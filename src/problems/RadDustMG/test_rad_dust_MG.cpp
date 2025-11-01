@@ -12,6 +12,7 @@
 #include "math/interpolate.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_dust_system.hpp"
+#include "util/BC.hpp"
 #include "util/fextract.hpp"
 #include <fmt/format.h>
 #include <fstream>
@@ -130,10 +131,10 @@ template <> void QuokkaSimulation<DustProblem>::setInitialConditionsOnGrid(quokk
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int g = 0; g < Physics_Traits<DustProblem>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<DustProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = erad_floor;
-			state_cc(i, j, k, RadSystem<DustProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<DustProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<DustProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			state_cc(i, j, k, RadSystem<DustProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = erad_floor;
+			state_cc(i, j, k, RadSystem<DustProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			state_cc(i, j, k, RadSystem<DustProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			state_cc(i, j, k, RadSystem<DustProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
 		}
 		state_cc(i, j, k, RadSystem<DustProblem>::gasEnergy_index) = Egas + 0.5 * rho0 * v0 * v0;
 		state_cc(i, j, k, RadSystem<DustProblem>::gasDensity_index) = rho0;
@@ -159,7 +160,7 @@ template <> void QuokkaSimulation<DustProblem>::computeAfterTimestep()
 		const amrex::Real Egas_i = RadSystem<DustProblem>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Etot_i);
 		double Erad_i = 0.0;
 		for (int g = 0; g < Physics_Traits<DustProblem>::nGroups; ++g) {
-			Erad_i += values.at(RadSystem<DustProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[0];
+			Erad_i += values.at(RadSystem<DustProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g)[0];
 		}
 		// userData_.Trad_vec_.push_back(std::pow(Erad_i / a_rad, 1. / 4.));
 		userData_.Trad_vec_.push_back(Erad_i / a_rad);
@@ -174,14 +175,7 @@ auto problem_main() -> int
 	const double CFL_number_gas = 0.8;
 
 	// Boundary conditions
-	constexpr int nvars = RadSystem<DustProblem>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc = quokka::BC<DustProblem>(quokka::BCType::int_dir);
 
 	// Problem initialization
 	QuokkaSimulation<DustProblem> sim(BCs_cc);

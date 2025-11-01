@@ -7,24 +7,20 @@
 /// \brief Defines a test problem for linear advection.
 ///
 
+#include "AMReX_Array.H"
+#include "AMReX_Box.H"
+#include "AMReX_ParmParse.H"
+#include "AMReX_REAL.H"
+
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
 #include "linear_advection/AdvectionSimulation.hpp"
 #include "linear_advection/linear_advection.hpp"
 #include <fmt/format.h>
-#include <limits>
 #include <vector>
 
-#include "AMReX_Array.H"
-#include "AMReX_Box.H"
-#include "AMReX_FArrayBox.H"
-#include "AMReX_ParmParse.H"
-#include "AMReX_REAL.H"
-
-#include "hyperbolic_system.hpp"
-#include "linear_advection/AdvectionSimulation.hpp"
-#include "linear_advection/linear_advection.hpp"
+#include "util/BC.hpp"
 #include "util/fextract.hpp"
 
 struct SemiellipseProblem {
@@ -37,6 +33,7 @@ template <> struct Physics_Traits<SemiellipseProblem> {
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
+	static constexpr int nGroups = 1; // number of radiation groups, need to set despite radiation is not enabled.
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
@@ -132,14 +129,8 @@ auto problem_main() -> int
 	const double max_dt = 1e-4;
 	const int max_timesteps = 1e4;
 
-	const int nvars = 1; // only density
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	// Set boundary conditions - periodic
+	auto BCs_cc = quokka::BC<SemiellipseProblem>(quokka::BCType::int_dir);
 
 	// Problem initialization
 	AdvectionSimulation<SemiellipseProblem> sim(BCs_cc);

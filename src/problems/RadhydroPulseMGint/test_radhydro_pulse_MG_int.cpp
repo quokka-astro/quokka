@@ -14,6 +14,7 @@
 #include "physics_info.hpp"
 #include "radiation/planck_integral.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 #include "util/fextract.hpp"
 #include <fmt/format.h>
 #include <fstream>
@@ -241,12 +242,12 @@ template <> void QuokkaSimulation<MGProblem>::setInitialConditionsOnGrid(quokka:
 		auto Frad_g = RadSystem<MGProblem>::ComputeFluxInDiffusionLimit(radBoundaries_g, Trad, v0);
 
 		for (int g = 0; g < Physics_Traits<MGProblem>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<MGProblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad_g[g];
+			state_cc(i, j, k, RadSystem<MGProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad_g[g];
 			// OLD, correct if you ignore the (delta nu B) term
-			// state_cc(i, j, k, RadSystem<MGProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 4. / 3. * v0 * Erad_g[g];
-			state_cc(i, j, k, RadSystem<MGProblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = Frad_g[g];
-			state_cc(i, j, k, RadSystem<MGProblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<MGProblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			// state_cc(i, j, k, RadSystem<MGProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 4. / 3. * v0 * Erad_g[g];
+			state_cc(i, j, k, RadSystem<MGProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = Frad_g[g];
+			state_cc(i, j, k, RadSystem<MGProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			state_cc(i, j, k, RadSystem<MGProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
 		}
 
 		state_cc(i, j, k, RadSystem<MGProblem>::gasEnergy_index) = Egas + 0.5 * rho * v0 * v0;
@@ -304,14 +305,7 @@ auto problem_main() -> int
 	amrex::ParmParse const pp("rad");
 
 	// Boundary conditions
-	constexpr int nvars = RadSystem<MGProblem>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc = quokka::BC<MGProblem>(quokka::BCType::int_dir);
 
 	// Problem 1: advecting pulse with multigroup integration
 
@@ -369,7 +363,7 @@ auto problem_main() -> int
 		amrex::Real const x = position[i];
 		double Erad_t = 0.0;
 		for (int g = 0; g < Physics_Traits<MGProblem>::nGroups; ++g) {
-			Erad_t += values.at(RadSystem<MGProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
+			Erad_t += values.at(RadSystem<MGProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g)[i];
 		}
 		const auto Trad_t = std::pow(Erad_t / a_rad, 1. / 4.);
 		const auto rho_t = values.at(RadSystem<MGProblem>::gasDensity_index)[i];

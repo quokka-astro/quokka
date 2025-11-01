@@ -7,23 +7,21 @@
 /// \brief Defines a test problem for pressureless spherical collapse.
 ///
 #include "hydro/hydro_system.hpp"
-#include "math/interpolate.hpp"
-#include <fstream>
-#include <limits>
 
-#include "AMReX.H"
-#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
-#include "AMReX_Config.H"
-#include "AMReX_FabArrayUtility.H"
 #include "AMReX_MultiFab.H"
-#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
-#include "AMReX_Print.H"
-
-#include "AMReX_SPACE.H"
 #include "QuokkaSimulation.hpp"
-#include "hydro/hydro_system.hpp"
+#include "util/BC.hpp"
+
+struct GlobalConfig {
+	static int num_particles;
+	static int seed;
+};
+
+// Initialize static members with default values
+int GlobalConfig::num_particles = 1000;
+int GlobalConfig::seed = 42;
 
 struct CollapseProblem {
 };
@@ -98,8 +96,8 @@ template <> void QuokkaSimulation<CollapseProblem>::createInitialCICParticles()
 {
 	// add particles at random positions in the box
 	const bool generate_on_root_rank = true;
-	const int iseed = 42;
-	const int num_particles = 1000;
+	const int iseed = GlobalConfig::seed;
+	const int num_particles = GlobalConfig::num_particles;
 	const double total_particle_mass = 0.5; // about 0.1 of the total fluid mass
 	const double particle_mass = total_particle_mass / static_cast<double>(num_particles);
 
@@ -140,32 +138,12 @@ template <> void QuokkaSimulation<CollapseProblem>::ComputeDerivedVar(int lev, s
 
 auto problem_main() -> int
 {
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == HydroSystem<CollapseProblem>::x1Momentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == HydroSystem<CollapseProblem>::x2Momentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == HydroSystem<CollapseProblem>::x3Momentum_index) && (dim == 2)) {
-			return true;
-		}
-		return false;
-	};
+	// boundary conditions
+	auto BCs_cc = quokka::BC<CollapseProblem>(quokka::BCType::reflecting);
 
-	const int ncomp_cc = Physics_Indices<CollapseProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			if (isNormalComp(n, i)) {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
-			} else {
-				BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
-				BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
-			}
-		}
-	}
+	amrex::ParmParse const pp("problem");
+	pp.query("num_particles", GlobalConfig::num_particles);
+	pp.query("seed", GlobalConfig::seed);
 
 	// Problem initialization
 	QuokkaSimulation<CollapseProblem> sim(BCs_cc);

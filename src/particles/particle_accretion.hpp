@@ -24,7 +24,11 @@ constexpr AccretionScheme accretion_scheme = AccretionScheme::BondiHoyle;
 namespace SinkAccretionUtils
 {
 
-constexpr int stencil_size = quokka::ParticleUtils::stencil_size;
+// constexpr int stencil_size = quokka::ParticleUtils::stencil_size;
+constexpr int stencil_size = 3;
+constexpr int rho_infty_stencil_size = stencil_size; // 0: use the cell that the particle is in
+
+constexpr double r_acc_tolerance = 1.0001;
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto get_delta_rho(double rho, double rho_sink) -> double { return -0.5 * (rho - rho_sink) / rho; }
 
@@ -53,15 +57,16 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::
 	double sum_py = 0.0;
 	double sum_pz = 0.0;
 	double sum_cs = 0.0;
-	for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
-		for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
-			for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-				const double x = par_x - plo[0] - ii * dx[0];
-				const double y = par_y - plo[1] - jj * dx[1];
-				const double z = par_z - plo[2] - kk * dx[2];
+	for (int ii = ix - rho_infty_stencil_size; ii <= ix + rho_infty_stencil_size; ++ii) {
+		for (int jj = iy - rho_infty_stencil_size; jj <= iy + rho_infty_stencil_size; ++jj) {
+			for (int kk = iz - rho_infty_stencil_size; kk <= iz + rho_infty_stencil_size; ++kk) {
+				const double x = par_x - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
+				const double y = par_y - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
+				const double z = par_z - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
 				const double r_sqr = x * x + y * y + z * z;
 				const double r_acc_sqr = stencil_size * stencil_size * dx_max * dx_max;
-				if (r_sqr > r_acc_sqr) {
+				// allow a small tolerance to avoid numerical issues when the particle is exactly at the cell center
+				if (r_sqr > r_acc_sqr * r_acc_tolerance) {
 					continue;
 				}
 				const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
@@ -156,16 +161,17 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double x = p.pos(0) - plo[0] - ii * dx[0];
-					const double y = p.pos(1) - plo[1] - jj * dx[1];
-					const double z = p.pos(2) - plo[2] - kk * dx[2];
+					const double x = p.pos(0) - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
+					const double y = p.pos(1) - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
+					const double z = p.pos(2) - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
 					const double r_sqr = x * x + y * y + z * z;
 					double r_acc_sqr = stencil_size * stencil_size * dx_max * dx_max;
 					if (use_uniform_kernel) {
 						// use a large accretion radius; this has the effect of using a cubic, uniform kernel
 						r_acc_sqr = std::numeric_limits<double>::infinity();
 					}
-					if (r_sqr > r_acc_sqr) {
+					// allow a small tolerance to avoid numerical issues when the particle is exactly at the cell center
+					if (r_sqr > r_acc_sqr * r_acc_tolerance) {
 						continue;
 					}
 					double w = compute_accretion_kernel(r_sqr, r_K);
@@ -181,16 +187,17 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double x = p.pos(0) - plo[0] - ii * dx[0];
-					const double y = p.pos(1) - plo[1] - jj * dx[1];
-					const double z = p.pos(2) - plo[2] - kk * dx[2];
+					const double x = p.pos(0) - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
+					const double y = p.pos(1) - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
+					const double z = p.pos(2) - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
 					const double r_sqr = x * x + y * y + z * z;
 					double r_acc_sqr = stencil_size * stencil_size * dx_max * dx_max;
 					if (use_uniform_kernel) {
 						// use a large accretion radius; this has the effect of using a cubic, uniform kernel
 						r_acc_sqr = std::numeric_limits<double>::infinity();
 					}
-					if (r_sqr > r_acc_sqr) {
+					// allow a small tolerance to avoid numerical issues when the particle is exactly at the cell center
+					if (r_sqr > r_acc_sqr * r_acc_tolerance) {
 						continue;
 					}
 					double w = compute_accretion_kernel(r_sqr, r_K);
@@ -205,7 +212,11 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 					AMREX_ASSERT(rho > 0.0);
 					const double rel_accretion_rate = M_dot_cell * dt / (vol * rho);
 					AMREX_ASSERT(rel_accretion_rate <= 0.0);
-					amrex::Gpu::Atomic::AddNoRet(&local_accretion_rate(ii, jj, kk), rel_accretion_rate);
+					amrex::Gpu::Atomic::AddNoRet(&local_accretion_rate(ii, jj, kk, 0), rel_accretion_rate);
+
+					// Deposit count into the last component for roundoff algorithm
+					const int count_comp = Physics_NumVars::numHydroVars; // Last component is the count
+					amrex::Gpu::Atomic::AddNoRet(&local_accretion_rate(ii, jj, kk, count_comp), 1.0);
 					//----------------------------------------------------------------------------------------------------
 				}
 			}
@@ -293,16 +304,17 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double x = p.pos(0) - plo[0] - ii * dx[0];
-					const double y = p.pos(1) - plo[1] - jj * dx[1];
-					const double z = p.pos(2) - plo[2] - kk * dx[2];
+					const double x = p.pos(0) - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
+					const double y = p.pos(1) - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
+					const double z = p.pos(2) - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
 					const double r_sqr = x * x + y * y + z * z;
 					double r_acc_sqr = stencil_size * stencil_size * dx_max * dx_max;
 					if (use_uniform_kernel) {
 						// use a large accretion radius; this has the effect of using a cubic, uniform kernel
 						r_acc_sqr = std::numeric_limits<double>::infinity();
 					}
-					if (r_sqr > r_acc_sqr) {
+					// allow a small tolerance to avoid numerical issues when the particle is exactly at the cell center
+					if (r_sqr > r_acc_sqr * r_acc_tolerance) {
 						continue;
 					}
 					double w = compute_accretion_kernel(r_sqr, r_K);
@@ -322,16 +334,17 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double x = p.pos(0) - plo[0] - ii * dx[0];
-					const double y = p.pos(1) - plo[1] - jj * dx[1];
-					const double z = p.pos(2) - plo[2] - kk * dx[2];
+					const double x = p.pos(0) - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
+					const double y = p.pos(1) - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
+					const double z = p.pos(2) - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
 					const double r_sqr = x * x + y * y + z * z;
 					double r_acc_sqr = stencil_size * stencil_size * dx_max * dx_max;
 					if (use_uniform_kernel) {
 						// use a large accretion radius; this has the effect of using a cubic, uniform kernel
 						r_acc_sqr = std::numeric_limits<double>::infinity();
 					}
-					if (r_sqr > r_acc_sqr) {
+					// allow a small tolerance to avoid numerical issues when the particle is exactly at the cell center
+					if (r_sqr > r_acc_sqr * r_acc_tolerance) {
 						continue;
 					}
 					double w = compute_accretion_kernel(r_sqr, r_K);

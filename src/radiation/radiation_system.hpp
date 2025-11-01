@@ -162,7 +162,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	}
 
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
-	static constexpr int numRadVars_ = Physics_NumVars::numRadVars;				 // number of radiation variables for each photon group
+	static constexpr int numRadVars_ = Physics_NumVars::numRadVarsPerGroup;			 // number of radiation variables for each photon group
 	static constexpr int nvarHyperbolic_ = numRadVars_ * Physics_Traits<problem_t>::nGroups; // total number of radiation variables
 	static constexpr int nstartHyperbolic_ = Physics_Indices<problem_t>::radFirstIndex;
 	static constexpr int nvar_ = nstartHyperbolic_ + nvarHyperbolic_;
@@ -291,10 +291,12 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 						double gas_update_factor, double Ekin0) -> FluxUpdateResult<problem_t>;
 
 	static void AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt, int stage,
-					     double dustGasCoeff, int *p_iteration_counter, int *p_iteration_failure_counter);
+					     double dustGasCoeff, double tol_h, double tol_rel_h, double tempFloor, int *p_iteration_counter,
+					     int *p_iteration_failure_counter);
 
 	static void AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt, int stage,
-					      double dustGasCoeff, int *p_iteration_counter, int *p_iteration_failure_counter);
+					      double dustGasCoeff, double tol_h, double tol_rel_h, double tempFloor, int *p_iteration_counter,
+					      int *p_iteration_failure_counter);
 
 	static void balanceMatterRadiation(arrayconst_t &consPrev, array_t &consNew, amrex::Box const &indexRange);
 
@@ -427,23 +429,26 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	SolveGasRadiationEnergyExchange(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double dt,
 					amrex::GpuArray<Real, nmscalars_> const &massScalars, int n_outer_iter, quokka::valarray<double, nGroups_> const &work,
 					quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
-					amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, int *p_iteration_counter, int *p_iteration_failure_counter)
-	    -> NewtonIterationResult<problem_t>;
+					amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double resid_tol, double rel_change_tol, double tempFloor,
+					int *p_iteration_counter, int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>;
 
 	AMREX_GPU_DEVICE static auto SolveGasDustRadiationEnergyExchange(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho,
 									 double coeff_n, double dt, amrex::GpuArray<Real, nmscalars_> const &massScalars,
 									 int n_outer_iter, quokka::valarray<double, nGroups_> const &work,
 									 quokka::valarray<double, nGroups_> const &vel_times_F,
 									 quokka::valarray<double, nGroups_> const &Src,
-									 amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, int *p_iteration_counter,
+									 amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double resid_tol,
+									 double rel_change_tol, double tempFloor, int *p_iteration_counter,
 									 int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>;
 
-	AMREX_GPU_DEVICE static auto
-	SolveGasDustRadiationEnergyExchangeWithPE(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double coeff_n, double dt,
-						  amrex::GpuArray<Real, nmscalars_> const &massScalars, int n_outer_iter,
-						  quokka::valarray<double, nGroups_> const &work, quokka::valarray<double, nGroups_> const &vel_times_F,
-						  quokka::valarray<double, nGroups_> const &Src, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
-						  int *p_iteration_counter, int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>;
+	AMREX_GPU_DEVICE static auto SolveGasDustRadiationEnergyExchangeWithPE(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho,
+									       double coeff_n, double dt, amrex::GpuArray<Real, nmscalars_> const &massScalars,
+									       int n_outer_iter, quokka::valarray<double, nGroups_> const &work,
+									       quokka::valarray<double, nGroups_> const &vel_times_F,
+									       quokka::valarray<double, nGroups_> const &Src,
+									       amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double resid_tol,
+									       double rel_change_tol, double tempFloor, int *p_iteration_counter,
+									       int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>;
 
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
@@ -520,7 +525,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeThermalRadiationMultiGro
 {
 	const double power = radiation_constant_ * std::pow(temperature, 4);
 	const auto radEnergyFractions = ComputePlanckEnergyFractions(boundaries, temperature);
-	auto Erad_g = power * radEnergyFractions;
+	quokka::valarray<amrex::Real, nGroups_> Erad_g = power * radEnergyFractions;
 	// set floor
 	for (int g = 0; g < nGroups_; ++g) {
 		if (Erad_g[g] < Erad_floor_) {
@@ -617,7 +622,9 @@ void RadSystem<problem_t>::SetRadEnergySource(array_t &radEnergySource, amrex::B
 					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 					      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real time)
 {
-	// do nothing -- user implemented
+	// Default implementation: no radiation source is added.
+	// Users should override this method to *add* custom radiation sources to radEnergySource.
+	// This function is intentionally left blank.
 }
 
 template <typename problem_t>
@@ -679,21 +686,35 @@ template <typename problem_t> AMREX_GPU_DEVICE auto RadSystem<problem_t>::isStat
 
 template <typename problem_t> AMREX_GPU_DEVICE void RadSystem<problem_t>::amendRadState(std::array<amrex::Real, nvarHyperbolic_> &cons)
 {
+	constexpr amrex::Real small_number = 1.0e20 * std::numeric_limits<amrex::Real>::min();
+	constexpr amrex::Real smaller_than_one = 1.0 - 20.0 * std::numeric_limits<amrex::Real>::epsilon();
+
 	// amend the state variable 'cons' to be a valid state
 	for (int g = 0; g < nGroups_; ++g) {
 		auto E_r = cons[radEnergy_index + numRadVars_ * g - nstartHyperbolic_];
+		// If E_r is NaN or below floor, set to floor
 		if (E_r < Erad_floor_) {
-			E_r = Erad_floor_;
 			cons[radEnergy_index + numRadVars_ * g - nstartHyperbolic_] = Erad_floor_;
+			cons[x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = 0.0;
+			cons[x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = 0.0;
+			cons[x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = 0.0;
+			continue;
 		}
 		const auto Fx = cons[x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_];
 		const auto Fy = cons[x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_];
 		const auto Fz = cons[x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_];
-		if (Fx * Fx + Fy * Fy + Fz * Fz > c_light_ * c_light_ * E_r * E_r) {
+		if (Fx * Fx + Fy * Fy + Fz * Fz > (c_light_ * c_light_) * (E_r * E_r) * smaller_than_one) {
 			const auto Fnorm = std::sqrt(Fx * Fx + Fy * Fy + Fz * Fz);
-			cons[x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = Fx / Fnorm * c_light_ * E_r;
-			cons[x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = Fy / Fnorm * c_light_ * E_r;
-			cons[x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = Fz / Fnorm * c_light_ * E_r;
+			// If Fnorm is NaN or very close to zero, set fluxes to zero
+			if (Fnorm < small_number) {
+				cons[x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = 0.0;
+				cons[x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = 0.0;
+				cons[x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = 0.0;
+			} else {
+				cons[x1RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = (Fx / Fnorm) * c_light_ * E_r * smaller_than_one;
+				cons[x2RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = (Fy / Fnorm) * c_light_ * E_r * smaller_than_one;
+				cons[x3RadFlux_index + numRadVars_ * g - nstartHyperbolic_] = (Fz / Fnorm) * c_light_ * E_r * smaller_than_one;
+			}
 		}
 	}
 }

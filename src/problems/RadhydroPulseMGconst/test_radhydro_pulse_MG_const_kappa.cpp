@@ -12,6 +12,7 @@
 #include "math/interpolate.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 #include "util/fextract.hpp"
 #include <fmt/format.h>
 #include <fstream>
@@ -218,10 +219,10 @@ template <> void QuokkaSimulation<MGproblem>::setInitialConditionsOnGrid(quokka:
 		auto Erad_g = RadSystem<MGproblem>::ComputeThermalRadiationMultiGroup(Trad, radBoundaries_g);
 
 		for (int g = 0; g < Physics_Traits<MGproblem>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<MGproblem>::radEnergy_index + Physics_NumVars::numRadVars * g) = Erad_g[g];
-			state_cc(i, j, k, RadSystem<MGproblem>::x1RadFlux_index + Physics_NumVars::numRadVars * g) = 4. / 3. * v0 * Erad_g[g];
-			state_cc(i, j, k, RadSystem<MGproblem>::x2RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
-			state_cc(i, j, k, RadSystem<MGproblem>::x3RadFlux_index + Physics_NumVars::numRadVars * g) = 0;
+			state_cc(i, j, k, RadSystem<MGproblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad_g[g];
+			state_cc(i, j, k, RadSystem<MGproblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 4. / 3. * v0 * Erad_g[g];
+			state_cc(i, j, k, RadSystem<MGproblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			state_cc(i, j, k, RadSystem<MGproblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
 		}
 
 		state_cc(i, j, k, RadSystem<MGproblem>::gasEnergy_index) = Egas + 0.5 * rho * v0 * v0;
@@ -247,18 +248,7 @@ auto problem_main() -> int
 
 	// Problem 1: pulse with grey radiation
 
-	// Boundary conditions
-	constexpr int nvars = RadSystem<SGProblem>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		// periodic boundary condition in the x-direction will not work
-		BCs_cc[n].setLo(0, amrex::BCType::foextrap); // extrapolate
-		BCs_cc[n].setHi(0, amrex::BCType::foextrap);
-		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc = quokka::BC<SGProblem>(quokka::BCType::foextrap, quokka::BCType::int_dir, quokka::BCType::int_dir);
 
 	// Problem initialization
 	QuokkaSimulation<SGProblem> sim(BCs_cc);
@@ -293,7 +283,7 @@ auto problem_main() -> int
 		// const auto Erad_t = values.at(RadSystem<SGProblem>::radEnergy_index)[i];
 		double Erad_t = 0.0;
 		for (int g = 0; g < Physics_Traits<SGProblem>::nGroups; ++g) {
-			Erad_t += values.at(RadSystem<SGProblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
+			Erad_t += values.at(RadSystem<SGProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g)[i];
 		}
 		const auto Trad_t = std::pow(Erad_t / a_rad, 1. / 4.);
 		const auto rho_t = values.at(RadSystem<SGProblem>::gasDensity_index)[i];
@@ -308,18 +298,7 @@ auto problem_main() -> int
 
 	// Problem 2: advecting pulse
 
-	// Boundary conditions
-	constexpr int nvars2 = RadSystem<MGproblem>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc2(nvars2);
-	for (int n = 0; n < nvars2; ++n) {
-		// periodic boundary condition in the x-direction will not work
-		BCs_cc2[n].setLo(0, amrex::BCType::foextrap); // extrapolate
-		BCs_cc2[n].setHi(0, amrex::BCType::foextrap);
-		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc2[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc2[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc2 = quokka::BC<MGproblem>(quokka::BCType::foextrap, quokka::BCType::int_dir, quokka::BCType::int_dir);
 
 	// Problem initialization
 	QuokkaSimulation<MGproblem> sim2(BCs_cc2);
@@ -377,7 +356,7 @@ auto problem_main() -> int
 		// const auto Erad_t = values2.at(RadSystem<MGproblem>::radEnergy_index)[i];
 		double Erad_t = 0.0;
 		for (int g = 0; g < Physics_Traits<MGproblem>::nGroups; ++g) {
-			Erad_t += values2.at(RadSystem<MGproblem>::radEnergy_index + Physics_NumVars::numRadVars * g)[i];
+			Erad_t += values2.at(RadSystem<MGproblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g)[i];
 		}
 		const auto Trad_t = std::pow(Erad_t / a_rad, 1. / 4.);
 		const auto rho_t = values2.at(RadSystem<MGproblem>::gasDensity_index)[i];

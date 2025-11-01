@@ -7,7 +7,6 @@
 /// \brief Implements the random blast problem with radiative cooling.
 ///
 #include "AMReX.H"
-#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLProfiler.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_FabArray.H"
@@ -24,11 +23,11 @@
 #include <fmt/format.h>
 
 #include "QuokkaSimulation.hpp"
-#include "cooling/GrackleLikeCooling.hpp"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "math/quadrature.hpp"
 #include "physics_info.hpp"
+#include "util/BC.hpp"
 
 using amrex::Real;
 
@@ -40,7 +39,7 @@ constexpr double parsec_in_cm = C::parsec; // cm == 1 pc
 constexpr double m_H = C::m_p + C::m_e;	   // mass of hydrogen atom
 
 template <> struct Physics_Traits<RandomBlast> {
-	static constexpr bool is_self_gravity_enabled = false;
+	static constexpr bool is_self_gravity_enabled = true;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
@@ -55,9 +54,10 @@ template <> struct quokka::EOS_Traits<RandomBlast> {
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-constexpr Real Tgas0 = 1.0e4;								// K
-constexpr Real nH0 = 0.1;								// cm^-3
-constexpr Real rho0 = nH0 * (m_H / quokka::GrackleLikeCooling::cloudy_H_mass_fraction); // g cm^-3
+constexpr Real Tgas0 = 1.0e4; // K
+constexpr Real nH0 = 0.1;     // cm^-3
+constexpr Real cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
+constexpr Real rho0 = nH0 * (m_H / cloudy_H_mass_fraction); // g cm^-3
 
 template <> struct SimulationData<RandomBlast> {
 	std::unique_ptr<amrex::TableData<Real, 1>> blast_x;
@@ -229,8 +229,9 @@ template <> void QuokkaSimulation<RandomBlast>::ComputeDerivedVar(int lev, std::
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "temperature") {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "RandomBlast diagnostics require resampled cooling tables.");
 		const int ncomp = ncomp_cc_in;
-		auto tables = grackleTables_.const_tables();
+		auto tables = resampledTables_.const_tables();
 
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
@@ -244,7 +245,7 @@ template <> void QuokkaSimulation<RandomBlast>::ComputeDerivedVar(int lev, std::
 				Real const x3Mom = state(i, j, k, HydroSystem<RandomBlast>::x3Momentum_index);
 				Real const Egas = state(i, j, k, HydroSystem<RandomBlast>::energy_index);
 				Real const Eint = RadSystem<RandomBlast>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-				Real const Tgas = ComputeTgasFromEgas(rho, Eint, HydroSystem<RandomBlast>::gamma_, tables);
+				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 
 				output(i, j, k, ncomp) = Tgas;
 			});
@@ -287,7 +288,7 @@ template <> void QuokkaSimulation<RandomBlast>::refineGrid(int lev, amrex::TagBo
 
 auto problem_main() -> int
 {
-	// This problem is only implemented in CGS units because the Grackle cooling tables are in CGS units.
+	// This problem is only implemented in CGS units because the cooling tables are provided in CGS units.
 	static_assert(Physics_Traits<RandomBlast>::unit_system == UnitSystem::CGS);
 
 	// read parameters
@@ -309,37 +310,7 @@ auto problem_main() -> int
 	pp.query("use_periodic_bc", use_periodic_bc);
 
 	// Problem initialization
-	auto isNormalComp = [=](int n, int dim) {
-		if ((n == HydroSystem<RandomBlast>::x1Momentum_index) && (dim == 0)) {
-			return true;
-		}
-		if ((n == HydroSystem<RandomBlast>::x2Momentum_index) && (dim == 1)) {
-			return true;
-		}
-		if ((n == HydroSystem<RandomBlast>::x3Momentum_index) && (dim == 2)) {
-			return true;
-		}
-		return false;
-	};
-
-	const int nvars = HydroSystem<RandomBlast>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			if (use_periodic_bc == 1) { // periodic boundaries
-				BCs_cc[n].setLo(idim, amrex::BCType::int_dir);
-				BCs_cc[n].setHi(idim, amrex::BCType::int_dir);
-			} else { // reflecting boundaries
-				if (isNormalComp(n, idim)) {
-					BCs_cc[n].setLo(idim, amrex::BCType::reflect_odd);
-					BCs_cc[n].setHi(idim, amrex::BCType::reflect_odd);
-				} else {
-					BCs_cc[n].setLo(idim, amrex::BCType::reflect_even);
-					BCs_cc[n].setHi(idim, amrex::BCType::reflect_even);
-				}
-			}
-		}
-	}
+	auto BCs_cc = (use_periodic_bc == 1) ? quokka::BC<RandomBlast>(quokka::BCType::int_dir) : quokka::BC<RandomBlast>(quokka::BCType::reflecting);
 
 	QuokkaSimulation<RandomBlast> sim(BCs_cc);
 	sim.densityFloor_ = 1.0e-5 * rho0; // density floor (to prevent vacuum)

@@ -1,8 +1,16 @@
-#include "DiagFramePlane.H"
+#include <cmath>
+#include <cstring>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+
 #include "AMReX_FPC.H"
+#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_PlotFileUtil.H"
+#include "AMReX_Print.H"
 #include "AMReX_VisMF.H"
+#include "DiagFramePlane.H"
 #include "yaml-cpp/yaml.h"
 
 void printLowerDimIntVect(std::ostream &a_File, const amrex::IntVect &a_IntVect, int skipDim)
@@ -76,6 +84,23 @@ void DiagFramePlane::init(const std::string &a_prefix, std::string_view a_diagNa
 		m_interpType = Quadratic;
 	} else {
 		amrex::Abort("Unknown interpolation type for " + a_prefix);
+	}
+
+	// Read particle types to include (optional, default to empty = no particles)
+	int const nParticleTypes = pp.countval("particles");
+	if (nParticleTypes > 0) {
+		m_particleTypes.resize(nParticleTypes);
+		for (int n = 0; n < nParticleTypes; ++n) {
+			pp.get("particles", m_particleTypes[n], n);
+		}
+
+		amrex::Print() << "DiagFramePlane: Including particles: ";
+		for (const auto &ptype : m_particleTypes) {
+			amrex::Print() << ptype << " ";
+		}
+		amrex::Print() << "\n";
+	} else {
+		amrex::Print() << "DiagFramePlane: No particles will be included\n";
 	}
 }
 
@@ -188,79 +213,6 @@ void DiagFramePlane::prepare(int a_nlevels, const amrex::Vector<amrex::Geometry>
 		}
 		m_sliceBA[lev].define(bl);
 		m_sliceDM[lev].define(pmap);
-	}
-}
-
-void DiagFramePlane::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
-				 const amrex::Vector<std::string> & /*a_stateVar*/, const YAML::Node &simulationMetadata)
-{
-	// Interpolate data to slice
-	amrex::Vector<amrex::MultiFab> planeData(a_state.size());
-	for (int lev = 0; lev < a_state.size(); ++lev) {
-		planeData[lev].define(m_sliceBA[lev], m_sliceDM[lev], static_cast<int>(m_fieldNames.size()), 0);
-		int const p0 = m_k0[lev];
-#ifdef AMREX_USE_OMP
-#pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
-#endif
-		for (amrex::MFIter mfi(planeData[lev], amrex::TilingIfNotGPU()); mfi.isValid(); ++mfi) {
-			const auto &bx = mfi.tilebox();
-			const int state_idx = m_dmConvert[lev][mfi.index()];
-			auto const &state = a_state[lev]->const_array(state_idx, 0);
-			auto const &plane = planeData[lev].array(mfi);
-			auto const &intwgt = m_intwgt[lev];
-			auto *idx_d_p = m_fieldIndices_d.dataPtr();
-			if (m_normal == 0) {
-				amrex::ParallelFor(bx, m_fieldNames.size(), [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-					int const stIdx = idx_d_p[n]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-					plane(i, j, k, n) = intwgt[0] * state(p0 - 1, i, j, stIdx) + intwgt[1] * state(p0, i, j, stIdx) +
-							    intwgt[2] * state(p0 + 1, i, j, stIdx);
-				});
-			} else if (m_normal == 1) {
-				amrex::ParallelFor(bx, m_fieldNames.size(), [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-					int const stIdx = idx_d_p[n]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-					plane(i, j, k, n) = intwgt[0] * state(i, p0 - 1, j, stIdx) + intwgt[1] * state(i, p0, j, stIdx) +
-							    intwgt[2] * state(i, p0 + 1, j, stIdx);
-				});
-			} else if (m_normal == 2) {
-				amrex::ParallelFor(bx, m_fieldNames.size(), [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-					int const stIdx = idx_d_p[n]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-					plane(i, j, k, n) = intwgt[0] * state(i, j, p0 - 1, stIdx) + intwgt[1] * state(i, j, p0, stIdx) +
-							    intwgt[2] * state(i, j, p0 + 1, stIdx);
-				});
-			}
-		}
-	}
-
-	// Count the number of level where the cut exists
-	int nlevs = 0;
-	for (int lev = 0; lev < a_state.size(); lev++) {
-		if (!m_sliceBA[lev].empty()) {
-			nlevs += 1;
-		}
-	}
-
-	if (nlevs > 0) {
-		// Build up a z-normal 2D Geom
-		amrex::Vector<amrex::Geometry> pltGeoms(nlevs);
-		pltGeoms[0] = m_geomLev0;
-		amrex::Vector<amrex::IntVect> ref_ratio;
-		amrex::IntVect const rref(AMREX_D_DECL(2, 2, 1));
-		for (int lev = 1; lev < nlevs; ++lev) {
-			pltGeoms[lev] = amrex::refine(pltGeoms[lev - 1], rref);
-			ref_ratio.push_back(rref);
-		}
-
-		// File name based on tep or time
-		std::string diagfile;
-		if (m_interval > 0) {
-			diagfile = amrex::Concatenate(m_diagfile, a_nstep, 6);
-		}
-		if (m_per > 0.0) {
-			diagfile = m_diagfile + std::to_string(a_time);
-		}
-		amrex::Vector<int> const step_array(nlevs, a_nstep);
-		Write2DMultiLevelPlotfile(diagfile, nlevs, GetVecOfConstPtrs(planeData), m_fieldNames, pltGeoms, a_time, step_array, ref_ratio,
-					  simulationMetadata);
 	}
 }
 

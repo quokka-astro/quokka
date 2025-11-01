@@ -13,6 +13,7 @@
 #include "QuokkaSimulation.hpp"
 #include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
+#include "util/BC.hpp"
 #include "util/fextract.hpp"
 #include <fmt/format.h>
 #ifdef HAVE_PYTHON
@@ -72,17 +73,17 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputeFluxMe
 
 [[maybe_unused]] static constexpr int nmscalars_ = Physics_Traits<CouplingProblem>::numMassScalars;
 template <>
-AMREX_GPU_HOST_DEVICE auto quokka::EOS<CouplingProblem>::ComputeTgasFromEint(const double /*rho*/, const double Egas,
-									     std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/)
-    -> double
+AMREX_GPU_HOST_DEVICE auto
+quokka::EOS<CouplingProblem>::ComputeTgasFromEint([[maybe_unused]] const double rho, const double Egas,
+						  [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto quokka::EOS<CouplingProblem>::ComputeEintFromTgas(const double /*rho*/, const double Tgas,
-									     std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/)
-    -> double
+AMREX_GPU_HOST_DEVICE auto
+quokka::EOS<CouplingProblem>::ComputeEintFromTgas([[maybe_unused]] const double rho, const double Tgas,
+						  [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
 {
 	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
 }
@@ -90,7 +91,7 @@ AMREX_GPU_HOST_DEVICE auto quokka::EOS<CouplingProblem>::ComputeEintFromTgas(con
 template <>
 AMREX_GPU_HOST_DEVICE auto
 quokka::EOS<CouplingProblem>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas,
-							std::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
+							quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	// This is also known as the heat capacity, i.e.
 	// 		\del E_g / \del T = \rho c_v,
@@ -159,15 +160,8 @@ auto problem_main() -> int
 	const int max_timesteps = 1e6;
 	const double constant_dt = 1.0e-8; // s
 
-	// Problem initialization
-	constexpr int ncomp_cc = Physics_Indices<CouplingProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::foextrap); // extrapolate
-			BCs_cc[n].setHi(i, amrex::BCType::foextrap);
-		}
-	}
+	// Set boundary conditions - extrapolate
+	auto BCs_cc = quokka::BC<CouplingProblem>(quokka::BCType::foextrap);
 
 	QuokkaSimulation<CouplingProblem> sim(BCs_cc);
 
