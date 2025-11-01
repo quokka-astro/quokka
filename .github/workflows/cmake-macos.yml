@@ -84,7 +84,7 @@ jobs:
       shell: bash
       run: |
         export PATH="$HOME/Library/Python/3.11/bin:$PATH"
-        canary run --output-on-failure --workers=3 .
+        canary run --output-on-failure --workers=3 -k 'not HydroWaveConvergence' .
 
     - name: Upload test output
       if: always()

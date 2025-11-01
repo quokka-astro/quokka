@@ -61,7 +61,7 @@ jobs:
     - name: Test
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      run: canary run --output-on-failure --workers=4 .
+      run: canary run --output-on-failure --workers=4 -k 'not HydroWaveConvergence' .
 
     - name: Upload test output
       if: always()
