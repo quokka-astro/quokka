@@ -875,11 +875,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvol
 		rel_err = abs_err / Etot0;
 	}
 
-	amrex::Print() << "\nInitial gas+radiation energy = " << Etot0 << '\n';
-	amrex::Print() << "Final gas+radiation energy = " << Etot << '\n';
-	amrex::Print() << "\tabsolute conservation error = " << abs_err << '\n';
-	amrex::Print() << "\trelative conservation error = " << rel_err << '\n';
-	amrex::Print() << '\n';
+	if (this->suppress_output == 0) {
+		amrex::Print() << "\nInitial gas+radiation energy = " << Etot0 << '\n';
+		amrex::Print() << "Final gas+radiation energy = " << Etot << '\n';
+		amrex::Print() << "\tabsolute conservation error = " << abs_err << '\n';
+		amrex::Print() << "\trelative conservation error = " << rel_err << '\n';
+		amrex::Print() << '\n';
+	}
 
 	if (computeReferenceSolution_) {
 		// compute cc-reference solution
@@ -956,9 +958,11 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvol
 
 	// compute average number of radiation subcycles per timestep
 	if (cellUpdates_ > 0) {
-		double const avg_rad_subcycles = static_cast<double>(radiationCellUpdates_) / static_cast<double>(cellUpdates_);
-		amrex::Print() << "avg. num. of radiation subcycles = " << avg_rad_subcycles << '\n';
-		amrex::Print() << '\n';
+		if (this->suppress_output == 0) {
+			double const avg_rad_subcycles = static_cast<double>(radiationCellUpdates_) / static_cast<double>(cellUpdates_);
+			amrex::Print() << "avg. num. of radiation subcycles = " << avg_rad_subcycles << '\n';
+			amrex::Print() << '\n';
+		}
 	} else {
 		amrex::Print() << "No cell updates performed!\n";
 		amrex::Print() << '\n';

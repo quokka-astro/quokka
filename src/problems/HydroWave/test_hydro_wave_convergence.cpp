@@ -174,6 +174,14 @@ auto problem_main() -> int
 		}
 	}
 
+	// Suppress per-step logging from the coarse timestep loop
+	{
+		amrex::ParmParse pp_general;
+		if (!pp_general.contains("suppress_output")) {
+			pp_general.add("suppress_output", 1);
+		}
+	}
+
 	amrex::Vector<int> resolutions;
 	amrex::Vector<double> errors;
 	amrex::Vector<double> dx_values;
