@@ -205,7 +205,8 @@ auto problem_main() -> int
 		}
 
 		if (nx == nx_max) {
-			amrex::Print() << fmt::format("\nReached maximum resolution (nx = {}) without achieving the target error {:.3e}\n", nx_max, machine_precision_target);
+			amrex::Print() << fmt::format("\nReached maximum resolution (nx = {}) without achieving the target error {:.3e}\n", nx_max,
+						      machine_precision_target);
 			break;
 		}
 	}
