@@ -9,6 +9,7 @@
 
 #include "hydro/hydro_system.hpp"
 #include <fmt/format.h>
+#include <limits>
 #include <valarray>
 
 #include "AMReX_Array.H"
@@ -91,7 +92,7 @@ auto runWaveTest(int nx) -> double
 	// Problem parameters
 	const double CFL_number = 0.1;
 	const double max_time = 1.0;
-	const int max_timesteps = 2e4;
+	const int max_timesteps = std::max(20000, nx * 100);
 
 	// Problem initialization
 	const int ncomp_cc = Physics_Indices<WaveProblem>::nvarTotal_cc;
@@ -159,22 +160,46 @@ auto runWaveTest(int nx) -> double
 
 auto problem_main() -> int
 {
-	// Richardson convergence test: run at multiple resolutions
-	amrex::Vector<int> resolutions = {32, 64, 128};
-	amrex::Vector<double> errors(resolutions.size());
-	amrex::Vector<double> dx_values(resolutions.size());
+	// Richardson convergence test: run at increasing resolution until machine precision is reached
+	const double machine_precision_target = 1.0e3 * std::numeric_limits<double>::epsilon();
+	const int nx_initial = 32;
+	const int nx_max = 4096;
+	bool reached_target = false;
+
+	// Silence TinyProfiler so convergence logs stay readable
+	{
+		amrex::ParmParse pp_tp("tiny_profiler");
+		if (!pp_tp.contains("output_file")) {
+			pp_tp.add("output_file", "/dev/null");
+		}
+	}
+
+	amrex::Vector<int> resolutions;
+	amrex::Vector<double> errors;
+	amrex::Vector<double> dx_values;
 
 	amrex::Print() << "Running Richardson convergence test for HydroWave:\n";
 	amrex::Print() << "Resolution\tError Norm\n";
 	amrex::Print() << "----------\t----------\n";
 
-	for (int i = 0; i < resolutions.size(); ++i) {
-		int const nx = resolutions[i];
+	for (int nx = nx_initial; nx <= nx_max; nx *= 2) {
 		double const error = runWaveTest(nx);
-		errors[i] = error;
-		dx_values[i] = 1.0 / static_cast<double>(nx); // dx = L / nx for unit domain
+
+		resolutions.push_back(nx);
+		errors.push_back(error);
+		dx_values.push_back(1.0 / static_cast<double>(nx)); // dx = L / nx for unit domain
 
 		amrex::Print() << fmt::format("{:10d}\t{:.6e}\n", nx, error);
+
+		if (error <= machine_precision_target) {
+			reached_target = true;
+			break;
+		}
+
+		if (nx == nx_max) {
+			amrex::Print() << fmt::format("\nReached maximum resolution (nx = {}) without achieving the target error {:.3e}\n", nx_max, machine_precision_target);
+			break;
+		}
 	}
 
 	// Calculate convergence rates using Richardson extrapolation
@@ -227,7 +252,11 @@ auto problem_main() -> int
 
 	// Test status
 	if (convergence_passed) {
-		amrex::Print() << "\n✓ Richardson convergence test PASSED\n";
+		if (reached_target) {
+			amrex::Print() << fmt::format("\n✓ Richardson convergence test PASSED (target error {:.3e} reached)\n", machine_precision_target);
+		} else {
+			amrex::Print() << "\n✓ Richardson convergence test PASSED\n";
+		}
 		return 0;
 	} else {
 		amrex::Print() << "\n✗ Richardson convergence test FAILED\n";
