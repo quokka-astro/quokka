@@ -20,8 +20,27 @@ jobs:
     pool: avatar
     timeoutInMinutes: 300
     steps:
+    - task: Cache@2
+      displayName: Restore ccache
+      inputs:
+        key: 'ccache | regression | $(Agent.OS) | $(Build.SourceBranch)'
+        restoreKeys: |
+          ccache | regression | $(Agent.OS)
+        path: $(Pipeline.Workspace)/ccache
+
+    - script: |
+        mkdir -p $(Pipeline.Workspace)/ccache
+        ccache --zero-stats || true
+      displayName: Prepare ccache
+      env:
+        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+
     - script: ./extern/regression_testing/regtest.py --clean_testdir regression/quokka-tests.ini
       displayName: 'Run regression testing'
+      env:
+        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+        CCACHE_BASEDIR: $(Build.SourcesDirectory)
+        CCACHE_NOHASHDIR: 1
     - publish: /data/mash/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests/web
       condition: succeededOrFailed()
       artifact: regressionHTMLOutput
@@ -29,3 +48,9 @@ jobs:
     - script: cd /data/mash/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests/web && git add . && git commit -m 'updated results' && git push
       condition: succeededOrFailed()
       displayName: 'Upload results to GitHub Pages'
+    - script: |
+        ccache --show-stats || true
+      displayName: Report ccache statistics
+      condition: succeededOrFailed()
+      env:
+        CCACHE_DIR: $(Pipeline.Workspace)/ccache

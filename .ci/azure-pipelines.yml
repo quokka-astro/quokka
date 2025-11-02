@@ -35,13 +35,36 @@ jobs:
     pool: avatar
     timeoutInMinutes: 120
     steps:
+    - task: Cache@2
+      displayName: Restore ccache
+      inputs:
+        key: 'ccache | CUDA | $(Agent.OS) | $(Build.SourceBranch)'
+        restoreKeys: |
+          ccache | CUDA | $(Agent.OS)
+        path: $(Pipeline.Workspace)/ccache
+
+    - script: |
+        mkdir -p $(Pipeline.Workspace)/ccache
+        ccache --zero-stats || true
+      displayName: Prepare ccache
+      env:
+        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+
     - task: CMake@1
       displayName: 'Configure CMake'
+      env:
+        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+        CCACHE_BASEDIR: $(Build.SourcesDirectory)
+        CCACHE_NOHASHDIR: 1
       inputs:
-        cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DAMReX_SPACEDIM=3 -DAMReX_GPU_BACKEND=CUDA -DQUOKKA_PYTHON=OFF'
+        cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DAMReX_SPACEDIM=3 -DAMReX_GPU_BACKEND=CUDA -DQUOKKA_PYTHON=OFF -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache'
     
     - task: CMake@1
       displayName: 'Build Quokka'
+      env:
+        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+        CCACHE_BASEDIR: $(Build.SourcesDirectory)
+        CCACHE_NOHASHDIR: 1
       inputs:
         cmakeArgs: '--build . --parallel 16'
     
@@ -57,3 +80,10 @@ jobs:
         testRunTitle: $(Agent.JobName)
       condition: succeededOrFailed()
       displayName: Publish test results
+
+    - script: |
+        ccache --show-stats || true
+      displayName: Report ccache statistics
+      condition: succeededOrFailed()
+      env:
+        CCACHE_DIR: $(Pipeline.Workspace)/ccache
