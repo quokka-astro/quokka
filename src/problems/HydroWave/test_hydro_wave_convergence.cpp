@@ -105,17 +105,17 @@ auto runWaveTest(int nx) -> double
 	}
 
 	// Set grid dimensions using AMReX parameter system
-        amrex::ParmParse pp("amr");
-        amrex::Vector<int> const ncells = {nx, 8, 8};
+	amrex::ParmParse pp("amr");
+	amrex::Vector<int> const ncells = {nx, 8, 8};
 #if (AMREX_SPACEDIM == 1)
-        amrex::Vector<int> const blocking_factor = {nx};
+	amrex::Vector<int> const blocking_factor = {nx};
 #elif (AMREX_SPACEDIM == 2)
-        amrex::Vector<int> const blocking_factor = {nx, 4};
+	amrex::Vector<int> const blocking_factor = {nx, 4};
 #else
-        amrex::Vector<int> const blocking_factor = {nx, 4, 4};
+	amrex::Vector<int> const blocking_factor = {nx, 4, 4};
 #endif
-        pp.add("max_level", 0);
-        pp.addarr("blocking_factor", blocking_factor);
+	pp.add("max_level", 0);
+	pp.addarr("blocking_factor", blocking_factor);
 	pp.add("max_grid_size", nx);
 	pp.addarr("n_cell", ncells);
 
