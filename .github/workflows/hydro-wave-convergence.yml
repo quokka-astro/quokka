@@ -2,8 +2,10 @@ name: Hydro Wave Convergence
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 6 * * 1'
+  push:
+    branches:
+      - development
+  pull_request:
 
 concurrency:
   group: ${{ github.ref }}-${{ github.head_ref }}-hydro-wave-convergence
