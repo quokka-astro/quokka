@@ -1,4 +1,4 @@
-.devcontainer/gcc-container/DockerfileFROM mcr.microsoft.com/devcontainers/cpp:ubuntu-24.04@sha256:a7cddc16b93b4ccfab0d33c805460a826703211ec30e3c04761aec17d71275cb
+FROM mcr.microsoft.com/devcontainers/cpp:ubuntu-24.04@sha256:a7cddc16b93b4ccfab0d33c805460a826703211ec30e3c04761aec17d71275cb
 
 RUN apt-get --yes -qq update \
  && apt-get --yes -qq upgrade \

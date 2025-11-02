@@ -13,6 +13,15 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake ${PROJECT_SOURCE_DIR}/extern/amrex/Tools/CMake)
 include(CTest)
 
+if(APPLE)
+  set(QUOKKA_RPATH_ORIGIN "@loader_path")
+else()
+  set(QUOKKA_RPATH_ORIGIN "$ORIGIN")
+endif()
+set(CMAKE_BUILD_RPATH_USE_ORIGIN ON)
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH FALSE)
+set(CMAKE_INSTALL_RPATH ${QUOKKA_RPATH_ORIGIN})
+
 set(AMReX_SPACEDIM 1 CACHE STRING "")
 set(AMReX_MPI ON CACHE BOOL "" FORCE)
 set(AMReX_HDF5 OFF CACHE BOOL "" FORCE) # do not use
@@ -37,6 +46,25 @@ option(QUOKKA_OPENPMD "Enable OpenPMD output (on/off)" OFF)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
   enable_language(CUDA)
+  set(QUOKKA_CUDA_KEEP_DIR ${CMAKE_BINARY_DIR}/cuda_tmp)
+  file(MAKE_DIRECTORY ${QUOKKA_CUDA_KEEP_DIR})
+  if(NOT DEFINED ENV{CUDA_CACHE_DISABLE})
+    set(ENV{CUDA_CACHE_DISABLE} 1)
+  endif()
+  set(QUOKKA_CUDA_EXTRA_FLAGS
+      "-Xcompiler=-ffile-prefix-map=${QuokkaCode_SOURCE_DIR}=."
+      "-Xcompiler=-fmacro-prefix-map=${QuokkaCode_SOURCE_DIR}=."
+      "-Xnvlink=--deterministic"
+      "--keep"
+      "--keep-dir"
+      "${QUOKKA_CUDA_KEEP_DIR}"
+  )
+  foreach(extra_flag IN LISTS QUOKKA_CUDA_EXTRA_FLAGS)
+    string(FIND " ${CMAKE_CUDA_FLAGS} " " ${extra_flag} " flag_index)
+    if(flag_index EQUAL -1)
+      string(APPEND CMAKE_CUDA_FLAGS " ${extra_flag}")
+    endif()
+  endforeach()
   
   if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.0)
     message(FATAL_ERROR "You must use CUDA version 12.0 or newer to compile Quokka because C++20 support is needed.")
@@ -124,6 +152,37 @@ add_definitions(-DQUOKKA_GIT_HASH="${QUOKKA_GIT_HASH}")
 message(STATUS "Quokka git branch: ${QUOKKA_GIT_BRANCH}")
 message(STATUS "Quokka git commit hash: ${QUOKKA_GIT_HASH}")
 message(STATUS "AMReX git commit hash: ${AMREX_GIT_HASH}")
+
+if(NOT DEFINED ENV{SOURCE_DATE_EPOCH})
+  execute_process(
+      COMMAND git show -s --format=%ct HEAD
+      WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}
+      OUTPUT_VARIABLE QUOKKA_SOURCE_DATE_EPOCH
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET
+  )
+  if(QUOKKA_SOURCE_DATE_EPOCH)
+    set(ENV{SOURCE_DATE_EPOCH} ${QUOKKA_SOURCE_DATE_EPOCH})
+  endif()
+endif()
+
+if(NOT DEFINED ENV{TZ})
+  set(ENV{TZ} UTC)
+endif()
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+  add_compile_options(
+      -ffile-prefix-map=${QuokkaCode_SOURCE_DIR}=.
+      -fdebug-prefix-map=${QuokkaCode_SOURCE_DIR}=.
+      -fmacro-prefix-map=${QuokkaCode_SOURCE_DIR}=.
+  )
+endif()
+
+set(QUOKKA_TMPDIR ${CMAKE_BINARY_DIR}/tmp)
+file(MAKE_DIRECTORY ${QUOKKA_TMPDIR})
+if(NOT DEFINED ENV{TMPDIR})
+  set(ENV{TMPDIR} ${QUOKKA_TMPDIR})
+endif()
 
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/amrex ${QuokkaCode_BINARY_DIR}/amrex)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/fmt ${QuokkaCode_BINARY_DIR}/fmt)

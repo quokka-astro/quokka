@@ -1,0 +1,245 @@
+name: Build Reproducible Artifacts
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: build-reproducible-artifacts-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.container.name }} artifacts
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        container:
+          - name: cuda
+            image: quokka-linux-amd64-cuda
+            cmake_args: "-DAMReX_GPU_BACKEND=CUDA -DCMAKE_CUDA_ARCHITECTURES=70"
+          - name: rocm
+            image: quokka-linux-amd64-rocm
+            cmake_args: "-DAMReX_GPU_BACKEND=HIP -DAMReX_AMD_ARCH=gfx90a"
+          - name: gcc
+            image: quokka-linux-amd64-gcc
+            cmake_args: ""
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Determine SOURCE_DATE_EPOCH
+        id: source_epoch
+        run: |
+          EPOCH=$(git show -s --format=%ct HEAD)
+          echo "epoch=${EPOCH}" >> "${GITHUB_OUTPUT}"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull devcontainer image
+        env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.container.image }}:development
+        run: docker pull "${IMAGE}"
+
+      - name: Reproducible build (run 1)
+        env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.container.image }}:development
+          CONTAINER_NAME: ${{ matrix.container.name }}
+          SOURCE_DATE_EPOCH: ${{ steps.source_epoch.outputs.epoch }}
+          CMAKE_ARGS: ${{ matrix.container.cmake_args }}
+        run: |
+          set -euo pipefail
+          docker run --rm --user root \
+            -e HOME=/root \
+            -e TZ=UTC \
+            -e LANG=C.UTF-8 \
+            -e LC_ALL=C.UTF-8 \
+            -e SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH}" \
+            -e CMAKE_ARGS="${CMAKE_ARGS}" \
+            -e CONTAINER_NAME="${CONTAINER_NAME}" \
+            -e RUN_INDEX=1 \
+            -e WRITE_TAR=1 \
+            -v "${PWD}:/workspace" \
+            -w /workspace \
+            "${IMAGE}" \
+            bash -s <<'EOF'
+          set -euo pipefail
+          : "${CONTAINER_NAME:?container name required}"
+          : "${RUN_INDEX:?run index required}"
+          : "${SOURCE_DATE_EPOCH:?source date epoch required}"
+          BUILD_DIR=$(mktemp -d)
+          INSTALL_DIR=$(mktemp -d)
+          if command -v ninja >/dev/null 2>&1; then
+            GENERATOR_ARGS="-G Ninja"
+          else
+            GENERATOR_ARGS=""
+          fi
+          cmake -S /workspace -B "${BUILD_DIR}" ${GENERATOR_ARGS} \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DAMReX_SPACEDIM=3 \
+            ${CMAKE_ARGS}
+          cmake --build "${BUILD_DIR}" --parallel "$(nproc)"
+          cmake --install "${BUILD_DIR}" --prefix "${INSTALL_DIR}"
+          find "${INSTALL_DIR}" -type f -print0 | sort -z | xargs -0 sha256sum \
+            > "/workspace/repro-${CONTAINER_NAME}-build${RUN_INDEX}.sha256"
+          if [ "${WRITE_TAR:-0}" = "1" ]; then
+            tar --posix --sort=name --mtime="@${SOURCE_DATE_EPOCH}" \
+              --owner=0 --group=0 --numeric-owner \
+              -C "${INSTALL_DIR}" \
+              -cf "/workspace/repro-${CONTAINER_NAME}-install.tar" .
+          fi
+          EOF
+
+      - name: Reproducible build (run 2)
+        env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.container.image }}:development
+          CONTAINER_NAME: ${{ matrix.container.name }}
+          SOURCE_DATE_EPOCH: ${{ steps.source_epoch.outputs.epoch }}
+          CMAKE_ARGS: ${{ matrix.container.cmake_args }}
+        run: |
+          set -euo pipefail
+          docker run --rm --user root \
+            -e HOME=/root \
+            -e TZ=UTC \
+            -e LANG=C.UTF-8 \
+            -e LC_ALL=C.UTF-8 \
+            -e SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH}" \
+            -e CMAKE_ARGS="${CMAKE_ARGS}" \
+            -e CONTAINER_NAME="${CONTAINER_NAME}" \
+            -e RUN_INDEX=2 \
+            -e WRITE_TAR=0 \
+            -v "${PWD}:/workspace" \
+            -w /workspace \
+            "${IMAGE}" \
+            bash -s <<'EOF'
+          set -euo pipefail
+          : "${CONTAINER_NAME:?container name required}"
+          : "${RUN_INDEX:?run index required}"
+          : "${SOURCE_DATE_EPOCH:?source date epoch required}"
+          BUILD_DIR=$(mktemp -d)
+          INSTALL_DIR=$(mktemp -d)
+          if command -v ninja >/dev/null 2>&1; then
+            GENERATOR_ARGS="-G Ninja"
+          else
+            GENERATOR_ARGS=""
+          fi
+          cmake -S /workspace -B "${BUILD_DIR}" ${GENERATOR_ARGS} \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DAMReX_SPACEDIM=3 \
+            ${CMAKE_ARGS}
+          cmake --build "${BUILD_DIR}" --parallel "$(nproc)"
+          cmake --install "${BUILD_DIR}" --prefix "${INSTALL_DIR}"
+          find "${INSTALL_DIR}" -type f -print0 | sort -z | xargs -0 sha256sum \
+            > "/workspace/repro-${CONTAINER_NAME}-build${RUN_INDEX}.sha256"
+          EOF
+
+      - name: Compare build manifests
+        env:
+          CONTAINER_NAME: ${{ matrix.container.name }}
+        run: |
+          set -euo pipefail
+          diff -u \
+            "repro-${CONTAINER_NAME}-build1.sha256" \
+            "repro-${CONTAINER_NAME}-build2.sha256"
+
+      - name: Produce manifest
+        id: manifest
+        env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.container.image }}:development
+          CONTAINER_NAME: ${{ matrix.container.name }}
+          SOURCE_DATE_EPOCH: ${{ steps.source_epoch.outputs.epoch }}
+        run: |
+          set -euo pipefail
+          TAR_PATH="repro-${CONTAINER_NAME}-install.tar"
+          TAR_SHA=$(sha256sum "${TAR_PATH}" | awk '{print $1}')
+          TREE_SHA=$(sha256sum "repro-${CONTAINER_NAME}-build1.sha256" | awk '{print $1}')
+          IMAGE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE}" 2>/dev/null || true)
+          {
+            echo "commit: ${GITHUB_SHA}"
+            echo "container_image: ${IMAGE}"
+            echo "container_digest: ${IMAGE_DIGEST:-unknown}"
+            echo "source_date_epoch: ${SOURCE_DATE_EPOCH}"
+            echo "install_tar_path: ${TAR_PATH}"
+            echo "install_tar_sha256: ${TAR_SHA}"
+            echo "tree_manifest_sha256: ${TREE_SHA}"
+          } > "repro-${CONTAINER_NAME}-manifest.txt"
+          echo "tar_sha=${TAR_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "tree_sha=${TREE_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "image_digest=${IMAGE_DIGEST}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: quokka-${{ matrix.container.name }}-reproducible-build
+          path: |
+            repro-${{ matrix.container.name }}-install.tar
+            repro-${{ matrix.container.name }}-build1.sha256
+            repro-${{ matrix.container.name }}-build2.sha256
+            repro-${{ matrix.container.name }}-manifest.txt
+
+      - name: Generate SLSA predicate
+        env:
+          CONTAINER_NAME: ${{ matrix.container.name }}
+        run: |
+          cat <<EOF > predicate-${CONTAINER_NAME}.json
+          {
+            "buildDefinition": {
+              "buildType": "https://github.com/${{ github.repository }}/.github/workflows/build-reproducible-artifacts.yml",
+              "externalParameters": {
+                "container": "${CONTAINER_NAME}",
+                "commit": "${GITHUB_SHA}"
+              },
+              "resolvedDependencies": []
+            },
+            "runDetails": {
+              "builder": {
+                "id": "https://github.com/${{ github.repository }}/actions/runs/${GITHUB_RUN_ID}"
+              }
+            }
+          }
+          EOF
+
+      - name: Create GitHub attestation
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CONTAINER_NAME: ${{ matrix.container.name }}
+        run: |
+          gh attestation create \
+            --artifact "quokka-${CONTAINER_NAME}-reproducible-build" \
+            --subject "repo:${{ github.repository }}" \
+            --predicate-type slsaprovenance \
+            --predicate-file "predicate-${CONTAINER_NAME}.json"
+
+      - name: Update job summary
+        env:
+          CONTAINER_NAME: ${{ matrix.container.name }}
+          IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.container.image }}:development
+          TAR_SHA: ${{ steps.manifest.outputs.tar_sha }}
+          TREE_SHA: ${{ steps.manifest.outputs.tree_sha }}
+          IMAGE_DIGEST: ${{ steps.manifest.outputs.image_digest }}
+        run: |
+          {
+            echo "### ${CONTAINER_NAME} artifact"
+            echo ""
+            echo "- image: \`${IMAGE}\`"
+            if [ -n "${IMAGE_DIGEST}" ]; then
+              echo "- image digest: \`${IMAGE_DIGEST}\`"
+            fi
+            echo "- install tar sha256: \`${TAR_SHA}\`"
+            echo "- tree manifest sha256: \`${TREE_SHA}\`"
+            echo "- attestation download: \`gh attestation download --artifact quokka-${CONTAINER_NAME}-reproducible-build --workflow build-reproducible-artifacts.yml --repository ${{ github.repository }} --run ${GITHUB_RUN_ID} --output attestation-${CONTAINER_NAME}.json\`"
+            echo ""
+          } >> "${GITHUB_STEP_SUMMARY}"

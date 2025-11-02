@@ -1,0 +1,96 @@
+name: Build Devcontainer Images
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+concurrency:
+  group: build-devcontainers-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.container.name }} image
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        container:
+          - name: cuda
+            context: .devcontainer/cuda-container
+            image: quokka-linux-amd64-cuda
+            channel: development
+          - name: rocm
+            context: .devcontainer/rocm-container
+            image: quokka-linux-amd64-rocm
+            channel: development
+          - name: gcc
+            context: .devcontainer/gcc-container
+            image: quokka-linux-amd64-gcc
+            channel: development
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare image tags
+        id: tags
+        run: |
+          IMAGE="ghcr.io/${{ github.repository_owner }}/${{ matrix.container.image }}"
+          TAGS="${IMAGE}:sha-${GITHUB_SHA}"
+          if [ "${GITHUB_REF}" = "refs/heads/${{ matrix.container.channel }}" ]; then
+            TAGS="${TAGS}"$'\n'"${IMAGE}:${{ matrix.container.channel }}"
+          fi
+          {
+            echo "tags<<'EOF'"
+            echo "${TAGS}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Build (and optionally push) image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.container.context }}
+          file: ${{ matrix.container.context }}/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          provenance: true
+          sbom: true
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha,scope=${{ matrix.container.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.container.name }}
+
+      - name: Record image digest
+        run: |
+          {
+            echo "### ${{ matrix.container.name }} image"
+            echo ""
+            echo "- context: \`${{ matrix.container.context }}\`"
+            echo "- digest: \`${{ steps.build.outputs.digest }}\`"
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              echo "- push: disabled (pull request build)"
+            else
+              echo "- tags:"
+              while IFS= read -r tag; do
+                echo "  - \`${tag}\`"
+              done <<< "${{ steps.tags.outputs.tags }}"
+            fi
+            echo ""
+          } >> "${GITHUB_STEP_SUMMARY}"
