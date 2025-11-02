@@ -31,6 +31,9 @@ pr:
     - '*.rst'
     - '*.txt'
 
+variables:
+  cacheKeySuffix: $[replace(variables['Build.SourceBranch'], '/', '_')]
+
 jobs:
   - job: HIP_Build_Test
     pool: amdgpu
@@ -39,7 +42,7 @@ jobs:
     - task: Cache@2
       displayName: Restore ccache
       inputs:
-        key: 'ccache | HIP | $(Agent.OS) | $(Build.SourceBranch)'
+        key: 'ccache | HIP | $(Agent.OS) | $(cacheKeySuffix)'
         restoreKeys: |
           ccache | HIP | $(Agent.OS)
         path: $(Pipeline.Workspace)/ccache

@@ -11,6 +11,9 @@ schedules:
     include:
     - development
 
+variables:
+  cacheKeySuffix: $[replace(variables['Build.SourceBranch'], '/', '_')]
+
 # NOTE: several Python packages are needed for regression_testing to run properly:
 #   https://github.com/AMReX-Codes/regression_testing/blob/main/requirements.txt
 # ALSO NEEDED: bokeh
@@ -23,7 +26,7 @@ jobs:
     - task: Cache@2
       displayName: Restore ccache
       inputs:
-        key: 'ccache | regression | $(Agent.OS) | $(Build.SourceBranch)'
+        key: 'ccache | regression | $(Agent.OS) | $(cacheKeySuffix)'
         restoreKeys: |
           ccache | regression | $(Agent.OS)
         path: $(Pipeline.Workspace)/ccache

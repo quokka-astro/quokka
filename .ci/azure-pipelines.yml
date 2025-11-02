@@ -30,6 +30,9 @@ pr:
     - '*.rst'
     - '*.txt'
 
+variables:
+  cacheKeySuffix: $[replace(variables['Build.SourceBranch'], '/', '_')]
+
 jobs:
   - job: CUDA_Build_Test
     pool: avatar
@@ -38,7 +41,7 @@ jobs:
     - task: Cache@2
       displayName: Restore ccache
       inputs:
-        key: 'ccache | CUDA | $(Agent.OS) | $(Build.SourceBranch)'
+        key: 'ccache | CUDA | $(Agent.OS) | $(cacheKeySuffix)'
         restoreKeys: |
           ccache | CUDA | $(Agent.OS)
         path: $(Pipeline.Workspace)/ccache
