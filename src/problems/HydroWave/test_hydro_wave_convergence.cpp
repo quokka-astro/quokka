@@ -170,7 +170,7 @@ auto problem_main() -> int
 	{
 		amrex::ParmParse pp_tp("tiny_profiler");
 		if (!pp_tp.contains("output_file")) {
-			pp_tp.add("output_file", "/dev/null");
+			pp_tp.add("output_file", std::string("/dev/null"));
 		}
 	}
 
@@ -267,9 +267,9 @@ auto problem_main() -> int
 			amrex::Print() << "\n✓ Richardson convergence test PASSED\n";
 		}
 		return 0;
-	} else {
-		amrex::Print() << "\n✗ Richardson convergence test FAILED\n";
-		amrex::Print() << "Observed convergence rate deviates from expected rate by more than " << tolerance << "\n";
-		return 1;
 	}
+
+	amrex::Print() << "\n✗ Richardson convergence test FAILED\n";
+	amrex::Print() << "Observed convergence rate deviates from expected rate by more than " << tolerance << "\n";
+	return 1;
 }
