@@ -41,10 +41,10 @@ jobs:
       working-directory: ${{ runner.workspace }}/build
       run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_C_COMPILER=gcc-11 -DCMAKE_CXX_COMPILER=g++-11
 
-    - name: Build
+    - name: Build test_hydro_wave_convergence
       shell: bash
       working-directory: ${{ runner.workspace }}/build
-      run: cmake --build . --config $BUILD_TYPE --parallel 4
+      run: cmake --build . --config $BUILD_TYPE --parallel 4 --target test_hydro_wave_convergence
 
     - name: Create test output directory
       run: cmake -E make_directory $GITHUB_WORKSPACE/tests
