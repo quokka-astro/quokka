@@ -112,7 +112,7 @@ def fit_power_law_with_floor(data: Sequence[ConvergenceDatum]) -> FitResult:
 
             sse = 0.0
             for nx, err in zip(nx_values, error_values):
-                model = math.sqrt((amplitude * (nx ** (-order))) ** 2 + floor * floor)
+                model = math.hypot(amplitude * (nx ** (-order)), floor)
                 diff = err - model
                 sse += diff * diff
 
