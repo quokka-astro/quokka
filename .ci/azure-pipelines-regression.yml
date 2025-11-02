@@ -32,6 +32,13 @@ jobs:
         path: $(Pipeline.Workspace)/ccache
 
     - script: |
+        if ! command -v ccache >/dev/null 2>&1; then
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ccache
+        fi
+      displayName: Ensure ccache
+
+    - script: |
         mkdir -p $(Pipeline.Workspace)/ccache
         ccache --zero-stats || true
       displayName: Prepare ccache
