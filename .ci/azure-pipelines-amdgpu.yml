@@ -48,15 +48,22 @@ jobs:
         path: $(Pipeline.Workspace)/ccache
 
     - script: |
-        if ! command -v ccache >/dev/null 2>&1; then
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ccache
+        if command -v ccache >/dev/null 2>&1; then
+          echo "ccache available on agent."
+          echo "##vso[task.setvariable variable=cmakeLauncherArgs]-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
+        else
+          echo "ccache not found; proceeding without compiler cache."
+          echo "##vso[task.setvariable variable=cmakeLauncherArgs]"
         fi
-      displayName: Ensure ccache
+      displayName: Detect ccache
 
     - script: |
         mkdir -p $(Pipeline.Workspace)/ccache
-        ccache --zero-stats || true
+        if command -v ccache >/dev/null 2>&1; then
+          ccache --zero-stats || true
+        else
+          echo "ccache not installed; skipping zero-stats."
+        fi
       displayName: Prepare ccache
       env:
         CCACHE_DIR: $(Pipeline.Workspace)/ccache
@@ -68,7 +75,7 @@ jobs:
         CCACHE_BASEDIR: $(Build.SourcesDirectory)
         CCACHE_NOHASHDIR: 1
       inputs:
-        cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DAMReX_SPACEDIM=3 -DAMReX_GPU_BACKEND=HIP -DCMAKE_CXX_FLAGS=-ffp-exception-behavior=strict -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache'
+        cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DAMReX_SPACEDIM=3 -DAMReX_GPU_BACKEND=HIP -DCMAKE_CXX_FLAGS=-ffp-exception-behavior=strict $(cmakeLauncherArgs)'
     
     - task: CMake@1
       displayName: 'Build Quokka'
@@ -93,7 +100,11 @@ jobs:
       displayName: Publish test results
 
     - script: |
-        ccache --show-stats || true
+        if command -v ccache >/dev/null 2>&1; then
+          ccache --show-stats || true
+        else
+          echo "ccache not installed; no statistics to report."
+        fi
       displayName: Report ccache statistics
       condition: succeededOrFailed()
       env:
