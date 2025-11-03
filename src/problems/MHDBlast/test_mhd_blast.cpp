@@ -98,19 +98,14 @@ template <> void QuokkaSimulation<MHDBlast>::refineGrid(int lev, amrex::TagBoxAr
 {
 	// tag cells for refinement
 	const amrex::Real eta_threshold = 0.1; // gradient refinement threshold
-	const auto& state_fc = state_new_fc_[lev];
+	const auto &state_fc = state_new_fc_[lev];
 
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
 		const auto state = state_new_cc_[lev].const_array(mfi);
 		const auto tag = tags.array(mfi);
 		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{
-			AMREX_D_DECL(
-				state_fc[0].const_array(mfi),
-				state_fc[1].const_array(mfi),
-				state_fc[2].const_array(mfi)
-			)
-		};
+		    AMREX_D_DECL(state_fc[0].const_array(mfi), state_fc[1].const_array(mfi), state_fc[2].const_array(mfi))};
 
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			amrex::Real const P = HydroSystem<MHDBlast>::ComputePressure(state, cons_fc, i, j, k);
