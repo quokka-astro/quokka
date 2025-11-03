@@ -86,9 +86,15 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	static auto CheckStatesValid(amrex::MultiFab const &cons_mf,  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf) -> bool;
 
+	AMREX_GPU_DEVICE static auto ComputePrimVars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> quokka::valarray<amrex::Real, nvar_>;
+	
 	AMREX_GPU_DEVICE static auto ComputePrimVars(amrex::Array4<const amrex::Real> const &cons, std::array<amrex::Array4<const amrex::Real>, 3> const &cons_fc, int i, int j, int k) -> quokka::valarray<amrex::Real, nvar_>;
 
 	AMREX_GPU_DEVICE static auto ComputeConsVars(quokka::valarray<amrex::Real, nvar_> const &prim) -> quokka::valarray<amrex::Real, nvar_>;
+
+	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
+
+	AMREX_GPU_DEVICE static auto ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
 
 	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons, std::array<amrex::Array4<const amrex::Real>, 3> const &cons_fc, int i, int j, int k) -> amrex::Real;
 
@@ -438,6 +444,46 @@ template <typename problem_t> auto HydroSystem<problem_t>::CheckStatesValid(amre
 				});
 }
 
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
+    -> quokka::valarray<amrex::Real, nvar_>
+{
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+        AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, 
+            "ComputePrimVars called without cons_fc but MHD is enabled! "
+            "Please pass face-centered magnetic field array.");
+    }
+	
+	// convert to primitive vars
+	const auto rho = cons(i, j, k, density_index);
+	const auto px = cons(i, j, k, x1Momentum_index);
+	const auto py = cons(i, j, k, x2Momentum_index);
+	const auto pz = cons(i, j, k, x3Momentum_index);
+	const auto E = cons(i, j, k, energy_index); // *total* gas energy per unit volume
+	const auto Eint_aux = cons(i, j, k, internalEnergy_index);
+	const auto vx = px / rho;
+	const auto vy = py / rho;
+	const auto vz = pz / rho;
+	const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
+	const auto thermal_energy = E - kinetic_energy;
+
+	amrex::Real P = NAN;
+	if constexpr (is_eos_isothermal()) {
+		P = rho * cs_iso_ * cs_iso_;
+	} else {
+		amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+		P = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
+	}
+
+	quokka::valarray<amrex::Real, nvar_> primVars{rho, vx, vy, vz, P, Eint_aux};
+
+	for (int n = 0; n < nscalars_; ++n) {
+		primVars[primScalar0_index + n] = cons(i, j, k, scalar0_index + n);
+	}
+	return primVars;
+}
+
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars(amrex::Array4<const amrex::Real> const &cons, std::array<amrex::Array4<const amrex::Real>, 3> const &cons_fc, int i, int j, int k)
     -> quokka::valarray<amrex::Real, nvar_>
@@ -509,6 +555,36 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeConsVars
 }
 
 template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
+    -> amrex::Real
+{
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+        AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, 
+            "ComputePressure called without cons_fc but MHD is enabled! "
+            "Please pass face-centered magnetic field array.");
+    }
+	const auto rho = cons(i, j, k, density_index);
+	const auto px = cons(i, j, k, x1Momentum_index);
+	const auto py = cons(i, j, k, x2Momentum_index);
+	const auto pz = cons(i, j, k, x3Momentum_index);
+	const auto E = cons(i, j, k, energy_index); // *total* gas energy per unit volume
+	const auto vx = px / rho;
+	const auto vy = py / rho;
+	const auto vz = pz / rho;
+	const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
+	const auto thermal_energy = E - kinetic_energy;
+	amrex::Real P = NAN;
+
+	if constexpr (is_eos_isothermal()) {
+		P = rho * cs_iso_ * cs_iso_;
+	} else {
+		amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+		P = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
+	}
+	return P;
+}
+
+template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure(amrex::Array4<const amrex::Real> const &cons, std::array<amrex::Array4<const amrex::Real>, 3> const &cons_fc, int i, int j, int k)
     -> amrex::Real
 {
@@ -545,6 +621,36 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure
 		P = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
 	}
 	return P;
+}
+
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
+    -> amrex::Real
+{
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+        AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, 
+            "ComputeSoundSpeed called without cons_fc but MHD is enabled! "
+            "Please pass face-centered magnetic field array.");
+    }
+	
+	const auto rho = cons(i, j, k, density_index);
+	const auto px = cons(i, j, k, x1Momentum_index);
+	const auto py = cons(i, j, k, x2Momentum_index);
+	const auto pz = cons(i, j, k, x3Momentum_index);
+	const auto E = cons(i, j, k, energy_index); // *total* gas energy per unit volume
+	const auto vx = px / rho;
+	const auto vy = py / rho;
+	const auto vz = pz / rho;
+
+	const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
+	const auto thermal_energy = E - kinetic_energy;
+
+	amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+	amrex::Real P = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
+	amrex::Real cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P, massScalars);
+
+	return cs;
 }
 
 template <typename problem_t>

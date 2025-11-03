@@ -158,7 +158,7 @@ template <> void QuokkaSimulation<MHDQuirk>::computeAfterTimestep()
 		// it should be sufficient examine a single box on level 0
 		// (no AMR should be used for this problem, and the odd-even decoupling will
 		// manifest in every row along the shock, if it happens)
-
+		const auto& state_fc = state_new_fc_[0];
 		amrex::MultiFab const &mf_state = state_new_cc_[0];
 		int box_no = -1;
 		int const ilo = ishock_g;
@@ -178,6 +178,13 @@ template <> void QuokkaSimulation<MHDQuirk>::computeAfterTimestep()
 
 		AMREX_ALWAYS_ASSERT(box_no != -1);
 		auto const &state = mf_state.const_array(box_no);
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{
+			AMREX_D_DECL(
+				state_fc[0].const_array(box_no),
+				state_fc[1].const_array(box_no),
+				state_fc[2].const_array(box_no)
+			)
+		};
 		amrex::Box const bx = amrex::makeSingleCellBox(ilo, jlo, klo);
 		Real host_s = NAN;
 		amrex::AsyncArray async_s(&host_s, 1);
@@ -189,9 +196,9 @@ template <> void QuokkaSimulation<MHDQuirk>::computeAfterTimestep()
 			int const j = idx[1];
 			int const k = idx[2];
 			Real const dodd = state(i, j + 1, k, HydroSystem<MHDQuirk>::density_index);
-			Real const podd = HydroSystem<MHDQuirk>::ComputePressure(state, i, j + 1, k);
+			Real const podd = HydroSystem<MHDQuirk>::ComputePressure(state, cons_fc, i, j + 1, k);
 			Real const deven = state(i, j, k, HydroSystem<MHDQuirk>::density_index);
-			Real const peven = HydroSystem<MHDQuirk>::ComputePressure(state, i, j, k);
+			Real const peven = HydroSystem<MHDQuirk>::ComputePressure(state, cons_fc, i, j, k);
 
 			// the 'entropy function' s == P / rho^gamma
 			const Real gamma = quokka::EOS_Traits<MHDQuirk>::gamma;
