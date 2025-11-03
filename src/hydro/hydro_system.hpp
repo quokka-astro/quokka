@@ -81,7 +81,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	static auto maxSignalSpeedLocal(amrex::MultiFab const &cons, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf) -> amrex::Real;
 
-	static void ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons_cc, std::array<amrex::Array4<const amrex::Real>, 3> const &cons_fc,
+	static void ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons_cc, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &cons_fc,
 					  array_t &maxSignal, amrex::Box const &indexRange);
 
 	static auto CheckStatesValid(amrex::MultiFab const &cons_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf) -> bool;
@@ -89,7 +89,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	AMREX_GPU_DEVICE static auto ComputePrimVars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> quokka::valarray<amrex::Real, nvar_>;
 
 	AMREX_GPU_DEVICE static auto ComputePrimVars(amrex::Array4<const amrex::Real> const &cons,
-						     std::array<amrex::Array4<const amrex::Real>, 3> const &cons_fc, int i, int j, int k)
+						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &cons_fc, int i, int j, int k)
 	    -> quokka::valarray<amrex::Real, nvar_>;
 
 	AMREX_GPU_DEVICE static auto ComputeConsVars(quokka::valarray<amrex::Real, nvar_> const &prim) -> quokka::valarray<amrex::Real, nvar_>;
@@ -99,10 +99,10 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	AMREX_GPU_DEVICE static auto ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
 
 	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons,
-						     std::array<amrex::Array4<const amrex::Real>, 3> const &cons_fc, int i, int j, int k) -> amrex::Real;
+						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &cons_fc, int i, int j, int k) -> amrex::Real;
 
 	AMREX_GPU_DEVICE static auto ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons,
-						       std::array<amrex::Array4<const amrex::Real>, 3> const &cons_fc, int i, int j, int k) -> amrex::Real;
+						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &cons_fc, int i, int j, int k) -> amrex::Real;
 
 	AMREX_GPU_DEVICE static auto ComputeVelocityX1(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
 
@@ -488,7 +488,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars
 
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars(amrex::Array4<const amrex::Real> const &cons,
-										 std::array<amrex::Array4<const amrex::Real>, 3> const &cons_fc, int i, int j,
+										 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &cons_fc, int i, int j,
 										 int k) -> quokka::valarray<amrex::Real, nvar_>
 {
 	// convert to primitive vars
@@ -588,7 +588,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure
 
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure(amrex::Array4<const amrex::Real> const &cons,
-										 std::array<amrex::Array4<const amrex::Real>, 3> const &cons_fc, int i, int j,
+										 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &cons_fc, int i, int j,
 										 int k) -> amrex::Real
 {
 	amrex::Real magnetic_energy = 0.0;
@@ -656,7 +656,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpe
 
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons,
-										   std::array<amrex::Array4<const amrex::Real>, 3> const &cons_fc, int i, int j,
+										   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &cons_fc, int i, int j,
 										   int k) -> amrex::Real
 {
 	amrex::Real magnetic_energy = 0.0;
