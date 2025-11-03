@@ -178,7 +178,7 @@ template <> void QuokkaSimulation<MHDQuirk>::computeAfterTimestep()
 
 		AMREX_ALWAYS_ASSERT(box_no != -1);
 		auto const &state = mf_state.const_array(box_no);
-		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const cons_fc{
 		    AMREX_D_DECL(state_fc[0].const_array(box_no), state_fc[1].const_array(box_no), state_fc[2].const_array(box_no))};
 		amrex::Box const bx = amrex::makeSingleCellBox(ilo, jlo, klo);
 		Real host_s = NAN;
