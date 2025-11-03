@@ -575,7 +575,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 	for (amrex::MFIter iter(state_new_cc_[level]); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateNew_cc = state_new_cc_[level].const_array(iter);
-		std::array<amrex::Array4<const amrex::Real>, 3> stateNew_fc;
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> stateNew_fc;
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int idim = 0; idim < 3; ++idim) {
 				stateNew_fc[idim] = state_new_fc_[level][idim].const_array(iter);
