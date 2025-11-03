@@ -110,7 +110,7 @@ auto runWaveTest(int nx) -> double
 	pp.add("max_level", 0);
 	pp.add("blocking_factor_x", nx);
 	pp.add("blocking_factor_y", 8);
-	pp.add("blocking_factor_z", 8);	
+	pp.add("blocking_factor_z", 8);
 	pp.add("max_grid_size", nx);
 	pp.addarr("n_cell", ncells);
 
