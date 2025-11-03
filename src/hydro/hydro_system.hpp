@@ -276,7 +276,7 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 }
 
 template <typename problem_t>
-auto HydroSystem<problem_t>::maxSignalSpeedLocal(amrex::MultiFab const &cons_mf, std::array<amrex::MultiFab, 3> const &cons_fc_mf) -> amrex::Real
+auto HydroSystem<problem_t>::maxSignalSpeedLocal(amrex::MultiFab const &cons_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf) -> amrex::Real
 {
 	// return maximum signal speed on local grids
 	auto const &cons_fc_x0 = cons_fc_mf[0].const_arrays();
