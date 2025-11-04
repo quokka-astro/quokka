@@ -45,6 +45,12 @@ template <typename problem_t> struct HydroSystem_Traits {
 	static constexpr bool reconstruct_eint = true;
 };
 
+// Helper for dependent static_assert that always evaluates to false
+// This is needed to make static_assert work inside constexpr if blocks
+template <typename T> struct dependent_false : std::false_type {
+};
+template <typename T> inline constexpr bool dependent_false_v = dependent_false<T>::value;
+
 enum class RiemannSolver { HLLC, LLF, LLF_MHD, HLLD };
 
 /// Class for the Euler equations of inviscid hydrodynamics
@@ -107,8 +113,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &cons_fc, int i, int j, int k)
 	    -> amrex::Real;
 
-	AMREX_GPU_DEVICE static auto ComputeMagneticEnergy(std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &cons_fc, int i, int j,
-							    int k) -> amrex::Real;
+	AMREX_GPU_DEVICE static auto ComputeMagneticEnergy(std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &cons_fc, int i, int j, int k)
+	    -> amrex::Real;
 
 	AMREX_GPU_DEVICE static auto ComputeVelocityX1(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
 
@@ -444,8 +450,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars
     -> quokka::valarray<amrex::Real, nvar_>
 {
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, "ComputePrimVars called without cons_fc but MHD is enabled! "
-							"Please pass face-centered magnetic field array.");
+		static_assert(dependent_false_v<problem_t>, "ComputePrimVars called without cons_fc but MHD is enabled! "
+							    "Please pass face-centered magnetic field array.");
 	}
 
 	// convert to primitive vars
@@ -540,8 +546,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure
     -> amrex::Real
 {
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, "ComputePressure called without cons_fc but MHD is enabled! "
-							"Please pass face-centered magnetic field array.");
+		static_assert(dependent_false_v<problem_t>, "ComputePressure called without cons_fc but MHD is enabled! "
+							    "Please pass face-centered magnetic field array.");
 	}
 	const auto rho = cons(i, j, k, density_index);
 	const auto px = cons(i, j, k, x1Momentum_index);
@@ -596,8 +602,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpe
     -> amrex::Real
 {
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, "ComputeSoundSpeed called without cons_fc but MHD is enabled! "
-							"Please pass face-centered magnetic field array.");
+		static_assert(dependent_false_v<problem_t>, "ComputeSoundSpeed called without cons_fc but MHD is enabled! "
+							    "Please pass face-centered magnetic field array.");
 	}
 
 	const auto rho = cons(i, j, k, density_index);
@@ -644,8 +650,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpe
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeMagneticEnergy(std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &cons_fc,
-										       int i, int j, int k) -> amrex::Real
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
+HydroSystem<problem_t>::ComputeMagneticEnergy(std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &cons_fc, int i, int j, int k) -> amrex::Real
 {
 	if constexpr (!Physics_Traits<problem_t>::is_mhd_enabled) {
 		return 0.0;
