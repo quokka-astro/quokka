@@ -199,13 +199,9 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 		cons_fc[0] = fc_x0_ref;
 #if AMREX_SPACEDIM >= 2
 		cons_fc[1] = fc_x1_ref;
-#else
-		cons_fc[1] = amrex::Array4<const amrex::Real>{};
 #endif
 #if AMREX_SPACEDIM == 3
 		cons_fc[2] = fc_x2_ref;
-#else
-		cons_fc[2] = amrex::Array4<const amrex::Real>{};
 #endif
 		const amrex::Real rho = cons_cc[bx](i, j, k, density_index);
 		const amrex::Real px = cons_cc[bx](i, j, k, x1Momentum_index);
