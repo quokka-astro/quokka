@@ -191,9 +191,9 @@ template <> void QuokkaSimulation<MHDQuirk>::computeAfterTimestep()
 			int const j = idx[1];
 			int const k = idx[2];
 			Real const dodd = state(i, j + 1, k, HydroSystem<MHDQuirk>::density_index);
-			Real const podd = HydroSystem<MHDQuirk>::ComputePressure(state, cons_fc, i, j + 1, k);
+			Real const podd = HydroSystem<MHDQuirk>::ComputePressure(state, i, j + 1, k, &cons_fc);
 			Real const deven = state(i, j, k, HydroSystem<MHDQuirk>::density_index);
-			Real const peven = HydroSystem<MHDQuirk>::ComputePressure(state, cons_fc, i, j, k);
+			Real const peven = HydroSystem<MHDQuirk>::ComputePressure(state, i, j, k, &cons_fc);
 
 			// the 'entropy function' s == P / rho^gamma
 			const Real gamma = quokka::EOS_Traits<MHDQuirk>::gamma;

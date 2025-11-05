@@ -108,14 +108,14 @@ template <> void QuokkaSimulation<MHDBlast>::refineGrid(int lev, amrex::TagBoxAr
 		    AMREX_D_DECL(state_fc[0].const_array(mfi), state_fc[1].const_array(mfi), state_fc[2].const_array(mfi))};
 
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			amrex::Real const P = HydroSystem<MHDBlast>::ComputePressure(state, cons_fc, i, j, k);
+			amrex::Real const P = HydroSystem<MHDBlast>::ComputePressure(state, i, j, k, &cons_fc);
 
-			amrex::Real const P_xplus = HydroSystem<MHDBlast>::ComputePressure(state, cons_fc, i + 1, j, k);
-			amrex::Real const P_xminus = HydroSystem<MHDBlast>::ComputePressure(state, cons_fc, i - 1, j, k);
-			amrex::Real const P_yplus = HydroSystem<MHDBlast>::ComputePressure(state, cons_fc, i, j + 1, k);
-			amrex::Real const P_yminus = HydroSystem<MHDBlast>::ComputePressure(state, cons_fc, i, j - 1, k);
-			amrex::Real const P_zplus = HydroSystem<MHDBlast>::ComputePressure(state, cons_fc, i, j, k + 1);
-			amrex::Real const P_zminus = HydroSystem<MHDBlast>::ComputePressure(state, cons_fc, i, j, k - 1);
+			amrex::Real const P_xplus = HydroSystem<MHDBlast>::ComputePressure(state, i + 1, j, k, &cons_fc);
+			amrex::Real const P_xminus = HydroSystem<MHDBlast>::ComputePressure(state, i - 1, j, k, &cons_fc);
+			amrex::Real const P_yplus = HydroSystem<MHDBlast>::ComputePressure(state, i, j + 1, k, &cons_fc);
+			amrex::Real const P_yminus = HydroSystem<MHDBlast>::ComputePressure(state, i, j - 1, k, &cons_fc);
+			amrex::Real const P_zplus = HydroSystem<MHDBlast>::ComputePressure(state, i, j, k + 1, &cons_fc);
+			amrex::Real const P_zminus = HydroSystem<MHDBlast>::ComputePressure(state, i, j, k - 1, &cons_fc);
 
 			amrex::Real const Dx = 0.5 * (P_xplus - P_xminus);
 			amrex::Real const Dy = 0.5 * (P_yplus - P_yminus);
