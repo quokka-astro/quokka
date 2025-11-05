@@ -1,7 +1,7 @@
 if (AMReX_SPACEDIM GREATER_EQUAL 3)
 set(JOB_NAME ShockCloud)
 
-    add_executable(${JOB_NAME} testShockCloud.cpp ${QuokkaObjSources})
+    add_executable(${JOB_NAME} test${JOB_NAME}.cpp ${QuokkaObjSources})
 
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
         setup_target_for_cuda_compilation(${JOB_NAME})

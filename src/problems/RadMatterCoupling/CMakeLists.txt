@@ -1,7 +1,7 @@
 
 set(JOB_NAME RadMatterCoupling)
 
-add_executable(${JOB_NAME} testRadMatterCoupling.cpp ${QuokkaObjSources})
+add_executable(${JOB_NAME} test${JOB_NAME}.cpp ${QuokkaObjSources})
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(${JOB_NAME})

@@ -1,6 +1,6 @@
 set(JOB_NAME HydroWave)
 
-add_executable(${JOB_NAME} testHydroWave.cpp ${QuokkaObjSources})
+add_executable(${JOB_NAME} test${JOB_NAME}.cpp ${QuokkaObjSources})
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(${JOB_NAME})
