@@ -107,7 +107,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 						      int i, int j, int k, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr)
 	    -> amrex::Real;
 
-	AMREX_GPU_DEVICE static auto ComputeMagneticEnergy(std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc, int i, int j, int k)
+	AMREX_GPU_DEVICE static auto ComputeMagneticEnergy(int i, int j, int k, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr)
 	    -> amrex::Real;
 
 	AMREX_GPU_DEVICE static auto ComputeVelocityX1(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
@@ -347,7 +347,7 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 			amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons_cc, i, j, k);
 			const auto total_energy = cons_cc(i, j, k, energy_index); // *total* gas energy per unit volume
 			const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
-			const auto magnetic_energy = ComputeMagneticEnergy(&cons_fc, i, j, k);
+			const auto magnetic_energy = ComputeMagneticEnergy(i, j, k, &cons_fc);
 			const auto thermal_energy = total_energy - kinetic_energy - magnetic_energy;
 			const auto bx1_m = cons_fc[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
 			const auto bx1_p = cons_fc[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
@@ -415,7 +415,7 @@ auto HydroSystem<problem_t>::CheckStatesValid(amrex::MultiFab const &cons_mf, st
 					const auto vx = px / rho;
 					const auto vy = py / rho;
 					const auto vz = pz / rho;
-					const auto magnetic_energy = ComputeMagneticEnergy(&cons_fc, i, j, k);
+					const auto magnetic_energy = ComputeMagneticEnergy(i, j, k, &cons_fc);
 					const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
 					const auto thermal_energy = E - kinetic_energy - magnetic_energy;
 					const auto P = ComputePressure(cons[bx], i, j, k, &cons_fc);
@@ -454,7 +454,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars
 	const auto vx = px / rho;
 	const auto vy = py / rho;
 	const auto vz = pz / rho;
-	const auto magnetic_energy = ComputeMagneticEnergy(cons_fc, i, j, k);
+	const auto magnetic_energy = ComputeMagneticEnergy(i, j, k, cons_fc);
 	const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
 	const auto thermal_energy = E - kinetic_energy - magnetic_energy;
 
@@ -510,7 +510,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure
 	const auto vx = px / rho;
 	const auto vy = py / rho;
 	const auto vz = pz / rho;
-	const auto magnetic_energy = ComputeMagneticEnergy(cons_fc, i, j, k);
+	const auto magnetic_energy = ComputeMagneticEnergy(i, j, k, cons_fc);
 	const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
 	const auto thermal_energy = E - kinetic_energy - magnetic_energy;
 	amrex::Real P = NAN;
@@ -538,7 +538,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpe
 	const auto vx = px / rho;
 	const auto vy = py / rho;
 	const auto vz = pz / rho;
-	const auto magnetic_energy = ComputeMagneticEnergy(cons_fc, i, j, k);
+	const auto magnetic_energy = ComputeMagneticEnergy(i, j, k, cons_fc);
 	const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
 	const auto thermal_energy = E - kinetic_energy - magnetic_energy;
 
@@ -551,11 +551,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpe
 
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
-HydroSystem<problem_t>::ComputeMagneticEnergy(std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc, int i, int j, int k) -> amrex::Real
+HydroSystem<problem_t>::ComputeMagneticEnergy(int i, int j, int k, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc) -> amrex::Real
 {
 	if constexpr (!Physics_Traits<problem_t>::is_mhd_enabled) {
 		return 0.0;
-	} else {
+	} else if (cons_fc != nullptr) {
 		const auto bx1_m = (*cons_fc)[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
 		const auto bx1_p = (*cons_fc)[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
 		const auto bx2_m = (*cons_fc)[1](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
@@ -567,6 +567,9 @@ HydroSystem<problem_t>::ComputeMagneticEnergy(std::array<amrex::Array4<const amr
 		const auto bx3 = 0.5 * (bx3_m + bx3_p);
 		const auto b_sq = bx1 * bx1 + bx2 * bx2 + bx3 * bx3;
 		return 0.5 * b_sq;
+	} else {
+		static_assert(Physics_Traits<problem_t>::is_mhd_enabled, "ComputeMagneticEnergy called without face-centered fields for MHD problem");
+		return NAN;
 	}
 }
 
