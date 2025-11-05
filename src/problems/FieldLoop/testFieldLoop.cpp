@@ -2,7 +2,7 @@
 // Copyright 2025 Ben Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// ile testFieldLoop.cpp
+/// \file testFieldLoop.cpp
 /// \brief
 ///   This problem is based on the test described here:
 ///   https://www.astro.princeton.edu/~jstone/Athena/tests/field-loop/Field-loop.html

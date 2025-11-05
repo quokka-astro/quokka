@@ -2,7 +2,7 @@
 // Copyright 2025 Ben Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// ile testOrszagTang.cpp
+/// \file testOrszagTang.cpp
 /// \brief
 ///   This problem is based on the implementation here:
 ///   https://github.com/PrincetonUniversity/athena/blob/master/src/pgen/orszag_tang.cpp.

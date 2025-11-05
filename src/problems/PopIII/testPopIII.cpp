@@ -3,7 +3,7 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// ile testPopIII.cpp
+/// \file testPopIII.cpp
 /// \brief Defines a test problem for Pop III star formation.
 /// Author: Piyush Sharda (Leiden University, 2023)
 ///

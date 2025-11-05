@@ -1,4 +1,4 @@
-/// ile testRadLineCooling.cpp
+/// \file testRadLineCooling.cpp
 /// \brief Defines a test problem for line cooling and cosmic-ray heating in a uniform medium.
 ///
 

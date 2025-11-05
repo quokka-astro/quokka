@@ -3,7 +3,7 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// ile testCooling.cpp
+/// \file testCooling.cpp
 /// \brief Defines a test problem for SUNDIALS cooling.
 ///
 #include <fmt/format.h>

@@ -3,7 +3,7 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// ile testHydroShocktube.cpp
+/// \file testHydroShocktube.cpp
 /// \brief Defines a test problem for a shock tube.
 ///
 

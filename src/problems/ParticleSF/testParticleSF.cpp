@@ -1,4 +1,4 @@
-/// ile testParticleSF.cpp
+/// \file testParticleSF.cpp
 /// \brief Defines a test problem for stochastic star formation.
 ///
 

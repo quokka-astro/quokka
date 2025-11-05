@@ -3,7 +3,7 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// ile testHydroBlast3D.cpp
+/// \file testHydroBlast3D.cpp
 /// \brief Defines a test problem for a 3D explosion.
 ///
 #include "AMReX.H"

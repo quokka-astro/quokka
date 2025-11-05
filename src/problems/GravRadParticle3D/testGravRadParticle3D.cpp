@@ -1,4 +1,4 @@
-/// ile testGravRadParticle3D.cpp
+/// \file testGravRadParticle3D.cpp
 /// \brief Defines a 3D test problem for radiating particles with gravity.
 ///
 

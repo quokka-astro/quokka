@@ -1,4 +1,4 @@
-/// ile testSN.cpp
+/// \file testSN.cpp
 /// \brief Defines a test problem for supernova feedback.
 ///
 

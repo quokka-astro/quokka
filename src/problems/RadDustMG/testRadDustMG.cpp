@@ -1,4 +1,4 @@
-/// ile testRadDustMG.cpp
+/// \file testRadDustMG.cpp
 /// \brief Defines a multigroup test problem for gas-dust-radiation coupling in uniform medium.
 ///
 

@@ -3,7 +3,7 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// ile testShockCloud.cpp
+/// \file testShockCloud.cpp
 /// \brief Implements a shock-cloud problem with radiative cooling.
 ///
 

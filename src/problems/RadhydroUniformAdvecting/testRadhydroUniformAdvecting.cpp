@@ -1,4 +1,4 @@
-/// ile testRadhydroUniformAdvecting.cpp
+/// \file testRadhydroUniformAdvecting.cpp
 /// \brief Defines a test problem for radiation advection in a uniform medium with grey radiation.
 ///
 

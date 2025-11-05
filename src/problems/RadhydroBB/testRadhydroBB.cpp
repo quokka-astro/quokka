@@ -1,4 +1,4 @@
-/// ile testRadhydroBB.cpp
+/// \file testRadhydroBB.cpp
 /// \brief Defines a test problem for blackbody spectrum in a uniform advecting medium.
 ///
 

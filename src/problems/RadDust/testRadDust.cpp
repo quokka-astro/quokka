@@ -1,4 +1,4 @@
-/// ile testRadDust.cpp
+/// \file testRadDust.cpp
 /// \brief Defines a single-group test problem for gas-dust-radiation coupling in uniform medium.
 ///
 

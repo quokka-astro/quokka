@@ -3,7 +3,7 @@
 // Copyright 2024 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// ile testDiskGalaxy.cpp
+/// \file testDiskGalaxy.cpp
 /// \brief Defines a simulation using the AGORA isolated galaxy initial conditions.
 ///
 

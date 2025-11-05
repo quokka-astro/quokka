@@ -2,7 +2,7 @@
 // Copyright 2022 Neco Kriel and Ben Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// ile testCurrentSheet.cpp
+/// \file testCurrentSheet.cpp
 /// \brief Defines a test problem to test magnetic reconnection in a current sheet.
 ///   This problem is based on the description here:
 ///	  https://www.astro.princeton.edu/~jstone/Athena/tests/current-sheet/current-sheet.html

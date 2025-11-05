@@ -3,7 +3,7 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// ile testSphericalCollapse.cpp
+/// \file testSphericalCollapse.cpp
 /// \brief Defines a test problem for pressureless spherical collapse.
 ///
 #include "hydro/hydro_system.hpp"

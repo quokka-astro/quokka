@@ -5,7 +5,7 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// ile testResampledCoolingTest.cpp
+/// \file testResampledCoolingTest.cpp
 /// \brief Defines a test problem for cooling integrator accuracy using the ResampledCooling module.
 ///
 

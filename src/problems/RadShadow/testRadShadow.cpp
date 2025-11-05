@@ -3,7 +3,7 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// ile testRadShadow.cpp
+/// \file testRadShadow.cpp
 /// \brief Defines a 2D test problem for radiation in the transport regime.
 ///
 

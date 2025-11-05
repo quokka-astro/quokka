@@ -1,4 +1,4 @@
-/// ile testRadhydroPulseGrey.cpp
+/// \file testRadhydroPulseGrey.cpp
 /// \brief Defines a test problem for radiation in the diffusion regime with advection in medium with variable opacity under grey approximation.
 ///
 

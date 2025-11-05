@@ -3,7 +3,7 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// ile testPrimordialChem.cpp
+/// \file testPrimordialChem.cpp
 /// \brief Defines a test problem for primordial chemistry (microphysics).
 ///
 #ifdef HAVE_PYTHON

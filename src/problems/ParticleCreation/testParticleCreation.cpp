@@ -1,4 +1,4 @@
-/// ile testParticleCreation.cpp
+/// \file testParticleCreation.cpp
 /// \brief Defines a test problem for particle creation.
 ///
 

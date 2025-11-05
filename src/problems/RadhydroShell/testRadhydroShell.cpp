@@ -3,7 +3,7 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// ile testRadhydroShell.cpp
+/// \file testRadhydroShell.cpp
 /// \brief Defines a test problem for a 3D radiation pressure-driven shell.
 ///
 

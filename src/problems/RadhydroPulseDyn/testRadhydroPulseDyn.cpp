@@ -1,4 +1,4 @@
-/// ile testRadhydroPulseDyn.cpp
+/// \file testRadhydroPulseDyn.cpp
 /// \brief Defines a test problem for radiation in the dynamic diffusion regime with advection by gas.
 ///
 

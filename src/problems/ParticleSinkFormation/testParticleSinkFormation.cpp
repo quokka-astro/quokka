@@ -1,4 +1,4 @@
-/// ile testParticleSinkFormation.cpp
+/// \file testParticleSinkFormation.cpp
 /// \brief Defines a test problem for sink particle formation.
 ///
 

@@ -3,7 +3,7 @@
 // Credit to Nico Kriel for creating the MHD module and Alfven wave test
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// ile testFastWave.cpp
+/// \file testFastWave.cpp
 /// \brief Defines a test problem for magnetosonic waves of the fast type.
 ///
 
