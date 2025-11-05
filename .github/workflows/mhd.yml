@@ -74,10 +74,10 @@ jobs:
       working-directory: ${{runner.workspace}}/build
       shell: bash
       run: |
-        # Find all CTestTestfile.cmake files that contain MHD label and extract executable names
+        # Find all CMakeLists.txt files that contain MHD label and extract JOB_NAME
         grep -l "LABELS.*MHD" $(find . -name "CTestTestfile.cmake") | while read file; do
-          # Extract the executable path from add_test line
-          grep "add_test" "$file" | head -1 | sed 's/.*add_test([^"]*"//;s/".*//' | xargs basename
+          # Extract the JOB_NAME from set(JOB_NAME ...) line
+          grep "set(JOB_NAME" "$file" | sed 's/.*set(JOB_NAME \(.*\))/\1/' | tr -d ')'
         done | sort -u > mhd_executables.txt
         echo "MHD test executables to build:"
         cat mhd_executables.txt

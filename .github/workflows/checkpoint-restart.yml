@@ -76,7 +76,7 @@ jobs:
       working-directory: ${{runner.workspace}}/build
       shell: bash
       # Execute the build.  You can specify a specific target with "--target <NAME>"
-      run: cmake --build . --config $BUILD_TYPE --parallel 4 --target test_hydro3d_blast
+      run: cmake --build . --config $BUILD_TYPE --parallel 4 --target HydroBlast3D
 
     - name: Checkpoint/Restart Test
       working-directory: ${{github.workspace}}/tests
