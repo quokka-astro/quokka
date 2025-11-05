@@ -1,8 +1,10 @@
 if (AMReX_SPACEDIM EQUAL 3)
-    add_executable(test_mhd_blast test_mhd_blast.cpp ${QuokkaObjSources})
+set(JOB_NAME MHDBlast)
+
+    add_executable(${JOB_NAME} testMHDBlast.cpp ${QuokkaObjSources})
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
-        setup_target_for_cuda_compilation(test_mhd_blast)
+        setup_target_for_cuda_compilation(${JOB_NAME})
     endif()
 
-    add_test(NAME MHDBlast COMMAND test_mhd_blast ../inputs/blast_mhd.in ${QuokkaTestParams} ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in ${QuokkaTestParams} ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

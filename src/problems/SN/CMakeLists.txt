@@ -1,10 +1,12 @@
 if (AMReX_SPACEDIM EQUAL 3)
-    add_executable(test_SN test_SN.cpp ${QuokkaObjSources})
+set(JOB_NAME SN)
+
+    add_executable(${JOB_NAME} testSN.cpp ${QuokkaObjSources})
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
-        setup_target_for_cuda_compilation(test_SN)
+        setup_target_for_cuda_compilation(${JOB_NAME})
     endif()
 
-    add_test(NAME SN COMMAND test_SN ../inputs/SN.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-    add_test(NAME SN_long_grackle COMMAND test_SN ../inputs/SN_long_grackle.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-    add_test(NAME SN_long_resampled COMMAND test_SN ../inputs/SN_long_resampled.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME SN_long_grackle COMMAND ${JOB_NAME} ../inputs/SN_long_grackle.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME SN_long_resampled COMMAND ${JOB_NAME} ../inputs/SN_long_resampled.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

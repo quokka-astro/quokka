@@ -9,11 +9,13 @@ if (AMReX_SPACEDIM EQUAL 3)
     #this is critical to ensure the correct Microphysics files are linked to primordial chem target
     include_directories(BEFORE ${primordial_chem_dirs} "${CMAKE_CURRENT_BINARY_DIR}/" "includes/extern_parameters.H" "includes/network_properties.H")
 
-    add_executable(popiii popiii.cpp "${QuokkaSourcesNoEOS}" ../../turbulence/TurbDataReader.cpp ../../chemistry/Chemistry.cpp ${primordial_chem_sources})
-    target_compile_definitions(popiii PUBLIC CHEMISTRY) #this will add #define CHEMISTRY
+set(JOB_NAME PopIII)
+
+    add_executable(${JOB_NAME} testPopIII.cpp "${QuokkaSourcesNoEOS}" ../../turbulence/TurbDataReader.cpp ../../chemistry/Chemistry.cpp ${primordial_chem_sources})
+    target_compile_definitions(${JOB_NAME} PUBLIC CHEMISTRY) #this will add #define CHEMISTRY
 
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
-        setup_target_for_cuda_compilation(popiii)
+        setup_target_for_cuda_compilation(${JOB_NAME})
     endif()
 
     #need h5py to run perturbations.py file below
@@ -69,10 +71,10 @@ if (AMReX_SPACEDIM EQUAL 3)
 
 
     add_test(NAME ComputePerturbations COMMAND python3 ${CMAKE_SOURCE_DIR}/src/turbulence/perturbation.py --kmin=2 --kmax=${result} --size=${first_digits} --alpha=1.8 --f_solenoidal=0.66667 ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-    add_test(NAME PopIII COMMAND popiii ../inputs/PopIII.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME PopIII COMMAND ${JOB_NAME} ../inputs/PopIII.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
     set_tests_properties(ComputePerturbations PROPERTIES FIXTURES_SETUP PopIII_fixture)
     set_tests_properties(PopIII PROPERTIES FIXTURES_REQUIRED PopIII_fixture)
 
     # AMR test only works on Setonix because Gadi and avatar do not have enough memory per GPU
-    # add_test(NAME PopIIIAMR COMMAND popiii ../inputs/popiii_AMR.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    # add_test(NAME PopIIIAMR COMMAND ${JOB_NAME} ../inputs/popiii_AMR.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

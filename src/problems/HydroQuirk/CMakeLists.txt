@@ -1,8 +1,10 @@
 if (AMReX_SPACEDIM GREATER_EQUAL 2)
-    add_executable(test_hydro_quirk test_hydro_quirk.cpp ${QuokkaObjSources})
+set(JOB_NAME HydroQuirk)
+
+    add_executable(${JOB_NAME} testHydroQuirk.cpp ${QuokkaObjSources})
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
-        setup_target_for_cuda_compilation(test_hydro_quirk)
+        setup_target_for_cuda_compilation(${JOB_NAME})
     endif()
 
-    add_test(NAME HydroQuirk COMMAND test_hydro_quirk ../inputs/quirk.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

@@ -1,7 +1,9 @@
-add_executable(test_radhydro_pulse_MG_const_kappa test_radhydro_pulse_MG_const_kappa.cpp ${QuokkaObjSources})
+set(JOB_NAME RadhydroPulseMGconst)
+
+add_executable(${JOB_NAME} testRadhydroPulseMGconst.cpp ${QuokkaObjSources})
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
-		setup_target_for_cuda_compilation(test_radhydro_pulse_MG_const_kappa)
+		setup_target_for_cuda_compilation(${JOB_NAME})
 endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-add_test(NAME RadhydroPulseMGconst COMMAND test_radhydro_pulse_MG_const_kappa ../inputs/RadhydroPulse.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/RadhydroPulse.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)

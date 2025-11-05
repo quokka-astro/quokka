@@ -1,6 +1,8 @@
 if (AMReX_SPACEDIM GREATER_EQUAL 2)
-    add_executable(test_hydro2d_rm test_hydro2d_rm.cpp ${QuokkaObjSources})
+set(JOB_NAME HydroRichtmeyerMeshkov)
+
+    add_executable(${JOB_NAME} testHydroRichtmeyerMeshkov.cpp ${QuokkaObjSources})
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
-        setup_target_for_cuda_compilation(test_hydro2d_rm)
+        setup_target_for_cuda_compilation(${JOB_NAME})
     endif()
 endif()

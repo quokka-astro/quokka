@@ -1,7 +1,9 @@
-add_executable(test_radiation_marshak_Vaytet test_radiation_marshak_Vaytet.cpp ${QuokkaObjSources})
+set(JOB_NAME RadMarshakVaytet)
+
+add_executable(${JOB_NAME} testRadMarshakVaytet.cpp ${QuokkaObjSources})
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
-    setup_target_for_cuda_compilation(test_radiation_marshak_Vaytet)
+    setup_target_for_cuda_compilation(${JOB_NAME})
 endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-add_test(NAME MarshakWaveVaytet COMMAND test_radiation_marshak_Vaytet ../inputs/MarshakVaytet.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)

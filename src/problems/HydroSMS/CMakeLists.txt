@@ -1,7 +1,9 @@
-add_executable(test_hydro_sms test_hydro_sms.cpp ${QuokkaObjSources})
+set(JOB_NAME HydroSMS)
+
+add_executable(${JOB_NAME} testHydroSMS.cpp ${QuokkaObjSources})
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
-    setup_target_for_cuda_compilation(test_hydro_sms)
+    setup_target_for_cuda_compilation(${JOB_NAME})
 endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-add_test(NAME HydroSlowMovingShock COMMAND test_hydro_sms ../inputs/SlowMovingShock.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)

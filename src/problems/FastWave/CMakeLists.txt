@@ -1,10 +1,12 @@
 if (AMReX_SPACEDIM EQUAL 3)
-    add_executable(test_fast_wave test_fast_wave.cpp ${QuokkaObjSources})
+set(JOB_NAME FastWave)
+
+    add_executable(${JOB_NAME} testFastWave.cpp ${QuokkaObjSources})
 
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
-        setup_target_for_cuda_compilation(test_fast_wave)
+        setup_target_for_cuda_compilation(${JOB_NAME})
     endif()
 
-    add_test(NAME FastWave COMMAND test_fast_wave ../inputs/fast_wave.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
     set_tests_properties(FastWave PROPERTIES LABELS "MHD")
 endif()

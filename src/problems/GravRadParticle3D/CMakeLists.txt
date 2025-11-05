@@ -1,9 +1,11 @@
 if (AMReX_SPACEDIM EQUAL 3)
-	add_executable(test_grav_rad_particle_3D test_grav_rad_particle_3D.cpp ${QuokkaObjSources})
+set(JOB_NAME GravRadParticle3D)
+
+	add_executable(${JOB_NAME} testGravRadParticle3D.cpp ${QuokkaObjSources})
 
 	if(AMReX_GPU_BACKEND MATCHES "CUDA")
-			setup_target_for_cuda_compilation(test_grav_rad_particle_3D)
+			setup_target_for_cuda_compilation(${JOB_NAME})
 	endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-	add_test(NAME GravRadParticle3D COMMAND test_grav_rad_particle_3D ../inputs/GravRadParticle3D.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+	add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

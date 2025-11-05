@@ -1,8 +1,10 @@
 
-add_executable(test_radiation_marshak_cgs test_radiation_marshak_cgs.cpp ${QuokkaObjSources})
+set(JOB_NAME RadMarshakCGS)
+
+add_executable(${JOB_NAME} testRadMarshakCGS.cpp ${QuokkaObjSources})
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
-    setup_target_for_cuda_compilation(test_radiation_marshak_cgs)
+    setup_target_for_cuda_compilation(${JOB_NAME})
 endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-add_test(NAME MarshakWaveCGS COMMAND test_radiation_marshak_cgs ../inputs/MarshakCGS.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)

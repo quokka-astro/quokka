@@ -1,8 +1,10 @@
 if (AMReX_SPACEDIM GREATER_EQUAL 2)
-    add_executable(test_advection2d test_advection2d.cpp ${QuokkaObjSources})
+set(JOB_NAME Advection2D)
+
+    add_executable(${JOB_NAME} testAdvection2D.cpp ${QuokkaObjSources})
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
-        setup_target_for_cuda_compilation(test_advection2d)
+        setup_target_for_cuda_compilation(${JOB_NAME})
     endif()
     
-    add_test(NAME Advection2D COMMAND test_advection2d ../inputs/advection2d_amr.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

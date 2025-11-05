@@ -1,8 +1,10 @@
 
-add_executable(test_radiation_SuOlson test_radiation_SuOlson.cpp ${QuokkaObjSources})
+set(JOB_NAME RadSuOlson)
+
+add_executable(${JOB_NAME} testRadSuOlson.cpp ${QuokkaObjSources})
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
-    setup_target_for_cuda_compilation(test_radiation_SuOlson)
+    setup_target_for_cuda_compilation(${JOB_NAME})
 endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-add_test(NAME SuOlsonTest COMMAND test_radiation_SuOlson ../inputs/SuOlson.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)

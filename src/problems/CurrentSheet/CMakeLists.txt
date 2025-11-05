@@ -1,9 +1,11 @@
 if (AMReX_SPACEDIM EQUAL 3)
-    add_executable(test_current_sheet test_current_sheet.cpp ${QuokkaObjSources})
+set(JOB_NAME CurrentSheet)
+
+    add_executable(${JOB_NAME} testCurrentSheet.cpp ${QuokkaObjSources})
 
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
-        setup_target_for_cuda_compilation(test_current_sheet)
+        setup_target_for_cuda_compilation(${JOB_NAME})
     endif()
 
-    add_test(NAME CurrentSheet COMMAND test_current_sheet ../inputs/current_sheet.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

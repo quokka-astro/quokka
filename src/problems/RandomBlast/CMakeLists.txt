@@ -1,8 +1,10 @@
 if (AMReX_SPACEDIM EQUAL 3)
-    add_executable(random_blast blast.cpp ${QuokkaObjSources})
+set(JOB_NAME RandomBlast)
+
+    add_executable(${JOB_NAME} testRandomBlast.cpp ${QuokkaObjSources})
 
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
-        setup_target_for_cuda_compilation(random_blast)
+        setup_target_for_cuda_compilation(${JOB_NAME})
     endif(AMReX_GPU_BACKEND MATCHES "CUDA")
     
 endif(AMReX_SPACEDIM EQUAL 3)

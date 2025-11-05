@@ -1,10 +1,12 @@
 if (AMReX_SPACEDIM EQUAL 3)
-    add_executable(test_alfven_wave_linear test_alfven_wave_linear.cpp ${QuokkaObjSources})
+set(JOB_NAME AlfvenWaveLinear)
+
+    add_executable(${JOB_NAME} testAlfvenWaveLinear.cpp ${QuokkaObjSources})
 
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
-        setup_target_for_cuda_compilation(test_alfven_wave_linear)
+        setup_target_for_cuda_compilation(${JOB_NAME})
     endif()
 
-    add_test(NAME AlfvenWaveLinear COMMAND test_alfven_wave_linear ../inputs/alfven_wave_linear.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
     set_tests_properties(AlfvenWaveLinear PROPERTIES LABELS "MHD")
 endif()

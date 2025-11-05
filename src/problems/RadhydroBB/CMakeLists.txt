@@ -1,7 +1,9 @@
-add_executable(test_radhydro_bb test_radhydro_bb.cpp ${QuokkaObjSources})
+set(JOB_NAME RadhydroBB)
+
+add_executable(${JOB_NAME} testRadhydroBB.cpp ${QuokkaObjSources})
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
-    setup_target_for_cuda_compilation(test_radhydro_bb)
+    setup_target_for_cuda_compilation(${JOB_NAME})
 endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-add_test(NAME RadhydroBB COMMAND test_radhydro_bb ../inputs/RadhydroBB.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)

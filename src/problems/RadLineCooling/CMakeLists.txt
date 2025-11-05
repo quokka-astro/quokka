@@ -1,7 +1,9 @@
-add_executable(test_rad_line_cooling test_rad_line_cooling.cpp ${QuokkaObjSources})
+set(JOB_NAME RadLineCooling)
+
+add_executable(${JOB_NAME} testRadLineCooling.cpp ${QuokkaObjSources})
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
-    setup_target_for_cuda_compilation(test_rad_line_cooling)
+    setup_target_for_cuda_compilation(${JOB_NAME})
 endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-add_test(NAME RadLineCooling COMMAND test_rad_line_cooling ../inputs/RadLineCooling.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
