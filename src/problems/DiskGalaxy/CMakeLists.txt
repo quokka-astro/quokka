@@ -1,10 +1,5 @@
 if(AMReX_SPACEDIM EQUAL 3)
-  set(JOB_NAME DiskGalaxy)
-
-  add_executable(${JOB_NAME} test${JOB_NAME}.cpp ${QuokkaObjSources})
-  if(AMReX_GPU_BACKEND MATCHES "CUDA")
-    setup_target_for_cuda_compilation(${JOB_NAME})
-  endif()
+  quokka_add_problem(JOB_NAME DiskGalaxy ADD_TEST OFF)
 
   # extract data files for regression testing
   file(
