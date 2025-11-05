@@ -554,8 +554,9 @@ HydroSystem<problem_t>::ComputeMagneticEnergy(int i, int j, int k, std::array<am
 	if constexpr (!Physics_Traits<problem_t>::is_mhd_enabled) {
 		return 0.0;
 	} else {
-		AMREX_ASSERT(cons_fc != nullptr);
-		
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(cons_fc != nullptr, 
+			"ComputeMagneticEnergy called without face-centered fields for MHD problem");
+
 		const auto bx1_m = (*cons_fc)[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
 		const auto bx1_p = (*cons_fc)[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
 		const auto bx2_m = (*cons_fc)[1](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
