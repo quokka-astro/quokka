@@ -25,6 +25,7 @@
 #include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
 #include "hydro/hydro_system.hpp"
+#include "particles/particle_types.hpp"
 #include "radiation/radiation_system.hpp"
 #include "turbulence/TurbDataReader.hpp"
 
@@ -36,6 +37,11 @@
 using amrex::Real;
 
 struct PopIII {
+};
+
+template <> struct Particle_Traits<PopIII> {
+	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Sink;
 };
 
 template <> struct HydroSystem_Traits<PopIII> {
