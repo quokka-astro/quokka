@@ -93,19 +93,17 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	static auto CheckStatesValid(amrex::MultiFab const &cons_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf) -> bool;
 
-	AMREX_GPU_DEVICE static auto ComputePrimVars(amrex::Array4<const amrex::Real> const &cons,
-						      int i, int j, int k, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr)
+	AMREX_GPU_DEVICE static auto ComputePrimVars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
+						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr)
 	    -> quokka::valarray<amrex::Real, nvar_>;
 
 	AMREX_GPU_DEVICE static auto ComputeConsVars(quokka::valarray<amrex::Real, nvar_> const &prim) -> quokka::valarray<amrex::Real, nvar_>;
 
-	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons,
-						     int i, int j, int k, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr)
-	    -> amrex::Real;
+	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
+						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr) -> amrex::Real;
 
-	AMREX_GPU_DEVICE static auto ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons,
-						      int i, int j, int k, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr)
-	    -> amrex::Real;
+	AMREX_GPU_DEVICE static auto ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
+						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr) -> amrex::Real;
 
 	AMREX_GPU_DEVICE static auto ComputeMagneticEnergy(std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc, int i, int j, int k)
 	    -> amrex::Real;
@@ -440,9 +438,9 @@ auto HydroSystem<problem_t>::CheckStatesValid(amrex::MultiFab const &cons_mf, st
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars(amrex::Array4<const amrex::Real> const &cons,							 
-					int i, int j, int k, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc) 
-					-> quokka::valarray<amrex::Real, nvar_>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
+										 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc)
+    -> quokka::valarray<amrex::Real, nvar_>
 {
 	// convert to primitive vars
 	const auto rho = cons(i, j, k, density_index);
@@ -497,10 +495,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeConsVars
 	return consVars;
 }
 
-
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure(amrex::Array4<const amrex::Real> const &cons,
-										 int i, int j, int k, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc) -> amrex::Real
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
+										 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc)
+    -> amrex::Real
 {
 	const auto rho = cons(i, j, k, density_index);
 	const auto px = cons(i, j, k, x1Momentum_index);
@@ -524,11 +522,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure
 	return P;
 }
 
-
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons,
-										   int i, int j, int k, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc) 
-										   -> amrex::Real
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
+										   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc)
+    -> amrex::Real
 {
 	const auto rho = cons(i, j, k, density_index);
 	const auto px = cons(i, j, k, x1Momentum_index);
