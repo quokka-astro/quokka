@@ -3,7 +3,7 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file testNSCBC.cpp
+/// \file testNscbcChannel.cpp
 /// \brief Implements a subsonic channel flow problem with Navier-Stokes
 ///        Characteristic Boundary Conditions (NSCBC).
 ///
