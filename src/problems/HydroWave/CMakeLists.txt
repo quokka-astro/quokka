@@ -11,6 +11,6 @@ add_test(
   COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in ${QuokkaTestParams}
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 add_test(
-  NAME HydroWaveFC
-  COMMAND ${JOB_NAME} ../inputs/hydro_wave_fc.in ${QuokkaTestParams}
+  NAME HydroWaveFc
+  COMMAND ${JOB_NAME} ../inputs/HydroWaveFc.in ${QuokkaTestParams}
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
