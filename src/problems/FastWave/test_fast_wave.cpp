@@ -12,6 +12,7 @@
 #include <cmath>
 #include <gcem.hpp>
 #include <iostream>
+#include <numbers>
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
@@ -55,12 +56,12 @@ constexpr double bg_mag_amplitude = 1.;
 
 // theta is the angle between k and background magnetic field bg_mag
 constexpr double theta_degrees = 90.0; // degrees
-constexpr double cos_theta = gcem::cos(theta_degrees * M_PI / 180.0);
+constexpr double cos_theta = gcem::cos(theta_degrees * std::numbers::pi / 180.0);
 
 // k = 2 pi / wave length
 // box length = 1, so |k| in [1, inf)
 constexpr double num_modes = 1;
-constexpr double k_amplitude = 2 * M_PI * num_modes;
+constexpr double k_amplitude = 2 * std::numbers::pi * num_modes;
 
 // input perturbation: choose to do this via the relative density field in [0, 1]. remember, the linear regime is valid when this perturbation is small
 constexpr double delta_b = 1e-4;

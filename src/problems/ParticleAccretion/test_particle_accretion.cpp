@@ -17,6 +17,7 @@
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 #include <gcem.hpp>
+#include <numbers>
 
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
@@ -537,7 +538,7 @@ auto problem_main() -> int
 		const Real r_BH = C::Gconst * M_star_in_g / (cs0 * cs0);
 		const Real lam = std::exp(1.5) / 4.0;
 		const Real rho_bg = uniform_density > 0.0 ? uniform_density : rho0;
-		const Real Mdot_exact = 4.0 * M_PI * rho_bg * r_BH * r_BH * (lam * cs0);
+		const Real Mdot_exact = 4.0 * std::numbers::pi * rho_bg * r_BH * r_BH * (lam * cs0);
 		amrex::Print() << "Mdot_exact = " << Mdot_exact << "\n";
 
 		// Estimate the accretion rate from the particle data

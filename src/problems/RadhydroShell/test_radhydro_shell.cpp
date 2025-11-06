@@ -19,6 +19,7 @@
 #include "math/interpolate.hpp"
 #include "util/BC.hpp"
 #include <fstream>
+#include <numbers>
 
 #include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
@@ -81,7 +82,7 @@ constexpr amrex::Real sigma_star = 0.3 * r_0;	// cm
 constexpr amrex::Real H_shell = 0.3 * r_0;	// cm
 constexpr amrex::Real kappa0 = 20.0;		// specific opacity [cm^2 g^-1]
 
-constexpr amrex::Real rho_0 = M_shell / ((4. / 3.) * M_PI * r_0 * r_0 * r_0); // g cm^-3
+constexpr amrex::Real rho_0 = M_shell / ((4. / 3.) * std::numbers::pi_v<amrex::Real> * r_0 * r_0 * r_0); // g cm^-3
 constexpr amrex::Real c_v = k_B / ((2.2 * m_H) * (gamma_gas - 1.0));
 
 template <>
@@ -104,7 +105,7 @@ void RadSystem<ShellProblem>::SetRadEnergySource(array_t &radEnergy, const amrex
 		z0 = 0.;
 	}
 
-	const amrex::Real source_norm = L_star / std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5);
+	const amrex::Real source_norm = L_star / std::pow(2.0 * std::numbers::pi_v<amrex::Real> * sigma_star * sigma_star, 1.5);
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
@@ -214,7 +215,7 @@ template <> void QuokkaSimulation<ShellProblem>::setInitialConditionsOnGrid(quok
 		amrex::Real const rhat_z = (z - z0) / r;
 
 		double const sigma_sh = H_shell / (2.0 * std::sqrt(2.0 * std::log(2.0)));
-		double const rho_norm = M_shell / (4.0 * M_PI * r * r * std::sqrt(2.0 * M_PI * sigma_sh * sigma_sh));
+		double const rho_norm = M_shell / (4.0 * std::numbers::pi * r * r * std::sqrt(2.0 * std::numbers::pi * sigma_sh * sigma_sh));
 		double const rho_shell = rho_norm * std::exp(-std::pow(r - r_0, 2) / (2.0 * sigma_sh * sigma_sh));
 		double const rho = std::max(rho_shell, 1.0e-8 * rho_0);
 

@@ -11,6 +11,7 @@
 #include <fstream>
 #include <limits>
 #include <memory>
+#include <numbers>
 #include <random>
 
 #include "AMReX.H"
@@ -99,7 +100,7 @@ template <> void QuokkaSimulation<StarCluster>::preCalculateInitialConditions()
 		const Real R_sphere = userData_.R_sphere;
 		const Real rho_sph = userData_.rho_sphere;
 		const Real alpha_vir = userData_.alpha_vir;
-		const Real M_sphere = (4. / 3.) * M_PI * std::pow(R_sphere, 3) * rho_sph;
+		const Real M_sphere = (4. / 3.) * std::numbers::pi * std::pow(R_sphere, 3) * rho_sph;
 		const Real rms_dv_target = std::sqrt(alpha_vir * (3. / 5.) * Gconst_ * M_sphere / R_sphere);
 		const Real rms_Mach_target = rms_dv_target / quokka::EOS_Traits<StarCluster>::cs_isothermal;
 		const Real rms_dv_actual = userData_.dv_rms_generated;
@@ -183,7 +184,7 @@ template <> void QuokkaSimulation<StarCluster>::refineGrid(int lev, amrex::TagBo
 
 	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		Real const rho = state[bx](i, j, k, HydroSystem<StarCluster>::density_index);
-		const amrex::Real l_Jeans = cs * std::sqrt(M_PI / (G * rho));
+		const amrex::Real l_Jeans = cs * std::sqrt(std::numbers::pi / (G * rho));
 
 		if (l_Jeans < (N_cells * dx)) {
 			tag[bx](i, j, k) = amrex::TagBox::SET;

@@ -17,6 +17,7 @@
 #include "math/interpolate.hpp"
 #include <fmt/format.h>
 #include <fstream>
+#include <numbers>
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
@@ -64,8 +65,8 @@ template <> void QuokkaSimulation<HighMachProblem>::setInitialConditionsOnGrid(q
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		Real const x = prob_lo[0] + (i + static_cast<Real>(0.5)) * dx[0];
 
-		double const norm = 1. / (2.0 * M_PI);
-		double const vx = norm * std::sin(2.0 * M_PI * x);
+		double const norm = 1. / (2.0 * std::numbers::pi);
+		double const vx = norm * std::sin(2.0 * std::numbers::pi * x);
 		double const rho = 1.0;
 		double const P = 1.0e-10;
 

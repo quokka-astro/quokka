@@ -7,9 +7,6 @@
 /// \brief Defines a simulation using the AGORA isolated galaxy initial conditions.
 ///
 
-#include <algorithm>
-#include <cmath>
-
 #include "AMReX_Array.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_FabArrayBase.H"
@@ -17,6 +14,9 @@
 #include "AMReX_GpuDevice.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_REAL.H"
+#include <algorithm>
+#include <cmath>
+#include <numbers>
 
 #include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
@@ -148,7 +148,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 	const double R_d = disk_Rscale_kpc * (1.0e3 * C::parsec);
 	const double z_d = disk_zscale_kpc * (1.0e3 * C::parsec);
 	const double R_max_perturb = disk_perturb_Rmax_kpc * (1e3 * C::parsec);
-	const double rho_0 = disk_gas_mass / 4. / M_PI / (R_d * R_d) / z_d; // normalization constant
+	const double rho_0 = disk_gas_mass / (4. * std::numbers::pi) / (R_d * R_d) / z_d; // normalization constant
 
 	// halo parameters
 	double T_halo = 1.0e6;	    // K

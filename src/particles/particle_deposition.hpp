@@ -1,8 +1,6 @@
 #ifndef PARTICLE_DEPOSITION_HPP_
 #define PARTICLE_DEPOSITION_HPP_
 
-#include <algorithm>
-
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BLProfiler.H"
@@ -13,6 +11,8 @@
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
 #include "particles/particle_utils.hpp"
+#include <algorithm>
+#include <numbers>
 
 namespace amrex::ParticleInterpolator
 {
@@ -108,7 +108,7 @@ struct MassDeposition {
 		const amrex::Real cellVolumeFactor = (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
 		// Deposit mass weighted by 4 pi G
 		interp.ParticleToMesh(p, rho, start_part_comp, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
-			return 4.0 * M_PI * gConstLocal * part.rdata(comp) * cellVolumeFactor;
+			return 4.0 * std::numbers::pi_v<amrex::Real> * gConstLocal * part.rdata(comp) * cellVolumeFactor;
 		});
 	}
 };
@@ -273,7 +273,7 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 		     int evolutionStageIndex, int birthTimeIndex, const SNScheme SN_scheme_d)
 {
 	const BL_PROFILE("SNFeedbackUtils::depositToBuffer()");
-	constexpr amrex::Real stencil_volume = 4.0 / 3.0 * M_PI * SN_stencil_size * SN_stencil_size * SN_stencil_size;
+	constexpr amrex::Real stencil_volume = 4.0 / 3.0 * std::numbers::pi_v<amrex::Real> * SN_stencil_size * SN_stencil_size * SN_stencil_size;
 	constexpr amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>
 	    stencil_weights_gpu = {{{{{0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00416240696843},
 				      {0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00262865918549},

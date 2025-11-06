@@ -9,6 +9,7 @@
 ///
 
 #include <cmath>
+#include <numbers>
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
@@ -64,8 +65,8 @@ template <> void QuokkaSimulation<FieldLoop>::setInitialConditionsOnGrid(quokka:
 		const double y = prob_lo[1] + ((j + 0.5) * dx[1]);
 
 		//  Vx=sin(60 degrees) and Vy=cos(60 degrees)
-		const double vx = std::sin(M_PI / 3.0);
-		const double vy = std::cos(M_PI / 3.0);
+		const double vx = std::sin(std::numbers::pi / 3.0);
+		const double vy = std::cos(std::numbers::pi / 3.0);
 		const double vz = 1.0; // this should not affect the solution!
 
 		const double Ekin = 0.5 * rho0 * (vx * vx + vy * vy);

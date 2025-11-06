@@ -12,6 +12,7 @@
 #endif
 #include "hydro/hydro_system.hpp"
 #include <fmt/format.h>
+#include <numbers>
 #include <valarray>
 
 #include "AMReX_Array.H"
@@ -58,7 +59,8 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 
 	const quokka::valarray<double, 3> R = {1.0, -1.0, 1.5}; // right eigenvector of sound wave
 	const quokka::valarray<double, 3> U_0 = {rho0, rho0 * v0, P0 / (quokka::EOS_Traits<WaveProblem>::gamma - 1.0) + 0.5 * rho0 * std::pow(v0, 2)};
-	const quokka::valarray<double, 3> dU = (A * R / (2.0 * M_PI * dx[0])) * (std::cos(2.0 * M_PI * x_L) - std::cos(2.0 * M_PI * x_R));
+	const quokka::valarray<double, 3> dU =
+	    (A * R / (2.0 * std::numbers::pi * dx[0])) * (std::cos(2.0 * std::numbers::pi * x_L) - std::cos(2.0 * std::numbers::pi * x_R));
 
 	double const rho = U_0[0] + dU[0];
 	double const xmom = U_0[1] + dU[1];

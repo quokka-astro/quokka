@@ -9,6 +9,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <numbers>
 
 #include "AMReX_Array.H"
 #include "AMReX_BLassert.H"
@@ -19,7 +20,7 @@
 using Real = amrex::Real;
 
 static constexpr bool USE_SECOND_ORDER = false;
-static constexpr double PI = M_PI;
+static constexpr double PI = std::numbers::pi;
 static constexpr Real gInf = PI * PI * PI * PI / 15.0;
 static constexpr int INTERP_SIZE = 1000;
 static constexpr Real LOG_X_MIN = -3.;

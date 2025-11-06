@@ -14,6 +14,7 @@
 #include "math/interpolate.hpp"
 #include <cmath>
 #include <fstream>
+#include <numbers>
 
 #include "AMReX_BLassert.H"
 #include "AMReX_ParmParse.H"
@@ -78,7 +79,7 @@ template <> void QuokkaSimulation<RTProblem>::setInitialConditionsOnGrid(quokka:
 		double const amp = A * amrex::Random(rng);
 
 		double const vx = 0;
-		double const vy = amp * (1.0 + std::cos(8.0 * M_PI * y / 3.0)) / 2.0;
+		double const vy = amp * (1.0 + std::cos(8.0 * std::numbers::pi * y / 3.0)) / 2.0;
 		double const vz = 0;
 		double const P0 = 2.5;
 		double const P = P0 + rho * g_y * y;
