@@ -3,7 +3,7 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_hydro_wave_convergence.cpp
+/// \file testHydroWaveConvergence.cpp
 /// \brief Defines a Richardson convergence test for the linear hydro wave.
 ///
 

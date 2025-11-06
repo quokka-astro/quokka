@@ -1,4 +1,4 @@
-/// \file test_radiation_marshak_vaytet.cpp
+/// \file testRadMarshakVaytet.cpp
 /// \brief Defines a Marshak wave problem with variable opacity.
 ///
 

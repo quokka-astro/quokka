@@ -1,4 +1,4 @@
-/// \file particle_sink_accretion.cpp
+/// \file testParticleAccretion.cpp
 /// \brief Defines a test problem for Bondi-Hoyle accretion.
 
 #include "AMReX.H"

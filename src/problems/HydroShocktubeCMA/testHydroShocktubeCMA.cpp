@@ -3,7 +3,7 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_hydro_shocktube_CMA.cpp
+/// \file testHydroShocktubeCMA.cpp
 /// \brief Defines a test problem for a shock tube with passive scalars using consistent multi-fluid advection (CMA).
 /// Implementing shock tube proglem from Plewa and Muller 1999, A&A 342, 179
 ///

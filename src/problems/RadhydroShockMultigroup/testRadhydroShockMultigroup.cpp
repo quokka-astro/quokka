@@ -1,4 +1,4 @@
-/// \file test_radhydro_shock.cpp
+/// \file testRadhydroShockMultigroup.cpp
 /// \brief Defines a test problem for a multigroup gray-opacity non-equilibrium radiative shock.
 ///
 

@@ -3,7 +3,7 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_radiation_marshak.cpp
+/// \file testRadMarshakCGS.cpp
 /// \brief Defines a test problem for radiation in the diffusion regime.
 ///
 
