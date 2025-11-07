@@ -3,7 +3,7 @@
 # *****************************************************************
 geometry.prob_lo     =  -2.5e13 -2.5e13 -2.5e13
 geometry.prob_hi     =   2.5e13  2.5e13  2.5e13
-geometry.is_periodic =  1    1    0
+geometry.is_periodic =  1    1    1
 
 # *****************************************************************
 # VERBOSITY
@@ -30,5 +30,10 @@ plotfile_interval = -1
 tiny_profiler.enabled = 0
 
 cfl = 0.3
-max_timesteps = 2000
+max_timesteps = 20
 stop_time = 5.0e7   # s
+
+problem.do_split_particles = true
+problem.split_factor = 8
+
+particles.verbose = 1
