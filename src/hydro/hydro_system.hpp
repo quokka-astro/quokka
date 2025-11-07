@@ -277,58 +277,47 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 }
 
 template <typename problem_t>
-auto HydroSystem<problem_t>::maxSignalSpeedLocal(
-    amrex::MultiFab const &cons_mf,
-    std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf) -> amrex::Real
+auto HydroSystem<problem_t>::maxSignalSpeedLocal(amrex::MultiFab const &cons_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf) -> amrex::Real
 {
-    auto const &cons = cons_mf.const_arrays();
-
-    // Capture the MultiFabs themselves
-    auto const &cons_fc_x0 = cons_fc_mf[0].const_arrays();
+	// return maximum signal speed on local grids
+	auto const &cons_fc_x0 = cons_fc_mf[0].const_arrays();
 #if AMREX_SPACEDIM >= 2
-    auto const &cons_fc_x1 = cons_fc_mf[1].const_arrays();
+	auto const &cons_fc_x1 = cons_fc_mf[1].const_arrays();
 #endif
 #if AMREX_SPACEDIM == 3
-    auto const &cons_fc_x2 = cons_fc_mf[2].const_arrays();
+	auto const &cons_fc_x2 = cons_fc_mf[2].const_arrays();
 #endif
 
-    return amrex::ParReduce(
-        amrex::TypeList<amrex::ReduceOpMax>{},
-        amrex::TypeList<amrex::Real>{},
-        cons_mf,
-        amrex::IntVect(0),
-        [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real>
-        {
-            // Build local array only inside lambda
-            std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
-            if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-                cons_fc[0] = cons_fc_x0[bx];
+	auto const &cons = cons_mf.const_arrays();
+	return amrex::ParReduce(amrex::TypeList<amrex::ReduceOpMax>{}, amrex::TypeList<amrex::Real>{}, cons_mf,
+				amrex::IntVect(0), // no ghost cells
+				[=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real> {
+					std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
+					std::remove_cv_t<std::remove_reference_t<decltype(cons_fc_x0[bx])>> const fc_x0_ref{};
+					if (Physics_Traits<problem_t>::is_mhd_enabled) {
+						cons_fc[0] = cons_fc_x0[bx];
 #if AMREX_SPACEDIM >= 2
-                cons_fc[1] = cons_fc_x1[bx];
+						cons_fc[1] = cons_fc_x1[bx];
 #endif
 #if AMREX_SPACEDIM == 3
-                cons_fc[2] = cons_fc_x2[bx];
+						cons_fc[2] = cons_fc_x2[bx];
 #endif
-            }
+					}
+					const auto rho = cons[bx](i, j, k, HydroSystem<problem_t>::density_index);
+					const auto px = cons[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+					const auto py = cons[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+					const auto pz = cons[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+					const auto kinetic_energy = (px * px + py * py + pz * pz) / (2.0 * rho);
+					const double abs_vel = std::sqrt(2.0 * kinetic_energy / rho);
+					double cs = NAN;
 
-            const auto rho = cons[bx](i, j, k, HydroSystem<problem_t>::density_index);
-            const auto px  = cons[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
-            const auto py  = cons[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
-            const auto pz  = cons[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
-
-            const auto kinetic_energy = (px*px + py*py + pz*pz) / (2.0*rho);
-            const double abs_vel = std::sqrt(2.0 * kinetic_energy / rho);
-
-            double cs = NAN;
-            if constexpr (is_eos_isothermal()) {
-                cs = cs_iso_;
-            } else {
-                cs = ComputeSoundSpeed(cons[bx], i, j, k, &cons_fc);
-            }
-
-            return {cs + abs_vel};
-        }
-    );
+					if constexpr (is_eos_isothermal()) {
+						cs = cs_iso_;
+					} else {
+						cs = ComputeSoundSpeed(cons[bx], i, j, k, &cons_fc);
+					}
+					return {cs + abs_vel};
+				});
 }
 
 template <typename problem_t>
