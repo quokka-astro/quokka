@@ -294,7 +294,7 @@ auto HydroSystem<problem_t>::maxSignalSpeedLocal(amrex::MultiFab const &cons_mf,
 				[=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real> {
 					std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
 					std::remove_cv_t<std::remove_reference_t<decltype(cons_fc_x0[bx])>> const fc_x0_ref{};
-					if (Physics_Traits<problem_t>::is_mhd_enabled) { //if instead of if constexpr to avoid nvcc issues
+					if (Physics_Traits<problem_t>::is_mhd_enabled) { // if instead of if constexpr to avoid nvcc issues
 						cons_fc[0] = cons_fc_x0[bx];
 #if AMREX_SPACEDIM >= 2
 						cons_fc[1] = cons_fc_x1[bx];
