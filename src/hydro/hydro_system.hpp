@@ -298,10 +298,8 @@ auto HydroSystem<problem_t>::maxSignalSpeedLocal(amrex::MultiFab const &cons_mf,
 						cons_fc[0] = cons_fc_x0[bx];
 #if AMREX_SPACEDIM >= 2
 						cons_fc[1] = cons_fc_x1[bx];
-						cons_fc[1] = cons_fc_x1[bx];
 #endif
 #if AMREX_SPACEDIM == 3
-						cons_fc[2] = cons_fc_x2[bx];
 						cons_fc[2] = cons_fc_x2[bx];
 #endif
 					}
