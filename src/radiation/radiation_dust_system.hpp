@@ -561,7 +561,7 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 		AMREX_ASSERT_WITH_MESSAGE(min(cooling_tend) >= 0., "add_line_cooling_to_radiation has to be enabled when there is negative cooling rate!");
 		// TODO(CCH): potential GPU-related issue here.
 		EradVec_guess += (1 / cscale) * cooling_tend;
-	    AMREX_ASSERT(min(EradVec_guess) >= 0.0);
+		AMREX_ASSERT(min(EradVec_guess) >= 0.0);
 	}
 
 	AMREX_ASSERT(Egas_guess > 0.0);
@@ -932,10 +932,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 
 	if constexpr (!add_line_cooling_to_radiation_in_jac) {
 		EradVec_guess += (1 / cscale) * cooling_tend;
-        for (int g = 0; g < nGroups_; ++g) {
-            EradVec_guess[g] = std::max(EradVec_guess[g], Erad_floor_);
-        }
-	    AMREX_ASSERT(min(EradVec_guess) > 0.0);
+		for (int g = 0; g < nGroups_; ++g) {
+			EradVec_guess[g] = std::max(EradVec_guess[g], Erad_floor_);
+		}
+		AMREX_ASSERT(min(EradVec_guess) > 0.0);
 	}
 
 	AMREX_ASSERT(Egas_guess > 0.0);
