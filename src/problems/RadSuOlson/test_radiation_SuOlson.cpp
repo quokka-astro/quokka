@@ -64,6 +64,7 @@ template <> struct quokka::EOS_Traits<MarshakProblem> {
 
 template <> struct Physics_Traits<MarshakProblem> {
 	static constexpr bool is_self_gravity_enabled = false;
+	static constexpr bool is_driving_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr bool is_chemistry_enabled = false;
