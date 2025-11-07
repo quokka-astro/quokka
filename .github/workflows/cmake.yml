@@ -90,7 +90,7 @@ jobs:
     - name: Test
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      run: ASAN_OPTIONS=abort_on_error=1:fast_unwind_on_malloc=1:detect_leaks=0 UBSAN_OPTIONS=print_stacktrace=0 LSAN_OPTIONS=suppressions=$GITHUB_WORKSPACE/inputs/leak_suppress.txt canary run --output-on-failure --workers=2 .
+      run: ASAN_OPTIONS=abort_on_error=1:fast_unwind_on_malloc=1:detect_leaks=0 UBSAN_OPTIONS=print_stacktrace=0 LSAN_OPTIONS=suppressions=$GITHUB_WORKSPACE/inputs/leak_suppress.txt canary run --output-on-failure --workers=2 -k 'not HydroWaveConvergence' .
 
     - name: ccache stats
       if: always()

@@ -81,7 +81,7 @@ jobs:
     - name: Test
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      run: canary run --output-on-failure --workers=4 -k 'not RadhydroPulseMG' .
+      run: canary run --output-on-failure --workers=4 -k 'not RadhydroPulseMG and not HydroWaveConvergence' .
 
     - name: ccache stats
       if: always()

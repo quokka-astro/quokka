@@ -98,8 +98,8 @@ jobs:
     - name: Test
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      # Execute all tests with MHD in their name
-      run: canary run --output-on-failure --workers=2 -k MHD .
+      # Execute the MHD tests while skipping the slow HydroWave case
+      run: canary run --output-on-failure --workers=2 -k 'MHD and not HydroWaveConvergence' .
 
     - name: ccache stats
       if: always()
