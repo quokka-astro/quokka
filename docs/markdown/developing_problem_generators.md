@@ -5,8 +5,22 @@ Quokka problem generators live under `src/problems/`, each in its own subdirecto
 ## 1. Create a problem skeleton
 
 1. Pick a descriptive directory name (for example `MyProblem`) beneath `src/problems/` and add an `add_subdirectory(MyProblem)` entry to `src/problems/CMakeLists.txt`. This is how the top-level build discovers the new problem; see [`src/problems/CMakeLists.txt`](https://github.com/quokka-astro/quokka/blob/development/src/problems/CMakeLists.txt#L1-L71).
-2. Inside the new directory, create a `CMakeLists.txt` that declares the executable, enables CUDA compilation when needed, and (optionally) registers a regression test. The advection example shows the typical pattern: declare the executable with `${QuokkaObjSources}`, guard the CUDA setup, and use `add_test` to run the binary against an input deck located under `tests/../inputs/`; compare with [`src/problems/Advection/CMakeLists.txt`](https://github.com/quokka-astro/quokka/blob/development/src/problems/Advection/CMakeLists.txt#L1-L8).
-3. Add a driver source file (for example `test_my_problem.cpp`) that will hold the problem-specific specialisations and the `problem_main()` implementation described below.
+2. Inside the new directory, create a `CMakeLists.txt` that uses the `quokka_add_problem` helper function from `ProblemHelpers.cmake`. This function automatically sets up the executable (with the correct sources and CUDA compilation if needed) and optionally registers a regression test. The simplest case is:
+   ```cmake
+   quokka_add_problem(JOB_NAME MyProblem)
+   ```
+   This creates an executable named `MyProblem` from `testMyProblem.cpp`, sets up CUDA compilation if needed, and registers a test that runs with `../inputs/MyProblem.in`. To disable the test, use `ADD_TEST OFF`:
+   ```cmake
+   quokka_add_problem(JOB_NAME MyProblem ADD_TEST OFF)
+   ```
+   For problems that need dimension guards or custom input files, you can combine the helper with conditional logic:
+   ```cmake
+   if(AMReX_SPACEDIM GREATER_EQUAL 3)
+     quokka_add_problem(JOB_NAME MyProblem)
+   endif()
+   ```
+   See [`src/problems/ShockCloud/CMakeLists.txt`](https://github.com/quokka-astro/quokka/blob/development/src/problems/ShockCloud/CMakeLists.txt) and [`src/problems/NscbcVortex/CMakeLists.txt`](https://github.com/quokka-astro/quokka/blob/development/src/problems/NscbcVortex/CMakeLists.txt) for examples. The helper function's full interface is documented in [`src/problems/ProblemHelpers.cmake`](https://github.com/quokka-astro/quokka/blob/development/src/problems/ProblemHelpers.cmake). For problems requiring multiple tests or more complex test configurations, you may need to manually set up the executable and tests instead of using the helper. See [`src/problems/testSN/CMakeLists.txt`](https://github.com/quokka-astro/quokka/blob/development/src/problems/testSN/CMakeLists.txt) for an example of a problem that requires multiple tests.
+3. Add a driver source file (for example `testMyProblem.cpp`) that will hold the problem-specific specialisations and the `problem_main()` implementation described below.
 
 ## 2. Define problem traits
 
@@ -38,7 +52,7 @@ If your problem needs exact solutions, diagnostics, or error checks, compute the
 ## 5. Build and run the problem
 
 1. Regenerate or update your build tree with CMake (for example, `cmake -S . -B build -G Ninja` with the desired options). The compiled problem executables live under `build/src/problems/<ProblemName>/` once the build completes; the installation guide covers the workflow in the [build instructions](installation.md#installation).
-2. Ask CMake for the target corresponding to your new problem (e.g., `cmake --build build --target help`) and then build it with Ninja or your chosen generator. The documentation shows building just the `test_hydro3d_blast` target; replace that name with your new executable, as outlined in the [specific-target build section](installation.md#building-a-specific-test-problem).
-3. Run the binary from a working directory that can see your input deck, passing the `.in` file path as the first argument. The regression tests invoke the advection example as `test_advection ../inputs/advection_sawtooth.in`, which you can mimic for manual runs; see [`src/problems/Advection/CMakeLists.txt`](https://github.com/quokka-astro/quokka/blob/development/src/problems/Advection/CMakeLists.txt#L1-L8).
+2. Ask CMake for the target corresponding to your new problem (e.g., `cmake --build build --target help`) and then build it with Ninja or your chosen generator. The executable name matches the `JOB_NAME` you specified in `quokka_add_problem` (e.g., `MyProblem`), as outlined in the [specific-target build section](installation.md#building-a-specific-test-problem).
+3. Run the binary from a working directory that can see your input deck, passing the `.in` file path as the first argument. The regression tests invoke the advection example as `Advection ../inputs/Advection.in` (note the executable name matches the `JOB_NAME`), which you can mimic for manual runs. The `quokka_add_problem` helper automatically configures tests to run from the `tests/` directory with the input file path `../inputs/${JOB_NAME}.in`.
 
 Following the steps above should give you a fully integrated problem generator that participates in Quokka’s build system and can be exercised both manually and through CTest.
