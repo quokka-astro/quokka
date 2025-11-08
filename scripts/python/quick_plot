@@ -115,7 +115,7 @@ assert yt.__version__ >= "4.3.0", "yt version must be >= 4.3.0"
 yt.set_log_level(40)
 
 m_u = 1.660539e-24 * unyt.g
-
+kelvin = unyt.K
 
 def plot_one(pltdir, args, suffix_idx=None):
 
@@ -187,17 +187,23 @@ def plot_one(pltdir, args, suffix_idx=None):
         ds.add_field(field, function=lambda field, data: data[(
             "gas", "density")] / mean_molecular_weight_per_H_atom, units="cm**-3", sampling_type="cell")
     elif field == ("gas", "temperature"):
-        # add derived field
-        k_B = unyt.physical_constants.boltzmann_constant
-        gamma = 5.0 / 3.0
-        def temperature_function(field, data):
-            etot = data[("gas", "energy_density")]
-            density = data[("gas", "density")]
-            kinetic_energy = 0.5 * density * (data[("gas", "velocity_x")]**2 + data[("gas", "velocity_y")]**2 + data[("gas", "velocity_z")]**2)
-            eint = etot - kinetic_energy
-            # eint = data[("gas", "internal_energy_density")]
-            return eint * (gamma - 1.0) / (density / mean_molecular_weight_per_H_atom * k_B)
-        ds.add_field(field, function=temperature_function, units="K", sampling_type="cell")
+        # check if ("boxlib", "temperature") is in the fields list
+        if ("boxlib", "temperature") in ds.derived_field_list:
+            print("temperature is in the boxlib fields list, using boxlib temperature")
+            ds.add_field(field, function=lambda field, data: data[("boxlib", "temperature")] * kelvin, units="K", sampling_type="cell")
+        else:
+            print("temperature is not in the boxlib fields list, using energy_density and momentum to compute temperature, assuming gamma = 5/3")
+            # add derived field
+            k_B = unyt.physical_constants.boltzmann_constant
+            gamma = 5.0 / 3.0
+            def temperature_function(field, data):
+                etot = data[("gas", "total_energy_density")]
+                density = data[("gas", "density")]
+                kinetic_energy = 0.5 * density * (data[("gas", "velocity_x")]**2 + data[("gas", "velocity_y")]**2 + data[("gas", "velocity_z")]**2)
+                eint = etot - kinetic_energy
+                # eint = data[("gas", "internal_energy_density")]
+                return eint * (gamma - 1.0) / (density / mean_molecular_weight_per_H_atom * k_B)
+            ds.add_field(field, function=temperature_function, units="K", sampling_type="cell")
     elif field == ("gas", "velocity"):
         # add derived field for velocity magnitude
         ds.add_field(field, function=lambda field, data: np.sqrt(data[("gas", "velocity_x")]**2 + data[(
