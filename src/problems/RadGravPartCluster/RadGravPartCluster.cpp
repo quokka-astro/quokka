@@ -1,4 +1,4 @@
-/// \file particle_radiation.cpp
+/// \file RadGravPartCluster.cpp
 /// \brief Defines a test problem for radiation from particles.
 ///
 

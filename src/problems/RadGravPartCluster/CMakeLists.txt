@@ -1,6 +1,3 @@
 if (AMReX_SPACEDIM EQUAL 3)
-    add_executable(RadGravPartCluster RadGravPartCluster.cpp ${QuokkaObjSources})
-    if(AMReX_GPU_BACKEND MATCHES "CUDA")
-        setup_target_for_cuda_compilation(RadGravPartCluster)
-    endif()
+    quokka_add_problem(JOB_NAME RadGravPartCluster ADD_TEST OFF)
 endif()
