@@ -113,7 +113,8 @@ RadSystem<ParticleRadiationProblem>::DefineOpacityExponentsAndLowerValues(amrex:
 	return exponents_and_values;
 }
 
-template <> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ParticleRadiationProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/) -> amrex::Real
+template <>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto RadSystem<ParticleRadiationProblem>::ComputePlanckOpacity(const double rho, const double /*Tgas*/) -> amrex::Real
 {
 	return 1e4;
 }
