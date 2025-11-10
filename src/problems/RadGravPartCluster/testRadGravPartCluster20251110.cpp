@@ -16,8 +16,10 @@
 struct ParticleRadiationProblem {
 };
 
-constexpr int ngroups_ = 4;
-constexpr amrex::GpuArray<double, ngroups_ + 1> radBoundaries_{1.e-04, 1.00778140e-01, 1.00778140e+00, 5.53817071e+00, 1.e+2};
+// constexpr int ngroups_ = 4;
+// constexpr amrex::GpuArray<double, ngroups_ + 1> radBoundaries_{1.e-04, 1.00778140e-01, 1.00778140e+00, 5.53817071e+00, 1.e+2};
+constexpr int ngroups_ = 1;
+constexpr amrex::GpuArray<double, ngroups_ + 1> radBoundaries_{1.0e-4, 1.0e+2};
 
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
@@ -64,9 +66,9 @@ template <> struct Physics_Traits<ParticleRadiationProblem> {
 };
 
 template <> struct ISM_Traits<ParticleRadiationProblem> {
-	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
+	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
 	static constexpr double gas_dust_coupling_threshold = 1.0e-4;
-	static constexpr bool enable_photoelectric_heating = false;
+	static constexpr bool enable_photoelectric_heating = true;
 };
 
 template <> struct RadSystem_Traits<ParticleRadiationProblem> {
