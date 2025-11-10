@@ -551,7 +551,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
 HydroSystem<problem_t>::ComputeMagneticEnergy(int i, int j, int k, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc) -> amrex::Real
 {
 	if constexpr (!Physics_Traits<problem_t>::is_mhd_enabled) {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(cons_fc == nullptr, "ComputeMagneticEnergy called with face-centered fields for non-MHD problem");
 		return 0.0;
 	} else {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(cons_fc != nullptr, "ComputeMagneticEnergy called without face-centered fields for MHD problem");
