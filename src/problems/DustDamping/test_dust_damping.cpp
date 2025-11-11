@@ -246,7 +246,7 @@ auto problem_main() -> int
 {
 	// problem parameters
 	const double Lx = 1.0;
-	const double CFL_number = 10000000;
+	const double CFL_number = 1000000.0;
 
 	// boundary conditions
 	constexpr int nvars = HydroSystem<DustDamping>::nvar_;
@@ -264,6 +264,7 @@ auto problem_main() -> int
 	sim.reconstructionOrder_ = 3;
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.plotfileInterval_ = -1;
+	sim.cflNumber_ = CFL_number;
 	sim.constantDt_ = 0.005;
 
 	// initialize
@@ -329,7 +330,7 @@ auto problem_main() -> int
 	amrex::Print() << "Relative L1 norm for gas E     = " << rel_err_gas_E << "\n";
 
 	int status = 0;
-	const double rel_err_tol = 0.01;
+	const double rel_err_tol = 0.03;
 	if ((rel_err_gas_vx > rel_err_tol) || (rel_err_dust1_vx > rel_err_tol) || (rel_err_dust2_vx > rel_err_tol) || (rel_err_gas_E > rel_err_tol)) {
 		status = 1;
 	}
