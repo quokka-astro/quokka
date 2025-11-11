@@ -41,6 +41,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_Box.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_FabArray.H"
+#include "AMReX_FabArrayUtility.H"
 #include "AMReX_FabFactory.H"
 #include "AMReX_Geometry.H"
 #include "AMReX_GpuControl.H"
@@ -53,6 +54,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_ParmParse.H"
 #include "AMReX_PlotFileUtil.H"
 #include "AMReX_Print.H"
+#include "AMReX_Random.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 
@@ -244,6 +246,11 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction dir);
 	void WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf, const amrex::Vector<std::string> &compNames,
 						int lev, int interval) override;
+	void advectTracerParticlesMonteCarlo(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxes, amrex::MultiFab const &state_cc, amrex::Real dt_lev,
+					     int lev);
+	void computeMonteCarloTracerProbabilities(amrex::MultiFab &probabilities, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxes,
+						  amrex::MultiFab const &state_cc, amrex::Real dt_lev, int lev);
+	void applyMonteCarloTracerMoves(amrex::MultiFab const &probabilities, int lev);
 
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
@@ -1743,7 +1750,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	}
 
 	if (do_tracers != 0 && final_success) {
-		TracerPC->AdvectWithUmac(avgFaceVel.data(), lev, dt_lev);
+		advectTracerParticlesMonteCarlo(flux_rk2, state_old_cc_tmp, dt_lev, lev);
 	}
 
 	return final_success;
@@ -2576,6 +2583,194 @@ void QuokkaSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> 
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, dir);
 	RadSystem<problem_t>::template ComputeFluxes<DIR>(x1Flux.array(), x1FluxDiffusive.array(), x1LeftState.array(), x1RightState.array(), x1FluxRange,
 							  consState, dx, use_wavespeed_correction_); // watch out for argument order!!
+}
+
+template <typename problem_t>
+void QuokkaSimulation<problem_t>::advectTracerParticlesMonteCarlo(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxes,
+								  amrex::MultiFab const &state_cc, amrex::Real dt_lev, int lev)
+{
+	const BL_PROFILE("QuokkaSimulation::advectTracerParticlesMonteCarlo()");
+	if (TracerPC == nullptr) {
+		return;
+	}
+
+	constexpr int numFaces = 2 * AMREX_SPACEDIM;
+	amrex::MultiFab tracer_face_prob(grids[lev], dmap[lev], numFaces, 0);
+	tracer_face_prob.setVal(0.0);
+
+	computeMonteCarloTracerProbabilities(tracer_face_prob, fluxes, state_cc, dt_lev, lev);
+
+	amrex::Gpu::streamSynchronize();
+	amrex::prefetchToHost(tracer_face_prob);
+
+	applyMonteCarloTracerMoves(tracer_face_prob, lev);
+}
+
+template <typename problem_t>
+void QuokkaSimulation<problem_t>::computeMonteCarloTracerProbabilities(amrex::MultiFab &probabilities,
+								       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxes,
+								       amrex::MultiFab const &state_cc, amrex::Real dt_lev, int lev)
+{
+	const BL_PROFILE("QuokkaSimulation::computeMonteCarloTracerProbabilities()");
+	auto const state_arrs = state_cc.const_arrays();
+	AMREX_D_TERM(auto const flux_x = fluxes[0].const_arrays();, auto const flux_y = fluxes[1].const_arrays();
+		     , auto const flux_z = fluxes[2].const_arrays();)
+	auto prob_arrs = probabilities.arrays();
+
+	auto const dx = geom[lev].CellSizeArray();
+	amrex::Real cell_vol = dx[0];
+#if (AMREX_SPACEDIM >= 2)
+	cell_vol *= dx[1];
+#endif
+#if (AMREX_SPACEDIM == 3)
+	cell_vol *= dx[2];
+#endif
+
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> face_area{};
+	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+		face_area[dir] = cell_vol / dx[dir];
+	}
+
+	amrex::ParallelFor(state_cc, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		constexpr int numFacesLocal = 2 * AMREX_SPACEDIM;
+		amrex::Real const rho = state_arrs[bx](i, j, k, HydroSystem<problem_t>::density_index);
+		amrex::Real const mass = rho * cell_vol;
+		if (mass <= amrex::Real(0.0)) {
+			for (int comp = 0; comp < numFacesLocal; ++comp) {
+				prob_arrs[bx](i, j, k, comp) = amrex::Real(0.0);
+			}
+			return;
+		}
+
+		amrex::Real remaining = mass;
+		auto store_probability = [&](amrex::Real oriented_flux, int comp_index, int dir) {
+			amrex::Real prob_val = amrex::Real(0.0);
+			if (remaining > amrex::Real(0.0) && oriented_flux > amrex::Real(0.0)) {
+				amrex::Real const mass_out = amrex::min(oriented_flux * face_area[dir] * dt_lev, remaining);
+				amrex::Real const denom = remaining;
+				prob_val = amrex::min(mass_out / denom, amrex::Real(1.0));
+				remaining = amrex::max(denom - mass_out, amrex::Real(0.0));
+			}
+			prob_arrs[bx](i, j, k, comp_index) = prob_val;
+		};
+
+#if (AMREX_SPACEDIM >= 1)
+		{
+			amrex::Real const flux_low = flux_x[bx](i, j, k, HydroSystem<problem_t>::density_index);
+			store_probability(amrex::max(-flux_low, amrex::Real(0.0)), 0, 0);
+			amrex::Real const flux_high = flux_x[bx](i + 1, j, k, HydroSystem<problem_t>::density_index);
+			store_probability(amrex::max(flux_high, amrex::Real(0.0)), 1, 0);
+		}
+#endif
+#if (AMREX_SPACEDIM >= 2)
+		{
+			amrex::Real const flux_low = flux_y[bx](i, j, k, HydroSystem<problem_t>::density_index);
+			store_probability(amrex::max(-flux_low, amrex::Real(0.0)), 2, 1);
+			amrex::Real const flux_high = flux_y[bx](i, j + 1, k, HydroSystem<problem_t>::density_index);
+			store_probability(amrex::max(flux_high, amrex::Real(0.0)), 3, 1);
+		}
+#endif
+#if (AMREX_SPACEDIM == 3)
+		{
+			amrex::Real const flux_low = flux_z[bx](i, j, k, HydroSystem<problem_t>::density_index);
+			store_probability(amrex::max(-flux_low, amrex::Real(0.0)), 4, 2);
+			amrex::Real const flux_high = flux_z[bx](i, j, k + 1, HydroSystem<problem_t>::density_index);
+			store_probability(amrex::max(flux_high, amrex::Real(0.0)), 5, 2);
+		}
+#endif
+	});
+}
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::applyMonteCarloTracerMoves(amrex::MultiFab const &probabilities, int lev)
+{
+	const BL_PROFILE("QuokkaSimulation::applyMonteCarloTracerMoves()");
+	if (TracerPC == nullptr) {
+		return;
+	}
+
+	auto const prob_arrs = probabilities.const_arrays();
+	auto const dx = geom[lev].CellSizeArray();
+	auto const plo = geom[lev].ProbLoArray();
+	auto const domain = geom[lev].Domain();
+	std::array<int, AMREX_SPACEDIM> dom_lo{};
+	std::array<int, AMREX_SPACEDIM> dom_hi{};
+	std::array<int, AMREX_SPACEDIM> dom_len{};
+	std::array<int, AMREX_SPACEDIM> periodic_axis{};
+	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+		dom_lo[dir] = domain.smallEnd(dir);
+		dom_hi[dir] = domain.bigEnd(dir);
+		dom_len[dir] = domain.length(dir);
+		periodic_axis[dir] = geom[lev].isPeriodic(dir) ? 1 : 0;
+	}
+
+	for (typename amrex::AmrTracerParticleContainer::ParIterType pti(*TracerPC, lev); pti.isValid(); ++pti) {
+		int const grid = pti.index();
+		auto &particles = pti.GetArrayOfStructs();
+		auto *parray = particles().data();
+		const int np = particles.numParticles();
+
+		for (int ip = 0; ip < np; ++ip) {
+			auto &p = parray[ip];
+			if (!p.id().is_valid()) {
+				continue;
+			}
+
+			amrex::IntVect cell = TracerPC->Index(p, lev);
+			if (!prob_arrs[grid].contains(cell)) {
+				continue;
+			}
+
+			amrex::IntVect dest = cell;
+			bool moved = false;
+			for (int dir = 0; dir < AMREX_SPACEDIM && !moved; ++dir) {
+				int const neg_comp = 2 * dir;
+				amrex::Real const prob_neg = prob_arrs[grid](cell[0], cell[1], cell[2], neg_comp);
+				if (prob_neg > amrex::Real(0.0) && amrex::Random() < prob_neg) {
+					dest[dir] -= 1;
+					moved = true;
+					break;
+				}
+
+				amrex::Real const prob_pos = prob_arrs[grid](cell[0], cell[1], cell[2], neg_comp + 1);
+				if (prob_pos > amrex::Real(0.0) && amrex::Random() < prob_pos) {
+					dest[dir] += 1;
+					moved = true;
+				}
+			}
+
+			if (!moved) {
+				continue;
+			}
+
+			bool inside_domain = true;
+			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				if (dest[dir] < dom_lo[dir]) {
+					if (periodic_axis[dir] != 0) {
+						dest[dir] += dom_len[dir];
+					} else {
+						inside_domain = false;
+						break;
+					}
+				} else if (dest[dir] > dom_hi[dir]) {
+					if (periodic_axis[dir] != 0) {
+						dest[dir] -= dom_len[dir];
+					} else {
+						inside_domain = false;
+						break;
+					}
+				}
+			}
+
+			if (!inside_domain) {
+				p.id() = -1;
+				continue;
+			}
+
+			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				p.pos(dir) = plo[dir] + (static_cast<amrex::Real>(dest[dir]) + amrex::Real(0.5)) * dx[dir];
+			}
+		}
+	}
 }
 
 // Save single-level plotfile
