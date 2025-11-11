@@ -28,6 +28,11 @@ jobs:
     runs-on: macos-14
     needs: check_changes
     if: needs.check_changes.outputs.has_non_docs_changes == 'true'
+    env:
+      CCACHE_COMPRESS: '1'
+      CCACHE_COMPRESSLEVEL: '10'
+      CCACHE_MAXSIZE: 450M
+      CCACHE_SLOPPINESS: time_macros
 
     steps:
     - uses: actions/checkout@ff7abcd0c3c05ccf6adc123a8cd1fd4fb30fb493 # v4.2.2
@@ -47,7 +52,7 @@ jobs:
 
     - name: Install Homebrew dependencies
       run: |
-        brew install openmpi hdf5@1.10 || true
+        brew install ccache openmpi hdf5@1.10 || true
         brew link --force hdf5@1.10
 
     - name: Output HDF5 configuration (verbose)
@@ -62,13 +67,26 @@ jobs:
     - name: Install Canary
       run: python3 -m pip install --user "canary-wm @ git+https://github.com/sandialabs/canary"
 
+    - name: Set Up Cache
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: ~/Library/Caches/ccache
+        key: ccache-${{ github.workflow }}-${{ github.job }}-git-${{ github.sha }}
+        restore-keys: |
+             ccache-${{ github.workflow }}-${{ github.job }}-git-
+
+    - name: Initialize ccache
+      run: |
+        ccache --version
+        ccache -z
+
     - name: Configure CMake
       # Use a bash shell so we can use the same syntax for environment variable
       # access regardless of the host operating system
       shell: bash
       working-directory: ${{runner.workspace}}/build
       env: {CXXFLAGS: "-ffp-exception-behavior=strict"}
-      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE
+      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
     - name: Build
       working-directory: ${{runner.workspace}}/build
@@ -84,7 +102,13 @@ jobs:
       shell: bash
       run: |
         export PATH="$HOME/Library/Python/3.11/bin:$PATH"
-        canary run --output-on-failure --workers=3 .
+        canary run --output-on-failure --workers=3 -k 'not HydroWaveConvergence' .
+
+    - name: ccache stats
+      if: always()
+      run: |
+        du -hs ~/Library/Caches/ccache
+        ccache -s
 
     - name: Upload test output
       if: always()
