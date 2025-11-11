@@ -208,6 +208,7 @@ auto problem_main() -> int
 	sim.reconstructionOrder_ = 3;
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.plotfileInterval_ = -1;
+	sim.cflNumber_ = CFL_number;
 
 	// initialize
 	sim.setInitialConditions();

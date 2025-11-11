@@ -134,6 +134,7 @@ auto linear_interpolate(const std::vector<double> &x, const std::vector<double> 
 auto problem_main() -> int
 {
 	const double Lx = 40.0;
+	const double CFL_number = 0.4;
 
 	// Boundary conditions: transmissive (first-order extrapolation)
 	constexpr int nvars = HydroSystem<StreamingProblem>::nvar_;
@@ -148,6 +149,7 @@ auto problem_main() -> int
 	QuokkaSimulation<StreamingProblem> sim(BCs_cc);
 	sim.reconstructionOrder_ = 2;
 	sim.plotfileInterval_ = -1;
+	sim.cflNumber_ = CFL_number;
 
 	sim.setInitialConditions();
 	sim.evolve();
