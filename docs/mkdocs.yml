@@ -20,6 +20,7 @@ nav:
     - Installation: installation.md
     - Running on HPC clusters: running_on_hpc_clusters.md
     - Grid refinement (AMR): amr_grid_refinement.md
+    - Tracer particles: tracer_particles.md
     - Test problems:
       - Overview: tests/index.md
       - Radiative shock test: tests/radshock.md
