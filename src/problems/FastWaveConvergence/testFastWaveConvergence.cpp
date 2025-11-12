@@ -282,7 +282,7 @@ auto runWaveTest(int nx) -> double
 
 	QuokkaSimulation<FastWaveConvergence> sim(BCs_cc, BCs_fc);
 
-    sim.computeReferenceSolution_ = true;
+	sim.computeReferenceSolution_ = true;
 	sim.cflNumber_ = CFL_number;
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
