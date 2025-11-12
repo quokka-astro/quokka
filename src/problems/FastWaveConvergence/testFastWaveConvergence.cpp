@@ -3,7 +3,7 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_fast_wave_convergence.cpp
+/// \file testFastWaveConvergence.cpp
 /// \brief Defines a Richardson convergence test for the fast MHD wave.
 ///
 
@@ -283,6 +283,7 @@ auto runWaveTest(int nx) -> double
 
 	QuokkaSimulation<FastWaveConvergence> sim(BCs_cc, BCs_fc);
 
+    sim.computeReferenceSolution_ = true;
 	sim.cflNumber_ = CFL_number;
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;

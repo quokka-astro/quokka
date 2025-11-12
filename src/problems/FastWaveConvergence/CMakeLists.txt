@@ -1,5 +1,5 @@
 if(AMReX_SPACEDIM EQUAL 3)
-  set(JOB_NAME FastWave)
+  set(JOB_NAME FastWaveConvergence)
 
   add_executable(${JOB_NAME} test${JOB_NAME}.cpp ${QuokkaObjSources})
 
@@ -9,7 +9,6 @@ if(AMReX_SPACEDIM EQUAL 3)
 
   add_test(
     NAME ${JOB_NAME}
-    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in
+    COMMAND ${JOB_NAME} ${QuokkaTestParams}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-  set_tests_properties(FastWaveConvergence PROPERTIES LABELS "MHD")
 endif()
