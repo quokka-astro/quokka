@@ -98,21 +98,24 @@ template <> void QuokkaSimulation<MHDBlast>::refineGrid(int lev, amrex::TagBoxAr
 {
 	// tag cells for refinement
 	const amrex::Real eta_threshold = 0.1; // gradient refinement threshold
+	const auto &state_fc = state_new_fc_[lev];
 
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
 		const auto state = state_new_cc_[lev].const_array(mfi);
 		const auto tag = tags.array(mfi);
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const cons_fc{
+		    AMREX_D_DECL(state_fc[0].const_array(mfi), state_fc[1].const_array(mfi), state_fc[2].const_array(mfi))};
 
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			amrex::Real const P = HydroSystem<MHDBlast>::ComputePressure(state, i, j, k);
+			amrex::Real const P = HydroSystem<MHDBlast>::ComputePressure(state, i, j, k, &cons_fc);
 
-			amrex::Real const P_xplus = HydroSystem<MHDBlast>::ComputePressure(state, i + 1, j, k);
-			amrex::Real const P_xminus = HydroSystem<MHDBlast>::ComputePressure(state, i - 1, j, k);
-			amrex::Real const P_yplus = HydroSystem<MHDBlast>::ComputePressure(state, i, j + 1, k);
-			amrex::Real const P_yminus = HydroSystem<MHDBlast>::ComputePressure(state, i, j - 1, k);
-			amrex::Real const P_zplus = HydroSystem<MHDBlast>::ComputePressure(state, i, j, k + 1);
-			amrex::Real const P_zminus = HydroSystem<MHDBlast>::ComputePressure(state, i, j, k - 1);
+			amrex::Real const P_xplus = HydroSystem<MHDBlast>::ComputePressure(state, i + 1, j, k, &cons_fc);
+			amrex::Real const P_xminus = HydroSystem<MHDBlast>::ComputePressure(state, i - 1, j, k, &cons_fc);
+			amrex::Real const P_yplus = HydroSystem<MHDBlast>::ComputePressure(state, i, j + 1, k, &cons_fc);
+			amrex::Real const P_yminus = HydroSystem<MHDBlast>::ComputePressure(state, i, j - 1, k, &cons_fc);
+			amrex::Real const P_zplus = HydroSystem<MHDBlast>::ComputePressure(state, i, j, k + 1, &cons_fc);
+			amrex::Real const P_zminus = HydroSystem<MHDBlast>::ComputePressure(state, i, j, k - 1, &cons_fc);
 
 			amrex::Real const Dx = 0.5 * (P_xplus - P_xminus);
 			amrex::Real const Dy = 0.5 * (P_yplus - P_yminus);
