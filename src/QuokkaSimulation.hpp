@@ -2721,17 +2721,31 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::applyMonteCarloT
 			}
 
 			amrex::IntVect dest = cell;
+			int const i = cell[0];
+#if (AMREX_SPACEDIM >= 2)
+			int const j = cell[1];
+#else
+			constexpr int j = 0;
+#endif
+#if (AMREX_SPACEDIM == 3)
+			int const k = cell[2];
+#else
+			constexpr int k = 0;
+#endif
+			auto sample_probability = [&](int comp) noexcept -> amrex::Real {
+				return prob_arrs[grid](i, j, k, comp);
+			};
 			bool moved = false;
 			for (int dir = 0; dir < AMREX_SPACEDIM && !moved; ++dir) {
 				int const neg_comp = 2 * dir;
-				amrex::Real const prob_neg = prob_arrs[grid](cell[0], cell[1], cell[2], neg_comp);
+				amrex::Real const prob_neg = sample_probability(neg_comp);
 				if (prob_neg > amrex::Real(0.0) && amrex::Random() < prob_neg) {
 					dest[dir] -= 1;
 					moved = true;
 					break;
 				}
 
-				amrex::Real const prob_pos = prob_arrs[grid](cell[0], cell[1], cell[2], neg_comp + 1);
+				amrex::Real const prob_pos = sample_probability(neg_comp + 1);
 				if (prob_pos > amrex::Real(0.0) && amrex::Random() < prob_pos) {
 					dest[dir] += 1;
 					moved = true;
