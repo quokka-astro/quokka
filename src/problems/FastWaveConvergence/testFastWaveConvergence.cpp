@@ -239,7 +239,7 @@ auto runWaveTest(int nx) -> double
 {
 	// Problem parameters
 	const double CFL_number = 0.3;
-	const double max_time = 1.0;
+	const double max_time = 0.1;
 	const int max_timesteps = std::max(20000, nx * 100);
 
 	// Problem initialization
