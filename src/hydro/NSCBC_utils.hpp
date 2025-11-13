@@ -15,11 +15,10 @@ namespace NSCBC
 namespace detail
 {
 template <typename problem_t, SlopeLimiter limiter = SlopeLimiter::minmod>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto limit_normal_gradient(
-    quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &high_order_grad,
-    quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &QL,
-    quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &QC,
-    quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &QR, const amrex::Real dx)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto limit_normal_gradient(quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &high_order_grad,
+							       quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &QL,
+							       quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &QC,
+							       quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &QR, const amrex::Real dx)
     -> quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_>
 {
 	quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> grad{};
@@ -33,10 +32,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto limit_normal_gradient(
 }
 
 template <typename problem_t, SlopeLimiter limiter = SlopeLimiter::minmod>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto centered_limited_gradient(
-    quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &Qm,
-    quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &Qc,
-    quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &Qp, const amrex::Real dx)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto centered_limited_gradient(quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &Qm,
+								   quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &Qc,
+								   quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> const &Qp, const amrex::Real dx)
     -> quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_>
 {
 	quokka::valarray<amrex::Real, HydroSystem<problem_t>::nvar_> grad{};

@@ -14,8 +14,8 @@
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
 #include "hydro/EOS.hpp"
-#include "hydro/hydro_system.hpp"
 #include "hydro/NSCBC_utils.hpp"
+#include "hydro/hydro_system.hpp"
 #include "util/valarray.hpp"
 
 namespace NSCBC
