@@ -92,7 +92,7 @@ template <> void QuokkaSimulation<MHDBitwiseICs>::setInitialConditionsOnGrid(quo
 		for (int n = 0; n < ncomp_cc; ++n) {
 			state_cc(i, j, k, n) = 0.0; // fill unused quantities with zeros
 		}
-		computeWaveSolution(i, j, k, state_cc, dx, prob_lo, cen, dir, 0);
+		computeWaveSolution(i, j, k, state_cc, dx, prob_lo, cen, dir);
 	});
 }
 
@@ -112,7 +112,7 @@ template <> void QuokkaSimulation<MHDBitwiseICs>::setInitialConditionsOnGridFace
 		for (int n = 0; n < ncomp_fc; ++n) {
 			state_fc(i, j, k, n) = 0.0; // fill unused quantities with zeros
 		}
-		computeWaveSolution(i, j, k, state_fc, dx, prob_lo, cen, dir, 0);
+		computeWaveSolution(i, j, k, state_fc, dx, prob_lo, cen, dir);
 	});
 }
 
@@ -177,7 +177,7 @@ auto verifyPeriodicBCs(const amrex::MultiFab &mf, const std::string &label) -> i
 		// raw extent of valid box
 		const std::array<int, 3> valid_extent{valid_upper_indices[0] - valid_lower_indices[0] + 1, valid_upper_indices[1] - valid_lower_indices[1] + 1,
 						      valid_upper_indices[2] - valid_lower_indices[2] + 1};
-		// number of periodic entries per axis (N for nodal, extent for cc)
+		// number of periodic entries per axis (N for fc, N-1 for cc)
 		const std::array<int, 3> num_valid_entries{valid_extent[0] - is_nodal[0], valid_extent[1] - is_nodal[1], valid_extent[2] - is_nodal[2]};
 		AMREX_ALWAYS_ASSERT(num_valid_entries[0] > 0 && num_valid_entries[1] > 0 && num_valid_entries[2] > 0);
 		// wrap an index back into the valid_region along a given axis
