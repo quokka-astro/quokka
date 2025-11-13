@@ -171,34 +171,19 @@ auto verifyPeriodicBCs(const amrex::MultiFab &mf, const std::string &label) -> i
 		host_fab.copy(mf[mf_iter], grown_region);
 		auto const &fab_view = host_fab.const_array();
 		// index-space bounds of the valid region
-		const std::array<int, 3> valid_lower_indices{
-			valid_region.smallEnd(0),
-			valid_region.smallEnd(1),
-			valid_region.smallEnd(2)
-		};
-		const std::array<int, 3> valid_upper_indices{
-			valid_region.bigEnd(0),
-			valid_region.bigEnd(1),
-			valid_region.bigEnd(2)
-		};
+		const std::array<int, 3> valid_lower_indices{valid_region.smallEnd(0), valid_region.smallEnd(1), valid_region.smallEnd(2)};
+		const std::array<int, 3> valid_upper_indices{valid_region.bigEnd(0), valid_region.bigEnd(1), valid_region.bigEnd(2)};
 
 		// raw extent of valid box
-		const std::array<int, 3> valid_extent{
-			valid_upper_indices[0] - valid_lower_indices[0] + 1,
-			valid_upper_indices[1] - valid_lower_indices[1] + 1,
-			valid_upper_indices[2] - valid_lower_indices[2] + 1
-		};
+		const std::array<int, 3> valid_extent{valid_upper_indices[0] - valid_lower_indices[0] + 1, valid_upper_indices[1] - valid_lower_indices[1] + 1,
+						      valid_upper_indices[2] - valid_lower_indices[2] + 1};
 		// number of periodic entries per axis (N for nodal, extent for cc)
-		const std::array<int, 3> num_valid_entries{
-			valid_extent[0] - is_nodal[0],
-			valid_extent[1] - is_nodal[1],
-			valid_extent[2] - is_nodal[2]
-		};
+		const std::array<int, 3> num_valid_entries{valid_extent[0] - is_nodal[0], valid_extent[1] - is_nodal[1], valid_extent[2] - is_nodal[2]};
 		AMREX_ALWAYS_ASSERT(num_valid_entries[0] > 0 && num_valid_entries[1] > 0 && num_valid_entries[2] > 0);
 		// wrap an index back into the valid_region along a given axis
 		auto wrap_into_valid = [&](int index, int axis) -> int {
 			const int wrapped_index = index - valid_lower_indices[axis];
-			if (index <  valid_lower_indices[axis]) {
+			if (index < valid_lower_indices[axis]) {
 				return valid_lower_indices[axis] + (wrapped_index + num_valid_entries[axis]);
 			}
 			if (index <= valid_upper_indices[axis]) {
@@ -206,15 +191,11 @@ auto verifyPeriodicBCs(const amrex::MultiFab &mf, const std::string &label) -> i
 			}
 			return valid_lower_indices[axis] + (wrapped_index - num_valid_entries[axis]);
 		};
-		auto get_num_elems = [](const amrex::Box& box) -> amrex::IntVect {
-			return {box.length(0), box.length(1), box.length(2)};
-		};
+		auto get_num_elems = [](const amrex::Box &box) -> amrex::IntVect { return {box.length(0), box.length(1), box.length(2)}; };
 		const amrex::IntVect ntotal = get_num_elems(grown_region);
 		const amrex::IntVect nvalid = get_num_elems(valid_region);
 		amrex::Print() << "[" << label << "] dims:"
-		               << " ntotal="  << ntotal
-		               << " nvalid="  << nvalid
-		               << " (nghosts=" << nghosts << ", is_nodal=" << is_nodal << ")\n";
+			       << " ntotal=" << ntotal << " nvalid=" << nvalid << " (nghosts=" << nghosts << ", is_nodal=" << is_nodal << ")\n";
 		for (amrex::BoxIterator box_iter(grown_region); box_iter.ok(); ++box_iter) {
 			const amrex::IntVect this_index = box_iter();
 			const int wrapped_i = wrap_into_valid(this_index[0], 0);
@@ -225,14 +206,12 @@ auto verifyPeriodicBCs(const amrex::MultiFab &mf, const std::string &label) -> i
 				const amrex::Real wrapped_value = fab_view(wrapped_i, wrapped_j, wrapped_k, icomp);
 				if (this_value != wrapped_value) {
 					++num_diffs;
-					amrex::Print() << "[" << label << "]"
-					               << " fab=" << mf_iter.index()
-					               << " coord=(" << this_index[0] << "," << this_index[1] << "," << this_index[2] << ")"
-					               << " -> wrapped=(" << wrapped_i << "," << wrapped_j << "," << wrapped_k << ")"
-					               << " icomp=" << icomp
-					               << " val=" << std::setprecision(17) << this_value
-					               << " vs ref=" << std::setprecision(17) << wrapped_value
-					               << " (mismatch)\n";
+					amrex::Print()
+					    << "[" << label << "]"
+					    << " fab=" << mf_iter.index() << " coord=(" << this_index[0] << "," << this_index[1] << "," << this_index[2] << ")"
+					    << " -> wrapped=(" << wrapped_i << "," << wrapped_j << "," << wrapped_k << ")"
+					    << " icomp=" << icomp << " val=" << std::setprecision(17) << this_value << " vs ref=" << std::setprecision(17)
+					    << wrapped_value << " (mismatch)\n";
 				}
 			}
 		}

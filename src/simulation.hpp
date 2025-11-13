@@ -2321,10 +2321,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		}
 		{
 			// sync overlapping face-centred data
-			const auto& periodicity = geom[level].periodicity();
+			const auto &periodicity = geom[level].periodicity();
 			auto owner_mask = amrex::OwnerMask(state_new_fc_[level][idim], periodicity);
 			state_new_fc_[level][idim].OverrideSync(*owner_mask, periodicity);
-    }
+		}
 		// check that the valid state_new_fc_[level][idim] data is filled properly
 		AMREX_ALWAYS_ASSERT(!state_new_fc_[level][idim].contains_nan(0, ncomp_per_dim_fc));
 		// fill ghost zones
