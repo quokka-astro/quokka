@@ -14,6 +14,7 @@
 #include "AMReX_Array4.H"
 #include "AMReX_Gpu.H"
 #include "AMReX_ParmParse.H"
+#include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
@@ -173,7 +174,6 @@ auto verifyPeriodicBCs(const amrex::MultiFab &mf, const std::string &label) -> i
 		// index-space bounds of the valid region
 		const std::array<int, 3> valid_lower_indices{valid_region.smallEnd(0), valid_region.smallEnd(1), valid_region.smallEnd(2)};
 		const std::array<int, 3> valid_upper_indices{valid_region.bigEnd(0), valid_region.bigEnd(1), valid_region.bigEnd(2)};
-
 		// raw extent of valid box
 		const std::array<int, 3> valid_extent{valid_upper_indices[0] - valid_lower_indices[0] + 1, valid_upper_indices[1] - valid_lower_indices[1] + 1,
 						      valid_upper_indices[2] - valid_lower_indices[2] + 1};
@@ -219,9 +219,12 @@ auto verifyPeriodicBCs(const amrex::MultiFab &mf, const std::string &label) -> i
 
 	amrex::ParallelDescriptor::ReduceIntSum(num_diffs);
 	if (num_diffs == 0) {
-		amrex::Print() << "[" << label << "] boundary-band ghosts + valid compare equal to periodic wraps (exact equality).\n";
+		amrex::Print() << "[" << label << "]"
+									 << " periodic BC check: ghost and valid cells exactly match their wrapped values.\n";
 	} else {
-		amrex::Print() << "[" << label << "] mismatches detected: " << num_diffs << "\n";
+		amrex::Print() << "[" << label << "]"
+									 << " periodic BC check: found " << num_diffs
+									 << " mismatched entries between ghost/valid cells and their wrapped values.\n";
 	}
 	amrex::Print() << "\n";
 	return num_diffs;
@@ -248,11 +251,14 @@ auto problem_main() -> int
 	amrex::Vector<amrex::MultiFab> const &cc_state = sim.getNewMF_cc();
 	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &fc_state = sim.getNewMF_fc();
 
+	int num_diffs = 0;
 	const int amr_level = 0;
-	verifyPeriodicBCs(cc_state[amr_level], "cell-centered");
-	verifyPeriodicBCs(fc_state[amr_level][0], "FC-x");
-	verifyPeriodicBCs(fc_state[amr_level][1], "FC-y");
-	verifyPeriodicBCs(fc_state[amr_level][2], "FC-z");
+	amrex::Print() << "\n";
+	num_diffs += verifyPeriodicBCs(cc_state[amr_level], "cell-centered");
+	num_diffs += verifyPeriodicBCs(fc_state[amr_level][0], "FC-x");
+	num_diffs += verifyPeriodicBCs(fc_state[amr_level][1], "FC-y");
+	num_diffs += verifyPeriodicBCs(fc_state[amr_level][2], "FC-z");
+	bool diff_exist = (num_diffs != 0);
 
-	return 0;
+	return static_cast<int>(diff_exist);
 }
