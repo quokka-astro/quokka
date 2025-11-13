@@ -54,8 +54,8 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_ParmParse.H"
 #include "AMReX_PlotFileUtil.H"
 #include "AMReX_Print.H"
-#include "AMReX_Random.H"
 #include "AMReX_REAL.H"
+#include "AMReX_Random.H"
 #include "AMReX_SPACE.H"
 
 #ifdef AMREX_USE_ASCENT
@@ -2586,8 +2586,8 @@ void QuokkaSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> 
 }
 
 template <typename problem_t>
-void QuokkaSimulation<problem_t>::advectTracerParticlesMonteCarlo(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxes,
-								  amrex::MultiFab const &state_cc, amrex::Real dt_lev, int lev)
+void QuokkaSimulation<problem_t>::advectTracerParticlesMonteCarlo(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxes, amrex::MultiFab const &state_cc,
+								  amrex::Real dt_lev, int lev)
 {
 	const BL_PROFILE("QuokkaSimulation::advectTracerParticlesMonteCarlo()");
 	if (TracerPC == nullptr) {
