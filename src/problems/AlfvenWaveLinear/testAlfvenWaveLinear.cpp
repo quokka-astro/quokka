@@ -128,9 +128,9 @@ AMREX_GPU_MANAGED double angle_between_k_b0_rad = 0.0; // NOLINT
 // row 0: e1 = k_dir_prf (propagation)
 // row 1: e2 = inplane_dir_prf (k-b0 plane)
 // row 2: e3 = outofplane_dir_prf (perpendicular to that plane)
-AMREX_GPU_MANAGED std::array<double, 3> k_dir_prf{1.0, 0.0, 0.0};  // NOLINT
-AMREX_GPU_MANAGED std::array<double, 3> inplane_dir_prf{0.0, 1.0, 0.0};  // NOLINT
-AMREX_GPU_MANAGED std::array<double, 3> outofplane_dir_prf{0.0, 0.0, 1.0};  // NOLINT
+AMREX_GPU_MANAGED std::array<double, 3> k_dir_prf{1.0, 0.0, 0.0};	   // NOLINT
+AMREX_GPU_MANAGED std::array<double, 3> inplane_dir_prf{0.0, 1.0, 0.0};	   // NOLINT
+AMREX_GPU_MANAGED std::array<double, 3> outofplane_dir_prf{0.0, 0.0, 1.0}; // NOLINT
 
 // wavefront
 AMREX_GPU_MANAGED double k_magn = 2.0 * M_PI; // NOLINT
