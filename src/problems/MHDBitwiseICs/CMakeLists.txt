@@ -1,10 +1,15 @@
 if (AMReX_SPACEDIM EQUAL 3)
-    add_executable(testMHDBitwiseICs testMHDBitwiseICs.cpp ${QuokkaObjSources})
+	set(JOB_NAME MHDBitwiseICs)
 
-    if(AMReX_GPU_BACKEND MATCHES "CUDA")
-        setup_target_for_cuda_compilation(testMHDBitwiseICs)
-    endif()
+	add_executable(${JOB_NAME} test${JOB_NAME}.cpp ${QuokkaObjSources})
 
-    add_test(NAME MHDBitwiseICs COMMAND testMHDBitwiseICs ../inputs/MHDBitwiseICs.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-    set_tests_properties(MHDBitwiseICs PROPERTIES LABELS "MHD")
+  if(AMReX_GPU_BACKEND MATCHES "CUDA")
+    setup_target_for_cuda_compilation(${JOB_NAME})
+  endif()
+
+  add_test(
+    NAME ${JOB_NAME}
+    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  set_tests_properties(${JOB_NAME} PROPERTIES LABELS "MHD")
 endif()
