@@ -5,6 +5,6 @@ if (AMReX_SPACEDIM EQUAL 3)
         setup_target_for_cuda_compilation(test_mhd_bitwise_ICs)
     endif()
 
-    add_test(NAME MHDBitwiseICs COMMAND test_mhd_bitwise_ICs ../inputs/alfven_wave_linear_regression.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME MHDBitwiseICs COMMAND test_mhd_bitwise_ICs ../inputs/bit_wise_ICs.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
     set_tests_properties(MHDBitwiseICs PROPERTIES LABELS "MHD")
 endif()
