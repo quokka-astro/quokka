@@ -129,9 +129,9 @@ AMREX_GPU_MANAGED double angle_between_k_b0_rad = 0.0; // NOLINT
 // row 0: e1 = k_dir_prf (propagation)
 // row 1: e2 = inplane_dir_prf (k-b0 plane)
 // row 2: e3 = outofplane_dir_prf (perpendicular to that plane)
-AMREX_GPU_MANAGED std::array<double, 3> k_dir_prf{double(1.0), double(0.0), double(0.0)};	       // NOLINT
-AMREX_GPU_MANAGED std::array<double, 3> inplane_dir_prf{double(0.0), double(1.0), double(0.0)};    // NOLINT
-AMREX_GPU_MANAGED std::array<double, 3> outofplane_dir_prf{double(0.0), double(0.0), double(1.0)}; // NOLINT
+AMREX_GPU_MANAGED std::array<double, 3> k_dir_prf{1.0, 0.0, 0.0};  // NOLINT
+AMREX_GPU_MANAGED std::array<double, 3> inplane_dir_prf{0.0, 1.0, 0.0};  // NOLINT
+AMREX_GPU_MANAGED std::array<double, 3> outofplane_dir_prf{0.0, 0.0, 1.0};  // NOLINT
 
 // wavefront
 AMREX_GPU_MANAGED double k_magn = 2.0 * M_PI; // NOLINT
@@ -162,8 +162,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotateMRF2PRF(const std::array<dou
 		vec_mrf[0] * k_dir_prf[2] + vec_mrf[1] * inplane_dir_prf[2] + vec_mrf[2] * outofplane_dir_prf[2]};
 }
 
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(const double x1_prf, const double x2_prf, const double x3_prf,
-									     const double time, const int icomp) -> double
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(const double x1_prf, const double x2_prf, const double x3_prf, const double time, const int icomp) -> double
 {
 	// Computes A in PRF by:
 	// 1. rotating x_vec from PRF->MRF,
@@ -175,15 +174,15 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	const double b0_x1_mrf = b0_magn * std::cos(angle_between_k_b0_rad);
 	const double b0_x2_mrf = b0_magn * std::sin(angle_between_k_b0_rad);
 	// bg_A = (0, 0, b0_x1 * x2 - b0_x2 * x1) -> curl(bg_A) = (b0_x1, b0_x2, 0)
-	const auto bg_A1_mrf = 0.0;
-	const auto bg_A2_mrf = 0.0;
+	const double bg_A1_mrf = 0.0;
+	const double bg_A2_mrf = 0.0;
 	const double bg_A3_mrf = b0_x1_mrf * x_vec_mrf[1] - b0_x2_mrf * x_vec_mrf[0];
 	// d/dx A_x2 = bg_b * delta_b * cos(omega t - k x1); A_x1 = A_x3 = 0 -> delta_b_x1 = delta_b_x3 = 0
 	const double alfven_speed = b0_magn / std::sqrt(bg_density);
 	const double omega = alfven_speed * k_magn * std::cos(angle_between_k_b0_rad);
-	const auto delta_A1_mrf = 0.0;
+	const double delta_A1_mrf = 0.0;
 	const double delta_A2_mrf = -((b0_magn * delta_b_magn) / k_magn) * std::sin(omega * time - k_magn * x_vec_mrf[0]);
-	const auto delta_A3_mrf = 0.0;
+	const double delta_A3_mrf = 0.0;
 	const double A1_mrf = bg_A1_mrf + delta_A1_mrf;
 	const double A2_mrf = bg_A2_mrf + delta_A2_mrf;
 	const double A3_mrf = bg_A3_mrf + delta_A3_mrf;
@@ -225,7 +224,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<double> const &state
 		const double omega = alfven_speed * k_magn * std::cos(angle_between_k_b0_rad);
 		const double cos_phase = std::cos(omega * time - k_magn * x_vec_mrf_C[0]);
 
-		constexpr auto elsasser_sgn = -1.0;
+		constexpr double elsasser_sgn = -1.0;
 		// equivalent to, but numerically safer than -omega / (k_magn * cos_theta)
 		const double delta_v_magn = elsasser_sgn * alfven_speed * delta_b_magn * cos_phase;
 
