@@ -220,11 +220,10 @@ auto verifyPeriodicBCs(const amrex::MultiFab &mf, const std::string &label) -> i
 	amrex::ParallelDescriptor::ReduceIntSum(num_diffs);
 	if (num_diffs == 0) {
 		amrex::Print() << "[" << label << "]"
-									 << " periodic BC check: ghost and valid cells exactly match their wrapped values.\n";
+			       << " periodic BC check: ghost and valid cells exactly match their wrapped values.\n";
 	} else {
 		amrex::Print() << "[" << label << "]"
-									 << " periodic BC check: found " << num_diffs
-									 << " mismatched entries between ghost/valid cells and their wrapped values.\n";
+			       << " periodic BC check: found " << num_diffs << " mismatched entries between ghost/valid cells and their wrapped values.\n";
 	}
 	amrex::Print() << "\n";
 	return num_diffs;
