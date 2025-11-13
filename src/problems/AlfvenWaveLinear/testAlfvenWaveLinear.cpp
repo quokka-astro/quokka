@@ -58,8 +58,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeMagnitude(const std::array<
 	return std::sqrt(vfield[0] * vfield[0] + vfield[1] * vfield[1] + vfield[2] * vfield[2]);
 }
 
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeDotProduct(const std::array<double, 3> &vfield1, const std::array<double, 3> &vfield2)
-    -> double
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeDotProduct(const std::array<double, 3> &vfield1, const std::array<double, 3> &vfield2) -> double
 {
 	return vfield1[0] * vfield2[0] + vfield1[1] * vfield2[1] + vfield1[2] * vfield2[2];
 }
@@ -162,7 +161,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotateMRF2PRF(const std::array<dou
 		vec_mrf[0] * k_dir_prf[2] + vec_mrf[1] * inplane_dir_prf[2] + vec_mrf[2] * outofplane_dir_prf[2]};
 }
 
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(const double x1_prf, const double x2_prf, const double x3_prf, const double time, const int icomp) -> double
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(const double x1_prf, const double x2_prf, const double x3_prf, const double time,
+									     const int icomp) -> double
 {
 	// Computes A in PRF by:
 	// 1. rotating x_vec from PRF->MRF,
@@ -233,12 +233,9 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<double> const &state
 		const double v_x3_prf = delta_v_magn * outofplane_dir_prf[2];
 
 		// background b
-		const double b0_x1_prf =
-		    b0_magn * (std::cos(angle_between_k_b0_rad) * k_dir_prf[0] + std::sin(angle_between_k_b0_rad) * inplane_dir_prf[0]);
-		const double b0_x2_prf =
-		    b0_magn * (std::cos(angle_between_k_b0_rad) * k_dir_prf[1] + std::sin(angle_between_k_b0_rad) * inplane_dir_prf[1]);
-		const double b0_x3_prf =
-		    b0_magn * (std::cos(angle_between_k_b0_rad) * k_dir_prf[2] + std::sin(angle_between_k_b0_rad) * inplane_dir_prf[2]);
+		const double b0_x1_prf = b0_magn * (std::cos(angle_between_k_b0_rad) * k_dir_prf[0] + std::sin(angle_between_k_b0_rad) * inplane_dir_prf[0]);
+		const double b0_x2_prf = b0_magn * (std::cos(angle_between_k_b0_rad) * k_dir_prf[1] + std::sin(angle_between_k_b0_rad) * inplane_dir_prf[1]);
+		const double b0_x3_prf = b0_magn * (std::cos(angle_between_k_b0_rad) * k_dir_prf[2] + std::sin(angle_between_k_b0_rad) * inplane_dir_prf[2]);
 		// perturbed b
 		const double delta_b_x1_prf = b0_magn * delta_b_magn * cos_phase * outofplane_dir_prf[0];
 		const double delta_b_x2_prf = b0_magn * delta_b_magn * cos_phase * outofplane_dir_prf[1];
@@ -277,13 +274,13 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<double> const &state
 		// b-field computed using the magnetic vector potential to preserve div(b) = 0 topology
 		// dAz/dy - dAy/dz
 		const double b_x1_L = (Az_prf(x1_prf_L, x2_prf_R, x3_prf_C, time) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_C, time)) / delta_x2 -
-					   (Ay_prf(x1_prf_L, x2_prf_C, x3_prf_R, time) - Ay_prf(x1_prf_L, x2_prf_C, x3_prf_L, time)) / delta_x3;
+				      (Ay_prf(x1_prf_L, x2_prf_C, x3_prf_R, time) - Ay_prf(x1_prf_L, x2_prf_C, x3_prf_L, time)) / delta_x3;
 		// dAx/dz - dAz/dx
 		const double b_x2_L = (Ax_prf(x1_prf_C, x2_prf_L, x3_prf_R, time) - Ax_prf(x1_prf_C, x2_prf_L, x3_prf_L, time)) / delta_x3 -
-					   (Az_prf(x1_prf_R, x2_prf_L, x3_prf_C, time) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_C, time)) / delta_x1;
+				      (Az_prf(x1_prf_R, x2_prf_L, x3_prf_C, time) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_C, time)) / delta_x1;
 		// dAy/dx - dAx/dy
 		const double b_x3_L = (Ay_prf(x1_prf_R, x2_prf_C, x3_prf_L, time) - Ay_prf(x1_prf_L, x2_prf_C, x3_prf_L, time)) / delta_x1 -
-					   (Ax_prf(x1_prf_C, x2_prf_R, x3_prf_L, time) - Ax_prf(x1_prf_C, x2_prf_L, x3_prf_L, time)) / delta_x2;
+				      (Ax_prf(x1_prf_C, x2_prf_R, x3_prf_L, time) - Ax_prf(x1_prf_C, x2_prf_L, x3_prf_L, time)) / delta_x2;
 		if (dir == quokka::direction::x) {
 			state(i, j, k, MHDSystem<AlfvenWaveLinear>::bfield_index) = b_x1_L;
 		} else if (dir == quokka::direction::y) {
@@ -392,9 +389,7 @@ auto problem_main() -> int
 	}
 
 	// we assume box length = 1.0
-	const std::array<double, 3> k_vec_prf = {(2.0 * M_PI) * num_modes_x,
-						      (2.0 * M_PI) * num_modes_y,
-						      (2.0 * M_PI) * num_modes_z};
+	const std::array<double, 3> k_vec_prf = {(2.0 * M_PI) * num_modes_x, (2.0 * M_PI) * num_modes_y, (2.0 * M_PI) * num_modes_z};
 	k_magn = computeMagnitude(k_vec_prf);
 	k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
 
