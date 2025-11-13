@@ -124,7 +124,6 @@ void QuokkaSimulation<MHDBitwiseICs>::computeReferenceSolution(amrex::MultiFab &
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = ref.array(iter);
 
-		const amrex::Real time = tNew_[0];
 		const int ncomp_cc = Physics_Indices<MHDBitwiseICs>::nvarTotal_cc;
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			for (int n = 0; n < ncomp_cc; ++n) {
@@ -143,7 +142,6 @@ void QuokkaSimulation<MHDBitwiseICs>::computeReferenceSolution_fc(amrex::MultiFa
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = ref.array(iter);
 
-		const amrex::Real time = tNew_[0];
 		const int ncomp_fc = Physics_Indices<MHDBitwiseICs>::nvarPerDim_fc;
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			for (int n = 0; n < ncomp_fc; ++n) {
