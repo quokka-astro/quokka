@@ -2732,9 +2732,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::applyMonteCarloT
 #else
 			constexpr int k = 0;
 #endif
-			auto sample_probability = [&](int comp) noexcept -> amrex::Real {
-				return prob_arrs[grid](i, j, k, comp);
-			};
+			auto sample_probability = [&](int comp) noexcept -> amrex::Real { return prob_arrs[grid](i, j, k, comp); };
 			bool moved = false;
 			for (int dir = 0; dir < AMREX_SPACEDIM && !moved; ++dir) {
 				int const neg_comp = 2 * dir;
