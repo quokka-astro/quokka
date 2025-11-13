@@ -117,7 +117,7 @@ template <> void QuokkaSimulation<MHDBitwiseICs>::setInitialConditionsOnGridFace
 
 template <>
 void QuokkaSimulation<MHDBitwiseICs>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+							       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -136,7 +136,7 @@ void QuokkaSimulation<MHDBitwiseICs>::computeReferenceSolution(amrex::MultiFab &
 
 template <>
 void QuokkaSimulation<MHDBitwiseICs>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
+								  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -153,8 +153,7 @@ void QuokkaSimulation<MHDBitwiseICs>::computeReferenceSolution_fc(amrex::MultiFa
 	}
 }
 
-auto
-verifyPeriodicBCs(const amrex::MultiFab &mf, const std::string &label) -> int
+auto verifyPeriodicBCs(const amrex::MultiFab &mf, const std::string &label) -> int
 {
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(AMREX_SPACEDIM == 3, "verifyPeriodicBCs: 3D-only.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(mf.boxArray().size() == 1, "verifyPeriodicBCs: single-FAB only.");
@@ -208,7 +207,7 @@ verifyPeriodicBCs(const amrex::MultiFab &mf, const std::string &label) -> int
 			return valid_lower_indices[axis] + (wrapped_index - num_valid_entries[axis]);
 		};
 		auto get_num_elems = [](const amrex::Box& box) -> amrex::IntVect {
-			return amrex::IntVect(box.length(0), box.length(1), box.length(2));
+			return {box.length(0), box.length(1), box.length(2)};
 		};
 		const amrex::IntVect ntotal = get_num_elems(grown_region);
 		const amrex::IntVect nvalid = get_num_elems(valid_region);
