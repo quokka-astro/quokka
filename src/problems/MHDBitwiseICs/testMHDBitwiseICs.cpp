@@ -258,7 +258,7 @@ auto problem_main() -> int
 	num_diffs += verifyPeriodicBCs(fc_state[amr_level][0], "FC-x");
 	num_diffs += verifyPeriodicBCs(fc_state[amr_level][1], "FC-y");
 	num_diffs += verifyPeriodicBCs(fc_state[amr_level][2], "FC-z");
-	bool diff_exist = (num_diffs != 0);
+	const bool diff_exist = (num_diffs != 0);
 
 	return static_cast<int>(diff_exist);
 }
