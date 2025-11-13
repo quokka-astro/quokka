@@ -291,7 +291,7 @@ auto problem_main() -> int
 
 	// Compute test success condition
 	int status = 0;
-	const double error_tol = 3.5e-5;
+	const double error_tol = 0.005; // minmod: rms of component-wise relative L1 error norms = 0.004027494839
 	if (epsilon > error_tol) {
 		status = 1;
 	}

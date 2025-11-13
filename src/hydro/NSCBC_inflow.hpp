@@ -15,6 +15,7 @@
 #include "AMReX_REAL.H"
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
+#include "hydro/NSCBC_utils.hpp"
 #include "util/valarray.hpp"
 
 namespace NSCBC
@@ -123,7 +124,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setInflowX1Lower(const amrex::IntVect &
 	quokka::valarray<amrex::Real, N> const Q_i = HydroSystem<problem_t>::ComputePrimVars(consVar, ilo, j, k);
 	quokka::valarray<amrex::Real, N> const Q_ip1 = HydroSystem<problem_t>::ComputePrimVars(consVar, ilo + 1, j, k);
 	quokka::valarray<amrex::Real, N> const Q_ip2 = HydroSystem<problem_t>::ComputePrimVars(consVar, ilo + 2, j, k);
-	quokka::valarray<amrex::Real, N> const dQ_dx_data = (-3. * Q_i + 4. * Q_ip1 - Q_ip2) / (2. * dx);
+	quokka::valarray<amrex::Real, N> const dQ_dx_high = (-3.0 * Q_i + 4.0 * Q_ip1 - Q_ip2) / (2.0 * dx);
+	quokka::valarray<amrex::Real, N> const dQ_dx_data = detail::limit_normal_gradient<problem_t>(dQ_dx_high, Q_ip2, Q_ip1, Q_i, dx);
 
 	// compute dQ/dx with modified characteristics
 	quokka::valarray<amrex::Real, N> const dQ_dx = detail::dQ_dx_inflow_x1_lower<problem_t>(Q_i, dQ_dx_data, T_t, u_t, v_t, w_t, s_t, Lx);

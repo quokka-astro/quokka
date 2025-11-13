@@ -14,6 +14,7 @@
 #include "AMReX_REAL.H"
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
+#include "hydro/NSCBC_utils.hpp"
 #include "util/valarray.hpp"
 
 namespace NSCBC
@@ -117,6 +118,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto transverse_xdir_dQ_data(const amrex::In
 	const auto &boundary_idx = (SIDE == BoundarySide::Lower) ? box.loVect3d() : box.hiVect3d();
 	const int ibr = boundary_idx[0];
 
+	[[maybe_unused]] quokka::valarray<amrex::Real, N> const Q_center = HydroSystem<problem_t>::ComputePrimVars(consVar, ibr, j, k);
 	quokka::valarray<amrex::Real, N> dQ_dy_data{};
 	quokka::valarray<amrex::Real, N> dQ_dz_data{};
 
@@ -125,7 +127,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto transverse_xdir_dQ_data(const amrex::In
 		if (consVar.contains(ibr, j + 1, k) && consVar.contains(ibr, j - 1, k)) {
 			quokka::valarray<amrex::Real, N> const Qp = HydroSystem<problem_t>::ComputePrimVars(consVar, ibr, j + 1, k);
 			quokka::valarray<amrex::Real, N> const Qm = HydroSystem<problem_t>::ComputePrimVars(consVar, ibr, j - 1, k);
-			dQ_dy_data = (Qp - Qm) / (2.0 * geom.CellSize(1));
+			dQ_dy_data = centered_limited_gradient<problem_t>(Qm, Q_center, Qp, geom.CellSize(1));
 		}
 	}
 	// dQ/dz
@@ -133,7 +135,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto transverse_xdir_dQ_data(const amrex::In
 		if (consVar.contains(ibr, j, k + 1) && consVar.contains(ibr, j, k - 1)) {
 			quokka::valarray<amrex::Real, N> const Qp = HydroSystem<problem_t>::ComputePrimVars(consVar, ibr, j, k + 1);
 			quokka::valarray<amrex::Real, N> const Qm = HydroSystem<problem_t>::ComputePrimVars(consVar, ibr, j, k - 1);
-			dQ_dy_data = (Qp - Qm) / (2.0 * geom.CellSize(2));
+			dQ_dz_data = centered_limited_gradient<problem_t>(Qm, Q_center, Qp, geom.CellSize(2));
 		}
 	}
 
@@ -151,6 +153,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto transverse_ydir_dQ_data(const amrex::In
 	const auto &boundary_idx = (SIDE == BoundarySide::Lower) ? box.loVect3d() : box.hiVect3d();
 	const int jbr = boundary_idx[1];
 
+	[[maybe_unused]] quokka::valarray<amrex::Real, N> const Q_center = HydroSystem<problem_t>::ComputePrimVars(consVar, i, jbr, k);
 	quokka::valarray<amrex::Real, N> dQ_dz_data{};
 	quokka::valarray<amrex::Real, N> dQ_dx_data{};
 
@@ -159,7 +162,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto transverse_ydir_dQ_data(const amrex::In
 		if (consVar.contains(i, jbr, k + 1) && consVar.contains(i, jbr, k - 1)) {
 			quokka::valarray<amrex::Real, N> const Qp = HydroSystem<problem_t>::ComputePrimVars(consVar, i, jbr, k + 1);
 			quokka::valarray<amrex::Real, N> const Qm = HydroSystem<problem_t>::ComputePrimVars(consVar, i, jbr, k - 1);
-			dQ_dz_data = (Qp - Qm) / (2.0 * geom.CellSize(2));
+			dQ_dz_data = centered_limited_gradient<problem_t>(Qm, Q_center, Qp, geom.CellSize(2));
 		}
 	}
 	// dQ/dx
@@ -167,7 +170,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto transverse_ydir_dQ_data(const amrex::In
 		if (consVar.contains(i + 1, jbr, k) && consVar.contains(i - 1, jbr, k)) {
 			quokka::valarray<amrex::Real, N> const Qp = HydroSystem<problem_t>::ComputePrimVars(consVar, i + 1, jbr, k);
 			quokka::valarray<amrex::Real, N> const Qm = HydroSystem<problem_t>::ComputePrimVars(consVar, i - 1, jbr, k);
-			dQ_dx_data = (Qp - Qm) / (2.0 * geom.CellSize(0));
+			dQ_dx_data = centered_limited_gradient<problem_t>(Qm, Q_center, Qp, geom.CellSize(0));
 		}
 	}
 	return std::make_tuple(dQ_dz_data, dQ_dx_data);
@@ -184,6 +187,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto transverse_zdir_dQ_data(const amrex::In
 	const auto &boundary_idx = (SIDE == BoundarySide::Lower) ? box.loVect3d() : box.hiVect3d();
 	const int kbr = boundary_idx[2];
 
+	[[maybe_unused]] quokka::valarray<amrex::Real, N> const Q_center = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, kbr);
 	quokka::valarray<amrex::Real, N> dQ_dx_data{};
 	quokka::valarray<amrex::Real, N> dQ_dy_data{};
 
@@ -192,7 +196,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto transverse_zdir_dQ_data(const amrex::In
 		if (consVar.contains(i + 1, j, kbr) && consVar.contains(i - 1, j, kbr)) {
 			quokka::valarray<amrex::Real, N> const Qp = HydroSystem<problem_t>::ComputePrimVars(consVar, i + 1, j, kbr);
 			quokka::valarray<amrex::Real, N> const Qm = HydroSystem<problem_t>::ComputePrimVars(consVar, i - 1, j, kbr);
-			dQ_dx_data = (Qp - Qm) / (2.0 * geom.CellSize(0));
+			dQ_dx_data = centered_limited_gradient<problem_t>(Qm, Q_center, Qp, geom.CellSize(0));
 		}
 	}
 	// dQ/dy
@@ -200,7 +204,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto transverse_zdir_dQ_data(const amrex::In
 		if (consVar.contains(i, j + 1, kbr) && consVar.contains(i, j - 1, kbr)) {
 			quokka::valarray<amrex::Real, N> const Qp = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j + 1, kbr);
 			quokka::valarray<amrex::Real, N> const Qm = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j - 1, kbr);
-			dQ_dy_data = (Qp - Qm) / (2.0 * geom.CellSize(1));
+			dQ_dy_data = centered_limited_gradient<problem_t>(Qm, Q_center, Qp, geom.CellSize(1));
 		}
 	}
 	return std::make_tuple(dQ_dx_data, dQ_dy_data);
@@ -295,7 +299,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundary(const amrex::IntVect
 		Q_im2 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, im2);
 	}
 
-	quokka::valarray<amrex::Real, N> dQ_dx_data = (Q_im2 - 4.0 * Q_im1 + 3.0 * Q_i) / (2.0 * dx);
+	quokka::valarray<amrex::Real, N> const dQ_dx_high = (Q_im2 - 4.0 * Q_im1 + 3.0 * Q_i) / (2.0 * dx);
+	quokka::valarray<amrex::Real, N> dQ_dx_data = detail::limit_normal_gradient<problem_t>(dQ_dx_high, Q_im2, Q_im1, Q_i, dx);
 	dQ_dx_data *= (SIDE == BoundarySide::Lower) ? -1.0 : 1.0;
 
 	// compute dQ/dx with modified characteristics
