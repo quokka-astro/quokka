@@ -49,7 +49,7 @@ template <> struct Physics_Traits<MHDBitwiseICs> {
 
 AMREX_GPU_DEVICE
 void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-			 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir, amrex::Real time)
+			 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir)
 {
 	const amrex::Real x1_L = prob_lo[0] + i * dx[0];
 	const amrex::Real x2_L = prob_lo[1] + j * dx[1];
@@ -130,7 +130,7 @@ void QuokkaSimulation<MHDBitwiseICs>::computeReferenceSolution(amrex::MultiFab &
 			for (int n = 0; n < ncomp_cc; ++n) {
 				stateExact(i, j, k, n) = 0.0; // fill unused quantities with zeros
 			}
-			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::cc, quokka::direction::na, time);
+			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::cc, quokka::direction::na);
 		});
 	}
 }
@@ -149,7 +149,7 @@ void QuokkaSimulation<MHDBitwiseICs>::computeReferenceSolution_fc(amrex::MultiFa
 			for (int n = 0; n < ncomp_fc; ++n) {
 				stateExact(i, j, k, n) = 0.0; // fill unused quantities with zeros
 			}
-			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::fc, dir, time);
+			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::fc, dir);
 		});
 	}
 }
