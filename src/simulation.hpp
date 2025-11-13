@@ -1181,12 +1181,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
 
-		// output per-cycle timing
-		if (printCycleTiming_ == 1) {
-			amrex::Real elapsed_sec = getCycleWalltime();
-			amrex::Print() << "(cycle time: " << elapsed_sec << " s) ...\n";
-		} else {
-			amrex::Print() << "...\n";
+		if (suppress_output == 0) {
+			// output per-cycle timing
+			if (printCycleTiming_ == 1) {
+				amrex::Real elapsed_sec = getCycleWalltime();
+				amrex::Print() << "(cycle time: " << elapsed_sec << " s) ...\n";
+			} else {
+				amrex::Print() << "...\n";
+			}
 		}
 
 		computeTimestep();
@@ -1412,25 +1414,30 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	for (int n = 0; n < ncomp_cc; ++n) {
 		amrex::Real const final_sum = state_new_cc_[0].sum(n) * vol;
 		amrex::Real const abs_err = (final_sum - init_sum_cons[n]);
-		amrex::Print() << "Initial " << componentNames_cc_[n] << " = " << init_sum_cons[n] << '\n';
-		amrex::Print() << "\tabsolute conservation error = " << abs_err << '\n';
-		if (init_sum_cons[n] != 0.0) {
-			amrex::Real const rel_err = abs_err / init_sum_cons[n];
-			amrex::Print() << "\trelative conservation error = " << rel_err << '\n';
+		if (suppress_output == 0) {
+			amrex::Print() << "Initial " << componentNames_cc_[n] << " = " << init_sum_cons[n] << '\n';
+			amrex::Print() << "\tabsolute conservation error = " << abs_err << '\n';
+			if (init_sum_cons[n] != 0.0) {
+				amrex::Real const rel_err = abs_err / init_sum_cons[n];
+				amrex::Print() << "\trelative conservation error = " << rel_err << '\n';
+			}
+			amrex::Print() << '\n';
 		}
-		amrex::Print() << '\n';
 	}
 
 	// compute zone-cycles/sec
 	const int IOProc = amrex::ParallelDescriptor::IOProcessorNumber();
 	amrex::ParallelDescriptor::ReduceRealMax(elapsed_sec, IOProc);
-	const double microseconds_per_update = 1.0e6 * elapsed_sec / cellUpdates_;
-	const double megaupdates_per_second = 1.0 / microseconds_per_update;
-	amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update << " μs/zone-update [" << megaupdates_per_second << " Mupdates/s]\n";
-	for (int lev = 0; lev <= max_level; ++lev) {
-		amrex::Print() << "Zone-updates on level " << lev << ": " << cellUpdatesEachLevel_[lev] << "\n";
+	if (suppress_output == 0) {
+		const double microseconds_per_update = 1.0e6 * elapsed_sec / cellUpdates_;
+		const double megaupdates_per_second = 1.0 / microseconds_per_update;
+		amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update << " μs/zone-update [" << megaupdates_per_second
+			       << " Mupdates/s]\n";
+		for (int lev = 0; lev <= max_level; ++lev) {
+			amrex::Print() << "Zone-updates on level " << lev << ": " << cellUpdatesEachLevel_[lev] << "\n";
+		}
+		amrex::Print() << '\n';
 	}
-	amrex::Print() << '\n';
 
 	// write final plotfile
 	if ((plotfileInterval_ > 0 || plotTimeInterval_ > 0) && istep[0] > last_plot_file_step) {
