@@ -389,7 +389,8 @@ auto problem_main() -> int
 	}
 
 	// we assume box length = 1.0
-	const std::array<double, 3> k_vec_prf = {(2.0 * M_PI) * static_cast<double>(num_modes_x), (2.0 * M_PI) * static_cast<double>(num_modes_y), (2.0 * M_PI) * static_cast<double>(num_modes_z)};
+	const std::array<double, 3> k_vec_prf = {(2.0 * M_PI) * static_cast<double>(num_modes_x), (2.0 * M_PI) * static_cast<double>(num_modes_y),
+						 (2.0 * M_PI) * static_cast<double>(num_modes_z)};
 	k_magn = computeMagnitude(k_vec_prf);
 	k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
 
