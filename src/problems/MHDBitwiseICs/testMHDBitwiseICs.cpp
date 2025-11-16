@@ -165,9 +165,9 @@ auto verifyPeriodicBCs(const amrex::MultiFab &mf, const std::string &label) -> i
 	for (amrex::MFIter mf_iter(mf, false); mf_iter.isValid(); ++mf_iter) {
 		const amrex::Box valid_region = mf_iter.validbox();
 		const amrex::Box grown_region = amrex::grow(valid_region, nghosts);
-		// mirror grown region to host (so we can print)
 		amrex::FArrayBox host_fab(grown_region, num_comps);
-		host_fab.copy(mf[mf_iter], grown_region);
+		// copy data from mf[mf_iter] into host_fab on the host
+		host_fab.template copy<amrex::RunOn::Host>(mf[mf_iter]);
 		auto const &fab_view = host_fab.const_array();
 		// index-space bounds of the valid region
 		const std::array<int, 3> valid_lower_indices{valid_region.smallEnd(0), valid_region.smallEnd(1), valid_region.smallEnd(2)};
