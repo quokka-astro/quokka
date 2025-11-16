@@ -22,6 +22,8 @@ suppress_output = 0
 
 max_timesteps = 1000
 
+dust.omega = 1.0
+
 # test B
 stop_time = 0.05
 dust.alpha = 100.0 500.0

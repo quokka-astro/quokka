@@ -153,6 +153,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	static constexpr bool is_particle_enabled = Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None;
 
 	amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> dust_alpha_ = {};
+	amrex::Real dust_omega_ = 0.0;
 
 	amrex::Real radiationCflNumber_ = 0.3;
 	int maxSubsteps_ = 10;				// maximum number of radiation subcycles per hydro step
@@ -301,8 +302,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
 
 	// dust-gas drag implicit update in Strang-split scheme
-	void UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt);
-	void ComputeDragUpdates(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &u,
+	void computeDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt);
+	void computeDragRhs(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &u,
 				amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &alpha,
 				amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &epsilon, amrex::Real dt, amrex::Real gamma1,
 				amrex::Real gamma2, amrex::Real beta1, amrex::Real beta2,
@@ -564,6 +565,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 				dust_alpha_[g] = alpha_vec[g];
 			}
 		}
+		dpp.query("omega", dust_omega_);
 	}
 
 	// set radiation runtime parameters
@@ -815,7 +817,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 #endif
 
 	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-		UpdateStatesFromDustDrag(state, dt);
+		computeDustDrag(state, dt);
 	}
 
 	// compute user-specified sources
@@ -2223,10 +2225,11 @@ void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab &primVar_m
 	}
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt)
+template <typename problem_t> void QuokkaSimulation<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt)
 {
 	auto const &consVar_cc = consVar_cc_mf.arrays();
 	constexpr int N = Physics_Traits<problem_t>::nDustGroups;
+	amrex::Real omega = dust_omega_;
 
 	amrex::ParallelFor(consVar_cc_mf, [=, this] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
 		amrex::Real rho_g = consVar_cc[bx](i, j, k, HydroSystem<problem_t>::density_index);
@@ -2303,7 +2306,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::UpdateStatesFrom
 
 			amrex::GpuArray<amrex::Real, N + 1> k1;
 			amrex::GpuArray<amrex::Real, N + 1> k2;
-			ComputeDragUpdates(u, alpha, epsilon, dt, gamma1, gamma2, beta1, beta2, k1, k2);
+			computeDragRhs(u, alpha, epsilon, dt, gamma1, gamma2, beta1, beta2, k1, k2);
 
 			consVar_cc[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index + dir) += dt * (b * k1[0] + (1.0 - b) * k2[0]);
 
@@ -2344,21 +2347,15 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::UpdateStatesFrom
 			}
 		}
 
-		amrex::Real omega = 0.0;
 		amrex::Real const delta_E = delta_E_g1 - omega * delta_E_g2;
 
-		int energy_idx = HydroSystem<problem_t>::energy_index;
-		consVar_cc[bx](i, j, k, energy_idx) += delta_E;
-
-		if (useDualEnergy_ == 1) {
-			int internal_idx = HydroSystem<problem_t>::internalEnergy_index;
-			consVar_cc[bx](i, j, k, internal_idx) += -omega * delta_E_g2;
-		}
+		consVar_cc[bx](i, j, k, HydroSystem<problem_t>::energy_index) += delta_E;
+		consVar_cc[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index) += -omega * delta_E_g2;
 	});
 }
 
 template <typename problem_t>
-void QuokkaSimulation<problem_t>::ComputeDragUpdates(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &u,
+void QuokkaSimulation<problem_t>::computeDragRhs(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &u,
 						     amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &alpha,
 						     amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &epsilon, amrex::Real dt,
 						     amrex::Real gamma1, amrex::Real gamma2, amrex::Real beta1, amrex::Real beta2,
