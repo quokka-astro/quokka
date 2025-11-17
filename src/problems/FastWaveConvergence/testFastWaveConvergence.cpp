@@ -92,68 +92,47 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir,
 					  double time)
 {
-	const amrex::Real x1_L = prob_lo[0] + i * dx[0];
-	const amrex::Real x2_L = prob_lo[1] + j * dx[1];
-	const amrex::Real x3_L = prob_lo[2] + k * dx[2];
+    const amrex::Real x1_C = prob_lo[0] + (i + 0.5) * dx[0]; // cell-center x1
+    const amrex::Real cos_wave = std::cos(omega * time - k_amplitude * x1_C);
 
-	const amrex::Real x1_C = x1_L + static_cast<amrex::Real>(0.5) * dx[0];
+    if (cen == quokka::centering::cc) {
+        // --- Cell-centered solution ---
+        const double density = bg_density + bg_density * delta_b / bg_mag_amplitude * cos_wave;
+        const double pressure = bg_pressure + bg_pressure * gamma_gas * delta_b / bg_mag_amplitude * cos_wave;
+        const double x1vel = magnetosonic_speed * delta_b / bg_mag_amplitude * cos_wave;
 
-	if (cen == quokka::centering::cc) {
-		const double cos_wave_C = std::cos(omega * time - k_amplitude * x1_C);
+        // Only Bz is nonzero
+        const double x1mag = 0.0;
+        const double x2mag = 0.0;
+        const double x3mag = bg_mag_amplitude + delta_b * cos_wave;
 
-		// magnetic field at the center of the cell
-		const double x1mag = 0.0;
-		const double x2mag = 0.0;
-		const double x3mag = bg_mag_amplitude + delta_b * cos_wave_C;
+        // Energy
+        const double Ekin = 0.5 * density * x1vel * x1vel;
+        const double Emag = 0.5 * (x1mag*x1mag + x2mag*x2mag + x3mag*x3mag);
+        const double Eint = pressure / (gamma_gas - 1);
+        const double Etot = Ekin + Emag + Eint;
 
-		const double density = bg_density + bg_density * delta_b / bg_mag_amplitude * cos_wave_C;
-		const double pressure = bg_pressure + bg_pressure * gamma_gas * delta_b / bg_mag_amplitude * cos_wave_C;
-		const double x1vel = magnetosonic_speed * delta_b / bg_mag_amplitude * cos_wave_C;
-		const double x2vel = 0.0;
-		const double x3vel = 0.0;
+        state(i,j,k, HydroSystem<FastWaveConvergence>::density_index) = density;
+        state(i,j,k, HydroSystem<FastWaveConvergence>::x1Momentum_index) = density * x1vel;
+        state(i,j,k, HydroSystem<FastWaveConvergence>::x2Momentum_index) = 0.0;
+        state(i,j,k, HydroSystem<FastWaveConvergence>::x3Momentum_index) = 0.0;
+        state(i,j,k, HydroSystem<FastWaveConvergence>::energy_index) = Etot;
+        state(i,j,k, HydroSystem<FastWaveConvergence>::internalEnergy_index) = Eint;
+    }
+    else if (cen == quokka::centering::fc) {
+        // --- Face-centered solution ---
+        double B_val = 0.0;
 
-		const double velocity_magnitude = std::sqrt(std::pow(x1vel, 2) + std::pow(x2vel, 2) + std::pow(x3vel, 2));
-		const double momentum = density * velocity_magnitude;
-		const double Ekin = 0.5 * std::pow(momentum, 2) / density;
-		const double Emag = 0.5 * (x1mag * x1mag + x2mag * x2mag + x3mag * x3mag);
-		const double Eint = pressure / (gamma_gas - 1);
-		const double Etot = Ekin + Emag + Eint;
+        if (dir == quokka::direction::x) {
+            B_val = 0.0; // Bx = 0
+        } else if (dir == quokka::direction::y) {
+            B_val = 0.0; // By = 0
+        } else if (dir == quokka::direction::z) {
+            B_val = bg_mag_amplitude + delta_b * cos_wave; // Bz only
+        }
 
-		state(i, j, k, HydroSystem<FastWaveConvergence>::density_index) = density;
-		state(i, j, k, HydroSystem<FastWaveConvergence>::x1Momentum_index) = x1vel * density;
-		state(i, j, k, HydroSystem<FastWaveConvergence>::x2Momentum_index) = x2vel * density;
-		state(i, j, k, HydroSystem<FastWaveConvergence>::x3Momentum_index) = x3vel * density;
-		state(i, j, k, HydroSystem<FastWaveConvergence>::energy_index) = Etot;
-		state(i, j, k, HydroSystem<FastWaveConvergence>::internalEnergy_index) = Eint;
-	} else if (cen == quokka::centering::fc) {
-		const double x1mag = (computeMagneticVectorPotential_z(x1_L, x2_L + dx[1], x3_L + dx[2] / 2, time) -
-				      computeMagneticVectorPotential_z(x1_L, x2_L, x3_L + dx[2] / 2, time)) /
-					 dx[1] -
-				     (computeMagneticVectorPotential_y(x1_L, x2_L + dx[1] / 2, x3_L + dx[2], time) -
-				      computeMagneticVectorPotential_y(x1_L, x2_L + dx[1] / 2, x3_L, time)) /
-					 dx[2];
-		const double x2mag = (computeMagneticVectorPotential_x(x1_L + dx[0] / 2, x2_L, x3_L + dx[2], time) -
-				      computeMagneticVectorPotential_x(x1_L + dx[0] / 2, x2_L, x3_L, time)) /
-					 dx[2] -
-				     (computeMagneticVectorPotential_z(x1_L + dx[0], x2_L, x3_L + dx[2] / 2, time) -
-				      computeMagneticVectorPotential_z(x1_L, x2_L, x3_L + dx[2] / 2, time)) /
-					 dx[0];
-
-		const double x3mag = ((computeMagneticVectorPotential_y(x1_L + dx[0], x2_L + (dx[1] / 2), x3_L, time) -
-				       computeMagneticVectorPotential_y(x1_L, x2_L + (dx[1] / 2), x3_L, time)) /
-				      dx[0]) -
-				     ((computeMagneticVectorPotential_x(x1_L + (dx[0] / 2), x2_L + dx[1], x3_L, time) -
-				       computeMagneticVectorPotential_x(x1_L + (dx[0] / 2), x2_L, x3_L, time)) /
-				      dx[1]);
-
-		if (dir == quokka::direction::x) {
-			state(i, j, k, MHDSystem<FastWaveConvergence>::bfield_index) = x1mag;
-		} else if (dir == quokka::direction::y) {
-			state(i, j, k, MHDSystem<FastWaveConvergence>::bfield_index) = x2mag;
-		} else if (dir == quokka::direction::z) {
-			state(i, j, k, MHDSystem<FastWaveConvergence>::bfield_index) = x3mag;
-		}
-	}
+        state(i,j,k, MHDSystem<FastWaveConvergence>::bfield_index) = B_val;
+    }
 }
 
 template <> void QuokkaSimulation<FastWaveConvergence>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -239,7 +218,7 @@ auto runWaveTest(int nx) -> double
 {
 	// Problem parameters
 	const double CFL_number = 0.3;
-	const double max_time = 0.1;
+	const double max_time = k_amplitude / omega;
 	const int max_timesteps = std::max(20000, nx * 100);
 
 	// Problem initialization
@@ -289,19 +268,45 @@ auto runWaveTest(int nx) -> double
 
 	// set initial conditions
 	sim.setInitialConditions();
+	auto [pos_exact, val_exact] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
 
 	// Main time loop
 	sim.evolve();
+	auto [position, values] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
+	int const nx_final = static_cast<int>(position.size());
 
-	return sim.errorNorm_;
+	
+
+	amrex::Real err_sq = 0.;
+	for (int n = 0; n < QuokkaSimulation<FastWaveConvergence>::ncompHydro_; ++n) {
+		if (n == HydroSystem<FastWaveConvergence>::internalEnergy_index) {
+			continue;
+		}
+		amrex::Real dU_k = 0.;
+		for (int i = 0; i < nx_final; ++i) {
+			// Δ Uk = ∑i |Uk,in - Uk,i0| / Nx
+			const amrex::Real U_k0 = val_exact.at(n)[i];
+			const amrex::Real U_k1 = values.at(n)[i];
+			dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final);
+		}
+		// ε = || Δ U || = [&sum_k (Δ Uk)2]^{1/2}
+		err_sq += dU_k * dU_k;
+		std::cout << "Component " << n << " error: " << dU_k << "\n";
+	}
+	const amrex::Real epsilon = std::sqrt(err_sq);
+
+
+	return epsilon;
+
+	//return sim.errorNorm_;
 }
 
 auto problem_main() -> int
 {
 	// Richardson convergence test: run at increasing resolution until machine precision is reached
 	const double machine_precision_target = 2.0e-11;
-	const int nx_initial = 128;
-	const int nx_max = 2048;
+	const int nx_initial = 32;
+	const int nx_max = 512;
 	bool reached_target = false;
 
 	// Silence TinyProfiler so convergence logs stay readable
