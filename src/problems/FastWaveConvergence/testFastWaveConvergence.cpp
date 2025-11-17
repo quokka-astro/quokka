@@ -92,47 +92,46 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir,
 					  double time)
 {
-    const amrex::Real x1_C = prob_lo[0] + (i + 0.5) * dx[0]; // cell-center x1
-    const amrex::Real cos_wave = std::cos(omega * time - k_amplitude * x1_C);
+	const amrex::Real x1_C = prob_lo[0] + (i + 0.5) * dx[0]; // cell-center x1
+	const amrex::Real cos_wave = std::cos(omega * time - k_amplitude * x1_C);
 
-    if (cen == quokka::centering::cc) {
-        // --- Cell-centered solution ---
-        const double density = bg_density + bg_density * delta_b / bg_mag_amplitude * cos_wave;
-        const double pressure = bg_pressure + bg_pressure * gamma_gas * delta_b / bg_mag_amplitude * cos_wave;
-        const double x1vel = magnetosonic_speed * delta_b / bg_mag_amplitude * cos_wave;
+	if (cen == quokka::centering::cc) {
+		// --- Cell-centered solution ---
+		const double density = bg_density + bg_density * delta_b / bg_mag_amplitude * cos_wave;
+		const double pressure = bg_pressure + bg_pressure * gamma_gas * delta_b / bg_mag_amplitude * cos_wave;
+		const double x1vel = magnetosonic_speed * delta_b / bg_mag_amplitude * cos_wave;
 
-        // Only Bz is nonzero
-        const double x1mag = 0.0;
-        const double x2mag = 0.0;
-        const double x3mag = bg_mag_amplitude + delta_b * cos_wave;
+		// Only Bz is nonzero
+		const double x1mag = 0.0;
+		const double x2mag = 0.0;
+		const double x3mag = bg_mag_amplitude + delta_b * cos_wave;
 
-        // Energy
-        const double Ekin = 0.5 * density * x1vel * x1vel;
-        const double Emag = 0.5 * (x1mag*x1mag + x2mag*x2mag + x3mag*x3mag);
-        const double Eint = pressure / (gamma_gas - 1);
-        const double Etot = Ekin + Emag + Eint;
+		// Energy
+		const double Ekin = 0.5 * density * x1vel * x1vel;
+		const double Emag = 0.5 * (x1mag * x1mag + x2mag * x2mag + x3mag * x3mag);
+		const double Eint = pressure / (gamma_gas - 1);
+		const double Etot = Ekin + Emag + Eint;
 
-        state(i,j,k, HydroSystem<FastWaveConvergence>::density_index) = density;
-        state(i,j,k, HydroSystem<FastWaveConvergence>::x1Momentum_index) = density * x1vel;
-        state(i,j,k, HydroSystem<FastWaveConvergence>::x2Momentum_index) = 0.0;
-        state(i,j,k, HydroSystem<FastWaveConvergence>::x3Momentum_index) = 0.0;
-        state(i,j,k, HydroSystem<FastWaveConvergence>::energy_index) = Etot;
-        state(i,j,k, HydroSystem<FastWaveConvergence>::internalEnergy_index) = Eint;
-    }
-    else if (cen == quokka::centering::fc) {
-        // --- Face-centered solution ---
-        double B_val = 0.0;
+		state(i, j, k, HydroSystem<FastWaveConvergence>::density_index) = density;
+		state(i, j, k, HydroSystem<FastWaveConvergence>::x1Momentum_index) = density * x1vel;
+		state(i, j, k, HydroSystem<FastWaveConvergence>::x2Momentum_index) = 0.0;
+		state(i, j, k, HydroSystem<FastWaveConvergence>::x3Momentum_index) = 0.0;
+		state(i, j, k, HydroSystem<FastWaveConvergence>::energy_index) = Etot;
+		state(i, j, k, HydroSystem<FastWaveConvergence>::internalEnergy_index) = Eint;
+	} else if (cen == quokka::centering::fc) {
+		// --- Face-centered solution ---
+		double B_val = 0.0;
 
-        if (dir == quokka::direction::x) {
-            B_val = 0.0; // Bx = 0
-        } else if (dir == quokka::direction::y) {
-            B_val = 0.0; // By = 0
-        } else if (dir == quokka::direction::z) {
-            B_val = bg_mag_amplitude + delta_b * cos_wave; // Bz only
-        }
+		if (dir == quokka::direction::x) {
+			B_val = 0.0; // Bx = 0
+		} else if (dir == quokka::direction::y) {
+			B_val = 0.0; // By = 0
+		} else if (dir == quokka::direction::z) {
+			B_val = bg_mag_amplitude + delta_b * cos_wave; // Bz only
+		}
 
-        state(i,j,k, MHDSystem<FastWaveConvergence>::bfield_index) = B_val;
-    }
+		state(i, j, k, MHDSystem<FastWaveConvergence>::bfield_index) = B_val;
+	}
 }
 
 template <> void QuokkaSimulation<FastWaveConvergence>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -275,8 +274,6 @@ auto runWaveTest(int nx) -> double
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
 	int const nx_final = static_cast<int>(position.size());
 
-	
-
 	amrex::Real err_sq = 0.;
 	for (int n = 0; n < QuokkaSimulation<FastWaveConvergence>::ncompHydro_; ++n) {
 		if (n == HydroSystem<FastWaveConvergence>::internalEnergy_index) {
@@ -295,10 +292,9 @@ auto runWaveTest(int nx) -> double
 	}
 	const amrex::Real epsilon = std::sqrt(err_sq);
 
-
 	return epsilon;
 
-	//return sim.errorNorm_;
+	// return sim.errorNorm_;
 }
 
 auto problem_main() -> int
