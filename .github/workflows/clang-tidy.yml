@@ -26,7 +26,7 @@ jobs:
         submodules: true
         fetch-depth: 0
 
-    - uses: ZedThree/clang-tidy-review@4ea7f7b72e7e039588ef5e64de9a845e5a3f8db5 # v0.21.0
+    - uses: ZedThree/clang-tidy-review@b0de75228bf6ce85aed1c89780a05939b62606ab # v0.22.0
       id: review
       with:
         config_file: src/.clang-tidy
@@ -36,7 +36,7 @@ jobs:
         split_workflow: true
 
     # Uploads an artefact containing clang_fixes.json
-    - uses: ZedThree/clang-tidy-review/upload@4ea7f7b72e7e039588ef5e64de9a845e5a3f8db5 # v0.21.0
+    - uses: ZedThree/clang-tidy-review/upload@b0de75228bf6ce85aed1c89780a05939b62606ab # v0.22.0
 
     # If there are any comments, fail the check
     - if: steps.review.outputs.total_comments > 0
