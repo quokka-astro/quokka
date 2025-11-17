@@ -100,13 +100,7 @@ template <> void QuokkaSimulation<DustDamping>::setInitialConditionsOnGrid(quokk
 	const auto vx_dust1 = 2 * v0;	// dust1 velocity
 	const auto vx_dust2 = 0.5 * v0; // dust2 velocity
 
-	// get geometry information
-	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = Geom(0).CellSizeArray();
-	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = Geom(0).ProbLoArray();
-
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
-
 		// for gas
 		state_cc(i, j, k, HydroSystem<DustDamping>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<DustDamping>::energy_index) = Egas0;
@@ -245,7 +239,6 @@ auto E_gas_analytic(double t) -> double
 auto problem_main() -> int
 {
 	// problem parameters
-	const double Lx = 1.0;
 	const double CFL_number = 1000000.0;
 
 	// boundary conditions
