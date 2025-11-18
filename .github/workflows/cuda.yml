@@ -67,7 +67,7 @@ jobs:
             -DCMAKE_C_COMPILER=$(which gcc)              \
             -DCMAKE_CXX_COMPILER=$(which g++)            \
             -DCMAKE_CUDA_HOST_COMPILER=$(which g++)      \
-            -DAMReX_CUDA_ARCH="7.0"                      \
+            -DAMReX_CUDA_ARCH="9.0"                      \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache           \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache         \
             -DCMAKE_CUDA_COMPILER_LAUNCHER=ccache	 \
