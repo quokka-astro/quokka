@@ -2323,26 +2323,30 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeDustDrag(
 			amrex::Real D2 = 1.0;
 			for (int g = 0; g < N; ++g) {
 				A1 += alpha[g] * u[1 + g] * delta1[g] -
-							beta1 * dt * alpha[g] * alpha[g] * u[1 + g] * (1.0 + alpha[g] * dt * (gamma1 - beta2)) * delta1[g] * Lambda[g];
+				      beta1 * dt * alpha[g] * alpha[g] * u[1 + g] * (1.0 + alpha[g] * dt * (gamma1 - beta2)) * delta1[g] * Lambda[g];
 
 				A2 += alpha[g] * u[1 + g] * delta2[g] -
-							beta2 * dt * alpha[g] * alpha[g] * u[1 + g] * (1.0 + alpha[g] * dt * (gamma2 - beta1)) * delta2[g] * Lambda[g];
+				      beta2 * dt * alpha[g] * alpha[g] * u[1 + g] * (1.0 + alpha[g] * dt * (gamma2 - beta1)) * delta2[g] * Lambda[g];
 
 				B1 += alpha[g] * epsilon[g] * delta1[g] -
-							beta1 * dt * alpha[g] * alpha[g] * epsilon[g] * (1.0 + alpha[g] * dt * (gamma1 - beta2)) * delta1[g] * Lambda[g];
+				      beta1 * dt * alpha[g] * alpha[g] * epsilon[g] * (1.0 + alpha[g] * dt * (gamma1 - beta2)) * delta1[g] * Lambda[g];
 
 				B2 += alpha[g] * epsilon[g] * delta2[g] -
-							beta2 * dt * alpha[g] * alpha[g] * epsilon[g] * (1.0 + alpha[g] * dt * (gamma2 - beta1)) * delta2[g] * Lambda[g];
+				      beta2 * dt * alpha[g] * alpha[g] * epsilon[g] * (1.0 + alpha[g] * dt * (gamma2 - beta1)) * delta2[g] * Lambda[g];
 
-				C1 += alpha[g] * epsilon[g] * delta1[g] -
-							dt * alpha[g] * alpha[g] * epsilon[g] * (gamma2 + alpha[g] * dt * (gamma1 * gamma2 - beta1 * beta2)) * delta1[g] * Lambda[g];
+				C1 += alpha[g] * epsilon[g] * delta1[g] - dt * alpha[g] * alpha[g] * epsilon[g] *
+									      (gamma2 + alpha[g] * dt * (gamma1 * gamma2 - beta1 * beta2)) * delta1[g] *
+									      Lambda[g];
 
-				C2 += alpha[g] * epsilon[g] * delta2[g] -
-							dt * alpha[g] * alpha[g] * epsilon[g] * (gamma1 + alpha[g] * dt * (gamma1 * gamma2 - beta1 * beta2)) * delta2[g] * Lambda[g];
+				C2 += alpha[g] * epsilon[g] * delta2[g] - dt * alpha[g] * alpha[g] * epsilon[g] *
+									      (gamma1 + alpha[g] * dt * (gamma1 * gamma2 - beta1 * beta2)) * delta2[g] *
+									      Lambda[g];
 
-				D1 += gamma1 * dt * alpha[g] * epsilon[g] * delta1[g] - beta1 * beta2 * dt * dt * alpha[g] * alpha[g] * epsilon[g] * delta1[g] * Lambda[g];
+				D1 += gamma1 * dt * alpha[g] * epsilon[g] * delta1[g] -
+				      beta1 * beta2 * dt * dt * alpha[g] * alpha[g] * epsilon[g] * delta1[g] * Lambda[g];
 
-				D2 += gamma2 * dt * alpha[g] * epsilon[g] * delta2[g] - beta1 * beta2 * dt * dt * alpha[g] * alpha[g] * epsilon[g] * delta2[g] * Lambda[g];
+				D2 += gamma2 * dt * alpha[g] * epsilon[g] * delta2[g] -
+				      beta1 * beta2 * dt * dt * alpha[g] * alpha[g] * epsilon[g] * delta2[g] * Lambda[g];
 			}
 
 			amrex::Real denominator = beta1 * beta2 * dt * dt * C1 * C2 - D1 * D2;
@@ -2351,13 +2355,15 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeDustDrag(
 			k2[0] = (beta2 * dt * C2 * (A1 - B1 * u[0]) - D1 * (A2 - B2 * u[0])) / denominator;
 
 			for (int g = 0; g < N; ++g) {
-				k1[1 + g] = alpha[g] * Lambda[g] *
-							((u[0] * epsilon[g] - u[1 + g]) * (1.0 + alpha[g] * dt * (gamma2 - beta1)) +
-							k1[0] * epsilon[g] * dt * (gamma1 + alpha[g] * dt * (gamma1 * gamma2 - beta1 * beta2)) + k2[0] * beta1 * epsilon[g] * dt);
+				k1[1 + g] =
+				    alpha[g] * Lambda[g] *
+				    ((u[0] * epsilon[g] - u[1 + g]) * (1.0 + alpha[g] * dt * (gamma2 - beta1)) +
+				     k1[0] * epsilon[g] * dt * (gamma1 + alpha[g] * dt * (gamma1 * gamma2 - beta1 * beta2)) + k2[0] * beta1 * epsilon[g] * dt);
 
-				k2[1 + g] = alpha[g] * Lambda[g] *
-							((u[0] * epsilon[g] - u[1 + g]) * (1.0 + alpha[g] * dt * (gamma1 - beta2)) +
-							k2[0] * epsilon[g] * dt * (gamma2 + alpha[g] * dt * (gamma1 * gamma2 - beta1 * beta2)) + k1[0] * beta2 * epsilon[g] * dt);
+				k2[1 + g] =
+				    alpha[g] * Lambda[g] *
+				    ((u[0] * epsilon[g] - u[1 + g]) * (1.0 + alpha[g] * dt * (gamma1 - beta2)) +
+				     k2[0] * epsilon[g] * dt * (gamma2 + alpha[g] * dt * (gamma1 * gamma2 - beta1 * beta2)) + k1[0] * beta2 * epsilon[g] * dt);
 			}
 
 			consVar_cc[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index + dir) += dt * (b * k1[0] + (1.0 - b) * k2[0]);
