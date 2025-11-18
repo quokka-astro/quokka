@@ -13,7 +13,7 @@ amr.v              = 0       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 64 64 64
+amr.n_cell          = 32 32 32
 amr.max_level       = 0     # number of levels = max_level + 1
 amr.blocking_factor = 32     # grid size must be divisible by this
 amr.max_grid_size   = 64    # at least 128 for GPUs
@@ -46,20 +46,20 @@ problem.particles_filename = ../inputs/cluster_N4_ng4.txt
 radiation.iteration_tolerance = 1e-10
 radiation.iteration_tolerance_rel = -1
 
-quokka.diagnostics = slicex plt
-quokka.slicex.type = DiagFramePlane         # Diagnostic type
-quokka.slicex.file = slicex_plt             # Output file prefix (must end in "plt")
-quokka.slicex.normal = 2                    # Plane normal (0 == x, 1 == y, 2 == z)
-quokka.slicex.center = 1e10              # midplane, ~ 0
-quokka.slicex.int    = 10                   # Output cadence (in number of coarse steps)
-quokka.slicex.field_names = gasDensity gasInternalEnergy radEnergy-Group0 radEnergy-Group1 radEnergy-Group2 radEnergy-Group3
+#quokka.diagnostics = slicex plt
+#quokka.slicex.type = DiagFramePlane         # Diagnostic type
+#quokka.slicex.file = slicex_plt             # Output file prefix (must end in "plt")
+#quokka.slicex.normal = 2                    # Plane normal (0 == x, 1 == y, 2 == z)
+#quokka.slicex.center = 1e10              # midplane, ~ 0
+#quokka.slicex.int    = 10                   # Output cadence (in number of coarse steps)
+#quokka.slicex.field_names = gasDensity gasInternalEnergy radEnergy-Group0 radEnergy-Group1 radEnergy-Group2 radEnergy-Group3
 
-quokka.plt.type = PlotFile         # pltfile for the whole box
-quokka.plt.file = plt              # Output file prefix (default "plt", must end in "plt")
-quokka.plt.int  = 10                # Output cadence (in number of coarse steps)
-quokka.plt.particles = StochasticStellarPop_particles
+#quokka.plt.type = PlotFile         # pltfile for the whole box
+#quokka.plt.file = plt              # Output file prefix (default "plt", must end in "plt")
+#quokka.plt.int  = 10                # Output cadence (in number of coarse steps)
+#quokka.plt.particles = StochasticStellarPop_particles
 
-cooling.enabled = 1
-cooling.read_tables_even_if_disabled = 1
-cooling.cooling_table_type = resampled
-cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
+#cooling.enabled = 1
+#cooling.read_tables_even_if_disabled = 1
+#cooling.cooling_table_type = resampled
+#cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
