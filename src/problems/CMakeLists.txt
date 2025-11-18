@@ -66,6 +66,7 @@ add_subdirectory(RadhydroPulseMGint)
 add_subdirectory(RadhydroBB)
 
 add_subdirectory(AlfvenWaveLinear)
+add_subdirectory(AlfvenWaveLinearConvergence)
 add_subdirectory(AlfvenWaveCircular)
 add_subdirectory(CurrentSheet)
 add_subdirectory(OrszagTang)
