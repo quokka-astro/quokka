@@ -9,7 +9,7 @@ Usage: $0 [OPTIONS] [TARGETS]
 
 Run CUDA tests in a Docker container for Quokka.
 
-The most common usage is a simple "$0" command without any option.
+The most common usage is a simple "$0" command without any option, or "$0 'Problem1 Problem2'" to build specific problems.
 
 This script automatically:
   1. Detects the Quokka repository root
@@ -138,16 +138,13 @@ while [[ $# -gt 0 ]]; do
 			shift
 			;;
 		*)
-			# Treat as target name
-			if [[ -z "$TARGETS" ]]; then
-				TARGETS="$1"
-			else
-				TARGETS="$TARGETS $1"
-			fi
-			shift
+			break
 			;;
 	esac
 done
+
+# Everything remaining is a target
+TARGETS=("$@")
 
 # Set default build directory if not specified
 if [[ -z "$BUILD_DIR" ]]; then
