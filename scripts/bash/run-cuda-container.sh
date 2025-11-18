@@ -9,6 +9,8 @@ Usage: $0 [OPTIONS] [TARGETS]
 
 Run CUDA tests in a Docker container for Quokka.
 
+The most common usage is a simple "$0" command without any option.
+
 This script automatically:
   1. Detects the Quokka repository root
   2. Selects the appropriate CUDA container image for your platform
