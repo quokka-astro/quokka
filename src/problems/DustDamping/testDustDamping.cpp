@@ -24,7 +24,7 @@ constexpr double rho_dust1 = 1.0;
 constexpr double rho_dust2 = 1.0;
 constexpr double TS1 = 0.01;
 constexpr double TS2 = 0.002;
-constexpr double OMEGA = 0.0;
+constexpr double OMEGA = 1.0;
 constexpr double P_INITIAL = 1.0;
 
 // // analytic solution parameters for test C
