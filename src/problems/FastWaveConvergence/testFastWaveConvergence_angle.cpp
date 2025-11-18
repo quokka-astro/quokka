@@ -59,8 +59,8 @@ constexpr double cos_theta = gcem::cos(theta_degrees * M_PI / 180.0);
 // k = 2 pi / wave length
 // box length = 1, so |k| in [1, inf)
 constexpr double num_modes = 1;
-AMREX_GPU_MANAGED double k_amplitude = 2.0 * M_PI;  // Will be updated
-//constexpr double k_amplitude = 2 * M_PI * num_modes;
+AMREX_GPU_MANAGED double k_amplitude = 2.0 * M_PI; // Will be updated
+// constexpr double k_amplitude = 2 * M_PI * num_modes;
 
 // input perturbation: choose to do this via the relative density field in [0, 1]. remember, the linear regime is valid when this perturbation is small
 constexpr double delta_b = 1e-4;
@@ -74,58 +74,55 @@ constexpr double bg_mag_x3 = bg_mag_amplitude;
 // 	       (gcem::pow(magnetosonic_speed, 2) + gcem::sqrt(gcem::pow(magnetosonic_speed, 4) - 4.0 * gcem::pow(alfven_speed, 2) * gcem::pow(sound_speed, 2) *
 // 												     gcem::pow(cos_theta, 2)))); // NOLINT(cert-err58-cpp)
 
-
-
 // angles (radians) in the math reference frame (MRF)
 AMREX_GPU_MANAGED double angle_between_k_b0_rad = 0.0; // NOLINT
 
 // Unit basis vectors of the MRF, expressed in PRF coordinates
-AMREX_GPU_MANAGED std::array<amrex::Real, 3> k_dir_prf{1.0, 0.0, 0.0};        // NOLINT
-AMREX_GPU_MANAGED std::array<amrex::Real, 3> inplane_dir_prf{0.0, 1.0, 0.0};  // NOLINT
+AMREX_GPU_MANAGED std::array<amrex::Real, 3> k_dir_prf{1.0, 0.0, 0.0};		// NOLINT
+AMREX_GPU_MANAGED std::array<amrex::Real, 3> inplane_dir_prf{0.0, 1.0, 0.0};	// NOLINT
 AMREX_GPU_MANAGED std::array<amrex::Real, 3> outofplane_dir_prf{0.0, 0.0, 1.0}; // NOLINT
 
 // Helper functions (add these before computeWaveSolution)
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeMagnitude(const std::array<amrex::Real, 3> &vfield) -> double
 {
-    return std::sqrt(vfield[0] * vfield[0] + vfield[1] * vfield[1] + vfield[2] * vfield[2]);
+	return std::sqrt(vfield[0] * vfield[0] + vfield[1] * vfield[1] + vfield[2] * vfield[2]);
 }
 
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeDotProduct(const std::array<amrex::Real, 3> &vfield1, const std::array<amrex::Real, 3> &vfield2) -> double
 {
-    return vfield1[0] * vfield2[0] + vfield1[1] * vfield2[1] + vfield1[2] * vfield2[2];
+	return vfield1[0] * vfield2[0] + vfield1[1] * vfield2[1] + vfield1[2] * vfield2[2];
 }
 
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeCrossProduct(const std::array<amrex::Real, 3> &vfield1, const std::array<amrex::Real, 3> &vfield2)
     -> std::array<amrex::Real, 3>
 {
-    return {vfield1[1] * vfield2[2] - vfield1[2] * vfield2[1], 
-            vfield1[2] * vfield2[0] - vfield1[0] * vfield2[2],
-            vfield1[0] * vfield2[1] - vfield1[1] * vfield2[0]};
+	return {vfield1[1] * vfield2[2] - vfield1[2] * vfield2[1], vfield1[2] * vfield2[0] - vfield1[0] * vfield2[2],
+		vfield1[0] * vfield2[1] - vfield1[1] * vfield2[0]};
 }
 
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE void normalizeVector(std::array<amrex::Real, 3> &vfield)
 {
-    const double vfield_magn = computeMagnitude(vfield);
-    if (vfield_magn > 1e-14) {
-        vfield[0] /= vfield_magn;
-        vfield[1] /= vfield_magn;
-        vfield[2] /= vfield_magn;
-    }
+	const double vfield_magn = computeMagnitude(vfield);
+	if (vfield_magn > 1e-14) {
+		vfield[0] /= vfield_magn;
+		vfield[1] /= vfield_magn;
+		vfield[2] /= vfield_magn;
+	}
 }
 
 // Rotation helpers
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotatePRF2MRF(const std::array<amrex::Real, 3> &vec_prf) -> std::array<amrex::Real, 3>
 {
-    return {vec_prf[0] * k_dir_prf[0] + vec_prf[1] * k_dir_prf[1] + vec_prf[2] * k_dir_prf[2],
-            vec_prf[0] * inplane_dir_prf[0] + vec_prf[1] * inplane_dir_prf[1] + vec_prf[2] * inplane_dir_prf[2],
-            vec_prf[0] * outofplane_dir_prf[0] + vec_prf[1] * outofplane_dir_prf[1] + vec_prf[2] * outofplane_dir_prf[2]};
+	return {vec_prf[0] * k_dir_prf[0] + vec_prf[1] * k_dir_prf[1] + vec_prf[2] * k_dir_prf[2],
+		vec_prf[0] * inplane_dir_prf[0] + vec_prf[1] * inplane_dir_prf[1] + vec_prf[2] * inplane_dir_prf[2],
+		vec_prf[0] * outofplane_dir_prf[0] + vec_prf[1] * outofplane_dir_prf[1] + vec_prf[2] * outofplane_dir_prf[2]};
 }
 
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotateMRF2PRF(const std::array<amrex::Real, 3> &vec_mrf) -> std::array<amrex::Real, 3>
 {
-    return {vec_mrf[0] * k_dir_prf[0] + vec_mrf[1] * inplane_dir_prf[0] + vec_mrf[2] * outofplane_dir_prf[0],
-            vec_mrf[0] * k_dir_prf[1] + vec_mrf[1] * inplane_dir_prf[1] + vec_mrf[2] * outofplane_dir_prf[1],
-            vec_mrf[0] * k_dir_prf[2] + vec_mrf[1] * inplane_dir_prf[2] + vec_mrf[2] * outofplane_dir_prf[2]};
+	return {vec_mrf[0] * k_dir_prf[0] + vec_mrf[1] * inplane_dir_prf[0] + vec_mrf[2] * outofplane_dir_prf[0],
+		vec_mrf[0] * k_dir_prf[1] + vec_mrf[1] * inplane_dir_prf[1] + vec_mrf[2] * outofplane_dir_prf[1],
+		vec_mrf[0] * k_dir_prf[2] + vec_mrf[1] * inplane_dir_prf[2] + vec_mrf[2] * outofplane_dir_prf[2]};
 }
 
 // Modified omega calculation (replaces your constexpr omega)
@@ -142,175 +139,172 @@ AMREX_GPU_MANAGED double omega = 0.0; // Will be computed in problem_main
 // AMREX_GPU_DEVICE auto computeMagneticVectorPotential_z(double /*x1*/, double /*x2*/, double /*x3*/, double /*time*/) -> double { return 0.0; }
 
 // Vector potential in PRF - computes component icomp of A at position (x1,x2,x3) in PRF
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(const double x1_prf, const double x2_prf, const double x3_prf, 
-                                                                              const double time, const int icomp) -> double
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(const double x1_prf, const double x2_prf, const double x3_prf, const double time,
+									     const int icomp) -> double
 {
-    AMREX_ALWAYS_ASSERT_WITH_MESSAGE(icomp == 0 || icomp == 1 || icomp == 2,
-                                     "computeVectorPotentialComponent_prf(): icomp must be in {0, 1, 2}");
-    
-    // Rotate position to MRF
-    const std::array<amrex::Real, 3> x_vec_mrf = rotatePRF2MRF({x1_prf, x2_prf, x3_prf});
-    
-    // Background B field in MRF: B0 = (b0_x1, b0_x2, 0) lying in the k-inplane plane
-    const double b0_x1_mrf = bg_mag_amplitude * std::cos(angle_between_k_b0_rad);
-    const double b0_x2_mrf = bg_mag_amplitude * std::sin(angle_between_k_b0_rad);
-    
-    // Background vector potential: curl(A_bg) = B0
-    // Choose A_bg = (0, 0, b0_x1 * x2 - b0_x2 * x1) so curl gives (b0_x1, b0_x2, 0)
-    const double bg_A1_mrf = 0.0;
-    const double bg_A2_mrf = 0.0;
-    const double bg_A3_mrf = b0_x1_mrf * x_vec_mrf[1] - b0_x2_mrf * x_vec_mrf[0];
-    
-    // Perturbation: delta_B is in x3 direction (out of k-b0 plane)
-    // For delta_B_x3 = delta_b * cos(omega*t - k*x1), we need:
-    // dA2/dx1 = delta_b * cos(omega*t - k*x1)
-    // So A2 = -(delta_b/k) * sin(omega*t - k*x1)
-    const double delta_A1_mrf = 0.0;
-    const double delta_A2_mrf = -(bg_mag_amplitude * delta_b / k_amplitude) * std::sin(omega * time - k_amplitude * x_vec_mrf[0]);
-    const double delta_A3_mrf = 0.0;
-    
-    // Total vector potential in MRF
-    const double A1_mrf = bg_A1_mrf + delta_A1_mrf;
-    const double A2_mrf = bg_A2_mrf + delta_A2_mrf;
-    const double A3_mrf = bg_A3_mrf + delta_A3_mrf;
-    
-    // Rotate back to PRF
-    const std::array<amrex::Real, 3> A_vec_prf = rotateMRF2PRF({A1_mrf, A2_mrf, A3_mrf});
-    
-    return A_vec_prf[icomp];
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(icomp == 0 || icomp == 1 || icomp == 2, "computeVectorPotentialComponent_prf(): icomp must be in {0, 1, 2}");
+
+	// Rotate position to MRF
+	const std::array<amrex::Real, 3> x_vec_mrf = rotatePRF2MRF({x1_prf, x2_prf, x3_prf});
+
+	// Background B field in MRF: B0 = (b0_x1, b0_x2, 0) lying in the k-inplane plane
+	const double b0_x1_mrf = bg_mag_amplitude * std::cos(angle_between_k_b0_rad);
+	const double b0_x2_mrf = bg_mag_amplitude * std::sin(angle_between_k_b0_rad);
+
+	// Background vector potential: curl(A_bg) = B0
+	// Choose A_bg = (0, 0, b0_x1 * x2 - b0_x2 * x1) so curl gives (b0_x1, b0_x2, 0)
+	const double bg_A1_mrf = 0.0;
+	const double bg_A2_mrf = 0.0;
+	const double bg_A3_mrf = b0_x1_mrf * x_vec_mrf[1] - b0_x2_mrf * x_vec_mrf[0];
+
+	// Perturbation: delta_B is in x3 direction (out of k-b0 plane)
+	// For delta_B_x3 = delta_b * cos(omega*t - k*x1), we need:
+	// dA2/dx1 = delta_b * cos(omega*t - k*x1)
+	// So A2 = -(delta_b/k) * sin(omega*t - k*x1)
+	const double delta_A1_mrf = 0.0;
+	const double delta_A2_mrf = -(bg_mag_amplitude * delta_b / k_amplitude) * std::sin(omega * time - k_amplitude * x_vec_mrf[0]);
+	const double delta_A3_mrf = 0.0;
+
+	// Total vector potential in MRF
+	const double A1_mrf = bg_A1_mrf + delta_A1_mrf;
+	const double A2_mrf = bg_A2_mrf + delta_A2_mrf;
+	const double A3_mrf = bg_A3_mrf + delta_A3_mrf;
+
+	// Rotate back to PRF
+	const std::array<amrex::Real, 3> A_vec_prf = rotateMRF2PRF({A1_mrf, A2_mrf, A3_mrf});
+
+	return A_vec_prf[icomp];
 }
 
 AMREX_GPU_DEVICE inline auto computeMagneticVectorPotential_x(double x1, double x2, double x3, double time) -> double
 {
-    return computeVectorPotentialComponent_prf(x1, x2, x3, time, 0);
+	return computeVectorPotentialComponent_prf(x1, x2, x3, time, 0);
 }
 
 AMREX_GPU_DEVICE inline auto computeMagneticVectorPotential_y(double x1, double x2, double x3, double time) -> double
 {
-    return computeVectorPotentialComponent_prf(x1, x2, x3, time, 1);
+	return computeVectorPotentialComponent_prf(x1, x2, x3, time, 1);
 }
 
 AMREX_GPU_DEVICE inline auto computeMagneticVectorPotential_z(double x1, double x2, double x3, double time) -> double
 {
-    return computeVectorPotentialComponent_prf(x1, x2, x3, time, 2);
+	return computeVectorPotentialComponent_prf(x1, x2, x3, time, 2);
 }
 
-AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, 
-                                          amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-                                          amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, 
-                                          quokka::centering cen, quokka::direction dir, double time)
+AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir,
+					  double time)
 {
 
 	const amrex::Real x1_L = prob_lo[0] + i * dx[0];
-    const amrex::Real x2_L = prob_lo[1] + j * dx[1];
-    const amrex::Real x3_L = prob_lo[2] + k * dx[2];
+	const amrex::Real x2_L = prob_lo[1] + j * dx[1];
+	const amrex::Real x3_L = prob_lo[2] + k * dx[2];
 
-    if (cen == quokka::centering::cc) {
-        const amrex::Real x1_C = x1_L + static_cast<amrex::Real>(0.5) * dx[0];
-        const amrex::Real x2_C = x2_L + static_cast<amrex::Real>(0.5) * dx[1];
-        const amrex::Real x3_C = x3_L + static_cast<amrex::Real>(0.5) * dx[2];
-        
-        // Rotate position to MRF
-        const std::array<amrex::Real, 3> x_vec_mrf = rotatePRF2MRF({x1_C, x2_C, x3_C});
-        
-        // Wave phase (invariant under rotation: k·x is the same in both frames)
-        const double cos_wave = std::cos(omega * time - k_amplitude * x_vec_mrf[0]);
-        
-        // Background magnetic field in MRF
-        const double b0_x1_mrf = bg_mag_amplitude * std::cos(angle_between_k_b0_rad);
-        const double b0_x2_mrf = bg_mag_amplitude * std::sin(angle_between_k_b0_rad);
-        const double b0_x3_mrf = 0.0;
-        
-        // Perturbed magnetic field in MRF (perpendicular to k-b0 plane)
-        const double delta_b_x1_mrf = 0.0;
-        const double delta_b_x2_mrf = 0.0;
-        const double delta_b_x3_mrf = delta_b * cos_wave;
-        
-        // Total B field in MRF
-        const double b_x1_mrf = b0_x1_mrf + delta_b_x1_mrf;
-        const double b_x2_mrf = b0_x2_mrf + delta_b_x2_mrf;
-        const double b_x3_mrf = b0_x3_mrf + delta_b_x3_mrf;
-        
-        // Rotate B field back to PRF
-        const std::array<amrex::Real, 3> b_vec_prf = rotateMRF2PRF({b_x1_mrf, b_x2_mrf, b_x3_mrf});
+	if (cen == quokka::centering::cc) {
+		const amrex::Real x1_C = x1_L + static_cast<amrex::Real>(0.5) * dx[0];
+		const amrex::Real x2_C = x2_L + static_cast<amrex::Real>(0.5) * dx[1];
+		const amrex::Real x3_C = x3_L + static_cast<amrex::Real>(0.5) * dx[2];
 
-        // Density and pressure perturbations
-        const double density = bg_density + bg_density * delta_b / bg_mag_amplitude * cos_wave;
-        const double pressure = bg_pressure + bg_pressure * gamma_gas * delta_b / bg_mag_amplitude * cos_wave;
-        
-        // Velocity perturbation in MRF (aligned with perturbed B)
-        const double v_x1_mrf = 0.0;
-        const double v_x2_mrf = 0.0;
-        const double v_x3_mrf = magnetosonic_speed * delta_b / bg_mag_amplitude * cos_wave;
-        
-        // Rotate velocity back to PRF
-        const std::array<amrex::Real, 3> v_vec_prf = rotateMRF2PRF({v_x1_mrf, v_x2_mrf, v_x3_mrf});
+		// Rotate position to MRF
+		const std::array<amrex::Real, 3> x_vec_mrf = rotatePRF2MRF({x1_C, x2_C, x3_C});
+
+		// Wave phase (invariant under rotation: k·x is the same in both frames)
+		const double cos_wave = std::cos(omega * time - k_amplitude * x_vec_mrf[0]);
+
+		// Background magnetic field in MRF
+		const double b0_x1_mrf = bg_mag_amplitude * std::cos(angle_between_k_b0_rad);
+		const double b0_x2_mrf = bg_mag_amplitude * std::sin(angle_between_k_b0_rad);
+		const double b0_x3_mrf = 0.0;
+
+		// Perturbed magnetic field in MRF (perpendicular to k-b0 plane)
+		const double delta_b_x1_mrf = 0.0;
+		const double delta_b_x2_mrf = 0.0;
+		const double delta_b_x3_mrf = delta_b * cos_wave;
+
+		// Total B field in MRF
+		const double b_x1_mrf = b0_x1_mrf + delta_b_x1_mrf;
+		const double b_x2_mrf = b0_x2_mrf + delta_b_x2_mrf;
+		const double b_x3_mrf = b0_x3_mrf + delta_b_x3_mrf;
+
+		// Rotate B field back to PRF
+		const std::array<amrex::Real, 3> b_vec_prf = rotateMRF2PRF({b_x1_mrf, b_x2_mrf, b_x3_mrf});
+
+		// Density and pressure perturbations
+		const double density = bg_density + bg_density * delta_b / bg_mag_amplitude * cos_wave;
+		const double pressure = bg_pressure + bg_pressure * gamma_gas * delta_b / bg_mag_amplitude * cos_wave;
+
+		// Velocity perturbation in MRF (aligned with perturbed B)
+		const double v_x1_mrf = 0.0;
+		const double v_x2_mrf = 0.0;
+		const double v_x3_mrf = magnetosonic_speed * delta_b / bg_mag_amplitude * cos_wave;
+
+		// Rotate velocity back to PRF
+		const std::array<amrex::Real, 3> v_vec_prf = rotateMRF2PRF({v_x1_mrf, v_x2_mrf, v_x3_mrf});
 		if (i == 4 && j == 4 && k == 4) {
-			std::cout << "Time: " << time 
-					<< ", B_prf: (" << b_vec_prf[0] << ", " << b_vec_prf[1] << ", " << b_vec_prf[2] << ")\n";
+			std::cout << "Time: " << time << ", B_prf: (" << b_vec_prf[0] << ", " << b_vec_prf[1] << ", " << b_vec_prf[2] << ")\n";
 			std::cout << "  delta_b_mrf: (" << delta_b_x1_mrf << ", " << delta_b_x2_mrf << ", " << delta_b_x3_mrf << ")\n";
 			std::cout << "  cos_wave: " << cos_wave << "\n";
 			std::cout << "  density: " << density << " (bg: " << bg_density << ")\n";
 			std::cout << "  pressure: " << pressure << " (bg: " << bg_pressure << ")\n";
-			std::cout << "  delta_rho/rho: " << (density - bg_density)/bg_density << "\n";
-			std::cout << "  delta_P/P: " << (pressure - bg_pressure)/bg_pressure << "\n";
+			std::cout << "  delta_rho/rho: " << (density - bg_density) / bg_density << "\n";
+			std::cout << "  delta_P/P: " << (pressure - bg_pressure) / bg_pressure << "\n";
 		}
-        // Compute energies
-        const double v_sq = v_vec_prf[0] * v_vec_prf[0] + v_vec_prf[1] * v_vec_prf[1] + v_vec_prf[2] * v_vec_prf[2];
-        const double b_sq = b_vec_prf[0] * b_vec_prf[0] + b_vec_prf[1] * b_vec_prf[1] + b_vec_prf[2] * b_vec_prf[2];
-        const double Ekin = 0.5 * density * v_sq;
-        const double Emag = 0.5 * b_sq;
-        const double Eint = pressure / (gamma_gas - 1.0);
-        const double Etot = Ekin + Emag + Eint;
-        
-        // Store in PRF coordinates
-        state(i, j, k, HydroSystem<FastWaveConvergence>::density_index) = density;
-        state(i, j, k, HydroSystem<FastWaveConvergence>::x1Momentum_index) = v_vec_prf[0] * density;
-        state(i, j, k, HydroSystem<FastWaveConvergence>::x2Momentum_index) = v_vec_prf[1] * density;
-        state(i, j, k, HydroSystem<FastWaveConvergence>::x3Momentum_index) = v_vec_prf[2] * density;
-        state(i, j, k, HydroSystem<FastWaveConvergence>::energy_index) = Etot;
-        state(i, j, k, HydroSystem<FastWaveConvergence>::internalEnergy_index) = Eint;
-        
-    } else if (cen == quokka::centering::fc) {
-        // Face-centered B: compute analytical B at face location
-        amrex::Real x1_F = x1_L, x2_F = x2_L, x3_F = x3_L;
-        if (dir == quokka::direction::x) {
-			x1_F += 0.0;        
-			x2_F += 0.5*dx[1]; 
-			x3_F += 0.5*dx[2];
+		// Compute energies
+		const double v_sq = v_vec_prf[0] * v_vec_prf[0] + v_vec_prf[1] * v_vec_prf[1] + v_vec_prf[2] * v_vec_prf[2];
+		const double b_sq = b_vec_prf[0] * b_vec_prf[0] + b_vec_prf[1] * b_vec_prf[1] + b_vec_prf[2] * b_vec_prf[2];
+		const double Ekin = 0.5 * density * v_sq;
+		const double Emag = 0.5 * b_sq;
+		const double Eint = pressure / (gamma_gas - 1.0);
+		const double Etot = Ekin + Emag + Eint;
+
+		// Store in PRF coordinates
+		state(i, j, k, HydroSystem<FastWaveConvergence>::density_index) = density;
+		state(i, j, k, HydroSystem<FastWaveConvergence>::x1Momentum_index) = v_vec_prf[0] * density;
+		state(i, j, k, HydroSystem<FastWaveConvergence>::x2Momentum_index) = v_vec_prf[1] * density;
+		state(i, j, k, HydroSystem<FastWaveConvergence>::x3Momentum_index) = v_vec_prf[2] * density;
+		state(i, j, k, HydroSystem<FastWaveConvergence>::energy_index) = Etot;
+		state(i, j, k, HydroSystem<FastWaveConvergence>::internalEnergy_index) = Eint;
+
+	} else if (cen == quokka::centering::fc) {
+		// Face-centered B: compute analytical B at face location
+		amrex::Real x1_F = x1_L, x2_F = x2_L, x3_F = x3_L;
+		if (dir == quokka::direction::x) {
+			x1_F += 0.0;
+			x2_F += 0.5 * dx[1];
+			x3_F += 0.5 * dx[2];
 		} else if (dir == quokka::direction::y) {
-			x1_F += 0.5*dx[0];  
-			x2_F += 0.0;       
-			x3_F += 0.5*dx[2];
+			x1_F += 0.5 * dx[0];
+			x2_F += 0.0;
+			x3_F += 0.5 * dx[2];
 		} else if (dir == quokka::direction::z) {
-			x1_F += 0.5*dx[0];  
-			x2_F += 0.5*dx[1]; 
+			x1_F += 0.5 * dx[0];
+			x2_F += 0.5 * dx[1];
 			x3_F += 0.0;
 		}
-        const std::array<amrex::Real,3> x_vec_mrf = rotatePRF2MRF({x1_F,x2_F,x3_F});
-        const double cos_wave = std::cos(omega*time - k_amplitude*x_vec_mrf[0]);
+		const std::array<amrex::Real, 3> x_vec_mrf = rotatePRF2MRF({x1_F, x2_F, x3_F});
+		const double cos_wave = std::cos(omega * time - k_amplitude * x_vec_mrf[0]);
 
-        const double b0_x1_mrf = bg_mag_amplitude * std::cos(angle_between_k_b0_rad);
-        const double b0_x2_mrf = bg_mag_amplitude * std::sin(angle_between_k_b0_rad);
-        const double b0_x3_mrf = 0.0;
+		const double b0_x1_mrf = bg_mag_amplitude * std::cos(angle_between_k_b0_rad);
+		const double b0_x2_mrf = bg_mag_amplitude * std::sin(angle_between_k_b0_rad);
+		const double b0_x3_mrf = 0.0;
 
-        const double delta_b_x1_mrf = 0.0;
-        const double delta_b_x2_mrf = 0.0;
-        const double delta_b_x3_mrf = delta_b * cos_wave;
+		const double delta_b_x1_mrf = 0.0;
+		const double delta_b_x2_mrf = 0.0;
+		const double delta_b_x3_mrf = delta_b * cos_wave;
 
-        const double b_x1_mrf = b0_x1_mrf + delta_b_x1_mrf;
-        const double b_x2_mrf = b0_x2_mrf + delta_b_x2_mrf;
-        const double b_x3_mrf = b0_x3_mrf + delta_b_x3_mrf;
+		const double b_x1_mrf = b0_x1_mrf + delta_b_x1_mrf;
+		const double b_x2_mrf = b0_x2_mrf + delta_b_x2_mrf;
+		const double b_x3_mrf = b0_x3_mrf + delta_b_x3_mrf;
 
-        const std::array<amrex::Real,3> b_vec_prf = rotateMRF2PRF({b_x1_mrf,b_x2_mrf,b_x3_mrf});
+		const std::array<amrex::Real, 3> b_vec_prf = rotateMRF2PRF({b_x1_mrf, b_x2_mrf, b_x3_mrf});
 
-        if (dir == quokka::direction::x)
-            state(i,j,k, MHDSystem<FastWaveConvergence>::bfield_index) = b_vec_prf[0];
-        else if (dir == quokka::direction::y)
-            state(i,j,k, MHDSystem<FastWaveConvergence>::bfield_index) = b_vec_prf[1];
-        else if (dir == quokka::direction::z)
-            state(i,j,k, MHDSystem<FastWaveConvergence>::bfield_index) = b_vec_prf[2];
-    }
+		if (dir == quokka::direction::x)
+			state(i, j, k, MHDSystem<FastWaveConvergence>::bfield_index) = b_vec_prf[0];
+		else if (dir == quokka::direction::y)
+			state(i, j, k, MHDSystem<FastWaveConvergence>::bfield_index) = b_vec_prf[1];
+		else if (dir == quokka::direction::z)
+			state(i, j, k, MHDSystem<FastWaveConvergence>::bfield_index) = b_vec_prf[2];
+	}
 }
 
 template <> void QuokkaSimulation<FastWaveConvergence>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -374,7 +368,8 @@ void QuokkaSimulation<FastWaveConvergence>::computeReferenceSolution(amrex::Mult
 
 template <>
 void QuokkaSimulation<FastWaveConvergence>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
+									amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+									quokka::direction const dir)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -393,14 +388,12 @@ void QuokkaSimulation<FastWaveConvergence>::computeReferenceSolution_fc(amrex::M
 
 auto runWaveTest(int nx) -> double
 {
-	    amrex::Print() << "runWaveTest: omega = " << omega << ", k_amplitude = " << k_amplitude 
-                   << ", max_time = " << k_amplitude / omega << "\n";
-	
-	
+	amrex::Print() << "runWaveTest: omega = " << omega << ", k_amplitude = " << k_amplitude << ", max_time = " << k_amplitude / omega << "\n";
+
 	// Problem parameters
 	const double CFL_number = 0.3;
 	const double max_time = 2.0 * M_PI / omega;
-	
+
 	const int max_timesteps = std::max(20000, nx * 100);
 
 	// Problem initialization
@@ -514,13 +507,13 @@ auto problem_main() -> int
 	for (int nx = nx_initial; nx <= nx_max; nx *= 2) {
 
 		amrex::ParmParse const hpp("setup");
-		
+
 		double angle_between_k_b0_deg = 90.0; // default to 90 degrees
 		hpp.query("angle_between_k_b0", angle_between_k_b0_deg);
-		
+
 		constexpr double deg2rad = M_PI / 180.0;
 		angle_between_k_b0_rad = deg2rad * angle_between_k_b0_deg;
-		
+
 		// Read k-vector modes
 		int num_modes_x = 1;
 		int num_modes_y = 0;
@@ -528,47 +521,44 @@ auto problem_main() -> int
 		hpp.query("num_modes_x", num_modes_x);
 		hpp.query("num_modes_y", num_modes_y);
 		hpp.query("num_modes_z", num_modes_z);
-		
+
 		// Compute k vector and basis
-		const std::array<amrex::Real, 3> k_vec_prf = {
-			2.0 * M_PI * static_cast<amrex::Real>(num_modes_x), 
-			2.0 * M_PI * static_cast<amrex::Real>(num_modes_y),
-			2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)
-		};
-		
+		const std::array<amrex::Real, 3> k_vec_prf = {2.0 * M_PI * static_cast<amrex::Real>(num_modes_x),
+							      2.0 * M_PI * static_cast<amrex::Real>(num_modes_y),
+							      2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)};
+
 		const double k_magn = computeMagnitude(k_vec_prf);
 		k_amplitude = k_magn;
 		k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
 		amrex::Print() << "k_dir_prf: (" << k_dir_prf[0] << ", " << k_dir_prf[1] << ", " << k_dir_prf[2] << ")\n";
-amrex::Print() << "inplane_dir_prf: (" << inplane_dir_prf[0] << ", " << inplane_dir_prf[1] << ", " << inplane_dir_prf[2] << ")\n";
-amrex::Print() << "outofplane_dir_prf: (" << outofplane_dir_prf[0] << ", " << outofplane_dir_prf[1] << ", " << outofplane_dir_prf[2] << ")\n";
-		
+		amrex::Print() << "inplane_dir_prf: (" << inplane_dir_prf[0] << ", " << inplane_dir_prf[1] << ", " << inplane_dir_prf[2] << ")\n";
+		amrex::Print() << "outofplane_dir_prf: (" << outofplane_dir_prf[0] << ", " << outofplane_dir_prf[1] << ", " << outofplane_dir_prf[2] << ")\n";
+
 		// Build orthonormal basis
 		std::array<amrex::Real, 3> ref_prf{0.0, 0.0, 1.0};
 		if (std::abs(computeDotProduct(ref_prf, k_dir_prf)) > 0.9999) {
 			ref_prf = {0.0, 1.0, 0.0};
 		}
-		
+
 		inplane_dir_prf = computeCrossProduct(ref_prf, k_dir_prf);
 		normalizeVector(inplane_dir_prf);
-		
+
 		outofplane_dir_prf = computeCrossProduct(k_dir_prf, inplane_dir_prf);
 		normalizeVector(outofplane_dir_prf);
-		
+
 		// Compute omega with the angle
 		const double cos_theta = std::cos(angle_between_k_b0_rad);
-		omega = std::sqrt(std::pow(k_magn, 2) / 2.0 *
-						(std::pow(magnetosonic_speed, 2) + 
-						std::sqrt(std::pow(magnetosonic_speed, 4) - 
-								4.0 * std::pow(alfven_speed, 2) * std::pow(sound_speed, 2) * 
-								std::pow(cos_theta, 2))));
-		
+		omega = std::sqrt(
+		    std::pow(k_magn, 2) / 2.0 *
+		    (std::pow(magnetosonic_speed, 2) +
+		     std::sqrt(std::pow(magnetosonic_speed, 4) - 4.0 * std::pow(alfven_speed, 2) * std::pow(sound_speed, 2) * std::pow(cos_theta, 2))));
+
 		amrex::Print() << "Fast wave configuration:\n";
 		amrex::Print() << "  Angle k-B0: " << angle_between_k_b0_deg << " degrees\n";
 		amrex::Print() << "  k magnitude: " << k_magn << "\n";
 		amrex::Print() << "  omega: " << omega << "\n";
 		amrex::Print() << "  Phase speed: " << omega / k_magn << "\n\n";
-    
+
 		double const error = runWaveTest(nx);
 
 		resolutions.push_back(nx);
