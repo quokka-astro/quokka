@@ -78,8 +78,8 @@ void DiagConditional::prepare(int a_nlevels, const amrex::Vector<amrex::Geometry
 	}
 }
 
-void DiagConditional::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
-				  const amrex::Vector<std::string> &a_stateVar)
+void DiagConditional::processDiagImpl(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
+			     const amrex::Vector<std::string> &a_stateVar)
 {
 	// Set conditional range
 	int const cFieldIdx = getFieldIndex(m_cFieldName, a_stateVar);

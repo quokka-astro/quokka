@@ -15,8 +15,7 @@ class DiagConditional : public DiagBase::Register<DiagConditional>
 	void prepare(int a_nlevels, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<amrex::BoxArray> &a_grids,
 		     const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames) override;
 
-	void processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
-			 const amrex::Vector<std::string> &a_stateVar);
+	template <typename problem_t> void processDiag(int a_nstep, const amrex::Real &a_time);
 
 	void addVars(amrex::Vector<std::string> &a_varList) override;
 
@@ -32,6 +31,9 @@ class DiagConditional : public DiagBase::Register<DiagConditional>
 	void close() override {}
 
       private:
+	void processDiagImpl(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
+			     const amrex::Vector<std::string> &a_stateVar);
+
 	// List of variables
 	conditionalType m_condType;		 // Type of conditional calculation
 	std::string m_cFieldName;		 // Condition Field name
@@ -46,5 +48,12 @@ class DiagConditional : public DiagBase::Register<DiagConditional>
 	amrex::Vector<amrex::Geometry> m_geoms; // Squirrel away the geoms
 	amrex::Vector<amrex::IntVect> m_refRatio;
 };
+
+template <typename problem_t> void DiagConditional::processDiag(int a_nstep, const amrex::Real &a_time)
+{
+	AMREX_ALWAYS_ASSERT(m_diagMF != nullptr);
+	AMREX_ALWAYS_ASSERT(m_diagVars != nullptr);
+	processDiagImpl(a_nstep, a_time, *m_diagMF, *m_diagVars);
+}
 
 #endif

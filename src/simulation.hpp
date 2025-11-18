@@ -92,6 +92,7 @@ namespace filesystem = experimental::filesystem;
 #include "fundamental_constants.H"
 #include "grid.hpp"
 #include "io/DiagBase.H"
+#include "io/DiagConditional.H"
 #include "io/DiagFramePlane.H"
 #include "io/DiagPDF.H"
 #include "io/DiagPlotfile.H"
@@ -166,6 +167,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	friend class DiagProjectionPlot;
 	friend class DiagPDF;
 	friend class DiagFramePlane;
+	friend class DiagConditional;
 
       public:
 	amrex::Real maxDt_ = std::numeric_limits<double>::max();  // no limit by default
@@ -3127,6 +3129,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 			auto *pdfDiag = dynamic_cast<DiagPDF *>(diag.get());
 			if (pdfDiag != nullptr) {
 				pdfDiag->processDiag<problem_t>(istep[0], tNew_[0]);
+				continue;
+			}
+
+			auto *conditionalDiag = dynamic_cast<DiagConditional *>(diag.get());
+			if (conditionalDiag != nullptr) {
+				conditionalDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 				continue;
 			}
 
