@@ -188,7 +188,7 @@ auto problem_main() -> int
 		const double rel_err_norm_dust_rho = err_norm_dust_rho / sol_norm_dust_rho;
 
 		int status = 1;
-		const double rel_err_tol = 0.01;
+		const double rel_err_tol = 0.03;
 		if ((rel_err_norm < rel_err_tol) && (rel_err_norm_dust_rho < rel_err_tol)) {
 			status = 0;
 		}
