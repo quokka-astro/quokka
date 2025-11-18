@@ -75,7 +75,6 @@ RadSystem<ParticleRadiationProblem>::DefineOpacityExponentsAndLowerValues(amrex:
 	return exponents_and_values;
 }
 
-
 template <> void QuokkaSimulation<ParticleRadiationProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -153,10 +152,8 @@ auto problem_main() -> int
 	// total gas energy
 	const amrex::Real total_gas_energy_init = sim.state_new_cc_[0].sum(RadSystem<ParticleRadiationProblem>::gasEnergy_index) * vol;
 
-
 	// evolve
 	sim.evolve();
-
 
 	// Total radiation energy in the field
 	amrex::Real total_Erad = 0.0;
@@ -166,7 +163,6 @@ auto problem_main() -> int
 
 	// total gas energy
 	const amrex::Real total_gas_energy = sim.state_new_cc_[0].sum(RadSystem<ParticleRadiationProblem>::gasEnergy_index) * vol;
-
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 
@@ -188,60 +184,59 @@ auto problem_main() -> int
 	const int status = 0; // Initialize to success
 	return status;
 
+	// 	// read output variables
+	// 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
+	// 	const int nx = static_cast<int>(position.size());
 
-// 	// read output variables
-// 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
-// 	const int nx = static_cast<int>(position.size());
+	// 	// compute error norm
+	// 	std::vector<double> erad(nx);
+	// 	std::vector<double> erad_exact(nx);
+	// 	std::vector<double> xs(nx);
+	// 	for (int i = 0; i < nx; ++i) {
+	// 		amrex::Real const x = position[i];
+	// 		xs.at(i) = x;
+	// 		erad_exact.at(i) = (x <= chat * tmax) ? 1.0 : 0.0;
+	// 		double erad_sim = 0.0;
+	// 		for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
+	// 			erad_sim += values.at(RadSystem<ParticleRadiationProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g)[i];
+	// 		}
+	// 		erad.at(i) = erad_sim;
+	// 	}
 
-// 	// compute error norm
-// 	std::vector<double> erad(nx);
-// 	std::vector<double> erad_exact(nx);
-// 	std::vector<double> xs(nx);
-// 	for (int i = 0; i < nx; ++i) {
-// 		amrex::Real const x = position[i];
-// 		xs.at(i) = x;
-// 		erad_exact.at(i) = (x <= chat * tmax) ? 1.0 : 0.0;
-// 		double erad_sim = 0.0;
-// 		for (int g = 0; g < Physics_Traits<ParticleRadiationProblem>::nGroups; ++g) {
-// 			erad_sim += values.at(RadSystem<ParticleRadiationProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g)[i];
-// 		}
-// 		erad.at(i) = erad_sim;
-// 	}
+	// 	double err_norm = 0.;
+	// 	double sol_norm = 0.;
+	// 	for (int i = 0; i < nx; ++i) {
+	// 		err_norm += std::abs(erad[i] - erad_exact[i]);
+	// 		sol_norm += std::abs(erad_exact[i]);
+	// 	}
 
-// 	double err_norm = 0.;
-// 	double sol_norm = 0.;
-// 	for (int i = 0; i < nx; ++i) {
-// 		err_norm += std::abs(erad[i] - erad_exact[i]);
-// 		sol_norm += std::abs(erad_exact[i]);
-// 	}
+	// 	const double rel_err_norm = err_norm / sol_norm;
+	// 	const double rel_err_tol = 0.01;
+	// 	int status = 1;
+	// 	if (rel_err_norm < rel_err_tol) {
+	// 		status = 0;
+	// 	}
+	// 	amrex::Print() << "Relative L1 norm = " << rel_err_norm << '\n';
 
-// 	const double rel_err_norm = err_norm / sol_norm;
-// 	const double rel_err_tol = 0.01;
-// 	int status = 1;
-// 	if (rel_err_norm < rel_err_tol) {
-// 		status = 0;
-// 	}
-// 	amrex::Print() << "Relative L1 norm = " << rel_err_norm << '\n';
+	// #ifdef HAVE_PYTHON
+	// 	// Plot results
+	// 	matplotlibcpp::clf();
+	// 	matplotlibcpp::ylim(0.0, 1.1);
 
-// #ifdef HAVE_PYTHON
-// 	// Plot results
-// 	matplotlibcpp::clf();
-// 	matplotlibcpp::ylim(0.0, 1.1);
+	// 	std::map<std::string, std::string> erad_args;
+	// 	std::map<std::string, std::string> erad_exact_args;
+	// 	erad_args["label"] = "numerical solution";
+	// 	erad_exact_args["label"] = "exact solution";
+	// 	erad_exact_args["linestyle"] = "--";
+	// 	matplotlibcpp::plot(xs, erad, erad_args);
+	// 	matplotlibcpp::plot(xs, erad_exact, erad_exact_args);
 
-// 	std::map<std::string, std::string> erad_args;
-// 	std::map<std::string, std::string> erad_exact_args;
-// 	erad_args["label"] = "numerical solution";
-// 	erad_exact_args["label"] = "exact solution";
-// 	erad_exact_args["linestyle"] = "--";
-// 	matplotlibcpp::plot(xs, erad, erad_args);
-// 	matplotlibcpp::plot(xs, erad_exact, erad_exact_args);
+	// 	matplotlibcpp::legend();
+	// 	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
+	// 	matplotlibcpp::save("./radiation_streaming.pdf");
+	// #endif // HAVE_PYTHON
 
-// 	matplotlibcpp::legend();
-// 	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
-// 	matplotlibcpp::save("./radiation_streaming.pdf");
-// #endif // HAVE_PYTHON
-
-// 	// Cleanup and exit
-// 	amrex::Print() << "Finished." << '\n';
-// 	return status;
+	// 	// Cleanup and exit
+	// 	amrex::Print() << "Finished." << '\n';
+	// 	return status;
 }
