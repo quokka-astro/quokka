@@ -303,7 +303,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	// dust-gas drag implicit update in Strang-split scheme
 	void computeDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt);
-	void computeDragRhs(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &u,
+	AMREX_GPU_DEVICE void computeDragRhs(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &u,
 			    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &alpha,
 			    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &epsilon, amrex::Real dt, amrex::Real gamma1,
 			    amrex::Real gamma2, amrex::Real beta1, amrex::Real beta2,
@@ -2355,7 +2355,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeDustDrag(
 }
 
 template <typename problem_t>
-void QuokkaSimulation<problem_t>::computeDragRhs(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &u,
+AMREX_GPU_DEVICE void QuokkaSimulation<problem_t>::computeDragRhs(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &u,
 						 amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &alpha,
 						 amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &epsilon, amrex::Real dt,
 						 amrex::Real gamma1, amrex::Real gamma2, amrex::Real beta1, amrex::Real beta2,
