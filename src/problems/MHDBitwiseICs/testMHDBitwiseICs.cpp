@@ -186,15 +186,10 @@ auto verifyPeriodicBCs(const amrex::MultiFab &mf, const std::string &label) -> i
 		const std::array<int, 3> valid_lower_indices{valid_region.smallEnd(0), valid_region.smallEnd(1), valid_region.smallEnd(2)};
 		const std::array<int, 3> valid_upper_indices{valid_region.bigEnd(0), valid_region.bigEnd(1), valid_region.bigEnd(2)};
 		// raw extent of valid box
-		const std::array<int, 3> valid_extent{
-		    valid_upper_indices[0] - valid_lower_indices[0] + 1,
-		    valid_upper_indices[1] - valid_lower_indices[1] + 1,
-		    valid_upper_indices[2] - valid_lower_indices[2] + 1};
+		const std::array<int, 3> valid_extent{valid_upper_indices[0] - valid_lower_indices[0] + 1, valid_upper_indices[1] - valid_lower_indices[1] + 1,
+						      valid_upper_indices[2] - valid_lower_indices[2] + 1};
 		// number of distinct periodic entries per axis: N for face-centred, N-1 for cell-centred (last entry wraps to first)
-		const std::array<int, 3> num_valid_entries{
-		    valid_extent[0] - is_nodal[0],
-		    valid_extent[1] - is_nodal[1],
-		    valid_extent[2] - is_nodal[2]};
+		const std::array<int, 3> num_valid_entries{valid_extent[0] - is_nodal[0], valid_extent[1] - is_nodal[1], valid_extent[2] - is_nodal[2]};
 		AMREX_ALWAYS_ASSERT(num_valid_entries[0] > 0 && num_valid_entries[1] > 0 && num_valid_entries[2] > 0);
 		// map an index in the grown region back into the equivalent periodic index in the valid region along a given axis
 		auto wrap_into_valid = [&](int index, int axis) -> int {
@@ -207,15 +202,11 @@ auto verifyPeriodicBCs(const amrex::MultiFab &mf, const std::string &label) -> i
 			}
 			return valid_lower_indices[axis] + (wrapped_index - num_valid_entries[axis]);
 		};
-		auto get_num_elems = [](const amrex::Box &box) -> amrex::IntVect {
-			return {box.length(0), box.length(1), box.length(2)};
-		};
+		auto get_num_elems = [](const amrex::Box &box) -> amrex::IntVect { return {box.length(0), box.length(1), box.length(2)}; };
 		const amrex::IntVect ntotal = get_num_elems(grown_region);
 		const amrex::IntVect nvalid = get_num_elems(valid_region);
 		amrex::Print() << "[" << label << "] dims:"
-		               << " ntotal=" << ntotal
-		               << " nvalid=" << nvalid
-		               << " (nghosts=" << nghosts << ", is_nodal=" << is_nodal << ")\n";
+			       << " ntotal=" << ntotal << " nvalid=" << nvalid << " (nghosts=" << nghosts << ", is_nodal=" << is_nodal << ")\n";
 		// Inspect every cell and check that it matches its periodic counterpart in the valid region.
 		// Note, we loop over the full domain, so for some fraction of the cells, we end up comparing valid cells with them-self.
 		for (amrex::BoxIterator box_iter(grown_region); box_iter.ok(); ++box_iter) {
@@ -230,14 +221,10 @@ auto verifyPeriodicBCs(const amrex::MultiFab &mf, const std::string &label) -> i
 					++num_diffs;
 					amrex::Print()
 					    << "[" << label << "]"
-					    << " fab=" << mf_iter.index()
-					    << " coord=(" << this_index[0] << "," << this_index[1] << "," << this_index[2]
-					    << ")"
+					    << " fab=" << mf_iter.index() << " coord=(" << this_index[0] << "," << this_index[1] << "," << this_index[2] << ")"
 					    << " -> wrapped=(" << wrapped_i << "," << wrapped_j << "," << wrapped_k << ")"
-					    << " icomp=" << icomp
-					    << " val=" << std::setprecision(17) << this_value
-					    << " vs ref=" << std::setprecision(17) << wrapped_value
-					    << " (mismatch)\n";
+					    << " icomp=" << icomp << " val=" << std::setprecision(17) << this_value << " vs ref=" << std::setprecision(17)
+					    << wrapped_value << " (mismatch)\n";
 				}
 			}
 		}
@@ -245,11 +232,10 @@ auto verifyPeriodicBCs(const amrex::MultiFab &mf, const std::string &label) -> i
 	amrex::ParallelDescriptor::ReduceIntSum(num_diffs);
 	if (num_diffs == 0) {
 		amrex::Print() << "[" << label << "]"
-		               << " periodic BC check: ghost and valid cells exactly match their wrapped values.\n";
+			       << " periodic BC check: ghost and valid cells exactly match their wrapped values.\n";
 	} else {
 		amrex::Print() << "[" << label << "]"
-		               << " periodic BC check: found " << num_diffs
-		               << " mismatched entries between ghost/valid cells and their wrapped values.\n";
+			       << " periodic BC check: found " << num_diffs << " mismatched entries between ghost/valid cells and their wrapped values.\n";
 	}
 	amrex::Print() << "\n";
 	return num_diffs;
