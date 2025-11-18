@@ -34,6 +34,7 @@ jobs:
       run: |
         extern/amrex/.github/workflows/dependencies/dependencies_nvcc.sh 13.0
         .github/workflows/dependencies/dependencies_ccache.sh
+        sudo apt-get update && sudo apt-get install libhdf5-mpi-dev
 
     - name: Python Dependencies
       run: python3 -m pip install --user cxxfilt
