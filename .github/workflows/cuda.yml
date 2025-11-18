@@ -71,7 +71,7 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache           \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache         \
             -DCMAKE_CUDA_COMPILER_LAUNCHER=ccache	 \
-	    -DQUOKKA_PYTHON=OFF
+            -DQUOKKA_PYTHON=OFF
         cmake --build build -j 4
 
         ccache -s
