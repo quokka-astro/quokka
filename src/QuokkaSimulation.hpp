@@ -817,7 +817,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 #endif
 
 	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-		computeDustDrag(state, dt);
+		// computeDustDrag(state, dt);
 	}
 
 	// compute user-specified sources
