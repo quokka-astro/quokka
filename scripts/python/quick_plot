@@ -413,24 +413,16 @@ def test_filter_snapshots_by_time_interval():
 
 
 def get_index_from_pltdir(pltdir):
-    idx = 0
-    try:
-        idx = int(os.path.basename(pltdir)[-8:])
-    except ValueError:
-        try:
-            idx = int(os.path.basename(pltdir)[-7:])
-        except ValueError:
-            try:
-                idx = int(os.path.basename(pltdir)[-6:])
-            except ValueError:
-                try:
-                    idx = int(os.path.basename(pltdir)[-5:])
-                except ValueError:
-                    try:
-                        idx = int(os.path.basename(pltdir)[-4:])
-                    except ValueError:
-                        raise ValueError(f"Cannot get index from {pltdir}")
-    return idx
+    base = os.path.basename(pltdir)
+    # find the longest trailing numeric substring
+    i = len(base) - 1
+    while i >= 0 and base[i].isdigit():
+        i -= 1
+    # if the last character wasn't a digit, no numeric suffix exists
+    if i == len(base) - 1:
+        raise ValueError(f"Cannot get index from {pltdir}")
+    return int(base[i + 1:])
+
 
 def main(args):
 
