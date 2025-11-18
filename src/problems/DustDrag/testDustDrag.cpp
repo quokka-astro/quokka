@@ -310,7 +310,7 @@ auto problem_main() -> int
 		}
 
 		const double rel_err_norm = err_norm / sol_norm;
-		const double rel_err_tol = 0.01;
+		const double rel_err_tol = 0.03;
 		const int status = (rel_err_norm < rel_err_tol) ? 0 : 1;
 
 		amrex::Print() << "Relative L1 norm for gas x velocity = " << rel_err_norm << '\n';

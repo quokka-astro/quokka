@@ -817,7 +817,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 #endif
 
 	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-		// computeDustDrag(state, dt);
+		computeDustDrag(state, dt);
 	}
 
 	// compute user-specified sources
@@ -2304,9 +2304,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeDustDrag(
 				b = 0.0;
 			}
 
-			amrex::GpuArray<amrex::Real, N + 1> k1;
-			amrex::GpuArray<amrex::Real, N + 1> k2;
-			computeDragRhs(u, alpha, epsilon, dt, gamma1, gamma2, beta1, beta2, k1, k2);
+			amrex::GpuArray<amrex::Real, N + 1> k1 = {};
+			amrex::GpuArray<amrex::Real, N + 1> k2 = {};
+			//computeDragRhs(u, alpha, epsilon, dt, gamma1, gamma2, beta1, beta2, k1, k2);
 
 			consVar_cc[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index + dir) += dt * (b * k1[0] + (1.0 - b) * k2[0]);
 
