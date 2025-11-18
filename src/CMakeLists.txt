@@ -134,9 +134,9 @@ link_libraries(yaml-cpp::yaml-cpp)
 include(CTest)
 
 set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
-                        "${CMAKE_CURRENT_SOURCE_DIR}/DiagConditional.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagBase.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagFilter.cpp" 
+                        "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagConditional.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagFramePlane.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagPDF.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagPlotfile.cpp"
