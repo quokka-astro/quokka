@@ -303,12 +303,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	// dust-gas drag implicit update in Strang-split scheme
 	void computeDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt);
-	AMREX_GPU_DEVICE void computeDragRhs(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &u,
-					     amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &alpha,
-					     amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &epsilon, amrex::Real dt,
-					     amrex::Real gamma1, amrex::Real gamma2, amrex::Real beta1, amrex::Real beta2,
-					     amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> &k1,
-					     amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> &k2);
 
 	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;
 
@@ -2303,7 +2297,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeDustDrag(
 
 			amrex::GpuArray<amrex::Real, N + 1> k1 = {};
 			amrex::GpuArray<amrex::Real, N + 1> k2 = {};
-			// computeDragRhs(u, alpha, epsilon, dt, gamma1, gamma2, beta1, beta2, k1, k2);
 			amrex::GpuArray<amrex::Real, N> Lambda;
 			amrex::GpuArray<amrex::Real, N> delta1;
 			amrex::GpuArray<amrex::Real, N> delta2;
@@ -2410,73 +2403,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeDustDrag(
 		consVar_cc[bx](i, j, k, HydroSystem<problem_t>::energy_index) += delta_E;
 		consVar_cc[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index) += -omega * delta_E_g2;
 	});
-}
-
-template <typename problem_t>
-AMREX_GPU_DEVICE void QuokkaSimulation<problem_t>::computeDragRhs(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &u,
-								  amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &alpha,
-								  amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &epsilon,
-								  amrex::Real dt, amrex::Real gamma1, amrex::Real gamma2, amrex::Real beta1, amrex::Real beta2,
-								  amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> &k1,
-								  amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> &k2)
-{
-	constexpr int N = Physics_Traits<problem_t>::nDustGroups;
-
-	amrex::GpuArray<amrex::Real, N> Lambda;
-	amrex::GpuArray<amrex::Real, N> delta1;
-	amrex::GpuArray<amrex::Real, N> delta2;
-	for (int g = 0; g < N; ++g) {
-		Lambda[g] = 1.0 / (1.0 + alpha[g] * dt * (gamma1 + gamma2 + alpha[g] * dt * (gamma1 * gamma2 - beta1 * beta2)));
-		delta1[g] = 1.0 / (1.0 + gamma1 * dt * alpha[g]);
-		delta2[g] = 1.0 / (1.0 + gamma2 * dt * alpha[g]);
-	}
-
-	amrex::Real A1 = 0.0;
-	amrex::Real A2 = 0.0;
-	amrex::Real B1 = 0.0;
-	amrex::Real B2 = 0.0;
-	amrex::Real C1 = 0.0;
-	amrex::Real C2 = 0.0;
-	amrex::Real D1 = 1.0;
-	amrex::Real D2 = 1.0;
-	for (int g = 0; g < N; ++g) {
-		A1 += alpha[g] * u[1 + g] * delta1[g] -
-		      beta1 * dt * alpha[g] * alpha[g] * u[1 + g] * (1.0 + alpha[g] * dt * (gamma1 - beta2)) * delta1[g] * Lambda[g];
-
-		A2 += alpha[g] * u[1 + g] * delta2[g] -
-		      beta2 * dt * alpha[g] * alpha[g] * u[1 + g] * (1.0 + alpha[g] * dt * (gamma2 - beta1)) * delta2[g] * Lambda[g];
-
-		B1 += alpha[g] * epsilon[g] * delta1[g] -
-		      beta1 * dt * alpha[g] * alpha[g] * epsilon[g] * (1.0 + alpha[g] * dt * (gamma1 - beta2)) * delta1[g] * Lambda[g];
-
-		B2 += alpha[g] * epsilon[g] * delta2[g] -
-		      beta2 * dt * alpha[g] * alpha[g] * epsilon[g] * (1.0 + alpha[g] * dt * (gamma2 - beta1)) * delta2[g] * Lambda[g];
-
-		C1 += alpha[g] * epsilon[g] * delta1[g] -
-		      dt * alpha[g] * alpha[g] * epsilon[g] * (gamma2 + alpha[g] * dt * (gamma1 * gamma2 - beta1 * beta2)) * delta1[g] * Lambda[g];
-
-		C2 += alpha[g] * epsilon[g] * delta2[g] -
-		      dt * alpha[g] * alpha[g] * epsilon[g] * (gamma1 + alpha[g] * dt * (gamma1 * gamma2 - beta1 * beta2)) * delta2[g] * Lambda[g];
-
-		D1 += gamma1 * dt * alpha[g] * epsilon[g] * delta1[g] - beta1 * beta2 * dt * dt * alpha[g] * alpha[g] * epsilon[g] * delta1[g] * Lambda[g];
-
-		D2 += gamma2 * dt * alpha[g] * epsilon[g] * delta2[g] - beta1 * beta2 * dt * dt * alpha[g] * alpha[g] * epsilon[g] * delta2[g] * Lambda[g];
-	}
-
-	amrex::Real denominator = beta1 * beta2 * dt * dt * C1 * C2 - D1 * D2;
-
-	k1[0] = (beta1 * dt * C1 * (A2 - B2 * u[0]) - D2 * (A1 - B1 * u[0])) / denominator;
-	k2[0] = (beta2 * dt * C2 * (A1 - B1 * u[0]) - D1 * (A2 - B2 * u[0])) / denominator;
-
-	for (int g = 0; g < N; ++g) {
-		k1[1 + g] = alpha[g] * Lambda[g] *
-			    ((u[0] * epsilon[g] - u[1 + g]) * (1.0 + alpha[g] * dt * (gamma2 - beta1)) +
-			     k1[0] * epsilon[g] * dt * (gamma1 + alpha[g] * dt * (gamma1 * gamma2 - beta1 * beta2)) + k2[0] * beta1 * epsilon[g] * dt);
-
-		k2[1 + g] = alpha[g] * Lambda[g] *
-			    ((u[0] * epsilon[g] - u[1 + g]) * (1.0 + alpha[g] * dt * (gamma1 - beta2)) +
-			     k2[0] * epsilon[g] * dt * (gamma2 + alpha[g] * dt * (gamma1 * gamma2 - beta1 * beta2)) + k1[0] * beta2 * epsilon[g] * dt);
-	}
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::swapRadiationState(amrex::MultiFab &stateOld, amrex::MultiFab const &stateNew)
