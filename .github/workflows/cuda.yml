@@ -16,7 +16,7 @@ jobs:
       workflow_file: '.github/workflows/cuda.yml'
 
   tests-cuda12:
-    name: CUDA@12.6 C++20 Release [build]
+    name: CUDA@13.0 C++20 Release [build]
     runs-on: ubuntu-24.04
     needs: check_changes
     if: needs.check_changes.outputs.has_non_docs_changes == 'true'
@@ -32,7 +32,7 @@ jobs:
 
     - name: Dependencies
       run: |
-        extern/amrex/.github/workflows/dependencies/dependencies_nvcc.sh 12.6
+        extern/amrex/.github/workflows/dependencies/dependencies_nvcc.sh 13.0
         .github/workflows/dependencies/dependencies_ccache.sh
 
     - name: Python Dependencies
@@ -70,8 +70,8 @@ jobs:
             -DAMReX_CUDA_ARCH="7.0"                      \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache           \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache         \
-            -DCMAKE_CUDA_COMPILER_LAUNCHER=ccache
-
+            -DCMAKE_CUDA_COMPILER_LAUNCHER=ccache	 \
+	    -DQUOKKA_PYTHON=OFF
         cmake --build build -j 4
 
         ccache -s
