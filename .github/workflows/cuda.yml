@@ -1,165 +1,120 @@
-name: CUDA
+name: cuda
 
-on:
-  push:
-    branches: [ development ]
-  pull_request:
-    branches: [ development ]
+on: [push, pull_request]
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.head_ref }}-cuda
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
-  # Job to generate and cache development branch output - only runs on development
-  cache-development-branch:
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/development' && github.event_name == 'push'
-    
-    steps:
-    - name: Checkout development branch
-      uses: actions/checkout@v3
-    
-    - name: Set up build environment
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential  # Add any other dependencies you need
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'  # Specify your Python version
-    
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        # Add any Python dependencies your script needs
-        # pip install -r requirements.txt
-    
-    - name: Compile development branch code
-      run: |
-        # Replace with your actual build commands
-        make
-    
-    - name: Run Python script on development branch
-      run: |
-        # Replace with your actual Python script and arguments
-        python ./your_script.py ./your-executable-name > development_output.txt
-    
-    - name: Upload development branch output as artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: development-branch-output
-        path: development_output.txt
-        retention-days: 90  # Keep the artifact for 90 days
-  
-  # Job to build PR branch and compare with cached development output
-  build-and-compare:
-    runs-on: ubuntu-latest
-    if: (github.ref != 'refs/heads/development' && github.event_name == 'pull_request') || (github.event_name == 'pull_request')
-    
-    steps:
-    - name: Checkout current code
-      uses: actions/checkout@v3
-    
-    - name: Download development branch output
-      uses: actions/download-artifact@v4
-      with:
-        name: development-branch-output
-        path: ./
-      continue-on-error: true  # Continue even if the artifact doesn't exist yet
-    
-    - name: Check if development output exists
-      id: check_files
-      run: |
-        if [ -f "development_output.txt" ]; then
-          echo "development_output_exists=true" >> $GITHUB_OUTPUT
-        else
-          echo "development_output_exists=false" >> $GITHUB_OUTPUT
-        fi
-    
-    - name: Set up build environment
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-    
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        # pip install -r requirements.txt
-    
-    - name: Compile current code
-      run: |
-        # Replace with your actual build commands
-        make
-    
-    - name: Run Python script on current code
-      run: |
-        # Replace with your actual Python script and arguments
-        python ./your_script.py ./your-executable-name > current_output.txt
-    
-    - name: Fallback - Checkout development branch
-      if: steps.check_files.outputs.development_output_exists != 'true'
-      uses: actions/checkout@v3
-      with:
-        ref: development
-        path: development-branch
-    
-    - name: Fallback - Compile development branch code
-      if: steps.check_files.outputs.development_output_exists != 'true'
-      run: |
-        cd development-branch
-        # Replace with your actual build commands
-        make
-    
-    - name: Fallback - Run Python script on development branch
-      if: steps.check_files.outputs.development_output_exists != 'true'
-      run: |
-        cd development-branch
-        # Replace with your actual Python script and arguments
-        python ./your_script.py ./your-executable-name > ../development_output.txt
-    
-    - name: Compare outputs
-      id: compare_outputs
-      run: |
-        set +e
-        diff -u development_output.txt current_output.txt > diff_result.txt
-        DIFF_EXIT_CODE=$?
-        set -e
+  check_changes:
+    uses: ./.github/workflows/check_changes.yml
+    with:
+      workflow_file: '.github/workflows/cuda.yml'
 
-        if [ $DIFF_EXIT_CODE -ne 0 ]; then
-          echo "differences_found=true" >> $GITHUB_OUTPUT
-          echo "Differences found between current branch and development."
-          cat diff_result.txt
-        else
-          echo "differences_found=false" >> $GITHUB_OUTPUT
-          echo "No differences found between current branch and development."
+  tests-cuda12:
+    name: CUDA@12.6 C++20 Release [build]
+    runs-on: ubuntu-24.04
+    needs: check_changes
+    if: needs.check_changes.outputs.has_non_docs_changes == 'true'
+    env:
+      CCACHE_COMPRESS: '1'
+      CCACHE_COMPRESSLEVEL: '10'
+      CCACHE_MAXSIZE: 235M
+    steps:
+    - uses: actions/checkout@ff7abcd0c3c05ccf6adc123a8cd1fd4fb30fb493 # v4.2.2
+      with:
+        submodules: true
+        fetch-depth: 0
+
+    - name: Dependencies
+      run: |
+        extern/amrex/.github/workflows/dependencies/dependencies_nvcc.sh 12.6
+        .github/workflows/dependencies/dependencies_ccache.sh
+
+    - name: Python Dependencies
+      run: python3 -m pip install --user cxxfilt
+
+    - name: Set Up Cache
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: ~/.cache/ccache
+        key: ccache-${{ github.workflow }}-${{ github.job }}-git-${{ github.sha }}
+        restore-keys: |
+             ccache-${{ github.workflow }}-${{ github.job }}-git-
+
+    - name: Build
+      env:
+        CXXFLAGS: "-Werror -Wall -Wextra -Wpedantic -Wshadow"
+      run: |
+        export CCACHE_COMPRESS=1
+        export CCACHE_COMPRESSLEVEL=10
+        export CCACHE_MAXSIZE=235M
+        ccache -z
+
+        export PATH=/usr/local/nvidia/bin:/usr/local/cuda/bin:${PATH}
+        export LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
+        which nvcc || echo "nvcc not in PATH!"
+
+        cmake -S . -B build                              \
+            -DCMAKE_VERBOSE_MAKEFILE=ON                  \
+            -DCMAKE_BUILD_TYPE=Release                   \
+            -DAMReX_SPACEDIM=3                           \
+            -DAMReX_GPU_BACKEND=CUDA                     \
+            -DCMAKE_C_COMPILER=$(which gcc)              \
+            -DCMAKE_CXX_COMPILER=$(which g++)            \
+            -DCMAKE_CUDA_HOST_COMPILER=$(which g++)      \
+            -DAMReX_CUDA_ARCH="7.0"                      \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache           \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache         \
+            -DCMAKE_CUDA_COMPILER_LAUNCHER=ccache
+
+        cmake --build build -j 4
+
+        ccache -s
+        du -hs ~/.cache/ccache
+
+    - name: CUDA Register Usage Report
+      run: |
+        set -euo pipefail
+        export PATH=/usr/local/nvidia/bin:/usr/local/cuda/bin:${PATH}
+
+        mapfile -t executables < <(find build/src -type f -executable -name "test*" | sort)
+        if [ "${#executables[@]}" -eq 0 ]; then
+          echo "No CUDA test executables found for cuobjdump analysis."
+          : > cuobjdump.txt
+          echo "No CUDA kernels were built, so register usage cannot be reported." | tee register_report.txt
+          exit 0
         fi
-    
-    - name: Create PR Comment
-      if: steps.compare_outputs.outputs.differences_found == 'true' && github.event_name == 'pull_request'
+
+        cuobjdump --version
+        cuobjdump --show-resource-usage "${executables[@]}" > cuobjdump.txt
+
+        python3 scripts/parse_cuobjdump.py cuobjdump.txt | tee register_report.txt
+
+    - name: Upload Register Usage Artifacts
+      if: always()
+      uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+      with:
+        name: cuda-register-usage
+        path: |
+          cuobjdump.txt
+          register_report.txt
+
+    - name: Comment Register Usage Summary
+      if: github.event_name == 'pull_request'
       env:
         GH_TOKEN: ${{ github.token }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
       run: |
-        # Prepare the diff comment
         {
-          echo "## 🔍 Output Comparison Results"
-          echo "\`\`\`diff"
-          cat diff_result.txt
-          echo "\`\`\`"
-        } > pr_comment.md
-
-        # Post the comment to the PR
-        gh pr comment $PR_NUMBER -F pr_comment.md
-    
-    - name: Upload comparison results as artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: comparison-results
-        path: |
-          current_output.txt
-          development_output.txt
-          diff_result.txt
-          pr_comment.md
+          echo "## CUDA Register Usage Summary"
+          echo
+          echo '```text'
+          cat register_report.txt
+          echo '```'
+        } > register_comment.md
+        gh pr comment $PR_NUMBER -F register_comment.md
