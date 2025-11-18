@@ -376,7 +376,8 @@ auto runWaveTest(int nx) -> double
 	constexpr double deg2rad = M_PI / 180.0;
 	angle_between_k_b0_rad = deg2rad * angle_between_k_b0_deg;
 	const double CFL_number = 0.3;
-	const double max_time = 1.0;
+	const double max_time = k_magn / (alfven_speed * k_magn * std::cos(angle_between_k_b0_rad)); // one wave period
+	std::cout << "Max time: " << max_time << "\n";
 	const int max_timesteps = std::max(20000, nx * 100);
 	
 	int num_modes_x = 0;
@@ -390,20 +391,18 @@ auto runWaveTest(int nx) -> double
 		amrex::Abort("Invalid k modes: the triplet (0,0,0) is not allowed.");
 	}
 	
-	// Compute wave vector (assuming box length = 1.0)
-	const std::array<amrex::Real, 3> k_vec_prf = {
-		2.0 * M_PI * static_cast<amrex::Real>(num_modes_x), 
-		2.0 * M_PI * static_cast<amrex::Real>(num_modes_y),
-		2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)
-	};
-	
+	// we assume box length = 1.0
+	const std::array<amrex::Real, 3> k_vec_prf = {2.0 * M_PI * static_cast<amrex::Real>(num_modes_x), 2.0 * M_PI * static_cast<amrex::Real>(num_modes_y),
+						      2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)};
 	k_magn = computeMagnitude(k_vec_prf);
 	k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
+
 	k_rotation_in_xy_rad = std::atan2(k_dir_prf[1], k_dir_prf[0]);
 	k_elevation_from_xy_rad = std::atan2(k_dir_prf[2], std::hypot(k_dir_prf[0], k_dir_prf[1]));
-	
-	// Build orthonormal basis in the problem reference frame (PRF)
-	std::array<amrex::Real, 3> ref_prf{0.0, 0.0, 1.0};
+
+	// to build our orthonormal basis in the problem reference frame (PRF)
+	// first choose a vector that is not aligned/parallel with the wave propagation direction
+	std::array<amrex::Real, 3> ref_prf{0.0, 0.0, 1.0}; // guess a direction
 	if (std::abs(computeDotProduct(ref_prf, k_dir_prf)) > 0.9999) {
 		ref_prf = {0.0, 1.0, 0.0};
 	}
@@ -448,7 +447,6 @@ auto runWaveTest(int nx) -> double
 	// Run simulation
 	QuokkaSimulation<AlfvenWaveLinear> sim(BCs_cc, BCs_fc);
 	sim.computeReferenceSolution_ = true;
-	sim.computeReferenceSolution_ = true;
 	sim.cflNumber_ = CFL_number;
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
@@ -481,9 +479,9 @@ auto runWaveTest(int nx) -> double
 	const amrex::Real epsilon = std::sqrt(err_sq);
 
 
-	return epsilon;
+//	return epsilon;
 
-	//return sim.errorNorm_;
+	return sim.errorNorm_;
 }
 
 auto problem_main() -> int
@@ -491,7 +489,7 @@ auto problem_main() -> int
 	// Richardson convergence test: run at increasing resolution until target precision is reached
 	const double machine_precision_target = 2.0e-11;
 	const int nx_initial = 32;
-	const int nx_max = 512;
+	const int nx_max = 256;
 	bool reached_target = false;
 	
 	// Silence TinyProfiler so convergence logs stay readable
