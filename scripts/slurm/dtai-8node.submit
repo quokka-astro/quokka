@@ -1,0 +1,16 @@
+#!/bin/bash
+#SBATCH --mem=0
+#SBATCH --nodes=8
+#SBATCH --ntasks-per-node=4
+#SBATCH --ntasks-per-socket=1
+#SBATCH --cpus-per-task=64
+#SBATCH --partition=ghx4
+#SBATCH --time=00:10:00
+#SBATCH --job-name=quokka-8node
+#SBATCH --account=cvz-dtai-gh
+#SBATCH --gpus-per-node=4
+#SBATCH --gpu-bind=verbose,closest
+
+. scripts/delta_ai.profile
+
+srun build/src/problems/HydroBlast3D/test_hydro3d_blast tests/benchmark_unigrid_1024.in

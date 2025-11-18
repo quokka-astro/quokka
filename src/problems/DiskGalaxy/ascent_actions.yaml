@@ -1,0 +1,55 @@
+- action: "add_pipelines"
+  pipelines: 
+    pipeline1:
+      filter1:
+        type: "log10"
+        params: 
+          field: "gasDensity"
+          output_name: "rho"
+      filter2:
+        type: "log10"
+        params: 
+          field: "temperature"
+          output_name: "T"
+          clamp_min_value: 1e2
+- 
+  action: "add_scenes"
+  scenes:
+    scene1:
+      plots:
+        plot1:
+          type: "volume"
+          field: "rho"
+          pipeline: "pipeline1"
+          min_value: -28.5
+          max_value: -23.0
+          color_table:
+            annotation: "false"
+            name: "cool to warm"
+            control_points: 
+              - 
+                type: "alpha"
+                position: 0.0
+                alpha: 0.0
+              - 
+                type: "alpha"
+                position: 1.0
+                alpha: 1.0
+      renders:
+        render1:
+          world_annotations: "false"
+          image_width: 512
+          image_height: 512
+          image_prefix: "rho_volume%05d"
+          camera: 
+            look_at: [0, 0, 0]
+            position: [-1.5, -0.001, 0.001]
+            up: [0.0, 0.0, 1.0]
+            fov: 60.0
+            xpan: 0.0
+            ypan: 0.0
+            zoom: 30.0
+            azimuth: 0.0
+            elevation: 0.0
+            near_plane: 1.45
+            far_plane: 1.55

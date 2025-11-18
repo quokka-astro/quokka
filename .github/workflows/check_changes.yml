@@ -1,0 +1,90 @@
+name: Check Changes
+
+on:
+  workflow_call:
+    inputs:
+      workflow_file:
+        description: 'Specific workflow file to check for changes (optional)'
+        required: false
+        type: string
+    outputs:
+      has_docs_changes:
+        value: ${{ jobs.check.outputs.has_docs_changes }}
+      has_non_docs_changes:
+        value: ${{ jobs.check.outputs.has_non_docs_changes }}
+      has_scripts_changes:
+        value: ${{ jobs.check.outputs.has_scripts_changes }}
+      has_cpp_changes:
+        value: ${{ jobs.check.outputs.has_cpp_changes }}
+      has_py_changes:
+        value: ${{ jobs.check.outputs.has_py_changes }}
+      has_workflow_changes:
+        value: ${{ jobs.check.outputs.has_workflow_changes }}
+      has_specific_workflow_changes:
+        value: ${{ jobs.check.outputs.has_specific_workflow_changes }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      has_docs_changes: ${{ steps.set-output.outputs.has_docs_changes }}
+      has_non_docs_changes: ${{ steps.set-output.outputs.has_non_docs_changes }}
+      has_scripts_changes: ${{ steps.set-output.outputs.has_scripts_changes }}
+      has_cpp_changes: ${{ steps.set-output.outputs.has_cpp_changes }}
+      has_py_changes: ${{ steps.set-output.outputs.has_py_changes }}
+      has_workflow_changes: ${{ steps.set-output.outputs.has_workflow_changes }}
+      has_specific_workflow_changes: ${{ steps.set-output.outputs.has_specific_workflow_changes }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            docs:
+              - 'docs/**'
+            scripts:
+              - 'scripts/**'
+            code:
+              - 'src/**'
+              - 'extern/amrex/**'
+              - 'extern/Microphysics/**'
+              - 'extern/fmt/**'
+              - 'extern/grackle_data_files/**'
+              - 'extern/openPMD-api/**'
+              - 'extern/yaml-cpp/**'
+              - 'inputs/**'
+              - 'CMakeLists.txt'
+              - '**/*.cpp'
+              - '**/*.c'
+              - '**/*.hpp'
+              - '**/*.h'
+            cpp:
+              - '**/*.cpp'
+              - '**/*.c'
+              - '**/*.hpp'
+              - '**/*.h'
+            py:
+              - '**/*.py'
+              - '**/*.ipynb'
+            workflows:
+              - '.github/workflows/**/*.yml'
+              - '.github/workflows/**/*.yaml'
+            specific_workflow:
+              - '${{ inputs.workflow_file }}'
+
+      - id: set-output
+        run: |
+          echo "has_docs_changes=${{ steps.changes.outputs.docs }}" >> $GITHUB_OUTPUT
+          echo "has_scripts_changes=${{ steps.changes.outputs.scripts }}" >> $GITHUB_OUTPUT 
+          echo "has_cpp_changes=${{ steps.changes.outputs.cpp }}" >> $GITHUB_OUTPUT
+          echo "has_py_changes=${{ steps.changes.outputs.py }}" >> $GITHUB_OUTPUT
+          echo "has_workflow_changes=${{ steps.changes.outputs.workflows }}" >> $GITHUB_OUTPUT
+          echo "has_specific_workflow_changes=${{ steps.changes.outputs.specific_workflow }}" >> $GITHUB_OUTPUT
+          
+          # Calculate has_non_docs_changes based on code changes OR specific workflow changes (if specified)
+          if [ "${{ inputs.workflow_file }}" != "" ]; then
+            has_non_docs_changes=${{ steps.changes.outputs.code == 'true' || steps.changes.outputs.specific_workflow == 'true' }}
+          else
+            has_non_docs_changes=${{ steps.changes.outputs.code == 'true' || steps.changes.outputs.workflows == 'true' }}
+          fi
+          echo "has_non_docs_changes=$has_non_docs_changes" >> $GITHUB_OUTPUT

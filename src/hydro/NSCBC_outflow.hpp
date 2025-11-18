@@ -326,12 +326,17 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundary(const amrex::IntVect
 	quokka::valarray<amrex::Real, N> Q_ip2 = -2.0 * Q_im1 - 3.0 * Q_i + 6.0 * Q_ip1 - 6.0 * dx * dQ_dx;
 	quokka::valarray<amrex::Real, N> Q_ip3 = 3.0 * Q_im1 + 10.0 * Q_i - 18.0 * Q_ip1 + 6.0 * Q_ip2 + 12.0 * dx * dQ_dx;
 	quokka::valarray<amrex::Real, N> Q_ip4 = -2.0 * Q_im1 - 13.0 * Q_i + 24.0 * Q_ip1 - 12.0 * Q_ip2 + 4.0 * Q_ip3 - 12.0 * dx * dQ_dx;
+	// TODO(bwibking): update these values with higher-order extrapolated values
+	quokka::valarray<amrex::Real, N> Q_ip5 = Q_ip4;
+	quokka::valarray<amrex::Real, N> Q_ip6 = Q_ip4;
 
 	// set cell values
 	const int ip1 = (SIDE == BoundarySide::Lower) ? ibr - 1 : ibr + 1;
 	const int ip2 = (SIDE == BoundarySide::Lower) ? ibr - 2 : ibr + 2;
 	const int ip3 = (SIDE == BoundarySide::Lower) ? ibr - 3 : ibr + 3;
 	const int ip4 = (SIDE == BoundarySide::Lower) ? ibr - 4 : ibr + 4;
+	const int ip5 = (SIDE == BoundarySide::Lower) ? ibr - 5 : ibr + 5;
+	const int ip6 = (SIDE == BoundarySide::Lower) ? ibr - 6 : ibr + 6;
 
 	quokka::valarray<amrex::Real, N> consCell{};
 	if (idx[static_cast<int>(DIR)] == ip1) {
@@ -342,6 +347,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundary(const amrex::IntVect
 		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_ip3);
 	} else if (idx[static_cast<int>(DIR)] == ip4) {
 		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_ip4);
+	} else if (idx[static_cast<int>(DIR)] == ip5) {
+		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_ip5);
+	} else if (idx[static_cast<int>(DIR)] == ip6) {
+		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_ip6);
 	}
 
 	consVar(i, j, k, HydroSystem<problem_t>::density_index) = consCell[0];
@@ -371,6 +380,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundaryLowOrder(const amrex:
 	const int im1 = (SIDE == BoundarySide::Lower) ? ibr + 1 : ibr - 1;
 	const int im2 = (SIDE == BoundarySide::Lower) ? ibr + 2 : ibr - 2;
 	const int im3 = (SIDE == BoundarySide::Lower) ? ibr + 3 : ibr - 3;
+	const int im4 = (SIDE == BoundarySide::Lower) ? ibr + 4 : ibr - 4;
+	const int im5 = (SIDE == BoundarySide::Lower) ? ibr + 5 : ibr - 5;
 
 	// compute primitive vars
 	quokka::valarray<amrex::Real, N> Q_i{};
@@ -386,6 +397,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundaryLowOrder(const amrex:
 	quokka::valarray<amrex::Real, N> Q_ip2{};
 	quokka::valarray<amrex::Real, N> Q_ip3{};
 	quokka::valarray<amrex::Real, N> Q_ip4{};
+	quokka::valarray<amrex::Real, N> Q_ip5{};
+	quokka::valarray<amrex::Real, N> Q_ip6{};
 
 	// if gas is inflowing, change to reflecting B.C.
 	quokka::valarray<amrex::Real, N> Qr_im0 = detail::permute_vel<problem_t, DIR>(Q_i);
@@ -396,35 +409,49 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundaryLowOrder(const amrex:
 		quokka::valarray<amrex::Real, N> Q_im1{};
 		quokka::valarray<amrex::Real, N> Q_im2{};
 		quokka::valarray<amrex::Real, N> Q_im3{};
+		quokka::valarray<amrex::Real, N> Q_im4{};
+		quokka::valarray<amrex::Real, N> Q_im5{};
 
 		if constexpr (DIR == FluxDir::X1) {
 			Q_im1 = HydroSystem<problem_t>::ComputePrimVars(consVar, im1, j, k);
 			Q_im2 = HydroSystem<problem_t>::ComputePrimVars(consVar, im2, j, k);
 			Q_im3 = HydroSystem<problem_t>::ComputePrimVars(consVar, im3, j, k);
+			Q_im4 = HydroSystem<problem_t>::ComputePrimVars(consVar, im4, j, k);
+			Q_im5 = HydroSystem<problem_t>::ComputePrimVars(consVar, im5, j, k);
 		} else if constexpr (DIR == FluxDir::X2) {
 			Q_im1 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, im1, k);
 			Q_im2 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, im2, k);
 			Q_im3 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, im3, k);
+			Q_im4 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, im4, k);
+			Q_im5 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, im5, k);
 		} else if constexpr (DIR == FluxDir::X3) {
 			Q_im1 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, im1);
 			Q_im2 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, im2);
 			Q_im3 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, im3);
+			Q_im3 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, im4);
+			Q_im3 = HydroSystem<problem_t>::ComputePrimVars(consVar, i, j, im5);
 		}
 
 		// reflect velocities
 		quokka::valarray<amrex::Real, N> Qr_im1 = detail::permute_vel<problem_t, DIR>(Q_im1);
 		quokka::valarray<amrex::Real, N> Qr_im2 = detail::permute_vel<problem_t, DIR>(Q_im2);
 		quokka::valarray<amrex::Real, N> Qr_im3 = detail::permute_vel<problem_t, DIR>(Q_im3);
+		quokka::valarray<amrex::Real, N> Qr_im4 = detail::permute_vel<problem_t, DIR>(Q_im4);
+		quokka::valarray<amrex::Real, N> Qr_im5 = detail::permute_vel<problem_t, DIR>(Q_im5);
 
 		Qr_im0[1] *= -1.0;
 		Qr_im1[1] *= -1.0;
 		Qr_im2[1] *= -1.0;
 		Qr_im3[1] *= -1.0;
+		Qr_im4[1] *= -1.0;
+		Qr_im5[1] *= -1.0;
 
 		Q_ip1 = detail::unpermute_vel<problem_t, DIR>(Qr_im0);
 		Q_ip2 = detail::unpermute_vel<problem_t, DIR>(Qr_im1);
 		Q_ip3 = detail::unpermute_vel<problem_t, DIR>(Qr_im2);
 		Q_ip4 = detail::unpermute_vel<problem_t, DIR>(Qr_im3);
+		Q_ip5 = detail::unpermute_vel<problem_t, DIR>(Qr_im4);
+		Q_ip6 = detail::unpermute_vel<problem_t, DIR>(Qr_im5);
 	} else {
 		// specify pressure at boundary
 		Q_i[4] = P_outflow;
@@ -432,6 +459,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundaryLowOrder(const amrex:
 		Q_ip2 = Q_i;
 		Q_ip3 = Q_i;
 		Q_ip4 = Q_i;
+		Q_ip5 = Q_i;
+		Q_ip6 = Q_i;
 	}
 
 	// set cell values
@@ -439,6 +468,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundaryLowOrder(const amrex:
 	const int ip2 = (SIDE == BoundarySide::Lower) ? ibr - 2 : ibr + 2;
 	const int ip3 = (SIDE == BoundarySide::Lower) ? ibr - 3 : ibr + 3;
 	const int ip4 = (SIDE == BoundarySide::Lower) ? ibr - 4 : ibr + 4;
+	const int ip5 = (SIDE == BoundarySide::Lower) ? ibr - 5 : ibr + 5;
+	const int ip6 = (SIDE == BoundarySide::Lower) ? ibr - 6 : ibr + 6;
 
 	quokka::valarray<amrex::Real, N> consCell{};
 	if (idx[static_cast<int>(DIR)] == ip1) {
@@ -449,6 +480,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setOutflowBoundaryLowOrder(const amrex:
 		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_ip3);
 	} else if (idx[static_cast<int>(DIR)] == ip4) {
 		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_ip4);
+	} else if (idx[static_cast<int>(DIR)] == ip5) {
+		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_ip5);
+	} else if (idx[static_cast<int>(DIR)] == ip6) {
+		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_ip6);
 	}
 
 	consVar(i, j, k, HydroSystem<problem_t>::density_index) = consCell[0];

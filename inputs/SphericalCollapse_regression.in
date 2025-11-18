@@ -1,0 +1,43 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  -0.6  -0.6 -0.6 
+geometry.prob_hi     =  0.6  0.6  0.6
+geometry.is_periodic =  0    0    0
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 1       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 128 128 128
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor = 32    # grid size must be divisible by this
+amr.max_grid_size   = 64    # at least 128 for GPUs
+amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
+amr.grid_eff        = 1.0
+
+hydro.reconstruction_order = 3  # PPM
+cfl = 0.25
+max_timesteps = 1000
+plotfile_interval = 100000
+stop_time = 0.05
+
+# typical values: 19 is good for 1M particles and 20 stesp, so 25 is required for 1000 steps
+particles.reproducibility_roundoff_redundancy = 28
+
+derived_vars = gpot
+
+do_reflux = 1
+do_subcycle = 0
+do_tracers = 0          # turn on tracer particles
+
+ascent_interval = -1
+particle_csv_interval = -1
+checkpoint_interval = -1
+
+problem.num_particles = 1000000
+problem.seed = 42123

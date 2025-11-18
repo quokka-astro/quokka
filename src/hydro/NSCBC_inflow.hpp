@@ -133,6 +133,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setInflowX1Lower(const amrex::IntVect &
 	quokka::valarray<amrex::Real, N> const Q_im2 = -2.0 * Q_ip1 - 3.0 * Q_i + 6.0 * Q_im1 + 6.0 * dx * dQ_dx;
 	quokka::valarray<amrex::Real, N> const Q_im3 = 3.0 * Q_ip1 + 10.0 * Q_i - 18.0 * Q_im1 + 6.0 * Q_im2 - 12.0 * dx * dQ_dx;
 	quokka::valarray<amrex::Real, N> const Q_im4 = -2.0 * Q_ip1 - 13.0 * Q_i + 24.0 * Q_im1 - 12.0 * Q_im2 + 4.0 * Q_im3 + 12.0 * dx * dQ_dx;
+	// TODO(bwibking): update these values with higher-order extrapolated values
+	quokka::valarray<amrex::Real, N> const Q_im5 = Q_im4;
+	quokka::valarray<amrex::Real, N> const Q_im6 = Q_im4;
 
 	// set cell values
 	quokka::valarray<amrex::Real, N> consCell{};
@@ -144,6 +147,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setInflowX1Lower(const amrex::IntVect &
 		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_im3);
 	} else if (i == ilo - 4) {
 		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_im4);
+	} else if (i == ilo - 5) {
+		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_im5);
+	} else if (i == ilo - 6) {
+		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_im6);
 	}
 
 	consVar(i, j, k, HydroSystem<problem_t>::density_index) = consCell[0];

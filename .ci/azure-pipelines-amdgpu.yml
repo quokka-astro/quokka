@@ -11,26 +11,85 @@ pr:
   branches:
     include:
     - development
+  paths:
+    include:
+    - src/*
+    - tests/*
+    - inputs/*
+    - CMakeLists.txt
+    - .ci/*
+    - extern/amrex
+    - extern/Microphysics
+    - extern/fmt
+    - extern/yaml-cpp
+    - extern/openPMD-api
+    exclude:
+    - docs/*
+    - paper/*
+    - scripts/*
+    - '*.md'
+    - '*.rst'
+    - '*.txt'
+
+variables:
+  cacheKeySuffix: $[replace(variables['Build.SourceBranch'], '/', '_')]
 
 jobs:
   - job: HIP_Build_Test
     pool: amdgpu
     timeoutInMinutes: 120
     steps:
+    - task: Cache@2
+      displayName: Restore ccache
+      inputs:
+        key: 'ccache | HIP | $(Agent.OS) | $(cacheKeySuffix)'
+        restoreKeys: |
+          ccache | HIP | $(Agent.OS)
+        path: $(Pipeline.Workspace)/ccache
+
+    - script: |
+        if command -v ccache >/dev/null 2>&1; then
+          echo "ccache available on agent."
+          echo "##vso[task.setvariable variable=cmakeLauncherArgs]-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
+        else
+          echo "ccache not found; proceeding without compiler cache."
+          echo "##vso[task.setvariable variable=cmakeLauncherArgs]"
+        fi
+      displayName: Detect ccache
+
+    - script: |
+        mkdir -p $(Pipeline.Workspace)/ccache
+        if command -v ccache >/dev/null 2>&1; then
+          ccache --zero-stats || true
+        else
+          echo "ccache not installed; skipping zero-stats."
+        fi
+      displayName: Prepare ccache
+      env:
+        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+
     - task: CMake@1
       displayName: 'Configure CMake'
+      env:
+        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+        CCACHE_BASEDIR: $(Build.SourcesDirectory)
+        CCACHE_NOHASHDIR: 1
       inputs:
-        cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DAMReX_SPACEDIM=3 -DAMReX_GPU_BACKEND=HIP -DCMAKE_CXX_FLAGS=-ffp-exception-behavior=strict'
+        cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DAMReX_SPACEDIM=3 -DAMReX_GPU_BACKEND=HIP -DCMAKE_CXX_FLAGS=-ffp-exception-behavior=strict $(cmakeLauncherArgs)'
     
     - task: CMake@1
       displayName: 'Build Quokka'
+      env:
+        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+        CCACHE_BASEDIR: $(Build.SourcesDirectory)
+        CCACHE_NOHASHDIR: 1
       inputs:
         cmakeArgs: '--build . --parallel 16'
     
     - task: CMake@1
       displayName: 'Run CTest'
       inputs:
-        cmakeArgs: '-E chdir . ctest -E "MatterEnergyExchange*" -T Test --output-on-failure'
+        cmakeArgs: '-E chdir . ctest -E "RadMatterCoupling*" -T Test --output-on-failure'
     
     - task: PublishTestResults@2
       inputs:
@@ -39,3 +98,14 @@ jobs:
         testRunTitle: $(Agent.JobName)
       condition: succeededOrFailed()
       displayName: Publish test results
+
+    - script: |
+        if command -v ccache >/dev/null 2>&1; then
+          ccache --show-stats || true
+        else
+          echo "ccache not installed; no statistics to report."
+        fi
+      displayName: Report ccache statistics
+      condition: succeededOrFailed()
+      env:
+        CCACHE_DIR: $(Pipeline.Workspace)/ccache

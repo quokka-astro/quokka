@@ -1,0 +1,91 @@
+name: Claude Code Review
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to review'
+        required: true
+        type: string
+      
+  # Trigger on specific comment containing '/claude-review'
+  issue_comment:
+    types: [created]
+    
+  # Trigger when 'review-requested' label is added to PR
+  pull_request:
+    types: [labeled]
+
+jobs:
+  claude-review:
+    # Only run if:
+    # 1. Manual trigger, OR
+    # 2. Comment contains '/claude-review', OR  
+    # 3. Label 'review-requested' was added
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' && 
+       github.event.issue.pull_request && 
+       contains(github.event.comment.body, '/claude-review')) ||
+      (github.event_name == 'pull_request' && 
+       github.event.action == 'labeled' && 
+       github.event.label.name == 'review-requested')
+    
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      id-token: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@ff7abcd0c3c05ccf6adc123a8cd1fd4fb30fb493 # v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code Review
+        id: claude-review
+        uses: anthropics/claude-code-action@8a1c4371755898f67cd97006ba7c97702d5fc4bf # beta
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          # Optional: Specify model (defaults to Claude Sonnet 4, uncomment for Claude Opus 4)
+          model: "claude-opus-4-20250514"
+          
+          # Direct prompt for automated review (no @claude mention needed)
+          direct_prompt: |
+            Please review this pull request and provide feedback on:
+            - Code quality and best practices
+            - Potential bugs or issues
+            - Performance considerations
+            - Test coverage
+            
+            Be constructive and helpful in your feedback.
+
+          # Optional: Use sticky comments to make Claude reuse the same comment on subsequent pushes to the same PR
+          use_sticky_comment: true
+          
+          # Optional: Customize review based on file types
+          # direct_prompt: |
+          #   Review this PR focusing on:
+          #   - For TypeScript files: Type safety and proper interface usage
+          #   - For API endpoints: Security, input validation, and error handling
+          #   - For React components: Performance, accessibility, and best practices
+          #   - For tests: Coverage, edge cases, and test quality
+          
+          # Optional: Different prompts for different authors
+          # direct_prompt: |
+          #   ${{ github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR' && 
+          #   'Welcome! Please review this PR from a first-time contributor. Be encouraging and provide detailed explanations for any suggestions.' ||
+          #   'Please provide a thorough code review focusing on our coding standards and best practices.' }}
+          
+          # Optional: Add specific tools for running tests or linting
+          # allowed_tools: "Bash(npm run test),Bash(npm run lint),Bash(npm run typecheck)"
+          
+          # Optional: Skip review for certain conditions
+          # if: |
+          #   !contains(github.event.pull_request.title, '[skip-review]') &&
+          #   !contains(github.event.pull_request.title, '[WIP]')
+
