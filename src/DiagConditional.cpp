@@ -291,11 +291,9 @@ void DiagConditional::writeAverageDataToFile(int a_nstep, const amrex::Real &a_t
 			 << " ";
 		for (int f{0}; f < nProcessFields; ++f) {
 			widths[3 + 2 * f] = std::max(width, static_cast<int>(m_fieldNames[f].length()) + 5);
-			condFile << std::left << std::setw(widths[3 + 2 * f]) << m_fieldNames[f] + "_Avg"
-				 << " ";
+			condFile << std::left << std::setw(widths[3 + 2 * f]) << m_fieldNames[f] + "_Avg" << " ";
 			widths[4 + 2 * f] = std::max(width, static_cast<int>(m_fieldNames[f].length()) + 7);
-			condFile << std::left << std::setw(widths[4 + 2 * f]) << m_fieldNames[f] + "_StdDev"
-				 << " ";
+			condFile << std::left << std::setw(widths[4 + 2 * f]) << m_fieldNames[f] + "_StdDev" << " ";
 		}
 		condFile << "\n";
 
@@ -343,8 +341,7 @@ void DiagConditional::writeIntegralDataToFile(int a_nstep, const amrex::Real &a_
 		condFile << std::left << std::setw(widths[0]) << m_cFieldName << " ";
 		for (int f{0}; f < nProcessFields; ++f) {
 			widths[1 + f] = std::max(width, static_cast<int>(m_fieldNames[f].length()) + 5);
-			condFile << std::left << std::setw(widths[1 + f]) << m_fieldNames[f] + "_Int"
-				 << " ";
+			condFile << std::left << std::setw(widths[1 + f]) << m_fieldNames[f] + "_Int" << " ";
 		}
 		condFile << "\n";
 
@@ -385,8 +382,7 @@ void DiagConditional::writeSumDataToFile(int a_nstep, const amrex::Real &a_time,
 		condFile << std::left << std::setw(widths[0]) << m_cFieldName << " ";
 		for (int f{0}; f < nProcessFields; ++f) {
 			widths[1 + f] = std::max(width, static_cast<int>(m_fieldNames[f].length()) + 5);
-			condFile << std::left << std::setw(widths[1 + f]) << m_fieldNames[f] + "_Sum"
-				 << " ";
+			condFile << std::left << std::setw(widths[1 + f]) << m_fieldNames[f] + "_Sum" << " ";
 		}
 		condFile << "\n";
 
