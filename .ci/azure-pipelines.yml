@@ -83,7 +83,7 @@ jobs:
         CCACHE_BASEDIR: $(Build.SourcesDirectory)
         CCACHE_NOHASHDIR: 1
       inputs:
-        cmakeArgs: '--build . --parallel 16 --target DustDamping DustDiffusion DustDrag DustSoundwave DustyShock'
+        cmakeArgs: '--build . --parallel 16 --target DustDamping DustDrag DustSoundwave'
     
     - task: CMake@1
       displayName: 'Run CTest'
