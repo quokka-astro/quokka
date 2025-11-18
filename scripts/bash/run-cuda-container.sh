@@ -195,20 +195,16 @@ else
 	# Container doesn't exist, create it
 	echo "Creating container $CONTAINER_NAME from image $IMAGE_NAME..."
 	
-	# Build docker run command
-	DOCKER_RUN_CMD=(docker run -d --name "$CONTAINER_NAME")
-	
-	# Add --gpus flag only when running tests (assumes Linux with GPU)
+	# Build docker run command with GPU support if running tests
 	if [[ "$RUN_TESTS" == true ]]; then
-		DOCKER_RUN_CMD+=(--gpus all)
+		docker run -d --name "$CONTAINER_NAME" --gpus all \
+			-v "$REPO_ROOT:/home/ubuntu/workspace" \
+			"$IMAGE_NAME" tail -f /dev/null
+	else
+		docker run -d --name "$CONTAINER_NAME" \
+			-v "$REPO_ROOT:/home/ubuntu/workspace" \
+			"$IMAGE_NAME" tail -f /dev/null
 	fi
-	
-	DOCKER_RUN_CMD+=(-v "$REPO_ROOT:/home/ubuntu/workspace")
-	DOCKER_RUN_CMD+=(--workdir /home/ubuntu/workspace)
-	DOCKER_RUN_CMD+=("$IMAGE_NAME")
-	DOCKER_RUN_CMD+=(tail -f /dev/null)
-	
-	"${DOCKER_RUN_CMD[@]}"
 fi
 
 # Handle build directory
@@ -240,21 +236,14 @@ else
 fi
 
 # Prepare build command
-CMAKE_ARGS=(
-	-DCMAKE_BUILD_TYPE=Release
-	-DCMAKE_C_COMPILER="$(docker exec "$CONTAINER_NAME" which gcc)"
-	-DCMAKE_CXX_COMPILER="$(docker exec "$CONTAINER_NAME" which g++)"
-	-DCMAKE_CXX_FLAGS="-Wno-deprecated-gpu-targets"
-	-DAMReX_GPU_BACKEND=CUDA
-	-DAMReX_MPI=OFF
-	-DAMReX_SPACEDIM="$DIM"
-	-G Ninja
-)
+CMAKE_ARGS="-DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS='-Wno-deprecated-gpu-targets' -DAMReX_GPU_BACKEND=CUDA -DAMReX_MPI=OFF -DAMReX_SPACEDIM=$DIM -G Ninja"
 
-CMAKE_CMD="mkdir -p /home/ubuntu/workspace/$BUILD_DIR && cd /home/ubuntu/workspace/$BUILD_DIR"
+CMAKE_CMD="cd /home/ubuntu/workspace/$BUILD_DIR"
 
 if [[ "$IS_RECONFIG" == true ]]; then
-	CMAKE_CMD="$CMAKE_CMD && cmake /home/ubuntu/workspace ${CMAKE_ARGS[*]}"
+	CMAKE_CMD="mkdir -p /home/ubuntu/workspace/$BUILD_DIR && cd /home/ubuntu/workspace/$BUILD_DIR && cmake /home/ubuntu/workspace $CMAKE_ARGS"
+else
+	CMAKE_CMD="cd /home/ubuntu/workspace/$BUILD_DIR"
 fi
 
 if [[ -n "$TARGETS" ]]; then
