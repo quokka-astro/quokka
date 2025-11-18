@@ -15,6 +15,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   check_changes:
@@ -85,44 +86,4 @@ jobs:
         ccache -s
         du -hs ~/.cache/ccache
 
-    - name: CUDA Register Usage Report
-      run: |
-        set -euo pipefail
-        export PATH=/usr/local/nvidia/bin:/usr/local/cuda/bin:${PATH}
 
-        mapfile -t executables < <(find build/src -type f -executable -name "test*" | sort)
-        if [ "${#executables[@]}" -eq 0 ]; then
-          echo "No CUDA test executables found for cuobjdump analysis."
-          : > cuobjdump.txt
-          echo "No CUDA kernels were built, so register usage cannot be reported." | tee register_report.txt
-          exit 0
-        fi
-
-        cuobjdump --version
-        cuobjdump --show-resource-usage "${executables[@]}" > cuobjdump.txt
-
-        python3 scripts/parse_cuobjdump.py cuobjdump.txt | tee register_report.txt
-
-    - name: Upload Register Usage Artifacts
-      if: always()
-      uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-      with:
-        name: cuda-register-usage
-        path: |
-          cuobjdump.txt
-          register_report.txt
-
-    - name: Comment Register Usage Summary
-      if: github.event_name == 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
-        PR_NUMBER: ${{ github.event.pull_request.number }}
-      run: |
-        {
-          echo "## CUDA Register Usage Summary"
-          echo
-          echo '```text'
-          cat register_report.txt
-          echo '```'
-        } > register_comment.md
-        gh pr comment $PR_NUMBER -F register_comment.md
