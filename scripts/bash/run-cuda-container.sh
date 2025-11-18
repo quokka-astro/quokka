@@ -19,23 +19,19 @@ This script automatically:
 
 Options:
   -h, --help              Show this help message
-  --build-image          Build the Docker image locally instead of pulling
-  --rebuild              Remove existing build directory and reconfigure
+  --reuse-build          Reuse existing build directory without asking
   --log                  Save build output to a log file with timestamp
   --dim DIM              Space dimension (2 or 3, default: 3)
   --build-dir DIR        Build directory name (default: build/container-cuda-\$DIM)
-  --image IMAGE          Override Docker image name
-  --container NAME       Override container name
   --jobs N               Number of parallel build jobs (default: 8)
   --run-tests            Run ctest after building
 
 Examples:
   $0                                    # Build with default settings (3D, CUDA)
   $0 --dim 2                            # Build 2D version
-  $0 --rebuild                          # Clean rebuild
+  $0 --reuse-build                      # Automatically use existing build
   $0 --log                              # Build and save logs
   $0 --run-tests                        # Build and run tests
-  $0 --build-image                      # Build Docker image locally first
   $0 --jobs 16                          # Use 16 parallel build jobs
 
 TARGETS:
@@ -47,13 +43,10 @@ EOF
 }
 
 # Initialize variables
-BUILD_IMAGE=false
-REBUILD=false
+REUSE_BUILD=false
 USE_LOG=false
 DIM=3
 BUILD_DIR=""
-IMAGE_NAME=""
-CONTAINER_NAME=""
 JOBS=8
 RUN_TESTS=false
 TARGETS=""
@@ -98,19 +91,15 @@ else
 	OS_TYPE="linux"
 fi
 
-# Set default image name based on platform
-if [[ -z "$IMAGE_NAME" ]]; then
-	if [[ "$ARCH" == "arm64" ]]; then
-		IMAGE_NAME="ghcr.io/quokka-astro/quokka-arm64-cuda:development"
-	else
-		IMAGE_NAME="ghcr.io/quokka-astro/quokka-linux-amd64-cuda:development"
-	fi
+# Set image name based on platform
+if [[ "$ARCH" == "arm64" ]]; then
+	IMAGE_NAME="ghcr.io/quokka-astro/quokka-arm64-cuda:development"
+else
+	IMAGE_NAME="ghcr.io/quokka-astro/quokka-linux-amd64-cuda:development"
 fi
 
-# Set default container name
-if [[ -z "$CONTAINER_NAME" ]]; then
-	CONTAINER_NAME="quokka-cuda-container-${ARCH}"
-fi
+# Set container name
+CONTAINER_NAME="quokka-${ARCH}-cuda-container"
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -118,12 +107,8 @@ while [[ $# -gt 0 ]]; do
 		-h|--help)
 			show_help
 			;;
-		--build-image)
-			BUILD_IMAGE=true
-			shift
-			;;
-		--rebuild)
-			REBUILD=true
+		--reuse-build)
+			REUSE_BUILD=true
 			shift
 			;;
 		--log)
@@ -140,14 +125,6 @@ while [[ $# -gt 0 ]]; do
 			;;
 		--build-dir)
 			BUILD_DIR="$2"
-			shift 2
-			;;
-		--image)
-			IMAGE_NAME="$2"
-			shift 2
-			;;
-		--container)
-			CONTAINER_NAME="$2"
 			shift 2
 			;;
 		--jobs)
@@ -191,55 +168,15 @@ if ! docker info &> /dev/null; then
 	exit 1
 fi
 
-# Handle build directory
-IS_RECONFIG=false
-if [[ -d "$BUILD_DIR_FULL" ]]; then
-	if [[ "$REBUILD" == true ]]; then
-		echo "Removing existing build directory: $BUILD_DIR_FULL"
-		rm -rf "$BUILD_DIR_FULL"
-		IS_RECONFIG=true
-	else
-		read -p "Build directory $BUILD_DIR_FULL exists. Continue with existing build (y) or remove and rebuild (r)? [y/r] " response
-		if [[ "$response" =~ ^[Rr]$ ]]; then
-			echo "Removing directory $BUILD_DIR_FULL..."
-			rm -rf "$BUILD_DIR_FULL"
-			IS_RECONFIG=true
-		elif [[ "$response" =~ ^[Yy]$ ]]; then
-			echo "Will build upon existing build..."
-		else
-			echo "Aborting..."
-			exit 0
-		fi
-	fi
-else
-	IS_RECONFIG=true
-	echo "Creating build directory: $BUILD_DIR_FULL"
-	mkdir -p "$BUILD_DIR_FULL"
-fi
-
-# Handle Docker image
-if [[ "$BUILD_IMAGE" == true ]]; then
-	echo "Building Docker image: $IMAGE_NAME"
-	DOCKERFILE_PATH="$REPO_ROOT/.devcontainer/cuda-container/Dockerfile"
-	if [[ ! -f "$DOCKERFILE_PATH" ]]; then
-		echo "Error: Dockerfile not found at $DOCKERFILE_PATH"
+# Handle Docker image - pull if not present
+if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "^${IMAGE_NAME}$"; then
+	echo "Image $IMAGE_NAME not found locally. Attempting to pull..."
+	if ! docker pull "$IMAGE_NAME"; then
+		echo "Error: Failed to pull image $IMAGE_NAME"
+		echo "You may need to:"
+		echo "  1. Check your internet connection"
+		echo "  2. Verify you have access to ghcr.io/quokka-astro"
 		exit 1
-	fi
-	cd "$REPO_ROOT/.devcontainer/cuda-container"
-	docker build -t "$IMAGE_NAME" -f Dockerfile .
-	cd "$REPO_ROOT"
-else
-	# Check if image exists locally
-	if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "^${IMAGE_NAME}$"; then
-		echo "Image $IMAGE_NAME not found locally. Attempting to pull..."
-		if ! docker pull "$IMAGE_NAME"; then
-			echo "Error: Failed to pull image $IMAGE_NAME"
-			echo "You may need to:"
-			echo "  1. Check your internet connection"
-			echo "  2. Verify you have access to ghcr.io/quokka-astro"
-			echo "  3. Try building locally with --build-image flag"
-			exit 1
-		fi
 	fi
 fi
 
@@ -255,13 +192,49 @@ if docker ps -a -q -f name="^${CONTAINER_NAME}$" | grep -q .; then
 else
 	# Container doesn't exist, create it
 	echo "Creating container $CONTAINER_NAME from image $IMAGE_NAME..."
-	# Use --gpus all for NVIDIA GPU support (works on both Linux and macOS with Docker Desktop)
-	docker run -d --name "$CONTAINER_NAME" \
-		--gpus all \
-		-v "$REPO_ROOT:/home/ubuntu/workspace" \
-		--workdir /home/ubuntu/workspace \
-		"$IMAGE_NAME" \
-		tail -f /dev/null
+	
+	# Build docker run command
+	DOCKER_RUN_CMD=(docker run -d --name "$CONTAINER_NAME")
+	
+	# Add --gpus flag only when running tests (assumes Linux with GPU)
+	if [[ "$RUN_TESTS" == true ]]; then
+		DOCKER_RUN_CMD+=(--gpus all)
+	fi
+	
+	DOCKER_RUN_CMD+=(-v "$REPO_ROOT:/home/ubuntu/workspace")
+	DOCKER_RUN_CMD+=(--workdir /home/ubuntu/workspace)
+	DOCKER_RUN_CMD+=("$IMAGE_NAME")
+	DOCKER_RUN_CMD+=(tail -f /dev/null)
+	
+	"${DOCKER_RUN_CMD[@]}"
+fi
+
+# Handle build directory
+IS_RECONFIG=false
+if [[ -d "$BUILD_DIR_FULL" ]]; then
+	if [[ "$REUSE_BUILD" == true ]]; then
+		# Automatically use existing build
+		echo "Using existing build directory: $BUILD_DIR_FULL"
+	else
+		# Ask user what to do
+		read -p "Build directory $BUILD_DIR_FULL exists. Continue with existing build (y) or remove and rebuild (r)? [y/r] " response
+		if [[ "$response" =~ ^[Rr]$ ]]; then
+			echo "Removing directory $BUILD_DIR_FULL..."
+			rm -rf "$BUILD_DIR_FULL"
+			IS_RECONFIG=true
+			echo "Creating build directory: $BUILD_DIR_FULL"
+			mkdir -p "$BUILD_DIR_FULL"
+		elif [[ "$response" =~ ^[Yy]$ ]]; then
+			echo "Will build upon existing build..."
+		else
+			echo "Aborting..."
+			exit 0
+		fi
+	fi
+else
+	IS_RECONFIG=true
+	echo "Creating build directory: $BUILD_DIR_FULL"
+	mkdir -p "$BUILD_DIR_FULL"
 fi
 
 # Prepare build command
@@ -328,7 +301,7 @@ if [[ "$RUN_TESTS" == true ]]; then
 	echo "Running tests..."
 	TEST_CMD="cd /home/ubuntu/workspace/$BUILD_DIR && ctest --output-on-failure"
 	if [[ "$USE_LOG" == true ]]; then
-		docker exec "$CONTAINER_NAME" bash -c "$TEST_CMD" &>> "$LOG_DIR/test.log"
+		docker exec "$CONTAINER_NAME" bash -c "$TEST_CMD" >> "$LOG_DIR/test.log" 2>&1
 		TEST_EXIT_CODE=${PIPESTATUS[0]}
 	else
 		docker exec "$CONTAINER_NAME" bash -c "$TEST_CMD"
