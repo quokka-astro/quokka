@@ -305,7 +305,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	// dust-gas drag implicit update
 	void UpdateStatesFromDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt_lev, double gamma, amrex::iMultiFab &redoFlag,
 				      amrex::MultiFab &drag_increment_temp_mf);
-	void ComputeDragUpdates(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &q,
+	AMREX_GPU_DEVICE void ComputeDragUpdates(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &q,
 				amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &alpha,
 				amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &epsilon, amrex::Real gamma_dt,
 				amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> &k);
@@ -2359,7 +2359,7 @@ void QuokkaSimulation<problem_t>::UpdateStatesFromDustDrag(amrex::MultiFab &cons
 }
 
 template <typename problem_t>
-void QuokkaSimulation<problem_t>::ComputeDragUpdates(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &q,
+AMREX_GPU_DEVICE void QuokkaSimulation<problem_t>::ComputeDragUpdates(amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> const &q,
 						     amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &alpha,
 						     amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> const &epsilon, amrex::Real gamma_dt,
 						     amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups + 1> &k)

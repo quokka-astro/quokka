@@ -109,15 +109,19 @@ template <> void QuokkaSimulation<DustDamping>::setInitialConditionsOnGrid(quokk
 		state_cc(i, j, k, HydroSystem<DustDamping>::x2Momentum_index) = 0.;
 		state_cc(i, j, k, HydroSystem<DustDamping>::x3Momentum_index) = 0.;
 
+		// first-capture for CUDA
+		const auto vx_dust1_local = vx_dust1;
+		const auto vx_dust2_local = vx_dust2;
+
 		if constexpr (Physics_Traits<DustDamping>::is_dust_enabled) {
 			// for dust1
 			state_cc(i, j, k, HydroSystem<DustDamping>::dustDensity_index) = rho_dust1;
-			state_cc(i, j, k, HydroSystem<DustDamping>::x1DustMomentum_index) = rho_dust1 * vx_dust1;
+			state_cc(i, j, k, HydroSystem<DustDamping>::x1DustMomentum_index) = rho_dust1 * vx_dust1_local;
 			state_cc(i, j, k, HydroSystem<DustDamping>::x2DustMomentum_index) = 0.;
 			state_cc(i, j, k, HydroSystem<DustDamping>::x3DustMomentum_index) = 0.;
 			// for dust2
 			state_cc(i, j, k, HydroSystem<DustDamping>::dustDensity_index + numDustVars) = rho_dust2;
-			state_cc(i, j, k, HydroSystem<DustDamping>::x1DustMomentum_index + numDustVars) = rho_dust2 * vx_dust2;
+			state_cc(i, j, k, HydroSystem<DustDamping>::x1DustMomentum_index + numDustVars) = rho_dust2 * vx_dust2_local;
 			state_cc(i, j, k, HydroSystem<DustDamping>::x2DustMomentum_index + numDustVars) = 0.;
 			state_cc(i, j, k, HydroSystem<DustDamping>::x3DustMomentum_index + numDustVars) = 0.;
 		}

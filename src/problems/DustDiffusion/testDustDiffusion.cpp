@@ -69,11 +69,14 @@ template <> void QuokkaSimulation<StreamingProblem>::setInitialConditionsOnGrid(
 		state_cc(i, j, k, HydroSystem<StreamingProblem>::x2Momentum_index) = 0.;
 		state_cc(i, j, k, HydroSystem<StreamingProblem>::x3Momentum_index) = 0.;
 
+		// first-capture for CUDA
+		const auto vx_dust_local = vx_dust;
+
 		if constexpr (Physics_Traits<StreamingProblem>::is_dust_enabled) {
 			// Gaussian + background for dust
 			amrex::Real const rho_dust_local = rho + A * std::exp(-((x - xc) * (x - xc)) / (2.0 * sigma * sigma));
 			state_cc(i, j, k, HydroSystem<StreamingProblem>::dustDensity_index) = rho_dust_local;
-			state_cc(i, j, k, HydroSystem<StreamingProblem>::x1DustMomentum_index) = rho_dust_local * vx_dust;
+			state_cc(i, j, k, HydroSystem<StreamingProblem>::x1DustMomentum_index) = rho_dust_local * vx_dust_local;
 			state_cc(i, j, k, HydroSystem<StreamingProblem>::x2DustMomentum_index) = 0.;
 			state_cc(i, j, k, HydroSystem<StreamingProblem>::x3DustMomentum_index) = 0.;
 		}

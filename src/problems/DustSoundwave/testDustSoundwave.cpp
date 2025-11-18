@@ -129,15 +129,16 @@ template <> void QuokkaSimulation<DustSoundwave>::setInitialConditionsOnGrid(quo
 		state_cc(i, j, k, HydroSystem<DustSoundwave>::energy_index) = 0.5 * rho_gas_local * (du_g * du_g);
 		state_cc(i, j, k, HydroSystem<DustSoundwave>::internalEnergy_index) = 0.0;
 
+		// Compute dust values before constexpr-if to ensure proper capture
+		// density perturbation: δρ_d = A_rho[Re(δρ_d^)cos(kx) - Im(δρ_d^)sin(kx)]
+		double const drho_d = A_rho * (Re_rho_d * cos(kk * x) - Im_rho_d * sin(kk * x));
+		amrex::Real const rho_dust_local = rho_d0 + drho_d;
+
+		// velocity perturbation: δv_d = A_vel[Re(δv_d^)cos(kx) - Im(δv_d^)sin(kx)]
+		double const du_d = A_vel * (Re_u_d * cos(kk * x) - Im_u_d * sin(kk * x));
+
 		if constexpr (Physics_Traits<DustSoundwave>::is_dust_enabled) {
 			//----- dust initialization -----
-			// density perturbation: δρ_d = A_rho[Re(δρ_d^)cos(kx) - Im(δρ_d^)sin(kx)]
-			double const drho_d = A_rho * (Re_rho_d * cos(kk * x) - Im_rho_d * sin(kk * x));
-			amrex::Real const rho_dust_local = rho_d0 + drho_d;
-
-			// velocity perturbation: δv_d = A_vel[Re(δv_d^)cos(kx) - Im(δv_d^)sin(kx)]
-			double const du_d = A_vel * (Re_u_d * cos(kk * x) - Im_u_d * sin(kk * x));
-
 			state_cc(i, j, k, HydroSystem<DustSoundwave>::dustDensity_index) = rho_dust_local;
 			state_cc(i, j, k, HydroSystem<DustSoundwave>::x1DustMomentum_index) = rho_dust_local * du_d;
 			state_cc(i, j, k, HydroSystem<DustSoundwave>::x2DustMomentum_index) = 0.;
