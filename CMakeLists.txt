@@ -3,9 +3,10 @@ project(QuokkaCode VERSION 1.0
   DESCRIPTION "Radiation hydrodynamics with structured AMR"
   LANGUAGES CXX C)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 #set(CMAKE_CXX_COMPILER_LAUNCHER "ccache")
 #set(CMAKE_C_COMPILER_LAUNCHER "ccache")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -31,18 +32,15 @@ option(QUOKKA_PYTHON "Compile with Python support (on/off)" ON)
 option(DISABLE_FMAD "Disable fused multiply-add instructions on GPU (on/off)" ON)
 option(ENABLE_ASAN "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(ENABLE_HWASAN "Enable HWAddressSanitizer" OFF)
-option(ENABLE_TESTS_FPE "Enable floating-point exceptions when running tests" ON)
 option(WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(QUOKKA_OPENPMD "Enable OpenPMD output (on/off)" OFF)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
   enable_language(CUDA)
   
-  if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.7)
-    message(FATAL_ERROR "You must use CUDA version 11.7 or newer to compile Quokka. All previous CUDA versions have compiler bugs that cause Quokka to crash.")
+  if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.0)
+    message(FATAL_ERROR "You must use CUDA version 12.0 or newer to compile Quokka because C++20 support is needed.")
   endif()
-
-  set(CMAKE_CUDA_ARCHITECTURES 70 80 CACHE STRING "")
   
   if(CMAKE_VERSION VERSION_LESS 3.20)
     include(AMReX_SetupCUDA)
@@ -77,6 +75,13 @@ endif(CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
 # this is necessary to prevent GCC from warning about ARM64 ABI changes in GCC 10.1
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   add_compile_options(-Wno-psabi)
+endif()
+
+# this is necessary to avoid spurious FPEs due to vectorization
+if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" OR (CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
+	option(ENABLE_TESTS_FPE "Enable floating-point exceptions when running tests" OFF)
+else()
+	option(ENABLE_TESTS_FPE "Enable floating-point exceptions when running tests" ON)
 endif()
 
 execute_process(COMMAND git rev-parse --abbrev-ref HEAD

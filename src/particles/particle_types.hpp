@@ -15,10 +15,13 @@ template <unsigned int position> constexpr auto bitflag() -> unsigned int { retu
 // To check if CIC particles are enabled:
 //   if (particle_switch & ParticleSwitch::CIC) { ... }
 enum class ParticleSwitch : unsigned int {
-	None = 0U,	      // No particles, = 0b0000
-	CIC = bitflag<1>(),   // Cloud-In-Cell (gravitating) particles, = 0b0001
-	Rad = bitflag<2>(),   // Radiation particles, = 0b0010
-	CICRad = bitflag<3>() // Combined gravitating-radiating particles, = 0b0100
+	None = 0U,			     // No particles, = 0b0000
+	CIC = bitflag<1>(),		     // Cloud-In-Cell (gravitating) particles, = 0b0001
+	Rad = bitflag<2>(),		     // Radiation particles, = 0b0010
+	CICRad = bitflag<3>(),		     // Combined gravitating-radiating particles, = 0b0100
+	StochasticStellarPop = bitflag<4>(), // Stellar population particles, = 0b1000
+	Sink = bitflag<5>(),		     // Sink particles, = 0b10000
+	Test = bitflag<6>()		     // Test particles with all features enabled, = 0b100000
 };
 
 // Enable bitwise operations on the enum class
@@ -66,18 +69,21 @@ namespace quokka
 
 // Enum class to identify different particle types
 enum class ParticleType {
-	Rad,   // Radiation particles
-	CIC,   // Gravitating particles
-	CICRad // Gravitating radiation particles
+	Rad,		      // Radiation particles
+	CIC,		      // Gravitating particles
+	CICRad,		      // Gravitating radiation particles
+	StochasticStellarPop, // Stellar population particles
+	Sink,		      // Sink particles
+	Test		      // Test particles with all features enabled
 };
 
-// Global particle parameters
-// The 'inline' keyword is used here to avoid multiple definition errors when this header
-// is included in multiple source files. It ensures that all translation units that include
-// this header will refer to the same instance of these variables, rather than creating
-// their own copies.
-inline amrex::Real particle_param1 = -1.0; // NOLINT
-inline amrex::Real particle_param2 = -1.0; // NOLINT
+// Enum for SN schemes: ThermalOnly, ThermalAndMomentum
+AMREX_ENUM(SNScheme,				   // NOLINT
+	   SN_thermal_only,			   // pure thermal
+	   SN_thermal_or_thermal_momentum,	   // pure thermal (RM<1) or thermal+momentum (RM>=1)
+	   SN_thermal_kinetic_or_thermal_momentum, // thermal+kinetic (RM<1) or thermal+momentum (RM>=1)
+	   SN_pure_kinetic_or_thermal_momentum	   // pure kinetic (RM<1) or thermal+momentum (RM>=1)
+);
 
 //-------------------- Radiation particles --------------------
 
@@ -148,11 +154,175 @@ constexpr int CICRadParticleRealComps = []() constexpr {
 template <typename problem_t> using CICRadParticleContainer = amrex::AmrParticleContainer<CICRadParticleRealComps<problem_t>>;
 template <typename problem_t> using CICRadParticleIterator = amrex::ParIter<CICRadParticleRealComps<problem_t>>;
 
+//-------------------- Stellar evolution stage enum --------------------
+
+// Enum for particle evolution stages. This is designed to be shared among several particle types. However, not all particle types will use all stages.
+// - LowMassStar: singular low mass star
+// - SNProgenitor: singular high-mass stars (> 9 Msun). Depending on the SF and SN scheme, these stars will either explode as supernovae in
+//   the end of their lifetime unconditionally, or conditionally according to their evolutional track.
+// - SNRemnant: Supernova remnant stage
+// - LowMassComposite: composite of low-mass stars
+// - Removed: marked for removal
+enum class StellarEvolutionStage { LowMassStar, SNProgenitor, SNRemnant, LowMassComposite, Removed };
+
+//-------------------- Stellar population particles --------------------
+
+// Indices for StochasticStellarPop_particles
+enum StochasticStellarPopParticleDataIdx {
+	StochasticStellarPopParticleMassIdx = 0,  // Mass of the particle
+	StochasticStellarPopParticleVxIdx,	  // Velocity in x direction
+	StochasticStellarPopParticleVyIdx,	  // Velocity in y direction
+	StochasticStellarPopParticleVzIdx,	  // Velocity in z direction
+	StochasticStellarPopParticleBirthTimeIdx, // Time when particle becomes active
+	StochasticStellarPopParticleDeathTimeIdx, // Time when particle becomes inactive
+	StochasticStellarPopParticleLumIdx	  // Base index for luminosity components
+};
+
+constexpr int StochasticStellarPopParticleStageIdx = 0; // Evolution stage of the particle, index in the integer components
+
+// Number of real components for StochasticStellarPop_particles, mass + 3 velocity components + luminosity
+template <typename problem_t>
+constexpr int StochasticStellarPopParticleRealComps = []() constexpr {
+	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
+		return 6 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, death_time, lum[nGroups]
+	} else {
+		return 6; // mass, vx, vy, vz, birth_time, death_time
+	}
+}();
+
+// Number of integer components for StochasticStellarPop_particles
+constexpr int StochasticStellarPopParticleIntComps = 1; // evolution stage
+
+// Type definitions for StochasticStellarPop_particles container and iterator
+template <typename problem_t>
+using StochasticStellarPopParticleContainer =
+    amrex::AmrParticleContainer<StochasticStellarPopParticleRealComps<problem_t>, StochasticStellarPopParticleIntComps>;
+template <typename problem_t>
+using StochasticStellarPopParticleIterator = amrex::ParIter<StochasticStellarPopParticleRealComps<problem_t>, StochasticStellarPopParticleIntComps>;
+
+//-------------------- Test particles --------------------
+
+// Indices for test particles (Test_particles)
+enum TestParticleDataIdx {
+	TestParticleMassIdx = 0,  // Mass of the particle
+	TestParticleVxIdx,	  // Velocity in x direction
+	TestParticleVyIdx,	  // Velocity in y direction
+	TestParticleVzIdx,	  // Velocity in z direction
+	TestParticleBirthTimeIdx, // Time when particle becomes active
+	TestParticleDeathTimeIdx, // Time when particle becomes inactive
+	TestParticleLumIdx	  // Base index for luminosity components
+};
+
+constexpr int TestParticleStageIdx = 0; // Evolution stage of the particle, index in the integer components
+
+// Number of real components for Test_particles
+template <typename problem_t>
+constexpr int TestParticleRealComps = []() constexpr {
+	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
+		return 6 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, death_time, lum[nGroups]
+	} else {
+		return 6; // mass, vx, vy, vz, birth_time, death_time
+	}
+}();
+
+// Number of integer components for Test_particles
+constexpr int TestParticleIntComps = 1; // stellar evolution stage
+
+// Type definitions for Test_particles container and iterator
+template <typename problem_t> using TestParticleContainer = amrex::AmrParticleContainer<TestParticleRealComps<problem_t>, TestParticleIntComps>;
+template <typename problem_t> using TestParticleIterator = amrex::ParIter<TestParticleRealComps<problem_t>, TestParticleIntComps>;
+
+//-------------------- Sink particles --------------------
+
+// Indices for Sink_particles
+enum SinkParticleDataIdx {
+	SinkParticleMassIdx = 0, // Mass of the particle
+	SinkParticleVxIdx,	 // Velocity in x direction
+	SinkParticleVyIdx,	 // Velocity in y direction
+	SinkParticleVzIdx,	 // Velocity in z direction
+};
+
+// Number of real components for Sink_particles
+constexpr int SinkParticleRealComps = 4; // mass, vx, vy, vz
+
+// Type definitions for Sink_particles container and iterator
+using SinkParticleContainer = amrex::AmrParticleContainer<SinkParticleRealComps>;
+using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
+
 #endif // AMREX_SPACEDIM == 3
+
+//-------------------- Units --------------------
+
+// Units data for each particle type as powers of Mass, Length, Time, Temperature
+inline auto get_units_data() -> const auto &
+{
+	static const auto units_data = std::map<ParticleType, std::vector<std::map<std::string, std::array<int, 4>>>>{
+	    {ParticleType::Rad, {{{"birth_time", {0, 0, 1, 0}}, {"death_time", {0, 0, 1, 0}}, {"luminosity", {-1, 2, -3, 0}}}}},
+	    {ParticleType::CIC, {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}}}}},
+	    {ParticleType::CICRad,
+	     {{{"mass", {1, 0, 0, 0}},
+	       {"vx", {0, 1, -1, 0}},
+	       {"vy", {0, 1, -1, 0}},
+	       {"vz", {0, 1, -1, 0}},
+	       {"birth_time", {0, 0, 1, 0}},
+	       {"death_time", {0, 0, 1, 0}},
+	       {"luminosity", {-1, 2, -3, 0}}}}},
+	    {ParticleType::StochasticStellarPop,
+	     {{{"mass", {1, 0, 0, 0}},
+	       {"vx", {0, 1, -1, 0}},
+	       {"vy", {0, 1, -1, 0}},
+	       {"vz", {0, 1, -1, 0}},
+	       {"birth_time", {0, 0, 1, 0}},
+	       {"death_time", {0, 0, 1, 0}},
+	       {"luminosity", {-1, 2, -3, 0}}}}},
+	    {ParticleType::Sink, {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}}}}},
+	    {ParticleType::Test,
+	     {{{"mass", {1, 0, 0, 0}},
+	       {"vx", {0, 1, -1, 0}},
+	       {"vy", {0, 1, -1, 0}},
+	       {"vz", {0, 1, -1, 0}},
+	       {"birth_time", {0, 0, 1, 0}},
+	       {"death_time", {0, 0, 1, 0}},
+	       {"luminosity", {-1, 2, -3, 0}}}}}};
+	return units_data;
+}
 
 // Assumptions for any particle type:
 // 1. For massive particles, velocity components start after mass
 // 2. Birth time, if existing, is always followed by death time
+
+// Global particle parameters
+// The 'inline' keyword is used here to avoid multiple definition errors when this header
+// is included in multiple source files. It ensures that all translation units that include
+// this header will refer to the same instance of these variables, rather than creating
+// their own copies.
+
+// Disable SN feedback when a particle evolves from SNProgenitor to SNRemnant
+inline bool disable_SN_feedback = false; // NOLINT
+
+// Placeholder parameters for particles. Used in gravity_3d.cpp tests
+inline amrex::Real particle_param1 = -1.0; // NOLINT
+inline amrex::Real particle_param2 = -1.0; // NOLINT
+
+inline amrex::Real particle_param3 = -1.0; // NOLINT
+inline amrex::Real eps_ff = 0.01;	   // NOLINT
+
+// Scheme for SN feedback
+inline SNScheme SN_scheme = SNScheme::SN_thermal_or_thermal_momentum; // NOLINT
+
+// Sink particle accretion
+inline bool sink_particle_use_uniform_kernel = false; // NOLINT. If true, use uniform accretion kernel in a (7 dx)^3 box
+
+// Verbosity for particle operations
+inline int particle_verbose = 0; // NOLINT print particle logistics
+
+// Disable particle drift
+inline bool disable_particle_drift = false; // NOLINT
+
+// Maximum velocity limit for stellar particles in cm/s (default: 1000 km/s)
+inline amrex::Real stellar_velocity_limit = 1.0e8; // NOLINT
+
+inline int reproducibility_roundoff_redundancy = 20; // NOLINT; remove 20 bits from the significand
 
 // Function to parse particle parameters from input file
 // The 'inline' keyword allows this function to be defined in a header file without
@@ -164,6 +334,28 @@ inline void particleParmParse()
 {
 	// Parse particle parameters
 	const amrex::ParmParse pp("particles");
+	pp.query("disable_SN_feedback", disable_SN_feedback);
+	pp.query("sink_particle_use_uniform_kernel", sink_particle_use_uniform_kernel);
+
+	// Handle SNScheme enum
+	pp.query("SN_scheme", SN_scheme);
+
+	// Stochastic SF parameters
+	pp.query("eps_ff", eps_ff);
+
+	// Handle integer verbose flag
+	pp.query("verbose", particle_verbose);
+
+	// Disable particle drift
+	pp.query("disable_particle_drift", disable_particle_drift);
+
+	// Stellar velocity limit parameter
+	pp.query("stellar_velocity_limit", stellar_velocity_limit);
+
+	// Roundoff factor for particles
+	pp.query("reproducibility_roundoff_redundancy", reproducibility_roundoff_redundancy);
+
+	// Placeholder parameters for particles
 	pp.query("param1", particle_param1);
 	pp.query("param2", particle_param2);
 }

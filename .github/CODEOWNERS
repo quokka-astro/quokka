@@ -6,7 +6,7 @@
 # the repo. Unless a later match takes precedence,
 # these global owners will be requested for
 # review when someone opens a pull request.
-*       @BenWibking @markkrumholz
+*       @BenWibking @markkrumholz @chongchonghe
 
 # Order is important; the last matching pattern takes the most
 # precedence. When someone opens a pull request that only
@@ -14,16 +14,16 @@
 # and not the global owner(s) will be requested for a review.
 
 # hydro
-src/hydro/ @BenWibking @markkrumholz
+src/hydro/ @BenWibking @markkrumholz @chongchonghe
 
 # optically-thin radiative cooling (assuming ionization equilibrium)
-src/cooling/ @BenWibking @markkrumholz
+src/cooling/ @BenWibking @markkrumholz @chongchonghe
 
-# particles -- CICParticles only
-src/particles/CICParticles.hpp @BenWibking @markkrumholz
+# particles
+src/particles/ @chongchonghe @BenWibking @markkrumholz
 
 # chemistry (including chemical heating/cooling)
-src/chemistry/ @psharda @BenWibking @markkrumholz
+src/chemistry/ @psharda @BenWibking @markkrumholz @chongchonghe
 
 # radiation
 src/radiation/ @chongchonghe @BenWibking @markkrumholz

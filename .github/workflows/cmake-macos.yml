@@ -19,16 +19,28 @@ permissions:
   contents: read
 
 jobs:
+  check_changes:
+    uses: ./.github/workflows/check_changes.yml
+    with:
+      workflow_file: '.github/workflows/cmake-macos.yml'
+
   build:
     runs-on: macos-14
+    needs: check_changes
+    if: needs.check_changes.outputs.has_non_docs_changes == 'true'
+    env:
+      CCACHE_COMPRESS: '1'
+      CCACHE_COMPRESSLEVEL: '10'
+      CCACHE_MAXSIZE: 450M
+      CCACHE_SLOPPINESS: time_macros
 
     steps:
-    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+    - uses: actions/checkout@ff7abcd0c3c05ccf6adc123a8cd1fd4fb30fb493 # v4.2.2
       with:
         submodules: true
         fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of sonarcloud analysis
     
-    - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+    - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
       with:
         python-version: '3.11'
         cache: 'pip' # caching pip dependencies
@@ -40,7 +52,7 @@ jobs:
 
     - name: Install Homebrew dependencies
       run: |
-        brew install openmpi hdf5@1.10 || true
+        brew install ccache openmpi hdf5@1.10 || true
         brew link --force hdf5@1.10
 
     - name: Output HDF5 configuration (verbose)
@@ -52,13 +64,29 @@ jobs:
     - name: Install pip dependencies
       run: python3 -m pip install --user numpy matplotlib
 
+    - name: Install Canary
+      run: python3 -m pip install --user "canary-wm @ git+https://github.com/sandialabs/canary"
+
+    - name: Set Up Cache
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: ~/Library/Caches/ccache
+        key: ccache-${{ github.workflow }}-${{ github.job }}-git-${{ github.sha }}
+        restore-keys: |
+             ccache-${{ github.workflow }}-${{ github.job }}-git-
+
+    - name: Initialize ccache
+      run: |
+        ccache --version
+        ccache -z
+
     - name: Configure CMake
       # Use a bash shell so we can use the same syntax for environment variable
       # access regardless of the host operating system
       shell: bash
       working-directory: ${{runner.workspace}}/build
       env: {CXXFLAGS: "-ffp-exception-behavior=strict"}
-      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE
+      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
     - name: Build
       working-directory: ${{runner.workspace}}/build
@@ -72,13 +100,19 @@ jobs:
     - name: Test
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      # Execute tests defined by the CMake configuration.  
-      # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-      run: ctest --output-on-failure -C $BUILD_TYPE -j3
+      run: |
+        export PATH="$HOME/Library/Python/3.11/bin:$PATH"
+        canary run --output-on-failure --workers=3 -k 'not HydroWaveConvergence' .
+
+    - name: ccache stats
+      if: always()
+      run: |
+        du -hs ~/Library/Caches/ccache
+        ccache -s
 
     - name: Upload test output
       if: always()
-      uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+      uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
       with:
         name: test-results
         path: ${{github.workspace}}/tests

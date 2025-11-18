@@ -151,9 +151,18 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 				v.resize(1);
 			}
 		}
-		ParallelDescriptor::Gatherv(pos.data(), numpts, allpos.data(), recvcnt, disp, ParallelDescriptor::IOProcessorNumber());
+		// Handle empty vectors to avoid null pointer issues in MPI gather operations
+		// Use static Real addresses when vectors are empty to provide non-null pointers
+		// MPI won't read from these addresses when numpts is 0
+		static Real static_real = 0.0;
+		const Real *pos_ptr = pos.empty() ? &static_real : pos.data();
+		Real *allpos_ptr = allpos.empty() ? &static_real : allpos.data();
+
+		ParallelDescriptor::Gatherv(pos_ptr, numpts, allpos_ptr, recvcnt, disp, ParallelDescriptor::IOProcessorNumber());
 		for (int i = 0; i < data.size(); ++i) {
-			ParallelDescriptor::Gatherv(data[i].data(), numpts, alldata[i].data(), recvcnt, disp, ParallelDescriptor::IOProcessorNumber());
+			const Real *data_ptr = data[i].empty() ? &static_real : data[i].data();
+			Real *alldata_ptr = alldata[i].empty() ? &static_real : alldata[i].data();
+			ParallelDescriptor::Gatherv(data_ptr, numpts, alldata_ptr, recvcnt, disp, ParallelDescriptor::IOProcessorNumber());
 		}
 		if (ParallelDescriptor::IOProcessor()) {
 			pos = std::move(allpos);
