@@ -1,0 +1,77 @@
+# don't run on pull request or push
+pr: none
+trigger: none
+
+# run on timed schedule, like a cron job
+# NOTE: all times are in UTC!
+schedules:
+- cron: '0 14 * * *'
+  displayName: Daily 1am build (AEDT)
+  branches:
+    include:
+    - development
+
+variables:
+  cacheKeySuffix: $[replace(variables['Build.SourceBranch'], '/', '_')]
+
+# NOTE: several Python packages are needed for regression_testing to run properly:
+#   https://github.com/AMReX-Codes/regression_testing/blob/main/requirements.txt
+# ALSO NEEDED: bokeh
+
+jobs:
+  - job: GPU_Regression
+    pool: avatar
+    timeoutInMinutes: 300
+    steps:
+    - task: Cache@2
+      displayName: Restore ccache
+      inputs:
+        key: 'ccache | regression | $(Agent.OS) | $(cacheKeySuffix)'
+        restoreKeys: |
+          ccache | regression | $(Agent.OS)
+        path: $(Pipeline.Workspace)/ccache
+
+    - script: |
+        if command -v ccache >/dev/null 2>&1; then
+          echo "ccache available on agent."
+          echo "##vso[task.setvariable variable=cmakeLauncherArgs]-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_CUDA_COMPILER_LAUNCHER=ccache"
+        else
+          echo "ccache not found; proceeding without compiler cache."
+          echo "##vso[task.setvariable variable=cmakeLauncherArgs]"
+        fi
+      displayName: Detect ccache
+
+    - script: |
+        mkdir -p $(Pipeline.Workspace)/ccache
+        if command -v ccache >/dev/null 2>&1; then
+          ccache --zero-stats || true
+        else
+          echo "ccache not installed; skipping zero-stats."
+        fi
+      displayName: Prepare ccache
+      env:
+        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+
+    - script: ./extern/regression_testing/regtest.py --clean_testdir regression/quokka-tests.ini
+      displayName: 'Run regression testing'
+      env:
+        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+        CCACHE_BASEDIR: $(Build.SourcesDirectory)
+        CCACHE_NOHASHDIR: 1
+    - publish: /data/mash/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests/web
+      condition: succeededOrFailed()
+      artifact: regressionHTMLOutput
+      displayName: 'Upload results to Azure Pipelines'
+    - script: cd /data/mash/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests/web && git add . && git commit -m 'updated results' && git push
+      condition: succeededOrFailed()
+      displayName: 'Upload results to GitHub Pages'
+    - script: |
+        if command -v ccache >/dev/null 2>&1; then
+          ccache --show-stats || true
+        else
+          echo "ccache not installed; no statistics to report."
+        fi
+      displayName: Report ccache statistics
+      condition: succeededOrFailed()
+      env:
+        CCACHE_DIR: $(Pipeline.Workspace)/ccache

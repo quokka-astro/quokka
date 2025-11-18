@@ -1,3 +1,9 @@
-breathe==4.31
-sphinx==4.2.0
-sphinxcontrib_bibtex==2.4.1
+mkdocs-material>=9.5.9
+mkdocs-include-markdown-plugin>=6.0.4
+mkdocs-exclude>=1.0.2
+mkdocs-macros-plugin>=1.0.4
+pymdown-extensions
+mkdocs-awesome-pages-plugin
+mkdocs-material
+mkdocs-bibtex==4.4.0
+mkdocs-mermaid2-plugin

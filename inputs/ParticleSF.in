@@ -1,0 +1,52 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  -3.949667304e+19 -3.949667304e+19 -3.949667304e+19
+geometry.prob_hi     =  3.949667304e+19 3.949667304e+19 3.949667304e+19
+geometry.is_periodic =  1    1    1
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 1       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 32 32 32
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor = 16    # grid size must be divisible by this
+amr.max_grid_size   = 16    # at least 128 for GPUs
+amr.n_error_buf     = 2     # minimum 3 cell buffer around tagged cells
+amr.grid_eff        = 0.7   # default
+
+do_reflux = 1
+do_subcycle = 0
+do_tracers = 0      # turn on tracer particles
+
+hydro.artificial_viscosity_coefficient = 0.1
+
+particles.SN_scheme = SN_thermal_or_thermal_momentum
+particles.verbose = 0
+particles.eps_ff = 0.5
+# Maximum velocity limit for stellar particles (cm/s), default: 1.0e8 (1000 km/s)
+particles.stellar_velocity_limit = 1.0e8
+
+tiny_profiler.enabled = 0
+
+problem.n0 = 1.0e5
+problem.Tamb = 1.0e1
+problem.stage_2_max_timesteps = 10
+plotfile_interval = -1
+checkpoint_interval = -1
+
+# *****************************************************************
+# Cooling parameters: turn on later after merging the ResampledCooling branch
+# *****************************************************************
+#cooling.enabled = 1
+#cooling.cooling_table_type = "grackle"
+#cooling.hdf5_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
+#cooling.cooling_table_type = "resampled"
+#cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
+
+#temperature_floor = 10.0  	# K

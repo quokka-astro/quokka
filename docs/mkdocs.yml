@@ -1,0 +1,73 @@
+site_name: Quokka
+docs_dir: markdown
+copyright: © Copyright 2020-2025, Ben Wibking and Quokka Developers.
+theme:
+  name: readthedocs
+  font:
+    text: Source Sans Pro
+  features:
+    - navigation.expand
+nav:
+  - About: about.md
+  - Equations: equations.md
+  - Citation: citation.md
+  - Physics Modules:
+    - Magnetohydrodynamics: mhd_module.md
+    - Star Formation: star_formation.md
+  - Simulation gallery:
+    - Hydro: gallery.md
+  - User guide:
+    - Installation: installation.md
+    - Running on HPC clusters: running_on_hpc_clusters.md
+    - Grid refinement (AMR): amr_grid_refinement.md
+    - Test problems:
+      - Overview: tests/index.md
+      - Radiative shock test: tests/radshock.md
+      - Shu-Osher shock test: tests/shu_osher.md
+      - Slow-moving shock test: tests/sms.md
+      - Matter-radiation temperature equilibrium test: tests/energy_exchange.md
+      - Uniform advecting radiation in diffusive limit: tests/radhydro_uniform_adv.md
+      - Advecting radiation pulse test: tests/radhydro_pulse.md
+    - Runtime parameters: parameters.md
+    - In-situ analysis: insitu_analysis.md
+    - Postprocessing: postprocessing.md
+    - Debugging simulation instability: instability.md
+  - Developer Guide:
+    - Developer onboarding: developer_onboarding.md
+    - Developing a new problem generator: developing_problem_generators.md
+    - Contributing Guide: contributing.md
+    - Flowchart: flowchart.md
+    - Hydro Integrator: hydro_integrator.md
+    - Debugging: debugging.md
+    - Assertions and error checking: error_checking.md
+    - Performance tips: performance.md
+    - How to use clang-tidy: howto_clang_tidy.md
+
+plugins:
+  - search
+  - awesome-pages
+  - include-markdown
+  - bibtex:
+      bib_file: markdown/references.bib
+      bib_by_default: true
+      csl_file: apa-6th-edition.csl
+      # csl_file: https://raw.githubusercontent.com/citation-style-language/styles/master/apa-5th-edition.csl
+      cite_inline: true
+  - mermaid2:
+      version: 10.6.1
+
+markdown_extensions:
+  - pymdownx.arithmatex:
+      generic: true
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:mermaid2.fence_mermaid
+  - footnotes
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js

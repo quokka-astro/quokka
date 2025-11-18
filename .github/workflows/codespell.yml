@@ -9,22 +9,25 @@ on:
     branches:
       - development
 
+permissions:
+  contents: read
+
 jobs:
   codespell:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@ff7abcd0c3c05ccf6adc123a8cd1fd4fb30fb493 # v4.2.2
         with:
           fetch-depth: 0
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
         with:
           python-version: '3.10'
 
       - name: Cache pip
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           # this path is specific to Ubuntu
           path: ~/.cache/pip
@@ -36,4 +39,4 @@ jobs:
 
       - name: Run codespell
         run: |
-          codespell src
+          codespell -I .github/workflows/codespell_ignore.txt, --ignore-words=.github/workflows/codespell_ignore.txt src

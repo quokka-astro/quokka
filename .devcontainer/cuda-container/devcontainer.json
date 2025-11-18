@@ -1,0 +1,26 @@
+// devcontainer.json
+    {
+      "name": "Quokka CUDA Dev Container",
+      "image": "ghcr.io/quokka-astro/quokka-linux-amd64-cuda:development",
+      "hostRequirements": {
+        "cpus": 4
+      },
+      "customizations": {
+        "vscode": {
+          "settings": {},
+          "extensions": [
+            // disabled, since it interferes with clangd
+            "-ms-vscode.cpptools",
+            "llvm-vs-code-extensions.vscode-clangd",
+            "github.vscode-pull-request-github",
+            "ms-vscode.live-server",
+            "ms-azuretools.vscode-docker"
+          ]
+        }
+      },
+      "remoteUser": "ubuntu",
+      // we need to manually checkout the submodules,
+      // but VSCode may try to configure CMake before they are fully checked-out.
+      // workaround TBD
+      "postCreateCommand": "git submodule update --init"
+    }

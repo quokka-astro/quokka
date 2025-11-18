@@ -24,7 +24,7 @@ if(QUOKKA_OPENPMD)
   add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/openPMD-api ${QuokkaCode_BINARY_DIR}/openPMD-api)
   include_directories(${OpenPMD_INCLUDE_DIRS_RET})
   link_libraries(openPMD::openPMD)
-  set(openPMDSources "${CMAKE_CURRENT_SOURCE_DIR}/openPMD.cpp")
+  set(openPMDSources "${CMAKE_CURRENT_SOURCE_DIR}/io/openPMD.cpp")
   message(STATUS "WARNING: OpenPMD plotfiles are ENABLED. Face-centered variables will only be available as cell-centered averages in plotfiles!")
 else()
   set(openPMDSources "")
@@ -69,22 +69,34 @@ endif(ENABLE_HWASAN)
 
 if(DISABLE_FMAD)
   message(STATUS "Fused multiply-add (FMAD) is disabled for device code.")
-  add_compile_options($<$<COMPILE_LANGUAGE:C>:-ffp-contract=off>)
-  add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-ffp-contract=off>)
-
   set(AMReX_CUDA_FASTMATH OFF CACHE BOOL "" FORCE)
+
   if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA")
     add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--fmad=false>)
   endif()
+
   if(CMAKE_CUDA_COMPILER_ID STREQUAL "Clang")
     add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-ffp-contract=off>)
     add_compile_options($<$<COMPILE_LANGUAGE:C>:-ffp-contract=off>)
     add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-ffp-contract=off>)
-    endif()
+  endif()
+
+  if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVHPC")
+    add_compile_options($<$<COMPILE_LANGUAGE:C>:-Mnofma>)
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Mnofma>)
+    add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-gpu=nofma>)
+  endif()
 else()
   # fused MAD causes directional asymmetry -- enabled by default by nvcc and clang
   message(STATUS "Fused multiply-add (FMAD) is *enabled* for device code. Exact direction symmetry will NOT be preserved.")
 endif(DISABLE_FMAD)
+
+if(ENABLE_TESTS_FPE)
+  set(QuokkaTestParams "amrex.fpe_trap_invalid=1 amrex.fpe_trap_overflow=1 amrex.fpe_trap_zero=1")
+else()
+  set(QuokkaTestParams "")
+  message(STATUS "WARNING: Floating-point exceptions are *DISABLED* when running the test suite.")
+endif(ENABLE_TESTS_FPE)
 
 # emit error if warnings are produced
 if(WARNINGS_AS_ERRORS)
@@ -122,68 +134,18 @@ link_libraries(yaml-cpp::yaml-cpp)
 include(CTest)
 
 set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
-                        "${CMAKE_CURRENT_SOURCE_DIR}/DiagBase.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/DiagConditional.cpp"
-                        "${CMAKE_CURRENT_SOURCE_DIR}/DiagFilter.cpp" 
-                        "${CMAKE_CURRENT_SOURCE_DIR}/DiagFramePlane.cpp" 
-                        "${CMAKE_CURRENT_SOURCE_DIR}/CloudyCooling.cpp" 
-                        "${CMAKE_CURRENT_SOURCE_DIR}/GrackleDataReader.cpp"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagBase.cpp" 
+                        "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagFilter.cpp" 
+                        "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagFramePlane.cpp" 
+                        "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagPDF.cpp" 
+                        "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagPlotfile.cpp"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagProjectionPlot.cpp"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/io/projection.cpp" 
+                        "${CMAKE_CURRENT_SOURCE_DIR}/cooling/ResampledCooling.cpp"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/util/fextract.cpp"
                         "${openPMDSources}")
 
 set (QuokkaObjSources "${QuokkaSourcesNoEOS}" "${gamma_law_sources}")
 
-add_subdirectory(Advection)
-add_subdirectory(Advection2D)
-add_subdirectory(AdvectionSemiellipse)
-
-add_subdirectory(HydroBlast2D)
-add_subdirectory(HydroBlast3D)
-add_subdirectory(HydroContact)
-add_subdirectory(HydroKelvinHelmholz)
-add_subdirectory(HydroLeblanc)
-add_subdirectory(HydroRichtmeyerMeshkov)
-add_subdirectory(HydroShocktube)
-add_subdirectory(HydroShocktubeCMA)
-add_subdirectory(HydroShuOsher)
-add_subdirectory(HydroSMS)
-add_subdirectory(HydroVacuum)
-add_subdirectory(HydroWave)
-add_subdirectory(HydroQuirk)
-add_subdirectory(HydroHighMach)
-add_subdirectory(RayleighTaylor2D)
-add_subdirectory(RayleighTaylor3D)
-add_subdirectory(RadBeam)
-add_subdirectory(RadForce)
-add_subdirectory(RadMarshak)
-add_subdirectory(RadMarshakCGS)
-add_subdirectory(RadMarshakAsymptotic)
-add_subdirectory(RadMatterCoupling)
-add_subdirectory(RadMatterCouplingRSLA)
-add_subdirectory(RadPulse)
-add_subdirectory(RadShadow)
-add_subdirectory(RadStreaming)
-add_subdirectory(RadSuOlson)
-add_subdirectory(RadTophat)
-add_subdirectory(RadTube)
-
-add_subdirectory(RadhydroShell)
-add_subdirectory(RadhydroShock)
-add_subdirectory(RadhydroShockCGS)
-add_subdirectory(RadhydroShockMultigroup)
-add_subdirectory(RadhydroUniformAdvecting)
-add_subdirectory(RadhydroPulse)
-add_subdirectory(RadhydroPulseDyn)
-add_subdirectory(RadhydroPulseGrey)
-add_subdirectory(RadhydroPulseMG)
-
-add_subdirectory(BinaryOrbitCIC)
-add_subdirectory(Cooling)
-add_subdirectory(FCQuantities)
-add_subdirectory(NSCBC)
-add_subdirectory(ODEIntegration)
-add_subdirectory(PassiveScalar)
-add_subdirectory(PrimordialChem)
-add_subdirectory(PopIII)
-add_subdirectory(ShockCloud)
-add_subdirectory(StarCluster)
-add_subdirectory(SphericalCollapse)
+add_subdirectory(problems)

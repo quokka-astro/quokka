@@ -1,3 +1,6 @@
+plt*
+chk*
+last_chk
 *.log
 compile_commands.json
 .vscode/
@@ -7,6 +10,7 @@ docs/doxygen/
 tests/last_chk
 tests/plt*
 tests/chk*
+tests/slice*
 tests/*.csv
 tests/plt*
 sims/
@@ -14,7 +18,21 @@ sims/
 __pycache__
 *.code-workspace
 *.sarif
+Backtrace.*
 
+# Agora galaxy uncompressed data
+/extern/agora_data/vcirc.dat
+/extern/agora_data/AgoraGalaxy_particles_LOW.txt
+
+# Singularity Docker images
+*.sif
+
+# files in tests/ folder
+/tests/
+!/tests/matplotlibrc
+# !/tests/ascent_actions.yaml
+
+# LaTeX files
 *.aux
 *.dbl
 *.bbl
@@ -35,10 +53,15 @@ __pycache__
 # image files
 *.png
 
+/docs/site/*
+
 # Documentation build directory
 docs/api/
 docs/doxyoutput/
 _build/
+
+# Include image and pdf files inside docs
+!/docs/markdown/tests/attach/*.png
 
 # Kokkos build files
 KokkosCore_config.h

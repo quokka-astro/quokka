@@ -1,0 +1,3 @@
+if(AMReX_SPACEDIM GREATER_EQUAL 3)
+  quokka_add_problem(JOB_NAME ShockCloud ADD_TEST OFF)
+endif(AMReX_SPACEDIM GREATER_EQUAL 3)
