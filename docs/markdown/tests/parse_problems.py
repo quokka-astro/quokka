@@ -251,6 +251,7 @@ def main():
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_path, 'w') as f:
+        f.write('# Table of all test problems\n\n')
         f.write('This table lists all test problems in the Quokka codebase.\n\n')
         f.write(header_row + '\n')
         f.write(sep_row + '\n')

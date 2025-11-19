@@ -1,3 +1,5 @@
+# Table of all test problems
+
 This table lists all test problems in the Quokka codebase.
 
 | Problem                  | DIM | Hydro | MHD | Rad               | Gravity | Particles                 | PassiveScalars |

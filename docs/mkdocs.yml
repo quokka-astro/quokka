@@ -22,6 +22,7 @@ nav:
     - Grid refinement (AMR): amr_grid_refinement.md
     - Test problems:
       - Overview: tests/index.md
+      - Table of all test problems: tests/table_of_all_problems.md
       - Radiative shock test: tests/radshock.md
       - Shu-Osher shock test: tests/shu_osher.md
       - Slow-moving shock test: tests/sms.md
