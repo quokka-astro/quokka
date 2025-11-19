@@ -291,7 +291,7 @@ auto problem_main() -> int
 	// Compute test success condition
 	int status = 0;
 	const double error_tol = 0.005;
-	amrex::Real error_norm = sim.computeErrorNorm();
+	amrex::Real const error_norm = sim.computeErrorNorm();
 	if (error_norm < error_tol) {
 		status = 1;
 	}
