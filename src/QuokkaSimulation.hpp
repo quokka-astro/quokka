@@ -243,8 +243,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction dir);
 	auto computeErrorNorm() -> amrex::Real;
-	auto computeComponentErrors(amrex::MultiFab &state_new, amrex::MultiFab &state_ref, amrex::Vector<std::string> const &componentNames)
-	    -> std::vector<std::tuple<std::string, amrex::Real, amrex::Real>>;
+	auto computeComponentErrors() -> std::vector<std::tuple<std::string, amrex::Real, amrex::Real>>;
 	void WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf, const amrex::Vector<std::string> &compNames,
 						int lev, int interval) override;
 
@@ -847,45 +846,35 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::print_multifab_f
 }
 
 template <typename problem_t>
-auto QuokkaSimulation<problem_t>::computeComponentErrors(amrex::MultiFab &state_new, amrex::MultiFab &state_ref,
-							 amrex::Vector<std::string> const &componentNames)
-    -> std::vector<std::tuple<std::string, amrex::Real, amrex::Real>>
+auto QuokkaSimulation<problem_t>::computeComponentErrors() -> std::vector<std::tuple<std::string, amrex::Real, amrex::Real>>
 {
-	std::vector<std::tuple<std::string, amrex::Real, amrex::Real>> component_errors{};
-	const int ncomp = state_new.nComp();
+	std::vector<std::tuple<std::string, amrex::Real, amrex::Real>> comp_errors{};
 
-	// Use the BoxArray from state_ref instead of boxArray(0)!
-	amrex::MultiFab residual(state_ref.boxArray(), state_ref.DistributionMap(), ncomp, 0);
-	amrex::MultiFab::Copy(residual, state_ref, 0, 0, ncomp, 0);
-	amrex::MultiFab::Saxpy(residual, -1., state_new, 0, 0, ncomp, 0);
+	// Compute cell-centered errors
+	const int ncomp = state_new_cc_[0].nComp();
+	amrex::MultiFab state_ref_level0(boxArray(0), DistributionMap(0), ncomp, 0);
+	computeReferenceSolution(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray());
+
+	// Compute residual
+	amrex::MultiFab residual(state_ref_level0.boxArray(), state_ref_level0.DistributionMap(), ncomp, 0);
+	amrex::MultiFab::Copy(residual, state_ref_level0, 0, 0, ncomp, 0);
+	amrex::MultiFab::Saxpy(residual, -1., state_new_cc_[0], 0, 0, ncomp, 0);
 
 	const auto n_cells = static_cast<amrex::Real>(residual.boxArray().numPts());
 
 	for (int icomp = 0; icomp < ncomp; ++icomp) {
 		const amrex::Real abs_err = residual.norm1(icomp) / n_cells;
-		const amrex::Real ref_norm = state_ref.norm1(icomp) / n_cells;
+		const amrex::Real ref_norm = state_ref_level0.norm1(icomp) / n_cells;
 
 		amrex::Real rel_err = NAN;
 		if (ref_norm > 0.0) {
 			rel_err = abs_err / ref_norm;
 		}
 
-		component_errors.emplace_back(componentNames[icomp], abs_err, rel_err);
+		comp_errors.emplace_back(componentNames_cc_[icomp], abs_err, rel_err);
 	}
-	return component_errors;
-}
 
-template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm() -> amrex::Real
-{
-	const BL_PROFILE("QuokkaSimulation::computeErrorNorm()");
-
-	    const int ncomp = state_new_cc_[0].nComp();
-	amrex::MultiFab state_ref_level0(boxArray(0), DistributionMap(0), ncomp, 0);
-	computeReferenceSolution(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray());
-
-	auto comp_errors = computeComponentErrors(state_new_cc_[0], state_ref_level0, componentNames_cc_);
-
-	int ncomp_tot = ncomp;
+	// Compute face-centered errors (if MHD is enabled)
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			const int ncomp_fc = state_new_fc_[0][idim].nComp();
@@ -903,22 +892,49 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm
 			// Copy shrunk data (removes the last face in direction idim)
 			amrex::MultiFab::Copy(state_new_fc_shrunk, state_new_fc_[0][idim], 0, 0, ncomp_fc, 0);
 
-			auto fc_comp_errors = computeComponentErrors(state_new_fc_shrunk, state_ref_fc_level0, componentNames_fc_[idim]);
-			comp_errors.insert(comp_errors.end(), fc_comp_errors.begin(), fc_comp_errors.end());
-			ncomp_tot += ncomp_fc;
+			// Compute residual
+			amrex::MultiFab residual_fc(state_ref_fc_level0.boxArray(), state_ref_fc_level0.DistributionMap(), ncomp_fc, 0);
+			amrex::MultiFab::Copy(residual_fc, state_ref_fc_level0, 0, 0, ncomp_fc, 0);
+			amrex::MultiFab::Saxpy(residual_fc, -1., state_new_fc_shrunk, 0, 0, ncomp_fc, 0);
+
+			const auto n_cells_fc = static_cast<amrex::Real>(residual_fc.boxArray().numPts());
+
+			for (int icomp_fc = 0; icomp_fc < ncomp_fc; ++icomp_fc) {
+				const amrex::Real abs_err = residual_fc.norm1(icomp_fc) / n_cells_fc;
+				const amrex::Real ref_norm = state_ref_fc_level0.norm1(icomp_fc) / n_cells_fc;
+
+				amrex::Real rel_err = NAN;
+				if (ref_norm > 0.0) {
+					rel_err = abs_err / ref_norm;
+				}
+
+				comp_errors.emplace_back(componentNames_fc_[idim][icomp_fc], abs_err, rel_err);
+			}
 		}
 	}
+
+	return comp_errors;
+}
+
+template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm() -> amrex::Real
+{
+	const BL_PROFILE("QuokkaSimulation::computeErrorNorm()");
+
+	// Compute all component errors
+	auto comp_errors = computeComponentErrors();
+	const int ncomp_tot = static_cast<int>(comp_errors.size());
+
+	// Compute RMS error and print results
 	amrex::Real rms_err = 0.0;
 	if (this->suppress_output == 0) {
 		amrex::Print() << "\nComponent Errors:\n";
 		amrex::Print() << std::string(70, '=') << "\n";
-		amrex::Print() << std::setw(25) << std::left << "Component" << std::setw(20) << std::right << "Absolute Error" << std::setw(20) << std::right
-			       << "Relative Error" << "\n";
+		amrex::Print() << std::setw(25) << std::left << "Component" << std::setw(20) << std::right << "Absolute Error" << std::setw(20)
+			       << std::right << "Relative Error" << "\n";
 		amrex::Print() << std::string(70, '-') << "\n";
 	}
 
-	for (int icomp = 0; icomp < ncomp_tot; ++icomp) {
-		auto [name, abs_err, rel_err] = comp_errors[icomp];
+	for (const auto &[name, abs_err, rel_err] : comp_errors) {
 		rms_err += abs_err * abs_err;
 		// Print each component
 		if (this->suppress_output == 0) {
