@@ -879,7 +879,7 @@ emplace_back return component_errors;
 template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm() -> amrex::Real
 {
 	const BL_PROFILE("QuokkaSimulation::computeErrorNorm()");
-	amrex::Real errorNorm = 0.0;
+");const 
 
 	const int ncomp = state_new_cc_[0].nComp();
 	amrex::MultiFab state_ref_level0(boxArray(0), DistributionMap(0), ncomp, 0);
