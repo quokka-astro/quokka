@@ -872,8 +872,8 @@ auto QuokkaSimulation<problem_t>::computeComponentErrors(amrex::MultiFab &state_
 
 		component_errors.push_back(std::make_tuple(componentNames[icomp], abs_err, rel_err));
 	}
-));emplace_back
-	return component_errors;
+));
+emplace_back return component_errors;
 }
 
 template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm() -> amrex::Real
