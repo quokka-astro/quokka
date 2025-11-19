@@ -266,7 +266,8 @@ auto problem_main() -> int
 
 	const double error_tol = 0.26;
 	int status = 0;
-	if (sim.errorNorm_ > error_tol || std::isnan(sim.errorNorm_)) {
+	amrex::Real error_norm = sim.computeErrorNorm();
+	if (error_norm < error_tol || std::isnan(error_norm)) {
 		status = 1;
 	}
 
