@@ -1,5 +1,7 @@
 # Test problems
 
+{% include "tests/table_of_all_problems.md" %}
+
 Listed here are the test problems that are included with Quokka. *This page is still under construction.*
 
 - [Radiative shock test](radshock.md)
