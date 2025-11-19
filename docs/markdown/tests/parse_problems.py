@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """
 Script to parse Quokka problem directories and generate a table of all problems.
+Run it in the root of the Quokka repository to generate the table.
+
+    python3 docs/markdown/tests/parse_problems.py
+
+This will generate the table in `docs/markdown/tests/table_of_all_problems.md`.
 """
 
 import re
