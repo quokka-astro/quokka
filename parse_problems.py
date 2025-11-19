@@ -3,7 +3,6 @@
 Script to parse Quokka problem directories and generate a table of all problems.
 """
 
-import os
 import re
 from pathlib import Path
 from typing import Dict, Optional, List
@@ -43,26 +42,43 @@ def parse_cpp_flags(cpp_path: Path) -> Dict[str, any]:
     with open(cpp_path, 'r') as f:
         content = f.read()
 
+    # Remove commented lines (lines starting with //)
+    lines = content.split('\n')
+    uncommented_lines = []
+    for line in lines:
+        stripped = line.lstrip()
+        if not stripped.startswith('//'):
+            uncommented_lines.append(line)
+    content = '\n'.join(uncommented_lines)
+
     flags = {}
 
-    # Parse boolean flags
-    bool_patterns = {
-        'is_hydro_enabled': r'is_hydro_enabled\s*=\s*(true|false)',
-        'is_mhd_enabled': r'is_mhd_enabled\s*=\s*(true|false)',
-        'is_radiation_enabled': r'is_radiation_enabled\s*=\s*(true|false)',
-        'is_self_gravity_enabled': r'is_self_gravity_enabled\s*=\s*(true|false)',
-        'enable_dust_gas_thermal_coupling_model': r'enable_dust_gas_thermal_coupling_model\s*=\s*(true|false)',
-        'enable_photoelectric_heating': r'enable_photoelectric_heating\s*=\s*(true|false)',
-    }
+    # Parse boolean flags (may be direct values or variable references)
+    bool_flags = [
+        'is_hydro_enabled',
+        'is_mhd_enabled',
+        'is_radiation_enabled',
+        'is_self_gravity_enabled',
+        'enable_dust_gas_thermal_coupling_model',
+        'enable_photoelectric_heating',
+    ]
 
-    for key, pattern in bool_patterns.items():
-        match = re.search(pattern, content)
+    for key in bool_flags:
+        # Try to match the flag assignment
+        match = re.search(rf'{key}\s*=\s*(\w+)', content)
         if match:
-            flags[key] = match.group(1) == 'true'
+            value_or_var = match.group(1)
+            if value_or_var in ('true', 'false'):
+                # Direct boolean value
+                flags[key] = value_or_var == 'true'
+            else:
+                # Variable reference - search for its definition
+                var_def_match = re.search(rf'constexpr\s+bool\s+{value_or_var}\s*=\s*(true|false)', content)
+                if var_def_match:
+                    flags[key] = var_def_match.group(1) == 'true'
 
     # Parse integer flags
     int_patterns = {
-        'nGroups': r'nGroups\s*=\s*(\d+)',
         'numPassiveScalars': r'numPassiveScalars\s*=\s*(?:numMassScalars\s*\+\s*)?(\d+)',
         'numMassScalars': r'numMassScalars\s*=\s*(\d+)',
     }
@@ -71,6 +87,25 @@ def parse_cpp_flags(cpp_path: Path) -> Dict[str, any]:
         match = re.search(pattern, content)
         if match:
             flags[key] = int(match.group(1))
+
+    # Parse nGroups (special case - may be a variable reference or multiple definitions)
+    # Find all nGroups assignments
+    ngroups_matches = re.findall(r'nGroups\s*=\s*(\w+)', content)
+    ngroups_values = []
+
+    for value_or_var in ngroups_matches:
+        # Check if it's a direct number
+        if value_or_var.isdigit():
+            ngroups_values.append(int(value_or_var))
+        else:
+            # It's a variable, search for its definition
+            var_def_match = re.search(rf'constexpr\s+int\s+{value_or_var}\s*=\s*(\d+)', content)
+            if var_def_match:
+                ngroups_values.append(int(var_def_match.group(1)))
+
+    # Take the maximum value if we found any (handles files with multiple problem types)
+    if ngroups_values:
+        flags['nGroups'] = max(ngroups_values)
 
     # Parse particle_switch (special case)
     particle_match = re.search(r'particle_switch\s*=\s*([^;]+);', content)
