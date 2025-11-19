@@ -845,8 +845,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::print_multifab_f
 	    mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { printf("%f\n", mf_fc[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex)); });
 }
 
-template <typename problem_t>
-auto QuokkaSimulation<problem_t>::computeComponentErrors() -> std::vector<std::tuple<std::string, amrex::Real, amrex::Real>>
+template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponentErrors() -> std::vector<std::tuple<std::string, amrex::Real, amrex::Real>>
 {
 	std::vector<std::tuple<std::string, amrex::Real, amrex::Real>> comp_errors{};
 
@@ -929,8 +928,8 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm
 	if (this->suppress_output == 0) {
 		amrex::Print() << "\nComponent Errors:\n";
 		amrex::Print() << std::string(70, '=') << "\n";
-		amrex::Print() << std::setw(25) << std::left << "Component" << std::setw(20) << std::right << "Absolute Error" << std::setw(20)
-			       << std::right << "Relative Error" << "\n";
+		amrex::Print() << std::setw(25) << std::left << "Component" << std::setw(20) << std::right << "Absolute Error" << std::setw(20) << std::right
+			       << "Relative Error" << "\n";
 		amrex::Print() << std::string(70, '-') << "\n";
 	}
 
