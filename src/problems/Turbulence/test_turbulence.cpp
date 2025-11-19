@@ -1,12 +1,6 @@
-//
-// Created by rowan on 8/11/24.
-//
-
-#include "test_turbulence.hpp"
-
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
-#include "turbulence/TurbulentDriving.hpp"
+#include "util/BC.hpp"
 
 #include "AMReX.H"
 #include "AMReX_BC_TYPES.H"
@@ -31,7 +25,6 @@ template <> struct Physics_Traits<BasicTurbulence> {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
-	static constexpr bool is_driving_enabled = true;
 	static constexpr bool is_self_gravity_enabled = false;
 
 	static constexpr int numMassScalars = 0;
@@ -72,28 +65,50 @@ template <> void QuokkaSimulation<BasicTurbulence>::setInitialConditionsOnGrid(q
 	});
 }
 
+template <> void QuokkaSimulation<BasicTurbulence>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+{
+	// tag cells for refinement
+
+	const amrex::Real eta_threshold = 0.2; // gradient refinement threshold
+	const amrex::Real rho_min = 0.1;       // minimum density for refinement
+
+	const auto state = state_new_cc_[lev].const_arrays();
+	const auto tag = tags.arrays();
+
+	amrex::ParallelFor(state_new_cc_[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		const int n = HydroSystem<BasicTurbulence>::density_index;
+		amrex::Real const rho = state[bx](i, j, k, n);
+		amrex::Real const rho_xplus = state[bx](i + 1, j, k, n);
+		amrex::Real const rho_xminus = state[bx](i - 1, j, k, n);
+		amrex::Real const rho_yplus = state[bx](i, j + 1, k, n);
+		amrex::Real const rho_yminus = state[bx](i, j - 1, k, n);
+		amrex::Real const rho_zplus = state[bx](i, j, k + 1, n);
+		amrex::Real const rho_zminus = state[bx](i, j, k - 1, n);
+
+		amrex::Real const del_x = 0.5 * (rho_xplus - rho_xminus);
+		amrex::Real const del_y = 0.5 * (rho_yplus - rho_yminus);
+		amrex::Real const del_z = 0.5 * (rho_zplus - rho_zminus);
+
+		amrex::Real const gradient_indicator = std::sqrt(del_x * del_x + del_y * del_y + del_z * del_z) / rho;
+
+		if ((gradient_indicator > eta_threshold) && (rho > rho_min)) {
+			tag[bx](i, j, k) = amrex::TagBox::SET;
+		}
+	});
+	amrex::Gpu::streamSynchronize();
+}
+
 auto problem_main() -> int
 {
-
-	// Sets all variables to be periodic
-	const int ncomp_cc = Physics_Indices<BasicTurbulence>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc = quokka::BC<BasicTurbulence>(quokka::BCType::reflecting,  // x: reflecting
+						  quokka::BCType::reflecting,  // y: reflecting
+						  quokka::BCType::reflecting); // z: reflecting
 
 	QuokkaSimulation<BasicTurbulence> sim(BCs_cc);
 
-	sim.stopTime_ = 6;
-	sim.plotfileInterval_ = 300;
-	sim.maxTimesteps_ = 100000;
 	sim.setInitialConditions();
 
 	// Main time loop
 	sim.evolve();
-	return 1;
+	return 0;
 }

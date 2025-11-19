@@ -50,7 +50,6 @@ template <> struct Physics_Traits<ParticleProblem> {
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
 	static constexpr bool is_self_gravity_enabled = true;
-	static constexpr bool is_driving_enabled = false;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = nGroups_; // number of radiation groups

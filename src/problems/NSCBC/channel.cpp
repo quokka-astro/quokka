@@ -61,7 +61,6 @@ template <> struct Physics_Traits<Channel> {
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_driving_enabled = false;
 	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };

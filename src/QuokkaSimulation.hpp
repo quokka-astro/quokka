@@ -9,6 +9,8 @@
 /// \brief Implements classes and functions to organise the overall setup,
 /// timestepping, solving, and I/O of a simulation for radiation moments.
 
+#include "AMReX_GpuContainers.H"
+#include "AMReX_Tuple.H"
 #include "grid.hpp"
 #include "hydro/EOS.hpp"
 #include <algorithm>
@@ -62,7 +64,7 @@ namespace filesystem = experimental::filesystem;
 #include <conduit_node.hpp>
 #endif
 
-#include "../extern/turbulence_generator/plugins/AMReX/TurbGenAmrex.h"
+#include "../extern/turbulence_generator/plugins/AMReX/TurbGenEx.h"
 #include "SimulationData.hpp"
 #include "chemistry/Chemistry.hpp"
 #include "cooling/ResampledCooling.hpp"
@@ -138,12 +140,14 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	int enableCooling_ = 0;
 	int enableChemistry_ = 0;
+	int enableTurbulence_ = 0;
 	Real max_density_allowed = std::numeric_limits<amrex::Real>::max();
 	Real min_density_allowed = std::numeric_limits<amrex::Real>::min();
 
 	quokka::ResampledCooling::resampled_tables resampledTables_;
 	std::string coolingTableType_;
 	std::string coolingTableFilename_;
+	std::string turbulenceFilename_;
 
 	static constexpr int nvarTotal_cc_ = Physics_Indices<problem_t>::nvarTotal_cc;
 	static constexpr int ncompHydro_ = HydroSystem<problem_t>::nvar_; // hydro
@@ -182,7 +186,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::LondrilloDelZanna2004; // method to use to average EMF at edges
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
-	TurbGenAmrex tg;		       // create TurbGen class object for turbulent driving
+	quokka::turbulence::turbulentDriving<problem_t> td;
 
 	// member functions
 	explicit QuokkaSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : AMRSimulation<problem_t>(BCs_cc, BCs_fc)
@@ -213,15 +217,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		amrex::Real small_temp = 1e-10;
 		amrex::Real small_dens = 1e-100;
 		eos_init(small_temp, small_dens);
-
-		if constexpr (Physics_Traits<problem_t>::is_driving_enabled) {
-			tg = TurbGenAmrex();
-			std::string filePath;
-
-			amrex::ParmParse turb("Turbulence");
-			turb.query("path_to_turb_settings", filePath);
-			tg.init_driving(filePath);
-		}
 	}
 
 	[[nodiscard]] static auto getScalarVariableNames() -> std::vector<std::string>;
@@ -531,6 +526,16 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		}
 	}
 
+	// set turbulence runtime parameters
+	{
+		amrex::ParmParse const hpp("turbulence");
+		hpp.query("enabled", enableTurbulence_);
+		hpp.query("settings_path", turbulenceFilename_);
+
+		if (enableTurbulence_)
+			td = quokka::turbulence::turbulentDriving<problem_t>(turbulenceFilename_);
+	}
+
 #ifdef CHEMISTRY
 	// set chemistry runtime parameters
 	{
@@ -788,56 +793,9 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	}
 #endif
 
-	if (Physics_Traits<problem_t>::is_driving_enabled) {
+	if (enableTurbulence_) {
 		auto const &cellSizes = geom[lev].CellSizeArray();
-
-		// Updates the field if necessary
-		// returns a bool if it was updated
-
-		amrex::Real sumsHost[] = {0, 0, 0};
-		amrex::Real sumsSqrdHost[] = {0, 0, 0};
-
-		amrex::Gpu::DeviceVector<amrex::Real> sumsGpu = {0, 0, 0};
-		amrex::Gpu::DeviceVector<amrex::Real> sumsSqrdGpu = {0, 0, 0};
-
-		auto sumsSqrdDevice = sumsGpu.data();
-		auto sumsDevice = sumsSqrdGpu.data();
-		long n = 0;
-
-		for (amrex::MFIter iter(state); iter.isValid(); ++iter) {
-			const amrex::Box &indexRange = iter.validbox();
-			auto const &data = state.array(iter);
-
-			n += indexRange.numPts();
-
-			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-				amrex::GpuArray<amrex::Real, 3> vels{};
-				vels[0] = data(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / data(i, j, k, HydroSystem<problem_t>::density_index);
-				vels[1] = data(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / data(i, j, k, HydroSystem<problem_t>::density_index);
-				vels[2] = data(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / data(i, j, k, HydroSystem<problem_t>::density_index);
-
-				for (int d = 0; d < 3; d++) {
-					amrex::Gpu::Atomic::Add(&sumsDevice[d], vels[d]);
-					amrex::Gpu::Atomic::Add(&sumsSqrdDevice[d], vels[d] * vels[d]);
-				}
-			});
-		}
-
-		amrex::Gpu::copy(amrex::Gpu::DeviceToHost(), sumsDevice, sumsDevice + 3, sumsHost);
-		amrex::Gpu::copy(amrex::Gpu::DeviceToHost(), sumsSqrdDevice, sumsSqrdDevice + 3, sumsSqrdHost);
-
-		double dispersion[] = {0, 0, 0};
-		for (int i = 0; i < 3; i++) {
-			dispersion[i] = sqrt(sumsSqrdHost[i] / n) - (sumsHost[i] / n) * (sumsHost[i] / n);
-		}
-
-		if (time == 0) {
-			tg.check_for_update(time);
-		} else {
-			tg.check_for_update(time, dispersion);
-		}
-
-		quokka::TurbulentDriving::computeDriving<problem_t>(state, dt, cellSizes, tg);
+		td.computeDriving(state, time, dt, cellSizes);
 	}
 
 	// compute user-specified sources

@@ -58,7 +58,6 @@ template <> struct Physics_Traits<MHDQuirk> {
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_driving_enabled = false;
 	// face-centred
 	static constexpr bool is_mhd_enabled = true;
 	static constexpr int nGroups = 1; // number of radiation groups
