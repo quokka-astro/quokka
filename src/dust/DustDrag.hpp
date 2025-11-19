@@ -16,7 +16,9 @@
 namespace quokka::DustDrag
 {
 
-template <typename problem_t> void computeDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt, amrex::Real dust_omega_, amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> dust_alpha_)
+template <typename problem_t>
+void computeDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt, amrex::Real dust_omega_,
+		     amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> dust_alpha_)
 {
 	auto const &consVar_cc = consVar_cc_mf.arrays();
 	constexpr int N = Physics_Traits<problem_t>::nDustGroups;
@@ -202,7 +204,6 @@ template <typename problem_t> void computeDustDrag(amrex::MultiFab &consVar_cc_m
 		consVar_cc[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index) += -omega * delta_E_g2;
 	});
 }
-
 
 } // namespace quokka::DustDrag
 
