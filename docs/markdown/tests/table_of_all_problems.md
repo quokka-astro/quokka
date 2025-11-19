@@ -1,6 +1,11 @@
 # Table of all test problems
+This table lists all test problems in the Quokka codebase. The acronyms used are as follows:
 
-This table lists all test problems in the Quokka codebase.
+- SG: Single-group radiation
+- MG: Multi-group radiation
+- ThermalDust: Dust thermally coupled to the gas
+- PE: Photoelectric heating
+- CIC: Cloud-in-cell particles
 
 | Problem                  | DIM | Hydro | MHD | Rad               | Gravity | Particles                 | PassiveScalars |
 |--------------------------|-----|-------|-----|-------------------|---------|---------------------------|----------------|
