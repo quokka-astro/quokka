@@ -119,7 +119,7 @@ def parse_cpp_flags(cpp_path: Path) -> Dict[str, any]:
         flags['nGroups'] = max(ngroups_values)
 
     # Parse particle_switch (special case)
-    particle_match = re.search(r'particle_switch\s*=\s*([^;]+);', content)
+    particle_match = re.search(r'particle_switch\s*=\s*([^;]{1,100});', content)
     if particle_match:
         particles_str = particle_match.group(1)
         # Extract particle types (e.g., "ParticleSwitch::CIC | ParticleSwitch::Rad | ParticleSwitch::CICRad")
