@@ -879,7 +879,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm
 {
 	const BL_PROFILE("QuokkaSimulation::computeErrorNorm()");
 
-	    const int ncomp = state_new_cc_[0].nComp();
+	const int ncomp = state_new_cc_[0].nComp();
 	amrex::MultiFab state_ref_level0(boxArray(0), DistributionMap(0), ncomp, 0);
 	computeReferenceSolution(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray());
 
