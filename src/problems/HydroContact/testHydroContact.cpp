@@ -210,7 +210,7 @@ auto problem_main() -> int
 	// [See Section 10.7 and Figure 10.20 of Toro (1998).]
 	const double error_tol = 0.0; // this is not a typo
 	int status = 0;
-	amrex::Real error_norm = sim.computeErrorNorm();
+	amrex::Real const error_norm = sim.computeErrorNorm();
 	if (error_norm < error_tol) {
 		status = 1;
 	}
