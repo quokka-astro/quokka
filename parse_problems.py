@@ -54,6 +54,7 @@ def parse_cpp_flags(cpp_path: Path) -> Dict[str, any]:
     flags = {}
 
     # Parse boolean flags (may be direct values or variable references)
+    # Handle multiple occurrences - if any is true, use true
     bool_flags = [
         'is_hydro_enabled',
         'is_mhd_enabled',
@@ -64,18 +65,23 @@ def parse_cpp_flags(cpp_path: Path) -> Dict[str, any]:
     ]
 
     for key in bool_flags:
-        # Try to match the flag assignment
-        match = re.search(rf'{key}\s*=\s*(\w+)', content)
-        if match:
-            value_or_var = match.group(1)
+        # Find all matches for this flag
+        matches = re.findall(rf'{key}\s*=\s*(\w+)', content)
+        bool_values = []
+
+        for value_or_var in matches:
             if value_or_var in ('true', 'false'):
                 # Direct boolean value
-                flags[key] = value_or_var == 'true'
+                bool_values.append(value_or_var == 'true')
             else:
                 # Variable reference - search for its definition
                 var_def_match = re.search(rf'constexpr\s+bool\s+{value_or_var}\s*=\s*(true|false)', content)
                 if var_def_match:
-                    flags[key] = var_def_match.group(1) == 'true'
+                    bool_values.append(var_def_match.group(1) == 'true')
+
+        # If any value is true, set flag to true (handles files with multiple trait structs)
+        if bool_values:
+            flags[key] = any(bool_values)
 
     # Parse integer flags
     int_patterns = {
