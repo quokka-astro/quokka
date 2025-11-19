@@ -29,7 +29,7 @@
 #include "HLLD.hpp"
 #include "LLF.hpp"
 #include "LLF_mhd.hpp"
-#include "dustRiemannSolver.hpp"
+#include "dust/dustRiemannSolver.hpp"
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
