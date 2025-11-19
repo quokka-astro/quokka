@@ -260,7 +260,7 @@ auto problem_main() -> int
 
 	const double error_tol = 0.008;
 	int status = 0;
-	amrex::Real error_norm = sim.computeErrorNorm();
+	amrex::Real const error_norm = sim.computeErrorNorm();
 	if (error_norm < error_tol) {
 		status = 1;
 	}
