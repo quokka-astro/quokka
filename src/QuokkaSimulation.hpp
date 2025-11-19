@@ -870,16 +870,14 @@ auto QuokkaSimulation<problem_t>::computeComponentErrors(amrex::MultiFab &state_
 			rel_err = abs_err / ref_norm;
 		}
 
-		component_errors.push_back(std::make_tuple(componentNames[icomp], abs_err, rel_err));
+		component_errors.emplace_back(componentNames[icomp], abs_err, rel_err);
 	}
-));
-emplace_back return component_errors;
+	return component_errors;
 }
 
 template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm() -> amrex::Real
 {
 	const BL_PROFILE("QuokkaSimulation::computeErrorNorm()");
-	");const 
 
 	    const int ncomp = state_new_cc_[0].nComp();
 	amrex::MultiFab state_ref_level0(boxArray(0), DistributionMap(0), ncomp, 0);
