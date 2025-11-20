@@ -13,22 +13,26 @@ amr.v              = 0      # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 32 32 128
+amr.n_cell          = 16 16 64
 amr.max_level       = 0     # number of levels = max_level + 1
 amr.max_grid_size   = 256   # at least 128 for GPUs
-amr.blocking_factor_x = 32   # grid size must be divisible by this
-amr.blocking_factor_y = 32
-amr.blocking_factor_z = 128
+amr.blocking_factor_x = 16   # grid size must be divisible by this
+amr.blocking_factor_y = 16
+amr.blocking_factor_z = 8
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
 amr.grid_eff        = 0.7   # default
+
+radiation.iteration_tolerance = 1e-9
+radiation.iteration_tolerance_rel = 1e-6
 
 do_reflux = 1
 do_subcycle = 0
 stop_time     = 9.462e+15
-max_timesteps = 1
-plotfile_interval = -1
-checkpoint_interval = -1
-particle_csv_interval = 32
+max_timesteps = 128
+#restartfile = last_chk
+plotfile_interval = 16
+checkpoint_interval = 100000
+particle_csv_interval = 128
 suppress_output = 0
 
 particles.verbose = 1
@@ -43,8 +47,6 @@ particles.eps_ff = 0.01
 particles.param1 = 3.155760000e+14 # 10 Myr
 particles.param2 = 1.0
 problem.stars_file = ../inputs/ParticlesInTallBox.txt
-
-radiation.iteration_tolerance = 1e-6
 
 cooling.enabled = 1
 cooling.cooling_table_type = "resampled"
@@ -68,7 +70,7 @@ quokka.slice_x.normal = 0              # Plane normal (0 == x, 1 == y, 2 == z)
 quokka.slice_x.center = 1.509001e21
 quokka.slice_x.int = 128
 quokka.slice_x.interpolation = Linear
-quokka.slice_x.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s
+quokka.slice_x.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s radEnergy-Group0 radEnergy-Group1 radEnergy-Group2 radEnergy-Group3
 
 quokka.slice_z.type = DiagFramePlane
 quokka.slice_z.file = slicez_plt
@@ -76,7 +78,7 @@ quokka.slice_z.normal = 2              # Plane normal (0 == x, 1 == y, 2 == z)
 quokka.slice_z.center = 1.0e12        # Domain center in the normal direction
 quokka.slice_z.int = 128
 quokka.slice_z.interpolation = Linear
-quokka.slice_z.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s
+quokka.slice_z.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s radEnergy-Group0 radEnergy-Group1 radEnergy-Group2 radEnergy-Group3
 
 quokka.proj.type = ProjectionPlot   # Projection plot diagnostic
 quokka.proj.file = proj_plt         # Output file prefix (must end in "plt")

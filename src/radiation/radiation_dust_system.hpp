@@ -503,6 +503,20 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 		}
 #endif
 
+#if 1
+		if (n >= maxIter - 4) {
+			printf("n = %d, Egas_guess = %e, EradVec_guess = [", n, Egas_guess);
+			for (int g = 0; g < nGroups_; ++g) {
+				printf("%e, ", EradVec_guess[g]);
+			}
+			printf("], tau = [");
+			for (int g = 0; g < nGroups_; ++g) {
+				printf("%e, ", tau[g]);
+			}
+			printf("], F_G = %e, F_D_abs_sum = %e, Etot0 = %e\n", jacobian.F0, jacobian.Fg_abs_sum, Etot0);
+		}
+#endif
+
 		// update variables
 		RadSystem<problem_t>::SolveLinearEqs(jacobian, delta_x, delta_R); // This is modify delta_x and delta_R in place
 		AMREX_ASSERT(!std::isnan(delta_x));
