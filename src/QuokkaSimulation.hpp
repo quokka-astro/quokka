@@ -241,7 +241,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo);
 	void computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction dir);
-	auto computeErrorNorm() -> amrex::Real;
+	auto computeErrorNorm(bool use_rel_err = true) -> amrex::Real;
 	auto computeComponentErrors() -> std::vector<std::tuple<std::string, amrex::Real, amrex::Real>>;
 	void WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf, const amrex::Vector<std::string> &compNames,
 						int lev, int interval) override;
@@ -873,6 +873,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 	amrex::MultiFab::Saxpy(residual, -1., state_new_cc_[0], 0, 0, ncomp, 0);
 
 	const auto n_cells = static_cast<amrex::Real>(residual.boxArray().numPts());
+	std::cout << "\nChecking n_cells: " << n_cells << "\n";
 
 	for (int icomp = 0; icomp < ncomp; ++icomp) {
 		const amrex::Real abs_err = residual.norm1(icomp) / n_cells;
@@ -921,6 +922,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 			for (int icomp_fc = 0; icomp_fc < ncomp_fc; ++icomp_fc) {
 				const amrex::Real abs_err = residual_fc.norm1(icomp_fc) / n_cells_fc;
 				const amrex::Real ref_norm = state_ref_fc_level0.norm1(icomp_fc) / n_cells_fc;
+				std::cout << "\nChecking n_cells_fc: " << n_cells_fc << "\n";
 
 				amrex::Real rel_err = NAN;
 				if (ref_norm > 0.0) {
@@ -931,26 +933,6 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 			}
 		}
 	}
-
-	return comp_errors;
-}
-
-template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm() -> amrex::Real
-{
-	const BL_PROFILE("QuokkaSimulation::computeErrorNorm()");
-
-	// Compute all component errors
-	auto comp_errors = computeComponentErrors();
-	const int ncomp_tot = static_cast<int>(comp_errors.size());
-	if (ncomp_tot == 0) {  // ADDED: Check for empty results
-		if (this->suppress_output == 0) {
-			amrex::Print() << "\nNo valid reference solution found. Cannot compute error norm.\n\n";
-		}
-		return NAN;
-	}
-
-	// Compute RMS error and print results
-	amrex::Real rms_err = 0.0;
 	if (this->suppress_output == 0) {
 		amrex::Print() << "\nComponent Errors:\n";
 		amrex::Print() << std::string(70, '=') << "\n";
@@ -958,29 +940,64 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm
 			       << "Relative Error" << "\n";
 		amrex::Print() << std::string(70, '-') << "\n";
 	}
+	return comp_errors;
+}
 
-	for (const auto &[name, abs_err, rel_err] : comp_errors) {
-		rms_err += abs_err * abs_err;
-		// Print each component
-		if (this->suppress_output == 0) {
-			amrex::Print() << std::setw(25) << std::left << name << std::setw(20) << std::right << std::scientific << std::setprecision(4)
-				       << abs_err;
+template <typename problem_t>
+auto QuokkaSimulation<problem_t>::computeErrorNorm(bool use_rel_err) -> amrex::Real
+{
+    const BL_PROFILE("QuokkaSimulation::computeErrorNorm()");
 
-			if (std::isnan(rel_err)) {
-				amrex::Print() << std::setw(20) << std::right << "N/A" << "\n";
-			} else {
-				amrex::Print() << std::setw(20) << std::right << std::scientific << std::setprecision(4) << rel_err << "\n";
-			}
-		}
-	}
-	if (this->suppress_output == 0) {  // MOVED: inside conditional to avoid dividing by zero
-		amrex::Print() << std::string(70, '=') << "\n";
-		rms_err = std::sqrt(rms_err / static_cast<amrex::Real>(ncomp_tot));
-		amrex::Print() << "\nRMS of errors across all components = " << rms_err << "\n\n";
-	} else {
-		rms_err = std::sqrt(rms_err / static_cast<amrex::Real>(ncomp_tot));
-	}
-	return rms_err;
+    auto comp_errors = computeComponentErrors();
+    const int ncomp_tot = static_cast<int>(comp_errors.size());
+
+    if (ncomp_tot == 0) {
+        if (this->suppress_output == 0) {
+            amrex::Print() << "\nNo valid reference solution found. Cannot compute error norm.\n\n";
+        }
+        return NAN;
+    }
+
+    amrex::Real rms_err = 0.0;
+    auto N = static_cast<amrex::Real>(ncomp_tot);
+
+    for (const auto &[name, abs_err, rel_err] : comp_errors) {
+        amrex::Real err = abs_err;
+        if (use_rel_err) {
+            // Use relative error if valid, otherwise fall back to abs_err
+            if (!std::isnan(rel_err) && rel_err != 0.0) {
+                err = rel_err;
+            }
+        }
+        if (err == 0.0 || std::isnan(err)) {
+            N -= 1.0;   // exclude this component from RMS
+        } else {
+            rms_err += err * err;
+        }
+        // Optional printing
+        if (this->suppress_output == 0) {
+            amrex::Print() << std::setw(25) << std::left << name
+                           << std::setw(20) << std::right << std::scientific
+                           << std::setprecision(4) << abs_err;
+
+            if (std::isnan(rel_err)) {
+                amrex::Print() << std::setw(20) << "N/A\n";
+            } else {
+                amrex::Print() << std::setw(20) << std::scientific
+                               << std::setprecision(4) << rel_err << "\n";
+            }
+        }
+    }
+
+    // Final RMS
+    rms_err = std::sqrt(rms_err / N);
+
+    if (this->suppress_output == 0) {
+        amrex::Print() << std::string(70, '=') << "\n";
+        amrex::Print() << "\nRMS of errors across all components = " << rms_err << "\n\n";
+    }
+
+    return rms_err;
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
