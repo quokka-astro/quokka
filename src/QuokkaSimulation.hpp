@@ -909,7 +909,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 					amrex::Print() << "\nWARNING: Face-centered reference solution was not properly set.\n";
 					amrex::Print() << "Please implement computeReferenceSolution_fc() for your problem.\n\n";
 				}
-				return comp_errors; // Return empty vector
+				continue; // Return empty vector
 			}
 			amrex::MultiFab::Copy(state_new_fc_shrunk, state_new_fc_[0][idim], 0, 0, ncomp_fc, 0);
 			amrex::MultiFab residual_fc(state_ref_fc_level0.boxArray(), state_ref_fc_level0.DistributionMap(), ncomp_fc, 0);
@@ -942,6 +942,12 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm
 	// Compute all component errors
 	auto comp_errors = computeComponentErrors();
 	const int ncomp_tot = static_cast<int>(comp_errors.size());
+	if (ncomp_tot == 0) {  // ADDED: Check for empty results
+		if (this->suppress_output == 0) {
+			amrex::Print() << "\nNo valid reference solution found. Cannot compute error norm.\n\n";
+		}
+		return NAN;
+	}
 
 	// Compute RMS error and print results
 	amrex::Real rms_err = 0.0;
@@ -967,10 +973,12 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm
 			}
 		}
 	}
-	amrex::Print() << std::string(70, '=') << "\n";
-	rms_err = std::sqrt(rms_err / static_cast<amrex::Real>(ncomp_tot));
-	if (this->suppress_output == 0) {
+	if (this->suppress_output == 0) {  // MOVED: inside conditional to avoid dividing by zero
+		amrex::Print() << std::string(70, '=') << "\n";
+		rms_err = std::sqrt(rms_err / static_cast<amrex::Real>(ncomp_tot));
 		amrex::Print() << "\nRMS of errors across all components = " << rms_err << "\n\n";
+	} else {
+		rms_err = std::sqrt(rms_err / static_cast<amrex::Real>(ncomp_tot));
 	}
 	return rms_err;
 }
