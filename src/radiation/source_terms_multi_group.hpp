@@ -343,7 +343,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 		}
 
 		// check relative convergence of the residuals
-		if ((std::abs(jacobian.F0 / Etot0) < tol_d) && (cscale * jacobian.Fg_abs_sum / Etot0 < tol_d)) {
+		if ((std::abs(jacobian.F0 / Etot0) < resid_tol) && (cscale * jacobian.Fg_abs_sum / Etot0 < resid_tol)) {
 			break;
 		}
 
