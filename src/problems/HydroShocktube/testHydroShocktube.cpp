@@ -365,7 +365,7 @@ auto problem_main() -> int
 	// sim.initDt_ = initial_dt;
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
-	sim.computeReferenceSolution_ = true;
+
 
 	// Main time loop
 	sim.setInitialConditions();

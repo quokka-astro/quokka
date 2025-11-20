@@ -155,7 +155,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int maxSubsteps_ = 10;				// maximum number of radiation subcycles per hydro step
 	amrex::Real dustGasInteractionCoeff_ = 2.5e-34; // erg cm^3 s^−1 K^−3/2
 
-	bool computeReferenceSolution_ = false;
 	amrex::Real errorNorm_ = NAN;
 	amrex::Real pressureFloor_ = 0.;
 
@@ -853,6 +852,21 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 	const int ncomp = state_new_cc_[0].nComp();
 	amrex::MultiFab state_ref_level0(boxArray(0), DistributionMap(0), ncomp, 0);
 	computeReferenceSolution(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray());
+		bool has_valid_data = true;
+	for (int icomp = 0; icomp < ncomp; ++icomp) {
+		if (!std::isfinite(state_ref_level0.norm0(icomp))) {
+			has_valid_data = false;
+			break;
+		}
+	}
+
+	if (!has_valid_data) {
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			amrex::Print() << "\nWARNING: Cell-centered reference solution was not properly set.\n";
+			amrex::Print() << "Please implement computeReferenceSolution() for your problem.\n\n";
+		}
+		return comp_errors; // Return empty vector
+	}
 
 	amrex::MultiFab residual(state_ref_level0.boxArray(), state_ref_level0.DistributionMap(), ncomp, 0);
 	amrex::MultiFab::Copy(residual, state_ref_level0, 0, 0, ncomp, 0);
@@ -882,6 +896,21 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 			amrex::MultiFab state_ref_fc_level0(ba_fc, DistributionMap(0), ncomp_fc, 0);
 			amrex::MultiFab state_new_fc_shrunk(ba_fc, DistributionMap(0), ncomp_fc, 0);
 			computeReferenceSolution_fc(state_ref_fc_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray(), quokka::direction{idim});
+				bool has_valid_data = true;
+			for (int icomp = 0; icomp < ncomp; ++icomp) {
+				if (!std::isfinite(state_ref_level0.norm0(icomp))) {
+					has_valid_data = false;
+					break;
+				}
+			}
+
+			if (!has_valid_data) {
+				if (amrex::ParallelDescriptor::IOProcessor()) {
+					amrex::Print() << "\nWARNING: Face-centered reference solution was not properly set.\n";
+					amrex::Print() << "Please implement computeReferenceSolution_fc() for your problem.\n\n";
+				}
+				return comp_errors; // Return empty vector
+			}
 			amrex::MultiFab::Copy(state_new_fc_shrunk, state_new_fc_[0][idim], 0, 0, ncomp_fc, 0);
 			amrex::MultiFab residual_fc(state_ref_fc_level0.boxArray(), state_ref_fc_level0.DistributionMap(), ncomp_fc, 0);
 			amrex::MultiFab::Copy(residual_fc, state_ref_fc_level0, 0, 0, ncomp_fc, 0);

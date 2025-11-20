@@ -422,7 +422,7 @@ auto problem_main() -> int
 	}
 
 	QuokkaSimulation<AlfvenWaveLinear> sim(BCs_cc, BCs_fc);
-	sim.computeReferenceSolution_ = true;
+
 	sim.setInitialConditions();
 	sim.evolve();
 

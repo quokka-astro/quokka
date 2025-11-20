@@ -322,7 +322,7 @@ auto problem_main() -> int
 	sim.maxDt_ = max_dt;
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
-	sim.computeReferenceSolution_ = true;
+
 	sim.plotfileInterval_ = -1;
 
 	// Main time loop

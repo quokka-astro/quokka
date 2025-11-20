@@ -256,7 +256,7 @@ auto problem_main() -> int
 	}
 
 	QuokkaSimulation<MHDBitwiseICs> sim(BCs_cc, BCs_fc);
-	sim.computeReferenceSolution_ = true;
+
 	sim.setInitialConditions();
 
 	amrex::Vector<amrex::MultiFab> const &cc_state = sim.getNewMF_cc();

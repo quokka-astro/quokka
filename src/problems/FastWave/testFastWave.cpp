@@ -242,7 +242,7 @@ auto problem_main() -> int
 	}
 
 	QuokkaSimulation<FastWave> sim(BCs_cc, BCs_fc);
-	sim.computeReferenceSolution_ = true;
+
 	sim.setInitialConditions();
 	sim.evolve();
 

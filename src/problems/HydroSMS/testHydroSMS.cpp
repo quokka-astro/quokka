@@ -281,7 +281,7 @@ auto problem_main() -> int
 	sim.maxTimesteps_ = max_timesteps;
 	sim.integratorOrder_ = 2;     // use forward Euler
 	sim.reconstructionOrder_ = 3; // use donor cell
-	sim.computeReferenceSolution_ = true;
+
 	sim.plotfileInterval_ = -1;
 
 	// Main time loop
