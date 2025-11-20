@@ -942,7 +942,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm
 	// Compute all component errors
 	auto comp_errors = computeComponentErrors();
 	const int ncomp_tot = static_cast<int>(comp_errors.size());
-	if (ncomp_tot == 0) {  // ADDED: Check for empty results
+	if (ncomp_tot == 0) { // ADDED: Check for empty results
 		if (this->suppress_output == 0) {
 			amrex::Print() << "\nNo valid reference solution found. Cannot compute error norm.\n\n";
 		}
@@ -973,7 +973,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm
 			}
 		}
 	}
-	if (this->suppress_output == 0) {  // MOVED: inside conditional to avoid dividing by zero
+	if (this->suppress_output == 0) { // MOVED: inside conditional to avoid dividing by zero
 		amrex::Print() << std::string(70, '=') << "\n";
 		rms_err = std::sqrt(rms_err / static_cast<amrex::Real>(ncomp_tot));
 		amrex::Print() << "\nRMS of errors across all components = " << rms_err << "\n\n";
