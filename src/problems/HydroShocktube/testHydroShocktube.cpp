@@ -366,7 +366,6 @@ auto problem_main() -> int
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
 
-
 	// Main time loop
 	sim.setInitialConditions();
 	sim.evolve();

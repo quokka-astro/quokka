@@ -852,7 +852,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 	const int ncomp = state_new_cc_[0].nComp();
 	amrex::MultiFab state_ref_level0(boxArray(0), DistributionMap(0), ncomp, 0);
 	computeReferenceSolution(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray());
-		bool has_valid_data = true;
+	bool has_valid_data = true;
 	for (int icomp = 0; icomp < ncomp; ++icomp) {
 		if (!std::isfinite(state_ref_level0.norm0(icomp))) {
 			has_valid_data = false;
@@ -896,7 +896,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 			amrex::MultiFab state_ref_fc_level0(ba_fc, DistributionMap(0), ncomp_fc, 0);
 			amrex::MultiFab state_new_fc_shrunk(ba_fc, DistributionMap(0), ncomp_fc, 0);
 			computeReferenceSolution_fc(state_ref_fc_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray(), quokka::direction{idim});
-				bool has_valid_data = true;
+			bool has_valid_data = true;
 			for (int icomp = 0; icomp < ncomp; ++icomp) {
 				if (!std::isfinite(state_ref_level0.norm0(icomp))) {
 					has_valid_data = false;

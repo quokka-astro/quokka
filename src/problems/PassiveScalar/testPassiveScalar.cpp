@@ -252,8 +252,6 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<ScalarProblem> sim(BCs_cc);
 
-
-
 	// initialize and evolve
 	sim.setInitialConditions();
 	sim.evolve();

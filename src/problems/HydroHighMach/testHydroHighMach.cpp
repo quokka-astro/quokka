@@ -258,8 +258,6 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<HighMachProblem> sim(BCs_cc);
 
-
-
 	// initialize and evolve
 	sim.setInitialConditions();
 	sim.evolve();
