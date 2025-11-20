@@ -42,7 +42,8 @@ temperature_floor = 10.0 #K
 particles.eps_ff = 0.01
 particles.param1 = 3.155760000e+14 # 10 Myr
 particles.param2 = 1.0
-problem.stars_file = ../inputs/ParticlesInTallBox.txt
+#problem.stars_file = ../inputs/ParticlesInTallBox.txt
+problem.stars_file = "none"
 
 radiation.iteration_tolerance = 1e-6
 

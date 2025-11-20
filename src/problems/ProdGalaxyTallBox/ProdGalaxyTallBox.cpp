@@ -25,22 +25,29 @@
 #include "turbulence/TurbDataReader.hpp"
 
 static constexpr int BC_TYPE = 1; // 1: Periodic, 2: foextrap, 3: symmetry
+static constexpr bool is_rad_on = false;
+static constexpr int nGroups_ = 1;
+static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_{ 0.0, 100.0 };
+static constexpr amrex::GpuArray<double, nGroups_ + 1> dust_opacity_{0.0, 0.0};
+// static constexpr int nGroups_ = 4;
+// static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = { 1.e-04, 1.00778140e-01, 1.00778140e+00, 5.53817071e+00, 1.e+2 };
+// static constexpr amrex::GpuArray<double, nGroups_ + 1> dust_opacity_{6e2, 1e3, 2e4, 1e5, 2e5}; // dust opacity, cm2/g. last element not used
+static constexpr bool enable_dust_ = false;
+static constexpr bool enable_PE_ = false;
 static constexpr bool enable_self_gravity = true;
-// static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop | ParticleSwitch::CIC;
-static std::string stars_file = "none";
-// static std::string CIC_file = "none";
+
+static std::string stars_file = "none"; // default: no stars
 
 constexpr double pc = C::parsec;
-
-struct TheProblem {
-};
-
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
 constexpr double arad = C::a_rad;
 constexpr double TCMB = 2.7;		 // K, CMB temperature
 constexpr double initial_Erad = 1e-40 * arad * TCMB * TCMB * TCMB * TCMB;
 constexpr double chat_over_c = 2000.0 * 1e5 / C::c_light; // chat = 2000 km/s
+
+struct TheProblem {
+};
 
 template <> struct SimulationData<TheProblem> {
 	// turbulent velocity fields
@@ -103,7 +110,6 @@ static constexpr amrex::Real rho01 = 2.78556e-24;
 static constexpr amrex::Real rho02 = 2.7855600000000006e-29;
 
 template <> struct Particle_Traits<TheProblem> {
-	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
 };
 
@@ -120,12 +126,12 @@ template <> struct quokka::EOS_Traits<TheProblem> {
 template <> struct Physics_Traits<TheProblem> {
 	static constexpr bool is_self_gravity_enabled = enable_self_gravity;
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_radiation_enabled = true;
+	static constexpr bool is_radiation_enabled = is_rad_on;
 	static constexpr bool is_chemistry_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr int nGroups = 4;			     // number of radiation groups
+	static constexpr int nGroups = is_rad_on ? nGroups_ : 1;			     // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
@@ -134,18 +140,14 @@ template <> struct RadSystem_Traits<TheProblem> {
 	static constexpr double Erad_floor = initial_Erad;
 	static constexpr int beta_order = 1;
 	static constexpr double energy_unit = C::ev2erg; // set boundary unit to eV
-	// Define radiation group boundaries for 2-group radiation
-	// Group 0: 1 eV to 100 eV, Group 1: 100 eV to 10000 eV
-	static constexpr amrex::GpuArray<double, Physics_Traits<TheProblem>::nGroups + 1> radBoundaries{
-		1.e-04, 1.00778140e-01, 1.00778140e+00, 5.53817071e+00, 1.e+2
-	};
-	static constexpr OpacityModel opacity_model = OpacityModel::piecewise_constant_opacity;
+	static constexpr amrex::GpuArray<double, Physics_Traits<TheProblem>::nGroups + 1> radBoundaries = radBoundaries_;
+	static constexpr OpacityModel opacity_model = is_rad_on ? OpacityModel::piecewise_constant_opacity : OpacityModel::single_group;
 };
 
 template <> struct ISM_Traits<TheProblem> {
-	static constexpr bool enable_dust_gas_thermal_coupling_model = true;
-	static constexpr double gas_dust_coupling_threshold = 1.0e-4;
-	static constexpr bool enable_photoelectric_heating = true;
+	static constexpr bool enable_dust_gas_thermal_coupling_model = enable_dust_;
+	static constexpr bool enable_photoelectric_heating = enable_PE_;
+	static constexpr double gas_dust_coupling_threshold = 1.0e-5;
 };
 
 template <>
@@ -158,9 +160,8 @@ RadSystem<TheProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<doub
 	for (int i = 0; i < nGroups_ + 1; ++i) {
 		exponents_and_values[0][i] = 0.0; // power-law slopes
 	}
-	const amrex::GpuArray<double, nGroups_ + 1> dust_opacity{6e2, 1e3, 2e4, 1e5, 2e5}; // dust opacity, cm2/g. last element not used
 	for (int i = 0; i < nGroups_ + 1; ++i) {
-		exponents_and_values[1][i] = dust_opacity[i] * gas_to_dust_ratio;
+		exponents_and_values[1][i] = dust_opacity_[i] * gas_to_dust_ratio;
 	}
 	return exponents_and_values;
 }
@@ -345,11 +346,13 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 		const auto Erad_g = RadSystem<TheProblem>::ComputeThermalRadiationMultiGroup(TCMB, RadSystem<TheProblem>::radBoundaries_);
 
 		// Set radiation variables
-		for (int g = 0; g < Physics_Traits<TheProblem>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad_g[g];
-			state_cc(i, j, k, RadSystem<TheProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
-			state_cc(i, j, k, RadSystem<TheProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
-			state_cc(i, j, k, RadSystem<TheProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+		if constexpr (is_rad_on) {
+			for (int g = 0; g < Physics_Traits<TheProblem>::nGroups; ++g) {
+				state_cc(i, j, k, RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad_g[g];
+				state_cc(i, j, k, RadSystem<TheProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+				state_cc(i, j, k, RadSystem<TheProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+				state_cc(i, j, k, RadSystem<TheProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			}
 		}
 	});
 }
@@ -550,24 +553,26 @@ AMRSimulation<TheProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv,
 	consVar(i, j, k, HydroSystem<TheProblem>::energy_index) = etot_edge;
 	consVar(i, j, k, HydroSystem<TheProblem>::internalEnergy_index) = eint_edge;
 
-	// copy radiation variables from edge to boundary cells
-	const int ii = i;
-	const int jj = j;
-	const int kk = kedge;
-	for (int g = 0; g < Physics_Traits<TheProblem>::nGroups; ++g) {
-		const double radEnergy_edge = consVar(ii, jj, kk, RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g);
-		const double x1RadFlux_edge = consVar(ii, jj, kk, RadSystem<TheProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g);
-		const double x2RadFlux_edge = consVar(ii, jj, kk, RadSystem<TheProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g);
-		double x3RadFlux_edge = consVar(ii, jj, kk, RadSystem<TheProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g);
+	if constexpr (is_rad_on) {
+		// copy radiation variables from edge to boundary cells
+		const int ii = i;
+		const int jj = j;
+		const int kk = kedge;
+		for (int g = 0; g < Physics_Traits<TheProblem>::nGroups; ++g) {
+			const double radEnergy_edge = consVar(ii, jj, kk, RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g);
+			const double x1RadFlux_edge = consVar(ii, jj, kk, RadSystem<TheProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g);
+			const double x2RadFlux_edge = consVar(ii, jj, kk, RadSystem<TheProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g);
+			double x3RadFlux_edge = consVar(ii, jj, kk, RadSystem<TheProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g);
 
-		if ((x3RadFlux_edge * normal) < 0) { // radiation is inflowing
-			x3RadFlux_edge *= -1.;
+			if ((x3RadFlux_edge * normal) < 0) { // radiation is inflowing
+				x3RadFlux_edge *= -1.;
+			}
+
+			consVar(i, j, k, RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = radEnergy_edge;
+			consVar(i, j, k, RadSystem<TheProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = x1RadFlux_edge;
+			consVar(i, j, k, RadSystem<TheProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = x2RadFlux_edge;
+			consVar(i, j, k, RadSystem<TheProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = x3RadFlux_edge;
 		}
-
-		consVar(i, j, k, RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = radEnergy_edge;
-		consVar(i, j, k, RadSystem<TheProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = x1RadFlux_edge;
-		consVar(i, j, k, RadSystem<TheProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = x2RadFlux_edge;
-		consVar(i, j, k, RadSystem<TheProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = x3RadFlux_edge;
 	}
 }
 
@@ -582,7 +587,6 @@ auto problem_main() -> int
 
 	amrex::ParmParse const pp("problem");
 	pp.query("stars_file", stars_file);
-	// pp.query("CIC_file", CIC_file);
 
 	// set random state
 	const int seed = 42;
@@ -600,8 +604,10 @@ auto problem_main() -> int
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
 	// Total radiation energy in the field
 	amrex::Real total_Erad_init = 0.0;
-	for (int g = 0; g < Physics_Traits<TheProblem>::nGroups; ++g) {
-		total_Erad_init += sim.state_new_cc_[0].sum(RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) * vol;
+	if constexpr (is_rad_on) {
+		for (int g = 0; g < Physics_Traits<TheProblem>::nGroups; ++g) {
+			total_Erad_init += sim.state_new_cc_[0].sum(RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) * vol;
+		}
 	}
 
 	const amrex::Real total_gas_energy_init = sim.state_new_cc_[0].sum(RadSystem<TheProblem>::gasEnergy_index) * vol;
@@ -613,8 +619,10 @@ auto problem_main() -> int
 	sim.evolve();
 
 	amrex::Real total_Erad = 0.0;
-	for (int g = 0; g < Physics_Traits<TheProblem>::nGroups; ++g) {
-		total_Erad += sim.state_new_cc_[0].sum(RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) * vol;
+	if constexpr (is_rad_on) {
+		for (int g = 0; g < Physics_Traits<TheProblem>::nGroups; ++g) {
+			total_Erad += sim.state_new_cc_[0].sum(RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) * vol;
+		}
 	}
 
 	const amrex::Real total_gas_energy = sim.state_new_cc_[0].sum(RadSystem<TheProblem>::gasEnergy_index) * vol;
@@ -623,8 +631,10 @@ auto problem_main() -> int
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		amrex::Print() << "Total gas energy (initial): " << total_gas_energy_init << "\n";
 		amrex::Print() << "Total gas energy (final): " << total_gas_energy << "\n";
-		amrex::Print() << "Total radiation energy (initial): " << total_Erad_init / chat_over_c << "\n";
-		amrex::Print() << "Total radiation energy (final): " << total_Erad / chat_over_c << "\n";
+		if (is_rad_on) {
+			amrex::Print() << "Total radiation energy (initial): " << total_Erad_init / chat_over_c << "\n";
+			amrex::Print() << "Total radiation energy (final): " << total_Erad / chat_over_c << "\n";
+		}
 		amrex::Print() << "Change of total energy: " << total_energy_final - total_energy_init << "\n";
 		amrex::Print() << "Relative change of total energy: " << (total_energy_final - total_energy_init) / total_energy_init << "\n";
 	}
