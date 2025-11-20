@@ -854,7 +854,6 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 	amrex::MultiFab state_ref_level0(boxArray(0), DistributionMap(0), ncomp, 0);
 	computeReferenceSolution(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray());
 
-	// Compute residual
 	amrex::MultiFab residual(state_ref_level0.boxArray(), state_ref_level0.DistributionMap(), ncomp, 0);
 	amrex::MultiFab::Copy(residual, state_ref_level0, 0, 0, ncomp, 0);
 	amrex::MultiFab::Saxpy(residual, -1., state_new_cc_[0], 0, 0, ncomp, 0);
@@ -877,21 +876,13 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			const int ncomp_fc = state_new_fc_[0][idim].nComp();
-			// Start with face-centered BoxArray
 			amrex::BoxArray ba_fc = amrex::convert(boxArray(0), amrex::IntVect::TheDimensionVector(idim));
-			// Shrink by 1 in the face-normal direction (idim)
+			// Shrink by 1 in the face-normal direction (idim) so that identical cell numbers are used for error calculation
 			ba_fc.growHi(idim, -1);
-			// Create both MultiFabs with shrunk BoxArray
 			amrex::MultiFab state_ref_fc_level0(ba_fc, DistributionMap(0), ncomp_fc, 0);
 			amrex::MultiFab state_new_fc_shrunk(ba_fc, DistributionMap(0), ncomp_fc, 0);
-
-			// Fill reference solution
 			computeReferenceSolution_fc(state_ref_fc_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray(), quokka::direction{idim});
-
-			// Copy shrunk data (removes the last face in direction idim)
 			amrex::MultiFab::Copy(state_new_fc_shrunk, state_new_fc_[0][idim], 0, 0, ncomp_fc, 0);
-
-			// Compute residual
 			amrex::MultiFab residual_fc(state_ref_fc_level0.boxArray(), state_ref_fc_level0.DistributionMap(), ncomp_fc, 0);
 			amrex::MultiFab::Copy(residual_fc, state_ref_fc_level0, 0, 0, ncomp_fc, 0);
 			amrex::MultiFab::Saxpy(residual_fc, -1., state_new_fc_shrunk, 0, 0, ncomp_fc, 0);
