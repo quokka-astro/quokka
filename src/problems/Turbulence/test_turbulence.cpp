@@ -17,6 +17,7 @@
 #include "AMReX_SPACE.H"
 #include "AMReX_TableData.H"
 #include "AMReX_iMultiFab.H"
+#include <cmath>
 
 struct BasicTurbulence {
 }; // dummy type to allow compile-type polymorphism via template specialization
@@ -34,10 +35,14 @@ template <> struct Physics_Traits<BasicTurbulence> {
 };
 
 template <> struct quokka::EOS_Traits<BasicTurbulence> {
-	static constexpr double gamma = 1.4;
+	static constexpr double gamma = 1.0;
 	static constexpr double cs_isothermal = 1.0; // dimensionless
-	static constexpr double mean_molecular_weight = C::m_u;
-	static constexpr double boltzmann_constant = C::k_B;
+						     // static constexpr double mean_molecular_weight = C::m_u;
+						     // static constexpr double boltzmann_constant = C::k_B;
+};
+
+template <> struct HydroSystem_Traits<BasicTurbulence> {
+	static constexpr bool reconstruct_eint = false;
 };
 
 template <> void QuokkaSimulation<BasicTurbulence>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -47,13 +52,13 @@ template <> void QuokkaSimulation<BasicTurbulence>::setInitialConditionsOnGrid(q
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		Real const rho = 1;
-		Real const xmom = 0;
-		Real const ymom = 0;
-		Real const zmom = 0;
-		Real const Eint = 1;
-		Real const Egas = Eint;
-		Real const scalar_density = 0;
+		amrex::Real const rho = 1.0;
+		amrex::Real const xmom = 0.0;
+		amrex::Real const ymom = 0.0;
+		amrex::Real const zmom = 0.0;
+		amrex::Real const Eint = 0.0; // P0 / (gamma - 1.0);
+		amrex::Real const Egas = Eint;
+		amrex::Real const scalar_density = 0.0;
 
 		state_cc(i, j, k, HydroSystem<BasicTurbulence>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<BasicTurbulence>::x1Momentum_index) = xmom;

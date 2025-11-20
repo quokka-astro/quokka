@@ -52,37 +52,6 @@ template <typename problem_t> class turbulentDriving
 	amrex::Gpu::DeviceVector<amrex::Real> disp = {-1.0, -1.0, -1.0};
 	std::vector<amrex::Real> host_disp = {-1.0, -1.0, -1.0};
 
-	void calculate_dispersion(amrex::MultiFab &state)
-	{
-		amrex::Real sum_rho = state.sum(HydroSystem<problem_t>::density_index, false);
-		amrex::Real sum_px = state.sum(HydroSystem<problem_t>::x1Momentum_index, false);
-		amrex::Real sum_py = state.sum(HydroSystem<problem_t>::x2Momentum_index, false);
-		amrex::Real sum_pz = state.sum(HydroSystem<problem_t>::x3Momentum_index, false);
-		amrex::GpuArray<amrex::Real, 3> v_avg = {sum_px / sum_rho, sum_py / sum_rho, sum_pz / sum_rho};
-
-		amrex::ReduceOps<amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum> reduce_op;
-		amrex::ReduceData<amrex::Real, amrex::Real, amrex::Real> reduce_data(reduce_op);
-
-		for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
-			const amrex::Box &bx = mfi.validbox();
-			auto const &data = state.array(mfi);
-
-			reduce_op.eval(bx, reduce_data, [=] AMREX_GPU_DEVICE(int i, int j, int k) -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real> {
-				amrex::Real rho = data(i, j, k, HydroSystem<problem_t>::density_index);
-				amrex::Real vx = data(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / rho;
-				amrex::Real vy = data(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / rho;
-				amrex::Real vz = data(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / rho;
-
-				return {rho * (vx - v_avg[0]) * (vx - v_avg[0]), rho * (vy - v_avg[1]) * (vy - v_avg[1]),
-					rho * (vz - v_avg[2]) * (vz - v_avg[2])};
-			});
-		}
-
-		auto stdd = reduce_data.value();
-		disp = {std::sqrt(amrex::get<0>(stdd) / sum_rho), std::sqrt(amrex::get<1>(stdd) / sum_rho), std::sqrt(amrex::get<2>(stdd) / sum_rho)};
-		amrex::Gpu::copy(amrex::Gpu::deviceToHost, disp.begin(), disp.end(), host_disp.begin());
-	}
-
 	void update(const amrex::Real &time, amrex::MultiFab &state)
 	{
 		calculate_dispersion(state);
@@ -130,6 +99,37 @@ template <typename problem_t> class turbulentDriving
 
 		amrex::Gpu::streamSynchronize();
 		return true;
+	}
+
+	void calculate_dispersion(amrex::MultiFab &state)
+	{
+		amrex::Real sum_rho = state.sum(HydroSystem<problem_t>::density_index, false);
+		amrex::Real sum_px = state.sum(HydroSystem<problem_t>::x1Momentum_index, false);
+		amrex::Real sum_py = state.sum(HydroSystem<problem_t>::x2Momentum_index, false);
+		amrex::Real sum_pz = state.sum(HydroSystem<problem_t>::x3Momentum_index, false);
+		amrex::GpuArray<amrex::Real, 3> v_avg = {sum_px / sum_rho, sum_py / sum_rho, sum_pz / sum_rho};
+
+		amrex::ReduceOps<amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum> reduce_op;
+		amrex::ReduceData<amrex::Real, amrex::Real, amrex::Real> reduce_data(reduce_op);
+
+		for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
+			const amrex::Box &bx = mfi.validbox();
+			auto const &data = state.array(mfi);
+
+			reduce_op.eval(bx, reduce_data, [=] AMREX_GPU_DEVICE(int i, int j, int k) -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real> {
+				amrex::Real rho = data(i, j, k, HydroSystem<problem_t>::density_index);
+				amrex::Real vx = data(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / rho;
+				amrex::Real vy = data(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / rho;
+				amrex::Real vz = data(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / rho;
+
+				return {rho * (vx - v_avg[0]) * (vx - v_avg[0]), rho * (vy - v_avg[1]) * (vy - v_avg[1]),
+					rho * (vz - v_avg[2]) * (vz - v_avg[2])};
+			});
+		}
+
+		auto stdd = reduce_data.value();
+		disp = {std::sqrt(amrex::get<0>(stdd) / sum_rho), std::sqrt(amrex::get<1>(stdd) / sum_rho), std::sqrt(amrex::get<2>(stdd) / sum_rho)};
+		amrex::Gpu::copy(amrex::Gpu::deviceToHost, disp.begin(), disp.end(), host_disp.begin());
 	}
 };
 } // namespace quokka::turbulence
