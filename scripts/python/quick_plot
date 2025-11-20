@@ -100,14 +100,14 @@ import yt
 import unyt
 import matplotlib.pyplot as plt
 
-try:
-    import scienceplots
-    plt.style.use(['science', 'nature', 'no-latex'])
-    print("scienceplots loaded successfully")
-except ImportError:
-    print("scienceplots not installed; using default matplotlib style")
-except Exception as e:
-    print(f"scienceplots installed but failed to load style: {e}; using default matplotlib style")
+#try:
+#    import scienceplots
+#    plt.style.use(['science', 'nature', 'no-latex'])
+#    print("scienceplots loaded successfully")
+#except ImportError:
+#    print("scienceplots not installed; using default matplotlib style")
+#except Exception as e:
+#    print(f"scienceplots installed but failed to load style: {e}; using default matplotlib style")
 
 # check yt version
 assert yt.__version__ >= "4.3.0", "yt version must be >= 4.3.0"
