@@ -873,7 +873,6 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 	amrex::MultiFab::Saxpy(residual, -1., state_new_cc_[0], 0, 0, ncomp, 0);
 
 	const auto n_cells = static_cast<amrex::Real>(residual.boxArray().numPts());
-	std::cout << "\nChecking n_cells: " << n_cells << "\n";
 
 	for (int icomp = 0; icomp < ncomp; ++icomp) {
 		const amrex::Real abs_err = residual.norm1(icomp) / n_cells;
@@ -922,7 +921,6 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 			for (int icomp_fc = 0; icomp_fc < ncomp_fc; ++icomp_fc) {
 				const amrex::Real abs_err = residual_fc.norm1(icomp_fc) / n_cells_fc;
 				const amrex::Real ref_norm = state_ref_fc_level0.norm1(icomp_fc) / n_cells_fc;
-				std::cout << "\nChecking n_cells_fc: " << n_cells_fc << "\n";
 
 				amrex::Real rel_err = NAN;
 				if (ref_norm > 0.0) {
