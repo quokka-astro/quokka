@@ -1,6 +1,14 @@
 /* extra.css */
 @font-face {
   font-size: 20px; /* Adjust the font size as needed */
-  /* font color to black */
-  color: #000;
+  color: #000; /* font color to black */
+}
+
+/* Increase page width for Read the Docs theme */
+.wy-nav-content {
+  max-width: 1100px !important;
+}
+
+.wy-nav-content-wrap {
+  max-width: 1100px !important;
 }

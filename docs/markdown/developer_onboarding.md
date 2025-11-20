@@ -25,6 +25,7 @@
 - **Build locally.** Follow the installation guide to clone with submodules, configure with CMake (Ninja or Make), and choose the desired dimensionality and accelerator backend ([installation guide](installation.md)).
 - **Automated tests.** `ninja test` or `ctest` exercises the bundled problem suite; for full GPU coverage, rely on the regression harness described earlier ([installation guide](installation.md), [quokka-tests.ini](https://github.com/quokka-astro/quokka/blob/development/regression/quokka-tests.ini#L65-L146)).
 - **Static analysis.** Run `clang-tidy` manually or via `scripts/tidy.sh` to match the repository’s CI checks, as documented in the How to Use clang-tidy guide ([clang-tidy how-to](howto_clang_tidy.md)).
+- **CUDA builds on macOS or Linux.** To build and test CUDA functionality locally, run `./scripts/bash/run-cuda-container.sh`. This script pulls the appropriate Docker image, launches a container, and performs a CUDA build—useful for catching CUDA-specific issues on your development machine.
 
 ## Where to dive deeper next
 1. **Physics modules.** Explore `src/hydro/` and `src/radiation/` alongside the corresponding documentation pages (`hydro_integrator.md`, radiation topics) to understand scheme implementations ([QuokkaSimulation.hpp](https://github.com/quokka-astro/quokka/blob/development/src/QuokkaSimulation.hpp#L66-L200), [overview page](index.md)).
