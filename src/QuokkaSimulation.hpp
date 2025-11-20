@@ -898,7 +898,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 			computeReferenceSolution_fc(state_ref_fc_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray(), quokka::direction{idim});
 			bool has_valid_data = true;
 			for (int icomp = 0; icomp < ncomp_fc; ++icomp) {
-				if (!std::isfinite(state_ref_level0.norm0(icomp))) {
+				if (!std::isfinite(state_ref_fc_level0.norm0(icomp))) {
 					has_valid_data = false;
 					break;
 				}
