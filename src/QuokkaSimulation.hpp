@@ -985,6 +985,12 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm
 	}
 
 	// Final RMS
+	if (N == 0.0) {
+		if (this->suppress_output == 0) {
+			amrex::Print() << "\nNo non-zero errors found. RMS error is zero.\n\n";
+		}
+		return 0.0;
+	}
 	rms_err = std::sqrt(rms_err / N);
 
 	if (this->suppress_output == 0) {
