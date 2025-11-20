@@ -3,12 +3,8 @@
 
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
-#include <AMReX.H>
-#include <AMReX_REAL.H>
 
 #include "dust/DustState.hpp"
-#include "hydro/EOS.hpp"
-#include "util/ArrayView.hpp"
 #include "util/valarray.hpp"
 
 namespace quokka::Riemann
