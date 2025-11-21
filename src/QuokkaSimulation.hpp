@@ -938,6 +938,17 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 			       << "Relative Error" << "\n";
 		amrex::Print() << std::string(70, '-') << "\n";
 	}
+	for (const auto &[name, abs_err, rel_err] : comp_errors) {
+		if (this->suppress_output == 0) {
+			amrex::Print() << std::setw(25) << std::left << name 
+			               << std::setw(20) << std::right << std::scientific << std::setprecision(4) << abs_err;
+			if (std::isnan(rel_err)) {
+				amrex::Print() << std::setw(20) << std::right << "N/A" << "\n";
+			} else {
+				amrex::Print() << std::setw(20) << std::right << std::scientific << std::setprecision(4) << rel_err << "\n";
+			}
+		}
+	}
 	return comp_errors;
 }
 
@@ -946,58 +957,49 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm
 	const BL_PROFILE("QuokkaSimulation::computeErrorNorm()");
 
 	auto comp_errors = computeComponentErrors();
-	const int ncomp_tot = static_cast<int>(comp_errors.size());
-
-	if (ncomp_tot == 0) {
+	if (comp_errors.empty()) {
 		if (this->suppress_output == 0) {
 			amrex::Print() << "\nNo valid reference solution found. Cannot compute error norm.\n\n";
 		}
 		return NAN;
 	}
 
-	amrex::Real rms_err = 0.0;
-	auto N = static_cast<amrex::Real>(ncomp_tot);
-
-	for (const auto &[name, abs_err, rel_err] : comp_errors) {
-		amrex::Real err = abs_err;
-		if (use_rel_err) {
-			// Use relative error if valid, otherwise fall back to abs_err
-			if (!std::isnan(rel_err) && rel_err != 0.0) {
-				err = rel_err;
+	auto compute_rms = [](const auto &errors, auto selector) {
+		amrex::Real sum_sq = 0.0;
+		int count = 0;
+		for (const auto &e : errors) {
+			amrex::Real val = selector(e);
+			if (val != 0.0 && !std::isnan(val)) {
+				sum_sq += val * val;
+				++count;
 			}
 		}
-		if (err == 0.0 || std::isnan(err)) {
-			N -= 1.0; // exclude this component from RMS
-		} else {
-			rms_err += err * err;
-		}
-		// Optional printing
-		if (this->suppress_output == 0) {
-			amrex::Print() << std::setw(25) << std::left << name << std::setw(20) << std::right << std::scientific << std::setprecision(4)
-				       << abs_err;
+		return std::make_pair(std::sqrt(sum_sq), count);
+	};
 
-			if (std::isnan(rel_err)) {
-				amrex::Print() << std::setw(20) << "N/A\n";
-			} else {
-				amrex::Print() << std::setw(20) << std::scientific << std::setprecision(4) << rel_err << "\n";
-			}
-		}
-	}
+	auto [rms_abs, abs_count] = compute_rms(comp_errors, [](const auto &e) { return std::get<1>(e); });
+	auto [rms_rel, rel_count] = compute_rms(comp_errors, [](const auto &e) { return std::get<2>(e); });
 
-	// Final RMS
-	if (N == 0.0) {
+	if (abs_count == 0) {
 		if (this->suppress_output == 0) {
 			amrex::Print() << "\nNo non-zero errors found. RMS error is zero.\n\n";
 		}
 		return 0.0;
 	}
-	rms_err = std::sqrt(rms_err / N);
+
+	amrex::Real rms_err = rms_abs;
+	if (use_rel_err) {
+		if (rel_count > 0) {
+			rms_err = rms_rel;
+		} else if (this->suppress_output == 0) {
+			amrex::Print() << "\nNo valid relative errors found. Falling back to absolute errors.\n";
+		}
+	}
 
 	if (this->suppress_output == 0) {
 		amrex::Print() << std::string(70, '=') << "\n";
 		amrex::Print() << "\nRMS of errors across all components = " << rms_err << "\n\n";
 	}
-
 	return rms_err;
 }
 
