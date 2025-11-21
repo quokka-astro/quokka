@@ -940,8 +940,8 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 	}
 	for (const auto &[name, abs_err, rel_err] : comp_errors) {
 		if (this->suppress_output == 0) {
-			amrex::Print() << std::setw(25) << std::left << name 
-			               << std::setw(20) << std::right << std::scientific << std::setprecision(4) << abs_err;
+			amrex::Print() << std::setw(25) << std::left << name << std::setw(20) << std::right << std::scientific << std::setprecision(4)
+				       << abs_err;
 			if (std::isnan(rel_err)) {
 				amrex::Print() << std::setw(20) << std::right << "N/A" << "\n";
 			} else {
