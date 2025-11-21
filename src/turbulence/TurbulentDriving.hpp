@@ -128,7 +128,15 @@ template <typename problem_t> class turbulentDriving
 		}
 
 		auto stdd = reduce_data.value();
-		disp = {std::sqrt(amrex::get<0>(stdd) / sum_rho), std::sqrt(amrex::get<1>(stdd) / sum_rho), std::sqrt(amrex::get<2>(stdd) / sum_rho)};
+		amrex::Real dispx = amrex::get<0>(stdd);
+		amrex::Real dispy = amrex::get<1>(stdd);
+		amrex::Real dispz = amrex::get<2>(stdd);
+
+		amrex::ParallelDescriptor::ReduceRealSum(dispx);
+		amrex::ParallelDescriptor::ReduceRealSum(dispy);
+		amrex::ParallelDescriptor::ReduceRealSum(dispz);
+
+		disp = {std::sqrt(dispx / sum_rho), std::sqrt(dispy / sum_rho), std::sqrt(dispz / sum_rho)};
 		amrex::Gpu::copy(amrex::Gpu::deviceToHost, disp.begin(), disp.end(), host_disp.begin());
 	}
 };
