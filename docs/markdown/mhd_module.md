@@ -47,23 +47,25 @@ dual-energy synchronisation step.
 
 ## Edge-centred electromotive forces
 
-`MHDSystem::ComputeEMF` constructs edge-centred EMFs $\mathcal{E} = -\vec{v}\times\vec{B}$ by
-combining face-centred magnetic fields with either
+`MHDSystem::ComputeEMF` constructs either cell-centered or edge-centred EMFs $\mathcal{E} = -\vec{v}\times\vec{B}$ by
+combining face-centred magnetic fields with one of the three schemes selected by
+`emf_computinging_scheme`: 
 
-- reconstructed velocities obtained from cell-centred states (`emf_scheme = 0`),
-  or
-- the face-centred velocity returned by the Riemann solver (`emf_scheme = 1`).
+- `FelkerStone2017` – reconstructed velocities from cell-centered states to edges.
+- `Balsara2025` – average of face-centered magnetic fields with cell-centered velocities, with subsequent EMF calculation at cell-center then reconstructed EMF to edges
+- `Quokka2026` - face-centered velocity returned by the Riemann solver reconstructed to edges 
 
 The stencil used in this reconstruction is controlled by `emf_reconstruction_order`
 with the same order options as the flux reconstruction. After reconstruction,
 Quokka averages the four quadrant-centred EMFs surrounding each edge using one of
-two formulas selected by `emf_averaging_type`:
+three formulas selected by `emf_averaging_scheme`:
 
-- `BalsaraSpicer` – arithmetic averaging of the four quadrants.
-- `LD04` – the Londrillo & Del Zanna (2004) upwind constrained-transport
+- `BalsaraSpicer2004` – arithmetic averaging of the four quadrants.
+- `LondrilloDelZanna2004` – the Londrillo & Del Zanna (2004) upwind constrained-transport
   formula, which weights the quadrants using characteristic MHD signal speeds.
+- `Balsara2025` - EMF averaging with a dissapative term from wavespeeds and magnetic field jumps 
 
-During the LD04 average, the code leverages the fast magnetosonic speeds
+During the LondrilloDelZanna2004 average, the code leverages the fast magnetosonic speeds
 computed at interfaces during the Riemann solve so that the EMF averaging is properly upwinded
 without requiring a full state reconstruction and eigenvalue computation.
 
@@ -119,10 +121,9 @@ more detail in [Runtime parameters](parameters.md):
   3 = PPM).
 - `emf_reconstruction_order` – spatial order for the EMF reconstruction
   (default 5 = extrema-preserving PPM).
-- `emf_averaging_type` – choose `BalsaraSpicer` or `LD04` for edge averaging
-  (default `LD04`).
-- `emf_scheme` – set to 0 to reconstruct edge velocities from cell-centred data
-  or 1 to reuse the face-centred Riemann velocity (default 1).
+- `emf_compute_scheme` – choose `FelkerStone2017`, `Balsara2025`, or `Quokka2026` for computing the emf either at cell-center or at the edge (default `Balsara2025`).
+- `emf_averaging_type` – choose `BalsaraSpicer2004`, `LondrilloDelZanna2004`, or `Balsara2025` for edge averaging
+  (default `Balsara2025`).
 - `artificial_viscosity_k` – optional scalar viscosity coefficient that adds a
   diffusive flux to the momentum equations and can damp post-shock oscillations.
 

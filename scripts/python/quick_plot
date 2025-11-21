@@ -46,8 +46,12 @@ Batch processing with particles and custom output
     ./quick_plot plt00* -f rho --particles CIC_particles --outdir figures -j 4
 
 Time-filtered sequence with annotations. This is helpful when the output is too dense or is not regularly spaced in time.
+When --time_interval is specified, frames are generated at regular time intervals. If the interval is smaller than
+the gap between snapshots, the same snapshot will be duplicated multiple times. The basename index is padded to --ndigits
+digits (default: 5), and a 3-digit suffix is appended (e.g., plt00001 → plt00001000.png, plt00001001.png for ndigits=5).
 The '--grids' adds AMReX box boundaries to the plot. The '--top_left_text' adds text to the top-left corner of the plot.
     ./quick_plot plt* --time_interval 1_Myr --grids --top_left_text "Simulation X"
+    ./quick_plot plt* --time_interval 0.1_Myr --ndigits 8  # Use 8-digit basename index (e.g., plt00000001000.png)
 
 Advanced customization:
     ./quick_plot plt* --field T --cmap hot --figsize 8 --zlim 1e3 1e6 --p_size 200 --p_marker "*"
@@ -57,11 +61,10 @@ A comprehensive example:
 
 KEY FUNCTIONS:
 ==============
-- plot_one(pltdir, args): Creates a single plot for one snapshot directory, takes args namespace directly
-- filter_snapshots_by_time_interval(): Filters snapshots to create evenly spaced time sequences
+- plot_one(pltdir, args, suffix_idx=None): Creates a single plot for one snapshot directory, takes args namespace and optional suffix
+- filter_snapshots_by_time_interval(): Filters/duplicates snapshots to create evenly spaced time sequences with frame interpolation
 - main(args): Main orchestration function for batch processing, takes args namespace directly
 - parse_args(): Command-line argument parsing with extensive options
-- main(args): Entry point that coordinates the plotting workflow
 
 TECHNICAL DETAILS:
 ==================
@@ -104,7 +107,8 @@ try:
 except ImportError:
     print("scienceplots not installed; using default matplotlib style")
 except Exception as e:
-    print(f"scienceplots installed but failed to load style: {e}; using default matplotlib style")
+    print(
+        f"scienceplots installed but failed to load style: {e}; using default matplotlib style")
 
 # check yt version
 assert yt.__version__ >= "4.3.0", "yt version must be >= 4.3.0"
@@ -112,9 +116,10 @@ assert yt.__version__ >= "4.3.0", "yt version must be >= 4.3.0"
 yt.set_log_level(40)
 
 m_u = 1.660539e-24 * unyt.g
+kelvin = unyt.K
 
 
-def plot_one(pltdir, args):
+def plot_one(pltdir, args, suffix_idx=None):
 
     print(f"processing {pltdir}")
 
@@ -150,8 +155,33 @@ def plot_one(pltdir, args):
     outdir = args.outdir
     hide_all = args.hide_all
     hide_axes = args.hide_axes
+    weight_field = args.weight_field
+    ndigits = args.ndigits
 
     mean_molecular_weight_per_H_atom = mean_molecular_weight * m_u
+
+    field_root = field if not isinstance(field, tuple) else field[1]
+
+    # take a guess on the output filename: e.g. plt00008_Slice_z_density.png, and skip if it already exists
+    fn_slc = {"slc": "Slice", "prj": "Projection"}[kind]
+    # Add suffix if provided (for time interval interpolation)
+    basename = ds.basename
+    if suffix_idx is not None:
+        # Extract the numeric part from basename and pad it to ndigits
+        # Find where the digits start from the end
+        base_str = ds.basename
+        i = len(base_str) - 1
+        while i >= 0 and base_str[i].isdigit():
+            i -= 1
+        prefix = base_str[:i+1]  # e.g., "plt"
+        number = base_str[i+1:]   # e.g., "00001"
+        # Pad the number to ndigits and append the 3-digit suffix
+        padded_number = int(number)
+        basename = f"{prefix}{padded_number:0{ndigits}d}{suffix_idx:03d}"
+    fig_name = f"{basename}_{fn_slc}_{view_dir}_{field_root}.png"
+    if skip_existing and os.path.exists(os.path.join(outdir, fig_name)):
+        print(f"skipping existing figure: {fig_name}")
+        return
 
     # add derived fields
     if field == ("gas", "number_density"):
@@ -159,11 +189,28 @@ def plot_one(pltdir, args):
         ds.add_field(field, function=lambda field, data: data[(
             "gas", "density")] / mean_molecular_weight_per_H_atom, units="cm**-3", sampling_type="cell")
     elif field == ("gas", "temperature"):
-        # add derived field
-        k_B = unyt.physical_constants.boltzmann_constant
-        gamma = 5.0 / 3.0
-        ds.add_field(field, function=lambda field, data: data[("gas", "internal_energy_density")] * (gamma - 1.0) / (
-            data[('gas', 'density')] / mean_molecular_weight_per_H_atom * k_B), units="K", sampling_type="cell")
+        # check if ("boxlib", "temperature") is in the fields list
+        if ("boxlib", "temperature") in ds.derived_field_list:
+            print("temperature is in the boxlib fields list, using boxlib temperature")
+            ds.add_field(field, function=lambda field, data: data[(
+                "boxlib", "temperature")] * kelvin, units="K", sampling_type="cell")
+        else:
+            print("temperature is not in the boxlib fields list, using energy_density and momentum to compute temperature, assuming gamma = 5/3")
+            # add derived field
+            k_B = unyt.physical_constants.boltzmann_constant
+            gamma = 5.0 / 3.0
+
+            def temperature_function(field, data):
+                etot = data[("gas", "total_energy_density")]
+                density = data[("gas", "density")]
+                kinetic_energy = 0.5 * density * \
+                    (data[("gas", "velocity_x")]**2 + data[("gas",
+                     "velocity_y")]**2 + data[("gas", "velocity_z")]**2)
+                eint = etot - kinetic_energy
+                # eint = data[("gas", "internal_energy_density")]
+                return eint * (gamma - 1.0) / (density / mean_molecular_weight_per_H_atom * k_B)
+            ds.add_field(field, function=temperature_function,
+                         units="K", sampling_type="cell")
     elif field == ("gas", "velocity"):
         # add derived field for velocity magnitude
         ds.add_field(field, function=lambda field, data: np.sqrt(data[("gas", "velocity_x")]**2 + data[(
@@ -173,26 +220,15 @@ def plot_one(pltdir, args):
         ds.add_field(field, function=lambda field, data: np.sqrt(data[("gas", "momentum_density_x")]**2 + data[(
             "gas", "momentum_density_y")]**2 + data[("gas", "momentum_density_z")]**2), sampling_type="cell")
 
-    field_root = field if not isinstance(field, tuple) else field[1]
-
     # plot slice or projection
     field_rho = ("gas", "density")
-    if kind in ["slc", "slice"]:
-        kind = "slc"
+    if kind == "slc":
         slc = yt.SlicePlot(ds, view_dir, field, center=center)
-    elif kind in ["prj", "proj", "projection"]:
-        kind = "prj"
+    elif kind == "prj":
         slc = yt.ProjectionPlot(ds, view_dir, field,
-                                weight_field=field_rho, center=center)
+                                weight_field=args.weight_field, center=center)
     else:
         raise ValueError(f"kind {kind} not supported")
-
-    # take a guess on the output filename: e.g. plt00008_Slice_z_density.png, and skip if it already exists
-    fn_slc = {"slc": "Slice", "prj": "Projection"}[kind]
-    fig_name = f"{ds.basename}_{fn_slc}_{view_dir}_{field_root}.png"
-    if skip_existing and os.path.exists(os.path.join(outdir, fig_name)):
-        print(f"skipping existing figure: {fig_name}")
-        return
 
     if cmap == "default":
         cmap = "viridis"
@@ -276,10 +312,12 @@ def plot_one(pltdir, args):
         slc.annotate_timestamp()
     if top_left_text is not None:
         # Add text annotation at the top-left corner with LaTeX support
-        slc.annotate_text((0.02, 0.98), top_left_text, coord_system='axis', text_args={'color': 'white', 'usetex': True, 'verticalalignment': 'top', 'horizontalalignment': 'left'})
+        slc.annotate_text((0.02, 0.98), top_left_text, coord_system='axis', text_args={
+                          'color': 'white', 'usetex': True, 'verticalalignment': 'top', 'horizontalalignment': 'left'})
     if annotate_center is not None:
         # Add text annotation at the center of the domain
-        slc.annotate_text((0.5, 0.5), annotate_center, coord_system='axis', text_args={'color': 'red', 'usetex': True, 'verticalalignment': 'center', 'horizontalalignment': 'center'})
+        slc.annotate_text((0.5, 0.5), annotate_center, coord_system='axis', text_args={
+                          'color': 'red', 'usetex': True, 'verticalalignment': 'center', 'horizontalalignment': 'center'})
     # get cwd
     cwd = os.getcwd()
     # change to outdir
@@ -295,17 +333,21 @@ def plot_one(pltdir, args):
         if hide_axes:
             slc.hide_axes(draw_frame=True)
 
-    fn = slc.save(
-        mpl_kwargs={"dpi": 300, "bbox_inches": "tight", "pad_inches": 0.1})
+    # Save with explicit filename to include suffix if provided
+    fn = slc.save(fig_name,
+                  mpl_kwargs={"dpi": 300, "bbox_inches": "tight", "pad_inches": 0.1})
     print(f"{fn} saved")
     # change back to cwd
     os.chdir(cwd)
 
 
 def filter_snapshots_by_time_interval(pltdirs, time_interval):
-    """Filter snapshots to only include those closest to n * time_interval where n = 0, 1, 2, ..."""
+    """Filter snapshots to only include those closest to n * time_interval where n = 0, 1, 2, ...
+    When time_interval is smaller than the gap between snapshots, duplicate snapshots to fill the gaps.
+    Returns: list of (pltdir, suffix_idx, target_time) tuples, filtered_times, time_unit
+    """
     if time_interval is None:
-        return pltdirs, None, None
+        return [(pltdir, None, None) for pltdir in pltdirs], None, None
 
     if '_' in time_interval:
         time_interval, time_unit = float(time_interval.split('_')[
@@ -331,19 +373,40 @@ def filter_snapshots_by_time_interval(pltdirs, time_interval):
     # Sort by time
     snapshot_times.sort(key=lambda x: x[1])
 
-    # Find snapshots closest to n * time_interval
-    filtered_pltdirs = []
+    # Generate target times at regular intervals and map them to snapshots
+    result = []
     filtered_times = []
-    current_interval = 0
 
-    for pltdir, time in snapshot_times:
-        target_time = current_interval * time_interval
-        if time >= target_time:
-            filtered_pltdirs.append(pltdir)
-            filtered_times.append(time)
-            current_interval += 1
+    min_time = snapshot_times[0][1]
+    max_time = snapshot_times[-1][1]
 
-    return filtered_pltdirs, filtered_times, time_unit
+    # Generate all target times
+    current_time = 0
+    target_times = []
+    while current_time <= max_time:
+        target_times.append(current_time)
+        current_time += time_interval
+
+    # For each target time, find the most recent snapshot that came before or at that time
+    snapshot_idx = 0
+    for target_time in target_times:
+        # Find the appropriate snapshot for this target time
+        # Use the most recent snapshot that has time <= target_time
+        while snapshot_idx < len(snapshot_times) - 1 and snapshot_times[snapshot_idx + 1][1] <= target_time:
+            snapshot_idx += 1
+
+        # Only include if we're at or past the first snapshot
+        if target_time >= snapshot_times[0][1]:
+            pltdir = snapshot_times[snapshot_idx][0]
+
+            # Calculate suffix index for this snapshot
+            # Count how many times this snapshot has been used
+            suffix_idx = sum(1 for p, _, _ in result if p == pltdir)
+
+            result.append((pltdir, suffix_idx, target_time))
+            filtered_times.append(target_time)
+
+    return result, filtered_times, time_unit
 
 
 def test_filter_snapshots_by_time_interval():
@@ -364,6 +427,18 @@ def test_filter_snapshots_by_time_interval():
     print(times)
     print("Filtered times:")
     print(filtered_times)
+
+
+def get_index_from_pltdir(pltdir):
+    base = os.path.basename(pltdir)
+    # find the longest trailing numeric substring
+    i = len(base) - 1
+    while i >= 0 and base[i].isdigit():
+        i -= 1
+    # if the last character wasn't a digit, no numeric suffix exists
+    if i == len(base) - 1:
+        raise ValueError(f"Cannot get index from {pltdir}")
+    return int(base[i + 1:])
 
 
 def main(args):
@@ -399,20 +474,47 @@ def main(args):
     else:
         args.field = ("boxlib", args.field)
 
+    if args.kind in ["slc", "slice"]:
+        args.kind = "slc"
+    elif args.kind in ["prj", "proj", "projection"]:
+        args.kind = "prj"
+    else:
+        raise ValueError(f"kind {args.kind} not supported")
+
+    if args.weight_field in ["density", "rho", "den"]:
+        args.weight_field = ("gas", "density")
+    elif args.weight_field in ["volume", "vol"]:
+        args.weight_field = ("boxlib", "volume")
+    elif args.weight_field is None:
+        pass
+    else:
+        raise ValueError(f"weight_field {args.weight_field} not supported")
+
     # Filter out invalid directories and old directories
     valid_pltdirs = [
         pltdir for pltdir in args.pltdirs if os.path.isdir(pltdir) and ".old." not in os.path.basename(pltdir)
     ]
 
-    # Filter snapshots by time interval if specified
+    # sort pltdir
+    valid_pltdirs = sorted(valid_pltdirs, key=get_index_from_pltdir)[
+        :args.max_snapshots]
+
+    plot_jobs = []
+    # This returns a list of (pltdir, suffix_idx, target_time) tuples
     if args.time_interval is not None:
-        print(f"Filtering snapshots by time interval of {args.time_interval} ...")
-        valid_pltdirs, filtered_times, time_unit = filter_snapshots_by_time_interval(
+        print(
+            f"Filtering snapshots by time interval of {args.time_interval} ...")
+        plot_jobs, filtered_times, time_unit = filter_snapshots_by_time_interval(
             valid_pltdirs, args.time_interval)
         print(f"Filtered times: {filtered_times} {time_unit}")
         print(
-            f"Selected {len(valid_pltdirs)} snapshots based on time interval of {args.time_interval}")
-    print(f"Valid pltdirs: {valid_pltdirs}")
+            f"Selected {len(plot_jobs)} frames based on time interval of {args.time_interval}")
+        print(
+            f"Plot jobs (pltdir, suffix, time): {[(os.path.basename(p), s, t) for p, s, t in plot_jobs[:10]]}{'...' if len(plot_jobs) > 10 else ''}")
+    else:
+        # No time filtering, create jobs without suffix
+        plot_jobs = [(pltdir, None, None) for pltdir in valid_pltdirs]
+        print(f"Valid pltdirs: {[os.path.basename(p) for p in valid_pltdirs]}")
 
     # parse center
     if args.center is not None:
@@ -427,15 +529,16 @@ def main(args):
 
     if args.n_processes == 1 or args.first_only:
         if args.first_only:
-            valid_pltdirs = [valid_pltdirs[0]]
-        for pltdir in valid_pltdirs:
-            plot_one(pltdir, args)
+            plot_jobs = [plot_jobs[0]]
+        for pltdir, suffix_idx, target_time in plot_jobs:
+            plot_one(pltdir, args, suffix_idx)
     else:
         # Create arguments for parallel processing
-        plot_args = [(pltdir, args) for pltdir in valid_pltdirs]
+        plot_args = [(pltdir, args, suffix_idx)
+                     for pltdir, suffix_idx, target_time in plot_jobs]
 
         print(
-            f"Processing {len(valid_pltdirs)} directories using {args.n_processes} processes")
+            f"Processing {len(plot_jobs)} frames using {args.n_processes} processes")
 
         # Process directories in parallel
         with Pool(processes=args.n_processes) as pool:
@@ -520,14 +623,27 @@ def parse_args():
     parser.add_argument("--p_marker", type=str, default='.',
                         help="Marker style for particles. Common options: '.', '*', 'o', '+', 'x'. Default: '.'")
     # particle color
-    parser.add_argument("--p_color", type=str, default=None, 
+    parser.add_argument("--p_color", type=str, default=None,
                         help="Color for particles. Default: None (use default colors)")
     # annotate center
-    parser.add_argument("--annotate_center", type=str, default=None, help="Text to annotate at the center of the domain")
+    parser.add_argument("--annotate_center", type=str, default=None,
+                        help="Text to annotate at the center of the domain")
     # axis units
-    parser.add_argument("--axis_unit", type=str, default=None, help="Units for x and y axis, e.g. 'kpc', 'cm', 'pc'. Default: None (use dataset units)")
-    parser.add_argument("--hide_axes", action="store_true", help="Hide hide axes")
-    parser.add_argument("--hide_all", action="store_true", help="Hide both cb and cb labels")
+    parser.add_argument("--axis_unit", type=str, default=None,
+                        help="Units for x and y axis, e.g. 'kpc', 'cm', 'pc'. Default: None (use dataset units)")
+    parser.add_argument("--hide_axes", action="store_true",
+                        help="Hide hide axes")
+    parser.add_argument("--hide_all", action="store_true",
+                        help="Hide both cb and cb labels")
+    # maximum number of snapshots to plot
+    parser.add_argument("--max_snapshots", type=int, default=1000000,
+                        help="Maximum number of snapshots to plot. Default: None (no filtering)")
+    # field to weight with in projection plot
+    parser.add_argument("--weight_field", type=str, default=None,
+                        help="Field to weight with in projection plot. Default: None (no weighting)")
+    # number of digits for basename index padding
+    parser.add_argument("--ndigits", type=int, default=7,
+                        help="Number of digits to pad the basename index to when using --time_interval. Default: 7")
 
     return parser.parse_args()
 
