@@ -455,6 +455,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	bool useLuminosityTable_ = true;
 	std::string luminosityTableFilename_;
 	quokka::SpacingType rad_table_output_spacing_ = quokka::SpacingType::fast_log;
+	bool splitParticlesOnRestartRefine_ = true; // whether to split particles when restarting with refinement
 
 #if AMREX_SPACEDIM == 3
 	quokka::LuminosityTables<Physics_Traits<problem_t>::nGroups> luminosityTables_;
@@ -847,6 +848,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 		ppp.query("use_luminosity_table", useLuminosityTable_);
 		ppp.query("rad_table", luminosityTableFilename_);
 		ppp.query("rad_table_output_spacing", rad_table_output_spacing_);
+		ppp.query("split_particles_on_restart_refine", splitParticlesOnRestartRefine_);
 
 #if AMREX_SPACEDIM == 3
 		// if particle and radiation are enabled
@@ -3967,7 +3969,7 @@ void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::un
 
 	// Split particles
 #if AMREX_SPACEDIM == 3
-	if (restartRefineFactor_ > 1) {
+	if (restartRefineFactor_ > 1 && splitParticlesOnRestartRefine_) {
 		const int split_factor = gcem::pow(restartRefineFactor_, AMREX_SPACEDIM);
 		amrex::Print() << fmt::format("Splitting {} using split_factor = {}\n", particleRegister_.getParticleTypeName(particle_type), split_factor);
 		auto descriptor = particleRegister_.getParticleDescriptor(particle_type);
