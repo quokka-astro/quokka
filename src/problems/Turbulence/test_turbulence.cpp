@@ -105,9 +105,9 @@ template <> void QuokkaSimulation<BasicTurbulence>::refineGrid(int lev, amrex::T
 
 auto problem_main() -> int
 {
-	auto BCs_cc = quokka::BC<BasicTurbulence>(quokka::BCType::reflecting,  // x: reflecting
-						  quokka::BCType::reflecting,  // y: reflecting
-						  quokka::BCType::reflecting); // z: reflecting
+	auto BCs_cc = quokka::BC<BasicTurbulence>(quokka::BCType::int_dir,  // x: reflecting
+						  quokka::BCType::int_dir,  // y: reflecting
+						  quokka::BCType::int_dir); // z: reflecting
 
 	QuokkaSimulation<BasicTurbulence> sim(BCs_cc);
 
