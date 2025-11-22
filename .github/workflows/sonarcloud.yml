@@ -22,7 +22,7 @@ jobs:
           fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of sonarcloud analysis
           
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install python3-dev python3-numpy python3-matplotlib libopenmpi-dev libhdf5-mpi-dev
+        run: sudo apt-get update && sudo apt-get install python3-dev python3-numpy python3-matplotlib libopenmpi-dev libhdf5-mpi-dev fastbuild
         
       - name: Install sonar-scanner and build-wrapper
         uses: SonarSource/sonarcloud-github-c-cpp@44cc4d3d487fbc35e5c29b0a9d717be218d3a0e8 # v3.2.0
@@ -30,7 +30,7 @@ jobs:
       - name: Run build-wrapper
         run: |
           mkdir build
-          cmake -S . -B build
+          cmake -S . -B build -G "FASTBuild"
           build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} cmake --build build/ --config $BUILD_TYPE --parallel 1
           
       - name: Run sonar-scanner

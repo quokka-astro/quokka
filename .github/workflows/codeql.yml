@@ -67,23 +67,15 @@ jobs:
         if: ${{ matrix.language == 'cpp' }}
         run: |
           sudo apt-get update
-          sudo apt-get install --yes cmake openmpi-bin libopenmpi-dev libhdf5-openmpi-dev
-          .github/workflows/dependencies/dependencies_ccache.sh
-          sudo ln -s /usr/local/bin/ccache /usr/local/bin/g++
+          sudo apt-get install --yes cmake openmpi-bin libopenmpi-dev libhdf5-openmpi-dev fastbuild
 
-      - name: Set Up Cache
-        if: ${{ matrix.language == 'cpp' }}
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: ~/.cache/ccache
-          key: ccache-${{ github.workflow }}-${{ github.job }}-git-${{ github.sha }}
-          restore-keys: |
-               ccache-${{ github.workflow }}-${{ github.job }}-git-
+
 
       - name: Configure (C++)
         if: ${{ matrix.language == 'cpp' }}
         run: |
           cmake -S . -B build                            \
+              -G "FASTBuild"                             \
               -DAMReX_SPACEDIM=3                         \
               -DQUOKKA_PYTHON=OFF                        \
               -DCMAKE_VERBOSE_MAKEFILE=ON                \
@@ -103,19 +95,10 @@ jobs:
       - name: Build (C++)
         if: ${{ matrix.language == 'cpp' }}
         run: |
-          export CCACHE_COMPRESS=1
-          export CCACHE_COMPRESSLEVEL=10
-          export CCACHE_MAXSIZE=30M
-          ccache -z
-
           cmake --build build -j 4
-
-          ccache -s
-          du -hs ~/.cache/ccache
 
           # Make sure CodeQL has something to do
           touch src/main.cpp
-          export CCACHE_DISABLE=1
           cd build
           make -j 4
 

@@ -29,9 +29,7 @@ jobs:
     needs: check_changes
     if: needs.check_changes.outputs.has_non_docs_changes == 'true'
     env:
-      CCACHE_COMPRESS: '1'
-      CCACHE_COMPRESSLEVEL: '10'
-      CCACHE_MAXSIZE: 235M
+
     steps:
     - uses: actions/checkout@ff7abcd0c3c05ccf6adc123a8cd1fd4fb30fb493 # v4.2.2
       with:
@@ -41,34 +39,25 @@ jobs:
     - name: Dependencies
       run: |
         extern/amrex/.github/workflows/dependencies/dependencies_nvcc.sh 13.0
-        .github/workflows/dependencies/dependencies_ccache.sh
-        sudo apt-get update && sudo apt-get install libhdf5-mpi-dev
+        sudo apt-get update && sudo apt-get install libhdf5-mpi-dev fastbuild
 
     - name: Python Dependencies
       run: python3 -m pip install --user cxxfilt
 
-    - name: Set Up Cache
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-      with:
-        path: ~/.cache/ccache
-        key: ccache-${{ github.workflow }}-${{ github.job }}-git-${{ github.sha }}
-        restore-keys: |
-             ccache-${{ github.workflow }}-${{ github.job }}-git-
+
 
     - name: Build
       env:
         CXXFLAGS: "-Werror -Wall -Wextra -Wpedantic -Wshadow"
       run: |
-        export CCACHE_COMPRESS=1
-        export CCACHE_COMPRESSLEVEL=10
-        export CCACHE_MAXSIZE=235M
-        ccache -z
+
 
         export PATH=/usr/local/nvidia/bin:/usr/local/cuda/bin:${PATH}
         export LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
         which nvcc || echo "nvcc not in PATH!"
 
         cmake -S . -B build                              \
+            -G "FASTBuild"                               \
             -DCMAKE_VERBOSE_MAKEFILE=ON                  \
             -DCMAKE_BUILD_TYPE=Release                   \
             -DAMReX_SPACEDIM=3                           \
@@ -77,13 +66,9 @@ jobs:
             -DCMAKE_CXX_COMPILER=$(which g++)            \
             -DCMAKE_CUDA_HOST_COMPILER=$(which g++)      \
             -DAMReX_CUDA_ARCH="9.0"                      \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache           \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache         \
-            -DCMAKE_CUDA_COMPILER_LAUNCHER=ccache	 \
             -DQUOKKA_PYTHON=OFF
         cmake --build build -j 4
 
-        ccache -s
-        du -hs ~/.cache/ccache
+
 
 
