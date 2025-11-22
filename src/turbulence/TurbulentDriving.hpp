@@ -36,6 +36,7 @@
 #include "hydro/hydro_system.hpp"
 #include "math/FastMath.hpp"
 #include "radiation/radiation_system.hpp"
+#include <array>
 #include <cmath>
 #include <filesystem>
 #include <string>
@@ -50,12 +51,12 @@ template <typename problem_t> class turbulentDriving
 	TurbGenEx tg;
 	bool updated = false;
 	amrex::Gpu::DeviceVector<amrex::Real> disp = {-1.0, -1.0, -1.0};
-	std::vector<amrex::Real> host_disp = {-1.0, -1.0, -1.0};
+	std::array<double, 3> host_disp = {-1.0, -1.0, -1.0};
 
 	void update(const amrex::Real &time, amrex::MultiFab &state)
 	{
 		calculate_dispersion(state);
-		updated = time == 0 ? tg.check_for_update(time) : tg.check_for_update(time, host_disp);
+		updated = time == 0 ? tg.check_for_update(time) : tg.check_for_update(time, host_disp.data());
 	}
 
       public:
