@@ -26,6 +26,9 @@ jobs:
         submodules: true
         fetch-depth: 0
 
+    - name: Install CMake
+      run: .github/workflows/dependencies/dependencies_cmake.sh
+
     - name: Install FASTBuild
       run: .github/workflows/dependencies/dependencies_fastbuild.sh
 
