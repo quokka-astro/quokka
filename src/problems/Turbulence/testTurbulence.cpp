@@ -19,10 +19,10 @@
 #include "AMReX_iMultiFab.H"
 #include <cmath>
 
-struct BasicTurbulence {
+struct TurbulentBox {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-template <> struct Physics_Traits<BasicTurbulence> {
+template <> struct Physics_Traits<TurbulentBox> {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
@@ -34,18 +34,18 @@ template <> struct Physics_Traits<BasicTurbulence> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
-template <> struct quokka::EOS_Traits<BasicTurbulence> {
+template <> struct quokka::EOS_Traits<TurbulentBox> {
 	static constexpr double gamma = 1.0;
 	static constexpr double cs_isothermal = 1.0; // dimensionless
 						     // static constexpr double mean_molecular_weight = C::m_u;
 						     // static constexpr double boltzmann_constant = C::k_B;
 };
 
-template <> struct HydroSystem_Traits<BasicTurbulence> {
+template <> struct HydroSystem_Traits<TurbulentBox> {
 	static constexpr bool reconstruct_eint = false;
 };
 
-template <> void QuokkaSimulation<BasicTurbulence>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<TurbulentBox>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// set initial conditions
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -60,17 +60,17 @@ template <> void QuokkaSimulation<BasicTurbulence>::setInitialConditionsOnGrid(q
 		amrex::Real const Egas = Eint;
 		amrex::Real const scalar_density = 0.0;
 
-		state_cc(i, j, k, HydroSystem<BasicTurbulence>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<BasicTurbulence>::x1Momentum_index) = xmom;
-		state_cc(i, j, k, HydroSystem<BasicTurbulence>::x2Momentum_index) = ymom;
-		state_cc(i, j, k, HydroSystem<BasicTurbulence>::x3Momentum_index) = zmom;
-		state_cc(i, j, k, HydroSystem<BasicTurbulence>::energy_index) = Egas;
-		state_cc(i, j, k, HydroSystem<BasicTurbulence>::internalEnergy_index) = Eint;
-		state_cc(i, j, k, HydroSystem<BasicTurbulence>::scalar0_index) = scalar_density;
+		state_cc(i, j, k, HydroSystem<TurbulentBox>::density_index) = rho;
+		state_cc(i, j, k, HydroSystem<TurbulentBox>::x1Momentum_index) = xmom;
+		state_cc(i, j, k, HydroSystem<TurbulentBox>::x2Momentum_index) = ymom;
+		state_cc(i, j, k, HydroSystem<TurbulentBox>::x3Momentum_index) = zmom;
+		state_cc(i, j, k, HydroSystem<TurbulentBox>::energy_index) = Egas;
+		state_cc(i, j, k, HydroSystem<TurbulentBox>::internalEnergy_index) = Eint;
+		state_cc(i, j, k, HydroSystem<TurbulentBox>::scalar0_index) = scalar_density;
 	});
 }
 
-template <> void QuokkaSimulation<BasicTurbulence>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<TurbulentBox>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
 
@@ -81,7 +81,7 @@ template <> void QuokkaSimulation<BasicTurbulence>::refineGrid(int lev, amrex::T
 	const auto tag = tags.arrays();
 
 	amrex::ParallelFor(state_new_cc_[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		const int n = HydroSystem<BasicTurbulence>::density_index;
+		const int n = HydroSystem<TurbulentBox>::density_index;
 		amrex::Real const rho = state[bx](i, j, k, n);
 		amrex::Real const rho_xplus = state[bx](i + 1, j, k, n);
 		amrex::Real const rho_xminus = state[bx](i - 1, j, k, n);
@@ -105,11 +105,11 @@ template <> void QuokkaSimulation<BasicTurbulence>::refineGrid(int lev, amrex::T
 
 auto problem_main() -> int
 {
-	auto BCs_cc = quokka::BC<BasicTurbulence>(quokka::BCType::int_dir,  // x: reflecting
+	auto BCs_cc = quokka::BC<TurbulentBox>(quokka::BCType::int_dir,  // x: reflecting
 						  quokka::BCType::int_dir,  // y: reflecting
 						  quokka::BCType::int_dir); // z: reflecting
 
-	QuokkaSimulation<BasicTurbulence> sim(BCs_cc);
+	QuokkaSimulation<TurbulentBox> sim(BCs_cc);
 
 	sim.setInitialConditions();
 

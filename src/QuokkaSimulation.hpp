@@ -64,7 +64,6 @@ namespace filesystem = experimental::filesystem;
 #include <conduit_node.hpp>
 #endif
 
-#include "../extern/turbulence_generator/plugins/AMReX/TurbGenEx.h"
 #include "SimulationData.hpp"
 #include "chemistry/Chemistry.hpp"
 #include "cooling/ResampledCooling.hpp"
