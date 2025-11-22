@@ -67,7 +67,6 @@ constexpr double delta_b = 1e-4;
 
 constexpr double alfven_speed = bg_mag_amplitude / gcem::sqrt(bg_density);
 constexpr double magnetosonic_speed = gcem::sqrt(alfven_speed * alfven_speed + sound_speed * sound_speed);
-constexpr double bg_mag_x3 = bg_mag_amplitude;
 
 constexpr double omega =
     gcem::sqrt(gcem::pow(k_amplitude, 2) / 2.0 *
