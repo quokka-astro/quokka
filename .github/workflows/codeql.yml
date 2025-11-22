@@ -67,7 +67,8 @@ jobs:
         if: ${{ matrix.language == 'cpp' }}
         run: |
           sudo apt-get update
-          sudo apt-get install --yes cmake openmpi-bin libopenmpi-dev libhdf5-openmpi-dev fastbuild
+          sudo apt-get install --yes cmake openmpi-bin libopenmpi-dev libhdf5-openmpi-dev
+          .github/workflows/dependencies/dependencies_fastbuild.sh
 
 
 

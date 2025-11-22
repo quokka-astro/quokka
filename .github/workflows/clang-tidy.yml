@@ -26,12 +26,15 @@ jobs:
         submodules: true
         fetch-depth: 0
 
+    - name: Install FASTBuild
+      run: .github/workflows/dependencies/dependencies_fastbuild.sh
+
     - uses: ZedThree/clang-tidy-review@4ea7f7b72e7e039588ef5e64de9a845e5a3f8db5 # v0.21.0
       id: review
       with:
         config_file: src/.clang-tidy
         build_dir: build
-        apt_packages: libopenmpi-dev,libhdf5-mpi-dev,python3-dev,python3-numpy,python3-matplotlib,fastbuild
+        apt_packages: libopenmpi-dev,libhdf5-mpi-dev,python3-dev,python3-numpy,python3-matplotlib
         cmake_command: cmake . -B build -G "FASTBuild" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DQUOKKA_PYTHON=ON -DQUOKKA_OPENPMD=ON -DopenPMD_USE_ADIOS2=OFF -DAMReX_SPACEDIM=3
         split_workflow: true
 

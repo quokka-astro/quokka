@@ -41,12 +41,13 @@ jobs:
     - name: Create Build Environment
       run: cmake -E make_directory ${{runner.workspace}}/build
 
-    - name: Install dependencies
-      run: sudo apt-get update && sudo apt-get install python3-dev python3-numpy python3-matplotlib python3-pip libopenmpi-dev libhdf5-mpi-dev fastbuild
+        - name: Install dependencies
 
+          run: sudo apt-get update && sudo apt-get install python3-dev python3-numpy python3-matplotlib python3-pip libopenmpi-dev libhdf5-mpi-dev
 
+    
 
-    - name: Install Clang 20.x
+        - name: Install Clang 20.x
       run: sudo mkdir -m 0755 -p /etc/apt/keyrings/ && curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/llvm-snapshot.gpg.key && sudo echo "deb [signed-by=/etc/apt/keyrings/llvm-snapshot.gpg.key] http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null && sudo apt-get clean && sudo apt-get update -y && sudo apt-get install -y --no-install-recommends clang-20 llvm-20 libomp-20-dev libclang-rt-20-dev clangd-20 lld-20
 
 
@@ -59,7 +60,7 @@ jobs:
     - name: Configure CMake
       shell: bash
       working-directory: ${{runner.workspace}}/build
-      run: cmake -G "FASTBuild" $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_BUILD_TYPE=Release -DENABLE_HWASAN=ON -DCMAKE_CXX_FLAGS="-fPIC" -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld" -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20 -DAMReX_SPACEDIM=1
+      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_BUILD_TYPE=Release -DENABLE_HWASAN=ON -DCMAKE_CXX_FLAGS="-fPIC" -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld" -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20 -DAMReX_SPACEDIM=1
 
     - name: Build
       working-directory: ${{runner.workspace}}/build

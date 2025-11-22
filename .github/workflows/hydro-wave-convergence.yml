@@ -37,7 +37,10 @@ jobs:
       run: cmake -E make_directory ${{ runner.workspace }}/build
 
     - name: Install dependencies
-      run: sudo apt-get update && sudo apt-get install gcc-11 g++-11 python3-dev python3-numpy python3-matplotlib python3-pip libopenmpi-dev libhdf5-mpi-dev fastbuild
+      run: sudo apt-get update && sudo apt-get install gcc-11 g++-11 python3-dev python3-numpy python3-matplotlib python3-pip libopenmpi-dev libhdf5-mpi-dev
+
+    - name: Install FASTBuild
+      run: .github/workflows/dependencies/dependencies_fastbuild.sh
 
     - name: Install Canary
       run: python3 -m pip install "canary-wm @ git+https://github.com/sandialabs/canary"

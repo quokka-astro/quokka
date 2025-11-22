@@ -39,7 +39,8 @@ jobs:
     - name: Dependencies
       run: |
         extern/amrex/.github/workflows/dependencies/dependencies_nvcc.sh 13.0
-        sudo apt-get update && sudo apt-get install libhdf5-mpi-dev fastbuild
+        sudo apt-get update && sudo apt-get install libhdf5-mpi-dev
+        .github/workflows/dependencies/dependencies_fastbuild.sh
 
     - name: Python Dependencies
       run: python3 -m pip install --user cxxfilt
