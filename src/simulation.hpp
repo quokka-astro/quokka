@@ -199,6 +199,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real reltolPoisson_ = 1.0e-5;			     // default
 	amrex::Real abstolPoisson_ = 1.0e-5;			     // default (scaled by minimum RHS value)
 	int poissonSupercycleInterval_ = 1;			     // number of coarse steps between Poisson solves (default: 1)
+	bool splitParticlesOnRestartRefine_ = true; // whether to split particles when restarting with refinement
 	amrex::Vector<amrex::MultiFab> phi;
 
 	amrex::Real densityFloor_ = 0.0; // default
@@ -455,7 +456,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	bool useLuminosityTable_ = true;
 	std::string luminosityTableFilename_;
 	quokka::SpacingType rad_table_output_spacing_ = quokka::SpacingType::fast_log;
-	bool splitParticlesOnRestartRefine_ = true; // whether to split particles when restarting with refinement
 
 #if AMREX_SPACEDIM == 3
 	quokka::LuminosityTables<Physics_Traits<problem_t>::nGroups> luminosityTables_;

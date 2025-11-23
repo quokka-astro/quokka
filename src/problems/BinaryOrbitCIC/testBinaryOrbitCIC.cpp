@@ -150,6 +150,15 @@ template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 	++cycle;
 }
 
+template <> void QuokkaSimulation<BinaryOrbit>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+{
+	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
+		const amrex::Box &box = mfi.validbox();
+		const auto tag = tags.array(mfi);
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { tag(i, j, k) = amrex::TagBox::SET; });
+	}
+}
+
 auto problem_main() -> int
 {
 	// read in runtiem parameter geometry.is_periodic
@@ -190,6 +199,7 @@ auto problem_main() -> int
 	amrex::ParmParse const amr_pp("amr");
 	amr_pp.query("n_cell", n_cell);
 	const bool is_refactor = n_cell[0] == 64;
+	const bool is_refactor_splitparticle = is_refactor && sim.splitParticlesOnRestartRefine_;
 
 	// get the number of particles
 	const int n_particles = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getNumParticles();
@@ -233,7 +243,7 @@ auto problem_main() -> int
 				amrex::Print() << "Test failed\n";
 			}
 		} else {
-			const double max_err_tol = 2.0; // max error tol in cell widths
+			const double max_err_tol = (is_refactor_splitparticle) ? 2.0 : 0.05; // max error tol in cell widths
 			if (max_err < max_err_tol) {
 				status = 0;
 				amrex::Print() << "Test passed\n";
