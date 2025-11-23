@@ -271,7 +271,7 @@ auto problem_main() -> int
 	num_diffs += verifyPeriodicBCs(fc_state[amr_level][2], "FC-z");
 	const bool diff_exist = (num_diffs != 0);
 
-	auto errornorm = sim.computeErrorNorm();
+	sim.computeErrorNorm();
 
 	return static_cast<int>(diff_exist);
 }
