@@ -1,9 +1,3 @@
-if (AMReX_SPACEDIM EQUAL 1)
-  add_executable(test_radhydro_pulse_dyn test_radhydro_pulse_dyn.cpp ${QuokkaObjSources})
-
-  if(AMReX_GPU_BACKEND MATCHES "CUDA")
-      setup_target_for_cuda_compilation(test_radhydro_pulse_dyn)
-  endif(AMReX_GPU_BACKEND MATCHES "CUDA")
-
-  add_test(NAME RadhydroPulseDyn COMMAND test_radhydro_pulse_dyn ../inputs/RadhydroPulseDyn.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+if(AMReX_SPACEDIM EQUAL 1)
+  quokka_add_problem(JOB_NAME RadhydroPulseDyn)
 endif()

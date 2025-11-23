@@ -151,7 +151,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
     double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho, double const dt,
     amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter, quokka::valarray<double, nGroups_> const &work,
     quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
-    amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double const resid_tol, double const rel_change_tol, double const tempFloor,
+    amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double const resid_tol, double const rel_change_tol, double const /*tempFloor*/,
     int *p_iteration_counter, int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>
 {
 	// 1. Compute energy exchange
