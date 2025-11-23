@@ -963,38 +963,19 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm
 		}
 		return NAN;
 	}
-
-	auto compute_rms = [](const auto &errors, auto selector) {
-		amrex::Real sum_sq = 0.0;
-		int count = 0;
-		for (const auto &e : errors) {
-			amrex::Real val = selector(e);
-			if (val != 0.0 && !std::isnan(val)) {
-				sum_sq += val * val;
-				++count;
+	amrex::Real rms_err = 0.0;
+	for (const auto &[name, abs_err, rel_err] : comp_errors) {
+		if (use_rel_err) {
+			if (!std::isnan(rel_err)) {
+				rms_err += rel_err * rel_err;
+			} else {
+				rms_err += abs_err * abs_err;
 			}
-		}
-		return std::make_pair(std::sqrt(sum_sq), count);
-	};
-
-	auto [rms_abs, abs_count] = compute_rms(comp_errors, [](const auto &e) { return std::get<1>(e); });
-	auto [rms_rel, rel_count] = compute_rms(comp_errors, [](const auto &e) { return std::get<2>(e); });
-
-	if (abs_count == 0) {
-		if (this->suppress_output == 0) {
-			amrex::Print() << "\nNo non-zero errors found. RMS error is zero.\n\n";
-		}
-		return 0.0;
-	}
-
-	amrex::Real rms_err = rms_abs;
-	if (use_rel_err) {
-		if (rel_count > 0) {
-			rms_err = rms_rel;
-		} else if (this->suppress_output == 0) {
-			amrex::Print() << "\nNo valid relative errors found. Falling back to absolute errors.\n";
+		} else {
+			rms_err += abs_err * abs_err;
 		}
 	}
+	rms_err = std::sqrt(rms_err);
 
 	if (this->suppress_output == 0) {
 		amrex::Print() << std::string(70, '=') << "\n";
