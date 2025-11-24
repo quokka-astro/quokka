@@ -846,6 +846,10 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::print_multifab_f
 
 template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponentErrors() -> std::vector<std::tuple<std::string, amrex::Real, amrex::Real>>
 {
+	//returns a vector of tuples: (component name, absolute error, relative error)
+	//absolute error is normalized by number of cells
+	//relative error is NAN if reference norm is zero
+	
 	std::vector<std::tuple<std::string, amrex::Real, amrex::Real>> comp_errors{};
 
 	// Compute cell-centered errors
@@ -958,6 +962,8 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm(bool use_rel_err) -> amrex::Real
 {
 	const BL_PROFILE("QuokkaSimulation::computeErrorNorm()");
+	// use_rel_err: if true, compute relative error norm; else compute absolute error norm
+	// default: true
 
 	auto comp_errors = computeComponentErrors();
 	if (comp_errors.empty()) {
@@ -969,8 +975,6 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm
 
 	// Get number of cells to convert back from normalized errors to L1 norms
 	const auto n_cells = static_cast<amrex::Real>(state_new_cc_[0].boxArray().numPts());
-
-	// Compute aggregate norms (old code approach)
 	amrex::Real sum_sq_err = 0.0;
 	amrex::Real sum_sq_ref = 0.0;
 
