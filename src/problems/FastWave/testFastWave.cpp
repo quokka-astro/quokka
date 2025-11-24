@@ -122,18 +122,20 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 		state(i, j, k, HydroSystem<FastWave>::energy_index) = Etot;
 		state(i, j, k, HydroSystem<FastWave>::internalEnergy_index) = Eint;
 	} else if (cen == quokka::centering::fc) {
-		const double x1mag = (computeMagneticVectorPotential_z(x1_L, x2_L + dx[1], x3_L + dx[2] / 2, time) -
-				      computeMagneticVectorPotential_z(x1_L, x2_L, x3_L + dx[2] / 2, time)) /
-					 dx[1] -
-				     (computeMagneticVectorPotential_y(x1_L, x2_L + dx[1] / 2, x3_L + dx[2], time) -
-				      computeMagneticVectorPotential_y(x1_L, x2_L + dx[1] / 2, x3_L, time)) /
-					 dx[2];
-		const double x2mag = (computeMagneticVectorPotential_x(x1_L + dx[0] / 2, x2_L, x3_L + dx[2], time) -
-				      computeMagneticVectorPotential_x(x1_L + dx[0] / 2, x2_L, x3_L, time)) /
-					 dx[2] -
-				     (computeMagneticVectorPotential_z(x1_L + dx[0], x2_L, x3_L + dx[2] / 2, time) -
-				      computeMagneticVectorPotential_z(x1_L, x2_L, x3_L + dx[2] / 2, time)) /
-					 dx[0];
+		// commented out so that xmag1 and xmag2 can be explicitly set to 0.0, but needed later when Fast wave is set to run at an angle
+
+		// const double x1mag = (computeMagneticVectorPotential_z(x1_L, x2_L + dx[1], x3_L + dx[2] / 2, time) -
+		// 		      computeMagneticVectorPotential_z(x1_L, x2_L, x3_L + dx[2] / 2, time)) /
+		// 			 dx[1] -
+		// 		     (computeMagneticVectorPotential_y(x1_L, x2_L + dx[1] / 2, x3_L + dx[2], time) -
+		// 		      computeMagneticVectorPotential_y(x1_L, x2_L + dx[1] / 2, x3_L, time)) /
+		// 			 dx[2];
+		// const double x2mag = (computeMagneticVectorPotential_x(x1_L + dx[0] / 2, x2_L, x3_L + dx[2], time) -
+		// 		      computeMagneticVectorPotential_x(x1_L + dx[0] / 2, x2_L, x3_L, time)) /
+		// 			 dx[2] -
+		// 		     (computeMagneticVectorPotential_z(x1_L + dx[0], x2_L, x3_L + dx[2] / 2, time) -
+		// 		      computeMagneticVectorPotential_z(x1_L, x2_L, x3_L + dx[2] / 2, time)) /
+		// 			 dx[0];
 
 		const double x3mag = ((computeMagneticVectorPotential_y(x1_L + dx[0], x2_L + (dx[1] / 2), x3_L, time) -
 				       computeMagneticVectorPotential_y(x1_L, x2_L + (dx[1] / 2), x3_L, time)) /
@@ -143,9 +145,11 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 				      dx[1]);
 
 		if (dir == quokka::direction::x) {
-			state(i, j, k, MHDSystem<FastWave>::bfield_index) = x1mag;
+			// state(i, j, k, MHDSystem<FastWave>::bfield_index) = x1mag;
+			state(i, j, k, MHDSystem<FastWave>::bfield_index + 1) = 0.0;
 		} else if (dir == quokka::direction::y) {
-			state(i, j, k, MHDSystem<FastWave>::bfield_index) = x2mag;
+			// state(i, j, k, MHDSystem<FastWave>::bfield_index) = x2mag;
+			state(i, j, k, MHDSystem<FastWave>::bfield_index) = 0.0;
 		} else if (dir == quokka::direction::z) {
 			state(i, j, k, MHDSystem<FastWave>::bfield_index) = x3mag;
 		}
@@ -244,14 +248,21 @@ auto problem_main() -> int
 	}
 
 	QuokkaSimulation<FastWave> sim(BCs_cc, BCs_fc);
-	sim.computeReferenceSolution_ = true;
+
 	sim.setInitialConditions();
 	sim.evolve();
 
 	// Compute test success condition
 	int status = 0;
 	const double error_tol = 0.002;
-	if (sim.errorNorm_ > error_tol) {
+	// auto comp_errors = sim.computeComponentErrors();
+
+	// error norm must be manually computed since B fields that should be 0 may have small non-zero values due to numerical precision
+
+	double error_norm = 0.0;
+	error_norm = sim.computeErrorNorm();
+
+	if (error_norm > error_tol) {
 		status = 1;
 	}
 

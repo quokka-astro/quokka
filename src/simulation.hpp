@@ -393,6 +393,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	auto getWalltime() -> amrex::Real;
 	auto getCycleWalltime() -> amrex::Real;
 	void setChkFile(std::string const &chkfile_number);
+	[[nodiscard]] auto getOldMF_cc() const -> amrex::Vector<amrex::MultiFab> const &;
+	[[nodiscard]] auto getNewMF_cc() const -> amrex::Vector<amrex::MultiFab> const &;
 	[[nodiscard]] auto getOldMF_fc() const -> amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &;
 	[[nodiscard]] auto getNewMF_fc() const -> amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &;
 
@@ -563,6 +565,10 @@ template <typename problem_t> auto AMRSimulation<problem_t>::getGitHashForAmrex(
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::setChkFile(std::string const &chkfile_number) { restart_chkfile = chkfile_number; }
+
+template <typename problem_t> auto AMRSimulation<problem_t>::getOldMF_cc() const -> const amrex::Vector<amrex::MultiFab> & { return state_old_cc_; }
+
+template <typename problem_t> auto AMRSimulation<problem_t>::getNewMF_cc() const -> const amrex::Vector<amrex::MultiFab> & { return state_new_cc_; }
 
 template <typename problem_t> auto AMRSimulation<problem_t>::getOldMF_fc() const -> const amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> &
 {
@@ -2312,6 +2318,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 					       geom[level].ProbHiArray(), quokka::centering::fc, static_cast<quokka::direction>(idim));
 			// set initial conditions defined by the user
 			setInitialConditionsOnGridFaceVars(grid_elem);
+		}
+		{
+			// sync overlapping face-centred data
+			const auto &periodicity = geom[level].periodicity();
+			auto owner_mask = amrex::OwnerMask(state_new_fc_[level][idim], periodicity);
+			state_new_fc_[level][idim].OverrideSync(*owner_mask, periodicity);
 		}
 		// check that the valid state_new_fc_[level][idim] data is filled properly
 		AMREX_ALWAYS_ASSERT(!state_new_fc_[level][idim].contains_nan(0, ncomp_per_dim_fc));
