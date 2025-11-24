@@ -274,7 +274,7 @@ auto problem_main() -> int
 
 	amrex::Real error_norm = 0.0;
 	if (sol_norm > 0.0) {
-		error_norm = err_norm / sol_norm;	
+		error_norm = err_norm / sol_norm;
 		amrex::Print() << std::string(70, '=') << "\n";
 		amrex::Print() << "\nRelative RMS L1 error norm = " << error_norm << "\n\n";
 	} else {
@@ -286,7 +286,6 @@ auto problem_main() -> int
 			amrex::Print() << "\nAbsolute L1 error norm = " << error_norm << "\n\n";
 		}
 	}
-	
 
 	if (error_norm > error_tol) {
 		status = 1;
