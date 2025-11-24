@@ -2026,10 +2026,12 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxesBds(amrex::MultiFab const &c
 
 	const int reconstructGhost = nghost_vel_ + 1;
 	const int bdsGhostCells = reconstructGhost;
+	const int flatteningGhost = reconstructGhost + 1;
 
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nghost_cc_ >= bdsGhostCells + 2, "BDS reconstruction requires enough ghost cells to cover the stencil plus buffer.");
 
 	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
+	std::array<amrex::MultiFab, 3> flatCoefs;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> facevel;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> leftState;
@@ -2037,6 +2039,10 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxesBds(amrex::MultiFab const &c
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> leftState_bfield;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> rightState_bfield;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> fast_mhd_wavespeeds;
+
+	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		flatCoefs[idim] = amrex::MultiFab(ba, dm, 1, flatteningGhost);
+	}
 
 	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 		auto ba_face = amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim));
@@ -2071,6 +2077,11 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxesBds(amrex::MultiFab const &c
 	// conserved to primitive variables
 	HydroSystem<problem_t>::ConservedToPrimitive(consVar_cc, consVar_fc, primVar, nghost_cc_);
 
+	// compute flattening coefficients (shared with the default hydro path)
+	AMREX_D_TERM(HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X1>(primVar, flatCoefs[0], flatteningGhost);
+		     , HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X2>(primVar, flatCoefs[1], flatteningGhost);
+		     , HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X3>(primVar, flatCoefs[2], flatteningGhost);)
+
 	ComputeBDSReconstructionOptimized(primVar, bds_x_left, bds_x_right, bds_y_left, bds_y_right, bds_z_left, bds_z_right, bdsGhostCells);
 	overwriteFaceStatesWithBds<FluxDir::X1>(bds_x_left, bds_x_right, leftState[0], rightState[0], bdsGhostCells);
 #if AMREX_SPACEDIM >= 2
@@ -2078,6 +2089,18 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxesBds(amrex::MultiFab const &c
 #endif
 #if AMREX_SPACEDIM == 3
 	overwriteFaceStatesWithBds<FluxDir::X3>(bds_z_left, bds_z_right, leftState[2], rightState[2], bdsGhostCells);
+#endif
+
+	// apply post-reconstruction shock flattening to suppress oscillations
+	HydroSystem<problem_t>::template FlattenShocks<FluxDir::X1>(primVar, flatCoefs[0], flatCoefs[1], flatCoefs[2], leftState[0], rightState[0],
+								   reconstructGhost, nvars);
+#if AMREX_SPACEDIM >= 2
+	HydroSystem<problem_t>::template FlattenShocks<FluxDir::X2>(primVar, flatCoefs[0], flatCoefs[1], flatCoefs[2], leftState[1], rightState[1],
+								   reconstructGhost, nvars);
+#endif
+#if AMREX_SPACEDIM == 3
+	HydroSystem<problem_t>::template FlattenShocks<FluxDir::X3>(primVar, flatCoefs[0], flatCoefs[1], flatCoefs[2], leftState[2], rightState[2],
+								   reconstructGhost, nvars);
 #endif
 
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
