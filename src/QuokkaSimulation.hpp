@@ -531,8 +531,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("enabled", enableTurbulence_);
 		hpp.query("settings_path", turbulenceFilename_);
 
-		if (enableTurbulence_)
+		if (enableTurbulence_ == 1) {
 			td = quokka::turbulence::turbulentDriving<problem_t>(turbulenceFilename_);
+		}
 	}
 
 #ifdef CHEMISTRY
@@ -793,7 +794,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	}
 #endif
 
-	if (enableTurbulence_) {
+	if (enableTurbulence_ == 1) {
 		auto const &cellSizes = geom[lev].CellSizeArray();
 		td.computeDriving(state, time, dt, cellSizes);
 	}

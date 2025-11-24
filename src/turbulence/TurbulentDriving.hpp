@@ -48,7 +48,7 @@ namespace quokka::turbulence
 template <typename problem_t> class turbulentDriving
 {
       private:
-	TurbGenEx tg;
+	TurbGenEx tg{};
 	bool updated = false;
 	amrex::Gpu::DeviceVector<amrex::Real> disp = {-1.0, -1.0, -1.0};
 	std::array<double, 3> host_disp = {-1.0, -1.0, -1.0};
@@ -61,11 +61,7 @@ template <typename problem_t> class turbulentDriving
 
       public:
 	turbulentDriving() = default;
-	explicit turbulentDriving(const std::string &fp)
-	{
-		tg = TurbGenEx();
-		tg.init_driving(fp);
-	}
+	explicit turbulentDriving(const std::string &fp) { tg.init_driving(fp); }
 
 	auto computeDriving(amrex::MultiFab &state, const amrex::Real time, const amrex::Real dt_in,
 			    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &cellSizes) -> bool
@@ -78,11 +74,11 @@ template <typename problem_t> class turbulentDriving
 			auto const &data = state.array(mf);
 
 			amrex::FArrayBox forceFieldFab(bx, AMREX_SPACEDIM, amrex::The_Async_Arena());
-			amrex::Array4<amrex::Real> forceField = forceFieldFab.array();
+			amrex::Array4<amrex::Real> const forceField = forceFieldFab.array();
 
 			tg.get_turb_vector_unigrid(forceFieldFab, cellSizes);
 
-			amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept -> auto {
 				const amrex::Real rho = data(i, j, k, HydroSystem<problem_t>::density_index);
 
 				amrex::Real dE = 0;
@@ -108,7 +104,7 @@ template <typename problem_t> class turbulentDriving
 		amrex::Real sum_px = state.sum(HydroSystem<problem_t>::x1Momentum_index, false);
 		amrex::Real sum_py = state.sum(HydroSystem<problem_t>::x2Momentum_index, false);
 		amrex::Real sum_pz = state.sum(HydroSystem<problem_t>::x3Momentum_index, false);
-		amrex::GpuArray<amrex::Real, 3> v_avg = {sum_px / sum_rho, sum_py / sum_rho, sum_pz / sum_rho};
+		amrex::GpuArray<amrex::Real, 3> const v_avg = {sum_px / sum_rho, sum_py / sum_rho, sum_pz / sum_rho};
 
 		amrex::ReduceOps<amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum> reduce_op;
 		amrex::ReduceData<amrex::Real, amrex::Real, amrex::Real> reduce_data(reduce_op);
