@@ -5,7 +5,7 @@
 ndim               = 3              # N-dimensional turbulence driving (1 or 2 or 3).
                                     # Note that ndim = 1.5 or 2.5 will create 2 or 3 vector field components, respectively.
 L                  = 1.0            # Length of simulation domain (box) in [x[y[z]]] (can be comma-separated list to set each component).
-velocity           = 0.6            # Target turbulent velocity dispersion.
+velocity           = 1.0            # Target turbulent velocity dispersion.
                                     # The following parameters (ampl_factor) is used to adjust the driving amplitude in [x[y[z]]],
                                     # to approach the desired target velocity dispersion. Note that it scales as velocity/velocity_measured,
                                     # e.g., given a target velocity dispersion of 'velocity' and a measured velocity dispersion of 'velocity_measured',
