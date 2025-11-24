@@ -987,8 +987,8 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm
 		// If rel_err is NaN or zero, reference was zero, contributes 0 to sum_sq_ref
 	}
 
-	amrex::Real err_norm = std::sqrt(sum_sq_err);
-	amrex::Real sol_norm = std::sqrt(sum_sq_ref);
+	const amrex::Real err_norm = std::sqrt(sum_sq_err);
+	const amrex::Real sol_norm = std::sqrt(sum_sq_ref);
 
 	amrex::Real error_norm = 0.0;
 	if (use_rel_err && sol_norm > 0.0) {
