@@ -119,8 +119,6 @@ void ComputeBdsReconstruction2D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 		auto const &xr = x_R.array(mfi);
 		auto const &yl = y_L.array(mfi);
 		auto const &yr = y_R.array(mfi);
-		auto const &zl = z_L.array(mfi);
-		auto const &zr = z_R.array(mfi);
 
 		amrex::ParallelFor(bx, ncomp, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
 			Real nbr[3][3]; // NOLINT
@@ -218,10 +216,6 @@ void ComputeBdsReconstruction2D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 
 			yl(i, j, k, n) = 0.5 * (c[0] + c[1]);
 			yr(i, j, k, n) = 0.5 * (c[2] + c[3]);
-
-			// z-face states are unused in 2D but set to avoid uninitialized data.
-			zl(i, j, k, n) = 0.0;
-			zr(i, j, k, n) = 0.0;
 		});
 	}
 }

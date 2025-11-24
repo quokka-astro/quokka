@@ -92,12 +92,15 @@ template <> void QuokkaSimulation<BlastProblem>::setInitialConditionsOnGrid(quok
 		state_cc(i, j, k, HydroSystem<BlastProblem>::x2Momentum_index) = rho * vy;
 		state_cc(i, j, k, HydroSystem<BlastProblem>::x3Momentum_index) = rho * vz;
 		state_cc(i, j, k, HydroSystem<BlastProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * v_sq;
+		state_cc(i, j, k, HydroSystem<BlastProblem>::internalEnergy_index) = P / (gamma - 1.);
 
-		// initialize radiation variables to zero
-		state_cc(i, j, k, RadSystem<BlastProblem>::radEnergy_index) = 0;
-		state_cc(i, j, k, RadSystem<BlastProblem>::x1RadFlux_index) = 0;
-		state_cc(i, j, k, RadSystem<BlastProblem>::x2RadFlux_index) = 0;
-		state_cc(i, j, k, RadSystem<BlastProblem>::x3RadFlux_index) = 0;
+		if constexpr (Physics_Traits<BlastProblem>::is_radiation_enabled) {
+			// initialize radiation variables to zero
+			state_cc(i, j, k, RadSystem<BlastProblem>::radEnergy_index) = 0;
+			state_cc(i, j, k, RadSystem<BlastProblem>::x1RadFlux_index) = 0;
+			state_cc(i, j, k, RadSystem<BlastProblem>::x2RadFlux_index) = 0;
+			state_cc(i, j, k, RadSystem<BlastProblem>::x3RadFlux_index) = 0;
+		}
 	});
 }
 
