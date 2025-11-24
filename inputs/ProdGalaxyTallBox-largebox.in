@@ -47,6 +47,8 @@ statistics_interval = 128
 projection_interval = 128
 projection.dirs = x z
 
+particles.split_particles_on_restart_refine = false
+
 derived_vars = temperature c_s
 
 quokka.diagnostics = slice_x slice_z

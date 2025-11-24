@@ -35,6 +35,7 @@ particles.verbose = 1
 particles.disable_SN_feedback = false
 particles.rad_table = ../inputs/lum_data_4groups.csv
 particles.rad_table_output_spacing = fast_log
+particles.split_particles_on_restart_refine = false
 
 density_floor = 1.67e-30 #in g cm^-3
 temperature_floor = 10.0 #K
