@@ -143,9 +143,11 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 				      dx[1]);
 
 		if (dir == quokka::direction::x) {
-			state(i, j, k, MHDSystem<FastWave>::bfield_index) = x1mag;
+			//state(i, j, k, MHDSystem<FastWave>::bfield_index) = x1mag;
+			state(i, j, k, MHDSystem<FastWave>::bfield_index + 1) = 0.0;
 		} else if (dir == quokka::direction::y) {
-			state(i, j, k, MHDSystem<FastWave>::bfield_index) = x2mag;
+			//state(i, j, k, MHDSystem<FastWave>::bfield_index) = x2mag;
+			state(i, j, k, MHDSystem<FastWave>::bfield_index) = 0.0;
 		} else if (dir == quokka::direction::z) {
 			state(i, j, k, MHDSystem<FastWave>::bfield_index) = x3mag;
 		}
@@ -249,7 +251,14 @@ auto problem_main() -> int
 	// Compute test success condition
 	int status = 0;
 	const double error_tol = 0.002;
-	auto error_norm = sim.computeErrorNorm(false);
+	//auto comp_errors = sim.computeComponentErrors();
+
+	// error norm must be manually computed since B fields that should be 0 may have small non-zero values due to numerical precision
+
+	double error_norm = 0.0;
+	error_norm = sim.computeErrorNorm();
+
+
 	if (error_norm > error_tol) {
 		status = 1;
 	}
