@@ -63,28 +63,64 @@ void ComputeBdsReconstruction1D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 			c_right = amrex::max(right_min, amrex::min(right_max, c_right));
 
 			for (int iter = 0; iter < MAX_ITER; ++iter) {
-				Real diff = (c_left + c_right) - 2.0 * s_avg;
-				Real sign_mask = (diff > 0.0) ? 1.0 : -1.0;
-				Real target_limit = s_avg + sign_mask * EPSILON;
-
-				Real mask_left = (diff > 0.0) ? (c_left > target_limit ? 1.0 : 0.0) : (c_left < target_limit ? 1.0 : 0.0);
-				Real mask_right = (diff > 0.0) ? (c_right > target_limit ? 1.0 : 0.0) : (c_right < target_limit ? 1.0 : 0.0);
-				Real count = mask_left + mask_right;
-
-				if (count < 0.5) {
+				Real sum_curr = c_left + c_right;
+				Real delta = sum_curr - 2.0 * s_avg;
+				if (amrex::Math::abs(delta) <= EPSILON) {
 					break;
 				}
 
-				Real correction = diff / count;
-				Real abs_correction = amrex::Math::abs(correction);
-
-				Real dist_left = amrex::Math::abs(c_left - s_avg);
-				Real delta_left = -sign_mask * amrex::min(abs_correction, dist_left);
-				c_left += mask_left * delta_left;
-
-				Real dist_right = amrex::Math::abs(c_right - s_avg);
-				Real delta_right = -sign_mask * amrex::min(abs_correction, dist_right);
-				c_right += mask_right * delta_right;
+				if (delta > 0.0) {
+					// redistribute excess to sides above s_avg, limited by distance to lower bound
+					int count = 0;
+					bool left_cand = (c_left > (s_avg + EPSILON));
+					bool right_cand = (c_right > (s_avg + EPSILON));
+					count += left_cand ? 1 : 0;
+					count += right_cand ? 1 : 0;
+					if (count == 0) {
+						break;
+					}
+					if (left_cand && delta > EPSILON) {
+						Real headroom = c_left - left_min;
+						Real share = delta / static_cast<Real>(count);
+						Real gamma = amrex::min(share, headroom);
+						c_left -= gamma;
+						delta -= gamma;
+						--count;
+					}
+					if (right_cand && delta > EPSILON) {
+						Real headroom = c_right - right_min;
+						Real share = (count > 0) ? (delta / static_cast<Real>(count)) : delta;
+						Real gamma = amrex::min(share, headroom);
+						c_right -= gamma;
+						delta -= gamma;
+					}
+				} else {
+					// redistribute deficit to sides below s_avg, limited by distance to upper bound
+					delta = -delta;
+					int count = 0;
+					bool left_cand = (c_left < (s_avg - EPSILON));
+					bool right_cand = (c_right < (s_avg - EPSILON));
+					count += left_cand ? 1 : 0;
+					count += right_cand ? 1 : 0;
+					if (count == 0) {
+						break;
+					}
+					if (left_cand && delta > EPSILON) {
+						Real headroom = left_max - c_left;
+						Real share = delta / static_cast<Real>(count);
+						Real gamma = amrex::min(share, headroom);
+						c_left += gamma;
+						delta -= gamma;
+						--count;
+					}
+					if (right_cand && delta > EPSILON) {
+						Real headroom = right_max - c_right;
+						Real share = (count > 0) ? (delta / static_cast<Real>(count)) : delta;
+						Real gamma = amrex::min(share, headroom);
+						c_right += gamma;
+						delta -= gamma;
+					}
+				}
 			}
 
 			xl(i, j, k, n) = c_left;
@@ -184,30 +220,58 @@ void ComputeBdsReconstruction2D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 					sum_curr += c[idx];
 				}
 
-				Real diff = sum_curr - 4.0 * s_avg;
-				Real sign_mask = (diff > 0.0) ? 1.0 : -1.0;
-				Real target_limit = s_avg + sign_mask * EPSILON;
-
-				Real count = 0.0;
-				Real mask[4]; // NOLINT
-				for (int idx = 0; idx < 4; ++idx) {
-					bool is_cand = (diff > 0.0) ? (c[idx] > target_limit) : (c[idx] < target_limit);
-					mask[idx] = is_cand ? 1.0 : 0.0;
-					count += mask[idx];
-				}
-
-				if (count < 0.5) {
+				Real delta = sum_curr - 4.0 * s_avg;
+				if (amrex::Math::abs(delta) <= EPSILON) {
 					break;
 				}
 
-				Real correction = diff / count;
-				Real abs_correction = amrex::Math::abs(correction);
-
-				for (int idx = 0; idx < 4; ++idx) {
-					Real dist = amrex::Math::abs(c[idx] - s_avg);
-					Real act_chg = amrex::min(abs_correction, dist);
-					Real delta = -sign_mask * act_chg;
-					c[idx] += mask[idx] * delta;
+				if (delta > 0.0) {
+					// redistribute excess to corners above s_avg, limited by distance to lower bound
+					int count = 0;
+					bool is_cand[4]; // NOLINT
+					for (int idx = 0; idx < 4; ++idx) {
+						is_cand[idx] = (c[idx] > (s_avg + EPSILON));
+						count += is_cand[idx] ? 1 : 0;
+					}
+					if (count == 0) {
+						break;
+					}
+					for (int idx = 0; idx < 4 && delta > EPSILON; ++idx) {
+						if (!is_cand[idx]) {
+							continue;
+						}
+						Real headroom = c[idx] - b_min[idx];
+						Real share = delta / static_cast<Real>(count);
+						Real gamma = amrex::min(share, headroom);
+						c[idx] -= gamma;
+						delta -= gamma;
+						--count;
+					}
+				} else {
+					// redistribute deficit to corners below s_avg, limited by distance to upper bound
+					delta = -delta;
+					int count = 0;
+					bool is_cand[4]; // NOLINT
+					for (int idx = 0; idx < 4; ++idx) {
+						is_cand[idx] = (c[idx] < (s_avg - EPSILON));
+						count += is_cand[idx] ? 1 : 0;
+					}
+					if (count == 0) {
+						break;
+					}
+					for (int idx = 0; idx < 4 && delta > EPSILON; ++idx) {
+						if (!is_cand[idx]) {
+							continue;
+						}
+						Real headroom = b_max[idx] - c[idx];
+						Real share = delta / static_cast<Real>(count);
+						Real gamma = amrex::min(share, headroom);
+						c[idx] += gamma;
+						delta -= gamma;
+						--count;
+					}
+					// restore sign for loop exit check
+					delta = -delta;
 				}
 			}
 
@@ -352,55 +416,64 @@ void ComputeBdsReconstruction3D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 				c[k] = amrex::max(b_min[k], amrex::min(b_max[k], c[k]));
 			}
 
-			// 2. Iterative Heuristic (Branchless)
+			// 2. Iterative heuristic (Nonaka-style redistribution)
 			for (int iter = 0; iter < MAX_ITER; ++iter) {
 				Real sum_curr = 0.0;
 				for (int k = 0; k < 8; ++k) {
 					sum_curr += c[k];
 				}
 
-				Real diff = sum_curr - 8.0 * s_avg;
-
-				// Early exit check - requires reduction across warp or all threads continuing
-				// Since we are in ParallelFor (SIMT), strict early exit causes divergence.
-				// Better to just run the iterations (only 6) or use a predicate mask.
-				// However, if diff is 0, the math below results in 0 correction, so it's safe.
-
-				Real sign_mask = (diff > 0.0) ? 1.0 : -1.0;
-				// If diff > 0, target > s_avg. If diff < 0, target < s_avg.
-				Real target_limit = s_avg + sign_mask * EPSILON;
-
-				Real count = 0.0;
-				Real mask[8]; // 1.0 if candidate, 0.0 if not   // NOLINT
-
-				for (int k = 0; k < 8; ++k) {
-					// Logic: if (sign > 0) return val > target; else return val < target;
-					bool is_cand = (diff > 0.0) ? (c[k] > target_limit) : (c[k] < target_limit);
-					mask[k] = is_cand ? 1.0 : 0.0;
-					count += mask[k];
-				}
-
-				// Avoid divide by zero if count == 0
-				if (count < 0.5) {
+				Real delta = sum_curr - 8.0 * s_avg;
+				if (amrex::Math::abs(delta) <= EPSILON) {
 					break;
 				}
 
-				Real correction = diff / count;
-				Real abs_correction = amrex::Math::abs(correction);
-
-				for (int k = 0; k < 8; ++k) {
-					// Calculate max allowed change: |val - s_avg|
-					Real dist = amrex::Math::abs(c[k] - s_avg);
-
-					// Actual change = min(|correction|, dist)
-					Real act_chg = amrex::min(abs_correction, dist);
-
-					// Apply direction: if diff > 0, we subtract. if diff < 0, we add.
-					// Direction = -sign_mask
-					Real delta = -sign_mask * act_chg;
-
-					// Apply mask
-					c[k] += mask[k] * delta;
+				if (delta > 0.0) {
+					// redistribute excess to corners above s_avg, limited by distance to lower bound
+					int count = 0;
+					bool is_cand[8]; // NOLINT
+					for (int k = 0; k < 8; ++k) {
+						is_cand[k] = (c[k] > (s_avg + EPSILON));
+						count += is_cand[k] ? 1 : 0;
+					}
+					if (count == 0) {
+						break;
+					}
+					for (int k = 0; k < 8 && delta > EPSILON; ++k) {
+						if (!is_cand[k]) {
+							continue;
+						}
+						Real headroom = c[k] - b_min[k];
+						Real share = delta / static_cast<Real>(count);
+						Real gamma = amrex::min(share, headroom);
+						c[k] -= gamma;
+						delta -= gamma;
+						--count;
+					}
+				} else {
+					// redistribute deficit to corners below s_avg, limited by distance to upper bound
+					delta = -delta;
+					int count = 0;
+					bool is_cand[8]; // NOLINT
+					for (int k = 0; k < 8; ++k) {
+						is_cand[k] = (c[k] < (s_avg - EPSILON));
+						count += is_cand[k] ? 1 : 0;
+					}
+					if (count == 0) {
+						break;
+					}
+					for (int k = 0; k < 8 && delta > EPSILON; ++k) {
+						if (!is_cand[k]) {
+							continue;
+						}
+						Real headroom = b_max[k] - c[k];
+						Real share = delta / static_cast<Real>(count);
+						Real gamma = amrex::min(share, headroom);
+						c[k] += gamma;
+						delta -= gamma;
+						--count;
+					}
+					// sign restored implicitly by recomputing delta next iteration
 				}
 			}
 
