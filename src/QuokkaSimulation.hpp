@@ -67,6 +67,7 @@ namespace filesystem = experimental::filesystem;
 #include "cooling/ResampledCooling.hpp"
 #include "eos.H"
 #include "hydro/hydro_system.hpp"
+#include "hydro/bds.hpp"
 #include "hydro/mhd_system.hpp"
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
@@ -166,7 +167,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	int lowLevelDebuggingOutput_ = 0;	// 0 == do nothing; 1 == output intermediate multifabs used in hydro each timestep (ONLY USE FOR DEBUGGING)
 	int integratorOrder_ = 2;		// 1 == forward Euler; 2 == RK2-SSP (default)
-	int reconstructionOrder_ = 3;		// 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM (extrema-preserving)
+	int reconstructionOrder_ = 3;		// 1 == donor cell; 2 == PLM; 3 == PPM (default); 4 == BDS; 5 == xPPM (extrema-preserving)
 	int radiationReconstructionOrder_ = 3;	// 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM
 	int emfReconstructionOrder_ = 5;	// 1 == donor cell; 2 == PLM; 3 == PPM; 5 == xPPM (extrema-preserving, default)
 	int useDualEnergy_ = 1;			// 0 == disabled; 1 == use auxiliary internal energy equation (default)
@@ -317,6 +318,10 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	    -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>,
 			  std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
 
+	auto computeHydroFluxesBds(amrex::MultiFab const &consVar_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, int nvars, int lev)
+	    -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>,
+			  std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
+
 	auto computeFOHydroFluxes(amrex::MultiFab const &consVar_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, int nvars, int lev)
 	    -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>,
 			  std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
@@ -339,6 +344,10 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 				 amrex::MultiFab &leftState_bfield, amrex::MultiFab &rightState_bfield, amrex::MultiFab &x1Flux, amrex::MultiFab &x1FaceVel,
 				 amrex::MultiFab &x1FSpds, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &x1ConsVar_fc_mf, int ng_reconstruct_total,
 				 int nvars);
+
+	template <FluxDir DIR>
+	void overwriteFaceStatesWithBds(amrex::MultiFab const &left_cc, amrex::MultiFab const &right_cc, amrex::MultiFab &left_face,
+					amrex::MultiFab &right_face, int bds_num_ghost);
 
 	void replaceFluxes(std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxes, std::array<amrex::MultiFab, AMREX_SPACEDIM> &FOfluxes,
 			   amrex::iMultiFab &redoFlag);
@@ -1894,6 +1903,14 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 {
 	const BL_PROFILE("QuokkaSimulation::computeHydroFluxes()");
 
+	// BDS reconstruction is handled by a specialized path
+	if (reconstructionOrder_ == 4) {
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			amrex::Abort("BDS reconstruction is not currently supported for MHD.");
+		}
+		return computeHydroFluxesBds(consVar_cc, consVar_fc, nvars, lev);
+	}
+
 	const auto ba = grids[lev];
 	const auto dm = dmap[lev];
 
@@ -1997,6 +2014,97 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 }
 
 template <typename problem_t>
+auto QuokkaSimulation<problem_t>::computeHydroFluxesBds(amrex::MultiFab const &consVar_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc,
+							const int nvars, const int lev)
+    -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>
+{
+	const BL_PROFILE("QuokkaSimulation::computeHydroFluxesBds()");
+
+	const auto ba = grids[lev];
+	const auto dm = dmap[lev];
+
+	const int reconstructGhost = nghost_vel_ + 1;
+	const int bdsGhostCells = reconstructGhost;
+
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nghost_cc_ >= bdsGhostCells + 2, "BDS reconstruction requires enough ghost cells to cover the stencil plus buffer.");
+
+	amrex::MultiFab primVar(ba, dm, nvars, nghost_cc_);
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux;
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> facevel;
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> leftState;
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> rightState;
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> leftState_bfield;
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> rightState_bfield;
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> fast_mhd_wavespeeds;
+
+	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		auto ba_face = amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim));
+		leftState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructGhost);
+		rightState[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructGhost);
+		leftState_bfield[idim] = amrex::MultiFab(ba_face, dm, 2, reconstructGhost);
+		rightState_bfield[idim] = amrex::MultiFab(ba_face, dm, 2, reconstructGhost);
+		flux[idim] = amrex::MultiFab(ba_face, dm, nvars, reconstructGhost - 1);
+		facevel[idim] = amrex::MultiFab(ba_face, dm, 1, reconstructGhost - 1);
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			fast_mhd_wavespeeds[idim] = amrex::MultiFab(ba_face, dm, 2, reconstructGhost - 1);
+		}
+	}
+
+	amrex::MultiFab bds_x_left(ba, dm, nvars, reconstructGhost);
+	amrex::MultiFab bds_x_right(ba, dm, nvars, reconstructGhost);
+	amrex::MultiFab bds_y_left(ba, dm, nvars, reconstructGhost);
+	amrex::MultiFab bds_y_right(ba, dm, nvars, reconstructGhost);
+	amrex::MultiFab bds_z_left(ba, dm, nvars, reconstructGhost);
+	amrex::MultiFab bds_z_right(ba, dm, nvars, reconstructGhost);
+
+	// conserved to primitive variables
+	HydroSystem<problem_t>::ConservedToPrimitive(consVar_cc, consVar_fc, primVar, nghost_cc_);
+
+	ComputeBDSReconstructionOptimized(primVar, bds_x_left, bds_x_right, bds_y_left, bds_y_right, bds_z_left, bds_z_right, bdsGhostCells);
+	overwriteFaceStatesWithBds<FluxDir::X1>(bds_x_left, bds_x_right, leftState[0], rightState[0], bdsGhostCells);
+#if AMREX_SPACEDIM >= 2
+	overwriteFaceStatesWithBds<FluxDir::X2>(bds_y_left, bds_y_right, leftState[1], rightState[1], bdsGhostCells);
+#endif
+#if AMREX_SPACEDIM == 3
+	overwriteFaceStatesWithBds<FluxDir::X3>(bds_z_left, bds_z_right, leftState[2], rightState[2], bdsGhostCells);
+#endif
+
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, FluxDir::X1>(flux[0], facevel[0], leftState[0], rightState[0],
+												     leftState_bfield[0], rightState_bfield[0], primVar, artificialViscosityK_,
+												     &fast_mhd_wavespeeds[0], &consVar_fc[0], nghost_vel_);
+#if AMREX_SPACEDIM >= 2
+		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, FluxDir::X2>(flux[1], facevel[1], leftState[1], rightState[1],
+												     leftState_bfield[1], rightState_bfield[1], primVar, artificialViscosityK_,
+												     &fast_mhd_wavespeeds[1], &consVar_fc[1], nghost_vel_);
+#endif
+#if AMREX_SPACEDIM == 3
+		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, FluxDir::X3>(flux[2], facevel[2], leftState[2], rightState[2],
+												     leftState_bfield[2], rightState_bfield[2], primVar, artificialViscosityK_,
+												     &fast_mhd_wavespeeds[2], &consVar_fc[2], nghost_vel_);
+#endif
+	} else {
+		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLC, FluxDir::X1>(flux[0], facevel[0], leftState[0], rightState[0],
+												     leftState_bfield[0], rightState_bfield[0], primVar, artificialViscosityK_,
+												     nullptr, nullptr, nghost_vel_);
+#if AMREX_SPACEDIM >= 2
+		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLC, FluxDir::X2>(flux[1], facevel[1], leftState[1], rightState[1],
+												     leftState_bfield[1], rightState_bfield[1], primVar, artificialViscosityK_,
+												     nullptr, nullptr, nghost_vel_);
+#endif
+#if AMREX_SPACEDIM == 3
+		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLC, FluxDir::X3>(flux[2], facevel[2], leftState[2], rightState[2],
+												     leftState_bfield[2], rightState_bfield[2], primVar, artificialViscosityK_,
+												     nullptr, nullptr, nghost_vel_);
+#endif
+	}
+
+	amrex::Gpu::streamSynchronizeAll();
+
+	return std::make_tuple(std::move(flux), std::move(facevel), std::move(fast_mhd_wavespeeds));
+}
+
+template <typename problem_t>
 template <FluxDir DIR>
 AMREX_FORCE_INLINE void QuokkaSimulation<problem_t>::computeCCPerpBfieldComps(amrex::MultiFab &cc_bfield_perp_comps_mf,
 									      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc) const
@@ -2036,6 +2144,33 @@ AMREX_FORCE_INLINE void QuokkaSimulation<problem_t>::computeCCPerpBfieldComps(am
 		const amrex::Real bx3_m = x3State_fc_bfield_in[bx](i, j, k, b_comp);
 		const amrex::Real bx3_p = x3State_fc_bfield_in[bx](i + delta_x3[0], j + delta_x3[1], k + delta_x3[2], b_comp);
 		cc_bfield_perp_comps_out[bx](i, j, k, 1) = 0.5 * (bx3_m + bx3_p);
+	});
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
+void QuokkaSimulation<problem_t>::overwriteFaceStatesWithBds(amrex::MultiFab const &left_cc, amrex::MultiFab const &right_cc,
+							    amrex::MultiFab &left_face, amrex::MultiFab &right_face, int bds_num_ghost)
+{
+	auto const &left_cc_arrs = left_cc.const_arrays();
+	auto const &right_cc_arrs = right_cc.const_arrays();
+	auto left_face_arrs = left_face.arrays();
+	auto right_face_arrs = right_face.arrays();
+
+	int const ncomp = left_face.nComp();
+
+	amrex::IntVect const ng{AMREX_D_DECL(bds_num_ghost, bds_num_ghost, bds_num_ghost)};
+	amrex::ParallelFor(left_cc, ng, ncomp, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k, int n) noexcept {
+		if constexpr (DIR == FluxDir::X1) {
+			right_face_arrs[bx](i, j, k, n) = left_cc_arrs[bx](i, j, k, n);
+			left_face_arrs[bx](i + 1, j, k, n) = right_cc_arrs[bx](i, j, k, n);
+		} else if constexpr (DIR == FluxDir::X2) {
+			right_face_arrs[bx](i, j, k, n) = left_cc_arrs[bx](i, j, k, n);
+			left_face_arrs[bx](i, j + 1, k, n) = right_cc_arrs[bx](i, j, k, n);
+		} else if constexpr (DIR == FluxDir::X3) {
+			right_face_arrs[bx](i, j, k, n) = left_cc_arrs[bx](i, j, k, n);
+			left_face_arrs[bx](i, j, k + 1, n) = right_cc_arrs[bx](i, j, k, n);
+		}
 	});
 }
 
