@@ -97,6 +97,15 @@ These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`
 | chemistry.max_density_allowed | Float | Maximum density value for which chemistry calculations are accurate. Chemistry is not performed for cells with densities above this threshold. |
 | chemistry.min_density_allowed | Float | Minimum density value for which chemistry calculations are performed. Chemistry is not performed for cells with densities below this threshold. |
 
+## Dust
+
+These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`` function in ``src/QuokkaSimulation.hpp``.
+
+| Parameter Name | Type | Description |
+|----|----|----|
+| dust.alpha | Float array | Inverse of dust stopping time. If not specified, all dust species will use a default stopping time of 1. |
+| dust.omega | Float | Controls the level of frictional heating, with ω = 0 turning it off and ω = 1 depositing all dissipation into the gas. |
+
 ## Particles
 
 These parameters are read in the ``particleParmParse()`` function in ``src/particles/particle_types.hpp``.
