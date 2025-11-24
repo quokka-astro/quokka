@@ -950,14 +950,12 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 		}
 	}
 	if (this->suppress_output == 0) {
-    	amrex::Print() << std::string(70, '-') << "\n";
+		amrex::Print() << std::string(70, '-') << "\n";
 	}
 	return comp_errors;
 }
 
-
-template <typename problem_t>
-auto QuokkaSimulation<problem_t>::computeErrorNorm(bool use_rel_err) -> amrex::Real
+template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm(bool use_rel_err) -> amrex::Real
 {
 	const BL_PROFILE("QuokkaSimulation::computeErrorNorm()");
 	
@@ -971,16 +969,16 @@ auto QuokkaSimulation<problem_t>::computeErrorNorm(bool use_rel_err) -> amrex::R
 
 	// Get number of cells to convert back from normalized errors to L1 norms
 	const auto n_cells = static_cast<amrex::Real>(state_new_cc_[0].boxArray().numPts());
-	
+
 	// Compute aggregate norms (old code approach)
 	amrex::Real sum_sq_err = 0.0;
 	amrex::Real sum_sq_ref = 0.0;
-	
+
 	for (const auto &[name, abs_err, rel_err] : comp_errors) {
 		// Convert normalized errors back to L1 norms
 		amrex::Real L1_err = abs_err * n_cells;
 		sum_sq_err += L1_err * L1_err;
-		
+
 		// Reconstruct reference L1 norm
 		if (!std::isnan(rel_err) && rel_err != 0.0) {
 			amrex::Real L1_ref = (abs_err / rel_err) * n_cells;
@@ -988,10 +986,10 @@ auto QuokkaSimulation<problem_t>::computeErrorNorm(bool use_rel_err) -> amrex::R
 		}
 		// If rel_err is NaN or zero, reference was zero, contributes 0 to sum_sq_ref
 	}
-	
+
 	amrex::Real err_norm = std::sqrt(sum_sq_err);
 	amrex::Real sol_norm = std::sqrt(sum_sq_ref);
-	
+
 	amrex::Real error_norm = 0.0;
 	if (use_rel_err && sol_norm > 0.0) {
 		error_norm = err_norm / sol_norm;
@@ -1010,7 +1008,7 @@ auto QuokkaSimulation<problem_t>::computeErrorNorm(bool use_rel_err) -> amrex::R
 			}
 		}
 	}
-	
+
 	return error_norm;
 }
 
