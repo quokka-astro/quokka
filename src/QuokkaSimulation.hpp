@@ -959,7 +959,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 template <typename problem_t>
 auto QuokkaSimulation<problem_t>::computeErrorNorm(bool use_rel_err) -> amrex::Real
 {
-	BL_PROFILE("QuokkaSimulation::computeErrorNorm()");
+	const BL_PROFILE("QuokkaSimulation::computeErrorNorm()");
 	
 	auto comp_errors = computeComponentErrors();
 	if (comp_errors.empty()) {
