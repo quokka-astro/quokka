@@ -222,8 +222,6 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<SedovProblem> sim(BCs_cc);
 
-	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
-
 	// initialize
 	sim.setInitialConditions();
 

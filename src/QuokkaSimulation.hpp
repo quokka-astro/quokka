@@ -1908,6 +1908,7 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			amrex::Abort("BDS reconstruction is not currently supported for MHD.");
 		}
+		amrex::Print() << "...using BDS reconstruction.\n";
 		return computeHydroFluxesBds(consVar_cc, consVar_fc, nvars, lev);
 	}
 
