@@ -23,10 +23,92 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cubic_interp_fast(Real v_m1, Real 
 	return W0 * (v_m1 + v_p2) + W1 * (v_0 + v_p1);
 }
 
+#if AMREX_SPACEDIM == 1
+void ComputeBdsReconstruction1D(const MultiFab &input_mf, MultiFab &x_L, MultiFab &x_R, MultiFab &y_L, MultiFab &y_R, MultiFab &z_L, MultiFab &z_R,
+				int num_ghost)
+{
+	amrex::ignore_unused(y_L, y_R, z_L, z_R);
+
+	AMREX_ASSERT(num_ghost >= 0);
+	AMREX_ASSERT(input_mf.nGrow() >= num_ghost + 2);
+	AMREX_ASSERT(x_L.nGrow() >= num_ghost);
+	AMREX_ASSERT(x_R.nGrow() >= num_ghost);
+	AMREX_ASSERT(x_L.nComp() == input_mf.nComp());
+	AMREX_ASSERT(x_R.nComp() == input_mf.nComp());
+
+	for (amrex::MFIter mfi(input_mf); mfi.isValid(); ++mfi) {
+		const Box &bx = mfi.growntilebox(num_ghost);
+		int const ncomp = input_mf.nComp();
+
+		auto const &src = input_mf.array(mfi);
+		auto const &xl = x_L.array(mfi);
+		auto const &xr = x_R.array(mfi);
+
+		amrex::ParallelFor(bx, ncomp, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
+			Real s_avg = src(i, j, k, n);
+
+			Real left_min = amrex::min(src(i - 1, j, k, n), s_avg);
+			Real left_max = amrex::max(src(i - 1, j, k, n), s_avg);
+			Real right_min = amrex::min(s_avg, src(i + 1, j, k, n));
+			Real right_max = amrex::max(s_avg, src(i + 1, j, k, n));
+
+			Real c_left = cubic_interp_fast(src(i - 2, j, k, n), src(i - 1, j, k, n), s_avg, src(i + 1, j, k, n));
+			Real c_right = cubic_interp_fast(src(i - 1, j, k, n), s_avg, src(i + 1, j, k, n), src(i + 2, j, k, n));
+
+			Real shift = s_avg - 0.5 * (c_left + c_right);
+			c_left += shift;
+			c_right += shift;
+
+			c_left = amrex::max(left_min, amrex::min(left_max, c_left));
+			c_right = amrex::max(right_min, amrex::min(right_max, c_right));
+
+			for (int iter = 0; iter < MAX_ITER; ++iter) {
+				Real diff = (c_left + c_right) - 2.0 * s_avg;
+				Real sign_mask = (diff > 0.0) ? 1.0 : -1.0;
+				Real target_limit = s_avg + sign_mask * EPSILON;
+
+				Real mask_left = (diff > 0.0) ? (c_left > target_limit ? 1.0 : 0.0) : (c_left < target_limit ? 1.0 : 0.0);
+				Real mask_right = (diff > 0.0) ? (c_right > target_limit ? 1.0 : 0.0) : (c_right < target_limit ? 1.0 : 0.0);
+				Real count = mask_left + mask_right;
+
+				if (count < 0.5) {
+					break;
+				}
+
+				Real correction = diff / count;
+				Real abs_correction = amrex::Math::abs(correction);
+
+				Real dist_left = amrex::Math::abs(c_left - s_avg);
+				Real delta_left = -sign_mask * amrex::min(abs_correction, dist_left);
+				c_left += mask_left * delta_left;
+
+				Real dist_right = amrex::Math::abs(c_right - s_avg);
+				Real delta_right = -sign_mask * amrex::min(abs_correction, dist_right);
+				c_right += mask_right * delta_right;
+			}
+
+			xl(i, j, k, n) = c_left;
+			xr(i, j, k, n) = c_right;
+		});
+	}
+}
+#endif
+
 #if AMREX_SPACEDIM == 2
 void ComputeBdsReconstruction2D(const MultiFab &input_mf, MultiFab &x_L, MultiFab &x_R, MultiFab &y_L, MultiFab &y_R, MultiFab &z_L, MultiFab &z_R, int num_ghost)
 {
 	amrex::ignore_unused(z_L, z_R);
+
+	AMREX_ASSERT(num_ghost >= 0);
+	AMREX_ASSERT(input_mf.nGrow() >= num_ghost + 2);
+	AMREX_ASSERT(x_L.nGrow() >= num_ghost);
+	AMREX_ASSERT(x_R.nGrow() >= num_ghost);
+	AMREX_ASSERT(y_L.nGrow() >= num_ghost);
+	AMREX_ASSERT(y_R.nGrow() >= num_ghost);
+	AMREX_ASSERT(x_L.nComp() == input_mf.nComp());
+	AMREX_ASSERT(x_R.nComp() == input_mf.nComp());
+	AMREX_ASSERT(y_L.nComp() == input_mf.nComp());
+	AMREX_ASSERT(y_R.nComp() == input_mf.nComp());
 
 	for (amrex::MFIter mfi(input_mf); mfi.isValid(); ++mfi) {
 		const Box &bx = mfi.growntilebox(num_ghost);
@@ -356,21 +438,27 @@ void ComputeBDSReconstructionOptimized(const MultiFab &input_mf, MultiFab &x_L, 
 	AMREX_ASSERT(input_mf.nGrow() >= num_ghost + 2);
 	AMREX_ASSERT(x_L.nGrow() >= num_ghost);
 	AMREX_ASSERT(x_R.nGrow() >= num_ghost);
-	AMREX_ASSERT(y_L.nGrow() >= num_ghost);
-	AMREX_ASSERT(y_R.nGrow() >= num_ghost);
 	AMREX_ASSERT(x_L.nComp() == input_mf.nComp());
 	AMREX_ASSERT(x_R.nComp() == input_mf.nComp());
+#if AMREX_SPACEDIM >= 2
+	AMREX_ASSERT(y_L.nGrow() >= num_ghost);
+	AMREX_ASSERT(y_R.nGrow() >= num_ghost);
 	AMREX_ASSERT(y_L.nComp() == input_mf.nComp());
 	AMREX_ASSERT(y_R.nComp() == input_mf.nComp());
+#endif
+#if AMREX_SPACEDIM == 3
 	AMREX_ASSERT(z_L.nGrow() >= num_ghost);
 	AMREX_ASSERT(z_R.nGrow() >= num_ghost);
 	AMREX_ASSERT(z_L.nComp() == input_mf.nComp());
 	AMREX_ASSERT(z_R.nComp() == input_mf.nComp());
+#endif
 
 #if AMREX_SPACEDIM == 3
 	ComputeBdsReconstruction3D(input_mf, x_L, x_R, y_L, y_R, z_L, z_R, num_ghost);
-#else
+#elif AMREX_SPACEDIM == 2
 	// z_L/z_R are ignored in 2D but we keep the parameters for a uniform interface.
 	ComputeBdsReconstruction2D(input_mf, x_L, x_R, y_L, y_R, z_L, z_R, num_ghost);
+#else
+	ComputeBdsReconstruction1D(input_mf, x_L, x_R, y_L, y_R, z_L, z_R, num_ghost);
 #endif
 }

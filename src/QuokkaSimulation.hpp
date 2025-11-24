@@ -167,7 +167,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	int lowLevelDebuggingOutput_ = 0;	// 0 == do nothing; 1 == output intermediate multifabs used in hydro each timestep (ONLY USE FOR DEBUGGING)
 	int integratorOrder_ = 2;		// 1 == forward Euler; 2 == RK2-SSP (default)
-	int reconstructionOrder_ = 3;		// 1 == donor cell; 2 == PLM; 3 == PPM (default); 4 == BDS; 5 == xPPM (extrema-preserving)
+	int reconstructionOrder_ = 4;		// 1 == donor cell; 2 == PLM; 3 == PPM (default); 4 == BDS; 5 == xPPM (extrema-preserving)
 	int radiationReconstructionOrder_ = 3;	// 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM
 	int emfReconstructionOrder_ = 5;	// 1 == donor cell; 2 == PLM; 3 == PPM; 5 == xPPM (extrema-preserving, default)
 	int useDualEnergy_ = 1;			// 0 == disabled; 1 == use auxiliary internal energy equation (default)
@@ -2053,10 +2053,20 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxesBds(amrex::MultiFab const &c
 
 	amrex::MultiFab bds_x_left(ba, dm, nvars, reconstructGhost);
 	amrex::MultiFab bds_x_right(ba, dm, nvars, reconstructGhost);
+#if AMREX_SPACEDIM >= 2
 	amrex::MultiFab bds_y_left(ba, dm, nvars, reconstructGhost);
 	amrex::MultiFab bds_y_right(ba, dm, nvars, reconstructGhost);
+#else
+	amrex::MultiFab bds_y_left;
+	amrex::MultiFab bds_y_right;
+#endif
+#if AMREX_SPACEDIM == 3
 	amrex::MultiFab bds_z_left(ba, dm, nvars, reconstructGhost);
 	amrex::MultiFab bds_z_right(ba, dm, nvars, reconstructGhost);
+#else
+	amrex::MultiFab bds_z_left;
+	amrex::MultiFab bds_z_right;
+#endif
 
 	// conserved to primitive variables
 	HydroSystem<problem_t>::ConservedToPrimitive(consVar_cc, consVar_fc, primVar, nghost_cc_);
