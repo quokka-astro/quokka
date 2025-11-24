@@ -263,7 +263,7 @@ auto problem_main() -> int
 		sum_sq_err += L1_err * L1_err;
 		// Reconstruct reference L1 norm
 		if (!std::isnan(rel_err) && rel_err != 0.0 && abs_err > 10E-15) {
-			amrex::Real L1_ref = (abs_err / rel_err) * n_cells;
+			amrex::Real const L1_ref = (abs_err / rel_err) * n_cells;
 			sum_sq_ref += L1_ref * L1_ref;
 		}
 		// If rel_err is NaN or zero, reference was zero, contributes 0 to sum_sq_ref
