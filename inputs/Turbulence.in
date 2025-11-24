@@ -25,7 +25,6 @@ max_timesteps = 20000
 do_reflux = 0
 do_subcycle = 0
 hydro.artificial_viscosity_coefficient = 0.1
-checkpointtime_interval = 1
 
 turbulence.enabled = 1
 turbulence.settings_path = "../inputs/turbgen.par"

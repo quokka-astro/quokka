@@ -3,7 +3,9 @@
 #include "util/BC.hpp"
 
 #include "AMReX_FabArray.H"
+#include "AMReX_Geometry.H"
 #include "AMReX_GpuDevice.H"
+#include "AMReX_MultiFab.H"
 #include "AMReX_REAL.H"
 #include <cmath>
 
