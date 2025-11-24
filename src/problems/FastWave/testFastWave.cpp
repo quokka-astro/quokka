@@ -250,7 +250,7 @@ auto problem_main() -> int
 	// Compute test success condition
 	int status = 0;
 	const double error_tol = 0.002;
-	 auto comp_errors = sim.computeComponentErrors();
+	auto comp_errors = sim.computeComponentErrors();
 
 	// error norm must be manually computed since B fields that should be 0 may have small non-zero values due to numerical precision
 
@@ -272,7 +272,6 @@ auto problem_main() -> int
 		// If rel_err is NaN or zero, reference was zero, contributes 0 to sum_sq_ref
 	}
 
-	
 	if (error_norm > error_tol) {
 		status = 1;
 	}
