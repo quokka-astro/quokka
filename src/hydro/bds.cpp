@@ -63,23 +63,31 @@ void ComputeBdsReconstruction1D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 			c_right = amrex::max(right_min, amrex::min(right_max, c_right));
 
 			for (int iter = 0; iter < MAX_ITER; ++iter) {
+				Real max_abs = amrex::Math::abs(s_avg);
+				max_abs = amrex::max(max_abs, amrex::Math::abs(c_left));
+				max_abs = amrex::max(max_abs, amrex::Math::abs(c_right));
+				Real tol = EPSILON * max_abs * 2.0;
+				if (max_abs == 0.0) {
+					tol = EPSILON * static_cast<Real>(1.0e-30);
+				}
+
 				Real sum_curr = c_left + c_right;
 				Real delta = sum_curr - 2.0 * s_avg;
-				if (amrex::Math::abs(delta) <= EPSILON) {
+				if (amrex::Math::abs(delta) <= tol) {
 					break;
 				}
 
 				if (delta > 0.0) {
 					// redistribute excess to sides above s_avg, limited by distance to lower bound
 					int count = 0;
-					bool left_cand = (c_left > (s_avg + EPSILON));
-					bool right_cand = (c_right > (s_avg + EPSILON));
+					bool left_cand = (c_left > (s_avg + tol));
+					bool right_cand = (c_right > (s_avg + tol));
 					count += left_cand ? 1 : 0;
 					count += right_cand ? 1 : 0;
 					if (count == 0) {
 						break;
 					}
-					if (left_cand && delta > EPSILON) {
+					if (left_cand && delta > tol) {
 						Real headroom = c_left - left_min;
 						Real share = delta / static_cast<Real>(count);
 						Real gamma = amrex::min(share, headroom);
@@ -87,7 +95,7 @@ void ComputeBdsReconstruction1D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 						delta -= gamma;
 						--count;
 					}
-					if (right_cand && delta > EPSILON) {
+					if (right_cand && delta > tol) {
 						Real headroom = c_right - right_min;
 						Real share = (count > 0) ? (delta / static_cast<Real>(count)) : delta;
 						Real gamma = amrex::min(share, headroom);
@@ -98,14 +106,14 @@ void ComputeBdsReconstruction1D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 					// redistribute deficit to sides below s_avg, limited by distance to upper bound
 					delta = -delta;
 					int count = 0;
-					bool left_cand = (c_left < (s_avg - EPSILON));
-					bool right_cand = (c_right < (s_avg - EPSILON));
+					bool left_cand = (c_left < (s_avg - tol));
+					bool right_cand = (c_right < (s_avg - tol));
 					count += left_cand ? 1 : 0;
 					count += right_cand ? 1 : 0;
 					if (count == 0) {
 						break;
 					}
-					if (left_cand && delta > EPSILON) {
+					if (left_cand && delta > tol) {
 						Real headroom = left_max - c_left;
 						Real share = delta / static_cast<Real>(count);
 						Real gamma = amrex::min(share, headroom);
@@ -113,7 +121,7 @@ void ComputeBdsReconstruction1D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 						delta -= gamma;
 						--count;
 					}
-					if (right_cand && delta > EPSILON) {
+					if (right_cand && delta > tol) {
 						Real headroom = right_max - c_right;
 						Real share = (count > 0) ? (delta / static_cast<Real>(count)) : delta;
 						Real gamma = amrex::min(share, headroom);
@@ -215,13 +223,22 @@ void ComputeBdsReconstruction2D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 			}
 
 			for (int iter = 0; iter < MAX_ITER; ++iter) {
+				Real max_abs = amrex::Math::abs(s_avg);
+				for (int idx = 0; idx < 4; ++idx) {
+					max_abs = amrex::max(max_abs, amrex::Math::abs(c[idx]));
+				}
+				Real tol = EPSILON * max_abs * 4.0;
+				if (max_abs == 0.0) {
+					tol = EPSILON * static_cast<Real>(1.0e-30);
+				}
+
 				Real sum_curr = 0.0;
 				for (int idx = 0; idx < 4; ++idx) {
 					sum_curr += c[idx];
 				}
 
 				Real delta = sum_curr - 4.0 * s_avg;
-				if (amrex::Math::abs(delta) <= EPSILON) {
+				if (amrex::Math::abs(delta) <= tol) {
 					break;
 				}
 
@@ -230,13 +247,13 @@ void ComputeBdsReconstruction2D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 					int count = 0;
 					bool is_cand[4]; // NOLINT
 					for (int idx = 0; idx < 4; ++idx) {
-						is_cand[idx] = (c[idx] > (s_avg + EPSILON));
+						is_cand[idx] = (c[idx] > (s_avg + tol));
 						count += is_cand[idx] ? 1 : 0;
 					}
 					if (count == 0) {
 						break;
 					}
-					for (int idx = 0; idx < 4 && delta > EPSILON; ++idx) {
+					for (int idx = 0; idx < 4 && delta > tol; ++idx) {
 						if (!is_cand[idx]) {
 							continue;
 						}
@@ -253,13 +270,13 @@ void ComputeBdsReconstruction2D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 					int count = 0;
 					bool is_cand[4]; // NOLINT
 					for (int idx = 0; idx < 4; ++idx) {
-						is_cand[idx] = (c[idx] < (s_avg - EPSILON));
+						is_cand[idx] = (c[idx] < (s_avg - tol));
 						count += is_cand[idx] ? 1 : 0;
 					}
 					if (count == 0) {
 						break;
 					}
-					for (int idx = 0; idx < 4 && delta > EPSILON; ++idx) {
+					for (int idx = 0; idx < 4 && delta > tol; ++idx) {
 						if (!is_cand[idx]) {
 							continue;
 						}
@@ -418,13 +435,22 @@ void ComputeBdsReconstruction3D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 
 			// 2. Iterative heuristic (Nonaka-style redistribution)
 			for (int iter = 0; iter < MAX_ITER; ++iter) {
+				Real max_abs = amrex::Math::abs(s_avg);
+				for (int k = 0; k < 8; ++k) {
+					max_abs = amrex::max(max_abs, amrex::Math::abs(c[k]));
+				}
+				Real tol = EPSILON * max_abs * 8.0;
+				if (max_abs == 0.0) {
+					tol = EPSILON * static_cast<Real>(1.0e-30);
+				}
+
 				Real sum_curr = 0.0;
 				for (int k = 0; k < 8; ++k) {
 					sum_curr += c[k];
 				}
 
 				Real delta = sum_curr - 8.0 * s_avg;
-				if (amrex::Math::abs(delta) <= EPSILON) {
+				if (amrex::Math::abs(delta) <= tol) {
 					break;
 				}
 
@@ -433,13 +459,13 @@ void ComputeBdsReconstruction3D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 					int count = 0;
 					bool is_cand[8]; // NOLINT
 					for (int k = 0; k < 8; ++k) {
-						is_cand[k] = (c[k] > (s_avg + EPSILON));
+						is_cand[k] = (c[k] > (s_avg + tol));
 						count += is_cand[k] ? 1 : 0;
 					}
 					if (count == 0) {
 						break;
 					}
-					for (int k = 0; k < 8 && delta > EPSILON; ++k) {
+					for (int k = 0; k < 8 && delta > tol; ++k) {
 						if (!is_cand[k]) {
 							continue;
 						}
@@ -456,13 +482,13 @@ void ComputeBdsReconstruction3D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 					int count = 0;
 					bool is_cand[8]; // NOLINT
 					for (int k = 0; k < 8; ++k) {
-						is_cand[k] = (c[k] < (s_avg - EPSILON));
+						is_cand[k] = (c[k] < (s_avg - tol));
 						count += is_cand[k] ? 1 : 0;
 					}
 					if (count == 0) {
 						break;
 					}
-					for (int k = 0; k < 8 && delta > EPSILON; ++k) {
+					for (int k = 0; k < 8 && delta > tol; ++k) {
 						if (!is_cand[k]) {
 							continue;
 						}
