@@ -23,6 +23,7 @@ pr:
     - extern/fmt
     - extern/yaml-cpp
     - extern/openPMD-api
+    - extern/turbulence
     exclude:
     - docs/*
     - paper/*

@@ -2,21 +2,9 @@
 #include "hydro/hydro_system.hpp"
 #include "util/BC.hpp"
 
-#include "AMReX.H"
-#include "AMReX_BC_TYPES.H"
-#include "AMReX_BLProfiler.H"
-#include "AMReX_BLassert.H"
 #include "AMReX_FabArray.H"
-#include "AMReX_Geometry.H"
 #include "AMReX_GpuDevice.H"
-#include "AMReX_IntVect.H"
-#include "AMReX_MultiFab.H"
-#include "AMReX_ParallelContext.H"
-#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_REAL.H"
-#include "AMReX_SPACE.H"
-#include "AMReX_TableData.H"
-#include "AMReX_iMultiFab.H"
 #include <cmath>
 
 struct TurbulentBox {
@@ -52,21 +40,11 @@ template <> void QuokkaSimulation<TurbulentBox>::setInitialConditionsOnGrid(quok
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		amrex::Real const rho = 1.0;
-		amrex::Real const xmom = 0.0;
-		amrex::Real const ymom = 0.0;
-		amrex::Real const zmom = 0.0;
-		amrex::Real const Eint = 0.0; // P0 / (gamma - 1.0);
-		amrex::Real const Egas = Eint;
-		amrex::Real const scalar_density = 0.0;
-
-		state_cc(i, j, k, HydroSystem<TurbulentBox>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<TurbulentBox>::x1Momentum_index) = xmom;
-		state_cc(i, j, k, HydroSystem<TurbulentBox>::x2Momentum_index) = ymom;
-		state_cc(i, j, k, HydroSystem<TurbulentBox>::x3Momentum_index) = zmom;
-		state_cc(i, j, k, HydroSystem<TurbulentBox>::energy_index) = Egas;
-		state_cc(i, j, k, HydroSystem<TurbulentBox>::internalEnergy_index) = Eint;
-		state_cc(i, j, k, HydroSystem<TurbulentBox>::scalar0_index) = scalar_density;
+		state_cc(i, j, k, HydroSystem<TurbulentBox>::density_index) = 1.0;
+		state_cc(i, j, k, HydroSystem<TurbulentBox>::x1Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<TurbulentBox>::x2Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<TurbulentBox>::x3Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<TurbulentBox>::energy_index) = 0.0;
 	});
 }
 
@@ -105,9 +83,9 @@ template <> void QuokkaSimulation<TurbulentBox>::refineGrid(int lev, amrex::TagB
 
 auto problem_main() -> int
 {
-	auto BCs_cc = quokka::BC<TurbulentBox>(quokka::BCType::int_dir,  // x: reflecting
-						  quokka::BCType::int_dir,  // y: reflecting
-						  quokka::BCType::int_dir); // z: reflecting
+	auto BCs_cc = quokka::BC<TurbulentBox>(quokka::BCType::int_dir,	 // x: periodic
+					       quokka::BCType::int_dir,	 // y: periodic
+					       quokka::BCType::int_dir); // z: periodic
 
 	QuokkaSimulation<TurbulentBox> sim(BCs_cc);
 
