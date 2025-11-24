@@ -259,7 +259,7 @@ auto problem_main() -> int
 	amrex::Real sum_sq_ref = 0.0;
 	for (const auto &[name, abs_err, rel_err] : comp_errors) {
 		// Convert normalized errors back to L1 norms
-		amrex::Real L1_err = abs_err * n_cells;
+		amrex::Real const L1_err = abs_err * n_cells;
 		sum_sq_err += L1_err * L1_err;
 		// Reconstruct reference L1 norm
 		if (!std::isnan(rel_err) && rel_err != 0.0 && abs_err > 10E-15) {
