@@ -143,7 +143,8 @@ void ComputeBdsReconstruction1D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 #endif
 
 #if AMREX_SPACEDIM == 2
-void ComputeBdsReconstruction2D(const MultiFab &input_mf, MultiFab &x_L, MultiFab &x_R, MultiFab &y_L, MultiFab &y_R, MultiFab &z_L, MultiFab &z_R, int num_ghost)
+void ComputeBdsReconstruction2D(const MultiFab &input_mf, MultiFab &x_L, MultiFab &x_R, MultiFab &y_L, MultiFab &y_R, MultiFab &z_L, MultiFab &z_R,
+				int num_ghost)
 {
 	amrex::ignore_unused(z_L, z_R);
 
@@ -317,7 +318,8 @@ void ComputeBdsReconstruction2D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 #endif
 
 #if AMREX_SPACEDIM == 3
-void ComputeBdsReconstruction3D(const MultiFab &input_mf, MultiFab &x_L, MultiFab &x_R, MultiFab &y_L, MultiFab &y_R, MultiFab &z_L, MultiFab &z_R, int num_ghost)
+void ComputeBdsReconstruction3D(const MultiFab &input_mf, MultiFab &x_L, MultiFab &x_R, MultiFab &y_L, MultiFab &y_R, MultiFab &z_L, MultiFab &z_R,
+				int num_ghost)
 {
 	AMREX_ASSERT(num_ghost >= 0);
 	AMREX_ASSERT(input_mf.nGrow() >= num_ghost + 2);
@@ -553,7 +555,8 @@ void ComputeBdsReconstruction3D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 }
 #endif
 
-void ComputeBDSReconstructionOptimized(const MultiFab &input_mf, MultiFab &x_L, MultiFab &x_R, MultiFab &y_L, MultiFab &y_R, MultiFab &z_L, MultiFab &z_R, int num_ghost)
+void ComputeBDSReconstructionOptimized(const MultiFab &input_mf, MultiFab &x_L, MultiFab &x_R, MultiFab &y_L, MultiFab &y_R, MultiFab &z_L, MultiFab &z_R,
+				       int num_ghost)
 {
 	AMREX_ASSERT(num_ghost >= 0);
 	AMREX_ASSERT(input_mf.nGrow() >= num_ghost + 2);
