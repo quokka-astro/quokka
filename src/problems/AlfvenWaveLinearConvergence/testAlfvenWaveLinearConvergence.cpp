@@ -491,7 +491,7 @@ auto runWaveTest(int nx) -> double
 			dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final_x1);
 		}
 		std::cout << "Magnetic Component " << n << " error: " << dU_k << "\n";
-		dU_k=0;
+		dU_k=0.0;
 		for (int i = 0; i < nx_final_x2; ++i) {
 			// Δ Bk = ∑i |Bk,in - Bk,i0| / Nx
 			const amrex::Real U_k0 = val_exact_x2.at(n)[i];
@@ -499,7 +499,7 @@ auto runWaveTest(int nx) -> double
 			dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final_x2);
 		}
 		std::cout << "Magnetic Component " << n << " error: " << dU_k << "\n";
-		dU_k=0;
+		dU_k=0.0;
 		for (int i = 0; i < nx_final_x3; ++i) {
 			// Δ Bk = ∑i |Bk,in - Bk,i0| / Nx
 			const amrex::Real U_k0 = val_exact_x3.at(n)[i];
@@ -513,19 +513,19 @@ auto runWaveTest(int nx) -> double
 	const amrex::Real epsilon = std::sqrt(err_sq);
 	std::cout << "Total error norm: " << epsilon << "\n";
 
-	//	return epsilon;
+	return epsilon;
 
-	const auto errorNorm = sim.computeErrorNorm();
+	//const auto errorNorm = sim.computeErrorNorm();
 
-	return errorNorm;
+	//return errorNorm;
 }
 
 auto problem_main() -> int
 {
 	// Richardson convergence test: run at increasing resolution until target precision is reached
-	const double machine_precision_target = 2.0e-11;
+	const double machine_precision_target = 2.0e-13;
 	const int nx_initial = 32;
-	const int nx_max = 256;
+	const int nx_max = 2048;
 	bool reached_target = false;
 
 	// Silence TinyProfiler so convergence logs stay readable

@@ -62,7 +62,7 @@ constexpr double num_modes = 1;
 constexpr double k_amplitude = 2 * M_PI * num_modes;
 
 // input perturbation: choose to do this via the relative density field in [0, 1]. remember, the linear regime is valid when this perturbation is small
-constexpr double delta_b = 1e-9;
+constexpr double delta_b = 1e-6;
 
 constexpr double alfven_speed = bg_mag_amplitude / gcem::sqrt(bg_density);
 constexpr double magnetosonic_speed = gcem::sqrt(alfven_speed * alfven_speed + sound_speed * sound_speed);
@@ -79,7 +79,7 @@ AMREX_GPU_DEVICE auto computeMagneticVectorPotential_x(double x1, double x2, dou
 AMREX_GPU_DEVICE auto computeMagneticVectorPotential_y(double x1, double /*x2*/, double /*x3*/, double time) -> double
 {
     const double epsilon = delta_b / bg_mag_amplitude;
-    return bg_mag_amplitude * x1 + bg_mag_amplitude * 2.0 * epsilon * std::sin(omega * time - k_amplitude * x1) / k_amplitude;
+    return bg_mag_amplitude * x1 + bg_mag_amplitude * epsilon * std::sin(omega * time - k_amplitude * x1) / k_amplitude;
 }
 AMREX_GPU_DEVICE auto computeMagneticVectorPotential_z(double /*x1*/, double /*x2*/, double /*x3*/, double /*time*/) -> double { return 0.0; }
 
@@ -97,31 +97,38 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 
 	if (cen == quokka::centering::cc) {
 		const double cos_wave_C = std::cos(omega * time - k_amplitude * x1_C);
+		const double epsilon = delta_b / bg_mag_amplitude; // relative B perturbation
 
-		// magnetic field at the center of the cell
+		// --- Magnetic field at the center of the cell (consistent with A_y) ---
 		const double x1mag = 0.0;
 		const double x2mag = 0.0;
-		const double x3mag = bg_mag_amplitude * (1.0 + 2.0 * epsilon * cos_wave_C);
+		// Bz = B0 * (1 + epsilon * cos(...))  <-- matches A_y = B0*x + B0*epsilon*sin(...)/k
+		const double x3mag = bg_mag_amplitude * (1.0 + epsilon * cos_wave_C);
 
-		const double density = bg_density * (1.0 + epsilon * cos_wave_C);
+		// --- Density, pressure, velocities (linear relations) ---
+		const double density  = bg_density * (1.0 + epsilon * cos_wave_C);
+		// using δP = c_s^2 δρ and bg_pressure = c_s^2 * bg_density / gamma_gas
+		// => δP = gamma_gas * bg_pressure * epsilon * cos  (so total P = bg_pressure * (1 + gamma_gas * epsilon cos))
 		const double pressure = bg_pressure * (1.0 + gamma_gas * epsilon * cos_wave_C);
-		const double x1vel = omega/k_amplitude * epsilon * cos_wave_C;  // or use: omega/k_amplitude
+
+		// continuity: δv_x = (ω/k) * (δρ/ρ0) = (ω/k) * epsilon * cos
+		const double x1vel = (omega / k_amplitude) * epsilon * cos_wave_C;
 		const double x2vel = 0.0;
 		const double x3vel = 0.0;
 
-		const double velocity_magnitude = std::sqrt(std::pow(x1vel, 2) + std::pow(x2vel, 2) + std::pow(x3vel, 2));
-		const double momentum = density * velocity_magnitude;
-		const double Ekin = 0.5 * std::pow(momentum, 2) / density;
-		const double Emag = 0.5 * (x1mag * x1mag + x2mag * x2mag + x3mag * x3mag);
-		const double Eint = pressure / (gamma_gas - 1);
-		const double Etot = Ekin + Emag + Eint;
+		// Energies (consistent linearized contributions)
+		const double Ekin = 0.5 * density * (x1vel*x1vel + x2vel*x2vel + x3vel*x3vel);
+		const double Emag = 0.5 * (x1mag*x1mag + x2mag*x2mag + x3mag*x3mag);
+		const double Eint = pressure / (gamma_gas - 1.0);
+		const double Etot = Eint + Ekin + Emag;
 
-		state(i, j, k, HydroSystem<FastWaveConvergence>::density_index) = density;
-		state(i, j, k, HydroSystem<FastWaveConvergence>::x1Momentum_index) = x1vel * density;
-		state(i, j, k, HydroSystem<FastWaveConvergence>::x2Momentum_index) = x2vel * density;
-		state(i, j, k, HydroSystem<FastWaveConvergence>::x3Momentum_index) = x3vel * density;
-		state(i, j, k, HydroSystem<FastWaveConvergence>::energy_index) = Etot;
-		state(i, j, k, HydroSystem<FastWaveConvergence>::internalEnergy_index) = Eint;
+		// --- assign into state (match your indices) ---
+		state(i, j, k, HydroSystem<FastWaveConvergence>::density_index)       = density;
+		state(i, j, k, HydroSystem<FastWaveConvergence>::x1Momentum_index)   = density * x1vel;
+		state(i, j, k, HydroSystem<FastWaveConvergence>::x2Momentum_index)   = density * x2vel;
+		state(i, j, k, HydroSystem<FastWaveConvergence>::x3Momentum_index)   = density * x3vel;
+		state(i, j, k, HydroSystem<FastWaveConvergence>::internalEnergy_index)= Eint;
+		state(i, j, k, HydroSystem<FastWaveConvergence>::energy_index)       = Etot;
 	} else if (cen == quokka::centering::fc) {
 		// commented out so that xmag1 and xmag2 can be explicitly set to 0.0, but needed later when Fast wave is set to run at an angle
 
@@ -241,9 +248,6 @@ auto runWaveTest(int nx) -> double
 	const double max_time = 0.707;
 	const int max_timesteps = std::max(20000, nx * 100);
 
-	// std::cout << "omega = " << omega << std::endl;
-	// std::cout << "k = " << k_amplitude << std::endl;
-	// std::cout << "vf = omega/k = " << omega/k_amplitude << std::endl;
 	// // Problem initialization
 	const int ncomp_cc = Physics_Indices<FastWaveConvergence>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
@@ -356,7 +360,7 @@ auto runWaveTest(int nx) -> double
 
 	return epsilon;
 
-	const auto errorNorm = sim.computeErrorNorm();
+//	const auto errorNorm = sim.computeErrorNorm();
 
 //	return errorNorm;
 }
