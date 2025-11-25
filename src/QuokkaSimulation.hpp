@@ -2077,8 +2077,9 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxesBds(amrex::MultiFab const &c
 	// conserved to primitive variables
 	HydroSystem<problem_t>::ConservedToPrimitive(consVar_cc, consVar_fc, primVar, nghost_cc_);
 
+	// BDS reconstruction
 	ComputeBDSReconstructionOptimized(primVar, bds_x_left, bds_x_right, bds_y_left, bds_y_right, bds_z_left, bds_z_right, bdsGhostCells);
-	
+
 	overwriteFaceStatesWithBds<FluxDir::X1>(bds_x_left, bds_x_right, leftState[0], rightState[0], bdsGhostCells);
 #if AMREX_SPACEDIM >= 2
 	overwriteFaceStatesWithBds<FluxDir::X2>(bds_y_left, bds_y_right, leftState[1], rightState[1], bdsGhostCells);
@@ -2086,25 +2087,6 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxesBds(amrex::MultiFab const &c
 #if AMREX_SPACEDIM == 3
 	overwriteFaceStatesWithBds<FluxDir::X3>(bds_z_left, bds_z_right, leftState[2], rightState[2], bdsGhostCells);
 #endif
-
-#if 0
-	// compute flattening coefficients (shared with the default hydro path)
-	AMREX_D_TERM(HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X1>(primVar, flatCoefs[0], flatteningGhost);
-		     , HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X2>(primVar, flatCoefs[1], flatteningGhost);
-		     , HydroSystem<problem_t>::template ComputeFlatteningCoefficients<FluxDir::X3>(primVar, flatCoefs[2], flatteningGhost);)
-	
-	// apply post-reconstruction shock flattening to suppress oscillations
-	HydroSystem<problem_t>::template FlattenShocks<FluxDir::X1>(primVar, flatCoefs[0], flatCoefs[1], flatCoefs[2], leftState[0], rightState[0],
-								   reconstructGhost, nvars);
-#if AMREX_SPACEDIM >= 2
-	HydroSystem<problem_t>::template FlattenShocks<FluxDir::X2>(primVar, flatCoefs[0], flatCoefs[1], flatCoefs[2], leftState[1], rightState[1],
-								   reconstructGhost, nvars);
-#endif
-#if AMREX_SPACEDIM == 3
-	HydroSystem<problem_t>::template FlattenShocks<FluxDir::X3>(primVar, flatCoefs[0], flatCoefs[1], flatCoefs[2], leftState[2], rightState[2],
-								   reconstructGhost, nvars);
-#endif
-#endif // if 0
 
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, FluxDir::X1>(flux[0], facevel[0], leftState[0], rightState[0],

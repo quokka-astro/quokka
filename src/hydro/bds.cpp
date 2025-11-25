@@ -11,8 +11,8 @@ using Box = amrex::Box;
 // ------------------------------------------------------------------
 constexpr Real W0 = -1.0 / 12.0;
 constexpr Real W1 = 7.0 / 12.0;
-constexpr Real EPSILON = 1.0e-10;
-constexpr int MAX_ITER = 6;
+constexpr Real EPSILON = 1.0e-12;
+constexpr int MAX_ITER = 20;
 
 // ------------------------------------------------------------------
 // Optimized Helper
@@ -68,7 +68,7 @@ void ComputeBdsReconstruction1D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 				max_abs = amrex::max(max_abs, amrex::Math::abs(c_right));
 				Real tol = EPSILON * max_abs * 2.0;
 				if (max_abs == 0.0) {
-					tol = EPSILON * static_cast<Real>(1.0e-30);
+					tol = EPSILON * static_cast<Real>(1.0e-40);
 				}
 
 				Real sum_curr = c_left + c_right;
@@ -229,7 +229,7 @@ void ComputeBdsReconstruction2D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 				}
 				Real tol = EPSILON * max_abs * 4.0;
 				if (max_abs == 0.0) {
-					tol = EPSILON * static_cast<Real>(1.0e-30);
+					tol = EPSILON * static_cast<Real>(1.0e-40);
 				}
 
 				Real sum_curr = 0.0;
@@ -441,7 +441,7 @@ void ComputeBdsReconstruction3D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 				}
 				Real tol = EPSILON * max_abs * 8.0;
 				if (max_abs == 0.0) {
-					tol = EPSILON * static_cast<Real>(1.0e-30);
+					tol = EPSILON * static_cast<Real>(1.0e-40);
 				}
 
 				Real sum_curr = 0.0;
