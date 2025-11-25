@@ -30,7 +30,6 @@ Backtrace.*
 # files in tests/ folder
 /tests/
 !/tests/matplotlibrc
-!/tests/Makefile
 # !/tests/ascent_actions.yaml
 
 # LaTeX files
