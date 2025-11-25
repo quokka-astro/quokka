@@ -422,18 +422,19 @@ auto problem_main() -> int
 	}
 
 	QuokkaSimulation<AlfvenWaveLinear> sim(BCs_cc, BCs_fc);
-	sim.computeReferenceSolution_ = true;
+
 	sim.setInitialConditions();
 	sim.evolve();
 
 	int status = 1;
 	const double error_tol = 0.005;
-	if (sim.errorNorm_ < error_tol) {
+	amrex::Real const error_norm = sim.computeErrorNorm();
+	if (error_norm < error_tol) {
 		status = 0;
-		amrex::Print() << "Error norm = " << sim.errorNorm_ << "\n";
+		amrex::Print() << "Error norm = " << error_norm << "\n";
 		amrex::Print() << "test passed\n";
 	} else {
-		amrex::Print() << "Error norm = " << sim.errorNorm_ << "\n";
+		amrex::Print() << "Error norm = " << error_norm << "\n";
 		amrex::Print() << "test failed\n";
 	}
 
