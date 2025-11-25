@@ -365,7 +365,6 @@ auto problem_main() -> int
 	// sim.initDt_ = initial_dt;
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
-	sim.computeReferenceSolution_ = true;
 
 	// Main time loop
 	sim.setInitialConditions();
@@ -374,7 +373,8 @@ auto problem_main() -> int
 	// Compute test success condition
 	int status = 0;
 	const double error_tol = 0.002;
-	if (sim.errorNorm_ > error_tol) {
+	amrex::Real const error_norm = sim.computeErrorNorm();
+	if (error_norm > error_tol) {
 		status = 1;
 	}
 	return status;

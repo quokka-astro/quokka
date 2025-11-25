@@ -256,7 +256,7 @@ auto problem_main() -> int
 	}
 
 	QuokkaSimulation<MHDBitwiseICs> sim(BCs_cc, BCs_fc);
-	sim.computeReferenceSolution_ = true;
+
 	sim.setInitialConditions();
 
 	amrex::Vector<amrex::MultiFab> const &cc_state = sim.getNewMF_cc();
@@ -270,6 +270,8 @@ auto problem_main() -> int
 	num_diffs += verifyPeriodicBCs(fc_state[amr_level][1], "FC-y");
 	num_diffs += verifyPeriodicBCs(fc_state[amr_level][2], "FC-z");
 	const bool diff_exist = (num_diffs != 0);
+
+	sim.computeErrorNorm();
 
 	return static_cast<int>(diff_exist);
 }

@@ -198,7 +198,7 @@ auto problem_main() -> int
 	sim.stopTime_ = 2.0;
 	sim.cflNumber_ = 0.8;
 	sim.maxTimesteps_ = 2000;
-	sim.computeReferenceSolution_ = true;
+
 	sim.plotfileInterval_ = -1;
 
 	// initialize and evolve
@@ -210,7 +210,8 @@ auto problem_main() -> int
 	// [See Section 10.7 and Figure 10.20 of Toro (1998).]
 	const double error_tol = 0.0; // this is not a typo
 	int status = 0;
-	if (sim.errorNorm_ > error_tol) {
+	amrex::Real const error_norm = sim.computeErrorNorm();
+	if (error_norm > error_tol) {
 		status = 1;
 	}
 

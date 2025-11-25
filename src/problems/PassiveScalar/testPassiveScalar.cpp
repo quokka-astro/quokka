@@ -252,15 +252,14 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<ScalarProblem> sim(BCs_cc);
 
-	sim.computeReferenceSolution_ = true;
-
 	// initialize and evolve
 	sim.setInitialConditions();
 	sim.evolve();
 
 	const double error_tol = 0.008;
 	int status = 0;
-	if (sim.errorNorm_ > error_tol) {
+	amrex::Real const error_norm = sim.computeErrorNorm();
+	if (error_norm > error_tol) {
 		status = 1;
 	}
 

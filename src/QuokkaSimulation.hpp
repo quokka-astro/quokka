@@ -160,7 +160,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int maxSubsteps_ = 10;				// maximum number of radiation subcycles per hydro step
 	amrex::Real dustGasInteractionCoeff_ = 2.5e-34; // erg cm^3 s^−1 K^−3/2
 
-	bool computeReferenceSolution_ = false;
 	amrex::Real errorNorm_ = NAN;
 	amrex::Real pressureFloor_ = 0.;
 
@@ -248,6 +247,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo);
 	void computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction dir);
+	auto computeErrorNorm(bool use_rel_err = true) -> amrex::Real;
+	auto computeComponentErrors() -> std::vector<std::tuple<std::string, amrex::Real, amrex::Real>>;
 	void WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf, const amrex::Vector<std::string> &compNames,
 						int lev, int interval) override;
 
@@ -865,6 +866,177 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::print_multifab_f
 	    mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { printf("%f\n", mf_fc[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex)); });
 }
 
+template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponentErrors() -> std::vector<std::tuple<std::string, amrex::Real, amrex::Real>>
+{
+	// returns a vector of tuples: (component name, absolute error, relative error)
+	// absolute error is normalized by number of cells
+	// relative error is NAN if reference norm is zero
+
+	std::vector<std::tuple<std::string, amrex::Real, amrex::Real>> comp_errors{};
+
+	// Compute cell-centered errors
+	const int ncomp = state_new_cc_[0].nComp();
+	amrex::MultiFab state_ref_level0(boxArray(0), DistributionMap(0), ncomp, 0);
+	computeReferenceSolution(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray());
+	bool has_valid_data = true;
+	for (int icomp = 0; icomp < ncomp; ++icomp) {
+		if (!std::isfinite(state_ref_level0.norm0(icomp))) {
+			has_valid_data = false;
+			break;
+		}
+	}
+
+	if (!has_valid_data) {
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			amrex::Print() << "\nWARNING: Cell-centered reference solution was not properly set.\n";
+			amrex::Print() << "Please implement computeReferenceSolution() for your problem.\n\n";
+		}
+		return comp_errors; // Return empty vector
+	}
+
+	amrex::MultiFab residual(state_ref_level0.boxArray(), state_ref_level0.DistributionMap(), ncomp, 0);
+	amrex::MultiFab::Copy(residual, state_ref_level0, 0, 0, ncomp, 0);
+	amrex::MultiFab::Saxpy(residual, -1., state_new_cc_[0], 0, 0, ncomp, 0);
+
+	const auto n_cells = static_cast<amrex::Real>(residual.boxArray().numPts());
+
+	for (int icomp = 0; icomp < ncomp; ++icomp) {
+		const amrex::Real abs_err = residual.norm1(icomp) / n_cells;
+		const amrex::Real ref_norm = state_ref_level0.norm1(icomp) / n_cells;
+
+		amrex::Real rel_err = NAN;
+		if (ref_norm > 0.0) {
+			rel_err = abs_err / ref_norm;
+		}
+
+		comp_errors.emplace_back(componentNames_cc_[icomp], abs_err, rel_err);
+	}
+
+	// Compute face-centered errors (if MHD is enabled)
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			const int ncomp_fc = state_new_fc_[0][idim].nComp();
+			amrex::BoxArray ba_fc = amrex::convert(boxArray(0), amrex::IntVect::TheDimensionVector(idim));
+			// Shrink by 1 in the face-normal direction (idim) so that identical cell numbers are used for error calculation
+			ba_fc.growHi(idim, -1);
+			amrex::MultiFab state_ref_fc_level0(ba_fc, DistributionMap(0), ncomp_fc, 0);
+			amrex::MultiFab state_new_fc_shrunk(ba_fc, DistributionMap(0), ncomp_fc, 0);
+			computeReferenceSolution_fc(state_ref_fc_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray(), quokka::direction{idim});
+			bool has_valid_data = true;
+			for (int icomp = 0; icomp < ncomp_fc; ++icomp) {
+				if (!std::isfinite(state_ref_fc_level0.norm0(icomp))) {
+					has_valid_data = false;
+					break;
+				}
+			}
+
+			if (!has_valid_data) {
+				if (amrex::ParallelDescriptor::IOProcessor()) {
+					amrex::Print() << "\nWARNING: Face-centered reference solution was not properly set.\n";
+					amrex::Print() << "Please implement computeReferenceSolution_fc() for your problem.\n\n";
+				}
+				continue; // Return empty vector
+			}
+			amrex::MultiFab::Copy(state_new_fc_shrunk, state_new_fc_[0][idim], 0, 0, ncomp_fc, 0);
+			amrex::MultiFab residual_fc(state_ref_fc_level0.boxArray(), state_ref_fc_level0.DistributionMap(), ncomp_fc, 0);
+			amrex::MultiFab::Copy(residual_fc, state_ref_fc_level0, 0, 0, ncomp_fc, 0);
+			amrex::MultiFab::Saxpy(residual_fc, -1., state_new_fc_shrunk, 0, 0, ncomp_fc, 0);
+
+			const auto n_cells_fc = static_cast<amrex::Real>(residual_fc.boxArray().numPts());
+
+			for (int icomp_fc = 0; icomp_fc < ncomp_fc; ++icomp_fc) {
+				const amrex::Real abs_err = residual_fc.norm1(icomp_fc) / n_cells_fc;
+				const amrex::Real ref_norm = state_ref_fc_level0.norm1(icomp_fc) / n_cells_fc;
+
+				amrex::Real rel_err = NAN;
+				if (ref_norm > 0.0) {
+					rel_err = abs_err / ref_norm;
+				}
+
+				comp_errors.emplace_back(componentNames_fc_[idim][icomp_fc], abs_err, rel_err);
+			}
+		}
+	}
+	if (this->suppress_output == 0) {
+		amrex::Print() << "\nComponent Errors:\n";
+		amrex::Print() << std::string(70, '=') << "\n";
+		amrex::Print() << std::setw(25) << std::left << "Component" << std::setw(20) << std::right << "Absolute Error" << std::setw(20) << std::right
+			       << "Relative Error" << "\n";
+		amrex::Print() << std::string(70, '-') << "\n";
+	}
+	for (const auto &[name, abs_err, rel_err] : comp_errors) {
+		if (this->suppress_output == 0) {
+			amrex::Print() << std::setw(25) << std::left << name << std::setw(20) << std::right << std::scientific << std::setprecision(4)
+				       << abs_err;
+			if (std::isnan(rel_err)) {
+				amrex::Print() << std::setw(20) << std::right << "N/A" << "\n";
+			} else {
+				amrex::Print() << std::setw(20) << std::right << std::scientific << std::setprecision(4) << rel_err << "\n";
+			}
+		}
+	}
+	if (this->suppress_output == 0) {
+		amrex::Print() << std::string(70, '-') << "\n";
+	}
+	return comp_errors;
+}
+
+template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm(bool use_rel_err) -> amrex::Real
+{
+	// use_rel_err: if true, compute relative error norm; else compute absolute error norm
+	// default: true
+
+	auto comp_errors = computeComponentErrors();
+	if (comp_errors.empty()) {
+		if (this->suppress_output == 0) {
+			amrex::Print() << "\nNo valid reference solution found. Cannot compute error norm.\n\n";
+		}
+		return NAN;
+	}
+
+	// Get number of cells to convert back from normalized errors to L1 norms
+	const auto n_cells = static_cast<amrex::Real>(state_new_cc_[0].boxArray().numPts());
+	amrex::Real sum_sq_err = 0.0;
+	amrex::Real sum_sq_ref = 0.0;
+
+	for (const auto &[name, abs_err, rel_err] : comp_errors) {
+		// Convert normalized errors back to L1 norms
+		amrex::Real L1_err = abs_err * n_cells;
+		sum_sq_err += L1_err * L1_err;
+
+		// Reconstruct reference L1 norm
+		if (!std::isnan(rel_err) && rel_err != 0.0) {
+			amrex::Real L1_ref = (abs_err / rel_err) * n_cells;
+			sum_sq_ref += L1_ref * L1_ref;
+		}
+		// If rel_err is NaN or zero, reference was zero, contributes 0 to sum_sq_ref
+	}
+
+	const amrex::Real err_norm = std::sqrt(sum_sq_err);
+	const amrex::Real sol_norm = std::sqrt(sum_sq_ref);
+
+	amrex::Real error_norm = 0.0;
+	if (use_rel_err && sol_norm > 0.0) {
+		error_norm = err_norm / sol_norm;
+		if (this->suppress_output == 0) {
+			amrex::Print() << std::string(70, '=') << "\n";
+			amrex::Print() << "\nRelative RMS L1 error norm = " << error_norm << "\n\n";
+		}
+	} else {
+		error_norm = err_norm;
+		if (this->suppress_output == 0) {
+			amrex::Print() << std::string(70, '=') << "\n";
+			if (sol_norm == 0.0) {
+				amrex::Print() << "\nReference norm is zero; reporting absolute L1 error norm = " << error_norm << "\n\n";
+			} else {
+				amrex::Print() << "\nAbsolute L1 error norm = " << error_norm << "\n\n";
+			}
+		}
+	}
+
+	return error_norm;
+}
+
 template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons)
 {
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
@@ -906,77 +1078,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvol
 		amrex::Print() << '\n';
 	}
 
-	if (computeReferenceSolution_) {
-		// compute cc-reference solution
-		amrex::Print() << "Checking cc-quantities\n";
-		const int ncomp = state_new_cc_[0].nComp();
-		amrex::MultiFab state_ref_level0(boxArray(0), DistributionMap(0), ncomp, 0);
-		computeReferenceSolution(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray());
-
-		// compute error norm
-		amrex::MultiFab residual(boxArray(0), DistributionMap(0), ncomp, 0);
-		amrex::MultiFab::Copy(residual, state_ref_level0, 0, 0, ncomp, 0);
-		amrex::MultiFab::Saxpy(residual, -1., state_new_cc_[0], 0, 0, ncomp, 0);
-
-		amrex::Real sol_norm = 0.;
-		amrex::Real err_norm = 0.;
-		for (int n = 0; n < ncomp; ++n) {
-			sol_norm += std::pow(state_ref_level0.norm1(n), 2);
-			err_norm += std::pow(residual.norm1(n), 2);
-		}
-		sol_norm = std::sqrt(sol_norm);
-		err_norm = std::sqrt(err_norm);
-
-		double rel_error = NAN;
-		if (sol_norm > 0.) {
-			rel_error = err_norm / sol_norm;
-			errorNorm_ = rel_error;
-			amrex::Print() << "Relative rms L1 error norm = " << rel_error << '\n';
-		} else {
-			// if the reference solution is identically zero -> only report absolute error instead
-			errorNorm_ = err_norm;
-			amrex::Print() << "Reference norm is zero; reporting absolute L1 error norm = " << err_norm << '\n';
-		}
-
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-
-				amrex::Print() << "Checking fc-quantities in the " << idim << " direction\n";
-				const int ncomp = state_new_fc_[0][idim].nComp();
-				const int nghost = state_new_fc_[0][idim].nGrow();
-				amrex::MultiFab state_ref_level0(amrex::convert(boxArray(0), amrex::IntVect::TheDimensionVector(idim)), DistributionMap(0),
-								 ncomp, nghost);
-
-				computeReferenceSolution_fc(state_ref_level0, geom[0].CellSizeArray(), geom[0].ProbLoArray(), quokka::direction{idim});
-
-				// compute error norm
-				amrex::MultiFab residual(amrex::convert(boxArray(0), amrex::IntVect::TheDimensionVector(idim)), DistributionMap(0), ncomp,
-							 nghost);
-				amrex::MultiFab::Copy(residual, state_ref_level0, 0, 0, ncomp, nghost);
-				amrex::MultiFab::Saxpy(residual, -1., state_new_fc_[0][idim], 0, 0, ncomp, nghost);
-
-				amrex::Real sol_norm = 0.;
-				amrex::Real err_norm = 0.;
-				for (int n = 0; n < ncomp; ++n) {
-					sol_norm += std::pow(state_ref_level0.norm1(n), 2);
-					err_norm += std::pow(residual.norm1(n), 2);
-				}
-				sol_norm = std::sqrt(sol_norm);
-				err_norm = std::sqrt(err_norm);
-
-				double rel_error = NAN;
-				if (sol_norm > 0.) {
-					rel_error = err_norm / sol_norm;
-					errorNorm_ = rel_error;
-					amrex::Print() << "Relative rms L1 error norm = " << rel_error << ", with err_norm = " << err_norm
-						       << " and sol_norm = " << sol_norm << "\n";
-				} else {
-					errorNorm_ = err_norm;
-					amrex::Print() << "Reference norm is zero; reporting absolute L1 error norm = " << err_norm << " (sol_norm = 0)\n";
-				}
-			}
-		}
-	}
 	amrex::Print() << '\n';
 
 	// compute average number of radiation subcycles per timestep
