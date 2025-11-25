@@ -130,6 +130,7 @@ link_libraries(AMReX::amrex)
 link_libraries(fmt::fmt)
 link_libraries(hdf5::hdf5)
 link_libraries(yaml-cpp::yaml-cpp)
+link_libraries(turbulence::turbulence)
 
 include(CTest)
 

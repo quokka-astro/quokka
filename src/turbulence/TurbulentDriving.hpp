@@ -29,7 +29,7 @@
 #include "AMReX_SPACE.H"
 #include "AMReX_iMultiFab.H"
 
-#include "../extern/turbulence/plugins/AMReX/TurbGenEx.h"
+#include "turbulence/plugins/AMReX/TurbGenEx.h"
 #include "fmt/base.h"
 #include "fmt/core.h"
 #include "fundamental_constants.H"
