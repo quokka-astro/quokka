@@ -78,7 +78,7 @@ template <typename problem_t> class turbulentDriving
 
 			tg.get_turb_vector_unigrid(forceFieldFab, cellSizes);
 
-			amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept -> auto {
+			amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				const amrex::Real rho = data(i, j, k, HydroSystem<problem_t>::density_index);
 
 				amrex::Real dE = 0;
