@@ -27,12 +27,12 @@ cfl = 0.3
 
 
 hydro.rk_integrator_order = 2
-hydro.reconstruction_order = 5
+hydro.reconstruction_order = 3
 hydro.use_dual_energy = 0
 
-mhd.reconstruction_order = 5
+mhd.reconstruction_order = 3
 
 setup.num_modes_x = 1
-setup.num_modes_y = 1
+setup.num_modes_y = 0
 setup.num_modes_z = 0
-setup.angle_between_k_b0 = 45
+setup.angle_between_k_b0 = 0

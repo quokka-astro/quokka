@@ -935,15 +935,15 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 			}
 		}
 	}
-	if (this->suppress_output == 0) {
+	//if (this->suppress_output == 0) {
 		amrex::Print() << "\nComponent Errors:\n";
 		amrex::Print() << std::string(70, '=') << "\n";
 		amrex::Print() << std::setw(25) << std::left << "Component" << std::setw(20) << std::right << "Absolute Error" << std::setw(20) << std::right
 			       << "Relative Error" << "\n";
 		amrex::Print() << std::string(70, '-') << "\n";
-	}
+	//}
 	for (const auto &[name, abs_err, rel_err] : comp_errors) {
-		if (this->suppress_output == 0) {
+		//if (this->suppress_output == 0) {
 			amrex::Print() << std::setw(25) << std::left << name << std::setw(20) << std::right << std::scientific << std::setprecision(4)
 				       << abs_err;
 			if (std::isnan(rel_err)) {
@@ -951,11 +951,11 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 			} else {
 				amrex::Print() << std::setw(20) << std::right << std::scientific << std::setprecision(4) << rel_err << "\n";
 			}
-		}
+		//}
 	}
-	if (this->suppress_output == 0) {
+	//if (this->suppress_output == 0) {
 		amrex::Print() << std::string(70, '-') << "\n";
-	}
+	//}
 	return comp_errors;
 }
 
@@ -997,20 +997,20 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm
 	amrex::Real error_norm = 0.0;
 	if (use_rel_err && sol_norm > 0.0) {
 		error_norm = err_norm / sol_norm;
-		if (this->suppress_output == 0) {
+		//if (this->suppress_output == 0) {
 			amrex::Print() << std::string(70, '=') << "\n";
 			amrex::Print() << "\nRelative RMS L1 error norm = " << error_norm << "\n\n";
-		}
+		//}
 	} else {
 		error_norm = err_norm;
-		if (this->suppress_output == 0) {
+		//if (this->suppress_output == 0) {
 			amrex::Print() << std::string(70, '=') << "\n";
 			if (sol_norm == 0.0) {
 				amrex::Print() << "\nReference norm is zero; reporting absolute L1 error norm = " << error_norm << "\n\n";
 			} else {
 				amrex::Print() << "\nAbsolute L1 error norm = " << error_norm << "\n\n";
 			}
-		}
+		//}
 	}
 
 	return error_norm;
