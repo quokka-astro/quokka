@@ -36,13 +36,17 @@ void ComputeBdsReconstruction1D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 	AMREX_ASSERT(x_L.nComp() == input_mf.nComp());
 	AMREX_ASSERT(x_R.nComp() == input_mf.nComp());
 
+	auto const src_arrs = input_mf.const_arrays();
+	auto xL_arrs = x_L.arrays();
+	auto xR_arrs = x_R.arrays();
+
 	for (amrex::MFIter mfi(input_mf); mfi.isValid(); ++mfi) {
 		const Box &bx = mfi.growntilebox(num_ghost);
 		int const ncomp = input_mf.nComp();
 
-		auto const &src = input_mf.array(mfi);
-		auto const &xl = x_L.array(mfi);
-		auto const &xr = x_R.array(mfi);
+		auto const &src = src_arrs[mfi.LocalIndex()];
+		auto const &xl_face = xL_arrs[mfi.LocalIndex()];
+		auto const &xr_face = xR_arrs[mfi.LocalIndex()];
 
 		amrex::ParallelFor(bx, ncomp, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
 			Real s_avg = src(i, j, k, n);
@@ -131,8 +135,8 @@ void ComputeBdsReconstruction1D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 				}
 			}
 
-			xl(i, j, k, n) = c_left;
-			xr(i, j, k, n) = c_right;
+			xr_face(i, j, k, n) = c_left;	   // right state at i+1/2 (from cell i)
+			xl_face(i + 1, j, k, n) = c_right; // left state at i+1/2 (from cell i)
 		});
 	}
 }
@@ -154,15 +158,21 @@ void ComputeBdsReconstruction2D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 	AMREX_ASSERT(y_L.nComp() == input_mf.nComp());
 	AMREX_ASSERT(y_R.nComp() == input_mf.nComp());
 
+	auto const src_arrs = input_mf.const_arrays();
+	auto xL_arrs = x_L.arrays();
+	auto xR_arrs = x_R.arrays();
+	auto yL_arrs = y_L.arrays();
+	auto yR_arrs = y_R.arrays();
+
 	for (amrex::MFIter mfi(input_mf); mfi.isValid(); ++mfi) {
 		const Box &bx = mfi.growntilebox(num_ghost);
 		int const ncomp = input_mf.nComp();
 
-		auto const &src = input_mf.array(mfi);
-		auto const &xl = x_L.array(mfi);
-		auto const &xr = x_R.array(mfi);
-		auto const &yl = y_L.array(mfi);
-		auto const &yr = y_R.array(mfi);
+		auto const &src = src_arrs[mfi.LocalIndex()];
+		auto const &xl_face = xL_arrs[mfi.LocalIndex()];
+		auto const &xr_face = xR_arrs[mfi.LocalIndex()];
+		auto const &yl_face = yL_arrs[mfi.LocalIndex()];
+		auto const &yr_face = yR_arrs[mfi.LocalIndex()];
 
 		amrex::ParallelFor(bx, ncomp, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
 			Real nbr[3][3]; // NOLINT
@@ -292,11 +302,15 @@ void ComputeBdsReconstruction2D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 				}
 			}
 
-			xl(i, j, k, n) = 0.5 * (c[0] + c[2]);
-			xr(i, j, k, n) = 0.5 * (c[1] + c[3]);
+			Real const xl_val = 0.5 * (c[0] + c[2]);
+			Real const xr_val = 0.5 * (c[1] + c[3]);
+			xr_face(i, j, k, n) = xl_val;
+			xl_face(i + 1, j, k, n) = xr_val;
 
-			yl(i, j, k, n) = 0.5 * (c[0] + c[1]);
-			yr(i, j, k, n) = 0.5 * (c[2] + c[3]);
+			Real const yl_val = 0.5 * (c[0] + c[1]);
+			Real const yr_val = 0.5 * (c[2] + c[3]);
+			yr_face(i, j, k, n) = yl_val;
+			yl_face(i, j + 1, k, n) = yr_val;
 		});
 	}
 }
@@ -320,17 +334,25 @@ void ComputeBdsReconstruction3D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 	AMREX_ASSERT(z_L.nComp() == input_mf.nComp());
 	AMREX_ASSERT(z_R.nComp() == input_mf.nComp());
 
+	auto const src_arrs = input_mf.const_arrays();
+	auto xL_arrs = x_L.arrays();
+	auto xR_arrs = x_R.arrays();
+	auto yL_arrs = y_L.arrays();
+	auto yR_arrs = y_R.arrays();
+	auto zL_arrs = z_L.arrays();
+	auto zR_arrs = z_R.arrays();
+
 	for (amrex::MFIter mfi(input_mf); mfi.isValid(); ++mfi) {
 		const Box &bx = mfi.growntilebox(num_ghost);
 		int const ncomp = input_mf.nComp();
 
-		auto const &src = input_mf.array(mfi);
-		auto const &xl = x_L.array(mfi);
-		auto const &xr = x_R.array(mfi);
-		auto const &yl = y_L.array(mfi);
-		auto const &yr = y_R.array(mfi);
-		auto const &zl = z_L.array(mfi);
-		auto const &zr = z_R.array(mfi);
+		auto const &src = src_arrs[mfi.LocalIndex()];
+		auto const &xl_face = xL_arrs[mfi.LocalIndex()];
+		auto const &xr_face = xR_arrs[mfi.LocalIndex()];
+		auto const &yl_face = yL_arrs[mfi.LocalIndex()];
+		auto const &yr_face = yR_arrs[mfi.LocalIndex()];
+		auto const &zl_face = zL_arrs[mfi.LocalIndex()];
+		auto const &zr_face = zR_arrs[mfi.LocalIndex()];
 
 		amrex::ParallelFor(bx, ncomp, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
 			// ----------------------------------------------------------
@@ -510,16 +532,22 @@ void ComputeBdsReconstruction3D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 			// 0:000, 1:001, 2:010, 3:011, 4:100, 5:101, 6:110, 7:111
 
 			// X Faces (Stride 1)
-			xl(i, j, k, n) = 0.25 * (c[0] + c[2] + c[4] + c[6]); // x=0
-			xr(i, j, k, n) = 0.25 * (c[1] + c[3] + c[5] + c[7]); // x=1
+			Real const xl_val = 0.25 * (c[0] + c[2] + c[4] + c[6]); // x=0
+			Real const xr_val = 0.25 * (c[1] + c[3] + c[5] + c[7]); // x=1
+			xr_face(i, j, k, n) = xl_val;
+			xl_face(i + 1, j, k, n) = xr_val;
 
 			// Y Faces (Stride 2)
-			yl(i, j, k, n) = 0.25 * (c[0] + c[1] + c[4] + c[5]); // y=0
-			yr(i, j, k, n) = 0.25 * (c[2] + c[3] + c[6] + c[7]); // y=1
+			Real const yl_val = 0.25 * (c[0] + c[1] + c[4] + c[5]); // y=0
+			Real const yr_val = 0.25 * (c[2] + c[3] + c[6] + c[7]); // y=1
+			yr_face(i, j, k, n) = yl_val;
+			yl_face(i, j + 1, k, n) = yr_val;
 
 			// Z Faces (Stride 4)
-			zl(i, j, k, n) = 0.25 * (c[0] + c[1] + c[2] + c[3]); // z=0
-			zr(i, j, k, n) = 0.25 * (c[4] + c[5] + c[6] + c[7]); // z=1
+			Real const zl_val = 0.25 * (c[0] + c[1] + c[2] + c[3]); // z=0
+			Real const zr_val = 0.25 * (c[4] + c[5] + c[6] + c[7]); // z=1
+			zr_face(i, j, k, n) = zl_val;
+			zl_face(i, j, k + 1, n) = zr_val;
 		});
 	}
 }
