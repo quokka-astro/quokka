@@ -177,8 +177,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<amrex::Real> tOld_;     // for state_old_cc_
 	amrex::Vector<amrex::Real> dt_;	      // timestep for each level
 	amrex::Real stopTime_ = 1.0;	      // default
-	amrex::Real cflNumber_ = 0.3;	        // default
-	amrex::Real particleCflNumber_ = 0.5;   // default
+	amrex::Real cflNumber_ = 0.3;	      // default
+	amrex::Real particleCflNumber_ = 0.5; // default
 	amrex::Real signalSpeedAbortThreshold_ = -1.0;
 	amrex::Real particleSpeedAbortThreshold_ = -1.0;
 	amrex::Real dtToleranceFactor_ = 1.1; // default
@@ -1007,9 +1007,9 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	const amrex::IntVect domain_signal_maxloc = max_signal_speed_[lev].maxIndex(0);
 	if constexpr (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) {
 		if (signalSpeedAbortThreshold_ > 0.0 && domain_signal_max > signalSpeedAbortThreshold_) {
-			const std::string abort_msg = fmt::format(
-			    "[FATAL] Maximum signal speed ({:.3e} cm/s) exceeded abort threshold ({:.3e} cm/s) on level {} at cell {}",
-			    domain_signal_max, signalSpeedAbortThreshold_, lev, domain_signal_maxloc);
+			const std::string abort_msg =
+			    fmt::format("[FATAL] Maximum signal speed ({:.3e} cm/s) exceeded abort threshold ({:.3e} cm/s) on level {} at cell {}",
+					domain_signal_max, signalSpeedAbortThreshold_, lev, domain_signal_maxloc);
 			printCellProperties(lev, domain_signal_maxloc);
 			amrex::Print() << abort_msg << std::endl; // NOLINT(performance-avoid-endl)
 			amrex::Abort(abort_msg.c_str());
