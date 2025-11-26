@@ -179,8 +179,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real stopTime_ = 1.0;	      // default
 	amrex::Real cflNumber_ = 0.3;	      // default
 	amrex::Real particleCflNumber_ = 0.5; // default
-	amrex::Real signalSpeedAbortThreshold_ = -1.0;
-	amrex::Real particleSpeedAbortThreshold_ = -1.0;
+	amrex::Real signalSpeedAbort_ = -1.0;
+	amrex::Real particleSpeedAbort_ = -1.0;
 	amrex::Real dtToleranceFactor_ = 1.1; // default
 	amrex::Real dtCutoff_ = 0.0;	      // default: no cutoff (disabled when 0)
 	amrex::Long cycleCount_ = 0;
@@ -741,24 +741,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	pp.query("particle_cfl", particleCflNumber_);
 
 	// Abort when signal speed exceeds this threshold (specified in km/s, CGS only)
-	constexpr amrex::Real cm_per_km = 1.0e5;
-	amrex::Real signalSpeedAbortKms = signalSpeedAbortThreshold_ / cm_per_km;
-	if (pp.query("signal_speed_abort_kms", signalSpeedAbortKms) != 0) {
-		if (signalSpeedAbortKms <= 0.0) {
-			signalSpeedAbortThreshold_ = -1.0; // disable safety check
-		} else {
-			signalSpeedAbortThreshold_ = signalSpeedAbortKms * cm_per_km;
-		}
-	}
-	// Abort when particle speed exceeds this threshold (specified in km/s, CGS only)
-	amrex::Real particleSpeedAbortKms = particleSpeedAbortThreshold_ / cm_per_km;
-	if (pp.query("particle_speed_abort_kms", particleSpeedAbortKms) != 0) {
-		if (particleSpeedAbortKms <= 0.0) {
-			particleSpeedAbortThreshold_ = -1.0; // disable safety check
-		} else {
-			particleSpeedAbortThreshold_ = particleSpeedAbortKms * cm_per_km;
-		}
-	}
+	pp.query("signal_speed_abort", signalSpeedAbort_);
+	pp.query("particle_speed_abort", particleSpeedAbort_);
 
 	// Default AMR interpolation method == lincc_interp
 	pp.query("amr_interpolation_method", amrInterpMethod_);
@@ -1005,15 +989,12 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	computeMaxSignalLocal(lev);
 	const amrex::Real domain_signal_max = max_signal_speed_[lev].norminf();
 	const amrex::IntVect domain_signal_maxloc = max_signal_speed_[lev].maxIndex(0);
-	if constexpr (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) {
-		if (signalSpeedAbortThreshold_ > 0.0 && domain_signal_max > signalSpeedAbortThreshold_) {
-			const std::string abort_msg =
-			    fmt::format("[FATAL] Maximum signal speed ({:.3e} cm/s) exceeded abort threshold ({:.3e} cm/s) on level {} at cell {}",
-					domain_signal_max, signalSpeedAbortThreshold_, lev, domain_signal_maxloc);
-			printCellProperties(lev, domain_signal_maxloc);
-			amrex::Print() << abort_msg << std::endl; // NOLINT(performance-avoid-endl)
-			amrex::Abort(abort_msg.c_str());
-		}
+	if (signalSpeedAbort_ > 0.0 && domain_signal_max > signalSpeedAbort_) {
+		const std::string abort_msg =
+				fmt::format("[FATAL] Maximum signal speed ({:.3e} cm/s) exceeded abort threshold ({:.3e} cm/s) on level {} at cell {}",
+				domain_signal_max, signalSpeedAbort_, lev, domain_signal_maxloc);
+		printCellProperties(lev, domain_signal_maxloc);
+		amrex::Abort(abort_msg.c_str());
 	}
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx = geom[lev].CellSizeArray();
 	const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
@@ -1040,15 +1021,12 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 			particle_cell_idx[i] = static_cast<int>(dxinv[i] * (max_particle_speed.index[i] - prob_lo[i]));
 		}
-		if constexpr (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) {
-			if (particleSpeedAbortThreshold_ > 0.0 && max_particle_speed.value > particleSpeedAbortThreshold_) {
-				const std::string abort_msg =
-				    fmt::format("[FATAL] Maximum particle speed ({:.3e} cm/s) exceeded abort threshold ({:.3e} cm/s) on level {} at cell {}",
-						max_particle_speed.value, particleSpeedAbortThreshold_, lev, particle_cell_idx);
-				// printCellProperties(lev, particle_cell_idx);
-				amrex::Print() << abort_msg << std::endl; // NOLINT(performance-avoid-endl)
-				amrex::Abort(abort_msg.c_str());
-			}
+		if (particleSpeedAbort_ > 0.0 && max_particle_speed.value > particleSpeedAbort_) {
+			const std::string abort_msg =
+					fmt::format("[FATAL] Maximum particle speed ({:.3e} cm/s) exceeded abort threshold ({:.3e} cm/s) on level {} at cell {}",
+					max_particle_speed.value, particleSpeedAbort_, lev, particle_cell_idx);
+			// printCellProperties(lev, particle_cell_idx);
+			amrex::Abort(abort_msg.c_str());
 		}
 		// avoid division by zero by only computing dt if max_particle_speed is not too small
 		if (max_particle_speed.value > 1e-5 * (dx_min / hydro_dt.value)) {

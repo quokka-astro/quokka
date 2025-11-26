@@ -44,4 +44,4 @@ checkpoint_interval = -1
 
 #temperature_floor = 10
 density_floor = 1e-26
-signal_speed_abort_kms = 4000
+signal_speed_abort = 4e8
