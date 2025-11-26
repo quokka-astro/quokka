@@ -1007,12 +1007,9 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	const amrex::IntVect domain_signal_maxloc = max_signal_speed_[lev].maxIndex(0);
 	if constexpr (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) {
 		if (signalSpeedAbortThreshold_ > 0.0 && domain_signal_max > signalSpeedAbortThreshold_) {
-			constexpr amrex::Real cm_per_km = 1.0e5;
-			const amrex::Real measured_speed_kms = domain_signal_max / cm_per_km;
-			const amrex::Real threshold_speed_kms = signalSpeedAbortThreshold_ / cm_per_km;
 			const std::string abort_msg = fmt::format(
-			    "[FATAL] Maximum signal speed ({:.3f} km/s) exceeded abort threshold ({:.3f} km/s) on level {} at cell {}",
-			    measured_speed_kms, threshold_speed_kms, lev, domain_signal_maxloc);
+			    "[FATAL] Maximum signal speed ({:.3e} cm/s) exceeded abort threshold ({:.3e} cm/s) on level {} at cell {}",
+			    domain_signal_max, signalSpeedAbortThreshold_, lev, domain_signal_maxloc);
 			amrex::Print() << abort_msg << std::endl; // NOLINT(performance-avoid-endl)
 			amrex::Abort(abort_msg.c_str());
 		}
@@ -1038,12 +1035,9 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		AMREX_ALWAYS_ASSERT(std::isfinite(max_particle_speed.value));
 		if constexpr (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) {
 			if (particleSpeedAbortThreshold_ > 0.0 && max_particle_speed.value > particleSpeedAbortThreshold_) {
-				constexpr amrex::Real cm_per_km = 1.0e5;
-				const amrex::Real measured_speed_kms = max_particle_speed.value / cm_per_km;
-				const amrex::Real threshold_speed_kms = particleSpeedAbortThreshold_ / cm_per_km;
 				const std::string abort_msg =
-				    fmt::format("[FATAL] Maximum particle speed ({:.3f} km/s) exceeded abort threshold ({:.3f} km/s) on level {} at position {::e}",
-						measured_speed_kms, threshold_speed_kms, lev, max_particle_speed.index);
+				    fmt::format("[FATAL] Maximum particle speed ({:.3e} cm/s) exceeded abort threshold ({:.3e} cm/s) on level {} at position {::e}",
+						max_particle_speed.value, particleSpeedAbortThreshold_, lev, max_particle_speed.index);
 				amrex::Print() << abort_msg << std::endl; // NOLINT(performance-avoid-endl)
 				amrex::Abort(abort_msg.c_str());
 			}
