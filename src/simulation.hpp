@@ -179,8 +179,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real stopTime_ = 1.0;	      // default
 	amrex::Real cflNumber_ = 0.3;	        // default
 	amrex::Real particleCflNumber_ = 0.5;   // default
-	amrex::Real signalSpeedAbortThreshold_ = 5.0e8;	 // default 5000 km/s in cm/s; <=0 disables
-	amrex::Real particleSpeedAbortThreshold_ = 5.0e8; // default 5000 km/s in cm/s; <=0 disables
+	amrex::Real signalSpeedAbortThreshold_ = -1.0;
+	amrex::Real particleSpeedAbortThreshold_ = -1.0;
 	amrex::Real dtToleranceFactor_ = 1.1; // default
 	amrex::Real dtCutoff_ = 0.0;	      // default: no cutoff (disabled when 0)
 	amrex::Long cycleCount_ = 0;
