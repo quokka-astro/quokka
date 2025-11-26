@@ -177,8 +177,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<amrex::Real> tOld_;     // for state_old_cc_
 	amrex::Vector<amrex::Real> dt_;	      // timestep for each level
 	amrex::Real stopTime_ = 1.0;	      // default
-	amrex::Real cflNumber_ = 0.3;	      // default
-	amrex::Real particleCflNumber_ = 0.5; // default
+	amrex::Real cflNumber_ = 0.3;	        // default
+	amrex::Real particleCflNumber_ = 0.5;   // default
+	amrex::Real signalSpeedAbortThreshold_ = 5.0e8;	 // default 5000 km/s in cm/s; <=0 disables
+	amrex::Real particleSpeedAbortThreshold_ = 5.0e8; // default 5000 km/s in cm/s; <=0 disables
 	amrex::Real dtToleranceFactor_ = 1.1; // default
 	amrex::Real dtCutoff_ = 0.0;	      // default: no cutoff (disabled when 0)
 	amrex::Long cycleCount_ = 0;
@@ -738,6 +740,26 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default CFL number for particles == 0.5, set to whatever is in the file
 	pp.query("particle_cfl", particleCflNumber_);
 
+	// Abort when signal speed exceeds this threshold (specified in km/s, CGS only)
+	constexpr amrex::Real cm_per_km = 1.0e5;
+	amrex::Real signalSpeedAbortKms = signalSpeedAbortThreshold_ / cm_per_km;
+	if (pp.query("signal_speed_abort_kms", signalSpeedAbortKms) != 0) {
+		if (signalSpeedAbortKms <= 0.0) {
+			signalSpeedAbortThreshold_ = -1.0; // disable safety check
+		} else {
+			signalSpeedAbortThreshold_ = signalSpeedAbortKms * cm_per_km;
+		}
+	}
+	// Abort when particle speed exceeds this threshold (specified in km/s, CGS only)
+	amrex::Real particleSpeedAbortKms = particleSpeedAbortThreshold_ / cm_per_km;
+	if (pp.query("particle_speed_abort_kms", particleSpeedAbortKms) != 0) {
+		if (particleSpeedAbortKms <= 0.0) {
+			particleSpeedAbortThreshold_ = -1.0; // disable safety check
+		} else {
+			particleSpeedAbortThreshold_ = particleSpeedAbortKms * cm_per_km;
+		}
+	}
+
 	// Default AMR interpolation method == lincc_interp
 	pp.query("amr_interpolation_method", amrInterpMethod_);
 
@@ -983,6 +1005,18 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	computeMaxSignalLocal(lev);
 	const amrex::Real domain_signal_max = max_signal_speed_[lev].norminf();
 	const amrex::IntVect domain_signal_maxloc = max_signal_speed_[lev].maxIndex(0);
+	if constexpr (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) {
+		if (signalSpeedAbortThreshold_ > 0.0 && domain_signal_max > signalSpeedAbortThreshold_) {
+			constexpr amrex::Real cm_per_km = 1.0e5;
+			const amrex::Real measured_speed_kms = domain_signal_max / cm_per_km;
+			const amrex::Real threshold_speed_kms = signalSpeedAbortThreshold_ / cm_per_km;
+			const std::string abort_msg = fmt::format(
+			    "[FATAL] Maximum signal speed ({:.3f} km/s) exceeded abort threshold ({:.3f} km/s) on level {} at cell {}",
+			    measured_speed_kms, threshold_speed_kms, lev, domain_signal_maxloc);
+			amrex::Print() << abort_msg << std::endl; // NOLINT(performance-avoid-endl)
+			amrex::Abort(abort_msg.c_str());
+		}
+	}
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx = geom[lev].CellSizeArray();
 	const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
 	dtloc_t hydro_dt{.value = cflNumber_ * (dx_min / domain_signal_max), .index = domain_signal_maxloc};
@@ -1002,6 +1036,18 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		const amrex::ValLocPair<amrex::Real, amrex::RealVect> max_particle_speed = particleRegister_.computeMaxParticleSpeed(lev);
 		AMREX_ALWAYS_ASSERT(!std::isnan(max_particle_speed.value));
 		AMREX_ALWAYS_ASSERT(std::isfinite(max_particle_speed.value));
+		if constexpr (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) {
+			if (particleSpeedAbortThreshold_ > 0.0 && max_particle_speed.value > particleSpeedAbortThreshold_) {
+				constexpr amrex::Real cm_per_km = 1.0e5;
+				const amrex::Real measured_speed_kms = max_particle_speed.value / cm_per_km;
+				const amrex::Real threshold_speed_kms = particleSpeedAbortThreshold_ / cm_per_km;
+				const std::string abort_msg =
+				    fmt::format("[FATAL] Maximum particle speed ({:.3f} km/s) exceeded abort threshold ({:.3f} km/s) on level {} at position {::e}",
+						measured_speed_kms, threshold_speed_kms, lev, max_particle_speed.index);
+				amrex::Print() << abort_msg << std::endl; // NOLINT(performance-avoid-endl)
+				amrex::Abort(abort_msg.c_str());
+			}
+		}
 		// avoid division by zero by only computing dt if max_particle_speed is not too small
 		if (max_particle_speed.value > 1e-5 * (dx_min / hydro_dt.value)) {
 			particle_dt.value = particleCflNumber_ * (dx_min / max_particle_speed.value);
