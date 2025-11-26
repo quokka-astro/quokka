@@ -1010,6 +1010,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 			const std::string abort_msg = fmt::format(
 			    "[FATAL] Maximum signal speed ({:.3e} cm/s) exceeded abort threshold ({:.3e} cm/s) on level {} at cell {}",
 			    domain_signal_max, signalSpeedAbortThreshold_, lev, domain_signal_maxloc);
+			printCellProperties(lev, domain_signal_maxloc);
 			amrex::Print() << abort_msg << std::endl; // NOLINT(performance-avoid-endl)
 			amrex::Abort(abort_msg.c_str());
 		}
@@ -1033,11 +1034,18 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		const amrex::ValLocPair<amrex::Real, amrex::RealVect> max_particle_speed = particleRegister_.computeMaxParticleSpeed(lev);
 		AMREX_ALWAYS_ASSERT(!std::isnan(max_particle_speed.value));
 		AMREX_ALWAYS_ASSERT(std::isfinite(max_particle_speed.value));
+		amrex::IntVect particle_cell_idx{AMREX_D_DECL(-1, -1, -1)};
+		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxinv = geom[lev].InvCellSizeArray();
+		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo = geom[lev].ProbLoArray();
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			particle_cell_idx[i] = static_cast<int>(dxinv[i] * (max_particle_speed.index[i] - prob_lo[i]));
+		}
 		if constexpr (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) {
 			if (particleSpeedAbortThreshold_ > 0.0 && max_particle_speed.value > particleSpeedAbortThreshold_) {
 				const std::string abort_msg =
-				    fmt::format("[FATAL] Maximum particle speed ({:.3e} cm/s) exceeded abort threshold ({:.3e} cm/s) on level {} at position {::e}",
-						max_particle_speed.value, particleSpeedAbortThreshold_, lev, max_particle_speed.index);
+				    fmt::format("[FATAL] Maximum particle speed ({:.3e} cm/s) exceeded abort threshold ({:.3e} cm/s) on level {} at cell {}",
+						max_particle_speed.value, particleSpeedAbortThreshold_, lev, particle_cell_idx);
+				// printCellProperties(lev, particle_cell_idx);
 				amrex::Print() << abort_msg << std::endl; // NOLINT(performance-avoid-endl)
 				amrex::Abort(abort_msg.c_str());
 			}
@@ -1045,14 +1053,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		// avoid division by zero by only computing dt if max_particle_speed is not too small
 		if (max_particle_speed.value > 1e-5 * (dx_min / hydro_dt.value)) {
 			particle_dt.value = particleCflNumber_ * (dx_min / max_particle_speed.value);
-			// compute IntVect from RealVect and geom[lev]
-			amrex::IntVect cell_idx;
-			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxinv = geom[lev].InvCellSizeArray();
-			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo = geom[lev].ProbLoArray();
-			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-				cell_idx[i] = static_cast<int>(dxinv[i] * (max_particle_speed.index[i] - prob_lo[i]));
-			}
-			particle_dt.index = cell_idx;
+			particle_dt.index = particle_cell_idx;
 		}
 		if (verbose) {
 			amrex::Print() << fmt::format("...[level {}] estimated particle timestep: {:e}\n", lev, particle_dt.value);
