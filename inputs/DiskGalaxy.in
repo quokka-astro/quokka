@@ -36,7 +36,7 @@ cooling.cooling_table_type = resampled
 cooling.hdf5_data_file = "./CloudyData_UVB=HM2012_resampled.h5"
 temperature_floor = 100
 density_floor = 1e-30
-signal_speed_abort_kms = 6000
+signal_speed_abort = 6e8
 
 checkpoint_interval = 100
 plotfile_interval = 10
