@@ -15,12 +15,12 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto dustRiemannSolver(quokka::DustState con
 {
 	quokka::valarray<double, fluxdim> F{};
 
-	if (sL.u > 0.0 && sR.u > 0.0) {
+	if (sL.u > 0.0 && sR.u >= 0.0) {
 		F[0] = sL.rho * sL.u;
 		F[1] = sL.rho * sL.u * sL.u;
 		F[2] = sL.rho * sL.u * sL.v;
 		F[3] = sL.rho * sL.u * sL.w;
-	} else if (sL.u < 0.0 && sR.u < 0.0) {
+	} else if (sL.u <= 0.0 && sR.u < 0.0) {
 		F[0] = sR.rho * sR.u;
 		F[1] = sR.rho * sR.u * sR.u;
 		F[2] = sR.rho * sR.u * sR.v;
@@ -31,6 +31,10 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto dustRiemannSolver(quokka::DustState con
 		F[2] = sL.rho * sL.u * sL.v + sR.rho * sR.u * sR.v;
 		F[3] = sL.rho * sL.u * sL.w + sR.rho * sR.u * sR.w;
 	} else {
+		F[0] = 0.0;
+		F[1] = 0.0;
+		F[2] = 0.0;
+		F[3] = 0.0;
 	}
 
 	return F;
