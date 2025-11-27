@@ -1015,21 +1015,20 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		const amrex::ValLocPair<amrex::Real, amrex::RealVect> max_particle_speed = particleRegister_.computeMaxParticleSpeed(lev);
 		AMREX_ALWAYS_ASSERT(!std::isnan(max_particle_speed.value));
 		AMREX_ALWAYS_ASSERT(std::isfinite(max_particle_speed.value));
-		amrex::IntVect particle_cell_idx{AMREX_D_DECL(-1, -1, -1)};
-		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxinv = geom[lev].InvCellSizeArray();
-		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo = geom[lev].ProbLoArray();
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			particle_cell_idx[i] = static_cast<int>(dxinv[i] * (max_particle_speed.index[i] - prob_lo[i]));
-		}
 		if (particleSpeedAbort_ > 0.0 && max_particle_speed.value > particleSpeedAbort_) {
 			const std::string abort_msg = fmt::format(
-			    "[FATAL] Maximum particle speed ({:.3e} code units) exceeded abort threshold ({:.3e} code units) on level {} at cell {}",
-			    max_particle_speed.value, particleSpeedAbort_, lev, particle_cell_idx);
-			// printCellProperties(lev, particle_cell_idx);
+			    "[FATAL] Maximum particle speed ({:.3e} code units) exceeded abort threshold ({:.3e} code units) on level {} at position {::e}",
+			    max_particle_speed.value, particleSpeedAbort_, lev, max_particle_speed.index);
 			amrex::Abort(abort_msg.c_str());
 		}
 		// avoid division by zero by only computing dt if max_particle_speed is not too small
 		if (max_particle_speed.value > 1e-5 * (dx_min / hydro_dt.value)) {
+			amrex::IntVect particle_cell_idx{AMREX_D_DECL(-1, -1, -1)};
+			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxinv = geom[lev].InvCellSizeArray();
+			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo = geom[lev].ProbLoArray();
+			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+				particle_cell_idx[i] = static_cast<int>(dxinv[i] * (max_particle_speed.index[i] - prob_lo[i]));
+			}
 			particle_dt.value = particleCflNumber_ * (dx_min / max_particle_speed.value);
 			particle_dt.index = particle_cell_idx;
 		}
