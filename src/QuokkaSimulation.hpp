@@ -368,6 +368,17 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::defineComponentN
 		std::vector<std::string> scalarNames = getScalarVariableNames();
 		componentNames_cc_.insert(componentNames_cc_.end(), scalarNames.begin(), scalarNames.end());
 	}
+	// add dust state variables
+	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+		std::vector<std::string> dustNames = {};
+		for (int i = 0; i < Physics_Traits<problem_t>::nDustGroups; ++i) {
+			dustNames.push_back("dustDensity-Group" + std::to_string(i));
+			dustNames.push_back("x-DustMomentum-Group" + std::to_string(i));
+			dustNames.push_back("y-DustMomentum-Group" + std::to_string(i));
+			dustNames.push_back("z-DustMomentum-Group" + std::to_string(i));
+		}
+		componentNames_cc_.insert(componentNames_cc_.end(), dustNames.begin(), dustNames.end());
+	}
 	// add radiation state variables
 	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
 		std::vector<std::string> radNames = {};
@@ -387,16 +398,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::defineComponentN
 		for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
 			componentNames_fc_flat_.push_back({quokka::face_dir_str[idim] + "-BField"});
 			componentNames_fc_[idim].push_back({quokka::face_dir_str[idim] + "-BField"});
-		}
-	}
-	// add dust state variables
-	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-		for (int dg = 0; dg < Physics_Traits<problem_t>::nDustGroups; ++dg) {
-			std::string const prefix = "dust" + std::to_string(dg) + "-";
-			componentNames_cc_.push_back(prefix + "Density");
-			componentNames_cc_.push_back(prefix + "x-Momentum");
-			componentNames_cc_.push_back(prefix + "y-Momentum");
-			componentNames_cc_.push_back(prefix + "z-Momentum");
 		}
 	}
 }
