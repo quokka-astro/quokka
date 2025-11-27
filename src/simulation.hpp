@@ -740,7 +740,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default CFL number for particles == 0.5, set to whatever is in the file
 	pp.query("particle_cfl", particleCflNumber_);
 
-	// Abort when signal speed exceeds this threshold (specified in km/s, CGS only)
+	// Abort when signal speed exceeds this threshold (in code units)
 	pp.query("signal_speed_abort", signalSpeedAbort_);
 	pp.query("particle_speed_abort", particleSpeedAbort_);
 
@@ -991,7 +991,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	const amrex::IntVect domain_signal_maxloc = max_signal_speed_[lev].maxIndex(0);
 	if (signalSpeedAbort_ > 0.0 && domain_signal_max > signalSpeedAbort_) {
 		const std::string abort_msg =
-		    fmt::format("[FATAL] Maximum signal speed ({:.3e} cm/s) exceeded abort threshold ({:.3e} cm/s) on level {} at cell {}", domain_signal_max,
+		    fmt::format("[FATAL] Maximum signal speed ({:.3e} code units) exceeded abort threshold ({:.3e} code units) on level {} at cell {}", domain_signal_max,
 				signalSpeedAbort_, lev, domain_signal_maxloc);
 		printCellProperties(lev, domain_signal_maxloc);
 		amrex::Abort(abort_msg.c_str());
@@ -1023,7 +1023,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		}
 		if (particleSpeedAbort_ > 0.0 && max_particle_speed.value > particleSpeedAbort_) {
 			const std::string abort_msg =
-			    fmt::format("[FATAL] Maximum particle speed ({:.3e} cm/s) exceeded abort threshold ({:.3e} cm/s) on level {} at cell {}",
+			    fmt::format("[FATAL] Maximum particle speed ({:.3e} code units) exceeded abort threshold ({:.3e} code units) on level {} at cell {}",
 					max_particle_speed.value, particleSpeedAbort_, lev, particle_cell_idx);
 			// printCellProperties(lev, particle_cell_idx);
 			amrex::Abort(abort_msg.c_str());
