@@ -6,7 +6,7 @@ set(IGNORE_DIRS
 )
 
 # Get all children of the current directory (relative paths)
-file(GLOB children RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+file(GLOB children CONFIGURE_DEPENDS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
      ${CMAKE_CURRENT_SOURCE_DIR}/*)
 
 foreach(child ${children})
