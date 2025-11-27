@@ -1,3 +1,4 @@
+#include "bds.hpp"
 #include <AMReX.H>
 #include <AMReX_Gpu.H>
 #include <AMReX_MultiFab.H>
@@ -5,23 +6,10 @@
 using Real = amrex::Real;
 using MultiFab = amrex::MultiFab;
 using Box = amrex::Box;
+using bds::epsilon;
+using bds::max_iter;
 
-// ------------------------------------------------------------------
-// Constants
-// ------------------------------------------------------------------
-constexpr Real W0 = -1.0 / 12.0;
-constexpr Real W1 = 7.0 / 12.0;
-constexpr Real EPSILON = 1.0e-12;
-constexpr int MAX_ITER = 20;
-
-// ------------------------------------------------------------------
-// Optimized Helper
-// ------------------------------------------------------------------
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto cubic_interp_fast(Real v_m1, Real v_0, Real v_p1, Real v_p2) -> Real
-{
-	// Fused multiply-adds are generated better if written this way
-	return W0 * (v_m1 + v_p2) + W1 * (v_0 + v_p1);
-}
+using bds::cubic_interp_fast;
 
 #if AMREX_SPACEDIM == 1
 void ComputeBdsReconstruction1D(const MultiFab &input_mf, MultiFab &x_L, MultiFab &x_R, MultiFab &y_L, MultiFab &y_R, MultiFab &z_L, MultiFab &z_R,
@@ -66,14 +54,14 @@ void ComputeBdsReconstruction1D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 			c_left = amrex::max(left_min, amrex::min(left_max, c_left));
 			c_right = amrex::max(right_min, amrex::min(right_max, c_right));
 
-			for (int iter = 0; iter < MAX_ITER; ++iter) {
-				Real max_abs = amrex::Math::abs(s_avg);
-				max_abs = amrex::max(max_abs, amrex::Math::abs(c_left));
-				max_abs = amrex::max(max_abs, amrex::Math::abs(c_right));
-				Real tol = EPSILON * max_abs * 2.0;
-				if (max_abs == 0.0) {
-					tol = EPSILON * static_cast<Real>(1.0e-40);
-				}
+		for (int iter = 0; iter < max_iter; ++iter) {
+			Real max_abs = amrex::Math::abs(s_avg);
+			max_abs = amrex::max(max_abs, amrex::Math::abs(c_left));
+			max_abs = amrex::max(max_abs, amrex::Math::abs(c_right));
+			Real tol = epsilon * max_abs * 2.0;
+			if (max_abs == 0.0) {
+				tol = epsilon * static_cast<Real>(1.0e-40);
+			}
 
 				Real sum_curr = c_left + c_right;
 				Real delta = sum_curr - 2.0 * s_avg;
@@ -176,144 +164,18 @@ void ComputeBdsReconstruction2D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 		auto const &yr_face = yR_arrs[mfi.LocalIndex()];
 
 		amrex::ParallelFor(bx, ncomp, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-			Real nbr[3][3]; // NOLINT
+			auto const corners = bds::ComputeCornerValues2D<0, 1>(src, i, j, k, n);
 
-			for (int dy = 0; dy < 3; ++dy) {
-				for (int dx = 0; dx < 3; ++dx) {
-					nbr[dy][dx] = src(i + dx - 1, j + dy - 1, k, n);
-				}
-			}
-
-			Real s_avg = nbr[1][1];
-
-			Real c[4];     // corner values // NOLINT
-			Real b_min[4]; // min bound // NOLINT
-			Real b_max[4]; // max bound // NOLINT
-
-#pragma unroll
-			for (int corn_idx = 0; corn_idx < 4; ++corn_idx) {
-				int ky = corn_idx / 2;
-				int kx = corn_idx % 2;
-
-				Real local_min = 1.0e30;
-				Real local_max = -1.0e30;
-
-				for (int y = 0; y < 2; ++y) {
-					for (int x = 0; x < 2; ++x) {
-						Real val = nbr[ky + y][kx + x];
-						local_min = amrex::min(local_min, val);
-						local_max = amrex::max(local_max, val);
-					}
-				}
-				b_min[corn_idx] = local_min;
-				b_max[corn_idx] = local_max;
-
-				int bi = i + kx - 2;
-				int bj = j + ky - 2;
-
-				Real y_lines[4]; // NOLINT
-				for (int y_iter = 0; y_iter < 4; ++y_iter) {
-					Real v0 = src(bi + 0, bj + y_iter, k, n);
-					Real v1 = src(bi + 1, bj + y_iter, k, n);
-					Real v2 = src(bi + 2, bj + y_iter, k, n);
-					Real v3 = src(bi + 3, bj + y_iter, k, n);
-					y_lines[y_iter] = cubic_interp_fast(v0, v1, v2, v3);
-				}
-				c[corn_idx] = cubic_interp_fast(y_lines[0], y_lines[1], y_lines[2], y_lines[3]);
-			}
-
-			Real sum_corners = 0.0;
-			for (int idx = 0; idx < 4; ++idx) {
-				sum_corners += c[idx];
-			}
-			Real shift = s_avg - (sum_corners * 0.25);
-
-			for (int idx = 0; idx < 4; ++idx) {
-				c[idx] += shift;
-				c[idx] = amrex::max(b_min[idx], amrex::min(b_max[idx], c[idx]));
-			}
-
-			for (int iter = 0; iter < MAX_ITER; ++iter) {
-				Real max_abs = amrex::Math::abs(s_avg);
-				for (int idx = 0; idx < 4; ++idx) {
-					max_abs = amrex::max(max_abs, amrex::Math::abs(c[idx]));
-				}
-				Real tol = EPSILON * max_abs * 4.0;
-				if (max_abs == 0.0) {
-					tol = EPSILON * static_cast<Real>(1.0e-40);
-				}
-
-				Real sum_curr = 0.0;
-				for (int idx = 0; idx < 4; ++idx) {
-					sum_curr += c[idx];
-				}
-
-				Real delta = sum_curr - 4.0 * s_avg;
-				if (amrex::Math::abs(delta) <= tol) {
-					break;
-				}
-
-				if (delta > 0.0) {
-					// redistribute excess to corners above s_avg, limited by distance to lower bound
-					int count = 0;
-					bool is_cand[4]; // NOLINT
-					for (int idx = 0; idx < 4; ++idx) {
-						is_cand[idx] = (c[idx] > (s_avg + tol));
-						count += is_cand[idx] ? 1 : 0;
-					}
-					if (count == 0) {
-						break;
-					}
-					for (int idx = 0; idx < 4 && delta > tol; ++idx) {
-						if (!is_cand[idx]) {
-							continue;
-						}
-						Real headroom = c[idx] - b_min[idx];
-						Real share = delta / static_cast<Real>(count);
-						Real gamma = amrex::min(share, headroom);
-						c[idx] -= gamma;
-						delta -= gamma;
-						--count;
-					}
-				} else {
-					// redistribute deficit to corners below s_avg, limited by distance to upper bound
-					delta = -delta;
-					int count = 0;
-					bool is_cand[4]; // NOLINT
-					for (int idx = 0; idx < 4; ++idx) {
-						is_cand[idx] = (c[idx] < (s_avg - tol));
-						count += is_cand[idx] ? 1 : 0;
-					}
-					if (count == 0) {
-						break;
-					}
-					for (int idx = 0; idx < 4 && delta > tol; ++idx) {
-						if (!is_cand[idx]) {
-							continue;
-						}
-						Real headroom = b_max[idx] - c[idx];
-						Real share = delta / static_cast<Real>(count);
-						Real gamma = amrex::min(share, headroom);
-						c[idx] += gamma;
-						delta -= gamma;
-						--count;
-					}
-					// restore sign for loop exit check
-					delta = -delta;
-				}
-			}
-
-			Real const xl_val = 0.5 * (c[0] + c[2]);
-			Real const xr_val = 0.5 * (c[1] + c[3]);
+			Real const xl_val = 0.5 * (corners[0] + corners[2]);
+			Real const xr_val = 0.5 * (corners[1] + corners[3]);
 			xr_face(i, j, k, n) = xl_val;
 			xl_face(i + 1, j, k, n) = xr_val;
 
-			Real const yl_val = 0.5 * (c[0] + c[1]);
-			Real const yr_val = 0.5 * (c[2] + c[3]);
+			Real const yl_val = 0.5 * (corners[0] + corners[1]);
+			Real const yr_val = 0.5 * (corners[2] + corners[3]);
 			yr_face(i, j, k, n) = yl_val;
 			yl_face(i, j + 1, k, n) = yr_val;
 		});
-	}
 }
 #endif
 
@@ -458,15 +320,15 @@ void ComputeBdsReconstruction3D(const MultiFab &input_mf, MultiFab &x_L, MultiFa
 			}
 
 			// 2. Iterative heuristic (Nonaka-style redistribution)
-			for (int iter = 0; iter < MAX_ITER; ++iter) {
-				Real max_abs = amrex::Math::abs(s_avg);
-				for (int k = 0; k < 8; ++k) {
-					max_abs = amrex::max(max_abs, amrex::Math::abs(c[k]));
-				}
-				Real tol = EPSILON * max_abs * 8.0;
-				if (max_abs == 0.0) {
-					tol = EPSILON * static_cast<Real>(1.0e-40);
-				}
+		for (int iter = 0; iter < max_iter; ++iter) {
+			Real max_abs = amrex::Math::abs(s_avg);
+			for (int k = 0; k < 8; ++k) {
+				max_abs = amrex::max(max_abs, amrex::Math::abs(c[k]));
+			}
+			Real tol = epsilon * max_abs * 8.0;
+			if (max_abs == 0.0) {
+				tol = epsilon * static_cast<Real>(1.0e-40);
+			}
 
 				Real sum_curr = 0.0;
 				for (int k = 0; k < 8; ++k) {

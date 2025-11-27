@@ -17,6 +17,7 @@
 #include "AMReX_GpuControl.H"
 #include "AMReX_MFIter.H"
 #include "AMReX_ParmParse.H"
+#include "bds.hpp"
 #include "hydro_system.hpp"
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
@@ -64,11 +65,19 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 					   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
 					   EMFAvgScheme emf_avg_scheme);
 
-	static void ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
-					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
-					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
-					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
-					  EMFAvgScheme emf_avg_scheme);
+ static void ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
+				  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
+				  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
+				  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
+				  EMFAvgScheme emf_avg_scheme);
+
+	static void ReconstructVelocityCornersBDS(std::array<amrex::FArrayBox, 3> const &cc_fabs_Ux,
+					std::array<std::array<amrex::FArrayBox, 4>, 2> &ec_fabs_Ui_q, amrex::Box const &box_ec,
+					std::array<int, 2> const &extrap_dirs);
+
+	template <int dir0, int dir1>
+	static void ReconstructVelocityCornersBDSImpl(std::array<amrex::FArrayBox, 3> const &cc_fabs_Ux,
+					    std::array<std::array<amrex::FArrayBox, 4>, 2> &ec_fabs_Ui_q, amrex::Box const &box_ec);
 
 	static void EMFAverage_BalsaraSpicer2004(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
 						 amrex::Box const &box_ec);
@@ -91,10 +100,10 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 
 template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
-				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
-				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
-				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgScheme emf_avg_scheme,
-				      EMFComputeScheme emf_compute_scheme)
+			      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
+			      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
+			      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgScheme emf_avg_scheme,
+			      EMFComputeScheme emf_compute_scheme)
 {
 	if (emf_compute_scheme == EMFComputeScheme::FelkerStone2017) {
 		MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder,
@@ -106,6 +115,70 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 		MHDSystem<problem_t>::ComputeEMF_Quokka2026(ec_mf_emf_components, fcx_mf_vel, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, emf_avg_scheme);
 	} else {
 		throw std::runtime_error("Unsupported EMF-scheme. Expected either FelkerStone2017, Balsara2025, or Quokka2026.");
+	}
+}
+
+template <typename problem_t>
+template <int dir0, int dir1>
+void MHDSystem<problem_t>::ReconstructVelocityCornersBDSImpl(std::array<amrex::FArrayBox, 3> const &cc_fabs_Ux,
+					    std::array<std::array<amrex::FArrayBox, 4>, 2> &ec_fabs_Ui_q, amrex::Box const &box_ec)
+{
+	auto const u0 = cc_fabs_Ux[dir0].const_array();
+	auto const u1 = cc_fabs_Ux[dir1].const_array();
+
+	std::array<amrex::Array4<amrex::Real>, 4> U0_q = {ec_fabs_Ui_q[0][0].array(), ec_fabs_Ui_q[0][1].array(),
+						ec_fabs_Ui_q[0][2].array(), ec_fabs_Ui_q[0][3].array()};
+	std::array<amrex::Array4<amrex::Real>, 4> U1_q = {ec_fabs_Ui_q[1][0].array(), ec_fabs_Ui_q[1][1].array(),
+						ec_fabs_Ui_q[1][2].array(), ec_fabs_Ui_q[1][3].array()};
+
+	// edges are nodal in dir0/dir1, so surrounding cells are offset by -1 in those dirs
+	amrex::IntVect const e0 = amrex::IntVect::TheDimensionVector(dir0);
+	amrex::IntVect const e1 = amrex::IntVect::TheDimensionVector(dir1);
+	amrex::IntVect const base_shift = e0 + e1;
+
+	amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+		amrex::IntVect edge_iv{AMREX_D_DECL(i, j, k)};
+		amrex::IntVect base_cell = edge_iv - base_shift;
+
+		for (int oy = 0; oy < 2; ++oy) {
+			for (int ox = 0; ox < 2; ++ox) {
+				int quad_idx = ox + 2 * oy; // quadrant ordering: (x-,y-)=0, (x+,y-)=1, (x+,y+)=2, (x-,y+)=3
+				int corner_pick = (1 - ox) + 2 * (1 - oy); // pick corner relative to cell that touches this edge
+
+				amrex::IntVect cell_iv = base_cell + ox * e0 + oy * e1;
+				auto const corner0 = bds::ComputeCornerValues2D<dir0, dir1>(u0, cell_iv[0], cell_iv[1], cell_iv[2], 0);
+				auto const corner1 = bds::ComputeCornerValues2D<dir0, dir1>(u1, cell_iv[0], cell_iv[1], cell_iv[2], 0);
+
+				U0_q[quad_idx](edge_iv[0], edge_iv[1], edge_iv[2]) = corner0[corner_pick];
+				U1_q[quad_idx](edge_iv[0], edge_iv[1], edge_iv[2]) = corner1[corner_pick];
+			}
+		}
+	});
+}
+
+template <typename problem_t>
+void MHDSystem<problem_t>::ReconstructVelocityCornersBDS(std::array<amrex::FArrayBox, 3> const &cc_fabs_Ux,
+					   std::array<std::array<amrex::FArrayBox, 4>, 2> &ec_fabs_Ui_q, amrex::Box const &box_ec,
+					   std::array<int, 2> const &extrap_dirs)
+{
+	int const d0 = extrap_dirs[0];
+	int const d1 = extrap_dirs[1];
+	if constexpr (AMREX_SPACEDIM == 3) {
+		if ((d0 == 0 && d1 == 1) || (d0 == 1 && d1 == 0)) {
+			if (d0 == 0) {
+				ReconstructVelocityCornersBDSImpl<0, 1>(cc_fabs_Ux, ec_fabs_Ui_q, box_ec);
+			} else {
+				ReconstructVelocityCornersBDSImpl<1, 0>(cc_fabs_Ux, ec_fabs_Ui_q, box_ec);
+			}
+		} else if ((d0 == 1 && d1 == 2) || (d0 == 2 && d1 == 1)) {
+			ReconstructVelocityCornersBDSImpl<1, 2>(cc_fabs_Ux, ec_fabs_Ui_q, box_ec);
+		} else if ((d0 == 2 && d1 == 0) || (d0 == 0 && d1 == 2)) {
+			ReconstructVelocityCornersBDSImpl<2, 0>(cc_fabs_Ux, ec_fabs_Ui_q, box_ec);
+		} else {
+			amrex::Abort("Invalid direction pairing for BDS corner reconstruction");
+		}
+	} else {
+		ReconstructVelocityCornersBDSImpl<0, 1>(cc_fabs_Ux, ec_fabs_Ui_q, box_ec);
 	}
 }
 
@@ -136,6 +209,8 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 {
 	const BL_PROFILE("MHDSystem::ComputeEMF_FelkerStone2017()");
 	const int nghost_cc = 4; // we only need 4 cc ghost cells when reconstructing cc->fc->ec using PPM
+	const bool useBDSVelCorners = (reconstructionOrder == 4);
+	const int recon_no_bds = useBDSVelCorners ? 3 : reconstructionOrder;
 	// note: all the different centerings still have the same distribution mapping, so it is fine for us to attach our looping to cc FArrayBox
 	// note: cell-centered (cc), face-centered (fc), and edge-centered (ec) data all have a different number of cells
 
@@ -218,76 +293,80 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 				}
 			}
 
-			// extrapolate the two required cell-centered velocity field components to the cell-edge
-			// there are two possible permutations for doing this: getting cell-centered quanties to a cell-edge
-			// first is cc->fc[dir-0]->ec and second is cc->fc[dir-1]->ec
-			for (int iperm = 0; iperm < 2; ++iperm) {
-				// for each permutation of extrapolating cc->fc->ec
+			if (useBDSVelCorners) {
+				MHDSystem<problem_t>::ReconstructVelocityCornersBDS(cc_fabs_Ux, ec_fabs_Ui_q, box_ec, extrap_dirs);
+			} else {
+				// extrapolate the two required cell-centered velocity field components to the cell-edge
+				// there are two possible permutations for doing this: getting cell-centered quanties to a cell-edge
+				// first is cc->fc[dir-0]->ec and second is cc->fc[dir-1]->ec
+				for (int iperm = 0; iperm < 2; ++iperm) {
+					// for each permutation of extrapolating cc->fc->ec
 
-				// define quantities
-				const int extrap_dir2face = extrap_dirs[iperm];
-				const int extrap_dir2edge = extrap_dirs[(iperm + 1) % 2];
-				const auto dir2face = static_cast<FluxDir>(extrap_dir2face);
-				const auto dir2edge = static_cast<FluxDir>(extrap_dir2edge);
-				const amrex::IntVect vec_cc2fc = amrex::IntVect::TheDimensionVector(extrap_dir2face);
-				const amrex::IntVect vec_fc2ec = amrex::IntVect::TheDimensionVector(extrap_dir2edge);
-				const amrex::Box box_fc = amrex::convert(box_cc, vec_cc2fc);
-				// we expand the domain of cc-data, so that when we reconstruct cc->fc (we include enough ghost cells in the fc->ec dimension),
-				// we get as an output (from reconstructing fc->ec) data only in the valid domain
-				const amrex::Box box_cc_U =
-				    amrex::grow(box_cc, (nghost_cc - 1) * vec_fc2ec); // note, the reconstruct function will uniformly grow the bounds by 1
-				const amrex::Box box_fc_U = amrex::grow(box_fc, (nghost_cc - 1) * vec_fc2ec + 1);
+					// define quantities
+					const int extrap_dir2face = extrap_dirs[iperm];
+					const int extrap_dir2edge = extrap_dirs[(iperm + 1) % 2];
+					const auto dir2face = static_cast<FluxDir>(extrap_dir2face);
+					const auto dir2edge = static_cast<FluxDir>(extrap_dir2edge);
+					const amrex::IntVect vec_cc2fc = amrex::IntVect::TheDimensionVector(extrap_dir2face);
+					const amrex::IntVect vec_fc2ec = amrex::IntVect::TheDimensionVector(extrap_dir2edge);
+					const amrex::Box box_fc = amrex::convert(box_cc, vec_cc2fc);
+					// we expand the domain of cc-data, so that when we reconstruct cc->fc (we include enough ghost cells in the fc->ec dimension),
+					// we get as an output (from reconstructing fc->ec) data only in the valid domain
+					const amrex::Box box_cc_U =
+					    amrex::grow(box_cc, (nghost_cc - 1) * vec_fc2ec); // note, the reconstruct function will uniformly grow the bounds by 1
+					const amrex::Box box_fc_U = amrex::grow(box_fc, (nghost_cc - 1) * vec_fc2ec + 1);
 
-				// extrapolate both required cell-centered velocity fields to the cell-edge
-				for (int icomp = 0; icomp < 2; ++icomp) {
-					// create temporary FArrayBox for storing the face-centered velocity field reconstructed from the cell-center
-					// indexing: field[2: i-side of face]
-					const int wcomp = extrap_dirs[icomp];
-					std::array<amrex::FArrayBox, 2> fc_fabs_U_ifside = {amrex::FArrayBox(box_fc_U, 1, amrex::The_Async_Arena()),
-											    amrex::FArrayBox(box_fc_U, 1, amrex::The_Async_Arena())};
+					// extrapolate both required cell-centered velocity fields to the cell-edge
+					for (int icomp = 0; icomp < 2; ++icomp) {
+						// create temporary FArrayBox for storing the face-centered velocity field reconstructed from the cell-center
+						// indexing: field[2: i-side of face]
+						const int wcomp = extrap_dirs[icomp];
+						std::array<amrex::FArrayBox, 2> fc_fabs_U_ifside = {amrex::FArrayBox(box_fc_U, 1, amrex::The_Async_Arena()),
+									      amrex::FArrayBox(box_fc_U, 1, amrex::The_Async_Arena())};
 
-					// extrapolate cell-centered velocity components to the cell-face
-					MHDSystem<problem_t>::ReconstructTo(dir2face, cc_fabs_Ux[wcomp].array(), fc_fabs_U_ifside[0].array(),
-									    fc_fabs_U_ifside[1].array(), box_cc_U, reconstructionOrder);
+						// extrapolate cell-centered velocity components to the cell-face
+						MHDSystem<problem_t>::ReconstructTo(dir2face, cc_fabs_Ux[wcomp].array(), fc_fabs_U_ifside[0].array(),
+								fc_fabs_U_ifside[1].array(), box_cc_U, reconstructionOrder);
 
-					// extrapolate face-centered velocity components to the cell-edge
-					for (int iface = 0; iface < 2; ++iface) {
-						// reset values in temporary FArrayBox
-						ec_fabs_U_ieside[0].setVal<amrex::RunOn::Device>(0.0);
-						ec_fabs_U_ieside[1].setVal<amrex::RunOn::Device>(0.0);
+						// extrapolate face-centered velocity components to the cell-edge
+						for (int iface = 0; iface < 2; ++iface) {
+							// reset values in temporary FArrayBox
+							ec_fabs_U_ieside[0].setVal<amrex::RunOn::Device>(0.0);
+							ec_fabs_U_ieside[1].setVal<amrex::RunOn::Device>(0.0);
 
-						// extrapolate face-centered velocity component to the cell-edge
-						MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_U_ifside[iface].array(), ec_fabs_U_ieside[0].array(),
-										    ec_fabs_U_ieside[1].array(), box_fc, reconstructionOrder);
+							// extrapolate face-centered velocity component to the cell-edge
+							MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_U_ifside[iface].array(), ec_fabs_U_ieside[0].array(),
+									    ec_fabs_U_ieside[1].array(), box_fc, reconstructionOrder);
 
-						// figure out which quadrant of the cell-edge this extrapolated velocity component corresponds with
-						int iquad0 = -1;
-						int iquad1 = -1;
+							// figure out which quadrant of the cell-edge this extrapolated velocity component corresponds with
+							int iquad0 = -1;
+							int iquad1 = -1;
 
-						// note: quadrants are defined based on where the quantity sits relative to the edge (dir-0, dir-1):
-						// (-,+) | (+,+)
-						//   1   |   2
-						// ------+------
-						//   0   |   3
-						// (-,-) | (+,-)
-						if (iperm == 0) {
-							iquad0 = (iface == 0) ? 0 : 3;
-							iquad1 = (iface == 0) ? 1 : 2;
-						} else {
-							iquad0 = (iface == 0) ? 0 : 1;
-							iquad1 = (iface == 0) ? 3 : 2;
+							// note: quadrants are defined based on where the quantity sits relative to the edge (dir-0, dir-1):
+							// (-,+) | (+,+)
+							//   1   |   2
+							// ------+------
+							//   0   |   3
+							// (-,-) | (+,-)
+							if (iperm == 0) {
+								iquad0 = (iface == 0) ? 0 : 3;
+								iquad1 = (iface == 0) ? 1 : 2;
+							} else {
+								iquad0 = (iface == 0) ? 0 : 1;
+								iquad1 = (iface == 0) ? 3 : 2;
+							}
+
+							ec_fabs_Ui_q[icomp][iquad0].plus<amrex::RunOn::Device>(ec_fabs_U_ieside[0], 0, 0, 1);
+							ec_fabs_Ui_q[icomp][iquad1].plus<amrex::RunOn::Device>(ec_fabs_U_ieside[1], 0, 0, 1);
 						}
-
-						ec_fabs_Ui_q[icomp][iquad0].plus<amrex::RunOn::Device>(ec_fabs_U_ieside[0], 0, 0, 1);
-						ec_fabs_Ui_q[icomp][iquad1].plus<amrex::RunOn::Device>(ec_fabs_U_ieside[1], 0, 0, 1);
 					}
 				}
-			}
 
-			// finish averaging the two different ways for extrapolating velocity fields: cc->fc->ec
-			for (int icomp = 0; icomp < 2; ++icomp) {
-				for (int iquad = 0; iquad < 4; ++iquad) {
-					ec_fabs_Ui_q[icomp][iquad].mult<amrex::RunOn::Device>(0.5, 0, 1);
+				// finish averaging the two different ways for extrapolating velocity fields: cc->fc->ec
+				for (int icomp = 0; icomp < 2; ++icomp) {
+					for (int iquad = 0; iquad < 4; ++iquad) {
+						ec_fabs_Ui_q[icomp][iquad].mult<amrex::RunOn::Device>(0.5, 0, 1);
+					}
 				}
 			}
 
@@ -300,7 +379,7 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 				const amrex::Box box_fc = amrex::convert(box_cc, vec_cc2fc);
 				// extrapolate face-centered magnetic components to the cell-edge
 				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(),
-								    ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
+								 ec_fabs_Bi_ieside[icomp][1].array(), box_fc, recon_no_bds);
 			}
 
 			// indexing: field[4: quadrant around edge]
