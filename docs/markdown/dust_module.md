@@ -35,13 +35,14 @@ where $\omega$ controls the level of frictional heating, with $\omega = 0$ turni
 
 ## Variable Storage
 
-New dust cell-centred conserved variables ($\rho_{\mathrm{d}}$, $\rho_{\mathrm{d}}\vec{v_{\mathrm{d}}}$) are added to MultiFab.
+The dust cell-centred conserved variables ($\rho_{\mathrm{d}}$, $\rho_{\mathrm{d}}\vec{v_{\mathrm{d}}}$) are added to MultiFab.
 
 ## Reconstruction and Riemann Solver
 
 Dust reconstruction is performed together with gas using the same method. The Riemann Solver used is as follows:
 
-In one dimension along the x-direction, given the left/right states $W_d^{L/R}$, one can provide the Riemann flux for conserved variables as follows. The density flux reads:
+In one dimension along the x-direction, given the left/right states $W_d^{L/R}$, one can provide the Riemann flux for conserved variables as follows. The density flux reads (Huang & Bai 2022):
+
 $$
 \begin{align*}
 F^{\text a}_x(\rho_d) = 
@@ -53,6 +54,8 @@ F^{\text a}_x(\rho_d) =
 \end{cases}
 \end{align*}
 $$
+
+Similar expressions hold for the momentum flux for all directions.
 
 This is implemented in `src/dust/dustRiemannSolver.hpp` and called in `HydroSystem::ComputeFluxes` to compute the dust advection flux.
 
@@ -77,5 +80,6 @@ $$
 ## Runtime Controls
 
 The following input parameters tune the dust module and are documented in more detail in [Runtime parameters](parameters.md):
+
 - `alpha` – Inverse of dust stopping time.
 - `omega` – Controls the level of frictional heating.
