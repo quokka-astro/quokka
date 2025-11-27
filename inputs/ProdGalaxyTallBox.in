@@ -8,7 +8,7 @@ geometry.is_periodic =  1    1    0
 # *****************************************************************
 # VERBOSITY
 # *****************************************************************
-amr.v              = 0      # verbosity in Amr
+amr.v              = 1      # verbosity in Amr
 
 # *****************************************************************
 # Resolution and refinement
@@ -19,8 +19,8 @@ amr.max_grid_size   = 256   # at least 128 for GPUs
 amr.blocking_factor_x = 16   # grid size must be divisible by this
 amr.blocking_factor_y = 16
 amr.blocking_factor_z = 8
-amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
-amr.grid_eff        = 0.7   # default
+amr.n_error_buf     = 0     # minimum 0 cell buffer around tagged cells
+amr.grid_eff        = 1.0
 
 radiation.iteration_tolerance = 1e-9
 radiation.iteration_tolerance_rel = 1e-6
@@ -59,6 +59,8 @@ perturb.filename = "../inputs/zdrv.hdf5"
 perturb.amplitude = 7e5 # 7 km/s
 
 problem.refine_zmax = 3.018e21 1.509e21  # refine to lev=1 with 1 kpc and lev=2 with 0.5 kpc
+regrid_interval     = -1    # static refinement only (do not regrid)
+poisson_supercycle_interval = 5
 
 tiny_profiler.enabled = 0
 
