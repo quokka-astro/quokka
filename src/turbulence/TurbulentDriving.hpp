@@ -29,13 +29,13 @@
 #include "AMReX_SPACE.H"
 #include "AMReX_iMultiFab.H"
 
+#include "TurbGenEx.h"
 #include "fmt/base.h"
 #include "fmt/core.h"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "math/FastMath.hpp"
 #include "radiation/radiation_system.hpp"
-#include "turbulence/plugins/AMReX/TurbGenEx.h"
 #include <array>
 #include <cmath>
 #include <filesystem>

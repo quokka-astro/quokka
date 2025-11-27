@@ -27,8 +27,6 @@ template <> struct Physics_Traits<TurbulentBox> {
 template <> struct quokka::EOS_Traits<TurbulentBox> {
 	static constexpr double gamma = 1.0;
 	static constexpr double cs_isothermal = 1.0; // dimensionless
-						     // static constexpr double mean_molecular_weight = C::m_u;
-						     // static constexpr double boltzmann_constant = C::k_B;
 };
 
 template <> struct HydroSystem_Traits<TurbulentBox> {
