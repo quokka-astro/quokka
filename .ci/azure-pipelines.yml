@@ -83,12 +83,12 @@ jobs:
         CCACHE_BASEDIR: $(Build.SourcesDirectory)
         CCACHE_NOHASHDIR: 1
       inputs:
-        cmakeArgs: '--build . --parallel 16'
+        cmakeArgs: '--build . --parallel 16 --target SN'
     
     - task: CMake@1
       displayName: 'Run CTest'
       inputs:
-        cmakeArgs: '-E chdir . ctest -E "RadMatterCoupling*" -T Test --output-on-failure'
+        cmakeArgs: '-E chdir . ctest -R "(SN)" -T Test --output-on-failure'
     
     - task: PublishTestResults@2
       inputs:
