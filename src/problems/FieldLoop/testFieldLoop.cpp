@@ -123,7 +123,7 @@ template <> void QuokkaSimulation<FieldLoop>::setInitialConditionsOnGridFaceVars
 	});
 }
 
-template <> void QuokkaSimulation<FieldLoop>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<FieldLoop>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	RefineOn refine_based_on{};
 	amrex::ParmParse const pp("field_loop");
