@@ -28,13 +28,8 @@
 - **CUDA builds on macOS or Linux.** To build and test CUDA functionality locally, run `./scripts/bash/run-cuda-container.sh`. This script pulls the appropriate Docker image, launches a container, and performs a CUDA build—useful for catching CUDA-specific issues on your development machine.
 - **Writing and building documentation.** The developer is responsible for updating the documentation site. To build and view the documentation site locally:
 ```bash
-cd docs
-pip install -r requirements.txt
-cd ..
-./build_docs.sh
-# After building, you can host the documentation with a local web server:
-cd docs/site
-python3 -m http.server
+pip install -r docs/requirements.txt
+./scripts/bash/build_and_view_docs.sh
 ```
 Then open `http://[::]:8000/` in your browser to view the documentation locally.
 
