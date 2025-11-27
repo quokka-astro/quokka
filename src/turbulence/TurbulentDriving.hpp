@@ -84,10 +84,11 @@ template <typename problem_t> class turbulentDriving
 				amrex::Real dE = 0;
 
 				for (int m = 0; m < AMREX_SPACEDIM; m++) {
+					const amrex::Real vel = data(i, j, k, HydroSystem<problem_t>::x1Momentum_index + m) / rho;
 					const amrex::Real dMom = forceField(i, j, k, m) * dt;
 
 					data(i, j, k, HydroSystem<problem_t>::x1Momentum_index + m) += dMom;
-					dE += dMom * dMom / (2 * rho);
+					dE += vel * dMom + dMom * dMom / (2 * rho);
 				}
 
 				data(i, j, k, HydroSystem<problem_t>::energy_index) += dE;
