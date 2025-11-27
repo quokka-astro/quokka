@@ -220,16 +220,15 @@ template <> void QuokkaSimulation<TheProblem>::refineGrid(int lev, amrex::TagBox
 	// geometrical refinement
 	// tag cells within the cylinder defined by R < Rmax and abs(z) < zmax
 	amrex::ParmParse const pp("problem");
-	std::vector<amrex::Real> refine_zmax_kpc_list;
-	pp.queryarr("refine_zmax_kpc", refine_zmax_kpc_list);
+	std::vector<amrex::Real> refine_zmax_list;
+	pp.queryarr("refine_zmax", refine_zmax_list);
 	
 	// If no list is provided or level exceeds list size, skip refinement
-	if (refine_zmax_kpc_list.empty() || lev >= static_cast<int>(refine_zmax_kpc_list.size())) {
+	if (refine_zmax_list.empty() || lev >= static_cast<int>(refine_zmax_list.size())) {
 		return;
 	}
 	
-	const amrex::Real refine_zmax_kpc = refine_zmax_kpc_list[lev];
-	const amrex::Real refine_zmax = refine_zmax_kpc * (1.0e3 * C::parsec);
+	const amrex::Real refine_zmax = refine_zmax_list[lev];
 
 	const auto prob_lo = geom[lev].ProbLoArray();
 	const auto dx = geom[lev].CellSizeArray();

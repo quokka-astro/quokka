@@ -58,6 +58,8 @@ perturb.filename = "../inputs/zdrv.hdf5"
 #perturb.use_superresolution = 0
 perturb.amplitude = 7e5 # 7 km/s
 
+problem.refine_zmax = 3.018e21 1.509e21  # refine to lev=1 with 1 kpc and lev=2 with 0.5 kpc
+
 tiny_profiler.enabled = 0
 
 statistics_interval = 128
