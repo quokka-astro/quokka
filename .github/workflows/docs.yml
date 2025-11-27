@@ -45,7 +45,7 @@ jobs:
 
       - name: Install and Build
         run: |
-          ./scripts/bash/build_docs.sh
+          ./scripts/bash/build_and_view_docs.sh
 
       - name: Archive artifact
         shell: sh
