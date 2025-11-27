@@ -27,6 +27,7 @@ void computeDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt, amrex::Real
 
 	amrex::GpuArray<amrex::Real, N> alpha = dust_alpha_;
 
+	// NOLINTNEXTLINE(modernize-use-trailing-return-type)
 	amrex::ParallelFor(consVar_cc_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
 		amrex::Real rho_g = consVar_cc[bx](i, j, k, HydroSystem<problem_t>::density_index);
 
@@ -74,9 +75,9 @@ void computeDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt, amrex::Real
 			}
 
 			amrex::Real const dt_lev = 2.0 * dt;
-			amrex::Real gamma1 = 0;
+			amrex::Real gamma1 = 0; // NOLINT
 			amrex::Real gamma2 = 0;
-			amrex::Real beta1 = 0;
+			amrex::Real beta1 = 0; // NOLINT
 			amrex::Real beta2 = 0;
 			amrex::Real b = 0;
 			if (dt_lev < t_s_max) {
