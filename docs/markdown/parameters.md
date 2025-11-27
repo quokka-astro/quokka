@@ -104,7 +104,7 @@ These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`
 | Parameter Name | Type | Description |
 |----|----|----|
 | dust.alpha | Float array | Inverse of dust stopping time. Default: 0.0. |
-| dust.omega | Float | Controls the level of frictional heating, with ω = 0 turning it off and ω = 1 depositing all dissipation into the gas. Default: 1.0.|
+| dust.omega | Float | Controls the level of frictional heating, with omega = 0 turning it off and omega = 1 depositing all dissipation into the gas. Default: 1.0.|
 
 ## Particles
 

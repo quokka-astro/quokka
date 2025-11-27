@@ -1,4 +1,4 @@
-/// \file test_dust_soundwave.cpp
+/// \file testDustSoundwave.cpp
 /// \brief Defines a test problem for dust transport terms and dust drag force
 ///
 
