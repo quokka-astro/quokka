@@ -215,6 +215,46 @@ template <> void QuokkaSimulation<TheProblem>::createInitialStochasticStellarPop
 	amrex::Gpu::streamSynchronize();
 }
 
+template <> void QuokkaSimulation<TheProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+{
+	// geometrical refinement
+	// tag cells within the cylinder defined by R < Rmax and abs(z) < zmax
+	amrex::ParmParse const pp("problem");
+	std::vector<amrex::Real> refine_zmax_kpc_list;
+	pp.queryarr("refine_zmax_kpc", refine_zmax_kpc_list);
+	
+	// If no list is provided or level exceeds list size, skip refinement
+	if (refine_zmax_kpc_list.empty() || lev >= static_cast<int>(refine_zmax_kpc_list.size())) {
+		return;
+	}
+	
+	const amrex::Real refine_zmax_kpc = refine_zmax_kpc_list[lev];
+	const amrex::Real refine_zmax = refine_zmax_kpc * (1.0e3 * C::parsec);
+
+	const auto prob_lo = geom[lev].ProbLoArray();
+	const auto dx = geom[lev].CellSizeArray();
+	const auto tag = tags.arrays();
+
+	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		// NOTE: must check all nodes of the cell!
+		// Otherwise, cells that are too big can completely prevent refinement.
+		// amrex::Real const x0 = prob_lo[0] + (i * dx[0]);
+		// amrex::Real const y0 = prob_lo[1] + (j * dx[1]);
+		// amrex::Real const z0 = prob_lo[2] + (k * dx[2]);
+
+		// amrex::Real const x1 = prob_lo[0] + ((i + 1) * dx[0]);
+		// amrex::Real const y1 = prob_lo[1] + ((j + 1) * dx[1]);
+		// amrex::Real const z1 = prob_lo[2] + ((k + 1) * dx[2]);
+
+		amrex::Real const z = prob_lo[2] + ((k + 0.5) * dx[2]);
+
+		if (std::abs(z) < refine_zmax) {
+			tag[bx](i, j, k) = amrex::TagBox::SET;
+		}
+	});
+	amrex::Gpu::streamSynchronize();
+}
+
 template <> void QuokkaSimulation<TheProblem>::preCalculateInitialConditions()
 {
 	static bool isSamplingDone = false;
