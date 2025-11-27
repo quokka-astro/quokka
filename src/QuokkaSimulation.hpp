@@ -154,7 +154,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	static constexpr bool is_particle_enabled = Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None;
 
 	amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> dust_alpha_ = {};
-	amrex::Real dust_omega_ = 0.0;
+	amrex::Real dust_omega_ = 1.0;
 
 	amrex::Real radiationCflNumber_ = 0.3;
 	int maxSubsteps_ = 10;				// maximum number of radiation subcycles per hydro step
@@ -548,7 +548,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	// set dust runtime parameters
 	{
 		for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
-			dust_alpha_[g] = 1.0;
+			dust_alpha_[g] = 0.0;
 		}
 		amrex::ParmParse const dpp("dust");
 		std::vector<amrex::Real> alpha_vec;

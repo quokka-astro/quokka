@@ -70,6 +70,10 @@ void computeDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt, amrex::Real
 
 			amrex::Real t_s_max = 0.0;
 			for (int g = 0; g < N; ++g) {
+				if (alpha[g] == 0.0) {
+						t_s_max = std::numeric_limits<amrex::Real>::max();
+						break;  
+				}
 				amrex::Real t_s = 1.0 / alpha[g];
 				t_s_max = amrex::max(t_s_max, t_s);
 			}
