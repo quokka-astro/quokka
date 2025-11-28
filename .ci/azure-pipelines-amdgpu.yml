@@ -84,12 +84,12 @@ jobs:
         CCACHE_BASEDIR: $(Build.SourcesDirectory)
         CCACHE_NOHASHDIR: 1
       inputs:
-        cmakeArgs: '--build . --parallel 16 --target DustDamping DustDrag DustSoundwave'
+        cmakeArgs: '--build . --parallel 16 --target DustDamping DustDrag DustDrag3D DustSoundwave'
     
     - task: CMake@1
       displayName: 'Run CTest'
       inputs:
-        cmakeArgs: '-E chdir . ctest -R "(DustDamping|DustDrag|DustSoundwave)" -T Test --output-on-failure'
+        cmakeArgs: '-E chdir . ctest -R "(DustDamping|DustDrag|DustDrag3D|DustSoundwave)" -T Test --output-on-failure'
     
     - task: PublishTestResults@2
       inputs:
