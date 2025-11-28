@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QUOKKA Runtime Calculator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <div class="header-content">
+                <div>
+                    <h1>QUOKKA Runtime Calculator</h1>
+                    <p class="subtitle">Performance estimation for grid-based hydrodynamics codes</p>
+                </div>
+                <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme">
+                    <span class="theme-icon">🌙</span>
+                </button>
+            </div>
+        </header>
+
+        <main>
+            <div class="calculator-grid">
+                <!-- Left Column: Inputs -->
+                <div class="input-section">
+                    
+                    <!-- Hardware Performance -->
+                    <div class="card">
+                        <h2><span class="icon">⚡</span> Hardware Performance</h2>
+                        <div class="form-group input-with-unit">
+                            <label for="gpu-perf">
+                                Performance
+                                <span class="help-icon"
+                                    data-tooltip="Read Mupdates/s from the Quokka log file and divide by the number of GPUs to get Mupdates/(GPU*s)">ℹ️</span>
+                            </label>
+                            <div class="input-wrapper">
+                                <input type="number" id="gpu-perf" placeholder="e.g. 1.5" step="1">
+                                <select id="perf-unit">
+                                    <option value="mupdates">Mupdates/(GPU*s)</option>
+                                    <option value="ns">GPU*ns/update</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Grid Configuration -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h2><span class="icon">🌐</span> Grid Configuration</h2>
+                            <button id="add-level-btn" class="btn-icon" title="Add Level">+</button>
+                        </div>
+                        <div id="levels-container">
+                            <!-- Levels will be injected here by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Physics & Time -->
+                    <div class="card">
+                        <h2><span class="icon">⚛️</span> Physics & Time</h2>
+                        
+                        <div class="form-group-inline">
+                            <label for="box-size">
+                                Box Size X (pc)
+                                <span class="help-icon"
+                                    data-tooltip="Physical size of the x-dimension at the finest level. Used to estimate dt at the finest level (assuming no timestep subcycling)">ℹ️</span>
+                            </label>
+                            <input type="number" id="box-size" placeholder="e.g. 100">
+                        </div>
+
+                        <div class="form-group-inline">
+                            <label for="vmax">v<sub>max</sub> (km/s)
+                                <span class="help-icon" data-tooltip="Maximum signal speed. Used to estimate dt at the finest level">ℹ️</span>
+                            </label>
+                            <input type="number" id="vmax" placeholder="e.g. 10">
+                        </div>
+
+                        <div class="form-group-inline">
+                            <label for="cfl">
+                                CFL
+                                <span class="help-icon" data-tooltip="dt = CFL × dx / vmax">ℹ️</span>
+                            </label>
+                            <input type="number" id="cfl" value="0.3" step="0.05">
+                        </div>
+
+                        <div class="toggle-group">
+                            <label class="switch">
+                                <input type="checkbox" id="manual-steps-toggle">
+                                <span class="slider round"></span>
+                            </label>
+                            <span class="label-text">Enter Max Steps Manually</span>
+                        </div>
+
+                        <div id="auto-steps-inputs">
+                            <div class="form-group input-with-unit">
+                                <label for="t-stop">t<sub>stop</sub></label>
+                                <div class="input-wrapper">
+                                    <input type="number" id="t-stop" placeholder="e.g. 10">
+                                    <select id="t-stop-unit">
+                                        <option value="Myr">Myr</option>
+                                        <option value="s">s</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="manual-steps-inputs" class="hidden">
+                            <div class="form-group-inline">
+                                <label for="max-steps">Max Steps</label>
+                                <input type="number" id="max-steps" placeholder="e.g. 10000">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Resources -->
+                    <div class="card">
+                        <h2><span class="icon">🖥️</span> Resources</h2>
+                        <div class="form-group-inline">
+                            <label for="num-gpus">Number of GPUs</label>
+                            <input type="number" id="num-gpus" value="1" min="1">
+                        </div>
+                        <div class="form-group-inline">
+                            <label for="su-conversion">SU per GPU-Hour</label>
+                            <input type="number" id="su-conversion" value="64" min="1">
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Right Column: Outputs -->
+                <div class="output-section">
+                    <div class="sticky-wrapper">
+                        <div class="card result-card">
+                            <div class="card-header">
+                                <h2>Estimation Results</h2>
+                                <button id="export-btn" class="btn-export" title="Export JSON">
+                                    <span>📥</span> Export
+                                </button>
+                                </div>
+                            
+                            <div class="result-group">
+                                <span class="label">Total Active Cells</span>
+                                <span class="value" id="total-cells">-</span>
+                            </div>
+
+                            <div class="result-group">
+                                <span class="label">Finest Resolution (dx)</span>
+                                <span class="value" id="min-dx">-</span>
+                            </div>
+
+                            <div class="result-group">
+                                <span class="label">Time Step (dt)</span>
+                                <span class="value" id="dt-val">-</span>
+                            </div>
+
+                            <div class="result-group">
+                                <span class="label">Total Steps</span>
+                                <span class="value" id="total-steps">-</span>
+                            </div>
+
+                            <div class="divider"></div>
+
+                            <div class="result-group highlight">
+                                <span class="label">Physical Runtime</span>
+                                <div class="value-large-vertical" id="runtime-display">
+                                    <div class="time-row time-row-small"><span class="time-part time-part-small" id="rt-days">0</span> Days</div>
+                                    <div class="time-row time-row-large"><span class="time-part time-part-large" id="rt-hours">0</span> Hours</div>
+                                    <div class="time-row time-row-small"><span class="time-part time-part-small" id="rt-seconds">0</span> Seconds</div>
+                                </div>
+                            </div>
+
+                            <div class="divider"></div>
+
+                            <div class="result-group highlight-secondary">
+                                <span class="label">Total Resource Cost</span>
+                                <div class="value-medium value-medium-small"><span id="su-hours">0</span> SU</div>
+                                <div class="value-medium value-medium-large"><span id="gpu-hours">0</span> GPU-Hours</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

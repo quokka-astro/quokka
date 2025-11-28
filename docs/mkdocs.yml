@@ -33,6 +33,7 @@ nav:
     - In-situ analysis: insitu_analysis.md
     - Postprocessing: postprocessing.md
     - Debugging simulation instability: instability.md
+    - Runtime performance calculator: html/runtime-calculator/index.html
   - Developer Guide:
     - Developer onboarding: developer_onboarding.md
     - Developing a new problem generator: developing_problem_generators.md
