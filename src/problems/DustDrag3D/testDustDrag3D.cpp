@@ -45,7 +45,7 @@ template <> void QuokkaSimulation<DustDrag>::setInitialConditionsOnGrid(quokka::
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
 	const auto Egas0 = initial_Egas;
-	const auto v_gas = v0;	      // gas velocity in all directions
+	const auto v_gas = v0;	     // gas velocity in all directions
 	const auto v_dust = dust_v0; // dust velocity in all directions
 
 	// Gaussian parameters
@@ -68,7 +68,7 @@ template <> void QuokkaSimulation<DustDrag>::setInitialConditionsOnGrid(quokka::
 		// 3D Gaussian + background for gas
 		double const r2 = (x - xc) * (x - xc) + (y - yc) * (y - yc) + (z - zc) * (z - zc);
 		amrex::Real const rho_gas_local = rho_bg + A * std::exp(-r2 / (2.0 * sigma * sigma));
-		
+
 		state_cc(i, j, k, HydroSystem<DustDrag>::density_index) = rho_gas_local;
 		state_cc(i, j, k, HydroSystem<DustDrag>::energy_index) = Egas0;
 		state_cc(i, j, k, HydroSystem<DustDrag>::internalEnergy_index) = Egas0;
@@ -130,16 +130,16 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// get geometry information
-	const auto& geom = sim.Geom(0);
+	const auto &geom = sim.Geom(0);
 	const auto prob_lo = geom.ProbLoArray();
 	const auto dx = geom.CellSizeArray();
 	const auto domain = geom.Domain();
-	
+
 	// center indices in all directions
-	const int i_center = domain.smallEnd(0) + domain.length(0)/2;
-	const int j_center = domain.smallEnd(1) + domain.length(1)/2;
-	const int k_center = domain.smallEnd(2) + domain.length(2)/2;
-	
+	const int i_center = domain.smallEnd(0) + domain.length(0) / 2;
+	const int j_center = domain.smallEnd(1) + domain.length(1) / 2;
+	const int k_center = domain.smallEnd(2) + domain.length(2) / 2;
+
 	// X direction (fixed y and z at center)
 	const int nx = domain.length(0);
 	std::vector<double> xs(nx);
@@ -151,59 +151,69 @@ auto problem_main() -> int
 	std::vector<double> rho_dust_exact_x(nx);
 	std::vector<double> rho_gas_exact_x(nx);
 	std::vector<double> rho_gas_sim_x(nx);
-	
+
 	for (int i = domain.smallEnd(0); i <= domain.bigEnd(0); ++i) {
 		const int idx = i - domain.smallEnd(0);
 		amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
 		xs[idx] = x;
-		
+
 		amrex::Real const t = sim.tNew_[0];
 
 		// exact gas density (shifted by v0 * t in all directions)
 		amrex::Real x_gas_initial = std::fmod(x - v0 * t, Lx);
 		amrex::Real y_gas_initial = std::fmod(0.5 - v0 * t, Ly);
 		amrex::Real z_gas_initial = std::fmod(0.5 - v0 * t, Lz);
-		
+
 		// Handle periodic boundaries
-		if (x_gas_initial < 0.0) { x_gas_initial += Lx; }
-		if (y_gas_initial < 0.0) { y_gas_initial += Ly; }
-		if (z_gas_initial < 0.0) { z_gas_initial += Lz; }
-		
-		double const r2_gas = (x_gas_initial - xc) * (x_gas_initial - xc) + 
-		               (y_gas_initial - yc) * (y_gas_initial - yc) + 
-		               (z_gas_initial - zc) * (z_gas_initial - zc);
+		if (x_gas_initial < 0.0) {
+			x_gas_initial += Lx;
+		}
+		if (y_gas_initial < 0.0) {
+			y_gas_initial += Ly;
+		}
+		if (z_gas_initial < 0.0) {
+			z_gas_initial += Lz;
+		}
+
+		double const r2_gas =
+		    (x_gas_initial - xc) * (x_gas_initial - xc) + (y_gas_initial - yc) * (y_gas_initial - yc) + (z_gas_initial - zc) * (z_gas_initial - zc);
 		rho_gas_exact_x[idx] = rho_bg + A * std::exp(-r2_gas / (2.0 * sigma * sigma));
 
 		// exact dust density (shifted by dust_v0 * t in all directions)
 		amrex::Real x_dust_initial = std::fmod(x - dust_v0 * t, Lx);
 		amrex::Real y_dust_initial = std::fmod(0.5 - dust_v0 * t, Ly);
 		amrex::Real z_dust_initial = std::fmod(0.5 - dust_v0 * t, Lz);
-		
-		if (x_dust_initial < 0.0) { x_dust_initial += Lx; }
-		if (y_dust_initial < 0.0) { y_dust_initial += Ly; }
-		if (z_dust_initial < 0.0) { z_dust_initial += Lz; }
-		
-		double const r2_dust = (x_dust_initial - xc) * (x_dust_initial - xc) + 
-		                (y_dust_initial - yc) * (y_dust_initial - yc) + 
-		                (z_dust_initial - zc) * (z_dust_initial - zc);
+
+		if (x_dust_initial < 0.0) {
+			x_dust_initial += Lx;
+		}
+		if (y_dust_initial < 0.0) {
+			y_dust_initial += Ly;
+		}
+		if (z_dust_initial < 0.0) {
+			z_dust_initial += Lz;
+		}
+
+		double const r2_dust = (x_dust_initial - xc) * (x_dust_initial - xc) + (y_dust_initial - yc) * (y_dust_initial - yc) +
+				       (z_dust_initial - zc) * (z_dust_initial - zc);
 		rho_dust_exact_x[idx] = rho_bg + A * std::exp(-r2_dust / (2.0 * sigma * sigma));
 
 		vx_exact[idx] = v0;
 		vx_dust_exact[idx] = dust_v0;
-		
+
 		// read numerical values from MultiFab
-		const auto& mf = sim.state_new_cc_[0];
+		const auto &mf = sim.state_new_cc_[0];
 		for (amrex::MFIter mfi(mf); mfi.isValid(); ++mfi) {
-			const auto& fab = mf.array(mfi);
-			const amrex::Box& bx = mfi.validbox();
-			
+			const auto &fab = mf.array(mfi);
+			const amrex::Box &bx = mfi.validbox();
+
 			// check if the current box contains the (i, j_center, k_center) index
 			if (bx.contains(amrex::IntVect(i, j_center, k_center))) {
 				const double density = fab(i, j_center, k_center, HydroSystem<DustDrag>::density_index);
 				const double momentum_x = fab(i, j_center, k_center, HydroSystem<DustDrag>::x1Momentum_index);
 				const double dust_density = fab(i, j_center, k_center, HydroSystem<DustDrag>::dustDensity_index);
 				const double dust_momentum_x = fab(i, j_center, k_center, HydroSystem<DustDrag>::x1DustMomentum_index);
-				
+
 				vx_sim[idx] = momentum_x / density;
 				vx_dust_sim[idx] = dust_momentum_x / dust_density;
 				rho_dust_sim_x[idx] = dust_density;
@@ -224,59 +234,69 @@ auto problem_main() -> int
 	std::vector<double> rho_dust_exact_y(ny);
 	std::vector<double> rho_gas_exact_y(ny);
 	std::vector<double> rho_gas_sim_y(ny);
-	
+
 	for (int j = domain.smallEnd(1); j <= domain.bigEnd(1); ++j) {
 		const int idx = j - domain.smallEnd(1);
 		amrex::Real const y = prob_lo[1] + (j + 0.5) * dx[1];
 		ys[idx] = y;
-		
+
 		amrex::Real const t = sim.tNew_[0];
 
 		// exact gas density (shifted by v0 * t in all directions)
 		amrex::Real x_gas_initial = std::fmod(0.5 - v0 * t, Lx);
 		amrex::Real y_gas_initial = std::fmod(y - v0 * t, Ly);
 		amrex::Real z_gas_initial = std::fmod(0.5 - v0 * t, Lz);
-		
+
 		// Handle periodic boundaries
-		if (x_gas_initial < 0.0) { x_gas_initial += Lx; }
-		if (y_gas_initial < 0.0) { y_gas_initial += Ly; }
-		if (z_gas_initial < 0.0) { z_gas_initial += Lz; }
-		
-		double const r2_gas = (x_gas_initial - xc) * (x_gas_initial - xc) + 
-		               (y_gas_initial - yc) * (y_gas_initial - yc) + 
-		               (z_gas_initial - zc) * (z_gas_initial - zc);
+		if (x_gas_initial < 0.0) {
+			x_gas_initial += Lx;
+		}
+		if (y_gas_initial < 0.0) {
+			y_gas_initial += Ly;
+		}
+		if (z_gas_initial < 0.0) {
+			z_gas_initial += Lz;
+		}
+
+		double const r2_gas =
+		    (x_gas_initial - xc) * (x_gas_initial - xc) + (y_gas_initial - yc) * (y_gas_initial - yc) + (z_gas_initial - zc) * (z_gas_initial - zc);
 		rho_gas_exact_y[idx] = rho_bg + A * std::exp(-r2_gas / (2.0 * sigma * sigma));
 
 		// exact dust density (shifted by dust_v0 * t in all directions)
 		amrex::Real x_dust_initial = std::fmod(0.5 - dust_v0 * t, Lx);
 		amrex::Real y_dust_initial = std::fmod(y - dust_v0 * t, Ly);
 		amrex::Real z_dust_initial = std::fmod(0.5 - dust_v0 * t, Lz);
-		
-		if (x_dust_initial < 0.0) { x_dust_initial += Lx; }
-		if (y_dust_initial < 0.0) { y_dust_initial += Ly; }
-		if (z_dust_initial < 0.0) { z_dust_initial += Lz; }
-		
-		double const r2_dust = (x_dust_initial - xc) * (x_dust_initial - xc) + 
-		                (y_dust_initial - yc) * (y_dust_initial - yc) + 
-		                (z_dust_initial - zc) * (z_dust_initial - zc);
+
+		if (x_dust_initial < 0.0) {
+			x_dust_initial += Lx;
+		}
+		if (y_dust_initial < 0.0) {
+			y_dust_initial += Ly;
+		}
+		if (z_dust_initial < 0.0) {
+			z_dust_initial += Lz;
+		}
+
+		double const r2_dust = (x_dust_initial - xc) * (x_dust_initial - xc) + (y_dust_initial - yc) * (y_dust_initial - yc) +
+				       (z_dust_initial - zc) * (z_dust_initial - zc);
 		rho_dust_exact_y[idx] = rho_bg + A * std::exp(-r2_dust / (2.0 * sigma * sigma));
 
 		vy_exact[idx] = v0;
 		vy_dust_exact[idx] = dust_v0;
-		
+
 		// read numerical values from MultiFab
-		const auto& mf = sim.state_new_cc_[0];
+		const auto &mf = sim.state_new_cc_[0];
 		for (amrex::MFIter mfi(mf); mfi.isValid(); ++mfi) {
-			const auto& fab = mf.array(mfi);
-			const amrex::Box& bx = mfi.validbox();
-			
+			const auto &fab = mf.array(mfi);
+			const amrex::Box &bx = mfi.validbox();
+
 			// check if the current box contains the (i_center, j, k_center) index
 			if (bx.contains(amrex::IntVect(i_center, j, k_center))) {
 				const double density = fab(i_center, j, k_center, HydroSystem<DustDrag>::density_index);
 				const double momentum_y = fab(i_center, j, k_center, HydroSystem<DustDrag>::x2Momentum_index);
 				const double dust_density = fab(i_center, j, k_center, HydroSystem<DustDrag>::dustDensity_index);
 				const double dust_momentum_y = fab(i_center, j, k_center, HydroSystem<DustDrag>::x2DustMomentum_index);
-				
+
 				vy_sim[idx] = momentum_y / density;
 				vy_dust_sim[idx] = dust_momentum_y / dust_density;
 				rho_dust_sim_y[idx] = dust_density;
@@ -297,59 +317,69 @@ auto problem_main() -> int
 	std::vector<double> rho_dust_exact_z(nz);
 	std::vector<double> rho_gas_exact_z(nz);
 	std::vector<double> rho_gas_sim_z(nz);
-	
+
 	for (int k = domain.smallEnd(2); k <= domain.bigEnd(2); ++k) {
 		const int idx = k - domain.smallEnd(2);
 		amrex::Real const z = prob_lo[2] + (k + 0.5) * dx[2];
 		zs[idx] = z;
-		
+
 		amrex::Real const t = sim.tNew_[0];
 
 		// exact gas density (shifted by v0 * t in all directions)
 		amrex::Real x_gas_initial = std::fmod(0.5 - v0 * t, Lx);
 		amrex::Real y_gas_initial = std::fmod(0.5 - v0 * t, Ly);
 		amrex::Real z_gas_initial = std::fmod(z - v0 * t, Lz);
-		
+
 		// Handle periodic boundaries
-		if (x_gas_initial < 0.0) { x_gas_initial += Lx; }
-		if (y_gas_initial < 0.0) { y_gas_initial += Ly; }
-		if (z_gas_initial < 0.0) { z_gas_initial += Lz; }
-		
-		double const r2_gas = (x_gas_initial - xc) * (x_gas_initial - xc) + 
-		               (y_gas_initial - yc) * (y_gas_initial - yc) + 
-		               (z_gas_initial - zc) * (z_gas_initial - zc);
+		if (x_gas_initial < 0.0) {
+			x_gas_initial += Lx;
+		}
+		if (y_gas_initial < 0.0) {
+			y_gas_initial += Ly;
+		}
+		if (z_gas_initial < 0.0) {
+			z_gas_initial += Lz;
+		}
+
+		double const r2_gas =
+		    (x_gas_initial - xc) * (x_gas_initial - xc) + (y_gas_initial - yc) * (y_gas_initial - yc) + (z_gas_initial - zc) * (z_gas_initial - zc);
 		rho_gas_exact_z[idx] = rho_bg + A * std::exp(-r2_gas / (2.0 * sigma * sigma));
 
 		// exact dust density (shifted by dust_v0 * t in all directions)
 		amrex::Real x_dust_initial = std::fmod(0.5 - dust_v0 * t, Lx);
 		amrex::Real y_dust_initial = std::fmod(0.5 - dust_v0 * t, Ly);
 		amrex::Real z_dust_initial = std::fmod(z - dust_v0 * t, Lz);
-		
-		if (x_dust_initial < 0.0) { x_dust_initial += Lx; }
-		if (y_dust_initial < 0.0) { y_dust_initial += Ly; }
-		if (z_dust_initial < 0.0) { z_dust_initial += Lz; }
-		
-		double const r2_dust = (x_dust_initial - xc) * (x_dust_initial - xc) + 
-		                (y_dust_initial - yc) * (y_dust_initial - yc) + 
-		                (z_dust_initial - zc) * (z_dust_initial - zc);
+
+		if (x_dust_initial < 0.0) {
+			x_dust_initial += Lx;
+		}
+		if (y_dust_initial < 0.0) {
+			y_dust_initial += Ly;
+		}
+		if (z_dust_initial < 0.0) {
+			z_dust_initial += Lz;
+		}
+
+		double const r2_dust = (x_dust_initial - xc) * (x_dust_initial - xc) + (y_dust_initial - yc) * (y_dust_initial - yc) +
+				       (z_dust_initial - zc) * (z_dust_initial - zc);
 		rho_dust_exact_z[idx] = rho_bg + A * std::exp(-r2_dust / (2.0 * sigma * sigma));
 
 		vz_exact[idx] = v0;
 		vz_dust_exact[idx] = dust_v0;
-		
+
 		// read numerical values from MultiFab
-		const auto& mf = sim.state_new_cc_[0];
+		const auto &mf = sim.state_new_cc_[0];
 		for (amrex::MFIter mfi(mf); mfi.isValid(); ++mfi) {
-			const auto& fab = mf.array(mfi);
-			const amrex::Box& bx = mfi.validbox();
-			
+			const auto &fab = mf.array(mfi);
+			const amrex::Box &bx = mfi.validbox();
+
 			// check if the current box contains the (i_center, j_center, k) index
 			if (bx.contains(amrex::IntVect(i_center, j_center, k))) {
 				const double density = fab(i_center, j_center, k, HydroSystem<DustDrag>::density_index);
 				const double momentum_z = fab(i_center, j_center, k, HydroSystem<DustDrag>::x3Momentum_index);
 				const double dust_density = fab(i_center, j_center, k, HydroSystem<DustDrag>::dustDensity_index);
 				const double dust_momentum_z = fab(i_center, j_center, k, HydroSystem<DustDrag>::x3DustMomentum_index);
-				
+
 				vz_sim[idx] = momentum_z / density;
 				vz_dust_sim[idx] = dust_momentum_z / dust_density;
 				rho_dust_sim_z[idx] = dust_density;
@@ -414,9 +444,8 @@ auto problem_main() -> int
 
 	int status = 1;
 	const double rel_err_tol = 0.03;
-	if ((rel_err_norm_x < rel_err_tol) && (rel_err_norm_dust_rho_x < rel_err_tol) &&
-	    (rel_err_norm_y < rel_err_tol) && (rel_err_norm_dust_rho_y < rel_err_tol) &&
-	    (rel_err_norm_z < rel_err_tol) && (rel_err_norm_dust_rho_z < rel_err_tol)) {
+	if ((rel_err_norm_x < rel_err_tol) && (rel_err_norm_dust_rho_x < rel_err_tol) && (rel_err_norm_y < rel_err_tol) &&
+	    (rel_err_norm_dust_rho_y < rel_err_tol) && (rel_err_norm_z < rel_err_tol) && (rel_err_norm_dust_rho_z < rel_err_tol)) {
 		status = 0;
 	}
 
