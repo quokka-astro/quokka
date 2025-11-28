@@ -162,9 +162,8 @@ auto problem_main() -> int
 			z_gas_initial += Lz;
 		}
 
-		const double r2_gas = (x_gas_initial - xc) * (x_gas_initial - xc) + 
-		                     (y_gas_initial - yc) * (y_gas_initial - yc) + 
-		                     (z_gas_initial - zc) * (z_gas_initial - zc);
+		const double r2_gas =
+		    (x_gas_initial - xc) * (x_gas_initial - xc) + (y_gas_initial - yc) * (y_gas_initial - yc) + (z_gas_initial - zc) * (z_gas_initial - zc);
 		rho_gas_exact_x[i] = rho_bg + A * std::exp(-r2_gas / (2.0 * sigma * sigma));
 
 		// exact dust density (shifted by dust_v0 * t in all directions)
@@ -182,9 +181,8 @@ auto problem_main() -> int
 			z_dust_initial += Lz;
 		}
 
-		const double r2_dust = (x_dust_initial - xc) * (x_dust_initial - xc) + 
-		                      (y_dust_initial - yc) * (y_dust_initial - yc) + 
-		                      (z_dust_initial - zc) * (z_dust_initial - zc);
+		const double r2_dust = (x_dust_initial - xc) * (x_dust_initial - xc) + (y_dust_initial - yc) * (y_dust_initial - yc) +
+				       (z_dust_initial - zc) * (z_dust_initial - zc);
 		rho_dust_exact_x[i] = rho_bg + A * std::exp(-r2_dust / (2.0 * sigma * sigma));
 
 		vx_exact[i] = v0;
@@ -234,9 +232,8 @@ auto problem_main() -> int
 			z_gas_initial += Lz;
 		}
 
-		const double r2_gas = (x_gas_initial - xc) * (x_gas_initial - xc) + 
-		                     (y_gas_initial - yc) * (y_gas_initial - yc) + 
-		                     (z_gas_initial - zc) * (z_gas_initial - zc);
+		const double r2_gas =
+		    (x_gas_initial - xc) * (x_gas_initial - xc) + (y_gas_initial - yc) * (y_gas_initial - yc) + (z_gas_initial - zc) * (z_gas_initial - zc);
 		rho_gas_exact_y[j] = rho_bg + A * std::exp(-r2_gas / (2.0 * sigma * sigma));
 
 		// exact dust density (shifted by dust_v0 * t in all directions)
@@ -254,9 +251,8 @@ auto problem_main() -> int
 			z_dust_initial += Lz;
 		}
 
-		const double r2_dust = (x_dust_initial - xc) * (x_dust_initial - xc) + 
-		                      (y_dust_initial - yc) * (y_dust_initial - yc) + 
-		                      (z_dust_initial - zc) * (z_dust_initial - zc);
+		const double r2_dust = (x_dust_initial - xc) * (x_dust_initial - xc) + (y_dust_initial - yc) * (y_dust_initial - yc) +
+				       (z_dust_initial - zc) * (z_dust_initial - zc);
 		rho_dust_exact_y[j] = rho_bg + A * std::exp(-r2_dust / (2.0 * sigma * sigma));
 
 		vy_exact[j] = v0;
@@ -306,9 +302,8 @@ auto problem_main() -> int
 			z_gas_initial += Lz;
 		}
 
-		const double r2_gas = (x_gas_initial - xc) * (x_gas_initial - xc) + 
-		                     (y_gas_initial - yc) * (y_gas_initial - yc) + 
-		                     (z_gas_initial - zc) * (z_gas_initial - zc);
+		const double r2_gas =
+		    (x_gas_initial - xc) * (x_gas_initial - xc) + (y_gas_initial - yc) * (y_gas_initial - yc) + (z_gas_initial - zc) * (z_gas_initial - zc);
 		rho_gas_exact_z[k] = rho_bg + A * std::exp(-r2_gas / (2.0 * sigma * sigma));
 
 		// exact dust density (shifted by dust_v0 * t in all directions)
@@ -326,9 +321,8 @@ auto problem_main() -> int
 			z_dust_initial += Lz;
 		}
 
-		const double r2_dust = (x_dust_initial - xc) * (x_dust_initial - xc) + 
-		                      (y_dust_initial - yc) * (y_dust_initial - yc) + 
-		                      (z_dust_initial - zc) * (z_dust_initial - zc);
+		const double r2_dust = (x_dust_initial - xc) * (x_dust_initial - xc) + (y_dust_initial - yc) * (y_dust_initial - yc) +
+				       (z_dust_initial - zc) * (z_dust_initial - zc);
 		rho_dust_exact_z[k] = rho_bg + A * std::exp(-r2_dust / (2.0 * sigma * sigma));
 
 		vz_exact[k] = v0;
