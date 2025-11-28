@@ -15,6 +15,7 @@ add_subdirectory(ParticleSF)
 
 add_subdirectory(DustDamping)
 add_subdirectory(DustDrag)
+add_subdirectory(DustDrag3D)
 add_subdirectory(DustSoundwave)
 
 add_subdirectory(HydroBlast2D)
