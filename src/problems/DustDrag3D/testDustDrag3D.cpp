@@ -129,20 +129,10 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
-	// get geometry information
-	const auto &geom = sim.Geom(0);
-	const auto prob_lo = geom.ProbLoArray();
-	const auto dx = geom.CellSizeArray();
-	const auto domain = geom.Domain();
-
-	// center indices in all directions
-	const int i_center = domain.smallEnd(0) + domain.length(0) / 2;
-	const int j_center = domain.smallEnd(1) + domain.length(1) / 2;
-	const int k_center = domain.smallEnd(2) + domain.length(2) / 2;
-
 	// X direction (fixed y and z at center)
-	const int nx = domain.length(0);
-	std::vector<double> xs(nx);
+	auto [x_pos, x_vals] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
+	const int nx = static_cast<int>(x_pos.size());
+
 	std::vector<double> vx_sim(nx);
 	std::vector<double> vx_exact(nx);
 	std::vector<double> vx_dust_sim(nx);
@@ -152,17 +142,14 @@ auto problem_main() -> int
 	std::vector<double> rho_gas_exact_x(nx);
 	std::vector<double> rho_gas_sim_x(nx);
 
-	for (int i = domain.smallEnd(0); i <= domain.bigEnd(0); ++i) {
-		const int idx = i - domain.smallEnd(0);
-		amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
-		xs[idx] = x;
-
-		amrex::Real const t = sim.tNew_[0];
+	for (int i = 0; i < nx; ++i) {
+		const double x = x_pos[i];
+		const double t = sim.tNew_[0];
 
 		// exact gas density (shifted by v0 * t in all directions)
-		amrex::Real x_gas_initial = std::fmod(x - v0 * t, Lx);
-		amrex::Real y_gas_initial = std::fmod(0.5 - v0 * t, Ly);
-		amrex::Real z_gas_initial = std::fmod(0.5 - v0 * t, Lz);
+		double x_gas_initial = std::fmod(x - v0 * t, Lx);
+		double y_gas_initial = std::fmod(0.5 - v0 * t, Ly);
+		double z_gas_initial = std::fmod(0.5 - v0 * t, Lz);
 
 		// Handle periodic boundaries
 		if (x_gas_initial < 0.0) {
@@ -175,14 +162,15 @@ auto problem_main() -> int
 			z_gas_initial += Lz;
 		}
 
-		double const r2_gas =
-		    (x_gas_initial - xc) * (x_gas_initial - xc) + (y_gas_initial - yc) * (y_gas_initial - yc) + (z_gas_initial - zc) * (z_gas_initial - zc);
-		rho_gas_exact_x[idx] = rho_bg + A * std::exp(-r2_gas / (2.0 * sigma * sigma));
+		const double r2_gas = (x_gas_initial - xc) * (x_gas_initial - xc) + 
+		                     (y_gas_initial - yc) * (y_gas_initial - yc) + 
+		                     (z_gas_initial - zc) * (z_gas_initial - zc);
+		rho_gas_exact_x[i] = rho_bg + A * std::exp(-r2_gas / (2.0 * sigma * sigma));
 
 		// exact dust density (shifted by dust_v0 * t in all directions)
-		amrex::Real x_dust_initial = std::fmod(x - dust_v0 * t, Lx);
-		amrex::Real y_dust_initial = std::fmod(0.5 - dust_v0 * t, Ly);
-		amrex::Real z_dust_initial = std::fmod(0.5 - dust_v0 * t, Lz);
+		double x_dust_initial = std::fmod(x - dust_v0 * t, Lx);
+		double y_dust_initial = std::fmod(0.5 - dust_v0 * t, Ly);
+		double z_dust_initial = std::fmod(0.5 - dust_v0 * t, Lz);
 
 		if (x_dust_initial < 0.0) {
 			x_dust_initial += Lx;
@@ -194,38 +182,30 @@ auto problem_main() -> int
 			z_dust_initial += Lz;
 		}
 
-		double const r2_dust = (x_dust_initial - xc) * (x_dust_initial - xc) + (y_dust_initial - yc) * (y_dust_initial - yc) +
-				       (z_dust_initial - zc) * (z_dust_initial - zc);
-		rho_dust_exact_x[idx] = rho_bg + A * std::exp(-r2_dust / (2.0 * sigma * sigma));
+		const double r2_dust = (x_dust_initial - xc) * (x_dust_initial - xc) + 
+		                      (y_dust_initial - yc) * (y_dust_initial - yc) + 
+		                      (z_dust_initial - zc) * (z_dust_initial - zc);
+		rho_dust_exact_x[i] = rho_bg + A * std::exp(-r2_dust / (2.0 * sigma * sigma));
 
-		vx_exact[idx] = v0;
-		vx_dust_exact[idx] = dust_v0;
+		vx_exact[i] = v0;
+		vx_dust_exact[i] = dust_v0;
 
-		// read numerical values from MultiFab
-		const auto &mf = sim.state_new_cc_[0];
-		for (amrex::MFIter mfi(mf); mfi.isValid(); ++mfi) {
-			const auto &fab = mf.array(mfi);
-			const amrex::Box &bx = mfi.validbox();
+		// get numerical values from fextract results
+		const double density = x_vals[HydroSystem<DustDrag>::density_index][i];
+		const double momentum_x = x_vals[HydroSystem<DustDrag>::x1Momentum_index][i];
+		const double dust_density = x_vals[HydroSystem<DustDrag>::dustDensity_index][i];
+		const double dust_momentum_x = x_vals[HydroSystem<DustDrag>::x1DustMomentum_index][i];
 
-			// check if the current box contains the (i, j_center, k_center) index
-			if (bx.contains(amrex::IntVect(i, j_center, k_center))) {
-				const double density = fab(i, j_center, k_center, HydroSystem<DustDrag>::density_index);
-				const double momentum_x = fab(i, j_center, k_center, HydroSystem<DustDrag>::x1Momentum_index);
-				const double dust_density = fab(i, j_center, k_center, HydroSystem<DustDrag>::dustDensity_index);
-				const double dust_momentum_x = fab(i, j_center, k_center, HydroSystem<DustDrag>::x1DustMomentum_index);
-
-				vx_sim[idx] = momentum_x / density;
-				vx_dust_sim[idx] = dust_momentum_x / dust_density;
-				rho_dust_sim_x[idx] = dust_density;
-				rho_gas_sim_x[idx] = density;
-				break;
-			}
-		}
+		vx_sim[i] = momentum_x / density;
+		vx_dust_sim[i] = dust_momentum_x / dust_density;
+		rho_dust_sim_x[i] = dust_density;
+		rho_gas_sim_x[i] = density;
 	}
 
 	// Y direction (fixed x and z at center)
-	const int ny = domain.length(1);
-	std::vector<double> ys(ny);
+	auto [y_pos, y_vals] = fextract(sim.state_new_cc_[0], sim.Geom(0), 1, 0.0, true);
+	const int ny = static_cast<int>(y_pos.size());
+
 	std::vector<double> vy_sim(ny);
 	std::vector<double> vy_exact(ny);
 	std::vector<double> vy_dust_sim(ny);
@@ -235,19 +215,15 @@ auto problem_main() -> int
 	std::vector<double> rho_gas_exact_y(ny);
 	std::vector<double> rho_gas_sim_y(ny);
 
-	for (int j = domain.smallEnd(1); j <= domain.bigEnd(1); ++j) {
-		const int idx = j - domain.smallEnd(1);
-		amrex::Real const y = prob_lo[1] + (j + 0.5) * dx[1];
-		ys[idx] = y;
-
-		amrex::Real const t = sim.tNew_[0];
+	for (int j = 0; j < ny; ++j) {
+		const double y = y_pos[j];
+		const double t = sim.tNew_[0];
 
 		// exact gas density (shifted by v0 * t in all directions)
-		amrex::Real x_gas_initial = std::fmod(0.5 - v0 * t, Lx);
-		amrex::Real y_gas_initial = std::fmod(y - v0 * t, Ly);
-		amrex::Real z_gas_initial = std::fmod(0.5 - v0 * t, Lz);
+		double x_gas_initial = std::fmod(0.5 - v0 * t, Lx);
+		double y_gas_initial = std::fmod(y - v0 * t, Ly);
+		double z_gas_initial = std::fmod(0.5 - v0 * t, Lz);
 
-		// Handle periodic boundaries
 		if (x_gas_initial < 0.0) {
 			x_gas_initial += Lx;
 		}
@@ -258,14 +234,15 @@ auto problem_main() -> int
 			z_gas_initial += Lz;
 		}
 
-		double const r2_gas =
-		    (x_gas_initial - xc) * (x_gas_initial - xc) + (y_gas_initial - yc) * (y_gas_initial - yc) + (z_gas_initial - zc) * (z_gas_initial - zc);
-		rho_gas_exact_y[idx] = rho_bg + A * std::exp(-r2_gas / (2.0 * sigma * sigma));
+		const double r2_gas = (x_gas_initial - xc) * (x_gas_initial - xc) + 
+		                     (y_gas_initial - yc) * (y_gas_initial - yc) + 
+		                     (z_gas_initial - zc) * (z_gas_initial - zc);
+		rho_gas_exact_y[j] = rho_bg + A * std::exp(-r2_gas / (2.0 * sigma * sigma));
 
 		// exact dust density (shifted by dust_v0 * t in all directions)
-		amrex::Real x_dust_initial = std::fmod(0.5 - dust_v0 * t, Lx);
-		amrex::Real y_dust_initial = std::fmod(y - dust_v0 * t, Ly);
-		amrex::Real z_dust_initial = std::fmod(0.5 - dust_v0 * t, Lz);
+		double x_dust_initial = std::fmod(0.5 - dust_v0 * t, Lx);
+		double y_dust_initial = std::fmod(y - dust_v0 * t, Ly);
+		double z_dust_initial = std::fmod(0.5 - dust_v0 * t, Lz);
 
 		if (x_dust_initial < 0.0) {
 			x_dust_initial += Lx;
@@ -277,38 +254,30 @@ auto problem_main() -> int
 			z_dust_initial += Lz;
 		}
 
-		double const r2_dust = (x_dust_initial - xc) * (x_dust_initial - xc) + (y_dust_initial - yc) * (y_dust_initial - yc) +
-				       (z_dust_initial - zc) * (z_dust_initial - zc);
-		rho_dust_exact_y[idx] = rho_bg + A * std::exp(-r2_dust / (2.0 * sigma * sigma));
+		const double r2_dust = (x_dust_initial - xc) * (x_dust_initial - xc) + 
+		                      (y_dust_initial - yc) * (y_dust_initial - yc) + 
+		                      (z_dust_initial - zc) * (z_dust_initial - zc);
+		rho_dust_exact_y[j] = rho_bg + A * std::exp(-r2_dust / (2.0 * sigma * sigma));
 
-		vy_exact[idx] = v0;
-		vy_dust_exact[idx] = dust_v0;
+		vy_exact[j] = v0;
+		vy_dust_exact[j] = dust_v0;
 
-		// read numerical values from MultiFab
-		const auto &mf = sim.state_new_cc_[0];
-		for (amrex::MFIter mfi(mf); mfi.isValid(); ++mfi) {
-			const auto &fab = mf.array(mfi);
-			const amrex::Box &bx = mfi.validbox();
+		// get numerical values from fextract results
+		const double density = y_vals[HydroSystem<DustDrag>::density_index][j];
+		const double momentum_y = y_vals[HydroSystem<DustDrag>::x2Momentum_index][j];
+		const double dust_density = y_vals[HydroSystem<DustDrag>::dustDensity_index][j];
+		const double dust_momentum_y = y_vals[HydroSystem<DustDrag>::x2DustMomentum_index][j];
 
-			// check if the current box contains the (i_center, j, k_center) index
-			if (bx.contains(amrex::IntVect(i_center, j, k_center))) {
-				const double density = fab(i_center, j, k_center, HydroSystem<DustDrag>::density_index);
-				const double momentum_y = fab(i_center, j, k_center, HydroSystem<DustDrag>::x2Momentum_index);
-				const double dust_density = fab(i_center, j, k_center, HydroSystem<DustDrag>::dustDensity_index);
-				const double dust_momentum_y = fab(i_center, j, k_center, HydroSystem<DustDrag>::x2DustMomentum_index);
-
-				vy_sim[idx] = momentum_y / density;
-				vy_dust_sim[idx] = dust_momentum_y / dust_density;
-				rho_dust_sim_y[idx] = dust_density;
-				rho_gas_sim_y[idx] = density;
-				break;
-			}
-		}
+		vy_sim[j] = momentum_y / density;
+		vy_dust_sim[j] = dust_momentum_y / dust_density;
+		rho_dust_sim_y[j] = dust_density;
+		rho_gas_sim_y[j] = density;
 	}
 
 	// Z direction (fixed x and y at center)
-	const int nz = domain.length(2);
-	std::vector<double> zs(nz);
+	auto [z_pos, z_vals] = fextract(sim.state_new_cc_[0], sim.Geom(0), 2, 0.0, true);
+	const int nz = static_cast<int>(z_pos.size());
+
 	std::vector<double> vz_sim(nz);
 	std::vector<double> vz_exact(nz);
 	std::vector<double> vz_dust_sim(nz);
@@ -318,19 +287,15 @@ auto problem_main() -> int
 	std::vector<double> rho_gas_exact_z(nz);
 	std::vector<double> rho_gas_sim_z(nz);
 
-	for (int k = domain.smallEnd(2); k <= domain.bigEnd(2); ++k) {
-		const int idx = k - domain.smallEnd(2);
-		amrex::Real const z = prob_lo[2] + (k + 0.5) * dx[2];
-		zs[idx] = z;
-
-		amrex::Real const t = sim.tNew_[0];
+	for (int k = 0; k < nz; ++k) {
+		const double z = z_pos[k];
+		const double t = sim.tNew_[0];
 
 		// exact gas density (shifted by v0 * t in all directions)
-		amrex::Real x_gas_initial = std::fmod(0.5 - v0 * t, Lx);
-		amrex::Real y_gas_initial = std::fmod(0.5 - v0 * t, Ly);
-		amrex::Real z_gas_initial = std::fmod(z - v0 * t, Lz);
+		double x_gas_initial = std::fmod(0.5 - v0 * t, Lx);
+		double y_gas_initial = std::fmod(0.5 - v0 * t, Ly);
+		double z_gas_initial = std::fmod(z - v0 * t, Lz);
 
-		// Handle periodic boundaries
 		if (x_gas_initial < 0.0) {
 			x_gas_initial += Lx;
 		}
@@ -341,14 +306,15 @@ auto problem_main() -> int
 			z_gas_initial += Lz;
 		}
 
-		double const r2_gas =
-		    (x_gas_initial - xc) * (x_gas_initial - xc) + (y_gas_initial - yc) * (y_gas_initial - yc) + (z_gas_initial - zc) * (z_gas_initial - zc);
-		rho_gas_exact_z[idx] = rho_bg + A * std::exp(-r2_gas / (2.0 * sigma * sigma));
+		const double r2_gas = (x_gas_initial - xc) * (x_gas_initial - xc) + 
+		                     (y_gas_initial - yc) * (y_gas_initial - yc) + 
+		                     (z_gas_initial - zc) * (z_gas_initial - zc);
+		rho_gas_exact_z[k] = rho_bg + A * std::exp(-r2_gas / (2.0 * sigma * sigma));
 
 		// exact dust density (shifted by dust_v0 * t in all directions)
-		amrex::Real x_dust_initial = std::fmod(0.5 - dust_v0 * t, Lx);
-		amrex::Real y_dust_initial = std::fmod(0.5 - dust_v0 * t, Ly);
-		amrex::Real z_dust_initial = std::fmod(z - dust_v0 * t, Lz);
+		double x_dust_initial = std::fmod(0.5 - dust_v0 * t, Lx);
+		double y_dust_initial = std::fmod(0.5 - dust_v0 * t, Ly);
+		double z_dust_initial = std::fmod(z - dust_v0 * t, Lz);
 
 		if (x_dust_initial < 0.0) {
 			x_dust_initial += Lx;
@@ -360,36 +326,25 @@ auto problem_main() -> int
 			z_dust_initial += Lz;
 		}
 
-		double const r2_dust = (x_dust_initial - xc) * (x_dust_initial - xc) + (y_dust_initial - yc) * (y_dust_initial - yc) +
-				       (z_dust_initial - zc) * (z_dust_initial - zc);
-		rho_dust_exact_z[idx] = rho_bg + A * std::exp(-r2_dust / (2.0 * sigma * sigma));
+		const double r2_dust = (x_dust_initial - xc) * (x_dust_initial - xc) + 
+		                      (y_dust_initial - yc) * (y_dust_initial - yc) + 
+		                      (z_dust_initial - zc) * (z_dust_initial - zc);
+		rho_dust_exact_z[k] = rho_bg + A * std::exp(-r2_dust / (2.0 * sigma * sigma));
 
-		vz_exact[idx] = v0;
-		vz_dust_exact[idx] = dust_v0;
+		vz_exact[k] = v0;
+		vz_dust_exact[k] = dust_v0;
 
-		// read numerical values from MultiFab
-		const auto &mf = sim.state_new_cc_[0];
-		for (amrex::MFIter mfi(mf); mfi.isValid(); ++mfi) {
-			const auto &fab = mf.array(mfi);
-			const amrex::Box &bx = mfi.validbox();
+		// get numerical values from fextract results
+		const double density = z_vals[HydroSystem<DustDrag>::density_index][k];
+		const double momentum_z = z_vals[HydroSystem<DustDrag>::x3Momentum_index][k];
+		const double dust_density = z_vals[HydroSystem<DustDrag>::dustDensity_index][k];
+		const double dust_momentum_z = z_vals[HydroSystem<DustDrag>::x3DustMomentum_index][k];
 
-			// check if the current box contains the (i_center, j_center, k) index
-			if (bx.contains(amrex::IntVect(i_center, j_center, k))) {
-				const double density = fab(i_center, j_center, k, HydroSystem<DustDrag>::density_index);
-				const double momentum_z = fab(i_center, j_center, k, HydroSystem<DustDrag>::x3Momentum_index);
-				const double dust_density = fab(i_center, j_center, k, HydroSystem<DustDrag>::dustDensity_index);
-				const double dust_momentum_z = fab(i_center, j_center, k, HydroSystem<DustDrag>::x3DustMomentum_index);
-
-				vz_sim[idx] = momentum_z / density;
-				vz_dust_sim[idx] = dust_momentum_z / dust_density;
-				rho_dust_sim_z[idx] = dust_density;
-				rho_gas_sim_z[idx] = density;
-				break;
-			}
-		}
+		vz_sim[k] = momentum_z / density;
+		vz_dust_sim[k] = dust_momentum_z / dust_density;
+		rho_dust_sim_z[k] = dust_density;
+		rho_gas_sim_z[k] = density;
 	}
-
-	// Error calculations for all three directions
 
 	// X direction errors
 	double err_norm_x = 0.;
@@ -460,9 +415,7 @@ auto problem_main() -> int
 	amrex::Print() << "  Relative L1 norm for dust density   = " << rel_err_norm_dust_rho_z << '\n';
 
 #ifdef HAVE_PYTHON
-	// Plotting for all three directions
-
-	// X direction plots
+	// X direction density
 	matplotlibcpp::clf();
 	std::map<std::string, std::string> rho_gas_args;
 	std::map<std::string, std::string> rho_gas_exact_args;
@@ -485,15 +438,15 @@ auto problem_main() -> int
 	rho_dust_exact_args["color"] = "b";
 	rho_dust_exact_args["linestyle"] = ":";
 
-	matplotlibcpp::plot(xs, rho_gas_sim_x, rho_gas_args);
-	matplotlibcpp::plot(xs, rho_gas_exact_x, rho_gas_exact_args);
-	matplotlibcpp::plot(xs, rho_dust_sim_x, rho_dust_args);
-	matplotlibcpp::plot(xs, rho_dust_exact_x, rho_dust_exact_args);
+	matplotlibcpp::plot(x_pos, rho_gas_sim_x, rho_gas_args);
+	matplotlibcpp::plot(x_pos, rho_gas_exact_x, rho_gas_exact_args);
+	matplotlibcpp::plot(x_pos, rho_dust_sim_x, rho_dust_args);
+	matplotlibcpp::plot(x_pos, rho_dust_exact_x, rho_dust_exact_args);
 
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel("x");
 	matplotlibcpp::ylabel("density");
-	matplotlibcpp::title(fmt::format("X direction - t = {:.4f}", sim.tNew_[0]));
+	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./dust_drag_density_x.pdf");
 
@@ -522,29 +475,29 @@ auto problem_main() -> int
 	vx_dust_exact_args["color"] = "b";
 	vx_dust_exact_args["linestyle"] = ":";
 
-	matplotlibcpp::plot(xs, vx_sim, vx_gas_args);
-	matplotlibcpp::plot(xs, vx_exact, vx_gas_exact_args);
-	matplotlibcpp::plot(xs, vx_dust_sim, vx_dust_args);
-	matplotlibcpp::plot(xs, vx_dust_exact, vx_dust_exact_args);
+	matplotlibcpp::plot(x_pos, vx_sim, vx_gas_args);
+	matplotlibcpp::plot(x_pos, vx_exact, vx_gas_exact_args);
+	matplotlibcpp::plot(x_pos, vx_dust_sim, vx_dust_args);
+	matplotlibcpp::plot(x_pos, vx_dust_exact, vx_dust_exact_args);
 
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel("x");
 	matplotlibcpp::ylabel("velocity");
-	matplotlibcpp::title(fmt::format("X direction - t = {:.4f}", sim.tNew_[0]));
+	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./dust_drag_velocity_x.pdf");
 
-	// Y direction plots
+	// Y direction density
 	matplotlibcpp::clf();
-	matplotlibcpp::plot(ys, rho_gas_sim_y, rho_gas_args);
-	matplotlibcpp::plot(ys, rho_gas_exact_y, rho_gas_exact_args);
-	matplotlibcpp::plot(ys, rho_dust_sim_y, rho_dust_args);
-	matplotlibcpp::plot(ys, rho_dust_exact_y, rho_dust_exact_args);
+	matplotlibcpp::plot(y_pos, rho_gas_sim_y, rho_gas_args);
+	matplotlibcpp::plot(y_pos, rho_gas_exact_y, rho_gas_exact_args);
+	matplotlibcpp::plot(y_pos, rho_dust_sim_y, rho_dust_args);
+	matplotlibcpp::plot(y_pos, rho_dust_exact_y, rho_dust_exact_args);
 
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel("y");
 	matplotlibcpp::ylabel("density");
-	matplotlibcpp::title(fmt::format("Y direction - t = {:.4f}", sim.tNew_[0]));
+	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./dust_drag_density_y.pdf");
 
@@ -573,29 +526,29 @@ auto problem_main() -> int
 	vy_dust_exact_args["color"] = "b";
 	vy_dust_exact_args["linestyle"] = ":";
 
-	matplotlibcpp::plot(ys, vy_sim, vy_gas_args);
-	matplotlibcpp::plot(ys, vy_exact, vy_gas_exact_args);
-	matplotlibcpp::plot(ys, vy_dust_sim, vy_dust_args);
-	matplotlibcpp::plot(ys, vy_dust_exact, vy_dust_exact_args);
+	matplotlibcpp::plot(y_pos, vy_sim, vy_gas_args);
+	matplotlibcpp::plot(y_pos, vy_exact, vy_gas_exact_args);
+	matplotlibcpp::plot(y_pos, vy_dust_sim, vy_dust_args);
+	matplotlibcpp::plot(y_pos, vy_dust_exact, vy_dust_exact_args);
 
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel("y");
 	matplotlibcpp::ylabel("velocity");
-	matplotlibcpp::title(fmt::format("Y direction - t = {:.4f}", sim.tNew_[0]));
+	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./dust_drag_velocity_y.pdf");
 
-	// Z direction plots
+	// Z direction density
 	matplotlibcpp::clf();
-	matplotlibcpp::plot(zs, rho_gas_sim_z, rho_gas_args);
-	matplotlibcpp::plot(zs, rho_gas_exact_z, rho_gas_exact_args);
-	matplotlibcpp::plot(zs, rho_dust_sim_z, rho_dust_args);
-	matplotlibcpp::plot(zs, rho_dust_exact_z, rho_dust_exact_args);
+	matplotlibcpp::plot(z_pos, rho_gas_sim_z, rho_gas_args);
+	matplotlibcpp::plot(z_pos, rho_gas_exact_z, rho_gas_exact_args);
+	matplotlibcpp::plot(z_pos, rho_dust_sim_z, rho_dust_args);
+	matplotlibcpp::plot(z_pos, rho_dust_exact_z, rho_dust_exact_args);
 
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel("z");
 	matplotlibcpp::ylabel("density");
-	matplotlibcpp::title(fmt::format("Z direction - t = {:.4f}", sim.tNew_[0]));
+	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./dust_drag_density_z.pdf");
 
@@ -624,15 +577,15 @@ auto problem_main() -> int
 	vz_dust_exact_args["color"] = "b";
 	vz_dust_exact_args["linestyle"] = ":";
 
-	matplotlibcpp::plot(zs, vz_sim, vz_gas_args);
-	matplotlibcpp::plot(zs, vz_exact, vz_gas_exact_args);
-	matplotlibcpp::plot(zs, vz_dust_sim, vz_dust_args);
-	matplotlibcpp::plot(zs, vz_dust_exact, vz_dust_exact_args);
+	matplotlibcpp::plot(z_pos, vz_sim, vz_gas_args);
+	matplotlibcpp::plot(z_pos, vz_exact, vz_gas_exact_args);
+	matplotlibcpp::plot(z_pos, vz_dust_sim, vz_dust_args);
+	matplotlibcpp::plot(z_pos, vz_dust_exact, vz_dust_exact_args);
 
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel("z");
 	matplotlibcpp::ylabel("velocity");
-	matplotlibcpp::title(fmt::format("Z direction - t = {:.4f}", sim.tNew_[0]));
+	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./dust_drag_velocity_z.pdf");
 #endif // HAVE_PYTHON
