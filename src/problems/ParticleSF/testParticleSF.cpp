@@ -74,7 +74,7 @@ template <> void QuokkaSimulation<ParticleSFProblem>::setInitialConditionsOnGrid
 	});
 }
 
-template <> void QuokkaSimulation<ParticleSFProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<ParticleSFProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement: static mesh refinement for the whole domain
 
