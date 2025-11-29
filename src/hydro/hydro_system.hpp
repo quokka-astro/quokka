@@ -29,7 +29,7 @@
 #include "HLLD.hpp"
 #include "LLF.hpp"
 #include "LLF_mhd.hpp"
-#include "dust/dustRiemannSolver.hpp"
+#include "dust/dust_system.hpp"
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
@@ -1464,65 +1464,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 		// calculate dust fluxes if enabled
 		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-			for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
-				// gather left- and right- density for dust
-				const double dust_rho_L = x1LeftState(i, j, k, primDustDensity_index + numDustVars_ * g);
-				const double dust_rho_R = x1RightState(i, j, k, primDustDensity_index + numDustVars_ * g);
-
-				// assign normal component of velocity according to DIR
-				int dust_velN_index = x1DustVelocity_index + numDustVars_ * g;
-				int dust_velV_index = x2DustVelocity_index + numDustVars_ * g;
-				int dust_velW_index = x3DustVelocity_index + numDustVars_ * g;
-
-				if constexpr (DIR == FluxDir::X1) {
-					dust_velN_index = x1DustVelocity_index + numDustVars_ * g;
-					dust_velV_index = x2DustVelocity_index + numDustVars_ * g;
-					dust_velW_index = x3DustVelocity_index + numDustVars_ * g;
-				} else if constexpr (DIR == FluxDir::X2) {
-#if (AMREX_SPACEDIM == 2)
-					dust_velN_index = x2DustVelocity_index + numDustVars_ * g;
-					dust_velV_index = x1DustVelocity_index + numDustVars_ * g;
-					dust_velW_index = x3DustVelocity_index + numDustVars_ * g; // unchanged in 2D
-#endif
-#if (AMREX_SPACEDIM == 3)
-					dust_velN_index = x2DustVelocity_index + numDustVars_ * g;
-					dust_velV_index = x3DustVelocity_index + numDustVars_ * g;
-					dust_velW_index = x1DustVelocity_index + numDustVars_ * g;
-#endif
-				} else if constexpr (DIR == FluxDir::X3) {
-					dust_velN_index = x3DustVelocity_index + numDustVars_ * g;
-					dust_velV_index = x1DustVelocity_index + numDustVars_ * g;
-					dust_velW_index = x2DustVelocity_index + numDustVars_ * g;
-				}
-
-				quokka::DustState dust_sL{};
-				dust_sL.rho = dust_rho_L;
-				dust_sL.u = x1LeftState(i, j, k, dust_velN_index);
-				dust_sL.v = x1LeftState(i, j, k, dust_velV_index);
-				dust_sL.w = x1LeftState(i, j, k, dust_velW_index);
-
-				quokka::DustState dust_sR{};
-				dust_sR.rho = dust_rho_R;
-				dust_sR.u = x1RightState(i, j, k, dust_velN_index);
-				dust_sR.v = x1RightState(i, j, k, dust_velV_index);
-				dust_sR.w = x1RightState(i, j, k, dust_velW_index);
-
-				// solve the dust Riemann problem in canonical form (i.e., where the x-dir is the normal direction)
-				auto dust_F_canonical = quokka::Riemann::dustRiemannSolver<problem_t, numDustVars_>(dust_sL, dust_sR);
-
-				quokka::valarray<double, numDustVars_> dust_F = dust_F_canonical;
-
-				// permute dust momentum components according to flux direction DIR
-				dust_F[dust_velN_index - numDustVars_ * g - nHydroScalars_] = dust_F_canonical[x1DustMomentum_index - nHydroScalars_];
-				dust_F[dust_velV_index - numDustVars_ * g - nHydroScalars_] = dust_F_canonical[x2DustMomentum_index - nHydroScalars_];
-				dust_F[dust_velW_index - numDustVars_ * g - nHydroScalars_] = dust_F_canonical[x3DustMomentum_index - nHydroScalars_];
-
-				// copy all dust flux components to the flux array
-				for (int nc = 0; nc < numDustVars_; ++nc) {
-					AMREX_ASSERT(!std::isnan(dust_F[nc])); // check dust flux is valid
-					x1Flux(i, j, k, Physics_Indices<problem_t>::dustFirstIndex + nc + numDustVars_ * g) = dust_F[nc];
-				}
-			}
+			DustSystem<problem_t>::template ComputeDustFluxes<DIR>(x1Flux, x1LeftState, x1RightState, i, j, k);
 		}
 	});
 }
