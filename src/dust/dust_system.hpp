@@ -50,12 +50,13 @@ template <typename problem_t> class DustSystem
 	// compute dust fluxes for all dust groups
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static void ComputeDustFluxes(quokka::Array4View<amrex::Real, DIR> &x1Flux, quokka::Array4View<const amrex::Real, DIR> &x1LeftState,
-				      quokka::Array4View<const amrex::Real, DIR> &x1RightState, int i, int j, int k);
+						       quokka::Array4View<const amrex::Real, DIR> &x1RightState, int i, int j, int k);
 
 	// compute dust fluxes for a single dust group
 	template <FluxDir DIR>
-	AMREX_GPU_DEVICE static void ComputeSingleDustGroupFluxes(quokka::Array4View<amrex::Real, DIR> &x1Flux, quokka::Array4View<const amrex::Real, DIR> &x1LeftState,
-						 quokka::Array4View<const amrex::Real, DIR> &x1RightState, int i, int j, int k, int g);
+	AMREX_GPU_DEVICE static void ComputeSingleDustGroupFluxes(quokka::Array4View<amrex::Real, DIR> &x1Flux,
+								  quokka::Array4View<const amrex::Real, DIR> &x1LeftState,
+								  quokka::Array4View<const amrex::Real, DIR> &x1RightState, int i, int j, int k, int g);
 
 	static void computeDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt, amrex::Real dust_omega_,
 				    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> dust_alpha_);
@@ -63,8 +64,9 @@ template <typename problem_t> class DustSystem
 
 template <typename problem_t>
 template <FluxDir DIR>
-AMREX_GPU_DEVICE void DustSystem<problem_t>::ComputeDustFluxes(quokka::Array4View<amrex::Real, DIR> &x1Flux, quokka::Array4View<const amrex::Real, DIR> &x1LeftState,
-					      quokka::Array4View<const amrex::Real, DIR> &x1RightState, int i, int j, int k)
+AMREX_GPU_DEVICE void DustSystem<problem_t>::ComputeDustFluxes(quokka::Array4View<amrex::Real, DIR> &x1Flux,
+							       quokka::Array4View<const amrex::Real, DIR> &x1LeftState,
+							       quokka::Array4View<const amrex::Real, DIR> &x1RightState, int i, int j, int k)
 {
 	for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
 		ComputeSingleDustGroupFluxes<DIR>(x1Flux, x1LeftState, x1RightState, i, j, k, g);
@@ -73,8 +75,9 @@ AMREX_GPU_DEVICE void DustSystem<problem_t>::ComputeDustFluxes(quokka::Array4Vie
 
 template <typename problem_t>
 template <FluxDir DIR>
-AMREX_GPU_DEVICE void DustSystem<problem_t>::ComputeSingleDustGroupFluxes(quokka::Array4View<amrex::Real, DIR> &x1Flux, quokka::Array4View<const amrex::Real, DIR> &x1LeftState,
-							 quokka::Array4View<const amrex::Real, DIR> &x1RightState, int i, int j, int k, int g)
+AMREX_GPU_DEVICE void DustSystem<problem_t>::ComputeSingleDustGroupFluxes(quokka::Array4View<amrex::Real, DIR> &x1Flux,
+									  quokka::Array4View<const amrex::Real, DIR> &x1LeftState,
+									  quokka::Array4View<const amrex::Real, DIR> &x1RightState, int i, int j, int k, int g)
 {
 	// gather left- and right- density for dust
 	const double dust_rho_L = x1LeftState(i, j, k, primDustDensity_index + numDustVars_ * g);
