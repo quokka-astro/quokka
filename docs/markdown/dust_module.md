@@ -74,7 +74,7 @@ where $\mathcal{D}$ is the dust-gas drag operator and $\mathcal{H}$ is the hydro
 For the dust-gas coupled system with N dust species, we use the following CFL condition:
 
 $$
-\Delta t_{\mathrm{CFL}} = C_{\mathrm{CFL}} \cdot \min_{\mathrm{cells}} \left( \frac{\Delta x}{\max\left( |v_{\mathrm{g}}| + c_s, \max_{n=1}^{N} |v_{\mathrm{d},n}| \right)} \right).
+\Delta t_{\mathrm{CFL}} = C_{\mathrm{CFL}} \cdot \min_{\mathrm{cells}} \left( \frac{\Delta x}{\max\left( |v_{\mathrm{g}}| + c_s, \max_{n=1}^{N} |v_{\mathrm{d},n}|+c_s \right)} \right).
 $$
 
 ## Runtime Controls

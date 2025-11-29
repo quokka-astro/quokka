@@ -429,7 +429,7 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 				const amrex::Real dust_vy = dust_py / dust_rho;
 				const amrex::Real dust_vz = dust_pz / dust_rho;
 				const amrex::Real dust_vel_mag = std::sqrt(dust_vx * dust_vx + dust_vy * dust_vy + dust_vz * dust_vz);
-				signal_max = std::max(signal_max, dust_vel_mag);
+				signal_max = std::max(signal_max, dust_vel_mag + fastest_wavespeed);
 			}
 		}
 		maxSignal(i, j, k) = signal_max;
