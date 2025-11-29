@@ -1012,65 +1012,66 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm
 			}
 			//}
 		}
-
-		return error_norm;
 	}
 
-	template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real> & initSumCons)
-	{
-		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
-		amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+	return error_norm;
+}
 
-		// check conservation of total energy
-		amrex::Real const Egas0 = initSumCons[RadSystem<problem_t>::gasEnergy_index];
-		amrex::Real const Egas = state_new_cc_[0].sum(RadSystem<problem_t>::gasEnergy_index) * vol;
+template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterEvolve(amrex::Vector<amrex::Real> & initSumCons)
+{
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
+	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
 
-		amrex::Real Etot0 = NAN;
-		amrex::Real Etot = NAN;
-		if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
-			amrex::Real Erad0 = 0.;
-			for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
-				Erad0 += initSumCons[RadSystem<problem_t>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g];
-			}
-			Etot0 = Egas0 + (RadSystem<problem_t>::c_light_ / RadSystem<problem_t>::c_hat_) * Erad0;
-			amrex::Real Erad = 0.;
-			for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
-				Erad += state_new_cc_[0].sum(RadSystem<problem_t>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) * vol;
-			}
-			Etot = Egas + (RadSystem<problem_t>::c_light_ / RadSystem<problem_t>::c_hat_) * Erad;
-		} else {
-			Etot0 = Egas0;
-			Etot = Egas;
+	// check conservation of total energy
+	amrex::Real const Egas0 = initSumCons[RadSystem<problem_t>::gasEnergy_index];
+	amrex::Real const Egas = state_new_cc_[0].sum(RadSystem<problem_t>::gasEnergy_index) * vol;
+
+	amrex::Real Etot0 = NAN;
+	amrex::Real Etot = NAN;
+	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
+		amrex::Real Erad0 = 0.;
+		for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+			Erad0 += initSumCons[RadSystem<problem_t>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g];
 		}
-
-		amrex::Real const abs_err = (Etot - Etot0);
-		amrex::Real rel_err = NAN;
-		if (Etot0 != 0) {
-			rel_err = abs_err / Etot0;
+		Etot0 = Egas0 + (RadSystem<problem_t>::c_light_ / RadSystem<problem_t>::c_hat_) * Erad0;
+		amrex::Real Erad = 0.;
+		for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+			Erad += state_new_cc_[0].sum(RadSystem<problem_t>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) * vol;
 		}
+		Etot = Egas + (RadSystem<problem_t>::c_light_ / RadSystem<problem_t>::c_hat_) * Erad;
+	} else {
+		Etot0 = Egas0;
+		Etot = Egas;
+	}
 
-		if (this->suppress_output == 0) {
-			amrex::Print() << "\nInitial gas+radiation energy = " << Etot0 << '\n';
-			amrex::Print() << "Final gas+radiation energy = " << Etot << '\n';
-			amrex::Print() << "\tabsolute conservation error = " << abs_err << '\n';
-			amrex::Print() << "\trelative conservation error = " << rel_err << '\n';
-			amrex::Print() << '\n';
-		}
+	amrex::Real const abs_err = (Etot - Etot0);
+	amrex::Real rel_err = NAN;
+	if (Etot0 != 0) {
+		rel_err = abs_err / Etot0;
+	}
 
+	if (this->suppress_output == 0) {
+		amrex::Print() << "\nInitial gas+radiation energy = " << Etot0 << '\n';
+		amrex::Print() << "Final gas+radiation energy = " << Etot << '\n';
+		amrex::Print() << "\tabsolute conservation error = " << abs_err << '\n';
+		amrex::Print() << "\trelative conservation error = " << rel_err << '\n';
 		amrex::Print() << '\n';
+	}
 
-		// compute average number of radiation subcycles per timestep
-		if (cellUpdates_ > 0) {
-			if (this->suppress_output == 0) {
-				double const avg_rad_subcycles = static_cast<double>(radiationCellUpdates_) / static_cast<double>(cellUpdates_);
-				amrex::Print() << "avg. num. of radiation subcycles = " << avg_rad_subcycles << '\n';
-				amrex::Print() << '\n';
-			}
-		} else {
-			amrex::Print() << "No cell updates performed!\n";
+	amrex::Print() << '\n';
+
+	// compute average number of radiation subcycles per timestep
+	if (cellUpdates_ > 0) {
+		if (this->suppress_output == 0) {
+			double const avg_rad_subcycles = static_cast<double>(radiationCellUpdates_) / static_cast<double>(cellUpdates_);
+			amrex::Print() << "avg. num. of radiation subcycles = " << avg_rad_subcycles << '\n';
 			amrex::Print() << '\n';
 		}
+	} else {
+		amrex::Print() << "No cell updates performed!\n";
+		amrex::Print() << '\n';
 	}
+}
 
 	template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle)
 	{
