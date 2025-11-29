@@ -64,21 +64,22 @@
                         
                         <div class="help-text">
                             Estimate the global timestep size, based on the CFL condition at the finest level. The timestep is estimated using
-                            the formula <code>dt = CFL * dx / v<sub>max</sub></code> at the finest level, assuming no timestep subcycling.
+                            the formula <code>dt = CFL * dx / v<sub>max</sub></code> at the finest level, where
+                            <code>dx = (Lx / Nx<sub>base</sub>) / 2<sup>level<sub>max</sub></sup></code>.
                         </div>
 
                         <div class="form-group-inline">
                             <label for="box-size">
                                 Box Size X (pc)
                                 <span class="help-icon"
-                                    data-tooltip="Physical size of the x-dimension at the finest level.">ℹ️</span>
+                                    data-tooltip="Physical size of the x-dimension at the base level (Level 0).">ℹ️</span>
                             </label>
                             <input type="number" id="box-size" placeholder="e.g. 100">
                         </div>
 
                         <div class="form-group-inline">
                             <label for="vmax">v<sub>max</sub> (km/s)
-                                <span class="help-icon" data-tooltip="Maximum signal speed. Used to estimate dt at the finest level">ℹ️</span>
+                                <span class="help-icon" data-tooltip="Maximum signal speed.">ℹ️</span>
                             </label>
                             <input type="number" id="vmax" placeholder="e.g. 10">
                         </div>
@@ -86,7 +87,7 @@
                         <div class="form-group-inline">
                             <label for="cfl">
                                 CFL
-                                <span class="help-icon" data-tooltip="dt = CFL × dx / vmax">ℹ️</span>
+                                <span class="help-icon" data-tooltip="dt = CFL * dx / vmax">ℹ️</span>
                             </label>
                             <input type="number" id="cfl" value="0.3" step="0.05">
                         </div>
