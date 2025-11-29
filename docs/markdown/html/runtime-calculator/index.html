@@ -62,11 +62,16 @@
                     <div class="card">
                         <h2><span class="icon">⚛️</span> Physics & Time</h2>
                         
+                        <div class="help-text">
+                            Estimate the global timestep size, based on the CFL condition at the finest level. The timestep is estimated using
+                            the formula <code>dt = CFL * dx / v<sub>max</sub></code> at the finest level, assuming no timestep subcycling.
+                        </div>
+
                         <div class="form-group-inline">
                             <label for="box-size">
                                 Box Size X (pc)
                                 <span class="help-icon"
-                                    data-tooltip="Physical size of the x-dimension at the finest level. Used to estimate dt at the finest level (assuming no timestep subcycling)">ℹ️</span>
+                                    data-tooltip="Physical size of the x-dimension at the finest level.">ℹ️</span>
                             </label>
                             <input type="number" id="box-size" placeholder="e.g. 100">
                         </div>

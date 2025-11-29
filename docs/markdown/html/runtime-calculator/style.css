@@ -587,3 +587,10 @@ body.dark-mode .help-text {
 .help-text strong {
     color: var(--accent-primary);
 }
+code {
+    font-family: var(--font-mono);
+    background: rgba(0, 0, 0, 0.05);
+    padding: 0.1em 0.3em;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
