@@ -164,50 +164,46 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotateMRF2PRF(const std::array<amr
 		vec_mrf[0] * k_dir_prf[2] + vec_mrf[1] * inplane_dir_prf[2] + vec_mrf[2] * outofplane_dir_prf[2]};
 }
 
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(
-    const double x1_prf, const double x2_prf, const double x3_prf,
-    const double time, const int icomp) -> double
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(const double x1_prf, const double x2_prf, const double x3_prf, const double time,
+									     const int icomp) -> double
 {
-    AMREX_ALWAYS_ASSERT_WITH_MESSAGE(icomp == 0 || icomp == 1 || icomp == 2,
-                                     "computeVectorPotentialComponent_prf(): icomp must be 0,1,2");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(icomp == 0 || icomp == 1 || icomp == 2, "computeVectorPotentialComponent_prf(): icomp must be 0,1,2");
 
-    // rotate PRF -> MRF
-    const std::array<amrex::Real, 3> x_vec_mrf = rotatePRF2MRF({x1_prf, x2_prf, x3_prf});
+	// rotate PRF -> MRF
+	const std::array<amrex::Real, 3> x_vec_mrf = rotatePRF2MRF({x1_prf, x2_prf, x3_prf});
 	const double tiny = 1e-16;
 
-    // background B0 in MRF
-    const double θ = angle_between_k_b0_rad;
-    const double B0_1 = b0_magn * std::cos(θ);
-    const double B0_2 = b0_magn * std::sin(θ);
+	// background B0 in MRF
+	const double θ = angle_between_k_b0_rad;
+	const double B0_1 = b0_magn * std::cos(θ);
+	const double B0_2 = b0_magn * std::sin(θ);
 
-    // background vector potential that yields B0 in MRF:
-    // bg_A = (0,0, B0_1 * x2 - B0_2 * x1)
-    const double bg_A1 = 0.0;
-    const double bg_A2 = 0.0;
-    const double bg_A3 = B0_1 * x_vec_mrf[1] - B0_2 * x_vec_mrf[0];
+	// background vector potential that yields B0 in MRF:
+	// bg_A = (0,0, B0_1 * x2 - B0_2 * x1)
+	const double bg_A1 = 0.0;
+	const double bg_A2 = 0.0;
+	const double bg_A3 = B0_1 * x_vec_mrf[1] - B0_2 * x_vec_mrf[0];
 
-    // fast speed and phase
-    const double a = sound_speed;
-    const double vA = alfven_speed;
-    const double cosθ = std::cos(θ);
-    const double sinθ = std::sin(θ);
+	// fast speed and phase
+	const double a = sound_speed;
+	const double vA = alfven_speed;
+	const double cosθ = std::cos(θ);
+	const double sinθ = std::sin(θ);
 
-    const double cf = std::sqrt(
-        0.5 * (a*a + vA*vA +
-               std::sqrt((a*a + vA*vA)*(a*a + vA*vA)/4.0 - 4.0 * a*a * vA*vA * cosθ * cosθ)));
+	const double cf = std::sqrt(0.5 * (a * a + vA * vA + std::sqrt((a * a + vA * vA) * (a * a + vA * vA) / 4.0 - 4.0 * a * a * vA * vA * cosθ * cosθ)));
 
-    const double omega = cf * k_magn;
-    const double phase = omega * time - k_magn * x_vec_mrf[0];
+	const double omega = cf * k_magn;
+	const double phase = omega * time - k_magn * x_vec_mrf[0];
 	double v1_mrf = 0.0;
 	double v2_mrf = 0.0;
 
-    // polarization (velocity) angle alpha for FAST mode (robust form)
+	// polarization (velocity) angle alpha for FAST mode (robust form)
 	if (std::abs(cosθ) < tiny) {
 		// special case: theta = 90 deg
-			v1_mrf = cf * delta_b_magn * std::cos(phase); // dv amplitude times cos(phase)
-			v2_mrf = 0.0;	
+		v1_mrf = cf * delta_b_magn * std::cos(phase); // dv amplitude times cos(phase)
+		v2_mrf = 0.0;
 	} else {
-		const double tan_alpha = (cf*cf - vA*vA*cosθ*cosθ) / (vA*vA*sinθ*cosθ);
+		const double tan_alpha = (cf * cf - vA * vA * cosθ * cosθ) / (vA * vA * sinθ * cosθ);
 		const double cos_alpha = 1.0 / std::sqrt(1.0 + tan_alpha * tan_alpha);
 		const double sin_alpha = tan_alpha * cos_alpha;
 		const double dv = cf * delta_b_magn * std::cos(phase); // dv amplitude times cos(phase)
@@ -215,19 +211,18 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(
 		v2_mrf = dv * sin_alpha;
 	}
 
-    const double deltaB2_mrf = (k_magn * B0_1 * v2_mrf - k_magn * B0_2 * v1_mrf) / omega;
-    const double delta_A1 = 0.0;
-    const double delta_A2 = 0.0;
-    const double delta_A3 = (deltaB2_mrf / k_magn) * std::sin(phase) / cos(phase);
+	const double deltaB2_mrf = (k_magn * B0_1 * v2_mrf - k_magn * B0_2 * v1_mrf) / omega;
+	const double delta_A1 = 0.0;
+	const double delta_A2 = 0.0;
+	const double delta_A3 = (deltaB2_mrf / k_magn) * std::sin(phase) / cos(phase);
 
+	// 8) total A in MRF and rotate back
+	const double A1_mrf = bg_A1 + delta_A1;
+	const double A2_mrf = bg_A2 + delta_A2;
+	const double A3_mrf = bg_A3 + delta_A3;
 
-    // 8) total A in MRF and rotate back
-    const double A1_mrf = bg_A1 + delta_A1;
-    const double A2_mrf = bg_A2 + delta_A2;
-    const double A3_mrf = bg_A3 + delta_A3;
-
-    const std::array<amrex::Real, 3> A_prf = rotateMRF2PRF({A1_mrf, A2_mrf, A3_mrf});
-    return A_prf[icomp];
+	const std::array<amrex::Real, 3> A_prf = rotateMRF2PRF({A1_mrf, A2_mrf, A3_mrf});
+	return A_prf[icomp];
 }
 
 AMREX_GPU_DEVICE inline auto Ax_prf(const double x1_prf, const double x2_prf, const double x3_prf, const double time) -> double
@@ -246,36 +241,33 @@ AMREX_GPU_DEVICE inline auto Az_prf(const double x1_prf, const double x2_prf, co
 }
 
 AMREX_GPU_DEVICE
-void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state,
-                         amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-                         amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-                         quokka::centering cen, quokka::direction dir, amrex::Real time)
+void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+			 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir, amrex::Real time)
 {
-    const amrex::Real x1_prf_L = prob_lo[0] + i * dx[0];
-    const amrex::Real x2_prf_L = prob_lo[1] + j * dx[1];
-    const amrex::Real x3_prf_L = prob_lo[2] + k * dx[2];
+	const amrex::Real x1_prf_L = prob_lo[0] + i * dx[0];
+	const amrex::Real x2_prf_L = prob_lo[1] + j * dx[1];
+	const amrex::Real x3_prf_L = prob_lo[2] + k * dx[2];
 
-    if (cen == quokka::centering::cc) {
+	if (cen == quokka::centering::cc) {
 		const double tiny = 1e-16;
 		const amrex::Real x1_prf_C = x1_prf_L + static_cast<amrex::Real>(0.5) * dx[0];
-        const amrex::Real x2_prf_C = x2_prf_L + static_cast<amrex::Real>(0.5) * dx[1];
-        const amrex::Real x3_prf_C = x3_prf_L + static_cast<amrex::Real>(0.5) * dx[2];
-        const std::array<amrex::Real, 3> x_vec_mrf_C = rotatePRF2MRF({x1_prf_C, x2_prf_C, x3_prf_C});
+		const amrex::Real x2_prf_C = x2_prf_L + static_cast<amrex::Real>(0.5) * dx[1];
+		const amrex::Real x3_prf_C = x3_prf_L + static_cast<amrex::Real>(0.5) * dx[2];
+		const std::array<amrex::Real, 3> x_vec_mrf_C = rotatePRF2MRF({x1_prf_C, x2_prf_C, x3_prf_C});
 
-        // speeds & geometry
-        const double a = sound_speed;
-        const double vA = alfven_speed;
-        const double θ = angle_between_k_b0_rad;
-        const double cosθ = std::cos(θ);
-        const double sinθ = std::sin(θ);
+		// speeds & geometry
+		const double a = sound_speed;
+		const double vA = alfven_speed;
+		const double θ = angle_between_k_b0_rad;
+		const double cosθ = std::cos(θ);
+		const double sinθ = std::sin(θ);
 
-        const double cf = std::sqrt(
-            0.5 * (a*a + vA*vA +
-                   std::sqrt((a*a + vA*vA)*(a*a + vA*vA)/4.0 - 4.0 * a*a * vA*vA * cosθ * cosθ)));
+		const double cf =
+		    std::sqrt(0.5 * (a * a + vA * vA + std::sqrt((a * a + vA * vA) * (a * a + vA * vA) / 4.0 - 4.0 * a * a * vA * vA * cosθ * cosθ)));
 
-        const double omega = cf * k_magn;
-        const double phase = omega * time - k_magn * x_vec_mrf_C[0];
-        const double cos_phase = std::cos(phase);
+		const double omega = cf * k_magn;
+		const double phase = omega * time - k_magn * x_vec_mrf_C[0];
+		const double cos_phase = std::cos(phase);
 
 		// background B0 in MRF
 		const double B0_1 = b0_magn * cosθ;
@@ -291,68 +283,73 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 			v1_mrf = cf * delta_b_magn * std::cos(phase); // dv amplitude times cos(phase)
 			v2_mrf = 0.0;
 		} else {
-    		const double tan_alpha = (cf*cf - vA*vA*cosθ*cosθ) / (vA*vA*sinθ*cosθ);
-    		const double cos_alpha = 1.0 / std::sqrt(1.0 + tan_alpha * tan_alpha);
-    		const double sin_alpha = tan_alpha * cos_alpha;
+			const double tan_alpha = (cf * cf - vA * vA * cosθ * cosθ) / (vA * vA * sinθ * cosθ);
+			const double cos_alpha = 1.0 / std::sqrt(1.0 + tan_alpha * tan_alpha);
+			const double sin_alpha = tan_alpha * cos_alpha;
 			const double dv = cf * delta_b_magn * std::cos(phase); // dv amplitude times cos(phase)
 			v1_mrf = dv * cos_alpha;
 			v2_mrf = dv * sin_alpha;
 		}
 
+		// amplitude (fractional epsilon convention)
+		const double v3_mrf = 0.0;
+		const auto v_prf = rotateMRF2PRF({v1_mrf, v2_mrf, v3_mrf});
 
-        // amplitude (fractional epsilon convention)
-        const double v3_mrf = 0.0;
-        const auto v_prf = rotateMRF2PRF({v1_mrf, v2_mrf, v3_mrf});
-
-        // background B in MRF and perturbed B via induction
+		// background B in MRF and perturbed B via induction
 		const double dB2_mrf = (k_magn * B0_1 * v2_mrf - k_magn * B0_2 * v1_mrf) / omega;
-        const auto dB_prf = rotateMRF2PRF({0.0, dB2_mrf, 0.0});
+		const auto dB_prf = rotateMRF2PRF({0.0, dB2_mrf, 0.0});
 
-        const auto B0_prf = rotateMRF2PRF({B0_1, B0_2, 0.0});
-        const double b_x1_prf = B0_prf[0] + dB_prf[0];
-        const double b_x2_prf = B0_prf[1] + dB_prf[1];
-        const double b_x3_prf = B0_prf[2] + dB_prf[2];
+		const auto B0_prf = rotateMRF2PRF({B0_1, B0_2, 0.0});
+		const double b_x1_prf = B0_prf[0] + dB_prf[0];
+		const double b_x2_prf = B0_prf[1] + dB_prf[1];
+		const double b_x3_prf = B0_prf[2] + dB_prf[2];
 
-        // density & pressure perturbations (linear compressive fast mode)
-        const double density = bg_density * (1.0 + delta_b_magn * cos_phase);
-        const double pressure = bg_pressure * (1.0 + gamma_gas * delta_b_magn * cos_phase);
+		// density & pressure perturbations (linear compressive fast mode)
+		const double density = bg_density * (1.0 + delta_b_magn * cos_phase);
+		const double pressure = bg_pressure * (1.0 + gamma_gas * delta_b_magn * cos_phase);
 
-        // energy bookkeeping
-        const double v_magn_sq = v_prf[0]*v_prf[0] + v_prf[1]*v_prf[1] + v_prf[2]*v_prf[2];
-        const double b_magn_sq = b_x1_prf*b_x1_prf + b_x2_prf*b_x2_prf + b_x3_prf*b_x3_prf;
-        const double Ekin = 0.5 * density * v_magn_sq;
-        const double Emag = 0.5 * b_magn_sq;
-        const double Eint = pressure / (gamma_gas - 1);
-        const double Etot = Ekin + Emag + Eint;
+		// energy bookkeeping
+		const double v_magn_sq = v_prf[0] * v_prf[0] + v_prf[1] * v_prf[1] + v_prf[2] * v_prf[2];
+		const double b_magn_sq = b_x1_prf * b_x1_prf + b_x2_prf * b_x2_prf + b_x3_prf * b_x3_prf;
+		const double Ekin = 0.5 * density * v_magn_sq;
+		const double Emag = 0.5 * b_magn_sq;
+		const double Eint = pressure / (gamma_gas - 1);
+		const double Etot = Ekin + Emag + Eint;
 
-        // write state
-        state(i, j, k, HydroSystem<FastWaveConvergence>::density_index) = density;
-        state(i, j, k, HydroSystem<FastWaveConvergence>::x1Momentum_index) = v_prf[0] * density;
-        state(i, j, k, HydroSystem<FastWaveConvergence>::x2Momentum_index) = v_prf[1] * density;
-        state(i, j, k, HydroSystem<FastWaveConvergence>::x3Momentum_index) = v_prf[2] * density;
-        state(i, j, k, HydroSystem<FastWaveConvergence>::energy_index) = Etot;
-        state(i, j, k, HydroSystem<FastWaveConvergence>::internalEnergy_index) = Eint;
+		// write state
+		state(i, j, k, HydroSystem<FastWaveConvergence>::density_index) = density;
+		state(i, j, k, HydroSystem<FastWaveConvergence>::x1Momentum_index) = v_prf[0] * density;
+		state(i, j, k, HydroSystem<FastWaveConvergence>::x2Momentum_index) = v_prf[1] * density;
+		state(i, j, k, HydroSystem<FastWaveConvergence>::x3Momentum_index) = v_prf[2] * density;
+		state(i, j, k, HydroSystem<FastWaveConvergence>::energy_index) = Etot;
+		state(i, j, k, HydroSystem<FastWaveConvergence>::internalEnergy_index) = Eint;
 
 	} else if (cen == quokka::centering::fc) {
 
 		// compute b-field using the magnetic vector potential to preserve div(b) = 0 topology
-        if (dir == quokka::direction::x) {
+		if (dir == quokka::direction::x) {
 			const double b_x1 =
-		    (Az_prf(x1_prf_L, x2_prf_L + dx[1], x3_prf_L + dx[2] / 2.0, time) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_L + dx[2] / 2.0, time)) / dx[1] -
-		    (Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L + dx[2], time) - Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L, time)) / dx[2];
-            state(i, j, k, MHDSystem<FastWaveConvergence>::bfield_index) = b_x1;
-        } else if (dir == quokka::direction::y) {
+			    (Az_prf(x1_prf_L, x2_prf_L + dx[1], x3_prf_L + dx[2] / 2.0, time) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_L + dx[2] / 2.0, time)) /
+				dx[1] -
+			    (Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L + dx[2], time) - Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L, time)) /
+				dx[2];
+			state(i, j, k, MHDSystem<FastWaveConvergence>::bfield_index) = b_x1;
+		} else if (dir == quokka::direction::y) {
 			const double b_x2 =
-		    (Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L + dx[2], time) - Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time)) / dx[2] -
-		    (Az_prf(x1_prf_L + dx[0], x2_prf_L, x3_prf_L + dx[2] / 2.0, time) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_L + dx[2] / 2.0, time)) / dx[0];
-            state(i, j, k, MHDSystem<FastWaveConvergence>::bfield_index) = b_x2;
-        } else if (dir == quokka::direction::z) {
+			    (Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L + dx[2], time) - Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time)) /
+				dx[2] -
+			    (Az_prf(x1_prf_L + dx[0], x2_prf_L, x3_prf_L + dx[2] / 2.0, time) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_L + dx[2] / 2.0, time)) /
+				dx[0];
+			state(i, j, k, MHDSystem<FastWaveConvergence>::bfield_index) = b_x2;
+		} else if (dir == quokka::direction::z) {
 			const double b_x3 =
-		    (Ay_prf(x1_prf_L + dx[0], x2_prf_L + dx[1] / 2.0, x3_prf_L, time) - Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L, time)) / dx[0] -
-		    (Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L + dx[1], x3_prf_L, time) - Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time)) / dx[1];
-            state(i, j, k, MHDSystem<FastWaveConvergence>::bfield_index) = b_x3;
-        }
-    }
+			    (Ay_prf(x1_prf_L + dx[0], x2_prf_L + dx[1] / 2.0, x3_prf_L, time) - Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L, time)) /
+				dx[0] -
+			    (Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L + dx[1], x3_prf_L, time) - Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time)) /
+				dx[1];
+			state(i, j, k, MHDSystem<FastWaveConvergence>::bfield_index) = b_x3;
+		}
+	}
 }
 
 template <> void QuokkaSimulation<FastWaveConvergence>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -513,14 +510,13 @@ auto runWaveTest(int nx) -> double
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.setInitialConditions();
-	const auto& geom = sim.Geom(0);
+	const auto &geom = sim.Geom(0);
 	auto [pos_exact, val_exact] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
-	//auto [pos_exactx1, val_exact_x1] = fextract(sim.state_new_fc_[0][0], sim.geom[0], 0, 0.5);
-	// auto [pos_exactx2, val_exact_x2] = fextract(sim.state_new_fc_[0][1], sim.geom[0], 0, 0.5);
-	// auto [pos_exactx3, val_exact_x3] = fextract(sim.state_new_fc_[0][2], sim.geom[0], 0, 0.5);
+	// auto [pos_exactx1, val_exact_x1] = fextract(sim.state_new_fc_[0][0], sim.geom[0], 0, 0.5);
+	//  auto [pos_exactx2, val_exact_x2] = fextract(sim.state_new_fc_[0][1], sim.geom[0], 0, 0.5);
+	//  auto [pos_exactx3, val_exact_x3] = fextract(sim.state_new_fc_[0][2], sim.geom[0], 0, 0.5);
 
-
-	//Main time loop
+	// Main time loop
 	sim.evolve();
 	// auto [position, values] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
 	// auto [positionx1, values_x1] = fextract(sim.state_new_fc_[0][0], sim.geom[0], 0, 0.5);
@@ -529,7 +525,7 @@ auto runWaveTest(int nx) -> double
 	// int const nx_final = static_cast<int>(position.size());
 	// int const nx_final_x1 = static_cast<int>(positionx1.size());
 	// int const nx_final_x2 = static_cast<int>(positionx2.size());
-	// int const nx_final_x3 = static_cast<int>(positionx3.size());	
+	// int const nx_final_x3 = static_cast<int>(positionx3.size());
 
 	// amrex::Real err_sq = 0.;
 	// for (int n = 0; n < QuokkaSimulation<FastWaveConvergence>::ncompHydro_; ++n) {
@@ -548,7 +544,7 @@ auto runWaveTest(int nx) -> double
 	// 	std::cout << "Component " << n << " error: " << dU_k << "\n";
 	// }
 	// for (int n = 0; n < QuokkaSimulation<FastWaveConvergence>::n_mhd_vars_per_dim_; ++n) {
-	// 	amrex::Real dU_k = 0.;	
+	// 	amrex::Real dU_k = 0.;
 	// 	for (int i = 0; i < nx_final_x1; ++i) {
 	// 		// Δ Bk = ∑i |Bk,in - Bk,i0| / Nx
 	// 		const amrex::Real U_k0 = val_exact_x1.at(n)[i];

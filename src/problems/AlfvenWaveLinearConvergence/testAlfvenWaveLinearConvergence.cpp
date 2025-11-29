@@ -454,7 +454,6 @@ auto runWaveTest(int nx) -> double
 	auto [pos_exactx2, val_exact_x2] = fextract(sim.state_new_fc_[0][1], sim.geom[0], 0, 0.5);
 	auto [pos_exactx3, val_exact_x3] = fextract(sim.state_new_fc_[0][2], sim.geom[0], 0, 0.5);
 
-
 	// Main time loop
 	sim.evolve();
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
@@ -464,7 +463,7 @@ auto runWaveTest(int nx) -> double
 	int const nx_final = static_cast<int>(position.size());
 	int const nx_final_x1 = static_cast<int>(positionx1.size());
 	int const nx_final_x2 = static_cast<int>(positionx2.size());
-	int const nx_final_x3 = static_cast<int>(positionx3.size());	
+	int const nx_final_x3 = static_cast<int>(positionx3.size());
 
 	amrex::Real err_sq = 0.;
 	for (int n = 0; n < QuokkaSimulation<AlfvenWaveLinear>::ncompHydro_; ++n) {
@@ -483,7 +482,7 @@ auto runWaveTest(int nx) -> double
 		std::cout << "Component " << n << " error: " << dU_k << "\n";
 	}
 	for (int n = 0; n < QuokkaSimulation<AlfvenWaveLinear>::n_mhd_vars_per_dim_; ++n) {
-		amrex::Real dU_k = 0.;	
+		amrex::Real dU_k = 0.;
 		for (int i = 0; i < nx_final_x1; ++i) {
 			// Δ Bk = ∑i |Bk,in - Bk,i0| / Nx
 			const amrex::Real U_k0 = val_exact_x1.at(n)[i];
@@ -491,7 +490,7 @@ auto runWaveTest(int nx) -> double
 			dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final_x1);
 		}
 		std::cout << "Magnetic Component " << n << " error: " << dU_k << "\n";
-		dU_k=0.0;
+		dU_k = 0.0;
 		for (int i = 0; i < nx_final_x2; ++i) {
 			// Δ Bk = ∑i |Bk,in - Bk,i0| / Nx
 			const amrex::Real U_k0 = val_exact_x2.at(n)[i];
@@ -499,7 +498,7 @@ auto runWaveTest(int nx) -> double
 			dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final_x2);
 		}
 		std::cout << "Magnetic Component " << n << " error: " << dU_k << "\n";
-		dU_k=0.0;
+		dU_k = 0.0;
 		for (int i = 0; i < nx_final_x3; ++i) {
 			// Δ Bk = ∑i |Bk,in - Bk,i0| / Nx
 			const amrex::Real U_k0 = val_exact_x3.at(n)[i];
@@ -515,9 +514,9 @@ auto runWaveTest(int nx) -> double
 
 	return epsilon;
 
-	//const auto errorNorm = sim.computeErrorNorm();
+	// const auto errorNorm = sim.computeErrorNorm();
 
-	//return errorNorm;
+	// return errorNorm;
 }
 
 auto problem_main() -> int
