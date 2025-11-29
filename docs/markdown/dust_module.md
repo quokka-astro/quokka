@@ -57,7 +57,7 @@ $$
 
 Similar expressions hold for the momentum flux for all directions.
 
-This is implemented in `src/dust/dustRiemannSolver.hpp` and called in `HydroSystem::ComputeFluxes` to compute the dust advection flux.
+This is implemented in `src/dust/dustRiemannSolver.hpp` and called in `DustSystem::ComputeSingleDustGroupFluxes` to compute the dust advection flux.
 
 ## Time Integrator
 
@@ -67,7 +67,7 @@ $$
 \boldsymbol u^{n+1} = \mathcal{D}_{\Delta t/2} \mathcal{H}_{\Delta t} \mathcal{D}_{\Delta t/2} \boldsymbol u^n
 $$
 
-where $\mathcal{D}$ is the dust-gas drag operator and $\mathcal{H}$ is the hydrodynamics operator (including both gas and dust transport). The hydrodynamics operator $\mathcal{H}$ is handled using the explicit RK2 scheme. The drag operator $\mathcal{D}$ is implemented in `src/dust/DustDrag.hpp` and called in `QuokkaSimulation::addStrangSplitSourcesWithBuiltin` via `quokka::DustDrag::computeDustDrag`.
+where $\mathcal{D}$ is the dust-gas drag operator and $\mathcal{H}$ is the hydrodynamics operator (including both gas and dust transport). The hydrodynamics operator $\mathcal{H}$ is handled using the explicit RK2 scheme. The drag operator $\mathcal{D}$ is implemented in `src/dust/dust_system.hpp` and called in `QuokkaSimulation::addStrangSplitSourcesWithBuiltin` via `DustSystem::computeDustDrag`.
 
 ## CFL Condition for Dust
 

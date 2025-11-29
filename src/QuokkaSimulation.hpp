@@ -65,7 +65,7 @@ namespace filesystem = experimental::filesystem;
 #include "SimulationData.hpp"
 #include "chemistry/Chemistry.hpp"
 #include "cooling/ResampledCooling.hpp"
-#include "dust/DustDrag.hpp"
+#include "dust/dust_system.hpp"
 #include "eos.H"
 #include "hydro/hydro_system.hpp"
 #include "hydro/mhd_system.hpp"
@@ -811,7 +811,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 #endif
 
 	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-		quokka::DustDrag::computeDustDrag<problem_t>(state, dt, dust_omega_, dust_alpha_);
+		DustSystem<problem_t>::computeDustDrag(state, dt, dust_omega_, dust_alpha_);
 	}
 
 	// compute user-specified sources
