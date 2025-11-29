@@ -130,7 +130,7 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// X direction (fixed y and z at center)
-	auto [x_pos, x_vals] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
+	auto [x_pos, x_vals] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
 	const int nx = static_cast<int>(x_pos.size());
 
 	std::vector<double> vx_sim(nx);
@@ -148,10 +148,9 @@ auto problem_main() -> int
 
 		// exact gas density (shifted by v0 * t in all directions)
 		double x_gas_initial = std::fmod(x - v0 * t, Lx);
-		double y_gas_initial = std::fmod(0.5 - v0 * t, Ly);
-		double z_gas_initial = std::fmod(0.5 - v0 * t, Lz);
+		double y_gas_initial = std::fmod(0.0 - v0 * t, Ly);
+		double z_gas_initial = std::fmod(0.0 - v0 * t, Lz);
 
-		// Handle periodic boundaries
 		if (x_gas_initial < 0.0) {
 			x_gas_initial += Lx;
 		}
@@ -168,8 +167,8 @@ auto problem_main() -> int
 
 		// exact dust density (shifted by dust_v0 * t in all directions)
 		double x_dust_initial = std::fmod(x - dust_v0 * t, Lx);
-		double y_dust_initial = std::fmod(0.5 - dust_v0 * t, Ly);
-		double z_dust_initial = std::fmod(0.5 - dust_v0 * t, Lz);
+		double y_dust_initial = std::fmod(0.0 - dust_v0 * t, Ly);
+		double z_dust_initial = std::fmod(0.0 - dust_v0 * t, Lz);
 
 		if (x_dust_initial < 0.0) {
 			x_dust_initial += Lx;
@@ -201,7 +200,7 @@ auto problem_main() -> int
 	}
 
 	// Y direction (fixed x and z at center)
-	auto [y_pos, y_vals] = fextract(sim.state_new_cc_[0], sim.Geom(0), 1, 0.0, true);
+	auto [y_pos, y_vals] = fextract(sim.state_new_cc_[0], sim.Geom(0), 1, 0.0);
 	const int ny = static_cast<int>(y_pos.size());
 
 	std::vector<double> vy_sim(ny);
@@ -218,9 +217,9 @@ auto problem_main() -> int
 		const double t = sim.tNew_[0];
 
 		// exact gas density (shifted by v0 * t in all directions)
-		double x_gas_initial = std::fmod(0.5 - v0 * t, Lx);
+		double x_gas_initial = std::fmod(0.0 - v0 * t, Lx);
 		double y_gas_initial = std::fmod(y - v0 * t, Ly);
-		double z_gas_initial = std::fmod(0.5 - v0 * t, Lz);
+		double z_gas_initial = std::fmod(0.0 - v0 * t, Lz);
 
 		if (x_gas_initial < 0.0) {
 			x_gas_initial += Lx;
@@ -237,9 +236,9 @@ auto problem_main() -> int
 		rho_gas_exact_y[j] = rho_bg + A * std::exp(-r2_gas / (2.0 * sigma * sigma));
 
 		// exact dust density (shifted by dust_v0 * t in all directions)
-		double x_dust_initial = std::fmod(0.5 - dust_v0 * t, Lx);
+		double x_dust_initial = std::fmod(0.0 - dust_v0 * t, Lx);
 		double y_dust_initial = std::fmod(y - dust_v0 * t, Ly);
-		double z_dust_initial = std::fmod(0.5 - dust_v0 * t, Lz);
+		double z_dust_initial = std::fmod(0.0 - dust_v0 * t, Lz);
 
 		if (x_dust_initial < 0.0) {
 			x_dust_initial += Lx;
@@ -271,7 +270,7 @@ auto problem_main() -> int
 	}
 
 	// Z direction (fixed x and y at center)
-	auto [z_pos, z_vals] = fextract(sim.state_new_cc_[0], sim.Geom(0), 2, 0.0, true);
+	auto [z_pos, z_vals] = fextract(sim.state_new_cc_[0], sim.Geom(0), 2, 0.0);
 	const int nz = static_cast<int>(z_pos.size());
 
 	std::vector<double> vz_sim(nz);
@@ -288,8 +287,8 @@ auto problem_main() -> int
 		const double t = sim.tNew_[0];
 
 		// exact gas density (shifted by v0 * t in all directions)
-		double x_gas_initial = std::fmod(0.5 - v0 * t, Lx);
-		double y_gas_initial = std::fmod(0.5 - v0 * t, Ly);
+		double x_gas_initial = std::fmod(0.0 - v0 * t, Lx);
+		double y_gas_initial = std::fmod(0.0 - v0 * t, Ly);
 		double z_gas_initial = std::fmod(z - v0 * t, Lz);
 
 		if (x_gas_initial < 0.0) {
@@ -307,8 +306,8 @@ auto problem_main() -> int
 		rho_gas_exact_z[k] = rho_bg + A * std::exp(-r2_gas / (2.0 * sigma * sigma));
 
 		// exact dust density (shifted by dust_v0 * t in all directions)
-		double x_dust_initial = std::fmod(0.5 - dust_v0 * t, Lx);
-		double y_dust_initial = std::fmod(0.5 - dust_v0 * t, Ly);
+		double x_dust_initial = std::fmod(0.0 - dust_v0 * t, Lx);
+		double y_dust_initial = std::fmod(0.0 - dust_v0 * t, Ly);
 		double z_dust_initial = std::fmod(z - dust_v0 * t, Lz);
 
 		if (x_dust_initial < 0.0) {
