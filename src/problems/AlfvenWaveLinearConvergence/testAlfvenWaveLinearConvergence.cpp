@@ -418,7 +418,7 @@ auto runWaveTest(int nx) -> double
 	amrex::Vector<int> const ncells = {nx, 8, 8};
 	pp.addarr("n_cell", ncells);
 
-	int blocking_x = std::max(16, ncells[0] / 2); // default: split x-direction into two grids
+	int blocking_x = std::max(16, ncells[0]);
 	pp.query("blocking_factor_x", blocking_x);
 	if (!pp.contains("blocking_factor_x")) {
 		pp.add("blocking_factor_x", blocking_x);
@@ -429,11 +429,13 @@ auto runWaveTest(int nx) -> double
 	if (!pp.contains("blocking_factor_z")) {
 		pp.add("blocking_factor_z", 8);
 	}
-	int max_grid_x = std::max(blocking_x, ncells[0] / 2);
+	
+	int max_grid_x = ncells[0];
 	pp.query("max_grid_size", max_grid_x);
 	if (!pp.contains("max_grid_size")) {
 		pp.add("max_grid_size", max_grid_x);
 	}
+	
 	pp.add("max_level", 0);
 
 	// Set domain bounds using AMReX parameter system
@@ -481,7 +483,7 @@ auto problem_main() -> int
 	// Richardson convergence test: run at increasing resolution until target precision is reached
 	const double machine_precision_target = 2.0e-13;
 	const int nx_initial = 32;
-	const int nx_max = 2048;
+	const int nx_max = 256; // cap at 256 for quick tests. otherwise, it can take ~1-2 hours for 2048
 	bool reached_target = false;
 
 	// Silence TinyProfiler so convergence logs stay readable
