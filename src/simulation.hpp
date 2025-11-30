@@ -453,6 +453,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int checkpoint_nfiles = -1;	       // default: -1 (i.e., one file per process)
 	/// input parameters (if >= 0 we restart from a checkpoint)
 	std::string restart_chkfile;
+	bool showPerformanceHints_ = true; // default: true
 
 	bool useLuminosityTable_ = true;
 	std::string luminosityTableFilename_;
@@ -731,6 +732,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// ParmParse reads inputs from the *.inputs file
 	const amrex::ParmParse pp;
 
+	// Default == true
+	pp.query("show_performance_hints", showPerformanceHints_);
+
 	// Default nsteps == INT_MAX
 	pp.query("max_timesteps", maxTimesteps_);
 
@@ -975,7 +979,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 	doDiagnostics();
 
 	// ensure that there are enough boxes per MPI rank
-	PerformanceHints();
+	if (showPerformanceHints_) {
+		PerformanceHints();
+	}
 }
 
 template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLevel(int lev) -> amrex::ValLocPair<amrex::Real, amrex::IntVect>
