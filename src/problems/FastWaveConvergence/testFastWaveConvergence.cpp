@@ -7,12 +7,12 @@
 /// \brief Defines a Richardson convergence test for the fast MHD wave.
 ///
 
+#include <algorithm>
 #include <bitset>
 #include <cassert>
 #include <cmath>
 #include <gcem.hpp>
 #include <iostream>
-#include <algorithm>
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
@@ -477,7 +477,7 @@ auto runWaveTest(int nx) -> double
 	// Set grid dimensions using AMReX parameter system
 	amrex::ParmParse pp("amr");
 	amrex::Vector<int> const ncells = {nx, 8, 8};
-	const int blocking_x = std::max(16, nx / 2);	// default: split x-direction into two grids
+	const int blocking_x = std::max(16, nx / 2); // default: split x-direction into two grids
 	const int max_grid_x = std::max(blocking_x, nx / 2);
 	pp.add("max_level", 0);
 	if (!pp.contains("blocking_factor_x")) {
