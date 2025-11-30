@@ -310,7 +310,7 @@ CheckOptions:
   - key:             modernize-use-override.OverrideSpelling
     value:           override
   - key:             modernize-use-trailing-return-type.TransformLambdas
-    value:           '0'
+    value:           'none'
   - key:             modernize-use-transparent-functors.SafeMode
     value:           '0'
   - key:             modernize-use-using.IgnoreMacros
