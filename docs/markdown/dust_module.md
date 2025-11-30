@@ -47,21 +47,21 @@ $$
 \begin{align*}
 F^{\text a}_x(\rho_d) = 
 \begin{cases}
-\rho_d^L v_{d,x}^L & \text{if } v_{d,x}^L > 0, \, v_{d,x}^R > 0, \\
-\rho_d^R v_{d,x}^R & \text{if } v_{d,x}^L < 0, \, v_{d,x}^R < 0, \\
-0 & \text{if } v_{d,x}^L < 0, \, v_{d,x}^R > 0, \\
-\rho_d^L v_{d,x}^L + \rho_d^R v_{d,x}^R & \text{if } v_{d,x}^L > 0, \, v_{d,x}^R < 0.
+\rho_d^L v_{d,x}^L & \text{if } v_{d,x}^L > 0, \, v_{d,x}^R \ge 0, \\
+\rho_d^R v_{d,x}^R & \text{if } v_{d,x}^L \le 0, \, v_{d,x}^R < 0, \\
+\rho_d^L v_{d,x}^L + \rho_d^R v_{d,x}^R & \text{if } v_{d,x}^L > 0, \, v_{d,x}^R < 0, \\
+0 & \text{else}.
 \end{cases}
 \end{align*}
 $$
 
 Similar expressions hold for the momentum flux for all directions.
 
-This is implemented in `src/dust/dustRiemannSolver.hpp` and called in `DustSystem::ComputeSingleDustGroupFluxes` to compute the dust advection flux.
+This is implemented in `src/dust/dustRiemannSolver.hpp` and called in `DustSystem::ComputeDustFluxes` to compute the dust advection flux.
 
 ## Time Integrator
 
-A Strang-split method is used to integrate the dust-gas system. The Strang-split update can be expressed as:
+A Strang-split method (Tedeschi-Prades et al. 2025) is used to integrate the dust-gas system. The Strang-split update can be expressed as:
 
 $$
 \boldsymbol u^{n+1} = \mathcal{D}_{\Delta t/2} \mathcal{H}_{\Delta t} \mathcal{D}_{\Delta t/2} \boldsymbol u^n
