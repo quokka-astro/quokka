@@ -52,12 +52,7 @@ template <typename problem_t> class DustSystem
 	AMREX_GPU_DEVICE static void ComputeDustFluxes(quokka::Array4View<amrex::Real, DIR> &x1Flux, quokka::Array4View<const amrex::Real, DIR> &x1LeftState,
 						       quokka::Array4View<const amrex::Real, DIR> &x1RightState, int i, int j, int k);
 
-	// compute dust fluxes for a single dust group
-	template <FluxDir DIR>
-	AMREX_GPU_DEVICE static void ComputeSingleDustGroupFluxes(quokka::Array4View<amrex::Real, DIR> &x1Flux,
-								  quokka::Array4View<const amrex::Real, DIR> &x1LeftState,
-								  quokka::Array4View<const amrex::Real, DIR> &x1RightState, int i, int j, int k, int g);
-
+  // compute dust-gas drag source terms and update conserved variables
 	static void computeDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt, amrex::Real dust_omega_,
 				    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> dust_alpha_);
 };
@@ -69,72 +64,63 @@ AMREX_GPU_DEVICE void DustSystem<problem_t>::ComputeDustFluxes(quokka::Array4Vie
 							       quokka::Array4View<const amrex::Real, DIR> &x1RightState, int i, int j, int k)
 {
 	for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
-		ComputeSingleDustGroupFluxes<DIR>(x1Flux, x1LeftState, x1RightState, i, j, k, g);
-	}
-}
+		// gather left- and right- density for dust
+		const double dust_rho_L = x1LeftState(i, j, k, primDustDensity_index + numDustVars_ * g);
+		const double dust_rho_R = x1RightState(i, j, k, primDustDensity_index + numDustVars_ * g);
 
-template <typename problem_t>
-template <FluxDir DIR>
-AMREX_GPU_DEVICE void DustSystem<problem_t>::ComputeSingleDustGroupFluxes(quokka::Array4View<amrex::Real, DIR> &x1Flux,
-									  quokka::Array4View<const amrex::Real, DIR> &x1LeftState,
-									  quokka::Array4View<const amrex::Real, DIR> &x1RightState, int i, int j, int k, int g)
-{
-	// gather left- and right- density for dust
-	const double dust_rho_L = x1LeftState(i, j, k, primDustDensity_index + numDustVars_ * g);
-	const double dust_rho_R = x1RightState(i, j, k, primDustDensity_index + numDustVars_ * g);
+		// assign normal component of velocity according to DIR
+		int dust_velN_index = x1DustVelocity_index + numDustVars_ * g;
+		int dust_velV_index = x2DustVelocity_index + numDustVars_ * g;
+		int dust_velW_index = x3DustVelocity_index + numDustVars_ * g;
 
-	// assign normal component of velocity according to DIR
-	int dust_velN_index = x1DustVelocity_index + numDustVars_ * g;
-	int dust_velV_index = x2DustVelocity_index + numDustVars_ * g;
-	int dust_velW_index = x3DustVelocity_index + numDustVars_ * g;
-
-	if constexpr (DIR == FluxDir::X1) {
-		dust_velN_index = x1DustVelocity_index + numDustVars_ * g;
-		dust_velV_index = x2DustVelocity_index + numDustVars_ * g;
-		dust_velW_index = x3DustVelocity_index + numDustVars_ * g;
-	} else if constexpr (DIR == FluxDir::X2) {
+		if constexpr (DIR == FluxDir::X1) {
+			dust_velN_index = x1DustVelocity_index + numDustVars_ * g;
+			dust_velV_index = x2DustVelocity_index + numDustVars_ * g;
+			dust_velW_index = x3DustVelocity_index + numDustVars_ * g;
+		} else if constexpr (DIR == FluxDir::X2) {
 #if (AMREX_SPACEDIM == 2)
-		dust_velN_index = x2DustVelocity_index + numDustVars_ * g;
-		dust_velV_index = x1DustVelocity_index + numDustVars_ * g;
-		dust_velW_index = x3DustVelocity_index + numDustVars_ * g; // unchanged in 2D
+			dust_velN_index = x2DustVelocity_index + numDustVars_ * g;
+			dust_velV_index = x1DustVelocity_index + numDustVars_ * g;
+			dust_velW_index = x3DustVelocity_index + numDustVars_ * g; // unchanged in 2D
 #endif
 #if (AMREX_SPACEDIM == 3)
-		dust_velN_index = x2DustVelocity_index + numDustVars_ * g;
-		dust_velV_index = x3DustVelocity_index + numDustVars_ * g;
-		dust_velW_index = x1DustVelocity_index + numDustVars_ * g;
+			dust_velN_index = x2DustVelocity_index + numDustVars_ * g;
+			dust_velV_index = x3DustVelocity_index + numDustVars_ * g;
+			dust_velW_index = x1DustVelocity_index + numDustVars_ * g;
 #endif
-	} else if constexpr (DIR == FluxDir::X3) {
-		dust_velN_index = x3DustVelocity_index + numDustVars_ * g;
-		dust_velV_index = x1DustVelocity_index + numDustVars_ * g;
-		dust_velW_index = x2DustVelocity_index + numDustVars_ * g;
-	}
+		} else if constexpr (DIR == FluxDir::X3) {
+			dust_velN_index = x3DustVelocity_index + numDustVars_ * g;
+			dust_velV_index = x1DustVelocity_index + numDustVars_ * g;
+			dust_velW_index = x2DustVelocity_index + numDustVars_ * g;
+		}
 
-	quokka::DustState dust_sL{};
-	dust_sL.rho = dust_rho_L;
-	dust_sL.u = x1LeftState(i, j, k, dust_velN_index);
-	dust_sL.v = x1LeftState(i, j, k, dust_velV_index);
-	dust_sL.w = x1LeftState(i, j, k, dust_velW_index);
+		quokka::DustState dust_sL{};
+		dust_sL.rho = dust_rho_L;
+		dust_sL.u = x1LeftState(i, j, k, dust_velN_index);
+		dust_sL.v = x1LeftState(i, j, k, dust_velV_index);
+		dust_sL.w = x1LeftState(i, j, k, dust_velW_index);
 
-	quokka::DustState dust_sR{};
-	dust_sR.rho = dust_rho_R;
-	dust_sR.u = x1RightState(i, j, k, dust_velN_index);
-	dust_sR.v = x1RightState(i, j, k, dust_velV_index);
-	dust_sR.w = x1RightState(i, j, k, dust_velW_index);
+		quokka::DustState dust_sR{};
+		dust_sR.rho = dust_rho_R;
+		dust_sR.u = x1RightState(i, j, k, dust_velN_index);
+		dust_sR.v = x1RightState(i, j, k, dust_velV_index);
+		dust_sR.w = x1RightState(i, j, k, dust_velW_index);
 
-	// solve the dust Riemann problem in canonical form (i.e., where the x-dir is the normal direction)
-	auto dust_F_canonical = quokka::Riemann::dustRiemannSolver<problem_t, numDustVars_>(dust_sL, dust_sR);
+		// solve the dust Riemann problem in canonical form (i.e., where the x-dir is the normal direction)
+		auto dust_F_canonical = quokka::Riemann::dustRiemannSolver<problem_t, numDustVars_>(dust_sL, dust_sR);
 
-	quokka::valarray<double, numDustVars_> dust_F = dust_F_canonical;
+		quokka::valarray<double, numDustVars_> dust_F = dust_F_canonical;
 
-	// permute dust momentum components according to flux direction DIR
-	dust_F[dust_velN_index - numDustVars_ * g - nHydroScalars_] = dust_F_canonical[x1DustMomentum_index - nHydroScalars_];
-	dust_F[dust_velV_index - numDustVars_ * g - nHydroScalars_] = dust_F_canonical[x2DustMomentum_index - nHydroScalars_];
-	dust_F[dust_velW_index - numDustVars_ * g - nHydroScalars_] = dust_F_canonical[x3DustMomentum_index - nHydroScalars_];
+		// permute dust momentum components according to flux direction DIR
+		dust_F[dust_velN_index - numDustVars_ * g - nHydroScalars_] = dust_F_canonical[x1DustMomentum_index - nHydroScalars_];
+		dust_F[dust_velV_index - numDustVars_ * g - nHydroScalars_] = dust_F_canonical[x2DustMomentum_index - nHydroScalars_];
+		dust_F[dust_velW_index - numDustVars_ * g - nHydroScalars_] = dust_F_canonical[x3DustMomentum_index - nHydroScalars_];
 
-	// copy all dust flux components to the flux array
-	for (int nc = 0; nc < numDustVars_; ++nc) {
-		AMREX_ASSERT(!std::isnan(dust_F[nc])); // check dust flux is valid
-		x1Flux(i, j, k, Physics_Indices<problem_t>::dustFirstIndex + nc + numDustVars_ * g) = dust_F[nc];
+		// copy all dust flux components to the flux array
+		for (int nc = 0; nc < numDustVars_; ++nc) {
+			AMREX_ASSERT(!std::isnan(dust_F[nc])); // check dust flux is valid
+			x1Flux(i, j, k, Physics_Indices<problem_t>::dustFirstIndex + nc + numDustVars_ * g) = dust_F[nc];
+		}
 	}
 }
 
