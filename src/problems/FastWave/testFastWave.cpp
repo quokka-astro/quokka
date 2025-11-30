@@ -144,11 +144,9 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 				      dx[1]);
 
 		if (dir == quokka::direction::x) {
-			// state(i, j, k, MHDSystem<FastWave>::bfield_index) = x1mag;
-			state(i, j, k, MHDSystem<FastWave>::bfield_index + 1) = 0.0;
+			state(i, j, k, MHDSystem<FastWave>::bfield_index) = x1mag;
 		} else if (dir == quokka::direction::y) {
-			// state(i, j, k, MHDSystem<FastWave>::bfield_index) = x2mag;
-			state(i, j, k, MHDSystem<FastWave>::bfield_index) = 0.0;
+			state(i, j, k, MHDSystem<FastWave>::bfield_index) = x2mag;
 		} else if (dir == quokka::direction::z) {
 			state(i, j, k, MHDSystem<FastWave>::bfield_index) = x3mag;
 		}
