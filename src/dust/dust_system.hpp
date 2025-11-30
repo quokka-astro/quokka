@@ -52,7 +52,7 @@ template <typename problem_t> class DustSystem
 	AMREX_GPU_DEVICE static void ComputeDustFluxes(quokka::Array4View<amrex::Real, DIR> &x1Flux, quokka::Array4View<const amrex::Real, DIR> &x1LeftState,
 						       quokka::Array4View<const amrex::Real, DIR> &x1RightState, int i, int j, int k);
 
-  // compute dust-gas drag source terms and update conserved variables
+	// compute dust-gas drag source terms and update conserved variables
 	static void computeDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt, amrex::Real dust_omega_,
 				    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> dust_alpha_);
 };
