@@ -28,7 +28,7 @@ hydro.use_dual_energy = 0
 hydro.reconstruction_order = 2
 mhd.emf_reconstruction_order = 2
 mhd.emf_compute_scheme = Quokka2026
-mhd.emf_average_scheme = LondrilloDelZanna2004
+mhd.emf_averaging_scheme = LondrilloDelZanna2004
 
 setup.num_modes_x = 1
 setup.num_modes_y = 0
