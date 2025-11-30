@@ -15,6 +15,7 @@
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
 #include "AMReX_Gpu.H"
+#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_REAL.H"
 
@@ -374,7 +375,7 @@ auto runWaveTest(int nx) -> double
 	hpp.query("angle_between_k_b0", angle_between_k_b0_deg);
 	constexpr double deg2rad = M_PI / 180.0;
 	angle_between_k_b0_rad = deg2rad * angle_between_k_b0_deg;
-	const double CFL_number = 0.8;
+	const double CFL_number = 0.2;
 	const double max_time = 1.0;
 	const int max_timesteps = std::max(20000, nx * 100);
 
@@ -465,52 +466,58 @@ auto runWaveTest(int nx) -> double
 	int const nx_final_x2 = static_cast<int>(positionx2.size());
 	int const nx_final_x3 = static_cast<int>(positionx3.size());
 
-	amrex::Real err_sq = 0.;
-	for (int n = 0; n < QuokkaSimulation<AlfvenWaveLinear>::ncompHydro_; ++n) {
-		if (n == HydroSystem<AlfvenWaveLinear>::internalEnergy_index) {
-			continue;
+	amrex::Real epsilon = 0.0;
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		amrex::Real err_sq = 0.;
+		for (int n = 0; n < QuokkaSimulation<AlfvenWaveLinear>::ncompHydro_; ++n) {
+			if (n == HydroSystem<AlfvenWaveLinear>::internalEnergy_index) {
+				continue;
+			}
+			amrex::Real dU_k = 0.;
+			for (int i = 0; i < nx_final; ++i) {
+				// Δ Uk = ∑i |Uk,in - Uk,i0| / Nx
+				const amrex::Real U_k0 = val_exact.at(n)[i];
+				const amrex::Real U_k1 = values.at(n)[i];
+				dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final);
+			}
+			// ε = || Δ U || = [&sum_k (Δ Uk)2]^{1/2}
+			err_sq += dU_k * dU_k;
+			amrex::Print() << "Component " << n << " error: " << dU_k << "\n";
 		}
-		amrex::Real dU_k = 0.;
-		for (int i = 0; i < nx_final; ++i) {
-			// Δ Uk = ∑i |Uk,in - Uk,i0| / Nx
-			const amrex::Real U_k0 = val_exact.at(n)[i];
-			const amrex::Real U_k1 = values.at(n)[i];
-			dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final);
+		for (int n = 0; n < QuokkaSimulation<AlfvenWaveLinear>::n_mhd_vars_per_dim_; ++n) {
+			amrex::Real dU_k = 0.;
+			for (int i = 0; i < nx_final_x1; ++i) {
+				// Δ Bk = ∑i |Bk,in - Bk,i0| / Nx
+				const amrex::Real U_k0 = val_exact_x1.at(n)[i];
+				const amrex::Real U_k1 = values_x1.at(n)[i];
+				dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final_x1);
+			}
+			amrex::Print() << "Magnetic Component " << n << " error: " << dU_k << "\n";
+			dU_k = 0.0;
+			for (int i = 0; i < nx_final_x2; ++i) {
+				// Δ Bk = ∑i |Bk,in - Bk,i0| / Nx
+				const amrex::Real U_k0 = val_exact_x2.at(n)[i];
+				const amrex::Real U_k1 = values_x2.at(n)[i];
+				dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final_x2);
+			}
+			amrex::Print() << "Magnetic Component " << n << " error: " << dU_k << "\n";
+			dU_k = 0.0;
+			for (int i = 0; i < nx_final_x3; ++i) {
+				// Δ Bk = ∑i |Bk,in - Bk,i0| / Nx
+				const amrex::Real U_k0 = val_exact_x3.at(n)[i];
+				const amrex::Real U_k1 = values_x3.at(n)[i];
+				dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final_x3);
+			}
+			// ε = || Δ U || = [&sum_k (Δ Uk)2]^{1/2}
+			err_sq += dU_k * dU_k;
+			amrex::Print() << "Magnetic Component " << n << " error: " << dU_k << "\n";
 		}
-		// ε = || Δ U || = [&sum_k (Δ Uk)2]^{1/2}
-		err_sq += dU_k * dU_k;
-		std::cout << "Component " << n << " error: " << dU_k << "\n";
+		epsilon = std::sqrt(err_sq);
+		amrex::Print() << "Total error norm: " << epsilon << "\n";
 	}
-	for (int n = 0; n < QuokkaSimulation<AlfvenWaveLinear>::n_mhd_vars_per_dim_; ++n) {
-		amrex::Real dU_k = 0.;
-		for (int i = 0; i < nx_final_x1; ++i) {
-			// Δ Bk = ∑i |Bk,in - Bk,i0| / Nx
-			const amrex::Real U_k0 = val_exact_x1.at(n)[i];
-			const amrex::Real U_k1 = values_x1.at(n)[i];
-			dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final_x1);
-		}
-		std::cout << "Magnetic Component " << n << " error: " << dU_k << "\n";
-		dU_k = 0.0;
-		for (int i = 0; i < nx_final_x2; ++i) {
-			// Δ Bk = ∑i |Bk,in - Bk,i0| / Nx
-			const amrex::Real U_k0 = val_exact_x2.at(n)[i];
-			const amrex::Real U_k1 = values_x2.at(n)[i];
-			dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final_x2);
-		}
-		std::cout << "Magnetic Component " << n << " error: " << dU_k << "\n";
-		dU_k = 0.0;
-		for (int i = 0; i < nx_final_x3; ++i) {
-			// Δ Bk = ∑i |Bk,in - Bk,i0| / Nx
-			const amrex::Real U_k0 = val_exact_x3.at(n)[i];
-			const amrex::Real U_k1 = values_x3.at(n)[i];
-			dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final_x3);
-		}
-		// ε = || Δ U || = [&sum_k (Δ Uk)2]^{1/2}
-		err_sq += dU_k * dU_k;
-		std::cout << "Magnetic Component " << n << " error: " << dU_k << "\n";
-	}
-	const amrex::Real epsilon = std::sqrt(err_sq);
-	std::cout << "Total error norm: " << epsilon << "\n";
+
+	// Broadcast epsilon so all ranks see the same convergence status
+	amrex::ParallelDescriptor::Bcast(&epsilon, 1, amrex::ParallelDescriptor::IOProcessorNumber());
 
 	return epsilon;
 

@@ -15,6 +15,7 @@
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
+#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
@@ -576,7 +577,11 @@ auto runWaveTest(int nx) -> double
 
 	// return epsilon;
 
-	const auto errorNorm = sim.computeErrorNorm();
+	amrex::Real errorNorm = 0.0;
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		errorNorm = sim.computeErrorNorm();
+	}
+	amrex::ParallelDescriptor::Bcast(&errorNorm, 1, amrex::ParallelDescriptor::IOProcessorNumber());
 
 	return errorNorm;
 }
