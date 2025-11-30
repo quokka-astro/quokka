@@ -593,12 +593,8 @@ auto runWaveTest(int nx) -> double
 
 	// return epsilon;
 
-	amrex::Real errorNorm = 0.0;
-	if (amrex::ParallelDescriptor::IOProcessor()) {
-		errorNorm = sim.computeErrorNorm();
-	}
-
-	return errorNorm;
+	// All ranks must participate in the error calculation since it performs MPI reductions internally.
+	return sim.computeErrorNorm();
 }
 
 auto problem_main() -> int
