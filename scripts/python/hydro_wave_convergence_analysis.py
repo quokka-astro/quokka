@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Analyze hydro wave convergence data.
+Analyze wave convergence data (hydro or MHD).
 
-This utility reads the CSV produced by `test_hydro_wave_convergence`,
+This utility reads the CSV produced by convergence tests (e.g.,
+`test_hydro_wave_convergence` or `test_alfven_wave_convergence`),
 computes observed convergence orders, fits a power-law-with-floor model
 in terms of cells per wavelength, and generates a log-log plot of the
 error norm versus resolution.
@@ -165,6 +166,7 @@ def make_plot(
     data: Sequence[ConvergenceDatum],
     fit: FitResult,
     output_path: Path,
+    title: str,
 ) -> None:
     import matplotlib
 
@@ -197,7 +199,7 @@ def make_plot(
 
     ax.set_xlabel("Cells per wavelength (N_x)")
     ax.set_ylabel("L1 error norm")
-    ax.set_title("Hydro Wave Convergence")
+    ax.set_title(title)
     ax.grid(True, which="both", linestyle=":", alpha=0.4)
     ax.legend()
 
@@ -207,18 +209,24 @@ def make_plot(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Analyze hydro wave convergence output.")
+    parser = argparse.ArgumentParser(description="Analyze wave convergence output (hydro or MHD).")
     parser.add_argument(
         "--csv",
         type=Path,
         default=Path("tests") / "hydro_wave_convergence.csv",
-        help="Path to the hydro wave convergence CSV file (default: tests/hydro_wave_convergence.csv).",
+        help="Path to the wave convergence CSV file (default: tests/hydro_wave_convergence.csv).",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("tests") / "hydro_wave_convergence.png",
-        help="Destination path for the generated plot (default: tests/hydro_wave_convergence.png).",
+        default=None,
+        help="Destination path for the generated plot (default: <csv basename>.png).",
+    )
+    parser.add_argument(
+        "--title",
+        type=str,
+        default=None,
+        help="Plot title (default: derived from CSV filename, e.g., 'Alfven Wave Convergence').",
     )
     parser.add_argument(
         "--no-plot",
@@ -231,7 +239,13 @@ def main() -> None:
     fit = fit_power_law_with_floor(data)
     orders = compute_observed_orders(data)
 
-    print("Hydro wave convergence statistics:\n")
+    title = args.title
+    if title is None:
+        # Turn e.g., alfven_wave_convergence.csv into "Alfven Wave Convergence"
+        title = args.csv.stem.replace("_", " ").title()
+    output_path = args.output or args.csv.with_suffix(".png")
+
+    print(f"{title} statistics:\n")
     print(f"{'nx':>8} {'dx':>14} {'error':>16}")
     for row in data:
         print(f"{row.nx:8d} {row.dx:14.6e} {row.error:16.6e}")
@@ -249,8 +263,8 @@ def main() -> None:
     if args.no_plot:
         print("\nSkipping plot generation (per --no-plot).")
     else:
-        make_plot(data, fit, args.output)
-        print(f"\nSaved log-log plot to {args.output}")
+        make_plot(data, fit, output_path, title)
+        print(f"\nSaved log-log plot to {output_path}")
 
 
 if __name__ == "__main__":
