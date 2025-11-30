@@ -1,0 +1,31 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  0.0  0.0  0.0 
+geometry.prob_hi     =  1.0  1.0  1.0
+geometry.is_periodic =  1    1    1
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 0       # verbosity in Amr
+
+show_performance_hints = false
+do_reflux = 0
+do_subcycle = 0
+do_tracers = 0
+plotfile_interval = -1
+
+cfl = 0.1
+hydro.rk_integrator_order = 2
+hydro.use_dual_energy = 0
+
+hydro.reconstruction_order = 5
+mhd.emf_reconstruction_order = 5
+mhd.emf_compute_scheme = Quokka2026
+mhd.emf_averaging_scheme = LondrilloDelZanna2004
+
+setup.num_modes_x = 1
+setup.num_modes_y = 0
+setup.num_modes_z = 0
+setup.angle_between_k_b0 = 90
