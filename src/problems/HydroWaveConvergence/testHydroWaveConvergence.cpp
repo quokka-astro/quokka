@@ -108,11 +108,21 @@ auto runWaveTest(int nx) -> double
 	// Set grid dimensions using AMReX parameter system
 	amrex::ParmParse pp("amr");
 	amrex::Vector<int> const ncells = {nx, 8, 8};
+	const int blocking_x = std::max(16, nx / 2); // default: split x-direction into two grids
+	const int max_grid_x = std::max(blocking_x, nx / 2);
 	pp.add("max_level", 0);
-	pp.add("blocking_factor_x", nx);
-	pp.add("blocking_factor_y", 8);
-	pp.add("blocking_factor_z", 8);
-	pp.add("max_grid_size", nx);
+	if (!pp.contains("blocking_factor_x")) {
+		pp.add("blocking_factor_x", blocking_x);
+	}
+	if (!pp.contains("blocking_factor_y")) {
+		pp.add("blocking_factor_y", 8);
+	}
+	if (!pp.contains("blocking_factor_z")) {
+		pp.add("blocking_factor_z", 8);
+	}
+	if (!pp.contains("max_grid_size")) {
+		pp.add("max_grid_size", max_grid_x);
+	}
 	pp.addarr("n_cell", ncells);
 
 	// Set domain bounds using AMReX parameter system

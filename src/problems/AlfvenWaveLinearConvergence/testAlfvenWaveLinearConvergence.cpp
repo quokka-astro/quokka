@@ -6,6 +6,7 @@
 /// \brief Defines a test problem to make sure face-centered quantities are created correctly.
 ///
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cmath>
@@ -415,12 +416,25 @@ auto runWaveTest(int nx) -> double
 	// Set grid dimensions using AMReX parameter system
 	amrex::ParmParse pp("amr");
 	amrex::Vector<int> const ncells = {nx, 8, 8};
-	pp.add("max_level", 0);
-	pp.add("blocking_factor_x", nx);
-	pp.add("blocking_factor_y", 8);
-	pp.add("blocking_factor_z", 8);
-	pp.add("max_grid_size", nx);
 	pp.addarr("n_cell", ncells);
+
+	int blocking_x = std::max(16, ncells[0] / 2); // default: split x-direction into two grids
+	pp.query("blocking_factor_x", blocking_x);
+	if (!pp.contains("blocking_factor_x")) {
+		pp.add("blocking_factor_x", blocking_x);
+	}
+	if (!pp.contains("blocking_factor_y")) {
+		pp.add("blocking_factor_y", 8);
+	}
+	if (!pp.contains("blocking_factor_z")) {
+		pp.add("blocking_factor_z", 8);
+	}
+	int max_grid_x = std::max(blocking_x, ncells[0] / 2);
+	pp.query("max_grid_size", max_grid_x);
+	if (!pp.contains("max_grid_size")) {
+		pp.add("max_grid_size", max_grid_x);
+	}
+	pp.add("max_level", 0);
 
 	// Set domain bounds using AMReX parameter system
 	amrex::ParmParse pp_geom("geometry");
@@ -450,74 +464,10 @@ auto runWaveTest(int nx) -> double
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.setInitialConditions();
-	auto [pos_exact, val_exact] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
-	auto [pos_exactx1, val_exact_x1] = fextract(sim.state_new_fc_[0][0], sim.geom[0], 0, 0.5);
-	auto [pos_exactx2, val_exact_x2] = fextract(sim.state_new_fc_[0][1], sim.geom[0], 0, 0.5);
-	auto [pos_exactx3, val_exact_x3] = fextract(sim.state_new_fc_[0][2], sim.geom[0], 0, 0.5);
 
 	// Main time loop
 	sim.evolve();
-	auto [position, values] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
-	auto [positionx1, values_x1] = fextract(sim.state_new_fc_[0][0], sim.geom[0], 0, 0.5);
-	auto [positionx2, values_x2] = fextract(sim.state_new_fc_[0][1], sim.geom[0], 0, 0.5);
-	auto [positionx3, values_x3] = fextract(sim.state_new_fc_[0][2], sim.geom[0], 0, 0.5);
-	int const nx_final = static_cast<int>(position.size());
-	int const nx_final_x1 = static_cast<int>(positionx1.size());
-	int const nx_final_x2 = static_cast<int>(positionx2.size());
-	int const nx_final_x3 = static_cast<int>(positionx3.size());
-
-	amrex::Real epsilon = 0.0;
-	if (amrex::ParallelDescriptor::IOProcessor()) {
-		amrex::Real err_sq = 0.;
-		for (int n = 0; n < QuokkaSimulation<AlfvenWaveLinear>::ncompHydro_; ++n) {
-			if (n == HydroSystem<AlfvenWaveLinear>::internalEnergy_index) {
-				continue;
-			}
-			amrex::Real dU_k = 0.;
-			for (int i = 0; i < nx_final; ++i) {
-				// Δ Uk = ∑i |Uk,in - Uk,i0| / Nx
-				const amrex::Real U_k0 = val_exact.at(n)[i];
-				const amrex::Real U_k1 = values.at(n)[i];
-				dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final);
-			}
-			// ε = || Δ U || = [&sum_k (Δ Uk)2]^{1/2}
-			err_sq += dU_k * dU_k;
-			amrex::Print() << "Component " << n << " error: " << dU_k << "\n";
-		}
-		for (int n = 0; n < QuokkaSimulation<AlfvenWaveLinear>::n_mhd_vars_per_dim_; ++n) {
-			amrex::Real dU_k = 0.;
-			for (int i = 0; i < nx_final_x1; ++i) {
-				// Δ Bk = ∑i |Bk,in - Bk,i0| / Nx
-				const amrex::Real U_k0 = val_exact_x1.at(n)[i];
-				const amrex::Real U_k1 = values_x1.at(n)[i];
-				dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final_x1);
-			}
-			amrex::Print() << "Magnetic Component " << n << " error: " << dU_k << "\n";
-			dU_k = 0.0;
-			for (int i = 0; i < nx_final_x2; ++i) {
-				// Δ Bk = ∑i |Bk,in - Bk,i0| / Nx
-				const amrex::Real U_k0 = val_exact_x2.at(n)[i];
-				const amrex::Real U_k1 = values_x2.at(n)[i];
-				dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final_x2);
-			}
-			amrex::Print() << "Magnetic Component " << n << " error: " << dU_k << "\n";
-			dU_k = 0.0;
-			for (int i = 0; i < nx_final_x3; ++i) {
-				// Δ Bk = ∑i |Bk,in - Bk,i0| / Nx
-				const amrex::Real U_k0 = val_exact_x3.at(n)[i];
-				const amrex::Real U_k1 = values_x3.at(n)[i];
-				dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final_x3);
-			}
-			// ε = || Δ U || = [&sum_k (Δ Uk)2]^{1/2}
-			err_sq += dU_k * dU_k;
-			amrex::Print() << "Magnetic Component " << n << " error: " << dU_k << "\n";
-		}
-		epsilon = std::sqrt(err_sq);
-		amrex::Print() << "Total error norm: " << epsilon << "\n";
-	}
-
-	// Broadcast epsilon so all ranks see the same convergence status
-	amrex::ParallelDescriptor::Bcast(&epsilon, 1, amrex::ParallelDescriptor::IOProcessorNumber());
+	const amrex::Real epsilon = sim.computeErrorNorm();
 
 	return epsilon;
 
