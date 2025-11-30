@@ -309,6 +309,8 @@ CheckOptions:
     value:           '0'
   - key:             modernize-use-override.OverrideSpelling
     value:           override
+  - key:             modernize-use-trailing-return-type.TransformLambdas
+    value:           '0'
   - key:             modernize-use-transparent-functors.SafeMode
     value:           '0'
   - key:             modernize-use-using.IgnoreMacros
@@ -394,4 +396,3 @@ CheckOptions:
   - key:             zircon-temporary-objects.Names
     value:           ''
 ...
-
