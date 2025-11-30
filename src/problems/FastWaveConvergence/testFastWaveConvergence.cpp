@@ -490,7 +490,7 @@ auto runWaveTest(int nx) -> double
 	if (!pp.contains("blocking_factor_z")) {
 		pp.add("blocking_factor_z", 8);
 	}
-	
+
 	const int max_grid_x = nx;
 	if (!pp.contains("max_grid_size")) {
 		pp.add("max_grid_size", max_grid_x);

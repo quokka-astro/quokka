@@ -13,12 +13,13 @@
 #include <fmt/format.h>
 
 #include "AMReX.H"
-#include "AMReX_Print.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
+#include "AMReX_Print.H"
 #include "AMReX_Vector.H"
 
-namespace quokka::richardson {
+namespace quokka::richardson
+{
 
 struct Parameters {
 	double machine_precision_target = 0.0;

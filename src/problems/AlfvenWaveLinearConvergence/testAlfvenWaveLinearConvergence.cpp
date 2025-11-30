@@ -430,13 +430,13 @@ auto runWaveTest(int nx) -> double
 	if (!pp.contains("blocking_factor_z")) {
 		pp.add("blocking_factor_z", 8);
 	}
-	
+
 	int max_grid_x = ncells[0];
 	pp.query("max_grid_size", max_grid_x);
 	if (!pp.contains("max_grid_size")) {
 		pp.add("max_grid_size", max_grid_x);
 	}
-	
+
 	pp.add("max_level", 0);
 
 	// Set domain bounds using AMReX parameter system
