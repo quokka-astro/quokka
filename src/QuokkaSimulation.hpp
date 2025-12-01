@@ -74,6 +74,10 @@ namespace filesystem = experimental::filesystem;
 #include "radiation/radiation_system.hpp"
 #include "simulation.hpp"
 
+#ifdef QUOKKA_USE_GRAVITY
+#include "gravity/PoissonGravity.hpp"
+#endif
+
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class QuokkaSimulation : public AMRSimulation<problem_t>
 {
@@ -179,6 +183,10 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::LondrilloDelZanna2004; // method to use to average EMF at edges
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
+
+#ifdef QUOKKA_USE_GRAVITY
+	std::unique_ptr<PoissonGravity<problem_t>> poissonGravity_;
+#endif
 
 	// member functions
 	explicit QuokkaSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : AMRSimulation<problem_t>(BCs_cc, BCs_fc)

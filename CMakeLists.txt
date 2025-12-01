@@ -34,6 +34,7 @@ option(ENABLE_ASAN "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(ENABLE_HWASAN "Enable HWAddressSanitizer" OFF)
 option(WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(QUOKKA_OPENPMD "Enable OpenPMD output (on/off)" OFF)
+option(QUOKKA_GRAVITY "Enable self-gravity with Poisson solver (on/off)" OFF)
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
   enable_language(CUDA)
