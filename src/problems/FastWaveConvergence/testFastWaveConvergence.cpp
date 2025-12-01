@@ -192,7 +192,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	const double cosθ = std::cos(θ);
 	const double sinθ = std::sin(θ);
 
-	const double cf = std::sqrt(0.5 * (a * a + vA * vA + std::sqrt((a * a + vA * vA) * (a * a + vA * vA) / 4.0 - 4.0 * a * a * vA * vA * cosθ * cosθ)));
+	const double cf =
+	    std::sqrt(0.5 * (a * a + vA * vA + std::sqrt((a * a + vA * vA) * (a * a + vA * vA) - 4.0 * a * a * vA * vA * cosθ * cosθ)));
 
 	const double omega = cf * k_magn;
 	const double phase = omega * time - k_magn * x_vec_mrf[0];
@@ -213,10 +214,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 		v2_mrf = dv * sin_alpha;
 	}
 
+	// Choose A so that curl(A) reproduces the perturbed B2 component: B2 = deltaB2_mrf * cos(phase)
 	const double deltaB2_mrf = (k_magn * B0_1 * v2_mrf - k_magn * B0_2 * v1_mrf) / omega;
 	const double delta_A1 = 0.0;
 	const double delta_A2 = 0.0;
-	const double delta_A3 = (deltaB2_mrf / k_magn) * std::sin(phase) / cos(phase);
+	const double delta_A3 = (deltaB2_mrf / k_magn) * std::sin(phase);
 
 	// 8) total A in MRF and rotate back
 	const double A1_mrf = bg_A1 + delta_A1;
@@ -264,8 +266,8 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const double cosθ = std::cos(θ);
 		const double sinθ = std::sin(θ);
 
-		const double cf =
-		    std::sqrt(0.5 * (a * a + vA * vA + std::sqrt((a * a + vA * vA) * (a * a + vA * vA) / 4.0 - 4.0 * a * a * vA * vA * cosθ * cosθ)));
+		const double cf = std::sqrt(
+		    0.5 * (a * a + vA * vA + std::sqrt((a * a + vA * vA) * (a * a + vA * vA) - 4.0 * a * a * vA * vA * cosθ * cosθ)));
 
 		const double omega = cf * k_magn;
 		const double phase = omega * time - k_magn * x_vec_mrf_C[0];
