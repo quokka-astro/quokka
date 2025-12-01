@@ -303,7 +303,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 
 		// magnetic perturbation
 		const double deltaB2_amp = (k_magn * B0_1 * v2_amp - k_magn * B0_2 * v1_amp) / omega;
-		const double dB2_mrf = deltaB2_amp * cos_phase;
+		const double dB2_mrf = -deltaB2_amp * cos_phase;
 
 		const auto v_prf = rotateMRF2PRF({v1_mrf, v2_mrf, v3_mrf});
 		const auto dB_prf = rotateMRF2PRF({0.0, dB2_mrf, 0.0});
@@ -607,8 +607,8 @@ auto problem_main() -> int
 
 	quokka::richardson::Parameters params{};
 	params.machine_precision_target = 2.0e-12;
-	params.nx_initial = 32;
-	params.nx_max = 256;
+	params.nx_initial = 64;
+	params.nx_max = 64;
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;
 	params.test_name = "Fast Wave";
