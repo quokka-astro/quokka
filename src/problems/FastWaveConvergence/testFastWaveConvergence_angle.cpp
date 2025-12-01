@@ -59,7 +59,7 @@ constexpr double cos_theta = gcem::cos(theta_degrees * M_PI / 180.0);
 // k = 2 pi / wave length
 // box length = 1, so |k| in [1, inf)
 constexpr double num_modes = 1;
-AMREX_GPU_MANAGED double k_amplitude = 2.0 * M_PI; // Will be updated
+AMREX_GPU_MANAGED double k_amplitude = 2.0 * M_PI; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 // constexpr double k_amplitude = 2 * M_PI * num_modes;
 
 // input perturbation: choose to do this via the relative density field in [0, 1]. remember, the linear regime is valid when this perturbation is small
@@ -126,7 +126,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotateMRF2PRF(const std::array<amr
 }
 
 // Modified omega calculation (replaces your constexpr omega)
-AMREX_GPU_MANAGED double omega = 0.0; // Will be computed in problem_main
+AMREX_GPU_MANAGED double omega = 0.0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 // AMREX_GPU_DEVICE auto computeMagneticVectorPotential_x(double x1, double x2, double /*x3*/, double time)
 // {
@@ -267,7 +267,9 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 
 	} else if (cen == quokka::centering::fc) {
 		// Face-centered B: compute analytical B at face location
-		amrex::Real x1_F = x1_L, x2_F = x2_L, x3_F = x3_L;
+		amrex::Real x1_F = x1_L;
+		amrex::Real x2_F = x2_L;
+		amrex::Real x3_F = x3_L;
 		if (dir == quokka::direction::x) {
 			x1_F += 0.0;
 			x2_F += 0.5 * dx[1];
@@ -298,12 +300,13 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 
 		const std::array<amrex::Real, 3> b_vec_prf = rotateMRF2PRF({b_x1_mrf, b_x2_mrf, b_x3_mrf});
 
-		if (dir == quokka::direction::x)
+		if (dir == quokka::direction::x) {
 			state(i, j, k, MHDSystem<FastWaveConvergence>::bfield_index) = b_vec_prf[0];
-		else if (dir == quokka::direction::y)
+		} else if (dir == quokka::direction::y) {
 			state(i, j, k, MHDSystem<FastWaveConvergence>::bfield_index) = b_vec_prf[1];
-		else if (dir == quokka::direction::z)
+		} else if (dir == quokka::direction::z) {
 			state(i, j, k, MHDSystem<FastWaveConvergence>::bfield_index) = b_vec_prf[2];
+		}
 	}
 }
 
@@ -436,7 +439,6 @@ auto runWaveTest(int nx) -> double
 
 	QuokkaSimulation<FastWaveConvergence> sim(BCs_cc, BCs_fc);
 
-	sim.computeReferenceSolution_ = true;
 	sim.cflNumber_ = CFL_number;
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
