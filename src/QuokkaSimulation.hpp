@@ -643,7 +643,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::printCellPropert
 	}
 }
 
-#if !defined(NDEBUG)
+#ifndef NDEBUG
 #define CHECK_HYDRO_STATES(mf, mf_fc) checkHydroStates(mf, mf_fc, __FILE__, __LINE__)
 #else
 #define CHECK_HYDRO_STATES(mf, mf_fc)
@@ -2736,21 +2736,21 @@ void QuokkaSimulation<problem_t>::computeMonteCarloTracerProbabilities(amrex::Mu
 		constexpr int numFacesLocal = 2 * AMREX_SPACEDIM;
 		amrex::Real const rho = state_arrs[bx](i, j, k, HydroSystem<problem_t>::density_index);
 		amrex::Real const mass = rho * cell_vol;
-		if (mass <= amrex::Real(0.0)) {
+		if (mass <= static_cast<amrex::Real>(0.0)) {
 			for (int comp = 0; comp < numFacesLocal; ++comp) {
-				prob_arrs[bx](i, j, k, comp) = amrex::Real(0.0);
+				prob_arrs[bx](i, j, k, comp) = static_cast<amrex::Real>(0.0);
 			}
 			return;
 		}
 
 		amrex::Real remaining = mass;
 		auto store_probability = [&](amrex::Real oriented_flux, int comp_index, int dir) {
-			amrex::Real prob_val = amrex::Real(0.0);
-			if (remaining > amrex::Real(0.0) && oriented_flux > amrex::Real(0.0)) {
+			auto prob_val = static_cast<amrex::Real>(0.0);
+			if (remaining > static_cast<amrex::Real>(0.0) && oriented_flux > static_cast<amrex::Real>(0.0)) {
 				amrex::Real const mass_out = amrex::min(oriented_flux * face_area[dir] * dt_lev, remaining);
 				amrex::Real const denom = remaining;
-				prob_val = amrex::min(mass_out / denom, amrex::Real(1.0));
-				remaining = amrex::max(denom - mass_out, amrex::Real(0.0));
+				prob_val = amrex::min(mass_out / denom, static_cast<amrex::Real>(1.0));
+				remaining = amrex::max(denom - mass_out, static_cast<amrex::Real>(0.0));
 			}
 			prob_arrs[bx](i, j, k, comp_index) = prob_val;
 		};
@@ -2758,25 +2758,25 @@ void QuokkaSimulation<problem_t>::computeMonteCarloTracerProbabilities(amrex::Mu
 #if (AMREX_SPACEDIM >= 1)
 		{
 			amrex::Real const flux_low = flux_x[bx](i, j, k, HydroSystem<problem_t>::density_index);
-			store_probability(amrex::max(-flux_low, amrex::Real(0.0)), 0, 0);
+			store_probability(amrex::max(-flux_low, static_cast<amrex::Real>(0.0)), 0, 0);
 			amrex::Real const flux_high = flux_x[bx](i + 1, j, k, HydroSystem<problem_t>::density_index);
-			store_probability(amrex::max(flux_high, amrex::Real(0.0)), 1, 0);
+			store_probability(amrex::max(flux_high, static_cast<amrex::Real>(0.0)), 1, 0);
 		}
 #endif
 #if (AMREX_SPACEDIM >= 2)
 		{
 			amrex::Real const flux_low = flux_y[bx](i, j, k, HydroSystem<problem_t>::density_index);
-			store_probability(amrex::max(-flux_low, amrex::Real(0.0)), 2, 1);
+			store_probability(amrex::max(-flux_low, static_cast<amrex::Real>(0.0)), 2, 1);
 			amrex::Real const flux_high = flux_y[bx](i, j + 1, k, HydroSystem<problem_t>::density_index);
-			store_probability(amrex::max(flux_high, amrex::Real(0.0)), 3, 1);
+			store_probability(amrex::max(flux_high, static_cast<amrex::Real>(0.0)), 3, 1);
 		}
 #endif
 #if (AMREX_SPACEDIM == 3)
 		{
 			amrex::Real const flux_low = flux_z[bx](i, j, k, HydroSystem<problem_t>::density_index);
-			store_probability(amrex::max(-flux_low, amrex::Real(0.0)), 4, 2);
+			store_probability(amrex::max(-flux_low, static_cast<amrex::Real>(0.0)), 4, 2);
 			amrex::Real const flux_high = flux_z[bx](i, j, k + 1, HydroSystem<problem_t>::density_index);
-			store_probability(amrex::max(flux_high, amrex::Real(0.0)), 5, 2);
+			store_probability(amrex::max(flux_high, static_cast<amrex::Real>(0.0)), 5, 2);
 		}
 #endif
 	});
@@ -2838,14 +2838,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::applyMonteCarloT
 			for (int dir = 0; dir < AMREX_SPACEDIM && !moved; ++dir) {
 				int const neg_comp = 2 * dir;
 				amrex::Real const prob_neg = sample_probability(neg_comp);
-				if (prob_neg > amrex::Real(0.0) && amrex::Random() < prob_neg) {
+				if (prob_neg > static_cast<amrex::Real>(0.0) && amrex::Random() < prob_neg) {
 					dest[dir] -= 1;
 					moved = true;
 					break;
 				}
 
 				amrex::Real const prob_pos = sample_probability(neg_comp + 1);
-				if (prob_pos > amrex::Real(0.0) && amrex::Random() < prob_pos) {
+				if (prob_pos > static_cast<amrex::Real>(0.0) && amrex::Random() < prob_pos) {
 					dest[dir] += 1;
 					moved = true;
 				}
@@ -2880,7 +2880,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::applyMonteCarloT
 			}
 
 			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-				p.pos(dir) = plo[dir] + (static_cast<amrex::Real>(dest[dir]) + amrex::Real(0.5)) * dx[dir];
+				p.pos(dir) = plo[dir] + (static_cast<amrex::Real>(dest[dir]) + static_cast<amrex::Real>(0.5)) * dx[dir];
 			}
 		}
 	}
