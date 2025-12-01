@@ -10,11 +10,6 @@ geometry.is_periodic =  1    1    1
 # *****************************************************************
 amr.v              = 0       # verbosity in Amr
 
-# *****************************************************************
-# Resolution and refinement
-# *****************************************************************
-amr.max_level       = 0       # number of levels = max_level + 1
-
 show_performance_hints = false
 do_reflux = 0
 do_subcycle = 0
@@ -33,4 +28,4 @@ mhd.emf_averaging_scheme = LondrilloDelZanna2004
 setup.num_modes_x = 1
 setup.num_modes_y = 0
 setup.num_modes_z = 0
-setup.angle_between_k_b0 = 0
+setup.angle_between_k_b0 = 90

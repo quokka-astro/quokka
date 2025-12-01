@@ -23,7 +23,7 @@
 #include "grid.hpp"
 #include "physics_info.hpp"
 #include "util/BC.hpp"
-#include "util/fextract.hpp"
+#include "util/richardson.hpp"
 
 struct FastWaveConvergence {
 };
@@ -194,6 +194,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	const double sinθ = std::sin(θ);
 
 	const double cf = std::sqrt(0.5 * (a * a + vA * vA + std::sqrt((a * a + vA * vA) * (a * a + vA * vA) - 4.0 * a * a * vA * vA * cosθ * cosθ)));
+	const double cf = std::sqrt(0.5 * (a * a + vA * vA + std::sqrt((a * a + vA * vA) * (a * a + vA * vA) - 4.0 * a * a * vA * vA * cosθ * cosθ)));
 
 	const double omega = cf * k_magn;
 	const double phase = omega * time - k_magn * x_vec_mrf[0];
@@ -264,6 +265,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const double cosθ = std::cos(θ);
 		const double sinθ = std::sin(θ);
 
+		const double cf = std::sqrt(0.5 * (a * a + vA * vA + std::sqrt((a * a + vA * vA) * (a * a + vA * vA) - 4.0 * a * a * vA * vA * cosθ * cosθ)));
 		const double cf = std::sqrt(0.5 * (a * a + vA * vA + std::sqrt((a * a + vA * vA) * (a * a + vA * vA) - 4.0 * a * a * vA * vA * cosθ * cosθ)));
 
 		const double omega = cf * k_magn;
@@ -445,7 +447,8 @@ auto runWaveTest(int nx) -> double
 	hpp.query("angle_between_k_b0", angle_between_k_b0_deg);
 	constexpr double deg2rad = M_PI / 180.0;
 	angle_between_k_b0_rad = deg2rad * angle_between_k_b0_deg;
-	const double CFL_number = 0.8;
+
+	const double CFL_number = 0.2;
 	const double max_time = 0.707;
 	const int max_timesteps = std::max(20000, nx * 100);
 
@@ -485,9 +488,8 @@ auto runWaveTest(int nx) -> double
 	// Set grid dimensions using AMReX parameter system
 	amrex::ParmParse pp("amr");
 	amrex::Vector<int> const ncells = {nx, 8, 8};
-	const int blocking_x = std::max(16, nx / 2); // default: split x-direction into two grids
-	const int max_grid_x = std::max(blocking_x, nx / 2);
-	pp.add("max_level", 0);
+
+	const int blocking_x = std::max(16, nx);
 	if (!pp.contains("blocking_factor_x")) {
 		pp.add("blocking_factor_x", blocking_x);
 	}
@@ -497,9 +499,13 @@ auto runWaveTest(int nx) -> double
 	if (!pp.contains("blocking_factor_z")) {
 		pp.add("blocking_factor_z", 8);
 	}
+
+	const int max_grid_x = nx;
 	if (!pp.contains("max_grid_size")) {
 		pp.add("max_grid_size", max_grid_x);
 	}
+
+	pp.add("max_level", 0);
 	pp.addarr("n_cell", ncells);
 
 	// Set domain bounds using AMReX parameter system
@@ -531,7 +537,6 @@ auto runWaveTest(int nx) -> double
 	sim.maxTimesteps_ = max_timesteps;
 	sim.setInitialConditions();
 	const auto &geom = sim.Geom(0);
-	auto [pos_exact, val_exact] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
 	// auto [pos_exactx1, val_exact_x1] = fextract(sim.state_new_fc_[0][0], sim.geom[0], 0, 0.5);
 	//  auto [pos_exactx2, val_exact_x2] = fextract(sim.state_new_fc_[0][1], sim.geom[0], 0, 0.5);
 	//  auto [pos_exactx3, val_exact_x3] = fextract(sim.state_new_fc_[0][2], sim.geom[0], 0, 0.5);
@@ -596,127 +601,22 @@ auto runWaveTest(int nx) -> double
 
 	// return epsilon;
 
-	amrex::Real errorNorm = 0.0;
-	if (amrex::ParallelDescriptor::IOProcessor()) {
-		errorNorm = sim.computeErrorNorm();
-	}
-	amrex::ParallelDescriptor::Bcast(&errorNorm, 1, amrex::ParallelDescriptor::IOProcessorNumber());
-
-	return errorNorm;
+	// All ranks must participate in the error calculation since it performs MPI reductions internally.
+	return sim.computeErrorNorm();
 }
 
 auto problem_main() -> int
 {
-	// Richardson convergence test: run at increasing resolution until target precision is reached
-	const double machine_precision_target = 2.0e-13;
-	const int nx_initial = 32;
-	const int nx_max = 128;
-	bool reached_target = false;
+	quokka::richardson::applyQuietDefaults();
 
-	// Silence TinyProfiler so convergence logs stay readable
-	{
-		amrex::ParmParse pp_tp("tiny_profiler");
-		if (!pp_tp.contains("output_file")) {
-			pp_tp.add("output_file", std::string("/dev/null"));
-		}
-	}
+	quokka::richardson::Parameters params{};
+	params.machine_precision_target = 2.0e-12;
+	params.nx_initial = 32;
+	params.nx_max = 256;
+	params.expected_rate = 2.0;
+	params.tolerance = 0.3;
+	params.test_name = "Fast Wave";
+	params.csv_filename = "fast_wave_convergence.csv";
 
-	// Suppress per-step logging from the coarse timestep loop
-	{
-		amrex::ParmParse pp_general;
-		if (!pp_general.contains("suppress_output")) {
-			pp_general.add("suppress_output", 1);
-		}
-	}
-
-	amrex::Vector<int> resolutions;
-	amrex::Vector<double> errors;
-	amrex::Vector<double> dx_values;
-
-	amrex::Print() << "Running Richardson convergence test for Alfven Wave:\n";
-	amrex::Print() << "Resolution\tError Norm\n";
-	amrex::Print() << "----------\t----------\n";
-
-	for (int nx = nx_initial; nx <= nx_max; nx *= 2) {
-		double const error = runWaveTest(nx);
-
-		resolutions.push_back(nx);
-		errors.push_back(error);
-		dx_values.push_back(1.0 / static_cast<double>(nx)); // dx = L / nx for unit domain
-
-		amrex::Print() << fmt::format("{:10d}\t{:.6e}\n", nx, error);
-
-		if (error <= machine_precision_target) {
-			reached_target = true;
-			break;
-		}
-
-		if (nx == nx_max) {
-			amrex::Print() << fmt::format("\nReached maximum resolution (nx = {}) without achieving the target error {:.3e}\n", nx_max,
-						      machine_precision_target);
-			break;
-		}
-	}
-
-	// Calculate convergence rates using Richardson extrapolation
-	amrex::Print() << "\nConvergence Rate Analysis:\n";
-	amrex::Print() << "Resolution Pair\tObserved Rate\tExpected Rate\n";
-	amrex::Print() << "---------------\t-------------\t-------------\n";
-
-	bool convergence_passed = true;
-	const double expected_rate = 2.0; // PPM should give ~2nd order for smooth problems
-	const double tolerance = 0.3;	  // Allow 30% deviation from expected rate
-
-	for (int i = 1; i < resolutions.size(); ++i) {
-		// Calculate convergence rate: p = log(E(2h)/E(h)) / log(2)
-		double const log_error_ratio = std::log(errors[i - 1] / errors[i]);
-		double const log_dx_ratio = std::log(dx_values[i - 1] / dx_values[i]);
-		double const observed_rate = log_error_ratio / log_dx_ratio;
-
-		amrex::Print() << fmt::format("{:4d} -> {:4d}\t{:13.2f}\t{:13.1f}\n", resolutions[i - 1], resolutions[i], observed_rate, expected_rate);
-
-		// Check if convergence rate is within acceptable range
-		if (observed_rate + tolerance < expected_rate) {
-			convergence_passed = false;
-		}
-	}
-
-	// Calculate overall convergence rate from first to last resolution
-	if (resolutions.size() >= 2) {
-		double const overall_log_error_ratio = std::log(errors[0] / errors.back());
-		double const overall_log_dx_ratio = std::log(dx_values[0] / dx_values.back());
-		double const overall_rate = overall_log_error_ratio / overall_log_dx_ratio;
-
-		amrex::Print() << fmt::format("\nOverall convergence rate: {:.2f}\n", overall_rate);
-		amrex::Print() << fmt::format("Expected rate: {:.1f}\n", expected_rate);
-
-		if (overall_rate + tolerance < expected_rate) {
-			convergence_passed = false;
-		}
-	}
-
-	// Output results for analysis
-	if (amrex::ParallelDescriptor::IOProcessor()) {
-		std::ofstream file("alfven_wave_convergence.csv");
-		file << "nx,dx,error\n";
-		for (int i = 0; i < resolutions.size(); ++i) {
-			file << fmt::format("{},{:.6e},{:.6e}\n", resolutions[i], dx_values[i], errors[i]);
-		}
-		file.close();
-		amrex::Print() << "\nConvergence data written to alfven_wave_convergence.csv\n";
-	}
-
-	// Test status
-	if (convergence_passed) {
-		if (reached_target) {
-			amrex::Print() << fmt::format("\n✓ Richardson convergence test PASSED (target error {:.3e} reached)\n", machine_precision_target);
-		} else {
-			amrex::Print() << "\n✓ Richardson convergence test PASSED\n";
-		}
-		return 0;
-	}
-
-	amrex::Print() << "\n✗ Richardson convergence test FAILED\n";
-	amrex::Print() << "Observed convergence rate deviates from expected rate by more than " << tolerance << "\n";
-	return 1;
+	return quokka::richardson::run(params, [](int nx) { return runWaveTest(nx); });
 }
