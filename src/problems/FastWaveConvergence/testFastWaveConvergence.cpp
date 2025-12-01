@@ -197,8 +197,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 
 	const double omega = cf * k_magn;
 	const double phase = omega * time - k_magn * x_vec_mrf[0];
-	double delta_A1 = 0.0;
-	double delta_A2 = 0.0;
+	const double delta_A1 = 0.0;
+	const double delta_A2 = 0.0;
 	double delta_A3 = 0.0;
 
 	// polarization (velocity) angle alpha for FAST mode
@@ -213,8 +213,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 		const double cos_alpha = 1.0 / std::sqrt(1.0 + tan_alpha * tan_alpha);
 		const double sin_alpha = tan_alpha * cos_alpha;
 		const double dv = cf * delta_b_magn / b0_magn; // dv amplitude times cos(phase)
-		double v1_mrf = dv * cos_alpha;
-		double v2_mrf = dv * sin_alpha;
+		const double v1_mrf = dv * cos_alpha;
+		const double v2_mrf = dv * sin_alpha;
 		const double deltaB2_mrf = (k_magn * B0_1 * v2_mrf - k_magn * B0_2 * v1_mrf) / omega; // δB2
 		delta_A3 = -(deltaB2_mrf / k_magn) * std::sin(phase);
 	}
@@ -280,12 +280,8 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const double dv_amp = cf * delta_b_magn / b0_magn;
 
 		// polarization (velocity) angle alpha for FAST mode
-		if (std::abs(cosθ) < tiny) {
-			// theta = 90 deg
-			v1_amp = dv_amp;
-			v2_amp = 0.0;
-		} else if (std::abs(sinθ) < tiny) {
-			// theta = 0 or 180 deg → acoustic wave → dv = 0
+		if (std::abs(cosθ) < tiny || std::abs(sinθ) < tiny) {
+			// theta = 0, 90, or 180 deg → polarization is purely along x1
 			v1_amp = dv_amp;
 			v2_amp = 0.0;
 		} else {
