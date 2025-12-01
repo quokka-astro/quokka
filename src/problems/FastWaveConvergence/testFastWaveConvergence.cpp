@@ -532,7 +532,6 @@ auto runWaveTest(int nx) -> double
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.setInitialConditions();
-	const auto &geom = sim.Geom(0);
 	// auto [pos_exactx1, val_exact_x1] = fextract(sim.state_new_fc_[0][0], sim.geom[0], 0, 0.5);
 	//  auto [pos_exactx2, val_exact_x2] = fextract(sim.state_new_fc_[0][1], sim.geom[0], 0, 0.5);
 	//  auto [pos_exactx3, val_exact_x3] = fextract(sim.state_new_fc_[0][2], sim.geom[0], 0, 0.5);
