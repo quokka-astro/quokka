@@ -192,8 +192,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	const double cosθ = std::cos(θ);
 	const double sinθ = std::sin(θ);
 
-	const double cf =
-	    std::sqrt(0.5 * (a * a + vA * vA + std::sqrt((a * a + vA * vA) * (a * a + vA * vA) - 4.0 * a * a * vA * vA * cosθ * cosθ)));
+	const double cf = std::sqrt(0.5 * (a * a + vA * vA + std::sqrt((a * a + vA * vA) * (a * a + vA * vA) - 4.0 * a * a * vA * vA * cosθ * cosθ)));
 
 	const double omega = cf * k_magn;
 	const double phase = omega * time - k_magn * x_vec_mrf[0];
@@ -266,8 +265,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const double cosθ = std::cos(θ);
 		const double sinθ = std::sin(θ);
 
-		const double cf = std::sqrt(
-		    0.5 * (a * a + vA * vA + std::sqrt((a * a + vA * vA) * (a * a + vA * vA) - 4.0 * a * a * vA * vA * cosθ * cosθ)));
+		const double cf = std::sqrt(0.5 * (a * a + vA * vA + std::sqrt((a * a + vA * vA) * (a * a + vA * vA) - 4.0 * a * a * vA * vA * cosθ * cosθ)));
 
 		const double omega = cf * k_magn;
 		const double phase = omega * time - k_magn * x_vec_mrf_C[0];
