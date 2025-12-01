@@ -202,10 +202,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	double delta_A2 = 0.0;
 	double delta_A3 = 0.0;
 
-	// polarization (velocity) angle alpha for FAST mode 
+	// polarization (velocity) angle alpha for FAST mode
 	if (std::abs(cosθ) < tiny) {
 		// special case: theta = 90 deg
-		delta_A3 = (delta_b_magn / k_magn) * std::sin(phase); // δB2	
+		delta_A3 = (delta_b_magn / k_magn) * std::sin(phase); // δB2
 	} else if (std::abs(sinθ) < tiny) {
 		// theta = 0 or 180 deg: fast mode is pure sound wave → no B perturbation
 		delta_A3 = 0.0; // δB = 0
@@ -216,8 +216,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 		const double dv = cf * delta_b_magn / b0_magn; // dv amplitude times cos(phase)
 		double v1_mrf = dv * cos_alpha;
 		double v2_mrf = dv * sin_alpha;
-		const double deltaB2_mrf = (k_magn * B0_1 * v2_mrf - k_magn * B0_2 * v1_mrf) / omega; // δB2 
-		delta_A3 = - (deltaB2_mrf / k_magn) * std::sin(phase);
+		const double deltaB2_mrf = (k_magn * B0_1 * v2_mrf - k_magn * B0_2 * v1_mrf) / omega; // δB2
+		delta_A3 = -(deltaB2_mrf / k_magn) * std::sin(phase);
 	}
 	const double A1_mrf = bg_A1 + delta_A1;
 	const double A2_mrf = bg_A2 + delta_A2;
@@ -252,7 +252,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 	if (cen == quokka::centering::cc) {
 		const double tiny = 1e-16;
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(b0_magn) > tiny, "computeWaveSolution: background magnetic field magnitude b0_magn must be nonzero.");
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(k_magn) > tiny, "computeWaveSolution: wavevector magnitude k_magn must be nonzero.");	
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(k_magn) > tiny, "computeWaveSolution: wavevector magnitude k_magn must be nonzero.");
 		const amrex::Real x1_prf_C = x1_prf_L + static_cast<amrex::Real>(0.5) * dx[0];
 		const amrex::Real x2_prf_C = x2_prf_L + static_cast<amrex::Real>(0.5) * dx[1];
 		const amrex::Real x3_prf_C = x3_prf_L + static_cast<amrex::Real>(0.5) * dx[2];
@@ -279,7 +279,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		// compute velocity perturbations in MRF
 		double v1_amp = 0.0;
 		double v2_amp = 0.0;
-		const double dv_amp = cf * delta_b_magn / b0_magn; 
+		const double dv_amp = cf * delta_b_magn / b0_magn;
 
 		// polarization (velocity) angle alpha for FAST mode
 		if (std::abs(cosθ) < tiny) {
@@ -291,8 +291,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 			v1_amp = dv_amp;
 			v2_amp = 0.0;
 		} else {
-			const double tan_alpha =
-				(cf * cf - vA * vA * cosθ * cosθ) / (vA * vA * sinθ * cosθ);
+			const double tan_alpha = (cf * cf - vA * vA * cosθ * cosθ) / (vA * vA * sinθ * cosθ);
 			const double cos_alpha = 1.0 / std::sqrt(1.0 + tan_alpha * tan_alpha);
 			const double sin_alpha = tan_alpha * cos_alpha;
 			v1_amp = dv_amp * cos_alpha;
@@ -304,9 +303,8 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		double const v2_mrf = v2_amp * cos_phase;
 		const double v3_mrf = 0.0;
 
-		// magnetic perturbation 
-		const double deltaB2_amp =
-			(k_magn * B0_1 * v2_amp - k_magn * B0_2 * v1_amp) / omega;
+		// magnetic perturbation
+		const double deltaB2_amp = (k_magn * B0_1 * v2_amp - k_magn * B0_2 * v1_amp) / omega;
 		const double dB2_mrf = deltaB2_amp * cos_phase;
 
 		const auto v_prf = rotateMRF2PRF({v1_mrf, v2_mrf, v3_mrf});
