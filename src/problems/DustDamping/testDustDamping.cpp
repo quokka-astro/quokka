@@ -9,6 +9,24 @@
 #include "util/matplotlibcpp.h"
 #endif
 
+// // analytic solution parameters for test A
+// constexpr double V_COM = 1.16666666666667;
+// constexpr double LAMBDA1 = -0.63397459621556;
+// constexpr double LAMBDA2 = -2.36602540378444;
+// constexpr double C_GAS_1 = -0.22767090063074;
+// constexpr double C_GAS_2 = 0.06100423396407;
+// constexpr double C_DUST1_1 = 0.84967936855889;
+// constexpr double C_DUST1_2 = -0.01634603522555;
+// constexpr double C_DUST2_1 = -0.62200846792815;
+// constexpr double C_DUST2_2 = -0.04465819873852;
+
+// constexpr double rho_dust1 = 1.0;
+// constexpr double rho_dust2 = 1.0;
+// constexpr double TS1 = 2.0;
+// constexpr double TS2 = 1.0;
+// constexpr double OMEGA = 1.0;
+// constexpr double P_INITIAL = 1.0;
+
 // analytic solution parameters for test B
 constexpr double V_COM = 1.16666666666667;
 constexpr double LAMBDA1 = -141.742430504416;
@@ -243,7 +261,7 @@ auto E_gas_analytic(double t) -> double
 auto problem_main() -> int
 {
 	// problem parameters
-	const double CFL_number = 1000000.0;
+	const double CFL_number = 1000000.0; // set large CFL to avoid CFL violation
 
 	// boundary conditions
 	constexpr int nvars = HydroSystem<DustDamping>::nvar_;
@@ -262,7 +280,7 @@ auto problem_main() -> int
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = CFL_number;
-	sim.constantDt_ = 0.005;
+	sim.constantDt_ = 0.005; // usually 0.005 for test B, 0.05 for test C
 
 	// initialize
 	sim.setInitialConditions();
