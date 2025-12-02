@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <ranges>
 #include <string>
 
 #include <fmt/format.h>
@@ -142,7 +143,7 @@ class PhysicsParticleDescriptorBase
 	// Note: particles are not allowed to spawn outside of real cells. If they do, we will need a redistribution immediately after this call in order to
 	// make particle-mesh interaction work.
 	virtual void createParticlesFromState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real current_time, amrex::Real dt,
-					      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr)
+					      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc)
 	{ /* Default empty implementation */
 	}
 
@@ -388,7 +389,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					    const amrex::Real vz = p_type.m_aos[i].rdata(mass_idx + 3);
 					    const amrex::Real v2 = (vx * vx) + (vy * vy) + (vz * vz);
 					    const amrex::RealVect pos{p_type[i].pos(0), p_type[i].pos(1), p_type[i].pos(2)};
-					    return amrex::ValLocPair<amrex::Real, amrex::RealVect>{std::sqrt(v2), pos};
+					    return amrex::ValLocPair<amrex::Real, amrex::RealVect>{.value = std::sqrt(v2), .index = pos};
 				    },
 				    reduce_ops);
 
@@ -575,7 +576,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	}
 
 	void createParticlesFromState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real current_time, amrex::Real dt,
-				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr) override
+				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc) override
 	{
 		// Use the traits class to implement the specialized behavior
 		ParticleCreationTraits<particleType>::template createParticles<problem_t, ContainerType>(
@@ -791,7 +792,7 @@ template <typename problem_t> class PhysicsParticleRegister
 			const std::string typeName = getParticleTypeName(type);
 
 			// Check if this particle type is in the requested list
-			if (std::find(particleTypeNames.begin(), particleTypeNames.end(), typeName) != particleTypeNames.end()) {
+			if (std::ranges::find(particleTypeNames, typeName) != particleTypeNames.end()) {
 				descriptor->writePlotFile(plotfilename, typeName);
 				descriptor->writeUnitsFile(plotfilename, typeName);
 			}
