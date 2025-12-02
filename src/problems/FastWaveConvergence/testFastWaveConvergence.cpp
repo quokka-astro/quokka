@@ -533,72 +533,44 @@ auto runWaveTest(int nx) -> double
 	sim.maxTimesteps_ = max_timesteps;
 	sim.setInitialConditions();
 	const auto &geom = sim.Geom(0);
-	// auto [pos_exactx1, val_exact_x1] = fextract(sim.state_new_fc_[0][0], sim.geom[0], 0, 0.5);
-	//  auto [pos_exactx2, val_exact_x2] = fextract(sim.state_new_fc_[0][1], sim.geom[0], 0, 0.5);
-	//  auto [pos_exactx3, val_exact_x3] = fextract(sim.state_new_fc_[0][2], sim.geom[0], 0, 0.5);
 
 	// Main time loop
 	sim.evolve();
-	// auto [position, values] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
-	// auto [positionx1, values_x1] = fextract(sim.state_new_fc_[0][0], sim.geom[0], 0, 0.5);
-	// auto [positionx2, values_x2] = fextract(sim.state_new_fc_[0][1], sim.geom[0], 0, 0.5);
-	// auto [positionx3, values_x3] = fextract(sim.state_new_fc_[0][2], sim.geom[0], 0, 0.5);
-	// int const nx_final = static_cast<int>(position.size());
-	// int const nx_final_x1 = static_cast<int>(positionx1.size());
-	// int const nx_final_x2 = static_cast<int>(positionx2.size());
-	// int const nx_final_x3 = static_cast<int>(positionx3.size());
 
-	// amrex::Real err_sq = 0.;
-	// for (int n = 0; n < QuokkaSimulation<FastWaveConvergence>::ncompHydro_; ++n) {
-	// 	if (n == HydroSystem<FastWaveConvergence>::internalEnergy_index) {
-	// 		continue;
-	// 	}
-	// 	amrex::Real dU_k = 0.;
-	// 	for (int i = 0; i < nx_final; ++i) {
-	// 		// Δ Uk = ∑i |Uk,in - Uk,i0| / Nx
-	// 		const amrex::Real U_k0 = val_exact.at(n)[i];
-	// 		const amrex::Real U_k1 = values.at(n)[i];
-	// 		dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final);
-	// 	}
-	// 	// ε = || Δ U || = [&sum_k (Δ Uk)2]^{1/2}
-	// 	err_sq += dU_k * dU_k;
-	// 	std::cout << "Component " << n << " error: " << dU_k << "\n";
-	// }
-	// for (int n = 0; n < QuokkaSimulation<FastWaveConvergence>::n_mhd_vars_per_dim_; ++n) {
-	// 	amrex::Real dU_k = 0.;
-	// 	for (int i = 0; i < nx_final_x1; ++i) {
-	// 		// Δ Bk = ∑i |Bk,in - Bk,i0| / Nx
-	// 		const amrex::Real U_k0 = val_exact_x1.at(n)[i];
-	// 		const amrex::Real U_k1 = values_x1.at(n)[i];
-	// 		dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final_x1);
-	// 	}
-	// 	std::cout << "Magnetic Component " << n << " error: " << dU_k << "\n";
-	// 	dU_k=0.0;
-	// 	for (int i = 0; i < nx_final_x2; ++i) {
-	// 		// Δ Bk = ∑i |Bk,in - Bk,i0| / Nx
-	// 		const amrex::Real U_k0 = val_exact_x2.at(n)[i];
-	// 		const amrex::Real U_k1 = values_x2.at(n)[i];
-	// 		dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final_x2);
-	// 	}
-	// 	std::cout << "Magnetic Component " << n << " error: " << dU_k << "\n";
-	// 	dU_k=0.0;
-	// 	for (int i = 0; i < nx_final_x3; ++i) {
-	// 		// Δ Bk = ∑i |Bk,in - Bk,i0| / Nx
-	// 		const amrex::Real U_k0 = val_exact_x3.at(n)[i];
-	// 		const amrex::Real U_k1 = values_x3.at(n)[i];
-	// 		dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final_x3);
-	// 	}
-	// 	// ε = || Δ U || = [&sum_k (Δ Uk)2]^{1/2}
-	// 	err_sq += dU_k * dU_k;
-	// 	std::cout << "Magnetic Component " << n << " error: " << dU_k << "\n";
-	// }
-	// const amrex::Real epsilon = std::sqrt(err_sq);
-	// std::cout << "Total error norm: " << epsilon << "\n";
+	auto comp_errors = sim.computeComponentErrors();
+	const auto n_cells = static_cast<amrex::Real>(sim.state_new_cc_[0].boxArray().numPts());
+	amrex::Real sum_sq_err = 0.0;
+	amrex::Real sum_sq_ref = 0.0;
+	for (const auto &[name, abs_err, rel_err] : comp_errors) {
+		// Convert normalized errors back to L1 norms
+		amrex::Real const L1_err = abs_err * n_cells;
+		sum_sq_err += L1_err * L1_err;
+		// Reconstruct reference L1 norm
+		if (!std::isnan(rel_err) && rel_err != 0.0 && abs_err > 10E-15) {
+			amrex::Real const L1_ref = (abs_err / rel_err) * n_cells;
+			sum_sq_ref += L1_ref * L1_ref;
+		}
+		// If rel_err is NaN or zero, reference was zero, contributes 0 to sum_sq_ref
+	}
 
-	// return epsilon;
+	const amrex::Real err_norm = std::sqrt(sum_sq_err);
+	const amrex::Real sol_norm = std::sqrt(sum_sq_ref);
 
-	// All ranks must participate in the error calculation since it performs MPI reductions internally.
-	return sim.computeErrorNorm();
+	amrex::Real error_norm = 0.0;
+	if (sol_norm > 0.0) {
+		error_norm = err_norm / sol_norm;
+		amrex::Print() << std::string(70, '=') << "\n";
+		amrex::Print() << "\nRelative RMS L1 error norm = " << error_norm << "\n\n";
+	} else {
+		error_norm = err_norm;
+		amrex::Print() << std::string(70, '=') << "\n";
+		if (sol_norm == 0.0) {
+			amrex::Print() << "\nReference norm is zero; reporting absolute L1 error norm = " << error_norm << "\n\n";
+		} else {
+			amrex::Print() << "\nAbsolute L1 error norm = " << error_norm << "\n\n";
+		}
+	}
+	return error_norm;
 }
 
 auto problem_main() -> int
