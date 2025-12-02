@@ -2,7 +2,7 @@
   "version": 1,
   "project": "quokka",
   "project_url": "https://github.com/quokka-astro/quokka",
-  "repo": "../../..",
+  "repo": "../..",
   "branches": [
     "development"
   ],
