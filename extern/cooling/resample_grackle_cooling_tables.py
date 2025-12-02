@@ -488,6 +488,7 @@ def main():
             try:
                 os.unlink(cleanup_path)
             except FileNotFoundError:
+                # It is safe to ignore if the file is already deleted or was never created.
                 pass
 
 
