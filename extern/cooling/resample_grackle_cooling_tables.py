@@ -1,10 +1,19 @@
 #!/usr/bin/env python3
 # ABOUTME: Resample cooling tables from grackle_tables.py as a function of specific
 # ABOUTME: internal energy and mass density on a logarithmic 2D grid, including sound speeds.
-
-# By default, the Grackle data used is input/CloudyData_UVB=HM2012.h5 and is automatically 
-# downloaded from this url, if not specified:
-# https://github.com/grackle-project/grackle_data_files/raw/928696482fbe15d9bac4382de6134d95568f099c/input/CloudyData_UVB=HM2012.h5
+"""
+Example usage:
+Resample using the default CloudyData_UVB=HM2012.h5 data (auto-downloaded via wget) at solar metallicity
+    ./resample_grackle_cooling_tables.py
+The CloudyData_UVB=HM2012_resampled.h5 file in this folder was generated via this command:
+    ./resample_grackle_cooling_tables.py --output CloudyData_UVB=HM2012_resampled.h5
+Resample using the default CloudyData_UVB=HM2012.h5 data (auto-downloaded via wget) at 0.5 solar metallicity
+    ./resample_grackle_cooling_tables.py --zmet 0.5
+Resample with user-provided tables and non-default spacing parameters
+    ./resample_grackle_cooling_tables.py /path/to/CloudyData.h5 --n_rho 50 --n_eint 400 --output my_tables.h5
+Validate fast_log2 <-> inverse_fast_log2
+    ./resample_grackle_cooling_tables.py --test
+"""
 
 import os
 import shutil
