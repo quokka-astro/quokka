@@ -145,7 +145,7 @@ if [ -z "$native_final_plt" ]; then
 fi
 
 # Extract native final time (time is on line 13 of plotfile Header)
-native_time=$(sed -n '13p' $native_final_plt/Header)
+native_time=$(sed -n '10p' $native_final_plt/Header)
 echo "Native fine AMR simulation completed at time t=$native_time"
 
 echo ""
@@ -163,7 +163,7 @@ if [ -z "$restart_final_plt" ]; then
 fi
 
 # Extract restart final time (time is on line 13 of plotfile Header)
-restart_time=$(sed -n '13p' $restart_final_plt/Header)
+restart_time=$(sed -n '10p' $restart_final_plt/Header)
 echo "Multi-level universal refinement simulation completed at time t=$restart_time"
 
 echo ""
