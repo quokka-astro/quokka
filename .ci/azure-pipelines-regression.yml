@@ -58,6 +58,12 @@ jobs:
         CCACHE_DIR: $(Pipeline.Workspace)/ccache
         CCACHE_BASEDIR: $(Build.SourcesDirectory)
         CCACHE_NOHASHDIR: 1
+    - script: |
+        ./regression/gen_asv_dashboard.py /data/mash/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests
+        mkdir -p /data/mash/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests/web/asv
+        cp -r regression/asv_benchmarks/html/* /data/mash/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests/web/asv/
+      condition: succeededOrFailed()
+      displayName: 'Generate ASV dashboard'
     - publish: /data/mash/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests/web
       condition: succeededOrFailed()
       artifact: regressionHTMLOutput
