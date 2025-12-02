@@ -4,4 +4,6 @@ set -e # Exit with nonzero exit code if anything fails
 echo "Build the HTML documentation using MkDocs"
 cd docs
 mkdocs build
-cd ../
+
+cd site
+python3 -m http.server
