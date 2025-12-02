@@ -1,6 +1,7 @@
 #ifndef PHYSICS_PARTICLES_HPP_
 #define PHYSICS_PARTICLES_HPP_
 
+#include <array>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -140,7 +141,8 @@ class PhysicsParticleDescriptorBase
 	// Create particles from hydro state at the finest level
 	// Note: particles are not allowed to spawn outside of real cells. If they do, we will need a redistribution immediately after this call in order to
 	// make particle-mesh interaction work.
-	virtual void createParticlesFromState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real current_time, amrex::Real dt)
+	virtual void createParticlesFromState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real current_time, amrex::Real dt,
+					      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr)
 	{ /* Default empty implementation */ }
 
 	virtual void applySinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, const amrex::Geometry &geom, int lev, amrex::Real time,
@@ -571,12 +573,13 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 									     this->getMassIndex());
 	}
 
-	void createParticlesFromState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real current_time, amrex::Real dt) override
+	void createParticlesFromState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real current_time, amrex::Real dt,
+				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr) override
 	{
 		// Use the traits class to implement the specialized behavior
 		ParticleCreationTraits<particleType>::template createParticles<problem_t, ContainerType>(
 		    this->container_, this->getMassIndex(), state, accretion_rate, lev, current_time, dt, this->getEvolutionStageIndex(),
-		    this->getBirthTimeIndex());
+		    this->getBirthTimeIndex(), state_fc);
 	}
 #endif // AMREX_SPACEDIM == 3
 };
@@ -844,14 +847,15 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Create particles based on particle type
-	void createParticlesFromState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real current_time, amrex::Real dt)
+	void createParticlesFromState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real current_time, amrex::Real dt,
+				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr)
 	{
 		const BL_PROFILE("PhysicsParticleRegister::createParticlesFromState()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			// Only create particles if the descriptor allows creation
 			if (descriptor->getAllowsCreation()) {
 				// Call the appropriate particle creation method based on the particle type
-				descriptor->createParticlesFromState(state, accretion_rate, lev, current_time, dt);
+				descriptor->createParticlesFromState(state, accretion_rate, lev, current_time, dt, state_fc);
 
 				// redistribute particles
 				// descriptor->redistribute(lev);
