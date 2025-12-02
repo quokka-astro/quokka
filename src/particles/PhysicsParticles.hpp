@@ -143,7 +143,8 @@ class PhysicsParticleDescriptorBase
 	// make particle-mesh interaction work.
 	virtual void createParticlesFromState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real current_time, amrex::Real dt,
 					      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr)
-	{ /* Default empty implementation */ }
+	{ /* Default empty implementation */
+	}
 
 	virtual void applySinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, const amrex::Geometry &geom, int lev, amrex::Real time,
 					amrex::Real dt)

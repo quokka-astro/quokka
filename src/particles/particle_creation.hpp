@@ -108,7 +108,8 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 					if (pcounts[index] > 0) {			  // NOLINT
 						const int num_particles = pcounts[index]; // NOLINT
 						auto *particles = &pdata[poffset[index]]; // NOLINT
-						particle_creator(particles, num_particles, state_arr, accretion_rate_arr, i, j, k, dx, plo, cons_fc_ptr, poffset[index],
+						particle_creator(particles, num_particles, state_arr, accretion_rate_arr, i, j, k, dx, plo, cons_fc_ptr,
+								 poffset[index],
 								 engine); // NOLINT
 					}
 				});
@@ -139,7 +140,8 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, amrex::Array4<const amrex::Real> const &accretion_rate_arr,
 						 int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-						 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc, amrex::RandomEngine const &engine) const -> int
+						 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc,
+						 amrex::RandomEngine const &engine) const -> int
 		{
 			// Default implementation creates no particles
 			amrex::ignore_unused(state_arr, accretion_rate_arr, i, j, k, dx, cons_fc, engine);
