@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-# ABOUTME: Resample cooling tables from grackle_tables.py as a function of specific
-# ABOUTME: internal energy and mass density on a logarithmic 2D grid, including sound speeds.
 """
+Resample Grackle cooling tables as a function of specific internal energy and mass density on a logarithmic 2D grid.
+Outputs include cooling rates, temperatures, sound speeds, pressures, and entropies.
+
 Example usage:
 Resample using the default CloudyData_UVB=HM2012.h5 data (auto-downloaded via wget) at solar metallicity
     ./resample_grackle_cooling_tables.py
