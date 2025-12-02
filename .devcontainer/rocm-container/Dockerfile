@@ -75,6 +75,9 @@ RUN mkdir -p /tmp/build-adios2 && cd /tmp/build-adios2 && \
     cd / && \
     rm -rf /tmp/build-adios2
 
+# add packages needed for full C++20 support
+RUN zypper --non-interactive install gcc13 gcc13-c++ libstdc++6-devel-gcc13 && zypper clean --all
+
 # Install Kokkos (needed for Viskores for ROCm)
 RUN mkdir -p /tmp/build-kokkos && cd /tmp/build-kokkos && \
     wget -q https://github.com/kokkos/kokkos/releases/download/5.0.0/kokkos-5.0.0.tar.gz && \
@@ -96,9 +99,6 @@ RUN mkdir -p /tmp/build-viskores && cd /tmp/build-viskores && \
     make -j$(nproc) && make install && \
     cd / && \
     rm -rf /tmp/build-viskores
-
-# add packages needed for full C++20 support
-RUN zypper --non-interactive install gcc13 gcc13-c++ libstdc++6-devel-gcc13 && zypper clean --all
 
 # add packages needed to download and build Quokka
 RUN zypper --non-interactive install git gdb hdf5-devel python3-devel && zypper clean --all
