@@ -1,12 +1,16 @@
 {
-    "version": 1,
-    "project": "quokka",
-    "project_url": "https://github.com/quokka-astro/quokka",
-    "repo": "../../..",
-    "branches": ["development"],
-    "show_commit_url": "https://github.com/quokka-astro/quokka/commit/",
-    "environment_type": "virtualenv",
-    "results_dir": "results",
-    "html_dir": "html",
-    "pythons": ["3.10"]
+  "version": 1,
+  "project": "quokka",
+  "project_url": "https://github.com/quokka-astro/quokka",
+  "repo": "../../..",
+  "branches": [
+    "development"
+  ],
+  "show_commit_url": "https://github.com/quokka-astro/quokka/commit/",
+  "environment_type": "virtualenv",
+  "results_dir": "results",
+  "html_dir": "html",
+  "pythons": [
+    "3.10"
+  ]
 }
