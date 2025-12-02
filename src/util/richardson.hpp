@@ -2,7 +2,8 @@
 // Shared Richardson convergence driver
 //==============================================================================
 
-#pragma once
+#ifndef QUOKKA_RICHARDSON_HPP
+#define QUOKKA_RICHARDSON_HPP
 
 #include <cmath>
 #include <fstream>
@@ -61,7 +62,7 @@ template <typename Callable> auto run(const Parameters &params, Callable &&runTe
 	amrex::Print() << "----------\t----------\n";
 
 	for (int nx = params.nx_initial; nx <= params.nx_max; nx *= 2) {
-		double error = runTest(nx);
+		double error = std::forward<Callable>(runTest)(nx);
 		amrex::ParallelDescriptor::Bcast(&error, 1, amrex::ParallelDescriptor::IOProcessorNumber());
 
 		resolutions.push_back(nx);
@@ -139,3 +140,5 @@ template <typename Callable> auto run(const Parameters &params, Callable &&runTe
 }
 
 } // namespace quokka::richardson
+
+#endif // QUOKKA_RICHARDSON_HPP
