@@ -18,6 +18,7 @@ This matches the published scheme:
 - **Mass unbiased:** Because the probabilities are derived from the conservative fluxes, the ensemble of tracers reproduces the Eulerian mass distribution.
 - **Diffusive noise:** Every tracer performs a random walk relative to the bulk flow (variance ≈ mean number of exchanges). Using more tracers per cell reduces sampling noise but not this intrinsic diffusion.
 - **Low coupling cost:** The algorithm only needs face fluxes and cell masses, so it integrates cleanly with Quokka’s existing hyperbolic update.
+- **Host-side particle advection:** The actual particle advection (movement) is performed on the host (CPU). While the probabilities are computed on the device (GPU), the individual stochastic decisions for each particle and their position updates occur on the CPU. This can be a performance consideration for very large numbers of tracer particles in GPU-accelerated simulations.
 
 ## Caveats and current limitations
 

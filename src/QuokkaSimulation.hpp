@@ -2805,7 +2805,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::applyMonteCarloT
 	}
 
 	for (typename amrex::AmrTracerParticleContainer::ParIterType pti(*TracerPC, lev); pti.isValid(); ++pti) {
-		int const grid = pti.index();
 		int const local_grid = pti.LocalIndex(); // MultiFab arrays are indexed by local FAB order
 		auto &particles = pti.GetArrayOfStructs();
 		auto *parray = particles().data();
