@@ -76,10 +76,6 @@ template <> struct SimulationData<TheProblem> {
 	Real sigma1 = 700000.0;
 };
 
-static constexpr amrex::Real ks_sigma_sfr = 2.088579882548443e-55;
-static constexpr amrex::Real hscale = 150. * pc;
-static constexpr amrex::Real sigma2 = 7000000.0;
-
 template <> struct Particle_Traits<TheProblem> {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
 };
@@ -320,9 +316,6 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const z = prob_lo[2] + ((k + static_cast<amrex::Real>(0.5)) * dx[2]);
 
-		double rho = NAN;
-		double P = NAN;
-
 		// Use DataTable to interpolate initial conditions from file
 		// Table provides: [rho, g_z, Phi] as functions of z
 		std::array<amrex::Real, 1> const point = {std::abs(z)};
@@ -332,9 +325,9 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 		const double phi_tot = ic_values[2];
 		const double rho1 = rho01_ic * std::exp(-phi_tot / (sigma1_ic * sigma1_ic));
 		const double rho2 = rho02_ic * std::exp(-phi_tot / (sigma2_ic * sigma2_ic));
-		rho = rho1 + rho2;
+		const double rho = rho1 + rho2;
 
-		P = rho1 * sigma1_ic * sigma1_ic + rho2 * sigma2_ic * sigma2_ic;
+		const double P = rho1 * sigma1_ic * sigma1_ic + rho2 * sigma2_ic * sigma2_ic;
 
 		AMREX_ASSERT(!std::isnan(rho));
 
