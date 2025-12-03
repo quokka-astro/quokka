@@ -509,6 +509,13 @@ template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::Mult
 	const Real rho_dm = userData_.rho_dm;
 	const Real R0_Gal = userData_.R0_Gal;
 
+	// Create GPU const tables for initial conditions if available
+	ICGpuConstTables gpu_ic_tables;
+	bool const use_ic_table = userData_.use_ic_table;
+	if (use_ic_table) {
+		gpu_ic_tables.ic_table = userData_.ic_table.const_tables();
+	}
+
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = mf.array(iter);
@@ -534,20 +541,38 @@ template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::Mult
 
 			// Calculate gradient of fixed potential using captured parameters
 			double const z = posvec[2];
-			// Interpolate to find the accurate g-value from array
-			auto const &x_arr = z_data;
-			auto const &y_arr = logg_data;
-			const amrex::Real ginterp = interpolate_value<BoundaryPolicy::Clamp>(std::abs(z), x_arr.data(), y_arr.data(), ARR_SIZE);
-			AMREX_ASSERT(!std::isnan(ginterp));
 
-			// DM Potential
-			GradPhi[0] = 0.0;
-			GradPhi[1] = 0.0;
-			GradPhi[2] = 2. * M_PI * C::Gconst * rho_dm * std::pow(R0_Gal, 2) * (2. * z / std::pow(R0_Gal, 2)) / (1. + std::pow(z, 2) / std::pow(R0_Gal, 2));
-			// Stellar Disk Potential
-			GradPhi[2] += 2. * M_PI * C::Gconst * Sigma_star * (z / z_star) * (std::pow(1. + (z * z / (z_star * z_star)), -0.5));
-			// Gas Disk Potential, removed because we have self-gravity
-			// GradPhi[2] += (z / std::abs(z)) * std::pow(10., ginterp);
+			if (use_ic_table) {
+				std::array<amrex::Real, 1> const point = {std::abs(z)};
+				auto const ic_values = gpu_ic_tables.ic_table.interpolate(point);
+				// ic_values[0] = g_1, ic_values[1] = g_ext, ic_values[2] = phi_tot
+				const double g_ext = ic_values[1];
+
+				GradPhi[0] = 0.0;
+				GradPhi[1] = 0.0;
+				// g_ext is the gravitational acceleration (g_z) at z > 0 (it is negative)
+				// GradPhi = -g (vector)
+				// For z > 0, GradPhi_z = -g_ext (positive)
+				// For z < 0, g_z = -g_ext (positive), GradPhi_z = -g_z = g_ext (negative)
+				// This is equivalent to GradPhi_z = -g_ext * sign(z)
+				GradPhi[2] = -g_ext * std::copysign(1.0, z);
+			} else {
+				// Interpolate to find the accurate g-value from array
+				auto const &x_arr = z_data;
+				auto const &y_arr = logg_data;
+				const amrex::Real ginterp = interpolate_value<BoundaryPolicy::Clamp>(std::abs(z), x_arr.data(), y_arr.data(), ARR_SIZE);
+				AMREX_ASSERT(!std::isnan(ginterp));
+
+				// DM Potential
+				GradPhi[0] = 0.0;
+				GradPhi[1] = 0.0;
+				GradPhi[2] = 2. * M_PI * C::Gconst * rho_dm * std::pow(R0_Gal, 2) * (2. * z / std::pow(R0_Gal, 2)) /
+					     (1. + std::pow(z, 2) / std::pow(R0_Gal, 2));
+				// Stellar Disk Potential
+				GradPhi[2] += 2. * M_PI * C::Gconst * Sigma_star * (z / z_star) * (std::pow(1. + (z * z / (z_star * z_star)), -0.5));
+				// Gas Disk Potential, removed because we have self-gravity
+				// GradPhi[2] += (z / std::abs(z)) * std::pow(10., ginterp);
+			}
 			AMREX_ASSERT(!std::isnan(GradPhi[2]));
 
 			x1mom_new = x1mom + dt * (-rho * GradPhi[0]);
