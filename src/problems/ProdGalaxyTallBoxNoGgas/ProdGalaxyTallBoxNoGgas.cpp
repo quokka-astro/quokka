@@ -49,12 +49,6 @@ constexpr double chat_over_c = 2000.0 * 1e5 / C::c_light; // chat = 2000 km/s
 struct TheProblem {
 };
 
-// GPU-friendly const table access for initial conditions
-// 3 outputs: rho, g_z, Phi
-struct ICGpuConstTables {
-	quokka::DataTableGpuConst<1, 3, quokka::OutOfBounds::clamp> ic_table; // 1D table: z -> (rho, g_z, Phi)
-};
-
 template <> struct SimulationData<TheProblem> {
 	// turbulent velocity fields
 	amrex::TableData<Real, 3> dvx;
@@ -68,7 +62,7 @@ template <> struct SimulationData<TheProblem> {
 	std::string stars_file = "none"; // default: no stars
 	std::string IC_file = "none"; // Initial disk vertical structure
 
-	// Initial conditions table: z -> (rho, g_z, Phi)
+	// Initial conditions table: z -> (g_1, g_ext, phi_tot)
 	quokka::DataTable<1, 3, quokka::OutOfBounds::clamp> ic_table;
 
 	// Galaxy parameters (default is solar neighborhood)
@@ -263,9 +257,10 @@ template <> void QuokkaSimulation<TheProblem>::preCalculateInitialConditions()
 			amrex::Print() << "Reading initial conditions from: " << userData_.IC_file << "\n";
 			// Read CSV file with linear spacing for outputs
 			userData_.ic_table = quokka::DataTable<1, 3, quokka::OutOfBounds::clamp>::CSVReader(userData_.IC_file, quokka::SpacingType::linear);
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(userData_.ic_table.is_initialized(), "Initial conditions table failed to load.");
 			amrex::Print() << "Initial conditions table loaded successfully.\n";
 		} else {
-			amrex::Print() << "No IC file specified. Using hardcoded initial conditions.\n";
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, "No IC file specified. Please specify problem.IC_file in the input file.");
 		}
 
 		isSamplingDone = true;
@@ -310,8 +305,7 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	const Real rho02_ic = 1.0e-5 * rho01_ic;
 
 	// Create GPU const tables for initial conditions if available
-	ICGpuConstTables gpu_ic_tables;
-	gpu_ic_tables.ic_table = userData_.ic_table.const_tables();
+	const auto &ic_table = userData_.ic_table.const_tables();
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const z = prob_lo[2] + ((k + static_cast<amrex::Real>(0.5)) * dx[2]);
@@ -319,7 +313,7 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 		// Use DataTable to interpolate initial conditions from file
 		// Table provides: [rho, g_z, Phi] as functions of z
 		std::array<amrex::Real, 1> const point = {std::abs(z)};
-		auto const ic_values = gpu_ic_tables.ic_table.interpolate(point);
+		auto const ic_values = ic_table.interpolate(point);
 		
 		// Extract values: ic_values[0] = g_1, ic_values[1] = g_ext, ic_values[2] = phi_tot
 		const double phi_tot = ic_values[2];
@@ -417,8 +411,7 @@ template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::Mult
 	const Real dt = dt_lev;
 
 	// Create GPU const tables for initial conditions if available
-	ICGpuConstTables gpu_ic_tables;
-	gpu_ic_tables.ic_table = userData_.ic_table.const_tables();
+	const auto &ic_table = userData_.ic_table.const_tables();
 
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -447,7 +440,7 @@ template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::Mult
 			double const z = posvec[2];
 
 			std::array<amrex::Real, 1> const point = {std::abs(z)};
-			auto const ic_values = gpu_ic_tables.ic_table.interpolate(point);
+			auto const ic_values = ic_table.interpolate(point);
 			// ic_values[0] = g_1, ic_values[1] = g_ext, ic_values[2] = phi_tot
 			const double g_ext = ic_values[1];
 
