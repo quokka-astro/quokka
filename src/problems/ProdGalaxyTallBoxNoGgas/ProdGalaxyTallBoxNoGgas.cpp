@@ -73,10 +73,6 @@ template <> struct SimulationData<TheProblem> {
 
 	// Galaxy parameters (default is solar neighborhood)
 	Real rho01 = 4.320441e-24; // 2.58 m_p/cm^3
-	Real z_star = 245.0 * pc;
-	Real Sigma_star = 42.0 * C::M_solar / pc / pc; // originally 42.0 when there is no self gravity
-	Real rho_dm = 0.0064 * C::M_solar / pc / pc / pc;
-	Real R0_Gal = 8.e3 * pc;
 	Real sigma1 = 700000.0;
 };
 
@@ -312,10 +308,6 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	const int k_end = 2 * nx + nx / 2;
 
 	// Capture galaxy parameters from userData_ for GPU kernel
-	const Real z_star_ic = userData_.z_star;
-	const Real Sigma_star_ic = userData_.Sigma_star;
-	const Real rho_dm_ic = userData_.rho_dm;
-	const Real R0_Gal_ic = userData_.R0_Gal;
 	const Real sigma1_ic = userData_.sigma1;
 	const Real sigma2_ic = 10.0 * sigma1_ic;
 	const Real rho01_ic = userData_.rho01;
@@ -620,10 +612,6 @@ auto problem_main() -> int
 	pp.query("stars_file", sim.userData_.stars_file);
 	pp.query("IC_file", sim.userData_.IC_file);
 	pp.query("rho01", sim.userData_.rho01);
-	pp.query("z_star", sim.userData_.z_star);
-	pp.query("Sigma_star", sim.userData_.Sigma_star);
-	pp.query("rho_dm", sim.userData_.rho_dm);
-	pp.query("R0_Gal", sim.userData_.R0_Gal);
 	pp.query("sigma1", sim.userData_.sigma1);
 
 	// initialize (this will parse particle parameters and load luminosity table)
