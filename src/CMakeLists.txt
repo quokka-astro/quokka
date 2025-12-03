@@ -147,4 +147,9 @@ set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
 
 set (QuokkaObjSources "${QuokkaSourcesNoEOS}" "${gamma_law_sources}")
 
+add_executable(fextract_util_driver util/test_fextract_driver.cpp util/fextract.cpp)
+if(AMReX_GPU_BACKEND MATCHES "CUDA")
+  setup_target_for_cuda_compilation(fextract_util_driver)
+endif()
+
 add_subdirectory(problems)
