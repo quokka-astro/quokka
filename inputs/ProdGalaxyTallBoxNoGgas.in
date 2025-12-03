@@ -49,6 +49,7 @@ particles.param1 = 3.155760000e+14 # 10 Myr
 particles.param2 = 1.0
 #problem.stars_file = ../inputs/ParticlesInTallBox.txt
 problem.stars_file = "none"
+problem.IC_file = ../inputs/disk_solution_datatable.csv
 
 cooling.enabled = 1
 cooling.cooling_table_type = "resampled"

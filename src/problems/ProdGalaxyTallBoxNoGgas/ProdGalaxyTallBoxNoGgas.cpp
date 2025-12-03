@@ -70,7 +70,6 @@ template <> struct SimulationData<TheProblem> {
 
 	// Initial conditions table: z -> (rho, g_z, Phi)
 	quokka::DataTable<1, 3, quokka::OutOfBounds::clamp> ic_table;
-	bool use_ic_table = false; // Flag to indicate if IC table is loaded
 
 	// Galaxy parameters
 	Real rho01 = 2.85 * C::m_p;
@@ -309,11 +308,9 @@ template <> void QuokkaSimulation<TheProblem>::preCalculateInitialConditions()
 			amrex::Print() << "Reading initial conditions from: " << userData_.IC_file << "\n";
 			// Read CSV file with linear spacing for outputs
 			userData_.ic_table = quokka::DataTable<1, 3, quokka::OutOfBounds::clamp>::CSVReader(userData_.IC_file, quokka::SpacingType::linear);
-			userData_.use_ic_table = true;
 			amrex::Print() << "Initial conditions table loaded successfully.\n";
 		} else {
 			amrex::Print() << "No IC file specified. Using hardcoded initial conditions.\n";
-			userData_.use_ic_table = false;
 		}
 
 		isSamplingDone = true;
@@ -360,13 +357,10 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	const Real sigma2_ic = 10.0 * sigma1_ic;
 	const Real rho01_ic = userData_.rho01;
 	const Real rho02_ic = 1.0e-5 * rho01_ic;
-	const bool use_ic_table = userData_.use_ic_table;
 
 	// Create GPU const tables for initial conditions if available
 	ICGpuConstTables gpu_ic_tables;
-	if (use_ic_table) {
-		gpu_ic_tables.ic_table = userData_.ic_table.const_tables();
-	}
+	gpu_ic_tables.ic_table = userData_.ic_table.const_tables();
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const z = prob_lo[2] + ((k + static_cast<amrex::Real>(0.5)) * dx[2]);
@@ -374,46 +368,18 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 		double rho = NAN;
 		double P = NAN;
 
-		if (use_ic_table) {
-			// Use DataTable to interpolate initial conditions from file
-			// Table provides: [rho, g_z, Phi] as functions of z
-			std::array<amrex::Real, 1> const point = {std::abs(z)};
-			auto const ic_values = gpu_ic_tables.ic_table.interpolate(point);
-			
-			// Extract values: ic_values[0] = g_1, ic_values[1] = g_ext, ic_values[2] = phi_tot
-			const double phi_tot = ic_values[2];
-			const double rho1 = rho01_ic * std::exp(-phi_tot / (sigma1_ic * sigma1_ic));
-			const double rho2 = rho02_ic * std::exp(-phi_tot / (sigma2_ic * sigma2_ic));
-			rho = rho1 + rho2;
+		// Use DataTable to interpolate initial conditions from file
+		// Table provides: [rho, g_z, Phi] as functions of z
+		std::array<amrex::Real, 1> const point = {std::abs(z)};
+		auto const ic_values = gpu_ic_tables.ic_table.interpolate(point);
+		
+		// Extract values: ic_values[0] = g_1, ic_values[1] = g_ext, ic_values[2] = phi_tot
+		const double phi_tot = ic_values[2];
+		const double rho1 = rho01_ic * std::exp(-phi_tot / (sigma1_ic * sigma1_ic));
+		const double rho2 = rho02_ic * std::exp(-phi_tot / (sigma2_ic * sigma2_ic));
+		rho = rho1 + rho2;
 
-			P = rho1 * sigma1_ic * sigma1_ic + rho2 * sigma2_ic * sigma2_ic;
-		} else {
-			// Use hardcoded arrays (original behavior)
-			// Calculate DM Potential
-			double prefac = NAN;
-			prefac = 2. * M_PI * Gconst_ * rho_dm_ic * std::pow(R0_Gal_ic, 2);
-			const double Phidm = (prefac * std::log(1. + std::pow(z / R0_Gal_ic, 2)));
-
-			// Calculate Stellar Disk Potential
-			double prefac2 = NAN;
-			prefac2 = 2. * M_PI * Gconst_ * Sigma_star_ic * z_star_ic;
-			const double Phist = prefac2 * (std::pow(1. + (z * z / z_star_ic / z_star_ic), 0.5) - 1.);
-
-			// Calculate Gas Disk Potential
-			auto const &x_arr = z_data;
-			auto const &y_arr = logphi_data;
-			const double phi_interp = interpolate_value<BoundaryPolicy::Clamp>(std::abs(z), x_arr.data(), y_arr.data(), ARR_SIZE);
-			const double Phigas = std::pow(10., phi_interp);
-
-			const double Phitot = Phist + Phidm + Phigas;
-
-			const double rho_disk = rho01_ic * std::exp(-Phitot / std::pow(sigma1_ic, 2.0));
-			const double rho02 = 1.0e-5 * rho01_ic;
-			const double rho_halo = rho02 * std::exp(-Phitot / std::pow(sigma2, 2.0)); // in g/cc
-			rho = (rho_disk + rho_halo);
-
-			P = (rho_disk * std::pow(sigma1_ic, 2.0)) + rho_halo * std::pow(sigma2, 2.0);
-		}
+		P = rho1 * sigma1_ic * sigma1_ic + rho2 * sigma2_ic * sigma2_ic;
 
 		AMREX_ASSERT(!std::isnan(rho));
 
@@ -511,10 +477,7 @@ template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::Mult
 
 	// Create GPU const tables for initial conditions if available
 	ICGpuConstTables gpu_ic_tables;
-	bool const use_ic_table = userData_.use_ic_table;
-	if (use_ic_table) {
-		gpu_ic_tables.ic_table = userData_.ic_table.const_tables();
-	}
+	gpu_ic_tables.ic_table = userData_.ic_table.const_tables();
 
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -542,37 +505,19 @@ template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::Mult
 			// Calculate gradient of fixed potential using captured parameters
 			double const z = posvec[2];
 
-			if (use_ic_table) {
-				std::array<amrex::Real, 1> const point = {std::abs(z)};
-				auto const ic_values = gpu_ic_tables.ic_table.interpolate(point);
-				// ic_values[0] = g_1, ic_values[1] = g_ext, ic_values[2] = phi_tot
-				const double g_ext = ic_values[1];
+			std::array<amrex::Real, 1> const point = {std::abs(z)};
+			auto const ic_values = gpu_ic_tables.ic_table.interpolate(point);
+			// ic_values[0] = g_1, ic_values[1] = g_ext, ic_values[2] = phi_tot
+			const double g_ext = ic_values[1];
 
-				GradPhi[0] = 0.0;
-				GradPhi[1] = 0.0;
-				// g_ext is the gravitational acceleration (g_z) at z > 0 (it is negative)
-				// GradPhi = -g (vector)
-				// For z > 0, GradPhi_z = -g_ext (positive)
-				// For z < 0, g_z = -g_ext (positive), GradPhi_z = -g_z = g_ext (negative)
-				// This is equivalent to GradPhi_z = -g_ext * sign(z)
-				GradPhi[2] = -g_ext * std::copysign(1.0, z);
-			} else {
-				// Interpolate to find the accurate g-value from array
-				auto const &x_arr = z_data;
-				auto const &y_arr = logg_data;
-				const amrex::Real ginterp = interpolate_value<BoundaryPolicy::Clamp>(std::abs(z), x_arr.data(), y_arr.data(), ARR_SIZE);
-				AMREX_ASSERT(!std::isnan(ginterp));
-
-				// DM Potential
-				GradPhi[0] = 0.0;
-				GradPhi[1] = 0.0;
-				GradPhi[2] = 2. * M_PI * C::Gconst * rho_dm * std::pow(R0_Gal, 2) * (2. * z / std::pow(R0_Gal, 2)) /
-					     (1. + std::pow(z, 2) / std::pow(R0_Gal, 2));
-				// Stellar Disk Potential
-				GradPhi[2] += 2. * M_PI * C::Gconst * Sigma_star * (z / z_star) * (std::pow(1. + (z * z / (z_star * z_star)), -0.5));
-				// Gas Disk Potential, removed because we have self-gravity
-				// GradPhi[2] += (z / std::abs(z)) * std::pow(10., ginterp);
-			}
+			GradPhi[0] = 0.0;
+			GradPhi[1] = 0.0;
+			// g_ext is the gravitational acceleration (g_z) at z > 0 (it is negative)
+			// GradPhi = -g (vector)
+			// For z > 0, GradPhi_z = -g_ext (positive)
+			// For z < 0, g_z = -g_ext (positive), GradPhi_z = -g_z = g_ext (negative)
+			// This is equivalent to GradPhi_z = -g_ext * sign(z)
+			GradPhi[2] = -g_ext * std::copysign(1.0, z);
 			AMREX_ASSERT(!std::isnan(GradPhi[2]));
 
 			x1mom_new = x1mom + dt * (-rho * GradPhi[0]);
