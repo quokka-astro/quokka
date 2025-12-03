@@ -357,7 +357,9 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	const Real rho_dm_ic = userData_.rho_dm;
 	const Real R0_Gal_ic = userData_.R0_Gal;
 	const Real sigma1_ic = userData_.sigma1;
+	const Real sigma2_ic = 10.0 * sigma1_ic;
 	const Real rho01_ic = userData_.rho01;
+	const Real rho02_ic = 1.0e-5 * rho01_ic;
 	const bool use_ic_table = userData_.use_ic_table;
 
 	// Create GPU const tables for initial conditions if available
@@ -378,12 +380,13 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 			std::array<amrex::Real, 1> const point = {std::abs(z)};
 			auto const ic_values = gpu_ic_tables.ic_table.interpolate(point);
 			
-			// Extract values: ic_values[0] = rho, ic_values[1] = g_z, ic_values[2] = Phi
-			rho = ic_values[0];
-			
-			// Compute pressure assuming hydrostatic equilibrium
-			// P = rho * sigma^2, where sigma is the velocity dispersion
-			P = rho * std::pow(sigma1_ic, 2.0);
+			// Extract values: ic_values[0] = g_1, ic_values[1] = g_ext, ic_values[2] = phi_tot
+			const double phi_tot = ic_values[2];
+			const double rho1 = rho01_ic * std::exp(-phi_tot / (sigma1_ic * sigma1_ic));
+			const double rho2 = rho02_ic * std::exp(-phi_tot / (sigma2_ic * sigma2_ic));
+			rho = rho1 + rho2;
+
+			P = rho1 * sigma1_ic * sigma1_ic + rho2 * sigma2_ic * sigma2_ic;
 		} else {
 			// Use hardcoded arrays (original behavior)
 			// Calculate DM Potential
@@ -491,16 +494,6 @@ template <> void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::s
 		});
 	}
 	amrex::Gpu::streamSynchronizeAll();
-}
-
-template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<TheProblem>::GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec)
-    -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>
-{
-	// This function is not used - see addStrangSplitSources for the actual implementation
-	// that uses userData_ parameters
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> grad_potential{}; // NOLINT
-	return grad_potential;
 }
 
 // Add Strang Split Source Term for External Fixed Potential Here
