@@ -2,6 +2,7 @@
 include(${CMAKE_CURRENT_SOURCE_DIR}/ProblemHelpers.cmake)
 
 add_subdirectory(ProdGalaxyTallBox)
+add_subdirectory(ProdGalaxyTallBoxNoGgas)
 
 add_subdirectory(Advection)
 add_subdirectory(Advection2D)
