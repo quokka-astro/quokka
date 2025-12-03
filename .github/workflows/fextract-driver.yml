@@ -66,5 +66,5 @@ jobs:
 
     - name: Run fextract MPI consistency test
       shell: bash
-      working-directory: $GITHUB_WORKSPACE
+      working-directory: ${{ github.workspace }}
       run: scripts/bash/test_fextract_mpi.sh -p "${PLOTFILE_PATH}" -b ${{ runner.workspace }}/build -n 2
