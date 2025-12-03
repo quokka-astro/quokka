@@ -23,6 +23,7 @@
 #include "math/interpolate.hpp"
 #include "radiation/radiation_dust_system.hpp"
 #include "turbulence/TurbDataReader.hpp"
+#include "util/DataTable.hpp"
 
 static constexpr int BC_TYPE = 1; // 1: Periodic, 2: foextrap
 static constexpr bool is_rad_on = false;
@@ -48,6 +49,12 @@ constexpr double chat_over_c = 2000.0 * 1e5 / C::c_light; // chat = 2000 km/s
 struct TheProblem {
 };
 
+// GPU-friendly const table access for initial conditions
+// 3 outputs: rho, g_z, Phi
+struct ICGpuConstTables {
+	quokka::DataTableGpuConst<1, 3, quokka::OutOfBounds::clamp> ic_table; // 1D table: z -> (rho, g_z, Phi)
+};
+
 template <> struct SimulationData<TheProblem> {
 	// turbulent velocity fields
 	amrex::TableData<Real, 3> dvx;
@@ -60,6 +67,10 @@ template <> struct SimulationData<TheProblem> {
 	Real refine_parameter = 1.0; // placeholder for refinement control
 	std::string stars_file = "none"; // default: no stars
 	std::string IC_file = "none"; // Initial disk vertical structure
+
+	// Initial conditions table: z -> (rho, g_z, Phi)
+	quokka::DataTable<1, 3, quokka::OutOfBounds::clamp> ic_table;
+	bool use_ic_table = false; // Flag to indicate if IC table is loaded
 
 	// Galaxy parameters
 	Real rho01 = 2.85 * C::m_p;
@@ -293,6 +304,18 @@ template <> void QuokkaSimulation<TheProblem>::preCalculateInitialConditions()
 		userData_.dvz.resize(pinned_dvz.lo(), pinned_dvz.hi());
 		userData_.dvz.copy(pinned_dvz);
 
+		// Read initial conditions from file if specified
+		if (userData_.IC_file != "none") {
+			amrex::Print() << "Reading initial conditions from: " << userData_.IC_file << "\n";
+			// Read CSV file with linear spacing for outputs
+			userData_.ic_table = quokka::DataTable<1, 3, quokka::OutOfBounds::clamp>::CSVReader(userData_.IC_file, quokka::SpacingType::linear);
+			userData_.use_ic_table = true;
+			amrex::Print() << "Initial conditions table loaded successfully.\n";
+		} else {
+			amrex::Print() << "No IC file specified. Using hardcoded initial conditions.\n";
+			userData_.use_ic_table = false;
+		}
+
 		isSamplingDone = true;
 	}
 }
@@ -335,35 +358,59 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	const Real R0_Gal_ic = userData_.R0_Gal;
 	const Real sigma1_ic = userData_.sigma1;
 	const Real rho01_ic = userData_.rho01;
+	const bool use_ic_table = userData_.use_ic_table;
+
+	// Create GPU const tables for initial conditions if available
+	ICGpuConstTables gpu_ic_tables;
+	if (use_ic_table) {
+		gpu_ic_tables.ic_table = userData_.ic_table.const_tables();
+	}
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const z = prob_lo[2] + ((k + static_cast<amrex::Real>(0.5)) * dx[2]);
 
-		// Calculate DM Potential
-		double prefac = NAN;
-		prefac = 2. * M_PI * Gconst_ * rho_dm_ic * std::pow(R0_Gal_ic, 2);
-		const double Phidm = (prefac * std::log(1. + std::pow(z / R0_Gal_ic, 2)));
+		double rho = NAN;
+		double P = NAN;
 
-		// Calculate Stellar Disk Potential
-		double prefac2 = NAN;
-		prefac2 = 2. * M_PI * Gconst_ * Sigma_star_ic * z_star_ic;
-		const double Phist = prefac2 * (std::pow(1. + (z * z / z_star_ic / z_star_ic), 0.5) - 1.);
+		if (use_ic_table) {
+			// Use DataTable to interpolate initial conditions from file
+			// Table provides: [rho, g_z, Phi] as functions of z
+			std::array<amrex::Real, 1> const point = {std::abs(z)};
+			auto const ic_values = gpu_ic_tables.ic_table.interpolate(point);
+			
+			// Extract values: ic_values[0] = rho, ic_values[1] = g_z, ic_values[2] = Phi
+			rho = ic_values[0];
+			
+			// Compute pressure assuming hydrostatic equilibrium
+			// P = rho * sigma^2, where sigma is the velocity dispersion
+			P = rho * std::pow(sigma1_ic, 2.0);
+		} else {
+			// Use hardcoded arrays (original behavior)
+			// Calculate DM Potential
+			double prefac = NAN;
+			prefac = 2. * M_PI * Gconst_ * rho_dm_ic * std::pow(R0_Gal_ic, 2);
+			const double Phidm = (prefac * std::log(1. + std::pow(z / R0_Gal_ic, 2)));
 
-		// Calculate Gas Disk Potential
+			// Calculate Stellar Disk Potential
+			double prefac2 = NAN;
+			prefac2 = 2. * M_PI * Gconst_ * Sigma_star_ic * z_star_ic;
+			const double Phist = prefac2 * (std::pow(1. + (z * z / z_star_ic / z_star_ic), 0.5) - 1.);
 
-		auto const &x_arr = z_data;
-		auto const &y_arr = logphi_data;
-		const double phi_interp = interpolate_value<BoundaryPolicy::Clamp>(std::abs(z), x_arr.data(), y_arr.data(), ARR_SIZE);
-		const double Phigas = std::pow(10., phi_interp);
+			// Calculate Gas Disk Potential
+			auto const &x_arr = z_data;
+			auto const &y_arr = logphi_data;
+			const double phi_interp = interpolate_value<BoundaryPolicy::Clamp>(std::abs(z), x_arr.data(), y_arr.data(), ARR_SIZE);
+			const double Phigas = std::pow(10., phi_interp);
 
-		const double Phitot = Phist + Phidm + Phigas;
+			const double Phitot = Phist + Phidm + Phigas;
 
-		const double rho_disk = rho01_ic * std::exp(-Phitot / std::pow(sigma1_ic, 2.0));
-		const double rho02 = 1.0e-5 * rho01_ic;
-		const double rho_halo = rho02 * std::exp(-Phitot / std::pow(sigma2, 2.0)); // in g/cc
-		const double rho = (rho_disk + rho_halo);
+			const double rho_disk = rho01_ic * std::exp(-Phitot / std::pow(sigma1_ic, 2.0));
+			const double rho02 = 1.0e-5 * rho01_ic;
+			const double rho_halo = rho02 * std::exp(-Phitot / std::pow(sigma2, 2.0)); // in g/cc
+			rho = (rho_disk + rho_halo);
 
-		const double P = (rho_disk * std::pow(sigma1_ic, 2.0)) + rho_halo * std::pow(sigma2, 2.0);
+			P = (rho_disk * std::pow(sigma1_ic, 2.0)) + rho_halo * std::pow(sigma2, 2.0);
+		}
 
 		AMREX_ASSERT(!std::isnan(rho));
 
