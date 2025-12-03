@@ -52,8 +52,7 @@ auto buildMultiFab(PlotFileData &pf, const Vector<std::string> &names) -> MultiF
 	return subset;
 }
 
-void writeSlice(const std::string &outfile, const Vector<Real> &pos, const Vector<Gpu::HostVector<Real>> &data,
-		const Vector<std::string> &names)
+void writeSlice(const std::string &outfile, const Vector<Real> &pos, const Vector<Gpu::HostVector<Real>> &data, const Vector<std::string> &names)
 {
 	if (!ParallelDescriptor::IOProcessor()) {
 		return;
@@ -95,37 +94,37 @@ auto main(int argc, char **argv) -> int
 		if (!pp.query("plotfile", plotfile)) {
 			amrex::Abort("plotfile must be provided (plotfile=/path/to/pltXXXX).");
 		}
-	std::string outfile = "fextract.out";
-	pp.query("outfile", outfile);
+		std::string outfile = "fextract.out";
+		pp.query("outfile", outfile);
 
-	int dir = 0;
-	pp.query("dir", dir);
-	Real coord = std::numeric_limits<Real>::lowest();
-	pp.query("coord", coord);
-	bool center = true;
-	pp.query("center", center);
+		int dir = 0;
+		pp.query("dir", dir);
+		Real coord = std::numeric_limits<Real>::lowest();
+		pp.query("coord", coord);
+		bool center = true;
+		pp.query("center", center);
 
-	Vector<std::string> names;
-	pp.queryarr("vars", names);
+		Vector<std::string> names;
+		pp.queryarr("vars", names);
 
-	if (plotfile.empty()) {
-		amrex::Abort("plotfile must be provided (plotfile=/path/to/pltXXXX).");
-	}
+		if (plotfile.empty()) {
+			amrex::Abort("plotfile must be provided (plotfile=/path/to/pltXXXX).");
+		}
 
-	PlotFileData pf(plotfile);
+		PlotFileData pf(plotfile);
 
-	if (dir < 0 || dir >= AMREX_SPACEDIM) {
-		amrex::Abort("dir must be within [0, AMREX_SPACEDIM).");
-	}
+		if (dir < 0 || dir >= AMREX_SPACEDIM) {
+			amrex::Abort("dir must be within [0, AMREX_SPACEDIM).");
+		}
 
-	Geometry geom = buildGeometry(pf);
-	MultiFab mf = buildMultiFab(pf, names);
+		Geometry geom = buildGeometry(pf);
+		MultiFab mf = buildMultiFab(pf, names);
 
-	const bool has_coord = coord != std::numeric_limits<Real>::lowest();
-	const Array<Real, AMREX_SPACEDIM> problo = pf.probLo();
-	const Array<Real, AMREX_SPACEDIM> probhi = pf.probHi();
-	const Real slice_coord = has_coord ? coord : Real(0.5) * (problo[dir] + probhi[dir]);
-	const bool use_center = has_coord ? false : center;
+		const bool has_coord = coord != std::numeric_limits<Real>::lowest();
+		const Array<Real, AMREX_SPACEDIM> problo = pf.probLo();
+		const Array<Real, AMREX_SPACEDIM> probhi = pf.probHi();
+		const Real slice_coord = has_coord ? coord : Real(0.5) * (problo[dir] + probhi[dir]);
+		const bool use_center = has_coord ? false : center;
 
 		auto [pos, data] = fextract(mf, geom, dir, slice_coord, use_center);
 		writeSlice(outfile, pos, data, names);

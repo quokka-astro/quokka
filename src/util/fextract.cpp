@@ -106,18 +106,18 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 
 	// compute position coordinates using contiguous local indices
 	int box_idx = 0;
-		for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
-			const Box bx = mfi.validbox() & slice_box;
-			if (bx.ok()) {
-				const int offset = offsets[box_idx];
-				const int start_dir = bx.smallEnd(idir);
-				const int local_len = bx.length(idir);
-				amrex::LoopOnCpu(bx, [problo, dx, idir, offset, start_dir, local_len, &pos](int i, int j, int k) {
-					Array<Real, AMREX_SPACEDIM> p = {AMREX_D_DECL(problo[0] + static_cast<Real>(i + 0.5) * dx[0],
-										      problo[1] + static_cast<Real>(j + 0.5) * dx[1],
-										      problo[2] + static_cast<Real>(k + 0.5) * dx[2])};
-					int idx = offset;
-					if (idir == 0) {
+	for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
+		const Box bx = mfi.validbox() & slice_box;
+		if (bx.ok()) {
+			const int offset = offsets[box_idx];
+			const int start_dir = bx.smallEnd(idir);
+			const int local_len = bx.length(idir);
+			amrex::LoopOnCpu(bx, [problo, dx, idir, offset, start_dir, local_len, &pos](int i, int j, int k) {
+				Array<Real, AMREX_SPACEDIM> p = {AMREX_D_DECL(problo[0] + static_cast<Real>(i + 0.5) * dx[0],
+									      problo[1] + static_cast<Real>(j + 0.5) * dx[1],
+									      problo[2] + static_cast<Real>(k + 0.5) * dx[2])};
+				int idx = offset;
+				if (idir == 0) {
 					idx += i - start_dir;
 				}
 #if AMREX_SPACEDIM >= 2
@@ -126,16 +126,16 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 				}
 #endif
 #if AMREX_SPACEDIM == 3
-					if (idir == 2) {
-						idx += k - start_dir;
-					}
+				if (idir == 2) {
+					idx += k - start_dir;
+				}
 #endif
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(idx >= offset && idx < offset + local_len, "fextract: position index out of bounds");
-					pos[idx] = p[idir];
-				});
-				++box_idx;
-			}
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(idx >= offset && idx < offset + local_len, "fextract: position index out of bounds");
+				pos[idx] = p[idir];
+			});
+			++box_idx;
 		}
+	}
 
 	// fill data arrays with the same contiguous indexing
 	box_idx = 0;
