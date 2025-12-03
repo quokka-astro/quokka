@@ -13,7 +13,7 @@ amr.v              = 1      # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 16 16 64
+amr.n_cell          = 32 32 128
 amr.max_level       = 0     # number of levels = max_level + 1
 amr.max_grid_size   = 64   # at least 128 for GPUs
 amr.blocking_factor = 16   # grid size must be divisible by this
@@ -26,12 +26,12 @@ radiation.iteration_tolerance_rel = 1e-6
 do_reflux = 1
 do_subcycle = 0
 stop_time     = 9.462e+15
-max_timesteps = 1
+max_timesteps = 200
 #restartfile = last_chk
-plotfile_interval = 1
-checkpoint_interval = 100000
-particle_csv_interval = 128
-suppress_output = 0
+plotfile_interval = 20
+checkpoint_interval = -1
+particle_csv_interval = -1
+suppress_output = 1
 regrid_interval = -1
 #poisson_supercycle_interval = 4
 
@@ -56,7 +56,8 @@ cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 
 perturb.filename = "../inputs/zdrv.hdf5"
 #perturb.use_superresolution = 0
-perturb.amplitude = 7e5 # 7 km/s
+#perturb.amplitude = 7e5 # 7 km/s
+perturb.amplitude = 0
 
 problem.refine_zmax = 3.018e21 1.509e21  # refine to lev=1 with 1 kpc and lev=2 with 0.5 kpc
 

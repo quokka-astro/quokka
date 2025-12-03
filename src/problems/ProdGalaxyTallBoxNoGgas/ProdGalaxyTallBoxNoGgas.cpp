@@ -60,7 +60,14 @@ template <> struct SimulationData<TheProblem> {
 	Real refine_parameter = 1.0; // placeholder for refinement control
 	std::string stars_file = "none"; // default: no stars
 	std::string IC_file = "none"; // Initial disk vertical structure
-	Real rho01 = NAN;
+
+	// Galaxy parameters
+	Real rho01 = 2.85 * C::m_p;
+	Real z_star = 245.0 * pc;
+	Real Sigma_star = 42.0 * C::M_solar / pc / pc; // originally 42.0 when there is no self gravity
+	Real rho_dm = 0.0064 * C::M_solar / pc / pc / pc;
+	Real R0_Gal = 8.e3 * pc;
+	Real sigma1 = 700000.0;
 };
 
 // global variables needed for Dirichlet boundary condition and initial conditions
@@ -100,13 +107,8 @@ AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, ARR_SIZE> z_data{
     1.10132661e+22, 1.11349597e+22, 1.12566532e+22, 1.13783468e+22, 1.15000403e+22, 1.16217339e+22, 1.17434274e+22, 1.18651210e+22, 1.19868145e+22,
     1.21085081e+22}; // NOLINTEND
 
-static constexpr amrex::Real z_star = 245.0 * pc;
-static constexpr amrex::Real Sigma_star = 42.0 * C::M_solar / pc / pc; // originally 42.0 when there is no self gravity
-static constexpr amrex::Real rho_dm = 0.0064 * C::M_solar / pc / pc / pc;
-static constexpr amrex::Real R0_Gal = 8.e3 * pc;
 static constexpr amrex::Real ks_sigma_sfr = 2.088579882548443e-55;
 static constexpr amrex::Real hscale = 150. * pc;
-static constexpr amrex::Real sigma1 = 700000.0;
 static constexpr amrex::Real sigma2 = 7000000.0;
 
 template <> struct Particle_Traits<TheProblem> {
@@ -326,18 +328,26 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	const int k_start = nx + nx / 2;
 	const int k_end = 2 * nx + nx / 2;
 
+	// Capture galaxy parameters from userData_ for GPU kernel
+	const Real z_star_ic = userData_.z_star;
+	const Real Sigma_star_ic = userData_.Sigma_star;
+	const Real rho_dm_ic = userData_.rho_dm;
+	const Real R0_Gal_ic = userData_.R0_Gal;
+	const Real sigma1_ic = userData_.sigma1;
+	const Real rho01_ic = userData_.rho01;
+
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const z = prob_lo[2] + ((k + static_cast<amrex::Real>(0.5)) * dx[2]);
 
 		// Calculate DM Potential
 		double prefac = NAN;
-		prefac = 2. * M_PI * Gconst_ * rho_dm * std::pow(R0_Gal, 2);
-		const double Phidm = (prefac * std::log(1. + std::pow(z / R0_Gal, 2)));
+		prefac = 2. * M_PI * Gconst_ * rho_dm_ic * std::pow(R0_Gal_ic, 2);
+		const double Phidm = (prefac * std::log(1. + std::pow(z / R0_Gal_ic, 2)));
 
 		// Calculate Stellar Disk Potential
 		double prefac2 = NAN;
-		prefac2 = 2. * M_PI * Gconst_ * Sigma_star * z_star;
-		const double Phist = prefac2 * (std::pow(1. + (z * z / z_star / z_star), 0.5) - 1.);
+		prefac2 = 2. * M_PI * Gconst_ * Sigma_star_ic * z_star_ic;
+		const double Phist = prefac2 * (std::pow(1. + (z * z / z_star_ic / z_star_ic), 0.5) - 1.);
 
 		// Calculate Gas Disk Potential
 
@@ -348,12 +358,12 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 
 		const double Phitot = Phist + Phidm + Phigas;
 
-		const double rho_disk = userData_.rho01 * std::exp(-Phitot / std::pow(sigma1, 2.0));
-		const double rho02 = 1.0e-5 * userData_.rho01;
+		const double rho_disk = rho01_ic * std::exp(-Phitot / std::pow(sigma1_ic, 2.0));
+		const double rho02 = 1.0e-5 * rho01_ic;
 		const double rho_halo = rho02 * std::exp(-Phitot / std::pow(sigma2, 2.0)); // in g/cc
 		const double rho = (rho_disk + rho_halo);
 
-		const double P = (rho_disk * std::pow(sigma1, 2.0)) + rho_halo * std::pow(sigma2, 2.0);
+		const double P = (rho_disk * std::pow(sigma1_ic, 2.0)) + rho_halo * std::pow(sigma2, 2.0);
 
 		AMREX_ASSERT(!std::isnan(rho));
 
@@ -440,27 +450,9 @@ template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<TheProblem>::GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec)
     -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>
 {
-
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> grad_potential; // NOLINT
-	grad_potential[0] = 0.0;
-	grad_potential[1] = 0.0;
-
-	double const z = posvec[2];
-
-	// Interpolate to find the accurate g-value from array
-	auto const &x_arr = z_data;
-	auto const &y_arr = logg_data;
-	const amrex::Real ginterp = interpolate_value<BoundaryPolicy::Clamp>(std::abs(z), x_arr.data(), y_arr.data(), ARR_SIZE);
-	AMREX_ASSERT(!std::isnan(ginterp));
-
-	// DM Potential
-	grad_potential[2] = 2. * M_PI * C::Gconst * rho_dm * std::pow(R0_Gal, 2) * (2. * z / std::pow(R0_Gal, 2)) / (1. + std::pow(z, 2) / std::pow(R0_Gal, 2));
-	// Stellar Disk Potential
-	grad_potential[2] += 2. * M_PI * C::Gconst * Sigma_star * (z / z_star) * (std::pow(1. + (z * z / (z_star * z_star)), -0.5));
-	// Gas Disk Potential, removed because we have self-gravity
-	// grad_potential[2] += (z / std::abs(z)) * std::pow(10., ginterp);
-	AMREX_ASSERT(!std::isnan(grad_potential[2]));
-
+	// This function is not used - see addStrangSplitSources for the actual implementation
+	// that uses userData_ parameters
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> grad_potential{}; // NOLINT
 	return grad_potential;
 }
 
@@ -470,6 +462,12 @@ template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::Mult
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx = geom[lev].CellSizeArray();
 	const Real dt = dt_lev;
+
+	// Capture galaxy parameters from userData_ for GPU kernel
+	const Real z_star = userData_.z_star;
+	const Real Sigma_star = userData_.Sigma_star;
+	const Real rho_dm = userData_.rho_dm;
+	const Real R0_Gal = userData_.R0_Gal;
 
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -494,7 +492,23 @@ template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::Mult
 			posvec[1] = prob_lo[1] + (j + 0.5) * dx[1];
 			posvec[2] = prob_lo[2] + (k + 0.5) * dx[2];
 
-			GradPhi = HydroSystem<TheProblem>::GetGradFixedPotential(posvec);
+			// Calculate gradient of fixed potential using captured parameters
+			double const z = posvec[2];
+			// Interpolate to find the accurate g-value from array
+			auto const &x_arr = z_data;
+			auto const &y_arr = logg_data;
+			const amrex::Real ginterp = interpolate_value<BoundaryPolicy::Clamp>(std::abs(z), x_arr.data(), y_arr.data(), ARR_SIZE);
+			AMREX_ASSERT(!std::isnan(ginterp));
+
+			// DM Potential
+			GradPhi[0] = 0.0;
+			GradPhi[1] = 0.0;
+			GradPhi[2] = 2. * M_PI * C::Gconst * rho_dm * std::pow(R0_Gal, 2) * (2. * z / std::pow(R0_Gal, 2)) / (1. + std::pow(z, 2) / std::pow(R0_Gal, 2));
+			// Stellar Disk Potential
+			GradPhi[2] += 2. * M_PI * C::Gconst * Sigma_star * (z / z_star) * (std::pow(1. + (z * z / (z_star * z_star)), -0.5));
+			// Gas Disk Potential, removed because we have self-gravity
+			// GradPhi[2] += (z / std::abs(z)) * std::pow(10., ginterp);
+			AMREX_ASSERT(!std::isnan(GradPhi[2]));
 
 			x1mom_new = x1mom + dt * (-rho * GradPhi[0]);
 			x2mom_new = x2mom + dt * (-rho * GradPhi[1]);
@@ -640,6 +654,11 @@ auto problem_main() -> int
 	pp.query("stars_file", sim.userData_.stars_file);
 	pp.query("IC_file", sim.userData_.IC_file);
 	pp.query("rho01", sim.userData_.rho01);
+	pp.query("z_star", sim.userData_.z_star);
+	pp.query("Sigma_star", sim.userData_.Sigma_star);
+	pp.query("rho_dm", sim.userData_.rho_dm);
+	pp.query("R0_Gal", sim.userData_.R0_Gal);
+	pp.query("sigma1", sim.userData_.sigma1);
 
 	// initialize (this will parse particle parameters and load luminosity table)
 	sim.setInitialConditions();
