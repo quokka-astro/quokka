@@ -13,7 +13,8 @@ amr.v              = 1      # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 32 32 128
+#amr.n_cell          = 128 128 512
+amr.n_cell          = 64 64 256
 amr.max_level       = 0     # number of levels = max_level + 1
 amr.max_grid_size   = 64   # at least 128 for GPUs
 amr.blocking_factor = 16   # grid size must be divisible by this
@@ -26,7 +27,7 @@ radiation.iteration_tolerance_rel = 1e-6
 do_reflux = 1
 do_subcycle = 0
 stop_time     = 9.462e+15
-max_timesteps = 200
+max_timesteps = 100
 #restartfile = last_chk
 plotfile_interval = 20
 checkpoint_interval = -1
@@ -50,6 +51,7 @@ particles.param2 = 1.0
 #problem.stars_file = ../inputs/ParticlesInTallBox.txt
 problem.stars_file = "none"
 problem.IC_file = ../inputs/disk_solution_datatable.csv
+problem.rho01 = 4.320441e-24
 
 cooling.enabled = 1
 cooling.cooling_table_type = "resampled"

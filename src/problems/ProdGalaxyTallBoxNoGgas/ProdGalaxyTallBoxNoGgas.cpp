@@ -71,8 +71,8 @@ template <> struct SimulationData<TheProblem> {
 	// Initial conditions table: z -> (rho, g_z, Phi)
 	quokka::DataTable<1, 3, quokka::OutOfBounds::clamp> ic_table;
 
-	// Galaxy parameters
-	Real rho01 = 2.85 * C::m_p;
+	// Galaxy parameters (default is solar neighborhood)
+	Real rho01 = 4.320441e-24; // 2.58 m_p/cm^3
 	Real z_star = 245.0 * pc;
 	Real Sigma_star = 42.0 * C::M_solar / pc / pc; // originally 42.0 when there is no self gravity
 	Real rho_dm = 0.0064 * C::M_solar / pc / pc / pc;
