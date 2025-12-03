@@ -37,8 +37,6 @@ static constexpr bool enable_PE_ = false;
 
 static constexpr bool enable_self_gravity = true;
 
-static std::string stars_file = "none"; // default: no stars
-
 constexpr double pc = C::parsec;
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
@@ -60,6 +58,9 @@ template <> struct SimulationData<TheProblem> {
 	int turbulent_size = 128;
 
 	Real refine_parameter = 1.0; // placeholder for refinement control
+	std::string stars_file = "none"; // default: no stars
+	std::string IC_file = "none"; // Initial disk vertical structure
+	Real rho01 = NAN;
 };
 
 // global variables needed for Dirichlet boundary condition and initial conditions
@@ -107,8 +108,6 @@ static constexpr amrex::Real ks_sigma_sfr = 2.088579882548443e-55;
 static constexpr amrex::Real hscale = 150. * pc;
 static constexpr amrex::Real sigma1 = 700000.0;
 static constexpr amrex::Real sigma2 = 7000000.0;
-static constexpr amrex::Real rho01 = 2.78556e-24;
-static constexpr amrex::Real rho02 = 2.7855600000000006e-29;
 
 template <> struct Particle_Traits<TheProblem> {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
@@ -180,7 +179,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TheProblem>::DefinePhotoelectricHeatingE1De
 
 template <> void QuokkaSimulation<TheProblem>::createInitialStochasticStellarPopParticles()
 {
-	if (stars_file == "none") {
+	if (userData_.stars_file == "none") {
 		return;
 	}
 
@@ -188,7 +187,7 @@ template <> void QuokkaSimulation<TheProblem>::createInitialStochasticStellarPop
 	// InitSetPhyParticles to set the integer components
 	const int nreal_extra = 7; // mass vx vy vz birth_time death_time lum
 	StochasticStellarPopParticles->SetVerbose(1);
-	StochasticStellarPopParticles->InitFromAsciiFile(stars_file, nreal_extra, nullptr);
+	StochasticStellarPopParticles->InitFromAsciiFile(userData_.stars_file, nreal_extra, nullptr);
 
 	// Using a for loop from lev = 0 to StochasticStellarPopParticles->maxLevel() won't work because not all levels necessarily have particles, and when
 	// some levels do not have particles, StochasticStellarPopParticles->GetParticles(lev) will result in a Segfault. Therefore, we loop over the actual
@@ -349,10 +348,10 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 
 		const double Phitot = Phist + Phidm + Phigas;
 
-		double rho, rho_disk, rho_halo; // NOLINT
-		rho_disk = rho01 * std::exp(-Phitot / std::pow(sigma1, 2.0));
-		rho_halo = rho02 * std::exp(-Phitot / std::pow(sigma2, 2.0)); // in g/cc
-		rho = (rho_disk + rho_halo);
+		const double rho_disk = userData_.rho01 * std::exp(-Phitot / std::pow(sigma1, 2.0));
+		const double rho02 = 1.0e-5 * userData_.rho01;
+		const double rho_halo = rho02 * std::exp(-Phitot / std::pow(sigma2, 2.0)); // in g/cc
+		const double rho = (rho_disk + rho_halo);
 
 		const double P = (rho_disk * std::pow(sigma1, 2.0)) + rho_halo * std::pow(sigma2, 2.0);
 
@@ -628,9 +627,6 @@ auto problem_main() -> int
 		BCs_cc = quokka::BC<TheProblem>(quokka::BCType::foextrap);
 	}
 
-	amrex::ParmParse const pp("problem");
-	pp.query("stars_file", stars_file);
-
 	// set random state
 	const int seed = 42;
 	amrex::InitRandom(seed, 1); // all ranks should produce the same values
@@ -639,6 +635,11 @@ auto problem_main() -> int
 	QuokkaSimulation<TheProblem> sim(BCs_cc);
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
+
+	amrex::ParmParse const pp("problem");
+	pp.query("stars_file", sim.userData_.stars_file);
+	pp.query("IC_file", sim.userData_.IC_file);
+	pp.query("rho01", sim.userData_.rho01);
 
 	// initialize (this will parse particle parameters and load luminosity table)
 	sim.setInitialConditions();
