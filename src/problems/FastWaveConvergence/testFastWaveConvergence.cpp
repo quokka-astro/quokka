@@ -88,54 +88,13 @@ AMREX_GPU_MANAGED double angle_between_k_b0_rad = 0.0; // NOLINT
 AMREX_GPU_MANAGED double k_rotation_in_xy_rad = 0.0;	// NOLINT
 AMREX_GPU_MANAGED double k_elevation_from_xy_rad = 0.0; // NOLINT
 
-//------------------------------------------------------------------------------
-// Reference frames and rotation matrix
-//
-// We work with two right-handed, orthonormal frames:
-//
-// PRF (Problem Reference Frame): the simulation's grid-aligned axes.
-// MRF (Math Reference Frame):    a wave-aligned basis:
-//                                e1 = k_dir_prf          (propagation direction)
-//                                e2 = inplane_dir_prf    (lies in the k-b0 plane)
-//                                e3 = outofplane_dir_prf (perpendicular to that plane)
-//
-// The three unit vectors (k_dir_prf, inplane_dir_prf, outofplane_dir_prf) are
-// stored as 3-vectors *expressed in PRF coordinates*. Arranged as the *rows*
-// of a 3x3 matrix
-//
-//             [ k_dir_prf^T         ]    [ r00 r01 r02   (row 0)
-// R  =  rows  [ inplane_dir_prf^T   ]  =   r10 r11 r12   (row 1)
-//             [ outofplane_dir_prf^T]      r20 r21 r22 ] (row 2)
-//
-// R maps PRF component vectors into MRF component vectors via a standard
-// rotation (passive change of basis):
-//
-// v_mrf = R * v_prf
-//
-// Because the rows are orthonormal, R is a pure rotation, so the inverse is
-// its transpose:
-//
-// v_prf = R^T * v_mrf
-//
-// The two helpers below implement exactly these operations using dot products
-// with the basis vectors (to stay GPU-friendly and avoid building dynamic
-// matrices):
-//
-// - rotatePRF2MRF(v_prf) -> R * v_prf
-// - rotateMRF2PRF(v_mrf) -> R^T * v_mrf
-//
-// Preconditions:
-//  (k_dir_prf, inplane_dir_prf, outofplane_dir_prf) form a right-handed,
-//  orthonormal basis (constructed in problem_main()).
-//------------------------------------------------------------------------------
-
 // Unit basis vectors of the MRF, expressed in PRF coordinates (rows of R):
 // row 0: e1 = k_dir_prf (propagation)
-// row 1: e2 = inplane_dir_prf (k-b0 plane)
-// row 2: e3 = outofplane_dir_prf (perpendicular to that plane)
+// row 1: e2 = outofplane_dir_prf (perpendicular to k-b0 plane)
+// row 2: e3 = inplane_dir_prf (lies in the k-b0 plane)
 AMREX_GPU_MANAGED std::array<amrex::Real, 3> k_dir_prf{1.0, 0.0, 0.0};		// NOLINT
-AMREX_GPU_MANAGED std::array<amrex::Real, 3> inplane_dir_prf{0.0, 1.0, 0.0};	// NOLINT
-AMREX_GPU_MANAGED std::array<amrex::Real, 3> outofplane_dir_prf{0.0, 0.0, 1.0}; // NOLINT
+AMREX_GPU_MANAGED std::array<amrex::Real, 3> outofplane_dir_prf{0.0, 1.0, 0.0}; // NOLINT
+AMREX_GPU_MANAGED std::array<amrex::Real, 3> inplane_dir_prf{0.0, 0.0, 1.0};	// NOLINT
 
 // wavefront
 AMREX_GPU_MANAGED double k_magn = 2.0 * M_PI; // NOLINT
@@ -143,15 +102,15 @@ AMREX_GPU_MANAGED double k_magn = 2.0 * M_PI; // NOLINT
 /// \brief Rotate a vector from PRF to MRF by multiplying with the rotation matrix R.
 /// \details Implements v_mrf = R * v_prf, where the rows of R are the
 ///          MRF basis vectors expressed in PRF coordinates:
-///          R = [k_dir_prf^T; inplane_dir_prf^T; outofplane_dir_prf^T].
+///          R = [k_dir_prf^T; outofplane_dir_prf^T; inplane_dir_prf^T].
 /// \param vec_prf Components of the vector in the PRF.
 /// \return Components of the same geometric vector in the MRF.
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotatePRF2MRF(const std::array<amrex::Real, 3> &vec_prf) -> std::array<amrex::Real, 3>
 {
-	// v_mrf[i] = e_i^T * v_prf  (i = 0:k, 1:in-plane, 2:out-of-plane)
+	// v_mrf[i] = e_i^T * v_prf  (i = 0:k, 1:out-of-plane, 2:in-plane)
 	return {vec_prf[0] * k_dir_prf[0] + vec_prf[1] * k_dir_prf[1] + vec_prf[2] * k_dir_prf[2],
-		vec_prf[0] * inplane_dir_prf[0] + vec_prf[1] * inplane_dir_prf[1] + vec_prf[2] * inplane_dir_prf[2],
-		vec_prf[0] * outofplane_dir_prf[0] + vec_prf[1] * outofplane_dir_prf[1] + vec_prf[2] * outofplane_dir_prf[2]};
+		vec_prf[0] * outofplane_dir_prf[0] + vec_prf[1] * outofplane_dir_prf[1] + vec_prf[2] * outofplane_dir_prf[2],
+		vec_prf[0] * inplane_dir_prf[0] + vec_prf[1] * inplane_dir_prf[1] + vec_prf[2] * inplane_dir_prf[2]};
 }
 
 /// \brief Rotate a vector from MRF back to PRF by multiplying with R^T.
@@ -160,10 +119,10 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotatePRF2MRF(const std::array<amr
 /// \return Components of the same geometric vector in the PRF.
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotateMRF2PRF(const std::array<amrex::Real, 3> &vec_mrf) -> std::array<amrex::Real, 3>
 {
-	// v_prf = k_dir_prf * v_mrf[0] + inplane_dir_prf * v_mrf[1] + outofplane_dir_prf * v_mrf[2]
-	return {vec_mrf[0] * k_dir_prf[0] + vec_mrf[1] * inplane_dir_prf[0] + vec_mrf[2] * outofplane_dir_prf[0],
-		vec_mrf[0] * k_dir_prf[1] + vec_mrf[1] * inplane_dir_prf[1] + vec_mrf[2] * outofplane_dir_prf[1],
-		vec_mrf[0] * k_dir_prf[2] + vec_mrf[1] * inplane_dir_prf[2] + vec_mrf[2] * outofplane_dir_prf[2]};
+	// v_prf = k_dir_prf * v_mrf[0] + outofplane_dir_prf * v_mrf[1] + inplane_dir_prf * v_mrf[2]
+	return {vec_mrf[0] * k_dir_prf[0] + vec_mrf[1] * outofplane_dir_prf[0] + vec_mrf[2] * inplane_dir_prf[0],
+		vec_mrf[0] * k_dir_prf[1] + vec_mrf[1] * outofplane_dir_prf[1] + vec_mrf[2] * inplane_dir_prf[1],
+		vec_mrf[0] * k_dir_prf[2] + vec_mrf[1] * outofplane_dir_prf[2] + vec_mrf[2] * inplane_dir_prf[2]};
 }
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(const double x1_prf, const double x2_prf, const double x3_prf, const double time,
@@ -174,18 +133,18 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	// rotate PRF -> MRF
 	const std::array<amrex::Real, 3> x_vec_mrf = rotatePRF2MRF({x1_prf, x2_prf, x3_prf});
 	const double tiny = 1e-16;
-	// Assumes: k along x1_mrf, B0 in (x1_mrf, x2_mrf) plane, and A along x3_mrf.
+	// Assumes: k along x1_mrf, B0 in (x1_mrf, x3_mrf) plane, and A along x2_mrf.
 
 	// background B0 in MRF
 	const double θ = angle_between_k_b0_rad;
 	const double B0_1 = b0_magn * std::cos(θ);
-	const double B0_2 = b0_magn * std::sin(θ);
+	const double B0_3 = b0_magn * std::sin(θ);
 
 	// background vector potential that yields B0 in MRF:
-	// bg_A = (0,0, B0_1 * x2 - B0_2 * x1)
+	// bg_A = (0, B0_1 * x3 - B0_3 * x1, 0)
 	const double bg_A1 = 0.0;
-	const double bg_A2 = 0.0;
-	const double bg_A3 = B0_1 * x_vec_mrf[1] - B0_2 * x_vec_mrf[0];
+	const double bg_A2 = B0_3 * x_vec_mrf[0] - B0_1 * x_vec_mrf[2];
+	const double bg_A3 = 0.0;
 
 	// fast speed and phase
 	const double a = sound_speed;
@@ -198,25 +157,25 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	const double omega = cf * k_magn;
 	const double phase = omega * time - k_magn * x_vec_mrf[0];
 	const double delta_A1 = 0.0;
-	const double delta_A2 = 0.0;
-	double delta_A3 = 0.0;
+	double delta_A2 = 0.0;
+	const double delta_A3 = 0.0;
 
 	// polarization (velocity) angle alpha for FAST mode
 	if (std::abs(cosθ) < tiny) {
 		// special case: theta = 90 deg
-		delta_A3 = (delta_b_magn / k_magn) * std::sin(phase); // δB2
+		delta_A2 = -(delta_b_magn / k_magn) * std::sin(phase); // δB3
 	} else if (std::abs(sinθ) < tiny) {
 		// theta = 0 or 180 deg: fast mode is pure sound wave → no B perturbation
-		delta_A3 = 0.0; // δB = 0
+		delta_A2 = 0.0; // δB = 0
 	} else {
 		const double tan_alpha = (cf * cf - vA * vA * cosθ * cosθ) / (vA * vA * sinθ * cosθ);
 		const double cos_alpha = 1.0 / std::sqrt(1.0 + tan_alpha * tan_alpha);
 		const double sin_alpha = tan_alpha * cos_alpha;
 		const double dv = cf * delta_b_magn / b0_magn; // dv amplitude times cos(phase)
 		const double v1_mrf = dv * cos_alpha;
-		const double v2_mrf = dv * sin_alpha;
-		const double deltaB2_mrf = (k_magn * B0_1 * v2_mrf - k_magn * B0_2 * v1_mrf) / omega; // δB2
-		delta_A3 = -(deltaB2_mrf / k_magn) * std::sin(phase);
+		const double v3_mrf = dv * sin_alpha;
+		const double deltaB3_mrf = (k_magn * B0_1 * v3_mrf - k_magn * B0_3 * v1_mrf) / omega; // δB3
+		delta_A2 = -(deltaB3_mrf / k_magn) * std::sin(phase);
 	}
 	const double A1_mrf = bg_A1 + delta_A1;
 	const double A2_mrf = bg_A2 + delta_A2;
@@ -272,38 +231,38 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 
 		// background B0 in MRF
 		const double B0_1 = b0_magn * cosθ;
-		const double B0_2 = b0_magn * sinθ;
+		const double B0_3 = b0_magn * sinθ;
 
 		// compute velocity perturbations in MRF
 		double v1_amp = 0.0;
-		double v2_amp = 0.0;
+		double v3_amp = 0.0;
 		const double dv_amp = cf * delta_b_magn / b0_magn;
 
 		// polarization (velocity) angle alpha for FAST mode
 		if (std::abs(cosθ) < tiny || std::abs(sinθ) < tiny) {
 			// theta = 0, 90, or 180 deg → polarization is purely along x1
 			v1_amp = dv_amp;
-			v2_amp = 0.0;
+			v3_amp = 0.0;
 		} else {
 			const double tan_alpha = (cf * cf - vA * vA * cosθ * cosθ) / (vA * vA * sinθ * cosθ);
 			const double cos_alpha = 1.0 / std::sqrt(1.0 + tan_alpha * tan_alpha);
 			const double sin_alpha = tan_alpha * cos_alpha;
 			v1_amp = dv_amp * cos_alpha;
-			v2_amp = dv_amp * sin_alpha;
+			v3_amp = dv_amp * sin_alpha;
 		}
 
 		// velocity perturbations with time dependence
 		double const v1_mrf = v1_amp * cos_phase;
-		double const v2_mrf = v2_amp * cos_phase;
-		const double v3_mrf = 0.0;
+		const double v2_mrf = 0.0;
+		double const v3_mrf = v3_amp * cos_phase;
 
 		// magnetic perturbation
-		const double deltaB2_amp = (k_magn * B0_1 * v2_amp - k_magn * B0_2 * v1_amp) / omega;
-		const double dB2_mrf = -deltaB2_amp * cos_phase;
+		const double deltaB3_amp = (k_magn * B0_1 * v3_amp - k_magn * B0_3 * v1_amp) / omega;
+		const double dB3_mrf = -deltaB3_amp * cos_phase;
 
 		const auto v_prf = rotateMRF2PRF({v1_mrf, v2_mrf, v3_mrf});
-		const auto dB_prf = rotateMRF2PRF({0.0, dB2_mrf, 0.0});
-		const auto B0_prf = rotateMRF2PRF({B0_1, B0_2, 0.0});
+		const auto dB_prf = rotateMRF2PRF({0.0, 0.0, dB3_mrf});
+		const auto B0_prf = rotateMRF2PRF({B0_1, 0.0, B0_3});
 		const double b_x1_prf = B0_prf[0] + dB_prf[0];
 		const double b_x2_prf = B0_prf[1] + dB_prf[1];
 		const double b_x3_prf = B0_prf[2] + dB_prf[2];
@@ -471,11 +430,11 @@ auto runWaveTest(int nx) -> double
 		ref_prf = {0.0, 1.0, 0.0};
 	}
 
-	inplane_dir_prf = computeCrossProduct(ref_prf, k_dir_prf);
-	normalizeVector(inplane_dir_prf);
-
-	outofplane_dir_prf = computeCrossProduct(k_dir_prf, inplane_dir_prf);
+	outofplane_dir_prf = computeCrossProduct(ref_prf, k_dir_prf);
 	normalizeVector(outofplane_dir_prf);
+
+	inplane_dir_prf = computeCrossProduct(k_dir_prf, outofplane_dir_prf);
+	normalizeVector(inplane_dir_prf);
 
 	// Set grid dimensions using AMReX parameter system
 	amrex::ParmParse pp("amr");
@@ -576,7 +535,7 @@ auto problem_main() -> int
 	quokka::richardson::Parameters params{};
 	params.machine_precision_target = 2.0e-12;
 	params.nx_initial = 16;
-	params.nx_max = 256;
+	params.nx_max = 128;
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;
 	params.test_name = "Fast Wave";
