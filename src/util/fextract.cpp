@@ -87,59 +87,6 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 	slice_box.setBig(idir, std::numeric_limits<int>::max());
 
 	const GpuArray<Real, AMREX_SPACEDIM> dx = dx0;
-<<<<<<< Updated upstream
-
-	// First pass: determine per-box offsets along the slice and total points
-	Vector<int> offsets;
-	int total_pts = 0;
-	for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
-		const Box bx = mfi.validbox() & slice_box;
-		if (bx.ok()) {
-			offsets.push_back(total_pts);
-			total_pts += bx.length(idir);
-		}
-	}
-
-	pos.resize(total_pts);
-	for (auto &vec : data) {
-		vec.resize(total_pts);
-	}
-
-	// compute position coordinates using contiguous local indices
-	int box_idx = 0;
-	for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
-		const Box bx = mfi.validbox() & slice_box;
-		if (bx.ok()) {
-			const int offset = offsets[box_idx];
-			const int start_dir = bx.smallEnd(idir);
-			const int local_len = bx.length(idir);
-			amrex::LoopOnCpu(bx, [problo, dx, idir, offset, start_dir, local_len, &pos](int i, int j, int k) {
-				Array<Real, AMREX_SPACEDIM> p = {AMREX_D_DECL(problo[0] + static_cast<Real>(i + 0.5) * dx[0],
-									      problo[1] + static_cast<Real>(j + 0.5) * dx[1],
-									      problo[2] + static_cast<Real>(k + 0.5) * dx[2])};
-				int idx = offset;
-				if (idir == 0) {
-					idx += i - start_dir;
-				}
-#if AMREX_SPACEDIM >= 2
-				if (idir == 1) {
-					idx += j - start_dir;
-				}
-#endif
-#if AMREX_SPACEDIM == 3
-				if (idir == 2) {
-					idx += k - start_dir;
-				}
-#endif
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(idx >= offset && idx < offset + local_len, "fextract: position index out of bounds");
-				pos[idx] = p[idir];
-			});
-			++box_idx;
-		}
-	}
-
-=======
-
 	const auto linearIndex = [idir] AMREX_GPU_HOST_DEVICE (int i, int j, int k, int start_dir, int offset) {
 #if AMREX_SPACEDIM == 1
 		const int coord = i;
@@ -187,38 +134,12 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 			});
 		}
 	}
-
->>>>>>> Stashed changes
 	// fill data arrays with the same contiguous indexing
-	box_idx = 0;
+	int data_box_idx = 0;
 	for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
 		const Box bx = mfi.validbox() & slice_box;
 		if (bx.ok()) {
-<<<<<<< Updated upstream
-			const int offset = offsets[box_idx];
-			const int start_dir = bx.smallEnd(idir);
-			const int local_len = bx.length(idir);
-			const auto &fab = mf.array(mfi);
-			for (int ivar = 0; ivar < mf.nComp(); ++ivar) {
-				auto *dataptr = data[ivar].data();
-				ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-					int idx = offset;
-					if (idir == 0) {
-						idx += i - start_dir;
-					}
-#if AMREX_SPACEDIM >= 2
-					if (idir == 1) {
-						idx += j - start_dir;
-					}
-#endif
-#if AMREX_SPACEDIM == 3
-					if (idir == 2) {
-						idx += k - start_dir;
-					}
-#endif
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(idx >= offset && idx < offset + local_len, "fextract: data index out of bounds");
-=======
-			const int offset = offsets[box_idx++];
+			const int offset = offsets[data_box_idx++];
 			const int start_dir = bx.smallEnd(idir);
 			const int ncomp = mf.nComp();
 			const int box_len = bx.length(idir);
@@ -228,11 +149,9 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 				ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					const int idx = linearIndex(i, j, k, start_dir, offset);
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(idx >= offset && idx < offset + box_len, "fextract: data index out of bounds");
->>>>>>> Stashed changes
 					dataptr[idx] = fab(i, j, k, ivar); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 				});
 			}
-			++box_idx;
 		}
 	}
 
