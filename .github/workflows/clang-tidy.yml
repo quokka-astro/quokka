@@ -62,11 +62,11 @@ jobs:
         cmake --build build -j 4
 
         # Generate makefile for clang-tidy
-        # python3 ${{github.workspace}}/.github/workflows/scripts/makeMakefileForClangTidy.py --input ${{github.workspace}}/ccache.log.txt --identifier src
+        python3 ${{github.workspace}}/.github/workflows/scripts/makeMakefileForClangTidy.py --input ${{github.workspace}}/ccache.log.txt --identifier src
 
         # Run clang-tidy
-        # make -j4 --keep-going -f clang-tidy-ccache-misses.mak \
-        #     CLANG_TIDY=clang-tidy \
-        #     CLANG_TIDY_ARGS="--config-file=${{github.workspace}}/src/.clang-tidy --warnings-as-errors=*"
+        make -j4 --keep-going -f clang-tidy-ccache-misses.mak \
+            CLANG_TIDY=clang-tidy \
+            CLANG_TIDY_ARGS="--config-file=${{github.workspace}}/src/.clang-tidy --warnings-as-errors=*"
 
         ccache -s
