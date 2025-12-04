@@ -139,6 +139,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	const double θ = angle_between_k_b0_rad;
 	const double B0_1 = b0_magn * std::cos(θ);
 	const double B0_3 = b0_magn * std::sin(θ);
+	const double epsilon = delta_b_magn / b0_magn;
 
 	// background vector potential that yields B0 in MRF:
 	// bg_A = (0, B0_1 * x3 - B0_3 * x1, 0)
@@ -160,22 +161,13 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	double delta_A2 = 0.0;
 	const double delta_A3 = 0.0;
 
-	// polarization (velocity) angle alpha for FAST mode
-	if (std::abs(cosθ) < tiny) {
-		// special case: theta = 90 deg
-		delta_A2 = -(delta_b_magn / k_magn) * std::sin(phase); // δB3
-	} else if (std::abs(sinθ) < tiny) {
+
+	if (std::abs(sinθ) < tiny) {
 		// theta = 0 or 180 deg: fast mode is pure sound wave → no B perturbation
 		delta_A2 = 0.0; // δB = 0
 	} else {
-		const double tan_alpha = (cf * cf - vA * vA * cosθ * cosθ) / (vA * vA * sinθ * cosθ);
-		const double cos_alpha = 1.0 / std::sqrt(1.0 + tan_alpha * tan_alpha);
-		const double sin_alpha = tan_alpha * cos_alpha;
-		const double dv = cf * delta_b_magn / b0_magn; // dv amplitude times cos(phase)
-		const double v1_mrf = dv * cos_alpha;
-		const double v3_mrf = dv * sin_alpha;
-		const double deltaB3_mrf = (k_magn * B0_1 * v3_mrf - k_magn * B0_3 * v1_mrf) / omega; // δB3
-		delta_A2 = -(deltaB3_mrf / k_magn) * std::sin(phase);
+		const double dB3_mrf = (cf*cf*sinθ) / (cf*cf - vA*vA*cosθ*cosθ) * delta_b_magn; // δB3
+		delta_A2 = -(dB3_mrf / k_magn) * std::sin(phase);
 	}
 	const double A1_mrf = bg_A1 + delta_A1;
 	const double A2_mrf = bg_A2 + delta_A2;
@@ -228,37 +220,41 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const double omega = cf * k_magn;
 		const double phase = omega * time - k_magn * x_vec_mrf_C[0];
 		const double cos_phase = std::cos(phase);
+		const double epsilon = delta_b_magn / b0_magn;
+		;
 
 		// background B0 in MRF
 		const double B0_1 = b0_magn * cosθ;
+		const double B0_2 = 0.0;
 		const double B0_3 = b0_magn * sinθ;
 
-		// compute velocity perturbations in MRF
 		double v1_amp = 0.0;
 		double v3_amp = 0.0;
-		const double dv_amp = cf * delta_b_magn / b0_magn;
+		double dB3_mrf = 0.0;
 
-		// polarization (velocity) angle alpha for FAST mode
-		if (std::abs(cosθ) < tiny || std::abs(sinθ) < tiny) {
-			// theta = 0, 90, or 180 deg → polarization is purely along x1
-			v1_amp = dv_amp;
+		// compute velocity perturbations in MRF
+		if (std::abs(sinθ) < tiny) {
+			// theta = 0 or 180 deg: fast mode is pure sound wave → no B perturbation
+			amrex::Warning("FastWaveConvergence: theta = 0 detected. Fast mode is a pure sound wave with no magnetic perturbation.");
+			v1_amp = epsilon * cf;
 			v3_amp = 0.0;
+			dB3_mrf = 0.0;
 		} else {
-			const double tan_alpha = (cf * cf - vA * vA * cosθ * cosθ) / (vA * vA * sinθ * cosθ);
-			const double cos_alpha = 1.0 / std::sqrt(1.0 + tan_alpha * tan_alpha);
-			const double sin_alpha = tan_alpha * cos_alpha;
-			v1_amp = dv_amp * cos_alpha;
-			v3_amp = dv_amp * sin_alpha;
+			// general case
+			v1_amp = epsilon * cf;
+			v3_amp = -epsilon * (vA * vA * cosθ * sinθ) / (cf * cf - vA * vA * cosθ * cosθ);
+			dB3_mrf = (cf * cf * sinθ) / (cf * cf - vA * vA * cosθ * cosθ) * delta_b_magn * cos_phase;
 		}
-
 		// velocity perturbations with time dependence
 		double const v1_mrf = v1_amp * cos_phase;
-		const double v2_mrf = 0.0;
+		double const v2_mrf = 0.0;
 		double const v3_mrf = v3_amp * cos_phase;
 
 		// magnetic perturbation
-		const double deltaB3_amp = (k_magn * B0_1 * v3_amp - k_magn * B0_3 * v1_amp) / omega;
-		const double dB3_mrf = -deltaB3_amp * cos_phase;
+	
+		// density & pressure perturbations (linear compressive fast mode)
+		const double density = bg_density * (1.0 + epsilon * cos_phase);
+		const double pressure = bg_pressure * (1.0 + gamma_gas * epsilon * cos_phase);
 
 		const auto v_prf = rotateMRF2PRF({v1_mrf, v2_mrf, v3_mrf});
 		const auto dB_prf = rotateMRF2PRF({0.0, 0.0, dB3_mrf});
@@ -266,10 +262,6 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const double b_x1_prf = B0_prf[0] + dB_prf[0];
 		const double b_x2_prf = B0_prf[1] + dB_prf[1];
 		const double b_x3_prf = B0_prf[2] + dB_prf[2];
-
-		// density & pressure perturbations (linear compressive fast mode)
-		const double density = bg_density * (1.0 + delta_b_magn * cos_phase);
-		const double pressure = bg_pressure * (1.0 + gamma_gas * delta_b_magn * cos_phase);
 
 		// energy bookkeeping
 		const double v_magn_sq = v_prf[0] * v_prf[0] + v_prf[1] * v_prf[1] + v_prf[2] * v_prf[2];
