@@ -23,7 +23,8 @@
 
 using namespace amrex; // NOLINT
 
-namespace {
+namespace
+{
 
 auto buildGeometry(PlotFileData &pf) -> Geometry
 {
@@ -55,8 +56,7 @@ auto buildMultiFab(PlotFileData &pf, const Vector<std::string> &names) -> MultiF
 	return subset;
 }
 
-void writeSlice(const std::string &outfile, const Vector<Real> &pos, const Vector<Gpu::HostVector<Real>> &data,
-		const Vector<std::string> &names)
+void writeSlice(const std::string &outfile, const Vector<Real> &pos, const Vector<Gpu::HostVector<Real>> &data, const Vector<std::string> &names)
 {
 	if (!ParallelDescriptor::IOProcessor()) {
 		return;

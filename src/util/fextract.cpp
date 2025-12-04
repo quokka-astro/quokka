@@ -87,7 +87,7 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 	slice_box.setBig(idir, std::numeric_limits<int>::max());
 
 	const GpuArray<Real, AMREX_SPACEDIM> dx = dx0;
-	const auto linearIndex = [idir] AMREX_GPU_HOST_DEVICE (int i, int j, int k, int start_dir, int offset) {
+	const auto linearIndex = [idir] AMREX_GPU_HOST_DEVICE(int i, int j, int k, int start_dir, int offset) {
 #if AMREX_SPACEDIM == 1
 		const int coord = i;
 #elif AMREX_SPACEDIM == 2
@@ -126,8 +126,8 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 			const int box_len = bx.length(idir);
 			amrex::LoopOnCpu(bx, [problo, dx, idir, offset, start_dir, box_len, &pos, linearIndex](int i, int j, int k) {
 				const Array<Real, AMREX_SPACEDIM> p = {AMREX_D_DECL(problo[0] + static_cast<Real>(i + 0.5) * dx[0],
-										  problo[1] + static_cast<Real>(j + 0.5) * dx[1],
-										  problo[2] + static_cast<Real>(k + 0.5) * dx[2])};
+										    problo[1] + static_cast<Real>(j + 0.5) * dx[1],
+										    problo[2] + static_cast<Real>(k + 0.5) * dx[2])};
 				const int idx = linearIndex(i, j, k, start_dir, offset);
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(idx >= offset && idx < offset + box_len, "fextract: position index out of bounds");
 				pos[idx] = p[idir];
