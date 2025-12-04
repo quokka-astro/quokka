@@ -253,8 +253,9 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 #if AMREX_SPACEDIM == 3
 	std::remove_reference_t<decltype((*state_fc)[2].const_arrays())> state_fc_x2{};
 #endif
+	const bool has_face_fields = Physics_Traits<problem_t>::is_mhd_enabled;
 
-	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+	if (has_face_fields) {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state_fc != nullptr, "Face-centered state is required for MHD sink accretion");
 #if AMREX_SPACEDIM >= 1
 		state_fc_x0 = (*state_fc)[0].const_arrays();
@@ -285,7 +286,7 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 			// Compute Jeans density rho_J = J^2 * pi * cs^2 / (G * dx^2)
 			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
 			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc_ptr = nullptr;
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			if (has_face_fields) {
 				cons_fc[0] = state_fc_x0[bx];
 #if AMREX_SPACEDIM >= 2
 				cons_fc[1] = state_fc_x1[bx];
