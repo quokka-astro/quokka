@@ -67,6 +67,6 @@ jobs:
         # Run clang-tidy
         make -j4 --keep-going -f clang-tidy-ccache-misses.mak \
             CLANG_TIDY=clang-tidy \
-            CLANG_TIDY_ARGS="--config-file=${{github.workspace}}/src/.clang-tidy"
+            CLANG_TIDY_ARGS="--config-file=${{github.workspace}}/src/.clang-tidy --warnings-as-errors=*"
 
         ccache -s
