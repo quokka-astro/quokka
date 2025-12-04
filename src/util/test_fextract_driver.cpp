@@ -123,7 +123,7 @@ auto problem_main() -> int
 
 		auto [pos, data] = fextract(mf, geom, dir, slice_coord, use_center);
 		writeSlice(outfile, pos, data, names);
-		
+
 		return 0;
 	} catch (const std::runtime_error &ex) {
 		amrex::Print() << ex.what() << "\n";
