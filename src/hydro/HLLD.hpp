@@ -209,49 +209,49 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	// MK5: eqn (48)
 	u_star_R.E = (siui_R * u_R.E - ptot_R * sR.u + ptot_star * spds[2] + bx * (sR.u * bx + (sR.v * u_R.by + sR.w * u_R.bz) - vb_star_R)) * sism_inv_R;
 
-	// if Bx is near zero, then u_i^dstar = u_i^star
-	if (0.5 * bx_sq < DELTA * ptot_star) {
-		u_dstar_L = u_star_L;
-		u_dstar_R = u_star_R;
-	} else {
-		double rho_sum_inv = 1.0 / (rho_sqrt_L + rho_sqrt_R);
-		double bx_sign = (bx > 0.0 ? 1.0 : -1.0);
-		u_dstar_L.rho = u_star_L.rho;
-		u_dstar_R.rho = u_star_R.rho;
-		u_dstar_L.mx = u_star_L.mx;
-		u_dstar_R.mx = u_star_R.mx;
-		u_dstar_L.Eint = u_star_L.Eint;
-		u_dstar_R.Eint = u_star_R.Eint;
-		for (int n = 0; n < N_scalars; ++n) {
-			u_dstar_L.scalar[n] = u_star_L.scalar[n];
-			u_dstar_R.scalar[n] = u_star_R.scalar[n];
-		}
+	// compute double-star states using MK5 eqns (59)–(63)
+	double rho_sum_inv = 1.0 / (rho_sqrt_L + rho_sqrt_R);
+	double bx_sign = (bx > 0.0 ? 1.0 : -1.0);
 
-		// MK5: eqn (59)
-		double tmp = rho_sum_inv * (rho_sqrt_L * (u_star_L.my * u_star_rho_inv_L) + rho_sqrt_R * (u_star_R.my * u_star_rho_inv_R) +
-					    bx_sign * (u_star_R.by - u_star_L.by));
-		u_dstar_L.my = u_dstar_L.rho * tmp;
-		u_dstar_R.my = u_dstar_R.rho * tmp;
-		// MK5: eqn (60)
-		tmp = rho_sum_inv *
-		      (rho_sqrt_L * (u_star_L.mz * u_star_rho_inv_L) + rho_sqrt_R * (u_star_R.mz * u_star_rho_inv_R) + bx_sign * (u_star_R.bz - u_star_L.bz));
-		u_dstar_L.mz = u_dstar_L.rho * tmp;
-		u_dstar_R.mz = u_dstar_R.rho * tmp;
-		// MK5: eqn (61)
-		tmp = rho_sum_inv * (rho_sqrt_L * u_star_R.by + rho_sqrt_R * u_star_L.by +
-				     bx_sign * rho_sqrt_L * rho_sqrt_R * ((u_star_R.my * u_star_rho_inv_R) - (u_star_L.my * u_star_rho_inv_L)));
-		u_dstar_L.by = tmp;
-		u_dstar_R.by = tmp;
-		// MK5: eqn (62)
-		tmp = rho_sum_inv * (rho_sqrt_L * u_star_R.bz + rho_sqrt_R * u_star_L.bz +
-				     bx_sign * rho_sqrt_L * rho_sqrt_R * ((u_star_R.mz * u_star_rho_inv_R) - (u_star_L.mz * u_star_rho_inv_L)));
-		u_dstar_L.bz = tmp;
-		u_dstar_R.bz = tmp;
-		// MK5: eqn (63)
-		tmp = spds[2] * bx + (u_dstar_L.my * u_dstar_L.by + u_dstar_L.mz * u_dstar_L.bz) / u_dstar_L.rho;
-		u_dstar_L.E = u_star_L.E - rho_sqrt_L * bx_sign * (vb_star_L - tmp);
-		u_dstar_R.E = u_star_R.E + rho_sqrt_R * bx_sign * (vb_star_R - tmp);
+	u_dstar_L.rho = u_star_L.rho;
+	u_dstar_R.rho = u_star_R.rho;
+	u_dstar_L.mx = u_star_L.mx;
+	u_dstar_R.mx = u_star_R.mx;
+	u_dstar_L.Eint = u_star_L.Eint;
+	u_dstar_R.Eint = u_star_R.Eint;
+	for (int n = 0; n < N_scalars; ++n) {
+		u_dstar_L.scalar[n] = u_star_L.scalar[n];
+		u_dstar_R.scalar[n] = u_star_R.scalar[n];
 	}
+
+	// MK5: eqn (59)
+	double tmp = rho_sum_inv *
+		     (rho_sqrt_L * (u_star_L.my * u_star_rho_inv_L) + rho_sqrt_R * (u_star_R.my * u_star_rho_inv_R) + bx_sign * (u_star_R.by - u_star_L.by));
+	u_dstar_L.my = u_dstar_L.rho * tmp;
+	u_dstar_R.my = u_dstar_R.rho * tmp;
+
+	// MK5: eqn (60)
+	tmp = rho_sum_inv *
+	      (rho_sqrt_L * (u_star_L.mz * u_star_rho_inv_L) + rho_sqrt_R * (u_star_R.mz * u_star_rho_inv_R) + bx_sign * (u_star_R.bz - u_star_L.bz));
+	u_dstar_L.mz = u_dstar_L.rho * tmp;
+	u_dstar_R.mz = u_dstar_R.rho * tmp;
+
+	// MK5: eqn (61)
+	tmp = rho_sum_inv * (rho_sqrt_L * u_star_R.by + rho_sqrt_R * u_star_L.by +
+			     bx_sign * rho_sqrt_L * rho_sqrt_R * ((u_star_R.my * u_star_rho_inv_R) - (u_star_L.my * u_star_rho_inv_L)));
+	u_dstar_L.by = tmp;
+	u_dstar_R.by = tmp;
+
+	// MK5: eqn (62)
+	tmp = rho_sum_inv * (rho_sqrt_L * u_star_R.bz + rho_sqrt_R * u_star_L.bz +
+			     bx_sign * rho_sqrt_L * rho_sqrt_R * ((u_star_R.mz * u_star_rho_inv_R) - (u_star_L.mz * u_star_rho_inv_L)));
+	u_dstar_L.bz = tmp;
+	u_dstar_R.bz = tmp;
+
+	// MK5: eqn (63)
+	tmp = spds[2] * bx + (u_dstar_L.my * u_dstar_L.by + u_dstar_L.mz * u_dstar_L.bz) / u_dstar_L.rho;
+	u_dstar_L.E = u_star_L.E - rho_sqrt_L * bx_sign * (vb_star_L - tmp);
+	u_dstar_R.E = u_star_R.E + rho_sqrt_R * bx_sign * (vb_star_R - tmp);
 
 	// Convert to arrays for simplified math
 
