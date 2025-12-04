@@ -4,7 +4,15 @@ Instructions for running on various HPC clusters are given below.
 
 ## Gadi (NCI Australia)
 
-Use the `openmpi/4.1.4` module (or newer), and build with `gcc/system` or `gcc/11.1.0`, and use `cuda/11.7.0` (or newer).
+The recommended build procedure on Gadi is:
+
+    source scripts/hpc_profiles/gadi_hopper.profile
+    cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DAMReX_GPU_BACKEND=CUDA
+    cmake --build build -j
+
+Then a single-node test job can be run with:
+
+    qsub scripts/pbs/gpuhopper.pbs
 
 ### Using VisIt
 
