@@ -392,7 +392,11 @@ auto runWaveTest(int nx) -> double
 	angle_between_k_b0_rad = deg2rad * angle_between_k_b0_deg;
 
 	const double CFL_number = 0.2;
-	const double max_time = 0.707;
+	const double a = sound_speed;
+	const double vA = alfven_speed;
+	const double cosθ = std::cos(angle_between_k_b0_rad);
+	const double cf = std::sqrt(0.5 * (a * a + vA * vA + std::sqrt((a * a + vA * vA) * (a * a + vA * vA) - 4.0 * a * a * vA * vA * cosθ * cosθ)));
+	const double max_time = 1.0 / cf;
 	const int max_timesteps = std::max(20000, nx * 100);
 
 	int num_modes_x = 0;
