@@ -20,9 +20,7 @@
 
 using namespace amrex; // NOLINT
 
-namespace
-{
-auto buildGeometry(PlotFileData &pf) -> Geometry
+static auto buildGeometry(PlotFileData &pf) -> Geometry
 {
 	const int level = 0;
 	const Box domain = pf.probDomain(level);
@@ -33,7 +31,7 @@ auto buildGeometry(PlotFileData &pf) -> Geometry
 	return Geometry(domain, &rb, pf.coordSys(), periodic.data());
 }
 
-auto buildMultiFab(PlotFileData &pf, const Vector<std::string> &names) -> MultiFab
+static auto buildMultiFab(PlotFileData &pf, const Vector<std::string> &names) -> MultiFab
 {
 	const int level = 0;
 	auto full = pf.get(level);
@@ -41,7 +39,7 @@ auto buildMultiFab(PlotFileData &pf, const Vector<std::string> &names) -> MultiF
 		return full;
 	}
 
-	MultiFab subset(full.boxArray(), full.DistributionMap(), names.size(), full.nGrowVect());
+	MultiFab subset(full.boxArray(), full.DistributionMap(), static_cast<int>(names.size()), full.nGrowVect());
 	subset.setVal(0.0);
 
 	for (int idx = 0; idx < static_cast<int>(names.size()); ++idx) {
@@ -52,7 +50,7 @@ auto buildMultiFab(PlotFileData &pf, const Vector<std::string> &names) -> MultiF
 	return subset;
 }
 
-void writeSlice(const std::string &outfile, const Vector<Real> &pos, const Vector<Gpu::HostVector<Real>> &data, const Vector<std::string> &names)
+static void writeSlice(const std::string &outfile, const Vector<Real> &pos, const Vector<Gpu::HostVector<Real>> &data, const Vector<std::string> &names)
 {
 	if (!ParallelDescriptor::IOProcessor()) {
 		return;
@@ -60,7 +58,7 @@ void writeSlice(const std::string &outfile, const Vector<Real> &pos, const Vecto
 
 	std::vector<int> indices(pos.size());
 	std::iota(indices.begin(), indices.end(), 0);
-	std::sort(indices.begin(), indices.end(), [&pos](int a, int b) { return pos[a] < pos[b]; });
+	std::ranges::sort(indices, [&pos](int a, int b) { return pos[a] < pos[b]; });
 
 	std::ofstream ofs(outfile, std::ios::trunc);
 	ofs.setf(std::ios::scientific);
@@ -82,16 +80,16 @@ void writeSlice(const std::string &outfile, const Vector<Real> &pos, const Vecto
 		ofs << "\n";
 	}
 }
-} // namespace
 
 auto main(int argc, char **argv) -> int
 {
 	amrex::Initialize(argc, argv);
-	{
-		ParmParse pp;
+	try {
+		const ParmParse pp;
 
 		std::string plotfile;
-		if (!pp.query("plotfile", plotfile)) {
+		const bool has_plotfile = pp.query("plotfile", plotfile) != 0;
+		if (!has_plotfile) {
 			amrex::Abort("plotfile must be provided (plotfile=/path/to/pltXXXX).");
 		}
 		std::string outfile = "fextract.out";
@@ -123,11 +121,15 @@ auto main(int argc, char **argv) -> int
 		const bool has_coord = coord != std::numeric_limits<Real>::lowest();
 		const Array<Real, AMREX_SPACEDIM> problo = pf.probLo();
 		const Array<Real, AMREX_SPACEDIM> probhi = pf.probHi();
-		const Real slice_coord = has_coord ? coord : Real(0.5) * (problo[dir] + probhi[dir]);
+		const Real slice_coord = has_coord ? coord : static_cast<Real>(0.5) * (problo[dir] + probhi[dir]);
 		const bool use_center = has_coord ? false : center;
 
 		auto [pos, data] = fextract(mf, geom, dir, slice_coord, use_center);
 		writeSlice(outfile, pos, data, names);
+	} catch (const std::exception &ex) {
+		amrex::Abort(ex.what());
+	} catch (...) {
+		amrex::Abort("Unknown exception in test_fextract_driver");
 	}
 	amrex::Finalize();
 	return 0;

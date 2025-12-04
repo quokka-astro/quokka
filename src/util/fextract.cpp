@@ -15,11 +15,11 @@ using namespace amrex; // NOLINT
 auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coord, const bool center = false)
     -> std::tuple<Vector<Real>, Vector<Gpu::HostVector<Real>>>
 {
-	AMREX_D_TERM(Real xcoord = slice_coord;, Real ycoord = slice_coord;, Real zcoord = slice_coord;)
+	AMREX_D_TERM(const Real xcoord = slice_coord;, const Real ycoord = slice_coord;, const Real zcoord = slice_coord;)
 
 	GpuArray<Real, AMREX_SPACEDIM> problo = geom.ProbLoArray();
 	GpuArray<Real, AMREX_SPACEDIM> dx0 = geom.CellSizeArray();
-	Box probdom0 = geom.Domain();
+	const Box probdom0 = geom.Domain();
 	const auto lo0 = amrex::lbound(probdom0);
 	const auto hi0 = amrex::ubound(probdom0);
 
@@ -36,7 +36,7 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 		// we specified the x value to pass through
 		iloc = hi0.x;
 		for (int i = lo0.x; i <= hi0.x; ++i) {
-			amrex::Real xc = problo[0] + (i + 0.5) * dx0[0];
+			const amrex::Real xc = problo[0] + (i + 0.5) * dx0[0];
 			if (xc > xcoord) {
 				iloc = i;
 				break;
@@ -49,7 +49,7 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 		// we specified the y value to pass through
 		jloc = hi0.y;
 		for (int j = lo0.y; j <= hi0.y; ++j) {
-			amrex::Real yc = problo[1] + (j + 0.5) * dx0[1];
+			const amrex::Real yc = problo[1] + (j + 0.5) * dx0[1];
 			if (yc > ycoord) {
 				jloc = j;
 				break;
@@ -63,7 +63,7 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 		// we specified the z value to pass through
 		kloc = hi0.z;
 		for (int k = lo0.z; k <= hi0.z; ++k) {
-			amrex::Real zc = problo[2] + (k + 0.5) * dx0[2];
+			const amrex::Real zc = problo[2] + (k + 0.5) * dx0[2];
 			if (zc > zcoord) {
 				kloc = k;
 				break;
@@ -81,12 +81,12 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 	Vector<Real> pos;
 	Vector<Gpu::HostVector<Real>> data(mf.nComp());
 
-	IntVect rr{1};
+	const IntVect rr{1};
 	Box slice_box(ivloc * rr, ivloc * rr);
 	slice_box.setSmall(idir, std::numeric_limits<int>::lowest());
 	slice_box.setBig(idir, std::numeric_limits<int>::max());
 
-	GpuArray<Real, AMREX_SPACEDIM> dx = dx0;
+	const GpuArray<Real, AMREX_SPACEDIM> dx = dx0;
 
 	// First pass: determine per-box offsets along the slice and total points
 	Vector<int> offsets;
@@ -147,7 +147,7 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 			const int local_len = bx.length(idir);
 			const auto &fab = mf.array(mfi);
 			for (int ivar = 0; ivar < mf.nComp(); ++ivar) {
-				auto dataptr = data[ivar].data();
+				auto *dataptr = data[ivar].data();
 				ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					int idx = offset;
 					if (idir == 0) {
