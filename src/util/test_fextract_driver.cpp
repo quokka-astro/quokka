@@ -6,7 +6,6 @@
 #include <iomanip>
 #include <limits>
 #include <numeric>
-#include <ranges>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -23,10 +22,7 @@
 
 using namespace amrex; // NOLINT
 
-namespace
-{
-
-auto buildGeometry(PlotFileData &pf) -> Geometry
+static auto buildGeometry(PlotFileData &pf) -> Geometry
 {
 	const int level = 0;
 	const Box domain = pf.probDomain(level);
@@ -37,7 +33,7 @@ auto buildGeometry(PlotFileData &pf) -> Geometry
 	return Geometry(domain, &rb, pf.coordSys(), periodic.data());
 }
 
-auto buildMultiFab(PlotFileData &pf, const Vector<std::string> &names) -> MultiFab
+static auto buildMultiFab(PlotFileData &pf, const Vector<std::string> &names) -> MultiFab
 {
 	const int level = 0;
 	auto full = pf.get(level);
@@ -56,7 +52,7 @@ auto buildMultiFab(PlotFileData &pf, const Vector<std::string> &names) -> MultiF
 	return subset;
 }
 
-void writeSlice(const std::string &outfile, const Vector<Real> &pos, const Vector<Gpu::HostVector<Real>> &data, const Vector<std::string> &names)
+static void writeSlice(const std::string &outfile, const Vector<Real> &pos, const Vector<Gpu::HostVector<Real>> &data, const Vector<std::string> &names)
 {
 	if (!ParallelDescriptor::IOProcessor()) {
 		return;
@@ -87,12 +83,8 @@ void writeSlice(const std::string &outfile, const Vector<Real> &pos, const Vecto
 	}
 }
 
-} // namespace
-
-int main(int argc, char **argv)
+auto problem_main() -> int
 {
-	amrex::Initialize(argc, argv);
-	int retval = 0;
 	try {
 		ParmParse pp;
 
@@ -120,7 +112,6 @@ int main(int argc, char **argv)
 		}
 
 		PlotFileData pf(plotfile);
-
 		Geometry geom = buildGeometry(pf);
 		MultiFab mf = buildMultiFab(pf, names);
 
@@ -132,10 +123,10 @@ int main(int argc, char **argv)
 
 		auto [pos, data] = fextract(mf, geom, dir, slice_coord, use_center);
 		writeSlice(outfile, pos, data, names);
+		
+		return 0;
 	} catch (const std::runtime_error &ex) {
 		amrex::Print() << ex.what() << "\n";
-		retval = 1;
+		return 1;
 	}
-	amrex::Finalize();
-	return retval;
 }

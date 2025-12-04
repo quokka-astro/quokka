@@ -94,7 +94,7 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 		const int coords[AMREX_SPACEDIM] = {i, j};
 		const int coord = coords[idir];
 #else
-		const int coords[AMREX_SPACEDIM] = {i, j, k};
+		const std::array<int, AMREX_SPACEDIM> coords = {i, j, k};
 		const int coord = coords[idir];
 #endif
 		return offset + (coord - start_dir);
