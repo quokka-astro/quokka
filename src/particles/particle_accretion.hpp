@@ -33,12 +33,10 @@ constexpr double r_acc_tolerance = 1.0001;
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto get_delta_rho(double rho, double rho_sink) -> double { return -0.5 * (rho - rho_sink) / rho; }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::Array4<const amrex::Real> &local_state, int ix, int iy, int iz, double par_mass,
-								   double par_x, double par_y, double par_z,
-								   const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
-								   const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
-								   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *state_fc = nullptr)
-    -> std::tuple<double, double>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+compute_Mdot_and_r_K(const amrex::Array4<const amrex::Real> &local_state, int ix, int iy, int iz, double par_mass, double par_x, double par_y, double par_z,
+		     const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
+		     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *state_fc = nullptr) -> std::tuple<double, double>
 {
 	const double dx_max = std::max({dx[0], dx[1], dx[2]});
 
@@ -135,9 +133,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_accretion_kernel(const dou
 template <typename ContainerType, typename problem_t>
 void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, const amrex::Array4<const amrex::Real> &local_state,
 			       const amrex::Array4<amrex::Real> &local_accretion_rate, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
-			       const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
-			       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> state_fc, bool has_face_fields, amrex::Real /*time*/,
-			       amrex::Real dt, int /*mass_index*/)
+			       const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> state_fc,
+			       bool has_face_fields, amrex::Real /*time*/, amrex::Real dt, int /*mass_index*/)
 {
 	const BL_PROFILE("SinkAccretionUtils::ComputeAccretionRateInBox()");
 	// Get the particle array of structs
@@ -461,7 +458,7 @@ void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &st
 
 		// Process particles in this box
 		UpdateParticleMassAndMomentumInBox<ContainerType, problem_t>(pti, local_state, local_scale_down, plo, dx, local_state_fc, has_face_fields,
-									      mass_index, time, dt, vol);
+									     mass_index, time, dt, vol);
 	}
 }
 
@@ -522,7 +519,7 @@ void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 
 		// Process particles in this box
 		ComputeAccretionRateInBox<ContainerType, problem_t>(pti, local_state, local_accretion_rate, plo, dx, local_state_fc, has_face_fields, time, dt,
-								   mass_index);
+								    mass_index);
 	}
 
 	// Sum boundary cell values to real cells
@@ -532,8 +529,8 @@ void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 // Functor for applying accretion.
 template <typename ContainerType, typename problem_t>
 void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate,
-		    std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, const amrex::Geometry &geom, int lev, amrex::Real time,
-		    amrex::Real dt, int mass_index)
+		    std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, const amrex::Geometry &geom, int lev, amrex::Real time, amrex::Real dt,
+		    int mass_index)
 {
 	const BL_PROFILE("SinkAccretionUtils::applyAccretion()");
 	// Step 2: Compute the scale_down factor. We scale down the accretion rate to prevent accretion rates from exceeding 100%

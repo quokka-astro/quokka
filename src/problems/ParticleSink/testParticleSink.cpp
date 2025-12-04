@@ -33,7 +33,7 @@ const double T0 = 10.0;		  // K
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
 const double dt_init = 3.0 * year;
-constexpr double B0 = 1.0e-7;    // constant background field [Gauss-equivalent units]
+constexpr double B0 = 1.0e-7; // constant background field [Gauss-equivalent units]
 
 static std::string particles_file = "sink4.txt"; // NOLINT
 
@@ -53,11 +53,11 @@ template <> struct HydroSystem_Traits<SinkProblem> {
 
 template <> struct Physics_Traits<SinkProblem> {
 	// cell-centred
-static constexpr bool is_hydro_enabled = true;
-static constexpr bool is_self_gravity_enabled = true;
-static constexpr int numMassScalars = 0;		     // number of mass scalars
-static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-static constexpr bool is_radiation_enabled = false;
+	static constexpr bool is_hydro_enabled = true;
+	static constexpr bool is_self_gravity_enabled = true;
+	static constexpr int numMassScalars = 0;		     // number of mass scalars
+	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
+	static constexpr bool is_radiation_enabled = false;
 	// face-centred
 	static constexpr bool is_mhd_enabled = true;
 	static constexpr int nGroups = 1; // number of radiation groups
