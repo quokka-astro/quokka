@@ -6,6 +6,12 @@
 #include <iomanip>
 #include <limits>
 #include <numeric>
+<<<<<<< Updated upstream
+=======
+#include <ranges>
+#include <stdexcept>
+#include <string>
+>>>>>>> Stashed changes
 #include <vector>
 
 #include "AMReX.H"
@@ -20,7 +26,13 @@
 
 using namespace amrex; // NOLINT
 
+<<<<<<< Updated upstream
 static auto buildGeometry(PlotFileData &pf) -> Geometry
+=======
+namespace {
+
+auto buildGeometry(PlotFileData &pf) -> Geometry
+>>>>>>> Stashed changes
 {
 	const int level = 0;
 	const Box domain = pf.probDomain(level);
@@ -31,7 +43,11 @@ static auto buildGeometry(PlotFileData &pf) -> Geometry
 	return Geometry(domain, &rb, pf.coordSys(), periodic.data());
 }
 
+<<<<<<< Updated upstream
 static auto buildMultiFab(PlotFileData &pf, const Vector<std::string> &names) -> MultiFab
+=======
+auto buildMultiFab(PlotFileData &pf, const Vector<std::string> &names) -> MultiFab
+>>>>>>> Stashed changes
 {
 	const int level = 0;
 	auto full = pf.get(level);
@@ -50,7 +66,12 @@ static auto buildMultiFab(PlotFileData &pf, const Vector<std::string> &names) ->
 	return subset;
 }
 
+<<<<<<< Updated upstream
 static void writeSlice(const std::string &outfile, const Vector<Real> &pos, const Vector<Gpu::HostVector<Real>> &data, const Vector<std::string> &names)
+=======
+void writeSlice(const std::string &outfile, const Vector<Real> &pos, const Vector<Gpu::HostVector<Real>> &data,
+		const Vector<std::string> &names)
+>>>>>>> Stashed changes
 {
 	if (!ParallelDescriptor::IOProcessor()) {
 		return;
@@ -81,6 +102,7 @@ static void writeSlice(const std::string &outfile, const Vector<Real> &pos, cons
 	}
 }
 
+<<<<<<< Updated upstream
 auto main(int argc, char **argv) -> int
 {
 	amrex::Initialize(argc, argv);
@@ -92,6 +114,23 @@ auto main(int argc, char **argv) -> int
 		if (!has_plotfile) {
 			amrex::Abort("plotfile must be provided (plotfile=/path/to/pltXXXX).");
 		}
+=======
+} // namespace
+
+int main(int argc, char **argv)
+{
+	amrex::Initialize(argc, argv);
+	int retval = 0;
+	try {
+		ParmParse pp;
+
+		std::string plotfile;
+		const bool has_plotfile = pp.query("plotfile", plotfile) != 0;
+		if (!has_plotfile || plotfile.empty()) {
+			throw std::runtime_error("plotfile must be provided (plotfile=/path/to/pltXXXX).");
+		}
+
+>>>>>>> Stashed changes
 		std::string outfile = "fextract.out";
 		pp.query("outfile", outfile);
 
@@ -105,27 +144,40 @@ auto main(int argc, char **argv) -> int
 		Vector<std::string> names;
 		pp.queryarr("vars", names);
 
+<<<<<<< Updated upstream
 		if (plotfile.empty()) {
 			amrex::Abort("plotfile must be provided (plotfile=/path/to/pltXXXX).");
+=======
+		if (dir < 0 || dir >= AMREX_SPACEDIM) {
+			throw std::runtime_error("dir must be within [0, AMREX_SPACEDIM).");
+>>>>>>> Stashed changes
 		}
 
 		PlotFileData pf(plotfile);
 
+<<<<<<< Updated upstream
 		if (dir < 0 || dir >= AMREX_SPACEDIM) {
 			amrex::Abort("dir must be within [0, AMREX_SPACEDIM).");
 		}
 
+=======
+>>>>>>> Stashed changes
 		Geometry geom = buildGeometry(pf);
 		MultiFab mf = buildMultiFab(pf, names);
 
 		const bool has_coord = coord != std::numeric_limits<Real>::lowest();
 		const Array<Real, AMREX_SPACEDIM> problo = pf.probLo();
 		const Array<Real, AMREX_SPACEDIM> probhi = pf.probHi();
+<<<<<<< Updated upstream
 		const Real slice_coord = has_coord ? coord : static_cast<Real>(0.5) * (problo[dir] + probhi[dir]);
+=======
+		const Real slice_coord = has_coord ? coord : 0.5 * (problo[dir] + probhi[dir]);
+>>>>>>> Stashed changes
 		const bool use_center = has_coord ? false : center;
 
 		auto [pos, data] = fextract(mf, geom, dir, slice_coord, use_center);
 		writeSlice(outfile, pos, data, names);
+<<<<<<< Updated upstream
 	} catch (const std::exception &ex) {
 		amrex::Abort(ex.what());
 	} catch (...) {
@@ -133,4 +185,12 @@ auto main(int argc, char **argv) -> int
 	}
 	amrex::Finalize();
 	return 0;
+=======
+	} catch (const std::runtime_error &ex) {
+		amrex::Print() << ex.what() << "\n";
+		retval = 1;
+	}
+	amrex::Finalize();
+	return retval;
+>>>>>>> Stashed changes
 }

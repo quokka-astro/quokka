@@ -5,7 +5,11 @@ set -euo pipefail
 
 usage() {
     cat <<EOF
+<<<<<<< Updated upstream
 Usage: $0 -p <plotfile> [-v "<var1 var2>"] [-d <dir>] [-c <coord>] [-n <ranks>] [-m <mpi_launcher>] [-a \"<mpi_args>\"] [-b <build_dir>] [-k]
+=======
+Usage: $0 -p <plotfile> [-v "<var1 var2>"] [-d <dir>] [-c <coord>] [-n <ranks>] [-m <mpi_launcher>] [-a "<mpi_args>"] [-b <build_dir>] [-k]
+>>>>>>> Stashed changes
 
 Options:
   -p <plotfile>        Path to the plotfile directory to slice (required)
@@ -22,7 +26,11 @@ Options:
 The script builds the fextract_util_driver target, runs it once with a single rank
 and once with the requested parallel ranks, then diffs the outputs.
 EOF
+<<<<<<< Updated upstream
     exit 1
+=======
+    return 1
+>>>>>>> Stashed changes
 }
 
 plotfile=""
@@ -46,33 +54,60 @@ while getopts ":p:v:d:c:n:m:a:b:kh" opt; do
         a) mpi_args="${OPTARG}" ;;
         b) build_dir="${OPTARG}" ;;
         k) keep_tmp=true ;;
+<<<<<<< Updated upstream
         h) usage ;;
         *) echo "Invalid option: -${OPTARG}" >&2; usage ;;
+=======
+        h) usage; exit 0 ;;
+        *) usage; exit 1 ;;
+>>>>>>> Stashed changes
     esac
 done
 
 if [[ -z "${plotfile}" ]]; then
+<<<<<<< Updated upstream
     echo "Error: plotfile is required."
     usage
 fi
 
 if [[ ! -d "${plotfile}" ]]; then
     echo "Error: plotfile path '${plotfile}' is not a directory."
+=======
+    echo "Error: plotfile is required." >&2
+    usage
+    exit 1
+fi
+
+if [[ ! -d "${plotfile}" ]]; then
+    echo "Error: plotfile path '${plotfile}' is not a directory." >&2
+>>>>>>> Stashed changes
     exit 1
 fi
 
 if ! [[ "${direction}" =~ ^[0-2]$ ]]; then
+<<<<<<< Updated upstream
     echo "Error: direction must be 0, 1, or 2."
+=======
+    echo "Error: direction must be 0, 1, or 2." >&2
+>>>>>>> Stashed changes
     exit 1
 fi
 
 if ! [[ "${mpi_ranks}" =~ ^[0-9]+$ ]] || [[ "${mpi_ranks}" -lt 2 ]]; then
+<<<<<<< Updated upstream
     echo "Error: ranks (-n) must be an integer >= 2."
+=======
+    echo "Error: ranks (-n) must be an integer >= 2." >&2
+>>>>>>> Stashed changes
     exit 1
 fi
 
 if ! command -v "${mpi_launcher}" >/dev/null 2>&1; then
+<<<<<<< Updated upstream
     echo "Error: MPI launcher '${mpi_launcher}' not found in PATH."
+=======
+    echo "Error: MPI launcher '${mpi_launcher}' not found in PATH." >&2
+>>>>>>> Stashed changes
     exit 1
 fi
 
@@ -93,13 +128,21 @@ build_path="${build_dir}/src/fextract_util_driver"
 
 echo "Building fextract_util_driver in ${build_dir}..."
 if ! cmake --build "${build_dir}" --target fextract_util_driver >/dev/null; then
+<<<<<<< Updated upstream
     echo "Build failed. Re-run with VERBOSE=1 or without redirect to inspect errors."
+=======
+    echo "Build failed. Re-run with VERBOSE=1 or without redirect to inspect errors." >&2
+>>>>>>> Stashed changes
     exit 1
 fi
 echo "Build complete."
 
 if [[ ! -x "${build_path}" ]]; then
+<<<<<<< Updated upstream
     echo "Error: built driver not found at ${build_path}"
+=======
+    echo "Error: built driver not found at ${build_path}" >&2
+>>>>>>> Stashed changes
     exit 1
 fi
 
@@ -111,6 +154,10 @@ cleanup() {
     else
         echo "Temporary files kept at ${tmp_dir}"
     fi
+<<<<<<< Updated upstream
+=======
+    return 0
+>>>>>>> Stashed changes
 }
 trap cleanup EXIT
 
@@ -128,9 +175,16 @@ echo "Comparing outputs..."
 if diff -u "${single_out}" "${multi_out}"; then
     echo "Success: fextract output matches between 1 and ${mpi_ranks} ranks."
 else
+<<<<<<< Updated upstream
     echo "Failure: fextract outputs differ."
     echo "Single-rank slice: ${single_out}"
     echo "Multi-rank slice:  ${multi_out}"
     exit 2
+=======
+	echo "Failure: fextract outputs differ." >&2
+	echo "Single-rank slice: ${single_out}" >&2
+	echo "Multi-rank slice:  ${multi_out}" >&2
+	exit 2
+>>>>>>> Stashed changes
 fi
 echo "Done. Temp files at ${tmp_dir}"
