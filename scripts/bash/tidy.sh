@@ -64,6 +64,29 @@ if [ ! -d "$BUILD_DIR" ]; then
     exit 1
 fi
 
+compile_commands_path="$BUILD_DIR/compile_commands.json"
+if [ ! -f "$compile_commands_path" ]; then
+    echo "Error: $compile_commands_path not found. Please generate it with CMake."
+    exit 1
+fi
+
+cleanup_tmp_cdb() {
+    if [ -n "$tmp_cdb_dir" ] && [ -d "$tmp_cdb_dir" ]; then
+        rm -rf "$tmp_cdb_dir"
+    fi
+}
+trap cleanup_tmp_cdb EXIT
+
+# Deduplicate compile_commands entries so clang-tidy runs each file once
+cdb_dir="$BUILD_DIR"
+if command -v jq >/dev/null 2>&1; then
+    tmp_cdb_dir=$(mktemp -d)
+    jq 'unique_by(.file)' "$compile_commands_path" > "$tmp_cdb_dir/compile_commands.json"
+    cdb_dir="$tmp_cdb_dir"
+else
+    echo "Warning: jq not found; using compile_commands.json as-is (may repeat files)."
+fi
+
 # Get the name of the current git branch
 CURRENT_BRANCH=$(git branch --show-current)
 
@@ -102,5 +125,5 @@ echo
 
 # Only run clang-tidy if there are files to process
 if [ ${#files_select[@]} -gt 0 ]; then
-    clang-tidy --extra-arg="-isysroot$(xcrun --show-sdk-path)" "${files_select[@]}" -p "$BUILD_DIR" $fix_flag
+    clang-tidy --extra-arg="-isysroot$(xcrun --show-sdk-path)" "${files_select[@]}" -p "$cdb_dir" $fix_flag
 fi
