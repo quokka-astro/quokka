@@ -39,7 +39,7 @@ else
   rocm_suite="jammy"
 fi
 
-for ver in 7.0; do
+for ver in 7.1; do
   echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/$ver ${rocm_suite} main" \
       | sudo tee --append /etc/apt/sources.list.d/rocm.list
 done
@@ -62,13 +62,13 @@ sudo apt-get install -y --no-install-recommends \
     libnuma-dev     \
     libopenmpi-dev  \
     openmpi-bin     \
-    rocm-dev7.0.0        \
-    roctracer-dev7.0.0   \
-    rocprofiler-dev7.0.0 \
-    rocrand-dev7.0.0     \
-    hiprand-dev7.0.0     \
-    rocprim-dev7.0.0     \
-    rocsparse-dev7.0.0
+    rocm-dev7.1.0        \
+    roctracer-dev7.1.0   \
+    rocprofiler-dev7.1.0 \
+    rocrand-dev7.1.0     \
+    hiprand-dev7.1.0     \
+    rocprim-dev7.1.0     \
+    rocsparse-dev7.1.0
 
 # activate
 #
