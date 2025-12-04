@@ -33,6 +33,7 @@ const double T0 = 10.0;		  // K
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
 const double dt_init = 3.0 * year;
+constexpr double B0 = 1.0e-7;    // constant background field [Gauss-equivalent units]
 
 static std::string particles_file = "sink4.txt"; // NOLINT
 
@@ -52,13 +53,13 @@ template <> struct HydroSystem_Traits<SinkProblem> {
 
 template <> struct Physics_Traits<SinkProblem> {
 	// cell-centred
-	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_self_gravity_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr bool is_radiation_enabled = false;
+static constexpr bool is_hydro_enabled = true;
+static constexpr bool is_self_gravity_enabled = true;
+static constexpr int numMassScalars = 0;		     // number of mass scalars
+static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
+static constexpr bool is_radiation_enabled = false;
 	// face-centred
-	static constexpr bool is_mhd_enabled = false;
+	static constexpr bool is_mhd_enabled = true;
 	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
@@ -76,6 +77,7 @@ template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokk
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const double rho_e = CV * T0 * rho0;
+	const double Emag = 0.5 * B0 * B0;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -83,8 +85,25 @@ template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokk
 		state_cc(i, j, k, HydroSystem<SinkProblem>::x1Momentum_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<SinkProblem>::x2Momentum_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<SinkProblem>::x3Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<SinkProblem>::energy_index) = rho_e;
+		state_cc(i, j, k, HydroSystem<SinkProblem>::energy_index) = rho_e + Emag;
 		state_cc(i, j, k, HydroSystem<SinkProblem>::internalEnergy_index) = rho_e;
+	});
+}
+
+template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+{
+	const amrex::Array4<double> &state_fc = grid_elem.array_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const quokka::direction dir = grid_elem.dir_;
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		if (dir == quokka::direction::x) {
+			state_fc(i, j, k, Physics_Indices<SinkProblem>::mhdFirstIndex) = B0;
+		} else if (dir == quokka::direction::y) {
+			state_fc(i, j, k, Physics_Indices<SinkProblem>::mhdFirstIndex) = 0.0;
+		} else if (dir == quokka::direction::z) {
+			state_fc(i, j, k, Physics_Indices<SinkProblem>::mhdFirstIndex) = 0.0;
+		}
 	});
 }
 
@@ -116,12 +135,21 @@ auto problem_main() -> int
 {
 	auto BCs_cc = quokka::BC<SinkProblem>(quokka::BCType::reflecting);
 
+	const int nvars_fc = Physics_Indices<SinkProblem>::nvarTotal_fc;
+	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
+	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			BCs_fc[icomp].setLo(idim, amrex::BCType::reflect_even);
+			BCs_fc[icomp].setHi(idim, amrex::BCType::reflect_even);
+		}
+	}
+
 	amrex::ParmParse const pp("problem");
 	pp.query("particles_file", particles_file);
 	pp.query("refine_half_domain", refine_half_domain);
 
 	// Problem initialization
-	QuokkaSimulation<SinkProblem> sim(BCs_cc);
+	QuokkaSimulation<SinkProblem> sim(BCs_cc, BCs_fc);
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
