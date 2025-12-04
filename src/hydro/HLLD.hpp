@@ -226,33 +226,25 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 
 	// MK5: eqn (59)
 	double tmp = rho_sum_inv *
-	             (rho_sqrt_L * (u_star_L.my * u_star_rho_inv_L) +
-	              rho_sqrt_R * (u_star_R.my * u_star_rho_inv_R) +
-	              bx_sign * (u_star_R.by - u_star_L.by));
+		     (rho_sqrt_L * (u_star_L.my * u_star_rho_inv_L) + rho_sqrt_R * (u_star_R.my * u_star_rho_inv_R) + bx_sign * (u_star_R.by - u_star_L.by));
 	u_dstar_L.my = u_dstar_L.rho * tmp;
 	u_dstar_R.my = u_dstar_R.rho * tmp;
 
 	// MK5: eqn (60)
 	tmp = rho_sum_inv *
-	      (rho_sqrt_L * (u_star_L.mz * u_star_rho_inv_L) +
-	       rho_sqrt_R * (u_star_R.mz * u_star_rho_inv_R) +
-	       bx_sign * (u_star_R.bz - u_star_L.bz));
+	      (rho_sqrt_L * (u_star_L.mz * u_star_rho_inv_L) + rho_sqrt_R * (u_star_R.mz * u_star_rho_inv_R) + bx_sign * (u_star_R.bz - u_star_L.bz));
 	u_dstar_L.mz = u_dstar_L.rho * tmp;
 	u_dstar_R.mz = u_dstar_R.rho * tmp;
 
 	// MK5: eqn (61)
-	tmp = rho_sum_inv *
-	      (rho_sqrt_L * u_star_R.by + rho_sqrt_R * u_star_L.by +
-	       bx_sign * rho_sqrt_L * rho_sqrt_R *
-	       ((u_star_R.my * u_star_rho_inv_R) - (u_star_L.my * u_star_rho_inv_L)));
+	tmp = rho_sum_inv * (rho_sqrt_L * u_star_R.by + rho_sqrt_R * u_star_L.by +
+			     bx_sign * rho_sqrt_L * rho_sqrt_R * ((u_star_R.my * u_star_rho_inv_R) - (u_star_L.my * u_star_rho_inv_L)));
 	u_dstar_L.by = tmp;
 	u_dstar_R.by = tmp;
 
 	// MK5: eqn (62)
-	tmp = rho_sum_inv *
-	      (rho_sqrt_L * u_star_R.bz + rho_sqrt_R * u_star_L.bz +
-	       bx_sign * rho_sqrt_L * rho_sqrt_R *
-	       ((u_star_R.mz * u_star_rho_inv_R) - (u_star_L.mz * u_star_rho_inv_L)));
+	tmp = rho_sum_inv * (rho_sqrt_L * u_star_R.bz + rho_sqrt_R * u_star_L.bz +
+			     bx_sign * rho_sqrt_L * rho_sqrt_R * ((u_star_R.mz * u_star_rho_inv_R) - (u_star_L.mz * u_star_rho_inv_L)));
 	u_dstar_L.bz = tmp;
 	u_dstar_R.bz = tmp;
 
