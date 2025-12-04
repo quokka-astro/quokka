@@ -161,12 +161,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	double delta_A2 = 0.0;
 	const double delta_A3 = 0.0;
 
-
 	if (std::abs(sinθ) < tiny) {
 		// theta = 0 or 180 deg: fast mode is pure sound wave → no B perturbation
 		delta_A2 = 0.0; // δB = 0
 	} else {
-		const double dB3_mrf = (cf*cf*sinθ) / (cf*cf - vA*vA*cosθ*cosθ) * delta_b_magn; // δB3
+		const double dB3_mrf = (cf * cf * sinθ) / (cf * cf - vA * vA * cosθ * cosθ) * delta_b_magn; // δB3
 		delta_A2 = -(dB3_mrf / k_magn) * std::sin(phase);
 	}
 	const double A1_mrf = bg_A1 + delta_A1;
@@ -251,7 +250,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		double const v3_mrf = v3_amp * cos_phase;
 
 		// magnetic perturbation
-	
+
 		// density & pressure perturbations (linear compressive fast mode)
 		const double density = bg_density * (1.0 + epsilon * cos_phase);
 		const double pressure = bg_pressure * (1.0 + gamma_gas * epsilon * cos_phase);
