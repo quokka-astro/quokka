@@ -22,8 +22,8 @@ struct ParticleSFProblem {
 constexpr Real mu = 1.0 * C::m_p;
 constexpr Real gamma_ = 5. / 3.;
 constexpr Real year = 3.15576e+07; // in seconds
-static Real n0 = 1.0e4;   // NOLINT
-static Real Tamb = 10.0;  // NOLINT
+static Real n0 = 1.0e4;		   // NOLINT
+static Real Tamb = 10.0;	   // NOLINT
 
 template <> struct Particle_Traits<ParticleSFProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
@@ -105,11 +105,11 @@ template <> void QuokkaSimulation<ParticleSFProblem>::computeAfterTimestep()
 		const amrex::Real prob_star_formation = (eps_ff / eps_star) * (initDt_ / t_ff);
 		amrex::Print() << "Probability of star formation = " << prob_star_formation << "\n";
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(prob_star_formation < 1.0,
-						"Probability of star formation must be less than 1.0, adjust Tamb, dx, or rho to ensure this is the case");
+						 "Probability of star formation must be less than 1.0, adjust Tamb, dx, or rho to ensure this is the case");
 
 		const auto n_cells = CountCells(0);
 		const auto [real_data_final, idata_final] =
-				particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->getParticleDataAtLevel(0);
+		    particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->getParticleDataAtLevel(0);
 		const double m_gas_final = state_new_cc_[0].sum(HydroSystem<ParticleSFProblem>::density_index) * cell_volume;
 
 		const int mass_idx = 3;
@@ -187,11 +187,11 @@ template <> void QuokkaSimulation<ParticleSFProblem>::computeAfterTimestep()
 			// get total mass in gas
 			const double m_gas_change = userData_.m_gas_init - m_gas_final;
 
-			amrex::Print() << "Mass of high-mass stars [expected]   = " << m_star_high_tot / C::M_solar << " [" << exp_m_star_high_total / C::M_solar
-							<< "] M_sol \n";
+			amrex::Print() << "Mass of high-mass stars [expected]   = " << m_star_high_tot / C::M_solar << " ["
+				       << exp_m_star_high_total / C::M_solar << "] M_sol \n";
 			amrex::Print() << "Number of high-mass stars [expected]   = " << n_star_high << " [" << exp_n_star_high_total << "] \n";
-			amrex::Print() << "Mean mass of high-mass stars [expected]   = " << mean_mass_high_mass_stars / C::M_solar << " [" << exp_Mstar_high_mean
-							<< "] M_sol \n";
+			amrex::Print() << "Mean mass of high-mass stars [expected]   = " << mean_mass_high_mass_stars / C::M_solar << " ["
+				       << exp_Mstar_high_mean << "] M_sol \n";
 			amrex::Print() << "Number of low-mass stars [expected]   = " << n_star_low << " [" << exp_n_star_low_total << "] \n";
 			amrex::Print() << "Mass of all stars [expected]   = " << m_star_tot / C::M_solar << " [" << m_gas_change / C::M_solar << "] M_sol \n";
 

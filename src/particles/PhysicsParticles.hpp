@@ -219,12 +219,12 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 			// Sum mass over all particles at all levels
 			for (int lev = 0; lev <= container_->finestLevel(); ++lev) {
-				auto result_tuple = amrex::ParticleReduce<ReduceDataType>(*container_, lev, 
-					[=] AMREX_GPU_DEVICE(const PTDType &p_type, const int i) noexcept -> amrex::Real
-					{
-						return p_type.m_aos[i].rdata(mass_idx);
-					},
-					reduce_ops);
+				auto result_tuple = amrex::ParticleReduce<ReduceDataType>(
+				    *container_, lev,
+				    [=] AMREX_GPU_DEVICE(const PTDType &p_type, const int i) noexcept -> amrex::Real {
+					    return p_type.m_aos[i].rdata(mass_idx);
+				    },
+				    reduce_ops);
 				total_mass += amrex::get<0>(result_tuple);
 			}
 		}
