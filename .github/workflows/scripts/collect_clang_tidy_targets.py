@@ -57,6 +57,7 @@ def _build_include_index(tus: Iterable[pathlib.Path], repo_root: pathlib.Path) -
             rel_path = tu.relative_to(repo_root).as_posix()
             include_index[rel_path].add(tu)
         except ValueError:
+            # TU is not relative to repo root; skipping.
             pass
     return include_index
 
