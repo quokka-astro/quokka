@@ -1284,26 +1284,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		++cycleCount_;
 		computeAfterTimestep();
 
-
-
-
 		// Compute SFH if interval is reached
-		bool compute_sfh = false;
-		const amrex::Real current_time = tNew_[0]; // Use tNew_[0] as current time
-
-		if (sfh_interval_ > 0 && istep[0] % sfh_interval_ == 0) {
-			compute_sfh = true;
+		if ((sfh_interval_ > 0 && step % sfh_interval_ == 0) ||
+		    (sfh_time_interval_ > 0 && cur_time - last_sfh_time_ >= sfh_time_interval_)) {
+			particleRegister_.updateSFH(step, cur_time);
+			last_sfh_time_ = cur_time;
 		}
-		if (sfh_time_interval_ > 0 && current_time - last_sfh_time_ >= sfh_time_interval_) {
-			compute_sfh = true;
-		}
-
-		if (compute_sfh) {
-			particleRegister_.updateSFH(istep[0], current_time);
-			last_sfh_time_ = current_time;
-		}
-
-
 
 		// sync up time (to avoid roundoff error)
 		for (lev = 0; lev <= finest_level; ++lev) {
@@ -4008,7 +3994,7 @@ void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::un
 	restartParticleContainerWithRefinement(container, restart_chkfile, particleRegister_.getParticleTypeName(particle_type), header_box_arrays);
 
 	// Read SFH data
-	particleRegister_.readSFH(restart_chkfile, particleRegister_.getParticleTypeName(particle_type));
+	last_sfh_time_ = particleRegister_.readSFH(restart_chkfile, particleRegister_.getParticleTypeName(particle_type));
 
 	// Split particles
 #if AMREX_SPACEDIM == 3

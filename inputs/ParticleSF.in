@@ -38,4 +38,5 @@ problem.Tamb = 1.0e1
 max_timesteps = 10
 plotfile_interval = 5
 checkpoint_interval = 5
-SFH_interval = 3
+#SFH_interval = 3
+SFH_time_interval = 2e10

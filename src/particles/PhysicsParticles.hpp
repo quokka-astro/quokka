@@ -1018,10 +1018,11 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Read SFH data from file
-	void readSFH(const std::string &base_dir, const std::string &particle_type_name)
+	auto readSFH(const std::string &base_dir, const std::string &particle_type_name) -> Real
 	{
 		std::string filename = base_dir + "/" + particle_type_name + "/SFH.txt";
 		std::ifstream ifs(filename);
+		Real time = 0.0;
 		if (ifs.is_open()) {
 			sfh_data_[particle_type_name].clear();
 			std::string line;
@@ -1031,7 +1032,6 @@ template <typename problem_t> class PhysicsParticleRegister
 				}
 				std::istringstream iss(line);
 				int nstep = 0;
-				amrex::Real time = 0.0;
 				amrex::Real mass = 0.0;
 				if (iss >> nstep >> time >> mass) {
 					sfh_data_[particle_type_name].emplace_back(nstep, time, mass);
@@ -1040,8 +1040,9 @@ template <typename problem_t> class PhysicsParticleRegister
 			ifs.close();
 			amrex::Print() << "Read SFH data for " << particle_type_name << " from " << filename << "\n";
 		}
-
 		// It's okay if file doesn't exist, e.g. first run, in which case you should not call this function
+
+		return time;
 	}
 };
 
