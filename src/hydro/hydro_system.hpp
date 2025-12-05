@@ -87,12 +87,12 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 		primScalar0_index, // first passive scalar (only present if nscalars > 0!)
 	};
 
-	enum dustVarIndex {
+	enum dustVarIndex { // NOLINT
 		dustDensity_index = Physics_Indices<problem_t>::dustFirstIndex,
 		x1DustMomentum_index,
 		x2DustMomentum_index,
 		x3DustMomentum_index
-	}; // NOLINT
+	};
 
 	static constexpr int primDustFirstIndex = primScalar0_index + nscalars_;
 	enum primDustVarIndex { primDustDensity_index = primDustFirstIndex, x1DustVelocity_index, x2DustVelocity_index, x3DustVelocity_index }; // NOLINT
