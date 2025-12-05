@@ -19,6 +19,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: check_changes
     if: needs.check_changes.outputs.has_non_docs_changes == 'true' || needs.check_changes.outputs.has_scripts_changes == 'true'
+    env:
+      CCACHE_COMPRESS: 1
+      CCACHE_COMPRESSLEVEL: 10
+      CCACHE_MAXSIZE: 300M
+      CCACHE_EXTRAFILES: ${{ github.workspace }}/src/.clang-tidy
 
     steps:
     - uses: actions/checkout@v4
@@ -35,20 +40,14 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.cache/ccache
-        key: ccache-${{ github.workflow }}-${{ github.job }}-git-${{ github.sha }}
+        key: ccache-${{ runner.os }}-clang-tidy-${{ github.base_ref }}
         restore-keys: |
-             ccache-${{ github.workflow }}-${{ github.job }}-git-
+             ccache-${{ runner.os }}-clang-tidy-
 
-    - name: Build Quokka & run clang-tidy
+    - name: Configure build
       run: |
-        export CCACHE_COMPRESS=1
-        export CCACHE_COMPRESSLEVEL=10
-        export CCACHE_MAXSIZE=300M
-        export CCACHE_EXTRAFILES=${{ github.workspace }}/src/.clang-tidy
-        export CCACHE_LOGFILE=${{ github.workspace }}/ccache.log.txt
         ccache -z
 
-        # Configure
         cmake -S . -B build \
           -DCMAKE_VERBOSE_MAKEFILE=ON \
           -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
@@ -58,15 +57,67 @@ jobs:
           -DAMReX_SPACEDIM=3 \
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
-        # Build to populate cache
-        cmake --build build -j 4
+    - name: Build to warm ccache
+      run: cmake --build build -j 4
 
-        # Generate makefile for clang-tidy
-        python3 ${{github.workspace}}/.github/workflows/scripts/makeMakefileForClangTidy.py --input ${{github.workspace}}/ccache.log.txt --identifier src
+    - name: Compute changed files
+      id: changed-files
+      run: |
+        git fetch origin ${{ github.event.pull_request.base.ref }}:refs/remotes/origin/${{ github.event.pull_request.base.ref }}
+        git diff --name-only --diff-filter=ACMRT origin/${{ github.event.pull_request.base.ref }}...HEAD > changed-files.txt
+        git diff -U0 --diff-filter=ACMRT origin/${{ github.event.pull_request.base.ref }}...HEAD > diff.patch
+        awk '/\\.(cpp|cc|c|cxx|hpp|h|hh|hxx|cu|cuh)$/{print}' changed-files.txt > filtered-changed-files.txt
+        if [ -s filtered-changed-files.txt ]; then
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+        else
+          echo "has_changes=false" >> $GITHUB_OUTPUT
+        fi
 
-        # Run clang-tidy
-        make -j4 --keep-going -f clang-tidy-ccache-misses.mak \
-            CLANG_TIDY=clang-tidy \
-            CLANG_TIDY_ARGS="--config-file=${{github.workspace}}/src/.clang-tidy --warnings-as-errors=*"
+    - name: Resolve clang-tidy targets
+      id: targets
+      if: steps.changed-files.outputs.has_changes == 'true'
+      run: |
+        python3 .github/workflows/scripts/collect_clang_tidy_targets.py \
+          --changed-files filtered-changed-files.txt \
+          --compile-commands build/compile_commands.json \
+          --repo-root "${GITHUB_WORKSPACE}" \
+          --output clang-tidy-targets.txt
+        if [ -s clang-tidy-targets.txt ]; then
+          echo "has_targets=true" >> $GITHUB_OUTPUT
+        else
+          echo "has_targets=false" >> $GITHUB_OUTPUT
+        fi
 
-        ccache -s
+    - name: Run clang-tidy on changed files
+      id: clang-tidy
+      if: steps.targets.outputs.has_targets == 'true'
+      continue-on-error: true
+      run: |
+        python3 .github/workflows/scripts/run_clang_tidy_and_sarif.py \
+          --file-list clang-tidy-targets.txt \
+          --build-dir build \
+          --config-file "${GITHUB_WORKSPACE}/src/.clang-tidy" \
+          --repo-root "${GITHUB_WORKSPACE}" \
+          --diff-file diff.patch \
+          --sarif-output clang-tidy-results.sarif \
+          --log-output clang-tidy.log \
+          --flag-output clang-tidy.has_diagnostics
+        echo "has_diagnostics=$(cat clang-tidy.has_diagnostics)" >> $GITHUB_OUTPUT
+
+    - name: Upload clang-tidy SARIF artifact
+      if: always() && steps.targets.outputs.has_targets == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: clang-tidy-sarif
+        path: clang-tidy-results.sarif
+        if-no-files-found: warn
+
+    - name: Upload SARIF
+      if: always() && steps.targets.outputs.has_targets == 'true'
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: clang-tidy-results.sarif
+
+    - name: Fail on clang-tidy diagnostics
+      if: steps.targets.outputs.has_targets == 'true' && steps.clang-tidy.outputs.has_diagnostics == 'true'
+      run: exit 1
