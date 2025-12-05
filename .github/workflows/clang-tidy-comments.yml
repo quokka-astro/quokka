@@ -1,4 +1,4 @@
-name: Post clang-tidy-review comments
+name: 💬 Post clang-tidy-review comments
 
 on:
   workflow_run:
