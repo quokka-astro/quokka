@@ -19,11 +19,11 @@
 struct ParticleSFProblem {
 };
 
-constexpr double mu = 1.0 * C::m_p;
-constexpr double gamma_ = 5. / 3.;
-constexpr double year = 3.15576e+07; // in seconds
-AMREX_GPU_MANAGED Real n0 = 1.0e4;   // NOLINT
-AMREX_GPU_MANAGED Real Tamb = 10.0;  // NOLINT
+constexpr Real mu = 1.0 * C::m_p;
+constexpr Real gamma_ = 5. / 3.;
+constexpr Real year = 3.15576e+07; // in seconds
+static Real n0 = 1.0e4;   // NOLINT
+static Real Tamb = 10.0;  // NOLINT
 
 template <> struct Particle_Traits<ParticleSFProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
@@ -233,17 +233,10 @@ auto problem_main() -> int
 	sim.stopTime_ = 1.0e7 * year; // 10 Myr
 	sim.initDt_ = 1.0e5 * year;   // 0.1 Myr
 
-	// Real Tamb and n0 from the input file
-	amrex::ParmParse const p1("problem");
-	p1.query("Tamb", Tamb);
-	p1.query("n0", n0);
-
 	// set random state
 	const int seed = 42;
 	amrex::InitRandom(seed, 1); // all ranks should produce the same values
 
-	// initialize
-	sim.maxTimesteps_ = 1;
 	sim.setInitialConditions();
 
 	// get total gas mass
@@ -251,18 +244,11 @@ auto problem_main() -> int
 	const amrex::Real cell_volume = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
 	sim.userData_.m_gas_init = sim.state_new_cc_[0].sum(HydroSystem<ParticleSFProblem>::density_index) * cell_volume;
 
-	amrex::Real eps_ff = 0.5;
-	amrex::ParmParse const p2("particles");
-	p2.query("eps_ff", eps_ff);
-
-	const int mass_idx = 3;
-
-	int status = 0;
-
-	// sim.maxTimesteps_ = max_timesteps;
 	sim.evolve();
 
-	// If restarting from checkpoint, return success
+	// If restarting from checkfile, return success. The initial gas mass is unknonw, so there is nothing to compare with.
+	// We validate restarting from checkfile.
+
 	std::string restartfile;
 	amrex::ParmParse const p3;
 	p3.query("restartfile", restartfile);
@@ -270,16 +256,17 @@ auto problem_main() -> int
 		return 0; // success
 	}
 
+	// If not from checkpoint, validate mass sonservation (roughly)
+
 	const auto [real_data_final2, idata_final2] =
 	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->getParticleDataAtLevel(0);
 	amrex::ignore_unused(idata_final2);
 
+	int status = 0;
+
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// get total particle mass
-		double m_star_tot2 = 0.0;
-		for (const auto &i : real_data_final2) {
-			m_star_tot2 += i[mass_idx];
-		}
+		const double m_star_tot2 = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->computeStellarMass();
 		// get total gas mass
 		const double m_gas_final2 = sim.state_new_cc_[0].sum(HydroSystem<ParticleSFProblem>::density_index) * cell_volume;
 		const double m_gas_change2 = sim.userData_.m_gas_init - m_gas_final2;

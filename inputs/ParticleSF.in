@@ -32,12 +32,10 @@ particles.eps_ff = 0.5
 # Maximum velocity limit for stellar particles (cm/s), default: 1.0e8 (1000 km/s)
 particles.stellar_velocity_limit = 1.0e8
 
-tiny_profiler.enabled = 0
-
 problem.n0 = 1.0e5
 problem.Tamb = 1.0e1
+
+max_timesteps = 10
 plotfile_interval = 5
 checkpoint_interval = 5
-max_timesteps = 10
-
 SFH_interval = 3
