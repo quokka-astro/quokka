@@ -1,4 +1,4 @@
-name: Docs toctree coverage
+name: 📚 Docs toctree coverage
 
 on:
   push:

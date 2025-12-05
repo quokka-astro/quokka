@@ -1,4 +1,4 @@
-name: CheckpointRestartRefine
+name: 🔄 CheckpointRestartRefine
 
 on:
   push:
