@@ -39,6 +39,7 @@ problem.Tamb = 1.0e1
 problem.stage_2_max_timesteps = 20
 plotfile_interval = 5
 checkpoint_interval = 5
+max_timesteps = 20
 
 SFH_interval = 3
 restartfile = chk00010

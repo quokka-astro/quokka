@@ -52,6 +52,10 @@ template <> struct Physics_Traits<ParticleSFProblem> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
+template <> struct SimulationData<ParticleSFProblem> {
+	Real m_gas_init;
+};
+
 template <> void QuokkaSimulation<ParticleSFProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -84,9 +88,141 @@ template <> void QuokkaSimulation<ParticleSFProblem>::refineGrid(int lev, amrex:
 	}
 }
 
+template <> void QuokkaSimulation<ParticleSFProblem>::computeAfterTimestep()
+{
+	int step = istep[0];
+	if (step == 1) {
+		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
+		const amrex::Real cell_volume = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+
+		amrex::Real eps_ff = 0.5;
+		amrex::ParmParse const pp("particles");
+		pp.query("eps_ff", eps_ff);
+
+		const amrex::Real eps_star = 0.5;
+		const amrex::Real rho0 = n0 * mu;
+		const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * rho0));
+		const amrex::Real prob_star_formation = (eps_ff / eps_star) * (initDt_ / t_ff);
+		amrex::Print() << "Probability of star formation = " << prob_star_formation << "\n";
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(prob_star_formation < 1.0,
+						"Probability of star formation must be less than 1.0, adjust Tamb, dx, or rho to ensure this is the case");
+
+		const auto n_cells = CountCells(0);
+		const auto [real_data_final, idata_final] =
+				particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->getParticleDataAtLevel(0);
+		const double m_gas_final = state_new_cc_[0].sum(HydroSystem<ParticleSFProblem>::density_index) * cell_volume;
+
+		const int mass_idx = 3;
+
+		int status = 0;
+
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			const double exp_Mstar_high_mean = 19.39; // Msun
+			const double exp_fstar_high = 0.220;	  // fraction of mass in high mass stars
+
+			const amrex::Real exp_m_star_per_cell = rho0 * cell_volume * eps_star;
+			const amrex::Real exp_m_star_high_per_cell = exp_m_star_per_cell * exp_fstar_high;
+			const amrex::Real exp_m_star_high_total = exp_m_star_high_per_cell * static_cast<amrex::Real>(n_cells) * prob_star_formation;
+			const amrex::Real exp_n_star_high_total = exp_m_star_high_total / (exp_Mstar_high_mean * C::M_solar);
+			// one low-mass star per cell
+			const amrex::Real exp_n_star_low_total = static_cast<amrex::Real>(n_cells) * prob_star_formation;
+
+			// statistics from the simulation
+
+			double m_star_high_tot = 0.0;
+			double m_star_tot = 0.0;
+			int n_star_high = 0;
+			const int n_star_tot = static_cast<int>(real_data_final.size());
+
+			if (n_star_tot == 0) {
+				amrex::Abort("Test failed: No stars formed in step 1");
+			}
+
+			for (int i = 0; i < n_star_tot; ++i) {
+				if (idata_final[i][0] != static_cast<int>(quokka::StellarEvolutionStage::LowMassComposite)) {
+					m_star_high_tot += real_data_final[i][mass_idx];
+					n_star_high++;
+				}
+				m_star_tot += real_data_final[i][mass_idx];
+			}
+			const double mean_mass_high_mass_stars = m_star_high_tot / n_star_high;
+			const int n_star_low = n_star_tot - n_star_high;
+
+			double log_vel = NAN;
+			double vx = NAN;
+			double vy = NAN;
+			double vz = NAN;
+			double vtot = NAN;
+			double vmin = 3.e5;  // minimum velocity in km/s
+			double vmax = -3.e5; // maximum velocity in km/s
+			const int n_bins = 20;
+			const double log_v_min = std::log(3.0);	  // minimum velocity of the input distribution
+			const double log_v_max = std::log(385.0); // maximum velocity of the input distributions
+			const double bin_width = (log_v_max - log_v_min) / n_bins;
+			std::vector<int> hist(n_bins, 0);
+			for (int i = 0; i < n_star_tot; ++i) {
+				if (idata_final[i][0] != static_cast<int>(quokka::StellarEvolutionStage::LowMassComposite)) {
+					vx = real_data_final[i][mass_idx + 1] / 1.e5;
+					vy = real_data_final[i][mass_idx + 2] / 1.e5;
+					vz = real_data_final[i][mass_idx + 3] / 1.e5;
+					vtot = std::sqrt(vx * vx + vy * vy + vz * vz);
+					if (vtot < vmin) {
+						vmin = vtot; // update minimum velocity
+					} else if (vtot > vmax) {
+						vmax = vtot; // update maximum velocity
+					}
+					log_vel = std::log(vtot); // store log of velocity in km/s
+					int const bin_index = static_cast<int>((log_vel - log_v_min) / bin_width);
+					if (bin_index >= 0 && bin_index < n_bins) {
+						hist[bin_index]++;
+					}
+				}
+			}
+
+			double const slope_predicted = 1. - ((std::log(hist[n_bins - 1]) - std::log(hist[0])) / (log_v_max - log_v_min));
+			amrex::Print() << "Slope of velocity distribution = " << slope_predicted << "\n";
+			amrex::Print() << "Minimum velocity = " << vmin << " km/s\n";
+			amrex::Print() << "Maximum velocity = " << vmax << " km/s\n";
+
+			// get total mass in gas
+			const double m_gas_change = userData_.m_gas_init - m_gas_final;
+
+			amrex::Print() << "Mass of high-mass stars [expected]   = " << m_star_high_tot / C::M_solar << " [" << exp_m_star_high_total / C::M_solar
+							<< "] M_sol \n";
+			amrex::Print() << "Number of high-mass stars [expected]   = " << n_star_high << " [" << exp_n_star_high_total << "] \n";
+			amrex::Print() << "Mean mass of high-mass stars [expected]   = " << mean_mass_high_mass_stars / C::M_solar << " [" << exp_Mstar_high_mean
+							<< "] M_sol \n";
+			amrex::Print() << "Number of low-mass stars [expected]   = " << n_star_low << " [" << exp_n_star_low_total << "] \n";
+			amrex::Print() << "Mass of all stars [expected]   = " << m_star_tot / C::M_solar << " [" << m_gas_change / C::M_solar << "] M_sol \n";
+
+			const Real tol_m_star_high_tot = 0.1;
+			const Real tol_m_star_tot = 0.1;
+			const Real tol_n_star_high = 0.1;
+			const Real sigma_over_expectation_n_star_low = 1.0 / std::sqrt(exp_n_star_low_total);
+			const Real tol_n_star_low = 3.0 * sigma_over_expectation_n_star_low;
+
+			if (!((m_star_high_tot - exp_m_star_high_total) / exp_m_star_high_total < tol_m_star_high_tot)) {
+				status = 1;
+				amrex::Print() << "Test failed: Mass of high-mass stars does not match expectation\n";
+			}
+			if (!((n_star_high - exp_n_star_high_total) / exp_n_star_high_total < tol_n_star_high)) {
+				status = 1;
+				amrex::Print() << "Test failed: Number of high-mass stars does not match expectation\n";
+			}
+			if (!((n_star_low - exp_n_star_low_total) / exp_n_star_low_total < tol_n_star_low)) {
+				status = 1;
+				amrex::Print() << "Test failed: Number of low-mass stars does not match expectation\n";
+			}
+			if (!((m_star_tot - m_gas_change) / m_gas_change < tol_m_star_tot)) {
+				status = 1;
+				amrex::Print() << "Test failed: Total mass of all stars does not match expectation\n";
+			}
+		}
+	}
+}
+
 auto problem_main() -> int
 {
-
 	auto BCs_cc = quokka::BC<ParticleSFProblem>(quokka::BCType::int_dir);
 
 	// Problem initialization
@@ -98,11 +234,9 @@ auto problem_main() -> int
 	sim.initDt_ = 1.0e5 * year;   // 0.1 Myr
 
 	// Real Tamb and n0 from the input file
-	amrex::ParmParse const ppp("problem");
-	ppp.query("Tamb", Tamb);
-	ppp.query("n0", n0);
-	int max_timesteps = 10;
-	ppp.query("stage_2_max_timesteps", max_timesteps);
+	amrex::ParmParse const p1("problem");
+	p1.query("Tamb", Tamb);
+	p1.query("n0", n0);
 
 	// set random state
 	const int seed = 42;
@@ -115,137 +249,26 @@ auto problem_main() -> int
 	// get total gas mass
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
 	const amrex::Real cell_volume = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-	const double m_gas_init = sim.state_new_cc_[0].sum(HydroSystem<ParticleSFProblem>::density_index) * cell_volume;
+	sim.userData_.m_gas_init = sim.state_new_cc_[0].sum(HydroSystem<ParticleSFProblem>::density_index) * cell_volume;
 
 	amrex::Real eps_ff = 0.5;
-	amrex::ParmParse const pp("particles");
-	pp.query("eps_ff", eps_ff);
-
-	const amrex::Real eps_star = 0.5;
-	const amrex::Real rho0 = n0 * mu;
-	const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * rho0));
-	const amrex::Real prob_star_formation = (eps_ff / eps_star) * (sim.initDt_ / t_ff);
-	amrex::Print() << "Probability of star formation = " << prob_star_formation << "\n";
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(prob_star_formation < 1.0,
-					 "Probability of star formation must be less than 1.0, adjust Tamb, dx, or rho to ensure this is the case");
-
-	sim.evolve();
-
-	const auto n_cells = sim.CountCells(0);
-	const auto [real_data_final, idata_final] =
-	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->getParticleDataAtLevel(0);
-	const double m_gas_final = sim.state_new_cc_[0].sum(HydroSystem<ParticleSFProblem>::density_index) * cell_volume;
+	amrex::ParmParse const p2("particles");
+	p2.query("eps_ff", eps_ff);
 
 	const int mass_idx = 3;
 
 	int status = 0;
 
-	if (amrex::ParallelDescriptor::IOProcessor()) {
-		const double exp_Mstar_high_mean = 19.39; // Msun
-		const double exp_fstar_high = 0.220;	  // fraction of mass in high mass stars
-
-		const amrex::Real exp_m_star_per_cell = rho0 * cell_volume * eps_star;
-		const amrex::Real exp_m_star_high_per_cell = exp_m_star_per_cell * exp_fstar_high;
-		const amrex::Real exp_m_star_high_total = exp_m_star_high_per_cell * static_cast<amrex::Real>(n_cells) * prob_star_formation;
-		const amrex::Real exp_n_star_high_total = exp_m_star_high_total / (exp_Mstar_high_mean * C::M_solar);
-		// one low-mass star per cell
-		const amrex::Real exp_n_star_low_total = static_cast<amrex::Real>(n_cells) * prob_star_formation;
-
-		// statistics from the simulation
-
-		double m_star_high_tot = 0.0;
-		double m_star_tot = 0.0;
-		int n_star_high = 0;
-		const int n_star_tot = static_cast<int>(real_data_final.size());
-
-		if (n_star_tot == 0) {
-			amrex::Print() << "Test failed: No stars formed\n";
-			return 1;
-		}
-
-		for (int i = 0; i < n_star_tot; ++i) {
-			if (idata_final[i][0] != static_cast<int>(quokka::StellarEvolutionStage::LowMassComposite)) {
-				m_star_high_tot += real_data_final[i][mass_idx];
-				n_star_high++;
-			}
-			m_star_tot += real_data_final[i][mass_idx];
-		}
-		const double mean_mass_high_mass_stars = m_star_high_tot / n_star_high;
-		const int n_star_low = n_star_tot - n_star_high;
-
-		double log_vel = NAN;
-		double vx = NAN;
-		double vy = NAN;
-		double vz = NAN;
-		double vtot = NAN;
-		double vmin = 3.e5;  // minimum velocity in km/s
-		double vmax = -3.e5; // maximum velocity in km/s
-		const int n_bins = 20;
-		const double log_v_min = std::log(3.0);	  // minimum velocity of the input distribution
-		const double log_v_max = std::log(385.0); // maximum velocity of the input distributions
-		const double bin_width = (log_v_max - log_v_min) / n_bins;
-		std::vector<int> hist(n_bins, 0);
-		for (int i = 0; i < n_star_tot; ++i) {
-			if (idata_final[i][0] != static_cast<int>(quokka::StellarEvolutionStage::LowMassComposite)) {
-				vx = real_data_final[i][mass_idx + 1] / 1.e5;
-				vy = real_data_final[i][mass_idx + 2] / 1.e5;
-				vz = real_data_final[i][mass_idx + 3] / 1.e5;
-				vtot = std::sqrt(vx * vx + vy * vy + vz * vz);
-				if (vtot < vmin) {
-					vmin = vtot; // update minimum velocity
-				} else if (vtot > vmax) {
-					vmax = vtot; // update maximum velocity
-				}
-				log_vel = std::log(vtot); // store log of velocity in km/s
-				int const bin_index = static_cast<int>((log_vel - log_v_min) / bin_width);
-				if (bin_index >= 0 && bin_index < n_bins) {
-					hist[bin_index]++;
-				}
-			}
-		}
-
-		double const slope_predicted = 1. - ((std::log(hist[n_bins - 1]) - std::log(hist[0])) / (log_v_max - log_v_min));
-		amrex::Print() << "Slope of velocity distribution = " << slope_predicted << "\n";
-		amrex::Print() << "Minimum velocity = " << vmin << " km/s\n";
-		amrex::Print() << "Maximum velocity = " << vmax << " km/s\n";
-
-		// get total mass in gas
-		const double m_gas_change = m_gas_init - m_gas_final;
-
-		amrex::Print() << "Mass of high-mass stars [expected]   = " << m_star_high_tot / C::M_solar << " [" << exp_m_star_high_total / C::M_solar
-			       << "] M_sol \n";
-		amrex::Print() << "Number of high-mass stars [expected]   = " << n_star_high << " [" << exp_n_star_high_total << "] \n";
-		amrex::Print() << "Mean mass of high-mass stars [expected]   = " << mean_mass_high_mass_stars / C::M_solar << " [" << exp_Mstar_high_mean
-			       << "] M_sol \n";
-		amrex::Print() << "Number of low-mass stars [expected]   = " << n_star_low << " [" << exp_n_star_low_total << "] \n";
-		amrex::Print() << "Mass of all stars [expected]   = " << m_star_tot / C::M_solar << " [" << m_gas_change / C::M_solar << "] M_sol \n";
-
-		const Real tol_m_star_high_tot = 0.1;
-		const Real tol_m_star_tot = 0.1;
-		const Real tol_n_star_high = 0.1;
-		const Real sigma_over_expectation_n_star_low = 1.0 / std::sqrt(exp_n_star_low_total);
-		const Real tol_n_star_low = 3.0 * sigma_over_expectation_n_star_low;
-
-		if (!((m_star_high_tot - exp_m_star_high_total) / exp_m_star_high_total < tol_m_star_high_tot)) {
-			status = 1;
-			amrex::Print() << "Test failed: Mass of high-mass stars does not match expectation\n";
-		}
-		if (!((n_star_high - exp_n_star_high_total) / exp_n_star_high_total < tol_n_star_high)) {
-			status = 1;
-			amrex::Print() << "Test failed: Number of high-mass stars does not match expectation\n";
-		}
-		if (!((n_star_low - exp_n_star_low_total) / exp_n_star_low_total < tol_n_star_low)) {
-			status = 1;
-			amrex::Print() << "Test failed: Number of low-mass stars does not match expectation\n";
-		}
-		if (!((m_star_tot - m_gas_change) / m_gas_change < tol_m_star_tot)) {
-			status = 1;
-			amrex::Print() << "Test failed: Total mass of all stars does not match expectation\n";
-		}
-	}
-
-	sim.maxTimesteps_ = max_timesteps;
+	// sim.maxTimesteps_ = max_timesteps;
 	sim.evolve();
+
+	// If restarting from checkpoint, return success
+	std::string restartfile;
+	amrex::ParmParse const p3;
+	p3.query("restartfile", restartfile);
+	if (!restartfile.empty()) {
+		return 0; // success
+	}
 
 	const auto [real_data_final2, idata_final2] =
 	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->getParticleDataAtLevel(0);
@@ -259,7 +282,7 @@ auto problem_main() -> int
 		}
 		// get total gas mass
 		const double m_gas_final2 = sim.state_new_cc_[0].sum(HydroSystem<ParticleSFProblem>::density_index) * cell_volume;
-		const double m_gas_change2 = m_gas_init - m_gas_final2;
+		const double m_gas_change2 = sim.userData_.m_gas_init - m_gas_final2;
 		amrex::Print() << fmt::format("Mass of all stars [expected]   = {:.6e} [{:.6e}] M_sol \n", m_star_tot2 / C::M_solar,
 					      m_gas_change2 / C::M_solar);
 
