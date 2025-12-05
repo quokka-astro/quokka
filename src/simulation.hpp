@@ -204,6 +204,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	bool splitParticlesOnRestartRefine_ = true;		     // whether to split particles when restarting with refinement
 	amrex::Vector<amrex::MultiFab> phi;
 
+	// SFH parameters
+	int sfh_interval_ = -1;
+	amrex::Real sfh_time_interval_ = -1.0;
+	amrex::Real last_sfh_time_ = 0.0;
+
 	amrex::Real densityFloor_ = 0.0; // default
 	amrex::Real tempFloor_ = 0.0;	 // default
 
@@ -838,6 +843,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 		amrex::Print() << fmt::format("Setting walltime limit to {} hours, {} minutes, {} seconds.\n", hours, minutes, seconds);
 	}
 
+	pp.query("SFH_interval", sfh_interval_);
+	pp.query("SFH_time_interval", sfh_time_interval_);
+
 	// IO settings (following the AMReX convention for the Amr class)
 	// (Since we use AmrCore instead of Amr, we have to reimplement these.)
 	amrex::ParmParse const pp_amr("amr");
@@ -1275,6 +1283,27 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		cur_time += dt_[0];
 		++cycleCount_;
 		computeAfterTimestep();
+
+
+
+
+		// Compute SFH if interval is reached
+		bool compute_sfh = false;
+		const amrex::Real current_time = tNew_[0]; // Use tNew_[0] as current time
+
+		if (sfh_interval_ > 0 && istep[0] % sfh_interval_ == 0) {
+			compute_sfh = true;
+		}
+		if (sfh_time_interval_ > 0 && current_time - last_sfh_time_ >= sfh_time_interval_) {
+			compute_sfh = true;
+		}
+
+		if (compute_sfh) {
+			particleRegister_.updateSFH(istep[0], current_time);
+			last_sfh_time_ = current_time;
+		}
+
+
 
 		// sync up time (to avoid roundoff error)
 		for (lev = 0; lev <= finest_level; ++lev) {

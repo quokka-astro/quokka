@@ -180,11 +180,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
-	// SFH parameters
-	int sfh_interval_ = -1;
-	amrex::Real sfh_time_interval_ = -1.0;
-	amrex::Real last_sfh_time_ = 0.0;
-
 	// member functions
 	explicit QuokkaSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : AMRSimulation<problem_t>(BCs_cc, BCs_fc)
 	{
@@ -545,13 +540,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		rpp.query("iteration_tolerance", radiation_iteration_tolerance_);
 		rpp.query("iteration_tolerance_rel", radiation_iteration_tolerance_rel_);
 	}
-
-	// set SFH parameters
-	{
-		amrex::ParmParse const pp;
-		pp.query("SFH_interval", sfh_interval_);
-		pp.query("SFH_time_interval", sfh_time_interval_);
-	}
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::rereadRuntimeParameters()
@@ -752,22 +740,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeBeforeTim
 template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterTimestep()
 {
 	// do nothing -- user should implement if desired
-
-	// Compute SFH if interval is reached
-	bool compute_sfh = false;
-	const amrex::Real current_time = tNew_[0]; // Use tNew_[0] as current time
-
-	if (sfh_interval_ > 0 && istep[0] % sfh_interval_ == 0) {
-		compute_sfh = true;
-	}
-	if (sfh_time_interval_ > 0 && current_time - last_sfh_time_ >= sfh_time_interval_) {
-		compute_sfh = true;
-	}
-
-	if (compute_sfh) {
-		particleRegister_.updateSFH(istep[0], current_time);
-		last_sfh_time_ = current_time;
-	}
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle)
