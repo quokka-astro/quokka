@@ -112,6 +112,9 @@ class PhysicsParticleDescriptorBase
 	// Get the number of particles
 	[[nodiscard]] virtual auto getNumParticles() const -> int = 0;
 
+	// Compute total stellar mass
+	[[nodiscard]] virtual auto computeStellarMass() const -> amrex::Real = 0;
+
 #if AMREX_SPACEDIM == 3
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
 
@@ -202,6 +205,31 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			return static_cast<int>(container_->TotalNumberOfParticles(true, false));
 		}
 		return 0;
+	}
+
+	// Compute total stellar mass
+	[[nodiscard]] auto computeStellarMass() const -> amrex::Real override
+	{
+		amrex::Real total_mass = 0.0;
+		if (container_ != nullptr && this->getMassIndex() >= 0) {
+			const int mass_idx = this->getMassIndex();
+			amrex::ReduceOps<amrex::ReduceOpSum> reduce_ops;
+			using ReduceDataType = amrex::ReduceData<amrex::Real>;
+			using PTDType = typename ContainerType::ParticleTileType::ConstParticleTileDataType;
+
+			// Sum mass over all particles at all levels
+			for (int lev = 0; lev <= container_->finestLevel(); ++lev) {
+				auto result_tuple = amrex::ParticleReduce<ReduceDataType>(
+				    *container_, lev,
+				    [=] AMREX_GPU_DEVICE(const PTDType &p_type, const int i) noexcept -> amrex::Real {
+					    return p_type.m_aos[i].rdata(mass_idx);
+				    },
+				    reduce_ops);
+				total_mass += amrex::get<0>(result_tuple);
+			}
+		}
+		amrex::ParallelAllReduce::Sum(total_mass, amrex::ParallelContext::CommunicatorSub());
+		return total_mass;
 	}
 
 #if AMREX_SPACEDIM == 3
@@ -588,6 +616,9 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Map storing particle descriptors, indexed by particle type enum
 	std::map<ParticleType, std::unique_ptr<PhysicsParticleDescriptorBase>> particleRegistry_;
 
+	// SFH data: nstep, time, total_mass
+	std::map<std::string, std::vector<std::tuple<int, amrex::Real, amrex::Real>>> sfh_data_;
+
       public:
 	// Constructor
 	PhysicsParticleRegister() = default;
@@ -774,6 +805,7 @@ template <typename problem_t> class PhysicsParticleRegister
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->writePlotFile(plotfilename, getParticleTypeName(type));
 			descriptor->writeUnitsFile(plotfilename, getParticleTypeName(type));
+			saveSFH(plotfilename, getParticleTypeName(type));
 		}
 	}
 
@@ -815,6 +847,7 @@ template <typename problem_t> class PhysicsParticleRegister
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->writeCheckpoint(checkpointname, getParticleTypeName(type), include_header);
 			descriptor->writeUnitsFile(checkpointname, getParticleTypeName(type));
+			saveSFH(checkpointname, getParticleTypeName(type));
 		}
 	}
 
@@ -943,6 +976,73 @@ template <typename problem_t> class PhysicsParticleRegister
 	auto operator=(const PhysicsParticleRegister &) -> PhysicsParticleRegister & = delete;
 	PhysicsParticleRegister(PhysicsParticleRegister &&) = delete;
 	auto operator=(PhysicsParticleRegister &&) -> PhysicsParticleRegister & = delete;
+
+	// Update SFH data
+	void updateSFH(int nstep, amrex::Real time)
+	{
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			// Only compute SFH for particles that can be created (stars)
+			if (descriptor->getAllowsCreation()) {
+				amrex::Real total_mass = descriptor->computeStellarMass();
+				std::string typeName = getParticleTypeName(type);
+				sfh_data_[typeName].emplace_back(nstep, time, total_mass);
+			}
+		}
+	}
+
+	// Save SFH data to file
+	void saveSFH(const std::string &base_dir, const std::string &particle_type_name) const
+	{
+		auto it = sfh_data_.find(particle_type_name);
+		if (it != sfh_data_.end()) {
+			std::string filename = base_dir + "/" + particle_type_name + "/SFH.txt";
+			// Ensure directory exists (it should be created by writePlotFile/writeCheckpoint)
+			if (!amrex::UtilCreateDirectory(base_dir + "/" + particle_type_name, 0755)) {
+				amrex::CreateDirectoryFailed(base_dir + "/" + particle_type_name);
+			}
+
+			// Open file for writing (overwrite or append? Checkpoint usually overwrites whole dir, but let's just overwrite)
+			std::ofstream ofs(filename);
+			if (ofs.is_open()) {
+				ofs << "# nstep time total_mass\n";
+				for (const auto &entry : it->second) {
+					ofs << std::get<0>(entry) << " " << std::scientific << std::setprecision(12) << std::get<1>(entry) << " "
+					    << std::get<2>(entry) << "\n";
+				}
+				ofs.close();
+			} else {
+				amrex::Print() << "Warning: Could not open SFH file " << filename << " for writing.\n";
+			}
+		}
+	}
+
+	// Read SFH data from file
+	void readSFH(const std::string &base_dir, const std::string &particle_type_name)
+	{
+		std::string filename = base_dir + "/" + particle_type_name + "/SFH.txt";
+		std::ifstream ifs(filename);
+		if (ifs.is_open()) {
+			sfh_data_[particle_type_name].clear();
+			std::string line;
+			while (std::getline(ifs, line)) {
+				if (line.empty() || line[0] == '#') {
+					continue;
+				}
+				std::istringstream iss(line);
+				int nstep = 0;
+				amrex::Real time = 0.0;
+				amrex::Real mass = 0.0;
+				if (iss >> nstep >> time >> mass) {
+					sfh_data_[particle_type_name].emplace_back(nstep, time, mass);
+				}
+			}
+			ifs.close();
+			amrex::Print() << "Read SFH data for " << particle_type_name << " from " << filename << "\n";
+		} else {
+			// It's okay if file doesn't exist (e.g. first run)
+			// amrex::Print() << "Warning: Could not open SFH file " << filename << " for reading.\n";
+		}
+	}
 };
 
 } // namespace quokka
