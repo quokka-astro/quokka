@@ -219,12 +219,12 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 			// Sum mass over all particles at all levels
 			for (int lev = 0; lev <= container_->finestLevel(); ++lev) {
-				auto result_tuple = amrex::ParticleReduce<ReduceDataType>(
-				    *container_, lev,
-				    [=] AMREX_GPU_DEVICE(const PTDType &p_type, const int i) noexcept -> amrex::Real {
-					    return p_type.m_aos[i].rdata(mass_idx);
-				    },
-				    reduce_ops);
+				auto result_tuple = amrex::ParticleReduce<ReduceDataType>(*container_, lev, 
+					[=] AMREX_GPU_DEVICE(const PTDType &p_type, const int i) noexcept -> amrex::Real
+					{
+						return p_type.m_aos[i].rdata(mass_idx);
+					},
+					reduce_ops);
 				total_mass += amrex::get<0>(result_tuple);
 			}
 		}
@@ -1001,7 +1001,7 @@ template <typename problem_t> class PhysicsParticleRegister
 				amrex::CreateDirectoryFailed(base_dir + "/" + particle_type_name);
 			}
 
-			// Open file for writing (overwrite or append? Checkpoint usually overwrites whole dir, but let's just overwrite)
+			// Open file for writing (overwrite)
 			std::ofstream ofs(filename);
 			if (ofs.is_open()) {
 				ofs << "# nstep time total_mass\n";
@@ -1039,8 +1039,7 @@ template <typename problem_t> class PhysicsParticleRegister
 			ifs.close();
 			amrex::Print() << "Read SFH data for " << particle_type_name << " from " << filename << "\n";
 		} else {
-			// It's okay if file doesn't exist (e.g. first run)
-			// amrex::Print() << "Warning: Could not open SFH file " << filename << " for reading.\n";
+			// It's okay if file doesn't exist, e.g. first run, in which case you should not call this function
 		}
 	}
 };
