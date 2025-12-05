@@ -2,6 +2,8 @@
 #define PARTICLE_DEPOSITION_HPP_
 
 #include <algorithm>
+#include <array>
+#include <numbers>
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
@@ -205,8 +207,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
 			if (RM > 0.027) {
 				f_factor = 0.529 * std::sqrt(RM); // f^2 = 0.28. 28% kinetic (Kim & Ostriker 2017)
 			} else {
-				f_factor = 1.414 * std::sqrt(RM); // pure kinetic in well-resolved limit: (f^2 / RM) * (p_snr^2
-								  // / 2 M_sf) = 2 * (p_snr^2 / 2 M_sf) ~= 1e51 erg
+				f_factor = std::numbers::sqrt2 * std::sqrt(RM); // pure kinetic in well-resolved limit: (f^2 / RM) * (p_snr^2
+										// / 2 M_sf) = 2 * (p_snr^2 / 2 M_sf) ~= 1e51 erg
 			}
 		}
 	}
@@ -380,9 +382,9 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state,
-								   amrex::Array4<amrex::Real> const &local_buffer, int i, int j, int k,
-								   amrex::Real *p_max_velocity)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::Array4<amrex::Real> const &local_buffer,
+			  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc, int i, int j, int k, amrex::Real *p_max_velocity)
 {
 	// For SN_thermal_or_thermal_momentum, SN_thermal_kinetic_or_thermal_momentum, and SN_pure_kinetic_or_thermal_momentum,
 	// the buffer contains mass, momentum, and energy. We need to add the buffer to the state in a way that guarantees
@@ -490,7 +492,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4
 	if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
 		cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
 	} else {
-		cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, i, j, k);
+		cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, i, j, k, cons_fc);
 	}
 
 	// Compute velocity magnitude and track maximum
@@ -515,9 +517,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addThermalOnlyBufferToState(amrex::Array4<amrex::Real> const &local_state,
-								     amrex::Array4<amrex::Real> const &local_buffer, int i, int j, int k,
-								     amrex::Real *p_max_velocity)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+addThermalOnlyBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::Array4<amrex::Real> const &local_buffer,
+			    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc, int i, int j, int k,
+			    amrex::Real *p_max_velocity)
 {
 	const Real d_rho = local_buffer(i, j, k, HydroSystem<problem_t>::density_index);
 
@@ -547,28 +550,40 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addThermalOnlyBufferToState(amrex::Arra
 	if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
 		cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
 	} else {
-		cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, i, j, k);
+		cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, i, j, k, cons_fc);
 	}
 
 	amrex::Gpu::Atomic::Max(&p_max_velocity[0], cs);
 }
 
 template <typename problem_t>
-void addBufferToState(amrex::MultiFab &state, amrex::MultiFab &state_buffer, const SNScheme SN_scheme_d, amrex::Real *p_max_velocity)
+void addBufferToState(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, amrex::MultiFab &state_buffer,
+		      const SNScheme SN_scheme_d, amrex::Real *p_max_velocity)
 {
 	const BL_PROFILE("SNFeedbackUtils::addBufferToState()");
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state_fc != nullptr, "MHD SN feedback requires face-centered magnetic fields.");
+	}
 	for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
 		auto const &local_state = state.array(mfi);
 		auto const &local_buffer = state_buffer.array(mfi);
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
+		if (state_fc != nullptr) {
+			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				cons_fc[dir] = (*state_fc)[dir].const_array(mfi);
+			}
+		}
+		const bool has_cons_fc = (state_fc != nullptr);
 
-		// add buffer to state
-		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-			auto p_max_velocity_local = p_max_velocity; // NOLINT
-			if (SN_scheme_d == SNScheme::SN_thermal_only) {
-				addThermalOnlyBufferToState<problem_t>(local_state, local_buffer, i, j, k, p_max_velocity_local);
-			} else {
-				addCompositeBufferToState<problem_t>(local_state, local_buffer, i, j, k, p_max_velocity_local);
+			// add buffer to state
+			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+				auto p_max_velocity_local = p_max_velocity; // NOLINT
+				const auto *const cons_fc_ptr = has_cons_fc ? &cons_fc : nullptr;
+				if (SN_scheme_d == SNScheme::SN_thermal_only) {
+					addThermalOnlyBufferToState<problem_t>(local_state, local_buffer, cons_fc_ptr, i, j, k, p_max_velocity_local);
+				} else {
+				addCompositeBufferToState<problem_t>(local_state, local_buffer, cons_fc_ptr, i, j, k, p_max_velocity_local);
 			}
 		});
 	}
@@ -607,8 +622,8 @@ void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real ste
 } // namespace SNFeedbackUtils
 
 template <typename ContainerType, typename problem_t>
-auto SNDeposition(ContainerType *container, amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt, int mass_index, int evolutionStageIndex,
-		  int birthTimeIndex) -> Real
+auto SNDeposition(ContainerType *container, amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev,
+		  amrex::Real time, amrex::Real dt, int mass_index, int evolutionStageIndex, int birthTimeIndex) -> Real
 {
 	const BL_PROFILE("[particle_deposition] SNDeposition()");
 	static_assert(SN_stencil_size <= 3,
@@ -636,7 +651,7 @@ auto SNDeposition(ContainerType *container, amrex::MultiFab &state, int lev, amr
 	ParticleUtils::roundoffMultiFab(state_buffer);
 
 	// Step 3: Add the buffer to the state
-	SNFeedbackUtils::addBufferToState<problem_t>(state, state_buffer, SN_scheme_d, p_max_velocity);
+	SNFeedbackUtils::addBufferToState<problem_t>(state, state_fc, state_buffer, SN_scheme_d, p_max_velocity);
 
 	// Step 4: Check maximum velocity and print warning if needed
 	auto *h_max_velocity = max_velocity_buffer.copyToHost();
