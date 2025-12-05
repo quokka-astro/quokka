@@ -31,6 +31,7 @@ namespace filesystem = experimental::filesystem;
 #include <string>
 #include <tuple>
 #include <unordered_map>
+#include <tr1/unordered_map>
 #include <utility>
 
 #include "AMReX.H"
@@ -146,7 +147,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	quokka::ResampledCooling::resampled_tables resampledTables_;
 	std::string coolingTableType_;
 	std::string coolingTableFilename_;
-	std::string turbulenceFilename_;
+
+	std::tr1::unordered_map<std::string, std::string> turbParams_;
 
 	static constexpr int nvarTotal_cc_ = Physics_Indices<problem_t>::nvarTotal_cc;
 	static constexpr int ncompHydro_ = HydroSystem<problem_t>::nvar_; // hydro
@@ -530,10 +532,23 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	{
 		amrex::ParmParse const hpp("turbulence");
 		hpp.query("enabled", enableTurbulence_);
-		hpp.query("settings_path", turbulenceFilename_);
+		hpp.query("length", turbParams_["length"]);
+		hpp.query("target_vdisp", turbParams_["target_vdisp"]);
+		hpp.query("ampl_factor", turbParams_["ampl_factor"]);
+		hpp.query("ampl_auto_adjust", turbParams_["ampl_auto_adjust"]);
+		hpp.query("k_driv", turbParams_["k_driv"]);
+		hpp.query("k_min", turbParams_["k_min"]);
+		hpp.query("k_max", turbParams_["k_max"]);
+		hpp.query("sol_weight", turbParams_["sol_weight"]);
+		hpp.query("spect_form", turbParams_["spect_form"]);
+		hpp.query("power_law_exp", turbParams_["power_law_exp"]);
+		hpp.query("angles_exp", turbParams_["angles_exp"]);
+		hpp.query("random_seed", turbParams_["random_seed"]);
+		hpp.query("nsteps_per_t_turb", turbParams_["nsteps_per_t_turb"]);
+		turbParams_["ndim"] = std::to_string(AMREX_SPACEDIM);
 
 		if (enableTurbulence_ == 1) {
-			td = quokka::turbulence::turbulentDriving<problem_t>(turbulenceFilename_);
+			td = quokka::turbulence::turbulentDriving<problem_t>(turbParams_);
 		}
 	}
 

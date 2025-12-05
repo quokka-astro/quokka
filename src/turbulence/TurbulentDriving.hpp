@@ -40,6 +40,7 @@
 #include <cmath>
 #include <filesystem>
 #include <string>
+#include <tr1/unordered_map>
 #include <vector>
 
 namespace quokka::turbulence
@@ -61,7 +62,7 @@ template <typename problem_t> class turbulentDriving
 
       public:
 	turbulentDriving() = default;
-	explicit turbulentDriving(const std::string &fp) { tg.init_driving(fp); }
+	explicit turbulentDriving(const std::tr1::unordered_map<std::string, std::string> &turb_params) { tg.init_driving(turb_params); }
 
 	auto computeDriving(amrex::MultiFab &state, const amrex::Real time, const amrex::Real dt_in,
 			    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &cellSizes) -> bool

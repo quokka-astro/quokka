@@ -26,5 +26,15 @@ do_reflux = 0
 do_subcycle = 0
 hydro.artificial_viscosity_coefficient = 0.1
 
-turbulence.enabled = 1
-turbulence.settings_path = "../inputs/turbgen.par"
+turbulence.enabled           = 1
+turbulence.length            = 1.0
+turbulence.target_vdisp      = 1.0
+turbulence.ampl_factor       = 0.5
+turbulence.ampl_auto_adjust  = 1
+turbulence.k_driv            = 2.0
+turbulence.k_min             = 2.0
+turbulence.k_max             = 3.0
+turbulence.sol_weight        = 0.5
+turbulence.spect_form        = 1
+turbulence.random_seed       = 140281
+turbulence.nsteps_per_t_turb = 10

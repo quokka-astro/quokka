@@ -45,6 +45,8 @@ template <> void QuokkaSimulation<TurbulentBox>::setInitialConditionsOnGrid(quok
 		state_cc(i, j, k, HydroSystem<TurbulentBox>::x2Momentum_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<TurbulentBox>::x3Momentum_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<TurbulentBox>::energy_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<TurbulentBox>::internalEnergy_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<TurbulentBox>::scalar0_index) = 1.0;
 	});
 }
 
