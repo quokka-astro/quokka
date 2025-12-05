@@ -67,7 +67,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	static constexpr int nHydroScalars_ = Physics_NumVars::numHydroVars + nscalars_;
 	static constexpr int numDustVars_ = Physics_NumVars::numDustVarsPerGroup; // number of dust variables for each dust group
 
-	enum consVarIndex {
+	enum consVarIndex { // NOLINT
 		density_index = Physics_Indices<problem_t>::hydroFirstIndex,
 		x1Momentum_index,
 		x2Momentum_index,
@@ -77,7 +77,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 		scalar0_index	      // first passive scalar (only present if nscalars > 0!)
 	};
 
-	enum primVarIndex {
+	enum primVarIndex { // NOLINT
 		primDensity_index = 0,
 		x1Velocity_index,
 		x2Velocity_index,
@@ -87,10 +87,10 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 		primScalar0_index, // first passive scalar (only present if nscalars > 0!)
 	};
 
-	enum dustVarIndex { dustDensity_index = Physics_Indices<problem_t>::dustFirstIndex, x1DustMomentum_index, x2DustMomentum_index, x3DustMomentum_index };
+	enum dustVarIndex { dustDensity_index = Physics_Indices<problem_t>::dustFirstIndex, x1DustMomentum_index, x2DustMomentum_index, x3DustMomentum_index }; // NOLINT
 
 	static constexpr int primDustFirstIndex = primScalar0_index + nscalars_;
-	enum primDustVarIndex { primDustDensity_index = primDustFirstIndex, x1DustVelocity_index, x2DustVelocity_index, x3DustVelocity_index };
+	enum primDustVarIndex { primDustDensity_index = primDustFirstIndex, x1DustVelocity_index, x2DustVelocity_index, x3DustVelocity_index }; // NOLINT
 
 	static void ConservedToPrimitive(amrex::MultiFab const &cons_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf,
 					 amrex::MultiFab &primVar_mf, int nghost);
