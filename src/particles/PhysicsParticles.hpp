@@ -996,9 +996,10 @@ template <typename problem_t> class PhysicsParticleRegister
 		auto it = sfh_data_.find(particle_type_name);
 		if (it != sfh_data_.end()) {
 			std::string filename = base_dir + "/" + particle_type_name + "/SFH.txt";
-			// Ensure directory exists (it should be created by writePlotFile/writeCheckpoint)
-			if (!amrex::UtilCreateDirectory(base_dir + "/" + particle_type_name, 0755)) {
-				amrex::CreateDirectoryFailed(base_dir + "/" + particle_type_name);
+			// Continue only if directory exists (it should be created by writePlotFile/writeCheckpoint)
+			const std::string dir = base_dir + "/" + particle_type_name;
+			if (!amrex::FileSystem::Exists(dir)) {
+				return;
 			}
 
 			// Open file for writing (overwrite)
@@ -1038,9 +1039,9 @@ template <typename problem_t> class PhysicsParticleRegister
 			}
 			ifs.close();
 			amrex::Print() << "Read SFH data for " << particle_type_name << " from " << filename << "\n";
-		} else {
-			// It's okay if file doesn't exist, e.g. first run, in which case you should not call this function
 		}
+
+		// It's okay if file doesn't exist, e.g. first run, in which case you should not call this function
 	}
 };
 
