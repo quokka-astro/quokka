@@ -218,6 +218,8 @@ template <> void QuokkaSimulation<ParticleSFProblem>::computeAfterTimestep()
 				amrex::Print() << "Test failed: Total mass of all stars does not match expectation\n";
 			}
 		}
+
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status == 0, "Test failed at step 1");
 	}
 }
 
