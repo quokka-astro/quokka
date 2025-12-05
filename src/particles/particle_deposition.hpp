@@ -519,8 +519,7 @@ addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 addThermalOnlyBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::Array4<amrex::Real> const &local_buffer,
-			    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc, int i, int j, int k,
-			    amrex::Real *p_max_velocity)
+			    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc, int i, int j, int k, amrex::Real *p_max_velocity)
 {
 	const Real d_rho = local_buffer(i, j, k, HydroSystem<problem_t>::density_index);
 
@@ -576,13 +575,13 @@ void addBufferToState(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_
 		}
 		const bool has_cons_fc = (state_fc != nullptr);
 
-			// add buffer to state
-			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-				auto p_max_velocity_local = p_max_velocity; // NOLINT
-				const auto *const cons_fc_ptr = has_cons_fc ? &cons_fc : nullptr;
-				if (SN_scheme_d == SNScheme::SN_thermal_only) {
-					addThermalOnlyBufferToState<problem_t>(local_state, local_buffer, cons_fc_ptr, i, j, k, p_max_velocity_local);
-				} else {
+		// add buffer to state
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+			auto p_max_velocity_local = p_max_velocity; // NOLINT
+			const auto *const cons_fc_ptr = has_cons_fc ? &cons_fc : nullptr;
+			if (SN_scheme_d == SNScheme::SN_thermal_only) {
+				addThermalOnlyBufferToState<problem_t>(local_state, local_buffer, cons_fc_ptr, i, j, k, p_max_velocity_local);
+			} else {
 				addCompositeBufferToState<problem_t>(local_state, local_buffer, cons_fc_ptr, i, j, k, p_max_velocity_local);
 			}
 		});
@@ -622,8 +621,8 @@ void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real ste
 } // namespace SNFeedbackUtils
 
 template <typename ContainerType, typename problem_t>
-auto SNDeposition(ContainerType *container, amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev,
-		  amrex::Real time, amrex::Real dt, int mass_index, int evolutionStageIndex, int birthTimeIndex) -> Real
+auto SNDeposition(ContainerType *container, amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, amrex::Real time,
+		  amrex::Real dt, int mass_index, int evolutionStageIndex, int birthTimeIndex) -> Real
 {
 	const BL_PROFILE("[particle_deposition] SNDeposition()");
 	static_assert(SN_stencil_size <= 3,

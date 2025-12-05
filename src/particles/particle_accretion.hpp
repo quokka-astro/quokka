@@ -285,11 +285,11 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 			if (has_face_fields) {
 				cons_fc[0] = state_fc_x0[bx];
 #if AMREX_SPACEDIM >= 2
-					cons_fc[1] = state_fc_x1[bx];
+				cons_fc[1] = state_fc_x1[bx];
 #endif
-					cons_fc[2] = state_fc_x2[bx];
-					cons_fc_ptr = &cons_fc;
-				}
+				cons_fc[2] = state_fc_x2[bx];
+				cons_fc_ptr = &cons_fc;
+			}
 			double cs_cell = HydroSystem<problem_t>::ComputeSoundSpeed(local_state_arr[bx], i, j, k, cons_fc_ptr);
 			if constexpr (quokka::EOS_Traits<problem_t>::gamma == 1.0) {
 				cs_cell = quokka::EOS_Traits<problem_t>::cs_isothermal;
@@ -435,11 +435,11 @@ void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &st
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state_fc != nullptr, "Face-centered state is required for MHD sink accretion");
 			local_state_fc[0] = (*state_fc)[0].array(pti);
 #if AMREX_SPACEDIM >= 2
-				local_state_fc[1] = (*state_fc)[1].array(pti);
+			local_state_fc[1] = (*state_fc)[1].array(pti);
 #endif
-				local_state_fc[2] = (*state_fc)[2].array(pti);
-				has_face_fields = true;
-			}
+			local_state_fc[2] = (*state_fc)[2].array(pti);
+			has_face_fields = true;
+		}
 
 		// Get geometry information for this level
 		const auto &geom = container->Geom(lev);
@@ -497,11 +497,11 @@ void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state_fc != nullptr, "Face-centered state is required for MHD sink accretion");
 			local_state_fc[0] = (*state_fc)[0].array(pti);
 #if AMREX_SPACEDIM >= 2
-				local_state_fc[1] = (*state_fc)[1].array(pti);
+			local_state_fc[1] = (*state_fc)[1].array(pti);
 #endif
-				local_state_fc[2] = (*state_fc)[2].array(pti);
-				has_face_fields = true;
-			}
+			local_state_fc[2] = (*state_fc)[2].array(pti);
+			has_face_fields = true;
+		}
 
 		// Get geometry information for this level
 		const auto &geom = container->Geom(lev);
