@@ -29,9 +29,9 @@ namespace filesystem = experimental::filesystem;
 #endif
 #include <limits>
 #include <string>
-#include <tr1/unordered_map>
 #include <tuple>
 #include <unordered_map>
+#include <map>
 #include <utility>
 
 #include "AMReX.H"
@@ -148,7 +148,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	std::string coolingTableType_;
 	std::string coolingTableFilename_;
 
-	std::tr1::unordered_map<std::string, std::string> turbParams_;
+	std::map<std::string, std::string> turbParams_;
 
 	static constexpr int nvarTotal_cc_ = Physics_Indices<problem_t>::nvarTotal_cc;
 	static constexpr int ncompHydro_ = HydroSystem<problem_t>::nvar_; // hydro
