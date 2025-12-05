@@ -1,4 +1,4 @@
-name: hip
+name: 🔥 hip
 
 on:
   push:
@@ -24,12 +24,12 @@ jobs:
       workflow_file: '.github/workflows/hip.yml'
 
   tests-hip:
-    name: HIP ROCm C++17
+    name: HIP ROCm C++20
     runs-on: ubuntu-latest
     needs: check_changes
     if: needs.check_changes.outputs.has_non_docs_changes == 'true'
     steps:
-    - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v4.2.2
+    - uses: actions/checkout@c2d88d3ecc89a9ef08eebf45d9637801dcee7eb5 # v4.2.2
       with:
         submodules: true
     - name: AMReX Dependencies
@@ -70,9 +70,9 @@ jobs:
             -DAMReX_ROCTX=ON                              \
             -DCMAKE_C_COMPILER=$(which clang)             \
             -DCMAKE_CXX_COMPILER=$(which clang++)         \
-            -DCMAKE_CXX_STANDARD=17                       \
+            -DCMAKE_CXX_STANDARD=20                       \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache          \
-            -DCMAKE_CXX_FLAGS="-ffp-exception-behavior=strict -stdlib=libc++"
+            -DCMAKE_CXX_FLAGS="-ffp-exception-behavior=strict"
         cmake --build build -j 2
 
         ccache -s

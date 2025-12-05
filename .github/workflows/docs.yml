@@ -1,4 +1,4 @@
-name: Build and Deploy Docs
+name: 📖 Build and Deploy Docs
 
 on:
   push:
@@ -33,7 +33,7 @@ jobs:
     if: needs.check_changes.outputs.has_docs_changes == 'true' || needs.check_changes.outputs.has_specific_workflow_changes == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v4.2.2
+        uses: actions/checkout@c2d88d3ecc89a9ef08eebf45d9637801dcee7eb5 # v4.2.2
         with:
           persist-credentials: false
 
@@ -45,7 +45,7 @@ jobs:
 
       - name: Install and Build
         run: |
-          ./build_docs.sh
+          ./scripts/bash/docs_build.sh
 
       - name: Archive artifact
         shell: sh

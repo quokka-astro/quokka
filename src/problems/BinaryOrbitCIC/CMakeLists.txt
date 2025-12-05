@@ -9,9 +9,13 @@ if (AMReX_SPACEDIM EQUAL 3)
     add_test(NAME BinaryOrbitCICSplit COMMAND ${JOB_NAME} ../inputs/BinaryOrbit_split.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
     add_test(NAME BinaryOrbitCICRefactorInit COMMAND ${JOB_NAME} ../inputs/BinaryOrbit_refactor_init.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
     add_test(NAME BinaryOrbitCICRefactor COMMAND ${JOB_NAME} ../inputs/BinaryOrbit_refactor.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME BinaryOrbitCICRefactorInit2 COMMAND ${JOB_NAME} ../inputs/BinaryOrbit_refactor_init.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    add_test(NAME BinaryOrbitCICRefactor2 COMMAND ${JOB_NAME} ../inputs/BinaryOrbit_refactor_splitparticle.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
     add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
     add_test(NAME BinaryOrbitCICAMR COMMAND ${JOB_NAME} ../inputs/BinaryOrbitAMR.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 
     # BinaryOrbitCICRefactor runs after BinaryOrbitCICRefactorInit, even if it fails
     set_tests_properties(BinaryOrbitCICRefactor PROPERTIES DEPENDS "BinaryOrbitCICRefactorInit")
+    set_tests_properties(BinaryOrbitCICRefactorInit2 PROPERTIES DEPENDS "BinaryOrbitCICRefactor")
+    set_tests_properties(BinaryOrbitCICRefactor2 PROPERTIES DEPENDS "BinaryOrbitCICRefactorInit2")
 endif()

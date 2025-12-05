@@ -1,4 +1,4 @@
-name: clang-tidy-review
+name: 🧹 clang-tidy-review
 
 # You can be more specific, but it currently only works on pull requests
 # Fiewer paths are ignored because some folders (e.g. scripts) are not relavent to code build but should be linted
@@ -21,12 +21,12 @@ jobs:
     if: needs.check_changes.outputs.has_non_docs_changes == 'true' || needs.check_changes.outputs.has_scripts_changes == 'true'
 
     steps:
-    - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v4.2.2
+    - uses: actions/checkout@c2d88d3ecc89a9ef08eebf45d9637801dcee7eb5 # v4.2.2
       with:
         submodules: true
         fetch-depth: 0
 
-    - uses: ZedThree/clang-tidy-review@915f596c1e0d086cf9b7f5a423dde83be7983056 # v0.22.1
+    - uses: ZedThree/clang-tidy-review@8e835e573551b213a7da2ccb4e9560a4785e46f4 # v0.22.2
       id: review
       with:
         config_file: src/.clang-tidy
@@ -36,7 +36,7 @@ jobs:
         split_workflow: true
 
     # Uploads an artefact containing clang_fixes.json
-    - uses: ZedThree/clang-tidy-review/upload@915f596c1e0d086cf9b7f5a423dde83be7983056 # v0.22.1
+    - uses: ZedThree/clang-tidy-review/upload@8e835e573551b213a7da2ccb4e9560a4785e46f4 # v0.22.2
 
     # If there are any comments, fail the check
     - if: steps.review.outputs.total_comments > 0
