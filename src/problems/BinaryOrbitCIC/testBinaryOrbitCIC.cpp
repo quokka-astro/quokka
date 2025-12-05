@@ -192,6 +192,7 @@ auto problem_main() -> int
 	amrex::ParmParse const amr_pp("amr");
 	amr_pp.query("n_cell", n_cell);
 	const bool is_refactor = n_cell[0] == 64;
+	const bool is_refactor_splitparticle = is_refactor && sim.splitParticlesOnRestartRefine_;
 
 	// get the number of particles
 	const int n_particles = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getNumParticles();
@@ -235,16 +236,21 @@ auto problem_main() -> int
 				amrex::Print() << "Test failed\n";
 			}
 		} else {
-			const double max_err_tol = 2.0; // max error tol in cell widths
+			double max_err_tol = 0.05;
+			int n_particles_expected = 2;
+			if (is_refactor_splitparticle) {
+				max_err_tol = 2.0;
+				n_particles_expected = 2 * 8; // 8 = 2^3 is the split factor and is hard-coded
+			}
 			if (max_err < max_err_tol) {
 				status = 0;
 				amrex::Print() << "Test passed\n";
 			} else {
 				amrex::Print() << "Test failed\n";
 			}
-			if (n_particles != 2 * 8) {
+			if (n_particles != n_particles_expected) {
 				status = 1;
-				amrex::Print() << "Test failed (refactor, number of particles is not 2 * 8)\n";
+				amrex::Print() << "Test failed (refactor, number of particles is not " << n_particles_expected << ")\n";
 			}
 		}
 	}
