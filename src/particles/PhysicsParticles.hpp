@@ -805,7 +805,9 @@ template <typename problem_t> class PhysicsParticleRegister
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->writePlotFile(plotfilename, getParticleTypeName(type));
 			descriptor->writeUnitsFile(plotfilename, getParticleTypeName(type));
-			saveSFH(plotfilename, getParticleTypeName(type));
+			if (descriptor->getAllowsCreation()) {
+				saveSFH(plotfilename, getParticleTypeName(type));
+			}
 		}
 	}
 
@@ -847,7 +849,9 @@ template <typename problem_t> class PhysicsParticleRegister
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->writeCheckpoint(checkpointname, getParticleTypeName(type), include_header);
 			descriptor->writeUnitsFile(checkpointname, getParticleTypeName(type));
-			saveSFH(checkpointname, getParticleTypeName(type));
+			if (descriptor->getAllowsCreation()) {
+				saveSFH(checkpointname, getParticleTypeName(type));
+			}
 		}
 	}
 
