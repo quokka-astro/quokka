@@ -3,7 +3,6 @@
 
 import argparse
 import json
-import os
 import pathlib
 import re
 from collections import defaultdict
