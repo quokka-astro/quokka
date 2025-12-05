@@ -248,7 +248,7 @@ auto problem_main() -> int
 
 	sim.evolve();
 
-	// If restarting from checkfile, return success. The initial gas mass is unknonw, so there is nothing to compare with.
+	// If restarting from checkfile, return success. The initial gas mass is unknown, so there is nothing to compare with.
 	// We validate restarting from checkfile.
 
 	std::string restartfile;
