@@ -35,7 +35,7 @@ const double year = 3.15576e+07; // in seconds
 const double dt_init = 3.0 * year;
 constexpr double B0 = 1.0e-7; // constant background field [Gauss-equivalent units]
 
-static std::string particles_file = "sink4.txt"; // NOLINT
+static const std::string particles_file = "sink4.txt"; // NOLINT
 
 template <> struct Particle_Traits<SinkProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;

@@ -241,8 +241,6 @@ template <> void QuokkaSimulation<TestParticle>::setInitialConditionsOnGrid(quok
 	});
 }
 
-template <> void QuokkaSimulation<TestParticle>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) {}
-
 auto problem_main() -> int
 {
 	auto BCs_cc = quokka::BC<TestParticle>(quokka::BCType::reflecting);
