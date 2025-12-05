@@ -37,16 +37,7 @@ tiny_profiler.enabled = 0
 problem.n0 = 1.0e5
 problem.Tamb = 1.0e1
 problem.stage_2_max_timesteps = 10
-plotfile_interval = -1
-checkpoint_interval = -1
+plotfile_interval = 5
+checkpoint_interval = 5
 
-# *****************************************************************
-# Cooling parameters: turn on later after merging the ResampledCooling branch
-# *****************************************************************
-#cooling.enabled = 1
-#cooling.cooling_table_type = "grackle"
-#cooling.hdf5_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
-#cooling.cooling_table_type = "resampled"
-#cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
-
-#temperature_floor = 10.0  	# K
+SFH_interval = 3
