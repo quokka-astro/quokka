@@ -91,7 +91,7 @@ void writeSlice(const std::string &outfile, const Vector<Real> &pos, const Vecto
 auto problem_main() -> int
 {
 	try {
-		ParmParse pp;
+		ParmParse const pp;
 
 		std::string plotfile;
 		const bool has_plotfile = pp.query("plotfile", plotfile) != 0;
