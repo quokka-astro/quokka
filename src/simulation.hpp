@@ -1285,8 +1285,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		computeAfterTimestep();
 
 		// Compute SFH if interval is reached
-		if ((sfh_interval_ > 0 && step % sfh_interval_ == 0) || (sfh_time_interval_ > 0 && cur_time - last_sfh_time_ >= sfh_time_interval_)) {
-			particleRegister_.updateSFH(step, cur_time);
+		if ((sfh_interval_ > 0 && (step + 1) % sfh_interval_ == 0) || (sfh_time_interval_ > 0 && cur_time - last_sfh_time_ >= sfh_time_interval_)) {
+			particleRegister_.updateSFH(step + 1, cur_time);
 			last_sfh_time_ = cur_time;
 		}
 
