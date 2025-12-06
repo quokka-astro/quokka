@@ -22,7 +22,10 @@
 
 using namespace amrex; // NOLINT
 
-static auto buildGeometry(PlotFileData &pf) -> Geometry
+namespace
+{
+
+auto buildGeometry(PlotFileData &pf) -> Geometry
 {
 	const int level = 0;
 	const Box domain = pf.probDomain(level);
@@ -33,7 +36,7 @@ static auto buildGeometry(PlotFileData &pf) -> Geometry
 	return Geometry(domain, &rb, pf.coordSys(), periodic.data());
 }
 
-static auto buildMultiFab(PlotFileData &pf, const Vector<std::string> &names) -> MultiFab
+auto buildMultiFab(PlotFileData &pf, const Vector<std::string> &names) -> MultiFab
 {
 	const int level = 0;
 	auto full = pf.get(level);
@@ -52,7 +55,7 @@ static auto buildMultiFab(PlotFileData &pf, const Vector<std::string> &names) ->
 	return subset;
 }
 
-static void writeSlice(const std::string &outfile, const Vector<Real> &pos, const Vector<Gpu::HostVector<Real>> &data, const Vector<std::string> &names)
+void writeSlice(const std::string &outfile, const Vector<Real> &pos, const Vector<Gpu::HostVector<Real>> &data, const Vector<std::string> &names)
 {
 	if (!ParallelDescriptor::IOProcessor()) {
 		return;
@@ -82,6 +85,8 @@ static void writeSlice(const std::string &outfile, const Vector<Real> &pos, cons
 		ofs << "\n";
 	}
 }
+
+} // anonymous namespace
 
 auto problem_main() -> int
 {
