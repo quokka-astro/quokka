@@ -40,4 +40,4 @@ max_timesteps = 20
 plotfile_interval = 5
 checkpoint_interval = 5
 #SFH_interval = 3
-SFH_time_interval = 2e10
+SFH_time_interval = 4e10
