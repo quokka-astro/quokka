@@ -239,6 +239,11 @@ auto problem_main() -> int
 	const int seed = 42;
 	amrex::InitRandom(seed, 1); // all ranks should produce the same values
 
+	// Real Tamb and n0 from the input file
+	amrex::ParmParse const ppp("problem");
+	ppp.query("Tamb", Tamb);
+	ppp.query("n0", n0);
+
 	sim.setInitialConditions();
 
 	// get total gas mass
