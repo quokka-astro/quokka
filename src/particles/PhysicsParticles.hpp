@@ -617,7 +617,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	std::map<ParticleType, std::unique_ptr<PhysicsParticleDescriptorBase>> particleRegistry_;
 
 	// SFH data: nstep, time, total_mass
-	std::map<std::string, std::vector<std::tuple<int, amrex::Real, amrex::Real>>> sfh_data_;
+	std::map<ParticleType, std::vector<std::tuple<int, amrex::Real, amrex::Real>>> sfh_data_;
 
       public:
 	// Constructor
@@ -806,7 +806,7 @@ template <typename problem_t> class PhysicsParticleRegister
 			descriptor->writePlotFile(plotfilename, getParticleTypeName(type));
 			descriptor->writeUnitsFile(plotfilename, getParticleTypeName(type));
 			if (descriptor->getAllowsCreation()) {
-				saveSFH(plotfilename, getParticleTypeName(type));
+				saveSFH(plotfilename, type);
 			}
 		}
 	}
@@ -850,7 +850,7 @@ template <typename problem_t> class PhysicsParticleRegister
 			descriptor->writeCheckpoint(checkpointname, getParticleTypeName(type), include_header);
 			descriptor->writeUnitsFile(checkpointname, getParticleTypeName(type));
 			if (descriptor->getAllowsCreation()) {
-				saveSFH(checkpointname, getParticleTypeName(type));
+				saveSFH(checkpointname, type);
 			}
 		}
 	}
@@ -988,20 +988,19 @@ template <typename problem_t> class PhysicsParticleRegister
 			// Only compute SFH for particles that can be created (stars)
 			if (descriptor->getAllowsCreation()) {
 				amrex::Real total_mass = descriptor->computeStellarMass();
-				std::string typeName = getParticleTypeName(type);
-				sfh_data_[typeName].emplace_back(nstep, time, total_mass);
+				sfh_data_[type].emplace_back(nstep, time, total_mass);
 			}
 		}
 	}
 
 	// Save SFH data to file
-	void saveSFH(const std::string &base_dir, const std::string &particle_type_name) const
+	void saveSFH(const std::string &base_dir, ParticleType type) const
 	{
-		auto it = sfh_data_.find(particle_type_name);
+		const auto it = sfh_data_.find(type);
 		if (it != sfh_data_.end()) {
-			std::string filename = base_dir + "/" + particle_type_name + "/SFH.txt";
+			std::string filename = base_dir + "/" + getParticleTypeName(type) + "/SFH.txt";
 			// Continue only if directory exists (it should be created by writePlotFile/writeCheckpoint)
-			const std::string dir = base_dir + "/" + particle_type_name;
+			const std::string dir = base_dir + "/" + getParticleTypeName(type);
 			if (!amrex::FileSystem::Exists(dir)) {
 				return;
 			}
@@ -1022,13 +1021,13 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Read SFH data from file
-	auto readSFH(const std::string &base_dir, const std::string &particle_type_name) -> Real
+	auto readSFH(const std::string &base_dir, ParticleType type) -> Real
 	{
-		std::string filename = base_dir + "/" + particle_type_name + "/SFH.txt";
+		std::string filename = base_dir + "/" + getParticleTypeName(type) + "/SFH.txt";
 		std::ifstream ifs(filename);
 		Real time = 0.0;
 		if (ifs.is_open()) {
-			sfh_data_[particle_type_name].clear();
+			sfh_data_[type].clear();
 			std::string line;
 			while (std::getline(ifs, line)) {
 				if (line.empty() || line[0] == '#') {
@@ -1038,11 +1037,11 @@ template <typename problem_t> class PhysicsParticleRegister
 				int nstep = 0;
 				amrex::Real mass = 0.0;
 				if (iss >> nstep >> time >> mass) {
-					sfh_data_[particle_type_name].emplace_back(nstep, time, mass);
+					sfh_data_[type].emplace_back(nstep, time, mass);
 				}
 			}
 			ifs.close();
-			amrex::Print() << "Read SFH data for " << particle_type_name << " from " << filename << "\n";
+			amrex::Print() << "Read SFH data for " << getParticleTypeName(type) << " from " << filename << "\n";
 		}
 		// It's okay if file doesn't exist, e.g. first run, in which case you should not call this function
 

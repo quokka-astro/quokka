@@ -3993,7 +3993,7 @@ void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::un
 	restartParticleContainerWithRefinement(container, restart_chkfile, particleRegister_.getParticleTypeName(particle_type), header_box_arrays);
 
 	// Read SFH data
-	last_sfh_time_ = particleRegister_.readSFH(restart_chkfile, particleRegister_.getParticleTypeName(particle_type));
+	last_sfh_time_ = particleRegister_.readSFH(restart_chkfile, particle_type);
 
 	// Split particles
 #if AMREX_SPACEDIM == 3
