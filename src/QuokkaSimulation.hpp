@@ -1320,13 +1320,11 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCente
 	auto const to_linop_bc = [](int bc_value) -> amrex::LinOpBCType {
 		if (bc_value == amrex::BCType::reflect_even || bc_value == amrex::BCType::foextrap) {
 			return amrex::LinOpBCType::Neumann; // Neumann zero-valued BC
-		} else if (bc_value == amrex::BCType::reflect_odd) {
-			return amrex::LinOpBCType::Dirichlet; // Dirichlet zero-valued BC
-		} else if (bc_value == amrex::BCType::int_dir) {
-			return amrex::LinOpBCType::Periodic; // periodic BC
-		} else {
-			return amrex::LinOpBCType::Dirichlet; // unsupported, but return something
 		}
+		if (bc_value == amrex::BCType::int_dir) {
+			return amrex::LinOpBCType::Periodic; // periodic BC
+		}
+		return amrex::LinOpBCType::Dirichlet; // zero-valued or fallback BC (includes reflect_odd)
 	};
 
 	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
