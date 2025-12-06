@@ -277,3 +277,4 @@ auto problem_main() -> int
 
 	return static_cast<int>(diff_exist);
 }
+

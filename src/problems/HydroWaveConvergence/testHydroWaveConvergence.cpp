@@ -277,3 +277,4 @@ auto problem_main() -> int
 	amrex::Print() << "Observed convergence rate deviates from expected rate by more than " << tolerance << "\n";
 	return 1;
 }
+
