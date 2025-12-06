@@ -998,7 +998,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	{
 		const auto it = sfh_data_.find(type);
 		if (it != sfh_data_.end()) {
-			std::string filename = base_dir + "/" + getParticleTypeName(type) + "/SFH.txt";
+			const std::string filename = base_dir + "/" + getParticleTypeName(type) + "/SFH.txt";
 			// Continue only if directory exists (it should be created by writePlotFile/writeCheckpoint)
 			const std::string dir = base_dir + "/" + getParticleTypeName(type);
 			if (!amrex::FileSystem::Exists(dir)) {
@@ -1023,7 +1023,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Read SFH data from file
 	auto readSFH(const std::string &base_dir, ParticleType type) -> Real
 	{
-		std::string filename = base_dir + "/" + getParticleTypeName(type) + "/SFH.txt";
+		const std::string filename = base_dir + "/" + getParticleTypeName(type) + "/SFH.txt";
 		std::ifstream ifs(filename);
 		Real time = 0.0;
 		if (ifs.is_open()) {
