@@ -71,7 +71,9 @@ These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`
 
 | Parameter Name | Type | Description |
 |----|----|----|
-| mhd.emf_averaging_method | String | Determines the method used to average EMF at edges. Can be set to `BalsaraSpicer` or `LD04`. Default: `LD04`. |
+| mhd.emf_computing_scheme | String | Determines the method used to compute the EMF at edges. Can be set to `FelkerStone2017`, `Balsara2025`, or `Quokka2026`. Default: `FelkerStone2017`. |
+
+| mhd.emf_averaging_scheme | String | Determines the method used to average EMF at edges. Can be set to `BalsaraSpicer2004`, `LondrilloDelZanna2004`, or `Balsara2025`. Default: `LondrilloDelZanna2004`. |
 | mhd.emf_reconstruction_order | Integer | Determines the order of spatial reconstruction algorithm used for EMF computation. Can be set to 1 (piecewise constant), 2 (piecewise linear; PLM), 3 (piecewise parabolic; PPM), or 5 (extrema-preserving xPPM). Default: 5 (xPPM). |
 
 ## Optically-thin radiative cooling
@@ -83,7 +85,7 @@ These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`
 | cooling.enabled | Integer | If set to 1, turns on optically-thin radiative cooling as a Strang-split source term. Default: 0 (disabled). |
 | cooling.cooling_table_type | String | Specifies the type of cooling table to use. The only supported option is "resampled". |
 | cooling.read_tables_even_if_disabled | Integer | If set to 1, reads the cooling tables even if the cooling module is disabled. |
-| cooling.hdf5_data_file | String | The path to the cooling tables in HDF5 format. |
+| cooling.hdf5_data_file | String | The path to the cooling tables in HDF5 format. We recommend using extern/cooling/CloudyData_UVB=HM2012_resampled.h5 for ISM at solar metallicity. |
 
 ## Chemistry
 
@@ -94,6 +96,15 @@ These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`
 | chemistry.enabled | Integer | If set to 1, turns on chemistry as a Strang-split source term. Default: 0 (disabled). |
 | chemistry.max_density_allowed | Float | Maximum density value for which chemistry calculations are accurate. Chemistry is not performed for cells with densities above this threshold. |
 | chemistry.min_density_allowed | Float | Minimum density value for which chemistry calculations are performed. Chemistry is not performed for cells with densities below this threshold. |
+
+## Dust
+
+These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`` function in ``src/QuokkaSimulation.hpp``.
+
+| Parameter Name | Type | Description |
+|----|----|----|
+| dust.alpha | Float array | Inverse of dust stopping time. Default: 0.0. |
+| dust.omega | Float | Controls the level of frictional heating, with omega = 0 turning it off and omega = 1 depositing all dissipation into the gas. Default: 1.0.|
 
 ## Particles
 

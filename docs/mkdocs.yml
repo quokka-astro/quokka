@@ -14,6 +14,7 @@ nav:
   - Physics Modules:
     - Magnetohydrodynamics: mhd_module.md
     - Star Formation: star_formation.md
+    - Dust Module: dust_module.md
   - Simulation gallery:
     - Hydro: gallery.md
   - User guide:
@@ -22,6 +23,7 @@ nav:
     - Grid refinement (AMR): amr_grid_refinement.md
     - Test problems:
       - Overview: tests/index.md
+      - Table of all test problems: tests/table_of_all_problems.md
       - Radiative shock test: tests/radshock.md
       - Shu-Osher shock test: tests/shu_osher.md
       - Slow-moving shock test: tests/sms.md
@@ -32,6 +34,7 @@ nav:
     - In-situ analysis: insitu_analysis.md
     - Postprocessing: postprocessing.md
     - Debugging simulation instability: instability.md
+    - Runtime calculator: html/runtime-calculator/index.html
   - Developer Guide:
     - Developer onboarding: developer_onboarding.md
     - Developing a new problem generator: developing_problem_generators.md
@@ -71,3 +74,6 @@ markdown_extensions:
 extra_javascript:
   - javascripts/mathjax.js
   - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+
+extra_css:
+  - extra.css

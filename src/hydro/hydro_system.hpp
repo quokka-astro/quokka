@@ -30,6 +30,7 @@
 #include "HLLD.hpp"
 #include "LLF.hpp"
 #include "LLF_mhd.hpp"
+#include "dust/dust_system.hpp"
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
@@ -59,6 +60,12 @@ template <typename problem_t> struct HydroSystem_Traits {
 	static constexpr bool reconstruct_eint = true;
 };
 
+// Helper for dependent static_assert that always evaluates to false
+// This is needed to make static_assert work inside constexpr if blocks
+template <typename T> struct dependent_false : std::false_type {
+};
+template <typename T> inline constexpr bool dependent_false_v = dependent_false<T>::value;
+
 enum class RiemannSolver { HLLC, LLF, LLF_MHD, HLLD };
 
 /// Class for the Euler equations of inviscid hydrodynamics
@@ -68,9 +75,13 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
       public:
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
 	static constexpr int nscalars_ = Physics_Traits<problem_t>::numPassiveScalars;
-	static constexpr int nvar_ = Physics_NumVars::numHydroVars + nscalars_;
+	static constexpr int nvar_ = Physics_NumVars::numHydroVars + nscalars_ +
+				     (Physics_Traits<problem_t>::nDustGroups * Physics_NumVars::numDustVarsPerGroup) *
+					 static_cast<int>(Physics_Traits<problem_t>::is_dust_enabled); // total number of variables
+	static constexpr int nHydroScalars_ = Physics_NumVars::numHydroVars + nscalars_;
+	static constexpr int numDustVars_ = Physics_NumVars::numDustVarsPerGroup; // number of dust variables for each dust group
 
-	enum consVarIndex {
+	enum consVarIndex { // NOLINT
 		density_index = Physics_Indices<problem_t>::hydroFirstIndex,
 		x1Momentum_index,
 		x2Momentum_index,
@@ -80,7 +91,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 		scalar0_index	      // first passive scalar (only present if nscalars > 0!)
 	};
 
-	enum primVarIndex {
+	enum primVarIndex { // NOLINT
 		primDensity_index = 0,
 		x1Velocity_index,
 		x2Velocity_index,
@@ -90,23 +101,44 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 		primScalar0_index, // first passive scalar (only present if nscalars > 0!)
 	};
 
+	enum dustVarIndex { // NOLINT
+		dustDensity_index = Physics_Indices<problem_t>::dustFirstIndex,
+		x1DustMomentum_index,
+		x2DustMomentum_index,
+		x3DustMomentum_index
+	};
+
+	static constexpr int primDustFirstIndex = primScalar0_index + nscalars_;
+	enum primDustVarIndex { primDustDensity_index = primDustFirstIndex, x1DustVelocity_index, x2DustVelocity_index, x3DustVelocity_index }; // NOLINT
+
 	static void ConservedToPrimitive(amrex::MultiFab const &cons_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf,
 					 amrex::MultiFab &primVar_mf, int nghost);
 
-	static auto maxSignalSpeedLocal(amrex::MultiFab const &cons) -> amrex::Real;
+	static auto maxSignalSpeedLocal(amrex::MultiFab const &cons, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf) -> amrex::Real;
 
-	static void ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons_cc, std::array<amrex::Array4<const amrex::Real>, 3> const &cons_fc,
-					  array_t &maxSignal, amrex::Box const &indexRange);
+	static void ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons_cc,
+					  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &cons_fc, array_t &maxSignal,
+					  amrex::Box const &indexRange);
 
-	static auto CheckStatesValid(amrex::MultiFab const &cons_mf) -> bool;
+	static auto CheckStatesValid(amrex::MultiFab const &cons_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf) -> bool;
 
-	AMREX_GPU_DEVICE static auto ComputePrimVars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> quokka::valarray<amrex::Real, nvar_>;
+	AMREX_GPU_DEVICE static auto ComputePrimVars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
+						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr)
 
-	AMREX_GPU_DEVICE static auto ComputeConsVars(quokka::valarray<amrex::Real, nvar_> const &prim) -> quokka::valarray<amrex::Real, nvar_>;
+	    -> quokka::valarray<amrex::Real, nHydroScalars_>;
 
-	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
+	AMREX_GPU_DEVICE static auto ComputeConsVars(quokka::valarray<amrex::Real, nHydroScalars_> const &prim)
+	    -> quokka::valarray<amrex::Real, nHydroScalars_>;
 
-	AMREX_GPU_DEVICE static auto ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
+	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
+						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr) -> amrex::Real;
+
+	AMREX_GPU_DEVICE static auto ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
+						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr) -> amrex::Real;
+
+	AMREX_GPU_DEVICE static auto ComputeMagneticEnergy(int i, int j, int k,
+							   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr)
+	    -> amrex::Real;
 
 	AMREX_GPU_DEVICE static auto ComputeVelocityX1(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
 
@@ -129,9 +161,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	static void EnforceLimits(amrex::Real densityFloor, amrex::Real tempFloor, amrex::MultiFab &state_mf);
 
-	static void ApplyDensitySponge(amrex::MultiFab &state_mf, quokka::DensitySpongeConfig const &densitySponge, amrex::Real dt);
-
-	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf,
+					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray, amrex::iMultiFab const &redoFlag_mf);
 
 	static void SyncDualEnergy(amrex::MultiFab &consVar_mf, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &faceVar_mf);
@@ -196,6 +227,15 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 			fc_x2_ref = cons_fc_x2[bx];
 		}
 #endif
+
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
+		cons_fc[0] = fc_x0_ref;
+#if AMREX_SPACEDIM >= 2
+		cons_fc[1] = fc_x1_ref;
+#endif
+#if AMREX_SPACEDIM == 3
+		cons_fc[2] = fc_x2_ref;
+#endif
 		const amrex::Real rho = cons_cc[bx](i, j, k, density_index);
 		const amrex::Real px = cons_cc[bx](i, j, k, x1Momentum_index);
 		const amrex::Real py = cons_cc[bx](i, j, k, x2Momentum_index);
@@ -234,7 +274,7 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 		}
 		const amrex::Real Eint_cons = E - kinetic_energy - magnetic_energy;
 
-		const amrex::Real Pgas = ComputePressure(cons_cc[bx], i, j, k);
+		const amrex::Real Pgas = ComputePressure(cons_cc[bx], i, j, k, &cons_fc);
 		const amrex::Real eint_cons = Eint_cons / rho;
 		const amrex::Real eint_aux = Eint_aux / rho;
 
@@ -264,17 +304,61 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 		for (int nc = 0; nc < nscalars_; ++nc) {
 			primVar[bx](i, j, k, primScalar0_index + nc) = cons_cc[bx](i, j, k, scalar0_index + nc);
 		}
+
+		// handle dust
+		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+			for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
+				const amrex::Real dust_rho = cons_cc[bx](i, j, k, dustDensity_index + numDustVars_ * g);
+				const amrex::Real dust_px = cons_cc[bx](i, j, k, x1DustMomentum_index + numDustVars_ * g);
+				const amrex::Real dust_py = cons_cc[bx](i, j, k, x2DustMomentum_index + numDustVars_ * g);
+				const amrex::Real dust_pz = cons_cc[bx](i, j, k, x3DustMomentum_index + numDustVars_ * g);
+
+				AMREX_ASSERT(!std::isnan(dust_rho));
+				AMREX_ASSERT(!std::isnan(dust_px));
+				AMREX_ASSERT(!std::isnan(dust_py));
+				AMREX_ASSERT(!std::isnan(dust_pz));
+
+				AMREX_ASSERT(dust_rho > 0.);
+
+				const amrex::Real dust_vx = dust_px / dust_rho;
+				const amrex::Real dust_vy = dust_py / dust_rho;
+				const amrex::Real dust_vz = dust_pz / dust_rho;
+
+				primVar[bx](i, j, k, primDustDensity_index + numDustVars_ * g) = dust_rho;
+				primVar[bx](i, j, k, x1DustVelocity_index + numDustVars_ * g) = dust_vx;
+				primVar[bx](i, j, k, x2DustVelocity_index + numDustVars_ * g) = dust_vy;
+				primVar[bx](i, j, k, x3DustVelocity_index + numDustVars_ * g) = dust_vz;
+			}
+		}
 	});
 }
 
-template <typename problem_t> auto HydroSystem<problem_t>::maxSignalSpeedLocal(amrex::MultiFab const &cons_mf) -> amrex::Real
+template <typename problem_t>
+auto HydroSystem<problem_t>::maxSignalSpeedLocal(amrex::MultiFab const &cons_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf) -> amrex::Real
 {
 	// return maximum signal speed on local grids
+	auto const &cons_fc_x0 = cons_fc_mf[0].const_arrays();
+#if AMREX_SPACEDIM >= 2
+	auto const &cons_fc_x1 = cons_fc_mf[1].const_arrays();
+#endif
+#if AMREX_SPACEDIM == 3
+	auto const &cons_fc_x2 = cons_fc_mf[2].const_arrays();
+#endif
 
 	auto const &cons = cons_mf.const_arrays();
 	return amrex::ParReduce(amrex::TypeList<amrex::ReduceOpMax>{}, amrex::TypeList<amrex::Real>{}, cons_mf,
 				amrex::IntVect(0), // no ghost cells
 				[=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real> {
+					std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
+					if (Physics_Traits<problem_t>::is_mhd_enabled) { // if instead of if constexpr to avoid nvcc issues
+						cons_fc[0] = cons_fc_x0[bx];
+#if AMREX_SPACEDIM >= 2
+						cons_fc[1] = cons_fc_x1[bx];
+#endif
+#if AMREX_SPACEDIM == 3
+						cons_fc[2] = cons_fc_x2[bx];
+#endif
+					}
 					const auto rho = cons[bx](i, j, k, HydroSystem<problem_t>::density_index);
 					const auto px = cons[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
 					const auto py = cons[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
@@ -286,7 +370,7 @@ template <typename problem_t> auto HydroSystem<problem_t>::maxSignalSpeedLocal(a
 					if constexpr (is_eos_isothermal()) {
 						cs = cs_iso_;
 					} else {
-						cs = ComputeSoundSpeed(cons[bx], i, j, k);
+						cs = ComputeSoundSpeed(cons[bx], i, j, k, &cons_fc);
 					}
 					return {cs + abs_vel};
 				});
@@ -294,13 +378,11 @@ template <typename problem_t> auto HydroSystem<problem_t>::maxSignalSpeedLocal(a
 
 template <typename problem_t>
 void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons_cc,
-						   std::array<amrex::Array4<const amrex::Real>, 3> const &cons_fc, array_t &maxSignal,
+						   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &cons_fc, array_t &maxSignal,
 						   amrex::Box const &indexRange)
 {
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// First-capture by early access
-		[[maybe_unused]] const auto fc_ref = cons_fc;
-
 		const auto rho = cons_cc(i, j, k, density_index);
 		const auto px = cons_cc(i, j, k, x1Momentum_index);
 		const auto py = cons_cc(i, j, k, x2Momentum_index);
@@ -316,25 +398,24 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 		const double vel_magnitude = std::sqrt(vx * vx + vy * vy + vz * vz);
 		double fastest_wavespeed = NAN;
 
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		if (Physics_Traits<problem_t>::is_mhd_enabled) {
 			amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons_cc, i, j, k);
 			const auto total_energy = cons_cc(i, j, k, energy_index); // *total* gas energy per unit volume
 			const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
-			const auto thermal_energy = total_energy - kinetic_energy;
-			const auto pressure = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
-			double gp = quokka::EOS<problem_t>::gamma_ * pressure;
-
-			const auto bx1_m = fc_ref[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const auto bx1_p = fc_ref[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const auto bx2_m = fc_ref[1](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const auto bx2_p = fc_ref[1](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const auto bx3_m = fc_ref[2](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
-			const auto bx3_p = fc_ref[2](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex);
-
+			const auto magnetic_energy = ComputeMagneticEnergy(i, j, k, &cons_fc);
+			const auto thermal_energy = total_energy - kinetic_energy - magnetic_energy;
+			const auto bx1_m = cons_fc[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const auto bx1_p = cons_fc[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const auto bx2_m = cons_fc[1](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const auto bx2_p = cons_fc[1](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const auto bx3_m = cons_fc[2](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+			const auto bx3_p = cons_fc[2](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex);
 			const auto bx1 = 0.5 * (bx1_m + bx1_p);
 			const auto bx2 = 0.5 * (bx2_m + bx2_p);
 			const auto bx3 = 0.5 * (bx3_m + bx3_p);
 			double b_sq = bx1 * bx1 + bx2 * bx2 + bx3 * bx3;
+			const auto pressure = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
+			double gp = quokka::EOS<problem_t>::gamma_ * pressure;
 
 			double bgp_p = b_sq + gp;
 			double const bgp_m = b_sq - gp;
@@ -345,24 +426,61 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 			if constexpr (is_eos_isothermal()) {
 				fastest_wavespeed = cs_iso_;
 			} else {
-				fastest_wavespeed = ComputeSoundSpeed(cons_cc, i, j, k);
+				fastest_wavespeed = ComputeSoundSpeed(cons_cc, i, j, k, &cons_fc);
 			}
 			AMREX_ASSERT(fastest_wavespeed > 0.);
 		}
 
-		const double signal_max = fastest_wavespeed + vel_magnitude;
+		double signal_max = fastest_wavespeed + vel_magnitude;
+
+		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+			for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
+				const amrex::Real dust_rho = cons_cc(i, j, k, dustDensity_index + g * numDustVars_);
+				const amrex::Real dust_px = cons_cc(i, j, k, x1DustMomentum_index + g * numDustVars_);
+				const amrex::Real dust_py = cons_cc(i, j, k, x2DustMomentum_index + g * numDustVars_);
+				const amrex::Real dust_pz = cons_cc(i, j, k, x3DustMomentum_index + g * numDustVars_);
+				AMREX_ASSERT(!std::isnan(dust_rho));
+				AMREX_ASSERT(!std::isnan(dust_px));
+				AMREX_ASSERT(!std::isnan(dust_py));
+				AMREX_ASSERT(!std::isnan(dust_pz));
+
+				const amrex::Real dust_vx = dust_px / dust_rho;
+				const amrex::Real dust_vy = dust_py / dust_rho;
+				const amrex::Real dust_vz = dust_pz / dust_rho;
+				const amrex::Real dust_vel_mag = std::sqrt(dust_vx * dust_vx + dust_vy * dust_vy + dust_vz * dust_vz);
+				signal_max = std::max(signal_max, dust_vel_mag + fastest_wavespeed);
+			}
+		}
 		maxSignal(i, j, k) = signal_max;
 	});
 }
 
-template <typename problem_t> auto HydroSystem<problem_t>::CheckStatesValid(amrex::MultiFab const &cons_mf) -> bool
+template <typename problem_t>
+auto HydroSystem<problem_t>::CheckStatesValid(amrex::MultiFab const &cons_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf) -> bool
 {
 	// check whether density or pressure are negative
 	auto const &cons = cons_mf.const_arrays();
+	auto const &cons_fc_x0 = cons_fc_mf[0].const_arrays();
+#if AMREX_SPACEDIM >= 2
+	auto const &cons_fc_x1 = cons_fc_mf[1].const_arrays();
+#endif
+#if AMREX_SPACEDIM == 3
+	auto const &cons_fc_x2 = cons_fc_mf[2].const_arrays();
+#endif
 
 	return amrex::ParReduce(amrex::TypeList<amrex::ReduceOpLogicalAnd>{}, amrex::TypeList<bool>{}, cons_mf,
 				amrex::IntVect(0), // no ghost cells
 				[=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::GpuTuple<bool> {
+					std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
+					if (Physics_Traits<problem_t>::is_mhd_enabled) {
+						cons_fc[0] = cons_fc_x0[bx];
+#if AMREX_SPACEDIM >= 2
+						cons_fc[1] = cons_fc_x1[bx];
+#endif
+#if AMREX_SPACEDIM == 3
+						cons_fc[2] = cons_fc_x2[bx];
+#endif
+					}
 					const auto rho = cons[bx](i, j, k, density_index);
 					const auto px = cons[bx](i, j, k, x1Momentum_index);
 					const auto py = cons[bx](i, j, k, x2Momentum_index);
@@ -371,9 +489,10 @@ template <typename problem_t> auto HydroSystem<problem_t>::CheckStatesValid(amre
 					const auto vx = px / rho;
 					const auto vy = py / rho;
 					const auto vz = pz / rho;
+					const auto magnetic_energy = ComputeMagneticEnergy(i, j, k, &cons_fc);
 					const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
-					const auto thermal_energy = E - kinetic_energy;
-					const auto P = ComputePressure(cons[bx], i, j, k);
+					const auto thermal_energy = E - kinetic_energy - magnetic_energy;
+					const auto P = ComputePressure(cons[bx], i, j, k, &cons_fc);
 
 					bool negativeDensity = (rho <= 0.);
 					bool const negativePressure = (P <= 0.);
@@ -395,8 +514,9 @@ template <typename problem_t> auto HydroSystem<problem_t>::CheckStatesValid(amre
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
-    -> quokka::valarray<amrex::Real, nvar_>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
+										 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc)
+    -> quokka::valarray<amrex::Real, nHydroScalars_>
 {
 	// convert to primitive vars
 	const auto rho = cons(i, j, k, density_index);
@@ -408,8 +528,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars
 	const auto vx = px / rho;
 	const auto vy = py / rho;
 	const auto vz = pz / rho;
+	const auto magnetic_energy = ComputeMagneticEnergy(i, j, k, cons_fc);
 	const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
-	const auto thermal_energy = E - kinetic_energy;
+	const auto thermal_energy = E - kinetic_energy - magnetic_energy;
 
 	amrex::Real P = NAN;
 	if constexpr (is_eos_isothermal()) {
@@ -419,7 +540,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars
 		P = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
 	}
 
-	quokka::valarray<amrex::Real, nvar_> primVars{rho, vx, vy, vz, P, Eint_aux};
+	quokka::valarray<amrex::Real, nHydroScalars_> primVars{rho, vx, vy, vz, P, Eint_aux};
 
 	for (int n = 0; n < nscalars_; ++n) {
 		primVars[primScalar0_index + n] = cons(i, j, k, scalar0_index + n);
@@ -428,8 +549,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeConsVars(quokka::valarray<amrex::Real, nvar_> const &prim)
-    -> quokka::valarray<amrex::Real, nvar_>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeConsVars(quokka::valarray<amrex::Real, nHydroScalars_> const &prim)
+    -> quokka::valarray<amrex::Real, nHydroScalars_>
 {
 	// convert to conserved vars
 	Real const rho = prim[0];
@@ -442,7 +563,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeConsVars
 	Real const Eint = quokka::EOS<problem_t>::ComputeEintFromPres(rho, P);
 	Real const Egas = Eint + 0.5 * rho * (v1 * v1 + v2 * v2 + v3 * v3);
 
-	quokka::valarray<amrex::Real, nvar_> consVars{rho, rho * v1, rho * v2, rho * v3, Egas, Eint_aux};
+	quokka::valarray<amrex::Real, nHydroScalars_> consVars{rho, rho * v1, rho * v2, rho * v3, Egas, Eint_aux};
 
 	for (int i = 0; i < nscalars_; ++i) {
 		consVars[scalar0_index + i] = prim[primScalar0_index + i];
@@ -451,7 +572,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeConsVars
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
+										 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc)
     -> amrex::Real
 {
 	const auto rho = cons(i, j, k, density_index);
@@ -462,8 +584,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure
 	const auto vx = px / rho;
 	const auto vy = py / rho;
 	const auto vz = pz / rho;
+	const auto magnetic_energy = ComputeMagneticEnergy(i, j, k, cons_fc);
 	const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
-	const auto thermal_energy = E - kinetic_energy;
+	const auto thermal_energy = E - kinetic_energy - magnetic_energy;
 	amrex::Real P = NAN;
 
 	if constexpr (is_eos_isothermal()) {
@@ -476,7 +599,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
+										   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc)
     -> amrex::Real
 {
 	const auto rho = cons(i, j, k, density_index);
@@ -487,14 +611,38 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpe
 	const auto vx = px / rho;
 	const auto vy = py / rho;
 	const auto vz = pz / rho;
+	const auto magnetic_energy = ComputeMagneticEnergy(i, j, k, cons_fc);
 	const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
-	const auto thermal_energy = E - kinetic_energy;
+	const auto thermal_energy = E - kinetic_energy - magnetic_energy;
 
 	amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
 	amrex::Real P = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
 	amrex::Real cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P, massScalars);
 
 	return cs;
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
+HydroSystem<problem_t>::ComputeMagneticEnergy(int i, int j, int k, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc) -> amrex::Real
+{
+	if constexpr (!Physics_Traits<problem_t>::is_mhd_enabled) {
+		return 0.0;
+	} else {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(cons_fc != nullptr, "ComputeMagneticEnergy called without face-centered fields for MHD problem");
+
+		const auto bx1_m = (*cons_fc)[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+		const auto bx1_p = (*cons_fc)[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+		const auto bx2_m = (*cons_fc)[1](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+		const auto bx2_p = (*cons_fc)[1](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex);
+		const auto bx3_m = (*cons_fc)[2](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex);
+		const auto bx3_p = (*cons_fc)[2](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex);
+		const auto bx1 = 0.5 * (bx1_m + bx1_p);
+		const auto bx2 = 0.5 * (bx2_m + bx2_p);
+		const auto bx3 = 0.5 * (bx3_m + bx3_p);
+		const auto b_sq = bx1 * bx1 + bx2 * bx2 + bx3 * bx3;
+		return 0.5 * b_sq;
+	}
 }
 
 template <typename problem_t>
@@ -797,73 +945,6 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 #endif
 }
 
-// to ensure that physical quantities are within reasonable
-// floors and ceilings which can be set in the param file
-template <typename problem_t>
-void HydroSystem<problem_t>::ApplyDensitySponge(amrex::MultiFab &state_mf, quokka::DensitySpongeConfig const &densitySponge, amrex::Real const dt)
-{
-	if (!densitySponge.enabled || densitySponge.timescale <= static_cast<amrex::Real>(0.0)) {
-		return;
-	}
-
-	bool const thresholdsValid = (densitySponge.upperDensity > static_cast<amrex::Real>(0.0)) &&
-				     (densitySponge.lowerDensity > static_cast<amrex::Real>(0.0)) && (densitySponge.lowerDensity != densitySponge.upperDensity);
-	if (!thresholdsValid) {
-		return;
-	}
-
-	auto state = state_mf.arrays();
-	quokka::DensitySpongeConfig const spongeParams = densitySponge;
-
-	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		amrex::Real const rho = state[bx](i, j, k, density_index);
-		if (rho > static_cast<amrex::Real>(0.0)) {
-			amrex::Real spongeFactor = spongeParams.lowerFactor;
-
-			if (rho > spongeParams.upperDensity) {
-				spongeFactor = spongeParams.lowerFactor;
-			} else if (rho >= spongeParams.lowerDensity) {
-				amrex::Real const deltaRho = spongeParams.lowerDensity - spongeParams.upperDensity;
-				amrex::Real const arg = (rho - spongeParams.upperDensity) / deltaRho;
-				amrex::Real const cosTerm = amrex::Math::cospi(arg);
-				spongeFactor = spongeParams.lowerFactor +
-					       static_cast<amrex::Real>(0.5) * (spongeParams.upperFactor - spongeParams.lowerFactor) * (1.0 - cosTerm);
-			} else {
-				spongeFactor = spongeParams.upperFactor;
-			}
-
-			amrex::Real const alpha = (dt > static_cast<amrex::Real>(0.0) && spongeParams.timescale > static_cast<amrex::Real>(0.0))
-						      ? (dt / spongeParams.timescale)
-						      : static_cast<amrex::Real>(0.0);
-			amrex::Real const fac =
-			    -(static_cast<amrex::Real>(1.0) - static_cast<amrex::Real>(1.0) / (static_cast<amrex::Real>(1.0) + alpha * spongeFactor));
-
-			if (fac != static_cast<amrex::Real>(0.0)) {
-				amrex::Real const px_old = state[bx](i, j, k, x1Momentum_index);
-				amrex::Real const py_old = state[bx](i, j, k, x2Momentum_index);
-				amrex::Real const pz_old = state[bx](i, j, k, x3Momentum_index);
-
-				amrex::Real const deltaPx = fac * (px_old - rho * spongeParams.targetVelocity[0]);
-				amrex::Real const deltaPy = fac * (py_old - rho * spongeParams.targetVelocity[1]);
-				amrex::Real const deltaPz = fac * (pz_old - rho * spongeParams.targetVelocity[2]);
-
-				amrex::Real const px_new = px_old + deltaPx;
-				amrex::Real const py_new = py_old + deltaPy;
-				amrex::Real const pz_new = pz_old + deltaPz;
-
-				state[bx](i, j, k, x1Momentum_index) = px_new;
-				state[bx](i, j, k, x2Momentum_index) = py_new;
-				state[bx](i, j, k, x3Momentum_index) = pz_new;
-
-				amrex::Real const kineticOld = static_cast<amrex::Real>(0.5) * (px_old * px_old + py_old * py_old + pz_old * pz_old) / rho;
-				amrex::Real const kineticNew = static_cast<amrex::Real>(0.5) * (px_new * px_new + py_new * py_new + pz_new * pz_new) / rho;
-
-				state[bx](i, j, k, energy_index) += (kineticNew - kineticOld);
-			}
-		}
-	});
-}
-
 template <typename problem_t> void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const tempFloor, amrex::MultiFab &state_mf)
 {
 	auto state = state_mf.arrays();
@@ -911,6 +992,16 @@ template <typename problem_t> void HydroSystem<problem_t>::EnforceLimits(amrex::
 			}
 		}
 
+		// Enforce dust density floor
+		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+			for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
+				amrex::Real dust_rho = state[bx](i, j, k, dustDensity_index + g * numDustVars_);
+				if (dust_rho < densityFloor) {
+					state[bx](i, j, k, dustDensity_index + g * numDustVars_) = densityFloor;
+				}
+			}
+		}
+
 		// Enforce temperature floor
 		if ((rho_new > std::numeric_limits<amrex::Real>::min()) && !HydroSystem<problem_t>::is_eos_isothermal()) {
 			amrex::Real const vx1 = state[bx](i, j, k, x1Momentum_index) / rho_new;
@@ -943,17 +1034,21 @@ template <typename problem_t> void HydroSystem<problem_t>::EnforceLimits(amrex::
 
 template <typename problem_t>
 void HydroSystem<problem_t>::AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf,
+						  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf,
 						  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx,
 						  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArray, amrex::iMultiFab const &redoFlag_mf)
 {
 	// compute P dV source term for the internal energy equation,
 	// using the face-centered velocities in faceVelArray and the pressure
-
+	auto const &cons_fc_x0 = cons_fc_mf[0].const_arrays();
 	auto vel_x = faceVelArray[0].const_arrays();
+
 #if AMREX_SPACEDIM >= 2
+	auto const &cons_fc_x1 = cons_fc_mf[1].const_arrays();
 	auto vel_y = faceVelArray[1].const_arrays();
 #endif
 #if AMREX_SPACEDIM == 3
+	auto const &cons_fc_x2 = cons_fc_mf[2].const_arrays();
 	auto vel_z = faceVelArray[2].const_arrays();
 #endif
 
@@ -963,7 +1058,18 @@ void HydroSystem<problem_t>::AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex
 
 	amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
 		// get cell-centered pressure
-		const amrex::Real Pgas = ComputePressure(consVar[bx], i, j, k);
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
+
+		if (Physics_Traits<problem_t>::is_mhd_enabled) {
+			cons_fc[0] = cons_fc_x0[bx];
+#if AMREX_SPACEDIM >= 2
+			cons_fc[1] = cons_fc_x1[bx];
+#endif
+#if AMREX_SPACEDIM == 3
+			cons_fc[2] = cons_fc_x2[bx];
+#endif
+		}
+		const amrex::Real Pgas = ComputePressure(consVar[bx], i, j, k, &cons_fc);
 
 		// compute div v from face-centered velocities
 		amrex::Real div_v = NAN;
@@ -1271,36 +1377,38 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 #endif
 
 		// solve the Riemann problem in canonical form (i.e., where the x-dir is the normal direction)
-		quokka::valarray<double, nvar_> F_canonical{};
+		quokka::valarray<double, nHydroScalars_> F_canonical{};
 
 		if constexpr (RIEMANN == RiemannSolver::HLLC) {
 			static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "Cannot use HLLC solver for MHD problems!");
-			F_canonical = quokka::Riemann::HLLC<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, du, dw);
+			F_canonical = quokka::Riemann::HLLC<problem_t, nscalars_, nmscalars_, nHydroScalars_>(sL, sR, gamma_, du, dw);
 		} else if constexpr (RIEMANN == RiemannSolver::LLF) {
-			F_canonical = quokka::Riemann::LLF<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR);
+			F_canonical = quokka::Riemann::LLF<problem_t, nscalars_, nmscalars_, nHydroScalars_>(sL, sR);
 		} else if constexpr (RIEMANN == RiemannSolver::LLF_MHD) {
 			quokka::Array4View<amrex::Real, DIR> x1FSpds(x1FSpds_ref);
-			auto [F_canonical_tmp, fspd_m, fspd_p] = quokka::Riemann::LLF_MHD<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, bx1);
+			auto [F_canonical_tmp, fspd_m, fspd_p] =
+			    quokka::Riemann::LLF_MHD<problem_t, nscalars_, nmscalars_, nHydroScalars_>(sL, sR, gamma_, bx1);
 			F_canonical = F_canonical_tmp;
 			x1FSpds(i, j, k, 0) = fspd_m;
 			x1FSpds(i, j, k, 1) = fspd_p;
 		} else if constexpr (RIEMANN == RiemannSolver::HLLD) {
 			quokka::Array4View<amrex::Real, DIR> x1FSpds(x1FSpds_ref);
-			auto [F_canonical_tmp, fspd_m, fspd_p] = quokka::Riemann::HLLD<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, bx1, dw);
+			auto [F_canonical_tmp, fspd_m, fspd_p] =
+			    quokka::Riemann::HLLD<problem_t, nscalars_, nmscalars_, nHydroScalars_>(sL, sR, gamma_, bx1, dw);
 			F_canonical = F_canonical_tmp;
 			x1FSpds(i, j, k, 0) = fspd_m;
 			x1FSpds(i, j, k, 1) = fspd_p;
 		}
 
-		quokka::valarray<double, nvar_> F = F_canonical;
+		quokka::valarray<double, nHydroScalars_> F = F_canonical;
 
 		// add artificial viscosity
 		// following Colella & Woodward (1984), eq. (4.2)
 		const double div_v = AMREX_D_TERM(du, +0.5 * (dvl + dvr), +0.5 * (dwl + dwr));
 		const double viscosity = K_visc * std::max(-div_v, 0.);
 
-		quokka::valarray<double, nvar_> U_L = {sL.rho, sL.rho * sL.u, sL.rho * sL.v, sL.rho * sL.w, sL.E, sL.Eint};
-		quokka::valarray<double, nvar_> U_R = {sR.rho, sR.rho * sR.u, sR.rho * sR.v, sR.rho * sR.w, sR.E, sR.Eint};
+		quokka::valarray<double, nHydroScalars_> U_L = {sL.rho, sL.rho * sL.u, sL.rho * sL.v, sL.rho * sL.w, sL.E, sL.Eint};
+		quokka::valarray<double, nHydroScalars_> U_R = {sR.rho, sR.rho * sR.u, sR.rho * sR.v, sR.rho * sR.w, sR.E, sR.Eint};
 
 		// conserve flux of mass scalars
 		// based on Plewa and Muller 1999, A&A, 342, 179 (equations 8 and 12)
@@ -1308,7 +1416,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		amrex::Real fluxSum_U_R = 0;
 
 		for (int n = 0; n < nscalars_; ++n) {
-			const int nstart = nvar_ - nscalars_;
+			const int nstart = nHydroScalars_ - nscalars_;
 			U_L[nstart + n] = sL.scalar[n];
 			U_R[nstart + n] = sR.scalar[n];
 
@@ -1347,7 +1455,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		// use the same logic as above to scale and conserve specie fluxes
 		if (F[density_index] >= 0.) {
 			for (int n = 0; n < nmscalars_; ++n) {
-				const int nstart = nvar_ - nscalars_;
+				const int nstart = nHydroScalars_ - nscalars_;
 				if (fluxSum_U_L > 0.) {
 					F[nstart + n] = F[density_index] * U_L[nstart + n] / fluxSum_U_L;
 				} else {
@@ -1356,7 +1464,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			}
 		} else {
 			for (int n = 0; n < nmscalars_; ++n) {
-				const int nstart = nvar_ - nscalars_;
+				const int nstart = nHydroScalars_ - nscalars_;
 				if (fluxSum_U_R > 0.) {
 					F[nstart + n] = F[density_index] * U_R[nstart + n] / fluxSum_U_R;
 				} else {
@@ -1366,9 +1474,14 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		}
 
 		// copy all flux components to the flux array
-		for (int nc = 0; nc < nvar_; ++nc) {
+		for (int nc = 0; nc < nHydroScalars_; ++nc) {
 			AMREX_ASSERT(!std::isnan(F[nc])); // check flux is valid
 			x1Flux(i, j, k, nc) = F[nc];
+		}
+
+		// calculate dust fluxes if enabled
+		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+			DustSystem<problem_t>::template ComputeDustFluxes<DIR>(x1Flux, x1LeftState, x1RightState, i, j, k);
 		}
 	});
 }

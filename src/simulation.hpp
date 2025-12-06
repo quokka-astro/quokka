@@ -179,6 +179,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real stopTime_ = 1.0;	      // default
 	amrex::Real cflNumber_ = 0.3;	      // default
 	amrex::Real particleCflNumber_ = 0.5; // default
+	amrex::Real signalSpeedAbort_ = -1.0;
+	amrex::Real particleSpeedAbort_ = -1.0;
 	amrex::Real dtToleranceFactor_ = 1.1; // default
 	amrex::Real dtCutoff_ = 0.0;	      // default: no cutoff (disabled when 0)
 	amrex::Long cycleCount_ = 0;
@@ -199,6 +201,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real reltolPoisson_ = 1.0e-5;			     // default
 	amrex::Real abstolPoisson_ = 1.0e-5;			     // default (scaled by minimum RHS value)
 	int poissonSupercycleInterval_ = 1;			     // number of coarse steps between Poisson solves (default: 1)
+	bool splitParticlesOnRestartRefine_ = true;		     // whether to split particles when restarting with refinement
 	amrex::Vector<amrex::MultiFab> phi;
 
 	amrex::Real densityFloor_ = 0.0; // default
@@ -394,6 +397,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	auto getWalltime() -> amrex::Real;
 	auto getCycleWalltime() -> amrex::Real;
 	void setChkFile(std::string const &chkfile_number);
+	[[nodiscard]] auto getOldMF_cc() const -> amrex::Vector<amrex::MultiFab> const &;
+	[[nodiscard]] auto getNewMF_cc() const -> amrex::Vector<amrex::MultiFab> const &;
 	[[nodiscard]] auto getOldMF_fc() const -> amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &;
 	[[nodiscard]] auto getNewMF_fc() const -> amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &;
 
@@ -565,6 +570,10 @@ template <typename problem_t> auto AMRSimulation<problem_t>::getGitHashForAmrex(
 
 template <typename problem_t> void AMRSimulation<problem_t>::setChkFile(std::string const &chkfile_number) { restart_chkfile = chkfile_number; }
 
+template <typename problem_t> auto AMRSimulation<problem_t>::getOldMF_cc() const -> const amrex::Vector<amrex::MultiFab> & { return state_old_cc_; }
+
+template <typename problem_t> auto AMRSimulation<problem_t>::getNewMF_cc() const -> const amrex::Vector<amrex::MultiFab> & { return state_new_cc_; }
+
 template <typename problem_t> auto AMRSimulation<problem_t>::getOldMF_fc() const -> const amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> &
 {
 	return state_old_fc_;
@@ -733,6 +742,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default CFL number for particles == 0.5, set to whatever is in the file
 	pp.query("particle_cfl", particleCflNumber_);
 
+	// Abort when signal speed exceeds this threshold (in code units)
+	pp.query("signal_speed_abort", signalSpeedAbort_);
+	pp.query("particle_speed_abort", particleSpeedAbort_);
+
 	// Default AMR interpolation method == lincc_interp
 	pp.query("amr_interpolation_method", amrInterpMethod_);
 
@@ -842,6 +855,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 		ppp.query("use_luminosity_table", useLuminosityTable_);
 		ppp.query("rad_table", luminosityTableFilename_);
 		ppp.query("rad_table_output_spacing", rad_table_output_spacing_);
+		ppp.query("split_particles_on_restart_refine", splitParticlesOnRestartRefine_);
 
 #if AMREX_SPACEDIM == 3
 		// if particle and radiation are enabled
@@ -980,6 +994,13 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	computeMaxSignalLocal(lev);
 	const amrex::Real domain_signal_max = max_signal_speed_[lev].norminf();
 	const amrex::IntVect domain_signal_maxloc = max_signal_speed_[lev].maxIndex(0);
+	if (signalSpeedAbort_ > 0.0 && domain_signal_max > signalSpeedAbort_) {
+		const std::string abort_msg =
+		    fmt::format("[FATAL] Maximum signal speed ({:.3e} code units) exceeded abort threshold ({:.3e} code units) on level {} at cell {}",
+				domain_signal_max, signalSpeedAbort_, lev, domain_signal_maxloc);
+		printCellProperties(lev, domain_signal_maxloc);
+		amrex::Abort(abort_msg.c_str());
+	}
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx = geom[lev].CellSizeArray();
 	const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
 	dtloc_t hydro_dt{.value = cflNumber_ * (dx_min / domain_signal_max), .index = domain_signal_maxloc};
@@ -999,17 +1020,15 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		const amrex::ValLocPair<amrex::Real, amrex::RealVect> max_particle_speed = particleRegister_.computeMaxParticleSpeed(lev);
 		AMREX_ALWAYS_ASSERT(!std::isnan(max_particle_speed.value));
 		AMREX_ALWAYS_ASSERT(std::isfinite(max_particle_speed.value));
+		if (particleSpeedAbort_ > 0.0 && max_particle_speed.value > particleSpeedAbort_) {
+			const std::string abort_msg = fmt::format(
+			    "[FATAL] Maximum particle speed ({:.3e} code units) exceeded abort threshold ({:.3e} code units) on level {} at position {::e}",
+			    max_particle_speed.value, particleSpeedAbort_, lev, max_particle_speed.index);
+			amrex::Abort(abort_msg.c_str());
+		}
 		// avoid division by zero by only computing dt if max_particle_speed is not too small
 		if (max_particle_speed.value > 1e-5 * (dx_min / hydro_dt.value)) {
 			particle_dt.value = particleCflNumber_ * (dx_min / max_particle_speed.value);
-			// compute IntVect from RealVect and geom[lev]
-			amrex::IntVect cell_idx;
-			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxinv = geom[lev].InvCellSizeArray();
-			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo = geom[lev].ProbLoArray();
-			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-				cell_idx[i] = static_cast<int>(dxinv[i] * (max_particle_speed.index[i] - prob_lo[i]));
-			}
-			particle_dt.index = cell_idx;
 		}
 		if (verbose) {
 			amrex::Print() << fmt::format("...[level {}] estimated particle timestep: {:e}\n", lev, particle_dt.value);
@@ -1178,12 +1197,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
 
-		// output per-cycle timing
-		if (printCycleTiming_ == 1) {
-			amrex::Real elapsed_sec = getCycleWalltime();
-			amrex::Print() << "(cycle time: " << elapsed_sec << " s) ...\n";
-		} else {
-			amrex::Print() << "...\n";
+		if (suppress_output == 0) {
+			// output per-cycle timing
+			if (printCycleTiming_ == 1) {
+				amrex::Real elapsed_sec = getCycleWalltime();
+				amrex::Print() << "(cycle time: " << elapsed_sec << " s) ...\n";
+			} else {
+				amrex::Print() << "...\n";
+			}
 		}
 
 		computeTimestep();
@@ -1409,25 +1430,30 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	for (int n = 0; n < ncomp_cc; ++n) {
 		amrex::Real const final_sum = state_new_cc_[0].sum(n) * vol;
 		amrex::Real const abs_err = (final_sum - init_sum_cons[n]);
-		amrex::Print() << "Initial " << componentNames_cc_[n] << " = " << init_sum_cons[n] << '\n';
-		amrex::Print() << "\tabsolute conservation error = " << abs_err << '\n';
-		if (init_sum_cons[n] != 0.0) {
-			amrex::Real const rel_err = abs_err / init_sum_cons[n];
-			amrex::Print() << "\trelative conservation error = " << rel_err << '\n';
+		if (suppress_output == 0) {
+			amrex::Print() << "Initial " << componentNames_cc_[n] << " = " << init_sum_cons[n] << '\n';
+			amrex::Print() << "\tabsolute conservation error = " << abs_err << '\n';
+			if (init_sum_cons[n] != 0.0) {
+				amrex::Real const rel_err = abs_err / init_sum_cons[n];
+				amrex::Print() << "\trelative conservation error = " << rel_err << '\n';
+			}
+			amrex::Print() << '\n';
 		}
-		amrex::Print() << '\n';
 	}
 
 	// compute zone-cycles/sec
 	const int IOProc = amrex::ParallelDescriptor::IOProcessorNumber();
 	amrex::ParallelDescriptor::ReduceRealMax(elapsed_sec, IOProc);
-	const double microseconds_per_update = 1.0e6 * elapsed_sec / cellUpdates_;
-	const double megaupdates_per_second = 1.0 / microseconds_per_update;
-	amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update << " μs/zone-update [" << megaupdates_per_second << " Mupdates/s]\n";
-	for (int lev = 0; lev <= max_level; ++lev) {
-		amrex::Print() << "Zone-updates on level " << lev << ": " << cellUpdatesEachLevel_[lev] << "\n";
+	if (suppress_output == 0) {
+		const double microseconds_per_update = 1.0e6 * elapsed_sec / cellUpdates_;
+		const double megaupdates_per_second = 1.0 / microseconds_per_update;
+		amrex::Print() << "Performance figure-of-merit: " << microseconds_per_update << " μs/zone-update [" << megaupdates_per_second
+			       << " Mupdates/s]\n";
+		for (int lev = 0; lev <= max_level; ++lev) {
+			amrex::Print() << "Zone-updates on level " << lev << ": " << cellUpdatesEachLevel_[lev] << "\n";
+		}
+		amrex::Print() << '\n';
 	}
-	amrex::Print() << '\n';
 
 	// write final plotfile
 	if ((plotfileInterval_ > 0 || plotTimeInterval_ > 0) && istep[0] > last_plot_file_step) {
@@ -2308,6 +2334,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 					       geom[level].ProbHiArray(), quokka::centering::fc, static_cast<quokka::direction>(idim));
 			// set initial conditions defined by the user
 			setInitialConditionsOnGridFaceVars(grid_elem);
+		}
+		{
+			// sync overlapping face-centred data
+			const auto &periodicity = geom[level].periodicity();
+			auto owner_mask = amrex::OwnerMask(state_new_fc_[level][idim], periodicity);
+			state_new_fc_[level][idim].OverrideSync(*owner_mask, periodicity);
 		}
 		// check that the valid state_new_fc_[level][idim] data is filled properly
 		AMREX_ALWAYS_ASSERT(!state_new_fc_[level][idim].contains_nan(0, ncomp_per_dim_fc));
@@ -3951,7 +3983,7 @@ void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::un
 
 	// Split particles
 #if AMREX_SPACEDIM == 3
-	if (restartRefineFactor_ > 1) {
+	if (restartRefineFactor_ > 1 && splitParticlesOnRestartRefine_) {
 		const int split_factor = gcem::pow(restartRefineFactor_, AMREX_SPACEDIM);
 		amrex::Print() << fmt::format("Splitting {} using split_factor = {}\n", particleRegister_.getParticleTypeName(particle_type), split_factor);
 		auto descriptor = particleRegister_.getParticleDescriptor(particle_type);
