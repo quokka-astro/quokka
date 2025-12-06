@@ -38,6 +38,8 @@ template <> struct Physics_Traits<WaveProblem> {
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
+	static constexpr bool is_dust_enabled = false;
+	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = 1; // number of radiation groups
@@ -125,7 +127,7 @@ auto problem_main() -> int
 
 	// compute error norm
 	amrex::Real err_sq = 0.;
-	for (int n = 0; n < QuokkaSimulation<WaveProblem>::ncompHydro_; ++n) {
+	for (int n = 0; n < QuokkaSimulation<WaveProblem>::nvars_; ++n) {
 		if (n == HydroSystem<WaveProblem>::internalEnergy_index) {
 			continue;
 		}
