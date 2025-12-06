@@ -1,4 +1,13 @@
 if(AMReX_SPACEDIM EQUAL 3)
-  quokka_add_problem(JOB_NAME ParticleSF)
-  add_test(NAME ParticleSF2 COMMAND ParticleSF ../inputs/ParticleSF2.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+	set(JOB_NAME ParticleSF)
+
+	add_executable(${JOB_NAME} test${JOB_NAME}.cpp ${QuokkaObjSources})
+	if(AMReX_GPU_BACKEND MATCHES "CUDA")
+		setup_target_for_cuda_compilation(${JOB_NAME})
+	endif()
+
+  add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(NAME ${JOB_NAME}2 COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}2.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+
+	set_tests_properties(${JOB_NAME}2 PROPERTIES DEPENDS "${JOB_NAME}")
 endif()
