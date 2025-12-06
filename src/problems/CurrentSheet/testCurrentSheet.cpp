@@ -124,4 +124,3 @@ auto problem_main() -> int
 	sim.evolve();
 	return 0;
 }
-

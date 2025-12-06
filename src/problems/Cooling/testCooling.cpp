@@ -225,4 +225,3 @@ auto problem_main() -> int
 	int const status = 0;
 	return status;
 }
-

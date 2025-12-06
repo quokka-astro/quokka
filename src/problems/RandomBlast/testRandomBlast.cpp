@@ -340,4 +340,3 @@ auto problem_main() -> int
 	const int status = 0;
 	return status;
 }
-
