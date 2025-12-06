@@ -33,10 +33,10 @@ constexpr double r_acc_tolerance = 1.0001;
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto get_delta_rho(double rho, double rho_sink) -> double { return -0.5 * (rho - rho_sink) / rho; }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::Array4<const amrex::Real> &local_state, int ix, int iy, int iz, double par_mass,
-								   double par_x, double par_y, double par_z,
-								   const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
-								   const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx) -> std::tuple<double, double>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+compute_Mdot_and_r_K(const amrex::Array4<const amrex::Real> &local_state, int ix, int iy, int iz, double par_mass, double par_x, double par_y, double par_z,
+		     const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
+		     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *state_fc = nullptr) -> std::tuple<double, double>
 {
 	const double dx_max = std::max({dx[0], dx[1], dx[2]});
 
@@ -73,7 +73,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::
 				const double px = local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index);
 				const double py = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index);
 				const double pz = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index);
-				double cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, ii, jj, kk);
+				double cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, ii, jj, kk, state_fc);
 				if constexpr (quokka::EOS_Traits<problem_t>::gamma == 1.0) {
 					cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
 				}
@@ -133,7 +133,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_accretion_kernel(const dou
 template <typename ContainerType, typename problem_t>
 void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, const amrex::Array4<const amrex::Real> &local_state,
 			       const amrex::Array4<amrex::Real> &local_accretion_rate, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
-			       const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx, amrex::Real /*time*/, amrex::Real dt, int /*mass_index*/)
+			       const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> state_fc,
+			       bool has_face_fields, amrex::Real /*time*/, amrex::Real dt, int /*mass_index*/)
 {
 	const BL_PROFILE("SinkAccretionUtils::ComputeAccretionRateInBox()");
 	// Get the particle array of structs
@@ -144,6 +145,9 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 	const double vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 	const bool use_uniform_kernel = sink_particle_use_uniform_kernel;
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(has_face_fields, "Face-centered state is required for MHD sink accretion");
+	}
 
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
@@ -153,7 +157,9 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 		int iy = static_cast<int>((p.pos(1) - plo[1]) / dx[1]);
 		int iz = static_cast<int>((p.pos(2) - plo[2]) / dx[2]);
 
-		const auto [M_dot, r_K] = compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, p.rdata(0), p.pos(0), p.pos(1), p.pos(2), plo, dx);
+		auto const *state_fc_ptr = has_face_fields ? &state_fc : nullptr;
+		const auto [M_dot, r_K] =
+		    compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, p.rdata(0), p.pos(0), p.pos(1), p.pos(2), plo, dx, state_fc_ptr);
 		AMREX_ASSERT(M_dot >= 0.0);
 
 		// compute the sum of the accretion kernel weight function, w = exp(- r^2 / r_K^2)
@@ -228,7 +234,8 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 // Then, if the density in the end state is above the Jeans density, we increase the accretion rate so that the density in the end state is
 // equal to the Jeans density.
 template <typename problem_t>
-void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, amrex::MultiFab &scale_down, const amrex::Geometry &geom)
+void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, amrex::MultiFab &scale_down, const amrex::Geometry &geom,
+		      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc)
 {
 	const BL_PROFILE("SinkAccretionUtils::ComputeScaleDown()");
 	const auto &local_state_arr = state.arrays();
@@ -236,6 +243,26 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 	const auto &local_scale_down_arr = scale_down.arrays();
 	const auto &dx = geom.CellSizeArray();
 	const double dx_max = std::max({dx[0], dx[1], dx[2]});
+
+#if AMREX_SPACEDIM >= 1
+	std::remove_reference_t<decltype((*state_fc)[0].const_arrays())> state_fc_x0{};
+#endif
+#if AMREX_SPACEDIM >= 2
+	std::remove_reference_t<decltype((*state_fc)[1].const_arrays())> state_fc_x1{};
+#endif
+	std::remove_reference_t<decltype((*state_fc)[2].const_arrays())> state_fc_x2{};
+	const bool has_face_fields = Physics_Traits<problem_t>::is_mhd_enabled;
+
+	if (has_face_fields) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state_fc != nullptr, "Face-centered state is required for MHD sink accretion");
+#if AMREX_SPACEDIM >= 1
+		state_fc_x0 = (*state_fc)[0].const_arrays();
+#endif
+#if AMREX_SPACEDIM >= 2
+		state_fc_x1 = (*state_fc)[1].const_arrays();
+#endif
+		state_fc_x2 = (*state_fc)[2].const_arrays();
+	}
 
 	amrex::ParallelFor(accretion_rate, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		const double accretion_rate_cell = local_accretion_rate_arr[bx](i, j, k);
@@ -253,7 +280,17 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 		// Jeans-violating cell that is not in a accretion zone emerging at the beginning of a step.
 		if (accretion_rate_cell > std::numeric_limits<double>::min()) {
 			// Compute Jeans density rho_J = J^2 * pi * cs^2 / (G * dx^2)
-			double cs_cell = HydroSystem<problem_t>::ComputeSoundSpeed(local_state_arr[bx], i, j, k);
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc_ptr = nullptr;
+			if (has_face_fields) {
+				cons_fc[0] = state_fc_x0[bx];
+#if AMREX_SPACEDIM >= 2
+				cons_fc[1] = state_fc_x1[bx];
+#endif
+				cons_fc[2] = state_fc_x2[bx];
+				cons_fc_ptr = &cons_fc;
+			}
+			double cs_cell = HydroSystem<problem_t>::ComputeSoundSpeed(local_state_arr[bx], i, j, k, cons_fc_ptr);
 			if constexpr (quokka::EOS_Traits<problem_t>::gamma == 1.0) {
 				cs_cell = quokka::EOS_Traits<problem_t>::cs_isothermal;
 			}
@@ -277,8 +314,9 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 template <typename ContainerType, typename problem_t>
 void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterType &pti, const amrex::Array4<const amrex::Real> &local_state,
 					const amrex::Array4<const amrex::Real> &local_scale_down, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
-					const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx, int mass_index, amrex::Real /*time*/, amrex::Real dt,
-					amrex::Real /*vol*/)
+					const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
+					std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> state_fc, bool has_face_fields, int mass_index,
+					amrex::Real /*time*/, amrex::Real dt, amrex::Real /*vol*/)
 {
 	const BL_PROFILE("SinkAccretionUtils::UpdateParticleMassAndMomentumInBox()");
 	// Get the particle array of structs
@@ -297,7 +335,9 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 		int iy = static_cast<int>((p.pos(1) - plo[1]) / dx[1]);
 		int iz = static_cast<int>((p.pos(2) - plo[2]) / dx[2]);
 
-		const auto [M_dot, r_K] = compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, p.rdata(0), p.pos(0), p.pos(1), p.pos(2), plo, dx);
+		auto const *state_fc_ptr = has_face_fields ? &state_fc : nullptr;
+		const auto [M_dot, r_K] =
+		    compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, p.rdata(0), p.pos(0), p.pos(1), p.pos(2), plo, dx, state_fc_ptr);
 
 		// compute the sum of the accretion kernel weight function, w = exp(- r^2 / r_K^2)
 		double w_sum = 0.0;
@@ -381,14 +421,25 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 }
 
 template <typename ContainerType, typename problem_t>
-void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &scale_down, int lev, int mass_index, amrex::Real time,
-				   amrex::Real dt)
+void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &scale_down,
+				   std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, int mass_index, amrex::Real time, amrex::Real dt)
 {
 	const BL_PROFILE("SinkAccretionUtils::UpdateParticleMassAndMomentum()");
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 		// Get the local deposit array for this box
 		const auto &local_state = state.array(pti);
 		const auto &local_scale_down = scale_down.array(pti);
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
+		bool has_face_fields = false;
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state_fc != nullptr, "Face-centered state is required for MHD sink accretion");
+			local_state_fc[0] = (*state_fc)[0].array(pti);
+#if AMREX_SPACEDIM >= 2
+			local_state_fc[1] = (*state_fc)[1].array(pti);
+#endif
+			local_state_fc[2] = (*state_fc)[2].array(pti);
+			has_face_fields = true;
+		}
 
 		// Get geometry information for this level
 		const auto &geom = container->Geom(lev);
@@ -399,7 +450,8 @@ void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &st
 		const amrex::Real vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 		// Process particles in this box
-		UpdateParticleMassAndMomentumInBox<ContainerType, problem_t>(pti, local_state, local_scale_down, plo, dx, mass_index, time, dt, vol);
+		UpdateParticleMassAndMomentumInBox<ContainerType, problem_t>(pti, local_state, local_scale_down, plo, dx, local_state_fc, has_face_fields,
+									     mass_index, time, dt, vol);
 	}
 }
 
@@ -431,14 +483,25 @@ template <typename problem_t> void UpdateHydroState(amrex::MultiFab &state, amre
 
 // Functor for computing the accretion rate and store it in a buffer state `accretion_rate`.
 template <typename ContainerType, typename problem_t>
-void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real time, amrex::Real dt,
-		      int mass_index)
+void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &accretion_rate,
+		      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, amrex::Real time, amrex::Real dt, int mass_index)
 {
 	const BL_PROFILE("SinkAccretionUtils::computeAccretion()");
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 		// Get the local deposit array for this box
 		const auto &local_state = state.array(pti);
 		const auto &local_accretion_rate = accretion_rate.array(pti);
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
+		bool has_face_fields = false;
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state_fc != nullptr, "Face-centered state is required for MHD sink accretion");
+			local_state_fc[0] = (*state_fc)[0].array(pti);
+#if AMREX_SPACEDIM >= 2
+			local_state_fc[1] = (*state_fc)[1].array(pti);
+#endif
+			local_state_fc[2] = (*state_fc)[2].array(pti);
+			has_face_fields = true;
+		}
 
 		// Get geometry information for this level
 		const auto &geom = container->Geom(lev);
@@ -446,7 +509,8 @@ void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 		const auto dx = geom.CellSizeArray();
 
 		// Process particles in this box
-		ComputeAccretionRateInBox<ContainerType, problem_t>(pti, local_state, local_accretion_rate, plo, dx, time, dt, mass_index);
+		ComputeAccretionRateInBox<ContainerType, problem_t>(pti, local_state, local_accretion_rate, plo, dx, local_state_fc, has_face_fields, time, dt,
+								    mass_index);
 	}
 
 	// Sum boundary cell values to real cells
@@ -455,8 +519,9 @@ void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 
 // Functor for applying accretion.
 template <typename ContainerType, typename problem_t>
-void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, const amrex::Geometry &geom, int lev,
-		    amrex::Real time, amrex::Real dt, int mass_index)
+void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate,
+		    std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, const amrex::Geometry &geom, int lev, amrex::Real time, amrex::Real dt,
+		    int mass_index)
 {
 	const BL_PROFILE("SinkAccretionUtils::applyAccretion()");
 	// Step 2: Compute the scale_down factor. We scale down the accretion rate to prevent accretion rates from exceeding 100%
@@ -464,10 +529,10 @@ void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mul
 	amrex::MultiFab scale_down(state.boxArray(), state.DistributionMap(), 1, state.nGrow());
 	scale_down.setVal(1.0);
 	// Update accretion_rate and compute scale_down
-	ComputeScaleDown<problem_t>(state, state_accretion_rate, scale_down, geom);
+	ComputeScaleDown<problem_t>(state, state_accretion_rate, scale_down, geom, state_fc);
 
 	// Step 3: Update particle mass and momentum
-	UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, lev, mass_index, time, dt);
+	UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, state_fc, lev, mass_index, time, dt);
 
 	// Step 4: Update the hydro state. We do this at last because the original state is needed for updating particles in step 3.
 	UpdateHydroState<problem_t>(state, state_accretion_rate);

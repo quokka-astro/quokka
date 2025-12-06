@@ -123,7 +123,9 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const & /*state_arr*/,
 						 amrex::Array4<const amrex::Real> const & /*state_accretion_rate_arr*/, int i, int j, int k,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::RandomEngine const & /*engine*/) const -> int
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+						 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const * /*cons_fc*/,
+						 amrex::RandomEngine const & /*engine*/) const -> int
 		{
 			// A simple demonstration of particle creation
 			// Could check density threshold or other state-based conditions
@@ -167,7 +169,8 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		AMREX_GPU_DEVICE void
 		operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, StateArray const & /*state_accretion_rate_arr*/, int i,
 			   int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
-			   amrex::Long base_offset, amrex::RandomEngine const & /*engine*/) const
+			   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const * /*cons_fc*/, amrex::Long base_offset,
+			   amrex::RandomEngine const & /*engine*/) const
 		{
 			if (mass_idx + 3 < ParticleType::NReal) {
 				// Calculate common values for all particles
@@ -214,12 +217,13 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 	// Main method to create particles - uses the helper implementation
 	template <typename problem_t, typename ContainerType>
 	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev,
-				    amrex::Real current_time, amrex::Real dt, int evolution_stage_index, int birth_time_index)
+				    amrex::Real current_time, amrex::Real dt, int evolution_stage_index, int birth_time_index,
+				    std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr)
 	{
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<ParticleType::Test>::template ParticleChecker,
 							  ParticleCreationTraits<ParticleType::Test>::template ParticleCreator>(
-		    container, mass_idx, state, state_accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index);
+		    container, mass_idx, state, state_accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index, state_fc);
 	}
 };
 } // namespace quokka
@@ -238,8 +242,6 @@ template <> void QuokkaSimulation<TestParticle>::setInitialConditionsOnGrid(quok
 		state_cc(i, j, k, HydroSystem<TestParticle>::internalEnergy_index) = 0;
 	});
 }
-
-template <> void QuokkaSimulation<TestParticle>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) {}
 
 auto problem_main() -> int
 {
