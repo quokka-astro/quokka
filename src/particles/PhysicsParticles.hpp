@@ -821,7 +821,7 @@ template <typename problem_t> class PhysicsParticleRegister
 			const std::string typeName = getParticleTypeName(type);
 
 			// Check if this particle type is in the requested list
-			if (std::find(particleTypeNames.begin(), particleTypeNames.end(), typeName) != particleTypeNames.end()) {
+			if (std::ranges::find(particleTypeNames, typeName) != particleTypeNames.end()) {
 				descriptor->writePlotFile(plotfilename, typeName);
 				descriptor->writeUnitsFile(plotfilename, typeName);
 			}
@@ -987,7 +987,7 @@ template <typename problem_t> class PhysicsParticleRegister
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			// Only compute SFH for particles that can be created (stars)
 			if (descriptor->getAllowsCreation()) {
-				amrex::Real total_mass = descriptor->computeStellarMass();
+				const amrex::Real total_mass = descriptor->computeStellarMass();
 				sfh_data_[type].emplace_back(nstep, time, total_mass);
 			}
 		}

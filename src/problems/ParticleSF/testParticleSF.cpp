@@ -90,7 +90,7 @@ template <> void QuokkaSimulation<ParticleSFProblem>::refineGrid(int lev, amrex:
 
 template <> void QuokkaSimulation<ParticleSFProblem>::computeAfterTimestep()
 {
-	int step = istep[0];
+	const int step = istep[0];
 	if (step == 1) {
 		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
 		const amrex::Real cell_volume = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
