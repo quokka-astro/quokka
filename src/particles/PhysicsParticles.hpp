@@ -995,7 +995,7 @@ template <typename problem_t> class PhysicsParticleRegister
 		for (const auto &[type, history] : sfh_data_) {
 			const std::string type_name = getParticleTypeName(type);
 			const std::string sfh_key = "SFH_" + type_name;
-			
+
 			// Write the full history to metadata
 			metadata[sfh_key] = YAML::Node(YAML::NodeType::Sequence);
 			for (const auto &entry : history) {
@@ -1013,15 +1013,15 @@ template <typename problem_t> class PhysicsParticleRegister
 	{
 		const std::string type_name = getParticleTypeName(type);
 		const std::string sfh_key = "SFH_" + type_name;
-		
+
 		Real last_time = 0.0;
-		
+
 		if (metadata[sfh_key]) {
 			const YAML::Node sfh_yaml = metadata[sfh_key];
 			if (sfh_yaml.IsSequence() && sfh_yaml.size() > 0) {
 				// Clear and restore sfh_data_ from metadata
 				sfh_data_[type].clear();
-				
+
 				for (const auto &entry : sfh_yaml) {
 					if (entry.IsSequence() && entry.size() == 3) {
 						const int nstep = entry[0].as<int>();
@@ -1031,11 +1031,11 @@ template <typename problem_t> class PhysicsParticleRegister
 						last_time = time;
 					}
 				}
-				
+
 				amrex::Print() << "Read SFH data for " << type_name << " from metadata (" << sfh_yaml.size() << " entries)\n";
 			}
 		}
-		
+
 		return last_time;
 	}
 };
