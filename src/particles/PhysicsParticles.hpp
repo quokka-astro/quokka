@@ -976,28 +976,34 @@ template <typename problem_t> class PhysicsParticleRegister
 	PhysicsParticleRegister(PhysicsParticleRegister &&) = delete;
 	auto operator=(PhysicsParticleRegister &&) -> PhysicsParticleRegister & = delete;
 
-	// Update SFH data in simulation metadata
-	void updateSFH(YAML::Node &metadata, int nstep, amrex::Real time)
+	// Update SFH data (store in memory)
+	void updateSFH(int nstep, amrex::Real time)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			// Only compute SFH for particles that can be created (stars)
 			if (descriptor->getAllowsCreation()) {
 				const amrex::Real total_mass = descriptor->computeStellarMass();
-				const std::string type_name = getParticleTypeName(type);
-				const std::string sfh_key = "SFH_" + type_name;
-				
 				// Store in local sfh_data_ for accumulation
 				sfh_data_[type].emplace_back(nstep, time, total_mass);
-				
-				// Write the full history to metadata
-				metadata[sfh_key] = YAML::Node(YAML::NodeType::Sequence);
-				for (const auto &entry : sfh_data_[type]) {
-					YAML::Node array_entry;
-					array_entry.push_back(std::get<0>(entry)); // nstep
-					array_entry.push_back(std::get<1>(entry)); // time
-					array_entry.push_back(std::get<2>(entry)); // total_mass
-					metadata[sfh_key].push_back(array_entry);
-				}
+			}
+		}
+	}
+
+	// Write SFH data from memory to metadata
+	void writeSFHToMetadata(YAML::Node &metadata) const
+	{
+		for (const auto &[type, history] : sfh_data_) {
+			const std::string type_name = getParticleTypeName(type);
+			const std::string sfh_key = "SFH_" + type_name;
+			
+			// Write the full history to metadata
+			metadata[sfh_key] = YAML::Node(YAML::NodeType::Sequence);
+			for (const auto &entry : history) {
+				YAML::Node array_entry;
+				array_entry.push_back(std::get<0>(entry)); // nstep
+				array_entry.push_back(std::get<1>(entry)); // time
+				array_entry.push_back(std::get<2>(entry)); // total_mass
+				metadata[sfh_key].push_back(array_entry);
 			}
 		}
 	}
