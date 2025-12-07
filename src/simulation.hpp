@@ -3886,6 +3886,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Test) {
 		initializeParticleContainerFromCheckpoint(TestParticles, quokka::ParticleType::Test, header_box_arrays);
 	}
+
+	// Read SFH data from metadata
+	last_sfh_time_ = particleRegister_.readSFH(simulationMetadata_);
 #endif // AMREX_SPACEDIM == 3
 
 	areInitialConditionsDefined_ = true;
@@ -3999,9 +4002,6 @@ void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::un
 
 	// Read particles
 	restartParticleContainerWithRefinement(container, restart_chkfile, particleRegister_.getParticleTypeName(particle_type), header_box_arrays);
-
-	// Read SFH data from metadata
-	last_sfh_time_ = particleRegister_.readSFH(simulationMetadata_, particle_type);
 
 	// Split particles
 #if AMREX_SPACEDIM == 3
