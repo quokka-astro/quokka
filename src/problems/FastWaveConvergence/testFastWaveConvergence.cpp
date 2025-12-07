@@ -50,7 +50,7 @@ constexpr double gamma_gas = quokka::EOS_Traits<FastWaveConvergence>::gamma;
 constexpr double bg_density = 1.0;
 constexpr double bg_pressure = sound_speed * sound_speed * bg_density / gamma_gas;
 constexpr double b0_magn = 1.0;
-constexpr double delta_b_magn = 1e-6;
+constexpr double delta_b_magn = 1e-3;
 constexpr double alfven_speed = b0_magn / gcem::sqrt(bg_density);
 constexpr double fast_speed = gcem::sqrt(alfven_speed * alfven_speed + sound_speed * sound_speed);
 
@@ -166,7 +166,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 		// theta = 0 or 180 deg: fast mode is pure sound wave → no B perturbation
 		delta_A2 = 0.0; // δB = 0
 	} else {
-		const double dB3_mrf = (cf*cf*sinθ) / (cf*cf - vA*vA*cosθ*cosθ) * delta_b_magn; // δB3
+		const double dB3_mrf = delta_b_magn; // δB3
 		delta_A2 = -(dB3_mrf / k_magn) * std::sin(phase);
 	}
 	const double A1_mrf = bg_A1 + delta_A1;
@@ -215,49 +215,51 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const double cosθ = std::cos(θ);
 		const double sinθ = std::sin(θ);
 
+
 		const double cf = std::sqrt(0.5 * (a * a + vA * vA + std::sqrt((a * a + vA * vA) * (a * a + vA * vA) - 4.0 * a * a * vA * vA * cosθ * cosθ)));
 
 		const double omega = cf * k_magn;
 		const double phase = omega * time - k_magn * x_vec_mrf_C[0];
 		const double cos_phase = std::cos(phase);
 		const double epsilon = delta_b_magn / b0_magn;
-		;
-
-		// background B0 in MRF
 		const double B0_1 = b0_magn * cosθ;
-		const double B0_2 = 0.0;
 		const double B0_3 = b0_magn * sinθ;
 
-		double v1_amp = 0.0;
-		double v3_amp = 0.0;
-		double dB3_mrf = 0.0;
+		// Velocity perturbations in MRF (from fast mode eigenvector)
+		double v1_mrf = 0.0;
+		double v3_mrf = 0.0;
+
+		// Magnetic field perturbation in MRF: δB = (0, 0, δB3)
+		double delta_B3 = 0.0;
 
 		// compute velocity perturbations in MRF
 		if (std::abs(sinθ) < tiny) {
-			// theta = 0 or 180 deg: fast mode is pure sound wave → no B perturbation
-			amrex::Warning("FastWaveConvergence: theta = 0 detected. Fast mode is a pure sound wave with no magnetic perturbation.");
-			v1_amp = epsilon * cf;
-			v3_amp = 0.0;
-			dB3_mrf = 0.0;
+			// Pure sound wave: set amplitude via epsilon (velocity/density perturbation)
+			if (i == 0 && j == 0 && k == 0 && time ==0.0) {
+				amrex::Print() << "Warning: angle between k and B0 is 0 or 180 deg. Fast wave reduces to pure sound wave with no magnetic perturbation.\n";
+			}	
+			v1_mrf = -epsilon * cf * cos_phase;
+			v3_mrf = 0.0;
+			delta_B3 = 0.0;
 		} else {
-			// general case
-			v1_amp = epsilon * cf;
-			v3_amp = -epsilon * (vA * vA * cosθ * sinθ) / (cf * cf - vA * vA * cosθ * cosθ);
-			dB3_mrf = (cf * cf * sinθ) / (cf * cf - vA * vA * cosθ * cosθ) * delta_b_magn * cos_phase;
+			// Fast magnetosonic wave: δB is primary
+			delta_B3 = delta_b_magn * cos_phase;			
+			// From eigenvector component 2: v₁/δB₃ = (c_f/ρ) / (B₃·c²_f/(ρc²_f - B²_x))
+			// Simplifies to: v₁ = c_f · δB₃ / B₃ = c_f · δB₃ / (b0_magn·sinθ)
+			v1_mrf = -(cf / (b0_magn * sinθ)) * delta_B3;
+			// From eigenvector component 4: δu_z / δB_z = -(B_x·B_z) / (ρ(ρc²_f - B²_x)) / (B_z·c²_f / (ρc²_f - B²_x))
+			// Simplifies to: v₃ = -(v_A² cosθ sinθ) / (c_f² - v_A² cos²θ) · c_f · δB₃ / B₃
+			v3_mrf = (vA * vA * cosθ) / (cf * cf - vA * vA * cosθ * cosθ) * (cf / sinθ) * (delta_B3 / b0_magn);
 		}
-		// velocity perturbations with time dependence
-		double const v1_mrf = v1_amp * cos_phase;
+	
 		double const v2_mrf = 0.0;
-		double const v3_mrf = v3_amp * cos_phase;
-
-		// magnetic perturbation
 	
 		// density & pressure perturbations (linear compressive fast mode)
 		const double density = bg_density * (1.0 + epsilon * cos_phase);
 		const double pressure = bg_pressure * (1.0 + gamma_gas * epsilon * cos_phase);
 
 		const auto v_prf = rotateMRF2PRF({v1_mrf, v2_mrf, v3_mrf});
-		const auto dB_prf = rotateMRF2PRF({0.0, 0.0, dB3_mrf});
+		const auto dB_prf = rotateMRF2PRF({0.0, 0.0, delta_B3});
 		const auto B0_prf = rotateMRF2PRF({B0_1, 0.0, B0_3});
 		const double b_x1_prf = B0_prf[0] + dB_prf[0];
 		const double b_x2_prf = B0_prf[1] + dB_prf[1];
@@ -530,8 +532,8 @@ auto problem_main() -> int
 
 	quokka::richardson::Parameters params{};
 	params.machine_precision_target = 2.0e-12;
-	params.nx_initial = 16;
-	params.nx_max = 128;
+	params.nx_initial =16;
+	params.nx_max = 1024;
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;
 	params.test_name = "Fast Wave";
