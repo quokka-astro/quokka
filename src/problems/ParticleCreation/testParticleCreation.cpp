@@ -17,7 +17,7 @@ struct TestParticle {
 constexpr double rho0 = 1.0e-5;
 constexpr double dt_ = 0.001;
 static bool refine_half_domain = false; // NOLINT
-constexpr double B0 = 1.0e-7;		  // uniform background field
+constexpr double B0 = 1.0e-7;		// uniform background field
 
 // locations of the particles: a 2x2x2 grids of particles
 constexpr double box_left_edge_ = -2.0; // This should be fixed for this problem.
