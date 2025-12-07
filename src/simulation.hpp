@@ -1804,11 +1804,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, time, quokka::centering::cc, quokka::direction::na, InterpHookNone, InterpHookNone,
 			       FillPatchType::fillpatch_function);
 
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc_ptr = nullptr;
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, time, quokka::centering::fc,
 					       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
 		}
+
+		state_fc_ptr = &state_new_fc_[lev];
 	}
 
 	// Create a MultiFab to hold the change of states (density, 3 x momentum, internal energy, energy) during particle-mesh interaction
@@ -1818,23 +1821,19 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	accretion_rate_at_level.setVal(0.0);
 
 	// Sink accretion, stage 1: compute the accretion rate
-	particleRegister_.computeSinkAccretion(state_new_cc_[lev], accretion_rate_at_level, &state_new_fc_[lev], lev, time, dt);
+	particleRegister_.computeSinkAccretion(state_new_cc_[lev], accretion_rate_at_level, state_fc_ptr, lev, time, dt);
 
 	// Apply roundoff to accretion_rate_at_level
 	// TODO(cch): compute accumulative errors and pass it to roundoffMultiFab
 	quokka::ParticleUtils::roundoffMultiFab(accretion_rate_at_level);
 
 	// Sink accretion, stage 2: update the particle states -- compute scale_down, apply to particle, apply to cells
-	particleRegister_.applySinkAccretion(state_new_cc_[lev], accretion_rate_at_level, &state_new_fc_[lev], geom[lev], lev, time, dt);
+	particleRegister_.applySinkAccretion(state_new_cc_[lev], accretion_rate_at_level, state_fc_ptr, geom[lev], lev, time, dt);
 
 	// We allow particle formation at the finest level only to avoid duplicate particle creation from multiple levels at the same location.
-	particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt, &state_new_fc_[lev]);
+	particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt, state_fc_ptr);
 
 	// Deposit the SN particles into the MultiFab
-	std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc_ptr = nullptr;
-	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		state_fc_ptr = &state_new_fc_[lev];
-	}
 	const amrex::Real max_velocity = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
 
 	// Check if the maximum velocity is greater than the threshold
