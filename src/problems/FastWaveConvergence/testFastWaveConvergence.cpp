@@ -161,7 +161,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	double delta_A2 = 0.0;
 	const double delta_A3 = 0.0;
 
-
 	if (std::abs(sinθ) < tiny) {
 		// theta = 0 or 180 deg: fast mode is pure sound wave → no B perturbation
 		delta_A2 = 0.0; // δB = 0
