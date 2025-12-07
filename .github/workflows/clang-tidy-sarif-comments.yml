@@ -1,0 +1,123 @@
+name: 💬 clang-tidy SARIF comments
+
+on:
+  workflow_run:
+    workflows: ["🧹 clang-tidy-review"]
+    types:
+      - completed
+
+jobs:
+  post:
+    if: ${{ github.event.workflow_run.event == 'pull_request' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download clang-tidy SARIF artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: clang-tidy-sarif
+          run-id: ${{ github.event.workflow_run.id }}
+          path: artifacts
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          if-no-files-found: ignore
+
+      - name: Post clang-tidy comments
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const run = context.payload.workflow_run;
+            const prs = run.pull_requests || [];
+            if (!prs.length) {
+              core.info('No associated pull request; skipping.');
+              return;
+            }
+            const prNumber = prs[0].number;
+            const { owner, repo } = context.repo;
+
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+            if (pr.merged) {
+              core.info('PR already merged; skipping comments.');
+              return;
+            }
+
+            const sarifPath = path.join(process.cwd(), 'artifacts', 'clang-tidy-results.sarif');
+            if (!fs.existsSync(sarifPath)) {
+              core.info('No SARIF artifact found; skipping.');
+              return;
+            }
+
+            let sarif;
+            try {
+              sarif = JSON.parse(fs.readFileSync(sarifPath, 'utf8') || '{}');
+            } catch (err) {
+              core.warning(`Failed to parse SARIF: ${err}`);
+              return;
+            }
+
+            const results = sarif?.runs?.[0]?.results || [];
+            if (!results.length) {
+              core.info('No clang-tidy results found; nothing to comment.');
+              return;
+            }
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number: prNumber,
+              per_page: 100,
+            });
+            const fileSet = new Set(files.map(f => f.filename));
+
+            const comments = [];
+            for (const res of results) {
+              const loc = res?.locations?.[0]?.physicalLocation;
+              if (!loc?.region?.startLine || !loc.artifactLocation?.uri) continue;
+
+              const filePath = loc.artifactLocation.uri.replace(/^file:\/\//, '');
+              if (!fileSet.has(filePath)) continue;
+
+              const notes = (res.relatedLocations || [])
+                .map(note => note?.message?.text)
+                .filter(Boolean);
+
+              const bodyParts = [
+                `clang-tidy (${res.ruleId || 'unknown'}): ${res.message?.text || ''}`.trim(),
+              ];
+              if (notes.length) {
+                bodyParts.push('Notes:');
+                for (const note of notes) {
+                  bodyParts.push(`- ${note}`);
+                }
+              }
+
+              comments.push({
+                path: filePath,
+                line: loc.region.startLine,
+                side: 'RIGHT',
+                body: bodyParts.join('\n'),
+              });
+            }
+
+            if (!comments.length) {
+              core.info('No applicable comments for PR files.');
+              return;
+            }
+
+            const limited = comments.slice(0, 30);
+            await github.rest.pulls.createReview({
+              owner,
+              repo,
+              pull_number: prNumber,
+              commit_id: pr.head.sha,
+              event: 'COMMENT',
+              body: `clang-tidy reported ${comments.length} issue(s); posting ${limited.length} comment(s).`,
+              comments: limited,
+            });
+
+            if (comments.length > limited.length) {
+              core.warning(`Truncated comments to ${limited.length} of ${comments.length} to avoid noise.`);
+            }
