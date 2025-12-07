@@ -38,6 +38,7 @@ constexpr double T0 = 10.0;
 constexpr double mu = 2.33 * C::m_p;
 constexpr double k_B = C::k_B;
 constexpr double cs0 = gcem::sqrt(k_B * T0 / mu); // = 18821.95750 cm / s for T = 10 K
+constexpr double B0 = 1.0e-7;			  // constant background field [Gauss-equivalent units]
 
 double rho0 = C::m_p;				 // NOLINT
 double t_end_over_t_b = 10.0;			 // NOLINT
@@ -73,7 +74,7 @@ template <> struct Physics_Traits<AccretionProblem> {
 	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr bool is_self_gravity_enabled = true;
 	// face-centred
-	static constexpr bool is_mhd_enabled = false;
+	static constexpr bool is_mhd_enabled = true;
 	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
@@ -350,7 +351,8 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 
 		const Real Eint = rho / mu * k_B * T0; // arbitrary choice, since Eint is not used in isothermal gas EOS
 		const Real Ekin = 0.5 * rho * v * v;
-		const Real Etot = Eint + Ekin;
+		const Real Emag = 0.5 * B0 * B0;
+		const Real Etot = Eint + Ekin + Emag;
 
 		state_cc(i, j, k, HydroSystem<AccretionProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<AccretionProblem>::x1Momentum_index) = rho * vx;
@@ -358,6 +360,23 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGrid(
 		state_cc(i, j, k, HydroSystem<AccretionProblem>::x3Momentum_index) = rho * vz;
 		state_cc(i, j, k, HydroSystem<AccretionProblem>::internalEnergy_index) = Eint;
 		state_cc(i, j, k, HydroSystem<AccretionProblem>::energy_index) = Etot;
+	});
+}
+
+template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+{
+	const amrex::Array4<double> &state_fc = grid_elem.array_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const quokka::direction dir = grid_elem.dir_;
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		if (dir == quokka::direction::x) {
+			state_fc(i, j, k, Physics_Indices<AccretionProblem>::mhdFirstIndex) = B0;
+		} else if (dir == quokka::direction::y) {
+			state_fc(i, j, k, Physics_Indices<AccretionProblem>::mhdFirstIndex) = 0.0;
+		} else if (dir == quokka::direction::z) {
+			state_fc(i, j, k, Physics_Indices<AccretionProblem>::mhdFirstIndex) = 0.0;
+		}
 	});
 }
 
@@ -425,9 +444,17 @@ auto problem_main() -> int
 	const Real t_end = t_end_over_t_b * t_BH;
 
 	auto BCs_cc = quokka::BC<AccretionProblem>(quokka::BCType::reflecting);
+	const int nvars_fc = Physics_Indices<AccretionProblem>::nvarTotal_fc;
+	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
+	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			BCs_fc[icomp].setLo(idim, amrex::BCType::reflect_even);
+			BCs_fc[icomp].setHi(idim, amrex::BCType::reflect_even);
+		}
+	}
 
 	// Problem initialization
-	QuokkaSimulation<AccretionProblem> sim(BCs_cc);
+	QuokkaSimulation<AccretionProblem> sim(BCs_cc, BCs_fc);
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
 	// sim.initDt_ = 3.0e10;	      // ~1 kyr

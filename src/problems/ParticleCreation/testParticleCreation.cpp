@@ -17,6 +17,7 @@ struct TestParticle {
 constexpr double rho0 = 1.0e-5;
 constexpr double dt_ = 0.001;
 static bool refine_half_domain = false; // NOLINT
+constexpr double B0 = 1.0e-7;		  // uniform background field
 
 // locations of the particles: a 2x2x2 grids of particles
 constexpr double box_left_edge_ = -2.0; // This should be fixed for this problem.
@@ -56,7 +57,7 @@ template <> struct Physics_Traits<TestParticle> {
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_dust_enabled = false;
 	static constexpr int nDustGroups = 1; // number of dust groups
-	static constexpr bool is_mhd_enabled = false;
+	static constexpr bool is_mhd_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr int nGroups = 1;			     // number of radiation groups
@@ -232,23 +233,49 @@ template <> void QuokkaSimulation<TestParticle>::setInitialConditionsOnGrid(quok
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
+	const double Emag = 0.5 * B0 * B0;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		state_cc(i, j, k, HydroSystem<TestParticle>::density_index) = rho0;
 		state_cc(i, j, k, HydroSystem<TestParticle>::x1Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<TestParticle>::x2Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<TestParticle>::x3Momentum_index) = 0;
-		state_cc(i, j, k, HydroSystem<TestParticle>::energy_index) = 0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::energy_index) = Emag;
 		state_cc(i, j, k, HydroSystem<TestParticle>::internalEnergy_index) = 0;
+	});
+}
+
+template <> void QuokkaSimulation<TestParticle>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+{
+	const amrex::Array4<double> &state_fc = grid_elem.array_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const quokka::direction dir = grid_elem.dir_;
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		if (dir == quokka::direction::x) {
+			state_fc(i, j, k, Physics_Indices<TestParticle>::mhdFirstIndex) = B0;
+		} else if (dir == quokka::direction::y) {
+			state_fc(i, j, k, Physics_Indices<TestParticle>::mhdFirstIndex) = 0.0;
+		} else if (dir == quokka::direction::z) {
+			state_fc(i, j, k, Physics_Indices<TestParticle>::mhdFirstIndex) = 0.0;
+		}
 	});
 }
 
 auto problem_main() -> int
 {
 	auto BCs_cc = quokka::BC<TestParticle>(quokka::BCType::reflecting);
+	const int nvars_fc = Physics_Indices<TestParticle>::nvarTotal_fc;
+	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
+	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			BCs_fc[icomp].setLo(idim, amrex::BCType::reflect_even);
+			BCs_fc[icomp].setHi(idim, amrex::BCType::reflect_even);
+		}
+	}
 
 	// Problem initialization
-	QuokkaSimulation<TestParticle> sim(BCs_cc);
+	QuokkaSimulation<TestParticle> sim(BCs_cc, BCs_fc);
 	sim.initDt_ = dt_;
 	sim.maxDt_ = dt_;
 
