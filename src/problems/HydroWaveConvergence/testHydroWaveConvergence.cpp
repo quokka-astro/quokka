@@ -38,6 +38,8 @@ template <> struct Physics_Traits<WaveProblem> {
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = 1; // number of radiation groups
+	static constexpr bool is_dust_enabled = false;
+	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
@@ -141,7 +143,7 @@ auto runWaveTest(int nx) -> double
 
 	// compute error norm
 	amrex::Real err_sq = 0.;
-	for (int n = 0; n < QuokkaSimulation<WaveProblem>::ncompHydro_; ++n) {
+	for (int n = 0; n < QuokkaSimulation<WaveProblem>::nvars_; ++n) {
 		if (n == HydroSystem<WaveProblem>::internalEnergy_index) {
 			continue;
 		}
