@@ -1286,7 +1286,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		// Compute SFH if interval is reached
 		if ((sfh_interval_ > 0 && (step + 1) % sfh_interval_ == 0) || (sfh_time_interval_ > 0 && cur_time - last_sfh_time_ >= sfh_time_interval_)) {
-			particleRegister_.updateSFH(step + 1, cur_time);
+			particleRegister_.updateSFH(simulationMetadata_, step + 1, cur_time);
 			last_sfh_time_ = cur_time;
 		}
 
@@ -3377,7 +3377,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadMetadataFile(st
 	// read metadata file in on all ranks (needed when restarting from checkpoint)
 	const std::string MetadataFileName(chkfilename + "/metadata.yaml");
 
-	// read YAML file into simulationMetadata_ std::map
+	// read YAML file into simulationMetadata_
 	const YAML::Node metadata = YAML::LoadFile(MetadataFileName);
 	amrex::Print() << "Reading " << MetadataFileName << "...\n";
 
@@ -3393,7 +3393,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadMetadataFile(st
 			simulationMetadata_[key] = value_string.value();
 			amrex::Print() << fmt::format("\t{} = {}\n", key, value_string.value());
 		} else {
-			amrex::Print() << fmt::format("\t{} has unknown type! skipping this entry.\n", key);
+			// For complex types (sequences, maps), copy the entire node
+			simulationMetadata_[key] = it->second;
+			amrex::Print() << fmt::format("\t{} = (complex type)\n", key);
 		}
 	}
 
@@ -3992,8 +3994,8 @@ void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::un
 	// Read particles
 	restartParticleContainerWithRefinement(container, restart_chkfile, particleRegister_.getParticleTypeName(particle_type), header_box_arrays);
 
-	// Read SFH data
-	last_sfh_time_ = particleRegister_.readSFH(restart_chkfile, particle_type);
+	// Read SFH data from metadata
+	last_sfh_time_ = particleRegister_.readSFH(simulationMetadata_, particle_type);
 
 	// Split particles
 #if AMREX_SPACEDIM == 3

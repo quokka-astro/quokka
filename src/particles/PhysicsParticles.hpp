@@ -7,6 +7,7 @@
 #include <string>
 
 #include <fmt/format.h>
+#include <yaml-cpp/yaml.h>
 
 #include "AMReX_Array4.H"
 #include "AMReX_BLProfiler.H"
@@ -616,7 +617,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Map storing particle descriptors, indexed by particle type enum
 	std::map<ParticleType, std::unique_ptr<PhysicsParticleDescriptorBase>> particleRegistry_;
 
-	// SFH data: nstep, time, total_mass
+	// SFH data: nstep, time, total_mass (kept in memory for accumulation)
 	std::map<ParticleType, std::vector<std::tuple<int, amrex::Real, amrex::Real>>> sfh_data_;
 
       public:
@@ -805,9 +806,6 @@ template <typename problem_t> class PhysicsParticleRegister
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->writePlotFile(plotfilename, getParticleTypeName(type));
 			descriptor->writeUnitsFile(plotfilename, getParticleTypeName(type));
-			if (descriptor->getAllowsCreation()) {
-				saveSFH(plotfilename, type);
-			}
 		}
 	}
 
@@ -849,9 +847,6 @@ template <typename problem_t> class PhysicsParticleRegister
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->writeCheckpoint(checkpointname, getParticleTypeName(type), include_header);
 			descriptor->writeUnitsFile(checkpointname, getParticleTypeName(type));
-			if (descriptor->getAllowsCreation()) {
-				saveSFH(checkpointname, type);
-			}
 		}
 	}
 
@@ -981,71 +976,61 @@ template <typename problem_t> class PhysicsParticleRegister
 	PhysicsParticleRegister(PhysicsParticleRegister &&) = delete;
 	auto operator=(PhysicsParticleRegister &&) -> PhysicsParticleRegister & = delete;
 
-	// Update SFH data
-	void updateSFH(int nstep, amrex::Real time)
+	// Update SFH data in simulation metadata
+	void updateSFH(YAML::Node &metadata, int nstep, amrex::Real time)
 	{
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			// Only compute SFH for particles that can be created (stars)
 			if (descriptor->getAllowsCreation()) {
 				const amrex::Real total_mass = descriptor->computeStellarMass();
+				const std::string type_name = getParticleTypeName(type);
+				const std::string sfh_key = "SFH_" + type_name;
+				
+				// Store in local sfh_data_ for accumulation
 				sfh_data_[type].emplace_back(nstep, time, total_mass);
+				
+				// Write the full history to metadata
+				metadata[sfh_key] = YAML::Node(YAML::NodeType::Sequence);
+				for (const auto &entry : sfh_data_[type]) {
+					YAML::Node array_entry;
+					array_entry.push_back(std::get<0>(entry)); // nstep
+					array_entry.push_back(std::get<1>(entry)); // time
+					array_entry.push_back(std::get<2>(entry)); // total_mass
+					metadata[sfh_key].push_back(array_entry);
+				}
 			}
 		}
 	}
 
-	// Save SFH data to file
-	void saveSFH(const std::string &base_dir, ParticleType type) const
+	// Read SFH data from metadata and return the last time
+	auto readSFH(const YAML::Node &metadata, ParticleType type) -> Real
 	{
-		const auto it = sfh_data_.find(type);
-		if (it != sfh_data_.end()) {
-			const std::string filename = base_dir + "/" + getParticleTypeName(type) + "/SFH.txt";
-			// Continue only if directory exists (it should be created by writePlotFile/writeCheckpoint)
-			const std::string dir = base_dir + "/" + getParticleTypeName(type);
-			if (!amrex::FileSystem::Exists(dir)) {
-				return;
-			}
-
-			// Open file for writing (overwrite)
-			std::ofstream ofs(filename);
-			if (ofs.is_open()) {
-				ofs << "# nstep time total_mass\n";
-				for (const auto &entry : it->second) {
-					ofs << std::get<0>(entry) << " " << std::scientific << std::setprecision(12) << std::get<1>(entry) << " "
-					    << std::get<2>(entry) << "\n";
+		const std::string type_name = getParticleTypeName(type);
+		const std::string sfh_key = "SFH_" + type_name;
+		
+		Real last_time = 0.0;
+		
+		if (metadata[sfh_key]) {
+			const YAML::Node sfh_yaml = metadata[sfh_key];
+			if (sfh_yaml.IsSequence() && sfh_yaml.size() > 0) {
+				// Clear and restore sfh_data_ from metadata
+				sfh_data_[type].clear();
+				
+				for (const auto &entry : sfh_yaml) {
+					if (entry.IsSequence() && entry.size() == 3) {
+						const int nstep = entry[0].as<int>();
+						const auto time = entry[1].as<amrex::Real>();
+						const auto mass = entry[2].as<amrex::Real>();
+						sfh_data_[type].emplace_back(nstep, time, mass);
+						last_time = time;
+					}
 				}
-				ofs.close();
-			} else {
-				amrex::Print() << "Warning: Could not open SFH file " << filename << " for writing.\n";
+				
+				amrex::Print() << "Read SFH data for " << type_name << " from metadata (" << sfh_yaml.size() << " entries)\n";
 			}
 		}
-	}
-
-	// Read SFH data from file
-	auto readSFH(const std::string &base_dir, ParticleType type) -> Real
-	{
-		const std::string filename = base_dir + "/" + getParticleTypeName(type) + "/SFH.txt";
-		std::ifstream ifs(filename);
-		Real time = 0.0;
-		if (ifs.is_open()) {
-			sfh_data_[type].clear();
-			std::string line;
-			while (std::getline(ifs, line)) {
-				if (line.empty() || line[0] == '#') {
-					continue;
-				}
-				std::istringstream iss(line);
-				int nstep = 0;
-				amrex::Real mass = 0.0;
-				if (iss >> nstep >> time >> mass) {
-					sfh_data_[type].emplace_back(nstep, time, mass);
-				}
-			}
-			ifs.close();
-			amrex::Print() << "Read SFH data for " << getParticleTypeName(type) << " from " << filename << "\n";
-		}
-		// It's okay if file doesn't exist, e.g. first run, in which case you should not call this function
-
-		return time;
+		
+		return last_time;
 	}
 };
 
