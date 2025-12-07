@@ -1801,8 +1801,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	// Fill ghost zones before computing accretion rate. This is necessary because the computation of accretion rate uses 3 ghost cells, but the
 	// boundaries are not filled at this point.
 	// TODO(cch): fill the hydro variables but not radiation variables, since radiation variables are used in accretion
-	fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, time, quokka::centering::cc, quokka::direction::na, InterpHookNone,
-			       InterpHookNone, FillPatchType::fillpatch_function);
+	fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, time, quokka::centering::cc, quokka::direction::na, InterpHookNone, InterpHookNone,
+			       FillPatchType::fillpatch_function);
 
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
