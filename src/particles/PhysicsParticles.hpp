@@ -414,7 +414,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					    const amrex::Real vz = p_type.m_aos[i].rdata(mass_idx + 3);
 					    const amrex::Real v2 = (vx * vx) + (vy * vy) + (vz * vz);
 					    const amrex::RealVect pos{p_type[i].pos(0), p_type[i].pos(1), p_type[i].pos(2)};
-					    return amrex::ValLocPair<amrex::Real, amrex::RealVect>{std::sqrt(v2), pos};
+					    return amrex::ValLocPair<amrex::Real, amrex::RealVect>{.value=std::sqrt(v2), .index=pos};
 				    },
 				    reduce_ops);
 
