@@ -343,7 +343,7 @@ void QuokkaSimulation<AlfvenWaveLinear>::computeReferenceSolution(amrex::MultiFa
 		auto const ncomp = ref.nComp();
 		const amrex::Real time = tNew_[0];
 
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept -> void {
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.0; // fill unused quantities with zeros
 			}
