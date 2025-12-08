@@ -282,7 +282,6 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		state(i, j, k, HydroSystem<FastWaveConvergence>::internalEnergy_index) = Eint;
 
 	} else if (cen == quokka::centering::fc) {
-
 		// compute b-field using the magnetic vector potential to preserve div(b) = 0 topology
 		if (dir == quokka::direction::x) {
 			const double b_x1 =
