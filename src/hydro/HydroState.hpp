@@ -20,7 +20,6 @@ template <int Nall, int Nmass> struct HydroState {
 	amrex::GpuArray<double, Nall> scalar;	   // passive scalars
 	amrex::GpuArray<double, Nmass> massScalar; // mass scalars
 };
-
 } // namespace quokka
 
 // density, momentum, total energy, transverse magnetic field

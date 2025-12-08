@@ -1,4 +1,4 @@
-name: linux-arm64-hwasan
+name: 🛡️ linux-arm64-hwasan
 
 on:
   push:

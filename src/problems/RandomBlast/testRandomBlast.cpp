@@ -42,6 +42,8 @@ template <> struct Physics_Traits<RandomBlast> {
 	static constexpr bool is_self_gravity_enabled = true;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
+	static constexpr bool is_dust_enabled = false;
+	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int numMassScalars = 0;
 	static constexpr int numPassiveScalars = numMassScalars + 1;

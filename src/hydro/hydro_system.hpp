@@ -29,6 +29,7 @@
 #include "HLLD.hpp"
 #include "LLF.hpp"
 #include "LLF_mhd.hpp"
+#include "dust/dust_system.hpp"
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
@@ -60,9 +61,13 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
       public:
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
 	static constexpr int nscalars_ = Physics_Traits<problem_t>::numPassiveScalars;
-	static constexpr int nvar_ = Physics_NumVars::numHydroVars + nscalars_;
+	static constexpr int nvar_ = Physics_NumVars::numHydroVars + nscalars_ +
+				     (Physics_Traits<problem_t>::nDustGroups * Physics_NumVars::numDustVarsPerGroup) *
+					 static_cast<int>(Physics_Traits<problem_t>::is_dust_enabled); // total number of variables
+	static constexpr int nHydroScalars_ = Physics_NumVars::numHydroVars + nscalars_;
+	static constexpr int numDustVars_ = Physics_NumVars::numDustVarsPerGroup; // number of dust variables for each dust group
 
-	enum consVarIndex {
+	enum consVarIndex { // NOLINT
 		density_index = Physics_Indices<problem_t>::hydroFirstIndex,
 		x1Momentum_index,
 		x2Momentum_index,
@@ -72,7 +77,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 		scalar0_index	      // first passive scalar (only present if nscalars > 0!)
 	};
 
-	enum primVarIndex {
+	enum primVarIndex { // NOLINT
 		primDensity_index = 0,
 		x1Velocity_index,
 		x2Velocity_index,
@@ -81,6 +86,16 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 		primEint_index,	   // auxiliary internal energy (rho * e)
 		primScalar0_index, // first passive scalar (only present if nscalars > 0!)
 	};
+
+	enum dustVarIndex { // NOLINT
+		dustDensity_index = Physics_Indices<problem_t>::dustFirstIndex,
+		x1DustMomentum_index,
+		x2DustMomentum_index,
+		x3DustMomentum_index
+	};
+
+	static constexpr int primDustFirstIndex = primScalar0_index + nscalars_;
+	enum primDustVarIndex { primDustDensity_index = primDustFirstIndex, x1DustVelocity_index, x2DustVelocity_index, x3DustVelocity_index }; // NOLINT
 
 	static void ConservedToPrimitive(amrex::MultiFab const &cons_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf,
 					 amrex::MultiFab &primVar_mf, int nghost);
@@ -95,9 +110,11 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	AMREX_GPU_DEVICE static auto ComputePrimVars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
 						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr)
-	    -> quokka::valarray<amrex::Real, nvar_>;
 
-	AMREX_GPU_DEVICE static auto ComputeConsVars(quokka::valarray<amrex::Real, nvar_> const &prim) -> quokka::valarray<amrex::Real, nvar_>;
+	    -> quokka::valarray<amrex::Real, nHydroScalars_>;
+
+	AMREX_GPU_DEVICE static auto ComputeConsVars(quokka::valarray<amrex::Real, nHydroScalars_> const &prim)
+	    -> quokka::valarray<amrex::Real, nHydroScalars_>;
 
 	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
 						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr) -> amrex::Real;
@@ -273,6 +290,32 @@ void HydroSystem<problem_t>::ConservedToPrimitive(amrex::MultiFab const &cons_cc
 		for (int nc = 0; nc < nscalars_; ++nc) {
 			primVar[bx](i, j, k, primScalar0_index + nc) = cons_cc[bx](i, j, k, scalar0_index + nc);
 		}
+
+		// handle dust
+		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+			for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
+				const amrex::Real dust_rho = cons_cc[bx](i, j, k, dustDensity_index + numDustVars_ * g);
+				const amrex::Real dust_px = cons_cc[bx](i, j, k, x1DustMomentum_index + numDustVars_ * g);
+				const amrex::Real dust_py = cons_cc[bx](i, j, k, x2DustMomentum_index + numDustVars_ * g);
+				const amrex::Real dust_pz = cons_cc[bx](i, j, k, x3DustMomentum_index + numDustVars_ * g);
+
+				AMREX_ASSERT(!std::isnan(dust_rho));
+				AMREX_ASSERT(!std::isnan(dust_px));
+				AMREX_ASSERT(!std::isnan(dust_py));
+				AMREX_ASSERT(!std::isnan(dust_pz));
+
+				AMREX_ASSERT(dust_rho > 0.);
+
+				const amrex::Real dust_vx = dust_px / dust_rho;
+				const amrex::Real dust_vy = dust_py / dust_rho;
+				const amrex::Real dust_vz = dust_pz / dust_rho;
+
+				primVar[bx](i, j, k, primDustDensity_index + numDustVars_ * g) = dust_rho;
+				primVar[bx](i, j, k, x1DustVelocity_index + numDustVars_ * g) = dust_vx;
+				primVar[bx](i, j, k, x2DustVelocity_index + numDustVars_ * g) = dust_vy;
+				primVar[bx](i, j, k, x3DustVelocity_index + numDustVars_ * g) = dust_vz;
+			}
+		}
 	});
 }
 
@@ -374,7 +417,26 @@ void HydroSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Re
 			AMREX_ASSERT(fastest_wavespeed > 0.);
 		}
 
-		const double signal_max = fastest_wavespeed + vel_magnitude;
+		double signal_max = fastest_wavespeed + vel_magnitude;
+
+		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+			for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
+				const amrex::Real dust_rho = cons_cc(i, j, k, dustDensity_index + g * numDustVars_);
+				const amrex::Real dust_px = cons_cc(i, j, k, x1DustMomentum_index + g * numDustVars_);
+				const amrex::Real dust_py = cons_cc(i, j, k, x2DustMomentum_index + g * numDustVars_);
+				const amrex::Real dust_pz = cons_cc(i, j, k, x3DustMomentum_index + g * numDustVars_);
+				AMREX_ASSERT(!std::isnan(dust_rho));
+				AMREX_ASSERT(!std::isnan(dust_px));
+				AMREX_ASSERT(!std::isnan(dust_py));
+				AMREX_ASSERT(!std::isnan(dust_pz));
+
+				const amrex::Real dust_vx = dust_px / dust_rho;
+				const amrex::Real dust_vy = dust_py / dust_rho;
+				const amrex::Real dust_vz = dust_pz / dust_rho;
+				const amrex::Real dust_vel_mag = std::sqrt(dust_vx * dust_vx + dust_vy * dust_vy + dust_vz * dust_vz);
+				signal_max = std::max(signal_max, dust_vel_mag + fastest_wavespeed);
+			}
+		}
 		maxSignal(i, j, k) = signal_max;
 	});
 }
@@ -440,7 +502,7 @@ auto HydroSystem<problem_t>::CheckStatesValid(amrex::MultiFab const &cons_mf, st
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
 										 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc)
-    -> quokka::valarray<amrex::Real, nvar_>
+    -> quokka::valarray<amrex::Real, nHydroScalars_>
 {
 	// convert to primitive vars
 	const auto rho = cons(i, j, k, density_index);
@@ -464,7 +526,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars
 		P = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
 	}
 
-	quokka::valarray<amrex::Real, nvar_> primVars{rho, vx, vy, vz, P, Eint_aux};
+	quokka::valarray<amrex::Real, nHydroScalars_> primVars{rho, vx, vy, vz, P, Eint_aux};
 
 	for (int n = 0; n < nscalars_; ++n) {
 		primVars[primScalar0_index + n] = cons(i, j, k, scalar0_index + n);
@@ -473,8 +535,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePrimVars
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeConsVars(quokka::valarray<amrex::Real, nvar_> const &prim)
-    -> quokka::valarray<amrex::Real, nvar_>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeConsVars(quokka::valarray<amrex::Real, nHydroScalars_> const &prim)
+    -> quokka::valarray<amrex::Real, nHydroScalars_>
 {
 	// convert to conserved vars
 	Real const rho = prim[0];
@@ -487,7 +549,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeConsVars
 	Real const Eint = quokka::EOS<problem_t>::ComputeEintFromPres(rho, P);
 	Real const Egas = Eint + 0.5 * rho * (v1 * v1 + v2 * v2 + v3 * v3);
 
-	quokka::valarray<amrex::Real, nvar_> consVars{rho, rho * v1, rho * v2, rho * v3, Egas, Eint_aux};
+	quokka::valarray<amrex::Real, nHydroScalars_> consVars{rho, rho * v1, rho * v2, rho * v3, Egas, Eint_aux};
 
 	for (int i = 0; i < nscalars_; ++i) {
 		consVars[scalar0_index + i] = prim[primScalar0_index + i];
@@ -918,6 +980,16 @@ template <typename problem_t> void HydroSystem<problem_t>::EnforceLimits(amrex::
 			}
 		}
 
+		// Enforce dust density floor
+		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+			for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
+				amrex::Real dust_rho = state[bx](i, j, k, dustDensity_index + g * numDustVars_);
+				if (dust_rho < densityFloor) {
+					state[bx](i, j, k, dustDensity_index + g * numDustVars_) = densityFloor;
+				}
+			}
+		}
+
 		// Enforce temperature floor
 		if ((rho_new > std::numeric_limits<amrex::Real>::min()) && !HydroSystem<problem_t>::is_eos_isothermal()) {
 			amrex::Real const vx1 = state[bx](i, j, k, x1Momentum_index) / rho_new;
@@ -1293,36 +1365,38 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 #endif
 
 		// solve the Riemann problem in canonical form (i.e., where the x-dir is the normal direction)
-		quokka::valarray<double, nvar_> F_canonical{};
+		quokka::valarray<double, nHydroScalars_> F_canonical{};
 
 		if constexpr (RIEMANN == RiemannSolver::HLLC) {
 			static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "Cannot use HLLC solver for MHD problems!");
-			F_canonical = quokka::Riemann::HLLC<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, du, dw);
+			F_canonical = quokka::Riemann::HLLC<problem_t, nscalars_, nmscalars_, nHydroScalars_>(sL, sR, gamma_, du, dw);
 		} else if constexpr (RIEMANN == RiemannSolver::LLF) {
-			F_canonical = quokka::Riemann::LLF<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR);
+			F_canonical = quokka::Riemann::LLF<problem_t, nscalars_, nmscalars_, nHydroScalars_>(sL, sR);
 		} else if constexpr (RIEMANN == RiemannSolver::LLF_MHD) {
 			quokka::Array4View<amrex::Real, DIR> x1FSpds(x1FSpds_ref);
-			auto [F_canonical_tmp, fspd_m, fspd_p] = quokka::Riemann::LLF_MHD<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, bx1);
+			auto [F_canonical_tmp, fspd_m, fspd_p] =
+			    quokka::Riemann::LLF_MHD<problem_t, nscalars_, nmscalars_, nHydroScalars_>(sL, sR, gamma_, bx1);
 			F_canonical = F_canonical_tmp;
 			x1FSpds(i, j, k, 0) = fspd_m;
 			x1FSpds(i, j, k, 1) = fspd_p;
 		} else if constexpr (RIEMANN == RiemannSolver::HLLD) {
 			quokka::Array4View<amrex::Real, DIR> x1FSpds(x1FSpds_ref);
-			auto [F_canonical_tmp, fspd_m, fspd_p] = quokka::Riemann::HLLD<problem_t, nscalars_, nmscalars_, nvar_>(sL, sR, gamma_, bx1, dw);
+			auto [F_canonical_tmp, fspd_m, fspd_p] =
+			    quokka::Riemann::HLLD<problem_t, nscalars_, nmscalars_, nHydroScalars_>(sL, sR, gamma_, bx1, dw);
 			F_canonical = F_canonical_tmp;
 			x1FSpds(i, j, k, 0) = fspd_m;
 			x1FSpds(i, j, k, 1) = fspd_p;
 		}
 
-		quokka::valarray<double, nvar_> F = F_canonical;
+		quokka::valarray<double, nHydroScalars_> F = F_canonical;
 
 		// add artificial viscosity
 		// following Colella & Woodward (1984), eq. (4.2)
 		const double div_v = AMREX_D_TERM(du, +0.5 * (dvl + dvr), +0.5 * (dwl + dwr));
 		const double viscosity = K_visc * std::max(-div_v, 0.);
 
-		quokka::valarray<double, nvar_> U_L = {sL.rho, sL.rho * sL.u, sL.rho * sL.v, sL.rho * sL.w, sL.E, sL.Eint};
-		quokka::valarray<double, nvar_> U_R = {sR.rho, sR.rho * sR.u, sR.rho * sR.v, sR.rho * sR.w, sR.E, sR.Eint};
+		quokka::valarray<double, nHydroScalars_> U_L = {sL.rho, sL.rho * sL.u, sL.rho * sL.v, sL.rho * sL.w, sL.E, sL.Eint};
+		quokka::valarray<double, nHydroScalars_> U_R = {sR.rho, sR.rho * sR.u, sR.rho * sR.v, sR.rho * sR.w, sR.E, sR.Eint};
 
 		// conserve flux of mass scalars
 		// based on Plewa and Muller 1999, A&A, 342, 179 (equations 8 and 12)
@@ -1330,7 +1404,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		amrex::Real fluxSum_U_R = 0;
 
 		for (int n = 0; n < nscalars_; ++n) {
-			const int nstart = nvar_ - nscalars_;
+			const int nstart = nHydroScalars_ - nscalars_;
 			U_L[nstart + n] = sL.scalar[n];
 			U_R[nstart + n] = sR.scalar[n];
 
@@ -1369,7 +1443,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		// use the same logic as above to scale and conserve specie fluxes
 		if (F[density_index] >= 0.) {
 			for (int n = 0; n < nmscalars_; ++n) {
-				const int nstart = nvar_ - nscalars_;
+				const int nstart = nHydroScalars_ - nscalars_;
 				if (fluxSum_U_L > 0.) {
 					F[nstart + n] = F[density_index] * U_L[nstart + n] / fluxSum_U_L;
 				} else {
@@ -1378,7 +1452,7 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			}
 		} else {
 			for (int n = 0; n < nmscalars_; ++n) {
-				const int nstart = nvar_ - nscalars_;
+				const int nstart = nHydroScalars_ - nscalars_;
 				if (fluxSum_U_R > 0.) {
 					F[nstart + n] = F[density_index] * U_R[nstart + n] / fluxSum_U_R;
 				} else {
@@ -1388,9 +1462,14 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		}
 
 		// copy all flux components to the flux array
-		for (int nc = 0; nc < nvar_; ++nc) {
+		for (int nc = 0; nc < nHydroScalars_; ++nc) {
 			AMREX_ASSERT(!std::isnan(F[nc])); // check flux is valid
 			x1Flux(i, j, k, nc) = F[nc];
+		}
+
+		// calculate dust fluxes if enabled
+		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+			DustSystem<problem_t>::template ComputeDustFluxes<DIR>(x1Flux, x1LeftState, x1RightState, i, j, k);
 		}
 	});
 }
