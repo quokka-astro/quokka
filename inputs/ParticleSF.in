@@ -40,3 +40,5 @@ plotfile_interval = 5
 checkpoint_interval = 5
 #sfh_interval = 3
 sfh_time_interval = 4e10
+use_sfh_based_pe_heating = true
+sfh_to_pe_heating_table = "../inputs/photoelectric_heating_from_sfh.csv"
