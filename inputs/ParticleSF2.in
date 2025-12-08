@@ -39,5 +39,5 @@ restartfile = chk00010
 max_timesteps = 20
 plotfile_interval = 5
 checkpoint_interval = 5
-#SFH_interval = 3
-SFH_time_interval = 4e10
+#sfh_interval = 3
+sfh_time_interval = 4e10

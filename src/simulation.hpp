@@ -208,6 +208,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int sfh_interval_ = -1;
 	amrex::Real sfh_time_interval_ = -1.0;
 	amrex::Real last_sfh_time_ = 0.0;
+	std::string sfh_to_pe_heating_table_filename_;
 
 	amrex::Real densityFloor_ = 0.0; // default
 	amrex::Real tempFloor_ = 0.0;	 // default
@@ -843,8 +844,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 		amrex::Print() << fmt::format("Setting walltime limit to {} hours, {} minutes, {} seconds.\n", hours, minutes, seconds);
 	}
 
-	pp.query("SFH_interval", sfh_interval_);
-	pp.query("SFH_time_interval", sfh_time_interval_);
+	pp.query("sfh_interval", sfh_interval_);
+	pp.query("sfh_time_interval", sfh_time_interval_);
+	pp.query("sfh_to_pe_heating_table", sfh_to_pe_heating_table_filename_);
 
 	// IO settings (following the AMReX convention for the Amr class)
 	// (Since we use AmrCore instead of Amr, we have to reimplement these.)
