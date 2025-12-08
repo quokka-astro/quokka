@@ -122,6 +122,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::GetData;
 	using AMRSimulation<problem_t>::FillPatchWithData;
 	using AMRSimulation<problem_t>::Gconst_;
+	using AMRSimulation<problem_t>::const_sfr_Msun_per_year_per_kpc2_;
 
 	using AMRSimulation<problem_t>::densityFloor_;
 	using AMRSimulation<problem_t>::tempFloor_;
@@ -302,6 +303,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
 	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
+
+	auto computePhotoelectricHeatingRate(Real current_time) -> amrex::Real;
 
 	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;
 
@@ -786,6 +789,31 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::addStrangSplitSo
 }
 
 template <typename problem_t>
+auto QuokkaSimulation<problem_t>::computePhotoelectricHeatingRate(amrex::Real current_time) -> amrex::Real
+{
+	amrex::Real heating_rate = 0.0;
+	
+	// Check if PE heating tables are initialized
+	// Note that this funciton is always called as long as cooling is turned on, so it is okay if g_pe_heating_tables_ptr is null
+	if (quokka::g_pe_heating_tables_ptr<> == nullptr || !quokka::g_pe_heating_tables_ptr<>->is_initialized()) {
+		return heating_rate; // Return 0 if tables not loaded
+	}
+
+	// Get GPU-friendly const tables
+	auto const gpu_tables = quokka::g_pe_heating_tables_ptr<>->const_tables();
+
+	if (const_sfr_Msun_per_year_per_kpc2_ > 0.0) {
+		// Constant star formation rate
+		heating_rate = quokka::PeHeatingFromConstSfr(const_sfr_Msun_per_year_per_kpc2_, gpu_tables);
+	} else {
+		// Real star formation history
+		heating_rate = particleRegister_.computePhotoelectricHeatingRate(current_time, gpu_tables);
+	}
+
+	return heating_rate;
+}
+
+template <typename problem_t>
 auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt) -> bool
 {
 	// start by assuming cooling integrator is successful.
@@ -795,7 +823,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 			coolingTableType_ = "resampled";
 		}
 		if (coolingTableType_ == "resampled") {
-			const Real const_heating_rate = particleRegister_.computePhotoelectricHeatingRate();
+			const Real const_heating_rate = computePhotoelectricHeatingRate(time);
 			cool_success = quokka::ResampledCooling::computeCooling<problem_t>(state, dt, resampledTables_, tempFloor_, const_heating_rate);
 		} else {
 			amrex::Abort("Invalid cooling table type! Only 'resampled' is supported.");
