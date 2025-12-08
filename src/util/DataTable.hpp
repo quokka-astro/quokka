@@ -1000,18 +1000,18 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		// lambda function for log
 		// For fast_log, use inverse_pow2 to find y such that pow2(y) = x exactly
 		// This ensures interpolation at grid points returns exact values
-		auto log_ = [output_spacing](amrex::Real x, amrex::Real max_val) {
+		auto log_ = [output_spacing](amrex::Real x) {
 			if (x > 0.0) {
 				if (output_spacing == SpacingType::fast_log) {
 					return FastMath::inverse_pow2(x);
 				}
 				return std::log(x);
 			}
-			if (x < -1.0e-30 * max_val) {
-				amrex::Print() << "[Warning] DataTable: Negative value " << x << " found in log output (max value: " << max_val << ")\n";
-			}
 			return -10000.0;
 		};
+
+		// A negative number whole absolute value is smaller than 1.0e-30 times the maximum value is assumed to be 0 and won't cause an error.
+		constexpr amrex::Real allowed_negative_ratio = 1.0e-30;
 
 		// Read data values - layout is transposed from internal representation
 		// CSV layout: last dimensions as rows, first dimension as columns
@@ -1033,17 +1033,26 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			if (output_spacing == SpacingType::fast_log || output_spacing == SpacingType::log) {
 				// find the max value of data_array
 				amrex::Real max_val = std::numeric_limits<amrex::Real>::lowest();
+				amrex::Real min_val = std::numeric_limits<amrex::Real>::max();
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i = 0; i < sizes[0]; ++i) {
 						if (data_array[out_idx][i] > max_val) {
 							max_val = data_array[out_idx][i];
 						}
+						if (data_array[out_idx][i] < min_val) {
+							min_val = data_array[out_idx][i];
+						}
 					}
+				}
+
+				if (oob_policy == OutOfBounds::fail) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    min_val > -allowed_negative_ratio * max_val, fmt::format("Negative value found in log output (min value: {}, max value: {})", min_val, max_val));
 				}
 
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i = 0; i < sizes[0]; ++i) { // NOSONAR
-						data_array[out_idx][i] = log_(data_array[out_idx][i], max_val);
+						data_array[out_idx][i] = log_(data_array[out_idx][i]);
 					}
 				}
 			}
@@ -1088,20 +1097,29 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			if (output_spacing == SpacingType::fast_log || output_spacing == SpacingType::log) {
 				// find the max value of data_array
 				amrex::Real max_val = std::numeric_limits<amrex::Real>::lowest();
+				amrex::Real min_val = std::numeric_limits<amrex::Real>::max();
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
 						for (int i2 = 0; i2 < sizes[1]; ++i2) {
 							if (data_array[out_idx][i1][i2] > max_val) {
 								max_val = data_array[out_idx][i1][i2];
 							}
+							if (data_array[out_idx][i1][i2] < min_val) {
+								min_val = data_array[out_idx][i1][i2];
+							}
 						}
 					}
+				}
+
+				if (oob_policy == OutOfBounds::fail) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    min_val > -allowed_negative_ratio * max_val, fmt::format("Negative value found in log output (min value: {}, max value: {})", min_val, max_val));
 				}
 
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
 						for (int i2 = 0; i2 < sizes[1]; ++i2) {
-							data_array[out_idx][i1][i2] = log_(data_array[out_idx][i1][i2], max_val);
+							data_array[out_idx][i1][i2] = log_(data_array[out_idx][i1][i2]);
 						}
 					}
 				}
@@ -1152,6 +1170,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			if (output_spacing == SpacingType::fast_log || output_spacing == SpacingType::log) {
 				// find the max value of data_array
 				amrex::Real max_val = std::numeric_limits<amrex::Real>::lowest();
+				amrex::Real min_val = std::numeric_limits<amrex::Real>::max();
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
 						for (int i2 = 0; i2 < sizes[1]; ++i2) { // NOSONAR
@@ -1159,16 +1178,24 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 								if (data_array[out_idx][i1][i2][i3] > max_val) {
 									max_val = data_array[out_idx][i1][i2][i3];
 								}
+								if (data_array[out_idx][i1][i2][i3] < min_val) {
+									min_val = data_array[out_idx][i1][i2][i3];
+								}
 							}
 						}
 					}
+				}
+
+				if (oob_policy == OutOfBounds::fail) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    min_val > -allowed_negative_ratio * max_val, fmt::format("Negative value found in log output (min value: {}, max value: {})", min_val, max_val));
 				}
 
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i1 = 0; i1 < sizes[0]; ++i1) {			// NOSONAR
 						for (int i2 = 0; i2 < sizes[1]; ++i2) {		// NOSONAR
 							for (int i3 = 0; i3 < sizes[2]; ++i3) { // NOSONAR
-								data_array[out_idx][i1][i2][i3] = log_(data_array[out_idx][i1][i2][i3], max_val);
+								data_array[out_idx][i1][i2][i3] = log_(data_array[out_idx][i1][i2][i3]);
 							}
 						}
 					}
@@ -1225,6 +1252,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			if (output_spacing == SpacingType::fast_log || output_spacing == SpacingType::log) {
 				// find the max value of data_array
 				amrex::Real max_val = std::numeric_limits<amrex::Real>::lowest();
+				amrex::Real min_val = std::numeric_limits<amrex::Real>::max();
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
 						for (int i2 = 0; i2 < sizes[1]; ++i2) { // NOSONAR
@@ -1233,10 +1261,18 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 									if (data_array[out_idx][i1][i2][i3][i4] > max_val) {
 										max_val = data_array[out_idx][i1][i2][i3][i4];
 									}
+									if (data_array[out_idx][i1][i2][i3][i4] < min_val) {
+										min_val = data_array[out_idx][i1][i2][i3][i4];
+									}
 								}
 							}
 						}
 					}
+				}
+
+				if (oob_policy == OutOfBounds::fail) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    min_val > -allowed_negative_ratio * max_val, fmt::format("Negative value found in log output (min value: {}, max value: {})", min_val, max_val));
 				}
 
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
@@ -1244,7 +1280,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 						for (int i2 = 0; i2 < sizes[1]; ++i2) {			// NOSONAR
 							for (int i3 = 0; i3 < sizes[2]; ++i3) {		// NOSONAR
 								for (int i4 = 0; i4 < sizes[3]; ++i4) { // NOSONAR
-									data_array[out_idx][i1][i2][i3][i4] = log_(data_array[out_idx][i1][i2][i3][i4], max_val);
+									data_array[out_idx][i1][i2][i3][i4] = log_(data_array[out_idx][i1][i2][i3][i4]);
 								}
 							}
 						}
