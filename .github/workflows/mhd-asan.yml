@@ -1,4 +1,4 @@
-name: MHD-WaveTests-ASAN
+name: 🧲 MHD-WaveTests-ASAN
 
 on:
   push:

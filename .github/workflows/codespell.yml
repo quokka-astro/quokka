@@ -1,4 +1,4 @@
-name: codespell
+name: ✍️ codespell
 
 on:
   push:
