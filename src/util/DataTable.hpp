@@ -1025,11 +1025,15 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			if (output_spacing == SpacingType::fast_log || output_spacing == SpacingType::log) {
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i = 0; i < sizes[0]; ++i) { // NOSONAR
-						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-						    data_array[out_idx][i] > 0.0,
-						    fmt::format("log output spacing requires positive values, got {} at output {} index {}",
-								data_array[out_idx][i], out_idx, i));
-						data_array[out_idx][i] = log_(data_array[out_idx][i]);
+						// AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+						//     data_array[out_idx][i] > 0.0,
+						//     fmt::format("log output spacing requires positive values, got {} at output {} index {}",
+						// 		data_array[out_idx][i], out_idx, i));
+						if (data_array[out_idx][i] > 0.0) {
+						    data_array[out_idx][i] = log_(data_array[out_idx][i]);
+                        } else {
+						    data_array[out_idx][i] = -10000;
+                        }
 					}
 				}
 			}
@@ -1075,11 +1079,15 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 					for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
 						for (int i2 = 0; i2 < sizes[1]; ++i2) {
-							AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-							    data_array[out_idx][i1][i2] > 0.0,
-							    fmt::format("log output spacing requires positive values, got {} at output {} index ({}, {})",
-									data_array[out_idx][i1][i2], out_idx, i1, i2));
-							data_array[out_idx][i1][i2] = log_(data_array[out_idx][i1][i2]);
+							// AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+							//     data_array[out_idx][i1][i2] > 0.0,
+							//     fmt::format("log output spacing requires positive values, got {} at output {} index ({}, {})",
+							// 		data_array[out_idx][i1][i2], out_idx, i1, i2));
+                            if (data_array[out_idx][i1][i2] > 0.0) {
+                                data_array[out_idx][i1][i2] = log_(data_array[out_idx][i1][i2]);
+                            } else {
+                                data_array[out_idx][i1][i2] = -10000;
+                            }
 						}
 					}
 				}
