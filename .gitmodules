@@ -19,4 +19,4 @@
 	url = https://github.com/AMReX-Codes/regression_testing.git
 [submodule "extern/turbulence"]
 	path = extern/turbulence
-	url = https://github.com/XRByte/turbulence_generator.git
+	url = https://github.com/chfeder/turbulence_generator.git
