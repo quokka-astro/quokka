@@ -41,6 +41,8 @@ template <> struct Physics_Traits<SlowWaveConvergence> {
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_mhd_enabled = true;
 	static constexpr int nGroups = 1;
+	static constexpr bool is_dust_enabled = false;
+	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
