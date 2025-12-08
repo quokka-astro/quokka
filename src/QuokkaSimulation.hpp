@@ -795,7 +795,7 @@ auto QuokkaSimulation<problem_t>::computePhotoelectricHeatingRate(amrex::Real cu
 	amrex::Real heating_rate = 0.0;
 	
 	// Check if PE heating tables are initialized
-	// Note that this funciton is always called as long as cooling is turned on, so it is okay if g_pe_heating_tables_ptr is null
+	// Note that this function is always called as long as cooling is turned on, so it is okay if g_pe_heating_tables_ptr is null
 	if (quokka::g_pe_heating_tables_ptr<> == nullptr || !quokka::g_pe_heating_tables_ptr<>->is_initialized()) {
 		return heating_rate; // Return 0 if tables not loaded
 	}
