@@ -2,11 +2,11 @@
 #define PHOTOELECTRIC_HEATING_HPP_
 
 #include "AMReX_REAL.H"
+#include "fundamental_constants.H"
 #include "util/DataTable.hpp"
 #include <array>
 #include <tuple>
 #include <vector>
-#include "fundamental_constants.H"
 
 namespace quokka
 {
@@ -39,8 +39,7 @@ template <quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp> class PeH
 };
 
 // Static pointer to the current simulation's PE heating tables (set during initialization)
-template <quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp>
-inline PeHeatingTables<oob_policy> *g_pe_heating_tables_ptr = nullptr; // NOLINT
+template <quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp> inline PeHeatingTables<oob_policy> *g_pe_heating_tables_ptr = nullptr; // NOLINT
 
 // Function to compute PE heating rate from star formation history
 // sfh_data: vector of tuples (nstep, time, mass)
@@ -86,13 +85,13 @@ template <quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp>
 auto PeHeatingFromConstSfr(amrex::Real const_sfr_Msun_per_year_per_kpc2, PeHeatingGpuConstTables<oob_policy> const &gpu_tables) -> amrex::Real
 {
 	// compute PE heating rate from constant star formation rate. Use intervals of 1 Myr from 0 to 100 Myr
-	const amrex::Real age_interval_in_years = 1.0e6; // 1 Myr
+	const amrex::Real age_interval_in_years = 1.0e6;	 // 1 Myr
 	const int num_intervals = 1.0e9 / age_interval_in_years; // 1 Gyr
 	amrex::Real heating_rate = 0.0;
 	for (int i = 0; i < num_intervals; ++i) {
 		amrex::Real age_in_years = i * age_interval_in_years;
 		amrex::Real delta_mass = const_sfr_Msun_per_year_per_kpc2 * age_interval_in_years;
-		
+
 		std::array<amrex::Real, 1> const point = {age_in_years};
 		auto const pe_heating_per_mass = gpu_tables.pe_heating.interpolate(point);
 		heating_rate += delta_mass * pe_heating_per_mass[0];

@@ -89,7 +89,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(Real const rho
 	return Tgas;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(Real const rho, Real const Eint, resampledGpuConstTables const &tables, Real const_heating_rate = 0.0) -> Real
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(Real const rho, Real const Eint, resampledGpuConstTables const &tables,
+								   Real const_heating_rate = 0.0) -> Real
 {
 	// Compute cooling length l_cool = c_s * t_cool
 	// Convert Eint (energy density) to eint (specific energy) and then to fast log scale for interpolation
@@ -146,7 +147,10 @@ struct ResampledCoolingFunctor {
 	resampledGpuConstTables tables;
 	Real const_heating_rate;
 
-	AMREX_GPU_HOST_DEVICE ResampledCoolingFunctor(Real rho_in, resampledGpuConstTables const &tables_in, Real const_heating_rate_in) : rho(rho_in), tables(tables_in), const_heating_rate(const_heating_rate_in) {}
+	AMREX_GPU_HOST_DEVICE ResampledCoolingFunctor(Real rho_in, resampledGpuConstTables const &tables_in, Real const_heating_rate_in)
+	    : rho(rho_in), tables(tables_in), const_heating_rate(const_heating_rate_in)
+	{
+	}
 
 	AMREX_GPU_HOST_DEVICE ~ResampledCoolingFunctor() = default;
 	AMREX_GPU_HOST_DEVICE ResampledCoolingFunctor(ResampledCoolingFunctor const &) = default;
@@ -164,7 +168,8 @@ struct ResampledCoolingFunctor {
 };
 
 // const_heating_rate_per_H: unit erg/s/H
-template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &resampledTables, const Real E_floor, const Real const_heating_rate_per_H) -> bool
+template <typename problem_t>
+auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &resampledTables, const Real E_floor, const Real const_heating_rate_per_H) -> bool
 {
 	const BL_PROFILE("quokka::ResampledCooling::computeCooling()");
 
