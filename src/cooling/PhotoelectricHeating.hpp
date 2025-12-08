@@ -6,6 +6,7 @@
 #include <array>
 #include <tuple>
 #include <vector>
+#include "fundamental_constants.H"
 
 namespace quokka
 {
@@ -43,11 +44,11 @@ inline PeHeatingTables<oob_policy> *g_pe_heating_tables_ptr = nullptr; // NOLINT
 
 // Function to compute PE heating rate from star formation history
 // sfh_data: vector of tuples (nstep, time, mass)
-// sfh_area_kpc2: area of the star formation history region in kpc^2
+// sf_area_kpc2: area of the star formation history region in kpc^2
 // Returns: heating_rate = sum_i (mass_{i+1} - mass_i) * photoelectricHeatingRatePerUnitMass(time_i), unit: erg/s/H
 template <quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp>
 auto PeHeatingFromSfh(const std::vector<std::tuple<int, amrex::Real, amrex::Real>> &sfh_data, amrex::Real current_time,
-		      PeHeatingGpuConstTables<oob_policy> const &gpu_tables, amrex::Real sfh_area_kpc2) -> amrex::Real
+		      PeHeatingGpuConstTables<oob_policy> const &gpu_tables, amrex::Real sf_area_kpc2) -> amrex::Real
 {
 	amrex::Real heating_rate = 0.0;
 
@@ -57,6 +58,8 @@ auto PeHeatingFromSfh(const std::vector<std::tuple<int, amrex::Real, amrex::Real
 		const int nstep = std::get<0>(entry);
 		const auto time = std::get<1>(entry);
 		const auto mass = std::get<2>(entry);
+
+		const auto mass_in_Msun = mass / C::M_solar;
 
 		// Compute age of this stellar population (in years)
 		const amrex::Real age_in_seconds = current_time - time;
@@ -71,11 +74,11 @@ auto PeHeatingFromSfh(const std::vector<std::tuple<int, amrex::Real, amrex::Real
 		auto const pe_heating_per_mass = gpu_tables.pe_heating.interpolate(point);
 
 		// Accumulate contribution: (mass increment) * (PE heating rate per unit mass)
-		heating_rate += (mass - mass_old) * pe_heating_per_mass[0];
-		mass_old = mass;
+		heating_rate += (mass_in_Msun - mass_old) * pe_heating_per_mass[0];
+		mass_old = mass_in_Msun;
 	}
 
-	return heating_rate / sfh_area_kpc2;
+	return heating_rate / sf_area_kpc2;
 }
 
 // Function to compute PE heating rate from constant star formation rate
