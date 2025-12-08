@@ -1153,8 +1153,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				// find the max value of data_array
 				amrex::Real max_val = std::numeric_limits<amrex::Real>::lowest();
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-					for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
-						for (int i2 = 0; i2 < sizes[1]; ++i2) { // NOSONAR
+					for (int i1 = 0; i1 < sizes[0]; ++i1) {			// NOSONAR
+						for (int i2 = 0; i2 < sizes[1]; ++i2) {		// NOSONAR
 							for (int i3 = 0; i3 < sizes[2]; ++i3) { // NOSONAR
 								if (data_array[out_idx][i1][i2][i3] > max_val) {
 									max_val = data_array[out_idx][i1][i2][i3];
@@ -1226,9 +1226,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				// find the max value of data_array
 				amrex::Real max_val = std::numeric_limits<amrex::Real>::lowest();
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-					for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
-						for (int i2 = 0; i2 < sizes[1]; ++i2) { // NOSONAR
-							for (int i3 = 0; i3 < sizes[2]; ++i3) { // NOSONAR
+					for (int i1 = 0; i1 < sizes[0]; ++i1) {				// NOSONAR
+						for (int i2 = 0; i2 < sizes[1]; ++i2) {			// NOSONAR
+							for (int i3 = 0; i3 < sizes[2]; ++i3) {		// NOSONAR
 								for (int i4 = 0; i4 < sizes[3]; ++i4) { // NOSONAR
 									if (data_array[out_idx][i1][i2][i3][i4] > max_val) {
 										max_val = data_array[out_idx][i1][i2][i3][i4];
@@ -1244,7 +1244,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 						for (int i2 = 0; i2 < sizes[1]; ++i2) {			// NOSONAR
 							for (int i3 = 0; i3 < sizes[2]; ++i3) {		// NOSONAR
 								for (int i4 = 0; i4 < sizes[3]; ++i4) { // NOSONAR
-									data_array[out_idx][i1][i2][i3][i4] = log_(data_array[out_idx][i1][i2][i3][i4], max_val);
+									data_array[out_idx][i1][i2][i3][i4] =
+									    log_(data_array[out_idx][i1][i2][i3][i4], max_val);
 								}
 							}
 						}
