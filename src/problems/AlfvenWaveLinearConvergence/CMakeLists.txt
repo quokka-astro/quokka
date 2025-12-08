@@ -9,6 +9,7 @@ if(AMReX_SPACEDIM EQUAL 3)
 
   add_test(
     NAME ${JOB_NAME}
-    COMMAND ${JOB_NAME} ${QuokkaTestParams}
+    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  set_tests_properties(AlfvenWaveLinearConvergence PROPERTIES LABELS "MHD")
 endif()
