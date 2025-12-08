@@ -305,7 +305,7 @@ template <> void QuokkaSimulation<AlfvenWaveLinear>::setInitialConditionsOnGrid(
 	const quokka::direction dir = grid_elem.dir_;
 
 	const int ncomp_cc = Physics_Indices<AlfvenWaveLinear>::nvarTotal_cc;
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k)noexcept {
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		for (int n = 0; n < ncomp_cc; ++n) {
 			state_cc(i, j, k, n) = 0; // fill unused quantities with zeros
 		}
@@ -325,7 +325,7 @@ template <> void QuokkaSimulation<AlfvenWaveLinear>::setInitialConditionsOnGridF
 
 	const int ncomp_fc = Physics_Indices<AlfvenWaveLinear>::nvarPerDim_fc;
 	// loop over the grid and set the initial condition
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k)noexcept {
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		for (int n = 0; n < ncomp_fc; ++n) {
 			state_fc(i, j, k, n) = 0; // fill unused quantities with zeros
 		}
