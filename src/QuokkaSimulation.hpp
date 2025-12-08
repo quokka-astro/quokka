@@ -997,7 +997,6 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponent
 
 template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm(bool use_rel_err) -> amrex::Real
 {
-	const BL_PROFILE("QuokkaSimulation::computeErrorNorm()");
 	// use_rel_err: if true, compute relative error norm; else compute absolute error norm
 	// default: true
 
@@ -1046,7 +1045,6 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeErrorNorm
 			} else {
 				amrex::Print() << "\nAbsolute L1 error norm = " << error_norm << "\n\n";
 			}
-			//}
 		}
 	}
 

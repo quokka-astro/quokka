@@ -258,7 +258,7 @@ auto problem_main() -> int
 	sim.setInitialConditions();
 	sim.evolve();
 
-	const double error_tol = 0.02;
+	const double error_tol = 0.008;
 	int status = 0;
 	amrex::Real const error_norm = sim.computeErrorNorm();
 	if (error_norm > error_tol) {

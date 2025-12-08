@@ -305,7 +305,7 @@ template <> void QuokkaSimulation<AlfvenWaveLinear>::setInitialConditionsOnGrid(
 	const quokka::direction dir = grid_elem.dir_;
 
 	const int ncomp_cc = Physics_Indices<AlfvenWaveLinear>::nvarTotal_cc;
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) -> void {
 		for (int n = 0; n < ncomp_cc; ++n) {
 			state_cc(i, j, k, n) = 0; // fill unused quantities with zeros
 		}
