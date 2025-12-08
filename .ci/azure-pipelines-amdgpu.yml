@@ -75,7 +75,7 @@ jobs:
         CCACHE_BASEDIR: $(Build.SourcesDirectory)
         CCACHE_NOHASHDIR: 1
       inputs:
-        cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DAMReX_SPACEDIM=3 -DAMReX_GPU_BACKEND=HIP $(cmakeLauncherArgs)'
+        cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DAMReX_SPACEDIM=3 -DAMReX_GPU_BACKEND=HIP -DCMAKE_CXX_FLAGS=-ffp-exception-behavior=strict $(cmakeLauncherArgs)'
     
     - task: CMake@1
       displayName: 'Build Quokka'
