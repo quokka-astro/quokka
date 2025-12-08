@@ -397,7 +397,7 @@ auto runWaveTest(int nx) -> double
 						      2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)};
 	k_magn = computeMagnitude(k_vec_prf);
 	const double wavelength = 2.0 * M_PI / k_magn;
-	const double max_time   = wavelength / cA;
+	const double max_time = wavelength / cA;
 	k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
 
 	k_rotation_in_xy_rad = std::atan2(k_dir_prf[1], k_dir_prf[0]);

@@ -213,7 +213,6 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const double cosθ = std::cos(θ);
 		const double sinθ = std::sin(θ);
 
-
 		const double cf = std::sqrt(0.5 * (a * a + vA * vA + std::sqrt((a * a + vA * vA) * (a * a + vA * vA) - 4.0 * a * a * vA * vA * cosθ * cosθ)));
 
 		const double omega = cf * k_magn;
@@ -233,15 +232,16 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		// compute velocity perturbations in MRF
 		if (std::abs(sinθ) < tiny) {
 			// Pure sound wave: set amplitude via epsilon (velocity/density perturbation)
-			if (i == 0 && j == 0 && k == 0 && time ==0.0) {
-				amrex::Warning( "Warning: angle between k and B0 is 0 or 180 deg. Fast wave reduces to pure sound wave with no magnetic perturbation.");
-			}	
+			if (i == 0 && j == 0 && k == 0 && time == 0.0) {
+				amrex::Warning(
+				    "Warning: angle between k and B0 is 0 or 180 deg. Fast wave reduces to pure sound wave with no magnetic perturbation.");
+			}
 			v1_mrf = -epsilon * cf * cos_phase;
 			v3_mrf = 0.0;
 			delta_B3 = 0.0;
 		} else {
 			// Fast magnetosonic wave: δB is primary
-			delta_B3 = delta_b_magn * cos_phase;			
+			delta_B3 = delta_b_magn * cos_phase;
 			// From eigenvector component 2: v₁/δB₃ = (c_f/ρ) / (B₃·c²_f/(ρc²_f - B²_x))
 			// Simplifies to: v₁ = c_f · δB₃ / B₃ = c_f · δB₃ / (b0_magn·sinθ)
 			v1_mrf = (cf / (b0_magn * sinθ)) * delta_B3;
@@ -249,9 +249,9 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 			// Simplifies to: v₃ = -(v_A² cosθ sinθ) / (c_f² - v_A² cos²θ) · c_f · δB₃ / B₃
 			v3_mrf = -(vA * vA * cosθ) / (cf * cf - vA * vA * cosθ * cosθ) * (cf / sinθ) * (delta_B3 / b0_magn);
 		}
-	
+
 		double const v2_mrf = 0.0;
-	
+
 		// density & pressure perturbations (linear compressive fast mode)
 		const double density = bg_density * (1.0 + epsilon * cos_phase);
 		const double pressure = bg_pressure * (1.0 + gamma_gas * epsilon * cos_phase);
@@ -414,7 +414,7 @@ auto runWaveTest(int nx) -> double
 						      2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)};
 	k_magn = computeMagnitude(k_vec_prf);
 	const double wavelength = 2.0 * M_PI / k_magn;
-	const double max_time   = wavelength / cf;
+	const double max_time = wavelength / cf;
 	k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
 
 	k_rotation_in_xy_rad = std::atan2(k_dir_prf[1], k_dir_prf[0]);
@@ -531,7 +531,7 @@ auto problem_main() -> int
 
 	quokka::richardson::Parameters params{};
 	params.machine_precision_target = 2.0e-12;
-	params.nx_initial =16;
+	params.nx_initial = 16;
 	params.nx_max = 1024;
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;

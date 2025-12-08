@@ -172,19 +172,19 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	// rotate PRF -> MRF
 	const std::array<amrex::Real, 3> x_vec_mrf = rotatePRF2MRF({x1_prf, x2_prf, x3_prf});
 	const double tiny = 1e-16;
-	
+
 	// Assumes: k along x1_mrf, B0 in (x1_mrf, x3_mrf) plane
 	// background B0 in MRF
 	const double θ = angle_between_k_b0_rad;
 	const double B0_1 = b0_magn * std::cos(θ);
 	const double B0_3 = b0_magn * std::sin(θ);
-	
+
 	// background vector potential that yields B0 in MRF:
 	// bg_A = (0, B0_3 * x1 - B0_1 * x3, 0)
 	const double bg_A1 = 0.0;
 	const double bg_A2 = B0_3 * x_vec_mrf[0] - B0_1 * x_vec_mrf[2];
 	const double bg_A3 = 0.0;
-	
+
 	// slow speed and phase
 	const double a = sound_speed;
 	const double vA = alfven_speed;
@@ -193,12 +193,12 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	const double cs = std::sqrt(0.5 * (a * a + vA * vA - std::sqrt((a * a + vA * vA) * (a * a + vA * vA) - 4.0 * a * a * vA * vA * cosθ * cosθ)));
 	const double omega = cs * k_magn;
 	const double phase = omega * time - k_magn * x_vec_mrf[0];
-	
+
 	// Perturbation in MRF: δB = (0, 0, δB₃)
 	const double delta_A1 = 0.0;
 	double delta_A2 = 0.0;
 	const double delta_A3 = 0.0;
-	
+
 	if (std::abs(sinθ) < tiny || std::abs(cosθ) < tiny) {
 		// θ ≈ 0° or θ ≈ 90°: slow mode does not propagate → no B perturbation
 		delta_A2 = 0.0;
@@ -208,7 +208,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 		const double delta_B3 = delta_b_magn;
 		delta_A2 = -(delta_B3 / k_magn) * std::sin(phase);
 	}
-	
+
 	const double A1_mrf = bg_A1 + delta_A1;
 	const double A2_mrf = bg_A2 + delta_A2;
 	const double A3_mrf = bg_A3 + delta_A3;
@@ -232,10 +232,8 @@ AMREX_GPU_DEVICE inline auto Az_prf(const double x1_prf, const double x2_prf, co
 }
 
 AMREX_GPU_DEVICE
-void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state,
-                              amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-                              amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-                              quokka::centering cen, quokka::direction dir, amrex::Real time)
+void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+			 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir, amrex::Real time)
 {
 	const amrex::Real x1_prf_L = prob_lo[0] + i * dx[0];
 	const amrex::Real x2_prf_L = prob_lo[1] + j * dx[1];
@@ -244,7 +242,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 	const double tiny = 1e-16;
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(b0_magn) > tiny, "computeWaveSolution: background magnetic field magnitude b0_magn must be nonzero.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(k_magn) > tiny, "computeWaveSolution: wavevector magnitude k_magn must be nonzero.");
-	
+
 	const amrex::Real x1_prf_C = x1_prf_L + static_cast<amrex::Real>(0.5) * dx[0];
 	const amrex::Real x2_prf_C = x2_prf_L + static_cast<amrex::Real>(0.5) * dx[1];
 	const amrex::Real x3_prf_C = x3_prf_L + static_cast<amrex::Real>(0.5) * dx[2];
@@ -271,7 +269,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 	// Velocity perturbations in MRF (from slow mode eigenvector)
 	double v1_mrf = 0.0;
 	double v3_mrf = 0.0;
-	
+
 	// Magnetic field perturbation in MRF: δB = (0, 0, δB3)
 	double delta_B3 = 0.0;
 
@@ -295,15 +293,15 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		delta_B3 = 0.0;
 	} else {
 		// General case: both velocity and magnetic perturbations
-		constexpr double wave_sign = -1.0;  // -1 for right-propagating, +1 for left-propagating		
+		constexpr double wave_sign = -1.0; // -1 for right-propagating, +1 for left-propagating
 		// Slow magnetosonic wave: δB is primary
-		delta_B3 = delta_b_magn * cos_phase;		
+		delta_B3 = delta_b_magn * cos_phase;
 		// From eigenvector component 2: v₁ = c_s · δB₃ / B₃ = c_s · δB₃ / (b0_magn·sinθ)
-		v1_mrf = wave_sign * (cs / (b0_magn * sinθ)) * delta_B3;		
+		v1_mrf = wave_sign * (cs / (b0_magn * sinθ)) * delta_B3;
 		// From eigenvector component 4: v₃ = +(v_A² cosθ sinθ) / (c_s² - v_A² cos²θ) · c_s · δB₃ / B₃
 		v3_mrf = wave_sign * (vA * vA * cosθ) / (cs * cs - vA * vA * cosθ * cosθ) * (cs / sinθ) * (delta_B3 / b0_magn);
 	}
-	
+
 	const double v2_mrf = 0.0;
 
 	// Density & pressure perturbations (linear compressive mode)
@@ -315,7 +313,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const auto v_prf = rotateMRF2PRF({v1_mrf, v2_mrf, v3_mrf});
 		const auto B0_prf = rotateMRF2PRF({B0_1, 0.0, B0_3});
 		const auto delta_B_prf = rotateMRF2PRF({0.0, 0.0, delta_B3});
-		
+
 		const double b_x1_prf = B0_prf[0] + delta_B_prf[0];
 		const double b_x2_prf = B0_prf[1] + delta_B_prf[1];
 		const double b_x3_prf = B0_prf[2] + delta_B_prf[2];
@@ -339,21 +337,21 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 	} else if (cen == quokka::centering::fc) {
 		// Compute b-field using the magnetic vector potential to preserve div(b) = 0 topology
 		if (dir == quokka::direction::x) {
-			const double b_x1 = 
+			const double b_x1 =
 			    (Az_prf(x1_prf_L, x2_prf_L + dx[1], x3_prf_L + dx[2] / 2.0, time) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_L + dx[2] / 2.0, time)) /
 				dx[1] -
 			    (Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L + dx[2], time) - Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L, time)) /
 				dx[2];
 			state(i, j, k, MHDSystem<SlowWaveConvergence>::bfield_index) = b_x1;
 		} else if (dir == quokka::direction::y) {
-			const double b_x2 = 
+			const double b_x2 =
 			    (Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L + dx[2], time) - Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time)) /
 				dx[2] -
 			    (Az_prf(x1_prf_L + dx[0], x2_prf_L, x3_prf_L + dx[2] / 2.0, time) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_L + dx[2] / 2.0, time)) /
 				dx[0];
 			state(i, j, k, MHDSystem<SlowWaveConvergence>::bfield_index) = b_x2;
 		} else if (dir == quokka::direction::z) {
-			const double b_x3 = 
+			const double b_x3 =
 			    (Ay_prf(x1_prf_L + dx[0], x2_prf_L + dx[1] / 2.0, x3_prf_L, time) - Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L, time)) /
 				dx[0] -
 			    (Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L + dx[1], x3_prf_L, time) - Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time)) /
@@ -469,7 +467,7 @@ auto runWaveTest(int nx) -> double
 	k_magn = computeMagnitude(k_vec_prf);
 	k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
 	const double wavelength = 2.0 * M_PI / k_magn;
-	const double max_time   = wavelength / cs;
+	const double max_time = wavelength / cs;
 
 	k_rotation_in_xy_rad = std::atan2(k_dir_prf[1], k_dir_prf[0]);
 	k_elevation_from_xy_rad = std::atan2(k_dir_prf[2], std::hypot(k_dir_prf[0], k_dir_prf[1]));
