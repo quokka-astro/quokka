@@ -571,12 +571,12 @@ auto problem_main() -> int
 
 	quokka::richardson::Parameters params{};
 	params.machine_precision_target = 2.0e-12;
-	params.nx_initial = 64;
-	params.nx_max = 64; // cap at 256 for quick tests. otherwise, it can take ~1-2 hours for 2048
+	params.nx_initial = 16;
+	params.nx_max = 256; // cap at 256 for quick tests. otherwise, it can take ~1-2 hours for 2048
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;
-	params.test_name = "Alfven Wave";
-	params.csv_filename = "alfven_wave_convergence.csv";
+	params.test_name = "Slow Wave";
+	params.csv_filename = "slow_wave_convergence.csv";
 
 	return quokka::richardson::run(params, [](int nx) { return runWaveTest(nx); });
 }
