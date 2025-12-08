@@ -8,17 +8,17 @@
 ///
 
 #include "hydro/hydro_system.hpp"
+#include <fmt/format.h>
+#include <limits>
 #include <valarray>
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
-#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
 #include "util/fextract.hpp"
-#include "util/richardson.hpp"
 
 struct WaveProblem {
 };
@@ -38,6 +38,8 @@ template <> struct Physics_Traits<WaveProblem> {
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = 1; // number of radiation groups
+	static constexpr bool is_dust_enabled = false;
+	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
@@ -107,21 +109,11 @@ auto runWaveTest(int nx) -> double
 	// Set grid dimensions using AMReX parameter system
 	amrex::ParmParse pp("amr");
 	amrex::Vector<int> const ncells = {nx, 8, 8};
-	const int blocking_x = std::max(16, nx / 2); // default: split x-direction into two grids
-	const int max_grid_x = std::max(blocking_x, nx / 2);
 	pp.add("max_level", 0);
-	if (!pp.contains("blocking_factor_x")) {
-		pp.add("blocking_factor_x", blocking_x);
-	}
-	if (!pp.contains("blocking_factor_y")) {
-		pp.add("blocking_factor_y", 8);
-	}
-	if (!pp.contains("blocking_factor_z")) {
-		pp.add("blocking_factor_z", 8);
-	}
-	if (!pp.contains("max_grid_size")) {
-		pp.add("max_grid_size", max_grid_x);
-	}
+	pp.add("blocking_factor_x", nx);
+	pp.add("blocking_factor_y", 8);
+	pp.add("blocking_factor_z", 8);
+	pp.add("max_grid_size", nx);
 	pp.addarr("n_cell", ncells);
 
 	// Set domain bounds using AMReX parameter system
@@ -141,54 +133,147 @@ auto runWaveTest(int nx) -> double
 
 	// set initial conditions
 	sim.setInitialConditions();
-
 	auto [pos_exact, val_exact] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
 
 	// Main time loop
 	sim.evolve();
 
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
+	int const nx_final = static_cast<int>(position.size());
 
-	amrex::Real epsilon = 0.0;
-	if (amrex::ParallelDescriptor::IOProcessor()) {
-		int const nx_final = static_cast<int>(position.size());
-
-		// compute error norm
-		amrex::Real err_sq = 0.;
-		for (int n = 0; n < QuokkaSimulation<WaveProblem>::ncompHydro_; ++n) {
-			if (n == HydroSystem<WaveProblem>::internalEnergy_index) {
-				continue;
-			}
-			amrex::Real dU_k = 0.;
-			for (int i = 0; i < nx_final; ++i) {
-				// Δ Uk = ∑i |Uk,in - Uk,i0| / Nx
-				const amrex::Real U_k0 = val_exact.at(n)[i];
-				const amrex::Real U_k1 = values.at(n)[i];
-				dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final);
-			}
-			// ε = || Δ U || = [&sum_k (Δ Uk)2]^{1/2}
-			err_sq += dU_k * dU_k;
+	// compute error norm
+	amrex::Real err_sq = 0.;
+	for (int n = 0; n < QuokkaSimulation<WaveProblem>::nvars_; ++n) {
+		if (n == HydroSystem<WaveProblem>::internalEnergy_index) {
+			continue;
 		}
-		epsilon = std::sqrt(err_sq);
+		amrex::Real dU_k = 0.;
+		for (int i = 0; i < nx_final; ++i) {
+			// Δ Uk = ∑i |Uk,in - Uk,i0| / Nx
+			const amrex::Real U_k0 = val_exact.at(n)[i];
+			const amrex::Real U_k1 = values.at(n)[i];
+			dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final);
+		}
+		// ε = || Δ U || = [&sum_k (Δ Uk)2]^{1/2}
+		err_sq += dU_k * dU_k;
 	}
-
-	// Broadcast epsilon so all ranks follow identical control flow
+	const amrex::Real epsilon = std::sqrt(err_sq);
 
 	return epsilon;
 }
 
 auto problem_main() -> int
 {
-	quokka::richardson::applyQuietDefaults();
+	// Richardson convergence test: run at increasing resolution until machine precision is reached
+	const double machine_precision_target = 2.0e-11;
+	const int nx_initial = 128;
+	const int nx_max = 2048;
+	bool reached_target = false;
 
-	quokka::richardson::Parameters params{};
-	params.machine_precision_target = 2.0e-11;
-	params.nx_initial = 128;
-	params.nx_max = 2048;
-	params.expected_rate = 2.0;
-	params.tolerance = 0.3;
-	params.test_name = "HydroWave";
-	params.csv_filename = "hydro_wave_convergence.csv";
+	// Silence TinyProfiler so convergence logs stay readable
+	{
+		amrex::ParmParse pp_tp("tiny_profiler");
+		if (!pp_tp.contains("output_file")) {
+			pp_tp.add("output_file", std::string("/dev/null"));
+		}
+	}
 
-	return quokka::richardson::run(params, [](int nx) { return runWaveTest(nx); });
+	// Suppress per-step logging from the coarse timestep loop
+	{
+		amrex::ParmParse pp_general;
+		if (!pp_general.contains("suppress_output")) {
+			pp_general.add("suppress_output", 1);
+		}
+	}
+
+	amrex::Vector<int> resolutions;
+	amrex::Vector<double> errors;
+	amrex::Vector<double> dx_values;
+
+	amrex::Print() << "Running Richardson convergence test for HydroWave:\n";
+	amrex::Print() << "Resolution\tError Norm\n";
+	amrex::Print() << "----------\t----------\n";
+
+	for (int nx = nx_initial; nx <= nx_max; nx *= 2) {
+		double const error = runWaveTest(nx);
+
+		resolutions.push_back(nx);
+		errors.push_back(error);
+		dx_values.push_back(1.0 / static_cast<double>(nx)); // dx = L / nx for unit domain
+
+		amrex::Print() << fmt::format("{:10d}\t{:.6e}\n", nx, error);
+
+		if (error <= machine_precision_target) {
+			reached_target = true;
+			break;
+		}
+
+		if (nx == nx_max) {
+			amrex::Print() << fmt::format("\nReached maximum resolution (nx = {}) without achieving the target error {:.3e}\n", nx_max,
+						      machine_precision_target);
+			break;
+		}
+	}
+
+	// Calculate convergence rates using Richardson extrapolation
+	amrex::Print() << "\nConvergence Rate Analysis:\n";
+	amrex::Print() << "Resolution Pair\tObserved Rate\tExpected Rate\n";
+	amrex::Print() << "---------------\t-------------\t-------------\n";
+
+	bool convergence_passed = true;
+	const double expected_rate = 2.0; // PPM should give ~2nd order for smooth problems
+	const double tolerance = 0.3;	  // Allow 30% deviation from expected rate
+
+	for (int i = 1; i < resolutions.size(); ++i) {
+		// Calculate convergence rate: p = log(E(2h)/E(h)) / log(2)
+		double const log_error_ratio = std::log(errors[i - 1] / errors[i]);
+		double const log_dx_ratio = std::log(dx_values[i - 1] / dx_values[i]);
+		double const observed_rate = log_error_ratio / log_dx_ratio;
+
+		amrex::Print() << fmt::format("{:4d} -> {:4d}\t{:13.2f}\t{:13.1f}\n", resolutions[i - 1], resolutions[i], observed_rate, expected_rate);
+
+		// Check if convergence rate is within acceptable range
+		if (observed_rate + tolerance < expected_rate) {
+			convergence_passed = false;
+		}
+	}
+
+	// Calculate overall convergence rate from first to last resolution
+	if (resolutions.size() >= 2) {
+		double const overall_log_error_ratio = std::log(errors[0] / errors.back());
+		double const overall_log_dx_ratio = std::log(dx_values[0] / dx_values.back());
+		double const overall_rate = overall_log_error_ratio / overall_log_dx_ratio;
+
+		amrex::Print() << fmt::format("\nOverall convergence rate: {:.2f}\n", overall_rate);
+		amrex::Print() << fmt::format("Expected rate: {:.1f}\n", expected_rate);
+
+		if (overall_rate + tolerance < expected_rate) {
+			convergence_passed = false;
+		}
+	}
+
+	// Output results for analysis
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		std::ofstream file("hydro_wave_convergence.csv");
+		file << "nx,dx,error\n";
+		for (int i = 0; i < resolutions.size(); ++i) {
+			file << fmt::format("{},{:.6e},{:.6e}\n", resolutions[i], dx_values[i], errors[i]);
+		}
+		file.close();
+		amrex::Print() << "\nConvergence data written to hydro_wave_convergence.csv\n";
+	}
+
+	// Test status
+	if (convergence_passed) {
+		if (reached_target) {
+			amrex::Print() << fmt::format("\n✓ Richardson convergence test PASSED (target error {:.3e} reached)\n", machine_precision_target);
+		} else {
+			amrex::Print() << "\n✓ Richardson convergence test PASSED\n";
+		}
+		return 0;
+	}
+
+	amrex::Print() << "\n✗ Richardson convergence test FAILED\n";
+	amrex::Print() << "Observed convergence rate deviates from expected rate by more than " << tolerance << "\n";
+	return 1;
 }
