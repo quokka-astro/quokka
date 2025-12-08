@@ -210,7 +210,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real last_sfh_time_ = 0.0;
 	bool use_sfh_based_pe_heating_ = false;
 	std::string sfh_to_pe_heating_table_filename_;
-	amrex::Real sfh_area_kpc2_ = 1.0; // area of the star formation history region in kpc^2 (for computing the PE heating rate)
+	amrex::Real sf_area_kpc2_ = -1.0; // area of the star formation region in kpc^2 (for computing the PE heating rate)
 	amrex::Real const_sfr_Msun_per_year_per_kpc2_ = -1.0; // constant star formation rate in Msun/year/kpc^2 (for computing the PE heating rate); will override real star formation rate from the simulation if non-negative
 
 	amrex::Real densityFloor_ = 0.0; // default
@@ -856,7 +856,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 		pp.query("sfh_time_interval", sfh_time_interval_);
 		pp.query("use_sfh_based_pe_heating", use_sfh_based_pe_heating_);
 		pp.query("sfh_to_pe_heating_table", sfh_to_pe_heating_table_filename_);
-		pp.query("sfh_area_kpc2", sfh_area_kpc2_);
+		pp.query("sf_area_kpc2", sf_area_kpc2_);
 		pp.query("const_sfr_Msun_per_year_per_kpc2", const_sfr_Msun_per_year_per_kpc2_);
 
 		if (const_sfr_Msun_per_year_per_kpc2_ < 0.0) {
@@ -866,6 +866,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 									"When use_sfh_based_pe_heating is set to true, star formation history must be turned on by specifying sfh_interval or sfh_time_interval");
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!sfh_to_pe_heating_table_filename_.empty(),
 									"When use_sfh_based_pe_heating is set to true, a PE heating table must be specified via sfh_to_pe_heating_table");
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sf_area_kpc2_ > 0.0,
+									"When use_sfh_based_pe_heating is set to true, sf_area_kpc2 must be set to a positive value");
 			} else {
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sfh_to_pe_heating_table_filename_.empty(),
 									"use_sfh_based_pe_heating is set to false but sfh_to_pe_heating_table is specified. This indicates a misconfiguration.");

@@ -123,7 +123,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::FillPatchWithData;
 	using AMRSimulation<problem_t>::Gconst_;
 	using AMRSimulation<problem_t>::const_sfr_Msun_per_year_per_kpc2_;
-	using AMRSimulation<problem_t>::sfh_area_kpc2_;
+	using AMRSimulation<problem_t>::sf_area_kpc2_;
 
 	using AMRSimulation<problem_t>::densityFloor_;
 	using AMRSimulation<problem_t>::tempFloor_;
@@ -808,7 +808,7 @@ auto QuokkaSimulation<problem_t>::computePhotoelectricHeatingRate(amrex::Real cu
 		heating_rate = quokka::PeHeatingFromConstSfr(const_sfr_Msun_per_year_per_kpc2_, gpu_tables);
 	} else {
 		// Real star formation history
-		heating_rate = particleRegister_.computePhotoelectricHeatingRate(current_time, gpu_tables, sfh_area_kpc2_);
+		heating_rate = particleRegister_.computePhotoelectricHeatingRate(current_time, gpu_tables, sf_area_kpc2_);
 	}
 
 	return heating_rate;
