@@ -139,7 +139,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	const double θ = angle_between_k_b0_rad;
 	const double B0_1 = b0_magn * std::cos(θ);
 	const double B0_3 = b0_magn * std::sin(θ);
-	const double epsilon = delta_b_magn / b0_magn;
 
 	// background vector potential that yields B0 in MRF:
 	// bg_A = (0, B0_1 * x3 - B0_3 * x1, 0)
@@ -235,7 +234,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		if (std::abs(sinθ) < tiny) {
 			// Pure sound wave: set amplitude via epsilon (velocity/density perturbation)
 			if (i == 0 && j == 0 && k == 0 && time ==0.0) {
-				amrex::Print() << "Warning: angle between k and B0 is 0 or 180 deg. Fast wave reduces to pure sound wave with no magnetic perturbation.\n";
+				amrex::Warning( "Warning: angle between k and B0 is 0 or 180 deg. Fast wave reduces to pure sound wave with no magnetic perturbation.");
 			}	
 			v1_mrf = -epsilon * cf * cos_phase;
 			v3_mrf = 0.0;
@@ -245,10 +244,10 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 			delta_B3 = delta_b_magn * cos_phase;			
 			// From eigenvector component 2: v₁/δB₃ = (c_f/ρ) / (B₃·c²_f/(ρc²_f - B²_x))
 			// Simplifies to: v₁ = c_f · δB₃ / B₃ = c_f · δB₃ / (b0_magn·sinθ)
-			v1_mrf = -(cf / (b0_magn * sinθ)) * delta_B3;
+			v1_mrf = (cf / (b0_magn * sinθ)) * delta_B3;
 			// From eigenvector component 4: δu_z / δB_z = -(B_x·B_z) / (ρ(ρc²_f - B²_x)) / (B_z·c²_f / (ρc²_f - B²_x))
 			// Simplifies to: v₃ = -(v_A² cosθ sinθ) / (c_f² - v_A² cos²θ) · c_f · δB₃ / B₃
-			v3_mrf = (vA * vA * cosθ) / (cf * cf - vA * vA * cosθ * cosθ) * (cf / sinθ) * (delta_B3 / b0_magn);
+			v3_mrf = -(vA * vA * cosθ) / (cf * cf - vA * vA * cosθ * cosθ) * (cf / sinθ) * (delta_B3 / b0_magn);
 		}
 	
 		double const v2_mrf = 0.0;
@@ -397,7 +396,6 @@ auto runWaveTest(int nx) -> double
 	const double vA = alfven_speed;
 	const double cosθ = std::cos(angle_between_k_b0_rad);
 	const double cf = std::sqrt(0.5 * (a * a + vA * vA + std::sqrt((a * a + vA * vA) * (a * a + vA * vA) - 4.0 * a * a * vA * vA * cosθ * cosθ)));
-	const double max_time = 1.0 / cf;
 	const int max_timesteps = std::max(20000, nx * 100);
 
 	int num_modes_x = 0;
@@ -415,6 +413,8 @@ auto runWaveTest(int nx) -> double
 	const std::array<amrex::Real, 3> k_vec_prf = {2.0 * M_PI * static_cast<amrex::Real>(num_modes_x), 2.0 * M_PI * static_cast<amrex::Real>(num_modes_y),
 						      2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)};
 	k_magn = computeMagnitude(k_vec_prf);
+	const double wavelength = 2.0 * M_PI / k_magn;
+	const double max_time   = wavelength / cf;
 	k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
 
 	k_rotation_in_xy_rad = std::atan2(k_dir_prf[1], k_dir_prf[0]);
