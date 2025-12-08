@@ -406,7 +406,6 @@ void QuokkaSimulation<SlowWaveConvergence>::computeReferenceSolution(amrex::Mult
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = ref.array(iter);
 		auto const ncomp = ref.nComp();
-		const amrex::Real time = tNew_[0];
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			for (int n = 0; n < ncomp; ++n) {
@@ -426,7 +425,6 @@ void QuokkaSimulation<SlowWaveConvergence>::computeReferenceSolution_fc(amrex::M
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = ref.array(iter);
 		auto const ncomp = ref.nComp();
-		const amrex::Real time = tNew_[0];
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			for (int n = 0; n < ncomp; ++n) {

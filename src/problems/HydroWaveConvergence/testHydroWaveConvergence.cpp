@@ -170,7 +170,7 @@ auto problem_main() -> int
 	quokka::richardson::Parameters params{};
 	params.machine_precision_target = 2.0e-12;
 	params.nx_initial = 16;
-	params.nx_max = 1024;
+	params.nx_max = 4096;
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;
 	params.test_name = "Fast Wave";
