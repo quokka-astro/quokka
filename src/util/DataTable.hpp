@@ -1030,10 +1030,10 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 						//     fmt::format("log output spacing requires positive values, got {} at output {} index {}",
 						// 		data_array[out_idx][i], out_idx, i));
 						if (data_array[out_idx][i] > 0.0) {
-						    data_array[out_idx][i] = log_(data_array[out_idx][i]);
-                        } else {
-						    data_array[out_idx][i] = -10000;
-                        }
+							data_array[out_idx][i] = log_(data_array[out_idx][i]);
+						} else {
+							data_array[out_idx][i] = -10000;
+						}
 					}
 				}
 			}
@@ -1083,11 +1083,11 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 							//     data_array[out_idx][i1][i2] > 0.0,
 							//     fmt::format("log output spacing requires positive values, got {} at output {} index ({}, {})",
 							// 		data_array[out_idx][i1][i2], out_idx, i1, i2));
-                            if (data_array[out_idx][i1][i2] > 0.0) {
-                                data_array[out_idx][i1][i2] = log_(data_array[out_idx][i1][i2]);
-                            } else {
-                                data_array[out_idx][i1][i2] = -10000;
-                            }
+							if (data_array[out_idx][i1][i2] > 0.0) {
+								data_array[out_idx][i1][i2] = log_(data_array[out_idx][i1][i2]);
+							} else {
+								data_array[out_idx][i1][i2] = -10000;
+							}
 						}
 					}
 				}
