@@ -163,7 +163,8 @@ struct ResampledCoolingFunctor {
 	}
 };
 
-template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &resampledTables, const Real E_floor, const Real const_heating_rate) -> bool
+// const_heating_rate_per_H: unit erg/s/H
+template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &resampledTables, const Real E_floor, const Real const_heating_rate_per_H) -> bool
 {
 	const BL_PROFILE("quokka::ResampledCooling::computeCooling()");
 
@@ -189,8 +190,11 @@ template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Rea
 			const Real x3Mom = state(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
 			const Real Egas = state(i, j, k, HydroSystem<problem_t>::energy_index);
 
+			// number density
+			const Real nH = rho * tables.cloudy_H_mass_fraction / C::m_p; // unit: cm^-3
+
 			const Real Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			const ResampledCoolingFunctor user_rhs(rho, tables, const_heating_rate);
+			const ResampledCoolingFunctor user_rhs(rho, tables, const_heating_rate_per_H * nH); // unit: erg/cm^3/s
 			quokka::valarray<Real, 1> y = {Eint};
 			quokka::valarray<Real, 1> const abstol = {reltol_floor * E_floor};
 
@@ -201,7 +205,7 @@ template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Rea
 
 			// check if integration failed
 			if (nsteps >= maxStepsODEIntegrate) {
-				Real const Edot = resampled_cooling_function(rho, Eint, tables) + const_heating_rate;
+				Real const Edot = resampled_cooling_function(rho, Eint, tables) + const_heating_rate_per_H * nH; // unit: erg/cm^3/s
 				Real const t_cool = Eint / Edot;
 				printf("max substeps exceeded! rho = %.17e, Eint = %.17e, cooling " // NOLINT
 				       "time = %g, dt = %.17e\n",
