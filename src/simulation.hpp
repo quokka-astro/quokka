@@ -859,19 +859,21 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 		pp.query("sfh_area_kpc2", sfh_area_kpc2_);
 		pp.query("const_sfr_Msun_per_year_per_kpc2", const_sfr_Msun_per_year_per_kpc2_);
 
-		// It's allowed to turn on sfh and not turn on use_sfh_based_pe_heating, but the opposite is not allowed.
-		if (use_sfh_based_pe_heating_) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE((sfh_interval_ > 0) || (sfh_time_interval_ > 0),
-								"When use_sfh_based_pe_heating is set to true, star formation history must be turned on by specifying sfh_interval or sfh_time_interval");
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!sfh_to_pe_heating_table_filename_.empty(),
-								"When use_sfh_based_pe_heating is set to true, a PE heating table must be specified via sfh_to_pe_heating_table");
-		} else {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sfh_to_pe_heating_table_filename_.empty(),
-								"use_sfh_based_pe_heating is set to false but sfh_to_pe_heating_table is specified. This indicates a misconfiguration.");
+		if (const_sfr_Msun_per_year_per_kpc2_ < 0.0) {
+			// It's allowed to turn on sfh and not turn on use_sfh_based_pe_heating, but the opposite is not allowed.
+			if (use_sfh_based_pe_heating_) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE((sfh_interval_ > 0) || (sfh_time_interval_ > 0),
+									"When use_sfh_based_pe_heating is set to true, star formation history must be turned on by specifying sfh_interval or sfh_time_interval");
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!sfh_to_pe_heating_table_filename_.empty(),
+									"When use_sfh_based_pe_heating is set to true, a PE heating table must be specified via sfh_to_pe_heating_table");
+			} else {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sfh_to_pe_heating_table_filename_.empty(),
+									"use_sfh_based_pe_heating is set to false but sfh_to_pe_heating_table is specified. This indicates a misconfiguration.");
+			}
 		}
 
 		// Load PE heating table if specified
-		if (use_sfh_based_pe_heating_ && (const_sfr_Msun_per_year_per_kpc2_ < 0.0)) {
+		if (use_sfh_based_pe_heating_) {
 			amrex::Print() << "Loading PE heating table from: " << sfh_to_pe_heating_table_filename_ << "\n";
 
 			// Use linear spacing for PE heating values (can be changed if needed)
@@ -883,13 +885,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 			// Validate table metadata matches expected hardcoded values
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(peHeatingTables_.pe_heating.input_name(0) == "age",
-							 fmt::format("PE heating table input must be 'age', got '{}'", peHeatingTables_.pe_heating.input_name(0)));
+							fmt::format("PE heating table input must be 'age', got '{}'", peHeatingTables_.pe_heating.input_name(0)));
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-			    peHeatingTables_.pe_heating.input_unit(0) == "year",
-			    fmt::format("PE heating table input unit must be 'year', got '{}'", peHeatingTables_.pe_heating.input_unit(0)));
+					peHeatingTables_.pe_heating.input_unit(0) == "year",
+					fmt::format("PE heating table input unit must be 'year', got '{}'", peHeatingTables_.pe_heating.input_unit(0)));
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-			    peHeatingTables_.pe_heating.output_unit(0) == "erg/s/Msun",
-			    fmt::format("PE heating table output unit must be 'erg/s/Msun', got '{}'", peHeatingTables_.pe_heating.output_unit(0)));
+					peHeatingTables_.pe_heating.output_unit(0) == "erg/s/Msun",
+					fmt::format("PE heating table output unit must be 'erg/s/Msun', got '{}'", peHeatingTables_.pe_heating.output_unit(0)));
 
 			// Set global pointer for access from particle functions
 			quokka::g_pe_heating_tables_ptr<> = &peHeatingTables_;

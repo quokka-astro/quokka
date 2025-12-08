@@ -83,8 +83,8 @@ template <quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp>
 auto PeHeatingFromConstSfr(amrex::Real const_sfr_Msun_per_year_per_kpc2, PeHeatingGpuConstTables<oob_policy> const &gpu_tables) -> amrex::Real
 {
 	// compute PE heating rate from constant star formation rate. Use intervals of 1 Myr from 0 to 100 Myr
-	const amrex::Real age_interval_in_years = 5.0e5; // 0.5 Myr
-	const int num_intervals = 1.0e8 / age_interval_in_years; // 100 Myr
+	const amrex::Real age_interval_in_years = 1.0e6; // 1 Myr
+	const int num_intervals = 1.0e9 / age_interval_in_years; // 1 Gyr
 	amrex::Real heating_rate = 0.0;
 	for (int i = 0; i < num_intervals; ++i) {
 		amrex::Real age_in_years = i * age_interval_in_years;
