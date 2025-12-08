@@ -40,6 +40,8 @@ template <> struct Physics_Traits<WaveProblem> {
 	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr bool is_dust_enabled = false;
 	static constexpr int nDustGroups = 1; // number of dust groups
+	static constexpr bool is_dust_enabled = false;
+	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 

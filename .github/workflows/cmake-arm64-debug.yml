@@ -1,4 +1,4 @@
-name: linux-arm64-debug
+name: 🐛 linux-arm64-debug
 
 on:
   push:
