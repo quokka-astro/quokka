@@ -1047,7 +1047,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	{
 		Real heating_rate = 0.0;
 
-		if (sfh_data_.size() > 0) {
+		if (!sfh_data_.empty()) {
 			for (const auto &[type, sfh_data] : sfh_data_) {
 				// Call PeHeatingFromSFH for each particle type's star formation history
 				heating_rate += quokka::PeHeatingFromSfh(sfh_data, current_time, gpu_tables, sfh_area_kpc2);

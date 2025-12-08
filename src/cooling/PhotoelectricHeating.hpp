@@ -54,7 +54,6 @@ auto PeHeatingFromSfh(const std::vector<std::tuple<int, amrex::Real, amrex::Real
 	// Use real star formation history
 	amrex::Real mass_old = 0.0;
 	for (const auto &entry : sfh_data) {
-		const int nstep = std::get<0>(entry);
 		const auto time = std::get<1>(entry);
 		const auto mass = std::get<2>(entry);
 
@@ -86,11 +85,11 @@ auto PeHeatingFromConstSfr(amrex::Real const_sfr_Msun_per_year_per_kpc2, PeHeati
 {
 	// compute PE heating rate from constant star formation rate. Use intervals of 1 Myr from 0 to 100 Myr
 	const amrex::Real age_interval_in_years = 1.0e6;	 // 1 Myr
-	const int num_intervals = 1.0e9 / age_interval_in_years; // 1 Gyr
+	const int num_intervals = static_cast<int>(1.0e9 / age_interval_in_years); // 1 Gyr
 	amrex::Real heating_rate = 0.0;
 	for (int i = 0; i < num_intervals; ++i) {
-		amrex::Real age_in_years = i * age_interval_in_years;
-		amrex::Real delta_mass = const_sfr_Msun_per_year_per_kpc2 * age_interval_in_years;
+		const amrex::Real age_in_years = i * age_interval_in_years;
+		const amrex::Real delta_mass = const_sfr_Msun_per_year_per_kpc2 * age_interval_in_years;
 
 		std::array<amrex::Real, 1> const point = {age_in_years};
 		auto const pe_heating_per_mass = gpu_tables.pe_heating.interpolate(point);
