@@ -43,10 +43,11 @@ inline PeHeatingTables<oob_policy> *g_pe_heating_tables_ptr = nullptr; // NOLINT
 
 // Function to compute PE heating rate from star formation history
 // sfh_data: vector of tuples (nstep, time, mass)
-// Returns: heating_rate = sum_i (mass_{i+1} - mass_i) * photoelectricHeatingRatePerUnitMass(time_i)
+// sfh_area_kpc2: area of the star formation history region in kpc^2
+// Returns: heating_rate = sum_i (mass_{i+1} - mass_i) * photoelectricHeatingRatePerUnitMass(time_i), unit: erg/s/H
 template <quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp>
 auto PeHeatingFromSfh(const std::vector<std::tuple<int, amrex::Real, amrex::Real>> &sfh_data, amrex::Real current_time,
-		      PeHeatingGpuConstTables<oob_policy> const &gpu_tables) -> amrex::Real
+		      PeHeatingGpuConstTables<oob_policy> const &gpu_tables, amrex::Real sfh_area_kpc2) -> amrex::Real
 {
 	amrex::Real heating_rate = 0.0;
 
@@ -74,7 +75,7 @@ auto PeHeatingFromSfh(const std::vector<std::tuple<int, amrex::Real, amrex::Real
 		mass_old = mass;
 	}
 
-	return heating_rate;
+	return heating_rate / sfh_area_kpc2;
 }
 
 // Function to compute PE heating rate from constant star formation rate
