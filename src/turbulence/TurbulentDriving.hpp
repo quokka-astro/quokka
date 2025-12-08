@@ -38,7 +38,6 @@
 #include "radiation/radiation_system.hpp"
 #include <array>
 #include <cmath>
-#include <filesystem>
 #include <map>
 #include <string>
 #include <vector>
