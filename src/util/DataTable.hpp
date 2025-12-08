@@ -1047,7 +1047,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 				if (oob_policy == OutOfBounds::fail) {
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-					    min_val > -allowed_negative_ratio * max_val, fmt::format("Negative value found in log output (min value: {}, max value: {})", min_val, max_val));
+					    min_val > -allowed_negative_ratio * max_val,
+					    fmt::format("Negative value found in log output (min value: {}, max value: {})", min_val, max_val));
 				}
 
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
@@ -1113,7 +1114,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 				if (oob_policy == OutOfBounds::fail) {
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-					    min_val > -allowed_negative_ratio * max_val, fmt::format("Negative value found in log output (min value: {}, max value: {})", min_val, max_val));
+					    min_val > -allowed_negative_ratio * max_val,
+					    fmt::format("Negative value found in log output (min value: {}, max value: {})", min_val, max_val));
 				}
 
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
@@ -1188,7 +1190,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 				if (oob_policy == OutOfBounds::fail) {
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-					    min_val > -allowed_negative_ratio * max_val, fmt::format("Negative value found in log output (min value: {}, max value: {})", min_val, max_val));
+					    min_val > -allowed_negative_ratio * max_val,
+					    fmt::format("Negative value found in log output (min value: {}, max value: {})", min_val, max_val));
 				}
 
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
@@ -1272,7 +1275,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 				if (oob_policy == OutOfBounds::fail) {
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-					    min_val > -allowed_negative_ratio * max_val, fmt::format("Negative value found in log output (min value: {}, max value: {})", min_val, max_val));
+					    min_val > -allowed_negative_ratio * max_val,
+					    fmt::format("Negative value found in log output (min value: {}, max value: {})", min_val, max_val));
 				}
 
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
