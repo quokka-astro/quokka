@@ -2,6 +2,19 @@
 
 There are several ways to post-process the output of Quokka simulations. AMReX PlotfileTools, yt, and VisIt all allow you to analyze the outputs after they are written to disk.
 
+## Amrvis-container
+
+[Amrvis-container](../Amrvis-container) bundles Amrvis in a Docker/Apptainer image with a browser-based X11 frontend. To browse Quokka plotfiles locally (Docker required), run from the Quokka repo:
+
+```
+../Amrvis-container/launch_amrvis_browser.sh /path/to/plotfiles
+```
+
+The target directory is bind-mounted to `/home/vscode/data` in the container. The launcher prints a one-time password; open `http://localhost:8080`, paste the password, and use the `xterm` window to start `amrvis2d` or `amrvis3d` on your `plt*` directories.
+
+!!! Tip
+    On SLURM clusters with Apptainer, pull the image once with `apptainer pull amrvis-container.sif docker://ghcr.io/amrex-codes/amrvis-container:main`, then use `../Amrvis-container/launch_amrvis_browser_hpc.sh /path/to/plotfiles` on a compute node and follow the printed SSH tunnel instructions.
+
 ## AMReX PlotfileTools
 
 These are self-contained C++ programs (included with AMReX in the `Tools/Plotfile` subdirectory) that will output a 2D slice (axis-aligned), a 1D slice (axis-aligned), or compute a volume integral given an AMReX plotfile. This works as an alternative to yt and VisIt for basic tasks.
