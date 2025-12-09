@@ -48,6 +48,7 @@ namespace quokka::turbulence
 template <typename problem_t> class turbulentDriving
 {
       private:
+	TurbGenEx tg;
 	bool updated = false;
 	amrex::Gpu::DeviceVector<amrex::Real> disp = {-1.0, -1.0, -1.0};
 	std::array<double, 3> host_disp = {-1.0, -1.0, -1.0};
@@ -59,7 +60,6 @@ template <typename problem_t> class turbulentDriving
 	}
 
       public:
-	TurbGenEx tg{};
 	turbulentDriving() = default;
 	explicit turbulentDriving(const std::map<std::string, std::string> &turb_params) { tg.init_driving(turb_params); }
 
