@@ -4,14 +4,19 @@ Resample Grackle cooling tables as a function of specific internal energy and ma
 Outputs include cooling rates, temperatures, sound speeds, pressures, and entropies.
 
 Example usage:
-Resample using the default CloudyData_UVB=HM2012.h5 data (auto-downloaded via wget) at solar metallicity
-    ./resample_grackle_cooling_tables.py
-The CloudyData_UVB=HM2012_resampled.h5 file in this folder was generated via this command:
+
+The CloudyData_UVB=HM2012_resampled.h5 file in this folder was generated via this command, using the default CloudyData_UVB=HM2012.h5 data (auto-downloaded via wget) at solar metallicity
     ./resample_grackle_cooling_tables.py --output CloudyData_UVB=HM2012_resampled.h5
-Resample using the default CloudyData_UVB=HM2012.h5 data (auto-downloaded via wget) at 0.5 solar metallicity
+
+The CloudyData_UVB=HM2012_resampled_no_PE.h5 file in this folder was generated via this command:
+    ./resample_grackle_cooling_tables.py --output CloudyData_UVB=HM2012_resampled_no_PE.h5 --exclude_pe
+
+The default CloudyData_UVB=HM2012.h5 data at 0.5 solar metallicity:
     ./resample_grackle_cooling_tables.py --zmet 0.5
-Resample with user-provided tables and non-default spacing parameters
+
+User-provided tables and non-default spacing parameters
     ./resample_grackle_cooling_tables.py /path/to/CloudyData.h5 --n_rho 50 --n_eint 400 --output my_tables.h5
+
 Validate fast_log2 <-> inverse_fast_log2
     ./resample_grackle_cooling_tables.py --test
 """
