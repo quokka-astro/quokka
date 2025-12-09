@@ -305,9 +305,9 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const double b_x1_prf = B0_prf[0] + dB_prf[0];
 		const double b_x2_prf = B0_prf[1] + dB_prf[1];
 		const double b_x3_prf = B0_prf[2] + dB_prf[2];
-		if (i ==3 && j == 3 && k == 3 && time == 0.0) {
+		if (i == 3 && j == 3 && k == 3 && time == 0.0) {
 			amrex::Print() << "  B_prf = (" << b_x1_prf << ", " << b_x2_prf << ", " << b_x3_prf << ")\n";
-		}	
+		}
 		// energy bookkeeping
 		const double v_magn_sq = v_prf[0] * v_prf[0] + v_prf[1] * v_prf[1] + v_prf[2] * v_prf[2];
 		const double b_magn_sq = b_x1_prf * b_x1_prf + b_x2_prf * b_x2_prf + b_x3_prf * b_x3_prf;
@@ -348,8 +348,9 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 				dx[1];
 			state(i, j, k, MHDSystem<FastWaveConvergence>::bfield_index) = b_x3;
 		}
-		if (i ==3 && j == 3 && k == 3 && time == 0.0) {
-			amrex::Print() << "  Face bfield at (3,3,3) dir=" << static_cast<int>(dir) << " : " << state(i, j, k, MHDSystem<FastWaveConvergence>::bfield_index) << "\n";
+		if (i == 3 && j == 3 && k == 3 && time == 0.0) {
+			amrex::Print() << "  Face bfield at (3,3,3) dir=" << static_cast<int>(dir) << " : "
+				       << state(i, j, k, MHDSystem<FastWaveConvergence>::bfield_index) << "\n";
 		}
 	}
 }
