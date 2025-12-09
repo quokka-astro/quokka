@@ -100,15 +100,14 @@ import yt
 import unyt
 import matplotlib.pyplot as plt
 
-try:
-    import scienceplots
-    plt.style.use(['science', 'nature', 'no-latex'])
-    print("scienceplots loaded successfully")
-except ImportError:
-    print("scienceplots not installed; using default matplotlib style")
-except Exception as e:
-    print(
-        f"scienceplots installed but failed to load style: {e}; using default matplotlib style")
+#try:
+#    import scienceplots
+#    plt.style.use(['science', 'nature', 'no-latex'])
+#    print("scienceplots loaded successfully")
+#except ImportError:
+#    print("scienceplots not installed; using default matplotlib style")
+#except Exception as e:
+#    print(f"scienceplots installed but failed to load style: {e}; using default matplotlib style")
 
 # check yt version
 assert yt.__version__ >= "4.3.0", "yt version must be >= 4.3.0"
@@ -224,6 +223,10 @@ def plot_one(pltdir, args, suffix_idx=None):
     field_rho = ("gas", "density")
     if kind == "slc":
         slc = yt.SlicePlot(ds, view_dir, field, center=center)
+        #slc = yt.SlicePlot(ds, view_dir, field)
+        #if center is not None:
+        #    #slc.set_center(((center[0], 'cm'), (center[1], 'cm')))
+        #    slc.set_center(center)
     elif kind == "prj":
         slc = yt.ProjectionPlot(ds, view_dir, field,
                                 weight_field=args.weight_field, center=center)
@@ -337,6 +340,7 @@ def plot_one(pltdir, args, suffix_idx=None):
     fn = slc.save(fig_name,
                   mpl_kwargs={"dpi": 300, "bbox_inches": "tight", "pad_inches": 0.1})
     print(f"{fn} saved")
+    plt.close('all')
     # change back to cwd
     os.chdir(cwd)
 
