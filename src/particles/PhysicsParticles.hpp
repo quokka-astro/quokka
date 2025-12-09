@@ -832,7 +832,7 @@ template <typename problem_t> class PhysicsParticleRegister
 			const std::string typeName = getParticleTypeName(type);
 
 			// Check if this particle type is in the requested list
-			if (std::ranges::find(particleTypeNames, typeName) != particleTypeNames.end()) {
+			if (std::find(particleTypeNames.begin(), particleTypeNames.end(), typeName) != particleTypeNames.end()) {
 				descriptor->writePlotFile(plotfilename, typeName);
 				descriptor->writeUnitsFile(plotfilename, typeName);
 			}
@@ -1061,6 +1061,21 @@ template <typename problem_t> class PhysicsParticleRegister
 			}
 		}
 		return last_time;
+	}
+
+	// Compute Photoelectric heating rate from the contribution of all stars
+	auto computePhotoelectricHeatingRate(amrex::Real current_time, quokka::PeHeatingGpuConstTables<quokka::OutOfBounds::clamp> const &gpu_tables,
+					     amrex::Real sfh_area_kpc2) -> Real
+	{
+		Real heating_rate = 0.0;
+
+		if (!sfh_data_.empty()) {
+			for (const auto &[type, sfh_data] : sfh_data_) {
+				// Call PeHeatingFromSFH for each particle type's star formation history
+				heating_rate += quokka::PeHeatingFromSfh(sfh_data, current_time, gpu_tables, sfh_area_kpc2);
+			}
+		}
+		return heating_rate;
 	}
 };
 

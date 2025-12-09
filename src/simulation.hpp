@@ -2956,7 +2956,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 	int comp = 0;
 	for (const std::string &varname : plotfileVarsToInclude_cc_) {
 		// Check if it's a cell-centered variable
-		auto cc_it = std::ranges::find(componentNames_cc_, varname);
+		auto cc_it = std::find(componentNames_cc_.begin(), componentNames_cc_.end(), varname);
 		if (cc_it != componentNames_cc_.end()) {
 			int cc_comp = std::distance(componentNames_cc_.begin(), cc_it);
 			amrex::MultiFab::Copy(plotMF, state_new_cc_[lev], cc_comp, comp, 1, included_ghosts);
@@ -2966,7 +2966,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 
 		// Check if it's a face-centered variable
 		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-			auto fc_it = std::ranges::find(componentNames_fc_flat_, varname);
+			auto fc_it = std::find(componentNames_fc_flat_.begin(), componentNames_fc_flat_.end(), varname);
 			if (fc_it != componentNames_fc_flat_.end()) {
 				const int fc_comp_flat = std::distance(componentNames_fc_flat_.begin(), fc_it);
 				// componentNames_fc_flat_ is organized as: all dims for var0, then all dims for var1, etc.
@@ -2982,7 +2982,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 		}
 
 		// Check if it's a derived variable
-		auto deriv_it = std::ranges::find(derivedNames_, varname);
+		auto deriv_it = std::find(derivedNames_.begin(), derivedNames_.end(), varname);
 		if (deriv_it != derivedNames_.end()) {
 			ComputeDerivedVar(lev, varname, plotMF, comp);
 			comp++;
@@ -3066,9 +3066,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::createDiagnostics()
 	}
 
 	// Remove duplicates from m_diagVars and check that all the variables exist
-	std::ranges::sort(m_diagVars);
-	auto last = std::ranges::unique(m_diagVars);
-	m_diagVars.erase(last.begin(), m_diagVars.end());
+	std::sort(m_diagVars.begin(), m_diagVars.end());
+	auto last = std::unique(m_diagVars.begin(), m_diagVars.end());
+	m_diagVars.erase(last, m_diagVars.end());
 
 	auto isVarName = [this](std::string const &v) {
 		auto const varnames = GetPlotfileVarNames();
@@ -4003,9 +4003,6 @@ void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::un
 
 	// Read particles
 	restartParticleContainerWithRefinement(container, restart_chkfile, particleRegister_.getParticleTypeName(particle_type), header_box_arrays);
-
-	// Read SFH data from metadata
-	last_sfh_time_ = particleRegister_.readSFH(simulationMetadata_, particle_type);
 
 	// Split particles
 #if AMREX_SPACEDIM == 3
