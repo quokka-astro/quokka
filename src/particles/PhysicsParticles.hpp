@@ -7,6 +7,7 @@
 #include <string>
 
 #include <fmt/format.h>
+#include <yaml-cpp/yaml.h>
 
 #include "AMReX_Array4.H"
 #include "AMReX_BLProfiler.H"
@@ -112,6 +113,9 @@ class PhysicsParticleDescriptorBase
 	// Get the number of particles
 	[[nodiscard]] virtual auto getNumParticles() const -> int = 0;
 
+	// Compute total stellar mass
+	[[nodiscard]] virtual auto computeStellarMass() const -> amrex::Real = 0;
+
 #if AMREX_SPACEDIM == 3
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
 
@@ -202,6 +206,31 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			return static_cast<int>(container_->TotalNumberOfParticles(true, false));
 		}
 		return 0;
+	}
+
+	// Compute total stellar mass
+	[[nodiscard]] auto computeStellarMass() const -> amrex::Real override
+	{
+		amrex::Real total_mass = 0.0;
+		if (container_ != nullptr && this->getMassIndex() >= 0) {
+			const int mass_idx = this->getMassIndex();
+			amrex::ReduceOps<amrex::ReduceOpSum> reduce_ops;
+			using ReduceDataType = amrex::ReduceData<amrex::Real>;
+			using PTDType = typename ContainerType::ParticleTileType::ConstParticleTileDataType;
+
+			// Sum mass over all particles at all levels
+			for (int lev = 0; lev <= container_->finestLevel(); ++lev) {
+				auto result_tuple = amrex::ParticleReduce<ReduceDataType>(
+				    *container_, lev,
+				    [=] AMREX_GPU_DEVICE(const PTDType &p_type, const int i) noexcept -> amrex::Real {
+					    return p_type.m_aos[i].rdata(mass_idx);
+				    },
+				    reduce_ops);
+				total_mass += amrex::get<0>(result_tuple);
+			}
+		}
+		amrex::ParallelAllReduce::Sum(total_mass, amrex::ParallelContext::CommunicatorSub());
+		return total_mass;
 	}
 
 #if AMREX_SPACEDIM == 3
@@ -385,7 +414,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					    const amrex::Real vz = p_type.m_aos[i].rdata(mass_idx + 3);
 					    const amrex::Real v2 = (vx * vx) + (vy * vy) + (vz * vz);
 					    const amrex::RealVect pos{p_type[i].pos(0), p_type[i].pos(1), p_type[i].pos(2)};
-					    return amrex::ValLocPair<amrex::Real, amrex::RealVect>{std::sqrt(v2), pos};
+					    return amrex::ValLocPair<amrex::Real, amrex::RealVect>{.value = std::sqrt(v2), .index = pos};
 				    },
 				    reduce_ops);
 
@@ -588,6 +617,9 @@ template <typename problem_t> class PhysicsParticleRegister
 	// Map storing particle descriptors, indexed by particle type enum
 	std::map<ParticleType, std::unique_ptr<PhysicsParticleDescriptorBase>> particleRegistry_;
 
+	// SFH data: nstep, time, total_mass (kept in memory for accumulation)
+	std::map<ParticleType, std::vector<std::tuple<int, amrex::Real, amrex::Real>>> sfh_data_;
+
       public:
 	// Constructor
 	PhysicsParticleRegister() = default;
@@ -613,6 +645,17 @@ template <typename problem_t> class PhysicsParticleRegister
 				if (descriptor->getLumIndex() >= 0) {
 					return true;
 				}
+			}
+		}
+		return false;
+	}
+
+	// Check if registry contains any particles that support formation
+	[[nodiscard]] auto HasFormationParticles() const -> bool
+	{
+		for (const auto &[name, descriptor] : particleRegistry_) { // NOSONAR
+			if (descriptor->getAllowsCreation()) {
+				return true;
 			}
 		}
 		return false;
@@ -943,6 +986,80 @@ template <typename problem_t> class PhysicsParticleRegister
 	auto operator=(const PhysicsParticleRegister &) -> PhysicsParticleRegister & = delete;
 	PhysicsParticleRegister(PhysicsParticleRegister &&) = delete;
 	auto operator=(PhysicsParticleRegister &&) -> PhysicsParticleRegister & = delete;
+
+	// Update SFH data (store in memory)
+	void updateSFH(int nstep, amrex::Real time)
+	{
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			// Only compute SFH for particles that can be created (stars)
+			if (descriptor->getAllowsCreation()) {
+				const amrex::Real total_mass = descriptor->computeStellarMass();
+				// Store in local sfh_data_ for accumulation
+				sfh_data_[type].emplace_back(nstep, time, total_mass);
+			}
+		}
+	}
+
+	// Write SFH data from memory to metadata
+	void writeSFHToMetadata(YAML::Node &metadata) const
+	{
+		if (!HasFormationParticles()) {
+			return;
+		}
+
+		for (const auto &[type, history] : sfh_data_) {
+			const std::string type_name = getParticleTypeName(type);
+			const std::string sfh_key = "SFH_" + type_name;
+
+			// Write the full history to metadata
+			metadata[sfh_key] = YAML::Node(YAML::NodeType::Sequence);
+			for (const auto &entry : history) {
+				YAML::Node array_entry;
+				array_entry.push_back(std::get<0>(entry)); // nstep
+				array_entry.push_back(std::get<1>(entry)); // time
+				array_entry.push_back(std::get<2>(entry)); // total_mass
+				metadata[sfh_key].push_back(array_entry);
+			}
+		}
+	}
+
+	// Read SFH data from metadata and return the last time
+	auto readSFH(const YAML::Node &metadata) -> Real
+	{
+		if (!HasFormationParticles()) {
+			return 0.0;
+		}
+
+		Real last_time = 0.0;
+
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			if (descriptor->getAllowsCreation()) {
+				const std::string type_name = getParticleTypeName(type);
+				const std::string sfh_key = "SFH_" + type_name;
+
+				if (metadata[sfh_key]) {
+					const YAML::Node sfh_yaml = metadata[sfh_key];
+					if (sfh_yaml.IsSequence() && sfh_yaml.size() > 0) {
+						// Clear and restore sfh_data_ from metadata
+						sfh_data_[type].clear();
+
+						for (const auto &entry : sfh_yaml) {
+							if (entry.IsSequence() && entry.size() == 3) {
+								const int nstep = entry[0].as<int>();
+								const auto time = entry[1].as<amrex::Real>();
+								const auto mass = entry[2].as<amrex::Real>();
+								sfh_data_[type].emplace_back(nstep, time, mass);
+								last_time = time;
+							}
+						}
+
+						amrex::Print() << "Read SFH data for " << type_name << " from metadata (" << sfh_yaml.size() << " entries)\n";
+					}
+				}
+			}
+		}
+		return last_time;
+	}
 };
 
 } // namespace quokka

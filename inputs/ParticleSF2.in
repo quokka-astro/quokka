@@ -35,7 +35,8 @@ particles.stellar_velocity_limit = 1.0e8
 problem.n0 = 1.0e5
 problem.Tamb = 1.0e1
 
-max_timesteps = 10
+restartfile = chk00010
+max_timesteps = 20
 plotfile_interval = 5
 checkpoint_interval = 5
 #SFH_interval = 3
