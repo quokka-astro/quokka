@@ -69,6 +69,8 @@ add_subdirectory(RadhydroPulseMGconst)
 add_subdirectory(RadhydroPulseMGint)
 add_subdirectory(RadhydroBB)
 
+add_subdirectory(TallBoxSf)
+
 add_subdirectory(AlfvenWaveLinear)
 add_subdirectory(AlfvenWaveCircular)
 add_subdirectory(CurrentSheet)
