@@ -211,7 +211,7 @@ auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &res
 			// check if integration failed
 			if (nsteps >= maxStepsODEIntegrate) {
 				Real const Edot = resampled_cooling_function(rho, Eint, tables) + const_heating_rate_per_H * nH; // unit: erg/cm^3/s
-				Real const t_cool = Eint / Edot;
+				Real const t_cool = (Edot != 0.0) ? std::abs(Eint / Edot) : std::numeric_limits<Real>::max();
 				printf("max substeps exceeded! rho = %.17e, Eint = %.17e, cooling " // NOLINT
 				       "time = %g, dt = %.17e\n",
 				       rho, Eint, t_cool, dt);
