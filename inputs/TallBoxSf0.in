@@ -26,7 +26,7 @@ radiation.iteration_tolerance_rel = 1e-6
 do_reflux = 1
 do_subcycle = 0
 stop_time     = 9.462e+15
-max_timesteps = 1
+max_timesteps = 4
 #restartfile = last_chk
 plotfile_interval = 1
 checkpoint_interval = 100000
@@ -37,8 +37,8 @@ regrid_interval = -1
 
 particles.verbose = 1
 particles.disable_SN_feedback = false
-particles.rad_table = ../inputs/lum_data_4groups.csv
-particles.rad_table_output_spacing = fast_log
+#particles.rad_table = ../extern/problems/TallBoxSf/lum_data_4groups.csv
+#particles.rad_table_output_spacing = fast_log
 particles.split_particles_on_restart_refine = false
 
 density_floor = 1.67e-30 #in g cm^-3
@@ -47,14 +47,13 @@ temperature_floor = 10.0 #K
 particles.eps_ff = 0.01
 particles.param1 = 3.155760000e+14 # 10 Myr
 particles.param2 = 1.0
-#problem.stars_file = ../inputs/ParticlesInTallBox.txt
 problem.stars_file = "none"
 
 cooling.enabled = 1
 cooling.cooling_table_type = "resampled"
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 
-perturb.filename = "../inputs/zdrv.hdf5"
+perturb.filename = "../extern/problems/TallBoxSf/zdrv.hdf5"
 #perturb.use_superresolution = 0
 perturb.amplitude = 7e5 # 7 km/s
 

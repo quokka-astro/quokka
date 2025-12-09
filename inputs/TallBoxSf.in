@@ -13,7 +13,6 @@ amr.v              = 1      # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-#amr.n_cell          = 128 128 512
 amr.n_cell          = 64 64 256
 amr.max_level       = 0     # number of levels = max_level + 1
 amr.max_grid_size   = 64   # at least 128 for GPUs
@@ -38,7 +37,7 @@ regrid_interval = -1
 
 particles.verbose = 1
 particles.disable_SN_feedback = false
-#particles.rad_table = ../inputs/lum_data_4groups.csv
+#particles.rad_table = ../extern/problems/TallBoxSf/lum_data_4groups.csv
 #particles.rad_table_output_spacing = fast_log
 particles.split_particles_on_restart_refine = false
 
@@ -57,10 +56,9 @@ cooling.enabled = 1
 cooling.cooling_table_type = "resampled"
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 
-perturb.filename = "../inputs/zdrv.hdf5"
+perturb.filename = "../extern/problems/TallBoxSf/zdrv.hdf5"
 #perturb.use_superresolution = 0
-#perturb.amplitude = 7e5 # 7 km/s
-perturb.amplitude = 0
+perturb.amplitude = 7e5 # 7 km/s
 
 problem.refine_zmax = 3.018e21 1.509e21  # refine to lev=1 with 1 kpc and lev=2 with 0.5 kpc
 
