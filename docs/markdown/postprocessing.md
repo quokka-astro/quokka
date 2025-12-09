@@ -4,7 +4,7 @@ There are several ways to post-process the output of Quokka simulations. AMReX P
 
 ## Amrvis-container
 
-[Amrvis-container](../Amrvis-container) bundles Amrvis in a Docker/Apptainer image with a browser-based X11 frontend. To browse Quokka plotfiles locally (Docker required), run from the Quokka repo:
+[Amrvis-container](https://github.com/AMReX-Codes/Amrvis-container) bundles Amrvis in a Docker/Apptainer image with a browser-based X11 frontend. To browse Quokka plotfiles locally (Docker required), run from the Quokka repo:
 
 ```
 ../Amrvis-container/launch_amrvis_browser.sh /path/to/plotfiles
