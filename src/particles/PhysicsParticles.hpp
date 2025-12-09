@@ -28,6 +28,8 @@
 #include "particle_update.hpp"
 #include "physics_info.hpp"
 
+#include "cooling/PhotoelectricHeating.hpp"
+
 namespace quokka
 {
 
@@ -1059,6 +1061,21 @@ template <typename problem_t> class PhysicsParticleRegister
 			}
 		}
 		return last_time;
+	}
+
+	// Compute Photoelectric heating rate from the contribution of all stars
+	auto computePhotoelectricHeatingRate(amrex::Real current_time, quokka::PeHeatingGpuConstTables<quokka::OutOfBounds::clamp> const &gpu_tables,
+					     amrex::Real sfh_area_kpc2) -> Real
+	{
+		Real heating_rate = 0.0;
+
+		if (!sfh_data_.empty()) {
+			for (const auto &[type, sfh_data] : sfh_data_) {
+				// Call PeHeatingFromSFH for each particle type's star formation history
+				heating_rate += quokka::PeHeatingFromSfh(sfh_data, current_time, gpu_tables, sfh_area_kpc2);
+			}
+		}
+		return heating_rate;
 	}
 };
 
