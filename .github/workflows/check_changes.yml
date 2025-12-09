@@ -35,7 +35,7 @@ jobs:
       has_workflow_changes: ${{ steps.set-output.outputs.has_workflow_changes }}
       has_specific_workflow_changes: ${{ steps.set-output.outputs.has_specific_workflow_changes }}
     steps:
-      - uses: actions/checkout@v6.0.0
+      - uses: actions/checkout@v6.0.1
       - uses: dorny/paths-filter@v3
         id: changes
         with:
@@ -73,18 +73,34 @@ jobs:
               - '${{ inputs.workflow_file }}'
 
       - id: set-output
+        env:
+          DOCS_CHANGED: ${{ steps.changes.outputs.docs }}
+          SCRIPTS_CHANGED: ${{ steps.changes.outputs.scripts }}
+          CPP_CHANGED: ${{ steps.changes.outputs.cpp }}
+          PY_CHANGED: ${{ steps.changes.outputs.py }}
+          WORKFLOW_CHANGED: ${{ steps.changes.outputs.workflows }}
+          SPECIFIC_WORKFLOW_CHANGED: ${{ steps.changes.outputs.specific_workflow }}
+          CODE_CHANGED: ${{ steps.changes.outputs.code }}
+          WORKFLOW_FILE: ${{ inputs.workflow_file }}
         run: |
-          echo "has_docs_changes=${{ steps.changes.outputs.docs }}" >> $GITHUB_OUTPUT
-          echo "has_scripts_changes=${{ steps.changes.outputs.scripts }}" >> $GITHUB_OUTPUT 
-          echo "has_cpp_changes=${{ steps.changes.outputs.cpp }}" >> $GITHUB_OUTPUT
-          echo "has_py_changes=${{ steps.changes.outputs.py }}" >> $GITHUB_OUTPUT
-          echo "has_workflow_changes=${{ steps.changes.outputs.workflows }}" >> $GITHUB_OUTPUT
-          echo "has_specific_workflow_changes=${{ steps.changes.outputs.specific_workflow }}" >> $GITHUB_OUTPUT
+          echo "has_docs_changes=$DOCS_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "has_scripts_changes=$SCRIPTS_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "has_cpp_changes=$CPP_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "has_py_changes=$PY_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "has_workflow_changes=$WORKFLOW_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "has_specific_workflow_changes=$SPECIFIC_WORKFLOW_CHANGED" >> "$GITHUB_OUTPUT"
           
           # Calculate has_non_docs_changes based on code changes OR specific workflow changes (if specified)
-          if [ "${{ inputs.workflow_file }}" != "" ]; then
-            has_non_docs_changes=${{ steps.changes.outputs.code == 'true' || steps.changes.outputs.specific_workflow == 'true' }}
+          if [ -n "$WORKFLOW_FILE" ]; then
+            if [ "$CODE_CHANGED" = "true" ] || [ "$SPECIFIC_WORKFLOW_CHANGED" = "true" ]; then
+              echo "has_non_docs_changes=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "has_non_docs_changes=false" >> "$GITHUB_OUTPUT"
+            fi
           else
-            has_non_docs_changes=${{ steps.changes.outputs.code == 'true' || steps.changes.outputs.workflows == 'true' }}
+            if [ "$CODE_CHANGED" = "true" ] || [ "$WORKFLOW_CHANGED" = "true" ]; then
+              echo "has_non_docs_changes=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "has_non_docs_changes=false" >> "$GITHUB_OUTPUT"
+            fi
           fi
-          echo "has_non_docs_changes=$has_non_docs_changes" >> $GITHUB_OUTPUT
