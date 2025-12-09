@@ -4,16 +4,16 @@ There are several ways to post-process the output of Quokka simulations. AMReX P
 
 ## Amrvis-container
 
-[Amrvis-container](https://github.com/AMReX-Codes/Amrvis-container) bundles Amrvis in a Docker/Apptainer image with a browser-based X11 frontend. To browse Quokka plotfiles locally (Docker required), run from the Quokka repo:
+[Amrvis-container](https://github.com/AMReX-Codes/Amrvis-container) bundles Amrvis in a Docker/Apptainer image with a browser-based X11 frontend. To browse Quokka plotfiles locally (Docker required), run from the Amrvis-container repo:
 
 ```
-../Amrvis-container/launch_amrvis_browser.sh /path/to/plotfiles
+./launch_amrvis_browser.sh /path/to/plotfiles
 ```
 
 The target directory is bind-mounted to `/home/vscode/data` in the container. The launcher prints a one-time password; open `http://localhost:8080`, paste the password, and use the `xterm` window to start `amrvis2d` or `amrvis3d` on your `plt*` directories.
 
 !!! Tip
-    On SLURM clusters with Apptainer, pull the image once with `apptainer pull amrvis-container.sif docker://ghcr.io/amrex-codes/amrvis-container:main`, then use `../Amrvis-container/launch_amrvis_browser_hpc.sh /path/to/plotfiles` on a compute node and follow the printed SSH tunnel instructions.
+    On SLURM clusters with Apptainer, pull the image once with `apptainer pull amrvis-container.sif docker://ghcr.io/amrex-codes/amrvis-container:main`, then use `./launch_amrvis_browser_hpc.sh /path/to/plotfiles` on a compute node and follow the printed SSH tunnel instructions.
 
 ## AMReX PlotfileTools
 
