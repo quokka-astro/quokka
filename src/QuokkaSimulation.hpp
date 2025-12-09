@@ -572,8 +572,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 			}
 		} else {
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-					sfh_to_pe_heating_table_filename_.empty(),
-					"use_sfh_based_pe_heating is set to false but sfh_to_pe_heating_table is specified. This indicates a misconfiguration.");
+			    sfh_to_pe_heating_table_filename_.empty(),
+			    "use_sfh_based_pe_heating is set to false but sfh_to_pe_heating_table is specified. This indicates a misconfiguration.");
 		}
 	}
 

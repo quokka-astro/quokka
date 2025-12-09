@@ -161,8 +161,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 					// Check for non-positive values and abort if found
 					if (point[dim] <= 0.0) {
 						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-						    false, fmt::format("Invalid value for log interpolation in dimension {}: {} (must be positive)", dim, point[dim])
-							       .c_str());
+						    false,
+						    fmt::format("Invalid value for log interpolation in dimension {}: {} (must be positive)", dim, point[dim])
+							.c_str());
 					}
 					point_[dim] = std::log(point[dim]);
 				}
@@ -177,7 +178,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 					// Check for non-positive values and abort if found
 					if (point[dim] <= 0.0) {
 						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-						    false, fmt::format("Invalid value for fast_log interpolation in dimension {}: {} (must be positive)", dim, point[dim])
+						    false, fmt::format("Invalid value for fast_log interpolation in dimension {}: {} (must be positive)", dim,
+								       point[dim])
 							       .c_str());
 					}
 					point_[dim] = FastMath::lg(point[dim]);
@@ -229,8 +231,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 					// Check for non-positive values and abort if found
 					if (point[dim] <= 0.0) {
 						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-						    false, fmt::format("Invalid value for log interpolation in dimension {}: {} (must be positive)", dim, point[dim])
-							       .c_str());
+						    false,
+						    fmt::format("Invalid value for log interpolation in dimension {}: {} (must be positive)", dim, point[dim])
+							.c_str());
 					}
 					point_[dim] = std::log(point[dim]);
 				}
@@ -245,7 +248,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 					// Check for non-positive values and abort if found
 					if (point[dim] <= 0.0) {
 						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-						    false, fmt::format("Invalid value for fast_log interpolation in dimension {}: {} (must be positive)", dim, point[dim])
+						    false, fmt::format("Invalid value for fast_log interpolation in dimension {}: {} (must be positive)", dim,
+								       point[dim])
 							       .c_str());
 					}
 					point_[dim] = FastMath::lg(point[dim]);
