@@ -6,9 +6,7 @@ There are several ways to post-process the output of Quokka simulations. AMReX P
 
 [Amrvis-container](https://github.com/AMReX-Codes/Amrvis-container) bundles Amrvis in a Docker/Apptainer image with a browser-based X11 frontend. To browse Quokka plotfiles locally (Docker required), run from the Amrvis-container repo:
 
-```
-./launch_amrvis_browser.sh /path/to/plotfiles
-```
+    ./launch_amrvis_browser.sh /path/to/plotfiles
 
 The target directory is bind-mounted to `/home/vscode/data` in the container. The launcher prints a one-time password; open `http://localhost:8080`, paste the password, and use the `xterm` window to start `amrvis2d` or `amrvis3d` on your `plt*` directories.
 
