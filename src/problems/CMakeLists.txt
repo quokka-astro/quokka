@@ -11,8 +11,12 @@ add_subdirectory(ParticleCreation)
 add_subdirectory(ParticleRadiation)
 add_subdirectory(ParticleSinkFormation)
 add_subdirectory(SN)
-
 add_subdirectory(ParticleSF)
+
+add_subdirectory(DustDamping)
+add_subdirectory(DustDrag)
+add_subdirectory(DustDrag3D)
+add_subdirectory(DustSoundwave)
 
 add_subdirectory(HydroBlast2D)
 add_subdirectory(HydroBlast3D)
