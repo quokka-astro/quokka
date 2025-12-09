@@ -70,6 +70,7 @@ add_subdirectory(RadhydroPulseMGint)
 add_subdirectory(RadhydroBB)
 
 add_subdirectory(TallBoxSf)
+add_subdirectory(TallBoxSf0)
 
 add_subdirectory(AlfvenWaveLinear)
 add_subdirectory(AlfvenWaveCircular)
