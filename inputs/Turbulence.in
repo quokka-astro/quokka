@@ -18,8 +18,8 @@ amr.max_level       = 0     # number of levels = max_level + 1
 amr.blocking_factor = 32 # grid size must be divisible by this
 amr.max_grid_size   = 64 # at least 128 for GPUs
 
-stop_time = 15
-plottime_interval = 15
+stop_time = 16
+plottime_interval = 16
 max_timesteps = 20000
 
 do_reflux = 0

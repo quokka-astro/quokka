@@ -73,10 +73,10 @@ template <typename problem_t> class turbulentDriving
 			const amrex::Box &bx = mf.validbox();
 			auto const &data = state.array(mf);
 
-			amrex::FArrayBox forceFieldFab(bx, AMREX_SPACEDIM, amrex::The_Async_Arena());
-			amrex::Array4<amrex::Real> const forceField = forceFieldFab.array();
+			amrex::FArrayBox axFab(bx, AMREX_SPACEDIM, amrex::The_Async_Arena());
+			amrex::Array4<amrex::Real> const ax = axFab.array();
 
-			tg.get_turb_vector_unigrid(forceFieldFab, cellSizes);
+			tg.get_turb_vector_unigrid(axFab, cellSizes);
 
 			amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				const amrex::Real rho = data(i, j, k, HydroSystem<problem_t>::density_index);
@@ -85,7 +85,7 @@ template <typename problem_t> class turbulentDriving
 
 				for (int m = 0; m < AMREX_SPACEDIM; m++) {
 					const amrex::Real vel = data(i, j, k, HydroSystem<problem_t>::x1Momentum_index + m) / rho;
-					const amrex::Real dMom = forceField(i, j, k, m) * dt;
+					const amrex::Real dMom = ax(i, j, k, m) * dt * rho;
 
 					data(i, j, k, HydroSystem<problem_t>::x1Momentum_index + m) += dMom;
 					dE += vel * dMom + dMom * dMom / (2 * rho);
@@ -98,7 +98,8 @@ template <typename problem_t> class turbulentDriving
 		amrex::Gpu::streamSynchronize();
 		return true;
 	}
-
+	
+	// Function to calculate the mass weighted velocity dispersion in the computational domain
 	void calculate_dispersion(amrex::MultiFab &state)
 	{
 		amrex::Real sum_rho = state.sum(HydroSystem<problem_t>::density_index, false);

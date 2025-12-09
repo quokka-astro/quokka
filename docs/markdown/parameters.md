@@ -119,3 +119,24 @@ These parameters are read in the ``particleParmParse()`` function in ``src/parti
 | particles.verbose | Integer | Verbosity level for particle operations. Higher values provide more detailed output. Default: 0. |
 | particles.param1 | Float | Placeholder parameter for particles (used in gravity_3d.cpp tests). Default: -1.0. |
 | particles.param2 | Float | Placeholder parameter for particles (used in gravity_3d.cpp tests). Default: -1.0. |
+
+## Turbulence 
+
+These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`` function in ``src/QuokkaSimulation.hpp``. Details about the turbulence driving implementation can be found [here](https://github.com/chfeder/turbulence_generator).
+
+| Parameter Name | Type | Description |
+|----|----|----|
+| turbulence.enabled | Integer | If set to 1, enables turbulence driving using [chfeder's turbulence driving module](https://github.com/chfeder/turbulence_generator). Default: 0 (disabled). |
+| turbulence.length | Float | Length of turbulent driving box. Can have 1 value or a comma separated list for each component |
+| turbulence.target_vdisp | Float | Target tarbulent velocity dispersion. |
+| turbulence.ampl_factor | Float | Amplitude adjust factor for forcing field. Can have 1 value or a comma separated list for each component. |
+| turbulence.ampl_auto_adjust | Integer | If set to 1, enables automatic amplitude adjustment. Default: 0 (Disabled). |
+| turbulence.k_driv | Float | Characteristic driving scale in units of $2\pi/length$. |
+| turbulence.k_min | Float | Minimum driving wavenumber in units of $2\pi/length$. |
+| turbulence.k_max | Float | Maximum driving wavenumber in units of $2\pi/length$. |
+| turbulence.sol_weight | Float | Solenoidal weight. Can be 0.0 (compresive driving), 1.0 (solenoidal driving) or 0.5 (natural mixture). |
+| turbulence.spect_form | Integer | Spectral form of the driving amplitude. Can be 0 (band, rectangle, constant), 1 (paraboloid) or 2 (power law). |
+| turbulence.power_law_exp | Float | If spect_form = 2, this sets the spectral power-law exponent (e.g., -5/3: Kolmogorov; -2: Burgers). |
+| turbulence.angles_exp | Float | If spect_form = 2, this sets the number of modes (angles) in k-shell such that it increases as $k^angles_exp$. |
+| turbulence.random_seed | Integer | Random number seed for driving sequence. |
+| turbulence.nsteps_per_t_turb | Integer | Number of turbulence driving pattern updates per turnover time. |
