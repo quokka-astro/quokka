@@ -279,18 +279,30 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 				amrex::Warning(
 				    "Warning: angle between k and B0 is 0 or 180 deg. Fast wave reduces to pure sound wave with no magnetic perturbation.");
 			}
-			v1_mrf = -epsilon * cf * cos_phase;
-			v2_mrf = 0.0;
-			delta_B2 = 0.0;
+			v1_mrf   = -epsilon * cf * cos_phase;  // velocity along k̂ (parallel component)
+			v2_mrf   = 0.0;                        // perpendicular velocity suppressed
+			delta_B2 = 0.0;                        // no transverse magnetic perturbation
+
 		} else {
-			// Fast magnetosonic wave: δB is primary
+
+			// --- Oblique fast magnetosonic wave ---
+			// δB₂ is the primary perturbation: magnetic fluctuation perpendicular to both k̂ and B0.
 			delta_B2 = delta_b_magn * cos_phase;
-			// From eigenvector component 2: v₁/δB₃ = (c_f/ρ) / (B₃·c²_f/(ρc²_f - B²_x))
-			// Simplifies to: v₁ = c_f · δB₃ / B₃ = c_f · δB₃ / (b0_magn·sinθ)
+
+			// v₁ — velocity component in the (k̂, B0)-plane, parallel to the projection of k̂.
+			// For the fast mode eigenvector:
+			//     v₁ / δB₂ = c_f / (B0⊥)    where B0⊥ = b0_magn * sinθ
+			// →   v₁ = (c_f / (b0_magn * sinθ)) * δB₂
 			v1_mrf = (cf / (b0_magn * sinθ)) * delta_B2;
-			// From eigenvector component 4: δu_z / δB_z = -(B_x·B_z) / (ρ(ρc²_f - B²_x)) / (B_z·c²_f / (ρc²_f - B²_x))
-			// Simplifies to: v₃ = -(v_A² cosθ sinθ) / (c_f² - v_A² cos²θ) · c_f · δB₃ / B₃
-			v2_mrf = -(vA * vA * cosθ) / (cf * cf - vA * vA * cosθ * cosθ) * (cf / sinθ) * (delta_B2 / b0_magn);
+
+			// v₂ — velocity component perpendicular to v₁ but still in the (k̂, B0)-plane.
+			// Derived from the fast-mode eigenstructure:
+			//     v₂ = - [ v_A² cosθ sinθ / (c_f² - v_A² cos²θ) ] * (c_f / sinθ) * (δB₂ / b0_magn)
+			// This encodes magnetic tension restoring forces for oblique propagation.
+			v2_mrf =
+				-(vA * vA * cosθ) / (cf * cf - vA * vA * cosθ * cosθ)
+				* (cf / sinθ)
+				* (delta_B2 / b0_magn);
 		}
 
 		double const v3_mrf = 0.0;
@@ -305,9 +317,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const double b_x1_prf = B0_prf[0] + dB_prf[0];
 		const double b_x2_prf = B0_prf[1] + dB_prf[1];
 		const double b_x3_prf = B0_prf[2] + dB_prf[2];
-		if (i ==3 && j == 3 && k == 3 && time == 0.0) {
-			amrex::Print() << "  B_prf = (" << b_x1_prf << ", " << b_x2_prf << ", " << b_x3_prf << ")\n";
-		}	
+
 		// energy bookkeeping
 		const double v_magn_sq = v_prf[0] * v_prf[0] + v_prf[1] * v_prf[1] + v_prf[2] * v_prf[2];
 		const double b_magn_sq = b_x1_prf * b_x1_prf + b_x2_prf * b_x2_prf + b_x3_prf * b_x3_prf;
@@ -347,9 +357,6 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 			    (Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L + dx[1], x3_prf_L, time) - Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time)) /
 				dx[1];
 			state(i, j, k, MHDSystem<FastWaveConvergence>::bfield_index) = b_x3;
-		}
-		if (i ==3 && j == 3 && k == 3 && time == 0.0) {
-			amrex::Print() << "  Face bfield at (3,3,3) dir=" << static_cast<int>(dir) << " : " << state(i, j, k, MHDSystem<FastWaveConvergence>::bfield_index) << "\n";
 		}
 	}
 }
