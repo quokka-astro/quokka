@@ -44,7 +44,7 @@ template <quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp> inline Pe
 // Function to compute PE heating rate from star formation history
 // sfh_data: vector of tuples (nstep, time, mass)
 // sf_area_kpc2: area of the star formation history region in kpc^2
-// Returns: heating_rate = sum_i (mass_{i+1} - mass_i) * photoelectricHeatingRatePerUnitMass(time_i), unit: erg/s/H
+// Returns: PE heating rate, unit: erg/s/H
 template <quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp>
 auto PeHeatingFromSfh(const std::vector<std::tuple<int, amrex::Real, amrex::Real>> &sfh_data, amrex::Real current_time,
 		      PeHeatingGpuConstTables<oob_policy> const &gpu_tables, amrex::Real sf_area_kpc2) -> amrex::Real
@@ -72,11 +72,13 @@ auto PeHeatingFromSfh(const std::vector<std::tuple<int, amrex::Real, amrex::Real
 		auto const pe_heating_per_mass = gpu_tables.pe_heating.interpolate(point);
 
 		// Accumulate contribution: (mass increment) * (PE heating rate per unit mass)
-		heating_rate += (mass_in_Msun - mass_old) * pe_heating_per_mass[0];
+		// The table is given in units of erg/s/H/Msun, and it expects the input to be SFR per kpc^2, so we need to devide the mass increment by the area. 
+		const amrex::Real delta_mass_per_area = (mass_in_Msun - mass_old) / sf_area_kpc2;
+		heating_rate += delta_mass_per_area * pe_heating_per_mass[0];
 		mass_old = mass_in_Msun;
 	}
 
-	return heating_rate / sf_area_kpc2;
+	return heating_rate;
 }
 
 // Function to compute PE heating rate from constant star formation rate
