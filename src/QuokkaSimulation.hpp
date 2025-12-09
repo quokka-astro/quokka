@@ -122,8 +122,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::GetData;
 	using AMRSimulation<problem_t>::FillPatchWithData;
 	using AMRSimulation<problem_t>::Gconst_;
-	using AMRSimulation<problem_t>::const_sfr_Msun_per_year_per_kpc2_;
-	using AMRSimulation<problem_t>::sf_area_kpc2_;
 
 	using AMRSimulation<problem_t>::densityFloor_;
 	using AMRSimulation<problem_t>::tempFloor_;
@@ -131,11 +129,22 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::max_level;
 	using AMRSimulation<problem_t>::n_error_buf;
 
+	using AMRSimulation<problem_t>::sfh_interval_;
+	using AMRSimulation<problem_t>::sfh_time_interval_;
+
 #if AMREX_SPACEDIM == 3
 	using AMRSimulation<problem_t>::luminosityTables_;
 #endif // AMREX_SPACEDIM == 3
 
 	SimulationData<problem_t> userData_;
+
+	// Photoelectric heating
+	bool use_sfh_based_pe_heating_ = false;
+	std::string sfh_to_pe_heating_table_filename_;
+	amrex::Real sf_area_kpc2_ = -1.0;		      // area of the star formation region in kpc^2 (for computing the PE heating rate)
+	amrex::Real const_sfr_Msun_per_year_per_kpc2_ = -1.0; // constant star formation rate in Msun/year/kpc^2 (for computing the PE heating rate); will
+							      // override real star formation rate from the simulation if non-negative
+	quokka::PeHeatingTables<> peHeatingTables_;
 
 	int enableCooling_ = 0;
 	int enableChemistry_ = 0;
@@ -538,6 +547,58 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 				amrex::Abort("Invalid cooling table type! Only 'resampled' is supported.");
 			}
 		}
+	}
+
+	// set photoelectric heating runtime parameters
+	{
+		amrex::ParmParse const pp;
+		pp.query("use_sfh_based_pe_heating", use_sfh_based_pe_heating_);
+		pp.query("sfh_to_pe_heating_table", sfh_to_pe_heating_table_filename_);
+		pp.query("sf_area_kpc2", sf_area_kpc2_);
+		pp.query("const_sfr_Msun_per_year_per_kpc2", const_sfr_Msun_per_year_per_kpc2_);
+		if (const_sfr_Msun_per_year_per_kpc2_ < 0.0) {
+			// It's allowed to turn on sfh and not turn on use_sfh_based_pe_heating, but the opposite is not allowed.
+			if (use_sfh_based_pe_heating_) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE((sfh_interval_ > 0) || (sfh_time_interval_ > 0),
+								 "When use_sfh_based_pe_heating is set to true, star formation history must be turned on by "
+								 "specifying sfh_interval or sfh_time_interval");
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    !sfh_to_pe_heating_table_filename_.empty(),
+				    "When use_sfh_based_pe_heating is set to true, a PE heating table must be specified via sfh_to_pe_heating_table");
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sf_area_kpc2_ > 0.0,
+								 "When use_sfh_based_pe_heating is set to true, sf_area_kpc2 must be set to a positive value");
+			} else {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    sfh_to_pe_heating_table_filename_.empty(),
+				    "use_sfh_based_pe_heating is set to false but sfh_to_pe_heating_table is specified. This indicates a misconfiguration.");
+			}
+		}
+	}
+
+	// Load PE heating table if specified
+	if (use_sfh_based_pe_heating_) {
+		amrex::Print() << "Loading PE heating table from: " << sfh_to_pe_heating_table_filename_ << "\n";
+
+		// Use linear spacing for PE heating values (can be changed if needed)
+		peHeatingTables_.pe_heating = quokka::DataTable<1, 1>::CSVReader(sfh_to_pe_heating_table_filename_, quokka::SpacingType::fast_log);
+
+		amrex::Print() << "PE heating table loaded successfully.\n";
+		amrex::Print() << fmt::format("\tTable dimension: {}\n", peHeatingTables_.pe_heating.size(0));
+		amrex::Print() << fmt::format("\tNumber of outputs: {}\n", peHeatingTables_.pe_heating.num_outputs());
+
+		// Validate table metadata matches expected hardcoded values
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				peHeatingTables_.pe_heating.input_name(0) == "age",
+				fmt::format("PE heating table input must be 'age', got '{}'", peHeatingTables_.pe_heating.input_name(0)));
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				peHeatingTables_.pe_heating.input_unit(0) == "year",
+				fmt::format("PE heating table input unit must be 'year', got '{}'", peHeatingTables_.pe_heating.input_unit(0)));
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				peHeatingTables_.pe_heating.output_unit(0) == "erg/s/Msun",
+				fmt::format("PE heating table output unit must be 'erg/s/Msun', got '{}'", peHeatingTables_.pe_heating.output_unit(0)));
+
+		// Set global pointer for access from particle functions
+		quokka::g_pe_heating_tables_ptr<> = &peHeatingTables_;
 	}
 
 #ifdef CHEMISTRY
