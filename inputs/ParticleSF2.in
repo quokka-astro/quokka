@@ -35,19 +35,9 @@ particles.stellar_velocity_limit = 1.0e8
 problem.n0 = 1.0e5
 problem.Tamb = 1.0e1
 
-max_timesteps = 10
+restartfile = chk00010
+max_timesteps = 20
 plotfile_interval = 5
 checkpoint_interval = 5
-
-# *****************************************************************
-# Cooling parameters
-# *****************************************************************
-cooling.enabled = 1
-cooling.cooling_table_type = resampled
-cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled_no_PE.h5"
-use_sfh_based_pe_heating = true
-#const_sfr_Msun_per_year_per_kpc2 = 3.0e-2 			# Msun/year/kpc^2
-sfh_to_pe_heating_table = "../inputs/photoelectric_heating_from_sfh.csv"
-#sfh_interval = 3
-sfh_time_interval = 4e10 		# years
-sf_area_kpc2 = 1.0 					# kpc^2
+#SFH_interval = 3
+SFH_time_interval = 4e10
