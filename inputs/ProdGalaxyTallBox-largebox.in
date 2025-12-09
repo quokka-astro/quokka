@@ -1,0 +1,69 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  0.0       0.0       -6.036e+21
+geometry.prob_hi     =  3.018e21  3.018e21   6.036e+21
+geometry.is_periodic =  1    1    0
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 1      # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 128 128 512
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.max_grid_size   = 512   # at least 128 for GPUs
+amr.blocking_factor_x = 128   # grid size must be divisible by this
+amr.blocking_factor_y = 128
+amr.blocking_factor_z = 128
+amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
+amr.grid_eff        = 0.7   # default
+
+do_reflux     = 1
+do_subcycle   = 0
+stop_time     = 9.462e+15
+max_timesteps = 2
+plotfile_interval = 512
+checkpoint_interval = -1
+
+density_floor = 1.67e-30 #in g cm^-3
+temperature_floor = 10.0 #K
+
+cooling.enabled = 1
+cooling.cooling_table_type = "resampled"
+cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
+
+perturb.filename = "../inputs/zdrv.hdf5"
+perturb.use_superresolution = 0
+#perturb.amplitude = 0.35e5 # cm/s, = 0.05 * 7 km/s
+perturb.amplitude = 7e5 # 7 km/s
+
+tiny_profiler.enabled = 1
+
+statistics_interval = 128
+projection_interval = 128
+projection.dirs = x z
+
+particles.split_particles_on_restart_refine = false
+
+derived_vars = temperature c_s
+
+quokka.diagnostics = slice_x slice_z
+quokka.slice_x.type = DiagFramePlane
+quokka.slice_x.file = slicex_plt
+quokka.slice_x.normal = 0              # Plane normal (0 == x, 1 == y, 2 == z)
+quokka.slice_x.center = 1.509001e21
+quokka.slice_x.int = 128
+quokka.slice_x.interpolation = Linear
+quokka.slice_x.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s
+
+quokka.slice_z.type = DiagFramePlane
+quokka.slice_z.file = slicez_plt
+quokka.slice_z.normal = 2              # Plane normal (0 == x, 1 == y, 2 == z)
+quokka.slice_z.center = 1.0e12        # Domain center in the normal direction
+quokka.slice_z.int = 128
+quokka.slice_z.interpolation = Linear
+quokka.slice_z.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s
