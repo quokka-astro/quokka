@@ -4,4 +4,10 @@ if (AMReX_SPACEDIM EQUAL 3)
         setup_target_for_cuda_compilation(TallBoxSf)
     endif()
     add_test(NAME TallBoxSf COMMAND TallBoxSf ../inputs/TallBoxSf.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+
+		# extract data files for regression testing
+		file(
+			ARCHIVE_EXTRACT INPUT
+			${QuokkaCode_SOURCE_DIR}/extern/problems/TallBoxSf/zdrv.hdf5.zip
+			DESTINATION ${QuokkaCode_SOURCE_DIR}/extern/problems/TallBoxSf)
 endif()

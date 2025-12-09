@@ -24,6 +24,9 @@ Backtrace.*
 /extern/agora_data/vcirc.dat
 /extern/agora_data/AgoraGalaxy_particles_LOW.txt
 
+# TallBox sim uncompressed data
+/extern/problems/TallBoxSf/zdrv.hdf5
+
 # Singularity Docker images
 *.sif
 
