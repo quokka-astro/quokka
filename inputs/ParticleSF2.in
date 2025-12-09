@@ -48,6 +48,6 @@ cooling.cooling_table_type = resampled
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled_no_PE.h5"
 use_sfh_based_pe_heating = true
 const_sfr_Msun_per_year_per_kpc2 = 3.0e-2
-sfh_to_pe_heating_table = "../inputs/photoelectric_heating_from_sfh.csv"
+sfh_to_pe_heating_table = "../extern/cooling/photoelectric_heating_from_sfh.csv"
 #sfh_interval = 3
 sfh_time_interval = 4e10
