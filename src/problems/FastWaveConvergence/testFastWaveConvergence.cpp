@@ -279,9 +279,9 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 				amrex::Warning(
 				    "Warning: angle between k and B0 is 0 or 180 deg. Fast wave reduces to pure sound wave with no magnetic perturbation.");
 			}
-			v1_mrf   = -epsilon * cf * cos_phase;  // velocity along k̂ (parallel component)
-			v2_mrf   = 0.0;                        // perpendicular velocity suppressed
-			delta_B2 = 0.0;                        // no transverse magnetic perturbation
+			v1_mrf = -epsilon * cf * cos_phase; // velocity along k̂ (parallel component)
+			v2_mrf = 0.0;			    // perpendicular velocity suppressed
+			delta_B2 = 0.0;			    // no transverse magnetic perturbation
 
 		} else {
 
@@ -299,10 +299,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 			// Derived from the fast-mode eigenstructure:
 			//     v₂ = - [ v_A² cosθ sinθ / (c_f² - v_A² cos²θ) ] * (c_f / sinθ) * (δB₂ / b0_magn)
 			// This encodes magnetic tension restoring forces for oblique propagation.
-			v2_mrf =
-				-(vA * vA * cosθ) / (cf * cf - vA * vA * cosθ * cosθ)
-				* (cf / sinθ)
-				* (delta_B2 / b0_magn);
+			v2_mrf = -(vA * vA * cosθ) / (cf * cf - vA * vA * cosθ * cosθ) * (cf / sinθ) * (delta_B2 / b0_magn);
 		}
 
 		double const v3_mrf = 0.0;
