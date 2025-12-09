@@ -587,15 +587,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		amrex::Print() << fmt::format("\tNumber of outputs: {}\n", peHeatingTables_.pe_heating.num_outputs());
 
 		// Validate table metadata matches expected hardcoded values
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(peHeatingTables_.pe_heating.input_name(0) == "age",
+						 fmt::format("PE heating table input must be 'age', got '{}'", peHeatingTables_.pe_heating.input_name(0)));
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-				peHeatingTables_.pe_heating.input_name(0) == "age",
-				fmt::format("PE heating table input must be 'age', got '{}'", peHeatingTables_.pe_heating.input_name(0)));
+		    peHeatingTables_.pe_heating.input_unit(0) == "year",
+		    fmt::format("PE heating table input unit must be 'year', got '{}'", peHeatingTables_.pe_heating.input_unit(0)));
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-				peHeatingTables_.pe_heating.input_unit(0) == "year",
-				fmt::format("PE heating table input unit must be 'year', got '{}'", peHeatingTables_.pe_heating.input_unit(0)));
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-				peHeatingTables_.pe_heating.output_unit(0) == "erg/s/Msun",
-				fmt::format("PE heating table output unit must be 'erg/s/Msun', got '{}'", peHeatingTables_.pe_heating.output_unit(0)));
+		    peHeatingTables_.pe_heating.output_unit(0) == "erg/s/Msun",
+		    fmt::format("PE heating table output unit must be 'erg/s/Msun', got '{}'", peHeatingTables_.pe_heating.output_unit(0)));
 
 		// Set global pointer for access from particle functions
 		quokka::g_pe_heating_tables_ptr<> = &peHeatingTables_;
