@@ -16,6 +16,7 @@
 #include "math/FastMath.hpp"
 #include <array>
 #include <fstream>
+#include <limits>
 #include <memory>
 #include <sstream>
 #include <type_traits>
@@ -150,9 +151,37 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 			if (spacing_types[dim] == SpacingType::linear) {
 				point_[dim] = point[dim];
 			} else if (spacing_types[dim] == SpacingType::log) {
-				point_[dim] = std::log(point[dim]);
+				// Handle non-positive values for log spacing
+				if constexpr (oob_policy == OutOfBounds::clamp) {
+					// Clamp to minimum valid value (slightly above zero)
+					constexpr amrex::Real epsilon = std::numeric_limits<amrex::Real>::min() * 1.0e10; // ~1e-298 for double
+					amrex::Real const clamped_val = amrex::max(point[dim], epsilon);
+					point_[dim] = std::log(clamped_val);
+				} else if constexpr (oob_policy == OutOfBounds::fail) {
+					// Check for non-positive values and abort if found
+					if (point[dim] <= 0.0) {
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+						    false, fmt::format("Invalid value for log interpolation in dimension {}: {} (must be positive)", dim, point[dim])
+							       .c_str());
+					}
+					point_[dim] = std::log(point[dim]);
+				}
 			} else if (spacing_types[dim] == SpacingType::fast_log) {
-				point_[dim] = FastMath::lg(point[dim]);
+				// Handle non-positive values for fast_log spacing
+				if constexpr (oob_policy == OutOfBounds::clamp) {
+					// Clamp to minimum valid value (slightly above zero)
+					constexpr amrex::Real epsilon = std::numeric_limits<amrex::Real>::min() * 1.0e10; // ~1e-298 for double
+					amrex::Real const clamped_val = amrex::max(point[dim], epsilon);
+					point_[dim] = FastMath::lg(clamped_val);
+				} else if constexpr (oob_policy == OutOfBounds::fail) {
+					// Check for non-positive values and abort if found
+					if (point[dim] <= 0.0) {
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+						    false, fmt::format("Invalid value for fast_log interpolation in dimension {}: {} (must be positive)", dim, point[dim])
+							       .c_str());
+					}
+					point_[dim] = FastMath::lg(point[dim]);
+				}
 			}
 		}
 
@@ -190,9 +219,37 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 			if (spacing_types[dim] == SpacingType::linear) {
 				point_[dim] = point[dim];
 			} else if (spacing_types[dim] == SpacingType::log) {
-				point_[dim] = std::log(point[dim]);
+				// Handle non-positive values for log spacing
+				if constexpr (oob_policy == OutOfBounds::clamp) {
+					// Clamp to minimum valid value (slightly above zero)
+					constexpr amrex::Real epsilon = std::numeric_limits<amrex::Real>::min() * 1.0e10; // ~1e-298 for double
+					amrex::Real const clamped_val = amrex::max(point[dim], epsilon);
+					point_[dim] = std::log(clamped_val);
+				} else if constexpr (oob_policy == OutOfBounds::fail) {
+					// Check for non-positive values and abort if found
+					if (point[dim] <= 0.0) {
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+						    false, fmt::format("Invalid value for log interpolation in dimension {}: {} (must be positive)", dim, point[dim])
+							       .c_str());
+					}
+					point_[dim] = std::log(point[dim]);
+				}
 			} else if (spacing_types[dim] == SpacingType::fast_log) {
-				point_[dim] = FastMath::lg(point[dim]);
+				// Handle non-positive values for fast_log spacing
+				if constexpr (oob_policy == OutOfBounds::clamp) {
+					// Clamp to minimum valid value (slightly above zero)
+					constexpr amrex::Real epsilon = std::numeric_limits<amrex::Real>::min() * 1.0e10; // ~1e-298 for double
+					amrex::Real const clamped_val = amrex::max(point[dim], epsilon);
+					point_[dim] = FastMath::lg(clamped_val);
+				} else if constexpr (oob_policy == OutOfBounds::fail) {
+					// Check for non-positive values and abort if found
+					if (point[dim] <= 0.0) {
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+						    false, fmt::format("Invalid value for fast_log interpolation in dimension {}: {} (must be positive)", dim, point[dim])
+							       .c_str());
+					}
+					point_[dim] = FastMath::lg(point[dim]);
+				}
 			}
 		}
 
