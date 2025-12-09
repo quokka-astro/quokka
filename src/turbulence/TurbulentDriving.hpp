@@ -98,7 +98,7 @@ template <typename problem_t> class turbulentDriving
 		amrex::Gpu::streamSynchronize();
 		return true;
 	}
-	
+
 	// Function to calculate the mass weighted velocity dispersion in the computational domain
 	void calculate_dispersion(amrex::MultiFab &state)
 	{
