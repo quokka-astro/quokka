@@ -556,22 +556,24 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		pp.query("sfh_to_pe_heating_table", sfh_to_pe_heating_table_filename_);
 		pp.query("sf_area_kpc2", sf_area_kpc2_);
 		pp.query("const_sfr_Msun_per_year_per_kpc2", const_sfr_Msun_per_year_per_kpc2_);
-		if (const_sfr_Msun_per_year_per_kpc2_ < 0.0) {
-			// It's allowed to turn on sfh and not turn on use_sfh_based_pe_heating, but the opposite is not allowed.
-			if (use_sfh_based_pe_heating_) {
+		// It's allowed to turn on sfh and not turn on use_sfh_based_pe_heating, but the opposite is not allowed.
+		if (use_sfh_based_pe_heating_) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+			    !sfh_to_pe_heating_table_filename_.empty(),
+			    "When use_sfh_based_pe_heating is set to true, a PE heating table must be specified via sfh_to_pe_heating_table");
+			if (const_sfr_Msun_per_year_per_kpc2_ < 0.0) {
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE((sfh_interval_ > 0) || (sfh_time_interval_ > 0),
 								 "When use_sfh_based_pe_heating is set to true, star formation history must be turned on by "
 								 "specifying sfh_interval or sfh_time_interval");
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-				    !sfh_to_pe_heating_table_filename_.empty(),
-				    "When use_sfh_based_pe_heating is set to true, a PE heating table must be specified via sfh_to_pe_heating_table");
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sf_area_kpc2_ > 0.0,
 								 "When use_sfh_based_pe_heating is set to true, sf_area_kpc2 must be set to a positive value");
 			} else {
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-				    sfh_to_pe_heating_table_filename_.empty(),
-				    "use_sfh_based_pe_heating is set to false but sfh_to_pe_heating_table is specified. This indicates a misconfiguration.");
+				// Using a constant star formation rate does not require recording the star formation history.
 			}
+		} else {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					sfh_to_pe_heating_table_filename_.empty(),
+					"use_sfh_based_pe_heating is set to false but sfh_to_pe_heating_table is specified. This indicates a misconfiguration.");
 		}
 	}
 
