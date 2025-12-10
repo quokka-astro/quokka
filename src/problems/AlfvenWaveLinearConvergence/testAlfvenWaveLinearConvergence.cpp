@@ -359,6 +359,7 @@ void QuokkaSimulation<AlfvenWaveLinear>::computeReferenceSolution_fc(amrex::Mult
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = ref.array(iter);
 		auto const ncomp = ref.nComp();
+		const amrex::Real time = tNew_[0];
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept -> void {
 			for (int n = 0; n < ncomp; ++n) {
@@ -487,8 +488,8 @@ auto problem_main() -> int
 
 	quokka::richardson::Parameters params{};
 	params.machine_precision_target = 2.0e-12;
-	params.nx_initial = 64;
-	params.nx_max = 64; // cap at 256 for quick tests. otherwise, it can take ~1-2 hours for 2048
+	params.nx_initial = 16;
+	params.nx_max = 256; // cap at 256 for quick tests. otherwise, it can take ~1-2 hours for 2048
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;
 	params.test_name = "Alfven Wave";

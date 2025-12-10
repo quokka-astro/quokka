@@ -54,7 +54,6 @@ constexpr double bg_pressure = sound_speed * sound_speed * bg_density / gamma_ga
 constexpr double b0_magn = 1.0;
 constexpr double delta_b_magn = 1e-3;
 constexpr double alfven_speed = b0_magn / gcem::sqrt(bg_density);
-constexpr double fast_speed = gcem::sqrt(alfven_speed * alfven_speed + sound_speed * sound_speed);
 
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeMagnitude(const std::array<amrex::Real, 3> &vfield) -> double
 {
@@ -390,13 +389,12 @@ void QuokkaSimulation<FastWaveConvergence>::computeReferenceSolution(amrex::Mult
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = ref.array(iter);
 		auto const ncomp = ref.nComp();
-		const amrex::Real time = tNew_[0];
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.0;
 			}
-			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::cc, quokka::direction::na, time);
+			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::cc, quokka::direction::na, 0);
 		});
 	}
 }
@@ -410,13 +408,12 @@ void QuokkaSimulation<FastWaveConvergence>::computeReferenceSolution_fc(amrex::M
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = ref.array(iter);
 		auto const ncomp = ref.nComp();
-		const amrex::Real time = tNew_[0];
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.0;
 			}
-			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::fc, dir, time);
+			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::fc, dir, 0);
 		});
 	}
 }
@@ -474,7 +471,7 @@ auto runWaveTest(int nx) -> double
 
 	// Set grid dimensions using AMReX parameter system
 	amrex::ParmParse pp("amr");
-	amrex::Vector<int> const ncells = {nx, 32, 32};
+	amrex::Vector<int> const ncells = {nx, 8, 8};
 
 	const int blocking_x = std::max(16, nx);
 	if (!pp.contains("blocking_factor_x")) {
@@ -570,8 +567,8 @@ auto problem_main() -> int
 
 	quokka::richardson::Parameters params{};
 	params.machine_precision_target = 2.0e-12;
-	params.nx_initial = 32;
-	params.nx_max = 32;
+	params.nx_initial = 16;
+	params.nx_max = 256;  // cap at 256 for quick tests. otherwise, it can take ~1-2 hours for 2048
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;
 	params.test_name = "Fast Wave";

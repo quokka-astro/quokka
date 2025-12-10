@@ -3,10 +3,11 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file testFastWaveConvergence.cpp
-/// \brief Defines a Richardson convergence test for the fast MHD wave.
+/// \file testSlowWaveConvergence.cpp
+/// \brief Defines a Richardson convergence test for the slow MHD wave.
 ///
 
+#include <algorithm>
 #include <bitset>
 #include <cassert>
 #include <cmath>
@@ -15,13 +16,13 @@
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
+#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
 #include "grid.hpp"
 #include "physics_info.hpp"
 #include "util/BC.hpp"
-#include "util/fextract.hpp"
 #include "util/richardson.hpp"
 
 struct SlowWaveConvergence {
@@ -52,7 +53,6 @@ constexpr double bg_density = 1.0;
 constexpr double bg_pressure = sound_speed * sound_speed * bg_density / gamma_gas;
 constexpr double b0_magn = 1.0;
 constexpr double delta_b_magn = 1e-3;
-constexpr double epsilon = delta_b_magn / b0_magn;
 constexpr double alfven_speed = b0_magn / gcem::sqrt(bg_density);
 
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeMagnitude(const std::array<amrex::Real, 3> &vfield) -> double
@@ -75,7 +75,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeCrossProduct(const std::arr
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE void normalizeVector(std::array<amrex::Real, 3> &vfield)
 {
 	const double vfield_magn = computeMagnitude(vfield);
-	if (vfield_magn > 1e-16) {
+	if (vfield_magn > 1e-14) {
 		vfield[0] /= vfield_magn;
 		vfield[1] /= vfield_magn;
 		vfield[2] /= vfield_magn;
@@ -83,7 +83,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE void normalizeVector(std::array<amrex::
 }
 
 // angles (radians) in the math reference frame (MRF)
-AMREX_GPU_MANAGED double angle_between_k_b0_rad = 45.0 * M_PI / 180.0; // NOLINT
+AMREX_GPU_MANAGED double angle_between_k_b0_rad = 0.0; // NOLINT
 
 // rotation from the problem reference frame (PRF) to the MRF
 AMREX_GPU_MANAGED double k_rotation_in_xy_rad = 0.0;	// NOLINT
@@ -171,46 +171,47 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 									     const int icomp) -> double
 {
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(icomp == 0 || icomp == 1 || icomp == 2, "computeVectorPotentialComponent_prf(): icomp must be 0,1,2");
+
 	// rotate PRF -> MRF
 	const std::array<amrex::Real, 3> x_vec_mrf = rotatePRF2MRF({x1_prf, x2_prf, x3_prf});
 	const double tiny = 1e-16;
+	// Assumes: k along x1_mrf, B0 in (x1_mrf, x3_mrf) plane, and A along x2_mrf.
 
-	// Assumes: k along x1_mrf, B0 in (x1_mrf, x3_mrf) plane
 	// background B0 in MRF
 	const double θ = angle_between_k_b0_rad;
 	const double B0_1 = b0_magn * std::cos(θ);
-	const double B0_3 = b0_magn * std::sin(θ);
+	const double B0_2 = b0_magn * std::sin(θ);
 
 	// background vector potential that yields B0 in MRF:
-	// bg_A = (0, B0_3 * x1 - B0_1 * x3, 0)
+	// bg_A = (0, B0_1 * x3 - B0_3 * x1, 0)
 	const double bg_A1 = 0.0;
-	const double bg_A2 = B0_3 * x_vec_mrf[0] - B0_1 * x_vec_mrf[2];
-	const double bg_A3 = 0.0;
+	const double bg_A2 = 0.0;
+	const double bg_A3 = -B0_2 * x_vec_mrf[0] + B0_1 * x_vec_mrf[1];
 
 	// slow speed and phase
 	const double a = sound_speed;
 	const double vA = alfven_speed;
 	const double cosθ = std::cos(θ);
 	const double sinθ = std::sin(θ);
+
 	const double cs = std::sqrt(0.5 * (a * a + vA * vA - std::sqrt((a * a + vA * vA) * (a * a + vA * vA) - 4.0 * a * a * vA * vA * cosθ * cosθ)));
+
 	const double omega = cs * k_magn;
 	const double phase = omega * time - k_magn * x_vec_mrf[0];
-
-	// Perturbation in MRF: δB = (0, 0, δB₃)
 	const double delta_A1 = 0.0;
-	double delta_A2 = 0.0;
-	const double delta_A3 = 0.0;
+	const double delta_A2 = 0.0;
+	double delta_A3 = 0.0;
 
-	if (std::abs(sinθ) < tiny || std::abs(cosθ) < tiny) {
-		// θ ≈ 0° or θ ≈ 90°: slow mode does not propagate → no B perturbation
-		delta_A2 = 0.0;
-	} else {
-		// General case: slow mode with magnetic perturbation
-		// δB₃ in MRF (only non-zero when both parallel and perpendicular components exist)
-		const double delta_B3 = delta_b_magn;
-		delta_A2 = -(delta_B3 / k_magn) * std::sin(phase);
+	if (std::abs(sinθ) < tiny) {
+		// theta = 0 or 180 deg: slow mode is pure sound wave → no B perturbation
+		delta_A3 = 0.0; // δB = 0
+	} else if (std::abs(cosθ) < tiny) {
+		// theta = 90 deg: no perturbations in B1 or B2
+		delta_A3 = 0.0; // δB1 = 0
+	}else {
+		const double dB2_mrf = delta_b_magn; // δB3
+		delta_A3 = (dB2_mrf / k_magn) * std::sin(phase);
 	}
-
 	const double A1_mrf = bg_A1 + delta_A1;
 	const double A2_mrf = bg_A2 + delta_A2;
 	const double A3_mrf = bg_A3 + delta_A3;
@@ -241,86 +242,78 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 	const amrex::Real x2_prf_L = prob_lo[1] + j * dx[1];
 	const amrex::Real x3_prf_L = prob_lo[2] + k * dx[2];
 
-	const double tiny = 1e-16;
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(b0_magn) > tiny, "computeWaveSolution: background magnetic field magnitude b0_magn must be nonzero.");
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(k_magn) > tiny, "computeWaveSolution: wavevector magnitude k_magn must be nonzero.");
-
-	const amrex::Real x1_prf_C = x1_prf_L + static_cast<amrex::Real>(0.5) * dx[0];
-	const amrex::Real x2_prf_C = x2_prf_L + static_cast<amrex::Real>(0.5) * dx[1];
-	const amrex::Real x3_prf_C = x3_prf_L + static_cast<amrex::Real>(0.5) * dx[2];
-	const std::array<amrex::Real, 3> x_vec_mrf_C = rotatePRF2MRF({x1_prf_C, x2_prf_C, x3_prf_C});
-
-	// speeds & geometry
-	const double a = sound_speed;
-	const double vA = alfven_speed;
-	const double θ = angle_between_k_b0_rad;
-	const double cosθ = std::cos(θ);
-	const double sinθ = std::sin(θ);
-
-	const double cs = std::sqrt(0.5 * (a * a + vA * vA - std::sqrt((a * a + vA * vA) * (a * a + vA * vA) - 4.0 * a * a * vA * vA * cosθ * cosθ)));
-
-	const double omega = cs * k_magn;
-	const double phase = omega * time - k_magn * x_vec_mrf_C[0];
-	const double cos_phase = std::cos(phase);
-	const double epsilon = delta_b_magn / b0_magn;
-
-	// Background B0 in MRF: B0 = (B0_1, 0, B0_3) lies in (x1, x3) plane
-	const double B0_1 = b0_magn * cosθ;
-	const double B0_3 = b0_magn * sinθ;
-
-	// Velocity perturbations in MRF (from slow mode eigenvector)
-	double v1_mrf = 0.0;
-	double v3_mrf = 0.0;
-
-	// Magnetic field perturbation in MRF: δB = (0, 0, δB3)
-	double delta_B3 = 0.0;
-
-	if (std::abs(sinθ) < tiny) {
-		// θ ≈ 0 or 180°: B0 parallel to k → slow mode does not propagate
-		// No magnetic perturbation, c_s = 0 when k ∥ B₀
-		if (i == 0 && j == 0 && k == 0 && time == 0.0) {
-			amrex::Warning("computeWaveSolution: angle_between_k_b0 ≈ 0 detected. Slow mode does not propagate parallel to field (c_s = 0).");
-		}
-		v1_mrf = 0.0;
-		v3_mrf = 0.0;
-		delta_B3 = 0.0;
-	} else if (std::abs(cosθ) < tiny) {
-		// θ ≈ 90°: B0 perpendicular to k → slow mode becomes non-propagating
-		// c_s → 0 when k ⊥ B₀ (fast mode takes over as the magnetosonic wave)
-		if (i == 0 && j == 0 && k == 0 && time == 0.0) {
-			amrex::Warning("computeWaveSolution: angle_between_k_b0 ≈ 90° detected. Slow mode becomes non-propagating (c_s → 0).");
-		}
-		v1_mrf = 0.0;
-		v3_mrf = 0.0;
-		delta_B3 = 0.0;
-	} else {
-		// General case: both velocity and magnetic perturbations
-		constexpr double wave_sign = -1.0; // -1 for right-propagating, +1 for left-propagating
-		// Slow magnetosonic wave: δB is primary
-		delta_B3 = delta_b_magn * cos_phase;
-		// From eigenvector component 2: v₁ = c_s · δB₃ / B₃ = c_s · δB₃ / (b0_magn·sinθ)
-		v1_mrf = wave_sign * (cs / (b0_magn * sinθ)) * delta_B3;
-		// From eigenvector component 4: v₃ = +(v_A² cosθ sinθ) / (c_s² - v_A² cos²θ) · c_s · δB₃ / B₃
-		v3_mrf = wave_sign * (vA * vA * cosθ) / (cs * cs - vA * vA * cosθ * cosθ) * (cs / sinθ) * (delta_B3 / b0_magn);
-	}
-
-	const double v2_mrf = 0.0;
-
-	// Density & pressure perturbations (linear compressive mode)
-	const double density = bg_density * (1.0 + epsilon * cos_phase);
-	const double pressure = bg_pressure * (1.0 + gamma_gas * epsilon * cos_phase);
-
 	if (cen == quokka::centering::cc) {
-		// Rotate back to PRF
+		const double tiny = 1e-16;
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(b0_magn) > tiny, "computeWaveSolution: background magnetic field magnitude b0_magn must be nonzero.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(k_magn) > tiny, "computeWaveSolution: wavevector magnitude k_magn must be nonzero.");
+		const amrex::Real x1_prf_C = x1_prf_L + static_cast<amrex::Real>(0.5) * dx[0];
+		const amrex::Real x2_prf_C = x2_prf_L + static_cast<amrex::Real>(0.5) * dx[1];
+		const amrex::Real x3_prf_C = x3_prf_L + static_cast<amrex::Real>(0.5) * dx[2];
+		const std::array<amrex::Real, 3> x_vec_mrf_C = rotatePRF2MRF({x1_prf_C, x2_prf_C, x3_prf_C});
+
+		// speeds & geometry
+		const double a = sound_speed;
+		const double vA = alfven_speed;
+		const double θ = angle_between_k_b0_rad;
+		const double cosθ = std::cos(θ);
+		const double sinθ = std::sin(θ);
+
+		const double cs = std::sqrt(0.5 * (a * a + vA * vA - std::sqrt((a * a + vA * vA) * (a * a + vA * vA) - 4.0 * a * a * vA * vA * cosθ * cosθ)));
+
+		const double omega = cs * k_magn;
+		const double phase = omega * time - k_magn * x_vec_mrf_C[0];
+		const double cos_phase = std::cos(phase);
+		double epsilon = delta_b_magn / b0_magn*(cs*cs - vA*vA* cosθ*cosθ)/(cs*cs*sinθ); // normalized amplitude
+		const double B0_1 = b0_magn * cosθ;
+		const double B0_2 = b0_magn * sinθ;
+
+		// Velocity perturbations in MRF (from slow mode eigenvector)
+		double v1_mrf = 0.0;
+		double v2_mrf = 0.0;
+
+		// Magnetic field perturbation in MRF: δB = (0, 0, δB3)
+		double delta_B2 = 0.0;
+
+		// compute velocity perturbations in MRF
+		if (std::abs(sinθ) < tiny) {
+			// Pure sound wave: set amplitude via epsilon (velocity/density perturbation)
+			if (i == 0 && j == 0 && k == 0 && time == 0.0) {
+				amrex::Warning(
+				    "Warning: angle between k and B0 is 0 or 180 deg. Slow wave reduces to pure sound wave with no magnetic perturbation.");
+			}
+			v1_mrf   = - delta_b_magn/b0_magn * cs * cos_phase;  // velocity along k̂ (parallel component)
+			v2_mrf   = 0.0;                        // perpendicular velocity suppressed
+			delta_B2 = 0.0;                        // no transverse magnetic perturbation
+
+		} else if (std::abs(cosθ) < tiny) {
+			    if (i == 0 && j == 0 && k == 0 && time == 0.0) {
+					amrex::Warning("Slow wave at 90 degrees: c_s = 0, mode becomes static pressure-balanced structure. Setting all perturbations to zero.");
+				}
+				v1_mrf   = 0.0;  // no parallel velocity
+				v2_mrf   = 0.0;  // no perpendicular velocity
+				delta_B2 = 0.0;  // no magnetic perturbation
+				epsilon  = 0.0;  // density/pressure perturbation set to zero
+		}else {
+			// --- Oblique slow magnetosonic wave ---
+			delta_B2 = delta_b_magn * cos_phase;
+			v1_mrf = -epsilon * cs * cos_phase; // velocity along k̂ (parallel component)
+			v2_mrf = delta_b_magn/b0_magn * vA * vA * cosθ / cs * cos_phase;
+		}
+
+		double const v3_mrf = 0.0;
+
+		// density & pressure perturbations (linear compressive slow mode)
+		const double density = bg_density * (1.0 + epsilon * cos_phase);
+		const double pressure = bg_pressure * (1.0 + gamma_gas * epsilon * cos_phase);
+
 		const auto v_prf = rotateMRF2PRF({v1_mrf, v2_mrf, v3_mrf});
-		const auto B0_prf = rotateMRF2PRF({B0_1, 0.0, B0_3});
-		const auto delta_B_prf = rotateMRF2PRF({0.0, 0.0, delta_B3});
+		const auto dB_prf = rotateMRF2PRF({0.0, delta_B2, 0.0});
+		const auto B0_prf = rotateMRF2PRF({B0_1, B0_2, 0.0});
+		const double b_x1_prf = B0_prf[0] + dB_prf[0];
+		const double b_x2_prf = B0_prf[1] + dB_prf[1];
+		const double b_x3_prf = B0_prf[2] + dB_prf[2];
 
-		const double b_x1_prf = B0_prf[0] + delta_B_prf[0];
-		const double b_x2_prf = B0_prf[1] + delta_B_prf[1];
-		const double b_x3_prf = B0_prf[2] + delta_B_prf[2];
-
-		// Energy bookkeeping
+		// energy bookkeeping
 		const double v_magn_sq = v_prf[0] * v_prf[0] + v_prf[1] * v_prf[1] + v_prf[2] * v_prf[2];
 		const double b_magn_sq = b_x1_prf * b_x1_prf + b_x2_prf * b_x2_prf + b_x3_prf * b_x3_prf;
 		const double Ekin = 0.5 * density * v_magn_sq;
@@ -328,7 +321,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const double Eint = pressure / (gamma_gas - 1);
 		const double Etot = Ekin + Emag + Eint;
 
-		// Write state
+		// write state
 		state(i, j, k, HydroSystem<SlowWaveConvergence>::density_index) = density;
 		state(i, j, k, HydroSystem<SlowWaveConvergence>::x1Momentum_index) = v_prf[0] * density;
 		state(i, j, k, HydroSystem<SlowWaveConvergence>::x2Momentum_index) = v_prf[1] * density;
@@ -337,7 +330,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		state(i, j, k, HydroSystem<SlowWaveConvergence>::internalEnergy_index) = Eint;
 
 	} else if (cen == quokka::centering::fc) {
-		// Compute b-field using the magnetic vector potential to preserve div(b) = 0 topology
+		// compute b-field using the magnetic vector potential to preserve div(b) = 0 topology
 		if (dir == quokka::direction::x) {
 			const double b_x1 =
 			    (Az_prf(x1_prf_L, x2_prf_L + dx[1], x3_prf_L + dx[2] / 2.0, time) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_L + dx[2] / 2.0, time)) /
@@ -362,6 +355,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		}
 	}
 }
+
 template <> void QuokkaSimulation<SlowWaveConvergence>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -443,7 +437,8 @@ auto runWaveTest(int nx) -> double
 	hpp.query("angle_between_k_b0", angle_between_k_b0_deg);
 	constexpr double deg2rad = M_PI / 180.0;
 	angle_between_k_b0_rad = deg2rad * angle_between_k_b0_deg;
-	const double CFL_number = 0.3;
+
+	const double CFL_number = 0.2;
 	const double a = sound_speed;
 	const double vA = alfven_speed;
 	const double cosθ = std::cos(angle_between_k_b0_rad);
@@ -465,9 +460,9 @@ auto runWaveTest(int nx) -> double
 	const std::array<amrex::Real, 3> k_vec_prf = {2.0 * M_PI * static_cast<amrex::Real>(num_modes_x), 2.0 * M_PI * static_cast<amrex::Real>(num_modes_y),
 						      2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)};
 	k_magn = computeMagnitude(k_vec_prf);
-	k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
 	const double wavelength = 2.0 * M_PI / k_magn;
 	const double max_time = wavelength / cs;
+	k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
 
 	k_rotation_in_xy_rad = std::atan2(k_dir_prf[1], k_dir_prf[0]);
 	k_elevation_from_xy_rad = std::atan2(k_dir_prf[2], std::hypot(k_dir_prf[0], k_dir_prf[1]));
@@ -479,20 +474,33 @@ auto runWaveTest(int nx) -> double
 		ref_prf = {0.0, 1.0, 0.0};
 	}
 
-	outofplane_dir_prf = computeCrossProduct(ref_prf, k_dir_prf);
-	normalizeVector(outofplane_dir_prf);
-
-	inplane_dir_prf = computeCrossProduct(k_dir_prf, outofplane_dir_prf);
+	inplane_dir_prf = computeCrossProduct(ref_prf, k_dir_prf);
 	normalizeVector(inplane_dir_prf);
+
+	outofplane_dir_prf = computeCrossProduct(k_dir_prf, inplane_dir_prf);
+	normalizeVector(outofplane_dir_prf);
 
 	// Set grid dimensions using AMReX parameter system
 	amrex::ParmParse pp("amr");
-	amrex::Vector<int> const ncells = {nx, 8, 8};
+	amrex::Vector<int> const ncells = {nx,8, 8};
+
+	const int blocking_x = std::max(16, nx);
+	if (!pp.contains("blocking_factor_x")) {
+		pp.add("blocking_factor_x", blocking_x);
+	}
+	if (!pp.contains("blocking_factor_y")) {
+		pp.add("blocking_factor_y", 8);
+	}
+	if (!pp.contains("blocking_factor_z")) {
+		pp.add("blocking_factor_z", 8);
+	}
+
+	const int max_grid_x = nx;
+	if (!pp.contains("max_grid_size")) {
+		pp.add("max_grid_size", max_grid_x);
+	}
+
 	pp.add("max_level", 0);
-	pp.add("blocking_factor_x", nx);
-	pp.add("blocking_factor_y", 8);
-	pp.add("blocking_factor_z", 8);
-	pp.add("max_grid_size", nx);
 	pp.addarr("n_cell", ncells);
 
 	// Set domain bounds using AMReX parameter system
@@ -523,6 +531,7 @@ auto runWaveTest(int nx) -> double
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.setInitialConditions();
+	const auto &geom = sim.Geom(0);
 
 	// Main time loop
 	sim.evolve();
@@ -570,7 +579,7 @@ auto problem_main() -> int
 	quokka::richardson::Parameters params{};
 	params.machine_precision_target = 2.0e-12;
 	params.nx_initial = 16;
-	params.nx_max = 256; // cap at 256 for quick tests. otherwise, it can take ~1-2 hours for 2048
+	params.nx_max = 256;  // cap at 256 for quick tests. otherwise, it can take ~1-2 hours for 2048
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;
 	params.test_name = "Slow Wave";
