@@ -192,7 +192,7 @@ def compute_entropy(rho, T, mu):
     return K
 
 
-def compute_cooling_length(rho, e_int, Edot):
+def compute_cooling_time(rho, e_int, Edot):
     """Compute cooling length from density, specific internal energy, and cooling rate.
     
     Args:
@@ -329,7 +329,8 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, zmet=1.0,
                 sound_speeds[i, j] = cs # 'cm/s'
                 pressures[i, j] = P
                 entropies[i, j] = K
-                cooling_lengths[i, j] = compute_cooling_length(rho, e_int, Edot) # 'cm'
+                ct = compute_cooling_time(rho, e_int, Edot) # s
+                cooling_lengths[i, j] = cs * ct # cm
 
             except ValueError:
                 # Handle extrapolation errors by setting to NaN
