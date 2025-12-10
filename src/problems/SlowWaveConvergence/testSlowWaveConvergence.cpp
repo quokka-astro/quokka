@@ -208,7 +208,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	} else if (std::abs(cosθ) < tiny) {
 		// theta = 90 deg: no perturbations in B1 or B2
 		delta_A3 = 0.0; // δB1 = 0
-	}else {
+	} else {
 		const double dB2_mrf = delta_b_magn; // δB3
 		delta_A3 = (dB2_mrf / k_magn) * std::sin(phase);
 	}
@@ -263,7 +263,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const double omega = cs * k_magn;
 		const double phase = omega * time - k_magn * x_vec_mrf_C[0];
 		const double cos_phase = std::cos(phase);
-		double epsilon = delta_b_magn / b0_magn*(cs*cs - vA*vA* cosθ*cosθ)/(cs*cs*sinθ); // normalized amplitude
+		double epsilon = delta_b_magn / b0_magn * (cs * cs - vA * vA * cosθ * cosθ) / (cs * cs * sinθ); // normalized amplitude
 		const double B0_1 = b0_magn * cosθ;
 		const double B0_2 = b0_magn * sinθ;
 
@@ -281,23 +281,24 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 				amrex::Warning(
 				    "Warning: angle between k and B0 is 0 or 180 deg. Slow wave reduces to pure sound wave with no magnetic perturbation.");
 			}
-			v1_mrf   = - delta_b_magn/b0_magn * cs * cos_phase;  // velocity along k̂ (parallel component)
-			v2_mrf   = 0.0;                        // perpendicular velocity suppressed
-			delta_B2 = 0.0;                        // no transverse magnetic perturbation
+			v1_mrf = -delta_b_magn / b0_magn * cs * cos_phase; // velocity along k̂ (parallel component)
+			v2_mrf = 0.0;					   // perpendicular velocity suppressed
+			delta_B2 = 0.0;					   // no transverse magnetic perturbation
 
 		} else if (std::abs(cosθ) < tiny) {
-			    if (i == 0 && j == 0 && k == 0 && time == 0.0) {
-					amrex::Warning("Slow wave at 90 degrees: c_s = 0, mode becomes static pressure-balanced structure. Setting all perturbations to zero.");
-				}
-				v1_mrf   = 0.0;  // no parallel velocity
-				v2_mrf   = 0.0;  // no perpendicular velocity
-				delta_B2 = 0.0;  // no magnetic perturbation
-				epsilon  = 0.0;  // density/pressure perturbation set to zero
-		}else {
+			if (i == 0 && j == 0 && k == 0 && time == 0.0) {
+				amrex::Warning(
+				    "Slow wave at 90 degrees: c_s = 0, mode becomes static pressure-balanced structure. Setting all perturbations to zero.");
+			}
+			v1_mrf = 0.0;	// no parallel velocity
+			v2_mrf = 0.0;	// no perpendicular velocity
+			delta_B2 = 0.0; // no magnetic perturbation
+			epsilon = 0.0;	// density/pressure perturbation set to zero
+		} else {
 			// --- Oblique slow magnetosonic wave ---
 			delta_B2 = delta_b_magn * cos_phase;
 			v1_mrf = -epsilon * cs * cos_phase; // velocity along k̂ (parallel component)
-			v2_mrf = delta_b_magn/b0_magn * vA * vA * cosθ / cs * cos_phase;
+			v2_mrf = delta_b_magn / b0_magn * vA * vA * cosθ / cs * cos_phase;
 		}
 
 		double const v3_mrf = 0.0;
@@ -482,7 +483,7 @@ auto runWaveTest(int nx) -> double
 
 	// Set grid dimensions using AMReX parameter system
 	amrex::ParmParse pp("amr");
-	amrex::Vector<int> const ncells = {nx,8, 8};
+	amrex::Vector<int> const ncells = {nx, 8, 8};
 
 	const int blocking_x = std::max(16, nx);
 	if (!pp.contains("blocking_factor_x")) {
@@ -579,7 +580,7 @@ auto problem_main() -> int
 	quokka::richardson::Parameters params{};
 	params.machine_precision_target = 2.0e-12;
 	params.nx_initial = 16;
-	params.nx_max = 256;  // cap at 256 for quick tests. otherwise, it can take ~1-2 hours for 2048
+	params.nx_max = 256; // cap at 256 for quick tests. otherwise, it can take ~1-2 hours for 2048
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;
 	params.test_name = "Slow Wave";
