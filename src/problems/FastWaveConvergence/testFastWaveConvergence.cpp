@@ -287,7 +287,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 			// --- Oblique fast magnetosonic wave ---
 			delta_B2 = delta_b_magn * cos_phase;
 			v1_mrf = epsilon * cf * cos_phase; // velocity along k̂ (parallel component)
-			v2_mrf = -delta_b_magn/b0_magn * vA * cosθ / cf * cos_phase;
+			v2_mrf = -delta_b_magn/b0_magn * vA * vA * cosθ / cf * cos_phase;
 		}
 
 		double const v3_mrf = 0.0;
