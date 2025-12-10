@@ -23,16 +23,30 @@ import tempfile
 
 import numpy as np
 import h5py
+import matplotlib.pyplot as plt
+import matplotlib.colors as colors
+from scipy.interpolate import RectBivariateSpline
 
+import grackle_tables
 from grackle_tables import (
     read_tables, cooling_rate, interpolate_mu, compute_temperature_from_nH_e,
     m_H, boltzmann_constant_cgs_, cloudy_H_mass_fraction, specific_energy_from_temperature
 )
 
+import scienceplots
+
+plt.style.use(['science', 'no-latex'])
+
+KPC = 3.086e21 # cm
+
 
 DEFAULT_GRACKLE_DATA_URL = (
     "https://github.com/grackle-project/grackle_data_files/raw/"
     "928696482fbe15d9bac4382de6134d95568f099c/input/CloudyData_UVB=HM2012.h5"
+)
+DEFAULT_GRACKLE_DATA_URL_SHIELDED = (
+    "https://github.com/grackle-project/grackle_data_files/raw/"
+    "928696482fbe15d9bac4382de6134d95568f099c/input/CloudyData_UVB=HM2012_shielded.h5"
 )
 
 
@@ -178,6 +192,17 @@ def compute_entropy(rho, T, mu):
     return K
 
 
+def compute_cooling_time(rho, e_int, Edot):
+    """Compute cooling length from density, specific internal energy, and cooling rate.
+    
+    Args:
+        rho: density (g/cm^3)
+        e_int: specific internal energy (erg/g)
+        Edot: net cooling rate (erg/cm^3/s)
+    """
+    return -(rho * e_int) / Edot # 'cm'
+
+
 def find_eint_range(tables):
     """Find the range of specific internal energies for a given table.
 
@@ -246,6 +271,12 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, zmet=1.0,
     rho_grid = inverse_fast_log2(fast_log_rho_scaled)
     eint_grid = inverse_fast_log2(fast_log_eint_scaled)
 
+    # Broadcast nH to 2D
+    # x: n_H, y: T/mu = 2/3 * eint * m_H / k_B
+    x = rho_grid * cloudy_H_mass_fraction / m_H
+    y = 2./3. * eint_grid * m_H / boltzmann_constant_cgs_
+    X, Y = np.meshgrid(x, y)
+
     # Check that the grid boundaries are correct
     print("Verifying grid boundaries...")
     print(f"  rho_grid[0] = {rho_grid[0]:.15e}, rho_min = {rho_min:.15e}")
@@ -265,6 +296,7 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, zmet=1.0,
     
     # Initialize output arrays
     cooling_rates = np.zeros((n_rho, n_eint))
+    cooling_lengths = np.zeros((n_rho, n_eint))
     temperatures = np.zeros((n_rho, n_eint))
     sound_speeds = np.zeros((n_rho, n_eint))
     pressures = np.zeros((n_rho, n_eint))
@@ -285,6 +317,7 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, zmet=1.0,
         nH = rho * cloudy_H_mass_fraction / m_H
         
         for j, e_int in enumerate(eint_grid):
+            # e_int: erg/g
             try:
                 T = compute_temperature_from_nH_e(nH, e_int, tables=tables)
                 Edot = cooling_rate(nH, T, zmet, redshift=0., tables=tables, include_pe=include_pe)
@@ -293,10 +326,13 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, zmet=1.0,
                 P = compute_pressure(rho, T, mu)
                 K = compute_entropy(rho, T, mu)
                 temperatures[i, j] = T
-                cooling_rates[i, j] = Edot / rho**2
-                sound_speeds[i, j] = cs
+                cooling_rates[i, j] = Edot / rho**2 # 'erg/cm^3/s/(g/cm^3)^2'
+                sound_speeds[i, j] = cs # 'cm/s'
                 pressures[i, j] = P
                 entropies[i, j] = K
+                ct = compute_cooling_time(rho, e_int, Edot) # s
+                cooling_lengths[i, j] = cs * ct # cm
+
             except ValueError:
                 # Handle extrapolation errors by setting to NaN
                 temperatures[i, j] = np.nan
@@ -304,6 +340,11 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, zmet=1.0,
                 sound_speeds[i, j] = np.nan
                 pressures[i, j] = np.nan
                 entropies[i, j] = np.nan
+                cooling_lengths[i, j] = np.nan
+
+    print(f"cooling_lengths.shape = {cooling_lengths.shape}")
+    # midrow values in kpc
+    print(f"cooling_lengths[n_rho/2, :] = {cooling_lengths[n_rho//2, :] / KPC} kpc")
     
     # Save resampled tables to HDF5 file
     print(f"\nSaving resampled tables to {output_file}")
@@ -332,6 +373,7 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, zmet=1.0,
         data_group.create_dataset('sound_speeds', data=sound_speeds)
         data_group.create_dataset('pressures', data=pressures)
         data_group.create_dataset('entropies', data=entropies)
+        data_group.create_dataset('cooling_lengths', data=cooling_lengths)
         
         # Store metadata as attributes
         metadata_group.attrs['n_rho'] = n_rho
@@ -352,6 +394,7 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, zmet=1.0,
         units_group.attrs['sound_speed'] = 'cm/s'
         units_group.attrs['pressure'] = 'dyne/cm^2'
         units_group.attrs['entropy'] = 'erg*cm^2'
+        units_group.attrs['cooling_length'] = 'cm'
     
     print("Done!")
     
@@ -365,6 +408,41 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, zmet=1.0,
         print(f"Sound speed range: {np.min(sound_speeds[valid_mask]):.2e} to {np.max(sound_speeds[valid_mask]):.2e} cm/s")
         print(f"Pressure range: {np.min(pressures[valid_mask]):.2e} to {np.max(pressures[valid_mask]):.2e} dyne/cm^2")
         print(f"Entropy range: {np.min(entropies[valid_mask]):.2e} to {np.max(entropies[valid_mask]):.2e} erg*cm^2")
+        print(f"Cooling length range: {np.min(cooling_lengths[valid_mask]):.2e} to {np.max(cooling_lengths[valid_mask]):.2e} cm")
+
+    # Generate phase plot
+    print("\nGenerating phase plot...")
+    
+    # Create plot
+    plt.figure(figsize=(5, 4))
+
+    # Convert to kpc for plotting
+    L_cool_kpc = cooling_lengths / KPC
+    Z = L_cool_kpc.T # transpose to get (n_H, T/mu)
+    Z_abs = np.abs(Z)
+
+    # mask out negative Z
+    # Z_masked = np.ma.masked_where(Z_abs > 1e6, Z_abs)
+    Z_masked = np.ma.masked_where(Z < 0, Z)
+
+    assert X.shape == Y.shape == Z.shape, f"X.shape={X.shape} != Y.shape={Y.shape} != Z.shape={Z.shape}"
+
+    # Use pcolormesh with linear scale
+    pcm = plt.pcolormesh(X, Y, Z_masked, shading='auto', cmap='viridis', norm=colors.LogNorm())
+
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.xlim(1e-6, x.max())
+    plt.xlabel(r'Number Density $n_H$ (cm$^{-3}$)')
+    plt.ylabel(r'$T/\mu$ (K)')
+    plt.title('Cooling Length $L_{cool} = c_s t_{cool}$ (kpc)')
+    cbar = plt.colorbar(pcm, label='Cooling Length (kpc)')
+    cbar.ax.set_facecolor("0.8")
+
+    plot_file = os.path.splitext(output_file)[0] + '_cooling_length_phase_plot.png'
+    plt.savefig(plot_file, dpi=300)
+    plt.close()
+    print(f"Saved phase plot to {plot_file}")
 
 
 def test_inverse_fast_log2():
@@ -415,10 +493,18 @@ def test_inverse_fast_log2():
     return max_error < eps * tolerance_factor
 
 
-def download_default_grackle_tables(url: str = DEFAULT_GRACKLE_DATA_URL) -> str:
+def download_default_grackle_tables(url: str = DEFAULT_GRACKLE_DATA_URL, local: str = None) -> str:
     """Download the default Grackle tables via wget and return the temporary file path."""
+    if local is not None:
+        if os.path.exists(local):
+            return local
+
     if shutil.which('wget') is None:
         raise RuntimeError("wget is required to download default Grackle tables automatically.")
+
+    if local is not None:
+        subprocess.run(['wget', '-O', local, url], check=True)
+        return local
 
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.h5')
     temp_path = temp_file.name
@@ -461,6 +547,12 @@ def main():
     parser.add_argument('--zmet', type=float, default=1.0,
                         help='Gas Metallicity scaled to Solar (default: 1.0)')
 
+    parser.add_argument('--shield', action='store_true',
+                        help='Account for self-shielding (default: False)')
+
+    parser.add_argument('--local', action='store_true',
+                        help='Store the Grackle table in the local directory (default: False)')
+
     args = parser.parse_args()
 
     if args.test:
@@ -471,8 +563,18 @@ def main():
     cleanup_path = None
     grackle_file = args.grackle_file
     if not grackle_file:
+        if args.shield:
+            url = DEFAULT_GRACKLE_DATA_URL_SHIELDED
+        else:
+            url = DEFAULT_GRACKLE_DATA_URL
+
+        if args.local:
+            grackle_file = 'grackle.h5'
+        else:
+            grackle_file = None
+
         try:
-            cleanup_path = download_default_grackle_tables()
+            cleanup_path = download_default_grackle_tables(url, local=grackle_file)
             grackle_file = cleanup_path
         except RuntimeError as err:
             parser.error(str(err))
@@ -487,7 +589,7 @@ def main():
             include_pe=not args.exclude_pe
         )
     finally:
-        if cleanup_path:
+        if cleanup_path and not args.local:
             try:
                 os.unlink(cleanup_path)
             except FileNotFoundError:
