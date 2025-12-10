@@ -418,10 +418,17 @@ def test_inverse_fast_log2():
     return max_error < eps * tolerance_factor
 
 
-def download_default_grackle_tables(url: str = DEFAULT_GRACKLE_DATA_URL) -> str:
+def download_default_grackle_tables(url: str = DEFAULT_GRACKLE_DATA_URL, local: str = None) -> str:
     """Download the default Grackle tables via wget and return the temporary file path."""
+    if os.path.exists(local):
+        return local
+
     if shutil.which('wget') is None:
         raise RuntimeError("wget is required to download default Grackle tables automatically.")
+
+    if local is not None:
+        subprocess.run(['wget', '-O', local, url], check=True)
+        return local
 
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.h5')
     temp_path = temp_file.name
@@ -466,6 +473,9 @@ def main():
     parser.add_argument('--shield', action='store_true',
                         help='Account for self-shielding (default: False)')
 
+    parser.add_argument('--local', action='store_true',
+                        help='Store the Grackle table in the local directory (default: False)')
+
     args = parser.parse_args()
 
     if args.test:
@@ -480,8 +490,14 @@ def main():
             url = DEFAULT_GRACKLE_DATA_URL_SHIELDED
         else:
             url = DEFAULT_GRACKLE_DATA_URL
+
+        if args.local:
+            grackle_file = 'grackle.h5'
+        else:
+            grackle_file = None
+
         try:
-            cleanup_path = download_default_grackle_tables(url)
+            cleanup_path = download_default_grackle_tables(url, local=grackle_file)
             grackle_file = cleanup_path
         except RuntimeError as err:
             parser.error(str(err))
@@ -495,7 +511,7 @@ def main():
             output_file=args.output
         )
     finally:
-        if cleanup_path:
+        if cleanup_path and not args.local:
             try:
                 os.unlink(cleanup_path)
             except FileNotFoundError:
