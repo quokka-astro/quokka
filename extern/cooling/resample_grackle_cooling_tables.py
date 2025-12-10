@@ -34,6 +34,10 @@ DEFAULT_GRACKLE_DATA_URL = (
     "https://github.com/grackle-project/grackle_data_files/raw/"
     "928696482fbe15d9bac4382de6134d95568f099c/input/CloudyData_UVB=HM2012.h5"
 )
+DEFAULT_GRACKLE_DATA_URL_SHIELDED = (
+    "https://github.com/grackle-project/grackle_data_files/raw/"
+    "928696482fbe15d9bac4382de6134d95568f099c/input/CloudyData_UVB=HM2012_shielded.h5"
+)
 
 
 def fast_log2(x):
@@ -459,6 +463,9 @@ def main():
     parser.add_argument('--zmet', type=float, default=1.0,
                         help='Gas Metallicity scaled to Solar (default: 1.0)')
 
+    parser.add_argument('--shield', action='store_true',
+                        help='Account for self-shielding (default: False)')
+
     args = parser.parse_args()
 
     if args.test:
@@ -469,8 +476,12 @@ def main():
     cleanup_path = None
     grackle_file = args.grackle_file
     if not grackle_file:
+        if args.shield:
+            url = DEFAULT_GRACKLE_DATA_URL_SHIELDED
+        else:
+            url = DEFAULT_GRACKLE_DATA_URL
         try:
-            cleanup_path = download_default_grackle_tables()
+            cleanup_path = download_default_grackle_tables(url)
             grackle_file = cleanup_path
         except RuntimeError as err:
             parser.error(str(err))
