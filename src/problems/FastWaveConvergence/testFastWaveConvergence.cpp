@@ -261,7 +261,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const double omega = cf * k_magn;
 		const double phase = omega * time - k_magn * x_vec_mrf_C[0];
 		const double cos_phase = std::cos(phase);
-		const double epsilon = delta_b_magn / b0_magn;
+		const double epsilon = delta_b_magn / b0_magn*(cf*cf - vA*vA* cosθ*cosθ)/(cf*cf*sinθ); // normalized amplitude
 		const double B0_1 = b0_magn * cosθ;
 		const double B0_2 = b0_magn * sinθ;
 
@@ -279,30 +279,15 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 				amrex::Warning(
 				    "Warning: angle between k and B0 is 0 or 180 deg. Fast wave reduces to pure sound wave with no magnetic perturbation.");
 			}
-			v1_mrf   = -epsilon * cf * cos_phase;  // velocity along k̂ (parallel component)
+			v1_mrf   = - delta_b_magn/b0_magn * cf * cos_phase;  // velocity along k̂ (parallel component)
 			v2_mrf   = 0.0;                        // perpendicular velocity suppressed
 			delta_B2 = 0.0;                        // no transverse magnetic perturbation
 
 		} else {
-
 			// --- Oblique fast magnetosonic wave ---
-			// δB₂ is the primary perturbation: magnetic fluctuation perpendicular to both k̂ and B0.
 			delta_B2 = delta_b_magn * cos_phase;
-
-			// v₁ — velocity component in the (k̂, B0)-plane, parallel to the projection of k̂.
-			// For the fast mode eigenvector:
-			//     v₁ / δB₂ = c_f / (B0⊥)    where B0⊥ = b0_magn * sinθ
-			// →   v₁ = (c_f / (b0_magn * sinθ)) * δB₂
-			v1_mrf = (cf / (b0_magn * sinθ)) * delta_B2;
-
-			// v₂ — velocity component perpendicular to v₁ but still in the (k̂, B0)-plane.
-			// Derived from the fast-mode eigenstructure:
-			//     v₂ = - [ v_A² cosθ sinθ / (c_f² - v_A² cos²θ) ] * (c_f / sinθ) * (δB₂ / b0_magn)
-			// This encodes magnetic tension restoring forces for oblique propagation.
-			v2_mrf =
-				-(vA * vA * cosθ) / (cf * cf - vA * vA * cosθ * cosθ)
-				* (cf / sinθ)
-				* (delta_B2 / b0_magn);
+			v1_mrf = epsilon * cf * cos_phase; // velocity along k̂ (parallel component)
+			v2_mrf = -delta_b_magn/b0_magn * vA * cosθ / cf * cos_phase;
 		}
 
 		double const v3_mrf = 0.0;
@@ -405,12 +390,13 @@ void QuokkaSimulation<FastWaveConvergence>::computeReferenceSolution(amrex::Mult
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = ref.array(iter);
 		auto const ncomp = ref.nComp();
+		const amrex::Real time = tNew_[0];
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.0;
 			}
-			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::cc, quokka::direction::na, 0);
+			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::cc, quokka::direction::na, time);
 		});
 	}
 }
@@ -424,12 +410,13 @@ void QuokkaSimulation<FastWaveConvergence>::computeReferenceSolution_fc(amrex::M
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = ref.array(iter);
 		auto const ncomp = ref.nComp();
+		const amrex::Real time = tNew_[0];
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.0;
 			}
-			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::fc, dir, 0);
+			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::fc, dir, time);
 		});
 	}
 }
