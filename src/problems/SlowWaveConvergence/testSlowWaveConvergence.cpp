@@ -52,7 +52,7 @@ constexpr double gamma_gas = quokka::EOS_Traits<SlowWaveConvergence>::gamma;
 constexpr double bg_density = 1.0;
 constexpr double bg_pressure = sound_speed * sound_speed * bg_density / gamma_gas;
 constexpr double b0_magn = 1.0;
-constexpr double delta_b_magn = 1e-3;
+constexpr double delta_b_magn = 1e-6;
 constexpr double alfven_speed = b0_magn / gcem::sqrt(bg_density);
 
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeMagnitude(const std::array<amrex::Real, 3> &vfield) -> double
@@ -546,7 +546,7 @@ auto runWaveTest(int nx) -> double
 		amrex::Real const L1_err = abs_err * n_cells;
 		sum_sq_err += L1_err * L1_err;
 		// Reconstruct reference L1 norm
-		if (!std::isnan(rel_err) && rel_err != 0.0 && abs_err > 10E-15) {
+		if (!std::isnan(rel_err) && rel_err != 0.0 && abs_err > 10E-14) {
 			amrex::Real const L1_ref = (abs_err / rel_err) * n_cells;
 			sum_sq_ref += L1_ref * L1_ref;
 		}
@@ -578,9 +578,9 @@ auto problem_main() -> int
 	quokka::richardson::applyQuietDefaults();
 
 	quokka::richardson::Parameters params{};
-	params.machine_precision_target = 2.0e-12;
+	params.machine_precision_target = 2.0e-10; //limit based on delta_b_magn, smaller values can be used if this is decreased
 	params.nx_initial = 16;
-	params.nx_max = 256; // cap at 256 for quick tests. otherwise, it can take ~1-2 hours for 2048
+	params.nx_max = 1024; // cap at 256 for quick tests. otherwise, it can take ~1-2 hours for 2048
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;
 	params.test_name = "Slow Wave";
