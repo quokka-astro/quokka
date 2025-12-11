@@ -532,7 +532,6 @@ auto runWaveTest(int nx) -> double
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.setInitialConditions();
-	const auto &geom = sim.Geom(0);
 
 	// Main time loop
 	sim.evolve();
