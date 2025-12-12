@@ -1763,7 +1763,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 
 		// Create potential MultiFab with sufficient ghost cells for gradient computation
 		amrex::MultiFab phi_extended(boxArray(lev), DistributionMap(lev), 1, nghost_phi); // 3 ghost cells
-		phi_extended.setVal(0., phi_extended.nGrowVect())
 
 		// Fill extended potential from existing phi using FillPatch
 		// This handles coarse-fine boundaries without InterpFromCoarseLevel
