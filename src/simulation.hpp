@@ -1739,14 +1739,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		const int nghost_phi = nghost_acc + 1; // Need extra ghost cell for centered difference
 
 		// Create potential MultiFab with sufficient ghost cells for gradient computation
-		amrex::MultiFab phi_extended(boxArray(lev), DistributionMap(lev), 1, nghost_phi);
+		amrex::MultiFab phi_extended(boxArray(lev), DistributionMap(lev), 1, nghost_phi); // 3 ghost cells
+		phi_extended.setVal(0., phi_extended.nGrowVect())
 
 		// Fill extended potential from existing phi using FillPatch
 		// This handles coarse-fine boundaries without InterpFromCoarseLevel
 		if (lev == 0) {
 			// Base level: just copy and fill boundaries
-			amrex::MultiFab::Copy(phi_extended, phi[lev], 0, 0, 1, 0);
-			phi_extended.FillBoundary(geom[lev].periodicity());
+			amrex::MultiFab::Copy(phi_extended, phi[lev], 0, 0, 1, 0); // fill in 0 ghost cells
+			phi_extended.FillBoundary(geom[lev].periodicity()); // fill in all ghost cells in the periodic dimensions, e.g. x and y for tall box
 
 			// Apply physical boundary conditions to phi
 			amrex::Vector<amrex::BCRec> phiBC(1);

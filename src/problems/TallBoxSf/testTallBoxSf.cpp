@@ -25,7 +25,7 @@
 #include "turbulence/TurbDataReader.hpp"
 #include "util/DataTable.hpp"
 
-static constexpr int BC_TYPE = 1; // 1: Periodic, 2: foextrap
+static constexpr int BC_TYPE = 1; // 1: Periodic in x and y, outflow in z, 2: foextrap, 3: Periodic in all (for testing only)
 static constexpr bool is_rad_on = false;
 static constexpr int nGroups_ = 1;
 static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_{ 0.0, 100.0 };
@@ -585,6 +585,8 @@ auto problem_main() -> int
 		BCs_cc = quokka::BC<TheProblem>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::ext_dir);
 	} else if constexpr (BC_TYPE == 2) {
 		BCs_cc = quokka::BC<TheProblem>(quokka::BCType::foextrap);
+	} else if constexpr (BC_TYPE == 3) {
+		BCs_cc = quokka::BC<TheProblem>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
 	}
 
 	// set random state
