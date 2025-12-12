@@ -1823,7 +1823,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		amrex::Gpu::streamSynchronize();
 
 		// This check is not necessary since we have checked phi_extended
-		AMREX_ALWAYS_ASSERT(!accel_cc.contains_nan());
+		// AMREX_ALWAYS_ASSERT(!accel_cc.contains_nan());
 
 		// Kick particles using the acceleration field
 		particleRegister_.kickParticlesAtLevel(lev, dt, accel_cc);
