@@ -20,15 +20,15 @@
 #include "AMReX_GpuAtomic.H"
 #include "AMReX_MFIter.H"
 #include "AMReX_Math.H"
+#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_ParticleMesh.H"
-#include "AMReX_ParallelDescriptor.H"
+#include "AMReX_REAL.H"
 #include "AMReX_Random.H"
 #include "AMReX_Reduce.H"
-#include "AMReX_REAL.H"
 
-#include "physics_info.hpp"
 #include "hydro/EOS.hpp"
+#include "physics_info.hpp"
 
 struct WaveProblem {
 };
@@ -70,10 +70,7 @@ class WaveSimulation : public QuokkaSimulation<WaveProblem>
       public:
 	using QuokkaSimulation<WaveProblem>::QuokkaSimulation;
 
-	auto tracerContainer() -> amrex::AmrTracerParticleContainer *
-	{
-		return TracerPC.get();
-	}
+	auto tracerContainer() -> amrex::AmrTracerParticleContainer * { return TracerPC.get(); }
 
 	[[nodiscard]] auto suppressOutput() const -> bool { return suppress_output != 0; }
 };
@@ -241,7 +238,8 @@ auto problem_main() -> int
 							const amrex::Real expected = tracer_multiplier * (rho / rho_mean);
 							int base = static_cast<int>(amrex::Math::floor(expected));
 							amrex::Real frac = expected - static_cast<amrex::Real>(base);
-							seeds.push_back(CellSeed{amrex::IntVect(AMREX_D_DECL(i, j, k)), mfi.index(), mfi.LocalTileIndex(), frac, base});
+							seeds.push_back(
+							    CellSeed{amrex::IntVect(AMREX_D_DECL(i, j, k)), mfi.index(), mfi.LocalTileIndex(), frac, base});
 						}
 #else
 						const amrex::Real rho = arr(i, j, 0, HydroSystem<WaveProblem>::density_index);
@@ -353,8 +351,8 @@ auto problem_main() -> int
 			amrex::ParallelDescriptor::ReduceLongSum(total_added);
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				if (total_added != desired_total) {
-					amrex::Print() << "[Tracer init] expected " << desired_total << " tracers, got " << total_added
-						       << " (multiplier " << tracer_multiplier << ")\n";
+					amrex::Print() << "[Tracer init] expected " << desired_total << " tracers, got " << total_added << " (multiplier "
+						       << tracer_multiplier << ")\n";
 				}
 			}
 			tracer_pc->Redistribute();
@@ -412,8 +410,7 @@ auto problem_main() -> int
 
 		amrex::MultiFab tracer_counts(sim.boxArray(lev), sim.DistributionMap(lev), 1, 0);
 		amrex::ParticleToMesh(*tracer_pc, tracer_counts, lev,
-				      [] AMREX_GPU_DEVICE(auto const &p, amrex::Array4<amrex::Real> const &fab, auto const &plo,
-							  auto const &dxi) noexcept {
+				      [] AMREX_GPU_DEVICE(auto const &p, amrex::Array4<amrex::Real> const &fab, auto const &plo, auto const &dxi) noexcept {
 					      const int i = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
 #if (AMREX_SPACEDIM >= 2)
 					      const int j = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
@@ -449,8 +446,7 @@ auto problem_main() -> int
 			const amrex::Box &bx = mfi.validbox();
 			amrex::ReduceOps<amrex::ReduceOpSum, amrex::ReduceOpSum> reduce_ops;
 			amrex::ReduceData<amrex::Real, amrex::Real> reduce_data(reduce_ops);
-			reduce_ops.eval(bx, reduce_data, [=] AMREX_GPU_DEVICE(int i, int j, int k)
-							    -> amrex::GpuTuple<amrex::Real, amrex::Real> {
+			reduce_ops.eval(bx, reduce_data, [=] AMREX_GPU_DEVICE(int i, int j, int k) -> amrex::GpuTuple<amrex::Real, amrex::Real> {
 				amrex::Real const mass = state_arr(i, j, k, HydroSystem<WaveProblem>::density_index) * cell_vol;
 				amrex::Real const tracer = tracer_arr(i, j, k, 0);
 				amrex::Real const pmass = mass * inv_total_mass;
@@ -468,8 +464,7 @@ auto problem_main() -> int
 		sigma *= std::sqrt(static_cast<amrex::Real>(sim.istep[0]));
 		// allow occasional large deviations (4-sigma)
 		const amrex::Real sigma_limit = 4.0 * sigma + 1.0e-14;
-		amrex::Print() << "Tracer-mass L1 error = " << l1_error << " after " << sim.istep[0] << " steps (limit = " << sigma_limit
-			       << ")\n";
+		amrex::Print() << "Tracer-mass L1 error = " << l1_error << " after " << sim.istep[0] << " steps (limit = " << sigma_limit << ")\n";
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(l1_error < sigma_limit, "Monte Carlo tracer distribution deviates beyond expected noise floor");
 
 		// build 1D tracer profile summed over transverse directions
@@ -508,8 +503,7 @@ auto problem_main() -> int
 			const auto tracer_arr = tracer_counts.const_array(mfi);
 			const amrex::Box &bx = mfi.validbox();
 			amrex::ReduceData<amrex::Real, amrex::Real> moment_data(moment_ops);
-			moment_ops.eval(bx, moment_data, [=] AMREX_GPU_DEVICE(int i, int j, int k)
-							   -> amrex::GpuTuple<amrex::Real, amrex::Real> {
+			moment_ops.eval(bx, moment_data, [=] AMREX_GPU_DEVICE(int i, int j, int k) -> amrex::GpuTuple<amrex::Real, amrex::Real> {
 				const amrex::Real x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
 				const amrex::Real mass = state_arr(i, j, k, HydroSystem<WaveProblem>::density_index) * cell_vol;
 				const amrex::Real tracer = tracer_arr(i, j, k, 0);
@@ -526,8 +520,8 @@ auto problem_main() -> int
 		amrex::Real centroid_delta = tracer_centroid - mass_centroid;
 		amrex::Real const Lx = sim.geom[lev].ProbLength(0);
 		centroid_delta -= Lx * std::round(centroid_delta / Lx); // wrap into domain
-		amrex::Print() << "Mass centroid: initial " << initial_mass_centroid << ", final " << mass_centroid << "; tracer centroid "
-			       << tracer_centroid << ", delta = " << centroid_delta << " (" << centroid_delta / dx[0] << " cells)\n";
+		amrex::Print() << "Mass centroid: initial " << initial_mass_centroid << ", final " << mass_centroid << "; tracer centroid " << tracer_centroid
+			       << ", delta = " << centroid_delta << " (" << centroid_delta / dx[0] << " cells)\n";
 	}
 
 #ifdef HAVE_PYTHON
@@ -673,9 +667,8 @@ auto problem_main() -> int
 		auto const delta_phase = std::remainder(tracer_phase - mass_phase, 2.0 * M_PI);
 		auto const delta_cells = delta_phase / (2.0 * M_PI) * static_cast<amrex::Real>(nx);
 		auto const amp_ratio = std::abs(tracer_mode) / std::abs(mass_mode);
-		amrex::Print() << "Fundamental mode: mass phase " << mass_phase << " rad, tracer phase " << tracer_phase
-			       << " rad, delta " << delta_phase << " rad (" << delta_cells << " cells), amplitude ratio tracer/mass = "
-			       << amp_ratio << '\n';
+		amrex::Print() << "Fundamental mode: mass phase " << mass_phase << " rad, tracer phase " << tracer_phase << " rad, delta " << delta_phase
+			       << " rad (" << delta_cells << " cells), amplitude ratio tracer/mass = " << amp_ratio << '\n';
 	}
 
 	const double err_tol = wave_error_tol; // defaults tuned for convergence tests; override via inputs

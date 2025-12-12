@@ -9,6 +9,7 @@
 /// \brief Implements classes and functions to organise the overall setup,
 /// timestepping, solving, and I/O of a simulation for radiation moments.
 
+#include "fmt/format.h"
 #include "grid.hpp"
 #include "hydro/EOS.hpp"
 #include <algorithm>
@@ -17,7 +18,6 @@
 #include <fstream>
 #include <iostream>
 #include <set>
-#include "fmt/format.h"
 #if __has_include(<filesystem>)
 #include <filesystem>
 #elif __has_include(<experimental/filesystem>)
