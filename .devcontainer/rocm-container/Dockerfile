@@ -29,21 +29,21 @@ RUN zypper --non-interactive install wget tar gzip gcc gcc-fortran file gcc-c++ 
     if [ ! -z "$(gcc --version | grep -Eo -m 1 [0-9][0-9]+\.[0-9]+\.[0-9]+ | grep -m 1 [0-9])" ]; then \
     export FFLAGS=-fallow-argument-mismatch; \
     fi && \
-    wget --progress=bar:force https://www.mpich.org/static/downloads/3.4.3/mpich-3.4.3.tar.gz && \
-    tar xzf mpich-3.4.3.tar.gz && \
-    cd mpich-3.4.3 && \
-    ./configure --with-device=ch4:ofi --prefix=/opt/mpich/3.4.3 --with-hip=/opt/rocm/hip && \
+    wget --progress=bar:force https://www.mpich.org/static/downloads/4.1.2/mpich-4.1.2.tar.gz && \
+    tar xzf mpich-4.1.2.tar.gz && \
+    cd mpich-4.1.2 && \
+    ./configure --with-device=ch4:ofi --prefix=/opt/mpich/4.1.2 --with-hip=/opt/rocm/hip && \
     make install -j7 && \
     cd / && \
-    rm -rf mpich-3.4.3/ mpich-3.4.3.tar.gz
+    rm -rf mpich-4.1.2/ mpich-4.1.2.tar.gz
 
-ENV MPICH_VERSION="3.4.3" \
-    MPICH_URL="https://www.mpich.org/static/downloads/3.4.3/mpich-3.4.3.tar.gz" \
-    MPICH_DIR="/opt/mpich/3.4.3" \
-    PATH="/opt/mpich/3.4.3/bin:$PATH" \
-    LIBRARY_PATH="/opt/mpich/3.4.3/lib:$LIBRARY_PATH" \
-    LD_LIBRARY_PATH="/opt/mpich/3.4.3/lib:$LD_LIBRARY_PATH" \
-    MANPATH="/opt/mpich/3.4.3/share/man:$MANPATH"
+ENV MPICH_VERSION="4.1.2" \
+    MPICH_URL="https://www.mpich.org/static/downloads/4.1.2/mpich-4.1.2.tar.gz" \
+    MPICH_DIR="/opt/mpich/4.1.2" \
+    PATH="/opt/mpich/4.1.2/bin:$PATH" \
+    LIBRARY_PATH="/opt/mpich/4.1.2/lib:$LIBRARY_PATH" \
+    LD_LIBRARY_PATH="/opt/mpich/4.1.2/lib:$LD_LIBRARY_PATH" \
+    MANPATH="/opt/mpich/4.1.2/share/man:$MANPATH"
 
 # Install CMake
 RUN zypper --non-interactive install cmake && zypper clean --all
