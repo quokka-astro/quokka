@@ -111,12 +111,13 @@ template <> void QuokkaSimulation<WaveProblem>::setInitialConditionsOnGrid(quokk
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const int ncomp_cc = Physics_Indices<WaveProblem>::nvarTotal_cc;
+	const amrex::Real amplitude = wave_amplitude;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int n = 0; n < ncomp_cc; ++n) {
 			state_cc(i, j, k, n) = 0; // fill unused components with zeros
 		}
-		computeWaveSolution(i, j, k, state_cc, dx, prob_lo, wave_amplitude);
+		computeWaveSolution(i, j, k, state_cc, dx, prob_lo, amplitude);
 	});
 }
 
