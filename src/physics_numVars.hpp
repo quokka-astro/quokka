@@ -7,6 +7,7 @@ struct Physics_NumVars {
 	// cell-centred
 	static const int numHydroVars = 6;
 	static const int numRadVarsPerGroup = 4;
+	static const int numDustVarsPerGroup = 4; // density, momentum
 	// face-centred
 	static const int numMHDVars_per_dim = 1;
 	static const int numMHDVars_tot = AMREX_SPACEDIM * numMHDVars_per_dim;

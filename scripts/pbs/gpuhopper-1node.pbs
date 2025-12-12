@@ -1,26 +1,19 @@
 #!/bin/bash
 
-#PBS -N quokka_GPU_1node_1stream
+#PBS -N quokka
 #PBS -P jh2
-#PBS -q gpuvolta
+#PBS -q gpuhopper
 #PBS -l ncpus=48
 #PBS -l ngpus=4
-#PBS -l mem=382GB
+#PBS -l mem=1000GB
 #PBS -m aeb
-#PBS -M ben.wibking@anu.edu.au
 #PBS -l wd
 #PBS -l walltime=1:00:00
 #PBS -l storage=scratch/jh2+gdata/jh2
-#PBS -l jobfs=400GB
+#PBS -l jobfs=800GB
 
 # --- initialize Quokka ---
 MPI_OPTIONS="-np $PBS_NGPUS --map-by numa:SPAN --bind-to numa --mca pml ucx"
 echo "Using MPI_OPTIONS = $MPI_OPTIONS"
 
-mpirun $MPI_OPTIONS ./scripts/gpu_wrapper_amr_shell_stream.sh > amr_1node_1stream.log
-
-
-
-
-
-
+mpirun $MPI_OPTIONS ./build/src/problems/HydroBlast3D/HydroBlast3D inputs/blast_unigrid_512.in max_timesteps=1000 blast_problem.check_solution=false > quokka.log

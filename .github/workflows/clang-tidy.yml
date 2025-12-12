@@ -1,4 +1,4 @@
-name: clang-tidy-review
+name: 🧹 clang-tidy-review
 
 # You can be more specific, but it currently only works on pull requests
 # Fiewer paths are ignored because some folders (e.g. scripts) are not relavent to code build but should be linted
@@ -21,7 +21,7 @@ jobs:
     if: needs.check_changes.outputs.has_non_docs_changes == 'true' || needs.check_changes.outputs.has_scripts_changes == 'true'
 
     steps:
-    - uses: actions/checkout@c2d88d3ecc89a9ef08eebf45d9637801dcee7eb5 # v4.2.2
+    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v4.2.2
       with:
         submodules: true
         fetch-depth: 0

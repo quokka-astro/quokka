@@ -33,3 +33,5 @@ checkpoint_interval = 20
 max_timesteps = 40
 plotfile_interval = -1
 restartfile = chk00020
+
+particles.split_particles_on_restart_refine = false
