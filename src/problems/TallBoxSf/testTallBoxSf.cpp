@@ -604,6 +604,10 @@ auto problem_main() -> int
 	pp.query("rho01", sim.userData_.rho01);
 	pp.query("sigma1", sim.userData_.sigma1);
 
+	// preCalculate must be explicitly called here to ensure
+	// ic_table is initialized even when restarting from checkpoint
+	sim.preCalculateInitialConditions();
+
 	// initialize (this will parse particle parameters and load luminosity table)
 	sim.setInitialConditions();
 

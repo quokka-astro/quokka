@@ -26,14 +26,15 @@ radiation.iteration_tolerance_rel = 1e-6
 do_reflux = 1
 do_subcycle = 0
 stop_time     = 9.462e+15
-max_timesteps = 4
-#restartfile = last_chk
 plotfile_interval = 20
-checkpoint_interval = -1
 particle_csv_interval = -1
 suppress_output = 1
 regrid_interval = -1
 #poisson_supercycle_interval = 4
+
+max_timesteps = 4
+checkpoint_interval = -1
+#restartfile = last_chk
 
 particles.verbose = 1
 particles.disable_SN_feedback = false
@@ -57,7 +58,7 @@ cooling.cooling_table_type = "resampled"
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 
 use_sfh_based_pe_heating = true
-sfh_to_pe_heating_table = "../photoelectric_heating_from_sfh.csv"
+sfh_to_pe_heating_table = "../extern/cooling/photoelectric_heating_from_sfh.csv"
 #sfh_interval = 3
 sfh_time_interval = 3.15576e+13 # =1 Myr
 sf_area_kpc2 = 1.0 					# kpc^2
