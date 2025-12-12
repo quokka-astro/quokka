@@ -14,3 +14,7 @@ add_test(
   NAME HydroWaveFc
   COMMAND ${JOB_NAME} ../inputs/HydroWaveFc.in ${QuokkaTestParams}
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+add_test(
+  NAME HydroWaveTracerLong
+  COMMAND ${JOB_NAME} ../inputs/HydroWaveTracerLong.in ${QuokkaTestParams}
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)

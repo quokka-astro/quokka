@@ -14,8 +14,10 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <fstream>
 #include <iostream>
 #include <set>
+#include "fmt/format.h"
 #if __has_include(<filesystem>)
 #include <filesystem>
 #elif __has_include(<experimental/filesystem>)
@@ -2742,6 +2744,11 @@ void QuokkaSimulation<problem_t>::advectTracerParticlesMonteCarlo(std::array<amr
 	amrex::prefetchToHost(tracer_face_prob);
 
 	applyMonteCarloTracerMoves(tracer_face_prob, lev);
+
+	// ensure particles migrate to correct owning grids after moves
+	if (TracerPC != nullptr) {
+		TracerPC->Redistribute(lev);
+	}
 }
 
 template <typename problem_t>
@@ -2826,6 +2833,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::applyMonteCarloT
 		return;
 	}
 
+	// optional debug dump of pre/post counts and probabilities (only level 0)
+	bool const dump_tracer_debug = this->tracer_mc_debug_dump_ && (lev == 0);
+	std::vector<amrex::Real> pre_counts;
+	amrex::MultiFab tracer_counts_host_pre;
+	amrex::MultiFab prob_host;
+	int nx_line = 0;
+	int n_transverse = 1;
+
 	auto const prob_arrs = probabilities.const_arrays();
 	auto const dx = geom[lev].CellSizeArray();
 	auto const plo = geom[lev].ProbLoArray();
@@ -2839,6 +2854,61 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::applyMonteCarloT
 		dom_hi[dir] = domain.bigEnd(dir);
 		dom_len[dir] = domain.length(dir);
 		periodic_axis[dir] = geom[lev].isPeriodic(dir) ? 1 : 0;
+	}
+
+	if (dump_tracer_debug) {
+		nx_line = domain.length(0);
+#if (AMREX_SPACEDIM >= 2)
+		n_transverse *= domain.length(1);
+#endif
+#if (AMREX_SPACEDIM == 3)
+		n_transverse *= domain.length(2);
+#endif
+		pre_counts.assign(nx_line, 0.0);
+		amrex::MFInfo host_info;
+		host_info.SetArena(amrex::The_Pinned_Arena());
+		tracer_counts_host_pre.define(boxArray(lev), this->dmap[lev], 1, 0, host_info);
+		tracer_counts_host_pre.setVal(0.0);
+		amrex::ParticleToMesh(*TracerPC, tracer_counts_host_pre, lev,
+				      [] AMREX_GPU_DEVICE(auto const &p, amrex::Array4<amrex::Real> const &fab, auto const &plo,
+							  auto const &dxi) noexcept {
+					      const int i = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
+#if (AMREX_SPACEDIM >= 2)
+					      const int j = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
+#else
+					      const int j = 0;
+#endif
+#if (AMREX_SPACEDIM == 3)
+					      const int k = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
+#else
+					      const int k = 0;
+#endif
+					      amrex::Gpu::Atomic::Add(&fab(i, j, k, 0), 1.0);
+				      });
+		for (amrex::MFIter mfi(tracer_counts_host_pre); mfi.isValid(); ++mfi) {
+			auto const arr = tracer_counts_host_pre.const_array(mfi);
+			const amrex::Box &bx = mfi.validbox();
+			for (int i = bx.smallEnd(0); i <= bx.bigEnd(0); ++i) {
+#if (AMREX_SPACEDIM >= 2)
+				for (int j = bx.smallEnd(1); j <= bx.bigEnd(1); ++j) {
+#if (AMREX_SPACEDIM == 3)
+					for (int k = bx.smallEnd(2); k <= bx.bigEnd(2); ++k) {
+						pre_counts[i] += arr(i, j, k, 0);
+					}
+#else
+					pre_counts[i] += arr(i, j, 0, 0);
+#endif
+				}
+#else
+				pre_counts[i] += arr(i, 0, 0, 0);
+#endif
+			}
+		}
+		amrex::ParallelDescriptor::ReduceRealSum(pre_counts.data(), nx_line);
+
+		prob_host.define(probabilities.boxArray(), this->dmap[lev], probabilities.nComp(), probabilities.nGrowVect(), host_info);
+		prob_host.setVal(0.0);
+		amrex::MultiFab::Copy(prob_host, probabilities, 0, 0, probabilities.nComp(), probabilities.nGrowVect());
 	}
 
 	for (typename amrex::AmrTracerParticleContainer::ParIterType pti(*TracerPC, lev); pti.isValid(); ++pti) {
@@ -2919,6 +2989,130 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::applyMonteCarloT
 			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 				p.pos(dir) = plo[dir] + (static_cast<amrex::Real>(dest[dir]) + static_cast<amrex::Real>(0.5)) * dx[dir];
 			}
+		}
+	}
+
+	if (dump_tracer_debug) {
+		amrex::MFInfo host_info;
+		host_info.SetArena(amrex::The_Pinned_Arena());
+		amrex::MultiFab tracer_counts_host_post(boxArray(lev), dmap[lev], 1, 0, host_info);
+		tracer_counts_host_post.setVal(0.0);
+		amrex::ParticleToMesh(*TracerPC, tracer_counts_host_post, lev,
+				      [] AMREX_GPU_DEVICE(auto const &p, amrex::Array4<amrex::Real> const &fab, auto const &plo,
+							  auto const &dxi) noexcept {
+					      const int i = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
+#if (AMREX_SPACEDIM >= 2)
+					      const int j = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
+#else
+					      const int j = 0;
+#endif
+#if (AMREX_SPACEDIM == 3)
+					      const int k = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
+#else
+					      const int k = 0;
+#endif
+					      amrex::Gpu::Atomic::Add(&fab(i, j, k, 0), 1.0);
+				      });
+
+		std::vector<amrex::Real> post_counts(nx_line, 0.0);
+		for (amrex::MFIter mfi(tracer_counts_host_post); mfi.isValid(); ++mfi) {
+			auto const arr = tracer_counts_host_post.const_array(mfi);
+			const amrex::Box &bx = mfi.validbox();
+			for (int i = bx.smallEnd(0); i <= bx.bigEnd(0); ++i) {
+#if (AMREX_SPACEDIM >= 2)
+				for (int j = bx.smallEnd(1); j <= bx.bigEnd(1); ++j) {
+#if (AMREX_SPACEDIM == 3)
+					for (int k = bx.smallEnd(2); k <= bx.bigEnd(2); ++k) {
+						post_counts[i] += arr(i, j, k, 0);
+					}
+#else
+					post_counts[i] += arr(i, j, 0, 0);
+#endif
+				}
+#else
+				post_counts[i] += arr(i, 0, 0, 0);
+#endif
+			}
+		}
+		amrex::ParallelDescriptor::ReduceRealSum(post_counts.data(), nx_line);
+
+		// average probabilities over transverse directions
+		constexpr int numFaces = 2 * AMREX_SPACEDIM;
+		std::vector<std::array<amrex::Real, numFaces>> prob_avg(nx_line);
+		for (auto &entry : prob_avg) {
+			entry.fill(0.0);
+		}
+		for (amrex::MFIter mfi(prob_host); mfi.isValid(); ++mfi) {
+			auto const arr = prob_host.const_array(mfi);
+			const amrex::Box &bx = mfi.validbox();
+			for (int i = bx.smallEnd(0); i <= bx.bigEnd(0); ++i) {
+#if (AMREX_SPACEDIM >= 2)
+				for (int j = bx.smallEnd(1); j <= bx.bigEnd(1); ++j) {
+#if (AMREX_SPACEDIM == 3)
+					for (int k = bx.smallEnd(2); k <= bx.bigEnd(2); ++k) {
+						for (int comp = 0; comp < numFaces; ++comp) {
+							prob_avg[i][comp] += arr(i, j, k, comp);
+						}
+					}
+#else
+					for (int comp = 0; comp < numFaces; ++comp) {
+						prob_avg[i][comp] += arr(i, j, 0, comp);
+					}
+#endif
+				}
+#else
+				for (int comp = 0; comp < numFaces; ++comp) {
+					prob_avg[i][comp] += arr(i, 0, 0, comp);
+				}
+#endif
+			}
+		}
+		for (auto &entry : prob_avg) {
+			for (auto &v : entry) {
+				amrex::ParallelDescriptor::ReduceRealSum(&v, 1);
+				v /= static_cast<amrex::Real>(n_transverse);
+			}
+		}
+
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			std::string fname = fmt::format("tracer_debug_step{:05d}.csv", istep[lev]);
+			std::ofstream ofs(fname);
+			ofs << "i,pre_count,post_count";
+			for (int comp = 0; comp < numFaces; ++comp) {
+				ofs << ",prob" << comp;
+			}
+			ofs << "\n";
+			for (int i = 0; i < nx_line; ++i) {
+				ofs << i << "," << pre_counts[i] << "," << post_counts[i];
+				for (int comp = 0; comp < numFaces; ++comp) {
+					ofs << "," << prob_avg[i][comp];
+				}
+				ofs << "\n";
+			}
+
+			// summary statistics for phase-drift analysis
+			amrex::Real total_pre = 0.0;
+			amrex::Real total_post = 0.0;
+			amrex::Real mean_pre = 0.0;
+			amrex::Real mean_post = 0.0;
+			for (int i = 0; i < nx_line; ++i) {
+				total_pre += pre_counts[i];
+				total_post += post_counts[i];
+				mean_pre += static_cast<amrex::Real>(i) * pre_counts[i];
+				mean_post += static_cast<amrex::Real>(i) * post_counts[i];
+			}
+			if (total_pre > 0.0) {
+				mean_pre /= total_pre;
+			}
+			if (total_post > 0.0) {
+				mean_post /= total_post;
+			}
+			std::string summary_fname = "tracer_debug_summary.csv";
+			std::ofstream summary(summary_fname, std::ios::app);
+			if (summary.tellp() == 0) {
+				summary << "step,total_pre,total_post,mean_pre_idx,mean_post_idx\n";
+			}
+			summary << istep[lev] << "," << total_pre << "," << total_post << "," << mean_pre << "," << mean_post << "\n";
 		}
 	}
 }
