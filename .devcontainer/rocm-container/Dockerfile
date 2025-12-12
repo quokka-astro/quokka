@@ -20,19 +20,22 @@ RUN if ! zypper repos -E | grep devel_languages_perl; then \
     zypper clean --all && \
     cat rocm_so.conf >> /etc/ld.so.conf.d/rocm.conf && \
     rm rocm_so.conf && \
-    ldconfig
+	    ldconfig
 
 ENV PATH="/opt/rocm/bin:${PATH}" \
     LD_LIBRARY_PATH="/opt/rocm/lib:${LD_LIBRARY_PATH}"
 
-RUN zypper --non-interactive install wget tar gzip gcc gcc-fortran file gcc-c++ make && zypper clean --all && \
+COPY mpich-4.1.2-rocm-6.4-hip-pointer-attr.patch /tmp/mpich-4.1.2-rocm-6.4-hip-pointer-attr.patch
+
+RUN zypper --non-interactive install wget tar gzip gcc gcc-fortran file gcc-c++ make patch && zypper clean --all && \
     if [ ! -z "$(gcc --version | grep -Eo -m 1 [0-9][0-9]+\.[0-9]+\.[0-9]+ | grep -m 1 [0-9])" ]; then \
     export FFLAGS=-fallow-argument-mismatch; \
     fi && \
     wget --progress=bar:force https://www.mpich.org/static/downloads/4.1.2/mpich-4.1.2.tar.gz && \
     tar xzf mpich-4.1.2.tar.gz && \
     cd mpich-4.1.2 && \
-    ./configure --with-device=ch4:ofi --prefix=/opt/mpich/4.1.2 --with-hip=/opt/rocm/hip && \
+    patch -p1 < /tmp/mpich-4.1.2-rocm-6.4-hip-pointer-attr.patch && \
+    ./configure --with-device=ch4:ofi --prefix=/opt/mpich/4.1.2 && \
     make install -j7 && \
     cd / && \
     rm -rf mpich-4.1.2/ mpich-4.1.2.tar.gz
