@@ -56,13 +56,19 @@ cooling.enabled = 1
 cooling.cooling_table_type = "resampled"
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 
+use_sfh_based_pe_heating = true
+sfh_to_pe_heating_table = "../photoelectric_heating_from_sfh.csv"
+#sfh_interval = 3
+sfh_time_interval = 3.15576e+13 # =1 Myr
+sf_area_kpc2 = 1.0 					# kpc^2
+
 perturb.filename = "../extern/problems/TallBoxSf/zdrv.hdf5"
 #perturb.use_superresolution = 0
 perturb.amplitude = 7e5 # 7 km/s
 
 problem.refine_zmax = 3.018e21 1.509e21  # refine to lev=1 with 1 kpc and lev=2 with 0.5 kpc
 
-tiny_profiler.enabled = 0
+tiny_profiler.enabled = 1
 
 statistics_interval = 128
 
