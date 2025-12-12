@@ -57,10 +57,10 @@ template <> struct Physics_Traits<EntropyWaveLinear> {
 };
 
 // Background and perturbation parameters
-constexpr double adv_speed = 1.0;               // advection speed of the entropy wave (in MRF along k)
+constexpr double adv_speed = 1.0; // advection speed of the entropy wave (in MRF along k)
 constexpr double gamma_gas = quokka::EOS_Traits<EntropyWaveLinear>::gamma;
 constexpr double bg_density = 1.0;
-constexpr double delta_rho_magn = 1e-6;         // small density perturbation amplitude
+constexpr double delta_rho_magn = 1e-6; // small density perturbation amplitude
 constexpr double sound_speed = 1.0;
 constexpr double bg_pressure = sound_speed * sound_speed * bg_density / gamma_gas;
 constexpr double b0_magn = 1.0;
@@ -124,8 +124,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotateMRF2PRF(const std::array<amr
 }
 
 // Vector potential: construct only the background field (no perturbation)
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(const double x1_prf, const double x2_prf, const double x3_prf, const double /*time*/,
-									     const int icomp) -> double
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(const double x1_prf, const double x2_prf, const double x3_prf,
+									     const double /*time*/, const int icomp) -> double
 {
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(icomp == 0 || icomp == 1 || icomp == 2,
 					 "computeVectorPotentialComponent_prf(): icomp must be an integer in {0, 1, 2}");
@@ -271,7 +271,7 @@ template <> void QuokkaSimulation<EntropyWaveLinear>::setInitialConditionsOnGrid
 
 template <>
 void QuokkaSimulation<EntropyWaveLinear>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+								   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -289,7 +289,7 @@ void QuokkaSimulation<EntropyWaveLinear>::computeReferenceSolution(amrex::MultiF
 
 template <>
 void QuokkaSimulation<EntropyWaveLinear>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
+								      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
