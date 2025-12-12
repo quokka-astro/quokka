@@ -34,7 +34,6 @@ max_timesteps = 100
 hydro.wave_amp = 5.0e-2
 hydro.wave_err_tol = 1.0e-1
 hydro.tracer_multiplier = 10000
-tracer_mc_debug_dump = 1
 
 # *****************************************************************
 # Output control

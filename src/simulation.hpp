@@ -477,7 +477,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int do_reflux = 1;	 // 1 == reflux, 0 == no reflux
 	int do_subcycle = 1;	 // 1 == subcycle, 0 == no subcyle
 	int suppress_output = 0; // 1 == show timestepping, 0 == do not output each timestep
-	bool tracer_mc_debug_dump_ = false; // debug dump for Monte Carlo tracer advection
 
 	// performance metrics
 	amrex::Long cellUpdates_ = 0;
@@ -811,7 +810,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Default suppress_output = 0
 	pp.query("suppress_output", suppress_output);
-	pp.query("tracer_mc_debug_dump", tracer_mc_debug_dump_);
 
 	// Default print_cycle_timing = 0
 	pp.query("print_cycle_timing", printCycleTiming_);
