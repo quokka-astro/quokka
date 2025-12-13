@@ -39,7 +39,8 @@ RUN set -euo pipefail && \
         rocm-device-libs \
 	rocrand-devel \
 	hiprand-devel \
-	rocprim-devel; \
+	rocprim-devel \
+	rocsparse-devel; \
     fi && \
     zypper --non-interactive install --no-recommends \
       cmake \
