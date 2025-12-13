@@ -50,6 +50,8 @@ jobs:
         with:
           context: .
           file: .github/workflows/dockerfiles/ROCm-DiskGalaxy/Dockerfile
+          build-args: |
+            AMREX_MPI=ON
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rocm-diskgalaxy
@@ -63,6 +65,8 @@ jobs:
         with:
           context: .
           file: .github/workflows/dockerfiles/ROCm-DiskGalaxy/Dockerfile
+          build-args: |
+            AMREX_MPI=ON
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rocm-diskgalaxy-pr-${{ github.event.pull_request.number }}
@@ -76,6 +80,8 @@ jobs:
         with:
           context: .
           file: .github/workflows/dockerfiles/ROCm-DiskGalaxy/Dockerfile
+          build-args: |
+            AMREX_MPI=ON
           push: false
           tags: rocm-diskgalaxy-pr-${{ github.event.pull_request.number }}:${{ env.IMAGE_TAG_SHA }}
           cache-from: type=gha

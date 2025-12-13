@@ -1,7 +1,7 @@
 FROM --platform=linux/amd64 registry.opensuse.org/opensuse/leap:15.6 AS build
 
 ARG ROCM_ZYPP_REPO_VERSION=6.4.4
-ARG ROCM_ZYPP_META_PKG=rocm6.4.4
+ARG ROCM_ZYPP_PACKAGES=
 ARG MPICH_VERSION=4.1.2
 ARG MPICH_URL=https://www.mpich.org/static/downloads/4.1.2/mpich-4.1.2.tar.gz
 ARG AMREX_SPACEDIM=3
@@ -25,8 +25,18 @@ RUN set -euo pipefail && \
     printf "[ROCm-%s]\nname=ROCm%s\nbaseurl=https://repo.radeon.com/rocm/zyp/%s/main\nenabled=1\ngpgcheck=1\ngpgkey=https://repo.radeon.com/rocm/rocm.gpg.key\n" \
       "${ROCM_ZYPP_REPO_VERSION}" "${ROCM_ZYPP_REPO_VERSION}" "${ROCM_ZYPP_REPO_VERSION}" > /etc/zypp/repos.d/rocm.repo && \
     zypper --non-interactive --gpg-auto-import-keys refresh && \
+    if [ -n "${ROCM_ZYPP_PACKAGES}" ]; then \
+      zypper --non-interactive install --no-recommends ${ROCM_ZYPP_PACKAGES}; \
+    else \
+      zypper --non-interactive install --no-recommends \
+        "rocm-llvm${ROCM_ZYPP_REPO_VERSION}" \
+        "hip${ROCM_ZYPP_REPO_VERSION}" \
+        "hip-devel${ROCM_ZYPP_REPO_VERSION}" \
+        "hsa-rocr${ROCM_ZYPP_REPO_VERSION}" \
+        "rocclr${ROCM_ZYPP_REPO_VERSION}" \
+        "rocm-device-libs${ROCM_ZYPP_REPO_VERSION}"; \
+    fi && \
     zypper --non-interactive install --no-recommends \
-      ${ROCM_ZYPP_META_PKG} \
       cmake \
       git \
       gcc13 gcc13-c++ libstdc++6-devel-gcc13 \
