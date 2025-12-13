@@ -1,5 +1,5 @@
 ARG BASE_IMAGE=ghcr.io/quokka-astro/quokka-linux-amd64-rocm:development
-FROM ${BASE_IMAGE} AS build
+FROM --platform=linux/amd64 ${BASE_IMAGE} AS build
 
 ARG QUOKKA_REPO=https://github.com/quokka-astro/quokka.git
 ARG QUOKKA_REF=development
@@ -22,14 +22,14 @@ RUN set -euo pipefail && \
     cmake --build build -j"$(nproc)" --target DiskGalaxy && \
     test -x build/src/problems/DiskGalaxy/DiskGalaxy
 
-FROM ${BASE_IMAGE}
+FROM --platform=linux/amd64 ${BASE_IMAGE}
 
 USER root
 RUN mkdir -p /opt/quokka/bin /opt/quokka/share/quokka/inputs /opt/quokka/share/quokka/extern/agora_data
 COPY --from=build /tmp/quokka-src/build/src/problems/DiskGalaxy/DiskGalaxy /opt/quokka/bin/DiskGalaxy
 COPY --from=build /tmp/quokka-src/inputs/DiskGalaxy.in /opt/quokka/share/quokka/inputs/DiskGalaxy.in
 COPY --from=build /tmp/quokka-src/extern/agora_data/ /opt/quokka/share/quokka/extern/agora_data/
-RUN chmod 0755 /opt/quokka/bin/DiskGalaxy && chown -R leap:leap /opt/quokka
+RUN chmod 0755 /opt/quokka/bin/DiskGalaxy && chown -R leap /opt/quokka
 ENV PATH="/opt/quokka/bin:${PATH}"
 USER leap
 WORKDIR /home/leap
