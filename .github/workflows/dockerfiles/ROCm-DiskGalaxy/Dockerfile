@@ -29,12 +29,12 @@ RUN set -euo pipefail && \
       zypper --non-interactive install --no-recommends ${ROCM_ZYPP_PACKAGES}; \
     else \
       zypper --non-interactive install --no-recommends \
-        "rocm-llvm${ROCM_ZYPP_REPO_VERSION}" \
-        "hip${ROCM_ZYPP_REPO_VERSION}" \
-        "hip-devel${ROCM_ZYPP_REPO_VERSION}" \
-        "hsa-rocr${ROCM_ZYPP_REPO_VERSION}" \
-        "rocclr${ROCM_ZYPP_REPO_VERSION}" \
-        "rocm-device-libs${ROCM_ZYPP_REPO_VERSION}"; \
+        rocm-llvm \
+        hip \
+        hip-devel \
+        hsa-rocr \
+        rocclr \
+        rocm-device-libs; \
     fi && \
     zypper --non-interactive install --no-recommends \
       cmake \
