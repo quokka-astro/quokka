@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 registry.opensuse.org/opensuse/leap:15.6 AS build
+FROM --platform=linux/amd64 opensuse/leap:15.6 AS build
 
 ARG ROCM_ZYPP_REPO_VERSION=6.4.4
 ARG ROCM_ZYPP_PACKAGES=
@@ -18,6 +18,7 @@ COPY . /tmp/quokka-src
 WORKDIR /tmp/quokka-src
 
 COPY .github/workflows/dockerfiles/ROCm-DiskGalaxy/rocm_so.conf /tmp/rocm_so.conf
+#COPY rocm_so.conf /tmp/rocm_so.conf
 RUN set -euo pipefail && \
     if ! zypper repos -E | grep -q devel_languages_perl; then \
       zypper --non-interactive addrepo https://download.opensuse.org/repositories/devel:/languages:/perl/15.6/devel:languages:perl.repo; \
@@ -41,10 +42,10 @@ RUN set -euo pipefail && \
       cmake \
       git \
       gcc13 gcc13-c++ libstdc++6-devel-gcc13 \
-      libfabric-devel \
       make tar gzip wget \
       patch \
       python3-devel && \
+    ln -sf /usr/lib64/libefa.so.1 /usr/lib64/libefa.so && \
     zypper clean --all && \
     cat /tmp/rocm_so.conf >> /etc/ld.so.conf.d/rocm.conf && \
     rm /tmp/rocm_so.conf && \
@@ -58,6 +59,7 @@ ENV PATH="/opt/rocm/bin:${PATH}" \
     CXX="amdclang++"
 
 COPY .github/workflows/dockerfiles/ROCm-DiskGalaxy/mpich-4.1.2-rocm-6.4-hip-pointer-attr.patch /tmp/mpich-rocm.patch
+#COPY mpich-4.1.2-rocm-6.4-hip-pointer-attr.patch /tmp/mpich-rocm.patch
 RUN set -euo pipefail && \
     mkdir -p /tmp/build-mpich && \
     cd /tmp/build-mpich && \
@@ -65,7 +67,7 @@ RUN set -euo pipefail && \
     tar xzf "mpich-${MPICH_VERSION}.tar.gz" && \
     cd "mpich-${MPICH_VERSION}" && \
     patch -p1 < /tmp/mpich-rocm.patch && \
-    ./configure --with-device=ch4:ofi --disable-fortran --disable-doc --prefix="/opt/mpich/${MPICH_VERSION}" && \
+    ./configure --with-device=ch4:ofi --disable-fortran --prefix="/opt/mpich/${MPICH_VERSION}" && \
     make -j"$(nproc)" && \
     make install && \
     cd / && \
@@ -88,21 +90,15 @@ RUN set -euo pipefail && \
     cmake --build build -j"$(nproc)" --target DiskGalaxy && \
     test -x build/src/problems/DiskGalaxy/DiskGalaxy
 
-FROM --platform=linux/amd64 registry.opensuse.org/opensuse/leap:15.6
+FROM --platform=linux/amd64 opensuse/leap:15.6
 
 ARG MPICH_VERSION=4.1.2
 
 USER root
-RUN set -euo pipefail && \
-    echo "rpm.install.excludedocs = yes" >> /etc/zypp/zypp.conf && \
-    zypper --non-interactive refresh && \
-    zypper --non-interactive update && \
-    zypper --non-interactive install --no-recommends libfabric && \
-    zypper clean --all
-
 COPY --from=build /opt/rocm /opt/rocm
 COPY --from=build /opt/mpich /opt/mpich
 COPY .github/workflows/dockerfiles/ROCm-DiskGalaxy/rocm_so.conf /tmp/rocm_so.conf
+#COPY rocm_so.conf /tmp/rocm_so.conf
 RUN set -euo pipefail && \
     cat /tmp/rocm_so.conf >> /etc/ld.so.conf.d/rocm.conf && \
     rm /tmp/rocm_so.conf && \
