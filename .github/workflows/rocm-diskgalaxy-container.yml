@@ -29,17 +29,17 @@ jobs:
           submodules: recursive
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@af5b9c285a8492c5170a95a7e462f6b3fca0dede
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@465a07811f14bebb1938fbedb7d318ce25d57f0a
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push DiskGalaxy image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@ac9327f06ed0493cb7f0f86e8bc64c06e0b932b4
         with:
           context: .
           file: .github/workflows/dockerfiles/ROCm-DiskGalaxy/Dockerfile
