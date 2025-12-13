@@ -30,10 +30,11 @@ RUN set -euo pipefail && \
     else \
       zypper --non-interactive install --no-recommends \
         rocm-llvm \
-        hip \
+        hipcc \
+        hip-runtime-amd \
         hip-devel \
         hsa-rocr \
-        rocclr \
+        comgr \
         rocm-device-libs; \
     fi && \
     zypper --non-interactive install --no-recommends \
