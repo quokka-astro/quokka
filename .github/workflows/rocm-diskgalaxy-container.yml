@@ -35,11 +35,11 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@af5b9c285a8492c5170a95a7e462f6b3fca0dede
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
 
       - name: Log in to GHCR
         if: ${{ github.event_name == 'push' || env.IS_INTERNAL_PR == 'true' }}
-        uses: docker/login-action@465a07811f14bebb1938fbedb7d318ce25d57f0a
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -47,7 +47,7 @@ jobs:
 
       - name: Build and push DiskGalaxy image (development)
         if: ${{ github.event_name == 'push' }}
-        uses: docker/build-push-action@ac9327f06ed0493cb7f0f86e8bc64c06e0b932b4
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6
         with:
           context: .
           file: .github/workflows/dockerfiles/ROCm-DiskGalaxy/Dockerfile
@@ -62,7 +62,7 @@ jobs:
 
       - name: Build and push DiskGalaxy image (PR)
         if: ${{ env.IS_INTERNAL_PR == 'true' }}
-        uses: docker/build-push-action@ac9327f06ed0493cb7f0f86e8bc64c06e0b932b4
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6
         with:
           context: .
           file: .github/workflows/dockerfiles/ROCm-DiskGalaxy/Dockerfile
@@ -77,7 +77,7 @@ jobs:
 
       - name: Build DiskGalaxy image (PR, no publish)
         if: ${{ github.event_name == 'pull_request' && env.IS_INTERNAL_PR != 'true' }}
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6
         with:
           context: .
           file: .github/workflows/dockerfiles/ROCm-DiskGalaxy/Dockerfile
