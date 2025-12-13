@@ -48,6 +48,7 @@ RUN set -euo pipefail && \
       gcc13 gcc13-c++ libstdc++6-devel-gcc13 \
       make tar gzip wget \
       patch \
+      hdf5-devel \
       python3-devel && \
     ln -sf /usr/lib64/libefa.so.1 /usr/lib64/libefa.so && \
     zypper clean --all && \
@@ -90,7 +91,8 @@ RUN set -euo pipefail && \
       -DAMReX_MPI="${AMREX_MPI}" \
       -DAMReX_GPU_ARCH="${AMREX_AMD_ARCH}" \
       -DCMAKE_C_COMPILER="${CC}" \
-      -DCMAKE_CXX_COMPILER="${CXX}" && \
+      -DCMAKE_CXX_COMPILER="${CXX}" \
+      -DQUOKKA_PYTHON=OFF && \
     cmake --build build -j"$(nproc)" --target DiskGalaxy && \
     test -x build/src/problems/DiskGalaxy/DiskGalaxy
 
