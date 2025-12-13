@@ -36,7 +36,8 @@ RUN set -euo pipefail && \
         hip-devel \
         hsa-rocr \
         comgr \
-        rocm-device-libs; \
+        rocm-device-libs \
+	rocrand-devel; \
     fi && \
     zypper --non-interactive install --no-recommends \
       cmake \
