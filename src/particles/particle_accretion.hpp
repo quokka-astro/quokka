@@ -133,8 +133,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_accretion_kernel(const dou
 template <typename ContainerType, typename problem_t>
 void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, const amrex::Array4<const amrex::Real> &local_state,
 			       const amrex::Array4<amrex::Real> &local_accretion_rate, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
-			       const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> state_fc,
-			       bool has_face_fields, amrex::Real /*time*/, amrex::Real dt, int /*mass_index*/)
+			       const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *state_fc_fab,
+			       amrex::Real /*time*/, amrex::Real dt, int /*mass_index*/)
 {
 	const BL_PROFILE("SinkAccretionUtils::ComputeAccretionRateInBox()");
 	// Get the particle array of structs
@@ -145,9 +145,6 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 	const double vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 	const bool use_uniform_kernel = sink_particle_use_uniform_kernel;
-	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(has_face_fields, "Face-centered state is required for MHD sink accretion");
-	}
 
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
@@ -157,9 +154,8 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 		int iy = static_cast<int>((p.pos(1) - plo[1]) / dx[1]);
 		int iz = static_cast<int>((p.pos(2) - plo[2]) / dx[2]);
 
-		auto const *state_fc_ptr = has_face_fields ? &state_fc : nullptr;
 		const auto [M_dot, r_K] =
-		    compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, p.rdata(0), p.pos(0), p.pos(1), p.pos(2), plo, dx, state_fc_ptr);
+		    compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, p.rdata(0), p.pos(0), p.pos(1), p.pos(2), plo, dx, state_fc_fab);
 		AMREX_ASSERT(M_dot >= 0.0);
 
 		// compute the sum of the accretion kernel weight function, w = exp(- r^2 / r_K^2)
@@ -487,16 +483,14 @@ void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 		// Get the local deposit array for this box
 		const auto &local_state = state.array(pti);
 		const auto &local_accretion_rate = accretion_rate.array(pti);
+
 		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
-		bool has_face_fields = false;
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state_fc != nullptr, "Face-centered state is required for MHD sink accretion");
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *state_fc_fab = nullptr;
+		if (state_fc != nullptr) {
 			local_state_fc[0] = (*state_fc)[0].array(pti);
-#if AMREX_SPACEDIM >= 2
 			local_state_fc[1] = (*state_fc)[1].array(pti);
-#endif
 			local_state_fc[2] = (*state_fc)[2].array(pti);
-			has_face_fields = true;
+			state_fc_fab = &local_state_fc;
 		}
 
 		// Get geometry information for this level
@@ -505,7 +499,7 @@ void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 		const auto dx = geom.CellSizeArray();
 
 		// Process particles in this box
-		ComputeAccretionRateInBox<ContainerType, problem_t>(pti, local_state, local_accretion_rate, plo, dx, local_state_fc, has_face_fields, time, dt,
+		ComputeAccretionRateInBox<ContainerType, problem_t>(pti, local_state, local_accretion_rate, plo, dx, state_fc_fab, time, dt,
 								    mass_index);
 	}
 
