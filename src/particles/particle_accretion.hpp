@@ -240,26 +240,6 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 	const auto &dx = geom.CellSizeArray();
 	const double dx_max = std::max({dx[0], dx[1], dx[2]});
 
-#if AMREX_SPACEDIM >= 1
-	std::remove_reference_t<decltype((*state_fc)[0].const_arrays())> state_fc_x0{};
-#endif
-#if AMREX_SPACEDIM >= 2
-	std::remove_reference_t<decltype((*state_fc)[1].const_arrays())> state_fc_x1{};
-#endif
-	std::remove_reference_t<decltype((*state_fc)[2].const_arrays())> state_fc_x2{};
-	const bool has_face_fields = Physics_Traits<problem_t>::is_mhd_enabled;
-
-	if (has_face_fields) {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state_fc != nullptr, "Face-centered state is required for MHD sink accretion");
-#if AMREX_SPACEDIM >= 1
-		state_fc_x0 = (*state_fc)[0].const_arrays();
-#endif
-#if AMREX_SPACEDIM >= 2
-		state_fc_x1 = (*state_fc)[1].const_arrays();
-#endif
-		state_fc_x2 = (*state_fc)[2].const_arrays();
-	}
-
 	amrex::ParallelFor(accretion_rate, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		const double accretion_rate_cell = local_accretion_rate_arr[bx](i, j, k);
 		const double accretion_rate_floor = -0.25;
@@ -276,16 +256,16 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 		// Jeans-violating cell that is not in a accretion zone emerging at the beginning of a step.
 		if (accretion_rate_cell > std::numeric_limits<double>::min()) {
 			// Compute Jeans density rho_J = J^2 * pi * cs^2 / (G * dx^2)
+
 			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
 			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc_ptr = nullptr;
-			if (has_face_fields) {
-				cons_fc[0] = state_fc_x0[bx];
-#if AMREX_SPACEDIM >= 2
-				cons_fc[1] = state_fc_x1[bx];
-#endif
-				cons_fc[2] = state_fc_x2[bx];
+			if (state_fc != nullptr) {
+				cons_fc[0] = (*state_fc)[0].const_arrays()[bx];
+				cons_fc[1] = (*state_fc)[1].const_arrays()[bx];
+				cons_fc[2] = (*state_fc)[2].const_arrays()[bx];
 				cons_fc_ptr = &cons_fc;
 			}
+
 			double cs_cell = HydroSystem<problem_t>::ComputeSoundSpeed(local_state_arr[bx], i, j, k, cons_fc_ptr);
 			if constexpr (quokka::EOS_Traits<problem_t>::gamma == 1.0) {
 				cs_cell = quokka::EOS_Traits<problem_t>::cs_isothermal;
