@@ -6,9 +6,6 @@
 #SBATCH -t 00:10:00
 #SBATCH -p gpu
 #SBATCH --exclusive
-#SBATCH --ntasks-per-node=8
-#SBATCH --gpus-per-node=8
-##SBATCH --core-spec=8
 #SBATCH -N 8
 
 # *MUST* load environment modules setup script inside the SLURM script, otherwise job will fail
@@ -20,20 +17,42 @@ export MPICH_GPU_SUPPORT_ENABLED=1
 # use correct NIC-to-GPU binding
 export MPICH_OFI_NIC_POLICY=NUMA
 
+# OpenMP threads (pure MPI => 1)
+# QUOKKA does not use OpenMP, but it's good practice on Setonix to avoid accidental thread oversubscription
+export OMP_NUM_THREADS=1
+
 ## run
 EXE="build/src/problems/HydroBlast3D/test_hydro3d_blast"
 INPUTS="inputs/benchmark_unigrid_1024.in"
 
-srun bash -c "
-    case \$((SLURM_LOCALID)) in
-      0) GPU=4;;
-      1) GPU=5;;
-      2) GPU=2;;
-      3) GPU=3;;
-      4) GPU=6;;
-      5) GPU=7;;
-      6) GPU=0;;
-      7) GPU=1;;
-    esac
-    export ROCR_VISIBLE_DEVICES=\$((GPU));
-    ${EXE} ${INPUTS}"
+# Wrapper that sets ROCR_VISIBLE_DEVICES per task
+# Create it in the working directory
+cat > selectGPU_X.sh << 'EOF'
+#!/bin/bash
+# Set the visible GPU for this task to its local task ID on the node
+export ROCR_VISIBLE_DEVICES="$SLURM_LOCALID"
+exec "$@"
+EOF
+chmod 755 ./selectGPU_X.sh
+
+# Generate optimal CPU binding list for 8 tasks on the GPUs allocated to this job
+CPU_BIND=$(generate_CPU_BIND.sh map_cpu)
+echo -e "\n# CPU_BIND=${CPU_BIND}"
+
+echo -e "\n# Run: 8 MPI tasks, manual GPU + CPU binding"
+# Notes:
+# -N 1, -n 8: 8 ranks on this node
+# -c 8: reserve one full chiplet per rank (actual threads controlled by OMP_NUM_THREADS)
+# --gres=gpu:8: expose 8 GPUs per node to this step
+# --cpu-bind=${CPU_BIND}: bind each rank to the chiplet matching its GPU
+# No --gpus-per-task, no --gpu-bind (manual binding avoids ROCm IPC attach error)
+NODES=${SLURM_NNODES}
+TASKS_PER_NODE=8                 # one task per GPU
+TOTAL_TASKS=$((NODES * TASKS_PER_NODE))
+
+srun -N $NODES -n ${TOTAL_TASKS} -c 8 --gres=gpu:8 --cpu-bind=${CPU_BIND} ./selectGPU_X.sh ${EXE} ${INPUTS}
+
+echo -e "\n# sacct summary"
+sacct -j ${SLURM_JOBID} -o jobid%20,Start%20,elapsed%20
+echo -e "\n# Done"
+
