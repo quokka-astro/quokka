@@ -42,16 +42,14 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 				const auto &geom = container->Geom(lev);
 				const auto dx = geom.CellSizeArray();
 				const auto plo = geom.ProbLoArray();
-				std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
 
-				if (has_face_centered_state) {
-					cons_fc[0] = (*state_fc)[0].const_array(mfi);
-#if AMREX_SPACEDIM >= 2
-					cons_fc[1] = (*state_fc)[1].const_array(mfi);
-#endif
-#if AMREX_SPACEDIM == 3
-					cons_fc[2] = (*state_fc)[2].const_array(mfi);
-#endif
+				std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
+				std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc_ptr = nullptr;
+				if (state_fc != nullptr) {
+					cons_fc[0] = (*state_fc)[0].array(mfi);
+					cons_fc[1] = (*state_fc)[1].array(mfi);
+					cons_fc[2] = (*state_fc)[2].array(mfi);
+					cons_fc_ptr = &cons_fc;
 				}
 
 				// Count particles to be created in this box
@@ -64,10 +62,6 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 					const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
 					const auto index = box.index(iv);
 					// Check if we should create a particle at this location and time
-					std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc_ptr = nullptr;
-					if (has_face_centered_state) {
-						cons_fc_ptr = &cons_fc;
-					}
 					pcounts[index] = particle_checker(state_arr, accretion_rate_arr, i, j, k, dx, cons_fc_ptr, engine); // NOLINT
 				});
 
@@ -100,10 +94,6 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 				amrex::ParallelForRNG(box, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::RandomEngine const &engine) {
 					const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
 					const auto index = box.index(iv);
-					std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc_ptr = nullptr;
-					if (has_face_centered_state) {
-						cons_fc_ptr = &cons_fc;
-					}
 
 					if (pcounts[index] > 0) {			  // NOLINT
 						const int num_particles = pcounts[index]; // NOLINT
