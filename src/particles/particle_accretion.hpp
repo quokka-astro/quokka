@@ -404,6 +404,7 @@ void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &st
 		// Get the local deposit array for this box
 		const auto &local_state = state.array(pti);
 		const auto &local_scale_down = scale_down.array(pti);
+
 		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
 		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *state_fc_fab = nullptr;
 		if (state_fc != nullptr) {

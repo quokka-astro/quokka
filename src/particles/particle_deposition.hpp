@@ -560,25 +560,23 @@ void addBufferToState(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_
 		      const SNScheme SN_scheme_d, amrex::Real *p_max_velocity)
 {
 	const BL_PROFILE("SNFeedbackUtils::addBufferToState()");
-	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state_fc != nullptr, "MHD SN feedback requires face-centered magnetic fields.");
-	}
 	for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
 		auto const &local_state = state.array(mfi);
 		auto const &local_buffer = state_buffer.array(mfi);
+
 		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc_ptr = nullptr;
 		if (state_fc != nullptr) {
 			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 				cons_fc[dir] = (*state_fc)[dir].const_array(mfi);
 			}
+			cons_fc_ptr = &cons_fc;
 		}
-		const bool has_cons_fc = (state_fc != nullptr);
 
 		// add buffer to state
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 			auto p_max_velocity_local = p_max_velocity; // NOLINT
-			const auto *const cons_fc_ptr = has_cons_fc ? &cons_fc : nullptr;
 			if (SN_scheme_d == SNScheme::SN_thermal_only) {
 				addThermalOnlyBufferToState<problem_t>(local_state, local_buffer, cons_fc_ptr, i, j, k, p_max_velocity_local);
 			} else {
