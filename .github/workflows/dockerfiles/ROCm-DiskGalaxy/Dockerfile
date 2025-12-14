@@ -1,5 +1,9 @@
 FROM --platform=linux/amd64 opensuse/leap:15.6 AS build
 
+# Note: `COPY` paths are resolved relative to the Docker build context, not the Dockerfile location.
+# For local builds, use the repo root as the build context, e.g.:
+#   docker build -f .github/workflows/dockerfiles/ROCm-DiskGalaxy/Dockerfile .
+
 ARG ROCM_ZYPP_REPO_VERSION=6.4.4
 ARG ROCM_ZYPP_PACKAGES=
 ARG MPICH_VERSION=4.1.2
@@ -7,6 +11,7 @@ ARG MPICH_URL=https://www.mpich.org/static/downloads/4.1.2/mpich-4.1.2.tar.gz
 ARG AMREX_SPACEDIM=3
 ARG AMREX_MPI=ON
 ARG AMREX_AMD_ARCH=gfx90a
+ARG DOCKERFILES_DIR=.github/workflows/dockerfiles/ROCm-DiskGalaxy
 
 RUN set -euo pipefail && \
     echo "rpm.install.excludedocs = yes" >> /etc/zypp/zypp.conf && \
@@ -17,8 +22,13 @@ RUN set -euo pipefail && \
 COPY . /tmp/quokka-src
 WORKDIR /tmp/quokka-src
 
-COPY .github/workflows/dockerfiles/ROCm-DiskGalaxy/rocm_so.conf /tmp/rocm_so.conf
-#COPY rocm_so.conf /tmp/rocm_so.conf
+RUN set -euo pipefail && \
+    test -f CMakeLists.txt || { \
+      echo "ERROR: Quokka source not found in the Docker build context." >&2; \
+      echo "Build from the repo root, e.g.: docker build -f .github/workflows/dockerfiles/ROCm-DiskGalaxy/Dockerfile ." >&2; \
+      exit 1; \
+    }
+
 RUN set -euo pipefail && \
     if ! zypper repos -E | grep -q devel_languages_perl; then \
       zypper --non-interactive addrepo https://download.opensuse.org/repositories/devel:/languages:/perl/15.6/devel:languages:perl.repo; \
@@ -52,8 +62,7 @@ RUN set -euo pipefail && \
       python3-devel && \
     ln -sf /usr/lib64/libefa.so.1 /usr/lib64/libefa.so && \
     zypper clean --all && \
-    cat /tmp/rocm_so.conf >> /etc/ld.so.conf.d/rocm.conf && \
-    rm /tmp/rocm_so.conf && \
+    printf "%s\n" "/opt/rocm/lib" "/opt/rocm/lib64" >> /etc/ld.so.conf.d/rocm.conf && \
     ldconfig
 
 ENV PATH="/opt/rocm/bin:${PATH}" \
@@ -63,8 +72,16 @@ ENV PATH="/opt/rocm/bin:${PATH}" \
     CC="amdclang" \
     CXX="amdclang++"
 
-COPY .github/workflows/dockerfiles/ROCm-DiskGalaxy/mpich-4.1.2-rocm-6.4-hip-pointer-attr.patch /tmp/mpich-rocm.patch
-#COPY mpich-4.1.2-rocm-6.4-hip-pointer-attr.patch /tmp/mpich-rocm.patch
+RUN set -euo pipefail && \
+    if [ -f "/tmp/quokka-src/${DOCKERFILES_DIR}/mpich-4.1.2-rocm-6.4-hip-pointer-attr.patch" ]; then \
+      cp "/tmp/quokka-src/${DOCKERFILES_DIR}/mpich-4.1.2-rocm-6.4-hip-pointer-attr.patch" /tmp/mpich-rocm.patch; \
+    elif [ -f /tmp/quokka-src/mpich-4.1.2-rocm-6.4-hip-pointer-attr.patch ]; then \
+      cp /tmp/quokka-src/mpich-4.1.2-rocm-6.4-hip-pointer-attr.patch /tmp/mpich-rocm.patch; \
+    else \
+      echo "ERROR: MPICH patch not found in the Docker build context." >&2; \
+      exit 1; \
+    fi
+
 RUN set -euo pipefail && \
     mkdir -p /tmp/build-mpich && \
     cd /tmp/build-mpich && \
@@ -103,11 +120,12 @@ ARG MPICH_VERSION=4.1.2
 USER root
 COPY --from=build /opt/rocm /opt/rocm
 COPY --from=build /opt/mpich /opt/mpich
-COPY .github/workflows/dockerfiles/ROCm-DiskGalaxy/rocm_so.conf /tmp/rocm_so.conf
-#COPY rocm_so.conf /tmp/rocm_so.conf
 RUN set -euo pipefail && \
-    cat /tmp/rocm_so.conf >> /etc/ld.so.conf.d/rocm.conf && \
-    rm /tmp/rocm_so.conf && \
+    zypper --non-interactive refresh && \
+    zypper --non-interactive install --no-recommends \
+      libhdf5-103 && \
+    zypper clean --all && \
+    printf "%s\n" "/opt/rocm/lib" "/opt/rocm/lib64" >> /etc/ld.so.conf.d/rocm.conf && \
     rm -rf \
       /opt/rocm/bin \
       /opt/rocm/include \
