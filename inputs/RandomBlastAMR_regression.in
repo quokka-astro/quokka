@@ -9,7 +9,7 @@ use_periodic_bc = 0
 # *****************************************************************
 # VERBOSITY
 # *****************************************************************
-amr.v               = 0     # verbosity in Amr
+amr.v               = 1     # verbosity in Amr
 
 # *****************************************************************
 # Resolution and refinement
@@ -28,9 +28,9 @@ cfl = 0.2
 hydro.reconstruction_order = 3
 derived_vars = temperature
 
-plotfile_interval = 1000
-checkpoint_interval = -1
-max_timesteps = 1000
+plotfile_interval = -1
+checkpoint_interval = 50
+max_timesteps = 120
 stop_time = 3.154e12       # 1e5 yr
 
 SN_rate_per_volume = 0.03  # yr^-1 kpc^-1
@@ -38,4 +38,4 @@ SN_rate_per_volume = 0.03  # yr^-1 kpc^-1
 cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1
 cooling.cooling_table_type = resampled
-cooling.hdf5_data_file = "./CloudyData_UVB=HM2012_resampled.h5"
+cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"

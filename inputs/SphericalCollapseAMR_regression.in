@@ -22,7 +22,8 @@ amr.grid_eff        = 1.0
 
 hydro.reconstruction_order = 3  # PPM
 cfl = 0.25
-max_timesteps = 1000
+max_timesteps = 20
+checkpoint_interval = 20
 stop_time = 0.05
 
 derived_vars = gpot
@@ -32,9 +33,8 @@ do_subcycle = 0
 do_tracers = 0          # turn on tracer particles
 
 ascent_interval = -1
-plotfile_interval = 200
+plotfile_interval = -1
 particle_csv_interval = -1
-checkpoint_interval = -1
 
 problem.num_particles = 1000000
 problem.seed = 42123
