@@ -384,7 +384,7 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::Array4<amrex::Real> const &local_buffer,
-			  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc, int i, int j, int k, amrex::Real *p_max_velocity)
+			  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc, int i, int j, int k, amrex::Real *p_max_velocity)
 {
 	// For SN_thermal_or_thermal_momentum, SN_thermal_kinetic_or_thermal_momentum, and SN_pure_kinetic_or_thermal_momentum,
 	// the buffer contains mass, momentum, and energy. We need to add the buffer to the state in a way that guarantees
@@ -492,7 +492,7 @@ addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::
 	if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
 		cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
 	} else {
-		cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, i, j, k, cons_fc);
+		cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, i, j, k, fab_fc);
 	}
 
 	// Compute velocity magnitude and track maximum
@@ -519,7 +519,7 @@ addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 addThermalOnlyBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::Array4<amrex::Real> const &local_buffer,
-			    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc, int i, int j, int k, amrex::Real *p_max_velocity)
+			    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc, int i, int j, int k, amrex::Real *p_max_velocity)
 {
 	const Real d_rho = local_buffer(i, j, k, HydroSystem<problem_t>::density_index);
 
@@ -549,7 +549,7 @@ addThermalOnlyBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex
 	if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
 		cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
 	} else {
-		cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, i, j, k, cons_fc);
+		cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, i, j, k, fab_fc);
 	}
 
 	amrex::Gpu::Atomic::Max(&p_max_velocity[0], cs);
@@ -565,22 +565,22 @@ void addBufferToState(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_
 		auto const &local_state = state.array(mfi);
 		auto const &local_buffer = state_buffer.array(mfi);
 
-		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
-		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc_ptr = nullptr;
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fab_fc{};
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc_ptr = nullptr;
 		if (state_fc != nullptr) {
 			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-				cons_fc[dir] = (*state_fc)[dir].const_array(mfi);
+				fab_fc[dir] = (*state_fc)[dir].const_array(mfi);
 			}
-			cons_fc_ptr = &cons_fc;
+			fab_fc_ptr = &fab_fc;
 		}
 
 		// add buffer to state
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 			auto p_max_velocity_local = p_max_velocity; // NOLINT
 			if (SN_scheme_d == SNScheme::SN_thermal_only) {
-				addThermalOnlyBufferToState<problem_t>(local_state, local_buffer, cons_fc_ptr, i, j, k, p_max_velocity_local);
+				addThermalOnlyBufferToState<problem_t>(local_state, local_buffer, fab_fc_ptr, i, j, k, p_max_velocity_local);
 			} else {
-				addCompositeBufferToState<problem_t>(local_state, local_buffer, cons_fc_ptr, i, j, k, p_max_velocity_local);
+				addCompositeBufferToState<problem_t>(local_state, local_buffer, fab_fc_ptr, i, j, k, p_max_velocity_local);
 			}
 		});
 	}
