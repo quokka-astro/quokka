@@ -17,11 +17,13 @@
 struct GlobalConfig {
 	static int num_particles;
 	static int seed;
+	static Real r_refine;
 };
 
 // Initialize static members with default values
 int GlobalConfig::num_particles = 1000;
 int GlobalConfig::seed = 42;
+Real GlobalConfig::r_refine = 0.2;
 
 struct CollapseProblem {
 };
@@ -110,20 +112,26 @@ template <> void QuokkaSimulation<CollapseProblem>::createInitialCICParticles()
 template <> void QuokkaSimulation<CollapseProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
-	const Real q_min = 5.0; // minimum density for refinement
+	const Real r_refine = GlobalConfig::r_refine;
 
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
-		const auto state = state_new_cc_[lev].const_array(mfi);
 		const auto tag = tags.array(mfi);
-		const int nidx = HydroSystem<CollapseProblem>::density_index;
+		const auto &prob_lo = geom[lev].ProbLoArray();
+		const auto &dx = geom[lev].CellSizeArray();
 
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			Real const q = state(i, j, k, nidx);
-			if (q > q_min) {
+			// get coordinates
+			const Real x = prob_lo[0] + static_cast<Real>(i) * dx[0];
+			const Real y = prob_lo[1] + static_cast<Real>(j) * dx[1];
+			const Real z = prob_lo[2] + static_cast<Real>(k) * dx[2];
+			const Real r = std::sqrt(x * x + y * y + z * z);
+
+			if (r < r_refine) {
 				tag(i, j, k) = amrex::TagBox::SET;
 			}
 		});
+
 	}
 }
 
@@ -146,6 +154,7 @@ auto problem_main() -> int
 	amrex::ParmParse const pp("problem");
 	pp.query("num_particles", GlobalConfig::num_particles);
 	pp.query("seed", GlobalConfig::seed);
+	pp.query("r_refine", GlobalConfig::r_refine);
 
 	// Problem initialization
 	QuokkaSimulation<CollapseProblem> sim(BCs_cc);
