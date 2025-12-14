@@ -102,15 +102,10 @@ template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGridFaceVa
 	const amrex::Array4<double> &state_fc = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const quokka::direction dir = grid_elem.dir_;
+	const double B_val = (dir == quokka::direction::x) ? B0 : 0.0;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		if (dir == quokka::direction::x) {
-			state_fc(i, j, k, Physics_Indices<SinkProblem>::mhdFirstIndex) = B0;
-		} else if (dir == quokka::direction::y) {
-			state_fc(i, j, k, Physics_Indices<SinkProblem>::mhdFirstIndex) = 0.0;
-		} else if (dir == quokka::direction::z) {
-			state_fc(i, j, k, Physics_Indices<SinkProblem>::mhdFirstIndex) = 0.0;
-		}
+		state_fc(i, j, k, Physics_Indices<SinkProblem>::mhdFirstIndex) = B_val;
 	});
 }
 
