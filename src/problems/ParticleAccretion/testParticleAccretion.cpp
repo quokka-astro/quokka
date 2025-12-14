@@ -371,9 +371,8 @@ template <> void QuokkaSimulation<AccretionProblem>::setInitialConditionsOnGridF
 
 	const double B_val = (dir == quokka::direction::x) ? B0 : 0.0;
 
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		state_fc(i, j, k, Physics_Indices<AccretionProblem>::mhdFirstIndex) = B_val;
-	});
+	amrex::ParallelFor(indexRange,
+			   [=] AMREX_GPU_DEVICE(int i, int j, int k) { state_fc(i, j, k, Physics_Indices<AccretionProblem>::mhdFirstIndex) = B_val; });
 }
 
 template <> void QuokkaSimulation<AccretionProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
