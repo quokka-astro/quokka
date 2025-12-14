@@ -258,30 +258,21 @@ template <> void QuokkaSimulation<RandomBlast>::ComputeDerivedVar(int lev, std::
 template <> void QuokkaSimulation<RandomBlast>::refineGrid(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement
-	const Real q_min = 1e-5 * rho0; // minimum density for refinement
-	const Real eta_threshold = userData_.refine_threshold;
 
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
-		const auto state = state_new_cc_[lev].const_array(mfi);
 		const auto tag = tags.array(mfi);
-		const int nidx = HydroSystem<RandomBlast>::density_index;
+		const auto &prob_lo = geom[lev].ProbLoArray();
+		const auto &dx = geom[lev].CellSizeArray();
 
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			Real const q = state(i, j, k, nidx);
-			Real const q_xplus = state(i + 1, j, k, nidx);
-			Real const q_xminus = state(i - 1, j, k, nidx);
-			Real const q_yplus = state(i, j + 1, k, nidx);
-			Real const q_yminus = state(i, j - 1, k, nidx);
-			Real const q_zplus = state(i, j, k + 1, nidx);
-			Real const q_zminus = state(i, j, k - 1, nidx);
+			// get coordinates
+			const Real x = prob_lo[0] + static_cast<Real>(i) * dx[0];
+			const Real y = prob_lo[1] + static_cast<Real>(j) * dx[1];
+			const Real z = prob_lo[2] + static_cast<Real>(k) * dx[2];
+			const Real r = std::sqrt(x * x + y * y + z * z);
 
-			Real const del_x = 0.5 * (q_xplus - q_xminus);
-			Real const del_y = 0.5 * (q_yplus - q_yminus);
-			Real const del_z = 0.5 * (q_zplus - q_zminus);
-			Real const gradient_indicator = std::sqrt(del_x * del_x + del_y * del_y + del_z * del_z) / q;
-
-			if ((gradient_indicator > eta_threshold) && (q > q_min)) {
+			if (r < 1.0e20) {
 				tag(i, j, k) = amrex::TagBox::SET;
 			}
 		});
