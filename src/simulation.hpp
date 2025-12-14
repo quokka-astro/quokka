@@ -1826,6 +1826,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 		}
 
 		state_fc_ptr = &state_new_fc_[lev];
+
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state_fc_ptr != nullptr, "MHD is enabled but state_fc_ptr is nullptr in particleMeshInteraction");
 	}
 
 	// Create a MultiFab to hold the change of states (density, 3 x momentum, internal energy, energy) during particle-mesh interaction

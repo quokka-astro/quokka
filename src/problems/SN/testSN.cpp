@@ -127,16 +127,9 @@ template <> void QuokkaSimulation<SNProblem>::setInitialConditionsOnGridFaceVars
 	const amrex::Array4<double> &state_fc = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const quokka::direction dir = grid_elem.dir_;
+	const double B_val = (dir == quokka::direction::x) ? B0 : 0.0;
 
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		if (dir == quokka::direction::x) {
-			state_fc(i, j, k, Physics_Indices<SNProblem>::mhdFirstIndex) = B0;
-		} else if (dir == quokka::direction::y) {
-			state_fc(i, j, k, Physics_Indices<SNProblem>::mhdFirstIndex) = 0.0;
-		} else if (dir == quokka::direction::z) {
-			state_fc(i, j, k, Physics_Indices<SNProblem>::mhdFirstIndex) = 0.0;
-		}
-	});
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) { state_fc(i, j, k, Physics_Indices<SNProblem>::mhdFirstIndex) = B_val; });
 }
 
 template <> void QuokkaSimulation<SNProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
