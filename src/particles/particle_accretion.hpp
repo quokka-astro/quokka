@@ -36,7 +36,7 @@ template <typename problem_t>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 compute_Mdot_and_r_K(const amrex::Array4<const amrex::Real> &local_state, int ix, int iy, int iz, double par_mass, double par_x, double par_y, double par_z,
 		     const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
-		     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *state_fc = nullptr) -> std::tuple<double, double>
+		     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *state_fc_fab = nullptr) -> std::tuple<double, double>
 {
 	const double dx_max = std::max({dx[0], dx[1], dx[2]});
 
@@ -73,7 +73,7 @@ compute_Mdot_and_r_K(const amrex::Array4<const amrex::Real> &local_state, int ix
 				const double px = local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index);
 				const double py = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index);
 				const double pz = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index);
-				double cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, ii, jj, kk, state_fc);
+				double cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, ii, jj, kk, state_fc_fab);
 				if constexpr (quokka::EOS_Traits<problem_t>::gamma == 1.0) {
 					cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
 				}
@@ -315,7 +315,7 @@ template <typename ContainerType, typename problem_t>
 void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterType &pti, const amrex::Array4<const amrex::Real> &local_state,
 					const amrex::Array4<const amrex::Real> &local_scale_down, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
 					const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
-					std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> state_fc, bool has_face_fields, int mass_index,
+					std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *state_fc_fab, int mass_index,
 					amrex::Real /*time*/, amrex::Real dt, amrex::Real /*vol*/)
 {
 	const BL_PROFILE("SinkAccretionUtils::UpdateParticleMassAndMomentumInBox()");
@@ -335,9 +335,8 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 		int iy = static_cast<int>((p.pos(1) - plo[1]) / dx[1]);
 		int iz = static_cast<int>((p.pos(2) - plo[2]) / dx[2]);
 
-		auto const *state_fc_ptr = has_face_fields ? &state_fc : nullptr;
 		const auto [M_dot, r_K] =
-		    compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, p.rdata(0), p.pos(0), p.pos(1), p.pos(2), plo, dx, state_fc_ptr);
+		    compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, p.rdata(0), p.pos(0), p.pos(1), p.pos(2), plo, dx, state_fc_fab);
 
 		// compute the sum of the accretion kernel weight function, w = exp(- r^2 / r_K^2)
 		double w_sum = 0.0;
@@ -430,15 +429,12 @@ void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &st
 		const auto &local_state = state.array(pti);
 		const auto &local_scale_down = scale_down.array(pti);
 		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
-		bool has_face_fields = false;
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state_fc != nullptr, "Face-centered state is required for MHD sink accretion");
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *state_fc_fab = nullptr;
+		if (state_fc != nullptr) {
 			local_state_fc[0] = (*state_fc)[0].array(pti);
-#if AMREX_SPACEDIM >= 2
 			local_state_fc[1] = (*state_fc)[1].array(pti);
-#endif
 			local_state_fc[2] = (*state_fc)[2].array(pti);
-			has_face_fields = true;
+			state_fc_fab = &local_state_fc;
 		}
 
 		// Get geometry information for this level
@@ -450,7 +446,7 @@ void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &st
 		const amrex::Real vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 		// Process particles in this box
-		UpdateParticleMassAndMomentumInBox<ContainerType, problem_t>(pti, local_state, local_scale_down, plo, dx, local_state_fc, has_face_fields,
+		UpdateParticleMassAndMomentumInBox<ContainerType, problem_t>(pti, local_state, local_scale_down, plo, dx, state_fc_fab,
 									     mass_index, time, dt, vol);
 	}
 }
