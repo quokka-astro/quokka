@@ -101,7 +101,7 @@ COPY --from=build /opt/mpich /opt/mpich
 # Install runtime deps, cleanup, and setup user
 RUN set -euo pipefail && \
     zypper --non-interactive refresh && \
-    zypper --non-interactive install --no-recommends libhdf5 libpciaccess0 && \
+    zypper --non-interactive install --no-recommends libhdf5 libpciaccess0 libnuma1 libdrm2 libdrm_amdgpu1 && \
     zypper clean --all && \
     printf "%s\n" "/opt/rocm/lib" "/opt/rocm/lib64" >> /etc/ld.so.conf.d/rocm.conf && \
     rm -rf /opt/rocm/bin /opt/rocm/include /opt/rocm/share /opt/rocm/lib/cmake \
