@@ -240,6 +240,16 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 	const auto &dx = geom.CellSizeArray();
 	const double dx_max = std::max({dx[0], dx[1], dx[2]});
 
+	std::remove_reference_t<decltype((*state_fc)[0].const_arrays())> state_fc_x0{};
+	std::remove_reference_t<decltype((*state_fc)[1].const_arrays())> state_fc_x1{};
+	std::remove_reference_t<decltype((*state_fc)[2].const_arrays())> state_fc_x2{};
+
+	if (state_fc != nullptr) {
+		state_fc_x0 = (*state_fc)[0].const_arrays();
+		state_fc_x1 = (*state_fc)[1].const_arrays();
+		state_fc_x2 = (*state_fc)[2].const_arrays();
+	}
+
 	amrex::ParallelFor(accretion_rate, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		const double accretion_rate_cell = local_accretion_rate_arr[bx](i, j, k);
 		const double accretion_rate_floor = -0.25;
@@ -257,13 +267,13 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 		if (accretion_rate_cell > std::numeric_limits<double>::min()) {
 			// Compute Jeans density rho_J = J^2 * pi * cs^2 / (G * dx^2)
 
-			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fab_fc{};
 			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc_ptr = nullptr;
 			if (state_fc != nullptr) {
-				cons_fc[0] = (*state_fc)[0].const_arrays()[bx];
-				cons_fc[1] = (*state_fc)[1].const_arrays()[bx];
-				cons_fc[2] = (*state_fc)[2].const_arrays()[bx];
-				fab_fc_ptr = &cons_fc;
+				fab_fc[0] = state_fc_x0[bx];
+				fab_fc[1] = state_fc_x1[bx];
+				fab_fc[2] = state_fc_x2[bx];
+				fab_fc_ptr = &fab_fc;
 			}
 
 			double cs_cell = HydroSystem<problem_t>::ComputeSoundSpeed(local_state_arr[bx], i, j, k, fab_fc_ptr);
