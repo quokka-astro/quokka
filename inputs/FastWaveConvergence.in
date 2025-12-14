@@ -36,5 +36,5 @@ setup.num_modes_z = 0
 setup.angle_between_k_b0 = 90
 
 mhd.reconstruction_order = 3
-mhd.emf_compute_scheme = Quokka2026
+mhd.emf_compute_scheme = FelkerStone2017
 mhd.emf_averaging_scheme = LondrilloDelZanna2004
