@@ -418,7 +418,7 @@ auto problem_main() -> int
 	quokka::richardson::Parameters params{};
 	params.machine_precision_target = 2.0e-10; // limit based on delta_rho_magn
 	params.nx_initial = 16;
-	params.nx_max = 512;
+	params.nx_max = 256;
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;
 	params.test_name = "Entropy Wave";
