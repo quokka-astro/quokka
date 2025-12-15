@@ -13,6 +13,7 @@
 #include "AMReX_MFInterpolater.H"
 #include "AMReX_Periodicity.H"
 #include "AMReX_String.H"
+#include <algorithm>
 #include <cfenv>
 #include <cmath>
 #include <cstdio>
@@ -25,7 +26,6 @@ namespace std
 namespace filesystem = experimental::filesystem;
 }
 #endif
-#include <algorithm>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -205,10 +205,15 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	bool splitParticlesOnRestartRefine_ = true;		     // whether to split particles when restarting with refinement
 	amrex::Vector<amrex::MultiFab> phi;
 
+	// SFH parameters
+	int sfh_interval_ = -1;
+	amrex::Real sfh_time_interval_ = -1.0;
+	amrex::Real last_sfh_time_ = 0.0;
+
 	amrex::Real densityFloor_ = 0.0; // default
 	amrex::Real tempFloor_ = 0.0;	 // default
 
-	YAML::Node simulationMetadata_;
+	mutable YAML::Node simulationMetadata_;
 
 	// constructor
 	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : BCs_cc_(BCs_cc), BCs_fc_(BCs_fc) { initialize(); }
@@ -840,6 +845,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 		amrex::Print() << fmt::format("Setting walltime limit to {} hours, {} minutes, {} seconds.\n", hours, minutes, seconds);
 	}
 
+	pp.query("SFH_interval", sfh_interval_);
+	pp.query("SFH_time_interval", sfh_time_interval_);
+
 	// IO settings (following the AMReX convention for the Amr class)
 	// (Since we use AmrCore instead of Amr, we have to reimplement these.)
 	amrex::ParmParse const pp_amr("amr");
@@ -1279,6 +1287,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		cur_time += dt_[0];
 		++cycleCount_;
 		computeAfterTimestep();
+
+		// Compute SFH if interval is reached
+		if ((sfh_interval_ > 0 && (step + 1) % sfh_interval_ == 0) || (sfh_time_interval_ > 0 && cur_time - last_sfh_time_ >= sfh_time_interval_)) {
+			particleRegister_.updateSFH(step + 1, cur_time);
+			last_sfh_time_ = cur_time;
+		}
 
 		// sync up time (to avoid roundoff error)
 		for (lev = 0; lev <= finest_level; ++lev) {
@@ -1815,6 +1829,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 		}
 
 		state_fc_ptr = &state_new_fc_[lev];
+
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state_fc_ptr != nullptr, "MHD is enabled but state_fc_ptr is nullptr in particleMeshInteraction");
 	}
 
 	// Create a MultiFab to hold the change of states (density, 3 x momentum, internal energy, energy) during particle-mesh interaction
@@ -3291,6 +3307,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	auto varnames = GetPlotfileVarNames();
 	amrex::Print() << "Writing plotfile " << plotfilename << "\n";
 
+	// Update SFH data in metadata before writing
+	particleRegister_.writeSFHToMetadata(simulationMetadata_);
+
 #ifdef QUOKKA_USE_OPENPMD
 	// TODO(bwibking): write particles using openPMD
 	quokka::OpenPMDOutput::WriteFile(varnames, finest_level + 1, mf_cc_ptr, Geom(), plot_file, tNew_[0], istep[0]);
@@ -3376,7 +3395,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadMetadataFile(st
 	// read metadata file in on all ranks (needed when restarting from checkpoint)
 	const std::string MetadataFileName(chkfilename + "/metadata.yaml");
 
-	// read YAML file into simulationMetadata_ std::map
+	// read YAML file into simulationMetadata_
 	const YAML::Node metadata = YAML::LoadFile(MetadataFileName);
 	amrex::Print() << "Reading " << MetadataFileName << "...\n";
 
@@ -3392,7 +3411,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadMetadataFile(st
 			simulationMetadata_[key] = value_string.value();
 			amrex::Print() << fmt::format("\t{} = {}\n", key, value_string.value());
 		} else {
-			amrex::Print() << fmt::format("\t{} has unknown type! skipping this entry.\n", key);
+			// For complex types (sequences, maps), copy the entire node
+			simulationMetadata_[key] = it->second;
+			amrex::Print() << fmt::format("\t{} = (complex type)\n", key);
 		}
 	}
 
@@ -3531,6 +3552,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 			HeaderFile << '\n';
 		}
 	}
+
+	// Update SFH data in metadata before writing
+	particleRegister_.writeSFHToMetadata(simulationMetadata_);
 
 	// write Metadata file
 	WriteMetadataFile(checkpointname + "/metadata.yaml");
@@ -3877,6 +3901,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Test) {
 		initializeParticleContainerFromCheckpoint(TestParticles, quokka::ParticleType::Test, header_box_arrays);
 	}
+
+	// Read SFH data from metadata
+	last_sfh_time_ = particleRegister_.readSFH(simulationMetadata_);
 #endif // AMREX_SPACEDIM == 3
 
 	areInitialConditionsDefined_ = true;
