@@ -59,7 +59,6 @@ constexpr double bg_density = 1.0;
 constexpr double bg_pressure = sound_speed * sound_speed * bg_density / gamma_gas;
 constexpr double delta_b_magn = 1e-6;
 
-
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeMagnitude(const std::array<amrex::Real, 3> &vfield) -> double
 {
 	return std::sqrt(vfield[0] * vfield[0] + vfield[1] * vfield[1] + vfield[2] * vfield[2]);
@@ -87,7 +86,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE void normalizeVector(std::array<amrex::
 	}
 }
 
-AMREX_GPU_MANAGED double b0_magn = 1.0; // NOLINT
+AMREX_GPU_MANAGED double b0_magn = 1.0;					  // NOLINT
 AMREX_GPU_MANAGED double alfven_speed = b0_magn / gcem::sqrt(bg_density); // NOLINT
 
 // angles (radians) in the math reference frame (MRF)
@@ -399,26 +398,16 @@ auto runWaveTest(int nx) -> double
 	}
 
 	// Assume box length = 1.0
-	const std::array<amrex::Real, 3> k_vec_prf = {
-		2.0 * M_PI * static_cast<amrex::Real>(num_modes_x),
-		2.0 * M_PI * static_cast<amrex::Real>(num_modes_y),
-		2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)
-	};
+	const std::array<amrex::Real, 3> k_vec_prf = {2.0 * M_PI * static_cast<amrex::Real>(num_modes_x), 2.0 * M_PI * static_cast<amrex::Real>(num_modes_y),
+						      2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)};
 
 	k_magn = computeMagnitude(k_vec_prf);
 	AMREX_ALWAYS_ASSERT(k_magn > 0.0);
 
-	k_dir_prf = {
-		k_vec_prf[0] / k_magn,
-		k_vec_prf[1] / k_magn,
-		k_vec_prf[2] / k_magn
-	};
+	k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
 
-	k_rotation_in_xy_rad =
-		std::atan2(k_dir_prf[1], k_dir_prf[0]);
-	k_elevation_from_xy_rad =
-		std::atan2(k_dir_prf[2],
-		           std::hypot(k_dir_prf[0], k_dir_prf[1]));
+	k_rotation_in_xy_rad = std::atan2(k_dir_prf[1], k_dir_prf[0]);
+	k_elevation_from_xy_rad = std::atan2(k_dir_prf[2], std::hypot(k_dir_prf[0], k_dir_prf[1]));
 
 	//==================================================
 	// Build orthonormal basis in PRF
@@ -431,8 +420,7 @@ auto runWaveTest(int nx) -> double
 	inplane_dir_prf = computeCrossProduct(ref_prf, k_dir_prf);
 	normalizeVector(inplane_dir_prf);
 
-	outofplane_dir_prf =
-		computeCrossProduct(k_dir_prf, inplane_dir_prf);
+	outofplane_dir_prf = computeCrossProduct(k_dir_prf, inplane_dir_prf);
 	normalizeVector(outofplane_dir_prf);
 
 	//==================================================
@@ -453,9 +441,7 @@ auto runWaveTest(int nx) -> double
 
 		// B0 lies in the (k, in-plane) plane
 		for (int i = 0; i < 3; ++i) {
-			b0_vec[i] =
-				std::cos(theta) * k_dir_prf[i] +
-				std::sin(theta) * inplane_dir_prf[i];
+			b0_vec[i] = std::cos(theta) * k_dir_prf[i] + std::sin(theta) * inplane_dir_prf[i];
 		}
 
 		normalizeVector(b0_vec);
@@ -466,7 +452,7 @@ auto runWaveTest(int nx) -> double
 	} else {
 		double b0_x = 0.0;
 		double b0_y = 0.0;
-		double b0_z = 0.0;	
+		double b0_z = 0.0;
 		hpp.query("b0_x", b0_x);
 		hpp.query("b0_y", b0_y);
 		hpp.query("b0_z", b0_z);
@@ -474,23 +460,16 @@ auto runWaveTest(int nx) -> double
 		b0_vec = {b0_x, b0_y, b0_z};
 	}
 
-
 	b0_magn = computeMagnitude(b0_vec);
 	AMREX_ALWAYS_ASSERT(b0_magn > 0.0);
 
-	std::array<amrex::Real, 3> b0_dir = {
-		b0_vec[0] / b0_magn,
-		b0_vec[1] / b0_magn,
-		b0_vec[2] / b0_magn
-	};
+	std::array<amrex::Real, 3> b0_dir = {b0_vec[0] / b0_magn, b0_vec[1] / b0_magn, b0_vec[2] / b0_magn};
 
 	alfven_speed = b0_magn; // rho0 = 1
 
-	const double cos_k_b0 =
-		computeDotProduct(k_dir_prf, b0_dir);
+	const double cos_k_b0 = computeDotProduct(k_dir_prf, b0_dir);
 
-	const double cA =
-		alfven_speed * std::abs(cos_k_b0);
+	const double cA = alfven_speed * std::abs(cos_k_b0);
 	AMREX_ALWAYS_ASSERT(cA > 0.0);
 
 	const double wavelength = 2.0 * M_PI / k_magn;
@@ -520,18 +499,14 @@ auto runWaveTest(int nx) -> double
 
 	pp.add("max_level", 0);
 
-
 	amrex::ParmParse pp_geom("geometry");
 	pp_geom.addarr("prob_lo", amrex::Vector<double>{0.0, 0.0, 0.0});
 	pp_geom.addarr("prob_hi", amrex::Vector<double>{1.0, 1.0, 1.0});
 	pp_geom.addarr("is_periodic", amrex::Vector<int>{1, 1, 1});
 
+	auto BCs_cc = quokka::BC<AlfvenWaveLinear>(quokka::BCType::int_dir);
 
-	auto BCs_cc =
-		quokka::BC<AlfvenWaveLinear>(quokka::BCType::int_dir);
-
-	const int nvars_fc =
-		Physics_Indices<AlfvenWaveLinear>::nvarTotal_fc;
+	const int nvars_fc = Physics_Indices<AlfvenWaveLinear>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
 
 	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
@@ -551,7 +526,6 @@ auto runWaveTest(int nx) -> double
 
 	return sim.computeErrorNorm();
 }
-
 
 auto problem_main() -> int
 {
