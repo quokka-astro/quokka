@@ -420,9 +420,6 @@ auto runWaveTest(int nx) -> double
 		std::atan2(k_dir_prf[2],
 		           std::hypot(k_dir_prf[0], k_dir_prf[1]));
 
-	//==================================================
-	// Build orthonormal basis in PRF
-	//==================================================
 	std::array<amrex::Real, 3> ref_prf{0.0, 0.0, 1.0};
 	if (std::abs(computeDotProduct(ref_prf, k_dir_prf)) > 0.9999) {
 		ref_prf = {0.0, 1.0, 0.0};
@@ -435,9 +432,6 @@ auto runWaveTest(int nx) -> double
 		computeCrossProduct(k_dir_prf, inplane_dir_prf);
 	normalizeVector(outofplane_dir_prf);
 
-	//==================================================
-	// Background magnetic field (BRANCH HERE)
-	//==================================================
 	std::array<amrex::Real, 3> b0_vec{};
 
 	if (use_angle) {
@@ -478,7 +472,7 @@ auto runWaveTest(int nx) -> double
 	b0_magn = computeMagnitude(b0_vec);
 	AMREX_ALWAYS_ASSERT(b0_magn > 0.0);
 
-	std::array<amrex::Real, 3> b0_dir = {
+	const std::array<amrex::Real, 3> b0_dir = {
 		b0_vec[0] / b0_magn,
 		b0_vec[1] / b0_magn,
 		b0_vec[2] / b0_magn
