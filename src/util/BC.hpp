@@ -15,14 +15,16 @@ namespace quokka
 namespace BCType
 {
 // Standard AMReX boundary conditions (using actual amrex::BCType values, safe from AMReX changes)
-AMREX_ENUM(mathematicalBndryTypes, bogus, reflect_odd,
-	   int_dir, // interior/periodic
-	   reflect_even,
-	   foextrap,   // first order extrapolation
-	   ext_dir,    // external Dirichlet
-	   hoextrap,   // higher order extrapolation
-	   hoextrapcc, // higher order extrapolation to cell center
-	   ext_dir_cc, // external Dirichlet at cell center
+AMREX_ENUM(mathematicalBndryTypes,
+	   bogus,	 // bogus
+	   reflect_odd,	 // reflect with opposite sign
+	   int_dir,	 // interior/periodic
+	   reflect_even, // reflect with same sign
+	   foextrap,	 // first order extrapolation
+	   ext_dir,	 // external Dirichlet
+	   hoextrap,	 // higher order extrapolation
+	   hoextrapcc,	 // higher order extrapolation to cell center
+	   ext_dir_cc,	 // external Dirichlet at cell center
 	   direction_dependent, user_1, user_2, user_3,
 
 	   // Quokka-specific boundary conditions (custom values, not conflicting with AMReX values)

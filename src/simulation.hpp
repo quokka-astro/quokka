@@ -242,22 +242,39 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 			// Parse BCs
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(bc_str.size() >= 3, "quokka.bc must have at least 3 components");
 
-			auto getBCType = [](std::string const &str) -> int {
+			auto getBCType = [](std::string const &str) -> quokka::BCType::mathematicalBndryTypes {
 				if (str == "periodic")
-					return static_cast<int>(quokka::BCType::mathematicalBndryTypes::int_dir);
+					return quokka::BCType::mathematicalBndryTypes::int_dir;
 				if (str == "reflecting")
-					return static_cast<int>(quokka::BCType::mathematicalBndryTypes::reflecting);
-				if (str == "outflow")
-					return static_cast<int>(quokka::BCType::mathematicalBndryTypes::foextrap);
+					return quokka::BCType::mathematicalBndryTypes::reflecting;
+				if (str == "bogus")
+					return quokka::BCType::mathematicalBndryTypes::bogus;
+				if (str == "reflect_odd")
+					return quokka::BCType::mathematicalBndryTypes::reflect_odd;
+				if (str == "reflect_even")
+					return quokka::BCType::mathematicalBndryTypes::reflect_even;
+				if (str == "foextrap")
+					return quokka::BCType::mathematicalBndryTypes::foextrap;
 				if (str == "ext_dir")
-					return static_cast<int>(quokka::BCType::mathematicalBndryTypes::ext_dir); // Dirichlet
-				// Add other mappings as needed, or use AMREX_ENUM parsing if fully switched
-				return static_cast<int>(quokka::BCType::mathematicalBndryTypes::bogus);
+					return quokka::BCType::mathematicalBndryTypes::ext_dir;
+				if (str == "hoextrap")
+					return quokka::BCType::mathematicalBndryTypes::hoextrap;
+				if (str == "hoextrapcc")
+					return quokka::BCType::mathematicalBndryTypes::hoextrapcc;
+				if (str == "ext_dir_cc")
+					return quokka::BCType::mathematicalBndryTypes::ext_dir_cc;
+				if (str == "direction_dependent")
+					return quokka::BCType::mathematicalBndryTypes::direction_dependent;
+				if (str == "user_1")
+					return quokka::BCType::mathematicalBndryTypes::user_1;
+				if (str == "user_2")
+					return quokka::BCType::mathematicalBndryTypes::user_2;
+				return quokka::BCType::mathematicalBndryTypes::user_3;
 			};
 
-			int bc_x = getBCType(bc_str[0]);
-			int bc_y = getBCType(bc_str[1]);
-			int bc_z = getBCType(bc_str[2]);
+			int bc_x = static_cast<int>(getBCType(bc_str[0]));
+			int bc_y = static_cast<int>(getBCType(bc_str[1]));
+			int bc_z = static_cast<int>(getBCType(bc_str[2]));
 
 			BCs_cc_ = quokka::BC<problem_t>(bc_x, bc_y, bc_z);
 		} else {
