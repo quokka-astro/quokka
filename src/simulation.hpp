@@ -217,18 +217,14 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	mutable YAML::Node simulationMetadata_;
 
 	// constructor
-	// constructor
-	AMRSimulation()
-	{
+	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_fc) : BCs_fc_(BCs_fc) { 
 		readBCs();
-		BCs_fc_ = builtin_BCs_fc();
-		initialize();
+		initialize(); 
 	}
 
-	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_fc) : BCs_fc_(BCs_fc)
-	{
+	explicit AMRSimulation() : BCs_fc_(builtin_BCs_fc()) { 
 		readBCs();
-		initialize();
+		initialize(); 
 	}
 
 	auto builtin_BCs_fc() -> amrex::Vector<amrex::BCRec>
