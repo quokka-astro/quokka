@@ -321,6 +321,14 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputePressure(am
 {
 	// return pressure for an ideal gas
 	amrex::Real P = NAN;
+
+	if constexpr (gamma_ == 1.0) {
+		static_assert(EOS_Traits<problem_t>::cs_isothermal > 0.0, "EOS_Traits<problem_t>::cs_isothermal must be set when gamma=1.");
+		amrex::ignore_unused(Eint);
+		amrex::ignore_unused(massScalars);
+		P = rho * EOS_Traits<problem_t>::cs_isothermal * EOS_Traits<problem_t>::cs_isothermal;
+		return P;
+	}
 #ifdef CHEMISTRY
 	eos_t chemstate;
 	chemstate.rho = rho;
@@ -342,19 +350,17 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputePressure(am
 #else
 	amrex::ignore_unused(massScalars);
 
-	if constexpr (gamma_ != 1.0) {
-		chem_eos_t estate;
-		estate.rho = rho;
-		// if rho is 0, pass 0 to state.e
-		if (rho == 0.0) {
-			estate.e = 0;
-		} else {
-			estate.e = Eint / rho;
-		}
-		estate.mu = mean_molecular_weight_ / C::m_u;
-		eos(eos_input_re, estate);
-		P = estate.p;
+	chem_eos_t estate;
+	estate.rho = rho;
+	// if rho is 0, pass 0 to state.e
+	if (rho == 0.0) {
+		estate.e = 0;
+	} else {
+		estate.e = Eint / rho;
 	}
+	estate.mu = mean_molecular_weight_ / C::m_u;
+	eos(eos_input_re, estate);
+	P = estate.p;
 #endif
 	return P;
 }
@@ -366,6 +372,15 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeSoundSpeed(
 {
 	// return sound speed for an ideal gas
 	amrex::Real cs = NAN;
+
+	if constexpr (gamma_ == 1.0) {
+		static_assert(EOS_Traits<problem_t>::cs_isothermal > 0.0, "EOS_Traits<problem_t>::cs_isothermal must be set when gamma=1.");
+		amrex::ignore_unused(rho);
+		amrex::ignore_unused(Pressure);
+		amrex::ignore_unused(massScalars);
+		cs = EOS_Traits<problem_t>::cs_isothermal;
+		return cs;
+	}
 
 #ifdef CHEMISTRY
 	eos_t chemstate;
@@ -388,14 +403,12 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeSoundSpeed(
 #else
 	amrex::ignore_unused(massScalars);
 
-	if constexpr (gamma_ != 1.0) {
-		chem_eos_t estate;
-		estate.rho = rho;
-		estate.p = Pressure;
-		estate.mu = mean_molecular_weight_ / C::m_u;
-		eos(eos_input_rp, estate);
-		cs = estate.cs;
-	}
+	chem_eos_t estate;
+	estate.rho = rho;
+	estate.p = Pressure;
+	estate.mu = mean_molecular_weight_ / C::m_u;
+	eos(eos_input_rp, estate);
+	cs = estate.cs;
 #endif
 	return cs;
 }
