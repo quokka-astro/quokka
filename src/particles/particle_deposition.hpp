@@ -560,9 +560,6 @@ void addBufferToState(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_
 		      const SNScheme SN_scheme_d, amrex::Real *p_max_velocity)
 {
 	const BL_PROFILE("SNFeedbackUtils::addBufferToState()");
-	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state_fc != nullptr, "MHD SN feedback requires face-centered magnetic fields.");
-	}
 	for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
 		auto const &local_state = state.array(mfi);

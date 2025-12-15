@@ -17,7 +17,6 @@
 #include "AMReX.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BLassert.H"
-#include "AMReX_Math.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
@@ -39,19 +38,6 @@
 
 // Microphysics headers
 #include "extern_parameters.H"
-
-namespace quokka
-{
-struct DensitySpongeConfig {
-	bool enabled = false;
-	amrex::Real timescale = -1.0;
-	amrex::Real lowerDensity = -1.0;
-	amrex::Real upperDensity = -1.0;
-	amrex::Real lowerFactor = 0.0;
-	amrex::Real upperFactor = 1.0;
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> targetVelocity{AMREX_D_DECL(0.0, 0.0, 0.0)};
-};
-} // namespace quokka
 
 // this struct is specialized by the user application code
 //
@@ -945,6 +931,8 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 #endif
 }
 
+// to ensure that physical quantities are within reasonable
+// floors and ceilings which can be set in the param file
 template <typename problem_t> void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const tempFloor, amrex::MultiFab &state_mf)
 {
 	auto state = state_mf.arrays();
