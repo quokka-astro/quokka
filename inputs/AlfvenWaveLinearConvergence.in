@@ -21,7 +21,7 @@ amr.max_grid_size   = 128    # maximum grid size to create 4 FABs of 25 cells ea
 do_reflux = 0
 do_subcycle = 0
 do_tracers = 1
-plotfile_interval = -1
+plotfile_interval = 10
 
 cfl = 0.3
 
@@ -32,7 +32,13 @@ hydro.use_dual_energy = 0
 
 mhd.reconstruction_order = 3
 
+setup.use_angle = 0  
 setup.num_modes_x = 1
 setup.num_modes_y = 0
 setup.num_modes_z = 0
-setup.angle_between_k_b0 = 0
+
+setup.b0_x = 1.0
+setup.b0_y = 0.0
+setup.b0_z = 0.0
+
+setup.angle_between_k_b0 = 0.0   # degrees
