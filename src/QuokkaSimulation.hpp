@@ -184,7 +184,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int useDualEnergy_ = 1;			// 0 == disabled; 1 == use auxiliary internal energy equation (default)
 	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
-	quokka::DensitySpongeConfig densitySpongeConfig_;
 	// number of ghost cells for face velocity computation (default == 2)
 	// we now need 3 total to accommodate the higher-order reconstruction in computeEMF
 	int nghost_vel_ = Physics_Traits<problem_t>::is_mhd_enabled ? 3 : 2;
@@ -509,8 +508,6 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::getScalarVariabl
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 {
-	densitySpongeConfig_ = quokka::DensitySpongeConfig{};
-
 	// set hydro runtime parameters
 	{
 		amrex::ParmParse const hpp("hydro");
