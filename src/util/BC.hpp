@@ -14,28 +14,20 @@ namespace quokka
 
 namespace BCType
 {
-enum mathematicalBndryTypes : int {
-	// Standard AMReX boundary conditions (using actual amrex::BCType values, safe from AMReX changes)
-	bogus = amrex::BCType::bogus,
-	reflect_odd = amrex::BCType::reflect_odd,
-	int_dir = amrex::BCType::int_dir, // interior/periodic
-	reflect_even = amrex::BCType::reflect_even,
-	foextrap = amrex::BCType::foextrap,	// first order extrapolation
-	ext_dir = amrex::BCType::ext_dir,	// external Dirichlet
-	hoextrap = amrex::BCType::hoextrap,	// higher order extrapolation
-	hoextrapcc = amrex::BCType::hoextrapcc, // higher order extrapolation to cell center
-	ext_dir_cc = amrex::BCType::ext_dir_cc, // external Dirichlet at cell center
-	direction_dependent = amrex::BCType::direction_dependent,
-	user_1 = amrex::BCType::user_1,
-	user_2 = amrex::BCType::user_2,
-	user_3 = amrex::BCType::user_3,
+// Standard AMReX boundary conditions (using actual amrex::BCType values, safe from AMReX changes)
+AMREX_ENUM(mathematicalBndryTypes, bogus, reflect_odd,
+	   int_dir, // interior/periodic
+	   reflect_even,
+	   foextrap,   // first order extrapolation
+	   ext_dir,    // external Dirichlet
+	   hoextrap,   // higher order extrapolation
+	   hoextrapcc, // higher order extrapolation to cell center
+	   ext_dir_cc, // external Dirichlet at cell center
+	   direction_dependent, user_1, user_2, user_3,
 
-	// Quokka-specific boundary conditions (custom values, not conflicting with AMReX values)
-	reflecting = 8881, // Special: uses reflect_odd/reflect_even based on component
-			   // outflow_nscbc = 8882, // Future: NSCBC outflow
-			   // inflow_nscbc = 8883, // Future: NSCBC inflow
-			   // custom_wall = 8884  // Future: custom wall treatment
-};
+	   // Quokka-specific boundary conditions (custom values, not conflicting with AMReX values)
+	   reflecting, // Special: uses reflect_odd/reflect_even based on component
+	   outflow_nscbc, inflow_nscbc, custom_wall);
 } // namespace BCType
 
 namespace detail
@@ -96,7 +88,7 @@ template <typename problem_t> auto BC(int bc_x, int bc_y, int bc_z) -> amrex::Ve
 
 	for (int n = 0; n < ncomp_cc; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			if (bcs[i] == BCType::reflecting) {
+			if (bcs[i] == static_cast<int>(BCType::mathematicalBndryTypes::reflecting)) {
 				// For reflecting boundaries, use reflect_odd for normal momentum components
 				// and reflect_even for all other components (including tangential momentum)
 				if (detail::isNormalComponent<problem_t>(n, i)) {

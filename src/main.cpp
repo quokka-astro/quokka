@@ -43,6 +43,22 @@ auto main(int argc, char **argv) -> int
 		if (!pp.contains("use_gpu_aware_mpi")) {
 			pp.add("use_gpu_aware_mpi", 1);
 		}
+
+		// override geometry.is_periodic based on quokka.bc
+		amrex::Vector<std::string> bc_str;
+		amrex::ParmParse pp_quokka("quokka");
+		if (pp_quokka.queryarr("bc", bc_str)) {
+			amrex::Vector<int> is_periodic(3, 0);
+			if (bc_str.size() >= 3) {
+				for (int i = 0; i < 3; ++i) {
+					if (bc_str[i] == "periodic") {
+						is_periodic[i] = 1;
+					}
+				}
+				amrex::ParmParse pp_geom("geometry");
+				pp_geom.addarr("is_periodic", is_periodic); // Overwrites if exists
+			}
+		}
 	});
 
 	amrex::Real start_time = amrex::ParallelDescriptor::second();

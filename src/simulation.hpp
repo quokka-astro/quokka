@@ -100,6 +100,7 @@ namespace filesystem = experimental::filesystem;
 #include "io/io_utils.hpp"
 #include "io/projection.hpp"
 #include "physics_info.hpp"
+#include "util/BC.hpp"
 
 #ifdef QUOKKA_USE_OPENPMD
 #include "io/openPMD.hpp"
@@ -216,15 +217,60 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	mutable YAML::Node simulationMetadata_;
 
 	// constructor
-	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : BCs_cc_(BCs_cc), BCs_fc_(BCs_fc) { initialize(); }
+	// constructor
+	AMRSimulation()
+	{
+		readBCs();
+		BCs_fc_ = builtin_BCs_fc();
+		initialize();
+	}
 
-	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : BCs_cc_(BCs_cc), BCs_fc_(builtin_BCs_fc(BCs_cc)) { initialize(); }
+	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_fc) : BCs_fc_(BCs_fc)
+	{
+		readBCs();
+		initialize();
+	}
 
-	auto builtin_BCs_fc(amrex::Vector<amrex::BCRec> & /*BCs_cc*/) -> amrex::Vector<amrex::BCRec>
+	auto builtin_BCs_fc() -> amrex::Vector<amrex::BCRec>
 	{
 		static_assert(!(Physics_Traits<problem_t>::is_mhd_enabled), "You are required to explicitly define the face-centered BCs when MHD is enabled.");
 		amrex::Vector<amrex::BCRec> BCs_fc(0);
 		return BCs_fc;
+	}
+
+	void readBCs()
+	{
+		amrex::ParmParse pp_quokka("quokka");
+		amrex::Vector<std::string> bc_str;
+		if (pp_quokka.queryarr("bc", bc_str)) {
+			// Parse BCs
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(bc_str.size() >= 3, "quokka.bc must have at least 3 components");
+
+			auto getBCType = [](std::string const &str) -> int {
+				if (str == "periodic")
+					return static_cast<int>(quokka::BCType::mathematicalBndryTypes::int_dir);
+				if (str == "reflecting")
+					return static_cast<int>(quokka::BCType::mathematicalBndryTypes::reflecting);
+				if (str == "outflow")
+					return static_cast<int>(quokka::BCType::mathematicalBndryTypes::foextrap);
+				if (str == "ext_dir")
+					return static_cast<int>(quokka::BCType::mathematicalBndryTypes::ext_dir); // Dirichlet
+				// Add other mappings as needed, or use AMREX_ENUM parsing if fully switched
+				return static_cast<int>(quokka::BCType::mathematicalBndryTypes::bogus);
+			};
+
+			int bc_x = getBCType(bc_str[0]);
+			int bc_y = getBCType(bc_str[1]);
+			int bc_z = getBCType(bc_str[2]);
+
+			BCs_cc_ = quokka::BC<problem_t>(bc_x, bc_y, bc_z);
+		} else {
+			// For now, if not found, we could error out, but to support tests that might not have it yet (if any),
+			// maybe we shouldn't. But the Plan says "Add quokka.bc ...", so we assume it's there.
+			// If we want to strictly follow the plan, we should enforce it.
+			// NOTE: The previous code passed BCs from main.cpp which constructed them.
+			amrex::Abort("quokka.bc must be specified in the input file.");
+		}
 	}
 
 	void initialize();
