@@ -18,26 +18,23 @@ namespace BCType
 // NOTE: Standard BC values must match amrex::BCType exactly (verified by static_assert below)
 // AMREX_ENUM requires literal integers for runtime string parsing to work
 AMREX_ENUM(mathematicalBndryTypes,
-	// Standard AMReX boundary conditions (literal values from AMReX_BC_TYPES.H)
-	bogus = -666,
-	reflect_odd = -1,
-	periodic = 0,       // corresponds to amrex::BCType::int_dir (interior/periodic); this conversion of int_dir to periodic requires enforcing geometry.is_periodic in main.cpp
-	reflect_even = 1,
-	foextrap = 2,       // first order extrapolation
-	ext_dir = 3,        // external Dirichlet
-	hoextrap = 4,       // higher order extrapolation
-	hoextrapcc = 5,     // higher order extrapolation to cell center
-	ext_dir_cc = 6,     // external Dirichlet at cell center
-	direction_dependent = 7,
-	user_1 = 1001,
-	user_2 = 1002,
-	user_3 = 1003,
+	   // Standard AMReX boundary conditions (literal values from AMReX_BC_TYPES.H)
+	   bogus = -666, reflect_odd = -1,
+	   periodic = 0, // corresponds to amrex::BCType::int_dir (interior/periodic); this conversion of int_dir to periodic requires enforcing
+			 // geometry.is_periodic in main.cpp
+	   reflect_even = 1,
+	   foextrap = 2,   // first order extrapolation
+	   ext_dir = 3,	   // external Dirichlet
+	   hoextrap = 4,   // higher order extrapolation
+	   hoextrapcc = 5, // higher order extrapolation to cell center
+	   ext_dir_cc = 6, // external Dirichlet at cell center
+	   direction_dependent = 7, user_1 = 1001, user_2 = 1002, user_3 = 1003,
 
-	// Quokka-specific boundary conditions (custom values, not conflicting with AMReX values)
-	reflecting = 8881   // Special: uses reflect_odd/reflect_even based on component
-			    // outflow_nscbc = 8882, // Future: NSCBC outflow
-			    // inflow_nscbc = 8883, // Future: NSCBC inflow
-			    // custom_wall = 8884  // Future: custom wall treatment
+	   // Quokka-specific boundary conditions (custom values, not conflicting with AMReX values)
+	   reflecting = 8881 // Special: uses reflect_odd/reflect_even based on component
+			     // outflow_nscbc = 8882, // Future: NSCBC outflow
+			     // inflow_nscbc = 8883, // Future: NSCBC inflow
+			     // custom_wall = 8884  // Future: custom wall treatment
 );
 
 // Compile-time verification that our values match AMReX's BCType values
@@ -105,7 +102,8 @@ template <typename problem_t> constexpr auto isNormalComponent(int n, int dim) -
 } // namespace detail
 
 // Three parameter version - sets each dimension separately
-template <typename problem_t> auto BC(BCType::mathematicalBndryTypes bc_x, BCType::mathematicalBndryTypes bc_y, BCType::mathematicalBndryTypes bc_z) -> amrex::Vector<amrex::BCRec>
+template <typename problem_t>
+auto BC(BCType::mathematicalBndryTypes bc_x, BCType::mathematicalBndryTypes bc_y, BCType::mathematicalBndryTypes bc_z) -> amrex::Vector<amrex::BCRec>
 {
 	const int ncomp_cc = Physics_Indices<problem_t>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
