@@ -507,8 +507,17 @@ template <> struct ParticleCreationTraits<ParticleType::Star> {
 			state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) *= scale_factor;
 			state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) *= scale_factor;
 			state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) *= scale_factor;
+			state_arr(i, j, k, HydroSystem<problem_t>::x1AngMomentum_index) *= scale_factor;
+			state_arr(i, j, k, HydroSystem<problem_t>::x2AngMomentum_index) *= scale_factor;
+			state_arr(i, j, k, HydroSystem<problem_t>::x3AngMomentum_index) *= scale_factor;
 			state_arr(i, j, k, HydroSystem<problem_t>::energy_index) *= scale_factor;
 			state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index) *= scale_factor;
+			state_arr(i, j, k, HydroSystem<problem_t>::mdeut) *= scale_factor;
+			state_arr(i, j, k, HydroSystem<problem_t>::n) *= scale_factor;
+			state_arr(i, j, k, HydroSystem<problem_t>::mdot) *= scale_factor;
+			state_arr(i, j, k, HydroSystem<problem_t>::burnState) *= scale_factor;
+			state_arr(i, j, k, HydroSystem<problem_t>::l_hist) *= scale_factor;
+			
 		}
 	};
 
@@ -519,8 +528,8 @@ template <> struct ParticleCreationTraits<ParticleType::Star> {
 				    std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr)
 	{
 		// Use the common implementation with our checker and creator types
-		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<ParticleType::Sink>::template ParticleChecker,
-							  ParticleCreationTraits<ParticleType::Sink>::template ParticleCreator>(
+		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<ParticleType::Star>::template ParticleChecker,
+							  ParticleCreationTraits<ParticleType::Star>::template ParticleCreator>(
 		    container, mass_idx, state, accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index, state_fc);
 	}
 };
