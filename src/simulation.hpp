@@ -1537,56 +1537,56 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 					rhs_buffer[lev].setVal(0);
 				}
 
-			// deposit mass into temporary buffer
-			particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs_buffer), finest_level, Gconst_);
+				// deposit mass into temporary buffer
+				particleRegister_.depositMass(amrex::GetVecOfPtrs(rhs_buffer), finest_level, Gconst_);
 
-			// apply roundoff to buffer before adding to rhs
-			for (int lev = 0; lev <= finest_level; ++lev) {
-				quokka::ParticleUtils::roundoffMultiFab(rhs_buffer[lev]);
+				// apply roundoff to buffer before adding to rhs
+				for (int lev = 0; lev <= finest_level; ++lev) {
+					quokka::ParticleUtils::roundoffMultiFab(rhs_buffer[lev]);
+				}
+
+				// add buffer to rhs
+				for (int lev = 0; lev <= finest_level; ++lev) {
+					amrex::MultiFab::Add(rhs[lev], rhs_buffer[lev], 0, 0, ncomp, 0);
+				}
+			}
+		}
+
+		// check for NaN
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
+		}
+
+		// Analyze boundary conditions for each dimension
+		amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_lo;
+		amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_hi;
+		int num_periodic_dims = 0;
+		std::string bc_description = "Gravity BCs: ";
+
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			std::string dim_name;
+			if (idim == 0) {
+				dim_name = "x";
+			} else if (idim == 1) {
+				dim_name = "y";
+			} else {
+				dim_name = "z";
 			}
 
-			// add buffer to rhs
-			for (int lev = 0; lev <= finest_level; ++lev) {
-				amrex::MultiFab::Add(rhs[lev], rhs_buffer[lev], 0, 0, ncomp, 0);
+			if (geom[0].isPeriodic(idim)) {
+				bc_lo[idim] = amrex::LinOpBCType::Periodic;
+				bc_hi[idim] = amrex::LinOpBCType::Periodic;
+				num_periodic_dims++;
+				bc_description += dim_name + ":periodic ";
+			} else {
+				// Use homogeneous Neumann (dphi/dn = 0) for non-periodic dimensions
+				// This is appropriate for reflecting boundaries: zero gravitational acceleration
+				// perpendicular to the wall, which means zero normal derivative of phi.
+				bc_lo[idim] = amrex::LinOpBCType::Neumann;
+				bc_hi[idim] = amrex::LinOpBCType::Neumann;
+				bc_description += dim_name + ":Neumann ";
 			}
 		}
-	}
-
-	// check for NaN
-	for (int lev = 0; lev <= finest_level; ++lev) {
-		AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
-	}
-
-	// Analyze boundary conditions for each dimension
-	amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_lo;
-	amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_hi;
-	int num_periodic_dims = 0;
-	std::string bc_description = "Gravity BCs: ";
-
-	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		std::string dim_name;
-		if (idim == 0) {
-			dim_name = "x";
-		} else if (idim == 1) {
-			dim_name = "y";
-		} else {
-			dim_name = "z";
-		}
-
-		if (geom[0].isPeriodic(idim)) {
-			bc_lo[idim] = amrex::LinOpBCType::Periodic;
-			bc_hi[idim] = amrex::LinOpBCType::Periodic;
-			num_periodic_dims++;
-			bc_description += dim_name + ":periodic ";
-		} else {
-			// Use homogeneous Neumann (dphi/dn = 0) for non-periodic dimensions
-			// This is appropriate for reflecting boundaries: zero gravitational acceleration
-			// perpendicular to the wall, which means zero normal derivative of phi.
-			bc_lo[idim] = amrex::LinOpBCType::Neumann;
-			bc_hi[idim] = amrex::LinOpBCType::Neumann;
-			bc_description += dim_name + ":Neumann ";
-		}
-	}
 
 		if (verbose) {
 			amrex::Print() << bc_description << "\n";
@@ -1596,36 +1596,36 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		const bool use_mlmg_solver = (num_periodic_dims > 0);
 
 		if (use_mlmg_solver) {
-		// Use MLMG solver with mixed/periodic boundary conditions
-		if (verbose) {
-			if (num_periodic_dims == 3) {
-				amrex::Print() << "Using MLMG solver with fully periodic boundaries...\n\n";
-			} else if (num_periodic_dims >= 1) {
-				amrex::Print() << "Using MLMG solver with mixed periodic/Neumann boundaries...\n\n";
-			} else {
-				amrex::Print() << "Using MLMG solver with Neumann boundaries...\n\n";
+			// Use MLMG solver with mixed/periodic boundary conditions
+			if (verbose) {
+				if (num_periodic_dims == 3) {
+					amrex::Print() << "Using MLMG solver with fully periodic boundaries...\n\n";
+				} else if (num_periodic_dims >= 1) {
+					amrex::Print() << "Using MLMG solver with mixed periodic/Neumann boundaries...\n\n";
+				} else {
+					amrex::Print() << "Using MLMG solver with Neumann boundaries...\n\n";
+				}
 			}
-		}
 
-		// Create MLPoisson linear operator with proper LPInfo for AMR
-		amrex::LPInfo info;
-		// For AMR problems, we need to ensure proper coarsening
-		if (finest_level > 0) {
-			info.setAgglomeration(false); // Disable agglomeration for AMR
-			info.setConsolidation(false); // Disable consolidation for AMR
-		}
+			// Create MLPoisson linear operator with proper LPInfo for AMR
+			amrex::LPInfo info;
+			// For AMR problems, we need to ensure proper coarsening
+			if (finest_level > 0) {
+				info.setAgglomeration(false); // Disable agglomeration for AMR
+				info.setConsolidation(false); // Disable consolidation for AMR
+			}
 
-		amrex::MLPoisson mlpoisson(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level), info);
+			amrex::MLPoisson mlpoisson(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level), info);
 
-		// Set the mixed boundary conditions (already computed above)
-		mlpoisson.setDomainBC(bc_lo, bc_hi);
+			// Set the mixed boundary conditions (already computed above)
+			mlpoisson.setDomainBC(bc_lo, bc_hi);
 
-		// Set level boundary conditions for each AMR level
-		// For homogeneous Neumann BCs (dphi/dn = 0), we don't need to specify values
-		// For Dirichlet BCs, we would need to specify the boundary values
-		for (int lev = 0; lev <= finest_level; ++lev) {
-			mlpoisson.setLevelBC(lev, nullptr);
-		}
+			// Set level boundary conditions for each AMR level
+			// For homogeneous Neumann BCs (dphi/dn = 0), we don't need to specify values
+			// For Dirichlet BCs, we would need to specify the boundary values
+			for (int lev = 0; lev <= finest_level; ++lev) {
+				mlpoisson.setLevelBC(lev, nullptr);
+			}
 
 			// Create MLMG solver
 			amrex::MLMG mlmg(mlpoisson);
