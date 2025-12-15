@@ -17,6 +17,7 @@ struct TestParticle {
 constexpr double rho0 = 1.0e-5;
 constexpr double dt_ = 0.001;
 static bool refine_half_domain = false; // NOLINT
+constexpr double B0 = 1.0e-7;		// uniform background field
 
 // locations of the particles: a 2x2x2 grids of particles
 constexpr double box_left_edge_ = -2.0; // This should be fixed for this problem.
@@ -56,7 +57,7 @@ template <> struct Physics_Traits<TestParticle> {
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_dust_enabled = false;
 	static constexpr int nDustGroups = 1; // number of dust groups
-	static constexpr bool is_mhd_enabled = false;
+	static constexpr bool is_mhd_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr int nGroups = 1;			     // number of radiation groups
@@ -123,7 +124,9 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const & /*state_arr*/,
 						 amrex::Array4<const amrex::Real> const & /*state_accretion_rate_arr*/, int i, int j, int k,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::RandomEngine const & /*engine*/) const -> int
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+						 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const * /*cons_fc*/,
+						 amrex::RandomEngine const & /*engine*/) const -> int
 		{
 			// A simple demonstration of particle creation
 			// Could check density threshold or other state-based conditions
@@ -167,7 +170,8 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		AMREX_GPU_DEVICE void
 		operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, StateArray const & /*state_accretion_rate_arr*/, int i,
 			   int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
-			   amrex::Long base_offset, amrex::RandomEngine const & /*engine*/) const
+			   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const * /*cons_fc*/, amrex::Long base_offset,
+			   amrex::RandomEngine const & /*engine*/) const
 		{
 			if (mass_idx + 3 < ParticleType::NReal) {
 				// Calculate common values for all particles
@@ -214,12 +218,13 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 	// Main method to create particles - uses the helper implementation
 	template <typename problem_t, typename ContainerType>
 	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev,
-				    amrex::Real current_time, amrex::Real dt, int evolution_stage_index, int birth_time_index)
+				    amrex::Real current_time, amrex::Real dt, int evolution_stage_index, int birth_time_index,
+				    std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr)
 	{
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<ParticleType::Test>::template ParticleChecker,
 							  ParticleCreationTraits<ParticleType::Test>::template ParticleCreator>(
-		    container, mass_idx, state, state_accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index);
+		    container, mass_idx, state, state_accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index, state_fc);
 	}
 };
 } // namespace quokka
@@ -228,25 +233,42 @@ template <> void QuokkaSimulation<TestParticle>::setInitialConditionsOnGrid(quok
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
+	const double Emag = 0.5 * B0 * B0;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		state_cc(i, j, k, HydroSystem<TestParticle>::density_index) = rho0;
 		state_cc(i, j, k, HydroSystem<TestParticle>::x1Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<TestParticle>::x2Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<TestParticle>::x3Momentum_index) = 0;
-		state_cc(i, j, k, HydroSystem<TestParticle>::energy_index) = 0;
+		state_cc(i, j, k, HydroSystem<TestParticle>::energy_index) = Emag;
 		state_cc(i, j, k, HydroSystem<TestParticle>::internalEnergy_index) = 0;
 	});
 }
 
-template <> void QuokkaSimulation<TestParticle>::computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) {}
+template <> void QuokkaSimulation<TestParticle>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+{
+	const amrex::Array4<double> &state_fc = grid_elem.array_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const quokka::direction dir = grid_elem.dir_;
+	const double B_val = (dir == quokka::direction::x) ? B0 : 0.0;
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) { state_fc(i, j, k, Physics_Indices<TestParticle>::mhdFirstIndex) = B_val; });
+}
 
 auto problem_main() -> int
 {
 	auto BCs_cc = quokka::BC<TestParticle>(quokka::BCType::reflecting);
+	const int nvars_fc = Physics_Indices<TestParticle>::nvarTotal_fc;
+	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
+	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			BCs_fc[icomp].setLo(idim, amrex::BCType::reflect_even);
+			BCs_fc[icomp].setHi(idim, amrex::BCType::reflect_even);
+		}
+	}
 
 	// Problem initialization
-	QuokkaSimulation<TestParticle> sim(BCs_cc);
+	QuokkaSimulation<TestParticle> sim(BCs_cc, BCs_fc);
 	sim.initDt_ = dt_;
 	sim.maxDt_ = dt_;
 
