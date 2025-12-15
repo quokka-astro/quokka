@@ -145,9 +145,6 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 	const double vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 	const bool use_uniform_kernel = sink_particle_use_uniform_kernel;
-	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(has_face_fields, "Face-centered state is required for MHD sink accretion");
-	}
 
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
