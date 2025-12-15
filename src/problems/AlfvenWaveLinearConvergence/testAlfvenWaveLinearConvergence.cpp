@@ -457,11 +457,7 @@ auto runWaveTest(int nx) -> double
 	b0_magn = computeMagnitude(b0_vec);
 	AMREX_ALWAYS_ASSERT(b0_magn > 0.0);
 
-	const std::array<amrex::Real, 3> b0_dir = {
-		b0_vec[0] / b0_magn,
-		b0_vec[1] / b0_magn,
-		b0_vec[2] / b0_magn
-	};
+	const std::array<amrex::Real, 3> b0_dir = {b0_vec[0] / b0_magn, b0_vec[1] / b0_magn, b0_vec[2] / b0_magn};
 
 	alfven_speed = b0_magn; // rho0 = 1
 
