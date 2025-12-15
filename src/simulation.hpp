@@ -260,7 +260,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void computeBeforeTimestep() = 0;
 	virtual void computeAfterTimestep() = 0;
 	virtual void computeAfterEvolve(amrex::Vector<amrex::Real> &initSumCons) = 0;
-	virtual void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev) = 0;
+	virtual void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev, int n_ghost) = 0;
 	virtual void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) = 0;
 	virtual void WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf,
 							const amrex::Vector<std::string> &compNames, int lev, int interval) = 0;
@@ -1522,7 +1522,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		}
 
 		for (int lev = 0; lev <= finest_level; ++lev) {
-			fillPoissonRhsAtLevel(rhs[lev], lev);
+			fillPoissonRhsAtLevel(rhs[lev], lev, nghost_rhs);
 			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
 			rhs_min = std::min(rhs_min, rhs[lev].min(0));
 		}
