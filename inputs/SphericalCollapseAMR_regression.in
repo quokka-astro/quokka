@@ -22,9 +22,9 @@ amr.grid_eff        = 1.0
 
 hydro.reconstruction_order = 3  # PPM
 cfl = 0.25
-max_timesteps = 20
+max_timesteps = 10
 checkpoint_interval = -1
-plotfile_interval = 20000
+plotfile_interval = 1
 stop_time = 0.05
 
 derived_vars = gpot
@@ -40,6 +40,6 @@ problem.num_particles = 1000000
 problem.seed = 42123
 problem.r_refine = 0.2
 
-particles.reproducibility_roundoff_redundancy = 42
+particles.reproducibility_roundoff_redundancy = 32
 
 amrex.init_snan = 1

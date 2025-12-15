@@ -321,7 +321,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void AverageDown();
 	void AverageDownTo(int crse_lev);
 	void timeStepWithSubcycling(int lev, amrex::Real time, int iteration);
-	void calculateGpotAllLevels();
+	void calculateGpotAllLevels(int is_first_step);
 	void gravAccelAllLevels(amrex::Real dt);
 	void ellipticSolveAllLevels(amrex::Real dt);
 
@@ -950,7 +950,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		}
 	}
 
-	calculateGpotAllLevels();
+	calculateGpotAllLevels(1);
 
 	// abort if amrex.async_out=1, it is currently broken
 	if (amrex::AsyncOut::UseAsyncOut()) {
@@ -1494,7 +1494,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 #endif
 }
 
-template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLevels()
+template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLevels(int is_first_step)
 {
 #if AMREX_SPACEDIM == 3
 	if constexpr (Physics_Traits<problem_t>::is_self_gravity_enabled) {
@@ -1518,6 +1518,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			rhs[lev].define(grids[lev], dmap[lev], ncomp, nghost_rhs);
 			phi[lev].setVal(0); // set initial guess to zero
 			rhs[lev].setVal(0);
+
+			if (is_first_step == 1) {
+				WriteSingleLevelPlotfileSimplified("debug_phi_stage1_lev" + std::to_string(lev) + "_", phi[lev], {"phi"}, lev, 1);
+			}
 		}
 
 		for (int lev = 0; lev <= finest_level; ++lev) {
@@ -1555,6 +1559,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		// check for NaN
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
+		}
+
+		if (is_first_step == 1) {
+			for (int lev = 0; lev <= finest_level; ++lev) {
+				WriteSingleLevelPlotfileSimplified("debug_rhs_stage1_lev" + std::to_string(lev) + "_", rhs[lev], {"rhs"}, lev, 1);
+			}
 		}
 
 		// Analyze boundary conditions for each dimension
@@ -1648,6 +1658,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			amrex::Real abstol = abstolPoisson_ * std::abs(rhs_min);
 			amrex::Real final_resnorm = mlmg.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
 
+			if (is_first_step == 1) {
+				for (int lev = 0; lev <= finest_level; ++lev) {
+					WriteSingleLevelPlotfileSimplified("debug_phi_stage2_lev" + std::to_string(lev) + "_", phi[lev], {"phi"}, lev, 1);
+				}
+			}
+
 			// Check convergence
 			if (verbose) {
 				amrex::Print() << "MLMG converged with final residual norm: " << final_resnorm << "\n";
@@ -1685,7 +1701,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			// NOTE: this fails when multiple levels are fully refined when open boundary condition is used.
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!phi[lev].contains_nan(), fmt::format("NaN detected in phi at level {} after Poisson solve", lev));
+			if (is_first_step == 1) {
+				WriteSingleLevelPlotfileSimplified("debug_phi_stage3_lev" + std::to_string(lev) + "_", phi[lev], {"phi"}, lev, 1);
+			}
 		}
+
 	}
 #endif
 }
@@ -1714,7 +1734,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 		}
 		if (istep[0] % poissonSupercycleInterval_ == 0) {
 			// do Poisson solve every poissonSupercycleInterval_ coarse steps
-			calculateGpotAllLevels();
+			calculateGpotAllLevels(0);
 		}
 		// this must be done every step
 		gravAccelAllLevels(dt);

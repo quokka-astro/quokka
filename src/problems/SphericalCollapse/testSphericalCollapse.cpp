@@ -34,7 +34,7 @@ template <> struct quokka::EOS_Traits<CollapseProblem> {
 };
 
 template <> struct Particle_Traits<CollapseProblem> {
-	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
 };
 
 template <> struct HydroSystem_Traits<CollapseProblem> {
