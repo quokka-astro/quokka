@@ -202,12 +202,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	const double delta_A2 = 0.0;
 	double delta_A3 = 0.0;
 
-	if (std::abs(sinθ) < tiny) {
+	if (std::abs(sinθ) < tiny || std::abs(cosθ) < tiny) {
 		// theta = 0 or 180 deg: slow mode is pure sound wave → no B perturbation
-		delta_A3 = 0.0; // δB = 0
-	} else if (std::abs(cosθ) < tiny) {
 		// theta = 90 deg: no perturbations in B1 or B2
-		delta_A3 = 0.0; // δB1 = 0
+		delta_A3 = 0.0; // δB = 0
 	} else {
 		const double dB2_mrf = delta_b_magn; // δB3
 		delta_A3 = (dB2_mrf / k_magn) * std::sin(phase);
