@@ -565,18 +565,19 @@ void addBufferToState(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_
 		auto const &local_state = state.array(mfi);
 		auto const &local_buffer = state_buffer.array(mfi);
 
+		bool has_fab_fc = false;
 		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fab_fc{};
-		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc_ptr = nullptr;
 		if (state_fc != nullptr) {
 			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 				fab_fc[dir] = (*state_fc)[dir].const_array(mfi);
 			}
-			fab_fc_ptr = &fab_fc;
+			has_fab_fc = true;
 		}
 
 		// add buffer to state
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 			auto p_max_velocity_local = p_max_velocity; // NOLINT
+			const auto *const fab_fc_ptr = has_fab_fc ? &fab_fc : nullptr;
 			if (SN_scheme_d == SNScheme::SN_thermal_only) {
 				addThermalOnlyBufferToState<problem_t>(local_state, local_buffer, fab_fc_ptr, i, j, k, p_max_velocity_local);
 			} else {
