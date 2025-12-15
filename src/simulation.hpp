@@ -242,14 +242,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 		amrex::Vector<quokka::BCType::mathematicalBndryTypes> bc_type;
 		if (pp_quokka.queryarr("bc", bc_type) != 0) {
 			// Parse BCs
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(bc_type.size() >= 3, "quokka.bc must have at least 3 components");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(bc_type.size() == 3, "quokka.bc must have 3 components");
 
 			BCs_cc_ = quokka::BC<problem_t>(bc_type[0], bc_type[1], bc_type[2]);
 		} else {
-			// For now, if not found, we could error out, but to support tests that might not have it yet (if any),
-			// maybe we shouldn't. But the Plan says "Add quokka.bc ...", so we assume it's there.
-			// If we want to strictly follow the plan, we should enforce it.
-			// NOTE: The previous code passed BCs from main.cpp which constructed them.
 			amrex::Abort("quokka.bc must be specified in the input file.");
 		}
 	}
