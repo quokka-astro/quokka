@@ -73,6 +73,7 @@ namespace filesystem = experimental::filesystem;
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 #include <yaml-cpp/yaml.h>
+#include "util/BC.hpp"
 
 #include "AMReX_AmrParticles.H"
 #include "particles/PhysicsParticles.hpp"
@@ -100,7 +101,6 @@ namespace filesystem = experimental::filesystem;
 #include "io/io_utils.hpp"
 #include "io/projection.hpp"
 #include "physics_info.hpp"
-#include "util/BC.hpp"
 
 #ifdef QUOKKA_USE_OPENPMD
 #include "io/openPMD.hpp"
@@ -217,14 +217,16 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	mutable YAML::Node simulationMetadata_;
 
 	// constructor
-	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_fc) : BCs_fc_(BCs_fc) { 
+	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_fc) : BCs_fc_(BCs_fc)
+	{
 		readBCs();
-		initialize(); 
+		initialize();
 	}
 
-	explicit AMRSimulation() : BCs_fc_(builtin_BCs_fc()) { 
+	explicit AMRSimulation() : BCs_fc_(builtin_BCs_fc())
+	{
 		readBCs();
-		initialize(); 
+		initialize();
 	}
 
 	auto builtin_BCs_fc() -> amrex::Vector<amrex::BCRec>
@@ -237,46 +239,12 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void readBCs()
 	{
 		amrex::ParmParse pp_quokka("quokka");
-		amrex::Vector<std::string> bc_str;
-		if (pp_quokka.queryarr("bc", bc_str)) {
+		amrex::Vector<quokka::BCType::mathematicalBndryTypes> bc_type;
+		if (pp_quokka.queryarr("bc", bc_type) != 0) {
 			// Parse BCs
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(bc_str.size() >= 3, "quokka.bc must have at least 3 components");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(bc_type.size() >= 3, "quokka.bc must have at least 3 components");
 
-			auto getBCType = [](std::string const &str) -> quokka::BCType::mathematicalBndryTypes {
-				if (str == "periodic")
-					return quokka::BCType::mathematicalBndryTypes::int_dir;
-				if (str == "reflecting")
-					return quokka::BCType::mathematicalBndryTypes::reflecting;
-				if (str == "bogus")
-					return quokka::BCType::mathematicalBndryTypes::bogus;
-				if (str == "reflect_odd")
-					return quokka::BCType::mathematicalBndryTypes::reflect_odd;
-				if (str == "reflect_even")
-					return quokka::BCType::mathematicalBndryTypes::reflect_even;
-				if (str == "foextrap")
-					return quokka::BCType::mathematicalBndryTypes::foextrap;
-				if (str == "ext_dir")
-					return quokka::BCType::mathematicalBndryTypes::ext_dir;
-				if (str == "hoextrap")
-					return quokka::BCType::mathematicalBndryTypes::hoextrap;
-				if (str == "hoextrapcc")
-					return quokka::BCType::mathematicalBndryTypes::hoextrapcc;
-				if (str == "ext_dir_cc")
-					return quokka::BCType::mathematicalBndryTypes::ext_dir_cc;
-				if (str == "direction_dependent")
-					return quokka::BCType::mathematicalBndryTypes::direction_dependent;
-				if (str == "user_1")
-					return quokka::BCType::mathematicalBndryTypes::user_1;
-				if (str == "user_2")
-					return quokka::BCType::mathematicalBndryTypes::user_2;
-				return quokka::BCType::mathematicalBndryTypes::user_3;
-			};
-
-			int bc_x = static_cast<int>(getBCType(bc_str[0]));
-			int bc_y = static_cast<int>(getBCType(bc_str[1]));
-			int bc_z = static_cast<int>(getBCType(bc_str[2]));
-
-			BCs_cc_ = quokka::BC<problem_t>(bc_x, bc_y, bc_z);
+			BCs_cc_ = quokka::BC<problem_t>(bc_type[0], bc_type[1], bc_type[2]);
 		} else {
 			// For now, if not found, we could error out, but to support tests that might not have it yet (if any),
 			// maybe we shouldn't. But the Plan says "Add quokka.bc ...", so we assume it's there.
