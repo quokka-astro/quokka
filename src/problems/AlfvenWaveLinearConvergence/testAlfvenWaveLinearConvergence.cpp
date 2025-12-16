@@ -57,7 +57,9 @@ constexpr double sound_speed = 1.0;
 constexpr double gamma_gas = quokka::EOS_Traits<AlfvenWaveLinear>::gamma;
 constexpr double bg_density = 1.0;
 constexpr double bg_pressure = sound_speed * sound_speed * bg_density / gamma_gas;
+constexpr double b0_magn = 1.0;
 constexpr double delta_b_magn = 1e-6;
+constexpr double alfven_speed = b0_magn / gcem::sqrt(bg_density);
 
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeMagnitude(const std::array<amrex::Real, 3> &vfield) -> double
 {
@@ -86,15 +88,11 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE void normalizeVector(std::array<amrex::
 	}
 }
 
-AMREX_GPU_MANAGED double b0_magn = 1.0;					  // NOLINT
-AMREX_GPU_MANAGED double alfven_speed = b0_magn / gcem::sqrt(bg_density); // NOLINT
-
 // angles (radians) in the math reference frame (MRF)
 AMREX_GPU_MANAGED double angle_between_k_b0_rad = 0.0; // NOLINT
 
 // rotation from the problem reference frame (PRF) to the MRF
 AMREX_GPU_MANAGED double k_rotation_in_xy_rad = 0.0;	// NOLINT
-AMREX_GPU_MANAGED double k_elevation_from_xy_rad = 0.0; // NOLINT
 
 //------------------------------------------------------------------------------
 // Reference frames and rotation matrix
