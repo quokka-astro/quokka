@@ -4,7 +4,6 @@
 geometry.prob_lo     =  -3.949667304e+19 -3.949667304e+19 -3.949667304e+19
 geometry.prob_hi     =  3.949667304e+19 3.949667304e+19 3.949667304e+19
 quokka.bc = periodic periodic periodic
-quokka.bc = periodic periodic periodic
 
 # *****************************************************************
 # VERBOSITY

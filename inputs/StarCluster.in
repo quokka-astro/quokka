@@ -4,7 +4,6 @@
 geometry.prob_lo     =  -10.  -10.  -10.
 geometry.prob_hi     =  10.  10.  10.
 quokka.bc = foextrap foextrap foextrap
-geometry.is_periodic =  0    0    0
 
 # *****************************************************************
 # VERBOSITY

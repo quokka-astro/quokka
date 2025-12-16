@@ -4,7 +4,6 @@
 geometry.prob_lo     =  0.0  0.0  0.0 
 geometry.prob_hi     =  1.0  1.0  1.0
 quokka.bc = periodic periodic periodic
-quokka.bc = periodic periodic periodic
 
 # *****************************************************************
 # RADIATION

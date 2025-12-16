@@ -8,7 +8,6 @@ max_time = 1e-5
 geometry.prob_lo     =  -512.0  0.0  0.0 
 geometry.prob_hi     =  512.0  1.0  1.0
 quokka.bc = periodic periodic periodic
-quokka.bc = periodic periodic periodic
 
 # *****************************************************************
 # VERBOSITY
