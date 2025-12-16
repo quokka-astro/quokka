@@ -100,6 +100,7 @@ namespace filesystem = experimental::filesystem;
 #include "io/io_utils.hpp"
 #include "io/projection.hpp"
 #include "physics_info.hpp"
+#include "util/TypedMultifab.hpp"
 
 #ifdef QUOKKA_USE_OPENPMD
 #include "io/openPMD.hpp"
@@ -158,6 +159,10 @@ template <> struct as_if<std::string, std::optional<std::string>> {
 } // namespace YAML
 
 enum class FillPatchType { fillpatch_class, fillpatch_function };
+
+// TypedStateVector definition for typed multifab support
+template <typename TypeList>
+using TypedStateVector = amrex::Vector<quokka::TypedMultifab<TypeList>>;
 
 // Main simulation class; solvers should inherit from this
 template <typename problem_t> class AMRSimulation : public amrex::AmrCore
@@ -264,6 +269,61 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) = 0;
 	virtual void WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf,
 							const amrex::Vector<std::string> &compNames, int lev, int interval) = 0;
+
+	// Migration support: Create typed views of existing MultiFabs
+	template <typename ConservedTypeList>
+	void syncTypedMultiFabs(int lev) {
+		// Initialize typed state vectors if not already done
+		if (!typed_state_new_cc_.has_value()) {
+			auto vec_new = std::make_unique<TypedStateVector<ConservedTypeList>>();
+			auto vec_old = std::make_unique<TypedStateVector<ConservedTypeList>>();
+			vec_new->resize(max_level + 1);
+			vec_old->resize(max_level + 1);
+			typed_state_new_cc_ = vec_new.release();
+			typed_state_old_cc_ = vec_old.release();
+		}
+		
+		// Get typed vectors
+		auto& typed_new = *static_cast<TypedStateVector<ConservedTypeList>*>(*typed_state_new_cc_);
+		auto& typed_old = *static_cast<TypedStateVector<ConservedTypeList>*>(*typed_state_old_cc_);
+		
+		// Create zero-copy typed views of the existing MultiFabs
+		if (state_new_cc_[lev].ok()) {
+			typed_new[lev] = quokka::TypedMultifab<ConservedTypeList>(
+				state_new_cc_[lev].boxArray(),
+				state_new_cc_[lev].DistributionMap(),
+				state_new_cc_[lev].nGrow(),
+				state_new_cc_[lev]  // Wrap existing MultiFab
+			);
+		}
+		
+		if (state_old_cc_[lev].ok()) {
+			typed_old[lev] = quokka::TypedMultifab<ConservedTypeList>(
+				state_old_cc_[lev].boxArray(),
+				state_old_cc_[lev].DistributionMap(),
+				state_old_cc_[lev].nGrow(),
+				state_old_cc_[lev]  // Wrap existing MultiFab
+			);
+		}
+	}
+	
+	
+	// Get typed state
+	template <typename ConservedTypeList>
+	TypedStateVector<ConservedTypeList>* getTypedStateNew() {
+		if (typed_state_new_cc_.has_value()) {
+			return static_cast<TypedStateVector<ConservedTypeList>*>(*typed_state_new_cc_);
+		}
+		return nullptr;
+	}
+	
+	template <typename ConservedTypeList>
+	TypedStateVector<ConservedTypeList>* getTypedStateOld() {
+		if (typed_state_old_cc_.has_value()) {
+			return static_cast<TypedStateVector<ConservedTypeList>*>(*typed_state_old_cc_);
+		}
+		return nullptr;
+	}
 
 	// compute derived variables
 	virtual void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const = 0;
@@ -427,6 +487,14 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> state_old_fc_;
 	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> state_new_fc_;
 	amrex::Vector<amrex::MultiFab> max_signal_speed_; // needed to compute CFL timestep
+
+	// Migration support: Typed versions of state MultiFabs
+	// These provide zero-copy typed views of the existing MultiFabs
+	
+	// Typed state vectors - initially empty until migration is enabled
+	// The TypeList template parameter should be defined by the problem
+	std::optional<void*> typed_state_old_cc_; // Will hold TypedStateVector when enabled
+	std::optional<void*> typed_state_new_cc_; // Will hold TypedStateVector
 
 	// flux registers: store fluxes at coarse-fine interface for synchronization
 	// this will be sized "nlevs_max+1"

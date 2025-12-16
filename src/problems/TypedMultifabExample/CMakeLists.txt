@@ -1,0 +1,4 @@
+add_executable(typed_multifab_example test_typed_multifab.cpp ${QuokkaObjSources})
+target_compile_definitions(typed_multifab_example PUBLIC PROBLEM_NAME=TypedMultifabExample)
+
+add_test(NAME TypedMultifabExample COMMAND typed_multifab_example ${CMAKE_CURRENT_SOURCE_DIR}/test_typed_multifab.in WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
