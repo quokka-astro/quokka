@@ -21,7 +21,7 @@ amr.max_grid_size   = 128    # maximum grid size to create 4 FABs of 25 cells ea
 do_reflux = 0
 do_subcycle = 0
 do_tracers = 1
-plotfile_interval = 10
+plotfile_interval = -1
 
 cfl = 0.3
 
