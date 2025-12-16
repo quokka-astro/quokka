@@ -275,19 +275,17 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			return vcirc_exact(R) * std::sin(theta); // vy
 		};
 
-		double rho = NAN;
+		double rho = 0;
 		double vx = NAN;
 		double vy = NAN;
 		double vz = NAN;
 		double T = NAN;
 
-		double const x_cen = 0.5 * (x0 + x1);
-		double const y_cen = 0.5 * (y0 + y1);
-		double const z_cen = 0.5 * (z0 + z1);
-		double const r = std::sqrt(x_cen * x_cen + y_cen * y_cen + z_cen * z_cen);
-		const double r_transition = 15.0 * (1.0e3 * C::parsec);
-
-		if (r >= r_transition) {
+		double const x = 0.5 * (x0 + x1);
+		double const y = 0.5 * (y0 + y1);
+		double const z = 0.5 * (z0 + z1);
+		double const r = std::sqrt(x * x + y * y + z * z);
+		{
 			// Cooling flow profile
 			double rho_cf = 0;
 			double temp_cf = 0;
@@ -305,39 +303,38 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 				vr_cf = interpolate_value(r, profile_R_table, profile_vr_table, profile_len_table);
 				temp_cf = interpolate_value(r, profile_R_table, profile_temp_table, profile_len_table);
 			}
-			rho = rho_cf;
+
+			rho += rho_cf;
 			T = temp_cf;
-			vx = -vr_cf * (x_cen / r);
-			vy = -vr_cf * (y_cen / r);
-			vz = -vr_cf * (z_cen / r);
-		} else {
+			vx = -vr_cf * (x / r);
+			vy = -vr_cf * (y / r);
+			vz = -vr_cf * (z / r);
+		}
+		{
 			// integrate density profile over cell volume
-			// TODO(bwibking): use adaptive quadrature with relative tolerance
 			const double cell_vol = dx[0] * dx[1] * dx[2];
 			const double rho_disk = quad_3d(rho_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
 			AMREX_ALWAYS_ASSERT(!std::isnan(rho_disk));
 
-			double const x = 0.5 * (x0 + x1);
-			double const y = 0.5 * (y0 + y1);
 			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
 			double const theta = std::atan2(x, y);
 
 			// set density (compute density perturbation)
 			// NOTE: jn is the C standard math function for BesselJ. it works everywhere.
 			double const drho_over_rho = disk_perturb_amplitude * jn(2, 5.1356 * R / R_max_perturb) * std::sin(2.0 * theta);
-			rho = rho_disk * (1 + drho_over_rho);
-			AMREX_ALWAYS_ASSERT(rho > 0.);
 
-			// set temperature
-			T = T_disk;
+			if (rho_disk > rho) {
+				// we are in the disk
+				// set velocity to disk velocity
+				vx = quad_3d(vx_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
+				vy = quad_3d(vy_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
+				vz = 0;
 
-			// set velocity (integrate velocity profiles over cell volume)
-			// TODO(bwibking): use adaptive quadrature with relative tolerance
-			vx = quad_3d(vx_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
-			vy = quad_3d(vy_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
-			vz = 0;
-			AMREX_ALWAYS_ASSERT(!std::isnan(vx));
-			AMREX_ALWAYS_ASSERT(!std::isnan(vy));
+				// compute harmonic mean of temperatures
+				T = (2.0 * T * T_disk) / (T + T_disk);
+			}
+			// update density
+			rho += rho_disk * (1 + drho_over_rho);
 		}
 
 		// compute auxiliary quantities
