@@ -4,7 +4,7 @@
 geometry.prob_lo     =  -3.949667304e+20 -3.949667304e+20 -3.949667304e+20
 geometry.prob_hi     =  3.949667304e+20 3.949667304e+20 3.949667304e+20
 quokka.bc = reflecting reflecting reflecting
-geometry.is_periodic =  1    1    1
+quokka.bc = periodic periodic periodic
 
 # *****************************************************************
 # VERBOSITY
