@@ -7,7 +7,6 @@ max_time = 4.8e-6
 # *****************************************************************
 geometry.prob_lo     =  -512.0  0.0  0.0 
 geometry.prob_hi     =  512.0  1.0  1.0
-quokka.bc = foextrap periodic periodic
 quokka.bc = periodic periodic periodic
 
 # *****************************************************************
