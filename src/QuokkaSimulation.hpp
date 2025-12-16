@@ -278,7 +278,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
 
 	// fill rhs for Poisson solve
-	void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev, int n_ghost) override;
+	void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev) override;
 
 	void print_multifab_fc(amrex::MultiFab &mf, std::string const &name, int lev, int idim);
 
@@ -1176,15 +1176,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTim
 	AMREX_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp()));
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::fillPoissonRhsAtLevel(amrex::MultiFab &rhs_mf, const int lev, const int n_ghost)
+template <typename problem_t> void QuokkaSimulation<problem_t>::fillPoissonRhsAtLevel(amrex::MultiFab &rhs_mf, const int lev)
 {
 	// add hydro density to Poisson rhs
 	auto const &state = state_new_cc_[lev].const_arrays();
 	auto rhs = rhs_mf.arrays();
 	const Real G = Gconst_;
 
-	amrex::IntVect ng{AMREX_D_DECL(n_ghost, n_ghost, n_ghost)};
-	amrex::ParallelFor(rhs_mf, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+	amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		// *add* density to rhs_mf
 		// (N.B. particles **will not work** if you overwrite the density here!)
 		rhs[bx](i, j, k) += 4.0 * M_PI * G * state[bx](i, j, k, HydroSystem<problem_t>::density_index);

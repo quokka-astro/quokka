@@ -91,7 +91,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi);
 	void WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf, const amrex::Vector<std::string> &compNames,
 						int lev, int interval) override;
-	void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev, int n_ghost) override;
+	void fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev) override;
 	void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) override;
 
 	// compute derived variables
@@ -142,7 +142,7 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::printCellProp
 	// deliberately empty
 }
 
-template <typename problem_t> void AdvectionSimulation<problem_t>::fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev, int n_ghost)
+template <typename problem_t> void AdvectionSimulation<problem_t>::fillPoissonRhsAtLevel(amrex::MultiFab &rhs, int lev)
 {
 	// deliberately empty
 }
