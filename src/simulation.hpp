@@ -1519,9 +1519,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			phi[lev].setVal(0); // set initial guess to zero
 			rhs[lev].setVal(0);
 
-			if (is_first_step == 1) {
-				WriteSingleLevelPlotfileSimplified("debug_phi_stage1_lev" + std::to_string(lev) + "_", phi[lev], {"phi"}, lev, 1);
-			}
+			// if (is_first_step == 1) {
+			// 	WriteSingleLevelPlotfileSimplified("debug_phi_stage1_lev" + std::to_string(lev) + "_", phi[lev], {"phi"}, lev, 1);
+			// }
 		}
 
 		for (int lev = 0; lev <= finest_level; ++lev) {
@@ -1561,11 +1561,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			AMREX_ALWAYS_ASSERT(!rhs[lev].contains_nan());
 		}
 
-		if (is_first_step == 1) {
-			for (int lev = 0; lev <= finest_level; ++lev) {
-				WriteSingleLevelPlotfileSimplified("debug_rhs_stage1_lev" + std::to_string(lev) + "_", rhs[lev], {"rhs"}, lev, 1);
-			}
-		}
+		// if (is_first_step == 1) {
+		// 	for (int lev = 0; lev <= finest_level; ++lev) {
+		// 		WriteSingleLevelPlotfileSimplified("debug_rhs_stage1_lev" + std::to_string(lev) + "_", rhs[lev], {"rhs"}, lev, 1);
+		// 	}
+		// }
 
 		// Analyze boundary conditions for each dimension
 		amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> bc_lo;
@@ -1658,11 +1658,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			amrex::Real abstol = abstolPoisson_ * std::abs(rhs_min);
 			amrex::Real final_resnorm = mlmg.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
 
-			if (is_first_step == 1) {
-				for (int lev = 0; lev <= finest_level; ++lev) {
-					WriteSingleLevelPlotfileSimplified("debug_phi_stage2_lev" + std::to_string(lev) + "_", phi[lev], {"phi"}, lev, 1);
-				}
-			}
+			// if (is_first_step == 1) {
+			// 	for (int lev = 0; lev <= finest_level; ++lev) {
+			// 		WriteSingleLevelPlotfileSimplified("debug_phi_stage2_lev" + std::to_string(lev) + "_", phi[lev], {"phi"}, lev, 1);
+			// 	}
+			// }
 
 			// Check convergence
 			if (verbose) {
@@ -1701,9 +1701,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			// NOTE: this fails when multiple levels are fully refined when open boundary condition is used.
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!phi[lev].contains_nan(), fmt::format("NaN detected in phi at level {} after Poisson solve", lev));
-			if (is_first_step == 1) {
-				WriteSingleLevelPlotfileSimplified("debug_phi_stage3_lev" + std::to_string(lev) + "_", phi[lev], {"phi"}, lev, 1);
-			}
+			// if (is_first_step == 1) {
+			// 	WriteSingleLevelPlotfileSimplified("debug_phi_stage3_lev" + std::to_string(lev) + "_", phi[lev], {"phi"}, lev, 1);
+			// }
 		}
 
 	}
