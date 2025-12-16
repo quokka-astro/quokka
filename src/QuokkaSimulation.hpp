@@ -186,9 +186,14 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 
 	// member functions
-	QuokkaSimulation() : AMRSimulation<problem_t>() { initialize(); }
+	explicit QuokkaSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : AMRSimulation<problem_t>(BCs_cc, BCs_fc)
+	{
+		initialize();
+	}
 
-	explicit QuokkaSimulation(amrex::Vector<amrex::BCRec> &BCs_fc) : AMRSimulation<problem_t>(BCs_fc) { initialize(); }
+	explicit QuokkaSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : AMRSimulation<problem_t>(BCs_cc) { initialize(); }
+
+	explicit QuokkaSimulation() : AMRSimulation<problem_t>() { initialize(); }
 
 	void initialize()
 	{

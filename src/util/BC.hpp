@@ -3,6 +3,8 @@
 
 #include "AMReX_BCRec.H"
 #include "AMReX_BC_TYPES.H"
+#include "AMReX_BLassert.H"
+#include "AMReX_IntVect.H"
 #include "AMReX_Vector.H"
 #include "hydro/hydro_system.hpp"
 #include "physics_numVars.hpp"
@@ -14,6 +16,29 @@ namespace quokka
 
 namespace BCType
 {
+enum mathematicalBndryTypesInteger : int {
+	// Standard AMReX boundary conditions (using actual amrex::BCType values, safe from AMReX changes)
+	bogus = amrex::BCType::bogus,
+	reflect_odd = amrex::BCType::reflect_odd,
+	int_dir = amrex::BCType::int_dir, // interior/periodic
+	reflect_even = amrex::BCType::reflect_even,
+	foextrap = amrex::BCType::foextrap,	// first order extrapolation
+	ext_dir = amrex::BCType::ext_dir,	// external Dirichlet
+	hoextrap = amrex::BCType::hoextrap,	// higher order extrapolation
+	hoextrapcc = amrex::BCType::hoextrapcc, // higher order extrapolation to cell center
+	ext_dir_cc = amrex::BCType::ext_dir_cc, // external Dirichlet at cell center
+	direction_dependent = amrex::BCType::direction_dependent,
+	user_1 = amrex::BCType::user_1,
+	user_2 = amrex::BCType::user_2,
+	user_3 = amrex::BCType::user_3,
+
+	// Quokka-specific boundary conditions (custom values, not conflicting with AMReX values)
+	reflecting = 8881, // Special: uses reflect_odd/reflect_even based on component
+			   // outflow_nscbc = 8882, // Future: NSCBC outflow
+			   // inflow_nscbc = 8883, // Future: NSCBC inflow
+			   // custom_wall = 8884  // Future: custom wall treatment
+};
+
 // Quokka boundary conditions
 // NOTE: Standard BC values must match amrex::BCType exactly (verified by static_assert below)
 // AMREX_ENUM requires literal integers for runtime string parsing to work
@@ -101,9 +126,45 @@ template <typename problem_t> constexpr auto isNormalComponent(int n, int dim) -
 }
 } // namespace detail
 
+// For manual BC setting in problem creator
+// Three parameter version - sets each dimension separately
+template <typename problem_t> auto BC(int bc_x, int bc_y, int bc_z) -> amrex::Vector<amrex::BCRec>
+{
+	const int ncomp_cc = Physics_Indices<problem_t>::nvarTotal_cc;
+	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+
+	std::array<int, 3> bcs = {bc_x, bc_y, bc_z};
+
+	for (int n = 0; n < ncomp_cc; ++n) {
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			if (bcs[i] == BCType::reflecting) {
+				// For reflecting boundaries, use reflect_odd for normal momentum components
+				// and reflect_even for all other components (including tangential momentum)
+				if (detail::isNormalComponent<problem_t>(n, i)) {
+					BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
+					BCs_cc[n].setHi(i, amrex::BCType::reflect_odd);
+				} else {
+					BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
+					BCs_cc[n].setHi(i, amrex::BCType::reflect_even);
+				}
+			} else {
+				// For standard AMReX boundaries, use the BC type directly
+				// (quokka::BCType values map directly to amrex::BCType values)
+				BCs_cc[n].setLo(i, bcs[i]);
+				BCs_cc[n].setHi(i, bcs[i]);
+			}
+		}
+	}
+
+	return BCs_cc;
+}
+
+// Overloads for BCType enum - provides clean, type-safe syntax
+template <typename problem_t> auto BC(int bc) -> amrex::Vector<amrex::BCRec> { return BC<problem_t>(bc, bc, bc); }
+
 // Three parameter version - sets each dimension separately
 template <typename problem_t>
-auto BC(BCType::mathematicalBndryTypes bc_x, BCType::mathematicalBndryTypes bc_y, BCType::mathematicalBndryTypes bc_z) -> amrex::Vector<amrex::BCRec>
+auto BC_cc(BCType::mathematicalBndryTypes bc_x, BCType::mathematicalBndryTypes bc_y, BCType::mathematicalBndryTypes bc_z) -> amrex::Vector<amrex::BCRec>
 {
 	const int ncomp_cc = Physics_Indices<problem_t>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
@@ -134,11 +195,23 @@ auto BC(BCType::mathematicalBndryTypes bc_x, BCType::mathematicalBndryTypes bc_y
 	return BCs_cc;
 }
 
-// Overloads for BCType enum - provides clean, type-safe syntax
-template <typename problem_t> auto BC(int bc) -> amrex::Vector<amrex::BCRec> { return BC<problem_t>(bc, bc, bc); }
-
-// Note: BCType values implicitly convert to int, so we can use them directly with the int version
-// Usage: BC<Problem>(BCType::reflecting) or BC<Problem>(BCType::ext_dir, BCType::int_dir, BCType::reflecting)
+template <typename problem_t>
+auto BC_fc(BCType::mathematicalBndryTypes bc_x, BCType::mathematicalBndryTypes bc_y, BCType::mathematicalBndryTypes bc_z) -> amrex::Vector<amrex::BCRec>
+{
+	const int nvars_fc = Physics_Indices<problem_t>::nvarTotal_fc;
+	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(bc_x != BCType::mathematicalBndryTypes::reflecting, "MHD does not support reflecting B.C. yet");
+		std::array<BCType::mathematicalBndryTypes, 3> bcs = {bc_x, bc_y, bc_z};
+		for (int icomp = 0; icomp < nvars_fc; ++icomp) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				BCs_fc[icomp].setLo(idim, static_cast<int>(bcs[idim]));
+				BCs_fc[icomp].setHi(idim, static_cast<int>(bcs[idim]));
+			}
+		}
+	}
+	return BCs_fc;
+}
 
 } // namespace quokka
 

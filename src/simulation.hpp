@@ -217,19 +217,17 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	mutable YAML::Node simulationMetadata_;
 
 	// constructor
-	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_fc) : BCs_fc_(BCs_fc)
+	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : BCs_cc_(BCs_cc), BCs_fc_(BCs_fc) { initialize(); }
+
+	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : BCs_cc_(BCs_cc), BCs_fc_(builtin_BCs_fc(BCs_cc)) { initialize(); }
+
+	explicit AMRSimulation()
 	{
 		readBCs();
 		initialize();
 	}
 
-	explicit AMRSimulation() : BCs_fc_(builtin_BCs_fc())
-	{
-		readBCs();
-		initialize();
-	}
-
-	auto builtin_BCs_fc() -> amrex::Vector<amrex::BCRec>
+	auto builtin_BCs_fc(amrex::Vector<amrex::BCRec> & /*BCs_cc*/) -> amrex::Vector<amrex::BCRec>
 	{
 		static_assert(!(Physics_Traits<problem_t>::is_mhd_enabled), "You are required to explicitly define the face-centered BCs when MHD is enabled.");
 		amrex::Vector<amrex::BCRec> BCs_fc(0);
@@ -244,7 +242,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 			// Parse BCs
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(bc_type.size() == 3, "quokka.bc must have 3 components");
 
-			BCs_cc_ = quokka::BC<problem_t>(bc_type[0], bc_type[1], bc_type[2]);
+			BCs_cc_ = quokka::BC_cc<problem_t>(bc_type[0], bc_type[1], bc_type[2]);
+			BCs_fc_ = quokka::BC_fc<problem_t>(bc_type[0], bc_type[1], bc_type[2]);
 		} else {
 			amrex::Abort("quokka.bc must be specified in the input file.");
 		}
