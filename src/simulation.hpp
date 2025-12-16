@@ -1590,12 +1590,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 				num_periodic_dims++;
 				bc_description += dim_name + ":periodic ";
 			} else {
-				// Use homogeneous Neumann (dphi/dn = 0) for non-periodic dimensions
-				// This is appropriate for reflecting boundaries: zero gravitational acceleration
-				// perpendicular to the wall, which means zero normal derivative of phi.
-				bc_lo[idim] = amrex::LinOpBCType::Neumann;
-				bc_hi[idim] = amrex::LinOpBCType::Neumann;
-				bc_description += dim_name + ":Neumann ";
+				// Use homogeneous Dirichlet (phi = 0) for non-periodic dimensions
+				bc_lo[idim] = amrex::LinOpBCType::Dirichlet;
+				bc_hi[idim] = amrex::LinOpBCType::Dirichlet;
+				bc_description += dim_name + ":Dirichlet ";
 			}
 		}
 
@@ -1612,9 +1610,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 				if (num_periodic_dims == 3) {
 					amrex::Print() << "Using MLMG solver with fully periodic boundaries...\n\n";
 				} else if (num_periodic_dims >= 1) {
-					amrex::Print() << "Using MLMG solver with mixed periodic/Neumann boundaries...\n\n";
+					amrex::Print() << "Using MLMG solver with mixed periodic/Dirichlet boundaries...\n\n";
 				} else {
-					amrex::Print() << "Using MLMG solver with Neumann boundaries...\n\n";
+					amrex::Print() << "Using MLMG solver with Dirichlet boundaries...\n\n";
 				}
 			}
 
@@ -1632,8 +1630,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			mlpoisson.setDomainBC(bc_lo, bc_hi);
 
 			// Set level boundary conditions for each AMR level
-			// For homogeneous Neumann BCs (dphi/dn = 0), we don't need to specify values
-			// For Dirichlet BCs, we would need to specify the boundary values
+			// For gravity problems with mixed BCs, we don't need to specify Dirichlet values
+			// MLMG will automatically handle the gauge freedom and find a solution
+			// The gravitational force F = -∇φ is gauge invariant (independent of φ + constant)
 			for (int lev = 0; lev <= finest_level; ++lev) {
 				mlpoisson.setLevelBC(lev, nullptr);
 			}
@@ -1687,15 +1686,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 
 		if (verbose) {
 			amrex::Print() << "\n";
-		}
-
-		// Fill phi ghost cells for deterministic gradient computation
-		// This is CRITICAL for reproducibility: applyPoissonGravityAtLevel computes gradients
-		// using neighboring cells (i±1, j±1, k±1), which requires valid ghost cell values.
-		// The MLMG solver correctly solves at coarse-fine boundaries internally, but it does not
-		// fill ghost cells afterwards. Simple FillBoundary should suffice for periodic and physical boundaries.
-		for (int lev = 0; lev <= finest_level; ++lev) {
-			phi[lev].FillBoundary(geom[lev].periodicity());
 		}
 
 		// check for NaN
