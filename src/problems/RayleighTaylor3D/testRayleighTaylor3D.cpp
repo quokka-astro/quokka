@@ -203,7 +203,7 @@ auto problem_main() -> int
 	auto BCs_cc = quokka::BC<RTProblem>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::reflecting);
 
 	// Problem initialization
-	QuokkaSimulation<RTProblem> sim(BCs_cc);
+	QuokkaSimulation<RTProblem> sim;
 
 	// initialize
 	sim.setInitialConditions();

@@ -156,7 +156,7 @@ auto problem_main() -> int
 	auto BCs_cc = quokka::BC<DustProblem>(quokka::BCType::int_dir); // periodic
 
 	// Problem initialization
-	QuokkaSimulation<DustProblem> sim(BCs_cc);
+	QuokkaSimulation<DustProblem> sim;
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;

@@ -245,7 +245,7 @@ auto problem_main() -> int
 	auto BCs_cc = quokka::BC<ShockProblem>(quokka::BCType::ext_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
 
 	// Problem initialization
-	QuokkaSimulation<ShockProblem> sim(BCs_cc);
+	QuokkaSimulation<ShockProblem> sim;
 
 	sim.cflNumber_ = CFL_number;
 	sim.radiationCflNumber_ = CFL_number;

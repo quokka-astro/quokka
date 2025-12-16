@@ -314,7 +314,7 @@ auto problem_main() -> int
 	// Problem initialization
 	auto BCs_cc = (use_periodic_bc == 1) ? quokka::BC<RandomBlast>(quokka::BCType::int_dir) : quokka::BC<RandomBlast>(quokka::BCType::reflecting);
 
-	QuokkaSimulation<RandomBlast> sim(BCs_cc);
+	QuokkaSimulation<RandomBlast> sim;
 	sim.densityFloor_ = 1.0e-5 * rho0; // density floor (to prevent vacuum)
 	sim.userData_.SN_rate_per_vol = SN_rate_per_vol;
 	sim.userData_.refine_threshold = refine_threshold;

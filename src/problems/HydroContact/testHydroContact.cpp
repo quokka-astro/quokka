@@ -195,7 +195,7 @@ auto problem_main() -> int
 	auto BCs_cc = quokka::BC<ContactProblem>(quokka::BCType::int_dir); // periodic
 
 	// Problem initialization
-	QuokkaSimulation<ContactProblem> sim(BCs_cc);
+	QuokkaSimulation<ContactProblem> sim;
 
 	sim.stopTime_ = 2.0;
 	sim.cflNumber_ = 0.8;

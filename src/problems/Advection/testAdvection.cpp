@@ -138,7 +138,7 @@ auto problem_main() -> int
 	auto BCs_cc = quokka::BC<SawtoothProblem>(quokka::BCType::int_dir); // periodic
 
 	// Problem initialization
-	AdvectionSimulation<SawtoothProblem> sim(BCs_cc);
+	AdvectionSimulation<SawtoothProblem> sim;
 	sim.maxDt_ = max_dt;
 	sim.stopTime_ = max_time;
 	sim.cflNumber_ = CFL_number;

@@ -196,7 +196,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	QuokkaSimulation<StreamingProblem> sim(BCs_cc);
+	QuokkaSimulation<StreamingProblem> sim;
 
 	// read tmax from inputs file
 	amrex::ParmParse pp; // NOLINT

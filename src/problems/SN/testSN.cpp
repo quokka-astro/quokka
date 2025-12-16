@@ -191,7 +191,7 @@ auto problem_main() -> int
 	cpp.query("cooling_table_type", coolingTableType_);
 
 	// Problem initialization
-	QuokkaSimulation<SNProblem> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<SNProblem> sim;
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.stopTime_ = t_stop * year;

@@ -256,7 +256,7 @@ auto problem_main() -> int
 	// Set boundary conditions - extrapolate
 	auto BCs_cc = quokka::BC<PrimordialChemTest>(quokka::BCType::foextrap);
 
-	QuokkaSimulation<PrimordialChemTest> sim(BCs_cc);
+	QuokkaSimulation<PrimordialChemTest> sim;
 
 	// Standard PPM gives unphysically enormous temperatures when used for
 	// this problem (e.g., ~1e14 K or higher), but can be fixed by

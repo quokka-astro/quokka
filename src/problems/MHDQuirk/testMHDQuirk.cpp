@@ -286,7 +286,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	QuokkaSimulation<MHDQuirk> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<MHDQuirk> sim;
 
 	sim.reconstructionOrder_ = 2; // PLM
 	sim.stopTime_ = 0.4;

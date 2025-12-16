@@ -272,7 +272,7 @@ auto problem_main() -> int
 	auto BCs_cc = quokka::BC<TubeProblem>(quokka::BCType::ext_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
 
 	// Problem initialization
-	QuokkaSimulation<TubeProblem> sim(BCs_cc);
+	QuokkaSimulation<TubeProblem> sim;
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.reconstructionOrder_ = 3;	       // PPM

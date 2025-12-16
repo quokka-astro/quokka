@@ -226,7 +226,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	QuokkaSimulation<SuOlsonProblem> sim(BCs_cc);
+	QuokkaSimulation<SuOlsonProblem> sim;
 
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;

@@ -303,7 +303,7 @@ auto problem_main() -> int
 		}
 	}
 
-	QuokkaSimulation<ShocktubeProblem> sim(BCs_cc);
+	QuokkaSimulation<ShocktubeProblem> sim;
 
 	sim.cflNumber_ = CFL_number;
 	sim.constantDt_ = fixed_dt;

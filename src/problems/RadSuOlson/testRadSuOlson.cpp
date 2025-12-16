@@ -194,7 +194,7 @@ auto problem_main() -> int
 
 	auto BCs_cc = quokka::BC<MarshakProblem>(quokka::BCType::reflecting);
 
-	QuokkaSimulation<MarshakProblem> sim(BCs_cc);
+	QuokkaSimulation<MarshakProblem> sim;
 
 	sim.cflNumber_ = CFL_number;
 	sim.radiationCflNumber_ = CFL_number;

@@ -253,7 +253,7 @@ auto problem_main() -> int
 
 	auto BCs_cc = quokka::BC<ShocktubeProblem>(quokka::BCType::ext_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
 
-	QuokkaSimulation<ShocktubeProblem> sim(BCs_cc);
+	QuokkaSimulation<ShocktubeProblem> sim;
 
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;

@@ -214,7 +214,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	QuokkaSimulation<MarshakProblem> sim(BCs_cc);
+	QuokkaSimulation<MarshakProblem> sim;
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	// sim.stopTime_ = tmax; // set with runtime parameters

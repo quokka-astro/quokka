@@ -202,7 +202,7 @@ auto problem_main() -> int
 #endif
 	}
 
-	QuokkaSimulation<CoolingTest> sim(BCs_cc);
+	QuokkaSimulation<CoolingTest> sim;
 
 	// Standard PPM gives unphysically enormous temperatures when used for
 	// this problem (e.g., ~1e14 K or higher), but can be fixed by

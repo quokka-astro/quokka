@@ -255,7 +255,7 @@ auto problem_main() -> int
 	auto BCs_cc = quokka::BC<SGProblem>(quokka::BCType::foextrap, quokka::BCType::int_dir, quokka::BCType::int_dir);
 
 	// Problem initialization
-	QuokkaSimulation<SGProblem> sim(BCs_cc);
+	QuokkaSimulation<SGProblem> sim;
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;

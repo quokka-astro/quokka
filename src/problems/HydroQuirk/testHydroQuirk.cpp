@@ -261,7 +261,7 @@ auto problem_main() -> int
 					       quokka::BCType::int_dir); // z: periodic
 
 	// Problem initialization
-	QuokkaSimulation<QuirkProblem> sim(BCs_cc);
+	QuokkaSimulation<QuirkProblem> sim;
 
 	sim.reconstructionOrder_ = 2; // PLM
 	sim.stopTime_ = 0.4;

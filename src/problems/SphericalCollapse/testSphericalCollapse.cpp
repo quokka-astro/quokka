@@ -148,7 +148,7 @@ auto problem_main() -> int
 	pp.query("seed", GlobalConfig::seed);
 
 	// Problem initialization
-	QuokkaSimulation<CollapseProblem> sim(BCs_cc);
+	QuokkaSimulation<CollapseProblem> sim;
 
 	// initialize
 	sim.setInitialConditions();

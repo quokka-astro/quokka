@@ -201,7 +201,7 @@ auto problem_main() -> int
 	pp.query("max_dt", max_dt);
 
 	// Problem initialization
-	QuokkaSimulation<TubeProblem> sim(BCs_cc);
+	QuokkaSimulation<TubeProblem> sim;
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.reconstructionOrder_ = 3;	       // PPM

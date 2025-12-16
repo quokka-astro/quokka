@@ -245,7 +245,7 @@ auto problem_main() -> int
 	// const double resid_tol = 1.0e-15;
 
 	// Problem initialization
-	QuokkaSimulation<ShadowProblem> sim(BCs_cc);
+	QuokkaSimulation<ShadowProblem> sim;
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;
 	sim.maxTimesteps_ = max_timesteps;

@@ -133,7 +133,7 @@ auto problem_main() -> int
 		}
 	}
 
-	QuokkaSimulation<OrszagTang> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<OrszagTang> sim;
 	sim.setInitialConditions();
 	sim.evolve();
 	return 0;

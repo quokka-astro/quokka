@@ -268,7 +268,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	QuokkaSimulation<TestParticle> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<TestParticle> sim;
 	sim.initDt_ = dt_;
 	sim.maxDt_ = dt_;
 

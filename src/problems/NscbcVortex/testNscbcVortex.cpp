@@ -175,7 +175,7 @@ auto problem_main() -> int
 #endif
 	}
 
-	QuokkaSimulation<Vortex> sim(BCs_cc);
+	QuokkaSimulation<Vortex> sim;
 
 	amrex::ParmParse const pp("vortex");
 	// initial condition parameters

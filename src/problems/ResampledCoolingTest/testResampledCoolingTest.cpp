@@ -174,7 +174,7 @@ auto problem_main() -> int
 	// Set boundary conditions - extrapolate
 	auto BCs_cc = quokka::BC<ResampledCoolingTest>(quokka::BCType::foextrap);
 
-	QuokkaSimulation<ResampledCoolingTest> sim(BCs_cc);
+	QuokkaSimulation<ResampledCoolingTest> sim;
 
 	sim.plotfileInterval_ = -1;
 

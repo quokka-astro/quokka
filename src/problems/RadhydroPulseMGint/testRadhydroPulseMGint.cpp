@@ -314,7 +314,7 @@ auto problem_main() -> int
 	// Problem 1: advecting pulse with multigroup integration
 
 	// Problem initialization
-	QuokkaSimulation<MGProblem> sim(BCs_cc);
+	QuokkaSimulation<MGProblem> sim;
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;
@@ -384,7 +384,7 @@ auto problem_main() -> int
 	// Problem 2: exact opacity
 
 	// Problem initialization
-	QuokkaSimulation<ExactProblem> sim2(BCs_cc);
+	QuokkaSimulation<ExactProblem> sim2;
 
 	sim2.radiationReconstructionOrder_ = 3; // PPM
 	sim2.stopTime_ = max_time;

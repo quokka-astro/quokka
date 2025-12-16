@@ -244,7 +244,7 @@ auto problem_main() -> int
 		}
 	}
 
-	QuokkaSimulation<FastWave> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<FastWave> sim;
 
 	sim.setInitialConditions();
 	sim.evolve();

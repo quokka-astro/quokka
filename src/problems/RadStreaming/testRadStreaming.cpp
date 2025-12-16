@@ -187,7 +187,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	QuokkaSimulation<StreamingProblem> sim(BCs_cc);
+	QuokkaSimulation<StreamingProblem> sim;
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = tmax;

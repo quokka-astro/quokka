@@ -135,7 +135,7 @@ auto problem_main() -> int
 	auto BCs_cc = quokka::BC<SemiellipseProblem>(quokka::BCType::int_dir);
 
 	// Problem initialization
-	AdvectionSimulation<SemiellipseProblem> sim(BCs_cc);
+	AdvectionSimulation<SemiellipseProblem> sim;
 	sim.maxDt_ = max_dt;
 	sim.advectionVx_ = advection_velocity;
 	sim.advectionVy_ = 0.;

@@ -214,7 +214,7 @@ auto problem_main() -> int
 		}
 	}
 
-	QuokkaSimulation<FieldLoop> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<FieldLoop> sim;
 	sim.setInitialConditions();
 	sim.evolve();
 	return 0;

@@ -144,7 +144,7 @@ auto problem_main() -> int
 	pp.query("refine_half_domain", refine_half_domain);
 
 	// Problem initialization
-	QuokkaSimulation<SinkProblem> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<SinkProblem> sim;
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!

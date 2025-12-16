@@ -153,12 +153,12 @@ auto problem_main() -> int
 		}
 	}
 
-	QuokkaSimulation<FCQuantities> sim_write(BCs_cc, BCs_fc);
+	QuokkaSimulation<FCQuantities> sim_write;
 	sim_write.setInitialConditions();
 	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &state_new_fc_write = sim_write.getNewMF_fc();
 	amrex::Print() << "\n";
 
-	QuokkaSimulation<FCQuantities> sim_restart(BCs_cc, BCs_fc);
+	QuokkaSimulation<FCQuantities> sim_restart;
 	sim_restart.setChkFile("chk00000");
 	sim_restart.setInitialConditions();
 	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &state_new_fc_restart = sim_restart.getNewMF_fc();

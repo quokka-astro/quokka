@@ -257,7 +257,7 @@ auto problem_main() -> int
 		}
 	}
 
-	QuokkaSimulation<MHDBitwiseICs> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<MHDBitwiseICs> sim;
 
 	sim.setInitialConditions();
 

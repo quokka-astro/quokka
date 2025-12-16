@@ -229,7 +229,7 @@ auto problem_main() -> int
 	auto BCs_cc = quokka::BC<StarCluster>(quokka::BCType::foextrap);
 
 	// Problem initialization
-	QuokkaSimulation<StarCluster> sim(BCs_cc);
+	QuokkaSimulation<StarCluster> sim;
 	sim.densityFloor_ = 0.01;
 
 	sim.userData_.R_sphere = R_sphere;

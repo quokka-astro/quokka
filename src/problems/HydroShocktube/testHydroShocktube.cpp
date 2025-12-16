@@ -360,7 +360,7 @@ auto problem_main() -> int
 
 	auto BCs_cc = quokka::BC<ShocktubeProblem>(quokka::BCType::ext_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
 
-	QuokkaSimulation<ShocktubeProblem> sim(BCs_cc);
+	QuokkaSimulation<ShocktubeProblem> sim;
 
 	// sim.cflNumber_ = CFL_number;
 	// sim.maxDt_ = max_dt;

@@ -183,7 +183,7 @@ auto problem_main() -> int
 		}
 	}
 
-	QuokkaSimulation<MHDBlast> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<MHDBlast> sim;
 
 	// initialize
 	sim.setInitialConditions();

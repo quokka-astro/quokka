@@ -300,7 +300,7 @@ auto problem_main() -> int
 		}
 	}
 
-	QuokkaSimulation<MHDShocktubeProblem> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<MHDShocktubeProblem> sim;
 
 	// Main time loop
 	sim.setInitialConditions();

@@ -152,7 +152,7 @@ auto problem_main() -> int
 	auto BCs_cc = quokka::BC<ParticleProblem>(quokka::BCType::reflecting);
 
 	// Problem initialization
-	QuokkaSimulation<ParticleProblem> sim(BCs_cc);
+	QuokkaSimulation<ParticleProblem> sim;
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 

@@ -142,7 +142,7 @@ auto problem_main() -> int
 #endif
 	}
 
-	QuokkaSimulation<Channel> sim(BCs_cc);
+	QuokkaSimulation<Channel> sim;
 
 	amrex::ParmParse const pp("channel");
 	// initial condition parameters

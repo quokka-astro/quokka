@@ -165,7 +165,7 @@ auto problem_main() -> int
 	// Set boundary conditions - extrapolate
 	auto BCs_cc = quokka::BC<CouplingProblem>(quokka::BCType::foextrap);
 
-	QuokkaSimulation<CouplingProblem> sim(BCs_cc);
+	QuokkaSimulation<CouplingProblem> sim;
 
 	sim.cflNumber_ = CFL_number;
 	sim.radiationCflNumber_ = CFL_number;

@@ -283,7 +283,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	QuokkaSimulation<TophatProblem> sim(BCs_cc);
+	QuokkaSimulation<TophatProblem> sim;
 
 	sim.radiationReconstructionOrder_ = 2; // PLM
 	sim.stopTime_ = max_time;

@@ -232,7 +232,7 @@ auto problem_main() -> int
 		}
 	}
 
-	QuokkaSimulation<AlfvenWaveCircular> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<AlfvenWaveCircular> sim;
 
 	sim.setInitialConditions();
 	sim.evolve();

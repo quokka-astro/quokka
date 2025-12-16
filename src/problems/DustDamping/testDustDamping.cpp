@@ -274,7 +274,7 @@ auto problem_main() -> int
 	}
 
 	// problem initialization
-	QuokkaSimulation<DustDamping> sim(BCs_cc);
+	QuokkaSimulation<DustDamping> sim;
 
 	sim.reconstructionOrder_ = 3;
 	sim.radiationReconstructionOrder_ = 3; // PPM

@@ -368,7 +368,7 @@ auto problem_main() -> int
 	auto BCs_cc = quokka::BC<AgoraGalaxy>(quokka::BCType::reflecting);
 
 	// Problem initialization
-	QuokkaSimulation<AgoraGalaxy> sim(BCs_cc);
+	QuokkaSimulation<AgoraGalaxy> sim;
 
 	// initialize
 	sim.setInitialConditions();

@@ -206,7 +206,7 @@ auto problem_main() -> int
 	auto BCs_cc = quokka::BC<CoolingProblem>(quokka::BCType::int_dir);
 
 	// Problem initialization
-	QuokkaSimulation<CoolingProblem> sim(BCs_cc);
+	QuokkaSimulation<CoolingProblem> sim;
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;

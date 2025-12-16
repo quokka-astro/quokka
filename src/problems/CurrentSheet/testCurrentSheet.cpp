@@ -119,7 +119,7 @@ auto problem_main() -> int
 		}
 	}
 
-	QuokkaSimulation<CurrentSheet> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<CurrentSheet> sim;
 	sim.setInitialConditions();
 	sim.evolve();
 	return 0;

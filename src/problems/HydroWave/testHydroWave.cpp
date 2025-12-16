@@ -107,7 +107,7 @@ auto problem_main() -> int
 	// Problem initialization
 	auto BCs_cc = quokka::BC<WaveProblem>(quokka::BCType::int_dir); // periodic
 
-	QuokkaSimulation<WaveProblem> sim(BCs_cc);
+	QuokkaSimulation<WaveProblem> sim;
 
 	sim.cflNumber_ = CFL_number;
 	sim.stopTime_ = max_time;
