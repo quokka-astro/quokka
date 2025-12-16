@@ -372,20 +372,16 @@ void QuokkaSimulation<AlfvenWaveLinear>::computeReferenceSolution_fc(amrex::Mult
 
 auto runWaveTest(int nx) -> double
 {
-	//==================================================
-	// Read setup parameters
-	//==================================================
+	// Read problem parameters
 	amrex::ParmParse const hpp("setup");
-
-	bool use_angle = true;
-	hpp.query("use_angle", use_angle);
-
+	double angle_between_k_b0_deg = 0.0;
+	hpp.query("angle_between_k_b0", angle_between_k_b0_deg);
+	constexpr double deg2rad = M_PI / 180.0;
+	angle_between_k_b0_rad = deg2rad * angle_between_k_b0_deg;
 	const double CFL_number = 0.2;
+	const double cA = alfven_speed * std::abs(std::cos(angle_between_k_b0_rad));
 	const int max_timesteps = std::max(20000, nx * 100);
 
-	//==================================================
-	// Read k-modes (always required)
-	//==================================================
 	int num_modes_x = 0;
 	int num_modes_y = 0;
 	int num_modes_z = 0;
@@ -397,19 +393,20 @@ auto runWaveTest(int nx) -> double
 		amrex::Abort("Invalid k modes: the triplet (0,0,0) is not allowed.");
 	}
 
-	// Assume box length = 1.0
+	// we assume box length = 1.0
 	const std::array<amrex::Real, 3> k_vec_prf = {2.0 * M_PI * static_cast<amrex::Real>(num_modes_x), 2.0 * M_PI * static_cast<amrex::Real>(num_modes_y),
 						      2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)};
-
 	k_magn = computeMagnitude(k_vec_prf);
-	AMREX_ALWAYS_ASSERT(k_magn > 0.0);
-
+	const double wavelength = 2.0 * M_PI / k_magn;
+	const double max_time = wavelength / cA;
 	k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
 
 	k_rotation_in_xy_rad = std::atan2(k_dir_prf[1], k_dir_prf[0]);
 	k_elevation_from_xy_rad = std::atan2(k_dir_prf[2], std::hypot(k_dir_prf[0], k_dir_prf[1]));
 
-	std::array<amrex::Real, 3> ref_prf{0.0, 0.0, 1.0};
+	// to build our orthonormal basis in the problem reference frame (PRF)
+	// first choose a vector that is not aligned/parallel with the wave propagation direction
+	std::array<amrex::Real, 3> ref_prf{0.0, 0.0, 1.0}; // guess a direction
 	if (std::abs(computeDotProduct(ref_prf, k_dir_prf)) > 0.9999) {
 		ref_prf = {0.0, 1.0, 0.0};
 	}
@@ -420,55 +417,7 @@ auto runWaveTest(int nx) -> double
 	outofplane_dir_prf = computeCrossProduct(k_dir_prf, inplane_dir_prf);
 	normalizeVector(outofplane_dir_prf);
 
-	std::array<amrex::Real, 3> b0_vec{};
-
-	if (use_angle) {
-		// ---------- Angle-based input ----------
-		double angle_between_k_b0_deg = 0.0;
-		hpp.query("angle_between_k_b0", angle_between_k_b0_deg);
-
-		constexpr double deg2rad = M_PI / 180.0;
-		const double theta = deg2rad * angle_between_k_b0_deg;
-
-		double b0_magn_input = 1.0;
-		hpp.query("b0_magn", b0_magn_input);
-
-		// B0 lies in the (k, in-plane) plane
-		for (int i = 0; i < 3; ++i) {
-			b0_vec[i] = std::cos(theta) * k_dir_prf[i] + std::sin(theta) * inplane_dir_prf[i];
-		}
-
-		normalizeVector(b0_vec);
-		for (auto &v : b0_vec) {
-			v *= b0_magn_input;
-		}
-
-	} else {
-		double b0_x = 0.0;
-		double b0_y = 0.0;
-		double b0_z = 0.0;
-		hpp.query("b0_x", b0_x);
-		hpp.query("b0_y", b0_y);
-		hpp.query("b0_z", b0_z);
-
-		b0_vec = {b0_x, b0_y, b0_z};
-	}
-
-	b0_magn = computeMagnitude(b0_vec);
-	AMREX_ALWAYS_ASSERT(b0_magn > 0.0);
-
-	const std::array<amrex::Real, 3> b0_dir = {b0_vec[0] / b0_magn, b0_vec[1] / b0_magn, b0_vec[2] / b0_magn};
-
-	alfven_speed = b0_magn; // rho0 = 1
-
-	const double cos_k_b0 = computeDotProduct(k_dir_prf, b0_dir);
-
-	const double cA = alfven_speed * std::abs(cos_k_b0);
-	AMREX_ALWAYS_ASSERT(cA > 0.0);
-
-	const double wavelength = 2.0 * M_PI / k_magn;
-	const double max_time = wavelength / cA;
-
+	// Set grid dimensions using AMReX parameter system
 	amrex::ParmParse pp("amr");
 	amrex::Vector<int> const ncells = {nx, 8, 8};
 	pp.addarr("n_cell", ncells);
@@ -493,16 +442,20 @@ auto runWaveTest(int nx) -> double
 
 	pp.add("max_level", 0);
 
+	// Set domain bounds using AMReX parameter system
 	amrex::ParmParse pp_geom("geometry");
-	pp_geom.addarr("prob_lo", amrex::Vector<double>{0.0, 0.0, 0.0});
-	pp_geom.addarr("prob_hi", amrex::Vector<double>{1.0, 1.0, 1.0});
-	pp_geom.addarr("is_periodic", amrex::Vector<int>{1, 1, 1});
+	amrex::Vector<double> const prob_lo = {0.0, 0.0, 0.0};
+	amrex::Vector<double> const prob_hi = {1.0, 1.0, 1.0};
+	amrex::Vector<int> const is_periodic = {1, 1, 1};
+	pp_geom.addarr("prob_lo", prob_lo);
+	pp_geom.addarr("prob_hi", prob_hi);
+	pp_geom.addarr("is_periodic", is_periodic);
 
+	// Setup boundary conditions
 	auto BCs_cc = quokka::BC<AlfvenWaveLinear>(quokka::BCType::int_dir);
 
 	const int nvars_fc = Physics_Indices<AlfvenWaveLinear>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
-
 	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			BCs_fc[icomp].setLo(idim, amrex::BCType::int_dir);
@@ -510,12 +463,15 @@ auto runWaveTest(int nx) -> double
 		}
 	}
 
+	// Run simulation
 	QuokkaSimulation<AlfvenWaveLinear> sim(BCs_cc, BCs_fc);
 
 	sim.cflNumber_ = CFL_number;
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.setInitialConditions();
+
+	// Main time loop
 	sim.evolve();
 
 	return sim.computeErrorNorm();
