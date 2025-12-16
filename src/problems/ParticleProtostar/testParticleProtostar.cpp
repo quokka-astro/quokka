@@ -25,7 +25,7 @@ static bool refine_half_domain = false; // NOLINT
 
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
-const double T0 = 10.0;		  // K
+const double T0 = 10.0; // K
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
 const double dt_init = 3.0 * year;
