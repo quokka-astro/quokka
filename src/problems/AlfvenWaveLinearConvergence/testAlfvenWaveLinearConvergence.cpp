@@ -92,7 +92,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE void normalizeVector(std::array<amrex::
 AMREX_GPU_MANAGED double angle_between_k_b0_rad = 0.0; // NOLINT
 
 // rotation from the problem reference frame (PRF) to the MRF
-AMREX_GPU_MANAGED double k_rotation_in_xy_rad = 0.0; // NOLINT
+AMREX_GPU_MANAGED double k_rotation_in_xy_rad = 0.0;	// NOLINT
+AMREX_GPU_MANAGED double k_elevation_from_xy_rad = 0.0; // NOLINT
 
 //------------------------------------------------------------------------------
 // Reference frames and rotation matrix
@@ -481,7 +482,7 @@ auto problem_main() -> int
 
 	quokka::richardson::Parameters params{};
 	params.machine_precision_target = 2.0e-10; // limit based on delta_b_magn, smaller values can be used if this is decreased
-	params.nx_initial = 32;
+	params.nx_initial = 16;
 	params.nx_max = 256; // cap at 256 for quick tests. otherwise, it can take ~1-2 hours for 2048
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;
