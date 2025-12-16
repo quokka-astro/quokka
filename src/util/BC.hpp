@@ -43,7 +43,7 @@ enum mathematicalBndryTypesInteger : int {
 // NOTE: Standard BC values must match amrex::BCType exactly (verified by static_assert below)
 // AMREX_ENUM requires literal integers for runtime string parsing to work
 AMREX_ENUM(mathematicalBndryTypes, // NOLINT
-	   // Standard AMReX boundary conditions (literal values from AMReX_BC_TYPES.H)
+				   // Standard AMReX boundary conditions (literal values from AMReX_BC_TYPES.H)
 	   bogus = -666, reflect_odd = -1,
 	   periodic = 0, // corresponds to amrex::BCType::int_dir (interior/periodic); this conversion of int_dir to periodic requires enforcing
 			 // geometry.is_periodic in main.cpp
