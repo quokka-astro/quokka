@@ -92,7 +92,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE void normalizeVector(std::array<amrex::
 AMREX_GPU_MANAGED double angle_between_k_b0_rad = 0.0; // NOLINT
 
 // rotation from the problem reference frame (PRF) to the MRF
-AMREX_GPU_MANAGED double k_rotation_in_xy_rad = 0.0;	// NOLINT
+AMREX_GPU_MANAGED double k_rotation_in_xy_rad = 0.0; // NOLINT
 
 //------------------------------------------------------------------------------
 // Reference frames and rotation matrix
