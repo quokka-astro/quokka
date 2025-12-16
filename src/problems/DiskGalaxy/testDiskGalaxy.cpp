@@ -66,6 +66,13 @@ template <> struct SimulationData<AgoraGalaxy> {
 	amrex::Real vcirc_outer{};
 	amrex::Gpu::PinnedVector<amrex::Real> radius;
 	amrex::Gpu::PinnedVector<amrex::Real> vcirc;
+
+	amrex::Real profile_r_min{};
+	amrex::Real profile_r_max{};
+	amrex::Gpu::PinnedVector<amrex::Real> profile_radius;
+	amrex::Gpu::PinnedVector<amrex::Real> profile_rho;
+	amrex::Gpu::PinnedVector<amrex::Real> profile_vr;
+	amrex::Gpu::PinnedVector<amrex::Real> profile_temp;
 };
 
 template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
@@ -118,6 +125,58 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 	auto max_result = std::max_element(radius_h.begin(), radius_h.end());
 	userData_.r_outer = (*max_result) * length_unit;
 	userData_.vcirc_outer = vcirc_h[std::distance(radius_h.begin(), max_result)] * vel_unit;
+
+	// read CGM profile
+	std::string profile_filename = "extern/agora_data/cooling_flow_MW.txt";
+	pp.query("cooling_flow_file", profile_filename);
+
+	std::vector<amrex::Real> profile_radius_h;
+	std::vector<amrex::Real> profile_rho_h;
+	std::vector<amrex::Real> profile_vr_h;
+	std::vector<amrex::Real> profile_temp_h;
+
+	std::ifstream profile_fstream(profile_filename, std::ios::in);
+	AMREX_ALWAYS_ASSERT(profile_fstream.is_open());
+	std::string profile_header;
+	std::getline(profile_fstream, profile_header);
+
+	for (std::string line; std::getline(profile_fstream, line);) {
+		std::istringstream iss(line);
+		std::vector<double> values;
+
+		for (double value = NAN; iss >> value;) {
+			values.push_back(value);
+		}
+		Real const R_val = values.at(0);
+		Real const rho_val = values.at(1);
+		Real const vr_val = values.at(2);
+		Real const temp_val = values.at(3);
+
+		profile_radius_h.push_back(R_val);
+		profile_rho_h.push_back(rho_val);
+		profile_vr_h.push_back(vr_val);
+		profile_temp_h.push_back(temp_val);
+	}
+
+	// copy data to simData
+	const size_t N_profile = profile_radius_h.size();
+	userData_.profile_radius.resize(N_profile);
+	userData_.profile_rho.resize(N_profile);
+	userData_.profile_vr.resize(N_profile);
+	userData_.profile_temp.resize(N_profile);
+
+	for (size_t i = 0; i < N_profile; ++i) {
+		userData_.profile_radius[i] = profile_radius_h[i] * length_unit;
+		userData_.profile_rho[i] = profile_rho_h[i];
+		userData_.profile_vr[i] = profile_vr_h[i];
+		userData_.profile_temp[i] = profile_temp_h[i];
+	}
+
+	auto min_profile = std::min_element(profile_radius_h.begin(), profile_radius_h.end());
+	userData_.profile_r_min = (*min_profile) * length_unit;
+
+	auto max_profile = std::max_element(profile_radius_h.begin(), profile_radius_h.end());
+	userData_.profile_r_max = (*max_profile) * length_unit;
 }
 
 template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -152,16 +211,6 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 	const double R_max_perturb = disk_perturb_Rmax_kpc * (1e3 * C::parsec);
 	const double rho_0 = disk_gas_mass / 4. / M_PI / (R_d * R_d) / z_d; // normalization constant
 
-	// halo parameters
-	double T_halo = 1.0e6;	    // K
-	double ndens_halo = 1.0e-6; // cm^{-3}
-	pp.query("halo_temperature", T_halo);
-	pp.query("halo_number_density", ndens_halo);
-	AMREX_ALWAYS_ASSERT(!std::isnan(T_halo));
-	AMREX_ALWAYS_ASSERT(!std::isnan(ndens_halo));
-
-	const double rho_halo = ndens_halo * quokka::EOS_Traits<AgoraGalaxy>::mean_molecular_weight;
-
 	// read tables
 	//
 	double const *R_table = userData_.radius.dataPtr();
@@ -171,6 +220,14 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 	const amrex::Real R_table_max = userData_.r_outer;
 	const amrex::Real vcirc_inner = userData_.vcirc_inner;
 	const amrex::Real vcirc_outer = userData_.vcirc_outer;
+
+	double const *profile_R_table = userData_.profile_radius.dataPtr();
+	double const *profile_rho_table = userData_.profile_rho.dataPtr();
+	double const *profile_vr_table = userData_.profile_vr.dataPtr();
+	double const *profile_temp_table = userData_.profile_temp.dataPtr();
+	auto const profile_len_table = static_cast<int>(userData_.profile_radius.size());
+	const amrex::Real profile_R_min = userData_.profile_r_min;
+	const amrex::Real profile_R_max = userData_.profile_r_max;
 
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -218,25 +275,48 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			return vcirc_exact(R) * std::sin(theta); // vy
 		};
 
-		// integrate density profile over cell volume
-		// TODO(bwibking): use adaptive quadrature with relative tolerance
-		const double cell_vol = dx[0] * dx[1] * dx[2];
-		const double rho_disk = quad_3d(rho_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
-		AMREX_ALWAYS_ASSERT(!std::isnan(rho_disk));
-
 		double rho = NAN;
 		double vx = NAN;
 		double vy = NAN;
-		double const vz = 0;
+		double vz = NAN;
 		double T = NAN;
 
-		// IMPORTANT: transition between disk and halo at the P_halo == P_disk surface
-		if (rho_halo * T_halo > rho_disk * T_disk) {
-			rho = rho_halo;
-			T = T_halo;
-			vx = 0; // velocity is zero in the halo
-			vy = 0;
-		} else { // we are in the disk
+		double const x_cen = 0.5 * (x0 + x1);
+		double const y_cen = 0.5 * (y0 + y1);
+		double const z_cen = 0.5 * (z0 + z1);
+		double const r = std::sqrt(x_cen * x_cen + y_cen * y_cen + z_cen * z_cen);
+		const double r_transition = 15.0 * (1.0e3 * C::parsec);
+
+		if (r >= r_transition) {
+			// Cooling flow profile
+			double rho_cf = 0;
+			double temp_cf = 0;
+			double vr_cf = 0;
+			if (r <= profile_R_min) {
+				rho_cf = profile_rho_table[0];
+				vr_cf = profile_vr_table[0];
+				temp_cf = profile_temp_table[0];
+			} else if (r >= profile_R_max) {
+				rho_cf = profile_rho_table[profile_len_table - 1];
+				vr_cf = profile_vr_table[profile_len_table - 1];
+				temp_cf = profile_temp_table[profile_len_table - 1];
+			} else {
+				rho_cf = interpolate_value(r, profile_R_table, profile_rho_table, profile_len_table);
+				vr_cf = interpolate_value(r, profile_R_table, profile_vr_table, profile_len_table);
+				temp_cf = interpolate_value(r, profile_R_table, profile_temp_table, profile_len_table);
+			}
+			rho = rho_cf;
+			T = temp_cf;
+			vx = -vr_cf * (x_cen / r);
+			vy = -vr_cf * (y_cen / r);
+			vz = -vr_cf * (z_cen / r);
+		} else {
+			// integrate density profile over cell volume
+			// TODO(bwibking): use adaptive quadrature with relative tolerance
+			const double cell_vol = dx[0] * dx[1] * dx[2];
+			const double rho_disk = quad_3d(rho_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
+			AMREX_ALWAYS_ASSERT(!std::isnan(rho_disk));
+
 			double const x = 0.5 * (x0 + x1);
 			double const y = 0.5 * (y0 + y1);
 			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
@@ -255,6 +335,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			// TODO(bwibking): use adaptive quadrature with relative tolerance
 			vx = quad_3d(vx_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
 			vy = quad_3d(vy_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
+			vz = 0;
 			AMREX_ALWAYS_ASSERT(!std::isnan(vx));
 			AMREX_ALWAYS_ASSERT(!std::isnan(vy));
 		}
