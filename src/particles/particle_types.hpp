@@ -21,7 +21,8 @@ enum class ParticleSwitch : unsigned int {
 	CICRad = bitflag<3>(),		     // Combined gravitating-radiating particles, = 0b0100
 	StochasticStellarPop = bitflag<4>(), // Stellar population particles, = 0b1000
 	Sink = bitflag<5>(),		     // Sink particles, = 0b10000
-	Test = bitflag<6>()		     // Test particles with all features enabled, = 0b100000
+	Protostar = bitflag<6>(),	     // Protostar particles, = 0b100000
+	Test = bitflag<7>()		     // Test particles with all features enabled, = 0b1000000
 };
 
 // Enable bitwise operations on the enum class
@@ -74,6 +75,7 @@ enum class ParticleType {
 	CICRad,		      // Gravitating radiation particles
 	StochasticStellarPop, // Stellar population particles
 	Sink,		      // Sink particles
+	Protostar,	      // Protostar particles
 	Test		      // Test particles with all features enabled
 };
 
@@ -249,6 +251,32 @@ constexpr int SinkParticleRealComps = 4; // mass, vx, vy, vz
 using SinkParticleContainer = amrex::AmrParticleContainer<SinkParticleRealComps>;
 using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
 
+//-------------------- Protostar particles --------------------
+
+// Indices for Protostar_particles
+enum ProtostarParticleDataIdx {
+	ProtostarParticleMassIdx = 0,  // Mass of the particle
+	ProtostarParticleVxIdx,	       // Velocity in x direction
+	ProtostarParticleVyIdx,	       // Velocity in y direction
+	ProtostarParticleVzIdx,	       // Velocity in z direction
+	ProtostarParticleBirthTimeIdx, // Time when particle becomes active
+	ProtostarParticleLumIdx	       // Base index for luminosity components
+};
+
+// Number of real components for Protostar_particles
+template <typename problem_t>
+constexpr int ProtostarParticleRealComps = []() constexpr {
+	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
+		return 5 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, lum[nGroups]
+	} else {
+		return 5; // mass, vx, vy, vz, birth_time
+	}
+}();
+
+// Type definitions for Protostar_particles container and iterator
+template <typename problem_t> using ProtostarParticleContainer = amrex::AmrParticleContainer<ProtostarParticleRealComps<problem_t>>;
+template <typename problem_t> using ProtostarParticleIterator = amrex::ParIter<ProtostarParticleRealComps<problem_t>>;
+
 #endif // AMREX_SPACEDIM == 3
 
 //-------------------- Units --------------------
@@ -283,6 +311,13 @@ inline auto get_units_data() -> const auto &
 	       {"vz", {0, 1, -1, 0}},
 	       {"birth_time", {0, 0, 1, 0}},
 	       {"death_time", {0, 0, 1, 0}},
+	       {"luminosity", {-1, 2, -3, 0}}}}},
+	    {ParticleType::Protostar,
+	     {{{"mass", {1, 0, 0, 0}},
+	       {"vx", {0, 1, -1, 0}},
+	       {"vy", {0, 1, -1, 0}},
+	       {"vz", {0, 1, -1, 0}},
+	       {"birth_time", {0, 0, 1, 0}},
 	       {"luminosity", {-1, 2, -3, 0}}}}}};
 	return units_data;
 }

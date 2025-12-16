@@ -74,6 +74,13 @@ class LuminosityUpdate
 			}
 		}
 	}
+
+	template <typename problem_t, typename ParticleType, int Nout, quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProtostarLuminosity(ParticleType & /*p*/, amrex::Real /*current_time*/,
+										  LuminosityGpuConstTables<Nout, oob_policy> const & /*gpu_tables*/) noexcept
+	{
+		// No-op for now
+	}
 };
 
 #endif // AMREX_SPACEDIM == 3
