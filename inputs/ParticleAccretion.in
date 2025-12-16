@@ -4,6 +4,7 @@
 # box size: (-7.7696 pc, 7.7696 pc)
 geometry.prob_lo     = -9.590075420e+19 -9.590075420e+19 -9.590075420e+19
 geometry.prob_hi     = 9.590075420e+19 9.590075420e+19 9.590075420e+19
+quokka.bc = reflecting reflecting reflecting
 geometry.is_periodic =  0    0    0
 
 # *****************************************************************

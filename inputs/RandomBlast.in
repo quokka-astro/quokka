@@ -3,6 +3,7 @@
 # *****************************************************************
 geometry.prob_lo     =  0.0  0.0  0.0 
 geometry.prob_hi     =  3.086e20  3.086e20  3.086e20  # 100 x 100 x 100 pc
+quokka.bc = periodic periodic periodic
 geometry.is_periodic =  1   1   1
 use_periodic_bc = 1
 

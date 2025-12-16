@@ -3,6 +3,7 @@
 # *****************************************************************
 geometry.prob_lo     =  -0.6  -0.6 -0.6 
 geometry.prob_hi     =  0.6  0.6  0.6
+quokka.bc = reflecting reflecting reflecting
 geometry.is_periodic =  0    0    0
 
 # *****************************************************************
