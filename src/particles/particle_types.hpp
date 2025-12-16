@@ -21,7 +21,8 @@ enum class ParticleSwitch : unsigned int {
 	CICRad = bitflag<3>(),		     // Combined gravitating-radiating particles, = 0b0100
 	StochasticStellarPop = bitflag<4>(), // Stellar population particles, = 0b1000
 	Sink = bitflag<5>(),		     // Sink particles, = 0b10000
-	Test = bitflag<6>()		     // Test particles with all features enabled, = 0b100000
+	Test = bitflag<6>(),		     // Test particles with all features enabled, = 0b100000
+	Star = bitflag<7>()		             // Sink particles, = 0b1000000
 };
 
 // Enable bitwise operations on the enum class
@@ -74,7 +75,8 @@ enum class ParticleType {
 	CICRad,		      // Gravitating radiation particles
 	StochasticStellarPop, // Stellar population particles
 	Sink,		      // Sink particles
-	Test		      // Test particles with all features enabled
+	Test,		      // Test particles with all features enabled
+	Star                       // Star
 };
 
 // Enum for SN schemes: ThermalOnly, ThermalAndMomentum
@@ -249,6 +251,31 @@ constexpr int SinkParticleRealComps = 4; // mass, vx, vy, vz
 using SinkParticleContainer = amrex::AmrParticleContainer<SinkParticleRealComps>;
 using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
 
+//-------------------- Star particles --------------------
+
+// Indices for Star_particles
+enum StarParticleDataIdx {
+	StarParticleMassIdx = 0, // Mass of the particle
+	StarParticleVxIdx,	 // Velocity in x direction
+	StarParticleVyIdx,	 // Velocity in y direction
+	StarParticleVzIdx,	 // Velocity in z direction
+	StarParticleAMxIdx,  // Angular Momentum in x direction
+	StarParticleAMyIdx,  // Angular Momentum in y direction
+	StarParticleAMzIdx,  // Angular Momentum in z direction
+	StarParticleMdeutIdx,  // Mdeut
+	StarParticleN,  // n
+	StarParticleMdotxIdx,  // Mass accretion rate
+	StarParticleBurnStateIdx,  // burnState
+	StarParticleL_histIdx,  // Luminosity history
+};
+
+// Number of real components for Star_particles
+constexpr int StarParticleRealComps = 11; // mass, vx, vy, vz, amx, amy, amz, mdeut, n, mdot,burnState,l_hist
+
+// Type definitions for Star_particles container and iterator
+using StarParticleContainer = amrex::AmrParticleContainer<StarParticleRealComps>;
+using StarParticleIterator = amrex::ParIter<StarParticleRealComps>;
+
 #endif // AMREX_SPACEDIM == 3
 
 //-------------------- Units --------------------
@@ -276,6 +303,7 @@ inline auto get_units_data() -> const auto &
 	       {"death_time", {0, 0, 1, 0}},
 	       {"luminosity", {-1, 2, -3, 0}}}}},
 	    {ParticleType::Sink, {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}}}}},
+	    {ParticleType::Star, {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}},{"amx", {0, 1, -1, 0}},{"amy", {0, 1, -1, 0}},{"amz", {0, 1, -1, 0}},{"mdeut", {1, 0, 0, 0}},{"n", {1, 0, 0, 0}},{"mdot", {1, 0, 0, 0}},{"burnState", {1, 0, 0, 0}},{"l_hist", {1, 0, 0, 0}}}}},
 	    {ParticleType::Test,
 	     {{{"mass", {1, 0, 0, 0}},
 	       {"vx", {0, 1, -1, 0}},
@@ -313,6 +341,9 @@ inline SNScheme SN_scheme = SNScheme::SN_thermal_or_thermal_momentum; // NOLINT
 // Sink particle accretion
 inline bool sink_particle_use_uniform_kernel = false; // NOLINT. If true, use uniform accretion kernel in a (7 dx)^3 box
 
+// Star particle accretion
+inline bool star_particle_use_uniform_kernel = false; // NOLINT. If true, use uniform accretion kernel in a (7 dx)^3 box
+
 // Verbosity for particle operations
 inline int particle_verbose = 0; // NOLINT print particle logistics
 
@@ -336,6 +367,7 @@ inline void particleParmParse()
 	const amrex::ParmParse pp("particles");
 	pp.query("disable_SN_feedback", disable_SN_feedback);
 	pp.query("sink_particle_use_uniform_kernel", sink_particle_use_uniform_kernel);
+	pp.query("star_particle_use_uniform_kernel", star_particle_use_uniform_kernel);
 
 	// Handle SNScheme enum
 	pp.query("SN_scheme", SN_scheme);
