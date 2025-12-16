@@ -358,8 +358,6 @@ auto problem_main() -> int
 	const double max_time = 0.4;
 	const int max_timesteps = 8000;
 
-	auto BCs_cc = quokka::BC<ShocktubeProblem>(quokka::BCType::ext_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
-
 	QuokkaSimulation<ShocktubeProblem> sim;
 
 	// sim.cflNumber_ = CFL_number;

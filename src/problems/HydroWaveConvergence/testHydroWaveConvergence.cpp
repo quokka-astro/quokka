@@ -125,7 +125,7 @@ auto runWaveTest(int nx) -> double
 	pp_geom.addarr("prob_hi", prob_hi);
 	pp_geom.addarr("is_periodic", is_periodic);
 
-	QuokkaSimulation<WaveProblem> sim;
+	QuokkaSimulation<WaveProblem> sim(BCs_cc);
 
 	sim.cflNumber_ = CFL_number;
 	sim.stopTime_ = max_time;

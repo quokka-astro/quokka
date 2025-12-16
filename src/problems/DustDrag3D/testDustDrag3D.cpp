@@ -105,16 +105,6 @@ auto problem_main() -> int
 	const double yc = 0.5;
 	const double zc = 0.5;
 
-	// boundary conditions
-	constexpr int nvars = HydroSystem<DustDrag>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir);
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
-
 	// problem initialization
 	QuokkaSimulation<DustDrag> sim;
 

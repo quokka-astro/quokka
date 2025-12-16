@@ -171,9 +171,6 @@ auto problem_main() -> int
 	std::string output_csv_file;
 	pp.query("output_csv_file", output_csv_file);
 
-	// Set boundary conditions - extrapolate
-	auto BCs_cc = quokka::BC<ResampledCoolingTest>(quokka::BCType::foextrap);
-
 	QuokkaSimulation<ResampledCoolingTest> sim;
 
 	sim.plotfileInterval_ = -1;

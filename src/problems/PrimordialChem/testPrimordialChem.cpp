@@ -253,9 +253,6 @@ auto problem_main() -> int
 	const double max_time = 5e16; // > 1 Gyr
 	const int max_timesteps = 5;
 
-	// Set boundary conditions - extrapolate
-	auto BCs_cc = quokka::BC<PrimordialChemTest>(quokka::BCType::foextrap);
-
 	QuokkaSimulation<PrimordialChemTest> sim;
 
 	// Standard PPM gives unphysically enormous temperatures when used for

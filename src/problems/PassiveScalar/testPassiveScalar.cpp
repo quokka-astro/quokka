@@ -248,9 +248,6 @@ template <> void QuokkaSimulation<ScalarProblem>::refineGrid(int lev, amrex::Tag
 
 auto problem_main() -> int
 {
-	// Problem parameters
-	auto BCs_cc = quokka::BC<ScalarProblem>(quokka::BCType::int_dir); // periodic
-
 	// Problem initialization
 	QuokkaSimulation<ScalarProblem> sim;
 

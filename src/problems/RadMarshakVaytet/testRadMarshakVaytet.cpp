@@ -280,7 +280,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	QuokkaSimulation<SuOlsonProblemCgs> sim;
+	QuokkaSimulation<SuOlsonProblemCgs> sim(BCs_cc);
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;

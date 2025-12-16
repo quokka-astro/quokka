@@ -148,9 +148,6 @@ auto problem_main() -> int
 	// const int nx = 1000;
 	// const double Lx = 1.0;
 
-	// Boundary conditions
-	auto BCs_cc = quokka::BC<ParticleProblem>(quokka::BCType::reflecting);
-
 	// Problem initialization
 	QuokkaSimulation<ParticleProblem> sim;
 

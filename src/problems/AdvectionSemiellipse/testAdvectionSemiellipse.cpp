@@ -131,9 +131,6 @@ auto problem_main() -> int
 	const double max_dt = 1e-4;
 	const int max_timesteps = 1e4;
 
-	// Set boundary conditions - periodic
-	auto BCs_cc = quokka::BC<SemiellipseProblem>(quokka::BCType::int_dir);
-
 	// Problem initialization
 	AdvectionSimulation<SemiellipseProblem> sim;
 	sim.maxDt_ = max_dt;

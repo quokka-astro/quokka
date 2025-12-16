@@ -175,7 +175,7 @@ auto problem_main() -> int
 					    quokka::BCType::reflecting); // z: reflecting
 
 	// Problem initialization
-	QuokkaSimulation<RTProblem> sim;
+	QuokkaSimulation<RTProblem> sim(BCs_cc);
 
 	// initialize
 	sim.setInitialConditions();

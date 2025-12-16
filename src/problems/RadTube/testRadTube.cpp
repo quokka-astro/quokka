@@ -269,8 +269,6 @@ auto problem_main() -> int
 	constexpr double tmax = Lx / a0;
 	constexpr int max_timesteps = 2000;
 
-	auto BCs_cc = quokka::BC<TubeProblem>(quokka::BCType::ext_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
-
 	// Problem initialization
 	QuokkaSimulation<TubeProblem> sim;
 

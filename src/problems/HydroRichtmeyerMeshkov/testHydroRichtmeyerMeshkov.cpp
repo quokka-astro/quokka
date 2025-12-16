@@ -157,7 +157,7 @@ auto problem_main() -> int
 	auto BCs_cc = quokka::BC<RichtmeyerMeshkovProblem>(quokka::BCType::reflecting);
 
 	// Problem initialization
-	QuokkaSimulation<RichtmeyerMeshkovProblem> sim;
+	QuokkaSimulation<RichtmeyerMeshkovProblem> sim(BCs_cc);
 
 	sim.stopTime_ = 2.5;
 	sim.cflNumber_ = 0.4;

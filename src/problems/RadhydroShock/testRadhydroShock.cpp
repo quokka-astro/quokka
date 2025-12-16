@@ -242,8 +242,6 @@ auto problem_main() -> int
 	const double max_dt = max_dtau / c_s0;
 	const double max_time = max_tau / c_s0;
 
-	auto BCs_cc = quokka::BC<ShockProblem>(quokka::BCType::ext_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
-
 	// Problem initialization
 	QuokkaSimulation<ShockProblem> sim;
 

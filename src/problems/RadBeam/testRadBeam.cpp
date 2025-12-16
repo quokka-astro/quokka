@@ -292,7 +292,7 @@ auto problem_main() -> int
 	}
 
 	// Problem initialization
-	QuokkaSimulation<BeamProblem> sim;
+	QuokkaSimulation<BeamProblem> sim(BCs_cc);
 
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;

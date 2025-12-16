@@ -227,8 +227,6 @@ template <> void QuokkaSimulation<ParticleSFProblem>::computeAfterTimestep()
 
 auto problem_main() -> int
 {
-	auto BCs_cc = quokka::BC<ParticleSFProblem>(quokka::BCType::int_dir);
-
 	// Problem initialization
 	QuokkaSimulation<ParticleSFProblem> sim;
 

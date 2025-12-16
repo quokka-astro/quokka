@@ -222,7 +222,7 @@ auto problem_main() -> int
 	auto BCs_cc = simulate_full_box ? quokka::BC<SedovProblem>(quokka::BCType::int_dir) : quokka::BC<SedovProblem>(quokka::BCType::reflecting);
 
 	// Problem initialization
-	QuokkaSimulation<SedovProblem> sim;
+	QuokkaSimulation<SedovProblem> sim(BCs_cc);
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 

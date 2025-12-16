@@ -257,16 +257,6 @@ template <> void QuokkaSimulation<TestParticle>::setInitialConditionsOnGridFaceV
 
 auto problem_main() -> int
 {
-	auto BCs_cc = quokka::BC<TestParticle>(quokka::BCType::reflecting);
-	const int nvars_fc = Physics_Indices<TestParticle>::nvarTotal_fc;
-	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
-	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_fc[icomp].setLo(idim, amrex::BCType::reflect_even);
-			BCs_fc[icomp].setHi(idim, amrex::BCType::reflect_even);
-		}
-	}
-
 	// Problem initialization
 	QuokkaSimulation<TestParticle> sim;
 	sim.initDt_ = dt_;

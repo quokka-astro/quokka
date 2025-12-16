@@ -202,9 +202,6 @@ auto problem_main() -> int
 
 	const double the_dt = 1.0e-2;
 
-	// Boundary conditions
-	auto BCs_cc = quokka::BC<CoolingProblemMG>(quokka::BCType::int_dir);
-
 	// Problem initialization
 	QuokkaSimulation<CoolingProblemMG> sim;
 

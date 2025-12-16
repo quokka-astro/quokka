@@ -365,8 +365,6 @@ template <> void QuokkaSimulation<AgoraGalaxy>::ComputeDerivedVar(int lev, std::
 
 auto problem_main() -> int
 {
-	auto BCs_cc = quokka::BC<AgoraGalaxy>(quokka::BCType::reflecting);
-
 	// Problem initialization
 	QuokkaSimulation<AgoraGalaxy> sim;
 

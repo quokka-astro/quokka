@@ -207,8 +207,6 @@ auto problem_main() -> int
 
 	const double max_dt = 1e-3; // t_cr = 2 cm / cs = 7e-8 s
 
-	auto BCs_cc = quokka::BC<PulseProblem>(quokka::BCType::foextrap, quokka::BCType::int_dir, quokka::BCType::int_dir);
-
 	// Problem 1: non-advecting pulse
 
 	// Problem initialization

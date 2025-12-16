@@ -108,8 +108,6 @@ template <> void QuokkaSimulation<CurrentSheet>::setInitialConditionsOnGridFaceV
 
 auto problem_main() -> int
 {
-	auto BCs_cc = quokka::BC<CurrentSheet>(quokka::BCType::int_dir); // periodic
-
 	const int nvars_fc = Physics_Indices<CurrentSheet>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
 	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
