@@ -201,12 +201,17 @@ auto BC_fc(BCType::mathematicalBndryTypes bc_x, BCType::mathematicalBndryTypes b
 	const int nvars_fc = Physics_Indices<problem_t>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(bc_x != BCType::mathematicalBndryTypes::reflecting, "MHD does not support reflecting B.C. yet");
 		std::array<BCType::mathematicalBndryTypes, 3> bcs = {bc_x, bc_y, bc_z};
 		for (int icomp = 0; icomp < nvars_fc; ++icomp) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				BCs_fc[icomp].setLo(idim, static_cast<int>(bcs[idim]));
-				BCs_fc[icomp].setHi(idim, static_cast<int>(bcs[idim]));
+				if (bcs[idim] == BCType::mathematicalBndryTypes::reflecting) {
+					// TODO(cch): Support reflecting B.C. for MHD
+					BCs_fc[icomp].setLo(idim, static_cast<int>(BCType::mathematicalBndryTypes::reflect_even));
+					BCs_fc[icomp].setHi(idim, static_cast<int>(BCType::mathematicalBndryTypes::reflect_even));
+				} else {
+					BCs_fc[icomp].setLo(idim, static_cast<int>(bcs[idim]));
+					BCs_fc[icomp].setHi(idim, static_cast<int>(bcs[idim]));
+				}
 			}
 		}
 	}
