@@ -46,7 +46,7 @@ auto main(int argc, char **argv) -> int
 
 		// override geometry.is_periodic based on quokka.bc
 		amrex::Vector<std::string> bc_str;
-		amrex::ParmParse pp_quokka("quokka");
+		amrex::ParmParse const pp_quokka("quokka");
 		if (pp_quokka.queryarr("bc", bc_str)) {
 			amrex::Vector<int> is_periodic(3, 0);
 			if (bc_str.size() >= 3) {
@@ -61,7 +61,7 @@ auto main(int argc, char **argv) -> int
 		}
 	});
 
-	amrex::Real start_time = amrex::ParallelDescriptor::second();
+	amrex::Real const start_time = amrex::ParallelDescriptor::second();
 
 	int result = 0;
 	{ // objects must be destroyed before amrex::finalize, so enter new

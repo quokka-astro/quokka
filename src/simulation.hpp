@@ -236,7 +236,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	void readBCs()
 	{
-		amrex::ParmParse pp_quokka("quokka");
+		amrex::ParmParse const pp_quokka("quokka");
 		amrex::Vector<quokka::BCType::mathematicalBndryTypes> bc_type;
 		if (pp_quokka.queryarr("bc", bc_type) != 0) {
 			// Parse BCs
