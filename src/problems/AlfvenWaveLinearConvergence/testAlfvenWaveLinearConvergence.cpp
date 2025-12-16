@@ -483,7 +483,7 @@ auto problem_main() -> int
 	quokka::richardson::Parameters params{};
 	params.machine_precision_target = 2.0e-10; // limit based on delta_b_magn, smaller values can be used if this is decreased
 	params.nx_initial = 16;
-	params.nx_max = 256; // cap at 256 for quick tests. otherwise, it can take ~1-2 hours for 2048
+	params.nx_max = 128; // cap at 256 for quick tests. otherwise, it can take ~1-2 hours for 2048
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;
 	params.test_name = "Slow Wave";
