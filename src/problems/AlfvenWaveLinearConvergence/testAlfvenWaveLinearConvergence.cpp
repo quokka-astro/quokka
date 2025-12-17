@@ -486,8 +486,8 @@ auto problem_main() -> int
 	params.nx_max = 128; // cap at 256 for quick tests. otherwise, it can take ~1-2 hours for 2048
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;
-	params.test_name = "Slow Wave";
-	params.csv_filename = "slow_wave_convergence.csv";
+	params.test_name = "Alfven Wave";
+	params.csv_filename = "alfven_wave_convergence.csv";
 
 	return quokka::richardson::run(params, [](int nx) { return runWaveTest(nx); });
 }
