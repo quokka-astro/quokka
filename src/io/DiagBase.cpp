@@ -56,9 +56,9 @@ auto DiagBase::doDiag(const amrex::Real &a_time, int a_nstep) -> bool
 	if (m_last_output_step != a_nstep) {
 		m_did_output_this_step = false;
 	}
-	
+
 	bool willDo = false;
-	
+
 	// Check step-based output condition
 	if (m_interval > 0 && (a_nstep % m_interval == 0)) {
 		willDo = true;
