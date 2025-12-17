@@ -154,7 +154,6 @@ template <typename problem_t> void DiagFramePlane::processDiag(int a_nstep, cons
 		if (!m_particleTypes.empty()) {
 			auto *sim = getSim<problem_t>();
 			sim->particleRegister_.writePlotFileFiltered(diagfile, m_particleTypes);
-			amrex::Print() << "  Wrote particles to frame plane " << diagfile << "\n";
 		}
 	}
 }
