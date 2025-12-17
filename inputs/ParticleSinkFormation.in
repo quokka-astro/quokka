@@ -34,7 +34,7 @@ quokka.diagnostics = plt slice_z slice_x
 
 quokka.plt.type = PlotFile         # pltfile for the whole box
 quokka.plt.file = plt              # Output file prefix (default "plt", must end in "plt")
-quokka.plt.time_int  = 2e13        # Output cadence (in number of coarse steps). For this test, expected outputs are: 6, 9, 12, 15, 18
+quokka.plt.time_int  = 2e13        # Output cadence (in time intervals). For this test, expected outputs are: 6, 9, 12, 15, 18
 #quokka.plt.particles = # Default to all particle types
 
 quokka.slice_z.type = DiagFramePlane         # Diagnostic type
@@ -50,7 +50,7 @@ quokka.slice_x.type = DiagFramePlane         # Diagnostic type
 quokka.slice_x.file = slicex_plt             # Output file prefix (must end in "plt")
 quokka.slice_x.normal = 0                    # Plane normal (0 == x, 1 == y, 2 == z)
 quokka.slice_x.center = 1e10                 # Coordinate in the normal direction (cannot lie *exactly* on domain boundary)
-quokka.slice_x.time_int    = 4e13            # Output cadence (in number of coarse steps). For this test, expected outputs are: 9, 15
+quokka.slice_x.time_int    = 4e13            # Output cadence (in time intervals). For this test, expected outputs are: 9, 15
 quokka.slice_x.interpolation = Linear        # (Optional, default is Linear) Interpolation type: Linear or Quadratic
 quokka.slice_x.particles = Sink_particles
 quokka.slice_z.field_names = gasDensity gasInternalEnergy # List of variables included in output
