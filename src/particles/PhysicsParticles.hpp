@@ -893,6 +893,11 @@ template <typename problem_t> class PhysicsParticleRegister
 	{
 		const BL_PROFILE("PhysicsParticleRegister::createParticlesFromState()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
+			// hack: skip formation of Stachastic stars
+			if (type == ParticleType::StochasticStellarPop) {
+				continue;
+			}
+
 			// Only create particles if the descriptor allows creation
 			if (descriptor->getAllowsCreation()) {
 				// Call the appropriate particle creation method based on the particle type
