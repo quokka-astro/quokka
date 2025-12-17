@@ -60,6 +60,7 @@ class DiagBase : public quokka::Factory<DiagBase>
 	std::string m_diagfile;
 	int m_verbose{0};
 	amrex::Real m_per{-1.0};
+	amrex::Real m_time_interval{-1.0};
 	int m_interval{-1};
 	amrex::Real m_next_output_time{0.0}; // Track when next time-based output should occur
 	int m_last_output_step{-1}; // Track the last step we decided to output

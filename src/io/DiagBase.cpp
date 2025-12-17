@@ -8,14 +8,14 @@ void DiagBase::init(const std::string &a_prefix, std::string_view a_diagName)
 	// IO
 	pp.query("int", m_interval);
 	pp.query("per", m_per);
-	pp.query("time_int", m_per); // time_int takes precedence over per
+	pp.query("time_int", m_time_interval); // time_int takes precedence over per
 	m_diagfile = a_diagName;
 	pp.query("file", m_diagfile);
-	AMREX_ASSERT(m_interval > 0 || m_per > 0.0);
+	AMREX_ASSERT(m_interval > 0 || m_per > 0.0 || m_time_interval > 0.0);
 
 	// Initialize next output time for time-based diagnostics
-	if (m_per > 0.0) {
-		m_next_output_time = m_per;
+	if (m_time_interval > 0.0) {
+		m_next_output_time = m_time_interval;
 	}
 
 	// Filters
@@ -66,7 +66,7 @@ auto DiagBase::doDiag(const amrex::Real &a_time, int a_nstep) -> bool
 
 	// Check time-based output condition
 	// Use the cached decision if we've already decided for this step
-	if (m_per > 0.0) {
+	if (m_time_interval > 0.0) {
 		if (m_did_output_this_step) {
 			// We already decided to output at this step, return true
 			willDo = true;
@@ -75,10 +75,10 @@ auto DiagBase::doDiag(const amrex::Real &a_time, int a_nstep) -> bool
 			willDo = true;
 			m_did_output_this_step = true;
 			// Update next output time
-			m_next_output_time += m_per;
+			m_next_output_time += m_time_interval;
 			// Handle case where multiple intervals have passed
 			while (m_next_output_time < a_time) {
-				m_next_output_time += m_per;
+				m_next_output_time += m_time_interval;
 			}
 			// Record this output step
 			m_last_output_step = a_nstep;
