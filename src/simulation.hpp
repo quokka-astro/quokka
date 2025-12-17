@@ -1675,7 +1675,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 				amrex::Print() << "Doing Poisson solve with open boundaries using OpenBCSolver...\n\n";
 			}
 
-			amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
+			amrex::LPInfo openbc_info;
+			openbc_info.setDeterministic(true); // Enable deterministic mode for bitwise reproducibility
+			amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level), openbc_info);
 			if (verbose) {
 				poissonSolver.setVerbose(1);
 				poissonSolver.setBottomVerbose(0);

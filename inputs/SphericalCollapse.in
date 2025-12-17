@@ -3,7 +3,7 @@
 # *****************************************************************
 geometry.prob_lo     =  -0.6  -0.6 -0.6 
 geometry.prob_hi     =  0.6  0.6  0.6
-geometry.is_periodic =  0    0    0
+geometry.is_periodic =  1    0    0
 
 # *****************************************************************
 # VERBOSITY
@@ -40,6 +40,7 @@ problem.num_particles = 1000000
 problem.seed = 42123
 problem.r_refine = 0.2
 
-particles.reproducibility_roundoff_redundancy = 32
+# Number of bits to remove from the significand. 20 is the default value. For production runs with large number of cells and timesteps, you have to increase this value to ensure bitwise reproducibility.
+particles.reproducibility_roundoff_redundancy = 20 
 
 amrex.init_snan = 1
