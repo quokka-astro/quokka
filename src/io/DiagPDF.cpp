@@ -126,8 +126,13 @@ auto DiagPDF::MFVecMax(const amrex::Vector<const amrex::MultiFab *> &a_state, in
 
 void DiagPDF::writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex::Vector<amrex::Real> &a_pdf)
 {
-	// Generate filename using step number (works for both step-based and time-based intervals)
-	std::string diagfile = amrex::Concatenate(m_diagfile, a_nstep, 6);
+	std::string diagfile;
+	if (m_interval > 0 || m_time_interval > 0.0) {
+		diagfile = amrex::Concatenate(m_diagfile, a_nstep, 6);
+	}
+	if (m_per > 0.0) {
+		diagfile = m_diagfile + std::to_string(a_time);
+	}
 	diagfile = diagfile + ".dat";
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
