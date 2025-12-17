@@ -3344,6 +3344,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	}
 
 	// write all particles in particleRegister_ to plotfile
+	particleRegister_.redistribute(0, 0);
 	particleRegister_.writePlotFile(plotfilename);
 #endif
 }
@@ -3582,6 +3583,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 	}
 
 	// write all particles in particleRegister_ to checkpoint file
+	particleRegister_.redistribute(0, 0);
 	particleRegister_.writeCheckpoint(checkpointname, true);
 
 	// create symlink and point it at this checkpoint dir

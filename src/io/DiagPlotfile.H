@@ -128,9 +128,11 @@ template <typename problem_t> void DiagPlotfile::processDiag(int a_nstep, const 
 	// Write physics particles
 	if (m_particleTypes.empty()) {
 		// Write all particle types
+		sim->particleRegister_.redistribute(0, 0);
 		sim->particleRegister_.writePlotFile(plotfilename);
 	} else {
 		// Write only specified particle types
+		sim->particleRegister_.redistribute(0, 0);
 		sim->particleRegister_.writePlotFileFiltered(plotfilename, m_particleTypes);
 	}
 #endif
