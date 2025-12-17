@@ -8,9 +8,15 @@ void DiagBase::init(const std::string &a_prefix, std::string_view a_diagName)
 	// IO
 	pp.query("int", m_interval);
 	pp.query("per", m_per);
+	pp.query("time_int", m_per); // time_int takes precedence over per
 	m_diagfile = a_diagName;
 	pp.query("file", m_diagfile);
 	AMREX_ASSERT(m_interval > 0 || m_per > 0.0);
+
+	// Initialize next output time for time-based diagnostics
+	if (m_per > 0.0) {
+		m_next_output_time = m_per;
+	}
 
 	// Filters
 	int const nFilters = pp.countval("filters");
@@ -46,13 +52,38 @@ void DiagBase::prepare(int /*a_nlevels*/, const amrex::Vector<amrex::Geometry> &
 
 auto DiagBase::doDiag(const amrex::Real &a_time, int a_nstep) -> bool
 {
+	// Reset flag if we're on a new step
+	if (m_last_output_step != a_nstep) {
+		m_did_output_this_step = false;
+	}
+	
 	bool willDo = false;
+	
+	// Check step-based output condition
 	if (m_interval > 0 && (a_nstep % m_interval == 0)) {
 		willDo = true;
 	}
 
-	// TODO(bwibking): output based on a_time
-	amrex::ignore_unused(a_time);
+	// Check time-based output condition
+	// Use the cached decision if we've already decided for this step
+	if (m_per > 0.0) {
+		if (m_did_output_this_step) {
+			// We already decided to output at this step, return true
+			willDo = true;
+		} else if (m_next_output_time <= a_time) {
+			// First check for this step - decide whether to output
+			willDo = true;
+			m_did_output_this_step = true;
+			// Update next output time
+			m_next_output_time += m_per;
+			// Handle case where multiple intervals have passed
+			while (m_next_output_time < a_time) {
+				m_next_output_time += m_per;
+			}
+			// Record this output step
+			m_last_output_step = a_nstep;
+		}
+	}
 
 	return willDo;
 }
