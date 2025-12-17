@@ -262,11 +262,11 @@ enum StarParticleDataIdx {
 	StarParticleAMxIdx,  // Angular Momentum in x direction
 	StarParticleAMyIdx,  // Angular Momentum in y direction
 	StarParticleAMzIdx,  // Angular Momentum in z direction
-	StarParticleMdeutIdx,  // Mdeut
-	StarParticleN,  // n
-	StarParticleMdotxIdx,  // Mass accretion rate
+	StarParticleMdeutIdx,  // Mass of gas that still contains deuterium
+	StarParticlepolytropicIdx,  // n
+	StarParticleMdotxIdx,  // Current mass accretion rate
 	StarParticleBurnStateIdx,  // burnState
-	StarParticleL_histIdx,  // Luminosity history
+	StarParticleL_histIdx,  // Past masses
 };
 
 // Number of real components for Star_particles
@@ -276,6 +276,16 @@ constexpr int StarParticleRealComps = 11; // mass, vx, vy, vz, amx, amy, amz, md
 using StarParticleContainer = amrex::AmrParticleContainer<StarParticleRealComps>;
 using StarParticleIterator = amrex::ParIter<StarParticleRealComps>;
 
+// Indices for burnState
+enum burningState {
+	Uninitialized,
+	None,
+	VariableCoreDeuterium,
+	SteadyCoreDeuterium,
+	ShellDeuterium,
+	ZAMS
+};
+  
 #endif // AMREX_SPACEDIM == 3
 
 //-------------------- Units --------------------
@@ -303,7 +313,19 @@ inline auto get_units_data() -> const auto &
 	       {"death_time", {0, 0, 1, 0}},
 	       {"luminosity", {-1, 2, -3, 0}}}}},
 	    {ParticleType::Sink, {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}}}}},
-	    {ParticleType::Star, {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}},{"amx", {0, 1, -1, 0}},{"amy", {0, 1, -1, 0}},{"amz", {0, 1, -1, 0}},{"mdeut", {1, 0, 0, 0}},{"n", {1, 0, 0, 0}},{"mdot", {1, 0, 0, 0}},{"burnState", {1, 0, 0, 0}},{"l_hist", {1, 0, 0, 0}}}}},
+	    {ParticleType::Star,
+	     {{{"mass", {1, 0, 0, 0}},
+	       {"vx", {0, 1, -1, 0}},
+	       {"vy", {0, 1, -1, 0}},
+	       {"vz", {0, 1, -1, 0}},
+	       {"amx", {1, 2, -1, 0}},
+	       {"amy", {1, 2, -1, 0}},
+	       {"amz", {1, 2, -1, 0}},
+	       {"mdeut", {1, 0, 0, 0}},
+	       {"n", {0, 0, 0, 0}},
+	       {"mdot", {1, 0, -1, 0}},
+	       {"burnState", {0, 0, 0, 0}},
+	       {"l_hist", {1, 0, 0, 0}}}}},
 	    {ParticleType::Test,
 	     {{{"mass", {1, 0, 0, 0}},
 	       {"vx", {0, 1, -1, 0}},
