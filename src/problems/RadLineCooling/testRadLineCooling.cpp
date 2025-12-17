@@ -214,6 +214,8 @@ auto problem_main() -> int
 	sim.cflNumber_ = CFL_number_gas;
 	sim.initDt_ = the_dt;
 	sim.maxDt_ = the_dt;
+	sim.maxTimesteps_ = max_timesteps;
+	sim.plotfileInterval_ = -1;
 
 	// initialize
 	sim.setInitialConditions();
