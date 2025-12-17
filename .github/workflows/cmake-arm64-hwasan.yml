@@ -61,7 +61,7 @@ jobs:
              ccache-${{ github.workflow }}-${{ github.job }}-git-
 
     - name: Install Canary
-      run: python3 -m pip install "canary-wm @ git+https://github.com/sandialabs/canary"
+      run: python3 -m pip install canary-wm
 
     - name: Initialize ccache
       run: |
