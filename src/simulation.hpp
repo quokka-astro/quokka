@@ -1618,6 +1618,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 
 			// Create MLPoisson linear operator with proper LPInfo for AMR
 			amrex::LPInfo info;
+			info.setDeterministic(true); // Enable deterministic mode for bitwise reproducibility
 			// For AMR problems, we need to ensure proper coarsening
 			if (finest_level > 0) {
 				info.setAgglomeration(false); // Disable agglomeration for AMR
