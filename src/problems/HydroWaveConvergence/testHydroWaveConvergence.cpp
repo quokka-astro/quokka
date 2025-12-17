@@ -173,8 +173,8 @@ auto problem_main() -> int
 	params.nx_max = 2048;
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;
-	params.test_name = "Entropy Wave";
-	params.csv_filename = "entropy_wave_convergence.csv";
+	params.test_name = "Hydro Wave";
+	params.csv_filename = "hydro_wave_convergence.csv";
 
 	return quokka::richardson::run(params, [](int nx) { return runWaveTest(nx); });
 }

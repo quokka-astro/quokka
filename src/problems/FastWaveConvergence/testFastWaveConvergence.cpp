@@ -524,40 +524,7 @@ auto runWaveTest(int nx) -> double
 	// Main time loop
 	sim.evolve();
 
-	auto comp_errors = sim.computeComponentErrors();
-	const auto n_cells = static_cast<amrex::Real>(sim.state_new_cc_[0].boxArray().numPts());
-	amrex::Real sum_sq_err = 0.0;
-	amrex::Real sum_sq_ref = 0.0;
-	for (const auto &[name, abs_err, rel_err] : comp_errors) {
-		// Convert normalized errors back to L1 norms
-		amrex::Real const L1_err = abs_err * n_cells;
-		sum_sq_err += L1_err * L1_err;
-		// Reconstruct reference L1 norm
-		if (!std::isnan(rel_err) && rel_err != 0.0 && abs_err > 10E-14) {
-			amrex::Real const L1_ref = (abs_err / rel_err) * n_cells;
-			sum_sq_ref += L1_ref * L1_ref;
-		}
-		// If rel_err is NaN or zero, reference was zero, contributes 0 to sum_sq_ref
-	}
-
-	const amrex::Real err_norm = std::sqrt(sum_sq_err);
-	const amrex::Real sol_norm = std::sqrt(sum_sq_ref);
-
-	amrex::Real error_norm = 0.0;
-	if (sol_norm > 0.0) {
-		error_norm = err_norm / sol_norm;
-		amrex::Print() << std::string(70, '=') << "\n";
-		amrex::Print() << "\nRelative RMS L1 error norm = " << error_norm << "\n\n";
-	} else {
-		error_norm = err_norm;
-		amrex::Print() << std::string(70, '=') << "\n";
-		if (sol_norm == 0.0) {
-			amrex::Print() << "\nReference norm is zero; reporting absolute L1 error norm = " << error_norm << "\n\n";
-		} else {
-			amrex::Print() << "\nAbsolute L1 error norm = " << error_norm << "\n\n";
-		}
-	}
-	return error_norm;
+	return sim.computeErrorNorm();
 }
 
 auto problem_main() -> int
