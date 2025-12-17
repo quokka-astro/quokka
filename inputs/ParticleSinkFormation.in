@@ -53,4 +53,4 @@ quokka.slice_x.center = 1e10                 # Coordinate in the normal directio
 quokka.slice_x.time_int    = 4e13            # Output cadence (in time intervals). For this test, expected outputs are: 9, 15
 quokka.slice_x.interpolation = Linear        # (Optional, default is Linear) Interpolation type: Linear or Quadratic
 quokka.slice_x.particles = Sink_particles
-quokka.slice_z.field_names = gasDensity gasInternalEnergy # List of variables included in output
+quokka.slice_x.field_names = gasDensity gasInternalEnergy # List of variables included in output
