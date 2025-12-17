@@ -253,6 +253,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void createInitialCICRadParticles() = 0;
 	virtual void createInitialStochasticStellarPopParticles() = 0;
 	virtual void createInitialSinkParticles() = 0;
+	virtual void createInitialProtostarParticles() = 0;
 	virtual void createInitialTestParticles() = 0;
 	// Test particles have integer components, and InitFromAsciiFile does not support integer components, so we do not allow creating them at the start
 	// of the simulation
@@ -549,6 +550,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	std::unique_ptr<quokka::CICRadParticleContainer<problem_t>> CICRadParticles;
 	std::unique_ptr<quokka::StochasticStellarPopParticleContainer<problem_t>> StochasticStellarPopParticles;
 	std::unique_ptr<quokka::SinkParticleContainer> SinkParticles;
+	std::unique_ptr<quokka::ProtostarParticleContainer<problem_t>> ProtostarParticles;
 	std::unique_ptr<quokka::TestParticleContainer<problem_t>> TestParticles;
 #endif // AMREX_SPACEDIM == 3
 
@@ -2887,6 +2889,21 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		// Initialize particles through user-defined function
 		createInitialSinkParticles();
 	}
+
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Protostar) {
+		AMREX_ASSERT(ProtostarParticles == nullptr);
+
+		// Create particle container
+		ProtostarParticles = std::make_unique<quokka::ProtostarParticleContainer<problem_t>>(this);
+		ProtostarParticles->SetVerbose(0);
+
+		// Register with particle register - Protostar particles allow creation
+		particleRegister_.registerParticleType(ProtostarParticles.get(), quokka::ParticleType::Protostar);
+
+		// Initialize particles through user-defined function
+		createInitialProtostarParticles();
+	}
+
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Test) {
 		AMREX_ASSERT(TestParticles == nullptr);
 

@@ -7,6 +7,7 @@ add_subdirectory(AdvectionSemiellipse)
 
 add_subdirectory(ParticleAccretion)
 add_subdirectory(ParticleSink)
+add_subdirectory(ParticleProtostar)
 add_subdirectory(ParticleCreation)
 add_subdirectory(ParticleRadiation)
 add_subdirectory(ParticleSinkFormation)
