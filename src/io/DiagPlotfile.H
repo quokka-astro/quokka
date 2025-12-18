@@ -64,6 +64,7 @@ template <typename problem_t> void DiagPlotfile::processDiag(int a_nstep, const 
 	// Get the simulation pointer
 	auto *sim = getSim<problem_t>();
 
+	// Generate filename using step number (works for both step-based and time-based intervals)
 	const std::string plotfilename = amrex::Concatenate(m_diagfile, a_nstep, 5);
 	amrex::Print() << "DiagPlotfile: Writing plotfile " << plotfilename << "\n";
 
