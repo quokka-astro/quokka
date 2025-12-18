@@ -46,7 +46,7 @@ template <> struct quokka::DensityFloor<AgoraGalaxy> {
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto value(amrex::Real x, amrex::Real y, amrex::Real z,
 								  amrex::Real base_density_floor) -> amrex::Real
 	{
-		amrex::Real constexpr r_break = 20.0e3 * C::parsec; // 20 kpc
+		amrex::Real constexpr r_break = 10.0e3 * C::parsec; // 10 kpc
 		amrex::Real const r = std::sqrt(x * x + y * y + z * z);
 		if (r <= r_break) {
 			return base_density_floor;
