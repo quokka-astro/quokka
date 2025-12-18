@@ -56,9 +56,11 @@ template <typename problem_t> class DustSystem
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static void ComputeDustFluxes(quokka::Array4View<amrex::Real, DIR> &x1Flux, quokka::Array4View<const amrex::Real, DIR> &x1LeftState,
 						       quokka::Array4View<const amrex::Real, DIR> &x1RightState, int i, int j, int k);
-  
+
 	// compute reciprocal of dust stopping time
-	AMREX_GPU_HOST_DEVICE static auto ComputeReciprocalStoppingTime(amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, Physics_Traits<problem_t>::nDustGroups + 1> /*vel*/) -> amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups>;
+	AMREX_GPU_HOST_DEVICE static auto
+	    ComputeReciprocalStoppingTime(amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, Physics_Traits<problem_t>::nDustGroups + 1> /*vel*/)
+		-> amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups>;
 
 	// compute dust-gas drag source terms and update conserved variables
 	static void computeDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt, amrex::Real dust_omega_);
@@ -131,20 +133,22 @@ AMREX_GPU_DEVICE void DustSystem<problem_t>::ComputeDustFluxes(quokka::Array4Vie
 	}
 }
 
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto DustSystem<problem_t>::ComputeReciprocalStoppingTime(amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, Physics_Traits<problem_t>::nDustGroups + 1> /*vel*/) -> amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> 
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto DustSystem<problem_t>::ComputeReciprocalStoppingTime(
+    amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, Physics_Traits<problem_t>::nDustGroups + 1> /*vel*/)
+    -> amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups>
 {
 	constexpr int N = Physics_Traits<problem_t>::nDustGroups;
 	amrex::GpuArray<amrex::Real, N> alpha;
-	
+
 	for (int g = 0; g < N; ++g) {
-			alpha[g] = 0.0;
+		alpha[g] = 0.0;
 	}
-	
+
 	return alpha;
 }
 
-template <typename problem_t>
-void DustSystem<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt, amrex::Real dust_omega_)
+template <typename problem_t> void DustSystem<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt, amrex::Real dust_omega_)
 {
 	auto const &consVar_cc = consVar_cc_mf.arrays();
 	constexpr int N = Physics_Traits<problem_t>::nDustGroups;
@@ -186,7 +190,7 @@ void DustSystem<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, amre
 			}
 		}
 
-    amrex::GpuArray<amrex::Real, N> alpha = ComputeReciprocalStoppingTime(vel_inter);
+		amrex::GpuArray<amrex::Real, N> alpha = ComputeReciprocalStoppingTime(vel_inter);
 
 		amrex::Real t_s_max = 0.0;
 		for (int g = 0; g < N; ++g) {
