@@ -16,7 +16,7 @@ namespace quokka
 
 namespace BCType
 {
-enum mathematicalBndryTypesInteger : int {
+enum mathematicalBndryTypesInteger : int { // NOLINT
 	// Standard AMReX boundary conditions (using actual amrex::BCType values, safe from AMReX changes)
 	bogus = amrex::BCType::bogus,
 	reflect_odd = amrex::BCType::reflect_odd,
