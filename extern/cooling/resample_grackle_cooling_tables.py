@@ -415,7 +415,6 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, zmet=1.0,
     # Convert to kpc for plotting
     L_cool_kpc = cooling_lengths / KPC
     Z = L_cool_kpc.T # transpose to get (n_H, T/mu)
-    Z_abs = np.abs(Z)
 
     # mask out negative Z
     # Z_masked = np.ma.masked_where(Z_abs > 1e6, Z_abs)
