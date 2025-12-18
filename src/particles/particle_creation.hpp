@@ -497,6 +497,15 @@ template <> struct ParticleCreationTraits<ParticleType::Star> {
 					p.rdata(mass_idx + 1) = vx;
 					p.rdata(mass_idx + 2) = vy;
 					p.rdata(mass_idx + 3) = vz;
+					p.rdata(mass_idx + 4) = amx;
+					p.rdata(mass_idx + 5) = amy;
+					p.rdata(mass_idx + 6) = amz;
+					p.rdata(mass_idx + 7) = particle_mass;  // mlast
+					p.rdata(mass_idx + 8) = 1.5;  // polytropic index npoly
+					p.rdata(mass_idx + 9) = particle_mass;  // mdeut
+					p.rdata(mass_idx + 10) = Uninitialized;  // burnStates
+					p.rdata(mass_idx + 11) = 2.0*6.96e10;  // radius
+					p.rdata(mass_idx + 12) = 3.90e31;  // l_hist      		
 				}
 			}
 
@@ -507,17 +516,8 @@ template <> struct ParticleCreationTraits<ParticleType::Star> {
 			state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) *= scale_factor;
 			state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) *= scale_factor;
 			state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) *= scale_factor;
-			state_arr(i, j, k, HydroSystem<problem_t>::x1AngMomentum_index) *= scale_factor;
-			state_arr(i, j, k, HydroSystem<problem_t>::x2AngMomentum_index) *= scale_factor;
-			state_arr(i, j, k, HydroSystem<problem_t>::x3AngMomentum_index) *= scale_factor;
 			state_arr(i, j, k, HydroSystem<problem_t>::energy_index) *= scale_factor;
 			state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index) *= scale_factor;
-			state_arr(i, j, k, HydroSystem<problem_t>::mdeut) *= scale_factor;
-			state_arr(i, j, k, HydroSystem<problem_t>::n) *= scale_factor;
-			state_arr(i, j, k, HydroSystem<problem_t>::mdot) *= scale_factor;
-			state_arr(i, j, k, HydroSystem<problem_t>::burnState) *= scale_factor;
-			state_arr(i, j, k, HydroSystem<problem_t>::l_hist) *= scale_factor;
-			
 		}
 	};
 

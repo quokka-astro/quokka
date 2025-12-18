@@ -726,8 +726,7 @@ template <typename problem_t> class PhysicsParticleRegister
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Sink>>(container, SinkParticleMassIdx,
 															       -1, -1, true, false, -1, true);
 		} else if (type == ParticleType::Star) {
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Star>>(container, StartParticleMassIdx,
-															       -1, -1, true, false, -1, true);
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Star>>(container, StartParticleMassIdx,StarParticleLumIdx, StarParticleBirthTimeIdx, true, false, -1, true);
 		} else if (type == ParticleType::Test) {
 			// descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
 			//     container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, true, true, TestParticleStageIdx, false);
