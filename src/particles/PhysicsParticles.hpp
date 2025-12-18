@@ -50,13 +50,15 @@ class PhysicsParticleDescriptorBase
 	int evolutionStageIndex_{-1};	// Index for evolution stage (-1 if not used)
 	bool allowsAccretion_{false};	// Whether particles can accrete gas
 
+	int massAtBirthIndex_{-1};     // Index for particle mass at birth (-1 if not used)
 	bool forceFinestLevel_{false}; // Whether particles are forced to live in the finest level
 
       public:
 	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation, bool allows_destruction = false,
-				      int evolution_stage_idx = -1, bool allows_accretion = false)
+				      int evolution_stage_idx = -1, bool allows_accretion = false, int mass_at_birth_idx = -1)
 	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), allowsCreation_(allows_creation),
-	      allowsDestruction_(allows_destruction), evolutionStageIndex_(evolution_stage_idx), allowsAccretion_(allows_accretion)
+	      allowsDestruction_(allows_destruction), evolutionStageIndex_(evolution_stage_idx), allowsAccretion_(allows_accretion),
+	      massAtBirthIndex_(mass_at_birth_idx)
 	{
 	}
 
@@ -76,6 +78,7 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] AMREX_FORCE_INLINE auto getAllowsDestruction() const -> bool { return allowsDestruction_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getEvolutionStageIndex() const -> int { return evolutionStageIndex_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getAllowsAccretion() const -> bool { return allowsAccretion_; }
+	[[nodiscard]] AMREX_FORCE_INLINE auto getMassAtBirthIndex() const -> int { return massAtBirthIndex_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getForceFinestLevel() const -> bool { return forceFinestLevel_; }
 
 	// setter methods for particle properties
@@ -119,6 +122,7 @@ class PhysicsParticleDescriptorBase
 
 	// Compute total stellar mass
 	[[nodiscard]] virtual auto computeStellarMass() const -> amrex::Real = 0;
+	[[nodiscard]] virtual auto computeStellarMassAtBirth() const -> amrex::Real = 0;
 
 #if AMREX_SPACEDIM == 3
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
@@ -185,8 +189,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 	// Constructor initializing descriptor with container and particle properties
 	PhysicsParticleDescriptor(ContainerType *container, int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation,
-				  bool allows_destruction = false, int evolution_stage_idx = -1, bool allows_accretion = false)
-	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction, evolution_stage_idx, allows_accretion),
+				  bool allows_destruction = false, int evolution_stage_idx = -1, bool allows_accretion = false, int mass_at_birth_idx = -1)
+	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction, evolution_stage_idx, allows_accretion,
+					    mass_at_birth_idx),
 	      container_(container)
 	{
 	}
@@ -227,6 +232,35 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		amrex::Real total_mass = 0.0;
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
 			const int mass_idx = this->getMassIndex();
+			amrex::ReduceOps<amrex::ReduceOpSum> reduce_ops;
+			using ReduceDataType = amrex::ReduceData<amrex::Real>;
+			using PTDType = typename ContainerType::ParticleTileType::ConstParticleTileDataType;
+
+			// Sum mass over all particles at all levels
+			for (int lev = 0; lev <= container_->finestLevel(); ++lev) {
+				auto result_tuple = amrex::ParticleReduce<ReduceDataType>(
+				    *container_, lev,
+				    [=] AMREX_GPU_DEVICE(const PTDType &p_type, const int i) noexcept -> amrex::Real {
+					    return p_type.m_aos[i].rdata(mass_idx);
+				    },
+				    reduce_ops);
+				total_mass += amrex::get<0>(result_tuple);
+			}
+		}
+		amrex::ParallelAllReduce::Sum(total_mass, amrex::ParallelContext::CommunicatorSub());
+		return total_mass;
+	}
+
+	// Compute total stellar mass at birth
+	[[nodiscard]] auto computeStellarMassAtBirth() const -> amrex::Real override
+	{
+		if (this->getMassAtBirthIndex() < 0) {
+			return computeStellarMass();
+		}
+
+		amrex::Real total_mass = 0.0;
+		if (container_ != nullptr) {
+			const int mass_idx = this->getMassAtBirthIndex();
 			amrex::ReduceOps<amrex::ReduceOpSum> reduce_ops;
 			using ReduceDataType = amrex::ReduceData<amrex::Real>;
 			using PTDType = typename ContainerType::ParticleTileType::ConstParticleTileDataType;
@@ -621,7 +655,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		// Use the traits class to implement the specialized behavior
 		ParticleCreationTraits<particleType>::template createParticles<problem_t, ContainerType>(
 		    this->container_, this->getMassIndex(), state, accretion_rate, lev, current_time, dt, this->getEvolutionStageIndex(),
-		    this->getBirthTimeIndex(), state_fc);
+		    this->getBirthTimeIndex(), this->getMassAtBirthIndex(), state_fc);
 	}
 #endif // AMREX_SPACEDIM == 3
 };
@@ -721,7 +755,7 @@ template <typename problem_t> class PhysicsParticleRegister
 		} else if (type == ParticleType::StochasticStellarPop) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::StochasticStellarPop>>(
 			    container, StochasticStellarPopParticleMassIdx, StochasticStellarPopParticleLumIdx, StochasticStellarPopParticleBirthTimeIdx, true,
-			    false, StochasticStellarPopParticleStageIdx, false);
+			    false, StochasticStellarPopParticleStageIdx, false, StochasticStellarPopParticleMassAtBirthIdx);
 		} else if (type == ParticleType::Sink) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Sink>>(container, SinkParticleMassIdx,
 															       -1, -1, true, false, -1, true);
@@ -1012,7 +1046,7 @@ template <typename problem_t> class PhysicsParticleRegister
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			// Only compute SFH for particles that can be created (stars)
 			if (descriptor->getAllowsCreation()) {
-				const amrex::Real total_mass = descriptor->computeStellarMass();
+				const amrex::Real total_mass = descriptor->computeStellarMassAtBirth();
 				// Store in local sfh_data_ for accumulation
 				sfh_data_[type].emplace_back(nstep, time, total_mass);
 			}
