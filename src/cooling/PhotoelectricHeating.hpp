@@ -72,8 +72,7 @@ auto PeHeatingFromSfh(const std::vector<std::tuple<int, amrex::Real, amrex::Real
 		auto const pe_heating_per_mass = gpu_tables.pe_heating.interpolate(point);
 
 		// Accumulate contribution: (mass increment) * (PE heating rate per unit mass)
-		// The table is given in units of erg/s/H/Msun, and it expects the input to be SFR per kpc^2, so we need to divide the mass increment by the
-		// area.
+		// The table is given in units of erg/s/H/(Msun/kpc^2), and it expects the input to be SFR per kpc^2, so we need to divide the mass increment by the area.
 		const amrex::Real delta_mass_per_area = (mass_in_Msun - mass_old) / sf_area_kpc2;
 		heating_rate += delta_mass_per_area * pe_heating_per_mass[0];
 		mass_old = mass_in_Msun;
