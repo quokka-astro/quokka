@@ -525,13 +525,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("emf_reconstruction_order", emfReconstructionOrder_);
 		hpp.query("emf_compute_scheme", emfComputingScheme_);
 		hpp.query("emf_averaging_scheme", emfAveragingScheme_);
-	}
-
-	// set Quokka runtime parameters
-	{
-		amrex::ParmParse const qpp("quokka");
-		qpp.query("project_initial_b_field", projectInitialBField_);
-		qpp.query("update_initial_b_energy", updateInitialMagneticEnergy_);
+		hpp.query("project_initial_b_field", projectInitialBField_);
+		hpp.query("update_initial_b_energy", updateInitialMagneticEnergy_);
 	}
 
 	// set cooling runtime parameters
