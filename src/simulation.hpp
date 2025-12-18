@@ -206,8 +206,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<amrex::MultiFab> phi;
 
 	// SFH parameters
-	int sfh_interval_ = -1;
-	amrex::Real sfh_time_interval_ = -1.0;
+	int sfh_interval_ = -1;		       // interval for the star formation history
+	amrex::Real sfh_time_interval_ = -1.0; // time interval for the star formation history
 	amrex::Real last_sfh_time_ = 0.0;
 
 	amrex::Real densityFloor_ = 0.0; // default
@@ -848,8 +848,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 		amrex::Print() << fmt::format("Setting walltime limit to {} hours, {} minutes, {} seconds.\n", hours, minutes, seconds);
 	}
 
-	pp.query("SFH_interval", sfh_interval_);
-	pp.query("SFH_time_interval", sfh_time_interval_);
+	// SFH parameters
+	pp.query("sfh_interval", sfh_interval_);
+	pp.query("sfh_time_interval", sfh_time_interval_);
 
 	// IO settings (following the AMReX convention for the Amr class)
 	// (Since we use AmrCore instead of Amr, we have to reimplement these.)
