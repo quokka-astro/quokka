@@ -63,19 +63,19 @@ AMREX_ENUM(mathematicalBndryTypes, // NOLINT
 );
 
 // Compile-time verification that our values match AMReX's BCType values
-static_assert(static_cast<int>(mathematicalBndryTypes::bogus) == amrex::BCType::bogus);
-static_assert(static_cast<int>(mathematicalBndryTypes::reflect_odd) == amrex::BCType::reflect_odd);
-static_assert(static_cast<int>(mathematicalBndryTypes::periodic) == amrex::BCType::int_dir);
-static_assert(static_cast<int>(mathematicalBndryTypes::reflect_even) == amrex::BCType::reflect_even);
-static_assert(static_cast<int>(mathematicalBndryTypes::foextrap) == amrex::BCType::foextrap);
-static_assert(static_cast<int>(mathematicalBndryTypes::ext_dir) == amrex::BCType::ext_dir);
-static_assert(static_cast<int>(mathematicalBndryTypes::hoextrap) == amrex::BCType::hoextrap);
-static_assert(static_cast<int>(mathematicalBndryTypes::hoextrapcc) == amrex::BCType::hoextrapcc);
-static_assert(static_cast<int>(mathematicalBndryTypes::ext_dir_cc) == amrex::BCType::ext_dir_cc);
-static_assert(static_cast<int>(mathematicalBndryTypes::direction_dependent) == amrex::BCType::direction_dependent);
-static_assert(static_cast<int>(mathematicalBndryTypes::user_1) == amrex::BCType::user_1);
-static_assert(static_cast<int>(mathematicalBndryTypes::user_2) == amrex::BCType::user_2);
-static_assert(static_cast<int>(mathematicalBndryTypes::user_3) == amrex::BCType::user_3);
+static_assert(std::__to_underlying(mathematicalBndryTypes::bogus) == amrex::BCType::bogus);
+static_assert(std::__to_underlying(mathematicalBndryTypes::reflect_odd) == amrex::BCType::reflect_odd);
+static_assert(std::__to_underlying(mathematicalBndryTypes::periodic) == amrex::BCType::int_dir);
+static_assert(std::__to_underlying(mathematicalBndryTypes::reflect_even) == amrex::BCType::reflect_even);
+static_assert(std::__to_underlying(mathematicalBndryTypes::foextrap) == amrex::BCType::foextrap);
+static_assert(std::__to_underlying(mathematicalBndryTypes::ext_dir) == amrex::BCType::ext_dir);
+static_assert(std::__to_underlying(mathematicalBndryTypes::hoextrap) == amrex::BCType::hoextrap);
+static_assert(std::__to_underlying(mathematicalBndryTypes::hoextrapcc) == amrex::BCType::hoextrapcc);
+static_assert(std::__to_underlying(mathematicalBndryTypes::ext_dir_cc) == amrex::BCType::ext_dir_cc);
+static_assert(std::__to_underlying(mathematicalBndryTypes::direction_dependent) == amrex::BCType::direction_dependent);
+static_assert(std::__to_underlying(mathematicalBndryTypes::user_1) == amrex::BCType::user_1);
+static_assert(std::__to_underlying(mathematicalBndryTypes::user_2) == amrex::BCType::user_2);
+static_assert(std::__to_underlying(mathematicalBndryTypes::user_3) == amrex::BCType::user_3);
 } // namespace BCType
 
 namespace detail
@@ -206,8 +206,8 @@ auto BC_fc(BCType::mathematicalBndryTypes bc_x, BCType::mathematicalBndryTypes b
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 				if (bcs[idim] == BCType::mathematicalBndryTypes::reflecting) {
 					// TODO(cch): Support reflecting B.C. for MHD
-					BCs_fc[icomp].setLo(idim, static_cast<int>(BCType::mathematicalBndryTypes::reflect_even));
-					BCs_fc[icomp].setHi(idim, static_cast<int>(BCType::mathematicalBndryTypes::reflect_even));
+					BCs_fc[icomp].setLo(idim, std::__to_underlying(BCType::mathematicalBndryTypes::reflect_even));
+					BCs_fc[icomp].setHi(idim, std::__to_underlying(BCType::mathematicalBndryTypes::reflect_even));
 				} else {
 					BCs_fc[icomp].setLo(idim, static_cast<int>(bcs[idim]));
 					BCs_fc[icomp].setHi(idim, static_cast<int>(bcs[idim]));
