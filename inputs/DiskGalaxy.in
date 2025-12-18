@@ -48,7 +48,7 @@ derived_vars = temperature gpot
 #
 amr.max_level              = 5
 
-agora_galaxy.vcirc_file    = "./vcirc.dat"
+agora_galaxy.vcirc_file    = "./agora_halo_IC.dat"
 agora_galaxy.particle_file = "./AgoraGalaxy_particles_LOW.txt"
 agora_galaxy.refine_Rmax_kpc = 16.0         # kpc
 agora_galaxy.refine_zmax_kpc = 4.0          # kpc
