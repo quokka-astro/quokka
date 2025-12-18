@@ -456,9 +456,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	}
 
 	// Backward compatibility constructor for single output (Nout = 1)
-	template <int N = Nout, typename = std::enable_if_t<N == 1>>
+	template <int N = Nout>
 	DataTable(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const amrex::Vector<amrex::Vector<amrex::Real>> &data)
-	{
+	requires (N == 1) {
 		std::array<amrex::Vector<amrex::Vector<amrex::Real>>, 1> data_array = {data};
 		initialize(coords, data_array);
 	}
@@ -483,9 +483,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	}
 
 	// Initialize from coordinate arrays - 1D interface
-	template <int N = Ndim, typename = std::enable_if_t<N == 1>>
+	template <int N = Ndim>
 	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const data_1d_type &data)
-	{
+	requires (N == 1) {
 		static_assert(Ndim == 1, "This initialize overload is for 1D tables only");
 
 		// Validate inputs
@@ -504,9 +504,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	}
 
 	// Initialize from coordinate arrays - 2D interface
-	template <int N = Ndim, typename = std::enable_if_t<N == 2>>
+	template <int N = Ndim>
 	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const data_2d_type &data)
-	{
+	requires (N == 2) {
 		static_assert(Ndim == 2, "This initialize overload is for 2D tables only");
 
 		// Validate inputs
@@ -534,9 +534,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	}
 
 	// Initialize from coordinate arrays - 3D interface
-	template <int N = Ndim, typename = std::enable_if_t<N == 3>>
+	template <int N = Ndim>
 	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const data_3d_type &data)
-	{
+	requires (N == 3) {
 		static_assert(Ndim == 3, "This initialize overload is for 3D tables only");
 
 		// Validate inputs
@@ -569,9 +569,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	}
 
 	// Initialize from coordinate arrays - 4D interface
-	template <int N = Ndim, typename = std::enable_if_t<N == 4>>
+	template <int N = Ndim>
 	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const data_4d_type &data)
-	{
+	requires (N == 4) {
 		static_assert(Ndim == 4, "This initialize overload is for 4D tables only");
 
 		// Validate inputs
