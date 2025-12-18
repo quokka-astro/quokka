@@ -19,8 +19,7 @@ namespace quokka
 //
 // The default implementation returns `base_density_floor` (i.e. constant floor).
 template <typename problem_t> struct DensityFloor {
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto value(amrex::Real x, amrex::Real y, amrex::Real z,
-								  amrex::Real base_density_floor) -> amrex::Real
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto value(amrex::Real x, amrex::Real y, amrex::Real z, amrex::Real base_density_floor) -> amrex::Real
 	{
 		amrex::ignore_unused(x, y, z);
 		return base_density_floor;
