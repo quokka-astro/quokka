@@ -56,10 +56,12 @@ template <typename problem_t> class DustSystem
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static void ComputeDustFluxes(quokka::Array4View<amrex::Real, DIR> &x1Flux, quokka::Array4View<const amrex::Real, DIR> &x1LeftState,
 						       quokka::Array4View<const amrex::Real, DIR> &x1RightState, int i, int j, int k);
+  
+	// compute reciprocal of dust stopping time
+	AMREX_GPU_HOST_DEVICE static auto ComputeReciprocalStoppingTime(amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, Physics_Traits<problem_t>::nDustGroups + 1> /*vel*/) -> amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups>;
 
 	// compute dust-gas drag source terms and update conserved variables
-	static void computeDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt, amrex::Real dust_omega_,
-				    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> dust_alpha_);
+	static void computeDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt, amrex::Real dust_omega_);
 };
 
 template <typename problem_t>
@@ -129,16 +131,25 @@ AMREX_GPU_DEVICE void DustSystem<problem_t>::ComputeDustFluxes(quokka::Array4Vie
 	}
 }
 
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto DustSystem<problem_t>::ComputeReciprocalStoppingTime(amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, Physics_Traits<problem_t>::nDustGroups + 1> /*vel*/) -> amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> 
+{
+	constexpr int N = Physics_Traits<problem_t>::nDustGroups;
+	amrex::GpuArray<amrex::Real, N> alpha;
+	
+	for (int g = 0; g < N; ++g) {
+			alpha[g] = 0.0;
+	}
+	
+	return alpha;
+}
+
 template <typename problem_t>
-void DustSystem<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt, amrex::Real dust_omega_,
-					    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> dust_alpha_)
+void DustSystem<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt, amrex::Real dust_omega_)
 {
 	auto const &consVar_cc = consVar_cc_mf.arrays();
 	constexpr int N = Physics_Traits<problem_t>::nDustGroups;
 	int const numDustVars = Physics_NumVars::numDustVarsPerGroup;
 	amrex::Real const omega = dust_omega_;
-
-	amrex::GpuArray<amrex::Real, N> alpha = dust_alpha_;
 
 	// NOLINTNEXTLINE(modernize-use-trailing-return-type)
 	amrex::ParallelFor(consVar_cc_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
@@ -167,6 +178,57 @@ void DustSystem<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, amre
 			}
 		}
 
+		amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, N + 1> vel_inter;
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			vel_inter[0][dir] = vel_g_old[dir];
+			for (int g = 0; g < N; ++g) {
+				vel_inter[1 + g][dir] = vel_d_old[g][dir];
+			}
+		}
+
+    amrex::GpuArray<amrex::Real, N> alpha = ComputeReciprocalStoppingTime(vel_inter);
+
+		amrex::Real t_s_max = 0.0;
+		for (int g = 0; g < N; ++g) {
+			if (alpha[g] == 0.0) {
+				t_s_max = std::numeric_limits<amrex::Real>::max();
+				break;
+			}
+			amrex::Real t_s = 1.0 / alpha[g];
+			t_s_max = amrex::max(t_s_max, t_s);
+		}
+
+		amrex::Real const dt_lev = 2.0 * dt;
+		amrex::Real gamma1 = 0; // NOLINT
+		amrex::Real gamma2 = 0;
+		amrex::Real beta1 = 0; // NOLINT
+		amrex::Real beta2 = 0;
+		amrex::Real b = 0;
+		if (dt_lev < t_s_max) {
+			// Δt < t_s^max
+			gamma1 = 1.0;
+			gamma2 = 0.0;
+			beta1 = -0.5;
+			beta2 = 2.0 / 3.0;
+			b = 1.0;
+		} else {
+			// Δt > t_s^max
+			gamma1 = 1.0;
+			gamma2 = 1.0;
+			beta1 = 1.0;
+			beta2 = -1.0;
+			b = 0.0;
+		}
+
+		amrex::GpuArray<amrex::Real, N> Lambda;
+		amrex::GpuArray<amrex::Real, N> delta1;
+		amrex::GpuArray<amrex::Real, N> delta2;
+		for (int g = 0; g < N; ++g) {
+			Lambda[g] = 1.0 / (1.0 + alpha[g] * dt * (gamma1 + gamma2 + alpha[g] * dt * (gamma1 * gamma2 - beta1 * beta2)));
+			delta1[g] = 1.0 / (1.0 + gamma1 * dt * alpha[g]);
+			delta2[g] = 1.0 / (1.0 + gamma2 * dt * alpha[g]);
+		}
+
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 			amrex::Real const v_g = vel_g_old[dir];
 
@@ -181,49 +243,8 @@ void DustSystem<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, amre
 				u[1 + g] = rho_d[g] * v_d[g];
 			}
 
-			amrex::Real t_s_max = 0.0;
-			for (int g = 0; g < N; ++g) {
-				if (alpha[g] == 0.0) {
-					t_s_max = std::numeric_limits<amrex::Real>::max();
-					break;
-				}
-				amrex::Real t_s = 1.0 / alpha[g];
-				t_s_max = amrex::max(t_s_max, t_s);
-			}
-
-			amrex::Real const dt_lev = 2.0 * dt;
-			amrex::Real gamma1 = 0; // NOLINT
-			amrex::Real gamma2 = 0;
-			amrex::Real beta1 = 0; // NOLINT
-			amrex::Real beta2 = 0;
-			amrex::Real b = 0;
-			if (dt_lev < t_s_max) {
-				// Δt < t_s^max
-				gamma1 = 1.0;
-				gamma2 = 0.0;
-				beta1 = -0.5;
-				beta2 = 2.0 / 3.0;
-				b = 1.0;
-			} else {
-				// Δt > t_s^max
-				gamma1 = 1.0;
-				gamma2 = 1.0;
-				beta1 = 1.0;
-				beta2 = -1.0;
-				b = 0.0;
-			}
-
 			amrex::GpuArray<amrex::Real, N + 1> k1 = {};
 			amrex::GpuArray<amrex::Real, N + 1> k2 = {};
-			amrex::GpuArray<amrex::Real, N> Lambda;
-			amrex::GpuArray<amrex::Real, N> delta1;
-			amrex::GpuArray<amrex::Real, N> delta2;
-			for (int g = 0; g < N; ++g) {
-				Lambda[g] = 1.0 / (1.0 + alpha[g] * dt * (gamma1 + gamma2 + alpha[g] * dt * (gamma1 * gamma2 - beta1 * beta2)));
-				delta1[g] = 1.0 / (1.0 + gamma1 * dt * alpha[g]);
-				delta2[g] = 1.0 / (1.0 + gamma2 * dt * alpha[g]);
-			}
-
 			amrex::Real A1 = 0.0;
 			amrex::Real A2 = 0.0;
 			amrex::Real B1 = 0.0;

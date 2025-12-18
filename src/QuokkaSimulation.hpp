@@ -153,7 +153,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	static constexpr bool is_particle_enabled = Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None;
 
-	amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> dust_alpha_ = {};
 	amrex::Real dust_omega_ = 1.0;
 
 	amrex::Real radiationCflNumber_ = 0.3;
@@ -548,17 +547,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 
 	// set dust runtime parameters
 	{
-		for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
-			dust_alpha_[g] = 0.0;
-		}
 		amrex::ParmParse const dpp("dust");
-		std::vector<amrex::Real> alpha_vec;
-		if (dpp.queryarr("alpha", alpha_vec) != 0) {
-			AMREX_ASSERT(alpha_vec.size() == Physics_Traits<problem_t>::nDustGroups);
-			for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
-				dust_alpha_[g] = alpha_vec[g];
-			}
-		}
 		dpp.query("omega", dust_omega_);
 	}
 
@@ -811,7 +800,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 #endif
 
 	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-		DustSystem<problem_t>::computeDustDrag(state, dt, dust_omega_, dust_alpha_);
+		DustSystem<problem_t>::computeDustDrag(state, dt, dust_omega_);
 	}
 
 	// compute user-specified sources

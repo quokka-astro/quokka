@@ -109,6 +109,14 @@ template <> struct Physics_Traits<DustDamping> {
 	static constexpr double radiation_constant = 1.0;
 };
 
+template <> AMREX_GPU_HOST_DEVICE auto DustSystem<DustDamping>::ComputeReciprocalStoppingTime(amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, Physics_Traits<DustDamping>::nDustGroups + 1> /*vel*/) -> amrex::GpuArray<amrex::Real, Physics_Traits<DustDamping>::nDustGroups> 
+{
+	amrex::GpuArray<amrex::Real, 2> alpha{};
+    alpha[0] = 1.0 / TS1; 
+    alpha[1] = 1.0 / TS2; 
+    return alpha;
+}
+
 template <> void QuokkaSimulation<DustDamping>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
