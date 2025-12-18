@@ -191,7 +191,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 	AMREX_ALWAYS_ASSERT(!std::isnan(T_halo));
 	AMREX_ALWAYS_ASSERT(!std::isnan(ndens_halo));
 
-	// const double rho_halo = ndens_halo * quokka::EOS_Traits<AgoraGalaxy>::mean_molecular_weight;
+	const double rho_ambient = ndens_halo * quokka::EOS_Traits<AgoraGalaxy>::mean_molecular_weight;
 
 	// read tables
 
@@ -225,7 +225,25 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		amrex::Real const y1 = prob_lo[1] + ((j + 1) * dx[1]);
 		amrex::Real const z1 = prob_lo[2] + ((k + 1) * dx[2]);
 
-		// compute density profile
+		// auto make_halo_interpolator = [R_table, R_table_max, len_table](auto const *table, auto outer_val) {
+		// 		return [=](const amrex::Real R) {
+		// 			double value = NAN;
+		// 			if (R <= R_table_max) {
+		// 				// Using BoundaryPolicy::Clamp handles R < R_table_min by clamping to the first value.
+		// 				value = interpolate_value<quokka::BoundaryPolicy::Clamp>(R, R_table, table, len_table);
+		// 			} else {
+		// 				value = outer_val;
+		// 			}
+		// 			return value;
+		// 		};
+		// 	};
+
+		// auto rhoHalo = make_halo_interpolator(rhoH_table, rho_outer);
+		// auto momHalo = make_halo_interpolator(momr_table, momr_outer);
+		// auto eintHalo = make_halo_interpolator(eint_table, eint_outer);
+		// auto etotHalo = make_halo_interpolator(etot_table, etot_outer);
+
+		// // compute density profile
 		auto rho_exact = [rho_0, R_d, z_d](double x, double y, double z) {
 			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
 			return rho_0 * std::exp(-R / R_d) * std::exp(-std::abs(z) / z_d);
@@ -352,19 +370,14 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 
 		AMREX_ALWAYS_ASSERT(!std::isnan(rho_disk));
 
-		double rho = NAN;
-		double vx = NAN;
-		double vy = NAN;
+		double rho = 0;
+		double vx = 0;
+		double vy = 0;
 		double const vz = 0;
 		double T = NAN;
 
 		// IMPORTANT: transition between disk and halo at the P_halo == P_disk surface
-		if (rho_halo * T_halo > rho_disk * T_disk) {
-			rho = rho_halo;
-			T = T_halo;
-			vx = 0; // velocity is zero in the halo
-			vy = 0;
-		} else { // we are in the disk
+		if (rho_ambient * T_halo < rho_disk * T_disk) { // we are in the disk
 			double const x = 0.5 * (x0 + x1);
 			double const y = 0.5 * (y0 + y1);
 			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
