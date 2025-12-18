@@ -109,7 +109,6 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 		Real const momr_val = values.at(3);
 		Real const eint_val = values.at(4);
 		Real const etot_val = values.at(5);
-		
 		radius_h.push_back(R_val);
 		vcirc_h.push_back(vcirc_val);
 		rho_h.push_back(rho_val);
@@ -139,7 +138,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 		userData_.etot_halo[i] = etot_h[i];
 
 	}
-
+	
 	// save min/max radii
 	auto min_result = std::min_element(radius_h.begin(), radius_h.end());
 	userData_.r_inner = (*min_result) * length_unit;
@@ -194,7 +193,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 	AMREX_ALWAYS_ASSERT(!std::isnan(T_halo));
 	AMREX_ALWAYS_ASSERT(!std::isnan(ndens_halo));
 
-	const double rho_halo = ndens_halo * quokka::EOS_Traits<AgoraGalaxy>::mean_molecular_weight;
+	// const double rho_halo = ndens_halo * quokka::EOS_Traits<AgoraGalaxy>::mean_molecular_weight;
 
 	// read tables
 	
@@ -238,9 +237,9 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 
 		auto vcirc_exact = [R_table_max, R_table, vcirc_outer, vcirc_table, len_table](const amrex::Real R) {
 			double vcirc = NAN;
-			if ((R <= R_table_max)) {
+			if ((R < R_table_max)) {
 				vcirc = interpolate_value(R, R_table, vcirc_table, len_table);
-			} else {
+			} else if(R >= R_table_max) {
 				vcirc = vcirc_outer;
 			}
 			return vcirc;
@@ -320,23 +319,26 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		// compute momenta profiles
 		auto momx_exact = [momHalo](double x, double y, double z) {
 			double const r = std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, 2));
-			double const theta = std::atan2(x, y);
-			double const phi  = std::atan2(r, z);
-			return momHalo(r) * std::sin(phi) * std::cos(theta); // vx
+			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
+			double const theta = std::atan2(R, z) + (z < 0.0 ? M_PI : 0.0);;
+			double const phi  = std::atan2(y, x);
+			return momHalo(r) * std::sin(theta) * std::cos(phi); // vx
 		};
 
 
 		auto momy_exact = [momHalo](double x, double y, double z) {
 			double const r = std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, 2));
-			double const theta = std::atan2(x, y);
-			double const phi  = std::atan2(r, z);
-			return momHalo(r) * std::sin(phi) * std::sin(theta); // vy
+			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
+			double const theta = std::atan2(R, z) + (z < 0.0 ? M_PI : 0.0);;
+			double const phi  = std::atan2(y, x);
+			return momHalo(r) * std::sin(theta) * std::sin(phi); // vy
 		};
 
 		auto momz_exact = [momHalo](double x, double y, double z) {
 			double const r = std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, 2));
-			double const phi  = std::atan2(r, z);
-			return momHalo(r) * std::cos(phi); // vz
+			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
+			double const theta  = std::atan2(R, z) + (z < 0.0 ? M_PI : 0.0);;
+			return momHalo(r) * std::cos(theta); // vz
 		};
 
 		// integrate density profile over cell volume
