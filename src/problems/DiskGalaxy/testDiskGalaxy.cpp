@@ -134,11 +134,10 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 		userData_.vcirc[i] = vcirc_h[i] * vel_unit;
 		userData_.rho_halo[i] = rho_h[i];
 		userData_.momr_halo[i] = momr_h[i];
-		userData_.eint_halo[i] = eint_h[i];	
+		userData_.eint_halo[i] = eint_h[i];
 		userData_.etot_halo[i] = etot_h[i];
-
 	}
-	
+
 	// save min/max radii
 	auto min_result = std::min_element(radius_h.begin(), radius_h.end());
 	userData_.r_inner = (*min_result) * length_unit;
@@ -150,7 +149,6 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 	userData_.momr_outer = momr_h[std::distance(radius_h.begin(), max_result)];
 	userData_.eint_outer = eint_h[std::distance(radius_h.begin(), max_result)];
 	userData_.etot_outer = etot_h[std::distance(radius_h.begin(), max_result)];
-
 }
 
 template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -196,14 +194,13 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 	// const double rho_halo = ndens_halo * quokka::EOS_Traits<AgoraGalaxy>::mean_molecular_weight;
 
 	// read tables
-	
+
 	double const *R_table = userData_.radius.dataPtr();
 	double const *vcirc_table = userData_.vcirc.dataPtr();
 	double const *rhoH_table = userData_.rho_halo.dataPtr();
 	double const *momr_table = userData_.momr_halo.dataPtr();
 	double const *eint_table = userData_.eint_halo.dataPtr();
 	double const *etot_table = userData_.etot_halo.dataPtr();
-	
 
 	auto const len_table = static_cast<int>(userData_.radius.size());
 	const amrex::Real R_table_max = userData_.r_outer;
@@ -212,7 +209,6 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 	const amrex::Real momr_outer = userData_.momr_outer;
 	const amrex::Real eint_outer = userData_.eint_outer;
 	const amrex::Real etot_outer = userData_.etot_outer;
-	
 
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -239,7 +235,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			double vcirc = NAN;
 			if ((R < R_table_max)) {
 				vcirc = interpolate_value(R, R_table, vcirc_table, len_table);
-			} else if(R >= R_table_max) {
+			} else if (R >= R_table_max) {
 				vcirc = vcirc_outer;
 			}
 			return vcirc;
@@ -265,7 +261,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			} else {
 				rho_H = rho_outer;
 			}
-			
+
 			return rho_H;
 		};
 
@@ -320,24 +316,26 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		auto momx_exact = [momHalo](double x, double y, double z) {
 			double const r = std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, 2));
 			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
-			double const theta = std::atan2(R, z) + (z < 0.0 ? M_PI : 0.0);;
-			double const phi  = std::atan2(y, x);
+			double const theta = std::atan2(R, z) + (z < 0.0 ? M_PI : 0.0);
+			;
+			double const phi = std::atan2(y, x);
 			return momHalo(r) * std::sin(theta) * std::cos(phi); // vx
 		};
-
 
 		auto momy_exact = [momHalo](double x, double y, double z) {
 			double const r = std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, 2));
 			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
-			double const theta = std::atan2(R, z) + (z < 0.0 ? M_PI : 0.0);;
-			double const phi  = std::atan2(y, x);
+			double const theta = std::atan2(R, z) + (z < 0.0 ? M_PI : 0.0);
+			;
+			double const phi = std::atan2(y, x);
 			return momHalo(r) * std::sin(theta) * std::sin(phi); // vy
 		};
 
 		auto momz_exact = [momHalo](double x, double y, double z) {
 			double const r = std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, 2));
 			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
-			double const theta  = std::atan2(R, z) + (z < 0.0 ? M_PI : 0.0);;
+			double const theta = std::atan2(R, z) + (z < 0.0 ? M_PI : 0.0);
+			;
 			return momHalo(r) * std::cos(theta); // vz
 		};
 
