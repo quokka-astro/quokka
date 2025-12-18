@@ -1,0 +1,11 @@
+This is the collection of source code files used in the FLASH hydro code for generating initial turbulent velocity and magnetic fields.
+
+It uses the C++ implementation of TurbGen.h with Fortran (with a Fortran-to-C interface in st_stirics_TurbGen_interface.C) to construct a single realisation of a turbulent vector field.
+
+This code can be used as a template for other hydro codes. Short description of main files:
+
+- StirICs_data.F90 contains shared data for the FLASH module.
+- StirICs_init.F90 initialises the turbulent initial conditions module.
+- StirICs.F90 is the main source code that generates turbulent velocity or magnetic fields as initial conditions, by calling functions in st_stirics_TurbGen_interface.C.
+- st_stirics_TurbGen_interface.C is the Fortran-to-C interface to access functions in TurbGen.h.
+- Config is the FLASH internal module configuration file.

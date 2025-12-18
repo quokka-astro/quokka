@@ -1,0 +1,55 @@
+# Configuration file for intitial turbulent stirring: StirICs (Initial Conditions)
+#
+# For example applications see Federrath et al. 2008, ApJ 688, L79,
+# Federrath et al. (2010, A&A 512, A81), Federrath et al. (2010, ApJ 713, 269),
+# Federrath et al. (2014, ApJ 790, 128), Federrath et al. (2022, ASCL)
+#
+# Parameters (for initial turbulent velocity field)
+#
+#D        st_rmsVelocity        the target turbulent RMS velocity
+PARAMETER st_rmsVelocity        REAL       0.0
+
+#D        st_solWeight          solenoidal weight (1: purely solenoidal, 0: purely compressive)
+PARAMETER st_solWeight          REAL       0.5
+
+#D        st_stirMin            minimum stirring wavenumber (in units of 2pi/Lx), but stirring is isotropic
+PARAMETER st_stirMin            REAL       2.0
+
+#D        st_stirMax            maximum stirring wavenumber (in units of 2pi/Lx), but stirring is isotropic
+PARAMETER st_stirMax            REAL       20.0
+
+#D        st_spectForm          spectral form of amplitude (0: band, 1: paraboloid, 2: power law)
+PARAMETER st_spectForm          INTEGER    2
+
+#D        st_powerLawExp        power-law exponent in case of st_spectForm = 2
+PARAMETER st_powerLawExp        REAL       -2.0
+
+#D        st_seed               random number generator seed
+PARAMETER st_seed               INTEGER    140281
+
+
+# currently applies to both velocity and magnetic field generation
+#D        st_anglesExp           power-law exponent for the angle in k-space sampling
+PARAMETER st_anglesExp           REAL       1.0
+
+
+#
+# Parameters (for initial turbulent magnetic field)
+#
+#D        st_rmsMagneticField     the target turbulent RMS magnetic field strength
+PARAMETER st_rmsMagneticField     REAL       0.0
+
+#D        st_stirMagneticKMin     minimum magnetic field wavenumber (in units of 2pi/Lx), but stirring is isotropic
+PARAMETER st_stirMagneticKMin     REAL       2.0
+
+#D        st_stirMagneticKMax     maximum magnetic field wavenumber (in units of 2pi/Lx), but stirring is isotropic
+PARAMETER st_stirMagneticKMax     REAL       20.0
+
+#D        st_MagneticSpectForm    spectral form of amplitude (0: band, 1: paraboloid, 2: power law)
+PARAMETER st_MagneticSpectForm    INTEGER    2
+
+#D        st_MagneticPowerLawExp  magnetic spectral power-law exponent in case of st_spectForm = 2
+PARAMETER st_MagneticPowerLawExp  REAL       1.5
+
+#D        st_MagneticSeed         random number generator seed for magentic field
+PARAMETER st_MagneticSeed         INTEGER    0815

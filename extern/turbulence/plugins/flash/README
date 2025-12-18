@@ -1,0 +1,5 @@
+This is the collection of source code files used in the FLASH hydro code for driving turbulence or generating turbulent initial conditions.
+
+- StirMain is the turbulence driving module (this would replace the "StirMain" directory in the public FLASH source tree within source/physics/sourceTerms/Stir).
+- StirICsMain is the module that generates turbulent initial velocity and/or magnetic fields (if needed).
+- legacy_fortran uses the old Fortran-only based driving method; should not be used; just here for reference.

@@ -1,0 +1,15 @@
+This is the collection of source code files used in the FLASH code for driving turbulence.
+
+It uses the C++ implementation of TurbGen.h with Fortran (with a Fortran-to-C interface in st_stir_TurbGen_interface.C) to construct the physical acceleration field from the Fourier mode sequence in the driving .par file.
+Therefore, you will need to link the C++ standard library when compiling FLASH. This can be achieved by adding "-lstdc++" for example to "LIB_MPI = ..." in your site (machine) Makefile.h. Depending on the details of the environment your machine is running on, you may also need to add "-lmpi_cxx" for the MPI C++ library (in some environments this may be called "-lmpicxx"). It may also be necessary to add "-lc++" (e.g., on Mac OS).
+=
+This code can be used as a template for other hydro codes. Short description of main files:
+
+- Config is the FLASH internal module configuration file (in older versions of FLASH that use python2 for setup, you will need to change the line "IF Grid != 'UG'" to "IF Grid <> 'UG'"; the same holds for InjectionRate/Config, if you want the energy injection rate as a grid variable/field).
+- Stir_data.F90 contains shared data for the FLASH module.
+- Stir_init.F90 initialises the turbulence generator.
+- Stir.F90 couples the generated physical acceleration field to the hydro equations, i.e., it applies it as an acceleration, which modifies the velocity field (VELX, VELY, VELZ). It also checks for updates of the turbulence driving pattern.
+- Stir_computeDt.F90 implements a time step constraint based on the turbulence driving; for typical applications, this is usually not actually necessary, but included here for completeness.
+- st_stir_TurbGen_interface.C is the Fortran-to-C interface to access functions in TurbGen.h.
+
+Also note that if you are using the UG mode, and you want the turbulent acceleration fields as plt (ACC?_VAR) database/grid variables, you will need to include the "AMR" subdirectory (even if your simulation is not not actually using AMR). The default is not to define those grid variables, as this will save calls to guard-cell filling and those field will be locally allocated (which yields some memory advantages) rather than participate in FLASH-wide allocation.

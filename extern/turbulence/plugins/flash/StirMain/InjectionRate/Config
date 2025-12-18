@@ -1,0 +1,9 @@
+
+USESETUPVARS Grid
+
+IF Grid != 'UG'
+   REQUIRES physics/sourceTerms/Stir/StirMain/AMR
+ENDIF
+
+# Kinetic energy injection rate d(0.5 rho v^2) / dt
+VARIABLE injr

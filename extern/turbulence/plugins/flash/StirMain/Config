@@ -1,0 +1,28 @@
+# Configuration file for turbulent stirring: Stir
+#
+# For example applications see Federrath et al. (2008, ApJ 688, L79);
+# Federrath et al. (2010, A&A 512, A81); Federrath (2013, MNRAS 436, 1245)
+# Federrath et al. (2022, ASCL)
+#
+# The st_infilename points to a file containing all parameters that
+# control the turbulence driving generator.
+# See details in parameter file, default 'TurbGen.par'.
+
+USESETUPVARS Grid
+
+IF Grid != 'UG'
+  DEFAULT AMR
+ENDIF
+
+# Parameters
+D         st_infilename  file containing the parameters for the turbulence generator
+PARAMETER st_infilename  STRING   "TurbGen.par"
+
+D         st_computeDt   whether to restrict time step based on stirring
+PARAMETER st_computeDt   BOOLEAN   FALSE
+
+D         st_stop_driving_time   time at which to turn off driving
+PARAMETER st_stop_driving_time   REAL   1e38
+
+# this is to link the example TurbGen.par parameter file into the object dir
+DATAFILES *.par

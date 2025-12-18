@@ -1,0 +1,9 @@
+This is the collection of source code files used in the FLASH hydro code.
+
+This will read the generated turbulence driving file and construct the physical acceleration field from the Fourier mode sequence in the driving file, at requested times.
+
+This code can be used as a template for other hydro codes. Short description:
+
+- st_read_modes_file.F90 reads the modes from the generated turbulence driving file at requested simulation time (input parameter of function).
+- st_calcAccel.F90 computes the physical turbulence acceleration field (ACCX, ACCY, ACCZ) by summation over the read modes at any physical position where the acceleration field is needed (e.g., here in every grid cell).
+- Stir.F90 couples the generated physical acceleration field to the hydro equations, i.e., it applies it as an acceleration, which modifies the velocity field (VELX, VELY, VELZ).

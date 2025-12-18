@@ -1,0 +1,6 @@
+# Additional variables needed by the AMR implementation
+#
+# grid variables to store turbulent driving acceleration field
+VARIABLE accx
+VARIABLE accy
+VARIABLE accz
