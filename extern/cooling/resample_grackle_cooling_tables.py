@@ -25,20 +25,13 @@ import numpy as np
 import h5py
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
-from scipy.interpolate import RectBivariateSpline
 
-import grackle_tables
 from grackle_tables import (
     read_tables, cooling_rate, interpolate_mu, compute_temperature_from_nH_e,
     m_H, boltzmann_constant_cgs_, cloudy_H_mass_fraction, specific_energy_from_temperature
 )
 
-import scienceplots
-
-plt.style.use(['science', 'no-latex'])
-
 KPC = 3.086e21 # cm
-
 
 DEFAULT_GRACKLE_DATA_URL = (
     "https://github.com/grackle-project/grackle_data_files/raw/"
@@ -193,14 +186,17 @@ def compute_entropy(rho, T, mu):
 
 
 def compute_cooling_time(rho, e_int, Edot):
-    """Compute cooling length from density, specific internal energy, and cooling rate.
+    """Compute cooling time from density, specific internal energy, and cooling rate.
     
     Args:
         rho: density (g/cm^3)
         e_int: specific internal energy (erg/g)
         Edot: net cooling rate (erg/cm^3/s)
+
+    Returns:
+        t_cool: cooling time (s)
     """
-    return -(rho * e_int) / Edot # 'cm'
+    return -(rho * e_int) / Edot
 
 
 def find_eint_range(tables):
