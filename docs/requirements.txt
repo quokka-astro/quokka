@@ -7,3 +7,4 @@ mkdocs-awesome-pages-plugin
 mkdocs-material
 mkdocs-bibtex==4.4.0
 mkdocs-mermaid2-plugin
+mkdocs-copybutton
