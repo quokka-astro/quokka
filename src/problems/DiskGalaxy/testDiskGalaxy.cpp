@@ -152,7 +152,6 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 	userData_.eint_inner = eint_h[std::distance(radius_h.begin(), min_result)];
 	userData_.etot_inner = etot_h[std::distance(radius_h.begin(), min_result)];
 
-	
 	auto max_result = std::max_element(radius_h.begin(), radius_h.end());
 	userData_.r_outer = (*max_result) * length_unit;
 	userData_.vcirc_outer = vcirc_h[std::distance(radius_h.begin(), max_result)] * vel_unit;
@@ -255,7 +254,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 				vcirc = interpolate_value(R, R_table, vcirc_table, len_table);
 			} else if (R >= R_table_max) {
 				vcirc = vcirc_outer;
-			} else if(R <= R_table_min){
+			} else if (R <= R_table_min) {
 				vcirc = vcirc_inner;
 			}
 			return vcirc;
