@@ -24,7 +24,7 @@ do_reflux = 0
 do_subcycle = 0
 
 # Disable magnetic-energy rewrite so energy stays bitwise-defined by ICs
-quokka.update_initial_b_energy = 0
+mhd.update_initial_b_energy = 0
 
 plotfile_interval = -1
 checkpoint_interval = -1
