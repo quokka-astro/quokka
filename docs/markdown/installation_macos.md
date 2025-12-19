@@ -80,8 +80,7 @@ python3 -m pip install cmake ninja --user
 
 Using uv (if you have [uv](https://docs.astral.sh/uv/) installed):
 ```bash
-uv tool install cmake-build-extension
-uv tool install ninja
+uv tool install cmake ninja
 ```
 
 Note: For uv, you may also use `uv pip install cmake ninja` if you're working within a virtual environment.
