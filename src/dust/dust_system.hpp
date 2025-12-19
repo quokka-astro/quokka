@@ -144,7 +144,8 @@ AMREX_GPU_HOST_DEVICE auto DustSystem<problem_t>::ComputeReciprocalStoppingTime(
 	return alpha;
 }
 
-template <typename problem_t> void DustSystem<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt, amrex::Real dust_omega_, int enableInterDustStoptime_)
+template <typename problem_t>
+void DustSystem<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, amrex::Real dt, amrex::Real dust_omega_, int enableInterDustStoptime_)
 {
 	auto const &consVar_cc = consVar_cc_mf.arrays();
 	constexpr int N = Physics_Traits<problem_t>::nDustGroups;
@@ -181,20 +182,20 @@ template <typename problem_t> void DustSystem<problem_t>::computeDustDrag(amrex:
 		// set iteration parameters
 		const int max_iterations = (enableInterDustStoptime_ != 0) ? 100 : 1;
 		const amrex::Real tolerance = 1.0e-6;
-		
+
 		// initialize iteration velocities - using two intermediate variables
 		amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, N + 1> vel_inter_old;
 		amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, N + 1> vel_inter_new;
-		
+
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 			vel_inter_old[0][dir] = vel_g_old[dir];
 			vel_inter_new[0][dir] = vel_g_old[dir];
 			for (int g = 0; g < N; ++g) {
-					vel_inter_old[1 + g][dir] = vel_d_old[g][dir];
-					vel_inter_new[1 + g][dir] = vel_d_old[g][dir];
+				vel_inter_old[1 + g][dir] = vel_d_old[g][dir];
+				vel_inter_new[1 + g][dir] = vel_d_old[g][dir];
 			}
 		}
-		
+
 		// Picard iteration loop
 		for (int iteration = 0; iteration < max_iterations; ++iteration) {
 			amrex::GpuArray<amrex::Real, N> alpha = ComputeReciprocalStoppingTime(vel_inter_old);
@@ -241,11 +242,11 @@ template <typename problem_t> void DustSystem<problem_t>::computeDustDrag(amrex:
 			}
 
 			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-				amrex::Real const v_g = vel_inter_old[0][dir];  // using current iteration velocity
-									
+				amrex::Real const v_g = vel_inter_old[0][dir]; // using current iteration velocity
+
 				amrex::GpuArray<amrex::Real, N> v_d;
 				for (int g = 0; g < N; ++g) {
-						v_d[g] = vel_inter_old[1 + g][dir];  // using current iteration velocity
+					v_d[g] = vel_inter_old[1 + g][dir]; // using current iteration velocity
 				}
 
 				amrex::GpuArray<amrex::Real, N + 1> u;
@@ -266,30 +267,30 @@ template <typename problem_t> void DustSystem<problem_t>::computeDustDrag(amrex:
 				amrex::Real D2 = 1.0;
 				for (int g = 0; g < N; ++g) {
 					A1 += alpha[g] * u[1 + g] * delta1[g] -
-								beta1 * dt * alpha[g] * alpha[g] * u[1 + g] * (1.0 + alpha[g] * dt * (gamma1 - beta2)) * delta1[g] * Lambda[g];
+					      beta1 * dt * alpha[g] * alpha[g] * u[1 + g] * (1.0 + alpha[g] * dt * (gamma1 - beta2)) * delta1[g] * Lambda[g];
 
 					A2 += alpha[g] * u[1 + g] * delta2[g] -
-								beta2 * dt * alpha[g] * alpha[g] * u[1 + g] * (1.0 + alpha[g] * dt * (gamma2 - beta1)) * delta2[g] * Lambda[g];
+					      beta2 * dt * alpha[g] * alpha[g] * u[1 + g] * (1.0 + alpha[g] * dt * (gamma2 - beta1)) * delta2[g] * Lambda[g];
 
 					B1 += alpha[g] * epsilon[g] * delta1[g] -
-								beta1 * dt * alpha[g] * alpha[g] * epsilon[g] * (1.0 + alpha[g] * dt * (gamma1 - beta2)) * delta1[g] * Lambda[g];
+					      beta1 * dt * alpha[g] * alpha[g] * epsilon[g] * (1.0 + alpha[g] * dt * (gamma1 - beta2)) * delta1[g] * Lambda[g];
 
 					B2 += alpha[g] * epsilon[g] * delta2[g] -
-								beta2 * dt * alpha[g] * alpha[g] * epsilon[g] * (1.0 + alpha[g] * dt * (gamma2 - beta1)) * delta2[g] * Lambda[g];
+					      beta2 * dt * alpha[g] * alpha[g] * epsilon[g] * (1.0 + alpha[g] * dt * (gamma2 - beta1)) * delta2[g] * Lambda[g];
 
 					C1 += alpha[g] * epsilon[g] * delta1[g] - dt * alpha[g] * alpha[g] * epsilon[g] *
-													(gamma2 + alpha[g] * dt * (gamma1 * gamma2 - beta1 * beta2)) * delta1[g] *
-													Lambda[g];
+										      (gamma2 + alpha[g] * dt * (gamma1 * gamma2 - beta1 * beta2)) * delta1[g] *
+										      Lambda[g];
 
 					C2 += alpha[g] * epsilon[g] * delta2[g] - dt * alpha[g] * alpha[g] * epsilon[g] *
-													(gamma1 + alpha[g] * dt * (gamma1 * gamma2 - beta1 * beta2)) * delta2[g] *
-													Lambda[g];
+										      (gamma1 + alpha[g] * dt * (gamma1 * gamma2 - beta1 * beta2)) * delta2[g] *
+										      Lambda[g];
 
 					D1 += gamma1 * dt * alpha[g] * epsilon[g] * delta1[g] -
-								beta1 * beta2 * dt * dt * alpha[g] * alpha[g] * epsilon[g] * delta1[g] * Lambda[g];
+					      beta1 * beta2 * dt * dt * alpha[g] * alpha[g] * epsilon[g] * delta1[g] * Lambda[g];
 
 					D2 += gamma2 * dt * alpha[g] * epsilon[g] * delta2[g] -
-								beta1 * beta2 * dt * dt * alpha[g] * alpha[g] * epsilon[g] * delta2[g] * Lambda[g];
+					      beta1 * beta2 * dt * dt * alpha[g] * alpha[g] * epsilon[g] * delta2[g] * Lambda[g];
 				}
 
 				amrex::Real denominator = beta1 * beta2 * dt * dt * C1 * C2 - D1 * D2;
@@ -298,21 +299,21 @@ template <typename problem_t> void DustSystem<problem_t>::computeDustDrag(amrex:
 				k2[0] = (beta2 * dt * C2 * (A1 - B1 * u[0]) - D1 * (A2 - B2 * u[0])) / denominator;
 
 				for (int g = 0; g < N; ++g) {
-					k1[1 + g] =
-							alpha[g] * Lambda[g] *
-							((u[0] * epsilon[g] - u[1 + g]) * (1.0 + alpha[g] * dt * (gamma2 - beta1)) +
-							k1[0] * epsilon[g] * dt * (gamma1 + alpha[g] * dt * (gamma1 * gamma2 - beta1 * beta2)) + k2[0] * beta1 * epsilon[g] * dt);
+					k1[1 + g] = alpha[g] * Lambda[g] *
+						    ((u[0] * epsilon[g] - u[1 + g]) * (1.0 + alpha[g] * dt * (gamma2 - beta1)) +
+						     k1[0] * epsilon[g] * dt * (gamma1 + alpha[g] * dt * (gamma1 * gamma2 - beta1 * beta2)) +
+						     k2[0] * beta1 * epsilon[g] * dt);
 
-					k2[1 + g] =
-							alpha[g] * Lambda[g] *
-							((u[0] * epsilon[g] - u[1 + g]) * (1.0 + alpha[g] * dt * (gamma1 - beta2)) +
-							k2[0] * epsilon[g] * dt * (gamma2 + alpha[g] * dt * (gamma1 * gamma2 - beta1 * beta2)) + k1[0] * beta2 * epsilon[g] * dt);
+					k2[1 + g] = alpha[g] * Lambda[g] *
+						    ((u[0] * epsilon[g] - u[1 + g]) * (1.0 + alpha[g] * dt * (gamma1 - beta2)) +
+						     k2[0] * epsilon[g] * dt * (gamma2 + alpha[g] * dt * (gamma1 * gamma2 - beta1 * beta2)) +
+						     k1[0] * beta2 * epsilon[g] * dt);
 				}
 
 				vel_inter_new[0][dir] = vel_inter_old[0][dir] + dt * (b * k1[0] + (1.0 - b) * k2[0]) / rho_g;
-									
+
 				for (int g = 0; g < N; ++g) {
-						vel_inter_new[1 + g][dir] = vel_inter_old[1 + g][dir] + dt * (b * k1[1 + g] + (1.0 - b) * k2[1 + g]) / rho_d[g];
+					vel_inter_new[1 + g][dir] = vel_inter_old[1 + g][dir] + dt * (b * k1[1 + g] + (1.0 - b) * k2[1 + g]) / rho_d[g];
 				}
 			}
 			// check convergence conditions
@@ -321,27 +322,27 @@ template <typename problem_t> void DustSystem<problem_t>::computeDustDrag(amrex:
 			{
 				amrex::Real speed_sq = 0.0;
 				for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-						speed_sq += vel_inter_old[0][dir] * vel_inter_old[0][dir];
+					speed_sq += vel_inter_old[0][dir] * vel_inter_old[0][dir];
 				}
 				max_speed_old = std::sqrt(speed_sq);
 			}
 			for (int g = 0; g < N; ++g) {
 				amrex::Real speed_sq = 0.0;
 				for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-						speed_sq += vel_inter_old[1 + g][dir] * vel_inter_old[1 + g][dir];
+					speed_sq += vel_inter_old[1 + g][dir] * vel_inter_old[1 + g][dir];
 				}
 				max_speed_old = amrex::max(max_speed_old, std::sqrt(speed_sq));
 			}
 			const amrex::Real abs_tolerance = tolerance * amrex::max(max_speed_old, 1.0e-12);
-			
+
 			// check convergence based on maximum speed change
 			amrex::Real max_speed_change = 0.0;
 			{
 				amrex::Real speed_sq_old = 0.0;
 				amrex::Real speed_sq_new = 0.0;
 				for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-						speed_sq_old += vel_inter_old[0][dir] * vel_inter_old[0][dir];
-						speed_sq_new += vel_inter_new[0][dir] * vel_inter_new[0][dir];
+					speed_sq_old += vel_inter_old[0][dir] * vel_inter_old[0][dir];
+					speed_sq_new += vel_inter_new[0][dir] * vel_inter_new[0][dir];
 				}
 				amrex::Real const speed_change = std::abs(std::sqrt(speed_sq_new) - std::sqrt(speed_sq_old));
 				max_speed_change = amrex::max(max_speed_change, speed_change);
@@ -350,18 +351,18 @@ template <typename problem_t> void DustSystem<problem_t>::computeDustDrag(amrex:
 				amrex::Real speed_sq_old = 0.0;
 				amrex::Real speed_sq_new = 0.0;
 				for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-						speed_sq_old += vel_inter_old[1 + g][dir] * vel_inter_old[1 + g][dir];
-						speed_sq_new += vel_inter_new[1 + g][dir] * vel_inter_new[1 + g][dir];
+					speed_sq_old += vel_inter_old[1 + g][dir] * vel_inter_old[1 + g][dir];
+					speed_sq_new += vel_inter_new[1 + g][dir] * vel_inter_new[1 + g][dir];
 				}
 				amrex::Real const speed_change = std::abs(std::sqrt(speed_sq_new) - std::sqrt(speed_sq_old));
 				max_speed_change = amrex::max(max_speed_change, speed_change);
 			}
-			
+
 			// if the maximum speed change is less than the absolute tolerance, exit the loop early
 			if (max_speed_change <= abs_tolerance) {
 				break;
 			}
-			
+
 			vel_inter_old = vel_inter_new;
 		}
 
@@ -374,7 +375,7 @@ template <typename problem_t> void DustSystem<problem_t>::computeDustDrag(amrex:
 				consVar_cc[bx](i, j, k, x1DustMomentum_index + dir + g * numDustVars) += delta_mom_d;
 			}
 		}
-		
+
 		// update energy
 		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> vel_g_new{};
 		amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, N> vel_d_new;
