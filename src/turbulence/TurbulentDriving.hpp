@@ -63,8 +63,8 @@ template <typename problem_t> class turbulentDriving
 	turbulentDriving() = default;
 	explicit turbulentDriving(const std::map<std::string, std::string> &turb_params) { tg.init_driving(turb_params); }
 
-	auto computeDriving(amrex::MultiFab &state, const amrex::Real time, const amrex::Real dt_in,
-			    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &cellSizes) -> bool
+	auto applyDriving(amrex::MultiFab &state, const amrex::Real time, const amrex::Real dt_in,
+			  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &cellSizes) -> bool
 	{
 		update(time, state);
 		const amrex::Real dt = dt_in;

@@ -935,7 +935,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 
 	if (enableTurbulence_ == 1) {
 		auto const &cellSizes = geom[lev].CellSizeArray();
-		td.computeDriving(state, time, dt, cellSizes);
+		td.applyDriving(state, time, dt, cellSizes);
 	}
 	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
 		DustSystem<problem_t>::computeDustDrag(state, dt, dust_omega_, dust_alpha_);
