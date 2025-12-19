@@ -84,8 +84,6 @@ class ProtoLuminosityUpdate
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProtoLuminosity(ParticleType &p, amrex::Real current_time,
 									 LuminosityGpuConstTables<Nout, oob_policy> const &gpu_tables) noexcept
 	{
-	        const amrex::Real NAVOG = 6.022e23;   
-	        const amrex::Real ERGEV = 1.6e-12;    // Number of ergs per eV
 	        const amrex::Real FACC = 0.5; // Fraction of accreted energy that comes out as radiation, rather than being advected into the stellar interior or used to drive a wind
 		const amrex::Real FK = 0.5;     // Fraction of energy the falls into the sink particle but is radiated away from the the inner disk before reaching the stellar surface
 	        const amrex::Real FWIND = 0.21; // Fraction of accreted mass ejected in a wind
@@ -93,11 +91,10 @@ class ProtoLuminosityUpdate
 		const amrex::Real SHELLFAC = 2.1;  // Radius increases by SHELLFAC when shell burning starts
 	        const amrex::Real THAY = 3000.0;     // Hayashi temperature
 		const amrex::Real TDEUT = 1.5e6;  // Temperature when deuterium burning starts
-		const amrex::Real PSIION = (16.0*ERGEV*NAVOG);  // Energy per gram needed to dissociate and ionize a molecular gas with solar abundances
-		const amrex::Real PSID = (100*ERGEV*NAVOG);  // Energy per gram released by burning the deuterium in a gas with solar abundances
-		const amrex::Real MSUN = 1.989e33;    // Solar mass
-		const amrex::Real RSUN = 6.96e10;    // Solar mass
-		const amrex::Real MRADMIN = (0.01*MSUN);  // Minimum mass at which we use the model
+		const amrex::Real PSIION = (16.0*C::ev2erg*C::n_A);  // Energy per gram needed to dissociate and ionize a molecular gas with solar abundances
+		const amrex::Real PSID = (100*C::ev2erg*C::n_A);  // Energy per gram released by burning the deuterium in a gas with solar abundances
+		const amrex::Real MRADMIN = (0.01*C::M_solar);  // Minimum mass at which we use the model
+		const amrex::Real PI = std::acos(-1.0);
 		  
 		// Use table interpolation: (age, mass) -> luminosity per group
 		const int mass_idx = StarParticleMassIdx;
@@ -122,21 +119,263 @@ class ProtoLuminosityUpdate
 		// auto const luminosities = gpu_tables.luminosity.interpolate(point);
 
 		// Update luminosity components (they are stored consecutively starting at lum_idx)
+		// Initialize polytrope index
+		inline amrex::Real nInit(amrexReal::mdotInit) {
+		  amrex::Real aGinit = 1.475 + 0.07*log10(mdotInit*seconds_per_year/C::M_solar);
+		  amrex::Real npoly = 5.0 - 3.0/aGinit;
+		  if (npoly < 1.5) npoly = 1.5;
+		  if (npoly > 3.0) npoly = 3.0;
+		  return( npoly );
+		}
+		
+		// Initialize radius
+		inline amrex::Real radInit(amrex::Real mdotInit) {
+		  return (C::R_solar * max(2.5*pow(mdot*seconds_per_year/C::M_solar*1.0e5, 0.2), 2.0) ;
+		}
+
+	        // For a polytrope, the gravitational energy is aG G M^2 / R, aG = -3/(5-n)
+		inline amrex::Real aG() {
+		    return( 3.0/(5.0-n) );
+		  }
+
+		inline amrex::Real rhoc(amrex::Real mass) {
+		  // Table of values of rho_mean / rho_c for n=1.5 to 3.1 in intervals of 0.1
+		  static amrex::Real rhofactab[] = {
+		       0.166931, 0.14742, 0.129933, 0.114265, 0.100242,
+		       0.0877, 0.0764968, 0.0665109, 0.0576198, 0.0497216,
+		       0.0427224, 0.0365357, 0.0310837, 0.0262952, 0.0221057,
+		       0.0184553, 0.01529
+		  };
+		  amrex::int itab = (int) floor((n-1.5)/0.1);
+		  amrex::Real wgt = (n - (1.5 + 0.1*itab)) / 0.1;
+		  amrex::Real rhofac = rhofactab[itab]*(1.0-wgt) + rhofactab[itab+1]*wgt;
+		  return( mass / (4./3.*PI*r*r*r) / rhofac );
+		}
+
+		// The central pressure in a polytropic model, found by table lookup.
+		// See Kippenhahn & Weigert.
+		inline amrex::Real Pc(Real mass) {
+		  static amrex::Real pfactab[] = {
+		       0.770087, 0.889001, 1.02979, 1.19731, 1.39753,
+		       1.63818, 1.92909, 2.2825, 2.71504, 3.24792, 3.90921,
+		       4.73657, 5.78067, 7.11088, 8.82286, 11.0515, 13.9885
+		  };
+		  amrex::int itab = (amrex::int) floor((n-1.5)/0.1);
+		  amrex::Real wgt = (n - (1.5 + 0.1*itab)) / 0.1;
+		  amrex::Real pfac = pfactab[itab]*(1.0-wgt) + pfactab[itab+1]*wgt;
+		  return( pfac * G * mass*mass/(r*r*r*r) );
+		}
+
+		// The central temperature in a protostar, found by using a bisection
+		// method to solve Pc = rho_c k Tc / (mu mH) + 1/3 a Tc^4.
+		amrex::Real Tc(amrex::Real mass, amrex::Real rhoc1, amrex::Real Pc1) {
+		  if (rhoc1 == -1.0) rhoc1 = rhoc(mass);
+		  if (Pc1 == -1.0) Pc1 = Pc(mass);
+		  const amrex::int JMAX = 40
+		  const amrex::Real TOL = 1.0e-7
+		  amrex::Real Tgas, Trad;
+		  amrex::int j;
+		  amrex::Real dx, f, fmid, xmid, rtb, x1, x2;
+		  amrex::char errstr[256];
+
+		  x1 = 0.0;
+		  Tgas = Pc1*MU*MH/(C::k_B*rhoc1);
+		  Trad = pow(3*Pc1/A, 0.25);
+		  x2 = (Trad > Tgas) ? 2*Trad : 2*Tgas;
+		  f = Pc1 - rhoc1*C::k_B*x1/(C::mu*C::m_p) - A*pow(x1,4)/3.0;
+		  fmid=Pc1 - rhoc1*C::k_B*x2/(C::mu*C::m_p) - A*pow(x2,4)/3.0;
+		  rtb = f < 0.0 ? (dx=x2-x1,x1) : (dx=x1-x2,x2);
+		  for (j=1;j<=JMAX;j++) {
+		    xmid=rtb+(dx *= 0.5);
+		    fmid = Pc1 - rhoc1*C::k_B*xmid/(C::mu*C::m_p) - A*pow(xmid,4)/3.0;
+		    if (fmid <= 0.0) rtb=xmid;
+		    if (fabs(dx) < TOL*fabs(xmid) || fmid == 0.0) return rtb;
+		  }
+		}
+		
+		inline amrex::Real betac(amrex::Real mass, amrex::Real rhoc1, amrex::Real Pc1, amrex::Real Tc1) {
+		  if (rhoc1 == -1.0) rhoc1 = rhoc(mass);
+		  if (Pc1 == -1.0) Pc1 = Pc(mass);
+		  if (Tc1 == -1.0) Tc1 = Tc(mass, rhoc1, Pc1);
+		  return( rhoc1*C::k_B*Tc1/(C::mu*C::m_p) / Pc1 );
+		}
+
+		amrex::Real beta(amrex::Real mass, amrex::Real rhoc1, amrex::Real Pc1) {
+		  if (n==3.0) {
+		    // In this case we solve the Eddington quartic,
+		    // P_c^3 = (3/a) (k / (mu mH))^4 (1 - beta) / beta^4 rho_c^4
+		    // for beta
+		    const amrex::int JMAX = 40;
+		    const amrex::Real BETAMIN = 1.0e-4;
+		    const amrex::Real BETAMAX = 1.0;
+		    const amrex::Real TOL = 1.0e-7;
+		    amrex::int j;
+		    amrex::Real dx, f, fmid, xmid, rtb, x1, x2, coef;
+
+		    if (rhoc1 == -1.0) rhoc1 = rhoc(mass);
+		    if (Pc1 == -1.0) Pc1 = Pc(mass);
+		    coef = 3/A*pow(C::k_B*rhoc1/(C::mu*C::m_p),4);
+		    x1=BETAMIN;
+		    x2=BETAMAX;
+		    f = pow(Pc1,3) - coef * (1.0-x1)/pow(x1,4);
+		    fmid = pow(Pc1,3) - coef * (1.0-x2)/pow(x2,4);
+		    rtb = f < 0.0 ? (dx=x2-x1,x1) : (dx=x1-x2,x2);
+		    for (j=1;j<=JMAX;j++) {
+		      xmid=rtb+(dx *= 0.5);
+		      fmid = pow(Pc1,3) - coef * (1.0-xmid)/pow(xmid,4);
+		      if (fmid <= 0.0) rtb=xmid;
+		      if (fabs(dx) < TOL*fabs(xmid) || fmid == 0.0) return rtb;
+		    }
+		    MayDay::
+		      Error("SinkParticleData::beta(): bisection solve failed to converge");
+		    return(-1);
+		  } else {
+		    // For npoly != 3, we use a table lookup. The values of beta have been
+		    // pre-computed with mathematica. The table goes from M=5 to 50 solar
+		    // masses in steps of 2.5 M_sun, and from n=1.5 to n=3 in steps of 0.5.
+		    // We should never call this routine with M > 50 Msun, since by then
+		    // the star should be fully on the main sequence.
+		    const amrex::Real MTABMIN = (5.0*C::M_solar);
+		    const amrex::Real MTABMAX = (50.0*C::M_solar);
+		    const amrex::Real MTABSTEP = (2.5*C::M_solar);
+		    const amrex::Real NTABMIN = 1.5;
+		    const amrex::Real NTABMAX = 3.0;
+		    const amrex::Real NTABSTEP = 0.5;
+		    if (mass < MTABMIN) return(1.0);  // Set beta = 1 for M < 5 Msun
+		    if ((mass >= MTABMAX) || (npoly >= NTABMAX)) {
+		      MayDay::
+			Error("SinkParticleData::beta(): off interpolation table");
+		      return(-1.0);
+		    }
+		    static Real betatab[19][4] = {
+		       {0.98785, 0.988928, 0.98947, 0.989634}, 
+		       {0.97438, 0.976428, 0.977462, 0.977774}, 
+		       {0.957927, 0.960895, 0.962397, 0.962846}, 
+		       {0.939787, 0.943497, 0.945369, 0.945922}, 
+		       {0.92091, 0.925151, 0.927276, 0.927896}, 
+		       {0.901932, 0.906512, 0.908785, 0.909436}, 
+		       {0.883254, 0.888017, 0.890353, 0.891013}, 
+		       {0.865111, 0.86994, 0.872277, 0.872927}, 
+		       {0.847635, 0.852445, 0.854739, 0.855367}, 
+		       {0.830886, 0.835619, 0.837842, 0.838441}, 
+		       {0.814885, 0.8195, 0.821635, 0.822201}, 
+		       {0.799625, 0.804095, 0.806133, 0.806664}, 
+		       {0.785082, 0.789394, 0.791328, 0.791825}, 
+		       {0.771226, 0.775371, 0.777202, 0.777665}, 
+		       {0.758022, 0.761997, 0.763726, 0.764156}, 
+		       {0.745433, 0.749238, 0.750869, 0.751268}, 
+		       {0.733423, 0.73706, 0.738596, 0.738966}, 
+		       {0.721954, 0.725429, 0.726874, 0.727216}, 
+		       {0.710993, 0.714311, 0.715671, 0.715987}
+		    };
+		    
+		    // Locate ourselves on the table and do a linear interpolation
+		    amrex::int midx = (int) floor((mass-MTABMIN)/MTABSTEP);
+		    amrex::Real mwgt = (mass-(MTABMIN+midx*MTABSTEP)) / MTABSTEP;
+		    amrex::int nidx = (int) floor((npoly-NTABMIN)/NTABSTEP);
+		    amrex::Real nwgt = (npoly-(NTABMIN+nidx*NTABSTEP)) / NTABSTEP;
+		    return ( betatab[midx][nidx]*(1.0-mwgt)*(1.0-nwgt) +
+			     betatab[midx+1][nidx]*mwgt*(1.0-nwgt) +
+			     betatab[midx][nidx+1]*(1.0-mwgt)*nwgt +
+			     betatab[midx+1][nidx+1]*mwgt*nwgt );
+		  }
+		}
+		
+		const amrex::Real DM = (0.01*mass);
+		amrex::Real dlogBetaOverBetac_dlogM(amrex::Real beta_1) {
+		  // If npoly==3, beta = beta_c independent of M, so return 0
+		  if (npoly==3) return(0.0);
+
+		  // Otherwise take a numerical derivative
+		  amrex::Real beta1;
+		  if (beta_1==-1.0) beta1 = beta(mass);
+		  else beta1 = beta_1;
+		  amrex::Real beta2 = beta(mmass+DM);
+		  amrex::Real betac1 = betac(mass);
+		  amrex::Real betac2 = betac(mass+DM);
+		  return( mass/(beta1/betac1) * ((beta2/betac2) - (beta1/betac1)) / DM );
+		}
+
+		amrex::Real dlogBeta_dlogM(amrex::Real beta_1) {
+		  // Take a numerical derivative
+		  amrex::Real beta1;
+		  if (beta_1==-1.0) beta1 = beta(mass);
+		  else beta1 = beta_1;
+		  amrex::Real beta2 = beta(mass+DM);
+		  return( mass/beta1 * (beta2-beta1) / DM );
+		}
+
+		amrex::Real luminosity() {
+		  if (burnState == Uninitialized) return(0.0);
+		  amrex::Real lum =  lStar() + lDisk();
+		  //#ifdef NHIST
+		  //SSRO take the smaller of the new luminosity or 
+		  //25% greater than the old luminosity.
+		  //l_hist=(lum<1.25*l_hist)?lum:1.25*l_hist;
+		  //#endif
+		  return( lum );
+		}
+
+		amrex::Real lStar() {
+		  amrex::Real lstar = lZAMS() + lAcc();
+		  amrex::Real Teff = pow(lstar / (4. * PI * r*r * C::sigma_SB), 0.25);
+		  if (Teff > THAY) return( lstar );
+		  else return( 4.*PI*r*r*C::sigma_SB*pow(THAY, 4) );
+		}
+
+		inline amrex::Real lAcc() {
+		  return( FACC * FK * C::Gconst * mass * mdot / r );
+		}
+
+		amrex::Real lDisk() {
+		  return ( (1.0 - FK) * C::Gconst * mass * mdot / r );
+		}
+
+		amrex::Real lDeut(amrex::Real beta1) {
+		  switch (burnState) {
+		  case Uninitialized: return(0.0);
+		  case None: return(0.0);
+		  case VariableCoreDeuterium: {
+		    if (beta1 == -1.0) beta1=beta(mass);
+		    return( lStar() + eDotIon() + C::Gconst*mass*mdot/r *
+			    (1.0 - FK - aG()*beta1/2.0 *
+			    (1.0 + dlogBetaOverBetac_dlogM(beta1))) );
+		  }
+		  case SteadyCoreDeuterium: return( mdot * PSID );
+		  case ShellDeuterium: return( mdot * PSID );
+		  default: MayDay::Error("SinkParticleData::lDeut(): bad value of burnState");
+		  }
+		  return(-1.0); // Never get here
+		}
+  
+		inline amrex::Real eDotIon() {
+		  return( mdot * PSIION );
+		}
+
+		inline amrex::Realc dlogR_dlogM(amrex::Real beta1) {
+		  if (beta1==-1.0) beta1 = beta(m);
+		  return( 2.0 - 2.0/(aG()*beta1) * (1.0 - FK) +
+			  dlogBeta_dlogM(beta1) - 2.0*r/(aG()*beta1*C::Gconst*mass*mdot) * 
+			  (lStar() + eDotIon() - lDeut(beta1)) );
+		}
+
+		amrex::Real vWind(amrex::Real vw_fkep, amrex::Real vw_max, amrex::Real rlaunch) {
+		  // Set wind velocity equal to Keplerian velocity
+		  if (burnState == Uninitialized) return(0.0);
+		  return( min(vw_fkep*sqrt(G*m/r),vw_max) * sqrt(1.+2.*r/(pow(vw_fkep,2)*rlaunch)));
+		}
+
+
+		
 		if (burnState == Uninitialized) {
 		  if (mass < MRADMIN) || (mdot == 0.0)) {
 		  p,rdata(mlast_idx) = mass;
 		    return;
 		  }
-
-		  // Initialize polytrope index
-		  amrex::Real aGinit = 1.475 + 0.07*log10(mdot*YR_TO_SEC/C::M_solar);
-		  amrex::Real npoly = 5.0 - 3.0/aGinit;
-		  if (npoly < 1.5) npoly = 1.5;
-		  if (npoly > 3.0) npoly = 3.0;
-
-		  // Initialize radius
-		  amrex::Real r = RSUN * max(2.5*pow(mdot*YR_TO_SEC/C::M_solar*1.0e5, 0.2), 2.0) 
-		  burnState = None;
+		amrex::Real npoly = nInit(mdot);
+		amrex::Real r = radInit(mdot);
+		burnState = None;
+		
 	       }
 
                // Update the radius 
@@ -272,7 +511,7 @@ class ProtoLuminosityUpdate
     r = radInit(mdot);
     burnState = None;
 
-		  amrex::Real r = RSUN * max(2.5*pow(mdot*YR_TO_SEC/MSUN*1.0e5, 0.2), 2.0) );
+    amrex::Real r = C::R_solar * max(2.5*pow(mdot*YR_TO_SEC/C::M_solar*1.0e5, 0.2), 2.0) );
 		  amrex::Real lAcc = FACC * FK * G * mass * mdot / r;
 		  amrex::Real ldisk = (1.0 - FK) * G * mass * mdot / r;
 		  amrex::Real lsol = (ALPHA*pow(msol,5.5) + BETA*pow(msol,11)) / (GAMMA+pow(msol,3)+DELTA*pow(msol,5)+EPSILON*pow(msol,7)+ ZETA*pow(msol,8)+ETA*pow(msol,9.5));
