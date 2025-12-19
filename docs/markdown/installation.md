@@ -1,5 +1,7 @@
 # Installation
 
+The following instructions are for Linux and macOS. If you come across any issues on macOS, see [Installation on macOS](installation_macos.md) for detailed instructions.
+
 To run Quokka, download this repository and its submodules to your local machine:
 
     git clone --recursive https://github.com/quokka-astro/quokka.git
