@@ -89,7 +89,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(Real const rho
 	return Tgas;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(Real const rho, Real const Eint, resampledGpuConstTables const &tables) -> Real
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(Real const rho, Real const Eint, resampledGpuConstTables const &tables,
+								   Real const_heating_rate = 0.0) -> Real
 {
 	// Compute cooling length l_cool = c_s * t_cool
 	// Convert Eint (energy density) to eint (specific energy) and then to fast log scale for interpolation
@@ -99,7 +100,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(Real const rh
 	// Interpolate sound speed from data tables
 	const Real cs = tables.sound_speeds.interpolate_single(point);
 
-	const Real Edot = resampled_cooling_function(rho, Eint, tables);
+	const Real Edot = resampled_cooling_function(rho, Eint, tables) + const_heating_rate;
 	const Real t_cool = (Edot != 0.0) ? std::abs(Eint / Edot) : std::numeric_limits<Real>::max();
 
 	return cs * t_cool;
@@ -144,8 +145,12 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeSoundSpeedFromRhoEint(Real 
 struct ResampledCoolingFunctor {
 	Real rho;
 	resampledGpuConstTables tables;
+	Real const_heating_rate;
 
-	AMREX_GPU_HOST_DEVICE ResampledCoolingFunctor(Real rho_in, resampledGpuConstTables const &tables_in) : rho(rho_in), tables(tables_in) {}
+	AMREX_GPU_HOST_DEVICE ResampledCoolingFunctor(Real rho_in, resampledGpuConstTables const &tables_in, Real const_heating_rate_in)
+	    : rho(rho_in), tables(tables_in), const_heating_rate(const_heating_rate_in)
+	{
+	}
 
 	AMREX_GPU_HOST_DEVICE ~ResampledCoolingFunctor() = default;
 	AMREX_GPU_HOST_DEVICE ResampledCoolingFunctor(ResampledCoolingFunctor const &) = default;
@@ -157,12 +162,14 @@ struct ResampledCoolingFunctor {
 	{
 		// compute temperature and cooling rate
 		const Real Eint = y_data[0];
-		y_rhs[0] = resampled_cooling_function(rho, Eint, tables);
+		y_rhs[0] = resampled_cooling_function(rho, Eint, tables) + const_heating_rate;
 		return 0; // success
 	}
 };
 
-template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &resampledTables, const Real E_floor) -> bool
+// const_heating_rate_per_H: unit erg/s/H
+template <typename problem_t>
+auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &resampledTables, const Real E_floor, const Real const_heating_rate_per_H) -> bool
 {
 	const BL_PROFILE("quokka::ResampledCooling::computeCooling()");
 
@@ -188,8 +195,11 @@ template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Rea
 			const Real x3Mom = state(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
 			const Real Egas = state(i, j, k, HydroSystem<problem_t>::energy_index);
 
+			// number density
+			const Real nH = rho * tables.cloudy_H_mass_fraction / C::m_p; // unit: cm^-3
+
 			const Real Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			const ResampledCoolingFunctor user_rhs(rho, tables);
+			const ResampledCoolingFunctor user_rhs(rho, tables, const_heating_rate_per_H * nH); // unit: erg/cm^3/s
 			quokka::valarray<Real, 1> y = {Eint};
 			quokka::valarray<Real, 1> const abstol = {reltol_floor * E_floor};
 
@@ -200,8 +210,8 @@ template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Rea
 
 			// check if integration failed
 			if (nsteps >= maxStepsODEIntegrate) {
-				Real const Edot = resampled_cooling_function(rho, Eint, tables);
-				Real const t_cool = Eint / Edot;
+				Real const Edot = resampled_cooling_function(rho, Eint, tables) + const_heating_rate_per_H * nH; // unit: erg/cm^3/s
+				Real const t_cool = (Edot != 0.0) ? std::abs(Eint / Edot) : std::numeric_limits<Real>::max();
 				printf("max substeps exceeded! rho = %.17e, Eint = %.17e, cooling " // NOLINT
 				       "time = %g, dt = %.17e\n",
 				       rho, Eint, t_cool, dt);
