@@ -73,15 +73,18 @@ You can install CMake and Ninja using either pip or Homebrew.
 
 **Option 1: Install via pip or uv**
 
-pip install:
+Using pip:
 ```bash
 python3 -m pip install cmake ninja --user
 ```
 
-uv install:
+Using uv (if you have [uv](https://docs.astral.sh/uv/) installed):
 ```bash
-uv add cmake ninja --dev
+uv tool install cmake-build-extension
+uv tool install ninja
 ```
+
+Note: For uv, you may also use `uv pip install cmake ninja` if you're working within a virtual environment.
 
 **Option 2: Install via Homebrew**
 
@@ -100,8 +103,14 @@ ninja --version
 
 Some test problems use Python for plotting results. Install NumPy and matplotlib:
 
+Using pip:
 ```bash
 python3 -m pip install numpy matplotlib --user
+```
+
+Using uv:
+```bash
+uv pip install numpy matplotlib
 ```
 
 If you skip this step, you can disable Python support later by adding `-DQUOKKA_PYTHON=OFF` to the CMake configuration.

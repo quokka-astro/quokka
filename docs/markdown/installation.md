@@ -8,6 +8,10 @@ Quokka uses CMake (and optionally, Ninja) as its build system. If you don't have
 
     python3 -m pip install cmake ninja --user
 
+Alternatively, if you have [uv](https://docs.astral.sh/uv/) installed, you can use:
+
+    uv pip install cmake ninja
+
 Now that CMake is installed, create a ``build/`` subdirectory and compile Quokka, as shown below.
 
     cd quokka
@@ -53,6 +57,10 @@ If CMake prints an error saying that Python could not be found, e.g.:
 you should be able to fix this by installing NumPy (and matplotlib) by running
 
     python3 -m pip install numpy matplotlib --user
+
+or with uv:
+
+    uv pip install numpy matplotlib
 
 This should enable CMake to find the NumPy header files that are needed to successfully compile.
 
