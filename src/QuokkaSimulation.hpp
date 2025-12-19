@@ -216,6 +216,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		eos_init(small_temp, small_dens);
 	}
 
+	[[nodiscard]] AMREX_FORCE_INLINE auto densityFloor(amrex::Real x, amrex::Real y, amrex::Real z, amrex::Real base_density_floor) const -> amrex::Real;
 	[[nodiscard]] static auto getScalarVariableNames() -> std::vector<std::string>;
 	void defineComponentNames();
 	void defineDefaultPlotfileVariables();
@@ -880,6 +881,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::print_multifab_f
 	    mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { printf("%f\n", mf_fc[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex)); });
 }
 
+template <typename problem_t>
+auto QuokkaSimulation<problem_t>::densityFloor(amrex::Real x, amrex::Real y, amrex::Real z, amrex::Real base_density_floor) const -> amrex::Real
+{
+	amrex::ignore_unused(x, y, z);
+	return base_density_floor;
+}
+
 template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponentErrors() -> std::vector<std::tuple<std::string, amrex::Real, amrex::Real>>
 {
 	// returns a vector of tuples: (component name, absolute error, relative error)
@@ -1235,7 +1243,11 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::FixupState(int l
 	const BL_PROFILE("QuokkaSimulation::FixupState()");
 
 	// fix hydro state
-	HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev], geom[lev].data());
+	auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
+								     amrex::Real base_density_floor) -> amrex::Real {
+		return densityFloor(x, y, z, base_density_floor);
+	};
+	HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev], geom[lev].data(), density_floor_func);
 
 	// sync internal energy and total energy
 	HydroSystem<problem_t>::SyncDualEnergy(state_new_cc_[lev], state_new_fc_[lev]);
@@ -1738,7 +1750,11 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		}
 
 		// prevent vacuum
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew_cc, geom[lev].data());
+		auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
+									     amrex::Real base_density_floor) -> amrex::Real {
+			return densityFloor(x, y, z, base_density_floor);
+		};
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew_cc, geom[lev].data(), density_floor_func);
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
@@ -1849,7 +1865,11 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		}
 
 		// prevent vacuum
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal_cc, geom[lev].data());
+		auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
+									     amrex::Real base_density_floor) -> amrex::Real {
+			return densityFloor(x, y, z, base_density_floor);
+		};
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal_cc, geom[lev].data(), density_floor_func);
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)

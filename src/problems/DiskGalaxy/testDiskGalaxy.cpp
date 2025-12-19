@@ -42,19 +42,6 @@ template <> struct HydroSystem_Traits<AgoraGalaxy> {
 	static constexpr bool reconstruct_eint = true;
 };
 
-template <> struct quokka::DensityFloor<AgoraGalaxy> {
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto value(amrex::Real x, amrex::Real y, amrex::Real z, amrex::Real base_density_floor) -> amrex::Real
-	{
-		amrex::Real constexpr r_break = 10.0e3 * C::parsec; // 10 kpc
-		amrex::Real const r = std::sqrt(x * x + y * y + z * z);
-		if (r <= r_break) {
-			return base_density_floor;
-		}
-		amrex::Real const ratio = r_break / r;
-		return base_density_floor * ratio * ratio;
-	}
-};
-
 template <> struct Physics_Traits<AgoraGalaxy> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 	static constexpr bool is_hydro_enabled = true;
@@ -87,6 +74,19 @@ template <> struct SimulationData<AgoraGalaxy> {
 	amrex::Gpu::PinnedVector<amrex::Real> profile_vr;
 	amrex::Gpu::PinnedVector<amrex::Real> profile_temp;
 };
+
+template <>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto QuokkaSimulation<AgoraGalaxy>::densityFloor(amrex::Real x, amrex::Real y, amrex::Real z,
+											  amrex::Real base_density_floor) const -> amrex::Real
+{
+	amrex::Real constexpr r_break = 10.0e3 * C::parsec; // 10 kpc
+	amrex::Real const r = std::sqrt(x * x + y * y + z * z);
+	if (r <= r_break) {
+		return base_density_floor;
+	}
+	amrex::Real const ratio = r_break / r;
+	return base_density_floor * ratio * ratio;
+}
 
 template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 {
