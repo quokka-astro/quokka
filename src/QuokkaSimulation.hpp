@@ -137,6 +137,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	int enableCooling_ = 0;
 	int enableChemistry_ = 0;
+	int enableInterDustStoptime_ = 0;
 	Real max_density_allowed = std::numeric_limits<amrex::Real>::max();
 	Real min_density_allowed = std::numeric_limits<amrex::Real>::min();
 
@@ -800,7 +801,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 #endif
 
 	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-		DustSystem<problem_t>::computeDustDrag(state, dt, dust_omega_);
+		DustSystem<problem_t>::computeDustDrag(state, dt, dust_omega_, enableInterDustStoptime_);
 	}
 
 	// compute user-specified sources
