@@ -444,7 +444,7 @@ auto problem_main() -> int
 	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
 		int const component_dir = (nvars_per_dim_fc > 0) ? (icomp / nvars_per_dim_fc) : 0;
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			int const bc_type = (component_dir == idim) ? amrex::BCType::reflect_odd : amrex::BCType::reflect_even;
+			int const bc_type = (component_dir == idim) ? amrex::BCType::reflect_even : amrex::BCType::reflect_odd;
 			BCs_fc[icomp].setLo(idim, bc_type);
 			BCs_fc[icomp].setHi(idim, bc_type);
 		}
