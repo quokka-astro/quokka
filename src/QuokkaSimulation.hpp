@@ -137,7 +137,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	int enableCooling_ = 0;
 	int enableChemistry_ = 0;
-	int enableInterDustStoptime_ = 0;
+	int enableInterDustStoptime_ = 1;
 	Real max_density_allowed = std::numeric_limits<amrex::Real>::max();
 	Real min_density_allowed = std::numeric_limits<amrex::Real>::min();
 

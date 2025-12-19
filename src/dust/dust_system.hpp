@@ -180,7 +180,7 @@ void DustSystem<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, amre
 		}
 
 		// set iteration parameters
-		const int max_iterations = (enableInterDustStoptime_ != 0) ? 100 : 1;
+		const int max_iterations = (enableInterDustStoptime_ != 0) ? 20 : 1;
 		const amrex::Real tolerance = 1.0e-6;
 
 		// initialize iteration velocities - using two intermediate variables
@@ -189,10 +189,8 @@ void DustSystem<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, amre
 
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 			vel_inter_old[0][dir] = vel_g_old[dir];
-			vel_inter_new[0][dir] = vel_g_old[dir];
 			for (int g = 0; g < N; ++g) {
 				vel_inter_old[1 + g][dir] = vel_d_old[g][dir];
-				vel_inter_new[1 + g][dir] = vel_d_old[g][dir];
 			}
 		}
 
@@ -242,11 +240,11 @@ void DustSystem<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, amre
 			}
 
 			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-				amrex::Real const v_g = vel_inter_old[0][dir]; // using current iteration velocity
+				amrex::Real const v_g = vel_g_old[dir];
 
 				amrex::GpuArray<amrex::Real, N> v_d;
 				for (int g = 0; g < N; ++g) {
-					v_d[g] = vel_inter_old[1 + g][dir]; // using current iteration velocity
+					v_d[g] = vel_d_old[g][dir];
 				}
 
 				amrex::GpuArray<amrex::Real, N + 1> u;
@@ -310,10 +308,10 @@ void DustSystem<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, amre
 						     k1[0] * beta2 * epsilon[g] * dt);
 				}
 
-				vel_inter_new[0][dir] = vel_inter_old[0][dir] + dt * (b * k1[0] + (1.0 - b) * k2[0]) / rho_g;
+				vel_inter_new[0][dir] =  vel_g_old[dir] + dt * (b * k1[0] + (1.0 - b) * k2[0]) / rho_g;
 
 				for (int g = 0; g < N; ++g) {
-					vel_inter_new[1 + g][dir] = vel_inter_old[1 + g][dir] + dt * (b * k1[1 + g] + (1.0 - b) * k2[1 + g]) / rho_d[g];
+					vel_inter_new[1 + g][dir] = vel_d_old[g][dir] + dt * (b * k1[1 + g] + (1.0 - b) * k2[1 + g]) / rho_d[g];
 				}
 			}
 			// check convergence conditions
