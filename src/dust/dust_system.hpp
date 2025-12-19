@@ -140,11 +140,7 @@ AMREX_GPU_HOST_DEVICE auto DustSystem<problem_t>::ComputeReciprocalStoppingTime(
 {
 	constexpr int N = Physics_Traits<problem_t>::nDustGroups;
 	amrex::GpuArray<amrex::Real, N> alpha;
-
-	for (int g = 0; g < N; ++g) {
-		alpha[g] = 0.0;
-	}
-
+	alpha.fill(0.0);
 	return alpha;
 }
 
