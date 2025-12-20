@@ -39,7 +39,8 @@ auto readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 	bool is_pe_enabled = false;
 
 	// Read all 2D datasets using generic DataTable H5Reader (file path-based interface)
-	resampledTables.cooling_rates = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/cooling_rates", coord_names, is_fast_log, &coord_bounds, &is_pe_enabled);
+	resampledTables.cooling_rates =
+	    quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/cooling_rates", coord_names, is_fast_log, &coord_bounds, &is_pe_enabled);
 	resampledTables.temperatures = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/temperatures", coord_names, is_fast_log);
 	resampledTables.sound_speeds = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/sound_speeds", coord_names, is_fast_log);
 	resampledTables.pressures = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/pressures", coord_names, is_fast_log);
