@@ -3,6 +3,7 @@ docs_dir: markdown
 copyright: © Copyright 2020-2025, Ben Wibking and Quokka Developers.
 theme:
   name: material
+  favicon: quokka-favicon.svg
   font:
     text: Source Sans Pro
   features:
