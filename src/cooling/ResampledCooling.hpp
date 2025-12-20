@@ -224,8 +224,9 @@ auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &res
 
 	const int nmax = nsubstepsMF.max(0);
 	const Real navg = static_cast<Real>(nsubstepsMF.sum(0)) / static_cast<Real>(nsubstepsMF.boxArray().numPts());
-	if (verbose)
+	if (verbose) {
 		amrex::Print() << fmt::format("\tcooling substeps (per cell): avg {}, max {}\n", navg, nmax);
+	}
 
 	// check if integration succeeded
 	if (nmax >= maxStepsODEIntegrate) {

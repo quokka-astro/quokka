@@ -31,23 +31,11 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 	resampledTables.pressures = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/pressures");
 	resampledTables.entropies = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/entropies");
 
-	// Set coordinate bounds from the table metadata
-	// Dimension 0: rho, Dimension 1: eint
-	resampledTables.rho_min = resampledTables.cooling_rates.coord_min(0);
-	resampledTables.rho_max = resampledTables.cooling_rates.coord_max(0);
-	resampledTables.eint_min = resampledTables.cooling_rates.coord_min(1);
-	resampledTables.eint_max = resampledTables.cooling_rates.coord_max(1);
-
 	// Get grid dimensions from the DataTable objects for logging
 	const int n_rho = resampledTables.cooling_rates.size(0);
 	const int n_eint = resampledTables.cooling_rates.size(1);
 
 	resampledTables.cloudy_H_mass_fraction = cloudy_H_mass_fraction;
-
-	amrex::Print() << fmt::format("\tDensity range: {} to {} g/cm^3 ({} steps).\n", FastMath::pow2(resampledTables.rho_min),
-				      FastMath::pow2(resampledTables.rho_max), n_rho);
-	amrex::Print() << fmt::format("\tSpecific energy range: {} to {} erg/g ({} steps).\n", FastMath::pow2(resampledTables.eint_min),
-				      FastMath::pow2(resampledTables.eint_max), n_eint);
 }
 
 auto resampled_tables::const_tables() const -> resampledGpuConstTables

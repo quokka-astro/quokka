@@ -1284,21 +1284,6 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		}
 	}
 
-	// Get coordinate bounds
-	[[nodiscard]] auto coord_min(int dim) const -> amrex::Real
-	{
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dim >= 0 && dim < Ndim,
-						 fmt::format("Dimension index out of bounds! (provided: {}, valid range: [0, {}])", dim, Ndim - 1));
-		return coord_min_[dim];
-	}
-
-	[[nodiscard]] auto coord_max(int dim) const -> amrex::Real
-	{
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dim >= 0 && dim < Ndim,
-						 fmt::format("Dimension index out of bounds! (provided: {}, valid range: [0, {}])", dim, Ndim - 1));
-		return coord_max_[dim];
-	}
-
 	// H5Reader: Generic static method to read n-dimensional data from HDF5 file and create DataTable
 	// Reads metadata, coordinates, and data all from the HDF5 file
 	// @param file_path Path to the HDF5 file
