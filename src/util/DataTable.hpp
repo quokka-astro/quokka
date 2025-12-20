@@ -16,6 +16,7 @@
 #include "math/FastMath.hpp"
 #include <array>
 #include <fstream>
+#include <limits>
 #include <memory>
 #include <sstream>
 #include <type_traits>
@@ -150,9 +151,39 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 			if (spacing_types[dim] == SpacingType::linear) {
 				point_[dim] = point[dim];
 			} else if (spacing_types[dim] == SpacingType::log) {
-				point_[dim] = std::log(point[dim]);
+				// Handle non-positive values for log spacing
+				if constexpr (oob_policy == OutOfBounds::clamp) {
+					// Clamp to minimum valid value (slightly above zero)
+					constexpr amrex::Real epsilon = std::numeric_limits<amrex::Real>::min() * 1.0e10; // ~1e-298 for double
+					amrex::Real const clamped_val = amrex::max(point[dim], epsilon);
+					point_[dim] = std::log(clamped_val);
+				} else if constexpr (oob_policy == OutOfBounds::fail) {
+					// Check for non-positive values and abort if found
+					if (point[dim] <= 0.0) {
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+						    false,
+						    fmt::format("Invalid value for log interpolation in dimension {}: {} (must be positive)", dim, point[dim])
+							.c_str());
+					}
+					point_[dim] = std::log(point[dim]);
+				}
 			} else if (spacing_types[dim] == SpacingType::fast_log) {
-				point_[dim] = FastMath::lg(point[dim]);
+				// Handle non-positive values for fast_log spacing
+				if constexpr (oob_policy == OutOfBounds::clamp) {
+					// Clamp to minimum valid value (slightly above zero)
+					constexpr amrex::Real epsilon = std::numeric_limits<amrex::Real>::min() * 1.0e10; // ~1e-298 for double
+					amrex::Real const clamped_val = amrex::max(point[dim], epsilon);
+					point_[dim] = FastMath::lg(clamped_val);
+				} else if constexpr (oob_policy == OutOfBounds::fail) {
+					// Check for non-positive values and abort if found
+					if (point[dim] <= 0.0) {
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+						    false, fmt::format("Invalid value for fast_log interpolation in dimension {}: {} (must be positive)", dim,
+								       point[dim])
+							       .c_str());
+					}
+					point_[dim] = FastMath::lg(point[dim]);
+				}
 			}
 		}
 
@@ -190,9 +221,39 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 			if (spacing_types[dim] == SpacingType::linear) {
 				point_[dim] = point[dim];
 			} else if (spacing_types[dim] == SpacingType::log) {
-				point_[dim] = std::log(point[dim]);
+				// Handle non-positive values for log spacing
+				if constexpr (oob_policy == OutOfBounds::clamp) {
+					// Clamp to minimum valid value (slightly above zero)
+					constexpr amrex::Real epsilon = std::numeric_limits<amrex::Real>::min() * 1.0e10; // ~1e-298 for double
+					amrex::Real const clamped_val = amrex::max(point[dim], epsilon);
+					point_[dim] = std::log(clamped_val);
+				} else if constexpr (oob_policy == OutOfBounds::fail) {
+					// Check for non-positive values and abort if found
+					if (point[dim] <= 0.0) {
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+						    false,
+						    fmt::format("Invalid value for log interpolation in dimension {}: {} (must be positive)", dim, point[dim])
+							.c_str());
+					}
+					point_[dim] = std::log(point[dim]);
+				}
 			} else if (spacing_types[dim] == SpacingType::fast_log) {
-				point_[dim] = FastMath::lg(point[dim]);
+				// Handle non-positive values for fast_log spacing
+				if constexpr (oob_policy == OutOfBounds::clamp) {
+					// Clamp to minimum valid value (slightly above zero)
+					constexpr amrex::Real epsilon = std::numeric_limits<amrex::Real>::min() * 1.0e10; // ~1e-298 for double
+					amrex::Real const clamped_val = amrex::max(point[dim], epsilon);
+					point_[dim] = FastMath::lg(clamped_val);
+				} else if constexpr (oob_policy == OutOfBounds::fail) {
+					// Check for non-positive values and abort if found
+					if (point[dim] <= 0.0) {
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+						    false, fmt::format("Invalid value for fast_log interpolation in dimension {}: {} (must be positive)", dim,
+								       point[dim])
+							       .c_str());
+					}
+					point_[dim] = FastMath::lg(point[dim]);
+				}
 			}
 		}
 
@@ -395,8 +456,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	}
 
 	// Backward compatibility constructor for single output (Nout = 1)
-	template <int N = Nout, typename = std::enable_if_t<N == 1>>
-	DataTable(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const amrex::Vector<amrex::Vector<amrex::Real>> &data)
+	template <int N = Nout>
+	DataTable(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const amrex::Vector<amrex::Vector<amrex::Real>> &data) requires(N == 1)
 	{
 		std::array<amrex::Vector<amrex::Vector<amrex::Real>>, 1> data_array = {data};
 		initialize(coords, data_array);
@@ -422,8 +483,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	}
 
 	// Initialize from coordinate arrays - 1D interface
-	template <int N = Ndim, typename = std::enable_if_t<N == 1>>
-	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const data_1d_type &data)
+	template <int N = Ndim> void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const data_1d_type &data) requires(N == 1)
 	{
 		static_assert(Ndim == 1, "This initialize overload is for 1D tables only");
 
@@ -443,8 +503,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	}
 
 	// Initialize from coordinate arrays - 2D interface
-	template <int N = Ndim, typename = std::enable_if_t<N == 2>>
-	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const data_2d_type &data)
+	template <int N = Ndim> void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const data_2d_type &data) requires(N == 2)
 	{
 		static_assert(Ndim == 2, "This initialize overload is for 2D tables only");
 
@@ -473,8 +532,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	}
 
 	// Initialize from coordinate arrays - 3D interface
-	template <int N = Ndim, typename = std::enable_if_t<N == 3>>
-	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const data_3d_type &data)
+	template <int N = Ndim> void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const data_3d_type &data) requires(N == 3)
 	{
 		static_assert(Ndim == 3, "This initialize overload is for 3D tables only");
 
@@ -508,8 +566,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	}
 
 	// Initialize from coordinate arrays - 4D interface
-	template <int N = Ndim, typename = std::enable_if_t<N == 4>>
-	void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const data_4d_type &data)
+	template <int N = Ndim> void initialize(const std::array<amrex::Vector<amrex::Real>, Ndim> &coords, const data_4d_type &data) requires(N == 4)
 	{
 		static_assert(Ndim == 4, "This initialize overload is for 4D tables only");
 
