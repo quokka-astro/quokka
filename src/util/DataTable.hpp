@@ -1344,7 +1344,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		if (include_pe != nullptr) {
 			if (H5Aexists(metadata_group, "include_pe") > 0) {
 				attr_id = H5Aopen(metadata_group, "include_pe", H5P_DEFAULT);
-				hid_t attr_type = H5Aget_type(attr_id);
+				const hid_t attr_type = H5Aget_type(attr_id);
 				if (H5Tget_class(attr_type) == H5T_INTEGER) {
 					int cooling_include_pe = 0;
 					status = H5Aread(attr_id, H5T_NATIVE_INT, &cooling_include_pe);
@@ -1352,10 +1352,10 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 					*include_pe = (cooling_include_pe != 0);
 				} else if (H5Tget_class(attr_type) == H5T_STRING) {
 					// Handle string written by older Python script versions ('0' or '1')
-					char buf[4] = {0};
-					hid_t mem_type = H5Tcopy(H5T_C_S1);
+					std::array<char, 4> buf{};
+					const hid_t mem_type = H5Tcopy(H5T_C_S1);
 					H5Tset_size(mem_type, 4);
-					status = H5Aread(attr_id, mem_type, buf);
+					status = H5Aread(attr_id, mem_type, buf.data());
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read include_pe (string)!");
 					*include_pe = (buf[0] == '1');
 					H5Tclose(mem_type);
