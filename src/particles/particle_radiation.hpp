@@ -94,7 +94,7 @@ class ProtoLuminosityUpdate
 		const amrex::Real PSIION = (16.0*C::ev2erg*C::n_A);  // Energy per gram needed to dissociate and ionize a molecular gas with solar abundances
 		const amrex::Real PSID = (100*C::ev2erg*C::n_A);  // Energy per gram released by burning the deuterium in a gas with solar abundances
 		const amrex::Real MRADMIN = (0.01*C::M_solar);  // Minimum mass at which we use the model
-		const amrex::Real PI = std::acos(-1.0);
+		const amrex::Real mPI = std::acos(-1.0);
 		  
 		// Use table interpolation: (age, mass) -> luminosity per group
 		const int mass_idx = StarParticleMassIdx;
@@ -149,7 +149,7 @@ class ProtoLuminosityUpdate
 		  amrex::int itab = (int) floor((n-1.5)/0.1);
 		  amrex::Real wgt = (n - (1.5 + 0.1*itab)) / 0.1;
 		  amrex::Real rhofac = rhofactab[itab]*(1.0-wgt) + rhofactab[itab+1]*wgt;
-		  return( mass / (4./3.*PI*r*r*r) / rhofac );
+		  return( mass / (4./3.*mPI*r*r*r) / rhofac );
 		}
 
 		// The central pressure in a polytropic model, found by table lookup.
@@ -318,9 +318,9 @@ class ProtoLuminosityUpdate
 
 		amrex::Real lStar() {
 		  amrex::Real lstar = lZAMS() + lAcc();
-		  amrex::Real Teff = pow(lstar / (4. * PI * r*r * C::sigma_SB), 0.25);
+		  amrex::Real Teff = pow(lstar / (4. * mPI * r*r * C::sigma_SB), 0.25);
 		  if (Teff > THAY) return( lstar );
-		  else return( 4.*PI*r*r*C::sigma_SB*pow(THAY, 4) );
+		  else return( 4.*mPI*r*r*C::sigma_SB*pow(THAY, 4) );
 		}
 
 		inline amrex::Real lAcc() {
@@ -365,29 +365,71 @@ class ProtoLuminosityUpdate
 		  return( min(vw_fkep*sqrt(G*m/r),vw_max) * sqrt(1.+2.*r/(pow(vw_fkep,2)*rlaunch)));
 		}
 
-
-		
-		if (burnState == Uninitialized) {
-		  if (mass < MRADMIN) || (mdot == 0.0)) {
-		  p,rdata(mlast_idx) = mass;
-		    return;
+		amrex::Real iso_mloss() {
+		  // Compute isotropic wind for MS OB stars; see Vink et al. 2001, Langer et al. 95
+		  // No line-driven winds for protostars
+		  if (burnState != ZAMS) return(0.0);
+		  amrex::Real vrat = 1.3 ;   // Ratio of the terminal velocity to the escape speed.                   // Bi-uniform with break at B1: m~17Msun, Teff~21,000 K
+		  amrex::Real Z = 1.0;       // Metallicity, not currently in our stellar model
+		  amrex::Real lstar = lZAMS();
+		  amrex::Real Teff = pow(lstar / (4. * mPI * r*r * C::sigma::SB), 0.25);
+		  if (Teff >= 2.1e4){
+		    vrat = 2.6;  // O stars
+		  }else if (Teff < 1.25e4){
+		    vrat = 0.7; // A-F stars
+		  }else{
+		    vrat = 1.3; // Bstars
 		  }
-		amrex::Real npoly = nInit(mdot);
-		amrex::Real r = radInit(mdot);
-		burnState = None;
-		
-	       }
+  
+		  amrex::Real logmdot; //Log mass loss rate in (Msun/yr)
+		  if (Teff <= 2.25e4){
+		    logmdot = -6.688+2.210*log(lstar/(1.0e5*C::L_solar)) - 1.339*log(mass/(30.*C::M_solar))-1.601*log(vrat/2.0)+1.07*log(Teff/2.0e4)+0.85*log(Z/1.0);
+		  }else{
+		    logmdot = -6.697+2.194*log(lstar/(1.0e5*C::L_solar)) - 1.313*log(mass/(30.*C::M_solar))-1.226*log(vrat/2.0)+0.933*log(Teff/4.0e4) - 10.92*pow(log(Teff/4.0e4),2.0)+0.85*log(Z/1.0);
+		  }
+		  return (pow(2.71828, logmdot)*MSUN/YRSEC);
+		}
 
-               // Update the radius 
-               if (burnState != ZAMS) {
-		 amrex::Real beta1 = beta(m);
-		 amrex::Real dr = (2.0*mdot/m*r*(FK/(aG()*beta1)+1.0-1.0/(aG()*beta1))
-				          + beta1/m * dlogBeta_dlogM(beta1) * mdot * r / beta1
-			                   - 2.0/(beta1*aG())*r*r/(G*m*m)*(lStar()+eDotIon()-lDeut(beta1)));
-		 amrex::Real rdottime = fabs(r/dr  )/100.0;
-		 amrex::Real mdottime = fabs(m/mdot)/100.0;
+		amrex::Real iso_vWind(Real vw_max) {
+		  // Compute isotropic wind for MS OB stars; see Leitherer et al 92
+		  if (burnState != ZAMS) return(0.0); // No line-driven winds for protostars
+		  amrex::Real lstar = lZAMS();
+		  amrex::Real Teff = pow(lstar / (4. * mPI * r*r * C::sigma_SB), 0.25);
+		  amrex::Real vrat = 1.3 ;     // Ratio of the terminal velocity to the escape speed.
+		  if (Teff <= 1.25e4) vrat = 0.7; // A-F stars  
+		  if (Teff >= 2.1e4) vrat  = 2.6; // Break at B1 spectral type
+		  // Different papers give 21,000-25,000K
+		  amrex::Real Z = 1.0;                   // Metallicity, not in our stellar model
+		  //Log terminal velocity in km/s
+		  amrex::Real logvout = 1.23-0.3*log(lstar/C::L_solar)+0.55*log(mass/C::M_solar)+0.64*log(Teff)+0.13*log(Z);
+		  return (min(pow(2.71828,logvout)*1e5,vw_max));
+		}
+
+		void updateState(amrex::Real dt) {
+		  
+		  // Note that we don't update the mass. We only update mdot and mdeut.
+  
+		  if (burnState == Uninitialized) {
+		    if (mass < MRADMIN) || (mdot == 0.0)) {
+		      p.rdata(mlast_idx) = mass;
+		      return;
+		    }
+		    amrex::Real npoly = nInit(mdot);
+		    amrex::Real r = radInit(mdot);
+		    burnState = None;
+		  }
+		}
+		
+		// Update the radius 
+		if (burnState != ZAMS) {
+		  amrex::Real beta1 = beta(m);
+		  amrex::Real dr = (2.0*mdot/mass*r*(FK/(aG()*beta1)+1.0-1.0/(aG()*beta1))
+				    + beta1/mass * dlogBeta_dlogM(beta1) * mdot * r / beta1
+			                   - 2.0/(beta1*aG())*r*r/(G*mass*mass)*(lStar()+eDotIon()-lDeut(beta1)));
+		  amrex::Real rdottime = fabs(r/dr  )/100.0;
+		  amrex::Real mdottime = fabs(mass/mdot)/100.0;
     
-		 if( rdottime < dt)
+		  if( rdottime < dt)
 		   {
 		     amrex::int rdotfac = ceil(dt/rdottime);
 		     amrex::Real rdotfacr = rdotfac;
@@ -396,9 +438,9 @@ class ProtoLuminosityUpdate
 		     for(int rdotloop = 0; rdotloop < rdotfac; rdotloop++)
 		       {
 			 beta1 = beta(m);
-			 dr = (2.0*mdot/m*r*(FK/(aG()*beta1)+1.0-1.0/(aG()*beta1))
-			      + beta1/m * dlogBeta_dlogM(beta1) * mdot * r / beta1
-			       - 2.0/(beta1*aG())*r*r/(G*m*m)*(lStar()+eDotIon()-lDeut(beta1)));
+			 dr = (2.0*mdot/mass*r*(FK/(aG()*beta1)+1.0-1.0/(aG()*beta1))
+			      + beta1/mass * dlogBeta_dlogM(beta1) * mdot * r / beta1
+			       - 2.0/(beta1*aG())*r*r/(G*mass*mass)*(lStar()+eDotIon()-lDeut(beta1)));
 			 r += dtprime * dr;
 		       }
 
@@ -407,122 +449,127 @@ class ProtoLuminosityUpdate
 		     amrex::int mdotfac = ceil(dt/mdottime);
 		     amrex::Real mdotfacr = mdotfac;
 		     amrex::Real dtprime = dt/mdotfacr;
-		     //printf("In Loop: mdottime: %6.4e mdotfac: %i mdotfacr: %6.4e dtprime: %6.4e mass: %6.4e mdot: %6.4e dt: %6.4e\n",mdottime,mdotfac,mdotfacr,dtprime,m,mdot,dt);
+
 		     for(int mdotloop = 0; mdotloop < mdotfac; mdotloop++)
 		       {
-			 beta1=beta(m);
-			 dr = (2.0*mdot/m*r*(FK/(aG()*beta1)+1.0-1.0/(aG()*beta1))
-			       + beta1/m * dlogBeta_dlogM(beta1) * mdot * r / beta1
-			       - 2.0/(beta1*aG())*r*r/(G*m*m)*(lStar()+eDotIon()-lDeut(beta1)));
+			 beta1=beta(mass);
+			 dr = (2.0*mdot/mass*r*(FK/(aG()*beta1)+1.0-1.0/(aG()*beta1))
+			       + beta1/mass * dlogBeta_dlogM(beta1) * mdot * r / beta1
+			       - 2.0/(beta1*aG())*r*r/(G*mass*mass)*(lStar()+eDotIon()-lDeut(beta1)));
 			 r += dtprime * dr;
 		       }
 		   } else
 		   {
-		     beta1=beta(m);
-		     dr = (2.0*mdot/m*r*(FK/(aG()*beta1)+1.0-1.0/(aG()*beta1))
-			   + beta1/m * dlogBeta_dlogM(beta1) * mdot * r / beta1
-			   - 2.0/(beta1*aG())*r*r/(G*m*m)*(lStar()+eDotIon()-lDeut(beta1)));
+		     beta1=beta(mass);
+		     dr = (2.0*mdot/mass*r*(FK/(aG()*beta1)+1.0-1.0/(aG()*beta1))
+			   + beta1/mass * dlogBeta_dlogM(beta1) * mdot * r / beta1
+			   - 2.0/(beta1*aG())*r*r/(G*mass*mass)*(lStar()+eDotIon()-lDeut(beta1)));
 		     r += dt * dr;
 		   }
 
-		 if(r < 0.0e0)
-		   {
-		     r = 0.2*6.96e10; //Worst case and we do get a neg radius. reset it
-		     pout() << "Star Particle updating radius: Found negative radius. Resetting to 0.2 R_sun" << std::endl;
-		   }
-	       }
+		  if(r < 0.0e0)
+		    {
+		      r = 0.2*C::R_solar; //Worst case and we do get a neg radius. reset it
+		      //		      pout() << "Star Particle updating radius: Found negative radius. Resetting to 0.2 R_sun" << std::endl;
+		    }
+		}
 
-               // Update the burning state and things associated with it
-               switch (burnState) {
+		// Update the burning state and things associated with it
+		switch (burnState) {
+		  
+		case None: {
+		  // No burning yet, so check for the onset of D burning in the core
+		  npoly = nInit(mdot);
+		  if (Tc(m) > TDEUT) {
+		    burnState = VariableCoreDeuterium;
+		    npoly = 1.5; // Star becomes convective
+		  }
+		  break;
+		}
 
-	       case None: {
-		 // No burning yet, so check for the onset of D burning in the core
-		 n = nInit(mdot);
-		 if (Tc(m) > TDEUT) {
-		   burnState = VariableCoreDeuterium;
-		   n = 1.5; // Star becomes convective
-		 }
-		 break;
-	       }
+		case VariableCoreDeuterium: {
+		  // We are burning deuterium at a variable rate to keep the core
+		  // temperature constant. Check to make sure we haven't exhausted
+		  // our supply of D, in which case we change to steady core burning.
+		  mdeut -= lDeut()*dt/PSID;
+		  if ( mdeut <= mdot*dt ) {
+		    burnState = SteadyCoreDeuterium;
+		    mdeut = 0.0;
+		  }
+		  break;
+		}
 
-	       case VariableCoreDeuterium: {
-		 // We are burning deuterium at a variable rate to keep the core
-		 // temperature constant. Check to make sure we haven't exhausted
-		 // our supply of D, in which case we change to steady core burning.
-		 mdeut -= lDeut()*dt/PSID;
-		 if ( mdeut <= mdot*dt ) {
-		   burnState = SteadyCoreDeuterium;
-		   mdeut = 0.0;
-		 }
-		 break;
-	       }
+		case SteadyCoreDeuterium: {
+		  // We are burning deuterium in the core at the rate it comes in. Check
+		  // to see if a radiative barrier forms, which stops convection, shuts
+		  // off core deuterium burning, and starts shell burning.
+		  mdeut = 0.0;
+		  if ( lDeut() <= FRAD*lZAMS() ) {
+		    burnState = ShellDeuterium;
+		    npoly = 3.0;
+		    r *= SHELLFAC;
+		  }
+		  break;
+		}
 
-	       case SteadyCoreDeuterium: {
-		 // We are burning deuterium in the core at the rate it comes in. Check
-		 // to see if a radiative barrier forms, which stops convection, shuts
-		 // off core deuterium burning, and starts shell burning.
-		 mdeut = 0.0;
-		 if ( lDeut() <= FRAD*lZAMS() ) {
-		   burnState = ShellDeuterium;
-		   n = 3.0;
-		   r *= SHELLFAC;
-		 }
-		 break;
-	       }
-
-	       case ShellDeuterium: {
-		 // We are burning deuterium in a shell. Check if the radius has
-		 // decreased to the ZAMS radius, in which case we stay on the ZAMS
-		 // from now on.
-		 mdeut = 0.0;
-		 if ( r <= rZAMS() ) {
+		case ShellDeuterium: {
+		  // We are burning deuterium in a shell. Check if the radius has
+		  // decreased to the ZAMS radius, in which case we stay on the ZAMS
+		  // from now on.
+		  mdeut = 0.0;
+		  if ( r <= rZAMS() ) {
 		   burnState = ZAMS;
 		   r = rZAMS();
-		 }
-		 break;
-	       }
-
-	       case ZAMS: {
-		 mdeut = 0.0;
-		 break;
-	       }
-  }
-
-  p.rdata(mlast_idx) = m;
-}
-
-
-
-  
-		if (burnState == Uninitialized) {
-		  p.rdata(lum_idx) = 0.0;
+		  }
+		  break;
 		}
-		else {
-		      // Determine burnState
-		        // Do nothing if we are below the minimum mass or we have just been
-  // created and thus don't have a valid mdot. Otherwise, if we're not
-  // initilized, then initialize here
-  if (burnState == Uninitialized) {
-    if ((m < MRADMIN) || (mdot == 0.0)) {
-      mlast = m;
-      return;
-    }
-    n = nInit(mdot);
-    r = radInit(mdot);
-    burnState = None;
 
-    amrex::Real r = C::R_solar * max(2.5*pow(mdot*YR_TO_SEC/C::M_solar*1.0e5, 0.2), 2.0) );
-		  amrex::Real lAcc = FACC * FK * G * mass * mdot / r;
-		  amrex::Real ldisk = (1.0 - FK) * G * mass * mdot / r;
-		  amrex::Real lsol = (ALPHA*pow(msol,5.5) + BETA*pow(msol,11)) / (GAMMA+pow(msol,3)+DELTA*pow(msol,5)+EPSILON*pow(msol,7)+ ZETA*pow(msol,8)+ETA*pow(msol,9.5));
-		  lZAMS = lsol * LSUN;
-		  lstar = IZAMS+lAcc;
-		  amrex::Real Teff = pow(lstar / (4. * PI * r*r * SIGMA), 0.25);
-                  if (Teff <= THAY) lstar = 4.*PI*r*r*SIGMA*pow(THAY, 4) );
-		  p.rdata(lum_idx) =  lstar + ldisk;
+		case ZAMS: {
+		  mdeut = 0.0;
+		  break;
 		}
-		
+		}
+
+		p.rdata(mlast_idx) = m;
+
+		// Main sqquence fits
+		// Parameters for the main sequence luminosity and radius fitting formulae
+		// from Tout et al (1996)
+		const amrex::Real ALPHA = 0.39704170;
+		const amrex::Real BETA = 8.52762600;
+		const amrex::Real GAMMA = 0.00025546;
+		const amrex::Real DELTA = 5.43288900;
+		const amrex::Real EPSILON = 5.56357900;
+		const amrex::Real ZETA = 0.78866060;
+		const amrex::Real ETA = 0.00586685;
+		const amrex::Real THETA = 1.71535900;
+		const amrex::Real IOTA = 6.59778800;
+		const amrex::Real KAPPA = 10.08855000;
+		const amrex::Real LAMBDA = 1.01249500;
+		const amrex::Real MU = 0.07490166;
+		const amrex::Real NU = 0.01077422;
+		const amrex::Real XI = 3.08223400;
+		const amrex::Real UPSILON 17.84778000;
+		const amrex::Real PI = 0.00022582;
+
+		inline amrex::Real lZAMS() {
+		  amrex::Real msol = mass/C::M_solar;
+		  amrex::Real lsol = (ALPHA*pow(msol,5.5) + BETA*pow(msol,11)) /
+		    (GAMMA+pow(msol,3)+DELTA*pow(msol,5)+EPSILON*pow(msol,7)+
+		     ZETA*pow(msol,8)+ETA*pow(msol,9.5));
+		  return(lsol*C::L_solar);
+		}	
+
+		inline amrex::Real rZAMS() {
+		  amrex::Real msol = mass/MSUN;
+		  amrex::Real rsol = (THETA*pow(msol,2.5)+IOTA*pow(msol,6.5)+KAPPA*pow(msol,11)+
+		    LAMBDA*pow(msol,19)+MU*pow(msol,19.5)) /
+		    (NU+XI*pow(msol,2)+UPSILON*pow(msol,8.5)+pow(msol,18.5)+
+		     PI*pow(msol,19.5));
+		  return(rsol*RSUN);
+		}
 	}
+	
 };
 
 #endif // AMREX_SPACEDIM == 3
