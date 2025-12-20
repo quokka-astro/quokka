@@ -24,25 +24,19 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 	amrex::Print() << "Initializing resampled cooling.\n";
 	amrex::Print() << fmt::format("resampled_table_file: {}.\n", hdf5_file);
 
-	// Define coordinate names and fast_log setting
-	const std::vector<std::string> coord_names = {"rho", "eint"};
-	const int is_fast_log = 1;
+	// Read all 2D datasets using new generic DataTable H5Reader (file path + group name)
+	resampledTables.cooling_rates = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/cooling_rates");
+	resampledTables.temperatures = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/temperatures");
+	resampledTables.sound_speeds = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/sound_speeds");
+	resampledTables.pressures = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/pressures");
+	resampledTables.entropies = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/entropies");
 
-	// Coordinate bounds will be read by H5Reader
-	std::array<std::pair<amrex::Real, amrex::Real>, 2> coord_bounds;
-
-	// Read all 2D datasets using generic DataTable H5Reader (file path-based interface)
-	resampledTables.cooling_rates = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/cooling_rates", coord_names, is_fast_log, &coord_bounds);
-	resampledTables.temperatures = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/temperatures", coord_names, is_fast_log);
-	resampledTables.sound_speeds = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/sound_speeds", coord_names, is_fast_log);
-	resampledTables.pressures = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/pressures", coord_names, is_fast_log);
-	resampledTables.entropies = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/entropies", coord_names, is_fast_log);
-
-	// Set coordinate bounds from H5Reader output
-	resampledTables.rho_min = coord_bounds[0].first;
-	resampledTables.rho_max = coord_bounds[0].second;
-	resampledTables.eint_min = coord_bounds[1].first;
-	resampledTables.eint_max = coord_bounds[1].second;
+	// Set coordinate bounds from the table metadata
+	// Dimension 0: rho, Dimension 1: eint
+	resampledTables.rho_min = resampledTables.cooling_rates.coord_min(0);
+	resampledTables.rho_max = resampledTables.cooling_rates.coord_max(0);
+	resampledTables.eint_min = resampledTables.cooling_rates.coord_min(1);
+	resampledTables.eint_max = resampledTables.cooling_rates.coord_max(1);
 
 	// Get grid dimensions from the DataTable objects for logging
 	const int n_rho = resampledTables.cooling_rates.size(0);

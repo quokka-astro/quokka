@@ -169,7 +169,8 @@ struct ResampledCoolingFunctor {
 
 // const_heating_rate_per_H: unit erg/s/H
 template <typename problem_t>
-auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &resampledTables, const Real E_floor, const Real const_heating_rate_per_H) -> bool
+auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &resampledTables, const Real E_floor, const Real const_heating_rate_per_H,
+		    const bool verbose) -> bool
 {
 	const BL_PROFILE("quokka::ResampledCooling::computeCooling()");
 
@@ -226,7 +227,8 @@ auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &res
 
 	const int nmax = nsubstepsMF.max(0);
 	const Real navg = static_cast<Real>(nsubstepsMF.sum(0)) / static_cast<Real>(nsubstepsMF.boxArray().numPts());
-	amrex::Print() << fmt::format("\tcooling substeps (per cell): avg {}, max {}\n", navg, nmax);
+	if (verbose)
+		amrex::Print() << fmt::format("\tcooling substeps (per cell): avg {}, max {}\n", navg, nmax);
 
 	// check if integration succeeded
 	if (nmax >= maxStepsODEIntegrate) {

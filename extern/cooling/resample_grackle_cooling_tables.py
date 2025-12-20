@@ -308,50 +308,57 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, zmet=1.0,
     # Save resampled tables to HDF5 file
     print(f"\nSaving resampled tables to {output_file}")
     
-    # Store the actual fast_log values of the grid
-    fast_log_rho = fast_log2(rho_grid)
-    fast_log_eint = fast_log2(eint_grid)
-    
     # Write the HDF5 file
     with h5py.File(output_file, 'w') as f:
-        # Create groups to organize data
-        grids_group = f.create_group('grids')
-        data_group = f.create_group('data')
-        metadata_group = f.create_group('metadata')
-        units_group = metadata_group.create_group('units')
+        # Define common attributes
+        ndim = 2
+        nx = np.array([n_rho, n_eint], dtype=np.int32)
+        nout = 1
+        input_names = np.array(["rho", "eint"], dtype='S')
+        input_units = np.array(["g/cm^3", "erg/g"], dtype='S')
+        xlo = np.array([rho_min, eint_min], dtype=np.float64)
+        xhi = np.array([rho_max, eint_max], dtype=np.float64)
+        spacing = np.array(["fast_log", "fast_log"], dtype='S')
         
-        # Store grid data
-        grids_group.create_dataset('fast_log_rho', data=fast_log_rho)
-        grids_group.create_dataset('fast_log_eint', data=fast_log_eint)
-        grids_group.create_dataset('rho', data=rho_grid)
-        grids_group.create_dataset('eint', data=eint_grid)
+        # Store global metadata for backward compatibility or convenience (optional)
+        # But we primarily want groups
         
-        # Store computed data
-        data_group.create_dataset('cooling_rates', data=cooling_rates)
-        data_group.create_dataset('temperatures', data=temperatures)
-        data_group.create_dataset('sound_speeds', data=sound_speeds)
-        data_group.create_dataset('pressures', data=pressures)
-        data_group.create_dataset('entropies', data=entropies)
+        # Helper function to create a table group
+        def create_table_group(name, data, output_name, output_unit):
+            g = f.create_group(name)
+            g.attrs.create('Ndim', ndim, dtype='i4')
+            g.attrs.create('Nx', nx, dtype='i4')
+            g.attrs.create('Nout', nout, dtype='i4')
+            g.attrs.create('input_names', input_names)
+            g.attrs.create('output_names', np.array([output_name], dtype='S'))
+            g.attrs.create('input_units', input_units)
+            g.attrs.create('output_units', np.array([output_unit], dtype='S'))
+            g.attrs.create('xlo', xlo, dtype='f8')
+            g.attrs.create('xhi', xhi, dtype='f8')
+            g.attrs.create('spacing', spacing)
+            
+            # The dataset 'data' must be of shape [Nout, Nin1, Nin2, ...]
+            # Our data is [n_rho, n_eint], so resize to [1, n_rho, n_eint]
+            data_out = data.reshape((1, n_rho, n_eint))
+            # HDF5 in C++ is row-major, numpy is row-major.
+            # C++ reader expects [Nout, Nin1, Nin2]
+            g.create_dataset('data', data=data_out)
+            
+            # Optional: Add grids
+            grids_g = g.create_group('grids')
+            grids_g.create_dataset('rho', data=rho_grid)
+            grids_g.create_dataset('eint', data=eint_grid)
+
+        # Create groups
+        create_table_group('cooling_rates', cooling_rates, 'cooling_rate', 'erg/cm^3/s/(g/cm^3)^2')
+        create_table_group('temperatures', temperatures, 'temperature', 'K')
+        create_table_group('sound_speeds', sound_speeds, 'sound_speed', 'cm/s')
+        create_table_group('pressures', pressures, 'pressure', 'dyne/cm^2')
+        create_table_group('entropies', entropies, 'entropy', 'erg*cm^2')
         
-        # Store metadata as attributes
-        metadata_group.attrs['n_rho'] = n_rho
-        metadata_group.attrs['n_eint'] = n_eint
-        metadata_group.attrs['rho_min'] = rho_min
-        metadata_group.attrs['rho_max'] = rho_max
-        metadata_group.attrs['eint_min'] = eint_min
-        metadata_group.attrs['eint_max'] = eint_max
-        metadata_group.attrs['cloudy_H_mass_fraction'] = cloudy_H_mass_fraction
-        metadata_group.attrs['description'] = 'Cooling rates resampled on (rho, e_int) grid using not-quite-logarithmic spacing'
-        metadata_group.attrs['spacing_method'] = 'not-quite-logarithmic (fast log2 approximation)'
-        
-        # Store units as attributes
-        units_group.attrs['rho'] = 'g/cm^3'
-        units_group.attrs['eint'] = 'erg/g'
-        units_group.attrs['cooling_rate'] = 'erg/cm^3/s/(g/cm^3)^2'
-        units_group.attrs['temperature'] = 'K'
-        units_group.attrs['sound_speed'] = 'cm/s'
-        units_group.attrs['pressure'] = 'dyne/cm^2'
-        units_group.attrs['entropy'] = 'erg*cm^2'
+        # Add a global attribute for description
+        f.attrs['description'] = 'Cooling rates resampled on (rho, e_int) grid'
+        f.attrs['cloudy_H_mass_fraction'] = cloudy_H_mass_fraction
     
     print("Done!")
     
