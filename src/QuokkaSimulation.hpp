@@ -935,12 +935,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDerivedVa
 	if (dname == kDensityFloorDbgName) {
 		auto arr = mf.arrays();
 		auto const geom_data = geom[lev].data();
-		auto const prob_lo = geom_data.ProbLo();
-		auto const dx = geom_data.CellSize();
-		auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
-									     amrex::Real base_density_floor) -> amrex::Real {
-			return densityFloor(x, y, z, base_density_floor);
-		};
+	auto const prob_lo = geom_data.ProbLo();
+	auto const dx = geom_data.CellSize();
+	auto const density_floor = densityFloor_;
+	auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
+								     amrex::Real base_density_floor) -> amrex::Real {
+		return densityFloor(x, y, z, base_density_floor);
+	};
 
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + amrex::Real(0.5)) * dx[0];
@@ -954,9 +955,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDerivedVa
 #else
 			amrex::Real const z = 0.0;
 #endif
-			arr[bx](i, j, k, ncomp) = density_floor_func(x, y, z, densityFloor_);
-		});
-	}
+		arr[bx](i, j, k, ncomp) = density_floor_func(x, y, z, density_floor);
+	});
+}
 }
 
 template <typename problem_t>
