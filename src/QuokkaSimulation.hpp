@@ -528,6 +528,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	}
 
 	// set cooling runtime parameters
+	bool cooling_table_include_pe = false;
 	{
 		amrex::ParmParse const hpp("cooling");
 		int alwaysReadTables = 0;
@@ -542,12 +543,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 			if (coolingTableType_ == "resampled") {
 				// read resampled cooling tables
 				amrex::Print() << "Reading resampled cooling tables...\n";
-				const bool include_pe = quokka::ResampledCooling::readResampledData(coolingTableFilename_, resampledTables_);
-				if (include_pe) {
-					amrex::Print() << "Photoelectric heating is enabled in cooling tables.\n";
-				} else {
-					amrex::Print() << "Photoelectric heating is disabled in cooling tables.\n";
-				}
+				cooling_table_include_pe = quokka::ResampledCooling::readResampledData(coolingTableFilename_, resampledTables_);
 			} else {
 				amrex::Abort("Invalid cooling table type! Only 'resampled' is supported.");
 			}
@@ -563,6 +559,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		pp.query("const_sfr_Msun_per_year_per_kpc2", const_sfr_Msun_per_year_per_kpc2_);
 		// It's allowed to turn on sfh and not turn on use_sfh_based_pe_heating, but the opposite is not allowed.
 		if (use_sfh_based_pe_heating_) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!cooling_table_include_pe, "When use_sfh_based_pe_heating is set to true, please use a Grackle cooling table that does NOT include photoelectric heating.");
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 			    !sfh_to_pe_heating_table_filename_.empty(),
 			    "When use_sfh_based_pe_heating is set to true, a PE heating table must be specified via sfh_to_pe_heating_table");
