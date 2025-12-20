@@ -31,25 +31,13 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 	resampledTables.pressures = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/pressures");
 	resampledTables.entropies = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/entropies");
 
-	// Get grid dimensions from the DataTable objects for logging
-	const int n_rho = resampledTables.cooling_rates.size(0);
-	const int n_eint = resampledTables.cooling_rates.size(1);
-
 	resampledTables.cloudy_H_mass_fraction = cloudy_H_mass_fraction;
 }
 
 auto resampled_tables::const_tables() const -> resampledGpuConstTables
 {
-	resampledGpuConstTables tables{cooling_rates.const_tables(),
-				       temperatures.const_tables(),
-				       sound_speeds.const_tables(),
-				       pressures.const_tables(),
-				       entropies.const_tables(),
-				       rho_min,
-				       rho_max,
-				       eint_min,
-				       eint_max,
-				       cloudy_H_mass_fraction};
+	resampledGpuConstTables tables{cooling_rates.const_tables(), temperatures.const_tables(), sound_speeds.const_tables(),
+				       pressures.const_tables(),     entropies.const_tables(),	  cloudy_H_mass_fraction};
 	return tables;
 }
 

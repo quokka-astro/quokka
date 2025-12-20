@@ -32,14 +32,6 @@ struct resampledGpuConstTables {
 	quokka::DataTableGpuConst<2, 1> pressures;
 	quokka::DataTableGpuConst<2, 1> entropies;
 
-	// density range
-	amrex::Real rho_min;
-	amrex::Real rho_max;
-
-	// specific internal energy range
-	amrex::Real eint_min;
-	amrex::Real eint_max;
-
 	// hydrogen mass fraction
 	amrex::Real cloudy_H_mass_fraction;
 };
@@ -53,10 +45,6 @@ class resampled_tables
 	quokka::DataTable<2, 1> pressures;
 	quokka::DataTable<2, 1> entropies;
 
-	amrex::Real rho_min;
-	amrex::Real rho_max;
-	amrex::Real eint_min;
-	amrex::Real eint_max;
 	amrex::Real cloudy_H_mass_fraction;
 
 	[[nodiscard]] auto const_tables() const -> resampledGpuConstTables;
