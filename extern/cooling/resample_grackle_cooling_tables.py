@@ -186,12 +186,12 @@ def compute_entropy(rho, T, mu):
 
 
 def compute_cooling_time(rho, e_int, Edot):
-    """Compute cooling time from density, specific internal energy, and cooling rate.
+    """Compute cooling time from density, specific internal energy, and net *heating* rate.
     
     Args:
         rho: density (g/cm^3)
         e_int: specific internal energy (erg/g)
-        Edot: net cooling rate (erg/cm^3/s)
+        Edot: net *heating* rate (erg/cm^3/s)
 
     Returns:
         t_cool: cooling time (s)
