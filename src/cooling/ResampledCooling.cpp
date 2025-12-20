@@ -44,8 +44,10 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 
 	resampledTables.cloudy_H_mass_fraction = cloudy_H_mass_fraction;
 
-	amrex::Print() << fmt::format("\tDensity range: {} to {} g/cm^3 ({} steps).\n", resampledTables.rho_min, resampledTables.rho_max, n_rho);
-	amrex::Print() << fmt::format("\tSpecific energy range: {} to {} erg/g ({} steps).\n", resampledTables.eint_min, resampledTables.eint_max, n_eint);
+	amrex::Print() << fmt::format("\tDensity range: {} to {} g/cm^3 ({} steps).\n", FastMath::pow2(resampledTables.rho_min),
+				      FastMath::pow2(resampledTables.rho_max), n_rho);
+	amrex::Print() << fmt::format("\tSpecific energy range: {} to {} erg/g ({} steps).\n", FastMath::pow2(resampledTables.eint_min),
+				      FastMath::pow2(resampledTables.eint_max), n_eint);
 }
 
 auto resampled_tables::const_tables() const -> resampledGpuConstTables

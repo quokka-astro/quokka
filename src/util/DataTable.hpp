@@ -1381,12 +1381,14 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		// Helper lambda to read string array attribute
 		auto read_string_array = [&](const char *attr_name, int count) -> std::vector<std::string> {
 			std::vector<std::string> result(count);
-			if (H5Aexists(group_id, attr_name) <= 0)
+			if (H5Aexists(group_id, attr_name) <= 0) {
 				return result; // Optional?
+			}
 
 			hid_t aid = H5Aopen(group_id, attr_name, H5P_DEFAULT);
-			if (aid < 0)
+			if (aid < 0) {
 				return result;
+			}
 
 			hid_t atype_id = H5Aget_type(aid);
 			hid_t native_type_id = H5Tget_native_type(atype_id, H5T_DIR_ASCEND);
@@ -1416,8 +1418,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		// Dataset 'data' has shape [Nout, Nin1, Nin2, ...]
 		// We read it into a flat buffer and then distribute
 		int64_t total_elements = Nout;
-		for (int i = 0; i < Ndim; ++i)
+		for (int i = 0; i < Ndim; ++i) {
 			total_elements *= sizes[i];
+		}
 
 		std::vector<double> flat_data(total_elements);
 		hid_t dset_id = H5Dopen2(group_id, "data", H5P_DEFAULT);
@@ -1448,18 +1451,22 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			table.initialize_common(xlo, xhi, sizes, spacing_types_enum, empty_coords, data_array);
 
 			// Set metadata
-			for (int i = 0; i < Ndim; ++i)
-				if (i < input_names_vec.size())
+			for (int i = 0; i < Ndim; ++i) {
+				if (i < static_cast<int>(input_names_vec.size())) {
 					table.input_names_[i] = input_names_vec[i];
-			for (int i = 0; i < Nout; ++i)
-				if (i < output_names_vec.size())
-					table.output_names_[i] = output_names_vec[i];
-			for (int i = 0; i < Ndim; ++i)
-				if (i < input_units_vec.size())
+				}
+				if (i < static_cast<int>(input_units_vec.size())) {
 					table.input_units_[i] = input_units_vec[i];
-			for (int i = 0; i < Nout; ++i)
-				if (i < output_units_vec.size())
+				}
+			}
+			for (int i = 0; i < Nout; ++i) {
+				if (i < static_cast<int>(output_names_vec.size())) {
+					table.output_names_[i] = output_names_vec[i];
+				}
+				if (i < static_cast<int>(output_units_vec.size())) {
 					table.output_units_[i] = output_units_vec[i];
+				}
+			}
 
 			H5Gclose(group_id);
 			H5Fclose(file_id);
@@ -1478,18 +1485,23 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			DataTable table;
 			table.initialize_common(xlo, xhi, sizes, spacing_types_enum, empty_coords, data_array);
 
-			for (int i = 0; i < Ndim; ++i)
-				if (i < input_names_vec.size())
+			// Set metadata
+			for (int i = 0; i < Ndim; ++i) {
+				if (i < static_cast<int>(input_names_vec.size())) {
 					table.input_names_[i] = input_names_vec[i];
-			for (int i = 0; i < Nout; ++i)
-				if (i < output_names_vec.size())
-					table.output_names_[i] = output_names_vec[i];
-			for (int i = 0; i < Ndim; ++i)
-				if (i < input_units_vec.size())
+				}
+				if (i < static_cast<int>(input_units_vec.size())) {
 					table.input_units_[i] = input_units_vec[i];
-			for (int i = 0; i < Nout; ++i)
-				if (i < output_units_vec.size())
+				}
+			}
+			for (int i = 0; i < Nout; ++i) {
+				if (i < static_cast<int>(output_names_vec.size())) {
+					table.output_names_[i] = output_names_vec[i];
+				}
+				if (i < static_cast<int>(output_units_vec.size())) {
 					table.output_units_[i] = output_units_vec[i];
+				}
+			}
 
 			H5Gclose(group_id);
 			H5Fclose(file_id);

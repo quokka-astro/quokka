@@ -17,7 +17,6 @@
 
 #include "fmt/core.h"
 #include "hydro/hydro_system.hpp"
-#include "math/FastMath.hpp"
 #include "math/ODEIntegrate.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/DataTable.hpp"
@@ -65,23 +64,21 @@ class resampled_tables
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto resampled_cooling_function(Real const rho, Real const Eint, resampledGpuConstTables const &tables) -> Real
 {
-	// Convert Eint (energy density) to eint (specific energy) and then to fast log scale for interpolation
+	// Convert Eint (energy density) to eint (specific energy)
 	const Real eint = Eint / rho;
-	std::array<amrex::Real, 2> const point = {FastMath::fastlg(rho), FastMath::fastlg(eint)};
+	std::array<amrex::Real, 2> const point = {rho, eint};
 
 	// Interpolate cooling rate from data tables
 	const Real Edot_over_rhosq = tables.cooling_rates.interpolate_single(point);
-	// unused computation of the numeric derivative, just to check if it compiles and runs
-	// const Real d_Edot_over_d_rhosq = tables.cooling_rates.numeric_derivative(fast_log_rho_val, fast_log_eint_val)[0]; // NOLINT
 	const Real Edot = Edot_over_rhosq * (rho * rho);
 	return Edot;
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(Real const rho, Real const Eint, resampledGpuConstTables const &tables) -> Real
 {
-	// Convert Eint (energy density) to eint (specific energy) and then to fast log scale for interpolation
+	// Convert Eint (energy density) to eint (specific energy)
 	const Real eint = Eint / rho;
-	std::array<amrex::Real, 2> const point = {FastMath::fastlg(rho), FastMath::fastlg(eint)};
+	std::array<amrex::Real, 2> const point = {rho, eint};
 
 	// Interpolate temperature from data tables
 	const Real Tgas = tables.temperatures.interpolate_single(point);
@@ -93,9 +90,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(Real const rh
 								   Real const_heating_rate = 0.0) -> Real
 {
 	// Compute cooling length l_cool = c_s * t_cool
-	// Convert Eint (energy density) to eint (specific energy) and then to fast log scale for interpolation
+	// Convert Eint (energy density) to eint (specific energy)
 	const Real eint = Eint / rho;
-	std::array<amrex::Real, 2> const point = {FastMath::fastlg(rho), FastMath::fastlg(eint)};
+	std::array<amrex::Real, 2> const point = {rho, eint};
 
 	// Interpolate sound speed from data tables
 	const Real cs = tables.sound_speeds.interpolate_single(point);
@@ -108,9 +105,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(Real const rh
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputePressureFromRhoEint(Real const rho, Real const Eint, resampledGpuConstTables const &tables) -> Real
 {
-	// Convert Eint (energy density) to eint (specific energy) and then to fast log scale for interpolation
+	// Convert Eint (energy density) to eint (specific energy)
 	const Real eint = Eint / rho;
-	std::array<amrex::Real, 2> const point = {FastMath::fastlg(rho), FastMath::fastlg(eint)};
+	std::array<amrex::Real, 2> const point = {rho, eint};
 
 	// Interpolate pressure from data tables
 	const Real P = tables.pressures.interpolate_single(point);
@@ -120,9 +117,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputePressureFromRhoEint(Real co
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEntropyFromRhoEint(Real const rho, Real const Eint, resampledGpuConstTables const &tables) -> Real
 {
-	// Convert Eint (energy density) to eint (specific energy) and then to fast log scale for interpolation
+	// Convert Eint (energy density) to eint (specific energy)
 	const Real eint = Eint / rho;
-	std::array<amrex::Real, 2> const point = {FastMath::fastlg(rho), FastMath::fastlg(eint)};
+	std::array<amrex::Real, 2> const point = {rho, eint};
 
 	// Interpolate entropy from data tables
 	const Real K = tables.entropies.interpolate_single(point);
@@ -132,9 +129,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEntropyFromRhoEint(Real con
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeSoundSpeedFromRhoEint(Real const rho, Real const Eint, resampledGpuConstTables const &tables) -> Real
 {
-	// Convert Eint (energy density) to eint (specific energy) and then to fast log scale for interpolation
+	// Convert Eint (energy density) to eint (specific energy)
 	const Real eint = Eint / rho;
-	std::array<amrex::Real, 2> const point = {FastMath::fastlg(rho), FastMath::fastlg(eint)};
+	std::array<amrex::Real, 2> const point = {rho, eint};
 
 	// Interpolate sound speed from data tables
 	const Real cs = tables.sound_speeds.interpolate_single(point);
