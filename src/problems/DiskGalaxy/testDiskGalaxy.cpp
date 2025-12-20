@@ -496,6 +496,41 @@ template <> void QuokkaSimulation<AgoraGalaxy>::refineGrid(int lev, amrex::TagBo
 template <> void QuokkaSimulation<AgoraGalaxy>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
 {
 	// compute derived variables and save in 'mf'
+	if (dname == "density_floor_dbg") {
+		const int ncomp = ncomp_cc_in;
+		auto output = mf.arrays();
+		auto const geom_data = geom[lev].data();
+		auto const prob_lo = geom_data.ProbLo();
+		auto const dx = geom_data.CellSize();
+		amrex::Real const base_density_floor = densityFloor_;
+		auto const density_floor_func = [] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
+									 amrex::Real base_density_floor) -> amrex::Real {
+			amrex::Real constexpr r_break = 10.0e3 * C::parsec; // 10 kpc
+			amrex::Real const r = std::sqrt(x * x + y * y + z * z);
+			if (r <= r_break) {
+				return base_density_floor;
+			}
+			amrex::Real const ratio = r_break / r;
+			return base_density_floor * ratio * ratio;
+		};
+
+		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + amrex::Real(0.5)) * dx[0];
+#if (AMREX_SPACEDIM >= 2)
+			amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + amrex::Real(0.5)) * dx[1];
+#else
+			amrex::Real const y = 0.0;
+#endif
+#if (AMREX_SPACEDIM == 3)
+			amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + amrex::Real(0.5)) * dx[2];
+#else
+			amrex::Real const z = 0.0;
+#endif
+			output[bx](i, j, k, ncomp) = density_floor_func(x, y, z, base_density_floor);
+		});
+		amrex::Gpu::streamSynchronize();
+	}
+
 	if (dname == "gpot") {
 		const int ncomp = ncomp_cc_in;
 		auto const &phi_arr = phi[lev].const_arrays();
