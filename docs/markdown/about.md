@@ -33,5 +33,3 @@ We reconstruct the energy density and the *reduced flux* $f = F/cE$, in order to
 To ensure the correct behavior of the advection terms in the asymptotic diffusion limit [@Lowrie_2001], we modify the Riemann solver according to [@Skinner_2019]. We use the Lorentz-factor local closure of [@Levermore_1984] to compute the variable Eddington tensor.
 
 The source terms corresponding to matter-radiation energy exchange are solved implicitly with the method of [@Howell_2003] following the hyperbolic subsystem update. The matter-radiation momentum update is likewise computed implicitly in order to maintain the correct behavior in the asymptotic diffusion limit [@Skinner_2019].
-
-<!-- \bibliography  -->
