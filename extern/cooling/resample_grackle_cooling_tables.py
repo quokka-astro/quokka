@@ -381,7 +381,7 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, zmet=1.0,
         metadata_group.attrs['cloudy_H_mass_fraction'] = cloudy_H_mass_fraction
         metadata_group.attrs['description'] = 'Cooling rates resampled on (rho, e_int) grid using not-quite-logarithmic spacing'
         metadata_group.attrs['spacing_method'] = 'not-quite-logarithmic (fast log2 approximation)'
-        metadata_group.attrs['include_pe'] = '1' if include_pe else '0'
+        metadata_group.attrs['include_pe'] = 1 if include_pe else 0
         
         # Store units as attributes
         units_group.attrs['rho'] = 'g/cm^3'

@@ -226,7 +226,7 @@ template <typename problem_t> auto computeCooling(amrex::MultiFab &mf, const Rea
 	return true; // success
 }
 
-void readResampledData(std::string const &hdf5_file, resampled_tables &resampledTables);
+auto readResampledData(std::string const &hdf5_file, resampled_tables &resampledTables) -> bool;
 
 } // namespace quokka::ResampledCooling
 

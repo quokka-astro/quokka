@@ -529,7 +529,12 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 			if (coolingTableType_ == "resampled") {
 				// read resampled cooling tables
 				amrex::Print() << "Reading resampled cooling tables...\n";
-				quokka::ResampledCooling::readResampledData(coolingTableFilename_, resampledTables_);
+				const bool include_pe = quokka::ResampledCooling::readResampledData(coolingTableFilename_, resampledTables_);
+				if (include_pe) {
+					amrex::Print() << "Photoelectric heating is enabled in cooling tables.\n";
+				} else {
+					amrex::Print() << "Photoelectric heating is disabled in cooling tables.\n";
+				}
 			} else {
 				amrex::Abort("Invalid cooling table type! Only 'resampled' is supported.");
 			}
