@@ -137,9 +137,9 @@ and then build the problem of interest:
     ninja -j6 test_hydro3d_blast
 
 
-## Installation on macOS
+## Building on macOS
 
-This guide provides detailed instructions for installing and building Quokka on macOS systems.
+This guide provides detailed instructions for building Quokka on macOS systems.
 
 ### Prerequisites
 
@@ -255,7 +255,7 @@ If you skip this step, you can disable Python support later by adding `-DQUOKKA_
 
 ### Building Quokka
 
-Following the instructions in [Installation](installation.md).
+Continue with the instructions in [Building on Linux and macOS](#building-on-linux-and-macos).
 
 ### Troubleshooting
 
