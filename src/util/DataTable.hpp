@@ -1,6 +1,7 @@
 #ifndef DATATABLE_HPP_
 #define DATATABLE_HPP_
 
+#include "AMReX.H"
 #include "AMReX_Arena.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Enum.H"
@@ -1497,6 +1498,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			amrex::Abort("H5Reader new format only implemented for 1D and 2D for now in this patch.");
 			return DataTable();
 		}
+	
+		amrex::ignore_unused(status);
 	}
 };
 

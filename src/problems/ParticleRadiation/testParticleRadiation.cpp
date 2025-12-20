@@ -26,7 +26,6 @@ constexpr double initial_Erad = 1.0e-30 * CV * rho0 * T0;
 constexpr double dt_ = 0.1 * quokka::seconds_per_year;
 // constexpr double chat_over_c = 1.0e-5;
 constexpr double chat_over_c = 1.0;
-constexpr double formation_time = 1.5 * dt_;
 
 template <> struct SimulationData<ParticleRadiationProblem> {
 	std::string particles_filename = "../inputs/TestParticlesNoRad.txt";

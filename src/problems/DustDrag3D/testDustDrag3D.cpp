@@ -13,7 +13,6 @@ struct DustDrag {
 };
 
 constexpr double initial_Egas = 1.0e-9;
-constexpr double rho = 1.0;
 constexpr double v0 = 5.0;
 constexpr double dust_v0 = 5.0;
 
