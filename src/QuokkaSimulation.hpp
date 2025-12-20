@@ -236,7 +236,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	}
 
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto densityFloor(amrex::Real x, amrex::Real y, amrex::Real z,
-										  amrex::Real base_density_floor) const -> amrex::Real;
+										 amrex::Real base_density_floor) const -> amrex::Real;
 	[[nodiscard]] static auto getScalarVariableNames() -> std::vector<std::string>;
 	void defineComponentNames();
 	void defineDefaultPlotfileVariables();
@@ -1015,8 +1015,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::print_multifab_f
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto QuokkaSimulation<problem_t>::densityFloor(amrex::Real x, amrex::Real y, amrex::Real z,
-								     amrex::Real base_density_floor) const -> amrex::Real
+AMREX_GPU_HOST_DEVICE auto QuokkaSimulation<problem_t>::densityFloor(amrex::Real x, amrex::Real y, amrex::Real z, amrex::Real base_density_floor) const
+    -> amrex::Real
 {
 	amrex::ignore_unused(x, y, z);
 	return base_density_floor;
