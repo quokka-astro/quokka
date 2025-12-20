@@ -204,7 +204,7 @@ def find_eint_range(tables):
 
 
 def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, zmet=1.0,
-                            output_file='resampled_cooling_tables.h5'):
+                            output_file='resampled_cooling_tables.h5', include_pe=True):
     """Resample cooling tables on a not-quite-logarithmic grid of density and specific internal energy.
     Uses the fast logarithm approximation from https://arxiv.org/pdf/2206.08957 for grid spacing.
     
@@ -273,6 +273,7 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, zmet=1.0,
     print(f"Resampling cooling tables on {n_rho} x {n_eint} grid using not-quite-logarithmic spacing...")
     print(f"Density range: {rho_min:.2e} to {rho_max:.2e} g/cm^3")
     print(f"Specific energy range: {eint_min:.2e} to {eint_max:.2e} erg/g")
+    print(("Including" if include_pe else "Not including") + " photoelectric heating.")
     print("")
     
     # Loop over the grid and compute cooling rates
@@ -286,7 +287,7 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, zmet=1.0,
         for j, e_int in enumerate(eint_grid):
             try:
                 T = compute_temperature_from_nH_e(nH, e_int, tables=tables)
-                Edot = cooling_rate(nH, T, zmet, redshift=0., tables=tables)
+                Edot = cooling_rate(nH, T, zmet, redshift=0., tables=tables, include_pe=include_pe)
                 mu = interpolate_mu(nH, T, tables=tables)
                 cs = compute_sound_speed(rho, T, mu)
                 P = compute_pressure(rho, T, mu)
@@ -455,7 +456,8 @@ def main():
                         help='Number of specific energy points (default: 200)')
     parser.add_argument('--output', type=str, default='resampled_cooling_tables.h5',
                         help='Output HDF5 file name (default: resampled_cooling_tables.h5)')
-
+    parser.add_argument('--exclude_pe', action='store_true',
+                        help='Exclude photoelectric heating (default: False, i.e., include PE heating)')
     parser.add_argument('--zmet', type=float, default=1.0,
                         help='Gas Metallicity scaled to Solar (default: 1.0)')
 
@@ -481,7 +483,8 @@ def main():
             n_rho=args.n_rho,
             n_eint=args.n_eint,
             zmet=args.zmet,
-            output_file=args.output
+            output_file=args.output,
+            include_pe=not args.exclude_pe
         )
     finally:
         if cleanup_path:
