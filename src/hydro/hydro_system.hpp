@@ -146,9 +146,9 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	AMREX_GPU_DEVICE static auto GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec) -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>;
 
-	template <typename DensityFloorFunc>
-	static void EnforceLimits(amrex::Real const densityFloor, amrex::Real const tempFloor, amrex::MultiFab &state_mf, amrex::GeometryData const &geom,
-				  DensityFloorFunc const &density_floor_func);
+template <typename DensityFloorFunc>
+static void EnforceLimits(amrex::Real densityFloor, amrex::Real tempFloor, amrex::MultiFab &state_mf, amrex::GeometryData const &geom,
+			  DensityFloorFunc const &density_floor_func);
 
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
@@ -942,18 +942,18 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 					   amrex::GeometryData const &geom, DensityFloorFunc const &density_floor_func)
 {
 	auto state = state_mf.arrays();
-	auto const prob_lo = geom.ProbLo();
-	auto const dx = geom.CellSize();
+auto const *const prob_lo = geom.ProbLo();
+auto const *const dx = geom.CellSize();
 
 	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + amrex::Real(0.5)) * dx[0];
+	amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
 #if (AMREX_SPACEDIM >= 2)
-		amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + amrex::Real(0.5)) * dx[1];
+	amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + static_cast<amrex::Real>(0.5)) * dx[1];
 #else
 		amrex::Real const y = 0.0;
 #endif
 #if (AMREX_SPACEDIM == 3)
-		amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + amrex::Real(0.5)) * dx[2];
+	amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + static_cast<amrex::Real>(0.5)) * dx[2];
 #else
 		amrex::Real const z = 0.0;
 #endif
