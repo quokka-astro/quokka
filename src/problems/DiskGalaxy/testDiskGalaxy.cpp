@@ -64,24 +64,19 @@ template <> struct SimulationData<AgoraGalaxy> {
 	amrex::Real r_outer{};
 	amrex::Real vcirc_outer{};
 	amrex::Real rho_outer{};
-	amrex::Real momr_outer{};
+	amrex::Real velr_outer{};
 	amrex::Real temp_outer{};
-	amrex::Real eint_outer{};
-	amrex::Real etot_outer{};
 
 	amrex::Real vcirc_inner{};
 	amrex::Real rho_inner{};
-	amrex::Real momr_inner{};
+	amrex::Real velr_inner{};
 	amrex::Real temp_inner{};
-	amrex::Real eint_inner{};
-	amrex::Real etot_inner{};
+
 	amrex::Gpu::PinnedVector<amrex::Real> radius;
 	amrex::Gpu::PinnedVector<amrex::Real> vcirc;
 	amrex::Gpu::PinnedVector<amrex::Real> rho_halo;
-	amrex::Gpu::PinnedVector<amrex::Real> momr_halo;
+	amrex::Gpu::PinnedVector<amrex::Real> velr_halo;
 	amrex::Gpu::PinnedVector<amrex::Real> temp_halo;
-	amrex::Gpu::PinnedVector<amrex::Real> eint_halo;
-	amrex::Gpu::PinnedVector<amrex::Real> etot_halo;
 };
 
 template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
@@ -90,10 +85,8 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 	std::vector<amrex::Real> radius_h;
 	std::vector<amrex::Real> vcirc_h;
 	std::vector<amrex::Real> rho_h;
-	std::vector<amrex::Real> momr_h;
+	std::vector<amrex::Real> velr_h;
 	std::vector<amrex::Real> temp_h;
-	std::vector<amrex::Real> eint_h;
-	std::vector<amrex::Real> etot_h;
 
 	// get circular velocity profile filename from ParmParse
 	amrex::ParmParse const pp("agora_galaxy");
@@ -115,17 +108,14 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 		Real const R_val = values.at(0);
 		Real const vcirc_val = values.at(1);
 		Real const rho_val = values.at(2);
-		Real const momr_val = values.at(3);
+		Real const velr_val = values.at(3);
 		Real const temp_val = values.at(4);
-		Real const eint_val = values.at(5);
-		Real const etot_val = values.at(6);
+		
 		radius_h.push_back(R_val);
 		vcirc_h.push_back(vcirc_val);
 		rho_h.push_back(rho_val);
-		momr_h.push_back(momr_val);
+		velr_h.push_back(velr_val);
 		temp_h.push_back(temp_val);
-		eint_h.push_back(eint_val);
-		etot_h.push_back(etot_val);
 	}
 
 	// 2. copy data to simData_.radius and simData_.vcirc
@@ -133,10 +123,8 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 	userData_.radius.resize(N);
 	userData_.vcirc.resize(N);
 	userData_.rho_halo.resize(N);
-	userData_.momr_halo.resize(N);
+	userData_.velr_halo.resize(N);
 	userData_.temp_halo.resize(N);
-	userData_.eint_halo.resize(N);
-	userData_.etot_halo.resize(N);
 
 	const double length_unit = 1.0e3 * C::parsec; // kpc
 	const double vel_unit = 1.0e5;		      // km/s
@@ -144,9 +132,8 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 		userData_.radius[i] = radius_h[i] * length_unit;
 		userData_.vcirc[i] = vcirc_h[i] * vel_unit;
 		userData_.rho_halo[i] = rho_h[i];
-		userData_.momr_halo[i] = momr_h[i];
-		userData_.eint_halo[i] = eint_h[i];
-		userData_.etot_halo[i] = etot_h[i];
+		userData_.velr_halo[i] = velr_h[i];
+		userData_.temp_halo[i] = temp_h[i];
 	}
 
 	// save min/max radii
@@ -154,19 +141,15 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 	userData_.r_inner = (*min_result) * length_unit;
 	userData_.vcirc_inner = vcirc_h[std::distance(radius_h.begin(), min_result)] * vel_unit;
 	userData_.rho_inner = rho_h[std::distance(radius_h.begin(), min_result)];
-	userData_.momr_inner = momr_h[std::distance(radius_h.begin(), min_result)];
+	userData_.velr_inner = velr_h[std::distance(radius_h.begin(), min_result)];
 	userData_.temp_inner = temp_h[std::distance(radius_h.begin(), min_result)];
-	userData_.eint_inner = eint_h[std::distance(radius_h.begin(), min_result)];
-	userData_.etot_inner = etot_h[std::distance(radius_h.begin(), min_result)];
 
 	auto max_result = std::max_element(radius_h.begin(), radius_h.end());
 	userData_.r_outer = (*max_result) * length_unit;
 	userData_.vcirc_outer = vcirc_h[std::distance(radius_h.begin(), max_result)] * vel_unit;
 	userData_.rho_outer = rho_h[std::distance(radius_h.begin(), max_result)];
-	userData_.momr_outer = momr_h[std::distance(radius_h.begin(), max_result)];
+	userData_.velr_outer = velr_h[std::distance(radius_h.begin(), max_result)];
 	userData_.temp_outer = temp_h[std::distance(radius_h.begin(), max_result)];
-	userData_.eint_outer = eint_h[std::distance(radius_h.begin(), max_result)];
-	userData_.etot_outer = etot_h[std::distance(radius_h.begin(), max_result)];
 }
 
 template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -206,27 +189,24 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 	double const *R_table = userData_.radius.dataPtr();
 	double const *vcirc_table = userData_.vcirc.dataPtr();
 	double const *rhoH_table = userData_.rho_halo.dataPtr();
-	double const *momr_table = userData_.momr_halo.dataPtr();
+	double const *velr_table = userData_.velr_halo.dataPtr();
 	double const *temp_table = userData_.temp_halo.dataPtr();
-	double const *eint_table = userData_.eint_halo.dataPtr();
-	double const *etot_table = userData_.etot_halo.dataPtr();
+	
 
 	auto const len_table = static_cast<int>(userData_.radius.size());
 	const amrex::Real R_table_min = userData_.r_inner;
 	const amrex::Real rho_inner = userData_.rho_inner;
 	const amrex::Real vcirc_inner = userData_.vcirc_inner;
-	const amrex::Real momr_inner = userData_.momr_inner;
+	const amrex::Real velr_inner = userData_.velr_inner;
 	const amrex::Real temp_inner = userData_.temp_inner;
-	const amrex::Real eint_inner = userData_.eint_inner;
-	const amrex::Real etot_inner = userData_.etot_inner;
+
 
 	const amrex::Real R_table_max = userData_.r_outer;
 	const amrex::Real vcirc_outer = userData_.vcirc_outer;
 	const amrex::Real rho_outer = userData_.rho_outer;
-	const amrex::Real momr_outer = userData_.momr_outer;
+	const amrex::Real velr_outer = userData_.velr_outer;
 	const amrex::Real temp_outer = userData_.temp_outer;
-	const amrex::Real eint_outer = userData_.eint_outer;
-	const amrex::Real etot_outer = userData_.etot_outer;
+	
 
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -287,14 +267,14 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			return rho_H;
 		};
 
-		auto velHalo = [R_table_min, R_table, R_table_max, momr_inner, momr_outer, momr_table, len_table](const amrex::Real R) {
+		auto velHalo = [R_table_min, R_table, R_table_max, velr_inner, velr_outer, velr_table, len_table](const amrex::Real R) {
 			double vel_H = NAN;
 			if (R > R_table_min && R < R_table_max) {
-				vel_H = interpolate_value(R, R_table, momr_table, len_table);
+				vel_H = interpolate_value(R, R_table, velr_table, len_table);
 			} else if (R <= R_table_min) {
-				vel_H = momr_inner;
+				vel_H = velr_inner;
 			} else {
-				vel_H = momr_outer;
+				vel_H = velr_outer;
 			}
 			return vel_H;
 		};
@@ -311,30 +291,6 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			return temp_H;
 		};
 
-		auto eintHalo = [R_table_min, R_table, R_table_max, eint_inner, eint_outer, eint_table, len_table](const amrex::Real R) {
-			double eint_H = NAN;
-			if (R > R_table_min && R < R_table_max) {
-				eint_H = interpolate_value(R, R_table, eint_table, len_table);
-			} else if (R <= R_table_min) {
-				eint_H = eint_inner;
-			} else {
-				eint_H = eint_outer;
-			}
-			return eint_H;
-		};
-
-		auto etotHalo = [R_table_min, R_table, R_table_max, etot_inner, etot_outer, etot_table, len_table](const amrex::Real R) {
-			double etot_H = NAN;
-			if (R > R_table_min && R < R_table_max) {
-				etot_H = interpolate_value(R, R_table, etot_table, len_table);
-			} else if (R <= R_table_min) {
-				etot_H = etot_inner;
-			} else {
-				etot_H = etot_outer;
-			}
-			return etot_H;
-		};
-
 		// compute density profiles
 		auto rhoHalo_exact = [rhoHalo](double x, double y, double z) {
 			double const r = std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, 2));
@@ -344,17 +300,6 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		auto tempHalo_exact = [tempHalo](double x, double y, double z) {
 			double const r = std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, 2));
 			return tempHalo(r);
-		};
-
-		// compute eint profiles
-		auto eintHalo_exact = [eintHalo](double x, double y, double z) {
-			double const r = std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, 2));
-			return eintHalo(r);
-		};
-
-		auto etotHalo_exact = [etotHalo](double x, double y, double z) {
-			double const r = std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, 2));
-			return etotHalo(r);
 		};
 
 		// compute momenta profiles
