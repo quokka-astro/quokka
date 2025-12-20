@@ -287,16 +287,16 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			return rho_H;
 		};
 
-		auto momHalo = [R_table_min, R_table, R_table_max, momr_inner, momr_outer, momr_table, len_table](const amrex::Real R) {
-			double mom_H = NAN;
+		auto velHalo = [R_table_min, R_table, R_table_max, momr_inner, momr_outer, momr_table, len_table](const amrex::Real R) {
+			double vel_H = NAN;
 			if (R > R_table_min && R < R_table_max) {
-				mom_H = interpolate_value(R, R_table, momr_table, len_table);
+				vel_H = interpolate_value(R, R_table, momr_table, len_table);
 			} else if (R <= R_table_min) {
-				mom_H = momr_inner;
+				vel_H = momr_inner;
 			} else {
-				mom_H = momr_outer;
+				vel_H = momr_outer;
 			}
-			return mom_H;
+			return vel_H;
 		};
 
 		auto tempHalo = [R_table_min, R_table, R_table_max, temp_inner, temp_outer, temp_table, len_table](const amrex::Real R) {
@@ -358,30 +358,30 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		};
 
 		// compute momenta profiles
-		auto momx_exact = [momHalo](double x, double y, double z) {
+		auto velx_exact = [velHalo](double x, double y, double z) {
 			double const r = std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, 2));
 			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
 			double const theta = std::atan2(R, z) + (z < 0.0 ? M_PI : 0.0);
 			;
 			double const phi = std::atan2(y, x);
-			return momHalo(r) * std::sin(theta) * std::cos(phi); // vx
+			return velHalo(r) * std::sin(theta) * std::cos(phi); // vx
 		};
 
-		auto momy_exact = [momHalo](double x, double y, double z) {
+		auto vely_exact = [velHalo](double x, double y, double z) {
 			double const r = std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, 2));
 			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
 			double const theta = std::atan2(R, z) + (z < 0.0 ? M_PI : 0.0);
 			;
 			double const phi = std::atan2(y, x);
-			return momHalo(r) * std::sin(theta) * std::sin(phi); // vy
+			return velHalo(r) * std::sin(theta) * std::sin(phi); // vy
 		};
 
-		auto momz_exact = [momHalo](double x, double y, double z) {
+		auto velz_exact = [velHalo](double x, double y, double z) {
 			double const r = std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, 2));
 			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
 			double const theta = std::atan2(R, z) + (z < 0.0 ? M_PI : 0.0);
 			;
-			return momHalo(r) * std::cos(theta); // vz
+			return velHalo(r) * std::cos(theta); // vz
 		};
 
 		// integrate density profile over cell volume
@@ -389,12 +389,19 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		const double cell_vol = dx[0] * dx[1] * dx[2];
 		const double rho_disk = quad_3d(rho_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
 		const double rho_halo = quad_3d(rhoHalo_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
-		const double momx_halo = quad_3d(momx_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
-		const double momy_halo = quad_3d(momy_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
-		const double momz_halo = quad_3d(momz_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
+		const double vel_Hx_halo = quad_3d(velx_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
+		const double vel_Hy_halo = quad_3d(vely_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
+		const double vel_Hz_halo = quad_3d(velz_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
 		const double temp_halo = quad_3d(tempHalo_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
-		const double eint_halo = quad_3d(eintHalo_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
-		const double etot_halo = quad_3d(etotHalo_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
+
+		//Compute halo momenta
+		const double momx_halo = rho_halo * vel_Hx_halo;
+		const double momy_halo = rho_halo * vel_Hy_halo;
+		const double momz_halo = rho_halo * vel_Hz_halo;
+
+		//Compute halo total internal energy
+		//use mu = 0.61 as in cooling flow solutions
+		const double eint_halo = rho_halo * C::k_B * temp_halo / 0.61 / C::m_p; 
 
 		AMREX_ALWAYS_ASSERT(!std::isnan(rho_disk));
 
@@ -432,12 +439,22 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		double const vsq = (vx * vx) + (vy * vy) + (vz * vz);
 		double const Eint = quokka::EOS<AgoraGalaxy>::ComputeEintFromTgas(rho, T);
 
-		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::density_index) = rho + rho_halo;
-		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::x1Momentum_index) = rho * vx + momx_halo;
-		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::x2Momentum_index) = rho * vy + momy_halo;
-		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::x3Momentum_index) = rho * vz + momz_halo;
-		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::energy_index) = Eint + 0.5 * rho * vsq + etot_halo;
-		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::internalEnergy_index) = Eint + eint_halo;
+
+		//Add up disk and halo contributions
+		double const rho_disk_halo = rho + rho_halo;
+		double const momx_disk_halo = rho * vx + momx_halo;
+		double const momy_disk_halo = rho * vy + momy_halo;
+		double const momz_disk_halo = rho * vz + momz_halo;
+		double const Ekin_disk_halo = 0.5 * (momx_disk_halo * momx_disk_halo + momy_disk_halo * momy_disk_halo + momz_disk_halo * momz_disk_halo) / rho_disk_halo;
+		double const Eint_disk_halo = Eint + eint_halo;
+		double const Etot_disk_halo = Eint_disk_halo + Ekin_disk_halo;
+
+		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::density_index) = rho_disk_halo;
+		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::x1Momentum_index) = momx_disk_halo;
+		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::x2Momentum_index) = momy_disk_halo;
+		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::x3Momentum_index) = momz_disk_halo;
+		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::energy_index) = Etot_disk_halo;
+		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::internalEnergy_index) = Eint_disk_halo;
 	});
 }
 
