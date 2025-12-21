@@ -85,7 +85,7 @@ def interpolate_mu(nH, T, tables=None):
     return interp_mmw(log_nH, log_T)[0][0]
 
 
-def cooling_rate(nH, T, zmet, redshift=0., tables=None):
+def cooling_rate(nH, T, zmet, redshift=0., tables=None, include_pe=True):
     """compute the cooling rate at a given density, redshift, and temperature.
     Note that the rate tables are C-ordered (as specified by the HDF5 standard.)"""
     log_nH = np.log10(nH)
@@ -132,15 +132,16 @@ def cooling_rate(nH, T, zmet, redshift=0., tables=None):
     n_e = max(n_e, 1.0e-4 * nH)
 
     # photoelectric heating term
-    Tsqrt = np.sqrt(T)
-    phi = 0.5  # phi_PAH from Wolfire et al. (2003)
-    G_0 = 1.7  # ISRF from Wolfire et al. (2003)
-    epsilon = \
-      4.9e-2 / (1. + 4.0e-3 * (G_0 * Tsqrt / (n_e * phi))**0.73) + \
-      3.7e-2 * (T / 1.0e4)**(0.7) / \
-          (1. + 2.0e-4 * (G_0 * Tsqrt / (n_e * phi)))
-    Gamma_pe = 1.3e-24 * nH * epsilon * G_0
-    Edot += (zmet * Gamma_pe)
+    if include_pe:
+        Tsqrt = np.sqrt(T)
+        phi = 0.5  # phi_PAH from Wolfire et al. (2003)
+        G_0 = 1.7  # ISRF from Wolfire et al. (2003)
+        epsilon = \
+        4.9e-2 / (1. + 4.0e-3 * (G_0 * Tsqrt / (n_e * phi))**0.73) + \
+        3.7e-2 * (T / 1.0e4)**(0.7) / \
+            (1. + 2.0e-4 * (G_0 * Tsqrt / (n_e * phi)))
+        Gamma_pe = 1.3e-24 * nH * epsilon * G_0
+        Edot += (zmet * Gamma_pe)
 
     # Compton term (CMB photons)
     # [e.g., Hirata 2018: doi:10.1093/mnras/stx2854]
