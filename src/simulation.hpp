@@ -1777,7 +1777,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 
 			amrex::GpuBndryFuncFab<setFunctorParticleAccel<problem_t>> boundaryFunctor(setFunctorParticleAccel<problem_t>{});
 			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel<problem_t>>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel<problem_t>>> phiCoarseBdryFunct(geom[lev - 1], phiBC, boundaryFunctor);
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel<problem_t>>> phiCoarseBdryFunct(geom[lev - 1], phiBC,
+															  boundaryFunctor);
 
 			amrex::FillPatchTwoLevels(phi_extended, 0., {&phi[lev - 1]}, {0.}, {&phi[lev]}, {0.}, 0, 0, 1, geom[lev - 1], geom[lev],
 						  phiCoarseBdryFunct, 0, phiBdryFunct, 0, refRatio(lev - 1), &amrex::quadratic_interp, phiBC, 0);

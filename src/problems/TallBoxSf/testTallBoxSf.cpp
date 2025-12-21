@@ -28,7 +28,7 @@
 static constexpr int BC_TYPE = 1; // 1: Periodic in x and y, outflow in z, 2: foextrap, 3: Periodic in all (for testing only)
 static constexpr bool is_rad_on = false;
 static constexpr int nGroups_ = 1;
-static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_{ 0.0, 100.0 };
+static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_{0.0, 100.0};
 static constexpr amrex::GpuArray<double, nGroups_ + 1> dust_opacity_{0.0, 0.0};
 // static constexpr int nGroups_ = 4;
 // static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = { 1.e-04, 1.00778140e-01, 1.00778140e+00, 5.53817071e+00, 1.e+2 };
@@ -42,7 +42,7 @@ constexpr double pc = C::parsec;
 constexpr double mu = 1.0 * C::m_p;
 constexpr double gamma_ = 5. / 3.;
 constexpr double arad = C::a_rad;
-constexpr double TCMB = 2.7;		 // K, CMB temperature
+constexpr double TCMB = 2.7; // K, CMB temperature
 constexpr double initial_Erad = 1e-40 * arad * TCMB * TCMB * TCMB * TCMB;
 constexpr double chat_over_c = 2000.0 * 1e5 / C::c_light; // chat = 2000 km/s
 
@@ -58,9 +58,9 @@ template <> struct SimulationData<TheProblem> {
 	Real turbulent_amplitude = 1500.0; // cm/s,  0.05 * cs at 10K (~0.3 km/s)
 	int turbulent_size = 128;
 
-	Real refine_parameter = 1.0; // placeholder for refinement control
+	Real refine_parameter = 1.0;	 // placeholder for refinement control
 	std::string stars_file = "none"; // default: no stars
-	std::string IC_file = "none"; // Initial disk vertical structure
+	std::string IC_file = "none";	 // Initial disk vertical structure
 
 	// Initial conditions table: z -> (g_1, g_ext, phi_tot)
 	quokka::DataTable<1, 3, quokka::OutOfBounds::clamp> ic_table;
@@ -91,10 +91,10 @@ template <> struct Physics_Traits<TheProblem> {
 	static constexpr bool is_chemistry_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
+	static constexpr int nDustGroups = 1;			     // number of dust groups
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr int nGroups = is_rad_on ? nGroups_ : 1;			     // number of radiation groups
+	static constexpr int nGroups = is_rad_on ? nGroups_ : 1;     // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
@@ -161,11 +161,11 @@ RadSystem<TheProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<doub
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<TheProblem>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/,
-											     amrex::Real const num_density) -> amrex::Real
+AMREX_GPU_HOST_DEVICE auto RadSystem<TheProblem>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/, amrex::Real const num_density)
+    -> amrex::Real
 {
 	// Values in cgs units from Bate & Keto (2015), Eq. 26.
-	const double epsilon = 0.05; // default efficiency factor for cold molecular clouds
+	const double epsilon = 0.05;	   // default efficiency factor for cold molecular clouds
 	const double ref_J_ISR = 5.29e-14; // reference value for the ISR in erg cm^3
 	const double coeff = 1.33e-24;
 	return coeff * epsilon * num_density / ref_J_ISR; // s^-1
@@ -216,12 +216,12 @@ template <> void QuokkaSimulation<TheProblem>::refineGrid(int lev, amrex::TagBox
 	amrex::ParmParse const pp("problem");
 	std::vector<amrex::Real> refine_zmax_list;
 	pp.queryarr("refine_zmax", refine_zmax_list);
-	
+
 	// If no list is provided or level exceeds list size, skip refinement
 	if (refine_zmax_list.empty() || lev >= static_cast<int>(refine_zmax_list.size())) {
 		return;
 	}
-	
+
 	const amrex::Real refine_zmax = refine_zmax_list[lev];
 
 	const auto prob_lo = geom[lev].ProbLoArray();
@@ -326,7 +326,7 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	const int nturb = turb_hi[0] - turb_lo[0] + 1;
 
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nx <= nturb, "nx must be less than or equal to turbulent_size (128)");
-	
+
 	// z-range limits: apply turbulence only from 1.5*nx to 2.5*nx
 	const int k_start = nx + nx / 2;
 	const int k_end = 2 * nx + nx / 2;
@@ -347,7 +347,7 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 		// Table provides: [rho, g_z, Phi] as functions of z
 		std::array<amrex::Real, 1> const point = {std::abs(z)};
 		auto const ic_values = ic_table.interpolate(point);
-		
+
 		// Extract values: ic_values[0] = g_1, ic_values[1] = g_ext, ic_values[2] = phi_tot
 		const double phi_tot = ic_values[2];
 		const double rho1 = rho01_ic * std::exp(-phi_tot / (sigma1_ic * sigma1_ic));
@@ -370,7 +370,7 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 		const int turb_i = turb_lo[0] + (i % nturb);
 		const int turb_j = turb_lo[1] + (j % nturb);
 		const int turb_k = turb_lo[2] + (k % nturb);
-		
+
 		const double vx = dvx(turb_i, turb_j, turb_k) * renorm_factor;
 		const double vy = dvy(turb_i, turb_j, turb_k) * renorm_factor;
 		const double vz = dvz(turb_i, turb_j, turb_k) * renorm_factor;
@@ -380,7 +380,7 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 		state_cc(i, j, k, HydroSystem<TheProblem>::x2Momentum_index) = rho * vy;
 		state_cc(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = rho * vz;
 		state_cc(i, j, k, HydroSystem<TheProblem>::internalEnergy_index) = P / (gamma - 1.);
-		state_cc(i, j, k, HydroSystem<TheProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * (vx*vx + vy*vy + vz*vz);
+		state_cc(i, j, k, HydroSystem<TheProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * (vx * vx + vy * vy + vz * vz);
 
 		// Set radiation variables
 		if constexpr (is_rad_on) {
@@ -525,10 +525,10 @@ auto QuokkaSimulation<TheProblem>::ComputeProjections(const amrex::Direction dir
 
 // Implement User-defined diode BC
 template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<TheProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-							 amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-							 int /*orig_comp*/)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<TheProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
+												int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+												const Real /*time*/, const amrex::BCRec * /*bcr*/,
+												int /*bcomp*/, int /*orig_comp*/)
 {
 	auto [i, j, k] = iv.dim3();
 	amrex::Box const &box = geom.Domain();
