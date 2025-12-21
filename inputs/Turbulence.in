@@ -15,10 +15,10 @@ amr.v              = 0       # verbosity in Amr
 # *****************************************************************
 amr.n_cell          = 32 32 32
 amr.max_level       = 0     # number of levels = max_level + 1
-amr.blocking_factor = 16 # grid size must be divisible by this
-amr.max_grid_size   = 32 # at least 128 for GPUs
+amr.blocking_factor = 32 # grid size must be divisible by this
+amr.max_grid_size   = 128 # at least 128 for GPUs
 
-stop_time = 0.5
+stop_time = 10
 plotfile_interval = -1
 max_timesteps = 2000
 
