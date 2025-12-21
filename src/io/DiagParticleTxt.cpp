@@ -11,14 +11,9 @@ void DiagParticleTxt::init(const std::string &a_prefix, std::string_view a_diagN
 
 	// Check if file prefix ends with "plt" - if not, warn and append it
 	if (m_diagfile.size() < 3 || m_diagfile.substr(m_diagfile.size() - 3) != "plt") {
-		if (m_diagfile != std::string(a_diagName)) {
-			// User specified a custom file prefix that doesn't end in plt
-			amrex::Print() << "Warning: DiagParticleTxt file prefix '" << m_diagfile << "' does not end with 'plt'. Appending '_plt'.\n";
-			m_diagfile += "_plt";
-		} else {
-			// No custom prefix, use default
-			m_diagfile = "plt";
-		}
+		// User specified a custom file prefix that doesn't end in plt
+		amrex::Print() << "Warning: DiagParticleTxt file prefix '" << m_diagfile << "' does not end with 'plt'. Appending '_plt'.\n";
+		m_diagfile += "_plt";
 	}
 
 	// Read particle types to include (optional, empty means all)

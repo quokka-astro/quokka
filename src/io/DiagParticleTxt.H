@@ -31,7 +31,7 @@ class DiagParticleTxt : public DiagBase::Register<DiagParticleTxt>
 };
 
 // Template implementation - processes diagnostic with full access to simulation
-template <typename problem_t> void DiagParticleTxt::processDiag(int a_nstep, const amrex::Real &a_time)
+template <typename problem_t> void DiagParticleTxt::processDiag(int a_nstep, const amrex::Real & /*a_time*/)
 {
 	const BL_PROFILE("DiagParticleTxt::processDiag()");
 
@@ -55,6 +55,8 @@ template <typename problem_t> void DiagParticleTxt::processDiag(int a_nstep, con
 	if (!m_particleTypes.empty()) {
 		// Save only specified particle types
 		particleRegister.saveParticleDataToTxtFileFiltered(plotfilename, m_particleTypes);
+	} else {
+		amrex::Print() << "DiagParticleTxt: No particle types specified, skipping output\n";
 	}
 }
 
