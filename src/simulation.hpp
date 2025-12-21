@@ -1599,10 +1599,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			if (verbose) {
 				if (num_periodic_dims == 3) {
 					amrex::Print() << "Using MLMG solver with fully periodic boundaries...\n\n";
-				} else if (num_periodic_dims >= 1) {
-					amrex::Print() << "Using MLMG solver with mixed periodic/Dirichlet boundaries...\n\n";
 				} else {
-					amrex::Print() << "Using MLMG solver with Dirichlet boundaries...\n\n";
+					amrex::Print() << "Using MLMG solver with mixed periodic/Dirichlet boundaries...\n\n";
 				}
 			}
 
