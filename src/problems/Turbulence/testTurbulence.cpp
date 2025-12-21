@@ -1,5 +1,6 @@
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
+#include "turbulence/TurbulentDriving.hpp"
 #include "util/BC.hpp"
 
 #include "AMReX_FabArray.H"
@@ -28,10 +29,16 @@ template <> struct Physics_Traits<TurbulentBox> {
 template <> struct quokka::EOS_Traits<TurbulentBox> {
 	static constexpr double gamma = 1.0;
 	static constexpr double cs_isothermal = 1.0; // dimensionless
+	static constexpr double mean_molecular_weight = C::m_u;
 };
 
 template <> struct HydroSystem_Traits<TurbulentBox> {
 	static constexpr bool reconstruct_eint = false;
+};
+
+template <> struct SimulationData<TurbulentBox> {
+	std::vector<double> t_vec_;
+	std::vector<double> Disp3d_vec_;
 };
 
 template <> void QuokkaSimulation<TurbulentBox>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -84,6 +91,17 @@ template <> void QuokkaSimulation<TurbulentBox>::refineGrid(int lev, amrex::TagB
 	amrex::Gpu::streamSynchronize();
 }
 
+template <> void QuokkaSimulation<TurbulentBox>::computeAfterTimestep()
+{
+	auto disp = quokka::turbulence::calculate_dispersion<TurbulentBox>(state_new_cc_[0]);
+	const amrex::Real disp3d = std::sqrt(disp[0] * disp[0] + disp[1] * disp[1] + disp[2] * disp[2]);
+
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		userData_.t_vec_.push_back(tNew_[0]);
+		userData_.Disp3d_vec_.push_back(disp3d);
+	}
+}
+
 auto problem_main() -> int
 {
 	auto BCs_cc = quokka::BC<TurbulentBox>(quokka::BCType::int_dir,	 // x: periodic
@@ -96,5 +114,6 @@ auto problem_main() -> int
 
 	// Main time loop
 	sim.evolve();
+
 	return 0;
 }
