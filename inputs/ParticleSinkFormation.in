@@ -58,5 +58,6 @@ quokka.slice_x.field_names = gasDensity gasInternalEnergy # List of variables in
 
 quokka.part.type = ParticleTxt         # Diagnostic type
 quokka.part.file = part_plt             # Output file prefix (must end in "plt")
-quokka.part.int = 18
+#quokka.part.int = 18
+quokka.part.time_int = 4e13
 quokka.part.particles = Sink_particles

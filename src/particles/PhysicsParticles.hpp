@@ -114,8 +114,8 @@ class PhysicsParticleDescriptorBase
 	// Print statistics of particles
 	virtual void printParticleStatistics() const = 0;
 
-	// Save particle data to file
-	virtual void saveParticleDataToFile(const std::string &plotfilename, const std::string &name) = 0;
+	// Save particle data to text file
+	virtual void saveParticleDataToTxtFile(const std::string &plotfilename, const std::string &name) = 0;
 
 	// Get the number of particles
 	[[nodiscard]] virtual auto getNumParticles() const -> int = 0;
@@ -537,10 +537,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
-	void saveParticleDataToFile(const std::string &filename, const std::string &name) override
+	void saveParticleDataToTxtFile(const std::string &filename, const std::string &name) override
 	{
 		if (container_ != nullptr) {
-			particle_io::saveParticleDataToFile<ContainerType>(container_, filename, name);
+			particle_io::saveParticleDataToTxtFile<ContainerType>(container_, filename, name);
 		}
 	}
 
@@ -903,6 +903,27 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 	}
 
+	// Save all particles to text files
+	void saveParticleDataToTxtFile(const std::string &plotfilename)
+	{
+		const BL_PROFILE("PhysicsParticleRegister::saveParticleDataToTxtFile()");
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			descriptor->saveParticleDataToTxtFile(plotfilename, getParticleTypeName(type));
+		}
+	}
+
+	// Save only specified particle types to text files
+	void saveParticleDataToTxtFileFiltered(const std::string &plotfilename, const std::vector<std::string> &particleTypeNames)
+	{
+		const BL_PROFILE("PhysicsParticleRegister::saveParticleDataToTxtFileFiltered()");
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			const std::string typeName = getParticleTypeName(type);
+			if (std::ranges::find(particleTypeNames, typeName) != particleTypeNames.end()) {
+				descriptor->saveParticleDataToTxtFile(plotfilename, typeName);
+			}
+		}
+	}
+
 	// Write all particle data to checkpoint file
 	void writeCheckpoint(const std::string &checkpointname, bool include_header) const
 	{
@@ -1013,24 +1034,6 @@ template <typename problem_t> class PhysicsParticleRegister
 
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->printParticleStatistics();
-		}
-	}
-
-	// Save particle data to file only if particle count <= max_particles
-	void saveParticleDataToFileConditional(const std::string &plotfilename, int max_particles)
-	{
-		const BL_PROFILE("PhysicsParticleRegister::saveParticleDataToFileConditional()");
-		for (const auto &[type, descriptor] : particleRegistry_) {
-			const int num_particles = descriptor->getNumParticles();
-			const std::string particle_type_name = getParticleTypeName(type);
-
-			if (num_particles <= max_particles) {
-				amrex::Print() << "Saving " << num_particles << " " << particle_type_name << " to CSV file\n";
-				descriptor->saveParticleDataToFile(plotfilename, particle_type_name);
-			} else {
-				amrex::Print() << "Skipping " << particle_type_name << " CSV output: " << num_particles << " particles exceeds limit of "
-					       << max_particles << "\n";
-			}
 		}
 	}
 

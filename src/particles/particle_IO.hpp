@@ -361,62 +361,42 @@ void printParticleStatistics(ContainerType *container, int massIndex, int evolut
 	}
 }
 
-// Save particle data to a CSV file
-// This function gathers all particle data from all ranks and saves it to a CSV file on rank 0.
-// The CSV file will contain the following columns:
-// - ID: Particle ID
-// - x, y, z: Particle positions
-// - real_0, real_1, ...: Real components (e.g., mass, velocities, etc.)
-// - int_0, int_1, ...: Integer components (if any)
+// Save particle data to a text file
+// The text file will contain the following format:
+// - First line: Number of particles
+// - Remaining lines: Particle data (positions, real components, integer components)
 //
 // Note: Only rank 0 will write the file, but all ranks must participate in the data gathering.
 // @param container: Particle container
-// @param filename: Name of the CSV file to write
+// @param filename: Name of the text file to write
 // @return: true if file was written successfully, false otherwise
-template <typename ContainerType> auto saveParticleDataToFile(ContainerType *container, const std::string &filename, const std::string &name) -> bool
+template <typename ContainerType> auto saveParticleDataToTxtFile(ContainerType *container, const std::string &filename, const std::string &name) -> bool
 {
 	// Get all particle data
 	const auto [particle_ids, real_data, int_data] = getParticleDataAtAllLevels(container);
 
 	// Only rank 0 writes the file
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		std::ofstream outFile(filename + "/" + name + ".csv");
+		std::string const full_filename = filename + "/" + name + ".txt";
+		std::ofstream outFile(full_filename);
 		if (!outFile) {
 			return false;
 		}
 
-		// Write header
-		outFile << "ID";
-		// Position columns
-		for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-			outFile << ",pos_" << d;
-		}
-		// Real component columns
-		for (int d = 0; d < ContainerType::ParticleType::NReal; ++d) {
-			outFile << ",real_" << d;
-		}
-		// Integer component columns
-		if constexpr (ContainerType::ParticleType::NInt > 0) {
-			for (int d = 0; d < ContainerType::ParticleType::NInt; ++d) {
-				outFile << ",int_" << d;
-			}
-		}
-		outFile << "\n";
+		// Write number of particles
+		outFile << real_data.size() << "\n";
 
 		// Write data
 		for (size_t i = 0; i < real_data.size(); ++i) {
-			// Write particle ID
-			outFile << particle_ids[i];
-
 			// Write position and real components
-			for (const auto &val : real_data[i]) {
-				outFile << "," << std::scientific << std::setprecision(15) << val;
+			for (size_t j = 0; j < real_data[i].size(); ++j) {
+				outFile << std::scientific << std::setprecision(15) << real_data[i][j] << " ";
 			}
 
-			// Write remaining integer components (skip ID which was written first)
+			// Write integer components
 			if constexpr (ContainerType::ParticleType::NInt > 1) {
 				for (size_t j = 1; j < int_data[i].size(); ++j) {
-					outFile << "," << int_data[i][j];
+					outFile << int_data[i][j] << " ";
 				}
 			}
 			outFile << "\n";
