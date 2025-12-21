@@ -159,7 +159,7 @@ class PhysicsParticleDescriptorBase
 	// Note: particles are not allowed to spawn outside of real cells. If they do, we will need a redistribution immediately after this call in order to
 	// make particle-mesh interaction work.
 	virtual void createParticlesFromState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real current_time, amrex::Real dt,
-					      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int verbose = 0)
+					      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int verbose)
 	{ /* Default empty implementation */
 	}
 
@@ -650,7 +650,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	}
 
 	void createParticlesFromState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real current_time, amrex::Real dt,
-				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int verbose = 0) override
+				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int verbose) override
 	{
 		// Use the traits class to implement the specialized behavior
 		ParticleCreationTraits<particleType>::template createParticles<problem_t, ContainerType>(

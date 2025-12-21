@@ -8,7 +8,7 @@ geometry.is_periodic =  0    0    0
 # *****************************************************************
 # VERBOSITY
 # *****************************************************************
-amr.v              = 0       # verbosity in Amr
+amr.v              = 1       # verbosity in Amr
 
 # *****************************************************************
 # Resolution and refinement
@@ -24,12 +24,11 @@ do_reflux = 1
 do_subcycle = 0
 do_tracers = 0      # turn on tracer particles
 
-particles.verbose = 0
+particles.verbose = 1
 
 plotfile_interval = -1
 
 tiny_profiler.enabled = 0
-suppress_output = 1
 
 quokka.diagnostics = plt slice_z slice_x part
 
