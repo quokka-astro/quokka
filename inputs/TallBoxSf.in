@@ -13,15 +13,12 @@ amr.v              = 1      # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 64 64 256
-amr.max_level       = 0     # number of levels = max_level + 1
-amr.max_grid_size   = 64   # at least 128 for GPUs
+amr.n_cell          = 32 32 128
+amr.max_level       = 1     # number of levels = max_level + 1
+amr.max_grid_size   = 32   # at least 128 for GPUs
 amr.blocking_factor = 16   # grid size must be divisible by this
 amr.n_error_buf     = 0     # minimum 0 cell buffer around tagged cells
 amr.grid_eff        = 0.0
-
-radiation.iteration_tolerance = 1e-9
-radiation.iteration_tolerance_rel = 1e-6
 
 do_reflux = 1
 do_subcycle = 0
@@ -32,7 +29,7 @@ suppress_output = 1
 regrid_interval = -1
 #poisson_supercycle_interval = 4
 
-max_timesteps = 4
+max_timesteps = 2
 checkpoint_interval = -1
 #restartfile = last_chk
 
@@ -42,13 +39,11 @@ particles.disable_SN_feedback = false
 #particles.rad_table_output_spacing = fast_log
 particles.split_particles_on_restart_refine = false
 
-density_floor = 1.67e-30 #in g cm^-3
+density_floor = 1.67e-28 #in g cm^-3
 temperature_floor = 10.0 #K
 
 particles.eps_ff = 0.01
-particles.param1 = 3.155760000e+14 # 10 Myr
-particles.param2 = 1.0
-problem.stars_file = "none"
+problem.stars_file = "none" # no initial particles
 problem.IC_file = ../extern/problems/TallBoxSf/disk_solution_datatable_Sigma13-Z1.csv
 problem.rho01 = 4.320441e-24
 problem.sigma1 = 7.0e5
