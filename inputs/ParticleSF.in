@@ -28,14 +28,15 @@ hydro.artificial_viscosity_coefficient = 0.1
 
 particles.SN_scheme = SN_thermal_or_thermal_momentum
 particles.verbose = 0
-particles.eps_ff = 0.5
+particles.eps_ff = 0.0005
 # Maximum velocity limit for stellar particles (cm/s), default: 1.0e8 (1000 km/s)
 particles.stellar_velocity_limit = 1.0e8
+particle_csv_interval = 2
 
 problem.n0 = 1.0e5
 problem.Tamb = 1.0e1
 
-max_timesteps = 10
+max_timesteps = 2
 plotfile_interval = 5
 checkpoint_interval = 5
 
