@@ -1,7 +1,9 @@
+#include "AMReX_Print.H"
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 #include "turbulence/TurbulentDriving.hpp"
 #include "util/BC.hpp"
+#include "util/matplotlibcpp.h"
 
 #include "AMReX_FabArray.H"
 #include "AMReX_Geometry.H"
@@ -9,6 +11,9 @@
 #include "AMReX_MultiFab.H"
 #include "AMReX_REAL.H"
 #include <cmath>
+#include <cstdlib>
+#include <string>
+#include <vector>
 
 struct TurbulentBox {
 }; // dummy type to allow compile-type polymorphism via template specialization
@@ -115,5 +120,38 @@ auto problem_main() -> int
 	// Main time loop
 	sim.evolve();
 
-	return 0;
+	// Check solution validity
+	int status = 0;
+	auto disp_last = sim.userData_.Disp3d_vec_.back();
+	double err_tol = 0.075;
+	double target_vdisp = std::stod(sim.turbParams_["target_vdisp"]);
+	double rel_error = std::abs(target_vdisp - disp_last) / target_vdisp;
+
+	amrex::Print() << "\n" << "Target velocity dispersion: " << sim.turbParams_["target_vdisp"] << "\n";
+	amrex::Print() << "Last calculated velocity dispersion: " << disp_last << "\n";
+	amrex::Print() << "Relative error: " << rel_error << "\n\n";
+
+#if HAVE_PYTHON
+	// Plot dispersion
+	std::vector<double> &time = sim.userData_.t_vec_;
+	std::vector<double> &disp3d = sim.userData_.Disp3d_vec_;
+
+	matplotlibcpp::clf();
+	std::map<std::string, std::string> Vdisp_args;
+	Vdisp_args["label"] = "Velocity dispersion vs time";
+	Vdisp_args["linestyle"] = "-";
+	Vdisp_args["color"] = "C1";
+	matplotlibcpp::plot(time, disp3d, Vdisp_args);
+	matplotlibcpp::xlabel("t (dimensionless)");
+	matplotlibcpp::ylabel("vdisp (dimensionless)");
+	matplotlibcpp::legend();
+	matplotlibcpp::tight_layout();
+	matplotlibcpp::save("./Turbulence_vdisp.pdf");
+#endif
+
+	if ((rel_error > err_tol) || std::isnan(rel_error)) {
+		status = 1;
+	}
+
+	return status;
 }
