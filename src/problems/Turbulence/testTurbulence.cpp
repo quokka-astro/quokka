@@ -3,7 +3,9 @@
 #include "hydro/hydro_system.hpp"
 #include "turbulence/TurbulentDriving.hpp"
 #include "util/BC.hpp"
+#ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
+#endif
 
 #include "AMReX_FabArray.H"
 #include "AMReX_Geometry.H"
