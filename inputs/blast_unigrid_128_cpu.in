@@ -26,7 +26,10 @@ do_tracers = 1      # turn on tracer particles
 
 hydro.artificial_viscosity_coefficient = 0.1
 
-quokka.diagnostics = slice_z
+plotfile_interval  = 20000
+
+quokka.diagnostics = slice_z condEint
+
 quokka.slice_z.type = DiagFramePlane         # Diagnostic type
 quokka.slice_z.file = slicez_plt             # Output file prefix (must end in "plt")
 quokka.slice_z.normal = 2                    # Plane normal (0 == x, 1 == y, 2 == z)
@@ -35,4 +38,10 @@ quokka.slice_z.int    = 10                   # Output cadence (in number of coar
 quokka.slice_z.interpolation = Linear        # (Optional, default is Linear) Interpolation type: Linear or Quadratic
 quokka.slice_z.field_names = gasDensity gasInternalEnergy      # List of variables included in output
 
-plotfile_interval  = 20000
+quokka.condEint.type = DiagConditional             # Diagnostic type
+quokka.condEint.file = condEint                    # Output file prefix
+quokka.condEint.int  = 10                          # Frequency (as step #) for performing the diagnostic
+quokka.condEint.conditional_type = Average         # Conditional type: Average, Integral or Sum
+quokka.condEint.field_names = gasInternalEnergy    # List of variables to be averaged, integrated, or summed
+quokka.condEint.nBins = 50                         # Number of bins for the conditioning variable
+quokka.condEint.condition_field_name = gasDensity  # Conditioning variable name
