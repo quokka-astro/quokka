@@ -20,3 +20,6 @@
 [submodule "extern/turbulence"]
 	path = extern/turbulence
 	url = https://github.com/chfeder/turbulence_generator.git
+[submodule "extern/AMReX-Hydro"]
+	path = extern/AMReX-Hydro
+	url = https://github.com/AMReX-Fluids/AMReX-Hydro.git
