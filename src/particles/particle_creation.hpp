@@ -116,7 +116,7 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				if (verbose > 0 && global_total_particles > 0) {
 					amrex::Print() << ">>>Particle creation:\n\tTime: " << current_time << " - Created " << global_total_particles
-					       << " particles at level " << lev << "\n";
+						       << " particles at level " << lev << "\n";
 				}
 			}
 		}
@@ -185,7 +185,8 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<particleType>::template ParticleChecker,
 							  ParticleCreationTraits<particleType>::template ParticleCreator>(
-		    container, mass_idx, state, accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index, mass_at_birth_index, state_fc, verbose);
+		    container, mass_idx, state, accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index, mass_at_birth_index, state_fc,
+		    verbose);
 	}
 };
 
@@ -357,7 +358,8 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<ParticleType::Sink>::template ParticleChecker,
 							  ParticleCreationTraits<ParticleType::Sink>::template ParticleCreator>(
-		    container, mass_idx, state, accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index, mass_at_birth_index, state_fc, verbose);
+		    container, mass_idx, state, accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index, mass_at_birth_index, state_fc,
+		    verbose);
 	}
 };
 
@@ -597,7 +599,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType,
 							  ParticleCreationTraits<ParticleType::StochasticStellarPop>::template ParticleChecker,
 							  ParticleCreationTraits<ParticleType::StochasticStellarPop>::template ParticleCreator>(
-		    container, mass_idx, state, accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index, mass_at_birth_index, state_fc, verbose);
+		    container, mass_idx, state, accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index, mass_at_birth_index, state_fc,
+		    verbose);
 	}
 }; // ParticleCreationTraits<ParticleType::StochasticStellarPop>
 

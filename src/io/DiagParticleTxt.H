@@ -59,4 +59,3 @@ template <typename problem_t> void DiagParticleTxt::processDiag(int a_nstep, con
 }
 
 #endif // DIAGPARTICLETXT_H
-

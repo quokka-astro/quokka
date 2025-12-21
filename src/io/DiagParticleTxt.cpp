@@ -53,4 +53,3 @@ void DiagParticleTxt::addVars(amrex::Vector<std::string> & /*a_varList*/)
 {
 	// DiagParticleTxt doesn't use the standard diagnostic variable extraction system
 }
-
