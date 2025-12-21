@@ -299,7 +299,7 @@ void writeUnitsFile(ContainerType *container, const std::string &snapshot_name, 
 
 			// Get the units data for this particle type
 			const auto &unitsData = get_units_data();
-			if (unitsData.find(particleType) == unitsData.end()) {
+			if (!unitsData.contains(particleType)) {
 				amrex::Abort(
 				    "Error: Particle type not defined in units data map. Please add units for this particle type in get_units_data().");
 			}
