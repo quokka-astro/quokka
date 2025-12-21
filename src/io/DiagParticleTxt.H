@@ -52,10 +52,7 @@ template <typename problem_t> void DiagParticleTxt::processDiag(int a_nstep, con
 	// Get the particle registry
 	auto &particleRegister = sim->GetParticleRegister();
 
-	if (m_particleTypes.empty()) {
-		// Save all particle types
-		particleRegister.saveParticleDataToTxtFile(plotfilename);
-	} else {
+	if (!m_particleTypes.empty()) {
 		// Save only specified particle types
 		particleRegister.saveParticleDataToTxtFileFiltered(plotfilename, m_particleTypes);
 	}

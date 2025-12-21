@@ -903,15 +903,6 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 	}
 
-	// Save all particles to text files
-	void saveParticleDataToTxtFile(const std::string &plotfilename)
-	{
-		const BL_PROFILE("PhysicsParticleRegister::saveParticleDataToTxtFile()");
-		for (const auto &[type, descriptor] : particleRegistry_) {
-			descriptor->saveParticleDataToTxtFile(plotfilename, getParticleTypeName(type));
-		}
-	}
-
 	// Save only specified particle types to text files
 	void saveParticleDataToTxtFileFiltered(const std::string &plotfilename, const std::vector<std::string> &particleTypeNames)
 	{
