@@ -32,7 +32,6 @@ particles.rad_table_output_spacing = log
 stop_time = 8.0e20
 max_timesteps = 3
 plotfile_interval = -1
-particle_csv_interval = 1
 checkpoint_interval = -1
 
 tiny_profiler.enabled = 0

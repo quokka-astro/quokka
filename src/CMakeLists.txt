@@ -129,6 +129,9 @@ set(microphysics_output_dir "${CMAKE_CURRENT_BINARY_DIR}/")
 setup_target_for_microphysics_compilation(${microphysics_network_name} "${CMAKE_CURRENT_BINARY_DIR}/")
 include_directories(${gamma_law_dirs} ${CMAKE_CURRENT_BINARY_DIR} "includes/extern_parameters.H" "includes/network_properties.H")
 
+if(TARGET amrex_hydro_api)
+  link_libraries(amrex_hydro_api)
+endif()
 link_libraries(AMReX::amrex)
 link_libraries(fmt::fmt)
 link_libraries(${HDF5_LIBRARIES})
@@ -142,6 +145,7 @@ set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagFramePlane.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagPDF.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagPlotfile.cpp"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagParticleTxt.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagProjectionPlot.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/projection.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/cooling/ResampledCooling.cpp"

@@ -2,11 +2,14 @@ site_name: Quokka
 docs_dir: markdown
 copyright: © Copyright 2020-2025, Ben Wibking and Quokka Developers.
 theme:
-  name: readthedocs
+  name: material
+  favicon: quokka-favicon.svg
   font:
     text: Source Sans Pro
   features:
     - navigation.expand
+    - content.code.copy
+    - content.code.select
 nav:
   - About: about.md
   - Equations: equations.md
@@ -54,8 +57,6 @@ plugins:
       bib_file: markdown/references.bib
       bib_by_default: true
       csl_file: apa-6th-edition.csl
-      # csl_file: https://raw.githubusercontent.com/citation-style-language/styles/master/apa-5th-edition.csl
-      cite_inline: true
   - mermaid2:
       version: 10.6.1
 
@@ -70,6 +71,12 @@ markdown_extensions:
           class: mermaid
           format: !!python/name:mermaid2.fence_mermaid
   - footnotes
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
 
 extra_javascript:
   - javascripts/mathjax.js
