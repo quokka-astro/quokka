@@ -2,7 +2,7 @@
 // Copyright 2025 Neco Kriel.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_hydro_balsara_vortex.cpp
+/// \file testMHDBalsaraVortex.cpp
 /// \brief hydro (HLLC) Balsara vortex (constant-ρ, prescribed p).
 ///
 
