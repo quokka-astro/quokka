@@ -59,7 +59,8 @@ template <typename problem_t> class DustSystem
 
 	// compute reciprocal of dust stopping time
 	AMREX_GPU_HOST_DEVICE static auto
-	    ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> /*rho_d*/, amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, Physics_Traits<problem_t>::nDustGroups + 1> /*vel*/)
+	    ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> /*rho_d*/,
+					  amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, Physics_Traits<problem_t>::nDustGroups + 1> /*vel*/)
 		-> amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups>;
 
 	// compute dust-gas drag source terms and update conserved variables
@@ -134,7 +135,9 @@ AMREX_GPU_DEVICE void DustSystem<problem_t>::ComputeDustFluxes(quokka::Array4Vie
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto DustSystem<problem_t>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> /*rho_d*/, amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, Physics_Traits<problem_t>::nDustGroups + 1> /*vel*/)
+AMREX_GPU_HOST_DEVICE auto DustSystem<problem_t>::ComputeReciprocalStoppingTime(
+    amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> /*rho_d*/,
+    amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, Physics_Traits<problem_t>::nDustGroups + 1> /*vel*/)
     -> amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups>
 {
 	constexpr int N = Physics_Traits<problem_t>::nDustGroups;
