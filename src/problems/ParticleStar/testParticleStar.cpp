@@ -1,5 +1,5 @@
-/// \file testParticleSink.cpp
-/// \brief Defines a test problem for sink particles.
+/// \file testParticleStar.cpp
+/// \brief Defines a test problem for star particles.
 ///
 
 #include "AMReX.H"
@@ -21,7 +21,7 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-struct SinkProblem {
+struct StarProblem {
 };
 
 static bool refine_half_domain = false; // NOLINT
@@ -35,23 +35,23 @@ const double year = 3.15576e+07; // in seconds
 const double dt_init = 3.0 * year;
 constexpr double B0 = 1.0e-7; // constant background field [Gauss-equivalent units]
 
-static std::string particles_file = "sink4.txt"; // NOLINT
+static std::string particles_file = "sink.txt"; // NOLINT
 
-template <> struct Particle_Traits<SinkProblem> {
+template <> struct Particle_Traits<StarProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
-	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Sink;
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Star;
 };
 
-template <> struct quokka::EOS_Traits<SinkProblem> {
+template <> struct quokka::EOS_Traits<StarProblem> {
 	static constexpr double gamma = gamma_;
 	static constexpr double mean_molecular_weight = mu;
 };
 
-template <> struct HydroSystem_Traits<SinkProblem> {
+template <> struct HydroSystem_Traits<StarProblem> {
 	static constexpr bool reconstruct_eint = true; // need to reconstruct temperature
 };
 
-template <> struct Physics_Traits<SinkProblem> {
+template <> struct Physics_Traits<StarProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_self_gravity_enabled = true;
@@ -66,15 +66,15 @@ template <> struct Physics_Traits<SinkProblem> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
-template <> void QuokkaSimulation<SinkProblem>::createInitialSinkParticles()
+template <> void QuokkaSimulation<StarProblem>::createInitialStarParticles()
 {
 	// read particles from ASCII file
 	const int nreal_extra = 4; // mass vx vy vz
-	SinkParticles->SetVerbose(1);
-	SinkParticles->InitFromAsciiFile(particles_file, nreal_extra, nullptr);
+	StarParticles->SetVerbose(1);
+	StarParticles->InitFromAsciiFile(particles_file, nreal_extra, nullptr);
 }
 
-template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<StarProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
@@ -83,26 +83,26 @@ template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokk
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = rho0;
-		state_cc(i, j, k, HydroSystem<SinkProblem>::x1Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<SinkProblem>::x2Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<SinkProblem>::x3Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<SinkProblem>::energy_index) = rho_e + Emag;
-		state_cc(i, j, k, HydroSystem<SinkProblem>::internalEnergy_index) = rho_e;
+		state_cc(i, j, k, HydroSystem<StarProblem>::density_index) = rho0;
+		state_cc(i, j, k, HydroSystem<StarProblem>::x1Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<StarProblem>::x2Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<StarProblem>::x3Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<StarProblem>::energy_index) = rho_e + Emag;
+		state_cc(i, j, k, HydroSystem<StarProblem>::internalEnergy_index) = rho_e;
 	});
 }
 
-template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<StarProblem>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
 {
 	const amrex::Array4<double> &state_fc = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const quokka::direction dir = grid_elem.dir_;
 	const double B_val = (dir == quokka::direction::x) ? B0 : 0.0;
 
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) { state_fc(i, j, k, Physics_Indices<SinkProblem>::mhdFirstIndex) = B_val; });
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) { state_fc(i, j, k, Physics_Indices<StarProblem>::mhdFirstIndex) = B_val; });
 }
 
-template <> void QuokkaSimulation<SinkProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<StarProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement: static mesh refinement for the whole domain (if refine_half_domain is false) or for x > 0 (if refine_half_domain is true)
 
@@ -128,9 +128,9 @@ template <> void QuokkaSimulation<SinkProblem>::refineGrid(int lev, amrex::TagBo
 
 auto problem_main() -> int
 {
-	auto BCs_cc = quokka::BC<SinkProblem>(quokka::BCType::reflecting);
+	auto BCs_cc = quokka::BC<StarProblem>(quokka::BCType::reflecting);
 
-	const int nvars_fc = Physics_Indices<SinkProblem>::nvarTotal_fc;
+	const int nvars_fc = Physics_Indices<StarProblem>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
 	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -144,11 +144,11 @@ auto problem_main() -> int
 	pp.query("refine_half_domain", refine_half_domain);
 
 	// Problem initialization
-	QuokkaSimulation<SinkProblem> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<StarProblem> sim(BCs_cc, BCs_fc);
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
-	sim.stopTime_ = 10.0 * dt_init;
+	sim.stopTime_ = 1.0e5 * dt_init;
 	sim.initDt_ = dt_init;
 	sim.tempFloor_ = 10.0; // K
 
@@ -158,11 +158,11 @@ auto problem_main() -> int
 	// get total gas mass in the initial state
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-	amrex::Real const total_mass_init = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
+	amrex::Real const total_mass_init = sim.state_new_cc_[0].sum(HydroSystem<StarProblem>::density_index) * vol;
 	double total_particle_mass = 0.0;
 
 	// get total particle mass
-	const auto &real_data = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
+	const auto &real_data = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Star)->getParticleDataAtLevel(0).first;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// const double total_particle_mass = std::accumulate(real_data.begin(), real_data.end(), 0.0, [](double sum, const auto &d) { return sum +
 		// d[3]; });
@@ -181,7 +181,7 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// get total gas mass in the final state
-	amrex::Real const total_mass_step1 = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
+	amrex::Real const total_mass_step1 = sim.state_new_cc_[0].sum(HydroSystem<StarProblem>::density_index) * vol;
 
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);
 	const int nx = static_cast<int>(position.size());
@@ -192,7 +192,7 @@ auto problem_main() -> int
 
 	int status = 0;
 
-	const auto &real_data_ste1 = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
+	const auto &real_data_ste1 = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Star)->getParticleDataAtLevel(0).first;
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// compute total particle mass and error
@@ -239,7 +239,7 @@ auto problem_main() -> int
 		for (int i = 0; i < nx; ++i) {
 			xs[i] = position[i];
 			xs_over_dx[i] = position[i] / dx0[0];
-			rho[i] = values.at(HydroSystem<SinkProblem>::density_index)[i];
+			rho[i] = values.at(HydroSystem<StarProblem>::density_index)[i];
 			num_den[i] = rho[i] / C::m_p; // cm^-3
 
 			// exact solution
@@ -305,7 +305,7 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// get total particle mass in the final state
-	const auto &real_data_final = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
+	const auto &real_data_final = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Star)->getParticleDataAtLevel(0).first;
 	double total_particle_mass_final = 0.0;
 	for (const auto &p : real_data_final) {
 		total_particle_mass_final += p[3];
@@ -313,7 +313,7 @@ auto problem_main() -> int
 	amrex::Print() << "Total particle mass = " << total_particle_mass_final << "\n";
 
 	// get total gas mass in the final state
-	amrex::Real const total_mass_final = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
+	amrex::Real const total_mass_final = sim.state_new_cc_[0].sum(HydroSystem<StarProblem>::density_index) * vol;
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		amrex::Print() << "Total gas mass = " << total_mass_final << "\n";
