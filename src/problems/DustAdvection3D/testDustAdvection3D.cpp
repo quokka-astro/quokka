@@ -1,5 +1,5 @@
-/// \file testDustDrag.cpp
-/// \brief Defines a test problem for dust transport with drag force
+/// \file testDustAdvection3D.cpp
+/// \brief Defines a 3D test problem for dust transport with drag force
 ///
 
 #include "QuokkaSimulation.hpp"
@@ -9,7 +9,7 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-struct DustDrag {
+struct DustAdvection3D {
 };
 
 constexpr double initial_Egas = 1.0e-9;
@@ -17,12 +17,12 @@ constexpr double rho = 1.0;
 constexpr double v0 = 5.0;
 constexpr double dust_v0 = 5.0;
 
-template <> struct quokka::EOS_Traits<DustDrag> {
+template <> struct quokka::EOS_Traits<DustAdvection3D> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct Physics_Traits<DustDrag> {
+template <> struct Physics_Traits<DustAdvection3D> {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -39,7 +39,7 @@ template <> struct Physics_Traits<DustDrag> {
 	static constexpr double radiation_constant = 1.0;
 };
 
-template <> void QuokkaSimulation<DustDrag>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<DustAdvection3D>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
@@ -69,22 +69,22 @@ template <> void QuokkaSimulation<DustDrag>::setInitialConditionsOnGrid(quokka::
 		double const r2 = (x - xc) * (x - xc) + (y - yc) * (y - yc) + (z - zc) * (z - zc);
 		amrex::Real const rho_gas_local = rho_bg + A * std::exp(-r2 / (2.0 * sigma * sigma));
 
-		state_cc(i, j, k, HydroSystem<DustDrag>::density_index) = rho_gas_local;
-		state_cc(i, j, k, HydroSystem<DustDrag>::energy_index) = Egas0;
-		state_cc(i, j, k, HydroSystem<DustDrag>::internalEnergy_index) = Egas0;
-		state_cc(i, j, k, HydroSystem<DustDrag>::x1Momentum_index) = rho_gas_local * v_gas;
-		state_cc(i, j, k, HydroSystem<DustDrag>::x2Momentum_index) = rho_gas_local * v_gas;
-		state_cc(i, j, k, HydroSystem<DustDrag>::x3Momentum_index) = rho_gas_local * v_gas;
+		state_cc(i, j, k, HydroSystem<DustAdvection3D>::density_index) = rho_gas_local;
+		state_cc(i, j, k, HydroSystem<DustAdvection3D>::energy_index) = Egas0;
+		state_cc(i, j, k, HydroSystem<DustAdvection3D>::internalEnergy_index) = Egas0;
+		state_cc(i, j, k, HydroSystem<DustAdvection3D>::x1Momentum_index) = rho_gas_local * v_gas;
+		state_cc(i, j, k, HydroSystem<DustAdvection3D>::x2Momentum_index) = rho_gas_local * v_gas;
+		state_cc(i, j, k, HydroSystem<DustAdvection3D>::x3Momentum_index) = rho_gas_local * v_gas;
 
 		// 3D Gaussian + background for dust
 		amrex::Real const rho_dust_local = rho_bg + A * std::exp(-r2 / (2.0 * sigma * sigma));
 		amrex::Real const v_dust_local = v_dust;
 
-		if constexpr (Physics_Traits<DustDrag>::is_dust_enabled) {
-			state_cc(i, j, k, HydroSystem<DustDrag>::dustDensity_index) = rho_dust_local;
-			state_cc(i, j, k, HydroSystem<DustDrag>::x1DustMomentum_index) = rho_dust_local * v_dust_local;
-			state_cc(i, j, k, HydroSystem<DustDrag>::x2DustMomentum_index) = rho_dust_local * v_dust_local;
-			state_cc(i, j, k, HydroSystem<DustDrag>::x3DustMomentum_index) = rho_dust_local * v_dust_local;
+		if constexpr (Physics_Traits<DustAdvection3D>::is_dust_enabled) {
+			state_cc(i, j, k, HydroSystem<DustAdvection3D>::dustDensity_index) = rho_dust_local;
+			state_cc(i, j, k, HydroSystem<DustAdvection3D>::x1DustMomentum_index) = rho_dust_local * v_dust_local;
+			state_cc(i, j, k, HydroSystem<DustAdvection3D>::x2DustMomentum_index) = rho_dust_local * v_dust_local;
+			state_cc(i, j, k, HydroSystem<DustAdvection3D>::x3DustMomentum_index) = rho_dust_local * v_dust_local;
 		}
 	});
 }
@@ -106,7 +106,7 @@ auto problem_main() -> int
 	const double zc = 0.5;
 
 	// boundary conditions
-	constexpr int nvars = HydroSystem<DustDrag>::nvar_;
+	constexpr int nvars = HydroSystem<DustAdvection3D>::nvar_;
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
@@ -116,7 +116,7 @@ auto problem_main() -> int
 	}
 
 	// problem initialization
-	QuokkaSimulation<DustDrag> sim(BCs_cc);
+	QuokkaSimulation<DustAdvection3D> sim(BCs_cc);
 
 	sim.reconstructionOrder_ = 3;
 	sim.radiationReconstructionOrder_ = 3; // PPM
@@ -188,10 +188,10 @@ auto problem_main() -> int
 		vx_dust_exact[i] = dust_v0;
 
 		// get numerical values from fextract results
-		const double density = x_vals[HydroSystem<DustDrag>::density_index][i];
-		const double momentum_x = x_vals[HydroSystem<DustDrag>::x1Momentum_index][i];
-		const double dust_density = x_vals[HydroSystem<DustDrag>::dustDensity_index][i];
-		const double dust_momentum_x = x_vals[HydroSystem<DustDrag>::x1DustMomentum_index][i];
+		const double density = x_vals[HydroSystem<DustAdvection3D>::density_index][i];
+		const double momentum_x = x_vals[HydroSystem<DustAdvection3D>::x1Momentum_index][i];
+		const double dust_density = x_vals[HydroSystem<DustAdvection3D>::dustDensity_index][i];
+		const double dust_momentum_x = x_vals[HydroSystem<DustAdvection3D>::x1DustMomentum_index][i];
 
 		vx_sim[i] = momentum_x / density;
 		vx_dust_sim[i] = dust_momentum_x / dust_density;
@@ -258,10 +258,10 @@ auto problem_main() -> int
 		vy_dust_exact[j] = dust_v0;
 
 		// get numerical values from fextract results
-		const double density = y_vals[HydroSystem<DustDrag>::density_index][j];
-		const double momentum_y = y_vals[HydroSystem<DustDrag>::x2Momentum_index][j];
-		const double dust_density = y_vals[HydroSystem<DustDrag>::dustDensity_index][j];
-		const double dust_momentum_y = y_vals[HydroSystem<DustDrag>::x2DustMomentum_index][j];
+		const double density = y_vals[HydroSystem<DustAdvection3D>::density_index][j];
+		const double momentum_y = y_vals[HydroSystem<DustAdvection3D>::x2Momentum_index][j];
+		const double dust_density = y_vals[HydroSystem<DustAdvection3D>::dustDensity_index][j];
+		const double dust_momentum_y = y_vals[HydroSystem<DustAdvection3D>::x2DustMomentum_index][j];
 
 		vy_sim[j] = momentum_y / density;
 		vy_dust_sim[j] = dust_momentum_y / dust_density;
@@ -328,10 +328,10 @@ auto problem_main() -> int
 		vz_dust_exact[k] = dust_v0;
 
 		// get numerical values from fextract results
-		const double density = z_vals[HydroSystem<DustDrag>::density_index][k];
-		const double momentum_z = z_vals[HydroSystem<DustDrag>::x3Momentum_index][k];
-		const double dust_density = z_vals[HydroSystem<DustDrag>::dustDensity_index][k];
-		const double dust_momentum_z = z_vals[HydroSystem<DustDrag>::x3DustMomentum_index][k];
+		const double density = z_vals[HydroSystem<DustAdvection3D>::density_index][k];
+		const double momentum_z = z_vals[HydroSystem<DustAdvection3D>::x3Momentum_index][k];
+		const double dust_density = z_vals[HydroSystem<DustAdvection3D>::dustDensity_index][k];
+		const double dust_momentum_z = z_vals[HydroSystem<DustAdvection3D>::x3DustMomentum_index][k];
 
 		vz_sim[k] = momentum_z / density;
 		vz_dust_sim[k] = dust_momentum_z / dust_density;

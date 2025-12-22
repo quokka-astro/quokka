@@ -42,9 +42,9 @@ template <> struct Physics_Traits<DustyShock> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSystem<DustyShock>::ComputeReciprocalStoppingTime(
+AMREX_GPU_HOST_DEVICE auto DustDrag<DustyShock>::ComputeReciprocalStoppingTime(
     amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, Physics_Traits<DustyShock>::nDustGroups> rho_d,
-    amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, Physics_Traits<DustyShock>::nDustGroups + 1> /*vel*/)
+    amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, Physics_Traits<DustyShock>::nDustGroups + 1> /*vel*/, double /*cs*/)
     -> amrex::GpuArray<amrex::Real, Physics_Traits<DustyShock>::nDustGroups>
 {
 	amrex::GpuArray<amrex::Real, Physics_Traits<DustyShock>::nDustGroups> alpha{};
