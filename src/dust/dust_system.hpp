@@ -59,7 +59,7 @@ template <typename problem_t> class DustSystem
 
 	// compute reciprocal of dust stopping time
 	AMREX_GPU_HOST_DEVICE static auto
-	    ComputeReciprocalStoppingTime(amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, Physics_Traits<problem_t>::nDustGroups + 1> /*vel*/)
+	    ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> /*rho_d*/, amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, Physics_Traits<problem_t>::nDustGroups + 1> /*vel*/)
 		-> amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups>;
 
 	// compute dust-gas drag source terms and update conserved variables
@@ -134,8 +134,7 @@ AMREX_GPU_DEVICE void DustSystem<problem_t>::ComputeDustFluxes(quokka::Array4Vie
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto DustSystem<problem_t>::ComputeReciprocalStoppingTime(
-    amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, Physics_Traits<problem_t>::nDustGroups + 1> /*vel*/)
+AMREX_GPU_HOST_DEVICE auto DustSystem<problem_t>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> /*rho_d*/, amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, Physics_Traits<problem_t>::nDustGroups + 1> /*vel*/)
     -> amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups>
 {
 	constexpr int N = Physics_Traits<problem_t>::nDustGroups;
@@ -196,7 +195,7 @@ void DustSystem<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, amre
 
 		// Picard iteration loop
 		for (int iteration = 0; iteration < max_iterations; ++iteration) {
-			amrex::GpuArray<amrex::Real, N> alpha = ComputeReciprocalStoppingTime(vel_inter_old);
+			amrex::GpuArray<amrex::Real, N> alpha = ComputeReciprocalStoppingTime(rho_g, rho_d, vel_inter_old);
 
 			amrex::Real t_s_max = 0.0;
 			for (int g = 0; g < N; ++g) {
@@ -314,6 +313,7 @@ void DustSystem<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, amre
 					vel_inter_new[1 + g][dir] = vel_d_old[g][dir] + dt * (b * k1[1 + g] + (1.0 - b) * k2[1 + g]) / rho_d[g];
 				}
 			}
+
 			// check convergence conditions
 			// calculate the reference speed
 			amrex::Real max_speed_old = 0.0;
@@ -332,7 +332,6 @@ void DustSystem<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, amre
 				max_speed_old = amrex::max(max_speed_old, std::sqrt(speed_sq));
 			}
 			const amrex::Real abs_tolerance = tolerance * amrex::max(max_speed_old, 1.0e-12);
-
 			// check convergence based on maximum speed change
 			amrex::Real max_speed_change = 0.0;
 			{
