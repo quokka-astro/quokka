@@ -211,8 +211,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real sfh_time_interval_ = -1.0; // time interval for the star formation history
 	amrex::Real last_sfh_time_ = 0.0;
 
-	amrex::Real densityFloor_ = 0.0;     // default
-	amrex::Real tempFloor_ = 0.0;	     // default
+	amrex::Real densityFloor_ = 0.0; // default
+	amrex::Real tempFloor_ = 0.0;	 // default
 	bool useDensityFloorParser_ = false;
 	std::string densityFloorExpr_;
 	std::optional<amrex::Parser> densityFloorParser_;

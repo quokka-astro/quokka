@@ -2221,7 +2221,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		if (this->useDensityFloorParser_) {
 			auto const density_floor_parser = this->densityFloorParserExe_.value();
 			auto const density_floor_func = [=] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
-									  amrex::Real base_density_floor) -> amrex::Real {
+										  amrex::Real base_density_floor) -> amrex::Real {
 				return density_floor_parser(x, y, z, base_density_floor);
 			};
 			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew_cc, geom[lev].data(), density_floor_func);
@@ -2345,7 +2345,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		if (this->useDensityFloorParser_) {
 			auto const density_floor_parser = this->densityFloorParserExe_.value();
 			auto const density_floor_func = [=] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
-									  amrex::Real base_density_floor) -> amrex::Real {
+										  amrex::Real base_density_floor) -> amrex::Real {
 				return density_floor_parser(x, y, z, base_density_floor);
 			};
 			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal_cc, geom[lev].data(), density_floor_func);
