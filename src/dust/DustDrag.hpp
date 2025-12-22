@@ -74,7 +74,7 @@ AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::ComputeReciprocalStoppingTime(
 
 template <typename problem_t>
 void DustDrag<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc_mf, amrex::Real dt,
-					    amrex::Real dust_omega_, int enableInterDustStoptime_)
+					  amrex::Real dust_omega_, int enableInterDustStoptime_)
 {
 	auto const &consVar_cc = consVar_cc_mf.arrays();
 	auto const &cons_fc_x0 = consVar_fc_mf[0].const_arrays();
@@ -335,7 +335,7 @@ void DustDrag<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::a
 			delta_mom_g[dir] = consVar_cc[bx](i, j, k, x1Momentum_index + dir) - rho_g * vel_g_old[dir];
 
 			for (int g = 0; g < N; ++g) {
-				delta_mom_d[g][dir] = consVar_cc[bx](i, j, k,  x1DustMomentum_index + dir + g * numDustVars) - rho_d[g] * vel_d_old[g][dir];
+				delta_mom_d[g][dir] = consVar_cc[bx](i, j, k, x1DustMomentum_index + dir + g * numDustVars) - rho_d[g] * vel_d_old[g][dir];
 			}
 		}
 
