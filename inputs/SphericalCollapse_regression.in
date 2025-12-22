@@ -36,7 +36,6 @@ do_subcycle = 0
 do_tracers = 0          # turn on tracer particles
 
 ascent_interval = -1
-particle_csv_interval = -1
 checkpoint_interval = -1
 
 problem.num_particles = 1000000
