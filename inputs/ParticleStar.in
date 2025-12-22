@@ -1,0 +1,52 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  -2.393565931e+17 -2.393565931e+17 -2.393565931e+17 
+geometry.prob_hi     =  2.393565931e+17 2.393565931e+17 2.393565931e+17 
+geometry.is_periodic =  0    0    0
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 1       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 32 32 32
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor = 16    # grid size must be divisible by this
+amr.max_grid_size   = 16    # at least 128 for GPUs
+amr.n_error_buf     = 2     # minimum 3 cell buffer around tagged cells
+amr.grid_eff        = 0.7   # default
+
+do_reflux = 1
+do_subcycle = 0
+
+problem.particles_file = "../inputs/sink.txt"
+problem.refine_half_domain = false
+
+particles.verbose = 1
+# Check with Chongchong if the following remain valid
+particles.sink_particle_use_uniform_kernel = true
+
+max_timesteps = 1
+particle_interval = 1
+
+tiny_profiler.enabled = 0
+
+quokka.diagnostics = plt slice_z
+
+quokka.plt.type = PlotFile         # pltfile for the whole box
+quokka.plt.file = plt              # Output file prefix (default "plt", must end in "plt")
+quokka.plt.int  = 100                # Output cadence (in number of coarse steps)
+#quokka.plt.particles = # Default to all particle types
+
+quokka.slice_z.type = DiagFramePlane         # Diagnostic type
+quokka.slice_z.file = slicez_plt             # Output file prefix (must end in "plt")
+quokka.slice_z.normal = 2                    # Plane normal (0 == x, 1 == y, 2 == z)
+quokka.slice_z.center = 0.001                # Coordinate in the normal direction (cannot lie *exactly* on domain boundary)
+quokka.slice_z.int    = 1                   # Output cadence (in number of coarse steps)
+quokka.slice_z.interpolation = Linear        # (Optional, default is Linear) Interpolation type: Linear or Quadratic
+quokka.slice_z.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum # List of variables included in output
+quokka.slice_z.particles = Star_particles
