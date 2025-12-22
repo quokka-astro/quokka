@@ -74,7 +74,7 @@ AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::ComputeReciprocalStoppingTime(
 
 template <typename problem_t>
 void DustDrag<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc_mf, amrex::Real dt,
-					    amrex::Real dust_omega_, int enableInterDustStoptime_)
+					  amrex::Real dust_omega_, int enableInterDustStoptime_)
 {
 	auto const &consVar_cc = consVar_cc_mf.arrays();
 	auto const &cons_fc_x0 = consVar_fc_mf[0].const_arrays();
@@ -102,6 +102,8 @@ void DustDrag<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::a
 #endif
 		}
 		amrex::Real rho_g = consVar_cc[bx](i, j, k, density_index);
+		amrex::Real E_tot = consVar_cc[bx](i, j, k, energy_index);
+		amrex::Real E_int = consVar_cc[bx](i, j, k, internalEnergy_index);
 
 		amrex::GpuArray<amrex::Real, N> rho_d;
 		for (int g = 0; g < N; ++g) {
@@ -268,6 +270,34 @@ void DustDrag<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::a
 				}
 			}
 
+			// update momenta and energy
+			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> delta_mom_g{};
+			amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, N> delta_mom_d;
+			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				delta_mom_g[dir] = rho_g * (vel_inter_new[0][dir] - vel_g_old[dir]);
+				consVar_cc[bx](i, j, k, x1Momentum_index + dir) = rho_g * vel_g_old[dir] + delta_mom_g[dir];
+				for (int g = 0; g < N; ++g) {
+					delta_mom_d[g][dir] = rho_d[g] * (vel_inter_new[1 + g][dir] - vel_d_old[g][dir]);
+					consVar_cc[bx](i, j, k, x1DustMomentum_index + dir + g * numDustVars) =
+					    rho_d[g] * vel_d_old[g][dir] + delta_mom_d[g][dir];
+				}
+			}
+			amrex::Real delta_E_g1 = 0.0;
+			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				amrex::Real const avg_v_g = 0.5 * (vel_g_old[dir] + vel_inter_new[0][dir]);
+				delta_E_g1 += delta_mom_g[dir] * avg_v_g;
+			}
+			amrex::Real delta_E_g2 = delta_E_g1;
+			for (int g = 0; g < N; ++g) {
+				for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+					amrex::Real avg_v_d = 0.5 * (vel_d_old[g][dir] + vel_inter_new[1 + g][dir]);
+					delta_E_g2 += delta_mom_d[g][dir] * avg_v_d;
+				}
+			}
+			amrex::Real const delta_E = delta_E_g1 - omega * delta_E_g2;
+			consVar_cc[bx](i, j, k, energy_index) = E_tot + delta_E;
+			consVar_cc[bx](i, j, k, internalEnergy_index) = E_int - omega * delta_E_g2;
+
 			// check convergence conditions
 			// calculate the reference speed
 			amrex::Real max_speed_old = 0.0;
@@ -316,46 +346,5 @@ void DustDrag<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::a
 
 			vel_inter_old = vel_inter_new;
 		}
-
-		// update momenta
-		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-			amrex::Real delta_mom_g = rho_g * (vel_inter_new[0][dir] - vel_g_old[dir]);
-			consVar_cc[bx](i, j, k, x1Momentum_index + dir) += delta_mom_g;
-			for (int g = 0; g < N; ++g) {
-				amrex::Real delta_mom_d = rho_d[g] * (vel_inter_new[1 + g][dir] - vel_d_old[g][dir]);
-				consVar_cc[bx](i, j, k, x1DustMomentum_index + dir + g * numDustVars) += delta_mom_d;
-			}
-		}
-
-		// update energy
-		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> delta_mom_g{};
-		amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, N> delta_mom_d;
-
-		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-			delta_mom_g[dir] = consVar_cc[bx](i, j, k, x1Momentum_index + dir) - rho_g * vel_g_old[dir];
-
-			for (int g = 0; g < N; ++g) {
-				delta_mom_d[g][dir] = consVar_cc[bx](i, j, k,  x1DustMomentum_index + dir + g * numDustVars) - rho_d[g] * vel_d_old[g][dir];
-			}
-		}
-
-		amrex::Real delta_E_g1 = 0.0;
-		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-			amrex::Real const avg_v_g = 0.5 * (vel_g_old[dir] + vel_inter_new[0][dir]);
-			delta_E_g1 += delta_mom_g[dir] * avg_v_g;
-		}
-
-		amrex::Real delta_E_g2 = delta_E_g1;
-		for (int g = 0; g < N; ++g) {
-			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-				amrex::Real avg_v_d = 0.5 * (vel_d_old[g][dir] + vel_inter_new[1 + g][dir]);
-				delta_E_g2 += delta_mom_d[g][dir] * avg_v_d;
-			}
-		}
-
-		amrex::Real const delta_E = delta_E_g1 - omega * delta_E_g2;
-
-		consVar_cc[bx](i, j, k, energy_index) += delta_E;
-		consVar_cc[bx](i, j, k, internalEnergy_index) += -omega * delta_E_g2;
 	});
 }
