@@ -130,13 +130,13 @@ class ProtoLuminosityUpdate
 		
 		// Initialize radius
 		inline amrex::Real radInit(amrex::Real mdotInit) {
-		  return (C::R_solar * max(2.5*pow(mdot*seconds_per_year/C::M_solar*1.0e5, 0.2), 2.0) ;
-		}
+		  return (C::R_solar * max(2.5*pow(mdot*seconds_per_year/C::M_solar*1.0e5, 0.2), 2.0) );
+	        }
 
-	        // For a polytrope, the gravitational energy is aG G M^2 / R, aG = -3/(5-n)
+		// For a polytrope, the gravitational energy is aG G M^2 / R, aG = -3/(5-n)
 		inline amrex::Real aG() {
-		    return( 3.0/(5.0-n) );
-		  }
+		  return( 3.0/(5.0-n) );
+		}
 
 		inline amrex::Real rhoc(amrex::Real mass) {
 		  // Table of values of rho_mean / rho_c for n=1.5 to 3.1 in intervals of 0.1
@@ -201,7 +201,7 @@ class ProtoLuminosityUpdate
 		}
 
 		amrex::Real beta(amrex::Real mass, amrex::Real rhoc1, amrex::Real Pc1) {
-		  if (n==3.0) {
+		  if (npoly==3.0) {
 		    // In this case we solve the Eddington quartic,
 		    // P_c^3 = (3/a) (k / (mu mH))^4 (1 - beta) / beta^4 rho_c^4
 		    // for beta
@@ -419,7 +419,7 @@ class ProtoLuminosityUpdate
 		    burnState = None;
 		  }
 		}
-		
+  
 		// Update the radius 
 		if (burnState != ZAMS) {
 		  amrex::Real beta1 = beta(m);
