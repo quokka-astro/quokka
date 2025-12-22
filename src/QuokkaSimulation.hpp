@@ -938,25 +938,43 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDerivedVa
 		auto const prob_lo = geom_data.ProbLo();
 		auto const dx = geom_data.CellSize();
 		auto const density_floor = densityFloor_;
-		auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
-									     amrex::Real base_density_floor) -> amrex::Real {
-			return densityFloor(x, y, z, base_density_floor);
-		};
 
-		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + amrex::Real(0.5)) * dx[0];
+		if (this->useDensityFloorParser_) {
+			auto const density_floor_parser = this->densityFloorParserExe_.value();
+			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + amrex::Real(0.5)) * dx[0];
 #if (AMREX_SPACEDIM >= 2)
-			amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + amrex::Real(0.5)) * dx[1];
+				amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + amrex::Real(0.5)) * dx[1];
 #else
-			amrex::Real const y = 0.0;
+				amrex::Real const y = 0.0;
 #endif
 #if (AMREX_SPACEDIM == 3)
-			amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + amrex::Real(0.5)) * dx[2];
+				amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + amrex::Real(0.5)) * dx[2];
 #else
-			amrex::Real const z = 0.0;
+				amrex::Real const z = 0.0;
 #endif
-			arr[bx](i, j, k, ncomp) = density_floor_func(x, y, z, density_floor);
-		});
+				arr[bx](i, j, k, ncomp) = density_floor_parser(x, y, z, density_floor);
+			});
+		} else {
+			auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
+										     amrex::Real base_density_floor) -> amrex::Real {
+				return densityFloor(x, y, z, base_density_floor);
+			};
+			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + amrex::Real(0.5)) * dx[0];
+#if (AMREX_SPACEDIM >= 2)
+				amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + amrex::Real(0.5)) * dx[1];
+#else
+				amrex::Real const y = 0.0;
+#endif
+#if (AMREX_SPACEDIM == 3)
+				amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + amrex::Real(0.5)) * dx[2];
+#else
+				amrex::Real const z = 0.0;
+#endif
+				arr[bx](i, j, k, ncomp) = density_floor_func(x, y, z, density_floor);
+			});
+		}
 	}
 }
 
@@ -1684,11 +1702,20 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::FixupState(int l
 	const BL_PROFILE("QuokkaSimulation::FixupState()");
 
 	// fix hydro state
-	auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
-								     amrex::Real base_density_floor) -> amrex::Real {
-		return densityFloor(x, y, z, base_density_floor);
-	};
-	HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev], geom[lev].data(), density_floor_func);
+	if (this->useDensityFloorParser_) {
+		auto const density_floor_parser = this->densityFloorParserExe_.value();
+		auto const density_floor_func = [=] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
+									  amrex::Real base_density_floor) -> amrex::Real {
+			return density_floor_parser(x, y, z, base_density_floor);
+		};
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev], geom[lev].data(), density_floor_func);
+	} else {
+		auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
+									     amrex::Real base_density_floor) -> amrex::Real {
+			return densityFloor(x, y, z, base_density_floor);
+		};
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev], geom[lev].data(), density_floor_func);
+	}
 
 	// sync internal energy and total energy
 	HydroSystem<problem_t>::SyncDualEnergy(state_new_cc_[lev], state_new_fc_[lev]);
@@ -2191,11 +2218,20 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		}
 
 		// prevent vacuum
-		auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
-									     amrex::Real base_density_floor) -> amrex::Real {
-			return densityFloor(x, y, z, base_density_floor);
-		};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew_cc, geom[lev].data(), density_floor_func);
+		if (this->useDensityFloorParser_) {
+			auto const density_floor_parser = this->densityFloorParserExe_.value();
+			auto const density_floor_func = [=] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
+									  amrex::Real base_density_floor) -> amrex::Real {
+				return density_floor_parser(x, y, z, base_density_floor);
+			};
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew_cc, geom[lev].data(), density_floor_func);
+		} else {
+			auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
+										     amrex::Real base_density_floor) -> amrex::Real {
+				return densityFloor(x, y, z, base_density_floor);
+			};
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew_cc, geom[lev].data(), density_floor_func);
+		}
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
@@ -2306,11 +2342,20 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		}
 
 		// prevent vacuum
-		auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
-									     amrex::Real base_density_floor) -> amrex::Real {
-			return densityFloor(x, y, z, base_density_floor);
-		};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal_cc, geom[lev].data(), density_floor_func);
+		if (this->useDensityFloorParser_) {
+			auto const density_floor_parser = this->densityFloorParserExe_.value();
+			auto const density_floor_func = [=] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
+									  amrex::Real base_density_floor) -> amrex::Real {
+				return density_floor_parser(x, y, z, base_density_floor);
+			};
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal_cc, geom[lev].data(), density_floor_func);
+		} else {
+			auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
+										     amrex::Real base_density_floor) -> amrex::Real {
+				return densityFloor(x, y, z, base_density_floor);
+			};
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal_cc, geom[lev].data(), density_floor_func);
+		}
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)

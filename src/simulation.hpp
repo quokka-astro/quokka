@@ -62,6 +62,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_Orientation.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
+#include "AMReX_Parser.H"
 #include "AMReX_PlotFileUtil.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
@@ -212,6 +213,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	amrex::Real densityFloor_ = 0.0;     // default
 	amrex::Real tempFloor_ = 0.0;	     // default
+	bool useDensityFloorParser_ = false;
+	std::string densityFloorExpr_;
+	std::optional<amrex::Parser> densityFloorParser_;
+	std::optional<amrex::ParserExecutor<4>> densityFloorParserExe_;
 	bool debugDensityFloorPlot_ = false; // default: disabled
 
 	mutable YAML::Node simulationMetadata_;
@@ -832,6 +837,19 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// read temperature floor in K
 	pp.query("temperature_floor", tempFloor_);
+
+	// optional density floor expression (variables: x, y, z, base_density_floor)
+	densityFloorExpr_.clear();
+	pp.query("density_floor_expr", densityFloorExpr_);
+	useDensityFloorParser_ = !densityFloorExpr_.empty();
+	if (useDensityFloorParser_) {
+		densityFloorParser_.emplace(densityFloorExpr_);
+		densityFloorParser_->registerVariables({"x", "y", "z", "base_density_floor"});
+		densityFloorParserExe_ = densityFloorParser_->compile<4>();
+	} else {
+		densityFloorParser_.reset();
+		densityFloorParserExe_.reset();
+	}
 
 	// Optional debug output: spatially varying density floor
 	pp.query("debug_density_floor_plot", debugDensityFloorPlot_);
