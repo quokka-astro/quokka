@@ -52,13 +52,11 @@ template <typename problem_t> class turbulentDriving
 	TurbGenEx tg;
 	bool updated = false;
 	amrex::Gpu::DeviceVector<amrex::Real> disp = {-1.0, -1.0, -1.0};
-	std::array<double, 3> host_disp = {-1.0, -1.0, -1.0};
 
 	void update(const amrex::Real &time, amrex::MultiFab &state)
 	{
 		auto disp = quokka::turbulence::calculate_dispersion<problem_t>(state);
-		amrex::Gpu::copy(amrex::Gpu::deviceToHost, disp.begin(), disp.end(), host_disp.begin());
-		updated = time == 0 ? tg.check_for_update(time) : tg.check_for_update(time, host_disp.data());
+		updated = time == 0 ? tg.check_for_update(time) : tg.check_for_update(time, disp.data());
 	}
 
       public:
