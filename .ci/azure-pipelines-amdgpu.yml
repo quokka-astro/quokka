@@ -13,13 +13,14 @@ trigger:
     - tests/**
     - inputs/**
     - CMakeLists.txt
-    - .ci/**
+    - .ci/azure-pipelines-amdgpu.yml
+    - extern/cooling/*.h5
     - extern/amrex/**
     - extern/Microphysics/**
     - extern/fmt/**
     - extern/yaml-cpp/**
     - extern/openPMD-api/**
-    - extern/grackle_data_files/**
+    - extern/AMReX-Hydro/**
     exclude:
     - docs/**
     - paper/**
@@ -39,13 +40,14 @@ pr:
     - tests/**
     - inputs/**
     - CMakeLists.txt
-    - .ci/**
+    - .ci/azure-pipelines-amdgpu.yml
+    - extern/cooling/*.h5
     - extern/amrex/**
     - extern/Microphysics/**
     - extern/fmt/**
     - extern/yaml-cpp/**
     - extern/openPMD-api/**
-    - extern/grackle_data_files/**
+    - extern/AMReX-Hydro/**
     exclude:
     - docs/**
     - paper/**
