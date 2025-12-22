@@ -114,8 +114,8 @@ class PhysicsParticleDescriptorBase
 	// Print statistics of particles
 	virtual void printParticleStatistics() const = 0;
 
-	// Save particle data to file
-	virtual void saveParticleDataToFile(const std::string &plotfilename, const std::string &name) = 0;
+	// Save particle data to text file
+	virtual void saveParticleDataToTxtFile(const std::string &plotfilename, const std::string &name) = 0;
 
 	// Get the number of particles
 	[[nodiscard]] virtual auto getNumParticles() const -> int = 0;
@@ -159,7 +159,7 @@ class PhysicsParticleDescriptorBase
 	// Note: particles are not allowed to spawn outside of real cells. If they do, we will need a redistribution immediately after this call in order to
 	// make particle-mesh interaction work.
 	virtual void createParticlesFromState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real current_time, amrex::Real dt,
-					      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc)
+					      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int verbose)
 	{ /* Default empty implementation */
 	}
 
@@ -537,10 +537,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
-	void saveParticleDataToFile(const std::string &filename, const std::string &name) override
+	void saveParticleDataToTxtFile(const std::string &filename, const std::string &name) override
 	{
 		if (container_ != nullptr) {
-			particle_io::saveParticleDataToFile<ContainerType>(container_, filename, name);
+			particle_io::saveParticleDataToTxtFile<ContainerType>(container_, filename, name);
 		}
 	}
 
@@ -650,12 +650,12 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	}
 
 	void createParticlesFromState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real current_time, amrex::Real dt,
-				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc) override
+				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int verbose) override
 	{
 		// Use the traits class to implement the specialized behavior
 		ParticleCreationTraits<particleType>::template createParticles<problem_t, ContainerType>(
 		    this->container_, this->getMassIndex(), state, accretion_rate, lev, current_time, dt, this->getEvolutionStageIndex(),
-		    this->getBirthTimeIndex(), this->getMassAtBirthIndex(), state_fc);
+		    this->getBirthTimeIndex(), this->getMassAtBirthIndex(), state_fc, verbose);
 	}
 #endif // AMREX_SPACEDIM == 3
 };
@@ -903,6 +903,18 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 	}
 
+	// Save only specified particle types to text files
+	void saveParticleDataToTxtFileFiltered(const std::string &plotfilename, const std::vector<std::string> &particleTypeNames)
+	{
+		const BL_PROFILE("PhysicsParticleRegister::saveParticleDataToTxtFileFiltered()");
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			const std::string typeName = getParticleTypeName(type);
+			if (std::ranges::find(particleTypeNames, typeName) != particleTypeNames.end()) {
+				descriptor->saveParticleDataToTxtFile(plotfilename, typeName);
+			}
+		}
+	}
+
 	// Write all particle data to checkpoint file
 	void writeCheckpoint(const std::string &checkpointname, bool include_header) const
 	{
@@ -940,14 +952,14 @@ template <typename problem_t> class PhysicsParticleRegister
 
 	// Create particles based on particle type
 	void createParticlesFromState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real current_time, amrex::Real dt,
-				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr)
+				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr, int verbose = 0)
 	{
 		const BL_PROFILE("PhysicsParticleRegister::createParticlesFromState()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			// Only create particles if the descriptor allows creation
 			if (descriptor->getAllowsCreation()) {
 				// Call the appropriate particle creation method based on the particle type
-				descriptor->createParticlesFromState(state, accretion_rate, lev, current_time, dt, state_fc);
+				descriptor->createParticlesFromState(state, accretion_rate, lev, current_time, dt, state_fc, verbose);
 
 				// redistribute particles
 				// descriptor->redistribute(lev);
@@ -1013,24 +1025,6 @@ template <typename problem_t> class PhysicsParticleRegister
 
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->printParticleStatistics();
-		}
-	}
-
-	// Save particle data to file only if particle count <= max_particles
-	void saveParticleDataToFileConditional(const std::string &plotfilename, int max_particles)
-	{
-		const BL_PROFILE("PhysicsParticleRegister::saveParticleDataToFileConditional()");
-		for (const auto &[type, descriptor] : particleRegistry_) {
-			const int num_particles = descriptor->getNumParticles();
-			const std::string particle_type_name = getParticleTypeName(type);
-
-			if (num_particles <= max_particles) {
-				amrex::Print() << "Saving " << num_particles << " " << particle_type_name << " to CSV file\n";
-				descriptor->saveParticleDataToFile(plotfilename, particle_type_name);
-			} else {
-				amrex::Print() << "Skipping " << particle_type_name << " CSV output: " << num_particles << " particles exceeds limit of "
-					       << max_particles << "\n";
-			}
 		}
 	}
 
