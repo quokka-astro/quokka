@@ -17,3 +17,6 @@
 [submodule "extern/regression_testing"]
 	path = extern/regression_testing
 	url = https://github.com/AMReX-Codes/regression_testing.git
+[submodule "extern/AMReX-Hydro"]
+	path = extern/AMReX-Hydro
+	url = https://github.com/AMReX-Fluids/AMReX-Hydro.git

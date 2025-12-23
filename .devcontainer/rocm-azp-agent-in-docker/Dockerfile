@@ -1,5 +1,5 @@
 # Use the AMD ROCm image as the base image
-FROM ghcr.io/quokka-astro/quokka-amd64-rocm-frontier:latest
+FROM ghcr.io/quokka-astro/quokka-linux-amd64-rocm:development
 ENV TARGETARCH="linux/amd64"
 
 USER root
