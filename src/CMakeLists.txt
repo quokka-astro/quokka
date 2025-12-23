@@ -136,6 +136,7 @@ link_libraries(AMReX::amrex)
 link_libraries(fmt::fmt)
 link_libraries(${HDF5_LIBRARIES})
 link_libraries(yaml-cpp::yaml-cpp)
+link_libraries(turbulence::turbulence)
 
 include(CTest)
 
