@@ -15,7 +15,8 @@ namespace quokka::Riemann
 {
 constexpr double DELTA = 1.0e-4;
 
-// HLLD solver following Miyoshi and Kusano (2005), hereafter MK5.
+// HLLD solver based on Miyoshi & Kusano (2005), hereafter MK5.
+// Corrections based on Minoshima & Miyoshi (2021), hereafter MM21.
 template <typename problem_t, int N_scalars, int N_mscalars, int fluxdim>
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_mscalars> const &sL, quokka::HydroState<N_scalars, N_mscalars> const &sR,
 					      const double gamma, const double bx, const double perp_v_jump)
@@ -76,10 +77,10 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 
 	//--- Step 2. Compute L & R wave speeds according to MK5, eqn. (67)
 
-	const double fspd_L = FastMagnetoSonicSpeed(gamma, sL, bx);
-	const double fspd_R = FastMagnetoSonicSpeed(gamma, sR, bx);
-	spds[0] = std::min(sL.u - fspd_L, sR.u - fspd_R);
-	spds[4] = std::max(sL.u + fspd_L, sR.u + fspd_R);
+	const double spd_fms_L = FastMagnetoSonicSpeed(gamma, sL, bx);
+	const double spd_fms_R = FastMagnetoSonicSpeed(gamma, sR, bx);
+	spds[0] = std::min(sL.u - spd_fms_L, sR.u - spd_fms_R);
+	spds[4] = std::max(sL.u + spd_fms_L, sR.u + spd_fms_R);
 	const double fspd_m = -std::min(0.0, spds[0]);
 	const double fspd_p = std::max(0.0, spds[4]);
 
@@ -119,20 +120,18 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	const double siui_L = spds[0] - sL.u;
 	const double siui_R = spds[4] - sR.u;
 	// carbuncle detector
-	const double max_spd = std::max(fspd_L, fspd_R);
+	const double spd_fms_max = std::max(spd_fms_L, spd_fms_R);
 	const double para_v_jump = sL.u - sR.u; // negative -> compression
-	double theta = 1.0;
 	// tp := shock anisotropy, clamped to [0, 1], with theta = tp^4
-	const double denom_tp = std::max(1e-14, max_spd - std::min(perp_v_jump, 0.0));
-	double tp = (max_spd - std::min(para_v_jump, 0.0)) / denom_tp;
+	const double denom_tp = std::max(1e-14, spd_fms_max - std::min(perp_v_jump, 0.0));
+	double tp = (spd_fms_max - std::min(para_v_jump, 0.0)) / denom_tp;
 	tp = amrex::Clamp(tp, 0.0, 1.0);
-	theta = SQUARE(SQUARE(tp));
-	// modified middle speed S_M from MK5 eqn (38)
+	const double theta = SQUARE(SQUARE(tp));
+	// modified middle speed S_M from MK5 eqn 38 with theta from MM21 eqn 9
 	const double sm_denom = (siui_R * u_R.rho - siui_L * u_L.rho);
 	spds[2] = (siui_R * u_R.mx - siui_L * u_L.mx + theta * (ptot_L - ptot_R)) / sm_denom;
 	// S_i - S_M (for i=L or R)
 	const double sism_L = spds[0] - spds[2];
-
 	const double sism_R = spds[4] - spds[2];
 	const double sism_inv_L = 1.0 / sism_L;
 	const double sism_inv_R = 1.0 / sism_R;
@@ -156,11 +155,22 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 
 	//--- Step 5. Compute intermediate states
 
-	// compute total pressure
-	// MK5: eqn (41) can be calculated (more explicitly) via eqn (23)
+	// low-Mach pressure correction (MM21)
+	// build a low-Mach limiter phi from a Mach-like ratio using the local advection + fast-wave speed
+	// (phi -> 0 for very low Mach, phi -> 1 as advection becomes comparable to wave speeds)
+	const double spd_fss_L = std::abs(sL.u) + spd_fms_L;
+	const double spd_fss_R = std::abs(sR.u) + spd_fms_R;
+	const double spd_fss_max = std::max(spd_fss_L, spd_fss_R);
+	const double chi = std::min(1.0, spd_fss_max / std::max(1e-14, spd_fms_max));
+	const double phi = chi * (2.0 - chi);
+	// MK5 star total pressures estimate (eqn 23)
 	const double ptot_star_L = ptot_L + u_L.rho * siui_L * (spds[2] - sL.u);
 	const double ptot_star_R = ptot_R + u_R.rho * siui_R * (spds[2] - sR.u);
-	const double ptot_star = 0.5 * (ptot_star_L + ptot_star_R);
+	const double ptot_star_avg_LR = 0.5 * (ptot_star_L + ptot_star_R);
+	// correct the excess (compressive) contributions in the low Mach regime (MM21)
+	const double ptot_avg_LR = 0.5 * (ptot_L + ptot_R);
+	const double ptot_star_excess = ptot_star_avg_LR - ptot_avg_LR;
+	const double ptot_star = ptot_avg_LR + phi * ptot_star_excess;
 
 	// MK5: u_L^(star, dstar) from, eqn (39)
 	u_star_L.mx = u_star_L.rho * spds[2];
