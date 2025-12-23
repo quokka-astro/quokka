@@ -68,8 +68,10 @@ RUN set -euo pipefail && \
     ./configure --with-device=ch4:ofi --disable-fortran --prefix="/opt/mpich/${MPICH_VERSION}" && \
     make -j"$(nproc)" && \
     make install && \
+    rm -rf mpich-4.1.2/ mpich-4.1.2.tar.gz /tmp/mpich-4.1.2-rocm-6.4-hip-pointer-attr.patch && \
     cd / && \
     rm -rf /tmp/build-mpich
+
 
 ENV MPICH_VERSION="${MPICH_VERSION}" \
     MPICH_DIR="/opt/mpich/${MPICH_VERSION}" \
