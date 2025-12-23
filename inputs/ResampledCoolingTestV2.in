@@ -1,0 +1,46 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  0.0	0.0	0.0 
+geometry.prob_hi     =  1.0e23  1.0e23  1.0e23
+geometry.is_periodic =  0    	0	0
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 0       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 8 8 8
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor = 8     # grid size must be divisible by this
+
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 0
+
+# *****************************************************************
+# Cooling parameters
+# *****************************************************************
+cooling.enabled = 1
+cooling.cooling_table_type = resampled
+cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled_no_PE.h5"
+use_sfh_based_pe_heating = true
+const_sfr_Msun_per_year_per_kpc2 = 3.0e-2
+sfh_to_pe_heating_table = "../extern/cooling/photoelectric_heating_from_sfh.csv"
+
+# *****************************************************************
+# Time stepping and run control
+# *****************************************************************
+cfl = 0.8
+stop_time = 1.0e17
+
+# *****************************************************************
+# Reference solution comparison (optional)
+# *****************************************************************
+cooling_test.reference_solution_file = ../extern/cooling/grackle_reference_solution.csv
+cooling_test.output_csv_file = simulation_output.csv
+
+tiny_profiler.enabled = 1

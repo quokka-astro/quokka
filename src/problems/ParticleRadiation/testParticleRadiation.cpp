@@ -55,6 +55,8 @@ template <> struct Physics_Traits<ParticleRadiationProblem> {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = true;
+	static constexpr bool is_dust_enabled = false;
+	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
@@ -90,7 +92,7 @@ template <> void QuokkaSimulation<ParticleRadiationProblem>::createInitialStocha
 {
 	// Read particles from ASCII file. Note that this only read real components and not integer components, therefore we need to use
 	// InitSetPhyParticles to set the integer components
-	const int nreal_extra = 7; // mass vx vy vz birth_time death_time lum
+	const int nreal_extra = 6 + Physics_Traits<ParticleRadiationProblem>::nGroups; // mass vx vy vz birth_time death_time lum[nGroups]
 	StochasticStellarPopParticles->SetVerbose(1);
 	StochasticStellarPopParticles->InitFromAsciiFile(userData_.particles_filename, nreal_extra, nullptr);
 

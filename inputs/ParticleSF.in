@@ -32,21 +32,21 @@ particles.eps_ff = 0.5
 # Maximum velocity limit for stellar particles (cm/s), default: 1.0e8 (1000 km/s)
 particles.stellar_velocity_limit = 1.0e8
 
-tiny_profiler.enabled = 0
-
 problem.n0 = 1.0e5
 problem.Tamb = 1.0e1
-problem.stage_2_max_timesteps = 10
-plotfile_interval = -1
-checkpoint_interval = -1
+
+max_timesteps = 10
+plotfile_interval = 5
+checkpoint_interval = 5
 
 # *****************************************************************
-# Cooling parameters: turn on later after merging the ResampledCooling branch
+# Cooling parameters
 # *****************************************************************
-#cooling.enabled = 1
-#cooling.cooling_table_type = "grackle"
-#cooling.hdf5_data_file = "../extern/grackle_data_files/input/CloudyData_UVB=HM2012.h5"
-#cooling.cooling_table_type = "resampled"
-#cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
-
-#temperature_floor = 10.0  	# K
+cooling.enabled = 1
+cooling.cooling_table_type = resampled
+cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled_no_PE.h5"
+use_sfh_based_pe_heating = true
+sfh_to_pe_heating_table = "../extern/cooling/photoelectric_heating_from_sfh.csv"
+#sfh_interval = 3
+sfh_time_interval = 4e10 		# years
+sf_area_kpc2 = 1.0 					# kpc^2

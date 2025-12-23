@@ -42,6 +42,8 @@ template <> struct Physics_Traits<ShocktubeProblem> {
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
+	static constexpr bool is_dust_enabled = false;
+	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = 1; // number of radiation groups
@@ -322,7 +324,7 @@ auto problem_main() -> int
 	sim.maxDt_ = max_dt;
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
-	sim.computeReferenceSolution_ = true;
+
 	sim.plotfileInterval_ = -1;
 
 	// Main time loop
@@ -332,7 +334,8 @@ auto problem_main() -> int
 	// Compute test success condition
 	int status = 0;
 	const double error_tol = 0.015;
-	if (sim.errorNorm_ > error_tol) {
+	amrex::Real const error_norm = sim.computeErrorNorm();
+	if (error_norm > error_tol) {
 		status = 1;
 	}
 

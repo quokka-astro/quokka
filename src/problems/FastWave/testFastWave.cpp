@@ -39,6 +39,8 @@ template <> struct Physics_Traits<FastWave> {
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_radiation_enabled = false;
+	static constexpr bool is_dust_enabled = false;
+	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr bool is_mhd_enabled = true;
 	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
@@ -122,6 +124,7 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 		state(i, j, k, HydroSystem<FastWave>::energy_index) = Etot;
 		state(i, j, k, HydroSystem<FastWave>::internalEnergy_index) = Eint;
 	} else if (cen == quokka::centering::fc) {
+
 		const double x1mag = (computeMagneticVectorPotential_z(x1_L, x2_L + dx[1], x3_L + dx[2] / 2, time) -
 				      computeMagneticVectorPotential_z(x1_L, x2_L, x3_L + dx[2] / 2, time)) /
 					 dx[1] -
@@ -242,14 +245,51 @@ auto problem_main() -> int
 	}
 
 	QuokkaSimulation<FastWave> sim(BCs_cc, BCs_fc);
-	sim.computeReferenceSolution_ = true;
+
 	sim.setInitialConditions();
 	sim.evolve();
 
 	// Compute test success condition
 	int status = 0;
 	const double error_tol = 0.002;
-	if (sim.errorNorm_ > error_tol) {
+	auto comp_errors = sim.computeComponentErrors();
+
+	// error norm must be manually computed since B fields that should be 0 may have small non-zero values due to numerical precision
+
+	const auto n_cells = static_cast<amrex::Real>(sim.state_new_cc_[0].boxArray().numPts());
+	amrex::Real sum_sq_err = 0.0;
+	amrex::Real sum_sq_ref = 0.0;
+	for (const auto &[name, abs_err, rel_err] : comp_errors) {
+		// Convert normalized errors back to L1 norms
+		amrex::Real const L1_err = abs_err * n_cells;
+		sum_sq_err += L1_err * L1_err;
+		// Reconstruct reference L1 norm
+		if (!std::isnan(rel_err) && rel_err != 0.0 && abs_err > 10E-15) {
+			amrex::Real const L1_ref = (abs_err / rel_err) * n_cells;
+			sum_sq_ref += L1_ref * L1_ref;
+		}
+		// If rel_err is NaN or zero, reference was zero, contributes 0 to sum_sq_ref
+	}
+
+	const amrex::Real err_norm = std::sqrt(sum_sq_err);
+	const amrex::Real sol_norm = std::sqrt(sum_sq_ref);
+
+	amrex::Real error_norm = 0.0;
+	if (sol_norm > 0.0) {
+		error_norm = err_norm / sol_norm;
+		amrex::Print() << std::string(70, '=') << "\n";
+		amrex::Print() << "\nRelative RMS L1 error norm = " << error_norm << "\n\n";
+	} else {
+		error_norm = err_norm;
+		amrex::Print() << std::string(70, '=') << "\n";
+		if (sol_norm == 0.0) {
+			amrex::Print() << "\nReference norm is zero; reporting absolute L1 error norm = " << error_norm << "\n\n";
+		} else {
+			amrex::Print() << "\nAbsolute L1 error norm = " << error_norm << "\n\n";
+		}
+	}
+
+	if (error_norm > error_tol) {
 		status = 1;
 	}
 

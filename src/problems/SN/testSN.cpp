@@ -38,6 +38,7 @@ const double cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
 const double year = 3.15576e+07; // in seconds
 const double mass_SNR = 10.0 * C::M_solar;
 const int n_SNR = 2;
+constexpr double B0 = 1.0e-7; // uniform background field for MHD variant
 
 static double n_amb = 1.0;    // ambient density (g cm^-3) // NOLINT
 static double T_amb = 100.0;  // ambient temperature (K) // NOLINT
@@ -64,8 +65,10 @@ template <> struct Physics_Traits<SNProblem> {
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
+	static constexpr bool is_dust_enabled = false;
+	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
-	static constexpr bool is_mhd_enabled = false;
+	static constexpr bool is_mhd_enabled = true;
 	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
@@ -106,6 +109,7 @@ template <> void QuokkaSimulation<SNProblem>::setInitialConditionsOnGrid(quokka:
 	const double E0 = CV * T_amb * rho_bg;
 	const double rho = rho_bg;
 	const double rho_e = E0;
+	const double Emag = 0.5 * B0 * B0;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -113,12 +117,22 @@ template <> void QuokkaSimulation<SNProblem>::setInitialConditionsOnGrid(quokka:
 		state_cc(i, j, k, HydroSystem<SNProblem>::x1Momentum_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<SNProblem>::x2Momentum_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<SNProblem>::x3Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<SNProblem>::energy_index) = rho_e;
+		state_cc(i, j, k, HydroSystem<SNProblem>::energy_index) = rho_e + Emag;
 		state_cc(i, j, k, HydroSystem<SNProblem>::internalEnergy_index) = rho_e;
 	});
 }
 
-template <> void QuokkaSimulation<SNProblem>::ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<SNProblem>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+{
+	const amrex::Array4<double> &state_fc = grid_elem.array_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const quokka::direction dir = grid_elem.dir_;
+	const double B_val = (dir == quokka::direction::x) ? B0 : 0.0;
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) { state_fc(i, j, k, Physics_Indices<SNProblem>::mhdFirstIndex) = B_val; });
+}
+
+template <> void QuokkaSimulation<SNProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	// tag cells for refinement: static mesh refinement for the whole domain (if refine_half_domain is false) or for x > 0 (if refine_half_domain is true)
 
@@ -156,6 +170,14 @@ auto problem_main() -> int
 {
 	// Set boundary conditions - octant symmetry (reflecting)
 	auto BCs_cc = quokka::BC<SNProblem>(quokka::BCType::reflecting);
+	const int nvars_fc = Physics_Indices<SNProblem>::nvarTotal_fc;
+	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
+	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			BCs_fc[icomp].setLo(idim, amrex::BCType::reflect_even);
+			BCs_fc[icomp].setHi(idim, amrex::BCType::reflect_even);
+		}
+	}
 
 	// get n_amb from the input file
 	amrex::ParmParse const pp("problem");
@@ -169,7 +191,7 @@ auto problem_main() -> int
 	cpp.query("cooling_table_type", coolingTableType_);
 
 	// Problem initialization
-	QuokkaSimulation<SNProblem> sim(BCs_cc);
+	QuokkaSimulation<SNProblem> sim(BCs_cc, BCs_fc);
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.stopTime_ = t_stop * year;

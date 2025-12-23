@@ -1,0 +1,53 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  -3.949667304e+19 -3.949667304e+19 -3.949667304e+19
+geometry.prob_hi     =  3.949667304e+19 3.949667304e+19 3.949667304e+19
+geometry.is_periodic =  1    1    1
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 1       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 32 32 32
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor = 16    # grid size must be divisible by this
+amr.max_grid_size   = 16    # at least 128 for GPUs
+amr.n_error_buf     = 2     # minimum 3 cell buffer around tagged cells
+amr.grid_eff        = 0.7   # default
+
+do_reflux = 1
+do_subcycle = 0
+do_tracers = 0      # turn on tracer particles
+
+hydro.artificial_viscosity_coefficient = 0.1
+
+particles.SN_scheme = SN_thermal_or_thermal_momentum
+particles.verbose = 0
+particles.eps_ff = 0.5
+# Maximum velocity limit for stellar particles (cm/s), default: 1.0e8 (1000 km/s)
+particles.stellar_velocity_limit = 1.0e8
+
+problem.n0 = 1.0e5
+problem.Tamb = 1.0e1
+
+restartfile = chk00010
+max_timesteps = 20
+plotfile_interval = 5
+checkpoint_interval = 5
+
+# *****************************************************************
+# Cooling parameters
+# *****************************************************************
+cooling.enabled = 1
+cooling.cooling_table_type = resampled
+cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled_no_PE.h5"
+use_sfh_based_pe_heating = true
+const_sfr_Msun_per_year_per_kpc2 = 3.0e-2
+sfh_to_pe_heating_table = "../extern/cooling/photoelectric_heating_from_sfh.csv"
+#sfh_interval = 3
+sfh_time_interval = 4e10

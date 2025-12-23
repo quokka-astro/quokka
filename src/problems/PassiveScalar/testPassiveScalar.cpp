@@ -41,6 +41,8 @@ template <> struct Physics_Traits<ScalarProblem> {
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
+	static constexpr bool is_dust_enabled = false;
+	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = 1; // number of radiation groups; has to be defined even though radiation is disabled
@@ -252,15 +254,14 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<ScalarProblem> sim(BCs_cc);
 
-	sim.computeReferenceSolution_ = true;
-
 	// initialize and evolve
 	sim.setInitialConditions();
 	sim.evolve();
 
 	const double error_tol = 0.008;
 	int status = 0;
-	if (sim.errorNorm_ > error_tol) {
+	amrex::Real const error_norm = sim.computeErrorNorm();
+	if (error_norm > error_tol) {
 		status = 1;
 	}
 

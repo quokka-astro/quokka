@@ -39,6 +39,8 @@ template <> struct Physics_Traits<ContactProblem> {
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 2; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
+	static constexpr bool is_dust_enabled = false;
+	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = 1; // number of radiation groups
@@ -198,7 +200,7 @@ auto problem_main() -> int
 	sim.stopTime_ = 2.0;
 	sim.cflNumber_ = 0.8;
 	sim.maxTimesteps_ = 2000;
-	sim.computeReferenceSolution_ = true;
+
 	sim.plotfileInterval_ = -1;
 
 	// initialize and evolve
@@ -210,7 +212,8 @@ auto problem_main() -> int
 	// [See Section 10.7 and Figure 10.20 of Toro (1998).]
 	const double error_tol = 0.0; // this is not a typo
 	int status = 0;
-	if (sim.errorNorm_ > error_tol) {
+	amrex::Real const error_norm = sim.computeErrorNorm();
+	if (error_norm > error_tol) {
 		status = 1;
 	}
 

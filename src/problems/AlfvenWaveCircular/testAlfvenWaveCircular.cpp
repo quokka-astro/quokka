@@ -34,6 +34,8 @@ template <> struct Physics_Traits<AlfvenWaveCircular> {
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_radiation_enabled = false;
+	static constexpr bool is_dust_enabled = false;
+	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr bool is_mhd_enabled = true;
 	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
@@ -231,14 +233,15 @@ auto problem_main() -> int
 	}
 
 	QuokkaSimulation<AlfvenWaveCircular> sim(BCs_cc, BCs_fc);
-	sim.computeReferenceSolution_ = true;
+
 	sim.setInitialConditions();
 	sim.evolve();
 
 	// Compute test success condition
 	int status = 0;
 	const double error_tol = 0.003;
-	if (sim.errorNorm_ > error_tol) {
+	amrex::Real const error_norm = sim.computeErrorNorm();
+	if (error_norm > error_tol) {
 		status = 1;
 	}
 

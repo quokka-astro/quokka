@@ -1,6 +1,25 @@
 #!/usr/bin/env python3
-# ABOUTME: Resample cooling tables from grackle_tables.py as a function of specific
-# ABOUTME: internal energy and mass density on a logarithmic 2D grid, including sound speeds.
+"""
+Resample Grackle cooling tables as a function of specific internal energy and mass density on a logarithmic 2D grid.
+Outputs include cooling rates, temperatures, sound speeds, pressures, and entropies.
+
+Example usage:
+Resample using the default CloudyData_UVB=HM2012.h5 data (auto-downloaded via wget) at solar metallicity
+    ./resample_grackle_cooling_tables.py
+The CloudyData_UVB=HM2012_resampled.h5 file in this folder was generated via this command:
+    ./resample_grackle_cooling_tables.py --output CloudyData_UVB=HM2012_resampled.h5
+Resample using the default CloudyData_UVB=HM2012.h5 data (auto-downloaded via wget) at 0.5 solar metallicity
+    ./resample_grackle_cooling_tables.py --zmet 0.5
+Resample with user-provided tables and non-default spacing parameters
+    ./resample_grackle_cooling_tables.py /path/to/CloudyData.h5 --n_rho 50 --n_eint 400 --output my_tables.h5
+Validate fast_log2 <-> inverse_fast_log2
+    ./resample_grackle_cooling_tables.py --test
+"""
+
+import os
+import shutil
+import subprocess
+import tempfile
 
 import numpy as np
 import h5py
@@ -8,6 +27,12 @@ import h5py
 from grackle_tables import (
     read_tables, cooling_rate, interpolate_mu, compute_temperature_from_nH_e,
     m_H, boltzmann_constant_cgs_, cloudy_H_mass_fraction, specific_energy_from_temperature
+)
+
+
+DEFAULT_GRACKLE_DATA_URL = (
+    "https://github.com/grackle-project/grackle_data_files/raw/"
+    "928696482fbe15d9bac4382de6134d95568f099c/input/CloudyData_UVB=HM2012.h5"
 )
 
 
@@ -179,8 +204,8 @@ def find_eint_range(tables):
 
 
 def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, zmet=1.0,
-                            output_file='resampled_cooling_tables.h5'):
-    """Resample cooling tables on a not-quite-logarithmic grid of density and specific internal energy.    
+                            output_file='resampled_cooling_tables.h5', include_pe=True):
+    """Resample cooling tables on a not-quite-logarithmic grid of density and specific internal energy.
     Uses the fast logarithm approximation from https://arxiv.org/pdf/2206.08957 for grid spacing.
     
     Computes and stores:
@@ -248,6 +273,7 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, zmet=1.0,
     print(f"Resampling cooling tables on {n_rho} x {n_eint} grid using not-quite-logarithmic spacing...")
     print(f"Density range: {rho_min:.2e} to {rho_max:.2e} g/cm^3")
     print(f"Specific energy range: {eint_min:.2e} to {eint_max:.2e} erg/g")
+    print(("Including" if include_pe else "Not including") + " photoelectric heating.")
     print("")
     
     # Loop over the grid and compute cooling rates
@@ -261,7 +287,7 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, zmet=1.0,
         for j, e_int in enumerate(eint_grid):
             try:
                 T = compute_temperature_from_nH_e(nH, e_int, tables=tables)
-                Edot = cooling_rate(nH, T, zmet, redshift=0., tables=tables)
+                Edot = cooling_rate(nH, T, zmet, redshift=0., tables=tables, include_pe=include_pe)
                 mu = interpolate_mu(nH, T, tables=tables)
                 cs = compute_sound_speed(rho, T, mu)
                 P = compute_pressure(rho, T, mu)
@@ -389,19 +415,40 @@ def test_inverse_fast_log2():
     return max_error < eps * tolerance_factor
 
 
+def download_default_grackle_tables(url: str = DEFAULT_GRACKLE_DATA_URL) -> str:
+    """Download the default Grackle tables via wget and return the temporary file path."""
+    if shutil.which('wget') is None:
+        raise RuntimeError("wget is required to download default Grackle tables automatically.")
+
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.h5')
+    temp_path = temp_file.name
+    temp_file.close()
+
+    print(f"Downloading default Grackle tables from {url}")
+    try:
+        subprocess.run(['wget', '-O', temp_path, url], check=True)
+    except subprocess.CalledProcessError as exc:
+        os.unlink(temp_path)
+        raise RuntimeError("Failed to download default Grackle tables via wget.") from exc
+
+    return temp_path
+
+
 def main():
     """Main function to run the resampling."""
     import argparse
-    
+    import sys
+
     parser = argparse.ArgumentParser(description='Resample Grackle cooling tables on (rho, e_int) grid')
-    
+
     parser.add_argument('grackle_file', type=str, nargs='?',
-                        help='Path to Grackle HDF5 cooling table file')
-    
+                        help=('Path to Grackle HDF5 cooling table file. '
+                              'If omitted, downloads the default HM2012 tables automatically.'))
+
     # Mode selection
     parser.add_argument('--test', action='store_true',
                         help='Test the inverse_fast_log2 function')
-    
+
     # Parameters for resampling
     parser.add_argument('--n_rho', type=int, default=30,
                         help='Number of density points (default: 30)')
@@ -409,30 +456,43 @@ def main():
                         help='Number of specific energy points (default: 200)')
     parser.add_argument('--output', type=str, default='resampled_cooling_tables.h5',
                         help='Output HDF5 file name (default: resampled_cooling_tables.h5)')
-
+    parser.add_argument('--exclude_pe', action='store_true',
+                        help='Exclude photoelectric heating (default: False, i.e., include PE heating)')
     parser.add_argument('--zmet', type=float, default=1.0,
                         help='Gas Metallicity scaled to Solar (default: 1.0)')
-    
+
     args = parser.parse_args()
-    
+
     if args.test:
         # Run the test
         success = test_inverse_fast_log2()
-        import sys
         sys.exit(0 if success else 1)
-    
-    # For other modes, grackle_file is required
-    if not args.grackle_file:
-        parser.error("grackle_file is required unless using --test mode")    
-    else:
-        # Resampling mode
+
+    cleanup_path = None
+    grackle_file = args.grackle_file
+    if not grackle_file:
+        try:
+            cleanup_path = download_default_grackle_tables()
+            grackle_file = cleanup_path
+        except RuntimeError as err:
+            parser.error(str(err))
+
+    try:
         resample_cooling_tables(
-            args.grackle_file,
+            grackle_file,
             n_rho=args.n_rho,
             n_eint=args.n_eint,
-            zmet = args.zmet,
-            output_file=args.output
+            zmet=args.zmet,
+            output_file=args.output,
+            include_pe=not args.exclude_pe
         )
+    finally:
+        if cleanup_path:
+            try:
+                os.unlink(cleanup_path)
+            except FileNotFoundError:
+                # It is safe to ignore if the file is already deleted or was never created.
+                pass
 
 
 if __name__ == '__main__':

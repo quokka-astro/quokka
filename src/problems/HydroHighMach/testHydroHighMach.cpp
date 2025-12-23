@@ -46,6 +46,8 @@ template <> struct Physics_Traits<HighMachProblem> {
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
+	static constexpr bool is_dust_enabled = false;
+	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = 1; // number of radiation groups
@@ -258,15 +260,14 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<HighMachProblem> sim(BCs_cc);
 
-	sim.computeReferenceSolution_ = true;
-
 	// initialize and evolve
 	sim.setInitialConditions();
 	sim.evolve();
 
 	const double error_tol = 0.26;
 	int status = 0;
-	if (sim.errorNorm_ > error_tol || std::isnan(sim.errorNorm_)) {
+	amrex::Real const error_norm = sim.computeErrorNorm();
+	if (error_norm > error_tol || std::isnan(error_norm)) {
 		status = 1;
 	}
 

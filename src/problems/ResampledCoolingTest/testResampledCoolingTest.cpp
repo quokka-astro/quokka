@@ -95,6 +95,8 @@ template <> struct Physics_Traits<ResampledCoolingTest> {
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
+	static constexpr bool is_dust_enabled = false;
+	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
@@ -168,6 +170,10 @@ auto problem_main() -> int
 
 	std::string output_csv_file;
 	pp.query("output_csv_file", output_csv_file);
+
+	amrex::ParmParse const ppp;
+	bool use_sfh_based_pe_heating = false;
+	ppp.query("use_sfh_based_pe_heating", use_sfh_based_pe_heating);
 
 	// Set boundary conditions - extrapolate
 	auto BCs_cc = quokka::BC<ResampledCoolingTest>(quokka::BCType::foextrap);
@@ -315,7 +321,7 @@ auto problem_main() -> int
 		matplotlibcpp::xlabel("time (Myr)");
 		matplotlibcpp::ylabel("Temperature (K)");
 		matplotlibcpp::title("Isochoric Cooling Test");
-		matplotlibcpp::save("./cooling_temperature.pdf");
+		matplotlibcpp::save(use_sfh_based_pe_heating ? "./cooling_temperature_sfh_base_pe.pdf" : "./cooling_temperature.pdf");
 #endif
 	}
 
