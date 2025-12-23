@@ -4,7 +4,29 @@
 # https://aka.ms/yaml
 
 trigger:
-- development
+  branches:
+    include:
+    - development
+  paths:
+    include:
+    - src/**
+    - inputs/**
+    - CMakeLists.txt
+    - .ci/azure-pipelines.yml
+    - extern/cooling/*.h5
+    - extern/amrex/**
+    - extern/Microphysics/**
+    - extern/fmt/**
+    - extern/yaml-cpp/**
+    - extern/openPMD-api/**
+    - extern/AMReX-Hydro/**
+    exclude:
+    - docs/**
+    - paper/**
+    - scripts/**
+    - '*.md'
+    - '*.rst'
+    - '*.txt'
 
 pr:
   autoCancel: true
@@ -13,20 +35,23 @@ pr:
     - development
   paths:
     include:
-    - src/*
-    - inputs/*
+    - src/**
+    - tests/**
+    - inputs/**
     - CMakeLists.txt
-    - .ci/*
-    - extern/amrex
-    - extern/Microphysics
-    - extern/fmt
-    - extern/yaml-cpp
-    - extern/openPMD-api
-    - extern/turbulence
+    - .ci/azure-pipelines.yml
+    - extern/cooling/*.h5
+    - extern/amrex/**
+    - extern/Microphysics/**
+    - extern/fmt/**
+    - extern/yaml-cpp/**
+    - extern/openPMD-api/**
+    - extern/AMReX-Hydro/**
+    - extern/turbulence/**
     exclude:
-    - docs/*
-    - paper/*
-    - scripts/*
+    - docs/**
+    - paper/**
+    - scripts/**
     - '*.md'
     - '*.rst'
     - '*.txt'
