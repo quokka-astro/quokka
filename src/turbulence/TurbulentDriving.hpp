@@ -51,11 +51,11 @@ template <typename problem_t> class turbulentDriving
       private:
 	TurbGenEx tg;
 	bool updated = false;
-	amrex::Gpu::DeviceVector<amrex::Real> disp = {-1.0, -1.0, -1.0};
+	amrex::GpuArray<amrex::Real, 3> disp = {-1.0, -1.0, -1.0};
 
 	void update(const amrex::Real &time, amrex::MultiFab &state)
 	{
-		auto disp = quokka::turbulence::calculate_dispersion<problem_t>(state);
+		disp = quokka::turbulence::calculate_dispersion<problem_t>(state);
 		updated = time == 0 ? tg.check_for_update(time) : tg.check_for_update(time, disp.data());
 	}
 
@@ -103,39 +103,54 @@ template <typename problem_t> class turbulentDriving
 // Function to calculate the mass weighted velocity dispersion in the computational domain
 template <typename problem_t> auto calculate_dispersion(amrex::MultiFab &state) -> amrex::GpuArray<amrex::Real, 3>
 {
-	const amrex::Real sum_rho = state.sum(HydroSystem<problem_t>::density_index, false);
-	const amrex::Real sum_px = state.sum(HydroSystem<problem_t>::x1Momentum_index, false);
-	const amrex::Real sum_py = state.sum(HydroSystem<problem_t>::x2Momentum_index, false);
-	const amrex::Real sum_pz = state.sum(HydroSystem<problem_t>::x3Momentum_index, false);
-	const amrex::GpuArray<amrex::Real, 3> v_avg = {sum_px / sum_rho, sum_py / sum_rho, sum_pz / sum_rho};
-
-	amrex::ReduceOps<amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum> reduce_op;
-	amrex::ReduceData<amrex::Real, amrex::Real, amrex::Real> reduce_data(reduce_op);
+	amrex::ReduceOps<amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum,
+			 amrex::ReduceOpSum>
+	    reduce_op;
+	amrex::ReduceData<amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real> reduce_data(reduce_op);
 
 	for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
 		const amrex::Box &bx = mfi.validbox();
 		auto const &data = state.array(mfi);
 
-		reduce_op.eval(bx, reduce_data, [=] AMREX_GPU_DEVICE(int i, int j, int k) -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real> {
-			amrex::Real rho = data(i, j, k, HydroSystem<problem_t>::density_index);
-			amrex::Real vx = data(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / rho;
-			amrex::Real vy = data(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / rho;
-			amrex::Real vz = data(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / rho;
+		reduce_op.eval(bx, reduce_data,
+			       [=] AMREX_GPU_DEVICE(int i, int j, int k)
+				   -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real> {
+				       const amrex::Real rho = data(i, j, k, HydroSystem<problem_t>::density_index);
+				       const amrex::Real px = data(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+				       const amrex::Real py = data(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+				       const amrex::Real pz = data(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
 
-			return {rho * (vx - v_avg[0]) * (vx - v_avg[0]), rho * (vy - v_avg[1]) * (vy - v_avg[1]), rho * (vz - v_avg[2]) * (vz - v_avg[2])};
-		});
+				       const amrex::Real vx = px / rho;
+				       const amrex::Real vy = py / rho;
+				       const amrex::Real vz = pz / rho;
+
+				       return {rho, px, py, pz, px * vx, py * vy, pz * vz};
+			       });
 	}
 
-	auto stdd = reduce_data.value();
-	amrex::Real dispx = amrex::get<0>(stdd);
-	amrex::Real dispy = amrex::get<1>(stdd);
-	amrex::Real dispz = amrex::get<2>(stdd);
+	auto [sum_rho, sum_px, sum_py, sum_pz, sum_pvx, sum_pvy, sum_pvz] = reduce_data.value();
 
-	amrex::ParallelDescriptor::ReduceRealSum(dispx);
-	amrex::ParallelDescriptor::ReduceRealSum(dispy);
-	amrex::ParallelDescriptor::ReduceRealSum(dispz);
+	amrex::GpuArray<amrex::Real, 7> reduce_vec = {sum_rho, sum_px, sum_py, sum_pz, sum_pvx, sum_pvy, sum_pvz};
+	amrex::ParallelDescriptor::ReduceRealSum(reduce_vec.data(), 7);
 
-	return {std::sqrt(dispx / sum_rho), std::sqrt(dispy / sum_rho), std::sqrt(dispz / sum_rho)};
+	const amrex::Real total_rho = reduce_vec[0];
+	const amrex::Real total_px = reduce_vec[1];
+	const amrex::Real total_py = reduce_vec[2];
+	const amrex::Real total_pz = reduce_vec[3];
+	const amrex::Real total_pvx = reduce_vec[4];
+	const amrex::Real total_pvy = reduce_vec[5];
+	const amrex::Real total_pvz = reduce_vec[6];
+
+	const amrex::Real v_avg_x = total_px / total_rho;
+	const amrex::Real v_avg_y = total_py / total_rho;
+	const amrex::Real v_avg_z = total_pz / total_rho;
+
+	// Compute dispersion using the identity: Var(X) = E[X^2] - (E[X])^2
+	const amrex::Real dispx = std::sqrt(std::max(0.0, (total_pvx / total_rho) - (v_avg_x * v_avg_x)));
+	const amrex::Real dispy = std::sqrt(std::max(0.0, (total_pvy / total_rho) - (v_avg_y * v_avg_y)));
+	const amrex::Real dispz = std::sqrt(std::max(0.0, (total_pvz / total_rho) - (v_avg_z * v_avg_z)));
+
+	return {dispx, dispy, dispz};
 }
 } // namespace quokka::turbulence
 

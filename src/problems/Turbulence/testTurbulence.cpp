@@ -30,7 +30,9 @@ template <> struct Physics_Traits<TurbulentBox> {
 	static constexpr int numMassScalars = 0;
 	static constexpr int numPassiveScalars = numMassScalars + 1;
 	static constexpr int nGroups = 1; // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
+	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
+	static constexpr double boltzmann_constant = C::k_B;
+	static constexpr amrex::Real gravitational_constant = 1.0;
 };
 
 template <> struct quokka::EOS_Traits<TurbulentBox> {
@@ -124,14 +126,26 @@ auto problem_main() -> int
 
 	// Check solution validity
 	int status = 0;
-	auto disp_last = sim.userData_.Disp3d_vec_.back();
-	const double err_tol = 0.075;
-	const double target_vdisp = std::stod(sim.turbParams_["target_vdisp"]);
-	const double rel_error = std::abs(target_vdisp - disp_last) / target_vdisp;
 
-	amrex::Print() << "\n" << "Target velocity dispersion: " << sim.turbParams_["target_vdisp"] << "\n";
-	amrex::Print() << "Last calculated velocity dispersion: " << disp_last << "\n";
-	amrex::Print() << "Relative error: " << rel_error << "\n\n";
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		if (!sim.userData_.Disp3d_vec_.empty()) {
+			const auto disp_last = sim.userData_.Disp3d_vec_.back();
+			const double target_vdisp = std::stod(sim.turbParams_["target_vdisp"]);
+			const double rel_error = std::abs(target_vdisp - disp_last) / target_vdisp;
+			const double err_tol = 0.075;
+
+			amrex::Print() << "\n" << "Target velocity dispersion: " << target_vdisp << "\n";
+			amrex::Print() << "Last calculated velocity dispersion: " << disp_last << "\n";
+			amrex::Print() << "Relative error: " << rel_error << "\n\n";
+
+			if ((rel_error > err_tol) || std::isnan(rel_error)) {
+				status = 1;
+			}
+		} else {
+			amrex::Print() << "Error: Dispersion vector is empty!\n";
+			status = 1;
+		}
+	}
 
 #if HAVE_PYTHON
 	// Plot dispersion
@@ -150,10 +164,6 @@ auto problem_main() -> int
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./Turbulence_vdisp.pdf");
 #endif
-
-	if ((rel_error > err_tol) || std::isnan(rel_error)) {
-		status = 1;
-	}
 
 	return status;
 }

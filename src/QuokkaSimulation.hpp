@@ -210,7 +210,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::LondrilloDelZanna2004; // method to use to average EMF at edges
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
-	quokka::turbulence::turbulentDriving<problem_t> td;
+					       // quokka::turbulence::turbulentDriving<problem_t> td;
+	std::unique_ptr<quokka::turbulence::turbulentDriving<problem_t>> td;
 
 	// member functions
 	explicit QuokkaSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : AMRSimulation<problem_t>(BCs_cc, BCs_fc)
@@ -592,7 +593,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		turbParams_["ndim"] = std::to_string(AMREX_SPACEDIM);
 
 		if (enableTurbulence_ == 1) {
-			td = quokka::turbulence::turbulentDriving<problem_t>(turbParams_);
+			td = std::make_unique<quokka::turbulence::turbulentDriving<problem_t>>(turbParams_);
+			// td = quokka::turbulence::turbulentDriving<problem_t>(turbParams_);
 		}
 	}
 
@@ -950,7 +952,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 
 	if (enableTurbulence_ == 1) {
 		auto const &cellSizes = geom[lev].CellSizeArray();
-		td.applyDriving(state, time, dt, cellSizes);
+		td->applyDriving(state, time, dt, cellSizes);
 	}
 	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
 		DustSystem<problem_t>::computeDustDrag(state, dt, dust_omega_, dust_alpha_);
