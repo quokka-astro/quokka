@@ -210,7 +210,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::LondrilloDelZanna2004; // method to use to average EMF at edges
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
-					       // quokka::turbulence::turbulentDriving<problem_t> td;
 	std::unique_ptr<quokka::turbulence::turbulentDriving<problem_t>> td;
 
 	// member functions
@@ -594,7 +593,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 
 		if (enableTurbulence_ == 1) {
 			td = std::make_unique<quokka::turbulence::turbulentDriving<problem_t>>(turbParams_);
-			// td = quokka::turbulence::turbulentDriving<problem_t>(turbParams_);
 		}
 	}
 
