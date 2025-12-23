@@ -220,7 +220,6 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	// MK5: eqn (48)
 	u_star_R.E = (siui_R * u_R.E - ptot_R * sR.u + ptot_star * spds[2] + bx * (sR.u * bx + (sR.v * u_R.by + sR.w * u_R.bz) - vb_star_R)) * sism_inv_R;
 
-
 	// compute double-star states using MK5 eqns (59)–(63)
 	double rho_sum_inv = 1.0 / (rho_sqrt_L + rho_sqrt_R);
 	double bx_sign = (bx > 0.0 ? 1.0 : -1.0);
@@ -234,7 +233,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	for (int n = 0; n < N_scalars; ++n) {
 		u_dstar_L.scalar[n] = u_star_L.scalar[n];
 		u_dstar_R.scalar[n] = u_star_R.scalar[n];
-  }
+	}
 
 	// MK5: eqn (59)
 	double tmp = rho_sum_inv *
