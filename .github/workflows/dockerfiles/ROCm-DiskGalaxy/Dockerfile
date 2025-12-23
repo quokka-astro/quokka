@@ -1,6 +1,6 @@
 FROM --platform=linux/amd64 opensuse/leap:15.6 AS build
 
-ARG ROCM_ZYPP_REPO_VERSION=6.4.4
+ARG ROCM_ZYPP_REPO_VERSION=6.4.2
 ARG ROCM_ZYPP_PACKAGES=
 ARG MPICH_VERSION=4.1.2
 ARG MPICH_URL=https://www.mpich.org/static/downloads/4.1.2/mpich-4.1.2.tar.gz
