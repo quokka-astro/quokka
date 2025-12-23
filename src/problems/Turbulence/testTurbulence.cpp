@@ -141,29 +141,30 @@ auto problem_main() -> int
 			if ((rel_error > err_tol) || std::isnan(rel_error)) {
 				status = 1;
 			}
+
+#if HAVE_PYTHON
+			// Plot dispersion
+			const std::vector<double> &time = sim.userData_.t_vec_;
+			const std::vector<double> &disp3d = sim.userData_.Disp3d_vec_;
+
+			matplotlibcpp::clf();
+			std::map<std::string, std::string> Vdisp_args;
+			Vdisp_args["label"] = "Velocity dispersion vs time";
+			Vdisp_args["linestyle"] = "-";
+			Vdisp_args["color"] = "C1";
+			matplotlibcpp::plot(time, disp3d, Vdisp_args);
+			matplotlibcpp::xlabel("t (dimensionless)");
+			matplotlibcpp::ylabel("vdisp (dimensionless)");
+			matplotlibcpp::legend();
+			matplotlibcpp::tight_layout();
+			matplotlibcpp::save("./Turbulence_vdisp.pdf");
+#endif
+
 		} else {
 			amrex::Print() << "Error: Dispersion vector is empty!\n";
 			status = 1;
 		}
 	}
-
-#if HAVE_PYTHON
-	// Plot dispersion
-	const std::vector<double> &time = sim.userData_.t_vec_;
-	const std::vector<double> &disp3d = sim.userData_.Disp3d_vec_;
-
-	matplotlibcpp::clf();
-	std::map<std::string, std::string> Vdisp_args;
-	Vdisp_args["label"] = "Velocity dispersion vs time";
-	Vdisp_args["linestyle"] = "-";
-	Vdisp_args["color"] = "C1";
-	matplotlibcpp::plot(time, disp3d, Vdisp_args);
-	matplotlibcpp::xlabel("t (dimensionless)");
-	matplotlibcpp::ylabel("vdisp (dimensionless)");
-	matplotlibcpp::legend();
-	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./Turbulence_vdisp.pdf");
-#endif
 
 	return status;
 }
