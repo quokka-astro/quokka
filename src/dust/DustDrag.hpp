@@ -55,6 +55,13 @@ template <typename problem_t> class DustDrag
 				      amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, Physics_Traits<problem_t>::nDustGroups + 1> /*vel*/,
 				      double /*cs*/) -> amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups>;
 
+	static AMREX_GPU_HOST_DEVICE auto
+	ComputeReciprocalStoppingTimeHelper(amrex::Real rho_g, amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> rho_d,
+					    amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, Physics_Traits<problem_t>::nDustGroups + 1> vel,
+					    double cs, amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> dust_grain_radius,
+					    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> dust_grain_density,
+					    bool enable_supersonic_correction) -> amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups>;
+
 	// compute dust-gas drag source terms and update conserved variables
 	static void computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc_mf, amrex::Real dt,
 				    amrex::Real dust_omega_, int enableInterDustStoptime_);
@@ -69,6 +76,41 @@ AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::ComputeReciprocalStoppingTime(
 	constexpr int N = Physics_Traits<problem_t>::nDustGroups;
 	amrex::GpuArray<amrex::Real, N> alpha;
 	alpha.fill(0.0);
+	return alpha;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::ComputeReciprocalStoppingTimeHelper(
+    amrex::Real rho_g, amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> rho_d,
+    amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, Physics_Traits<problem_t>::nDustGroups + 1> vel, double cs,
+    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> dust_grain_radius,
+    amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> dust_grain_density, bool enable_supersonic_correction)
+    -> amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups>
+{
+	constexpr int N = Physics_Traits<problem_t>::nDustGroups;
+	amrex::GpuArray<amrex::Real, N> alpha;
+
+	for (int g = 0; g < N; ++g) {
+		if (rho_g <= 0.0 || rho_d[g] <= 0.0 || cs <= 0.0) {
+			alpha[g] = 0.0;
+			continue;
+		}
+
+		// compute relative velocity squared between dust group g and gas
+		amrex::Real v_rel_sq = 0.0;
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			amrex::Real v_diff = vel[1 + g][dir] - vel[0][dir];
+			v_rel_sq += v_diff * v_diff;
+		}
+		// compute stopping time t_s with/without supersonic correction
+		amrex::Real t_s_sub =
+		    std::sqrt(M_PI * quokka::EOS_Traits<problem_t>::gamma) * dust_grain_radius[g] * dust_grain_density[g] / (2.0 * std::sqrt(2.0) * rho_g * cs);
+		amrex::Real const correction = 1.0 + static_cast<int>(enable_supersonic_correction) * (9.0 * M_PI / 128.0) * (v_rel_sq / (cs * cs));
+		amrex::Real const t_s_fin = t_s_sub * std::pow(correction, -0.5);
+
+		alpha[g] = (t_s_fin > 0.0) ? 1.0 / t_s_fin : 0.0;
+	}
+
 	return alpha;
 }
 
