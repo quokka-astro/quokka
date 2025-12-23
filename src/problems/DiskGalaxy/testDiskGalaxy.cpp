@@ -110,7 +110,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 		Real const rho_val = values.at(2);
 		Real const velr_val = values.at(3);
 		Real const temp_val = values.at(4);
-		
+
 		radius_h.push_back(R_val);
 		vcirc_h.push_back(vcirc_val);
 		rho_h.push_back(rho_val);
@@ -195,7 +195,6 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 	double const *rhoH_table = userData_.rho_halo.dataPtr();
 	double const *velr_table = userData_.velr_halo.dataPtr();
 	double const *temp_table = userData_.temp_halo.dataPtr();
-	
 
 	auto const len_table = static_cast<int>(userData_.radius.size());
 	const amrex::Real R_table_min = userData_.r_inner;
@@ -204,13 +203,11 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 	const amrex::Real velr_inner = userData_.velr_inner;
 	const amrex::Real temp_inner = userData_.temp_inner;
 
-
 	const amrex::Real R_table_max = userData_.r_outer;
 	const amrex::Real vcirc_outer = userData_.vcirc_outer;
 	const amrex::Real rho_outer = userData_.rho_outer;
 	const amrex::Real velr_outer = userData_.velr_outer;
 	const amrex::Real temp_outer = userData_.temp_outer;
-	
 
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -357,14 +354,14 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		const double vel_Hz_halo = quad_3d(velz_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
 		const double temp_halo = quad_3d(tempHalo_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
 
-		//Compute halo momenta
+		// Compute halo momenta
 		const double momx_halo = rho_halo * vel_Hx_halo;
 		const double momy_halo = rho_halo * vel_Hy_halo;
 		const double momz_halo = rho_halo * vel_Hz_halo;
 
-		//Compute halo total internal energy
-		//use mu = 0.61 as in cooling flow solutions
-		const double eint_halo = rho_halo * C::k_B * temp_halo / 0.61 / C::m_p; 
+		// Compute halo total internal energy
+		// use mu = 0.61 as in cooling flow solutions
+		const double eint_halo = rho_halo * C::k_B * temp_halo / 0.61 / C::m_p;
 
 		AMREX_ALWAYS_ASSERT(!std::isnan(rho_disk));
 
@@ -402,13 +399,13 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		double const vsq = (vx * vx) + (vy * vy) + (vz * vz);
 		double const Eint = quokka::EOS<AgoraGalaxy>::ComputeEintFromTgas(rho, T);
 
-
-		//Add up disk and halo contributions
+		// Add up disk and halo contributions
 		double const rho_disk_halo = rho + rho_halo;
 		double const momx_disk_halo = rho * vx + momx_halo;
 		double const momy_disk_halo = rho * vy + momy_halo;
 		double const momz_disk_halo = rho * vz + momz_halo;
-		double const Ekin_disk_halo = 0.5 * (momx_disk_halo * momx_disk_halo + momy_disk_halo * momy_disk_halo + momz_disk_halo * momz_disk_halo) / rho_disk_halo;
+		double const Ekin_disk_halo =
+		    0.5 * (momx_disk_halo * momx_disk_halo + momy_disk_halo * momy_disk_halo + momz_disk_halo * momz_disk_halo) / rho_disk_halo;
 		double const Eint_disk_halo = Eint + eint_halo;
 		double const Etot_disk_halo = Eint_disk_halo + Ekin_disk_halo;
 
