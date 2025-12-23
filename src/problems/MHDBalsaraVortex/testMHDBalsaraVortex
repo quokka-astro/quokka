@@ -3,7 +3,7 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file testMHDBalsaraVortex.cpp
-/// \brief hydro (HLLC) Balsara vortex (constant-ρ, prescribed p).
+/// \brief advecting MHD Balsara vortex.
 ///
 
 #include <cassert>
@@ -49,82 +49,134 @@ constexpr double bg_pressure = 1.0;
 constexpr double sound_speed = gcem::sqrt(gamma_gas * bg_pressure / bg_density);
 // vortex parameters
 AMREX_GPU_MANAGED double vortex_Mach = 0.01; // NOLINT
+AMREX_GPU_MANAGED double vortex_b_magn = 0.01; // NOLINT
 // domain extends over [-5, 5] by default
 constexpr double vortex_center_x1 = 0.0;
 constexpr double vortex_center_x2 = 0.0;
-// drift is off by default
+// no drift by default
 AMREX_GPU_MANAGED double vortex_drift_x1 = 0.0; // NOLINT
 AMREX_GPU_MANAGED double vortex_drift_x2 = 0.0; // NOLINT
 
-AMREX_GPU_DEVICE
-inline void computeVortexSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeRadiusSq(const double x1, const double x2) -> double
 {
+	const double delta_x1_from_center = x1 - vortex_center_x1;
+	const double delta_x2_from_center = x2 - vortex_center_x2;
+	return delta_x1_from_center * delta_x1_from_center + delta_x2_from_center * delta_x2_from_center;
+}
+
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeRadialProfile(const double radius_sq) -> double
+{
+	return std::exp(0.5 * (1.0 - radius_sq));
+}
+
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto Az(const double x1, const double x2) -> double
+{
+	// vec(a) = (0, 0, a_z), with:
+	//   a_z = b_magn * exp((1 - r^2)/2)
+	// so that:
+	//   b_x =  d(a_z)/dy = -y * b_magn * exp((1 - r^2)/2)
+	//   b_y = -d(a_z)/dx =  x * b_magn * exp((1 - r^2)/2)
+	const double radius_sq = computeRadiusSq(x1, x2);
+	const double radial_profile = computeRadialProfile(radius_sq);
+	return vortex_b_magn * radial_profile;
+}
+
+AMREX_GPU_DEVICE
+void computeVortexSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir)
+{
+	// lower-left corner
 	const amrex::Real x1_L = prob_lo[0] + i * dx[0];
 	const amrex::Real x2_L = prob_lo[1] + j * dx[1];
-	const amrex::Real x1_C = x1_L + 0.5 * dx[0];
-	const amrex::Real x2_C = x2_L + 0.5 * dx[1];
 
-	const double delta_x1_from_center = static_cast<double>(x1_C) - vortex_center_x1;
-	const double delta_x2_from_center = static_cast<double>(x2_C) - vortex_center_x2;
-	const double radius_sq = delta_x1_from_center * delta_x1_from_center + delta_x2_from_center * delta_x2_from_center;
-	const double radial_profile = std::exp(0.5 * (1.0 - radius_sq));
-	const double radial_profile_sq = radial_profile * radial_profile;
+	if (cen == quokka::centering::cc) {
+		const amrex::Real x1_C = x1_L + static_cast<amrex::Real>(0.5) * dx[0];
+		const amrex::Real x2_C = x2_L + static_cast<amrex::Real>(0.5) * dx[1];
 
-	const double density = bg_density;
-	const double vortex_speed = vortex_Mach * sound_speed;
-	const double pressure = bg_pressure - 0.5 * density * vortex_speed * vortex_speed * radial_profile_sq;
+		const double radius_sq = computeRadiusSq(x1_C, x2_C);
+		const double radial_profile = computeRadialProfile(radius_sq);
+		const double radial_profile_sq = radial_profile * radial_profile;
+		const double delta_x1_from_center = x1_C - vortex_center_x1;
+		const double delta_x2_from_center = x2_C - vortex_center_x2;
 
-	const double delta_vel_x1 = -delta_x2_from_center * vortex_speed * radial_profile;
-	const double delta_vel_x2 = delta_x1_from_center * vortex_speed * radial_profile;
-	const double vel_x1 = vortex_drift_x1 + delta_vel_x1;
-	const double vel_x2 = vortex_drift_x2 + delta_vel_x2;
-	const double vel_x3 = 0.0;
+		const double vortex_u_magn = vortex_Mach * sound_speed;
+		
+		const double pressure = bg_pressure + 0.5 * (vortex_b_magn * vortex_b_magn * (1.0 - radius_sq) - vortex_u_magn * vortex_u_magn) * radial_profile_sq;
+		const double Eint = pressure / (gamma_gas - 1.0);
 
-	const double mom_x1 = density * vel_x1;
-	const double mom_x2 = density * vel_x2;
-	const double mom_x3 = density * vel_x3;
+		const double delta_vel_x1 = -delta_x2_from_center * vortex_u_magn * radial_profile;
+		const double delta_vel_x2 = delta_x1_from_center * vortex_u_magn * radial_profile;
+		const double vel_x1 = vortex_drift_x1 + delta_vel_x1;
+		const double vel_x2 = vortex_drift_x2 + delta_vel_x2;
+		const double vel_x3 = 0.0;
+		const double mom_x1 = bg_density * vel_x1;
+		const double mom_x2 = bg_density * vel_x2;
+		const double mom_x3 = bg_density * vel_x3;
+		const double Ekin = 0.5 * bg_density * (vel_x1 * vel_x1 + vel_x2 * vel_x2 + vel_x3 * vel_x3);
 
-	const double Eint = pressure / (gamma_gas - 1.0);
-	const double Ekin = 0.5 * density * (vel_x1 * vel_x1 + vel_x2 * vel_x2 + vel_x3 * vel_x3);
-	const double Etot = Eint + Ekin;
+		const double Bx_cc = -delta_x2_from_center * vortex_b_magn * radial_profile;
+		const double By_cc = delta_x1_from_center * vortex_b_magn * radial_profile;
+		const double Bz_cc = 0.0;
+		const double Emag = 0.5 * (Bx_cc * Bx_cc + By_cc * By_cc + Bz_cc * Bz_cc);
 
-	state(i, j, k, HydroSystem<MHDBalsaraVortex>::density_index) = density;
-	state(i, j, k, HydroSystem<MHDBalsaraVortex>::x1Momentum_index) = mom_x1;
-	state(i, j, k, HydroSystem<MHDBalsaraVortex>::x2Momentum_index) = mom_x2;
-	state(i, j, k, HydroSystem<MHDBalsaraVortex>::x3Momentum_index) = mom_x3;
-	state(i, j, k, HydroSystem<MHDBalsaraVortex>::energy_index) = Etot;
-	state(i, j, k, HydroSystem<MHDBalsaraVortex>::internalEnergy_index) = Eint;
+		const double Etot = Eint + Ekin + Emag;
+
+		state(i, j, k, HydroSystem<MHDBalsaraVortex>::density_index) = bg_density;
+		state(i, j, k, HydroSystem<MHDBalsaraVortex>::x1Momentum_index) = mom_x1;
+		state(i, j, k, HydroSystem<MHDBalsaraVortex>::x2Momentum_index) = mom_x2;
+		state(i, j, k, HydroSystem<MHDBalsaraVortex>::x3Momentum_index) = mom_x3;
+		state(i, j, k, HydroSystem<MHDBalsaraVortex>::energy_index) = Etot;
+		state(i, j, k, HydroSystem<MHDBalsaraVortex>::internalEnergy_index) = Eint;
+
+	} else if (cen == quokka::centering::fc) {
+		const auto b_x1_L = (Az(x1_L, x2_L + static_cast<double>(dx[1])) - Az(x1_L, x2_L)) / static_cast<double>(dx[1]);
+		const auto b_x2_L = (Az(x1_L, x2_L) - Az(x1_L + static_cast<double>(dx[0]), x2_L)) / static_cast<double>(dx[0]);
+		const auto b_x3_L = 0.0;
+
+		if (dir == quokka::direction::x) {
+			state(i, j, k, MHDSystem<MHDBalsaraVortex>::bfield_index) = b_x1_L;
+		} else if (dir == quokka::direction::y) {
+			state(i, j, k, MHDSystem<MHDBalsaraVortex>::bfield_index) = b_x2_L;
+		} else if (dir == quokka::direction::z) {
+			state(i, j, k, MHDSystem<MHDBalsaraVortex>::bfield_index) = b_x3_L;
+		}
+	}
 }
 
 template <> void QuokkaSimulation<MHDBalsaraVortex>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
-	const amrex::Array4<double> &state_cc = grid_elem.array_;
+	const amrex::Array4<amrex::Real> &state_cc = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const quokka::centering cen = grid_elem.cen_;
+	const quokka::direction dir = grid_elem.dir_;
+
 	const int ncomp_cc = Physics_Indices<MHDBalsaraVortex>::nvarTotal_cc;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int icomp = 0; icomp < ncomp_cc; ++icomp) {
-			state_cc(i, j, k, icomp) = 0.0;
+			state_cc(i, j, k, icomp) = 0.0; // fill unused quantities with zeros
 		}
-		computeVortexSolution(i, j, k, state_cc, dx, prob_lo);
+		computeVortexSolution(i, j, k, state_cc, dx, prob_lo, cen, dir);
 	});
 }
 
 template <> void QuokkaSimulation<MHDBalsaraVortex>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
 {
-	// extract grid information
-	const amrex::Array4<double> &state_fc = grid_elem.array_;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	const amrex::Array4<amrex::Real> &state_fc = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const quokka::centering cen = grid_elem.cen_;
+	const quokka::direction dir = grid_elem.dir_;
 
 	const int ncomp_fc = Physics_Indices<MHDBalsaraVortex>::nvarPerDim_fc;
-	// loop over the grid and set the initial condition
+
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		for (int n = 0; n < ncomp_fc; ++n) {
-			state_fc(i, j, k, n) = 0; // fill all b-field quantities with zeros
+		for (int icomp = 0; icomp < ncomp_fc; ++icomp) {
+			state_fc(i, j, k, icomp) = 0.0; // fill unused quantities with zeros
 		}
+		computeVortexSolution(i, j, k, state_fc, dx, prob_lo, cen, dir);
 	});
 }
 
@@ -139,9 +191,27 @@ void QuokkaSimulation<MHDBalsaraVortex>::computeReferenceSolution(amrex::MultiFa
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			for (int icomp = 0; icomp < ncomp; ++icomp) {
-				stateExact(i, j, k, icomp) = 0.0;
+				stateExact(i, j, k, icomp) = 0.0; // fill unused quantities with zeros
 			}
-			computeVortexSolution(i, j, k, stateExact, dx, prob_lo);
+			computeVortexSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::cc, quokka::direction::na);
+		});
+	}
+}
+
+template <>
+void QuokkaSimulation<MHDBalsaraVortex>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+								     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
+{
+	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &stateExact = ref.array(iter);
+		auto const ncomp = ref.nComp();
+
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			for (int icomp = 0; icomp < ncomp; ++icomp) {
+				stateExact(i, j, k, icomp) = 0.0; // fill unused quantities with zeros
+			}
+			computeVortexSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::fc, dir);
 		});
 	}
 }
@@ -153,9 +223,10 @@ auto problem_main() -> int
 	int advection_int = 0;
 	int num_orbits = 1;
 	hpp.query("vortex_Mach", vortex_Mach);
+	hpp.query("vortex_b_magn", vortex_b_magn);
 	hpp.query("advection", advection_int);
 	hpp.query("num_orbits", num_orbits);
-	const double vortex_speed = vortex_Mach * sound_speed;
+	const double vortex_u_magn = vortex_Mach * sound_speed;
 	const bool is_advection_enabled = (advection_int != 0);
 
 	auto BCs_cc = quokka::BC<MHDBalsaraVortex>(quokka::BCType::int_dir);
@@ -173,7 +244,7 @@ auto problem_main() -> int
 
 	double stop_time = 0.0;
 	if (is_advection_enabled) {
-		const double advection_speed = vortex_speed;
+		const double advection_speed = vortex_u_magn;
 		vortex_drift_x2 = vortex_drift_x1 = advection_speed / std::sqrt(2.0);
 		const double length_x1 = sim.geom[0].ProbLength(0);
 		const double length_x2 = sim.geom[0].ProbLength(1);
@@ -181,11 +252,11 @@ auto problem_main() -> int
 			amrex::Abort("The domain must be square for advection.");
 		}
 		const double advection_distance = std::sqrt(length_x1 * length_x1 + length_x2 * length_x2);
-		const double advection_duration = advection_distance / vortex_speed;
+		const double advection_duration = advection_distance / vortex_u_magn;
 		stop_time = static_cast<double>(num_orbits) * advection_duration;
 	} else {
 		vortex_drift_x1 = vortex_drift_x2 = 0.0;
-		const double orbital_duration = 2 * M_PI / vortex_speed;
+		const double orbital_duration = 2.0 * M_PI / vortex_u_magn;
 		stop_time = static_cast<double>(num_orbits) * orbital_duration;
 	}
 
