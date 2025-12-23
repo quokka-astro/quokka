@@ -236,7 +236,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			Bx = -B_phi * y_mid / R_mid;
 			By = B_phi * x_mid / R_mid;
 		}
-		amrex::Real const magnetic_energy_density = 0.5 * ((Bx * Bx) + (By * By));
+		amrex::Real const Emag = 0.5 * ((Bx * Bx) + (By * By));
 
 		// compute density profile
 		auto rho_exact = [rho_0, R_d, z_d](double x, double y, double z) {
@@ -396,7 +396,6 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		}
 
 		// compute auxiliary quantities
-		double const vsq = (vx * vx) + (vy * vy) + (vz * vz);
 		double const Eint = quokka::EOS<AgoraGalaxy>::ComputeEintFromTgas(rho, T);
 
 		// Add up disk and halo contributions
@@ -407,7 +406,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		double const Ekin_disk_halo =
 		    0.5 * (momx_disk_halo * momx_disk_halo + momy_disk_halo * momy_disk_halo + momz_disk_halo * momz_disk_halo) / rho_disk_halo;
 		double const Eint_disk_halo = Eint + eint_halo;
-		double const Etot_disk_halo = Eint_disk_halo + Ekin_disk_halo;
+		double const Etot_disk_halo = Eint_disk_halo + Ekin_disk_halo + Emag;
 
 		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::density_index) = rho_disk_halo;
 		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::x1Momentum_index) = momx_disk_halo;
