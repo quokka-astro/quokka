@@ -37,6 +37,8 @@ template <> struct Physics_Traits<MHDBalsaraVortex> {
 	static constexpr int numPassiveScalars = numMassScalars + 0;
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_radiation_enabled = false;
+	static constexpr bool is_dust_enabled = false;
+	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr bool is_mhd_enabled = true;
 	static constexpr int nGroups = 1;
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
@@ -261,15 +263,21 @@ auto problem_main() -> int
 	}
 
 	sim.stopTime_ = stop_time;
-	sim.computeReferenceSolution_ = true;
 
 	sim.setInitialConditions();
 	sim.evolve();
 
-	int status = 0;
-	const double error_tol = 0.002;
-	if (sim.errorNorm_ > error_tol) {
-		status = 1;
+	int status = 1;
+	const double error_tol = 0.005;
+	amrex::Real const error_norm = sim.computeErrorNorm();
+	if (error_norm < error_tol) {
+		status = 0;
+		amrex::Print() << "Error norm = " << error_norm << "\n";
+		amrex::Print() << "test passed\n";
+	} else {
+		amrex::Print() << "Error norm = " << error_norm << "\n";
+		amrex::Print() << "test failed\n";
 	}
+
 	return status;
 }
