@@ -458,25 +458,30 @@ void write_2D_header(std::ostream &os, const amrex::FArrayBox &f, int nvar)
 auto transform_box_to_2D(amrex::Direction const &dir, amrex::Box const &box) -> amrex::Box
 {
 	// transform box dimensions (Nx, Ny, Nz) -> (Nx', Ny', 1) where *one* of Nx, Ny, Nz == 1.
-	// NOTE: smallBox is assumed to be {0, 0, 0}.
-	amrex::IntVect dim = box.bigEnd();
-	amrex::IntVect bigEnd;
+	// Preserve the original indices in the remaining dimensions.
+	amrex::IntVect smallEnd = box.smallEnd();
+	amrex::IntVect bigEnd = box.bigEnd();
+	amrex::IntVect smallEnd2d;
+	amrex::IntVect bigEnd2d;
 
 	if (dir == amrex::Direction::x) { // y-z plane
-		bigEnd = amrex::IntVect(amrex::Dim3{dim[1], dim[2], 0});
+		smallEnd2d = amrex::IntVect(amrex::Dim3{smallEnd[1], smallEnd[2], 0});
+		bigEnd2d = amrex::IntVect(amrex::Dim3{bigEnd[1], bigEnd[2], 0});
 #if AMREX_SPACEDIM >= 2
 	} else if (dir == amrex::Direction::y) { // x-z plane
-		bigEnd = amrex::IntVect(amrex::Dim3{dim[0], dim[2], 0});
+		smallEnd2d = amrex::IntVect(amrex::Dim3{smallEnd[0], smallEnd[2], 0});
+		bigEnd2d = amrex::IntVect(amrex::Dim3{bigEnd[0], bigEnd[2], 0});
 #endif
 #if AMREX_SPACEDIM == 3
 	} else if (dir == amrex::Direction::z) { // x-y plane
-		bigEnd = amrex::IntVect(amrex::Dim3{dim[0], dim[1], 0});
+		smallEnd2d = amrex::IntVect(amrex::Dim3{smallEnd[0], smallEnd[1], 0});
+		bigEnd2d = amrex::IntVect(amrex::Dim3{bigEnd[0], bigEnd[1], 0});
 #endif
 	} else {
 		amrex::Abort("detail::transform_box_to_2D: invalid direction!");
 	}
 
-	return amrex::Box(amrex::IntVect(amrex::Dim3{0, 0, 0}), bigEnd);
+	return amrex::Box(smallEnd2d, bigEnd2d);
 }
 
 auto transform_realbox_to_2D(amrex::Direction const &dir, amrex::RealBox const &box) -> amrex::RealBox
@@ -543,8 +548,8 @@ void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex
 		// Iterate in the same order as varnames
 		for (const auto &varname : varnames) {
 			const amrex::MultiFab &comp_mf = proj.at(varname)[lev];
-			// Copy comp_mf (1 comp) to mf_all[lev] at component icomp
-			amrex::MultiFab::Copy(mf_all[lev], comp_mf, 0, icomp, 1, 0);
+			// ParallelCopy handles differing DistributionMappings safely.
+			mf_all[lev].ParallelCopy(comp_mf, 0, icomp, 1, 0, 0);
 			icomp++;
 		}
 	}

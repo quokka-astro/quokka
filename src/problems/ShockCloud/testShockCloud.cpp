@@ -616,9 +616,9 @@ template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<s
 }
 
 template <>
-auto QuokkaSimulation<ShockCloud>::ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
+auto QuokkaSimulation<ShockCloud>::ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>>
 {
-	std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
+	std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> proj;
 
 	auto tables = resampledTables_.const_tables();
 	Real const H_mass_fraction = tables.cloudy_H_mass_fraction;

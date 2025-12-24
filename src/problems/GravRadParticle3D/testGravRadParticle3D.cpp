@@ -126,9 +126,9 @@ template <> void QuokkaSimulation<ParticleProblem>::setInitialConditionsOnGrid(q
 }
 
 template <>
-auto QuokkaSimulation<ParticleProblem>::ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
+auto QuokkaSimulation<ParticleProblem>::ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>>
 {
-	std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
+	std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> proj;
 
 	Real const H_mass_fraction = 1.0;
 
