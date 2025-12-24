@@ -169,13 +169,14 @@ enum class StellarEvolutionStage { LowMassStar, SNProgenitor, SNRemnant, LowMass
 
 // Indices for StochasticStellarPop_particles
 enum StochasticStellarPopParticleDataIdx {
-	StochasticStellarPopParticleMassIdx = 0,  // Mass of the particle
-	StochasticStellarPopParticleVxIdx,	  // Velocity in x direction
-	StochasticStellarPopParticleVyIdx,	  // Velocity in y direction
-	StochasticStellarPopParticleVzIdx,	  // Velocity in z direction
-	StochasticStellarPopParticleBirthTimeIdx, // Time when particle becomes active
-	StochasticStellarPopParticleDeathTimeIdx, // Time when particle becomes inactive
-	StochasticStellarPopParticleLumIdx	  // Base index for luminosity components
+	StochasticStellarPopParticleMassIdx = 0,    // Mass of the particle
+	StochasticStellarPopParticleVxIdx,	    // Velocity in x direction
+	StochasticStellarPopParticleVyIdx,	    // Velocity in y direction
+	StochasticStellarPopParticleVzIdx,	    // Velocity in z direction
+	StochasticStellarPopParticleBirthTimeIdx,   // Time when particle becomes active
+	StochasticStellarPopParticleDeathTimeIdx,   // Time when particle becomes inactive
+	StochasticStellarPopParticleMassAtBirthIdx, // Particle mass at birth
+	StochasticStellarPopParticleLumIdx	    // Base index for luminosity components
 };
 
 constexpr int StochasticStellarPopParticleStageIdx = 0; // Evolution stage of the particle, index in the integer components
@@ -184,9 +185,9 @@ constexpr int StochasticStellarPopParticleStageIdx = 0; // Evolution stage of th
 template <typename problem_t>
 constexpr int StochasticStellarPopParticleRealComps = []() constexpr {
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
-		return 6 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, death_time, lum[nGroups]
+		return 7 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, death_time, mass_at_birth, lum[nGroups]
 	} else {
-		return 6; // mass, vx, vy, vz, birth_time, death_time
+		return 7; // mass, vx, vy, vz, birth_time, death_time, mass_at_birth
 	}
 }();
 
@@ -251,6 +252,8 @@ using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
 
 #endif // AMREX_SPACEDIM == 3
 
+//-------------------- Units --------------------
+
 // Units data for each particle type as powers of Mass, Length, Time, Temperature
 inline auto get_units_data() -> const auto &
 {
@@ -272,6 +275,7 @@ inline auto get_units_data() -> const auto &
 	       {"vz", {0, 1, -1, 0}},
 	       {"birth_time", {0, 0, 1, 0}},
 	       {"death_time", {0, 0, 1, 0}},
+	       {"mass_at_birth", {1, 0, 0, 0}},
 	       {"luminosity", {-1, 2, -3, 0}}}}},
 	    {ParticleType::Sink, {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}}}}},
 	    {ParticleType::Test,
@@ -314,8 +318,13 @@ inline bool sink_particle_use_uniform_kernel = false; // NOLINT. If true, use un
 // Verbosity for particle operations
 inline int particle_verbose = 0; // NOLINT print particle logistics
 
+// Disable particle drift
+inline bool disable_particle_drift = false; // NOLINT
+
 // Maximum velocity limit for stellar particles in cm/s (default: 1000 km/s)
 inline amrex::Real stellar_velocity_limit = 1.0e8; // NOLINT
+
+inline int reproducibility_roundoff_redundancy = 20; // NOLINT; remove 20 bits from the significand
 
 // Function to parse particle parameters from input file
 // The 'inline' keyword allows this function to be defined in a header file without
@@ -339,8 +348,14 @@ inline void particleParmParse()
 	// Handle integer verbose flag
 	pp.query("verbose", particle_verbose);
 
+	// Disable particle drift
+	pp.query("disable_particle_drift", disable_particle_drift);
+
 	// Stellar velocity limit parameter
 	pp.query("stellar_velocity_limit", stellar_velocity_limit);
+
+	// Roundoff factor for particles
+	pp.query("reproducibility_roundoff_redundancy", reproducibility_roundoff_redundancy);
 
 	// Placeholder parameters for particles
 	pp.query("param1", particle_param1);

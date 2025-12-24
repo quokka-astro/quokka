@@ -1,5 +1,5 @@
 # Use the AMD ROCm image as the base image
-FROM ghcr.io/quokka-astro/quokka-amd64-rocm-frontier:latest
+FROM ghcr.io/quokka-astro/quokka-linux-amd64-rocm:development
 ENV TARGETARCH="linux/amd64"
 
 USER root
@@ -8,6 +8,7 @@ USER root
 RUN zypper --non-interactive refresh && \
     zypper --non-interactive update && \
     zypper --non-interactive install \
+        ccache \
         curl \
         git \
         jq \

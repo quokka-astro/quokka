@@ -41,3 +41,7 @@ particles.verbose = 1
 max_timesteps = 10
 plotfile_interval = -1
 checkpoint_interval = -1
+
+#temperature_floor = 10
+density_floor = 1e-26
+signal_speed_abort = 4e8

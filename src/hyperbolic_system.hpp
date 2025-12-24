@@ -14,6 +14,7 @@
 ///
 
 // c++ headers
+#include <algorithm>
 #include <cmath>
 
 // library headers
@@ -57,7 +58,7 @@ template <typename problem_t> class HyperbolicSystem
 
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto MC(double a, double b) -> double
 	{
-		return 0.5 * (sgn(a) + sgn(b)) * std::min(0.5 * std::abs(a + b), std::min(2.0 * std::abs(a), 2.0 * std::abs(b)));
+		return 0.5 * (sgn(a) + sgn(b)) * std::min({0.5 * std::abs(a + b), 2.0 * std::abs(a), 2.0 * std::abs(b)});
 	}
 
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto minmod(double a, double b) -> double
@@ -69,9 +70,6 @@ template <typename problem_t> class HyperbolicSystem
 	{
 		return std::max(std::min(a, b), std::min(std::max(a, b), c));
 	}
-
-	[[nodiscard]] AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto GetMinmaxSurroundingCell(arrayconst_t &q, int i, int j, int k, int n)
-	    -> std::pair<double, double>;
 
 	template <FluxDir DIR>
 	static void ReconstructStatesConstant(amrex::MultiFab const &q, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int nghost, int nvars);
@@ -146,19 +144,17 @@ template <typename problem_t> class HyperbolicSystem
 #if defined(__x86_64__)
 	__attribute__((__target__("no-fma")))
 #endif
-	static void
-	AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1, std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, double dt_in,
-		     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars, F &&isStateValid,
-		     amrex::Array4<int> const &redoFlag);
+	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1, std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, double dt_in,
+				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars, F &&isStateValid,
+				 amrex::Array4<int> const &redoFlag);
 
 	template <typename F>
 #if defined(__x86_64__)
 	__attribute__((__target__("no-fma")))
 #endif
-	static void
-	PredictStep(arrayconst_t &consVarOld, array_t &consVarNew, std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, double dt_in,
-		    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars, F &&isStateValid,
-		    amrex::Array4<int> const &redoFlag);
+	static void PredictStep(arrayconst_t &consVarOld, array_t &consVarNew, std::array<arrayconst_t, AMREX_SPACEDIM> fluxArray, double dt_in,
+				amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars, F &&isStateValid,
+				amrex::Array4<int> const &redoFlag);
 };
 
 template <typename problem_t>
@@ -348,6 +344,7 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(quo
 	const std::pair<double, double> bounds = std::minmax({q(i, j, k, iReadFrom + n), q(i - 1, j, k, iReadFrom + n), q(i + 1, j, k, iReadFrom + n)});
 
 	// get interfaces
+
 	// PPM reconstruction following Colella & Woodward (1984), with
 	// some modifications following Mignone (2014), as implemented in
 	// Athena++.
@@ -409,7 +406,6 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(quo
 			new_a_plus = a + 2.0 * dq_minus;
 		}
 	}
-
 	rightState(i, j, k, iWriteFrom + n) = new_a_minus;
 	leftState(i + 1, j, k, iWriteFrom + n) = new_a_plus;
 }
@@ -474,7 +470,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HyperbolicSystem<problem_t>::ComputeWEN
 	// use WENO-Z smoothness indicators with *symmetric* linear weights
 	// (1-2-3 problem fails with the [asymmetric] 'optimal' weights)
 	const double q_mean = (std::abs(q(i - 1, j, k, n)) + std::abs(q(i, j, k, n)) + std::abs(q(i + 1, j, k, n))) / 3.0;
-	const double eps = (q_mean > 0.0) ? 1.0e-40 * q_mean : 1.0e-40;
+	const double eps = std::max(1.0e-40 * q_mean, 1.0e-40); // prevent underflow
 	const double tau = std::abs(IS_L - IS_R);
 	double wL = 0.2 * (1. + tau / (IS_L + eps));
 	double wC = 0.6 * (1. + tau / (IS_C + eps));
@@ -625,7 +621,7 @@ void HyperbolicSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t 
 					      const double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
 					      const int nvars, F &&isStateValid, amrex::Array4<int> const &redoFlag)
 {
-	BL_PROFILE("HyperbolicSystem::PredictStep()");
+	const BL_PROFILE("HyperbolicSystem::PredictStep()");
 
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
@@ -652,7 +648,7 @@ void HyperbolicSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t 
 		}
 
 		// check if state is valid -- flag for re-do if not
-		if (!isStateValid(consVarNew, i, j, k)) {
+		if (!std::forward<F>(isStateValid)(consVarNew, i, j, k)) {
 			redoFlag(i, j, k) = quokka::redoFlag::redo;
 		} else {
 			redoFlag(i, j, k) = quokka::redoFlag::none;
@@ -666,7 +662,7 @@ void HyperbolicSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0,
 					       const double dt_in, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange,
 					       const int nvars, F &&isStateValid, amrex::Array4<int> const &redoFlag)
 {
-	BL_PROFILE("HyperbolicSystem::AddFluxesRK2()");
+	const BL_PROFILE("HyperbolicSystem::AddFluxesRK2()");
 
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
@@ -704,7 +700,7 @@ void HyperbolicSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0,
 		}
 
 		// check if state is valid -- flag for re-do if not
-		if (!isStateValid(U_new, i, j, k)) {
+		if (!std::forward<F>(isStateValid)(U_new, i, j, k)) {
 			redoFlag(i, j, k) = quokka::redoFlag::redo;
 		} else {
 			redoFlag(i, j, k) = quokka::redoFlag::none;

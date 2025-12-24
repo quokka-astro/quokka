@@ -30,8 +30,11 @@ else()
   set(openPMDSources "")
 endif()
 
-# HDF5
-find_package(HDF5 REQUIRED)
+# HDF5 (use library list instead of imported target to avoid NOTFOUND device-link deps)
+find_package(HDF5 REQUIRED COMPONENTS C)
+if(HDF5_LIBRARIES MATCHES "NOTFOUND")
+  message(FATAL_ERROR "HDF5 libraries were not fully found: ${HDF5_LIBRARIES}")
+endif()
 
 # std::filesystem (required for GCC < 9)
 if (NOT ((CMAKE_SYSTEM_NAME MATCHES "Darwin") AND ((CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang") OR (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))))
@@ -115,7 +118,7 @@ endif(WARNINGS_AS_ERRORS)
 
 include_directories(${amrex_INCLUDE_DIRS_RET})
 include_directories(${fmt_INCLUDE_DIRS_RET})
-include_directories(${HDF5_INCLUDE_DIRS_RET})
+include_directories(${HDF5_INCLUDE_DIRS})
 include_directories(${Boost_INCLUDE_DIRS_RET})
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
@@ -126,9 +129,12 @@ set(microphysics_output_dir "${CMAKE_CURRENT_BINARY_DIR}/")
 setup_target_for_microphysics_compilation(${microphysics_network_name} "${CMAKE_CURRENT_BINARY_DIR}/")
 include_directories(${gamma_law_dirs} ${CMAKE_CURRENT_BINARY_DIR} "includes/extern_parameters.H" "includes/network_properties.H")
 
+if(TARGET amrex_hydro_api)
+  link_libraries(amrex_hydro_api)
+endif()
 link_libraries(AMReX::amrex)
 link_libraries(fmt::fmt)
-link_libraries(hdf5::hdf5)
+link_libraries(${HDF5_LIBRARIES})
 link_libraries(yaml-cpp::yaml-cpp)
 
 include(CTest)
@@ -138,14 +144,11 @@ set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagFilter.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagFramePlane.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagPDF.cpp" 
+                        "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagPlotfile.cpp"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagProjectionPlot.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/projection.cpp" 
-                        "${CMAKE_CURRENT_SOURCE_DIR}/cooling/GrackleLikeCooling.cpp" 
-                        "${CMAKE_CURRENT_SOURCE_DIR}/cooling/GrackleDataReader.cpp"
-                        "${CMAKE_CURRENT_SOURCE_DIR}/cooling/TabulatedCooling.cpp" 
-                        "${CMAKE_CURRENT_SOURCE_DIR}/cooling/CloudyDataReader.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/cooling/ResampledCooling.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/util/fextract.cpp"
-                        "${CMAKE_CURRENT_SOURCE_DIR}/util/DataTable.cpp"
                         "${openPMDSources}")
 
 set (QuokkaObjSources "${QuokkaSourcesNoEOS}" "${gamma_law_sources}")

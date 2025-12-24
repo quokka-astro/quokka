@@ -2,8 +2,8 @@
 # Problem size and geometry
 # *****************************************************************
 # box size: (-7.7696 pc, 7.7696 pc)
-geometry.prob_lo     = -2.397448054e+19 -2.397448054e+19 -2.397448054e+19
-geometry.prob_hi     = 2.397448054e+19 2.397448054e+19 2.397448054e+19
+geometry.prob_lo     = -9.590075420e+19 -9.590075420e+19 -9.590075420e+19
+geometry.prob_hi     = 9.590075420e+19 9.590075420e+19 9.590075420e+19
 geometry.is_periodic =  0    0    0
 
 # *****************************************************************
@@ -15,26 +15,26 @@ amr.v              = 1       # verbosity in Amr
 # Resolution and refinement
 # *****************************************************************
 amr.n_cell          = 128 128 128
-amr.max_level       = 0     # number of levels = max_level + 1
+amr.max_level       = 2     # number of levels = max_level + 1
 amr.blocking_factor = 64    # grid size must be divisible by this
 amr.max_grid_size   = 64    # at least 128 for GPUs
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
-amr.grid_eff        = 0.7   # default
-
-hydro.reconstruction_order = 3  # PPM
-cfl = 0.2
-stop_time = 0.5             # t_ff = 0.55
-
-gravity.Gconst = 1.0    #gravitational constant
+amr.grid_eff        = 0.99   # default
 
 do_reflux = 1
 do_subcycle = 0
 
-stop_time = 3.0e14
-
-problem.star_mass = 10.0
 plotfile_interval = -1
 checkpoint_interval = -1
-max_timesteps = 128
+max_timesteps = 32
+#restartfile = last_chk
+
+problem.star_mass = 0.01
+problem.turnon_fextract = false
+problem.sink_file = "../inputs/sink.txt"
+problem.return_1_at_fail = true
+problem.rho0 = 1e-25
+problem.t_end_over_t_b = 10.0
+problem.refine_center = true
 
 tiny_profiler.enabled = 0

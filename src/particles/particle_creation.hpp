@@ -9,6 +9,7 @@
 #include "particle_types.hpp"
 #include "particles/particle_utils.hpp"
 #include "stellarpop_data.hpp"
+#include <array>
 #include <cmath>
 #include <limits>
 
@@ -21,13 +22,15 @@ namespace ParticleCreationImpl
 // Common implementation of particle creation logic
 template <typename problem_t, typename ContainerType, template <typename> class CheckerType, template <typename> class CreatorType>
 static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev,
-				amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1, int birth_time_index = -1)
+				amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1, int birth_time_index = -1,
+				int mass_at_birth_index = -1, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr)
 {
 	const BL_PROFILE("ParticleCreationImpl::createParticlesImpl()");
 	if (container != nullptr) {
 		if (mass_idx >= 0) {
 			// Counter for total particles created at this time step
 			amrex::Long total_particles_created = 0;
+			const bool has_face_centered_state = (state_fc != nullptr);
 
 			// Use the provided ParticleChecker type with global particle parameters
 			CheckerType<problem_t> particle_checker(current_time, dt);
@@ -40,9 +43,16 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 				const auto dx = geom.CellSizeArray();
 				const auto plo = geom.ProbLoArray();
 
+				std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fab_fc{};
+				if (has_face_centered_state) {
+					fab_fc[0] = (*state_fc)[0].const_array(mfi);
+					fab_fc[1] = (*state_fc)[1].const_array(mfi);
+					fab_fc[2] = (*state_fc)[2].const_array(mfi);
+				}
+
 				// Count particles to be created in this box
-				amrex::Gpu::DeviceVector<unsigned int> counts(box.numPts()); // 1 if cell creates particle, 0 if not
-				amrex::Gpu::DeviceVector<unsigned int> offset(box.numPts()); // Will store starting index for each cell's particle
+				amrex::Gpu::AsyncVector<unsigned int> counts(box.numPts()); // 1 if cell creates particle, 0 if not
+				amrex::Gpu::AsyncVector<unsigned int> offset(box.numPts()); // Will store starting index for each cell's particle
 				auto *pcounts = counts.data();
 
 				// Count potential particles per cell
@@ -50,7 +60,9 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 					const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
 					const auto index = box.index(iv);
 					// Check if we should create a particle at this location and time
-					pcounts[index] = particle_checker(state_arr, accretion_rate_arr, i, j, k, dx, engine); // NOLINT
+					std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc_ptr =
+					    (has_face_centered_state) ? &fab_fc : nullptr;
+					pcounts[index] = particle_checker(state_arr, accretion_rate_arr, i, j, k, dx, fab_fc_ptr, engine); // NOLINT
 				});
 
 				// Calculate exclusive prefix sum to get unique position for each particle
@@ -77,16 +89,20 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 				const int cpu_id = amrex::ParallelDescriptor::MyProc();
 
 				// Initialize particle creator functor using the provided ParticleCreator type
-				CreatorType<problem_t> particle_creator(mass_idx, birth_time_index, cpu_id, pid, evolution_stage_index, current_time, dt);
+				CreatorType<problem_t> particle_creator(mass_idx, birth_time_index, cpu_id, pid, evolution_stage_index, mass_at_birth_index,
+									current_time, dt);
 
 				amrex::ParallelForRNG(box, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::RandomEngine const &engine) {
 					const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
 					const auto index = box.index(iv);
+					std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc_ptr =
+					    (has_face_centered_state) ? &fab_fc : nullptr;
 
 					if (pcounts[index] > 0) {			  // NOLINT
 						const int num_particles = pcounts[index]; // NOLINT
 						auto *particles = &pdata[poffset[index]]; // NOLINT
-						particle_creator(particles, num_particles, state_arr, accretion_rate_arr, i, j, k, dx, plo, poffset[index],
+						particle_creator(particles, num_particles, state_arr, accretion_rate_arr, i, j, k, dx, plo, fab_fc_ptr,
+								 poffset[index],
 								 engine); // NOLINT
 					}
 				});
@@ -117,10 +133,11 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, amrex::Array4<const amrex::Real> const &accretion_rate_arr,
 						 int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+						 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc,
 						 amrex::RandomEngine const &engine) const -> int
 		{
 			// Default implementation creates no particles
-			amrex::ignore_unused(state_arr, accretion_rate_arr, i, j, k, dx, engine);
+			amrex::ignore_unused(state_arr, accretion_rate_arr, i, j, k, dx, fab_fc, engine);
 			return 0;
 		}
 	};
@@ -130,6 +147,7 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 		int mass_idx;
 		int birth_time_index;
 		int evolution_stage_index;
+		int mass_at_birth_idx;
 		int cpu_id;
 		amrex::Long pid_start;
 		amrex::Real current_time;
@@ -137,33 +155,35 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 
 		AMREX_GPU_HOST_DEVICE
 		ParticleCreator(int mass_index, int birth_time_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index,
-				amrex::Real current_time, amrex::Real dt)
-		    : mass_idx(mass_index), birth_time_index(birth_time_index), evolution_stage_index(evolution_stage_index), cpu_id(processor_id),
-		      pid_start(particle_id_start), current_time(current_time), dt(dt)
+				int mass_at_birth_index, amrex::Real current_time, amrex::Real dt)
+		    : mass_idx(mass_index), birth_time_index(birth_time_index), evolution_stage_index(evolution_stage_index),
+		      mass_at_birth_idx(mass_at_birth_index), cpu_id(processor_id), pid_start(particle_id_start), current_time(current_time), dt(dt)
 		{
 		}
 
 		template <typename ParticleType, typename StateArray>
 		AMREX_GPU_DEVICE void operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, StateArray const &accretion_rate_arr,
 						 int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, amrex::Long base_offset,
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+						 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc, amrex::Long base_offset,
 						 amrex::RandomEngine const &engine) const
 		{
 			// Default implementation does nothing
-			amrex::ignore_unused(particles, num_particles, state_arr, accretion_rate_arr, i, j, k, dx, plo, base_offset, engine);
+			amrex::ignore_unused(particles, num_particles, state_arr, accretion_rate_arr, i, j, k, dx, plo, fab_fc, base_offset, engine);
 		}
 	};
 
 	// Main method to create particles - uses the helper implementation
 	template <typename problem_t, typename ContainerType>
 	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev,
-				    amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1, int birth_time_index = -1)
+				    amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1, int birth_time_index = -1,
+				    int mass_at_birth_index = -1, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr)
 	{
 		const BL_PROFILE("ParticleCreationTraits::createParticles()");
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<particleType>::template ParticleChecker,
 							  ParticleCreationTraits<particleType>::template ParticleCreator>(
-		    container, mass_idx, state, accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index);
+		    container, mass_idx, state, accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index, mass_at_birth_index, state_fc);
 	}
 };
 
@@ -187,6 +207,7 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr, amrex::Array4<const amrex::Real> const &accretion_rate_arr,
 						 int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+						 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc,
 						 amrex::RandomEngine const & /*engine*/) const -> int
 		{
 			const double dx_max = std::max({dx[0], dx[1], dx[2]});
@@ -196,7 +217,7 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 			if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
 				cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
 			} else {
-				cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k);
+				cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k, fab_fc);
 			}
 
 			// Jeans density.
@@ -244,6 +265,7 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 		int mass_idx;
 		int birth_time_index;
 		int evolution_stage_index;
+		int mass_at_birth_idx;
 		int cpu_id;
 		amrex::Long pid_start;
 		amrex::Real current_time;
@@ -255,9 +277,9 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 
 		AMREX_GPU_HOST_DEVICE
 		ParticleCreator(int mass_index, int birth_time_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index,
-				amrex::Real current_time, amrex::Real dt)
-		    : mass_idx(mass_index), birth_time_index(birth_time_index), evolution_stage_index(evolution_stage_index), cpu_id(processor_id),
-		      pid_start(particle_id_start), current_time(current_time), dt(dt)
+				int mass_at_birth_index, amrex::Real current_time, amrex::Real dt)
+		    : mass_idx(mass_index), birth_time_index(birth_time_index), evolution_stage_index(evolution_stage_index),
+		      mass_at_birth_idx(mass_at_birth_index), cpu_id(processor_id), pid_start(particle_id_start), current_time(current_time), dt(dt)
 		{
 		}
 
@@ -265,7 +287,8 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 		AMREX_GPU_DEVICE void
 		operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, StateArray const & /*accretion_rate_arr*/, int i, int j,
 			   int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
-			   amrex::Long base_offset, amrex::RandomEngine const & /*engine*/) const
+			   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc, amrex::Long base_offset,
+			   amrex::RandomEngine const & /*engine*/) const
 		{
 			const double dx_max = std::max({dx[0], dx[1], dx[2]});
 
@@ -274,7 +297,7 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 			if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
 				cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
 			} else {
-				cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k);
+				cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k, fab_fc);
 			}
 
 			// Jeans density.
@@ -326,12 +349,13 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 	// Main method to create particles - uses the helper implementation
 	template <typename problem_t, typename ContainerType>
 	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev,
-				    amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1, int birth_time_index = -1)
+				    amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1, int birth_time_index = -1,
+				    int mass_at_birth_index = -1, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr)
 	{
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<ParticleType::Sink>::template ParticleChecker,
 							  ParticleCreationTraits<ParticleType::Sink>::template ParticleCreator>(
-		    container, mass_idx, state, accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index);
+		    container, mass_idx, state, accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index, mass_at_birth_index, state_fc);
 	}
 };
 
@@ -370,12 +394,14 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 		AMREX_GPU_DEVICE auto operator()(amrex::Array4<const amrex::Real> const &state_arr,
 						 amrex::Array4<const amrex::Real> const & /*accretion_rate_arr*/, int i, int j, int k,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::RandomEngine const &engine) const -> int
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+						 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc,
+						 amrex::RandomEngine const &engine) const -> int
 		{
 			const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 			const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 
-			const amrex::Real cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k);
+			const amrex::Real cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k, fab_fc);
 			const amrex::Real LambdaJ = cs / std::sqrt(C::Gconst * cell_density);
 			const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * cell_density));
 			const amrex::Real prob_star_formation = (eps_ff_ / eps_star) * (dt / t_ff);
@@ -402,6 +428,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		int mass_idx;
 		int birth_time_index;
 		int evolution_stage_index;
+		int mass_at_birth_idx;
 		int cpu_id;
 		amrex::Long pid_start;
 		amrex::Real current_time;
@@ -413,9 +440,9 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 		AMREX_GPU_HOST_DEVICE
 		ParticleCreator(int mass_index, int birth_time_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index,
-				amrex::Real current_time, amrex::Real dt)
-		    : mass_idx(mass_index), birth_time_index(birth_time_index), evolution_stage_index(evolution_stage_index), cpu_id(processor_id),
-		      pid_start(particle_id_start), current_time(current_time), dt(dt)
+				int mass_at_birth_index, amrex::Real current_time, amrex::Real dt)
+		    : mass_idx(mass_index), birth_time_index(birth_time_index), evolution_stage_index(evolution_stage_index),
+		      mass_at_birth_idx(mass_at_birth_index), cpu_id(processor_id), pid_start(particle_id_start), current_time(current_time), dt(dt)
 		{
 		}
 
@@ -423,15 +450,16 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		AMREX_GPU_DEVICE void
 		operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, StateArray const & /*accretion_rate_arr*/, int i, int j,
 			   int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
-			   amrex::Long base_offset, amrex::RandomEngine const &engine) const
+			   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc, amrex::Long base_offset,
+			   amrex::RandomEngine const &engine) const
 		{
+			amrex::ignore_unused(fab_fc);
 
 			if (mass_idx + 3 < ParticleType::NReal) {
 				// Calculate common values for all particles
 				const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 				const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 				const amrex::Real cell_mass = cell_volume * cell_density;
-				const amrex::Real cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k);
 				const amrex::Real vx = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / cell_density;
 				const amrex::Real vy = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
 				const amrex::Real vz = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / cell_density;
@@ -472,89 +500,29 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					p.rdata(birth_time_index + 1) = std::numeric_limits<amrex::Real>::max();
 					if (p_idx > 0) {
 						// This is the loop that sets the velocity of the high mass stars
-						double numx = 0.0;
-						double numy = 0.0;
-						double numz = 0.0;
-						double denominator = 0.0;
-						double vx_adj = NAN;
-						double vy_adj = NAN;
-						double vz_adj = NAN;
-						double rho_adj = NAN;
-						double v_cm_x = NAN;
-						double v_cm_y = NAN;
-						double v_cm_z = NAN;
+						double const km_per_s = 1.e5; // convert km/s to cm/s
+						double const v_min = 3.0;     // Minimum velocity from the distribution
+						double const v_max = 385.0;   // Maximum velocity from the distribution
+						double const beta = 1.8;      // Slope of the velocity distribution
 
-						// Get the average velocity from the velocity dispersion of the surrounding cells
-						// We use the velocity dispersion of the surrounding cells to get the velocity of the high mass star...
-						//... from a log normal distribution
-						// Checkout docs/star_formation for more details
+						// Draw velocity from the power-law distribution
+						double const xx_random = amrex::Random(engine);
+						double v_mag =
+						    xx_random * (std::pow(v_max, 1. - beta) - std::pow(v_min, 1. - beta)) + std::pow(v_min, 1. - beta);
+						v_mag = std::pow(v_mag, 1. / (1. - beta)) * km_per_s; // Convert to km/s
 
-						for (int ii = i - 1; ii <= i + 1; ++ii) {
-							for (int jj = j - 1; jj <= j + 1; ++jj) {
-								for (int kk = k - 1; kk <= k + 1; ++kk) {
-									numx += (state_arr(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index));
-									numy += (state_arr(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index));
-									numz += (state_arr(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index));
-									denominator += state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
-								}
-							}
-						}
+						double const cos_theta_random =
+						    (2 * amrex::Random(engine) - 1.0); // Sample cos theta from a uniform distribution between -1 to 1.
+						double const phi_random =
+						    (1. - amrex::Random(engine)) * 2. * M_PI; // Sample phi from a uniform distribution between 0 and 2*pi
 
-						// Compute the centre of mass velocity
-						v_cm_x = numx / denominator;
-						v_cm_y = numy / denominator;
-						v_cm_z = numz / denominator;
+						double const vx_random = v_mag * std::sqrt(1. - cos_theta_random * cos_theta_random) * std::cos(phi_random);
+						double const vy_random = v_mag * std::sqrt(1. - cos_theta_random * cos_theta_random) * std::sin(phi_random);
+						double const vz_random = v_mag * cos_theta_random;
 
-						numx = 0.0;
-						numy = 0.0;
-						numz = 0.0;
-						// Use the centre of mass velocity to get the velocity dispersion
-						for (int ii = i - 1; ii <= i + 1; ++ii) {
-							for (int jj = j - 1; jj <= j + 1; ++jj) {
-								for (int kk = k - 1; kk <= k + 1; ++kk) {
-									rho_adj = state_arr(ii, jj, kk, HydroSystem<problem_t>::density_index);
-									AMREX_ASSERT(rho_adj > 0.0);
-									vx_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index)) / rho_adj;
-									vy_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index)) / rho_adj;
-									vz_adj = (state_arr(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index)) / rho_adj;
-
-									numx += rho_adj * (vx_adj - v_cm_x) * (vx_adj - v_cm_x);
-									numy += rho_adj * (vy_adj - v_cm_y) * (vy_adj - v_cm_y);
-									numz += rho_adj * (vz_adj - v_cm_z) * (vz_adj - v_cm_z);
-									denominator += rho_adj;
-								}
-							}
-						}
-						// numx could be zero if the cells are static or have uniform velocity.
-						// Set a minimum velocity dispersion equal to the sound speed squared (cs^2).
-						// This prevents sigma=0 and reflects that star-forming regions typically have
-						// turbulent and thermal energies in equipartition.
-						const double sigma_sq_x = std::max(numx / denominator, cs * cs / 3.0);
-						const double sigma_sq_y = std::max(numy / denominator, cs * cs / 3.0);
-						const double sigma_sq_z = std::max(numz / denominator, cs * cs / 3.0);
-
-						const double signx = v_cm_x == 0.0 ? 1.0 : (std::abs(v_cm_x) / v_cm_x);
-						const double signy = v_cm_y == 0.0 ? 1.0 : (std::abs(v_cm_y) / v_cm_y);
-						const double signz = v_cm_z == 0.0 ? 1.0 : (std::abs(v_cm_z) / v_cm_z);
-
-						double vx_new = signx * amrex::RandomNormal(std::abs(vx), std::sqrt(sigma_sq_x), engine);
-						double vy_new = signy * amrex::RandomNormal(std::abs(vy), std::sqrt(sigma_sq_y), engine);
-						double vz_new = signz * amrex::RandomNormal(std::abs(vz), std::sqrt(sigma_sq_z), engine);
-
-						// Enforce maximum speed limit for stellar particles
-						{
-							const double speed = std::sqrt(vx_new * vx_new + vy_new * vy_new + vz_new * vz_new);
-							const double max_speed = stellar_velocity_limit_; // cm s^{-1}
-							if (speed > max_speed) {
-								double const scale = max_speed / speed;
-								vx_new *= scale;
-								vy_new *= scale;
-								vz_new *= scale;
-								p.rdata(mass_idx + 1) = vx_new;
-								p.rdata(mass_idx + 2) = vy_new;
-								p.rdata(mass_idx + 3) = vz_new;
-							}
-						}
+						p.rdata(mass_idx + 1) = vx + vx_random;
+						p.rdata(mass_idx + 2) = vy + vy_random;
+						p.rdata(mass_idx + 3) = vz + vz_random;
 
 						// Sample mass randomly from the IMF between m_star_high, which is the min mass and max mass in the Sukhbold
 						// table
@@ -572,6 +540,10 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						p.idata(evolution_stage_index) =
 						    interpolate_fate(p.rdata(mass_idx)) == 1 ? static_cast<int>(StellarEvolutionStage::SNProgenitor) : 0;
 						p.rdata(birth_time_index + 1) = interpolate_death_time(p.rdata(mass_idx));
+					}
+					// Set mass_at_birth
+					if (mass_at_birth_idx >= 0) {
+						p.rdata(mass_at_birth_idx) = p.rdata(mass_idx);
 					}
 				}
 
@@ -612,7 +584,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	// Main method to create particles - uses the helper implementation
 	template <typename problem_t, typename ContainerType>
 	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev,
-				    amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1, int birth_time_index = -1)
+				    amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1, int birth_time_index = -1,
+				    int mass_at_birth_index = -1, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr)
 	{
 		const BL_PROFILE("ParticleCreationTraits<StochasticStellarPop>::createParticles()");
 		// Requires CGS units
@@ -622,7 +595,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType,
 							  ParticleCreationTraits<ParticleType::StochasticStellarPop>::template ParticleChecker,
 							  ParticleCreationTraits<ParticleType::StochasticStellarPop>::template ParticleCreator>(
-		    container, mass_idx, state, accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index);
+		    container, mass_idx, state, accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index, mass_at_birth_index, state_fc);
 	}
 }; // ParticleCreationTraits<ParticleType::StochasticStellarPop>
 

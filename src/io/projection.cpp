@@ -7,7 +7,6 @@
 ///  \brief AMReX I/O for 2D projections
 
 #include "AMReX_Array.H"
-#include "AMReX_BLassert.H"
 #include "AMReX_DistributionMapping.H"
 #include "AMReX_FPC.H"
 #include "AMReX_Geometry.H"
@@ -511,71 +510,85 @@ auto transform_realbox_to_2D(amrex::Direction const &dir, amrex::RealBox const &
 
 } // namespace detail
 
-void WriteProjection(const amrex::Direction dir, std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> const &proj,
-		     amrex::Vector<amrex::Geometry> const &geom, amrex::Real time, int istep)
+void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> const &proj, amrex::Real time, int istep,
+		     const std::string &basename, const YAML::Node &simulationMetadata)
 {
-	// write multi-level projections to plotfile preserving AMR structure
-	if (proj.empty()) {
-		return;
-	}
-
-	auto const &firstProj = proj.begin()->second;
-	const int nlevels = static_cast<int>(firstProj.size());
-	const int ncomp = static_cast<int>(proj.size());
-
+	// write projections to plotfile
+	auto const &firstFab = proj.begin()->second;
 	amrex::Vector<std::string> varnames;
-	for (auto const &kv : proj) {
-		varnames.push_back(kv.first);
-	}
 
-	// create 2D geometries for each level
-	amrex::Vector<amrex::Geometry> geom2d(nlevels);
-	for (int lev = 0; lev < nlevels; ++lev) {
-		const amrex::Box box2d = detail::transform_box_to_2D(dir, geom[lev].Domain());
-		const amrex::RealBox domain2d = detail::transform_realbox_to_2D(dir, geom[lev].ProbDomain());
-		geom2d[lev] = amrex::Geometry(box2d, &domain2d);
-	}
+	// NOTE: Write2DMultiLevelPlotfile assumes the slice lies in the x-y plane
+	//  (i.e. normal to the z axis) and the Geometry object corresponds to this.
+	//  For a z-projection, this works as expected. For an {x,y}-projection,
+	//  it is necessary to transform the geometry so that the data is stored in
+	//  the x-y plane.
+	amrex::Geometry geom3d{};
+	geom3d.Setup(); // read from ParmParse, NOLINT
+	const amrex::Box box2d = detail::transform_box_to_2D(dir, firstFab.box());
+	const amrex::RealBox domain2d = detail::transform_realbox_to_2D(dir, geom3d.ProbDomain());
+	const amrex::Geometry geom2d(box2d, &domain2d);
+	// amrex::Print() << box2d << "\n";
+	// amrex::Print() << domain2d << "\n";
 
-	// construct output multifabs for all levels
-	amrex::Vector<amrex::MultiFab> mf_all(nlevels);
-	amrex::Vector<const amrex::MultiFab *> mf_all_ptr(nlevels);
+	// construct output multifab on rank 0
+	const amrex::BoxArray ba(box2d);
+	const amrex::DistributionMapping dm(amrex::Vector<int>{0});
+	const int ncomp = static_cast<int>(proj.size());
+	amrex::MultiFab mf_all(ba, dm, ncomp, 0);
 
-	for (int lev = 0; lev < nlevels; ++lev) {
-		// use the BoxArray and DistributionMapping from the first projection
-		const amrex::BoxArray &ba = firstProj[lev].boxArray();
-		const amrex::DistributionMapping &dm = firstProj[lev].DistributionMap();
-		mf_all[lev].define(ba, dm, ncomp, 0);
-		mf_all_ptr[lev] = &mf_all[lev];
+	// copy all projections into a single Multifab with x-y geometry
+	auto iter = proj.begin();
+	for (int icomp = 0; icomp < ncomp; ++icomp) {
+		const std::string &varname = iter->first;
+		const amrex::BaseFab<amrex::Real> &baseFab = iter->second;
+		varnames.push_back(varname);
+		// amrex::Print() << "varname: " << varname << " icomp: " << icomp << "\n";
 
-		// copy all projections into a single MultiFab for this level
-		int icomp = 0;
-		for (auto const &kv : proj) {
-			const amrex::MultiFab &proj_mf = kv.second[lev];
+		// copy mf_comp into mf_all
+		auto output_arr = mf_all.arrays();
+		auto const &input_arr = baseFab.const_array();
 
-			// copy component icomp from proj_mf to mf_all[lev]
-			amrex::MultiFab::Copy(mf_all[lev], proj_mf, 0, icomp, 1, 0);
-			++icomp;
+		if (dir == amrex::Direction::x) {
+			amrex::ParallelFor(mf_all,
+					   [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { output_arr[bx](i, j, k, icomp) = input_arr(0, i, j); });
 		}
+#if AMREX_SPACEDIM >= 2
+		else if (dir == amrex::Direction::y) {
+			amrex::ParallelFor(mf_all,
+					   [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { output_arr[bx](i, j, k, icomp) = input_arr(i, 0, j); });
+		}
+#endif
+#if AMREX_SPACEDIM == 3
+		else if (dir == amrex::Direction::z) {
+			amrex::ParallelFor(mf_all,
+					   [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { output_arr[bx](i, j, k, icomp) = input_arr(i, j, 0); });
+		}
+#endif
+
+		amrex::Gpu::streamSynchronize();
+		++iter;
 	}
 
-	// write mf_all to disk as multi-level plotfile
-	const std::string basename = "proj_" + detail::direction_to_string(dir) + "_plt";
+	// write mf_all to disk
 	const std::string filename = amrex::Concatenate(basename, istep, 5);
 	amrex::Print() << "Writing multi-level projection " << filename << "\n";
 
-	// create ref_ratio vector for multi-level output
-	amrex::Vector<amrex::IntVect> ref_ratio(nlevels - 1);
-	for (int lev = 0; lev < nlevels - 1; ++lev) {
-		// Calculate ref_ratio from geometry
-		const amrex::IntVect &coarse_cell = geom[lev].Domain().size();
-		const amrex::IntVect &fine_cell = geom[lev + 1].Domain().size();
-		ref_ratio[lev] = fine_cell / coarse_cell;
+	amrex::Vector<const amrex::MultiFab *> mfs{&mf_all};
+	detail::Write2DMultiLevelPlotfile(filename, 1, mfs, varnames, {geom2d}, time, {istep}, {});
+
+	// Write metadata file (inside the plotfile directory)
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		const std::string metadataFilename = filename + "/metadata.yaml";
+		amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::IO_Buffer_Size);
+		std::ofstream MetadataFile;
+		MetadataFile.rdbuf()->pubsetbuf(io_buffer.dataPtr(), io_buffer.size());
+		MetadataFile.open(metadataFilename.c_str(), std::ofstream::out | std::ofstream::trunc | std::ofstream::binary);
+		if (!MetadataFile.good()) {
+			amrex::FileOpenFailed(metadataFilename);
+		}
+		MetadataFile << simulationMetadata << '\n';
+		MetadataFile.close();
 	}
-
-	// create level steps vector
-	amrex::Vector<int> const level_steps(nlevels, istep);
-
-	detail::Write2DMultiLevelPlotfile(filename, nlevels, mf_all_ptr, varnames, geom2d, time, level_steps, ref_ratio);
 }
 
 } // namespace quokka::diagnostics

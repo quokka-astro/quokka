@@ -3,9 +3,10 @@ project(QuokkaCode VERSION 1.0
   DESCRIPTION "Radiation hydrodynamics with structured AMR"
   LANGUAGES CXX C)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 #set(CMAKE_CXX_COMPILER_LAUNCHER "ccache")
 #set(CMAKE_C_COMPILER_LAUNCHER "ccache")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -16,13 +17,29 @@ set(AMReX_SPACEDIM 1 CACHE STRING "")
 set(AMReX_MPI ON CACHE BOOL "" FORCE)
 set(AMReX_HDF5 OFF CACHE BOOL "" FORCE) # do not use
 set(AMReX_LINEAR_SOLVERS ON CACHE BOOL "" FORCE)
-set(AMReX_LINEAR_SOLVERS_INCFLO OFF CACHE BOOL "" FORCE)
+set(AMReX_LINEAR_SOLVERS_INCFLO ON CACHE BOOL "" FORCE)
 set(AMReX_LINEAR_SOLVERS_EM OFF CACHE BOOL "" FORCE)
 set(AMReX_CONDUIT OFF CACHE BOOL "") # optional
 set(AMReX_ASCENT OFF CACHE BOOL "") # optional
 set(AMReX_AMRLEVEL OFF CACHE BOOL "" FORCE)
 set(AMReX_PROBINIT OFF CACHE BOOL "" FORCE)
 set(AMReX_TINY_PROFILE ON CACHE BOOL "" FORCE)
+
+# Configure AMReX-Hydro to match the AMReX build that Quokka uses
+if(NOT DEFINED AMReX_GPU_BACKEND)
+  set(AMReX_GPU_BACKEND NONE CACHE STRING "" FORCE)
+endif()
+
+set(QUOKKA_ENABLE_AMREX_HYDRO OFF)
+if(AMReX_SPACEDIM EQUAL 3)
+  set(QUOKKA_ENABLE_AMREX_HYDRO ON)
+  set(HYDRO_SPACEDIM ${AMReX_SPACEDIM} CACHE STRING "" FORCE)
+  set(HYDRO_MPI ${AMReX_MPI} CACHE BOOL "" FORCE)
+  set(HYDRO_PROJECTIONS ON CACHE BOOL "" FORCE)
+  set(HYDRO_EB OFF CACHE BOOL "" FORCE)
+  set(HYDRO_NO_EB ON CACHE BOOL "" FORCE)
+  set(HYDRO_GPU_BACKEND ${AMReX_GPU_BACKEND} CACHE STRING "" FORCE)
+endif()
 
 ## a Python installation can be specified with Python_ROOT_DIR
 ##   see: https://cmake.org/cmake/help/latest/module/FindPython.html#hints
@@ -37,8 +54,8 @@ option(QUOKKA_OPENPMD "Enable OpenPMD output (on/off)" OFF)
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
   enable_language(CUDA)
   
-  if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.7)
-    message(FATAL_ERROR "You must use CUDA version 11.7 or newer to compile Quokka. All previous CUDA versions have compiler bugs that cause Quokka to crash.")
+  if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.0)
+    message(FATAL_ERROR "You must use CUDA version 12.0 or newer to compile Quokka because C++20 support is needed.")
   endif()
   
   if(CMAKE_VERSION VERSION_LESS 3.20)
@@ -125,6 +142,9 @@ message(STATUS "Quokka git commit hash: ${QUOKKA_GIT_HASH}")
 message(STATUS "AMReX git commit hash: ${AMREX_GIT_HASH}")
 
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/amrex ${QuokkaCode_BINARY_DIR}/amrex)
+if(QUOKKA_ENABLE_AMREX_HYDRO)
+  add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/AMReX-Hydro ${QuokkaCode_BINARY_DIR}/AMReX-Hydro)
+endif()
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/fmt ${QuokkaCode_BINARY_DIR}/fmt)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/yaml-cpp ${QuokkaCode_BINARY_DIR}/yaml-cpp)
 

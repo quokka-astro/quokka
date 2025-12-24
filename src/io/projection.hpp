@@ -9,6 +9,9 @@
 ///  \brief AMReX I/O for 2D projections
 
 #include <string>
+#include <type_traits>
+#include <unordered_map>
+#include <vector>
 
 // AMReX headers
 #include "AMReX_MultiFab.H"
@@ -17,13 +20,22 @@
 #include "AMReX_VisMF.H"
 #include <AMReX.H>
 
+// YAML headers
+#include <yaml-cpp/yaml.h>
+
+// Forward declarations
+namespace quokka
+{
+template <typename problem_t> class PhysicsParticleRegister;
+} // namespace quokka
+
 namespace quokka::diagnostics
 {
 
 namespace detail
 {
 
-auto direction_to_string(const amrex::Direction dir) -> std::string;
+auto direction_to_string(amrex::Direction dir) -> std::string;
 auto transform_box_to_2D(amrex::Direction const &dir, amrex::Box const &box) -> amrex::Box;
 auto transform_realbox_to_2D(amrex::Direction const &dir, amrex::RealBox const &box) -> amrex::RealBox;
 
@@ -52,11 +64,10 @@ void write_2D_header(std::ostream &os, const amrex::FArrayBox &f, int nvar);
 
 template <typename ReduceOp, typename F>
 auto ComputePlaneProjection(amrex::Vector<amrex::MultiFab> const &state_new, const int finest_level, amrex::Vector<amrex::Geometry> const &geom,
-			    amrex::Vector<amrex::IntVect> const & /*ref_ratio*/, const amrex::Direction dir, F const &user_f) -> amrex::Vector<amrex::MultiFab>
+			    amrex::Vector<amrex::IntVect> const & /*ref_ratio*/, const amrex::Direction dir, F const &user_f) -> amrex::BaseFab<amrex::Real>
 {
 	// compute plane-parallel projection of user_f(i, j, k, state) along the given axis.
-	// preserves AMR structure by applying ReduceToPlane to each level separately.
-	BL_PROFILE("quokka::DiagProjection::computePlaneProjection()");
+	const BL_PROFILE("quokka::DiagProjection::computePlaneProjection()");
 
 	// allocate temporary multifabs
 	amrex::Vector<amrex::MultiFab> q;
@@ -74,71 +85,61 @@ auto ComputePlaneProjection(amrex::Vector<amrex::MultiFab> const &state_new, con
 	}
 	amrex::Gpu::streamSynchronize();
 
-	// compute projections for each level separately (preserves AMR structure)
-	amrex::Vector<amrex::MultiFab> proj_levels;
-	proj_levels.resize(finest_level + 1);
+	auto const &domain_box = geom[0].Domain();
+	auto const &dx = geom[0].CellSizeArray();
+	auto const &arr = q[0].const_arrays();
+	amrex::BaseFab<amrex::Real> proj = amrex::ReduceToPlane<ReduceOp, amrex::Real>(
+	    static_cast<int>(dir), domain_box, q[0], [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
+		    return dx[static_cast<int>(dir)] * arr[box_no](i, j, k); // data at (i,j,k) of Box box_no
+	    });
+	amrex::Gpu::streamSynchronize();
 
-	for (int lev = 0; lev <= finest_level; ++lev) {
-		auto const &domain_box = geom[lev].Domain();
-		auto const &dx = geom[lev].CellSizeArray();
-		auto const &arr = q[lev].const_arrays();
+	// copy to host pinned memory to work around AMReX bug
+	amrex::BaseFab<amrex::Real> proj_host(proj.box(), 1, amrex::The_Pinned_Arena());
+	proj_host.copy<amrex::RunOn::Device>(proj);
+	amrex::Gpu::streamSynchronize();
 
-		amrex::BaseFab<amrex::Real> proj = amrex::ReduceToPlane<ReduceOp, amrex::Real>(
-		    static_cast<int>(dir), domain_box, q[lev], [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
-			    return dx[static_cast<int>(dir)] * arr[box_no](i, j, k); // data at (i,j,k) of Box box_no
-		    });
-		amrex::Gpu::streamSynchronize();
-
-		// copy to host pinned memory to work around AMReX bug
-		amrex::BaseFab<amrex::Real> proj_host(proj.box(), 1, amrex::The_Pinned_Arena());
-		proj_host.copy<amrex::RunOn::Device>(proj);
-		amrex::Gpu::streamSynchronize();
-
-		if constexpr (std::is_same_v<ReduceOp, amrex::ReduceOpSum>) {
-			amrex::ParallelReduce::Sum(proj_host.dataPtr(), static_cast<int>(proj_host.size()), amrex::ParallelDescriptor::ioProcessor,
-						   amrex::ParallelDescriptor::Communicator());
-		} else if constexpr (std::is_same_v<ReduceOp, amrex::ReduceOpMin>) {
-			amrex::ParallelReduce::Min(proj_host.dataPtr(), static_cast<int>(proj_host.size()), amrex::ParallelDescriptor::ioProcessor,
-						   amrex::ParallelDescriptor::Communicator());
-		} else {
-			amrex::Abort("invalid reduce op!");
-		}
-
-		// convert proj_host to MultiFab for this level
-		const amrex::Box box2d = detail::transform_box_to_2D(dir, proj_host.box());
-		const amrex::BoxArray ba(box2d);
-		const amrex::DistributionMapping dm(amrex::Vector<int>{0});
-		proj_levels[lev].define(ba, dm, 1, 0);
-
-		// copy projection data to MultiFab
-		auto proj_arr = proj_levels[lev].arrays();
-		auto const &proj_data = proj_host.const_array();
-
-		if (dir == amrex::Direction::x) {
-			amrex::ParallelFor(proj_levels[lev],
-					   [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { proj_arr[bx](i, j, k) = proj_data(0, i, j); });
-		}
-#if AMREX_SPACEDIM >= 2
-		else if (dir == amrex::Direction::y) {
-			amrex::ParallelFor(proj_levels[lev],
-					   [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { proj_arr[bx](i, j, k) = proj_data(i, 0, j); });
-		}
-#endif
-#if AMREX_SPACEDIM == 3
-		else if (dir == amrex::Direction::z) {
-			amrex::ParallelFor(proj_levels[lev],
-					   [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { proj_arr[bx](i, j, k) = proj_data(i, j, 0); });
-		}
-#endif
-		amrex::Gpu::streamSynchronize();
+	if constexpr (std::is_same_v<ReduceOp, amrex::ReduceOpSum>) {
+		amrex::ParallelReduce::Sum(proj_host.dataPtr(), static_cast<int>(proj_host.size()), amrex::ParallelDescriptor::ioProcessor,
+					   amrex::ParallelDescriptor::Communicator());
+	} else if constexpr (std::is_same_v<ReduceOp, amrex::ReduceOpMin>) {
+		amrex::ParallelReduce::Min(proj_host.dataPtr(), static_cast<int>(proj_host.size()), amrex::ParallelDescriptor::ioProcessor,
+					   amrex::ParallelDescriptor::Communicator());
+	} else {
+		amrex::Abort("invalid reduce op!");
 	}
 
-	// return Vector<MultiFab> preserving AMR structure
-	return proj_levels;
+	// return BaseFab in host memory
+	return proj_host;
 }
 
-void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> const &proj,
-		     amrex::Vector<amrex::Geometry> const &geom, amrex::Real time, int istep);
+void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> const &proj, amrex::Real time, int istep,
+		     const std::string &basename, const YAML::Node &simulationMetadata);
+
+// Overload with particle support
+template <typename problem_t>
+void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> const &proj, amrex::Real time, int istep,
+		     const std::string &basename, quokka::PhysicsParticleRegister<problem_t> &particleRegister, const std::vector<std::string> &particleTypes,
+		     const YAML::Node &simulationMetadata)
+{
+	const BL_PROFILE("quokka::diagnostics::WriteProjection(with particles)");
+
+	// First, write the projection data using the base function (includes metadata)
+	WriteProjection(dir, proj, time, istep, basename, simulationMetadata);
+
+	// If no particle types specified, skip particle output
+	if (particleTypes.empty()) {
+		return;
+	}
+
+	// Construct the plotfile name (same directory as field data)
+	const std::string filename = amrex::Concatenate(basename, istep, 5);
+
+	// Write particles using the filtered method
+	particleRegister.writePlotFileFiltered(filename, particleTypes);
+
+	amrex::Print() << "  Wrote particles to projection " << filename << "\n";
+}
 
 } // namespace quokka::diagnostics
 

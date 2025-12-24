@@ -1,7 +1,15 @@
-add_executable(test_fc_quantities test_fc_quantities.cpp ${QuokkaObjSources})
+if(AMReX_SPACEDIM EQUAL 3)
+  set(JOB_NAME FCQuantities)
 
-if(AMReX_GPU_BACKEND MATCHES "CUDA")
-    setup_target_for_cuda_compilation(test_fc_quantities)
+  add_executable(${JOB_NAME} test${JOB_NAME}.cpp ${QuokkaObjSources})
+
+  if(AMReX_GPU_BACKEND MATCHES "CUDA")
+    setup_target_for_cuda_compilation(${JOB_NAME})
+  endif()
+
+  add_test(
+    NAME ${JOB_NAME}
+    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in ${QuokkaTestParams}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  set_tests_properties(FCQuantities PROPERTIES LABELS "MHD")
 endif()
-
-add_test(NAME FCQuantities COMMAND test_fc_quantities ../inputs/fc_hydro_wave.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)

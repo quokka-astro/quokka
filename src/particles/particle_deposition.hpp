@@ -2,8 +2,9 @@
 #define PARTICLE_DEPOSITION_HPP_
 
 #include <algorithm>
+#include <array>
+#include <numbers>
 
-#include "AMReX_Algorithm.H"
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BLProfiler.H"
@@ -13,6 +14,40 @@
 #include "AMReX_REAL.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
+#include "particles/particle_utils.hpp"
+
+namespace amrex::ParticleInterpolator
+{
+/** \brief A class that implements nearest-eight-cell interpolation.
+ */
+struct NearestEight : public Base<NearestEight, amrex::Real> {
+	static constexpr int stencil_width = 2;
+
+	static constexpr int nx = (AMREX_SPACEDIM >= 1) ? stencil_width - 1 : 0; // NOLINT
+	static constexpr int ny = (AMREX_SPACEDIM >= 2) ? stencil_width - 1 : 0; // NOLINT
+	static constexpr int nz = (AMREX_SPACEDIM >= 3) ? stencil_width - 1 : 0; // NOLINT
+
+	amrex::Real weights[3 * stencil_width]; // NOLINT
+
+	template <typename P>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE NearestEight(const P &p, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, // NOLINT
+							 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi)
+	{
+		w = &weights[0]; // NOLINT
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			amrex::Real l = (p.pos(i) - plo[i]) * dxi[i] + 0.5;
+			index[i] = static_cast<int>(amrex::Math::floor(l)) - 1;
+			w[stencil_width * i + 0] = 1.;
+			w[stencil_width * i + 1] = 1.;
+		}
+		for (int i = AMREX_SPACEDIM; i < 3; ++i) {
+			index[i] = 0;
+			w[stencil_width * i + 0] = 1.;
+			w[stencil_width * i + 1] = 0.;
+		}
+	}
+};
+} // namespace amrex::ParticleInterpolator
 
 namespace quokka
 {
@@ -40,10 +75,12 @@ struct RadDeposition {
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
 	{
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
+		const auto currentTime = current_time;
+		const auto birthIndex = birthTimeIndex;
 		// Deposit radiation energy only if particle is active
 		interp.ParticleToMesh(p, radEnergySource, start_part_comp, start_mesh_comp, num_comp,
 				      [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
-					      if (current_time < part.rdata(birthTimeIndex) || current_time >= part.rdata(birthTimeIndex + 1)) {
+					      if (currentTime < part.rdata(birthIndex) || currentTime >= part.rdata(birthIndex + 1)) {
 						      return 0.0;
 					      }
 					      return part.rdata(comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
@@ -69,10 +106,30 @@ struct MassDeposition {
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
 	{
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
+		const amrex::Real gConstLocal = Gconst;
+		const amrex::Real cellVolumeFactor = (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
 		// Deposit mass weighted by 4 pi G
 		interp.ParticleToMesh(p, rho, start_part_comp, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
-			return 4.0 * M_PI * Gconst * part.rdata(comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+			return 4.0 * M_PI * gConstLocal * part.rdata(comp) * cellVolumeFactor;
 		});
+	}
+};
+
+struct DepositionCount {
+	int start_part_comp{}; // Starting component in particle data
+	int start_mesh_comp{}; // Starting component in mesh data
+	int num_comp{};	       // Number of components to deposit
+
+	// Operator to perform mass deposition using linear interpolation
+	template <typename ContainerType>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<amrex::Real> const &rho_count,
+							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
+	{
+		amrex::ParticleInterpolator::NearestEight interp(p, plo, dxi);
+		// Deposit to 1.0 to all eight cells that the particle interacts with
+		interp.ParticleToMesh(p, rho_count, start_part_comp, start_mesh_comp, num_comp,
+				      [=] AMREX_GPU_DEVICE(const ContainerType & /*part*/, int /*comp*/) { return 1.0; });
 	}
 };
 
@@ -110,6 +167,10 @@ depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, 
 							     SNR_pz_per_cell);
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::energy_index),
 							     SNR_energy_per_cell);
+
+				// Deposit count into the last component for roundoff algorithm
+				const int count_comp = Physics_NumVars::numHydroVars; // Last component is the count
+				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, count_comp), 1.0);
 			}
 		}
 	}
@@ -146,8 +207,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
 			if (RM > 0.027) {
 				f_factor = 0.529 * std::sqrt(RM); // f^2 = 0.28. 28% kinetic (Kim & Ostriker 2017)
 			} else {
-				f_factor = 1.414 * std::sqrt(RM); // pure kinetic in well-resolved limit: (f^2 / RM) * (p_snr^2
-								  // / 2 M_sf) = 2 * (p_snr^2 / 2 M_sf) ~= 1e51 erg
+				f_factor = std::numbers::sqrt2 * std::sqrt(RM); // pure kinetic in well-resolved limit: (f^2 / RM) * (p_snr^2
+										// / 2 M_sf) = 2 * (p_snr^2 / 2 M_sf) ~= 1e51 erg
 			}
 		}
 	}
@@ -200,6 +261,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index), dpy);
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index), dpz);
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::energy_index), e_snr_per_cell);
+
+				// Deposit count into the last component for roundoff algorithm
+				const int count_comp = Physics_NumVars::numHydroVars; // Last component is the count
+				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, count_comp), 1.0);
 			}
 		}
 	}
@@ -317,9 +382,9 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state,
-								   amrex::Array4<amrex::Real> const &local_buffer, int i, int j, int k,
-								   amrex::Real *p_max_velocity)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::Array4<amrex::Real> const &local_buffer,
+			  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc, int i, int j, int k, amrex::Real *p_max_velocity)
 {
 	// For SN_thermal_or_thermal_momentum, SN_thermal_kinetic_or_thermal_momentum, and SN_pure_kinetic_or_thermal_momentum,
 	// the buffer contains mass, momentum, and energy. We need to add the buffer to the state in a way that guarantees
@@ -427,7 +492,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4
 	if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
 		cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
 	} else {
-		cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, i, j, k);
+		cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, i, j, k, fab_fc);
 	}
 
 	// Compute velocity magnitude and track maximum
@@ -452,9 +517,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addCompositeBufferToState(amrex::Array4
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addThermalOnlyBufferToState(amrex::Array4<amrex::Real> const &local_state,
-								     amrex::Array4<amrex::Real> const &local_buffer, int i, int j, int k,
-								     amrex::Real *p_max_velocity)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+addThermalOnlyBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::Array4<amrex::Real> const &local_buffer,
+			    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc, int i, int j, int k, amrex::Real *p_max_velocity)
 {
 	const Real d_rho = local_buffer(i, j, k, HydroSystem<problem_t>::density_index);
 
@@ -484,14 +549,15 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void addThermalOnlyBufferToState(amrex::Arra
 	if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
 		cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
 	} else {
-		cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, i, j, k);
+		cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, i, j, k, fab_fc);
 	}
 
 	amrex::Gpu::Atomic::Max(&p_max_velocity[0], cs);
 }
 
 template <typename problem_t>
-void addBufferToState(amrex::MultiFab &state, amrex::MultiFab &state_buffer, const SNScheme SN_scheme_d, amrex::Real *p_max_velocity)
+void addBufferToState(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, amrex::MultiFab &state_buffer,
+		      const SNScheme SN_scheme_d, amrex::Real *p_max_velocity)
 {
 	const BL_PROFILE("SNFeedbackUtils::addBufferToState()");
 	for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
@@ -499,13 +565,23 @@ void addBufferToState(amrex::MultiFab &state, amrex::MultiFab &state_buffer, con
 		auto const &local_state = state.array(mfi);
 		auto const &local_buffer = state_buffer.array(mfi);
 
+		bool has_fab_fc = false;
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fab_fc{};
+		if (state_fc != nullptr) {
+			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				fab_fc[dir] = (*state_fc)[dir].const_array(mfi);
+			}
+			has_fab_fc = true;
+		}
+
 		// add buffer to state
 		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 			auto p_max_velocity_local = p_max_velocity; // NOLINT
+			const auto *const fab_fc_ptr = has_fab_fc ? &fab_fc : nullptr;
 			if (SN_scheme_d == SNScheme::SN_thermal_only) {
-				addThermalOnlyBufferToState<problem_t>(local_state, local_buffer, i, j, k, p_max_velocity_local);
+				addThermalOnlyBufferToState<problem_t>(local_state, local_buffer, fab_fc_ptr, i, j, k, p_max_velocity_local);
 			} else {
-				addCompositeBufferToState<problem_t>(local_state, local_buffer, i, j, k, p_max_velocity_local);
+				addCompositeBufferToState<problem_t>(local_state, local_buffer, fab_fc_ptr, i, j, k, p_max_velocity_local);
 			}
 		});
 	}
@@ -544,14 +620,15 @@ void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real ste
 } // namespace SNFeedbackUtils
 
 template <typename ContainerType, typename problem_t>
-auto SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
-		  int evolutionStageIndex, int birthTimeIndex) -> Real
+auto SNDeposition(ContainerType *container, amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, amrex::Real time,
+		  amrex::Real dt, int mass_index, int evolutionStageIndex, int birthTimeIndex) -> Real
 {
 	const BL_PROFILE("[particle_deposition] SNDeposition()");
 	static_assert(SN_stencil_size <= 3,
 		      "SN_stencil_size must be <= 3"); // SN_stencil_size must be <= n_ghost - 1 = 3. SN particle may drift 1 cell before being deposited.
 
-	// Zero the buffer for each particle type
+	// Create buffer for this particle type with extra component for count
+	amrex::MultiFab state_buffer(state.boxArray(), state.DistributionMap(), state.nComp() + 1, state.nGrow());
 	state_buffer.setVal(0.0);
 
 	// copy host variables to device
@@ -568,8 +645,11 @@ auto SNDeposition(ContainerType *container, amrex::MultiFab &state, amrex::Multi
 	// Step 2: Sum boundary values
 	state_buffer.SumBoundary(container->Geom(lev).periodicity());
 
+	// Apply roundoff to state_buffer
+	ParticleUtils::roundoffMultiFab(state_buffer);
+
 	// Step 3: Add the buffer to the state
-	SNFeedbackUtils::addBufferToState<problem_t>(state, state_buffer, SN_scheme_d, p_max_velocity);
+	SNFeedbackUtils::addBufferToState<problem_t>(state, state_fc, state_buffer, SN_scheme_d, p_max_velocity);
 
 	// Step 4: Check maximum velocity and print warning if needed
 	auto *h_max_velocity = max_velocity_buffer.copyToHost();
