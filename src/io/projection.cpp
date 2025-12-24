@@ -510,71 +510,55 @@ auto transform_realbox_to_2D(amrex::Direction const &dir, amrex::RealBox const &
 
 } // namespace detail
 
-void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> const &proj, amrex::Real time, int istep,
+void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> const &proj,
+		     amrex::Vector<amrex::Geometry> const &geom, amrex::Vector<amrex::IntVect> const &ref_ratio, amrex::Real time, int istep,
 		     const std::string &basename, const YAML::Node &simulationMetadata)
 {
 	// write projections to plotfile
-	auto const &firstFab = proj.begin()->second;
+	auto const &firstVec = proj.begin()->second;
+	const int nlevels = static_cast<int>(firstVec.size());
 	amrex::Vector<std::string> varnames;
-
-	// NOTE: Write2DMultiLevelPlotfile assumes the slice lies in the x-y plane
-	//  (i.e. normal to the z axis) and the Geometry object corresponds to this.
-	//  For a z-projection, this works as expected. For an {x,y}-projection,
-	//  it is necessary to transform the geometry so that the data is stored in
-	//  the x-y plane.
-	amrex::Geometry geom3d{};
-	geom3d.Setup(); // read from ParmParse, NOLINT
-	const amrex::Box box2d = detail::transform_box_to_2D(dir, firstFab.box());
-	const amrex::RealBox domain2d = detail::transform_realbox_to_2D(dir, geom3d.ProbDomain());
-	const amrex::Geometry geom2d(box2d, &domain2d);
-	// amrex::Print() << box2d << "\n";
-	// amrex::Print() << domain2d << "\n";
-
-	// construct output multifab on rank 0
-	const amrex::BoxArray ba(box2d);
-	const amrex::DistributionMapping dm(amrex::Vector<int>{0});
 	const int ncomp = static_cast<int>(proj.size());
-	amrex::MultiFab mf_all(ba, dm, ncomp, 0);
 
-	// copy all projections into a single Multifab with x-y geometry
-	auto iter = proj.begin();
-	for (int icomp = 0; icomp < ncomp; ++icomp) {
-		const std::string &varname = iter->first;
-		const amrex::BaseFab<amrex::Real> &baseFab = iter->second;
-		varnames.push_back(varname);
-		// amrex::Print() << "varname: " << varname << " icomp: " << icomp << "\n";
+	for (const auto &[name, vec] : proj) {
+		varnames.push_back(name);
+	}
 
-		// copy mf_comp into mf_all
-		auto output_arr = mf_all.arrays();
-		auto const &input_arr = baseFab.const_array();
+	// Construct 2D geometry for all levels
+	amrex::Vector<amrex::Geometry> geom2d(nlevels);
+	for (int lev = 0; lev < nlevels; ++lev) {
+		const amrex::Box box2d = detail::transform_box_to_2D(dir, geom[lev].Domain());
+		const amrex::RealBox domain2d = detail::transform_realbox_to_2D(dir, geom[lev].ProbDomain());
+		geom2d[lev] = amrex::Geometry(box2d, &domain2d);
+	}
 
-		if (dir == amrex::Direction::x) {
-			amrex::ParallelFor(mf_all,
-					   [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { output_arr[bx](i, j, k, icomp) = input_arr(0, i, j); });
+	// Copy projections into Vector<MultiFab> where each MultiFab holds all components for that level
+	amrex::Vector<amrex::MultiFab> mf_all(nlevels);
+	for (int lev = 0; lev < nlevels; ++lev) {
+		// Use the BoxArray and DM from the first component's MultiFab on this level
+		const amrex::MultiFab &example_mf = firstVec[lev];
+		mf_all[lev].define(example_mf.boxArray(), example_mf.DistributionMap(), ncomp, 0);
+
+		int icomp = 0;
+		// Iterate in the same order as varnames
+		for (const auto &varname : varnames) {
+			const amrex::MultiFab &comp_mf = proj.at(varname)[lev];
+			// Copy comp_mf (1 comp) to mf_all[lev] at component icomp
+			amrex::MultiFab::Copy(mf_all[lev], comp_mf, 0, icomp, 1, 0);
+			icomp++;
 		}
-#if AMREX_SPACEDIM >= 2
-		else if (dir == amrex::Direction::y) {
-			amrex::ParallelFor(mf_all,
-					   [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { output_arr[bx](i, j, k, icomp) = input_arr(i, 0, j); });
-		}
-#endif
-#if AMREX_SPACEDIM == 3
-		else if (dir == amrex::Direction::z) {
-			amrex::ParallelFor(mf_all,
-					   [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { output_arr[bx](i, j, k, icomp) = input_arr(i, j, 0); });
-		}
-#endif
-
-		amrex::Gpu::streamSynchronize();
-		++iter;
 	}
 
 	// write mf_all to disk
 	const std::string filename = amrex::Concatenate(basename, istep, 5);
 	amrex::Print() << "Writing multi-level projection " << filename << "\n";
 
-	amrex::Vector<const amrex::MultiFab *> mfs{&mf_all};
-	detail::Write2DMultiLevelPlotfile(filename, 1, mfs, varnames, {geom2d}, time, {istep}, {});
+	amrex::Vector<const amrex::MultiFab *> mfs(nlevels);
+	for (int lev = 0; lev < nlevels; ++lev) {
+		mfs[lev] = &mf_all[lev];
+	}
+
+	detail::Write2DMultiLevelPlotfile(filename, nlevels, mfs, varnames, geom2d, time, amrex::Vector<int>(nlevels, istep), ref_ratio);
 
 	// Write metadata file (inside the plotfile directory)
 	if (amrex::ParallelDescriptor::IOProcessor()) {

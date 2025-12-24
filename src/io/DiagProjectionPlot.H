@@ -54,7 +54,7 @@ template <typename problem_t> void DiagProjectionPlot::processDiag(int a_nstep, 
 	// Loop through all requested projection directions
 	for (auto const &dir : m_projectionDirs) {
 		// Compute projections for this direction
-		std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj = sim->ComputeProjections(dir);
+		std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> proj = sim->ComputeProjections(dir);
 
 		// Skip if no projection data
 		if (proj.empty()) {
@@ -68,7 +68,7 @@ template <typename problem_t> void DiagProjectionPlot::processDiag(int a_nstep, 
 		basename += m_diagfile;
 
 		// Write projection data
-		quokka::diagnostics::WriteProjection(dir, proj, a_time, a_nstep, basename, sim->simulationMetadata_);
+		quokka::diagnostics::WriteProjection(dir, proj, sim->Geom(), sim->ref_ratio, a_time, a_nstep, basename, sim->simulationMetadata_);
 
 		// If particles are requested, write them
 		if (!m_particleTypes.empty()) {
