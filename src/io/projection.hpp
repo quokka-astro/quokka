@@ -82,8 +82,7 @@ auto ComputePlaneProjection(amrex::Vector<amrex::MultiFab> const &state_new, con
 		auto const &arr = q.const_arrays();
 
 		projections[lev] = amrex::ReduceToPlaneMF<ReduceOp>(
-		    static_cast<int>(dir), geom[lev].Domain(), q,
-		    [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
+		    static_cast<int>(dir), geom[lev].Domain(), q, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
 			    return dx[static_cast<int>(dir)] * arr[box_no](i, j, k); // data at (i,j,k) of Box box_no
 		    });
 	}
