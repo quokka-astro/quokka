@@ -155,6 +155,4 @@ set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
 
 set (QuokkaObjSources "${QuokkaSourcesNoEOS}" "${gamma_law_sources}")
 
-add_executable(parser_density_floor_repro "${QuokkaCode_SOURCE_DIR}/tests/parser_density_floor_repro.cpp")
-
 add_subdirectory(problems)
