@@ -501,6 +501,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::ComputeDerivedVar(int lev, std::
 		auto output = mf.arrays();
 		auto const geom_data = geom[lev].data();
 		auto const prob_lo = geom_data.ProbLo();
+		auto const prob_hi = geom_data.ProbHi();
 		auto const dx = geom_data.CellSize();
 		amrex::Real const base_density_floor = densityFloor_;
 		if (useDensityFloorParser_) {
