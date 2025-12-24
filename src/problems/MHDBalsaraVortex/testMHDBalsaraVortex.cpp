@@ -246,7 +246,7 @@ auto problem_main() -> int
 	double stop_time = 0.0;
 	if (is_advection_enabled) {
 		const double advection_speed = vortex_u_magn;
-		vortex_drift_x2 = vortex_drift_x1 = advection_speed / std::sqrt(2.0);
+		vortex_drift_x2 = vortex_drift_x1 = advection_speed / std::numbers::sqrt2;
 		const double length_x1 = sim.geom[0].ProbLength(0);
 		const double length_x2 = sim.geom[0].ProbLength(1);
 		if (std::abs(length_x1 - length_x2) > 1e-12) {
