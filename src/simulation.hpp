@@ -96,6 +96,7 @@ namespace filesystem = experimental::filesystem;
 #include "io/DiagBase.H"
 #include "io/DiagFramePlane.H"
 #include "io/DiagPDF.H"
+#include "io/DiagParticleTxt.H"
 #include "io/DiagPlotfile.H"
 #include "io/DiagProjectionPlot.H"
 #include "io/io_utils.hpp"
@@ -193,7 +194,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int plotfileInterval_ = -1;				     // -1 == no output
 	int projectionInterval_ = -1;				     // -1 == no output
 	int statisticsInterval_ = -1;				     // -1 == no output
-	int particleInterval_ = -1;				     // -1 == no output
 	amrex::Real plotTimeInterval_ = -1.0;			     // time interval for plt file
 	bool skipInitialPlotfile_ = false;			     // skip writing plotfile at t=0
 	amrex::Real checkpointTimeInterval_ = -1.0;		     // time interval for checkpoints
@@ -365,7 +365,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void ReadMetadataFile(std::string const &chkfilename);
 	void WriteStatisticsFile();
 	void WritePlotFile();
-	void WriteParticleFile();
 	void WriteCheckpointFile() const;
 	void SetLastCheckpointSymlink(std::string const &checkpointname) const;
 	void writeFaceVelocitiesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVel, int lev, int step);
@@ -561,6 +560,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// Add PhysicsParticleRegister member
 	quokka::PhysicsParticleRegister<problem_t> particleRegister_;
+
+      public:
+	// Public access to particle register
+	auto GetParticleRegister() -> quokka::PhysicsParticleRegister<problem_t> & { return particleRegister_; }
 };
 
 template <typename problem_t> auto AMRSimulation<problem_t>::getGitHashForQuokka() const -> std::string
@@ -772,8 +775,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	pp.query("projection_interval", projectionInterval_);
 
 	// Default output interval
-	pp.query("particle_csv_interval", particleInterval_);
-
 	// Default statistics interval
 	pp.query("statistics_interval", statisticsInterval_);
 
@@ -977,10 +978,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		WritePlotFile();
 	}
 
-	if (particleInterval_ > 0) {
-		WriteParticleFile();
-	}
-
 	if (statisticsInterval_ > 0) {
 		WriteStatisticsFile();
 	}
@@ -1162,7 +1159,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 #ifdef AMREX_USE_ASCENT
 	int last_ascent_step = 0;
 #endif
-	int last_particle_step = 0;
 	int last_statistics_step = 0;
 	int last_plot_file_step = 0;
 	int last_chk_file_step = 0;
@@ -1319,11 +1315,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			WritePlotFile();
 		}
 
-		if (particleInterval_ > 0 && (step + 1) % particleInterval_ == 0) {
-			last_particle_step = step + 1;
-			WriteParticleFile();
-		}
-
 		// print particle statistics
 		if constexpr (Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None) {
 			if (quokka::particle_verbose > 0) {
@@ -1477,11 +1468,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		WritePlotFile();
 	}
 
-	// write final particle file
-	if (particleInterval_ > 0 && istep[0] > last_particle_step) {
-		WriteParticleFile();
-	}
-
 	// write final statistics
 	if (statisticsInterval_ > 0 && istep[0] > last_statistics_step) {
 		WriteStatisticsFile();
@@ -1604,13 +1590,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			if (verbose) {
 				if (num_periodic_dims == 3) {
 					amrex::Print() << "Using MLMG solver with fully periodic boundaries...\n\n";
-				} else if (num_periodic_dims == 2) {
+				} else {
 					amrex::Print() << "Using MLMG solver with mixed periodic/Dirichlet boundaries...\n\n";
 				}
 			}
 
 			// Create MLPoisson linear operator with proper LPInfo for AMR
 			amrex::LPInfo info;
+			info.setDeterministic(true); // Enable deterministic mode for bitwise reproducibility
 			// For AMR problems, we need to ensure proper coarsening
 			if (finest_level > 0) {
 				info.setAgglomeration(false); // Disable agglomeration for AMR
@@ -1661,7 +1648,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 				amrex::Print() << "Doing Poisson solve with open boundaries using OpenBCSolver...\n\n";
 			}
 
-			amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level));
+			amrex::LPInfo openbc_info;
+			openbc_info.setDeterministic(true); // Enable deterministic mode for bitwise reproducibility
+			amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level), openbc_info);
 			if (verbose) {
 				poissonSolver.setVerbose(1);
 				poissonSolver.setBottomVerbose(0);
@@ -1852,7 +1841,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	particleRegister_.applySinkAccretion(state_new_cc_[lev], accretion_rate_at_level, state_fc_ptr, geom[lev], lev, time, dt);
 
 	// We allow particle formation at the finest level only to avoid duplicate particle creation from multiple levels at the same location.
-	particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt, state_fc_ptr);
+	particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt, state_fc_ptr, verbose);
 
 	// Deposit the SN particles into the MultiFab
 	const amrex::Real max_velocity = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
@@ -3186,6 +3175,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 				continue;
 			}
 
+			auto *particleTxtDiag = dynamic_cast<DiagParticleTxt *>(diag.get());
+			if (particleTxtDiag != nullptr) {
+				particleTxtDiag->processDiag<problem_t>(istep[0], tNew_[0]);
+				continue;
+			}
+
 			// Unknown diagnostic type
 			amrex::Abort("Unknown diagnostic type - all diagnostic types must implement template processDiag");
 		}
@@ -3351,23 +3346,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	// write all particles in particleRegister_ to plotfile
 	particleRegister_.writePlotFile(plotfilename);
 #endif
-}
-
-template <typename problem_t> void AMRSimulation<problem_t>::WriteParticleFile()
-{
-	const BL_PROFILE("AMRSimulation::WriteParticleFile()");
-
-	// Create particle file name using the same pattern as PlotFileName
-	const std::string partfilename = amrex::Concatenate("part", istep[0], 5);
-
-	amrex::Print() << "Writing particle file " << partfilename << "\n";
-
-	// Create directory, renaming existing one if it exists (following AMReX pattern)
-	amrex::UtilCreateCleanDirectory(partfilename, true);
-
-	// Save particle data to CSV files inside the created directory
-	// Only save if particle count <= 1000 for each type
-	particleRegister_.saveParticleDataToFileConditional(partfilename, 1000);
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::WriteMetadataFile(std::string const &MetadataFileName) const

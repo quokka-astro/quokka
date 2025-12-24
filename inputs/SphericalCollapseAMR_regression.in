@@ -33,8 +33,12 @@ do_tracers = 0          # turn on tracer particles
 
 ascent_interval = -1
 plotfile_interval = 200
-particle_csv_interval = -1
 checkpoint_interval = -1
 
 problem.num_particles = 1000000
 problem.seed = 42123
+
+# Number of bits to remove from the significand. 20 is the default value.
+# With N=28, the SphericalCollapse test is reproducible up to 1000 steps with 1M stars in 128³ cells.
+# For production runs with large number of cells and timesteps, you may have to increase this value to ensure bitwise reproducibility. Increase this value by 1 for each doubling of the number of cells or timesteps.
+particles.reproducibility_roundoff_redundancy = 28

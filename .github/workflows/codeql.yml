@@ -34,6 +34,7 @@ jobs:
               - 'extern/grackle_data_files/**'
               - 'extern/openPMD-api/**'
               - 'extern/yaml-cpp/**'
+              - 'extern/turbulence/**'
               - 'inputs/**'
               - 'CMakeLists.txt'
               - '**/*.cpp'
@@ -90,14 +91,14 @@ jobs:
               -DCMAKE_CXX_COMPILER="/usr/local/bin/g++"
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@1b168cd39490f61582a9beae412bb7057a6b2c4e # v3.29.5
+        uses: github/codeql-action/init@5d4e8d1aca955e8d8589aabd499c5cae939e33c7 # v3.29.5
         with:
           languages: ${{ matrix.language }}
           queries: +security-and-quality
           config-file: ./.github/workflows/codeql/codeql-config.yml
 
       - name: Build (py)
-        uses: github/codeql-action/autobuild@1b168cd39490f61582a9beae412bb7057a6b2c4e # v3.29.5
+        uses: github/codeql-action/autobuild@5d4e8d1aca955e8d8589aabd499c5cae939e33c7 # v3.29.5
         if: ${{ matrix.language == 'python' }}
 
       - name: Build (C++)
@@ -120,7 +121,7 @@ jobs:
           make -j 4
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@1b168cd39490f61582a9beae412bb7057a6b2c4e # v3.29.5
+        uses: github/codeql-action/analyze@5d4e8d1aca955e8d8589aabd499c5cae939e33c7 # v3.29.5
         with:
           category: "/language:${{ matrix.language }}"
 
