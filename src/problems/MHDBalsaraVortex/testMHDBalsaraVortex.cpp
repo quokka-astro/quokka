@@ -50,7 +50,7 @@ constexpr double bg_density = 1.0;
 constexpr double bg_pressure = 1.0;
 constexpr double sound_speed = gcem::sqrt(gamma_gas * bg_pressure / bg_density);
 // vortex parameters
-AMREX_GPU_MANAGED double vortex_Mach = 0.01; // NOLINT
+AMREX_GPU_MANAGED double vortex_Mach = 0.01;   // NOLINT
 AMREX_GPU_MANAGED double vortex_b_magn = 0.01; // NOLINT
 // domain extends over [-5, 5] by default
 constexpr double vortex_center_x1 = 0.0;
@@ -66,10 +66,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeRadiusSq(const double x1, const 
 	return delta_x1_from_center * delta_x1_from_center + delta_x2_from_center * delta_x2_from_center;
 }
 
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeRadialProfile(const double radius_sq) -> double
-{
-	return std::exp(0.5 * (1.0 - radius_sq));
-}
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeRadialProfile(const double radius_sq) -> double { return std::exp(0.5 * (1.0 - radius_sq)); }
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto Az(const double x1, const double x2) -> double
 {
@@ -84,7 +81,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto Az(const double x1, const double x2) ->
 }
 
 AMREX_GPU_DEVICE
-void computeVortexSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir)
+void computeVortexSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &state, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+			   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::centering cen, quokka::direction dir)
 {
 	// lower-left corner
 	const amrex::Real x1_L = prob_lo[0] + i * dx[0];
@@ -101,8 +99,9 @@ void computeVortexSolution(int i, int j, int k, amrex::Array4<amrex::Real> const
 		const double delta_x2_from_center = x2_C - vortex_center_x2;
 
 		const double vortex_u_magn = vortex_Mach * sound_speed;
-		
-		const double pressure = bg_pressure + 0.5 * (vortex_b_magn * vortex_b_magn * (1.0 - radius_sq) - vortex_u_magn * vortex_u_magn) * radial_profile_sq;
+
+		const double pressure =
+		    bg_pressure + 0.5 * (vortex_b_magn * vortex_b_magn * (1.0 - radius_sq) - vortex_u_magn * vortex_u_magn) * radial_profile_sq;
 		const double Eint = pressure / (gamma_gas - 1.0);
 
 		const double delta_vel_x1 = -delta_x2_from_center * vortex_u_magn * radial_profile;
