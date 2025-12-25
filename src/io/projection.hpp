@@ -18,9 +18,9 @@
 #include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_Orientation.H"
-#include "AMReX_iMultiFab.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_VisMF.H"
+#include "AMReX_iMultiFab.H"
 #include <AMReX.H>
 #include <AMReX_BC_TYPES.H>
 
@@ -166,8 +166,8 @@ auto ComputePlaneProjection(amrex::Vector<amrex::MultiFab> const &state_new, con
 			bcs[0].setHi(d, amrex::BCType::int_dir);
 		}
 		amrex::MFPCInterp interp;
-		interp.interp(projections_accum[lev], 0, coarse_refined, 0, 1, amrex::IntVect(0), geom2d[lev], geom2d[lev + 1],
-			      geom2d[lev + 1].Domain(), rr_2d, bcs, 0);
+		interp.interp(projections_accum[lev], 0, coarse_refined, 0, 1, amrex::IntVect(0), geom2d[lev], geom2d[lev + 1], geom2d[lev + 1].Domain(), rr_2d,
+			      bcs, 0);
 		amrex::MultiFab::Add(projections_accum[lev + 1], coarse_refined, 0, 0, 1, 0);
 	}
 
