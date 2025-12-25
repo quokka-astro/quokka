@@ -682,11 +682,7 @@ template <> void QuokkaSimulation<ShockCloud>::refineGrid(int lev, amrex::TagBox
 auto problem_main() -> int
 {
 	// Problem initialization
-	// Set boundary conditions: ext_dir in x, periodic in y and z
-	auto boundaryConditions = quokka::BC<ShockCloud>(quokka::BCType::ext_dir,  // x: Dirichlet/NSCBC
-							 quokka::BCType::int_dir,  // y: periodic
-							 quokka::BCType::int_dir); // z: periodic
-	QuokkaSimulation<ShockCloud> sim(boundaryConditions);
+	QuokkaSimulation<ShockCloud> sim;
 
 	// Read problem parameters
 	amrex::ParmParse const pp;
