@@ -70,65 +70,69 @@ auto ComputePlaneProjection(amrex::Vector<amrex::MultiFab> const &state_new, con
 	// compute plane-parallel projection of user_f(i, j, k, state) along the given axis.
 	const BL_PROFILE("quokka::DiagProjection::computePlaneProjection()");
 
-	amrex::Vector<amrex::MultiFab> projections(finest_level + 1);
-
-	for (int lev = 0; lev <= finest_level; ++lev) {
-		auto const &level_ba = state_new[lev].boxArray();
-		amrex::BoxList bl(level_ba.ixType());
-		for (int i = 0; i < level_ba.size(); ++i) {
-			bl.push_back(detail::transform_box_to_2D(dir, level_ba[i]));
-		}
-		bl.simplify();
-		amrex::BoxArray ba2d(std::move(bl));
-		ba2d.removeOverlap();
-		amrex::DistributionMapping dm2d(ba2d);
-
-		projections[lev].define(ba2d, dm2d, 1, 0);
-		projections[lev].setVal(0.0);
-
-		amrex::iMultiFab mask;
-		if (lev == finest_level) {
-			mask.define(state_new[lev].boxArray(), state_new[lev].DistributionMap(), 1, amrex::IntVect(0));
-			mask.setVal(1);
-		} else {
-			mask = amrex::makeFineMask(state_new[lev], state_new[lev + 1], amrex::IntVect(0), ref_ratio[lev], geom[lev].periodicity(), 1, 0);
-		}
-
-		auto const &state = state_new[lev].const_arrays();
-		auto const &mask_arr = mask.const_arrays();
-		auto const &dx = geom[lev].CellSizeArray();
-
-		auto plane_local = amrex::ReduceToPlane<ReduceOp, amrex::Real>(static_cast<int>(dir), geom[lev].Domain(), state_new[lev],
-									       [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
-										       if (mask_arr[box_no](i, j, k) == 0) {
-											       return 0.0;
-										       }
-										       return dx[static_cast<int>(dir)] * user_f(i, j, k, state[box_no]);
-									       });
-		amrex::ParallelDescriptor::ReduceRealSum(plane_local.dataPtr(), static_cast<int>(plane_local.size()));
-
-		auto const plane_arr = plane_local.const_array();
-		auto const proj_arr = projections[lev].arrays();
-		amrex::ParallelFor(projections[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
-			if (dir == amrex::Direction::x) {
-				proj_arr[bx](i, j, k) = plane_arr(AMREX_D_DECL(0, i, j));
-#if AMREX_SPACEDIM >= 2
-			} else if (dir == amrex::Direction::y) {
-				proj_arr[bx](i, j, k) = plane_arr(AMREX_D_DECL(i, 0, j));
-#endif
-#if AMREX_SPACEDIM == 3
-			} else if (dir == amrex::Direction::z) {
-				proj_arr[bx](i, j, k) = plane_arr(AMREX_D_DECL(i, j, 0));
-#endif
-			} else {
-				proj_arr[bx](i, j, k) = 0.0;
-			}
-		});
-		amrex::Gpu::streamSynchronize();
-	}
-
-	return projections;
-}
+	       amrex::Vector<amrex::MultiFab> projections(finest_level + 1);
+	
+	       for (int lev = 0; lev <= finest_level; ++lev) {
+	               auto const &level_ba = state_new[lev].boxArray();
+	               amrex::BoxList bl(level_ba.ixType());
+	               for (int i = 0; i < level_ba.size(); ++i) {
+	                       bl.push_back(detail::transform_box_to_2D(dir, level_ba[i]));
+	               }
+	               bl.simplify();
+	               amrex::BoxArray ba2d(std::move(bl));
+	               ba2d.removeOverlap();
+	               amrex::DistributionMapping dm2d(ba2d);
+	
+	               projections[lev].define(ba2d, dm2d, 1, 0);
+	               projections[lev].setVal(0.0);
+	
+	               auto const &state = state_new[lev].const_arrays();
+	               auto const &dx = geom[lev].CellSizeArray();
+	
+	               auto plane_local = amrex::ReduceToPlane<ReduceOp, amrex::Real>(static_cast<int>(dir), geom[lev].Domain(), state_new[lev],
+	                                                                              [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
+	                                                                                      return dx[static_cast<int>(dir)] * user_f(i, j, k, state[box_no]);
+	                                                                              });
+	               amrex::ParallelDescriptor::ReduceRealSum(plane_local.dataPtr(), static_cast<int>(plane_local.size()));
+	
+	               auto const plane_arr = plane_local.const_array();
+	               auto const proj_arr = projections[lev].arrays();
+	               amrex::ParallelFor(projections[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+	                       if (dir == amrex::Direction::x) {
+	                               proj_arr[bx](i, j, k) = plane_arr(AMREX_D_DECL(0, i, j));
+	#if AMREX_SPACEDIM >= 2
+	                       } else if (dir == amrex::Direction::y) {
+	                               proj_arr[bx](i, j, k) = plane_arr(AMREX_D_DECL(i, 0, j));
+	#endif
+	#if AMREX_SPACEDIM == 3
+	                       } else if (dir == amrex::Direction::z) {
+	                               proj_arr[bx](i, j, k) = plane_arr(AMREX_D_DECL(i, j, 0));
+	#endif
+	                       } else {
+	                               proj_arr[bx](i, j, k) = 0.0;
+	                       }
+	               });
+	               amrex::Gpu::streamSynchronize();
+	       }
+	
+	       // average down
+	       for (int lev = finest_level - 1; lev >= 0; --lev) {
+	               amrex::IntVect rr_2d{AMREX_D_DECL(1, 1, 1)};
+	               if (dir == amrex::Direction::x) {
+	                       rr_2d = amrex::IntVect{AMREX_D_DECL(ref_ratio[lev][1], ref_ratio[lev][2], 1)};
+	#if AMREX_SPACEDIM >= 2
+	               } else if (dir == amrex::Direction::y) {
+	                       rr_2d = amrex::IntVect{AMREX_D_DECL(ref_ratio[lev][0], ref_ratio[lev][2], 1)};
+	#endif
+	#if AMREX_SPACEDIM == 3
+	               } else if (dir == amrex::Direction::z) {
+	                       rr_2d = amrex::IntVect{AMREX_D_DECL(ref_ratio[lev][0], ref_ratio[lev][1], 1)};
+	#endif
+	               }
+	               amrex::average_down(projections[lev + 1], projections[lev], 0, 1, rr_2d);
+	       }
+	
+	       return projections;}
 
 void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> const &proj,
 		     amrex::Vector<amrex::Geometry> const &geom, amrex::Vector<amrex::IntVect> const &ref_ratio, amrex::Real time, int istep,
