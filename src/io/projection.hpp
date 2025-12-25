@@ -97,14 +97,13 @@ auto ComputePlaneProjection(amrex::Vector<amrex::MultiFab> const &state_new, con
 		auto const &mask_arr = mask.const_arrays();
 		auto const &dx = geom[lev].CellSizeArray();
 
-		auto plane_local = amrex::ReduceToPlane<ReduceOp, amrex::Real>(
-		    static_cast<int>(dir), geom[lev].Domain(), state_new[lev],
-		    [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
-			    if (mask_arr[box_no](i, j, k) == 0) {
-				    return 0.0;
-			    }
-			    return dx[static_cast<int>(dir)] * user_f(i, j, k, state[box_no]);
-		    });
+		auto plane_local = amrex::ReduceToPlane<ReduceOp, amrex::Real>(static_cast<int>(dir), geom[lev].Domain(), state_new[lev],
+									       [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
+										       if (mask_arr[box_no](i, j, k) == 0) {
+											       return 0.0;
+										       }
+										       return dx[static_cast<int>(dir)] * user_f(i, j, k, state[box_no]);
+									       });
 		amrex::ParallelDescriptor::ReduceRealSum(plane_local.dataPtr(), static_cast<int>(plane_local.size()));
 
 		auto const plane_arr = plane_local.const_array();
