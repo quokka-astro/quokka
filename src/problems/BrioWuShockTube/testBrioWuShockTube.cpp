@@ -278,29 +278,7 @@ template <> void QuokkaSimulation<MHDShocktubeProblem>::refineGrid(int lev, amre
 
 auto problem_main() -> int
 {
-	const int ncomp_cc = Physics_Indices<MHDShocktubeProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		BCs_cc[n].setLo(0, amrex::BCType::ext_dir); // Dirichlet
-		BCs_cc[n].setHi(0, amrex::BCType::ext_dir);
-		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
-
-	const int nvars_fc = Physics_Indices<MHDShocktubeProblem>::nvarTotal_fc;
-	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
-	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
-		BCs_fc[icomp].setLo(0, amrex::BCType::ext_dir); // Dirichlet
-		BCs_fc[icomp].setHi(0, amrex::BCType::ext_dir);
-		for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-			BCs_fc[icomp].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_fc[icomp].setHi(i, amrex::BCType::int_dir);
-		}
-	}
-
-	QuokkaSimulation<MHDShocktubeProblem> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<MHDShocktubeProblem> sim;
 
 	// Main time loop
 	sim.setInitialConditions();

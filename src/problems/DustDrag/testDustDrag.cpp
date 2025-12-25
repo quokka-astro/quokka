@@ -97,18 +97,8 @@ auto problem_main() -> int
 	const double sigma = 0.1;
 	const double xc = 0.5;
 
-	// boundary conditions
-	constexpr int nvars = HydroSystem<DustDrag>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir);
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
-
 	// problem initialization
-	QuokkaSimulation<DustDrag> sim(BCs_cc);
+	QuokkaSimulation<DustDrag> sim;
 
 	sim.reconstructionOrder_ = 3;
 	sim.radiationReconstructionOrder_ = 3; // PPM
