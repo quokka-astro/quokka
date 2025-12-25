@@ -155,11 +155,8 @@ auto problem_main() -> int
 
 	const double max_dt = 1.0;
 
-	// Boundary conditions
-	auto BCs_cc = quokka::BC<PulseProblem>(quokka::BCType::int_dir);
-
 	// Problem initialization
-	QuokkaSimulation<PulseProblem> sim(BCs_cc);
+	QuokkaSimulation<PulseProblem> sim;
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;

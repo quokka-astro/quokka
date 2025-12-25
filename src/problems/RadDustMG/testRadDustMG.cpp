@@ -176,11 +176,8 @@ auto problem_main() -> int
 	const int max_timesteps = 1e6;
 	const double CFL_number_gas = 0.8;
 
-	// Boundary conditions
-	auto BCs_cc = quokka::BC<DustProblem>(quokka::BCType::int_dir);
-
 	// Problem initialization
-	QuokkaSimulation<DustProblem> sim(BCs_cc);
+	QuokkaSimulation<DustProblem> sim;
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;
