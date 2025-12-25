@@ -4,7 +4,7 @@
 # Box size is [-600 kpc, 600 kpc]^3
 geometry.prob_lo     =  -1.8514065526075864e24 -1.8514065526075864e24 -1.8514065526075864e24
 geometry.prob_hi     =   1.8514065526075864e24  1.8514065526075864e24  1.8514065526075864e24
-geometry.is_periodic =   0    0    0
+quokka.bc = reflecting reflecting reflecting
 
 # *****************************************************************
 # VERBOSITY

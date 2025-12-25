@@ -202,11 +202,8 @@ auto problem_main() -> int
 
 	const double the_dt = 1.0e-2;
 
-	// Boundary conditions
-	auto BCs_cc = quokka::BC<CoolingProblem>(quokka::BCType::int_dir);
-
 	// Problem initialization
-	QuokkaSimulation<CoolingProblem> sim(BCs_cc);
+	QuokkaSimulation<CoolingProblem> sim;
 
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;

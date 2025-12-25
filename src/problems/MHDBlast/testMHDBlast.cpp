@@ -165,25 +165,7 @@ template <> void QuokkaSimulation<MHDBlast>::ComputeDerivedVar(int lev, std::str
 
 auto problem_main() -> int
 {
-	const int nvars_cc = Physics_Indices<MHDBlast>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars_cc);
-	for (int icomp = 0; icomp < nvars_cc; ++icomp) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_cc[icomp].setLo(idim, amrex::BCType::int_dir); // periodic
-			BCs_cc[icomp].setHi(idim, amrex::BCType::int_dir);
-		}
-	}
-
-	const int nvars_fc = Physics_Indices<MHDBlast>::nvarTotal_fc;
-	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
-	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_fc[icomp].setLo(idim, amrex::BCType::int_dir); // periodic
-			BCs_fc[icomp].setHi(idim, amrex::BCType::int_dir);
-		}
-	}
-
-	QuokkaSimulation<MHDBlast> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<MHDBlast> sim;
 
 	// initialize
 	sim.setInitialConditions();

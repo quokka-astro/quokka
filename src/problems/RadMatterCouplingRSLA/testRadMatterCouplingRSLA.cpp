@@ -162,10 +162,7 @@ auto problem_main() -> int
 	const int max_timesteps = 1e6;
 	const double constant_dt = 1.0e-8; // s
 
-	// Set boundary conditions - extrapolate
-	auto BCs_cc = quokka::BC<CouplingProblem>(quokka::BCType::foextrap);
-
-	QuokkaSimulation<CouplingProblem> sim(BCs_cc);
+	QuokkaSimulation<CouplingProblem> sim;
 
 	sim.cflNumber_ = CFL_number;
 	sim.radiationCflNumber_ = CFL_number;

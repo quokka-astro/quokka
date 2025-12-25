@@ -70,6 +70,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_Utility.H"
 #include "AMReX_Vector.H"
 #include "AMReX_VisMF.H"
+#include "util/BC.hpp"
 #include <AMReX_FluxRegister.H>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -226,11 +227,32 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : BCs_cc_(BCs_cc), BCs_fc_(builtin_BCs_fc(BCs_cc)) { initialize(); }
 
+	explicit AMRSimulation()
+	{
+		readBCs();
+		initialize();
+	}
+
 	auto builtin_BCs_fc(amrex::Vector<amrex::BCRec> & /*BCs_cc*/) -> amrex::Vector<amrex::BCRec>
 	{
 		static_assert(!(Physics_Traits<problem_t>::is_mhd_enabled), "You are required to explicitly define the face-centered BCs when MHD is enabled.");
 		amrex::Vector<amrex::BCRec> BCs_fc(0);
 		return BCs_fc;
+	}
+
+	void readBCs()
+	{
+		amrex::ParmParse const pp_quokka("quokka");
+		amrex::Vector<quokka::BCType::mathematicalBndryTypes> bc_type;
+		if (pp_quokka.queryarr("bc", bc_type) != 0) {
+			// Parse BCs
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(bc_type.size() == 3, "quokka.bc must have 3 components");
+
+			BCs_cc_ = quokka::BC_cc<problem_t>(bc_type[0], bc_type[1], bc_type[2]);
+			BCs_fc_ = quokka::BC_fc<problem_t>(bc_type[0], bc_type[1], bc_type[2]);
+		} else {
+			amrex::Abort("quokka.bc must be specified in the input file.");
+		}
 	}
 
 	void initialize();
