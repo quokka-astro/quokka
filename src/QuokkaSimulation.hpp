@@ -9,6 +9,8 @@
 /// \brief Implements classes and functions to organise the overall setup,
 /// timestepping, solving, and I/O of a simulation for radiation moments.
 
+#include "AMReX_GpuContainers.H"
+#include "AMReX_Tuple.H"
 #include "grid.hpp"
 #include "hydro/EOS.hpp"
 #include <algorithm>
@@ -26,6 +28,7 @@ namespace filesystem = experimental::filesystem;
 }
 #endif
 #include <limits>
+#include <map>
 #include <memory>
 #include <string>
 #include <tuple>
@@ -79,6 +82,7 @@ namespace filesystem = experimental::filesystem;
 #include "physics_numVars.hpp"
 #include "radiation/radiation_system.hpp"
 #include "simulation.hpp"
+#include "turbulence/TurbulentDriving.hpp"
 
 // Simulation class should be initialized only once per program (i.e., is a singleton)
 template <typename problem_t> class QuokkaSimulation : public AMRSimulation<problem_t>
@@ -153,12 +157,15 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	int enableCooling_ = 0;
 	int enableChemistry_ = 0;
+	int enableTurbulence_ = 0;
 	Real max_density_allowed = std::numeric_limits<amrex::Real>::max();
 	Real min_density_allowed = std::numeric_limits<amrex::Real>::min();
 
 	quokka::ResampledCooling::resampled_tables resampledTables_;
 	std::string coolingTableType_;
 	std::string coolingTableFilename_;
+
+	std::map<std::string, std::string> turbParams_;
 
 	static constexpr int nvarTotal_cc_ = Physics_Indices<problem_t>::nvarTotal_cc;
 	static constexpr int nvars_ = HydroSystem<problem_t>::nvar_;
@@ -203,6 +210,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::LondrilloDelZanna2004; // method to use to average EMF at edges
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
+	std::unique_ptr<quokka::turbulence::turbulentDriving<problem_t>> td;
 
 	// member functions
 	explicit QuokkaSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : AMRSimulation<problem_t>(BCs_cc, BCs_fc)
@@ -566,6 +574,30 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		}
 	}
 
+	// set turbulence runtime parameters
+	{
+		amrex::ParmParse const hpp("turbulence");
+		hpp.query("enabled", enableTurbulence_);
+		hpp.query("length", turbParams_["length"]);
+		hpp.query("target_vdisp", turbParams_["target_vdisp"]);
+		hpp.query("ampl_factor", turbParams_["ampl_factor"]);
+		hpp.query("ampl_auto_adjust", turbParams_["ampl_auto_adjust"]);
+		hpp.query("k_driv", turbParams_["k_driv"]);
+		hpp.query("k_min", turbParams_["k_min"]);
+		hpp.query("k_max", turbParams_["k_max"]);
+		hpp.query("sol_weight", turbParams_["sol_weight"]);
+		hpp.query("spect_form", turbParams_["spect_form"]);
+		hpp.query("power_law_exp", turbParams_["power_law_exp"]);
+		hpp.query("angles_exp", turbParams_["angles_exp"]);
+		hpp.query("random_seed", turbParams_["random_seed"]);
+		hpp.query("nsteps_per_t_turb", turbParams_["nsteps_per_t_turb"]);
+		turbParams_["ndim"] = std::to_string(AMREX_SPACEDIM);
+
+		if (enableTurbulence_ == 1) {
+			td = std::make_unique<quokka::turbulence::turbulentDriving<problem_t>>(turbParams_);
+		}
+	}
+
 	// set photoelectric heating runtime parameters
 	{
 		amrex::ParmParse const pp;
@@ -918,6 +950,10 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	}
 #endif
 
+	if (enableTurbulence_ == 1) {
+		auto const &cellSizes = geom[lev].CellSizeArray();
+		td->applyDriving(state, time, dt, cellSizes);
+	}
 	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
 		DustSystem<problem_t>::computeDustDrag(state, dt, dust_omega_, dust_alpha_);
 	}
