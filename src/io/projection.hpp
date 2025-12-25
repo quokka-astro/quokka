@@ -17,6 +17,7 @@
 #include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_Orientation.H"
+#include "AMReX_SPACE.H"
 #include "AMReX_VisMF.H"
 #include <AMReX.H>
 
@@ -110,11 +111,17 @@ auto ComputePlaneProjection(amrex::Vector<amrex::MultiFab> const &state_new, con
 		auto const proj_arr = projections[lev].arrays();
 		amrex::ParallelFor(projections[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
 			if (dir == amrex::Direction::x) {
-				proj_arr[bx](i, j, k) = plane_arr(0, i, j);
+				proj_arr[bx](i, j, k) = plane_arr(AMREX_D_DECL(0, i, j));
+#if AMREX_SPACEDIM >= 2
 			} else if (dir == amrex::Direction::y) {
-				proj_arr[bx](i, j, k) = plane_arr(i, 0, j);
+				proj_arr[bx](i, j, k) = plane_arr(AMREX_D_DECL(i, 0, j));
+#endif
+#if AMREX_SPACEDIM == 3
+			} else if (dir == amrex::Direction::z) {
+				proj_arr[bx](i, j, k) = plane_arr(AMREX_D_DECL(i, j, 0));
+#endif
 			} else {
-				proj_arr[bx](i, j, k) = plane_arr(i, j, k);
+				proj_arr[bx](i, j, k) = 0.0;
 			}
 		});
 		amrex::Gpu::streamSynchronize();
