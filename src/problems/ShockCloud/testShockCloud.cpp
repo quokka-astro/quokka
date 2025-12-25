@@ -646,6 +646,24 @@ auto QuokkaSimulation<ShockCloud>::ComputeProjections(const amrex::Direction dir
 		    return (H_mass_fraction * rho_wind) / m_H;
 	    });
 
+	// diagnostic: difference between total and partials
+	proj["nH_residual"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
+	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+		    Real const rho_wind = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
+		    Real const residual = rho - (rho_cloud + rho_wind);
+		    return (H_mass_fraction * residual) / m_H;
+	    });
+
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		for (int lev = 0; lev <= finestLevel(); ++lev) {
+			const amrex::Real max_residual = proj["nH_residual"][lev].norminf(0, 0, true);
+			amrex::Print() << "ShockCloud diag dir=" << quokka::diagnostics::detail::direction_to_string(dir) << " lev=" << lev
+				       << " max|nH_residual|=" << max_residual << "\n";
+		}
+	}
+
 	return proj;
 }
 

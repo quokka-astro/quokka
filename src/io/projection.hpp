@@ -14,12 +14,15 @@
 #include <vector>
 
 // AMReX headers
+#include "AMReX_MFInterpolater.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_Orientation.H"
+#include "AMReX_iMultiFab.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_VisMF.H"
 #include <AMReX.H>
+#include <AMReX_BC_TYPES.H>
 
 // YAML headers
 #include <yaml-cpp/yaml.h>
@@ -70,69 +73,106 @@ auto ComputePlaneProjection(amrex::Vector<amrex::MultiFab> const &state_new, con
 	// compute plane-parallel projection of user_f(i, j, k, state) along the given axis.
 	const BL_PROFILE("quokka::DiagProjection::computePlaneProjection()");
 
-	       amrex::Vector<amrex::MultiFab> projections(finest_level + 1);
-	
-	       for (int lev = 0; lev <= finest_level; ++lev) {
-	               auto const &level_ba = state_new[lev].boxArray();
-	               amrex::BoxList bl(level_ba.ixType());
-	               for (int i = 0; i < level_ba.size(); ++i) {
-	                       bl.push_back(detail::transform_box_to_2D(dir, level_ba[i]));
-	               }
-	               bl.simplify();
-	               amrex::BoxArray ba2d(std::move(bl));
-	               ba2d.removeOverlap();
-	               amrex::DistributionMapping dm2d(ba2d);
-	
-	               projections[lev].define(ba2d, dm2d, 1, 0);
-	               projections[lev].setVal(0.0);
-	
-	               auto const &state = state_new[lev].const_arrays();
-	               auto const &dx = geom[lev].CellSizeArray();
-	
-	               auto plane_local = amrex::ReduceToPlane<ReduceOp, amrex::Real>(static_cast<int>(dir), geom[lev].Domain(), state_new[lev],
-	                                                                              [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
-	                                                                                      return dx[static_cast<int>(dir)] * user_f(i, j, k, state[box_no]);
-	                                                                              });
-	               amrex::ParallelDescriptor::ReduceRealSum(plane_local.dataPtr(), static_cast<int>(plane_local.size()));
-	
-	               auto const plane_arr = plane_local.const_array();
-	               auto const proj_arr = projections[lev].arrays();
-	               amrex::ParallelFor(projections[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
-	                       if (dir == amrex::Direction::x) {
-	                               proj_arr[bx](i, j, k) = plane_arr(AMREX_D_DECL(0, i, j));
-	#if AMREX_SPACEDIM >= 2
-	                       } else if (dir == amrex::Direction::y) {
-	                               proj_arr[bx](i, j, k) = plane_arr(AMREX_D_DECL(i, 0, j));
-	#endif
-	#if AMREX_SPACEDIM == 3
-	                       } else if (dir == amrex::Direction::z) {
-	                               proj_arr[bx](i, j, k) = plane_arr(AMREX_D_DECL(i, j, 0));
-	#endif
-	                       } else {
-	                               proj_arr[bx](i, j, k) = 0.0;
-	                       }
-	               });
-	               amrex::Gpu::streamSynchronize();
-	       }
-	
-	       // average down
-	       for (int lev = finest_level - 1; lev >= 0; --lev) {
-	               amrex::IntVect rr_2d{AMREX_D_DECL(1, 1, 1)};
-	               if (dir == amrex::Direction::x) {
-	                       rr_2d = amrex::IntVect{AMREX_D_DECL(ref_ratio[lev][1], ref_ratio[lev][2], 1)};
-	#if AMREX_SPACEDIM >= 2
-	               } else if (dir == amrex::Direction::y) {
-	                       rr_2d = amrex::IntVect{AMREX_D_DECL(ref_ratio[lev][0], ref_ratio[lev][2], 1)};
-	#endif
-	#if AMREX_SPACEDIM == 3
-	               } else if (dir == amrex::Direction::z) {
-	                       rr_2d = amrex::IntVect{AMREX_D_DECL(ref_ratio[lev][0], ref_ratio[lev][1], 1)};
-	#endif
-	               }
-	               amrex::average_down(projections[lev + 1], projections[lev], 0, 1, rr_2d);
-	       }
-	
-	       return projections;}
+	amrex::Vector<amrex::MultiFab> projections(finest_level + 1);
+	amrex::Vector<amrex::Geometry> geom2d(finest_level + 1);
+
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		const amrex::Box box2d = detail::transform_box_to_2D(dir, geom[lev].Domain());
+		const amrex::RealBox domain2d = detail::transform_realbox_to_2D(dir, geom[lev].ProbDomain());
+		geom2d[lev] = amrex::Geometry(box2d, &domain2d);
+	}
+
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		auto const &level_ba = state_new[lev].boxArray();
+		amrex::BoxList bl(level_ba.ixType());
+		for (int i = 0; i < level_ba.size(); ++i) {
+			bl.push_back(detail::transform_box_to_2D(dir, level_ba[i]));
+		}
+		bl.simplify();
+		amrex::BoxArray ba2d(std::move(bl));
+		ba2d.removeOverlap();
+		amrex::DistributionMapping dm2d(ba2d);
+
+		projections[lev].define(ba2d, dm2d, 1, 0);
+		projections[lev].setVal(0.0);
+
+		amrex::iMultiFab mask;
+		if (lev == finest_level) {
+			mask.define(state_new[lev].boxArray(), state_new[lev].DistributionMap(), 1, amrex::IntVect(0));
+			mask.setVal(1);
+		} else {
+			mask = amrex::makeFineMask(state_new[lev], state_new[lev + 1], amrex::IntVect(0), ref_ratio[lev], geom[lev].periodicity(), 1, 0);
+		}
+
+		auto const &state = state_new[lev].const_arrays();
+		auto const &mask_arr = mask.const_arrays();
+		auto const &dx = geom[lev].CellSizeArray();
+
+		auto plane_local = amrex::ReduceToPlane<ReduceOp, amrex::Real>(static_cast<int>(dir), geom[lev].Domain(), state_new[lev],
+									       [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
+										       if (mask_arr[box_no](i, j, k) == 0) {
+											       return 0.0;
+										       }
+										       return dx[static_cast<int>(dir)] * user_f(i, j, k, state[box_no]);
+									       });
+		amrex::ParallelDescriptor::ReduceRealSum(plane_local.dataPtr(), static_cast<int>(plane_local.size()));
+
+		auto const plane_arr = plane_local.const_array();
+		auto const proj_arr = projections[lev].arrays();
+		amrex::ParallelFor(projections[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+			if (dir == amrex::Direction::x) {
+				proj_arr[bx](i, j, k) = plane_arr(AMREX_D_DECL(0, i, j));
+#if AMREX_SPACEDIM >= 2
+			} else if (dir == amrex::Direction::y) {
+				proj_arr[bx](i, j, k) = plane_arr(AMREX_D_DECL(i, 0, j));
+#endif
+#if AMREX_SPACEDIM == 3
+			} else if (dir == amrex::Direction::z) {
+				proj_arr[bx](i, j, k) = plane_arr(AMREX_D_DECL(i, j, 0));
+#endif
+			} else {
+				proj_arr[bx](i, j, k) = 0.0;
+			}
+		});
+		amrex::Gpu::streamSynchronize();
+	}
+
+	amrex::Vector<amrex::MultiFab> projections_accum(finest_level + 1);
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		projections_accum[lev].define(projections[lev].boxArray(), projections[lev].DistributionMap(), 1, 0);
+		projections_accum[lev].ParallelCopy(projections[lev], 0, 0, 1, 0, 0);
+	}
+
+	for (int lev = 0; lev < finest_level; ++lev) {
+		amrex::IntVect rr_2d{AMREX_D_DECL(1, 1, 1)};
+		if (dir == amrex::Direction::x) {
+			rr_2d = amrex::IntVect{AMREX_D_DECL(ref_ratio[lev][1], ref_ratio[lev][2], 1)};
+#if AMREX_SPACEDIM >= 2
+		} else if (dir == amrex::Direction::y) {
+			rr_2d = amrex::IntVect{AMREX_D_DECL(ref_ratio[lev][0], ref_ratio[lev][2], 1)};
+#endif
+#if AMREX_SPACEDIM == 3
+		} else if (dir == amrex::Direction::z) {
+			rr_2d = amrex::IntVect{AMREX_D_DECL(ref_ratio[lev][0], ref_ratio[lev][1], 1)};
+#endif
+		}
+
+		amrex::MultiFab coarse_refined(projections[lev + 1].boxArray(), projections[lev + 1].DistributionMap(), 1, 0);
+		coarse_refined.setVal(0.0);
+
+		amrex::Vector<amrex::BCRec> bcs(1);
+		for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+			bcs[0].setLo(d, amrex::BCType::int_dir);
+			bcs[0].setHi(d, amrex::BCType::int_dir);
+		}
+		amrex::MFPCInterp interp;
+		interp.interp(projections_accum[lev], 0, coarse_refined, 0, 1, amrex::IntVect(0), geom2d[lev], geom2d[lev + 1],
+			      geom2d[lev + 1].Domain(), rr_2d, bcs, 0);
+		amrex::MultiFab::Add(projections_accum[lev + 1], coarse_refined, 0, 0, 1, 0);
+	}
+
+	return projections_accum;
+}
 
 void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> const &proj,
 		     amrex::Vector<amrex::Geometry> const &geom, amrex::Vector<amrex::IntVect> const &ref_ratio, amrex::Real time, int istep,
