@@ -7,6 +7,7 @@
 ///  \brief AMReX I/O for 2D projections
 
 #include "AMReX_Array.H"
+#include "AMReX_BoxList.H"
 #include "AMReX_DistributionMapping.H"
 #include "AMReX_FPC.H"
 #include "AMReX_Geometry.H"
@@ -542,7 +543,36 @@ void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex
 	for (int lev = 0; lev < nlevels; ++lev) {
 		// Use the BoxArray and DM from the first component's MultiFab on this level
 		const amrex::MultiFab &example_mf = firstVec[lev];
-		mf_all[lev].define(example_mf.boxArray(), example_mf.DistributionMap(), ncomp, 0);
+		bool needs_union = false;
+		for (const auto &varname : varnames) {
+			const amrex::MultiFab &comp_mf = proj.at(varname)[lev];
+			const auto &example_ba = example_mf.boxArray();
+			const auto &comp_ba = comp_mf.boxArray();
+			const bool cover_match = example_ba.contains(comp_ba) && comp_ba.contains(example_ba);
+			if (!cover_match) {
+				needs_union = true;
+				break;
+			}
+		}
+
+		if (needs_union) {
+			amrex::BoxList bl_union(example_mf.boxArray());
+			for (const auto &varname : varnames) {
+				const amrex::MultiFab &comp_mf = proj.at(varname)[lev];
+				bl_union.join(comp_mf.boxArray().boxList());
+			}
+			bl_union.simplify();
+			amrex::BoxArray ba_union(amrex::removeOverlap(bl_union));
+			amrex::DistributionMapping dm_union(ba_union);
+			mf_all[lev].define(ba_union, dm_union, ncomp, 0);
+			mf_all[lev].setVal(0.0);
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				amrex::Print() << "Warning: projection components use different BoxArrays at level " << lev
+					       << "; using a union BoxArray for output.\n";
+			}
+		} else {
+			mf_all[lev].define(example_mf.boxArray(), example_mf.DistributionMap(), ncomp, 0);
+		}
 
 		int icomp = 0;
 		// Iterate in the same order as varnames
