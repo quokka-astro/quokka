@@ -30,6 +30,7 @@ namespace filesystem = experimental::filesystem;
 #include <limits>
 #include <map>
 #include <memory>
+#include <source_location>
 #include <string>
 #include <tuple>
 #include <unordered_map>
@@ -254,6 +255,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void rereadRuntimeParameters(); // Re-read parameters to ensure runtime values override compile-time settings
 
 	void checkHydroStates(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> &mf_fc, char const *file, int line);
+	void CheckHydroStates(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> &mf_fc,
+			      std::source_location const &location = std::source_location::current());
 	void computeMaxSignalLocal(int level) override;
 	void printCellProperties(int lev, amrex::IntVect const &index) override;
 	void preCalculateInitialConditions() override;
@@ -785,11 +788,18 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::printCellPropert
 	}
 }
 
-#if !defined(NDEBUG)
-#define CHECK_HYDRO_STATES(mf, mf_fc) checkHydroStates(mf, mf_fc, __FILE__, __LINE__)
+template <typename problem_t>
+void QuokkaSimulation<problem_t>::CheckHydroStates(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> &mf_fc,
+						   std::source_location const &location)
+{
+#ifndef NDEBUG
+	checkHydroStates(mf, mf_fc, location.file_name(), static_cast<int>(location.line()));
 #else
-#define CHECK_HYDRO_STATES(mf, mf_fc)
+	static_cast<void>(mf);
+	static_cast<void>(mf_fc);
+	static_cast<void>(location);
 #endif
+}
 
 template <typename problem_t>
 void QuokkaSimulation<problem_t>::checkHydroStates(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> &mf_fc, char const *file, int line)
@@ -980,14 +990,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDerivedVa
 		if (this->useDensityFloorParser_) {
 			auto const density_floor_parser = this->densityFloorParserExe_.value();
 			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-				amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + amrex::Real(0.5)) * dx[0];
+				amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
 #if (AMREX_SPACEDIM >= 2)
-				amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + amrex::Real(0.5)) * dx[1];
+				amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + static_cast<amrex::Real>(0.5)) * dx[1];
 #else
 				amrex::Real const y = 0.0;
 #endif
 #if (AMREX_SPACEDIM == 3)
-				amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + amrex::Real(0.5)) * dx[2];
+				amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + static_cast<amrex::Real>(0.5)) * dx[2];
 #else
 				amrex::Real const z = 0.0;
 #endif
@@ -999,14 +1009,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDerivedVa
 				return densityFloor(x, y, z, base_density_floor);
 			};
 			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-				amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + amrex::Real(0.5)) * dx[0];
+				amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
 #if (AMREX_SPACEDIM >= 2)
-				amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + amrex::Real(0.5)) * dx[1];
+				amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + static_cast<amrex::Real>(0.5)) * dx[1];
 #else
 				amrex::Real const y = 0.0;
 #endif
 #if (AMREX_SPACEDIM == 3)
-				amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + amrex::Real(0.5)) * dx[2];
+				amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + static_cast<amrex::Real>(0.5)) * dx[2];
 #else
 				amrex::Real const z = 0.0;
 #endif
@@ -1343,7 +1353,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTim
 	}
 
 	// check hydro states before update (this can be caused by the flux register!)
-	CHECK_HYDRO_STATES(state_old_cc_[lev], state_old_fc_[lev]);
+		CheckHydroStates(state_old_cc_[lev], state_old_fc_[lev]);
 
 	// advance hydro
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
@@ -1355,7 +1365,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTim
 	}
 
 	// check hydro states after hydro update
-	CHECK_HYDRO_STATES(state_new_cc_[lev], state_new_fc_[lev]);
+		CheckHydroStates(state_new_cc_[lev], state_new_fc_[lev]);
 
 	// subcycle radiation
 	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
@@ -1363,13 +1373,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTim
 	}
 
 	// check hydro states after radiation update
-	CHECK_HYDRO_STATES(state_new_cc_[lev], state_new_fc_[lev]);
+		CheckHydroStates(state_new_cc_[lev], state_new_fc_[lev]);
 
 	// compute any operator-split terms here (user-defined)
 	computeAfterLevelAdvance(lev, time, dt_lev, ncycle);
 
 	// check hydro states after user work
-	CHECK_HYDRO_STATES(state_new_cc_[lev], state_new_fc_[lev]);
+		CheckHydroStates(state_new_cc_[lev], state_new_fc_[lev]);
 
 	// check state validity
 	AMREX_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp()));

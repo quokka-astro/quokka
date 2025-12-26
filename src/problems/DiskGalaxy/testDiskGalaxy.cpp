@@ -500,21 +500,20 @@ template <> void QuokkaSimulation<AgoraGalaxy>::ComputeDerivedVar(int lev, std::
 		const int ncomp = ncomp_cc_in;
 		auto output = mf.arrays();
 		auto const geom_data = geom[lev].data();
-		auto const prob_lo = geom_data.ProbLo();
-		auto const prob_hi = geom_data.ProbHi();
-		auto const dx = geom_data.CellSize();
+		auto const *const prob_lo = geom_data.ProbLo();
+		auto const *const dx = geom_data.CellSize();
 		amrex::Real const base_density_floor = densityFloor_;
-		if (useDensityFloorParser_) {
+		if (useDensityFloorParser_ && densityFloorParserExe_.has_value()) {
 			auto const density_floor_parser = densityFloorParserExe_.value();
 			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-				amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + amrex::Real(0.5)) * dx[0];
+				amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
 #if (AMREX_SPACEDIM >= 2)
-				amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + amrex::Real(0.5)) * dx[1];
+				amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + static_cast<amrex::Real>(0.5)) * dx[1];
 #else
 				amrex::Real const y = 0.0;
 #endif
 #if (AMREX_SPACEDIM == 3)
-				amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + amrex::Real(0.5)) * dx[2];
+				amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + static_cast<amrex::Real>(0.5)) * dx[2];
 #else
 				amrex::Real const z = 0.0;
 #endif
@@ -533,14 +532,14 @@ template <> void QuokkaSimulation<AgoraGalaxy>::ComputeDerivedVar(int lev, std::
 			};
 
 			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-				amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + amrex::Real(0.5)) * dx[0];
+				amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
 #if (AMREX_SPACEDIM >= 2)
-				amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + amrex::Real(0.5)) * dx[1];
+				amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + static_cast<amrex::Real>(0.5)) * dx[1];
 #else
 				amrex::Real const y = 0.0;
 #endif
 #if (AMREX_SPACEDIM == 3)
-				amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + amrex::Real(0.5)) * dx[2];
+				amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + static_cast<amrex::Real>(0.5)) * dx[2];
 #else
 				amrex::Real const z = 0.0;
 #endif
