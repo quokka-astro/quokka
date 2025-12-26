@@ -51,6 +51,7 @@ constexpr double bg_density = 1.0;
 constexpr double bg_pressure = 1.0;
 constexpr double sound_speed = gcem::sqrt(gamma_gas * bg_pressure / bg_density);
 // vortex parameters
+AMREX_GPU_MANAGED double vortex_radius = 1.0;  // NOLINT
 AMREX_GPU_MANAGED double vortex_Mach = 0.01;   // NOLINT
 AMREX_GPU_MANAGED double vortex_b_magn = 0.01; // NOLINT
 // domain extends over [-5, 5] by default
@@ -102,11 +103,11 @@ void computeVortexSolution(int i, int j, int k, amrex::Array4<amrex::Real> const
 		const double vortex_u_magn = vortex_Mach * sound_speed;
 
 		const double pressure =
-		    bg_pressure + 0.5 * (vortex_b_magn * vortex_b_magn * (1.0 - radius_sq) - vortex_u_magn * vortex_u_magn) * radial_profile_sq;
+		    bg_pressure + 0.5 * (vortex_b_magn * vortex_b_magn * (1.0 - radius_sq) - bg_density * vortex_u_magn * vortex_u_magn) * radial_profile_sq;
 		const double Eint = pressure / (gamma_gas - 1.0);
 
-		const double delta_u_x1 = -delta_x2_from_center * vortex_u_magn * radial_profile;
-		const double delta_u_x2 = delta_x1_from_center * vortex_u_magn * radial_profile;
+		const double delta_u_x1 = -(delta_x2_from_center / vortex_radius) * vortex_u_magn * radial_profile;
+		const double delta_u_x2 = (delta_x1_from_center / vortex_radius) * vortex_u_magn * radial_profile;
 		const double u_x1 = vortex_drift_x1 + delta_u_x1;
 		const double u_x2 = vortex_drift_x2 + delta_u_x2;
 		const double u_x3 = 0.0;
@@ -115,8 +116,8 @@ void computeVortexSolution(int i, int j, int k, amrex::Array4<amrex::Real> const
 		const double mom_x3 = bg_density * u_x3;
 		const double Ekin = 0.5 * bg_density * (u_x1 * u_x1 + u_x2 * u_x2 + u_x3 * u_x3);
 
-		const double b_x1 = -delta_x2_from_center * vortex_b_magn * radial_profile;
-		const double b_x2 = delta_x1_from_center * vortex_b_magn * radial_profile;
+		const double b_x1 = -(delta_x2_from_center / vortex_radius) * vortex_b_magn * radial_profile;
+		const double b_x2 = (delta_x1_from_center / vortex_radius) * vortex_b_magn * radial_profile;
 		const double b_x3 = 0.0;
 		const double Emag = 0.5 * (b_x1 * b_x1 + b_x2 * b_x2 + b_x3 * b_x3);
 
