@@ -9,6 +9,7 @@
 #include <cassert>
 #include <cmath>
 #include <gcem.hpp>
+#include <numbers>
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
@@ -129,8 +130,8 @@ void computeVortexSolution(int i, int j, int k, amrex::Array4<amrex::Real> const
 		state(i, j, k, HydroSystem<MHDBalsaraVortex>::internalEnergy_index) = Eint;
 
 	} else if (cen == quokka::centering::fc) {
-		const auto b_x1_L = (Az(x1_L, x2_L + static_cast<double>(dx[1])) - Az(x1_L, x2_L)) / static_cast<double>(dx[1]);
-		const auto b_x2_L = (Az(x1_L, x2_L) - Az(x1_L + static_cast<double>(dx[0]), x2_L)) / static_cast<double>(dx[0]);
+		const auto b_x1_L = (Az(x1_L, x2_L + dx[1]) - Az(x1_L, x2_L)) / dx[1];
+		const auto b_x2_L = (Az(x1_L, x2_L) - Az(x1_L + dx[0], x2_L)) / dx[0];
 		const auto b_x3_L = 0.0;
 
 		if (dir == quokka::direction::x) {
@@ -257,7 +258,7 @@ auto problem_main() -> int
 		stop_time = static_cast<double>(num_orbits) * advection_duration;
 	} else {
 		vortex_drift_x1 = vortex_drift_x2 = 0.0;
-		const double orbital_duration = 2.0 * M_PI / vortex_u_magn;
+		const double orbital_duration = 2.0 * std::numbers::pi / vortex_u_magn;
 		stop_time = static_cast<double>(num_orbits) * orbital_duration;
 	}
 
