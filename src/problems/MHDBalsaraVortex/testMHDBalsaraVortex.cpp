@@ -50,7 +50,7 @@ constexpr double bg_density = 1.0;
 constexpr double bg_pressure = 1.0;
 constexpr double sound_speed = gcem::sqrt(gamma_gas * bg_pressure / bg_density);
 // vortex parameters
-AMREX_GPU_MANAGED double vortex_Mach = 0.01; // NOLINT
+AMREX_GPU_MANAGED double vortex_Mach = 0.01;   // NOLINT
 AMREX_GPU_MANAGED double vortex_b_magn = 0.01; // NOLINT
 // domain extends over [-5, 5] by default
 constexpr double vortex_center_x1 = 0.0;
