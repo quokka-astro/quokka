@@ -91,7 +91,7 @@ auto ComputePlaneProjection(amrex::Vector<amrex::MultiFab> const &state_new, con
 		bl.simplify();
 		amrex::BoxArray ba2d(std::move(bl));
 		ba2d.removeOverlap();
-		amrex::DistributionMapping dm2d(ba2d);
+		const amrex::DistributionMapping dm2d(ba2d);
 
 		projections[lev].define(ba2d, dm2d, 1, 0);
 		projections[lev].setVal(0.0);

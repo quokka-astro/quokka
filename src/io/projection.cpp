@@ -18,6 +18,8 @@
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 
+#include <utility>
+
 #include "projection.hpp"
 
 namespace quokka::diagnostics
@@ -28,21 +30,21 @@ namespace detail
 auto direction_to_string(const amrex::Direction dir) -> std::string
 {
 	if (dir == amrex::Direction::x) {
-		return std::string("x");
+		return {"x"};
 	}
 #if AMREX_SPACEDIM >= 2
 	if (dir == amrex::Direction::y) {
-		return std::string("y");
+		return {"y"};
 	}
 #endif
 #if AMREX_SPACEDIM == 3
 	if (dir == amrex::Direction::z) {
-		return std::string("z");
+		return {"z"};
 	}
 #endif
 
 	amrex::Error("invalid direction in quokka::diagnostics::direction_to_string!");
-	return std::string("");
+	return {""};
 }
 
 void printLowerDimIntVect(std::ostream &a_File, const amrex::IntVect &a_IntVect, int skipDim)
@@ -208,7 +210,7 @@ void VisMF2D(const amrex::MultiFab &a_mf, const std::string &a_mf_name)
 	for (const int i : pmap) {
 		procsWithData.insert(i);
 	}
-	if (static_cast<int>(procsWithData.size()) < nOutFiles) {
+	if (std::cmp_less(procsWithData.size(), nOutFiles)) {
 		useSparseFPP = true;
 		for (const int it : procsWithData) {
 			procsWithDataVector.push_back(it);
@@ -466,23 +468,23 @@ auto transform_box_to_2D(amrex::Direction const &dir, amrex::Box const &box) -> 
 	amrex::IntVect bigEnd2d;
 
 	if (dir == amrex::Direction::x) { // y-z plane
-		smallEnd2d = amrex::IntVect(amrex::Dim3{smallEnd[1], smallEnd[2], 0});
-		bigEnd2d = amrex::IntVect(amrex::Dim3{bigEnd[1], bigEnd[2], 0});
+		smallEnd2d = amrex::IntVect(amrex::Dim3{.x = smallEnd[1], .y = smallEnd[2], .z = 0});
+		bigEnd2d = amrex::IntVect(amrex::Dim3{.x = bigEnd[1], .y = bigEnd[2], .z = 0});
 #if AMREX_SPACEDIM >= 2
 	} else if (dir == amrex::Direction::y) { // x-z plane
-		smallEnd2d = amrex::IntVect(amrex::Dim3{smallEnd[0], smallEnd[2], 0});
-		bigEnd2d = amrex::IntVect(amrex::Dim3{bigEnd[0], bigEnd[2], 0});
+		smallEnd2d = amrex::IntVect(amrex::Dim3{.x = smallEnd[0], .y = smallEnd[2], .z = 0});
+		bigEnd2d = amrex::IntVect(amrex::Dim3{.x = bigEnd[0], .y = bigEnd[2], .z = 0});
 #endif
 #if AMREX_SPACEDIM == 3
 	} else if (dir == amrex::Direction::z) { // x-y plane
-		smallEnd2d = amrex::IntVect(amrex::Dim3{smallEnd[0], smallEnd[1], 0});
-		bigEnd2d = amrex::IntVect(amrex::Dim3{bigEnd[0], bigEnd[1], 0});
+		smallEnd2d = amrex::IntVect(amrex::Dim3{.x = smallEnd[0], .y = smallEnd[1], .z = 0});
+		bigEnd2d = amrex::IntVect(amrex::Dim3{.x = bigEnd[0], .y = bigEnd[1], .z = 0});
 #endif
 	} else {
 		amrex::Abort("detail::transform_box_to_2D: invalid direction!");
 	}
 
-	return amrex::Box(smallEnd2d, bigEnd2d);
+	return {smallEnd2d, bigEnd2d};
 }
 
 auto transform_realbox_to_2D(amrex::Direction const &dir, amrex::RealBox const &box) -> amrex::RealBox
@@ -511,7 +513,7 @@ auto transform_realbox_to_2D(amrex::Direction const &dir, amrex::RealBox const &
 		amrex::Abort("detail::transform_box_to_2D: invalid direction!");
 	}
 
-	return amrex::RealBox(new_lo, new_hi);
+	return {new_lo, new_hi};
 }
 
 } // namespace detail
@@ -562,8 +564,8 @@ void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex
 				bl_union.join(comp_mf.boxArray().boxList());
 			}
 			bl_union.simplify();
-			amrex::BoxArray ba_union(amrex::removeOverlap(bl_union));
-			amrex::DistributionMapping dm_union(ba_union);
+			const amrex::BoxArray ba_union(amrex::removeOverlap(bl_union));
+			const amrex::DistributionMapping dm_union(ba_union);
 			mf_all[lev].define(ba_union, dm_union, ncomp, 0);
 			mf_all[lev].setVal(0.0);
 			if (amrex::ParallelDescriptor::IOProcessor()) {

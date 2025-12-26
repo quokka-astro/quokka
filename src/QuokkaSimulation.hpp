@@ -783,7 +783,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::printCellPropert
 	}
 }
 
-#if !defined(NDEBUG)
+#ifndef NDEBUG
 #define CHECK_HYDRO_STATES(mf, mf_fc) checkHydroStates(mf, mf_fc, __FILE__, __LINE__)
 #else
 #define CHECK_HYDRO_STATES(mf, mf_fc)
