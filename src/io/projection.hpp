@@ -14,6 +14,7 @@
 #include <vector>
 
 // AMReX headers
+#include "AMReX_FillPatchUtil.H"
 #include "AMReX_MFInterpolater.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
@@ -165,9 +166,11 @@ auto ComputePlaneProjection(amrex::Vector<amrex::MultiFab> const &state_new, con
 			bcs[0].setLo(d, amrex::BCType::int_dir);
 			bcs[0].setHi(d, amrex::BCType::int_dir);
 		}
-		amrex::MFPCInterp interp;
-		interp.interp(projections_accum[lev], 0, coarse_refined, 0, 1, amrex::IntVect(0), geom2d[lev], geom2d[lev + 1], geom2d[lev + 1].Domain(), rr_2d,
-			      bcs, 0);
+		amrex::PhysBCFunctNoOp coarseBdryFunct;
+		amrex::PhysBCFunctNoOp fineBdryFunct;
+		amrex::MFInterpolater *mapper = &amrex::mf_pc_interp;
+		amrex::InterpFromCoarseLevel(coarse_refined, 0.0, projections_accum[lev], 0, 0, 1, geom2d[lev], geom2d[lev + 1], coarseBdryFunct, 0,
+					     fineBdryFunct, 0, rr_2d, mapper, bcs, 0);
 		amrex::MultiFab::Add(projections_accum[lev + 1], coarse_refined, 0, 0, 1, 0);
 	}
 
