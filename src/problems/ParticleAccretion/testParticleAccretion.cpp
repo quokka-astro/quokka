@@ -438,18 +438,8 @@ auto problem_main() -> int
 	const Real t_BH = r_BH / cs0;
 	const Real t_end = t_end_over_t_b * t_BH;
 
-	auto BCs_cc = quokka::BC<AccretionProblem>(quokka::BCType::reflecting);
-	const int nvars_fc = Physics_Indices<AccretionProblem>::nvarTotal_fc;
-	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
-	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_fc[icomp].setLo(idim, amrex::BCType::reflect_even);
-			BCs_fc[icomp].setHi(idim, amrex::BCType::reflect_even);
-		}
-	}
-
 	// Problem initialization
-	QuokkaSimulation<AccretionProblem> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<AccretionProblem> sim;
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
 	// sim.initDt_ = 3.0e10;	      // ~1 kyr
