@@ -41,16 +41,20 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	ConsHydro1D<N_scalars> u_star_R{};
 
 	// frequently used term
+	const double vel_magn_sq_L = SQUARE(sL.u) + (SQUARE(sL.v) + SQUARE(sL.w));
+	const double vel_magn_sq_R = SQUARE(sR.u) + (SQUARE(sR.v) + SQUARE(sR.w));
 	const double bx_sq = SQUARE(bx);
+	const double b_magn_sq_L = bx_sq + (SQUARE(sL.by) + SQUARE(sL.bz));
+	const double b_magn_sq_R = bx_sq + (SQUARE(sR.by) + SQUARE(sR.bz));
 
 	// compute L/R states for select conserved variables
 	// (group transverse vector components for floating-point associativity symmetry)
 	// magnetic pressure
-	const double pb_L = 0.5 * (bx_sq + (SQUARE(sL.by) + SQUARE(sL.bz)));
-	const double pb_R = 0.5 * (bx_sq + (SQUARE(sR.by) + SQUARE(sR.bz)));
+	const double pb_L = 0.5 * b_magn_sq_L;
+	const double pb_R = 0.5 * b_magn_sq_R;
 	// kinetic energy
-	const double ke_L = 0.5 * sL.rho * (SQUARE(sL.u) + (SQUARE(sL.v) + SQUARE(sL.w)));
-	const double ke_R = 0.5 * sR.rho * (SQUARE(sR.u) + (SQUARE(sR.v) + SQUARE(sR.w)));
+	const double ke_L = 0.5 * (sL.rho * vel_magn_sq_L);
+	const double ke_R = 0.5 * (sR.rho * vel_magn_sq_R);
 	// set left conserved states
 	u_L.rho = sL.rho;
 	u_L.mx = sL.u * u_L.rho;
@@ -155,22 +159,35 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 
 	//--- Step 5. Compute intermediate states
 
-	// low-Mach pressure correction (MM21)
-	// build a low-Mach limiter phi from a Mach-like ratio using the local advection + fast-wave speed
-	// (phi -> 0 for very low Mach, phi -> 1 as advection becomes comparable to wave speeds)
-	const double spd_fss_L = std::abs(sL.u) + spd_fms_L;
-	const double spd_fss_R = std::abs(sR.u) + spd_fms_R;
-	const double spd_fss_max = std::max(spd_fss_L, spd_fss_R);
-	const double chi = std::min(1.0, spd_fss_max / std::max(1e-14, spd_fms_max));
+	// // total pressure (no correction)
+	// // MK5: eqn (41) can be calculated (more explicitly) via eqn (23)
+	// double ptot_star_L = ptot_L + u_L.rho * siui_L * (spds[2] - sL.u);
+	// double ptot_star_R = ptot_R + u_R.rho * siui_R * (spds[2] - sR.u);
+	// double const ptot_star = 0.5 * (ptot_star_L + ptot_star_R);
+
+	// total pressure (w/ MM21 low-Mach correction)
+	// MM21 eqn 8
+	const double spd_ca_sq_L = b_magn_sq_L / sL.rho;
+	const double spd_ca_sq_R = b_magn_sq_R / sR.rho;
+	const double spd_cax_sq_L = bx_sq / sL.rho;
+	const double spd_cax_sq_R = bx_sq / sR.rho;
+	// cu := modified fast magnetosonic speed (MM21 eqn 14)
+	const double cu_sqrt_arg_L = std::max(0.0, SQUARE(spd_ca_sq_L + vel_magn_sq_L) - 4.0 * vel_magn_sq_L * spd_cax_sq_L);
+	const double cu_sqrt_arg_R = std::max(0.0, SQUARE(spd_ca_sq_R + vel_magn_sq_R) - 4.0 * vel_magn_sq_R * spd_cax_sq_R);
+	const double spd_cu_sq_L = 0.5 * ((spd_ca_sq_L + vel_magn_sq_L) + std::sqrt(cu_sqrt_arg_L));
+	const double spd_cu_sq_R = 0.5 * ((spd_ca_sq_R + vel_magn_sq_R) + std::sqrt(cu_sqrt_arg_R));
+	const double spd_cu_L = std::sqrt(std::max(0.0, spd_cu_sq_L));
+	const double spd_cu_R = std::sqrt(std::max(0.0, spd_cu_sq_R));
+	const double spd_cu_max = std::max(spd_cu_L, spd_cu_R);
+	// limiter (MM21 eqn 16)
+	const double chi = std::min(1.0, spd_cu_max / std::max(1e-14, spd_fms_max));
 	const double phi = chi * (2.0 - chi);
-	// MK5 star total pressures estimate (eqn 23)
-	const double ptot_star_L = ptot_L + u_L.rho * siui_L * (spds[2] - sL.u);
-	const double ptot_star_R = ptot_R + u_R.rho * siui_R * (spds[2] - sR.u);
-	const double ptot_star_avg_LR = 0.5 * (ptot_star_L + ptot_star_R);
-	// correct the excess (compressive) contributions in the low Mach regime (MM21)
-	const double ptot_avg_LR = 0.5 * (ptot_L + ptot_R);
-	const double ptot_star_excess = ptot_star_avg_LR - ptot_avg_LR;
-	const double ptot_star = ptot_avg_LR + phi * ptot_star_excess;
+	// corrected total star pressure (MM21 eqn 15)
+	const double ptot_star_numer_term1 = (siui_R * u_R.rho) * ptot_L;
+	const double ptot_star_numer_term2 = (siui_L * u_L.rho) * ptot_R;
+	const double ptot_star_numer_term3 = phi * (u_L.rho * u_R.rho) * (siui_R * siui_L) * (sR.u - sL.u);
+	const double ptot_star_numer = ptot_star_numer_term1 - ptot_star_numer_term2 + ptot_star_numer_term3;
+	const double ptot_star = ptot_star_numer / sm_denom;
 
 	// MK5: u_L^(star, dstar) from, eqn (39)
 	u_star_L.mx = u_star_L.rho * spds[2];
