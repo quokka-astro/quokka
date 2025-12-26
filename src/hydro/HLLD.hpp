@@ -83,8 +83,11 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 
 	const double spd_fms_L = FastMagnetoSonicSpeed(gamma, sL, bx);
 	const double spd_fms_R = FastMagnetoSonicSpeed(gamma, sR, bx);
-	spds[0] = std::min(sL.u - spd_fms_L, sR.u - spd_fms_R);
-	spds[4] = std::max(sL.u + spd_fms_L, sR.u + spd_fms_R);
+	const double spd_fms_max = std::max(spd_fms_L, spd_fms_R);
+	const double u_min = std::min(sL.u, sR.u);
+	const double u_max = std::max(sL.u, sR.u);
+	spds[0] = std::min(0.0, u_min - spd_fms_max);
+	spds[4] = std::max(0.0, u_max + spd_fms_max);
 	const double fspd_m = -std::min(0.0, spds[0]);
 	const double fspd_p = std::max(0.0, spds[4]);
 
@@ -124,8 +127,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	const double siui_L = spds[0] - sL.u;
 	const double siui_R = spds[4] - sR.u;
 	// carbuncle detector
-	const double spd_fms_max = std::max(spd_fms_L, spd_fms_R);
-	const double para_v_jump = sL.u - sR.u; // negative -> compression
+	const double para_v_jump = sR.u - sL.u; // negative -> compression
 	// tp := shock anisotropy, clamped to [0, 1], with theta = tp^4
 	const double denom_tp = std::max(1e-14, spd_fms_max - std::min(perp_v_jump, 0.0));
 	double tp = (spd_fms_max - std::min(para_v_jump, 0.0)) / denom_tp;
