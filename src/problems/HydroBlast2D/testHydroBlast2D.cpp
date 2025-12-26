@@ -136,14 +136,8 @@ template <> void QuokkaSimulation<BlastProblem>::refineGrid(int lev, amrex::TagB
 
 auto problem_main() -> int
 {
-	// Problem parameters
-	constexpr bool reflecting_boundary = true;
-
-	auto BCs_cc =
-	    reflecting_boundary ? quokka::BC<BlastProblem>(quokka::BCType::reflecting) : quokka::BC<BlastProblem>(quokka::BCType::int_dir); // periodic
-
 	// Problem initialization
-	QuokkaSimulation<BlastProblem> sim(BCs_cc);
+	QuokkaSimulation<BlastProblem> sim;
 
 	sim.stopTime_ = 0.1; // 1.5;
 	sim.cflNumber_ = 0.3;

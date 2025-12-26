@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       workflow_file:
-        description: 'Specific workflow file to check for changes (optional)'
+        description: "Specific workflow file to check for changes (optional)"
         required: false
         type: string
     outputs:
@@ -52,6 +52,7 @@ jobs:
               - 'extern/grackle_data_files/**'
               - 'extern/openPMD-api/**'
               - 'extern/yaml-cpp/**'
+              - 'extern/turbulence/**'
               - 'inputs/**'
               - 'CMakeLists.txt'
               - '**/*.cpp'

@@ -1,0 +1,88 @@
+name: rocm-diskgalaxy-container
+
+"on":
+  push:
+    branches:
+      - development
+  pull_request:
+    branches:
+      - development
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: rocm-diskgalaxy-container-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_TAG_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+  IS_INTERNAL_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
+
+      - name: Log in to GHCR
+        if: ${{ github.event_name == 'push' || env.IS_INTERNAL_PR == 'true' }}
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push DiskGalaxy image (development)
+        if: ${{ github.event_name == 'push' }}
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6
+        with:
+          context: .
+          file: .github/workflows/dockerfiles/ROCm-DiskGalaxy/Dockerfile
+          build-args: |
+            AMREX_MPI=ON
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rocm-diskgalaxy
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rocm-diskgalaxy-${{ env.IMAGE_TAG_SHA }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push DiskGalaxy image (PR)
+        if: ${{ env.IS_INTERNAL_PR == 'true' }}
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6
+        with:
+          context: .
+          file: .github/workflows/dockerfiles/ROCm-DiskGalaxy/Dockerfile
+          build-args: |
+            AMREX_MPI=ON
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rocm-diskgalaxy-pr-${{ github.event.pull_request.number }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rocm-diskgalaxy-pr-${{ github.event.pull_request.number }}-${{ env.IMAGE_TAG_SHA }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build DiskGalaxy image (PR, no publish)
+        if: ${{ github.event_name == 'pull_request' && env.IS_INTERNAL_PR != 'true' }}
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6
+        with:
+          context: .
+          file: .github/workflows/dockerfiles/ROCm-DiskGalaxy/Dockerfile
+          build-args: |
+            AMREX_MPI=ON
+          push: false
+          tags: rocm-diskgalaxy-pr-${{ github.event.pull_request.number }}:${{ env.IMAGE_TAG_SHA }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
