@@ -296,6 +296,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// compute derived variables
 	virtual void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const = 0;
+	virtual void ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const;
 
 	// compute projected vars
 	[[nodiscard]] virtual auto ComputeProjections(amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> = 0;
@@ -3038,6 +3039,12 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 		// Check if it's a derived variable
 		auto deriv_it = std::ranges::find(derivedNames_, varname);
 		if (deriv_it != derivedNames_.end()) {
+			static constexpr char const *kDensityFloorDbgName = "density_floor_dbg";
+			if (varname == kDensityFloorDbgName) {
+				ComputeDensityFloorDebug(lev, plotMF, comp);
+				comp++;
+				continue;
+			}
 			ComputeDerivedVar(lev, varname, plotMF, comp);
 			comp++;
 			continue;
@@ -3048,6 +3055,45 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 	}
 
 	return plotMF;
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const
+{
+	auto const ncomp_out = ncomp;
+	auto const geom_data = geom[lev].data();
+	auto const prob_lo = geom_data.ProbLo();
+	auto const dx = geom_data.CellSize();
+	auto const density_floor = densityFloor_;
+	auto const ngrow = mf.nGrow();
+
+	if (useDensityFloorParser_) {
+		auto const density_floor_parser = densityFloorParserExe_.value();
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			amrex::Box const &box = iter.growntilebox(ngrow);
+			auto const &arr = mf.array(iter);
+			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
+#if (AMREX_SPACEDIM >= 2)
+				amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + static_cast<amrex::Real>(0.5)) * dx[1];
+#else
+				amrex::Real const y = 0.0;
+#endif
+#if (AMREX_SPACEDIM == 3)
+				amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + static_cast<amrex::Real>(0.5)) * dx[2];
+#else
+				amrex::Real const z = 0.0;
+#endif
+				arr(i, j, k, ncomp_out) = density_floor_parser(x, y, z, density_floor);
+			});
+		}
+	} else {
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			amrex::Box const &box = iter.growntilebox(ngrow);
+			auto const &arr = mf.array(iter);
+			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { arr(i, j, k, ncomp_out) = density_floor; });
+		}
+	}
+	amrex::Gpu::streamSynchronize();
 }
 
 template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_fc(const int lev, int idim, const int nghost_fc_) -> amrex::MultiFab

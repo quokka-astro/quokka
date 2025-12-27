@@ -292,6 +292,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
+	void ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const override;
 
 	// compute projected vars
 	[[nodiscard]] auto ComputeProjections(amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> override;
@@ -979,17 +980,27 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp) const
 {
 	// compute derived variables and save in 'mf' -- user should implement
-	static constexpr char const *kDensityFloorDbgName = "density_floor_dbg";
-	if (dname == kDensityFloorDbgName) {
-		auto arr = mf.arrays();
-		auto const geom_data = geom[lev].data();
-		auto const prob_lo = geom_data.ProbLo();
-		auto const dx = geom_data.CellSize();
-		auto const density_floor = densityFloor_;
+	(void)lev;
+	(void)dname;
+	(void)mf;
+	(void)ncomp;
+}
 
-		if (this->useDensityFloorParser_) {
-			auto const density_floor_parser = this->densityFloorParserExe_.value();
-			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const
+{
+	auto const ncomp_out = ncomp;
+	auto const geom_data = geom[lev].data();
+	auto const prob_lo = geom_data.ProbLo();
+	auto const dx = geom_data.CellSize();
+	auto const density_floor = densityFloor_;
+	auto const ngrow = mf.nGrow();
+
+	if (this->useDensityFloorParser_) {
+		auto const density_floor_parser = this->densityFloorParserExe_.value();
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			amrex::Box const &box = iter.growntilebox(ngrow);
+			auto const &arr = mf.array(iter);
+			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
 #if (AMREX_SPACEDIM >= 2)
 				amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + static_cast<amrex::Real>(0.5)) * dx[1];
@@ -1001,14 +1012,18 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDerivedVa
 #else
 				amrex::Real const z = 0.0;
 #endif
-				arr[bx](i, j, k, ncomp) = density_floor_parser(x, y, z, density_floor);
+				arr(i, j, k, ncomp_out) = density_floor_parser(x, y, z, density_floor);
 			});
-		} else {
-			auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
-										     amrex::Real base_density_floor) -> amrex::Real {
-				return densityFloor(x, y, z, base_density_floor);
-			};
-			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		}
+	} else {
+		auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
+									     amrex::Real base_density_floor) -> amrex::Real {
+			return densityFloor(x, y, z, base_density_floor);
+		};
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			amrex::Box const &box = iter.growntilebox(ngrow);
+			auto const &arr = mf.array(iter);
+			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
 #if (AMREX_SPACEDIM >= 2)
 				amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + static_cast<amrex::Real>(0.5)) * dx[1];
@@ -1020,10 +1035,11 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDerivedVa
 #else
 				amrex::Real const z = 0.0;
 #endif
-				arr[bx](i, j, k, ncomp) = density_floor_func(x, y, z, density_floor);
+				arr(i, j, k, ncomp_out) = density_floor_func(x, y, z, density_floor);
 			});
 		}
 	}
+	amrex::Gpu::streamSynchronize();
 }
 
 template <typename problem_t>
