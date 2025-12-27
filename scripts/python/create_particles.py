@@ -15,7 +15,8 @@ Arguments:
     box_size: Size of the simulation box in cm
     sample_type: Spatial sampling type (uniform, Gaussian, Plummer)
     output: Output filename
-    --mean_mass: Mean particle mass in g (optional, default: 1.0 M_sun)
+    --m_min: Minimum stellar mass in M_sun (optional, default: 1.0)
+    --m_max: Maximum stellar mass in M_sun (optional, default: 120.0)
     --velocity_disp: Velocity dispersion in cm/s (optional, default: 10.0 km/s)
     --lifetime: Particle lifetime in s (optional, default: 10.0 Myr)
 
@@ -27,10 +28,10 @@ Examples:
     python create_particles.py Sink 50 5e17 Plummer sink_particles.txt
 
     # Generate radiation particles with custom parameters
-    python create_particles.py Rad 20 1e16 Gaussian rad_particles.txt --mean_mass 1.5e34 --velocity_disp 5e6
+    python create_particles.py Rad 20 1e16 Gaussian rad_particles.txt --m_min 0.5 --m_max 60 --velocity_disp 5e6
 
 Physical parameters (CGS units):
-    - mean_mass: 1 solar mass = 1.989e33 g
+    - mass range: 1-120 solar masses (Salpeter IMF, power law with exponent -2.35)
     - velocity_dispersion: 10 km/s = 1e7 cm/s
     - lifetime: 10 Myr = 3.156e14 s
 """
@@ -103,12 +104,20 @@ def sample_velocities(n_particles: int, velocity_disp: float) -> np.ndarray:
     """Sample velocities from a 3D Gaussian distribution."""
     return np.random.normal(0, velocity_disp, (n_particles, 3))
 
-def sample_masses(n_particles: int, mean_mass: float) -> np.ndarray:
-    """Sample masses from a log-normal distribution around mean_mass."""
-    # Use log-normal distribution with sigma=0.5 dex (typical for stellar masses)
-    sigma_log = 0.5
-    mu_log = np.log(mean_mass) - sigma_log**2 / 2  # To get correct mean
-    masses = np.random.lognormal(mu_log, sigma_log, n_particles)
+def sample_masses(n_particles: int, m_min: float, m_max: float) -> np.ndarray:
+    """Sample masses from a Salpeter IMF (power law with exponent -2.35)."""
+    alpha = 2.35  # Salpeter IMF exponent
+
+    # Generate uniform random numbers
+    u = np.random.uniform(0, 1, n_particles)
+
+    # Inverse CDF for power law: m = [(m_min^(1-α) + (m_max^(1-α) - m_min^(1-α)) * u)]^(1/(1-α))
+    # For α=2.35, 1-α = -1.35
+    m_min_pow = m_min ** (1 - alpha)
+    m_max_pow = m_max ** (1 - alpha)
+
+    masses = (m_min_pow + (m_max_pow - m_min_pow) * u) ** (1 / (1 - alpha))
+
     return masses
 
 def get_particle_data_components(part_type: str) -> Tuple[List[str], int]:
@@ -139,7 +148,7 @@ def get_particle_data_components(part_type: str) -> Tuple[List[str], int]:
     return components, n_extra
 
 def generate_particle_data(part_type: str, n_particles: int, box_size: float,
-                          sample_type: str, mean_mass: float, velocity_disp: float,
+                          sample_type: str, m_min: float, m_max: float, velocity_disp: float,
                           lifetime: float) -> Tuple[np.ndarray, np.ndarray]:
     """Generate complete particle data including positions and all required components."""
 
@@ -161,7 +170,7 @@ def generate_particle_data(part_type: str, n_particles: int, box_size: float,
     data[:, :3] = positions  # x, y, z positions
 
     # Sample masses and velocities
-    masses = sample_masses(n_particles, mean_mass)
+    masses = sample_masses(n_particles, m_min, m_max)
     velocities = sample_velocities(n_particles, velocity_disp)
 
     col_idx = 3  # Start after positions
@@ -233,10 +242,11 @@ def print_particle_info(part_type: str, n_particles: int, positions: np.ndarray,
     # Mass statistics (if applicable)
     if 'mass' in components:
         mass_idx = 3 + components.index('mass')
-        masses = data[:, mass_idx]
-        mass_mean = np.mean(masses) / M_SUN
-        mass_std = np.std(masses) / M_SUN
-        print(".2f")
+        masses = data[:, mass_idx] / M_SUN  # Convert to M_sun
+        mass_min = np.min(masses)
+        mass_max = np.max(masses)
+        mass_median = np.median(masses)
+        print(".1f")
 
     # Velocity statistics (if applicable)
     if 'vx' in components:
@@ -250,7 +260,7 @@ def print_particle_info(part_type: str, n_particles: int, positions: np.ndarray,
 def main():
     parser = argparse.ArgumentParser(
         description='Generate initial particle distributions for Quokka simulations',
-        usage='%(prog)s [part_type] [n_star] [box_size] [sample_type] [output] [--mean_mass MASS] [--velocity_disp VEL] [--lifetime TIME]'
+        usage='%(prog)s [part_type] [n_star] [box_size] [sample_type] [output] [--m_min M_MIN] [--m_max M_MAX] [--velocity_disp VEL] [--lifetime TIME]'
     )
     parser.add_argument('part_type', choices=PARTICLE_TYPES.keys(),
                        help='Particle type to generate')
@@ -262,8 +272,10 @@ def main():
                        help='Spatial sampling distribution')
     parser.add_argument('output',
                        help='Output filename')
-    parser.add_argument('--mean_mass', type=float, default=DEFAULT_MEAN_MASS,
-                       help=f'Mean particle mass in g (default: {DEFAULT_MEAN_MASS/M_SUN:.1f} M_sun)')
+    parser.add_argument('--m_min', type=float, default=1.0,
+                       help='Minimum stellar mass in M_sun (default: 1.0)')
+    parser.add_argument('--m_max', type=float, default=120.0,
+                       help='Maximum stellar mass in M_sun (default: 120.0)')
     parser.add_argument('--velocity_disp', type=float, default=DEFAULT_VELOCITY_DISP,
                        help=f'Velocity dispersion in cm/s (default: {DEFAULT_VELOCITY_DISP/KM_S:.1f} km/s)')
     parser.add_argument('--lifetime', type=float, default=DEFAULT_LIFETIME,
@@ -282,7 +294,7 @@ def main():
     print(f"Generating {args.n_star} {args.part_type} particles...")
     print(f"Box size: {args.box_size:.2e} cm")
     print(f"Sampling type: {args.sample_type}")
-    print(f"Mean mass: {args.mean_mass/M_SUN:.2f} M_sun")
+    print(f"Mass range: {args.m_min:.1f} - {args.m_max:.1f} M_sun (Salpeter IMF)")
     print(f"Velocity dispersion: {args.velocity_disp/KM_S:.1f} km/s")
     print(f"Lifetime: {args.lifetime/MYR:.1f} Myr")
 
@@ -290,7 +302,7 @@ def main():
         # Generate particle data
         positions, data = generate_particle_data(
             args.part_type, args.n_star, args.box_size, args.sample_type,
-            args.mean_mass, args.velocity_disp, args.lifetime
+            args.m_min * M_SUN, args.m_max * M_SUN, args.velocity_disp, args.lifetime
         )
 
         # Get component information for printing
