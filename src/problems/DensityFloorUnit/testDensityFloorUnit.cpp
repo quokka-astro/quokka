@@ -88,8 +88,9 @@ auto problem_main() -> int
 	state.setVal(Eint_init, HydroSystem<DensityFloorUnitProblem>::energy_index, 1, 0);
 	state.setVal(Eint_init, HydroSystem<DensityFloorUnitProblem>::internalEnergy_index, 1, 0);
 
-	auto const density_floor_func = [=] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
-							  amrex::Real base_floor) -> amrex::Real { return parser_exe(x, y, z, base_floor); };
+	auto const density_floor_func = [=] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z, amrex::Real base_floor) -> amrex::Real {
+		return parser_exe(x, y, z, base_floor);
+	};
 
 	HydroSystem<DensityFloorUnitProblem>::EnforceLimits(base_density_floor, 0.0, state, geom.data(), density_floor_func);
 
@@ -102,23 +103,22 @@ auto problem_main() -> int
 		amrex::Box const &bx = mfi.validbox();
 		auto const &data = state.array(mfi);
 
-		reduce_op.eval(bx, reduce_data,
-			       [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real> {
-				       amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
+		reduce_op.eval(bx, reduce_data, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real> {
+			amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
 #if (AMREX_SPACEDIM >= 2)
-				       amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + 0.5) * dx[1];
+			amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + 0.5) * dx[1];
 #else
 				       amrex::Real const y = 0.0;
 #endif
 #if (AMREX_SPACEDIM == 3)
-				       amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + 0.5) * dx[2];
+			amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + 0.5) * dx[2];
 #else
 				       amrex::Real const z = 0.0;
 #endif
-				       amrex::Real const expected = parser_exe(x, y, z, base_density_floor);
-				       amrex::Real const actual = data(i, j, k, HydroSystem<DensityFloorUnitProblem>::density_index);
-				       return {amrex::Math::abs(actual - expected)};
-			       });
+			amrex::Real const expected = parser_exe(x, y, z, base_density_floor);
+			amrex::Real const actual = data(i, j, k, HydroSystem<DensityFloorUnitProblem>::density_index);
+			return {amrex::Math::abs(actual - expected)};
+		});
 	}
 
 	auto [max_err] = reduce_data.value();
