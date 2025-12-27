@@ -35,6 +35,9 @@ Examples:
     # Generate particles with reproducible results using random seed
     python create_particles.py CIC 50 1e16 Plummer cluster.txt --random_seed 42
 
+    # Generate StochasticStellarPop particles used in the testRandomBlast problem
+    python create_particles.py StochasticStellarPop 100 1e19 Plummer particles_stochastic_n100.txt --random_seed 42
+
 Physical parameters (CGS units):
     - mass range: 1-120 solar masses (Salpeter IMF, power law with exponent -2.35)
     - velocity_dispersion: 10 km/s = 1e7 cm/s
@@ -209,9 +212,8 @@ def generate_particle_data(part_type: str, n_particles: int, box_size: float,
             data[:, col_idx] = masses
             col_idx += 1
         elif comp.startswith('lum_'):
-            # Set luminosity proportional to mass (simple scaling)
-            # Typical stellar luminosity ~ mass^3.5, but use mass for simplicity
-            luminosity_per_group = masses * 1e-3  # Arbitrary scaling, adjust as needed
+            # Set luminosity to zero
+            luminosity_per_group = 0.0
             data[:, col_idx] = luminosity_per_group
             col_idx += 1
 
