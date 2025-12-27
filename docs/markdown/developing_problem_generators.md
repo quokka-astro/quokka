@@ -38,17 +38,6 @@ At a minimum, implement `setInitialConditionsOnGrid` for your problem’s simula
 Additional hooks are available when you need them:
 
 * Override `setCustomBoundaryConditions` if you require non-periodic inflow/outflow values, as shown by the shock tube problem described in [`src/problems/HydroShocktube/test_hydro_shocktube.cpp`](https://github.com/quokka-astro/quokka/blob/development/src/problems/HydroShocktube/test_hydro_shocktube.cpp#L102-L152).
-* Specialise `quokka::DensityFloor<MyProblem>` to make the density floor spatially varying (evaluated at cell centres) instead of the default constant value set by the runtime parameter `density_floor`. For example:
-  ```cpp
-  template <> struct quokka::DensityFloor<MyProblem> {
-    AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto value(amrex::Real x, amrex::Real y, amrex::Real z,
-                                                              amrex::Real base_density_floor) -> amrex::Real
-    {
-      amrex::ignore_unused(y, z);
-      return (x < 0.0) ? 10.0 * base_density_floor : base_density_floor;
-    }
-  };
-  ```
 * Provide a `refineGrid` specialisation to tag cells for AMR refinement. The shock tube driver flags zones based on the density gradient magnitude—see [`src/problems/HydroShocktube/test_hydro_shocktube.cpp`](https://github.com/quokka-astro/quokka/blob/development/src/problems/HydroShocktube/test_hydro_shocktube.cpp#L154-L177).
 * Implement `computeReferenceSolution` when you want the regression harness to compare against an analytic or tabulated solution. The advection example computes an exact profile for error checking and optional plotting in [`src/problems/Advection/test_advection.cpp`](https://github.com/quokka-astro/quokka/blob/development/src/problems/Advection/test_advection.cpp#L70-L122).
 
