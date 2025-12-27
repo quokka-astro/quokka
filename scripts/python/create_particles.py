@@ -7,27 +7,28 @@ used in Quokka simulations, including CIC, Sink, Rad, CICRad, StochasticStellarP
 and Test particles.
 
 Usage:
-    python create_particles.py [part_type] [n_star] [box_size] [sample_type] [output] [--mean_mass MASS] [--velocity_disp VEL] [--lifetime TIME]
+    python create_particles.py [part_type] [n_star] [box_size] [sample_type] [output] [--m_min M_MIN] [--m_max M_MAX] [--velocity_disp VEL] [--lifetime TIME] [--center_origin]
 
 Arguments:
     part_type: Particle type (CIC, Sink, Rad, CICRad, StochasticStellarPop, Test)
     n_star: Number of particles to generate
-    box_size: Size of the simulation box in cm
+    box_size: Size of the simulation box in cm (domain: [0, box_size])
     sample_type: Spatial sampling type (uniform, Gaussian, Plummer)
     output: Output filename
     --m_min: Minimum stellar mass in M_sun (optional, default: 1.0)
     --m_max: Maximum stellar mass in M_sun (optional, default: 120.0)
     --velocity_disp: Velocity dispersion in cm/s (optional, default: 10.0 km/s)
     --lifetime: Particle lifetime in s (optional, default: 10.0 Myr)
+    --center_origin: Center coordinate origin at domain center [-box_size/2, box_size/2] (optional, default: origin at (0,0,0))
 
 Examples:
-    # Generate 100 CIC particles in uniform distribution within a box of size 1e18 cm
+    # Generate 100 CIC particles in uniform distribution (domain [0, 1e18] cm)
     python create_particles.py CIC 100 1e18 uniform particles.txt
 
-    # Generate 50 sink particles in Plummer sphere
-    python create_particles.py Sink 50 5e17 Plummer sink_particles.txt
+    # Generate 50 sink particles in Plummer sphere with centered origin (domain [-2.5e17, 2.5e17] cm)
+    python create_particles.py Sink 50 5e17 Plummer sink_particles.txt --center_origin
 
-    # Generate radiation particles with custom parameters
+    # Generate radiation particles with custom mass range
     python create_particles.py Rad 20 1e16 Gaussian rad_particles.txt --m_min 0.5 --m_max 60 --velocity_disp 5e6
 
 Physical parameters (CGS units):
@@ -149,10 +150,10 @@ def get_particle_data_components(part_type: str) -> Tuple[List[str], int]:
 
 def generate_particle_data(part_type: str, n_particles: int, box_size: float,
                           sample_type: str, m_min: float, m_max: float, velocity_disp: float,
-                          lifetime: float) -> Tuple[np.ndarray, np.ndarray]:
+                          lifetime: float, center_origin: bool = False) -> Tuple[np.ndarray, np.ndarray]:
     """Generate complete particle data including positions and all required components."""
 
-    # Sample positions
+    # Sample positions (always around center)
     if sample_type == 'uniform':
         positions = sample_positions_uniform(n_particles, box_size)
     elif sample_type == 'Gaussian':
@@ -161,6 +162,10 @@ def generate_particle_data(part_type: str, n_particles: int, box_size: float,
         positions = sample_positions_plummer(n_particles, box_size)
     else:
         raise ValueError(f"Unknown sampling type: {sample_type}")
+
+    # Shift positions if origin should be at (0,0,0) instead of domain center
+    if not center_origin:
+        positions += box_size / 2.0
 
     # Get components for this particle type
     components, n_extra = get_particle_data_components(part_type)
@@ -260,7 +265,7 @@ def print_particle_info(part_type: str, n_particles: int, positions: np.ndarray,
 def main():
     parser = argparse.ArgumentParser(
         description='Generate initial particle distributions for Quokka simulations',
-        usage='%(prog)s [part_type] [n_star] [box_size] [sample_type] [output] [--m_min M_MIN] [--m_max M_MAX] [--velocity_disp VEL] [--lifetime TIME]'
+        usage='%(prog)s [part_type] [n_star] [box_size] [sample_type] [output] [--m_min M_MIN] [--m_max M_MAX] [--velocity_disp VEL] [--lifetime TIME] [--center_origin]'
     )
     parser.add_argument('part_type', choices=PARTICLE_TYPES.keys(),
                        help='Particle type to generate')
@@ -280,6 +285,8 @@ def main():
                        help=f'Velocity dispersion in cm/s (default: {DEFAULT_VELOCITY_DISP/KM_S:.1f} km/s)')
     parser.add_argument('--lifetime', type=float, default=DEFAULT_LIFETIME,
                        help=f'Particle lifetime in s (default: {DEFAULT_LIFETIME/MYR:.1f} Myr)')
+    parser.add_argument('--center_origin', action='store_true',
+                       help='Center the coordinate origin at the domain center [-box_size/2, box_size/2] (default: origin at (0,0,0))')
 
     args = parser.parse_args()
 
@@ -291,8 +298,9 @@ def main():
         print("Error: box_size must be positive")
         sys.exit(1)
 
+    domain_str = f"[-{args.box_size/2:.2e}, {args.box_size/2:.2e}]" if args.center_origin else f"[0, {args.box_size:.2e}]"
     print(f"Generating {args.n_star} {args.part_type} particles...")
-    print(f"Box size: {args.box_size:.2e} cm")
+    print(f"Box size: {args.box_size:.2e} cm (domain: {domain_str} cm)")
     print(f"Sampling type: {args.sample_type}")
     print(f"Mass range: {args.m_min:.1f} - {args.m_max:.1f} M_sun (Salpeter IMF)")
     print(f"Velocity dispersion: {args.velocity_disp/KM_S:.1f} km/s")
@@ -302,7 +310,7 @@ def main():
         # Generate particle data
         positions, data = generate_particle_data(
             args.part_type, args.n_star, args.box_size, args.sample_type,
-            args.m_min * M_SUN, args.m_max * M_SUN, args.velocity_disp, args.lifetime
+            args.m_min * M_SUN, args.m_max * M_SUN, args.velocity_disp, args.lifetime, args.center_origin
         )
 
         # Get component information for printing
