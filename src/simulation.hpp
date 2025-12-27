@@ -1865,7 +1865,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt, state_fc_ptr, verbose);
 
 	// Deposit the SN particles into the MultiFab
-	const amrex::Real max_velocity = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
+	const auto [num_sn_explosions, max_velocity] = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
+
+	// Print SN explosion count if verbose and non-zero
+	if (verbose && num_sn_explosions > 0) {
+		amrex::Print() << "Number of SN explosions at level " << lev << ": " << num_sn_explosions << "\n";
+	}
 
 	// Check if the maximum velocity is greater than the threshold
 	constexpr amrex::Real v_over_c_threshold = 0.03;

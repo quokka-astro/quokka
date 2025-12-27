@@ -145,9 +145,9 @@ class PhysicsParticleDescriptorBase
 	//----- Methods that are implemented for some but not all particle types, so they cannot be pure virtual -----
 
 	virtual auto depositSN(amrex::MultiFab & /*state*/, std::array<amrex::MultiFab, AMREX_SPACEDIM> const * /*state_fc*/, int /*lev*/, amrex::Real /*time*/,
-			       amrex::Real /*dt*/) -> amrex::Real
+			       amrex::Real /*dt*/) -> std::pair<int, amrex::Real>
 	{
-		return 0.0_rt;
+		return {0, 0.0_rt};
 	}
 
 	virtual void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate,
@@ -610,8 +610,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 	// Implementation of supernova energy and momentum deposition from particles to grid
 	auto depositSN(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, amrex::Real time, amrex::Real dt)
-	    -> amrex::Real override
+	    -> std::pair<int, amrex::Real> override
 	{
+		int num_sn_explosions = 0;
 		amrex::Real max_velocity = 0.0;
 
 		if (this->container_ != nullptr && this->getEvolutionStageIndex() >= 0) {
@@ -621,8 +622,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 								 "UnitSystem must be CGS for particleMeshInteraction");
 
 				// Deposit supernova energy and momentum from all particles. This also updates the evolution stage of the particles.
-				max_velocity = SNDeposition<ContainerType, problem_t>(this->container_, state, state_fc, lev, time, dt, this->getMassIndex(),
-										      this->getEvolutionStageIndex(), this->getBirthTimeIndex());
+				auto [sn_count, vel] = SNDeposition<ContainerType, problem_t>(this->container_, state, state_fc, lev, time, dt, this->getMassIndex(),
+											      this->getEvolutionStageIndex(), this->getBirthTimeIndex());
+				num_sn_explosions = sn_count;
+				max_velocity = vel;
 			} else {
 				// Only update evolution stage but not deposit energy/momentum
 				SNFeedbackUtils::updateEvolutionStage(this->container_, lev, time + dt, this->getBirthTimeIndex(),
@@ -630,7 +633,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			}
 		}
 
-		return max_velocity;
+		return {num_sn_explosions, max_velocity};
 	}
 
 	// compute accretion rate
@@ -807,16 +810,18 @@ template <typename problem_t> class PhysicsParticleRegister
 
 	// Deposit supernova energy and momentum from all particles
 	auto depositSN(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, amrex::Real time, amrex::Real dt)
-	    -> amrex::Real
+	    -> std::pair<int, amrex::Real>
 	{
 		const BL_PROFILE("PhysicsParticleRegister::depositSN()");
+		int total_sn_explosions = 0;
 		amrex::Real max_velocity = 0.0;
 		// Each particle type handles its own buffer creation and roundoff independently
 		for (const auto &[type, descriptor] : particleRegistry_) {
-			const amrex::Real max_velocity_ = descriptor->depositSN(state, state_fc, lev, time, dt);
-			max_velocity = std::max(max_velocity, max_velocity_);
+			auto [sn_count, velocity] = descriptor->depositSN(state, state_fc, lev, time, dt);
+			total_sn_explosions += sn_count;
+			max_velocity = std::max(max_velocity, velocity);
 		}
-		return max_velocity;
+		return {total_sn_explosions, max_velocity};
 	}
 
 	// Implementation of computeSinkAccretion

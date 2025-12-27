@@ -1,0 +1,8 @@
+---
+alwaysApply: true
+---
+
+Validate your implementation following these steps:
+1. For the first time, run `source ~/rc/quokka.rc` to load modules
+2. Compile and run with `cd /Users/cche/softwares/quokka/quokka3/tests && make b && make r`
+3. If implemented successfully, you'll see `<TEST_NAME> Success` in the end. 
