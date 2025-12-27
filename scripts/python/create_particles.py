@@ -7,7 +7,7 @@ used in Quokka simulations, including CIC, Sink, Rad, CICRad, StochasticStellarP
 and Test particles.
 
 Usage:
-    python create_particles.py [part_type] [n_star] [box_size] [sample_type] [output] [--m_min M_MIN] [--m_max M_MAX] [--velocity_disp VEL] [--lifetime TIME] [--center_origin]
+    python create_particles.py [part_type] [n_star] [box_size] [sample_type] [output] [--m_min M_MIN] [--m_max M_MAX] [--velocity_disp VEL] [--lifetime TIME] [--center_origin] [--random_seed SEED]
 
 Arguments:
     part_type: Particle type (CIC, Sink, Rad, CICRad, StochasticStellarPop, Test)
@@ -20,6 +20,7 @@ Arguments:
     --velocity_disp: Velocity dispersion in cm/s (optional, default: 10.0 km/s)
     --lifetime: Particle lifetime in s (optional, default: 10.0 Myr)
     --center_origin: Center coordinate origin at domain center [-box_size/2, box_size/2] (optional, default: origin at (0,0,0))
+    --random_seed: Random seed for reproducible results (optional)
 
 Examples:
     # Generate 100 CIC particles in uniform distribution (domain [0, 1e18] cm)
@@ -30,6 +31,9 @@ Examples:
 
     # Generate radiation particles with custom mass range
     python create_particles.py Rad 20 1e16 Gaussian rad_particles.txt --m_min 0.5 --m_max 60 --velocity_disp 5e6
+
+    # Generate particles with reproducible results using random seed
+    python create_particles.py CIC 50 1e16 Plummer cluster.txt --random_seed 42
 
 Physical parameters (CGS units):
     - mass range: 1-120 solar masses (Salpeter IMF, power law with exponent -2.35)
@@ -265,7 +269,7 @@ def print_particle_info(part_type: str, n_particles: int, positions: np.ndarray,
 def main():
     parser = argparse.ArgumentParser(
         description='Generate initial particle distributions for Quokka simulations',
-        usage='%(prog)s [part_type] [n_star] [box_size] [sample_type] [output] [--m_min M_MIN] [--m_max M_MAX] [--velocity_disp VEL] [--lifetime TIME] [--center_origin]'
+        usage='%(prog)s [part_type] [n_star] [box_size] [sample_type] [output] [--m_min M_MIN] [--m_max M_MAX] [--velocity_disp VEL] [--lifetime TIME] [--center_origin] [--random_seed SEED]'
     )
     parser.add_argument('part_type', choices=PARTICLE_TYPES.keys(),
                        help='Particle type to generate')
@@ -287,8 +291,15 @@ def main():
                        help=f'Particle lifetime in s (default: {DEFAULT_LIFETIME/MYR:.1f} Myr)')
     parser.add_argument('--center_origin', action='store_true',
                        help='Center the coordinate origin at the domain center [-box_size/2, box_size/2] (default: origin at (0,0,0))')
+    parser.add_argument('--random_seed', type=int,
+                       help='Random seed for reproducible results (optional)')
 
     args = parser.parse_args()
+
+    # Set random seed if provided
+    if args.random_seed is not None:
+        np.random.seed(args.random_seed)
+        print(f"Random seed set to: {args.random_seed}")
 
     # Validate inputs
     if args.n_star <= 0:
