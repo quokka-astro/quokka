@@ -903,7 +903,7 @@ template <typename problem_t> class PhysicsParticleRegister
 				}
 			}
 			if (!found) {
-				amrex::Print() << "Warning: Requested particle type '" << requestedName << "' is not registered.\n";
+				amrex::Print() << "[WARNING] Requested particle type '" << requestedName << "' is not registered.\n";
 			}
 		}
 	}
@@ -1025,7 +1025,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	void printParticleStatistics() const
 	{
 		const BL_PROFILE("PhysicsParticleRegister::printParticleStatistics()");
-		amrex::Print() << ">>> Particle statistics:\n";
+		amrex::Print() << "[PARTICLES] Statistics:\n";
 		amrex::Print() << fmt::format("{:<20}{:>15}\n", "Particle type", "Number of particles");
 
 		for (const auto &[type, descriptor] : particleRegistry_) {
