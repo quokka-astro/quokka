@@ -1869,7 +1869,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 
 	// Print SN explosion count if verbose and non-zero
 	if (verbose && num_sn_explosions > 0) {
-		amrex::Print() << fmt::format("[PARTICLES] SN explosions:\n\tTime: {} - {} SN explosions at level {}\n", time, num_sn_explosions, lev);
+		amrex::Print() << fmt::format("[PARTICLES] SN explosions: Time: {} - {} stars went supernova at level {}\n", time, num_sn_explosions, lev);
 	}
 
 	// Check if the maximum velocity is greater than the threshold
