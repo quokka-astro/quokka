@@ -1865,12 +1865,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt, state_fc_ptr, verbose);
 
 	// Deposit the SN particles into the MultiFab
-	const amrex::Real max_velocity = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
+	const auto [num_sn_explosions, max_velocity] = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
+
+	// Print SN explosion count if verbose and non-zero
+	if (verbose && num_sn_explosions > 0) {
+		amrex::Print() << fmt::format("[PARTICLES] SN explosions:\n\tTime: {} - {} SN explosions at level {}\n", time, num_sn_explosions, lev);
+	}
 
 	// Check if the maximum velocity is greater than the threshold
 	constexpr amrex::Real v_over_c_threshold = 0.03;
 	if (max_velocity > v_over_c_threshold * C::c_light) {
-		amrex::Print() << "WARNING: SN remnant net velocity (" << max_velocity / C::c_light << " c) greater than " << v_over_c_threshold
+		amrex::Print() << "[WARNING] SN remnant net velocity (" << max_velocity / C::c_light << " c) greater than " << v_over_c_threshold
 			       << " c threshold!" << "\n";
 	}
 }
