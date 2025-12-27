@@ -48,7 +48,7 @@ auto problem_main() -> int
 	amrex::Real small_dens = 1.0e-100;
 	eos_init(small_temp, small_dens);
 
-	amrex::ParmParse pp;
+	amrex::ParmParse const pp;
 	amrex::Real base_density_floor = 0.0;
 	pp.query("density_floor", base_density_floor);
 
