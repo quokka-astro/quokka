@@ -9,23 +9,15 @@
 #include "AMReX.H"
 #include "AMReX_BLProfiler.H"
 #include "AMReX_BLassert.H"
-#include "AMReX_FabArray.H"
 #include "AMReX_Geometry.H"
-#include "AMReX_GpuDevice.H"
-#include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
-#include "AMReX_ParallelContext.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_REAL.H"
-#include "AMReX_SPACE.H"
-#include "AMReX_TableData.H"
-#include "AMReX_iMultiFab.H"
 #include <fmt/format.h>
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
-#include "math/quadrature.hpp"
 #include "physics_info.hpp"
 #include "util/BC.hpp"
 
@@ -56,18 +48,18 @@ template <> struct quokka::EOS_Traits<RandomBlast> {
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
+template <> struct Particle_Traits<RandomBlast> {
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
+};
+
 constexpr Real Tgas0 = 1.0e4; // K
 constexpr Real nH0 = 0.1;     // cm^-3
 constexpr Real cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
 constexpr Real rho0 = nH0 * (m_H / cloudy_H_mass_fraction); // g cm^-3
 
 template <> struct SimulationData<RandomBlast> {
-	std::unique_ptr<amrex::TableData<Real, 1>> blast_x;
-	std::unique_ptr<amrex::TableData<Real, 1>> blast_y;
-	std::unique_ptr<amrex::TableData<Real, 1>> blast_z;
+	int SN_counter_cumulative = 0; // Track total number of SNe
 
-	int nblast = 0;
-	int SN_counter_cumulative = 0;
 	Real SN_rate_per_vol = NAN; // rate per unit time per unit volume
 	Real E_blast = 1.0e51;	    // ergs
 	Real M_ejecta = 0;	    // 10.0 * Msun; // g
@@ -101,72 +93,37 @@ template <> void QuokkaSimulation<RandomBlast>::setInitialConditionsOnGrid(quokk
 	});
 }
 
-void injectEnergy(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<Real, AMREX_SPACEDIM> const &prob_hi,
-		  amrex::GpuArray<Real, AMREX_SPACEDIM> const &dx, SimulationData<RandomBlast> const &userData)
+template <> void QuokkaSimulation<RandomBlast>::createInitialStochasticStellarPopParticles()
 {
-	// inject energy into cells with stochastic sampling
-	const BL_PROFILE("QuokkaSimulation::injectEnergy()");
+	// Read particles from ASCII file. Note that this only reads real components and not integer components, therefore we need to use
+	// InitSetPhyParticles to set the integer components
+	const int nreal_extra = 7 + Physics_Traits<RandomBlast>::nGroups; // mass vx vy vz birth_time death_time mass_at_birth lum[nGroups]
+	StochasticStellarPopParticles->SetVerbose(1);
+	StochasticStellarPopParticles->InitFromAsciiFile("../inputs/particles_stochastic_n100.txt", nreal_extra, nullptr);
 
-	const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]); // cm^3
-	const Real rho_eint_blast = userData.E_blast / cell_vol;   // ergs cm^-3
-	const Real rho_ejecta = userData.M_ejecta / cell_vol;	   // g cm^-3
+	// Set integer components (evolution stage) - initialize all as SNProgenitor
+	for (auto &kv : StochasticStellarPopParticles->GetParticles()) {
+		for (auto &ikv : kv) {
+			auto &particle_array = ikv.second.GetArrayOfStructs();
+			const int np = particle_array.numParticles();
 
-	const Real Lx = prob_hi[0] - prob_lo[0];
-	const Real Ly = prob_hi[1] - prob_lo[1];
-	const Real Lz = prob_hi[2] - prob_lo[2];
-
-	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-		const amrex::Box &box = iter.validbox();
-		auto const &state = mf.array(iter);
-		auto const &px = userData.blast_x->table();
-		auto const &py = userData.blast_y->table();
-		auto const &pz = userData.blast_z->table();
-		const int np = userData.nblast;
-		const int use_periodic_bc = userData.use_periodic_bc;
-
-		const Real r_scale = 8.0 * dx[0]; // TODO(ben): cannot be based on local dx when using AMR!
-		const Real normfac = 1.0 / std::pow(r_scale, 3);
-
-		auto kern = [=] AMREX_GPU_DEVICE(const Real x, const Real y, const Real z) {
-			const Real r = std::sqrt(x * x + y * y + z * z);
-			return kernel_wendland_c2(r / r_scale);
-		};
-
-		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			const Real xc = prob_lo[0] + static_cast<Real>(i) * dx[0];
-			const Real yc = prob_lo[1] + static_cast<Real>(j) * dx[1];
-			const Real zc = prob_lo[2] + static_cast<Real>(k) * dx[2];
-
-			for (int n = 0; n < np; ++n) {
-				Real x0 = NAN;
-				Real y0 = NAN;
-				Real z0 = NAN;
-				if (use_periodic_bc == 1) {
-					// compute distance to nearest periodic image
-					x0 = std::remainder(xc - px(n), Lx);
-					y0 = std::remainder(yc - py(n), Ly);
-					z0 = std::remainder(zc - pz(n), Lz);
-				} else {
-					x0 = (xc - px(n));
-					y0 = (yc - py(n));
-					z0 = (zc - pz(n));
-				}
-
-				// integrate each particle kernel over the cell
-				const Real weight = normfac * quad_3d(kern, x0, x0 + dx[0], y0, y0 + dx[1], z0, z0 + dx[2]);
-
-				state(i, j, k, HydroSystem<RandomBlast>::density_index) += weight * rho_ejecta;
-				state(i, j, k, HydroSystem<RandomBlast>::scalar0_index) += weight * rho_ejecta;
-				state(i, j, k, HydroSystem<RandomBlast>::energy_index) += weight * rho_eint_blast;
-				state(i, j, k, HydroSystem<RandomBlast>::internalEnergy_index) += weight * rho_eint_blast;
+			if (np == 0) {
+				continue;
 			}
-		});
+
+			auto *idata = particle_array().data();
+
+			// Launch GPU kernel to set integer components
+			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
+				idata[i].m_idata[quokka::StochasticStellarPopParticleStageIdx] = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+			});
+		}
 	}
 }
 
 template <> void QuokkaSimulation<RandomBlast>::computeBeforeTimestep()
 {
-	// compute how many (and where) SNe will go off on the this coarse timestep
+	// compute how many SNe will go off on this coarse timestep
 	// sample from Poisson distribution
 	const Real dt_coarse = dt_[0];
 	const Real domain_vol = geom[0].ProbSize();
@@ -177,54 +134,16 @@ template <> void QuokkaSimulation<RandomBlast>::computeBeforeTimestep()
 		amrex::Print() << "\t" << count << " SNe to be exploded.\n";
 	}
 
-	// resize particle arrays
-	amrex::Array<int, 1> const lo{0};
-	amrex::Array<int, 1> const hi{count};
-	userData_.blast_x = std::make_unique<amrex::TableData<Real, 1>>(lo, hi, amrex::The_Pinned_Arena());
-	userData_.blast_y = std::make_unique<amrex::TableData<Real, 1>>(lo, hi, amrex::The_Pinned_Arena());
-	userData_.blast_z = std::make_unique<amrex::TableData<Real, 1>>(lo, hi, amrex::The_Pinned_Arena());
-	userData_.nblast = count;
 	userData_.SN_counter_cumulative += count;
 
-	// for each, sample location at random
-	auto const &px = userData_.blast_x->table();
-	auto const &py = userData_.blast_y->table();
-	auto const &pz = userData_.blast_z->table();
-	for (int i = 0; i < count; ++i) {
-		px(i) = geom[0].ProbLength(0) * amrex::Random();
-		py(i) = geom[0].ProbLength(1) * amrex::Random();
-		pz(i) = geom[0].ProbLength(2) * amrex::Random();
-	}
-
+	// SN feedback is handled automatically by the StochasticStellarPop particles
 	// TODO(ben): need to force refinement to highest level for cells near particles
-}
-
-template <> void QuokkaSimulation<RandomBlast>::computeAfterLevelAdvance(int lev, Real /*time*/, Real /*dt_lev*/, int /*ncycle*/)
-{
-	// compute operator split physics
-	injectEnergy(state_new_cc_[lev], geom[lev].ProbLoArray(), geom[lev].ProbHiArray(), geom[lev].CellSizeArray(), userData_);
 }
 
 template <> void QuokkaSimulation<RandomBlast>::computeAfterTimestep()
 {
-	// check conservation of mass
-	static auto const &dx = geom[0].CellSizeArray();
-	static Real const cvol = AMREX_D_TERM(dx[0], +dx[1], +dx[2]);
-	static Real const initial_mass = cvol * state_new_cc_[0].sum(HydroSystem<RandomBlast>::density_index);
-
-	const Real mass = cvol * state_new_cc_[0].sum(HydroSystem<RandomBlast>::density_index);
-	const Real cons_err = (mass - initial_mass) / initial_mass;
-
-	amrex::Print() << "Initial mass = " << initial_mass << "\n"
-		       << "Final mass = " << mass << "\n"
-		       << "Relative error = " << cons_err << "\n";
-
-	if (std::abs(cons_err) > 1.0e-10) {
-		// write out FABs with ghost zones
-		// amrex::writeFabs(state_new_cc_[0], "state_new_" + std::to_string(istep[0]));
-		// abort
-		amrex::Abort("mass nonconservation detected!");
-	}
+	// With SN feedback, mass is not conserved due to mass injection
+	// Instead, we track the cumulative injected mass and energy in problem_main
 }
 
 template <> void QuokkaSimulation<RandomBlast>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
