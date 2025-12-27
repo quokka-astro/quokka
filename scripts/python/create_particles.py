@@ -7,7 +7,7 @@ used in Quokka simulations, including CIC, Sink, Rad, CICRad, StochasticStellarP
 and Test particles.
 
 Usage:
-    python create_particles.py [part_type] [n_star] [box_size] [sample_type] [output] [--m_min M_MIN] [--m_max M_MAX] [--velocity_disp VEL] [--lifetime TIME] [--center_origin] [--random_seed SEED]
+    python create_particles.py [part_type] [n_star] [box_size] [sample_type] [output] [--m_min M_MIN] [--m_max M_MAX] [--velocity_disp VEL] [--lifetime_max TIME] [--center_origin] [--random_seed SEED]
 
 Arguments:
     part_type: Particle type (CIC, Sink, Rad, CICRad, StochasticStellarPop, Test)
@@ -18,7 +18,7 @@ Arguments:
     --m_min: Minimum stellar mass in M_sun (optional, default: 1.0)
     --m_max: Maximum stellar mass in M_sun (optional, default: 120.0)
     --velocity_disp: Velocity dispersion in cm/s (optional, default: 10.0 km/s)
-    --lifetime: Particle lifetime in s (optional, default: 10.0 Myr)
+    --lifetime_max: Maximum particle lifetime in s (optional, default: 10.0 Myr)
     --center_origin: Center coordinate origin at domain center [-box_size/2, box_size/2] (optional, default: origin at (0,0,0))
     --random_seed: Random seed for reproducible results (optional)
 
@@ -29,8 +29,8 @@ Examples:
     # Generate 50 sink particles in Plummer sphere with centered origin (domain [-2.5e17, 2.5e17] cm)
     python create_particles.py Sink 50 5e17 Plummer sink_particles.txt --center_origin
 
-    # Generate radiation particles with custom mass range
-    python create_particles.py Rad 20 1e16 Gaussian rad_particles.txt --m_min 0.5 --m_max 60 --velocity_disp 5e6
+    # Generate radiation particles with custom mass range and lifetime
+    python create_particles.py Rad 20 1e16 Gaussian rad_particles.txt --m_min 0.5 --m_max 60 --velocity_disp 5e6 --lifetime_max 5e14
 
     # Generate particles with reproducible results using random seed
     python create_particles.py CIC 50 1e16 Plummer cluster.txt --random_seed 42
@@ -157,7 +157,7 @@ def get_particle_data_components(part_type: str) -> Tuple[List[str], int]:
 
 def generate_particle_data(part_type: str, n_particles: int, box_size: float,
                           sample_type: str, m_min: float, m_max: float, velocity_disp: float,
-                          lifetime: float, center_origin: bool = False) -> Tuple[np.ndarray, np.ndarray]:
+                          lifetime_max: float, center_origin: bool = False) -> Tuple[np.ndarray, np.ndarray]:
     """Generate complete particle data including positions and all required components."""
 
     # Sample positions (always around center)
@@ -204,8 +204,8 @@ def generate_particle_data(part_type: str, n_particles: int, box_size: float,
             data[:, col_idx] = 0.0
             col_idx += 1
         elif comp == 'death_time':
-            # Particles die after lifetime
-            data[:, col_idx] = lifetime
+            # Particles die at random times between 0 and lifetime_max
+            data[:, col_idx] = np.random.uniform(0, lifetime_max, n_particles)
             col_idx += 1
         elif comp == 'mass_at_birth':
             # Same as current mass for simplicity
@@ -271,7 +271,7 @@ def print_particle_info(part_type: str, n_particles: int, positions: np.ndarray,
 def main():
     parser = argparse.ArgumentParser(
         description='Generate initial particle distributions for Quokka simulations',
-        usage='%(prog)s [part_type] [n_star] [box_size] [sample_type] [output] [--m_min M_MIN] [--m_max M_MAX] [--velocity_disp VEL] [--lifetime TIME] [--center_origin] [--random_seed SEED]'
+        usage='%(prog)s [part_type] [n_star] [box_size] [sample_type] [output] [--m_min M_MIN] [--m_max M_MAX] [--velocity_disp VEL] [--lifetime_max TIME] [--center_origin] [--random_seed SEED]'
     )
     parser.add_argument('part_type', choices=PARTICLE_TYPES.keys(),
                        help='Particle type to generate')
@@ -289,8 +289,8 @@ def main():
                        help='Maximum stellar mass in M_sun (default: 120.0)')
     parser.add_argument('--velocity_disp', type=float, default=DEFAULT_VELOCITY_DISP,
                        help=f'Velocity dispersion in cm/s (default: {DEFAULT_VELOCITY_DISP/KM_S:.1f} km/s)')
-    parser.add_argument('--lifetime', type=float, default=DEFAULT_LIFETIME,
-                       help=f'Particle lifetime in s (default: {DEFAULT_LIFETIME/MYR:.1f} Myr)')
+    parser.add_argument('--lifetime_max', type=float, default=DEFAULT_LIFETIME,
+                       help=f'Maximum particle lifetime in s (default: {DEFAULT_LIFETIME/MYR:.1f} Myr)')
     parser.add_argument('--center_origin', action='store_true',
                        help='Center the coordinate origin at the domain center [-box_size/2, box_size/2] (default: origin at (0,0,0))')
     parser.add_argument('--random_seed', type=int,
@@ -317,13 +317,13 @@ def main():
     print(f"Sampling type: {args.sample_type}")
     print(f"Mass range: {args.m_min:.1f} - {args.m_max:.1f} M_sun (Salpeter IMF)")
     print(f"Velocity dispersion: {args.velocity_disp/KM_S:.1f} km/s")
-    print(f"Lifetime: {args.lifetime/MYR:.1f} Myr")
+    print(f"Lifetime range: [0, {args.lifetime_max/MYR:.1f}] Myr")
 
     try:
         # Generate particle data
         positions, data = generate_particle_data(
             args.part_type, args.n_star, args.box_size, args.sample_type,
-            args.m_min * M_SUN, args.m_max * M_SUN, args.velocity_disp, args.lifetime, args.center_origin
+            args.m_min * M_SUN, args.m_max * M_SUN, args.velocity_disp, args.lifetime_max, args.center_origin
         )
 
         # Get component information for printing
