@@ -210,6 +210,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int sfh_interval_ = -1;		       // interval for the star formation history
 	amrex::Real sfh_time_interval_ = -1.0; // time interval for the star formation history
 	amrex::Real last_sfh_time_ = 0.0;
+	int sn_count_ = 0;	// number of SN explosions in a step (used for diagnostics)
 
 	amrex::Real densityFloor_ = 0.0; // default
 	amrex::Real tempFloor_ = 0.0;	 // default
@@ -1865,11 +1866,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt, state_fc_ptr, verbose);
 
 	// Deposit the SN particles into the MultiFab
-	const auto [num_sn_explosions, max_velocity] = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
+	Real max_velocity = 0.0;
+	std::tie(sn_count_, max_velocity) = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
 
 	// Print SN explosion count if verbose and non-zero
-	if (verbose && num_sn_explosions > 0) {
-		amrex::Print() << fmt::format("[PARTICLES] SN explosions: Time: {} - {} stars went supernova at level {}\n", time, num_sn_explosions, lev);
+	if (verbose && sn_count_ > 0) {
+		amrex::Print() << fmt::format("[PARTICLES] SN explosions: Time: {} - {} stars went supernova at level {}\n", time, sn_count_, lev);
 	}
 
 	// Check if the maximum velocity is greater than the threshold
