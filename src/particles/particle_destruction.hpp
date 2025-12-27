@@ -80,7 +80,9 @@ static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev
 			// Print the total number of particles destroyed at this time step
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				if (particle_verbose > 0) {
-					amrex::Print() << fmt::format("[PARTICLES] Particle destruction: Time: {} - Destroyed {} particles (from level {} and above)\n", current_time, global_total_destroyed, lev_min);
+					amrex::Print()
+					    << fmt::format("[PARTICLES] Particle destruction: Time: {} - Destroyed {} particles (from level {} and above)\n",
+							   current_time, global_total_destroyed, lev_min);
 				}
 			}
 		}
