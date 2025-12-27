@@ -1,6 +1,7 @@
 #ifndef PARTICLE_DESTRUCTION_HPP_
 #define PARTICLE_DESTRUCTION_HPP_
 
+#include <fmt/format.h>
 #include "AMReX_BLProfiler.H"
 #include "particle_types.hpp"
 
@@ -81,7 +82,7 @@ static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				if (particle_verbose > 0) {
 					amrex::Print()
-					    << std::format("[PARTICLES] Particle destruction: Time: {} - Destroyed {} particles (from level {} and above)\n",
+					    << fmt::format("[PARTICLES] Particle destruction: Time: {} - Destroyed {} particles (from level {} and above)\n",
 							   current_time, global_total_destroyed, lev_min);
 				}
 			}
