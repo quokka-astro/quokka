@@ -161,12 +161,6 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 
 	//--- Step 5. Compute intermediate states
 
-	// // total pressure (no correction)
-	// // MK5: eqn (41) can be calculated (more explicitly) via eqn (23)
-	// double ptot_star_L = ptot_L + u_L.rho * siui_L * (spds[2] - sL.u);
-	// double ptot_star_R = ptot_R + u_R.rho * siui_R * (spds[2] - sR.u);
-	// double const ptot_star = 0.5 * (ptot_star_L + ptot_star_R);
-
 	// total pressure (w/ MM21 low-Mach correction)
 	// MM21 eqn 8
 	const double spd_ca_sq_L = b_magn_sq_L / sL.rho;
