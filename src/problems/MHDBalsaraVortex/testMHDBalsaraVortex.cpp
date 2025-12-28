@@ -71,10 +71,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeRadiusSq(const double x1, const 
 	return delta_x1_scaled * delta_x1_scaled + delta_x2_scaled * delta_x2_scaled; // (r/R)^2
 }
 
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeRadialProfile(const double radius_sq) -> double
-{
-	return std::exp(0.5 * (1.0 - radius_sq));
-}
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeRadialProfile(const double radius_sq) -> double { return std::exp(0.5 * (1.0 - radius_sq)); }
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto Az(const double x1, const double x2) -> double
 {
