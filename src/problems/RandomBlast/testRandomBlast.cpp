@@ -19,7 +19,7 @@
 struct RandomBlast {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double m_H = C::m_p + C::m_e;	   // mass of hydrogen atom
+constexpr double m_H = C::m_p + C::m_e; // mass of hydrogen atom
 
 template <> struct Physics_Traits<RandomBlast> {
 	static constexpr bool is_self_gravity_enabled = true;
@@ -49,7 +49,7 @@ constexpr Real cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
 constexpr Real rho0 = nH0 * (m_H / cloudy_H_mass_fraction); // g cm^-3
 
 template <> struct SimulationData<RandomBlast> {
-	int SN_counter_cumulative = 0; // Track cumulative number of SNe at current time
+	int SN_counter_cumulative = 0;	 // Track cumulative number of SNe at current time
 	std::vector<int> SN_counter_arr; // Track cumulative number of SNe at all time
 
 	Real refine_threshold = 1.0; // gradient refinement threshold

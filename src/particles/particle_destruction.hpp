@@ -1,9 +1,9 @@
 #ifndef PARTICLE_DESTRUCTION_HPP_
 #define PARTICLE_DESTRUCTION_HPP_
 
-#include <fmt/format.h>
 #include "AMReX_BLProfiler.H"
 #include "particle_types.hpp"
+#include <fmt/format.h>
 
 namespace quokka
 {
