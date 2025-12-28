@@ -15,7 +15,7 @@ amr.v               = 1     # verbosity in Amr
 # *****************************************************************
 amr.n_cell          = 64 64 64
 amr.max_level       = 0     # number of levels = max_level + 1
-amr.blocking_factor = 16     # grid size must be divisible by this
+amr.blocking_factor = 32     # grid size must be divisible by this
 amr.max_grid_size   = 64
 
 regrid_interval = 2
@@ -27,9 +27,9 @@ cfl = 0.2
 hydro.reconstruction_order = 3
 derived_vars = temperature
 
-plotfile_interval = 50
-checkpoint_interval = 10000
-max_timesteps = 20000
+plotfile_interval = 200
+checkpoint_interval = -1
+max_timesteps = 1000
 
 dt_initial = 3.154e10       # 1000 yr
 stop_time = 3.154e13       # 1e6 yr
