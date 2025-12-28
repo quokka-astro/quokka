@@ -7,6 +7,8 @@
 /// \brief Unit test for a hydrostatic exponential atmosphere density floor.
 ///
 
+#include <cmath>
+
 #include "AMReX_Geometry.H"
 #include "AMReX_Math.H"
 #include "AMReX_ParallelDescriptor.H"
@@ -99,7 +101,7 @@ auto problem_main() -> int
 		amrex::Box const &bx = mfi.validbox();
 		amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
-			amrex::Real const rho_atm = base_density_floor * amrex::Math::exp(-x / scale_height);
+			amrex::Real const rho_atm = base_density_floor * std::exp(-x / scale_height);
 			amrex::Real const rho_init = rho_init_factor * rho_atm;
 			amrex::Real const Eint_init = quokka::EOS<HydrostaticAtmosphereProblem>::ComputeEintFromTgas(rho_init, Tgas_init);
 			arr(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::density_index) = rho_init;
@@ -133,7 +135,7 @@ auto problem_main() -> int
 #else
 			amrex::Real const z = 0.0;
 #endif
-			amrex::Real const rho_atm = base_density_floor * amrex::Math::exp(-x / scale_height);
+			amrex::Real const rho_atm = base_density_floor * std::exp(-x / scale_height);
 			amrex::Real const expected = 1.0e-2 * rho_atm;
 			amrex::Real const actual = data(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::density_index);
 			return {amrex::Math::abs(actual - expected)};
