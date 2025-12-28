@@ -52,13 +52,13 @@ auto problem_main() -> int
 
 	amrex::ParmParse const pp;
 	amrex::Real base_density_floor = 0.0;
-	if (!pp.query("density_floor", base_density_floor)) {
+	if (pp.query("density_floor", base_density_floor) == 0) {
 		amrex::Print() << "density_floor must be set for HydrostaticAtmosphere test.\n";
 		return 1;
 	}
 
 	amrex::Real scale_height = 0.0;
-	if (!pp.query("atmosphere_scale_height", scale_height)) {
+	if (pp.query("atmosphere_scale_height", scale_height) == 0) {
 		amrex::Print() << "atmosphere_scale_height must be set for HydrostaticAtmosphere test.\n";
 		return 1;
 	}
