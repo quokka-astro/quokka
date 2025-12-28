@@ -11,5 +11,4 @@ if(AMReX_SPACEDIM EQUAL 3)
     NAME ${JOB_NAME}
     COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-  set_tests_properties(MHDBalsaraVortex PROPERTIES LABELS "MHD")
 endif()
