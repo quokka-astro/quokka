@@ -1,4 +1,0 @@
-# Density floor unit test inputs
-
-density_floor = 1.0
-density_floor_expr = "base_density_floor*(1.0 + x)"

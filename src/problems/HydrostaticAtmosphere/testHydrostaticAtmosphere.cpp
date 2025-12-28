@@ -3,8 +3,8 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file testDensityFloorUnit.cpp
-/// \brief Unit test for spatially varying density floors.
+/// \file testHydrostaticAtmosphere.cpp
+/// \brief Unit test for a hydrostatic exponential atmosphere density floor.
 ///
 
 #include "AMReX_Geometry.H"
@@ -20,15 +20,15 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 
-struct DensityFloorUnitProblem {
+struct HydrostaticAtmosphereProblem {
 };
 
-template <> struct quokka::EOS_Traits<DensityFloorUnitProblem> {
+template <> struct quokka::EOS_Traits<HydrostaticAtmosphereProblem> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct Physics_Traits<DensityFloorUnitProblem> {
+template <> struct Physics_Traits<HydrostaticAtmosphereProblem> {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;
@@ -50,12 +50,21 @@ auto problem_main() -> int
 
 	amrex::ParmParse const pp;
 	amrex::Real base_density_floor = 0.0;
-	pp.query("density_floor", base_density_floor);
+	if (!pp.query("density_floor", base_density_floor)) {
+		amrex::Print() << "density_floor must be set for HydrostaticAtmosphere test.\n";
+		return 1;
+	}
+
+	amrex::Real scale_height = 0.0;
+	if (!pp.query("atmosphere_scale_height", scale_height)) {
+		amrex::Print() << "atmosphere_scale_height must be set for HydrostaticAtmosphere test.\n";
+		return 1;
+	}
 
 	std::string density_floor_expr;
 	pp.query("density_floor_expr", density_floor_expr);
 	if (density_floor_expr.empty()) {
-		amrex::Print() << "density_floor_expr must be set for DensityFloorUnit test.\n";
+		amrex::Print() << "density_floor_expr must be set for HydrostaticAtmosphere test.\n";
 		return 1;
 	}
 
@@ -76,28 +85,37 @@ auto problem_main() -> int
 	amrex::BoxArray ba(domain);
 	ba.maxSize(domain.size());
 	amrex::DistributionMapping const dm(ba);
-	int const ncomp = Physics_Indices<DensityFloorUnitProblem>::nvarTotal_cc;
+	int const ncomp = Physics_Indices<HydrostaticAtmosphereProblem>::nvarTotal_cc;
 	amrex::MultiFab state(ba, dm, ncomp, 0);
 
 	state.setVal(0.0);
 
-	amrex::Real const rho_init = 0.5 * base_density_floor;
 	amrex::Real const Tgas_init = 1.0;
-	amrex::Real const Eint_init = quokka::EOS<DensityFloorUnitProblem>::ComputeEintFromTgas(rho_init, Tgas_init);
-	state.setVal(rho_init, HydroSystem<DensityFloorUnitProblem>::density_index, 1, 0);
-	state.setVal(Eint_init, HydroSystem<DensityFloorUnitProblem>::energy_index, 1, 0);
-	state.setVal(Eint_init, HydroSystem<DensityFloorUnitProblem>::internalEnergy_index, 1, 0);
+	amrex::Real const rho_init_factor = 5.0e-3;
+	auto const *const prob_lo = geom.ProbLo();
+	auto const *const dx = geom.CellSize();
+	for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
+		auto const &arr = state.array(mfi);
+		amrex::Box const &bx = mfi.validbox();
+		amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
+			amrex::Real const rho_atm = base_density_floor * amrex::Math::exp(-x / scale_height);
+			amrex::Real const rho_init = rho_init_factor * rho_atm;
+			amrex::Real const Eint_init = quokka::EOS<HydrostaticAtmosphereProblem>::ComputeEintFromTgas(rho_init, Tgas_init);
+			arr(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::density_index) = rho_init;
+			arr(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::energy_index) = Eint_init;
+			arr(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::internalEnergy_index) = Eint_init;
+		});
+	}
 
 	auto const density_floor_func = [=] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z, amrex::Real base_floor) -> amrex::Real {
 		return parser_exe(x, y, z, base_floor);
 	};
 
-	HydroSystem<DensityFloorUnitProblem>::EnforceLimits(base_density_floor, 0.0, state, geom.data(), density_floor_func);
+	HydroSystem<HydrostaticAtmosphereProblem>::EnforceLimits(base_density_floor, 0.0, state, geom.data(), density_floor_func);
 
 	amrex::ReduceOps<amrex::ReduceOpMax> reduce_op;
 	amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
-	auto const *const prob_lo = geom.ProbLo();
-	auto const *const dx = geom.CellSize();
 
 	for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
 		amrex::Box const &bx = mfi.validbox();
@@ -108,15 +126,16 @@ auto problem_main() -> int
 #if (AMREX_SPACEDIM >= 2)
 			amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + 0.5) * dx[1];
 #else
-				       amrex::Real const y = 0.0;
+			amrex::Real const y = 0.0;
 #endif
 #if (AMREX_SPACEDIM == 3)
 			amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + 0.5) * dx[2];
 #else
-				       amrex::Real const z = 0.0;
+			amrex::Real const z = 0.0;
 #endif
-			amrex::Real const expected = parser_exe(x, y, z, base_density_floor);
-			amrex::Real const actual = data(i, j, k, HydroSystem<DensityFloorUnitProblem>::density_index);
+			amrex::Real const rho_atm = base_density_floor * amrex::Math::exp(-x / scale_height);
+			amrex::Real const expected = 1.0e-2 * rho_atm;
+			amrex::Real const actual = data(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::density_index);
 			return {amrex::Math::abs(actual - expected)};
 		});
 	}
