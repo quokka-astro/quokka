@@ -36,7 +36,7 @@ Examples:
     python create_particles.py CIC 50 1e16 Plummer cluster.txt --random_seed 42
 
     # Generate StochasticStellarPop particles used in the testRandomBlast problem
-    python create_particles.py StochasticStellarPop 100 1e19 Plummer particles_stochastic_n100.txt --random_seed 42
+    python create_particles.py StochasticStellarPop 100 3.086e19 Plummer particles_stochastic_n100.txt --random_seed 42
 
 Physical parameters (CGS units):
     - mass range: 1-120 solar masses (Salpeter IMF, power law with exponent -2.35)
@@ -108,6 +108,26 @@ def sample_positions_plummer(n_particles: int, box_size: float) -> np.ndarray:
 
     return np.array(positions)
 
+def ensure_positions_in_box(positions: np.ndarray, box_size: float, center_origin: bool) -> np.ndarray:
+    """Ensure all positions are strictly within the box bounds."""
+    if center_origin:
+        # Domain: [-box_size/2, box_size/2]
+        box_min = -box_size / 2
+        box_max = box_size / 2
+    else:
+        # Domain: [0, box_size]
+        box_min = 0
+        box_max = box_size
+
+    # Check which positions are within bounds
+    in_bounds = (
+        (positions[:, 0] > box_min) & (positions[:, 0] < box_max) &
+        (positions[:, 1] > box_min) & (positions[:, 1] < box_max) &
+        (positions[:, 2] > box_min) & (positions[:, 2] < box_max)
+    )
+
+    return in_bounds
+
 def sample_velocities(n_particles: int, velocity_disp: float) -> np.ndarray:
     """Sample velocities from a 3D Gaussian distribution."""
     return np.random.normal(0, velocity_disp, (n_particles, 3))
@@ -160,19 +180,36 @@ def generate_particle_data(part_type: str, n_particles: int, box_size: float,
                           lifetime_max: float, center_origin: bool = False) -> Tuple[np.ndarray, np.ndarray]:
     """Generate complete particle data including positions and all required components."""
 
-    # Sample positions (always around center)
+    # Sample exactly 2x the number of desired particles to ensure we get enough within bounds
+    n_sample = 2 * n_particles
+
+    # Sample positions (always around center initially)
     if sample_type == 'uniform':
-        positions = sample_positions_uniform(n_particles, box_size)
+        positions = sample_positions_uniform(n_sample, box_size)
     elif sample_type == 'Gaussian':
-        positions = sample_positions_gaussian(n_particles, box_size)
+        positions = sample_positions_gaussian(n_sample, box_size)
     elif sample_type == 'Plummer':
-        positions = sample_positions_plummer(n_particles, box_size)
+        positions = sample_positions_plummer(n_sample, box_size)
     else:
         raise ValueError(f"Unknown sampling type: {sample_type}")
 
     # Shift positions if origin should be at (0,0,0) instead of domain center
     if not center_origin:
         positions += box_size / 2.0
+
+    # Filter to get positions within bounds
+    in_bounds = ensure_positions_in_box(positions, box_size, center_origin)
+    valid_positions = positions[in_bounds]
+
+    # Check if we have enough valid positions
+    if len(valid_positions) < n_particles:
+        domain_str = f"[-{box_size/2:.2e}, {box_size/2:.2e}]" if center_origin else f"[0, {box_size:.2e}]"
+        raise ValueError(f"Failed to generate {n_particles} particles within bounds after sampling {n_sample} positions. "
+                        f"Only {len(valid_positions)} positions were within the domain {domain_str} cm. "
+                        f"Try increasing the box size or using a different sampling method.")
+
+    # Use only the first n_particles valid positions
+    positions = valid_positions[:n_particles]
 
     # Get components for this particle type
     components, n_extra = get_particle_data_components(part_type)
