@@ -53,10 +53,8 @@ from typing import Tuple, List
 M_SUN = 1.989e33  # g
 KM_S = 1e5        # cm/s
 MYR = 3.156e14    # s (seconds in 1 million years)
-PC = 3.086e18     # cm (parsec)
 
 # Default physical parameters for star cluster
-DEFAULT_MEAN_MASS = 1.0 * M_SUN      # 1 solar mass
 DEFAULT_VELOCITY_DISP = 10.0 * KM_S  # 10 km/s velocity dispersion
 DEFAULT_LIFETIME = 10.0 * MYR        # 10 million years
 DEFAULT_N_GROUPS = 1                 # Default number of radiation groups
@@ -72,44 +70,43 @@ PARTICLE_TYPES = {
 }
 
 def sample_positions_uniform(n_particles: int, box_size: float) -> np.ndarray:
-    """Sample positions uniformly within a cube."""
+    """Sample positions uniformly within a cube centered at origin."""
     return np.random.uniform(-box_size/2, box_size/2, (n_particles, 3))
 
 def sample_positions_gaussian(n_particles: int, box_size: float) -> np.ndarray:
-    """Sample positions from a 3D Gaussian distribution."""
+    """Sample positions from a 3D Gaussian distribution centered at origin."""
     # Use box_size/6 as sigma to keep most particles within the box
     sigma = box_size / 6.0
-    positions = np.random.normal(0, sigma, (n_particles, 3))
-    return positions
+    return np.random.normal(0, sigma, (n_particles, 3))
 
 def sample_positions_plummer(n_particles: int, box_size: float) -> np.ndarray:
-    """Sample positions from a Plummer sphere profile."""
+    """Sample positions from a Plummer sphere profile centered at origin."""
     # Plummer radius - use box_size/4 as a typical cluster radius
-    a = box_size / 4.0
+    plummer_radius = box_size / 4.0
 
     positions = []
     for _ in range(n_particles):
         # Sample radius from Plummer distribution
         while True:
             x = np.random.uniform(0, 1)
-            r = a / np.sqrt(x**(-2/3) - 1)
-            if r < box_size/2:  # Keep within box
+            radius = plummer_radius / np.sqrt(x**(-2/3) - 1)
+            if radius < box_size/2:  # Keep within box
                 break
 
         # Sample direction uniformly on sphere
         theta = np.arccos(2 * np.random.uniform(0, 1) - 1)
         phi = 2 * np.pi * np.random.uniform(0, 1)
 
-        x = r * np.sin(theta) * np.cos(phi)
-        y = r * np.sin(theta) * np.sin(phi)
-        z = r * np.cos(theta)
+        x_coord = radius * np.sin(theta) * np.cos(phi)
+        y_coord = radius * np.sin(theta) * np.sin(phi)
+        z_coord = radius * np.cos(theta)
 
-        positions.append([x, y, z])
+        positions.append([x_coord, y_coord, z_coord])
 
     return np.array(positions)
 
-def ensure_positions_in_box(positions: np.ndarray, box_size: float, center_origin: bool) -> np.ndarray:
-    """Ensure all positions are strictly within the box bounds."""
+def get_positions_within_bounds(positions: np.ndarray, box_size: float, center_origin: bool) -> np.ndarray:
+    """Get boolean mask of positions that are within the box bounds."""
     if center_origin:
         # Domain: [-box_size/2, box_size/2]
         box_min = -box_size / 2
@@ -177,36 +174,43 @@ def get_particle_data_components(part_type: str) -> Tuple[List[str], int]:
 
 def generate_particle_data(part_type: str, n_particles: int, box_size: float,
                           sample_type: str, m_min: float, m_max: float, velocity_disp: float,
-                          lifetime_max: float, center_origin: bool = False) -> Tuple[np.ndarray, np.ndarray]:
+                          lifetime_max: float, center_origin: bool = False) -> np.ndarray:
     """Generate complete particle data including positions and all required components."""
 
-    # Sample exactly 2x the number of desired particles to ensure we get enough within bounds
+    # Sample positions with oversampling to ensure we get enough within bounds
     n_sample = 2 * n_particles
 
-    # Sample positions (always around center initially)
-    if sample_type == 'uniform':
-        positions = sample_positions_uniform(n_sample, box_size)
-    elif sample_type == 'Gaussian':
-        positions = sample_positions_gaussian(n_sample, box_size)
-    elif sample_type == 'Plummer':
-        positions = sample_positions_plummer(n_sample, box_size)
-    else:
-        raise ValueError(f"Unknown sampling type: {sample_type}")
+    positions = None
+    valid_positions = np.array([]).reshape(0, 3)
 
-    # Shift positions if origin should be at (0,0,0) instead of domain center
-    if not center_origin:
-        positions += box_size / 2.0
+    # Keep sampling until we have enough valid positions
+    while len(valid_positions) < n_particles:
+        # Sample positions (always around center initially)
+        if sample_type == 'uniform':
+            new_positions = sample_positions_uniform(n_sample, box_size)
+        elif sample_type == 'Gaussian':
+            new_positions = sample_positions_gaussian(n_sample, box_size)
+        elif sample_type == 'Plummer':
+            new_positions = sample_positions_plummer(n_sample, box_size)
+        else:
+            raise ValueError(f"Unknown sampling type: {sample_type}")
 
-    # Filter to get positions within bounds
-    in_bounds = ensure_positions_in_box(positions, box_size, center_origin)
-    valid_positions = positions[in_bounds]
+        # Shift positions if origin should be at (0,0,0) instead of domain center
+        if not center_origin:
+            new_positions += box_size / 2.0
 
-    # Check if we have enough valid positions
-    if len(valid_positions) < n_particles:
-        domain_str = f"[-{box_size/2:.2e}, {box_size/2:.2e}]" if center_origin else f"[0, {box_size:.2e}]"
-        raise ValueError(f"Failed to generate {n_particles} particles within bounds after sampling {n_sample} positions. "
-                        f"Only {len(valid_positions)} positions were within the domain {domain_str} cm. "
-                        f"Try increasing the box size or using a different sampling method.")
+        # Filter to get positions within bounds
+        in_bounds = get_positions_within_bounds(new_positions, box_size, center_origin)
+        new_valid_positions = new_positions[in_bounds]
+
+        # Add to our collection of valid positions
+        valid_positions = np.vstack([valid_positions, new_valid_positions]) if len(valid_positions) > 0 else new_valid_positions
+
+        # Prevent infinite loop
+        if len(valid_positions) == 0 and n_sample >= 10000:
+            domain_str = f"[-{box_size/2:.2e}, {box_size/2:.2e}]" if center_origin else f"[0, {box_size:.2e}]"
+            raise ValueError(f"Failed to generate any valid positions within the domain {domain_str} cm. "
+                            f"Try increasing the box size or using a different sampling method.")
 
     # Use only the first n_particles valid positions
     positions = valid_positions[:n_particles]
@@ -249,14 +253,13 @@ def generate_particle_data(part_type: str, n_particles: int, box_size: float,
             data[:, col_idx] = masses
             col_idx += 1
         elif comp.startswith('lum_'):
-            # Set luminosity to zero
-            luminosity_per_group = 0.0
-            data[:, col_idx] = luminosity_per_group
+            # Set luminosity to zero for all groups
+            data[:, col_idx] = 0.0
             col_idx += 1
 
-    return positions, data
+    return data
 
-def save_particles_to_file(positions: np.ndarray, data: np.ndarray, output_file: str):
+def save_particles_to_file(data: np.ndarray, output_file: str):
     """Save particle data to ASCII file in Quokka format."""
     n_particles = len(data)
 
@@ -265,20 +268,20 @@ def save_particles_to_file(positions: np.ndarray, data: np.ndarray, output_file:
         f.write(f"{n_particles}\n")
 
         # Write each particle's data
-        for i in range(n_particles):
-            line = " ".join(f"{val:.6e}" for val in data[i])
+        for particle_data in data:
+            line = " ".join(f"{val:.6e}" for val in particle_data)
             f.write(f"{line}\n")
 
         # Empty line at end (matching example format)
         f.write("\n")
 
-def print_particle_info(part_type: str, n_particles: int, positions: np.ndarray,
-                        data: np.ndarray, components: List[str]):
+def print_particle_info(part_type: str, n_particles: int, data: np.ndarray, components: List[str]):
     """Print summary information about generated particles."""
     print(f"\nGenerated {n_particles} {part_type} particles")
     print(f"Components: {components}")
 
     # Position statistics
+    positions = data[:, :3]  # First 3 columns are x, y, z
     pos_min = np.min(positions, axis=0)
     pos_max = np.max(positions, axis=0)
     pos_mean = np.mean(positions, axis=0)
@@ -294,7 +297,7 @@ def print_particle_info(part_type: str, n_particles: int, positions: np.ndarray,
         mass_min = np.min(masses)
         mass_max = np.max(masses)
         mass_median = np.median(masses)
-        print(".1f")
+        print(f"Mass range: {mass_min:.1f} - {mass_max:.1f} M_sun (median: {mass_median:.1f} M_sun)")
 
     # Velocity statistics (if applicable)
     if 'vx' in components:
@@ -303,7 +306,7 @@ def print_particle_info(part_type: str, n_particles: int, positions: np.ndarray,
         vz_idx = 3 + components.index('vz')
         velocities = data[:, [vx_idx, vy_idx, vz_idx]]
         vel_disp = np.std(velocities, axis=0) / KM_S
-        print(".1f")
+        print(f"Velocity dispersion: ({vel_disp[0]:.1f}, {vel_disp[1]:.1f}, {vel_disp[2]:.1f}) km/s")
 
 def main():
     parser = argparse.ArgumentParser(
@@ -358,7 +361,7 @@ def main():
 
     try:
         # Generate particle data
-        positions, data = generate_particle_data(
+        data = generate_particle_data(
             args.part_type, args.n_star, args.box_size, args.sample_type,
             args.m_min * M_SUN, args.m_max * M_SUN, args.velocity_disp, args.lifetime_max, args.center_origin
         )
@@ -367,10 +370,10 @@ def main():
         components, _ = get_particle_data_components(args.part_type)
 
         # Print statistics
-        print_particle_info(args.part_type, args.n_star, positions, data, components)
+        print_particle_info(args.part_type, args.n_star, data, components)
 
         # Save to file
-        save_particles_to_file(positions, data, args.output)
+        save_particles_to_file(data, args.output)
         print(f"\nParticle data saved to: {args.output}")
 
     except Exception as e:
