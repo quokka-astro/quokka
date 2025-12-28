@@ -3960,71 +3960,6 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 		return;
 	}
 
-	// Handle case where number of MPI processes changed since checkpoint was written
-	if (has_level_dirs) {
-		const int finest_level = finestLevel();
-		const int num_procs = amrex::ParallelDescriptor::NProcs();
-		if (amrex::ParallelDescriptor::IOProcessor()) {
-			// First, find the highest level that has data
-			int source_level = -1;
-			for (int lev = finest_level; lev >= 0; --lev) {
-				std::string level_path = pc_path + "/Level_" + std::to_string(lev);
-				if (amrex::FileSystem::Exists(level_path)) {
-					source_level = lev;
-					break;
-				}
-			}
-			if (source_level >= 0) {
-				std::string source_level_path = pc_path + "/Level_" + std::to_string(source_level);
-				// Count number of DATA files in source level
-				int num_source_data_files = 0;
-				for (int i = 0;; ++i) {
-					std::string data_file = source_level_path + "/DATA_" + amrex::Concatenate("", i, 5);
-					if (amrex::FileSystem::Exists(data_file)) {
-						num_source_data_files = i + 1;
-					} else {
-						break;
-					}
-				}
-				// For each level, ensure it exists and has the correct number of DATA files
-				for (int lev = 0; lev <= finest_level; ++lev) {
-					std::string level_path = pc_path + "/Level_" + std::to_string(lev);
-					if (!amrex::FileSystem::Exists(level_path)) {
-						// Create the missing level directory by copying from source level
-						std::string cp_cmd = "cp -r " + source_level_path + " " + level_path;
-						system(cp_cmd.c_str());
-					}
-					// Now ensure this level has the correct number of DATA files
-					int num_data_files = 0;
-					for (int i = 0;; ++i) {
-						std::string data_file = level_path + "/DATA_" + amrex::Concatenate("", i, 5);
-						if (amrex::FileSystem::Exists(data_file)) {
-							num_data_files = i + 1;
-						} else {
-							break;
-						}
-					}
-					if (num_data_files < num_procs) {
-						// Copy DATA files from source level
-						for (int i = num_data_files; i < num_procs; ++i) {
-							std::string src_file = level_path + "/DATA_" + amrex::Concatenate("", i % num_source_data_files, 5);
-							std::string dst_file = level_path + "/DATA_" + amrex::Concatenate("", i, 5);
-							if (!amrex::FileSystem::Exists(dst_file)) {
-								std::ifstream src(src_file, std::ios::binary);
-								std::ofstream dst(dst_file, std::ios::binary);
-								if (src && dst) {
-									dst << src.rdbuf();
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-		// Synchronize
-		amrex::ParallelDescriptor::Barrier();
-	}
-
 	if (restartRefineFactor_ > 1) {
 		// Save current geometry for all levels
 		amrex::Vector<amrex::Geometry> current_geom(finest_level + 1);
@@ -4074,8 +4009,6 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 	} else {
 		// Normal restart without refinement
 		particles->Restart(restart_chkfile, particle_type_name);
-		// Redistribute particles in case number of processes changed
-		particles->Redistribute();
 	}
 }
 
