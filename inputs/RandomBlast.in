@@ -38,7 +38,3 @@ cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1
 cooling.cooling_table_type = resampled
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
-
-tiny_profiler.enabled = 1
-
-particles.verbose = 0
