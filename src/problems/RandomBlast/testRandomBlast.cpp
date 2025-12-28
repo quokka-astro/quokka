@@ -4,30 +4,21 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file testRandomBlast.cpp
-/// \brief Implements the random blast problem with radiative cooling.
+/// \brief Implements the random blast problem with particles, self-gravity, and Grackle cooling.
 ///
-#include "AMReX.H"
-#include "AMReX_BLProfiler.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Geometry.H"
 #include "AMReX_MultiFab.H"
-#include "AMReX_ParallelDescriptor.H"
-#include "AMReX_REAL.H"
 #include <fmt/format.h>
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "physics_info.hpp"
-#include "util/BC.hpp"
-
-using amrex::Real;
 
 struct RandomBlast {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double seconds_in_year = 3.1536e7;
-constexpr double parsec_in_cm = C::parsec; // cm == 1 pc
 constexpr double m_H = C::m_p + C::m_e;	   // mass of hydrogen atom
 
 template <> struct Physics_Traits<RandomBlast> {
@@ -58,14 +49,10 @@ constexpr Real cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
 constexpr Real rho0 = nH0 * (m_H / cloudy_H_mass_fraction); // g cm^-3
 
 template <> struct SimulationData<RandomBlast> {
-	int SN_counter_cumulative = 0; // Track total number of SNe
-
-	Real SN_rate_per_vol = NAN; // rate per unit time per unit volume
-	Real E_blast = 1.0e51;	    // ergs
-	Real M_ejecta = 0;	    // 10.0 * Msun; // g
+	int SN_counter_cumulative = 0; // Track cumulative number of SNe at current time
+	std::vector<int> SN_counter_arr; // Track cumulative number of SNe at all time
 
 	Real refine_threshold = 1.0; // gradient refinement threshold
-	int use_periodic_bc = 1;     // default is periodic
 };
 
 template <> void QuokkaSimulation<RandomBlast>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -121,29 +108,11 @@ template <> void QuokkaSimulation<RandomBlast>::createInitialStochasticStellarPo
 	}
 }
 
-template <> void QuokkaSimulation<RandomBlast>::computeBeforeTimestep()
-{
-	// compute how many SNe will go off on this coarse timestep
-	// sample from Poisson distribution
-	const Real dt_coarse = dt_[0];
-	const Real domain_vol = geom[0].ProbSize();
-	const Real expectation_value = userData_.SN_rate_per_vol * domain_vol * dt_coarse;
-
-	const int count = static_cast<int>(amrex::RandomPoisson(expectation_value));
-	if (count > 0) {
-		amrex::Print() << "\t" << count << " SNe to be exploded.\n";
-	}
-
-	userData_.SN_counter_cumulative += count;
-
-	// SN feedback is handled automatically by the StochasticStellarPop particles
-	// TODO(ben): need to force refinement to highest level for cells near particles
-}
-
 template <> void QuokkaSimulation<RandomBlast>::computeAfterTimestep()
 {
-	// With SN feedback, mass is not conserved due to mass injection
-	// Instead, we track the cumulative injected mass and energy in problem_main
+	// Count how many SN went off in this timestep
+	userData_.SN_counter_cumulative += sn_count_;
+	userData_.SN_counter_arr.push_back(userData_.SN_counter_cumulative);
 }
 
 template <> void QuokkaSimulation<RandomBlast>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
@@ -212,50 +181,25 @@ auto problem_main() -> int
 	// This problem is only implemented in CGS units because the cooling tables are provided in CGS units.
 	static_assert(Physics_Traits<RandomBlast>::unit_system == UnitSystem::CGS);
 
+	QuokkaSimulation<RandomBlast> sim;
+
 	// read parameters
-	amrex::ParmParse const pp;
-
-	// read in SN rate
-	Real SN_rate_per_vol = NAN;
-	pp.query("SN_rate_per_volume", SN_rate_per_vol); // yr^-1 kpc^-3
-	SN_rate_per_vol /= seconds_in_year;
-	SN_rate_per_vol /= std::pow(1.0e3 * parsec_in_cm, 3);
-	AMREX_ALWAYS_ASSERT(!std::isnan(SN_rate_per_vol));
-
-	// read in refinement threshold (relative gradient in density)
-	Real refine_threshold = 0.1;
-	pp.query("refine_threshold", refine_threshold); // dimensionless
-
-	// use periodic boundary conditions or not
-	int use_periodic_bc = 0;
-	pp.query("use_periodic_bc", use_periodic_bc);
-
-	// Problem initialization
-	auto BCs_cc = (use_periodic_bc == 1) ? quokka::BC<RandomBlast>(quokka::BCType::int_dir) : quokka::BC<RandomBlast>(quokka::BCType::reflecting);
-
-	QuokkaSimulation<RandomBlast> sim(BCs_cc);
-	sim.densityFloor_ = 1.0e-5 * rho0; // density floor (to prevent vacuum)
-	sim.userData_.SN_rate_per_vol = SN_rate_per_vol;
-	sim.userData_.refine_threshold = refine_threshold;
-	sim.userData_.use_periodic_bc = use_periodic_bc;
+	amrex::ParmParse const pp("problem");
+	pp.query("refine_threshold", sim.userData_.refine_threshold); // dimensionless
 
 	// Set initial conditions
 	sim.setInitialConditions();
 
-	// set random state
-	const int seed = 42;
-	amrex::InitRandom(seed, 1); // all ranks should produce the same values
-
 	// run simulation
 	sim.evolve();
 
-	// print injected energy, injected mass
-	const Real E_in_cumulative = static_cast<Real>(sim.userData_.SN_counter_cumulative) * sim.userData_.E_blast;
-	const Real M_in_cumulative = static_cast<Real>(sim.userData_.SN_counter_cumulative) * sim.userData_.M_ejecta;
-	amrex::Print() << "Cumulative injected energy = " << E_in_cumulative << "\n";
-	amrex::Print() << "Cumulative injected mass = " << M_in_cumulative << "\n";
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		amrex::Print() << "\nCumulative N_sn = [";
+		for (auto const &i : sim.userData_.SN_counter_arr) {
+			amrex::Print() << i << ", ";
+		}
+		amrex::Print() << "]\n";
+	}
 
-	// Cleanup and exit
-	const int status = 0;
-	return status;
+	return 0;
 }
