@@ -65,21 +65,27 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeRadiusSq(const double x1, const 
 {
 	const double delta_x1_from_center = x1 - vortex_center_x1;
 	const double delta_x2_from_center = x2 - vortex_center_x2;
-	return delta_x1_from_center * delta_x1_from_center + delta_x2_from_center * delta_x2_from_center;
+	const double vortex_radius_inv = 1.0 / vortex_radius;
+	const double delta_x1_scaled = delta_x1_from_center * vortex_radius_inv;
+	const double delta_x2_scaled = delta_x2_from_center * vortex_radius_inv;
+	return delta_x1_scaled * delta_x1_scaled + delta_x2_scaled * delta_x2_scaled; // (r/R)^2
 }
 
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeRadialProfile(const double radius_sq) -> double { return std::exp(0.5 * (1.0 - radius_sq)); }
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeRadialProfile(const double radius_sq) -> double
+{
+	return std::exp(0.5 * (1.0 - radius_sq));
+}
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto Az(const double x1, const double x2) -> double
 {
 	// vec(a) = (0, 0, a_z), with:
-	//   a_z = b_magn * exp((1 - r^2)/2)
-	// so that:
-	//   b_x =  d(a_z)/dy = -y * b_magn * exp((1 - r^2)/2)
-	//   b_y = -d(a_z)/dx =  x * b_magn * exp((1 - r^2)/2)
+	//   a_z = b_magn * R * exp((1 - (r/R)^2)/2)
+	// so:
+	//   b_x =  d(a_z)/dy = -(y/R) * b_magn * exp((1 - (r/R)^2)/2)
+	//   b_y = -d(a_z)/dx =  (x/R) * b_magn * exp((1 - (r/R)^2)/2)
 	const double radius_sq = computeRadiusSq(x1, x2);
 	const double radial_profile = computeRadialProfile(radius_sq);
-	return vortex_b_magn * radial_profile;
+	return vortex_b_magn * vortex_radius * radial_profile;
 }
 
 AMREX_GPU_DEVICE
@@ -231,6 +237,9 @@ auto problem_main() -> int
 	hpp.query("num_orbits", num_orbits);
 	const double vortex_u_magn = vortex_Mach * sound_speed;
 	const bool is_advection_enabled = (advection_int != 0);
+	if (vortex_radius <= 0.0) {
+		amrex::Abort("vortex_radius must be > 0.");
+	}
 
 	auto BCs_cc = quokka::BC<MHDBalsaraVortex>(quokka::BCType::int_dir);
 
