@@ -88,8 +88,8 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	const double u_max = std::max(sL.u, sR.u);
 	spds[0] = std::min(0.0, u_min - spd_fms_max);
 	spds[4] = std::max(0.0, u_max + spd_fms_max);
-	const double fspd_m = -std::min(0.0, spds[0]);
-	const double fspd_p = std::max(0.0, spds[4]);
+	const double fspd_m = -spds[0];
+	const double fspd_p = spds[4];
 
 	//--- Step 3. Compute L/R fluxes
 
