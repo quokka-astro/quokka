@@ -53,6 +53,7 @@ template <> struct SimulationData<RandomBlast> {
 	std::vector<int> SN_counter_arr; // Track cumulative number of SNe at all time
 
 	Real refine_threshold = 1.0; // gradient refinement threshold
+	std::string part_fn = "../inputs/particles_stochastic_n100.txt";
 };
 
 template <> void QuokkaSimulation<RandomBlast>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -86,7 +87,7 @@ template <> void QuokkaSimulation<RandomBlast>::createInitialStochasticStellarPo
 	// InitSetPhyParticles to set the integer components
 	const int nreal_extra = 7 + Physics_Traits<RandomBlast>::nGroups; // mass vx vy vz birth_time death_time mass_at_birth lum[nGroups]
 	StochasticStellarPopParticles->SetVerbose(1);
-	StochasticStellarPopParticles->InitFromAsciiFile("../inputs/particles_stochastic_n100.txt", nreal_extra, nullptr);
+	StochasticStellarPopParticles->InitFromAsciiFile(userData_.part_fn, nreal_extra, nullptr);
 
 	// Set integer components (evolution stage) - initialize all as SNProgenitor
 	for (auto &kv : StochasticStellarPopParticles->GetParticles()) {
@@ -186,6 +187,7 @@ auto problem_main() -> int
 	// read parameters
 	amrex::ParmParse const pp("problem");
 	pp.query("refine_threshold", sim.userData_.refine_threshold); // dimensionless
+	pp.query("part_fn", sim.userData_.part_fn);
 
 	// Set initial conditions
 	sim.setInitialConditions();

@@ -20,6 +20,7 @@ amr.max_grid_size   = 64
 
 regrid_interval = 2
 problem.refine_threshold = 0.1
+problem.part_fn = "./particles_stochastic_n100.txt"
 do_reflux = 1
 do_subcycle = 0
 
