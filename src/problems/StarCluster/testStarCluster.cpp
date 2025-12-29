@@ -24,6 +24,10 @@
 #include "AMReX_Print.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_TableData.H"
+#include "util/fextract.hpp"
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/EOS.hpp"
@@ -208,6 +212,26 @@ template <> void QuokkaSimulation<StarCluster>::ComputeDerivedVar(int lev, std::
 	}
 }
 
+// A GPU helper function to set up the density floor
+AMREX_GPU_HOST_DEVICE auto localDensityFloor(amrex::Real x, amrex::Real y, amrex::Real z) -> amrex::Real
+{
+	amrex::Real r = std::sqrt(x * x + y * y + z * z);
+	const Real rho_base_floor = 0.001;
+	const Real rho_peak = 1.0;
+	const Real r_max = 10.0;
+	amrex::Real custom_floor = std::max(rho_base_floor, rho_peak * (1.0 - (r / r_max)));
+	return custom_floor;
+}
+
+
+// Custom density floor for StarCluster: max(0.001, 0.1 - 0.01 * r)
+template <>
+AMREX_GPU_HOST_DEVICE auto QuokkaSimulation<StarCluster>::densityFloor(amrex::Real x, amrex::Real y, amrex::Real z, amrex::Real /*base_density_floor*/) const
+    -> amrex::Real
+{
+	return localDensityFloor(x, y, z);
+}
+
 auto problem_main() -> int
 {
 	// read problem parameters
@@ -239,6 +263,55 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
-	int const status = 0;
-	return status;
+
+	// read output variables
+	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 2, 0.0, true); // z direction
+	const int nz = static_cast<int>(position.size());
+
+	// extract density and check floor
+	std::vector<double> zs(nz);
+	std::vector<double> rho_z(nz);
+	std::vector<double> custom_floor_z(nz);
+	amrex::Real min_density = std::numeric_limits<amrex::Real>::max();
+	for (int i = 0; i < nz; ++i) {
+		amrex::Real const z = position[i];
+		custom_floor_z.at(i) = localDensityFloor(0.0, 0.0, z); // note that the real x and y are 0.5 * delta_x
+		amrex::Real const rho = values.at(RadSystem<StarCluster>::gasDensity_index)[i];
+		zs.at(i) = z;
+		rho_z.at(i) = rho;
+		min_density = std::min(min_density, rho);
+	}
+
+	// Check that custom floor is working: min density should be >= 0.001
+	amrex::Real const expected_min = 0.001;
+	if (min_density >= expected_min) {
+		amrex::Print() << "Custom density floor test PASSED: min density = " << min_density << " >= " << expected_min << '\n';
+	} else {
+		amrex::Print() << "Custom density floor test FAILED: min density = " << min_density << " < " << expected_min << '\n';
+		return 1;
+	}
+
+#ifdef HAVE_PYTHON
+	// Plot results
+	matplotlibcpp::clf();
+
+	std::map<std::string, std::string> rho_args;
+	std::map<std::string, std::string> custom_floor_args;
+	rho_args["label"] = "rho";
+	rho_args["linestyle"] = "-";
+	rho_args["color"] = "C0";
+	custom_floor_args["label"] = "custom floor";
+	custom_floor_args["linestyle"] = "--";
+	custom_floor_args["color"] = "C1";
+	matplotlibcpp::plot(zs, rho_z, rho_args);
+	matplotlibcpp::plot(zs, custom_floor_z, custom_floor_args);
+	matplotlibcpp::ylim(0.001, 1.1);
+
+	matplotlibcpp::legend();
+	matplotlibcpp::title("With custom floor");
+	matplotlibcpp::save("./star_cluster_density_floor_z.pdf");
+#endif // HAVE_PYTHON
+
+	amrex::Print() << "Finished." << '\n';
+	return 0;
 }
