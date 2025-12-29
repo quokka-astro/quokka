@@ -159,7 +159,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int enableCooling_ = 0;
 	int enableChemistry_ = 0;
 	int enableTurbulence_ = 0;
-	int enableInterDustStoptime_ = 1;
+	int enableIterDustStoptime_ = 0;
 	Real max_density_allowed = std::numeric_limits<amrex::Real>::max();
 	Real min_density_allowed = std::numeric_limits<amrex::Real>::min();
 
@@ -665,6 +665,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	{
 		amrex::ParmParse const dpp("dust");
 		dpp.query("omega", dust_omega_);
+		dpp.query("enable_iter_stoptime", enableIterDustStoptime_);
 	}
 
 	// set radiation runtime parameters
@@ -946,7 +947,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 		td->applyDriving(state, time, dt, cellSizes);
 	}
 	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-		DustDrag<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega_, enableInterDustStoptime_);
+		DustDrag<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega_, enableIterDustStoptime_);
 	}
 
 	// compute user-specified sources

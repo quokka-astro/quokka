@@ -64,7 +64,7 @@ template <typename problem_t> class DustDrag
 
 	// compute dust-gas drag source terms and update conserved variables
 	static void computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc_mf, amrex::Real dt,
-				    amrex::Real dust_omega_, int enableInterDustStoptime_);
+				    amrex::Real dust_omega_, int enableIterDustStoptime_);
 };
 
 template <typename problem_t>
@@ -116,7 +116,7 @@ AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::ComputeReciprocalStoppingTimeHel
 
 template <typename problem_t>
 void DustDrag<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc_mf, amrex::Real dt,
-					  amrex::Real dust_omega_, int enableInterDustStoptime_)
+					  amrex::Real dust_omega_, int enableIterDustStoptime_)
 {
 	auto const &consVar_cc = consVar_cc_mf.arrays();
 	auto const &cons_fc_x0 = consVar_fc_mf[0].const_arrays();
@@ -171,7 +171,7 @@ void DustDrag<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::a
 		}
 
 		// set iteration parameters
-		const int max_iterations = (enableInterDustStoptime_ != 0) ? 20 : 1;
+		const int max_iterations = (enableIterDustStoptime_ != 0) ? 20 : 1;
 		const amrex::Real tolerance = 1.0e-6;
 
 		// initialize iteration intermediate variables
