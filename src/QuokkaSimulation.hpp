@@ -2655,7 +2655,7 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::sweby>(primVar_mf, leftState, rightState, ng_reconstruct, nvars);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::sweby>(cc_bfield_perp_comps_mf, leftState_bfield,
-													   rightState_bfield, ng_reconstruct, 2);
+													     rightState_bfield, ng_reconstruct, 2);
 		}
 	} else if (reconstructionOrder_ == 1) {
 		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars);
@@ -3152,7 +3152,7 @@ void QuokkaSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> 
 	} else if (radiationReconstructionOrder_ == 2) {
 		// PLM and donor cell are interface-centered kernels
 		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::sweby>(primVar.array(), x1LeftState.array(), x1RightState.array(),
-												  x1ReconstructRange, nvars);
+												     x1ReconstructRange, nvars);
 	} else if (radiationReconstructionOrder_ == 1) {
 		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(),
 										     x1ReconstructRange, nvars);
