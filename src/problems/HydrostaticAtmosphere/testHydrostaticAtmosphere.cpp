@@ -83,7 +83,7 @@ void QuokkaSimulation<HydrostaticAtmosphereProblem>::computeReferenceSolution(am
 	const int ncomp_cc = ref.nComp();
 
 	if (useDensityFloorParser_) {
-		auto const density_floor_parser = densityFloorParserExe_.value();
+		auto const density_floor_parser = densityFloorParserExe_.value(); // NOLINT(bugprone-unchecked-optional-access)
 		for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &state_ref = ref.array(iter);
