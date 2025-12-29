@@ -36,7 +36,7 @@ enum redoFlag { none = 0, redo = 1 };
 } // namespace quokka
 
 // Define enum for slope limiter type
-enum SlopeLimiter { minmod = 0, MC };
+enum SlopeLimiter { minmod = 0, sweby, MC };
 
 using array_t = amrex::Array4<amrex::Real> const;
 using arrayconst_t = amrex::Array4<const amrex::Real> const;
@@ -47,23 +47,43 @@ template <typename problem_t> class HyperbolicSystem
       public:
 	template <SlopeLimiter limiter> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto SlopeFunc(amrex::Real x, amrex::Real y) -> amrex::Real
 	{
-		static_assert(limiter == SlopeLimiter::minmod || limiter == SlopeLimiter::MC, "Invalid slope limiter specified.");
+		static_assert(limiter == SlopeLimiter::minmod || limiter == SlopeLimiter::sweby || limiter == SlopeLimiter::MC,
+			      "Invalid slope limiter specified.");
 		if constexpr (limiter == SlopeLimiter::minmod) {
-			return minmod(x, y);
+			return Sweby(x, y, 1.0);
+		}
+		if constexpr (limiter == SlopeLimiter::sweby) {
+			return Sweby(x, y, 1.5);
 		}
 		if constexpr (limiter == SlopeLimiter::MC) {
-			return MC(x, y);
+			return Sweby(x, y, 2.0);
 		}
 	}
 
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto MC(double a, double b) -> double
 	{
-		return 0.5 * (sgn(a) + sgn(b)) * std::min({0.5 * std::abs(a + b), 2.0 * std::abs(a), 2.0 * std::abs(b)});
+		return Sweby(a, b, 2.0);
 	}
 
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto minmod(double a, double b) -> double
 	{
 		return 0.5 * (sgn(a) + sgn(b)) * std::min(std::abs(a), std::abs(b));
+	}
+
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto minmod3(double a, double b, double c) -> double
+	{
+		if ((sgn(a) == sgn(b)) && (sgn(a) == sgn(c))) {
+			return sgn(a) * std::min({std::abs(a), std::abs(b), std::abs(c)});
+		}
+		return 0.0;
+	}
+
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto Sweby(double a, double b, double sigma) -> double
+	{
+		const double sigma_a = sigma * a;
+		const double sigma_b = sigma * b;
+		const double centered = 0.5 * (a + b);
+		return minmod3(sigma_a, centered, sigma_b);
 	}
 
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto median(double a, double b, double c) -> double
@@ -255,7 +275,7 @@ HyperbolicSystem<problem_t>::ReconstructStatesPLM(quokka::Array4View<amrex::Real
 	// permute array indices according to dir
 	auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
-	// Unlike PPM, PLM with MC or minmod limiters is TVD.
+	// Unlike PPM, PLM with Sweby limiters (sigma=1 midmod, sigma=1.5 Sweby, sigma=2 MC) is TVD.
 	// (There are no spurious oscillations, *except* in the slow-moving shock problem,
 	// which can produce unphysical oscillations even when using upwind Godunov fluxes.)
 	// However, most tests fail when using PLM reconstruction because
@@ -273,8 +293,8 @@ HyperbolicSystem<problem_t>::ReconstructStatesPLM(quokka::Array4View<amrex::Real
 	// (This converges at second order in spatial resolution.)
 	const auto lslope = HyperbolicSystem<problem_t>::template SlopeFunc<limiter>(q(i, j, k, n) - q(i - 1, j, k, n), q(i - 1, j, k, n) - q(i - 2, j, k, n));
 	const auto rslope = HyperbolicSystem<problem_t>::template SlopeFunc<limiter>(q(i + 1, j, k, n) - q(i, j, k, n), q(i, j, k, n) - q(i - 1, j, k, n));
-	leftState(i, j, k, n) = q(i - 1, j, k, n) + 0.25 * lslope; // NOLINT
-	rightState(i, j, k, n) = q(i, j, k, n) - 0.25 * rslope;	   // NOLINT
+	leftState(i, j, k, n) = q(i - 1, j, k, n) + 0.5 * lslope; // NOLINT
+	rightState(i, j, k, n) = q(i, j, k, n) - 0.5 * rslope;	   // NOLINT
 }
 
 template <typename problem_t>
