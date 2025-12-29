@@ -44,6 +44,34 @@ template <> struct Physics_Traits<HydrostaticAtmosphereProblem> {
 
 constexpr amrex::Real kTgasInit = 1.0;
 constexpr amrex::Real kRhoInitFactor = 5.0e-3;
+AMREX_GPU_MANAGED amrex::Real g_base_density_floor = NAN; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED amrex::Real g_scale_height = NAN;	// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
+template <>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<HydrostaticAtmosphereProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
+									 int /*dcomp*/, int numcomp, amrex::GeometryData const &geom,
+									 const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+									 int /*orig_comp*/)
+{
+	auto [i, j, k] = iv.dim3();
+
+	amrex::Real const *dx = geom.CellSize();
+	amrex::Real const *prob_lo = geom.ProbLo();
+
+	amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+	amrex::Real const rho_atm = g_base_density_floor * std::exp(-x / g_scale_height);
+	amrex::Real const rho_init = kRhoInitFactor * rho_atm;
+	amrex::Real const Eint_init = quokka::EOS<HydrostaticAtmosphereProblem>::ComputeEintFromTgas(rho_init, kTgasInit);
+
+	for (int n = 0; n < numcomp; ++n) {
+		consVar(i, j, k, n) = 0.;
+	}
+
+	consVar(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::density_index) = rho_init;
+	consVar(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::energy_index) = Eint_init;
+	consVar(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::internalEnergy_index) = Eint_init;
+}
 
 template <> void QuokkaSimulation<HydrostaticAtmosphereProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -181,6 +209,9 @@ auto problem_main() -> int
 		amrex::Print() << "density_floor_expr must be set for HydrostaticAtmosphere test.\n";
 		return 1;
 	}
+
+	g_base_density_floor = base_density_floor;
+	g_scale_height = scale_height;
 
 	QuokkaSimulation<HydrostaticAtmosphereProblem> sim;
 	sim.userData_.atmosphere_scale_height = scale_height;
