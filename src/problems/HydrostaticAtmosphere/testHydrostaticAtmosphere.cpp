@@ -9,20 +9,19 @@
 
 #include <cmath>
 
-#include "AMReX_Geometry.H"
-#include "AMReX_Math.H"
-#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
-#include "AMReX_Parser.H"
+#include "AMReX_Print.H"
 #include "AMReX_REAL.H"
-#include "AMReX_Reduce.H"
 
-#include "eos.H"
-#include "extern_parameters.H"
+#include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 
 struct HydrostaticAtmosphereProblem {
+};
+
+template <> struct SimulationData<HydrostaticAtmosphereProblem> {
+	amrex::Real atmosphere_scale_height = NAN;
 };
 
 template <> struct quokka::EOS_Traits<HydrostaticAtmosphereProblem> {
@@ -43,23 +42,136 @@ template <> struct Physics_Traits<HydrostaticAtmosphereProblem> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
+constexpr amrex::Real kTgasInit = 1.0;
+constexpr amrex::Real kRhoInitFactor = 5.0e-3;
+
+template <> void QuokkaSimulation<HydrostaticAtmosphereProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+{
+	// extract variables required from the geom object
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const amrex::Array4<double> &state_cc = grid_elem.array_;
+	const int ncomp_cc = Physics_Indices<HydrostaticAtmosphereProblem>::nvarTotal_cc;
+
+	amrex::Real const base_density_floor = densityFloor_;
+	amrex::Real const scale_height = userData_.atmosphere_scale_height;
+
+	// loop over the grid and set the initial condition
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
+		amrex::Real const rho_atm = base_density_floor * std::exp(-x / scale_height);
+		amrex::Real const rho_init = kRhoInitFactor * rho_atm;
+		amrex::Real const Eint_init = quokka::EOS<HydrostaticAtmosphereProblem>::ComputeEintFromTgas(rho_init, kTgasInit);
+
+		for (int n = 0; n < ncomp_cc; ++n) {
+			state_cc(i, j, k, n) = 0.;
+		}
+
+		state_cc(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::density_index) = rho_init;
+		state_cc(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::energy_index) = Eint_init;
+		state_cc(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::internalEnergy_index) = Eint_init;
+	});
+}
+
+template <>
+void QuokkaSimulation<HydrostaticAtmosphereProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+									      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+{
+	amrex::Real const base_density_floor = densityFloor_;
+	amrex::Real const scale_height = userData_.atmosphere_scale_height;
+	const int ncomp_cc = ref.nComp();
+
+	if (useDensityFloorParser_) {
+		auto const density_floor_parser = densityFloorParserExe_.value();
+		for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &state_ref = ref.array(iter);
+
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
+#if (AMREX_SPACEDIM >= 2)
+				amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
+#else
+				amrex::Real const y = 0.0;
+#endif
+#if (AMREX_SPACEDIM == 3)
+				amrex::Real const z = prob_lo[2] + (k + static_cast<amrex::Real>(0.5)) * dx[2];
+#else
+				amrex::Real const z = 0.0;
+#endif
+				amrex::Real const rho_atm = base_density_floor * std::exp(-x / scale_height);
+				amrex::Real const rho_floor = density_floor_parser(x, y, z, base_density_floor);
+				amrex::Real const rho_init = kRhoInitFactor * rho_atm;
+				amrex::Real const Eint_init = quokka::EOS<HydrostaticAtmosphereProblem>::ComputeEintFromTgas(rho_init, kTgasInit);
+
+				for (int n = 0; n < ncomp_cc; ++n) {
+					state_ref(i, j, k, n) = 0.;
+				}
+
+				state_ref(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::density_index) = rho_floor;
+				state_ref(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::energy_index) = Eint_init;
+				state_ref(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::internalEnergy_index) = Eint_init;
+			});
+		}
+	} else {
+		auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
+									     amrex::Real base_floor) -> amrex::Real {
+			return densityFloor(x, y, z, base_floor);
+		};
+		for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &state_ref = ref.array(iter);
+
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
+#if (AMREX_SPACEDIM >= 2)
+				amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
+#else
+				amrex::Real const y = 0.0;
+#endif
+#if (AMREX_SPACEDIM == 3)
+				amrex::Real const z = prob_lo[2] + (k + static_cast<amrex::Real>(0.5)) * dx[2];
+#else
+				amrex::Real const z = 0.0;
+#endif
+				amrex::Real const rho_atm = base_density_floor * std::exp(-x / scale_height);
+				amrex::Real const rho_floor = density_floor_func(x, y, z, base_density_floor);
+				amrex::Real const rho_init = kRhoInitFactor * rho_atm;
+				amrex::Real const Eint_init = quokka::EOS<HydrostaticAtmosphereProblem>::ComputeEintFromTgas(rho_init, kTgasInit);
+
+				for (int n = 0; n < ncomp_cc; ++n) {
+					state_ref(i, j, k, n) = 0.;
+				}
+
+				state_ref(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::density_index) = rho_floor;
+				state_ref(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::energy_index) = Eint_init;
+				state_ref(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::internalEnergy_index) = Eint_init;
+			});
+		}
+	}
+}
+
 auto problem_main() -> int
 {
-	init_extern_parameters();
-	amrex::Real small_temp = 1.0e-10;
-	amrex::Real small_dens = 1.0e-100;
-	eos_init(small_temp, small_dens);
-
 	amrex::ParmParse const pp;
 	amrex::Real base_density_floor = 0.0;
 	if (pp.query("density_floor", base_density_floor) == 0) {
 		amrex::Print() << "density_floor must be set for HydrostaticAtmosphere test.\n";
 		return 1;
 	}
+	if (base_density_floor <= 0.0) {
+		amrex::Print() << "density_floor must be positive for HydrostaticAtmosphere test.\n";
+		return 1;
+	}
 
 	amrex::Real scale_height = 0.0;
 	if (pp.query("atmosphere_scale_height", scale_height) == 0) {
 		amrex::Print() << "atmosphere_scale_height must be set for HydrostaticAtmosphere test.\n";
+		return 1;
+	}
+	if (scale_height <= 0.0) {
+		amrex::Print() << "atmosphere_scale_height must be positive for HydrostaticAtmosphere test.\n";
 		return 1;
 	}
 
@@ -70,86 +182,18 @@ auto problem_main() -> int
 		return 1;
 	}
 
-	amrex::Parser parser(density_floor_expr);
-	parser.registerVariables({"x", "y", "z", "base_density_floor"});
-	auto const parser_exe = parser.compile<4>();
+	QuokkaSimulation<HydrostaticAtmosphereProblem> sim;
+	sim.userData_.atmosphere_scale_height = scale_height;
+	sim.plotfileInterval_ = -1;
 
-	constexpr int nx = 4;
-	constexpr int ny = 1;
-	constexpr int nz = 1;
-	amrex::IntVect const dom_lo(AMREX_D_DECL(0, 0, 0));
-	amrex::IntVect const dom_hi(AMREX_D_DECL(nx - 1, ny - 1, nz - 1));
-	amrex::Box const domain(dom_lo, dom_hi);
-	amrex::RealBox const real_box({AMREX_D_DECL(0.0, 0.0, 0.0)}, {AMREX_D_DECL(1.0, 1.0, 1.0)});
-	amrex::Array<int, AMREX_SPACEDIM> const is_periodic{AMREX_D_DECL(0, 0, 0)};
-	amrex::Geometry const geom(domain, &real_box, amrex::CoordSys::cartesian, is_periodic.data());
+	sim.setInitialConditions();
+	sim.FixupState(0);
 
-	amrex::BoxArray ba(domain);
-	ba.maxSize(domain.size());
-	amrex::DistributionMapping const dm(ba);
-	int const ncomp = Physics_Indices<HydrostaticAtmosphereProblem>::nvarTotal_cc;
-	amrex::MultiFab state(ba, dm, ncomp, 0);
-
-	state.setVal(0.0);
-
-	amrex::Real const Tgas_init = 1.0;
-	amrex::Real const rho_init_factor = 5.0e-3;
-	auto const *const prob_lo = geom.ProbLo();
-	auto const *const dx = geom.CellSize();
-	for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
-		auto const &arr = state.array(mfi);
-		amrex::Box const &bx = mfi.validbox();
-		amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
-			amrex::Real const rho_atm = base_density_floor * std::exp(-x / scale_height);
-			amrex::Real const rho_init = rho_init_factor * rho_atm;
-			amrex::Real const Eint_init = quokka::EOS<HydrostaticAtmosphereProblem>::ComputeEintFromTgas(rho_init, Tgas_init);
-			arr(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::density_index) = rho_init;
-			arr(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::energy_index) = Eint_init;
-			arr(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::internalEnergy_index) = Eint_init;
-		});
-	}
-
-	auto const density_floor_func = [=] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z, amrex::Real base_floor) -> amrex::Real {
-		return parser_exe(x, y, z, base_floor);
-	};
-
-	HydroSystem<HydrostaticAtmosphereProblem>::EnforceLimits(base_density_floor, 0.0, state, geom.data(), density_floor_func);
-
-	amrex::ReduceOps<amrex::ReduceOpMax> reduce_op;
-	amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
-
-	for (amrex::MFIter mfi(state); mfi.isValid(); ++mfi) {
-		amrex::Box const &bx = mfi.validbox();
-		auto const &data = state.array(mfi);
-
-		reduce_op.eval(bx, reduce_data, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real> {
-			amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
-#if (AMREX_SPACEDIM >= 2)
-			amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + 0.5) * dx[1];
-#else
-			amrex::Real const y = 0.0;
-#endif
-#if (AMREX_SPACEDIM == 3)
-			amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + 0.5) * dx[2];
-#else
-			amrex::Real const z = 0.0;
-#endif
-			amrex::ignore_unused(y, z);
-			amrex::Real const rho_atm = base_density_floor * std::exp(-x / scale_height);
-			amrex::Real const expected = 1.0e-2 * rho_atm;
-			amrex::Real const actual = data(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::density_index);
-			return {amrex::Math::abs(actual - expected)};
-		});
-	}
-
-	auto [max_err] = reduce_data.value();
-	amrex::ParallelDescriptor::ReduceRealMax(max_err);
-
+	amrex::Real const error_norm = sim.computeErrorNorm(false);
 	amrex::Real const tol = 1.0e-12;
 	int status = 0;
-	if (!(max_err <= tol)) {
-		amrex::Print() << "Max density floor error = " << max_err << "\n";
+	if (!(error_norm <= tol)) {
+		amrex::Print() << "Density floor error norm = " << error_norm << "\n";
 		status = 1;
 	}
 
