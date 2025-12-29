@@ -60,10 +60,7 @@ template <typename problem_t> class HyperbolicSystem
 		}
 	}
 
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto MC(double a, double b) -> double
-	{
-		return Sweby(a, b, 2.0);
-	}
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto MC(double a, double b) -> double { return Sweby(a, b, 2.0); }
 
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto minmod(double a, double b) -> double
 	{
@@ -294,7 +291,7 @@ HyperbolicSystem<problem_t>::ReconstructStatesPLM(quokka::Array4View<amrex::Real
 	const auto lslope = HyperbolicSystem<problem_t>::template SlopeFunc<limiter>(q(i, j, k, n) - q(i - 1, j, k, n), q(i - 1, j, k, n) - q(i - 2, j, k, n));
 	const auto rslope = HyperbolicSystem<problem_t>::template SlopeFunc<limiter>(q(i + 1, j, k, n) - q(i, j, k, n), q(i, j, k, n) - q(i - 1, j, k, n));
 	leftState(i, j, k, n) = q(i - 1, j, k, n) + 0.5 * lslope; // NOLINT
-	rightState(i, j, k, n) = q(i, j, k, n) - 0.5 * rslope;	   // NOLINT
+	rightState(i, j, k, n) = q(i, j, k, n) - 0.5 * rslope;	  // NOLINT
 }
 
 template <typename problem_t>
