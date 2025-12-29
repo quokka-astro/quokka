@@ -45,14 +45,13 @@ template <> struct Physics_Traits<HydrostaticAtmosphereProblem> {
 constexpr amrex::Real kTgasInit = 1.0;
 constexpr amrex::Real kRhoInitFactor = 5.0e-3;
 AMREX_GPU_MANAGED amrex::Real g_base_density_floor = NAN; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-AMREX_GPU_MANAGED amrex::Real g_scale_height = NAN;	// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+AMREX_GPU_MANAGED amrex::Real g_scale_height = NAN;	  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<HydrostaticAtmosphereProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
-									 int /*dcomp*/, int numcomp, amrex::GeometryData const &geom,
-									 const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-									 int /*orig_comp*/)
+AMRSimulation<HydrostaticAtmosphereProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
+									 int numcomp, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+									 const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	auto [i, j, k] = iv.dim3();
 
