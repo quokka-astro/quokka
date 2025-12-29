@@ -135,6 +135,7 @@ auto problem_main() -> int
 #else
 			amrex::Real const z = 0.0;
 #endif
+			amrex::ignore_unused(y, z);
 			amrex::Real const rho_atm = base_density_floor * std::exp(-x / scale_height);
 			amrex::Real const expected = 1.0e-2 * rho_atm;
 			amrex::Real const actual = data(i, j, k, HydroSystem<HydrostaticAtmosphereProblem>::density_index);
