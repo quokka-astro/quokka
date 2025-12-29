@@ -223,7 +223,6 @@ AMREX_GPU_HOST_DEVICE auto localDensityFloor(amrex::Real x, amrex::Real y, amrex
 	return custom_floor;
 }
 
-
 // Custom density floor for StarCluster: max(0.001, 0.1 - 0.01 * r)
 template <>
 AMREX_GPU_HOST_DEVICE auto QuokkaSimulation<StarCluster>::densityFloor(amrex::Real x, amrex::Real y, amrex::Real z, amrex::Real /*base_density_floor*/) const
@@ -262,7 +261,6 @@ auto problem_main() -> int
 
 	// evolve
 	sim.evolve();
-
 
 	// read output variables
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 2, 0.0, true); // z direction

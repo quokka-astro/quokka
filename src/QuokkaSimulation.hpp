@@ -1710,7 +1710,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::enforceDensityFl
 
 	// enforce density floor
 	auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
-											amrex::Real base_density_floor) -> amrex::Real {
+								     amrex::Real base_density_floor) -> amrex::Real {
 		return densityFloor(x, y, z, base_density_floor);
 	};
 	HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_mf, geom[lev].data(), density_floor_func);
