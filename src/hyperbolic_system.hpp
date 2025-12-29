@@ -272,7 +272,7 @@ HyperbolicSystem<problem_t>::ReconstructStatesPLM(quokka::Array4View<amrex::Real
 	// permute array indices according to dir
 	auto [i, j, k] = quokka::reorderMultiIndex<DIR>(i_in, j_in, k_in);
 
-	// Unlike PPM, PLM with Sweby limiters (sigma=1 midmod, sigma=1.5 Sweby, sigma=2 MC) is TVD.
+	// Unlike PPM, PLM with Sweby limiters (sigma=1 minmod, sigma=1.5 Sweby, sigma=2 MC) is TVD.
 	// (There are no spurious oscillations, *except* in the slow-moving shock problem,
 	// which can produce unphysical oscillations even when using upwind Godunov fluxes.)
 	// However, most tests fail when using PLM reconstruction because
