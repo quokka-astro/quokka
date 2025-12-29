@@ -36,7 +36,7 @@ enum redoFlag { none = 0, redo = 1 };
 } // namespace quokka
 
 // Define enum for slope limiter type
-enum SlopeLimiter { minmod = 0, sweby, MC };
+enum class SlopeLimiter { minmod = 0, sweby, MC };
 
 using array_t = amrex::Array4<amrex::Real> const;
 using arrayconst_t = amrex::Array4<const amrex::Real> const;
