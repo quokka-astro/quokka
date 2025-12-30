@@ -46,3 +46,5 @@ derived_vars = log_density
 
 amrex.throw_exception = 0
 amrex.signal_handling = 1
+
+density_floor_expr = "1.0 - (sqrt(x*x + y*y + z*z)/10.0)"

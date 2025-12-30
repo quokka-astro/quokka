@@ -213,7 +213,7 @@ template <> void QuokkaSimulation<StarCluster>::ComputeDerivedVar(int lev, std::
 }
 
 // A GPU helper function to set up the density floor
-AMREX_GPU_HOST_DEVICE auto localDensityFloor(amrex::Real x, amrex::Real y, amrex::Real z) -> amrex::Real
+auto localDensityFloor(amrex::Real x, amrex::Real y, amrex::Real z) -> amrex::Real
 {
 	amrex::Real r = std::sqrt(x * x + y * y + z * z);
 	const Real rho_base_floor = 0.001;
@@ -221,14 +221,6 @@ AMREX_GPU_HOST_DEVICE auto localDensityFloor(amrex::Real x, amrex::Real y, amrex
 	const Real r_max = 10.0;
 	amrex::Real custom_floor = std::max(rho_base_floor, rho_peak * (1.0 - (r / r_max)));
 	return custom_floor;
-}
-
-// Custom density floor for StarCluster: max(0.001, 0.1 - 0.01 * r)
-template <>
-AMREX_GPU_HOST_DEVICE auto QuokkaSimulation<StarCluster>::densityFloor(amrex::Real x, amrex::Real y, amrex::Real z, amrex::Real /*base_density_floor*/) const
-    -> amrex::Real
-{
-	return localDensityFloor(x, y, z);
 }
 
 auto problem_main() -> int

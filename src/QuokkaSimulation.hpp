@@ -1693,27 +1693,20 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::postInitializati
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::enforceDensityFloor(int lev, amrex::MultiFab &state_mf)
 {
-	// if (this->useDensityFloorParser_) {
-	// 	auto const density_floor_parser = this->densityFloorParserExe_.value();
-	// 	auto const density_floor_func = [=] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
-	// 									amrex::Real base_density_floor) -> amrex::Real {
-	// 		return density_floor_parser(x, y, z, base_density_floor);
-	// 	};
-	// 	HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_mf, geom[lev].data(), density_floor_func);
-	// } else {
-	// 	auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
-	// 											amrex::Real base_density_floor) -> amrex::Real {
-	// 		return densityFloor(x, y, z, base_density_floor);
-	// 	};
-	// 	HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_mf, geom[lev].data(), density_floor_func);
-	// }
-
-	// enforce density floor
-	auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
-								     amrex::Real base_density_floor) -> amrex::Real {
-		return densityFloor(x, y, z, base_density_floor);
-	};
-	HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_mf, geom[lev].data(), density_floor_func);
+	if (this->useDensityFloorParser_) {
+		auto const density_floor_parser = this->densityFloorParserExe_.value();
+		auto const density_floor_func = [=] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
+										amrex::Real base_density_floor) -> amrex::Real {
+			return density_floor_parser(x, y, z, base_density_floor);
+		};
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_mf, geom[lev].data(), density_floor_func);
+	} else {
+		auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
+												amrex::Real base_density_floor) -> amrex::Real {
+			return densityFloor(x, y, z, base_density_floor);
+		};
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_mf, geom[lev].data(), density_floor_func);
+	}
 }
 
 // fix-up any unphysical states created by AMR operations
