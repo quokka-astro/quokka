@@ -870,6 +870,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 		densityFloorParser_.emplace(densityFloorExpr_);
 		densityFloorParser_->registerVariables({"x", "y", "z", "base_density_floor"});
 		densityFloorParserExe_ = densityFloorParser_->compile<4>();
+#ifdef AMREX_USE_GPU
+		if (densityFloorParserExe_->m_device_executor == nullptr) {
+			amrex::Abort("density_floor_expr: device parser executor is null after compile<4>()");
+		}
+#endif
 	} else {
 		densityFloorParser_.reset();
 		densityFloorParserExe_.reset();
