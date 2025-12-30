@@ -972,6 +972,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		ReadCheckpointFile();
 	}
 
+	enforceDensityFloor(0, state_new_cc_[0]); // enforce density floor at level 0 on the initial conditions
+
 	// Ensure consistency between particle radiation settings and luminosity data table configuration
 	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
 		if (particleRegister_.HasRadiatingParticles()) {

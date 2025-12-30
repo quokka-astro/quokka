@@ -259,9 +259,6 @@ auto problem_main() -> int
 	// initialize
 	sim.setInitialConditions();
 
-	// evolve
-	sim.evolve();
-
 	// read output variables
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 2, 0.0, true); // z direction
 	const int nz = static_cast<int>(position.size());
@@ -311,6 +308,9 @@ auto problem_main() -> int
 	matplotlibcpp::title("With custom floor");
 	matplotlibcpp::save("./star_cluster_density_floor_z.pdf");
 #endif // HAVE_PYTHON
+
+	// evolve
+	sim.evolve();
 
 	amrex::Print() << "Finished." << '\n';
 	return status;
