@@ -114,7 +114,7 @@ jobs:
     - task: CMake@1
       displayName: 'Run CTest'
       inputs:
-        cmakeArgs: '-E chdir . ctest -E "RadMatterCoupling*" -T Test --output-on-failure'
+        cmakeArgs: '-E chdir . ctest -R StarCluster -T Test --output-on-failure'
     
     - task: PublishTestResults@2
       inputs:
