@@ -271,22 +271,24 @@ auto problem_main() -> int
 	std::vector<double> rho_z(nz);
 	std::vector<double> custom_floor_z(nz);
 	amrex::Real min_density = std::numeric_limits<amrex::Real>::max();
+	amrex::Real min_density_ratio = std::numeric_limits<amrex::Real>::max();
 	for (int i = 0; i < nz; ++i) {
 		amrex::Real const z = position[i];
 		custom_floor_z.at(i) = localDensityFloor(0.0, 0.0, z); // note that the real x and y are 0.5 * delta_x
-		amrex::Real const rho = values.at(RadSystem<StarCluster>::gasDensity_index)[i];
+		amrex::Real const rho = values.at(HydroSystem<StarCluster>::density_index)[i];
 		zs.at(i) = z;
 		rho_z.at(i) = rho;
 		min_density = std::min(min_density, rho);
+		min_density_ratio = std::min(min_density_ratio, rho / custom_floor_z.at(i));
 	}
 
-	// Check that custom floor is working: min density should be >= 0.001
-	amrex::Real const expected_min = 0.001;
-	if (min_density >= expected_min) {
-		amrex::Print() << "Custom density floor test PASSED: min density = " << min_density << " >= " << expected_min << '\n';
+	// Check that custom floor is working: min_density_ratio should not be smaller than 1
+	int status = 0;
+	if (min_density_ratio > 0.99) {
+		amrex::Print() << "Custom density floor test PASSED: min density ratio = " << min_density_ratio << " > 0.99\n";
 	} else {
-		amrex::Print() << "Custom density floor test FAILED: min density = " << min_density << " < " << expected_min << '\n';
-		return 1;
+		amrex::Print() << "Custom density floor test FAILED: min density ratio = " << min_density_ratio << " < 0.99\n";
+		status = 1;
 	}
 
 #ifdef HAVE_PYTHON
@@ -311,5 +313,5 @@ auto problem_main() -> int
 #endif // HAVE_PYTHON
 
 	amrex::Print() << "Finished." << '\n';
-	return 0;
+	return status;
 }
