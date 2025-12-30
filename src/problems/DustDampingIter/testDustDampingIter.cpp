@@ -91,10 +91,10 @@ constexpr double v0 = 1.0;
 constexpr double Egas0 = P_INITIAL / (quokka::EOS_Traits<DustDamping>::gamma - 1.0) + 0.5 * rho * v0 * v0;
 constexpr double Egas0_internal = P_INITIAL / (quokka::EOS_Traits<DustDamping>::gamma - 1.0);
 constexpr int numDustVars = Physics_NumVars::numDustVarsPerGroup;
-static constexpr amrex::GpuArray<amrex::Real, 2> dust_grain_radius = {0.01716, 0.01184}; //supersonic
-//static constexpr amrex::GpuArray<amrex::Real, 2> dust_grain_radius = {0.015945, 0.003189}; //subsonic
+static constexpr amrex::GpuArray<amrex::Real, 2> dust_grain_radius = {0.01716, 0.01184}; // supersonic
+// static constexpr amrex::GpuArray<amrex::Real, 2> dust_grain_radius = {0.015945, 0.003189}; //subsonic
 static constexpr amrex::GpuArray<amrex::Real, 2> dust_grain_density = {1.0, 1.0};
-static constexpr bool enable_supersonic_correction = true; 
+static constexpr bool enable_supersonic_correction = true;
 
 template <> struct Physics_Traits<DustDamping> {
 	static constexpr bool is_self_gravity_enabled = false;
@@ -115,17 +115,11 @@ template <> struct Physics_Traits<DustDamping> {
 
 template <>
 AMREX_GPU_HOST_DEVICE auto DustDrag<DustDamping>::ComputeReciprocalStoppingTime(
-    amrex::Real rho_g, 
-    amrex::GpuArray<amrex::Real, Physics_Traits<DustDamping>::nDustGroups> rho_d,
-    amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, 
-                    Physics_Traits<DustDamping>::nDustGroups + 1> vel,
-    double cs) -> amrex::GpuArray<amrex::Real, Physics_Traits<DustDamping>::nDustGroups>
+    amrex::Real rho_g, amrex::GpuArray<amrex::Real, Physics_Traits<DustDamping>::nDustGroups> rho_d,
+    amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, Physics_Traits<DustDamping>::nDustGroups + 1> vel, double cs)
+    -> amrex::GpuArray<amrex::Real, Physics_Traits<DustDamping>::nDustGroups>
 {
-    return ComputeReciprocalStoppingTimeHelper(
-        rho_g, rho_d, vel, cs, 
-        dust_grain_radius, 
-        dust_grain_density, 
-        enable_supersonic_correction);
+	return ComputeReciprocalStoppingTimeHelper(rho_g, rho_d, vel, cs, dust_grain_radius, dust_grain_density, enable_supersonic_correction);
 }
 
 template <> void QuokkaSimulation<DustDamping>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -133,8 +127,8 @@ template <> void QuokkaSimulation<DustDamping>::setInitialConditionsOnGrid(quokk
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	const auto vx0 = v0;		// gas velocity
-	const auto vx_dust1 = 2 * v0;	// dust1 velocity
+	const auto vx0 = v0;		 // gas velocity
+	const auto vx_dust1 = 2 * v0;	 // dust1 velocity
 	const auto vx_dust2 = 10.0 * v0; // dust2 velocity
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -299,8 +293,8 @@ auto problem_main() -> int
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = CFL_number;
-  sim.constantDt_ = 0.005; // usually 0.005 for test B, 0.05 for test C
-	//sim.constantDt_ = 0.00001;
+	sim.constantDt_ = 0.005; // usually 0.005 for test B, 0.05 for test C
+	// sim.constantDt_ = 0.00001;
 
 	// initialize
 	sim.setInitialConditions();
