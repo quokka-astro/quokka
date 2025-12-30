@@ -91,8 +91,7 @@ constexpr double v0 = 1.0;
 constexpr double Egas0 = P_INITIAL / (quokka::EOS_Traits<DustDamping>::gamma - 1.0) + 0.5 * rho * v0 * v0;
 constexpr double Egas0_internal = P_INITIAL / (quokka::EOS_Traits<DustDamping>::gamma - 1.0);
 constexpr int numDustVars = Physics_NumVars::numDustVarsPerGroup;
-static constexpr amrex::GpuArray<amrex::Real, 2> dust_grain_radius = {0.01716, 0.01184}; // supersonic
-// static constexpr amrex::GpuArray<amrex::Real, 2> dust_grain_radius = {0.015945, 0.003189}; //subsonic
+static constexpr amrex::GpuArray<amrex::Real, 2> dust_grain_radius = {0.02, 0.01};
 static constexpr amrex::GpuArray<amrex::Real, 2> dust_grain_density = {1.0, 1.0};
 static constexpr bool enable_supersonic_correction = true;
 
@@ -276,25 +275,15 @@ auto problem_main() -> int
 	// problem parameters
 	const double CFL_number = 1000000.0; // set large CFL to avoid CFL violation
 
-	// boundary conditions
-	constexpr int nvars = HydroSystem<DustDamping>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir);
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
-
 	// problem initialization
-	QuokkaSimulation<DustDamping> sim(BCs_cc);
+	QuokkaSimulation<DustDamping> sim;
 
 	sim.reconstructionOrder_ = 3;
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = CFL_number;
-	sim.constantDt_ = 0.005; // usually 0.005 for test B, 0.05 for test C
-	// sim.constantDt_ = 0.00001;
+	// sim.constantDt_ = 0.005; // usually 0.005 for test B, 0.05 for test C
+	sim.constantDt_ = 0.00001;
 
 	// initialize
 	sim.setInitialConditions();
