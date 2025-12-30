@@ -7,12 +7,17 @@
 /// \brief Defines a test problem for pressureless spherical collapse.
 ///
 #include "hydro/hydro_system.hpp"
+#include "math/interpolate.hpp"
+#include <limits>
 
 #include "AMReX_BLassert.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParmParse.H"
 #include "QuokkaSimulation.hpp"
-#include "util/BC.hpp"
+#include "util/fextract.hpp"
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 
 struct GlobalConfig {
 	static int num_particles;
@@ -138,6 +143,13 @@ template <> void QuokkaSimulation<CollapseProblem>::ComputeDerivedVar(int lev, s
 	}
 }
 
+// A GPU helper function to set up the density floor
+auto localDensityFloor(amrex::Real x, amrex::Real y, amrex::Real z) -> amrex::Real
+{
+	// density_floor_expr = "0.1 * (1.0 - sqrt(x*x + y*y + z*z))"
+	return 0.1 * (1.0 - std::sqrt(x * x + y * y + z * z));
+}
+
 auto problem_main() -> int
 {
 	amrex::ParmParse const pp("problem");
@@ -146,13 +158,64 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<CollapseProblem> sim;
+	sim.densityFloor_ = 1.0e-5;
 
 	// initialize
 	sim.setInitialConditions();
 
+	// read output variables
+	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 2, 0.0, true); // z direction
+	const int nz = static_cast<int>(position.size());
+
+	// extract density and check floor
+	std::vector<double> zs(nz);
+	std::vector<double> rho_z(nz);
+	std::vector<double> custom_floor_z(nz);
+	amrex::Real min_density = std::numeric_limits<amrex::Real>::max();
+	amrex::Real min_density_ratio = std::numeric_limits<amrex::Real>::max();
+	for (int i = 0; i < nz; ++i) {
+		amrex::Real const z = position[i];
+		custom_floor_z.at(i) = localDensityFloor(0.0, 0.0, z); // note that the real x and y are 0.5 * delta_x
+		amrex::Real const rho = values.at(HydroSystem<CollapseProblem>::density_index)[i];
+		zs.at(i) = z;
+		rho_z.at(i) = rho;
+		min_density = std::min(min_density, rho);
+		min_density_ratio = std::min(min_density_ratio, rho / custom_floor_z.at(i));
+	}
+
+	// Check that custom floor is working: min_density_ratio should not be smaller than 0.98
+	int status = 0;
+	if (min_density_ratio > 0.99) {
+		amrex::Print() << "Custom density floor test PASSED: min density ratio = " << min_density_ratio << " > 0.99\n";
+	} else {
+		amrex::Print() << "Custom density floor test FAILED: min density ratio = " << min_density_ratio << " < 0.99\n";
+		status = 1;
+	}
+
+#ifdef HAVE_PYTHON
+	// Plot results
+	matplotlibcpp::clf();
+
+	std::map<std::string, std::string> rho_args;
+	std::map<std::string, std::string> custom_floor_args;
+	rho_args["label"] = "rho";
+	rho_args["linestyle"] = "-";
+	rho_args["color"] = "C0";
+	custom_floor_args["label"] = "custom floor";
+	custom_floor_args["linestyle"] = "--";
+	custom_floor_args["color"] = "C1";
+	matplotlibcpp::plot(zs, rho_z, rho_args);
+	matplotlibcpp::plot(zs, custom_floor_z, custom_floor_args);
+	matplotlibcpp::ylim(1.0e-3, 11.0);
+	matplotlibcpp::yscale("log");
+
+	matplotlibcpp::legend();
+	matplotlibcpp::title("Spherical Collapse with custom floor");
+	matplotlibcpp::save("./spherical_collapse_density_floor_z.pdf");
+#endif // HAVE_PYTHON
+
 	// evolve
 	sim.evolve();
 
-	int const status = 0;
 	return status;
 }
