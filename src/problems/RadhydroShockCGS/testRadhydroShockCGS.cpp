@@ -243,10 +243,8 @@ auto problem_main() -> int
 	//  const double max_dt = max_dtau / c_s0;
 	const double max_time = 1.0e-9; // 9.08e-10; // s
 
-	auto BCs_cc = quokka::BC<ShockProblem>(quokka::BCType::ext_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
-
 	// Problem initialization
-	QuokkaSimulation<ShockProblem> sim(BCs_cc);
+	QuokkaSimulation<ShockProblem> sim;
 
 	sim.cflNumber_ = CFL_number;
 	sim.radiationCflNumber_ = CFL_number;

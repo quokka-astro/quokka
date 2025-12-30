@@ -126,4 +126,4 @@ more detail in [Runtime parameters](parameters.md):
   (default `Balsara2025`).
 - `artificial_viscosity_k` – optional scalar viscosity coefficient that adds a
   diffusive flux to the momentum equations and can damp post-shock oscillations.
-
+- `quokka.bc` – (required) choose `periodic` or `reflecting` for the boundary conditions. For reflecting boundaries, we use `amrex::BCType::reflect_even` for all magnetic field components. Support for properly reflecting magnetic field boundaries will be added in the future.

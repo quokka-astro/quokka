@@ -246,18 +246,7 @@ auto verifyPeriodicBCs(const amrex::MultiFab &mf, const std::string &label) -> i
 auto problem_main() -> int
 {
 
-	auto BCs_cc = quokka::BC<MHDBitwiseICs>(quokka::BCType::int_dir);
-
-	const int nvars_fc = Physics_Indices<MHDBitwiseICs>::nvarTotal_fc;
-	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
-	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_fc[icomp].setLo(idim, amrex::BCType::int_dir);
-			BCs_fc[icomp].setHi(idim, amrex::BCType::int_dir);
-		}
-	}
-
-	QuokkaSimulation<MHDBitwiseICs> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<MHDBitwiseICs> sim;
 
 	sim.setInitialConditions();
 

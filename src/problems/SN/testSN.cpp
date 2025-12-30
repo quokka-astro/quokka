@@ -168,17 +168,6 @@ template <> void QuokkaSimulation<SNProblem>::computeAfterTimestep()
 
 auto problem_main() -> int
 {
-	// Set boundary conditions - octant symmetry (reflecting)
-	auto BCs_cc = quokka::BC<SNProblem>(quokka::BCType::reflecting);
-	const int nvars_fc = Physics_Indices<SNProblem>::nvarTotal_fc;
-	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
-	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_fc[icomp].setLo(idim, amrex::BCType::reflect_even);
-			BCs_fc[icomp].setHi(idim, amrex::BCType::reflect_even);
-		}
-	}
-
 	// get n_amb from the input file
 	amrex::ParmParse const pp("problem");
 	pp.query("n_amb", n_amb);
@@ -191,7 +180,7 @@ auto problem_main() -> int
 	cpp.query("cooling_table_type", coolingTableType_);
 
 	// Problem initialization
-	QuokkaSimulation<SNProblem> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<SNProblem> sim;
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.stopTime_ = t_stop * year;

@@ -221,12 +221,14 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	explicit QuokkaSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : AMRSimulation<problem_t>(BCs_cc) { initialize(); }
 
+	explicit QuokkaSimulation() : AMRSimulation<problem_t>() { initialize(); }
+
 	void initialize()
 	{
 		static_assert(!(Physics_Traits<problem_t>::is_mhd_enabled && Physics_Traits<problem_t>::is_radiation_enabled),
 			      "MHD + Radiation is not supported yet.");
 #if (AMREX_SPACEDIM != 3)
-		static_assert(!(Physics_Traits<problem_t>::is_mhd_enabled), "MHD is only supported in 3D.");
+		static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "MHD is only supported in 3D.");
 #endif // (AMREX_SPACEDIM != 3)
 
 		defineComponentNames();
