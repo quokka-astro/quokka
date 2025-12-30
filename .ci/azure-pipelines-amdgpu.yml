@@ -110,7 +110,7 @@ jobs:
         CCACHE_BASEDIR: $(Build.SourcesDirectory)
         CCACHE_NOHASHDIR: 1
       inputs:
-        cmakeArgs: '--build . --parallel 16'
+        cmakeArgs: '--build . --parallel 16 --target StarCluster'
     
     - task: CMake@1
       displayName: 'Run CTest'
