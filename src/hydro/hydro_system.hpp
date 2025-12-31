@@ -942,8 +942,8 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 					   amrex::GeometryData const &geom, DensityFloorFunc const &density_floor_func)
 {
 	auto state = state_mf.arrays();
-	auto const *const prob_lo = geom.ProbLo();
-	auto const *const dx = geom.CellSize();
+	auto const prob_lo = geom.ProbLoArray();
+	auto const dx = geom.CellSizeArray();
 
 	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
