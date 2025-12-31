@@ -15,7 +15,8 @@ namespace quokka::Riemann
 {
 constexpr double DELTA = 1.0e-4;
 
-// HLLD solver following Miyoshi and Kusano (2005), hereafter MK5.
+// HLLD solver based on Miyoshi & Kusano (2005), hereafter MK5.
+// Corrections based on Minoshima & Miyoshi (2021), hereafter MM21.
 template <typename problem_t, int N_scalars, int N_mscalars, int fluxdim>
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_mscalars> const &sL, quokka::HydroState<N_scalars, N_mscalars> const &sR,
 					      const double gamma, const double bx, const double perp_v_jump)
@@ -40,16 +41,20 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	ConsHydro1D<N_scalars> u_star_R{};
 
 	// frequently used term
-	double const bx_sq = SQUARE(bx);
+	const double vel_magn_sq_L = SQUARE(sL.u) + (SQUARE(sL.v) + SQUARE(sL.w));
+	const double vel_magn_sq_R = SQUARE(sR.u) + (SQUARE(sR.v) + SQUARE(sR.w));
+	const double bx_sq = SQUARE(bx);
+	const double b_magn_sq_L = bx_sq + (SQUARE(sL.by) + SQUARE(sL.bz));
+	const double b_magn_sq_R = bx_sq + (SQUARE(sR.by) + SQUARE(sR.bz));
 
 	// compute L/R states for select conserved variables
 	// (group transverse vector components for floating-point associativity symmetry)
 	// magnetic pressure
-	double const pb_L = 0.5 * (bx_sq + (SQUARE(sL.by) + SQUARE(sL.bz)));
-	double const pb_R = 0.5 * (bx_sq + (SQUARE(sR.by) + SQUARE(sR.bz)));
+	const double pb_L = 0.5 * b_magn_sq_L;
+	const double pb_R = 0.5 * b_magn_sq_R;
 	// kinetic energy
-	double const ke_L = 0.5 * sL.rho * (SQUARE(sL.u) + (SQUARE(sL.v) + SQUARE(sL.w)));
-	double const ke_R = 0.5 * sR.rho * (SQUARE(sR.u) + (SQUARE(sR.v) + SQUARE(sR.w)));
+	const double ke_L = 0.5 * (sL.rho * vel_magn_sq_L);
+	const double ke_R = 0.5 * (sR.rho * vel_magn_sq_R);
 	// set left conserved states
 	u_L.rho = sL.rho;
 	u_L.mx = sL.u * u_L.rho;
@@ -76,18 +81,21 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 
 	//--- Step 2. Compute L & R wave speeds according to MK5, eqn. (67)
 
-	const double fspd_L = FastMagnetoSonicSpeed(gamma, sL, bx);
-	const double fspd_R = FastMagnetoSonicSpeed(gamma, sR, bx);
-	spds[0] = std::min(sL.u - fspd_L, sR.u - fspd_R);
-	spds[4] = std::max(sL.u + fspd_L, sR.u + fspd_R);
-	const double fspd_m = -std::min(0.0, spds[0]);
-	const double fspd_p = std::max(0.0, spds[4]);
+	const double spd_fms_L = FastMagnetoSonicSpeed(gamma, sL, bx);
+	const double spd_fms_R = FastMagnetoSonicSpeed(gamma, sR, bx);
+	const double spd_fms_max = std::max(spd_fms_L, spd_fms_R);
+	const double u_min = std::min(sL.u, sR.u);
+	const double u_max = std::max(sL.u, sR.u);
+	spds[0] = std::min(0.0, u_min - spd_fms_max);
+	spds[4] = std::max(0.0, u_max + spd_fms_max);
+	const double fspd_m = -spds[0];
+	const double fspd_p = spds[4];
 
 	//--- Step 3. Compute L/R fluxes
 
 	// total pressure
-	double ptot_L = sL.P + pb_L;
-	double ptot_R = sR.P + pb_R;
+	const double ptot_L = sL.P + pb_L;
+	const double ptot_R = sR.P + pb_R;
 	// fluxes on the left side of the interface
 	f_L.rho = u_L.mx;
 	f_L.mx = u_L.mx * sL.u + ptot_L - bx_sq;
@@ -116,25 +124,23 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	//--- Step 4. Compute middle and Alfven wave speeds
 
 	// MK5: S_i - u_i (for i=L or R)
-	double siui_L = spds[0] - sL.u;
-	double siui_R = spds[4] - sR.u;
+	const double siui_L = spds[0] - sL.u;
+	const double siui_R = spds[4] - sR.u;
 	// carbuncle detector
-	const double max_spd = std::max(fspd_L, fspd_R);
-	const double para_v_jump = sL.u - sR.u; // negative -> compression
-	double theta = 1.0;
+	const double para_v_jump = sR.u - sL.u; // negative -> compression
 	// tp := shock anisotropy, clamped to [0, 1], with theta = tp^4
-	const double denom_tp = std::max(1e-14, max_spd - std::min(perp_v_jump, 0.0));
-	double tp = (max_spd - std::min(para_v_jump, 0.0)) / denom_tp;
+	const double denom_tp = std::max(1e-14, spd_fms_max - std::min(perp_v_jump, 0.0));
+	double tp = (spd_fms_max - std::min(para_v_jump, 0.0)) / denom_tp;
 	tp = amrex::Clamp(tp, 0.0, 1.0);
-	theta = SQUARE(SQUARE(tp));
-	// modified middle speed S_M from MK5 eqn (38)
+	const double theta = SQUARE(SQUARE(tp));
+	// modified middle speed S_M from MK5 eqn 38 with theta from MM21 eqn 9
 	const double sm_denom = (siui_R * u_R.rho - siui_L * u_L.rho);
 	spds[2] = (siui_R * u_R.mx - siui_L * u_L.mx + theta * (ptot_L - ptot_R)) / sm_denom;
 	// S_i - S_M (for i=L or R)
-	double sism_L = spds[0] - spds[2];
-	double sism_R = spds[4] - spds[2];
-	double sism_inv_L = 1.0 / sism_L;
-	double sism_inv_R = 1.0 / sism_R;
+	const double sism_L = spds[0] - spds[2];
+	const double sism_R = spds[4] - spds[2];
+	const double sism_inv_L = 1.0 / sism_L;
+	const double sism_inv_R = 1.0 / sism_R;
 	// MK5: rho_i from eqn (43)
 	u_star_L.rho = u_L.rho * siui_L * sism_inv_L;
 	u_star_R.rho = u_R.rho * siui_R * sism_inv_R;
@@ -145,21 +151,45 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 		u_star_R.scalar[n] = u_R.scalar[n] * siui_R * sism_inv_R;
 	}
 
-	double u_star_rho_inv_L = 1.0 / u_star_L.rho;
-	double u_star_rho_inv_R = 1.0 / u_star_R.rho;
-	double rho_sqrt_L = std::sqrt(u_star_L.rho);
-	double rho_sqrt_R = std::sqrt(u_star_R.rho);
+	const double u_star_rho_inv_L = 1.0 / u_star_L.rho;
+	const double u_star_rho_inv_R = 1.0 / u_star_R.rho;
+	const double rho_sqrt_L = std::sqrt(u_star_L.rho);
+	const double rho_sqrt_R = std::sqrt(u_star_R.rho);
 	// MK5: eqn (51)
 	spds[1] = spds[2] - std::abs(bx) / rho_sqrt_L;
 	spds[3] = spds[2] + std::abs(bx) / rho_sqrt_R;
 
 	//--- Step 5. Compute intermediate states
 
-	// compute total pressure
-	// MK5: eqn (41) can be calculated (more explicitly) via eqn (23)
-	double ptot_star_L = ptot_L + u_L.rho * siui_L * (spds[2] - sL.u);
-	double ptot_star_R = ptot_R + u_R.rho * siui_R * (spds[2] - sR.u);
-	double const ptot_star = 0.5 * (ptot_star_L + ptot_star_R);
+	// // total pressure (no correction)
+	// // MK5: eqn (41) can be calculated (more explicitly) via eqn (23)
+	// double ptot_star_L = ptot_L + u_L.rho * siui_L * (spds[2] - sL.u);
+	// double ptot_star_R = ptot_R + u_R.rho * siui_R * (spds[2] - sR.u);
+	// double const ptot_star = 0.5 * (ptot_star_L + ptot_star_R);
+
+	// total pressure (w/ MM21 low-Mach correction)
+	// MM21 eqn 8
+	const double spd_ca_sq_L = b_magn_sq_L / sL.rho;
+	const double spd_ca_sq_R = b_magn_sq_R / sR.rho;
+	const double spd_cax_sq_L = bx_sq / sL.rho;
+	const double spd_cax_sq_R = bx_sq / sR.rho;
+	// cu := modified fast magnetosonic speed (MM21 eqn 14)
+	const double cu_sqrt_arg_L = std::max(0.0, SQUARE(spd_ca_sq_L + vel_magn_sq_L) - 4.0 * vel_magn_sq_L * spd_cax_sq_L);
+	const double cu_sqrt_arg_R = std::max(0.0, SQUARE(spd_ca_sq_R + vel_magn_sq_R) - 4.0 * vel_magn_sq_R * spd_cax_sq_R);
+	const double spd_cu_sq_L = 0.5 * ((spd_ca_sq_L + vel_magn_sq_L) + std::sqrt(cu_sqrt_arg_L));
+	const double spd_cu_sq_R = 0.5 * ((spd_ca_sq_R + vel_magn_sq_R) + std::sqrt(cu_sqrt_arg_R));
+	const double spd_cu_L = std::sqrt(std::max(0.0, spd_cu_sq_L));
+	const double spd_cu_R = std::sqrt(std::max(0.0, spd_cu_sq_R));
+	const double spd_cu_max = std::max(spd_cu_L, spd_cu_R);
+	// limiter (MM21 eqn 16)
+	const double chi = std::min(1.0, spd_cu_max / std::max(1e-14, spd_fms_max));
+	const double phi = chi * (2.0 - chi);
+	// corrected total star pressure (MM21 eqn 15)
+	const double ptot_star_numer_term1 = (siui_R * u_R.rho) * ptot_L;
+	const double ptot_star_numer_term2 = (siui_L * u_L.rho) * ptot_R;
+	const double ptot_star_numer_term3 = phi * (u_L.rho * u_R.rho) * (siui_R * siui_L) * (sR.u - sL.u);
+	const double ptot_star_numer = ptot_star_numer_term1 - ptot_star_numer_term2 + ptot_star_numer_term3;
+	const double ptot_star = ptot_star_numer / sm_denom;
 
 	// MK5: u_L^(star, dstar) from, eqn (39)
 	u_star_L.mx = u_star_L.rho * spds[2];
@@ -205,7 +235,7 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	}
 	// vec(v_R^star) dot vec(b_R^star)
 	// group transverse momenta-components for floating-point associativity
-	double vb_star_R = (u_star_R.mx * bx + (u_star_R.my * u_star_R.by + u_star_R.mz * u_star_R.bz)) * u_star_rho_inv_R;
+	const double vb_star_R = (u_star_R.mx * bx + (u_star_R.my * u_star_R.by + u_star_R.mz * u_star_R.bz)) * u_star_rho_inv_R;
 	// MK5: eqn (48)
 	u_star_R.E = (siui_R * u_R.E - ptot_R * sR.u + ptot_star * spds[2] + bx * (sR.u * bx + (sR.v * u_R.by + sR.w * u_R.bz) - vb_star_R)) * sism_inv_R;
 
