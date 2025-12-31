@@ -277,7 +277,7 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
-	std::vector<double> &t = sim.userData_.t_vec_;
+	std::vector<double> const &t = sim.userData_.t_vec_;
 	std::vector<double> const &v_gas = sim.userData_.v_gas_vec_;
 	std::vector<double> const &v_dust1 = sim.userData_.v_dust1_vec_;
 	std::vector<double> const &v_dust2 = sim.userData_.v_dust2_vec_;
@@ -369,52 +369,13 @@ auto problem_main() -> int
 	}
 
 #ifdef HAVE_PYTHON
-	// create interpolated versions for reference solutions for plotting purposes
-	std::vector<double> t_dense;
-	std::vector<double> v_gas_ref_dense;
-	std::vector<double> v_dust1_ref_dense;
-	std::vector<double> v_dust2_ref_dense;
-	std::vector<double> E_gas_ref_dense;
-
-	// downsampling the reference solution to match the testing time point
-	if (!t_ref.empty() && !t.empty()) {
-		double const t_max = t.back();
-		size_t const n_points = 1000;
-		for (size_t i = 0; i < n_points; ++i) {
-			double const t_val = t_max * static_cast<double>(i) / (n_points - 1);
-			t_dense.push_back(t_val);
-
-			// linear interpolation to find the closest time point in the reference solution
-			size_t idx = 0;
-			for (size_t j = 0; j < t_ref.size() - 1; ++j) {
-				if (t_val >= t_ref[j] && t_val <= t_ref[j + 1]) {
-					idx = j;
-					break;
-				}
-			}
-
-			if (idx < t_ref.size() - 1) {
-				double const frac = (t_val - t_ref[idx]) / (t_ref[idx + 1] - t_ref[idx]);
-				v_gas_ref_dense.push_back(v_gas_ref[idx] + frac * (v_gas_ref[idx + 1] - v_gas_ref[idx]));
-				v_dust1_ref_dense.push_back(v_dust1_ref[idx] + frac * (v_dust1_ref[idx + 1] - v_dust1_ref[idx]));
-				v_dust2_ref_dense.push_back(v_dust2_ref[idx] + frac * (v_dust2_ref[idx + 1] - v_dust2_ref[idx]));
-				E_gas_ref_dense.push_back(E_gas_ref[idx] + frac * (E_gas_ref[idx + 1] - E_gas_ref[idx]));
-			} else {
-				v_gas_ref_dense.push_back(v_gas_ref.back());
-				v_dust1_ref_dense.push_back(v_dust1_ref.back());
-				v_dust2_ref_dense.push_back(v_dust2_ref.back());
-				E_gas_ref_dense.push_back(E_gas_ref.back());
-			}
-		}
-	}
-
 	// plot
-	if (!t_dense.empty()) {
+	if (!t_ref.empty() && !t.empty()) {
 		// gas velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(t, v_gas,
 				    {{"label", "numerical (iter, dt=0.005)"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
-		matplotlibcpp::plot(t_dense, v_gas_ref_dense, {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "r"}, {"linestyle", "--"}});
+		matplotlibcpp::plot(t_ref, v_gas_ref, {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "r"}, {"linestyle", "--"}});
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($v_g$)");
@@ -426,7 +387,7 @@ auto problem_main() -> int
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(t, v_dust1,
 				    {{"label", "numerical (iter, dt=0.005)"}, {"color", "b"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
-		matplotlibcpp::plot(t_dense, v_dust1_ref_dense, {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "b"}, {"linestyle", "--"}});
+		matplotlibcpp::plot(t_ref, v_dust1_ref, {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "b"}, {"linestyle", "--"}});
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($v_{d,1}$)");
@@ -438,7 +399,7 @@ auto problem_main() -> int
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(t, v_dust2,
 				    {{"label", "numerical (iter, dt=0.005)"}, {"color", "g"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
-		matplotlibcpp::plot(t_dense, v_dust2_ref_dense, {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "g"}, {"linestyle", "--"}});
+		matplotlibcpp::plot(t_ref, v_dust2_ref, {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "g"}, {"linestyle", "--"}});
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($v_{d,2}$)");
@@ -450,7 +411,7 @@ auto problem_main() -> int
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(t, E_gas,
 				    {{"label", "numerical (iter, dt=0.005)"}, {"color", "m"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
-		matplotlibcpp::plot(t_dense, E_gas_ref_dense, {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "m"}, {"linestyle", "--"}});
+		matplotlibcpp::plot(t_ref, E_gas_ref, {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "m"}, {"linestyle", "--"}});
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($E_g$)");
