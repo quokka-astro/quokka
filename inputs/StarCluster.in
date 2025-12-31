@@ -22,7 +22,7 @@ amr.grid_eff        = 0.7   # default
 
 hydro.reconstruction_order = 3  # PPM
 cfl = 0.2
-max_timesteps = 1
+max_timesteps = 300
 stop_time = 0.5             # t_ff = 0.55
 
 gravity.Gconst = 1.0    #gravitational constant
@@ -46,5 +46,3 @@ derived_vars = log_density
 
 amrex.throw_exception = 0
 amrex.signal_handling = 1
-
-density_floor_expr = "1.0 - (sqrt(x*x + y*y + z*z)/10.0)"
