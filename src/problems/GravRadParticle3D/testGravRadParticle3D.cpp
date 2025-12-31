@@ -330,7 +330,10 @@ auto problem_main() -> int
 			amrex::Print() << "Relative error within tolerance.\n";
 		} else {
 			status = 1;
-			amrex::Print() << "Relative error beyond tolerance: rel_err = " << rel_err << ", rel_position_error_cicrad = " << rel_position_error_cicrad << ", rel_position_error_cic = " << rel_position_error_cic << ", rel_position_error_rad = " << rel_position_error_rad << "\n";
+			amrex::Print() << "Relative error beyond tolerance: rel_err = " << rel_err
+				       << ", rel_position_error_cicrad = " << rel_position_error_cicrad
+				       << ", rel_position_error_cic = " << rel_position_error_cic << ", rel_position_error_rad = " << rel_position_error_rad
+				       << "\n";
 		}
 
 		amrex::Print() << "Exact positions of the CICRad particles should be: " << exact_x << ", " << exact_y << ", " << exact_z << "\n";
