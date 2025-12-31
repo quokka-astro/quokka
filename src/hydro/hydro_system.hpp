@@ -147,7 +147,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	AMREX_GPU_DEVICE static auto GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec) -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>;
 
 	template <typename DensityFloorFunc>
-	static void EnforceLimits(amrex::Real densityFloor, amrex::Real tempFloor, amrex::MultiFab &state_mf, amrex::GeometryData const &geom,
+	static void EnforceLimits(amrex::Real densityFloor, amrex::Real tempFloor, amrex::MultiFab &state_mf, amrex::Geometry const &geom,
 				  DensityFloorFunc const &density_floor_func);
 
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf,
@@ -939,7 +939,7 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 template <typename problem_t>
 template <typename DensityFloorFunc>
 void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const tempFloor, amrex::MultiFab &state_mf,
-					   amrex::GeometryData const &geom, DensityFloorFunc const &density_floor_func)
+					   amrex::Geometry const &geom, DensityFloorFunc const &density_floor_func)
 {
 	auto state = state_mf.arrays();
 	auto const prob_lo = geom.ProbLoArray();

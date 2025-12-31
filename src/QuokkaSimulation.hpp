@@ -1772,13 +1772,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::FixupState(int l
 									  amrex::Real base_density_floor) -> amrex::Real {
 			return density_floor_parser(x, y, z, base_density_floor);
 		};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev], geom[lev].data(), density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev], geom[lev], density_floor_func);
 	} else {
 		auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
 									     amrex::Real base_density_floor) -> amrex::Real {
 			return densityFloor(x, y, z, base_density_floor);
 		};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev], geom[lev].data(), density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev], geom[lev], density_floor_func);
 	}
 
 	// sync internal energy and total energy
@@ -2288,13 +2288,13 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 										  amrex::Real base_density_floor) -> amrex::Real {
 				return density_floor_parser(x, y, z, base_density_floor);
 			};
-			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew_cc, geom[lev].data(), density_floor_func);
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew_cc, geom[lev], density_floor_func);
 		} else {
 			auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
 										     amrex::Real base_density_floor) -> amrex::Real {
 				return densityFloor(x, y, z, base_density_floor);
 			};
-			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew_cc, geom[lev].data(), density_floor_func);
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew_cc, geom[lev], density_floor_func);
 		}
 
 		if (useDualEnergy_ == 1) {
@@ -2412,13 +2412,13 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 										  amrex::Real base_density_floor) -> amrex::Real {
 				return density_floor_parser(x, y, z, base_density_floor);
 			};
-			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal_cc, geom[lev].data(), density_floor_func);
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal_cc, geom[lev], density_floor_func);
 		} else {
 			auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
 										     amrex::Real base_density_floor) -> amrex::Real {
 				return densityFloor(x, y, z, base_density_floor);
 			};
-			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal_cc, geom[lev].data(), density_floor_func);
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal_cc, geom[lev], density_floor_func);
 		}
 
 		if (useDualEnergy_ == 1) {
