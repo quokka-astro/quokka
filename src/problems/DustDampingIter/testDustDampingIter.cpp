@@ -4,39 +4,12 @@
 
 #include "QuokkaSimulation.hpp"
 #include "util/fextract.hpp"
+#include <cmath>
 #include <fmt/format.h>
+#include <fstream>
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
-
-// // analytic solution parameters for test A
-// constexpr double V_COM = 1.16666666666667;
-// constexpr double LAMBDA1 = -0.63397459621556;
-// constexpr double LAMBDA2 = -2.36602540378444;
-// constexpr double C_GAS_1 = -0.22767090063074;
-// constexpr double C_GAS_2 = 0.06100423396407;
-// constexpr double C_DUST1_1 = 0.84967936855889;
-// constexpr double C_DUST1_2 = -0.01634603522555;
-// constexpr double C_DUST2_1 = -0.62200846792815;
-// constexpr double C_DUST2_2 = -0.04465819873852;
-
-// constexpr double rho_dust1 = 1.0;
-// constexpr double rho_dust2 = 1.0;
-// constexpr double TS1 = 2.0;
-// constexpr double TS2 = 1.0;
-// constexpr double OMEGA = 1.0;
-// constexpr double P_INITIAL = 1.0;
-
-// analytic solution parameters for test B
-constexpr double V_COM = 1.16666666666667;
-constexpr double LAMBDA1 = -141.742430504416;
-constexpr double LAMBDA2 = -1058.25756949558;
-constexpr double C_GAS_1 = -0.35610569612832;
-constexpr double C_GAS_2 = 0.18943902946166;
-constexpr double C_DUST1_1 = 0.85310244713865;
-constexpr double C_DUST1_2 = -0.01976911380532;
-constexpr double C_DUST2_1 = -0.49699675101033;
-constexpr double C_DUST2_2 = -0.16966991565634;
 
 constexpr double rho_dust1 = 1.0;
 constexpr double rho_dust2 = 1.0;
@@ -44,30 +17,6 @@ constexpr double TS1 = 0.01;
 constexpr double TS2 = 0.002;
 constexpr double OMEGA = 1.0;
 constexpr double P_INITIAL = 1.0;
-
-// // analytic solution parameters for test C
-// constexpr double V_COM = 0.63963963963963;
-// constexpr double LAMBDA1 = -0.52370200744224;
-// constexpr double LAMBDA2 = -105.976297992557;
-// constexpr double C_GAS_1 = -0.06458203330249;
-// constexpr double C_GAS_2 = 0.42494239366285;
-// constexpr double C_DUST1_1 = 1.36237475791577;
-// constexpr double C_DUST1_2 = -0.00201439755542;
-// constexpr double C_DUST2_1 = -0.13559165545855;
-// constexpr double C_DUST2_2 = -0.00404798418109;
-
-// constexpr double rho_dust1 = 10.0;
-// constexpr double rho_dust2 = 100.0;
-// constexpr double TS1 = 2.0;
-// constexpr double TS2 = 1.0;
-// constexpr double OMEGA = 1.0;
-// constexpr double P_INITIAL = 1.0;
-
-// analytic solution function declarations
-auto v_gas_analytic(double t) -> double;
-auto v_dust1_analytic(double t) -> double;
-auto v_dust2_analytic(double t) -> double;
-auto E_gas_analytic(double t) -> double;
 
 struct DustDamping {
 };
@@ -229,45 +178,73 @@ template <> void QuokkaSimulation<DustDamping>::computeAfterTimestep()
 	}
 }
 
-// implementation of analytic solution functions
-auto analytic_velocity(double t, double c1, double c2) -> double { return V_COM + c1 * std::exp(LAMBDA1 * t) + c2 * std::exp(LAMBDA2 * t); }
-
-auto v_gas_analytic(double t) -> double { return analytic_velocity(t, C_GAS_1, C_GAS_2); }
-
-auto v_dust1_analytic(double t) -> double { return analytic_velocity(t, C_DUST1_1, C_DUST1_2); }
-
-auto v_dust2_analytic(double t) -> double { return analytic_velocity(t, C_DUST2_1, C_DUST2_2); }
-
-// calculate analytic gas energy
-auto E_gas_analytic(double t) -> double
+// save reference solution to file
+void save_reference_solution(const std::vector<double> &t, const std::vector<double> &v_gas, const std::vector<double> &v_dust1,
+			     const std::vector<double> &v_dust2, const std::vector<double> &E_gas, const std::string &filename)
 {
-	const int n_points = 1000;
-	const double dt = t / n_points;
-	double integral = 0.0;
-
-	for (int i = 0; i < n_points; ++i) {
-		double const t1 = i * dt;
-		double const t2 = (i + 1) * dt;
-
-		double const vg1 = v_gas_analytic(t1);
-		double const vd1_1 = v_dust1_analytic(t1);
-		double const vd2_1 = v_dust2_analytic(t1);
-
-		double const vg2 = v_gas_analytic(t2);
-		double const vd1_2 = v_dust1_analytic(t2);
-		double const vd2_2 = v_dust2_analytic(t2);
-
-		double const term1 = (rho_dust1 * (vd1_1 - vg1) / TS1 * vg1 + rho_dust2 * (vd2_1 - vg1) / TS2 * vg1 +
-				      OMEGA * (rho_dust1 * std::pow(vd1_1 - vg1, 2) / TS1 + rho_dust2 * std::pow(vd2_1 - vg1, 2) / TS2));
-
-		double const term2 = (rho_dust1 * (vd1_2 - vg2) / TS1 * vg2 + rho_dust2 * (vd2_2 - vg2) / TS2 * vg2 +
-				      OMEGA * (rho_dust1 * std::pow(vd1_2 - vg2, 2) / TS1 + rho_dust2 * std::pow(vd2_2 - vg2, 2) / TS2));
-
-		integral += 0.5 * (term1 + term2) * dt;
+	std::ofstream outfile(filename);
+	if (!outfile) {
+		amrex::Print() << "Error: Could not open file " << filename << " for writing.\n";
+		return;
 	}
 
-	const double E_gas_initial = P_INITIAL / (quokka::EOS_Traits<DustDamping>::gamma - 1.0) + 0.5 * 1.0 * std::pow(v_gas_analytic(0), 2);
-	return E_gas_initial + integral;
+	// write file header
+	outfile << "# Reference solution for dust damping test (supersonic correction enabled)\n";
+	outfile << "# dt = 0.00001, enable_supersonic_correction = true\n";
+	outfile << "# Columns: time, v_gas, v_dust1, v_dust2, E_gas\n";
+	outfile << "# Total points: " << t.size() << "\n";
+
+	// write data
+	outfile << std::scientific << std::setprecision(15);
+	for (size_t i = 0; i < t.size(); ++i) {
+		outfile << t[i] << " " << v_gas[i] << " " << v_dust1[i] << " " << v_dust2[i] << " " << E_gas[i] << "\n";
+	}
+
+	outfile.close();
+	amrex::Print() << "Reference solution saved to " << filename << "\n";
+}
+
+// read reference solution from file
+auto load_reference_solution(const std::string &filename, std::vector<double> &t_ref, std::vector<double> &v_gas_ref, std::vector<double> &v_dust1_ref,
+			     std::vector<double> &v_dust2_ref, std::vector<double> &E_gas_ref) -> bool
+{
+	std::ifstream infile(filename);
+	if (!infile) {
+		amrex::Print() << "Error: Could not open reference file " << filename << "\n";
+		return false;
+	}
+
+	t_ref.clear();
+	v_gas_ref.clear();
+	v_dust1_ref.clear();
+	v_dust2_ref.clear();
+	E_gas_ref.clear();
+
+	std::string line;
+	// skip file header
+	while (std::getline(infile, line)) {
+		if (line.empty() || line[0] == '#') {
+			continue;
+		}
+
+		std::istringstream iss(line);
+		double time = NAN;
+		double vg = NAN;
+		double vd1 = NAN;
+		double vd2 = NAN;
+		double eg = NAN;
+		if (iss >> time >> vg >> vd1 >> vd2 >> eg) {
+			t_ref.push_back(time);
+			v_gas_ref.push_back(vg);
+			v_dust1_ref.push_back(vd1);
+			v_dust2_ref.push_back(vd2);
+			E_gas_ref.push_back(eg);
+		}
+	}
+
+	infile.close();
+	amrex::Print() << "Loaded " << t_ref.size() << " points from reference file " << filename << "\n";
+	return !t_ref.empty();
 }
 
 auto problem_main() -> int
@@ -282,8 +259,17 @@ auto problem_main() -> int
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = CFL_number;
-	// sim.constantDt_ = 0.005; // usually 0.005 for test B, 0.05 for test C
-	sim.constantDt_ = 0.00001;
+	sim.constantDt_ = 0.005; // usually 0.005 for test B, 0.05 for test C
+	// sim.constantDt_ = 0.00001;
+
+	// determine whether to generate reference solution or run test
+	bool generating_reference = false;
+	if (sim.constantDt_ == 0.00001) {
+		generating_reference = true;
+		amrex::Print() << "Running in reference generation mode (dt = 0.00001)\n";
+	} else {
+		amrex::Print() << "Running in test mode (dt = " << sim.constantDt_ << ")\n";
+	}
 
 	// initialize
 	sim.setInitialConditions();
@@ -297,107 +283,183 @@ auto problem_main() -> int
 	std::vector<double> const &v_dust2 = sim.userData_.v_dust2_vec_;
 	std::vector<double> const &E_gas = sim.userData_.E_gas_vec_;
 
-	// calculate dense analytic solution for plotting
-	const size_t n_dense_points = 1000;
-	std::vector<double> t_dense(n_dense_points);
-	std::vector<double> v_gas_exact_dense(n_dense_points);
-	std::vector<double> v_dust1_exact_dense(n_dense_points);
-	std::vector<double> v_dust2_exact_dense(n_dense_points);
-	std::vector<double> E_gas_exact_dense(n_dense_points);
+	if (generating_reference) {
+		// generate reference solution mode: save reference solution to file
+		save_reference_solution(t, v_gas, v_dust1, v_dust2, E_gas, "dust_damping_reference_supersonic.txt");
 
-	double const t_max = t.empty() ? 0.0 : t.back();
-	for (size_t i = 0; i < n_dense_points; ++i) {
-		t_dense[i] = t_max * static_cast<double>(i) / (n_dense_points - 1);
-		v_gas_exact_dense[i] = v_gas_analytic(t_dense[i]);
-		v_dust1_exact_dense[i] = v_dust1_analytic(t_dense[i]);
-		v_dust2_exact_dense[i] = v_dust2_analytic(t_dense[i]);
-		E_gas_exact_dense[i] = E_gas_analytic(t_dense[i]);
+		amrex::Print() << "Reference solution generation complete.\n";
+		amrex::Print() << "Please copy dust_damping_reference_supersonic.txt to quokka/src/problems/DustDampingIter/\n";
+		return 0;
+	}
+	// test mode: read reference solution and calculate error
+	std::string const ref_file_problem = "../src/problems/DustDampingIter/dust_damping_reference_supersonic.txt";
+
+	std::vector<double> t_ref;
+	std::vector<double> v_gas_ref;
+	std::vector<double> v_dust1_ref;
+	std::vector<double> v_dust2_ref;
+	std::vector<double> E_gas_ref;
+
+	bool ref_loaded = false;
+	if (load_reference_solution(ref_file_problem, t_ref, v_gas_ref, v_dust1_ref, v_dust2_ref, E_gas_ref)) {
+		ref_loaded = true;
 	}
 
-	// calculate relative L1 norm errors
-	std::vector<double> v_gas_exact(t.size());
-	std::vector<double> v_dust1_exact(t.size());
-	std::vector<double> v_dust2_exact(t.size());
-	std::vector<double> E_gas_exact(t.size());
-
-	for (size_t i = 0; i < t.size(); ++i) {
-		v_gas_exact[i] = v_gas_analytic(t[i]);
-		v_dust1_exact[i] = v_dust1_analytic(t[i]);
-		v_dust2_exact[i] = v_dust2_analytic(t[i]);
-		E_gas_exact[i] = E_gas_analytic(t[i]);
+	if (!ref_loaded) {
+		amrex::Print() << "Error: Could not load reference solution.\n";
+		amrex::Print() << "Please ensure dust_damping_reference_supersonic.txt is in the current directory or problem directory.\n";
+		return 1;
 	}
 
-	auto rel_err = [](const std::vector<double> &sim, const std::vector<double> &exact) {
-		double err = 0.0;
-		double sol = 0.0;
+	// check if the time points match (the test time points should be a subset of the reference solution time points)
+	if (t_ref.size() < t.size()) {
+		amrex::Print() << "Error: Reference solution has fewer points (" << t_ref.size() << ") than test solution (" << t.size() << ")\n";
+		return 1;
+	}
+
+	// calculate the sampling step size
+	auto step = static_cast<size_t>(t_ref.size() / t.size());
+	if (step == 0) {
+		step = 1;
+	}
+
+	// calculate relative error
+	auto compute_relative_error = [](const std::vector<double> &sim, const std::vector<double> &ref, size_t step) {
+		double err_sum = 0.0;
+		double ref_sum = 0.0;
+		size_t count = 0;
+
 		for (size_t i = 0; i < sim.size(); ++i) {
-			err += std::abs(sim[i] - exact[i]);
-			sol += std::abs(exact[i]);
+			size_t const ref_idx = i * step;
+			if (ref_idx >= ref.size()) {
+				break;
+			}
+
+			err_sum += std::abs(sim[i] - ref[ref_idx]);
+			ref_sum += std::abs(ref[ref_idx]);
+			count++;
 		}
-		return err / sol;
+
+		if (count == 0 || ref_sum == 0.0) {
+			return 1.0; // error value
+		}
+		return err_sum / ref_sum;
 	};
 
-	double const rel_err_gas_vx = rel_err(v_gas, v_gas_exact);
-	double const rel_err_dust1_vx = rel_err(v_dust1, v_dust1_exact);
-	double const rel_err_dust2_vx = rel_err(v_dust2, v_dust2_exact);
-	double const rel_err_gas_E = rel_err(E_gas, E_gas_exact);
+	double const rel_err_gas_vx = compute_relative_error(v_gas, v_gas_ref, step);
+	double const rel_err_dust1_vx = compute_relative_error(v_dust1, v_dust1_ref, step);
+	double const rel_err_dust2_vx = compute_relative_error(v_dust2, v_dust2_ref, step);
+	double const rel_err_gas_E = compute_relative_error(E_gas, E_gas_ref, step);
 
+	amrex::Print() << "Comparison with reference solution (supersonic correction enabled):\n";
 	amrex::Print() << "Relative L1 norm for gas vx    = " << rel_err_gas_vx << "\n";
 	amrex::Print() << "Relative L1 norm for dust1 vx  = " << rel_err_dust1_vx << "\n";
 	amrex::Print() << "Relative L1 norm for dust2 vx  = " << rel_err_dust2_vx << "\n";
 	amrex::Print() << "Relative L1 norm for gas E     = " << rel_err_gas_E << "\n";
 
+	// determine whether the test has passed
 	int status = 0;
 	const double rel_err_tol = 0.03;
+
 	if ((rel_err_gas_vx > rel_err_tol) || (rel_err_dust1_vx > rel_err_tol) || (rel_err_dust2_vx > rel_err_tol) || (rel_err_gas_E > rel_err_tol)) {
 		status = 1;
+		amrex::Print() << "Test FAILED: one or more errors exceed tolerance of " << rel_err_tol << "\n";
+	} else {
+		amrex::Print() << "Test PASSED: all errors within tolerance of " << rel_err_tol << "\n";
 	}
 
 #ifdef HAVE_PYTHON
-	// plot gas velocity
-	matplotlibcpp::clf();
-	matplotlibcpp::plot(t, v_gas, {{"label", "numerical"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
-	matplotlibcpp::plot(t_dense, v_gas_exact_dense, {{"label", "analytic"}, {"color", "r"}, {"linestyle", "--"}});
-	matplotlibcpp::legend();
-	matplotlibcpp::xlabel("t");
-	matplotlibcpp::ylabel(R"($v_g$)");
-	matplotlibcpp::title("Gas Velocity Evolution");
-	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./dust_damping_iter_gas_velocity.pdf");
+	// create interpolated versions for reference solutions for plotting purposes
+	std::vector<double> t_dense;
+	std::vector<double> v_gas_ref_dense;
+	std::vector<double> v_dust1_ref_dense;
+	std::vector<double> v_dust2_ref_dense;
+	std::vector<double> E_gas_ref_dense;
 
-	// plot dust1 velocity
-	matplotlibcpp::clf();
-	matplotlibcpp::plot(t, v_dust1, {{"label", "numerical"}, {"color", "b"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
-	matplotlibcpp::plot(t_dense, v_dust1_exact_dense, {{"label", "analytic"}, {"color", "b"}, {"linestyle", "--"}});
-	matplotlibcpp::legend();
-	matplotlibcpp::xlabel("t");
-	matplotlibcpp::ylabel(R"($v_{d,1}$)");
-	matplotlibcpp::title("Dust1 Velocity Evolution");
-	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./dust_damping_iter_dust1_velocity.pdf");
+	// downsampling the reference solution to match the testing time point
+	if (!t_ref.empty() && !t.empty()) {
+		double const t_max = t.back();
+		size_t const n_points = 1000;
+		for (size_t i = 0; i < n_points; ++i) {
+			double const t_val = t_max * static_cast<double>(i) / (n_points - 1);
+			t_dense.push_back(t_val);
 
-	// plot dust2 velocity
-	matplotlibcpp::clf();
-	matplotlibcpp::plot(t, v_dust2, {{"label", "numerical"}, {"color", "g"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
-	matplotlibcpp::plot(t_dense, v_dust2_exact_dense, {{"label", "analytic"}, {"color", "g"}, {"linestyle", "--"}});
-	matplotlibcpp::legend();
-	matplotlibcpp::xlabel("t");
-	matplotlibcpp::ylabel(R"($v_{d,2}$)");
-	matplotlibcpp::title("Dust2 Velocity Evolution");
-	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./dust_damping_iter_dust2_velocity.pdf");
+			// linear interpolation to find the closest time point in the reference solution
+			size_t idx = 0;
+			for (size_t j = 0; j < t_ref.size() - 1; ++j) {
+				if (t_val >= t_ref[j] && t_val <= t_ref[j + 1]) {
+					idx = j;
+					break;
+				}
+			}
 
-	// plot gas energy
-	matplotlibcpp::clf();
-	matplotlibcpp::plot(t, E_gas, {{"label", "numerical"}, {"color", "m"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
-	matplotlibcpp::plot(t_dense, E_gas_exact_dense, {{"label", "analytic"}, {"color", "m"}, {"linestyle", "--"}});
-	matplotlibcpp::legend();
-	matplotlibcpp::xlabel("t");
-	matplotlibcpp::ylabel(R"($E_g$)");
-	matplotlibcpp::title("Gas Energy Evolution");
-	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./dust_damping_iter_gas_energy.pdf");
+			if (idx < t_ref.size() - 1) {
+				double const frac = (t_val - t_ref[idx]) / (t_ref[idx + 1] - t_ref[idx]);
+				v_gas_ref_dense.push_back(v_gas_ref[idx] + frac * (v_gas_ref[idx + 1] - v_gas_ref[idx]));
+				v_dust1_ref_dense.push_back(v_dust1_ref[idx] + frac * (v_dust1_ref[idx + 1] - v_dust1_ref[idx]));
+				v_dust2_ref_dense.push_back(v_dust2_ref[idx] + frac * (v_dust2_ref[idx + 1] - v_dust2_ref[idx]));
+				E_gas_ref_dense.push_back(E_gas_ref[idx] + frac * (E_gas_ref[idx + 1] - E_gas_ref[idx]));
+			} else {
+				v_gas_ref_dense.push_back(v_gas_ref.back());
+				v_dust1_ref_dense.push_back(v_dust1_ref.back());
+				v_dust2_ref_dense.push_back(v_dust2_ref.back());
+				E_gas_ref_dense.push_back(E_gas_ref.back());
+			}
+		}
+	}
+
+	// plot
+	if (!t_dense.empty()) {
+		// gas velocity
+		matplotlibcpp::clf();
+		matplotlibcpp::plot(t, v_gas,
+				    {{"label", "numerical (iter, dt=0.005)"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
+		matplotlibcpp::plot(t_dense, v_gas_ref_dense, {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "r"}, {"linestyle", "--"}});
+		matplotlibcpp::legend();
+		matplotlibcpp::xlabel("t");
+		matplotlibcpp::ylabel(R"($v_g$)");
+		matplotlibcpp::title("Gas Velocity (with supersonic correction)");
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("./dust_damping_supersonic_gas_velocity.pdf");
+
+		// dust1 velocity
+		matplotlibcpp::clf();
+		matplotlibcpp::plot(t, v_dust1,
+				    {{"label", "numerical (iter, dt=0.005)"}, {"color", "b"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
+		matplotlibcpp::plot(t_dense, v_dust1_ref_dense, {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "b"}, {"linestyle", "--"}});
+		matplotlibcpp::legend();
+		matplotlibcpp::xlabel("t");
+		matplotlibcpp::ylabel(R"($v_{d,1}$)");
+		matplotlibcpp::title("Dust1 Velocity (with supersonic correction)");
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("./dust_damping_supersonic_dust1_velocity.pdf");
+
+		// dust2 velocity
+		matplotlibcpp::clf();
+		matplotlibcpp::plot(t, v_dust2,
+				    {{"label", "numerical (iter, dt=0.005)"}, {"color", "g"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
+		matplotlibcpp::plot(t_dense, v_dust2_ref_dense, {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "g"}, {"linestyle", "--"}});
+		matplotlibcpp::legend();
+		matplotlibcpp::xlabel("t");
+		matplotlibcpp::ylabel(R"($v_{d,2}$)");
+		matplotlibcpp::title("Dust2 Velocity (with supersonic correction)");
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("./dust_damping_supersonic_dust2_velocity.pdf");
+
+		// gas energy
+		matplotlibcpp::clf();
+		matplotlibcpp::plot(t, E_gas,
+				    {{"label", "numerical (iter, dt=0.005)"}, {"color", "m"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
+		matplotlibcpp::plot(t_dense, E_gas_ref_dense, {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "m"}, {"linestyle", "--"}});
+		matplotlibcpp::legend();
+		matplotlibcpp::xlabel("t");
+		matplotlibcpp::ylabel(R"($E_g$)");
+		matplotlibcpp::title("Gas Energy (with supersonic correction)");
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("./dust_damping_supersonic_gas_energy.pdf");
+	}
 #endif
-	amrex::Print() << "Finished.\n";
+
+	amrex::Print() << "Test complete.\n";
 	return status;
 }
