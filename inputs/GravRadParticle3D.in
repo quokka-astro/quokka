@@ -54,3 +54,6 @@ quokka.proj.particles = CIC_particles # List of particle types to include in out
 max_timesteps = 2
 
 tiny_profiler.enabled = 0
+
+density_floor = 1.0e-7
+density_floor_expr = "1.0e-7 * (3.0 - sqrt(x*x + y*y + z*z) / 2.0)"

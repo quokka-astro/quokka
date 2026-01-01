@@ -105,6 +105,8 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 
 	void FixupState(int lev) override;
 
+	void enforceDensityFloor(int lev, amrex::MultiFab &state_mf) override;
+
 	// tag cells for refinement
 	void refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
 
@@ -257,6 +259,11 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::ErrorEst(int 
 template <typename problem_t> void AdvectionSimulation<problem_t>::FixupState(int lev)
 {
 	// fix negative states
+}
+
+template <typename problem_t> void AdvectionSimulation<problem_t>::enforceDensityFloor(int /*lev*/, amrex::MultiFab & /*state_mf*/)
+{
+	// enforce density floor
 }
 
 template <typename problem_t>

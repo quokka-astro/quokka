@@ -62,6 +62,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_Orientation.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
+#include "AMReX_Parser.H"
 #include "AMReX_PlotFileUtil.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
@@ -213,6 +214,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	amrex::Real densityFloor_ = 0.0; // default
 	amrex::Real tempFloor_ = 0.0;	 // default
+	bool useDensityFloorParser_ = false;
+	std::string densityFloorExpr_;
+	std::optional<amrex::Parser> densityFloorParser_;
+	std::optional<amrex::ParserExecutor<4>> densityFloorParserExe_;
 
 	mutable YAML::Node simulationMetadata_;
 
@@ -300,6 +305,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// fix-up any unphysical states created by AMR operations
 	// (e.g., caused by the flux register or from interpolation)
 	virtual void FixupState(int level) = 0;
+
+	virtual void enforceDensityFloor(int lev, amrex::MultiFab &state_mf) = 0;
 
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override = 0;
@@ -855,6 +862,19 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// read temperature floor in K
 	pp.query("temperature_floor", tempFloor_);
 
+	// optional density floor expression (variables: x, y, z, base_density_floor)
+	densityFloorExpr_.clear();
+	pp.query("density_floor_expr", densityFloorExpr_);
+	useDensityFloorParser_ = !densityFloorExpr_.empty();
+	if (useDensityFloorParser_) {
+		densityFloorParser_.emplace(densityFloorExpr_);
+		densityFloorParser_->registerVariables({"x", "y", "z", "base_density_floor"});
+		densityFloorParserExe_ = densityFloorParser_->compile<4>();
+	} else {
+		densityFloorParser_.reset();
+		densityFloorParserExe_.reset();
+	}
+
 	// specify maximum walltime in HH:MM:SS format
 	std::string maxWalltimeInput;
 	pp.query("max_walltime", maxWalltimeInput);
@@ -969,6 +989,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 		// restart from a checkpoint
 		ReadCheckpointFile();
 	}
+
+	enforceDensityFloor(0, state_new_cc_[0]); // enforce density floor at level 0 on the initial conditions
 
 	// Ensure consistency between particle radiation settings and luminosity data table configuration
 	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {

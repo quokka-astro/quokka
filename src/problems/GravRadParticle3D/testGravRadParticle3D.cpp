@@ -17,6 +17,10 @@
 #include "particles/PhysicsParticles.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
+#include "util/fextract.hpp"
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 
 struct ParticleProblem {
 };
@@ -29,7 +33,7 @@ constexpr double initial_Egas = 1.0e-5;
 constexpr double c = 100.0;	   // speed of light
 constexpr double chat = 2.0;	   // reduced speed of light
 constexpr double kappa0 = 1.0e-20; // opacity
-constexpr double rho0 = 1.0e-8;
+constexpr double rho0 = 1.0e-9;
 constexpr double m_H = C::m_p + C::m_e;
 
 const double lum1 = 1.0;
@@ -142,6 +146,12 @@ auto QuokkaSimulation<ParticleProblem>::ComputeProjections(const amrex::Directio
 	return proj;
 }
 
+auto localDensityFloor(amrex::Real x, amrex::Real y, amrex::Real z) -> amrex::Real
+{
+	// density_floor_expr = "1.0e-7 * (3.0 - sqrt(x*x + y*y + z*z) / 2.0)"
+	return std::max(1.0e-7, 1.0e-7 * (3.0 - std::sqrt(x * x + y * y + z * z) / 2.0));
+}
+
 auto problem_main() -> int
 {
 	// Problem parameters
@@ -156,10 +166,59 @@ auto problem_main() -> int
 	// initialize
 	sim.setInitialConditions();
 
-	// evolve
-	sim.evolve();
+	// read output variables
+	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 2, 0.0, true); // z direction
+	const int nz = static_cast<int>(position.size());
 
 	int status = 0;
+
+	// extract density and check floor
+	std::vector<double> zs(nz);
+	std::vector<double> rho_z(nz);
+	std::vector<double> custom_floor_z(nz);
+	amrex::Real min_density = std::numeric_limits<amrex::Real>::max();
+	amrex::Real min_density_ratio = std::numeric_limits<amrex::Real>::max();
+	for (int i = 0; i < nz; ++i) {
+		amrex::Real const z = position[i];
+		custom_floor_z.at(i) = localDensityFloor(0.0, 0.0, z); // note that the real x and y are 0.5 * delta_x
+		amrex::Real const rho = values.at(RadSystem<ParticleProblem>::gasDensity_index)[i];
+		zs.at(i) = z;
+		rho_z.at(i) = rho;
+		min_density = std::min(min_density, rho);
+		min_density_ratio = std::min(min_density_ratio, rho / custom_floor_z.at(i));
+	}
+
+	// Check that custom floor is working: min_density_ratio should not be smaller than 0.98
+	if (min_density_ratio > 0.99) {
+		amrex::Print() << "Custom density floor test PASSED: min density ratio = " << min_density_ratio << " > 0.99\n";
+	} else {
+		amrex::Print() << "Custom density floor test FAILED: min density ratio = " << min_density_ratio << " < 0.99\n";
+		status = 1;
+	}
+
+#ifdef HAVE_PYTHON
+	// Plot results
+	matplotlibcpp::clf();
+	matplotlibcpp::ylim(0.9e-7, 3.1e-7);
+
+	std::map<std::string, std::string> rho_args;
+	std::map<std::string, std::string> custom_floor_args;
+	rho_args["label"] = "rho";
+	rho_args["linestyle"] = "-";
+	rho_args["color"] = "C0";
+	custom_floor_args["label"] = "custom floor";
+	custom_floor_args["linestyle"] = "--";
+	custom_floor_args["color"] = "C1";
+	matplotlibcpp::plot(zs, rho_z, rho_args);
+	matplotlibcpp::plot(zs, custom_floor_z, custom_floor_args);
+
+	matplotlibcpp::legend();
+	matplotlibcpp::title("Custom density floor: 1.0e-7*(3-r/2)");
+	matplotlibcpp::save("./grav_rad_particle_3d_density_floor_z.pdf");
+#endif // HAVE_PYTHON
+
+	// evolve
+	sim.evolve();
 
 	// compute total radiation energy
 	const double total_Erad_over_vol = sim.state_new_cc_[0].sum(RadSystem<ParticleProblem>::radEnergy_index);
@@ -266,11 +325,15 @@ auto problem_main() -> int
 
 		const double rel_err_tol = 1.0e-7;
 		const double rel_position_error_tol = t_sim < 1.0 ? 2.0e-4 : 2.0e-3;
-		status = 1;
 		if (rel_err < rel_err_tol && rel_position_error_cicrad < rel_position_error_tol && rel_position_error_cic < rel_position_error_tol &&
 		    rel_position_error_rad < rel_position_error_tol) {
-			status = 0;
 			amrex::Print() << "Relative error within tolerance.\n";
+		} else {
+			status = 1;
+			amrex::Print() << "Relative error beyond tolerance: rel_err = " << rel_err
+				       << ", rel_position_error_cicrad = " << rel_position_error_cicrad
+				       << ", rel_position_error_cic = " << rel_position_error_cic << ", rel_position_error_rad = " << rel_position_error_rad
+				       << "\n";
 		}
 
 		amrex::Print() << "Exact positions of the CICRad particles should be: " << exact_x << ", " << exact_y << ", " << exact_z << "\n";
@@ -294,8 +357,7 @@ auto problem_main() -> int
 		amrex::Print() << "Relative L1 norm on Rad particle positions = " << rel_position_error_rad << "\n";
 
 		// Cleanup and exit
-		amrex::Print() << "Finished."
-			       << "\n";
+		amrex::Print() << "Finished.\n";
 	}
 
 	return status;
