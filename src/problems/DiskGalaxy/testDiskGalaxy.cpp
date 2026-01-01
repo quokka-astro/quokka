@@ -9,6 +9,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
+#include <sstream>
 
 #include "AMReX_Array.H"
 #include "AMReX_BLassert.H"
@@ -16,6 +18,7 @@
 #include "AMReX_GpuContainers.H"
 #include "AMReX_GpuDevice.H"
 #include "AMReX_MultiFab.H"
+#include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
@@ -95,9 +98,6 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 
 	std::ifstream fstream(filename, std::ios::in);
 	AMREX_ALWAYS_ASSERT(fstream.is_open());
-	std::string header;
-	std::getline(fstream, header);
-
 	for (std::string line; std::getline(fstream, line);) {
 		std::istringstream iss(line);
 		std::vector<double> values;
@@ -105,6 +105,11 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 		for (double value = NAN; iss >> value;) {
 			values.push_back(value);
 		}
+		if (values.empty()) {
+			continue;
+		}
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(values.size() == 5,
+						"agora_galaxy.vcirc_file must have 5 columns per row (R, vcirc, rho_halo, velr_halo, temp_halo).");
 		Real const R_val = values.at(0);
 		Real const vcirc_val = values.at(1);
 		Real const rho_val = values.at(2);
@@ -119,6 +124,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 	}
 
 	// 2. copy data to simData_.radius and simData_.vcirc
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!radius_h.empty(), "agora_galaxy.vcirc_file contained no numeric rows.");
 	const size_t N = radius_h.size();
 	userData_.radius.resize(N);
 	userData_.vcirc.resize(N);
