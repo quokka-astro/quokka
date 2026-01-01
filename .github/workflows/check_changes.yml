@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       workflow_file:
-        description: 'Specific workflow file to check for changes (optional)'
+        description: "Specific workflow file to check for changes (optional)"
         required: false
         type: string
     outputs:
@@ -35,7 +35,7 @@ jobs:
       has_workflow_changes: ${{ steps.set-output.outputs.has_workflow_changes }}
       has_specific_workflow_changes: ${{ steps.set-output.outputs.has_specific_workflow_changes }}
     steps:
-      - uses: actions/checkout@v6.0.1
+      - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
         id: changes
         with:
@@ -52,6 +52,7 @@ jobs:
               - 'extern/grackle_data_files/**'
               - 'extern/openPMD-api/**'
               - 'extern/yaml-cpp/**'
+              - 'extern/turbulence/**'
               - 'inputs/**'
               - 'CMakeLists.txt'
               - '**/*.cpp'

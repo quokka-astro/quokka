@@ -122,18 +122,7 @@ template <> void QuokkaSimulation<OrszagTang>::setInitialConditionsOnGridFaceVar
 
 auto problem_main() -> int
 {
-	auto BCs_cc = quokka::BC<OrszagTang>(quokka::BCType::int_dir); // periodic
-
-	const int nvars_fc = Physics_Indices<OrszagTang>::nvarTotal_fc;
-	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
-	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_fc[icomp].setLo(idim, amrex::BCType::int_dir); // periodic
-			BCs_fc[icomp].setHi(idim, amrex::BCType::int_dir);
-		}
-	}
-
-	QuokkaSimulation<OrszagTang> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<OrszagTang> sim;
 	sim.setInitialConditions();
 	sim.evolve();
 	return 0;

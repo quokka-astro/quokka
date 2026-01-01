@@ -192,9 +192,7 @@ auto problem_main() -> int
 	const double max_time = 10.0;	// dimensionless time
 	// const double max_time = 3.16228;	  // dimensionless time
 
-	auto BCs_cc = quokka::BC<MarshakProblem>(quokka::BCType::reflecting);
-
-	QuokkaSimulation<MarshakProblem> sim(BCs_cc);
+	QuokkaSimulation<MarshakProblem> sim;
 
 	sim.cflNumber_ = CFL_number;
 	sim.radiationCflNumber_ = CFL_number;

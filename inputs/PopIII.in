@@ -3,7 +3,7 @@
 # *****************************************************************
 geometry.prob_lo     =  -3.703e18  -3.703e18  -3.703e18
 geometry.prob_hi     =  3.703e18   3.703e18   3.703e18
-geometry.is_periodic =  0    0    0
+quokka.bc = foextrap foextrap foextrap
 #restartfile = "chk15360"
 # *****************************************************************
 # VERBOSITY

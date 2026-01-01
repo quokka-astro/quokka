@@ -21,7 +21,7 @@ jobs:
     outputs:
       code-changed: ${{ steps.changes.outputs.code }}
     steps:
-      - uses: actions/checkout@v6.0.1
+      - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
         id: changes
         with:
@@ -34,6 +34,7 @@ jobs:
               - 'extern/grackle_data_files/**'
               - 'extern/openPMD-api/**'
               - 'extern/yaml-cpp/**'
+              - 'extern/turbulence/**'
               - 'inputs/**'
               - 'CMakeLists.txt'
               - '**/*.cpp'

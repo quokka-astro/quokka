@@ -47,6 +47,7 @@ pr:
     - extern/yaml-cpp/**
     - extern/openPMD-api/**
     - extern/AMReX-Hydro/**
+    - extern/turbulence/**
     exclude:
     - docs/**
     - paper/**
