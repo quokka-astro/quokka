@@ -5,6 +5,8 @@
 #include "AMReX_GpuContainers.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_ParmParse.H"
+#include "AMReX_ParallelDescriptor.H"
+#include "AMReX_Print.H"
 #include "AMReX_SPACE.H"
 
 #include "DiagPDF.H"
@@ -51,6 +53,7 @@ void DiagPDF::init(const std::string &a_prefix, std::string_view a_diagName)
 			m_useFieldMinMax[n] = true;
 		}
 	}
+
 }
 
 void DiagPDF::addVars(amrex::Vector<std::string> &a_varList)

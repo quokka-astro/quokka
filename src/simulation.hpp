@@ -3153,14 +3153,36 @@ template <typename problem_t> void AMRSimulation<problem_t>::createDiagnostics()
 	amrex::ParmParse const pp(code_prefix);
 	amrex::Vector<std::string> diags;
 
-	int const n_diags = pp.countval("diagnostics");
+	int n_diags = pp.countval("diagnostics");
+	const int io_rank = amrex::ParallelDescriptor::IOProcessorNumber();
+	amrex::ParallelDescriptor::Bcast(&n_diags, 1, io_rank);
 	if (n_diags > 0) {
 		m_diagnostics.resize(n_diags);
 		diags.resize(n_diags);
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			for (int n = 0; n < n_diags; ++n) {
+				pp.get("diagnostics", diags[n], n);
+			}
+		}
+		for (int n = 0; n < n_diags; ++n) {
+			int len = static_cast<int>(diags[n].size());
+			amrex::ParallelDescriptor::Bcast(&len, 1, io_rank);
+			std::vector<char> buffer;
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				buffer.assign(diags[n].begin(), diags[n].end());
+			} else {
+				buffer.resize(len);
+			}
+			if (len > 0) {
+				amrex::ParallelDescriptor::Bcast(buffer.data(), len, io_rank);
+			}
+			if (!amrex::ParallelDescriptor::IOProcessor()) {
+				diags[n].assign(buffer.begin(), buffer.end());
+			}
+		}
 	}
 
 	for (int n = 0; n < n_diags; ++n) {
-		pp.get("diagnostics", diags[n], n);
 		std::string const diag_prefix = code_prefix + "." + diags[n];
 		amrex::ParmParse const ppd(diag_prefix);
 		std::string diag_type;
@@ -3214,8 +3236,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 	const BL_PROFILE("AMRSimulation::doDiagnostics()");
 	updateDiagnostics();
 
-	bool const computeVars =
-	    std::any_of(m_diagnostics.cbegin(), m_diagnostics.cend(), [this](const auto &diag) { return diag->doDiag(tNew_[0], istep[0]); });
+	amrex::Vector<int> diag_willdo(m_diagnostics.size(), 0);
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		for (int n = 0; n < static_cast<int>(m_diagnostics.size()); ++n) {
+			diag_willdo[n] = m_diagnostics[n]->doDiag(tNew_[0], istep[0]) ? 1 : 0;
+		}
+	}
+	if (!diag_willdo.empty()) {
+		amrex::ParallelDescriptor::Bcast(diag_willdo.data(), diag_willdo.size(), amrex::ParallelDescriptor::IOProcessorNumber());
+	}
+
+	bool const computeVars = std::any_of(diag_willdo.cbegin(), diag_willdo.cend(), [](int v) { return v != 0; });
 
 	amrex::Vector<std::unique_ptr<amrex::MultiFab>> diagMFVec(finestLevel() + 1);
 	amrex::Vector<const amrex::MultiFab *> diagMFVec_ptr;
@@ -3244,38 +3275,39 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 	auto const geoms = Geom(0, finestLevel());
 	auto const ref_ratio = refRatio();
 
-	for (const auto &diag : m_diagnostics) {
-		if (diag->doDiag(tNew_[0], istep[0])) {
+	for (int n = 0; n < static_cast<int>(m_diagnostics.size()); ++n) {
+		if (diag_willdo[n] != 0) {
+			auto *diag = m_diagnostics[n].get();
 			// Set common diagnostic data (including simulation pointer)
 			diag->setDiagData(this, &diagMFVec_ptr, &m_diagVars, &geoms, &ref_ratio, &simulationMetadata_);
 
 			// Call the appropriate template processDiag for each diagnostic type
 			// All diagnostics now have a unified API: processDiag<problem_t>(nstep, time)
-			auto *plotfileDiag = dynamic_cast<DiagPlotfile *>(diag.get());
+			auto *plotfileDiag = dynamic_cast<DiagPlotfile *>(diag);
 			if (plotfileDiag != nullptr) {
 				plotfileDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 				continue;
 			}
 
-			auto *projectionDiag = dynamic_cast<DiagProjectionPlot *>(diag.get());
+			auto *projectionDiag = dynamic_cast<DiagProjectionPlot *>(diag);
 			if (projectionDiag != nullptr) {
 				projectionDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 				continue;
 			}
 
-			auto *framePlaneDiag = dynamic_cast<DiagFramePlane *>(diag.get());
+			auto *framePlaneDiag = dynamic_cast<DiagFramePlane *>(diag);
 			if (framePlaneDiag != nullptr) {
 				framePlaneDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 				continue;
 			}
 
-			auto *pdfDiag = dynamic_cast<DiagPDF *>(diag.get());
+			auto *pdfDiag = dynamic_cast<DiagPDF *>(diag);
 			if (pdfDiag != nullptr) {
 				pdfDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 				continue;
 			}
 
-			auto *particleTxtDiag = dynamic_cast<DiagParticleTxt *>(diag.get());
+			auto *particleTxtDiag = dynamic_cast<DiagParticleTxt *>(diag);
 			if (particleTxtDiag != nullptr) {
 				particleTxtDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 				continue;
