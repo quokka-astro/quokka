@@ -116,7 +116,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 			continue;
 		}
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(values.size() == 5,
-						"agora_galaxy.vcirc_file must have 5 columns per row (R, vcirc, rho_halo, velr_halo, temp_halo).");
+						 "agora_galaxy.vcirc_file must have 5 columns per row (R, vcirc, rho_halo, velr_halo, temp_halo).");
 		Real const R_val = values.at(0);
 		Real const vcirc_val = values.at(1);
 		Real const rho_val = values.at(2);

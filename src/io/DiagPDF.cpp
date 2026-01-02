@@ -4,8 +4,8 @@
 #include "AMReX_Extension.H"
 #include "AMReX_GpuContainers.H"
 #include "AMReX_MultiFabUtil.H"
-#include "AMReX_ParmParse.H"
 #include "AMReX_ParallelDescriptor.H"
+#include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 #include "AMReX_SPACE.H"
 
@@ -31,8 +31,6 @@ void DiagPDF::init(const std::string &a_prefix, std::string_view a_diagName)
 
 	for (int n = 0; n < ndims; ++n) {
 		std::string const var_prefix = a_prefix + "." + m_varNames[n];
-		amrex::Print() << "[DiagPDF] Reading parameters: " + var_prefix + "\n";
-
 		amrex::ParmParse const var_pp(var_prefix);
 		var_pp.get("nBins", m_nBins[n]);
 		var_pp.query("log_spaced_bins", m_useLogSpacedBins[n]);
@@ -53,7 +51,6 @@ void DiagPDF::init(const std::string &a_prefix, std::string_view a_diagName)
 			m_useFieldMinMax[n] = true;
 		}
 	}
-
 }
 
 void DiagPDF::addVars(amrex::Vector<std::string> &a_varList)
