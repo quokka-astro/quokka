@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <limits>
 #include <sstream>
 
 #include "AMReX_Array.H"
@@ -181,6 +182,8 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 	pp.query("disk_temperature", T_disk);
 	pp.query("disk_perturb_amplitude", disk_perturb_amplitude);
 	pp.query("disk_perturb_Rmax_kpc", disk_perturb_Rmax_kpc);
+	int debug_disk_switch = 0;
+	pp.query("debug_disk_switch", debug_disk_switch);
 	AMREX_ALWAYS_ASSERT(!std::isnan(disk_gas_mass_Msun));
 	AMREX_ALWAYS_ASSERT(!std::isnan(disk_Rscale_kpc));
 	AMREX_ALWAYS_ASSERT(!std::isnan(disk_zscale_kpc));
@@ -219,6 +222,74 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
+
+#ifndef AMREX_USE_GPU
+	if (debug_disk_switch != 0) {
+		auto rhoHalo_host = [R_table_min, R_table, R_table_max, rho_inner, rho_outer, rhoH_table, len_table](amrex::Real const R) {
+			double rho_H = NAN;
+			if (R > R_table_min && R < R_table_max) {
+				rho_H = interpolate_value(R, R_table, rhoH_table, len_table);
+			} else if (R <= R_table_min) {
+				rho_H = rho_inner;
+			} else {
+				rho_H = rho_outer;
+			}
+			return rho_H;
+		};
+
+		auto tempHalo_host = [R_table_min, R_table, R_table_max, temp_inner, temp_outer, temp_table, len_table](amrex::Real const R) {
+			double temp_H = NAN;
+			if (R > R_table_min && R < R_table_max) {
+				temp_H = interpolate_value(R, R_table, temp_table, len_table);
+			} else if (R <= R_table_min) {
+				temp_H = temp_inner;
+			} else {
+				temp_H = temp_outer;
+			}
+			return temp_H;
+		};
+
+		amrex::Real min_disk_r = std::numeric_limits<amrex::Real>::max();
+		amrex::Real max_disk_r = 0.0;
+		long disk_count = 0;
+
+		for (int k = indexRange.smallEnd(2); k <= indexRange.bigEnd(2); ++k) {
+			for (int j = indexRange.smallEnd(1); j <= indexRange.bigEnd(1); ++j) {
+				for (int i = indexRange.smallEnd(0); i <= indexRange.bigEnd(0); ++i) {
+					amrex::Real const x_mid = prob_lo[0] + (i + 0.5) * dx[0];
+					amrex::Real const y_mid = prob_lo[1] + (j + 0.5) * dx[1];
+					amrex::Real const z_mid = prob_lo[2] + (k + 0.5) * dx[2];
+					amrex::Real const R_mid = std::sqrt((x_mid * x_mid) + (y_mid * y_mid));
+					amrex::Real const r_mid = std::sqrt((x_mid * x_mid) + (y_mid * y_mid) + (z_mid * z_mid));
+
+					double const rho_disk_mid = rho_0 * std::exp(-R_mid / R_d) * std::exp(-std::abs(z_mid) / z_d);
+					double const rho_halo_mid = rhoHalo_host(r_mid);
+					double const temp_halo_mid = tempHalo_host(r_mid);
+
+					if (rho_halo_mid * temp_halo_mid < rho_disk_mid * T_disk) {
+						min_disk_r = std::min(min_disk_r, r_mid);
+						max_disk_r = std::max(max_disk_r, r_mid);
+						++disk_count;
+					}
+				}
+			}
+		}
+
+		const amrex::Real kpc = 1.0e3 * C::parsec;
+		const amrex::Real min_disk_r_global = amrex::ParallelDescriptor::ReduceRealMin(min_disk_r);
+		const amrex::Real max_disk_r_global = amrex::ParallelDescriptor::ReduceRealMax(max_disk_r);
+		const long disk_count_global = amrex::ParallelDescriptor::ReduceLongSum(disk_count);
+
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			if (disk_count_global > 0) {
+				amrex::Print() << "[DiskGalaxy] disk-selected cells=" << disk_count_global
+					       << " r_min_kpc=" << (min_disk_r_global / kpc) << " r_max_kpc=" << (max_disk_r_global / kpc) << "\n";
+			} else {
+				amrex::Print() << "[DiskGalaxy] disk-selected cells=0\n";
+			}
+		}
+	}
+#endif
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// Cartesian coordinates
@@ -297,7 +368,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			} else {
 				vel_H = velr_outer;
 			}
-			return vel_H;
+			return -vel_H;
 		};
 
 		auto tempHalo = [R_table_min, R_table, R_table_max, temp_inner, temp_outer, temp_table, len_table](const amrex::Real R) {
@@ -326,28 +397,17 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		// compute momenta profiles
 		auto velx_exact = [velHalo](double x, double y, double z) {
 			double const r = std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, 2));
-			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
-			double const theta = std::atan2(R, z) + (z < 0.0 ? M_PI : 0.0);
-			;
-			double const phi = std::atan2(y, x);
-			return velHalo(r) * std::sin(theta) * std::cos(phi); // vx
+			return (r > 0.0) ? (velHalo(r) * x / r) : 0.0; // vx
 		};
 
 		auto vely_exact = [velHalo](double x, double y, double z) {
 			double const r = std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, 2));
-			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
-			double const theta = std::atan2(R, z) + (z < 0.0 ? M_PI : 0.0);
-			;
-			double const phi = std::atan2(y, x);
-			return velHalo(r) * std::sin(theta) * std::sin(phi); // vy
+			return (r > 0.0) ? (velHalo(r) * y / r) : 0.0; // vy
 		};
 
 		auto velz_exact = [velHalo](double x, double y, double z) {
 			double const r = std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, 2));
-			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
-			double const theta = std::atan2(R, z) + (z < 0.0 ? M_PI : 0.0);
-			;
-			return velHalo(r) * std::cos(theta); // vz
+			return (r > 0.0) ? (velHalo(r) * z / r) : 0.0; // vz
 		};
 
 		// integrate density profile over cell volume
@@ -367,7 +427,8 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 
 		// Compute halo total internal energy
 		// use mu = 0.61 as in cooling flow solutions
-		const double eint_halo = rho_halo * C::k_B * temp_halo / 0.61 / C::m_p;
+		constexpr double gamma_gas = quokka::EOS_Traits<AgoraGalaxy>::gamma;
+		const double eint_halo = rho_halo * C::k_B * temp_halo / (0.61 * C::m_p * (gamma_gas - 1.0));
 
 		AMREX_ALWAYS_ASSERT(!std::isnan(rho_disk));
 
@@ -401,8 +462,9 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			AMREX_ALWAYS_ASSERT(!std::isnan(vy));
 		}
 
-		// compute auxiliary quantities
-		double const Eint = quokka::EOS<AgoraGalaxy>::ComputeEintFromTgas(rho, T);
+		// compute auxiliary quantities (approximate mean molecular weight)
+		constexpr double mu = 0.61;
+		double const Eint = (rho > 0.0 && std::isfinite(T)) ? (rho * C::k_B * T / (mu * C::m_p * (gamma_gas - 1.0))) : 0.0;
 
 		// Add up disk and halo contributions
 		double const rho_disk_halo = rho + rho_halo;
@@ -562,6 +624,104 @@ template <> void QuokkaSimulation<AgoraGalaxy>::ComputeDerivedVar(int lev, std::
 				Real const Eint = RadSystem<AgoraGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
 				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 				output(i, j, k, ncomp) = Tgas;
+			});
+		}
+	}
+
+	if (dname == "pressure") {
+		const int ncomp = ncomp_cc_in;
+		auto const &state_fc = state_new_fc_[lev];
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &output = mf.array(iter);
+			auto const &state = state_new_cc_[lev].const_array(iter);
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const cons_fc{
+			    AMREX_D_DECL(state_fc[0].const_array(iter), state_fc[1].const_array(iter), state_fc[2].const_array(iter))};
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				Real const Pgas = HydroSystem<AgoraGalaxy>::ComputePressure(state, i, j, k, &cons_fc);
+				output(i, j, k, ncomp) = Pgas / C::k_B;
+			});
+		}
+	}
+
+	if (dname == "radius_sph") {
+		const int ncomp = ncomp_cc_in;
+		auto const geom_data = geom[lev].data();
+		auto const prob_lo = geom_data.ProbLo();
+		auto const dx = geom_data.CellSize();
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &output = mf.array(iter);
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				const amrex::Real x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
+				const amrex::Real y = prob_lo[1] + (static_cast<amrex::Real>(j) + 0.5) * dx[1];
+				const amrex::Real z = prob_lo[2] + (static_cast<amrex::Real>(k) + 0.5) * dx[2];
+				const amrex::Real r_cm = std::sqrt(x * x + y * y + z * z);
+				output(i, j, k, ncomp) = r_cm / 3.08567758e21;
+			});
+		}
+	}
+
+	if (dname == "bfield_strength") {
+		static_assert(Physics_Traits<AgoraGalaxy>::is_mhd_enabled, "bfield_strength requires MHD to be enabled.");
+		const int ncomp = ncomp_cc_in;
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &output = mf.array(iter);
+			auto const &bx_fc = state_new_fc_[lev][0].const_array(iter);
+			auto const &by_fc = state_new_fc_[lev][1].const_array(iter);
+			auto const &bz_fc = state_new_fc_[lev][2].const_array(iter);
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				const amrex::Real bx_cc = 0.5 * (bx_fc(i, j, k, 0) + bx_fc(i + 1, j, k, 0));
+				const amrex::Real by_cc = 0.5 * (by_fc(i, j, k, 0) + by_fc(i, j + 1, k, 0));
+				const amrex::Real bz_cc = 0.5 * (bz_fc(i, j, k, 0) + bz_fc(i, j, k + 1, 0));
+				const amrex::Real b_code = std::sqrt(bx_cc * bx_cc + by_cc * by_cc + bz_cc * bz_cc);
+				output(i, j, k, ncomp) = b_code * std::sqrt(4.0 * M_PI) * 1.0e6;
+			});
+		}
+	}
+
+	if (dname == "radial_velocity") {
+		const int ncomp = ncomp_cc_in;
+		auto const geom_data = geom[lev].data();
+		auto const prob_lo = geom_data.ProbLo();
+		auto const dx = geom_data.CellSize();
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &output = mf.array(iter);
+			auto const &state = state_new_cc_[lev].const_array(iter);
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				const amrex::Real rho = state(i, j, k, HydroSystem<AgoraGalaxy>::density_index);
+				const amrex::Real vx = state(i, j, k, HydroSystem<AgoraGalaxy>::x1Momentum_index) / rho;
+				const amrex::Real vy = state(i, j, k, HydroSystem<AgoraGalaxy>::x2Momentum_index) / rho;
+				const amrex::Real vz = state(i, j, k, HydroSystem<AgoraGalaxy>::x3Momentum_index) / rho;
+				const amrex::Real x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
+				const amrex::Real y = prob_lo[1] + (static_cast<amrex::Real>(j) + 0.5) * dx[1];
+				const amrex::Real z = prob_lo[2] + (static_cast<amrex::Real>(k) + 0.5) * dx[2];
+				const amrex::Real r_cm = std::sqrt(x * x + y * y + z * z);
+				// Radial velocity follows the input halo table sign convention (implicit minus in the table).
+				output(i, j, k, ncomp) = (r_cm > 0.0) ? ((x * vx + y * vy + z * vz) / r_cm) / 1.0e5 : 0.0;
+			});
+		}
+	}
+
+	if (dname == "circular_velocity") {
+		const int ncomp = ncomp_cc_in;
+		auto const geom_data = geom[lev].data();
+		auto const prob_lo = geom_data.ProbLo();
+		auto const dx = geom_data.CellSize();
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &output = mf.array(iter);
+			auto const &state = state_new_cc_[lev].const_array(iter);
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				const amrex::Real rho = state(i, j, k, HydroSystem<AgoraGalaxy>::density_index);
+				const amrex::Real vx = state(i, j, k, HydroSystem<AgoraGalaxy>::x1Momentum_index) / rho;
+				const amrex::Real vy = state(i, j, k, HydroSystem<AgoraGalaxy>::x2Momentum_index) / rho;
+				const amrex::Real x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
+				const amrex::Real y = prob_lo[1] + (static_cast<amrex::Real>(j) + 0.5) * dx[1];
+				const amrex::Real r_cyl = std::sqrt(x * x + y * y);
+				output(i, j, k, ncomp) = (r_cyl > 0.0) ? ((x * vy - y * vx) / r_cyl) / 1.0e5 : 0.0;
 			});
 		}
 	}
