@@ -110,7 +110,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 			continue;
 		}
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(values.size() == 5,
-						"agora_galaxy.vcirc_file must have 5 columns per row (R, vcirc, rho_halo, velr_halo, temp_halo).");
+						 "agora_galaxy.vcirc_file must have 5 columns per row (R, vcirc, rho_halo, velr_halo, temp_halo).");
 		Real const R_val = values.at(0);
 		Real const vcirc_val = values.at(1);
 		Real const rho_val = values.at(2);
@@ -282,8 +282,8 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 
 		if (amrex::ParallelDescriptor::IOProcessor()) {
 			if (disk_count_global > 0) {
-				amrex::Print() << "[DiskGalaxy] disk-selected cells=" << disk_count_global
-					       << " r_min_kpc=" << (min_disk_r_global / kpc) << " r_max_kpc=" << (max_disk_r_global / kpc) << "\n";
+				amrex::Print() << "[DiskGalaxy] disk-selected cells=" << disk_count_global << " r_min_kpc=" << (min_disk_r_global / kpc)
+					       << " r_max_kpc=" << (max_disk_r_global / kpc) << "\n";
 			} else {
 				amrex::Print() << "[DiskGalaxy] disk-selected cells=0\n";
 			}

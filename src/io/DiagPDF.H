@@ -91,8 +91,7 @@ template <typename problem_t> void DiagPDF::processDiag(int a_nstep, const amrex
 			amrex::Real const field_max = MFVecMax(a_state, fieldIdx[n]);
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				amrex::Print() << "[DiagPDF] " << m_diagfile << " field '" << m_varNames[n] << "' min/max = " << field_min << " " << field_max
-					       << " (log_spaced=" << m_useLogSpacedBins[n] << ", range="
-					       << (m_useFieldMinMax[n] ? "auto" : "user") << ")\n";
+					       << " (log_spaced=" << m_useLogSpacedBins[n] << ", range=" << (m_useFieldMinMax[n] ? "auto" : "user") << ")\n";
 			}
 		}
 		m_reportedRange = true;
