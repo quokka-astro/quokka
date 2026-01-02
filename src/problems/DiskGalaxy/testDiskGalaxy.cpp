@@ -32,6 +32,7 @@
 #include "particles/particle_types.hpp"
 #include "physics_info.hpp"
 #include "util/BC.hpp"
+#include "util/DataTable.hpp"
 
 struct AgoraGalaxy {
 };
@@ -81,6 +82,9 @@ template <> struct SimulationData<AgoraGalaxy> {
 	amrex::Gpu::PinnedVector<amrex::Real> rho_halo;
 	amrex::Gpu::PinnedVector<amrex::Real> velr_halo;
 	amrex::Gpu::PinnedVector<amrex::Real> temp_halo;
+
+	bool has_disk_blend = false;
+	quokka::DataTable<2, 1> disk_blend;
 };
 
 template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
@@ -96,6 +100,8 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 	amrex::ParmParse const pp("agora_galaxy");
 	std::string filename;
 	pp.query("vcirc_file", filename);
+	std::string blend_filename;
+	pp.query("disk_blend_file", blend_filename);
 
 	std::ifstream fstream(filename, std::ios::in);
 	AMREX_ALWAYS_ASSERT(fstream.is_open());
@@ -157,6 +163,11 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 	userData_.rho_outer = rho_h[std::distance(radius_h.begin(), max_result)];
 	userData_.velr_outer = velr_h[std::distance(radius_h.begin(), max_result)];
 	userData_.temp_outer = temp_h[std::distance(radius_h.begin(), max_result)];
+
+	if (!blend_filename.empty()) {
+		userData_.disk_blend = quokka::DataTable<2, 1>::CSVReader(blend_filename, quokka::SpacingType::linear);
+		userData_.has_disk_blend = true;
+	}
 }
 
 template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -182,8 +193,6 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 	pp.query("disk_temperature", T_disk);
 	pp.query("disk_perturb_amplitude", disk_perturb_amplitude);
 	pp.query("disk_perturb_Rmax_kpc", disk_perturb_Rmax_kpc);
-	int debug_disk_switch = 0;
-	pp.query("debug_disk_switch", debug_disk_switch);
 	AMREX_ALWAYS_ASSERT(!std::isnan(disk_gas_mass_Msun));
 	AMREX_ALWAYS_ASSERT(!std::isnan(disk_Rscale_kpc));
 	AMREX_ALWAYS_ASSERT(!std::isnan(disk_zscale_kpc));
@@ -223,73 +232,11 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-#ifndef AMREX_USE_GPU
-	if (debug_disk_switch != 0) {
-		auto rhoHalo_host = [R_table_min, R_table, R_table_max, rho_inner, rho_outer, rhoH_table, len_table](amrex::Real const R) {
-			double rho_H = NAN;
-			if (R > R_table_min && R < R_table_max) {
-				rho_H = interpolate_value(R, R_table, rhoH_table, len_table);
-			} else if (R <= R_table_min) {
-				rho_H = rho_inner;
-			} else {
-				rho_H = rho_outer;
-			}
-			return rho_H;
-		};
-
-		auto tempHalo_host = [R_table_min, R_table, R_table_max, temp_inner, temp_outer, temp_table, len_table](amrex::Real const R) {
-			double temp_H = NAN;
-			if (R > R_table_min && R < R_table_max) {
-				temp_H = interpolate_value(R, R_table, temp_table, len_table);
-			} else if (R <= R_table_min) {
-				temp_H = temp_inner;
-			} else {
-				temp_H = temp_outer;
-			}
-			return temp_H;
-		};
-
-		amrex::Real min_disk_r = std::numeric_limits<amrex::Real>::max();
-		amrex::Real max_disk_r = 0.0;
-		long disk_count = 0;
-
-		for (int k = indexRange.smallEnd(2); k <= indexRange.bigEnd(2); ++k) {
-			for (int j = indexRange.smallEnd(1); j <= indexRange.bigEnd(1); ++j) {
-				for (int i = indexRange.smallEnd(0); i <= indexRange.bigEnd(0); ++i) {
-					amrex::Real const x_mid = prob_lo[0] + (i + 0.5) * dx[0];
-					amrex::Real const y_mid = prob_lo[1] + (j + 0.5) * dx[1];
-					amrex::Real const z_mid = prob_lo[2] + (k + 0.5) * dx[2];
-					amrex::Real const R_mid = std::sqrt((x_mid * x_mid) + (y_mid * y_mid));
-					amrex::Real const r_mid = std::sqrt((x_mid * x_mid) + (y_mid * y_mid) + (z_mid * z_mid));
-
-					double const rho_disk_mid = rho_0 * std::exp(-R_mid / R_d) * std::exp(-std::abs(z_mid) / z_d);
-					double const rho_halo_mid = rhoHalo_host(r_mid);
-					double const temp_halo_mid = tempHalo_host(r_mid);
-
-					if (rho_halo_mid * temp_halo_mid < rho_disk_mid * T_disk) {
-						min_disk_r = std::min(min_disk_r, r_mid);
-						max_disk_r = std::max(max_disk_r, r_mid);
-						++disk_count;
-					}
-				}
-			}
-		}
-
-		const amrex::Real kpc = 1.0e3 * C::parsec;
-		const amrex::Real min_disk_r_global = amrex::ParallelDescriptor::ReduceRealMin(min_disk_r);
-		const amrex::Real max_disk_r_global = amrex::ParallelDescriptor::ReduceRealMax(max_disk_r);
-		const long disk_count_global = amrex::ParallelDescriptor::ReduceLongSum(disk_count);
-
-		if (amrex::ParallelDescriptor::IOProcessor()) {
-			if (disk_count_global > 0) {
-				amrex::Print() << "[DiskGalaxy] disk-selected cells=" << disk_count_global
-					       << " r_min_kpc=" << (min_disk_r_global / kpc) << " r_max_kpc=" << (max_disk_r_global / kpc) << "\n";
-			} else {
-				amrex::Print() << "[DiskGalaxy] disk-selected cells=0\n";
-			}
-		}
+	const bool use_disk_blend = userData_.has_disk_blend;
+	quokka::DataTableGpuConst<2, 1> blend_tables{};
+	if (use_disk_blend) {
+		blend_tables = userData_.disk_blend.const_tables();
 	}
-#endif
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// Cartesian coordinates
@@ -394,6 +341,13 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			return tempHalo(r);
 		};
 
+		auto rhoDisk_exact = [rho_0, R_d, z_d, disk_perturb_amplitude, R_max_perturb](double x, double y, double z) {
+			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
+			double const theta = std::atan2(x, y);
+			double const drho_over_rho = disk_perturb_amplitude * jn(2, 5.1356 * R / R_max_perturb) * std::sin(2.0 * theta);
+			return rho_0 * std::exp(-R / R_d) * std::exp(-std::abs(z) / z_d) * (1.0 + drho_over_rho);
+		};
+
 		// compute momenta profiles
 		auto velx_exact = [velHalo](double x, double y, double z) {
 			double const r = std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, 2));
@@ -410,70 +364,75 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			return (r > 0.0) ? (velHalo(r) * z / r) : 0.0; // vz
 		};
 
-		// integrate density profile over cell volume
+		// integrate blended profiles over cell volume
 		// TODO(bwibking): use adaptive quadrature with relative tolerance
 		const double cell_vol = dx[0] * dx[1] * dx[2];
-		const double rho_disk = quad_3d(rho_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
-		const double rho_halo = quad_3d(rhoHalo_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
-		const double vel_Hx_halo = quad_3d(velx_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
-		const double vel_Hy_halo = quad_3d(vely_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
-		const double vel_Hz_halo = quad_3d(velz_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
-		const double temp_halo = quad_3d(tempHalo_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
-
-		// Compute halo momenta
-		const double momx_halo = rho_halo * vel_Hx_halo;
-		const double momy_halo = rho_halo * vel_Hy_halo;
-		const double momz_halo = rho_halo * vel_Hz_halo;
-
-		// Compute halo total internal energy
-		// use mu = 0.61 as in cooling flow solutions
 		constexpr double gamma_gas = quokka::EOS_Traits<AgoraGalaxy>::gamma;
-		const double eint_halo = rho_halo * C::k_B * temp_halo / (0.61 * C::m_p * (gamma_gas - 1.0));
-
-		AMREX_ALWAYS_ASSERT(!std::isnan(rho_disk));
-
-		double rho = 0;
-		double vx = 0;
-		double vy = 0;
-		double const vz = 0;
-		double T = NAN;
-
-		// IMPORTANT: transition between disk and halo at the P_halo == P_disk surface
-		if (rho_halo * temp_halo < rho_disk * T_disk) { // we are in the disk
-			double const x = 0.5 * (x0 + x1);
-			double const y = 0.5 * (y0 + y1);
-			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
-			double const theta = std::atan2(x, y);
-
-			// set density (compute density perturbation)
-			// NOTE: jn is the C standard math function for BesselJ. it works everywhere.
-			double const drho_over_rho = disk_perturb_amplitude * jn(2, 5.1356 * R / R_max_perturb) * std::sin(2.0 * theta);
-			rho = rho_disk * (1 + drho_over_rho);
-			AMREX_ALWAYS_ASSERT(rho > 0.);
-
-			// set temperature
-			T = T_disk;
-
-			// set velocity (integrate velocity profiles over cell volume)
-			// TODO(bwibking): use adaptive quadrature with relative tolerance
-			vx = quad_3d(vx_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
-			vy = quad_3d(vy_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
-			AMREX_ALWAYS_ASSERT(!std::isnan(vx));
-			AMREX_ALWAYS_ASSERT(!std::isnan(vy));
-		}
-
-		// compute auxiliary quantities (approximate mean molecular weight)
 		constexpr double mu = 0.61;
-		double const Eint = (rho > 0.0 && std::isfinite(T)) ? (rho * C::k_B * T / (mu * C::m_p * (gamma_gas - 1.0))) : 0.0;
+
+		auto f_disk_exact = [=] AMREX_GPU_DEVICE(double x, double y, double z) {
+			const double R = std::sqrt(x * x + y * y);
+			const double z_abs = std::abs(z);
+			if (use_disk_blend) {
+				constexpr double kpc = 1.0e3 * C::parsec;
+				return blend_tables.interpolate_single({R / kpc, z_abs / kpc});
+			}
+			const double rho_disk_local = rho_0 * std::exp(-R / R_d) * std::exp(-z_abs / z_d);
+			const double r_sph = std::sqrt(x * x + y * y + z * z);
+			const double rho_halo_local = rhoHalo(r_sph);
+			const double temp_halo_local = tempHalo(r_sph);
+			return (rho_halo_local * temp_halo_local < rho_disk_local * T_disk) ? 1.0 : 0.0;
+		};
+
+		auto rho_blend_exact = [=] AMREX_GPU_DEVICE(double x, double y, double z) {
+			const double f = f_disk_exact(x, y, z);
+			const double rho_disk_local = rhoDisk_exact(x, y, z);
+			const double rho_halo_local = rhoHalo_exact(x, y, z);
+			return f * rho_disk_local + (1.0 - f) * rho_halo_local;
+		};
+
+		auto vx_blend_exact = [=] AMREX_GPU_DEVICE(double x, double y, double z) {
+			const double f = f_disk_exact(x, y, z);
+			return f * vx_exact(x, y, z) + (1.0 - f) * velx_exact(x, y, z);
+		};
+
+		auto vy_blend_exact = [=] AMREX_GPU_DEVICE(double x, double y, double z) {
+			const double f = f_disk_exact(x, y, z);
+			return f * vy_exact(x, y, z) + (1.0 - f) * vely_exact(x, y, z);
+		};
+
+		auto vz_blend_exact = [=] AMREX_GPU_DEVICE(double x, double y, double z) {
+			const double f = f_disk_exact(x, y, z);
+			return (1.0 - f) * velz_exact(x, y, z);
+		};
+
+		auto eint_blend_exact = [=] AMREX_GPU_DEVICE(double x, double y, double z) {
+			const double f = f_disk_exact(x, y, z);
+			const double rho_disk_local = rhoDisk_exact(x, y, z);
+			const double rho_halo_local = rhoHalo_exact(x, y, z);
+			const double temp_halo_local = tempHalo_exact(x, y, z);
+			const double eint_disk_local =
+			    (rho_disk_local > 0.0) ? (rho_disk_local * C::k_B * T_disk / (mu * C::m_p * (gamma_gas - 1.0))) : 0.0;
+			const double eint_halo_local =
+			    (rho_halo_local > 0.0) ? (rho_halo_local * C::k_B * temp_halo_local / (mu * C::m_p * (gamma_gas - 1.0))) : 0.0;
+			return f * eint_disk_local + (1.0 - f) * eint_halo_local;
+		};
+
+		const double rho = quad_3d(rho_blend_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
+		AMREX_ALWAYS_ASSERT(rho > 0.0);
+		const double vx = quad_3d(vx_blend_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
+		const double vy = quad_3d(vy_blend_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
+		const double vz = quad_3d(vz_blend_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
+		const double Eint = quad_3d(eint_blend_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
 
 		// Add up disk and halo contributions
-		double const rho_disk_halo = rho + rho_halo;
-		double const momx_disk_halo = rho * vx + momx_halo;
-		double const momy_disk_halo = rho * vy + momy_halo;
-		double const momz_disk_halo = rho * vz + momz_halo;
+		double const rho_disk_halo = rho;
+		double const momx_disk_halo = rho * vx;
+		double const momy_disk_halo = rho * vy;
+		double const momz_disk_halo = rho * vz;
 		double const Ekin_disk_halo =
 		    0.5 * (momx_disk_halo * momx_disk_halo + momy_disk_halo * momy_disk_halo + momz_disk_halo * momz_disk_halo) / rho_disk_halo;
-		double const Eint_disk_halo = Eint + eint_halo;
+		double const Eint_disk_halo = Eint;
 		double const Etot_disk_halo = Eint_disk_halo + Ekin_disk_halo + Emag;
 
 		state_cc(i, j, k, HydroSystem<AgoraGalaxy>::density_index) = rho_disk_halo;
