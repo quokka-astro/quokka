@@ -598,9 +598,8 @@ template <> void QuokkaSimulation<AgoraGalaxy>::ComputeDerivedVar(int lev, std::
 
 	if (dname == "radius_sph") {
 		const int ncomp = ncomp_cc_in;
-		auto const geom_data = geom[lev].data();
-		const auto *const prob_lo = geom_data.ProbLo();
-		const auto *const dx = geom_data.CellSize();
+		const auto prob_lo = geom[lev].ProbLoArray();
+		const auto dx = geom[lev].CellSizeArray();
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
@@ -635,9 +634,8 @@ template <> void QuokkaSimulation<AgoraGalaxy>::ComputeDerivedVar(int lev, std::
 
 	if (dname == "radial_velocity") {
 		const int ncomp = ncomp_cc_in;
-		auto const geom_data = geom[lev].data();
-		const auto *const prob_lo = geom_data.ProbLo();
-		const auto *const dx = geom_data.CellSize();
+		const auto prob_lo = geom[lev].ProbLoArray();
+		const auto dx = geom[lev].CellSizeArray();
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
@@ -659,9 +657,8 @@ template <> void QuokkaSimulation<AgoraGalaxy>::ComputeDerivedVar(int lev, std::
 
 	if (dname == "circular_velocity") {
 		const int ncomp = ncomp_cc_in;
-		auto const geom_data = geom[lev].data();
-		const auto *const prob_lo = geom_data.ProbLo();
-		const auto *const dx = geom_data.CellSize();
+		const auto prob_lo = geom[lev].ProbLoArray();
+		const auto dx = geom[lev].CellSizeArray();
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
