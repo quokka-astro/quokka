@@ -262,12 +262,6 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		}
 		amrex::Real const Emag = 0.5 * ((Bx * Bx) + (By * By));
 
-		// compute density profile
-		auto rho_exact = [rho_0, R_d, z_d](double x, double y, double z) {
-			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
-			return rho_0 * std::exp(-R / R_d) * std::exp(-std::abs(z) / z_d);
-		};
-
 		auto vcirc_exact = [R_table_min, R_table_max, R_table, vcirc_inner, vcirc_outer, vcirc_table, len_table](const amrex::Real R) {
 			double vcirc = NAN;
 			if (R > R_table_min && R < R_table_max) {
@@ -605,8 +599,8 @@ template <> void QuokkaSimulation<AgoraGalaxy>::ComputeDerivedVar(int lev, std::
 	if (dname == "radius_sph") {
 		const int ncomp = ncomp_cc_in;
 		auto const geom_data = geom[lev].data();
-		auto const prob_lo = geom_data.ProbLo();
-		auto const dx = geom_data.CellSize();
+		const auto *const prob_lo = geom_data.ProbLo();
+		const auto *const dx = geom_data.CellSize();
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
@@ -642,8 +636,8 @@ template <> void QuokkaSimulation<AgoraGalaxy>::ComputeDerivedVar(int lev, std::
 	if (dname == "radial_velocity") {
 		const int ncomp = ncomp_cc_in;
 		auto const geom_data = geom[lev].data();
-		auto const prob_lo = geom_data.ProbLo();
-		auto const dx = geom_data.CellSize();
+		const auto *const prob_lo = geom_data.ProbLo();
+		const auto *const dx = geom_data.CellSize();
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
@@ -666,8 +660,8 @@ template <> void QuokkaSimulation<AgoraGalaxy>::ComputeDerivedVar(int lev, std::
 	if (dname == "circular_velocity") {
 		const int ncomp = ncomp_cc_in;
 		auto const geom_data = geom[lev].data();
-		auto const prob_lo = geom_data.ProbLo();
-		auto const dx = geom_data.CellSize();
+		const auto *const prob_lo = geom_data.ProbLo();
+		const auto *const dx = geom_data.CellSize();
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
