@@ -1,5 +1,5 @@
-/// \file test_dust_drag.cpp
-/// \brief Dust–gas drag test with analytic comparison (RK4-based analytic solution restored).
+/// \file testDustyShock.cpp
+/// \brief Dust–gas drag test with analytic comparison.
 
 #include "QuokkaSimulation.hpp"
 #include "util/fextract.hpp"
@@ -14,6 +14,16 @@
 #include <map>
 #include <string>
 #include <vector>
+
+constexpr double shock_position_init = 4.0;
+constexpr double rho_gas_left = 1.0;
+constexpr double vel_gas_left = 2.0;
+constexpr double rho_gas_right = 8.0;
+constexpr double vel_gas_right = 0.25;
+constexpr double rho_dust_left = 1.0;
+constexpr double vel_dust_left = 2.0;
+constexpr double cs_isothermal = 1.0;
+constexpr double drag_coefficient = 1.0; // K1 in the analytic solution
 
 struct DustyShock {
 };
@@ -62,11 +72,11 @@ template <> void QuokkaSimulation<DustyShock>::setInitialConditionsOnGrid(quokka
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = Geom(0).ProbLoArray();
 
 	// Shock tube initial conditions
-	const double shock_position = 4.0;
-	const double rho_left = 1.0;
-	const double u_left = 2.0;
-	const double rho_right = 8.0;
-	const double u_right = 0.25;
+	const double shock_position = shock_position_init;
+	const double rho_left = rho_gas_left;
+	const double u_left = vel_gas_left;
+	const double rho_right = rho_gas_right;
+	const double u_right = vel_gas_right;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
@@ -185,13 +195,13 @@ auto problem_main() -> int
 	double const shock_pos_numeric = position[shock_idx];
 
 	// Analytic solution parameters
-	const double v_s = 2.0;
-	const double c_s = 1.0;
+	const double v_s = vel_gas_left;
+	const double c_s = cs_isothermal;
 	const double M = v_s / c_s;
 	const double epsilon = 1.0;
-	const double K1 = 1.0;
-	const double rho_d_left = 1.0;
-	const double v_d_left = 2.0;
+	const double K1 = drag_coefficient;
+	const double rho_d_left = rho_dust_left;
+	const double v_d_left = vel_dust_left;
 	const double K_over_rho_v = K1 / (rho_d_left * v_d_left);
 
 	// prepare analytic x grid
