@@ -30,6 +30,7 @@ namespace filesystem = experimental::filesystem;
 #include <limits>
 #include <map>
 #include <memory>
+#include <source_location>
 #include <string>
 #include <tuple>
 #include <unordered_map>
@@ -246,6 +247,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		eos_init(small_temp, small_dens);
 	}
 
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto densityFloor(amrex::Real x, amrex::Real y, amrex::Real z,
+										 amrex::Real base_density_floor) const -> amrex::Real;
 	[[nodiscard]] static auto getScalarVariableNames() -> std::vector<std::string>;
 	void defineComponentNames();
 	void defineDefaultPlotfileVariables();
@@ -253,6 +256,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void rereadRuntimeParameters(); // Re-read parameters to ensure runtime values override compile-time settings
 
 	void checkHydroStates(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> &mf_fc, char const *file, int line);
+	void CheckHydroStates(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> &mf_fc,
+			      std::source_location const &location = std::source_location::current());
 	void computeMaxSignalLocal(int level) override;
 	void printCellProperties(int lev, amrex::IntVect const &index) override;
 	void preCalculateInitialConditions() override;
@@ -288,6 +293,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	// compute derived variables
 	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
+	void ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const override;
 
 	// compute projected vars
 	[[nodiscard]] auto ComputeProjections(amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> override;
@@ -776,11 +782,18 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::printCellPropert
 	}
 }
 
-#if !defined(NDEBUG)
-#define CHECK_HYDRO_STATES(mf, mf_fc) checkHydroStates(mf, mf_fc, __FILE__, __LINE__)
+template <typename problem_t>
+void QuokkaSimulation<problem_t>::CheckHydroStates(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> &mf_fc,
+						   std::source_location const &location)
+{
+#ifndef NDEBUG
+	checkHydroStates(mf, mf_fc, location.file_name(), static_cast<int>(location.line()));
 #else
-#define CHECK_HYDRO_STATES(mf, mf_fc)
+	static_cast<void>(mf);
+	static_cast<void>(mf_fc);
+	static_cast<void>(location);
 #endif
+}
 
 template <typename problem_t>
 void QuokkaSimulation<problem_t>::checkHydroStates(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> &mf_fc, char const *file, int line)
@@ -961,6 +974,66 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp) const
 {
 	// compute derived variables and save in 'mf' -- user should implement
+	(void)lev;
+	(void)dname;
+	(void)mf;
+	(void)ncomp;
+}
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const
+{
+	auto const ncomp_out = ncomp;
+	auto const geom_data = geom[lev].data();
+	auto const prob_lo = geom_data.ProbLo();
+	auto const dx = geom_data.CellSize();
+	auto const density_floor = densityFloor_;
+	auto const ngrow = mf.nGrow();
+
+	if (this->useDensityFloorParser_) {
+		auto const density_floor_parser = this->densityFloorParserExe_.value();
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			amrex::Box const &box = iter.growntilebox(ngrow);
+			auto const &arr = mf.array(iter);
+			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
+#if (AMREX_SPACEDIM >= 2)
+				amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + static_cast<amrex::Real>(0.5)) * dx[1];
+#else
+				amrex::Real const y = 0.0;
+#endif
+#if (AMREX_SPACEDIM == 3)
+				amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + static_cast<amrex::Real>(0.5)) * dx[2];
+#else
+				amrex::Real const z = 0.0;
+#endif
+				arr(i, j, k, ncomp_out) = density_floor_parser(x, y, z, density_floor);
+			});
+		}
+	} else {
+		auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
+									     amrex::Real base_density_floor) -> amrex::Real {
+			return densityFloor(x, y, z, base_density_floor);
+		};
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			amrex::Box const &box = iter.growntilebox(ngrow);
+			auto const &arr = mf.array(iter);
+			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
+#if (AMREX_SPACEDIM >= 2)
+				amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + static_cast<amrex::Real>(0.5)) * dx[1];
+#else
+				amrex::Real const y = 0.0;
+#endif
+#if (AMREX_SPACEDIM == 3)
+				amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + static_cast<amrex::Real>(0.5)) * dx[2];
+#else
+				amrex::Real const z = 0.0;
+#endif
+				arr(i, j, k, ncomp_out) = density_floor_func(x, y, z, density_floor);
+			});
+		}
+	}
+	amrex::Gpu::streamSynchronize();
 }
 
 template <typename problem_t>
@@ -1016,6 +1089,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::print_multifab_f
 	auto mf_fc = mf.arrays();
 	amrex::ParallelFor(
 	    mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { printf("%f\n", mf_fc[bx](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex)); });
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto QuokkaSimulation<problem_t>::densityFloor(amrex::Real x, amrex::Real y, amrex::Real z, amrex::Real base_density_floor) const
+    -> amrex::Real
+{
+	amrex::ignore_unused(x, y, z);
+	return base_density_floor;
 }
 
 template <typename problem_t> auto QuokkaSimulation<problem_t>::computeComponentErrors() -> std::vector<std::tuple<std::string, amrex::Real, amrex::Real>>
@@ -1282,7 +1363,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTim
 	}
 
 	// check hydro states before update (this can be caused by the flux register!)
-	CHECK_HYDRO_STATES(state_old_cc_[lev], state_old_fc_[lev]);
+	CheckHydroStates(state_old_cc_[lev], state_old_fc_[lev]);
 
 	// advance hydro
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
@@ -1294,7 +1375,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTim
 	}
 
 	// check hydro states after hydro update
-	CHECK_HYDRO_STATES(state_new_cc_[lev], state_new_fc_[lev]);
+	CheckHydroStates(state_new_cc_[lev], state_new_fc_[lev]);
 
 	// subcycle radiation
 	if constexpr (Physics_Traits<problem_t>::is_radiation_enabled) {
@@ -1302,13 +1383,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTim
 	}
 
 	// check hydro states after radiation update
-	CHECK_HYDRO_STATES(state_new_cc_[lev], state_new_fc_[lev]);
+	CheckHydroStates(state_new_cc_[lev], state_new_fc_[lev]);
 
 	// compute any operator-split terms here (user-defined)
 	computeAfterLevelAdvance(lev, time, dt_lev, ncycle);
 
 	// check hydro states after user work
-	CHECK_HYDRO_STATES(state_new_cc_[lev], state_new_fc_[lev]);
+	CheckHydroStates(state_new_cc_[lev], state_new_fc_[lev]);
 
 	// check state validity
 	AMREX_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp()));
@@ -1679,7 +1760,20 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::FixupState(int l
 	const BL_PROFILE("QuokkaSimulation::FixupState()");
 
 	// fix hydro state
-	HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev]);
+	if (this->useDensityFloorParser_) {
+		auto const density_floor_parser = this->densityFloorParserExe_.value();
+		auto const density_floor_func = [=] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
+									  amrex::Real base_density_floor) -> amrex::Real {
+			return density_floor_parser(x, y, z, base_density_floor);
+		};
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev], geom[lev], density_floor_func);
+	} else {
+		auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
+									     amrex::Real base_density_floor) -> amrex::Real {
+			return densityFloor(x, y, z, base_density_floor);
+		};
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev], geom[lev], density_floor_func);
+	}
 
 	// sync internal energy and total energy
 	HydroSystem<problem_t>::SyncDualEnergy(state_new_cc_[lev], state_new_fc_[lev]);
@@ -2182,7 +2276,20 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		}
 
 		// prevent vacuum
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew_cc);
+		if (this->useDensityFloorParser_) {
+			auto const density_floor_parser = this->densityFloorParserExe_.value();
+			auto const density_floor_func = [=] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
+										  amrex::Real base_density_floor) -> amrex::Real {
+				return density_floor_parser(x, y, z, base_density_floor);
+			};
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew_cc, geom[lev], density_floor_func);
+		} else {
+			auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
+										     amrex::Real base_density_floor) -> amrex::Real {
+				return densityFloor(x, y, z, base_density_floor);
+			};
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew_cc, geom[lev], density_floor_func);
+		}
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
@@ -2293,7 +2400,20 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		}
 
 		// prevent vacuum
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal_cc);
+		if (this->useDensityFloorParser_) {
+			auto const density_floor_parser = this->densityFloorParserExe_.value();
+			auto const density_floor_func = [=] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
+										  amrex::Real base_density_floor) -> amrex::Real {
+				return density_floor_parser(x, y, z, base_density_floor);
+			};
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal_cc, geom[lev], density_floor_func);
+		} else {
+			auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
+										     amrex::Real base_density_floor) -> amrex::Real {
+				return densityFloor(x, y, z, base_density_floor);
+			};
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal_cc, geom[lev], density_floor_func);
+		}
 
 		if (useDualEnergy_ == 1) {
 			// sync internal energy (requires positive density)
@@ -2646,10 +2766,10 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 											ng_reconstruct, 2);
 		}
 	} else if (reconstructionOrder_ == 2) {
-		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(primVar_mf, leftState, rightState, ng_reconstruct, nvars);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::sweby>(primVar_mf, leftState, rightState, ng_reconstruct, nvars);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(cc_bfield_perp_comps_mf, leftState_bfield,
-													      rightState_bfield, ng_reconstruct, 2);
+			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::sweby>(cc_bfield_perp_comps_mf, leftState_bfield,
+													     rightState_bfield, ng_reconstruct, 2);
 		}
 	} else if (reconstructionOrder_ == 1) {
 		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars);
@@ -3145,8 +3265,8 @@ void QuokkaSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> 
 										x1ReconstructRange, nvars);
 	} else if (radiationReconstructionOrder_ == 2) {
 		// PLM and donor cell are interface-centered kernels
-		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::MC>(primVar.array(), x1LeftState.array(), x1RightState.array(),
-												  x1ReconstructRange, nvars);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::sweby>(primVar.array(), x1LeftState.array(), x1RightState.array(),
+												     x1ReconstructRange, nvars);
 	} else if (radiationReconstructionOrder_ == 1) {
 		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(),
 										     x1ReconstructRange, nvars);
