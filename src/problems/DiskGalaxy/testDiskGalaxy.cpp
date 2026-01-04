@@ -36,6 +36,7 @@
 
 namespace {
 constexpr double keV_in_ergs = 1000.0 * C::ev2erg; // ergs == 1 keV
+constexpr double seconds_per_year = 3.15576e7;
 }
 
 struct AgoraGalaxy {
@@ -698,6 +699,70 @@ template <> void QuokkaSimulation<AgoraGalaxy>::ComputeDerivedVar(int lev, std::
 			});
 		}
 	}
+}
+
+template <> auto QuokkaSimulation<AgoraGalaxy>::ComputeStatistics() -> std::map<std::string, amrex::Real>
+{
+	std::map<std::string, amrex::Real> stats;
+
+	const amrex::Real time_now = tNew_[0];
+	const amrex::Real time_window = 1.0e6 * seconds_per_year;
+	const amrex::Real sfr_g_per_s = particleRegister_.computeSfrAveragedOverTime(time_now, time_window);
+	stats["sfr_1myr"] = (sfr_g_per_s / C::M_solar) * seconds_per_year;
+
+	amrex::ParmParse const pp("agora_galaxy");
+	amrex::Real refine_Rmax_kpc = NAN;
+	amrex::Real refine_zmax_kpc = NAN;
+	pp.query("refine_Rmax_kpc", refine_Rmax_kpc);
+	pp.query("refine_zmax_kpc", refine_zmax_kpc);
+	AMREX_ALWAYS_ASSERT(!std::isnan(refine_Rmax_kpc));
+	AMREX_ALWAYS_ASSERT(!std::isnan(refine_zmax_kpc));
+	const amrex::Real refine_Rmax = refine_Rmax_kpc * (1.0e3 * C::parsec);
+	const amrex::Real refine_zmax = refine_zmax_kpc * (1.0e3 * C::parsec);
+
+	amrex::Vector<amrex::MultiFab> refine_mask;
+	refine_mask.resize(finest_level + 1);
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		refine_mask[lev].define(boxArray(lev), DistributionMap(lev), 1, 0);
+	}
+
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		const auto prob_lo = geom[lev].ProbLoArray();
+		const auto dx = geom[lev].CellSizeArray();
+		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &result = refine_mask[lev].arrays();
+		amrex::ParallelFor(refine_mask[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			const amrex::Real x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
+			const amrex::Real y = prob_lo[1] + (static_cast<amrex::Real>(j) + 0.5) * dx[1];
+			const amrex::Real z = prob_lo[2] + (static_cast<amrex::Real>(k) + 0.5) * dx[2];
+			const amrex::Real R = std::sqrt(x * x + y * y);
+			const amrex::Real rho = state[bx](i, j, k, HydroSystem<AgoraGalaxy>::density_index);
+			result[bx](i, j, k) = (R < refine_Rmax && std::abs(z) < refine_zmax) ? rho : 0.0;
+		});
+	}
+	amrex::Gpu::streamSynchronize();
+
+	const amrex::Real disk_mass_refine =
+	    amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(refine_mask), 0, geom, ref_ratio);
+	stats["disk_mass_refine_region"] = disk_mass_refine / C::M_solar;
+
+	auto tables = resampledTables_.const_tables();
+	const amrex::Real cold_mass = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		const Real rho = state(i, j, k, HydroSystem<AgoraGalaxy>::density_index);
+		const Real x1Mom = state(i, j, k, HydroSystem<AgoraGalaxy>::x1Momentum_index);
+		const Real x2Mom = state(i, j, k, HydroSystem<AgoraGalaxy>::x2Momentum_index);
+		const Real x3Mom = state(i, j, k, HydroSystem<AgoraGalaxy>::x3Momentum_index);
+		const Real Egas = state(i, j, k, HydroSystem<AgoraGalaxy>::energy_index);
+		const Real Eint = RadSystem<AgoraGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+		const Real Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+		return (Tgas < 1.0e4) ? rho : 0.0;
+	});
+	stats["mass_T_lt_1e4"] = cold_mass / C::M_solar;
+
+	const amrex::Real stellar_mass = particleRegister_.computeTotalStellarMass();
+	stats["stellar_mass"] = stellar_mass / C::M_solar;
+
+	return stats;
 }
 
 auto problem_main() -> int

@@ -1,6 +1,7 @@
 #ifndef PHYSICS_PARTICLES_HPP_
 #define PHYSICS_PARTICLES_HPP_
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <map>
@@ -1045,6 +1046,76 @@ template <typename problem_t> class PhysicsParticleRegister
 				sfh_data_[type].emplace_back(nstep, time, total_mass);
 			}
 		}
+	}
+
+	[[nodiscard]] auto computeTotalStellarMass() const -> amrex::Real
+	{
+		amrex::Real total_mass = 0.0;
+		for (const auto &entry : particleRegistry_) {
+			const auto &descriptor = entry.second;
+			if (descriptor->getAllowsCreation()) {
+				total_mass += descriptor->computeStellarMass();
+			}
+		}
+		return total_mass;
+	}
+
+	auto computeSfrAveragedOverTime(amrex::Real current_time, amrex::Real time_window) const -> amrex::Real
+	{
+		if (sfh_data_.empty()) {
+			return 0.0;
+		}
+
+		auto compute_mass_at_time = [](auto const &history, amrex::Real time) -> amrex::Real {
+			if (history.empty()) {
+				return 0.0;
+			}
+			const auto &front = history.front();
+			const auto &back = history.back();
+			const amrex::Real t_front = std::get<1>(front);
+			const amrex::Real t_back = std::get<1>(back);
+
+			if (time <= t_front) {
+				return std::get<2>(front);
+			}
+			if (time >= t_back) {
+				return std::get<2>(back);
+			}
+
+			auto upper = std::upper_bound(history.begin(), history.end(), time, [](amrex::Real value, auto const &entry) {
+				return value < std::get<1>(entry);
+			});
+			auto lower = std::prev(upper);
+			const amrex::Real t0 = std::get<1>(*lower);
+			const amrex::Real t1 = std::get<1>(*upper);
+			const amrex::Real m0 = std::get<2>(*lower);
+			const amrex::Real m1 = std::get<2>(*upper);
+			const amrex::Real frac = (time - t0) / (t1 - t0);
+			return m0 + frac * (m1 - m0);
+		};
+
+		amrex::Real total_sfr = 0.0;
+		for (const auto &entry : sfh_data_) {
+			const auto &history = entry.second;
+			if (history.empty()) {
+				continue;
+			}
+			const amrex::Real t_back = std::get<1>(history.back());
+			const amrex::Real t_front = std::get<1>(history.front());
+			const amrex::Real time_now = std::min(current_time, t_back);
+			const amrex::Real time_start_requested = time_now - time_window;
+			const amrex::Real time_start = std::max(time_start_requested, t_front);
+
+			if (time_now <= time_start) {
+				continue;
+			}
+
+			const amrex::Real mass_now = compute_mass_at_time(history, time_now);
+			const amrex::Real mass_start = compute_mass_at_time(history, time_start);
+			total_sfr += (mass_now - mass_start) / (time_now - time_start);
+		}
+
+		return total_sfr;
 	}
 
 	// Write SFH data from memory to metadata
