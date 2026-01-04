@@ -116,6 +116,19 @@ void DiagFramePlane::prepare(int a_nlevels, const amrex::Vector<amrex::Geometry>
 			     const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames)
 {
 	if (first_time) {
+		for (auto const &field : m_fieldNames) {
+			bool found = false;
+			for (auto const &name : a_varNames) {
+				if (name == field) {
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				amrex::Abort("DiagFramePlane: Field '" + field + "' is not available!");
+			}
+		}
+
 		// Store the level0 geometry
 		auto initDomain = a_geoms[0].Domain();
 		auto initRealBox = a_geoms[0].ProbDomain();
