@@ -196,7 +196,7 @@ void save_reference_solution(const std::vector<double> &t, const std::vector<dou
 
 	// write data
 	outfile << std::scientific << std::setprecision(15);
-	for (int i = 0; i < t.size(); ++i) {
+	for (auto i = 0; i < t.size(); ++i) {
 		outfile << t[i] << " " << v_gas[i] << " " << v_dust1[i] << " " << v_dust2[i] << " " << E_gas[i] << "\n";
 	}
 
