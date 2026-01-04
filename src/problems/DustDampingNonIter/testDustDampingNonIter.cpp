@@ -196,7 +196,7 @@ void save_reference_solution(const std::vector<double> &t, const std::vector<dou
 
 	// write data
 	outfile << std::scientific << std::setprecision(15);
-	for (auto i = 0; i < t.size(); ++i) {
+	for (size_t i = 0; i < t.size(); ++i) {
 		outfile << t[i] << " " << v_gas[i] << " " << v_dust1[i] << " " << v_dust2[i] << " " << E_gas[i] << "\n";
 	}
 
@@ -318,20 +318,20 @@ auto problem_main() -> int
 	}
 
 	// calculate the sampling step size
-	auto step = static_cast<int>(t_ref.size() / t.size());
+	auto step = static_cast<size_t>(t_ref.size() / t.size());
 	if (step == 0) {
 		step = 1;
 	}
 
 	// calculate relative error
-	auto compute_relative_error = [](const std::vector<double> &sim, const std::vector<double> &ref, int step) {
+	auto compute_relative_error = [](const std::vector<double> &sim, const std::vector<double> &ref, size_t step) {
 		double err_sum = 0.0;
 		double ref_sum = 0.0;
 		int count = 0;
 
-		for (auto i = 0; i < sim.size(); ++i) {
-			int const ref_idx = i * step;
-			if (ref_idx >= static_cast<int>(ref.size())) {
+		for (size_t i = 0; i < sim.size(); ++i) {
+			size_t const ref_idx = i * step;
+			if (ref_idx >= ref.size()) {
 				break;
 			}
 
