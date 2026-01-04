@@ -34,7 +34,8 @@
 #include "util/BC.hpp"
 #include "util/DataTable.hpp"
 
-namespace {
+namespace
+{
 constexpr double keV_in_ergs = 1000.0 * C::ev2erg; // ergs == 1 keV
 }
 
