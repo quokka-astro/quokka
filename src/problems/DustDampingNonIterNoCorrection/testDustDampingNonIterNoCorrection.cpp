@@ -329,9 +329,9 @@ auto problem_main() -> int
 		double ref_sum = 0.0;
 		int count = 0;
 
-		for (int i = 0; i < sim.size(); ++i) {
+		for (auto i = 0; i < sim.size(); ++i) {
 			int const ref_idx = i * step;
-			if (ref_idx >= ref.size()) {
+			if (ref_idx >= static_cast<int>(ref.size())) {
 				break;
 			}
 
