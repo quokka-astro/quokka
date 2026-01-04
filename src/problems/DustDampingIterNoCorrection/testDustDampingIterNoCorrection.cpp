@@ -1,4 +1,4 @@
-/// \file testDustDampingIter.cpp
+/// \file testDustDampingIterNoCorrection.cpp
 /// \brief Defines a test problem for dust drag
 ///
 
@@ -42,7 +42,7 @@ constexpr double Egas0_internal = P_INITIAL / (quokka::EOS_Traits<DustDamping>::
 constexpr int numDustVars = Physics_NumVars::numDustVarsPerGroup;
 static constexpr amrex::GpuArray<amrex::Real, 2> dust_grain_radius = {0.02, 0.01};
 static constexpr amrex::GpuArray<amrex::Real, 2> dust_grain_density = {1.0, 1.0};
-static constexpr bool enable_supersonic_correction = true;
+static constexpr bool enable_supersonic_correction = false;
 
 template <> struct Physics_Traits<DustDamping> {
 	static constexpr bool is_self_gravity_enabled = false;
@@ -359,7 +359,7 @@ auto problem_main() -> int
 
 	// determine whether the test has passed
 	int status = 0;
-	const double rel_err_tol = 0.01;
+	const double rel_err_tol = 0.03;
 
 	if ((rel_err_gas_vx > rel_err_tol) || (rel_err_dust1_vx > rel_err_tol) || (rel_err_dust2_vx > rel_err_tol) || (rel_err_gas_E > rel_err_tol)) {
 		status = 1;
@@ -379,9 +379,9 @@ auto problem_main() -> int
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($v_g$)");
-		matplotlibcpp::title("Gas Velocity (with supersonic correction)");
+		matplotlibcpp::title("Gas Velocity (no supersonic correction)");
 		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./dust_damping_supersonic_gas_velocity.pdf");
+		matplotlibcpp::save("./dust_damping_supersonic_gas_velocity_noco.pdf");
 
 		// dust1 velocity
 		matplotlibcpp::clf();
@@ -391,9 +391,9 @@ auto problem_main() -> int
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($v_{d,1}$)");
-		matplotlibcpp::title("Dust1 Velocity (with supersonic correction)");
+		matplotlibcpp::title("Dust1 Velocity (no supersonic correction)");
 		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./dust_damping_supersonic_dust1_velocity.pdf");
+		matplotlibcpp::save("./dust_damping_supersonic_dust1_velocity_noco.pdf");
 
 		// dust2 velocity
 		matplotlibcpp::clf();
@@ -403,9 +403,9 @@ auto problem_main() -> int
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($v_{d,2}$)");
-		matplotlibcpp::title("Dust2 Velocity (with supersonic correction)");
+		matplotlibcpp::title("Dust2 Velocity (no supersonic correction)");
 		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./dust_damping_supersonic_dust2_velocity.pdf");
+		matplotlibcpp::save("./dust_damping_supersonic_dust2_velocity_noco.pdf");
 
 		// gas energy
 		matplotlibcpp::clf();
@@ -415,9 +415,9 @@ auto problem_main() -> int
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($E_g$)");
-		matplotlibcpp::title("Gas Energy (with supersonic correction)");
+		matplotlibcpp::title("Gas Energy (no supersonic correction)");
 		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./dust_damping_supersonic_gas_energy.pdf");
+		matplotlibcpp::save("./dust_damping_supersonic_gas_energy_noco.pdf");
 	}
 #endif
 
