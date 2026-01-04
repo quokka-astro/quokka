@@ -149,9 +149,6 @@ auto problem_main() -> int
 	const double Lx = 40.0;
 	const double CFL_number = 0.4;
 
-	// Boundary conditions: transmissive (first-order extrapolation)
-	constexpr int nvars = HydroSystem<DustyShock>::nvar_;
-
 	QuokkaSimulation<DustyShock> sim;
 	sim.reconstructionOrder_ = 2;
 	sim.plotfileInterval_ = -1;
