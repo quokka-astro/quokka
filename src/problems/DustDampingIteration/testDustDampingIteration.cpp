@@ -178,140 +178,126 @@ template <> void QuokkaSimulation<DustDamping>::computeAfterTimestep()
 auto run_simulation(double dt) -> SimulationData<DustDamping>
 {
 	QuokkaSimulation<DustDamping> sim;
-	
+
 	sim.reconstructionOrder_ = 3;
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = 1000000.0; // set large CFL to avoid CFL violation
 	sim.constantDt_ = dt;
-	
+
 	sim.setInitialConditions();
-	
+
 	sim.evolve();
-	
+
 	return sim.userData_;
 }
 
 auto problem_main() -> int
 {
 	amrex::Print() << "Running dust damping test with supersonic correction...\n";
-	
+
 	const double dt_ref = 0.00001;
 	const double dt_test = 0.005;
-	
+
 	// step 1: run reference solution (dt = 0.00001)
 	auto ref_data = run_simulation(dt_ref);
-	
+
 	// step 2: run numerical solution (dt = 0.005)
 	auto test_data = run_simulation(dt_test);
-	
+
 	// step 3: calculate errors
-	
+
 	// calculate sampling step size
 	const auto step = static_cast<size_t>(std::round(dt_test / dt_ref));
-	auto compute_relative_error = [](const std::vector<double> &sim, 
-																		const std::vector<double> &ref, size_t step) {
+	auto compute_relative_error = [](const std::vector<double> &sim, const std::vector<double> &ref, size_t step) {
 		double err_sum = 0.0;
 		double ref_sum = 0.0;
 		int count = 0;
-		
+
 		for (size_t i = 0; i < sim.size(); ++i) {
 			size_t const ref_idx = i * step;
 			if (ref_idx >= ref.size()) {
-					break;
+				break;
 			}
-			
+
 			err_sum += std::abs(sim[i] - ref[ref_idx]);
 			ref_sum += std::abs(ref[ref_idx]);
 			count++;
 		}
-		
+
 		if (count == 0 || ref_sum == 0.0) {
 			return 1.0; // error value
 		}
 		return err_sum / ref_sum;
 	};
-	
+
 	double const rel_err_gas_vx = compute_relative_error(test_data.v_gas_vec_, ref_data.v_gas_vec_, step);
 	double const rel_err_dust1_vx = compute_relative_error(test_data.v_dust1_vec_, ref_data.v_dust1_vec_, step);
 	double const rel_err_dust2_vx = compute_relative_error(test_data.v_dust2_vec_, ref_data.v_dust2_vec_, step);
 	double const rel_err_gas_E = compute_relative_error(test_data.E_gas_vec_, ref_data.E_gas_vec_, step);
-	
+
 	amrex::Print() << "Comparison with reference solution (supersonic correction enabled):\n";
 	amrex::Print() << "Relative L1 norm for gas vx    = " << rel_err_gas_vx << "\n";
 	amrex::Print() << "Relative L1 norm for dust1 vx  = " << rel_err_dust1_vx << "\n";
 	amrex::Print() << "Relative L1 norm for dust2 vx  = " << rel_err_dust2_vx << "\n";
 	amrex::Print() << "Relative L1 norm for gas E     = " << rel_err_gas_E << "\n";
-	
+
 	// determine whether the test has passed
 	int status = 0;
 	const double rel_err_tol = 0.01;
-	
-	if ((rel_err_gas_vx > rel_err_tol) || (rel_err_dust1_vx > rel_err_tol) || 
-		(rel_err_dust2_vx > rel_err_tol) || (rel_err_gas_E > rel_err_tol)) {
+
+	if ((rel_err_gas_vx > rel_err_tol) || (rel_err_dust1_vx > rel_err_tol) || (rel_err_dust2_vx > rel_err_tol) || (rel_err_gas_E > rel_err_tol)) {
 		status = 1;
-		amrex::Print() << "Test FAILED: one or more errors exceed tolerance of " 
-										<< rel_err_tol << "\n";
+		amrex::Print() << "Test FAILED: one or more errors exceed tolerance of " << rel_err_tol << "\n";
 	} else {
-		amrex::Print() << "Test PASSED: all errors within tolerance of " 
-										<< rel_err_tol << "\n";
+		amrex::Print() << "Test PASSED: all errors within tolerance of " << rel_err_tol << "\n";
 	}
-    
+
 #ifdef HAVE_PYTHON
 	if (!ref_data.t_vec_.empty() && !test_data.t_vec_.empty()) {
 		// gas velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(test_data.t_vec_, test_data.v_gas_vec_,
-								{{"label", "numerical (iter, dt=0.005)"}, {"color", "r"}, 
-									{"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
-		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_gas_vec_, 
-								{{"label", "reference (non-iter, dt=0.00001)"}, 
-									{"color", "r"}, {"linestyle", "--"}});
+				    {{"label", "numerical (iter, dt=0.005)"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
+		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_gas_vec_, {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "r"}, {"linestyle", "--"}});
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($v_g$)");
 		matplotlibcpp::title("Gas Velocity (with supersonic correction)");
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("./dust_damping_iteration_gas_velocity.pdf");
-		
+
 		// dust1 velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(test_data.t_vec_, test_data.v_dust1_vec_,
-								{{"label", "numerical (iter, dt=0.005)"}, {"color", "b"}, 
-									{"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
-		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust1_vec_, 
-								{{"label", "reference (non-iter, dt=0.00001)"}, 
-									{"color", "b"}, {"linestyle", "--"}});
+				    {{"label", "numerical (iter, dt=0.005)"}, {"color", "b"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
+		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust1_vec_,
+				    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "b"}, {"linestyle", "--"}});
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($v_{d,1}$)");
 		matplotlibcpp::title("Dust1 Velocity (with supersonic correction)");
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("./dust_damping_iteration_dust1_velocity.pdf");
-		
+
 		// dust2 velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(test_data.t_vec_, test_data.v_dust2_vec_,
-								{{"label", "numerical (iter, dt=0.005)"}, {"color", "g"}, 
-									{"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
-		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust2_vec_, 
-								{{"label", "reference (non-iter, dt=0.00001)"}, 
-									{"color", "g"}, {"linestyle", "--"}});
+				    {{"label", "numerical (iter, dt=0.005)"}, {"color", "g"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
+		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust2_vec_,
+				    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "g"}, {"linestyle", "--"}});
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($v_{d,2}$)");
 		matplotlibcpp::title("Dust2 Velocity (with supersonic correction)");
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("./dust_damping_iteration_dust2_velocity.pdf");
-		
+
 		// gas energy
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(test_data.t_vec_, test_data.E_gas_vec_,
-								{{"label", "numerical (iter, dt=0.005)"}, {"color", "m"}, 
-									{"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
-		matplotlibcpp::plot(ref_data.t_vec_, ref_data.E_gas_vec_, 
-								{{"label", "reference (non-iter, dt=0.00001)"}, 
-									{"color", "m"}, {"linestyle", "--"}});
+				    {{"label", "numerical (iter, dt=0.005)"}, {"color", "m"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
+		matplotlibcpp::plot(ref_data.t_vec_, ref_data.E_gas_vec_, {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "m"}, {"linestyle", "--"}});
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($E_g$)");
@@ -320,7 +306,7 @@ auto problem_main() -> int
 		matplotlibcpp::save("./dust_damping_iteration_gas_energy.pdf");
 	}
 #endif
-	
+
 	amrex::Print() << "\nTest complete.\n";
 	return status;
 }
