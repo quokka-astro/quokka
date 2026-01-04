@@ -1,0 +1,29 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  0.0  0.0  0.0 
+geometry.prob_hi     =  1.0  1.0  1.0
+quokka.bc = reflecting reflecting reflecting
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 0       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 512 512 8
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor_x = 128   # grid size must be divisible by this
+amr.blocking_factor_y = 128   # grid size must be divisible by this
+amr.blocking_factor_z = 8   # grid size must be divisible by this
+amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
+
+## grid_eff = 1 forces refinement to respect symmetries of the tagged cells
+amr.grid_eff        = 0.7   # default
+
+do_reflux = 0
+do_subcycle = 0
+do_tracers = 1
+plotfile_interval = 200

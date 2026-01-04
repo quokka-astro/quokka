@@ -3,7 +3,7 @@
 # *****************************************************************
 geometry.prob_lo     =  -3.949667304e+19 -3.949667304e+19 -3.949667304e+19
 geometry.prob_hi     =  3.949667304e+19 3.949667304e+19 3.949667304e+19
-geometry.is_periodic =  0    0    0
+quokka.bc = reflecting reflecting reflecting
 
 # *****************************************************************
 # VERBOSITY
@@ -30,7 +30,7 @@ plotfile_interval = -1
 
 tiny_profiler.enabled = 0
 
-quokka.diagnostics = plt slice_z slice_x
+quokka.diagnostics = plt slice_z slice_x part
 
 quokka.plt.type = PlotFile         # pltfile for the whole box
 quokka.plt.file = plt              # Output file prefix (default "plt", must end in "plt")
@@ -54,3 +54,9 @@ quokka.slice_x.time_int    = 4e13            # Output cadence (in time intervals
 quokka.slice_x.interpolation = Linear        # (Optional, default is Linear) Interpolation type: Linear or Quadratic
 quokka.slice_x.particles = Sink_particles
 quokka.slice_x.field_names = gasDensity gasInternalEnergy # List of variables included in output
+
+quokka.part.type = ParticleTxt         # Diagnostic type
+quokka.part.file = part_plt             # Output file prefix (must end in "plt")
+#quokka.part.int = 18
+quokka.part.time_int = 4e13
+quokka.part.particles = Sink_particles

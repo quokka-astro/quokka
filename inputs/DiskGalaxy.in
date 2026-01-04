@@ -4,7 +4,7 @@
 # Box size is [-600 kpc, 600 kpc]^3
 geometry.prob_lo     =  -1.8514065526075864e24 -1.8514065526075864e24 -1.8514065526075864e24
 geometry.prob_hi     =   1.8514065526075864e24  1.8514065526075864e24  1.8514065526075864e24
-geometry.is_periodic =   0    0    0
+quokka.bc = reflecting reflecting reflecting
 
 # *****************************************************************
 # VERBOSITY
@@ -59,6 +59,10 @@ agora_galaxy.disk_zscale_kpc = 0.343218     # kpc
 agora_galaxy.disk_temperature = 1.0e4       # K
 agora_galaxy.disk_perturb_amplitude = 1.0   # dimensionless
 agora_galaxy.disk_perturb_Rmax_kpc = 20.0   # kpc
+agora_galaxy.magnetic_field_microgauss = 1.0 # uniform B-field strength (microgauss)
+
+quokka.project_initial_b_field = true
+quokka.update_initial_b_energy = true
 
 agora_galaxy.halo_temperature = 1.0e6       # K
 agora_galaxy.halo_number_density = 1.0e-4   # cm^-3

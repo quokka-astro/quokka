@@ -3,7 +3,7 @@
 # *****************************************************************
 geometry.prob_lo     =  -0.6  -0.6 -0.6 
 geometry.prob_hi     =  0.6  0.6  0.6
-geometry.is_periodic =  0    0    0
+quokka.bc = reflecting reflecting reflecting
 
 # *****************************************************************
 # VERBOSITY
@@ -33,5 +33,4 @@ do_tracers = 0          # turn on tracer particles
 
 ascent_interval = 100
 plotfile_interval = 200
-particle_csv_interval = 200
 checkpoint_interval = 1000

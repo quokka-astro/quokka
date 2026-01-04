@@ -204,13 +204,10 @@ auto problem_main() -> int
 
 	const double max_dt = 1e-3; // t_cr = 2 cm / cs = 7e-8 s
 
-	// Boundary conditions
-	auto BCs_cc = quokka::BC<PulseProblem>(quokka::BCType::int_dir);
-
 	// Problem 1: non-advecting pulse
 
 	// Problem initialization
-	QuokkaSimulation<PulseProblem> sim(BCs_cc);
+	QuokkaSimulation<PulseProblem> sim;
 
 	double max_time = 4.8e-5;
 	amrex::ParmParse pp; // NOLINT
@@ -261,7 +258,7 @@ auto problem_main() -> int
 	// Problem 2: advecting radiation
 
 	// Problem initialization
-	QuokkaSimulation<AdvPulseProblem> sim2(BCs_cc);
+	QuokkaSimulation<AdvPulseProblem> sim2;
 
 	sim2.radiationReconstructionOrder_ = 3; // PPM
 	sim2.stopTime_ = max_time;
