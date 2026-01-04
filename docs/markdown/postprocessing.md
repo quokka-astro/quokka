@@ -40,7 +40,15 @@ Other tools:
 
 We have a fork of YT that includes a customized Quokka frontend: [https://github.com/chongchonghe/yt](https://github.com/chongchonghe/yt). To install it, run `pip install "yt[quokka] @ git+https://github.com/chongchonghe/yt.git"`. A comprehensive documentation is available at [this link](https://github.com/chongchonghe/yt/blob/Rongjun-ANUquokka-frontend/doc/source/examining/loading_data.rst#quokka-data), and a Jupyter Notebook with tutorials is available at [README.ipynb](https://github.com/Rongjun-ANU/README-of-yt-frontend-for-QUOKKA/blob/main/README.ipynb).
 
+### quick_plot script for batch processing
+
 The `quick_plot` script in `scripts/python/` is a convenient tool for visualizing Quokka outputs. It is a wrapper around YT for batch processing snapshots and generating slice or projection plots. The script has detailed documentation in the code itself, accessible at the top of the file and also by running `quick_plot -h`.
+
+### yt-studio for web-based visualization
+
+[yt-studio](https://github.com/chongchonghe/yt-studio) is a visualization tool for QUOKKA simulation data that provides both a web-based interface and Python API. Install it with `pip install git+https://github.com/chongchonghe/yt-studio.git`, then start the web interface with `yt-studio` and open http://localhost:5173 in your browser. The tool supports slice plots, projection plots, volume rendering, multiple colormaps, and high-resolution export, with optional particle overlay and AMR grid annotations. For programmatic use, the Python API offers `QuokkaPlotter` class methods like `slice()` and `project()` for generating publication-quality visualizations.
+
+![yt-studio-screenshot](media/yt-studio-screenshot.jpg)
 
 ## VisIt
 
