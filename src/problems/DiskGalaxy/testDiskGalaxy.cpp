@@ -38,7 +38,7 @@ namespace
 {
 constexpr double keV_in_ergs = 1000.0 * C::ev2erg; // ergs == 1 keV
 constexpr double seconds_per_year = 3.15576e7;
-}
+} // namespace
 
 struct AgoraGalaxy {
 };
@@ -743,8 +743,7 @@ template <> auto QuokkaSimulation<AgoraGalaxy>::ComputeStatistics() -> std::map<
 	}
 	amrex::Gpu::streamSynchronize();
 
-	const amrex::Real disk_mass_refine =
-	    amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(refine_mask), 0, geom, ref_ratio);
+	const amrex::Real disk_mass_refine = amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(refine_mask), 0, geom, ref_ratio);
 	stats["disk_mass_refine_region"] = disk_mass_refine / C::M_solar;
 
 	auto tables = resampledTables_.const_tables();

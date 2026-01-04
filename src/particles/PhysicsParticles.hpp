@@ -1082,9 +1082,8 @@ template <typename problem_t> class PhysicsParticleRegister
 				return std::get<2>(back);
 			}
 
-			auto upper = std::upper_bound(history.begin(), history.end(), time, [](amrex::Real value, auto const &entry) {
-				return value < std::get<1>(entry);
-			});
+			auto upper = std::upper_bound(history.begin(), history.end(), time,
+						      [](amrex::Real value, auto const &entry) { return value < std::get<1>(entry); });
 			auto lower = std::prev(upper);
 			const amrex::Real t0 = std::get<1>(*lower);
 			const amrex::Real t1 = std::get<1>(*upper);
