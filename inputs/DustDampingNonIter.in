@@ -23,7 +23,7 @@ suppress_output = 0
 max_timesteps = 10000000
 
 dust.omega = 1.0
-dust.enable_iter_stoptime = 1
+dust.enable_iter_stoptime = 0
 
 # test A
 #stop_time = 10.0
