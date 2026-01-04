@@ -34,6 +34,10 @@
 #include "util/BC.hpp"
 #include "util/DataTable.hpp"
 
+namespace {
+constexpr double keV_in_ergs = 1000.0 * C::ev2erg; // ergs == 1 keV
+}
+
 struct AgoraGalaxy {
 };
 
@@ -592,6 +596,26 @@ template <> void QuokkaSimulation<AgoraGalaxy>::ComputeDerivedVar(int lev, std::
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				Real const Pgas = HydroSystem<AgoraGalaxy>::ComputePressure(state, i, j, k, &cons_fc);
 				output(i, j, k, ncomp) = Pgas / C::k_B;
+			});
+		}
+	}
+
+	if (dname == "entropy") {
+		const int ncomp = ncomp_cc_in;
+		auto tables = resampledTables_.const_tables();
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &output = mf.array(iter);
+			auto const &state = state_new_cc_[lev].const_array(iter);
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				Real const rho = state(i, j, k, HydroSystem<AgoraGalaxy>::density_index);
+				Real const x1Mom = state(i, j, k, HydroSystem<AgoraGalaxy>::x1Momentum_index);
+				Real const x2Mom = state(i, j, k, HydroSystem<AgoraGalaxy>::x2Momentum_index);
+				Real const x3Mom = state(i, j, k, HydroSystem<AgoraGalaxy>::x3Momentum_index);
+				Real const Egas = state(i, j, k, HydroSystem<AgoraGalaxy>::energy_index);
+				Real const Eint = RadSystem<AgoraGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+				Real const K_cgs = quokka::ResampledCooling::ComputeEntropyFromRhoEint(rho, Eint, tables);
+				output(i, j, k, ncomp) = K_cgs / keV_in_ergs;
 			});
 		}
 	}
