@@ -151,15 +151,8 @@ auto problem_main() -> int
 
 	// Boundary conditions: transmissive (first-order extrapolation)
 	constexpr int nvars = HydroSystem<DustyShock>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::foextrap);
-			BCs_cc[n].setHi(i, amrex::BCType::foextrap);
-		}
-	}
 
-	QuokkaSimulation<DustyShock> sim(BCs_cc);
+	QuokkaSimulation<DustyShock> sim;
 	sim.reconstructionOrder_ = 2;
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = CFL_number;
@@ -194,7 +187,7 @@ auto problem_main() -> int
 	int const shock_idx = (drho.empty()) ? 0 : static_cast<int>(std::distance(drho.begin(), std::max_element(drho.begin(), drho.end())));
 	double const shock_pos_numeric = position[shock_idx];
 
-	// Analytic solution parameters (matching previous Python logic)
+	// Analytic solution parameters
 	const double v_s = 2.0;
 	const double c_s = 1.0;
 	const double M = v_s / c_s;
