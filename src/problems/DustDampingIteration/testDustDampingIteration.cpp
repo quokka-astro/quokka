@@ -1,4 +1,4 @@
-/// \file testDustDampingIter.cpp
+/// \file testDustDampingIteration.cpp
 /// \brief Defines a test problem for dust drag
 ///
 
