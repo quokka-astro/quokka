@@ -69,41 +69,6 @@ def read_inputs_param_str(filename: str, key: str):
     return None
 
 
-def read_blend_table(filename: str):
-    with open(filename, "r", encoding="utf-8") as handle:
-        lines = [line.strip() for line in handle if line.strip()]
-    if len(lines) < 11:
-        raise ValueError(f"{filename} does not look like a DataTable CSV file.")
-
-    ndim = int(lines[0])
-    if ndim != 2:
-        raise ValueError(f"{filename} expects 2D DataTable, got ndim={ndim}.")
-    sizes = [int(val.strip()) for val in lines[1].split(",")]
-    if len(sizes) != 2:
-        raise ValueError(f"{filename} has invalid size line: {lines[1]}")
-    n_r, n_z = sizes
-    xlo = [float(val.strip()) for val in lines[7].split(",")]
-    xhi = [float(val.strip()) for val in lines[8].split(",")]
-    if len(xlo) != 2 or len(xhi) != 2:
-        raise ValueError(f"{filename} has invalid bounds lines.")
-
-    r_min, z_min = xlo
-    r_max, z_max = xhi
-    r_grid = np.linspace(r_min, r_max, n_r)
-    z_grid = np.linspace(z_min, z_max, n_z)
-
-    data_lines = lines[10:]
-    if len(data_lines) != n_z:
-        raise ValueError(f"{filename} has {len(data_lines)} data rows, expected {n_z}.")
-    blend = np.zeros((n_z, n_r))
-    for iz, line in enumerate(data_lines):
-        row_vals = [float(val) for val in line.replace(",", " ").split()]
-        if len(row_vals) != n_r:
-            raise ValueError(f"{filename} row {iz} has {len(row_vals)} entries, expected {n_r}.")
-        blend[iz, :] = row_vals
-    return r_grid, z_grid, blend
-
-
 def bilinear_interp(r_grid, z_grid, values, r_val, z_val):
     r = float(np.clip(r_val, r_grid[0], r_grid[-1]))
     z = float(np.clip(z_val, z_grid[0], z_grid[-1]))
@@ -180,54 +145,6 @@ if HAVE_NUMBA:
         v11 = values[i_z + 1, i_r + 1]
         return (1.0 - fr) * (1.0 - fz) * v00 + fr * (1.0 - fz) * v10 + (1.0 - fr) * fz * v01 + fr * fz * v11
 
-    @nb.njit(cache=True)
-    def expected_rho_blend_bins(
-        r_mins,
-        r_maxs,
-        r_grid,
-        z_grid,
-        blend,
-        halo_r,
-        halo_rho,
-        rho0,
-        r_scale,
-        z_scale,
-        sin_t,
-        abs_cos_t,
-    ):
-        n_bins = r_mins.size
-        n_theta = sin_t.size
-        n_r = 128
-        out = np.empty(n_bins, dtype=np.float64)
-        dtheta = math.pi / (n_theta - 1)
-        for ibin in range(n_bins):
-            r0 = r_mins[ibin]
-            r1 = r_maxs[ibin]
-            if not np.isfinite(r0) or not np.isfinite(r1) or r1 <= r0:
-                out[ibin] = np.nan
-                continue
-            dr = (r1 - r0) / (n_r - 1)
-            shell_num = 0.0
-            shell_den = 0.0
-            for ir in range(n_r):
-                r_val = r0 + dr * ir
-                # angular average
-                num_theta = 0.0
-                for it in range(n_theta):
-                    w = 0.5 if (it == 0 or it == n_theta - 1) else 1.0
-                    r_cyl = r_val * sin_t[it]
-                    z_val = r_val * abs_cos_t[it]
-                    f_disk = bilinear_interp_numba(r_grid, z_grid, blend, r_cyl, z_val)
-                    rho_disk = rho0 * math.exp(-r_cyl / r_scale) * math.exp(-z_val / z_scale)
-                    rho_h = interp1d_linear(r_val, halo_r, halo_rho)
-                    rho_theta = f_disk * rho_disk + (1.0 - f_disk) * rho_h
-                    num_theta += w * rho_theta * sin_t[it]
-                avg_theta = 0.5 * dtheta * num_theta
-                w_r = 0.5 if (ir == 0 or ir == n_r - 1) else 1.0
-                shell_num += w_r * avg_theta * (r_val * r_val)
-                shell_den += w_r * (r_val * r_val)
-            out[ibin] = shell_num / shell_den if shell_den > 0.0 else np.nan
-        return out
 def disk_density_spherical_avg(radius_kpc, r_scale_kpc, z_scale_kpc, rho0_cgs):
     kpc_cm = 1.0e3 * 3.085677581e18
     r_cm = np.asarray(radius_kpc) * kpc_cm
@@ -375,7 +292,7 @@ def main():
     disk_rscale = read_inputs_param(args.inputs_file, "agora_galaxy.disk_Rscale_kpc")
     disk_zscale = read_inputs_param(args.inputs_file, "agora_galaxy.disk_zscale_kpc")
     disk_temp = read_inputs_param(args.inputs_file, "agora_galaxy.disk_temperature")
-    blend_file = read_inputs_param_str(args.inputs_file, "agora_galaxy.disk_blend_file")
+
     if (
         disk_mass is not None
         and disk_rscale is not None
@@ -395,14 +312,6 @@ def main():
             "z_scale": disk_zscale,
             "temp": disk_temp,
         }
-
-    blend_grid = None
-    if blend_file:
-        try:
-            r_grid, z_grid, blend = read_blend_table(blend_file)
-            blend_grid = (r_grid, z_grid, blend)
-        except OSError:
-            blend_grid = None
 
     def format_label(name: str) -> str:
         label = name
@@ -522,56 +431,6 @@ def main():
                 disk_profile["rho0"],
             )
             ax.loglog(r, analytic_rho, label="analytic disk rho", linestyle=":")
-            if profile_data is not None and blend_grid is not None:
-                r_grid, z_grid, blend = blend_grid
-                theta = np.linspace(0.0, math.pi, 512)
-                sin_t = np.sin(theta)
-                abs_cos_t = np.abs(np.cos(theta))
-                if HAVE_NUMBA:
-                    rho_blend = expected_rho_blend_bins(
-                        prof["radius_min"].astype(float),
-                        prof["radius_max"].astype(float),
-                        r_grid.astype(float),
-                        z_grid.astype(float),
-                        blend.astype(float),
-                        profile_data["radius"].astype(float),
-                        profile_data["rho"].astype(float),
-                        float(disk_profile["rho0"]),
-                        float(disk_profile["r_scale"]),
-                        float(disk_profile["z_scale"]),
-                        sin_t.astype(float),
-                        abs_cos_t.astype(float),
-                    )
-                else:
-                    rho_blend = np.full_like(r, np.nan, dtype=float)
-                    for i in range(len(r)):
-                        r0 = prof["radius_min"][i]
-                        r1 = prof["radius_max"][i]
-                        if not (np.isfinite(r0) and np.isfinite(r1)) or r1 <= r0:
-                            continue
-                        r_samples = np.linspace(r0, r1, 128)
-                        shell_vals = np.zeros_like(r_samples)
-                        for j, r_val in enumerate(r_samples):
-                            r_cyl = r_val * sin_t
-                            z_val = r_val * abs_cos_t
-                            f_disk = np.array(
-                                [bilinear_interp(r_grid, z_grid, blend, rc, zc) for rc, zc in zip(r_cyl, z_val)]
-                            )
-                            rho_disk = disk_profile["rho0"] * np.exp(-r_cyl / disk_profile["r_scale"]) * np.exp(
-                                -z_val / disk_profile["z_scale"]
-                            )
-                            rho_halo = np.interp(
-                                r_val,
-                                profile_data["radius"],
-                                profile_data["rho"],
-                                left=profile_data["rho"][0],
-                                right=profile_data["rho"][-1],
-                            )
-                            rho_theta = f_disk * rho_disk + (1.0 - f_disk) * rho_halo
-                            shell_vals[j] = 0.5 * np.trapz(rho_theta * sin_t, theta)
-                        weights = r_samples * r_samples
-                        rho_blend[i] = np.trapz(shell_vals * weights, r_samples) / np.trapz(weights, r_samples)
-                ax.loglog(r, rho_blend, label="expected rho (blend)", linestyle="-.")
 
         if other == "pressure" and disk_profile is not None:
             analytic_p_mid = disk_pressure_midplane(
