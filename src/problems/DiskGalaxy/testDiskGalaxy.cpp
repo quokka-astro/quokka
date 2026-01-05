@@ -238,12 +238,6 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	const bool use_disk_blend = userData_.has_disk_blend;
-	quokka::DataTableGpuConst<2, 1> blend_tables{};
-	if (use_disk_blend) {
-		blend_tables = userData_.disk_blend.const_tables();
-	}
-
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// Cartesian coordinates
 		amrex::Real const x0 = prob_lo[0] + (i * dx[0]);
@@ -370,65 +364,50 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		constexpr double gamma_gas = quokka::EOS_Traits<AgoraGalaxy>::gamma;
 		constexpr double mu = 0.61;
 
-		auto f_disk_exact = [=] AMREX_GPU_DEVICE(double x, double y, double z) {
-			const double R = std::sqrt(x * x + y * y);
-			const double z_abs = std::abs(z);
-			if (use_disk_blend) {
-				constexpr double kpc = 1.0e3 * C::parsec;
-				return blend_tables.interpolate_single({R / kpc, z_abs / kpc});
-			}
-			const double rho_disk_local = rho_0 * std::exp(-R / R_d) * std::exp(-z_abs / z_d);
-			const double r_sph = std::sqrt(x * x + y * y + z * z);
-			const double rho_halo_local = rhoHalo(r_sph);
-			const double temp_halo_local = tempHalo(r_sph);
-			return (rho_halo_local * temp_halo_local < rho_disk_local * T_disk) ? 1.0 : 0.0;
+		auto rho_total_exact = [=] AMREX_GPU_DEVICE(double x, double y, double z) {
+			return rhoDisk_exact(x, y, z) + rhoHalo_exact(x, y, z);
 		};
 
-		auto rho_blend_exact = [=] AMREX_GPU_DEVICE(double x, double y, double z) {
-			const double f = f_disk_exact(x, y, z);
+		auto momx_total_exact = [=] AMREX_GPU_DEVICE(double x, double y, double z) {
 			const double rho_disk_local = rhoDisk_exact(x, y, z);
 			const double rho_halo_local = rhoHalo_exact(x, y, z);
-			return f * rho_disk_local + (1.0 - f) * rho_halo_local;
+			return rho_disk_local * vx_exact(x, y, z) + rho_halo_local * velx_exact(x, y, z);
 		};
 
-		auto vx_blend_exact = [=] AMREX_GPU_DEVICE(double x, double y, double z) {
-			const double f = f_disk_exact(x, y, z);
-			return f * vx_exact(x, y, z) + (1.0 - f) * velx_exact(x, y, z);
+		auto momy_total_exact = [=] AMREX_GPU_DEVICE(double x, double y, double z) {
+			const double rho_disk_local = rhoDisk_exact(x, y, z);
+			const double rho_halo_local = rhoHalo_exact(x, y, z);
+			return rho_disk_local * vy_exact(x, y, z) + rho_halo_local * vely_exact(x, y, z);
 		};
 
-		auto vy_blend_exact = [=] AMREX_GPU_DEVICE(double x, double y, double z) {
-			const double f = f_disk_exact(x, y, z);
-			return f * vy_exact(x, y, z) + (1.0 - f) * vely_exact(x, y, z);
+		auto momz_total_exact = [=] AMREX_GPU_DEVICE(double x, double y, double z) {
+			const double rho_halo_local = rhoHalo_exact(x, y, z);
+			return rho_halo_local * velz_exact(x, y, z);
 		};
 
-		auto vz_blend_exact = [=] AMREX_GPU_DEVICE(double x, double y, double z) {
-			const double f = f_disk_exact(x, y, z);
-			return (1.0 - f) * velz_exact(x, y, z);
-		};
-
-		auto eint_blend_exact = [=] AMREX_GPU_DEVICE(double x, double y, double z) {
-			const double f = f_disk_exact(x, y, z);
+		auto eint_total_exact = [=] AMREX_GPU_DEVICE(double x, double y, double z) {
 			const double rho_disk_local = rhoDisk_exact(x, y, z);
 			const double rho_halo_local = rhoHalo_exact(x, y, z);
 			const double temp_halo_local = tempHalo_exact(x, y, z);
-			const double eint_disk_local = (rho_disk_local > 0.0) ? (rho_disk_local * C::k_B * T_disk / (mu * C::m_p * (gamma_gas - 1.0))) : 0.0;
+			const double eint_disk_local =
+			    (rho_disk_local > 0.0) ? (rho_disk_local * C::k_B * T_disk / (mu * C::m_p * (gamma_gas - 1.0))) : 0.0;
 			const double eint_halo_local =
 			    (rho_halo_local > 0.0) ? (rho_halo_local * C::k_B * temp_halo_local / (mu * C::m_p * (gamma_gas - 1.0))) : 0.0;
-			return f * eint_disk_local + (1.0 - f) * eint_halo_local;
+			return eint_disk_local + eint_halo_local;
 		};
 
-		const double rho = quad_3d(rho_blend_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
+		const double rho = quad_3d(rho_total_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
 		AMREX_ALWAYS_ASSERT(rho > 0.0);
-		const double vx = quad_3d(vx_blend_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
-		const double vy = quad_3d(vy_blend_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
-		const double vz = quad_3d(vz_blend_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
-		const double Eint = quad_3d(eint_blend_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
+		const double momx = quad_3d(momx_total_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
+		const double momy = quad_3d(momy_total_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
+		const double momz = quad_3d(momz_total_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
+		const double Eint = quad_3d(eint_total_exact, x0, x1, y0, y1, z0, z1) / cell_vol;
 
 		// Add up disk and halo contributions
 		double const rho_disk_halo = rho;
-		double const momx_disk_halo = rho * vx;
-		double const momy_disk_halo = rho * vy;
-		double const momz_disk_halo = rho * vz;
+		double const momx_disk_halo = momx;
+		double const momy_disk_halo = momy;
+		double const momz_disk_halo = momz;
 		double const Ekin_disk_halo =
 		    0.5 * (momx_disk_halo * momx_disk_halo + momy_disk_halo * momy_disk_halo + momz_disk_halo * momz_disk_halo) / rho_disk_halo;
 		double const Eint_disk_halo = Eint;
