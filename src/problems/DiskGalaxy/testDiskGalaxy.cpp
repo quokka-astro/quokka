@@ -88,9 +88,6 @@ template <> struct SimulationData<AgoraGalaxy> {
 	amrex::Gpu::PinnedVector<amrex::Real> rho_halo;
 	amrex::Gpu::PinnedVector<amrex::Real> velr_halo;
 	amrex::Gpu::PinnedVector<amrex::Real> temp_halo;
-
-	bool has_disk_blend = false;
-	quokka::DataTable<2, 1> disk_blend;
 };
 
 template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
@@ -106,8 +103,6 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 	amrex::ParmParse const pp("agora_galaxy");
 	std::string filename;
 	pp.query("vcirc_file", filename);
-	std::string blend_filename;
-	pp.query("disk_blend_file", blend_filename);
 
 	std::ifstream fstream(filename, std::ios::in);
 	AMREX_ALWAYS_ASSERT(fstream.is_open());
@@ -169,11 +164,6 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 	userData_.rho_outer = rho_h[std::distance(radius_h.begin(), max_result)];
 	userData_.velr_outer = velr_h[std::distance(radius_h.begin(), max_result)];
 	userData_.temp_outer = temp_h[std::distance(radius_h.begin(), max_result)];
-
-	if (!blend_filename.empty()) {
-		userData_.disk_blend = quokka::DataTable<2, 1>::CSVReader(blend_filename, quokka::SpacingType::linear);
-		userData_.has_disk_blend = true;
-	}
 }
 
 template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -358,8 +348,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			return (r > 0.0) ? (velHalo(r) * z / r) : 0.0; // vz
 		};
 
-		// integrate blended profiles over cell volume
-		// TODO(bwibking): use adaptive quadrature with relative tolerance
+		// integrate profiles over cell volume
 		const double cell_vol = dx[0] * dx[1] * dx[2];
 		constexpr double gamma_gas = quokka::EOS_Traits<AgoraGalaxy>::gamma;
 		constexpr double mu = 0.61;
