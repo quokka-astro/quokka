@@ -364,9 +364,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		constexpr double gamma_gas = quokka::EOS_Traits<AgoraGalaxy>::gamma;
 		constexpr double mu = 0.61;
 
-		auto rho_total_exact = [=] AMREX_GPU_DEVICE(double x, double y, double z) {
-			return rhoDisk_exact(x, y, z) + rhoHalo_exact(x, y, z);
-		};
+		auto rho_total_exact = [=] AMREX_GPU_DEVICE(double x, double y, double z) { return rhoDisk_exact(x, y, z) + rhoHalo_exact(x, y, z); };
 
 		auto momx_total_exact = [=] AMREX_GPU_DEVICE(double x, double y, double z) {
 			const double rho_disk_local = rhoDisk_exact(x, y, z);
@@ -389,8 +387,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 			const double rho_disk_local = rhoDisk_exact(x, y, z);
 			const double rho_halo_local = rhoHalo_exact(x, y, z);
 			const double temp_halo_local = tempHalo_exact(x, y, z);
-			const double eint_disk_local =
-			    (rho_disk_local > 0.0) ? (rho_disk_local * C::k_B * T_disk / (mu * C::m_p * (gamma_gas - 1.0))) : 0.0;
+			const double eint_disk_local = (rho_disk_local > 0.0) ? (rho_disk_local * C::k_B * T_disk / (mu * C::m_p * (gamma_gas - 1.0))) : 0.0;
 			const double eint_halo_local =
 			    (rho_halo_local > 0.0) ? (rho_halo_local * C::k_B * temp_halo_local / (mu * C::m_p * (gamma_gas - 1.0))) : 0.0;
 			return eint_disk_local + eint_halo_local;
