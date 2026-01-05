@@ -81,5 +81,5 @@ $$
 
 The following input parameters tune the dust module and are documented in more detail in [Runtime parameters](parameters.md):
 
-- `alpha` – Inverse of dust stopping time.
-- `omega` – Controls the level of frictional heating.
+- `enable_iter_stoptime` – switch of iterative dust stopping time calculation.
+- `omega` – controls the level of frictional heating.
