@@ -110,10 +110,9 @@ template <> struct Physics_Traits<DustDamping> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustDrag<DustDamping>::ComputeReciprocalStoppingTime(
-    amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, Physics_Traits<DustDamping>::nDustGroups> /*rho_d*/,
-    amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, Physics_Traits<DustDamping>::nDustGroups + 1> /*vel*/, double /*cs*/)
-    -> amrex::GpuArray<amrex::Real, Physics_Traits<DustDamping>::nDustGroups>
+AMREX_GPU_HOST_DEVICE auto DustDrag<DustDamping>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
+										amrex::GpuArray<amrex::Real, nDustGroups_ + 1> /*vel_mag*/, double /*cs*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, 2> alpha{};
 	alpha[0] = 1.0 / TS1;

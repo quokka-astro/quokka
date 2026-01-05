@@ -59,12 +59,11 @@ template <> struct Physics_Traits<DustDamping> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustDrag<DustDamping>::ComputeReciprocalStoppingTime(
-    amrex::Real rho_g, amrex::GpuArray<amrex::Real, Physics_Traits<DustDamping>::nDustGroups> rho_d,
-    amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, Physics_Traits<DustDamping>::nDustGroups + 1> vel, double cs)
-    -> amrex::GpuArray<amrex::Real, Physics_Traits<DustDamping>::nDustGroups>
+AMREX_GPU_HOST_DEVICE auto DustDrag<DustDamping>::ComputeReciprocalStoppingTime(amrex::Real rho_g, amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
+										amrex::GpuArray<amrex::Real, nDustGroups_ + 1> vel_mag, double cs)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	return ComputeReciprocalStoppingTimeHelper(rho_g, rho_d, vel, cs, dust_grain_radius, dust_grain_density, enable_supersonic_correction);
+	return ComputeReciprocalStoppingTimeHelper(rho_g, rho_d, vel_mag, cs, dust_grain_radius, dust_grain_density, enable_supersonic_correction);
 }
 
 template <> void QuokkaSimulation<DustDamping>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
