@@ -112,7 +112,7 @@ quokka.hist_temp.dense.value_greater = 1e-25           # Filters: value_greater,
 
 Ascent allows you to generate raytraced volume renderings (saved as a sequence of PNG images) while the simulation is running.
 
-![](volume_render_sphere.png)
+![](media/volume_render_sphere.png)
 
 *A volume rendering of the `SphericalCollapse` problem.*
 

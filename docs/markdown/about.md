@@ -1,7 +1,7 @@
 # About
 
 <figure align="center">
-  <img src="../quokka-favicon.svg" alt="quokka-favicon" width="200">
+  <img src="../media/quokka-favicon.svg" alt="quokka-favicon" width="200">
   <figcaption>Quokka riding a rocket</figcaption>
 </figure>
 
