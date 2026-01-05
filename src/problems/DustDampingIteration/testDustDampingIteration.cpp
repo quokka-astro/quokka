@@ -174,7 +174,7 @@ template <> void QuokkaSimulation<DustDamping>::computeAfterTimestep()
 	}
 }
 
-auto run_simulation(double dt) -> SimulationData<DustDamping>
+auto run_simulation(double dt, int enableIterDustStoptime) -> SimulationData<DustDamping>
 {
 	QuokkaSimulation<DustDamping> sim;
 
@@ -183,6 +183,7 @@ auto run_simulation(double dt) -> SimulationData<DustDamping>
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = 1000000.0; // set large CFL to avoid CFL violation
 	sim.constantDt_ = dt;
+	sim.enableIterDustStoptime_ = enableIterDustStoptime;
 
 	sim.setInitialConditions();
 
@@ -196,16 +197,17 @@ auto problem_main() -> int
 	amrex::Print() << "Running dust damping test with supersonic correction...\n";
 
 	const double dt_ref = 0.00001;
+	int const enableIterDustStoptime_ref = 0;
 	const double dt_test = 0.005;
+	int const enableIterDustStoptime_test = 1;
 
 	// step 1: run reference solution (dt = 0.00001)
-	auto ref_data = run_simulation(dt_ref);
+	auto ref_data = run_simulation(dt_ref, enableIterDustStoptime_ref);
 
 	// step 2: run numerical solution (dt = 0.005)
-	auto test_data = run_simulation(dt_test);
+	auto test_data = run_simulation(dt_test, enableIterDustStoptime_test);
 
 	// step 3: calculate errors
-
 	// calculate sampling step size
 	const auto step = static_cast<size_t>(std::round(dt_test / dt_ref));
 	auto compute_relative_error = [](const std::vector<double> &sim, const std::vector<double> &ref, size_t step) {
