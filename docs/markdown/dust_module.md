@@ -64,10 +64,30 @@ This is implemented in `src/dust/dustRiemannSolver.hpp` and called in `DustSyste
 A Strang-split method (Tedeschi-Prades et al. 2025) is used to integrate the dust-gas system. The Strang-split update can be expressed as:
 
 $$
-\mathbf{u}^{n+1} = \mathcal{D}_{\Delta t/2} \mathcal{H}_{\Delta t} \mathcal{D}_{\Delta t/2} \mathbf{u}^n
+\mathbf{u}^{n+1} = \mathcal{D}_{\Delta t/2} \mathcal{H}_{\Delta t} \mathcal{D}_{\Delta t/2} \mathbf{u}^n,
 $$
 
-where $\mathcal{D}$ is the dust-gas drag operator and $\mathcal{H}$ is the hydrodynamics operator (including both gas and dust transport). The hydrodynamics operator $\mathcal{H}$ is handled using the explicit RK2 scheme. The drag operator $\mathcal{D}$ is implemented in `src/dust/dust_system.hpp` and called in `QuokkaSimulation::addStrangSplitSourcesWithBuiltin` via `DustSystem::computeDustDrag`.
+where $\mathcal{D}$ is the dust-gas drag operator and $\mathcal{H}$ is the hydrodynamics operator (including both gas and dust transport). The hydrodynamics operator $\mathcal{H}$ is handled using the explicit RK2 scheme. The drag operator $\mathcal{D}$ is implemented in `src/dust/DustDrag.hpp` and called in `QuokkaSimulation::addStrangSplitSourcesWithBuiltin` via `DustDrag::computeDustDrag`.
+
+### Optional Picard iteration for dust–gas drag
+
+Users may optionally enable Picard iteration for the dust–gas drag operator $\mathcal{D}$. When the stopping time depends on the gas or dust velocity, enabling iteration is required to maintain an implicit dust drag update. See [Runtime parameters](parameters.md) for details.
+
+### User-defined dust stopping time
+
+For a given problem, users must define a problem-specific dust stopping time by implementing the `DustDrag::ComputeReciprocalStoppingTime` function (note that this function should return the reciprocal of the stopping time). An example can be found in the `src/problems/DustDamping` test.
+
+Also, users can directly use the dust stopping time calculation helper `DustDrag::ComputeReciprocalStoppingTimeKwok` to compute the physical dust stopping time, following Kwok (1975) with an optional supersonic correction. The stopping time of dust $t_{\mathrm{s}}$ is given by:
+
+$$
+t_{\mathrm{s}} = \frac{\sqrt{\pi \gamma}}{2\sqrt{2}} \frac{a \rho_{\mathrm{gr}}}{\rho_{\mathrm{g}} c_{\mathrm{s}}} \times 
+\begin{cases}
+\left( 1 + \dfrac{9\pi}{128} \left| \dfrac{\mathbf{v}_{\mathrm{d}} - \mathbf{v}_{\mathrm{g}}}{c_{\mathrm{s}}} \right|^2 \right)^{-1/2}, & \text{if supersonic correction is enabled,} \\[1.5em]
+1, & \text{if supersonic correction is disabled.}
+\end{cases}
+$$
+
+An example of its usage can be found in the `src/problems/DustDampingCorrection` test.
 
 ## CFL Condition for Dust
 
