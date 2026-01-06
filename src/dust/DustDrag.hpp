@@ -55,11 +55,11 @@ template <typename problem_t> class DustDrag
 									amrex::Real /*vel_mag_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*vel_mag_d*/,
 									double /*cs*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>;
 
-	static AMREX_GPU_HOST_DEVICE auto ComputeReciprocalStoppingTimeHelper(amrex::Real rho_g, amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-									      amrex::Real vel_mag_g, amrex::GpuArray<amrex::Real, nDustGroups_> vel_mag_d,
-									      double cs, amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_radius,
-									      amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_density,
-									      bool enable_supersonic_correction) -> amrex::GpuArray<amrex::Real, nDustGroups_>;
+	static AMREX_GPU_HOST_DEVICE auto ComputeReciprocalStoppingTimeKwok(amrex::Real rho_g, amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
+									    amrex::Real vel_mag_g, amrex::GpuArray<amrex::Real, nDustGroups_> vel_mag_d,
+									    double cs, amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_radius,
+									    amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_density,
+									    bool enable_supersonic_correction) -> amrex::GpuArray<amrex::Real, nDustGroups_>;
 	// compute dust-gas drag source terms and update conserved variables
 	static void computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc_mf, amrex::Real dt,
 				    amrex::Real dust_omega_, int enableIterDustStoptime_);
@@ -76,12 +76,13 @@ AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::ComputeReciprocalStoppingTime(am
 	return alpha;
 }
 
+// compute reciprocal of physical dust stopping time following Kwok 1975 with optional supersonic correction
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::ComputeReciprocalStoppingTimeHelper(amrex::Real rho_g, amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-										    amrex::Real vel_mag_g, amrex::GpuArray<amrex::Real, nDustGroups_> vel_mag_d,
-										    double cs, amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_radius,
-										    amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_density,
-										    bool enable_supersonic_correction)
+AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::ComputeReciprocalStoppingTimeKwok(amrex::Real rho_g, amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
+										  amrex::Real vel_mag_g, amrex::GpuArray<amrex::Real, nDustGroups_> vel_mag_d,
+										  double cs, amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_radius,
+										  amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_density,
+										  bool enable_supersonic_correction)
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, nDustGroups_> alpha;
