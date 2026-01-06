@@ -255,7 +255,10 @@ using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
 
 // Indices for Star_particles
 enum StarParticleDataIdx {
-	StarParticleMassIdx = 0, // Mass of the particle
+  	StarParticleBirthTimeIdx = 0, // Time when particle becomes active
+	StarParticleLumIdx,	  // Base index for luminosity components
+	StarParticleMassLastIdx,  // Mass of particle in the last time step
+	StarParticleMassIdx, // Mass of the particle
 	StarParticleVxIdx,	 // Velocity in x direction
 	StarParticleVyIdx,	 // Velocity in y direction
 	StarParticleVzIdx,	 // Velocity in z direction

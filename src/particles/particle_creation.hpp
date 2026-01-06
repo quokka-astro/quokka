@@ -497,9 +497,9 @@ template <> struct ParticleCreationTraits<ParticleType::Star> {
 					p.rdata(mass_idx + 1) = vx;
 					p.rdata(mass_idx + 2) = vy;
 					p.rdata(mass_idx + 3) = vz;
-					p.rdata(mass_idx + 4) = amx;
-					p.rdata(mass_idx + 5) = amy;
-					p.rdata(mass_idx + 6) = amz;
+					p.rdata(mass_idx + 4) = 0.0;  // amx
+					p.rdata(mass_idx + 5) = 0.0;  // amy
+					p.rdata(mass_idx + 6) = 0.0;  // amz
 					p.rdata(mass_idx + 7) = particle_mass;  // mlast
 					p.rdata(mass_idx + 8) = 1.5;  // polytropic index npoly
 					p.rdata(mass_idx + 9) = particle_mass;  // mdeut

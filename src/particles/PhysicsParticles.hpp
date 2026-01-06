@@ -572,7 +572,32 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
-	// Implementation of supernova energy and momentum deposition from particles to grid
+	// Override updateParticleProperties for (proto-)StarParticles updates
+        void updateStarParticleProperties(amrex::Real dt)
+	{
+	  // Static assert to ensure this is only called for StarParticle
+	  static_assert(particleType == ParticleType::StarParticle,
+			"updateStarParticleProperties can only be used with StarParticle type");
+	
+	  if (this->container_ != nullptr) {
+	    for (int lev = 0; lev <= this->container_->finestLevel(); ++lev) {
+	      for (typename ContainerType::ParIterType pIter(*this->container_, lev); pIter.isValid(); ++pIter) {
+		auto &particles = pIter.GetArrayOfStructs();
+		auto *pData = particles().data();
+		const amrex::Long np = pIter.numParticles();
+
+		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+		  auto &p = pData[idx]; // NOLINT
+					
+		// Direct call to StellarUpdate - no luminosity tables needed
+		  quokka::StellarUpdate::updateStellarProperties(p, dt);
+		});
+	      }
+	    }
+	  }
+	}
+
+  // Implementation of supernova energy and momentum deposition from particles to grid
 	auto depositSN(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, amrex::Real time, amrex::Real dt)
 	    -> amrex::Real override
 	{
