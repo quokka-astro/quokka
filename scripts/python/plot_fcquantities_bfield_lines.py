@@ -145,7 +145,7 @@ def main() -> None:
 
     fig_div, axes_div = plt.subplots(1, 2, figsize=(10.0, 4.5), constrained_layout=True)
     extent = (left_edge[0], right_edge[0], left_edge[1], right_edge[1])
-    im0 = axes_div[0].imshow(div_pre[:, :, k].T, origin="lower", extent=extent, cmap="RdBu_r", vmin=-vmax, vmax=vmax)
+    axes_div[0].imshow(div_pre[:, :, k].T, origin="lower", extent=extent, cmap="RdBu_r", vmin=-vmax, vmax=vmax)
     axes_div[0].set_title("Pre-restart div B")
     axes_div[0].set_xlabel("x")
     axes_div[0].set_ylabel("y")
