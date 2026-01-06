@@ -288,7 +288,6 @@ auto problem_main() -> int
 	// const double Lx = 10.0;
 	const double CFL_number = 0.2;
 	const double max_time = 1.8;
-	const double fixed_dt = 1e-4;
 	const int max_timesteps = 20000;
 
 	// Problem initialization
@@ -306,7 +305,6 @@ auto problem_main() -> int
 	QuokkaSimulation<ShocktubeProblem> sim(BCs_cc);
 
 	sim.cflNumber_ = CFL_number;
-	sim.constantDt_ = fixed_dt;
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
 

@@ -209,7 +209,6 @@ auto problem_main() -> int
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number_rad;
 	sim.cflNumber_ = CFL_number_gas;
-	sim.initDt_ = the_dt;
 	sim.maxDt_ = the_dt;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.plotfileInterval_ = -1;

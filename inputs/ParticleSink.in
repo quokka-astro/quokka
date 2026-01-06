@@ -30,6 +30,7 @@ particles.verbose = 1
 particles.sink_particle_use_uniform_kernel = true
 
 max_timesteps = 1
+initial_dt = 9.46728e7
 particle_interval = 1
 
 tiny_profiler.enabled = 0
