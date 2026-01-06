@@ -11,6 +11,7 @@
 #include "hydro/hydro_system.hpp"
 #include "physics_info.hpp"
 #include "util/ArrayView_3d.hpp"
+#include <numbers>
 
 template <typename problem_t> class DustDrag
 {
@@ -96,8 +97,8 @@ AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::ComputeReciprocalStoppingTimeKwo
 		// compute relative velocity squared between dust group g and gas
 		amrex::Real v_rel_sq = (vel_mag_d[g] - vel_mag_g) * (vel_mag_d[g] - vel_mag_g);
 		// compute stopping time t_s with/without supersonic correction
-		amrex::Real t_s_sub =
-		    std::sqrt(M_PI * quokka::EOS_Traits<problem_t>::gamma) * dust_grain_radius[g] * dust_grain_density[g] / (2.0 * std::sqrt(2.0) * rho_g * cs);
+		amrex::Real t_s_sub = std::sqrt(M_PI * quokka::EOS_Traits<problem_t>::gamma) * dust_grain_radius[g] * dust_grain_density[g] /
+				      (2.0 * std::numbers::sqrt2 * rho_g * cs);
 		amrex::Real const correction = 1.0 + static_cast<int>(enable_supersonic_correction) * (9.0 * M_PI / 128.0) * (v_rel_sq / (cs * cs));
 		amrex::Real const t_s_fin = t_s_sub * std::pow(correction, -0.5);
 
