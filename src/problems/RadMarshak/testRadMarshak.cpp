@@ -202,15 +202,15 @@ auto problem_main() -> int
 	const int max_timesteps = 2e4;
 	const double CFL_number = 0.4;
 
-	const double max_dtau = 1e-3;	  // dimensionless time
-	const double max_tau = 10.0;	  // dimensionless time
+	const double max_dtau = 1e-3; // dimensionless time
+	const double max_tau = 10.0;  // dimensionless time
 	// const double Lz = 20.0;	  // dimensionless length
 
 	// Su & Olson (1997) parameters
 	const double chi = rho0 * kappa; // cm^-1 (total matter opacity)
 	// const double Lx = Lz / chi;	// cm
-	const double max_time = max_tau / (eps_SuOlson * c * chi);	  // s
-	const double max_dt = max_dtau / (eps_SuOlson * c * chi);	  // s
+	const double max_time = max_tau / (eps_SuOlson * c * chi); // s
+	const double max_dt = max_dtau / (eps_SuOlson * c * chi);  // s
 
 	constexpr int nvars = RadSystem<SuOlsonProblem>::nvar_; // NOLINT(cppcoreguidelines-init-variables)
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
