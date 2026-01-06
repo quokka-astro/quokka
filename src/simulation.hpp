@@ -787,8 +787,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	const int dt_override_count =
 	    static_cast<int>(pp.contains("init_shrink")) + static_cast<int>(pp.contains("initial_dt")) + static_cast<int>(pp.contains("constant_dt"));
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dt_override_count <= 1,
-					 "Specify at most one of init_shrink, initial_dt, or constant_dt in the inputs.");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dt_override_count <= 1, "Specify at most one of init_shrink, initial_dt, or constant_dt in the inputs.");
 
 	// Abort when signal speed exceeds this threshold (in code units)
 	pp.query("signal_speed_abort", signalSpeedAbort_);
