@@ -10,11 +10,11 @@
 #include "hydro/mhd_system.hpp"
 #include <algorithm>
 #include <cassert>
-#include <limits>
 #include <fmt/format.h>
+#include <limits>
 #include <ostream>
-#include <string>
 #include <stdexcept>
+#include <string>
 #include <valarray>
 
 #include "AMReX_Array.H"
@@ -129,9 +129,8 @@ template <> void QuokkaSimulation<FCQuantities>::setInitialConditionsOnGridFaceV
 			state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = -(psi(x_hi, y, z) - psi(x_lo, y, z)) / dx[0];
 		});
 	} else if (dir == quokka::direction::z) {
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = 0.0;
-		});
+		amrex::ParallelFor(indexRange,
+				   [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = 0.0; });
 	}
 }
 
