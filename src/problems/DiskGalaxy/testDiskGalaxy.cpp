@@ -11,6 +11,7 @@
 #include <cmath>
 #include <fstream>
 #include <limits>
+#include <optional>
 #include <sstream>
 
 #include "AMReX_Array.H"
@@ -19,6 +20,7 @@
 #include "AMReX_GpuContainers.H"
 #include "AMReX_GpuDevice.H"
 #include "AMReX_MultiFab.H"
+#include "AMReX_Parser.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 
@@ -88,6 +90,11 @@ template <> struct SimulationData<AgoraGalaxy> {
 	amrex::Gpu::PinnedVector<amrex::Real> rho_halo;
 	amrex::Gpu::PinnedVector<amrex::Real> velr_halo;
 	amrex::Gpu::PinnedVector<amrex::Real> temp_halo;
+
+	std::string haloVphiExpr{};
+	bool useHaloVphiParser = false;
+	std::optional<amrex::Parser> haloVphiParser;
+	std::optional<amrex::ParserExecutor<3>> haloVphiParserExe;
 };
 
 template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
@@ -164,6 +171,25 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 	userData_.rho_outer = rho_h[std::distance(radius_h.begin(), max_result)];
 	userData_.velr_outer = velr_h[std::distance(radius_h.begin(), max_result)];
 	userData_.temp_outer = temp_h[std::distance(radius_h.begin(), max_result)];
+
+	// optional halo v_phi expression (variables: x, y, z)
+	userData_.haloVphiExpr.clear();
+	pp.query("halo_vphi_expr", userData_.haloVphiExpr);
+	userData_.useHaloVphiParser = !userData_.haloVphiExpr.empty();
+	if (userData_.useHaloVphiParser) {
+		userData_.haloVphiParser.emplace(userData_.haloVphiExpr);
+		userData_.haloVphiParser->registerVariables({"x", "y", "z"});
+		userData_.haloVphiParserExe = userData_.haloVphiParser->compile<3>();
+#ifdef AMREX_USE_GPU
+		if (userData_.haloVphiParserExe->m_device_executor == nullptr) {
+			amrex::Abort("agora_galaxy.halo_vphi_expr: device parser executor is null after compile<3>()");
+		}
+#endif
+		userData_.haloVphiParser.reset();
+	} else {
+		userData_.haloVphiParser.reset();
+		userData_.haloVphiParserExe.reset();
+	}
 }
 
 template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -222,6 +248,11 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 	const amrex::Real rho_outer = userData_.rho_outer;
 	const amrex::Real velr_outer = userData_.velr_outer;
 	const amrex::Real temp_outer = userData_.temp_outer;
+	const bool use_halo_vphi_parser = userData_.useHaloVphiParser;
+	amrex::ParserExecutor<3> halo_vphi_parser{};
+	if (use_halo_vphi_parser) {
+		halo_vphi_parser = userData_.haloVphiParserExe.value();
+	}
 
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -333,14 +364,27 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 		};
 
 		// compute momenta profiles
-		auto velx_exact = [velHalo](double x, double y, double z) {
-			double const r = std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, 2));
-			return (r > 0.0) ? (velHalo(r) * x / r) : 0.0; // vx
+		auto vphiHalo_exact = [=] AMREX_GPU_DEVICE(double x, double y, double z) {
+			if (use_halo_vphi_parser) {
+				return halo_vphi_parser(x, y, z);
+			}
+			return 0.0;
 		};
 
-		auto vely_exact = [velHalo](double x, double y, double z) {
+		auto velx_exact = [velHalo, vphiHalo_exact](double x, double y, double z) {
 			double const r = std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, 2));
-			return (r > 0.0) ? (velHalo(r) * y / r) : 0.0; // vy
+			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
+			double const vr_component = (r > 0.0) ? (velHalo(r) * x / r) : 0.0;
+			double const vphi_component = (R > 0.0) ? (-vphiHalo_exact(x, y, z) * y / R) : 0.0;
+			return vr_component + vphi_component; // vx
+		};
+
+		auto vely_exact = [velHalo, vphiHalo_exact](double x, double y, double z) {
+			double const r = std::sqrt(std::pow(x, 2) + std::pow(y, 2) + std::pow(z, 2));
+			double const R = std::sqrt(std::pow(x, 2) + std::pow(y, 2));
+			double const vr_component = (r > 0.0) ? (velHalo(r) * y / r) : 0.0;
+			double const vphi_component = (R > 0.0) ? (vphiHalo_exact(x, y, z) * x / R) : 0.0;
+			return vr_component + vphi_component; // vy
 		};
 
 		auto velz_exact = [velHalo](double x, double y, double z) {
