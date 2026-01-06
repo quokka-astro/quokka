@@ -96,22 +96,22 @@ jobs:
       run: cmake -E make_directory $GITHUB_WORKSPACE/tests
 
     - name: Test with ASAN
-      working-directory: ${{runner.workspace}}/build
+      working-directory: ${{ runner.workspace }}/build
       shell: bash
       env:
         ASAN_OPTIONS: detect_leaks=0:print_stats=1:check_initialization_order=1:strict_string_checks=1:detect_stack_use_after_return=1
         UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
-      # Execute all tests with MHD label, excluding the slow cases
-     run: |
-      canary run \
-        --output-on-failure \
-        --workers=1 \
-        -L MHD \
-        -LE Convergence \
-        -LE FastWave \
-        -LE BrioWuShockTube \
-        -LE MHDQuirk \
-        .
+      run: |
+        canary run \
+          --output-on-failure \
+          --workers=1 \
+          -L MHD \
+          -LE Convergence \
+          -LE FastWave \
+          -LE BrioWuShockTube \
+          -LE MHDQuirk \
+          .
+
         
     - name: ccache stats
       if: always()
