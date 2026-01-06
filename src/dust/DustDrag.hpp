@@ -52,12 +52,12 @@ template <typename problem_t> class DustDrag
 
 	// compute reciprocal of dust stopping time
 	AMREX_GPU_HOST_DEVICE static auto ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
-									amrex::GpuArray<amrex::Real, nDustGroups_ + 1> /*vel_mag*/, double /*cs*/)
-	    -> amrex::GpuArray<amrex::Real, nDustGroups_>;
+									amrex::Real /*vel_mag_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*vel_mag_d*/,
+									double /*cs*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>;
 
 	static AMREX_GPU_HOST_DEVICE auto ComputeReciprocalStoppingTimeHelper(amrex::Real rho_g, amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-									      amrex::GpuArray<amrex::Real, nDustGroups_ + 1> vel, double cs,
-									      amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_radius,
+									      amrex::Real vel_mag_g, amrex::GpuArray<amrex::Real, nDustGroups_> vel_mag_d,
+									      double cs, amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_radius,
 									      amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_density,
 									      bool enable_supersonic_correction) -> amrex::GpuArray<amrex::Real, nDustGroups_>;
 	// compute dust-gas drag source terms and update conserved variables
@@ -67,7 +67,8 @@ template <typename problem_t> class DustDrag
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
-									      amrex::GpuArray<amrex::Real, nDustGroups_ + 1> /*vel_mag*/, double /*cs*/)
+									      amrex::Real /*vel_mag_g*/,
+									      amrex::GpuArray<amrex::Real, nDustGroups_> /*vel_mag_d*/, double /*cs*/)
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, nDustGroups_> alpha;
@@ -77,8 +78,8 @@ AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::ComputeReciprocalStoppingTime(am
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::ComputeReciprocalStoppingTimeHelper(amrex::Real rho_g, amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-										    amrex::GpuArray<amrex::Real, nDustGroups_ + 1> vel_mag, double cs,
-										    amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_radius,
+										    amrex::Real vel_mag_g, amrex::GpuArray<amrex::Real, nDustGroups_> vel_mag_d,
+										    double cs, amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_radius,
 										    amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_density,
 										    bool enable_supersonic_correction)
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
@@ -92,7 +93,7 @@ AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::ComputeReciprocalStoppingTimeHel
 		}
 
 		// compute relative velocity squared between dust group g and gas
-		amrex::Real v_rel_sq = (vel_mag[1 + g] - vel_mag[0]) * (vel_mag[1 + g] - vel_mag[0]);
+		amrex::Real v_rel_sq = (vel_mag_d[g] - vel_mag_g) * (vel_mag_d[g] - vel_mag_g);
 		// compute stopping time t_s with/without supersonic correction
 		amrex::Real t_s_sub =
 		    std::sqrt(M_PI * quokka::EOS_Traits<problem_t>::gamma) * dust_grain_radius[g] * dust_grain_density[g] / (2.0 * std::sqrt(2.0) * rho_g * cs);
@@ -177,28 +178,31 @@ void DustDrag<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::a
 
 		// Picard iteration loop
 		for (int iteration = 0; iteration < max_iterations; ++iteration) {
+			// compute sound speed for stopping time calculation
 			double cs = 0.0;
 			if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
 				cs = HydroSystem<problem_t>::cs_iso_;
 			} else {
 				cs = HydroSystem<problem_t>::ComputeSoundSpeed(consVar_cc[bx], i, j, k, &cons_fc);
 			}
-			amrex::GpuArray<amrex::Real, nDustGroups_ + 1> vel_mag_inter;
+			// compute velocity magnitudes for stopping time calculation
+			amrex::Real vel_mag_g = 0.0;
+			amrex::GpuArray<amrex::Real, nDustGroups_> vel_mag_d;
 			{
 				amrex::Real speed_sq = 0.0;
 				for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 					speed_sq += vel_inter_old[0][dir] * vel_inter_old[0][dir];
 				}
-				vel_mag_inter[0] = std::sqrt(speed_sq);
+				vel_mag_g = std::sqrt(speed_sq);
 			}
 			for (int g = 0; g < nDustGroups_; ++g) {
 				amrex::Real speed_sq = 0.0;
 				for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 					speed_sq += vel_inter_old[1 + g][dir] * vel_inter_old[1 + g][dir];
 				}
-				vel_mag_inter[1 + g] = std::sqrt(speed_sq);
+				vel_mag_d[g] = std::sqrt(speed_sq);
 			}
-			amrex::GpuArray<amrex::Real, nDustGroups_> alpha = ComputeReciprocalStoppingTime(rho_g, rho_d, vel_mag_inter, cs);
+			amrex::GpuArray<amrex::Real, nDustGroups_> alpha = ComputeReciprocalStoppingTime(rho_g, rho_d, vel_mag_g, vel_mag_d, cs);
 
 			amrex::Real t_s_max = 0.0;
 			for (int g = 0; g < nDustGroups_; ++g) {
