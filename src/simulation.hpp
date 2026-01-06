@@ -415,6 +415,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 					    const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom, const amrex::Vector<amrex::BCRec> &bcs);
 	void interpolateFaceCenteredMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source, const RefinementContext &context,
 							const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom, quokka::direction dir);
+	void interpolateFaceCenteredMultiFabArrayFromRestart(amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &target,
+							     amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &source,
+							     const RefinementContext &context, const amrex::Geometry &coarse_geom,
+							     const amrex::Geometry &fine_geom);
 	void loadMultiFabData(const RefinementContext &context);
 	auto loadBalanceOnRestart(const amrex::BoxArray &input_ba, int lev) -> amrex::BoxArray;
 
@@ -3823,6 +3827,44 @@ void AMRSimulation<problem_t>::interpolateFaceCenteredMultiFabFromRestart(amrex:
 	}
 }
 
+template <typename problem_t>
+void AMRSimulation<problem_t>::interpolateFaceCenteredMultiFabArrayFromRestart(amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &target,
+									       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &source,
+									       const RefinementContext &context, const amrex::Geometry &coarse_geom,
+									       const amrex::Geometry &fine_geom)
+{
+	if (!context.needs_refinement()) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			target[idim].ParallelCopy(source[idim], 0, 0, source[idim].nComp(), nghost_fc_, nghost_fc_);
+		}
+		return;
+	}
+
+	amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> target_ptrs;
+	amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> source_ptrs;
+	amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> BCs_array;
+	using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>;
+	amrex::Array<amrex::PhysBCFunct<BndryFunc>, AMREX_SPACEDIM> fineBdryFunct;
+	amrex::Array<amrex::PhysBCFunct<BndryFunc>, AMREX_SPACEDIM> coarseBdryFunct;
+
+	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		target_ptrs[idim] = &target[idim];
+		source_ptrs[idim] = &source[idim];
+		BCs_array[idim] = BCs_fc_;
+
+		const auto dir = static_cast<quokka::direction>(idim);
+		BndryFunc boundaryFunctor(setBoundaryFunctorFaceVar<problem_t>{dir});
+		fineBdryFunct[idim] = amrex::PhysBCFunct<BndryFunc>(fine_geom, BCs_fc_, boundaryFunctor);
+		coarseBdryFunct[idim] = amrex::PhysBCFunct<BndryFunc>(coarse_geom, BCs_fc_, boundaryFunctor);
+	}
+
+	const amrex::IntVect restart_ref_ratio{
+	    AMREX_D_DECL(context.refinement_factor, context.refinement_factor, context.refinement_factor)};
+	const int ncomp = source[0].nComp();
+	amrex::InterpFromCoarseLevel(target_ptrs, 0., source_ptrs, 0, 0, ncomp, coarse_geom, fine_geom, coarseBdryFunct, 0, fineBdryFunct, 0,
+				     restart_ref_ratio, &amrex::face_divfree_interp, BCs_array, 0);
+}
+
 template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(const RefinementContext &context)
 {
 	for (int lev = 0; lev <= finest_level; ++lev) {
@@ -3841,19 +3883,34 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 
 		// face-centred data
 		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				amrex::MultiFab tmp_fc;
-				amrex::VisMF::Read(
-				    tmp_fc, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
 #if AMREX_SPACEDIM == 1
-				constexpr std::array<quokka::direction, 1> directions = {quokka::direction::x};
+			constexpr std::array<quokka::direction, 1> directions = {quokka::direction::x};
 #elif AMREX_SPACEDIM == 2
-				constexpr std::array<quokka::direction, 2> directions = {quokka::direction::x, quokka::direction::y};
+			constexpr std::array<quokka::direction, 2> directions = {quokka::direction::x, quokka::direction::y};
 #elif AMREX_SPACEDIM == 3
-				constexpr std::array<quokka::direction, 3> directions = {quokka::direction::x, quokka::direction::y, quokka::direction::z};
+			constexpr std::array<quokka::direction, 3> directions = {quokka::direction::x, quokka::direction::y, quokka::direction::z};
 #endif
-				interpolateFaceCenteredMultiFabFromRestart(state_new_fc_[lev][idim], tmp_fc, context, coarse_geom, geom[lev], directions[idim]);
-				AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan(0, state_new_fc_[lev][idim].nComp())); // check valid faces
+			if (context.needs_refinement()) {
+				amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> tmp_fc;
+				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+					amrex::VisMF::Read(tmp_fc[idim],
+							   amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_",
+											 std::string("Face_") + quokka::face_dir_str[idim]));
+				}
+				interpolateFaceCenteredMultiFabArrayFromRestart(state_new_fc_[lev], tmp_fc, context, coarse_geom, geom[lev]);
+				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+					AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan(0, state_new_fc_[lev][idim].nComp())); // check valid faces
+				}
+			} else {
+				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+					amrex::MultiFab tmp_fc;
+					amrex::VisMF::Read(
+					    tmp_fc, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_",
+										  std::string("Face_") + quokka::face_dir_str[idim]));
+					interpolateFaceCenteredMultiFabFromRestart(state_new_fc_[lev][idim], tmp_fc, context, coarse_geom, geom[lev],
+										   directions[idim]);
+					AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan(0, state_new_fc_[lev][idim].nComp())); // check valid faces
+				}
 			}
 		}
 	}

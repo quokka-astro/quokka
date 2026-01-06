@@ -8,14 +8,18 @@
 
 #include "hydro/hydro_system.hpp"
 #include "hydro/mhd_system.hpp"
+#include <algorithm>
 #include <cassert>
+#include <limits>
 #include <fmt/format.h>
 #include <ostream>
+#include <string>
 #include <stdexcept>
 #include <valarray>
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
+#include "AMReX_MultiFabUtil.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 
@@ -99,61 +103,105 @@ template <> void QuokkaSimulation<FCQuantities>::setInitialConditionsOnGridFaceV
 	// extract grid information
 	const amrex::Array4<double> &state = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const prob_lo = grid_elem.prob_lo_;
 	const quokka::direction dir = grid_elem.dir_;
 
+	// Use a nodal magnetic vector potential (A_z) so the discrete divergence is identically zero.
+	auto const psi = [=] AMREX_GPU_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z) noexcept -> amrex::Real {
+		return std::sin(2.0 * M_PI * x) * std::sin(2.0 * M_PI * y) * std::sin(2.0 * M_PI * z);
+	};
+
 	if (dir == quokka::direction::x) {
-		amrex::ParallelFor(
-		    indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = 1.0 + (i % 2); });
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			amrex::Real const x = prob_lo[0] + static_cast<amrex::Real>(i) * dx[0];
+			amrex::Real const y_lo = prob_lo[1] + static_cast<amrex::Real>(j) * dx[1];
+			amrex::Real const y_hi = prob_lo[1] + static_cast<amrex::Real>(j + 1) * dx[1];
+			amrex::Real const z = prob_lo[2] + static_cast<amrex::Real>(k) * dx[2];
+			state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = (psi(x, y_hi, z) - psi(x, y_lo, z)) / dx[1];
+		});
 	} else if (dir == quokka::direction::y) {
-		amrex::ParallelFor(
-		    indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = 2.0 + (j % 2); });
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			amrex::Real const x_lo = prob_lo[0] + static_cast<amrex::Real>(i) * dx[0];
+			amrex::Real const x_hi = prob_lo[0] + static_cast<amrex::Real>(i + 1) * dx[0];
+			amrex::Real const y = prob_lo[1] + static_cast<amrex::Real>(j) * dx[1];
+			amrex::Real const z = prob_lo[2] + static_cast<amrex::Real>(k) * dx[2];
+			state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = -(psi(x_hi, y, z) - psi(x_lo, y, z)) / dx[0];
+		});
 	} else if (dir == quokka::direction::z) {
-		amrex::ParallelFor(
-		    indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = 3.0 + (k % 2); });
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			state(i, j, k, MHDSystem<FCQuantities>::bfield_index) = 0.0;
+		});
 	}
 }
 
-void checkMFs(amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &state1,
-	      amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &state2)
+void setAmrNCell(amrex::Vector<int> const &n_cell)
 {
-	double err = 0.0;
-	for (int level = 0; level < state1.size(); ++level) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			// initialise MF
-			const amrex::BoxArray &ba = state1[level][idim].boxArray();
-			const amrex::DistributionMapping &dm = state1[level][idim].DistributionMap();
-			int const ncomp = state1[level][idim].nComp();
-			int const ngrow = state1[level][idim].nGrow();
-			amrex::MultiFab mf_diff(ba, dm, ncomp, ngrow);
-			// compute difference between two MFs (at level)
-			amrex::MultiFab::Copy(mf_diff, state1[level][idim], 0, 0, ncomp, ngrow);
-			amrex::MultiFab::Subtract(mf_diff, state2[level][idim], 0, 0, ncomp, ngrow);
-			// compute error (summed over each component)
-			for (int icomp = 0; icomp < Physics_Indices<FCQuantities>::nvarPerDim_fc; ++icomp) {
-				err += mf_diff.norm1(icomp);
-			}
+	amrex::ParmParse pp("amr");
+	pp.addarr("n_cell", n_cell);
+}
+
+void setPlotfileParams(std::string const &prefix)
+{
+	amrex::ParmParse pp;
+	pp.add("plotfile_interval", 1);
+	pp.add("plotfile_prefix", prefix);
+	pp.add("skip_initial_plotfile", 0);
+}
+
+void checkDivFreeRestart(QuokkaSimulation<FCQuantities> const &sim)
+{
+	auto const &state_fc = sim.getNewMF_fc();
+	auto const &state_cc = sim.getNewMF_cc();
+
+	amrex::Real max_div_ratio = 0.0;
+	for (int lev = 0; lev < state_fc.size(); ++lev) {
+		amrex::Array<amrex::MultiFab const *, AMREX_SPACEDIM> face_ptrs;
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			face_ptrs[dir] = &state_fc[lev][dir];
 		}
+
+		amrex::MultiFab divB(state_cc[lev].boxArray(), state_cc[lev].DistributionMap(), 1, 0);
+		amrex::computeDivergence(divB, face_ptrs, sim.geom[lev]);
+		amrex::Real const max_div = divB.norm0(0, 0, false);
+
+		amrex::Real max_b = 0.0;
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			max_b = std::max(max_b, state_fc[lev][dir].norm0(MHDSystem<FCQuantities>::bfield_index, 0, false));
+		}
+
+		auto const &dx = sim.geom[lev].CellSizeArray();
+		amrex::Real const dx_min = std::min({dx[0], dx[1], dx[2]});
+		amrex::Real const scale_b = std::max(max_b, static_cast<amrex::Real>(1.0e-30));
+		max_div_ratio = std::max(max_div_ratio, dx_min * max_div / scale_b);
 	}
-	amrex::Print() << "Accumulated error in MFs read from chk-file: " << err << "\n";
-	amrex::Print() << "\n";
-	AMREX_ALWAYS_ASSERT(std::abs(err) == 0.0);
+
+	amrex::Real const tolerance = 1000.0 * std::numeric_limits<amrex::Real>::epsilon();
+	amrex::Print() << "Max |div B| * dx / |B| = " << max_div_ratio << "\n\n";
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(max_div_ratio <= tolerance,
+					 fmt::format("Face-centered divergence exceeds tolerance: {} > {}", max_div_ratio, tolerance));
 }
 
 auto problem_main() -> int
 {
+	amrex::Vector<int> const coarse_ncells = {64, 32, 16};
+	amrex::Vector<int> const fine_ncells = {128, 64, 32};
+
+	setAmrNCell(coarse_ncells);
+	setPlotfileParams("fcq_pre");
 	QuokkaSimulation<FCQuantities> sim_write;
 	sim_write.setInitialConditions();
-	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &state_new_fc_write = sim_write.getNewMF_fc();
 	amrex::Print() << "\n";
 
+	setAmrNCell(fine_ncells);
+	setPlotfileParams("fcq_post");
 	QuokkaSimulation<FCQuantities> sim_restart;
 	sim_restart.setChkFile("chk00000");
 	sim_restart.setInitialConditions();
-	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &state_new_fc_restart = sim_restart.getNewMF_fc();
 	amrex::Print() << "\n";
 
-	amrex::Print() << "Checking new FC MFs...\n";
-	checkMFs(state_new_fc_write, state_new_fc_restart);
+	amrex::Print() << "Checking face-centered divergence after restart refinement...\n";
+	checkDivFreeRestart(sim_restart);
 
 	return 0;
 }
