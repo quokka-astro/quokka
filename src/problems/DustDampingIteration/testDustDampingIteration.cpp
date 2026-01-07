@@ -174,15 +174,20 @@ template <> void QuokkaSimulation<DustDamping>::computeAfterTimestep()
 	}
 }
 
-auto run_simulation(double dt, int enableIterDustStoptime) -> SimulationData<DustDamping>
+auto run_simulation(double dt, int enableIterDustStoptime, bool use_cfl = false) -> SimulationData<DustDamping>
 {
 	QuokkaSimulation<DustDamping> sim;
 
 	sim.reconstructionOrder_ = 3;
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.plotfileInterval_ = -1;
-	sim.cflNumber_ = 1000000.0; // set large CFL to avoid CFL violation
-	sim.constantDt_ = dt;
+	if (use_cfl) {
+		sim.cflNumber_ = 0.3;
+		sim.constantDt_ = -1.0;
+	} else {
+		sim.cflNumber_ = 1000000.0;
+		sim.constantDt_ = dt;
+	}
 	sim.enableIterDustStoptime_ = enableIterDustStoptime;
 
 	sim.setInitialConditions();
@@ -202,40 +207,59 @@ auto problem_main() -> int
 	int const enableIterDustStoptime_test = 1;
 
 	// step 1: run reference solution (dt = 0.00001)
-	auto ref_data = run_simulation(dt_ref, enableIterDustStoptime_ref);
+	auto ref_data = run_simulation(dt_ref, enableIterDustStoptime_ref, false);
 
-	// step 2: run numerical solution (dt = 0.005)
-	auto test_data = run_simulation(dt_test, enableIterDustStoptime_test);
+	// step 2: run numerical solution (cfl)
+	auto test_data = run_simulation(dt_test, enableIterDustStoptime_test, true);
 
 	// step 3: calculate errors
 	// calculate sampling step size
-	const auto step = static_cast<size_t>(std::round(dt_test / dt_ref));
-	auto compute_relative_error = [](const std::vector<double> &sim, const std::vector<double> &ref, size_t step) {
+	auto compute_relative_error = [](const std::vector<double> &t_test, const std::vector<double> &v_test, const std::vector<double> &t_ref,
+					 const std::vector<double> &v_ref) -> double {
+		if (t_ref.empty() || t_test.empty()) {
+			return 1.0;
+		}
+
 		double err_sum = 0.0;
 		double ref_sum = 0.0;
 		int count = 0;
 
-		for (size_t i = 0; i < sim.size(); ++i) {
-			size_t const ref_idx = i * step;
-			if (ref_idx >= ref.size()) {
-				break;
+		for (size_t i = 0; i < t_test.size(); ++i) {
+			double const t = t_test[i];
+
+			// find the closest reference time point
+			auto it = std::lower_bound(t_ref.begin(), t_ref.end(), t);
+
+			size_t ref_idx = 0;
+			if (it == t_ref.end()) {
+				ref_idx = t_ref.size() - 1;
+			} else if (it == t_ref.begin()) {
+				ref_idx = 0;
+			} else {
+				size_t const idx = it - t_ref.begin();
+				size_t const prev_idx = idx - 1;
+
+				double const diff1 = std::abs(t - t_ref[prev_idx]);
+				double const diff2 = std::abs(t - t_ref[idx]);
+
+				ref_idx = (diff1 <= diff2) ? prev_idx : idx;
 			}
 
-			err_sum += std::abs(sim[i] - ref[ref_idx]);
-			ref_sum += std::abs(ref[ref_idx]);
+			err_sum += std::abs(v_test[i] - v_ref[ref_idx]);
+			ref_sum += std::abs(v_ref[ref_idx]);
 			count++;
 		}
 
 		if (count == 0 || ref_sum == 0.0) {
-			return 1.0; // error value
+			return 1.0;
 		}
 		return err_sum / ref_sum;
 	};
 
-	double const rel_err_gas_vx = compute_relative_error(test_data.v_gas_vec_, ref_data.v_gas_vec_, step);
-	double const rel_err_dust1_vx = compute_relative_error(test_data.v_dust1_vec_, ref_data.v_dust1_vec_, step);
-	double const rel_err_dust2_vx = compute_relative_error(test_data.v_dust2_vec_, ref_data.v_dust2_vec_, step);
-	double const rel_err_gas_E = compute_relative_error(test_data.E_gas_vec_, ref_data.E_gas_vec_, step);
+	double const rel_err_gas_vx = compute_relative_error(test_data.t_vec_, test_data.v_gas_vec_, ref_data.t_vec_, ref_data.v_gas_vec_);
+	double const rel_err_dust1_vx = compute_relative_error(test_data.t_vec_, test_data.v_dust1_vec_, ref_data.t_vec_, ref_data.v_dust1_vec_);
+	double const rel_err_dust2_vx = compute_relative_error(test_data.t_vec_, test_data.v_dust2_vec_, ref_data.t_vec_, ref_data.v_dust2_vec_);
+	double const rel_err_gas_E = compute_relative_error(test_data.t_vec_, test_data.E_gas_vec_, ref_data.t_vec_, ref_data.E_gas_vec_);
 
 	amrex::Print() << "Comparison with reference solution (supersonic correction enabled):\n";
 	amrex::Print() << "Relative L1 norm for gas vx    = " << rel_err_gas_vx << "\n";
@@ -259,7 +283,7 @@ auto problem_main() -> int
 		// gas velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(test_data.t_vec_, test_data.v_gas_vec_,
-				    {{"label", "numerical (iter, dt=0.005)"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
+				    {{"label", "numerical (iter, cfl=0.3)"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_gas_vec_, {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "r"}, {"linestyle", "--"}});
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
@@ -271,7 +295,7 @@ auto problem_main() -> int
 		// dust1 velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(test_data.t_vec_, test_data.v_dust1_vec_,
-				    {{"label", "numerical (iter, dt=0.005)"}, {"color", "b"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
+				    {{"label", "numerical (iter, cfl=0.3)"}, {"color", "b"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust1_vec_,
 				    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "b"}, {"linestyle", "--"}});
 		matplotlibcpp::legend();
@@ -284,7 +308,7 @@ auto problem_main() -> int
 		// dust2 velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(test_data.t_vec_, test_data.v_dust2_vec_,
-				    {{"label", "numerical (iter, dt=0.005)"}, {"color", "g"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
+				    {{"label", "numerical (iter, cfl=0.3)"}, {"color", "g"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust2_vec_,
 				    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "g"}, {"linestyle", "--"}});
 		matplotlibcpp::legend();
@@ -297,7 +321,7 @@ auto problem_main() -> int
 		// gas energy
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(test_data.t_vec_, test_data.E_gas_vec_,
-				    {{"label", "numerical (iter, dt=0.005)"}, {"color", "m"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
+				    {{"label", "numerical (iter, cfl=0.3)"}, {"color", "m"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::plot(ref_data.t_vec_, ref_data.E_gas_vec_, {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "m"}, {"linestyle", "--"}});
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");

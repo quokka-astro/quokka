@@ -324,15 +324,15 @@ template <> void QuokkaSimulation<DustDampingWithoutCorrection>::computeAfterTim
 	}
 }
 
-template <typename ProblemType> auto run_simulation(double dt, int enableIterDustStoptime) -> SimulationData<ProblemType>
+template <typename ProblemType> auto run_simulation(double /*dt*/, int enableIterDustStoptime) -> SimulationData<ProblemType>
 {
 	QuokkaSimulation<ProblemType> sim;
 
 	sim.reconstructionOrder_ = 3;
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.plotfileInterval_ = -1;
-	sim.cflNumber_ = 1000000.0; // set large CFL to avoid CFL violation
-	sim.constantDt_ = dt;
+	sim.cflNumber_ = 0.3;
+	// sim.constantDt_ = dt;
 	sim.enableIterDustStoptime_ = enableIterDustStoptime;
 
 	sim.setInitialConditions();
@@ -408,7 +408,7 @@ auto problem_main() -> int
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($v_g$)");
-		matplotlibcpp::title("Gas Velocity (dt=0.005, iterative)");
+		matplotlibcpp::title("Gas Velocity (cfl=0.3, iterative)");
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("./dust_damping_correction_gas_velocity.pdf");
 
@@ -421,7 +421,7 @@ auto problem_main() -> int
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($v_{d,1}$)");
-		matplotlibcpp::title("Dust1 Velocity (dt=0.005, iterative)");
+		matplotlibcpp::title("Dust1 Velocity (cfl=0.3, iterative)");
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("./dust_damping_correction_dust1_velocity.pdf");
 
@@ -434,7 +434,7 @@ auto problem_main() -> int
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($v_{d,2}$)");
-		matplotlibcpp::title("Dust2 Velocity (dt=0.005, iterative)");
+		matplotlibcpp::title("Dust2 Velocity (cfl=0.3, iterative)");
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("./dust_damping_correction_dust2_velocity.pdf");
 
@@ -447,7 +447,7 @@ auto problem_main() -> int
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("t");
 		matplotlibcpp::ylabel(R"($E_g$)");
-		matplotlibcpp::title("Gas Energy (dt=0.005, iterative)");
+		matplotlibcpp::title("Gas Energy (cfl=0.3, iterative)");
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("./dust_damping_correction_gas_energy.pdf");
 	}
