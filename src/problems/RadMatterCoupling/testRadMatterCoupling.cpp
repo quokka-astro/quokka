@@ -157,13 +157,11 @@ auto problem_main() -> int
 	const double CFL_number = 1.0;
 	const double max_time = 1.0e-2; // s
 	const int max_timesteps = 1e6;
-	const double constant_dt = 1.0e-8; // s
 
 	QuokkaSimulation<CouplingProblem> sim;
 
 	sim.cflNumber_ = CFL_number;
 	sim.radiationCflNumber_ = CFL_number;
-	sim.constantDt_ = constant_dt;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.stopTime_ = max_time;
 	sim.plotfileInterval_ = -1;
