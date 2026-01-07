@@ -282,7 +282,6 @@ auto problem_main() -> int
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = CFL_number;
-	sim.constantDt_ = 0.005; // usually 0.005 for test B, 0.05 for test C
 
 	// initialize
 	sim.setInitialConditions();

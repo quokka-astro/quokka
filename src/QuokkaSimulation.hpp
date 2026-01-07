@@ -2980,8 +2980,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				RadSystem<problem_t>::SetRadEnergySource(radEnergySource_arr, indexRange, dx, prob_lo, prob_hi, time_subcycle + dt_radiation);
 
 				// update state_new_cc_[lev] in place (updates both radiation and hydro vars)
-				// Note that only a fraction (IMEX_a32) of the matter-radiation exchange source terms are added to hydro. This ensures that the
-				// hydro properties get to t + IMEX_a32 dt in terms of matter-radiation exchange.
+				// Note that only a fraction (IMEX_a32) of the matter-radiation exchange source terms are added to hydro. This ensures
+				// that the hydro properties get to t + IMEX_a32 dt in terms of matter-radiation exchange.
 				if constexpr (Physics_Traits<problem_t>::nGroups <= 1) {
 					RadSystem<problem_t>::AddSourceTermsSingleGroup(stateNew_cc, radEnergySource_arr, indexRange, dt_radiation, 1,
 											dustGasInteractionCoeff_, rad_tol, rad_tol_rel, tempFloor,
@@ -3070,8 +3070,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		amrex::ParallelDescriptor::ReduceLongSum(nf_dust);
 		amrex::ParallelDescriptor::ReduceLongSum(nf_outer);
 
-		// Note that the nf_dust has to abort BEFORE nf_coupling, because the dust temperature is used in the matter-radiation coupling and if dust
-		// temperature is negative, the matter-radiation coupling will fail to converge.
+		// Note that the nf_dust has to abort BEFORE nf_coupling, because the dust temperature is used in the matter-radiation coupling and if
+		// dust temperature is negative, the matter-radiation coupling will fail to converge.
 		if (nf_dust > 0) {
 			amrex::Abort("Newton-Raphson iteration for dust temperature failed to converge or dust temperature is negative!");
 		}

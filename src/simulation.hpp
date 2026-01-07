@@ -187,6 +187,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real particleSpeedAbort_ = -1.0;
 	amrex::Real dtToleranceFactor_ = 1.1; // default
 	amrex::Real dtCutoff_ = 0.0;	      // default: no cutoff (disabled when 0)
+	amrex::Real initShrink_ = 1.0;	      // default: no shrink
 	amrex::Long cycleCount_ = 0;
 	int printCycleTiming_ = 0;				     // default: don't print
 	amrex::Long maxTimesteps_ = std::numeric_limits<int>::max(); // default: no limit
@@ -489,6 +490,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int checkpoint_nfiles = -1;	       // default: -1 (i.e., one file per process)
 	/// input parameters (if >= 0 we restart from a checkpoint)
 	std::string restart_chkfile;
+	bool showPerformanceHints_ = true; // default: true
 
 	bool useLuminosityTable_ = true;
 	std::string luminosityTableFilename_;
@@ -771,6 +773,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// ParmParse reads inputs from the *.inputs file
 	const amrex::ParmParse pp;
 
+	// Default == true
+	pp.query("show_performance_hints", showPerformanceHints_);
+
 	// Default nsteps == INT_MAX
 	pp.query("max_timesteps", maxTimesteps_);
 
@@ -779,6 +784,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Default CFL number for particles == 0.5, set to whatever is in the file
 	pp.query("particle_cfl", particleCflNumber_);
+
+	// Optional fixed timestep controls
+	pp.query("constant_dt", constantDt_);
+	pp.query("initial_dt", initDt_);
+
+	const int dt_override_count =
+	    static_cast<int>(pp.contains("init_shrink")) + static_cast<int>(pp.contains("initial_dt")) + static_cast<int>(pp.contains("constant_dt"));
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dt_override_count <= 1, "Specify at most one of init_shrink, initial_dt, or constant_dt in the inputs.");
 
 	// Abort when signal speed exceeds this threshold (in code units)
 	pp.query("signal_speed_abort", signalSpeedAbort_);
@@ -792,6 +805,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Default timestep cutoff (safety feature)
 	pp.query("dt_cutoff", dtCutoff_);
+
+	// Default initial timestep shrink factor
+	pp.query("init_shrink", initShrink_);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(initShrink_ > 0.0 && initShrink_ <= 1.0, "init_shrink must be in (0, 1].");
 
 	// Default ascent render interval
 	pp.query("ascent_interval", ascentInterval_);
@@ -1043,7 +1060,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 	doDiagnostics();
 
 	// ensure that there are enough boxes per MPI rank
-	PerformanceHints();
+	if (showPerformanceHints_) {
+		PerformanceHints();
+	}
 }
 
 template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLevel(int lev) -> amrex::ValLocPair<amrex::Real, amrex::IntVect>
@@ -1163,6 +1182,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 		if (constantDt_ > 0.0) { // use constant timestep if set
 			dt_0 = constantDt_;
 		}
+	}
+
+	if (tNew_[0] == 0.0) { // shrink the initial timestep if requested
+		dt_0 *= initShrink_;
 	}
 
 	if (verbose) {
