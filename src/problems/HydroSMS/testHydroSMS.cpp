@@ -269,13 +269,11 @@ auto problem_main() -> int
 	// const double Lx = 1.0;
 	const double CFL_number = 0.2;
 	const double max_time = 1.0;
-	const double fixed_dt = 1e-3;
 	const int max_timesteps = 20000;
 
 	QuokkaSimulation<ShocktubeProblem> sim;
 
 	sim.cflNumber_ = CFL_number;
-	sim.constantDt_ = fixed_dt;
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.integratorOrder_ = 2;     // use forward Euler
