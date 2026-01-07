@@ -14,15 +14,15 @@ amr.v              = 0       # verbosity in Amr
 # Resolution and refinement
 # *****************************************************************
 amr.n_cell          = 32 32 32
-amr.max_level       = 0     # number of levels = max_level + 1
-amr.blocking_factor = 32     # grid size must be divisible by this
+amr.max_level       = 1     # number of levels = max_level + 1
+amr.blocking_factor = 16     # grid size must be divisible by this
 amr.max_grid_size   = 32    # at least 128 for GPUs
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
 amr.grid_eff        = 0.7
 
 do_reflux = 0
 do_subcycle = 0
-suppress_output = 0
+suppress_output = 1
 
 particles.verbose = 0
 particles.disable_SN_feedback = true
@@ -32,7 +32,8 @@ particles.rad_table_output_spacing = linear
 stop_time = 8.0e20
 initial_dt = 3.15576e6
 max_timesteps = 3
-plotfile_interval = -1
-checkpoint_interval = -1
+plotfile_interval = 2
+checkpoint_interval = 2
+restartfile = chk00002
 
 tiny_profiler.enabled = 0

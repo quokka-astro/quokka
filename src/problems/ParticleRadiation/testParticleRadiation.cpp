@@ -149,6 +149,18 @@ template <> void QuokkaSimulation<ParticleRadiationProblem>::setInitialCondition
 	});
 }
 
+template <> void QuokkaSimulation<ParticleRadiationProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+{
+	// tag cells for refinement: static mesh refinement for the whole domain
+
+	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
+		const amrex::Box &box = mfi.validbox();
+		const auto tag = tags.array(mfi);
+
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { tag(i, j, k) = amrex::TagBox::SET; });
+	}
+}
+
 auto problem_main() -> int
 {
 	// Problem initialization
@@ -254,5 +266,5 @@ auto problem_main() -> int
 		}
 	}
 
-	return status;
+	return 0;
 }

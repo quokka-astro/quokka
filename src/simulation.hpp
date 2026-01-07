@@ -212,6 +212,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int sfh_interval_ = -1;		       // interval for the star formation history
 	amrex::Real sfh_time_interval_ = -1.0; // time interval for the star formation history
 	amrex::Real last_sfh_time_ = 0.0;
+	int sn_count_ = 0; // number of SN explosions in a step (used for diagnostics)
 
 	amrex::Real densityFloor_ = 0.0; // default
 	amrex::Real tempFloor_ = 0.0;	 // default
@@ -1922,12 +1923,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt, state_fc_ptr, verbose);
 
 	// Deposit the SN particles into the MultiFab
-	const amrex::Real max_velocity = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
+	Real max_velocity = 0.0;
+	std::tie(sn_count_, max_velocity) = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
+
+	// Print SN explosion count if verbose and non-zero
+	if (verbose && sn_count_ > 0) {
+		amrex::Print() << fmt::format("[PARTICLES] SN explosions: Time: {} - {} stars went supernova at level {}\n", time, sn_count_, lev);
+	}
 
 	// Check if the maximum velocity is greater than the threshold
 	constexpr amrex::Real v_over_c_threshold = 0.03;
 	if (max_velocity > v_over_c_threshold * C::c_light) {
-		amrex::Print() << "WARNING: SN remnant net velocity (" << max_velocity / C::c_light << " c) greater than " << v_over_c_threshold
+		amrex::Print() << "[WARNING] SN remnant net velocity (" << max_velocity / C::c_light << " c) greater than " << v_over_c_threshold
 			       << " c threshold!" << "\n";
 	}
 }
@@ -4057,6 +4064,71 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 		return;
 	}
 
+	// Handle case where number of MPI processes changed since checkpoint was written
+	if (has_level_dirs) {
+		const int finest_level = finestLevel();
+		const int num_procs = amrex::ParallelDescriptor::NProcs();
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			// First, find the highest level that has data
+			int source_level = -1;
+			for (int lev = finest_level; lev >= 0; --lev) {
+				std::string level_path = pc_path + "/Level_" + std::to_string(lev);
+				if (amrex::FileSystem::Exists(level_path)) {
+					source_level = lev;
+					break;
+				}
+			}
+			if (source_level >= 0) {
+				std::string source_level_path = pc_path + "/Level_" + std::to_string(source_level);
+				// Count number of DATA files in source level
+				int num_source_data_files = 0;
+				for (int i = 0;; ++i) {
+					std::string data_file = source_level_path + "/DATA_" + amrex::Concatenate("", i, 5);
+					if (amrex::FileSystem::Exists(data_file)) {
+						num_source_data_files = i + 1;
+					} else {
+						break;
+					}
+				}
+				// For each level, ensure it exists and has the correct number of DATA files
+				for (int lev = 0; lev <= finest_level; ++lev) {
+					std::string level_path = pc_path + "/Level_" + std::to_string(lev);
+					if (!amrex::FileSystem::Exists(level_path)) {
+						// Create the missing level directory by copying from source level
+						std::string cp_cmd = "cp -r " + source_level_path + " " + level_path;
+						system(cp_cmd.c_str());
+					}
+					// Now ensure this level has the correct number of DATA files
+					int num_data_files = 0;
+					for (int i = 0;; ++i) {
+						std::string data_file = level_path + "/DATA_" + amrex::Concatenate("", i, 5);
+						if (amrex::FileSystem::Exists(data_file)) {
+							num_data_files = i + 1;
+						} else {
+							break;
+						}
+					}
+					if (num_data_files < num_procs) {
+						// Copy DATA files from source level
+						for (int i = num_data_files; i < num_procs; ++i) {
+							std::string src_file = level_path + "/DATA_" + amrex::Concatenate("", i % num_source_data_files, 5);
+							std::string dst_file = level_path + "/DATA_" + amrex::Concatenate("", i, 5);
+							if (!amrex::FileSystem::Exists(dst_file)) {
+								std::ifstream src(src_file, std::ios::binary);
+								std::ofstream dst(dst_file, std::ios::binary);
+								if (src && dst) {
+									dst << src.rdbuf();
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		// Synchronize
+		amrex::ParallelDescriptor::Barrier();
+	}
+
 	if (restartRefineFactor_ > 1) {
 		// Save current geometry for all levels
 		amrex::Vector<amrex::Geometry> current_geom(finest_level + 1);
@@ -4106,6 +4178,8 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 	} else {
 		// Normal restart without refinement
 		particles->Restart(restart_chkfile, particle_type_name);
+		// Redistribute particles in case number of processes changed
+		particles->Redistribute();
 	}
 }
 

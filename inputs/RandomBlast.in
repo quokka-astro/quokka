@@ -2,9 +2,8 @@
 # Problem size and geometry
 # *****************************************************************
 geometry.prob_lo     =  0.0  0.0  0.0 
-geometry.prob_hi     =  3.086e20  3.086e20  3.086e20  # 100 x 100 x 100 pc
-geometry.is_periodic =  1   1   1
-use_periodic_bc = 1
+geometry.prob_hi     =  3.086e19  3.086e19  3.086e19  # 10 x 10 x 10 pc
+quokka.bc = reflecting reflecting reflecting
 
 # *****************************************************************
 # VERBOSITY
@@ -20,9 +19,9 @@ amr.blocking_factor = 16     # grid size must be divisible by this
 amr.max_grid_size   = 64
 
 regrid_interval = 2
-refine_threshold = 0.1
+problem.refine_threshold = 0.1
 do_reflux = 1
-do_subcycle = 1
+do_subcycle = 0
 
 cfl = 0.2
 hydro.reconstruction_order = 3
@@ -35,9 +34,11 @@ max_timesteps = 20000
 dt_initial = 3.154e10       # 1000 yr
 stop_time = 3.154e13       # 1e6 yr
 
-SN_rate_per_volume = 0.03   # yr^-1 kpc^-1
-
 cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1
 cooling.cooling_table_type = resampled
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
+
+tiny_profiler.enabled = 1
+
+particles.verbose = 0
