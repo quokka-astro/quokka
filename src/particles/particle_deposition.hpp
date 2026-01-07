@@ -272,7 +272,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
 
 template <typename ContainerType, typename problem_t>
 void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
-		     int evolutionStageIndex, int birthTimeIndex, const SNScheme SN_scheme_d)
+		     int evolutionStageIndex, int birthTimeIndex, const SNScheme SN_scheme_d, int *p_sn_count = nullptr)
 {
 	const BL_PROFILE("SNFeedbackUtils::depositToBuffer()");
 	constexpr amrex::Real stencil_volume = 4.0 / 3.0 * M_PI * SN_stencil_size * SN_stencil_size * SN_stencil_size;
@@ -330,6 +330,11 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 			const bool is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
 
 			if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex + 1)) {
+				// Count this SN explosion
+				if (p_sn_count != nullptr) {
+					amrex::Gpu::Atomic::AddNoRet(p_sn_count, 1);
+				}
+
 				// Update the particle's evolution stage to SNRemnant
 				p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
 
@@ -621,7 +626,7 @@ void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real ste
 
 template <typename ContainerType, typename problem_t>
 auto SNDeposition(ContainerType *container, amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, amrex::Real time,
-		  amrex::Real dt, int mass_index, int evolutionStageIndex, int birthTimeIndex) -> Real
+		  amrex::Real dt, int mass_index, int evolutionStageIndex, int birthTimeIndex) -> std::pair<int, Real>
 {
 	const BL_PROFILE("[particle_deposition] SNDeposition()");
 	static_assert(SN_stencil_size <= 3,
@@ -638,9 +643,13 @@ auto SNDeposition(ContainerType *container, amrex::MultiFab &state, std::array<a
 	amrex::Gpu::Buffer<amrex::Real> max_velocity_buffer({0.0});
 	amrex::Real *p_max_velocity = max_velocity_buffer.data();
 
+	// Initialize SN explosion count tracking
+	amrex::Gpu::Buffer<int> sn_count_buffer({0});
+	int *p_sn_count = sn_count_buffer.data();
+
 	// Step 1: Local deposition within each box
 	SNFeedbackUtils::depositToBuffer<ContainerType, problem_t>(container, state, state_buffer, lev, time, dt, mass_index, evolutionStageIndex,
-								   birthTimeIndex, SN_scheme_d);
+								   birthTimeIndex, SN_scheme_d, p_sn_count);
 
 	// Step 2: Sum boundary values
 	state_buffer.SumBoundary(container->Geom(lev).periodicity());
@@ -651,12 +660,16 @@ auto SNDeposition(ContainerType *container, amrex::MultiFab &state, std::array<a
 	// Step 3: Add the buffer to the state
 	SNFeedbackUtils::addBufferToState<problem_t>(state, state_fc, state_buffer, SN_scheme_d, p_max_velocity);
 
-	// Step 4: Check maximum velocity and print warning if needed
+	// Step 4: Check maximum velocity and SN count, then reduce across ranks
 	auto *h_max_velocity = max_velocity_buffer.copyToHost();
 	Real max_velocity = h_max_velocity[0];
 	amrex::ParallelDescriptor::ReduceRealMax(max_velocity);
 
-	return max_velocity;
+	auto *h_sn_count = sn_count_buffer.copyToHost();
+	int sn_count = h_sn_count[0];
+	amrex::ParallelDescriptor::ReduceIntSum(sn_count);
+
+	return {sn_count, max_velocity};
 }
 
 #endif // AMREX_SPACEDIM == 3
