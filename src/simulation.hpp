@@ -3892,9 +3892,15 @@ void AMRSimulation<problem_t>::interpolateFaceCenteredMultiFabArrayFromRestart(a
 		coarseBdryFunct[idim] = amrex::PhysBCFunct<BndryFunc>(coarse_geom, BCs_array[idim], boundaryFunctor);
 	}
 
+	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		source_ptrs[idim]->setBndry(0.0);
+		source_ptrs[idim]->FillBoundary(coarse_geom.periodicity());
+	}
 	const amrex::IntVect restart_ref_ratio{AMREX_D_DECL(context.refinement_factor, context.refinement_factor, context.refinement_factor)};
+	// Restart refinement can re-tile BoxArrays, so use a robust face interpolator that
+	// does not assume proper nesting of coarse data.
 	amrex::InterpFromCoarseLevel(target_ptrs, 0., source_ptrs, 0, 0, ncomp, coarse_geom, fine_geom, coarseBdryFunct, 0, fineBdryFunct, 0, restart_ref_ratio,
-				     &amrex::face_divfree_interp, BCs_array, 0);
+				     &amrex::face_linear_interp, BCs_array, 0);
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(const RefinementContext &context)
@@ -3933,7 +3939,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 
 												   std::string("Face_") + quokka::face_dir_str[idim]));
 
-					tmp_fc[idim].define(tmp_read.boxArray(), tmp_read.DistributionMap(), tmp_read.nComp(), 1);
+					tmp_fc[idim].define(tmp_read.boxArray(), tmp_read.DistributionMap(), tmp_read.nComp(), nghost_fc_);
 
 					tmp_fc[idim].ParallelCopy(tmp_read);
 
@@ -4055,6 +4061,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 
 	// 5. Load MultiFab data with refinement handling
 	loadMultiFabData(refinement_context);
+	if (restartRefineFactor_ > 1) {
+		postInitialization();
+	}
 
 	// read particle data
 	if (do_tracers != 0) {
