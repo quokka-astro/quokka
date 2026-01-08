@@ -19,6 +19,8 @@
 
 // library headers
 #include "AMReX_Array4.H"
+#include "AMReX_BLassert.H"
+#include "AMReX_Enum.H"
 #include "AMReX_Extension.H"
 #include "AMReX_IntVect.H"
 #include "AMReX_MultiFab.H"
@@ -36,7 +38,7 @@ enum redoFlag { none = 0, redo = 1 };
 } // namespace quokka
 
 // Define enum for slope limiter type
-enum class SlopeLimiter { minmod = 0, sweby, MC };
+AMREX_ENUM(SlopeLimiter, minmod, sweby, mc); // NOLINT
 
 using array_t = amrex::Array4<amrex::Real> const;
 using arrayconst_t = amrex::Array4<const amrex::Real> const;
@@ -47,7 +49,7 @@ template <typename problem_t> class HyperbolicSystem
       public:
 	template <SlopeLimiter limiter> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto SlopeFunc(amrex::Real x, amrex::Real y) -> amrex::Real
 	{
-		static_assert(limiter == SlopeLimiter::minmod || limiter == SlopeLimiter::sweby || limiter == SlopeLimiter::MC,
+		static_assert(limiter == SlopeLimiter::minmod || limiter == SlopeLimiter::sweby || limiter == SlopeLimiter::mc,
 			      "Invalid slope limiter specified.");
 		if constexpr (limiter == SlopeLimiter::minmod) {
 			return Sweby(x, y, 1.0);
@@ -55,7 +57,7 @@ template <typename problem_t> class HyperbolicSystem
 		if constexpr (limiter == SlopeLimiter::sweby) {
 			return Sweby(x, y, 1.5);
 		}
-		if constexpr (limiter == SlopeLimiter::MC) {
+		if constexpr (limiter == SlopeLimiter::mc) {
 			return Sweby(x, y, 2.0);
 		}
 	}
@@ -103,9 +105,17 @@ template <typename problem_t> class HyperbolicSystem
 	template <FluxDir DIR, SlopeLimiter limiter>
 	static void ReconstructStatesPLM(amrex::MultiFab const &q, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int nghost, int nvars);
 
+	template <FluxDir DIR>
+	static void ReconstructStatesPLM(amrex::MultiFab const &q, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int nghost, int nvars,
+					 SlopeLimiter limiter);
+
 	template <FluxDir DIR, SlopeLimiter limiter>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPLM(arrayconst_t &q, array_t &leftState, array_t &rightState,
 										  amrex::Box const &indexRange, int nvars);
+
+	template <FluxDir DIR>
+	static void ReconstructStatesPLM(arrayconst_t &q, array_t &leftState, array_t &rightState, amrex::Box const &indexRange, int nvars,
+					 SlopeLimiter limiter);
 
 	template <FluxDir DIR, SlopeLimiter limiter>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void
@@ -249,6 +259,31 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(amrex::MultiFab const &q_
 }
 
 template <typename problem_t>
+template <FluxDir DIR>
+void HyperbolicSystem<problem_t>::ReconstructStatesPLM(amrex::MultiFab const &q_mf, amrex::MultiFab &leftState_mf, amrex::MultiFab &rightState_mf,
+						       const int nghost, const int nvars, SlopeLimiter limiter)
+{
+	switch (limiter) {
+		case SlopeLimiter::minmod: {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(q_mf, leftState_mf, rightState_mf, nghost, nvars);
+			break;
+		}
+		case SlopeLimiter::sweby: {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::sweby>(q_mf, leftState_mf, rightState_mf, nghost, nvars);
+			break;
+		}
+		case SlopeLimiter::mc: {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::mc>(q_mf, leftState_mf, rightState_mf, nghost, nvars);
+			break;
+		}
+		default: {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, "Invalid PLM limiter specified.");
+			break;
+		}
+	}
+}
+
+template <typename problem_t>
 template <FluxDir DIR, SlopeLimiter limiter>
 AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
 									     amrex::Box const &indexRange, const int nvars)
@@ -261,6 +296,33 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPLM(arr
 	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
 		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, limiter>(q, leftState, rightState, n, i_in, j_in, k_in);
 	});
+}
+
+template <typename problem_t>
+template <FluxDir DIR>
+void HyperbolicSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &indexRange,
+						       const int nvars, SlopeLimiter limiter)
+{
+	switch (limiter) {
+		case SlopeLimiter::minmod: {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(q_in, leftState_in, rightState_in, indexRange,
+													      nvars);
+			break;
+		}
+		case SlopeLimiter::sweby: {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::sweby>(q_in, leftState_in, rightState_in, indexRange,
+													     nvars);
+			break;
+		}
+		case SlopeLimiter::mc: {
+			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::mc>(q_in, leftState_in, rightState_in, indexRange, nvars);
+			break;
+		}
+		default: {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, "Invalid PLM limiter specified.");
+			break;
+		}
+	}
 }
 
 template <typename problem_t>
