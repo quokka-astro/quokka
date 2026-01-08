@@ -265,8 +265,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void postInitialization() override;
 
 	// Optionally project already-initialised face-centred magnetic fields onto a divergence-free space
-	auto projectFaceCenteredMagneticField() -> bool;
-	void updateInitialMagneticEnergyFromFaceField(bool force_update);
+	void projectFaceCenteredMagneticField();
+	void updateInitialMagneticEnergyFromFaceField();
 	void refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
 	void createInitialRadParticles() override;
 #if AMREX_SPACEDIM == 3
@@ -1457,15 +1457,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::applyPoissonGrav
 #endif // (AMREX_SPACEDIM == 3)
 }
 
-template <typename problem_t> auto QuokkaSimulation<problem_t>::projectFaceCenteredMagneticField() -> bool
+template <typename problem_t> void QuokkaSimulation<problem_t>::projectFaceCenteredMagneticField()
 {
 #if AMREX_SPACEDIM == 3
 	static_assert(Physics_Traits<problem_t>::is_mhd_enabled, "Magnetic field initialisation requires MHD to be enabled.");
 
-	// Restart refinement can introduce divB from face interpolation, so always project in that case.
-	const bool force_project = (this->restartRefineFactor_ > 1);
-	if (!projectInitialBField_ && !force_project) {
-		return false;
+	if (!projectInitialBField_) {
+		return;
 	}
 
 	auto const has_ext_dir_hydro_bc = [&]() {
@@ -1490,12 +1488,12 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::projectFaceCente
 
 	if (has_ext_dir_hydro_bc()) {
 		amrex::Print() << "Skipping initial magnetic field projection because ext_dir hydrodynamic boundary conditions are not supported.\n";
-		return false;
+		return;
 	}
 
 	int const finest = this->finest_level;
 	if (finest < 0) {
-		return false;
+		return;
 	}
 	amrex::Vector<amrex::Geometry> geom_levels(finest + 1);
 	amrex::Vector<amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM>> projector_umac(finest + 1);
@@ -1681,20 +1679,17 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::projectFaceCente
 		macproj.getMLMG().setFixedIter(0);
 		macproj.getMLMG().setMaxIter(200);
 	}
-	return true;
-#else
-	return false;
 #endif
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::updateInitialMagneticEnergyFromFaceField(bool force_update)
+template <typename problem_t> void QuokkaSimulation<problem_t>::updateInitialMagneticEnergyFromFaceField()
 {
 #if AMREX_SPACEDIM == 3
 	if constexpr (!Physics_Traits<problem_t>::is_mhd_enabled) {
 		return;
 	}
 
-	if (!updateInitialMagneticEnergy_ && !force_update) {
+	if (!updateInitialMagneticEnergy_) {
 		return;
 	}
 
@@ -1745,15 +1740,15 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::updateInitialMag
 		}
 	}
 #else
-	amrex::ignore_unused(updateInitialMagneticEnergy_, force_update);
+	amrex::ignore_unused(updateInitialMagneticEnergy_);
 #endif
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::postInitialization()
 {
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		const bool did_project = projectFaceCenteredMagneticField();
-		updateInitialMagneticEnergyFromFaceField(did_project);
+		projectFaceCenteredMagneticField();
+		updateInitialMagneticEnergyFromFaceField();
 
 		int const finest_level = finestLevel();
 		for (int lev = 0; lev <= finest_level; ++lev) {
