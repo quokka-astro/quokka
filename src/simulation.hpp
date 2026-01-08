@@ -493,6 +493,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int checkpoint_nfiles = -1;	       // default: -1 (i.e., one file per process)
 	/// input parameters (if >= 0 we restart from a checkpoint)
 	std::string restart_chkfile;
+	bool showPerformanceHints_ = true; // default: true
 
 	bool useLuminosityTable_ = true;
 	std::string luminosityTableFilename_;
@@ -774,6 +775,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// ParmParse reads inputs from the *.inputs file
 	const amrex::ParmParse pp;
+
+	// Default == true
+	pp.query("show_performance_hints", showPerformanceHints_);
 
 	// Default nsteps == INT_MAX
 	pp.query("max_timesteps", maxTimesteps_);
@@ -1059,7 +1063,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 	doDiagnostics();
 
 	// ensure that there are enough boxes per MPI rank
-	PerformanceHints();
+	if (showPerformanceHints_) {
+		PerformanceHints();
+	}
 }
 
 template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLevel(int lev) -> amrex::ValLocPair<amrex::Real, amrex::IntVect>
@@ -1919,12 +1925,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt, state_fc_ptr, verbose);
 
 	// Deposit the SN particles into the MultiFab
-	const amrex::Real max_velocity = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
+	const auto [num_sn_explosions, max_velocity] = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
+
+	// Print SN explosion count if verbose and non-zero
+	if (verbose && num_sn_explosions > 0) {
+		amrex::Print() << fmt::format("[PARTICLES] SN explosions: Time: {} - {} stars went supernova at level {}\n", time, num_sn_explosions, lev);
+	}
 
 	// Check if the maximum velocity is greater than the threshold
 	constexpr amrex::Real v_over_c_threshold = 0.03;
 	if (max_velocity > v_over_c_threshold * C::c_light) {
-		amrex::Print() << "WARNING: SN remnant net velocity (" << max_velocity / C::c_light << " c) greater than " << v_over_c_threshold
+		amrex::Print() << "[WARNING] SN remnant net velocity (" << max_velocity / C::c_light << " c) greater than " << v_over_c_threshold
 			       << " c threshold!" << "\n";
 	}
 }
