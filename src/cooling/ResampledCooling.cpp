@@ -19,10 +19,16 @@ namespace quokka::ResampledCooling
 
 constexpr double cloudy_H_mass_fraction = 1. / (1. + 0.1 * 3.971);
 
-void readResampledData(std::string const &hdf5_file, resampled_tables &resampledTables)
+// return: is_include_pe
+auto readResampledData(std::string const &hdf5_file, resampled_tables &resampledTables) -> bool
 {
 	amrex::Print() << "Initializing resampled cooling.\n";
 	amrex::Print() << fmt::format("resampled_table_file: {}.\n", hdf5_file);
+
+	// Check if file exists
+	if (!amrex::FileSystem::Exists(hdf5_file)) {
+		amrex::Abort("Resampled cooling table file does not exist!");
+	}
 
 	// Define coordinate names and fast_log setting
 	const std::vector<std::string> coord_names = {"rho", "eint"};
@@ -30,9 +36,11 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 
 	// Coordinate bounds will be read by H5Reader
 	std::array<std::pair<amrex::Real, amrex::Real>, 2> coord_bounds;
+	bool is_pe_enabled = false;
 
 	// Read all 2D datasets using generic DataTable H5Reader (file path-based interface)
-	resampledTables.cooling_rates = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/cooling_rates", coord_names, is_fast_log, &coord_bounds);
+	resampledTables.cooling_rates =
+	    quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/cooling_rates", coord_names, is_fast_log, &coord_bounds, &is_pe_enabled);
 	resampledTables.temperatures = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/temperatures", coord_names, is_fast_log);
 	resampledTables.sound_speeds = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/sound_speeds", coord_names, is_fast_log);
 	resampledTables.pressures = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/pressures", coord_names, is_fast_log);
@@ -52,6 +60,9 @@ void readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 
 	amrex::Print() << fmt::format("\tDensity range: {} to {} g/cm^3 ({} steps).\n", resampledTables.rho_min, resampledTables.rho_max, n_rho);
 	amrex::Print() << fmt::format("\tSpecific energy range: {} to {} erg/g ({} steps).\n", resampledTables.eint_min, resampledTables.eint_max, n_eint);
+	amrex::Print() << fmt::format("\tPhotoelectric heating: {}.\n", is_pe_enabled ? "enabled" : "disabled");
+
+	return is_pe_enabled;
 }
 
 auto resampled_tables::const_tables() const -> resampledGpuConstTables
