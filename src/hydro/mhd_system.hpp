@@ -56,8 +56,8 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 
 	static void ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
-					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, SlopeLimiter plmLimiter,
-					       EMFAvgScheme emf_avg_scheme);
+					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
+					       SlopeLimiter plmLimiter, EMFAvgScheme emf_avg_scheme);
 
 	static void ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 					   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
@@ -98,14 +98,14 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				      SlopeLimiter plmLimiter, EMFComputeScheme emf_compute_scheme)
 {
 	if (emf_compute_scheme == EMFComputeScheme::FelkerStone2017) {
-		MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder,
-								 plmLimiter, emf_avg_scheme);
+		MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, plmLimiter,
+								 emf_avg_scheme);
 	} else if (emf_compute_scheme == EMFComputeScheme::Balsara2025) {
-		MHDSystem<problem_t>::ComputeEMF_Balsara2025(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder,
-							     plmLimiter, emf_avg_scheme);
+		MHDSystem<problem_t>::ComputeEMF_Balsara2025(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, plmLimiter,
+							     emf_avg_scheme);
 	} else if (emf_compute_scheme == EMFComputeScheme::Quokka2026) {
 		MHDSystem<problem_t>::ComputeEMF_Quokka2026(ec_mf_emf_components, fcx_mf_vel, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, plmLimiter,
-							   emf_avg_scheme);
+							    emf_avg_scheme);
 	} else {
 		throw std::runtime_error("Unsupported EMF-scheme. Expected either FelkerStone2017, Balsara2025, or Quokka2026.");
 	}
@@ -134,8 +134,7 @@ template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 						      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 						      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
-						      SlopeLimiter plmLimiter,
-						      EMFAvgScheme emf_avg_scheme)
+						      SlopeLimiter plmLimiter, EMFAvgScheme emf_avg_scheme)
 {
 	const BL_PROFILE("MHDSystem::ComputeEMF_FelkerStone2017()");
 	const int nghost_cc = 4; // we only need 4 cc ghost cells when reconstructing cc->fc->ec using PPM
@@ -350,8 +349,8 @@ template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
 						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
 						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
-						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, SlopeLimiter plmLimiter,
-						 EMFAvgScheme emf_avg_scheme)
+						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
+						 SlopeLimiter plmLimiter, EMFAvgScheme emf_avg_scheme)
 {
 	const BL_PROFILE("MHDSystem::ComputeEMF_Quokka2026()");
 
@@ -487,8 +486,8 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 						  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
-						  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, SlopeLimiter plmLimiter,
-						  EMFAvgScheme emf_avg_scheme)
+						  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
+						  SlopeLimiter plmLimiter, EMFAvgScheme emf_avg_scheme)
 {
 	// calculating v x B at cell center, v already at cell center, B at face center
 

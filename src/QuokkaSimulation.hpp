@@ -195,9 +195,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	bool projectInitialBField_ = false;
 	bool updateInitialMagneticEnergy_ = true;
 
-	int lowLevelDebuggingOutput_ = 0;	// 0 == do nothing; 1 == output intermediate multifabs used in hydro each timestep (ONLY USE FOR DEBUGGING)
-	int integratorOrder_ = 2;		// 1 == forward Euler; 2 == RK2-SSP (default)
-	int reconstructionOrder_ = 3;		// 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM (extrema-preserving)
+	int lowLevelDebuggingOutput_ = 0; // 0 == do nothing; 1 == output intermediate multifabs used in hydro each timestep (ONLY USE FOR DEBUGGING)
+	int integratorOrder_ = 2;	  // 1 == forward Euler; 2 == RK2-SSP (default)
+	int reconstructionOrder_ = 3;	  // 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM (extrema-preserving)
 	SlopeLimiter plmLimiter_ = SlopeLimiter::sweby;
 	int radiationReconstructionOrder_ = 3;	// 1 == donor cell; 2 == PLM; 3 == PPM (default); 5 == xPPM
 	int emfReconstructionOrder_ = 5;	// 1 == donor cell; 2 == PLM; 3 == PPM; 5 == xPPM (extrema-preserving, default)
@@ -3277,8 +3277,8 @@ void QuokkaSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> 
 										x1ReconstructRange, nvars);
 	} else if (radiationReconstructionOrder_ == 2) {
 		// PLM and donor cell are interface-centered kernels
-		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::sweby>(primVar.array(), x1LeftState.array(),
-												     x1RightState.array(), x1ReconstructRange, nvars);
+		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::sweby>(primVar.array(), x1LeftState.array(), x1RightState.array(),
+												     x1ReconstructRange, nvars);
 	} else if (radiationReconstructionOrder_ == 1) {
 		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(),
 										     x1ReconstructRange, nvars);
