@@ -4020,8 +4020,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 							coarse_ptrs[idim] = &restart_fc[0][idim];
 						}
 						amrex::InterpFromCoarseLevel(new_ptrs, tNew_[lev], coarse_ptrs, 0, 0, ncomp, restart_geom[0], geom[0],
-									     coarse_bc, 0, fine_bc, 0, restart_ref_ratio, &amrex::face_divfree_interp, BCs_array,
-									     0);
+									     coarse_bc, 0, fine_bc, 0, restart_ref_ratio, &amrex::face_divfree_interp,
+									     BCs_array, 0);
 					}
 				} else {
 					amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> coarse_ptrs;
