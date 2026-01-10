@@ -50,7 +50,7 @@ problem.sigma1 = 7.0e5
 
 cooling.enabled = 1
 cooling.cooling_table_type = "resampled"
-cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
+cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_shielded_resampled_noPE.h5"
 
 use_sfh_based_pe_heating = true
 sfh_to_pe_heating_table = "../extern/cooling/photoelectric_heating_from_sfh.csv"
@@ -70,26 +70,26 @@ statistics_interval = 128
 
 derived_vars = temperature c_s
 
-#quokka.diagnostics = slice_x slice_z proj
+quokka.diagnostics = slice_x slice_z proj
 
-#quokka.slice_x.type = DiagFramePlane
-#quokka.slice_x.file = slicex_plt
-#quokka.slice_x.normal = 0              # Plane normal (0 == x, 1 == y, 2 == z)
-#quokka.slice_x.center = 1.509001e21
-#quokka.slice_x.int = 128
-#quokka.slice_x.interpolation = Linear
-#quokka.slice_x.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s radEnergy-Group0 radEnergy-Group1 radEnergy-Group2 radEnergy-Group3
+quokka.slice_x.type = DiagFramePlane
+quokka.slice_x.file = slicex_plt
+quokka.slice_x.normal = 0              # Plane normal (0 == x, 1 == y, 2 == z)
+quokka.slice_x.center = 1.509001e21
+quokka.slice_x.int = 128
+quokka.slice_x.interpolation = Linear
+quokka.slice_x.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s
 
-#quokka.slice_z.type = DiagFramePlane
-#quokka.slice_z.file = slicez_plt
-#quokka.slice_z.normal = 2              # Plane normal (0 == x, 1 == y, 2 == z)
-#quokka.slice_z.center = 1.0e12        # Domain center in the normal direction
-#quokka.slice_z.int = 128
-#quokka.slice_z.interpolation = Linear
-#quokka.slice_z.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s radEnergy-Group0 radEnergy-Group1 radEnergy-Group2 radEnergy-Group3
+quokka.slice_z.type = DiagFramePlane
+quokka.slice_z.file = slicez_plt
+quokka.slice_z.normal = 2              # Plane normal (0 == x, 1 == y, 2 == z)
+quokka.slice_z.center = 1.0e12        # Domain center in the normal direction
+quokka.slice_z.int = 128
+quokka.slice_z.interpolation = Linear
+quokka.slice_z.field_names = gasDensity gasInternalEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s
 
-#quokka.proj.type = ProjectionPlot   # Projection plot diagnostic
-#quokka.proj.file = proj_plt         # Output file prefix (must end in "plt")
-#quokka.proj.int  = 128                # Output cadence (in number of coarse steps)
-#quokka.proj.dirs = x                # Projection directions (x, y, z)
-#quokka.proj.particles = StochasticStellarPop_particles # List of particle types to include in output (default to none)
+quokka.proj.type = ProjectionPlot   # Projection plot diagnostic
+quokka.proj.file = proj_plt         # Output file prefix (must end in "plt")
+quokka.proj.int  = 128                # Output cadence (in number of coarse steps)
+quokka.proj.dirs = x                # Projection directions (x, y, z)
+quokka.proj.particles = StochasticStellarPop_particles # List of particle types to include in output (default to none)
