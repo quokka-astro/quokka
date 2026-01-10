@@ -48,7 +48,7 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 	static void ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgScheme emf_avg_scheme,
-			       EMFComputeScheme emf_compute_scheme);
+			       SlopeLimiter plmLimiter, EMFComputeScheme emf_compute_scheme);
 
 	static void AverageEMF(amrex::Array4<amrex::Real> const &E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_E_q, amrex::Box const &box_ec,
 			       std::array<int, 2> const &extrap_dirs, std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
@@ -57,17 +57,17 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 	static void ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
-					       EMFAvgScheme emf_avg_scheme);
+					       SlopeLimiter plmLimiter, EMFAvgScheme emf_avg_scheme);
 
 	static void ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 					   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
-					   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
+					   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, SlopeLimiter plmLimiter,
 					   EMFAvgScheme emf_avg_scheme);
 
 	static void ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
 					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
 					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
-					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
+					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, SlopeLimiter plmLimiter,
 					  EMFAvgScheme emf_avg_scheme);
 
 	static void EMFAverage_BalsaraSpicer2004(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
@@ -82,7 +82,8 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 					   std::array<int, 2> const &extrap_dirs, std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
 					   std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_Bi_ieside);
 
-	static void ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &box_cValid, int reconstructionOrder);
+	static void ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &box_cValid, int reconstructionOrder,
+				  SlopeLimiter plmLimiter);
 
 	static void SolveInductionEqn(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fc_consVarOld_mf,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> &fc_consVarNew_mf,
@@ -94,16 +95,17 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgScheme emf_avg_scheme,
-				      EMFComputeScheme emf_compute_scheme)
+				      SlopeLimiter plmLimiter, EMFComputeScheme emf_compute_scheme)
 {
 	if (emf_compute_scheme == EMFComputeScheme::FelkerStone2017) {
-		MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder,
+		MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, plmLimiter,
 								 emf_avg_scheme);
 	} else if (emf_compute_scheme == EMFComputeScheme::Balsara2025) {
-		MHDSystem<problem_t>::ComputeEMF_Balsara2025(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder,
+		MHDSystem<problem_t>::ComputeEMF_Balsara2025(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, plmLimiter,
 							     emf_avg_scheme);
 	} else if (emf_compute_scheme == EMFComputeScheme::Quokka2026) {
-		MHDSystem<problem_t>::ComputeEMF_Quokka2026(ec_mf_emf_components, fcx_mf_vel, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, emf_avg_scheme);
+		MHDSystem<problem_t>::ComputeEMF_Quokka2026(ec_mf_emf_components, fcx_mf_vel, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, plmLimiter,
+							    emf_avg_scheme);
 	} else {
 		throw std::runtime_error("Unsupported EMF-scheme. Expected either FelkerStone2017, Balsara2025, or Quokka2026.");
 	}
@@ -132,7 +134,7 @@ template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 						      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 						      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
-						      EMFAvgScheme emf_avg_scheme)
+						      SlopeLimiter plmLimiter, EMFAvgScheme emf_avg_scheme)
 {
 	const BL_PROFILE("MHDSystem::ComputeEMF_FelkerStone2017()");
 	const int nghost_cc = 4; // we only need 4 cc ghost cells when reconstructing cc->fc->ec using PPM
@@ -248,7 +250,7 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 
 					// extrapolate cell-centered velocity components to the cell-face
 					MHDSystem<problem_t>::ReconstructTo(dir2face, cc_fabs_Ux[wcomp].array(), fc_fabs_U_ifside[0].array(),
-									    fc_fabs_U_ifside[1].array(), box_cc_U, reconstructionOrder);
+									    fc_fabs_U_ifside[1].array(), box_cc_U, reconstructionOrder, plmLimiter);
 
 					// extrapolate face-centered velocity components to the cell-edge
 					for (int iface = 0; iface < 2; ++iface) {
@@ -258,7 +260,7 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 
 						// extrapolate face-centered velocity component to the cell-edge
 						MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_U_ifside[iface].array(), ec_fabs_U_ieside[0].array(),
-										    ec_fabs_U_ieside[1].array(), box_fc, reconstructionOrder);
+										    ec_fabs_U_ieside[1].array(), box_fc, reconstructionOrder, plmLimiter);
 
 						// figure out which quadrant of the cell-edge this extrapolated velocity component corresponds with
 						int iquad0 = -1;
@@ -300,7 +302,7 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 				const amrex::Box box_fc = amrex::convert(box_cc, vec_cc2fc);
 				// extrapolate face-centered magnetic components to the cell-edge
 				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(),
-								    ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
+								    ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder, plmLimiter);
 			}
 
 			// indexing: field[4: quadrant around edge]
@@ -348,7 +350,7 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
 						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
-						 EMFAvgScheme emf_avg_scheme)
+						 SlopeLimiter plmLimiter, EMFAvgScheme emf_avg_scheme)
 {
 	const BL_PROFILE("MHDSystem::ComputeEMF_Quokka2026()");
 
@@ -408,9 +410,9 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 				const amrex::Box box_fc = amrex::convert(box_cc, vec_cc2fc);
 				// extrapolate face-centered components to the cell-edge
 				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(),
-								    ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
+								    ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder, plmLimiter);
 				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Ux[wcomp].array(), ec_fabs_Ui_ieside[icomp][0].array(),
-								    ec_fabs_Ui_ieside[icomp][1].array(), box_fc, reconstructionOrder);
+								    ec_fabs_Ui_ieside[icomp][1].array(), box_fc, reconstructionOrder, plmLimiter);
 			}
 
 			// indexing: field[4: quadrant around edge]
@@ -485,7 +487,7 @@ template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 						  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 						  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
-						  EMFAvgScheme emf_avg_scheme)
+						  SlopeLimiter plmLimiter, EMFAvgScheme emf_avg_scheme)
 {
 	// calculating v x B at cell center, v already at cell center, B at face center
 
@@ -620,7 +622,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 
 				// extrapolate cell-centered velocity components to the cell-face
 				MHDSystem<problem_t>::ReconstructTo(dir2face, cc_mf_EMF[mfi].array(iedge), fc_fabs_EMF_ifside[0].array(),
-								    fc_fabs_EMF_ifside[1].array(), box_cc_EMF_edge, reconstructionOrder);
+								    fc_fabs_EMF_ifside[1].array(), box_cc_EMF_edge, reconstructionOrder, plmLimiter);
 
 				// extrapolate face-centered emf components to the cell-edge
 				for (int iface = 0; iface < 2; ++iface) {
@@ -629,7 +631,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 					ec_fabs_EMF_ieside[1].setVal<amrex::RunOn::Device>(0.0);
 
 					MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_EMF_ifside[iface].array(), ec_fabs_EMF_ieside[0].array(),
-									    ec_fabs_EMF_ieside[1].array(), box_fc, reconstructionOrder);
+									    ec_fabs_EMF_ieside[1].array(), box_fc, reconstructionOrder, plmLimiter);
 
 					// figure out which quadrant of the cell-edge this extrapolated emf component corresponds with
 					int iquad0 = -1;
@@ -673,7 +675,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 				const amrex::Box box_fc = amrex::convert(box_cc, vec_cc2fc);
 				// extrapolate face-centered components to the cell-edge
 				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_Bx[wcomp].array(), ec_fabs_Bi_ieside[icomp][0].array(),
-								    ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder);
+								    ec_fabs_Bi_ieside[icomp][1].array(), box_fc, reconstructionOrder, plmLimiter);
 			}
 			// selected averaging method for the emf:
 			std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi),
@@ -878,7 +880,7 @@ void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> E2_
 
 template <typename problem_t>
 void MHDSystem<problem_t>::ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &box_cValid,
-					 int reconstructionOrder)
+					 int reconstructionOrder, SlopeLimiter plmLimiter)
 {
 	const BL_PROFILE("MHDSystem::ReconstructTo()");
 	amrex::Box const &box_r = amrex::grow(box_cValid, 1);
@@ -911,13 +913,13 @@ void MHDSystem<problem_t>::ReconstructTo(FluxDir dir, arrayconst_t &cState, arra
 	} else if (reconstructionOrder == 2) {
 		switch (dir) {
 			case FluxDir::X1:
-				MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X1, SlopeLimiter::sweby>(cState, lState, rState, box_r, 1);
+				MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X1>(cState, lState, rState, box_r, 1, plmLimiter);
 				break;
 			case FluxDir::X2:
-				MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X2, SlopeLimiter::sweby>(cState, lState, rState, box_r, 1);
+				MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X2>(cState, lState, rState, box_r, 1, plmLimiter);
 				break;
 			case FluxDir::X3:
-				MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X3, SlopeLimiter::sweby>(cState, lState, rState, box_r, 1);
+				MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X3>(cState, lState, rState, box_r, 1, plmLimiter);
 				break;
 		}
 	} else if (reconstructionOrder == 1) {
