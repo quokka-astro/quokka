@@ -30,6 +30,7 @@ jobs:
         restoreKeys: |
           ccache | regression | $(Agent.OS)
         path: $(Pipeline.Workspace)/ccache
+        cacheHitVar: CACHE_RESTORED
 
     - script: |
         if command -v ccache >/dev/null 2>&1; then
@@ -41,16 +42,7 @@ jobs:
         fi
       displayName: Detect ccache
 
-    - script: |
-        mkdir -p $(Pipeline.Workspace)/ccache
-        if command -v ccache >/dev/null 2>&1; then
-          ccache --zero-stats || true
-        else
-          echo "ccache not installed; skipping zero-stats."
-        fi
-      displayName: Prepare ccache
-      env:
-        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+    - template: templates/ccache-prepare.yml
 
     - script: ./extern/regression_testing/regtest.py --clean_testdir regression/quokka-tests.ini
       displayName: 'Run regression testing'
@@ -65,13 +57,4 @@ jobs:
     - script: cd /data/mash/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests/web && git add . && git commit -m 'updated results' && git push
       condition: succeededOrFailed()
       displayName: 'Upload results to GitHub Pages'
-    - script: |
-        if command -v ccache >/dev/null 2>&1; then
-          ccache --show-stats || true
-        else
-          echo "ccache not installed; no statistics to report."
-        fi
-      displayName: Report ccache statistics
-      condition: succeededOrFailed()
-      env:
-        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+    - template: templates/ccache-stats.yml
