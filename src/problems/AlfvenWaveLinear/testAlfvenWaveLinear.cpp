@@ -412,18 +412,7 @@ auto problem_main() -> int
 	outofplane_dir_prf = computeCrossProduct(k_dir_prf, inplane_dir_prf);
 	normalizeVector(outofplane_dir_prf);
 
-	auto BCs_cc = quokka::BC<AlfvenWaveLinear>(quokka::BCType::int_dir);
-
-	const int nvars_fc = Physics_Indices<AlfvenWaveLinear>::nvarTotal_fc;
-	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
-	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_fc[icomp].setLo(idim, amrex::BCType::int_dir);
-			BCs_fc[icomp].setHi(idim, amrex::BCType::int_dir);
-		}
-	}
-
-	QuokkaSimulation<AlfvenWaveLinear> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<AlfvenWaveLinear> sim;
 
 	sim.setInitialConditions();
 	sim.evolve();

@@ -140,15 +140,12 @@ template <> void QuokkaSimulation<CollapseProblem>::ComputeDerivedVar(int lev, s
 
 auto problem_main() -> int
 {
-	// boundary conditions
-	auto BCs_cc = quokka::BC<CollapseProblem>(quokka::BCType::reflecting);
-
 	amrex::ParmParse const pp("problem");
 	pp.query("num_particles", GlobalConfig::num_particles);
 	pp.query("seed", GlobalConfig::seed);
 
 	// Problem initialization
-	QuokkaSimulation<CollapseProblem> sim(BCs_cc);
+	QuokkaSimulation<CollapseProblem> sim;
 
 	// initialize
 	sim.setInitialConditions();

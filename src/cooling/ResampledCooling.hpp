@@ -236,7 +236,7 @@ auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &res
 	return true; // success
 }
 
-void readResampledData(std::string const &hdf5_file, resampled_tables &resampledTables);
+auto readResampledData(std::string const &hdf5_file, resampled_tables &resampledTables) -> bool;
 
 } // namespace quokka::ResampledCooling
 

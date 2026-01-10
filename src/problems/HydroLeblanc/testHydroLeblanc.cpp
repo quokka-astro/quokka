@@ -349,18 +349,16 @@ auto problem_main() -> int
 	const double CFL_number = 0.1;
 	const double max_time = 6.0;
 	const double max_dt = 1e-3;
-	const double initial_dt = 1e-5;
 	const int max_timesteps = 50000;
 
 	auto BCs_cc = quokka::BC<ShocktubeProblem>(quokka::BCType::foextrap, quokka::BCType::int_dir, quokka::BCType::int_dir);
 
-	QuokkaSimulation<ShocktubeProblem> sim(BCs_cc);
+	QuokkaSimulation<ShocktubeProblem> sim;
 
 	sim.cflNumber_ = CFL_number;
 	sim.maxDt_ = max_dt;
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
-	sim.initDt_ = initial_dt;
 
 	sim.plotfileInterval_ = -1;
 

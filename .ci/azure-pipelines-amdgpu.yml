@@ -4,7 +4,30 @@
 # https://aka.ms/yaml
 
 trigger:
-- development
+  branches:
+    include:
+    - development
+  paths:
+    include:
+    - src/**
+    - tests/**
+    - inputs/**
+    - CMakeLists.txt
+    - .ci/azure-pipelines-amdgpu.yml
+    - extern/cooling/*.h5
+    - extern/amrex/**
+    - extern/Microphysics/**
+    - extern/fmt/**
+    - extern/yaml-cpp/**
+    - extern/openPMD-api/**
+    - extern/AMReX-Hydro/**
+    exclude:
+    - docs/**
+    - paper/**
+    - scripts/**
+    - '*.md'
+    - '*.rst'
+    - '*.txt'
 
 pr:
   autoCancel: true
@@ -13,20 +36,23 @@ pr:
     - development
   paths:
     include:
-    - src/*
-    - tests/*
-    - inputs/*
+    - src/**
+    - tests/**
+    - inputs/**
     - CMakeLists.txt
-    - .ci/*
-    - extern/amrex
-    - extern/Microphysics
-    - extern/fmt
-    - extern/yaml-cpp
-    - extern/openPMD-api
+    - .ci/azure-pipelines-amdgpu.yml
+    - extern/cooling/*.h5
+    - extern/amrex/**
+    - extern/Microphysics/**
+    - extern/fmt/**
+    - extern/yaml-cpp/**
+    - extern/openPMD-api/**
+    - extern/AMReX-Hydro/**
+    - extern/turbulence/**
     exclude:
-    - docs/*
-    - paper/*
-    - scripts/*
+    - docs/**
+    - paper/**
+    - scripts/**
     - '*.md'
     - '*.rst'
     - '*.txt'
@@ -37,7 +63,7 @@ variables:
 jobs:
   - job: HIP_Build_Test
     pool: amdgpu
-    timeoutInMinutes: 120
+    timeoutInMinutes: 150
     steps:
     - task: Cache@2
       displayName: Restore ccache
@@ -46,6 +72,7 @@ jobs:
         restoreKeys: |
           ccache | HIP | $(Agent.OS)
         path: $(Pipeline.Workspace)/ccache
+        cacheHitVar: CACHE_RESTORED
 
     - script: |
         if command -v ccache >/dev/null 2>&1; then
@@ -57,16 +84,7 @@ jobs:
         fi
       displayName: Detect ccache
 
-    - script: |
-        mkdir -p $(Pipeline.Workspace)/ccache
-        if command -v ccache >/dev/null 2>&1; then
-          ccache --zero-stats || true
-        else
-          echo "ccache not installed; skipping zero-stats."
-        fi
-      displayName: Prepare ccache
-      env:
-        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+    - template: templates/ccache-prepare.yml
 
     - task: CMake@1
       displayName: 'Configure CMake'
@@ -99,13 +117,4 @@ jobs:
       condition: succeededOrFailed()
       displayName: Publish test results
 
-    - script: |
-        if command -v ccache >/dev/null 2>&1; then
-          ccache --show-stats || true
-        else
-          echo "ccache not installed; no statistics to report."
-        fi
-      displayName: Report ccache statistics
-      condition: succeededOrFailed()
-      env:
-        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+    - template: templates/ccache-stats.yml

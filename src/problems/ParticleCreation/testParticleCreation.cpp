@@ -219,13 +219,13 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 	template <typename problem_t, typename ContainerType>
 	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev,
 				    amrex::Real current_time, amrex::Real dt, int evolution_stage_index, int birth_time_index, int mass_at_birth_index,
-				    std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr)
+				    std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr, int verbose = 0)
 	{
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<ParticleType::Test>::template ParticleChecker,
 							  ParticleCreationTraits<ParticleType::Test>::template ParticleCreator>(
 		    container, mass_idx, state, state_accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index, mass_at_birth_index,
-		    state_fc);
+		    state_fc, verbose);
 	}
 };
 } // namespace quokka
@@ -258,19 +258,8 @@ template <> void QuokkaSimulation<TestParticle>::setInitialConditionsOnGridFaceV
 
 auto problem_main() -> int
 {
-	auto BCs_cc = quokka::BC<TestParticle>(quokka::BCType::reflecting);
-	const int nvars_fc = Physics_Indices<TestParticle>::nvarTotal_fc;
-	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
-	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_fc[icomp].setLo(idim, amrex::BCType::reflect_even);
-			BCs_fc[icomp].setHi(idim, amrex::BCType::reflect_even);
-		}
-	}
-
 	// Problem initialization
-	QuokkaSimulation<TestParticle> sim(BCs_cc, BCs_fc);
-	sim.initDt_ = dt_;
+	QuokkaSimulation<TestParticle> sim;
 	sim.maxDt_ = dt_;
 
 	// Read parameters from input file

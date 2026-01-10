@@ -126,23 +126,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<Channel>::setCustomBounda
 auto problem_main() -> int
 {
 	// Problem initialization
-	constexpr int ncomp_cc = Physics_Indices<Channel>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		BCs_cc[n].setLo(0, amrex::BCType::ext_dir); // NSCBC inflow
-		BCs_cc[n].setHi(0, amrex::BCType::ext_dir); // NSCBC outflow
-
-#if (AMREX_SPACEDIM >= 2)
-		BCs_cc[n].setLo(1, amrex::BCType::int_dir); // periodic
-		BCs_cc[n].setHi(1, amrex::BCType::int_dir);
-#endif
-#if (AMREX_SPACEDIM == 3)
-		BCs_cc[n].setLo(2, amrex::BCType::int_dir);
-		BCs_cc[n].setHi(2, amrex::BCType::int_dir);
-#endif
-	}
-
-	QuokkaSimulation<Channel> sim(BCs_cc);
+	QuokkaSimulation<Channel> sim;
 
 	amrex::ParmParse const pp("channel");
 	// initial condition parameters

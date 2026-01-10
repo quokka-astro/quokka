@@ -442,11 +442,8 @@ auto problem_main() -> int
 	Real omega_sphere{};
 	pp.query("cloud_omega", omega_sphere);
 
-	// Set boundary conditions - extrapolate
-	auto BCs_cc = quokka::BC<PopIII>(quokka::BCType::foextrap);
-
 	// Problem initialization
-	QuokkaSimulation<PopIII> sim(BCs_cc);
+	QuokkaSimulation<PopIII> sim;
 
 	sim.tempFloor_ = 2.73 * (30.0 + 1.0);
 	// sim.speedCeiling_ = 3e6;
@@ -454,8 +451,6 @@ auto problem_main() -> int
 	sim.userData_.R_sphere = R_sphere;
 	sim.userData_.numdens_init = numdens_init;
 	sim.userData_.omega_sphere = omega_sphere;
-
-	sim.initDt_ = 1e6;
 
 	// initialize
 	sim.setInitialConditions();
