@@ -52,6 +52,7 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 | hydro.low_level_debugging_output       | Integer | If set to 1, turns on low-level debugging output for each RK stage. Warning: this writes an enormous volume of data to disk! This should only be used for debugging. Default: 0.          |
 | hydro.rk_integrator_order              | Integer | Determines the order of the RK integrator used. Can be set to 1 (Forward Euler) or 2 (RK2-SSP, also known as Heun's method). Default: 2. This should only be changed for debugging.       |
 | hydro.reconstruction_order             | Integer | Determines the order of spatial reconstruction algorithm used. Can be set to 1 (piecewise constant), 2 (piecewise linear; PLM), or 3 (piecewise parabolic; PPM). Default: 3 (PPM).        |
+| hydro.plm_limiter                      | String  | Selects the slope limiter for PLM reconstruction. Options: `minmod`, `sweby`, or `mc`. Only used when `hydro.reconstruction_order = 2`. Default: `sweby`.                                   |
 | hydro.use_dual_energy                  | Integer | If set to 1, the code evolves an auxiliary internal energy variable in order to correctly evolve high-mach flows. This should only be disabled (0) for debugging. Default: 1.             |
 | hydro.abort_on_fofc_failure            | Integer | If set to 1, the code aborts when first-order flux correction fails to yield a physical state (positive density and pressure). This should only be disabled (0) for debugging.            |
 | hydro.artificial_viscosity_coefficient | Float   | This is the linear artificial viscosity coefficient used in the artificial viscosity term added to the flux. This is the same parameter as defined in the original PPM paper. Default: 0. |
@@ -74,9 +75,9 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 | Parameter Name           | Type   | Description                                                                                                                                          |
 | ------------------------ | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | mhd.emf_computing_scheme | String | Determines the method used to compute the EMF at edges. Can be set to `FelkerStone2017`, `Balsara2025`, or `Quokka2026`. Default: `FelkerStone2017`. |
-
 | mhd.emf_averaging_scheme | String | Determines the method used to average EMF at edges. Can be set to `BalsaraSpicer2004`, `LondrilloDelZanna2004`, or `Balsara2025`. Default: `LondrilloDelZanna2004`. |
 | mhd.emf_reconstruction_order | Integer | Determines the order of spatial reconstruction algorithm used for EMF computation. Can be set to 1 (piecewise constant), 2 (piecewise linear; PLM), 3 (piecewise parabolic; PPM), or 5 (extrema-preserving xPPM). Default: 5 (xPPM). |
+| mhd.plm_limiter | String | Selects the slope limiter for PLM reconstruction in EMF calculations. Options: `minmod`, `sweby`, or `mc`. Only used when `mhd.emf_reconstruction_order = 2`. Default: `sweby`. |
 
 ## Optically-thin radiative cooling
 
