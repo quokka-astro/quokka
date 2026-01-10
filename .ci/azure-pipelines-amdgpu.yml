@@ -134,9 +134,17 @@ jobs:
 
     - script: |
         if command -v ccache >/dev/null 2>&1; then
+          echo "=== Before cleanup ==="
           ccache --show-stats || true
+          echo ""
+          echo "=== Cleanup ==="
           ccache --cleanup || true
+          echo ""
+          echo "=== After cleanup ==="
           ccache --show-stats || true
+          echo ""
+          echo "=== Cache directory size ==="
+          du -sh $(Pipeline.Workspace)/ccache 2>/dev/null || echo "Could not measure directory size"
         else
           echo "ccache not installed; no statistics to report."
         fi
