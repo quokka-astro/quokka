@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <utility>
 
 #include "AMReX.H"
 #include "AMReX_BC_TYPES.H"
@@ -218,7 +219,7 @@ template <> void QuokkaSimulation<TheProblem>::refineGrid(int lev, amrex::TagBox
 	pp.queryarr("refine_zmax", refine_zmax_list);
 	
 	// If no list is provided or level exceeds list size, skip refinement
-	if (refine_zmax_list.empty() || lev >= static_cast<int>(refine_zmax_list.size())) {
+	if (refine_zmax_list.empty() || std::cmp_greater_equal(lev ,refine_zmax_list.size()))) {
 		return;
 	}
 	
@@ -303,7 +304,7 @@ template <> void QuokkaSimulation<TheProblem>::preCalculateInitialConditions()
 template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;

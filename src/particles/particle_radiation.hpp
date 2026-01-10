@@ -38,7 +38,6 @@ template <int Nout = 1, quokka::OutOfBounds oob_policy = quokka::OutOfBounds::cl
 // Default to single output (Nout=1) and clamp out-of-bounds for backward compatibility
 template <int Nout = 1, quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp>
 inline LuminosityTables<Nout, oob_policy> *g_luminosity_tables_ptr = nullptr; // NOLINT
-
 // Class to handle luminosity updates for stellar particles
 class LuminosityUpdate
 {
