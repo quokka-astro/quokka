@@ -30,6 +30,7 @@ jobs:
         restoreKeys: |
           ccache | regression | $(Agent.OS)
         path: $(Pipeline.Workspace)/ccache
+        cacheHitVar: CACHE_RESTORED
 
     - script: |
         if command -v ccache >/dev/null 2>&1; then
@@ -44,7 +45,13 @@ jobs:
     - script: |
         mkdir -p $(Pipeline.Workspace)/ccache
         if command -v ccache >/dev/null 2>&1; then
+          ccache --set-config=max_size=5G
+          ccache --set-config=compression=true
+          ccache --set-config=compression_level=6
+          ccache --cleanup || true
           ccache --zero-stats || true
+          echo "ccache configuration:"
+          ccache --show-config | grep -E "(max_size|compression)" || true
         else
           echo "ccache not installed; skipping zero-stats."
         fi
@@ -67,6 +74,8 @@ jobs:
       displayName: 'Upload results to GitHub Pages'
     - script: |
         if command -v ccache >/dev/null 2>&1; then
+          ccache --show-stats || true
+          ccache --cleanup || true
           ccache --show-stats || true
         else
           echo "ccache not installed; no statistics to report."
