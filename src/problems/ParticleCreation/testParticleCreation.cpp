@@ -260,7 +260,6 @@ auto problem_main() -> int
 {
 	// Problem initialization
 	QuokkaSimulation<TestParticle> sim;
-	sim.initDt_ = dt_;
 	sim.maxDt_ = dt_;
 
 	// Read parameters from input file

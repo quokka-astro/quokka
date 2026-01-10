@@ -187,9 +187,8 @@ auto problem_main() -> int
 	// const int nx = 1500;
 	const int max_timesteps = 12000;
 	const double CFL_number = 0.4;
-	const double max_dt = 1e-2;	// dimensionless time
-	const double initial_dt = 1e-9; // dimensionless time
-	const double max_time = 10.0;	// dimensionless time
+	const double max_dt = 1e-2;   // dimensionless time
+	const double max_time = 10.0; // dimensionless time
 	// const double max_time = 3.16228;	  // dimensionless time
 
 	QuokkaSimulation<MarshakProblem> sim;
@@ -199,7 +198,6 @@ auto problem_main() -> int
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.maxDt_ = max_dt;
-	sim.initDt_ = initial_dt;
 	sim.plotfileInterval_ = -1;
 
 	// evolve

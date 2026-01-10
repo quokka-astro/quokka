@@ -39,6 +39,7 @@ particles.SN_scheme = SN_thermal_or_thermal_momentum
 particles.verbose = 1
 
 max_timesteps = 10
+initial_dt = 3.15576e4
 plotfile_interval = -1
 checkpoint_interval = -1
 

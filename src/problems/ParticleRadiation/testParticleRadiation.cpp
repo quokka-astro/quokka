@@ -153,7 +153,6 @@ auto problem_main() -> int
 {
 	// Problem initialization
 	QuokkaSimulation<ParticleRadiationProblem> sim;
-	sim.initDt_ = dt_;
 	sim.maxDt_ = dt_;
 
 	// Read parameters from input file

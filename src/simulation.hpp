@@ -62,6 +62,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_Orientation.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
+#include "AMReX_Parser.H"
 #include "AMReX_PlotFileUtil.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
@@ -186,6 +187,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real particleSpeedAbort_ = -1.0;
 	amrex::Real dtToleranceFactor_ = 1.1; // default
 	amrex::Real dtCutoff_ = 0.0;	      // default: no cutoff (disabled when 0)
+	amrex::Real initShrink_ = 1.0;	      // default: no shrink
 	amrex::Long cycleCount_ = 0;
 	int printCycleTiming_ = 0;				     // default: don't print
 	amrex::Long maxTimesteps_ = std::numeric_limits<int>::max(); // default: no limit
@@ -214,6 +216,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	amrex::Real densityFloor_ = 0.0; // default
 	amrex::Real tempFloor_ = 0.0;	 // default
+	bool useDensityFloorParser_ = false;
+	std::string densityFloorExpr_;
+	std::optional<amrex::Parser> densityFloorParser_;
+	std::optional<amrex::ParserExecutor<4>> densityFloorParserExe_;
+	bool debugDensityFloorPlot_ = false; // default: disabled
 
 	mutable YAML::Node simulationMetadata_;
 
@@ -291,6 +298,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// compute derived variables
 	virtual void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const = 0;
+	virtual void ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const;
 
 	// compute projected vars
 	[[nodiscard]] virtual auto ComputeProjections(amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> = 0;
@@ -483,6 +491,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int checkpoint_nfiles = -1;	       // default: -1 (i.e., one file per process)
 	/// input parameters (if >= 0 we restart from a checkpoint)
 	std::string restart_chkfile;
+	bool showPerformanceHints_ = true; // default: true
 
 	bool useLuminosityTable_ = true;
 	std::string luminosityTableFilename_;
@@ -765,6 +774,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// ParmParse reads inputs from the *.inputs file
 	const amrex::ParmParse pp;
 
+	// Default == true
+	pp.query("show_performance_hints", showPerformanceHints_);
+
 	// Default nsteps == INT_MAX
 	pp.query("max_timesteps", maxTimesteps_);
 
@@ -773,6 +785,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Default CFL number for particles == 0.5, set to whatever is in the file
 	pp.query("particle_cfl", particleCflNumber_);
+
+	// Optional fixed timestep controls
+	pp.query("constant_dt", constantDt_);
+	pp.query("initial_dt", initDt_);
+
+	const int dt_override_count =
+	    static_cast<int>(pp.contains("init_shrink")) + static_cast<int>(pp.contains("initial_dt")) + static_cast<int>(pp.contains("constant_dt"));
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dt_override_count <= 1, "Specify at most one of init_shrink, initial_dt, or constant_dt in the inputs.");
 
 	// Abort when signal speed exceeds this threshold (in code units)
 	pp.query("signal_speed_abort", signalSpeedAbort_);
@@ -786,6 +806,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Default timestep cutoff (safety feature)
 	pp.query("dt_cutoff", dtCutoff_);
+
+	// Default initial timestep shrink factor
+	pp.query("init_shrink", initShrink_);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(initShrink_ > 0.0 && initShrink_ <= 1.0, "init_shrink must be in (0, 1].");
 
 	// Default ascent render interval
 	pp.query("ascent_interval", ascentInterval_);
@@ -855,6 +879,33 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// read temperature floor in K
 	pp.query("temperature_floor", tempFloor_);
+
+	// optional density floor expression (variables: x, y, z, base_density_floor)
+	densityFloorExpr_.clear();
+	pp.query("density_floor_expr", densityFloorExpr_);
+	useDensityFloorParser_ = !densityFloorExpr_.empty();
+	if (useDensityFloorParser_) {
+		densityFloorParser_.emplace(densityFloorExpr_);
+		densityFloorParser_->registerVariables({"x", "y", "z", "base_density_floor"});
+		densityFloorParserExe_ = densityFloorParser_->compile<4>();
+#ifdef AMREX_USE_GPU
+		if (densityFloorParserExe_->m_device_executor == nullptr) {
+			amrex::Abort("density_floor_expr: device parser executor is null after compile<4>()");
+		}
+#endif
+	} else {
+		densityFloorParser_.reset();
+		densityFloorParserExe_.reset();
+	}
+
+	// Optional debug output: spatially varying density floor
+	pp.query("debug_density_floor_plot", debugDensityFloorPlot_);
+	if (debugDensityFloorPlot_) {
+		static constexpr char const *kDensityFloorDbgName = "density_floor_dbg";
+		if (std::ranges::find(derivedNames_, kDensityFloorDbgName) == derivedNames_.end()) {
+			derivedNames_.push_back(kDensityFloorDbgName);
+		}
+	}
 
 	// specify maximum walltime in HH:MM:SS format
 	std::string maxWalltimeInput;
@@ -1010,7 +1061,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 	doDiagnostics();
 
 	// ensure that there are enough boxes per MPI rank
-	PerformanceHints();
+	if (showPerformanceHints_) {
+		PerformanceHints();
+	}
 }
 
 template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLevel(int lev) -> amrex::ValLocPair<amrex::Real, amrex::IntVect>
@@ -1130,6 +1183,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 		if (constantDt_ > 0.0) { // use constant timestep if set
 			dt_0 = constantDt_;
 		}
+	}
+
+	if (tNew_[0] == 0.0) { // shrink the initial timestep if requested
+		dt_0 *= initShrink_;
 	}
 
 	if (verbose) {
@@ -1866,12 +1923,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt, state_fc_ptr, verbose);
 
 	// Deposit the SN particles into the MultiFab
-	Real max_velocity = 0.0;
-	std::tie(sn_count_, max_velocity) = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
+	const auto [num_sn_explosions, max_velocity] = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
 
 	// Print SN explosion count if verbose and non-zero
-	if (verbose && sn_count_ > 0) {
-		amrex::Print() << fmt::format("[PARTICLES] SN explosions: Time: {} - {} stars went supernova at level {}\n", time, sn_count_, lev);
+	if (verbose && num_sn_explosions > 0) {
+		amrex::Print() << fmt::format("[PARTICLES] SN explosions: Time: {} - {} stars went supernova at level {}\n", time, num_sn_explosions, lev);
 	}
 
 	// Check if the maximum velocity is greater than the threshold
@@ -3017,6 +3073,12 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 		// Check if it's a derived variable
 		auto deriv_it = std::ranges::find(derivedNames_, varname);
 		if (deriv_it != derivedNames_.end()) {
+			static constexpr char const *kDensityFloorDbgName = "density_floor_dbg";
+			if (varname == kDensityFloorDbgName) {
+				ComputeDensityFloorDebug(lev, plotMF, comp);
+				comp++;
+				continue;
+			}
 			ComputeDerivedVar(lev, varname, plotMF, comp);
 			comp++;
 			continue;
@@ -3027,6 +3089,45 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 	}
 
 	return plotMF;
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const
+{
+	auto const ncomp_out = ncomp;
+	auto const geom_data = geom[lev].data();
+	auto const prob_lo = geom_data.ProbLo();
+	auto const dx = geom_data.CellSize();
+	auto const density_floor = densityFloor_;
+	auto const ngrow = mf.nGrow();
+
+	if (useDensityFloorParser_) {
+		auto const density_floor_parser = densityFloorParserExe_.value();
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			amrex::Box const &box = iter.growntilebox(ngrow);
+			auto const &arr = mf.array(iter);
+			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
+#if (AMREX_SPACEDIM >= 2)
+				amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + static_cast<amrex::Real>(0.5)) * dx[1];
+#else
+				amrex::Real const y = 0.0;
+#endif
+#if (AMREX_SPACEDIM == 3)
+				amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + static_cast<amrex::Real>(0.5)) * dx[2];
+#else
+				amrex::Real const z = 0.0;
+#endif
+				arr(i, j, k, ncomp_out) = density_floor_parser(x, y, z, density_floor);
+			});
+		}
+	} else {
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			amrex::Box const &box = iter.growntilebox(ngrow);
+			auto const &arr = mf.array(iter);
+			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { arr(i, j, k, ncomp_out) = density_floor; });
+		}
+	}
+	amrex::Gpu::streamSynchronize();
 }
 
 template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_fc(const int lev, int idim, const int nghost_fc_) -> amrex::MultiFab
@@ -3372,6 +3473,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	}
 
 	// write all particles in particleRegister_ to plotfile
+	particleRegister_.redistribute(0, 0);
 	particleRegister_.writePlotFile(plotfilename);
 #endif
 }
@@ -3593,6 +3695,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 	}
 
 	// write all particles in particleRegister_ to checkpoint file
+	particleRegister_.redistribute(0, 0);
 	particleRegister_.writeCheckpoint(checkpointname, true);
 
 	// create symlink and point it at this checkpoint dir
