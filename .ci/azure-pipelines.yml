@@ -83,22 +83,7 @@ jobs:
         fi
       displayName: Detect ccache
 
-    - script: |
-        mkdir -p $(Pipeline.Workspace)/ccache
-        if command -v ccache >/dev/null 2>&1; then
-          ccache --set-config=max_size=5G
-          ccache --set-config=compression=true
-          ccache --set-config=compression_level=6
-          ccache --cleanup || true
-          ccache --zero-stats || true
-          echo "ccache configuration:"
-          ccache --show-config | grep -E "(max_size|compression)" || true
-        else
-          echo "ccache not installed; skipping zero-stats."
-        fi
-      displayName: Prepare ccache
-      env:
-        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+    - template: templates/ccache-prepare.yml
 
     - task: CMake@1
       displayName: 'Configure CMake'
@@ -131,23 +116,4 @@ jobs:
       condition: succeededOrFailed()
       displayName: Publish test results
 
-    - script: |
-        if command -v ccache >/dev/null 2>&1; then
-          echo "=== Before cleanup ==="
-          ccache --show-stats || true
-          echo ""
-          echo "=== Cleanup ==="
-          ccache --cleanup || true
-          echo ""
-          echo "=== After cleanup ==="
-          ccache --show-stats || true
-          echo ""
-          echo "=== Cache directory size ==="
-          du -sh $(Pipeline.Workspace)/ccache 2>/dev/null || echo "Could not measure directory size"
-        else
-          echo "ccache not installed; no statistics to report."
-        fi
-      displayName: Report ccache statistics
-      condition: succeededOrFailed()
-      env:
-        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+    - template: templates/ccache-stats.yml
