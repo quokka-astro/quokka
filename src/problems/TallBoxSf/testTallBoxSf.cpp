@@ -219,7 +219,7 @@ template <> void QuokkaSimulation<TheProblem>::refineGrid(int lev, amrex::TagBox
 	pp.queryarr("refine_zmax", refine_zmax_list);
 
 	// If no list is provided or level exceeds list size, skip refinement
-	if (refine_zmax_list.empty() || std::cmp_greater_equal(lev ,refine_zmax_list.size()))) {
+	if (refine_zmax_list.empty() || std::cmp_greater_equal(lev, refine_zmax_list.size()))) {
 		return;
 	}
 
