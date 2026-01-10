@@ -328,10 +328,6 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nx <= nturb, "nx must be less than or equal to turbulent_size (128)");
 
-	// z-range limits: apply turbulence only from 1.5*nx to 2.5*nx
-	const int k_start = nx + nx / 2;
-	const int k_end = 2 * nx + nx / 2;
-
 	// Capture galaxy parameters from userData_ for GPU kernel
 	const Real sigma1_ic = userData_.sigma1;
 	const Real sigma2_ic = 10.0 * sigma1_ic;
