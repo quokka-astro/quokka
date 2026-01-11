@@ -63,7 +63,7 @@ template <typename problem_t> class DustDrag
 									    bool enable_supersonic_correction) -> amrex::GpuArray<amrex::Real, nDustGroups_>;
 	// compute dust-gas drag source terms and update conserved variables
 	static void computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc_mf, amrex::Real dt,
-				    amrex::Real dust_omega_, int enableIterDustStoptime_);
+				    amrex::Real dust_omega_, int enableIterDustStoptime_, bool print_dust_counter_);
 };
 
 template <typename problem_t>
@@ -110,8 +110,10 @@ AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::ComputeReciprocalStoppingTimeKwo
 
 template <typename problem_t>
 void DustDrag<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc_mf, amrex::Real dt,
-					  amrex::Real dust_omega_, int enableIterDustStoptime_)
+					  amrex::Real dust_omega_, int enableIterDustStoptime_, bool print_dust_counter_)
 {
+	amrex::Gpu::Buffer<int> iteration_counter({0, 0, 0}); // [sum of iterations, number of cells, max iterations in any cell]
+	int *p_iteration_counter = iteration_counter.data();
 	auto const &consVar_cc = consVar_cc_mf.arrays();
 	auto const &cons_fc_x0 = consVar_fc_mf[0].const_arrays();
 #if AMREX_SPACEDIM >= 2
@@ -166,6 +168,7 @@ void DustDrag<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::a
 		// set iteration parameters
 		const int max_iterations = (enableIterDustStoptime_ != 0) ? 20 : 1;
 		const amrex::Real tolerance = 1.0e-6;
+		int cell_iteration_count = 0;
 
 		// initialize iteration intermediate variables
 		amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, nDustGroups_ + 1> vel_inter_old;
@@ -180,6 +183,7 @@ void DustDrag<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::a
 
 		// Picard iteration loop
 		for (int iteration = 0; iteration < max_iterations; ++iteration) {
+			cell_iteration_count++;
 			// compute sound speed for stopping time calculation
 			double cs = 0.0;
 			if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
@@ -400,5 +404,28 @@ void DustDrag<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::a
 
 			vel_inter_old = vel_inter_new;
 		}
+		amrex::Gpu::Atomic::Add(&p_iteration_counter[0], cell_iteration_count); // sum of iterations
+		amrex::Gpu::Atomic::Add(&p_iteration_counter[1], 1);			// number of cells
+		amrex::Gpu::Atomic::Max(&p_iteration_counter[2], cell_iteration_count); // max iterations in any cell
 	});
+	if (print_dust_counter_) {
+		auto *h_iteration_counter = iteration_counter.copyToHost();
+		long global_iteration_sum = h_iteration_counter[0]; // NOLINT(google-runtime-int)
+		long global_cell_count = h_iteration_counter[1];    // NOLINT(google-runtime-int)
+		int global_max_iterations = h_iteration_counter[2];
+
+		amrex::ParallelDescriptor::ReduceLongSum(global_iteration_sum);
+		amrex::ParallelDescriptor::ReduceLongSum(global_cell_count);
+		amrex::ParallelDescriptor::ReduceIntMax(global_max_iterations);
+
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			if (global_cell_count > 0) {
+				const double avg_iterations = static_cast<double>(global_iteration_sum) / static_cast<double>(global_cell_count);
+				amrex::Print() << "Dust drag Picard iteration statistics:\n";
+				amrex::Print() << "  total cells updated: " << global_cell_count << "\n";
+				amrex::Print() << "  average iterations per cell: " << avg_iterations << "\n";
+				amrex::Print() << "  maximum iterations in any cell: " << global_max_iterations << "\n";
+			}
+		}
+	}
 }

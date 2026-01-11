@@ -180,6 +180,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	static constexpr bool is_particle_enabled = Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None;
 
 	amrex::Real dust_omega_ = 1.0;
+	bool print_dust_counter_ = false;
 
 	amrex::Real radiationCflNumber_ = 0.3;
 	int maxSubsteps_ = 10;				// maximum number of radiation subcycles per hydro step
@@ -682,6 +683,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		amrex::ParmParse const dpp("dust");
 		dpp.query("omega", dust_omega_);
 		dpp.query("enable_iter_stoptime", enableIterDustStoptime_);
+		dpp.query("print_iteration_counts", print_dust_counter_);
 	}
 
 	// set radiation runtime parameters
@@ -970,7 +972,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 		td->applyDriving(state, time, dt, cellSizes);
 	}
 	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-		DustDrag<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega_, enableIterDustStoptime_);
+		DustDrag<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega_, enableIterDustStoptime_, print_dust_counter_);
 	}
 
 	// compute user-specified sources

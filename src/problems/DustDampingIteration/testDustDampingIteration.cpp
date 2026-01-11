@@ -344,6 +344,7 @@ auto run_reference_simulation() -> SimulationData<DustDampingWithCorrection>
 	sim.cflNumber_ = 1000000.0;
 	sim.constantDt_ = 0.00001;
 	sim.enableIterDustStoptime_ = 0;
+	sim.print_dust_counter_ = false;
 
 	sim.setInitialConditions();
 	sim.evolve();
@@ -361,6 +362,7 @@ auto run_iterative_with_correction() -> SimulationData<DustDampingWithCorrection
 	sim.cflNumber_ = 0.3;
 	sim.constantDt_ = -1.0;
 	sim.enableIterDustStoptime_ = 1;
+	sim.print_dust_counter_ = true;
 
 	sim.setInitialConditions();
 	sim.evolve();
@@ -378,6 +380,7 @@ auto run_iterative_without_correction() -> SimulationData<DustDampingWithoutCorr
 	sim.cflNumber_ = 0.3;
 	sim.constantDt_ = -1.0;
 	sim.enableIterDustStoptime_ = 1;
+	sim.print_dust_counter_ = true;
 
 	sim.setInitialConditions();
 	sim.evolve();
