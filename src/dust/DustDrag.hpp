@@ -316,10 +316,11 @@ void DustDrag<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::a
 						     k1[0] * beta2 * epsilon[g] * dt);
 				}
 
-				vel_inter_new[0][dir] = vel_g_old[dir] + dt * (b * k1[0] + (1.0 - b) * k2[0]) / rho_g;
+				vel_inter_new[0][dir] = vel_g_old[dir] + (rho_g > 0.0 ? dt * (b * k1[0] + (1.0 - b) * k2[0]) / rho_g : 0.0);
 
 				for (int g = 0; g < nDustGroups_; ++g) {
-					vel_inter_new[1 + g][dir] = vel_d_old[g][dir] + dt * (b * k1[1 + g] + (1.0 - b) * k2[1 + g]) / rho_d[g];
+					vel_inter_new[1 + g][dir] =
+					    vel_d_old[g][dir] + (rho_d[g] > 0.0 ? dt * (b * k1[1 + g] + (1.0 - b) * k2[1 + g]) / rho_d[g] : 0.0);
 				}
 			}
 
