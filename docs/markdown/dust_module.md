@@ -103,3 +103,4 @@ The following input parameters tune the dust module and are documented in more d
 
 - `enable_iter_stoptime` – switch of iterative dust stopping time calculation.
 - `omega` – controls the level of frictional heating.
+- `print_iteration_counts` - switch to turn on/off printing of dust drag iteration counts for debugging.
