@@ -3971,9 +3971,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 #endif
 			if (context.needs_refinement()) {
 				using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>;
+
 				const amrex::IntVect restart_ref_ratio{
 				    AMREX_D_DECL(context.refinement_factor, context.refinement_factor, context.refinement_factor)};
 				const int ncomp = restart_fc[0][0].nComp();
+
 				// Restart refinement strategy: build level 0 with old levels 0/1 (same domain, finer spacing),
 				// then fill higher levels from new coarse + old fine via FillPatchTwoLevels when available.
 				amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> BCs_array;
@@ -3987,6 +3989,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 				amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> new_ptrs;
 				amrex::Array<amrex::PhysBCFunct<BndryFunc>, AMREX_SPACEDIM> coarse_bc;
 				amrex::Array<amrex::PhysBCFunct<BndryFunc>, AMREX_SPACEDIM> fine_bc;
+
 				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 					new_ptrs[idim] = &state_new_fc_[lev][idim];
 
@@ -4002,16 +4005,22 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 
 				if (lev == 0) {
 					if (finest_level >= 1) {
+						AMREX_ALWAYS_ASSERT(context.refinement_factor == 2); // FaceDivFree interp only supports ref ratio of 2
+						AMREX_ALWAYS_ASSERT(context.refinement_factor == refRatio(0)[0]); // ref ratio consistency check
+						AMREX_ALWAYS_ASSERT(ref_ratio[lev] == refRatio(0)); // constant ref ratio check
+
 						amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> coarse_ptrs;
 						amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> fine_ptrs;
 						for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 							coarse_ptrs[idim] = &restart_fc[0][idim];
 							fine_ptrs[idim] = &restart_fc[1][idim];
 						}
+
 						amrex::Vector<amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM>> cmf{coarse_ptrs};
 						amrex::Vector<amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM>> fmf{fine_ptrs};
 						amrex::Vector<amrex::Real> ct{tNew_[0]};
 						amrex::Vector<amrex::Real> ft{tNew_[1]};
+
 						amrex::FillPatchTwoLevels(new_ptrs, amrex::IntVect(nghost_fc_), tNew_[lev], cmf, ct, fmf, ft, 0, 0, ncomp,
 									  restart_geom[0], geom[0], coarse_bc, 0, fine_bc, 0, refRatio(0),
 									  &amrex::face_divfree_interp, BCs_array, 0);
@@ -4039,6 +4048,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 						amrex::Vector<amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM>> fmf{fine_ptrs};
 						amrex::Vector<amrex::Real> ct{tNew_[lev - 1]};
 						amrex::Vector<amrex::Real> ft{tNew_[lev + 1]};
+
 						amrex::FillPatchTwoLevels(new_ptrs, amrex::IntVect(nghost_fc_), tNew_[lev], cmf, ct, fmf, ft, 0, 0, ncomp,
 									  geom[lev - 1], geom[lev], coarse_bc, 0, fine_bc, 0, refRatio(lev - 1),
 									  &amrex::face_divfree_interp, BCs_array, 0);
