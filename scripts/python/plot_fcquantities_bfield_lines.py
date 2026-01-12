@@ -36,9 +36,11 @@ def find_fc_plotfile(plotfile: Path, dim: str) -> Path:
 
 def load_face_field(fc_plotfile: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     import yt
-
     ds = yt.load(str(fc_plotfile))
-    field = next((f for f in ds.field_list if f[1].endswith("BField")), ds.field_list[0])
+    field = next((f for f in ds.field_list if f[1].endswith("BField")), None)
+    if field is None:
+        raise ValueError(f"No BField found in face-centered plotfile: {fc_plotfile}")
+    
     cg = ds.covering_grid(level=0, left_edge=ds.domain_left_edge, dims=ds.domain_dimensions)
     data = cg[field].to_ndarray()
     left_edge = np.asarray(ds.domain_left_edge)
