@@ -415,9 +415,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	auto readCheckpointHeader(const std::string &restart_file) -> amrex::Vector<amrex::BoxArray>;
 	void interpolateMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source, const RefinementContext &context,
 					    const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom, const amrex::Vector<amrex::BCRec> &bcs);
-	void interpolateFaceCenteredMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source, const RefinementContext &context,
-							const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom, quokka::direction dir);
-
+	void interpolateFaceMultiFabFromRestart(int lev, const RefinementContext &context, const amrex::Vector<amrex::Geometry> &restart_geom);
 	void loadMultiFabData(const RefinementContext &context);
 	auto loadBalanceOnRestart(const amrex::BoxArray &input_ba, int lev) -> amrex::BoxArray;
 
@@ -3833,36 +3831,113 @@ void AMRSimulation<problem_t>::interpolateMultiFabFromRestart(amrex::MultiFab &t
 }
 
 template <typename problem_t>
-void AMRSimulation<problem_t>::interpolateFaceCenteredMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source,
-									  const RefinementContext &context, const amrex::Geometry &coarse_geom,
-									  const amrex::Geometry &fine_geom, quokka::direction dir)
+void AMRSimulation<problem_t>::interpolateFaceMultiFabFromRestart(int lev, const RefinementContext &context, const amrex::Vector<amrex::Geometry> &restart_geom)
 {
 	if (!context.needs_refinement()) {
-		// if not refining, ParallelCopy
-		target.ParallelCopy(source, 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_, nghost_fc_);
+		// if not refining, we can read level-by-level and ParallelCopy to state_new_fc_[lev]
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			amrex::MultiFab tmp_read;
+			amrex::VisMF::Read(tmp_read,
+					   amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
+			state_new_fc_[lev][idim].ParallelCopy(tmp_read, 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_, nghost_fc_);
+			AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan(0, state_new_fc_[lev][idim].nComp())); // check valid faces
+		}
 	} else {
-		// if refining, InterpFromCoarseLevel
-		amrex::IntVect restart_ref_ratio{AMREX_D_DECL(context.refinement_factor, context.refinement_factor, context.refinement_factor)};
-		using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>;
-		BndryFunc boundaryFunctor(setBoundaryFunctorFaceVar<problem_t>{dir});
-		const int ncomp = source.nComp();
-
-		amrex::Vector<amrex::BCRec> BCs_this_dir(ncomp);
-
-		for (int n = 0; n < ncomp; ++n) {
-
-			BCs_this_dir[n] = BCs_fc_[static_cast<int>(dir) * ncomp + n];
+		// if refining, we have to read all levels of face data from restart file
+		amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> restart_fc;
+		restart_fc.resize(finest_level + 1);
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				amrex::MultiFab tmp_read;
+				amrex::VisMF::Read(
+				    tmp_read, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
+				restart_fc[lev][idim].define(tmp_read.boxArray(), tmp_read.DistributionMap(), tmp_read.nComp(), nghost_fc_);
+				restart_fc[lev][idim].ParallelCopy(tmp_read);
+				restart_fc[lev][idim].setBndry(0.0);
+				restart_fc[lev][idim].FillBoundary(restart_geom[lev].periodicity());
+			}
 		}
 
-		amrex::PhysBCFunct<BndryFunc> fineBdryFunct(fine_geom, BCs_this_dir, boundaryFunctor);
+		using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>;
+		const amrex::IntVect restart_ref_ratio{AMREX_D_DECL(context.refinement_factor, context.refinement_factor, context.refinement_factor)};
+		const int ncomp = restart_fc[0][0].nComp();
 
-		amrex::PhysBCFunct<BndryFunc> coarseBdryFunct(coarse_geom, BCs_this_dir, boundaryFunctor);
+		// Restart refinement strategy: build level 0 with old levels 0/1 (same domain, finer spacing),
+		// then fill higher levels from new coarse + old fine via FillPatchTwoLevels when available.
+		amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> BCs_array;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			BCs_array[idim].clear();
+			for (int n = 0; n < ncomp; ++n) {
+				BCs_array[idim].push_back(BCs_fc_[idim * ncomp + n]);
+			}
+		}
+		amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> new_ptrs;
+		amrex::Array<amrex::PhysBCFunct<BndryFunc>, AMREX_SPACEDIM> coarse_bc;
+		amrex::Array<amrex::PhysBCFunct<BndryFunc>, AMREX_SPACEDIM> fine_bc;
 
-		amrex::Interpolater *face_mapper = &amrex::face_divfree_interp;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			new_ptrs[idim] = &state_new_fc_[lev][idim];
+			const auto dir = static_cast<quokka::direction>(idim);
+			BndryFunc boundaryFunctor(setBoundaryFunctorFaceVar<problem_t>{dir});
+			if (lev == 0) {
+				coarse_bc[idim] = amrex::PhysBCFunct<BndryFunc>(restart_geom[0], BCs_array[idim], boundaryFunctor);
+			} else {
+				coarse_bc[idim] = amrex::PhysBCFunct<BndryFunc>(geom[lev - 1], BCs_array[idim], boundaryFunctor);
+			}
+			fine_bc[idim] = amrex::PhysBCFunct<BndryFunc>(geom[lev], BCs_array[idim], boundaryFunctor);
+		}
 
-		amrex::InterpFromCoarseLevel(target, 0., source, 0, 0, ncomp, coarse_geom, fine_geom, coarseBdryFunct, 0, fineBdryFunct, 0,
+		AMREX_ALWAYS_ASSERT(context.refinement_factor == 2);		  // FaceDivFree interp only supports ref ratio of 2
+		AMREX_ALWAYS_ASSERT(context.refinement_factor == refRatio(0)[0]); // ref ratio consistency check
+		AMREX_ALWAYS_ASSERT(ref_ratio[lev] == refRatio(0));		  // constant ref ratio check
 
-					     restart_ref_ratio, face_mapper, BCs_this_dir, 0);
+		if (lev == 0) {
+			if (finest_level >= 1) {
+				amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> coarse_ptrs;
+				amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> fine_ptrs;
+				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+					coarse_ptrs[idim] = &restart_fc[0][idim];
+					fine_ptrs[idim] = &restart_fc[1][idim];
+				}
+
+				amrex::Vector<amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM>> cmf{coarse_ptrs};
+				amrex::Vector<amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM>> fmf{fine_ptrs};
+				amrex::Vector<amrex::Real> ct{tNew_[0]};
+				amrex::Vector<amrex::Real> ft{tNew_[1]};
+
+				amrex::FillPatchTwoLevels(new_ptrs, amrex::IntVect(nghost_fc_), tNew_[lev], cmf, ct, fmf, ft, 0, 0, ncomp, restart_geom[0],
+							  geom[0], coarse_bc, 0, fine_bc, 0, refRatio(0), &amrex::face_divfree_interp, BCs_array, 0);
+			} else { // level 0 is the only level
+				amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> coarse_ptrs;
+				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+					coarse_ptrs[idim] = &restart_fc[0][idim];
+				}
+				amrex::InterpFromCoarseLevel(new_ptrs, tNew_[lev], coarse_ptrs, 0, 0, ncomp, restart_geom[0], geom[0], coarse_bc, 0, fine_bc, 0,
+							     restart_ref_ratio, &amrex::face_divfree_interp, BCs_array, 0);
+			}
+		} else {
+			amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> coarse_ptrs;
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				coarse_ptrs[idim] = &state_new_fc_[lev - 1][idim];
+			}
+
+			if (lev < finest_level) {
+				amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> fine_ptrs;
+				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+					fine_ptrs[idim] = &restart_fc[lev + 1][idim];
+				}
+				amrex::Vector<amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM>> cmf{coarse_ptrs};
+				amrex::Vector<amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM>> fmf{fine_ptrs};
+				amrex::Vector<amrex::Real> ct{tNew_[lev - 1]};
+				amrex::Vector<amrex::Real> ft{tNew_[lev + 1]};
+
+				amrex::FillPatchTwoLevels(new_ptrs, amrex::IntVect(nghost_fc_), tNew_[lev], cmf, ct, fmf, ft, 0, 0, ncomp, geom[lev - 1],
+							  geom[lev], coarse_bc, 0, fine_bc, 0, refRatio(lev - 1), &amrex::face_divfree_interp, BCs_array, 0);
+			} else { // lev is finest level
+				amrex::InterpFromCoarseLevel(new_ptrs, tNew_[lev], coarse_ptrs, 0, 0, ncomp, geom[lev - 1], geom[lev], coarse_bc, 0, fine_bc, 0,
+							     refRatio(lev - 1), &amrex::face_divfree_interp, BCs_array, 0);
+			}
+		}
 	}
 }
 
@@ -3876,24 +3951,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 				restart_geom[lev] = context.coarse_level0_geom;
 			} else {
 				restart_geom[lev] = amrex::coarsen(geom[lev], context.refinement_factor);
-			}
-		}
-	}
-
-	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> restart_fc;
-	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-		if (context.needs_refinement()) {
-			restart_fc.resize(finest_level + 1);
-			for (int lev = 0; lev <= finest_level; ++lev) {
-				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-					amrex::MultiFab tmp_read;
-					amrex::VisMF::Read(tmp_read, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_",
-												   std::string("Face_") + quokka::face_dir_str[idim]));
-					restart_fc[lev][idim].define(tmp_read.boxArray(), tmp_read.DistributionMap(), tmp_read.nComp(), nghost_fc_);
-					restart_fc[lev][idim].ParallelCopy(tmp_read);
-					restart_fc[lev][idim].setBndry(0.0);
-					restart_fc[lev][idim].FillBoundary(restart_geom[lev].periodicity());
-				}
 			}
 		}
 	}
@@ -3914,123 +3971,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 
 		// face-centred data
 		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-#if AMREX_SPACEDIM == 1
-			constexpr std::array<quokka::direction, 1> directions = {quokka::direction::x};
-#elif AMREX_SPACEDIM == 2
-			constexpr std::array<quokka::direction, 2> directions = {quokka::direction::x, quokka::direction::y};
-#elif AMREX_SPACEDIM == 3
-			constexpr std::array<quokka::direction, 3> directions = {quokka::direction::x, quokka::direction::y, quokka::direction::z};
-#endif
-			if (context.needs_refinement()) {
-				using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>;
-
-				const amrex::IntVect restart_ref_ratio{
-				    AMREX_D_DECL(context.refinement_factor, context.refinement_factor, context.refinement_factor)};
-				const int ncomp = restart_fc[0][0].nComp();
-
-				// Restart refinement strategy: build level 0 with old levels 0/1 (same domain, finer spacing),
-				// then fill higher levels from new coarse + old fine via FillPatchTwoLevels when available.
-				amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> BCs_array;
-				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-					BCs_array[idim].clear();
-					for (int n = 0; n < ncomp; ++n) {
-						BCs_array[idim].push_back(BCs_fc_[idim * ncomp + n]);
-					}
-				}
-
-				amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> new_ptrs;
-				amrex::Array<amrex::PhysBCFunct<BndryFunc>, AMREX_SPACEDIM> coarse_bc;
-				amrex::Array<amrex::PhysBCFunct<BndryFunc>, AMREX_SPACEDIM> fine_bc;
-
-				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-					new_ptrs[idim] = &state_new_fc_[lev][idim];
-
-					const auto dir = static_cast<quokka::direction>(idim);
-					BndryFunc boundaryFunctor(setBoundaryFunctorFaceVar<problem_t>{dir});
-					if (lev == 0) {
-						coarse_bc[idim] = amrex::PhysBCFunct<BndryFunc>(restart_geom[0], BCs_array[idim], boundaryFunctor);
-					} else {
-						coarse_bc[idim] = amrex::PhysBCFunct<BndryFunc>(geom[lev - 1], BCs_array[idim], boundaryFunctor);
-					}
-					fine_bc[idim] = amrex::PhysBCFunct<BndryFunc>(geom[lev], BCs_array[idim], boundaryFunctor);
-				}
-
-				if (lev == 0) {
-					if (finest_level >= 1) {
-						AMREX_ALWAYS_ASSERT(context.refinement_factor == 2); // FaceDivFree interp only supports ref ratio of 2
-						AMREX_ALWAYS_ASSERT(context.refinement_factor == refRatio(0)[0]); // ref ratio consistency check
-						AMREX_ALWAYS_ASSERT(ref_ratio[lev] == refRatio(0));		  // constant ref ratio check
-
-						amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> coarse_ptrs;
-						amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> fine_ptrs;
-						for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-							coarse_ptrs[idim] = &restart_fc[0][idim];
-							fine_ptrs[idim] = &restart_fc[1][idim];
-						}
-
-						amrex::Vector<amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM>> cmf{coarse_ptrs};
-						amrex::Vector<amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM>> fmf{fine_ptrs};
-						amrex::Vector<amrex::Real> ct{tNew_[0]};
-						amrex::Vector<amrex::Real> ft{tNew_[1]};
-
-						amrex::FillPatchTwoLevels(new_ptrs, amrex::IntVect(nghost_fc_), tNew_[lev], cmf, ct, fmf, ft, 0, 0, ncomp,
-									  restart_geom[0], geom[0], coarse_bc, 0, fine_bc, 0, refRatio(0),
-									  &amrex::face_divfree_interp, BCs_array, 0);
-					} else {
-						amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> coarse_ptrs;
-						for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-							coarse_ptrs[idim] = &restart_fc[0][idim];
-						}
-						amrex::InterpFromCoarseLevel(new_ptrs, tNew_[lev], coarse_ptrs, 0, 0, ncomp, restart_geom[0], geom[0],
-									     coarse_bc, 0, fine_bc, 0, restart_ref_ratio, &amrex::face_divfree_interp,
-									     BCs_array, 0);
-					}
-				} else {
-					amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> coarse_ptrs;
-					for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-						coarse_ptrs[idim] = &state_new_fc_[lev - 1][idim];
-					}
-
-					if (lev + 1 <= finest_level) {
-						amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> fine_ptrs;
-						for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-							fine_ptrs[idim] = &restart_fc[lev + 1][idim];
-						}
-						amrex::Vector<amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM>> cmf{coarse_ptrs};
-						amrex::Vector<amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM>> fmf{fine_ptrs};
-						amrex::Vector<amrex::Real> ct{tNew_[lev - 1]};
-						amrex::Vector<amrex::Real> ft{tNew_[lev + 1]};
-
-						amrex::FillPatchTwoLevels(new_ptrs, amrex::IntVect(nghost_fc_), tNew_[lev], cmf, ct, fmf, ft, 0, 0, ncomp,
-									  geom[lev - 1], geom[lev], coarse_bc, 0, fine_bc, 0, refRatio(lev - 1),
-									  &amrex::face_divfree_interp, BCs_array, 0);
-					} else {
-						amrex::InterpFromCoarseLevel(new_ptrs, tNew_[lev], coarse_ptrs, 0, 0, ncomp, geom[lev - 1], geom[lev],
-									     coarse_bc, 0, fine_bc, 0, refRatio(lev - 1), &amrex::face_divfree_interp,
-									     BCs_array, 0);
-					}
-				}
-
-				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-					AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan(0, state_new_fc_[lev][idim].nComp()));
-				}
-			} else {
-				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-					amrex::MultiFab tmp_read;
-
-					amrex::VisMF::Read(tmp_read, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_",
-
-												   std::string("Face_") + quokka::face_dir_str[idim]));
-
-					amrex::MultiFab tmp_fc(tmp_read.boxArray(), tmp_read.DistributionMap(), tmp_read.nComp(), 1);
-
-					tmp_fc.ParallelCopy(tmp_read);
-
-					tmp_fc.FillBoundary(coarse_geom.periodicity());
-					interpolateFaceCenteredMultiFabFromRestart(state_new_fc_[lev][idim], tmp_fc, context, coarse_geom, geom[lev],
-										   directions[idim]);
-					AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan(0, state_new_fc_[lev][idim].nComp())); // check valid faces
-				}
+			interpolateFaceMultiFabFromRestart(lev, context, restart_geom);
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan(0, state_new_fc_[lev][idim].nComp())); // check valid faces
 			}
 		}
 	}
