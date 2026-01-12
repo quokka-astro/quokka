@@ -65,7 +65,7 @@ template <typename problem_t> void DiagPlotfile::processDiag(int a_nstep, const 
 	auto *sim = getSim<problem_t>();
 
 	// Generate filename using step number (works for both step-based and time-based intervals)
-	const std::string plotfilename = amrex::Concatenate(m_diagfile, a_nstep, 5);
+	const std::string plotfilename = amrex::Concatenate(m_diagfile, a_nstep, 7);
 	amrex::Print() << "DiagPlotfile: Writing plotfile " << plotfilename << "\n";
 
 	// Prepare cell-centered data
@@ -119,7 +119,7 @@ template <typename problem_t> void DiagPlotfile::processDiag(int a_nstep, const 
 		std::vector<std::string> dimNames = {"x", "y", "z"};
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			auto plotfilename_base = plotfilename + "/fc_vars/" + dimNames[idim];
-			const std::string plotfilename_fc = amrex::Concatenate(plotfilename_base, sim->istep[0], 5);
+			const std::string plotfilename_fc = amrex::Concatenate(plotfilename_base, sim->istep[0], 7);
 			amrex::Vector<const amrex::MultiFab *> mf_fc_ptr = amrex::GetVecOfConstPtrs(mf_fc[idim]);
 			amrex::WriteMultiLevelPlotfile(plotfilename_fc, finest_level + 1, mf_fc_ptr, varnames_fc[idim], geoms, a_time, sim->istep, refRatio);
 			WriteMetadataFile(plotfilename_fc + "/metadata.yaml", sim->simulationMetadata_);

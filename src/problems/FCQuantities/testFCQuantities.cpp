@@ -147,7 +147,7 @@ auto problem_main() -> int
 	amrex::Print() << "\n";
 
 	QuokkaSimulation<FCQuantities> sim_restart;
-	sim_restart.setChkFile("chk00000");
+	sim_restart.setChkFile("chk0000000");
 	sim_restart.setInitialConditions();
 	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &state_new_fc_restart = sim_restart.getNewMF_fc();
 	amrex::Print() << "\n";

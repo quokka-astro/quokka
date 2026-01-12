@@ -136,7 +136,7 @@ void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex
 	}
 
 	// Construct the plotfile name (same directory as field data)
-	const std::string filename = amrex::Concatenate(basename, istep, 5);
+	const std::string filename = amrex::Concatenate(basename, istep, 7);
 
 	// Write particles using the filtered method
 	particleRegister.writePlotFileFiltered(filename, particleTypes);
