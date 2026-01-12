@@ -64,7 +64,7 @@ This is implemented in `src/dust/dustRiemannSolver.hpp` and called in `DustSyste
 A Strang-split method (Tedeschi-Prades et al. 2025) is used to integrate the dust-gas system. The Strang-split update can be expressed as:
 
 $$
-\mathbf{u}^{n+1} = \mathcal{D}_{\Delta t/2} \mathcal{H}_{\Delta t} \mathcal{D}_{\Delta t/2} \mathbf{u}^n,
+\mathbf{u}^{n+1} = \mathcal{D}_{\Delta t/2} \mathcal{H}_{\Delta t} \mathcal{D}_{\Delta t/2} \mathbf{u}^n
 $$
 
 where $\mathcal{D}$ is the dust-gas drag operator and $\mathcal{H}$ is the hydrodynamics operator (including both gas and dust transport). The hydrodynamics operator $\mathcal{H}$ is handled using the explicit RK2 scheme. The drag operator $\mathcal{D}$ is implemented in `src/dust/DustDrag.hpp` and called in `QuokkaSimulation::addStrangSplitSourcesWithBuiltin` via `DustDrag::computeDustDrag`.

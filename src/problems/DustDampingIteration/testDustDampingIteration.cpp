@@ -99,23 +99,21 @@ template <> struct Physics_Traits<DustDampingWithoutCorrection> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto
-DustDrag<DustDampingWithCorrection>::ComputeReciprocalStoppingTime(amrex::Real rho_g, amrex::GpuArray<amrex::Real, nDustGroups_> rho_d, amrex::Real vel_mag_g,
-								   amrex::GpuArray<amrex::Real, nDustGroups_> vel_mag_d, double cs)
+AMREX_GPU_HOST_DEVICE auto DustDrag<DustDampingWithCorrection>::ComputeReciprocalStoppingTime(amrex::Real rho_g,
+											      amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
+											      amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag, double cs)
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, vel_mag_g, vel_mag_d, cs, dust_grain_radius, dust_grain_density,
-						 enable_supersonic_correction_with);
+	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, dust_grain_radius, dust_grain_density, enable_supersonic_correction_with);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto
-DustDrag<DustDampingWithoutCorrection>::ComputeReciprocalStoppingTime(amrex::Real rho_g, amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-								      amrex::Real vel_mag_g, amrex::GpuArray<amrex::Real, nDustGroups_> vel_mag_d, double cs)
-    -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustDrag<DustDampingWithoutCorrection>::ComputeReciprocalStoppingTime(amrex::Real rho_g,
+												 amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
+												 amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag,
+												 double cs) -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, vel_mag_g, vel_mag_d, cs, dust_grain_radius, dust_grain_density,
-						 enable_supersonic_correction_without);
+	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, dust_grain_radius, dust_grain_density, enable_supersonic_correction_without);
 }
 
 template <> void QuokkaSimulation<DustDampingWithCorrection>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
