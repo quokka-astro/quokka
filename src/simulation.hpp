@@ -2983,13 +2983,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 }
 
 // get plotfile name
-template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileName(int lev) const -> std::string { return amrex::Concatenate(plot_file, lev, 5); }
+template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileName(int lev) const -> std::string { return amrex::Concatenate(plot_file, lev, 7); }
 
 // get plotfile name
 template <typename problem_t> auto AMRSimulation<problem_t>::CustomPlotFileName(const char *base, int lev) const -> std::string
 {
 	const std::string base_str(base);
-	return amrex::Concatenate(base_str, lev, 5);
+	return amrex::Concatenate(base_str, lev, 7);
 }
 
 template <typename problem_t>
@@ -3593,17 +3593,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 {
 	BL_PROFILE("AMRSimulation::WriteCheckpointFile()"); // NOLINT(misc-const-correctness)
 
-	// chk00010            write a checkpoint file with this root directory
-	// chk00010/Header     this contains information you need to save (e.g.,
+	// chk0000010            write a checkpoint file with this root directory
+	// chk0000010/Header     this contains information you need to save (e.g.,
 	// finest_level, t_new, etc.) and also
 	//                     the BoxArrays at each level
-	// chk00010/Level_0/
-	// chk00010/Level_1/
+	// chk0000010/Level_0/
+	// chk0000010/Level_1/
 	// etc.                these subdirectories will hold the MultiFab data at
 	// each level of refinement
 
-	// checkpoint file name, e.g., chk00010
-	const std::string &checkpointname = amrex::Concatenate(chk_file, istep[0]);
+	// checkpoint file name, e.g., chk0000010
+	const std::string &checkpointname = amrex::Concatenate(chk_file, istep[0], 7);
 
 	amrex::Print() << "Writing checkpoint " << checkpointname << "\n";
 
@@ -3671,13 +3671,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 	// set the maximum number of binary files per MultiFab
 	quokka::ScopedVisMFNOutFiles scoped_nfiles(checkpoint_nfiles);
 
-	// write the cell-centred MultiFab data to, e.g., chk00010/Level_0/
+	// write the cell-centred MultiFab data to, e.g., chk0000010/Level_0/
 	for (int lev = 0; lev <= finest_level; ++lev) {
 		amrex::VisMF::Write(state_new_cc_[lev], amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_", "Cell"));
 		amrex::ParallelDescriptor::Barrier(); // needed to avoid overwhelming Lustre I/O on Frontier
 	}
 
-	// write the face-centred MultiFab data to, e.g., chk00010/Level_0/
+	// write the face-centred MultiFab data to, e.g., chk0000010/Level_0/
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			for (int lev = 0; lev <= finest_level; ++lev) {

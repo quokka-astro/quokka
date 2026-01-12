@@ -195,7 +195,7 @@ auto problem_main() -> int
 	setAmrNCell(fine_ncells);
 	setPlotfileParams("fcq_post");
 	QuokkaSimulation<FCQuantities> sim_restart;
-	sim_restart.setChkFile("chk00000");
+	sim_restart.setChkFile("chk0000000");
 	sim_restart.setInitialConditions();
 	amrex::Print() << "\n";
 
