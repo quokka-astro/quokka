@@ -417,9 +417,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 					    const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom, const amrex::Vector<amrex::BCRec> &bcs);
 	void interpolateFaceCenteredMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source, const RefinementContext &context,
 							const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom, quokka::direction dir);
-	void interpolateFaceCenteredMultiFabArrayFromRestart(amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &target,
-							     amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &source, const RefinementContext &context,
-							     const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom);
+
 	void loadMultiFabData(const RefinementContext &context);
 	auto loadBalanceOnRestart(const amrex::BoxArray &input_ba, int lev) -> amrex::BoxArray;
 
@@ -3866,52 +3864,6 @@ void AMRSimulation<problem_t>::interpolateFaceCenteredMultiFabFromRestart(amrex:
 
 					     restart_ref_ratio, face_mapper, BCs_this_dir, 0);
 	}
-}
-
-template <typename problem_t>
-void AMRSimulation<problem_t>::interpolateFaceCenteredMultiFabArrayFromRestart(amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &target,
-									       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &source,
-									       const RefinementContext &context, const amrex::Geometry &coarse_geom,
-									       const amrex::Geometry &fine_geom)
-{
-	if (!context.needs_refinement()) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			target[idim].ParallelCopy(source[idim], 0, 0, source[idim].nComp(), nghost_fc_, nghost_fc_);
-		}
-		return;
-	}
-
-	amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> target_ptrs;
-	amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> source_ptrs;
-	amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> BCs_array;
-	using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>;
-	amrex::Array<amrex::PhysBCFunct<BndryFunc>, AMREX_SPACEDIM> fineBdryFunct;
-	amrex::Array<amrex::PhysBCFunct<BndryFunc>, AMREX_SPACEDIM> coarseBdryFunct;
-
-	const int ncomp = source[0].nComp();
-	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		target_ptrs[idim] = &target[idim];
-		source_ptrs[idim] = &source[idim];
-
-		BCs_array[idim].clear();
-		for (int n = 0; n < ncomp; ++n) {
-			BCs_array[idim].push_back(BCs_fc_[idim * ncomp + n]);
-		}
-
-		const auto dir = static_cast<quokka::direction>(idim);
-		BndryFunc boundaryFunctor(setBoundaryFunctorFaceVar<problem_t>{dir});
-		fineBdryFunct[idim] = amrex::PhysBCFunct<BndryFunc>(fine_geom, BCs_array[idim], boundaryFunctor);
-		coarseBdryFunct[idim] = amrex::PhysBCFunct<BndryFunc>(coarse_geom, BCs_array[idim], boundaryFunctor);
-	}
-
-	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		source_ptrs[idim]->setBndry(0.0);
-		source_ptrs[idim]->FillBoundary(coarse_geom.periodicity());
-	}
-	const amrex::IntVect restart_ref_ratio{AMREX_D_DECL(context.refinement_factor, context.refinement_factor, context.refinement_factor)};
-	// Caller must provide properly nested coarse data when using FaceDivFree.
-	amrex::InterpFromCoarseLevel(target_ptrs, 0., source_ptrs, 0, 0, ncomp, coarse_geom, fine_geom, coarseBdryFunct, 0, fineBdryFunct, 0, restart_ref_ratio,
-				     &amrex::face_divfree_interp, BCs_array, 0);
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(const RefinementContext &context)
