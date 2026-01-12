@@ -4007,7 +4007,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 					if (finest_level >= 1) {
 						AMREX_ALWAYS_ASSERT(context.refinement_factor == 2); // FaceDivFree interp only supports ref ratio of 2
 						AMREX_ALWAYS_ASSERT(context.refinement_factor == refRatio(0)[0]); // ref ratio consistency check
-						AMREX_ALWAYS_ASSERT(ref_ratio[lev] == refRatio(0)); // constant ref ratio check
+						AMREX_ALWAYS_ASSERT(ref_ratio[lev] == refRatio(0));		  // constant ref ratio check
 
 						amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> coarse_ptrs;
 						amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> fine_ptrs;
