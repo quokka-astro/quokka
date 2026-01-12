@@ -24,4 +24,4 @@ suppress_output = 0
 stop_time = 0.4
 plotfile_interval = 100000
 checkpoint_interval = 100000
-#restartfile = "chk00086"
+#restartfile = "chk0000086"
