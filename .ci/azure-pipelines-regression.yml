@@ -22,9 +22,9 @@ jobs:
     timeoutInMinutes: 300
     steps:
     - script: |
-        mkdir -p $(Pipeline.Workspace)/ccache
-        echo "Using local disk cache at $(Pipeline.Workspace)/ccache"
-      displayName: Prepare local ccache directory
+        mkdir -p $(Agent.HomeDirectory)/cache/ccache
+        echo "Using shared local disk cache at $(Agent.HomeDirectory)/cache/ccache"
+      displayName: Prepare shared ccache directory
 
     - script: |
         if command -v ccache >/dev/null 2>&1; then
@@ -41,7 +41,7 @@ jobs:
     - script: ./extern/regression_testing/regtest.py --clean_testdir regression/quokka-tests.ini
       displayName: 'Run regression testing'
       env:
-        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+        CCACHE_DIR: $(Agent.HomeDirectory)/cache/ccache
         CCACHE_BASEDIR: $(Build.SourcesDirectory)
         CCACHE_NOHASHDIR: 1
     - publish: /data/mash/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests/web
