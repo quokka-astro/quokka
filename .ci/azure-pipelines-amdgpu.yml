@@ -57,22 +57,16 @@ pr:
     - '*.rst'
     - '*.txt'
 
-variables:
-  cacheKeySuffix: $[replace(variables['Build.SourceBranch'], '/', '_')]
 
 jobs:
   - job: HIP_Build_Test
     pool: amdgpu
     timeoutInMinutes: 150
     steps:
-    - task: Cache@2
-      displayName: Restore ccache
-      inputs:
-        key: 'ccache | HIP | $(Agent.OS) | $(cacheKeySuffix)'
-        restoreKeys: |
-          ccache | HIP | $(Agent.OS)
-        path: $(Pipeline.Workspace)/ccache
-        cacheHitVar: CACHE_RESTORED
+    - script: |
+        mkdir -p $(Pipeline.Workspace)/ccache
+        echo "Using local disk cache at $(Pipeline.Workspace)/ccache"
+      displayName: Prepare local ccache directory
 
     - script: |
         if command -v ccache >/dev/null 2>&1; then

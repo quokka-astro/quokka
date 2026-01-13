@@ -11,8 +11,6 @@ schedules:
     include:
     - development
 
-variables:
-  cacheKeySuffix: $[replace(variables['Build.SourceBranch'], '/', '_')]
 
 # NOTE: several Python packages are needed for regression_testing to run properly:
 #   https://github.com/AMReX-Codes/regression_testing/blob/main/requirements.txt
@@ -23,14 +21,10 @@ jobs:
     pool: avatar
     timeoutInMinutes: 300
     steps:
-    - task: Cache@2
-      displayName: Restore ccache
-      inputs:
-        key: 'ccache | regression | $(Agent.OS) | $(cacheKeySuffix)'
-        restoreKeys: |
-          ccache | regression | $(Agent.OS)
-        path: $(Pipeline.Workspace)/ccache
-        cacheHitVar: CACHE_RESTORED
+    - script: |
+        mkdir -p $(Pipeline.Workspace)/ccache
+        echo "Using local disk cache at $(Pipeline.Workspace)/ccache"
+      displayName: Prepare local ccache directory
 
     - script: |
         if command -v ccache >/dev/null 2>&1; then
