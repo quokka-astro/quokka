@@ -37,6 +37,7 @@ hydro.use_dual_energy = 0
 
 mhd.emf_compute_scheme = Quokka2026
 mhd.emf_averaging_scheme = LondrilloDelZanna2004
+mhd.update_initial_b_energy = false
 
 
 setup.num_modes_x = 1
