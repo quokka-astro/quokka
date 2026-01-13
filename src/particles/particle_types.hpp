@@ -22,7 +22,7 @@ enum class ParticleSwitch : unsigned int {
 	StochasticStellarPop = bitflag<4>(), // Stellar population particles, = 0b1000
 	Sink = bitflag<5>(),		     // Sink particles, = 0b10000
 	Test = bitflag<6>(),		     // Test particles with all features enabled, = 0b100000
-	Star = bitflag<7>()		             // Sink particles, = 0b1000000
+	Star = bitflag<7>()		     // Star particles, = 0b1000000
 };
 
 // Enable bitwise operations on the enum class
@@ -76,7 +76,7 @@ enum class ParticleType {
 	StochasticStellarPop, // Stellar population particles
 	Sink,		      // Sink particles
 	Test,		      // Test particles with all features enabled
-	Star                       // Star
+	Star                       // Star particles
 };
 
 // Enum for SN schemes: ThermalOnly, ThermalAndMomentum
@@ -272,7 +272,7 @@ enum StarParticleDataIdx {
 	StarParticleL_histIdx,  // Past masses
 };
 
-// Number of real components for Star_particles
+// Number of real components for StarParticles
 constexpr int StarParticleRealComps = 11; // mass, vx, vy, vz, amx, amy, amz, mdeut, n, mdot,burnState,l_hist
 
 // Type definitions for Star_particles container and iterator
