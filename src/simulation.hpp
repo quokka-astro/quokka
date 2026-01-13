@@ -415,7 +415,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	auto readCheckpointHeader(const std::string &restart_file) -> amrex::Vector<amrex::BoxArray>;
 	void interpolateMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source, const RefinementContext &context,
 					    const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom, const amrex::Vector<amrex::BCRec> &bcs);
-	void interpolateFaceMultiFabFromRestart(int lev, const RefinementContext &context, const amrex::Vector<amrex::Geometry> &restart_geom);
+	void interpolateFaceMultiFabFromRestart(int lev, const RefinementContext &context, const amrex::Vector<amrex::Geometry> &restart_geom,
+						amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> &restart_fc);
 	void loadMultiFabData(const RefinementContext &context);
 	auto loadBalanceOnRestart(const amrex::BoxArray &input_ba, int lev) -> amrex::BoxArray;
 
@@ -3831,7 +3832,8 @@ void AMRSimulation<problem_t>::interpolateMultiFabFromRestart(amrex::MultiFab &t
 }
 
 template <typename problem_t>
-void AMRSimulation<problem_t>::interpolateFaceMultiFabFromRestart(int lev, const RefinementContext &context, const amrex::Vector<amrex::Geometry> &restart_geom)
+void AMRSimulation<problem_t>::interpolateFaceMultiFabFromRestart(int lev, const RefinementContext &context, const amrex::Vector<amrex::Geometry> &restart_geom,
+								  amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> &restart_fc)
 {
 	if (!context.needs_refinement()) {
 		// if not refining, we can read level-by-level and ParallelCopy to state_new_fc_[lev]
@@ -3843,27 +3845,17 @@ void AMRSimulation<problem_t>::interpolateFaceMultiFabFromRestart(int lev, const
 			AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan(0, state_new_fc_[lev][idim].nComp())); // check valid faces
 		}
 	} else {
-		// if refining, we have to read all levels of face data from restart file
-		amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> restart_fc;
-		restart_fc.resize(finest_level + 1);
-		for (int lev = 0; lev <= finest_level; ++lev) {
-			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				amrex::MultiFab tmp_read;
-				amrex::VisMF::Read(
-				    tmp_read, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
-				restart_fc[lev][idim].define(tmp_read.boxArray(), tmp_read.DistributionMap(), tmp_read.nComp(), nghost_fc_);
-				restart_fc[lev][idim].ParallelCopy(tmp_read);
-				restart_fc[lev][idim].setBndry(0.0);
-				restart_fc[lev][idim].FillBoundary(restart_geom[lev].periodicity());
-			}
-		}
-
-		using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>;
 		const amrex::IntVect restart_ref_ratio{AMREX_D_DECL(context.refinement_factor, context.refinement_factor, context.refinement_factor)};
-		const int ncomp = restart_fc[0][0].nComp();
+		AMREX_ALWAYS_ASSERT(context.refinement_factor == 2);   // FaceDivFree interp only supports ref ratio of 2
+		AMREX_ALWAYS_ASSERT(restart_ref_ratio == refRatio(0)); // ref ratio consistency check
+		if (lev > 0) {
+			AMREX_ALWAYS_ASSERT(refRatio(lev - 1) == refRatio(0)); // constant ref ratio check
+		}
 
 		// Restart refinement strategy: build level 0 with old levels 0/1 (same domain, finer spacing),
 		// then fill higher levels from new coarse + old fine via FillPatchTwoLevels when available.
+		using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>;
+		const int ncomp = restart_fc[0][0].nComp();
 		amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> BCs_array;
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			BCs_array[idim].clear();
@@ -3886,10 +3878,6 @@ void AMRSimulation<problem_t>::interpolateFaceMultiFabFromRestart(int lev, const
 			}
 			fine_bc[idim] = amrex::PhysBCFunct<BndryFunc>(geom[lev], BCs_array[idim], boundaryFunctor);
 		}
-
-		AMREX_ALWAYS_ASSERT(context.refinement_factor == 2);		  // FaceDivFree interp only supports ref ratio of 2
-		AMREX_ALWAYS_ASSERT(context.refinement_factor == refRatio(0)[0]); // ref ratio consistency check
-		AMREX_ALWAYS_ASSERT(ref_ratio[lev] == refRatio(0));		  // constant ref ratio check
 
 		if (lev == 0) {
 			if (finest_level >= 1) {
@@ -3955,6 +3943,24 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 		}
 	}
 
+	// if refining, we have to read all levels of face data from restart file up front
+	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> restart_fc;
+	if (context.needs_refinement()) {
+		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+			restart_fc.resize(finest_level + 1);
+			for (int chklev = 0; chklev <= finest_level; ++chklev) {
+				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+					amrex::MultiFab tmp_read;
+					amrex::VisMF::Read(tmp_read, amrex::MultiFabFileFullPrefix(chklev, restart_chkfile, "Level_",
+												   std::string("Face_") + quokka::face_dir_str[idim]));
+					restart_fc[chklev][idim].define(tmp_read.boxArray(), tmp_read.DistributionMap(), tmp_read.nComp(), nghost_fc_);
+					restart_fc[chklev][idim].ParallelCopy(tmp_read);
+					AMREX_ALWAYS_ASSERT(!restart_fc[chklev][idim].contains_nan(0, restart_fc[chklev][idim].nComp())); // check valid faces
+				}
+			}
+		}
+	}
+
 	for (int lev = 0; lev <= finest_level; ++lev) {
 		amrex::Geometry coarse_geom;
 		if (lev == 0) {
@@ -3971,7 +3977,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 
 		// face-centred data
 		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-			interpolateFaceMultiFabFromRestart(lev, context, restart_geom);
+			interpolateFaceMultiFabFromRestart(lev, context, restart_geom, restart_fc);
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 				AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan(0, state_new_fc_[lev][idim].nComp())); // check valid faces
 			}
