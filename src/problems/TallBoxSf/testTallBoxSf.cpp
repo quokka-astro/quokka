@@ -432,6 +432,7 @@ auto QuokkaSimulation<TheProblem>::ComputeProjections(const amrex::Direction dir
 }
 
 // Implement User-defined diode BC
+// Diode BC: allows outflow, prevents inflow by reflecting the z-momentum
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<TheProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
 												int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
@@ -444,34 +445,49 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<TheProblem>::setCustomBou
 	const auto &domain_hi = box.hiVect3d();
 	const int klo = domain_lo[2];
 	const int khi = domain_hi[2];
-	int kedge = 0;
+
+	int k_mirror = 0;
 	int normal = 0;
 
 	if (k < klo) {
-		kedge = klo;
-		normal = -1;
-	} else if (k >= khi) {
-		kedge = khi - 1;
-		normal = 1.0;
+		// Ghost cells below domain: reflect around lower boundary face
+		// k = klo-1 mirrors klo, k = klo-2 mirrors klo+1, etc.
+		k_mirror = 2 * klo - 1 - k;
+		normal = -1; // outward normal points in -z direction
+	} else if (k > khi) {
+		// Ghost cells above domain: reflect around upper boundary face
+		// k = khi+1 mirrors khi, k = khi+2 mirrors khi-1, etc.
+		k_mirror = 2 * khi + 1 - k;
+		normal = 1; // outward normal points in +z direction
+	} else {
+		return; // Not a ghost cell, nothing to do
 	}
 
-	const double rho_edge = consVar(i, j, kedge, HydroSystem<TheProblem>::density_index);
-	const double x1Mom_edge = consVar(i, j, kedge, HydroSystem<TheProblem>::x1Momentum_index);
-	const double x2Mom_edge = consVar(i, j, kedge, HydroSystem<TheProblem>::x2Momentum_index);
-	double x3Mom_edge = consVar(i, j, kedge, HydroSystem<TheProblem>::x3Momentum_index);
-	const double etot_edge = consVar(i, j, kedge, HydroSystem<TheProblem>::energy_index);
-	const double eint_edge = consVar(i, j, kedge, HydroSystem<TheProblem>::internalEnergy_index);
+	// Clamp mirror index to valid domain range for deep ghost cells
+	k_mirror = amrex::max(klo, amrex::min(khi, k_mirror));
 
-	if ((x3Mom_edge * normal) < 0) { // gas is inflowing
-		x3Mom_edge *= -1.;
+	const double rho = consVar(i, j, k_mirror, HydroSystem<TheProblem>::density_index);
+	const double x1Mom = consVar(i, j, k_mirror, HydroSystem<TheProblem>::x1Momentum_index);
+	const double x2Mom = consVar(i, j, k_mirror, HydroSystem<TheProblem>::x2Momentum_index);
+	double x3Mom = consVar(i, j, k_mirror, HydroSystem<TheProblem>::x3Momentum_index);
+	const double etot = consVar(i, j, k_mirror, HydroSystem<TheProblem>::energy_index);
+	const double eint = consVar(i, j, k_mirror, HydroSystem<TheProblem>::internalEnergy_index);
+
+	// Diode BC: allow outflow, prevent inflow
+	// If z-momentum in mirror cell would cause inflow into domain, reflect it
+	// Inflow condition: x3Mom * normal < 0 (momentum points opposite to outward normal)
+	// At lower boundary (normal=-1): inflow if x3Mom > 0 (gas moving toward +z, into domain)
+	// At upper boundary (normal=+1): inflow if x3Mom < 0 (gas moving toward -z, into domain)
+	if (x3Mom * normal < 0) {
+		x3Mom = -x3Mom;
 	}
 
-	consVar(i, j, k, HydroSystem<TheProblem>::density_index) = rho_edge;
-	consVar(i, j, k, HydroSystem<TheProblem>::x1Momentum_index) = x1Mom_edge;
-	consVar(i, j, k, HydroSystem<TheProblem>::x2Momentum_index) = x2Mom_edge;
-	consVar(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = x3Mom_edge;
-	consVar(i, j, k, HydroSystem<TheProblem>::energy_index) = etot_edge;
-	consVar(i, j, k, HydroSystem<TheProblem>::internalEnergy_index) = eint_edge;
+	consVar(i, j, k, HydroSystem<TheProblem>::density_index) = rho;
+	consVar(i, j, k, HydroSystem<TheProblem>::x1Momentum_index) = x1Mom;
+	consVar(i, j, k, HydroSystem<TheProblem>::x2Momentum_index) = x2Mom;
+	consVar(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = x3Mom;
+	consVar(i, j, k, HydroSystem<TheProblem>::energy_index) = etot;
+	consVar(i, j, k, HydroSystem<TheProblem>::internalEnergy_index) = eint;
 }
 
 auto problem_main() -> int
