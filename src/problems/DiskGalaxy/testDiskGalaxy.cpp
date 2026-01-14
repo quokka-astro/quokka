@@ -770,6 +770,7 @@ template <> auto QuokkaSimulation<AgoraGalaxy>::ComputeStatistics() -> std::map<
 
 	const amrex::Real stellar_mass = particleRegister_.computeTotalStellarMass();
 	stats["stellar_mass"] = stellar_mass / C::M_solar;
+	stats["sn_count"] = sn_count_;
 
 	return stats;
 }
