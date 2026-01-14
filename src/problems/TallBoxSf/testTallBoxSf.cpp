@@ -34,10 +34,6 @@ static constexpr amrex::GpuArray<double, nGroups_ + 1> dust_opacity_{0.0, 0.0};
 // static constexpr int nGroups_ = 4;
 // static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = { 1.e-04, 1.00778140e-01, 1.00778140e+00, 5.53817071e+00, 1.e+2 };
 // static constexpr amrex::GpuArray<double, nGroups_ + 1> dust_opacity_{6e2, 1e3, 2e4, 1e5, 2e5}; // dust opacity, cm2/g. last element not used
-static constexpr bool enable_dust_ = false;
-static constexpr bool enable_PE_ = false;
-
-static constexpr bool enable_self_gravity = true;
 
 constexpr double pc = C::parsec;
 constexpr double mu = 1.0 * C::m_p;
@@ -86,7 +82,7 @@ template <> struct quokka::EOS_Traits<TheProblem> {
 };
 
 template <> struct Physics_Traits<TheProblem> {
-	static constexpr bool is_self_gravity_enabled = enable_self_gravity;
+	static constexpr bool is_self_gravity_enabled = true;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = is_rad_on;
 	static constexpr bool is_chemistry_enabled = false;
@@ -109,8 +105,8 @@ template <> struct RadSystem_Traits<TheProblem> {
 };
 
 template <> struct ISM_Traits<TheProblem> {
-	static constexpr bool enable_dust_gas_thermal_coupling_model = enable_dust_;
-	static constexpr bool enable_photoelectric_heating = enable_PE_;
+	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
+	static constexpr bool enable_photoelectric_heating = false;
 	static constexpr double gas_dust_coupling_threshold = 1.0e-5;
 };
 
@@ -360,14 +356,9 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 		const auto gamma = HydroSystem<TheProblem>::gamma_;
 
 		// add turbulent velocities
-		// Clamp indices to [turb_lo, turb_hi] range
-		// const int turb_i = amrex::Math::max(turb_lo[0], amrex::Math::min(turb_hi[0], turb_lo[0] + (i % nturb)));
-		// const int turb_j = amrex::Math::max(turb_lo[1], amrex::Math::min(turb_hi[1], turb_lo[1] + (j % nturb)));
-		// const int turb_k = amrex::Math::max(turb_lo[2], amrex::Math::min(turb_hi[2], turb_lo[2] + (k % nturb)));
 		const int turb_i = turb_lo[0] + (i % nturb);
 		const int turb_j = turb_lo[1] + (j % nturb);
 		const int turb_k = turb_lo[2] + (k % nturb);
-
 		const double vx = dvx(turb_i, turb_j, turb_k) * renorm_factor;
 		const double vy = dvy(turb_i, turb_j, turb_k) * renorm_factor;
 		const double vz = dvz(turb_i, turb_j, turb_k) * renorm_factor;
