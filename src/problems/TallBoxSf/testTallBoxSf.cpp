@@ -183,7 +183,7 @@ template <> void QuokkaSimulation<TheProblem>::createInitialStochasticStellarPop
 
 	// Using a for loop from lev = 0 to StochasticStellarPopParticles->maxLevel() won't work because not all levels necessarily have particles, and when
 	// some levels do not have particles, StochasticStellarPopParticles->GetParticles(lev) will result in a Segfault. Therefore, we loop over the actual
-	// particle container.
+	// particle container. See https://github.com/AMReX-Codes/amrex/issues/4896
 	for (auto &kv : StochasticStellarPopParticles->GetParticles()) {
 		for (auto &ikv : kv) {
 			auto &particle_array = ikv.second.GetArrayOfStructs();
