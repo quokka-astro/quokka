@@ -1784,9 +1784,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 #endif
 }
 
-// Default no-op particle acceleration boundary functor.
-// Problem generators can provide a specialization when custom behavior is required.
-template <typename problem_t> struct setFunctorParticleAccel {
+struct setFunctorParticleAccel {
 	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, const int &dcomp, const int &numcomp,
 					 amrex::GeometryData const &geom, const amrex::Real &time, const amrex::BCRec *bcr, int bcomp,
 					 const int &orig_comp) const
@@ -1830,8 +1828,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 				phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
 			}
 
-			amrex::GpuBndryFuncFab<setFunctorParticleAccel<problem_t>> boundaryFunctor(setFunctorParticleAccel<problem_t>{});
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel<problem_t>>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
+			amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
 			phiBdryFunct(phi_extended, 0, 1, phi_extended.nGrowVect(), 0., 0);
 		} else {
 			// Fine level: use FillPatchTwoLevels to properly handle coarse-fine boundaries
@@ -1841,10 +1839,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 				phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
 			}
 
-			amrex::GpuBndryFuncFab<setFunctorParticleAccel<problem_t>> boundaryFunctor(setFunctorParticleAccel<problem_t>{});
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel<problem_t>>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel<problem_t>>> phiCoarseBdryFunct(geom[lev - 1], phiBC,
-															  boundaryFunctor);
+			amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiCoarseBdryFunct(geom[lev - 1], phiBC, boundaryFunctor);
 
 			amrex::FillPatchTwoLevels(phi_extended, 0., {&phi[lev - 1]}, {0.}, {&phi[lev]}, {0.}, 0, 0, 1, geom[lev - 1], geom[lev],
 						  phiCoarseBdryFunct, 0, phiBdryFunct, 0, refRatio(lev - 1), &amrex::quadratic_interp, phiBC, 0);
@@ -1873,6 +1870,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 #endif
 		});
 		amrex::Gpu::streamSynchronize();
+
+		// accel_cc is garanteed to be free of NaN as long as phi_extended does not contain NaN.
 
 		// Kick particles using the acceleration field
 		particleRegister_.kickParticlesAtLevel(lev, dt, accel_cc);
