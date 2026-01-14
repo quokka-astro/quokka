@@ -447,15 +447,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<TheProblem>::setCustomBou
 	int kedge = 0;
 	int normal = 0;
 
-	// if (k < klo) {
-	// 	kedge = klo;
-	// 	normal = -1;
-	// } else if (k > khi) {
-	// 	kedge = khi;
-	// 	normal = 1.0;
-	// }
-
-	// This should be the correct way?
 	if (k < klo) {
 		kedge = klo;
 		normal = -1;
@@ -463,18 +454,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<TheProblem>::setCustomBou
 		kedge = khi - 1;
 		normal = 1.0;
 	}
-
-	// Or, perhaps we also need this?
-	// if (i < domain_lo[0]) {
-	// 	ii = domain_lo[0];
-	// } else if (i >= domain_hi[0]) {
-	// 	ii = domain_hi[0] - 1;
-	// }
-	// if (j < domain_lo[1]) {
-	// 	jj = domain_lo[1];
-	// } else if (j >= domain_hi[1]) {
-	// 	jj = domain_hi[1] - 1;
-	// }
 
 	const double rho_edge = consVar(i, j, kedge, HydroSystem<TheProblem>::density_index);
 	const double x1Mom_edge = consVar(i, j, kedge, HydroSystem<TheProblem>::x1Momentum_index);
