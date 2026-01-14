@@ -40,8 +40,8 @@ template <> struct SimulationData<TheProblem> {
 	int turbulent_size = 128;
 
 	Real refine_parameter = 1.0; // placeholder for refinement control
-	std::string stars_file = ""; // default: no stars
-	std::string IC_file = "";    // Initial disk vertical structure
+	std::string stars_file; // default: no stars
+	std::string IC_file;    // Initial disk vertical structure
 
 	// Initial conditions table: z -> (g_1, g_ext, phi_tot)
 	quokka::DataTable<1, 3, quokka::OutOfBounds::clamp> ic_table;
