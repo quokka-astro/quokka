@@ -58,7 +58,7 @@ sfh_to_pe_heating_table = "../extern/cooling/photoelectric_heating_from_sfh.csv"
 sfh_time_interval = 3.15576e+13 # =1 Myr
 sf_area_kpc2 = 1.0 					# kpc^2
 
-perturb.filename = "../extern/problems/TallBoxSf/zdrv.hdf5"
+perturb.filename = "zdrv.hdf5"
 #perturb.use_superresolution = 0
 perturb.amplitude = 7e5 # 7 km/s
 
