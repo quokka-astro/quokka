@@ -22,7 +22,7 @@ jobs:
     timeoutInMinutes: 300
     steps:
     - script: |
-        mkdir -p $(Agent.HomeDirectory)/cache/ccache
+        mkdir -p "$(Agent.HomeDirectory)/cache/ccache"
         echo "Using shared local disk cache at $(Agent.HomeDirectory)/cache/ccache"
       displayName: Prepare shared ccache directory
 
