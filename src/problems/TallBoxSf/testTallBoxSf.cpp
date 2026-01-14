@@ -227,16 +227,6 @@ template <> void QuokkaSimulation<TheProblem>::refineGrid(int lev, amrex::TagBox
 	const auto tag = tags.arrays();
 
 	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-		// NOTE: must check all nodes of the cell!
-		// Otherwise, cells that are too big can completely prevent refinement.
-		// amrex::Real const x0 = prob_lo[0] + (i * dx[0]);
-		// amrex::Real const y0 = prob_lo[1] + (j * dx[1]);
-		// amrex::Real const z0 = prob_lo[2] + (k * dx[2]);
-
-		// amrex::Real const x1 = prob_lo[0] + ((i + 1) * dx[0]);
-		// amrex::Real const y1 = prob_lo[1] + ((j + 1) * dx[1]);
-		// amrex::Real const z1 = prob_lo[2] + ((k + 1) * dx[2]);
-
 		amrex::Real const z = prob_lo[2] + ((k + 0.5) * dx[2]);
 
 		if (std::abs(z) < refine_zmax) {
