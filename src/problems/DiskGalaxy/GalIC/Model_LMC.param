@@ -1,0 +1,152 @@
+
+%------   File and path names, as well as output file format
+
+OutputDir       ./LMC_1e7sol
+
+OutputFile      snap    % Base filename of generated sequence of files
+SnapFormat      3       % File format selection
+
+
+%------   Basic structural parameters of model
+
+CC             10.0       % halo concentration
+V200           71.75       % circular velocity v_200 (in km/sec)
+LAMBDA         0.026      % spin parameter          
+MD             0.014      % disk mass fraction      
+MB             0.0        % bulge mass fraction     
+MBH            0.0        % black hole mass fraction. If zero, no black
+                          % hole is generated, otherwise one at the centre
+                          % is added.
+ 
+JD             0.014      % disk spin fraction, typically chosen equal to MD
+
+DiskHeight     0.17       % thickness of stellar disk in units of radial scale length 
+BulgeSize      0.1        % bulge scale length in units of halo scale length 
+
+HaloStretch    1.0        % should be one for a spherical halo, smaller than one corresponds to prolate distortion, otherwise oblate
+BulgeStretch   1.0        % should be one for a spherical bulge, smaller than one corresponds to prolate distortion, otherwise oblate
+
+%------   Particle numbers in target model
+
+N_HALO         20000           % desired number of particles in dark halo 
+N_DISK         22000           % desired number of collisionless particles in disk 
+N_BULGE        0                % number of bulge particles 
+
+
+
+%------   Selection of symmetry constraints of velocity structure
+
+TypeOfHaloVelocityStructure    2      %  0 = spherically symmetric, isotropic
+                                      %  1 = spherically symmetric, anisotropic (with beta parameter specified)
+                                      %  2 = axisymmetric, f(E, Lz), with specified net rotation
+                                      %  3 = axisymmetric, f(E, Lz, I_3), with <vz^2>/<vR^2> specified and net rotation specified
+                                      
+TypeOfDiskVelocityStructure    2      %  0 = spherically symmetric, isotropic
+                                      %  1 = spherically symmetric, anisotropic (with beta parameter specified)
+                                      %  2 = axisymmetric, f(E, Lz), with specified net rotation
+                                      %  3 = axisymmetric, f(E, Lz, I_3), with <vz^2>/<vR^2> specified and net rotation specified
+                                      
+TypeOfBulgeVelocityStructure   0      %  0 = spherically symmetric, isotropic
+                                      %  1 = spherically symmetric, anisotropic (with beta parameter specified)
+                                      %  2 = axisymmetric, f(E, Lz), with specified net rotation
+                                      %  3 = axisymmetric, f(E, Lz, I_3), with <vz^2>/<vR^2> specified and net rotation specified
+                                      
+
+HaloBetaParameter              0    %  only relevant for TypeOfHaloVelocityStructure=1
+BulgeBetaParameter             0    %  only relevant for TypeOfBulgeVelocityStructure=1
+
+
+HaloDispersionRoverZratio      4.0   %  only relevant for TypeOfHaloVelocityStructure=3
+DiskDispersionRoverZratio      4.0   %  only relevant for TypeOfDiskVelocityStructure=3
+BulgeDispersionRoverZratio     4.0   %  only relevant for TypeOfBulgeVelocityStructure=3
+
+
+HaloStreamingVelocityParameter     0.0    % gives the azimuthal streaming velocity in the TypeOf*VelocityStructure=2/3 cases ('k parameter')
+DiskStreamingVelocityParameter     1.0    % gives the azimuthal streaming velocity in the TypeOf*VelocityStructure=2/3 cases ('k parameter')
+BulgeStreamingVelocityParameter    0.0    % gives the azimuthal streaming velocity in the TypeOf*VelocityStructure=2/3 cases ('k parameter')
+
+
+%------   Orbit integration accuracy
+
+TorbitFac                          10.0  % regulates the integration time of orbits
+                                         % (this is of the order of the typical number of orbits per particle)
+TimeStepFactorOrbit                0.01
+TimeStepFactorCellCross            0.25
+
+
+%------   Iterative optimization parameters
+
+FractionToOptimizeIndependendly    0.001
+IndepenentOptimizationsPerStep     100
+StepsBetweenDump                   10
+MaximumNumberOfSteps               100
+
+MinParticlesPerBinForDispersionMeasurement  100
+MinParticlesPerBinForDensityMeasurement     50  
+
+
+%------   Grid dimension and extenstion/resolution
+
+DG_MaxLevel    7
+EG_MaxLevel    7
+FG_Nbin        256                  % number of bins for the acceleration grid in the R- and z-directions 
+
+
+OutermostBinEnclosedMassFraction  0.999   % regulates the fraction of mass of the Hernquist 
+                                          % halo that must be inside the grid (determines grid extension)
+
+InnermostBinEnclosedMassFraction  0.0000001 % regulates the fraction of mass enclosed by the innermost 
+				            % bin (regulates size of innermost grid cells)
+
+
+
+MaxVelInUnitsVesc                 0.9999  % maximum allowed velocity in units of the local escape velocity
+
+
+%------   Construction of target density field
+
+SampleDensityFieldForTargetResponse 1               % if set to 1, the code will randomly sample points to construct the density field
+SampleParticleCount                 100000000       % number of points sampled for target density field 
+
+
+%------   Construction of force field
+
+SampleForceNhalo                    0               % number of points to use to for computing force field with a tree 
+SampleForceNdisk                    100000000
+SampleForceNbulge                   0
+
+Softening                           0.05
+
+
+%------   Accuracy settings of tree code used in construction of force field
+
+TypeOfOpeningCriterion    1
+ErrTolTheta               0.4
+ErrTolForceAcc            0.0025
+
+%------   Domain decomposition parameters used in parallel tree code
+
+MultipleDomains 4
+TopNodeFactor   4
+
+
+%------   Parallel I/O paramaters, only affects writing of galaxy files
+
+NumFilesPerSnapshot       1
+NumFilesWrittenInParallel 1
+
+
+%------   Memory allocation parameters
+
+MaxMemSize                2300    % in MB
+BufferSize                100.0
+BufferSizeGravity         100.0
+
+
+%------   Specification of internal system of units
+
+UnitLength_in_cm         3.085678e21        %  1.0 kpc
+UnitMass_in_g            1.989e43           %  1.0e10 solar masses
+UnitVelocity_in_cm_per_s 1e5                %  1 km/sec
+GravityConstantInternal  0
+
