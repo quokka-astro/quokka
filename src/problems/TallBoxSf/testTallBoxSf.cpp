@@ -22,26 +22,14 @@
 #include "hydro/hydro_system.hpp"
 #include "io/projection.hpp"
 #include "math/interpolate.hpp"
-#include "radiation/radiation_dust_system.hpp"
 #include "turbulence/TurbDataReader.hpp"
 #include "util/DataTable.hpp"
 
 static constexpr int BC_TYPE = 1; // 1: Periodic in x and y, outflow in z, 2: foextrap, 3: Periodic in all (for testing only)
-static constexpr bool is_rad_on = false;
-static constexpr int nGroups_ = 1;
-static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_{0.0, 100.0};
-static constexpr amrex::GpuArray<double, nGroups_ + 1> dust_opacity_{0.0, 0.0};
-// static constexpr int nGroups_ = 4;
-// static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = { 1.e-04, 1.00778140e-01, 1.00778140e+00, 5.53817071e+00, 1.e+2 };
-// static constexpr amrex::GpuArray<double, nGroups_ + 1> dust_opacity_{6e2, 1e3, 2e4, 1e5, 2e5}; // dust opacity, cm2/g. last element not used
 
 constexpr double pc = C::parsec;
 constexpr double mu = 1.0 * C::m_p;
-constexpr double gamma_ = 5. / 3.;
-constexpr double arad = C::a_rad;
-constexpr double TCMB = 2.7; // K, CMB temperature
-constexpr double initial_Erad = 1e-40 * arad * TCMB * TCMB * TCMB * TCMB;
-constexpr double chat_over_c = 2000.0 * 1e5 / C::c_light; // chat = 2000 km/s
+constexpr double gamma_ = 5. / 3.; // chat = 2000 km/s
 
 struct TheProblem {
 };
@@ -84,31 +72,17 @@ template <> struct quokka::EOS_Traits<TheProblem> {
 template <> struct Physics_Traits<TheProblem> {
 	static constexpr bool is_self_gravity_enabled = true;
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_radiation_enabled = is_rad_on;
+	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_chemistry_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr bool is_dust_enabled = false;
 	static constexpr int nDustGroups = 1;			     // number of dust groups
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr int nGroups = is_rad_on ? nGroups_ : 1;     // number of radiation groups
+	static constexpr int nGroups = 1;     // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
-template <> struct RadSystem_Traits<TheProblem> {
-	static constexpr double c_hat_over_c = chat_over_c;
-	static constexpr double Erad_floor = initial_Erad;
-	static constexpr int beta_order = 1;
-	static constexpr double energy_unit = C::ev2erg; // set boundary unit to eV
-	static constexpr amrex::GpuArray<double, Physics_Traits<TheProblem>::nGroups + 1> radBoundaries = radBoundaries_;
-	static constexpr OpacityModel opacity_model = is_rad_on ? OpacityModel::piecewise_constant_opacity : OpacityModel::single_group;
-};
-
-template <> struct ISM_Traits<TheProblem> {
-	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
-	static constexpr bool enable_photoelectric_heating = false;
-	static constexpr double gas_dust_coupling_threshold = 1.0e-5;
-};
 
 // Custom particle acceleration boundary condition for tall box test
 template <> struct setFunctorParticleAccel<TheProblem> {
@@ -141,32 +115,6 @@ template <> struct setFunctorParticleAccel<TheProblem> {
 	}
 };
 
-template <>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
-RadSystem<TheProblem>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> /*rad_boundaries*/, const double /*rho*/,
-							    const double /*Tgas*/) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
-{
-	constexpr double gas_to_dust_ratio = 1.0e-3;
-	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> exponents_and_values{};
-	for (int i = 0; i < nGroups_ + 1; ++i) {
-		exponents_and_values[0][i] = 0.0; // power-law slopes
-	}
-	for (int i = 0; i < nGroups_ + 1; ++i) {
-		exponents_and_values[1][i] = dust_opacity_[i] * gas_to_dust_ratio;
-	}
-	return exponents_and_values;
-}
-
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<TheProblem>::DefinePhotoelectricHeatingE1Derivative(amrex::Real const /*temperature*/, amrex::Real const num_density)
-    -> amrex::Real
-{
-	// Values in cgs units from Bate & Keto (2015), Eq. 26.
-	const double epsilon = 0.05;	   // default efficiency factor for cold molecular clouds
-	const double ref_J_ISR = 5.29e-14; // reference value for the ISR in erg cm^3
-	const double coeff = 1.33e-24;
-	return coeff * epsilon * num_density / ref_J_ISR; // s^-1
-}
 
 template <> void QuokkaSimulation<TheProblem>::createInitialStochasticStellarPopParticles()
 {
@@ -360,18 +308,6 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 		state_cc(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = rho * vz;
 		state_cc(i, j, k, HydroSystem<TheProblem>::internalEnergy_index) = P / (gamma - 1.);
 		state_cc(i, j, k, HydroSystem<TheProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * (vx * vx + vy * vy + vz * vz);
-
-		// Set radiation variables
-		if constexpr (is_rad_on) {
-			// compute energy fractions
-			const auto Erad_g = RadSystem<TheProblem>::ComputeThermalRadiationMultiGroup(TCMB, RadSystem<TheProblem>::radBoundaries_);
-			for (int g = 0; g < Physics_Traits<TheProblem>::nGroups; ++g) {
-				state_cc(i, j, k, RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad_g[g];
-				state_cc(i, j, k, RadSystem<TheProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
-				state_cc(i, j, k, RadSystem<TheProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
-				state_cc(i, j, k, RadSystem<TheProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
-			}
-		}
 	});
 }
 
@@ -380,35 +316,36 @@ template <> void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::s
 	// compute derived variables and save in 'mf'
 
 	if (dname == "temperature") {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "diagnostics require resampled cooling tables.");
 		const int ncomp = ncomp_in;
 		auto const &output = mf.arrays();
 		auto const &state = state_new_cc_[lev].const_arrays();
-		auto tables = resampledTables_.const_tables();
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
 			Real const x1Mom = state[bx](i, j, k, HydroSystem<TheProblem>::x1Momentum_index);
 			Real const x2Mom = state[bx](i, j, k, HydroSystem<TheProblem>::x2Momentum_index);
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<TheProblem>::energy_index);
-			Real const Eint = RadSystem<TheProblem>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+			// For ideal gas: Eint = Egas - 0.5 * rho * v^2
+			Real const Eint = Egas - 0.5 * (x1Mom * x1Mom + x2Mom * x2Mom + x3Mom * x3Mom) / rho;
+			// T = (gamma - 1) * Eint / (rho / mu * k_B), but simplified for now
+			Real const Tgas = (gamma_ - 1.) * Eint * mu / (rho * C::k_B);
 			output[bx](i, j, k, ncomp) = Tgas;
 		});
 	} else if (dname == "c_s") {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "diagnostics require resampled cooling tables.");
 		const int ncomp = ncomp_in;
 		auto const &output = mf.arrays();
 		auto const &state = state_new_cc_[lev].const_arrays();
-		auto tables = resampledTables_.const_tables();
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
 			Real const x1Mom = state[bx](i, j, k, HydroSystem<TheProblem>::x1Momentum_index);
 			Real const x2Mom = state[bx](i, j, k, HydroSystem<TheProblem>::x2Momentum_index);
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<TheProblem>::energy_index);
-			Real const Eint = RadSystem<TheProblem>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-			Real const cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, tables);
+			// For ideal gas: Eint = Egas - 0.5 * rho * v^2
+			Real const Eint = Egas - 0.5 * (x1Mom * x1Mom + x2Mom * x2Mom + x3Mom * x3Mom) / rho;
+			// P = (gamma - 1) * Eint, cs = sqrt(gamma * P / rho)
+			Real const P = (gamma_ - 1.) * Eint;
+			Real const cs = std::sqrt(gamma_ * P / rho);
 			output[bx](i, j, k, ncomp) = cs / 1.0e5; // km/s
 		});
 	}
@@ -442,7 +379,7 @@ template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::Mult
 			const Real x3mom = state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index);
 			const Real Egas = state(i, j, k, HydroSystem<TheProblem>::energy_index);
 
-			const Real Eint = RadSystem<TheProblem>::ComputeEintFromEgas(rho, x1mom, x2mom, x3mom, Egas);
+			const Real Eint = Egas - 0.5 * (x1mom * x1mom + x2mom * x2mom + x3mom * x3mom) / rho;
 
 			posvec[0] = prob_lo[0] + (i + 0.5) * dx[0];
 			posvec[1] = prob_lo[1] + (j + 0.5) * dx[1];
@@ -479,7 +416,7 @@ template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::Mult
 			state(i, j, k, HydroSystem<TheProblem>::x2Momentum_index) = x2mom_new;
 			state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = x3mom_new;
 
-			const Real Egas_new = RadSystem<TheProblem>::ComputeEgasFromEint(rho, x1mom_new, x2mom_new, x3mom_new, Eint);
+			const Real Egas_new = Eint + 0.5 * (x1mom_new * x1mom_new + x2mom_new * x2mom_new + x3mom_new * x3mom_new) / rho;
 			AMREX_ASSERT(!std::isnan(Egas_new));
 
 			state(i, j, k, HydroSystem<TheProblem>::energy_index) = Egas_new;
@@ -564,28 +501,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<TheProblem>::setCustomBou
 	consVar(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = x3Mom_edge;
 	consVar(i, j, k, HydroSystem<TheProblem>::energy_index) = etot_edge;
 	consVar(i, j, k, HydroSystem<TheProblem>::internalEnergy_index) = eint_edge;
-
-	if constexpr (is_rad_on) {
-		// copy radiation variables from edge to boundary cells
-		const int ii = i;
-		const int jj = j;
-		const int kk = kedge;
-		for (int g = 0; g < Physics_Traits<TheProblem>::nGroups; ++g) {
-			const double radEnergy_edge = consVar(ii, jj, kk, RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g);
-			const double x1RadFlux_edge = consVar(ii, jj, kk, RadSystem<TheProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g);
-			const double x2RadFlux_edge = consVar(ii, jj, kk, RadSystem<TheProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g);
-			double x3RadFlux_edge = consVar(ii, jj, kk, RadSystem<TheProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g);
-
-			if ((x3RadFlux_edge * normal) < 0) { // radiation is inflowing
-				x3RadFlux_edge *= -1.;
-			}
-
-			consVar(i, j, k, RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = radEnergy_edge;
-			consVar(i, j, k, RadSystem<TheProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = x1RadFlux_edge;
-			consVar(i, j, k, RadSystem<TheProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = x2RadFlux_edge;
-			consVar(i, j, k, RadSystem<TheProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = x3RadFlux_edge;
-		}
-	}
 }
 
 auto problem_main() -> int
@@ -612,41 +527,24 @@ auto problem_main() -> int
 
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-	// Total radiation energy in the field
-	amrex::Real total_Erad_init = 0.0;
-	if constexpr (is_rad_on) {
-		for (int g = 0; g < Physics_Traits<TheProblem>::nGroups; ++g) {
-			total_Erad_init += sim.state_new_cc_[0].sum(RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) * vol;
-		}
-	}
 
-	const amrex::Real total_gas_energy_init = sim.state_new_cc_[0].sum(RadSystem<TheProblem>::gasEnergy_index) * vol;
-	const amrex::Real total_energy_init = total_Erad_init / chat_over_c + total_gas_energy_init;
+	const amrex::Real total_gas_energy_init = sim.state_new_cc_[0].sum(HydroSystem<TheProblem>::energy_index) * vol;
+	const amrex::Real total_energy_init = total_gas_energy_init;
 
 	// set force finest level to true for test particles
 	// sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->setForceFinestLevel(true);
 
 	sim.evolve();
 
-	amrex::Real total_Erad = 0.0;
-	if constexpr (is_rad_on) {
-		for (int g = 0; g < Physics_Traits<TheProblem>::nGroups; ++g) {
-			total_Erad += sim.state_new_cc_[0].sum(RadSystem<TheProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) * vol;
-		}
-	}
-
-	const amrex::Real total_gas_energy = sim.state_new_cc_[0].sum(RadSystem<TheProblem>::gasEnergy_index) * vol;
-	const amrex::Real total_energy_final = total_Erad / chat_over_c + total_gas_energy;
+	const amrex::Real total_gas_energy = sim.state_new_cc_[0].sum(HydroSystem<TheProblem>::energy_index) * vol;
+	const amrex::Real total_energy_final = total_gas_energy;
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		amrex::Print() << "Total gas energy (initial): " << total_gas_energy_init << "\n";
 		amrex::Print() << "Total gas energy (final): " << total_gas_energy << "\n";
-		if (is_rad_on) {
-			amrex::Print() << "Total radiation energy (initial): " << total_Erad_init / chat_over_c << "\n";
-			amrex::Print() << "Total radiation energy (final): " << total_Erad / chat_over_c << "\n";
-		}
 		amrex::Print() << "Change of total energy: " << total_energy_final - total_energy_init << "\n";
 		amrex::Print() << "Relative change of total energy: " << (total_energy_final - total_energy_init) / total_energy_init << "\n";
+		amrex::Print() << "TallBoxSf Success" << "\n";
 	}
 
 	return 0;
