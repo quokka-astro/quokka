@@ -25,11 +25,7 @@
 #include "turbulence/TurbDataReader.hpp"
 #include "util/DataTable.hpp"
 
-static constexpr int BC_TYPE = 1; // 1: Periodic in x and y, outflow in z, 2: foextrap, 3: Periodic in all (for testing only)
-
-constexpr double pc = C::parsec;
 constexpr double mu = 1.0 * C::m_p;
-constexpr double gamma_ = 5. / 3.; // chat = 2000 km/s
 
 struct TheProblem {
 };
@@ -60,12 +56,11 @@ template <> struct Particle_Traits<TheProblem> {
 };
 
 template <> struct HydroSystem_Traits<TheProblem> {
-	static constexpr double gamma = gamma_;
 	static constexpr bool reconstruct_eint = true; // need to reconstruct temperature
 };
 
 template <> struct quokka::EOS_Traits<TheProblem> {
-	static constexpr double gamma = gamma_;
+	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = mu;
 };
 
@@ -292,7 +287,7 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 
 		// const double Tgas = P / (rho / mu * C::k_B);
 
-		const auto gamma = HydroSystem<TheProblem>::gamma_;
+		const auto gamma = quokka::EOS_Traits<TheProblem>::gamma;
 
 		// add turbulent velocities
 		const int turb_i = turb_lo[0] + (i % nturb);
@@ -316,36 +311,35 @@ template <> void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::s
 	// compute derived variables and save in 'mf'
 
 	if (dname == "temperature") {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "diagnostics require resampled cooling tables.");
 		const int ncomp = ncomp_in;
 		auto const &output = mf.arrays();
 		auto const &state = state_new_cc_[lev].const_arrays();
+		auto tables = resampledTables_.const_tables();
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
 			Real const x1Mom = state[bx](i, j, k, HydroSystem<TheProblem>::x1Momentum_index);
 			Real const x2Mom = state[bx](i, j, k, HydroSystem<TheProblem>::x2Momentum_index);
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<TheProblem>::energy_index);
-			// For ideal gas: Eint = Egas - 0.5 * rho * v^2
-			Real const Eint = Egas - 0.5 * (x1Mom * x1Mom + x2Mom * x2Mom + x3Mom * x3Mom) / rho;
-			// T = (gamma - 1) * Eint / (rho / mu * k_B), but simplified for now
-			Real const Tgas = (gamma_ - 1.) * Eint * mu / (rho * C::k_B);
+			Real const Eint = RadSystem<TheProblem>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 			output[bx](i, j, k, ncomp) = Tgas;
 		});
 	} else if (dname == "c_s") {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "diagnostics require resampled cooling tables.");
 		const int ncomp = ncomp_in;
 		auto const &output = mf.arrays();
 		auto const &state = state_new_cc_[lev].const_arrays();
+		auto tables = resampledTables_.const_tables();
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
 			Real const x1Mom = state[bx](i, j, k, HydroSystem<TheProblem>::x1Momentum_index);
 			Real const x2Mom = state[bx](i, j, k, HydroSystem<TheProblem>::x2Momentum_index);
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<TheProblem>::energy_index);
-			// For ideal gas: Eint = Egas - 0.5 * rho * v^2
-			Real const Eint = Egas - 0.5 * (x1Mom * x1Mom + x2Mom * x2Mom + x3Mom * x3Mom) / rho;
-			// P = (gamma - 1) * Eint, cs = sqrt(gamma * P / rho)
-			Real const P = (gamma_ - 1.) * Eint;
-			Real const cs = std::sqrt(gamma_ * P / rho);
+			Real const Eint = RadSystem<TheProblem>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			Real const cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, tables);
 			output[bx](i, j, k, ncomp) = cs / 1.0e5; // km/s
 		});
 	}
@@ -379,7 +373,7 @@ template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::Mult
 			const Real x3mom = state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index);
 			const Real Egas = state(i, j, k, HydroSystem<TheProblem>::energy_index);
 
-			const Real Eint = Egas - 0.5 * (x1mom * x1mom + x2mom * x2mom + x3mom * x3mom) / rho;
+			const Real Eint = RadSystem<TheProblem>::ComputeEintFromEgas(rho, x1mom, x2mom, x3mom, Egas);
 
 			posvec[0] = prob_lo[0] + (i + 0.5) * dx[0];
 			posvec[1] = prob_lo[1] + (j + 0.5) * dx[1];
@@ -416,7 +410,7 @@ template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::Mult
 			state(i, j, k, HydroSystem<TheProblem>::x2Momentum_index) = x2mom_new;
 			state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = x3mom_new;
 
-			const Real Egas_new = Eint + 0.5 * (x1mom_new * x1mom_new + x2mom_new * x2mom_new + x3mom_new * x3mom_new) / rho;
+			const Real Egas_new = RadSystem<TheProblem>::ComputeEgasFromEint(rho, x1mom_new, x2mom_new, x3mom_new, Eint);
 			AMREX_ASSERT(!std::isnan(Egas_new));
 
 			state(i, j, k, HydroSystem<TheProblem>::energy_index) = Egas_new;
@@ -544,7 +538,6 @@ auto problem_main() -> int
 		amrex::Print() << "Total gas energy (final): " << total_gas_energy << "\n";
 		amrex::Print() << "Change of total energy: " << total_energy_final - total_energy_init << "\n";
 		amrex::Print() << "Relative change of total energy: " << (total_energy_final - total_energy_init) / total_energy_init << "\n";
-		amrex::Print() << "TallBoxSf Success" << "\n";
 	}
 
 	return 0;
