@@ -29,7 +29,7 @@ suppress_output = 1
 regrid_interval = -1
 #poisson_supercycle_interval = 4
 
-max_timesteps = 1
+max_timesteps = 20
 checkpoint_interval = -1
 #restartfile = last_chk
 
