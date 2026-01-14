@@ -462,8 +462,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<TheProblem>::setCustomBou
 auto problem_main() -> int
 {
 	// set random state
-	const int seed = 42;
-	amrex::InitRandom(seed, 1); // all ranks should produce the same values
+	const int rank = amrex::ParallelDescriptor::MyProc();
+	const int seed = 42 + rank;
+	amrex::InitRandom(seed, 1);
 
 	// Problem initialization
 	QuokkaSimulation<TheProblem> sim;
