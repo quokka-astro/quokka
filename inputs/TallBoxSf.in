@@ -43,7 +43,7 @@ density_floor = 1.67e-28 #in g cm^-3
 temperature_floor = 10.0 #K
 
 particles.eps_ff = 0.01
-problem.stars_file = "none" # no initial particles
+problem.stars_file = "" # no initial particles
 problem.IC_file = ../extern/problems/TallBoxSf/disk_solution_datatable_Sigma13-Z1.csv
 problem.rho01 = 4.320441e-24
 problem.sigma1 = 7.0e5

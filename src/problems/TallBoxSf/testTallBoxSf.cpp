@@ -56,8 +56,8 @@ template <> struct SimulationData<TheProblem> {
 	int turbulent_size = 128;
 
 	Real refine_parameter = 1.0;	 // placeholder for refinement control
-	std::string stars_file = "none"; // default: no stars
-	std::string IC_file = "none";	 // Initial disk vertical structure
+	std::string stars_file = ""; // default: no stars
+	std::string IC_file = "";	 // Initial disk vertical structure
 
 	// Initial conditions table: z -> (g_1, g_ext, phi_tot)
 	quokka::DataTable<1, 3, quokka::OutOfBounds::clamp> ic_table;
@@ -170,7 +170,8 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<TheProblem>::DefinePhotoelectricHeatingE1De
 
 template <> void QuokkaSimulation<TheProblem>::createInitialStochasticStellarPopParticles()
 {
-	if (userData_.stars_file == "none") {
+	if (userData_.stars_file.empty()) {
+		amrex::Print() << "No stars file specified. Skipping particle creation.\n";
 		return;
 	}
 
@@ -283,7 +284,7 @@ template <> void QuokkaSimulation<TheProblem>::preCalculateInitialConditions()
 		userData_.dvz.copy(pinned_dvz);
 
 		// Read initial conditions from file if specified
-		if (userData_.IC_file != "none") {
+		if (!userData_.IC_file.empty()) {
 			amrex::Print() << "Reading initial conditions from: " << userData_.IC_file << "\n";
 			// Read CSV file with linear spacing for outputs
 			userData_.ic_table = quokka::DataTable<1, 3, quokka::OutOfBounds::clamp>::CSVReader(userData_.IC_file, quokka::SpacingType::linear);
