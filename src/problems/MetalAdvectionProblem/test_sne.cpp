@@ -30,72 +30,71 @@
 
 //########----Values for R8 Model-------################
 
-AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 100> logphi_data{5.23749982, 5.83925514, 6.19098487, 6.44028658, 6.63341552,
-       6.79097415, 6.92395454, 7.03892608, 7.1401333 , 7.23047697,
-       7.31202697, 7.38631194, 7.45449324, 7.5174744 , 7.57597231,
-       7.63056519, 7.68172614, 7.72984716, 7.77525663, 7.81823237,
-       7.85901159, 7.89779849, 7.93477008, 7.9700808 , 8.00386622,
-       8.03624594, 8.06732603, 8.09720099, 8.12595536, 8.1536651 ,
-       8.18039866, 8.206218  , 8.23117933, 8.25533386, 8.2787285 ,
-       8.30140621, 8.32340645, 8.34476546, 8.36551667, 8.38569095,
-       8.40531688, 8.42442095, 8.44302778, 8.46116029, 8.47883984,
-       8.49608638, 8.51291857, 8.52935389, 8.54540873, 8.5610985 ,
-       8.57643767, 8.59143987, 8.60611797, 8.62048409, 8.6345497 ,
-       8.64832568, 8.66182248, 8.6750501 , 8.68801804, 8.70073526,
-       8.71321029, 8.72545119, 8.73746565, 8.74926096, 8.76084405,
-       8.77222155, 8.78339974, 8.79438465, 8.80518201, 8.81579732,
-       8.8262358 , 8.83650248, 8.84660217, 8.85653946, 8.86631876,
-       8.87594432, 8.88542019, 8.89475028, 8.90393833, 8.91298796,
-       8.92190263, 8.93068568, 8.93934034, 8.94786969, 8.95627673,
-       8.96456434, 8.97273531, 8.98079244, 8.98873851, 8.99657621,
-       9.00430812, 9.01193675, 9.01946449, 9.02689367, 9.03422652,
-       9.0414652 , 9.04861178, 9.0556683 , 9.06263668, 9.06951882};
-AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 100> logg_data{-9.85457856, -9.39107618, -9.19504351, -9.08451673, -9.01789453,
-       -8.9773358 , -8.95292764, -8.93860797, -8.93051793, -8.92611324,
-       -8.92379746, -8.92261559, -8.92202532, -8.92173815, -8.92160118,
-       -8.92153673, -8.92150669, -8.9214927 , -8.92148604, -8.92148266,
-       -8.92148075, -8.92147948, -8.92147848, -8.92147761, -8.9214768 ,
-       -8.92147602, -8.92147525, -8.9214745 , -8.92147377, -8.92147304,
-       -8.92147233, -8.92147163, -8.92147094, -8.92147026, -8.92146959,
-       -8.92146894, -8.92146829, -8.92146765, -8.92146703, -8.92146641,
-       -8.92146581, -8.92146521, -8.92146462, -8.92146405, -8.92146348,
-       -8.92146293, -8.92146238, -8.92146185, -8.92146132, -8.9214608 ,
-       -8.92146029, -8.92145979, -8.9214593 , -8.92145882, -8.92145835,
-       -8.92145789, -8.92145744, -8.92145699, -8.92145655, -8.92145612,
-       -8.92145569, -8.92145528, -8.92145487, -8.92145447, -8.92145407,
-       -8.92145369, -8.92145331, -8.92145294, -8.92145257, -8.92145221,
-       -8.92145186, -8.92145152, -8.92145118, -8.92145085, -8.92145052,
-       -8.9214502 , -8.92144989, -8.92144959, -8.92144929, -8.921449  ,
-       -8.92144871, -8.92144844, -8.92144816, -8.9214479 , -8.92144764,
-       -8.92144738, -8.92144713, -8.92144689, -8.92144665, -8.92144642,
-       -8.92144619, -8.92144596, -8.92144574, -8.92144553, -8.92144531,
-       -8.92144511, -8.9214449 , -8.9214447 , -8.92144451, -8.92144431
-        };
-AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 100> z_data{6.08467742e+19, 1.82540323e+20, 3.04233871e+20, 4.25927419e+20,
-       5.47620968e+20, 6.69314516e+20, 7.91008065e+20, 9.12701613e+20,
-       1.03439516e+21, 1.15608871e+21, 1.27778226e+21, 1.39947581e+21,
-       1.52116935e+21, 1.64286290e+21, 1.76455645e+21, 1.88625000e+21,
-       2.00794355e+21, 2.12963710e+21, 2.25133065e+21, 2.37302419e+21,
-       2.49471774e+21, 2.61641129e+21, 2.73810484e+21, 2.85979839e+21,
-       2.98149194e+21, 3.10318548e+21, 3.22487903e+21, 3.34657258e+21,
-       3.46826613e+21, 3.58995968e+21, 3.71165323e+21, 3.83334677e+21,
-       3.95504032e+21, 4.07673387e+21, 4.19842742e+21, 4.32012097e+21,
-       4.44181452e+21, 4.56350806e+21, 4.68520161e+21, 4.80689516e+21,
-       4.92858871e+21, 5.05028226e+21, 5.17197581e+21, 5.29366935e+21,
-       5.41536290e+21, 5.53705645e+21, 5.65875000e+21, 5.78044355e+21,
-       5.90213710e+21, 6.02383065e+21, 6.14552419e+21, 6.26721774e+21,
-       6.38891129e+21, 6.51060484e+21, 6.63229839e+21, 6.75399194e+21,
-       6.87568548e+21, 6.99737903e+21, 7.11907258e+21, 7.24076613e+21,
-       7.36245968e+21, 7.48415323e+21, 7.60584677e+21, 7.72754032e+21,
-       7.84923387e+21, 7.97092742e+21, 8.09262097e+21, 8.21431452e+21,
-       8.33600806e+21, 8.45770161e+21, 8.57939516e+21, 8.70108871e+21,
-       8.82278226e+21, 8.94447581e+21, 9.06616935e+21, 9.18786290e+21,
-       9.30955645e+21, 9.43125000e+21, 9.55294355e+21, 9.67463710e+21,
-       9.79633065e+21, 9.91802419e+21, 1.00397177e+22, 1.01614113e+22,
-       1.02831048e+22, 1.04047984e+22, 1.05264919e+22, 1.06481855e+22,
-       1.07698790e+22, 1.08915726e+22, 1.10132661e+22, 1.11349597e+22,
-       1.12566532e+22, 1.13783468e+22, 1.15000403e+22, 1.16217339e+22,
-       1.17434274e+22, 1.18651210e+22, 1.19868145e+22, 1.21085081e+22 
+AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 100> logphi_data{9.729282, 10.623358, 11.041888, 11.309771, 11.501713,
+						11.647868, 11.763742, 11.858439, 11.937747, 12.005546,
+						12.064526, 12.116602, 12.163168, 12.205251, 12.243627,
+						12.278891, 12.311509, 12.341847, 12.370204, 12.396823,
+						12.421904, 12.445615, 12.468099, 12.489475, 12.509849,
+						12.529309, 12.547934, 12.565794, 12.582948, 12.599450,
+						12.615348, 12.630684, 12.645497, 12.659822, 12.673689,
+						12.687127, 12.700161, 12.712816, 12.725112, 12.737070,
+						12.748708, 12.760041, 12.771086, 12.781858, 12.792368,
+						12.802631, 12.812656, 12.822455, 12.832038, 12.841414,
+						12.850592, 12.859579, 12.868385, 12.877016, 12.885478,
+						12.893779, 12.901924, 12.909919, 12.917769, 12.925480,
+						12.933057, 12.940503, 12.947824, 12.955024, 12.962106,
+						12.969075, 12.975934, 12.982685, 12.989334, 12.995882,
+						13.002333, 13.008690, 13.014955, 13.021131, 13.027220,
+						13.033225, 13.039148, 13.044991, 13.050757, 13.056447,
+						13.062064, 13.067609, 13.073084, 13.078491, 13.083831,
+						13.089107, 13.094319, 13.099469, 13.104559, 13.109590,
+						13.114564, 13.119481, 13.124343, 13.129151, 13.133907,
+						13.138611, 13.143265, 13.147869, 13.152425, 13.156934
+								};
+
+
+AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 100> logg_data{-9.821986, -9.373092, -9.181660, -9.074428, -9.010522,
+					-8.972159, -8.949421, -8.936419, -8.929211, -8.925341,
+					-8.923377, -8.922390, -8.921909, -8.921679, -8.921572,
+					-8.921523, -8.921500, -8.921489, -8.921484, -8.921482,
+					-8.921480, -8.921479, -8.921478, -8.921477, -8.921476,
+					-8.921476, -8.921475, -8.921474, -8.921473, -8.921473,
+					-8.921472, -8.921471, -8.921471, -8.921470, -8.921469,
+					-8.921469, -8.921468, -8.921467, -8.921467, -8.921466,
+					-8.921465, -8.921465, -8.921464, -8.921464, -8.921463,
+					-8.921462, -8.921462, -8.921461, -8.921461, -8.921460,
+					-8.921460, -8.921459, -8.921459, -8.921458, -8.921458,
+					-8.921457, -8.921457, -8.921457, -8.921456, -8.921456,
+					-8.921455, -8.921455, -8.921454, -8.921454, -8.921454,
+					-8.921453, -8.921453, -8.921453, -8.921452, -8.921452,
+					-8.921451, -8.921451, -8.921451, -8.921450, -8.921450,
+					-8.921450, -8.921449, -8.921449, -8.921449, -8.921449,
+					-8.921448, -8.921448, -8.921448, -8.921448, -8.921447,
+					-8.921447, -8.921447, -8.921447, -8.921446, -8.921446,
+					-8.921446, -8.921446, -8.921445, -8.921445, -8.921445,
+					-8.921445, -8.921445, -8.921444, -8.921444, -8.921444
+};
+AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 100> z_data{6.186900e+19, 1.856070e+20, 3.093450e+20, 4.330830e+20, 5.568210e+20,
+				6.805590e+20, 8.042970e+20, 9.280350e+20, 1.051773e+21, 1.175511e+21,
+				1.299249e+21, 1.422987e+21, 1.546725e+21, 1.670463e+21, 1.794201e+21,
+				1.917939e+21, 2.041677e+21, 2.165415e+21, 2.289153e+21, 2.412891e+21,
+				2.536629e+21, 2.660367e+21, 2.784105e+21, 2.907843e+21, 3.031581e+21,
+				3.155319e+21, 3.279057e+21, 3.402795e+21, 3.526533e+21, 3.650271e+21,
+				3.774009e+21, 3.897747e+21, 4.021485e+21, 4.145223e+21, 4.268961e+21,
+				4.392699e+21, 4.516437e+21, 4.640175e+21, 4.763913e+21, 4.887651e+21,
+				5.011389e+21, 5.135127e+21, 5.258865e+21, 5.382603e+21, 5.506341e+21,
+				5.630079e+21, 5.753817e+21, 5.877555e+21, 6.001293e+21, 6.125031e+21,
+				6.248769e+21, 6.372507e+21, 6.496245e+21, 6.619983e+21, 6.743721e+21,
+				6.867459e+21, 6.991197e+21, 7.114935e+21, 7.238673e+21, 7.362411e+21,
+				7.486149e+21, 7.609887e+21, 7.733625e+21, 7.857363e+21, 7.981101e+21,
+				8.104839e+21, 8.228577e+21, 8.352315e+21, 8.476053e+21, 8.599791e+21,
+				8.723529e+21, 8.847267e+21, 8.971005e+21, 9.094743e+21, 9.218481e+21,
+				9.342219e+21, 9.465957e+21, 9.589695e+21, 9.713433e+21, 9.837171e+21,
+				9.960909e+21, 1.008465e+22, 1.020838e+22, 1.033212e+22, 1.045586e+22,
+				1.057960e+22, 1.070334e+22, 1.082707e+22, 1.095081e+22, 1.107455e+22,
+				1.119829e+22, 1.132203e+22, 1.144576e+22, 1.156950e+22, 1.169324e+22,
+				1.181698e+22, 1.194072e+22, 1.206445e+22, 1.218819e+22, 1.231193e+22,
+
       };
 
 
@@ -136,7 +135,7 @@ template <> struct Physics_Traits<NewProblem> {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_chemistry_enabled = false;
-	static constexpr bool is_mhd_enabled = false;
+	static constexpr bool is_mhd_enabled = true;
 	static constexpr int numMassScalars = 0;    // number of mass scalars
 	static constexpr int numPassiveScalars = 3; // number of passive scalars
 	static constexpr int nGroups = 1;	    // number of radiation groups
@@ -170,7 +169,16 @@ template <> struct SimulationData<NewProblem> {
 
 template <> void QuokkaSimulation<NewProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
-
+	double magnetic_field_microgauss = 2.6;
+	double disk_zscale_kpc = 1.0;
+	
+	amrex::ParmParse const pp("magnetic_field");
+	pp.query("magnetic_field_microgauss", magnetic_field_microgauss);
+	pp.query("disk_zscale_kpc", disk_zscale_kpc);
+	
+	const double z_d = disk_zscale_kpc * (1.0e3 * C::parsec);
+	const double B_0 = magnetic_field_microgauss * 1.0e-6 / std::sqrt(4.0 * M_PI);
+	
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -181,15 +189,28 @@ template <> void QuokkaSimulation<NewProblem>::setInitialConditionsOnGrid(quokka
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const z = prob_lo[2] + (k + amrex::Real(0.5)) * dx[2];
 
+		//Get xmid and ymid
+		amrex::Real const xlow = prob_lo[0] + (i * dx[0]);
+		amrex::Real const ylow = prob_lo[1] + (j * dx[1]);
+		amrex::Real const zlow = prob_lo[2] + (k * dx[2]);
+		
+		amrex::Real const xhigh = prob_lo[0] + ((i + 1) * dx[0]);
+		amrex::Real const yhigh = prob_lo[1] + ((j + 1) * dx[1]);
+		amrex::Real const zhigh = prob_lo[2] + ((k + 1) * dx[2]);
+
+		amrex::Real const x_mid = 0.5 * (xlow + xhigh);
+		amrex::Real const y_mid = 0.5 * (ylow + yhigh);
+		amrex::Real const z_mid = 0.5 * (zlow + zhigh);
+		
 		// Calculate DM Potential
 		double prefac;
 		prefac = 2. * M_PI * C::Gconst * rho_dm * std::pow(R0, 2);
-		double Phidm = (prefac * std::log(1. + std::pow(z / R0, 2)));
+		double Phidm = (prefac * std::log(1. + std::pow(z_mid / R0, 2)));
 
 		// Calculate Stellar Disk Potential
 		double prefac2;
 		prefac2 = 2. * M_PI * C::Gconst * Sigma_star * z_star;
-		double Phist = prefac2 * (std::pow(1. + z * z / z_star / z_star, 0.5) - 1.);
+		double Phist = prefac2 * (std::pow(1. + z_mid * z_mid / z_star / z_star, 0.5) - 1.);
 
 		// Calculate Gas Disk Potential
 
@@ -218,7 +239,12 @@ template <> void QuokkaSimulation<NewProblem>::setInitialConditionsOnGrid(quokka
 		rho = (rho_disk + rho_halo);
 
 		double P = rho_disk * std::pow(sigma1, 2.0) + rho_halo * std::pow(sigma2, 2.0);
+		
+		//Set magnetic field components
+		amrex::Real const B_y = B_0 * std::exp(-std::abs(z_mid) / z_d);
 
+		amrex::Real const magnetic_energy_density = 0.5 * (B_y * B_y);
+		amrex::Real const total_internal_energy = P / (HydroSystem<NewProblem>::gamma_ - 1.0) + magnetic_energy_density;
 		AMREX_ASSERT(!std::isnan(rho));
 
 		const auto gamma = HydroSystem<NewProblem>::gamma_;
@@ -227,8 +253,8 @@ template <> void QuokkaSimulation<NewProblem>::setInitialConditionsOnGrid(quokka
 		state_cc(i, j, k, HydroSystem<NewProblem>::x1Momentum_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<NewProblem>::x2Momentum_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<NewProblem>::x3Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) = P / (gamma - 1.);
-		state_cc(i, j, k, HydroSystem<NewProblem>::energy_index) = P / (gamma - 1.);
+		state_cc(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) = total_internal_energy;
+		state_cc(i, j, k, HydroSystem<NewProblem>::energy_index) = total_internal_energy;
 		state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex) = 1.e-5 / vol; // Injected tracer
 		state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+1) = 1.e-5 / vol; // Injected tracer 2
 		state_cc(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+2) = 1.e-5 / vol; // Injected tracer 3
@@ -282,7 +308,6 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
 					state(i, j, k, HydroSystem<NewProblem>::energy_index) += rho_eint_blast;
 					state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) += rho_eint_blast;
 					state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex) += scalar_blast;
-					
 				}
 			}
 				//Add SN1a
@@ -297,7 +322,7 @@ void AddSupernova(amrex::MultiFab &mf, amrex::GpuArray<Real, AMREX_SPACEDIM> pro
 					state(i, j, k, HydroSystem<NewProblem>::energy_index) += rho_eint_blast;
 					state(i, j, k, HydroSystem<NewProblem>::internalEnergy_index) += rho_eint_blast;
 					state(i, j, k, Physics_Indices<NewProblem>::pscalarFirstIndex+1) += scalar_blast;
-					
+
 				}
 			}
 
@@ -335,7 +360,7 @@ template <> void QuokkaSimulation<NewProblem>::computeBeforeTimestep()
 	const Real stddev = hscale / geom[0].ProbLength(2) / 2.;
 	const Real stddev1a = hscaleIa / geom[0].ProbLength(2) / 2.;
 	const Real stddevAGB = hscaleAGB / geom[0].ProbLength(2) / 2.;
-	const Real frac_rate_typeII = 0.9; // fraction of SN that are type II
+	const Real frac_rate_typeII = 0.6; // fraction of SN that are type II
 	const Real expectation_value = ks_sigma_sfr*frac_rate_typeII * domain_area * dt_coarse;
 
 	const Real expectation_value1a = (ks_sigma_sfr*(1.-frac_rate_typeII)) * domain_area * dt_coarse; 
@@ -359,6 +384,7 @@ template <> void QuokkaSimulation<NewProblem>::computeBeforeTimestep()
 	auto const &px = userData_.blast_x->table();
 	auto const &py = userData_.blast_y->table();
 	auto const &pz = userData_.blast_z->table();
+	amrex::Print() << "Number of Type II SN going off in this step:" << count <<"\n";
 	for (int i = 0; i < count; ++i) {
 		px(i) = geom[0].ProbLength(0) * amrex::Random();
 		py(i) = geom[0].ProbLength(1) * amrex::Random();
@@ -366,8 +392,7 @@ template <> void QuokkaSimulation<NewProblem>::computeBeforeTimestep()
 		while(1.*kpc < pz(i)){
 			pz(i) = geom[0].ProbLength(2) * amrex::RandomNormal(mean, stddev);
 		}
-		amrex::Print() << "Number of Type II SN:" << i <<"\n"; 
-		amrex::Print() << "The location of Type II SN: (x,y,z) : ("  << px(i) <<"," << py(i) << "," << pz(i) <<")" <<"\n"; 
+		amrex::Print() << "The location of "<< i<< " Type II SN: (x,y,z) : ("  << px(i) <<"," << py(i) << "," << pz(i) <<")" <<"\n"; 
 	}
 	
 	//Get probablities for Type Ias
@@ -381,6 +406,8 @@ template <> void QuokkaSimulation<NewProblem>::computeBeforeTimestep()
 	auto const &px1a = userData_.blast_x1a->table();
 	auto const &py1a = userData_.blast_y1a->table();
 	auto const &pz1a = userData_.blast_z1a->table();
+
+	amrex::Print() << "Number of Type Ia SN going off in this step:" << count1a <<"\n"; 
 	for (int i = 0; i < count1a; ++i) {
 		px1a(i) = geom[0].ProbLength(0) * amrex::Random();
 		py1a(i) = geom[0].ProbLength(1) * amrex::Random();
@@ -388,8 +415,7 @@ template <> void QuokkaSimulation<NewProblem>::computeBeforeTimestep()
 		while(1.*kpc < pz1a(i)){
 			pz1a(i) = geom[0].ProbLength(2) * amrex::RandomNormal(mean, stddev1a);
 		}	
-		amrex::Print() << "Number of Type Ia SN:" << i <<"\n"; 
-		amrex::Print() << "The location of Type Ia SN: (x,y,z) : ("  << px1a(i) <<"," << py1a(i) << "," << pz1a(i) <<")" <<"\n"; 
+		amrex::Print() << "The location of " << i << " Type Ia SN: (x,y,z) : ("  << px1a(i) <<"," << py1a(i) << "," << pz1a(i) <<")" <<"\n"; 
 	}
 
 	//Get probablities for AGBs
@@ -535,6 +561,51 @@ template <> void QuokkaSimulation<NewProblem>::addStrangSplitSources(amrex::Mult
 		});
 	}
 }
+
+//Add magnetic field initial conditions
+
+template <> void QuokkaSimulation<NewProblem>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+{
+	double magnetic_field_microgauss = 2.6;
+	double disk_zscale_kpc = 1.0;
+
+	amrex::ParmParse const pp("magnetic_field");
+	pp.query("magnetic_field_microgauss", magnetic_field_microgauss);
+	pp.query("disk_zscale_kpc", disk_zscale_kpc);
+	 
+	const double z_d = disk_zscale_kpc * (1.0e3 * C::parsec);
+	const double B_0 = magnetic_field_microgauss * 1.0e-6 / std::sqrt(4.0 * M_PI);
+
+	const amrex::Array4<double> &state_fc = grid_elem.array_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const quokka::direction dir = grid_elem.dir_;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		// Cartesian coordinates at this face
+		amrex::Real const dx_cen = (dir == quokka::direction::x) ? 0.0 : 0.5 * dx[0];
+		amrex::Real const dy_cen = (dir == quokka::direction::y) ? 0.0 : 0.5 * dx[1];
+		amrex::Real const dz_cen = (dir == quokka::direction::z) ? 0.0 : 0.5 * dx[2];
+		amrex::Real const x = prob_lo[0] + (i * dx[0]) + dx_cen;
+		amrex::Real const y = prob_lo[1] + (j * dx[1]) + dy_cen;
+		amrex::Real const z = prob_lo[2] + (k * dx[2]) + dz_cen;
+
+		amrex::Real Bx = 0.0;
+		amrex::Real By = B_0 *  std::exp(-std::abs(z) / z_d);
+		amrex::Real Bz = 0.0;
+
+		constexpr int mhd_index = Physics_Indices<NewProblem>::mhdFirstIndex;
+		if (dir == quokka::direction::x) {
+			state_fc(i, j, k, mhd_index) = Bx;
+		} else if (dir == quokka::direction::y) {
+			state_fc(i, j, k, mhd_index) = By;
+		} else if (dir == quokka::direction::z) {
+			state_fc(i, j, k, mhd_index) = Bz;
+		}
+	});
+}
+
 
 // Code for producing in-situ Projection plots
 template <> auto QuokkaSimulation<NewProblem>::ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
@@ -901,12 +972,29 @@ auto problem_main() -> int
 		}
 	}
 
+	const int nvars_fc = Physics_Indices<NewProblem>::nvarTotal_fc;
+	const int nvars_per_dim_fc = Physics_Indices<NewProblem>::nvarPerDim_fc;
+	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
+
+	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
+		int const component_dir = (nvars_per_dim_fc > 0) ? (icomp / nvars_per_dim_fc) : 0;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			if (idim == 2) {
+				BCs_fc[icomp].setLo(idim, amrex::BCType::ext_dir);
+				BCs_fc[icomp].setHi(idim, amrex::BCType::ext_dir);
+			} else {
+				BCs_fc[icomp].setLo(idim, amrex::BCType::int_dir); // periodic
+				BCs_fc[icomp].setHi(idim, amrex::BCType::int_dir); // periodic
+			}
+		}
+	}
+
 	// set random state
 	const int seed = 42;
 	amrex::InitRandom(seed, 1); // all ranks should produce the same values
 
 	// Problem initialization
-	QuokkaSimulation<NewProblem> sim(BCs_cc);
+	QuokkaSimulation<NewProblem> sim(BCs_cc, BCs_fc);
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
