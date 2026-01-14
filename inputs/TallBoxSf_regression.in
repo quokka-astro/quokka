@@ -3,7 +3,7 @@
 # *****************************************************************
 geometry.prob_lo     =  0.0       0.0       -6.036e+21
 geometry.prob_hi     =  3.018e21  3.018e21   6.036e+21
-geometry.is_periodic =  1    1    0
+quokka.bc = periodic periodic ext_dir
 
 # *****************************************************************
 # VERBOSITY

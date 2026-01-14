@@ -600,23 +600,12 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<TheProblem>::setCustomBou
 
 auto problem_main() -> int
 {
-	auto BCs_cc = quokka::BC<TheProblem>(quokka::BCType::reflecting);
-	if constexpr (BC_TYPE == 1) {
-		BCs_cc = quokka::BC<TheProblem>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::ext_dir);
-	} else if constexpr (BC_TYPE == 2) {
-		BCs_cc = quokka::BC<TheProblem>(quokka::BCType::foextrap);
-	} else if constexpr (BC_TYPE == 3) {
-		BCs_cc = quokka::BC<TheProblem>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
-	}
-
 	// set random state
 	const int seed = 42;
 	amrex::InitRandom(seed, 1); // all ranks should produce the same values
 
 	// Problem initialization
-	QuokkaSimulation<TheProblem> sim(BCs_cc);
-	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
-	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
+	QuokkaSimulation<TheProblem> sim;
 
 	amrex::ParmParse const pp("problem");
 	pp.query("stars_file", sim.userData_.stars_file);
