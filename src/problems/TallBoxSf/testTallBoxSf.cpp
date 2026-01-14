@@ -39,9 +39,9 @@ template <> struct SimulationData<TheProblem> {
 	Real turbulent_amplitude = 1500.0; // cm/s,  0.05 * cs at 10K (~0.3 km/s)
 	int turbulent_size = 128;
 
-	Real refine_parameter = 1.0;	 // placeholder for refinement control
+	Real refine_parameter = 1.0; // placeholder for refinement control
 	std::string stars_file = ""; // default: no stars
-	std::string IC_file = "";	 // Initial disk vertical structure
+	std::string IC_file = "";    // Initial disk vertical structure
 
 	// Initial conditions table: z -> (g_1, g_ext, phi_tot)
 	quokka::DataTable<1, 3, quokka::OutOfBounds::clamp> ic_table;
@@ -74,10 +74,9 @@ template <> struct Physics_Traits<TheProblem> {
 	static constexpr int nDustGroups = 1;			     // number of dust groups
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr int nGroups = 1;     // number of radiation groups
+	static constexpr int nGroups = 1;			     // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
-
 
 // Custom particle acceleration boundary condition for tall box test
 template <> struct setFunctorParticleAccel<TheProblem> {
@@ -109,7 +108,6 @@ template <> struct setFunctorParticleAccel<TheProblem> {
 		// For interior points, do nothing - already filled by Copy operation
 	}
 };
-
 
 template <> void QuokkaSimulation<TheProblem>::createInitialStochasticStellarPopParticles()
 {
