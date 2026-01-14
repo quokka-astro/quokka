@@ -1871,7 +1871,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		});
 		amrex::Gpu::streamSynchronize();
 
-		// accel_cc is garanteed to be free of NaN as long as phi_extended does not contain NaN.
+		// accel_cc is guaranteed to be free of NaN as long as phi_extended does not contain NaN.
 
 		// Kick particles using the acceleration field
 		particleRegister_.kickParticlesAtLevel(lev, dt, accel_cc);
