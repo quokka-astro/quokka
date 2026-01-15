@@ -6,16 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Quokka is a two-moment radiation hydrodynamics code using the piecewise-parabolic method with AMR and subcycling. It's built on AMReX and supports both CPU (MPI+vectorized) and GPU (CUDA/HIP) execution with a single C++20 codebase.
 
 ## Build & Test Commands
-- **Build**: `mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -G Ninja && ninja -j6` (keep in mind that `-DAMReX_SPACEDIM` must be set to specify the dimensionality of the code, and that some targets only build for certain dimensionality)
-- **GPU Support**: Add `-DAMReX_GPU_BACKEND=CUDA` (NVIDIA) or `-DAMReX_GPU_BACKEND=HIP` (AMD)
-- **Run all tests**: `ctest` or `ninja test`
-- **Run specific test**: `ctest -R TestName`
-- **Exclude tests**: `ctest -E "Pattern*"`
-- **List test targets**: `cmake --build . --target help`
-- **Test inputs**: Located in `inputs/` directory (`.in` files)
-- **Code formatting**: `clang-format -i file.cpp` (run from `src/` directory)
-- **Static analysis**: Use `scripts/tidy.sh build changed` to run clang-tidy on modified files
-- **Lint options**: `scripts/tidy.sh build [changed|previous|origin|dev] [--fix]`
+- Run `source ~/rc/qk.rc` to load modules before the first build. 
+- **Build test**: `cd /Users/cche/softwares/quokka/quokka/build/clang-3d && ninja -j8 TestName`
+- **Run test**: `cd /Users/cche/softwares/quokka/quokka/build/clang-3d && ctest -R TestName`
+- **Run test with specific commands**: `cd /Users/cche/softwares/quokka/quokka/tests && ../build/clang-3d/src/problems/TestName/TestName ../inputs/TestName.in`
 
 ## Architecture Overview
 - **Main entry**: `src/main.cpp` calls `problem_main()` defined in problem-specific files
@@ -29,12 +23,10 @@ Quokka is a two-moment radiation hydrodynamics code using the piecewise-paraboli
 
 ## Problem Structure
 - Each problem directory contains:
-  - `test_*.cpp`: Implementation with initial conditions and problem-specific physics
-  - `test_*.hpp`: Header with template specializations (removed in recent commits)
+  - `test*.cpp`: Implementation with initial conditions and problem-specific physics
   - `CMakeLists.txt`: Defines executable target
 - Problems use template specialization pattern for `QuokkaSimulation<ProblemName>`
 - Input files (`.in`) in `inputs/` configure geometry, AMR, physics parameters
-- Problems should ONLY contain `.cpp` files (no `.hpp` files per recent policy)
 
 ## Key Dependencies
 - **AMReX**: Underlying AMR framework (external submodule)
