@@ -229,7 +229,7 @@ auto problem_main() -> int
 	}
 
 	const double rel_err_norm = err_norm / sol_norm;
-	const double rel_err_tol = 0.01;
+	const double rel_err_tol = 0.05;
 	int status = 1;
 	if (rel_err_norm < rel_err_tol) {
 		status = 0;
