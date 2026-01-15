@@ -74,6 +74,7 @@ namespace filesystem = experimental::filesystem;
 #include "SimulationData.hpp"
 #include "chemistry/Chemistry.hpp"
 #include "cooling/ResampledCooling.hpp"
+#include "dust/DustDrag.hpp"
 #include "dust/dust_system.hpp"
 #include "eos.H"
 #include "hydro/hydro_system.hpp"
@@ -159,6 +160,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int enableCooling_ = 0;
 	int enableChemistry_ = 0;
 	int enableTurbulence_ = 0;
+	int enableIterDustStoptime_ = 0;
 	Real max_density_allowed = std::numeric_limits<amrex::Real>::max();
 	Real min_density_allowed = std::numeric_limits<amrex::Real>::min();
 
@@ -177,8 +179,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	static constexpr bool is_particle_enabled = Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None;
 
-	amrex::GpuArray<amrex::Real, Physics_Traits<problem_t>::nDustGroups> dust_alpha_ = {};
 	amrex::Real dust_omega_ = 1.0;
+	bool print_dust_counter_ = false;
 
 	amrex::Real radiationCflNumber_ = 0.3;
 	int maxSubsteps_ = 10;				// maximum number of radiation subcycles per hydro step
@@ -343,7 +345,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 				 amrex::EdgeFluxRegister *emf_as_fine, int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
-	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
+	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int lev, amrex::Real time,
+					      amrex::Real dt_lev) -> bool;
 
 	auto computePhotoelectricHeatingRate(Real current_time) -> amrex::Real;
 
@@ -677,18 +680,10 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 
 	// set dust runtime parameters
 	{
-		for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
-			dust_alpha_[g] = 0.0;
-		}
 		amrex::ParmParse const dpp("dust");
-		std::vector<amrex::Real> alpha_vec;
-		if (dpp.queryarr("alpha", alpha_vec) != 0) {
-			AMREX_ASSERT(alpha_vec.size() == Physics_Traits<problem_t>::nDustGroups);
-			for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
-				dust_alpha_[g] = alpha_vec[g];
-			}
-		}
 		dpp.query("omega", dust_omega_);
+		dpp.query("enable_iter_stoptime", enableIterDustStoptime_);
+		dpp.query("print_iteration_counts", print_dust_counter_);
 	}
 
 	// set radiation runtime parameters
@@ -946,7 +941,8 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computePhotoelec
 }
 
 template <typename problem_t>
-auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt) -> bool
+auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int lev,
+								   amrex::Real time, amrex::Real dt) -> bool
 {
 	// start by assuming cooling integrator is successful.
 	bool cool_success = true;
@@ -976,7 +972,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 		td->applyDriving(state, time, dt, cellSizes);
 	}
 	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-		DustSystem<problem_t>::computeDustDrag(state, dt, dust_omega_, dust_alpha_);
+		DustDrag<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega_, enableIterDustStoptime_, print_dust_counter_);
 	}
 
 	// compute user-specified sources
@@ -2094,7 +2090,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	auto dx = geom[lev].CellSizeArray();
 
 	// do Strang split source terms (first half-step)
-	auto burn_success_first = addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, lev, time, 0.5 * dt_lev);
+	auto burn_success_first = addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, state_old_fc_tmp, lev, time, 0.5 * dt_lev);
 
 	// check if reactions failed for source terms. If it failed, return false.
 	if (!burn_success_first) {
@@ -2444,7 +2440,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	amrex::Gpu::streamSynchronizeAll();
 
 	// do Strang split source terms (second half-step)
-	auto burn_success_second = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
+	auto burn_success_second = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], state_new_fc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
 
 	bool const cfl_ok = !isCflViolated(lev, time, dt_lev);
 	bool const final_success = (cfl_ok && burn_success_second);

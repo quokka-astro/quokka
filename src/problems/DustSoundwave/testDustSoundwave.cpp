@@ -82,6 +82,16 @@ template <> struct Physics_Traits<DustSoundwave> {
 	static constexpr double radiation_constant = 1.0;
 };
 
+template <>
+AMREX_GPU_HOST_DEVICE auto DustDrag<DustSoundwave>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
+										  amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/, double /*cs*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
+{
+	amrex::GpuArray<amrex::Real, 1> alpha{};
+	alpha[0] = 2.5;
+	return alpha;
+}
+
 template <> void QuokkaSimulation<DustSoundwave>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
