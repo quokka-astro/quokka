@@ -142,7 +142,7 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 			consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
 			consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
 		}
-	} else if (i >= hi[0]) {
+	} else if (i > hi[0]) {
 		// right-side boundary -- constant
 		const double Erad = initial_Erad;
 		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
