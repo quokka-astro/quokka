@@ -239,9 +239,9 @@ AMRSimulation<QuirkProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 	right_values[RadSystem<QuirkProblem>::x2GasMomentum_index] = 0.;
 	right_values[RadSystem<QuirkProblem>::x3GasMomentum_index] = 0.;
 
-	// Apply boundary conditions using helper functions
-	setConstantDirichletBCLeft(iv, consVar, geom, left_values);
-	setConstantDirichletBCRight(iv, consVar, geom, right_values);
+	// Apply boundary conditions using helper functions (direction 0 = x-axis)
+	setConstantDirichletBCLo<0>(iv, consVar, geom, left_values);
+	setConstantDirichletBCHi<0>(iv, consVar, geom, right_values);
 }
 
 auto problem_main() -> int

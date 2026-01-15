@@ -376,19 +376,27 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 									int numcomp, amrex::GeometryData const &geom, amrex::Real time, const amrex::BCRec *bcr,
 									int bcomp, int orig_comp); // template specialized by problem generator
 
-	/// Helper function to set constant Dirichlet boundary conditions on all left boundaries.
-	/// Sets all components of consVar to the provided values for cells outside the domain on any lower face.
-	/// Returns true if the cell was on a left boundary, false otherwise.
-	template <auto N>
-	AMREX_GPU_DEVICE static auto setConstantDirichletBCLeft(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
-								amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, N> const &values) -> bool;
+	/// Helper function to set constant Dirichlet boundary conditions on the lower boundary of a specific dimension.
+	/// @param dir The dimension to check (0=x, 1=y, 2=z)
+	/// @param iv The cell index
+	/// @param consVar The array to fill
+	/// @param geom The geometry data
+	/// @param values The values to set for all components
+	/// @return true if the cell was on the lower boundary of the specified dimension, false otherwise
+	template <int dir, auto N>
+	AMREX_GPU_DEVICE static auto setConstantDirichletBCLo(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
+							      amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, N> const &values) -> bool;
 
-	/// Helper function to set constant Dirichlet boundary conditions on all right boundaries.
-	/// Sets all components of consVar to the provided values for cells outside the domain on any upper face.
-	/// Returns true if the cell was on a right boundary, false otherwise.
-	template <auto N>
-	AMREX_GPU_DEVICE static auto setConstantDirichletBCRight(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
-								 amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, N> const &values) -> bool;
+	/// Helper function to set constant Dirichlet boundary conditions on the upper boundary of a specific dimension.
+	/// @param dir The dimension to check (0=x, 1=y, 2=z)
+	/// @param iv The cell index
+	/// @param consVar The array to fill
+	/// @param geom The geometry data
+	/// @param values The values to set for all components
+	/// @return true if the cell was on the upper boundary of the specified dimension, false otherwise
+	template <int dir, auto N>
+	AMREX_GPU_DEVICE static auto setConstantDirichletBCHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
+							      amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, N> const &values) -> bool;
 
 	// compute volume integrals
 	template <typename F> auto computeVolumeIntegral(F const &user_f) -> amrex::Real;
@@ -2384,11 +2392,13 @@ AMRSimulation<problem_t>::setCustomBoundaryConditionsFaceVar(const amrex::IntVec
 }
 
 template <typename problem_t>
-template <auto N>
+template <int dir, auto N>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
-AMRSimulation<problem_t>::setConstantDirichletBCLeft(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar, amrex::GeometryData const &geom,
-						     amrex::GpuArray<amrex::Real, N> const &values) -> bool
+AMRSimulation<problem_t>::setConstantDirichletBCLo(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar, amrex::GeometryData const &geom,
+						   amrex::GpuArray<amrex::Real, N> const &values) -> bool
 {
+	static_assert(dir >= 0 && dir < AMREX_SPACEDIM, "dir must be in range [0, AMREX_SPACEDIM)");
+
 	// Get cell indices
 	auto const [i, j, k] = iv.dim3();
 
@@ -2396,37 +2406,36 @@ AMRSimulation<problem_t>::setConstantDirichletBCLeft(amrex::IntVect const &iv, a
 	amrex::Box const &box = geom.Domain();
 	const amrex::GpuArray<int, 3> lo = box.loVect3d();
 
-	// Check if on left boundary in any dimension
-	bool onLeftBoundary = false;
-	if (i < lo[0]) {
-		onLeftBoundary = true;
+	// Get the cell index for the specified direction
+	int cellIdx = 0;
+	if constexpr (dir == 0) {
+		cellIdx = i;
+	} else if constexpr (dir == 1) {
+		cellIdx = j;
+	} else if constexpr (dir == 2) {
+		cellIdx = k;
 	}
-#if (AMREX_SPACEDIM >= 2)
-	if (j < lo[1]) {
-		onLeftBoundary = true;
-	}
-#endif
-#if (AMREX_SPACEDIM >= 3)
-	if (k < lo[2]) {
-		onLeftBoundary = true;
-	}
-#endif
 
-	if (onLeftBoundary) {
+	// Check if on lower boundary in the specified dimension
+	const bool onLoBoundary = (cellIdx < lo[dir]);
+
+	if (onLoBoundary) {
 		for (decltype(N) n = 0; n < N; ++n) {
 			consVar(i, j, k, static_cast<int>(n)) = values[n];
 		}
 	}
 
-	return onLeftBoundary;
+	return onLoBoundary;
 }
 
 template <typename problem_t>
-template <auto N>
+template <int dir, auto N>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
-AMRSimulation<problem_t>::setConstantDirichletBCRight(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar, amrex::GeometryData const &geom,
-						      amrex::GpuArray<amrex::Real, N> const &values) -> bool
+AMRSimulation<problem_t>::setConstantDirichletBCHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar, amrex::GeometryData const &geom,
+						   amrex::GpuArray<amrex::Real, N> const &values) -> bool
 {
+	static_assert(dir >= 0 && dir < AMREX_SPACEDIM, "dir must be in range [0, AMREX_SPACEDIM)");
+
 	// Get cell indices
 	auto const [i, j, k] = iv.dim3();
 
@@ -2434,29 +2443,26 @@ AMRSimulation<problem_t>::setConstantDirichletBCRight(amrex::IntVect const &iv, 
 	amrex::Box const &box = geom.Domain();
 	const amrex::GpuArray<int, 3> hi = box.hiVect3d();
 
-	// Check if on right boundary in any dimension
-	bool onRightBoundary = false;
-	if (i > hi[0]) {
-		onRightBoundary = true;
+	// Get the cell index for the specified direction
+	int cellIdx = 0;
+	if constexpr (dir == 0) {
+		cellIdx = i;
+	} else if constexpr (dir == 1) {
+		cellIdx = j;
+	} else if constexpr (dir == 2) {
+		cellIdx = k;
 	}
-#if (AMREX_SPACEDIM >= 2)
-	if (j > hi[1]) {
-		onRightBoundary = true;
-	}
-#endif
-#if (AMREX_SPACEDIM >= 3)
-	if (k > hi[2]) {
-		onRightBoundary = true;
-	}
-#endif
 
-	if (onRightBoundary) {
+	// Check if on upper boundary in the specified dimension
+	const bool onHiBoundary = (cellIdx > hi[dir]);
+
+	if (onHiBoundary) {
 		for (decltype(N) n = 0; n < N; ++n) {
 			consVar(i, j, k, static_cast<int>(n)) = values[n];
 		}
 	}
 
-	return onRightBoundary;
+	return onHiBoundary;
 }
 
 // Compute a new multifab 'mf' by copying in state from valid region and filling

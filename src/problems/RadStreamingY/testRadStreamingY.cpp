@@ -13,6 +13,7 @@
 #include "AMReX.H"
 #include "AMReX_BLassert.H"
 #include "QuokkaSimulation.hpp"
+#include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
@@ -100,71 +101,56 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 							     int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
 							     const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
-#if (AMREX_SPACEDIM == 1)
-	auto i = iv.toArray()[0];
-	int j = 0;
-	int k = 0;
-#endif
-#if (AMREX_SPACEDIM == 2)
-	auto [i, j] = iv.toArray();
-	int k = 0;
-#endif
-#if (AMREX_SPACEDIM == 3)
-	auto [i, j, k] = iv.toArray();
-#endif
+	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
+	constexpr int nvar = Physics_Indices<StreamingProblem>::nvarTotal_cc;
 
-	amrex::Box const &box = geom.Domain();
-	amrex::GpuArray<int, 3> lo = box.loVect3d();
-	amrex::GpuArray<int, 3> hi = box.hiVect3d();
-
-	if constexpr (direction == 0) {
-		if (i < lo[0]) {
-			// streaming inflow boundary
-			const double Erad = 1.0;
-			const double Frad = c * Erad;
-
-			// x1 left side boundary (Marshak)
-			consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index) = Erad;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index) = Frad;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index) = 0.;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index) = 0.;
-		} else if (i >= hi[0]) {
-			// right-side boundary -- constant
-			const double Erad = initial_Erad;
-			consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index) = Erad;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index) = 0;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index) = 0;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index) = 0;
+	// Prepare lower boundary values (streaming inflow)
+	amrex::GpuArray<amrex::Real, nvar> lo_values{};
+	{
+		const double Erad = 1.0;
+		const double Frad = c * Erad;
+		lo_values[RadSystem<StreamingProblem>::radEnergy_index] = Erad;
+		// Flux is in the direction of the boundary
+		if constexpr (direction == 0) {
+			lo_values[RadSystem<StreamingProblem>::x1RadFlux_index] = Frad;
+			lo_values[RadSystem<StreamingProblem>::x2RadFlux_index] = 0.;
+		} else {
+			lo_values[RadSystem<StreamingProblem>::x1RadFlux_index] = 0.;
+			lo_values[RadSystem<StreamingProblem>::x2RadFlux_index] = Frad;
 		}
-	} else {
-		if (j < lo[1]) {
-			// streaming inflow boundary
-			const double Erad = 1.0;
-			const double Frad = c * Erad;
-
-			// x1 left side boundary (Marshak)
-			consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index) = Erad;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index) = 0.;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index) = Frad;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index) = 0.;
-		} else if (j >= hi[1]) {
-			// right-side boundary -- constant
-			const double Erad = initial_Erad;
-			consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index) = Erad;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index) = 0;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index) = 0;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index) = 0;
-		}
+		lo_values[RadSystem<StreamingProblem>::x3RadFlux_index] = 0.;
+		lo_values[RadSystem<StreamingProblem>::gasEnergy_index] = initial_Egas;
+		lo_values[RadSystem<StreamingProblem>::gasDensity_index] = rho;
+		lo_values[RadSystem<StreamingProblem>::gasInternalEnergy_index] = initial_Egas;
+		lo_values[RadSystem<StreamingProblem>::x1GasMomentum_index] = 0.;
+		lo_values[RadSystem<StreamingProblem>::x2GasMomentum_index] = 0.;
+		lo_values[RadSystem<StreamingProblem>::x3GasMomentum_index] = 0.;
 	}
 
-	// gas boundary conditions are the same everywhere
-	const double Egas = initial_Egas;
-	consVar(i, j, k, RadSystem<StreamingProblem>::gasEnergy_index) = Egas;
-	consVar(i, j, k, RadSystem<StreamingProblem>::gasDensity_index) = rho;
-	consVar(i, j, k, RadSystem<StreamingProblem>::gasInternalEnergy_index) = Egas;
-	consVar(i, j, k, RadSystem<StreamingProblem>::x1GasMomentum_index) = 0.;
-	consVar(i, j, k, RadSystem<StreamingProblem>::x2GasMomentum_index) = 0.;
-	consVar(i, j, k, RadSystem<StreamingProblem>::x3GasMomentum_index) = 0.;
+	// Prepare upper boundary values (constant)
+	amrex::GpuArray<amrex::Real, nvar> hi_values{};
+	{
+		const double Erad = initial_Erad;
+		hi_values[RadSystem<StreamingProblem>::radEnergy_index] = Erad;
+		hi_values[RadSystem<StreamingProblem>::x1RadFlux_index] = 0;
+		hi_values[RadSystem<StreamingProblem>::x2RadFlux_index] = 0;
+		hi_values[RadSystem<StreamingProblem>::x3RadFlux_index] = 0;
+		hi_values[RadSystem<StreamingProblem>::gasEnergy_index] = initial_Egas;
+		hi_values[RadSystem<StreamingProblem>::gasDensity_index] = rho;
+		hi_values[RadSystem<StreamingProblem>::gasInternalEnergy_index] = initial_Egas;
+		hi_values[RadSystem<StreamingProblem>::x1GasMomentum_index] = 0.;
+		hi_values[RadSystem<StreamingProblem>::x2GasMomentum_index] = 0.;
+		hi_values[RadSystem<StreamingProblem>::x3GasMomentum_index] = 0.;
+	}
+
+	// Apply boundary conditions using helper functions
+	if constexpr (direction == 0) {
+		setConstantDirichletBCLo<0>(iv, consVar, geom, lo_values);
+		setConstantDirichletBCHi<0>(iv, consVar, geom, hi_values);
+	} else {
+		setConstantDirichletBCLo<1>(iv, consVar, geom, lo_values);
+		setConstantDirichletBCHi<1>(iv, consVar, geom, hi_values);
+	}
 }
 
 auto problem_main() -> int
