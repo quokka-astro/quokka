@@ -17,13 +17,10 @@
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
-#include "util/valarray.hpp"
 #include <fmt/format.h>
 
 struct StreamingProblem {
 };
-
-constexpr int direction = 1;
 
 constexpr double initial_Erad = 1.0e-5;
 constexpr double initial_Egas = 1.0e-5;
@@ -111,13 +108,8 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 		const double Frad = c * Erad;
 		lo_values[RadSystem<StreamingProblem>::radEnergy_index] = Erad;
 		// Flux is in the direction of the boundary
-		if constexpr (direction == 0) {
-			lo_values[RadSystem<StreamingProblem>::x1RadFlux_index] = Frad;
-			lo_values[RadSystem<StreamingProblem>::x2RadFlux_index] = 0.;
-		} else {
-			lo_values[RadSystem<StreamingProblem>::x1RadFlux_index] = 0.;
-			lo_values[RadSystem<StreamingProblem>::x2RadFlux_index] = Frad;
-		}
+		lo_values[RadSystem<StreamingProblem>::x1RadFlux_index] = 0.;
+		lo_values[RadSystem<StreamingProblem>::x2RadFlux_index] = Frad;
 		lo_values[RadSystem<StreamingProblem>::x3RadFlux_index] = 0.;
 		lo_values[RadSystem<StreamingProblem>::gasEnergy_index] = initial_Egas;
 		lo_values[RadSystem<StreamingProblem>::gasDensity_index] = rho;
@@ -144,13 +136,8 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 	}
 
 	// Apply boundary conditions using helper functions
-	if constexpr (direction == 0) {
-		setConstantDirichletBCLo<0>(iv, consVar, geom, lo_values);
-		setConstantDirichletBCHi<0>(iv, consVar, geom, hi_values);
-	} else {
-		setConstantDirichletBCLo<1>(iv, consVar, geom, lo_values);
-		setConstantDirichletBCHi<1>(iv, consVar, geom, hi_values);
-	}
+	setConstantDirichletBCLo<1>(iv, consVar, geom, lo_values);
+	setConstantDirichletBCHi<1>(iv, consVar, geom, hi_values);
 }
 
 auto problem_main() -> int
@@ -168,17 +155,10 @@ auto problem_main() -> int
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		// assert at compile time
-		if constexpr (direction == 0) {
-			BCs_cc[n].setLo(0, amrex::BCType::ext_dir);  // Dirichlet x1
-			BCs_cc[n].setHi(0, amrex::BCType::foextrap); // extrapolate x1
-			BCs_cc[n].setLo(1, amrex::BCType::int_dir);  // periodic
-			BCs_cc[n].setHi(1, amrex::BCType::int_dir);
-		} else {
-			BCs_cc[n].setLo(0, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(0, amrex::BCType::int_dir);
-			BCs_cc[n].setLo(1, amrex::BCType::ext_dir);  // Dirichlet x1
-			BCs_cc[n].setHi(1, amrex::BCType::foextrap); // extrapolate x1
-		}
+		BCs_cc[n].setLo(0, amrex::BCType::int_dir); // periodic
+		BCs_cc[n].setHi(0, amrex::BCType::int_dir);
+		BCs_cc[n].setLo(1, amrex::BCType::ext_dir);  // Dirichlet x1
+		BCs_cc[n].setHi(1, amrex::BCType::foextrap); // extrapolate x1
 	}
 
 	// Problem initialization
@@ -202,7 +182,7 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// read output variables
-	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), direction, 0.0);
+	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 1, 0.0);
 	const int nx = static_cast<int>(position.size());
 
 	// compute error norm
@@ -246,11 +226,7 @@ auto problem_main() -> int
 
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
-	if constexpr (direction == 0) {
-		matplotlibcpp::save("./radiation_streaming_x.pdf");
-	} else {
-		matplotlibcpp::save("./radiation_streaming_y.pdf");
-	}
+	matplotlibcpp::save("./radiation_streaming_y.pdf");
 #endif // HAVE_PYTHON
 
 	// Cleanup and exit

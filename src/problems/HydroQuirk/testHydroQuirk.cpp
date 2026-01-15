@@ -7,20 +7,14 @@
 /// \brief Defines a test problem for the odd-even decoupling instability.
 ///
 
-#ifdef HAVE_PYTHON
-#include "util/matplotlibcpp.h"
-#endif
 #include "hydro/hydro_system.hpp"
-#include "math/interpolate.hpp"
 #include <algorithm>
 #include <fmt/format.h>
-#include <fstream>
 #include <vector>
 
 #include "AMReX.H"
 #include "AMReX_Array.H"
 #include "AMReX_BCRec.H"
-#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Box.H"
 #include "AMReX_FabArrayBase.H"
@@ -34,10 +28,8 @@
 #include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
-#include "hydro/hydro_system.hpp"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
-#include "util/BC.hpp"
 
 using Real = amrex::Real;
 
