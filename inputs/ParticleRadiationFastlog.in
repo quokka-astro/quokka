@@ -3,7 +3,7 @@
 # *****************************************************************
 geometry.prob_lo     =  -3.0e18 -3.0e18 -3.0e18
 geometry.prob_hi     =  3.0e18 3.0e18 3.0e18
-geometry.is_periodic =  0    0    0
+quokka.bc = reflecting reflecting reflecting
 
 # *****************************************************************
 # VERBOSITY
@@ -30,6 +30,7 @@ particles.rad_table = ../inputs/lum_demo_2groups_fastlog.csv
 particles.rad_table_output_spacing = fast_log
 
 stop_time = 8.0e20
+initial_dt = 3.15576e6
 max_timesteps = 3
 plotfile_interval = -1
 checkpoint_interval = -1

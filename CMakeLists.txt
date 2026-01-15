@@ -147,6 +147,7 @@ if(QUOKKA_ENABLE_AMREX_HYDRO)
 endif()
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/fmt ${QuokkaCode_BINARY_DIR}/fmt)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/yaml-cpp ${QuokkaCode_BINARY_DIR}/yaml-cpp)
+add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/turbulence/plugins/AMReX ${QuokkaCode_BINARY_DIR}/turbulence)
 
 #add compiler definitions again because
 #they do not carry forward from Microphysics

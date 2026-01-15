@@ -1,9 +1,11 @@
+# Hydrostatic exponential atmosphere density floor unit test inputs
+
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-geometry.prob_lo     =  0.0  0.0  0.0 
+geometry.prob_lo     =  0.0  0.0  0.0
 geometry.prob_hi     =  1.0  1.0  1.0
-geometry.is_periodic =  1    1    1
+quokka.bc = ext_dir periodic periodic
 
 # *****************************************************************
 # VERBOSITY
@@ -13,12 +15,13 @@ amr.v              = 0       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 128 128 128
+amr.n_cell          = 8 8 8
 amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor = 1     # grid size must be divisible by this
 
 do_reflux = 0
 do_subcycle = 0
-suppress_output = 0
 
-stop_time = 0.9
-max_timesteps = 5000
+density_floor = 1.0
+atmosphere_scale_height = 0.25
+density_floor_expr = "1.0e-2*base_density_floor*exp(-x/0.25)"

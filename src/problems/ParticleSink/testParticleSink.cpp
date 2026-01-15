@@ -128,28 +128,16 @@ template <> void QuokkaSimulation<SinkProblem>::refineGrid(int lev, amrex::TagBo
 
 auto problem_main() -> int
 {
-	auto BCs_cc = quokka::BC<SinkProblem>(quokka::BCType::reflecting);
-
-	const int nvars_fc = Physics_Indices<SinkProblem>::nvarTotal_fc;
-	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
-	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_fc[icomp].setLo(idim, amrex::BCType::reflect_even);
-			BCs_fc[icomp].setHi(idim, amrex::BCType::reflect_even);
-		}
-	}
-
 	amrex::ParmParse const pp("problem");
 	pp.query("particles_file", particles_file);
 	pp.query("refine_half_domain", refine_half_domain);
 
 	// Problem initialization
-	QuokkaSimulation<SinkProblem> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<SinkProblem> sim;
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
 	sim.stopTime_ = 10.0 * dt_init;
-	sim.initDt_ = dt_init;
 	sim.tempFloor_ = 10.0; // K
 
 	// initialize

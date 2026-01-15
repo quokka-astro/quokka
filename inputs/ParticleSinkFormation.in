@@ -3,7 +3,7 @@
 # *****************************************************************
 geometry.prob_lo     =  -3.949667304e+19 -3.949667304e+19 -3.949667304e+19
 geometry.prob_hi     =  3.949667304e+19 3.949667304e+19 3.949667304e+19
-geometry.is_periodic =  0    0    0
+quokka.bc = reflecting reflecting reflecting
 
 # *****************************************************************
 # VERBOSITY
@@ -26,6 +26,7 @@ do_tracers = 0      # turn on tracer particles
 
 particles.verbose = 1
 
+initial_dt = 3.15576e12
 plotfile_interval = -1
 
 tiny_profiler.enabled = 0

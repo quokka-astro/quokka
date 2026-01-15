@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Analyze hydro wave convergence data.
+Analyze wave convergence data (hydro or MHD).
 
-This utility reads the CSV produced by `test_hydro_wave_convergence`,
+This utility reads the CSV produced by convergence tests (e.g.,
+`test_hydro_wave_convergence` or `test_alfven_wave_convergence`),
 computes observed convergence orders, fits a power-law-with-floor model
 in terms of cells per wavelength, and generates a log-log plot of the
 error norm versus resolution.
@@ -30,6 +31,13 @@ class FitResult:
     order: float
     floor: float
     sse: float
+
+
+@dataclass
+class ConvergenceRun:
+    label: str
+    data: Sequence[ConvergenceDatum]
+    fit: FitResult
 
 
 def read_convergence_csv(path: Path) -> List[ConvergenceDatum]:
@@ -161,43 +169,36 @@ def geometric_space(x_min: float, x_max: float, num: int) -> List[float]:
     return [math.exp(log_min + (log_max - log_min) * i / (num - 1)) for i in range(num)]
 
 
-def make_plot(
-    data: Sequence[ConvergenceDatum],
-    fit: FitResult,
-    output_path: Path,
-) -> None:
+def make_plot(runs: Sequence[ConvergenceRun], output_path: Path) -> None:
     import matplotlib
 
     matplotlib.use("Agg")
 
     import matplotlib.pyplot as plt
 
-    nx_values = [item.nx for item in data]
-    error_values = [item.error for item in data]
-
-    nx_min = min(nx_values)
-    nx_max = max(nx_values)
-    nx_plot = geometric_space(nx_min, nx_max, 200)
-
-    model_values = []
-    asymptotic_values = []
-    for nx in nx_plot:
-        asymptotic = fit.amplitude * (nx ** (-fit.order))
-        model_values.append(math.sqrt(asymptotic * asymptotic + fit.floor * fit.floor))
-        asymptotic_values.append(asymptotic)
-
     fig, ax = plt.subplots(figsize=(6.0, 4.0))
-    ax.loglog(nx_values, error_values, "o", label="Simulation data")
-    ax.loglog(nx_plot, model_values, "-", label="Power law + floor fit")
-    ax.loglog(nx_plot, asymptotic_values, "--", label="Asymptotic power law")
+    color_cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    for run_index, run in enumerate(runs):
+        color = color_cycle[run_index % len(color_cycle)]
+        nx_values = [item.nx for item in run.data]
+        error_values = [item.error for item in run.data]
 
-    x_lo, x_hi = ax.get_xlim()
-    ax.axhline(fit.floor, color="gray", linestyle="--", label="Roundoff floor")
-    ax.set_xlim(x_lo, x_hi)
+        nx_plot = geometric_space(min(nx_values), max(nx_values), 200)
+        model_values = []
+        asymptotic_values = []
+        for nx in nx_plot:
+            asymptotic = run.fit.amplitude * (nx ** (-run.fit.order))
+            model_values.append(math.sqrt(asymptotic * asymptotic + run.fit.floor * run.fit.floor))
+            asymptotic_values.append(asymptotic)
+
+        ax.loglog(nx_values, error_values, "o", color=color, label="_nolegend_")
+        ax.loglog(nx_plot, model_values, "-", color=color, label=f"{run.label} fit")
+        ax.loglog(nx_plot, asymptotic_values, "--", color=color, label="_nolegend_")
+        ax.axhline(run.fit.floor, color=color, linestyle=":", alpha=0.5, label="_nolegend_")
 
     ax.set_xlabel("Cells per wavelength (N_x)")
     ax.set_ylabel("L1 error norm")
-    ax.set_title("Hydro Wave Convergence")
+    ax.set_title(title)
     ax.grid(True, which="both", linestyle=":", alpha=0.4)
     ax.legend()
 
@@ -207,18 +208,31 @@ def make_plot(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Analyze hydro wave convergence output.")
+    parser = argparse.ArgumentParser(description="Analyze wave convergence output (hydro or MHD).")
     parser.add_argument(
         "--csv",
         type=Path,
-        default=Path("tests") / "hydro_wave_convergence.csv",
-        help="Path to the hydro wave convergence CSV file (default: tests/hydro_wave_convergence.csv).",
+        action="append",
+        default=[],
+        help="Path to a hydro wave convergence CSV file (repeatable).",
+    )
+    parser.add_argument(
+        "--label",
+        action="append",
+        default=[],
+        help="Optional label for a CSV file (repeatable, matches --csv order).",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("tests") / "hydro_wave_convergence.png",
-        help="Destination path for the generated plot (default: tests/hydro_wave_convergence.png).",
+        default=None,
+        help="Destination path for the generated plot (default: <csv basename>.png).",
+    )
+    parser.add_argument(
+        "--title",
+        type=str,
+        default=None,
+        help="Plot title (default: derived from CSV filename, e.g., 'Alfven Wave Convergence').",
     )
     parser.add_argument(
         "--no-plot",
@@ -227,29 +241,38 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    data = read_convergence_csv(args.csv)
-    fit = fit_power_law_with_floor(data)
-    orders = compute_observed_orders(data)
+    csv_paths = args.csv or [Path("tests") / "hydro_wave_convergence.csv"]
+    if args.label and len(args.label) != len(csv_paths):
+        raise ValueError("Provide the same number of --label entries as --csv entries.")
 
-    print("Hydro wave convergence statistics:\n")
-    print(f"{'nx':>8} {'dx':>14} {'error':>16}")
-    for row in data:
-        print(f"{row.nx:8d} {row.dx:14.6e} {row.error:16.6e}")
+    labels = args.label or [path.stem for path in csv_paths]
+    runs: List[ConvergenceRun] = []
 
-    print("\nObserved refinement ratios and orders (successive levels):")
-    print(f"{'nx':>8} {'ratio':>10} {'order':>10}")
-    for nx, ratio, order in orders:
-        print(f"{nx:8d} {ratio:10.3f} {order:10.3f}")
+    for label, csv_path in zip(labels, csv_paths):
+        data = read_convergence_csv(csv_path)
+        fit = fit_power_law_with_floor(data)
+        orders = compute_observed_orders(data)
+        runs.append(ConvergenceRun(label=label, data=data, fit=fit))
 
-    print("\nPower-law + floor fit parameters:")
-    print(f"  amplitude (A): {fit.amplitude:.6e}")
-    print(f"  order (p):     {fit.order:.3f}")
-    print(f"  floor (f):     {fit.floor:.6e}")
+        print(f"Hydro wave convergence statistics for {label} ({csv_path}):\n")
+        print(f"{'nx':>8} {'dx':>14} {'error':>16}")
+        for row in data:
+            print(f"{row.nx:8d} {row.dx:14.6e} {row.error:16.6e}")
+
+        print("\nObserved refinement ratios and orders (successive levels):")
+        print(f"{'nx':>8} {'ratio':>10} {'order':>10}")
+        for nx, ratio, order in orders:
+            print(f"{nx:8d} {ratio:10.3f} {order:10.3f}")
+
+        print("\nPower-law + floor fit parameters:")
+        print(f"  amplitude (A): {fit.amplitude:.6e}")
+        print(f"  order (p):     {fit.order:.3f}")
+        print(f"  floor (f):     {fit.floor:.6e}\n")
 
     if args.no_plot:
         print("\nSkipping plot generation (per --no-plot).")
     else:
-        make_plot(data, fit, args.output)
+        make_plot(runs, args.output)
         print(f"\nSaved log-log plot to {args.output}")
 
 

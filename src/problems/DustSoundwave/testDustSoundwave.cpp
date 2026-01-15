@@ -82,6 +82,16 @@ template <> struct Physics_Traits<DustSoundwave> {
 	static constexpr double radiation_constant = 1.0;
 };
 
+template <>
+AMREX_GPU_HOST_DEVICE auto DustDrag<DustSoundwave>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
+										  amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/, double /*cs*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
+{
+	amrex::GpuArray<amrex::Real, 1> alpha{};
+	alpha[0] = 2.5;
+	return alpha;
+}
+
 template <> void QuokkaSimulation<DustSoundwave>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -192,18 +202,8 @@ auto problem_main() -> int
 	// problem parameters
 	const double CFL_number = 0.4;
 
-	// boundary conditions
-	constexpr int nvars = HydroSystem<DustSoundwave>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir);
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
-
 	// problem initialization
-	QuokkaSimulation<DustSoundwave> sim(BCs_cc);
+	QuokkaSimulation<DustSoundwave> sim;
 
 	sim.reconstructionOrder_ = 3;
 	sim.radiationReconstructionOrder_ = 3; // PPM

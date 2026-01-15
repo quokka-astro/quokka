@@ -48,6 +48,7 @@ pr:
     - extern/yaml-cpp/**
     - extern/openPMD-api/**
     - extern/AMReX-Hydro/**
+    - extern/turbulence/**
     exclude:
     - docs/**
     - paper/**
@@ -56,21 +57,16 @@ pr:
     - '*.rst'
     - '*.txt'
 
-variables:
-  cacheKeySuffix: $[replace(variables['Build.SourceBranch'], '/', '_')]
 
 jobs:
   - job: HIP_Build_Test
     pool: amdgpu
-    timeoutInMinutes: 120
+    timeoutInMinutes: 150
     steps:
-    - task: Cache@2
-      displayName: Restore ccache
-      inputs:
-        key: 'ccache | HIP | $(Agent.OS) | $(cacheKeySuffix)'
-        restoreKeys: |
-          ccache | HIP | $(Agent.OS)
-        path: $(Pipeline.Workspace)/ccache
+    - script: |
+        mkdir -p "$(Agent.HomeDirectory)/cache/ccache"
+        echo "Using shared local disk cache at $(Agent.HomeDirectory)/cache/ccache"
+      displayName: Prepare shared ccache directory
 
     - script: |
         if command -v ccache >/dev/null 2>&1; then
@@ -82,21 +78,12 @@ jobs:
         fi
       displayName: Detect ccache
 
-    - script: |
-        mkdir -p $(Pipeline.Workspace)/ccache
-        if command -v ccache >/dev/null 2>&1; then
-          ccache --zero-stats || true
-        else
-          echo "ccache not installed; skipping zero-stats."
-        fi
-      displayName: Prepare ccache
-      env:
-        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+    - template: templates/ccache-prepare.yml
 
     - task: CMake@1
       displayName: 'Configure CMake'
       env:
-        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+        CCACHE_DIR: $(Agent.HomeDirectory)/cache/ccache
         CCACHE_BASEDIR: $(Build.SourcesDirectory)
         CCACHE_NOHASHDIR: 1
       inputs:
@@ -105,7 +92,7 @@ jobs:
     - task: CMake@1
       displayName: 'Build Quokka'
       env:
-        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+        CCACHE_DIR: $(Agent.HomeDirectory)/cache/ccache
         CCACHE_BASEDIR: $(Build.SourcesDirectory)
         CCACHE_NOHASHDIR: 1
       inputs:
@@ -124,13 +111,4 @@ jobs:
       condition: succeededOrFailed()
       displayName: Publish test results
 
-    - script: |
-        if command -v ccache >/dev/null 2>&1; then
-          ccache --show-stats || true
-        else
-          echo "ccache not installed; no statistics to report."
-        fi
-      displayName: Report ccache statistics
-      condition: succeededOrFailed()
-      env:
-        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+    - template: templates/ccache-stats.yml

@@ -175,10 +175,7 @@ auto problem_main() -> int
 	bool use_sfh_based_pe_heating = false;
 	ppp.query("use_sfh_based_pe_heating", use_sfh_based_pe_heating);
 
-	// Set boundary conditions - extrapolate
-	auto BCs_cc = quokka::BC<ResampledCoolingTest>(quokka::BCType::foextrap);
-
-	QuokkaSimulation<ResampledCoolingTest> sim(BCs_cc);
+	QuokkaSimulation<ResampledCoolingTest> sim;
 
 	sim.plotfileInterval_ = -1;
 

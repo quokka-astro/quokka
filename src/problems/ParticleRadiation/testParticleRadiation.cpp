@@ -151,11 +151,8 @@ template <> void QuokkaSimulation<ParticleRadiationProblem>::setInitialCondition
 
 auto problem_main() -> int
 {
-	auto BCs_cc = quokka::BC<ParticleRadiationProblem>(quokka::BCType::reflecting);
-
 	// Problem initialization
-	QuokkaSimulation<ParticleRadiationProblem> sim(BCs_cc);
-	sim.initDt_ = dt_;
+	QuokkaSimulation<ParticleRadiationProblem> sim;
 	sim.maxDt_ = dt_;
 
 	// Read parameters from input file
