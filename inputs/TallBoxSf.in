@@ -48,6 +48,18 @@ problem.IC_file = /software/projects/pawsey0807/chongchong/setonix/quokka/extern
 problem.rho01 = 4.320441e-24
 problem.sigma1 = 7.0e5
 
+# MHD
+problem.magnetic_field_microgauss = 1.0 # uniform B-field strength (microgauss)
+#hydro.artificial_viscosity_coefficient = 0.1
+hydro.reconstruction_order = 2
+hydro.plm_limiter = minmod
+mhd.emf_reconstruction_order = 2
+mhd.plm_limiter = minmod
+mhd.emf_compute_scheme = Quokka2026
+mhd.emf_averaging_scheme = LondrilloDelZanna2004
+
+
+
 cooling.enabled = 1
 cooling.cooling_table_type = "resampled"
 cooling.hdf5_data_file = "/software/projects/pawsey0807/chongchong/setonix/quokka/extern/cooling/CloudyData_UVB=HM2012_shielded_resampled_noPE.h5"

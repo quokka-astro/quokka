@@ -22,6 +22,7 @@
 #include "hydro/hydro_system.hpp"
 #include "io/projection.hpp"
 #include "math/interpolate.hpp"
+#include "physics_info.hpp"
 #include "turbulence/TurbDataReader.hpp"
 #include "util/DataTable.hpp"
 
@@ -69,7 +70,7 @@ template <> struct Physics_Traits<TheProblem> {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_chemistry_enabled = false;
-	static constexpr bool is_mhd_enabled = false;
+	static constexpr bool is_mhd_enabled = true;
 	static constexpr bool is_dust_enabled = false;
 	static constexpr int nDustGroups = 1;			     // number of dust groups
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -231,6 +232,12 @@ template <> void QuokkaSimulation<TheProblem>::preCalculateInitialConditions()
 
 template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
+	amrex::ParmParse const pp("problem");
+	double magnetic_field_microgauss = NAN;
+	pp.query("magnetic_field_microgauss", magnetic_field_microgauss);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!std::isnan(magnetic_field_microgauss), "magnetic_field_microgauss must be specified in the input file.");
+	const double B_0 = magnetic_field_microgauss * 1.0e-6 / std::sqrt(4.0 * M_PI);
+	const double magnetic_energy_density = 0.5 * (B_0 * B_0);
 
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
@@ -300,7 +307,35 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 		state_cc(i, j, k, HydroSystem<TheProblem>::x2Momentum_index) = rho * vy;
 		state_cc(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = rho * vz;
 		state_cc(i, j, k, HydroSystem<TheProblem>::internalEnergy_index) = P / (gamma - 1.);
-		state_cc(i, j, k, HydroSystem<TheProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * (vx * vx + vy * vy + vz * vz);
+		state_cc(i, j, k, HydroSystem<TheProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * (vx * vx + vy * vy + vz * vz) + magnetic_energy_density;
+	});
+}
+
+template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+{
+	amrex::ParmParse const pp("problem");
+	double magnetic_field_microgauss = NAN;
+	pp.query("magnetic_field_microgauss", magnetic_field_microgauss);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!std::isnan(magnetic_field_microgauss), "magnetic_field_microgauss must be specified in the input file.");
+	const double B_0 = magnetic_field_microgauss * 1.0e-6 / std::sqrt(4.0 * M_PI);
+
+	const amrex::Array4<double> &state_fc = grid_elem.array_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const quokka::direction dir = grid_elem.dir_;
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		const amrex::Real Bx = 0.0;
+		const amrex::Real By = 0.0;
+		const amrex::Real Bz = B_0;
+
+		constexpr int mhd_index = Physics_Indices<TheProblem>::mhdFirstIndex;
+		if (dir == quokka::direction::x) {
+			state_fc(i, j, k, mhd_index) = Bx;
+		} else if (dir == quokka::direction::y) {
+			state_fc(i, j, k, mhd_index) = By;
+		} else if (dir == quokka::direction::z) {
+			state_fc(i, j, k, mhd_index) = Bz;
+		}
 	});
 }
 
