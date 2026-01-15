@@ -7,23 +7,22 @@ Quokka is a two-moment radiation hydrodynamics code using the piecewise-paraboli
 
 ## Build & Test Commands
 - Run `source ~/rc/qk.rc` to load modules before the first build. 
-- **Build test**: `cd /Users/cche/softwares/quokka/quokka/build/clang-3d && ninja -j8 TestName`
-- **Run test**: `cd /Users/cche/softwares/quokka/quokka/build/clang-3d && ctest -R TestName`
-- **Run test with specific commands**: `cd /Users/cche/softwares/quokka/quokka/tests && ../build/clang-3d/src/problems/TestName/TestName ../inputs/TestName.in tiny_profiler.enabled=0`
+- **Build test**: `cd /Users/cche/softwares/quokka/quokka/build/clang-3d && ninja -j8 <TestName>`
+- **Run test with specific commands**: `TestName=<TestName> && cd /Users/cche/softwares/quokka/quokka/tests && (../build/clang-3d/src/problems/$TestName/$TestName ../inputs/$TestName.in tiny_profiler.enabled=0 suppress_output=1 && echo Success || echo Fail)`
 
 ## Architecture Overview
 - **Main entry**: `src/main.cpp` calls `problem_main()` defined in problem-specific files
 - **Core simulation**: `QuokkaSimulation` template class inherits from `AMRSimulation`
 - **Physics modules**: Located in `src/hydro/`, `src/radiation/`, `src/cooling/`, `src/chemistry/`
 - **Hyperbolic systems**: `HyperbolicSystem` template handles conservation laws and slope limiters
-- **Problem definitions**: Each problem in `src/problems/` has `.cpp/.hpp` files and CMake target
+- **Problem definitions**: Each problem in `src/problems/` has a `.cpp` file and a CMake target
 - **I/O and diagnostics**: `src/io/` contains output handling (plotfiles, checkpoints, openPMD)
 - **Math utilities**: `src/math/` has interpolation, quadrature, root finding, ODE integration
 - **Particles**: `src/particles/` handles stellar particles with accretion, creation, destruction
 
 ## Problem Structure
-- Each problem directory contains:
-  - `test*.cpp`: Implementation with initial conditions and problem-specific physics
+- Each problem, defined by TestName, is in the directory `src/problems/TestName/` and contains:
+  - `test<TestName>.cpp`: Implementation with initial conditions and problem-specific physics.
   - `CMakeLists.txt`: Defines executable target
 - Problems use template specialization pattern for `QuokkaSimulation<ProblemName>`
 - Input files (`.in`) in `inputs/` configure geometry, AMR, physics parameters
