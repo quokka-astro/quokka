@@ -537,12 +537,14 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<TheProblem>::setCustomBou
 	const auto &domain_hi = box.hiVect3d();
 	const int klo = domain_lo[2];
 	const int khi = domain_hi[2];
+	// In fact, this function will only be called at z direction
+	const int klo_face = (dir == quokka::direction::z) ? (klo + 1) : klo;
 
-	if (k > klo && k <= khi) {
+	if (k >= klo_face && k <= khi) {
 		return;
 	}
 
-	const int k_src = (k <= klo) ? klo : khi;
+	const int k_src = (k < klo_face) ? klo_face : khi;
 	constexpr int mhd_index = Physics_Indices<TheProblem>::mhdFirstIndex;
 	dest(i, j, k, mhd_index) = dest(i, j, k_src, mhd_index);
 }
