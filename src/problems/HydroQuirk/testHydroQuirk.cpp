@@ -35,6 +35,7 @@
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
+#include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 
@@ -216,41 +217,31 @@ AMRSimulation<QuirkProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 							 amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
 							 int /*bcomp*/, int /*orig_comp*/)
 {
-#if (AMREX_SPACEDIM == 1)
-	auto i = iv.toArray()[0];
-	int j = 0;
-	int k = 0;
-#endif
-#if (AMREX_SPACEDIM == 2)
-	auto [i, j] = iv.toArray();
-	int k = 0;
-#endif
-#if (AMREX_SPACEDIM == 3)
-	auto [i, j, k] = iv.toArray();
-#endif
-
-	amrex::Box const &box = geom.Domain();
-	amrex::GpuArray<int, 3> lo = box.loVect3d();
-	amrex::GpuArray<int, 3> hi = box.hiVect3d();
+	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
+	constexpr int nvar = Physics_Indices<QuirkProblem>::nvarTotal_cc;
 	const auto gamma = quokka::EOS_Traits<QuirkProblem>::gamma;
 
-	if (i < lo[0]) {
-		// x1 left side boundary
-		consVar(i, j, k, RadSystem<QuirkProblem>::gasEnergy_index) = pl / (gamma - 1.) + 0.5 * dl * ul * ul;
-		consVar(i, j, k, RadSystem<QuirkProblem>::gasInternalEnergy_index) = pl / (gamma - 1.);
-		consVar(i, j, k, RadSystem<QuirkProblem>::gasDensity_index) = dl;
-		consVar(i, j, k, RadSystem<QuirkProblem>::x1GasMomentum_index) = dl * ul;
-		consVar(i, j, k, RadSystem<QuirkProblem>::x2GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<QuirkProblem>::x3GasMomentum_index) = 0.;
-	} else if (i > hi[0]) {
-		// x1 right-side boundary
-		consVar(i, j, k, RadSystem<QuirkProblem>::gasEnergy_index) = pr / (gamma - 1.) + 0.5 * dr * ur * ur;
-		consVar(i, j, k, RadSystem<QuirkProblem>::gasInternalEnergy_index) = pr / (gamma - 1.);
-		consVar(i, j, k, RadSystem<QuirkProblem>::gasDensity_index) = dr;
-		consVar(i, j, k, RadSystem<QuirkProblem>::x1GasMomentum_index) = dr * ur;
-		consVar(i, j, k, RadSystem<QuirkProblem>::x2GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<QuirkProblem>::x3GasMomentum_index) = 0.;
-	}
+	// Prepare left boundary values (left state)
+	amrex::GpuArray<amrex::Real, nvar> left_values{};
+	left_values[RadSystem<QuirkProblem>::gasEnergy_index] = pl / (gamma - 1.) + 0.5 * dl * ul * ul;
+	left_values[RadSystem<QuirkProblem>::gasInternalEnergy_index] = pl / (gamma - 1.);
+	left_values[RadSystem<QuirkProblem>::gasDensity_index] = dl;
+	left_values[RadSystem<QuirkProblem>::x1GasMomentum_index] = dl * ul;
+	left_values[RadSystem<QuirkProblem>::x2GasMomentum_index] = 0.;
+	left_values[RadSystem<QuirkProblem>::x3GasMomentum_index] = 0.;
+
+	// Prepare right boundary values (right state)
+	amrex::GpuArray<amrex::Real, nvar> right_values{};
+	right_values[RadSystem<QuirkProblem>::gasEnergy_index] = pr / (gamma - 1.) + 0.5 * dr * ur * ur;
+	right_values[RadSystem<QuirkProblem>::gasInternalEnergy_index] = pr / (gamma - 1.);
+	right_values[RadSystem<QuirkProblem>::gasDensity_index] = dr;
+	right_values[RadSystem<QuirkProblem>::x1GasMomentum_index] = dr * ur;
+	right_values[RadSystem<QuirkProblem>::x2GasMomentum_index] = 0.;
+	right_values[RadSystem<QuirkProblem>::x3GasMomentum_index] = 0.;
+
+	// Apply boundary conditions using helper functions
+	setConstantDirichletBCLeft(iv, consVar, geom, left_values);
+	setConstantDirichletBCRight(iv, consVar, geom, right_values);
 }
 
 auto problem_main() -> int

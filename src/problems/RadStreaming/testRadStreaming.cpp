@@ -12,6 +12,7 @@
 #endif
 #include "AMReX.H"
 #include "QuokkaSimulation.hpp"
+#include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
@@ -106,62 +107,51 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 							     int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
 							     const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
-#if (AMREX_SPACEDIM == 1)
-	auto i = iv.toArray()[0];
-	int j = 0;
-	int k = 0;
-#endif
-#if (AMREX_SPACEDIM == 2)
-	auto [i, j] = iv.toArray();
-	int k = 0;
-#endif
-#if (AMREX_SPACEDIM == 3)
-	auto [i, j, k] = iv.toArray();
-#endif
+	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
+	constexpr int nvar = Physics_Indices<StreamingProblem>::nvarTotal_cc;
 
-	amrex::Box const &box = geom.Domain();
-	amrex::GpuArray<int, 3> lo = box.loVect3d();
-	amrex::GpuArray<int, 3> hi = box.hiVect3d();
-
-	// calculate radEnergyFractions
-	quokka::valarray<amrex::Real, Physics_Traits<StreamingProblem>::nGroups> radEnergyFractions{};
-	for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
-		radEnergyFractions[g] = 1.0 / Physics_Traits<StreamingProblem>::nGroups;
-	}
-
-	if (i < lo[0]) {
-		// streaming inflow boundary
+	// Prepare left boundary values (streaming inflow)
+	amrex::GpuArray<amrex::Real, nvar> left_values{};
+	{
 		const double Erad = 1.0;
 		const double Frad = c * Erad;
-
-		// multigroup radiation
-		// x1 left side boundary (Marshak)
 		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
-			consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad * radEnergyFractions[g];
-			consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = Frad * radEnergyFractions[g];
-			consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			const double radEnergyFraction = 1.0 / Physics_Traits<StreamingProblem>::nGroups;
+			left_values[RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g] = Erad * radEnergyFraction;
+			left_values[RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = Frad * radEnergyFraction;
+			left_values[RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0;
+			left_values[RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0;
 		}
-	} else if (i > hi[0]) {
-		// right-side boundary -- constant
-		const double Erad = initial_Erad;
-		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
-			auto const Erad_g = Erad * radEnergyFractions[g];
-			consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad_g;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
-		}
+		left_values[RadSystem<StreamingProblem>::gasEnergy_index] = initial_Egas;
+		left_values[RadSystem<StreamingProblem>::gasDensity_index] = rho;
+		left_values[RadSystem<StreamingProblem>::gasInternalEnergy_index] = initial_Egas;
+		left_values[RadSystem<StreamingProblem>::x1GasMomentum_index] = 0.;
+		left_values[RadSystem<StreamingProblem>::x2GasMomentum_index] = 0.;
+		left_values[RadSystem<StreamingProblem>::x3GasMomentum_index] = 0.;
 	}
 
-	// gas boundary conditions are the same everywhere
-	const double Egas = initial_Egas;
-	consVar(i, j, k, RadSystem<StreamingProblem>::gasEnergy_index) = Egas;
-	consVar(i, j, k, RadSystem<StreamingProblem>::gasDensity_index) = rho;
-	consVar(i, j, k, RadSystem<StreamingProblem>::gasInternalEnergy_index) = Egas;
-	consVar(i, j, k, RadSystem<StreamingProblem>::x1GasMomentum_index) = 0.;
-	consVar(i, j, k, RadSystem<StreamingProblem>::x2GasMomentum_index) = 0.;
-	consVar(i, j, k, RadSystem<StreamingProblem>::x3GasMomentum_index) = 0.;
+	// Prepare right boundary values (constant)
+	amrex::GpuArray<amrex::Real, nvar> right_values{};
+	{
+		const double Erad = initial_Erad;
+		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
+			const double radEnergyFraction = 1.0 / Physics_Traits<StreamingProblem>::nGroups;
+			right_values[RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g] = Erad * radEnergyFraction;
+			right_values[RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0;
+			right_values[RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0;
+			right_values[RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0;
+		}
+		right_values[RadSystem<StreamingProblem>::gasEnergy_index] = initial_Egas;
+		right_values[RadSystem<StreamingProblem>::gasDensity_index] = rho;
+		right_values[RadSystem<StreamingProblem>::gasInternalEnergy_index] = initial_Egas;
+		right_values[RadSystem<StreamingProblem>::x1GasMomentum_index] = 0.;
+		right_values[RadSystem<StreamingProblem>::x2GasMomentum_index] = 0.;
+		right_values[RadSystem<StreamingProblem>::x3GasMomentum_index] = 0.;
+	}
+
+	// Apply boundary conditions using helper functions
+	setConstantDirichletBCLeft(iv, consVar, geom, left_values);
+	setConstantDirichletBCRight(iv, consVar, geom, right_values);
 }
 
 auto problem_main() -> int
