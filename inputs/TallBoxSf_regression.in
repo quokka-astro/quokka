@@ -44,22 +44,21 @@ temperature_floor = 10.0 #K
 
 particles.eps_ff = 0.01
 problem.stars_file = "" # no initial particles
-problem.IC_file = ../extern/problems/TallBoxSf/disk_solution_datatable_Sigma13-Z1.csv
+problem.IC_file = "disk_solution_datatable_Sigma13-Z1.csv"
 problem.rho01 = 4.320441e-24
 problem.sigma1 = 7.0e5
 
 cooling.enabled = 1
 cooling.cooling_table_type = "resampled"
-cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_shielded_resampled_noPE.h5"
+cooling.hdf5_data_file = "CloudyData_UVB=HM2012_shielded_resampled_noPE.h5"
 
 use_sfh_based_pe_heating = true
-sfh_to_pe_heating_table = "../extern/cooling/photoelectric_heating_from_sfh.csv"
+sfh_to_pe_heating_table = "photoelectric_heating_from_sfh.csv"
 #sfh_interval = 3
 sfh_time_interval = 3.15576e+13 # =1 Myr
 sf_area_kpc2 = 1.0 					# kpc^2
 
-perturb.filename = "../extern/problems/TallBoxSf/zdrv.hdf5"
-#perturb.use_superresolution = 0
+perturb.filename = "zdrv.hdf5"
 perturb.amplitude = 7e5 # 7 km/s
 
 problem.refine_zmax = 3.018e21 1.509e21  # refine to lev=1 with 1 kpc and lev=2 with 0.5 kpc
