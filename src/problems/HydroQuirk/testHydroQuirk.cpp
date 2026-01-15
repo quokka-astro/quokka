@@ -242,7 +242,7 @@ AMRSimulation<QuirkProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 		consVar(i, j, k, RadSystem<QuirkProblem>::x1GasMomentum_index) = dl * ul;
 		consVar(i, j, k, RadSystem<QuirkProblem>::x2GasMomentum_index) = 0.;
 		consVar(i, j, k, RadSystem<QuirkProblem>::x3GasMomentum_index) = 0.;
-	} else if (i >= hi[0]) {
+	} else if (i > hi[0]) {
 		// x1 right-side boundary
 		consVar(i, j, k, RadSystem<QuirkProblem>::gasEnergy_index) = pr / (gamma - 1.) + 0.5 * dr * ur * ur;
 		consVar(i, j, k, RadSystem<QuirkProblem>::gasInternalEnergy_index) = pr / (gamma - 1.);
