@@ -261,7 +261,6 @@ auto problem_main() -> int
 	sim.reconstructionOrder_ = 2; // PLM
 	sim.stopTime_ = 0.4;
 	sim.cflNumber_ = 0.4;
-	sim.maxTimesteps_ = 2000;
 	sim.plotfileInterval_ = -1;
 
 	// initialize
