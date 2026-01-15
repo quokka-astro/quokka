@@ -525,6 +525,28 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<TheProblem>::setCustomBou
 	consVar(i, j, k, HydroSystem<TheProblem>::internalEnergy_index) = eint;
 }
 
+template <>
+template <quokka::direction dir>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<TheProblem>::setCustomBoundaryConditionsFaceVar(
+    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
+    const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+{
+	auto [i, j, k] = iv.dim3();
+	amrex::Box const &box = geom.Domain();
+	const auto &domain_lo = box.loVect3d();
+	const auto &domain_hi = box.hiVect3d();
+	const int klo = domain_lo[2];
+	const int khi = domain_hi[2];
+
+	if (k > klo && k <= khi) {
+		return;
+	}
+
+	const int k_src = (k <= klo) ? klo : khi;
+	constexpr int mhd_index = Physics_Indices<TheProblem>::mhdFirstIndex;
+	dest(i, j, k, mhd_index) = dest(i, j, k_src, mhd_index);
+}
+
 auto problem_main() -> int
 {
 	// set random state
