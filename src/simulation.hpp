@@ -2391,9 +2391,9 @@ AMRSimulation<problem_t>::setCustomBoundaryConditionsFaceVar(const amrex::IntVec
 
 template <typename problem_t>
 template <int dir, auto N>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<problem_t>::setConstantDirichletBCLo(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar, amrex::GeometryData const &geom,
-						   amrex::GpuArray<amrex::Real, N> const &values)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setConstantDirichletBCLo(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
+											    amrex::GeometryData const &geom,
+											    amrex::GpuArray<amrex::Real, N> const &values)
 {
 	static_assert(dir >= 0 && dir < AMREX_SPACEDIM, "dir must be in range [0, AMREX_SPACEDIM)");
 
@@ -2424,9 +2424,9 @@ AMRSimulation<problem_t>::setConstantDirichletBCLo(amrex::IntVect const &iv, amr
 
 template <typename problem_t>
 template <int dir, auto N>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<problem_t>::setConstantDirichletBCHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar, amrex::GeometryData const &geom,
-						   amrex::GpuArray<amrex::Real, N> const &values)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setConstantDirichletBCHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
+											    amrex::GeometryData const &geom,
+											    amrex::GpuArray<amrex::Real, N> const &values)
 {
 	static_assert(dir >= 0 && dir < AMREX_SPACEDIM, "dir must be in range [0, AMREX_SPACEDIM)");
 
