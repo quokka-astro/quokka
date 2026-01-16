@@ -397,7 +397,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 							      amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, N> const &values);
 
 	/// Helper function to set diode boundary conditions on the lower boundary of a specific dimension.
-	/// Diode BC: allows outflow, prevents inflow by reflecting the normal momentum component.
+	/// Diode BC: allows outflow (using first-order extrapolation), prevents inflow (using reflection with flipped normal momentum).
 	/// @tparam dir The dimension to check (0=x, 1=y, 2=z)
 	/// @param iv The cell index
 	/// @param consVar The array to fill
@@ -406,7 +406,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	AMREX_GPU_DEVICE static void setDiodeBCLo(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar, amrex::GeometryData const &geom);
 
 	/// Helper function to set diode boundary conditions on the upper boundary of a specific dimension.
-	/// Diode BC: allows outflow, prevents inflow by reflecting the normal momentum component.
+	/// Diode BC: allows outflow (using first-order extrapolation), prevents inflow (using reflection with flipped normal momentum).
 	/// @tparam dir The dimension to check (0=x, 1=y, 2=z)
 	/// @param iv The cell index
 	/// @param consVar The array to fill
@@ -2524,53 +2524,82 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCLo(
 
 	// Check if on lower boundary in the specified dimension
 	if (cellIdx < lo[dir]) {
-		// Mirror cell: reflect around lower boundary face
-		// cellIdx = lo[dir]-1 mirrors lo[dir], cellIdx = lo[dir]-2 mirrors lo[dir]+1, etc.
-		int const cellIdx_mirror = 2 * lo[dir] - 1 - cellIdx;
-		int i_mirror = i;
-		int j_mirror = j;
-		int k_mirror = k;
+		// First, get the nearest interior cell for first-order extrapolation
+		int i_interior = i;
+		int j_interior = j;
+		int k_interior = k;
 		if constexpr (dir == 0) {
-			i_mirror = cellIdx_mirror;
+			i_interior = lo[dir];
 		} else if constexpr (dir == 1) {
-			j_mirror = cellIdx_mirror;
+			j_interior = lo[dir];
 		} else if constexpr (dir == 2) {
-			k_mirror = cellIdx_mirror;
+			k_interior = lo[dir];
 		}
 
-		// Read values from mirror cell
-		const double rho = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::density_index);
-		const double x1Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x1Momentum_index);
-		const double x2Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x2Momentum_index);
-		const double x3Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x3Momentum_index);
-		const double etot = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::energy_index);
-		const double eint = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::internalEnergy_index);
-
-		// Diode BC: allow outflow, prevent inflow
-		// At lower boundary: outward normal points in -dir direction (normal = -1)
-		// Inflow condition: momentum * normal < 0 (momentum points opposite to outward normal)
-		// For lower boundary: inflow if momentum > 0 (gas moving toward +dir, into domain)
-		double mom_normal = 0.0;
+		// Read momentum from interior cell to determine flow direction
+		double mom_normal_interior = 0.0;
 		if constexpr (dir == 0) {
-			mom_normal = x1Mom;
+			mom_normal_interior = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x1Momentum_index);
 		} else if constexpr (dir == 1) {
-			mom_normal = x2Mom;
+			mom_normal_interior = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x2Momentum_index);
 		} else if constexpr (dir == 2) {
-			mom_normal = x3Mom;
+			mom_normal_interior = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x3Momentum_index);
 		}
 
-		// If momentum would cause inflow (mom_normal > 0 at lower boundary), reflect it
-		if (mom_normal > 0.0) {
-			mom_normal = -mom_normal;
-		}
+		// Diode BC: at lower boundary, outward normal points in -dir direction
+		// Outflow: mom_normal < 0 (gas moving away from domain) → first-order extrapolation
+		// Inflow: mom_normal > 0 (gas moving into domain) → reflection with flipped momentum
+		if (mom_normal_interior < 0.0) {
+			// Outflow: use first-order extrapolation (copy from nearest interior cell)
+			consVar(i, j, k, HydroSystem<problem_t>::density_index) = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::density_index);
+			consVar(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x1Momentum_index);
+			consVar(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x2Momentum_index);
+			consVar(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x3Momentum_index);
+			consVar(i, j, k, HydroSystem<problem_t>::energy_index) = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::energy_index);
+			consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) =
+			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::internalEnergy_index);
+		} else {
+			// Inflow: use reflection from mirror cell with flipped normal momentum
+			// Mirror cell: reflect around lower boundary face
+			// cellIdx = lo[dir]-1 mirrors lo[dir], cellIdx = lo[dir]-2 mirrors lo[dir]+1, etc.
+			int const cellIdx_mirror = 2 * lo[dir] - 1 - cellIdx;
+			int i_mirror = i;
+			int j_mirror = j;
+			int k_mirror = k;
+			if constexpr (dir == 0) {
+				i_mirror = cellIdx_mirror;
+			} else if constexpr (dir == 1) {
+				j_mirror = cellIdx_mirror;
+			} else if constexpr (dir == 2) {
+				k_mirror = cellIdx_mirror;
+			}
 
-		// Write to ghost cell
-		consVar(i, j, k, HydroSystem<problem_t>::density_index) = rho;
-		consVar(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = (dir == 0) ? mom_normal : x1Mom;
-		consVar(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = (dir == 1) ? mom_normal : x2Mom;
-		consVar(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = (dir == 2) ? mom_normal : x3Mom;
-		consVar(i, j, k, HydroSystem<problem_t>::energy_index) = etot;
-		consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = eint;
+			// Read values from mirror cell
+			const double rho = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::density_index);
+			const double x1Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x1Momentum_index);
+			const double x2Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x2Momentum_index);
+			const double x3Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x3Momentum_index);
+			const double etot = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::energy_index);
+			const double eint = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::internalEnergy_index);
+
+			// Get normal momentum and flip it
+			double mom_normal = 0.0;
+			if constexpr (dir == 0) {
+				mom_normal = -x1Mom;
+			} else if constexpr (dir == 1) {
+				mom_normal = -x2Mom;
+			} else if constexpr (dir == 2) {
+				mom_normal = -x3Mom;
+			}
+
+			// Write to ghost cell with reflected values
+			consVar(i, j, k, HydroSystem<problem_t>::density_index) = rho;
+			consVar(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = (dir == 0) ? mom_normal : x1Mom;
+			consVar(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = (dir == 1) ? mom_normal : x2Mom;
+			consVar(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = (dir == 2) ? mom_normal : x3Mom;
+			consVar(i, j, k, HydroSystem<problem_t>::energy_index) = etot;
+			consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = eint;
+		}
 	}
 }
 
@@ -2601,53 +2630,82 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCHi(
 	// Check if on upper boundary in the specified dimension
 	// Note that both lo and hi are inclusive bounds, i.e. for a dimension with 8 cells, the bounds are 0 and 7.
 	if (cellIdx > hi[dir]) {
-		// Mirror cell: reflect around upper boundary face
-		// cellIdx = hi[dir]+1 mirrors hi[dir], cellIdx = hi[dir]+2 mirrors hi[dir]-1, etc.
-		int const cellIdx_mirror = 2 * hi[dir] + 1 - cellIdx;
-		int i_mirror = i;
-		int j_mirror = j;
-		int k_mirror = k;
+		// First, get the nearest interior cell for first-order extrapolation
+		int i_interior = i;
+		int j_interior = j;
+		int k_interior = k;
 		if constexpr (dir == 0) {
-			i_mirror = cellIdx_mirror;
+			i_interior = hi[dir];
 		} else if constexpr (dir == 1) {
-			j_mirror = cellIdx_mirror;
+			j_interior = hi[dir];
 		} else if constexpr (dir == 2) {
-			k_mirror = cellIdx_mirror;
+			k_interior = hi[dir];
 		}
 
-		// Read values from mirror cell
-		const double rho = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::density_index);
-		const double x1Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x1Momentum_index);
-		const double x2Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x2Momentum_index);
-		const double x3Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x3Momentum_index);
-		const double etot = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::energy_index);
-		const double eint = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::internalEnergy_index);
-
-		// Diode BC: allow outflow, prevent inflow
-		// At upper boundary: outward normal points in +dir direction (normal = +1)
-		// Inflow condition: momentum * normal < 0 (momentum points opposite to outward normal)
-		// For upper boundary: inflow if momentum < 0 (gas moving toward -dir, into domain)
-		double mom_normal = 0.0;
+		// Read momentum from interior cell to determine flow direction
+		double mom_normal_interior = 0.0;
 		if constexpr (dir == 0) {
-			mom_normal = x1Mom;
+			mom_normal_interior = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x1Momentum_index);
 		} else if constexpr (dir == 1) {
-			mom_normal = x2Mom;
+			mom_normal_interior = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x2Momentum_index);
 		} else if constexpr (dir == 2) {
-			mom_normal = x3Mom;
+			mom_normal_interior = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x3Momentum_index);
 		}
 
-		// If momentum would cause inflow (mom_normal < 0 at upper boundary), reflect it
-		if (mom_normal < 0.0) {
-			mom_normal = -mom_normal;
-		}
+		// Diode BC: at upper boundary, outward normal points in +dir direction
+		// Outflow: mom_normal > 0 (gas moving away from domain) → first-order extrapolation
+		// Inflow: mom_normal < 0 (gas moving into domain) → reflection with flipped momentum
+		if (mom_normal_interior > 0.0) {
+			// Outflow: use first-order extrapolation (copy from nearest interior cell)
+			consVar(i, j, k, HydroSystem<problem_t>::density_index) = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::density_index);
+			consVar(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x1Momentum_index);
+			consVar(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x2Momentum_index);
+			consVar(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x3Momentum_index);
+			consVar(i, j, k, HydroSystem<problem_t>::energy_index) = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::energy_index);
+			consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) =
+			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::internalEnergy_index);
+		} else {
+			// Inflow: use reflection from mirror cell with flipped normal momentum
+			// Mirror cell: reflect around upper boundary face
+			// cellIdx = hi[dir]+1 mirrors hi[dir], cellIdx = hi[dir]+2 mirrors hi[dir]-1, etc.
+			int const cellIdx_mirror = 2 * hi[dir] + 1 - cellIdx;
+			int i_mirror = i;
+			int j_mirror = j;
+			int k_mirror = k;
+			if constexpr (dir == 0) {
+				i_mirror = cellIdx_mirror;
+			} else if constexpr (dir == 1) {
+				j_mirror = cellIdx_mirror;
+			} else if constexpr (dir == 2) {
+				k_mirror = cellIdx_mirror;
+			}
 
-		// Write to ghost cell
-		consVar(i, j, k, HydroSystem<problem_t>::density_index) = rho;
-		consVar(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = (dir == 0) ? mom_normal : x1Mom;
-		consVar(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = (dir == 1) ? mom_normal : x2Mom;
-		consVar(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = (dir == 2) ? mom_normal : x3Mom;
-		consVar(i, j, k, HydroSystem<problem_t>::energy_index) = etot;
-		consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = eint;
+			// Read values from mirror cell
+			const double rho = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::density_index);
+			const double x1Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x1Momentum_index);
+			const double x2Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x2Momentum_index);
+			const double x3Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x3Momentum_index);
+			const double etot = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::energy_index);
+			const double eint = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::internalEnergy_index);
+
+			// Get normal momentum and flip it
+			double mom_normal = 0.0;
+			if constexpr (dir == 0) {
+				mom_normal = -x1Mom;
+			} else if constexpr (dir == 1) {
+				mom_normal = -x2Mom;
+			} else if constexpr (dir == 2) {
+				mom_normal = -x3Mom;
+			}
+
+			// Write to ghost cell with reflected values
+			consVar(i, j, k, HydroSystem<problem_t>::density_index) = rho;
+			consVar(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = (dir == 0) ? mom_normal : x1Mom;
+			consVar(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = (dir == 1) ? mom_normal : x2Mom;
+			consVar(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = (dir == 2) ? mom_normal : x3Mom;
+			consVar(i, j, k, HydroSystem<problem_t>::energy_index) = etot;
+			consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = eint;
+		}
 	}
 }
 
