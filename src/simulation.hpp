@@ -2482,10 +2482,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setConstantDi
 
 template <typename problem_t>
 template <int boundary_dim, quokka::direction face_dir, int ncomp>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setConstantDirichletBCFaceVarLo(amrex::IntVect const &iv,
-													amrex::Array4<amrex::Real> const &consVar_fc,
-													amrex::GeometryData const &geom,
-													amrex::GpuArray<amrex::Real, ncomp> const &values)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<problem_t>::setConstantDirichletBCFaceVarLo(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar_fc,
+							  amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, ncomp> const &values)
 {
 	static_assert(boundary_dim >= 0 && boundary_dim < AMREX_SPACEDIM, "boundary_dim must be in range [0, AMREX_SPACEDIM)");
 
@@ -2549,10 +2548,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setConstantDi
 
 template <typename problem_t>
 template <int boundary_dim, quokka::direction face_dir, int ncomp>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setConstantDirichletBCFaceVarHi(amrex::IntVect const &iv,
-													amrex::Array4<amrex::Real> const &consVar_fc,
-													amrex::GeometryData const &geom,
-													amrex::GpuArray<amrex::Real, ncomp> const &values)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<problem_t>::setConstantDirichletBCFaceVarHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar_fc,
+							  amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, ncomp> const &values)
 {
 	static_assert(boundary_dim >= 0 && boundary_dim < AMREX_SPACEDIM, "boundary_dim must be in range [0, AMREX_SPACEDIM)");
 
