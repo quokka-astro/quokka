@@ -43,6 +43,7 @@ constexpr double B0 = 1.0e-7; // uniform background field for MHD variant
 static double n_amb = 1.0;    // ambient density (g cm^-3) // NOLINT
 static double T_amb = 100.0;  // ambient temperature (K) // NOLINT
 static double t_stop = 3.0e5; // stop time (yr) // NOLINT
+static amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity{0.0, 0.0, 0.0}; // NOLINT
 
 template <> struct Particle_Traits<SNProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
@@ -110,14 +111,16 @@ template <> void QuokkaSimulation<SNProblem>::setInitialConditionsOnGrid(quokka:
 	const double rho = rho_bg;
 	const double rho_e = E0;
 	const double Emag = 0.5 * B0 * B0;
+	const double v2 = (boost_velocity[0] * boost_velocity[0]) + (boost_velocity[1] * boost_velocity[1]) +
+			  (boost_velocity[2] * boost_velocity[2]);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		state_cc(i, j, k, HydroSystem<SNProblem>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<SNProblem>::x1Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<SNProblem>::x2Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<SNProblem>::x3Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<SNProblem>::energy_index) = rho_e + Emag;
+		state_cc(i, j, k, HydroSystem<SNProblem>::x1Momentum_index) = rho * boost_velocity[0];
+		state_cc(i, j, k, HydroSystem<SNProblem>::x2Momentum_index) = rho * boost_velocity[1];
+		state_cc(i, j, k, HydroSystem<SNProblem>::x3Momentum_index) = rho * boost_velocity[2];
+		state_cc(i, j, k, HydroSystem<SNProblem>::energy_index) = rho_e + Emag + 0.5 * rho * v2;
 		state_cc(i, j, k, HydroSystem<SNProblem>::internalEnergy_index) = rho_e;
 	});
 }
@@ -175,6 +178,7 @@ auto problem_main() -> int
 	pp.query("t_stop", t_stop);
 	pp.query("SN_particles_file", SN_particles_file);
 	pp.query("refine_half_domain", refine_half_domain);
+	pp.queryarr("boost_velocity", boost_velocity.data(), AMREX_SPACEDIM);
 
 	amrex::ParmParse const cpp("cooling");
 	cpp.query("cooling_table_type", coolingTableType_);
