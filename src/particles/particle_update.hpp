@@ -44,7 +44,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::Star> {
 	{
 		// Update stellar properties using the StellarUpdate class
 		// Note: dt is passed via particle data or calculated from current_time
-		amrex::Real dt = compute_time_step(p, current_time);
+	  //		amrex::Real dt = compute_time_step(p, current_time);
 		StellarUpdate::updateStellarProperties<problem_t>(p, dt);
 	}
 };
