@@ -144,27 +144,28 @@ AMRSimulation<CoolingTest>::setCustomBoundaryConditions(const amrex::IntVect &iv
 							amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
 							int /*bcomp*/, int /*orig_comp*/)
 {
-	auto const [i, j, k] = iv.dim3();
+	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
+	constexpr int nvar = Physics_Indices<CoolingTest>::nvarTotal_cc;
 
-	amrex::Box const &box = geom.Domain();
-	amrex::GpuArray<int, 3> hi = box.hiVect3d();
+	// Prepare upper boundary values (constant)
+	amrex::GpuArray<amrex::Real, nvar> hi_values{};
 
-	if (j >= hi[1]) {
-		// x2 upper boundary -- constant
-		Real const rho = rho0;
-		Real const xmom = 0;
-		Real const ymom = rho * (-26.0e5); // [-26 km/s]
-		Real const zmom = 0;
-		Real const Eint = quokka::EOS<CoolingTest>::ComputeEintFromTgas(rho, Tgas0);
-		Real const Egas = RadSystem<CoolingTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+	// Set boundary values
+	Real const rho = rho0;
+	Real const xmom = 0;
+	Real const ymom = rho * (-26.0e5); // [-26 km/s]
+	Real const zmom = 0;
+	Real const Eint = quokka::EOS<CoolingTest>::ComputeEintFromTgas(rho, Tgas0);
+	Real const Egas = RadSystem<CoolingTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+	hi_values[RadSystem<CoolingTest>::gasDensity_index] = rho;
+	hi_values[RadSystem<CoolingTest>::x1GasMomentum_index] = xmom;
+	hi_values[RadSystem<CoolingTest>::x2GasMomentum_index] = ymom;
+	hi_values[RadSystem<CoolingTest>::x3GasMomentum_index] = zmom;
+	hi_values[RadSystem<CoolingTest>::gasEnergy_index] = Egas;
+	hi_values[RadSystem<CoolingTest>::gasInternalEnergy_index] = Eint;
 
-		consVar(i, j, k, RadSystem<CoolingTest>::gasDensity_index) = rho;
-		consVar(i, j, k, RadSystem<CoolingTest>::x1GasMomentum_index) = xmom;
-		consVar(i, j, k, RadSystem<CoolingTest>::x2GasMomentum_index) = ymom;
-		consVar(i, j, k, RadSystem<CoolingTest>::x3GasMomentum_index) = zmom;
-		consVar(i, j, k, RadSystem<CoolingTest>::gasEnergy_index) = Egas;
-		consVar(i, j, k, RadSystem<CoolingTest>::gasInternalEnergy_index) = Eint;
-	}
+	// Apply boundary conditions using helper functions (direction 0 = x-axis)
+	setConstantDirichletBCHi<1>(iv, consVar, geom, hi_values);
 }
 
 auto problem_main() -> int

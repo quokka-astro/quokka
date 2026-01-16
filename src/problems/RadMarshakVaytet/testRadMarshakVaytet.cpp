@@ -5,15 +5,11 @@
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
-#include "AMReX_BLassert.H"
-#include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
-#include "util/BC.hpp"
 #include <fmt/format.h>
 #include <fstream>
 
 #include "QuokkaSimulation.hpp"
-#include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
 
 // constexpr int n_groups_ = 2; // Be careful
@@ -180,40 +176,46 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVe
 							      int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
 							      const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
-	auto const [i, j, k] = iv.dim3();
-
-	amrex::Box const &box = geom.Domain();
-	amrex::GpuArray<int, 3> lo = box.loVect3d();
-	amrex::GpuArray<int, 3> hi = box.hiVect3d();
-
+	// Number of variables
+	constexpr int nvar = Physics_Indices<SuOlsonProblemCgs>::nvarTotal_cc;
 	auto const radBoundaries_g = RadSystem<SuOlsonProblemCgs>::radBoundaries_;
+	const double Egas = quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
 
-	if (i < lo[0] || i >= hi[0]) {
-		double T_H = NAN;
-		if (i < lo[0]) {
-			T_H = T_L;
-		} else {
-			T_H = T_R;
-		}
-
-		auto Erad_g = RadSystem<SuOlsonProblemCgs>::ComputeThermalRadiationMultiGroup(T_H, radBoundaries_g);
-		const double Egas = quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
-
-		for (int g = 0; g < Physics_Traits<SuOlsonProblemCgs>::nGroups; ++g) {
-			consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad_g[g];
-			consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.;
-			consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.;
-			consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.;
-		}
-
-		// gas boundary conditions are the same on both sides
-		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasEnergy_index) = Egas;
-		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasDensity_index) = rho0;
-		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasInternalEnergy_index) = Egas;
-		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x1GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x2GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::x3GasMomentum_index) = 0.;
+	// Left state
+	amrex::GpuArray<amrex::Real, nvar> left_values{};
+	auto Erad_L = RadSystem<SuOlsonProblemCgs>::ComputeThermalRadiationMultiGroup(T_L, radBoundaries_g);
+	for (int g = 0; g < Physics_Traits<SuOlsonProblemCgs>::nGroups; ++g) {
+		left_values[RadSystem<SuOlsonProblemCgs>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g] = Erad_L[g];
+		left_values[RadSystem<SuOlsonProblemCgs>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0.;
+		left_values[RadSystem<SuOlsonProblemCgs>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0.;
+		left_values[RadSystem<SuOlsonProblemCgs>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0.;
 	}
+	left_values[RadSystem<SuOlsonProblemCgs>::gasEnergy_index] = Egas;
+	left_values[RadSystem<SuOlsonProblemCgs>::gasDensity_index] = rho0;
+	left_values[RadSystem<SuOlsonProblemCgs>::gasInternalEnergy_index] = Egas;
+	left_values[RadSystem<SuOlsonProblemCgs>::x1GasMomentum_index] = 0.;
+	left_values[RadSystem<SuOlsonProblemCgs>::x2GasMomentum_index] = 0.;
+	left_values[RadSystem<SuOlsonProblemCgs>::x3GasMomentum_index] = 0.;
+
+	// Right state
+	amrex::GpuArray<amrex::Real, nvar> right_values{};
+	auto Erad_R = RadSystem<SuOlsonProblemCgs>::ComputeThermalRadiationMultiGroup(T_R, radBoundaries_g);
+	for (int g = 0; g < Physics_Traits<SuOlsonProblemCgs>::nGroups; ++g) {
+		right_values[RadSystem<SuOlsonProblemCgs>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g] = Erad_R[g];
+		right_values[RadSystem<SuOlsonProblemCgs>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0.;
+		right_values[RadSystem<SuOlsonProblemCgs>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0.;
+		right_values[RadSystem<SuOlsonProblemCgs>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0.;
+	}
+	right_values[RadSystem<SuOlsonProblemCgs>::gasEnergy_index] = Egas;
+	right_values[RadSystem<SuOlsonProblemCgs>::gasDensity_index] = rho0;
+	right_values[RadSystem<SuOlsonProblemCgs>::gasInternalEnergy_index] = Egas;
+	right_values[RadSystem<SuOlsonProblemCgs>::x1GasMomentum_index] = 0.;
+	right_values[RadSystem<SuOlsonProblemCgs>::x2GasMomentum_index] = 0.;
+	right_values[RadSystem<SuOlsonProblemCgs>::x3GasMomentum_index] = 0.;
+
+	// Apply boundary conditions
+	setConstantDirichletBCLo<0>(iv, consVar, geom, left_values);
+	setConstantDirichletBCHi<0>(iv, consVar, geom, right_values);
 }
 
 template <> void QuokkaSimulation<SuOlsonProblemCgs>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)

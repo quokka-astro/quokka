@@ -19,12 +19,7 @@
 
 #include "AMReX_BC_TYPES.H"
 #include "QuokkaSimulation.hpp"
-#include "hydro/hydro_system.hpp"
-#include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
-#ifdef HAVE_PYTHON
-#include "util/matplotlibcpp.h"
-#endif
 
 struct ShocktubeProblem {
 };
@@ -99,33 +94,39 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVec
 							     int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
 							     const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
-	auto const [i, j, k] = iv.dim3();
-
-	amrex::Box const &box = geom.Domain();
-	amrex::GpuArray<int, 3> lo = box.loVect3d();
-	amrex::GpuArray<int, 3> hi = box.hiVect3d();
+	// Number of variables
+	constexpr int nvar = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
 	const auto gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
 
-	double vx = NAN;
-	double rho = NAN;
-	double P = NAN;
+	// Left state
+	const double rho_L = 3.857143;
+	const double vx_L = 2.629369;
+	const double P_L = 10.33333;
 
-	if (i < lo[0]) {
-		rho = 3.857143;
-		vx = 2.629369;
-		P = 10.33333;
-	} else if (i >= hi[0]) {
-		rho = 1.0;
-		vx = 0.0;
-		P = 1.0;
-	}
+	amrex::GpuArray<amrex::Real, nvar> left_values{};
+	left_values[HydroSystem<ShocktubeProblem>::density_index] = rho_L;
+	left_values[HydroSystem<ShocktubeProblem>::x1Momentum_index] = rho_L * vx_L;
+	left_values[HydroSystem<ShocktubeProblem>::x2Momentum_index] = 0;
+	left_values[HydroSystem<ShocktubeProblem>::x3Momentum_index] = 0;
+	left_values[HydroSystem<ShocktubeProblem>::energy_index] = P_L / (gamma - 1.) + 0.5 * rho_L * (vx_L * vx_L);
+	left_values[HydroSystem<ShocktubeProblem>::internalEnergy_index] = P_L / (gamma - 1.);
 
-	consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho;
-	consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = rho * vx;
-	consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0;
-	consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0;
-	consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) = P / (gamma - 1.) + 0.5 * rho * (vx * vx);
-	consVar(i, j, k, RadSystem<ShocktubeProblem>::gasInternalEnergy_index) = P / (gamma - 1.);
+	// Right state
+	const double rho_R = 1.0;
+	const double vx_R = 0.0;
+	const double P_R = 1.0;
+
+	amrex::GpuArray<amrex::Real, nvar> right_values{};
+	right_values[HydroSystem<ShocktubeProblem>::density_index] = rho_R;
+	right_values[HydroSystem<ShocktubeProblem>::x1Momentum_index] = rho_R * vx_R;
+	right_values[HydroSystem<ShocktubeProblem>::x2Momentum_index] = 0;
+	right_values[HydroSystem<ShocktubeProblem>::x3Momentum_index] = 0;
+	right_values[HydroSystem<ShocktubeProblem>::energy_index] = P_R / (gamma - 1.) + 0.5 * rho_R * (vx_R * vx_R);
+	right_values[HydroSystem<ShocktubeProblem>::internalEnergy_index] = P_R / (gamma - 1.);
+
+	// Apply boundary conditions
+	setConstantDirichletBCLo<0>(iv, consVar, geom, left_values);
+	setConstantDirichletBCHi<0>(iv, consVar, geom, right_values);
 }
 
 template <>
