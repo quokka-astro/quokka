@@ -94,6 +94,9 @@ template <> void QuokkaSimulation<SNProblem>::createInitialTestParticles()
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
 				auto &p = pdata[i]; // NOLINT
 				p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+				p.rdata(quokka::TestParticleVxIdx) += boost_velocity[0];
+				p.rdata(quokka::TestParticleVyIdx) += boost_velocity[1];
+				p.rdata(quokka::TestParticleVzIdx) += boost_velocity[2];
 			});
 		}
 	}
@@ -178,7 +181,12 @@ auto problem_main() -> int
 	pp.query("t_stop", t_stop);
 	pp.query("SN_particles_file", SN_particles_file);
 	pp.query("refine_half_domain", refine_half_domain);
-	pp.queryarr("boost_velocity", boost_velocity.data(), AMREX_SPACEDIM);
+	std::vector<amrex::Real> boost_velocity_vec(AMREX_SPACEDIM, 0.0);
+	if (pp.queryarr("boost_velocity", boost_velocity_vec) != 0) {
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			boost_velocity[dir] = boost_velocity_vec[dir];
+		}
+	}
 
 	amrex::ParmParse const cpp("cooling");
 	cpp.query("cooling_table_type", coolingTableType_);
@@ -186,9 +194,7 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<SNProblem> sim;
 
-	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.stopTime_ = t_stop * year;
-	sim.cflNumber_ = 0.3; // *must* be less than 1/3 in 3D!
 
 	// initialize
 	sim.setInitialConditions();
