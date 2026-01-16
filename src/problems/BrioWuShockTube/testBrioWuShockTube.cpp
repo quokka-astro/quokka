@@ -22,8 +22,10 @@
 #include "AMReX_BC_TYPES.H"
 
 #include "QuokkaSimulation.hpp"
+#include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/ArrayUtil.hpp"
+#include "util/BC.hpp"
 #include "util/fextract.hpp"
 
 struct MHDShocktubeProblem {
@@ -142,46 +144,48 @@ template <> void QuokkaSimulation<MHDShocktubeProblem>::setInitialConditionsOnGr
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<MHDShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int numcomp,
+AMRSimulation<MHDShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
 								amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
 								int /*bcomp*/, int /*orig_comp*/)
 {
-	auto const [i, j, k] = iv.dim3();
-
-	amrex::Box const &box = geom.Domain();
-	amrex::GpuArray<int, 3> lo = box.loVect3d();
-	amrex::GpuArray<int, 3> hi = box.hiVect3d();
+	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
+	constexpr int nvar = Physics_Indices<MHDShocktubeProblem>::nvarTotal_cc;
 	const auto gamma = quokka::EOS_Traits<MHDShocktubeProblem>::gamma;
 
 	const double Emag_L = 0.5 * (Bx * Bx + By_L * By_L + Bz * Bz);
 	const double Emag_R = 0.5 * (Bx * Bx + By_R * By_R + Bz * Bz);
 
-	if (i < lo[0]) {
-		// x1 left side boundary -- constant
-		for (int n = 0; n < numcomp; ++n) {
-			consVar(i, j, k, n) = 0;
-		}
-
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::gasEnergy_index) = P_L / (gamma - 1.) + Emag_L;
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::gasInternalEnergy_index) = P_L / (gamma - 1.);
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::gasDensity_index) = rho_L;
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::x1GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::x2GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::x3GasMomentum_index) = 0.;
-
-	} else if (i >= hi[0]) {
-		// x1 right-side boundary -- constant
-		for (int n = 0; n < numcomp; ++n) {
-			consVar(i, j, k, n) = 0;
-		}
-
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::gasEnergy_index) = P_R / (gamma - 1.) + Emag_R;
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::gasInternalEnergy_index) = P_R / (gamma - 1.);
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::gasDensity_index) = rho_R;
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::x1GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::x2GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::x3GasMomentum_index) = 0.;
+	// Prepare left boundary values (left state)
+	amrex::GpuArray<amrex::Real, nvar> left_values{};
+	// Initialize all to 0 first
+	for (int n = 0; n < nvar; ++n) {
+		left_values[n] = 0;
 	}
+	// Set specific values
+	left_values[RadSystem<MHDShocktubeProblem>::gasEnergy_index] = P_L / (gamma - 1.) + Emag_L;
+	left_values[RadSystem<MHDShocktubeProblem>::gasInternalEnergy_index] = P_L / (gamma - 1.);
+	left_values[RadSystem<MHDShocktubeProblem>::gasDensity_index] = rho_L;
+	left_values[RadSystem<MHDShocktubeProblem>::x1GasMomentum_index] = 0.;
+	left_values[RadSystem<MHDShocktubeProblem>::x2GasMomentum_index] = 0.;
+	left_values[RadSystem<MHDShocktubeProblem>::x3GasMomentum_index] = 0.;
+
+	// Prepare right boundary values (right state)
+	amrex::GpuArray<amrex::Real, nvar> right_values{};
+	// Initialize all to 0 first
+	for (int n = 0; n < nvar; ++n) {
+		right_values[n] = 0;
+	}
+	// Set specific values
+	right_values[RadSystem<MHDShocktubeProblem>::gasEnergy_index] = P_R / (gamma - 1.) + Emag_R;
+	right_values[RadSystem<MHDShocktubeProblem>::gasInternalEnergy_index] = P_R / (gamma - 1.);
+	right_values[RadSystem<MHDShocktubeProblem>::gasDensity_index] = rho_R;
+	right_values[RadSystem<MHDShocktubeProblem>::x1GasMomentum_index] = 0.;
+	right_values[RadSystem<MHDShocktubeProblem>::x2GasMomentum_index] = 0.;
+	right_values[RadSystem<MHDShocktubeProblem>::x3GasMomentum_index] = 0.;
+
+	// Apply boundary conditions using helper functions (direction 0 = x-axis)
+	setConstantDirichletBCLo<0>(iv, consVar, geom, left_values);
+	setConstantDirichletBCHi<0>(iv, consVar, geom, right_values);
 }
 
 template <>

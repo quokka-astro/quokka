@@ -17,6 +17,7 @@
 #include <fstream>
 
 #include "QuokkaSimulation.hpp"
+#include "physics_info.hpp"
 #include "hydro/hydro_system.hpp"
 #include "util/ArrayUtil.hpp"
 #include "util/fextract.hpp"
@@ -90,42 +91,52 @@ template <> void QuokkaSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int numcomp,
+AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
 							     amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
 							     int /*bcomp*/, int /*orig_comp*/)
 {
-	auto const [i, j, k] = iv.dim3();
+	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
+	constexpr int nvar = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
 
-	amrex::Box const &box = geom.Domain();
-	amrex::GpuArray<int, 3> lo = box.loVect3d();
-	amrex::GpuArray<int, 3> hi = box.hiVect3d();
+	// Left state
+	const double rho_L = 3.86;
+	const double m_L = -3.1266;
+	const double E_L = 27.0913;
+	const double Eint_L = E_L - 0.5 * (m_L * m_L) / rho_L;
 
-	double rho = NAN;
-	double m = NAN;
-	double E = NAN;
-
-	if (i < lo[0]) {
-		rho = 3.86;
-		m = -3.1266;
-		E = 27.0913;
-	} else if (i >= hi[0]) {
-		rho = 1.0;
-		m = -3.44;
-		E = 8.4168;
+	// Prepare left boundary values
+	amrex::GpuArray<amrex::Real, nvar> left_values{};
+	for (int n = 0; n < nvar; ++n) {
+		left_values[n] = 0;
 	}
+	left_values[RadSystem<ShocktubeProblem>::gasDensity_index] = rho_L;
+	left_values[RadSystem<ShocktubeProblem>::x1GasMomentum_index] = m_L;
+	left_values[RadSystem<ShocktubeProblem>::x2GasMomentum_index] = 0.;
+	left_values[RadSystem<ShocktubeProblem>::x3GasMomentum_index] = 0.;
+	left_values[RadSystem<ShocktubeProblem>::gasEnergy_index] = E_L;
+	left_values[HydroSystem<ShocktubeProblem>::internalEnergy_index] = Eint_L;
 
-	double const Eint = E - 0.5 * (m * m) / rho;
+	// Right state
+	const double rho_R = 1.0;
+	const double m_R = -3.44;
+	const double E_R = 8.4168;
+	const double Eint_R = E_R - 0.5 * (m_R * m_R) / rho_R;
 
-	for (int n = 0; n < numcomp; ++n) {
-		consVar(i, j, k, n) = 0;
+	// Prepare right boundary values
+	amrex::GpuArray<amrex::Real, nvar> right_values{};
+	for (int n = 0; n < nvar; ++n) {
+		right_values[n] = 0;
 	}
+	right_values[RadSystem<ShocktubeProblem>::gasDensity_index] = rho_R;
+	right_values[RadSystem<ShocktubeProblem>::x1GasMomentum_index] = m_R;
+	right_values[RadSystem<ShocktubeProblem>::x2GasMomentum_index] = 0.;
+	right_values[RadSystem<ShocktubeProblem>::x3GasMomentum_index] = 0.;
+	right_values[RadSystem<ShocktubeProblem>::gasEnergy_index] = E_R;
+	right_values[HydroSystem<ShocktubeProblem>::internalEnergy_index] = Eint_R;
 
-	consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho;
-	consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = m;
-	consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
-	consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
-	consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) = E;
-	consVar(i, j, k, HydroSystem<ShocktubeProblem>::internalEnergy_index) = Eint;
+	// Apply boundary conditions using helper functions (direction 0 = x-axis)
+	setConstantDirichletBCLo<0>(iv, consVar, geom, left_values);
+	setConstantDirichletBCHi<0>(iv, consVar, geom, right_values);
 }
 
 template <>

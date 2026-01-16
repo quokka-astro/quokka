@@ -19,6 +19,7 @@
 #include "AMReX_BLassert.H"
 
 #include "QuokkaSimulation.hpp"
+#include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/ArrayUtil.hpp"
 #include "util/BC.hpp"
@@ -91,44 +92,53 @@ template <> void QuokkaSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int numcomp,
+AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
 							     amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
 							     int /*bcomp*/, int /*orig_comp*/)
 {
-	auto const [i, j, k] = iv.dim3();
+	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
+	constexpr int nvar = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
+	const auto gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
 
-	amrex::Box const &box = geom.Domain();
-	amrex::GpuArray<int, 3> lo = box.loVect3d();
-	amrex::GpuArray<int, 3> hi = box.hiVect3d();
+	// Left boundary values
+	const double rho_L = 1.0;
+	const double vx_L = -2.0;
+	const double P_L = 0.4;
+	const double E_L = P_L / (gamma - 1.) + 0.5 * rho_L * (vx_L * vx_L);
 
-	double vx = NAN;
-	double rho = NAN;
-	double P = NAN;
-
-	if (i < lo[0]) {
-		rho = 1.0;
-		vx = -2.0;
-		P = 0.4;
-	} else if (i >= hi[0]) {
-		rho = 1.0;
-		vx = 2.0;
-		P = 0.4;
+	// Prepare left boundary values
+	amrex::GpuArray<amrex::Real, nvar> left_values{};
+	for (int n = 0; n < nvar; ++n) {
+		left_values[n] = 0;
 	}
+	left_values[RadSystem<ShocktubeProblem>::gasDensity_index] = rho_L;
+	left_values[RadSystem<ShocktubeProblem>::x1GasMomentum_index] = rho_L * vx_L;
+	left_values[RadSystem<ShocktubeProblem>::x2GasMomentum_index] = 0.;
+	left_values[RadSystem<ShocktubeProblem>::x3GasMomentum_index] = 0.;
+	left_values[RadSystem<ShocktubeProblem>::gasEnergy_index] = E_L;
+	left_values[RadSystem<ShocktubeProblem>::gasInternalEnergy_index] = P_L / (gamma - 1.);
 
-	const double gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
-	const double E = P / (gamma - 1.) + 0.5 * rho * (vx * vx);
+	// Right boundary values
+	const double rho_R = 1.0;
+	const double vx_R = 2.0;
+	const double P_R = 0.4;
+	const double E_R = P_R / (gamma - 1.) + 0.5 * rho_R * (vx_R * vx_R);
 
-	// zero-fill unused components
-	for (int n = 0; n < numcomp; ++n) {
-		consVar(i, j, k, n) = 0;
+	// Prepare right boundary values
+	amrex::GpuArray<amrex::Real, nvar> right_values{};
+	for (int n = 0; n < nvar; ++n) {
+		right_values[n] = 0;
 	}
+	right_values[RadSystem<ShocktubeProblem>::gasDensity_index] = rho_R;
+	right_values[RadSystem<ShocktubeProblem>::x1GasMomentum_index] = rho_R * vx_R;
+	right_values[RadSystem<ShocktubeProblem>::x2GasMomentum_index] = 0.;
+	right_values[RadSystem<ShocktubeProblem>::x3GasMomentum_index] = 0.;
+	right_values[RadSystem<ShocktubeProblem>::gasEnergy_index] = E_R;
+	right_values[RadSystem<ShocktubeProblem>::gasInternalEnergy_index] = P_R / (gamma - 1.);
 
-	consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho;
-	consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = rho * vx;
-	consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
-	consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
-	consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) = E;
-	consVar(i, j, k, RadSystem<ShocktubeProblem>::gasInternalEnergy_index) = P / (gamma - 1.);
+	// Apply boundary conditions using helper functions (direction 0 = x-axis)
+	setConstantDirichletBCLo<0>(iv, consVar, geom, left_values);
+	setConstantDirichletBCHi<0>(iv, consVar, geom, right_values);
 }
 
 template <>

@@ -12,6 +12,7 @@
 #endif
 #include "AMReX.H"
 #include "QuokkaSimulation.hpp"
+#include "physics_info.hpp"
 #include "radiation/radiation_dust_system.hpp"
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
@@ -145,36 +146,40 @@ AMRSimulation<MarshakProblem>::setCustomBoundaryConditions(const amrex::IntVect 
 							   amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
 							   int /*bcomp*/, int /*orig_comp*/)
 {
-	auto const [i, j, k] = iv.dim3();
-
-	amrex::Box const &box = geom.Domain();
-	amrex::GpuArray<int, 3> lo = box.loVect3d();
+	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
+	constexpr int nvar = Physics_Indices<MarshakProblem>::nvarTotal_cc;
 
 	// const auto Erads = RadSystem<MarshakProblem>::ComputeThermalRadiation(T_rad_L, radBoundaries_);
 	quokka::valarray<double, 2> const Erads = {erad_floor, EradL};
 	const double c_light = c;
 	const auto Frads = Erads * c_light;
 
-	if (i < lo[0]) {
-		// streaming inflow boundary
-		// multigroup radiation
-		// x1 left side boundary (Marshak)
-		for (int g = 0; g < Physics_Traits<MarshakProblem>::nGroups; ++g) {
-			consVar(i, j, k, RadSystem<MarshakProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erads[g];
-			consVar(i, j, k, RadSystem<MarshakProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = Frads[g];
-			consVar(i, j, k, RadSystem<MarshakProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
-			consVar(i, j, k, RadSystem<MarshakProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
-		}
+	// Prepare left boundary values
+	amrex::GpuArray<amrex::Real, nvar> left_values{};
+	// Initialize all to 0 first
+	for (int n = 0; n < nvar; ++n) {
+		left_values[n] = 0;
 	}
 
-	// gas boundary conditions are the same everywhere
+	// Set specific radiation values
+	for (int g = 0; g < Physics_Traits<MarshakProblem>::nGroups; ++g) {
+		left_values[RadSystem<MarshakProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g] = Erads[g];
+		left_values[RadSystem<MarshakProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = Frads[g];
+		left_values[RadSystem<MarshakProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0;
+		left_values[RadSystem<MarshakProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0;
+	}
+
+	// Set gas values
 	const double Egas = initial_T * CV;
-	consVar(i, j, k, RadSystem<MarshakProblem>::gasEnergy_index) = Egas;
-	consVar(i, j, k, RadSystem<MarshakProblem>::gasDensity_index) = rho0;
-	consVar(i, j, k, RadSystem<MarshakProblem>::gasInternalEnergy_index) = Egas;
-	consVar(i, j, k, RadSystem<MarshakProblem>::x1GasMomentum_index) = 0.;
-	consVar(i, j, k, RadSystem<MarshakProblem>::x2GasMomentum_index) = 0.;
-	consVar(i, j, k, RadSystem<MarshakProblem>::x3GasMomentum_index) = 0.;
+	left_values[RadSystem<MarshakProblem>::gasEnergy_index] = Egas;
+	left_values[RadSystem<MarshakProblem>::gasDensity_index] = rho0;
+	left_values[RadSystem<MarshakProblem>::gasInternalEnergy_index] = Egas;
+	left_values[RadSystem<MarshakProblem>::x1GasMomentum_index] = 0.;
+	left_values[RadSystem<MarshakProblem>::x2GasMomentum_index] = 0.;
+	left_values[RadSystem<MarshakProblem>::x3GasMomentum_index] = 0.;
+
+	// Apply boundary condition using helper function (direction 0 = x-axis)
+	setConstantDirichletBCLo<0>(iv, consVar, geom, left_values);
 }
 
 auto problem_main() -> int

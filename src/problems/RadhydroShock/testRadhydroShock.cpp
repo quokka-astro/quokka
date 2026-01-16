@@ -20,6 +20,7 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "QuokkaSimulation.hpp"
+#include "physics_info.hpp"
 #include "hydro/hydro_system.hpp"
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
@@ -118,49 +119,46 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 		return;
 	}
 
-	auto const [i, j, k] = iv.dim3();
+	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
+	constexpr int nvar = Physics_Indices<ShockProblem>::nvarTotal_cc;
 
-	amrex::Box const &box = geom.Domain();
-	amrex::GpuArray<int, 3> lo = box.loVect3d();
-	amrex::GpuArray<int, 3> hi = box.hiVect3d();
+	// Left state
+	const double px_L = rho0 * v0;
+	const double Egas_L = Egas0;
 
-	for (int scalar_index = 0; scalar_index < HydroSystem<ShockProblem>::nscalars_; scalar_index++) {
-		consVar(i, j, k, HydroSystem<ShockProblem>::scalar0_index + scalar_index) = 0;
-	}
+	// Prepare left boundary values
+	amrex::GpuArray<amrex::Real, nvar> left_values{};
+	left_values[RadSystem<ShockProblem>::gasDensity_index] = rho0;
+	left_values[RadSystem<ShockProblem>::gasInternalEnergy_index] = Egas_L;
+	left_values[RadSystem<ShockProblem>::x1GasMomentum_index] = px_L;
+	left_values[RadSystem<ShockProblem>::x2GasMomentum_index] = 0.;
+	left_values[RadSystem<ShockProblem>::x3GasMomentum_index] = 0.;
+	left_values[RadSystem<ShockProblem>::gasEnergy_index] = Egas_L + (px_L * px_L) / (2 * rho0);
+	left_values[RadSystem<ShockProblem>::radEnergy_index] = Erad0;
+	left_values[RadSystem<ShockProblem>::x1RadFlux_index] = 0;
+	left_values[RadSystem<ShockProblem>::x2RadFlux_index] = 0;
+	left_values[RadSystem<ShockProblem>::x3RadFlux_index] = 0;
 
-	if (i < lo[0]) {
-		const double px_L = rho0 * v0;
-		const double Egas_L = Egas0;
+	// Right state
+	const double px_R = rho1 * v1;
+	const double Egas_R = Egas1;
 
-		// x1 left side boundary -- constant
-		consVar(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = rho0;
-		consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = 0.;
-		consVar(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) = px_L;
-		consVar(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = Egas_L + (px_L * px_L) / (2 * rho0);
-		consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = Egas_L;
-		consVar(i, j, k, RadSystem<ShockProblem>::radEnergy_index) = Erad0;
-		consVar(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = 0;
-		consVar(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index) = 0;
-		consVar(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index) = 0;
-	} else if (i >= hi[0]) {
-		const double px_R = rho1 * v1;
-		const double Egas_R = Egas1;
+	// Prepare right boundary values
+	amrex::GpuArray<amrex::Real, nvar> right_values{};
+	right_values[RadSystem<ShockProblem>::gasDensity_index] = rho1;
+	right_values[RadSystem<ShockProblem>::gasInternalEnergy_index] = Egas_R;
+	right_values[RadSystem<ShockProblem>::x1GasMomentum_index] = px_R;
+	right_values[RadSystem<ShockProblem>::x2GasMomentum_index] = 0.;
+	right_values[RadSystem<ShockProblem>::x3GasMomentum_index] = 0.;
+	right_values[RadSystem<ShockProblem>::gasEnergy_index] = Egas_R + (px_R * px_R) / (2 * rho1);
+	right_values[RadSystem<ShockProblem>::radEnergy_index] = Erad1;
+	right_values[RadSystem<ShockProblem>::x1RadFlux_index] = 0;
+	right_values[RadSystem<ShockProblem>::x2RadFlux_index] = 0;
+	right_values[RadSystem<ShockProblem>::x3RadFlux_index] = 0;
 
-		// x1 right-side boundary -- constant
-		consVar(i, j, k, RadSystem<ShockProblem>::gasDensity_index) = rho1;
-		consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = 0.;
-		consVar(i, j, k, RadSystem<ShockProblem>::x1GasMomentum_index) = px_R;
-		consVar(i, j, k, RadSystem<ShockProblem>::x2GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<ShockProblem>::x3GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<ShockProblem>::gasEnergy_index) = Egas_R + (px_R * px_R) / (2 * rho1);
-		consVar(i, j, k, RadSystem<ShockProblem>::gasInternalEnergy_index) = Egas_R;
-		consVar(i, j, k, RadSystem<ShockProblem>::radEnergy_index) = Erad1;
-		consVar(i, j, k, RadSystem<ShockProblem>::x1RadFlux_index) = 0;
-		consVar(i, j, k, RadSystem<ShockProblem>::x2RadFlux_index) = 0;
-		consVar(i, j, k, RadSystem<ShockProblem>::x3RadFlux_index) = 0;
-	}
+	// Apply boundary conditions using helper functions (direction 0 = x-axis)
+	setConstantDirichletBCLo<0>(iv, consVar, geom, left_values);
+	setConstantDirichletBCHi<0>(iv, consVar, geom, right_values);
 }
 
 template <> void QuokkaSimulation<ShockProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)

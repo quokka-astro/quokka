@@ -125,40 +125,40 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 							amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
 							int /*bcomp*/, int /*orig_comp*/)
 {
-	auto const [i, j, k] = iv.dim3();
-
-	amrex::Box const &box = geom.Domain();
-	amrex::GpuArray<int, 3> lo = box.loVect3d();
+	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
+	constexpr int nvar = Physics_Indices<TubeProblem>::nvarTotal_cc;
 
 	amrex::Real const Erad = Frad0 / c_light_cgs_;
 	amrex::Real const Frad = Frad0;
-	amrex::Real rho = NAN;
-	amrex::Real vel = NAN;
+	amrex::Real const rho = rho0;
+	amrex::Real const vel = Mach0 * a0;
 
 	quokka::valarray<amrex::Real, Physics_Traits<TubeProblem>::nGroups> radEnergyFractions{};
 	for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
 		radEnergyFractions[g] = 1.0 / Physics_Traits<TubeProblem>::nGroups;
 	}
 
-	if (i < lo[0]) {
-		// left side
-		rho = rho0;
-		vel = Mach0 * a0;
-		// Dirichlet
-		for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
-			consVar(i, j, k, RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad * radEnergyFractions[g];
-			consVar(i, j, k, RadSystem<TubeProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = Frad * radEnergyFractions[g];
-			consVar(i, j, k, RadSystem<TubeProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.;
-			consVar(i, j, k, RadSystem<TubeProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.;
-		}
+	// Prepare left boundary values
+	amrex::GpuArray<amrex::Real, nvar> left_values{};
 
-		consVar(i, j, k, RadSystem<TubeProblem>::gasDensity_index) = rho;
-		consVar(i, j, k, RadSystem<TubeProblem>::gasEnergy_index) = 0.;
-		consVar(i, j, k, RadSystem<TubeProblem>::gasInternalEnergy_index) = 0.;
-		consVar(i, j, k, RadSystem<TubeProblem>::x1GasMomentum_index) = rho * vel;
-		consVar(i, j, k, RadSystem<TubeProblem>::x2GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<TubeProblem>::x3GasMomentum_index) = 0.;
+	// Set specific values for radiation groups
+	for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
+		left_values[RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g] = Erad * radEnergyFractions[g];
+		left_values[RadSystem<TubeProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = Frad * radEnergyFractions[g];
+		left_values[RadSystem<TubeProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0.;
+		left_values[RadSystem<TubeProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0.;
 	}
+
+	// Set gas variables
+	left_values[RadSystem<TubeProblem>::gasDensity_index] = rho;
+	left_values[RadSystem<TubeProblem>::gasEnergy_index] = 0.;
+	left_values[RadSystem<TubeProblem>::gasInternalEnergy_index] = 0.;
+	left_values[RadSystem<TubeProblem>::x1GasMomentum_index] = rho * vel;
+	left_values[RadSystem<TubeProblem>::x2GasMomentum_index] = 0.;
+	left_values[RadSystem<TubeProblem>::x3GasMomentum_index] = 0.;
+
+	// Apply boundary condition using helper function (direction 0 = x-axis)
+	setConstantDirichletBCLo<0>(iv, consVar, geom, left_values);
 }
 
 auto problem_main() -> int
