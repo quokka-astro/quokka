@@ -144,9 +144,9 @@ template <> void QuokkaSimulation<MHDShocktubeProblem>::setInitialConditionsOnGr
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<MHDShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-								amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
-								int /*bcomp*/, int /*orig_comp*/)
+AMRSimulation<MHDShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
+								int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+								const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
 	constexpr int nvar = Physics_Indices<MHDShocktubeProblem>::nvarTotal_cc;

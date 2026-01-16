@@ -20,8 +20,8 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "QuokkaSimulation.hpp"
-#include "physics_info.hpp"
 #include "hydro/hydro_system.hpp"
+#include "physics_info.hpp"
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 

@@ -22,8 +22,8 @@
 #include "AMReX_BC_TYPES.H"
 
 #include "QuokkaSimulation.hpp"
-#include "physics_info.hpp"
 #include "hydro/hydro_system.hpp"
+#include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/ArrayUtil.hpp"
 #include "util/fextract.hpp"
@@ -104,9 +104,9 @@ template <> void QuokkaSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
-							     amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
-							     int /*bcomp*/, int /*orig_comp*/)
+AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
+							     int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+							     const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
 	constexpr int nvar = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;

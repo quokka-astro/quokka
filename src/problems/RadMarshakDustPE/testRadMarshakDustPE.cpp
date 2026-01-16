@@ -158,7 +158,6 @@ AMRSimulation<MarshakProblem>::setCustomBoundaryConditions(const amrex::IntVect 
 	amrex::GpuArray<amrex::Real, nvar> left_values{};
 	// Initialize all to 0 first
 
-
 	// Set specific radiation values
 	for (int g = 0; g < Physics_Traits<MarshakProblem>::nGroups; ++g) {
 		left_values[RadSystem<MarshakProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g] = Erads[g];

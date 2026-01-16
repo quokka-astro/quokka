@@ -6,9 +6,9 @@
 #include "util/matplotlibcpp.h"
 #endif
 #include "QuokkaSimulation.hpp"
-#include "physics_info.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
+#include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include <cmath>
 #include <fmt/format.h>
