@@ -44,7 +44,7 @@ static double n_amb = 1.0;							   // ambient density (g cm^-3) // NOLINT
 static double T_amb = 100.0;							   // ambient temperature (K) // NOLINT
 static double t_stop = 3.0e5;							   // stop time (yr) // NOLINT
 static amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity{0.0, 0.0, 0.0}; // NOLINT
-static bool skip_checks = false;							   // NOLINT
+static bool skip_checks = false;						   // NOLINT
 
 template <> struct Particle_Traits<SNProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
