@@ -6,29 +6,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Quokka is a two-moment radiation hydrodynamics code using the piecewise-parabolic method with AMR and subcycling. It's built on AMReX and supports both CPU (MPI+vectorized) and GPU (CUDA/HIP) execution with a single C++20 codebase.
 
 ## Build & Test Commands
-- Run `source ~/rc/qk.rc` to load modules before the first build. 
-- **Build a specific test**: `cd /Users/cche/softwares/quokka/quokka/build/clang-1d && ninja -j8 <TestName>`
-- **Run a specific test**: `TestName=<TestName> && cd /Users/cche/softwares/quokka/quokka/tests && (../build/clang-1d/src/problems/$TestName/$TestName ../inputs/$TestName.in tiny_profiler.enabled=0 suppress_output=1 && echo Success || echo Fail)`
-- **Run a specific test with ctest**: `ctest -R <TestName>`
-- **Build all tests**: `cd /Users/cche/softwares/quokka/quokka/build/clang-1d && ninja -j8`
-- **Run all tests**: `ctest -j8`
+- **Build**: `mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -G Ninja && ninja -j6` (keep in mind that `-DAMReX_SPACEDIM` must be set to specify the dimensionality of the code, and that some targets only build for certain dimensionality)
+- **GPU Support**: Add `-DAMReX_GPU_BACKEND=CUDA` (NVIDIA) or `-DAMReX_GPU_BACKEND=HIP` (AMD)
+- **Run all tests**: `ctest` or `ninja test`
+- **Run specific test**: `ctest -R TestName`
+- **Exclude tests**: `ctest -E "Pattern*"`
+- **List test targets**: `cmake --build . --target help`
+- **Test inputs**: Located in `inputs/` directory (`.in` files)
+- **Code formatting**: `clang-format -i file.cpp` (run from `src/` directory)
+- **Static analysis**: Use `scripts/tidy.sh build changed` to run clang-tidy on modified files
+- **Lint options**: `scripts/tidy.sh build [changed|previous|origin|dev] [--fix]`
 
 ## Architecture Overview
 - **Main entry**: `src/main.cpp` calls `problem_main()` defined in problem-specific files
 - **Core simulation**: `QuokkaSimulation` template class inherits from `AMRSimulation`
 - **Physics modules**: Located in `src/hydro/`, `src/radiation/`, `src/cooling/`, `src/chemistry/`
 - **Hyperbolic systems**: `HyperbolicSystem` template handles conservation laws and slope limiters
-- **Problem definitions**: Each problem in `src/problems/` has a `.cpp` file and a CMake target
+- **Problem definitions**: Each problem in `src/problems/` has `.cpp/.hpp` files and CMake target
 - **I/O and diagnostics**: `src/io/` contains output handling (plotfiles, checkpoints, openPMD)
 - **Math utilities**: `src/math/` has interpolation, quadrature, root finding, ODE integration
 - **Particles**: `src/particles/` handles stellar particles with accretion, creation, destruction
 
 ## Problem Structure
-- Each problem, defined by TestName, is in the directory `src/problems/TestName/` and contains:
-  - `test<TestName>.cpp`: Implementation with initial conditions and problem-specific physics.
+- Each problem directory contains:
+  - `test_*.cpp`: Implementation with initial conditions and problem-specific physics
+  - `test_*.hpp`: Header with template specializations (removed in recent commits)
   - `CMakeLists.txt`: Defines executable target
 - Problems use template specialization pattern for `QuokkaSimulation<ProblemName>`
 - Input files (`.in`) in `inputs/` configure geometry, AMR, physics parameters
+- Problems should ONLY contain `.cpp` files (no `.hpp` files per recent policy)
 
 ## Key Dependencies
 - **AMReX**: Underlying AMR framework (external submodule)

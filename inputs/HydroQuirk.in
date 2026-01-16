@@ -20,7 +20,3 @@ amr.max_grid_size   = 128   # must be 128 for this problem
 
 do_reflux = 0
 do_subcycle = 0
-
-max_timesteps = 10
-
-tiny_profiler.enabled=0 
