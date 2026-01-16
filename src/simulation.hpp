@@ -396,6 +396,26 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	AMREX_GPU_DEVICE static void setConstantDirichletBCHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
 							      amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, N> const &values);
 
+	/// Helper function to set diode boundary conditions on the lower boundary of a specific dimension.
+	/// Diode BC: allows outflow, prevents inflow by reflecting the normal momentum component.
+	/// @tparam dir The dimension to check (0=x, 1=y, 2=z)
+	/// @param iv The cell index
+	/// @param consVar The array to fill
+	/// @param geom The geometry data
+	template <int dir>
+	AMREX_GPU_DEVICE static void setDiodeBCLo(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
+						  amrex::GeometryData const &geom);
+
+	/// Helper function to set diode boundary conditions on the upper boundary of a specific dimension.
+	/// Diode BC: allows outflow, prevents inflow by reflecting the normal momentum component.
+	/// @tparam dir The dimension to check (0=x, 1=y, 2=z)
+	/// @param iv The cell index
+	/// @param consVar The array to fill
+	/// @param geom The geometry data
+	template <int dir>
+	AMREX_GPU_DEVICE static void setDiodeBCHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
+						  amrex::GeometryData const &geom);
+
 	/// Helper function to set constant Dirichlet boundary conditions on the lower boundary of a specific dimension for face variables.
 	/// @tparam boundary_dim The dimension to check for boundaries (0=x, 1=y, 2=z)
 	/// @tparam face_dir The face direction (quokka::direction::x, y, or z)
@@ -2477,6 +2497,159 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setConstantDi
 		for (int n = 0; n < static_cast<int>(N); ++n) {
 			consVar(i, j, k, n) = values[n];
 		}
+	}
+}
+
+template <typename problem_t>
+template <int dir>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCLo(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
+										amrex::GeometryData const &geom)
+{
+	static_assert(dir >= 0 && dir < AMREX_SPACEDIM, "dir must be in range [0, AMREX_SPACEDIM)");
+
+	// Get cell indices
+	auto const [i, j, k] = iv.dim3();
+
+	// Get domain bounds
+	amrex::Box const &box = geom.Domain();
+	const amrex::GpuArray<int, 3> lo = box.loVect3d();
+
+	// Get the cell index for the specified direction
+	int cellIdx = 0;
+	if constexpr (dir == 0) {
+		cellIdx = i;
+	} else if constexpr (dir == 1) {
+		cellIdx = j;
+	} else if constexpr (dir == 2) {
+		cellIdx = k;
+	}
+
+	// Check if on lower boundary in the specified dimension
+	if (cellIdx < lo[dir]) {
+		// Mirror cell: reflect around lower boundary face
+		// cellIdx = lo[dir]-1 mirrors lo[dir], cellIdx = lo[dir]-2 mirrors lo[dir]+1, etc.
+		int const cellIdx_mirror = 2 * lo[dir] - 1 - cellIdx;
+		int i_mirror = i;
+		int j_mirror = j;
+		int k_mirror = k;
+		if constexpr (dir == 0) {
+			i_mirror = cellIdx_mirror;
+		} else if constexpr (dir == 1) {
+			j_mirror = cellIdx_mirror;
+		} else if constexpr (dir == 2) {
+			k_mirror = cellIdx_mirror;
+		}
+
+		// Read values from mirror cell
+		const double rho = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::density_index);
+		const double x1Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x1Momentum_index);
+		const double x2Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x2Momentum_index);
+		const double x3Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x3Momentum_index);
+		const double etot = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::energy_index);
+		const double eint = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::internalEnergy_index);
+
+		// Diode BC: allow outflow, prevent inflow
+		// At lower boundary: outward normal points in -dir direction (normal = -1)
+		// Inflow condition: momentum * normal < 0 (momentum points opposite to outward normal)
+		// For lower boundary: inflow if momentum > 0 (gas moving toward +dir, into domain)
+		double mom_normal = 0.0;
+		if constexpr (dir == 0) {
+			mom_normal = x1Mom;
+		} else if constexpr (dir == 1) {
+			mom_normal = x2Mom;
+		} else if constexpr (dir == 2) {
+			mom_normal = x3Mom;
+		}
+
+		// If momentum would cause inflow (mom_normal > 0 at lower boundary), reflect it
+		if (mom_normal > 0.0) {
+			mom_normal = -mom_normal;
+		}
+
+		// Write to ghost cell
+		consVar(i, j, k, HydroSystem<problem_t>::density_index) = rho;
+		consVar(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = (dir == 0) ? mom_normal : x1Mom;
+		consVar(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = (dir == 1) ? mom_normal : x2Mom;
+		consVar(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = (dir == 2) ? mom_normal : x3Mom;
+		consVar(i, j, k, HydroSystem<problem_t>::energy_index) = etot;
+		consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = eint;
+	}
+}
+
+template <typename problem_t>
+template <int dir>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
+										amrex::GeometryData const &geom)
+{
+	static_assert(dir >= 0 && dir < AMREX_SPACEDIM, "dir must be in range [0, AMREX_SPACEDIM)");
+
+	// Get cell indices
+	auto const [i, j, k] = iv.dim3();
+
+	// Get domain bounds
+	amrex::Box const &box = geom.Domain();
+	const amrex::GpuArray<int, 3> hi = box.hiVect3d();
+
+	// Get the cell index for the specified direction
+	int cellIdx = 0;
+	if constexpr (dir == 0) {
+		cellIdx = i;
+	} else if constexpr (dir == 1) {
+		cellIdx = j;
+	} else if constexpr (dir == 2) {
+		cellIdx = k;
+	}
+
+	// Check if on upper boundary in the specified dimension
+	// Note that both lo and hi are inclusive bounds, i.e. for a dimension with 8 cells, the bounds are 0 and 7.
+	if (cellIdx > hi[dir]) {
+		// Mirror cell: reflect around upper boundary face
+		// cellIdx = hi[dir]+1 mirrors hi[dir], cellIdx = hi[dir]+2 mirrors hi[dir]-1, etc.
+		int const cellIdx_mirror = 2 * hi[dir] + 1 - cellIdx;
+		int i_mirror = i;
+		int j_mirror = j;
+		int k_mirror = k;
+		if constexpr (dir == 0) {
+			i_mirror = cellIdx_mirror;
+		} else if constexpr (dir == 1) {
+			j_mirror = cellIdx_mirror;
+		} else if constexpr (dir == 2) {
+			k_mirror = cellIdx_mirror;
+		}
+
+		// Read values from mirror cell
+		const double rho = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::density_index);
+		const double x1Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x1Momentum_index);
+		const double x2Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x2Momentum_index);
+		const double x3Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x3Momentum_index);
+		const double etot = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::energy_index);
+		const double eint = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::internalEnergy_index);
+
+		// Diode BC: allow outflow, prevent inflow
+		// At upper boundary: outward normal points in +dir direction (normal = +1)
+		// Inflow condition: momentum * normal < 0 (momentum points opposite to outward normal)
+		// For upper boundary: inflow if momentum < 0 (gas moving toward -dir, into domain)
+		double mom_normal = 0.0;
+		if constexpr (dir == 0) {
+			mom_normal = x1Mom;
+		} else if constexpr (dir == 1) {
+			mom_normal = x2Mom;
+		} else if constexpr (dir == 2) {
+			mom_normal = x3Mom;
+		}
+
+		// If momentum would cause inflow (mom_normal < 0 at upper boundary), reflect it
+		if (mom_normal < 0.0) {
+			mom_normal = -mom_normal;
+		}
+
+		// Write to ghost cell
+		consVar(i, j, k, HydroSystem<problem_t>::density_index) = rho;
+		consVar(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = (dir == 0) ? mom_normal : x1Mom;
+		consVar(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = (dir == 1) ? mom_normal : x2Mom;
+		consVar(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = (dir == 2) ? mom_normal : x3Mom;
+		consVar(i, j, k, HydroSystem<problem_t>::energy_index) = etot;
+		consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = eint;
 	}
 }
 

@@ -146,52 +146,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<CollapseProblem>::setCust
 												const Real /*time*/, const amrex::BCRec * /*bcr*/,
 												int /*bcomp*/, int /*orig_comp*/)
 {
-	auto [i, j, k] = iv.dim3();
-	amrex::Box const &box = geom.Domain();
-	const auto &domain_lo = box.loVect3d();
-	const auto &domain_hi = box.hiVect3d();
-	const int klo = domain_lo[2];
-	const int khi = domain_hi[2];
-
-	int k_mirror = 0;
-	int normal = 0;
-
-	if (k < klo) {
-		// Ghost cells below domain: reflect around lower boundary face
-		// k = klo-1 mirrors klo, k = klo-2 mirrors klo+1, etc.
-		k_mirror = 2 * klo - 1 - k;
-		normal = -1; // outward normal points in -z direction
-	} else if (k > khi) {
-		// Ghost cells above domain: reflect around upper boundary face
-		// k = khi+1 mirrors khi, k = khi+2 mirrors khi-1, etc.
-		k_mirror = 2 * khi + 1 - k;
-		normal = 1; // outward normal points in +z direction
-	} else {
-		return; // Not a ghost cell, nothing to do
-	}
-
-	const double rho = consVar(i, j, k_mirror, HydroSystem<CollapseProblem>::density_index);
-	const double x1Mom = consVar(i, j, k_mirror, HydroSystem<CollapseProblem>::x1Momentum_index);
-	const double x2Mom = consVar(i, j, k_mirror, HydroSystem<CollapseProblem>::x2Momentum_index);
-	double x3Mom = consVar(i, j, k_mirror, HydroSystem<CollapseProblem>::x3Momentum_index);
-	const double etot = consVar(i, j, k_mirror, HydroSystem<CollapseProblem>::energy_index);
-	const double eint = consVar(i, j, k_mirror, HydroSystem<CollapseProblem>::internalEnergy_index);
-
-	// Diode BC: allow outflow, prevent inflow
-	// If z-momentum in mirror cell would cause inflow into domain, reflect it
-	// Inflow condition: x3Mom * normal < 0 (momentum points opposite to outward normal)
-	// At lower boundary (normal=-1): inflow if x3Mom > 0 (gas moving toward +z, into domain)
-	// At upper boundary (normal=+1): inflow if x3Mom < 0 (gas moving toward -z, into domain)
-	if (x3Mom * normal < 0) {
-		x3Mom = -x3Mom;
-	}
-
-	consVar(i, j, k, HydroSystem<CollapseProblem>::density_index) = rho;
-	consVar(i, j, k, HydroSystem<CollapseProblem>::x1Momentum_index) = x1Mom;
-	consVar(i, j, k, HydroSystem<CollapseProblem>::x2Momentum_index) = x2Mom;
-	consVar(i, j, k, HydroSystem<CollapseProblem>::x3Momentum_index) = x3Mom;
-	consVar(i, j, k, HydroSystem<CollapseProblem>::energy_index) = etot;
-	consVar(i, j, k, HydroSystem<CollapseProblem>::internalEnergy_index) = eint;
+	// Apply diode boundary conditions in z-direction (direction 2)
+	setDiodeBCLo<2>(iv, consVar, geom);
+	setDiodeBCHi<2>(iv, consVar, geom);
 }
 
 auto problem_main() -> int
