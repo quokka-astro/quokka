@@ -403,8 +403,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	/// @param consVar The array to fill
 	/// @param geom The geometry data
 	template <int dir>
-	AMREX_GPU_DEVICE static void setDiodeBCLo(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
-						  amrex::GeometryData const &geom);
+	AMREX_GPU_DEVICE static void setDiodeBCLo(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar, amrex::GeometryData const &geom);
 
 	/// Helper function to set diode boundary conditions on the upper boundary of a specific dimension.
 	/// Diode BC: allows outflow, prevents inflow by reflecting the normal momentum component.
@@ -413,8 +412,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	/// @param consVar The array to fill
 	/// @param geom The geometry data
 	template <int dir>
-	AMREX_GPU_DEVICE static void setDiodeBCHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
-						  amrex::GeometryData const &geom);
+	AMREX_GPU_DEVICE static void setDiodeBCHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar, amrex::GeometryData const &geom);
 
 	/// Helper function to set constant Dirichlet boundary conditions on the lower boundary of a specific dimension for face variables.
 	/// @tparam boundary_dim The dimension to check for boundaries (0=x, 1=y, 2=z)

@@ -141,10 +141,10 @@ template <> void QuokkaSimulation<CollapseProblem>::ComputeDerivedVar(int lev, s
 // Implement User-defined diode BC
 // Diode BC: allows outflow, prevents inflow by reflecting the z-momentum
 template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<CollapseProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
-												int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-												const Real /*time*/, const amrex::BCRec * /*bcr*/,
-												int /*bcomp*/, int /*orig_comp*/)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<CollapseProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
+							    amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+							    int /*orig_comp*/)
 {
 	// Apply diode boundary conditions in z-direction (direction 2)
 	setDiodeBCLo<2>(iv, consVar, geom);
