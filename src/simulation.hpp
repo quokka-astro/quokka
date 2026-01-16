@@ -2416,8 +2416,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setConstantDi
 
 	// Check if on lower boundary in the specified dimension and set values
 	if (cellIdx < lo[dir]) {
-		for (decltype(N) n = 0; n < N; ++n) {
-			consVar(i, j, k, static_cast<int>(n)) = values[n];
+		for (int n = 0; n < static_cast<int>(N); ++n) {
+			consVar(i, j, k, n) = values[n];
 		}
 	}
 }
@@ -2449,8 +2449,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setConstantDi
 
 	// Check if on upper boundary in the specified dimension and set values
 	if (cellIdx > hi[dir]) {
-		for (decltype(N) n = 0; n < N; ++n) {
-			consVar(i, j, k, static_cast<int>(n)) = values[n];
+		for (int n = 0; n < static_cast<int>(N); ++n) {
+			consVar(i, j, k, n) = values[n];
 		}
 	}
 }
