@@ -18,7 +18,7 @@ namespace StellarConstants
     static constexpr amrex::Real M_solar = 1.99e33;
     static constexpr amrex::Real L_solar = 3.90e33;
     static constexpr amrex::Real R_solar = 6.96e10;
-    static constexpr amrex::Real seconds_per_year = 3.15576e7;
+  //    static constexpr amrex::Real seconds_per_year = 3.15576e7;
 
     // Physical constants
     static constexpr amrex::Real G = 6.67e-8;
@@ -98,11 +98,11 @@ namespace StellarTables
         static constexpr amrex::Real iota = 6.59778800;
         static constexpr amrex::Real kappa = 10.08855000;
         static constexpr amrex::Real lambda = 1.01249500;
-        static constexpr amrex::Real mu = 0.07490166;
+        static constexpr amrex::Real gmu = 0.07490166;
         static constexpr amrex::Real nu = 0.01077422;
         static constexpr amrex::Real xi = 3.08223400;
         static constexpr amrex::Real upsilon = 17.84778000;
-        static constexpr amrex::Real pi = 0.00022582;
+        static constexpr amrex::Real gpi = 0.00022582;
     }
 }
 
@@ -364,9 +364,9 @@ namespace StellarPhysics
         
         amrex::Real numerator = theta * std::pow(m_sol, 2.5) + iota * std::pow(m_sol, 6.5) +
                                kappa * std::pow(m_sol, 11.0) + lambda * std::pow(m_sol, 19.0) +
-                               mu * std::pow(m_sol, 19.5);
+                               gmu * std::pow(m_sol, 19.5);
         amrex::Real denominator = nu + xi * std::pow(m_sol, 2.0) + upsilon * std::pow(m_sol, 8.5) +
-                                 std::pow(m_sol, 18.5) + pi * std::pow(m_sol, 19.5);
+                                 std::pow(m_sol, 18.5) + gpi * std::pow(m_sol, 19.5);
         
         return (numerator / denominator) * R_solar;
     }

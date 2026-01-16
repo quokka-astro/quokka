@@ -261,7 +261,8 @@ enum StarParticleDataIdx {
 	StarParticleMassIdx, // Mass of the particle
 	StarParticleVxIdx,	 // Velocity in x direction
 	StarParticleVyIdx,	 // Velocity in y direction
-	StarParticleVzIdx,	 // Velocity in z direction
+	StarParticleVzIdx,	 // Time step size
+	StarParticleDtIdx,	 // Velocity in z direction
 	StarParticleAMxIdx,  // Angular Momentum in x direction
 	StarParticleAMyIdx,  // Angular Momentum in y direction
 	StarParticleAMzIdx,  // Angular Momentum in z direction
@@ -273,7 +274,7 @@ enum StarParticleDataIdx {
 };
 
 // Number of real components for StarParticles
-constexpr int StarParticleRealComps = 11; // mass, vx, vy, vz, amx, amy, amz, mdeut, n, mdot,burnState,l_hist
+constexpr int StarParticleRealComps = 12; // mass, vx, vy, vz, dt, amx, amy, amz, mdeut, n, mdot,burnState,l_hist
 
 // Type definitions for Star_particles container and iterator
 using StarParticleContainer = amrex::AmrParticleContainer<StarParticleRealComps>;

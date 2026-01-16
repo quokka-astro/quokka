@@ -550,7 +550,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	std::unique_ptr<quokka::CICRadParticleContainer<problem_t>> CICRadParticles;
 	std::unique_ptr<quokka::StochasticStellarPopParticleContainer<problem_t>> StochasticStellarPopParticles;
 	std::unique_ptr<quokka::SinkParticleContainer> SinkParticles;
-	std::unique_ptr<quokka::StarParticleContainer<problem_t>> StarParticles;
+	std::unique_ptr<quokka::StarParticleContainer> StarParticles;
 	std::unique_ptr<quokka::TestParticleContainer<problem_t>> TestParticles;
 #endif // AMREX_SPACEDIM == 3
 
@@ -2876,6 +2876,22 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		createInitialStochasticStellarPopParticles();
 	}
 
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Star) {
+		AMREX_ASSERT(StarParticles == nullptr);
+
+		static_assert(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS, "UnitSystem must be CGS for Star particles");
+
+		// Create particle container
+		StarParticles = std::make_unique<quokka::StarParticleContainer>(this);
+		StarParticles->SetVerbose(0);
+
+		// Register with particle register - Star particles allow creation
+		particleRegister_.registerParticleType(StarParticles.get(), quokka::ParticleType::Star);
+
+		// Initialize particles through user-defined function
+		createInitialStarParticles();
+	}
+
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) {
 		AMREX_ASSERT(SinkParticles == nullptr);
 
@@ -3891,6 +3907,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::StochasticStellarPop) {
 		initializeParticleContainerFromCheckpoint(StochasticStellarPopParticles, quokka::ParticleType::StochasticStellarPop, header_box_arrays);
+	}
+
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Star) {
+		initializeParticleContainerFromCheckpoint(StarParticles, quokka::ParticleType::Star, header_box_arrays);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) {
