@@ -2448,6 +2448,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setConstantDi
 	}
 
 	// Check if on upper boundary in the specified dimension and set values
+	// Note that both lo and hi are inclusive bounds, i.e. for a dimension with 8 cells, the bounds are 0 and 7.
 	if (cellIdx > hi[dir]) {
 		for (int n = 0; n < static_cast<int>(N); ++n) {
 			consVar(i, j, k, n) = values[n];
