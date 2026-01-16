@@ -111,47 +111,47 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 	constexpr int nvar = Physics_Indices<StreamingProblem>::nvarTotal_cc;
 
 	// Prepare left boundary values (streaming inflow)
-	amrex::GpuArray<amrex::Real, nvar> left_values{};
+	amrex::GpuArray<amrex::Real, nvar> low_bdr_cells{};
 	{
 		const double Erad = 1.0;
 		const double Frad = c * Erad;
 		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
 			const double radEnergyFraction = 1.0 / Physics_Traits<StreamingProblem>::nGroups;
-			left_values[RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g] = Erad * radEnergyFraction;
-			left_values[RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = Frad * radEnergyFraction;
-			left_values[RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0;
-			left_values[RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0;
+			low_bdr_cells[RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g] = Erad * radEnergyFraction;
+			low_bdr_cells[RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = Frad * radEnergyFraction;
+			low_bdr_cells[RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0;
+			low_bdr_cells[RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0;
 		}
-		left_values[RadSystem<StreamingProblem>::gasEnergy_index] = initial_Egas;
-		left_values[RadSystem<StreamingProblem>::gasDensity_index] = rho;
-		left_values[RadSystem<StreamingProblem>::gasInternalEnergy_index] = initial_Egas;
-		left_values[RadSystem<StreamingProblem>::x1GasMomentum_index] = 0.;
-		left_values[RadSystem<StreamingProblem>::x2GasMomentum_index] = 0.;
-		left_values[RadSystem<StreamingProblem>::x3GasMomentum_index] = 0.;
+		low_bdr_cells[RadSystem<StreamingProblem>::gasEnergy_index] = initial_Egas;
+		low_bdr_cells[RadSystem<StreamingProblem>::gasDensity_index] = rho;
+		low_bdr_cells[RadSystem<StreamingProblem>::gasInternalEnergy_index] = initial_Egas;
+		low_bdr_cells[RadSystem<StreamingProblem>::x1GasMomentum_index] = 0.;
+		low_bdr_cells[RadSystem<StreamingProblem>::x2GasMomentum_index] = 0.;
+		low_bdr_cells[RadSystem<StreamingProblem>::x3GasMomentum_index] = 0.;
 	}
 
 	// Prepare right boundary values (constant)
-	amrex::GpuArray<amrex::Real, nvar> right_values{};
+	amrex::GpuArray<amrex::Real, nvar> high_bdr_cells{};
 	{
 		const double Erad = initial_Erad;
 		for (int g = 0; g < Physics_Traits<StreamingProblem>::nGroups; ++g) {
 			const double radEnergyFraction = 1.0 / Physics_Traits<StreamingProblem>::nGroups;
-			right_values[RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g] = Erad * radEnergyFraction;
-			right_values[RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0;
-			right_values[RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0;
-			right_values[RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0;
+			high_bdr_cells[RadSystem<StreamingProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g] = Erad * radEnergyFraction;
+			high_bdr_cells[RadSystem<StreamingProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0;
+			high_bdr_cells[RadSystem<StreamingProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0;
+			high_bdr_cells[RadSystem<StreamingProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0;
 		}
-		right_values[RadSystem<StreamingProblem>::gasEnergy_index] = initial_Egas;
-		right_values[RadSystem<StreamingProblem>::gasDensity_index] = rho;
-		right_values[RadSystem<StreamingProblem>::gasInternalEnergy_index] = initial_Egas;
-		right_values[RadSystem<StreamingProblem>::x1GasMomentum_index] = 0.;
-		right_values[RadSystem<StreamingProblem>::x2GasMomentum_index] = 0.;
-		right_values[RadSystem<StreamingProblem>::x3GasMomentum_index] = 0.;
+		high_bdr_cells[RadSystem<StreamingProblem>::gasEnergy_index] = initial_Egas;
+		high_bdr_cells[RadSystem<StreamingProblem>::gasDensity_index] = rho;
+		high_bdr_cells[RadSystem<StreamingProblem>::gasInternalEnergy_index] = initial_Egas;
+		high_bdr_cells[RadSystem<StreamingProblem>::x1GasMomentum_index] = 0.;
+		high_bdr_cells[RadSystem<StreamingProblem>::x2GasMomentum_index] = 0.;
+		high_bdr_cells[RadSystem<StreamingProblem>::x3GasMomentum_index] = 0.;
 	}
 
 	// Apply boundary conditions using helper functions (direction 0 = x-axis)
-	setConstantDirichletBCLo<0>(iv, consVar, geom, left_values);
-	setConstantDirichletBCHi<0>(iv, consVar, geom, right_values);
+	setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
+	setConstantDirichletBCHi<0>(iv, consVar, geom, high_bdr_cells);
 }
 
 auto problem_main() -> int

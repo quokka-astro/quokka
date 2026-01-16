@@ -139,26 +139,26 @@ AMRSimulation<TubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv
 	}
 
 	// Prepare left boundary values
-	amrex::GpuArray<amrex::Real, nvar> left_values{};
+	amrex::GpuArray<amrex::Real, nvar> low_bdr_cells{};
 
 	// Set specific values for radiation groups
 	for (int g = 0; g < Physics_Traits<TubeProblem>::nGroups; ++g) {
-		left_values[RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g] = Erad * radEnergyFractions[g];
-		left_values[RadSystem<TubeProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = Frad * radEnergyFractions[g];
-		left_values[RadSystem<TubeProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0.;
-		left_values[RadSystem<TubeProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0.;
+		low_bdr_cells[RadSystem<TubeProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g] = Erad * radEnergyFractions[g];
+		low_bdr_cells[RadSystem<TubeProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = Frad * radEnergyFractions[g];
+		low_bdr_cells[RadSystem<TubeProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0.;
+		low_bdr_cells[RadSystem<TubeProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0.;
 	}
 
 	// Set gas variables
-	left_values[RadSystem<TubeProblem>::gasDensity_index] = rho;
-	left_values[RadSystem<TubeProblem>::gasEnergy_index] = 0.;
-	left_values[RadSystem<TubeProblem>::gasInternalEnergy_index] = 0.;
-	left_values[RadSystem<TubeProblem>::x1GasMomentum_index] = rho * vel;
-	left_values[RadSystem<TubeProblem>::x2GasMomentum_index] = 0.;
-	left_values[RadSystem<TubeProblem>::x3GasMomentum_index] = 0.;
+	low_bdr_cells[RadSystem<TubeProblem>::gasDensity_index] = rho;
+	low_bdr_cells[RadSystem<TubeProblem>::gasEnergy_index] = 0.;
+	low_bdr_cells[RadSystem<TubeProblem>::gasInternalEnergy_index] = 0.;
+	low_bdr_cells[RadSystem<TubeProblem>::x1GasMomentum_index] = rho * vel;
+	low_bdr_cells[RadSystem<TubeProblem>::x2GasMomentum_index] = 0.;
+	low_bdr_cells[RadSystem<TubeProblem>::x3GasMomentum_index] = 0.;
 
 	// Apply boundary condition using helper function (direction 0 = x-axis)
-	setConstantDirichletBCLo<0>(iv, consVar, geom, left_values);
+	setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
 }
 
 auto problem_main() -> int

@@ -103,30 +103,30 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVec
 	const double vx_L = 2.629369;
 	const double P_L = 10.33333;
 
-	amrex::GpuArray<amrex::Real, nvar> left_values{};
-	left_values[HydroSystem<ShocktubeProblem>::density_index] = rho_L;
-	left_values[HydroSystem<ShocktubeProblem>::x1Momentum_index] = rho_L * vx_L;
-	left_values[HydroSystem<ShocktubeProblem>::x2Momentum_index] = 0;
-	left_values[HydroSystem<ShocktubeProblem>::x3Momentum_index] = 0;
-	left_values[HydroSystem<ShocktubeProblem>::energy_index] = P_L / (gamma - 1.) + 0.5 * rho_L * (vx_L * vx_L);
-	left_values[HydroSystem<ShocktubeProblem>::internalEnergy_index] = P_L / (gamma - 1.);
+	amrex::GpuArray<amrex::Real, nvar> low_bdr_cells{};
+	low_bdr_cells[HydroSystem<ShocktubeProblem>::density_index] = rho_L;
+	low_bdr_cells[HydroSystem<ShocktubeProblem>::x1Momentum_index] = rho_L * vx_L;
+	low_bdr_cells[HydroSystem<ShocktubeProblem>::x2Momentum_index] = 0;
+	low_bdr_cells[HydroSystem<ShocktubeProblem>::x3Momentum_index] = 0;
+	low_bdr_cells[HydroSystem<ShocktubeProblem>::energy_index] = P_L / (gamma - 1.) + 0.5 * rho_L * (vx_L * vx_L);
+	low_bdr_cells[HydroSystem<ShocktubeProblem>::internalEnergy_index] = P_L / (gamma - 1.);
 
 	// Right state
 	const double rho_R = 1.0;
 	const double vx_R = 0.0;
 	const double P_R = 1.0;
 
-	amrex::GpuArray<amrex::Real, nvar> right_values{};
-	right_values[HydroSystem<ShocktubeProblem>::density_index] = rho_R;
-	right_values[HydroSystem<ShocktubeProblem>::x1Momentum_index] = rho_R * vx_R;
-	right_values[HydroSystem<ShocktubeProblem>::x2Momentum_index] = 0;
-	right_values[HydroSystem<ShocktubeProblem>::x3Momentum_index] = 0;
-	right_values[HydroSystem<ShocktubeProblem>::energy_index] = P_R / (gamma - 1.) + 0.5 * rho_R * (vx_R * vx_R);
-	right_values[HydroSystem<ShocktubeProblem>::internalEnergy_index] = P_R / (gamma - 1.);
+	amrex::GpuArray<amrex::Real, nvar> high_bdr_cells{};
+	high_bdr_cells[HydroSystem<ShocktubeProblem>::density_index] = rho_R;
+	high_bdr_cells[HydroSystem<ShocktubeProblem>::x1Momentum_index] = rho_R * vx_R;
+	high_bdr_cells[HydroSystem<ShocktubeProblem>::x2Momentum_index] = 0;
+	high_bdr_cells[HydroSystem<ShocktubeProblem>::x3Momentum_index] = 0;
+	high_bdr_cells[HydroSystem<ShocktubeProblem>::energy_index] = P_R / (gamma - 1.) + 0.5 * rho_R * (vx_R * vx_R);
+	high_bdr_cells[HydroSystem<ShocktubeProblem>::internalEnergy_index] = P_R / (gamma - 1.);
 
 	// Apply boundary conditions
-	setConstantDirichletBCLo<0>(iv, consVar, geom, left_values);
-	setConstantDirichletBCHi<0>(iv, consVar, geom, right_values);
+	setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
+	setConstantDirichletBCHi<0>(iv, consVar, geom, high_bdr_cells);
 }
 
 template <>

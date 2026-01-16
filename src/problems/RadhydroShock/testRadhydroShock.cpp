@@ -127,38 +127,38 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 	const double Egas_L = Egas0;
 
 	// Prepare left boundary values
-	amrex::GpuArray<amrex::Real, nvar> left_values{};
-	left_values[RadSystem<ShockProblem>::gasDensity_index] = rho0;
-	left_values[RadSystem<ShockProblem>::gasInternalEnergy_index] = Egas_L;
-	left_values[RadSystem<ShockProblem>::x1GasMomentum_index] = px_L;
-	left_values[RadSystem<ShockProblem>::x2GasMomentum_index] = 0.;
-	left_values[RadSystem<ShockProblem>::x3GasMomentum_index] = 0.;
-	left_values[RadSystem<ShockProblem>::gasEnergy_index] = Egas_L + (px_L * px_L) / (2 * rho0);
-	left_values[RadSystem<ShockProblem>::radEnergy_index] = Erad0;
-	left_values[RadSystem<ShockProblem>::x1RadFlux_index] = 0;
-	left_values[RadSystem<ShockProblem>::x2RadFlux_index] = 0;
-	left_values[RadSystem<ShockProblem>::x3RadFlux_index] = 0;
+	amrex::GpuArray<amrex::Real, nvar> low_bdr_cells{};
+	low_bdr_cells[RadSystem<ShockProblem>::gasDensity_index] = rho0;
+	low_bdr_cells[RadSystem<ShockProblem>::gasInternalEnergy_index] = Egas_L;
+	low_bdr_cells[RadSystem<ShockProblem>::x1GasMomentum_index] = px_L;
+	low_bdr_cells[RadSystem<ShockProblem>::x2GasMomentum_index] = 0.;
+	low_bdr_cells[RadSystem<ShockProblem>::x3GasMomentum_index] = 0.;
+	low_bdr_cells[RadSystem<ShockProblem>::gasEnergy_index] = Egas_L + (px_L * px_L) / (2 * rho0);
+	low_bdr_cells[RadSystem<ShockProblem>::radEnergy_index] = Erad0;
+	low_bdr_cells[RadSystem<ShockProblem>::x1RadFlux_index] = 0;
+	low_bdr_cells[RadSystem<ShockProblem>::x2RadFlux_index] = 0;
+	low_bdr_cells[RadSystem<ShockProblem>::x3RadFlux_index] = 0;
 
 	// Right state
 	const double px_R = rho1 * v1;
 	const double Egas_R = Egas1;
 
 	// Prepare right boundary values
-	amrex::GpuArray<amrex::Real, nvar> right_values{};
-	right_values[RadSystem<ShockProblem>::gasDensity_index] = rho1;
-	right_values[RadSystem<ShockProblem>::gasInternalEnergy_index] = Egas_R;
-	right_values[RadSystem<ShockProblem>::x1GasMomentum_index] = px_R;
-	right_values[RadSystem<ShockProblem>::x2GasMomentum_index] = 0.;
-	right_values[RadSystem<ShockProblem>::x3GasMomentum_index] = 0.;
-	right_values[RadSystem<ShockProblem>::gasEnergy_index] = Egas_R + (px_R * px_R) / (2 * rho1);
-	right_values[RadSystem<ShockProblem>::radEnergy_index] = Erad1;
-	right_values[RadSystem<ShockProblem>::x1RadFlux_index] = 0;
-	right_values[RadSystem<ShockProblem>::x2RadFlux_index] = 0;
-	right_values[RadSystem<ShockProblem>::x3RadFlux_index] = 0;
+	amrex::GpuArray<amrex::Real, nvar> high_bdr_cells{};
+	high_bdr_cells[RadSystem<ShockProblem>::gasDensity_index] = rho1;
+	high_bdr_cells[RadSystem<ShockProblem>::gasInternalEnergy_index] = Egas_R;
+	high_bdr_cells[RadSystem<ShockProblem>::x1GasMomentum_index] = px_R;
+	high_bdr_cells[RadSystem<ShockProblem>::x2GasMomentum_index] = 0.;
+	high_bdr_cells[RadSystem<ShockProblem>::x3GasMomentum_index] = 0.;
+	high_bdr_cells[RadSystem<ShockProblem>::gasEnergy_index] = Egas_R + (px_R * px_R) / (2 * rho1);
+	high_bdr_cells[RadSystem<ShockProblem>::radEnergy_index] = Erad1;
+	high_bdr_cells[RadSystem<ShockProblem>::x1RadFlux_index] = 0;
+	high_bdr_cells[RadSystem<ShockProblem>::x2RadFlux_index] = 0;
+	high_bdr_cells[RadSystem<ShockProblem>::x3RadFlux_index] = 0;
 
 	// Apply boundary conditions using helper functions (direction 0 = x-axis)
-	setConstantDirichletBCLo<0>(iv, consVar, geom, left_values);
-	setConstantDirichletBCHi<0>(iv, consVar, geom, right_values);
+	setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
+	setConstantDirichletBCHi<0>(iv, consVar, geom, high_bdr_cells);
 }
 
 template <> void QuokkaSimulation<ShockProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)

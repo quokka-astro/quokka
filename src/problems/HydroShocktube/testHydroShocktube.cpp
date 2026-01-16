@@ -113,34 +113,34 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVec
 	const auto gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
 
 	// Prepare left boundary values (left state)
-	amrex::GpuArray<amrex::Real, nvar> left_values{};
+	amrex::GpuArray<amrex::Real, nvar> low_bdr_cells{};
 	// Initialize all to 0 first
 
 	// Set specific values
-	left_values[RadSystem<ShocktubeProblem>::gasEnergy_index] = P_L / (gamma - 1.);
-	left_values[RadSystem<ShocktubeProblem>::gasInternalEnergy_index] = P_L / (gamma - 1.);
-	left_values[RadSystem<ShocktubeProblem>::gasDensity_index] = rho_L;
-	left_values[RadSystem<ShocktubeProblem>::x1GasMomentum_index] = 0.;
-	left_values[RadSystem<ShocktubeProblem>::x2GasMomentum_index] = 0.;
-	left_values[RadSystem<ShocktubeProblem>::x3GasMomentum_index] = 0.;
+	low_bdr_cells[RadSystem<ShocktubeProblem>::gasEnergy_index] = P_L / (gamma - 1.);
+	low_bdr_cells[RadSystem<ShocktubeProblem>::gasInternalEnergy_index] = P_L / (gamma - 1.);
+	low_bdr_cells[RadSystem<ShocktubeProblem>::gasDensity_index] = rho_L;
+	low_bdr_cells[RadSystem<ShocktubeProblem>::x1GasMomentum_index] = 0.;
+	low_bdr_cells[RadSystem<ShocktubeProblem>::x2GasMomentum_index] = 0.;
+	low_bdr_cells[RadSystem<ShocktubeProblem>::x3GasMomentum_index] = 0.;
 
 	// Prepare right boundary values (right state)
-	amrex::GpuArray<amrex::Real, nvar> right_values{};
+	amrex::GpuArray<amrex::Real, nvar> high_bdr_cells{};
 	// Initialize all to 0 first
 	for (int n = 0; n < nvar; ++n) {
-		right_values[n] = 0;
+		high_bdr_cells[n] = 0;
 	}
 	// Set specific values
-	right_values[RadSystem<ShocktubeProblem>::gasEnergy_index] = P_R / (gamma - 1.);
-	right_values[RadSystem<ShocktubeProblem>::gasInternalEnergy_index] = P_R / (gamma - 1.);
-	right_values[RadSystem<ShocktubeProblem>::gasDensity_index] = rho_R;
-	right_values[RadSystem<ShocktubeProblem>::x1GasMomentum_index] = 0.;
-	right_values[RadSystem<ShocktubeProblem>::x2GasMomentum_index] = 0.;
-	right_values[RadSystem<ShocktubeProblem>::x3GasMomentum_index] = 0.;
+	high_bdr_cells[RadSystem<ShocktubeProblem>::gasEnergy_index] = P_R / (gamma - 1.);
+	high_bdr_cells[RadSystem<ShocktubeProblem>::gasInternalEnergy_index] = P_R / (gamma - 1.);
+	high_bdr_cells[RadSystem<ShocktubeProblem>::gasDensity_index] = rho_R;
+	high_bdr_cells[RadSystem<ShocktubeProblem>::x1GasMomentum_index] = 0.;
+	high_bdr_cells[RadSystem<ShocktubeProblem>::x2GasMomentum_index] = 0.;
+	high_bdr_cells[RadSystem<ShocktubeProblem>::x3GasMomentum_index] = 0.;
 
 	// Apply boundary conditions using helper functions (direction 0 = x-axis)
-	setConstantDirichletBCLo<0>(iv, consVar, geom, left_values);
-	setConstantDirichletBCHi<0>(iv, consVar, geom, right_values);
+	setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
+	setConstantDirichletBCHi<0>(iv, consVar, geom, high_bdr_cells);
 }
 
 template <> void QuokkaSimulation<ShocktubeProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)

@@ -155,24 +155,24 @@ AMRSimulation<MarshakProblem>::setCustomBoundaryConditions(const amrex::IntVect 
 	const double Egas = initial_T * CV;
 
 	// Prepare left boundary values (Marshak boundary with streaming inflow)
-	amrex::GpuArray<amrex::Real, nvar> left_values{};
+	amrex::GpuArray<amrex::Real, nvar> low_bdr_cells{};
 	// Set specific values for gas
-	left_values[RadSystem<MarshakProblem>::gasEnergy_index] = Egas;
-	left_values[RadSystem<MarshakProblem>::gasDensity_index] = rho0;
-	left_values[RadSystem<MarshakProblem>::gasInternalEnergy_index] = Egas;
-	left_values[RadSystem<MarshakProblem>::x1GasMomentum_index] = 0.;
-	left_values[RadSystem<MarshakProblem>::x2GasMomentum_index] = 0.;
-	left_values[RadSystem<MarshakProblem>::x3GasMomentum_index] = 0.;
+	low_bdr_cells[RadSystem<MarshakProblem>::gasEnergy_index] = Egas;
+	low_bdr_cells[RadSystem<MarshakProblem>::gasDensity_index] = rho0;
+	low_bdr_cells[RadSystem<MarshakProblem>::gasInternalEnergy_index] = Egas;
+	low_bdr_cells[RadSystem<MarshakProblem>::x1GasMomentum_index] = 0.;
+	low_bdr_cells[RadSystem<MarshakProblem>::x2GasMomentum_index] = 0.;
+	low_bdr_cells[RadSystem<MarshakProblem>::x3GasMomentum_index] = 0.;
 	// Set specific values for multigroup radiation
 	for (int g = 0; g < Physics_Traits<MarshakProblem>::nGroups; ++g) {
-		left_values[RadSystem<MarshakProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g] = Erads[g];
-		left_values[RadSystem<MarshakProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = Frads[g];
-		left_values[RadSystem<MarshakProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0;
-		left_values[RadSystem<MarshakProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0;
+		low_bdr_cells[RadSystem<MarshakProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g] = Erads[g];
+		low_bdr_cells[RadSystem<MarshakProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = Frads[g];
+		low_bdr_cells[RadSystem<MarshakProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0;
+		low_bdr_cells[RadSystem<MarshakProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g] = 0;
 	}
 
 	// Apply boundary conditions using helper function (direction 0 = x-axis)
-	setConstantDirichletBCLo<0>(iv, consVar, geom, left_values);
+	setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
 }
 
 auto problem_main() -> int

@@ -214,26 +214,26 @@ AMRSimulation<QuirkProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 	const auto gamma = quokka::EOS_Traits<QuirkProblem>::gamma;
 
 	// Prepare left boundary values (left state)
-	amrex::GpuArray<amrex::Real, nvar> left_values{};
-	left_values[RadSystem<QuirkProblem>::gasEnergy_index] = pl / (gamma - 1.) + 0.5 * dl * ul * ul;
-	left_values[RadSystem<QuirkProblem>::gasInternalEnergy_index] = pl / (gamma - 1.);
-	left_values[RadSystem<QuirkProblem>::gasDensity_index] = dl;
-	left_values[RadSystem<QuirkProblem>::x1GasMomentum_index] = dl * ul;
-	left_values[RadSystem<QuirkProblem>::x2GasMomentum_index] = 0.;
-	left_values[RadSystem<QuirkProblem>::x3GasMomentum_index] = 0.;
+	amrex::GpuArray<amrex::Real, nvar> low_bdr_cells{};
+	low_bdr_cells[RadSystem<QuirkProblem>::gasEnergy_index] = pl / (gamma - 1.) + 0.5 * dl * ul * ul;
+	low_bdr_cells[RadSystem<QuirkProblem>::gasInternalEnergy_index] = pl / (gamma - 1.);
+	low_bdr_cells[RadSystem<QuirkProblem>::gasDensity_index] = dl;
+	low_bdr_cells[RadSystem<QuirkProblem>::x1GasMomentum_index] = dl * ul;
+	low_bdr_cells[RadSystem<QuirkProblem>::x2GasMomentum_index] = 0.;
+	low_bdr_cells[RadSystem<QuirkProblem>::x3GasMomentum_index] = 0.;
 
 	// Prepare right boundary values (right state)
-	amrex::GpuArray<amrex::Real, nvar> right_values{};
-	right_values[RadSystem<QuirkProblem>::gasEnergy_index] = pr / (gamma - 1.) + 0.5 * dr * ur * ur;
-	right_values[RadSystem<QuirkProblem>::gasInternalEnergy_index] = pr / (gamma - 1.);
-	right_values[RadSystem<QuirkProblem>::gasDensity_index] = dr;
-	right_values[RadSystem<QuirkProblem>::x1GasMomentum_index] = dr * ur;
-	right_values[RadSystem<QuirkProblem>::x2GasMomentum_index] = 0.;
-	right_values[RadSystem<QuirkProblem>::x3GasMomentum_index] = 0.;
+	amrex::GpuArray<amrex::Real, nvar> high_bdr_cells{};
+	high_bdr_cells[RadSystem<QuirkProblem>::gasEnergy_index] = pr / (gamma - 1.) + 0.5 * dr * ur * ur;
+	high_bdr_cells[RadSystem<QuirkProblem>::gasInternalEnergy_index] = pr / (gamma - 1.);
+	high_bdr_cells[RadSystem<QuirkProblem>::gasDensity_index] = dr;
+	high_bdr_cells[RadSystem<QuirkProblem>::x1GasMomentum_index] = dr * ur;
+	high_bdr_cells[RadSystem<QuirkProblem>::x2GasMomentum_index] = 0.;
+	high_bdr_cells[RadSystem<QuirkProblem>::x3GasMomentum_index] = 0.;
 
 	// Apply boundary conditions using helper functions (direction 0 = x-axis)
-	setConstantDirichletBCLo<0>(iv, consVar, geom, left_values);
-	setConstantDirichletBCHi<0>(iv, consVar, geom, right_values);
+	setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
+	setConstantDirichletBCHi<0>(iv, consVar, geom, high_bdr_cells);
 }
 
 auto problem_main() -> int

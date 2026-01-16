@@ -124,30 +124,30 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVec
 	const double E_R = Eint_R + 0.5 * rho_R * (vx_R * vx_R);
 
 	// Prepare left boundary values
-	amrex::GpuArray<amrex::Real, nvar> left_values{};
+	amrex::GpuArray<amrex::Real, nvar> low_bdr_cells{};
 
-	left_values[RadSystem<ShocktubeProblem>::gasDensity_index] = rho_L;
-	left_values[RadSystem<ShocktubeProblem>::x1GasMomentum_index] = rho_L * vx_L;
-	left_values[RadSystem<ShocktubeProblem>::x2GasMomentum_index] = 0.;
-	left_values[RadSystem<ShocktubeProblem>::x3GasMomentum_index] = 0.;
-	left_values[RadSystem<ShocktubeProblem>::gasEnergy_index] = E_L;
-	left_values[RadSystem<ShocktubeProblem>::gasInternalEnergy_index] = Eint_L;
+	low_bdr_cells[RadSystem<ShocktubeProblem>::gasDensity_index] = rho_L;
+	low_bdr_cells[RadSystem<ShocktubeProblem>::x1GasMomentum_index] = rho_L * vx_L;
+	low_bdr_cells[RadSystem<ShocktubeProblem>::x2GasMomentum_index] = 0.;
+	low_bdr_cells[RadSystem<ShocktubeProblem>::x3GasMomentum_index] = 0.;
+	low_bdr_cells[RadSystem<ShocktubeProblem>::gasEnergy_index] = E_L;
+	low_bdr_cells[RadSystem<ShocktubeProblem>::gasInternalEnergy_index] = Eint_L;
 
 	// Prepare right boundary values
-	amrex::GpuArray<amrex::Real, nvar> right_values{};
+	amrex::GpuArray<amrex::Real, nvar> high_bdr_cells{};
 	for (int n = 0; n < nvar; ++n) {
-		right_values[n] = 0;
+		high_bdr_cells[n] = 0;
 	}
-	right_values[RadSystem<ShocktubeProblem>::gasDensity_index] = rho_R;
-	right_values[RadSystem<ShocktubeProblem>::x1GasMomentum_index] = rho_R * vx_R;
-	right_values[RadSystem<ShocktubeProblem>::x2GasMomentum_index] = 0.;
-	right_values[RadSystem<ShocktubeProblem>::x3GasMomentum_index] = 0.;
-	right_values[RadSystem<ShocktubeProblem>::gasEnergy_index] = E_R;
-	right_values[RadSystem<ShocktubeProblem>::gasInternalEnergy_index] = Eint_R;
+	high_bdr_cells[RadSystem<ShocktubeProblem>::gasDensity_index] = rho_R;
+	high_bdr_cells[RadSystem<ShocktubeProblem>::x1GasMomentum_index] = rho_R * vx_R;
+	high_bdr_cells[RadSystem<ShocktubeProblem>::x2GasMomentum_index] = 0.;
+	high_bdr_cells[RadSystem<ShocktubeProblem>::x3GasMomentum_index] = 0.;
+	high_bdr_cells[RadSystem<ShocktubeProblem>::gasEnergy_index] = E_R;
+	high_bdr_cells[RadSystem<ShocktubeProblem>::gasInternalEnergy_index] = Eint_R;
 
 	// Apply boundary conditions using helper functions (direction 0 = x-axis)
-	setConstantDirichletBCLo<0>(iv, consVar, geom, left_values);
-	setConstantDirichletBCHi<0>(iv, consVar, geom, right_values);
+	setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
+	setConstantDirichletBCHi<0>(iv, consVar, geom, high_bdr_cells);
 }
 
 template <>
