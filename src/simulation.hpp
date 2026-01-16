@@ -2551,11 +2551,16 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCLo(
 		// Inflow: mom_normal > 0 (gas moving into domain) → reflection with flipped momentum
 		if (mom_normal_interior < 0.0) {
 			// Outflow: use first-order extrapolation (copy from nearest interior cell)
-			consVar(i, j, k, HydroSystem<problem_t>::density_index) = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::density_index);
-			consVar(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x1Momentum_index);
-			consVar(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x2Momentum_index);
-			consVar(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x3Momentum_index);
-			consVar(i, j, k, HydroSystem<problem_t>::energy_index) = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::energy_index);
+			consVar(i, j, k, HydroSystem<problem_t>::density_index) =
+			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::density_index);
+			consVar(i, j, k, HydroSystem<problem_t>::x1Momentum_index) =
+			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x1Momentum_index);
+			consVar(i, j, k, HydroSystem<problem_t>::x2Momentum_index) =
+			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x2Momentum_index);
+			consVar(i, j, k, HydroSystem<problem_t>::x3Momentum_index) =
+			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x3Momentum_index);
+			consVar(i, j, k, HydroSystem<problem_t>::energy_index) =
+			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::energy_index);
 			consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) =
 			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::internalEnergy_index);
 		} else {
@@ -2657,11 +2662,16 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCHi(
 		// Inflow: mom_normal < 0 (gas moving into domain) → reflection with flipped momentum
 		if (mom_normal_interior > 0.0) {
 			// Outflow: use first-order extrapolation (copy from nearest interior cell)
-			consVar(i, j, k, HydroSystem<problem_t>::density_index) = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::density_index);
-			consVar(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x1Momentum_index);
-			consVar(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x2Momentum_index);
-			consVar(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x3Momentum_index);
-			consVar(i, j, k, HydroSystem<problem_t>::energy_index) = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::energy_index);
+			consVar(i, j, k, HydroSystem<problem_t>::density_index) =
+			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::density_index);
+			consVar(i, j, k, HydroSystem<problem_t>::x1Momentum_index) =
+			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x1Momentum_index);
+			consVar(i, j, k, HydroSystem<problem_t>::x2Momentum_index) =
+			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x2Momentum_index);
+			consVar(i, j, k, HydroSystem<problem_t>::x3Momentum_index) =
+			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x3Momentum_index);
+			consVar(i, j, k, HydroSystem<problem_t>::energy_index) =
+			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::energy_index);
 			consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) =
 			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::internalEnergy_index);
 		} else {
