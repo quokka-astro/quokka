@@ -126,9 +126,7 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 	// Prepare left boundary values (left state)
 	amrex::GpuArray<amrex::Real, nvar> left_values{};
 	// Initialize all to 0 first
-	for (int n = 0; n < nvar; ++n) {
-		left_values[n] = 0;
-	}
+
 
 	const double px_L = rho0 * v0;
 	const double Egas_L = Egas0;

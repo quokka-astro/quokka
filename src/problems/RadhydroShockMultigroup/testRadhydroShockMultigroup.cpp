@@ -125,9 +125,7 @@ AMRSimulation<ShockProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 
 	// Prepare left boundary values
 	amrex::GpuArray<amrex::Real, nvar> left_values{};
-	for (int n = 0; n < nvar; ++n) {
-		left_values[n] = 0;
-	}
+
 	left_values[RadSystem<ShockProblem>::gasDensity_index] = rho0;
 	left_values[RadSystem<ShockProblem>::gasInternalEnergy_index] = Egas_L;
 	left_values[RadSystem<ShockProblem>::x1GasMomentum_index] = px_L;

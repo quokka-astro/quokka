@@ -158,9 +158,7 @@ AMRSimulation<MHDShocktubeProblem>::setCustomBoundaryConditions(const amrex::Int
 	// Prepare left boundary values (left state)
 	amrex::GpuArray<amrex::Real, nvar> left_values{};
 	// Initialize all to 0 first
-	for (int n = 0; n < nvar; ++n) {
-		left_values[n] = 0;
-	}
+
 	// Set specific values
 	left_values[RadSystem<MHDShocktubeProblem>::gasEnergy_index] = P_L / (gamma - 1.) + Emag_L;
 	left_values[RadSystem<MHDShocktubeProblem>::gasInternalEnergy_index] = P_L / (gamma - 1.);
