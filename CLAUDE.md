@@ -8,8 +8,8 @@ Quokka is a two-moment radiation hydrodynamics code using the piecewise-paraboli
 ## Build & Test Commands
 - Run `source ~/rc/qk.rc` to load modules before the first build. 
 - **Build a specific test**: `cd /Users/cche/softwares/quokka/quokka/build/clang-1d && ninja -j8 <TestName>`
-- **Build all tests**: `ninja -j8`
 - **Run a specific test**: `TestName=<TestName> && cd /Users/cche/softwares/quokka/quokka/tests && (../build/clang-1d/src/problems/$TestName/$TestName ../inputs/$TestName.in tiny_profiler.enabled=0 suppress_output=1 && echo Success || echo Fail)`
+- **Build all tests**: `cd /Users/cche/softwares/quokka/quokka/build/clang-1d && ninja -j8`
 - **Run all tests**: `ctest -j8`
 
 ## Architecture Overview
