@@ -206,6 +206,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	SlopeLimiter mhdPlmLimiter_ = SlopeLimiter::sweby;
 	int useDualEnergy_ = 1;			// 0 == disabled; 1 == use auxiliary internal energy equation (default)
 	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
+	bool skipHydroAdvance_ = false;		// if true, skip hydro advance and copy state_old to state_new
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
 	// number of ghost cells for face velocity computation (default == 2)
 	// we now need 3 total to accommodate the higher-order reconstruction in computeEMF
@@ -552,6 +553,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("use_dual_energy", useDualEnergy_);
 		hpp.query("abort_on_fofc_failure", abortOnFofcFailure_);
 		hpp.query("artificial_viscosity_coefficient", artificialViscosityK_);
+		hpp.query("skip_advance", skipHydroAdvance_);
 	}
 
 	// set MHD runtime parameters
@@ -1377,7 +1379,16 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTim
 
 	// advance hydro
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled) {
-		advanceHydroAtLevelWithRetries(lev, time, dt_lev, fr_as_crse, fr_as_fine, emf_as_crse, emf_as_fine);
+		if (skipHydroAdvance_) {
+			amrex::MultiFab::Copy(state_new_cc_[lev], state_old_cc_[lev], 0, 0, nvars_, 0);
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+					amrex::MultiFab::Copy(state_new_fc_[lev][dir], state_old_fc_[lev][dir], 0, 0, n_mhd_vars_per_dim_, 0);
+				}
+			}
+		} else {
+			advanceHydroAtLevelWithRetries(lev, time, dt_lev, fr_as_crse, fr_as_fine, emf_as_crse, emf_as_fine);
+		}
 	} else {
 		// copy hydro vars from state_old_cc_ to state_new_cc_
 		// (otherwise radiation update will be wrong!)

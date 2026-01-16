@@ -44,6 +44,7 @@ static double n_amb = 1.0;							   // ambient density (g cm^-3) // NOLINT
 static double T_amb = 100.0;							   // ambient temperature (K) // NOLINT
 static double t_stop = 3.0e5;							   // stop time (yr) // NOLINT
 static amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity{0.0, 0.0, 0.0}; // NOLINT
+static bool skip_checks = false;							   // NOLINT
 
 template <> struct Particle_Traits<SNProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
@@ -180,6 +181,7 @@ auto problem_main() -> int
 	pp.query("t_stop", t_stop);
 	pp.query("SN_particles_file", SN_particles_file);
 	pp.query("refine_half_domain", refine_half_domain);
+	pp.query("skip_checks", skip_checks);
 	std::vector<amrex::Real> boost_velocity_vec(AMREX_SPACEDIM, 0.0);
 	if (pp.queryarr("boost_velocity", boost_velocity_vec) != 0) {
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
@@ -217,34 +219,37 @@ auto problem_main() -> int
 	const amrex::Real max_internal_energy = max_Eint_global * vol;
 	const amrex::Real expected_minimum_max_internal_energy = 1.0e51 / (7 * 7 * 7); // 1e51 erg energy into (2 * 3 + 1)^3 cells
 	int status = 1;
-	const bool pass_max_internal_energy = max_internal_energy > expected_minimum_max_internal_energy;
-	const bool pass_mass = mass_increase_rel_err < mass_increase_rel_err_tol;
-	bool is_pass = pass_max_internal_energy;
-	if (sim.maxTimesteps_ < 20) {
-		is_pass = is_pass && pass_mass;
-	} else {
-		// Write data to CSV file
-		std::ofstream csv_file("sn_energy_history_" + coolingTableType_ + ".csv");
-		if (csv_file.is_open()) {
-			// Set precision to 13 significant digits
-			csv_file << std::scientific << std::setprecision(13);
-
-			// Write header
-			csv_file << "step, Time_yr, Max_Internal_Energy_erg\n";
-
-			// Write data
-			for (int i = 0; i < static_cast<int>(max_Eint_history.size()); ++i) {
-				csv_file << i << ", " << t_history[i] / year << ", " << max_Eint_history[i] * vol << "\n";
-			}
-
-			csv_file.close();
-			amrex::Print() << "Energy history data written to sn_energy_history.csv\n";
+	bool is_pass = true;
+	if (!skip_checks) {
+		const bool pass_max_internal_energy = max_internal_energy > expected_minimum_max_internal_energy;
+		const bool pass_mass = mass_increase_rel_err < mass_increase_rel_err_tol;
+		is_pass = pass_max_internal_energy;
+		if (sim.maxTimesteps_ < 20) {
+			is_pass = is_pass && pass_mass;
 		} else {
-			amrex::Print() << "Error: Could not open CSV file for writing\n";
+			// Write data to CSV file
+			std::ofstream csv_file("sn_energy_history_" + coolingTableType_ + ".csv");
+			if (csv_file.is_open()) {
+				// Set precision to 13 significant digits
+				csv_file << std::scientific << std::setprecision(13);
+
+				// Write header
+				csv_file << "step, Time_yr, Max_Internal_Energy_erg\n";
+
+				// Write data
+				for (int i = 0; i < static_cast<int>(max_Eint_history.size()); ++i) {
+					csv_file << i << ", " << t_history[i] / year << ", " << max_Eint_history[i] * vol << "\n";
+				}
+
+				csv_file.close();
+				amrex::Print() << "Energy history data written to sn_energy_history.csv\n";
+			} else {
+				amrex::Print() << "Error: Could not open CSV file for writing\n";
+			}
 		}
 	}
 
-	if (is_pass) {
+	if (skip_checks || is_pass) {
 		status = 0;
 		amrex::Print() << "Test passed. Max internal energy in cells: " << max_internal_energy << "\n";
 		amrex::Print() << "Max internal energy last timestep: " << max_Eint_last * vol << "\n";

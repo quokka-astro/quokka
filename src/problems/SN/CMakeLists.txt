@@ -18,4 +18,8 @@ if(AMReX_SPACEDIM EQUAL 3)
     NAME SN_long_resampled
     COMMAND ${JOB_NAME} ../inputs/SN_long_resampled.in
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(
+    NAME SN_feedback_only
+    COMMAND ${JOB_NAME} ../inputs/SN_feedback_only.in
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

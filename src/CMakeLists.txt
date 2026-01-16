@@ -118,6 +118,8 @@ endif(WARNINGS_AS_ERRORS)
 
 include_directories(${amrex_INCLUDE_DIRS_RET})
 include_directories(${fmt_INCLUDE_DIRS_RET})
+
+find_package(MPI REQUIRED)
 include_directories(${HDF5_INCLUDE_DIRS})
 include_directories(${Boost_INCLUDE_DIRS_RET})
 include_directories(${CMAKE_SOURCE_DIR}/src)
@@ -154,5 +156,9 @@ set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
                         "${openPMDSources}")
 
 set (QuokkaObjSources "${QuokkaSourcesNoEOS}" "${gamma_law_sources}")
+
+add_executable(plotfile_boost ${QuokkaCode_SOURCE_DIR}/tools/plotfile_boost.cpp)
+target_include_directories(plotfile_boost PRIVATE ${MPI_CXX_INCLUDE_DIRS})
+target_link_libraries(plotfile_boost MPI::MPI_CXX)
 
 add_subdirectory(problems)
