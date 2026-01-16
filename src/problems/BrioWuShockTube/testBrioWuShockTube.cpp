@@ -193,52 +193,17 @@ AMRSimulation<MHDShocktubeProblem>::setCustomBoundaryConditionsFaceVar(const amr
 								       int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
 								       const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
-#if (AMREX_SPACEDIM == 1)
-	auto i = iv.toArray()[0];
-	int const j = 0;
-	int const k = 0;
-#endif
-#if (AMREX_SPACEDIM == 2)
-	auto [i, j] = iv.toArray();
-	int const k = 0;
-#endif
-#if (AMREX_SPACEDIM == 3)
-	auto [i, j, k] = iv.toArray();
-#endif
-	amrex::Box const &box = geom.Domain();
-	amrex::GpuArray<int, 3> lo = box.loVect3d();
-	amrex::GpuArray<int, 3> hi = box.hiVect3d();
+	// Prepare boundary values for each face direction: {x-face, y-face, z-face}
+	// For low boundary (left side)
+	const amrex::GpuArray<amrex::Real, 3> low_bdr_values = {Bx, By_L, Bz};
 
-	// Use direction to determine which boundaries to check
-	switch (dir) {
-		case quokka::direction::x:
-			if (i <= lo[0]) {
-				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = Bx;
-			} else if (i > hi[0]) {
-				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = Bx;
-			}
-			break;
-		case quokka::direction::y:
-			if (i < lo[0]) {
-				// Set y-direction left boundary values
-				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = By_L;
-			} else if (i > hi[0]) {
-				// Set y-direction right boundary values
-				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = By_R;
-			}
-			break;
-		case quokka::direction::z:
-			if (i < lo[0]) {
-				// Set z-direction left boundary values
-				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = Bz;
-			} else if (i > hi[0]) {
-				// Set z-direction right boundary values
-				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = Bz;
-			}
-			break;
-		case quokka::direction::na:
-			break; // do nothing
-	}
+	// For high boundary (right side)
+	const amrex::GpuArray<amrex::Real, 3> high_bdr_values = {Bx, By_R, Bz};
+
+	// Apply boundary conditions using helper functions (boundary_dim 0 = x-axis)
+	// The helper functions will internally select the appropriate value based on face_dir
+	setConstantDirichletBCFaceVarLo<0, dir, 3>(iv, consVar_fc, geom, low_bdr_values);
+	setConstantDirichletBCFaceVarHi<0, dir, 3>(iv, consVar_fc, geom, high_bdr_values);
 }
 
 template <> void QuokkaSimulation<MHDShocktubeProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
