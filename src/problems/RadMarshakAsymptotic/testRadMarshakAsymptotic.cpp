@@ -82,18 +82,7 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVe
 							      int /*numcomp*/, amrex::GeometryData const & /*geom*/, const amrex::Real /*time*/,
 							      const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
-#if (AMREX_SPACEDIM == 1)
-	auto i = iv.toArray()[0];
-	int j = 0;
-	int k = 0;
-#endif
-#if (AMREX_SPACEDIM == 2)
-	auto [i, j] = iv.toArray();
-	int k = 0;
-#endif
-#if (AMREX_SPACEDIM == 3)
-	auto [i, j, k] = iv.toArray();
-#endif
+	auto const [i, j, k] = iv.dim3();
 
 	// This boundary condition is only first-order accurate!
 	// (Not quite good enough for simulating an optically-thick Marshak wave;
