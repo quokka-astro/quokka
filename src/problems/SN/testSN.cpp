@@ -40,9 +40,9 @@ const double mass_SNR = 10.0 * C::M_solar;
 const int n_SNR = 2;
 constexpr double B0 = 1.0e-7; // uniform background field for MHD variant
 
-static double n_amb = 1.0;    // ambient density (g cm^-3) // NOLINT
-static double T_amb = 100.0;  // ambient temperature (K) // NOLINT
-static double t_stop = 3.0e5; // stop time (yr) // NOLINT
+static double n_amb = 1.0;							   // ambient density (g cm^-3) // NOLINT
+static double T_amb = 100.0;							   // ambient temperature (K) // NOLINT
+static double t_stop = 3.0e5;							   // stop time (yr) // NOLINT
 static amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity{0.0, 0.0, 0.0}; // NOLINT
 
 template <> struct Particle_Traits<SNProblem> {
@@ -114,8 +114,7 @@ template <> void QuokkaSimulation<SNProblem>::setInitialConditionsOnGrid(quokka:
 	const double rho = rho_bg;
 	const double rho_e = E0;
 	const double Emag = 0.5 * B0 * B0;
-	const double v2 = (boost_velocity[0] * boost_velocity[0]) + (boost_velocity[1] * boost_velocity[1]) +
-			  (boost_velocity[2] * boost_velocity[2]);
+	const double v2 = (boost_velocity[0] * boost_velocity[0]) + (boost_velocity[1] * boost_velocity[1]) + (boost_velocity[2] * boost_velocity[2]);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
