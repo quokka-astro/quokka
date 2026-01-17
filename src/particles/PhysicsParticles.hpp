@@ -686,45 +686,30 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		const int nstruct_real = ContainerType::ParticleType::NReal;
 		names.reserve(nstruct_real);
 
-		if constexpr (particleType_ == ParticleType::Rad) {
-			names.push_back("birth_time");
-			names.push_back("death_time");
-			appendLuminosityNames(names, nstruct_real - 2);
-		} else if constexpr (particleType_ == ParticleType::CIC) {
+		static constexpr bool has_mass_velocity = particleType_ == ParticleType::CIC || particleType_ == ParticleType::CICRad ||
+							  particleType_ == ParticleType::StochasticStellarPop || particleType_ == ParticleType::Sink ||
+							  particleType_ == ParticleType::Test;
+		static constexpr bool has_birth_death = particleType_ == ParticleType::Rad || particleType_ == ParticleType::CICRad ||
+							particleType_ == ParticleType::StochasticStellarPop || particleType_ == ParticleType::Test;
+		static constexpr bool has_mass_at_birth = particleType_ == ParticleType::StochasticStellarPop;
+		static constexpr bool has_luminosity = particleType_ == ParticleType::Rad || particleType_ == ParticleType::CICRad ||
+						       particleType_ == ParticleType::StochasticStellarPop || particleType_ == ParticleType::Test;
+
+		if constexpr (has_mass_velocity) {
 			names.push_back("mass");
 			names.push_back("vx");
 			names.push_back("vy");
 			names.push_back("vz");
-		} else if constexpr (particleType_ == ParticleType::CICRad) {
-			names.push_back("mass");
-			names.push_back("vx");
-			names.push_back("vy");
-			names.push_back("vz");
+		}
+		if constexpr (has_birth_death) {
 			names.push_back("birth_time");
 			names.push_back("death_time");
-			appendLuminosityNames(names, nstruct_real - 6);
-		} else if constexpr (particleType_ == ParticleType::StochasticStellarPop) {
-			names.push_back("mass");
-			names.push_back("vx");
-			names.push_back("vy");
-			names.push_back("vz");
-			names.push_back("birth_time");
-			names.push_back("death_time");
+		}
+		if constexpr (has_mass_at_birth) {
 			names.push_back("mass_at_birth");
-			appendLuminosityNames(names, nstruct_real - 7);
-		} else if constexpr (particleType_ == ParticleType::Sink) {
-			names.push_back("mass");
-			names.push_back("vx");
-			names.push_back("vy");
-			names.push_back("vz");
-		} else if constexpr (particleType_ == ParticleType::Test) {
-			names.push_back("mass");
-			names.push_back("vx");
-			names.push_back("vy");
-			names.push_back("vz");
-			names.push_back("birth_time");
-			names.push_back("death_time");
-			appendLuminosityNames(names, nstruct_real - 6);
+		}
+		if constexpr (has_luminosity) {
+			appendLuminosityNames(names, nstruct_real - static_cast<int>(names.size()));
 		}
 
 		for (int i = static_cast<int>(names.size()); i < nstruct_real; ++i) {
