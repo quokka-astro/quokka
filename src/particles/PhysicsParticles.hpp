@@ -87,10 +87,12 @@ template <ParticleType P> struct RealNameTraits {
 						  P == ParticleType::Sink || P == ParticleType::Test;
 	static constexpr bool has_birth_death =
 	    P == ParticleType::Rad || P == ParticleType::CICRad || P == ParticleType::StochasticStellarPop || P == ParticleType::Test;
+	static constexpr bool has_birth_death_positions = P == ParticleType::StochasticStellarPop;
 	static constexpr bool has_mass_at_birth = P == ParticleType::StochasticStellarPop;
 	static constexpr bool has_luminosity =
 	    P == ParticleType::Rad || P == ParticleType::CICRad || P == ParticleType::StochasticStellarPop || P == ParticleType::Test;
-	static constexpr int base_count = (has_mass_velocity ? 4 : 0) + (has_birth_death ? 2 : 0) + (has_mass_at_birth ? 1 : 0);
+	static constexpr int base_count =
+	    (has_mass_velocity ? 4 : 0) + (has_birth_death ? 2 : 0) + (has_birth_death_positions ? 6 : 0) + (has_mass_at_birth ? 1 : 0);
 };
 
 template <ParticleType P> struct IntNameTraits {
@@ -124,6 +126,14 @@ template <ParticleType P, int NReal, int NGroups> consteval auto makeBaseRealNam
 	if constexpr (RealNameTraits<P>::has_birth_death) {
 		names[idx++] = "birth_time";
 		names[idx++] = "death_time";
+	}
+	if constexpr (RealNameTraits<P>::has_birth_death_positions) {
+		names[idx++] = "birth_x";
+		names[idx++] = "birth_y";
+		names[idx++] = "birth_z";
+		names[idx++] = "death_x";
+		names[idx++] = "death_y";
+		names[idx++] = "death_z";
 	}
 	if constexpr (RealNameTraits<P>::has_mass_at_birth) {
 		names[idx++] = "mass_at_birth";
@@ -206,6 +216,9 @@ template <ParticleType P, int NReal, int NInt, int NGroups> struct ParticleNameT
 			if (real[StochasticStellarPopParticleMassIdx] != "mass" || real[StochasticStellarPopParticleVxIdx] != "vx" ||
 			    real[StochasticStellarPopParticleVyIdx] != "vy" || real[StochasticStellarPopParticleVzIdx] != "vz" ||
 			    real[StochasticStellarPopParticleBirthTimeIdx] != "birth_time" || real[StochasticStellarPopParticleDeathTimeIdx] != "death_time" ||
+			    real[StochasticStellarPopParticleBirthPosXIdx] != "birth_x" || real[StochasticStellarPopParticleBirthPosYIdx] != "birth_y" ||
+			    real[StochasticStellarPopParticleBirthPosZIdx] != "birth_z" || real[StochasticStellarPopParticleDeathPosXIdx] != "death_x" ||
+			    real[StochasticStellarPopParticleDeathPosYIdx] != "death_y" || real[StochasticStellarPopParticleDeathPosZIdx] != "death_z" ||
 			    real[StochasticStellarPopParticleMassAtBirthIdx] != "mass_at_birth") {
 				return false;
 			}

@@ -353,6 +353,12 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 				const amrex::Real pos_y = p.pos(1);
 				const amrex::Real pos_z = p.pos(2);
 
+				if constexpr (ContainerType::ParticleType::NReal > StochasticStellarPopParticleDeathPosZIdx) {
+					p.rdata(StochasticStellarPopParticleDeathPosXIdx) = pos_x;
+					p.rdata(StochasticStellarPopParticleDeathPosYIdx) = pos_y;
+					p.rdata(StochasticStellarPopParticleDeathPosZIdx) = pos_z;
+				}
+
 				// Find the cell containing the particle
 				int ix = static_cast<int>(amrex::Math::floor((pos_x - plo[0]) * dxi[0]));
 				int iy = static_cast<int>(amrex::Math::floor((pos_y - plo[1]) * dxi[1]));
@@ -616,6 +622,11 @@ void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real ste
 				// Update the particle's evolution stage to SNRemnant if it's time
 				if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex + 1)) {
 					p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
+					if constexpr (ContainerType::ParticleType::NReal > StochasticStellarPopParticleDeathPosZIdx) {
+						p.rdata(StochasticStellarPopParticleDeathPosXIdx) = p.pos(0);
+						p.rdata(StochasticStellarPopParticleDeathPosYIdx) = p.pos(1);
+						p.rdata(StochasticStellarPopParticleDeathPosZIdx) = p.pos(2);
+					}
 				}
 			});
 		}

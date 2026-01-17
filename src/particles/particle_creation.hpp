@@ -460,6 +460,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			amrex::ignore_unused(fab_fc);
 
 			if (mass_idx + 3 < ParticleType::NReal) {
+				const amrex::Real unset_position = std::numeric_limits<amrex::Real>::max();
 				// Calculate common values for all particles
 				const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 				const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
@@ -494,6 +495,13 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					p.pos(0) = plo[0] + (i + 0.5) * dx[0];
 					p.pos(1) = plo[1] + (j + 0.5) * dx[1];
 					p.pos(2) = plo[2] + (k + 0.5) * dx[2];
+
+					p.rdata(StochasticStellarPopParticleBirthPosXIdx) = p.pos(0);
+					p.rdata(StochasticStellarPopParticleBirthPosYIdx) = p.pos(1);
+					p.rdata(StochasticStellarPopParticleBirthPosZIdx) = p.pos(2);
+					p.rdata(StochasticStellarPopParticleDeathPosXIdx) = unset_position;
+					p.rdata(StochasticStellarPopParticleDeathPosYIdx) = unset_position;
+					p.rdata(StochasticStellarPopParticleDeathPosZIdx) = unset_position;
 
 					// Low Mass particle mass and velocity
 					p.rdata(mass_idx) = mass_low_mass_star;

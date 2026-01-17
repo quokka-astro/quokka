@@ -175,19 +175,25 @@ enum StochasticStellarPopParticleDataIdx {
 	StochasticStellarPopParticleVzIdx,	    // Velocity in z direction
 	StochasticStellarPopParticleBirthTimeIdx,   // Time when particle becomes active
 	StochasticStellarPopParticleDeathTimeIdx,   // Time when particle becomes inactive
+	StochasticStellarPopParticleBirthPosXIdx,   // Birthplace x coordinate
+	StochasticStellarPopParticleBirthPosYIdx,   // Birthplace y coordinate
+	StochasticStellarPopParticleBirthPosZIdx,   // Birthplace z coordinate
+	StochasticStellarPopParticleDeathPosXIdx,   // Deathplace x coordinate
+	StochasticStellarPopParticleDeathPosYIdx,   // Deathplace y coordinate
+	StochasticStellarPopParticleDeathPosZIdx,   // Deathplace z coordinate
 	StochasticStellarPopParticleMassAtBirthIdx, // Particle mass at birth
 	StochasticStellarPopParticleLumIdx	    // Base index for luminosity components
 };
 
 constexpr int StochasticStellarPopParticleStageIdx = 0; // Evolution stage of the particle, index in the integer components
 
-// Number of real components for StochasticStellarPop_particles, mass + 3 velocity components + luminosity
+// Number of real components for StochasticStellarPop_particles, mass + 3 velocity components + times + positions + luminosity
 template <typename problem_t>
 constexpr int StochasticStellarPopParticleRealComps = []() constexpr {
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
-		return 7 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, death_time, mass_at_birth, lum[nGroups]
+		return 13 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, death_time, birth_xyz, death_xyz, mass_at_birth, lum[nGroups]
 	} else {
-		return 7; // mass, vx, vy, vz, birth_time, death_time, mass_at_birth
+		return 13; // mass, vx, vy, vz, birth_time, death_time, birth_xyz, death_xyz, mass_at_birth
 	}
 }();
 
@@ -268,15 +274,21 @@ inline auto get_units_data() -> const auto &
 	       {"birth_time", {0, 0, 1, 0}},
 	       {"death_time", {0, 0, 1, 0}},
 	       {"luminosity", {-1, 2, -3, 0}}}}},
-	    {ParticleType::StochasticStellarPop,
-	     {{{"mass", {1, 0, 0, 0}},
-	       {"vx", {0, 1, -1, 0}},
-	       {"vy", {0, 1, -1, 0}},
-	       {"vz", {0, 1, -1, 0}},
-	       {"birth_time", {0, 0, 1, 0}},
-	       {"death_time", {0, 0, 1, 0}},
-	       {"mass_at_birth", {1, 0, 0, 0}},
-	       {"luminosity", {-1, 2, -3, 0}}}}},
+	     {ParticleType::StochasticStellarPop,
+	      {{{"mass", {1, 0, 0, 0}},
+	        {"vx", {0, 1, -1, 0}},
+	        {"vy", {0, 1, -1, 0}},
+	        {"vz", {0, 1, -1, 0}},
+	        {"birth_time", {0, 0, 1, 0}},
+	        {"death_time", {0, 0, 1, 0}},
+	        {"birth_x", {0, 1, 0, 0}},
+	        {"birth_y", {0, 1, 0, 0}},
+	        {"birth_z", {0, 1, 0, 0}},
+	        {"death_x", {0, 1, 0, 0}},
+	        {"death_y", {0, 1, 0, 0}},
+	        {"death_z", {0, 1, 0, 0}},
+	        {"mass_at_birth", {1, 0, 0, 0}},
+	        {"luminosity", {-1, 2, -3, 0}}}}},
 	    {ParticleType::Sink, {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}}}}},
 	    {ParticleType::Test,
 	     {{{"mass", {1, 0, 0, 0}},
