@@ -7,6 +7,8 @@
 #include <memory>
 #include <ranges>
 #include <string>
+#include <string_view>
+#include <utility>
 
 #include <fmt/format.h>
 #include <yaml-cpp/yaml.h>
@@ -34,6 +36,218 @@
 
 namespace quokka
 {
+
+namespace particle_name_detail
+{
+template <std::size_t N> struct FixedString {
+	std::array<char, N> data{};
+
+	[[nodiscard]] constexpr auto view() const -> std::string_view { return std::string_view{data.data(), N - 1}; }
+};
+
+consteval auto countDigits(unsigned int value) -> std::size_t
+{
+	std::size_t digits = 1;
+	while (value >= 10) {
+		value /= 10;
+		++digits;
+	}
+	return digits;
+}
+
+template <unsigned int G> consteval auto makeLuminosityName() -> FixedString<sizeof("luminosity_g") + countDigits(G)>
+{
+	constexpr std::string_view prefix = "luminosity_g";
+	constexpr std::size_t prefix_len = prefix.size();
+	constexpr std::size_t digits = countDigits(G);
+	FixedString<prefix_len + digits + 1> result{};
+
+	for (std::size_t i = 0; i < prefix_len; ++i) {
+		result.data[i] = prefix[i];
+	}
+
+	unsigned int value = G;
+	for (std::size_t i = 0; i < digits; ++i) {
+		const std::size_t pos = prefix_len + digits - 1 - i;
+		result.data[pos] = static_cast<char>('0' + (value % 10));
+		value /= 10;
+	}
+
+	result.data[prefix_len + digits] = '\0';
+	return result;
+}
+
+template <unsigned int G> struct LuminosityName {
+	static constexpr auto storage = makeLuminosityName<G>();
+	static constexpr std::string_view view = storage.view();
+};
+
+template <ParticleType P> struct RealNameTraits {
+	static constexpr bool has_mass_velocity = P == ParticleType::CIC || P == ParticleType::CICRad || P == ParticleType::StochasticStellarPop ||
+						  P == ParticleType::Sink || P == ParticleType::Test;
+	static constexpr bool has_birth_death = P == ParticleType::Rad || P == ParticleType::CICRad || P == ParticleType::StochasticStellarPop ||
+						P == ParticleType::Test;
+	static constexpr bool has_mass_at_birth = P == ParticleType::StochasticStellarPop;
+	static constexpr bool has_luminosity = P == ParticleType::Rad || P == ParticleType::CICRad || P == ParticleType::StochasticStellarPop ||
+					       P == ParticleType::Test;
+	static constexpr int base_count = (has_mass_velocity ? 4 : 0) + (has_birth_death ? 2 : 0) + (has_mass_at_birth ? 1 : 0);
+};
+
+template <ParticleType P> struct IntNameTraits {
+	static constexpr bool has_evolution_stage = P == ParticleType::StochasticStellarPop || P == ParticleType::Test;
+	static constexpr int base_count = has_evolution_stage ? 1 : 0;
+};
+
+template <std::size_t N, std::size_t... Is>
+consteval void appendLuminosityGroupNames(std::array<std::string_view, N> &names, std::size_t &idx, std::index_sequence<Is...> /*seq*/)
+{
+	((names[idx++] = LuminosityName<static_cast<unsigned int>(Is)>::view), ...);
+}
+
+template <ParticleType P, int NReal, int NGroups> consteval auto makeBaseRealNameViews() -> std::array<std::string_view, NReal>
+{
+	std::array<std::string_view, NReal> names{};
+	std::size_t idx = 0U;
+
+	constexpr int base_count = RealNameTraits<P>::base_count;
+	static_assert(NReal == base_count || (RealNameTraits<P>::has_luminosity && NReal == base_count + NGroups),
+		      "Unexpected number of ParticleReal components for this particle type.");
+	constexpr int lum_count = NReal - base_count;
+	static_assert(RealNameTraits<P>::has_luminosity || lum_count == 0,
+		      "Unexpected luminosity components for particle types without radiation.");
+
+	if constexpr (RealNameTraits<P>::has_mass_velocity) {
+		names[idx++] = "mass";
+		names[idx++] = "vx";
+		names[idx++] = "vy";
+		names[idx++] = "vz";
+	}
+	if constexpr (RealNameTraits<P>::has_birth_death) {
+		names[idx++] = "birth_time";
+		names[idx++] = "death_time";
+	}
+	if constexpr (RealNameTraits<P>::has_mass_at_birth) {
+		names[idx++] = "mass_at_birth";
+	}
+	if constexpr (RealNameTraits<P>::has_luminosity) {
+		if constexpr (lum_count == 1) {
+			names[idx++] = "luminosity";
+		} else if constexpr (lum_count > 1) {
+			appendLuminosityGroupNames(names, idx, std::make_index_sequence<lum_count>{});
+		}
+	}
+
+	return names;
+}
+
+template <ParticleType P, int NInt> consteval auto makeBaseIntNameViews() -> std::array<std::string_view, NInt>
+{
+	std::array<std::string_view, NInt> names{};
+	std::size_t idx = 0U;
+
+	static_assert(NInt == IntNameTraits<P>::base_count, "Unexpected number of ParticleInt components for this particle type.");
+
+	if constexpr (IntNameTraits<P>::has_evolution_stage) {
+		names[idx++] = "evolution_stage";
+	}
+
+	return names;
+}
+
+template <std::size_t N, int Count>
+consteval auto luminosityNamesMatch(const std::array<std::string_view, N> &names, int start_index) -> bool
+{
+	if constexpr (Count == 0) {
+		return true;
+	} else if constexpr (Count == 1) {
+		return names[start_index] == "luminosity";
+	} else {
+		auto matches = [&names, start_index]<std::size_t... Is>(std::index_sequence<Is...>) {
+			return ((names[start_index + static_cast<int>(Is)] == LuminosityName<static_cast<unsigned int>(Is)>::view) && ...);
+		};
+		return matches(std::make_index_sequence<Count>{});
+	}
+}
+
+template <ParticleType P, int NReal, int NInt, int NGroups> struct ParticleNameTable {
+	static constexpr auto real = makeBaseRealNameViews<P, NReal, NGroups>();
+	static constexpr auto integer = makeBaseIntNameViews<P, NInt>();
+
+	static consteval auto validate() -> bool
+	{
+		constexpr int lum_count = NReal - RealNameTraits<P>::base_count;
+
+		if constexpr (P == ParticleType::Rad) {
+			if ((real[RadParticleBirthTimeIdx] != "birth_time") || (real[RadParticleDeathTimeIdx] != "death_time")) {
+				return false;
+			}
+			if constexpr (lum_count > 0) {
+				if (!luminosityNamesMatch<real.size(), lum_count>(real, RadParticleLumIdx)) {
+					return false;
+				}
+			}
+			return true;
+		}
+#if AMREX_SPACEDIM == 3
+		if constexpr (P == ParticleType::CIC) {
+			return real[CICParticleMassIdx] == "mass" && real[CICParticleVxIdx] == "vx" && real[CICParticleVyIdx] == "vy" &&
+			       real[CICParticleVzIdx] == "vz";
+		}
+		if constexpr (P == ParticleType::CICRad) {
+			if (real[CICRadParticleMassIdx] != "mass" || real[CICRadParticleVxIdx] != "vx" || real[CICRadParticleVyIdx] != "vy" ||
+			    real[CICRadParticleVzIdx] != "vz" || real[CICRadParticleBirthTimeIdx] != "birth_time" ||
+			    real[CICRadParticleDeathTimeIdx] != "death_time") {
+				return false;
+			}
+			if constexpr (lum_count > 0) {
+				return luminosityNamesMatch<real.size(), lum_count>(real, CICRadParticleLumIdx);
+			}
+			return true;
+		}
+		if constexpr (P == ParticleType::StochasticStellarPop) {
+			if (real[StochasticStellarPopParticleMassIdx] != "mass" || real[StochasticStellarPopParticleVxIdx] != "vx" ||
+			    real[StochasticStellarPopParticleVyIdx] != "vy" || real[StochasticStellarPopParticleVzIdx] != "vz" ||
+			    real[StochasticStellarPopParticleBirthTimeIdx] != "birth_time" || real[StochasticStellarPopParticleDeathTimeIdx] != "death_time" ||
+			    real[StochasticStellarPopParticleMassAtBirthIdx] != "mass_at_birth") {
+				return false;
+			}
+			if constexpr (lum_count > 0) {
+				if (!luminosityNamesMatch<real.size(), lum_count>(real, StochasticStellarPopParticleLumIdx)) {
+					return false;
+				}
+			}
+			if constexpr (NInt > 0) {
+				return integer[StochasticStellarPopParticleStageIdx] == "evolution_stage";
+			}
+			return true;
+		}
+		if constexpr (P == ParticleType::Sink) {
+			return real[SinkParticleMassIdx] == "mass" && real[SinkParticleVxIdx] == "vx" && real[SinkParticleVyIdx] == "vy" &&
+			       real[SinkParticleVzIdx] == "vz";
+		}
+		if constexpr (P == ParticleType::Test) {
+			if (real[TestParticleMassIdx] != "mass" || real[TestParticleVxIdx] != "vx" || real[TestParticleVyIdx] != "vy" ||
+			    real[TestParticleVzIdx] != "vz" || real[TestParticleBirthTimeIdx] != "birth_time" ||
+			    real[TestParticleDeathTimeIdx] != "death_time") {
+				return false;
+			}
+			if constexpr (lum_count > 0) {
+				if (!luminosityNamesMatch<real.size(), lum_count>(real, TestParticleLumIdx)) {
+					return false;
+				}
+			}
+			if constexpr (NInt > 0) {
+				return integer[TestParticleStageIdx] == "evolution_stage";
+			}
+			return true;
+		}
+#endif // AMREX_SPACEDIM == 3
+		return true;
+	}
+
+	static_assert(validate(), "Particle component names do not match the expected indices.");
+};
+} // namespace particle_name_detail
 
 // Forward declarations
 template <typename problem_t> class PhysicsParticleRegister;
@@ -666,54 +880,15 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 #endif // AMREX_SPACEDIM == 3
 
       private:
-	void appendLuminosityNames(amrex::Vector<std::string> &names, int count) const
-	{
-		if (count <= 0) {
-			return;
-		}
-		if (count == 1) {
-			names.push_back("luminosity");
-			return;
-		}
-		for (int g = 0; g < count; ++g) {
-			names.push_back(fmt::format("luminosity_g{}", g));
-		}
-	}
-
 	[[nodiscard]] auto buildBaseRealCompNames() const -> amrex::Vector<std::string>
 	{
+		using NameTable =
+		    particle_name_detail::ParticleNameTable<particleType_, ContainerType::ParticleType::NReal, ContainerType::ParticleType::NInt,
+							    Physics_Traits<problem_t>::nGroups>;
 		amrex::Vector<std::string> names{};
-		const int nstruct_real = ContainerType::ParticleType::NReal;
-		names.reserve(nstruct_real);
-
-		static constexpr bool has_mass_velocity = particleType_ == ParticleType::CIC || particleType_ == ParticleType::CICRad ||
-							  particleType_ == ParticleType::StochasticStellarPop || particleType_ == ParticleType::Sink ||
-							  particleType_ == ParticleType::Test;
-		static constexpr bool has_birth_death = particleType_ == ParticleType::Rad || particleType_ == ParticleType::CICRad ||
-							particleType_ == ParticleType::StochasticStellarPop || particleType_ == ParticleType::Test;
-		static constexpr bool has_mass_at_birth = particleType_ == ParticleType::StochasticStellarPop;
-		static constexpr bool has_luminosity = particleType_ == ParticleType::Rad || particleType_ == ParticleType::CICRad ||
-						       particleType_ == ParticleType::StochasticStellarPop || particleType_ == ParticleType::Test;
-
-		if constexpr (has_mass_velocity) {
-			names.push_back("mass");
-			names.push_back("vx");
-			names.push_back("vy");
-			names.push_back("vz");
-		}
-		if constexpr (has_birth_death) {
-			names.push_back("birth_time");
-			names.push_back("death_time");
-		}
-		if constexpr (has_mass_at_birth) {
-			names.push_back("mass_at_birth");
-		}
-		if constexpr (has_luminosity) {
-			appendLuminosityNames(names, nstruct_real - static_cast<int>(names.size()));
-		}
-
-		for (int i = static_cast<int>(names.size()); i < nstruct_real; ++i) {
-			names.push_back(fmt::format("real_comp{}", i));
+		names.reserve(NameTable::real.size());
+		for (const auto view : NameTable::real) {
+			names.push_back(std::string(view));
 		}
 
 		return names;
@@ -721,16 +896,13 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 	[[nodiscard]] auto buildBaseIntCompNames() const -> amrex::Vector<std::string>
 	{
+		using NameTable =
+		    particle_name_detail::ParticleNameTable<particleType_, ContainerType::ParticleType::NReal, ContainerType::ParticleType::NInt,
+							    Physics_Traits<problem_t>::nGroups>;
 		amrex::Vector<std::string> names{};
-		const int nstruct_int = ContainerType::ParticleType::NInt;
-		names.reserve(nstruct_int);
-
-		if constexpr (particleType_ == ParticleType::StochasticStellarPop || particleType_ == ParticleType::Test) {
-			names.push_back("evolution_stage");
-		}
-
-		for (int i = static_cast<int>(names.size()); i < nstruct_int; ++i) {
-			names.push_back(fmt::format("int_comp{}", i));
+		names.reserve(NameTable::integer.size());
+		for (const auto view : NameTable::integer) {
+			names.push_back(std::string(view));
 		}
 
 		return names;
@@ -857,41 +1029,41 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Register a new particle type with specified properties
-	template <typename ContainerType> void registerParticleType(ContainerType *container, ParticleType type)
+	template <ParticleType particleType, typename ContainerType> void registerParticleType(ContainerType *container)
 	{
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
 
 		// Create the appropriate descriptor based on the particle type
 		// The parameters for the descriptor are: mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction, evolution_stage_idx,
 		// allows_accretion
-		if (type == ParticleType::Rad) {
+		if constexpr (particleType == ParticleType::Rad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(
 			    container, -1, RadParticleLumIdx, RadParticleBirthTimeIdx, false, false);
 		}
 #if AMREX_SPACEDIM == 3
-		else if (type == ParticleType::CIC) {
+		else if constexpr (particleType == ParticleType::CIC) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(container, CICParticleMassIdx, -1,
 															      -1, false, false);
-		} else if (type == ParticleType::CICRad) {
+		} else if constexpr (particleType == ParticleType::CICRad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
 			    container, CICRadParticleMassIdx, CICRadParticleLumIdx, CICRadParticleBirthTimeIdx, false, false);
-		} else if (type == ParticleType::StochasticStellarPop) {
+		} else if constexpr (particleType == ParticleType::StochasticStellarPop) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::StochasticStellarPop>>(
 			    container, StochasticStellarPopParticleMassIdx, StochasticStellarPopParticleLumIdx, StochasticStellarPopParticleBirthTimeIdx, true,
 			    false, StochasticStellarPopParticleStageIdx, false, StochasticStellarPopParticleMassAtBirthIdx);
-		} else if (type == ParticleType::Sink) {
+		} else if constexpr (particleType == ParticleType::Sink) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Sink>>(container, SinkParticleMassIdx,
 															       -1, -1, true, false, -1, true);
-		} else if (type == ParticleType::Test) {
+		} else if constexpr (particleType == ParticleType::Test) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
 			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, true, true, TestParticleStageIdx, false);
 		}
 #endif // AMREX_SPACEDIM == 3
 		else {
-			amrex::Abort("Unknown particle type for physics particles");
+			static_assert(particleType == ParticleType::Rad, "Unknown particle type for physics particles");
 		}
 
-		particleRegistry_[type] = std::move(descriptor);
+		particleRegistry_[particleType] = std::move(descriptor);
 	}
 
 	// Retrieve a particle descriptor by type
