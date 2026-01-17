@@ -1,0 +1,305 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb}
+\usepackage{geometry}
+\geometry{margin=1in}
+
+\title{Hopkins-Style Supernova Coupling on a Cartesian Mesh}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Overview}
+This note describes a Cartesian-mesh implementation of the Hopkins et al. mechanical
+supernova (SN) coupling, adapted to a fixed-grid particle--mesh workflow with
+order-independent multi-SN updates. The method injects ejecta mass, momentum, and
+energy into mesh cells using vector weights that enforce isotropy and conservation,
+then sets the coupled momentum $p_{0}$ from energy conservation and a terminal
+momentum cap.
+
+\section{Notation}
+We use cell-centered conserved variables for each mesh cell $b$ with volume $V_{b}$:
+mass $m_{b}=\rho_{b}V_{b}$, momentum $\mathbf p_{b}=\rho_{b}\mathbf v_{b}V_{b}$, total
+energy $E_{b}$, and internal energy $U_{b}$. For a supernova event (star particle) $a$,
+let $\mathbf x_{a}$ and $\mathbf v_{a}$ be position and velocity, with ejecta mass
+$m_{\rm ej}$ and total ejecta energy $E_{\rm ej}$ defined in the star frame. We also
+use the relative velocity $\mathbf v_{ba}=\mathbf v_{b}-\mathbf v_{a}$.
+
+\section{Kernel and Vector Weights on a Cartesian Mesh}
+Choose a kernel radius $r_{K}$ and include all cells $b$ with
+$|\mathbf x_{b}-\mathbf x_{a}| \le r_{K}$. Define the cell bounds
+$(x_{\min},x_{\max})$, $(y_{\min},y_{\max})$, $(z_{\min},z_{\max})$
+relative to $\mathbf x_{a}$.
+
+We compute the exact solid angle of the (axis-aligned) rectangular cell as the
+sum of the solid angles of its visible faces (at most three). For a rectangle
+lying in the plane $z=\text{const}$ with corners $(x_{1},y_{1})$ and $(x_{2},y_{2})$
+as seen from the origin, the solid angle is
+\begin{equation}
+\Omega_{\rm rect}(x_{1},x_{2},y_{1},y_{2},z) =
+\tan^{-1}\!\left(\frac{x_{1}y_{1}}{z\,r_{11}}\right)
+- \tan^{-1}\!\left(\frac{x_{1}y_{2}}{z\,r_{12}}\right)
+- \tan^{-1}\!\left(\frac{x_{2}y_{1}}{z\,r_{21}}\right)
++ \tan^{-1}\!\left(\frac{x_{2}y_{2}}{z\,r_{22}}\right),
+\end{equation}
+where $r_{ij}=\sqrt{x_{i}^{2}+y_{j}^{2}+z^{2}}$ and $z$ is the (signed) distance
+to the rectangle plane. We use $|z|$ in the formula to keep $\Omega_{\rm rect}>0$.
+
+For each cell, include the visible faces:
+\begin{equation}
+\Omega_{b} =
+\Omega_{x} + \Omega_{y} + \Omega_{z},
+\end{equation}
+with
+\begin{align}
+\Omega_{x} &=
+\begin{cases}
+\Omega_{\rm rect}(y_{\min},y_{\max},z_{\min},z_{\max},x_{\min}), & x_{\min} > 0, \\
+\Omega_{\rm rect}(y_{\min},y_{\max},z_{\min},z_{\max},x_{\max}), & x_{\max} < 0, \\
+0, & \text{otherwise,}
+\end{cases} \\
+\Omega_{y} &=
+\begin{cases}
+\Omega_{\rm rect}(x_{\min},x_{\max},z_{\min},z_{\max},y_{\min}), & y_{\min} > 0, \\
+\Omega_{\rm rect}(x_{\min},x_{\max},z_{\min},z_{\max},y_{\max}), & y_{\max} < 0, \\
+0, & \text{otherwise,}
+\end{cases} \\
+\Omega_{z} &=
+\begin{cases}
+\Omega_{\rm rect}(x_{\min},x_{\max},y_{\min},y_{\max},z_{\min}), & z_{\min} > 0, \\
+\Omega_{\rm rect}(x_{\min},x_{\max},y_{\min},y_{\max},z_{\max}), & z_{\max} < 0, \\
+0, & \text{otherwise.}
+\end{cases}
+\end{align}
+The solid-angle weight is then
+\begin{equation}
+\omega_{b} = \frac{\Omega_{b}}{4\pi}.
+\end{equation}
+Define a raw vector weight
+\begin{equation}
+\mathbf q_{b} = \omega_{b}\,\hat{\mathbf r}.
+\end{equation}
+To enforce exact linear-momentum conservation (zero net vector weight), remove the
+dipole component:
+\begin{equation}
+\mathbf Q = \sum_{b}\mathbf q_{b}, \qquad
+\mathbf q^{\prime}_{b} = \mathbf q_{b} - \frac{\omega_{b}}{\sum_{c}\omega_{c}}\,\mathbf Q.
+\end{equation}
+Normalize to obtain the Hopkins-style vector weights:
+\begin{equation}
+\bar{\mathbf w}_{b} = \frac{\mathbf q^{\prime}_{b}}{\sum_{c}|\mathbf q^{\prime}_{c}|}, \qquad
+\sum_{b}\bar{\mathbf w}_{b}=\mathbf 0,\quad \sum_{b}|\bar{\mathbf w}_{b}|=1.
+\end{equation}
+
+For a uniform Cartesian mesh with $\Delta x=\Delta y=\Delta z$, a source at the
+center of a cell, and a one-cell-thick kernel (the 26 neighbors in a $3^{3}$
+stencil), the unnormalized solid-angle weights $\omega_{b}=\Omega_{b}/(4\pi)$
+take only three distinct values, depending on the neighbor class. The table
+below lists the raw $\omega_{b}$ and the normalized $\bar\omega_{b}$
+obtained by dividing by the sum over the 26 cells. These values are specific to
+this kernel choice; larger kernels require re-normalization.
+
+\begin{center}
+\begin{tabular}{lccc}
+\hline
+Offset class $(|i|,|j|,|k|)$ & Count & $\omega_{b}$ & $\bar\omega_{b}$ (3x3x3) \\
+\hline
+$(0,0,1)$ (face neighbor) & 6  & 0.1666666667 & 0.0779325222 \\
+$(0,1,1)$ (edge neighbor) & 12 & 0.0673911931 & 0.0315117939 \\
+$(1,1,1)$ (corner neighbor) & 8  & 0.0412384905 & 0.0192829174 \\
+\hline
+\end{tabular}
+\end{center}
+
+Define the mass-loading factor
+\begin{equation}
+w^{\prime}_{b} \equiv \frac{|\bar{\mathbf w}_{b}|}{1 + \Delta m_{b}/m_{b}},
+\qquad
+\Delta m_{b} \equiv |\bar{\mathbf w}_{b}|\,m_{\rm ej}.
+\end{equation}
+
+\section{Single-Event Coupling}
+\subsection{Velocity and mass scalars}
+Compute the effective radial velocity and coupled mass (Hopkins et al. notation):
+\begin{equation}
+\langle v_{r}\rangle = \sum_{b} w^{\prime}_{b}\,\mathbf v_{ba}\cdot\frac{\bar{\mathbf w}_{b}}{|\bar{\mathbf w}_{b}|},
+\end{equation}
+\begin{equation}
+\langle M_{\rm coupled}\rangle = \left[\sum_{b}\frac{w^{\prime}_{b}|\bar{\mathbf w}_{b}|}{m_{b}}\right]^{-1}.
+\end{equation}
+Define
+\begin{equation}
+\beta_{1} = \frac{\langle v_{r}\rangle}{v_{\rm ej}}, \qquad
+\beta_{2} = \frac{m_{\rm ej}}{\langle M_{\rm coupled}\rangle},
+\end{equation}
+where $v_{\rm ej}$ is the ejecta speed implied by the available kinetic energy.
+
+\subsection{Energy partition and coupled momentum}
+Let the total available energy (in the star frame) be
+\begin{equation}
+\mathcal E_{a} = E_{\rm ej} + \frac{1}{2}m_{\rm ej}\sum_{b} w^{\prime}_{b} |\mathbf v_{ba}|^{2}.
+\end{equation}
+Choose a fixed kinetic fraction $f_{\rm kin}^{0}$ (e.g. $0.28$), then
+\begin{equation}
+\epsilon = f_{\rm kin}^{0}\,\mathcal E_{a}.
+\end{equation}
+Define
+\begin{equation}
+\psi = \frac{\sqrt{\beta_{2} + \beta_{1}^{2}} - \beta_{1}}{\beta_{2}}.
+\end{equation}
+Given a terminal momentum $p_{\rm term}$, set
+\begin{equation}
+\chi = \min\left[1,\ \frac{p_{\rm term}}{\psi \sqrt{2\epsilon m_{\rm ej}}}\right], \qquad
+p_{0} = \psi\,\chi\,\sqrt{2\epsilon m_{\rm ej}}.
+\end{equation}
+The non-kinetic energy fraction is then
+\begin{equation}
+\frac{U_{a}}{\mathcal E_{a}} =
+1 - \left[(\psi\chi)^{2}\beta_{2} + 2(\psi\chi)\beta_{1}\right]\frac{\epsilon}{\mathcal E_{a}}.
+\end{equation}
+
+\subsection{Cell updates for a single event}
+Define the momentum increment (in the lab frame)
+\begin{equation}
+\Delta \mathbf p_{b} = \Delta m_{b}\,\mathbf v_{a} + \bar{\mathbf w}_{b}\,p_{0}.
+\end{equation}
+Deposit internal energy and update total energy consistently:
+\begin{equation}
+\Delta U_{b} = |\bar{\mathbf w}_{b}|\,U_{a},
+\end{equation}
+\begin{equation}
+\Delta E_{b} = \Delta U_{b}
+ + \frac{|\mathbf p_{b}+\Delta \mathbf p_{b}|^{2}}{2(m_{b}+\Delta m_{b})}
+ - \frac{|\mathbf p_{b}|^{2}}{2m_{b}}.
+\end{equation}
+Update the conserved variables in each cell:
+\begin{equation}
+m_{b} \leftarrow m_{b} + \Delta m_{b},\quad
+\mathbf p_{b} \leftarrow \mathbf p_{b} + \Delta \mathbf p_{b},\quad
+E_{b} \leftarrow E_{b} + \Delta E_{b},\quad
+U_{b} \leftarrow U_{b} + \Delta U_{b}.
+\end{equation}
+When multiple events are applied in a single timestep, total energy should not
+be accumulated by summing $\Delta E_{b}$, because the kinetic-energy contribution
+depends on the \emph{summed} momentum and can cancel. A consistent approach is to
+sum $\Delta \rho$, $\Delta \mathbf p$, and $\Delta U$ (or other non-kinetic
+reservoirs), then reconstruct total energy in the simulation frame from
+$E=U+|\mathbf p|^{2}/(2\rho)$ after the sum.
+
+\section{Order-Independent Multi-SN Algorithm}
+To preserve the GPU-friendly, order-independent behavior of the particle-mesh
+method, compute each SN event using the pre-feedback state and accumulate
+changes into a buffer mesh:
+\begin{enumerate}
+\item For each event $a$, compute $\bar{\mathbf w}_{b}$, $\psi$, $\chi$, $p_{0}$, and
+the per-cell increments $(\Delta m_{b}, \Delta \mathbf p_{b}, \Delta U_{b})$
+using the state at time $t^{n}$ only.
+\item Accumulate all event contributions into buffer fields
+$\Delta m^{\rm buf}$, $\Delta \mathbf p^{\rm buf}$, $\Delta U^{\rm buf}$
+using atomic adds.
+\item Communicate and sum buffer ghost zones across MPI ranks.
+\item (Optional) apply a cell-wise positivity limiter to the summed increments
+if needed for robustness; otherwise skip, since the Hopkins coupling is
+energy-conserving per event.
+\item Apply the summed increments to $\rho$, $\mathbf p$, and $U$.
+\item Reconstruct total energy in the simulation frame from
+$E=U+|\mathbf p|^{2}/(2\rho)$ after the sum.
+\end{enumerate}
+Because all events are computed from the same pre-feedback state and summed
+linearly, the update is independent of deposition order and handles overlapping
+SN kernels deterministically.
+
+\section{Alternative Hopkins Variants}
+This section summarizes other variants described in Hopkins (2025) and earlier
+FIRE implementations, which can be substituted into the coupling step above.
+
+\subsection{Terminal-Momentum Variants}
+The baseline uses
+\begin{equation}
+p_{0} = \min\left[p_{\rm egy},\,p_{\rm term}\right],
+\end{equation}
+with $p_{\rm term}$ taken from a density/metallicity scaling and $p_{\rm egy}$
+from energy conservation. The paper discusses three practical choices for the
+velocity dependence in $p_{\rm term}$:
+\begin{enumerate}
+\item \textbf{Fixed $F_{v}=1$:} ignore velocity dependence so
+$p_{\rm term} = p_{t,0}\,F_{n}(\langle n\rangle)\,F_{Z}(\langle Z\rangle)$.
+This matches most legacy sub-grid models and is nearly identical to the more
+complex forms when $\langle v_{r}\rangle \ge 0$.
+\item \textbf{Total-momentum change:} define $F_{v}$ using the analytic
+terminal-momentum scaling in a background flow (Appendix~B.1 of Hopkins 2025),
+which suppresses $p_{\rm term}$ for strong outflows and can increase it in
+converging flows.
+\item \textbf{$\Delta$-momentum change:} define $F_{v}$ using the difference
+between the post-SN state and the no-SN evolution (Appendix~B.2). This tends to
+avoid very large boosts in strongly converging flows and yields behavior closer
+to $F_{v}=1$ for typical conditions.
+\end{enumerate}
+In all cases the coupling remains conservative; the choice primarily changes
+how the unresolved work scales with $\langle v_{r}\rangle$.
+
+\subsection{Energy vs. Momentum Deposition Limits}
+The algorithm can be specialized to two limiting regimes by fixing $\chi$:
+\begin{enumerate}
+\item \textbf{Energy-conserving limit:} set $\chi=1$, so
+$p_{0}=p_{\rm egy}$ and the coupled momentum is determined entirely by
+energy conservation.
+\item \textbf{Terminal-momentum limit:} fix $p_{0}=p_{\rm term}$ (equivalently
+$\chi=p_{\rm term}/p_{\rm egy}$), representing unresolved cooling losses.
+\end{enumerate}
+
+\subsection{Directional vs. Isotropic Coupling}
+Earlier FIRE implementations applied the solution ``in cones'' by computing
+the energy-conserving factor $\psi$ (and hence $p_{0}$) separately for each
+neighbor. This better preserves local anisotropy but breaks exact isotropy and
+can up-weight the tails of the kernel. The Hopkins (2025) formulation uses a
+single $\psi$ and $\chi$ per event with vector weights $\bar{\mathbf w}_{b}$,
+ensuring exact isotropy and conservation. On a Cartesian mesh, the isotropic
+version corresponds to the weight construction in Section~3, while the cone
+version would apply the same weights but recompute $\psi$ using each
+neighbor's local state.
+
+\section{Energy Conservation and Galilean Invariance}
+The Hopkins coupling enforces an exact energy conservation equation written in
+terms of star-frame relative velocities. For a single event $a$ with neighbor
+cells $b$, the discrete kinetic-energy balance can be written as (Hopkins 2025,
+Appendix~A):
+\begin{equation}
+\epsilon_{a} = \sum_{b}\left[\frac{|\Delta \mathbf p_{b}|^{2}}{2 m_{b}(1+\mu_{b})}
++ \frac{\mathbf v_{ba}\cdot\Delta \mathbf p_{b}}{1+\mu_{b}}\right],
+\end{equation}
+with $\mu_{b}\equiv \Delta m_{b}/m_{b}$ and $\mathbf v_{ba}=\mathbf v_{b}-\mathbf v_{a}$.
+Because $\mathbf v_{ba}$ is invariant under a uniform boost, this equation is
+Galilean invariant. The coupled momentum $p_{0}$ is then chosen (possibly capped
+by $p_{\rm term}$) so that the energy partition between kinetic and non-kinetic
+reservoirs satisfies the same invariant relation. Any velocity dependence in
+$p_{\rm term}$ should be expressed using star-frame or kernel-averaged relative
+velocities to preserve invariance.
+
+In contrast, the Quokka SN limiter operates on mesh-frame conserved variables
+after summing all events in a cell, solving for a scaling $\lambda$ so that
+$e_{\rm int}+|\mathbf p|^{2}/(2\rho)=e$ is satisfied in the lab frame. That
+constraint is not written in terms of star-frame relative velocities, so the
+resulting $\lambda$ can depend on the chosen inertial frame when multiple SNe
+contribute to the same cell. A Galilean-invariant limiter would need
+to enforce the constraint in a comoving frame (e.g., a kernel-averaged gas
+frame) and then transform back, or avoid a post-hoc limiter by using the
+Hopkins-style energy-conserving coupling per event.
+
+\section{Implementation Notes}
+\begin{itemize}
+\item The weight construction uses only relative positions, so it is translation
+invariant. The dipole removal ensures exact momentum conservation.
+\item For AMR, use the local cell sizes in $A_{\rm proj}$ and the local $V_{b}$ in
+all mass and energy updates.
+\item The kernel radius should be at most the ghost-zone depth used in the
+hydrodynamic solver to avoid extra communication steps.
+\item The total coupled energy per event is not a fixed constant unless
+$\mathbf v_{b}=\mathbf v_{a}$; the available energy is
+$\mathcal E_{a}=E_{\rm ej}+\tfrac{1}{2}m_{\rm ej}\sum_{b}w^{\prime}_{b}|\mathbf v_{b}-\mathbf v_{a}|^{2}$.
+In the terminal-momentum limit, part of $\mathcal E_{a}$ is assigned to the
+non-kinetic reservoir $U_{a}$, so the explicit gas energy increment can be smaller.
+\end{itemize}
+
+\end{document}
