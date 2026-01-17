@@ -85,11 +85,11 @@ template <unsigned int G> struct LuminosityName {
 template <ParticleType P> struct RealNameTraits {
 	static constexpr bool has_mass_velocity = P == ParticleType::CIC || P == ParticleType::CICRad || P == ParticleType::StochasticStellarPop ||
 						  P == ParticleType::Sink || P == ParticleType::Test;
-	static constexpr bool has_birth_death = P == ParticleType::Rad || P == ParticleType::CICRad || P == ParticleType::StochasticStellarPop ||
-						P == ParticleType::Test;
+	static constexpr bool has_birth_death =
+	    P == ParticleType::Rad || P == ParticleType::CICRad || P == ParticleType::StochasticStellarPop || P == ParticleType::Test;
 	static constexpr bool has_mass_at_birth = P == ParticleType::StochasticStellarPop;
-	static constexpr bool has_luminosity = P == ParticleType::Rad || P == ParticleType::CICRad || P == ParticleType::StochasticStellarPop ||
-					       P == ParticleType::Test;
+	static constexpr bool has_luminosity =
+	    P == ParticleType::Rad || P == ParticleType::CICRad || P == ParticleType::StochasticStellarPop || P == ParticleType::Test;
 	static constexpr int base_count = (has_mass_velocity ? 4 : 0) + (has_birth_death ? 2 : 0) + (has_mass_at_birth ? 1 : 0);
 };
 
@@ -113,8 +113,7 @@ template <ParticleType P, int NReal, int NGroups> consteval auto makeBaseRealNam
 	static_assert(NReal == base_count || (RealNameTraits<P>::has_luminosity && NReal == base_count + NGroups),
 		      "Unexpected number of ParticleReal components for this particle type.");
 	constexpr int lum_count = NReal - base_count;
-	static_assert(RealNameTraits<P>::has_luminosity || lum_count == 0,
-		      "Unexpected luminosity components for particle types without radiation.");
+	static_assert(RealNameTraits<P>::has_luminosity || lum_count == 0, "Unexpected luminosity components for particle types without radiation.");
 
 	if constexpr (RealNameTraits<P>::has_mass_velocity) {
 		names[idx++] = "mass";
@@ -154,8 +153,7 @@ template <ParticleType P, int NInt> consteval auto makeBaseIntNameViews() -> std
 	return names;
 }
 
-template <std::size_t N, int Count>
-consteval auto luminosityNamesMatch(const std::array<std::string_view, N> &names, int start_index) -> bool
+template <std::size_t N, int Count> consteval auto luminosityNamesMatch(const std::array<std::string_view, N> &names, int start_index) -> bool
 {
 	if constexpr (Count == 0) {
 		return true;
@@ -882,9 +880,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
       private:
 	[[nodiscard]] auto buildBaseRealCompNames() const -> amrex::Vector<std::string>
 	{
-		using NameTable =
-		    particle_name_detail::ParticleNameTable<particleType_, ContainerType::ParticleType::NReal, ContainerType::ParticleType::NInt,
-							    Physics_Traits<problem_t>::nGroups>;
+		using NameTable = particle_name_detail::ParticleNameTable<particleType_, ContainerType::ParticleType::NReal, ContainerType::ParticleType::NInt,
+									  Physics_Traits<problem_t>::nGroups>;
 		amrex::Vector<std::string> names{};
 		names.reserve(NameTable::real.size());
 		for (const auto view : NameTable::real) {
@@ -896,9 +893,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 	[[nodiscard]] auto buildBaseIntCompNames() const -> amrex::Vector<std::string>
 	{
-		using NameTable =
-		    particle_name_detail::ParticleNameTable<particleType_, ContainerType::ParticleType::NReal, ContainerType::ParticleType::NInt,
-							    Physics_Traits<problem_t>::nGroups>;
+		using NameTable = particle_name_detail::ParticleNameTable<particleType_, ContainerType::ParticleType::NReal, ContainerType::ParticleType::NInt,
+									  Physics_Traits<problem_t>::nGroups>;
 		amrex::Vector<std::string> names{};
 		names.reserve(NameTable::integer.size());
 		for (const auto view : NameTable::integer) {

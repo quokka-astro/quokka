@@ -425,8 +425,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 						    std::string const &particle_type_name, amrex::Vector<amrex::BoxArray> const &header_box_arrays);
 
 	template <quokka::ParticleType particle_type, typename ContainerType>
-	void initializeParticleContainerFromCheckpoint(std::unique_ptr<ContainerType> &container,
-						       amrex::Vector<amrex::BoxArray> const &header_box_arrays);
+	void initializeParticleContainerFromCheckpoint(std::unique_ptr<ContainerType> &container, amrex::Vector<amrex::BoxArray> const &header_box_arrays);
 
 	auto getGitHashForQuokka() const -> std::string;
 	auto getGitHashForAmrex() const -> std::string;
