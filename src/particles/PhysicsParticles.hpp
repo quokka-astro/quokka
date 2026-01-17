@@ -510,7 +510,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	void writePlotFile(const std::string &plotfilename, const std::string &name) override
 	{
 		if (container_ != nullptr) {
-			container_->WritePlotFile(plotfilename, name);
+			const auto real_comp_names = buildPlotfileRealCompNames();
+			const auto int_comp_names = buildPlotfileIntCompNames();
+			container_->WritePlotFile(plotfilename, name, real_comp_names, int_comp_names);
 		}
 	}
 
@@ -662,6 +664,138 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		    this->getBirthTimeIndex(), this->getMassAtBirthIndex(), state_fc, verbose);
 	}
 #endif // AMREX_SPACEDIM == 3
+
+      private:
+	void appendLuminosityNames(amrex::Vector<std::string> &names, int count) const
+	{
+		if (count <= 0) {
+			return;
+		}
+		if (count == 1) {
+			names.push_back("luminosity");
+			return;
+		}
+		for (int g = 0; g < count; ++g) {
+			names.push_back(fmt::format("luminosity_g{}", g));
+		}
+	}
+
+	[[nodiscard]] auto buildBaseRealCompNames() const -> amrex::Vector<std::string>
+	{
+		amrex::Vector<std::string> names{};
+		const int nstruct_real = ContainerType::ParticleType::NReal;
+		names.reserve(nstruct_real);
+
+		if constexpr (particleType_ == ParticleType::Rad) {
+			names.push_back("birth_time");
+			names.push_back("death_time");
+			appendLuminosityNames(names, nstruct_real - 2);
+		} else if constexpr (particleType_ == ParticleType::CIC) {
+			names.push_back("mass");
+			names.push_back("vx");
+			names.push_back("vy");
+			names.push_back("vz");
+		} else if constexpr (particleType_ == ParticleType::CICRad) {
+			names.push_back("mass");
+			names.push_back("vx");
+			names.push_back("vy");
+			names.push_back("vz");
+			names.push_back("birth_time");
+			names.push_back("death_time");
+			appendLuminosityNames(names, nstruct_real - 6);
+		} else if constexpr (particleType_ == ParticleType::StochasticStellarPop) {
+			names.push_back("mass");
+			names.push_back("vx");
+			names.push_back("vy");
+			names.push_back("vz");
+			names.push_back("birth_time");
+			names.push_back("death_time");
+			names.push_back("mass_at_birth");
+			appendLuminosityNames(names, nstruct_real - 7);
+		} else if constexpr (particleType_ == ParticleType::Sink) {
+			names.push_back("mass");
+			names.push_back("vx");
+			names.push_back("vy");
+			names.push_back("vz");
+		} else if constexpr (particleType_ == ParticleType::Test) {
+			names.push_back("mass");
+			names.push_back("vx");
+			names.push_back("vy");
+			names.push_back("vz");
+			names.push_back("birth_time");
+			names.push_back("death_time");
+			appendLuminosityNames(names, nstruct_real - 6);
+		}
+
+		for (int i = static_cast<int>(names.size()); i < nstruct_real; ++i) {
+			names.push_back(fmt::format("real_comp{}", i));
+		}
+
+		return names;
+	}
+
+	[[nodiscard]] auto buildBaseIntCompNames() const -> amrex::Vector<std::string>
+	{
+		amrex::Vector<std::string> names{};
+		const int nstruct_int = ContainerType::ParticleType::NInt;
+		names.reserve(nstruct_int);
+
+		if constexpr (particleType_ == ParticleType::StochasticStellarPop || particleType_ == ParticleType::Test) {
+			names.push_back("evolution_stage");
+		}
+
+		for (int i = static_cast<int>(names.size()); i < nstruct_int; ++i) {
+			names.push_back(fmt::format("int_comp{}", i));
+		}
+
+		return names;
+	}
+
+	[[nodiscard]] auto buildPlotfileRealCompNames() const -> amrex::Vector<std::string>
+	{
+		amrex::Vector<std::string> names = buildBaseRealCompNames();
+		auto soa_names = container_->GetRealSoANames();
+		if constexpr (ContainerType::ParticleType::is_soa_particle) {
+			if (soa_names.size() >= AMREX_SPACEDIM) {
+				soa_names.erase(soa_names.begin(), soa_names.begin() + AMREX_SPACEDIM);
+			} else {
+				soa_names.clear();
+			}
+		}
+
+		names.insert(names.end(), soa_names.begin(), soa_names.end());
+
+		int expected = ContainerType::ParticleType::NReal + container_->NumRealComps();
+		if constexpr (ContainerType::ParticleType::is_soa_particle) {
+			expected -= AMREX_SPACEDIM;
+		}
+
+		for (int i = static_cast<int>(names.size()); i < expected; ++i) {
+			names.push_back(fmt::format("real_comp{}", i));
+		}
+		if (static_cast<int>(names.size()) > expected) {
+			names.resize(expected);
+		}
+
+		return names;
+	}
+
+	[[nodiscard]] auto buildPlotfileIntCompNames() const -> amrex::Vector<std::string>
+	{
+		amrex::Vector<std::string> names = buildBaseIntCompNames();
+		const auto soa_names = container_->GetIntSoANames();
+		names.insert(names.end(), soa_names.begin(), soa_names.end());
+
+		const int expected = ContainerType::ParticleType::NInt + container_->NumIntComps();
+		for (int i = static_cast<int>(names.size()); i < expected; ++i) {
+			names.push_back(fmt::format("int_comp{}", i));
+		}
+		if (static_cast<int>(names.size()) > expected) {
+			names.resize(expected);
+		}
+
+		return names;
+	}
 };
 
 // Registry managing different types of physics particles
