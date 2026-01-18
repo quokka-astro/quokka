@@ -235,7 +235,8 @@ auto problem_main() -> int
 
 	QuokkaSimulation<SNProblem> sim2;
 	// set boosted velocity
-	sim2.userData_.boost_velocity = {1.0e8, 0.0, 0.0};
+	const double boost_vel_x = 1.0e8;
+	sim2.userData_.boost_velocity = {boost_vel_x, 0.0, 0.0};
 
 	sim2.stopTime_ = t_stop * year;
 
@@ -245,11 +246,11 @@ auto problem_main() -> int
 	// evolve
 	sim2.evolve();
 
-	auto [position2, values2] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0, true);
+	auto [position2, values2] = fextract(sim2.state_new_cc_[0], sim2.Geom(0), 0, 0, true);
 
 	std::vector<double> T2(nx);
 	std::vector<double> x2(nx);
-	std::vector<double> vx2(nx);
+	std::vector<double> vx2_rel(nx);
 
 	// plot the temperature and vx profile along the x axis at the center
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -260,7 +261,7 @@ auto problem_main() -> int
 			const double vx_val = values2.at(HydroSystem<SNProblem>::x1Momentum_index)[i] / rho;
 			T2[i] = Eint / (rho * CV); // simplified, but good enough for the purpose
 			x2[i] = position2[i];
-			vx2[i] = vx_val;
+			vx2_rel[i] = vx_val - boost_vel_x;
 		}
 
 		matplotlibcpp::clf();
@@ -274,7 +275,7 @@ auto problem_main() -> int
 
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(x, vx, {{"label", "base"}, {"color", "C0"}});
-		matplotlibcpp::plot(x2, vx2, {{"label", "boosted"}, {"color", "C1"}, {"linestyle", "--"}});
+		matplotlibcpp::plot(x2, vx2_rel, {{"label", "boosted"}, {"color", "C1"}, {"linestyle", "--"}});
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("x");
 		matplotlibcpp::ylabel("vx");
