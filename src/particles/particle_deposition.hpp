@@ -425,8 +425,8 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 					// Deposit momentum and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
 					// (SN kinetic energy computed inside function using COM frame for Galilean invariance)
 					depositThermalKineticMomentumSNR<problem_t>(local_state, local_buffer, ix, iy, iz, stencil_volume, pos_x, pos_y, pos_z,
-										    m_ej, E_blast, p_snr_0, vol_inverse, stencil_weights_gpu, avg_density,
-										    vol, dx, plo, SN_scheme_d, p_vx, p_vy, p_vz);
+										    m_ej, E_blast, p_snr_0, vol_inverse, stencil_weights_gpu, avg_density, vol,
+										    dx, plo, SN_scheme_d, p_vx, p_vy, p_vz);
 				}
 			}
 		});
