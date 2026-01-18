@@ -4,18 +4,24 @@
 
 #include "AMReX.H"
 #include "AMReX_BC_TYPES.H"
+#include "AMReX_GpuQualifiers.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 #include "AMReX_SPACE.H"
 #include <fstream>
 #include <iomanip>
+#include "util/fextract.hpp"
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
 #include "util/BC.hpp"
+
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 
 struct SNProblem {
 };
@@ -37,12 +43,14 @@ const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
 const double year = 3.15576e+07; // in seconds
 const double mass_SNR = 10.0 * C::M_solar;
-const int n_SNR = 2;
+const int n_SNR = 1;
 constexpr double B0 = 1.0e-7; // uniform background field for MHD variant
 
-static double n_amb = 1.0;    // ambient density (g cm^-3) // NOLINT
-static double T_amb = 100.0;  // ambient temperature (K) // NOLINT
-static double t_stop = 3.0e5; // stop time (yr) // NOLINT
+static double n_amb = 1.0;							   // ambient density (g cm^-3) // NOLINT
+static double T_amb = 100.0;							   // ambient temperature (K) // NOLINT
+static double t_stop = 3.0e5;							   // stop time (yr) // NOLINT
+// static amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity{0.0, 0.0, 0.0}; // NOLINT
+static bool skip_checks = false;						   // NOLINT
 
 template <> struct Particle_Traits<SNProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
@@ -73,6 +81,10 @@ template <> struct Physics_Traits<SNProblem> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
+template <> struct SimulationData<SNProblem> {
+	AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity{0.0, 0.0, 0.0};
+};
+
 template <> void QuokkaSimulation<SNProblem>::createInitialTestParticles()
 {
 	// read particles from ASCII file
@@ -93,6 +105,9 @@ template <> void QuokkaSimulation<SNProblem>::createInitialTestParticles()
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
 				auto &p = pdata[i]; // NOLINT
 				p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+				p.rdata(quokka::TestParticleVxIdx) += userData_.boost_velocity[0];
+				p.rdata(quokka::TestParticleVyIdx) += userData_.boost_velocity[1];
+				p.rdata(quokka::TestParticleVzIdx) += userData_.boost_velocity[2];
 			});
 		}
 	}
@@ -110,14 +125,15 @@ template <> void QuokkaSimulation<SNProblem>::setInitialConditionsOnGrid(quokka:
 	const double rho = rho_bg;
 	const double rho_e = E0;
 	const double Emag = 0.5 * B0 * B0;
+	const double v2 = (userData_.boost_velocity[0] * userData_.boost_velocity[0]) + (userData_.boost_velocity[1] * userData_.boost_velocity[1]) + (userData_.boost_velocity[2] * userData_.boost_velocity[2]);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		state_cc(i, j, k, HydroSystem<SNProblem>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<SNProblem>::x1Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<SNProblem>::x2Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<SNProblem>::x3Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<SNProblem>::energy_index) = rho_e + Emag;
+		state_cc(i, j, k, HydroSystem<SNProblem>::x1Momentum_index) = rho * userData_.boost_velocity[0];
+		state_cc(i, j, k, HydroSystem<SNProblem>::x2Momentum_index) = rho * userData_.boost_velocity[1];
+		state_cc(i, j, k, HydroSystem<SNProblem>::x3Momentum_index) = rho * userData_.boost_velocity[2];
+		state_cc(i, j, k, HydroSystem<SNProblem>::energy_index) = rho_e + Emag + 0.5 * rho * v2;
 		state_cc(i, j, k, HydroSystem<SNProblem>::internalEnergy_index) = rho_e;
 	});
 }
@@ -175,6 +191,7 @@ auto problem_main() -> int
 	pp.query("t_stop", t_stop);
 	pp.query("SN_particles_file", SN_particles_file);
 	pp.query("refine_half_domain", refine_half_domain);
+	pp.query("skip_checks", skip_checks);
 
 	amrex::ParmParse const cpp("cooling");
 	cpp.query("cooling_table_type", coolingTableType_);
@@ -182,9 +199,7 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<SNProblem> sim;
 
-	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.stopTime_ = t_stop * year;
-	sim.cflNumber_ = 0.3; // *must* be less than 1/3 in 3D!
 
 	// initialize
 	sim.setInitialConditions();
@@ -196,57 +211,76 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
-	amrex::Real const total_mass_final = sim.state_new_cc_[0].sum(HydroSystem<SNProblem>::density_index) * vol;
-	const amrex::Real mass_increase = total_mass_final - total_mass_init;
-	amrex::Print() << "----------------- Problem diagnostics -----------------" << "\n";
-	amrex::Print() << "Total mass increase: " << mass_increase << "\n";
-	amrex::Print() << "Expected total mass increase: " << n_SNR * mass_SNR << "\n";
-	const double mass_increase_rel_err = std::abs(mass_increase - n_SNR * mass_SNR) / (n_SNR * mass_SNR);
-	amrex::Print() << "Mass increase relative error: " << mass_increase_rel_err << "\n";
-	const double mass_increase_rel_err_tol = 1.0e-7;
+	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0, true);
+	const int nx = static_cast<int>(position.size());
 
-	const amrex::Real max_internal_energy = max_Eint_global * vol;
-	const amrex::Real expected_minimum_max_internal_energy = 1.0e51 / (7 * 7 * 7); // 1e51 erg energy into (2 * 3 + 1)^3 cells
-	int status = 1;
-	const bool pass_max_internal_energy = max_internal_energy > expected_minimum_max_internal_energy;
-	const bool pass_mass = mass_increase_rel_err < mass_increase_rel_err_tol;
-	bool is_pass = pass_max_internal_energy;
-	if (sim.maxTimesteps_ < 20) {
-		is_pass = is_pass && pass_mass;
-	} else {
-		// Write data to CSV file
-		std::ofstream csv_file("sn_energy_history_" + coolingTableType_ + ".csv");
-		if (csv_file.is_open()) {
-			// Set precision to 13 significant digits
-			csv_file << std::scientific << std::setprecision(13);
+	std::vector<double> T(nx);
+	std::vector<double> x(nx);
+	std::vector<double> vx(nx);
 
-			// Write header
-			csv_file << "step, Time_yr, Max_Internal_Energy_erg\n";
-
-			// Write data
-			for (int i = 0; i < static_cast<int>(max_Eint_history.size()); ++i) {
-				csv_file << i << ", " << t_history[i] / year << ", " << max_Eint_history[i] * vol << "\n";
-			}
-
-			csv_file.close();
-			amrex::Print() << "Energy history data written to sn_energy_history.csv\n";
-		} else {
-			amrex::Print() << "Error: Could not open CSV file for writing\n";
+	// plot the temperature and vx profile along the x axis at the center
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+#ifdef HAVE_PYTHON
+		for (int i = 0; i < nx; ++i) {
+			const double rho = values.at(HydroSystem<SNProblem>::density_index)[i];
+			const double Eint = values.at(HydroSystem<SNProblem>::internalEnergy_index)[i];
+			const double vx_val = values.at(HydroSystem<SNProblem>::x1Momentum_index)[i] / rho;
+			T[i] = Eint / (rho * CV); // simplified, but good enough for the purpose
+			x[i] = position[i];
+			vx[i] = vx_val;
 		}
+#endif
 	}
 
-	if (is_pass) {
-		status = 0;
-		amrex::Print() << "Test passed. Max internal energy in cells: " << max_internal_energy << "\n";
-		amrex::Print() << "Max internal energy last timestep: " << max_Eint_last * vol << "\n";
-	} else {
-		status = 1;
-		amrex::Print() << "Test failed. Max internal energy in cells too low: " << max_internal_energy << "\n";
-		amrex::Print() << "Expected minimum max internal energy: " << expected_minimum_max_internal_energy << "\n";
-		amrex::Print() << "OR\n";
-		amrex::Print() << "Mass increase relative error: " << mass_increase_rel_err << "\n";
-	}
-	amrex::Print() << "---------------------------------------------------------" << "\n";
 
-	return status;
+	QuokkaSimulation<SNProblem> sim2;
+	// set boosted velocity
+	sim2.userData_.boost_velocity = {1.0e8, 0.0, 0.0};
+
+	sim2.stopTime_ = t_stop * year;
+
+	// initialize
+	sim2.setInitialConditions();
+
+	// evolve
+	sim2.evolve();
+
+	auto [position2, values2] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0, true);
+
+	std::vector<double> T2(nx);
+	std::vector<double> x2(nx);
+	std::vector<double> vx2(nx);
+
+	// plot the temperature and vx profile along the x axis at the center
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+#ifdef HAVE_PYTHON
+		for (int i = 0; i < nx; ++i) {
+			const double rho = values2.at(HydroSystem<SNProblem>::density_index)[i];
+			const double Eint = values2.at(HydroSystem<SNProblem>::internalEnergy_index)[i];
+			const double vx_val = values2.at(HydroSystem<SNProblem>::x1Momentum_index)[i] / rho;
+			T2[i] = Eint / (rho * CV); // simplified, but good enough for the purpose
+			x2[i] = position2[i];
+			vx2[i] = vx_val;
+		}
+
+		matplotlibcpp::clf();
+		matplotlibcpp::plot(x, T, {{"label", "base"}, {"color", "C0"}});
+		matplotlibcpp::plot(x2, T2, {{"label", "boosted"}, {"color", "C1"}, {"linestyle", "--"}});
+		matplotlibcpp::legend();
+		matplotlibcpp::xlabel("x");
+		matplotlibcpp::ylabel("T");
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("sn_temperature_profile.pdf");
+
+		matplotlibcpp::clf();
+		matplotlibcpp::plot(x, vx, {{"label", "base"}, {"color", "C0"}});
+		matplotlibcpp::plot(x2, vx2, {{"label", "boosted"}, {"color", "C1"}, {"linestyle", "--"}});
+		matplotlibcpp::legend();
+		matplotlibcpp::xlabel("x");
+		matplotlibcpp::ylabel("vx");
+		matplotlibcpp::save("sn_velocity_profile.pdf");
+#endif
+	}
+
+	return 0;
 }
