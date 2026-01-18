@@ -92,9 +92,8 @@ template <ParticleType P> struct RealNameTraits {
 	static constexpr bool has_mass_at_birth = P == ParticleType::StochasticStellarPop;
 	static constexpr bool has_luminosity =
 	    P == ParticleType::Rad || P == ParticleType::CICRad || P == ParticleType::StochasticStellarPop || P == ParticleType::Test;
-	static constexpr int base_count =
-	    (has_mass_velocity ? 4 : 0) + (has_birth_death ? 2 : 0) + (has_birth_death_positions ? 6 : 0) + (has_death_density ? 1 : 0) +
-	    (has_mass_at_birth ? 1 : 0);
+	static constexpr int base_count = (has_mass_velocity ? 4 : 0) + (has_birth_death ? 2 : 0) + (has_birth_death_positions ? 6 : 0) +
+					  (has_death_density ? 1 : 0) + (has_mass_at_birth ? 1 : 0);
 };
 
 template <ParticleType P> struct IntNameTraits {

@@ -169,21 +169,21 @@ enum class StellarEvolutionStage { LowMassStar, SNProgenitor, SNRemnant, LowMass
 
 // Indices for StochasticStellarPop_particles
 enum StochasticStellarPopParticleDataIdx {
-	StochasticStellarPopParticleMassIdx = 0,    // Mass of the particle
-	StochasticStellarPopParticleVxIdx,	    // Velocity in x direction
-	StochasticStellarPopParticleVyIdx,	    // Velocity in y direction
-	StochasticStellarPopParticleVzIdx,	    // Velocity in z direction
-	StochasticStellarPopParticleBirthTimeIdx,   // Time when particle becomes active
-	StochasticStellarPopParticleDeathTimeIdx,   // Time when particle becomes inactive
-	StochasticStellarPopParticleBirthPosXIdx,   // Birthplace x coordinate
-	StochasticStellarPopParticleBirthPosYIdx,   // Birthplace y coordinate
-	StochasticStellarPopParticleBirthPosZIdx,   // Birthplace z coordinate
-	StochasticStellarPopParticleDeathPosXIdx,   // Deathplace x coordinate
-	StochasticStellarPopParticleDeathPosYIdx,   // Deathplace y coordinate
-	StochasticStellarPopParticleDeathPosZIdx,   // Deathplace z coordinate
+	StochasticStellarPopParticleMassIdx = 0,     // Mass of the particle
+	StochasticStellarPopParticleVxIdx,	     // Velocity in x direction
+	StochasticStellarPopParticleVyIdx,	     // Velocity in y direction
+	StochasticStellarPopParticleVzIdx,	     // Velocity in z direction
+	StochasticStellarPopParticleBirthTimeIdx,    // Time when particle becomes active
+	StochasticStellarPopParticleDeathTimeIdx,    // Time when particle becomes inactive
+	StochasticStellarPopParticleBirthPosXIdx,    // Birthplace x coordinate
+	StochasticStellarPopParticleBirthPosYIdx,    // Birthplace y coordinate
+	StochasticStellarPopParticleBirthPosZIdx,    // Birthplace z coordinate
+	StochasticStellarPopParticleDeathPosXIdx,    // Deathplace x coordinate
+	StochasticStellarPopParticleDeathPosYIdx,    // Deathplace y coordinate
+	StochasticStellarPopParticleDeathPosZIdx,    // Deathplace z coordinate
 	StochasticStellarPopParticleDeathDensityIdx, // Density at death cell
-	StochasticStellarPopParticleMassAtBirthIdx, // Particle mass at birth
-	StochasticStellarPopParticleLumIdx	    // Base index for luminosity components
+	StochasticStellarPopParticleMassAtBirthIdx,  // Particle mass at birth
+	StochasticStellarPopParticleLumIdx	     // Base index for luminosity components
 };
 
 constexpr int StochasticStellarPopParticleStageIdx = 0; // Evolution stage of the particle, index in the integer components
@@ -192,7 +192,8 @@ constexpr int StochasticStellarPopParticleStageIdx = 0; // Evolution stage of th
 template <typename problem_t>
 constexpr int StochasticStellarPopParticleRealComps = []() constexpr {
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
-		return 14 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, death_time, birth_xyz, death_xyz, death_density, mass_at_birth, lum[nGroups]
+		return 14 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, death_time, birth_xyz, death_xyz, death_density, mass_at_birth,
+								// lum[nGroups]
 	} else {
 		return 14; // mass, vx, vy, vz, birth_time, death_time, birth_xyz, death_xyz, death_density, mass_at_birth
 	}

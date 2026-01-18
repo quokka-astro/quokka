@@ -365,8 +365,7 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 				int iz = static_cast<int>(amrex::Math::floor((pos_z - plo[2]) * dxi[2]));
 
 				if constexpr (ContainerType::ParticleType::NReal > StochasticStellarPopParticleDeathDensityIdx) {
-					p.rdata(StochasticStellarPopParticleDeathDensityIdx) =
-					    local_state(ix, iy, iz, HydroSystem<problem_t>::density_index);
+					p.rdata(StochasticStellarPopParticleDeathDensityIdx) = local_state(ix, iy, iz, HydroSystem<problem_t>::density_index);
 				}
 
 				amrex::Real avg_density = 0.0;
@@ -643,8 +642,7 @@ void updateEvolutionStageAndDeathDensity(ContainerType *container, amrex::MultiF
 					const int ix = static_cast<int>(amrex::Math::floor((pos_x - plo[0]) * dxi[0]));
 					const int iy = static_cast<int>(amrex::Math::floor((pos_y - plo[1]) * dxi[1]));
 					const int iz = static_cast<int>(amrex::Math::floor((pos_z - plo[2]) * dxi[2]));
-					p.rdata(StochasticStellarPopParticleDeathDensityIdx) =
-					    local_state(ix, iy, iz, HydroSystem<problem_t>::density_index);
+					p.rdata(StochasticStellarPopParticleDeathDensityIdx) = local_state(ix, iy, iz, HydroSystem<problem_t>::density_index);
 				}
 			}
 		});
