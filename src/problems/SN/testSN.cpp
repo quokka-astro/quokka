@@ -268,8 +268,8 @@ auto problem_main() -> int
 		matplotlibcpp::plot(x, T, {{"label", "base"}, {"color", "C0"}});
 		matplotlibcpp::plot(x2, T2, {{"label", "boosted"}, {"color", "C1"}, {"linestyle", "--"}});
 		matplotlibcpp::legend();
-		matplotlibcpp::xlabel("x");
-		matplotlibcpp::ylabel("T");
+		matplotlibcpp::xlabel("x (cm)");
+		matplotlibcpp::ylabel("T (K)");
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("sn_temperature_profile.pdf");
 
@@ -277,8 +277,8 @@ auto problem_main() -> int
 		matplotlibcpp::plot(x, vx, {{"label", "base"}, {"color", "C0"}});
 		matplotlibcpp::plot(x2, vx2_rel, {{"label", "boosted"}, {"color", "C1"}, {"linestyle", "--"}});
 		matplotlibcpp::legend();
-		matplotlibcpp::xlabel("x");
-		matplotlibcpp::ylabel("vx");
+		matplotlibcpp::xlabel("x (cm)");
+		matplotlibcpp::ylabel("vx (cm/s)");
 		matplotlibcpp::save("sn_velocity_profile.pdf");
 #endif
 	}
