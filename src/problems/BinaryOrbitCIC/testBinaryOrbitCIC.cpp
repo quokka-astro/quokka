@@ -108,13 +108,13 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
 				amrex::Real mass_min = std::numeric_limits<amrex::Real>::max();
 				amrex::Real mass_max = std::numeric_limits<amrex::Real>::lowest();
 				amrex::Real pos_min[AMREX_SPACEDIM] = {std::numeric_limits<amrex::Real>::max(), std::numeric_limits<amrex::Real>::max(),
-								      std::numeric_limits<amrex::Real>::max()};
+								       std::numeric_limits<amrex::Real>::max()};
 				amrex::Real pos_max[AMREX_SPACEDIM] = {std::numeric_limits<amrex::Real>::lowest(), std::numeric_limits<amrex::Real>::lowest(),
-								      std::numeric_limits<amrex::Real>::lowest()};
+								       std::numeric_limits<amrex::Real>::lowest()};
 				amrex::Real vel_min[AMREX_SPACEDIM] = {std::numeric_limits<amrex::Real>::max(), std::numeric_limits<amrex::Real>::max(),
-								      std::numeric_limits<amrex::Real>::max()};
+								       std::numeric_limits<amrex::Real>::max()};
 				amrex::Real vel_max[AMREX_SPACEDIM] = {std::numeric_limits<amrex::Real>::lowest(), std::numeric_limits<amrex::Real>::lowest(),
-								      std::numeric_limits<amrex::Real>::lowest()};
+								       std::numeric_limits<amrex::Real>::lowest()};
 				amrex::Real com_pos[AMREX_SPACEDIM] = {0.0, 0.0, 0.0};
 				amrex::Real com_vel[AMREX_SPACEDIM] = {0.0, 0.0, 0.0};
 				amrex::Real max_pair_dist = 0.0;
@@ -168,14 +168,14 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
 				com_vel[1] *= inv_mass;
 				com_vel[2] *= inv_mass;
 
-				amrex::Print() << fmt::format("[split-debug] count={} mass_sum={:.6e} mass_min={:.6e} mass_max={:.6e}\n",
-							     real_data.size(), mass_sum, mass_min, mass_max);
-				amrex::Print() << fmt::format("[split-debug] pos_min=({:.6e},{:.6e},{:.6e}) pos_max=({:.6e},{:.6e},{:.6e})\n",
-							     pos_min[0], pos_min[1], pos_min[2], pos_max[0], pos_max[1], pos_max[2]);
-				amrex::Print() << fmt::format("[split-debug] vel_min=({:.6e},{:.6e},{:.6e}) vel_max=({:.6e},{:.6e},{:.6e})\n",
-							     vel_min[0], vel_min[1], vel_min[2], vel_max[0], vel_max[1], vel_max[2]);
-				amrex::Print() << fmt::format("[split-debug] com_pos=({:.6e},{:.6e},{:.6e}) com_vel=({:.6e},{:.6e},{:.6e})\n",
-							     com_pos[0], com_pos[1], com_pos[2], com_vel[0], com_vel[1], com_vel[2]);
+				amrex::Print() << fmt::format("[split-debug] count={} mass_sum={:.6e} mass_min={:.6e} mass_max={:.6e}\n", real_data.size(),
+							      mass_sum, mass_min, mass_max);
+				amrex::Print() << fmt::format("[split-debug] pos_min=({:.6e},{:.6e},{:.6e}) pos_max=({:.6e},{:.6e},{:.6e})\n", pos_min[0],
+							      pos_min[1], pos_min[2], pos_max[0], pos_max[1], pos_max[2]);
+				amrex::Print() << fmt::format("[split-debug] vel_min=({:.6e},{:.6e},{:.6e}) vel_max=({:.6e},{:.6e},{:.6e})\n", vel_min[0],
+							      vel_min[1], vel_min[2], vel_max[0], vel_max[1], vel_max[2]);
+				amrex::Print() << fmt::format("[split-debug] com_pos=({:.6e},{:.6e},{:.6e}) com_vel=({:.6e},{:.6e},{:.6e})\n", com_pos[0],
+							      com_pos[1], com_pos[2], com_vel[0], com_vel[1], com_vel[2]);
 				amrex::Print() << fmt::format("[split-debug] max_pair_dist={:.6e}\n", max_pair_dist);
 				if (!int_data.empty()) {
 					amrex::Print() << "[split-debug] int_data_size=" << int_data.size() << "\n";
