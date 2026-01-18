@@ -24,7 +24,7 @@
 struct RandomBlast {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-constexpr double m_H = C::m_p + C::m_e; // mass of hydrogen atom
+constexpr double m_H = C::m_p + C::m_e;	     // mass of hydrogen atom
 constexpr double seconds_per_year = 3.154e7; // seconds per year
 
 template <> struct Physics_Traits<RandomBlast> {
