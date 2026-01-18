@@ -9,8 +9,8 @@ Quokka is a two-moment radiation hydrodynamics code using the piecewise-paraboli
 - `export WORKSPACE=<path/to/workspace/root>`
 - Run `source ~/rc/qk.rc` to load modules before the first build. 
 - **Build a specific test**: `cd $WORKSPACE/build/clang-3d && ninja -j8 <TestName>`
-- **Run a specific test**: `TestName=<TestName> && cd $WORKSPACE/tests && (../build/clang-3d/src/problems/$TestName/$TestName ../inputs/$TestName.in tiny_profiler.enabled=0 suppress_output=1 amr.v=0 && echo Success || echo Fail)`
-- **Run a specific test with ctest**: `ctest -R <TestName>`
+- **Run a specific test**: `TestName=<TestName> && cd $WORKSPACE/tests && (../build/clang-3d/src/problems/$TestName/$TestName ../inputs/$TestName.in tiny_profiler.enabled=0 suppress_output=1 amr.v=0 && echo Success || echo Fail)` .
+- **Run a specific test with ctest**: `ctest -R '^<TestName>$'` (regex pattern to match the test name exactly) and then `tail -n 15 $WORKSPACE/build/clang-3d/Testing/Temporary/LastTest.log` to see the output and error estimation.
 - **Build all tests**: `cd $WORKSPACE/build/clang-3d && ninja -j8`
 - **Run all tests**: `ctest -j8`
 
