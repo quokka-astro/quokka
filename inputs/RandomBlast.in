@@ -23,16 +23,16 @@ problem.refine_threshold = 0.1
 do_reflux = 1
 do_subcycle = 0
 
-cfl = 0.2
+cfl = 0.3
 hydro.reconstruction_order = 3
 derived_vars = temperature
 
-plotfile_interval = 1
+plotfile_interval = 128
 checkpoint_interval = -1
-max_timesteps = 3
+max_timesteps = 1024
 
-dt_initial = 3.154e10       # 1000 yr
-stop_time = 3.154e13       # 1e6 yr
+stop_time = 3.154e15       # 1e6 yr
+#constant_dt = 3.154e7
 
 cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1

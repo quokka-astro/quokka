@@ -15,11 +15,17 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "physics_info.hpp"
+#include "util/fextract.hpp"
+
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 
 struct RandomBlast {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
 constexpr double m_H = C::m_p + C::m_e; // mass of hydrogen atom
+constexpr double seconds_per_year = 3.154e7; // seconds per year
 
 template <> struct Physics_Traits<RandomBlast> {
 	static constexpr bool is_self_gravity_enabled = true;
@@ -170,6 +176,49 @@ auto problem_main() -> int
 			amrex::Print() << i << ", ";
 		}
 		amrex::Print() << "]\n";
+	}
+
+	// Extract and plot temperature along z-axis
+	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 2, 0.0, true);
+	const int nz = static_cast<int>(position.size());
+
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		// Compute temperature from extracted state data
+		std::vector<double> zs(nz);
+		std::vector<double> temperature(nz);
+
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.coolingTableType_ == "resampled", "RandomBlast temperature extraction requires resampled cooling tables.");
+		auto tables = sim.resampledTables_.const_tables();
+
+		for (int i = 0; i < nz; ++i) {
+			zs[i] = position[i];
+			Real const rho = values.at(HydroSystem<RandomBlast>::density_index)[i];
+			Real const x1Mom = values.at(HydroSystem<RandomBlast>::x1Momentum_index)[i];
+			Real const x2Mom = values.at(HydroSystem<RandomBlast>::x2Momentum_index)[i];
+			Real const x3Mom = values.at(HydroSystem<RandomBlast>::x3Momentum_index)[i];
+			Real const Egas = values.at(HydroSystem<RandomBlast>::energy_index)[i];
+			Real const Eint = RadSystem<RandomBlast>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+			temperature[i] = Tgas;
+		}
+
+		amrex::Print() << "\nTemperature profile along z-axis:\n";
+		amrex::Print() << "z (cm)\tT (K)\n";
+		for (int i = 0; i < nz; ++i) {
+			amrex::Print() << fmt::format("{:.6e}\t{:.6e}\n", zs[i], temperature[i]);
+		}
+
+#ifdef HAVE_PYTHON
+		matplotlibcpp::clf();
+		matplotlibcpp::plot(zs, temperature, {{"label", "temperature"}, {"color", "blue"}});
+		matplotlibcpp::xlabel("z (cm)");
+		matplotlibcpp::ylabel("Temperature (K)");
+		matplotlibcpp::legend();
+		matplotlibcpp::title(fmt::format("time t = {:.1g} yr", sim.tNew_[0] / seconds_per_year));
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("./RandomBlast_temperature_z.png");
+		amrex::Print() << "\nTemperature plot saved to RandomBlast_temperature_z.png\n";
+#endif
 	}
 
 	return 0;
