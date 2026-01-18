@@ -184,7 +184,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
     const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>
 	&stencil_weights_gpu,
     const amrex::Real avg_density, const amrex::Real vol, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
-    const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo, const SNScheme SN_scheme_d)
+    const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo, const SNScheme SN_scheme_d, const Real pvx, const Real pvy, const Real pvz)
 {
 	const double n_H_amb = avg_density * cloudy_H_mass_fraction / m_u;
 	const amrex::Real M_snr = (avg_density * stencil_volume * vol) + m_ej;	 // SNR mass
@@ -252,9 +252,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
 				const double pz = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index);
 
 				// Compute momentum directed along unit vector
-				const double dpx = (delta_rho_i * px / rho) + (momentum_per_cell * r_hat_x);
-				const double dpy = (delta_rho_i * py / rho) + (momentum_per_cell * r_hat_y);
-				const double dpz = (delta_rho_i * pz / rho) + (momentum_per_cell * r_hat_z);
+				const double dpx = (delta_rho_i * pvx) + (momentum_per_cell * r_hat_x);
+				const double dpy = (delta_rho_i * pvy) + (momentum_per_cell * r_hat_y);
+				const double dpz = (delta_rho_i * pvz) + (momentum_per_cell * r_hat_z);
 
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::density_index), delta_rho_i);
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index), dpx);
@@ -379,7 +379,7 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 					// Deposit momentum and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
 					depositThermalKineticMomentumSNR<problem_t>(local_state, local_buffer, ix, iy, iz, stencil_volume, pos_x, pos_y, pos_z,
 										    m_ej, E_blast, SN_kin_energy, p_snr_0, vol_inverse, stencil_weights_gpu,
-										    avg_density, vol, dx, plo, SN_scheme_d);
+										    avg_density, vol, dx, plo, SN_scheme_d, p_vx, p_vy, p_vz);
 				}
 			}
 		});
