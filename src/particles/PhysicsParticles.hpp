@@ -88,11 +88,13 @@ template <ParticleType P> struct RealNameTraits {
 	static constexpr bool has_birth_death =
 	    P == ParticleType::Rad || P == ParticleType::CICRad || P == ParticleType::StochasticStellarPop || P == ParticleType::Test;
 	static constexpr bool has_birth_death_positions = P == ParticleType::StochasticStellarPop;
+	static constexpr bool has_death_density = P == ParticleType::StochasticStellarPop;
 	static constexpr bool has_mass_at_birth = P == ParticleType::StochasticStellarPop;
 	static constexpr bool has_luminosity =
 	    P == ParticleType::Rad || P == ParticleType::CICRad || P == ParticleType::StochasticStellarPop || P == ParticleType::Test;
 	static constexpr int base_count =
-	    (has_mass_velocity ? 4 : 0) + (has_birth_death ? 2 : 0) + (has_birth_death_positions ? 6 : 0) + (has_mass_at_birth ? 1 : 0);
+	    (has_mass_velocity ? 4 : 0) + (has_birth_death ? 2 : 0) + (has_birth_death_positions ? 6 : 0) + (has_death_density ? 1 : 0) +
+	    (has_mass_at_birth ? 1 : 0);
 };
 
 template <ParticleType P> struct IntNameTraits {
@@ -134,6 +136,9 @@ template <ParticleType P, int NReal, int NGroups> consteval auto makeBaseRealNam
 		names[idx++] = "death_x";
 		names[idx++] = "death_y";
 		names[idx++] = "death_z";
+	}
+	if constexpr (RealNameTraits<P>::has_death_density) {
+		names[idx++] = "death_density";
 	}
 	if constexpr (RealNameTraits<P>::has_mass_at_birth) {
 		names[idx++] = "mass_at_birth";
@@ -219,6 +224,7 @@ template <ParticleType P, int NReal, int NInt, int NGroups> struct ParticleNameT
 			    real[StochasticStellarPopParticleBirthPosXIdx] != "birth_x" || real[StochasticStellarPopParticleBirthPosYIdx] != "birth_y" ||
 			    real[StochasticStellarPopParticleBirthPosZIdx] != "birth_z" || real[StochasticStellarPopParticleDeathPosXIdx] != "death_x" ||
 			    real[StochasticStellarPopParticleDeathPosYIdx] != "death_y" || real[StochasticStellarPopParticleDeathPosZIdx] != "death_z" ||
+			    real[StochasticStellarPopParticleDeathDensityIdx] != "death_density" ||
 			    real[StochasticStellarPopParticleMassAtBirthIdx] != "mass_at_birth") {
 				return false;
 			}
@@ -856,8 +862,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				max_velocity = vel;
 			} else {
 				// Only update evolution stage but not deposit energy/momentum
-				SNFeedbackUtils::updateEvolutionStage(this->container_, lev, time + dt, this->getBirthTimeIndex(),
-								      this->getEvolutionStageIndex());
+				SNFeedbackUtils::updateEvolutionStageAndDeathDensity<ContainerType, problem_t>(
+				    this->container_, state, lev, time + dt, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
 			}
 		}
 

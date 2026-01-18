@@ -502,6 +502,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					p.rdata(StochasticStellarPopParticleDeathPosXIdx) = unset_position;
 					p.rdata(StochasticStellarPopParticleDeathPosYIdx) = unset_position;
 					p.rdata(StochasticStellarPopParticleDeathPosZIdx) = unset_position;
+					p.rdata(StochasticStellarPopParticleDeathDensityIdx) = unset_position;
 
 					// Low Mass particle mass and velocity
 					p.rdata(mass_idx) = mass_low_mass_star;

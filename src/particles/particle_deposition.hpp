@@ -364,6 +364,11 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 				int iy = static_cast<int>(amrex::Math::floor((pos_y - plo[1]) * dxi[1]));
 				int iz = static_cast<int>(amrex::Math::floor((pos_z - plo[2]) * dxi[2]));
 
+				if constexpr (ContainerType::ParticleType::NReal > StochasticStellarPopParticleDeathDensityIdx) {
+					p.rdata(StochasticStellarPopParticleDeathDensityIdx) =
+					    local_state(ix, iy, iz, HydroSystem<problem_t>::density_index);
+				}
+
 				amrex::Real avg_density = 0.0;
 				for (int ii = -SN_stencil_size; ii <= SN_stencil_size; ++ii) {
 					for (int jj = -SN_stencil_size; jj <= SN_stencil_size; ++jj) {
@@ -599,6 +604,53 @@ void addBufferToState(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_
 }
 
 // Function to update particle evolution stages from SNProgenitor to SNRemnant
+template <typename ContainerType, typename problem_t>
+void updateEvolutionStageAndDeathDensity(ContainerType *container, amrex::MultiFab &state, int lev, amrex::Real step_end_time, int birthTimeIndex,
+					 int evolutionStageIndex)
+{
+	const BL_PROFILE("SNFeedbackUtils::updateEvolutionStageAndDeathDensity()");
+	if (container == nullptr || evolutionStageIndex < 0 || birthTimeIndex < 0) {
+		return;
+	}
+
+	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
+		auto &particles = pti.GetArrayOfStructs();
+		auto *pData = particles().data();
+		const amrex::Long np = pti.numParticles();
+
+		const auto &local_state = state.array(pti);
+		const auto &geom = container->Geom(lev);
+		const auto plo = geom.ProbLoArray();
+		const auto dxi = geom.InvCellSizeArray();
+
+		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+			auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+
+			// Check if this is a supernova progenitor
+			const bool is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
+
+			// Update the particle's evolution stage to SNRemnant if it's time
+			if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex + 1)) {
+				p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
+				if constexpr (ContainerType::ParticleType::NReal > StochasticStellarPopParticleDeathDensityIdx) {
+					const amrex::Real pos_x = p.pos(0);
+					const amrex::Real pos_y = p.pos(1);
+					const amrex::Real pos_z = p.pos(2);
+					p.rdata(StochasticStellarPopParticleDeathPosXIdx) = pos_x;
+					p.rdata(StochasticStellarPopParticleDeathPosYIdx) = pos_y;
+					p.rdata(StochasticStellarPopParticleDeathPosZIdx) = pos_z;
+
+					const int ix = static_cast<int>(amrex::Math::floor((pos_x - plo[0]) * dxi[0]));
+					const int iy = static_cast<int>(amrex::Math::floor((pos_y - plo[1]) * dxi[1]));
+					const int iz = static_cast<int>(amrex::Math::floor((pos_z - plo[2]) * dxi[2]));
+					p.rdata(StochasticStellarPopParticleDeathDensityIdx) =
+					    local_state(ix, iy, iz, HydroSystem<problem_t>::density_index);
+				}
+			}
+		});
+	}
+}
+
 template <typename ContainerType>
 void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real step_end_time, int birthTimeIndex, int evolutionStageIndex)
 {
