@@ -105,8 +105,7 @@ template <> void QuokkaSimulation<RandomBlast>::createInitialStochasticStellarPo
 
 			// Launch GPU kernel to set integer components
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-				runtime_idata[quokka::StochasticStellarPopParticleStageIdx][i] =
-				    static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+				runtime_idata[quokka::StochasticStellarPopParticleStageIdx][i] = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
 			});
 		}
 	}

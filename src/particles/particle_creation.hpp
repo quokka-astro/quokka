@@ -163,12 +163,11 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 		}
 
 		template <typename PTDType, typename StateArray>
-		AMREX_GPU_DEVICE void operator()(PTDType &ptd, amrex::Long start_index, int num_particles, StateArray const &state_arr,
-						 StateArray const &accretion_rate_arr,
-						 int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
-						 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc, amrex::Long base_offset,
-						 amrex::RandomEngine const &engine) const
+		AMREX_GPU_DEVICE void
+		operator()(PTDType &ptd, amrex::Long start_index, int num_particles, StateArray const &state_arr, StateArray const &accretion_rate_arr, int i,
+			   int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+			   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc, amrex::Long base_offset,
+			   amrex::RandomEngine const &engine) const
 		{
 			// Default implementation does nothing
 			amrex::ignore_unused(ptd, start_index, num_particles, state_arr, accretion_rate_arr, i, j, k, dx, plo, fab_fc, base_offset, engine);
@@ -288,9 +287,8 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 
 		template <typename PTDType, typename StateArray>
 		AMREX_GPU_DEVICE void
-		operator()(PTDType &ptd, amrex::Long start_index, int num_particles, StateArray const &state_arr,
-			   StateArray const & /*accretion_rate_arr*/, int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-			   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+		operator()(PTDType &ptd, amrex::Long start_index, int num_particles, StateArray const &state_arr, StateArray const & /*accretion_rate_arr*/,
+			   int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
 			   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc, amrex::Long base_offset,
 			   amrex::RandomEngine const & /*engine*/) const
 		{
@@ -455,9 +453,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 		template <typename PTDType, typename StateArray>
 		AMREX_GPU_DEVICE void
-		operator()(PTDType &ptd, amrex::Long start_index, int num_particles, StateArray const &state_arr,
-			   StateArray const & /*accretion_rate_arr*/, int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-			   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+		operator()(PTDType &ptd, amrex::Long start_index, int num_particles, StateArray const &state_arr, StateArray const & /*accretion_rate_arr*/,
+			   int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
 			   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc, amrex::Long base_offset,
 			   amrex::RandomEngine const &engine) const
 		{

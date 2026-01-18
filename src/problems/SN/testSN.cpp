@@ -92,9 +92,8 @@ template <> void QuokkaSimulation<SNProblem>::createInitialTestParticles()
 			auto *runtime_idata = ptd.m_runtime_idata;
 
 			// Launch GPU kernel to set integer components
-			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-				runtime_idata[0][i] = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
-			});
+			amrex::ParallelFor(
+			    np, [=] AMREX_GPU_DEVICE(int i) { runtime_idata[0][i] = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor); });
 		}
 	}
 

@@ -87,8 +87,7 @@ enum class ParticleType {
 
 // Unified PureSoA particle container type with runtime-only extra components.
 // Compile-time SoA components are just positions (x/y/z); all extra data are runtime comps.
-using PhysicsParticleContainer =
-    amrex::AmrParticleContainer_impl<amrex::SoAParticle<AMREX_SPACEDIM, 0>, AMREX_SPACEDIM, 0, amrex::PolymorphicArenaAllocator>;
+using PhysicsParticleContainer = amrex::AmrParticleContainer_impl<amrex::SoAParticle<AMREX_SPACEDIM, 0>, AMREX_SPACEDIM, 0, amrex::PolymorphicArenaAllocator>;
 
 // Enum for SN schemes: ThermalOnly, ThermalAndMomentum
 AMREX_ENUM(SNScheme,				   // NOLINT
@@ -209,8 +208,7 @@ constexpr int StochasticStellarPopParticleIntComps = 1; // evolution stage
 
 // Type definitions for StochasticStellarPop_particles container and iterator
 template <typename problem_t> using StochasticStellarPopParticleContainer = PhysicsParticleContainer;
-template <typename problem_t>
-using StochasticStellarPopParticleIterator = typename StochasticStellarPopParticleContainer<problem_t>::ParIterType;
+template <typename problem_t> using StochasticStellarPopParticleIterator = typename StochasticStellarPopParticleContainer<problem_t>::ParIterType;
 
 //-------------------- Test particles --------------------
 
@@ -430,8 +428,7 @@ template <typename problem_t> [[nodiscard]] inline auto getRuntimeCompInfo(Parti
 	return info;
 }
 
-template <typename problem_t, typename ContainerType>
-inline void configureParticleContainer(ContainerType &container, ParticleType type)
+template <typename problem_t, typename ContainerType> inline void configureParticleContainer(ContainerType &container, ParticleType type)
 {
 	container.SetArena(getParticleArena());
 	container.SetSoACompileTimeNames({AMREX_D_DECL("x", "y", "z")}, {});

@@ -24,8 +24,7 @@ template <typename problem_t> class PhysicsParticleRegister;
 namespace particle_io
 {
 
-template <typename ContainerType>
-void configureAnalysisContainer(ContainerType &analysisPC, const ContainerType &container)
+template <typename ContainerType> void configureAnalysisContainer(ContainerType &analysisPC, const ContainerType &container)
 {
 	analysisPC.SetArena(container.arena());
 
@@ -51,8 +50,7 @@ void configureAnalysisContainer(ContainerType &analysisPC, const ContainerType &
 	}
 }
 
-template <typename ContainerType>
-void initParticlesFromAscii(ContainerType *container, const std::string &file, int nreal_extra)
+template <typename ContainerType> void initParticlesFromAscii(ContainerType *container, const std::string &file, int nreal_extra)
 {
 	if (container == nullptr) {
 		return;
@@ -223,7 +221,8 @@ template <typename ContainerType>
 				std::vector<amrex::Vector<amrex::ParticleReal>> real_host(num_real);
 				for (int comp = 0; comp < num_real_ct; ++comp) {
 					real_host[comp].resize(np);
-					amrex::Gpu::copy(amrex::Gpu::deviceToHost, ptd.m_rdata[comp], ptd.m_rdata[comp] + np, real_host[comp].begin()); // NOLINT
+					amrex::Gpu::copy(amrex::Gpu::deviceToHost, ptd.m_rdata[comp], ptd.m_rdata[comp] + np,
+							 real_host[comp].begin()); // NOLINT
 				}
 				for (int comp = 0; comp < num_real_rt; ++comp) {
 					real_host[num_real_ct + comp].resize(np);
@@ -351,7 +350,8 @@ template <typename ContainerType>
 				std::vector<amrex::Vector<amrex::ParticleReal>> real_host(num_real);
 				for (int comp = 0; comp < num_real_ct; ++comp) {
 					real_host[comp].resize(np);
-					amrex::Gpu::copy(amrex::Gpu::deviceToHost, ptd.m_rdata[comp], ptd.m_rdata[comp] + np, real_host[comp].begin()); // NOLINT
+					amrex::Gpu::copy(amrex::Gpu::deviceToHost, ptd.m_rdata[comp], ptd.m_rdata[comp] + np,
+							 real_host[comp].begin()); // NOLINT
 				}
 				for (int comp = 0; comp < num_real_rt; ++comp) {
 					real_host[num_real_ct + comp].resize(np);

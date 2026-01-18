@@ -80,13 +80,12 @@ struct RadDeposition {
 		const auto currentTime = current_time;
 		const auto birthIndex = birthTimeIndex;
 		// Deposit radiation energy only if particle is active
-		interp.ParticleToMesh(p, radEnergySource, start_part_comp, start_mesh_comp, num_comp,
-				      [=] AMREX_GPU_DEVICE(const auto & /*part*/, int comp) {
-					      if (currentTime < runtime_rdata[birthIndex][i] || currentTime >= runtime_rdata[birthIndex + 1][i]) {
-						      return 0.0;
-					      }
-					      return runtime_rdata[comp][i] * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
-				      });
+		interp.ParticleToMesh(p, radEnergySource, start_part_comp, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const auto & /*part*/, int comp) {
+			if (currentTime < runtime_rdata[birthIndex][i] || currentTime >= runtime_rdata[birthIndex + 1][i]) {
+				return 0.0;
+			}
+			return runtime_rdata[comp][i] * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+		});
 	}
 };
 
@@ -331,8 +330,7 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 		// Deposit particle data into the local buffer
 		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 			// Check if this is a supernova progenitor
-			const bool is_sn_progenitor =
-			    (runtime_idata[evolutionStageIndex][idx] == static_cast<int>(StellarEvolutionStage::SNProgenitor));
+			const bool is_sn_progenitor = (runtime_idata[evolutionStageIndex][idx] == static_cast<int>(StellarEvolutionStage::SNProgenitor));
 
 			if (is_sn_progenitor && step_end_time > runtime_rdata[birthTimeIndex + 1][idx]) {
 				// Count this SN explosion

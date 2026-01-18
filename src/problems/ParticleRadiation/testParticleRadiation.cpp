@@ -9,8 +9,8 @@
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
-#include "particles/particle_update.hpp"
 #include "particles/particle_IO.hpp"
+#include "particles/particle_update.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 #include "util/DataTable.hpp"
@@ -113,9 +113,8 @@ template <> void QuokkaSimulation<ParticleRadiationProblem>::createInitialStocha
 			auto *runtime_idata = ptd.m_runtime_idata;
 
 			// Launch GPU kernel to set integer components
-			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-				runtime_idata[0][i] = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
-			});
+			amrex::ParallelFor(
+			    np, [=] AMREX_GPU_DEVICE(int i) { runtime_idata[0][i] = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor); });
 		}
 	}
 

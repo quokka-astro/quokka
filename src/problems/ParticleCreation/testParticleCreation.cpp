@@ -169,12 +169,12 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		}
 
 		template <typename PTDType, typename StateArray>
-		AMREX_GPU_DEVICE void
-		operator()(PTDType &ptd, amrex::Long start_index, int num_particles, StateArray const &state_arr,
-			   StateArray const & /*state_accretion_rate_arr*/, int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-			   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
-			   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const * /*cons_fc*/, amrex::Long base_offset,
-			   amrex::RandomEngine const & /*engine*/) const
+		AMREX_GPU_DEVICE void operator()(PTDType &ptd, amrex::Long start_index, int num_particles, StateArray const &state_arr,
+						 StateArray const & /*state_accretion_rate_arr*/, int i, int j, int k,
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+						 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const * /*cons_fc*/, amrex::Long base_offset,
+						 amrex::RandomEngine const & /*engine*/) const
 		{
 			const int num_runtime_real = ptd.m_num_runtime_real;
 			auto *runtime_rdata = ptd.m_runtime_rdata;

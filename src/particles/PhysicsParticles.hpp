@@ -599,8 +599,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						const amrex::Long np = pIter.numParticles();
 
 						amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-							ParticlePropertyUpdateTraits<particleType>::template updateProperties<
-							    problem_t>(ptd, idx, current_time, gpu_tables);
+							ParticlePropertyUpdateTraits<particleType>::template updateProperties<problem_t>(ptd, idx, current_time,
+																	 gpu_tables);
 						});
 					}
 				}

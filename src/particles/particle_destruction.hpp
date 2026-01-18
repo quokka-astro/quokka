@@ -108,8 +108,7 @@ template <ParticleType particleType> struct ParticleDestructionTraits {
 			amrex::ignore_unused(mass_idx, current_time, dt);
 			// Remove particles with evolution stage Removed
 			const auto *runtime_idata = ptd.m_runtime_idata;
-			const bool will_be_removed =
-			    (runtime_idata[evolution_stage_index][i] == static_cast<int>(StellarEvolutionStage::Removed));
+			const bool will_be_removed = (runtime_idata[evolution_stage_index][i] == static_cast<int>(StellarEvolutionStage::Removed));
 			return will_be_removed;
 		}
 	};
