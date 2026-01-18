@@ -43,8 +43,8 @@ inline LuminosityTables<Nout, oob_policy> *g_luminosity_tables_ptr = nullptr; //
 class LuminosityUpdate
 {
       public:
-	template <typename problem_t, typename ParticleType, int Nout, quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateLuminosity(ParticleType &p, amrex::Real current_time,
+	template <typename problem_t, typename PTDType, int Nout, quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateLuminosity(PTDType &ptd, int i, amrex::Real current_time,
 									 LuminosityGpuConstTables<Nout, oob_policy> const &gpu_tables) noexcept
 	{
 		constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
@@ -54,8 +54,9 @@ class LuminosityUpdate
 		const int mass_idx = StochasticStellarPopParticleMassIdx;
 		const int birth_time_idx = StochasticStellarPopParticleBirthTimeIdx;
 		const int lum_idx = StochasticStellarPopParticleLumIdx;
-		const amrex::Real age_in_seconds = current_time - p.rdata(birth_time_idx);
-		const amrex::Real mass = p.rdata(mass_idx);
+		auto *runtime_rdata = ptd.m_runtime_rdata;
+		const amrex::Real age_in_seconds = current_time - runtime_rdata[birth_time_idx][i];
+		const amrex::Real mass = runtime_rdata[mass_idx][i];
 
 		const amrex::Real mass_in_solar_masses = mass / C::M_solar;
 		amrex::Real age_in_years = age_in_seconds / seconds_per_year;
@@ -68,9 +69,9 @@ class LuminosityUpdate
 		auto const luminosities = gpu_tables.luminosity.interpolate(point);
 
 		// Update luminosity components (they are stored consecutively starting at lum_idx)
-		if (lum_idx + nGroups <= ParticleType::NReal) {
+		if (lum_idx + nGroups <= ptd.m_num_runtime_real) {
 			for (int g = 0; g < nGroups; ++g) {
-				p.rdata(lum_idx + g) = luminosities[g];
+				runtime_rdata[lum_idx + g][i] = luminosities[g];
 			}
 		}
 	}

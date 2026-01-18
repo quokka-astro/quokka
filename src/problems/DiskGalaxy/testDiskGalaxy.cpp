@@ -25,6 +25,7 @@
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
 #include "math/quadrature.hpp"
+#include "particles/particle_IO.hpp"
 #include "particles/particle_types.hpp"
 #include "physics_info.hpp"
 #include "util/BC.hpp"
@@ -353,7 +354,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::createInitialCICParticles()
 	amrex::Print() << "\nReading particles from ASCII file " << filename << "...\n";
 	CICParticles->SetVerbose(1);
 	const int nreal_extra = 4; // mass vx vy vz
-	CICParticles->InitFromAsciiFile(filename, nreal_extra, nullptr);
+	quokka::particle_io::initParticlesFromAscii(CICParticles.get(), filename, nreal_extra);
 	amrex::Print() << "\n";
 }
 

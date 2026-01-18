@@ -26,6 +26,7 @@
 
 #include "AMReX_REAL.H"
 #include "QuokkaSimulation.hpp"
+#include "particles/particle_IO.hpp"
 
 struct BinaryOrbit {
 };
@@ -86,7 +87,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
 	// read particles from ASCII file
 	const int nreal_extra = 4; // mass vx vy vz
 	CICParticles->SetVerbose(1);
-	CICParticles->InitFromAsciiFile("../inputs/BinaryOrbit_particles.txt", nreal_extra, nullptr);
+	quokka::particle_io::initParticlesFromAscii(CICParticles.get(), "../inputs/BinaryOrbit_particles.txt", nreal_extra);
 
 	// test particle splitting
 	// (this is intended to only be used when restarting at a higher resolution)

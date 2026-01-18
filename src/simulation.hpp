@@ -2898,6 +2898,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 
 		// Create particle container
 		RadParticles = std::make_unique<quokka::RadParticleContainer<problem_t>>(this);
+		quokka::configureParticleContainer<problem_t>(*RadParticles, quokka::ParticleType::Rad);
 		RadParticles->SetVerbose(0);
 
 		// Register with particle register - Rad particles do not allow creation
@@ -2913,6 +2914,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 
 		// Create particle container
 		CICParticles = std::make_unique<quokka::CICParticleContainer>(this);
+		quokka::configureParticleContainer<problem_t>(*CICParticles, quokka::ParticleType::CIC);
 		CICParticles->SetVerbose(0);
 
 		// Register with particle register - CIC particles allow creation
@@ -2927,6 +2929,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 
 		// Create particle container
 		CICRadParticles = std::make_unique<quokka::CICRadParticleContainer<problem_t>>(this);
+		quokka::configureParticleContainer<problem_t>(*CICRadParticles, quokka::ParticleType::CICRad);
 		CICRadParticles->SetVerbose(0);
 
 		// Register with particle register - CICRad particles do not allow creation
@@ -2943,6 +2946,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 
 		// Create particle container
 		StochasticStellarPopParticles = std::make_unique<quokka::StochasticStellarPopParticleContainer<problem_t>>(this);
+		quokka::configureParticleContainer<problem_t>(*StochasticStellarPopParticles, quokka::ParticleType::StochasticStellarPop);
 		StochasticStellarPopParticles->SetVerbose(0);
 
 		// Register with particle register - StochasticStellarPop particles allow creation
@@ -2957,6 +2961,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 
 		// Create particle container
 		SinkParticles = std::make_unique<quokka::SinkParticleContainer>(this);
+		quokka::configureParticleContainer<problem_t>(*SinkParticles, quokka::ParticleType::Sink);
 		SinkParticles->SetVerbose(0);
 
 		// Register with particle register - Sink particles allow creation
@@ -2970,6 +2975,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 
 		// Create particle container
 		TestParticles = std::make_unique<quokka::TestParticleContainer<problem_t>>(this);
+		quokka::configureParticleContainer<problem_t>(*TestParticles, quokka::ParticleType::Test);
 		TestParticles->SetVerbose(0);
 
 		// Register with particle register - Test particles have all features enabled
@@ -4220,6 +4226,7 @@ void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::un
 {
 	AMREX_ASSERT(container == nullptr);
 	container = std::make_unique<ContainerType>(this);
+	quokka::configureParticleContainer<problem_t>(*container, particle_type);
 
 	// Register container
 	particleRegister_.registerParticleType(container.get(), particle_type);

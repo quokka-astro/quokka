@@ -103,8 +103,31 @@ template <> void QuokkaSimulation<CollapseProblem>::createInitialCICParticles()
 	const double total_particle_mass = 0.5; // about 0.1 of the total fluid mass
 	const double particle_mass = total_particle_mass / static_cast<double>(num_particles);
 
-	const quokka::CICParticleContainer::ParticleInitData pdata = {{particle_mass, 0, 0, 0}, {}, {}, {}}; // {mass vx vy vz}, empty, empty, empty
+	const quokka::CICParticleContainer::ParticleInitData pdata{}; // InitRandom sets positions only; runtime comps set below.
 	CICParticles->InitRandom(num_particles, iseed, pdata, generate_on_root_rank);
+
+	int const finest_level = finestLevel();
+	int const mass_idx = quokka::CICParticleMassIdx;
+	for (int lev = 0; lev <= finest_level; ++lev) {
+		for (quokka::CICParticleContainer::ParIterType pIter(*CICParticles, lev); pIter.isValid(); ++pIter) {
+			const amrex::Long np = pIter.numParticles();
+			if (np == 0) {
+				continue;
+			}
+
+			auto ptd = pIter.GetParticleTile().getParticleTileData();
+			auto *runtime_rdata = ptd.m_runtime_rdata;
+
+			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+				runtime_rdata[mass_idx][idx] = particle_mass;
+				runtime_rdata[mass_idx + 1][idx] = 0.0;
+				runtime_rdata[mass_idx + 2][idx] = 0.0;
+				runtime_rdata[mass_idx + 3][idx] = 0.0;
+			});
+		}
+	}
+
+	amrex::Gpu::streamSynchronize();
 }
 
 template <> void QuokkaSimulation<CollapseProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)

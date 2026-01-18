@@ -134,12 +134,12 @@ template <typename ContainerType, typename problem_t>
 void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, const amrex::Array4<const amrex::Real> &local_state,
 			       const amrex::Array4<amrex::Real> &local_accretion_rate, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
 			       const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fab_fc,
-			       amrex::Real /*time*/, amrex::Real dt, int /*mass_index*/)
+			       amrex::Real /*time*/, amrex::Real dt, int mass_index)
 {
 	const BL_PROFILE("SinkAccretionUtils::ComputeAccretionRateInBox()");
 	// Get the particle array of structs
-	auto &particles = pti.GetArrayOfStructs();
-	auto *pData = particles().data();
+	auto ptd = pti.GetParticleTile().getParticleTileData();
+	auto *runtime_rdata = ptd.m_runtime_rdata;
 	const amrex::Long np = pti.numParticles();
 	const double dx_max = std::max({dx[0], dx[1], dx[2]});
 	const double vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
@@ -147,16 +147,17 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 	const bool use_uniform_kernel = sink_particle_use_uniform_kernel;
 
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-
 		// Find the cell containing the particle
-		int ix = static_cast<int>((p.pos(0) - plo[0]) / dx[0]);
-		int iy = static_cast<int>((p.pos(1) - plo[1]) / dx[1]);
-		int iz = static_cast<int>((p.pos(2) - plo[2]) / dx[2]);
+		const amrex::Real pos_x = ptd.pos(0, idx);
+		const amrex::Real pos_y = ptd.pos(1, idx);
+		const amrex::Real pos_z = ptd.pos(2, idx);
+		int ix = static_cast<int>((pos_x - plo[0]) / dx[0]);
+		int iy = static_cast<int>((pos_y - plo[1]) / dx[1]);
+		int iz = static_cast<int>((pos_z - plo[2]) / dx[2]);
 
 		auto const *fab_fc_ptr = (fab_fc[0]) ? &fab_fc : nullptr;
 		const auto [M_dot, r_K] =
-		    compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, p.rdata(0), p.pos(0), p.pos(1), p.pos(2), plo, dx, fab_fc_ptr);
+		    compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, runtime_rdata[mass_index][idx], pos_x, pos_y, pos_z, plo, dx, fab_fc_ptr);
 		AMREX_ASSERT(M_dot >= 0.0);
 
 		// compute the sum of the accretion kernel weight function, w = exp(- r^2 / r_K^2)
@@ -164,9 +165,9 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double x = p.pos(0) - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
-					const double y = p.pos(1) - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
-					const double z = p.pos(2) - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
+					const double x = pos_x - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
+					const double y = pos_y - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
+					const double z = pos_z - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
 					const double r_sqr = x * x + y * y + z * z;
 					double r_acc_sqr = stencil_size * stencil_size * dx_max * dx_max;
 					if (use_uniform_kernel) {
@@ -190,9 +191,9 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double x = p.pos(0) - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
-					const double y = p.pos(1) - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
-					const double z = p.pos(2) - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
+					const double x = pos_x - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
+					const double y = pos_y - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
+					const double z = pos_z - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
 					const double r_sqr = x * x + y * y + z * z;
 					double r_acc_sqr = stencil_size * stencil_size * dx_max * dx_max;
 					if (use_uniform_kernel) {
@@ -307,34 +308,35 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 {
 	const BL_PROFILE("SinkAccretionUtils::UpdateParticleMassAndMomentumInBox()");
 	// Get the particle array of structs
-	auto &particles = pti.GetArrayOfStructs();
-	auto *pData = particles().data();
+	auto ptd = pti.GetParticleTile().getParticleTileData();
+	auto *runtime_rdata = ptd.m_runtime_rdata;
 	const double dx_max = std::max({dx[0], dx[1], dx[2]});
 	const amrex::Long np = pti.numParticles();
 
 	const bool use_uniform_kernel = sink_particle_use_uniform_kernel;
 
 	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-		auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-
 		// Find the cell containing the particle
-		int ix = static_cast<int>((p.pos(0) - plo[0]) / dx[0]);
-		int iy = static_cast<int>((p.pos(1) - plo[1]) / dx[1]);
-		int iz = static_cast<int>((p.pos(2) - plo[2]) / dx[2]);
+		const amrex::Real pos_x = ptd.pos(0, idx);
+		const amrex::Real pos_y = ptd.pos(1, idx);
+		const amrex::Real pos_z = ptd.pos(2, idx);
+		int ix = static_cast<int>((pos_x - plo[0]) / dx[0]);
+		int iy = static_cast<int>((pos_y - plo[1]) / dx[1]);
+		int iz = static_cast<int>((pos_z - plo[2]) / dx[2]);
 
 		// when state_fc is not populated (no fc variables), state_fc[0] will evaluate as false.
 		auto const *fab_fc_ptr = (fab_fc[0]) ? &fab_fc : nullptr;
 		const auto [M_dot, r_K] =
-		    compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, p.rdata(0), p.pos(0), p.pos(1), p.pos(2), plo, dx, fab_fc_ptr);
+		    compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, runtime_rdata[mass_index][idx], pos_x, pos_y, pos_z, plo, dx, fab_fc_ptr);
 
 		// compute the sum of the accretion kernel weight function, w = exp(- r^2 / r_K^2)
 		double w_sum = 0.0;
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double x = p.pos(0) - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
-					const double y = p.pos(1) - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
-					const double z = p.pos(2) - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
+					const double x = pos_x - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
+					const double y = pos_y - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
+					const double z = pos_z - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
 					const double r_sqr = x * x + y * y + z * z;
 					double r_acc_sqr = stencil_size * stencil_size * dx_max * dx_max;
 					if (use_uniform_kernel) {
@@ -362,9 +364,9 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double x = p.pos(0) - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
-					const double y = p.pos(1) - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
-					const double z = p.pos(2) - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
+					const double x = pos_x - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
+					const double y = pos_y - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
+					const double z = pos_z - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
 					const double r_sqr = x * x + y * y + z * z;
 					double r_acc_sqr = stencil_size * stencil_size * dx_max * dx_max;
 					if (use_uniform_kernel) {
@@ -399,12 +401,12 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 			}
 		}
 
-		const double par_m = p.rdata(mass_index);
+		const double par_m = runtime_rdata[mass_index][idx];
 		const double par_m_new = par_m + accreted_mass;
-		p.rdata(mass_index) = par_m_new;
-		p.rdata(mass_index + 1) = (par_m * p.rdata(mass_index + 1) + accreted_momentum_x) / par_m_new;
-		p.rdata(mass_index + 2) = (par_m * p.rdata(mass_index + 2) + accreted_momentum_y) / par_m_new;
-		p.rdata(mass_index + 3) = (par_m * p.rdata(mass_index + 3) + accreted_momentum_z) / par_m_new;
+		runtime_rdata[mass_index][idx] = par_m_new;
+		runtime_rdata[mass_index + 1][idx] = (par_m * runtime_rdata[mass_index + 1][idx] + accreted_momentum_x) / par_m_new;
+		runtime_rdata[mass_index + 2][idx] = (par_m * runtime_rdata[mass_index + 2][idx] + accreted_momentum_y) / par_m_new;
+		runtime_rdata[mass_index + 3][idx] = (par_m * runtime_rdata[mass_index + 3][idx] + accreted_momentum_z) / par_m_new;
 	});
 }
 

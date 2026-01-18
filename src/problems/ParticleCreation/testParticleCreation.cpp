@@ -6,6 +6,7 @@
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 #include "math/interpolate.hpp"
+#include "particles/particle_IO.hpp"
 #include "util/BC.hpp"
 
 #include "QuokkaSimulation.hpp"
@@ -74,30 +75,31 @@ template <> void QuokkaSimulation<TestParticle>::createInitialTestParticles()
 	// InitSetPhyParticles to set the integer components
 	const int nreal_extra = 7; // mass vx vy vz birth_time death_time lum
 	TestParticles->SetVerbose(1);
-	TestParticles->InitFromAsciiFile("../inputs/TestParticles.txt", nreal_extra, nullptr);
+	quokka::particle_io::initParticlesFromAscii(TestParticles.get(), "../inputs/TestParticles.txt", nreal_extra);
 
 	// Using a for loop from lev = 0 to TestParticles->maxLevel() won't work because not all levels necessarily have particles, and when some levels
 	// do not have particles, TestParticles->GetParticles(lev) will result in a Segfault. Therefore, we loop over the actual particle container.
 	for (auto &kv : TestParticles->GetParticles()) {
 		for (auto &ikv : kv) {
-			auto &particle_array = ikv.second.GetArrayOfStructs();
-			const int np = particle_array.numParticles();
+			auto &particle_tile = ikv.second;
+			const int np = particle_tile.numParticles();
 
 			if (np == 0) {
 				continue;
 			}
 
-			auto *pdata = particle_array().data();
+			auto ptd = particle_tile.getParticleTileData();
+			auto *runtime_rdata = ptd.m_runtime_rdata;
+			auto *runtime_idata = ptd.m_runtime_idata;
 
 			// Launch GPU kernel to set integer components
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-				auto &p = pdata[i]; // NOLINT
-				if (p.rdata(0) > 1.0e-10) {
-					p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+				if (runtime_rdata[0][i] > 1.0e-10) {
+					runtime_idata[0][i] = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
 				} else {
 					// For testing purposes, we mark particles with mass < 1.0e-10 as Removed. These particles will be removed in current
 					// timestep.
-					p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::Removed);
+					runtime_idata[0][i] = static_cast<int>(quokka::StellarEvolutionStage::Removed);
 				}
 			});
 		}
@@ -166,14 +168,19 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		{
 		}
 
-		template <typename ParticleType, typename StateArray>
+		template <typename PTDType, typename StateArray>
 		AMREX_GPU_DEVICE void
-		operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, StateArray const & /*state_accretion_rate_arr*/, int i,
-			   int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+		operator()(PTDType &ptd, amrex::Long start_index, int num_particles, StateArray const &state_arr,
+			   StateArray const & /*state_accretion_rate_arr*/, int i, int j, int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+			   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
 			   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const * /*cons_fc*/, amrex::Long base_offset,
 			   amrex::RandomEngine const & /*engine*/) const
 		{
-			if (mass_idx + 3 < ParticleType::NReal) {
+			const int num_runtime_real = ptd.m_num_runtime_real;
+			auto *runtime_rdata = ptd.m_runtime_rdata;
+			auto *runtime_idata = ptd.m_runtime_idata;
+			auto *idcpu_data = ptd.m_idcpu;
+			if (mass_idx + 3 < num_runtime_real) {
 				// Calculate common values for all particles
 				const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 
@@ -183,30 +190,29 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 
 				// Create all particles
 				for (int p_idx = 0; p_idx < num_particles; ++p_idx) {
-					auto &p = particles[p_idx]; // NOLINT
+					const amrex::Long particle_index = start_index + p_idx;
 
 					// Set particle position at cell center
-					p.pos(0) = plo[0] + (i + 0.5) * dx[0];
-					p.pos(1) = plo[1] + (j + 0.5) * dx[1];
-					p.pos(2) = plo[2] + (k + 0.5) * dx[2];
+					ptd.pos(0, particle_index) = plo[0] + (i + 0.5) * dx[0];
+					ptd.pos(1, particle_index) = plo[1] + (j + 0.5) * dx[1];
+					ptd.pos(2, particle_index) = plo[2] + (k + 0.5) * dx[2];
 
 					// Set particle ID and CPU
-					p.id() = pid_start + base_offset + p_idx;
-					p.cpu() = cpu_id;
+					idcpu_data[particle_index] = amrex::SetParticleIDandCPU(pid_start + base_offset + p_idx, cpu_id);
 
 					// Initialize particle properties
-					p.rdata(mass_idx) = SN_mass;
-					p.rdata(mass_idx + 1) = vx;
-					p.rdata(mass_idx + 2) = vy;
-					p.rdata(mass_idx + 3) = vz;
+					runtime_rdata[mass_idx][particle_index] = SN_mass;
+					runtime_rdata[mass_idx + 1][particle_index] = vx;
+					runtime_rdata[mass_idx + 2][particle_index] = vy;
+					runtime_rdata[mass_idx + 3][particle_index] = vz;
 
 					// set birth time to current time
-					p.rdata(birth_time_index) = current_time;
+					runtime_rdata[birth_time_index][particle_index] = current_time;
 					// set death time to current time + 0.0025 (2.5 time steps, so will evolve into SNRemnant at step 3)
-					p.rdata(birth_time_index + 1) = current_time + 0.0025;
+					runtime_rdata[birth_time_index + 1][particle_index] = current_time + 0.0025;
 
 					// Set particle evolution stage
-					p.idata(evolution_stage_index) = static_cast<int>(StellarEvolutionStage::SNProgenitor);
+					runtime_idata[evolution_stage_index][particle_index] = static_cast<int>(StellarEvolutionStage::SNProgenitor);
 				}
 
 				// Update cell density. For testing purposes, we remove a tiny amount of mass from the cell.

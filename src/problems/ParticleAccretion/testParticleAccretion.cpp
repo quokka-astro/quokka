@@ -14,6 +14,7 @@
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
+#include "particles/particle_IO.hpp"
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 #include <gcem.hpp>
@@ -89,7 +90,7 @@ template <> void QuokkaSimulation<AccretionProblem>::createInitialSinkParticles(
 	// read particles from ASCII file
 	const int nreal_extra = 4; // mass vx vy vz
 	SinkParticles->SetVerbose(1);
-	SinkParticles->InitFromAsciiFile(sink_file, nreal_extra, nullptr);
+	quokka::particle_io::initParticlesFromAscii(SinkParticles.get(), sink_file, nreal_extra);
 
 	const int max_lev = max_level;
 
@@ -101,27 +102,27 @@ template <> void QuokkaSimulation<AccretionProblem>::createInitialSinkParticles(
 	// manually set particle mass to M_star_in_Msun * C::M_solar
 	for (auto &kv : SinkParticles->GetParticles()) {
 		for (auto &ikv : kv) {
-			auto &particle_array = ikv.second.GetArrayOfStructs();
-			const int np = particle_array.numParticles();
+			auto &particle_tile = ikv.second;
+			const int np = particle_tile.numParticles();
 
 			if (np == 0) {
 				continue;
 			}
 
-			auto *pdata = particle_array().data();
+			auto ptd = particle_tile.getParticleTileData();
+			auto *runtime_rdata = ptd.m_runtime_rdata;
 
 			// Launch GPU kernel to set integer components
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-				auto &p = pdata[i]; // NOLINT
-				p.rdata(0) = M_star_in_Msun * C::M_solar;
+				runtime_rdata[0][i] = M_star_in_Msun * C::M_solar;
 				if (particle_in_cell_center) {
-					p.pos(0) = 0.5 * dx[0];
-					p.pos(1) = 0.5 * dx[1];
-					p.pos(2) = 0.5 * dx[2];
+					ptd.pos(0, i) = 0.5 * dx[0];
+					ptd.pos(1, i) = 0.5 * dx[1];
+					ptd.pos(2, i) = 0.5 * dx[2];
 				} else {
-					p.pos(0) = 0.0;
-					p.pos(1) = 0.0;
-					p.pos(2) = 0.0;
+					ptd.pos(0, i) = 0.0;
+					ptd.pos(1, i) = 0.0;
+					ptd.pos(2, i) = 0.0;
 				}
 			});
 		}

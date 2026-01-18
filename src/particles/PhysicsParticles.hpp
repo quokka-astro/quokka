@@ -241,7 +241,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				auto result_tuple = amrex::ParticleReduce<ReduceDataType>(
 				    *container_, lev,
 				    [=] AMREX_GPU_DEVICE(const PTDType &p_type, const int i) noexcept -> amrex::Real {
-					    return p_type.m_aos[i].rdata(mass_idx);
+					    return p_type.m_runtime_rdata[mass_idx][i];
 				    },
 				    reduce_ops);
 				total_mass += amrex::get<0>(result_tuple);
@@ -270,7 +270,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				auto result_tuple = amrex::ParticleReduce<ReduceDataType>(
 				    *container_, lev,
 				    [=] AMREX_GPU_DEVICE(const PTDType &p_type, const int i) noexcept -> amrex::Real {
-					    return p_type.m_aos[i].rdata(mass_idx);
+					    return p_type.m_runtime_rdata[mass_idx][i];
 				    },
 				    reduce_ops);
 				total_mass += amrex::get<0>(result_tuple);
@@ -304,16 +304,17 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			if (mass_idx >= 0) {
 				for (int lev = lev_min; lev <= lev_max; ++lev) {
 					for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
-						auto &particles = pIter.GetArrayOfStructs();
-						auto *pData = particles().data();
+						auto ptd = pIter.GetParticleTile().getParticleTileData();
 						const amrex::Long np = pIter.numParticles();
+						auto *runtime_rdata = ptd.m_runtime_rdata;
+						const int num_runtime_real = ptd.m_num_runtime_real;
 
 						amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-							auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 							// update particle position based on velocity components
 							for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-								if (mass_idx + 1 + i < ContainerType::ParticleType::NReal) {
-									p.pos(i) += dt * p.rdata(mass_idx + 1 + i);
+								const int vel_comp = mass_idx + 1 + i;
+								if (vel_comp < num_runtime_real) {
+									ptd.pos(i, idx) += dt * runtime_rdata[vel_comp][idx];
 								}
 							}
 						});
@@ -331,9 +332,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 			if (mass_idx >= 0) {
 				for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
-					auto &particles = pIter.GetArrayOfStructs();
-					auto *pData = particles().data();
+					auto ptd = pIter.GetParticleTile().getParticleTileData();
 					const amrex::Long np = pIter.numParticles();
+					auto *runtime_rdata = ptd.m_runtime_rdata;
 
 					const auto &accel_arr = accel.array(pIter);
 					const auto &geom = container_->Geom(lev);
@@ -341,7 +342,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					const auto dx_inv = geom.InvCellSizeArray();
 
 					amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-						auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+						auto p = typename ContainerType::ParticleType(ptd, idx);
 						amrex::ParticleInterpolator::Linear interp(p, plo, dx_inv);
 
 						// Interpolate acceleration from grid to particle and update velocity
@@ -350,10 +351,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						    [=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &acc, int i, int j, int k, int comp) {
 							    return acc(i, j, k, comp); // no weighting
 						    },
-						    [=] AMREX_GPU_DEVICE(typename ContainerType::ParticleType & p, int comp, amrex::Real acc_comp) {
+						    [=] AMREX_GPU_DEVICE(typename ContainerType::ParticleType & /*unused*/, int comp, amrex::Real acc_comp) {
 							    // kick particle by updating its velocity
-							    if (comp < ContainerType::ParticleType::NReal) {
-								    p.rdata(comp) += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);
+							    if (comp < ptd.m_num_runtime_real) {
+								    runtime_rdata[comp][idx] += 0.5 * dt * static_cast<amrex::ParticleReal>(acc_comp);
 							    }
 						    });
 					});
@@ -381,8 +382,14 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				ContainerType::ParticleType::NextID(pid + max_new_particles);
 
 				// Resize particle tile
-				auto &particles = pIter.GetArrayOfStructs();
-				particles.resize(npart_old + max_new_particles);
+				auto &particle_tile = pIter.GetParticleTile();
+				particle_tile.resize(npart_old + max_new_particles);
+				auto ptd = particle_tile.getParticleTileData();
+				auto *runtime_rdata = ptd.m_runtime_rdata;
+				auto *runtime_idata = ptd.m_runtime_idata;
+				auto *idcpu_data = ptd.m_idcpu;
+				const int num_runtime_real = ptd.m_num_runtime_real;
+				const int num_runtime_int = ptd.m_num_runtime_int;
 
 				// Create the particles
 				const auto &geom = container_->Geom(lev);
@@ -391,41 +398,37 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				const auto plo = geom.ProbLoArray();
 				const int cpu_id = amrex::ParallelDescriptor::MyProc();
 				const int mass_idx = this->getMassIndex();
-				auto *pdata_old = particles().data();
-				auto *pdata_new = particles().data() + npart_old;
 
 				amrex::ParallelForRNG(npart_old, [=] AMREX_GPU_DEVICE(int64_t idx, amrex::RandomEngine const &rng) {
 					// compute cell corner position (x0, y0, z0) of the old particle
-					const int i = static_cast<int>((pdata_old[idx].pos(0) - plo[0]) * dxinv[0]); // NOLINT
-					const int j = static_cast<int>((pdata_old[idx].pos(1) - plo[1]) * dxinv[1]); // NOLINT
-					const int k = static_cast<int>((pdata_old[idx].pos(2) - plo[2]) * dxinv[2]); // NOLINT
+					const int i = static_cast<int>((ptd.pos(0, idx) - plo[0]) * dxinv[0]); // NOLINT
+					const int j = static_cast<int>((ptd.pos(1, idx) - plo[1]) * dxinv[1]); // NOLINT
+					const int k = static_cast<int>((ptd.pos(2, idx) - plo[2]) * dxinv[2]); // NOLINT
 					amrex::Real const x0 = plo[0] + (i * dx[0]);
 					amrex::Real const y0 = plo[1] + (j * dx[1]);
 					amrex::Real const z0 = plo[2] + (k * dx[2]);
 
 					// mark old particle for deletion
-					auto &p_old = pdata_old[idx]; // NOLINT
-					p_old.id() = -1;
-					amrex::Real const old_mass = p_old.rdata(mass_idx);
+					amrex::ParticleIDWrapper old_id(idcpu_data[idx]);
+					old_id = -1;
+					amrex::Real const old_mass = runtime_rdata[mass_idx][idx];
 
 					// create new particles
-					auto *new_particles = &pdata_new[idx * splitFactor]; // NOLINT
 					for (int idx_new = 0; idx_new < splitFactor; ++idx_new) {
-						auto &p_new = new_particles[idx_new]; // NOLINT
+						const amrex::Long new_index = npart_old + idx * splitFactor + idx_new;
 						// copy old particle properties
-						for (int rc = 0; rc < ContainerType::ParticleType::NReal; ++rc) {
-							p_new.rdata(rc) = p_old.rdata(rc);
+						for (int rc = 0; rc < num_runtime_real; ++rc) {
+							runtime_rdata[rc][new_index] = runtime_rdata[rc][idx];
 						}
-						for (int ic = 0; ic < ContainerType::ParticleType::NInt; ++ic) {
-							p_new.idata(ic) = p_old.idata(ic);
+						for (int ic = 0; ic < num_runtime_int; ++ic) {
+							runtime_idata[ic][new_index] = runtime_idata[ic][idx];
 						}
 						// set new particle properties
-						p_new.cpu() = cpu_id;
-						p_new.id() = pid + idx * splitFactor + idx_new;
-						p_new.pos(0) = x0 + dx[0] * amrex::Random(rng);
-						p_new.pos(1) = y0 + dx[1] * amrex::Random(rng);
-						p_new.pos(2) = z0 + dx[2] * amrex::Random(rng);
-						p_new.rdata(mass_idx) = old_mass / static_cast<amrex::Real>(splitFactor);
+						idcpu_data[new_index] = amrex::SetParticleIDandCPU(pid + idx * splitFactor + idx_new, cpu_id);
+						ptd.pos(0, new_index) = x0 + dx[0] * amrex::Random(rng);
+						ptd.pos(1, new_index) = y0 + dx[1] * amrex::Random(rng);
+						ptd.pos(2, new_index) = z0 + dx[2] * amrex::Random(rng);
+						runtime_rdata[mass_idx][new_index] = old_mass / static_cast<amrex::Real>(splitFactor);
 					}
 				});
 			}
@@ -444,7 +447,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			const int mass_idx = this->getMassIndex();
 
 			// Check if we have enough components for velocities
-			if (mass_idx + 3 < ContainerType::ParticleType::NReal) {
+			if (mass_idx + 3 < container_->NumRuntimeRealComps()) {
 				// Use ParticleReduce with ReduceOpMax for efficient parallel reduction
 				amrex::ReduceOps<amrex::ReduceOpMax> reduce_ops;
 				using ResultType = amrex::ValLocPair<amrex::Real, amrex::RealVect>;
@@ -456,11 +459,12 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				    *container_, lev,
 				    [=] AMREX_GPU_DEVICE(const PTDType &p_type, const int i) noexcept -> ResultType {
 					    // Compute velocity magnitude
-					    const amrex::Real vx = p_type.m_aos[i].rdata(mass_idx + 1);
-					    const amrex::Real vy = p_type.m_aos[i].rdata(mass_idx + 2);
-					    const amrex::Real vz = p_type.m_aos[i].rdata(mass_idx + 3);
+					    const auto *runtime_rdata = p_type.m_runtime_rdata;
+					    const amrex::Real vx = runtime_rdata[mass_idx + 1][i];
+					    const amrex::Real vy = runtime_rdata[mass_idx + 2][i];
+					    const amrex::Real vz = runtime_rdata[mass_idx + 3][i];
 					    const amrex::Real v2 = (vx * vx) + (vy * vy) + (vz * vz);
-					    const amrex::RealVect pos{p_type[i].pos(0), p_type[i].pos(1), p_type[i].pos(2)};
+					    const amrex::RealVect pos{p_type.pos(0, i), p_type.pos(1, i), p_type.pos(2, i)};
 					    return amrex::ValLocPair<amrex::Real, amrex::RealVect>{.value = std::sqrt(v2), .index = pos};
 				    },
 				    reduce_ops);
@@ -553,8 +557,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 
 		for (typename ContainerType::ParIterType pti(*container_, lev); pti.isValid(); ++pti) {
-			auto &particles = pti.GetArrayOfStructs();
-			auto *pData = particles().data();
+			auto ptd = pti.GetParticleTile().getParticleTileData();
 			const amrex::Long np = pti.numParticles();
 
 			// Get geometry information for this level
@@ -565,11 +568,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			const auto tag = tags.array(pti);
 
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-				auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 				// Find the cell containing the particle
-				const int ix = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
-				const int iy = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
-				const int iz = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
+				const int ix = static_cast<int>(amrex::Math::floor((ptd.pos(0, idx) - plo[0]) * dxi[0]));
+				const int iy = static_cast<int>(amrex::Math::floor((ptd.pos(1, idx) - plo[1]) * dxi[1]));
+				const int iz = static_cast<int>(amrex::Math::floor((ptd.pos(2, idx) - plo[2]) * dxi[2]));
 
 				tag(ix, iy, iz) = amrex::TagBox::SET;
 			});
@@ -593,14 +595,12 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				// Apply the updater to all particles across all levels
 				for (int lev = 0; lev <= this->container_->finestLevel(); ++lev) {
 					for (typename ContainerType::ParIterType pIter(*this->container_, lev); pIter.isValid(); ++pIter) {
-						auto &particles = pIter.GetArrayOfStructs();
-						auto *pData = particles().data();
+						auto ptd = pIter.GetParticleTile().getParticleTileData();
 						const amrex::Long np = pIter.numParticles();
 
 						amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-							auto &p = pData[idx]; // NOLINT
 							ParticlePropertyUpdateTraits<particleType>::template updateProperties<
-							    problem_t, typename ContainerType::ParticleType, nGroups>(p, current_time, gpu_tables);
+							    problem_t>(ptd, idx, current_time, gpu_tables);
 						});
 					}
 				}

@@ -14,6 +14,7 @@
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
+#include "particles/particle_IO.hpp"
 #include "particles/particle_types.hpp"
 #include "util/BC.hpp"
 
@@ -71,7 +72,7 @@ template <> void QuokkaSimulation<SinkProblem>::createInitialSinkParticles()
 	// read particles from ASCII file
 	const int nreal_extra = 4; // mass vx vy vz
 	SinkParticles->SetVerbose(1);
-	SinkParticles->InitFromAsciiFile(particles_file, nreal_extra, nullptr);
+	quokka::particle_io::initParticlesFromAscii(SinkParticles.get(), particles_file, nreal_extra);
 }
 
 template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
