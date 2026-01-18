@@ -27,9 +27,9 @@ cfl = 0.2
 hydro.reconstruction_order = 3
 derived_vars = temperature
 
-plotfile_interval = 200
+plotfile_interval = 1
 checkpoint_interval = -1
-max_timesteps = 1000
+max_timesteps = 3
 
 dt_initial = 3.154e10       # 1000 yr
 stop_time = 3.154e13       # 1e6 yr
@@ -38,3 +38,5 @@ cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1
 cooling.cooling_table_type = resampled
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
+
+particles.SN_scheme = SN_thermal_only
