@@ -89,7 +89,7 @@ template <> void QuokkaSimulation<SNProblem>::createInitialTestParticles()
 {
 	// read particles from ASCII file
 	const int nreal_extra = 7; // mass vx vy vz birth_time death_time lum
-	TestParticles->SetVerbose(1);
+	TestParticles->SetVerbose(0);
 	TestParticles->InitFromAsciiFile(SN_particles_file, nreal_extra, nullptr);
 
 	// Loop over all particle at all levels and set first integer component to SNProgenitor
@@ -252,9 +252,15 @@ auto problem_main() -> int
 	std::vector<double> x2(nx);
 	std::vector<double> vx2_rel(nx);
 
+	int status = 0;
+
 	// plot the temperature and vx profile along the x axis at the center
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 #ifdef HAVE_PYTHON
+		double v_value_norm = 0.0;
+		double v_err_norm = 0.0;
+		double T_value_norm = 0.0;
+		double T_err_norm = 0.0;
 		for (int i = 0; i < nx; ++i) {
 			const double rho = values2.at(HydroSystem<SNProblem>::density_index)[i];
 			const double Eint = values2.at(HydroSystem<SNProblem>::internalEnergy_index)[i];
@@ -262,6 +268,19 @@ auto problem_main() -> int
 			T2[i] = Eint / (rho * CV); // simplified, but good enough for the purpose
 			x2[i] = position2[i];
 			vx2_rel[i] = vx_val - boost_vel_x;
+			v_value_norm += std::abs(vx_val); // use raw vx to account for the large boost velocity
+			v_err_norm += std::abs(vx2_rel[i] - vx[i]);
+			T_value_norm += std::abs(T[i]);
+			T_err_norm += std::abs(T2[i] - T[i]);
+		}
+		const double v_rel_err_norm = v_err_norm / v_value_norm;
+		const double T_rel_err_norm = T_err_norm / T_value_norm;
+		const double v_rel_err_tol = 0.05;
+		const double T_rel_err_tol = 0.001;
+		amrex::Print() << fmt::format("Relative L1 norm for vx = {}, tolerence = {}\n", v_rel_err_norm, v_rel_err_tol);
+		amrex::Print() << fmt::format("Relative L1 norm for T = {}, tolerence = {}\n", T_rel_err_norm, T_rel_err_tol);
+		if (!(v_rel_err_norm < v_rel_err_tol) || !(T_rel_err_norm < T_rel_err_tol)) {
+			status = 1;
 		}
 
 		matplotlibcpp::clf();
@@ -283,5 +302,5 @@ auto problem_main() -> int
 #endif
 	}
 
-	return 0;
+	return status;
 }
