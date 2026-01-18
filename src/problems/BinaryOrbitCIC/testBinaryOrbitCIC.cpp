@@ -36,6 +36,7 @@ struct BinaryOrbit {
 
 static bool do_split_particles = false; // NOLINT
 static int split_factor = 8;		// NOLINT
+static bool compare_init_ascii = false; // NOLINT
 
 template <> struct quokka::EOS_Traits<BinaryOrbit> {
 	static constexpr double gamma = 1.0;	       // isothermal
@@ -91,6 +92,71 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
 	const int nreal_extra = 4; // mass vx vy vz
 	CICParticles->SetVerbose(1);
 	quokka::particle_io::initParticlesFromAscii(CICParticles.get(), "../inputs/BinaryOrbit_particles.txt", nreal_extra);
+
+	if (compare_init_ascii) {
+		std::ifstream input("../inputs/BinaryOrbit_particles.txt");
+		std::vector<std::array<double, AMREX_SPACEDIM>> file_positions;
+		if (input) {
+			int np = 0;
+			input >> np;
+			file_positions.reserve(static_cast<size_t>(np));
+			for (int i = 0; i < np; ++i) {
+				std::array<double, AMREX_SPACEDIM> pos{};
+				for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+					input >> pos[d];
+				}
+				for (int r = 0; r < nreal_extra; ++r) {
+					double value = 0.0;
+					input >> value;
+				}
+				file_positions.push_back(pos);
+			}
+		}
+
+		const auto [quokka_real, quokka_int] = quokka::particle_io::getParticleDataAtLevel(CICParticles.get(), 0);
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			const auto &geom = this->geom[0];
+			const auto plo = geom.ProbLoArray();
+			const auto dxinv = geom.InvCellSizeArray();
+
+			auto sorted_by_x = [](std::vector<std::vector<double>> data) {
+				std::sort(data.begin(), data.end(),
+					  [](const std::vector<double> &a, const std::vector<double> &b) { return a.at(0) < b.at(0); });
+				return data;
+			};
+			auto print_positions = [](const char *label, const std::vector<std::vector<double>> &data) {
+				amrex::Print() << label << " count=" << data.size() << "\n";
+				for (const auto &p : data) {
+					amrex::Print() << fmt::format("{} pos=({:.6e},{:.6e},{:.6e})\n", label, p.at(0), p.at(1), p.at(2));
+				}
+			};
+			auto print_file_positions = [](const std::vector<std::array<double, AMREX_SPACEDIM>> &data) {
+				amrex::Print() << "[init-compare] file count=" << data.size() << "\n";
+				for (const auto &p : data) {
+					amrex::Print() << fmt::format("[init-compare] file pos=({:.6e},{:.6e},{:.6e})\n", p.at(0), p.at(1), p.at(2));
+				}
+			};
+			auto print_cell_index = [=](const char *label, double x, double y, double z) {
+				const int i = static_cast<int>((x - plo[0]) * dxinv[0]);
+				const int j = static_cast<int>((y - plo[1]) * dxinv[1]);
+				const int k = static_cast<int>((z - plo[2]) * dxinv[2]);
+				amrex::Print() << fmt::format("[init-compare] {} cell_index=({}, {}, {})\n", label, i, j, k);
+			};
+
+			print_file_positions(file_positions);
+			auto quokka_sorted = sorted_by_x(quokka_real);
+			print_positions("[init-compare] quokka", quokka_sorted);
+			for (size_t idx = 0; idx < quokka_sorted.size(); ++idx) {
+				print_cell_index("quokka", quokka_sorted[idx].at(0), quokka_sorted[idx].at(1), quokka_sorted[idx].at(2));
+			}
+			for (size_t idx = 0; idx < file_positions.size(); ++idx) {
+				print_cell_index("file", file_positions[idx].at(0), file_positions[idx].at(1), file_positions[idx].at(2));
+			}
+			if (!quokka_int.empty()) {
+				amrex::Print() << "[init-compare] int data size: quokka=" << quokka_int.size() << "\n";
+			}
+		}
+	}
 
 	// test particle splitting
 	// (this is intended to only be used when restarting at a higher resolution)
@@ -252,6 +318,7 @@ auto problem_main() -> int
 	amrex::ParmParse const pp("problem");
 	pp.query("do_split_particles", do_split_particles);
 	pp.query("split_factor", split_factor);
+	pp.query("compare_init_ascii", compare_init_ascii);
 
 	// Problem initialization
 	QuokkaSimulation<BinaryOrbit> sim;

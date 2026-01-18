@@ -374,6 +374,67 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	void splitParticles(int const lev, int const splitFactor) override
 	{
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
+			if (split_particles_debug && amrex::ParallelDescriptor::IOProcessor()) {
+				const auto [real_data, int_data] = particle_io::getParticleDataAtLevel(container_, lev);
+				const auto &geom_debug = container_->Geom(lev);
+				const auto plo = geom_debug.ProbLoArray();
+				const auto dx = geom_debug.CellSizeArray();
+				const auto dxinv = geom_debug.InvCellSizeArray();
+				const int mass_idx = this->getMassIndex();
+
+				amrex::Print() << fmt::format("[split-debug] pre-split lev={} splitFactor={} count={}\n", lev, splitFactor, real_data.size());
+				amrex::Real mass_sum = 0.0;
+				amrex::Real com_pos[AMREX_SPACEDIM] = {0.0, 0.0, 0.0};
+				const size_t max_print = std::min<size_t>(real_data.size(), 8);
+				for (size_t pidx = 0; pidx < real_data.size(); ++pidx) {
+					const auto &p = real_data[pidx];
+					const amrex::Real x = p.at(0);
+					const amrex::Real y = p.at(1);
+					const amrex::Real z = p.at(2);
+					const int i = static_cast<int>((x - plo[0]) * dxinv[0]);
+					const int j = static_cast<int>((y - plo[1]) * dxinv[1]);
+					const int k = static_cast<int>((z - plo[2]) * dxinv[2]);
+					const amrex::Real x0 = plo[0] + (static_cast<amrex::Real>(i) * dx[0]);
+					const amrex::Real y0 = plo[1] + (static_cast<amrex::Real>(j) * dx[1]);
+					const amrex::Real z0 = plo[2] + (static_cast<amrex::Real>(k) * dx[2]);
+					const amrex::Real x_center = x0 + amrex::Real(0.5) * dx[0];
+					const amrex::Real y_center = y0 + amrex::Real(0.5) * dx[1];
+					const amrex::Real z_center = z0 + amrex::Real(0.5) * dx[2];
+					if (mass_idx >= 0 && (AMREX_SPACEDIM + mass_idx) < static_cast<int>(p.size())) {
+						const amrex::Real mass = p.at(AMREX_SPACEDIM + mass_idx);
+						mass_sum += mass;
+						com_pos[0] += mass * x;
+						com_pos[1] += mass * y;
+						com_pos[2] += mass * z;
+					}
+
+					if (pidx < max_print) {
+						amrex::Print() << fmt::format(
+						    "[split-debug] pre p{} pos=({:.6e},{:.6e},{:.6e}) cell=({}, {}, {}) cell_center=({:.6e},{:.6e},{:.6e}) "
+						    "delta_center=({:.6e},{:.6e},{:.6e})\n",
+						    pidx, x, y, z, i, j, k, x_center, y_center, z_center, x - x_center, y - y_center, z - z_center);
+					}
+				}
+				if (mass_sum > 0.0) {
+					com_pos[0] /= mass_sum;
+					com_pos[1] /= mass_sum;
+					com_pos[2] /= mass_sum;
+				}
+				amrex::Print() << fmt::format("[split-debug] pre COM=({:.6e},{:.6e},{:.6e}) mass_sum={:.6e}\n", com_pos[0], com_pos[1],
+							      com_pos[2], mass_sum);
+				if (!int_data.empty()) {
+					amrex::Print() << "[split-debug] pre int_data_size=" << int_data.size() << "\n";
+				}
+			}
+
+			int split_grid = 1;
+			while ((split_grid * split_grid * split_grid) < splitFactor) {
+				++split_grid;
+			}
+			if ((split_grid * split_grid * split_grid) != splitFactor) {
+				split_grid = 0;
+			}
+
 			for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
 				// Update NextID to include particles that will be created
 				const amrex::Long npart_old = pIter.numParticles();
@@ -393,20 +454,14 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 				// Create the particles
 				const auto &geom = container_->Geom(lev);
-				const auto dxinv = geom.InvCellSizeArray();
 				const auto dx = geom.CellSizeArray();
-				const auto plo = geom.ProbLoArray();
 				const int cpu_id = amrex::ParallelDescriptor::MyProc();
 				const int mass_idx = this->getMassIndex();
 
 				amrex::ParallelForRNG(npart_old, [=] AMREX_GPU_DEVICE(int64_t idx, amrex::RandomEngine const &rng) {
-					// compute cell corner position (x0, y0, z0) of the old particle
-					const int i = static_cast<int>((ptd.pos(0, idx) - plo[0]) * dxinv[0]); // NOLINT
-					const int j = static_cast<int>((ptd.pos(1, idx) - plo[1]) * dxinv[1]); // NOLINT
-					const int k = static_cast<int>((ptd.pos(2, idx) - plo[2]) * dxinv[2]); // NOLINT
-					amrex::Real const x0 = plo[0] + (i * dx[0]);
-					amrex::Real const y0 = plo[1] + (j * dx[1]);
-					amrex::Real const z0 = plo[2] + (k * dx[2]);
+					const amrex::Real old_x = ptd.pos(0, idx);
+					const amrex::Real old_y = ptd.pos(1, idx);
+					const amrex::Real old_z = ptd.pos(2, idx);
 
 					// mark old particle for deletion
 					amrex::ParticleIDWrapper old_id(idcpu_data[idx]);
@@ -425,15 +480,79 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						}
 						// set new particle properties
 						idcpu_data[new_index] = amrex::SetParticleIDandCPU(pid + idx * splitFactor + idx_new, cpu_id);
-						ptd.pos(0, new_index) = x0 + dx[0] * amrex::Random(rng);
-						ptd.pos(1, new_index) = y0 + dx[1] * amrex::Random(rng);
-						ptd.pos(2, new_index) = z0 + dx[2] * amrex::Random(rng);
+					if (split_grid > 0) {
+						if (split_particles_debug && idx == 0 && idx_new < 4) {
+							const amrex::Real r0 = amrex::Random(rng);
+							const amrex::Real r1 = amrex::Random(rng);
+							const amrex::Real r2 = amrex::Random(rng);
+							amrex::Print() << fmt::format("[split-debug] rng sample idx=0 child={} parent_pos=({:.6e},{:.6e},{:.6e}) r0={:.6e} r1={:.6e} r2={:.6e}\n",
+											      idx_new, old_x, old_y, old_z, r0, r1, r2);
+						}
+							const int i = idx_new / (split_grid * split_grid);
+							const int j = (idx_new / split_grid) % split_grid;
+							const int k = idx_new % split_grid;
+							const amrex::Real ox = (static_cast<amrex::Real>(i) + amrex::Real(0.5)) / static_cast<amrex::Real>(split_grid) -
+									       amrex::Real(0.5);
+							const amrex::Real oy = (static_cast<amrex::Real>(j) + amrex::Real(0.5)) / static_cast<amrex::Real>(split_grid) -
+									       amrex::Real(0.5);
+							const amrex::Real oz = (static_cast<amrex::Real>(k) + amrex::Real(0.5)) / static_cast<amrex::Real>(split_grid) -
+									       amrex::Real(0.5);
+							ptd.pos(0, new_index) = old_x + dx[0] * ox;
+							ptd.pos(1, new_index) = old_y + dx[1] * oy;
+							ptd.pos(2, new_index) = old_z + dx[2] * oz;
+						} else {
+							const amrex::Real r0 = amrex::Random(rng);
+							const amrex::Real r1 = amrex::Random(rng);
+							const amrex::Real r2 = amrex::Random(rng);
+							if (split_particles_debug && idx == 0 && idx_new < 4) {
+								amrex::Print() << fmt::format("[split-debug] rng sample idx=0 child={} parent_pos=({:.6e},{:.6e},{:.6e}) r0={:.6e} r1={:.6e} r2={:.6e}\n",
+											      idx_new, old_x, old_y, old_z, r0, r1, r2);
+							}
+							ptd.pos(0, new_index) = old_x + dx[0] * (r0 - amrex::Real(0.5));
+							ptd.pos(1, new_index) = old_y + dx[1] * (r1 - amrex::Real(0.5));
+							ptd.pos(2, new_index) = old_z + dx[2] * (r2 - amrex::Real(0.5));
+						}
 						runtime_rdata[mass_idx][new_index] = old_mass / static_cast<amrex::Real>(splitFactor);
 					}
 				});
 			}
 			// Remove the old particles
 			container_->Redistribute(lev);
+
+			if (split_particles_debug && amrex::ParallelDescriptor::IOProcessor()) {
+				const auto [real_data, int_data] = particle_io::getParticleDataAtLevel(container_, lev);
+				amrex::Print() << fmt::format("[split-debug] post-split lev={} count={}\n", lev, real_data.size());
+				amrex::Real mass_sum = 0.0;
+				amrex::Real com_pos[AMREX_SPACEDIM] = {0.0, 0.0, 0.0};
+				const int mass_idx = this->getMassIndex();
+				const size_t max_print = std::min<size_t>(real_data.size(), 8);
+				for (size_t pidx = 0; pidx < real_data.size(); ++pidx) {
+					const auto &p = real_data[pidx];
+					const amrex::Real x = p.at(0);
+					const amrex::Real y = p.at(1);
+					const amrex::Real z = p.at(2);
+					if (mass_idx >= 0 && (AMREX_SPACEDIM + mass_idx) < static_cast<int>(p.size())) {
+						const amrex::Real mass = p.at(AMREX_SPACEDIM + mass_idx);
+						mass_sum += mass;
+						com_pos[0] += mass * x;
+						com_pos[1] += mass * y;
+						com_pos[2] += mass * z;
+					}
+					if (pidx < max_print) {
+						amrex::Print() << fmt::format("[split-debug] post p{} pos=({:.6e},{:.6e},{:.6e})\n", pidx, x, y, z);
+					}
+				}
+				if (mass_sum > 0.0) {
+					com_pos[0] /= mass_sum;
+					com_pos[1] /= mass_sum;
+					com_pos[2] /= mass_sum;
+				}
+				amrex::Print() << fmt::format("[split-debug] post COM=({:.6e},{:.6e},{:.6e}) mass_sum={:.6e}\n", com_pos[0], com_pos[1],
+							      com_pos[2], mass_sum);
+				if (!int_data.empty()) {
+					amrex::Print() << "[split-debug] post int_data_size=" << int_data.size() << "\n";
+				}
+			}
 		}
 	}
 

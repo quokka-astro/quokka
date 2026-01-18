@@ -327,6 +327,9 @@ inline bool sink_particle_use_uniform_kernel = false; // NOLINT. If true, use un
 // Verbosity for particle operations
 inline int particle_verbose = 0; // NOLINT print particle logistics
 
+// Debug particle splitting (prints per-particle cell info and COM)
+inline bool split_particles_debug = false; // NOLINT
+
 // Disable particle drift
 inline bool disable_particle_drift = false; // NOLINT
 
@@ -463,6 +466,7 @@ inline void particleParmParse()
 
 	// Handle integer verbose flag
 	pp.query("verbose", particle_verbose);
+	pp.query("split_particles_debug", split_particles_debug);
 
 	// Disable particle drift
 	pp.query("disable_particle_drift", disable_particle_drift);
