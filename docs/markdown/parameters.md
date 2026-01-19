@@ -20,9 +20,9 @@ These parameters are read in the `AMRSimulation<problem_t>::readParameters()` fu
 | statistics_interval         | Integer       | `-1` (Disabled)   | The number of coarse timesteps between statistics outputs.                                                                                                                            |
 | checkpoint_interval         | Integer       | `-1` (Disabled)   | The number of coarse timesteps between checkpoint outputs.                                                                                                                            |
 | checkpointtime_interval     | Float         | `-1.0` (Disabled) | The time interval (in simulated time) between checkpoint outputs.                                                                                                                     |
-| do_reflux                   | Boolean (0/1)       | `1` (Enabled)     | This turns on refluxing at coarse-fine boundaries (1) or turns it off (0). Except for debugging, this should always be on when AMR is used.                                           |
-| do_tracers                  | Boolean (0/1)       | `0` (Disabled)    | This turns on tracer particles. They are initialized one-per-cell and they follow the fluid velocity.                                                                                 |
-| suppress_output             | Boolean (0/1)       | `0` (Disabled)    | If set to 1, this disables output to stdout while the simulation is running.                                                                                                          |
+| do_reflux                   | Boolean (0/1) | `1` (Enabled)     | This turns on refluxing at coarse-fine boundaries (1) or turns it off (0). Except for debugging, this should always be on when AMR is used.                                           |
+| do_tracers                  | Boolean (0/1) | `0` (Disabled)    | This turns on tracer particles. They are initialized one-per-cell and they follow the fluid velocity.                                                                                 |
+| suppress_output             | Boolean (0/1) | `0` (Disabled)    | If set to 1, this disables output to stdout while the simulation is running.                                                                                                          |
 | derived_vars                | String list   | Empty             | A list of the names of derived variables that should be included in the plotfile and Ascent outputs.                                                                                  |
 | regrid_interval             | Integer       | `2`               | The number of timesteps between AMR regridding.                                                                                                                                       |
 | density_floor               | Float         | `0.0`             | The minimum density value allowed in the simulation. Enforced through EnforceLimits.                                                                                                  |
@@ -35,7 +35,7 @@ These parameters are read in the `AMRSimulation<problem_t>::readParameters()` fu
 | initial_dt                  | Float         | Unlimited         | Optional initial timestep.                                                                                                                                                            |
 | max_dt                      | Float         | Unlimited         | Optional maximum timestep.                                                                                                                                                            |
 | init_shrink                 | Float         | `1.0`             | Factor to shrink the initial timestep by.                                                                                                                                             |
-| show_performance_hints      | Boolean (0/1) | `1` (Enabled)     | If set to 1, prints performance hints.                                                                                                                                    |
+| show_performance_hints      | Boolean (0/1) | `1` (Enabled)     | If set to 1, prints performance hints.                                                                                                                                                |
 | signal_speed_abort          | Float         | `-1.0` (Disabled) | If value > 0 and the max signal speed exceeds this value, the simulation aborts.                                                                                                      |
 | particle_speed_abort        | Float         | `-1.0` (Disabled) | If value > 0 and the max particle speed exceeds this value, the simulation aborts.                                                                                                    |
 | sfh_interval                | Integer       | `-1` (Disabled)   | Interval for updating/writing star formation history.                                                                                                                                 |
@@ -43,11 +43,11 @@ These parameters are read in the `AMRSimulation<problem_t>::readParameters()` fu
 | particle_cfl                | Float         | `0.5`             | Sets the CFL number for particle advection. This is independent of the hydro CFL number.                                                                                              |
 | plotfile_prefix             | String        | `"plt"`           | The prefix for plotfile output filenames.                                                                                                                                             |
 | checkpoint_prefix           | String        | `"chk"`           | The prefix for checkpoint output filenames.                                                                                                                                           |
-| do_subcycle                 | Boolean (0/1)       | `1` (Enabled)     | This turns on subcycling at coarse-fine boundaries (1) or turns it off (0).                                                                                                           |
+| do_subcycle                 | Boolean (0/1) | `1` (Enabled)     | This turns on subcycling at coarse-fine boundaries (1) or turns it off (0).                                                                                                           |
 | poisson_supercycle_interval | Integer       | `1`               | The number of coarse timesteps between Poisson supercycle operations.                                                                                                                 |
 | poisson_reltol              | Float         | `1.0e-5`          | Relative tolerance for the Poisson solver convergence.                                                                                                                                |
 | poisson_abstol              | Float         | `1.0e-5`          | Absolute tolerance for the Poisson solver convergence (scaled by minimum RHS value).                                                                                                  |
-| print_cycle_timing          | Boolean (0/1)       | `0` (Disabled)    | If set to 1, prints per-cycle timing information.                                                                                                                                     |
+| print_cycle_timing          | Boolean (0/1) | `0` (Disabled)    | If set to 1, prints per-cycle timing information.                                                                                                                                     |
 | restartfile                 | String        | Empty             | The path to a checkpoint file from which to restart the simulation.                                                                                                                   |
 | amr.plot_nfiles             | Integer       | `-1` (Auto)       | Maximum number of binary files per multifab for plotfiles. Controls parallel I/O chunking.                                                                                            |
 | amr.checkpoint_nfiles       | Integer       | `-1` (Auto)       | Maximum number of binary files per multifab for checkpoints. Controls parallel I/O chunking.                                                                                          |
@@ -57,28 +57,28 @@ These parameters are read in the `AMRSimulation<problem_t>::readParameters()` fu
 
 These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` function in `src/QuokkaSimulation.hpp`.
 
-| Parameter Name                         | Type    | Default        | Description                                                                                                                                                                    |
-|----------------------------------------|---------|----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Parameter Name                         | Type          | Default        | Description                                                                                                                                                                    |
+|----------------------------------------|---------------|----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | hydro.low_level_debugging_output       | Boolean (0/1) | `0` (Disabled) | If set to 1, turns on low-level debugging output for each RK stage. Warning: this writes an enormous volume of data to disk! This should only be used for debugging.           |
-| hydro.rk_integrator_order              | Integer | `2` (RK2-SSP)  | Determines the order of the RK integrator used. Can be set to 1 (Forward Euler) or 2 (RK2-SSP, also known as Heun's method). This should only be changed for debugging.        |
-| hydro.reconstruction_order             | Integer | `3` (PPM)      | Determines the order of spatial reconstruction algorithm used. Can be set to 1 (piecewise constant), 2 (piecewise linear; PLM), or 3 (piecewise parabolic; PPM).               |
-| hydro.plm_limiter                      | String  | `"sweby"`      | Selects the slope limiter for PLM reconstruction. Options: `minmod`, `sweby`, or `mc`. Only used when `hydro.reconstruction_order = 2`.                                        |
+| hydro.rk_integrator_order              | Integer       | `2` (RK2-SSP)  | Determines the order of the RK integrator used. Can be set to 1 (Forward Euler) or 2 (RK2-SSP, also known as Heun's method). This should only be changed for debugging.        |
+| hydro.reconstruction_order             | Integer       | `3` (PPM)      | Determines the order of spatial reconstruction algorithm used. Can be set to 1 (piecewise constant), 2 (piecewise linear; PLM), or 3 (piecewise parabolic; PPM).               |
+| hydro.plm_limiter                      | String        | `"sweby"`      | Selects the slope limiter for PLM reconstruction. Options: `minmod`, `sweby`, or `mc`. Only used when `hydro.reconstruction_order = 2`.                                        |
 | hydro.use_dual_energy                  | Boolean (0/1) | `1` (Enabled)  | If set to 1, the code evolves an auxiliary internal energy variable in order to correctly evolve high-mach flows. This should only be disabled (0) for debugging.              |
 | hydro.abort_on_fofc_failure            | Boolean (0/1) | `1` (Enabled)  | If set to 1, the code aborts when first-order flux correction fails to yield a physical state (positive density and pressure). This should only be disabled (0) for debugging. |
-| hydro.artificial_viscosity_coefficient | Float   | `0.0`          | This is the linear artificial viscosity coefficient used in the artificial viscosity term added to the flux. This is the same parameter as defined in the original PPM paper.  |
+| hydro.artificial_viscosity_coefficient | Float         | `0.0`          | This is the linear artificial viscosity coefficient used in the artificial viscosity term added to the flux. This is the same parameter as defined in the original PPM paper.  |
 
 ## Radiation
 
 These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` function in `src/QuokkaSimulation.hpp`.
 
-| Parameter Name                       | Type    | Default           | Description                                                                                                                                                      |
-|--------------------------------------|---------|-------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| radiation.reconstruction_order       | Integer | `3` (PPM)         | Determines the order of spatial reconstruction algorithm used. Can be set to 1 (piecewise constant), 2 (piecewise linear; PLM), or 3 (piecewise parabolic; PPM). |
-| radiation.cfl                        | Float   | `0.3`             | Sets the CFL number for the radiation advance. This is independent of the hydro CFL number.                                                                      |
-| radiation.dust_gas_interaction_coeff | Float   | `2.5e-34`         | Coefficient for dust-gas interaction in radiation calculations.                                                                                                  |
+| Parameter Name                       | Type          | Default           | Description                                                                                                                                                      |
+|--------------------------------------|---------------|-------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| radiation.reconstruction_order       | Integer       | `3` (PPM)         | Determines the order of spatial reconstruction algorithm used. Can be set to 1 (piecewise constant), 2 (piecewise linear; PLM), or 3 (piecewise parabolic; PPM). |
+| radiation.cfl                        | Float         | `0.3`             | Sets the CFL number for the radiation advance. This is independent of the hydro CFL number.                                                                      |
+| radiation.dust_gas_interaction_coeff | Float         | `2.5e-34`         | Coefficient for dust-gas interaction in radiation calculations.                                                                                                  |
 | radiation.print_iteration_counts     | Boolean (0/1) | `0` (Disabled)    | If set to 1, prints radiation iteration counts for debugging.                                                                                                    |
-| radiation.iteration_tolerance        | Float   | `1e-11`           | Tolerance for the Newton-Raphson iteration residuals.                                                                                                            |
-| radiation.iteration_tolerance_rel    | Float   | `-1.0` (Disabled) | Tolerance for the relative change between two consecutive Newton-Raphson iterations.                                                                             |
+| radiation.iteration_tolerance        | Float         | `1e-11`           | Tolerance for the Newton-Raphson iteration residuals.                                                                                                            |
+| radiation.iteration_tolerance_rel    | Float         | `-1.0` (Disabled) | Tolerance for the relative change between two consecutive Newton-Raphson iterations.                                                                             |
 
 ## MHD
 
@@ -97,31 +97,31 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 
 These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` function in `src/QuokkaSimulation.hpp`.
 
-| Parameter Name                       | Type    | Default                             | Description                                                                                                                                         |
-|--------------------------------------|---------|-------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
+| Parameter Name                       | Type          | Default                             | Description                                                                                                                                         |
+|--------------------------------------|---------------|-------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
 | cooling.enabled                      | Boolean (0/1) | `0` (Disabled)                      | If set to 1, turns on optically-thin radiative cooling as a Strang-split source term.                                                               |
-| cooling.cooling_table_type           | String  | `"resampled"`                       | Specifies the type of cooling table to use. The only supported option is "resampled".                                                               |
+| cooling.cooling_table_type           | String        | `"resampled"`                       | Specifies the type of cooling table to use. The only supported option is "resampled".                                                               |
 | cooling.read_tables_even_if_disabled | Boolean (0/1) | `0` (Disabled)                      | If set to 1, reads the cooling tables even if the cooling module is disabled.                                                                       |
-| cooling.hdf5_data_file               | String  | **Required** if `cooling.enabled=1` | The path to the cooling tables in HDF5 format. We recommend using `extern/cooling/CloudyData_UVB=HM2012_resampled.h5` for ISM at solar metallicity. |
+| cooling.hdf5_data_file               | String        | **Required** if `cooling.enabled=1` | The path to the cooling tables in HDF5 format. We recommend using `extern/cooling/CloudyData_UVB=HM2012_resampled.h5` for ISM at solar metallicity. |
 
 ## Chemistry
 
 These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` function in `src/QuokkaSimulation.hpp`.
 
-| Parameter Name                | Type    | Default                 | Description                                                                                                                                     |
-|-------------------------------|---------|-------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
+| Parameter Name                | Type          | Default                 | Description                                                                                                                                     |
+|-------------------------------|---------------|-------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
 | chemistry.enabled             | Boolean (0/1) | `0` (Disabled)          | If set to 1, turns on chemistry as a Strang-split source term.                                                                                  |
-| chemistry.max_density_allowed | Float   | `1.0e300`               | Maximum density value for which chemistry calculations are accurate. Chemistry is not performed for cells with densities above this threshold.  |
-| chemistry.min_density_allowed | Float   | Smallest positive Value | Minimum density value for which chemistry calculations are performed. Chemistry is not performed for cells with densities below this threshold. |
+| chemistry.max_density_allowed | Float         | `1.0e300`               | Maximum density value for which chemistry calculations are accurate. Chemistry is not performed for cells with densities above this threshold.  |
+| chemistry.min_density_allowed | Float         | Smallest positive Value | Minimum density value for which chemistry calculations are performed. Chemistry is not performed for cells with densities below this threshold. |
 
 ## Dust
 
 These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` function in `src/QuokkaSimulation.hpp`.
 
-| Parameter Name              | Type    | Default        | Description                                                                                                                    |
-|-----------------------------|---------|----------------|--------------------------------------------------------------------------------------------------------------------------------|
+| Parameter Name              | Type          | Default        | Description                                                                                                                    |
+|-----------------------------|---------------|----------------|--------------------------------------------------------------------------------------------------------------------------------|
 | dust.enable_iter_stoptime   | Boolean (0/1) | `0` (Disabled) | If set to 1, enables iterative dust stopping time calculation.                                                                 |
-| dust.omega                  | Float   | `1.0`          | Controls the level of frictional heating, with omega = 0 turning it off and omega = 1 depositing all dissipation into the gas. |
+| dust.omega                  | Float         | `1.0`          | Controls the level of frictional heating, with omega = 0 turning it off and omega = 1 depositing all dissipation into the gas. |
 | dust.print_iteration_counts | Boolean (0/1) | `0` (Disabled) | If set to 1, prints dust drag iteration counts for debugging.                                                                  |
 
 ## Particles
@@ -130,11 +130,11 @@ These parameters are read in the `particleParmParse()` function in `src/particle
 
 | Parameter Name                                | Type          | Default                                                                                                       | Description                                                                                                                                                    |
 |-----------------------------------------------|---------------|---------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| particles.disable_SN_feedback                 | Boolean (0/1)       | `0`                                                                                                           | If set to 1, disables SN feedback when a particle evolves from SNProgenitor to SNRemnant.                                                                      |
-| particles.sink_particle_use_uniform_kernel    | Boolean (0/1)       | `0` (Disabled)                                                                                                | If set to 1, uses uniform accretion kernel in a (7 dx)^3 box for sink particles.                                                                               |
+| particles.disable_SN_feedback                 | Boolean (0/1) | `0`                                                                                                           | If set to 1, disables SN feedback when a particle evolves from SNProgenitor to SNRemnant.                                                                      |
+| particles.sink_particle_use_uniform_kernel    | Boolean (0/1) | `0` (Disabled)                                                                                                | If set to 1, uses uniform accretion kernel in a (7 dx)^3 box for sink particles.                                                                               |
 | particles.SN_scheme                           | String        | `SN_thermal_or_thermal_momentum`                                                                              | Scheme for SN feedback. Options: SN_thermal_only, SN_thermal_or_thermal_momentum, SN_thermal_kinetic_or_thermal_momentum, SN_pure_kinetic_or_thermal_momentum. |
 | particles.eps_ff                              | Float         | `0.01`                                                                                                        | Star formation efficiency parameter.                                                                                                                           |
-| particles.verbose                             | Boolean (0/1)       | `0`                                                                                                           | Verbosity level for particle operations. Higher values provide more detailed output.                                                                           |
+| particles.verbose                             | Boolean (0/1) | `0`                                                                                                           | Verbosity level for particle operations. Higher values provide more detailed output.                                                                           |
 | particles.param1                              | Float         | `-1.0`                                                                                                        | Placeholder parameter for particles (used in gravity_3d.cpp tests).                                                                                            |
 | particles.param2                              | Float         | `-1.0`                                                                                                        | Placeholder parameter for particles (used in gravity_3d.cpp tests).                                                                                            |
 | particles.disable_particle_drift              | Boolean (0/1) | `0`                                                                                                           | If set to 1, disables particle drift.                                                                                                                          |
@@ -149,22 +149,22 @@ These parameters are read in the `particleParmParse()` function in `src/particle
 
 These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` function in `src/QuokkaSimulation.hpp`. Details about the turbulence driving implementation can be found [here](https://github.com/chfeder/turbulence_generator).
 
-| Parameter Name               | Type    | Default                                | Description                                                                                                                           |
-|------------------------------|---------|----------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------|
+| Parameter Name               | Type          | Default                                | Description                                                                                                                           |
+|------------------------------|---------------|----------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------|
 | turbulence.enabled           | Boolean (0/1) | `0` (Disabled)                         | If set to 1, enables turbulence driving using [chfeder's turbulence driving module](https://github.com/chfeder/turbulence_generator). |
-| turbulence.length            | Float   | **Required** if `turbulence.enabled=1` | Length of turbulent driving box. Can have 1 value or a comma separated list for each component.                                       |
-| turbulence.target_vdisp      | Float   | **Required** if `turbulence.enabled=1` | Target turbulent velocity dispersion.                                                                                                 |
-| turbulence.ampl_factor       | Float   | **Required** if `turbulence.enabled=1` | Amplitude adjust factor for forcing field. Can have 1 value or a comma separated list for each component.                             |
+| turbulence.length            | Float         | **Required** if `turbulence.enabled=1` | Length of turbulent driving box. Can have 1 value or a comma separated list for each component.                                       |
+| turbulence.target_vdisp      | Float         | **Required** if `turbulence.enabled=1` | Target turbulent velocity dispersion.                                                                                                 |
+| turbulence.ampl_factor       | Float         | **Required** if `turbulence.enabled=1` | Amplitude adjust factor for forcing field. Can have 1 value or a comma separated list for each component.                             |
 | turbulence.ampl_auto_adjust  | Boolean (0/1) | `0` (Disabled)                         | If set to 1, enables automatic amplitude adjustment.                                                                                  |
-| turbulence.k_driv            | Float   | **Required** if `turbulence.enabled=1` | Characteristic driving scale in units of $2\pi/length$.                                                                               |
-| turbulence.k_min             | Float   | **Required** if `turbulence.enabled=1` | Minimum driving wavenumber in units of $2\pi/length$.                                                                                 |
-| turbulence.k_max             | Float   | **Required** if `turbulence.enabled=1` | Maximum driving wavenumber in units of $2\pi/length$.                                                                                 |
-| turbulence.sol_weight        | Float   | **Required** if `turbulence.enabled=1` | Solenoidal weight. Can be 0.0 (compressive driving), 1.0 (solenoidal driving) or 0.5 (natural mixture).                               |
-| turbulence.spect_form        | Integer | **Required** if `turbulence.enabled=1` | Spectral form of the driving amplitude. Can be 0 (band, rectangle, constant), 1 (paraboloid) or 2 (power law).                        |
-| turbulence.power_law_exp     | Float   | **Required** if `turbulence.enabled=1` | If spect_form = 2, this sets the spectral power-law exponent (e.g., -5/3: Kolmogorov; -2: Burgers).                                   |
-| turbulence.angles_exp        | Float   | **Required** if `turbulence.enabled=1` | If spect_form = 2, this sets the number of modes (angles) in k-shell such that it increases as $k^angles_exp$.                        |
-| turbulence.random_seed       | Integer | **Required** if `turbulence.enabled=1` | Random number seed for driving sequence.                                                                                              |
-| turbulence.nsteps_per_t_turb | Integer | **Required** if `turbulence.enabled=1` | Number of turbulence driving pattern updates per turnover time.                                                                       |
+| turbulence.k_driv            | Float         | **Required** if `turbulence.enabled=1` | Characteristic driving scale in units of $2\pi/length$.                                                                               |
+| turbulence.k_min             | Float         | **Required** if `turbulence.enabled=1` | Minimum driving wavenumber in units of $2\pi/length$.                                                                                 |
+| turbulence.k_max             | Float         | **Required** if `turbulence.enabled=1` | Maximum driving wavenumber in units of $2\pi/length$.                                                                                 |
+| turbulence.sol_weight        | Float         | **Required** if `turbulence.enabled=1` | Solenoidal weight. Can be 0.0 (compressive driving), 1.0 (solenoidal driving) or 0.5 (natural mixture).                               |
+| turbulence.spect_form        | Integer       | **Required** if `turbulence.enabled=1` | Spectral form of the driving amplitude. Can be 0 (band, rectangle, constant), 1 (paraboloid) or 2 (power law).                        |
+| turbulence.power_law_exp     | Float         | **Required** if `turbulence.enabled=1` | If spect_form = 2, this sets the spectral power-law exponent (e.g., -5/3: Kolmogorov; -2: Burgers).                                   |
+| turbulence.angles_exp        | Float         | **Required** if `turbulence.enabled=1` | If spect_form = 2, this sets the number of modes (angles) in k-shell such that it increases as $k^angles_exp$.                        |
+| turbulence.random_seed       | Integer       | **Required** if `turbulence.enabled=1` | Random number seed for driving sequence.                                                                                              |
+| turbulence.nsteps_per_t_turb | Integer       | **Required** if `turbulence.enabled=1` | Number of turbulence driving pattern updates per turnover time.                                                                       |
 
 ## Photoelectric Heating
 
