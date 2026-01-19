@@ -376,6 +376,50 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 									int numcomp, amrex::GeometryData const &geom, amrex::Real time, const amrex::BCRec *bcr,
 									int bcomp, int orig_comp); // template specialized by problem generator
 
+	/// Helper function to set constant Dirichlet boundary conditions on the lower boundary of a specific dimension.
+	/// @tparam dir The dimension to check (0=x, 1=y, 2=z)
+	/// @param iv The cell index
+	/// @param consVar The array to fill
+	/// @param geom The geometry data
+	/// @param values The values to set for all components
+	template <int dir, auto N>
+	AMREX_GPU_DEVICE static void setConstantDirichletBCLo(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
+							      amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, N> const &values);
+
+	/// Helper function to set constant Dirichlet boundary conditions on the upper boundary of a specific dimension.
+	/// @tparam dir The dimension to check (0=x, 1=y, 2=z)
+	/// @param iv The cell index
+	/// @param consVar The array to fill
+	/// @param geom The geometry data
+	/// @param values The values to set for all components
+	template <int dir, auto N>
+	AMREX_GPU_DEVICE static void setConstantDirichletBCHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
+							      amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, N> const &values);
+
+	/// Helper function to set constant Dirichlet boundary conditions on the lower boundary of a specific dimension for face variables.
+	/// @tparam boundary_dim The dimension to check for boundaries (0=x, 1=y, 2=z)
+	/// @tparam face_dir The face direction (quokka::direction::x, y, or z)
+	/// @tparam ncomp Number of components (typically 3 for x, y, z face values)
+	/// @param iv The cell index
+	/// @param consVar_fc The face-centered array to fill
+	/// @param geom The geometry data
+	/// @param values The values to set for each face direction {x-face value, y-face value, z-face value}
+	template <int boundary_dim, quokka::direction face_dir, int ncomp>
+	AMREX_GPU_DEVICE static void setConstantDirichletBCFaceVarLo(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar_fc,
+								     amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, ncomp> const &values);
+
+	/// Helper function to set constant Dirichlet boundary conditions on the upper boundary of a specific dimension for face variables.
+	/// @tparam boundary_dim The dimension to check for boundaries (0=x, 1=y, 2=z)
+	/// @tparam face_dir The face direction (quokka::direction::x, y, or z)
+	/// @tparam ncomp Number of components (typically 3 for x, y, z face values)
+	/// @param iv The cell index
+	/// @param consVar_fc The face-centered array to fill
+	/// @param geom The geometry data
+	/// @param values The values to set for each face direction {x-face value, y-face value, z-face value}
+	template <int boundary_dim, quokka::direction face_dir, int ncomp>
+	AMREX_GPU_DEVICE static void setConstantDirichletBCFaceVarHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar_fc,
+								     amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, ncomp> const &values);
+
 	// compute volume integrals
 	template <typename F> auto computeVolumeIntegral(F const &user_f) -> amrex::Real;
 
@@ -788,6 +832,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Optional fixed timestep controls
 	pp.query("constant_dt", constantDt_);
 	pp.query("initial_dt", initDt_);
+	pp.query("max_dt", maxDt_);
 
 	const int dt_override_count =
 	    static_cast<int>(pp.contains("init_shrink")) + static_cast<int>(pp.contains("initial_dt")) + static_cast<int>(pp.contains("constant_dt"));
@@ -2366,6 +2411,190 @@ AMRSimulation<problem_t>::setCustomBoundaryConditionsFaceVar(const amrex::IntVec
 	// boundary.)
 
 	// set boundary condition for cell 'iv'
+}
+
+template <typename problem_t>
+template <int dir, auto N> // 'auto N' is required because GpuArray's size type varies by platform (unsigned int vs std::size_t)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setConstantDirichletBCLo(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
+											    amrex::GeometryData const &geom,
+											    amrex::GpuArray<amrex::Real, N> const &values)
+{
+	static_assert(dir >= 0 && dir < AMREX_SPACEDIM, "dir must be in range [0, AMREX_SPACEDIM)");
+
+	// Get cell indices
+	auto const [i, j, k] = iv.dim3();
+
+	// Get domain bounds
+	amrex::Box const &box = geom.Domain();
+	const amrex::GpuArray<int, 3> lo = box.loVect3d();
+
+	// Get the cell index for the specified direction
+	int cellIdx = 0;
+	if constexpr (dir == 0) {
+		cellIdx = i;
+	} else if constexpr (dir == 1) {
+		cellIdx = j;
+	} else if constexpr (dir == 2) {
+		cellIdx = k;
+	}
+
+	// Check if on lower boundary in the specified dimension and set values
+	if (cellIdx < lo[dir]) {
+		for (int n = 0; n < static_cast<int>(N); ++n) {
+			consVar(i, j, k, n) = values[n];
+		}
+	}
+}
+
+template <typename problem_t>
+template <int dir, auto N> // 'auto N' is required because GpuArray's size type varies by platform (unsigned int vs std::size_t)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setConstantDirichletBCHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
+											    amrex::GeometryData const &geom,
+											    amrex::GpuArray<amrex::Real, N> const &values)
+{
+	static_assert(dir >= 0 && dir < AMREX_SPACEDIM, "dir must be in range [0, AMREX_SPACEDIM)");
+
+	// Get cell indices
+	auto const [i, j, k] = iv.dim3();
+
+	// Get domain bounds
+	amrex::Box const &box = geom.Domain();
+	const amrex::GpuArray<int, 3> hi = box.hiVect3d();
+
+	// Get the cell index for the specified direction
+	int cellIdx = 0;
+	if constexpr (dir == 0) {
+		cellIdx = i;
+	} else if constexpr (dir == 1) {
+		cellIdx = j;
+	} else if constexpr (dir == 2) {
+		cellIdx = k;
+	}
+
+	// Check if on upper boundary in the specified dimension and set values
+	// Note that both lo and hi are inclusive bounds, i.e. for a dimension with 8 cells, the bounds are 0 and 7.
+	if (cellIdx > hi[dir]) {
+		for (int n = 0; n < static_cast<int>(N); ++n) {
+			consVar(i, j, k, n) = values[n];
+		}
+	}
+}
+
+template <typename problem_t>
+template <int boundary_dim, quokka::direction face_dir, int ncomp>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<problem_t>::setConstantDirichletBCFaceVarLo(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar_fc,
+							  amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, ncomp> const &values)
+{
+	static_assert(boundary_dim >= 0 && boundary_dim < AMREX_SPACEDIM, "boundary_dim must be in range [0, AMREX_SPACEDIM)");
+
+	// Get cell indices
+	auto const [i, j, k] = iv.dim3();
+
+	// Get domain bounds
+	amrex::Box const &box = geom.Domain();
+	const amrex::GpuArray<int, 3> lo = box.loVect3d();
+
+	// Get the cell index for the specified boundary dimension
+	int cellIdx = 0;
+	if constexpr (boundary_dim == 0) {
+		cellIdx = i;
+	} else if constexpr (boundary_dim == 1) {
+		cellIdx = j;
+	} else if constexpr (boundary_dim == 2) {
+		cellIdx = k;
+	}
+
+	// Check if on lower boundary in the specified dimension and set value based on face direction
+	// For face variables: the face normal to the boundary uses inclusive comparison (<=),
+	// while tangent faces use exclusive comparison (<).
+	// This is because for N cells, there are N+1 face variables in the normal direction.
+	const bool is_on_boundary = [&]() {
+		if (face_dir == quokka::direction::x && boundary_dim == 0) {
+			return cellIdx <= lo[boundary_dim]; // inclusive for x-faces on x-boundary
+		}
+		if (face_dir == quokka::direction::y && boundary_dim == 1) {
+			return cellIdx <= lo[boundary_dim]; // inclusive for y-faces on y-boundary
+		}
+		if (face_dir == quokka::direction::z && boundary_dim == 2) {
+			return cellIdx <= lo[boundary_dim]; // inclusive for z-faces on z-boundary
+		}
+		return cellIdx < lo[boundary_dim]; // exclusive for tangent faces
+	}();
+
+	if (is_on_boundary) {
+		// Select the appropriate value based on face direction
+		amrex::Real value = 0.0;
+		switch (face_dir) {
+			case quokka::direction::x:
+				value = values[0];
+				break;
+			case quokka::direction::y:
+				value = values[1];
+				break;
+			case quokka::direction::z:
+				value = values[2];
+				break;
+			case quokka::direction::na:
+				break; // do nothing
+		}
+
+		// Set the first component (mhdFirstIndex) with the selected value
+		if (face_dir != quokka::direction::na) {
+			consVar_fc(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) = value;
+		}
+	}
+}
+
+template <typename problem_t>
+template <int boundary_dim, quokka::direction face_dir, int ncomp>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<problem_t>::setConstantDirichletBCFaceVarHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar_fc,
+							  amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, ncomp> const &values)
+{
+	static_assert(boundary_dim >= 0 && boundary_dim < AMREX_SPACEDIM, "boundary_dim must be in range [0, AMREX_SPACEDIM)");
+
+	// Get cell indices
+	auto const [i, j, k] = iv.dim3();
+
+	// Get domain bounds
+	amrex::Box const &box = geom.Domain();
+	const amrex::GpuArray<int, 3> hi = box.hiVect3d();
+
+	// Get the cell index for the specified boundary dimension
+	int cellIdx = 0;
+	if constexpr (boundary_dim == 0) {
+		cellIdx = i;
+	} else if constexpr (boundary_dim == 1) {
+		cellIdx = j;
+	} else if constexpr (boundary_dim == 2) {
+		cellIdx = k;
+	}
+
+	// Check if on upper boundary in the specified dimension and set value based on face direction
+	// Note that both lo and hi are inclusive bounds, i.e. for a dimension with 8 cells, the bounds are 0 and 7.
+	if (cellIdx > hi[boundary_dim]) {
+		// Select the appropriate value based on face direction
+		amrex::Real value = 0.0;
+		switch (face_dir) {
+			case quokka::direction::x:
+				value = values[0];
+				break;
+			case quokka::direction::y:
+				value = values[1];
+				break;
+			case quokka::direction::z:
+				value = values[2];
+				break;
+			case quokka::direction::na:
+				break; // do nothing
+		}
+
+		// Set the first component (mhdFirstIndex) with the selected value
+		if (face_dir != quokka::direction::na) {
+			consVar_fc(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) = value;
+		}
+	}
 }
 
 // Compute a new multifab 'mf' by copying in state from valid region and filling
