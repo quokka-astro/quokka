@@ -2,7 +2,7 @@
 # Problem size and geometry
 # *****************************************************************
 geometry.prob_lo     =  0.0  0.0  0.0 
-geometry.prob_hi     =  3.086e19  3.086e19  3.086e19  # 10 x 10 x 10 pc
+geometry.prob_hi     =  3.086e20  3.086e20  3.086e20  # 100 x 100 x 100 pc
 quokka.bc = periodic periodic periodic
 
 # *****************************************************************
@@ -18,7 +18,7 @@ amr.max_level       = 0     # number of levels = max_level + 1
 amr.blocking_factor = 32     # grid size must be divisible by this
 amr.max_grid_size   = 64
 
-regrid_interval = 2
+regrid_interval = -1
 problem.refine_threshold = 0.1
 do_reflux = 1
 do_subcycle = 0
