@@ -61,7 +61,7 @@ template <> struct SimulationData<RandomBlast> {
 	Real refine_threshold = 1.0; // gradient refinement threshold
 	std::string part_fn = "../inputs/particles_stochastic_n100.txt";
 
-	AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity{0.0, 0.0, 0.0};
+	std::vector<Real> boost_velocity{0.0, 0.0, 0.0}; // NOLINT
 };
 
 template <> void QuokkaSimulation<RandomBlast>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -70,11 +70,15 @@ template <> void QuokkaSimulation<RandomBlast>::setInitialConditionsOnGrid(quokk
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
+	const Real vx = userData_.boost_velocity[0];
+	const Real vy = userData_.boost_velocity[1];
+	const Real vz = userData_.boost_velocity[2];
+
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		Real const rho = rho0;
-		Real const xmom = rho * userData_.boost_velocity[0];
-		Real const ymom = rho * userData_.boost_velocity[1];
-		Real const zmom = rho * userData_.boost_velocity[2];
+		Real const xmom = rho * vx;
+		Real const ymom = rho * vy;
+		Real const zmom = rho * vz;
 		Real const Eint = quokka::EOS<RandomBlast>::ComputeEintFromTgas(rho, Tgas0);
 		Real const Egas = Eint + 0.5 * (xmom * xmom + ymom * ymom + zmom * zmom) / rho;
 		Real const scalar_density = 0;
@@ -97,6 +101,10 @@ template <> void QuokkaSimulation<RandomBlast>::createInitialStochasticStellarPo
 	StochasticStellarPopParticles->SetVerbose(1);
 	StochasticStellarPopParticles->InitFromAsciiFile(userData_.part_fn, nreal_extra, nullptr);
 
+	const Real vx = userData_.boost_velocity[0];
+	const Real vy = userData_.boost_velocity[1];
+	const Real vz = userData_.boost_velocity[2];
+
 	// Set integer components (evolution stage) - initialize all as SNProgenitor
 	for (auto &kv : StochasticStellarPopParticles->GetParticles()) {
 		for (auto &ikv : kv) {
@@ -112,9 +120,9 @@ template <> void QuokkaSimulation<RandomBlast>::createInitialStochasticStellarPo
 			// Launch GPU kernel to set integer components
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
 				idata[i].m_idata[quokka::StochasticStellarPopParticleStageIdx] = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
-				idata[i].m_rdata[quokka::StochasticStellarPopParticleVxIdx] += userData_.boost_velocity[0];
-				idata[i].m_rdata[quokka::StochasticStellarPopParticleVyIdx] += userData_.boost_velocity[1];
-				idata[i].m_rdata[quokka::StochasticStellarPopParticleVzIdx] += userData_.boost_velocity[2];
+				idata[i].m_rdata[quokka::StochasticStellarPopParticleVxIdx] += vx;
+				idata[i].m_rdata[quokka::StochasticStellarPopParticleVyIdx] += vy;
+				idata[i].m_rdata[quokka::StochasticStellarPopParticleVzIdx] += vz;
 			});
 		}
 	}
@@ -167,11 +175,10 @@ auto problem_main() -> int
 	pp.query("refine_threshold", sim.userData_.refine_threshold); // dimensionless
 	pp.query("part_fn", sim.userData_.part_fn);
 
-	std::vector<amrex::Real> boost_velocity_vec(AMREX_SPACEDIM, 0.0);
-	if (pp.queryarr("boost_velocity", boost_velocity_vec) != 0) {
-		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-			sim.userData_.boost_velocity[dir] = boost_velocity_vec[dir];
-		}
+	if (pp.queryarr("boost_velocity", sim.userData_.boost_velocity) == 0) {
+		amrex::Abort("boost_velocity must be specified in the input file.");
+	} else {
+		amrex::Print() << "boost_velocity: " << sim.userData_.boost_velocity[0] << ", " << sim.userData_.boost_velocity[1] << ", " << sim.userData_.boost_velocity[2] << "\n";
 	}
 
 	// Set initial conditions
