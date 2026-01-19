@@ -483,23 +483,28 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						}
 						// set new particle properties
 						idcpu_data[new_index] = amrex::SetParticleIDandCPU(pid + idx * splitFactor + idx_new, cpu_id);
-					if (split_grid > 0) {
-						if (split_particles_debug && idx == 0 && idx_new < 4) {
-							const amrex::Real r0 = amrex::Random(rng);
-							const amrex::Real r1 = amrex::Random(rng);
-							const amrex::Real r2 = amrex::Random(rng);
-							amrex::Print() << fmt::format("[split-debug] rng sample idx=0 child={} parent_pos=({:.6e},{:.6e},{:.6e}) r0={:.6e} r1={:.6e} r2={:.6e}\n",
-											      idx_new, old_x, old_y, old_z, r0, r1, r2);
-						}
+						if (split_grid > 0) {
+							if (split_particles_debug && idx == 0 && idx_new < 4) {
+								const amrex::Real r0 = amrex::Random(rng);
+								const amrex::Real r1 = amrex::Random(rng);
+								const amrex::Real r2 = amrex::Random(rng);
+								amrex::Print()
+								    << fmt::format("[split-debug] rng sample idx=0 child={} parent_pos=({:.6e},{:.6e},{:.6e}) "
+										   "r0={:.6e} r1={:.6e} r2={:.6e}\n",
+										   idx_new, old_x, old_y, old_z, r0, r1, r2);
+							}
 							const int i = idx_new / (split_grid * split_grid);
 							const int j = (idx_new / split_grid) % split_grid;
 							const int k = idx_new % split_grid;
-							const amrex::Real ox = (static_cast<amrex::Real>(i) + amrex::Real(0.5)) / static_cast<amrex::Real>(split_grid) -
-									       amrex::Real(0.5);
-							const amrex::Real oy = (static_cast<amrex::Real>(j) + amrex::Real(0.5)) / static_cast<amrex::Real>(split_grid) -
-									       amrex::Real(0.5);
-							const amrex::Real oz = (static_cast<amrex::Real>(k) + amrex::Real(0.5)) / static_cast<amrex::Real>(split_grid) -
-									       amrex::Real(0.5);
+							const amrex::Real ox =
+							    (static_cast<amrex::Real>(i) + amrex::Real(0.5)) / static_cast<amrex::Real>(split_grid) -
+							    amrex::Real(0.5);
+							const amrex::Real oy =
+							    (static_cast<amrex::Real>(j) + amrex::Real(0.5)) / static_cast<amrex::Real>(split_grid) -
+							    amrex::Real(0.5);
+							const amrex::Real oz =
+							    (static_cast<amrex::Real>(k) + amrex::Real(0.5)) / static_cast<amrex::Real>(split_grid) -
+							    amrex::Real(0.5);
 							ptd.pos(0, new_index) = old_x + dx[0] * ox;
 							ptd.pos(1, new_index) = old_y + dx[1] * oy;
 							ptd.pos(2, new_index) = old_z + dx[2] * oz;
@@ -508,8 +513,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 							const amrex::Real r1 = amrex::Random(rng);
 							const amrex::Real r2 = amrex::Random(rng);
 							if (split_particles_debug && idx == 0 && idx_new < 4) {
-								amrex::Print() << fmt::format("[split-debug] rng sample idx=0 child={} parent_pos=({:.6e},{:.6e},{:.6e}) r0={:.6e} r1={:.6e} r2={:.6e}\n",
-											      idx_new, old_x, old_y, old_z, r0, r1, r2);
+								amrex::Print()
+								    << fmt::format("[split-debug] rng sample idx=0 child={} parent_pos=({:.6e},{:.6e},{:.6e}) "
+										   "r0={:.6e} r1={:.6e} r2={:.6e}\n",
+										   idx_new, old_x, old_y, old_z, r0, r1, r2);
 							}
 							ptd.pos(0, new_index) = old_x + dx[0] * (r0 - amrex::Real(0.5));
 							ptd.pos(1, new_index) = old_y + dx[1] * (r1 - amrex::Real(0.5));
