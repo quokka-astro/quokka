@@ -102,6 +102,9 @@ class PhysicsParticleDescriptorBase
 	// Redistribute particles at level lev and above with ngrow ghost cells
 	virtual void redistribute(int lev, int ngrow) const = 0;
 
+	// Resize particle container data to match the current AMR levels.
+	virtual void resizeData() = 0;
+
 	// Write particle data to plot file
 	virtual void writePlotFile(const std::string &plotfilename, const std::string &name) = 0;
 
@@ -629,6 +632,13 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
+	void resizeData() override
+	{
+		if (container_ != nullptr) {
+			container_->resizeData();
+		}
+	}
+
 	// Implementation of particle data output to plot file
 	void writePlotFile(const std::string &plotfilename, const std::string &name) override
 	{
@@ -984,6 +994,14 @@ template <typename problem_t> class PhysicsParticleRegister
 		const BL_PROFILE("PhysicsParticleRegister::redistribute(lev,ngrow)");
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->redistribute(lev, ngrow);
+		}
+	}
+
+	void resizeData() const
+	{
+		const BL_PROFILE("PhysicsParticleRegister::resizeData()");
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			descriptor->resizeData();
 		}
 	}
 

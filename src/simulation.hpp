@@ -1960,6 +1960,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 				// so we save the previous finest level index
 				int old_finest = finest_level;
 				regrid(lev, time);
+				const int new_finest = finest_level;
 
 				// mark that we have regridded this level already
 				for (int k = lev; k <= finest_level; ++k) {
@@ -1975,6 +1976,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 					}
 				}
 
+				// Resize particle containers when levels are added; defer shrinking until after redistribution.
+				if (new_finest > old_finest) {
+					if (do_tracers != 0 && TracerPC != nullptr) {
+						TracerPC->resizeData();
+					}
+					particleRegister_.resizeData();
+				}
+
 				// redistribute particles
 				if (do_tracers != 0) {
 					TracerPC->Redistribute(lev);
@@ -1982,6 +1991,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 
 				// redistribute all particles in particleRegister_
 				particleRegister_.redistribute(lev);
+
+				if (new_finest < old_finest) {
+					if (do_tracers != 0 && TracerPC != nullptr) {
+						TracerPC->resizeData();
+					}
+					particleRegister_.resizeData();
+				}
 
 				// do fix-up on all levels that have been re-gridded
 				for (int k = lev; k <= finest_level; ++k) {
@@ -2545,12 +2561,45 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 
 		// returns old state, new state, or both depending on 'time'
 		GetData(lev - 1, time, coarseData, coarseTime, cen, dir);
+		if (state.contains_nan(0, state.nComp())) {
+			amrex::Print() << "fillBoundaryConditions NaN: fine state lev=" << lev << " nComp=" << state.nComp()
+				       << " nGrow=" << state.nGrowVect() << "\n";
+		}
 		AMREX_ASSERT(!state.contains_nan(0, state.nComp()));
 
-		for (auto &i : coarseData) {
-			AMREX_ASSERT(!i->contains_nan(0, state.nComp()));
-			AMREX_ASSERT(!i->contains_nan()); // check ghost zones
-			amrex::ignore_unused(i);
+		for (int idx = 0; idx < static_cast<int>(coarseData.size()); ++idx) {
+			auto *mf = coarseData[idx];
+			if (mf->contains_nan(0, state.nComp()) || mf->contains_nan()) {
+				amrex::Print() << "fillBoundaryConditions NaN: coarse state idx=" << idx << " lev=" << (lev - 1)
+					       << " nComp=" << mf->nComp() << " nGrow=" << mf->nGrowVect() << "\n";
+				const int ncomp = std::min(state.nComp(), mf->nComp());
+				for (int comp = 0; comp < ncomp; ++comp) {
+					amrex::Print() << "fillBoundaryConditions NaN: coarse comp=" << comp << " min="
+						       << mf->min(comp) << " max=" << mf->max(comp) << "\n";
+				}
+				bool reported = false;
+				for (amrex::MFIter mfi(*mf); mfi.isValid() && !reported; ++mfi) {
+					const amrex::Box &bx = mfi.fabbox();
+					auto const &arr = mf->const_array(mfi);
+					amrex::Loop(bx, [&](int i, int j, int k) {
+						if (reported) {
+							return;
+						}
+						for (int comp = 0; comp < ncomp; ++comp) {
+							if (std::isnan(arr(i, j, k, comp))) {
+								reported = true;
+								amrex::Print() << "fillBoundaryConditions NaN: coarse cell=(" << i << "," << j << "," << k
+									       << ") comp=" << comp << " in_valid="
+									       << mfi.validbox().contains(amrex::IntVect(AMREX_D_DECL(i, j, k))) << "\n";
+								break;
+							}
+						}
+					});
+				}
+			}
+			AMREX_ASSERT(!mf->contains_nan(0, state.nComp()));
+			AMREX_ASSERT(!mf->contains_nan()); // check ghost zones
+			amrex::ignore_unused(mf);
 		}
 
 		FillPatchWithData(lev, time, S_filled, coarseData, coarseTime, fineData, fineTime, 0, S_filled.nComp(), BCs, cen, dir, fptype, pre_interp,
@@ -2560,6 +2609,29 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 		// (there is no performance benefit for this in practice)
 		// state.FillBoundary(geom[lev].periodicity(), true);
 		state.FillBoundary(geom[lev].periodicity());
+		if (state.contains_nan()) {
+			amrex::Print() << "fillBoundaryConditions NaN after FillBoundary: lev=" << lev << " nComp=" << state.nComp()
+				       << " nGrow=" << state.nGrowVect() << "\n";
+			bool reported = false;
+			for (amrex::MFIter mfi(state); mfi.isValid() && !reported; ++mfi) {
+				const amrex::Box &bx = mfi.fabbox();
+				auto const &arr = state.const_array(mfi);
+				amrex::Loop(bx, [&](int i, int j, int k) {
+					if (reported) {
+						return;
+					}
+					for (int comp = 0; comp < state.nComp(); ++comp) {
+						if (std::isnan(arr(i, j, k, comp))) {
+							reported = true;
+							amrex::Print() << "fillBoundaryConditions NaN after FillBoundary: cell=(" << i << "," << j << "," << k
+								       << ") comp=" << comp << " in_valid="
+								       << mfi.validbox().contains(amrex::IntVect(AMREX_D_DECL(i, j, k))) << "\n";
+							break;
+						}
+					}
+				});
+			}
+		}
 
 		if (!geom[lev].isAllPeriodic()) {
 			if (cen == quokka::centering::cc) {
@@ -2584,6 +2656,10 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 
 	// ensure that there are no NaNs (can happen when domain boundary filling is
 	// unimplemented or malfunctioning)
+	if (S_filled.contains_nan(0, S_filled.nComp()) || S_filled.contains_nan()) {
+		amrex::Print() << "fillBoundaryConditions NaN: S_filled lev=" << lev << " nComp=" << S_filled.nComp()
+			       << " nGrow=" << S_filled.nGrowVect() << "\n";
+	}
 	AMREX_ASSERT(!S_filled.contains_nan(0, S_filled.nComp()));
 	AMREX_ASSERT(!S_filled.contains_nan()); // check ghost zones (usually this is caused by
 						// forgetting to fill some components when
@@ -2779,6 +2855,50 @@ void AMRSimulation<problem_t>::GetData(int lev, amrex::Real time, amrex::Vector<
 		} else if (cen == quokka::centering::fc) {
 			data.push_back(&state_old_fc_[lev][dim]);
 			data.push_back(&state_new_fc_[lev][dim]);
+		}
+	}
+
+	if (lev == 0) {
+		for (int idx = 0; idx < static_cast<int>(data.size()); ++idx) {
+			auto *mf = data[idx];
+			if (cen == quokka::centering::cc) {
+				fillBoundaryConditions(*mf, *mf, lev, datatime[idx], cen, quokka::direction::na, InterpHookNone, InterpHookNone,
+						       FillPatchType::fillpatch_function);
+			} else if (cen == quokka::centering::fc) {
+				fillBoundaryConditions(*mf, *mf, lev, datatime[idx], cen, dir, InterpHookNone, InterpHookNone,
+						       FillPatchType::fillpatch_function);
+			}
+		}
+	}
+
+	if (lev == 0) {
+		const int ndata = static_cast<int>(data.size());
+		for (int idx = 0; idx < ndata; ++idx) {
+			auto *mf = data[idx];
+			if (mf->contains_nan()) {
+				amrex::Print() << "GetData NaN: lev=0 idx=" << idx << " nComp=" << mf->nComp()
+					       << " nGrow=" << mf->nGrowVect() << " time=" << datatime[idx] << "\n";
+				const int ncomp = mf->nComp();
+				bool reported = false;
+				for (amrex::MFIter mfi(*mf); mfi.isValid() && !reported; ++mfi) {
+					const amrex::Box &bx = mfi.fabbox();
+					auto const &arr = mf->const_array(mfi);
+					amrex::Loop(bx, [&](int i, int j, int k) {
+						if (reported) {
+							return;
+						}
+						for (int comp = 0; comp < ncomp; ++comp) {
+							if (std::isnan(arr(i, j, k, comp))) {
+								reported = true;
+								amrex::Print() << "GetData NaN: cell=(" << i << "," << j << "," << k
+									       << ") comp=" << comp << " in_valid="
+									       << mfi.validbox().contains(amrex::IntVect(AMREX_D_DECL(i, j, k))) << "\n";
+								break;
+							}
+						}
+					});
+				}
+			}
 		}
 	}
 }
@@ -4130,8 +4250,44 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 								      std::string const &particle_type_name,
 								      amrex::Vector<amrex::BoxArray> const &header_box_arrays)
 {
+	auto readParticleCheckpointFinestLevel = [](std::string const &header_path) -> int {
+		std::ifstream header_file(header_path);
+		if (!header_file) {
+			return -1;
+		}
+
+		std::string version;
+		int ndim = 0;
+		int nreal = 0;
+		int nint = 0;
+		int is_checkpoint = 0;
+		long nparticles = 0;
+		long maxnextid = 0;
+		int finest_level_in_file = -1;
+
+		header_file >> version;
+		header_file >> ndim;
+		header_file >> nreal;
+		for (int i = 0; i < nreal; ++i) {
+			std::string name;
+			header_file >> name;
+		}
+		header_file >> nint;
+		for (int i = 0; i < nint; ++i) {
+			std::string name;
+			header_file >> name;
+		}
+		header_file >> is_checkpoint;
+		header_file >> nparticles;
+		header_file >> maxnextid;
+		header_file >> finest_level_in_file;
+
+		return finest_level_in_file;
+	};
+
 	// Check whether there are any particles to read
 	std::string const pc_path = restart_chkfile + "/" + particle_type_name;
+	const int particle_finest_level = readParticleCheckpointFinestLevel(pc_path + "/Header");
 
 	// Check if the particle checkpoint directory exists
 	if (!amrex::FileSystem::Exists(pc_path)) {
@@ -4168,51 +4324,12 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 	}
 
 	if (restartRefineFactor_ > 1) {
-		// Save current geometry for all levels
-		amrex::Vector<amrex::Geometry> current_geom(finest_level + 1);
-		amrex::Vector<amrex::BoxArray> current_ba(finest_level + 1);
-		amrex::Vector<amrex::DistributionMapping> current_dm(finest_level + 1);
-
-		for (int lev = 0; lev <= finest_level; ++lev) {
-			current_geom[lev] = particles->Geom(lev);
-			current_ba[lev] = particles->ParticleBoxArray(lev);
-			current_dm[lev] = particles->ParticleDistributionMap(lev);
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			amrex::Print() << "Particle restart debug: restartRefineFactor_=" << restartRefineFactor_
+				       << " pc_finest_level=" << particles->finestLevel()
+				       << " particle_finest_level=" << particle_finest_level << "\n";
 		}
-
-		// Set up original (coarse) geometry and boxArrays for particle reading
-		for (int lev = 0; lev <= finest_level; ++lev) {
-			// Get coarse BoxArray from header box arrays
-			amrex::BoxArray coarse_ba = header_box_arrays[lev];
-			amrex::DistributionMapping const coarse_dm{coarse_ba, amrex::ParallelDescriptor::NProcs()};
-			amrex::Geometry coarse_geom_lev = amrex::coarsen(current_geom[lev], restartRefineFactor_);
-			particles->SetParticleGeometry(lev, coarse_geom_lev);
-			particles->SetParticleBoxArray(lev, coarse_ba);
-			particles->SetParticleDistributionMap(lev, coarse_dm);
-		}
-
-		// Read particles with coarse grid structure
-		particles->resizeData(); // Ensure particle container internal structures are properly sized
-
-		// WORKAROUND for AMReX bug: If the particle container has more levels than the
-		// checkpoint file, Restart() will crash due to out-of-bounds access in the
-		// old_dms vector. We need to temporarily reduce the number of levels.
-		const int pc_finest_level = particles->finestLevel();
-		if (pc_finest_level > finest_level) {
-			amrex::Abort("ERROR: Particle container has more levels than checkpoint. "
-				     "This is not currently supported due to an AMReX limitation.");
-		}
-
 		particles->Restart(restart_chkfile, particle_type_name);
-
-		// Restore refined geometry for all levels
-		for (int lev = 0; lev <= finest_level; ++lev) {
-			particles->SetParticleGeometry(lev, current_geom[lev]);
-			particles->SetParticleBoxArray(lev, current_ba[lev]);
-			particles->SetParticleDistributionMap(lev, current_dm[lev]);
-		}
-
-		// Redistribute particles to refined grid
-		particles->Redistribute();
 	} else {
 		// Normal restart without refinement
 		particles->Restart(restart_chkfile, particle_type_name);
