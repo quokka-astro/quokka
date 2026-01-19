@@ -178,7 +178,8 @@ auto problem_main() -> int
 	if (pp.queryarr("boost_velocity", sim.userData_.boost_velocity) == 0) {
 		amrex::Abort("boost_velocity must be specified in the input file.");
 	} else {
-		amrex::Print() << "boost_velocity: " << sim.userData_.boost_velocity[0] << ", " << sim.userData_.boost_velocity[1] << ", " << sim.userData_.boost_velocity[2] << "\n";
+		amrex::Print() << "boost_velocity: " << sim.userData_.boost_velocity[0] << ", " << sim.userData_.boost_velocity[1] << ", "
+			       << sim.userData_.boost_velocity[2] << "\n";
 	}
 
 	// Set initial conditions
