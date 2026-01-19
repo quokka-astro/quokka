@@ -395,7 +395,6 @@ def main():
             elif other == "radial_velocity":
                 ax.semilogx(profile_data["radius"], -profile_data["velr"] / 1.0e5, label="input v_r", linestyle="--")
             elif other == "pressure":
-                k_b = 1.380649e-16
                 m_p = 1.67262192369e-24
                 mu = 0.61
                 pressure = profile_data["rho"] * profile_data["temp"] / (mu * m_p)
