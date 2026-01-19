@@ -2562,20 +2562,20 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 		// returns old state, new state, or both depending on 'time'
 		GetData(lev - 1, time, coarseData, coarseTime, cen, dir);
 		if (state.contains_nan(0, state.nComp())) {
-			amrex::Print() << "fillBoundaryConditions NaN: fine state lev=" << lev << " nComp=" << state.nComp()
-				       << " nGrow=" << state.nGrowVect() << "\n";
+			amrex::Print() << "fillBoundaryConditions NaN: fine state lev=" << lev << " nComp=" << state.nComp() << " nGrow=" << state.nGrowVect()
+				       << "\n";
 		}
 		AMREX_ASSERT(!state.contains_nan(0, state.nComp()));
 
 		for (int idx = 0; idx < static_cast<int>(coarseData.size()); ++idx) {
 			auto *mf = coarseData[idx];
 			if (mf->contains_nan(0, state.nComp()) || mf->contains_nan()) {
-				amrex::Print() << "fillBoundaryConditions NaN: coarse state idx=" << idx << " lev=" << (lev - 1)
-					       << " nComp=" << mf->nComp() << " nGrow=" << mf->nGrowVect() << "\n";
+				amrex::Print() << "fillBoundaryConditions NaN: coarse state idx=" << idx << " lev=" << (lev - 1) << " nComp=" << mf->nComp()
+					       << " nGrow=" << mf->nGrowVect() << "\n";
 				const int ncomp = std::min(state.nComp(), mf->nComp());
 				for (int comp = 0; comp < ncomp; ++comp) {
-					amrex::Print() << "fillBoundaryConditions NaN: coarse comp=" << comp << " min="
-						       << mf->min(comp) << " max=" << mf->max(comp) << "\n";
+					amrex::Print() << "fillBoundaryConditions NaN: coarse comp=" << comp << " min=" << mf->min(comp)
+						       << " max=" << mf->max(comp) << "\n";
 				}
 				bool reported = false;
 				for (amrex::MFIter mfi(*mf); mfi.isValid() && !reported; ++mfi) {
@@ -2588,9 +2588,10 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 						for (int comp = 0; comp < ncomp; ++comp) {
 							if (std::isnan(arr(i, j, k, comp))) {
 								reported = true;
-								amrex::Print() << "fillBoundaryConditions NaN: coarse cell=(" << i << "," << j << "," << k
-									       << ") comp=" << comp << " in_valid="
-									       << mfi.validbox().contains(amrex::IntVect(AMREX_D_DECL(i, j, k))) << "\n";
+								amrex::Print()
+								    << "fillBoundaryConditions NaN: coarse cell=(" << i << "," << j << "," << k
+								    << ") comp=" << comp
+								    << " in_valid=" << mfi.validbox().contains(amrex::IntVect(AMREX_D_DECL(i, j, k))) << "\n";
 								break;
 							}
 						}
@@ -2623,9 +2624,10 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 					for (int comp = 0; comp < state.nComp(); ++comp) {
 						if (std::isnan(arr(i, j, k, comp))) {
 							reported = true;
-							amrex::Print() << "fillBoundaryConditions NaN after FillBoundary: cell=(" << i << "," << j << "," << k
-								       << ") comp=" << comp << " in_valid="
-								       << mfi.validbox().contains(amrex::IntVect(AMREX_D_DECL(i, j, k))) << "\n";
+							amrex::Print()
+							    << "fillBoundaryConditions NaN after FillBoundary: cell=(" << i << "," << j << "," << k
+							    << ") comp=" << comp
+							    << " in_valid=" << mfi.validbox().contains(amrex::IntVect(AMREX_D_DECL(i, j, k))) << "\n";
 							break;
 						}
 					}
@@ -2657,8 +2659,8 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 	// ensure that there are no NaNs (can happen when domain boundary filling is
 	// unimplemented or malfunctioning)
 	if (S_filled.contains_nan(0, S_filled.nComp()) || S_filled.contains_nan()) {
-		amrex::Print() << "fillBoundaryConditions NaN: S_filled lev=" << lev << " nComp=" << S_filled.nComp()
-			       << " nGrow=" << S_filled.nGrowVect() << "\n";
+		amrex::Print() << "fillBoundaryConditions NaN: S_filled lev=" << lev << " nComp=" << S_filled.nComp() << " nGrow=" << S_filled.nGrowVect()
+			       << "\n";
 	}
 	AMREX_ASSERT(!S_filled.contains_nan(0, S_filled.nComp()));
 	AMREX_ASSERT(!S_filled.contains_nan()); // check ghost zones (usually this is caused by
@@ -2876,8 +2878,8 @@ void AMRSimulation<problem_t>::GetData(int lev, amrex::Real time, amrex::Vector<
 		for (int idx = 0; idx < ndata; ++idx) {
 			auto *mf = data[idx];
 			if (mf->contains_nan()) {
-				amrex::Print() << "GetData NaN: lev=0 idx=" << idx << " nComp=" << mf->nComp()
-					       << " nGrow=" << mf->nGrowVect() << " time=" << datatime[idx] << "\n";
+				amrex::Print() << "GetData NaN: lev=0 idx=" << idx << " nComp=" << mf->nComp() << " nGrow=" << mf->nGrowVect()
+					       << " time=" << datatime[idx] << "\n";
 				const int ncomp = mf->nComp();
 				bool reported = false;
 				for (amrex::MFIter mfi(*mf); mfi.isValid() && !reported; ++mfi) {
@@ -2890,9 +2892,9 @@ void AMRSimulation<problem_t>::GetData(int lev, amrex::Real time, amrex::Vector<
 						for (int comp = 0; comp < ncomp; ++comp) {
 							if (std::isnan(arr(i, j, k, comp))) {
 								reported = true;
-								amrex::Print() << "GetData NaN: cell=(" << i << "," << j << "," << k
-									       << ") comp=" << comp << " in_valid="
-									       << mfi.validbox().contains(amrex::IntVect(AMREX_D_DECL(i, j, k))) << "\n";
+								amrex::Print()
+								    << "GetData NaN: cell=(" << i << "," << j << "," << k << ") comp=" << comp
+								    << " in_valid=" << mfi.validbox().contains(amrex::IntVect(AMREX_D_DECL(i, j, k))) << "\n";
 								break;
 							}
 						}
@@ -4326,8 +4328,7 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 	if (restartRefineFactor_ > 1) {
 		if (amrex::ParallelDescriptor::IOProcessor()) {
 			amrex::Print() << "Particle restart debug: restartRefineFactor_=" << restartRefineFactor_
-				       << " pc_finest_level=" << particles->finestLevel()
-				       << " particle_finest_level=" << particle_finest_level << "\n";
+				       << " pc_finest_level=" << particles->finestLevel() << " particle_finest_level=" << particle_finest_level << "\n";
 		}
 		particles->Restart(restart_chkfile, particle_type_name);
 	} else {
