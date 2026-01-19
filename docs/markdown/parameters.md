@@ -4,13 +4,13 @@ This document lists all of the runtime parameters in Quokka that are set using t
 
 ## General
 
-These parameters are read in the `AMRSimulation<problem_t>::readParameters()` function in `src/simulation.hpp`.
+These parameters are read in the `AMRSimulation<problem_t>::readParameters()` function in `src/simulation.hpp` or in `src/main.cpp`.
 
 | Parameter Name              | Type          | Description                                                                                                                                                                                                     |
 | --------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | max_timesteps               | Integer       | The maximum number of time steps for the simulation.                                                                                                                                                            |
 | cfl                         | Float         | Sets the CFL number for the simulation.                                                                                                                                                                         |
-| amr_interpolation_method    | Integer       | Selects the method (piecewise constant or piecewise linear with limiters) used to interpolate from coarse to fine AMR levels. Except for debugging, this should not be changed.                                 |
+| amr_interpolation_method    | Integer       | Selects the method used to interpolate from coarse to fine AMR levels. 0: piecewise constant, 1: linear. Except for debugging, this should not be changed.                                 |
 | stop_time                   | Float         | The simulation time at which to stop evolving the simulation.                                                                                                                                                   |
 | ascent_interval             | Integer       | The number of coarse timesteps between Ascent outputs.                                                                                                                                                          |
 | plotfile_interval           | Integer       | The number of coarse timesteps between plotfile outputs.                                                                                                                                                        |
@@ -31,6 +31,14 @@ These parameters are read in the `AMRSimulation<problem_t>::readParameters()` fu
 | temperature_floor           | Float         | The minimum temperature value allowed in the simulation. Enforced through EnforceLimits.                                                                                                                        |
 | max_walltime                | String        | The maximum walltime for the simulation in the format DD:HH:SS (days/hours/seconds). After 90% of this walltime elapses, the simulation will automatically stop and exit.                                       |
 | dt_cutoff                   | Float         | Timestep drop detector threshold. If the timestep drops below dt_cutoff \* current_time, the simulation aborts with an error message. This helps detect numerical instabilities early. Default: 0.0 (disabled). |
+| constant_dt                 | Float         | Optional constant timestep. If set, forces the timestamp to be this value.                                                     |
+| initial_dt                  | Float         | Optional initial timestep.                                                     |
+| init_shrink                 | Float         | Factor to shrink the initial timestep by. Default: 1.0.                                                                 |
+| show_performance_hints      | Boolean (0/1) | If set to 1, prints performance performance hints. Default: 1 (enabled).                                                                 |
+| signal_speed_abort          | Float         | If value > 0 and the max signal speed exceeds this value, the simulation aborts.                                                |
+| particle_speed_abort        | Float         | If value > 0 and the max particle speed exceeds this value, the simulation aborts.                                                |
+| sfh_interval                | Integer       | Interval for updating/writing star formation history.                                                                                                                    |
+| sfh_time_interval           | Float         | Time interval for updating/writing star formation history.                                                                                                                    |
 | particle_cfl                | Float         | Sets the CFL number for particle advection. This is independent of the hydro CFL number.                                                                                                                        |
 | plotfile_prefix             | String        | The prefix for plotfile output filenames. Default: "plt".                                                                                                                                                       |
 | checkpoint_prefix           | String        | The prefix for checkpoint output filenames. Default: "chk".                                                                                                                                                     |
@@ -42,6 +50,7 @@ These parameters are read in the `AMRSimulation<problem_t>::readParameters()` fu
 | restartfile                 | String        | The path to a checkpoint file from which to restart the simulation.                                                                                                                                             |
 | amr.plot_nfiles             | Integer       | Maximum number of binary files per multifab for plotfiles. Controls parallel I/O chunking.                                                                                                                      |
 | amr.checkpoint_nfiles       | Integer       | Maximum number of binary files per multifab for checkpoints. Controls parallel I/O chunking.                                                                                                                    |
+| quokka.bc                   | String list   | Boundary conditions for the domain faces. Must be a list of 3 strings (e.g., `periodic periodic reflecting`). Overrides `geometry.is_periodic`.                                                                                  |
 
 ## Hydrodynamics
 
@@ -67,17 +76,21 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 | radiation.cfl                        | Float   | Sets the CFL number for the radiation advance. This is independent of the hydro CFL number.                                                                                        |
 | radiation.dust_gas_interaction_coeff | Float   | Coefficient for dust-gas interaction in radiation calculations.                                                                                                                    |
 | radiation.print_iteration_counts     | Integer | If set to 1, prints radiation iteration counts for debugging. Default: 0 (disabled).                                                                                               |
+| radiation.iteration_tolerance        | Float   | Tolerance for the Newton-Raphson iteration residuals. Default: 1e-11.                                                                                                              |
+| radiation.iteration_tolerance_rel    | Float   | Tolerance for the relative change between two consecutive Newton-Raphson iterations. Default: -1.0 (disabled).                                                                     |
 
 ## MHD
 
 These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` function in `src/QuokkaSimulation.hpp`.
 
-| Parameter Name           | Type   | Description                                                                                                                                          |
-| ------------------------ | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| mhd.emf_computing_scheme | String | Determines the method used to compute the EMF at edges. Can be set to `FelkerStone2017`, `Balsara2025`, or `Quokka2026`. Default: `FelkerStone2017`. |
-| mhd.emf_averaging_scheme | String | Determines the method used to average EMF at edges. Can be set to `BalsaraSpicer2004`, `LondrilloDelZanna2004`, or `Balsara2025`. Default: `LondrilloDelZanna2004`. |
-| mhd.emf_reconstruction_order | Integer | Determines the order of spatial reconstruction algorithm used for EMF computation. Can be set to 1 (piecewise constant), 2 (piecewise linear; PLM), 3 (piecewise parabolic; PPM), or 5 (extrema-preserving xPPM). Default: 5 (xPPM). |
-| mhd.plm_limiter | String | Selects the slope limiter for PLM reconstruction in EMF calculations. Options: `minmod`, `sweby`, or `mc`. Only used when `mhd.emf_reconstruction_order = 2`. Default: `sweby`. |
+| Parameter Name                | Type        | Description                                                                                                                                          |
+| ----------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| mhd.emf_computing_scheme      | String      | Determines the method used to compute the EMF at edges. Can be set to `FelkerStone2017`, `Balsara2025`, or `Quokka2026`. Default: `FelkerStone2017`. |
+| mhd.emf_averaging_scheme      | String      | Determines the method used to average EMF at edges. Can be set to `BalsaraSpicer2004`, `LondrilloDelZanna2004`, or `Balsara2025`. Default: `LondrilloDelZanna2004`. |
+| mhd.emf_reconstruction_order  | Integer     | Determines the order of spatial reconstruction algorithm used for EMF computation. Can be set to 1 (piecewise constant), 2 (piecewise linear; PLM), 3 (piecewise parabolic; PPM), or 5 (extrema-preserving xPPM). Default: 5 (xPPM). |
+| mhd.plm_limiter               | String      | Selects the slope limiter for PLM reconstruction in EMF calculations. Options: `minmod`, `sweby`, or `mc`. Only used when `mhd.emf_reconstruction_order = 2`. Default: `sweby`. |
+| mhd.project_initial_b_field   | Boolean (0/1) | If set to 1, projects the initial magnetic field to be divergence-free. Default: 0.                                                                                                  |
+| mhd.update_initial_b_energy   | Boolean (0/1) | If set to 1, updates the initial magnetic energy after projection. Default: 1.                                                                                                       |
 
 ## Optically-thin radiative cooling
 
@@ -112,17 +125,24 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 
 ## Particles
 
-These parameters are read in the `particleParmParse()` function in `src/particles/particle_types.hpp`.
+These parameters are read in the `particleParmParse()` function in `src/particles/particle_types.hpp` and `readParmParse()` in `src/simulation.hpp`.
 
-| Parameter Name                             | Type    | Description                                                                                                                                                                                             |
-| ------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| particles.disable_SN_feedback              | Integer | If set to 1, disables SN feedback when a particle evolves from SNProgenitor to SNRemnant. Default: 0 (enabled).                                                                                         |
-| particles.sink_particle_use_uniform_kernel | Integer | If set to 1, uses uniform accretion kernel in a (7 dx)^3 box for sink particles. Default: 0 (disabled).                                                                                                 |
-| particles.SN_scheme                        | string  | Scheme for SN feedback. Options: SN_thermal_only, SN_thermal_or_thermal_momentum, SN_thermal_kinetic_or_thermal_momentum, SN_pure_kinetic_or_thermal_momentum. Default: SN_thermal_or_thermal_momentum. |
-| particles.eps_ff                           | Float   | Star formation efficiency parameter. Default: 0.01.                                                                                                                                                     |
-| particles.verbose                          | Integer | Verbosity level for particle operations. Higher values provide more detailed output. Default: 0.                                                                                                        |
-| particles.param1                           | Float   | Placeholder parameter for particles (used in gravity_3d.cpp tests). Default: -1.0.                                                                                                                      |
-| particles.param2                           | Float   | Placeholder parameter for particles (used in gravity_3d.cpp tests). Default: -1.0.                                                                                                                      |
+| Parameter Name                             | Type          | Description                                                                                                                                                                                             |
+| ------------------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| particles.disable_SN_feedback              | Integer       | If set to 1, disables SN feedback when a particle evolves from SNProgenitor to SNRemnant. Default: 0 (enabled).                                                                                         |
+| particles.sink_particle_use_uniform_kernel | Integer       | If set to 1, uses uniform accretion kernel in a (7 dx)^3 box for sink particles. Default: 0 (disabled).                                                                                                 |
+| particles.SN_scheme                        | String        | Scheme for SN feedback. Options: SN_thermal_only, SN_thermal_or_thermal_momentum, SN_thermal_kinetic_or_thermal_momentum, SN_pure_kinetic_or_thermal_momentum. Default: SN_thermal_or_thermal_momentum. |
+| particles.eps_ff                           | Float         | Star formation efficiency parameter. Default: 0.01.                                                                                                                                                     |
+| particles.verbose                          | Integer       | Verbosity level for particle operations. Higher values provide more detailed output. Default: 0.                                                                                                        |
+| particles.param1                           | Float         | Placeholder parameter for particles (used in gravity_3d.cpp tests). Default: -1.0.                                                                                                                      |
+| particles.param2                           | Float         | Placeholder parameter for particles (used in gravity_3d.cpp tests). Default: -1.0.                                                                                                                      |
+| particles.disable_particle_drift           | Boolean (0/1) | If set to 1, disables particle drift. Default: 0.                                                                                                                                                       |
+| particles.stellar_velocity_limit           | Float         | Maximum velocity limit for stellar particles in cm/s. Default: 1.0e8.                                                                                                                                   |
+| particles.reproducibility_roundoff_redundancy | Integer    | Number of bits to remove from the significand for reproducibility. Default: 20.                                                                                                                         |
+| particles.use_luminosity_table             | Boolean (0/1) | If set to 1, uses a luminosity table for particles. Default: 1.                                                                                                                                         |
+| particles.rad_table                        | String        | Path to the radiation luminosity table.                                                                                                                                                                 |
+| particles.rad_table_output_spacing         | Integer       | Output spacing for radiation table.                                                                                                                                                                     |
+| particles.split_particles_on_restart_refine | Boolean (0/1) | Whether to split particles when restarting with refinement. Default: 1.                                                                                                                                 |
 
 ## Turbulence
 
@@ -144,3 +164,22 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 | turbulence.angles_exp        | Float   | If spect_form = 2, this sets the number of modes (angles) in k-shell such that it increases as $k^angles_exp$.                                               |
 | turbulence.random_seed       | Integer | Random number seed for driving sequence.                                                                                                                     |
 | turbulence.nsteps_per_t_turb | Integer | Number of turbulence driving pattern updates per turnover time.                                                                                              |
+
+## Photoelectric Heating
+
+These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` function in `src/QuokkaSimulation.hpp`.
+
+| Parameter Name                 | Type          | Description                                                                                                               |
+| ------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| use_sfh_based_pe_heating       | Boolean (0/1) | If set to 1, enables photoelectric heating based on star formation history.                                               |
+| sfh_to_pe_heating_table        | String        | Path to the table converting star formation history to photoelectric heating.                                             |
+| sf_area_kpc2                   | Float         | Area of the star formation region in kpc^2.                                                                               |
+| const_sfr_Msun_per_year_per_kpc2 | Float         | Constant star formation rate in Msun/year/kpc^2. If non-negative, overrides the simulation SFR.                          |
+
+## EOS
+
+These parameters are read in the `QuokkaSimulation<problem_t>::initialize()` function in `src/QuokkaSimulation.hpp`.
+
+| Parameter Name | Type  | Description                                        |
+| -------------- | ----- | -------------------------------------------------- |
+| eos.eos_gamma  | Float | The adiabatic index (gamma) for the equation of state. |
