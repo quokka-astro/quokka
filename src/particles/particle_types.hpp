@@ -305,117 +305,82 @@ using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
 
 //-------------------- Component Names for I/O --------------------
 
-// Helper function to generate component names for radiation particles using AMREX_ENUM
-template <typename problem_t> auto getRadParticleRealCompNames() -> amrex::Vector<std::string>
+// Unified template function to get real component names for any particle type
+// Uses AMREX_ENUM's getEnumNameStrings() and adds dynamic luminosity components where needed
+template <ParticleType particleType, typename problem_t> auto getParticleRealCompNames() -> amrex::Vector<std::string>
 {
-	// Get names from AMREX_ENUM (birth_time, death_time)
-	const std::vector<std::string> enum_names = amrex::getEnumNameStrings<RadParticleRealIdx>();
-	amrex::Vector<std::string> names(enum_names.begin(), enum_names.end());
+	amrex::Vector<std::string> names;
 
-	// Add luminosity components dynamically
-	constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
-	for (int i = 0; i < nGroups; ++i) {
-		names.push_back("luminosity_" + std::to_string(i));
+	if constexpr (particleType == ParticleType::Rad) {
+		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<RadParticleRealIdx>();
+		names = {enum_names.begin(), enum_names.end()};
+		// Add luminosity components
+		constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
+		for (int i = 0; i < nGroups; ++i) {
+			names.push_back("luminosity_" + std::to_string(i));
+		}
 	}
-	return names;
-}
-
-template <typename problem_t> auto getRadParticleIntCompNames() -> amrex::Vector<std::string>
-{
-	return {}; // No integer components
-}
-
 #if AMREX_SPACEDIM == 3
-
-// Helper function to generate component names for CIC particles using AMREX_ENUM
-inline auto getCICParticleRealCompNames() -> amrex::Vector<std::string>
-{
-	const std::vector<std::string> enum_names = amrex::getEnumNameStrings<CICParticleRealIdx>();
-	return {enum_names.begin(), enum_names.end()};
-}
-
-inline auto getCICParticleIntCompNames() -> amrex::Vector<std::string>
-{
-	return {}; // No integer components
-}
-
-// Helper function to generate component names for CICRad particles using AMREX_ENUM
-template <typename problem_t> auto getCICRadParticleRealCompNames() -> amrex::Vector<std::string>
-{
-	// Get names from AMREX_ENUM (mass, vx, vy, vz, birth_time, death_time)
-	const std::vector<std::string> enum_names = amrex::getEnumNameStrings<CICRadParticleRealIdx>();
-	amrex::Vector<std::string> names(enum_names.begin(), enum_names.end());
-
-	// Add luminosity components dynamically
-	constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
-	for (int i = 0; i < nGroups; ++i) {
-		names.push_back("luminosity_" + std::to_string(i));
+	else if constexpr (particleType == ParticleType::CIC) {
+		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<CICParticleRealIdx>();
+		names = {enum_names.begin(), enum_names.end()};
+	} else if constexpr (particleType == ParticleType::CICRad) {
+		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<CICRadParticleRealIdx>();
+		names = {enum_names.begin(), enum_names.end()};
+		// Add luminosity components
+		constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
+		for (int i = 0; i < nGroups; ++i) {
+			names.push_back("luminosity_" + std::to_string(i));
+		}
+	} else if constexpr (particleType == ParticleType::StochasticStellarPop) {
+		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<StochasticStellarPopParticleRealIdx>();
+		names = {enum_names.begin(), enum_names.end()};
+		// Add luminosity components
+		constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
+		for (int i = 0; i < nGroups; ++i) {
+			names.push_back("luminosity_" + std::to_string(i));
+		}
+	} else if constexpr (particleType == ParticleType::Sink) {
+		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<SinkParticleRealIdx>();
+		names = {enum_names.begin(), enum_names.end()};
+	} else if constexpr (particleType == ParticleType::Test) {
+		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<TestParticleRealIdx>();
+		names = {enum_names.begin(), enum_names.end()};
+		// Add luminosity components
+		constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
+		for (int i = 0; i < nGroups; ++i) {
+			names.push_back("luminosity_" + std::to_string(i));
+		}
 	}
+#endif
 	return names;
 }
 
-inline auto getCICRadParticleIntCompNames() -> amrex::Vector<std::string>
+// Unified template function to get integer component names for any particle type
+template <ParticleType particleType, typename problem_t> auto getParticleIntCompNames() -> amrex::Vector<std::string>
 {
-	return {}; // No integer components
-}
+	amrex::Vector<std::string> names;
 
-// Helper function to generate component names for StochasticStellarPop particles using AMREX_ENUM
-template <typename problem_t> auto getStochasticStellarPopParticleRealCompNames() -> amrex::Vector<std::string>
-{
-	// Get names from AMREX_ENUM (mass, vx, vy, vz, birth_time, death_time, mass_at_birth)
-	const std::vector<std::string> enum_names = amrex::getEnumNameStrings<StochasticStellarPopParticleRealIdx>();
-	amrex::Vector<std::string> names(enum_names.begin(), enum_names.end());
-
-	// Add luminosity components dynamically
-	constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
-	for (int i = 0; i < nGroups; ++i) {
-		names.push_back("luminosity_" + std::to_string(i));
+	if constexpr (particleType == ParticleType::Rad) {
+		// No integer components
 	}
+#if AMREX_SPACEDIM == 3
+	else if constexpr (particleType == ParticleType::CIC) {
+		// No integer components
+	} else if constexpr (particleType == ParticleType::CICRad) {
+		// No integer components
+	} else if constexpr (particleType == ParticleType::StochasticStellarPop) {
+		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<StochasticStellarPopParticleIntIdx>();
+		names = {enum_names.begin(), enum_names.end()};
+	} else if constexpr (particleType == ParticleType::Sink) {
+		// No integer components
+	} else if constexpr (particleType == ParticleType::Test) {
+		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<TestParticleIntIdx>();
+		names = {enum_names.begin(), enum_names.end()};
+	}
+#endif
 	return names;
 }
-
-// Helper function to generate integer component names for StochasticStellarPop particles using AMREX_ENUM
-inline auto getStochasticStellarPopParticleIntCompNames() -> amrex::Vector<std::string>
-{
-	const std::vector<std::string> enum_names = amrex::getEnumNameStrings<StochasticStellarPopParticleIntIdx>();
-	return {enum_names.begin(), enum_names.end()};
-}
-
-// Helper function to generate component names for Sink particles using AMREX_ENUM
-inline auto getSinkParticleRealCompNames() -> amrex::Vector<std::string>
-{
-	const std::vector<std::string> enum_names = amrex::getEnumNameStrings<SinkParticleRealIdx>();
-	return {enum_names.begin(), enum_names.end()};
-}
-
-inline auto getSinkParticleIntCompNames() -> amrex::Vector<std::string>
-{
-	return {}; // No integer components
-}
-
-// Helper function to generate component names for Test particles using AMREX_ENUM
-template <typename problem_t> auto getTestParticleRealCompNames() -> amrex::Vector<std::string>
-{
-	// Get names from AMREX_ENUM (mass, vx, vy, vz, birth_time, death_time)
-	const std::vector<std::string> enum_names = amrex::getEnumNameStrings<TestParticleRealIdx>();
-	amrex::Vector<std::string> names(enum_names.begin(), enum_names.end());
-
-	// Add luminosity components dynamically
-	constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
-	for (int i = 0; i < nGroups; ++i) {
-		names.push_back("luminosity_" + std::to_string(i));
-	}
-	return names;
-}
-
-// Helper function to generate integer component names for Test particles using AMREX_ENUM
-inline auto getTestParticleIntCompNames() -> amrex::Vector<std::string>
-{
-	const std::vector<std::string> enum_names = amrex::getEnumNameStrings<TestParticleIntIdx>();
-	return {enum_names.begin(), enum_names.end()};
-}
-
-#endif // AMREX_SPACEDIM == 3
 
 //-------------------- Units --------------------
 

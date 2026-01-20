@@ -506,52 +506,16 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
-	// Get real component names for this particle type
+	// Get real component names for this particle type using unified template function
 	[[nodiscard]] static auto getRealCompNames() -> amrex::Vector<std::string>
 	{
-		if constexpr (particleType_ == ParticleType::Rad) {
-			return getRadParticleRealCompNames<problem_t>();
-		}
-#if AMREX_SPACEDIM == 3
-		else if constexpr (particleType_ == ParticleType::CIC) {
-			return getCICParticleRealCompNames();
-		} else if constexpr (particleType_ == ParticleType::CICRad) {
-			return getCICRadParticleRealCompNames<problem_t>();
-		} else if constexpr (particleType_ == ParticleType::StochasticStellarPop) {
-			return getStochasticStellarPopParticleRealCompNames<problem_t>();
-		} else if constexpr (particleType_ == ParticleType::Sink) {
-			return getSinkParticleRealCompNames();
-		} else if constexpr (particleType_ == ParticleType::Test) {
-			return getTestParticleRealCompNames<problem_t>();
-		}
-#endif
-		else {
-			return {};
-		}
+		return getParticleRealCompNames<particleType_, problem_t>();
 	}
 
-	// Get int component names for this particle type
+	// Get int component names for this particle type using unified template function
 	[[nodiscard]] static auto getIntCompNames() -> amrex::Vector<std::string>
 	{
-		if constexpr (particleType_ == ParticleType::Rad) {
-			return getRadParticleIntCompNames<problem_t>();
-		}
-#if AMREX_SPACEDIM == 3
-		else if constexpr (particleType_ == ParticleType::CIC) {
-			return getCICParticleIntCompNames();
-		} else if constexpr (particleType_ == ParticleType::CICRad) {
-			return getCICRadParticleIntCompNames();
-		} else if constexpr (particleType_ == ParticleType::StochasticStellarPop) {
-			return getStochasticStellarPopParticleIntCompNames();
-		} else if constexpr (particleType_ == ParticleType::Sink) {
-			return getSinkParticleIntCompNames();
-		} else if constexpr (particleType_ == ParticleType::Test) {
-			return getTestParticleIntCompNames();
-		}
-#endif
-		else {
-			return {};
-		}
+		return getParticleIntCompNames<particleType_, problem_t>();
 	}
 
 	// Implementation of particle data output to plot file
