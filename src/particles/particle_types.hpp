@@ -309,22 +309,33 @@ using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
 
 //-------------------- Component Names for I/O --------------------
 
-// Helper function to expand the last component (e.g., "luminosity") into indexed names (luminosity_0, luminosity_1, ...)
-// All components except the last are added as-is; the last component is replicated with _0, _1, ... suffixes
-template <typename EnumType, typename problem_t> auto expandEnumNamesWithLuminosity() -> amrex::Vector<std::string>
+// Helper function to generate component names from an enum type
+// If expandLast is true, the last enum component is expanded with _0, _1, ... suffixes
+// to fill up to nComps total components
+template <typename EnumType, int nComps, bool expandLast> auto expandEnumNames() -> amrex::Vector<std::string>
 {
 	const std::vector<std::string> enum_names = amrex::getEnumNameStrings<EnumType>();
+	const auto enum_size = static_cast<int>(enum_names.size());
 	amrex::Vector<std::string> names;
 
-	// Add all components except the last one (luminosity)
-	for (size_t i = 0; i < enum_names.size() - 1; ++i) {
+	if constexpr (nComps <= 0) {
+		return names;
+	}
+
+	if constexpr (!expandLast) {
+		// No expansion - use enum names directly
+		return {enum_names.begin(), enum_names.end()};
+	}
+
+	// Add all components except the last one
+	for (int i = 0; i < enum_size - 1; ++i) {
 		names.push_back(enum_names[i]);
 	}
 
-	// Expand the last component (luminosity) into luminosity_0, luminosity_1, ...
+	// Expand the last component into name_0, name_1, ...
 	const std::string &base_name = enum_names.back();
-	constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
-	for (int i = 0; i < nGroups; ++i) {
+	const int nExtra = nComps - enum_size + 1;
+	for (int i = 0; i < nExtra; ++i) {
 		names.push_back(base_name + "_" + std::to_string(i));
 	}
 
@@ -332,27 +343,23 @@ template <typename EnumType, typename problem_t> auto expandEnumNamesWithLuminos
 }
 
 // Unified template function to get real component names for any particle type
-// Uses AMREX_ENUM's getEnumNameStrings() and expands luminosity components where needed
+// Uses AMREX_ENUM's getEnumNameStrings() and expands the last component for particle types with luminosity
 template <ParticleType particleType, typename problem_t> auto getParticleRealCompNames() -> amrex::Vector<std::string>
 {
 	if constexpr (particleType == ParticleType::Rad) {
-		return expandEnumNamesWithLuminosity<RadParticleRealIdx, problem_t>();
+		return expandEnumNames<RadParticleRealIdx, RadParticleRealComps<problem_t>, true>();
 	}
 #if AMREX_SPACEDIM == 3
 	else if constexpr (particleType == ParticleType::CIC) {
-		// No luminosity - use enum names directly
-		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<CICParticleRealIdx>();
-		return {enum_names.begin(), enum_names.end()};
+		return expandEnumNames<CICParticleRealIdx, CICParticleRealComps, false>();
 	} else if constexpr (particleType == ParticleType::CICRad) {
-		return expandEnumNamesWithLuminosity<CICRadParticleRealIdx, problem_t>();
+		return expandEnumNames<CICRadParticleRealIdx, CICRadParticleRealComps<problem_t>, true>();
 	} else if constexpr (particleType == ParticleType::StochasticStellarPop) {
-		return expandEnumNamesWithLuminosity<StochasticStellarPopParticleRealIdx, problem_t>();
+		return expandEnumNames<StochasticStellarPopParticleRealIdx, StochasticStellarPopParticleRealComps<problem_t>, true>();
 	} else if constexpr (particleType == ParticleType::Sink) {
-		// No luminosity - use enum names directly
-		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<SinkParticleRealIdx>();
-		return {enum_names.begin(), enum_names.end()};
+		return expandEnumNames<SinkParticleRealIdx, SinkParticleRealComps, false>();
 	} else if constexpr (particleType == ParticleType::Test) {
-		return expandEnumNamesWithLuminosity<TestParticleRealIdx, problem_t>();
+		return expandEnumNames<TestParticleRealIdx, TestParticleRealComps<problem_t>, true>();
 	}
 #endif
 	else {
