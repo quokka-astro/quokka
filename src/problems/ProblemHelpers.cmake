@@ -2,28 +2,25 @@
 # Usage:
 #   quokka_add_problem(
 #     JOB_NAME <name>
-#     [<priority>]               # single-digit 0-9 (default: 9), lower runs first
-#     [INPUT_FILE <input_file>]  # defaults to ${JOB_NAME}.in
-#     [ADD_TEST <ON|OFF>]        # whether to add a test (default: ON)
-#     [TEST_PARAMS <params>]     # additional test parameters (default: ${QuokkaTestParams})
+#     [PRIORITY <0-9>]           # default: 9, lower runs first
+#     [INPUT_FILE <input_file>]  # default: ${JOB_NAME}.in
+#     [ADD_TEST <ON|OFF>]        # default: ON
+#     [TEST_PARAMS <params>]     # default: ${QuokkaTestParams}
 #   )
 #
 # Tests are registered and added later via quokka_add_registered_tests(),
 # sorted by priority (ascending) then by name (alphabetical).
 function(quokka_add_problem)
-  cmake_parse_arguments(PARSE_ARGV 0 ARG "" "JOB_NAME;INPUT_FILE;ADD_TEST;TEST_PARAMS" "")
+  cmake_parse_arguments(PARSE_ARGV 0 ARG "" "JOB_NAME;PRIORITY;INPUT_FILE;ADD_TEST;TEST_PARAMS" "")
 
   if(NOT ARG_JOB_NAME)
     message(FATAL_ERROR "quokka_add_problem: JOB_NAME is required")
   endif()
 
-  # Priority from unparsed arguments, default 9
-  set(_priority 9)
-  if(ARG_UNPARSED_ARGUMENTS)
-    list(GET ARG_UNPARSED_ARGUMENTS 0 _priority)
-  endif()
-
   # Defaults
+  if(NOT DEFINED ARG_PRIORITY)
+    set(ARG_PRIORITY 9)
+  endif()
   if(NOT ARG_INPUT_FILE)
     set(ARG_INPUT_FILE "${ARG_JOB_NAME}.in")
   endif()
@@ -45,7 +42,7 @@ function(quokka_add_problem)
 
   # Register test for later sorted addition
   if(_add_test)
-    set_property(GLOBAL APPEND PROPERTY QUOKKA_TEST_KEYS "${_priority}_${ARG_JOB_NAME}")
+    set_property(GLOBAL APPEND PROPERTY QUOKKA_TEST_KEYS "${ARG_PRIORITY}_${ARG_JOB_NAME}")
     set_property(GLOBAL PROPERTY QUOKKA_TEST_${ARG_JOB_NAME}_INPUT "${ARG_INPUT_FILE}")
     set_property(GLOBAL PROPERTY QUOKKA_TEST_${ARG_JOB_NAME}_PARAMS "${ARG_TEST_PARAMS}")
   endif()
