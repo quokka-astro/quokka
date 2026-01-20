@@ -13,8 +13,8 @@ namespace quokka
 // Traits class for specializing particle property update behavior
 template <ParticleType particleType> struct ParticlePropertyUpdateTraits {
 	// Default implementation - does nothing
-	template <typename problem_t, typename ParticleType, int Nout>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType & /*p*/, amrex::Real /*current_time*/,
+	template <typename problem_t, typename PTDType, int Nout>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(PTDType & /*ptd*/, int /*i*/, amrex::Real /*current_time*/,
 									 LuminosityGpuConstTables<Nout> const & /*gpu_tables*/) noexcept
 	{
 		// Default implementation does nothing
@@ -25,12 +25,12 @@ template <ParticleType particleType> struct ParticlePropertyUpdateTraits {
 // This uses table interpolation and can be overridden in the problem generator
 // Currently, the default is updateLuminosity. In the future, we can add more properties to update
 template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarPop> {
-	template <typename problem_t, typename ParticleType, int Nout>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType &p, amrex::Real current_time,
+	template <typename problem_t, typename PTDType, int Nout>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(PTDType &ptd, int i, amrex::Real current_time,
 									 LuminosityGpuConstTables<Nout> const &gpu_tables) noexcept
 	{
 		// Update luminosity using the LuminosityUpdate class
-		LuminosityUpdate::updateLuminosity<problem_t>(p, current_time, gpu_tables);
+		LuminosityUpdate::updateLuminosity<problem_t>(ptd, i, current_time, gpu_tables);
 	}
 };
 

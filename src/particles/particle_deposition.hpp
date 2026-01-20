@@ -69,22 +69,23 @@ struct RadDeposition {
 	int birthTimeIndex{};  // Index for particle birth time
 
 	// Operator to perform radiation deposition using linear interpolation
-	template <typename ContainerType>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<amrex::Real> const &radEnergySource,
+	template <typename PTDType>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const PTDType &ptd, int i, amrex::Array4<amrex::Real> const &radEnergySource,
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
 	{
+		auto p = ptd[i];
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
+		const auto *runtime_rdata = ptd.m_runtime_rdata;
 		const auto currentTime = current_time;
 		const auto birthIndex = birthTimeIndex;
 		// Deposit radiation energy only if particle is active
-		interp.ParticleToMesh(p, radEnergySource, start_part_comp, start_mesh_comp, num_comp,
-				      [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
-					      if (currentTime < part.rdata(birthIndex) || currentTime >= part.rdata(birthIndex + 1)) {
-						      return 0.0;
-					      }
-					      return part.rdata(comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
-				      });
+		interp.ParticleToMesh(p, radEnergySource, start_part_comp, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const auto & /*part*/, int comp) {
+			if (currentTime < runtime_rdata[birthIndex][i] || currentTime >= runtime_rdata[birthIndex + 1][i]) {
+				return 0.0;
+			}
+			return runtime_rdata[comp][i] * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+		});
 	}
 };
 
@@ -100,17 +101,19 @@ struct MassDeposition {
 	int num_comp{};	       // Number of components to deposit
 
 	// Operator to perform mass deposition using linear interpolation
-	template <typename ContainerType>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<amrex::Real> const &rho,
+	template <typename PTDType>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const PTDType &ptd, int i, amrex::Array4<amrex::Real> const &rho,
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
 	{
+		auto p = ptd[i];
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
 		const amrex::Real gConstLocal = Gconst;
 		const amrex::Real cellVolumeFactor = (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+		const auto *runtime_rdata = ptd.m_runtime_rdata;
 		// Deposit mass weighted by 4 pi G
-		interp.ParticleToMesh(p, rho, start_part_comp, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
-			return 4.0 * M_PI * gConstLocal * part.rdata(comp) * cellVolumeFactor;
+		interp.ParticleToMesh(p, rho, start_part_comp, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const auto & /*part*/, int comp) {
+			return 4.0 * M_PI * gConstLocal * runtime_rdata[comp][i] * cellVolumeFactor;
 		});
 	}
 };
@@ -121,15 +124,16 @@ struct DepositionCount {
 	int num_comp{};	       // Number of components to deposit
 
 	// Operator to perform mass deposition using linear interpolation
-	template <typename ContainerType>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<amrex::Real> const &rho_count,
+	template <typename PTDType>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const PTDType &ptd, int i, amrex::Array4<amrex::Real> const &rho_count,
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
 	{
+		auto p = ptd[i];
 		amrex::ParticleInterpolator::NearestEight interp(p, plo, dxi);
 		// Deposit to 1.0 to all eight cells that the particle interacts with
 		interp.ParticleToMesh(p, rho_count, start_part_comp, start_mesh_comp, num_comp,
-				      [=] AMREX_GPU_DEVICE(const ContainerType & /*part*/, int /*comp*/) { return 1.0; });
+				      [=] AMREX_GPU_DEVICE(const auto & /*part*/, int /*comp*/) { return 1.0; });
 	}
 };
 
@@ -304,8 +308,9 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 	// Step 1: Local deposition within each box
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
 		// Get the particle array of structs
-		auto &particles = pti.GetArrayOfStructs();
-		auto *pData = particles().data();
+		auto ptd = pti.GetParticleTile().getParticleTileData();
+		auto *runtime_rdata = ptd.m_runtime_rdata;
+		auto *runtime_idata = ptd.m_runtime_idata;
 		const amrex::Long np = pti.numParticles();
 
 		// Get the local deposit array for this box
@@ -324,34 +329,32 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 
 		// Deposit particle data into the local buffer
 		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-			auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-
 			// Check if this is a supernova progenitor
-			const bool is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
+			const bool is_sn_progenitor = (runtime_idata[evolutionStageIndex][idx] == static_cast<int>(StellarEvolutionStage::SNProgenitor));
 
-			if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex + 1)) {
+			if (is_sn_progenitor && step_end_time > runtime_rdata[birthTimeIndex + 1][idx]) {
 				// Count this SN explosion
 				if (p_sn_count != nullptr) {
 					amrex::Gpu::Atomic::AddNoRet(p_sn_count, 1);
 				}
 
 				// Update the particle's evolution stage to SNRemnant
-				p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
+				runtime_idata[evolutionStageIndex][idx] = static_cast<int>(StellarEvolutionStage::SNRemnant);
 
 				// update the particle's mass: subtract ejecta mass
-				const amrex::Real mass_dead_star = p.rdata(mass_index) - m_ej;
+				const amrex::Real mass_dead_star = runtime_rdata[mass_index][idx] - m_ej;
 				// AMREX_ASSERT_WITH_MESSAGE(mass_dead_star > 0.0, "SN progenitor mass should be greater than ejecta mass (10 M_sun)");
-				p.rdata(mass_index) = std::max(m_dead_min, mass_dead_star);
+				runtime_rdata[mass_index][idx] = std::max(m_dead_min, mass_dead_star);
 
 				// get particle velocity and kinetic energy
-				const amrex::Real p_vx = p.rdata(mass_index + 1);
-				const amrex::Real p_vy = p.rdata(mass_index + 2);
-				const amrex::Real p_vz = p.rdata(mass_index + 3);
+				const amrex::Real p_vx = runtime_rdata[mass_index + 1][idx];
+				const amrex::Real p_vy = runtime_rdata[mass_index + 2][idx];
+				const amrex::Real p_vz = runtime_rdata[mass_index + 3][idx];
 				const amrex::Real SN_kin_energy = 0.5 * m_ej * (p_vx * p_vx + p_vy * p_vy + p_vz * p_vz);
 
-				const amrex::Real pos_x = p.pos(0);
-				const amrex::Real pos_y = p.pos(1);
-				const amrex::Real pos_z = p.pos(2);
+				const amrex::Real pos_x = ptd.pos(0, idx);
+				const amrex::Real pos_y = ptd.pos(1, idx);
+				const amrex::Real pos_z = ptd.pos(2, idx);
 
 				// Find the cell containing the particle
 				int ix = static_cast<int>(amrex::Math::floor((pos_x - plo[0]) * dxi[0]));
@@ -603,19 +606,19 @@ void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real ste
 
 	for (int lev = lev_min; lev <= container->finestLevel(); ++lev) {
 		for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
-			auto &particles = pti.GetArrayOfStructs();
-			auto *pData = particles().data();
+			auto ptd = pti.GetParticleTile().getParticleTileData();
+			auto *runtime_rdata = ptd.m_runtime_rdata;
+			auto *runtime_idata = ptd.m_runtime_idata;
 			const amrex::Long np = pti.numParticles();
 
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-				auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-
 				// Check if this is a supernova progenitor
-				const bool is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
+				const bool is_sn_progenitor =
+				    (runtime_idata[evolutionStageIndex][idx] == static_cast<int>(StellarEvolutionStage::SNProgenitor));
 
 				// Update the particle's evolution stage to SNRemnant if it's time
-				if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex + 1)) {
-					p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
+				if (is_sn_progenitor && step_end_time > runtime_rdata[birthTimeIndex + 1][idx]) {
+					runtime_idata[evolutionStageIndex][idx] = static_cast<int>(StellarEvolutionStage::SNRemnant);
 				}
 			});
 		}

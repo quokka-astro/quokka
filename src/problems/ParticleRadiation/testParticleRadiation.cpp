@@ -9,6 +9,7 @@
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
+#include "particles/particle_IO.hpp"
 #include "particles/particle_update.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
@@ -92,29 +93,28 @@ template <> void QuokkaSimulation<ParticleRadiationProblem>::createInitialStocha
 {
 	// Read particles from ASCII file. Note that this only read real components and not integer components, therefore we need to use
 	// InitSetPhyParticles to set the integer components
-	const int nreal_extra = 6 + Physics_Traits<ParticleRadiationProblem>::nGroups; // mass vx vy vz birth_time death_time lum[nGroups]
+	const int nreal_extra = 7 + Physics_Traits<ParticleRadiationProblem>::nGroups; // mass vx vy vz birth_time death_time mass_at_birth lum[nGroups]
 	StochasticStellarPopParticles->SetVerbose(1);
-	StochasticStellarPopParticles->InitFromAsciiFile(userData_.particles_filename, nreal_extra, nullptr);
+	quokka::particle_io::initParticlesFromAscii(StochasticStellarPopParticles.get(), userData_.particles_filename, nreal_extra);
 
 	// Using a for loop from lev = 0 to StochasticStellarPopParticles->maxLevel() won't work because not all levels necessarily have particles, and when
 	// some levels do not have particles, StochasticStellarPopParticles->GetParticles(lev) will result in a Segfault. Therefore, we loop over the actual
 	// particle container.
 	for (auto &kv : StochasticStellarPopParticles->GetParticles()) {
 		for (auto &ikv : kv) {
-			auto &particle_array = ikv.second.GetArrayOfStructs();
-			const int np = particle_array.numParticles();
+			auto &particle_tile = ikv.second;
+			const int np = particle_tile.numParticles();
 
 			if (np == 0) {
 				continue;
 			}
 
-			auto *pdata = particle_array().data();
+			auto ptd = particle_tile.getParticleTileData();
+			auto *runtime_idata = ptd.m_runtime_idata;
 
 			// Launch GPU kernel to set integer components
-			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-				auto &p = pdata[i]; // NOLINT
-				p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
-			});
+			amrex::ParallelFor(
+			    np, [=] AMREX_GPU_DEVICE(int i) { runtime_idata[0][i] = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor); });
 		}
 	}
 

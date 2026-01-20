@@ -2,8 +2,16 @@
 #define PARTICLE_TYPES_HPP_
 
 #include "AMReX_AmrParticles.H"
+#include "AMReX_Arena.H"
+#include "AMReX_GpuAllocators.H"
 #include "AMReX_ParIter.H"
 #include "physics_info.hpp"
+
+#include <array>
+#include <cctype>
+#include <map>
+#include <string>
+#include <vector>
 
 // Function to create bit flags: bitflag(position) = 2^(position - 1)
 // Example: bitflag<1>() = 1, bitflag<2>() = 2, bitflag<3>() = 4, ...
@@ -77,6 +85,10 @@ enum class ParticleType {
 	Test		      // Test particles with all features enabled
 };
 
+// Unified PureSoA particle container type with runtime-only extra components.
+// Compile-time SoA components are just positions (x/y/z); all extra data are runtime comps.
+using PhysicsParticleContainer = amrex::AmrParticleContainer_impl<amrex::SoAParticle<AMREX_SPACEDIM, 0>, AMREX_SPACEDIM, 0, amrex::PolymorphicArenaAllocator>;
+
 // Enum for SN schemes: ThermalOnly, ThermalAndMomentum
 AMREX_ENUM(SNScheme,				   // NOLINT
 	   SN_thermal_only,			   // pure thermal
@@ -105,8 +117,8 @@ constexpr int RadParticleRealComps = []() constexpr {
 }();
 
 // Type definitions for Rad_particles container and iterator
-template <typename problem_t> using RadParticleContainer = amrex::AmrParticleContainer<RadParticleRealComps<problem_t>>;
-template <typename problem_t> using RadParticleIterator = amrex::ParIter<RadParticleRealComps<problem_t>>;
+template <typename problem_t> using RadParticleContainer = PhysicsParticleContainer;
+template <typename problem_t> using RadParticleIterator = typename RadParticleContainer<problem_t>::ParIterType;
 
 #if AMREX_SPACEDIM == 3
 
@@ -124,8 +136,8 @@ enum CICParticleDataIdx {
 constexpr int CICParticleRealComps = 4;
 
 // Type definitions for CIC_particles container and iterator
-using CICParticleContainer = amrex::AmrParticleContainer<CICParticleRealComps>;
-using CICParticleIterator = amrex::ParIter<CICParticleRealComps>;
+using CICParticleContainer = PhysicsParticleContainer;
+using CICParticleIterator = CICParticleContainer::ParIterType;
 
 //-------------------- Gravitating radiation particles --------------------
 
@@ -151,8 +163,8 @@ constexpr int CICRadParticleRealComps = []() constexpr {
 }();
 
 // Type definitions for CICRad_particles container and iterator
-template <typename problem_t> using CICRadParticleContainer = amrex::AmrParticleContainer<CICRadParticleRealComps<problem_t>>;
-template <typename problem_t> using CICRadParticleIterator = amrex::ParIter<CICRadParticleRealComps<problem_t>>;
+template <typename problem_t> using CICRadParticleContainer = PhysicsParticleContainer;
+template <typename problem_t> using CICRadParticleIterator = typename CICRadParticleContainer<problem_t>::ParIterType;
 
 //-------------------- Stellar evolution stage enum --------------------
 
@@ -195,11 +207,8 @@ constexpr int StochasticStellarPopParticleRealComps = []() constexpr {
 constexpr int StochasticStellarPopParticleIntComps = 1; // evolution stage
 
 // Type definitions for StochasticStellarPop_particles container and iterator
-template <typename problem_t>
-using StochasticStellarPopParticleContainer =
-    amrex::AmrParticleContainer<StochasticStellarPopParticleRealComps<problem_t>, StochasticStellarPopParticleIntComps>;
-template <typename problem_t>
-using StochasticStellarPopParticleIterator = amrex::ParIter<StochasticStellarPopParticleRealComps<problem_t>, StochasticStellarPopParticleIntComps>;
+template <typename problem_t> using StochasticStellarPopParticleContainer = PhysicsParticleContainer;
+template <typename problem_t> using StochasticStellarPopParticleIterator = typename StochasticStellarPopParticleContainer<problem_t>::ParIterType;
 
 //-------------------- Test particles --------------------
 
@@ -230,8 +239,8 @@ constexpr int TestParticleRealComps = []() constexpr {
 constexpr int TestParticleIntComps = 1; // stellar evolution stage
 
 // Type definitions for Test_particles container and iterator
-template <typename problem_t> using TestParticleContainer = amrex::AmrParticleContainer<TestParticleRealComps<problem_t>, TestParticleIntComps>;
-template <typename problem_t> using TestParticleIterator = amrex::ParIter<TestParticleRealComps<problem_t>, TestParticleIntComps>;
+template <typename problem_t> using TestParticleContainer = PhysicsParticleContainer;
+template <typename problem_t> using TestParticleIterator = typename TestParticleContainer<problem_t>::ParIterType;
 
 //-------------------- Sink particles --------------------
 
@@ -247,8 +256,8 @@ enum SinkParticleDataIdx {
 constexpr int SinkParticleRealComps = 4; // mass, vx, vy, vz
 
 // Type definitions for Sink_particles container and iterator
-using SinkParticleContainer = amrex::AmrParticleContainer<SinkParticleRealComps>;
-using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
+using SinkParticleContainer = PhysicsParticleContainer;
+using SinkParticleIterator = SinkParticleContainer::ParIterType;
 
 #endif // AMREX_SPACEDIM == 3
 
@@ -318,6 +327,9 @@ inline bool sink_particle_use_uniform_kernel = false; // NOLINT. If true, use un
 // Verbosity for particle operations
 inline int particle_verbose = 0; // NOLINT print particle logistics
 
+// Debug particle splitting (prints per-particle cell info and COM)
+inline bool split_particles_debug = false; // NOLINT
+
 // Disable particle drift
 inline bool disable_particle_drift = false; // NOLINT
 
@@ -325,6 +337,113 @@ inline bool disable_particle_drift = false; // NOLINT
 inline amrex::Real stellar_velocity_limit = 1.0e8; // NOLINT
 
 inline int reproducibility_roundoff_redundancy = 20; // NOLINT; remove 20 bits from the significand
+
+enum class ParticleArena { Default, Device, Managed, Pinned, Host };
+
+inline ParticleArena particle_arena = ParticleArena::Device; // NOLINT default to device arena
+
+[[nodiscard]] inline auto getParticleArena() -> amrex::Arena *
+{
+	switch (particle_arena) {
+		case ParticleArena::Default:
+		case ParticleArena::Device:
+			return amrex::The_Device_Arena();
+		case ParticleArena::Managed:
+			return amrex::The_Managed_Arena();
+		case ParticleArena::Pinned:
+			return amrex::The_Pinned_Arena();
+		case ParticleArena::Host:
+			return amrex::The_Cpu_Arena();
+	}
+	return amrex::The_Device_Arena();
+}
+
+struct ParticleRuntimeCompInfo {
+	int num_real = 0;
+	int num_int = 0;
+	std::vector<std::string> real_names;
+	std::vector<std::string> int_names;
+};
+
+template <typename problem_t> [[nodiscard]] inline auto getRuntimeCompInfo(ParticleType type) -> ParticleRuntimeCompInfo
+{
+	ParticleRuntimeCompInfo info{};
+	switch (type) {
+		case ParticleType::Rad: {
+			info.real_names = {"birth_time", "death_time"};
+			if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
+				for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+					info.real_names.push_back("luminosity_g" + std::to_string(g));
+				}
+			}
+			info.num_real = static_cast<int>(info.real_names.size());
+			break;
+		}
+#if AMREX_SPACEDIM == 3
+		case ParticleType::CIC: {
+			info.real_names = {"mass", "vx", "vy", "vz"};
+			info.num_real = static_cast<int>(info.real_names.size());
+			break;
+		}
+		case ParticleType::CICRad: {
+			info.real_names = {"mass", "vx", "vy", "vz", "birth_time", "death_time"};
+			if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
+				for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+					info.real_names.push_back("luminosity_g" + std::to_string(g));
+				}
+			}
+			info.num_real = static_cast<int>(info.real_names.size());
+			break;
+		}
+		case ParticleType::StochasticStellarPop: {
+			info.real_names = {"mass", "vx", "vy", "vz", "birth_time", "death_time", "mass_at_birth"};
+			if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
+				for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+					info.real_names.push_back("luminosity_g" + std::to_string(g));
+				}
+			}
+			info.int_names = {"evolution_stage"};
+			info.num_real = static_cast<int>(info.real_names.size());
+			info.num_int = static_cast<int>(info.int_names.size());
+			break;
+		}
+		case ParticleType::Sink: {
+			info.real_names = {"mass", "vx", "vy", "vz"};
+			info.num_real = static_cast<int>(info.real_names.size());
+			break;
+		}
+		case ParticleType::Test: {
+			info.real_names = {"mass", "vx", "vy", "vz", "birth_time", "death_time"};
+			if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
+				for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+					info.real_names.push_back("luminosity_g" + std::to_string(g));
+				}
+			}
+			info.int_names = {"evolution_stage"};
+			info.num_real = static_cast<int>(info.real_names.size());
+			info.num_int = static_cast<int>(info.int_names.size());
+			break;
+		}
+#endif // AMREX_SPACEDIM == 3
+		default:
+			amrex::Abort("Unknown particle type for runtime component info");
+	}
+	return info;
+}
+
+template <typename problem_t, typename ContainerType> inline void configureParticleContainer(ContainerType &container, ParticleType type)
+{
+	container.SetArena(getParticleArena());
+	container.SetSoACompileTimeNames({AMREX_D_DECL("x", "y", "z")}, {});
+
+	const auto info = getRuntimeCompInfo<problem_t>(type);
+	for (auto const &name : info.real_names) {
+		container.AddRealComp(name);
+	}
+	for (auto const &name : info.int_names) {
+		container.AddIntComp(name);
+	}
+}
 
 // Function to parse particle parameters from input file
 // The 'inline' keyword allows this function to be defined in a header file without
@@ -347,6 +466,7 @@ inline void particleParmParse()
 
 	// Handle integer verbose flag
 	pp.query("verbose", particle_verbose);
+	pp.query("split_particles_debug", split_particles_debug);
 
 	// Disable particle drift
 	pp.query("disable_particle_drift", disable_particle_drift);
@@ -356,6 +476,25 @@ inline void particleParmParse()
 
 	// Roundoff factor for particles
 	pp.query("reproducibility_roundoff_redundancy", reproducibility_roundoff_redundancy);
+
+	// Particle memory arena selection (default: device)
+	std::string arena_name;
+	if (pp.query("arena", arena_name)) {
+		for (auto &ch : arena_name) {
+			ch = static_cast<char>(std::tolower(ch));
+		}
+		if (arena_name == "device" || arena_name == "default") {
+			particle_arena = ParticleArena::Device;
+		} else if (arena_name == "managed") {
+			particle_arena = ParticleArena::Managed;
+		} else if (arena_name == "pinned") {
+			particle_arena = ParticleArena::Pinned;
+		} else if (arena_name == "host" || arena_name == "cpu") {
+			particle_arena = ParticleArena::Host;
+		} else {
+			amrex::Abort("particles.arena must be one of: default, device, managed, pinned, host, cpu");
+		}
+	}
 
 	// Placeholder parameters for particles
 	pp.query("param1", particle_param1);

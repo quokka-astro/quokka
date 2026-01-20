@@ -30,8 +30,8 @@ static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev
 			for (int lev = lev_min; lev <= container->finestLevel(); ++lev) {
 				// Iterate through all particles at this level
 				for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
-					auto &particles = pti.GetArrayOfStructs();
-					const int np = particles.numParticles();
+					auto ptd = pti.GetParticleTile().getParticleTileData();
+					const amrex::Long np = ptd.m_size;
 
 					// Skip if no particles in this tile
 					if (np == 0) {
@@ -39,7 +39,7 @@ static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev
 					}
 
 					// Process particles on the device
-					auto *parray = particles().data();
+					auto *idcpu_data = ptd.m_idcpu;
 
 					// Create temporary array for reduction
 					int destroyed_count = 0;
@@ -47,14 +47,13 @@ static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev
 					int *p_count = h_count.data();
 
 					amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-						auto &p = parray[i]; // NOLINT
-
 						// Check if this particle should be destroyed
-						if (particle_checker(p, mass_idx, current_time, dt)) {
+						if (particle_checker(ptd, i, mass_idx, current_time, dt)) {
 							// Mark particle as invalid by negating its ID
 							// This is the AMReX way to mark particles for removal
 							// They will be removed during the next Redistribute call
-							p.id() = -1;
+							amrex::ParticleIDWrapper id_wrapper(idcpu_data[i]);
+							id_wrapper = -1;
 							amrex::Gpu::Atomic::Add(p_count, 1);
 						}
 					});
@@ -104,11 +103,12 @@ template <ParticleType particleType> struct ParticleDestructionTraits {
 		}
 
 		template <typename ParticleType>
-		AMREX_GPU_DEVICE auto operator()(ParticleType &p, int mass_idx, amrex::Real current_time, amrex::Real dt) const -> bool
+		AMREX_GPU_DEVICE auto operator()(const ParticleType &ptd, int i, int mass_idx, amrex::Real current_time, amrex::Real dt) const -> bool
 		{
 			amrex::ignore_unused(mass_idx, current_time, dt);
 			// Remove particles with evolution stage Removed
-			const bool will_be_removed = (p.idata(evolution_stage_index) == static_cast<int>(StellarEvolutionStage::Removed));
+			const auto *runtime_idata = ptd.m_runtime_idata;
+			const bool will_be_removed = (runtime_idata[evolution_stage_index][i] == static_cast<int>(StellarEvolutionStage::Removed));
 			return will_be_removed;
 		}
 	};

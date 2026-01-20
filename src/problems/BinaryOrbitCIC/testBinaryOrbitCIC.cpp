@@ -24,14 +24,19 @@
 #include "AMReX_Print.H"
 #include "util/BC.hpp"
 
+#include <fmt/format.h>
+#include <limits>
+
 #include "AMReX_REAL.H"
 #include "QuokkaSimulation.hpp"
+#include "particles/particle_IO.hpp"
 
 struct BinaryOrbit {
 };
 
 static bool do_split_particles = false; // NOLINT
 static int split_factor = 8;		// NOLINT
+static bool compare_init_ascii = false; // NOLINT
 
 template <> struct quokka::EOS_Traits<BinaryOrbit> {
 	static constexpr double gamma = 1.0;	       // isothermal
@@ -86,14 +91,169 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
 	// read particles from ASCII file
 	const int nreal_extra = 4; // mass vx vy vz
 	CICParticles->SetVerbose(1);
-	CICParticles->InitFromAsciiFile("../inputs/BinaryOrbit_particles.txt", nreal_extra, nullptr);
+	quokka::particle_io::initParticlesFromAscii(CICParticles.get(), "../inputs/BinaryOrbit_particles.txt", nreal_extra);
+
+	if (compare_init_ascii) {
+		std::ifstream input("../inputs/BinaryOrbit_particles.txt");
+		std::vector<std::array<double, AMREX_SPACEDIM>> file_positions;
+		if (input) {
+			int np = 0;
+			input >> np;
+			file_positions.reserve(static_cast<size_t>(np));
+			for (int i = 0; i < np; ++i) {
+				std::array<double, AMREX_SPACEDIM> pos{};
+				for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+					input >> pos[d];
+				}
+				for (int r = 0; r < nreal_extra; ++r) {
+					double value = 0.0;
+					input >> value;
+				}
+				file_positions.push_back(pos);
+			}
+		}
+
+		const auto [quokka_real, quokka_int] = quokka::particle_io::getParticleDataAtLevel(CICParticles.get(), 0);
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			const auto &geom = this->geom[0];
+			const auto plo = geom.ProbLoArray();
+			const auto dxinv = geom.InvCellSizeArray();
+
+			auto sorted_by_x = [](std::vector<std::vector<double>> data) {
+				std::sort(data.begin(), data.end(),
+					  [](const std::vector<double> &a, const std::vector<double> &b) { return a.at(0) < b.at(0); });
+				return data;
+			};
+			auto print_positions = [](const char *label, const std::vector<std::vector<double>> &data) {
+				amrex::Print() << label << " count=" << data.size() << "\n";
+				for (const auto &p : data) {
+					amrex::Print() << fmt::format("{} pos=({:.6e},{:.6e},{:.6e})\n", label, p.at(0), p.at(1), p.at(2));
+				}
+			};
+			auto print_file_positions = [](const std::vector<std::array<double, AMREX_SPACEDIM>> &data) {
+				amrex::Print() << "[init-compare] file count=" << data.size() << "\n";
+				for (const auto &p : data) {
+					amrex::Print() << fmt::format("[init-compare] file pos=({:.6e},{:.6e},{:.6e})\n", p.at(0), p.at(1), p.at(2));
+				}
+			};
+			auto print_cell_index = [=](const char *label, double x, double y, double z) {
+				const int i = static_cast<int>((x - plo[0]) * dxinv[0]);
+				const int j = static_cast<int>((y - plo[1]) * dxinv[1]);
+				const int k = static_cast<int>((z - plo[2]) * dxinv[2]);
+				amrex::Print() << fmt::format("[init-compare] {} cell_index=({}, {}, {})\n", label, i, j, k);
+			};
+
+			print_file_positions(file_positions);
+			auto quokka_sorted = sorted_by_x(quokka_real);
+			print_positions("[init-compare] quokka", quokka_sorted);
+			for (size_t idx = 0; idx < quokka_sorted.size(); ++idx) {
+				print_cell_index("quokka", quokka_sorted[idx].at(0), quokka_sorted[idx].at(1), quokka_sorted[idx].at(2));
+			}
+			for (size_t idx = 0; idx < file_positions.size(); ++idx) {
+				print_cell_index("file", file_positions[idx].at(0), file_positions[idx].at(1), file_positions[idx].at(2));
+			}
+			if (!quokka_int.empty()) {
+				amrex::Print() << "[init-compare] int data size: quokka=" << quokka_int.size() << "\n";
+			}
+		}
+	}
 
 	// test particle splitting
 	// (this is intended to only be used when restarting at a higher resolution)
 	if (do_split_particles) {
+		auto dump_split_stats = [this](const char *label) {
+			const auto [real_data, int_data] = quokka::particle_io::getParticleDataAtLevel(CICParticles.get(), 0);
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				amrex::Print() << "[split-debug] " << label << "\n";
+				if (real_data.empty()) {
+					amrex::Print() << "[split-debug] no particles\n";
+					return;
+				}
+
+				amrex::Real mass_sum = 0.0;
+				amrex::Real mass_min = std::numeric_limits<amrex::Real>::max();
+				amrex::Real mass_max = std::numeric_limits<amrex::Real>::lowest();
+				amrex::Real pos_min[AMREX_SPACEDIM] = {std::numeric_limits<amrex::Real>::max(), std::numeric_limits<amrex::Real>::max(),
+								       std::numeric_limits<amrex::Real>::max()};
+				amrex::Real pos_max[AMREX_SPACEDIM] = {std::numeric_limits<amrex::Real>::lowest(), std::numeric_limits<amrex::Real>::lowest(),
+								       std::numeric_limits<amrex::Real>::lowest()};
+				amrex::Real vel_min[AMREX_SPACEDIM] = {std::numeric_limits<amrex::Real>::max(), std::numeric_limits<amrex::Real>::max(),
+								       std::numeric_limits<amrex::Real>::max()};
+				amrex::Real vel_max[AMREX_SPACEDIM] = {std::numeric_limits<amrex::Real>::lowest(), std::numeric_limits<amrex::Real>::lowest(),
+								       std::numeric_limits<amrex::Real>::lowest()};
+				amrex::Real com_pos[AMREX_SPACEDIM] = {0.0, 0.0, 0.0};
+				amrex::Real com_vel[AMREX_SPACEDIM] = {0.0, 0.0, 0.0};
+				amrex::Real max_pair_dist = 0.0;
+
+				for (size_t i = 0; i < real_data.size(); ++i) {
+					const auto &p = real_data[i];
+					const amrex::Real mass = p.at(AMREX_SPACEDIM + quokka::CICParticleMassIdx);
+					const amrex::Real vx = p.at(AMREX_SPACEDIM + quokka::CICParticleVxIdx);
+					const amrex::Real vy = p.at(AMREX_SPACEDIM + quokka::CICParticleVyIdx);
+					const amrex::Real vz = p.at(AMREX_SPACEDIM + quokka::CICParticleVzIdx);
+					mass_sum += mass;
+					mass_min = std::min(mass_min, mass);
+					mass_max = std::max(mass_max, mass);
+					com_pos[0] += mass * p.at(0);
+					com_pos[1] += mass * p.at(1);
+					com_pos[2] += mass * p.at(2);
+					com_vel[0] += mass * vx;
+					com_vel[1] += mass * vy;
+					com_vel[2] += mass * vz;
+					pos_min[0] = std::min(pos_min[0], p.at(0));
+					pos_min[1] = std::min(pos_min[1], p.at(1));
+					pos_min[2] = std::min(pos_min[2], p.at(2));
+					pos_max[0] = std::max(pos_max[0], p.at(0));
+					pos_max[1] = std::max(pos_max[1], p.at(1));
+					pos_max[2] = std::max(pos_max[2], p.at(2));
+					vel_min[0] = std::min(vel_min[0], vx);
+					vel_min[1] = std::min(vel_min[1], vy);
+					vel_min[2] = std::min(vel_min[2], vz);
+					vel_max[0] = std::max(vel_max[0], vx);
+					vel_max[1] = std::max(vel_max[1], vy);
+					vel_max[2] = std::max(vel_max[2], vz);
+				}
+
+				for (size_t i = 0; i < real_data.size(); ++i) {
+					for (size_t j = i + 1; j < real_data.size(); ++j) {
+						const auto &p1 = real_data[i];
+						const auto &p2 = real_data[j];
+						const amrex::Real dx = p1.at(0) - p2.at(0);
+						const amrex::Real dy = p1.at(1) - p2.at(1);
+						const amrex::Real dz = p1.at(2) - p2.at(2);
+						const amrex::Real dist = std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
+						max_pair_dist = std::max(max_pair_dist, dist);
+					}
+				}
+
+				const amrex::Real inv_mass = (mass_sum > 0.0) ? (1.0 / mass_sum) : 0.0;
+				com_pos[0] *= inv_mass;
+				com_pos[1] *= inv_mass;
+				com_pos[2] *= inv_mass;
+				com_vel[0] *= inv_mass;
+				com_vel[1] *= inv_mass;
+				com_vel[2] *= inv_mass;
+
+				amrex::Print() << fmt::format("[split-debug] count={} mass_sum={:.6e} mass_min={:.6e} mass_max={:.6e}\n", real_data.size(),
+							      mass_sum, mass_min, mass_max);
+				amrex::Print() << fmt::format("[split-debug] pos_min=({:.6e},{:.6e},{:.6e}) pos_max=({:.6e},{:.6e},{:.6e})\n", pos_min[0],
+							      pos_min[1], pos_min[2], pos_max[0], pos_max[1], pos_max[2]);
+				amrex::Print() << fmt::format("[split-debug] vel_min=({:.6e},{:.6e},{:.6e}) vel_max=({:.6e},{:.6e},{:.6e})\n", vel_min[0],
+							      vel_min[1], vel_min[2], vel_max[0], vel_max[1], vel_max[2]);
+				amrex::Print() << fmt::format("[split-debug] com_pos=({:.6e},{:.6e},{:.6e}) com_vel=({:.6e},{:.6e},{:.6e})\n", com_pos[0],
+							      com_pos[1], com_pos[2], com_vel[0], com_vel[1], com_vel[2]);
+				amrex::Print() << fmt::format("[split-debug] max_pair_dist={:.6e}\n", max_pair_dist);
+				if (!int_data.empty()) {
+					amrex::Print() << "[split-debug] int_data_size=" << int_data.size() << "\n";
+				}
+			}
+		};
+
+		dump_split_stats("before split");
 		amrex::Print() << "Splitting CICParticles using split_factor = " << split_factor << "\n";
 		int const lev = 0; // all CICParticles are on level 0
 		particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->splitParticles(lev, split_factor);
+		dump_split_stats("after split");
 	}
 }
 
@@ -158,6 +318,7 @@ auto problem_main() -> int
 	amrex::ParmParse const pp("problem");
 	pp.query("do_split_particles", do_split_particles);
 	pp.query("split_factor", split_factor);
+	pp.query("compare_init_ascii", compare_init_ascii);
 
 	// Problem initialization
 	QuokkaSimulation<BinaryOrbit> sim;

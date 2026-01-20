@@ -14,6 +14,7 @@
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
+#include "particles/particle_IO.hpp"
 #include "particles/particle_types.hpp"
 #include "util/BC.hpp"
 
@@ -78,22 +79,21 @@ template <> void QuokkaSimulation<SNProblem>::createInitialTestParticles()
 	// read particles from ASCII file
 	const int nreal_extra = 7; // mass vx vy vz birth_time death_time lum
 	TestParticles->SetVerbose(1);
-	TestParticles->InitFromAsciiFile(SN_particles_file, nreal_extra, nullptr);
+	quokka::particle_io::initParticlesFromAscii(TestParticles.get(), SN_particles_file, nreal_extra);
 
 	// Loop over all particle at all levels and set first integer component to SNProgenitor
 	for (int lev = 0; lev <= TestParticles->finestLevel(); ++lev) {
 		auto &particles = TestParticles->GetParticles(lev);
 
 		for (auto &kv : particles) {
-			auto &particle_array = kv.second.GetArrayOfStructs();
-			const int np = particle_array.numParticles();
-			auto *pdata = particle_array().data();
+			auto &particle_tile = kv.second;
+			const int np = particle_tile.numParticles();
+			auto ptd = particle_tile.getParticleTileData();
+			auto *runtime_idata = ptd.m_runtime_idata;
 
 			// Launch GPU kernel to set integer components
-			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-				auto &p = pdata[i]; // NOLINT
-				p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
-			});
+			amrex::ParallelFor(
+			    np, [=] AMREX_GPU_DEVICE(int i) { runtime_idata[0][i] = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor); });
 		}
 	}
 

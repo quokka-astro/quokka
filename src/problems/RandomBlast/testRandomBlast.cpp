@@ -14,6 +14,7 @@
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
+#include "particles/particle_IO.hpp"
 #include "physics_info.hpp"
 
 struct RandomBlast {
@@ -87,23 +88,24 @@ template <> void QuokkaSimulation<RandomBlast>::createInitialStochasticStellarPo
 	// InitSetPhyParticles to set the integer components
 	const int nreal_extra = 7 + Physics_Traits<RandomBlast>::nGroups; // mass vx vy vz birth_time death_time mass_at_birth lum[nGroups]
 	StochasticStellarPopParticles->SetVerbose(1);
-	StochasticStellarPopParticles->InitFromAsciiFile(userData_.part_fn, nreal_extra, nullptr);
+	quokka::particle_io::initParticlesFromAscii(StochasticStellarPopParticles.get(), userData_.part_fn, nreal_extra);
 
 	// Set integer components (evolution stage) - initialize all as SNProgenitor
 	for (auto &kv : StochasticStellarPopParticles->GetParticles()) {
 		for (auto &ikv : kv) {
-			auto &particle_array = ikv.second.GetArrayOfStructs();
-			const int np = particle_array.numParticles();
+			auto &particle_tile = ikv.second;
+			const int np = particle_tile.numParticles();
 
 			if (np == 0) {
 				continue;
 			}
 
-			auto *idata = particle_array().data();
+			auto ptd = particle_tile.getParticleTileData();
+			auto *runtime_idata = ptd.m_runtime_idata;
 
 			// Launch GPU kernel to set integer components
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-				idata[i].m_idata[quokka::StochasticStellarPopParticleStageIdx] = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+				runtime_idata[quokka::StochasticStellarPopParticleStageIdx][i] = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
 			});
 		}
 	}
