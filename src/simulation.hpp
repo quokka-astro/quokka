@@ -851,6 +851,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Optional fixed timestep controls
 	pp.query("constant_dt", constantDt_);
 	pp.query("initial_dt", initDt_);
+	pp.query("max_dt", maxDt_);
 
 	const int dt_override_count =
 	    static_cast<int>(pp.contains("init_shrink")) + static_cast<int>(pp.contains("initial_dt")) + static_cast<int>(pp.contains("constant_dt"));

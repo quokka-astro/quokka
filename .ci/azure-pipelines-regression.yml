@@ -44,11 +44,11 @@ jobs:
         CCACHE_DIR: $(Agent.HomeDirectory)/cache/ccache
         CCACHE_BASEDIR: $(Build.SourcesDirectory)
         CCACHE_NOHASHDIR: 1
-    - publish: /data/mash/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests/web
+    - publish: /priv/avatar/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests/web
       condition: succeededOrFailed()
       artifact: regressionHTMLOutput
       displayName: 'Upload results to Azure Pipelines'
-    - script: cd /data/mash/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests/web && git add . && git commit -m 'updated results' && git push
+    - script: cd /priv/avatar/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests/web && git add . && git commit -m 'updated results' && git push
       condition: succeededOrFailed()
       displayName: 'Upload results to GitHub Pages'
     - template: templates/ccache-stats.yml
