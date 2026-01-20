@@ -1054,8 +1054,10 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Write SFH data from memory to metadata
-	void writeSFHToMetadata(YAML::Node &metadata) const
+	void writeSFHToMetadata(YAML::Node &metadata, int sn_count_cumulative) const
 	{
+		metadata["sn_count_cumulative"] = sn_count_cumulative;
+
 		if (!HasFormationParticles()) {
 			return;
 		}
@@ -1077,8 +1079,12 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Read SFH data from metadata and return the last time
-	auto readSFH(const YAML::Node &metadata) -> Real
+	auto readSFH(const YAML::Node &metadata, int &sn_count_cumulative) -> Real
 	{
+		if (metadata["sn_count_cumulative"]) {
+			sn_count_cumulative = metadata["sn_count_cumulative"].as<int>();
+		}
+
 		if (!HasFormationParticles()) {
 			return 0.0;
 		}

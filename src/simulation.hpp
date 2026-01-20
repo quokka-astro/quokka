@@ -3665,7 +3665,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	amrex::Print() << "Writing plotfile " << plotfilename << "\n";
 
 	// Update SFH data in metadata before writing
-	particleRegister_.writeSFHToMetadata(simulationMetadata_);
+	particleRegister_.writeSFHToMetadata(simulationMetadata_, sn_count_cumulative_);
 
 #ifdef QUOKKA_USE_OPENPMD
 	// TODO(bwibking): write particles using openPMD
@@ -3895,7 +3895,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 	}
 
 	// Update SFH data in metadata before writing
-	particleRegister_.writeSFHToMetadata(simulationMetadata_);
+	particleRegister_.writeSFHToMetadata(simulationMetadata_, sn_count_cumulative_);
 
 	// write Metadata file
 	WriteMetadataFile(checkpointname + "/metadata.yaml");
@@ -4343,7 +4343,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	}
 
 	// Read SFH data from metadata
-	last_sfh_time_ = particleRegister_.readSFH(simulationMetadata_);
+	last_sfh_time_ = particleRegister_.readSFH(simulationMetadata_, sn_count_cumulative_);
 #endif // AMREX_SPACEDIM == 3
 
 	areInitialConditionsDefined_ = true;
