@@ -991,9 +991,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDerivedVa
 template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const
 {
 	auto const ncomp_out = ncomp;
-	auto const geom_data = geom[lev].data();
-	auto const prob_lo = geom_data.ProbLo();
-	auto const dx = geom_data.CellSize();
+	auto const prob_lo = geom[lev].ProbLoArray();
+	auto const dx = geom[lev].CellSizeArray();
 	auto const density_floor = densityFloor_;
 	auto const ngrow = mf.nGrow();
 
