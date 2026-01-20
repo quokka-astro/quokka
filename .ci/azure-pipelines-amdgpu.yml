@@ -20,12 +20,19 @@ pr:
     - CMakeLists.txt
     - .ci/azure-pipelines-amdgpu.yml
     - extern/cooling/*.h5
+    - extern/amrex
     - extern/amrex/**
+    - extern/Microphysics
     - extern/Microphysics/**
+    - extern/fmt
     - extern/fmt/**
+    - extern/yaml-cpp
     - extern/yaml-cpp/**
+    - extern/openPMD-api
     - extern/openPMD-api/**
+    - extern/AMReX-Hydro
     - extern/AMReX-Hydro/**
+    - extern/turbulence
     - extern/turbulence/**
     exclude:
     - docs/**
