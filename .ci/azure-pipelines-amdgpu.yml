@@ -3,31 +3,9 @@
 # Add steps that build, run tests, deploy, and more:
 # https://aka.ms/yaml
 
-trigger:
-  branches:
-    include:
-    - development
-  paths:
-    include:
-    - src/**
-    - tests/**
-    - inputs/**
-    - CMakeLists.txt
-    - .ci/azure-pipelines-amdgpu.yml
-    - extern/cooling/*.h5
-    - extern/amrex/**
-    - extern/Microphysics/**
-    - extern/fmt/**
-    - extern/yaml-cpp/**
-    - extern/openPMD-api/**
-    - extern/AMReX-Hydro/**
-    exclude:
-    - docs/**
-    - paper/**
-    - scripts/**
-    - '*.md'
-    - '*.rst'
-    - '*.txt'
+# Disable automatic CI trigger on push/merge to development branch.
+# Pipeline can still be triggered manually via `/azp run` or on PR validation.
+trigger: none
 
 pr:
   autoCancel: true
