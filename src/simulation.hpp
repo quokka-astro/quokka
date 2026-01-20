@@ -1847,12 +1847,34 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 #endif
 }
 
+// Custom particle acceleration boundary condition for tall box test
 struct setFunctorParticleAccel {
-	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, const int &dcomp, const int &numcomp,
-					 amrex::GeometryData const &geom, const amrex::Real &time, const amrex::BCRec *bcr, int bcomp,
-					 const int &orig_comp) const
+	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, const int &dcomp, const int & /*numcomp*/,
+					 amrex::GeometryData const &geom, const amrex::Real & /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+					 const int & /*orig_comp*/) const
 	{
-		amrex::ignore_unused(iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
+		auto [i, j, k] = iv.dim3();
+		amrex::Box const &box = geom.Domain();
+		const auto &domain_lo = box.loVect3d();
+		const auto &domain_hi = box.hiVect3d();
+		const int klo = domain_lo[2];
+		const int khi = domain_hi[2];
+
+		// Handle z-direction boundaries (non-periodic)
+		if (k < klo) {
+			// Lower z boundary: extrapolate from interior
+			const int kedge = klo;
+			const amrex::Real phi_edge = dest(i, j, kedge, dcomp);
+			dest(i, j, k, dcomp) = phi_edge;
+		} else if (k > khi) {
+			// Upper z boundary: extrapolate from interior
+			const int kedge = khi;
+			const amrex::Real phi_edge = dest(i, j, kedge, dcomp);
+			dest(i, j, k, dcomp) = phi_edge;
+		}
+
+		// For periodic x,y directions, do nothing - FillBoundary handles them
+		// For interior points, do nothing - already filled by Copy operation
 	}
 };
 
