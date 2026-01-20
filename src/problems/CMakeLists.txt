@@ -9,6 +9,9 @@ set(IGNORE_DIRS
 file(GLOB children CONFIGURE_DEPENDS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/*)
 
+# Sort children alphabetically for consistent ordering within same priority
+list(SORT children)
+
 # Loop through all children and add them as subdirectories if they contain their own CMakeLists.txt
 foreach(child ${children})
 
@@ -28,3 +31,6 @@ foreach(child ${children})
   endif()
 
 endforeach()
+
+# Add all registered tests, sorted by priority (ascending) then by name (alphabetical)
+quokka_add_registered_tests()

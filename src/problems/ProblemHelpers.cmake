@@ -2,58 +2,71 @@
 # Usage:
 #   quokka_add_problem(
 #     JOB_NAME <name>
+#     [<priority>]               # single-digit 0-9 (default: 9), lower runs first
 #     [INPUT_FILE <input_file>]  # defaults to ${JOB_NAME}.in
 #     [ADD_TEST <ON|OFF>]        # whether to add a test (default: ON)
 #     [TEST_PARAMS <params>]     # additional test parameters (default: ${QuokkaTestParams})
 #   )
+#
+# Tests are registered and added later via quokka_add_registered_tests(),
+# sorted by priority (ascending) then by name (alphabetical).
 function(quokka_add_problem)
-  cmake_parse_arguments(
-    QUOKKA_PROBLEM
-    ""
-    "JOB_NAME;INPUT_FILE;ADD_TEST;TEST_PARAMS"
-    ""
-    ${ARGN}
-  )
+  cmake_parse_arguments(PARSE_ARGV 0 ARG "" "JOB_NAME;INPUT_FILE;ADD_TEST;TEST_PARAMS" "")
 
-  if(NOT QUOKKA_PROBLEM_JOB_NAME)
+  if(NOT ARG_JOB_NAME)
     message(FATAL_ERROR "quokka_add_problem: JOB_NAME is required")
   endif()
 
-  # Set default input file if not provided
-  if(NOT QUOKKA_PROBLEM_INPUT_FILE)
-    set(QUOKKA_PROBLEM_INPUT_FILE "${QUOKKA_PROBLEM_JOB_NAME}.in")
+  # Priority from unparsed arguments, default 9
+  set(_priority 9)
+  if(ARG_UNPARSED_ARGUMENTS)
+    list(GET ARG_UNPARSED_ARGUMENTS 0 _priority)
   endif()
 
-  # Default to adding test if not explicitly set, or if explicitly set to ON
-  if(NOT DEFINED QUOKKA_PROBLEM_ADD_TEST)
-    set(_add_test TRUE)
-  elseif(QUOKKA_PROBLEM_ADD_TEST STREQUAL "ON")
-    set(_add_test TRUE)
-  elseif(QUOKKA_PROBLEM_ADD_TEST STREQUAL "OFF")
+  # Defaults
+  if(NOT ARG_INPUT_FILE)
+    set(ARG_INPUT_FILE "${ARG_JOB_NAME}.in")
+  endif()
+  if(NOT ARG_TEST_PARAMS)
+    set(ARG_TEST_PARAMS "${QuokkaTestParams}")
+  endif()
+
+  # Determine if test should be added
+  set(_add_test TRUE)
+  if(DEFINED ARG_ADD_TEST AND ARG_ADD_TEST STREQUAL "OFF")
     set(_add_test FALSE)
-  else()
-    message(FATAL_ERROR "quokka_add_problem: ADD_TEST must be ON or OFF, got '${QUOKKA_PROBLEM_ADD_TEST}'")
-  endif()
-
-  # Set default test params
-  if(NOT QUOKKA_PROBLEM_TEST_PARAMS)
-    set(QUOKKA_PROBLEM_TEST_PARAMS "${QuokkaTestParams}")
   endif()
 
   # Add executable
-  add_executable(${QUOKKA_PROBLEM_JOB_NAME} 
-    test${QUOKKA_PROBLEM_JOB_NAME}.cpp ${QuokkaObjSources})
-
-  # Setup CUDA compilation if needed
+  add_executable(${ARG_JOB_NAME} test${ARG_JOB_NAME}.cpp ${QuokkaObjSources})
   if(AMReX_GPU_BACKEND MATCHES "CUDA")
-    setup_target_for_cuda_compilation(${QUOKKA_PROBLEM_JOB_NAME})
+    setup_target_for_cuda_compilation(${ARG_JOB_NAME})
   endif()
 
-  # Add test if requested
+  # Register test for later sorted addition
   if(_add_test)
-    add_test(
-      NAME ${QUOKKA_PROBLEM_JOB_NAME}
-      COMMAND ${QUOKKA_PROBLEM_JOB_NAME} ../inputs/${QUOKKA_PROBLEM_INPUT_FILE} ${QUOKKA_PROBLEM_TEST_PARAMS}
-      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+    set_property(GLOBAL APPEND PROPERTY QUOKKA_TEST_KEYS "${_priority}_${ARG_JOB_NAME}")
+    set_property(GLOBAL PROPERTY QUOKKA_TEST_${ARG_JOB_NAME}_INPUT "${ARG_INPUT_FILE}")
+    set_property(GLOBAL PROPERTY QUOKKA_TEST_${ARG_JOB_NAME}_PARAMS "${ARG_TEST_PARAMS}")
   endif()
+endfunction()
+
+# Add all registered tests sorted by priority then name
+function(quokka_add_registered_tests)
+  get_property(_keys GLOBAL PROPERTY QUOKKA_TEST_KEYS)
+  if(NOT _keys)
+    return()
+  endif()
+
+  list(SORT _keys)
+
+  foreach(_key ${_keys})
+    string(REGEX REPLACE "^[0-9]_" "" _name "${_key}")
+    get_property(_input GLOBAL PROPERTY QUOKKA_TEST_${_name}_INPUT)
+    get_property(_params GLOBAL PROPERTY QUOKKA_TEST_${_name}_PARAMS)
+
+    add_test(NAME ${_name}
+      COMMAND ${_name} ../inputs/${_input} ${_params}
+      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  endforeach()
 endfunction()
