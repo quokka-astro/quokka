@@ -11,8 +11,6 @@ schedules:
     include:
     - development
 
-variables:
-  cacheKeySuffix: $[replace(variables['Build.SourceBranch'], '/', '_')]
 
 # NOTE: several Python packages are needed for regression_testing to run properly:
 #   https://github.com/AMReX-Codes/regression_testing/blob/main/requirements.txt
@@ -23,14 +21,10 @@ jobs:
     pool: avatar
     timeoutInMinutes: 300
     steps:
-    - task: Cache@2
-      displayName: Restore ccache
-      inputs:
-        key: 'ccache | regression | $(Agent.OS) | $(cacheKeySuffix)'
-        restoreKeys: |
-          ccache | regression | $(Agent.OS)
-        path: $(Pipeline.Workspace)/ccache
-        cacheHitVar: CACHE_RESTORED
+    - script: |
+        mkdir -p "$(Agent.HomeDirectory)/cache/ccache"
+        echo "Using shared local disk cache at $(Agent.HomeDirectory)/cache/ccache"
+      displayName: Prepare shared ccache directory
 
     - script: |
         if command -v ccache >/dev/null 2>&1; then
@@ -47,14 +41,14 @@ jobs:
     - script: ./extern/regression_testing/regtest.py --clean_testdir regression/quokka-tests.ini
       displayName: 'Run regression testing'
       env:
-        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+        CCACHE_DIR: $(Agent.HomeDirectory)/cache/ccache
         CCACHE_BASEDIR: $(Build.SourcesDirectory)
         CCACHE_NOHASHDIR: 1
-    - publish: /data/mash/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests/web
+    - publish: /priv/avatar/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests/web
       condition: succeededOrFailed()
       artifact: regressionHTMLOutput
       displayName: 'Upload results to Azure Pipelines'
-    - script: cd /data/mash/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests/web && git add . && git commit -m 'updated results' && git push
+    - script: cd /priv/avatar/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests/web && git add . && git commit -m 'updated results' && git push
       condition: succeededOrFailed()
       displayName: 'Upload results to GitHub Pages'
     - template: templates/ccache-stats.yml

@@ -376,6 +376,50 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 									int numcomp, amrex::GeometryData const &geom, amrex::Real time, const amrex::BCRec *bcr,
 									int bcomp, int orig_comp); // template specialized by problem generator
 
+	/// Helper function to set constant Dirichlet boundary conditions on the lower boundary of a specific dimension.
+	/// @tparam dir The dimension to check (0=x, 1=y, 2=z)
+	/// @param iv The cell index
+	/// @param consVar The array to fill
+	/// @param geom The geometry data
+	/// @param values The values to set for all components
+	template <int dir, auto N>
+	AMREX_GPU_DEVICE static void setConstantDirichletBCLo(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
+							      amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, N> const &values);
+
+	/// Helper function to set constant Dirichlet boundary conditions on the upper boundary of a specific dimension.
+	/// @tparam dir The dimension to check (0=x, 1=y, 2=z)
+	/// @param iv The cell index
+	/// @param consVar The array to fill
+	/// @param geom The geometry data
+	/// @param values The values to set for all components
+	template <int dir, auto N>
+	AMREX_GPU_DEVICE static void setConstantDirichletBCHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
+							      amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, N> const &values);
+
+	/// Helper function to set constant Dirichlet boundary conditions on the lower boundary of a specific dimension for face variables.
+	/// @tparam boundary_dim The dimension to check for boundaries (0=x, 1=y, 2=z)
+	/// @tparam face_dir The face direction (quokka::direction::x, y, or z)
+	/// @tparam ncomp Number of components (typically 3 for x, y, z face values)
+	/// @param iv The cell index
+	/// @param consVar_fc The face-centered array to fill
+	/// @param geom The geometry data
+	/// @param values The values to set for each face direction {x-face value, y-face value, z-face value}
+	template <int boundary_dim, quokka::direction face_dir, int ncomp>
+	AMREX_GPU_DEVICE static void setConstantDirichletBCFaceVarLo(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar_fc,
+								     amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, ncomp> const &values);
+
+	/// Helper function to set constant Dirichlet boundary conditions on the upper boundary of a specific dimension for face variables.
+	/// @tparam boundary_dim The dimension to check for boundaries (0=x, 1=y, 2=z)
+	/// @tparam face_dir The face direction (quokka::direction::x, y, or z)
+	/// @tparam ncomp Number of components (typically 3 for x, y, z face values)
+	/// @param iv The cell index
+	/// @param consVar_fc The face-centered array to fill
+	/// @param geom The geometry data
+	/// @param values The values to set for each face direction {x-face value, y-face value, z-face value}
+	template <int boundary_dim, quokka::direction face_dir, int ncomp>
+	AMREX_GPU_DEVICE static void setConstantDirichletBCFaceVarHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar_fc,
+								     amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, ncomp> const &values);
+
 	// compute volume integrals
 	template <typename F> auto computeVolumeIntegral(F const &user_f) -> amrex::Real;
 
@@ -415,8 +459,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	auto readCheckpointHeader(const std::string &restart_file) -> amrex::Vector<amrex::BoxArray>;
 	void interpolateMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source, const RefinementContext &context,
 					    const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom, const amrex::Vector<amrex::BCRec> &bcs);
-	void interpolateFaceCenteredMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source, const RefinementContext &context,
-							const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom, quokka::direction dir);
+	void interpolateFaceMultiFabFromRestart(int lev, const RefinementContext &context, const amrex::Vector<amrex::Geometry> &restart_geom,
+						amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> &restart_fc);
 	void loadMultiFabData(const RefinementContext &context);
 	auto loadBalanceOnRestart(const amrex::BoxArray &input_ba, int lev) -> amrex::BoxArray;
 
@@ -789,6 +833,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Optional fixed timestep controls
 	pp.query("constant_dt", constantDt_);
 	pp.query("initial_dt", initDt_);
+	pp.query("max_dt", maxDt_);
 
 	const int dt_override_count =
 	    static_cast<int>(pp.contains("init_shrink")) + static_cast<int>(pp.contains("initial_dt")) + static_cast<int>(pp.contains("constant_dt"));
@@ -2371,6 +2416,190 @@ AMRSimulation<problem_t>::setCustomBoundaryConditionsFaceVar(const amrex::IntVec
 	// set boundary condition for cell 'iv'
 }
 
+template <typename problem_t>
+template <int dir, auto N> // 'auto N' is required because GpuArray's size type varies by platform (unsigned int vs std::size_t)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setConstantDirichletBCLo(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
+											    amrex::GeometryData const &geom,
+											    amrex::GpuArray<amrex::Real, N> const &values)
+{
+	static_assert(dir >= 0 && dir < AMREX_SPACEDIM, "dir must be in range [0, AMREX_SPACEDIM)");
+
+	// Get cell indices
+	auto const [i, j, k] = iv.dim3();
+
+	// Get domain bounds
+	amrex::Box const &box = geom.Domain();
+	const amrex::GpuArray<int, 3> lo = box.loVect3d();
+
+	// Get the cell index for the specified direction
+	int cellIdx = 0;
+	if constexpr (dir == 0) {
+		cellIdx = i;
+	} else if constexpr (dir == 1) {
+		cellIdx = j;
+	} else if constexpr (dir == 2) {
+		cellIdx = k;
+	}
+
+	// Check if on lower boundary in the specified dimension and set values
+	if (cellIdx < lo[dir]) {
+		for (int n = 0; n < static_cast<int>(N); ++n) {
+			consVar(i, j, k, n) = values[n];
+		}
+	}
+}
+
+template <typename problem_t>
+template <int dir, auto N> // 'auto N' is required because GpuArray's size type varies by platform (unsigned int vs std::size_t)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setConstantDirichletBCHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
+											    amrex::GeometryData const &geom,
+											    amrex::GpuArray<amrex::Real, N> const &values)
+{
+	static_assert(dir >= 0 && dir < AMREX_SPACEDIM, "dir must be in range [0, AMREX_SPACEDIM)");
+
+	// Get cell indices
+	auto const [i, j, k] = iv.dim3();
+
+	// Get domain bounds
+	amrex::Box const &box = geom.Domain();
+	const amrex::GpuArray<int, 3> hi = box.hiVect3d();
+
+	// Get the cell index for the specified direction
+	int cellIdx = 0;
+	if constexpr (dir == 0) {
+		cellIdx = i;
+	} else if constexpr (dir == 1) {
+		cellIdx = j;
+	} else if constexpr (dir == 2) {
+		cellIdx = k;
+	}
+
+	// Check if on upper boundary in the specified dimension and set values
+	// Note that both lo and hi are inclusive bounds, i.e. for a dimension with 8 cells, the bounds are 0 and 7.
+	if (cellIdx > hi[dir]) {
+		for (int n = 0; n < static_cast<int>(N); ++n) {
+			consVar(i, j, k, n) = values[n];
+		}
+	}
+}
+
+template <typename problem_t>
+template <int boundary_dim, quokka::direction face_dir, int ncomp>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<problem_t>::setConstantDirichletBCFaceVarLo(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar_fc,
+							  amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, ncomp> const &values)
+{
+	static_assert(boundary_dim >= 0 && boundary_dim < AMREX_SPACEDIM, "boundary_dim must be in range [0, AMREX_SPACEDIM)");
+
+	// Get cell indices
+	auto const [i, j, k] = iv.dim3();
+
+	// Get domain bounds
+	amrex::Box const &box = geom.Domain();
+	const amrex::GpuArray<int, 3> lo = box.loVect3d();
+
+	// Get the cell index for the specified boundary dimension
+	int cellIdx = 0;
+	if constexpr (boundary_dim == 0) {
+		cellIdx = i;
+	} else if constexpr (boundary_dim == 1) {
+		cellIdx = j;
+	} else if constexpr (boundary_dim == 2) {
+		cellIdx = k;
+	}
+
+	// Check if on lower boundary in the specified dimension and set value based on face direction
+	// For face variables: the face normal to the boundary uses inclusive comparison (<=),
+	// while tangent faces use exclusive comparison (<).
+	// This is because for N cells, there are N+1 face variables in the normal direction.
+	const bool is_on_boundary = [&]() {
+		if (face_dir == quokka::direction::x && boundary_dim == 0) {
+			return cellIdx <= lo[boundary_dim]; // inclusive for x-faces on x-boundary
+		}
+		if (face_dir == quokka::direction::y && boundary_dim == 1) {
+			return cellIdx <= lo[boundary_dim]; // inclusive for y-faces on y-boundary
+		}
+		if (face_dir == quokka::direction::z && boundary_dim == 2) {
+			return cellIdx <= lo[boundary_dim]; // inclusive for z-faces on z-boundary
+		}
+		return cellIdx < lo[boundary_dim]; // exclusive for tangent faces
+	}();
+
+	if (is_on_boundary) {
+		// Select the appropriate value based on face direction
+		amrex::Real value = 0.0;
+		switch (face_dir) {
+			case quokka::direction::x:
+				value = values[0];
+				break;
+			case quokka::direction::y:
+				value = values[1];
+				break;
+			case quokka::direction::z:
+				value = values[2];
+				break;
+			case quokka::direction::na:
+				break; // do nothing
+		}
+
+		// Set the first component (mhdFirstIndex) with the selected value
+		if (face_dir != quokka::direction::na) {
+			consVar_fc(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) = value;
+		}
+	}
+}
+
+template <typename problem_t>
+template <int boundary_dim, quokka::direction face_dir, int ncomp>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<problem_t>::setConstantDirichletBCFaceVarHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar_fc,
+							  amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, ncomp> const &values)
+{
+	static_assert(boundary_dim >= 0 && boundary_dim < AMREX_SPACEDIM, "boundary_dim must be in range [0, AMREX_SPACEDIM)");
+
+	// Get cell indices
+	auto const [i, j, k] = iv.dim3();
+
+	// Get domain bounds
+	amrex::Box const &box = geom.Domain();
+	const amrex::GpuArray<int, 3> hi = box.hiVect3d();
+
+	// Get the cell index for the specified boundary dimension
+	int cellIdx = 0;
+	if constexpr (boundary_dim == 0) {
+		cellIdx = i;
+	} else if constexpr (boundary_dim == 1) {
+		cellIdx = j;
+	} else if constexpr (boundary_dim == 2) {
+		cellIdx = k;
+	}
+
+	// Check if on upper boundary in the specified dimension and set value based on face direction
+	// Note that both lo and hi are inclusive bounds, i.e. for a dimension with 8 cells, the bounds are 0 and 7.
+	if (cellIdx > hi[boundary_dim]) {
+		// Select the appropriate value based on face direction
+		amrex::Real value = 0.0;
+		switch (face_dir) {
+			case quokka::direction::x:
+				value = values[0];
+				break;
+			case quokka::direction::y:
+				value = values[1];
+				break;
+			case quokka::direction::z:
+				value = values[2];
+				break;
+			case quokka::direction::na:
+				break; // do nothing
+		}
+
+		// Set the first component (mhdFirstIndex) with the selected value
+		if (face_dir != quokka::direction::na) {
+			consVar_fc(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) = value;
+		}
+	}
+}
+
 // Compute a new multifab 'mf' by copying in state from valid region and filling
 // ghost cells
 // NOTE: This implementation is only used by AdvectionSimulation.
@@ -2986,13 +3215,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 }
 
 // get plotfile name
-template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileName(int lev) const -> std::string { return amrex::Concatenate(plot_file, lev, 5); }
+template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileName(int lev) const -> std::string { return amrex::Concatenate(plot_file, lev, 7); }
 
 // get plotfile name
 template <typename problem_t> auto AMRSimulation<problem_t>::CustomPlotFileName(const char *base, int lev) const -> std::string
 {
 	const std::string base_str(base);
-	return amrex::Concatenate(base_str, lev, 5);
+	return amrex::Concatenate(base_str, lev, 7);
 }
 
 template <typename problem_t>
@@ -3596,17 +3825,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 {
 	BL_PROFILE("AMRSimulation::WriteCheckpointFile()"); // NOLINT(misc-const-correctness)
 
-	// chk00010            write a checkpoint file with this root directory
-	// chk00010/Header     this contains information you need to save (e.g.,
+	// chk0000010            write a checkpoint file with this root directory
+	// chk0000010/Header     this contains information you need to save (e.g.,
 	// finest_level, t_new, etc.) and also
 	//                     the BoxArrays at each level
-	// chk00010/Level_0/
-	// chk00010/Level_1/
+	// chk0000010/Level_0/
+	// chk0000010/Level_1/
 	// etc.                these subdirectories will hold the MultiFab data at
 	// each level of refinement
 
-	// checkpoint file name, e.g., chk00010
-	const std::string &checkpointname = amrex::Concatenate(chk_file, istep[0]);
+	// checkpoint file name, e.g., chk0000010
+	const std::string &checkpointname = amrex::Concatenate(chk_file, istep[0], 7);
 
 	amrex::Print() << "Writing checkpoint " << checkpointname << "\n";
 
@@ -3674,13 +3903,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 	// set the maximum number of binary files per MultiFab
 	quokka::ScopedVisMFNOutFiles scoped_nfiles(checkpoint_nfiles);
 
-	// write the cell-centred MultiFab data to, e.g., chk00010/Level_0/
+	// write the cell-centred MultiFab data to, e.g., chk0000010/Level_0/
 	for (int lev = 0; lev <= finest_level; ++lev) {
 		amrex::VisMF::Write(state_new_cc_[lev], amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_", "Cell"));
 		amrex::ParallelDescriptor::Barrier(); // needed to avoid overwhelming Lustre I/O on Frontier
 	}
 
-	// write the face-centred MultiFab data to, e.g., chk00010/Level_0/
+	// write the face-centred MultiFab data to, e.g., chk0000010/Level_0/
 	if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			for (int lev = 0; lev <= finest_level; ++lev) {
@@ -3834,28 +4063,135 @@ void AMRSimulation<problem_t>::interpolateMultiFabFromRestart(amrex::MultiFab &t
 }
 
 template <typename problem_t>
-void AMRSimulation<problem_t>::interpolateFaceCenteredMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source,
-									  const RefinementContext &context, const amrex::Geometry &coarse_geom,
-									  const amrex::Geometry &fine_geom, quokka::direction dir)
+void AMRSimulation<problem_t>::interpolateFaceMultiFabFromRestart(int lev, const RefinementContext &context, const amrex::Vector<amrex::Geometry> &restart_geom,
+								  amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> &restart_fc)
 {
 	if (!context.needs_refinement()) {
-		// if not refining, ParallelCopy
-		target.ParallelCopy(source, 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_, nghost_fc_);
+		// if not refining, we can read level-by-level and ParallelCopy to state_new_fc_[lev]
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			amrex::MultiFab tmp_read;
+			amrex::VisMF::Read(tmp_read,
+					   amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
+			state_new_fc_[lev][idim].ParallelCopy(tmp_read, 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, nghost_fc_, nghost_fc_);
+			AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan(0, state_new_fc_[lev][idim].nComp())); // check valid faces
+		}
 	} else {
-		// if refining, InterpFromCoarseLevel
-		amrex::IntVect restart_ref_ratio{AMREX_D_DECL(context.refinement_factor, context.refinement_factor, context.refinement_factor)};
+		const amrex::IntVect restart_ref_ratio{AMREX_D_DECL(context.refinement_factor, context.refinement_factor, context.refinement_factor)};
+		AMREX_ALWAYS_ASSERT(context.refinement_factor == 2);   // FaceDivFree interp only supports ref ratio of 2
+		AMREX_ALWAYS_ASSERT(restart_ref_ratio == refRatio(0)); // ref ratio consistency check
+		if (lev > 0) {
+			AMREX_ALWAYS_ASSERT(refRatio(lev - 1) == refRatio(0)); // constant ref ratio check
+		}
+
+		// Restart refinement strategy: build level 0 with old levels 0/1 (same domain, finer spacing),
+		// then fill higher levels from new coarse + old fine via FillPatchTwoLevels when available.
 		using BndryFunc = amrex::GpuBndryFuncFab<setBoundaryFunctorFaceVar<problem_t>>;
-		BndryFunc boundaryFunctor(setBoundaryFunctorFaceVar<problem_t>{dir});
-		amrex::PhysBCFunct<BndryFunc> fineBdryFunct(fine_geom, BCs_fc_, boundaryFunctor);
-		amrex::PhysBCFunct<BndryFunc> coarseBdryFunct(coarse_geom, BCs_fc_, boundaryFunctor);
-		amrex::Interpolater *face_mapper = &amrex::face_divfree_interp;
-		amrex::InterpFromCoarseLevel(target, 0., source, 0, 0, source.nComp(), coarse_geom, fine_geom, coarseBdryFunct, 0, fineBdryFunct, 0,
-					     restart_ref_ratio, face_mapper, BCs_fc_, 0);
+		const int ncomp = restart_fc[0][0].nComp();
+		amrex::Array<amrex::Vector<amrex::BCRec>, AMREX_SPACEDIM> BCs_array;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			BCs_array[idim].clear();
+			for (int n = 0; n < ncomp; ++n) {
+				BCs_array[idim].push_back(BCs_fc_[idim * ncomp + n]);
+			}
+		}
+		amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> new_ptrs;
+		amrex::Array<amrex::PhysBCFunct<BndryFunc>, AMREX_SPACEDIM> coarse_bc;
+		amrex::Array<amrex::PhysBCFunct<BndryFunc>, AMREX_SPACEDIM> fine_bc;
+
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			new_ptrs[idim] = &state_new_fc_[lev][idim];
+			const auto dir = static_cast<quokka::direction>(idim);
+			BndryFunc boundaryFunctor(setBoundaryFunctorFaceVar<problem_t>{dir});
+			if (lev == 0) {
+				coarse_bc[idim] = amrex::PhysBCFunct<BndryFunc>(restart_geom[0], BCs_array[idim], boundaryFunctor);
+			} else {
+				coarse_bc[idim] = amrex::PhysBCFunct<BndryFunc>(geom[lev - 1], BCs_array[idim], boundaryFunctor);
+			}
+			fine_bc[idim] = amrex::PhysBCFunct<BndryFunc>(geom[lev], BCs_array[idim], boundaryFunctor);
+		}
+
+		if (lev == 0) {
+			if (finest_level >= 1) {
+				amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> coarse_ptrs;
+				amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> fine_ptrs;
+				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+					coarse_ptrs[idim] = &restart_fc[0][idim];
+					fine_ptrs[idim] = &restart_fc[1][idim];
+				}
+
+				amrex::Vector<amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM>> cmf{coarse_ptrs};
+				amrex::Vector<amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM>> fmf{fine_ptrs};
+				amrex::Vector<amrex::Real> ct{tNew_[0]};
+				amrex::Vector<amrex::Real> ft{tNew_[1]};
+
+				amrex::FillPatchTwoLevels(new_ptrs, amrex::IntVect(nghost_fc_), tNew_[lev], cmf, ct, fmf, ft, 0, 0, ncomp, restart_geom[0],
+							  geom[0], coarse_bc, 0, fine_bc, 0, refRatio(0), &amrex::face_divfree_interp, BCs_array, 0);
+			} else { // level 0 is the only level
+				amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> coarse_ptrs;
+				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+					coarse_ptrs[idim] = &restart_fc[0][idim];
+				}
+				amrex::InterpFromCoarseLevel(new_ptrs, tNew_[lev], coarse_ptrs, 0, 0, ncomp, restart_geom[0], geom[0], coarse_bc, 0, fine_bc, 0,
+							     restart_ref_ratio, &amrex::face_divfree_interp, BCs_array, 0);
+			}
+		} else {
+			amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> coarse_ptrs;
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				coarse_ptrs[idim] = &state_new_fc_[lev - 1][idim];
+			}
+
+			if (lev < finest_level) {
+				amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> fine_ptrs;
+				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+					fine_ptrs[idim] = &restart_fc[lev + 1][idim];
+				}
+				amrex::Vector<amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM>> cmf{coarse_ptrs};
+				amrex::Vector<amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM>> fmf{fine_ptrs};
+				amrex::Vector<amrex::Real> ct{tNew_[lev - 1]};
+				amrex::Vector<amrex::Real> ft{tNew_[lev + 1]};
+
+				amrex::FillPatchTwoLevels(new_ptrs, amrex::IntVect(nghost_fc_), tNew_[lev], cmf, ct, fmf, ft, 0, 0, ncomp, geom[lev - 1],
+							  geom[lev], coarse_bc, 0, fine_bc, 0, refRatio(lev - 1), &amrex::face_divfree_interp, BCs_array, 0);
+			} else { // lev is finest level
+				amrex::InterpFromCoarseLevel(new_ptrs, tNew_[lev], coarse_ptrs, 0, 0, ncomp, geom[lev - 1], geom[lev], coarse_bc, 0, fine_bc, 0,
+							     refRatio(lev - 1), &amrex::face_divfree_interp, BCs_array, 0);
+			}
+		}
 	}
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(const RefinementContext &context)
 {
+	amrex::Vector<amrex::Geometry> restart_geom;
+	if (context.needs_refinement()) {
+		restart_geom.resize(finest_level + 1);
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			if (lev == 0) {
+				restart_geom[lev] = context.coarse_level0_geom;
+			} else {
+				restart_geom[lev] = amrex::coarsen(geom[lev], context.refinement_factor);
+			}
+		}
+	}
+
+	// if refining, we have to read all levels of face data from restart file up front
+	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> restart_fc;
+	if (context.needs_refinement()) {
+		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+			restart_fc.resize(finest_level + 1);
+			for (int chklev = 0; chklev <= finest_level; ++chklev) {
+				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+					amrex::MultiFab tmp_read;
+					amrex::VisMF::Read(tmp_read, amrex::MultiFabFileFullPrefix(chklev, restart_chkfile, "Level_",
+												   std::string("Face_") + quokka::face_dir_str[idim]));
+					restart_fc[chklev][idim].define(tmp_read.boxArray(), tmp_read.DistributionMap(), tmp_read.nComp(), nghost_fc_);
+					restart_fc[chklev][idim].ParallelCopy(tmp_read);
+					AMREX_ALWAYS_ASSERT(!restart_fc[chklev][idim].contains_nan(0, restart_fc[chklev][idim].nComp())); // check valid faces
+				}
+			}
+		}
+	}
+
 	for (int lev = 0; lev <= finest_level; ++lev) {
 		amrex::Geometry coarse_geom;
 		if (lev == 0) {
@@ -3872,18 +4208,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 
 		// face-centred data
 		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+			interpolateFaceMultiFabFromRestart(lev, context, restart_geom, restart_fc);
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				amrex::MultiFab tmp_fc;
-				amrex::VisMF::Read(
-				    tmp_fc, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
-#if AMREX_SPACEDIM == 1
-				constexpr std::array<quokka::direction, 1> directions = {quokka::direction::x};
-#elif AMREX_SPACEDIM == 2
-				constexpr std::array<quokka::direction, 2> directions = {quokka::direction::x, quokka::direction::y};
-#elif AMREX_SPACEDIM == 3
-				constexpr std::array<quokka::direction, 3> directions = {quokka::direction::x, quokka::direction::y, quokka::direction::z};
-#endif
-				interpolateFaceCenteredMultiFabFromRestart(state_new_fc_[lev][idim], tmp_fc, context, coarse_geom, geom[lev], directions[idim]);
 				AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan(0, state_new_fc_[lev][idim].nComp())); // check valid faces
 			}
 		}
@@ -3980,6 +4306,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 
 	// 5. Load MultiFab data with refinement handling
 	loadMultiFabData(refinement_context);
+	// NOTE: postInitialization (including magnetic projection) is only for fresh ICs, not restarts.
 
 	// read particle data
 	if (do_tracers != 0) {
