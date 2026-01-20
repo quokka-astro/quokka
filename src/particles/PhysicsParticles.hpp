@@ -506,11 +506,61 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
+	// Get real component names for this particle type
+	[[nodiscard]] static auto getRealCompNames() -> amrex::Vector<std::string>
+	{
+		if constexpr (particleType_ == ParticleType::Rad) {
+			return getRadParticleRealCompNames<problem_t>();
+		}
+#if AMREX_SPACEDIM == 3
+		else if constexpr (particleType_ == ParticleType::CIC) {
+			return getCICParticleRealCompNames();
+		} else if constexpr (particleType_ == ParticleType::CICRad) {
+			return getCICRadParticleRealCompNames<problem_t>();
+		} else if constexpr (particleType_ == ParticleType::StochasticStellarPop) {
+			return getStochasticStellarPopParticleRealCompNames<problem_t>();
+		} else if constexpr (particleType_ == ParticleType::Sink) {
+			return getSinkParticleRealCompNames();
+		} else if constexpr (particleType_ == ParticleType::Test) {
+			return getTestParticleRealCompNames<problem_t>();
+		}
+#endif
+		else {
+			return {};
+		}
+	}
+
+	// Get int component names for this particle type
+	[[nodiscard]] static auto getIntCompNames() -> amrex::Vector<std::string>
+	{
+		if constexpr (particleType_ == ParticleType::Rad) {
+			return getRadParticleIntCompNames<problem_t>();
+		}
+#if AMREX_SPACEDIM == 3
+		else if constexpr (particleType_ == ParticleType::CIC) {
+			return getCICParticleIntCompNames();
+		} else if constexpr (particleType_ == ParticleType::CICRad) {
+			return getCICRadParticleIntCompNames();
+		} else if constexpr (particleType_ == ParticleType::StochasticStellarPop) {
+			return getStochasticStellarPopParticleIntCompNames();
+		} else if constexpr (particleType_ == ParticleType::Sink) {
+			return getSinkParticleIntCompNames();
+		} else if constexpr (particleType_ == ParticleType::Test) {
+			return getTestParticleIntCompNames();
+		}
+#endif
+		else {
+			return {};
+		}
+	}
+
 	// Implementation of particle data output to plot file
 	void writePlotFile(const std::string &plotfilename, const std::string &name) override
 	{
 		if (container_ != nullptr) {
-			container_->WritePlotFile(plotfilename, name);
+			const amrex::Vector<std::string> real_comp_names = getRealCompNames();
+			const amrex::Vector<std::string> int_comp_names = getIntCompNames();
+			container_->WritePlotFile(plotfilename, name, real_comp_names, int_comp_names);
 		}
 	}
 
@@ -518,7 +568,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	void writeCheckpoint(const std::string &checkpointname, const std::string &name, bool include_header) override
 	{
 		if (container_ != nullptr) {
-			container_->Checkpoint(checkpointname, name, include_header);
+			const amrex::Vector<std::string> real_comp_names = getRealCompNames();
+			const amrex::Vector<std::string> int_comp_names = getIntCompNames();
+			container_->Checkpoint(checkpointname, name, include_header, real_comp_names, int_comp_names);
 		}
 	}
 

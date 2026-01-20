@@ -2,6 +2,7 @@
 #define PARTICLE_TYPES_HPP_
 
 #include "AMReX_AmrParticles.H"
+#include "AMReX_Enum.H"
 #include "AMReX_ParIter.H"
 #include "physics_info.hpp"
 
@@ -203,18 +204,31 @@ using StochasticStellarPopParticleIterator = amrex::ParIter<StochasticStellarPop
 
 //-------------------- Test particles --------------------
 
-// Indices for test particles (Test_particles)
-enum TestParticleDataIdx {
-	TestParticleMassIdx = 0,  // Mass of the particle
-	TestParticleVxIdx,	  // Velocity in x direction
-	TestParticleVyIdx,	  // Velocity in y direction
-	TestParticleVzIdx,	  // Velocity in z direction
-	TestParticleBirthTimeIdx, // Time when particle becomes active
-	TestParticleDeathTimeIdx, // Time when particle becomes inactive
-	TestParticleLumIdx	  // Base index for luminosity components
-};
+// Indices for test particles (Test_particles) using AMREX_ENUM for automatic string conversion
+// The enum values are short names that will appear directly in the Header file
+AMREX_ENUM(TestParticleRealIdx, // NOLINT
+	   mass,		// Mass of the particle
+	   vx,			// Velocity in x direction
+	   vy,			// Velocity in y direction
+	   vz,			// Velocity in z direction
+	   birth_time,		// Time when particle becomes active
+	   death_time		// Time when particle becomes inactive (luminosity components follow dynamically)
+);
 
-constexpr int TestParticleStageIdx = 0; // Evolution stage of the particle, index in the integer components
+// Integer component indices using AMREX_ENUM
+AMREX_ENUM(TestParticleIntIdx, // NOLINT
+	   evolution_stage     // Evolution stage of the particle
+);
+
+// Backward compatibility aliases for existing code
+constexpr int TestParticleMassIdx = static_cast<int>(TestParticleRealIdx::mass);
+constexpr int TestParticleVxIdx = static_cast<int>(TestParticleRealIdx::vx);
+constexpr int TestParticleVyIdx = static_cast<int>(TestParticleRealIdx::vy);
+constexpr int TestParticleVzIdx = static_cast<int>(TestParticleRealIdx::vz);
+constexpr int TestParticleBirthTimeIdx = static_cast<int>(TestParticleRealIdx::birth_time);
+constexpr int TestParticleDeathTimeIdx = static_cast<int>(TestParticleRealIdx::death_time);
+constexpr int TestParticleLumIdx = TestParticleDeathTimeIdx + 1; // Base index for luminosity components (follows death_time)
+constexpr int TestParticleStageIdx = static_cast<int>(TestParticleIntIdx::evolution_stage);
 
 // Number of real components for Test_particles
 template <typename problem_t>
@@ -249,6 +263,119 @@ constexpr int SinkParticleRealComps = 4; // mass, vx, vy, vz
 // Type definitions for Sink_particles container and iterator
 using SinkParticleContainer = amrex::AmrParticleContainer<SinkParticleRealComps>;
 using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
+
+#endif // AMREX_SPACEDIM == 3
+
+//-------------------- Component Names for I/O --------------------
+
+// Helper function to generate component names for radiation particles
+template <typename problem_t> auto getRadParticleRealCompNames() -> amrex::Vector<std::string>
+{
+	amrex::Vector<std::string> names;
+	names.push_back("birth_time");
+	names.push_back("death_time");
+	constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
+	for (int i = 0; i < nGroups; ++i) {
+		names.push_back("luminosity_" + std::to_string(i));
+	}
+	return names;
+}
+
+template <typename problem_t> auto getRadParticleIntCompNames() -> amrex::Vector<std::string>
+{
+	return {}; // No integer components
+}
+
+#if AMREX_SPACEDIM == 3
+
+// Helper function to generate component names for CIC particles
+inline auto getCICParticleRealCompNames() -> amrex::Vector<std::string>
+{
+	return {"mass", "vx", "vy", "vz"};
+}
+
+inline auto getCICParticleIntCompNames() -> amrex::Vector<std::string>
+{
+	return {}; // No integer components
+}
+
+// Helper function to generate component names for CICRad particles
+template <typename problem_t> auto getCICRadParticleRealCompNames() -> amrex::Vector<std::string>
+{
+	amrex::Vector<std::string> names;
+	names.push_back("mass");
+	names.push_back("vx");
+	names.push_back("vy");
+	names.push_back("vz");
+	names.push_back("birth_time");
+	names.push_back("death_time");
+	constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
+	for (int i = 0; i < nGroups; ++i) {
+		names.push_back("luminosity_" + std::to_string(i));
+	}
+	return names;
+}
+
+inline auto getCICRadParticleIntCompNames() -> amrex::Vector<std::string>
+{
+	return {}; // No integer components
+}
+
+// Helper function to generate component names for StochasticStellarPop particles
+template <typename problem_t> auto getStochasticStellarPopParticleRealCompNames() -> amrex::Vector<std::string>
+{
+	amrex::Vector<std::string> names;
+	names.push_back("mass");
+	names.push_back("vx");
+	names.push_back("vy");
+	names.push_back("vz");
+	names.push_back("birth_time");
+	names.push_back("death_time");
+	names.push_back("mass_at_birth");
+	constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
+	for (int i = 0; i < nGroups; ++i) {
+		names.push_back("luminosity_" + std::to_string(i));
+	}
+	return names;
+}
+
+inline auto getStochasticStellarPopParticleIntCompNames() -> amrex::Vector<std::string>
+{
+	return {"evolution_stage"};
+}
+
+// Helper function to generate component names for Sink particles
+inline auto getSinkParticleRealCompNames() -> amrex::Vector<std::string>
+{
+	return {"mass", "vx", "vy", "vz"};
+}
+
+inline auto getSinkParticleIntCompNames() -> amrex::Vector<std::string>
+{
+	return {}; // No integer components
+}
+
+// Helper function to generate component names for Test particles using AMREX_ENUM
+template <typename problem_t> auto getTestParticleRealCompNames() -> amrex::Vector<std::string>
+{
+	// Get names from AMREX_ENUM (mass, vx, vy, vz, birth_time, death_time)
+	const std::vector<std::string> enum_names = amrex::getEnumNameStrings<TestParticleRealIdx>();
+	amrex::Vector<std::string> names(enum_names.begin(), enum_names.end());
+
+	// Add luminosity components dynamically
+	constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
+	for (int i = 0; i < nGroups; ++i) {
+		names.push_back("luminosity_" + std::to_string(i));
+	}
+	return names;
+}
+
+// Helper function to generate integer component names for Test particles using AMREX_ENUM
+inline auto getTestParticleIntCompNames() -> amrex::Vector<std::string>
+{
+	const std::vector<std::string> enum_names = amrex::getEnumNameStrings<TestParticleIntIdx>();
+	return {enum_names.begin(), enum_names.end()};
+}
 
 #endif // AMREX_SPACEDIM == 3
 
