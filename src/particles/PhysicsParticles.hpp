@@ -507,16 +507,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	}
 
 	// Get real component names for this particle type using unified template function
-	[[nodiscard]] static auto getRealCompNames() -> amrex::Vector<std::string>
-	{
-		return getParticleRealCompNames<particleType_, problem_t>();
-	}
+	[[nodiscard]] static auto getRealCompNames() -> amrex::Vector<std::string> { return getParticleRealCompNames<particleType_, problem_t>(); }
 
 	// Get int component names for this particle type using unified template function
-	[[nodiscard]] static auto getIntCompNames() -> amrex::Vector<std::string>
-	{
-		return getParticleIntCompNames<particleType_, problem_t>();
-	}
+	[[nodiscard]] static auto getIntCompNames() -> amrex::Vector<std::string> { return getParticleIntCompNames<particleType_, problem_t>(); }
 
 	// Implementation of particle data output to plot file
 	void writePlotFile(const std::string &plotfilename, const std::string &name) override
