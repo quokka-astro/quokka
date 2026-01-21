@@ -75,13 +75,6 @@ void DiagFramePlane::init(const std::string &a_prefix, std::string_view a_diagNa
 		m_center[m_normal] = center[0];
 	}
 
-	// Interpolation
-	std::string intType = "Linear";
-	pp.query("interpolation", intType);
-	if (intType != "Linear") {
-		amrex::Abort("Unknown interpolation type for " + a_prefix + " (only Linear is supported)");
-	}
-
 	// Read particle types to include (optional, default to empty = no particles)
 	int const nParticleTypes = pp.countval("particles");
 	if (nParticleTypes > 0) {
