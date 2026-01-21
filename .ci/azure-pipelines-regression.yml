@@ -48,7 +48,26 @@ jobs:
       condition: succeededOrFailed()
       artifact: regressionHTMLOutput
       displayName: 'Upload results to Azure Pipelines'
-    - script: cd /priv/avatar/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests/web && git add . && git commit -m 'updated results' && git push
+    - script: |
+        set -x
+        cd /priv/avatar/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests/web
+        export GIT_TERMINAL_PROMPT=0
+        echo "Checking for changes in regression results..."
+        git status
+        git add .
+        if git diff --staged --quiet; then
+          echo "No changes to commit, skipping push..."
+          exit 0
+        fi
+        echo "Committing changes..."
+        git -c user.name="Quokka CI Bot" -c user.email="quokka-ci-bot@quokka.dev" \
+            commit --no-verify -m "updated results [skip ci]"
+        echo "Pushing to GitHub Pages..."
+        git -c core.askPass= push origin HEAD 2>&1 || {
+          echo "Push failed with exit code $?, but continuing..."
+          exit 0
+        }
+        echo "Successfully pushed regression results"
       condition: succeededOrFailed()
       displayName: 'Upload results to GitHub Pages'
     - template: templates/ccache-stats.yml

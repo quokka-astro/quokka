@@ -212,7 +212,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int sfh_interval_ = -1;		       // interval for the star formation history
 	amrex::Real sfh_time_interval_ = -1.0; // time interval for the star formation history
 	amrex::Real last_sfh_time_ = 0.0;
-	int sn_count_ = 0; // number of SN explosions in a step (used for diagnostics)
+	int sn_count_ = 0;	      // number of SN explosions in a step (used for diagnostics)
+	int sn_count_cumulative_ = 0; // cumulative number of SN explosions (used for diagnostics)
 
 	amrex::Real densityFloor_ = 0.0; // default
 	amrex::Real tempFloor_ = 0.0;	 // default
@@ -1990,6 +1991,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 
 	// Deposit the SN particles into the MultiFab
 	const auto [num_sn_explosions, max_velocity] = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
+	sn_count_ = num_sn_explosions;
+	sn_count_cumulative_ += num_sn_explosions;
 
 	// Print SN explosion count if verbose and non-zero
 	if (verbose && num_sn_explosions > 0) {
@@ -3983,7 +3986,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	amrex::Print() << "Writing plotfile " << plotfilename << "\n";
 
 	// Update SFH data in metadata before writing
-	particleRegister_.writeSFHToMetadata(simulationMetadata_);
+	particleRegister_.writeSFHToMetadata(simulationMetadata_, sn_count_cumulative_);
 
 #ifdef QUOKKA_USE_OPENPMD
 	// TODO(bwibking): write particles using openPMD
@@ -4213,7 +4216,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 	}
 
 	// Update SFH data in metadata before writing
-	particleRegister_.writeSFHToMetadata(simulationMetadata_);
+	particleRegister_.writeSFHToMetadata(simulationMetadata_, sn_count_cumulative_);
 
 	// write Metadata file
 	WriteMetadataFile(checkpointname + "/metadata.yaml");
@@ -4661,7 +4664,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	}
 
 	// Read SFH data from metadata
-	last_sfh_time_ = particleRegister_.readSFH(simulationMetadata_);
+	last_sfh_time_ = particleRegister_.readSFH(simulationMetadata_, sn_count_cumulative_);
 #endif // AMREX_SPACEDIM == 3
 
 	areInitialConditionsDefined_ = true;
