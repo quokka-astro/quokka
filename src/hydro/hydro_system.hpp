@@ -1410,13 +1410,6 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			x1FSpds(i, j, k, 1) = fspd_p;
 		}
 
-		quokka::valarray<double, nHydroScalars_> F = F_canonical;
-
-		// permute momentum components according to flux direction DIR
-		F[velN_index] = F_canonical[x1Momentum_index];
-		F[velV_index] = F_canonical[x2Momentum_index];
-		F[velW_index] = F_canonical[x3Momentum_index];
-
 		// add artificial viscosity
 		// following Colella & Woodward (1984), eq. (4.2)
 		const double div_v = AMREX_D_TERM(du, +0.5 * (dvl + dvr), +0.5 * (dwl + dwr));
@@ -1441,7 +1434,14 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			}
 		}
 
-		F = F + viscosity * (U_L - U_R);
+		F_canonical = F_canonical + viscosity * (U_L - U_R);
+
+		quokka::valarray<double, nHydroScalars_> F = F_canonical;
+
+		// permute momentum components according to flux direction DIR
+		F[velN_index] = F_canonical[x1Momentum_index];
+		F[velV_index] = F_canonical[x2Momentum_index];
+		F[velW_index] = F_canonical[x3Momentum_index];
 
 		// set energy fluxes to zero if EOS is isothermal
 		if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
