@@ -1,7 +1,9 @@
-if (AMReX_SPACEDIM EQUAL 3)
-      add_executable(test_sne test_sne.cpp ${QuokkaObjSources})
-    if(AMReX_GPU_BACKEND MATCHES "CUDA")
-        setup_target_for_cuda_compilation(test_sne)
-    endif()
-    add_test(NAME MetalAdvectionProblem COMMAND test_sne metal_problem_ctest.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+if(AMReX_SPACEDIM EQUAL 3)
+  set(JOB_NAME MetalAdv)
+
+  add_executable(${JOB_NAME} test${JOB_NAME}.cpp ${QuokkaObjSources})
+  if(AMReX_GPU_BACKEND MATCHES "CUDA")
+    setup_target_for_cuda_compilation(${JOB_NAME})
+  endif()
+
 endif()
