@@ -48,7 +48,49 @@ jobs:
       condition: succeededOrFailed()
       artifact: regressionHTMLOutput
       displayName: 'Upload results to Azure Pipelines'
-    - script: cd /priv/avatar/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests/web && git add . && git commit -m 'updated results' && git push
+    - script: |
+        set -euo pipefail
+    
+        WEB_DIR="/priv/avatar/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests/web"
+        PAGES_BRANCH="main"
+        COMMIT_MSG="updated results"
+    
+        echo "==> cd ${WEB_DIR}"
+        cd "${WEB_DIR}"
+    
+        echo "==> git status (before)"
+        git status --porcelain=v1 || true
+    
+        # Prevent hangs on credential prompts in non-interactive CI
+        export GIT_TERMINAL_PROMPT=0
+    
+        echo "==> fetch origin/${PAGES_BRANCH}"
+        git fetch --prune origin "${PAGES_BRANCH}" || true
+    
+        TMP_BRANCH="pages-tmp-${BUILD_BUILDID:-manual}-$(date +%s)"
+        echo "==> creating orphan branch ${TMP_BRANCH}"
+        git checkout --orphan "${TMP_BRANCH}"
+    
+        # Reset index (keeps working tree files), then stage everything in web/
+        echo "==> reset index"
+        git reset --mixed
+    
+        echo "==> add all files"
+        git add -A
+    
+        echo "==> commit snapshot (if needed)"
+        if git diff --cached --quiet; then
+          echo "No changes to publish; skipping push."
+          exit 0
+        fi
+    
+        # Disable auto-gc to avoid extra background work during CI
+        git -c gc.auto=0 commit -m "${COMMIT_MSG}"
+    
+        echo "==> force-push snapshot to ${PAGES_BRANCH} with progress"
+        git push --force --progress origin "HEAD:${PAGES_BRANCH}"
+    
+        echo "==> done"
       condition: succeededOrFailed()
       displayName: 'Upload results to GitHub Pages'
     - template: templates/ccache-stats.yml
