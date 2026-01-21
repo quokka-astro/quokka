@@ -1,3 +1,3 @@
 if (AMReX_SPACEDIM EQUAL 3)
-    quokka_add_problem(JOB_NAME Turbulence)
+    quokka_add_problem(JOB_NAME Turbulence PRIORITY 1)
 endif()
