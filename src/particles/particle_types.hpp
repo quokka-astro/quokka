@@ -373,18 +373,18 @@ template <ParticleType particleType, typename problem_t> auto getParticleIntComp
 	amrex::Vector<std::string> names;
 
 	if constexpr (particleType == ParticleType::Rad) { // NOLINT
-		// No integer components
+							   // No integer components
 	}
 #if AMREX_SPACEDIM == 3
-	else if constexpr (particleType == ParticleType::CIC) { // NOLINT
-		// No integer components
+	else if constexpr (particleType == ParticleType::CIC) {	     // NOLINT
+								     // No integer components
 	} else if constexpr (particleType == ParticleType::CICRad) { // NOLINT
-		// No integer components
+								     // No integer components
 	} else if constexpr (particleType == ParticleType::StochasticStellarPop) {
 		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<StochasticStellarPopParticleIntIdx>();
 		names = {enum_names.begin(), enum_names.end()};
 	} else if constexpr (particleType == ParticleType::Sink) { // NOLINT
-		// No integer components
+								   // No integer components
 	} else if constexpr (particleType == ParticleType::Test) {
 		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<TestParticleIntIdx>();
 		names = {enum_names.begin(), enum_names.end()};
