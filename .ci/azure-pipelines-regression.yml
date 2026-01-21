@@ -60,7 +60,7 @@ jobs:
           exit 0
         fi
         echo "Committing changes..."
-        git -c user.name="ChongChong He" -c user.email="chongchonghe99@gmail.com" \
+        git -c user.name="Quokka CI Bot" -c user.email="quokka-ci-bot@quokka.dev" \
             commit --no-verify -m "updated results [skip ci]"
         echo "Pushing to GitHub Pages..."
         git -c core.askPass= push origin HEAD 2>&1 || {
