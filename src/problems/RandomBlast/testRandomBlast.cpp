@@ -49,7 +49,6 @@ constexpr Real cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
 constexpr Real rho0 = nH0 * (m_H / cloudy_H_mass_fraction); // g cm^-3
 
 template <> struct SimulationData<RandomBlast> {
-	int SN_counter_cumulative = 0;	 // Track cumulative number of SNe at current time
 	std::vector<int> SN_counter_arr; // Track cumulative number of SNe at all time
 
 	Real refine_threshold = 1.0; // gradient refinement threshold
@@ -112,8 +111,7 @@ template <> void QuokkaSimulation<RandomBlast>::createInitialStochasticStellarPo
 template <> void QuokkaSimulation<RandomBlast>::computeAfterTimestep()
 {
 	// Count how many SN went off in this timestep
-	userData_.SN_counter_cumulative += sn_count_;
-	userData_.SN_counter_arr.push_back(userData_.SN_counter_cumulative);
+	userData_.SN_counter_arr.push_back(sn_count_cumulative_); // cumulative number of SNe at current time
 }
 
 template <> void QuokkaSimulation<RandomBlast>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
