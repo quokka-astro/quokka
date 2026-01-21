@@ -1,5 +1,5 @@
 if(AMReX_SPACEDIM EQUAL 3)
-  quokka_add_problem(JOB_NAME DiskGalaxy ADD_TEST OFF)
+  quokka_add_problem(JOB_NAME DiskGalaxy PRIORITY 1 ADD_TEST OFF)
 
   # extract data files for regression testing
   file(
