@@ -3559,9 +3559,6 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 		amrex::Abort("PlotFileMFAtLevel_cc: Variable '" + varname + "' not found in any component list");
 	}
 
-	// Fill internal ghost cells after derived vars are computed on valid boxes.
-	plotMF.FillBoundary(geom[lev].periodicity());
-
 	return plotMF;
 }
 
@@ -3665,6 +3662,11 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF_cc(const
 		r_ptrs.push_back(&mf);
 	}
 	AverageDownDerived(r_ptrs, plotfileVarsToInclude_cc_);
+	if (included_ghosts > 0) {
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			r[lev].FillBoundary(geom[lev].periodicity());
+		}
+	}
 	return r;
 }
 
@@ -3807,6 +3809,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 			diagMFVec_raw.push_back(mf.get());
 		}
 		AverageDownDerived(diagMFVec_raw, m_diagVars);
+		for (int lev = 0; lev <= finestLevel(); ++lev) {
+			if (diagMFVec[lev]->nGrow() > 0) {
+				diagMFVec[lev]->FillBoundary(geom[lev].periodicity());
+			}
+		}
 		diagMFVec_ptr = GetVecOfConstPtrs(diagMFVec);
 	}
 
