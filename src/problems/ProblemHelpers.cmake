@@ -2,14 +2,11 @@
 # Usage:
 #   quokka_add_problem(
 #     JOB_NAME <name>
-#     [PRIORITY <0-9>]           # default: 9, lower runs first
+#     [PRIORITY <0-9>]           # default: 9, lower runs first (uses CTest COST property)
 #     [INPUT_FILE <input_file>]  # default: ${JOB_NAME}.in
 #     [ADD_TEST <ON|OFF>]        # default: ON
 #     [TEST_PARAMS <params>]     # default: ${QuokkaTestParams}
 #   )
-#
-# Tests are registered and added later via quokka_add_registered_tests(),
-# sorted by priority (ascending) then by name (alphabetical).
 function(quokka_add_problem)
   cmake_parse_arguments(PARSE_ARGV 0 ARG "" "JOB_NAME;PRIORITY;INPUT_FILE;ADD_TEST;TEST_PARAMS" "")
 
@@ -40,30 +37,11 @@ function(quokka_add_problem)
     setup_target_for_cuda_compilation(${ARG_JOB_NAME})
   endif()
 
-  # Register test for later sorted addition
+  # Add test with priority using CTest COST property
   if(_add_test)
-    set_property(GLOBAL APPEND PROPERTY QUOKKA_TEST_KEYS "${ARG_PRIORITY}_${ARG_JOB_NAME}")
-    set_property(GLOBAL PROPERTY QUOKKA_TEST_${ARG_JOB_NAME}_INPUT "${ARG_INPUT_FILE}")
-    set_property(GLOBAL PROPERTY QUOKKA_TEST_${ARG_JOB_NAME}_PARAMS "${ARG_TEST_PARAMS}")
-  endif()
-endfunction()
-
-# Add all registered tests sorted by priority then name
-function(quokka_add_registered_tests)
-  get_property(_keys GLOBAL PROPERTY QUOKKA_TEST_KEYS)
-  if(NOT _keys)
-    return()
-  endif()
-
-  list(SORT _keys)
-
-  foreach(_key ${_keys})
-    string(REGEX REPLACE "^[0-9]_" "" _name "${_key}")
-    get_property(_input GLOBAL PROPERTY QUOKKA_TEST_${_name}_INPUT)
-    get_property(_params GLOBAL PROPERTY QUOKKA_TEST_${_name}_PARAMS)
-
-    add_test(NAME ${_name}
-      COMMAND ${_name} ../inputs/${_input} ${_params}
+    add_test(NAME ${ARG_JOB_NAME}
+      COMMAND ${ARG_JOB_NAME} ../inputs/${ARG_INPUT_FILE} ${ARG_TEST_PARAMS}
       WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-  endforeach()
+    set_tests_properties(${ARG_JOB_NAME} PROPERTIES COST ${ARG_PRIORITY})
+  endif()
 endfunction()

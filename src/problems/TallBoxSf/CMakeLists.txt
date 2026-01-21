@@ -1,4 +1,6 @@
 if (AMReX_SPACEDIM EQUAL 3)
+    # Note: Cannot use quokka_add_problem() due to additional source file requirement
+    # Priority: 0 (high priority test)
     add_executable(TallBoxSf testTallBoxSf.cpp ../../turbulence/TurbDataReader.cpp ${QuokkaObjSources})
     if(AMReX_GPU_BACKEND MATCHES "CUDA")
         setup_target_for_cuda_compilation(TallBoxSf)
@@ -14,6 +16,10 @@ if (AMReX_SPACEDIM EQUAL 3)
     add_test(NAME TallBoxSf COMMAND TallBoxSf ../inputs/TallBoxSf.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 
     # Ensure perturbations are computed before simulation runs
-    set_tests_properties(ComputeTallBoxSfPerturbations PROPERTIES FIXTURES_SETUP TallBoxSf_fixture)
-    set_tests_properties(TallBoxSf PROPERTIES FIXTURES_REQUIRED TallBoxSf_fixture)
+    set_tests_properties(ComputeTallBoxSfPerturbations PROPERTIES 
+        FIXTURES_SETUP TallBoxSf_fixture
+        COST 0)
+    set_tests_properties(TallBoxSf PROPERTIES 
+        FIXTURES_REQUIRED TallBoxSf_fixture
+        COST 0)
 endif()

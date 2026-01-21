@@ -31,6 +31,3 @@ foreach(child ${children})
   endif()
 
 endforeach()
-
-# Add all registered tests, sorted by priority (ascending) then by name (alphabetical)
-quokka_add_registered_tests()

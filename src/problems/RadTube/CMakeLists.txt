@@ -1,1 +1,1 @@
-quokka_add_problem(JOB_NAME RadTube PRIORITY 1)
+quokka_add_problem(JOB_NAME RadTube)
