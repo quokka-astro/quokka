@@ -507,11 +507,19 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
+	// Get real component names for this particle type using unified template function
+	[[nodiscard]] static auto getRealCompNames() -> amrex::Vector<std::string> { return getParticleRealCompNames<particleType_, problem_t>(); }
+
+	// Get int component names for this particle type using unified template function
+	[[nodiscard]] static auto getIntCompNames() -> amrex::Vector<std::string> { return getParticleIntCompNames<particleType_, problem_t>(); }
+
 	// Implementation of particle data output to plot file
 	void writePlotFile(const std::string &plotfilename, const std::string &name) override
 	{
 		if (container_ != nullptr) {
-			container_->WritePlotFile(plotfilename, name);
+			const amrex::Vector<std::string> real_comp_names = getRealCompNames();
+			const amrex::Vector<std::string> int_comp_names = getIntCompNames();
+			container_->WritePlotFile(plotfilename, name, real_comp_names, int_comp_names);
 		}
 	}
 
@@ -519,7 +527,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	void writeCheckpoint(const std::string &checkpointname, const std::string &name, bool include_header) override
 	{
 		if (container_ != nullptr) {
-			container_->Checkpoint(checkpointname, name, include_header);
+			const amrex::Vector<std::string> real_comp_names = getRealCompNames();
+			const amrex::Vector<std::string> int_comp_names = getIntCompNames();
+			container_->Checkpoint(checkpointname, name, include_header, real_comp_names, int_comp_names);
 		}
 	}
 
@@ -1124,8 +1134,10 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Write SFH data from memory to metadata
-	void writeSFHToMetadata(YAML::Node &metadata) const
+	void writeSFHToMetadata(YAML::Node &metadata, int sn_count_cumulative) const
 	{
+		metadata["sn_count_cumulative"] = sn_count_cumulative;
+
 		if (!HasFormationParticles()) {
 			return;
 		}
@@ -1147,8 +1159,12 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Read SFH data from metadata and return the last time
-	auto readSFH(const YAML::Node &metadata) -> Real
+	auto readSFH(const YAML::Node &metadata, int &sn_count_cumulative) -> Real
 	{
+		if (metadata["sn_count_cumulative"]) {
+			sn_count_cumulative = metadata["sn_count_cumulative"].as<int>();
+		}
+
 		if (!HasFormationParticles()) {
 			return 0.0;
 		}
