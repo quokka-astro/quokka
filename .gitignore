@@ -103,3 +103,6 @@ KokkosCore_config.tmp
 *.exe
 *.out
 *.app
+
+# hdf5 files
+*.hdf5
