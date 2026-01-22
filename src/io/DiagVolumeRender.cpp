@@ -56,9 +56,8 @@ void DiagVolumeRender::init(const std::string &a_prefix, std::string_view a_diag
 		m_upVector = amrex::RealVect(AMREX_D_DECL(upVec[0], upVec[1], upVec[2]));
 	}
 
-	bool const hasCameraParams =
-	    (pp.countval("camera_eye") > 0) || (pp.countval("camera_look_at") > 0) || (pp.countval("camera_up") > 0) ||
-	    (pp.countval("camera_fov_y_degrees") > 0) || (pp.countval("camera_near") > 0) || (pp.countval("camera_far") > 0);
+	bool const hasCameraParams = (pp.countval("camera_eye") > 0) || (pp.countval("camera_look_at") > 0) || (pp.countval("camera_up") > 0) ||
+				     (pp.countval("camera_fov_y_degrees") > 0) || (pp.countval("camera_near") > 0) || (pp.countval("camera_far") > 0);
 	if (hasCameraParams) {
 		bool const hasEye = (pp.countval("camera_eye") > 0);
 		bool const hasLookAt = (pp.countval("camera_look_at") > 0);
