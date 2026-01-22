@@ -85,6 +85,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::createInitialCICParticles()
 {
 	// read particles from ASCII file
 	const int nreal_extra = 4; // mass vx vy vz
+	CICParticles->SetVerbose(1);
 	CICParticles->InitFromAsciiFile("../inputs/BinaryOrbit_particles.txt", nreal_extra, nullptr);
 
 	// test particle splitting
