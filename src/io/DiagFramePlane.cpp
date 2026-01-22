@@ -75,17 +75,6 @@ void DiagFramePlane::init(const std::string &a_prefix, std::string_view a_diagNa
 		m_center[m_normal] = center[0];
 	}
 
-	// Interpolation
-	std::string intType = "Quadratic";
-	pp.query("interpolation", intType);
-	if (intType == "Linear") {
-		m_interpType = Linear;
-	} else if (intType == "Quadratic") {
-		m_interpType = Quadratic;
-	} else {
-		amrex::Abort("Unknown interpolation type for " + a_prefix);
-	}
-
 	// Read particle types to include (optional, default to empty = no particles)
 	int const nParticleTypes = pp.countval("particles");
 	if (nParticleTypes > 0) {
@@ -171,26 +160,19 @@ void DiagFramePlane::prepare(int a_nlevels, const amrex::Vector<amrex::Geometry>
 		int const k0 = static_cast<int>(std::round(dist));
 		dist -= static_cast<amrex::Real>(k0);
 		m_k0[lev] = k0;
-		if (m_interpType == Quadratic) {
-			// Quadratic interp. weights on k0-1, k0, k0+1 with dist in [-0.5, 0.5]
-			m_intwgt[lev][0] = 0.5 * dist * (dist - 1.0);
-			m_intwgt[lev][1] = 1.0 - dist * dist;
-			m_intwgt[lev][2] = 0.5 * dist * (dist + 1.0);
-		} else if (m_interpType == Linear) {
-			// linear interp. weights on k0-1, k0, k0+1
-			if (dist > 0.0) {
-				m_intwgt[lev][0] = 0.0;
-				m_intwgt[lev][1] = 1.0 - dist;
-				m_intwgt[lev][2] = dist;
-			} else if (dist < 0.0) {
-				m_intwgt[lev][0] = -dist;
-				m_intwgt[lev][1] = 1.0 + dist;
-				m_intwgt[lev][2] = 0.0;
-			} else {
-				m_intwgt[lev][0] = 0.0;
-				m_intwgt[lev][1] = 1.0;
-				m_intwgt[lev][2] = 0.0;
-			}
+		// linear interp. weights on k0-1, k0, k0+1
+		if (dist > 0.0) {
+			m_intwgt[lev][0] = 0.0;
+			m_intwgt[lev][1] = 1.0 - dist;
+			m_intwgt[lev][2] = dist;
+		} else if (dist < 0.0) {
+			m_intwgt[lev][0] = -dist;
+			m_intwgt[lev][1] = 1.0 + dist;
+			m_intwgt[lev][2] = 0.0;
+		} else {
+			m_intwgt[lev][0] = 0.0;
+			m_intwgt[lev][1] = 1.0;
+			m_intwgt[lev][2] = 0.0;
 		}
 	}
 
