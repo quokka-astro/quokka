@@ -1836,20 +1836,28 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		// handle periodic boundaries and fine-fine boundaries. Physical boundaries
 		// use homogeneous Dirichlet conditions (phi = 0) consistent with the solve.
 		for (int lev = 0; lev <= finest_level; ++lev) {
-			// Fill periodic boundaries and fine-fine interfaces
+			// Fill ghost cells at periodic boundaries and fine-fine interfaces
+			// This copies data from opposite side of domain (periodic) and neighboring boxes (fine-fine)
 			phi[lev].FillBoundary(geom[lev].periodicity());
 
 			// Apply physical boundary conditions to phi at non-periodic boundaries
 			// This enforces homogeneous Dirichlet (phi = 0) conditions
+			// Only execute if at least one dimension has non-periodic (physical) boundaries
 			if (!geom[lev].isAllPeriodic()) {
+				// Set up boundary condition types for phi (reuse hydro BCs)
 				amrex::Vector<amrex::BCRec> phiBC(1);
 				for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+					// Copy BC types from hydro: periodic dims will have BCType::int_dir,
+					// non-periodic dims will have physical BC types (e.g., BCType::foextrap)
 					phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
 					phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
 				}
 
+				// Create boundary functor that sets ghost cells to zero (homogeneous Dirichlet BC)
 				amrex::GpuBndryFuncFab<setFunctorPhiZero> boundaryFunctor(setFunctorPhiZero{});
 				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiZero>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
+				// Apply boundary functor: PhysBCFunct internally checks BCRec and only fills
+				// ghost cells at physical (non-periodic) boundaries; periodic dims are skipped
 				phiBdryFunct(phi[lev], 0, 1, phi[lev].nGrowVect(), 0., 0);
 			}
 		}
@@ -1920,31 +1928,50 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		// This handles coarse-fine boundaries without InterpFromCoarseLevel
 		if (lev == 0) {
 			// Base level: just copy real cells and and fill boundaries in periodic dimensions
+			// Copy valid cells from phi to phi_extended (no ghost cells copied)
 			amrex::MultiFab::Copy(phi_extended, phi[lev], 0, 0, 1, 0);
+			
+			// Fill ghost cells at periodic boundaries and fine-fine interfaces
+			// This copies data from opposite side of domain (periodic) and neighboring boxes (fine-fine)
 			phi_extended.FillBoundary(geom[lev].periodicity());
 
-			// Apply physical boundary conditions to phi
-			amrex::Vector<amrex::BCRec> phiBC(1);
-			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-				phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
-				phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
-			}
+			// Apply physical boundary conditions to phi at non-periodic boundaries
+			// Only execute if at least one dimension has non-periodic (physical) boundaries
+			if (!geom[lev].isAllPeriodic()) {
+				// Set up boundary condition types for phi (reuse hydro BCs)
+				amrex::Vector<amrex::BCRec> phiBC(1);
+				for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+					// Copy BC types from hydro: periodic dims will have BCType::int_dir,
+					// non-periodic dims will have physical BC types (e.g., BCType::foextrap)
+					phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
+					phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
+				}
 
-			amrex::GpuBndryFuncFab<setFunctorPhiZero> boundaryFunctor(setFunctorPhiZero{});
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiZero>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
-			phiBdryFunct(phi_extended, 0, 1, phi_extended.nGrowVect(), 0., 0);
+				// Create boundary functor that sets ghost cells to zero (homogeneous Dirichlet BC)
+				amrex::GpuBndryFuncFab<setFunctorPhiZero> boundaryFunctor(setFunctorPhiZero{});
+				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiZero>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
+				// Apply boundary functor: PhysBCFunct internally checks BCRec and only fills
+				// ghost cells at physical (non-periodic) boundaries; periodic dims are skipped
+				phiBdryFunct(phi_extended, 0, 1, phi_extended.nGrowVect(), 0., 0);
+			}
 		} else {
 			// Fine level: use FillPatchTwoLevels to properly handle coarse-fine boundaries
+			// Note: FillPatchTwoLevels requires boundary functors as arguments even for periodic domains
+			// Set up boundary condition types for phi (reuse hydro BCs)
 			amrex::Vector<amrex::BCRec> phiBC(1);
 			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 				phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
 				phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
 			}
 
+			// Create boundary functor that sets ghost cells to zero (homogeneous Dirichlet BC)
 			amrex::GpuBndryFuncFab<setFunctorPhiZero> boundaryFunctor(setFunctorPhiZero{});
 			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiZero>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
 			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiZero>> phiCoarseBdryFunct(geom[lev - 1], phiBC, boundaryFunctor);
 
+			// FillPatchTwoLevels handles: (1) interpolation from coarse level at coarse-fine boundaries,
+			// (2) copying from same-level neighbors at fine-fine boundaries, (3) periodic boundaries,
+			// (4) physical boundaries via the provided functors (only applied to non-periodic dims)
 			amrex::FillPatchTwoLevels(phi_extended, 0., {&phi[lev - 1]}, {0.}, {&phi[lev]}, {0.}, 0, 0, 1, geom[lev - 1], geom[lev],
 						  phiCoarseBdryFunct, 0, phiBdryFunct, 0, refRatio(lev - 1), &amrex::quadratic_interp, phiBC, 0);
 		}
