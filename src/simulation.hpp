@@ -3863,7 +3863,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 				continue;
 			}
 
-			auto *volumeRenderDiag = dynamic_cast<DiagVolumeRender *>(diag.get());
+			auto *volumeRenderDiag = dynamic_cast<DiagVolumeRender *>(diag);
 			if (volumeRenderDiag != nullptr) {
 				volumeRenderDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 				continue;
