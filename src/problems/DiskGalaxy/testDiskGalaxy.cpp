@@ -93,7 +93,7 @@ template <> struct SimulationData<AgoraGalaxy> {
 	amrex::Gpu::PinnedVector<amrex::Real> velr_halo;
 	amrex::Gpu::PinnedVector<amrex::Real> temp_halo;
 
-	std::string haloVphiExpr{};
+	std::string haloVphiExpr;
 	bool useHaloVphiParser = false;
 	std::optional<amrex::Parser> haloVphiParser;
 	std::optional<amrex::ParserExecutor<3>> haloVphiParserExe;
@@ -253,7 +253,11 @@ template <> void QuokkaSimulation<AgoraGalaxy>::setInitialConditionsOnGrid(quokk
 	const bool use_halo_vphi_parser = userData_.useHaloVphiParser;
 	amrex::ParserExecutor<3> halo_vphi_parser{};
 	if (use_halo_vphi_parser) {
-		halo_vphi_parser = userData_.haloVphiParserExe.value();
+		if (userData_.haloVphiParserExe.has_value()) {
+			halo_vphi_parser = *userData_.haloVphiParserExe;
+		} else {
+			amrex::Abort("agora_galaxy.halo_vphi_expr: parser executor is missing after compile<3>()");
+		}
 	}
 
 	const amrex::Box &indexRange = grid_elem.indexRange_;
