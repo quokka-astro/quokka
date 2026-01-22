@@ -68,7 +68,7 @@ jobs:
         if: ${{ matrix.language == 'cpp' }}
         run: |
           sudo apt-get update
-          sudo apt-get install --yes cmake openmpi-bin libopenmpi-dev libhdf5-openmpi-dev
+          sudo apt-get install --yes cmake openmpi-bin libopenmpi-dev libhdf5-openmpi-dev libpng-dev
           .github/workflows/dependencies/dependencies_ccache.sh
           sudo ln -s /usr/local/bin/ccache /usr/local/bin/g++
 
