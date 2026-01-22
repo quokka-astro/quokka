@@ -1,6 +1,8 @@
 # Include helper functions for problems
 include(${CMAKE_CURRENT_SOURCE_DIR}/ProblemHelpers.cmake)
 
+add_subdirectory(ParticleStar)
+
 add_subdirectory(Advection)
 add_subdirectory(Advection2D)
 add_subdirectory(AdvectionSemiellipse)
