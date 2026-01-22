@@ -1822,7 +1822,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		// Fill ghost cells of phi after solve
 		// This is necessary for computing gradients in applyPoissonGravityAtLevel
 		// and for particle acceleration in kickParticlesAllLevels
-		// 
+		//
 		// Note: For AMR cases, the MLMG solver ensures that values are consistent
 		// across coarse-fine boundaries in the valid cells. FillBoundary will properly
 		// handle periodic boundaries and fine-fine boundaries. Physical boundaries
@@ -1922,7 +1922,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			// Base level: just copy real cells and and fill boundaries in periodic dimensions
 			// Copy valid cells from phi to phi_extended (no ghost cells copied)
 			amrex::MultiFab::Copy(phi_extended, phi[lev], 0, 0, 1, 0);
-			
+
 			// Fill ghost cells at periodic boundaries and fine-fine interfaces
 			// This copies data from opposite side of domain (periodic) and neighboring boxes (fine-fine)
 			phi_extended.FillBoundary(geom[lev].periodicity());
