@@ -1799,8 +1799,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level), openbc_info);
 			if (verbose) {
 				poissonSolver.setVerbose(1);
-				poissonSolver.setBottomVerbose(0);
+			} else {
+				poissonSolver.setVerbose(0);
 			}
+			poissonSolver.setBottomVerbose(0);
 
 			amrex::Real abstol = abstolPoisson_ * rhs_min;
 			poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
