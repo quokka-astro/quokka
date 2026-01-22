@@ -7,12 +7,8 @@
 /// \brief Defines a simulation using the AGORA isolated galaxy initial conditions.
 ///
 
-#include <algorithm>
 #include <cmath>
-#include <fstream>
-#include <limits>
 #include <optional>
-#include <sstream>
 
 #include "AMReX_Array.H"
 #include "AMReX_BLassert.H"
@@ -102,47 +98,20 @@ template <> struct SimulationData<AgoraGalaxy> {
 template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 {
 	// 1. read in circular velocity table "vcirc.dat"
-	std::vector<amrex::Real> radius_h;
-	std::vector<amrex::Real> vcirc_h;
-	std::vector<amrex::Real> rho_h;
-	std::vector<amrex::Real> velr_h;
-	std::vector<amrex::Real> temp_h;
-
 	// get circular velocity profile filename from ParmParse
 	amrex::ParmParse const pp("agora_galaxy");
 	std::string filename;
 	pp.query("vcirc_file", filename);
 
-	std::ifstream fstream(filename, std::ios::in);
-	AMREX_ALWAYS_ASSERT(fstream.is_open());
-	for (std::string line; std::getline(fstream, line);) {
-		std::istringstream iss(line);
-		std::vector<double> values;
-
-		for (double value = NAN; iss >> value;) {
-			values.push_back(value);
-		}
-		if (values.empty()) {
-			continue;
-		}
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(values.size() == 5,
-						 "agora_galaxy.vcirc_file must have 5 columns per row (R, vcirc, rho_halo, velr_halo, temp_halo).");
-		Real const R_val = values.at(0);
-		Real const vcirc_val = values.at(1);
-		Real const rho_val = values.at(2);
-		Real const velr_val = values.at(3);
-		Real const temp_val = values.at(4);
-
-		radius_h.push_back(R_val);
-		vcirc_h.push_back(vcirc_val);
-		rho_h.push_back(rho_val);
-		velr_h.push_back(velr_val);
-		temp_h.push_back(temp_val);
-	}
+	auto halo_table =
+	    quokka::DataTable<1, 4, quokka::OutOfBounds::clamp>::CSVReader(filename, quokka::SpacingType::linear);
+	auto const halo_table_const = halo_table.const_tables();
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(halo_table_const.sizes[0] > 0, "agora_galaxy.vcirc_file contained no numeric rows.");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(halo_table_const.spacing_types[0] == quokka::SpacingType::linear,
+					 "agora_galaxy.vcirc_file must use linear spacing for the radius coordinate.");
 
 	// 2. copy data to simData_.radius and simData_.vcirc
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!radius_h.empty(), "agora_galaxy.vcirc_file contained no numeric rows.");
-	const size_t N = radius_h.size();
+	const size_t N = static_cast<size_t>(halo_table_const.sizes[0]);
 	userData_.radius.resize(N);
 	userData_.vcirc.resize(N);
 	userData_.rho_halo.resize(N);
@@ -152,27 +121,26 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 	const double length_unit = 1.0e3 * C::parsec; // kpc
 	const double vel_unit = 1.0e5;		      // km/s
 	for (size_t i = 0; i < N; ++i) {
-		userData_.radius[i] = radius_h[i] * length_unit;
-		userData_.vcirc[i] = vcirc_h[i] * vel_unit;
-		userData_.rho_halo[i] = rho_h[i];
-		userData_.velr_halo[i] = velr_h[i];
-		userData_.temp_halo[i] = temp_h[i];
+		amrex::Real const radius = halo_table_const.coord_min[0] + static_cast<amrex::Real>(i) * halo_table_const.dcoord[0];
+		userData_.radius[i] = radius * length_unit;
+		userData_.vcirc[i] = halo_table_const.dataViewArrays[0](static_cast<int>(i)) * vel_unit;
+		userData_.rho_halo[i] = halo_table_const.dataViewArrays[1](static_cast<int>(i));
+		userData_.velr_halo[i] = halo_table_const.dataViewArrays[2](static_cast<int>(i));
+		userData_.temp_halo[i] = halo_table_const.dataViewArrays[3](static_cast<int>(i));
 	}
 
 	// save min/max radii
-	auto min_result = std::min_element(radius_h.begin(), radius_h.end());
-	userData_.r_inner = (*min_result) * length_unit;
-	userData_.vcirc_inner = vcirc_h[std::distance(radius_h.begin(), min_result)] * vel_unit;
-	userData_.rho_inner = rho_h[std::distance(radius_h.begin(), min_result)];
-	userData_.velr_inner = velr_h[std::distance(radius_h.begin(), min_result)];
-	userData_.temp_inner = temp_h[std::distance(radius_h.begin(), min_result)];
+	userData_.r_inner = halo_table_const.coord_min[0] * length_unit;
+	userData_.vcirc_inner = halo_table_const.dataViewArrays[0](0) * vel_unit;
+	userData_.rho_inner = halo_table_const.dataViewArrays[1](0);
+	userData_.velr_inner = halo_table_const.dataViewArrays[2](0);
+	userData_.temp_inner = halo_table_const.dataViewArrays[3](0);
 
-	auto max_result = std::max_element(radius_h.begin(), radius_h.end());
-	userData_.r_outer = (*max_result) * length_unit;
-	userData_.vcirc_outer = vcirc_h[std::distance(radius_h.begin(), max_result)] * vel_unit;
-	userData_.rho_outer = rho_h[std::distance(radius_h.begin(), max_result)];
-	userData_.velr_outer = velr_h[std::distance(radius_h.begin(), max_result)];
-	userData_.temp_outer = temp_h[std::distance(radius_h.begin(), max_result)];
+	userData_.r_outer = halo_table_const.coord_max[0] * length_unit;
+	userData_.vcirc_outer = halo_table_const.dataViewArrays[0](static_cast<int>(N - 1)) * vel_unit;
+	userData_.rho_outer = halo_table_const.dataViewArrays[1](static_cast<int>(N - 1));
+	userData_.velr_outer = halo_table_const.dataViewArrays[2](static_cast<int>(N - 1));
+	userData_.temp_outer = halo_table_const.dataViewArrays[3](static_cast<int>(N - 1));
 
 	// optional halo v_phi expression (variables: x, y, z)
 	userData_.haloVphiExpr.clear();
