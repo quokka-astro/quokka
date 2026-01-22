@@ -49,6 +49,9 @@ template <> struct SimulationData<TheProblem> {
 	// Galaxy parameters (default is solar neighborhood)
 	Real rho01 = 4.320441e-24; // 2.58 m_p/cm^3
 	Real sigma1 = 700000.0;
+
+	// Boost velocity (cm/s)
+	std::array<Real, AMREX_SPACEDIM> boost_velocity{0.0, 0.0, 0.0};
 };
 
 template <> struct Particle_Traits<TheProblem> {
@@ -105,10 +108,16 @@ template <> void QuokkaSimulation<TheProblem>::createInitialStochasticStellarPop
 
 			auto *pdata = particle_array().data();
 
-			// Launch GPU kernel to set integer components
+			// Copy boost velocity for GPU kernel
+			const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_vel{userData_.boost_velocity[0], userData_.boost_velocity[1], userData_.boost_velocity[2]};
+
+			// Launch GPU kernel to set integer components and apply boost velocity
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
 				auto &p = pdata[i]; // NOLINT
 				p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+				p.rdata(quokka::TestParticleVxIdx) += boost_vel[0];
+				p.rdata(quokka::TestParticleVyIdx) += boost_vel[1];
+				p.rdata(quokka::TestParticleVzIdx) += boost_vel[2];
 			});
 		}
 	}
@@ -234,6 +243,9 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	// Create GPU const tables for initial conditions if available
 	const auto &ic_table = userData_.ic_table.const_tables();
 
+	// Copy boost velocity for GPU kernel
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_vel{userData_.boost_velocity[0], userData_.boost_velocity[1], userData_.boost_velocity[2]};
+
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const z = prob_lo[2] + ((k + static_cast<amrex::Real>(0.5)) * dx[2]);
 
@@ -260,9 +272,9 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 		const int turb_i = turb_lo[0] + (i % nturb);
 		const int turb_j = turb_lo[1] + (j % nturb);
 		const int turb_k = turb_lo[2] + (k % nturb);
-		const double vx = dvx(turb_i, turb_j, turb_k) * renorm_factor;
-		const double vy = dvy(turb_i, turb_j, turb_k) * renorm_factor;
-		const double vz = dvz(turb_i, turb_j, turb_k) * renorm_factor;
+		const double vx = dvx(turb_i, turb_j, turb_k) * renorm_factor + boost_vel[0];
+		const double vy = dvy(turb_i, turb_j, turb_k) * renorm_factor + boost_vel[1];
+		const double vz = dvz(turb_i, turb_j, turb_k) * renorm_factor + boost_vel[2];
 
 		state_cc(i, j, k, HydroSystem<TheProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<TheProblem>::x1Momentum_index) = rho * vx;
@@ -428,6 +440,12 @@ auto problem_main() -> int
 	pp.query("IC_file", sim.userData_.IC_file);
 	pp.query("rho01", sim.userData_.rho01);
 	pp.query("sigma1", sim.userData_.sigma1);
+	std::vector<amrex::Real> boost_velocity_vec(AMREX_SPACEDIM, 0.0);
+	if (pp.queryarr("boost_velocity", boost_velocity_vec) != 0) {
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			sim.userData_.boost_velocity[dir] = boost_velocity_vec[dir];
+		}
+	}
 
 	// preCalculate must be explicitly called here to ensure
 	// ic_table is initialized even when restarting from checkpoint
