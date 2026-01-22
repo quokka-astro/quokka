@@ -1,16 +1,17 @@
 # In-situ analysis
 
-*In-situ analysis* refers to analyzing the simulations as they are running. There are two options: using the *runtime diagnostics* that are built-in to Quokka, and volume rendering using *Ascent*, a third-party library.
+*In-situ analysis* refers to analyzing the simulations as they are running. Quokka has several built-in runtime diagnostics for this purpose.
 
 ## Diagnostics
 
 Most of Quokka's diagnostics are adapted from the implementation included in the *Pele* suite of AMReX-based combustion codes. (See the documentation for [PeleLMeX diagnostics](https://amrex-combustion.github.io/PeleLMeX/manual/html/LMeXControls.html#run-time-diagnostics) for an explanation of the original implementation.)
 
-There are three built-in diagnostics that can be configured to output at periodic intervals while the simulation is running:
+There are four built-in diagnostics that can be configured to output at periodic intervals while the simulation is running:
 
 - axis-aligned 2D projections
 - axis-aligned 2D slices, and
-- N-dimensional probability distribution functions (PDFs).
+- N-dimensional probability distribution functions (PDFs), and
+- volume renderings via the AMReX volume renderer.
 
 ### 2D Projections
 
@@ -104,65 +105,29 @@ quokka.hist_temp.dense.field_name = gasDensity         # Filter field
 quokka.hist_temp.dense.value_greater = 1e-25           # Filters: value_greater, value_less, value_inrange
 ```
 
-## Volume Rendering (Ascent)
+### Volume Rendering
 
-!!! Warning
-    Ascent should only be used for volume rendering.  Other visualization features are not expected to work correctly, since we do **not** pass ghost cells to Ascent.
+This diagnostic generates raytraced volume renderings (one image per output interval) using the AMReX volume renderer. It requires `AMREX_SPACEDIM=3` and outputs images to the diagnostic file prefix with the selected `output_ext`. As with other diagnostics, include the diagnostic name in `quokka.diagnostics` to enable it.
 
-Ascent allows you to generate raytraced volume renderings (saved as a sequence of PNG images) while the simulation is running.
+*Example input file configuration:*
 
-![](media/volume_render_sphere.png)
-
-*A volume rendering of the `SphericalCollapse` problem.*
-
-### Compiling Ascent on an HPC cluster
-
-1.  Download Spack and activate it in your environment.
-2.  Run `spack external find`.
-3.  Make sure there are entries listed for `slurm` and `mpi` in your `~/.spack/packages.yaml` file.
-4.  Add [buildable: False](https://spack.readthedocs.io/en/latest/build_settings.html#external-packages) to these entries.
-5.  Run `spack fetch --dependencies ascent@develop`
-6.  On a dedicated compute node, run `spack install ascent@develop`
-
-If you are running your simulation on GPU nodes, you should add either `+cuda` or `+rocm` to the Spack spec, e.g. `spack install ascent@develop+cuda`, depending on whether you are running on NVIDIA or AMD GPUs, respectively.
-
-### Compiling Quokka with Ascent support
-
-1.  Load Ascent: `spack load ascent`
-2.  Add `-DAMReX_ASCENT=ON -DAMReX_CONDUIT=ON` to your CMake options.
-3.  Compile your problem, e.g.: `ninja -j4 test_hydro3d_blast`
-
-### Running with Ascent
-
-Add `ascent_interval = N` to your ParmParse input file, where `N` is the number of coarse timesteps between Ascent outputs.
-
-### Customizing the rendering
-
-Add an [ascent_actions.yaml file](https://ascent.readthedocs.io/en/latest/Actions/Actions.html) to the simulation working directory. This example actions file will create a volume rendering with the given camera parameters:
-
-```yaml
-- action: "add_extracts"
-  extracts:
-    my_volume_extract:
-      type: "volume"
-      params:
-        field: "gasDensity"
-        filename: "volume%05d"
-        image_width: 512
-        image_height: 512
-        camera:
-          look_at: [0.5, 0.5, 0.5]
-          position: [-1.2, 0.499, 0.501]
-          up: [0.0, 0.0, 1.0]
-          fov: 60.0
-          xpan: 0.0
-          ypan: 0.0
-          zoom: 1.0
-          azimuth: 0.0
-          elevation: 0.0
-          near_plane: 0.01
-          far_plane: 10.0
+``` ini
+quokka.volrender.type = VolumeRender
+quokka.volrender.field = gasDensity
+quokka.volrender.scalar_range = 1.0e-23 1.0e-28
+quokka.volrender.log_scale_input = 1
+quokka.volrender.box_transparency = 0.7
+quokka.volrender.int = 10
+quokka.volrender.width = 512
+quokka.volrender.height = 512
+quokka.volrender.output_ext = png
+quokka.volrender.min_level = 4
+quokka.volrender.max_level = 5
+quokka.volrender.camera_up = 0 0 1
+# (optional)
+# quokka.volrender.camera_eye = 0.0 0.0 5.0e23
+# quokka.volrender.camera_look_at = 0.0 0.0 0.0
+# quokka.volrender.camera_fov_y_degrees = 40.0
+# quokka.volrender.camera_near = 1.0e22
+# quokka.volrender.camera_far = 5.0e24
 ```
-
-!!! Warning
-    The `ascent_actions.yaml` file can be edited while the simulation is running, and the updated parameters will be used for subsequent renders. If invalid values are given, renders may stop working without notice.
