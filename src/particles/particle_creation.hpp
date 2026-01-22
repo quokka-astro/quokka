@@ -408,8 +408,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			const amrex::Real cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k, fab_fc);
 			const amrex::Real LambdaJ = cs / std::sqrt(C::Gconst * cell_density);
 			const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * cell_density));
-			const amrex::Real lambda = (eps_ff_ / eps_star) / t_ff;
-			const amrex::Real prob_star_formation = 1.0 - std::exp(-lambda * dt);
+			const amrex::Real prob_star_formation = (eps_ff_ / eps_star) * (dt / t_ff);
 			const amrex::Real random_draw = amrex::Random(engine);
 			int num_star = 0;
 
