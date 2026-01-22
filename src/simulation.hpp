@@ -1778,11 +1778,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 
 			// Create MLMG solver
 			amrex::MLMG mlmg(mlpoisson);
-			if (verbose) {
-				mlmg.setVerbose(1);
-			} else {
-				mlmg.setVerbose(0);
-			}
+			mlmg.setVerbose(verbose);
 			mlmg.setBottomVerbose(0);
 
 			// Set solver parameters optimized for gravity problems
@@ -1812,11 +1808,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			amrex::LPInfo openbc_info;
 			openbc_info.setDeterministic(true); // Enable deterministic mode for bitwise reproducibility
 			amrex::OpenBCSolver poissonSolver(Geom(0, finest_level), boxArray(0, finest_level), DistributionMap(0, finest_level), openbc_info);
-			if (verbose) {
-				poissonSolver.setVerbose(1);
-			} else {
-				poissonSolver.setVerbose(0);
-			}
+			poissonSolver.setVerbose(verbose);
 			poissonSolver.setBottomVerbose(0);
 
 			amrex::Real abstol = abstolPoisson_ * rhs_min;
