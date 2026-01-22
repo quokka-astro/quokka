@@ -1765,8 +1765,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			amrex::MLMG mlmg(mlpoisson);
 			if (verbose) {
 				mlmg.setVerbose(1);
-				mlmg.setBottomVerbose(0);
+			} else {
+				mlmg.setVerbose(0);
 			}
+			mlmg.setBottomVerbose(0);
 
 			// Set solver parameters optimized for gravity problems
 			// mlmg.setMaxIter(200);
