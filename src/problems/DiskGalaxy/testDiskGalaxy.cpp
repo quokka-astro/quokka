@@ -111,7 +111,7 @@ template <> void QuokkaSimulation<AgoraGalaxy>::preCalculateInitialConditions()
 					 "agora_galaxy.vcirc_file must use linear spacing for the radius coordinate.");
 
 	// 2. copy data to simData_.radius and simData_.vcirc
-	const size_t N = static_cast<size_t>(halo_table_const.sizes[0]);
+	const auto N = static_cast<size_t>(halo_table_const.sizes[0]);
 	userData_.radius.resize(N);
 	userData_.vcirc.resize(N);
 	userData_.rho_halo.resize(N);
