@@ -23,3 +23,6 @@
 [submodule "extern/AMReX-Hydro"]
 	path = extern/AMReX-Hydro
 	url = https://github.com/AMReX-Fluids/AMReX-Hydro.git
+[submodule "extern/amrVolumeRenderer"]
+	path = extern/amrVolumeRenderer
+	url = https://github.com/BenWibking/amrVolumeRenderer.git

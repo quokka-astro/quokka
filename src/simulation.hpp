@@ -100,6 +100,7 @@ namespace filesystem = experimental::filesystem;
 #include "io/DiagParticleTxt.H"
 #include "io/DiagPlotfile.H"
 #include "io/DiagProjectionPlot.H"
+#include "io/DiagVolumeRender.H"
 #include "io/io_utils.hpp"
 #include "io/projection.hpp"
 #include "physics_info.hpp"
@@ -3780,6 +3781,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 			auto *particleTxtDiag = dynamic_cast<DiagParticleTxt *>(diag.get());
 			if (particleTxtDiag != nullptr) {
 				particleTxtDiag->processDiag<problem_t>(istep[0], tNew_[0]);
+				continue;
+			}
+
+			auto *volumeRenderDiag = dynamic_cast<DiagVolumeRender *>(diag.get());
+			if (volumeRenderDiag != nullptr) {
+				volumeRenderDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 				continue;
 			}
 
