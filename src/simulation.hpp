@@ -452,6 +452,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	[[nodiscard]] auto PlotFileMFAtLevel_cc(int lev, int included_ghosts) -> amrex::MultiFab;
 	[[nodiscard]] auto PlotFileMF_fc(int nghost_fc_) -> std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM>;
 	[[nodiscard]] auto PlotFileMFAtLevel_fc(int lev, int idim, int nghost_fc_) -> amrex::MultiFab;
+	void AverageDownDerived(const amrex::Vector<amrex::MultiFab *> &mfs, const amrex::Vector<std::string> &varnames) const;
 	void createDiagnostics();
 	void updateDiagnostics();
 	void doDiagnostics();
@@ -3568,9 +3569,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 template <typename problem_t> void AMRSimulation<problem_t>::ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const
 {
 	auto const ncomp_out = ncomp;
-	auto const geom_data = geom[lev].data();
-	auto const prob_lo = geom_data.ProbLo();
-	auto const dx = geom_data.CellSize();
+	auto const prob_lo = geom[lev].ProbLoArray();
+	auto const dx = geom[lev].CellSizeArray();
 	auto const density_floor = densityFloor_;
 	auto const ngrow = mf.nGrow();
 
@@ -3628,12 +3628,48 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_f
 	return plotMF_fc;
 }
 
+template <typename problem_t>
+void AMRSimulation<problem_t>::AverageDownDerived(const amrex::Vector<amrex::MultiFab *> &mfs, const amrex::Vector<std::string> &varnames) const
+{
+	if (mfs.size() <= 1 || derivedNames_.empty()) {
+		return;
+	}
+
+	amrex::Vector<int> derived_comps;
+	derived_comps.reserve(varnames.size());
+	for (int n = 0; n < varnames.size(); ++n) {
+		if (std::ranges::find(derivedNames_, varnames[n]) != derivedNames_.end()) {
+			derived_comps.push_back(n);
+		}
+	}
+	if (derived_comps.empty()) {
+		return;
+	}
+
+	for (int lev = static_cast<int>(mfs.size()) - 2; lev >= 0; --lev) {
+		for (int comp : derived_comps) {
+			amrex::average_down(*mfs[lev + 1], *mfs[lev], geom[lev + 1], geom[lev], comp, 1, refRatio(lev));
+		}
+	}
+}
+
 // put together an array of multifabs for writing
 template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF_cc(const int included_ghosts) -> amrex::Vector<amrex::MultiFab>
 {
 	amrex::Vector<amrex::MultiFab> r;
 	for (int i = 0; i <= finest_level; ++i) {
 		r.push_back(PlotFileMFAtLevel_cc(i, included_ghosts));
+	}
+	amrex::Vector<amrex::MultiFab *> r_ptrs;
+	r_ptrs.reserve(r.size());
+	for (auto &mf : r) {
+		r_ptrs.push_back(&mf);
+	}
+	AverageDownDerived(r_ptrs, plotfileVarsToInclude_cc_);
+	if (included_ghosts > 0) {
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			r[lev].FillBoundary(geom[lev].periodicity());
+		}
 	}
 	return r;
 }
@@ -3656,14 +3692,36 @@ template <typename problem_t> void AMRSimulation<problem_t>::createDiagnostics()
 	amrex::ParmParse const pp(code_prefix);
 	amrex::Vector<std::string> diags;
 
-	int const n_diags = pp.countval("diagnostics");
+	int n_diags = pp.countval("diagnostics");
+	const int io_rank = amrex::ParallelDescriptor::IOProcessorNumber();
+	amrex::ParallelDescriptor::Bcast(&n_diags, 1, io_rank);
 	if (n_diags > 0) {
 		m_diagnostics.resize(n_diags);
 		diags.resize(n_diags);
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			for (int n = 0; n < n_diags; ++n) {
+				pp.get("diagnostics", diags[n], n);
+			}
+		}
+		for (int n = 0; n < n_diags; ++n) {
+			int len = static_cast<int>(diags[n].size());
+			amrex::ParallelDescriptor::Bcast(&len, 1, io_rank);
+			std::vector<char> buffer;
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				buffer.assign(diags[n].begin(), diags[n].end());
+			} else {
+				buffer.resize(len);
+			}
+			if (len > 0) {
+				amrex::ParallelDescriptor::Bcast(buffer.data(), len, io_rank);
+			}
+			if (!amrex::ParallelDescriptor::IOProcessor()) {
+				diags[n].assign(buffer.begin(), buffer.end());
+			}
+		}
 	}
 
 	for (int n = 0; n < n_diags; ++n) {
-		pp.get("diagnostics", diags[n], n);
 		std::string const diag_prefix = code_prefix + "." + diags[n];
 		amrex::ParmParse const ppd(diag_prefix);
 		std::string diag_type;
@@ -3717,8 +3775,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 	const BL_PROFILE("AMRSimulation::doDiagnostics()");
 	updateDiagnostics();
 
-	bool const computeVars =
-	    std::any_of(m_diagnostics.cbegin(), m_diagnostics.cend(), [this](const auto &diag) { return diag->doDiag(tNew_[0], istep[0]); });
+	amrex::Vector<int> diag_willdo(m_diagnostics.size(), 0);
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		for (int n = 0; n < static_cast<int>(m_diagnostics.size()); ++n) {
+			diag_willdo[n] = m_diagnostics[n]->doDiag(tNew_[0], istep[0]) ? 1 : 0;
+		}
+	}
+	if (!diag_willdo.empty()) {
+		amrex::ParallelDescriptor::Bcast(diag_willdo.data(), diag_willdo.size(), amrex::ParallelDescriptor::IOProcessorNumber());
+	}
+
+	bool const computeVars = std::any_of(diag_willdo.cbegin(), diag_willdo.cend(), [](int v) { return v != 0; });
 
 	amrex::Vector<std::unique_ptr<amrex::MultiFab>> diagMFVec(finestLevel() + 1);
 	amrex::Vector<const amrex::MultiFab *> diagMFVec_ptr;
@@ -3740,6 +3807,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 				amrex::MultiFab::Copy(*diagMFVec[lev], mf, mf_idx, v, 1, 1);
 			}
 		}
+		amrex::Vector<amrex::MultiFab *> diagMFVec_raw;
+		diagMFVec_raw.reserve(diagMFVec.size());
+		for (auto &mf : diagMFVec) {
+			diagMFVec_raw.push_back(mf.get());
+		}
+		AverageDownDerived(diagMFVec_raw, m_diagVars);
+		for (int lev = 0; lev <= finestLevel(); ++lev) {
+			if (diagMFVec[lev]->nGrow() > 0) {
+				diagMFVec[lev]->FillBoundary(geom[lev].periodicity());
+			}
+		}
 		diagMFVec_ptr = GetVecOfConstPtrs(diagMFVec);
 	}
 
@@ -3747,38 +3825,39 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 	auto const geoms = Geom(0, finestLevel());
 	auto const ref_ratio = refRatio();
 
-	for (const auto &diag : m_diagnostics) {
-		if (diag->doDiag(tNew_[0], istep[0])) {
+	for (int n = 0; n < static_cast<int>(m_diagnostics.size()); ++n) {
+		if (diag_willdo[n] != 0) {
+			auto *diag = m_diagnostics[n].get();
 			// Set common diagnostic data (including simulation pointer)
 			diag->setDiagData(this, &diagMFVec_ptr, &m_diagVars, &geoms, &ref_ratio, &simulationMetadata_);
 
 			// Call the appropriate template processDiag for each diagnostic type
 			// All diagnostics now have a unified API: processDiag<problem_t>(nstep, time)
-			auto *plotfileDiag = dynamic_cast<DiagPlotfile *>(diag.get());
+			auto *plotfileDiag = dynamic_cast<DiagPlotfile *>(diag);
 			if (plotfileDiag != nullptr) {
 				plotfileDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 				continue;
 			}
 
-			auto *projectionDiag = dynamic_cast<DiagProjectionPlot *>(diag.get());
+			auto *projectionDiag = dynamic_cast<DiagProjectionPlot *>(diag);
 			if (projectionDiag != nullptr) {
 				projectionDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 				continue;
 			}
 
-			auto *framePlaneDiag = dynamic_cast<DiagFramePlane *>(diag.get());
+			auto *framePlaneDiag = dynamic_cast<DiagFramePlane *>(diag);
 			if (framePlaneDiag != nullptr) {
 				framePlaneDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 				continue;
 			}
 
-			auto *pdfDiag = dynamic_cast<DiagPDF *>(diag.get());
+			auto *pdfDiag = dynamic_cast<DiagPDF *>(diag);
 			if (pdfDiag != nullptr) {
 				pdfDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 				continue;
 			}
 
-			auto *particleTxtDiag = dynamic_cast<DiagParticleTxt *>(diag.get());
+			auto *particleTxtDiag = dynamic_cast<DiagParticleTxt *>(diag);
 			if (particleTxtDiag != nullptr) {
 				particleTxtDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 				continue;
