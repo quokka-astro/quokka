@@ -100,7 +100,9 @@ namespace filesystem = experimental::filesystem;
 #include "io/DiagParticleTxt.H"
 #include "io/DiagPlotfile.H"
 #include "io/DiagProjectionPlot.H"
+#if AMREX_SPACEDIM == 3
 #include "io/DiagVolumeRender.H"
+#endif
 #include "io/io_utils.hpp"
 #include "io/projection.hpp"
 #include "physics_info.hpp"
@@ -3863,11 +3865,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 				continue;
 			}
 
+#if AMREX_SPACEDIM == 3
 			auto *volumeRenderDiag = dynamic_cast<DiagVolumeRender *>(diag);
 			if (volumeRenderDiag != nullptr) {
 				volumeRenderDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 				continue;
 			}
+#endif
 
 			// Unknown diagnostic type
 			amrex::Abort("Unknown diagnostic type - all diagnostic types must implement template processDiag");
