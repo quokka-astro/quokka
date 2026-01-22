@@ -25,7 +25,7 @@ do_subcycle = 0
 
 ascent_interval = -1
 checkpoint_interval = -1
-plotfile_interval = -1
+plotfile_interval = 10
 
 tiny_profiler.enabled = 0
 

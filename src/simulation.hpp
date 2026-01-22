@@ -1630,6 +1630,21 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 #endif
 }
 
+// Functor for physical boundary conditions on gravitational potential (phi)
+// Enforces homogeneous Dirichlet (phi = 0) at physical boundaries, consistent with Poisson solver BCs
+struct setFunctorPhiZero {
+	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, const int &dcomp, const int &numcomp,
+					 amrex::GeometryData const &geom, const amrex::Real &time, const amrex::BCRec *bcr, int bcomp,
+					 const int &orig_comp) const
+	{
+		amrex::ignore_unused(iv, geom, time, bcr, bcomp, orig_comp);
+		// Explicitly set ghost cells to zero for homogeneous Dirichlet BC
+		for (int n = 0; n < numcomp; ++n) {
+			dest(iv, dcomp + n) = 0.0;
+		}
+	}
+};
+
 template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLevels()
 {
 #if AMREX_SPACEDIM == 3
@@ -1812,6 +1827,33 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			amrex::Print() << "\n";
 		}
 
+		// Fill ghost cells of phi after solve
+		// This is necessary for computing gradients in applyPoissonGravityAtLevel
+		// and for particle acceleration in kickParticlesAllLevels
+		// 
+		// Note: For AMR cases, the MLMG solver ensures that values are consistent
+		// across coarse-fine boundaries in the valid cells. FillBoundary will properly
+		// handle periodic boundaries and fine-fine boundaries. Physical boundaries
+		// use homogeneous Dirichlet conditions (phi = 0) consistent with the solve.
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			// Fill periodic boundaries and fine-fine interfaces
+			phi[lev].FillBoundary(geom[lev].periodicity());
+
+			// Apply physical boundary conditions to phi at non-periodic boundaries
+			// This enforces homogeneous Dirichlet (phi = 0) conditions
+			if (!geom[lev].isAllPeriodic()) {
+				amrex::Vector<amrex::BCRec> phiBC(1);
+				for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+					phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
+					phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
+				}
+
+				amrex::GpuBndryFuncFab<setFunctorPhiZero> boundaryFunctor(setFunctorPhiZero{});
+				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiZero>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
+				phiBdryFunct(phi[lev], 0, 1, phi[lev].nGrowVect(), 0., 0);
+			}
+		}
+
 		// check for NaN
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			// NOTE: this fails when multiple levels are fully refined when open boundary condition is used.
@@ -1853,15 +1895,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 #endif
 }
 
-struct setFunctorParticleAccel {
-	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, const int &dcomp, const int &numcomp,
-					 amrex::GeometryData const &geom, const amrex::Real &time, const amrex::BCRec *bcr, int bcomp,
-					 const int &orig_comp) const
-	{
-		amrex::ignore_unused(iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
-	}
-};
-
 #if AMREX_SPACEDIM == 3
 template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLevels(const amrex::Real dt)
 {
@@ -1897,8 +1930,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 				phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
 			}
 
-			amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
+			amrex::GpuBndryFuncFab<setFunctorPhiZero> boundaryFunctor(setFunctorPhiZero{});
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiZero>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
 			phiBdryFunct(phi_extended, 0, 1, phi_extended.nGrowVect(), 0., 0);
 		} else {
 			// Fine level: use FillPatchTwoLevels to properly handle coarse-fine boundaries
@@ -1908,9 +1941,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 				phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
 			}
 
-			amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiCoarseBdryFunct(geom[lev - 1], phiBC, boundaryFunctor);
+			amrex::GpuBndryFuncFab<setFunctorPhiZero> boundaryFunctor(setFunctorPhiZero{});
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiZero>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiZero>> phiCoarseBdryFunct(geom[lev - 1], phiBC, boundaryFunctor);
 
 			amrex::FillPatchTwoLevels(phi_extended, 0., {&phi[lev - 1]}, {0.}, {&phi[lev]}, {0.}, 0, 0, 1, geom[lev - 1], geom[lev],
 						  phiCoarseBdryFunct, 0, phiBdryFunct, 0, refRatio(lev - 1), &amrex::quadratic_interp, phiBC, 0);
