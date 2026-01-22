@@ -1076,7 +1076,7 @@ template <typename problem_t> class PhysicsParticleRegister
 		return total_mass;
 	}
 
-	auto computeSfrAveragedOverTime(amrex::Real current_time, amrex::Real time_window) const -> amrex::Real
+	[[nodiscard]] auto computeSfrAveragedOverTime(amrex::Real current_time, amrex::Real time_window) const -> amrex::Real
 	{
 		if (sfh_data_.empty()) {
 			return 0.0;
