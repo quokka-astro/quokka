@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 420" width="800" height="420">
+  <defs>
+    <style>
+      .axis { stroke: #444444; stroke-width: 2; }
+      .frustum { stroke: #1f77b4; stroke-width: 2; fill: none; }
+      .plane { stroke: #2ca02c; stroke-width: 2; fill: rgba(44, 160, 44, 0.08); }
+      .camera { fill: #ff7f0e; stroke: #cc6a0a; stroke-width: 2; }
+      .label { font-family: "Helvetica", "Arial", sans-serif; font-size: 18px; fill: #222222; }
+      .note { font-family: "Helvetica", "Arial", sans-serif; font-size: 14px; fill: #444444; }
+      .dashed { stroke-dasharray: 6 6; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="800" height="420" fill="#ffffff" />
+
+  <line class="axis" x1="80" y1="210" x2="720" y2="210" />
+  <line class="axis" x1="120" y1="360" x2="120" y2="60" />
+
+  <polygon class="camera" points="120,210 190,180 190,240" />
+  <text class="label" x="75" y="175">Camera (eye)</text>
+
+  <line class="frustum" x1="190" y1="180" x2="580" y2="100" />
+  <line class="frustum" x1="190" y1="240" x2="580" y2="320" />
+  <line class="frustum dashed" x1="190" y1="210" x2="580" y2="210" />
+
+  <rect class="plane" x="580" y="130" width="160" height="160" />
+  <text class="label" x="600" y="115">View plane</text>
+
+  <line class="frustum dashed" x1="250" y1="210" x2="580" y2="130" />
+  <line class="frustum dashed" x1="250" y1="210" x2="580" y2="290" />
+
+  <line class="axis dashed" x1="220" y1="210" x2="580" y2="210" />
+  <text class="note" x="280" y="198">view direction (look_at)</text>
+
+  <text class="note" x="340" y="90">near plane</text>
+  <line class="axis dashed" x1="300" y1="110" x2="300" y2="310" />
+  <text class="note" x="650" y="350">far plane</text>
+</svg>

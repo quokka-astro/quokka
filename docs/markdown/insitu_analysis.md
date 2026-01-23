@@ -109,6 +109,10 @@ quokka.hist_temp.dense.value_greater = 1e-25           # Filters: value_greater,
 
 This diagnostic generates raytraced volume renderings (one image per output interval) using the AMReX volume renderer. It requires `AMREX_SPACEDIM=3` and outputs images to the diagnostic file prefix with the selected `output_ext`. As with other diagnostics, include the diagnostic name in `quokka.diagnostics` to enable it.
 
+![Camera frustum for DiagVolumeRender](media/volrender_camera_frustum.svg)
+
+The camera parameters define a perspective frustum. `camera_eye` is the camera location, `camera_look_at` defines the view direction, and `camera_up` sets the roll. `camera_fov_y_degrees` is the vertical field of view, while `camera_near` and `camera_far` clip the view along the look direction.
+
 *Example input file configuration:*
 
 ``` ini
