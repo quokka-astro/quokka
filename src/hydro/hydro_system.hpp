@@ -1410,8 +1410,6 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			x1FSpds(i, j, k, 1) = fspd_p;
 		}
 
-		quokka::valarray<double, nHydroScalars_> F = F_canonical;
-
 		// add artificial viscosity
 		// following Colella & Woodward (1984), eq. (4.2)
 		const double div_v = AMREX_D_TERM(du, +0.5 * (dvl + dvr), +0.5 * (dwl + dwr));
@@ -1436,7 +1434,9 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			}
 		}
 
-		F = F + viscosity * (U_L - U_R);
+		F_canonical = F_canonical + viscosity * (U_L - U_R);
+
+		quokka::valarray<double, nHydroScalars_> F = F_canonical;
 
 		// permute momentum components according to flux direction DIR
 		F[velN_index] = F_canonical[x1Momentum_index];

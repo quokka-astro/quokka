@@ -13,16 +13,14 @@
 #include "AMReX.H"
 #include "AMReX_BLassert.H"
 #include "QuokkaSimulation.hpp"
+#include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
-#include "util/valarray.hpp"
 #include <fmt/format.h>
 
 struct StreamingProblem {
 };
-
-constexpr int direction = 1;
 
 constexpr double initial_Erad = 1.0e-5;
 constexpr double initial_Egas = 1.0e-5;
@@ -100,71 +98,46 @@ AMRSimulation<StreamingProblem>::setCustomBoundaryConditions(const amrex::IntVec
 							     int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
 							     const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
-#if (AMREX_SPACEDIM == 1)
-	auto i = iv.toArray()[0];
-	int j = 0;
-	int k = 0;
-#endif
-#if (AMREX_SPACEDIM == 2)
-	auto [i, j] = iv.toArray();
-	int k = 0;
-#endif
-#if (AMREX_SPACEDIM == 3)
-	auto [i, j, k] = iv.toArray();
-#endif
+	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
+	constexpr int nvar = Physics_Indices<StreamingProblem>::nvarTotal_cc;
 
-	amrex::Box const &box = geom.Domain();
-	amrex::GpuArray<int, 3> lo = box.loVect3d();
-	amrex::GpuArray<int, 3> hi = box.hiVect3d();
-
-	if constexpr (direction == 0) {
-		if (i < lo[0]) {
-			// streaming inflow boundary
-			const double Erad = 1.0;
-			const double Frad = c * Erad;
-
-			// x1 left side boundary (Marshak)
-			consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index) = Erad;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index) = Frad;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index) = 0.;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index) = 0.;
-		} else if (i >= hi[0]) {
-			// right-side boundary -- constant
-			const double Erad = initial_Erad;
-			consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index) = Erad;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index) = 0;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index) = 0;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index) = 0;
-		}
-	} else {
-		if (j < lo[1]) {
-			// streaming inflow boundary
-			const double Erad = 1.0;
-			const double Frad = c * Erad;
-
-			// x1 left side boundary (Marshak)
-			consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index) = Erad;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index) = 0.;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index) = Frad;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index) = 0.;
-		} else if (j >= hi[1]) {
-			// right-side boundary -- constant
-			const double Erad = initial_Erad;
-			consVar(i, j, k, RadSystem<StreamingProblem>::radEnergy_index) = Erad;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x1RadFlux_index) = 0;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x2RadFlux_index) = 0;
-			consVar(i, j, k, RadSystem<StreamingProblem>::x3RadFlux_index) = 0;
-		}
+	// Prepare lower boundary values (streaming inflow)
+	amrex::GpuArray<amrex::Real, nvar> lo_values{};
+	{
+		const double Erad = 1.0;
+		const double Frad = c * Erad;
+		lo_values[RadSystem<StreamingProblem>::radEnergy_index] = Erad;
+		// Flux is in the direction of the boundary
+		lo_values[RadSystem<StreamingProblem>::x1RadFlux_index] = 0.;
+		lo_values[RadSystem<StreamingProblem>::x2RadFlux_index] = Frad;
+		lo_values[RadSystem<StreamingProblem>::x3RadFlux_index] = 0.;
+		lo_values[RadSystem<StreamingProblem>::gasEnergy_index] = initial_Egas;
+		lo_values[RadSystem<StreamingProblem>::gasDensity_index] = rho;
+		lo_values[RadSystem<StreamingProblem>::gasInternalEnergy_index] = initial_Egas;
+		lo_values[RadSystem<StreamingProblem>::x1GasMomentum_index] = 0.;
+		lo_values[RadSystem<StreamingProblem>::x2GasMomentum_index] = 0.;
+		lo_values[RadSystem<StreamingProblem>::x3GasMomentum_index] = 0.;
 	}
 
-	// gas boundary conditions are the same everywhere
-	const double Egas = initial_Egas;
-	consVar(i, j, k, RadSystem<StreamingProblem>::gasEnergy_index) = Egas;
-	consVar(i, j, k, RadSystem<StreamingProblem>::gasDensity_index) = rho;
-	consVar(i, j, k, RadSystem<StreamingProblem>::gasInternalEnergy_index) = Egas;
-	consVar(i, j, k, RadSystem<StreamingProblem>::x1GasMomentum_index) = 0.;
-	consVar(i, j, k, RadSystem<StreamingProblem>::x2GasMomentum_index) = 0.;
-	consVar(i, j, k, RadSystem<StreamingProblem>::x3GasMomentum_index) = 0.;
+	// Prepare upper boundary values (constant)
+	amrex::GpuArray<amrex::Real, nvar> hi_values{};
+	{
+		const double Erad = initial_Erad;
+		hi_values[RadSystem<StreamingProblem>::radEnergy_index] = Erad;
+		hi_values[RadSystem<StreamingProblem>::x1RadFlux_index] = 0;
+		hi_values[RadSystem<StreamingProblem>::x2RadFlux_index] = 0;
+		hi_values[RadSystem<StreamingProblem>::x3RadFlux_index] = 0;
+		hi_values[RadSystem<StreamingProblem>::gasEnergy_index] = initial_Egas;
+		hi_values[RadSystem<StreamingProblem>::gasDensity_index] = rho;
+		hi_values[RadSystem<StreamingProblem>::gasInternalEnergy_index] = initial_Egas;
+		hi_values[RadSystem<StreamingProblem>::x1GasMomentum_index] = 0.;
+		hi_values[RadSystem<StreamingProblem>::x2GasMomentum_index] = 0.;
+		hi_values[RadSystem<StreamingProblem>::x3GasMomentum_index] = 0.;
+	}
+
+	// Apply boundary conditions using helper functions
+	setConstantDirichletBCLo<1>(iv, consVar, geom, lo_values);
+	setConstantDirichletBCHi<1>(iv, consVar, geom, hi_values);
 }
 
 auto problem_main() -> int
@@ -182,17 +155,10 @@ auto problem_main() -> int
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
 	for (int n = 0; n < nvars; ++n) {
 		// assert at compile time
-		if constexpr (direction == 0) {
-			BCs_cc[n].setLo(0, amrex::BCType::ext_dir);  // Dirichlet x1
-			BCs_cc[n].setHi(0, amrex::BCType::foextrap); // extrapolate x1
-			BCs_cc[n].setLo(1, amrex::BCType::int_dir);  // periodic
-			BCs_cc[n].setHi(1, amrex::BCType::int_dir);
-		} else {
-			BCs_cc[n].setLo(0, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(0, amrex::BCType::int_dir);
-			BCs_cc[n].setLo(1, amrex::BCType::ext_dir);  // Dirichlet x1
-			BCs_cc[n].setHi(1, amrex::BCType::foextrap); // extrapolate x1
-		}
+		BCs_cc[n].setLo(0, amrex::BCType::int_dir); // periodic
+		BCs_cc[n].setHi(0, amrex::BCType::int_dir);
+		BCs_cc[n].setLo(1, amrex::BCType::ext_dir);  // Dirichlet x1
+		BCs_cc[n].setHi(1, amrex::BCType::foextrap); // extrapolate x1
 	}
 
 	// Problem initialization
@@ -216,7 +182,7 @@ auto problem_main() -> int
 	sim.evolve();
 
 	// read output variables
-	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), direction, 0.0);
+	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 1, 0.0);
 	const int nx = static_cast<int>(position.size());
 
 	// compute error norm
@@ -260,11 +226,7 @@ auto problem_main() -> int
 
 	matplotlibcpp::legend();
 	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
-	if constexpr (direction == 0) {
-		matplotlibcpp::save("./radiation_streaming_x.pdf");
-	} else {
-		matplotlibcpp::save("./radiation_streaming_y.pdf");
-	}
+	matplotlibcpp::save("./radiation_streaming_y.pdf");
 #endif // HAVE_PYTHON
 
 	// Cleanup and exit

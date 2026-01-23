@@ -7,14 +7,9 @@
 /// \brief Defines a test problem for the odd-even decoupling instability.
 ///
 
-#ifdef HAVE_PYTHON
-#include "util/matplotlibcpp.h"
-#endif
 #include "hydro/hydro_system.hpp"
-#include "math/interpolate.hpp"
 #include <algorithm>
 #include <fmt/format.h>
-#include <fstream>
 #include <vector>
 
 #include "AMReX.H"
@@ -35,7 +30,6 @@
 
 #include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
-#include "util/BC.hpp"
 
 using Real = amrex::Real;
 
@@ -232,41 +226,31 @@ AMRSimulation<MHDQuirk>::setCustomBoundaryConditions(const amrex::IntVect &iv, a
 						     amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
 						     int /*orig_comp*/)
 {
-#if (AMREX_SPACEDIM == 1)
-	auto i = iv.toArray()[0];
-	int j = 0;
-	int k = 0;
-#endif
-#if (AMREX_SPACEDIM == 2)
-	auto [i, j] = iv.toArray();
-	int k = 0;
-#endif
-#if (AMREX_SPACEDIM == 3)
-	auto [i, j, k] = iv.toArray();
-#endif
-
-	amrex::Box const &box = geom.Domain();
-	amrex::GpuArray<int, 3> lo = box.loVect3d();
-	amrex::GpuArray<int, 3> hi = box.hiVect3d();
+	// Number of variables
+	constexpr int nvar = Physics_Indices<MHDQuirk>::nvarTotal_cc;
 	const auto gamma = quokka::EOS_Traits<MHDQuirk>::gamma;
 
-	if (i < lo[0]) {
-		// x1 left side boundary
-		consVar(i, j, k, RadSystem<MHDQuirk>::gasEnergy_index) = pl / (gamma - 1.) + 0.5 * dl * ul * ul;
-		consVar(i, j, k, RadSystem<MHDQuirk>::gasInternalEnergy_index) = pl / (gamma - 1.);
-		consVar(i, j, k, RadSystem<MHDQuirk>::gasDensity_index) = dl;
-		consVar(i, j, k, RadSystem<MHDQuirk>::x1GasMomentum_index) = dl * ul;
-		consVar(i, j, k, RadSystem<MHDQuirk>::x2GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<MHDQuirk>::x3GasMomentum_index) = 0.;
-	} else if (i >= hi[0]) {
-		// x1 right-side boundary
-		consVar(i, j, k, RadSystem<MHDQuirk>::gasEnergy_index) = pr / (gamma - 1.) + 0.5 * dr * ur * ur;
-		consVar(i, j, k, RadSystem<MHDQuirk>::gasInternalEnergy_index) = pr / (gamma - 1.);
-		consVar(i, j, k, RadSystem<MHDQuirk>::gasDensity_index) = dr;
-		consVar(i, j, k, RadSystem<MHDQuirk>::x1GasMomentum_index) = dr * ur;
-		consVar(i, j, k, RadSystem<MHDQuirk>::x2GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<MHDQuirk>::x3GasMomentum_index) = 0.;
-	}
+	// Left state
+	amrex::GpuArray<amrex::Real, nvar> low_bdr_cells{};
+	low_bdr_cells[RadSystem<MHDQuirk>::gasEnergy_index] = pl / (gamma - 1.) + 0.5 * dl * ul * ul;
+	low_bdr_cells[RadSystem<MHDQuirk>::gasInternalEnergy_index] = pl / (gamma - 1.);
+	low_bdr_cells[RadSystem<MHDQuirk>::gasDensity_index] = dl;
+	low_bdr_cells[RadSystem<MHDQuirk>::x1GasMomentum_index] = dl * ul;
+	low_bdr_cells[RadSystem<MHDQuirk>::x2GasMomentum_index] = 0.;
+	low_bdr_cells[RadSystem<MHDQuirk>::x3GasMomentum_index] = 0.;
+
+	// Right state
+	amrex::GpuArray<amrex::Real, nvar> high_bdr_cells{};
+	high_bdr_cells[RadSystem<MHDQuirk>::gasEnergy_index] = pr / (gamma - 1.) + 0.5 * dr * ur * ur;
+	high_bdr_cells[RadSystem<MHDQuirk>::gasInternalEnergy_index] = pr / (gamma - 1.);
+	high_bdr_cells[RadSystem<MHDQuirk>::gasDensity_index] = dr;
+	high_bdr_cells[RadSystem<MHDQuirk>::x1GasMomentum_index] = dr * ur;
+	high_bdr_cells[RadSystem<MHDQuirk>::x2GasMomentum_index] = 0.;
+	high_bdr_cells[RadSystem<MHDQuirk>::x3GasMomentum_index] = 0.;
+
+	// Apply boundary conditions
+	setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
+	setConstantDirichletBCHi<0>(iv, consVar, geom, high_bdr_cells);
 }
 
 auto problem_main() -> int
