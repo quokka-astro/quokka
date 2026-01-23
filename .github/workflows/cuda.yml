@@ -57,7 +57,7 @@ jobs:
 
     - name: Build
       env:
-        CXXFLAGS: "-Werror -Wall -Wextra -Wpedantic -Wshadow"
+        CXXFLAGS: "-Wall -Wextra -Wpedantic -Wshadow"
       run: |
         export CCACHE_COMPRESS=1
         export CCACHE_COMPRESSLEVEL=10
@@ -80,10 +80,10 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache           \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache         \
             -DCMAKE_CUDA_COMPILER_LAUNCHER=ccache	 \
-            -DQUOKKA_PYTHON=OFF
+            -DQUOKKA_PYTHON=OFF                           \
+            -DWARNINGS_AS_ERRORS=ON
         cmake --build build -j 4
 
         ccache -s
         du -hs ~/.cache/ccache
-
 
