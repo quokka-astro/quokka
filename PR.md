@@ -13,26 +13,32 @@ gx = -0.5 * (phi[i+1] - phi[i-1]) / dx
 
 ## Solution
 
-Added explicit ghost cell filling after both MLMG and OpenBC Poisson solves in `calculateGpotAllLevels()`:
+### `calculateGpotAllLevels()` - Ghost Cell Filling After Poisson Solve
 
-### Base Level (lev=0):
-1. **`FillBoundary()`** - Fills ghost cells at periodic boundaries and fine-fine interfaces
-2. **`setFunctorPhiZero` + `PhysBCFunct`** - For MLMG solver ONLY, sets ghost cells to φ = 0 at physical boundaries (homogeneous Dirichlet BC)
+**For MLMG solver** (any dimension is periodic):
+- Fill periodic boundaries with `FillBoundary()`
+- Apply Dirichlet BC (φ = 0) at non-periodic physical boundaries using `setFunctorPhiZero`
+- Coarse-fine boundaries are handled by the MLMG solver for valid cells
 
-### Fine Levels (lev>0):
-1. **`FillBoundary()`** - Fills periodic boundaries and fine-fine interfaces  
-2. **Physical BCs** - For MLMG solver only, applies Dirichlet BC (φ = 0)
-3. **NOTE**: Coarse-fine boundary ghost cells are not explicitly interpolated from coarse level in this implementation. The MLMG solver ensures consistency in valid cells, but ghost cells at coarse-fine boundaries rely on extrapolation from `FillBoundary()`. For better accuracy, `FillPatchTwoLevels` should be used (marked as TODO).
+**For OpenBC solver** (no periodic dimensions):
+- No ghost cell filling needed - the solver computes physically-consistent boundary values (φ → 0 at infinity, NOT at domain boundaries)
 
-**Key distinctions:**
-- **MLMG with Dirichlet BC**: Ghost cells at physical boundaries are set to φ = 0
-- **OpenBC solver**: Ghost cells at physical boundaries retain solver-computed values (φ → 0 at infinity, NOT at domain boundaries)
+### `kickParticlesAllLevels()` - Extended Ghost Cells for Particle Acceleration
 
-Also updated `kickParticlesAllLevels()` to use the same boundary handling approach for consistency.
+Particles require `phi_extended` with 3 ghost cells (vs 1 in `phi`) for gradient computation with CIC interpolation.
+
+**Level 0:**
+- Copy from `phi`, fill periodic boundaries with `FillBoundary()`
+- For MLMG with Dirichlet BC: apply `setFunctorPhiZero` at non-periodic boundaries
+
+**Fine levels:**
+- Use `FillPatchTwoLevels` to properly handle coarse-fine interpolation
+- For MLMG with Dirichlet BC: use `setFunctorPhiZero` boundary functor
+- For fully periodic or OpenBC: use no-op functor `setFunctorParticleAccel`
 
 ## Code Changes
 
-- **New functor**: `setFunctorPhiZero` - Enforces homogeneous Dirichlet BC (φ = 0) at physical boundaries for MLMG solver
-- **Ghost cell filling**: Added after `mlmg.solve()` and `poissonSolver.solve()` in `calculateGpotAllLevels()`
-- **OpenBC handling**: Physical boundary ghost cells are NOT set to zero for OpenBC solver (correct behavior)
-- **AMR limitation**: Ghost cells at coarse-fine boundaries use `FillBoundary()` extrapolation (TODO: implement `FillPatchTwoLevels` for proper interpolation)
+- **New functor `setFunctorPhiZero`**: Enforces homogeneous Dirichlet BC (φ = 0) at physical boundaries
+- **New functor `setFunctorParticleAccel`**: No-op functor for OpenBC/periodic cases in particle acceleration
+- **`calculateGpotAllLevels()`**: Ghost cell filling moved inside `if (use_mlmg_solver)` block; OpenBC needs no filling
+- **`kickParticlesAllLevels()`**: Uses `FillPatchTwoLevels` for fine levels with proper coarse-fine interpolation
