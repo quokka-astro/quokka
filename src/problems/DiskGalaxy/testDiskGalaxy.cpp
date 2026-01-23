@@ -741,8 +741,8 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 	});
 	stats["mass_T_lt_1e4"] = cold_mass / C::M_solar;
 
-	const amrex::Real stellar_mass = particleRegister_.computeTotalStellarMass();
-	stats["stellar_mass"] = stellar_mass / C::M_solar;
+	const amrex::Real stellar_mass_at_birth = particleRegister_.computeTotalStellarMassAtBirth();
+	stats["stellar_mass_at_birth"] = stellar_mass_at_birth / C::M_solar;
 	stats["sn_count"] = sn_count_;
 
 	return stats;
