@@ -1847,7 +1847,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		// check for NaN
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			// NOTE: this fails when multiple levels are fully refined when open boundary condition is used.
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!phi[lev].contains_nan(nghost_phi, 1), fmt::format("NaN detected in phi at level {} after Poisson solve", lev));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!phi[lev].contains_nan(nghost_phi, 1),
+							 fmt::format("NaN detected in phi at level {} after Poisson solve", lev));
 		}
 	}
 #endif
@@ -1972,7 +1973,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 				// Fully periodic or OpenBC: use no-op functor (physical boundary values are already correct)
 				amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
 				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiBdryFunct(geom[lev], phiBC_fine, boundaryFunctor);
-				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiCoarseBdryFunct(geom[lev - 1], phiBC_fine, boundaryFunctor);
+				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiCoarseBdryFunct(geom[lev - 1], phiBC_fine,
+														       boundaryFunctor);
 
 				amrex::FillPatchTwoLevels(phi_extended, 0., {&phi[lev - 1]}, {0.}, {&phi[lev]}, {0.}, 0, 0, 1, geom[lev - 1], geom[lev],
 							  phiCoarseBdryFunct, 0, phiBdryFunct, 0, refRatio(lev - 1), &amrex::quadratic_interp, phiBC_fine, 0);
