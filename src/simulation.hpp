@@ -1920,6 +1920,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 #endif
 }
 
+struct setFunctorParticleAccel {
+	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, const int &dcomp, const int &numcomp,
+					 amrex::GeometryData const &geom, const amrex::Real &time, const amrex::BCRec *bcr, int bcomp,
+					 const int &orig_comp) const
+	{
+		amrex::ignore_unused(iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
+	}
+};
+
 #if AMREX_SPACEDIM == 3
 template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLevels(const amrex::Real dt)
 {
@@ -1929,6 +1938,30 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 	// skip if there are no massive particles
 	if (!particleRegister_.HasMassiveParticles()) {
 		return;
+	}
+
+	// Determine solver type (same logic as calculateGpotAllLevels)
+	// MLMG is used when any dimension is periodic; OpenBC is used when all dimensions are non-periodic
+	int num_periodic_dims = 0;
+	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		if (geom[0].isPeriodic(idim)) {
+			num_periodic_dims++;
+		}
+	}
+	const bool use_mlmg_solver = (num_periodic_dims > 0);
+
+	// For MLMG solver with mixed BCs (some periodic, some Dirichlet), we need to apply
+	// homogeneous Dirichlet BC (phi=0) at non-periodic boundaries.
+	// For OpenBC solver, boundary values are physically meaningful and should NOT be overridden.
+	const bool needs_dirichlet_bc = use_mlmg_solver && !geom[0].isAllPeriodic();
+
+	// Set up boundary condition types for phi (only needed if applying Dirichlet BCs)
+	amrex::Vector<amrex::BCRec> phiBC(1);
+	if (needs_dirichlet_bc) {
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
+			phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
+		}
 	}
 
 	// Compute accelerations and kick particles
@@ -1941,54 +1974,30 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		// Create potential MultiFab with sufficient ghost cells for gradient computation
 		amrex::MultiFab phi_extended(boxArray(lev), DistributionMap(lev), 1, nghost_phi);
 
-		// Fill extended potential from existing phi using FillPatch
-		// This handles coarse-fine boundaries without InterpFromCoarseLevel
+		// Fill extended potential from existing phi
 		if (lev == 0) {
-			// Base level: just copy real cells and and fill boundaries in periodic dimensions
-			// Copy valid cells from phi to phi_extended (no ghost cells copied)
+			// Base level: copy valid cells and fill boundaries
 			amrex::MultiFab::Copy(phi_extended, phi[lev], 0, 0, 1, 0);
-			
-			// Fill ghost cells at periodic boundaries and fine-fine interfaces
-			// This copies data from opposite side of domain (periodic) and neighboring boxes (fine-fine)
 			phi_extended.FillBoundary(geom[lev].periodicity());
 
-			// Apply physical boundary conditions to phi at non-periodic boundaries
-			// Only execute if at least one dimension has non-periodic (physical) boundaries
-			if (!geom[lev].isAllPeriodic()) {
-				// Set up boundary condition types for phi (reuse hydro BCs)
-				amrex::Vector<amrex::BCRec> phiBC(1);
-				for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-					// Copy BC types from hydro: periodic dims will have BCType::int_dir,
-					// non-periodic dims will have physical BC types (e.g., BCType::foextrap)
-					phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
-					phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
-				}
-
-				// Create boundary functor that sets ghost cells to zero (homogeneous Dirichlet BC)
+			// Apply Dirichlet BC (phi=0) at non-periodic boundaries for MLMG solver
+			if (needs_dirichlet_bc) {
 				amrex::GpuBndryFuncFab<setFunctorPhiZero> boundaryFunctor(setFunctorPhiZero{});
 				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiZero>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
-				// Apply boundary functor: PhysBCFunct internally checks BCRec and only fills
-				// ghost cells at physical (non-periodic) boundaries; periodic dims are skipped
 				phiBdryFunct(phi_extended, 0, 1, phi_extended.nGrowVect(), 0., 0);
 			}
 		} else {
 			// Fine level: use FillPatchTwoLevels to properly handle coarse-fine boundaries
-			// Note: FillPatchTwoLevels requires boundary functors as arguments even for periodic domains
-			// Set up boundary condition types for phi (reuse hydro BCs)
 			amrex::Vector<amrex::BCRec> phiBC(1);
 			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 				phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
 				phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
 			}
 
-			// Create boundary functor that sets ghost cells to zero (homogeneous Dirichlet BC)
-			amrex::GpuBndryFuncFab<setFunctorPhiZero> boundaryFunctor(setFunctorPhiZero{});
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiZero>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiZero>> phiCoarseBdryFunct(geom[lev - 1], phiBC, boundaryFunctor);
+			amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
+			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiCoarseBdryFunct(geom[lev - 1], phiBC, boundaryFunctor);
 
-			// FillPatchTwoLevels handles: (1) interpolation from coarse level at coarse-fine boundaries,
-			// (2) copying from same-level neighbors at fine-fine boundaries, (3) periodic boundaries,
-			// (4) physical boundaries via the provided functors (only applied to non-periodic dims)
 			amrex::FillPatchTwoLevels(phi_extended, 0., {&phi[lev - 1]}, {0.}, {&phi[lev]}, {0.}, 0, 0, 1, geom[lev - 1], geom[lev],
 						  phiCoarseBdryFunct, 0, phiBdryFunct, 0, refRatio(lev - 1), &amrex::quadratic_interp, phiBC, 0);
 		}
