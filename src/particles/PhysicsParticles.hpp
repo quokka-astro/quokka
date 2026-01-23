@@ -1096,13 +1096,13 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 	}
 
-	[[nodiscard]] auto computeTotalStellarMass() const -> amrex::Real
+	[[nodiscard]] auto computeTotalStellarMassAtBirth() const -> amrex::Real
 	{
 		amrex::Real total_mass = 0.0;
 		for (const auto &entry : particleRegistry_) {
 			const auto &descriptor = entry.second;
 			if (descriptor->getAllowsCreation()) {
-				total_mass += descriptor->computeStellarMass();
+				total_mass += descriptor->computeStellarMassAtBirth();
 			}
 		}
 		return total_mass;
