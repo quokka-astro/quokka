@@ -1,0 +1,74 @@
+#!/bin/bash
+
+#SBATCH -A pawsey0807-gpu
+#SBATCH -J Sig13cfl0.3boost
+#SBATCH -o log_%x-%j.out
+#SBATCH -t 24:00:00
+#SBATCH -p gpu
+#SBATCH --exclusive
+#SBATCH -N 1
+##SBATCH --ntasks-per-node=8
+##SBATCH --gpus-per-node=8
+
+. ~/rc/setonix-gpu.profile
+
+# always run with GPU-aware MPI
+export MPICH_GPU_SUPPORT_ENABLED=1
+
+# use correct NIC-to-GPU binding
+export MPICH_OFI_NIC_POLICY=NUMA
+
+# OpenMP threads (pure MPI => 1)
+# QUOKKA does not use OpenMP, but it's good practice on Setonix to avoid accidental thread oversubscription
+export OMP_NUM_THREADS=1
+
+DATADIR=/home/chongchong/scratch/Projects-data/2025-quokka-ISRF/job3-turbulent-box/run-Setonix/job${SLURM_JOBID}-${SLURM_JOB_NAME}
+mkdir -p $DATADIR
+cd $DATADIR
+
+# copy aux data
+cp "${SLURM_SUBMIT_DIR}/../CloudyData_UVB=HM2012_shielded_resampled_noPE.h5" .
+cp "${SLURM_SUBMIT_DIR}/../zdrv.hdf5" .
+# Ignore the Z1 here, because the solution does not dependent on Z.
+cp "${SLURM_SUBMIT_DIR}/disk_solution_datatable_Sigma13-Z1.csv" .
+cp "${SLURM_SUBMIT_DIR}/../photoelectric_heating_from_sfh.csv" .
+
+mkdir -p run1
+# Create a symbolic link of run1 to ~/run1, pointing to the absolute path.
+ln -sf "$(pwd)/run1" "${SLURM_SUBMIT_DIR}/run1"
+cd run1
+
+## run
+EXENAME="TallBoxSf"
+INPUTSNAME="TallBoxSf.in"
+
+EXE="${SLURM_SUBMIT_DIR}/${EXENAME}"
+INPUTS="${SLURM_SUBMIT_DIR}/${INPUTSNAME}"
+
+# Wrapper that sets ROCR_VISIBLE_DEVICES per task
+# Create it in the working directory
+cat > selectGPU_X.sh << 'EOF'
+#!/bin/bash
+# Set the visible GPU for this task to its local task ID on the node
+export ROCR_VISIBLE_DEVICES="$SLURM_LOCALID"
+exec "$@"
+EOF
+chmod 755 ./selectGPU_X.sh
+
+# Generate optimal CPU binding list for 8 tasks on the GPUs allocated to this job
+CPU_BIND=$(generate_CPU_BIND.sh map_cpu)
+echo -e "\n# CPU_BIND=${CPU_BIND}"
+
+echo -e "\n# Run: 8 MPI tasks, manual GPU + CPU binding"
+# Notes:
+# -N 1, -n 8: 8 ranks on this node
+# -c 8: reserve one full chiplet per rank (actual threads controlled by OMP_NUM_THREADS)
+# --gres=gpu:8: expose 8 GPUs per node to this step
+# --cpu-bind=${CPU_BIND}: bind each rank to the chiplet matching its GPU
+# No --gpus-per-task, no --gpu-bind (manual binding avoids ROCm IPC attach error)
+srun -N 1 -n 8 -c 8 --gres=gpu:8 --cpu-bind=${CPU_BIND} ./selectGPU_X.sh ${EXE} ${INPUTS} amr.plot_nfiles=8
+
+echo -e "\n# sacct summary"
+sacct -j ${SLURM_JOBID} -o jobid%20,Start%20,elapsed%20
+echo -e "\n# Done"
+
