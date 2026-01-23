@@ -256,8 +256,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	// Compute total stellar mass at birth
 	[[nodiscard]] auto computeStellarMassAtBirth() const -> amrex::Real override
 	{
-		if (this->getMassAtBirthIndex() < 0) {
-			return computeStellarMass();
+		if (container_ == nullptr || this->getMassAtBirthIndex() < 0) {
+			return 0.0; // if it doesn't exist, return zero
 		}
 
 		amrex::Real total_mass = 0.0;
@@ -285,8 +285,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	[[nodiscard]] auto computeStellarMassAtBirthBornByTime(amrex::Real time) const -> amrex::Real override
 	{
 		const int birth_time_idx = this->getBirthTimeIndex();
-		const int mass_idx = (this->getMassAtBirthIndex() >= 0) ? this->getMassAtBirthIndex() : this->getMassIndex();
-		if (container_ == nullptr || birth_time_idx < 0 || mass_idx < 0) {
+		const int birth_mass_idx = this->getMassAtBirthIndex();
+		if (container_ == nullptr || birth_time_idx < 0 || birth_mass_idx < 0) {
 			return 0.0;
 		}
 
@@ -303,7 +303,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				    if (time < birth_time) {
 					    return 0.0;
 				    }
-				    return p_type.m_aos[i].rdata(mass_idx);
+				    return p_type.m_aos[i].rdata(birth_mass_idx);
 			    },
 			    reduce_ops);
 			total_mass += amrex::get<0>(result_tuple);
