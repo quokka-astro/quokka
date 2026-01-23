@@ -14,7 +14,7 @@ void DiagVolumeRender::init(const std::string &a_prefix, std::string_view a_diag
 
 	amrex::ParmParse const pp(a_prefix);
 
-	if (!pp.query("field", m_fieldName)) {
+	if (pp.query("field", m_fieldName) == 0) {
 		amrex::Abort("DiagVolumeRender requires a 'field' parameter.");
 	}
 
@@ -42,8 +42,8 @@ void DiagVolumeRender::init(const std::string &a_prefix, std::string_view a_diag
 		if (range.size() != 2) {
 			amrex::Abort("DiagVolumeRender scalar_range must have exactly two values.");
 		}
-		float const minVal = static_cast<float>(std::min(range[0], range[1]));
-		float const maxVal = static_cast<float>(std::max(range[0], range[1]));
+		auto const minVal = static_cast<float>(std::min(range[0], range[1]));
+		auto const maxVal = static_cast<float>(std::max(range[0], range[1]));
 		m_scalarRange = std::make_pair(minVal, maxVal);
 	}
 
@@ -122,7 +122,7 @@ void DiagVolumeRender::addVars(amrex::Vector<std::string> &a_varList)
 
 auto DiagVolumeRender::outputFilename(int a_nstep) const -> std::string
 {
-	std::string const base = amrex::Concatenate(m_diagfile, a_nstep, 7);
+	std::string base = amrex::Concatenate(m_diagfile, a_nstep, 7);
 	if (m_outputExt.empty()) {
 		return base;
 	}
