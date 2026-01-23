@@ -29,7 +29,7 @@ RUN set -euo pipefail && \
     fi && \
     zypper --non-interactive install --no-recommends \
       cmake git gcc13 gcc13-c++ libstdc++6-devel-gcc13 \
-      make tar gzip wget patch hdf5-devel python3-devel && \
+      make tar gzip wget patch hdf5-devel libpng-devel python3-devel && \
     ln -sf /usr/lib64/libefa.so.1 /usr/lib64/libefa.so && \
     zypper clean --all && \
     printf "%s\n" "/opt/rocm/lib" "/opt/rocm/lib64" >> /etc/ld.so.conf.d/rocm.conf && \
@@ -104,7 +104,7 @@ COPY --from=build /opt/mpich /opt/mpich
 # Install runtime deps, cleanup, and setup user
 RUN set -euo pipefail && \
     zypper --non-interactive refresh && \
-    zypper --non-interactive install --no-recommends libhdf5 libpciaccess0 libnuma1 libdrm2 libdrm_amdgpu1 && \
+    zypper --non-interactive install --no-recommends libhdf5 libpciaccess0 libnuma1 libdrm2 libdrm_amdgpu1 libpng16-16 && \
     zypper clean --all && \
     printf "%s\n" "/opt/rocm/lib" "/opt/rocm/lib64" >> /etc/ld.so.conf.d/rocm.conf && \
     rm -rf /opt/rocm/bin /opt/rocm/include /opt/rocm/share /opt/rocm/lib/cmake \
