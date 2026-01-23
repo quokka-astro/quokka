@@ -1799,8 +1799,29 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			if (verbose) {
 				amrex::Print() << "MLMG converged with final residual norm: " << final_resnorm << "\n";
 			}
+
+			// Fill ghost cells of phi after MLMG solve
+			// For MLMG: fill periodic boundaries and apply Dirichlet BC (phi=0) at non-periodic physical boundaries
+			// Note: coarse-fine boundaries are handled by the MLMG solver for valid cells.
+			for (int lev = 0; lev <= finest_level; ++lev) {
+				// Fill periodic boundaries
+				phi[lev].FillBoundary(geom[lev].periodicity());
+
+				// Apply Dirichlet BC (phi=0) at non-periodic physical boundaries
+				if (!geom[lev].isAllPeriodic()) {
+					amrex::Vector<amrex::BCRec> phiBC(1);
+					for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+						phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
+						phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
+					}
+
+					amrex::GpuBndryFuncFab<setFunctorPhiZero> boundaryFunctor(setFunctorPhiZero{});
+					amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiZero>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
+					phiBdryFunct(phi[lev], 0, 1, phi[lev].nGrowVect(), 0., 0);
+				}
+			}
 		} else {
-			// Use OpenBC solver for open boundary conditions
+			// Use OpenBC solver for open boundary conditions (no periodic dimensions)
 			if (verbose) {
 				amrex::Print() << "Doing Poisson solve with open boundaries using OpenBCSolver...\n\n";
 			}
@@ -1813,70 +1834,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 
 			amrex::Real abstol = abstolPoisson_ * rhs_min;
 			poissonSolver.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
+
+			// No ghost cell filling needed for OpenBC solver:
+			// - No dimensions are periodic, so FillBoundary does nothing
+			// - OpenBC computes physically-consistent boundary values (phi -> 0 at infinity, NOT phi=0 at boundaries)
 		}
 
 		if (verbose) {
 			amrex::Print() << "\n";
-		}
-
-		// Fill ghost cells of phi after solve
-		// This is necessary for computing gradients in applyPoissonGravityAtLevel
-		// and for particle acceleration in kickParticlesAllLevels
-		// 
-		// Strategy:
-		// - Base level (lev=0): FillBoundary for periodic/fine-fine, apply physical BCs
-		// - Fine levels (lev>0): Use FillPatchTwoLevels to interpolate from coarse level
-		//                        at coarse-fine boundaries, handles all BC types
-		for (int lev = 0; lev <= finest_level; ++lev) {
-			if (lev == 0) {
-				// Base level: Fill ghost cells at periodic boundaries and fine-fine interfaces
-				// This copies data from opposite side of domain (periodic) and neighboring boxes (fine-fine)
-				phi[lev].FillBoundary(geom[lev].periodicity());
-
-				// Apply physical boundary conditions at non-periodic boundaries
-				// ONLY for MLMG solver with Dirichlet BC (phi = 0 at boundaries)
-				// OpenBC solver computes physically-consistent boundary values (phi -> 0 at infinity, NOT at boundaries)
-				if (use_mlmg_solver && !geom[lev].isAllPeriodic()) {
-					// Set up boundary condition types for phi (reuse hydro BCs)
-					amrex::Vector<amrex::BCRec> phiBC(1);
-					for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-						// Copy BC types from hydro: periodic dims will have BCType::int_dir,
-						// non-periodic dims will have physical BC types (e.g., BCType::foextrap)
-						phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
-						phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
-					}
-
-					// Create boundary functor that sets ghost cells to zero (homogeneous Dirichlet BC)
-					amrex::GpuBndryFuncFab<setFunctorPhiZero> boundaryFunctor(setFunctorPhiZero{});
-					amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiZero>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
-					// Apply boundary functor: PhysBCFunct internally checks BCRec and only fills
-					// ghost cells at physical (non-periodic) boundaries; periodic dims are skipped
-					phiBdryFunct(phi[lev], 0, 1, phi[lev].nGrowVect(), 0., 0);
-				}
-			} else {
-				// Fine levels: Fill periodic boundaries and fine-fine interfaces
-				phi[lev].FillBoundary(geom[lev].periodicity());
-
-				// TODO: For AMR with coarse-fine boundaries, ideally should use FillPatchTwoLevels
-				// or InterpFromCoarseLevel to properly interpolate ghost cells from coarse level.
-				// The MLMG solver ensures consistency in valid cells, but ghost cells at coarse-fine
-				// boundaries may not be perfectly interpolated. For gradient computations, this may
-				// introduce small errors at coarse-fine interfaces.
-
-				// Apply physical boundary conditions at non-periodic boundaries
-				// ONLY for MLMG solver with Dirichlet BC
-				if (use_mlmg_solver && !geom[lev].isAllPeriodic()) {
-					amrex::Vector<amrex::BCRec> phiBC(1);
-					for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-						phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
-						phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
-					}
-
-					amrex::GpuBndryFuncFab<setFunctorPhiZero> boundaryFunctor(setFunctorPhiZero{});
-					amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiZero>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
-					phiBdryFunct(phi[lev], 0, 1, phi[lev].nGrowVect(), 0., 0);
-				}
-			}
 		}
 
 		// check for NaN
@@ -1988,18 +1953,30 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 			}
 		} else {
 			// Fine level: use FillPatchTwoLevels to properly handle coarse-fine boundaries
-			amrex::Vector<amrex::BCRec> phiBC(1);
+			// Set up BCRec for FillPatchTwoLevels (required even for periodic domains)
+			amrex::Vector<amrex::BCRec> phiBC_fine(1);
 			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-				phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
-				phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
+				phiBC_fine[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
+				phiBC_fine[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
 			}
 
-			amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
-			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiCoarseBdryFunct(geom[lev - 1], phiBC, boundaryFunctor);
+			if (needs_dirichlet_bc) {
+				// MLMG with Dirichlet BC: use setFunctorPhiZero for physical boundaries
+				amrex::GpuBndryFuncFab<setFunctorPhiZero> boundaryFunctor(setFunctorPhiZero{});
+				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiZero>> phiBdryFunct(geom[lev], phiBC_fine, boundaryFunctor);
+				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiZero>> phiCoarseBdryFunct(geom[lev - 1], phiBC_fine, boundaryFunctor);
 
-			amrex::FillPatchTwoLevels(phi_extended, 0., {&phi[lev - 1]}, {0.}, {&phi[lev]}, {0.}, 0, 0, 1, geom[lev - 1], geom[lev],
-						  phiCoarseBdryFunct, 0, phiBdryFunct, 0, refRatio(lev - 1), &amrex::quadratic_interp, phiBC, 0);
+				amrex::FillPatchTwoLevels(phi_extended, 0., {&phi[lev - 1]}, {0.}, {&phi[lev]}, {0.}, 0, 0, 1, geom[lev - 1], geom[lev],
+							  phiCoarseBdryFunct, 0, phiBdryFunct, 0, refRatio(lev - 1), &amrex::quadratic_interp, phiBC_fine, 0);
+			} else {
+				// Fully periodic or OpenBC: use no-op functor (physical boundary values are already correct)
+				amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
+				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiBdryFunct(geom[lev], phiBC_fine, boundaryFunctor);
+				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiCoarseBdryFunct(geom[lev - 1], phiBC_fine, boundaryFunctor);
+
+				amrex::FillPatchTwoLevels(phi_extended, 0., {&phi[lev - 1]}, {0.}, {&phi[lev]}, {0.}, 0, 0, 1, geom[lev - 1], geom[lev],
+							  phiCoarseBdryFunct, 0, phiBdryFunct, 0, refRatio(lev - 1), &amrex::quadratic_interp, phiBC_fine, 0);
+			}
 		}
 
 		// check for NaN
