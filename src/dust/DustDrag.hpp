@@ -10,7 +10,7 @@
 #include "AMReX_MultiFab.H"
 #include "hydro/hydro_system.hpp"
 #include "physics_info.hpp"
-#include "util/ArrayView_3d.hpp"
+#include "util/ArrayView.hpp"
 #include <numbers>
 
 template <typename problem_t> class DustDrag
