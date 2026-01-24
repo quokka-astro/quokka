@@ -100,14 +100,15 @@ template <> void QuokkaSimulation<SNProblem>::createInitialTestParticles()
 			auto &particle_array = kv.second.GetArrayOfStructs();
 			const int np = particle_array.numParticles();
 			auto *pdata = particle_array().data();
+			const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity = userData_.boost_velocity;
 
 			// Launch GPU kernel to set integer components
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
 				auto &p = pdata[i]; // NOLINT
 				p.idata(0) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
-				p.rdata(quokka::TestParticleVxIdx) += userData_.boost_velocity[0];
-				p.rdata(quokka::TestParticleVyIdx) += userData_.boost_velocity[1];
-				p.rdata(quokka::TestParticleVzIdx) += userData_.boost_velocity[2];
+				p.rdata(quokka::TestParticleVxIdx) += boost_velocity[0];
+				p.rdata(quokka::TestParticleVyIdx) += boost_velocity[1];
+				p.rdata(quokka::TestParticleVzIdx) += boost_velocity[2];
 			});
 		}
 	}
@@ -125,15 +126,16 @@ template <> void QuokkaSimulation<SNProblem>::setInitialConditionsOnGrid(quokka:
 	const double rho = rho_bg;
 	const double rho_e = E0;
 	const double Emag = 0.5 * B0 * B0;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity = userData_.boost_velocity;
 	const double v2 = (userData_.boost_velocity[0] * userData_.boost_velocity[0]) + (userData_.boost_velocity[1] * userData_.boost_velocity[1]) +
 			  (userData_.boost_velocity[2] * userData_.boost_velocity[2]);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		state_cc(i, j, k, HydroSystem<SNProblem>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<SNProblem>::x1Momentum_index) = rho * userData_.boost_velocity[0];
-		state_cc(i, j, k, HydroSystem<SNProblem>::x2Momentum_index) = rho * userData_.boost_velocity[1];
-		state_cc(i, j, k, HydroSystem<SNProblem>::x3Momentum_index) = rho * userData_.boost_velocity[2];
+		state_cc(i, j, k, HydroSystem<SNProblem>::x1Momentum_index) = rho * boost_velocity[0];
+		state_cc(i, j, k, HydroSystem<SNProblem>::x2Momentum_index) = rho * boost_velocity[1];
+		state_cc(i, j, k, HydroSystem<SNProblem>::x3Momentum_index) = rho * boost_velocity[2];
 		state_cc(i, j, k, HydroSystem<SNProblem>::energy_index) = rho_e + Emag + 0.5 * rho * v2;
 		state_cc(i, j, k, HydroSystem<SNProblem>::internalEnergy_index) = rho_e;
 	});
