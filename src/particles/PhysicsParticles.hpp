@@ -1,6 +1,7 @@
 #ifndef PHYSICS_PARTICLES_HPP_
 #define PHYSICS_PARTICLES_HPP_
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <map>
@@ -123,6 +124,7 @@ class PhysicsParticleDescriptorBase
 	// Compute total stellar mass
 	[[nodiscard]] virtual auto computeStellarMass() const -> amrex::Real = 0;
 	[[nodiscard]] virtual auto computeStellarMassAtBirth() const -> amrex::Real = 0;
+	[[nodiscard]] virtual auto computeStellarMassAtBirthBornByTime(amrex::Real time) const -> amrex::Real = 0;
 
 #if AMREX_SPACEDIM == 3
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
@@ -254,8 +256,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	// Compute total stellar mass at birth
 	[[nodiscard]] auto computeStellarMassAtBirth() const -> amrex::Real override
 	{
-		if (this->getMassAtBirthIndex() < 0) {
-			return computeStellarMass();
+		if (container_ == nullptr || this->getMassAtBirthIndex() < 0) {
+			return 0.0; // if it doesn't exist, return zero
 		}
 
 		amrex::Real total_mass = 0.0;
@@ -276,6 +278,37 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				total_mass += amrex::get<0>(result_tuple);
 			}
 		}
+		amrex::ParallelAllReduce::Sum(total_mass, amrex::ParallelContext::CommunicatorSub());
+		return total_mass;
+	}
+
+	[[nodiscard]] auto computeStellarMassAtBirthBornByTime(amrex::Real time) const -> amrex::Real override
+	{
+		const int birth_time_idx = this->getBirthTimeIndex();
+		const int birth_mass_idx = this->getMassAtBirthIndex();
+		if (container_ == nullptr || birth_time_idx < 0 || birth_mass_idx < 0) {
+			return 0.0;
+		}
+
+		amrex::Real total_mass = 0.0;
+		amrex::ReduceOps<amrex::ReduceOpSum> reduce_ops;
+		using ReduceDataType = amrex::ReduceData<amrex::Real>;
+		using PTDType = typename ContainerType::ParticleTileType::ConstParticleTileDataType;
+
+		for (int lev = 0; lev <= container_->finestLevel(); ++lev) {
+			auto result_tuple = amrex::ParticleReduce<ReduceDataType>(
+			    *container_, lev,
+			    [=] AMREX_GPU_DEVICE(const PTDType &p_type, const int i) noexcept -> amrex::Real {
+				    const amrex::Real birth_time = p_type.m_aos[i].rdata(birth_time_idx);
+				    if (time < birth_time) {
+					    return 0.0;
+				    }
+				    return p_type.m_aos[i].rdata(birth_mass_idx);
+			    },
+			    reduce_ops);
+			total_mass += amrex::get<0>(result_tuple);
+		}
+
 		amrex::ParallelAllReduce::Sum(total_mass, amrex::ParallelContext::CommunicatorSub());
 		return total_mass;
 	}
@@ -1061,6 +1094,39 @@ template <typename problem_t> class PhysicsParticleRegister
 				sfh_data_[type].emplace_back(nstep, time, total_mass);
 			}
 		}
+	}
+
+	[[nodiscard]] auto computeTotalStellarMassAtBirth() const -> amrex::Real
+	{
+		amrex::Real total_mass = 0.0;
+		for (const auto &entry : particleRegistry_) {
+			const auto &descriptor = entry.second;
+			if (descriptor->getAllowsCreation()) {
+				total_mass += descriptor->computeStellarMassAtBirth();
+			}
+		}
+		return total_mass;
+	}
+
+	[[nodiscard]] auto computeSfrAveragedOverTime(amrex::Real current_time, amrex::Real time_window) const -> amrex::Real
+	{
+		if (time_window <= 0.0) {
+			return 0.0;
+		}
+
+		auto descriptor_it = particleRegistry_.find(ParticleType::StochasticStellarPop);
+		if (descriptor_it == particleRegistry_.end() || descriptor_it->second == nullptr) {
+			return 0.0;
+		}
+
+		const amrex::Real time_now = current_time;
+		const amrex::Real time_start = current_time - time_window;
+
+		const auto &descriptor = descriptor_it->second;
+		const amrex::Real mass_now = descriptor->computeStellarMassAtBirthBornByTime(time_now);
+		const amrex::Real mass_start = descriptor->computeStellarMassAtBirthBornByTime(time_start);
+
+		return (mass_now - mass_start) / time_window;
 	}
 
 	// Write SFH data from memory to metadata
