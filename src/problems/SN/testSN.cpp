@@ -279,8 +279,8 @@ auto problem_main() -> int
 		const double T_rel_err_norm = T_err_norm / T_value_norm;
 		const double v_rel_err_tol = 0.05;
 		const double T_rel_err_tol = 0.001;
-		amrex::Print() << fmt::format("Relative L1 norm for vx = {}, tolerence = {}\n", v_rel_err_norm, v_rel_err_tol);
-		amrex::Print() << fmt::format("Relative L1 norm for T = {}, tolerence = {}\n", T_rel_err_norm, T_rel_err_tol);
+		amrex::Print() << fmt::format("Relative L1 norm for vx = {}, tolerance = {}\n", v_rel_err_norm, v_rel_err_tol);
+		amrex::Print() << fmt::format("Relative L1 norm for T = {}, tolerance = {}\n", T_rel_err_norm, T_rel_err_tol);
 		if (!(v_rel_err_norm < v_rel_err_tol) || !(T_rel_err_norm < T_rel_err_tol)) {
 			status = 1;
 		}
