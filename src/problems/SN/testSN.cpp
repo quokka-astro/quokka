@@ -207,10 +207,6 @@ auto problem_main() -> int
 	// initialize
 	sim.setInitialConditions();
 
-	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = sim.geom[0].CellSizeArray();
-	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
-	amrex::Real const total_mass_init = sim.state_new_cc_[0].sum(HydroSystem<SNProblem>::density_index) * vol;
-
 	// evolve
 	sim.evolve();
 
