@@ -60,7 +60,6 @@ quokka.slice_z.file = slicez_plt       # Output file prefix (should end in "plt"
 quokka.slice_z.normal = 2              # Plane normal (0 == x, 1 == y, 2 == z)
 quokka.slice_z.center = 2.4688e20      # Coordinate in the normal direction
 quokka.slice_z.int    = 10             # Output interval (in number of coarse steps)
-quokka.slice_z.interpolation = Linear  # Interpolation type: Linear or Quadratic (default: Linear)
 
 # The problem must output these derived variable(s)
 derived_vars = temperature

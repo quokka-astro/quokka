@@ -212,7 +212,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int sfh_interval_ = -1;		       // interval for the star formation history
 	amrex::Real sfh_time_interval_ = -1.0; // time interval for the star formation history
 	amrex::Real last_sfh_time_ = 0.0;
-	int sn_count_ = 0; // number of SN explosions in a step (used for diagnostics)
+	int sn_count_ = 0;	      // number of SN explosions in a step (used for diagnostics)
+	int sn_count_cumulative_ = 0; // cumulative number of SN explosions (used for diagnostics)
 
 	amrex::Real densityFloor_ = 0.0; // default
 	amrex::Real tempFloor_ = 0.0;	 // default
@@ -376,6 +377,68 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 									int numcomp, amrex::GeometryData const &geom, amrex::Real time, const amrex::BCRec *bcr,
 									int bcomp, int orig_comp); // template specialized by problem generator
 
+	/// Helper function to set constant Dirichlet boundary conditions on the lower boundary of a specific dimension.
+	/// @tparam dir The dimension to check (0=x, 1=y, 2=z)
+	/// @param iv The cell index
+	/// @param consVar The array to fill
+	/// @param geom The geometry data
+	/// @param values The values to set for all components
+	template <int dir, auto N>
+	AMREX_GPU_DEVICE static void setConstantDirichletBCLo(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
+							      amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, N> const &values);
+
+	/// Helper function to set constant Dirichlet boundary conditions on the upper boundary of a specific dimension.
+	/// @tparam dir The dimension to check (0=x, 1=y, 2=z)
+	/// @param iv The cell index
+	/// @param consVar The array to fill
+	/// @param geom The geometry data
+	/// @param values The values to set for all components
+	template <int dir, auto N>
+	AMREX_GPU_DEVICE static void setConstantDirichletBCHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
+							      amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, N> const &values);
+
+	/// Helper function to set diode boundary conditions on the lower boundary of a specific dimension.
+	/// Diode BC: allows outflow (using first-order extrapolation), prevents inflow (using reflection with flipped normal momentum).
+	/// @tparam dir The dimension to check (0=x, 1=y, 2=z)
+	/// @param iv The cell index
+	/// @param consVar The array to fill
+	/// @param geom The geometry data
+	template <int dir>
+	AMREX_GPU_DEVICE static void setDiodeBCLo(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar, amrex::GeometryData const &geom);
+
+	/// Helper function to set diode boundary conditions on the upper boundary of a specific dimension.
+	/// Diode BC: allows outflow (using first-order extrapolation), prevents inflow (using reflection with flipped normal momentum).
+	/// @tparam dir The dimension to check (0=x, 1=y, 2=z)
+	/// @param iv The cell index
+	/// @param consVar The array to fill
+	/// @param geom The geometry data
+	template <int dir>
+	AMREX_GPU_DEVICE static void setDiodeBCHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar, amrex::GeometryData const &geom);
+
+	/// Helper function to set constant Dirichlet boundary conditions on the lower boundary of a specific dimension for face variables.
+	/// @tparam boundary_dim The dimension to check for boundaries (0=x, 1=y, 2=z)
+	/// @tparam face_dir The face direction (quokka::direction::x, y, or z)
+	/// @tparam ncomp Number of components (typically 3 for x, y, z face values)
+	/// @param iv The cell index
+	/// @param consVar_fc The face-centered array to fill
+	/// @param geom The geometry data
+	/// @param values The values to set for each face direction {x-face value, y-face value, z-face value}
+	template <int boundary_dim, quokka::direction face_dir, int ncomp>
+	AMREX_GPU_DEVICE static void setConstantDirichletBCFaceVarLo(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar_fc,
+								     amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, ncomp> const &values);
+
+	/// Helper function to set constant Dirichlet boundary conditions on the upper boundary of a specific dimension for face variables.
+	/// @tparam boundary_dim The dimension to check for boundaries (0=x, 1=y, 2=z)
+	/// @tparam face_dir The face direction (quokka::direction::x, y, or z)
+	/// @tparam ncomp Number of components (typically 3 for x, y, z face values)
+	/// @param iv The cell index
+	/// @param consVar_fc The face-centered array to fill
+	/// @param geom The geometry data
+	/// @param values The values to set for each face direction {x-face value, y-face value, z-face value}
+	template <int boundary_dim, quokka::direction face_dir, int ncomp>
+	AMREX_GPU_DEVICE static void setConstantDirichletBCFaceVarHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar_fc,
+								     amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, ncomp> const &values);
+
 	// compute volume integrals
 	template <typename F> auto computeVolumeIntegral(F const &user_f) -> amrex::Real;
 
@@ -388,6 +451,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	[[nodiscard]] auto PlotFileMFAtLevel_cc(int lev, int included_ghosts) -> amrex::MultiFab;
 	[[nodiscard]] auto PlotFileMF_fc(int nghost_fc_) -> std::array<amrex::Vector<amrex::MultiFab>, AMREX_SPACEDIM>;
 	[[nodiscard]] auto PlotFileMFAtLevel_fc(int lev, int idim, int nghost_fc_) -> amrex::MultiFab;
+	void AverageDownDerived(const amrex::Vector<amrex::MultiFab *> &mfs, const amrex::Vector<std::string> &varnames) const;
 	void createDiagnostics();
 	void updateDiagnostics();
 	void doDiagnostics();
@@ -788,6 +852,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Optional fixed timestep controls
 	pp.query("constant_dt", constantDt_);
 	pp.query("initial_dt", initDt_);
+	pp.query("max_dt", maxDt_);
 
 	const int dt_override_count =
 	    static_cast<int>(pp.contains("init_shrink")) + static_cast<int>(pp.contains("initial_dt")) + static_cast<int>(pp.contains("constant_dt"));
@@ -1816,7 +1881,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		// Fill extended potential from existing phi using FillPatch
 		// This handles coarse-fine boundaries without InterpFromCoarseLevel
 		if (lev == 0) {
-			// Base level: just copy and fill boundaries
+			// Base level: just copy real cells and and fill boundaries in periodic dimensions
 			amrex::MultiFab::Copy(phi_extended, phi[lev], 0, 0, 1, 0);
 			phi_extended.FillBoundary(geom[lev].periodicity());
 
@@ -1846,6 +1911,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 						  phiCoarseBdryFunct, 0, phiBdryFunct, 0, refRatio(lev - 1), &amrex::quadratic_interp, phiBC, 0);
 		}
 
+		// check for NaN
+		AMREX_ALWAYS_ASSERT(!phi_extended.contains_nan());
+
 		// Create cell-centered acceleration MultiFab
 		amrex::MultiFab accel_cc(boxArray(lev), DistributionMap(lev), AMREX_SPACEDIM, nghost_acc);
 
@@ -1867,8 +1935,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		});
 		amrex::Gpu::streamSynchronize();
 
-		// check for NaN
-		AMREX_ALWAYS_ASSERT(!accel_cc.contains_nan());
+		// accel_cc is guaranteed to be free of NaN as long as phi_extended does not contain NaN.
 
 		// Kick particles using the acceleration field
 		particleRegister_.kickParticlesAtLevel(lev, dt, accel_cc);
@@ -1923,6 +1990,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 
 	// Deposit the SN particles into the MultiFab
 	const auto [num_sn_explosions, max_velocity] = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
+	sn_count_ = num_sn_explosions;
+	sn_count_cumulative_ += num_sn_explosions;
 
 	// Print SN explosion count if verbose and non-zero
 	if (verbose && num_sn_explosions > 0) {
@@ -2366,6 +2435,411 @@ AMRSimulation<problem_t>::setCustomBoundaryConditionsFaceVar(const amrex::IntVec
 	// boundary.)
 
 	// set boundary condition for cell 'iv'
+}
+
+template <typename problem_t>
+template <int dir, auto N> // 'auto N' is required because GpuArray's size type varies by platform (unsigned int vs std::size_t)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setConstantDirichletBCLo(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
+											    amrex::GeometryData const &geom,
+											    amrex::GpuArray<amrex::Real, N> const &values)
+{
+	static_assert(dir >= 0 && dir < AMREX_SPACEDIM, "dir must be in range [0, AMREX_SPACEDIM)");
+
+	// Get cell indices
+	auto const [i, j, k] = iv.dim3();
+
+	// Get domain bounds
+	amrex::Box const &box = geom.Domain();
+	const amrex::GpuArray<int, 3> lo = box.loVect3d();
+
+	// Get the cell index for the specified direction
+	int cellIdx = 0;
+	if constexpr (dir == 0) {
+		cellIdx = i;
+	} else if constexpr (dir == 1) {
+		cellIdx = j;
+	} else if constexpr (dir == 2) {
+		cellIdx = k;
+	}
+
+	// Check if on lower boundary in the specified dimension and set values
+	if (cellIdx < lo[dir]) {
+		for (int n = 0; n < static_cast<int>(N); ++n) {
+			consVar(i, j, k, n) = values[n];
+		}
+	}
+}
+
+template <typename problem_t>
+template <int dir, auto N> // 'auto N' is required because GpuArray's size type varies by platform (unsigned int vs std::size_t)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setConstantDirichletBCHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
+											    amrex::GeometryData const &geom,
+											    amrex::GpuArray<amrex::Real, N> const &values)
+{
+	static_assert(dir >= 0 && dir < AMREX_SPACEDIM, "dir must be in range [0, AMREX_SPACEDIM)");
+
+	// Get cell indices
+	auto const [i, j, k] = iv.dim3();
+
+	// Get domain bounds
+	amrex::Box const &box = geom.Domain();
+	const amrex::GpuArray<int, 3> hi = box.hiVect3d();
+
+	// Get the cell index for the specified direction
+	int cellIdx = 0;
+	if constexpr (dir == 0) {
+		cellIdx = i;
+	} else if constexpr (dir == 1) {
+		cellIdx = j;
+	} else if constexpr (dir == 2) {
+		cellIdx = k;
+	}
+
+	// Check if on upper boundary in the specified dimension and set values
+	// Note that both lo and hi are inclusive bounds, i.e. for a dimension with 8 cells, the bounds are 0 and 7.
+	if (cellIdx > hi[dir]) {
+		for (int n = 0; n < static_cast<int>(N); ++n) {
+			consVar(i, j, k, n) = values[n];
+		}
+	}
+}
+
+template <typename problem_t>
+template <int dir>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCLo(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
+										amrex::GeometryData const &geom)
+{
+	static_assert(dir >= 0 && dir < AMREX_SPACEDIM, "dir must be in range [0, AMREX_SPACEDIM)");
+
+	// Get cell indices
+	auto const [i, j, k] = iv.dim3();
+
+	// Get domain bounds
+	amrex::Box const &box = geom.Domain();
+	const amrex::GpuArray<int, 3> lo = box.loVect3d();
+
+	// Get the cell index for the specified direction
+	int cellIdx = 0;
+	if constexpr (dir == 0) {
+		cellIdx = i;
+	} else if constexpr (dir == 1) {
+		cellIdx = j;
+	} else if constexpr (dir == 2) {
+		cellIdx = k;
+	}
+
+	// Check if on lower boundary in the specified dimension
+	if (cellIdx < lo[dir]) {
+		// First, get the nearest interior cell for first-order extrapolation
+		int i_interior = i;
+		int j_interior = j;
+		int k_interior = k;
+		if constexpr (dir == 0) {
+			i_interior = lo[dir];
+		} else if constexpr (dir == 1) {
+			j_interior = lo[dir];
+		} else if constexpr (dir == 2) {
+			k_interior = lo[dir];
+		}
+
+		// Read momentum from interior cell to determine flow direction
+		double mom_normal_interior = 0.0;
+		if constexpr (dir == 0) {
+			mom_normal_interior = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x1Momentum_index);
+		} else if constexpr (dir == 1) {
+			mom_normal_interior = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x2Momentum_index);
+		} else if constexpr (dir == 2) {
+			mom_normal_interior = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x3Momentum_index);
+		}
+
+		// Diode BC: at lower boundary, outward normal points in -dir direction
+		// Outflow: mom_normal < 0 (gas moving away from domain) → first-order extrapolation
+		// Inflow: mom_normal > 0 (gas moving into domain) → reflection with flipped momentum
+		if (mom_normal_interior < 0.0) {
+			// Outflow: use first-order extrapolation (copy from nearest interior cell)
+			consVar(i, j, k, HydroSystem<problem_t>::density_index) =
+			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::density_index);
+			consVar(i, j, k, HydroSystem<problem_t>::x1Momentum_index) =
+			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x1Momentum_index);
+			consVar(i, j, k, HydroSystem<problem_t>::x2Momentum_index) =
+			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x2Momentum_index);
+			consVar(i, j, k, HydroSystem<problem_t>::x3Momentum_index) =
+			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x3Momentum_index);
+			consVar(i, j, k, HydroSystem<problem_t>::energy_index) =
+			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::energy_index);
+			consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) =
+			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::internalEnergy_index);
+		} else {
+			// Inflow: use reflection from mirror cell with flipped normal momentum
+			// Mirror cell: reflect around lower boundary face
+			// cellIdx = lo[dir]-1 mirrors lo[dir], cellIdx = lo[dir]-2 mirrors lo[dir]+1, etc.
+			int const cellIdx_mirror = 2 * lo[dir] - 1 - cellIdx;
+			int i_mirror = i;
+			int j_mirror = j;
+			int k_mirror = k;
+			if constexpr (dir == 0) {
+				i_mirror = cellIdx_mirror;
+			} else if constexpr (dir == 1) {
+				j_mirror = cellIdx_mirror;
+			} else if constexpr (dir == 2) {
+				k_mirror = cellIdx_mirror;
+			}
+
+			// Read values from mirror cell
+			const double rho = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::density_index);
+			const double x1Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x1Momentum_index);
+			const double x2Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x2Momentum_index);
+			const double x3Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x3Momentum_index);
+			const double etot = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::energy_index);
+			const double eint = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::internalEnergy_index);
+
+			// Get normal momentum and flip it
+			double mom_normal = 0.0;
+			if constexpr (dir == 0) {
+				mom_normal = -x1Mom;
+			} else if constexpr (dir == 1) {
+				mom_normal = -x2Mom;
+			} else if constexpr (dir == 2) {
+				mom_normal = -x3Mom;
+			}
+
+			// Write to ghost cell with reflected values
+			consVar(i, j, k, HydroSystem<problem_t>::density_index) = rho;
+			consVar(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = (dir == 0) ? mom_normal : x1Mom;
+			consVar(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = (dir == 1) ? mom_normal : x2Mom;
+			consVar(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = (dir == 2) ? mom_normal : x3Mom;
+			consVar(i, j, k, HydroSystem<problem_t>::energy_index) = etot;
+			consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = eint;
+		}
+	}
+}
+
+template <typename problem_t>
+template <int dir>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar,
+										amrex::GeometryData const &geom)
+{
+	static_assert(dir >= 0 && dir < AMREX_SPACEDIM, "dir must be in range [0, AMREX_SPACEDIM)");
+
+	// Get cell indices
+	auto const [i, j, k] = iv.dim3();
+
+	// Get domain bounds
+	amrex::Box const &box = geom.Domain();
+	const amrex::GpuArray<int, 3> hi = box.hiVect3d();
+
+	// Get the cell index for the specified direction
+	int cellIdx = 0;
+	if constexpr (dir == 0) {
+		cellIdx = i;
+	} else if constexpr (dir == 1) {
+		cellIdx = j;
+	} else if constexpr (dir == 2) {
+		cellIdx = k;
+	}
+
+	// Check if on upper boundary in the specified dimension
+	// Note that both lo and hi are inclusive bounds, i.e. for a dimension with 8 cells, the bounds are 0 and 7.
+	if (cellIdx > hi[dir]) {
+		// First, get the nearest interior cell for first-order extrapolation
+		int i_interior = i;
+		int j_interior = j;
+		int k_interior = k;
+		if constexpr (dir == 0) {
+			i_interior = hi[dir];
+		} else if constexpr (dir == 1) {
+			j_interior = hi[dir];
+		} else if constexpr (dir == 2) {
+			k_interior = hi[dir];
+		}
+
+		// Read momentum from interior cell to determine flow direction
+		double mom_normal_interior = 0.0;
+		if constexpr (dir == 0) {
+			mom_normal_interior = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x1Momentum_index);
+		} else if constexpr (dir == 1) {
+			mom_normal_interior = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x2Momentum_index);
+		} else if constexpr (dir == 2) {
+			mom_normal_interior = consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x3Momentum_index);
+		}
+
+		// Diode BC: at upper boundary, outward normal points in +dir direction
+		// Outflow: mom_normal > 0 (gas moving away from domain) → first-order extrapolation
+		// Inflow: mom_normal < 0 (gas moving into domain) → reflection with flipped momentum
+		if (mom_normal_interior > 0.0) {
+			// Outflow: use first-order extrapolation (copy from nearest interior cell)
+			consVar(i, j, k, HydroSystem<problem_t>::density_index) =
+			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::density_index);
+			consVar(i, j, k, HydroSystem<problem_t>::x1Momentum_index) =
+			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x1Momentum_index);
+			consVar(i, j, k, HydroSystem<problem_t>::x2Momentum_index) =
+			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x2Momentum_index);
+			consVar(i, j, k, HydroSystem<problem_t>::x3Momentum_index) =
+			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::x3Momentum_index);
+			consVar(i, j, k, HydroSystem<problem_t>::energy_index) =
+			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::energy_index);
+			consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) =
+			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::internalEnergy_index);
+		} else {
+			// Inflow: use reflection from mirror cell with flipped normal momentum
+			// Mirror cell: reflect around upper boundary face
+			// cellIdx = hi[dir]+1 mirrors hi[dir], cellIdx = hi[dir]+2 mirrors hi[dir]-1, etc.
+			int const cellIdx_mirror = 2 * hi[dir] + 1 - cellIdx;
+			int i_mirror = i;
+			int j_mirror = j;
+			int k_mirror = k;
+			if constexpr (dir == 0) {
+				i_mirror = cellIdx_mirror;
+			} else if constexpr (dir == 1) {
+				j_mirror = cellIdx_mirror;
+			} else if constexpr (dir == 2) {
+				k_mirror = cellIdx_mirror;
+			}
+
+			// Read values from mirror cell
+			const double rho = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::density_index);
+			const double x1Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x1Momentum_index);
+			const double x2Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x2Momentum_index);
+			const double x3Mom = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::x3Momentum_index);
+			const double etot = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::energy_index);
+			const double eint = consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::internalEnergy_index);
+
+			// Get normal momentum and flip it
+			double mom_normal = 0.0;
+			if constexpr (dir == 0) {
+				mom_normal = -x1Mom;
+			} else if constexpr (dir == 1) {
+				mom_normal = -x2Mom;
+			} else if constexpr (dir == 2) {
+				mom_normal = -x3Mom;
+			}
+
+			// Write to ghost cell with reflected values
+			consVar(i, j, k, HydroSystem<problem_t>::density_index) = rho;
+			consVar(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = (dir == 0) ? mom_normal : x1Mom;
+			consVar(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = (dir == 1) ? mom_normal : x2Mom;
+			consVar(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = (dir == 2) ? mom_normal : x3Mom;
+			consVar(i, j, k, HydroSystem<problem_t>::energy_index) = etot;
+			consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = eint;
+		}
+	}
+}
+
+template <typename problem_t>
+template <int boundary_dim, quokka::direction face_dir, int ncomp>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<problem_t>::setConstantDirichletBCFaceVarLo(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar_fc,
+							  amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, ncomp> const &values)
+{
+	static_assert(boundary_dim >= 0 && boundary_dim < AMREX_SPACEDIM, "boundary_dim must be in range [0, AMREX_SPACEDIM)");
+
+	// Get cell indices
+	auto const [i, j, k] = iv.dim3();
+
+	// Get domain bounds
+	amrex::Box const &box = geom.Domain();
+	const amrex::GpuArray<int, 3> lo = box.loVect3d();
+
+	// Get the cell index for the specified boundary dimension
+	int cellIdx = 0;
+	if constexpr (boundary_dim == 0) {
+		cellIdx = i;
+	} else if constexpr (boundary_dim == 1) {
+		cellIdx = j;
+	} else if constexpr (boundary_dim == 2) {
+		cellIdx = k;
+	}
+
+	// Check if on lower boundary in the specified dimension and set value based on face direction
+	// For face variables: the face normal to the boundary uses inclusive comparison (<=),
+	// while tangent faces use exclusive comparison (<).
+	// This is because for N cells, there are N+1 face variables in the normal direction.
+	const bool is_on_boundary = [&]() {
+		if (face_dir == quokka::direction::x && boundary_dim == 0) {
+			return cellIdx <= lo[boundary_dim]; // inclusive for x-faces on x-boundary
+		}
+		if (face_dir == quokka::direction::y && boundary_dim == 1) {
+			return cellIdx <= lo[boundary_dim]; // inclusive for y-faces on y-boundary
+		}
+		if (face_dir == quokka::direction::z && boundary_dim == 2) {
+			return cellIdx <= lo[boundary_dim]; // inclusive for z-faces on z-boundary
+		}
+		return cellIdx < lo[boundary_dim]; // exclusive for tangent faces
+	}();
+
+	if (is_on_boundary) {
+		// Select the appropriate value based on face direction
+		amrex::Real value = 0.0;
+		switch (face_dir) {
+			case quokka::direction::x:
+				value = values[0];
+				break;
+			case quokka::direction::y:
+				value = values[1];
+				break;
+			case quokka::direction::z:
+				value = values[2];
+				break;
+			case quokka::direction::na:
+				break; // do nothing
+		}
+
+		// Set the first component (mhdFirstIndex) with the selected value
+		if (face_dir != quokka::direction::na) {
+			consVar_fc(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) = value;
+		}
+	}
+}
+
+template <typename problem_t>
+template <int boundary_dim, quokka::direction face_dir, int ncomp>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<problem_t>::setConstantDirichletBCFaceVarHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar_fc,
+							  amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, ncomp> const &values)
+{
+	static_assert(boundary_dim >= 0 && boundary_dim < AMREX_SPACEDIM, "boundary_dim must be in range [0, AMREX_SPACEDIM)");
+
+	// Get cell indices
+	auto const [i, j, k] = iv.dim3();
+
+	// Get domain bounds
+	amrex::Box const &box = geom.Domain();
+	const amrex::GpuArray<int, 3> hi = box.hiVect3d();
+
+	// Get the cell index for the specified boundary dimension
+	int cellIdx = 0;
+	if constexpr (boundary_dim == 0) {
+		cellIdx = i;
+	} else if constexpr (boundary_dim == 1) {
+		cellIdx = j;
+	} else if constexpr (boundary_dim == 2) {
+		cellIdx = k;
+	}
+
+	// Check if on upper boundary in the specified dimension and set value based on face direction
+	// Note that both lo and hi are inclusive bounds, i.e. for a dimension with 8 cells, the bounds are 0 and 7.
+	if (cellIdx > hi[boundary_dim]) {
+		// Select the appropriate value based on face direction
+		amrex::Real value = 0.0;
+		switch (face_dir) {
+			case quokka::direction::x:
+				value = values[0];
+				break;
+			case quokka::direction::y:
+				value = values[1];
+				break;
+			case quokka::direction::z:
+				value = values[2];
+				break;
+			case quokka::direction::na:
+				break; // do nothing
+		}
+
+		// Set the first component (mhdFirstIndex) with the selected value
+		if (face_dir != quokka::direction::na) {
+			consVar_fc(i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) = value;
+		}
+	}
 }
 
 // Compute a new multifab 'mf' by copying in state from valid region and filling
@@ -3093,9 +3567,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 template <typename problem_t> void AMRSimulation<problem_t>::ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const
 {
 	auto const ncomp_out = ncomp;
-	auto const geom_data = geom[lev].data();
-	auto const prob_lo = geom_data.ProbLo();
-	auto const dx = geom_data.CellSize();
+	auto const prob_lo = geom[lev].ProbLoArray();
+	auto const dx = geom[lev].CellSizeArray();
 	auto const density_floor = densityFloor_;
 	auto const ngrow = mf.nGrow();
 
@@ -3153,12 +3626,48 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_f
 	return plotMF_fc;
 }
 
+template <typename problem_t>
+void AMRSimulation<problem_t>::AverageDownDerived(const amrex::Vector<amrex::MultiFab *> &mfs, const amrex::Vector<std::string> &varnames) const
+{
+	if (mfs.size() <= 1 || derivedNames_.empty()) {
+		return;
+	}
+
+	amrex::Vector<int> derived_comps;
+	derived_comps.reserve(varnames.size());
+	for (int n = 0; n < varnames.size(); ++n) {
+		if (std::ranges::find(derivedNames_, varnames[n]) != derivedNames_.end()) {
+			derived_comps.push_back(n);
+		}
+	}
+	if (derived_comps.empty()) {
+		return;
+	}
+
+	for (int lev = static_cast<int>(mfs.size()) - 2; lev >= 0; --lev) {
+		for (int comp : derived_comps) {
+			amrex::average_down(*mfs[lev + 1], *mfs[lev], geom[lev + 1], geom[lev], comp, 1, refRatio(lev));
+		}
+	}
+}
+
 // put together an array of multifabs for writing
 template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF_cc(const int included_ghosts) -> amrex::Vector<amrex::MultiFab>
 {
 	amrex::Vector<amrex::MultiFab> r;
 	for (int i = 0; i <= finest_level; ++i) {
 		r.push_back(PlotFileMFAtLevel_cc(i, included_ghosts));
+	}
+	amrex::Vector<amrex::MultiFab *> r_ptrs;
+	r_ptrs.reserve(r.size());
+	for (auto &mf : r) {
+		r_ptrs.push_back(&mf);
+	}
+	AverageDownDerived(r_ptrs, plotfileVarsToInclude_cc_);
+	if (included_ghosts > 0) {
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			r[lev].FillBoundary(geom[lev].periodicity());
+		}
 	}
 	return r;
 }
@@ -3181,14 +3690,36 @@ template <typename problem_t> void AMRSimulation<problem_t>::createDiagnostics()
 	amrex::ParmParse const pp(code_prefix);
 	amrex::Vector<std::string> diags;
 
-	int const n_diags = pp.countval("diagnostics");
+	int n_diags = pp.countval("diagnostics");
+	const int io_rank = amrex::ParallelDescriptor::IOProcessorNumber();
+	amrex::ParallelDescriptor::Bcast(&n_diags, 1, io_rank);
 	if (n_diags > 0) {
 		m_diagnostics.resize(n_diags);
 		diags.resize(n_diags);
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			for (int n = 0; n < n_diags; ++n) {
+				pp.get("diagnostics", diags[n], n);
+			}
+		}
+		for (int n = 0; n < n_diags; ++n) {
+			int len = static_cast<int>(diags[n].size());
+			amrex::ParallelDescriptor::Bcast(&len, 1, io_rank);
+			std::vector<char> buffer;
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				buffer.assign(diags[n].begin(), diags[n].end());
+			} else {
+				buffer.resize(len);
+			}
+			if (len > 0) {
+				amrex::ParallelDescriptor::Bcast(buffer.data(), len, io_rank);
+			}
+			if (!amrex::ParallelDescriptor::IOProcessor()) {
+				diags[n].assign(buffer.begin(), buffer.end());
+			}
+		}
 	}
 
 	for (int n = 0; n < n_diags; ++n) {
-		pp.get("diagnostics", diags[n], n);
 		std::string const diag_prefix = code_prefix + "." + diags[n];
 		amrex::ParmParse const ppd(diag_prefix);
 		std::string diag_type;
@@ -3242,8 +3773,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 	const BL_PROFILE("AMRSimulation::doDiagnostics()");
 	updateDiagnostics();
 
-	bool const computeVars =
-	    std::any_of(m_diagnostics.cbegin(), m_diagnostics.cend(), [this](const auto &diag) { return diag->doDiag(tNew_[0], istep[0]); });
+	amrex::Vector<int> diag_willdo(m_diagnostics.size(), 0);
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		for (int n = 0; n < static_cast<int>(m_diagnostics.size()); ++n) {
+			diag_willdo[n] = m_diagnostics[n]->doDiag(tNew_[0], istep[0]) ? 1 : 0;
+		}
+	}
+	if (!diag_willdo.empty()) {
+		amrex::ParallelDescriptor::Bcast(diag_willdo.data(), diag_willdo.size(), amrex::ParallelDescriptor::IOProcessorNumber());
+	}
+
+	bool const computeVars = std::any_of(diag_willdo.cbegin(), diag_willdo.cend(), [](int v) { return v != 0; });
 
 	amrex::Vector<std::unique_ptr<amrex::MultiFab>> diagMFVec(finestLevel() + 1);
 	amrex::Vector<const amrex::MultiFab *> diagMFVec_ptr;
@@ -3265,6 +3805,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 				amrex::MultiFab::Copy(*diagMFVec[lev], mf, mf_idx, v, 1, 1);
 			}
 		}
+		amrex::Vector<amrex::MultiFab *> diagMFVec_raw;
+		diagMFVec_raw.reserve(diagMFVec.size());
+		for (auto &mf : diagMFVec) {
+			diagMFVec_raw.push_back(mf.get());
+		}
+		AverageDownDerived(diagMFVec_raw, m_diagVars);
+		for (int lev = 0; lev <= finestLevel(); ++lev) {
+			if (diagMFVec[lev]->nGrow() > 0) {
+				diagMFVec[lev]->FillBoundary(geom[lev].periodicity());
+			}
+		}
 		diagMFVec_ptr = GetVecOfConstPtrs(diagMFVec);
 	}
 
@@ -3272,38 +3823,39 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 	auto const geoms = Geom(0, finestLevel());
 	auto const ref_ratio = refRatio();
 
-	for (const auto &diag : m_diagnostics) {
-		if (diag->doDiag(tNew_[0], istep[0])) {
+	for (int n = 0; n < static_cast<int>(m_diagnostics.size()); ++n) {
+		if (diag_willdo[n] != 0) {
+			auto *diag = m_diagnostics[n].get();
 			// Set common diagnostic data (including simulation pointer)
 			diag->setDiagData(this, &diagMFVec_ptr, &m_diagVars, &geoms, &ref_ratio, &simulationMetadata_);
 
 			// Call the appropriate template processDiag for each diagnostic type
 			// All diagnostics now have a unified API: processDiag<problem_t>(nstep, time)
-			auto *plotfileDiag = dynamic_cast<DiagPlotfile *>(diag.get());
+			auto *plotfileDiag = dynamic_cast<DiagPlotfile *>(diag);
 			if (plotfileDiag != nullptr) {
 				plotfileDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 				continue;
 			}
 
-			auto *projectionDiag = dynamic_cast<DiagProjectionPlot *>(diag.get());
+			auto *projectionDiag = dynamic_cast<DiagProjectionPlot *>(diag);
 			if (projectionDiag != nullptr) {
 				projectionDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 				continue;
 			}
 
-			auto *framePlaneDiag = dynamic_cast<DiagFramePlane *>(diag.get());
+			auto *framePlaneDiag = dynamic_cast<DiagFramePlane *>(diag);
 			if (framePlaneDiag != nullptr) {
 				framePlaneDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 				continue;
 			}
 
-			auto *pdfDiag = dynamic_cast<DiagPDF *>(diag.get());
+			auto *pdfDiag = dynamic_cast<DiagPDF *>(diag);
 			if (pdfDiag != nullptr) {
 				pdfDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 				continue;
 			}
 
-			auto *particleTxtDiag = dynamic_cast<DiagParticleTxt *>(diag.get());
+			auto *particleTxtDiag = dynamic_cast<DiagParticleTxt *>(diag);
 			if (particleTxtDiag != nullptr) {
 				particleTxtDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 				continue;
@@ -3433,7 +3985,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 	amrex::Print() << "Writing plotfile " << plotfilename << "\n";
 
 	// Update SFH data in metadata before writing
-	particleRegister_.writeSFHToMetadata(simulationMetadata_);
+	particleRegister_.writeSFHToMetadata(simulationMetadata_, sn_count_cumulative_);
 
 #ifdef QUOKKA_USE_OPENPMD
 	// TODO(bwibking): write particles using openPMD
@@ -3663,7 +4215,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 	}
 
 	// Update SFH data in metadata before writing
-	particleRegister_.writeSFHToMetadata(simulationMetadata_);
+	particleRegister_.writeSFHToMetadata(simulationMetadata_, sn_count_cumulative_);
 
 	// write Metadata file
 	WriteMetadataFile(checkpointname + "/metadata.yaml");
@@ -4111,7 +4663,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	}
 
 	// Read SFH data from metadata
-	last_sfh_time_ = particleRegister_.readSFH(simulationMetadata_);
+	last_sfh_time_ = particleRegister_.readSFH(simulationMetadata_, sn_count_cumulative_);
 #endif // AMREX_SPACEDIM == 3
 
 	areInitialConditionsDefined_ = true;

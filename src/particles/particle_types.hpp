@@ -2,6 +2,7 @@
 #define PARTICLE_TYPES_HPP_
 
 #include "AMReX_AmrParticles.H"
+#include "AMReX_Enum.H"
 #include "AMReX_ParIter.H"
 #include "physics_info.hpp"
 
@@ -87,12 +88,17 @@ AMREX_ENUM(SNScheme,				   // NOLINT
 
 //-------------------- Radiation particles --------------------
 
-// Indices for radiation particles (Rad_particles), birth time + death time + radiation groups
-enum RadParticleDataIdx {
-	RadParticleBirthTimeIdx = 0, // Time when particle becomes active
-	RadParticleDeathTimeIdx,     // Time when particle becomes inactive
-	RadParticleLumIdx	     // Base index for luminosity components
-};
+// Indices for radiation particles (Rad_particles) using AMREX_ENUM for automatic string conversion
+AMREX_ENUM(RadParticleRealIdx, // NOLINT
+	   birth_time,	       // Time when particle becomes active
+	   death_time,	       // Time when particle becomes inactive
+	   luminosity	       // Base luminosity component (expanded to luminosity_0, luminosity_1, ... in I/O)
+);
+
+// Backward compatibility aliases for existing code
+constexpr int RadParticleBirthTimeIdx = static_cast<int>(RadParticleRealIdx::birth_time);
+constexpr int RadParticleDeathTimeIdx = static_cast<int>(RadParticleRealIdx::death_time);
+constexpr int RadParticleLumIdx = static_cast<int>(RadParticleRealIdx::luminosity); // Base index for luminosity components
 
 // Number of real components for Rad_particles, birth time + death time + radiation groups
 template <typename problem_t>
@@ -112,13 +118,19 @@ template <typename problem_t> using RadParticleIterator = amrex::ParIter<RadPart
 
 //-------------------- Gravitating particles --------------------
 
-// Indices for gravitating particles (CIC_particles), mass + 3 velocity components
-enum CICParticleDataIdx {
-	CICParticleMassIdx = 0, // Mass of the particle
-	CICParticleVxIdx,	// Velocity in x direction
-	CICParticleVyIdx,	// Velocity in y direction
-	CICParticleVzIdx	// Velocity in z direction
-};
+// Indices for gravitating particles (CIC_particles) using AMREX_ENUM for automatic string conversion
+AMREX_ENUM(CICParticleRealIdx, // NOLINT
+	   mass,	       // Mass of the particle
+	   vx,		       // Velocity in x direction
+	   vy,		       // Velocity in y direction
+	   vz		       // Velocity in z direction
+);
+
+// Backward compatibility aliases for existing code
+constexpr int CICParticleMassIdx = static_cast<int>(CICParticleRealIdx::mass);
+constexpr int CICParticleVxIdx = static_cast<int>(CICParticleRealIdx::vx);
+constexpr int CICParticleVyIdx = static_cast<int>(CICParticleRealIdx::vy);
+constexpr int CICParticleVzIdx = static_cast<int>(CICParticleRealIdx::vz);
 
 // Number of real components for CIC_particles, mass + 3 velocity components
 constexpr int CICParticleRealComps = 4;
@@ -129,16 +141,25 @@ using CICParticleIterator = amrex::ParIter<CICParticleRealComps>;
 
 //-------------------- Gravitating radiation particles --------------------
 
-// Indices for gravitating radiation particles (CICRad_particles), mass + 3 velocity components + birth time + death time + radiation groups
-enum CICRadParticleDataIdx {
-	CICRadParticleMassIdx = 0,  // Mass of the particle
-	CICRadParticleVxIdx,	    // Velocity in x direction
-	CICRadParticleVyIdx,	    // Velocity in y direction
-	CICRadParticleVzIdx,	    // Velocity in z direction
-	CICRadParticleBirthTimeIdx, // Time when particle becomes active
-	CICRadParticleDeathTimeIdx, // Time when particle becomes inactive
-	CICRadParticleLumIdx	    // Base index for luminosity components
-};
+// Indices for gravitating radiation particles (CICRad_particles) using AMREX_ENUM for automatic string conversion
+AMREX_ENUM(CICRadParticleRealIdx, // NOLINT
+	   mass,		  // Mass of the particle
+	   vx,			  // Velocity in x direction
+	   vy,			  // Velocity in y direction
+	   vz,			  // Velocity in z direction
+	   birth_time,		  // Time when particle becomes active
+	   death_time,		  // Time when particle becomes inactive
+	   luminosity		  // Base luminosity component (expanded to luminosity_0, luminosity_1, ... in I/O)
+);
+
+// Backward compatibility aliases for existing code
+constexpr int CICRadParticleMassIdx = static_cast<int>(CICRadParticleRealIdx::mass);
+constexpr int CICRadParticleVxIdx = static_cast<int>(CICRadParticleRealIdx::vx);
+constexpr int CICRadParticleVyIdx = static_cast<int>(CICRadParticleRealIdx::vy);
+constexpr int CICRadParticleVzIdx = static_cast<int>(CICRadParticleRealIdx::vz);
+constexpr int CICRadParticleBirthTimeIdx = static_cast<int>(CICRadParticleRealIdx::birth_time);
+constexpr int CICRadParticleDeathTimeIdx = static_cast<int>(CICRadParticleRealIdx::death_time);
+constexpr int CICRadParticleLumIdx = static_cast<int>(CICRadParticleRealIdx::luminosity); // Base index for luminosity components
 
 // Number of real components for CICRad_particles, mass + 3 velocity components + birth time + death time + radiation groups
 template <typename problem_t>
@@ -167,26 +188,33 @@ enum class StellarEvolutionStage { LowMassStar, SNProgenitor, SNRemnant, LowMass
 
 //-------------------- Stellar population particles --------------------
 
-// Indices for StochasticStellarPop_particles
-enum StochasticStellarPopParticleDataIdx {
-	StochasticStellarPopParticleMassIdx = 0,     // Mass of the particle
-	StochasticStellarPopParticleVxIdx,	     // Velocity in x direction
-	StochasticStellarPopParticleVyIdx,	     // Velocity in y direction
-	StochasticStellarPopParticleVzIdx,	     // Velocity in z direction
-	StochasticStellarPopParticleBirthTimeIdx,    // Time when particle becomes active
-	StochasticStellarPopParticleDeathTimeIdx,    // Time when particle becomes inactive
-	StochasticStellarPopParticleBirthPosXIdx,    // Birthplace x coordinate
-	StochasticStellarPopParticleBirthPosYIdx,    // Birthplace y coordinate
-	StochasticStellarPopParticleBirthPosZIdx,    // Birthplace z coordinate
-	StochasticStellarPopParticleDeathPosXIdx,    // Deathplace x coordinate
-	StochasticStellarPopParticleDeathPosYIdx,    // Deathplace y coordinate
-	StochasticStellarPopParticleDeathPosZIdx,    // Deathplace z coordinate
-	StochasticStellarPopParticleDeathDensityIdx, // Density at death cell
-	StochasticStellarPopParticleMassAtBirthIdx,  // Particle mass at birth
-	StochasticStellarPopParticleLumIdx	     // Base index for luminosity components
-};
+// Indices for StochasticStellarPop_particles using AMREX_ENUM for automatic string conversion
+AMREX_ENUM(StochasticStellarPopParticleRealIdx, // NOLINT
+	   mass,				// Mass of the particle
+	   vx,					// Velocity in x direction
+	   vy,					// Velocity in y direction
+	   vz,					// Velocity in z direction
+	   birth_time,				// Time when particle becomes active
+	   death_time,				// Time when particle becomes inactive
+	   mass_at_birth,			// Particle mass at birth
+	   luminosity				// Base luminosity component (expanded to luminosity_0, luminosity_1, ... in I/O)
+);
 
-constexpr int StochasticStellarPopParticleStageIdx = 0; // Evolution stage of the particle, index in the integer components
+// Integer component indices using AMREX_ENUM
+AMREX_ENUM(StochasticStellarPopParticleIntIdx, // NOLINT
+	   evolution_stage		       // Evolution stage of the particle
+);
+
+// Backward compatibility aliases for existing code
+constexpr int StochasticStellarPopParticleMassIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::mass);
+constexpr int StochasticStellarPopParticleVxIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::vx);
+constexpr int StochasticStellarPopParticleVyIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::vy);
+constexpr int StochasticStellarPopParticleVzIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::vz);
+constexpr int StochasticStellarPopParticleBirthTimeIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::birth_time);
+constexpr int StochasticStellarPopParticleDeathTimeIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::death_time);
+constexpr int StochasticStellarPopParticleMassAtBirthIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::mass_at_birth);
+constexpr int StochasticStellarPopParticleLumIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::luminosity); // Base index for luminosity components
+constexpr int StochasticStellarPopParticleStageIdx = static_cast<int>(StochasticStellarPopParticleIntIdx::evolution_stage);
 
 // Number of real components for StochasticStellarPop_particles, mass + 3 velocity components + times + positions + death density + luminosity
 template <typename problem_t>
@@ -211,18 +239,32 @@ using StochasticStellarPopParticleIterator = amrex::ParIter<StochasticStellarPop
 
 //-------------------- Test particles --------------------
 
-// Indices for test particles (Test_particles)
-enum TestParticleDataIdx {
-	TestParticleMassIdx = 0,  // Mass of the particle
-	TestParticleVxIdx,	  // Velocity in x direction
-	TestParticleVyIdx,	  // Velocity in y direction
-	TestParticleVzIdx,	  // Velocity in z direction
-	TestParticleBirthTimeIdx, // Time when particle becomes active
-	TestParticleDeathTimeIdx, // Time when particle becomes inactive
-	TestParticleLumIdx	  // Base index for luminosity components
-};
+// Indices for test particles (Test_particles) using AMREX_ENUM for automatic string conversion
+// The enum values are short names that will appear directly in the Header file
+AMREX_ENUM(TestParticleRealIdx, // NOLINT
+	   mass,		// Mass of the particle
+	   vx,			// Velocity in x direction
+	   vy,			// Velocity in y direction
+	   vz,			// Velocity in z direction
+	   birth_time,		// Time when particle becomes active
+	   death_time,		// Time when particle becomes inactive
+	   luminosity		// Base luminosity component (expanded to luminosity_0, luminosity_1, ... in I/O)
+);
 
-constexpr int TestParticleStageIdx = 0; // Evolution stage of the particle, index in the integer components
+// Integer component indices using AMREX_ENUM
+AMREX_ENUM(TestParticleIntIdx, // NOLINT
+	   evolution_stage     // Evolution stage of the particle
+);
+
+// Backward compatibility aliases for existing code
+constexpr int TestParticleMassIdx = static_cast<int>(TestParticleRealIdx::mass);
+constexpr int TestParticleVxIdx = static_cast<int>(TestParticleRealIdx::vx);
+constexpr int TestParticleVyIdx = static_cast<int>(TestParticleRealIdx::vy);
+constexpr int TestParticleVzIdx = static_cast<int>(TestParticleRealIdx::vz);
+constexpr int TestParticleBirthTimeIdx = static_cast<int>(TestParticleRealIdx::birth_time);
+constexpr int TestParticleDeathTimeIdx = static_cast<int>(TestParticleRealIdx::death_time);
+constexpr int TestParticleLumIdx = static_cast<int>(TestParticleRealIdx::luminosity); // Base index for luminosity components
+constexpr int TestParticleStageIdx = static_cast<int>(TestParticleIntIdx::evolution_stage);
 
 // Number of real components for Test_particles
 template <typename problem_t>
@@ -243,13 +285,19 @@ template <typename problem_t> using TestParticleIterator = amrex::ParIter<TestPa
 
 //-------------------- Sink particles --------------------
 
-// Indices for Sink_particles
-enum SinkParticleDataIdx {
-	SinkParticleMassIdx = 0, // Mass of the particle
-	SinkParticleVxIdx,	 // Velocity in x direction
-	SinkParticleVyIdx,	 // Velocity in y direction
-	SinkParticleVzIdx,	 // Velocity in z direction
-};
+// Indices for Sink_particles using AMREX_ENUM for automatic string conversion
+AMREX_ENUM(SinkParticleRealIdx, // NOLINT
+	   mass,		// Mass of the particle
+	   vx,			// Velocity in x direction
+	   vy,			// Velocity in y direction
+	   vz			// Velocity in z direction
+);
+
+// Backward compatibility aliases for existing code
+constexpr int SinkParticleMassIdx = static_cast<int>(SinkParticleRealIdx::mass);
+constexpr int SinkParticleVxIdx = static_cast<int>(SinkParticleRealIdx::vx);
+constexpr int SinkParticleVyIdx = static_cast<int>(SinkParticleRealIdx::vy);
+constexpr int SinkParticleVzIdx = static_cast<int>(SinkParticleRealIdx::vz);
 
 // Number of real components for Sink_particles
 constexpr int SinkParticleRealComps = 4; // mass, vx, vy, vz
@@ -259,6 +307,92 @@ using SinkParticleContainer = amrex::AmrParticleContainer<SinkParticleRealComps>
 using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
 
 #endif // AMREX_SPACEDIM == 3
+
+//-------------------- Component Names for I/O --------------------
+
+// Helper function to generate component names from an enum type
+// If expandLast is true, the last enum component is expanded with _0, _1, ... suffixes
+// to fill up to nComps total components
+template <typename EnumType, int nComps, bool expandLast> auto expandEnumNames() -> amrex::Vector<std::string>
+{
+	const std::vector<std::string> enum_names = amrex::getEnumNameStrings<EnumType>();
+	const auto enum_size = static_cast<int>(enum_names.size());
+	amrex::Vector<std::string> names;
+
+	if constexpr (nComps <= 0) {
+		return names;
+	}
+
+	if constexpr (!expandLast) {
+		// No expansion - use enum names directly
+		return {enum_names.begin(), enum_names.end()};
+	}
+
+	// Add all components except the last one
+	for (int i = 0; i < enum_size - 1; ++i) {
+		names.push_back(enum_names[i]);
+	}
+
+	// Expand the last component into name_0, name_1, ...
+	const std::string &base_name = enum_names.back();
+	const int nExtra = nComps - enum_size + 1;
+	for (int i = 0; i < nExtra; ++i) {
+		names.push_back(base_name + "_" + std::to_string(i));
+	}
+
+	return names;
+}
+
+// Unified template function to get real component names for any particle type
+// Uses AMREX_ENUM's getEnumNameStrings() and expands the last component for particle types with luminosity
+template <ParticleType particleType, typename problem_t> auto getParticleRealCompNames() -> amrex::Vector<std::string>
+{
+	if constexpr (particleType == ParticleType::Rad) {
+		return expandEnumNames<RadParticleRealIdx, RadParticleRealComps<problem_t>, true>();
+	}
+#if AMREX_SPACEDIM == 3
+	else if constexpr (particleType == ParticleType::CIC) {
+		return expandEnumNames<CICParticleRealIdx, CICParticleRealComps, false>();
+	} else if constexpr (particleType == ParticleType::CICRad) {
+		return expandEnumNames<CICRadParticleRealIdx, CICRadParticleRealComps<problem_t>, true>();
+	} else if constexpr (particleType == ParticleType::StochasticStellarPop) {
+		return expandEnumNames<StochasticStellarPopParticleRealIdx, StochasticStellarPopParticleRealComps<problem_t>, true>();
+	} else if constexpr (particleType == ParticleType::Sink) {
+		return expandEnumNames<SinkParticleRealIdx, SinkParticleRealComps, false>();
+	} else if constexpr (particleType == ParticleType::Test) {
+		return expandEnumNames<TestParticleRealIdx, TestParticleRealComps<problem_t>, true>();
+	}
+#endif
+	else {
+		return {};
+	}
+}
+
+// Unified template function to get integer component names for any particle type
+template <ParticleType particleType, typename problem_t> auto getParticleIntCompNames() -> amrex::Vector<std::string>
+{
+	amrex::Vector<std::string> names;
+
+	if constexpr (particleType == ParticleType::Rad) { // NOLINT
+							   // No integer components
+	}
+#if AMREX_SPACEDIM == 3
+	else if constexpr (particleType == ParticleType::CIC) {	     // NOLINT
+								     // No integer components
+	} else if constexpr (particleType == ParticleType::CICRad) { // NOLINT
+								     // No integer components
+	} else if constexpr (particleType == ParticleType::StochasticStellarPop) {
+		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<StochasticStellarPopParticleIntIdx>();
+		names = {enum_names.begin(), enum_names.end()};
+	} else if constexpr (particleType == ParticleType::Sink) { // NOLINT
+								   // No integer components
+	} else if constexpr (particleType == ParticleType::Test) {
+		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<TestParticleIntIdx>();
+		names = {enum_names.begin(), enum_names.end()};
+	}
+#endif
+	return names;
+}
 
 //-------------------- Units --------------------
 
