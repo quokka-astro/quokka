@@ -22,3 +22,13 @@ amr.grid_eff        = 0.7   # default
 
 do_reflux = 1
 do_subcycle = 1
+statistics_interval = 10
+
+# *****************************************************************
+# Kelvin-Helmholtz problem parameters
+# *****************************************************************
+kelvin_helmholtz.rho0 = 1.0
+kelvin_helmholtz.P0 = 1.0
+kelvin_helmholtz.shear_thickness = 0.0009765625  # 2 * (1.0 / 2048)
+kelvin_helmholtz.perturb_amplitude = 0.01
+kelvin_helmholtz.boost_factor = 100.0  # V0 = boost_factor * Cs

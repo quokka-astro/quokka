@@ -61,23 +61,35 @@ template <> void QuokkaSimulation<KelvinHelmholzProblem>::setInitialConditionsOn
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
+	amrex::ParmParse const pp("kelvin_helmholtz");
+	amrex::Real rho0 = 1.0;
+	amrex::Real P0 = 1.0;
+	amrex::Real shear_thickness = 0.02;
+	amrex::Real perturb_amplitude = 0.01;
+	amrex::Real boost_factor = 0.0;
+	pp.query("rho0", rho0);
+	pp.query("P0", P0);
+	pp.query("shear_thickness", shear_thickness);
+	pp.query("perturb_amplitude", perturb_amplitude);
+	pp.query("boost_factor", boost_factor);
+
 	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
 	amrex::Real const y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
-	amrex::Real const A = 0.01;
+	amrex::Real const Lx = prob_hi[0] - prob_lo[0];
+	amrex::Real const gamma = quokka::EOS_Traits<KelvinHelmholzProblem>::gamma;
+	amrex::Real const cs = std::sqrt(gamma * P0 / rho0);
+	amrex::Real const V0 = boost_factor * cs;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 		amrex::Real const y = prob_lo[1] + (j + static_cast<amrex::Real>(0.5)) * dx[1];
 
-		double const L = 0.01;	  // shearing layer thickness
-		double const sigma = 0.2; // perturbation thickness
-		double const yy = std::abs(y - y0) - 0.25;
-
-		double const rho = 1.5 - 0.5 * std::tanh(yy / L);
-		double const vx = 0.5 * std::tanh(yy / L);
-		double const vy = A * std::cos(4.0 * M_PI * (x - x0)) * std::exp(-(yy * yy) / (sigma * sigma));
-		double const vz = 0.;
-		double const P = 2.5;
+		double const yy = y - y0;
+		double const rho = rho0;
+		double const vx = 0.5 * cs * std::tanh(yy / shear_thickness) + V0;
+		double const vy = perturb_amplitude * std::sin(4.0 * M_PI * (x - x0) / Lx);
+		double const vz = 0.0;
+		double const P = P0;
 
 		AMREX_ASSERT(!std::isnan(vx));
 		AMREX_ASSERT(!std::isnan(vy));
@@ -86,7 +98,6 @@ template <> void QuokkaSimulation<KelvinHelmholzProblem>::setInitialConditionsOn
 		AMREX_ASSERT(!std::isnan(P));
 
 		const auto v_sq = vx * vx + vy * vy + vz * vz;
-		const auto gamma = quokka::EOS_Traits<KelvinHelmholzProblem>::gamma;
 
 		state_cc(i, j, k, HydroSystem<KelvinHelmholzProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<KelvinHelmholzProblem>::x1Momentum_index) = rho * vx;
@@ -126,6 +137,21 @@ template <> void QuokkaSimulation<KelvinHelmholzProblem>::refineGrid(int lev, am
 			}
 		});
 	}
+}
+
+template <> auto QuokkaSimulation<KelvinHelmholzProblem>::ComputeStatistics() -> std::map<std::string, amrex::Real>
+{
+	std::map<std::string, amrex::Real> stats;
+
+	const amrex::Real Ekin_y = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
+		Real const rho = state(i, j, k, HydroSystem<KelvinHelmholzProblem>::density_index);
+		Real const py = state(i, j, k, HydroSystem<KelvinHelmholzProblem>::x2Momentum_index);
+		Real const vy = py / rho;
+		return 0.5 * rho * vy * vy;
+	});
+
+	stats["Ekin_y"] = Ekin_y;
+	return stats;
 }
 
 auto problem_main() -> int
