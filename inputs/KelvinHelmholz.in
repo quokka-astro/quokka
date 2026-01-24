@@ -13,10 +13,10 @@ amr.v              = 0       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 2048 2048 8
-amr.max_level       = 4     # number of levels = max_level + 1
-amr.blocking_factor = 128   # grid size must be divisible by this
-amr.max_grid_size   = 128
+amr.n_cell          = 512 512 0
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor = 16   # grid size must be divisible by this
+amr.max_grid_size   = 64
 amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
 amr.grid_eff        = 0.7   # default
 
@@ -29,6 +29,6 @@ statistics_interval = 10
 # *****************************************************************
 kelvin_helmholtz.rho0 = 1.0
 kelvin_helmholtz.P0 = 1.0
-kelvin_helmholtz.shear_thickness = 0.0009765625  # 2 * (1.0 / 2048)
+kelvin_helmholtz.shear_thickness = 2.0 / amr.n_cell[0]
 kelvin_helmholtz.perturb_amplitude = 0.01
 kelvin_helmholtz.boost_factor = 100.0  # V0 = boost_factor * Cs
