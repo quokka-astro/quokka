@@ -49,10 +49,10 @@ auto main(int argc, char **argv) -> int
 		/// iterate the grid generation at least max(4, amr.max_level) times.
 		/// [see https://github.com/AMReX-Codes/amrex/pull/4903 for details]
 		amrex::ParmParse pp_amr("amr");
-		if (!pp_amr.contains("amr.max_grid_iterations")) {
+		if (!pp_amr.contains("max_grid_iterations")) {
 			int amr_max_level = -1;
 			pp_amr.query("max_level", amr_max_level);
-			pp_amr.add("amr.max_grid_iterations", std::max(4, amr_max_level));
+			pp_amr.add("max_grid_iterations", std::max(4, amr_max_level));
 		}
 
 		/// override geometry.is_periodic based on quokka.bc
