@@ -1972,8 +1972,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 				// Fully periodic or OpenBC: use no-op functor (physical boundary values are already correct)
 				amrex::GpuBndryFuncFab<setFunctorPhiNoOp> boundaryFunctor(setFunctorPhiNoOp{});
 				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiNoOp>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
-				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiNoOp>> phiCoarseBdryFunct(geom[lev - 1], phiBC,
-														       boundaryFunctor);
+				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiNoOp>> phiCoarseBdryFunct(geom[lev - 1], phiBC, boundaryFunctor);
 
 				amrex::FillPatchTwoLevels(phi_extended, 0., {&phi[lev - 1]}, {0.}, {&phi[lev]}, {0.}, 0, 0, 1, geom[lev - 1], geom[lev],
 							  phiCoarseBdryFunct, 0, phiBdryFunct, 0, refRatio(lev - 1), &amrex::quadratic_interp, phiBC, 0);
