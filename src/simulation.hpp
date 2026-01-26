@@ -190,6 +190,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real initShrink_ = 1.0;	      // default: no shrink
 	amrex::Long cycleCount_ = 0;
 	int printCycleTiming_ = 0;				     // default: don't print
+	int cycleTimingFlushInterval_ = 50;			     // buffered write interval for cycle timing
+	std::string cycleTimingFile_{"cycle_timing.txt"};	     // cycle timing output filename
 	amrex::Long maxTimesteps_ = std::numeric_limits<int>::max(); // default: no limit
 	amrex::Long maxWalltime_ = 0;				     // default: no limit
 	int ascentInterval_ = -1;				     // -1 == no in-situ renders with Ascent
@@ -928,6 +930,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Default print_cycle_timing = 0
 	pp.query("print_cycle_timing", printCycleTiming_);
+	pp.query("cycle_timing_flush_interval", cycleTimingFlushInterval_);
+	pp.query("cycle_timing_file", cycleTimingFile_);
 
 	// specify this on the command-line in order to restart from a checkpoint
 	// file
@@ -1306,6 +1310,29 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	int last_statistics_step = 0;
 	int last_plot_file_step = 0;
 	int last_chk_file_step = 0;
+	std::ofstream cycle_timing_file;
+	std::vector<std::string> cycle_timing_buffer;
+	const int cycle_timing_flush_interval = std::max(1, cycleTimingFlushInterval_);
+	auto flushCycleTimingBuffer = [&]() {
+		if (!cycle_timing_file.is_open() || cycle_timing_buffer.empty()) {
+			return;
+		}
+		for (auto const &line : cycle_timing_buffer) {
+			cycle_timing_file << line;
+		}
+		cycle_timing_file.flush();
+		cycle_timing_buffer.clear();
+	};
+
+	if (printCycleTiming_ == 1 && amrex::ParallelDescriptor::IOProcessor()) {
+		cycle_timing_file.open(cycleTimingFile_, std::ios::out);
+		if (cycle_timing_file.is_open()) {
+			cycle_timing_file << "# cycle elapsed_sec\n";
+			cycle_timing_buffer.reserve(static_cast<size_t>(cycle_timing_flush_interval));
+		} else {
+			amrex::Print() << "[WARNING] Failed to open cycle timing file '" << cycleTimingFile_ << "' for writing.\n";
+		}
+	}
 
 	double next_plot_file_time = 0;
 	if (plotTimeInterval_ > 0) {
@@ -1348,10 +1375,20 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		amrex::ParallelDescriptor::Barrier(); // synchronize all MPI ranks
 
-		if (suppress_output == 0) {
+		amrex::Real elapsed_sec = 0.0;
+		if (printCycleTiming_ == 1) {
 			// output per-cycle timing
+			elapsed_sec = getCycleWalltime();
+			if (amrex::ParallelDescriptor::IOProcessor() && cycle_timing_file.is_open()) {
+				cycle_timing_buffer.emplace_back(fmt::format("{} {:.17g}\n", step + 1, elapsed_sec));
+				if (static_cast<int>(cycle_timing_buffer.size()) >= cycle_timing_flush_interval) {
+					flushCycleTimingBuffer();
+				}
+			}
+		}
+
+		if (suppress_output == 0) {
 			if (printCycleTiming_ == 1) {
-				amrex::Real elapsed_sec = getCycleWalltime();
 				amrex::Print() << "(cycle time: " << elapsed_sec << " s) ...\n";
 			} else {
 				amrex::Print() << "...\n";
@@ -1563,6 +1600,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			break;
 		}
 	}
+
+	flushCycleTimingBuffer();
 
 	if (step == 0) {
 		amrex::Print() << "No cell updates performed!\n";
