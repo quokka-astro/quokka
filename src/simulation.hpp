@@ -1631,7 +1631,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 }
 
 // Functor for physical boundary conditions on gravitational potential (phi)
-// Enforces homogeneous Dirichlet (phi = 0) at physical boundaries, consistent with Poisson solver BCs
+// No-op, consistent with OpenBCSolver
+struct setFunctorPhiNoOp {
+	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, const int &dcomp, const int &numcomp,
+					 amrex::GeometryData const &geom, const amrex::Real &time, const amrex::BCRec *bcr, int bcomp,
+					 const int &orig_comp) const
+	{
+		amrex::ignore_unused(iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
+	}
+};
+
+// Enforces homogeneous Dirichlet (phi = 0) at physical boundaries, consistent with MLMG Poisson solver with Dirichlet BC
 struct setFunctorPhiZero {
 	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, const int &dcomp, const int &numcomp,
 					 amrex::GeometryData const &geom, const amrex::Real &time, const amrex::BCRec *bcr, int bcomp,
@@ -1886,15 +1896,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 #endif
 }
 
-struct setFunctorParticleAccel {
-	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, const int &dcomp, const int &numcomp,
-					 amrex::GeometryData const &geom, const amrex::Real &time, const amrex::BCRec *bcr, int bcomp,
-					 const int &orig_comp) const
-	{
-		amrex::ignore_unused(iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
-	}
-};
-
 #if AMREX_SPACEDIM == 3
 template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLevels(const amrex::Real dt)
 {
@@ -1921,7 +1922,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 	// For OpenBC solver, boundary values are physically meaningful and should NOT be overridden.
 	const bool needs_dirichlet_bc = use_mlmg_solver && !geom[0].isAllPeriodic();
 
-	// Set up boundary condition types for phi (only needed if applying Dirichlet BCs)
+	// Set up boundary condition types for phi
 	amrex::Vector<amrex::BCRec> phiBC(1);
 	for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 		phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
@@ -1952,36 +1953,30 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 				phiBdryFunct(phi_extended, 0, 1, phi_extended.nGrowVect(), 0., 0);
 			} else {
 				// Apply physical boundary conditions to phi at open boundaries
-				amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
-				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
+				amrex::GpuBndryFuncFab<setFunctorPhiNoOp> boundaryFunctor(setFunctorPhiNoOp{});
+				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiNoOp>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
 				phiBdryFunct(phi_extended, 0, 1, phi_extended.nGrowVect(), 0., 0);
 			}
 		} else {
 			// Fine level: use FillPatchTwoLevels to properly handle coarse-fine boundaries
-			// Set up BCRec for FillPatchTwoLevels (required even for periodic domains)
-			amrex::Vector<amrex::BCRec> phiBC_fine(1);
-			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-				phiBC_fine[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
-				phiBC_fine[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
-			}
 
 			if (needs_dirichlet_bc) {
 				// MLMG with Dirichlet BC: use setFunctorPhiZero for physical boundaries
 				amrex::GpuBndryFuncFab<setFunctorPhiZero> boundaryFunctor(setFunctorPhiZero{});
-				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiZero>> phiBdryFunct(geom[lev], phiBC_fine, boundaryFunctor);
-				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiZero>> phiCoarseBdryFunct(geom[lev - 1], phiBC_fine, boundaryFunctor);
+				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiZero>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
+				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiZero>> phiCoarseBdryFunct(geom[lev - 1], phiBC, boundaryFunctor);
 
 				amrex::FillPatchTwoLevels(phi_extended, 0., {&phi[lev - 1]}, {0.}, {&phi[lev]}, {0.}, 0, 0, 1, geom[lev - 1], geom[lev],
-							  phiCoarseBdryFunct, 0, phiBdryFunct, 0, refRatio(lev - 1), &amrex::quadratic_interp, phiBC_fine, 0);
+							  phiCoarseBdryFunct, 0, phiBdryFunct, 0, refRatio(lev - 1), &amrex::quadratic_interp, phiBC, 0);
 			} else {
 				// Fully periodic or OpenBC: use no-op functor (physical boundary values are already correct)
-				amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
-				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiBdryFunct(geom[lev], phiBC_fine, boundaryFunctor);
-				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiCoarseBdryFunct(geom[lev - 1], phiBC_fine,
+				amrex::GpuBndryFuncFab<setFunctorPhiNoOp> boundaryFunctor(setFunctorPhiNoOp{});
+				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiNoOp>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
+				amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorPhiNoOp>> phiCoarseBdryFunct(geom[lev - 1], phiBC,
 														       boundaryFunctor);
 
 				amrex::FillPatchTwoLevels(phi_extended, 0., {&phi[lev - 1]}, {0.}, {&phi[lev]}, {0.}, 0, 0, 1, geom[lev - 1], geom[lev],
-							  phiCoarseBdryFunct, 0, phiBdryFunct, 0, refRatio(lev - 1), &amrex::quadratic_interp, phiBC_fine, 0);
+							  phiCoarseBdryFunct, 0, phiBdryFunct, 0, refRatio(lev - 1), &amrex::quadratic_interp, phiBC, 0);
 			}
 		}
 
