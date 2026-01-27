@@ -161,9 +161,6 @@ template <> void QuokkaSimulation<DustDamping>::computeAfterTimestep()
 {
 	auto [_, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
 
-	// force sync
-	amrex::Gpu::synchronize();
-
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		userData_.t_vec_.push_back(tNew_[0]); // store current time
 
