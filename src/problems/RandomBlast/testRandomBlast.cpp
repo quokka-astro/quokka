@@ -49,14 +49,13 @@ template <> struct Particle_Traits<RandomBlast> {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
 };
 
-constexpr Real Tgas0 = 1.0e4; // K
-constexpr Real nH0 = 0.1;     // cm^-3
 constexpr Real cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
-constexpr Real rho0 = nH0 * (m_H / cloudy_H_mass_fraction); // g cm^-3
 
 template <> struct SimulationData<RandomBlast> {
 	std::vector<int> SN_counter_arr; // Track cumulative number of SNe at all time
 
+	Real n_amb = 0.1;	     // ambient density (cm^-3)
+	Real T_amb = 1.0e4;	     // ambient temperature (K)
 	Real refine_threshold = 1.0; // gradient refinement threshold
 	std::string part_fn = "../inputs/particles_stochastic_n100.txt";
 
@@ -68,6 +67,9 @@ template <> void QuokkaSimulation<RandomBlast>::setInitialConditionsOnGrid(quokk
 	// set initial conditions
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
+
+	const Real rho0 = userData_.n_amb * (m_H / cloudy_H_mass_fraction); // g cm^-3
+	const Real Tgas0 = userData_.T_amb;
 
 	const Real vx = userData_.boost_velocity[0];
 	const Real vy = userData_.boost_velocity[1];
@@ -97,7 +99,7 @@ template <> void QuokkaSimulation<RandomBlast>::createInitialStochasticStellarPo
 	// Read particles from ASCII file. Note that this only reads real components and not integer components, therefore we need to use
 	// InitSetPhyParticles to set the integer components
 	const int nreal_extra = 7 + Physics_Traits<RandomBlast>::nGroups; // mass vx vy vz birth_time death_time mass_at_birth lum[nGroups]
-	StochasticStellarPopParticles->SetVerbose(1);
+	StochasticStellarPopParticles->SetVerbose(0);
 	StochasticStellarPopParticles->InitFromAsciiFile(userData_.part_fn, nreal_extra, nullptr);
 
 	const Real vx = userData_.boost_velocity[0];
@@ -170,6 +172,8 @@ auto problem_main() -> int
 
 	// read parameters
 	amrex::ParmParse const pp("problem");
+	pp.query("n_amb", sim.userData_.n_amb);
+	pp.query("T_amb", sim.userData_.T_amb);
 	pp.query("refine_threshold", sim.userData_.refine_threshold); // dimensionless
 	pp.query("part_fn", sim.userData_.part_fn);
 
