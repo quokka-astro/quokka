@@ -157,30 +157,10 @@ template <> void QuokkaSimulation<DustSoundwave>::setInitialConditionsOnGrid(quo
 	});
 }
 
-template <> void QuokkaSimulation<DustSoundwave>::computeBeforeTimestep()
-{
-	if (amrex::ParallelDescriptor::IOProcessor() && userData_.t_vec_.empty()) {
-		auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.0);
-		userData_.t_vec_.push_back(0.0);
-		const double density = values.at(HydroSystem<DustSoundwave>::density_index)[0];
-		const double mom_x = values.at(HydroSystem<DustSoundwave>::x1Momentum_index)[0];
-		const double dust_density = values.at(HydroSystem<DustSoundwave>::dustDensity_index)[0];
-		const double dust_mom_x = values.at(HydroSystem<DustSoundwave>::x1DustMomentum_index)[0];
-		double const v_gas = mom_x / density;
-		double const rho_gas = density;
-		double const v_dust = dust_mom_x / dust_density;
-		double const rho_dust = dust_density;
-		userData_.v_gas_vec_.push_back(v_gas);
-		userData_.rho_gas_vec_.push_back(rho_gas);
-		userData_.v_dust_vec_.push_back(v_dust);
-		userData_.rho_dust_vec_.push_back(rho_dust);
-	}
-}
-
 template <> void QuokkaSimulation<DustSoundwave>::computeAfterTimestep()
 {
+	auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.0);
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.0);
 		userData_.t_vec_.push_back(tNew_[0]);
 		const double density = values.at(HydroSystem<DustSoundwave>::density_index)[0];
 		const double mom_x = values.at(HydroSystem<DustSoundwave>::x1Momentum_index)[0];
@@ -212,6 +192,25 @@ auto problem_main() -> int
 
 	// initialize
 	sim.setInitialConditions();
+
+	// store initial values for t=0 plotting
+
+	auto [position, val_ini] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		sim.userData_.t_vec_.push_back(0.0);
+		const double density = val_ini.at(HydroSystem<DustSoundwave>::density_index)[0];
+		const double mom_x = val_ini.at(HydroSystem<DustSoundwave>::x1Momentum_index)[0];
+		const double dust_density = val_ini.at(HydroSystem<DustSoundwave>::dustDensity_index)[0];
+		const double dust_mom_x = val_ini.at(HydroSystem<DustSoundwave>::x1DustMomentum_index)[0];
+		double const v_gas = mom_x / density;
+		double const rho_gas = density;
+		double const v_dust = dust_mom_x / dust_density;
+		double const rho_dust = dust_density;
+		sim.userData_.v_gas_vec_.push_back(v_gas);
+		sim.userData_.rho_gas_vec_.push_back(rho_gas);
+		sim.userData_.v_dust_vec_.push_back(v_dust);
+		sim.userData_.rho_dust_vec_.push_back(rho_dust);
+	}
 
 	// evolve
 	sim.evolve();
