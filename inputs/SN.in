@@ -37,7 +37,6 @@ problem.T_amb = 5.80e3
 problem.t_stop = 3.0e5
 particles.SN_scheme = SN_thermal_or_thermal_momentum
 #particles.SN_scheme = SN_thermal_only
-particles.SN_use_galilean_invariant = 1
 particles.verbose = 1
 
 max_timesteps = 10
