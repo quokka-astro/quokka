@@ -9,7 +9,6 @@
 /// \brief Implements classes and functions to organise the overall setup,
 /// timestepping, solving, and I/O of a simulation.
 
-
 // c++ headers
 #include "AMReX_MFInterpolater.H"
 #include "AMReX_Periodicity.H"
