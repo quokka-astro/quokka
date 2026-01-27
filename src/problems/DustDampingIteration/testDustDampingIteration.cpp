@@ -474,29 +474,30 @@ auto problem_main() -> int
 
 	// determine whether the test has passed
 	int status = 0;
-	const double rel_err_tol = 0.01;
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		const double rel_err_tol = 0.01;
 
-	bool const with_corr_passed = (rel_err_with_corr_gas_vx <= rel_err_tol) && (rel_err_with_corr_dust1_vx <= rel_err_tol) &&
-				      (rel_err_with_corr_dust2_vx <= rel_err_tol) && (rel_err_with_corr_gas_E <= rel_err_tol);
+		bool const with_corr_passed = (rel_err_with_corr_gas_vx <= rel_err_tol) && (rel_err_with_corr_dust1_vx <= rel_err_tol) &&
+					      (rel_err_with_corr_dust2_vx <= rel_err_tol) && (rel_err_with_corr_gas_E <= rel_err_tol);
 
-	bool const without_corr_passed = (rel_err_without_corr_gas_vx <= rel_err_tol) && (rel_err_without_corr_dust1_vx <= rel_err_tol) &&
-					 (rel_err_without_corr_dust2_vx <= rel_err_tol) && (rel_err_without_corr_gas_E <= rel_err_tol);
+		bool const without_corr_passed = (rel_err_without_corr_gas_vx <= rel_err_tol) && (rel_err_without_corr_dust1_vx <= rel_err_tol) &&
+						 (rel_err_without_corr_dust2_vx <= rel_err_tol) && (rel_err_without_corr_gas_E <= rel_err_tol);
 
-	if (!with_corr_passed || !without_corr_passed) {
-		status = 1;
-		amrex::Print() << "\nTest FAILED: one or more errors exceed tolerance of " << rel_err_tol << "\n";
-		if (!with_corr_passed) {
-			amrex::Print() << "  - Iterative with correction failed\n";
+		if (!with_corr_passed || !without_corr_passed) {
+			status = 1;
+			amrex::Print() << "\nTest FAILED: one or more errors exceed tolerance of " << rel_err_tol << "\n";
+			if (!with_corr_passed) {
+				amrex::Print() << "  - Iterative with correction failed\n";
+			}
+			if (!without_corr_passed) {
+				amrex::Print() << "  - Iterative without correction failed\n";
+			}
+		} else {
+			amrex::Print() << "\nTest PASSED: all errors within tolerance of " << rel_err_tol << "\n";
 		}
-		if (!without_corr_passed) {
-			amrex::Print() << "  - Iterative without correction failed\n";
-		}
-	} else {
-		amrex::Print() << "\nTest PASSED: all errors within tolerance of " << rel_err_tol << "\n";
-	}
 
 #ifdef HAVE_PYTHON
-	if (amrex::ParallelDescriptor::IOProcessor()) {
+
 		if (!ref_data.t_vec_.empty() && !iter_with_corr_data.t_vec_.empty() && !iter_without_corr_data.t_vec_.empty()) {
 			// gas velocity
 			matplotlibcpp::clf();

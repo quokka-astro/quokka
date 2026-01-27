@@ -118,7 +118,7 @@ auto problem_main() -> int
 
 	// evolve
 	sim.evolve();
-	int status = 1;
+	int status = 0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// X direction (fixed y and z at center)
 		auto [x_pos, x_vals] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
@@ -382,9 +382,9 @@ auto problem_main() -> int
 		const double rel_err_norm_dust_rho_z = err_norm_dust_rho_z / sol_norm_dust_rho_z;
 
 		const double rel_err_tol = 0.03;
-		if ((rel_err_norm_x < rel_err_tol) && (rel_err_norm_dust_rho_x < rel_err_tol) && (rel_err_norm_y < rel_err_tol) &&
-		    (rel_err_norm_dust_rho_y < rel_err_tol) && (rel_err_norm_z < rel_err_tol) && (rel_err_norm_dust_rho_z < rel_err_tol)) {
-			status = 0;
+		if ((rel_err_norm_x > rel_err_tol) || (rel_err_norm_dust_rho_x > rel_err_tol) || (rel_err_norm_y > rel_err_tol) ||
+		    (rel_err_norm_dust_rho_y > rel_err_tol) || (rel_err_norm_z > rel_err_tol) || (rel_err_norm_dust_rho_z > rel_err_tol)) {
+			status = 1;
 		}
 
 		amrex::Print() << "X direction:" << '\n';

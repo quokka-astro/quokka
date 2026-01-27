@@ -169,7 +169,7 @@ auto problem_main() -> int
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
 	const int nx = static_cast<int>(position.size());
 
-	int status = 1;
+	int status = 0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// Extract numerical solution slices
 		std::vector<double> rho_g_num(nx);
@@ -395,8 +395,8 @@ auto problem_main() -> int
 		amrex::Print() << "Relative L1 norm (dust velocity)= " << err_u_d << "\n";
 
 		const double tol = 0.01;
-		if (err_rho_g < tol && err_rho_d < tol && err_u_g < tol && err_u_d < tol) {
-			status = 0;
+		if (err_rho_g > tol || err_rho_d > tol || err_u_g > tol || err_u_d > tol) {
+			status = 1;
 		}
 		amrex::Print() << (status == 0 ? "Test PASSED.\n" : "Test FAILED.\n");
 	}

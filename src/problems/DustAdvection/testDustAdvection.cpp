@@ -115,7 +115,7 @@ auto problem_main() -> int
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
 	const int nx = static_cast<int>(position.size());
 
-	int status = 1;
+	int status = 0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		std::vector<double> vx_sim(nx);
 		std::vector<double> vx_exact(nx);
@@ -179,8 +179,8 @@ auto problem_main() -> int
 		const double rel_err_norm_dust_rho = err_norm_dust_rho / sol_norm_dust_rho;
 
 		const double rel_err_tol = 0.03;
-		if ((rel_err_norm < rel_err_tol) && (rel_err_norm_dust_rho < rel_err_tol)) {
-			status = 0;
+		if ((rel_err_norm > rel_err_tol) || (rel_err_norm_dust_rho > rel_err_tol)) {
+			status = 1;
 		}
 
 		amrex::Print() << "Relative L1 norm for gas x velocity = " << rel_err_norm << '\n';
