@@ -115,157 +115,159 @@ auto problem_main() -> int
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
 	const int nx = static_cast<int>(position.size());
 
-	std::vector<double> vx_sim(nx);
-	std::vector<double> vx_exact(nx);
-	std::vector<double> xs(nx);
-
-	std::vector<double> vx_dust_sim(nx);
-	std::vector<double> vx_dust_exact(nx);
-	std::vector<double> rho_dust_sim(nx);
-	std::vector<double> rho_dust_exact(nx);
-	std::vector<double> rho_gas_exact(nx);
-
-	for (int i = 0; i < nx; ++i) {
-		amrex::Real const x = position[i];
-		xs.at(i) = x;
-
-		amrex::Real const t = sim.tNew_[0];
-
-		// exact gas density (shifted by v0 * t)
-		amrex::Real x_gas_initial = std::fmod(x - v0 * t, Lx);
-		if (x_gas_initial < 0.0) {
-			x_gas_initial += Lx;
-		}
-		rho_gas_exact.at(i) = rho_bg + A * std::exp(-((x_gas_initial - xc) * (x_gas_initial - xc)) / (2.0 * sigma * sigma));
-
-		// exact dust density (shifted by dust_v0 * t)
-		amrex::Real x_dust_initial = std::fmod(x - dust_v0 * t, Lx);
-		if (x_dust_initial < 0.0) {
-			x_dust_initial += Lx;
-		}
-		rho_dust_exact.at(i) = rho_bg + A * std::exp(-((x_dust_initial - xc) * (x_dust_initial - xc)) / (2.0 * sigma * sigma));
-
-		vx_exact.at(i) = v0;
-		vx_dust_exact.at(i) = dust_v0;
-
-		// numerical values
-		const double density = values.at(HydroSystem<DustAdvection>::density_index)[i];
-		const double momentum_x = values.at(HydroSystem<DustAdvection>::x1Momentum_index)[i];
-		const double dust_density = values.at(HydroSystem<DustAdvection>::dustDensity_index)[i];
-		const double dust_momentum_x = values.at(HydroSystem<DustAdvection>::x1DustMomentum_index)[i];
-		vx_sim.at(i) = momentum_x / density;
-		vx_dust_sim.at(i) = dust_momentum_x / dust_density;
-		rho_dust_sim.at(i) = dust_density;
-	}
-
-	// error norm gas velocity
-	double err_norm = 0.;
-	double sol_norm = 0.;
-	for (int i = 0; i < nx; ++i) {
-		err_norm += std::abs(vx_sim[i] - vx_exact[i]);
-		sol_norm += std::abs(vx_exact[i]);
-	}
-	const double rel_err_norm = err_norm / sol_norm;
-
-	// error norm dust density
-	double err_norm_dust_rho = 0.;
-	double sol_norm_dust_rho = 0.;
-	for (int i = 0; i < nx; ++i) {
-		err_norm_dust_rho += std::abs(rho_dust_sim[i] - rho_dust_exact[i]);
-		sol_norm_dust_rho += std::abs(rho_dust_exact[i]);
-	}
-	const double rel_err_norm_dust_rho = err_norm_dust_rho / sol_norm_dust_rho;
-
 	int status = 1;
-	const double rel_err_tol = 0.03;
-	if ((rel_err_norm < rel_err_tol) && (rel_err_norm_dust_rho < rel_err_tol)) {
-		status = 0;
-	}
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		std::vector<double> vx_sim(nx);
+		std::vector<double> vx_exact(nx);
+		std::vector<double> xs(nx);
 
-	amrex::Print() << "Relative L1 norm for gas x velocity = " << rel_err_norm << '\n';
-	amrex::Print() << "Relative L1 norm for dust density   = " << rel_err_norm_dust_rho << '\n';
+		std::vector<double> vx_dust_sim(nx);
+		std::vector<double> vx_dust_exact(nx);
+		std::vector<double> rho_dust_sim(nx);
+		std::vector<double> rho_dust_exact(nx);
+		std::vector<double> rho_gas_exact(nx);
+
+		for (int i = 0; i < nx; ++i) {
+			amrex::Real const x = position[i];
+			xs.at(i) = x;
+
+			amrex::Real const t = sim.tNew_[0];
+
+			// exact gas density (shifted by v0 * t)
+			amrex::Real x_gas_initial = std::fmod(x - v0 * t, Lx);
+			if (x_gas_initial < 0.0) {
+				x_gas_initial += Lx;
+			}
+			rho_gas_exact.at(i) = rho_bg + A * std::exp(-((x_gas_initial - xc) * (x_gas_initial - xc)) / (2.0 * sigma * sigma));
+
+			// exact dust density (shifted by dust_v0 * t)
+			amrex::Real x_dust_initial = std::fmod(x - dust_v0 * t, Lx);
+			if (x_dust_initial < 0.0) {
+				x_dust_initial += Lx;
+			}
+			rho_dust_exact.at(i) = rho_bg + A * std::exp(-((x_dust_initial - xc) * (x_dust_initial - xc)) / (2.0 * sigma * sigma));
+
+			vx_exact.at(i) = v0;
+			vx_dust_exact.at(i) = dust_v0;
+
+			// numerical values
+			const double density = values.at(HydroSystem<DustAdvection>::density_index)[i];
+			const double momentum_x = values.at(HydroSystem<DustAdvection>::x1Momentum_index)[i];
+			const double dust_density = values.at(HydroSystem<DustAdvection>::dustDensity_index)[i];
+			const double dust_momentum_x = values.at(HydroSystem<DustAdvection>::x1DustMomentum_index)[i];
+			vx_sim.at(i) = momentum_x / density;
+			vx_dust_sim.at(i) = dust_momentum_x / dust_density;
+			rho_dust_sim.at(i) = dust_density;
+		}
+
+		// error norm gas velocity
+		double err_norm = 0.;
+		double sol_norm = 0.;
+		for (int i = 0; i < nx; ++i) {
+			err_norm += std::abs(vx_sim[i] - vx_exact[i]);
+			sol_norm += std::abs(vx_exact[i]);
+		}
+		const double rel_err_norm = err_norm / sol_norm;
+
+		// error norm dust density
+		double err_norm_dust_rho = 0.;
+		double sol_norm_dust_rho = 0.;
+		for (int i = 0; i < nx; ++i) {
+			err_norm_dust_rho += std::abs(rho_dust_sim[i] - rho_dust_exact[i]);
+			sol_norm_dust_rho += std::abs(rho_dust_exact[i]);
+		}
+		const double rel_err_norm_dust_rho = err_norm_dust_rho / sol_norm_dust_rho;
+
+		const double rel_err_tol = 0.03;
+		if ((rel_err_norm < rel_err_tol) && (rel_err_norm_dust_rho < rel_err_tol)) {
+			status = 0;
+		}
+
+		amrex::Print() << "Relative L1 norm for gas x velocity = " << rel_err_norm << '\n';
+		amrex::Print() << "Relative L1 norm for dust density   = " << rel_err_norm_dust_rho << '\n';
 
 #ifdef HAVE_PYTHON
-	// plot density (gas + dust)
-	matplotlibcpp::clf();
+		// plot density (gas + dust)
+		matplotlibcpp::clf();
 
-	std::map<std::string, std::string> rho_gas_args;
-	std::map<std::string, std::string> rho_gas_exact_args;
-	std::map<std::string, std::string> rho_dust_args;
-	std::map<std::string, std::string> rho_dust_exact_args;
+		std::map<std::string, std::string> rho_gas_args;
+		std::map<std::string, std::string> rho_gas_exact_args;
+		std::map<std::string, std::string> rho_dust_args;
+		std::map<std::string, std::string> rho_dust_exact_args;
 
-	rho_gas_args["label"] = "gas density (numerical)";
-	rho_gas_args["color"] = "r";
-	rho_gas_args["linestyle"] = "-";
+		rho_gas_args["label"] = "gas density (numerical)";
+		rho_gas_args["color"] = "r";
+		rho_gas_args["linestyle"] = "-";
 
-	rho_gas_exact_args["label"] = "gas density (exact)";
-	rho_gas_exact_args["color"] = "r";
-	rho_gas_exact_args["linestyle"] = "--";
+		rho_gas_exact_args["label"] = "gas density (exact)";
+		rho_gas_exact_args["color"] = "r";
+		rho_gas_exact_args["linestyle"] = "--";
 
-	rho_dust_args["label"] = "dust density (numerical)";
-	rho_dust_args["color"] = "b";
-	rho_dust_args["linestyle"] = "-.";
+		rho_dust_args["label"] = "dust density (numerical)";
+		rho_dust_args["color"] = "b";
+		rho_dust_args["linestyle"] = "-.";
 
-	rho_dust_exact_args["label"] = "dust density (exact)";
-	rho_dust_exact_args["color"] = "b";
-	rho_dust_exact_args["linestyle"] = ":";
+		rho_dust_exact_args["label"] = "dust density (exact)";
+		rho_dust_exact_args["color"] = "b";
+		rho_dust_exact_args["linestyle"] = ":";
 
-	// gas density
-	std::vector<double> rho_gas_sim(nx);
-	for (int i = 0; i < nx; ++i) {
-		rho_gas_sim.at(i) = values.at(HydroSystem<DustAdvection>::density_index)[i];
-	}
+		// gas density
+		std::vector<double> rho_gas_sim(nx);
+		for (int i = 0; i < nx; ++i) {
+			rho_gas_sim.at(i) = values.at(HydroSystem<DustAdvection>::density_index)[i];
+		}
 
-	matplotlibcpp::plot(xs, rho_gas_sim, rho_gas_args);
-	matplotlibcpp::plot(xs, rho_gas_exact, rho_gas_exact_args);
-	matplotlibcpp::plot(xs, rho_dust_sim, rho_dust_args);
-	matplotlibcpp::plot(xs, rho_dust_exact, rho_dust_exact_args);
+		matplotlibcpp::plot(xs, rho_gas_sim, rho_gas_args);
+		matplotlibcpp::plot(xs, rho_gas_exact, rho_gas_exact_args);
+		matplotlibcpp::plot(xs, rho_dust_sim, rho_dust_args);
+		matplotlibcpp::plot(xs, rho_dust_exact, rho_dust_exact_args);
 
-	matplotlibcpp::legend();
-	matplotlibcpp::xlabel("x");
-	matplotlibcpp::ylabel("density");
-	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
-	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./dust_drag_density.pdf");
+		matplotlibcpp::legend();
+		matplotlibcpp::xlabel("x");
+		matplotlibcpp::ylabel("density");
+		matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("./dust_drag_density.pdf");
 
-	// plot velocity (gas + dust)
-	matplotlibcpp::clf();
-	matplotlibcpp::ylim(0.0, 6.0);
+		// plot velocity (gas + dust)
+		matplotlibcpp::clf();
+		matplotlibcpp::ylim(0.0, 6.0);
 
-	std::map<std::string, std::string> vx_gas_args;
-	std::map<std::string, std::string> vx_gas_exact_args;
-	std::map<std::string, std::string> vx_dust_args;
-	std::map<std::string, std::string> vx_dust_exact_args;
+		std::map<std::string, std::string> vx_gas_args;
+		std::map<std::string, std::string> vx_gas_exact_args;
+		std::map<std::string, std::string> vx_dust_args;
+		std::map<std::string, std::string> vx_dust_exact_args;
 
-	vx_gas_args["label"] = "gas velocity (numerical)";
-	vx_gas_args["color"] = "r";
-	vx_gas_args["linestyle"] = "-";
+		vx_gas_args["label"] = "gas velocity (numerical)";
+		vx_gas_args["color"] = "r";
+		vx_gas_args["linestyle"] = "-";
 
-	vx_gas_exact_args["label"] = "gas velocity (exact)";
-	vx_gas_exact_args["color"] = "r";
-	vx_gas_exact_args["linestyle"] = "--";
+		vx_gas_exact_args["label"] = "gas velocity (exact)";
+		vx_gas_exact_args["color"] = "r";
+		vx_gas_exact_args["linestyle"] = "--";
 
-	vx_dust_args["label"] = "dust velocity (numerical)";
-	vx_dust_args["color"] = "b";
-	vx_dust_args["linestyle"] = "-.";
+		vx_dust_args["label"] = "dust velocity (numerical)";
+		vx_dust_args["color"] = "b";
+		vx_dust_args["linestyle"] = "-.";
 
-	vx_dust_exact_args["label"] = "dust velocity (exact)";
-	vx_dust_exact_args["color"] = "b";
-	vx_dust_exact_args["linestyle"] = ":";
+		vx_dust_exact_args["label"] = "dust velocity (exact)";
+		vx_dust_exact_args["color"] = "b";
+		vx_dust_exact_args["linestyle"] = ":";
 
-	matplotlibcpp::plot(xs, vx_sim, vx_gas_args);
-	matplotlibcpp::plot(xs, vx_exact, vx_gas_exact_args);
-	matplotlibcpp::plot(xs, vx_dust_sim, vx_dust_args);
-	matplotlibcpp::plot(xs, vx_dust_exact, vx_dust_exact_args);
+		matplotlibcpp::plot(xs, vx_sim, vx_gas_args);
+		matplotlibcpp::plot(xs, vx_exact, vx_gas_exact_args);
+		matplotlibcpp::plot(xs, vx_dust_sim, vx_dust_args);
+		matplotlibcpp::plot(xs, vx_dust_exact, vx_dust_exact_args);
 
-	matplotlibcpp::legend();
-	matplotlibcpp::xlabel("x");
-	matplotlibcpp::ylabel("velocity");
-	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
-	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./dust_drag_velocity.pdf");
+		matplotlibcpp::legend();
+		matplotlibcpp::xlabel("x");
+		matplotlibcpp::ylabel("velocity");
+		matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("./dust_drag_velocity.pdf");
 #endif // HAVE_PYTHON
 
-	amrex::Print() << "Finished." << '\n';
+		amrex::Print() << "Finished." << '\n';
+	}
 	return status;
 }

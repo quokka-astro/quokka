@@ -190,78 +190,6 @@ template <> void QuokkaSimulation<DustDampingWithoutCorrection>::setInitialCondi
 	});
 }
 
-template <> void QuokkaSimulation<DustDampingWithCorrection>::computeBeforeTimestep()
-{
-	// extract initial physical quantities at t=0
-	if (amrex::ParallelDescriptor::IOProcessor() && userData_.t_vec_.empty()) {
-		auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
-
-		userData_.t_vec_.push_back(0.0); // initial time t=0
-
-		// extract physical quantities
-		const double density = values.at(HydroSystem<DustDampingWithCorrection>::density_index)[0];
-		const double momentum_x = values.at(HydroSystem<DustDampingWithCorrection>::x1Momentum_index)[0];
-		const double Egas_total = values.at(HydroSystem<DustDampingWithCorrection>::energy_index)[0];
-
-		// store gas velocity
-		const double v_gas = momentum_x / density;
-		userData_.v_gas_vec_.push_back(v_gas);
-
-		// store gas total energy
-		userData_.E_gas_vec_.push_back(Egas_total);
-
-		if constexpr (Physics_Traits<DustDampingWithCorrection>::is_dust_enabled) {
-			// store dust1 velocity
-			const double dust1_density = values.at(HydroSystem<DustDampingWithCorrection>::dustDensity_index)[0];
-			const double dust1_momentum_x = values.at(HydroSystem<DustDampingWithCorrection>::x1DustMomentum_index)[0];
-			const double v_dust1 = dust1_momentum_x / dust1_density;
-			userData_.v_dust1_vec_.push_back(v_dust1);
-
-			// store dust2 velocity
-			const double dust2_density = values.at(HydroSystem<DustDampingWithCorrection>::dustDensity_index + numDustVars)[0];
-			const double dust2_momentum_x = values.at(HydroSystem<DustDampingWithCorrection>::x1DustMomentum_index + numDustVars)[0];
-			const double v_dust2 = dust2_momentum_x / dust2_density;
-			userData_.v_dust2_vec_.push_back(v_dust2);
-		}
-	}
-}
-
-template <> void QuokkaSimulation<DustDampingWithoutCorrection>::computeBeforeTimestep()
-{
-	// extract initial physical quantities at t=0
-	if (amrex::ParallelDescriptor::IOProcessor() && userData_.t_vec_.empty()) {
-		auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
-
-		userData_.t_vec_.push_back(0.0); // initial time t=0
-
-		// extract physical quantities
-		const double density = values.at(HydroSystem<DustDampingWithoutCorrection>::density_index)[0];
-		const double momentum_x = values.at(HydroSystem<DustDampingWithoutCorrection>::x1Momentum_index)[0];
-		const double Egas_total = values.at(HydroSystem<DustDampingWithoutCorrection>::energy_index)[0];
-
-		// store gas velocity
-		const double v_gas = momentum_x / density;
-		userData_.v_gas_vec_.push_back(v_gas);
-
-		// store gas total energy
-		userData_.E_gas_vec_.push_back(Egas_total);
-
-		if constexpr (Physics_Traits<DustDampingWithoutCorrection>::is_dust_enabled) {
-			// store dust1 velocity
-			const double dust1_density = values.at(HydroSystem<DustDampingWithoutCorrection>::dustDensity_index)[0];
-			const double dust1_momentum_x = values.at(HydroSystem<DustDampingWithoutCorrection>::x1DustMomentum_index)[0];
-			const double v_dust1 = dust1_momentum_x / dust1_density;
-			userData_.v_dust1_vec_.push_back(v_dust1);
-
-			// store dust2 velocity
-			const double dust2_density = values.at(HydroSystem<DustDampingWithoutCorrection>::dustDensity_index + numDustVars)[0];
-			const double dust2_momentum_x = values.at(HydroSystem<DustDampingWithoutCorrection>::x1DustMomentum_index + numDustVars)[0];
-			const double v_dust2 = dust2_momentum_x / dust2_density;
-			userData_.v_dust2_vec_.push_back(v_dust2);
-		}
-	}
-}
-
 template <> void QuokkaSimulation<DustDampingWithCorrection>::computeAfterTimestep()
 {
 	auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
@@ -345,6 +273,31 @@ auto run_reference_simulation() -> SimulationData<DustDampingWithCorrection>
 	sim.print_dust_counter_ = false;
 
 	sim.setInitialConditions();
+	// store initial values for t=0 plotting
+	auto [_, val_ini] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.5);
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		sim.userData_.t_vec_.push_back(0.0);
+
+		const double initial_density = val_ini.at(HydroSystem<DustDampingWithCorrection>::density_index)[0];
+		const double initial_momentum_x = val_ini.at(HydroSystem<DustDampingWithCorrection>::x1Momentum_index)[0];
+		const double initial_Egas_total = val_ini.at(HydroSystem<DustDampingWithCorrection>::energy_index)[0];
+		const double initial_v_gas = initial_momentum_x / initial_density;
+		sim.userData_.v_gas_vec_.push_back(initial_v_gas);
+		sim.userData_.E_gas_vec_.push_back(initial_Egas_total);
+
+		if constexpr (Physics_Traits<DustDampingWithCorrection>::is_dust_enabled) {
+			const double initial_dust1_density = val_ini.at(HydroSystem<DustDampingWithCorrection>::dustDensity_index)[0];
+			const double initial_dust1_momentum_x = val_ini.at(HydroSystem<DustDampingWithCorrection>::x1DustMomentum_index)[0];
+			const double initial_v_dust1 = initial_dust1_momentum_x / initial_dust1_density;
+			sim.userData_.v_dust1_vec_.push_back(initial_v_dust1);
+
+			const double initial_dust2_density = val_ini.at(HydroSystem<DustDampingWithCorrection>::dustDensity_index + numDustVars)[0];
+			const double initial_dust2_momentum_x = val_ini.at(HydroSystem<DustDampingWithCorrection>::x1DustMomentum_index + numDustVars)[0];
+			const double initial_v_dust2 = initial_dust2_momentum_x / initial_dust2_density;
+			sim.userData_.v_dust2_vec_.push_back(initial_v_dust2);
+		}
+	}
+
 	sim.evolve();
 
 	return sim.userData_;
@@ -363,6 +316,30 @@ auto run_iterative_with_correction() -> SimulationData<DustDampingWithCorrection
 	sim.print_dust_counter_ = true;
 
 	sim.setInitialConditions();
+	// store initial values for t=0 plotting
+	auto [_, val_ini] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.5);
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		sim.userData_.t_vec_.push_back(0.0);
+
+		const double initial_density = val_ini.at(HydroSystem<DustDampingWithCorrection>::density_index)[0];
+		const double initial_momentum_x = val_ini.at(HydroSystem<DustDampingWithCorrection>::x1Momentum_index)[0];
+		const double initial_Egas_total = val_ini.at(HydroSystem<DustDampingWithCorrection>::energy_index)[0];
+		const double initial_v_gas = initial_momentum_x / initial_density;
+		sim.userData_.v_gas_vec_.push_back(initial_v_gas);
+		sim.userData_.E_gas_vec_.push_back(initial_Egas_total);
+
+		if constexpr (Physics_Traits<DustDampingWithCorrection>::is_dust_enabled) {
+			const double initial_dust1_density = val_ini.at(HydroSystem<DustDampingWithCorrection>::dustDensity_index)[0];
+			const double initial_dust1_momentum_x = val_ini.at(HydroSystem<DustDampingWithCorrection>::x1DustMomentum_index)[0];
+			const double initial_v_dust1 = initial_dust1_momentum_x / initial_dust1_density;
+			sim.userData_.v_dust1_vec_.push_back(initial_v_dust1);
+
+			const double initial_dust2_density = val_ini.at(HydroSystem<DustDampingWithCorrection>::dustDensity_index + numDustVars)[0];
+			const double initial_dust2_momentum_x = val_ini.at(HydroSystem<DustDampingWithCorrection>::x1DustMomentum_index + numDustVars)[0];
+			const double initial_v_dust2 = initial_dust2_momentum_x / initial_dust2_density;
+			sim.userData_.v_dust2_vec_.push_back(initial_v_dust2);
+		}
+	}
 	sim.evolve();
 
 	return sim.userData_;
@@ -381,6 +358,30 @@ auto run_iterative_without_correction() -> SimulationData<DustDampingWithoutCorr
 	sim.print_dust_counter_ = true;
 
 	sim.setInitialConditions();
+	// store initial values for t=0 plotting
+	auto [_, val_ini] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.5);
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		sim.userData_.t_vec_.push_back(0.0);
+
+		const double initial_density = val_ini.at(HydroSystem<DustDampingWithoutCorrection>::density_index)[0];
+		const double initial_momentum_x = val_ini.at(HydroSystem<DustDampingWithoutCorrection>::x1Momentum_index)[0];
+		const double initial_Egas_total = val_ini.at(HydroSystem<DustDampingWithoutCorrection>::energy_index)[0];
+		const double initial_v_gas = initial_momentum_x / initial_density;
+		sim.userData_.v_gas_vec_.push_back(initial_v_gas);
+		sim.userData_.E_gas_vec_.push_back(initial_Egas_total);
+
+		if constexpr (Physics_Traits<DustDampingWithoutCorrection>::is_dust_enabled) {
+			const double initial_dust1_density = val_ini.at(HydroSystem<DustDampingWithoutCorrection>::dustDensity_index)[0];
+			const double initial_dust1_momentum_x = val_ini.at(HydroSystem<DustDampingWithoutCorrection>::x1DustMomentum_index)[0];
+			const double initial_v_dust1 = initial_dust1_momentum_x / initial_dust1_density;
+			sim.userData_.v_dust1_vec_.push_back(initial_v_dust1);
+
+			const double initial_dust2_density = val_ini.at(HydroSystem<DustDampingWithoutCorrection>::dustDensity_index + numDustVars)[0];
+			const double initial_dust2_momentum_x = val_ini.at(HydroSystem<DustDampingWithoutCorrection>::x1DustMomentum_index + numDustVars)[0];
+			const double initial_v_dust2 = initial_dust2_momentum_x / initial_dust2_density;
+			sim.userData_.v_dust2_vec_.push_back(initial_v_dust2);
+		}
+	}
 	sim.evolve();
 
 	return sim.userData_;
@@ -494,69 +495,79 @@ auto problem_main() -> int
 		amrex::Print() << "\nTest PASSED: all errors within tolerance of " << rel_err_tol << "\n";
 	}
 
+	if (amrex::ParallelDescriptor::IOProcessor()) {
 #ifdef HAVE_PYTHON
-	if (!ref_data.t_vec_.empty() && !iter_with_corr_data.t_vec_.empty() && !iter_without_corr_data.t_vec_.empty()) {
-		// gas velocity
-		matplotlibcpp::clf();
-		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_gas_vec_,
-				    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
-		matplotlibcpp::plot(iter_with_corr_data.t_vec_, iter_with_corr_data.v_gas_vec_,
-				    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
-		matplotlibcpp::plot(iter_without_corr_data.t_vec_, iter_without_corr_data.v_gas_vec_,
-				    {{"label", "iterative without correction"}, {"color", "b"}, {"linestyle", ":"}, {"marker", "s"}, {"markersize", "3"}});
-		matplotlibcpp::legend();
-		matplotlibcpp::xlabel("t");
-		matplotlibcpp::ylabel(R"($v_g$)");
-		matplotlibcpp::title("Gas Velocity");
-		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./dust_damping_iteration_gas_velocity.pdf");
+		if (!ref_data.t_vec_.empty() && !iter_with_corr_data.t_vec_.empty() && !iter_without_corr_data.t_vec_.empty()) {
+			// gas velocity
+			matplotlibcpp::clf();
+			matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_gas_vec_,
+					    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+			matplotlibcpp::plot(
+			    iter_with_corr_data.t_vec_, iter_with_corr_data.v_gas_vec_,
+			    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
+			matplotlibcpp::plot(
+			    iter_without_corr_data.t_vec_, iter_without_corr_data.v_gas_vec_,
+			    {{"label", "iterative without correction"}, {"color", "b"}, {"linestyle", ":"}, {"marker", "s"}, {"markersize", "3"}});
+			matplotlibcpp::legend();
+			matplotlibcpp::xlabel("t");
+			matplotlibcpp::ylabel(R"($v_g$)");
+			matplotlibcpp::title("Gas Velocity");
+			matplotlibcpp::tight_layout();
+			matplotlibcpp::save("./dust_damping_iteration_gas_velocity.pdf");
 
-		// dust1 velocity
-		matplotlibcpp::clf();
-		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust1_vec_,
-				    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
-		matplotlibcpp::plot(iter_with_corr_data.t_vec_, iter_with_corr_data.v_dust1_vec_,
-				    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
-		matplotlibcpp::plot(iter_without_corr_data.t_vec_, iter_without_corr_data.v_dust1_vec_,
-				    {{"label", "iterative without correction"}, {"color", "b"}, {"linestyle", ":"}, {"marker", "s"}, {"markersize", "3"}});
-		matplotlibcpp::legend();
-		matplotlibcpp::xlabel("t");
-		matplotlibcpp::ylabel(R"($v_{d,1}$)");
-		matplotlibcpp::title("Dust1 Velocity");
-		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./dust_damping_iteration_dust1_velocity.pdf");
+			// dust1 velocity
+			matplotlibcpp::clf();
+			matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust1_vec_,
+					    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+			matplotlibcpp::plot(
+			    iter_with_corr_data.t_vec_, iter_with_corr_data.v_dust1_vec_,
+			    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
+			matplotlibcpp::plot(
+			    iter_without_corr_data.t_vec_, iter_without_corr_data.v_dust1_vec_,
+			    {{"label", "iterative without correction"}, {"color", "b"}, {"linestyle", ":"}, {"marker", "s"}, {"markersize", "3"}});
+			matplotlibcpp::legend();
+			matplotlibcpp::xlabel("t");
+			matplotlibcpp::ylabel(R"($v_{d,1}$)");
+			matplotlibcpp::title("Dust1 Velocity");
+			matplotlibcpp::tight_layout();
+			matplotlibcpp::save("./dust_damping_iteration_dust1_velocity.pdf");
 
-		// dust2 velocity
-		matplotlibcpp::clf();
-		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust2_vec_,
-				    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
-		matplotlibcpp::plot(iter_with_corr_data.t_vec_, iter_with_corr_data.v_dust2_vec_,
-				    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
-		matplotlibcpp::plot(iter_without_corr_data.t_vec_, iter_without_corr_data.v_dust2_vec_,
-				    {{"label", "iterative without correction"}, {"color", "b"}, {"linestyle", ":"}, {"marker", "s"}, {"markersize", "3"}});
-		matplotlibcpp::legend();
-		matplotlibcpp::xlabel("t");
-		matplotlibcpp::ylabel(R"($v_{d,2}$)");
-		matplotlibcpp::title("Dust2 Velocity");
-		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./dust_damping_iteration_dust2_velocity.pdf");
+			// dust2 velocity
+			matplotlibcpp::clf();
+			matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust2_vec_,
+					    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+			matplotlibcpp::plot(
+			    iter_with_corr_data.t_vec_, iter_with_corr_data.v_dust2_vec_,
+			    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
+			matplotlibcpp::plot(
+			    iter_without_corr_data.t_vec_, iter_without_corr_data.v_dust2_vec_,
+			    {{"label", "iterative without correction"}, {"color", "b"}, {"linestyle", ":"}, {"marker", "s"}, {"markersize", "3"}});
+			matplotlibcpp::legend();
+			matplotlibcpp::xlabel("t");
+			matplotlibcpp::ylabel(R"($v_{d,2}$)");
+			matplotlibcpp::title("Dust2 Velocity");
+			matplotlibcpp::tight_layout();
+			matplotlibcpp::save("./dust_damping_iteration_dust2_velocity.pdf");
 
-		// gas energy
-		matplotlibcpp::clf();
-		matplotlibcpp::plot(ref_data.t_vec_, ref_data.E_gas_vec_,
-				    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
-		matplotlibcpp::plot(iter_with_corr_data.t_vec_, iter_with_corr_data.E_gas_vec_,
-				    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
-		matplotlibcpp::plot(iter_without_corr_data.t_vec_, iter_without_corr_data.E_gas_vec_,
-				    {{"label", "iterative without correction"}, {"color", "b"}, {"linestyle", ":"}, {"marker", "s"}, {"markersize", "3"}});
-		matplotlibcpp::legend();
-		matplotlibcpp::xlabel("t");
-		matplotlibcpp::ylabel(R"($E_g$)");
-		matplotlibcpp::title("Gas Energy");
-		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./dust_damping_iteration_gas_energy.pdf");
-	}
+			// gas energy
+			matplotlibcpp::clf();
+			matplotlibcpp::plot(ref_data.t_vec_, ref_data.E_gas_vec_,
+					    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+			matplotlibcpp::plot(
+			    iter_with_corr_data.t_vec_, iter_with_corr_data.E_gas_vec_,
+			    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
+			matplotlibcpp::plot(
+			    iter_without_corr_data.t_vec_, iter_without_corr_data.E_gas_vec_,
+			    {{"label", "iterative without correction"}, {"color", "b"}, {"linestyle", ":"}, {"marker", "s"}, {"markersize", "3"}});
+			matplotlibcpp::legend();
+			matplotlibcpp::xlabel("t");
+			matplotlibcpp::ylabel(R"($E_g$)");
+			matplotlibcpp::title("Gas Energy");
+			matplotlibcpp::tight_layout();
+			matplotlibcpp::save("./dust_damping_iteration_gas_energy.pdf");
+		}
 #endif
+	}
 
 	amrex::Print() << "\nTest complete.\n";
 	return status;
