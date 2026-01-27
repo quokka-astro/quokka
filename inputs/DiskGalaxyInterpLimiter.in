@@ -1,0 +1,19 @@
+amr.n_cell = 64 64 32
+amr.ref_ratio = 2 2 2
+amr.max_grid_size = 64
+
+geometry.prob_lo = -1.0 -1.0 -0.5
+geometry.prob_hi =  1.0  1.0  0.5
+geometry.is_periodic = 1 1 1
+
+quokka.bc = periodic periodic periodic
+
+disk_interp.rho0 = 1.0
+disk_interp.rscale = 0.35
+disk_interp.zscale = 0.05
+disk_interp.v0 = 25.0
+disk_interp.rturn = 0.2
+
+# coarse index-space box to refine; choose a region inside the disk
+disk_interp.refine_box_lo = 16 16 8
+disk_interp.refine_box_hi = 47 47 23

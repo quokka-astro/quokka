@@ -47,6 +47,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_BLassert.H"
 #include "AMReX_DistributionMapping.H"
 #include "AMReX_EdgeFluxRegister.H"
+#include "AMReX_Enum.H"
 #include "AMReX_Extension.H"
 #include "AMReX_FArrayBox.H"
 #include "AMReX_FillPatchUtil.H"
@@ -162,6 +163,12 @@ template <> struct as_if<std::string, std::optional<std::string>> {
 
 enum class FillPatchType { fillpatch_class, fillpatch_function };
 
+AMREX_ENUM(AmrInterpolationMethod,
+	   piecewise_constant,
+	   linear_ll,
+	   linear_mc,
+	   linear_ll_minmax); // NOLINT
+
 // Main simulation class; solvers should inherit from this
 template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 {
@@ -200,7 +207,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	bool skipInitialPlotfile_ = false;			     // skip writing plotfile at t=0
 	amrex::Real checkpointTimeInterval_ = -1.0;		     // time interval for checkpoints
 	int checkpointInterval_ = -1;				     // -1 == no output
-	int amrInterpMethod_ = 1;				     // 0 == piecewise constant, 1 == lincc_interp
+	AmrInterpolationMethod amrInterpMethod_ = AmrInterpolationMethod::linear_ll_minmax;
 	int restartRefineFactor_ = 1;				     // 1 == don't refine, >1 == refine by this factor on restart
 	amrex::Real reltolPoisson_ = 1.0e-5;			     // default
 	amrex::Real abstolPoisson_ = 1.0e-5;			     // default (scaled by minimum RHS value)
@@ -863,8 +870,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	pp.query("signal_speed_abort", signalSpeedAbort_);
 	pp.query("particle_speed_abort", particleSpeedAbort_);
 
-	// Default AMR interpolation method == lincc_interp
-	pp.query("amr_interpolation_method", amrInterpMethod_);
+	// Default AMR interpolation method == linear_ll_minmax
+	{
+		std::string interp_method_str;
+		if (pp.query("amr_interpolation_method", interp_method_str)) {
+			amrInterpMethod_ = amrex::getEnumCaseInsensitive<AmrInterpolationMethod>(interp_method_str);
+		}
+	}
 
 	// Default stopping time
 	pp.query("stop_time", stopTime_);
@@ -2216,19 +2228,20 @@ void AMRSimulation<problem_t>::incrementEMFRegisters(amrex::EdgeFluxRegister *em
 
 template <typename problem_t> auto AMRSimulation<problem_t>::getAmrInterpolaterCellCentered() -> amrex::MFInterpolater *
 {
-	if (amrInterpMethod_ == 0) { // piecewise-constant interpolation
+	switch (amrInterpMethod_) {
+	case AmrInterpolationMethod::piecewise_constant:
 		return &amrex::mf_pc_interp;
-	}
-	if (amrInterpMethod_ == 1) { // slope-limited linear interpolation
-		//  It has the following important properties:
-		// 1. should NOT produce new extrema
-		//    (will revert to piecewise constant if any component has a local min/max)
-		// 2. should be conservative
-		// 3. preserves linear combinations of variables in each cell
+	case AmrInterpolationMethod::linear_ll:
+		// LL-limited linear interpolation (componentwise slopes with shared per-direction scaling).
+		return &amrex::mf_lincc_interp;
+	case AmrInterpolationMethod::linear_mc:
+		// MC-limited linear interpolation (per-component limiting).
+		return &amrex::mf_cell_cons_interp;
+	case AmrInterpolationMethod::linear_ll_minmax:
+		// LL slopes with additional min/max slope-vector limiting.
 		return &amrex::mf_linear_slope_minmax_interp;
+	default: amrex::Abort("Invalid AMR interpolation method specified!");
 	}
-
-	amrex::Abort("Invalid AMR interpolation method specified!");
 	return nullptr;
 }
 

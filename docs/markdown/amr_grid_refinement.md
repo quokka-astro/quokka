@@ -21,6 +21,24 @@ Several inputs shape how aggressively the hierarchy responds to refinement tags:
 
 Choose these controls as a set: a generous `blocking_factor` demands tighter tagging or higher `grid_efficiency` to avoid carpet refinement, while a smaller blocking factor allows surgical meshes but can stress GPUs. When in doubt, run short experiments that sweep one parameter at a time and compare the resulting plotfile headers to see how many grids are created per level.
 
+## Cell-Centered AMR Interpolation (Slope Limiters)
+
+Quokka uses AMReX's cell-centered conservative linear interpolation for coarse-to-fine fills. The runtime switch `amr_interpolation_method` is an `AMREX_ENUM` with these options:
+
+- `piecewise_constant`: `mf_pc_interp`
+- `linear_ll`: `mf_lincc_interp` (LL-limited linear)
+- `linear_mc`: `mf_cell_cons_interp` (MC-limited linear)
+- `linear_ll_minmax` (default): `mf_linear_slope_minmax_interp`
+
+AMReX also provides two related slope limiter variants that are not currently wired into the Quokka runtime parameter:
+
+- **LL slope** (`mf_lincc_interp`): computes per-direction scaling factors from the minimum ratio of limited to unlimited slopes across *all components*, then applies those scalings to every component. This coupling preserves linear combinations of state variables during interpolation.
+- **MC slope** (`mf_cell_cons_interp`): computes a per-component monotonic-central slope and applies a local `alpha` limiter based on nearby extrema and the refinement ratio. Limiting is component-wise, without cross-component coupling.
+- **Min/max slope-vector limiting** (`mf_linear_slope_minmax_interp`): starts from LL slopes but also limits the *slope vector* so the reconstructed fine values do not create new extrema. In contrast, `mf_lincc_interp` only limits each slope *component* via the shared per-direction factors.
+- **When is vector limiting enough?** The min/max slope-vector limiter is what directly enforces “no new extrema” for each component. The extra LL per-direction scaling is primarily about *cross-component consistency* (preserving linear combinations across components). Using both is more conservative; if your only goal is to avoid new extrema, vector limiting alone is sufficient.
+
+See `extern/amrex/Src/AmrCore/AMReX_MFInterp_1D_C.H`, `extern/amrex/Src/AmrCore/AMReX_MFInterp_2D_C.H`, and `extern/amrex/Src/AmrCore/AMReX_MFInterp_3D_C.H` for the exact limiter kernels. If you want LL or MC slopes selectable at runtime, Quokka would need to extend `getAmrInterpolaterCellCentered()` in `src/simulation.hpp`.
+
 ## Performance and Scaling Considerations
 
 GPU runs typically favor `blocking_factor ≥ 32` so each patch keeps SMs busy; values below 32 almost always break memory coalescing across a warp and leave expensive kernels underutilized even when occupancy looks fine. CPU multigrid solves prefer at least 8. If you push those limits, guard your memory footprint by trimming the number of refinement levels or enlarging `max_grid_size` so patches do not proliferate. Also watch how frequently you trigger `regrid` calls—rapid regridding magnifies the cost of tag evaluation and repartitioning, so coarse control logic or hysteresis inside `refineGrid` can pay dividends on very dynamic problems.
