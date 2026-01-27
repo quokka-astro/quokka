@@ -27,8 +27,7 @@ constexpr int ncomp = 4; // rho, momx, momy, momz
 struct NullFill {
 	AMREX_GPU_DEVICE
 	void operator()(const amrex::IntVect & /*iv*/, amrex::Array4<amrex::Real> const & /*dest*/, int /*dcomp*/, int /*numcomp*/,
-			amrex::GeometryData const & /*geom*/, amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-			int /*orig_comp*/) const
+			amrex::GeometryData const & /*geom*/, amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/) const
 	{
 		// no physical boundaries to fill (periodic)
 	}
@@ -50,8 +49,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto disk_vphi(amrex::Real x, amrex::Re
 	return v0 * (amrex::Real(1.0) - std::exp(-R / rturn));
 }
 
-void fill_disk(amrex::MultiFab &mf, const amrex::Geometry &geom, amrex::Real rho0, amrex::Real rscale, amrex::Real zscale, amrex::Real v0,
-	       amrex::Real rturn)
+void fill_disk(amrex::MultiFab &mf, const amrex::Geometry &geom, amrex::Real rho0, amrex::Real rscale, amrex::Real zscale, amrex::Real v0, amrex::Real rturn)
 {
 	const auto prob_lo = geom.ProbLoArray();
 	const auto dx = geom.CellSizeArray();
@@ -84,9 +82,8 @@ void fill_disk(amrex::MultiFab &mf, const amrex::Geometry &geom, amrex::Real rho
 }
 
 auto interp_and_write(const std::string &label, amrex::MultiFab const &coarse, amrex::Geometry const &cgeom, amrex::Geometry const &fgeom,
-		      amrex::BoxArray const &fba, amrex::MFInterpolater *mapper, const amrex::Vector<amrex::BCRec> &bcs,
-		      amrex::IntVect const &ratio, amrex::MultiFab const &exact, const std::array<std::string, ncomp> &names,
-		      amrex::MultiFab *delta_out) -> void
+		      amrex::BoxArray const &fba, amrex::MFInterpolater *mapper, const amrex::Vector<amrex::BCRec> &bcs, amrex::IntVect const &ratio,
+		      amrex::MultiFab const &exact, const std::array<std::string, ncomp> &names, amrex::MultiFab *delta_out) -> void
 {
 	amrex::DistributionMapping const fdm(fba);
 	amrex::MultiFab fine(fba, fdm, ncomp, 0);
@@ -171,8 +168,7 @@ auto problem_main() -> int
 	pp.getarr("refine_box_lo", ref_lo);
 	pp.getarr("refine_box_hi", ref_hi);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ref_lo.size() == 3 && ref_hi.size() == 3, "disk_interp.refine_box_lo/hi must have 3 components.");
-	amrex::Box coarse_ref_box(amrex::IntVect{AMREX_D_DECL(ref_lo[0], ref_lo[1], ref_lo[2])},
-				  amrex::IntVect{AMREX_D_DECL(ref_hi[0], ref_hi[1], ref_hi[2])});
+	amrex::Box coarse_ref_box(amrex::IntVect{AMREX_D_DECL(ref_lo[0], ref_lo[1], ref_lo[2])}, amrex::IntVect{AMREX_D_DECL(ref_hi[0], ref_hi[1], ref_hi[2])});
 	coarse_ref_box &= domain;
 	amrex::Box fine_ref_box = amrex::refine(coarse_ref_box, ratio);
 
@@ -208,8 +204,7 @@ auto problem_main() -> int
 	interp_and_write("plt_disk_interp_pc", coarse, cgeom, fgeom, fba, &amrex::mf_pc_interp, bcs, ratio, exact, names, nullptr);
 	interp_and_write("plt_disk_interp_ll", coarse, cgeom, fgeom, fba, &amrex::mf_lincc_interp, bcs, ratio, exact, names, &fine_ll);
 	interp_and_write("plt_disk_interp_mc", coarse, cgeom, fgeom, fba, &amrex::mf_cell_cons_interp, bcs, ratio, exact, names, nullptr);
-	interp_and_write("plt_disk_interp_ll_minmax", coarse, cgeom, fgeom, fba, &amrex::mf_linear_slope_minmax_interp, bcs, ratio, exact, names,
-			 &fine_minmax);
+	interp_and_write("plt_disk_interp_ll_minmax", coarse, cgeom, fgeom, fba, &amrex::mf_linear_slope_minmax_interp, bcs, ratio, exact, names, &fine_minmax);
 
 	amrex::MultiFab delta(fba, fdm, ncomp, 0);
 	for (amrex::MFIter mfi(delta); mfi.isValid(); ++mfi) {
@@ -217,9 +212,8 @@ auto problem_main() -> int
 		auto const &darr = delta.array(mfi);
 		auto const &ll = fine_ll.const_array(mfi);
 		auto const &mm = fine_minmax.const_array(mfi);
-		amrex::ParallelFor(bx, ncomp, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-			darr(i, j, k, n) = std::abs(mm(i, j, k, n) - ll(i, j, k, n));
-		});
+		amrex::ParallelFor(bx, ncomp,
+				   [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept { darr(i, j, k, n) = std::abs(mm(i, j, k, n) - ll(i, j, k, n)); });
 	}
 	amrex::WriteSingleLevelPlotfile("plt_disk_interp_ll_minmax_delta", delta, amrex::Vector<std::string>(names.begin(), names.end()), fgeom, 0.0, 0);
 

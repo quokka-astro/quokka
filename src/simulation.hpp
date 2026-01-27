@@ -163,10 +163,7 @@ template <> struct as_if<std::string, std::optional<std::string>> {
 
 enum class FillPatchType { fillpatch_class, fillpatch_function };
 
-AMREX_ENUM(AmrInterpolationMethod,
-	   piecewise_constant,
-	   linear_ll,
-	   linear_mc,
+AMREX_ENUM(AmrInterpolationMethod, piecewise_constant, linear_ll, linear_mc,
 	   linear_ll_minmax); // NOLINT
 
 // Main simulation class; solvers should inherit from this
@@ -208,11 +205,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real checkpointTimeInterval_ = -1.0;		     // time interval for checkpoints
 	int checkpointInterval_ = -1;				     // -1 == no output
 	AmrInterpolationMethod amrInterpMethod_ = AmrInterpolationMethod::linear_ll_minmax;
-	int restartRefineFactor_ = 1;				     // 1 == don't refine, >1 == refine by this factor on restart
-	amrex::Real reltolPoisson_ = 1.0e-5;			     // default
-	amrex::Real abstolPoisson_ = 1.0e-5;			     // default (scaled by minimum RHS value)
-	int poissonSupercycleInterval_ = 1;			     // number of coarse steps between Poisson solves (default: 1)
-	bool splitParticlesOnRestartRefine_ = true;		     // whether to split particles when restarting with refinement
+	int restartRefineFactor_ = 1;		    // 1 == don't refine, >1 == refine by this factor on restart
+	amrex::Real reltolPoisson_ = 1.0e-5;	    // default
+	amrex::Real abstolPoisson_ = 1.0e-5;	    // default (scaled by minimum RHS value)
+	int poissonSupercycleInterval_ = 1;	    // number of coarse steps between Poisson solves (default: 1)
+	bool splitParticlesOnRestartRefine_ = true; // whether to split particles when restarting with refinement
 	amrex::Vector<amrex::MultiFab> phi;
 
 	// SFH parameters
@@ -2229,18 +2226,19 @@ void AMRSimulation<problem_t>::incrementEMFRegisters(amrex::EdgeFluxRegister *em
 template <typename problem_t> auto AMRSimulation<problem_t>::getAmrInterpolaterCellCentered() -> amrex::MFInterpolater *
 {
 	switch (amrInterpMethod_) {
-	case AmrInterpolationMethod::piecewise_constant:
-		return &amrex::mf_pc_interp;
-	case AmrInterpolationMethod::linear_ll:
-		// LL-limited linear interpolation (componentwise slopes with shared per-direction scaling).
-		return &amrex::mf_lincc_interp;
-	case AmrInterpolationMethod::linear_mc:
-		// MC-limited linear interpolation (per-component limiting).
-		return &amrex::mf_cell_cons_interp;
-	case AmrInterpolationMethod::linear_ll_minmax:
-		// LL slopes with additional min/max slope-vector limiting.
-		return &amrex::mf_linear_slope_minmax_interp;
-	default: amrex::Abort("Invalid AMR interpolation method specified!");
+		case AmrInterpolationMethod::piecewise_constant:
+			return &amrex::mf_pc_interp;
+		case AmrInterpolationMethod::linear_ll:
+			// LL-limited linear interpolation (componentwise slopes with shared per-direction scaling).
+			return &amrex::mf_lincc_interp;
+		case AmrInterpolationMethod::linear_mc:
+			// MC-limited linear interpolation (per-component limiting).
+			return &amrex::mf_cell_cons_interp;
+		case AmrInterpolationMethod::linear_ll_minmax:
+			// LL slopes with additional min/max slope-vector limiting.
+			return &amrex::mf_linear_slope_minmax_interp;
+		default:
+			amrex::Abort("Invalid AMR interpolation method specified!");
 	}
 	return nullptr;
 }
