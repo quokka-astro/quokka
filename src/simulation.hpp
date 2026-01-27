@@ -4036,6 +4036,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteMetadataFile(s
 	// write metadata file
 	// (this is written for both checkpoints and plotfiles)
 
+  double dummy = 3.14;
+
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		amrex::VisMF::IO_Buffer io_buffer(amrex::VisMF::IO_Buffer_Size);
 		std::ofstream MetadataFile;
