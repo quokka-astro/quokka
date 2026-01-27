@@ -157,45 +157,12 @@ template <> void QuokkaSimulation<DustDamping>::setInitialConditionsOnGrid(quokk
 	});
 }
 
-template <> void QuokkaSimulation<DustDamping>::computeBeforeTimestep()
-{
-	// extract initial physical quantities at t=0
-	if (amrex::ParallelDescriptor::IOProcessor() && userData_.t_vec_.empty()) {
-		auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
-
-		userData_.t_vec_.push_back(0.0); // initial time t=0
-
-		// extract physical quantities
-		const double density = values.at(HydroSystem<DustDamping>::density_index)[0];
-		const double momentum_x = values.at(HydroSystem<DustDamping>::x1Momentum_index)[0];
-		const double Egas_total = values.at(HydroSystem<DustDamping>::energy_index)[0];
-
-		// store gas velocity
-		const double v_gas = momentum_x / density;
-		userData_.v_gas_vec_.push_back(v_gas);
-
-		// store gas total energy
-		userData_.E_gas_vec_.push_back(Egas_total);
-
-		if constexpr (Physics_Traits<DustDamping>::is_dust_enabled) {
-			// store dust1 velocity
-			const double dust1_density = values.at(HydroSystem<DustDamping>::dustDensity_index)[0];
-			const double dust1_momentum_x = values.at(HydroSystem<DustDamping>::x1DustMomentum_index)[0];
-			const double v_dust1 = dust1_momentum_x / dust1_density;
-			userData_.v_dust1_vec_.push_back(v_dust1);
-
-			// store dust2 velocity
-			const double dust2_density = values.at(HydroSystem<DustDamping>::dustDensity_index + numDustVars)[0];
-			const double dust2_momentum_x = values.at(HydroSystem<DustDamping>::x1DustMomentum_index + numDustVars)[0];
-			const double v_dust2 = dust2_momentum_x / dust2_density;
-			userData_.v_dust2_vec_.push_back(v_dust2);
-		}
-	}
-}
-
 template <> void QuokkaSimulation<DustDamping>::computeAfterTimestep()
 {
-	auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
+	auto [_, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
+
+	// force sync
+	amrex::Gpu::synchronize();
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		userData_.t_vec_.push_back(tNew_[0]); // store current time
