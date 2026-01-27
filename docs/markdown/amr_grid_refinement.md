@@ -30,14 +30,14 @@ Quokka uses AMReX's cell-centered conservative linear interpolation for coarse-t
 - `linear_mc`: `mf_cell_cons_interp` (MC-limited linear)
 - `linear_ll_minmax` (default): `mf_linear_slope_minmax_interp`
 
-AMReX also provides two related slope limiter variants that are not currently wired into the Quokka runtime parameter:
+AMReX provides the following slope limiter variants for linear interpolation:
 
 - **LL slope** (`mf_lincc_interp`): computes per-direction scaling factors from the minimum ratio of limited to unlimited slopes across *all components*, then applies those scalings to every component. This coupling preserves linear combinations of state variables during interpolation.
 - **MC slope** (`mf_cell_cons_interp`): computes a per-component monotonic-central slope and applies a local `alpha` limiter based on nearby extrema and the refinement ratio. Limiting is component-wise, without cross-component coupling.
 - **Min/max slope-vector limiting** (`mf_linear_slope_minmax_interp`): starts from LL slopes but also limits the *slope vector* so the reconstructed fine values do not create new extrema. In contrast, `mf_lincc_interp` only limits each slope *component* via the shared per-direction factors.
 - **When is vector limiting enough?** The min/max slope-vector limiter is what directly enforces “no new extrema” for each component. The extra LL per-direction scaling is primarily about *cross-component consistency* (preserving linear combinations across components). Using both is more conservative; if your only goal is to avoid new extrema, vector limiting alone is sufficient.
 
-See `extern/amrex/Src/AmrCore/AMReX_MFInterp_1D_C.H`, `extern/amrex/Src/AmrCore/AMReX_MFInterp_2D_C.H`, and `extern/amrex/Src/AmrCore/AMReX_MFInterp_3D_C.H` for the exact limiter kernels. If you want LL or MC slopes selectable at runtime, Quokka would need to extend `getAmrInterpolaterCellCentered()` in `src/simulation.hpp`.
+See `extern/amrex/Src/AmrCore/AMReX_MFInterp_1D_C.H`, `extern/amrex/Src/AmrCore/AMReX_MFInterp_2D_C.H`, and `extern/amrex/Src/AmrCore/AMReX_MFInterp_3D_C.H` for the exact limiter kernels.
 
 ## Performance and Scaling Considerations
 
