@@ -202,8 +202,10 @@ auto problem_main() -> int
 
 		std::vector<double> Tgas_interp(t.size());
 		std::vector<double> Trad_interp(t.size());
-		interpolate_arrays(t.data(), Tgas_interp.data(), static_cast<int>(t.size()), ts_exact.data(), Tgas_exact.data(), static_cast<int>(ts_exact.size()));
-		interpolate_arrays(t.data(), Trad_interp.data(), static_cast<int>(t.size()), ts_exact.data(), Trad_exact.data(), static_cast<int>(ts_exact.size()));
+		interpolate_arrays(t.data(), Tgas_interp.data(), static_cast<int>(t.size()), ts_exact.data(), Tgas_exact.data(),
+				   static_cast<int>(ts_exact.size()));
+		interpolate_arrays(t.data(), Trad_interp.data(), static_cast<int>(t.size()), ts_exact.data(), Trad_exact.data(),
+				   static_cast<int>(ts_exact.size()));
 
 		// compute error norm
 		double err_norm = 0.;
@@ -217,7 +219,7 @@ auto problem_main() -> int
 		const double rel_error = err_norm / sol_norm;
 		amrex::Print() << "Relative L1 error norm = " << rel_error << '\n';
 
-	#ifdef HAVE_PYTHON
+#ifdef HAVE_PYTHON
 		// plot temperature
 		matplotlibcpp::clf();
 		matplotlibcpp::xscale("log");
@@ -239,9 +241,9 @@ auto problem_main() -> int
 		Texact_args["color"] = "k";
 		// plot exact solution; skip the first point because it has t = 0
 		matplotlibcpp::plot(std::vector<double>(ts_exact.begin() + 1, ts_exact.end()), std::vector<double>(Tgas_exact.begin() + 1, Tgas_exact.end()),
-						Texact_args);
+				    Texact_args);
 		matplotlibcpp::plot(std::vector<double>(ts_exact.begin() + 1, ts_exact.end()), std::vector<double>(Trad_exact.begin() + 1, Trad_exact.end()),
-						Tradexact_args);
+				    Tradexact_args);
 		matplotlibcpp::plot(t, Tgas, Tgas_args);
 		matplotlibcpp::plot(t, Trad, Trad_args);
 		matplotlibcpp::xlabel("t (dimensionless)");
@@ -249,7 +251,7 @@ auto problem_main() -> int
 		matplotlibcpp::legend();
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("./rad_dust_T.pdf");
-	#endif
+#endif
 
 		if ((rel_error > error_tol) || std::isnan(rel_error)) {
 			status = 1;
