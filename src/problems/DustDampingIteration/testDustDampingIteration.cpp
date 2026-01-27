@@ -495,8 +495,8 @@ auto problem_main() -> int
 		amrex::Print() << "\nTest PASSED: all errors within tolerance of " << rel_err_tol << "\n";
 	}
 
-	if (amrex::ParallelDescriptor::IOProcessor()) {
 #ifdef HAVE_PYTHON
+	if (amrex::ParallelDescriptor::IOProcessor()) {
 		if (!ref_data.t_vec_.empty() && !iter_with_corr_data.t_vec_.empty() && !iter_without_corr_data.t_vec_.empty()) {
 			// gas velocity
 			matplotlibcpp::clf();
@@ -566,8 +566,8 @@ auto problem_main() -> int
 			matplotlibcpp::tight_layout();
 			matplotlibcpp::save("./dust_damping_iteration_gas_energy.pdf");
 		}
-#endif
 	}
+#endif
 
 	amrex::Print() << "\nTest complete.\n";
 	return status;
