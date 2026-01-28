@@ -175,20 +175,23 @@ auto problem_main() -> int
 		// Permutate data from different MPI processors
 		std::vector<size_t> p(nx);
 		std::iota(p.begin(), p.end(), 0);
+
 		std::sort(p.begin(), p.end(), [&](size_t i, size_t j) {
 			return position[i] < position[j];
 		});
 
-		std::vector<double> sorted_pos(nx);
+		amrex::Vector<double> sorted_pos(nx);
 		for (size_t i = 0; i < nx; ++i) {
 			sorted_pos[i] = position[p[i]];
 		}
-		std::map<std::string, std::vector<double>> sorted_values;
 
-		for (auto const& [key,val] : values) {
-			sorted_values[key].resize(nx);
+		int const n_comp = values.size();
+		amrex::Vector<amrex::PODVector<double>> sorted_values(n_comp);
+
+		for (int n = 0; n < n_comp; ++n) {
+			sorted_values[n].resize(nx);
 			for (size_t i = 0; i < nx; ++i) {
-				sorted_values[key][i] = val[p[i]];
+				sorted_values[n][i] = values[p[i]];
 			}
 		}
 
