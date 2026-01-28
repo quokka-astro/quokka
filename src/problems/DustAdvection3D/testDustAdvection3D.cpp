@@ -119,9 +119,11 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 	int status = 0;
+	auto [x_pos, x_vals] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
+	auto [y_pos, y_vals] = fextract(sim.state_new_cc_[0], sim.Geom(0), 1, 0.0);
+	auto [z_pos, z_vals] = fextract(sim.state_new_cc_[0], sim.Geom(0), 2, 0.0);
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// X direction (fixed y and z at center)
-		auto [x_pos, x_vals] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
 		const int nx = static_cast<int>(x_pos.size());
 
 		std::vector<double> vx_sim(nx);
@@ -191,7 +193,6 @@ auto problem_main() -> int
 		}
 
 		// Y direction (fixed x and z at center)
-		auto [y_pos, y_vals] = fextract(sim.state_new_cc_[0], sim.Geom(0), 1, 0.0);
 		const int ny = static_cast<int>(y_pos.size());
 
 		std::vector<double> vy_sim(ny);
@@ -261,7 +262,6 @@ auto problem_main() -> int
 		}
 
 		// Z direction (fixed x and y at center)
-		auto [z_pos, z_vals] = fextract(sim.state_new_cc_[0], sim.Geom(0), 2, 0.0);
 		const int nz = static_cast<int>(z_pos.size());
 
 		std::vector<double> vz_sim(nz);
