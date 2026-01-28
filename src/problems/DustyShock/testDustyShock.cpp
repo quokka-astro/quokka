@@ -191,7 +191,7 @@ auto problem_main() -> int
 		for (int n = 0; n < n_comp; ++n) {
 			sorted_values[n].resize(nx);
 			for (size_t i = 0; i < nx; ++i) {
-				sorted_values[n][i] = values[p[i]];
+				sorted_values[n][i] = values[n][p[i]];
 			}
 		}
 
