@@ -1,8 +1,4 @@
-# Stellar Particles and Supernova Feedback
-
-## Overview
-
-Quokka includes a particle framework for modeling stellar populations and their feedback effects on the interstellar medium (ISM). The primary feedback mechanism is supernova (SN) explosions, which inject energy and momentum into the surrounding gas. The SN module implements several physically-motivated schemes that adapt to the local resolution and density conditions.
+# Particles, star formation and feedback
 
 ## StochasticStellarPop Particle Type
 
@@ -22,9 +18,70 @@ Each particle also stores an integer **evolution stage** that tracks its lifecyc
 - `LowMassStar`: Low-mass star that will not explode
 - `LowMassComposite`: Composite particle representing a population of low-mass stars
 
+## Star Formation
+
+### Overview
+
+The star formation module adds star particles through a lightweight stochastic prescription that plugs into the Stochastic Stellar Population specialisation.
+
+- Runs once per hydro timestep and evaluates each cell independently.
+- Always spawns a low-mass star particle when a trial succeeds.
+- Adds high-mass particles probabilistically so the Chabrier (2005) initial mass function (IMF) is satisfied in expectation.
+
+### Jeans instability filter
+
+Eligible cells are first identified through a Jeans-length check before any stochastic sampling occurs.
+
+- Compute the Jeans length \(\lambda_J = c_s / \sqrt{G \rho}\) in every cell.
+- Mark the cell as eligible when \(\lambda_J < J \cdot \Delta x\) with \(J = 0.5\).
+- Only eligible cells continue to the sampling steps below.
+
+### Controlling the formation rate
+
+Two efficiency parameters tune how aggressively eligible gas is converted into star particles during each hydro step.
+
+- \(\epsilon_{ff}\): efficiency per free-fall time, defined through \(\epsilon_{ff} = (\dot M_{\star} \, t_{ff}) / (M_{cell} \, \Delta t)\).
+- \(\epsilon_{\star}\): fraction of the cell mass used when a particle is spawned.
+- The target stellar mass for the step is \(\epsilon_{ff} M_{cell} (\Delta t / t_{ff})\).
+- Bernoulli probability for spawning: \( P = \frac{\epsilon_{ff}}{\epsilon_{\star}} \frac{\Delta t}{t_{ff}} \).
+- The expectation value \(\langle M_{\star} \rangle = P \epsilon_{\star} M_{cell}\) matches the target mass provided \(\Delta t < t_{ff}\); the CFL condition typically enforces that inequality.
+
+### Sampling the stellar population
+
+Once a cell passes the filter and the Bernoulli draw succeeds, we construct the composite stellar population represented by the spawned particles.
+
+- Every accepted draw creates one low-mass particle that represents all stars with \(M < 8 M_{\odot}\).
+- High-mass stars follow the Chabrier (2005) IMF: log-normal below \(1 M_{\odot}\) and a slope of \(2.35\) above it.
+- Pre-computed IMF integrals provide the mass fraction \(f_{\star,high}\) and mean mass \(\langle m \rangle_{\star,high}\) of the high-mass component.
+- The expected number of massive stars is \(f_{\star,high} \epsilon_{\star} M_{cell} / \langle m \rangle_{\star,high}\); a Poisson variate with that mean sets the actual count.
+- Each massive star draws its mass from the high-mass end of the IMF, while the low-mass particle retains the remaining fraction \(1 - f_{\star,high}\) of the spawned mass.
+- If the Poisson draw returns zero, only the low-mass particle is inserted and it inherits the local gas velocity.
+
+### Assigning particle velocities
+
+Sampled star particles receive velocities that combine the local bulk flow with an isotropic runaway kick.
+
+- Each massive star draws a speed from a power-law distribution \(p(v) \propto v^{-1.8}\) truncated between 3 and 385 km s\(^{-1}\), then converts it to cgs units.
+- A random direction is chosen by sampling \(\cos \theta\) uniformly in \([-1, 1]\) and \(\phi\) in \([0, 2\pi)\); the resulting kick is added to the gas velocity of the parent cell.
+- The total momentum of all massive stars is accumulated, and the low-mass composite particle receives the opposite momentum so that the cell-level particle system conserves momentum.
+
+### Practical considerations
+
+A few implementation notes help interpret corner cases and limitations of the current recipe.
+
+- Star formation is operator-split from the hydrodynamics. When \(t_{ff}\) is unresolved (\(\Delta t \gtrsim t_{ff}\)), the true star formation rate is not captured, and this scheme provides one possible approximation; no explicit limiter is enforced beyond the CFL-controlled hydro step.
+- All spawned particles are inserted at the cell centre. Other physics modules are responsible for any subsequent repositioning or feedback coupling.
+
+
 ## Supernova Feedback
 
-### Physical Parameters
+### Overview
+
+Quokka includes a particle framework for modeling stellar populations and their feedback effects on the interstellar medium (ISM). The primary feedback mechanism is supernova (SN) explosions, which inject energy and momentum into the surrounding gas. The SN module implements several physically-motivated schemes that adapt to the local resolution and density conditions.
+
+### Supernova Feedback
+
+#### Physical Parameters
 
 When a progenitor star reaches its death time, it explodes as a Type II supernova with the following canonical parameters:
 
@@ -43,11 +100,11 @@ $$
 
 where $n_{\text{H}}$ is the ambient hydrogen number density averaged over the deposition kernel.
 
-### Deposition Kernel
+#### Deposition Kernel
 
 SN feedback is deposited into a $(2 \times 3 + 1)^3 = 343$ cell cubic stencil centered on the particle's location. The kernel weights are pre-computed to approximate a spherical distribution with radius $r = 3 \Delta x$, where $\Delta x$ is the cell width, around the host cell center. The kernel weights $W_{ijk}$ are normalized such that $\sum_{i,j,k} W_{ijk} = 1$.
 
-### Resolution-Adaptive Schemes
+#### Resolution-Adaptive Schemes
 
 The feedback implementation uses the **resolution factor** $R_M$ to determine whether the Sedov-Taylor phase is resolved:
 
@@ -61,7 +118,7 @@ where:
 
 When $R_M < 1$, the Sedov-Taylor phase is resolved and the blast wave dynamics can be captured. When $R_M \geq 1$, the resolution is insufficient and the code transitions to momentum-dominated feedback following Kim & Ostriker (2017).
 
-#### Available Schemes
+##### Available Schemes
 
 Quokka provides four SN feedback schemes controlled by `particles.SN_scheme`:
 
@@ -94,7 +151,7 @@ $$
 p_{\text{inject}} = f \, p_{\text{snr}}
 $$
 
-### Momentum Deposition
+#### Momentum Deposition
 
 For schemes with momentum injection, the momentum is distributed radially from the particle position. For each cell $(i,j,k)$ in the stencil:
 
@@ -106,11 +163,11 @@ For schemes with momentum injection, the momentum is distributed radially from t
 
 This creates an isotropic outward momentum distribution centered on the SN position.
 
-### Galilean Invariance Option
+#### Galilean Invariance Option
 
 The parameter `particles.SN_use_galilean_invariant` (default: `1`) controls whether the momentum deposition is Galilean invariant:
 
-#### Galilean-Invariant Formulation (`SN_use_galilean_invariant = 1`, default)
+##### Galilean-Invariant Formulation (`SN_use_galilean_invariant = 1`, default)
 
 Uses a center-of-mass (COM) frame formulation that ensures the feedback is invariant under Galilean transformations:
 
@@ -135,7 +192,7 @@ Uses a center-of-mass (COM) frame formulation that ensures the feedback is invar
 
 **Physical interpretation**: The gas velocity is first transformed to the COM frame, then isotropic expansion is added. This ensures that a boosted observer sees the same SN physics.
 
-#### Lab-frame Formulation (`SN_use_galilean_invariant = 0`)
+##### Lab-frame Formulation (`SN_use_galilean_invariant = 0`)
 
 Uses a lab-frame formulation that is simpler but not Galilean invariant:
 
@@ -156,7 +213,7 @@ Uses a lab-frame formulation that is simpler but not Galilean invariant:
 - Galilean-invariant (default): Physically correct for moving systems, better for simulations with bulk flows
 - Lab-frame: Simpler, may give lower numerical errors in some static cases, preserves original behavior
 
-### Thermal-Only Scheme
+#### Thermal-Only Scheme
 
 The `SN_thermal_only` scheme always uses the energy-conserving (lab-frame) formulation since there is no radial momentum injection. It deposits:
 
@@ -164,7 +221,7 @@ The `SN_thermal_only` scheme always uses the energy-conserving (lab-frame) formu
 - **Momentum**: $\Delta \vec{p}_{ijk} = m_{\text{ej}} \vec{v}_{\text{ej}} W_{ijk}$ (ejecta momentum only)
 - **Energy**: $\Delta E_{ijk} = \left(E_{\text{blast}} + \frac{1}{2} m_{\text{ej}} |\vec{v}_{\text{ej}}|^2\right) W_{ijk}$
 
-## Runtime Parameters
+### Runtime Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -174,9 +231,9 @@ The `SN_thermal_only` scheme always uses the energy-conserving (lab-frame) formu
 | `particles.verbose` | Integer | `0` | Verbosity level for particle diagnostics |
 | `particles.stellar_velocity_limit` | Float | $10^8$ cm/s | Maximum allowed stellar velocity (aborts if exceeded) |
 
-## Implementation Notes
+### Implementation Notes
 
-### Operator Splitting
+#### Operator Splitting
 
 SN feedback is operator-split from the hydrodynamics and applied after each timestep:
 
@@ -187,7 +244,7 @@ SN feedback is operator-split from the hydrodynamics and applied after each time
 5. Buffer is added to the state using a reproducibility-aware algorithm
 6. Particle evolution stage is updated to `SNRemnant`
 
-### Numerical Reproducibility
+#### Numerical Reproducibility
 
 The deposition uses a roundoff-resistant algorithm to ensure bit-for-bit reproducibility across different processor counts. The algorithm:
 
@@ -195,7 +252,7 @@ The deposition uses a roundoff-resistant algorithm to ensure bit-for-bit reprodu
 2. Applies the Kahan compensated summation algorithm
 3. Removes low-order bits controlled by `particles.reproducibility_roundoff_redundancy`
 
-### AMR Considerations
+#### AMR Considerations
 
 - Feedback is always deposited at the finest level covering the particle
 - If a particle sits at a coarse-fine boundary, feedback is deposited into fine-level cells (known limitation that needs to be fixed in the future)
@@ -203,14 +260,14 @@ The deposition uses a roundoff-resistant algorithm to ensure bit-for-bit reprodu
 - The kernel stencil size is fixed in cell widths, so the physical size adapts to local resolution
 - The use of `setForceFinestLevel(true)` is recommended to ensure that all SN progenitors, and thus SN events, exist at finest level. 
 
-### Limitations
+#### Limitations
 
 - Accurate radiative cooling must be present to resolve the pressure-confined snowplow phase
 - The spherical kernel is approximated on a Cartesian grid, introducing mild anisotropy
 - The terminal momentum formula assumes solar metallicity and Type II SNe physics
 - No explicit treatment of metal enrichment (can be added via passive scalars)
 
-## Physical Motivation
+### Physical Motivation
 
 The resolution-dependent momentum injection is based on the realization that under-resolved SN explosions lose energy to artificial radiative losses within a few timesteps. The momentum-based schemes compensate by directly injecting momentum when the Sedov-Taylor phase cannot be captured.
 
@@ -218,9 +275,9 @@ The terminal momentum $p_{\text{snr}}$ represents the asymptotic momentum that a
 
 The $R_M$ factor effectively measures whether the simulation has sufficient resolution and density to capture the Sedov-Taylor expansion. When $R_M \ll 1$, the blast wave will expand through many cells before reaching the shell-formation radius, allowing the hydrodynamics to naturally capture the momentum buildup. When $R_M \sim 1$ or larger, the explosion is under-resolved and the code preemptively injects the expected terminal momentum.
 
-## Examples
+### Examples
 
-### Basic SN Test
+#### Basic SN Test
 
 The `SN` problem provides a canonical test with one or more SN progenitors in a uniform medium:
 
@@ -230,7 +287,7 @@ particles.SN_use_galilean_invariant = 1                # use Galilean-invariant 
 particles.verbose = 1                                  # print SN diagnostics
 ```
 
-### Random Blast Test
+#### Random Blast Test
 
 The `RandomBlast` problem tests multiple SN explosions with various ambient conditions and bulk flows:
 
