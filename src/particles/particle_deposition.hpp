@@ -177,15 +177,15 @@ depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, 
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
-    amrex::Array4<amrex::Real> const &local_state, amrex::Array4<amrex::Real> const &local_buffer, const int ix, const int iy, const int iz,
-    const amrex::Real stencil_volume, const amrex::Real pos_x, const amrex::Real pos_y, const amrex::Real pos_z, const amrex::Real m_ej,
-    const amrex::Real E_blast, const amrex::Real p_snr_0, const amrex::Real vol_inverse,
-    const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>
-	&stencil_weights_gpu,
-    const amrex::Real avg_density, const amrex::Real vol, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
-    const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo, const SNScheme SN_scheme_d, const Real pvx, const Real pvy, const Real pvz,
-    const bool use_galilean_invariant)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+depositThermalKineticMomentumSNR(amrex::Array4<amrex::Real> const &local_state, amrex::Array4<amrex::Real> const &local_buffer, const int ix, const int iy,
+				 const int iz, const amrex::Real stencil_volume, const amrex::Real pos_x, const amrex::Real pos_y, const amrex::Real pos_z,
+				 const amrex::Real m_ej, const amrex::Real E_blast, const amrex::Real p_snr_0, const amrex::Real vol_inverse,
+				 const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>,
+						       SN_stencil_array_size> &stencil_weights_gpu,
+				 const amrex::Real avg_density, const amrex::Real vol, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
+				 const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo, const SNScheme SN_scheme_d, const Real pvx, const Real pvy,
+				 const Real pvz, const bool use_galilean_invariant)
 {
 	const double n_H_amb = avg_density * cloudy_H_mass_fraction / m_u;
 	const amrex::Real M_gas = avg_density * stencil_volume * vol;		 // Gas mass in stencil
