@@ -452,7 +452,7 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 					// (SN kinetic energy computed inside function; formulation depends on SN_use_galilean_invariant flag)
 					depositThermalKineticMomentumSNR<problem_t>(local_state, local_buffer, ix, iy, iz, stencil_volume, pos_x, pos_y, pos_z,
 										    m_ej, E_blast, p_snr_0, vol_inverse, stencil_weights_gpu, avg_density, vol,
-										    dx, plo, SN_scheme_d, p_vx, p_vy, p_vz, quokka::SN_use_galilean_invariant);
+										    dx, plo, SN_scheme_d, p_vx, p_vy, p_vz, SN_use_galilean_invariant);
 				}
 			}
 		});
