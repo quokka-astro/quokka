@@ -12,6 +12,7 @@
 #include <cmath>
 #include <limits>
 #include <map>
+#include <numeric>
 #include <string>
 #include <vector>
 
@@ -70,7 +71,7 @@ template <> void QuokkaSimulation<DustyShock>::setInitialConditionsOnGrid(quokka
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = Geom(0).CellSizeArray();
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = Geom(0).ProbLoArray();
 
-	// Shock tube initial conditions
+	// shock tube initial conditions
 	const double shock_position = shock_position_init;
 	const double rho_left = rho_gas_left;
 	const double u_left = vel_gas_left;
@@ -171,7 +172,31 @@ auto problem_main() -> int
 
 	int status = 0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		// Extract numerical solution slices
+		// permutate data from different MPI processors
+		std::vector<size_t> p(nx);
+		std::iota(p.begin(), p.end(), 0);
+
+		std::sort(p.begin(), p.end(), [&](size_t i, size_t j) { return position[i] < position[j]; });
+
+		amrex::Vector<double> sorted_pos(nx);
+		for (int i = 0; i < nx; ++i) {
+			sorted_pos[i] = position[p[i]];
+		}
+
+		int const n_comp = static_cast<int>(values.size());
+		amrex::Vector<amrex::PODVector<double>> sorted_values(n_comp);
+
+		for (int n = 0; n < n_comp; ++n) {
+			sorted_values[n].resize(nx);
+			for (int i = 0; i < nx; ++i) {
+				sorted_values[n][i] = values[n][p[i]];
+			}
+		}
+
+		position = sorted_pos;
+		values = sorted_values;
+
+		// extract numerical solution slices
 		std::vector<double> rho_g_num(nx);
 		std::vector<double> u_g_num(nx);
 		std::vector<double> rho_d_num(nx);
@@ -195,7 +220,7 @@ auto problem_main() -> int
 		int const shock_idx = (drho.empty()) ? 0 : static_cast<int>(std::distance(drho.begin(), std::max_element(drho.begin(), drho.end())));
 		double const shock_pos_numeric = position[shock_idx];
 
-		// Analytic solution parameters
+		// analytic solution parameters
 		const double v_s = vel_gas_left;
 		const double c_s = cs_isothermal;
 		const double M = v_s / c_s;
@@ -358,7 +383,7 @@ auto problem_main() -> int
 		save("dusty_shock_velocity.pdf");
 #endif // HAVE_PYTHON
 
-		// Interpolate analytic solution to numerical x positions, then compute relative L1 norms
+		// interpolate analytic solution to numerical x positions, then compute relative L1 norms
 		std::vector<double> rho_g_an_at_num(nx);
 		std::vector<double> rho_d_an_at_num(nx);
 		std::vector<double> u_g_an_at_num(nx);
