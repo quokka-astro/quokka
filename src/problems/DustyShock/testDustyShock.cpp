@@ -172,6 +172,7 @@ auto problem_main() -> int
 
 	int status = 0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
+		/*
 		// Permutate data from different MPI processors
 		std::vector<size_t> p(nx);
 		std::iota(p.begin(), p.end(), 0);
@@ -197,6 +198,7 @@ auto problem_main() -> int
 
 		position = sorted_pos;
 		values = sorted_values;
+		*/
 
 		// Extract numerical solution slices
 		std::vector<double> rho_g_num(nx);
