@@ -157,9 +157,10 @@ For schemes with momentum injection, the momentum is distributed radially from t
 
 1. Compute the unit vector $\hat{\mathbf{r}}_{ijk}$ from the particle to the cell center
 2. Distribute momentum proportional to the kernel weight:
-   $$
-   \Delta \mathbf{p}_{ijk} = f \, p_{\text{snr}} \, W_{ijk} \, \hat{\mathbf{r}}_{ijk}
-   $$
+
+$$
+\Delta \mathbf{p}_{ijk} = f \, p_{\text{snr}} \, W_{ijk} \, \hat{\mathbf{r}}_{ijk}
+$$
 
 This creates an isotropic outward momentum distribution centered on the SN position.
 
@@ -172,23 +173,28 @@ The parameter `particles.SN_use_galilean_invariant` (default: `1`) controls whet
 Uses a center-of-mass (COM) frame formulation that ensures the feedback is invariant under Galilean transformations:
 
 1. **Compute COM velocity** of the SNR (gas + ejecta):
-   $$
-   \vec{v}_{\text{COM}} = \frac{\vec{P}_{\text{gas}} + m_{\text{ej}} \vec{v}_{\text{ej}}}{M_{\text{gas}} + m_{\text{ej}}}
-   $$
-   where $\vec{P}_{\text{gas}}$ is the total momentum of gas in the stencil (kernel-weighted).
+
+$$
+\vec{v}_{\text{COM}} = \frac{\vec{P}_{\text{gas}} + m_{\text{ej}} \vec{v}_{\text{ej}}}{M_{\text{gas}} + m_{\text{ej}}}
+$$
+
+where $\vec{P}_{\text{gas}}$ is the total momentum of gas in the stencil (kernel-weighted).
 
 2. **Deposit momentum** such that each cell receives:
-   $$
-   \Delta \vec{p}_{ijk} = \left[\rho_{\text{new}} \vec{v}_{\text{COM}} - \vec{p}_{\text{old}}\right] + \vec{p}_{\text{radial}}
-   $$
-   where $\vec{p}_{\text{radial}} = f \, p_{\text{snr}} \, W_{ijk} \, \hat{\mathbf{r}}_{ijk}$ is the radial momentum component.
+
+$$
+\Delta \vec{p}_{ijk} = \left[\rho_{\text{new}} \vec{v}_{\text{COM}} - \vec{p}_{\text{old}}\right] + \vec{p}_{\text{radial}}
+$$
+
+where $\vec{p}_{\text{radial}} = f \, p_{\text{snr}} \, W_{ijk} \, \hat{\mathbf{r}}_{ijk}$ is the radial momentum component.
 
 3. **Energy deposition** includes a cross term:
-   $$
-   \Delta E_{ijk} = \left(E_{\text{blast}} + E_{\text{kin}}\right) W_{ijk} + \vec{v}_{\text{COM}} \cdot \vec{p}_{\text{radial}}
-   $$
 
-   The cross term $\vec{v}_{\text{COM}} \cdot \vec{p}_{\text{radial}}$ accounts for the kinetic energy change from "resetting" the cell velocity to the COM frame before adding radial expansion. This term sums to zero over all cells (momentum is conserved), ensuring Galilean invariance.
+$$
+\Delta E_{ijk} = \left(E_{\text{blast}} + E_{\text{kin}}\right) W_{ijk} + \vec{v}_{\text{COM}} \cdot \vec{p}_{\text{radial}}
+$$
+
+The cross term $\vec{v}_{\text{COM}} \cdot \vec{p}_{\text{radial}}$ accounts for the kinetic energy change from "resetting" the cell velocity to the COM frame before adding radial expansion. This term sums to zero over all cells (momentum is conserved), ensuring Galilean invariance.
 
 **Physical interpretation**: The gas velocity is first transformed to the COM frame, then isotropic expansion is added. This ensures that a boosted observer sees the same SN physics.
 
@@ -197,15 +203,18 @@ Uses a center-of-mass (COM) frame formulation that ensures the feedback is invar
 Uses a lab-frame formulation that is simpler but not Galilean invariant:
 
 1. **Deposit momentum** proportionally to preserve cell velocity:
-   $$
-   \Delta \vec{p}_{ijk} = \frac{\Delta \rho_{ijk}}{\rho_{ijk}} \vec{p}_{\text{old}} + \vec{p}_{\text{radial}}
-   $$
-   where $\Delta \rho_{ijk} = m_{\text{ej}} W_{ijk}$ is the deposited mass.
+
+$$
+\Delta \vec{p}_{ijk} = \frac{\Delta \rho_{ijk}}{\rho_{ijk}} \vec{p}_{\text{old}} + \vec{p}_{\text{radial}}
+$$
+
+where $\Delta \rho_{ijk} = m_{\text{ej}} W_{ijk}$ is the deposited mass.
 
 2. **Energy deposition** uses lab-frame ejecta kinetic energy:
-   $$
-   \Delta E_{ijk} = \left(E_{\text{blast}} + \frac{1}{2} m_{\text{ej}} |\vec{v}_{\text{ej}}|^2\right) W_{ijk}
-   $$
+
+$$
+\Delta E_{ijk} = \left(E_{\text{blast}} + \frac{1}{2} m_{\text{ej}} |\vec{v}_{\text{ej}}|^2\right) W_{ijk}
+$$
 
 **Physical interpretation**: The first term in the momentum deposition increases the momentum proportionally to maintain the cell's original velocity as mass is added. The radial momentum is then added on top. This is the legacy formulation from the original implementation.
 
