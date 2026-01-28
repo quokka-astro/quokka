@@ -234,7 +234,7 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 
 		std::sort(p.begin(), p.end(), [&](size_t i, size_t j) {
 			return pos[i] < pos[j];
-		}
+		});
 
 		Vector<Real> sorted_pos(n_pts);
 		for (size_t i = 0; i < n_pts; ++i) {
