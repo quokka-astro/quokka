@@ -14,6 +14,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <numeric>
 
 constexpr double shock_position_init = 4.0;
 constexpr double rho_gas_left = 1.0;
@@ -171,6 +172,29 @@ auto problem_main() -> int
 
 	int status = 0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
+		// Permutate data from different MPI processors
+		std::vector<size_t> p(nx);
+		std::iota(p.begin(), p.end(), 0);
+		std::sort(p.begin(), p.end(), [&](size_t i, size_t j) {
+			return position[i] < position[j];
+		});
+
+		std::vector<double> sorted_pos(nx);
+		for (size_t i = 0; i < nx; ++i) {
+			sorted_pos[i] = position[p[i]];
+		}
+		std::map<std::string, std::vector<double>> sorted_values;
+
+		for (auto const& [key,val] : values) {
+			sorted_values[key].resize(nx);
+			for (size_t i = 0; i < nx; ++i) {
+				sorted_values[key][i] = val[p[i]];
+			}
+		}
+
+		position = sorted_pos;
+		values = sorted_values;
+
 		// Extract numerical solution slices
 		std::vector<double> rho_g_num(nx);
 		std::vector<double> u_g_num(nx);
