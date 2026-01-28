@@ -147,7 +147,7 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 			const int local_len = bx.length(idir);
 			const auto &fab = mf.array(mfi);
 			for (int ivar = 0; ivar < mf.nComp(); ++ivar) {
-				auto dataptr = data[ivar].data();
+				auto *dataptr = data[ivar].data();
 				ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 					int idx = offset;
 					if (idir == 0) {
