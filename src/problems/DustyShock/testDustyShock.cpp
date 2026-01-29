@@ -14,7 +14,6 @@
 #include <map>
 #include <string>
 #include <vector>
-#include <numeric>
 
 constexpr double shock_position_init = 4.0;
 constexpr double rho_gas_left = 1.0;
