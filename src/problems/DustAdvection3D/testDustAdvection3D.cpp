@@ -13,9 +13,16 @@ struct DustAdvection3D {
 };
 
 constexpr double initial_Egas = 1.0e-9;
-constexpr double rho = 1.0;
 constexpr double v0 = 5.0;
 constexpr double dust_v0 = 5.0;
+
+// Gaussian parameters
+constexpr double rho_bg = 1.0;
+constexpr double A = 1.0;     // amplitude
+constexpr double sigma = 0.1; // width
+constexpr double xc = 0.5;    // domain center (assuming Lx = Ly = Lz = 1.0)
+constexpr double yc = 0.5;
+constexpr double zc = 0.5;
 
 template <> struct quokka::EOS_Traits<DustAdvection3D> {
 	static constexpr double mean_molecular_weight = 1.0;
@@ -47,14 +54,6 @@ template <> void QuokkaSimulation<DustAdvection3D>::setInitialConditionsOnGrid(q
 	const auto Egas0 = initial_Egas;
 	const auto v_gas = v0;	     // gas velocity in all directions
 	const auto v_dust = dust_v0; // dust velocity in all directions
-
-	// Gaussian parameters
-	const double rho_bg = 1.0;
-	const double A = 1.0;	  // amplitude
-	const double sigma = 0.1; // width
-	const double xc = 0.5;	  // domain center (assuming Lx = Ly = Lz = 1.0)
-	const double yc = 0.5;
-	const double zc = 0.5;
 
 	// get geometry information
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = Geom(0).CellSizeArray();
@@ -96,14 +95,6 @@ auto problem_main() -> int
 	const double Ly = 1.0;
 	const double Lz = 1.0;
 	const double CFL_number = 0.3;
-
-	// Gaussian parameters
-	const double rho_bg = 1.0;
-	const double A = 1.0;
-	const double sigma = 0.1;
-	const double xc = 0.5;
-	const double yc = 0.5;
-	const double zc = 0.5;
 
 	// problem initialization
 	QuokkaSimulation<DustAdvection3D> sim;
