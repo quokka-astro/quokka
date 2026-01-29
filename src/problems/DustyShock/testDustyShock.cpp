@@ -172,30 +172,6 @@ auto problem_main() -> int
 
 	int status = 0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		// permutate data from different MPI processors
-		std::vector<size_t> p(nx);
-		std::iota(p.begin(), p.end(), 0);
-
-		std::sort(p.begin(), p.end(), [&](size_t i, size_t j) { return position[i] < position[j]; });
-
-		amrex::Vector<double> sorted_pos(nx);
-		for (int i = 0; i < nx; ++i) {
-			sorted_pos[i] = position[p[i]];
-		}
-
-		int const n_comp = static_cast<int>(values.size());
-		amrex::Vector<amrex::PODVector<double>> sorted_values(n_comp);
-
-		for (int n = 0; n < n_comp; ++n) {
-			sorted_values[n].resize(nx);
-			for (int i = 0; i < nx; ++i) {
-				sorted_values[n][i] = values[n][p[i]];
-			}
-		}
-
-		position = sorted_pos;
-		values = sorted_values;
-
 		// extract numerical solution slices
 		std::vector<double> rho_g_num(nx);
 		std::vector<double> u_g_num(nx);
