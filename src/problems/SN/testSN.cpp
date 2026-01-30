@@ -41,7 +41,7 @@ constexpr double gamma_ = 5. / 3.;
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
 const double year = 3.15576e+07; // in seconds
-constexpr double B0 = 1.0e-7; // uniform background field for MHD variant
+constexpr double B0 = 1.0e-7;	 // uniform background field for MHD variant
 
 static double n_amb = 1.0;    // ambient density (g cm^-3) // NOLINT
 static double T_amb = 100.0;  // ambient temperature (K) // NOLINT
