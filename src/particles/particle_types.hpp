@@ -453,11 +453,6 @@ inline amrex::Real eps_ff = 0.01;	   // NOLINT
 // Scheme for SN feedback
 inline SNScheme SN_scheme = SNScheme::SN_thermal_or_thermal_momentum; // NOLINT
 
-// Use Galilean-invariant SN feedback (if false, use energy-conserving feedback)
-// When true, momentum schemes use COM-frame formulation with v_COM . p_radial cross term
-// When false, momentum schemes use lab-frame formulation (legacy behavior)
-inline bool SN_use_galilean_invariant = true; // NOLINT
-
 // Sink particle accretion
 inline bool sink_particle_use_uniform_kernel = false; // NOLINT. If true, use uniform accretion kernel in a (7 dx)^3 box
 
@@ -487,9 +482,6 @@ inline void particleParmParse()
 
 	// Handle SNScheme enum
 	pp.query("SN_scheme", SN_scheme);
-
-	// SN Galilean invariance option
-	pp.query("SN_use_galilean_invariant", SN_use_galilean_invariant);
 
 	// Stochastic SF parameters
 	pp.query("eps_ff", eps_ff);

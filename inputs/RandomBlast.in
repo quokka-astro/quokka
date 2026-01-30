@@ -41,7 +41,4 @@ cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 
 problem.boost_velocity = 0.0 0.0 0.0
 
-particles.SN_scheme = SN_thermal_or_thermal_momentum
-particles.SN_use_galilean_invariant = 1
-
 tiny_profiler.enabled = 0
