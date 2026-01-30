@@ -29,7 +29,6 @@ struct SNProblem {
 static bool refine_half_domain = false; // NOLINT
 
 static double max_Eint_global = 0.0;	       // NOLINT
-static double max_Eint_last = 0.0;	       // NOLINT
 static std::vector<double> max_Eint_history{}; // NOLINT
 static std::vector<double> t_history{};	       // NOLINT
 
@@ -42,8 +41,6 @@ constexpr double gamma_ = 5. / 3.;
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
 const double year = 3.15576e+07; // in seconds
-const double mass_SNR = 10.0 * C::M_solar;
-const int n_SNR = 1;
 constexpr double B0 = 1.0e-7; // uniform background field for MHD variant
 
 static double n_amb = 1.0;    // ambient density (g cm^-3) // NOLINT
@@ -180,7 +177,6 @@ template <> void QuokkaSimulation<SNProblem>::computeAfterTimestep()
 	// find the maximum temperature in the state_new_cc_[0]
 	const double max_internal_energy_density = state_new_cc_[0].max(HydroSystem<SNProblem>::internalEnergy_index);
 	max_Eint_global = std::max(max_Eint_global, max_internal_energy_density);
-	max_Eint_last = max_internal_energy_density;
 	max_Eint_history.push_back(max_internal_energy_density);
 	t_history.push_back(tNew_[0]);
 }
