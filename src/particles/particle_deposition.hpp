@@ -325,6 +325,10 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 		// Deposit particle data into the local buffer
 		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 			auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+			auto const local_state_capture = local_state;
+			auto const plo_capture = plo;
+			auto const dxi_capture = dxi;
+			amrex::ignore_unused(local_state_capture, plo_capture, dxi_capture);
 
 			// Check if this is a supernova progenitor
 			const bool is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
@@ -360,12 +364,13 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 				}
 
 				// Find the cell containing the particle
-				int ix = static_cast<int>(amrex::Math::floor((pos_x - plo[0]) * dxi[0]));
-				int iy = static_cast<int>(amrex::Math::floor((pos_y - plo[1]) * dxi[1]));
-				int iz = static_cast<int>(amrex::Math::floor((pos_z - plo[2]) * dxi[2]));
+				int ix = static_cast<int>(amrex::Math::floor((pos_x - plo_capture[0]) * dxi_capture[0]));
+				int iy = static_cast<int>(amrex::Math::floor((pos_y - plo_capture[1]) * dxi_capture[1]));
+				int iz = static_cast<int>(amrex::Math::floor((pos_z - plo_capture[2]) * dxi_capture[2]));
 
 				if constexpr (ContainerType::ParticleType::NReal > StochasticStellarPopParticleDeathDensityIdx) {
-					p.rdata(StochasticStellarPopParticleDeathDensityIdx) = local_state(ix, iy, iz, HydroSystem<problem_t>::density_index);
+					p.rdata(StochasticStellarPopParticleDeathDensityIdx) =
+					    local_state_capture(ix, iy, iz, HydroSystem<problem_t>::density_index);
 				}
 
 				amrex::Real avg_density = 0.0;
@@ -376,7 +381,7 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 							const int jjj = std::abs(jj);
 							const int kkk = std::abs(kk);
 							const double kernel = stencil_weights_gpu[iii][jjj][kkk];
-							avg_density += kernel * local_state(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::density_index);
+							avg_density += kernel * local_state_capture(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::density_index);
 						}
 					}
 				}
@@ -624,6 +629,10 @@ void updateEvolutionStageAndDeathDensity(ContainerType *container, amrex::MultiF
 
 		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 			auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+			auto const local_state_capture = local_state;
+			auto const plo_capture = plo;
+			auto const dxi_capture = dxi;
+			amrex::ignore_unused(local_state_capture, plo_capture, dxi_capture);
 
 			// Check if this is a supernova progenitor
 			const bool is_sn_progenitor = (p.idata(evolutionStageIndex) == static_cast<int>(StellarEvolutionStage::SNProgenitor));
@@ -639,10 +648,11 @@ void updateEvolutionStageAndDeathDensity(ContainerType *container, amrex::MultiF
 					p.rdata(StochasticStellarPopParticleDeathPosYIdx) = pos_y;
 					p.rdata(StochasticStellarPopParticleDeathPosZIdx) = pos_z;
 
-					const int ix = static_cast<int>(amrex::Math::floor((pos_x - plo[0]) * dxi[0]));
-					const int iy = static_cast<int>(amrex::Math::floor((pos_y - plo[1]) * dxi[1]));
-					const int iz = static_cast<int>(amrex::Math::floor((pos_z - plo[2]) * dxi[2]));
-					p.rdata(StochasticStellarPopParticleDeathDensityIdx) = local_state(ix, iy, iz, HydroSystem<problem_t>::density_index);
+					const int ix = static_cast<int>(amrex::Math::floor((pos_x - plo_capture[0]) * dxi_capture[0]));
+					const int iy = static_cast<int>(amrex::Math::floor((pos_y - plo_capture[1]) * dxi_capture[1]));
+					const int iz = static_cast<int>(amrex::Math::floor((pos_z - plo_capture[2]) * dxi_capture[2]));
+					p.rdata(StochasticStellarPopParticleDeathDensityIdx) =
+					    local_state_capture(ix, iy, iz, HydroSystem<problem_t>::density_index);
 				}
 			}
 		});
