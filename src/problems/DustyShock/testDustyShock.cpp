@@ -12,7 +12,6 @@
 #include <cmath>
 #include <limits>
 #include <map>
-#include <numeric>
 #include <string>
 #include <vector>
 
