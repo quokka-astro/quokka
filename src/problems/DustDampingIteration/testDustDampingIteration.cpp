@@ -497,75 +497,65 @@ auto problem_main() -> int
 		}
 
 #ifdef HAVE_PYTHON
-		if (!ref_data.t_vec_.empty() && !iter_with_corr_data.t_vec_.empty() && !iter_without_corr_data.t_vec_.empty()) {
-			// gas velocity
-			matplotlibcpp::clf();
-			matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_gas_vec_,
-					    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
-			matplotlibcpp::plot(
-			    iter_with_corr_data.t_vec_, iter_with_corr_data.v_gas_vec_,
-			    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
-			matplotlibcpp::plot(
-			    iter_without_corr_data.t_vec_, iter_without_corr_data.v_gas_vec_,
-			    {{"label", "iterative without correction"}, {"color", "b"}, {"linestyle", ":"}, {"marker", "s"}, {"markersize", "3"}});
-			matplotlibcpp::legend();
-			matplotlibcpp::xlabel("t");
-			matplotlibcpp::ylabel(R"($v_g$)");
-			matplotlibcpp::title("Gas Velocity");
-			matplotlibcpp::tight_layout();
-			matplotlibcpp::save("./dust_damping_iteration_gas_velocity.pdf");
+		// gas velocity
+		matplotlibcpp::clf();
+		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_gas_vec_,
+				    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+		matplotlibcpp::plot(iter_with_corr_data.t_vec_, iter_with_corr_data.v_gas_vec_,
+				    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
+		matplotlibcpp::plot(iter_without_corr_data.t_vec_, iter_without_corr_data.v_gas_vec_,
+				    {{"label", "iterative without correction"}, {"color", "b"}, {"linestyle", ":"}, {"marker", "s"}, {"markersize", "3"}});
+		matplotlibcpp::legend();
+		matplotlibcpp::xlabel("t");
+		matplotlibcpp::ylabel(R"($v_g$)");
+		matplotlibcpp::title("Gas Velocity");
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("./dust_damping_iteration_gas_velocity.pdf");
 
-			// dust1 velocity
-			matplotlibcpp::clf();
-			matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust1_vec_,
-					    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
-			matplotlibcpp::plot(
-			    iter_with_corr_data.t_vec_, iter_with_corr_data.v_dust1_vec_,
-			    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
-			matplotlibcpp::plot(
-			    iter_without_corr_data.t_vec_, iter_without_corr_data.v_dust1_vec_,
-			    {{"label", "iterative without correction"}, {"color", "b"}, {"linestyle", ":"}, {"marker", "s"}, {"markersize", "3"}});
-			matplotlibcpp::legend();
-			matplotlibcpp::xlabel("t");
-			matplotlibcpp::ylabel(R"($v_{d,1}$)");
-			matplotlibcpp::title("Dust1 Velocity");
-			matplotlibcpp::tight_layout();
-			matplotlibcpp::save("./dust_damping_iteration_dust1_velocity.pdf");
+		// dust1 velocity
+		matplotlibcpp::clf();
+		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust1_vec_,
+				    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+		matplotlibcpp::plot(iter_with_corr_data.t_vec_, iter_with_corr_data.v_dust1_vec_,
+				    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
+		matplotlibcpp::plot(iter_without_corr_data.t_vec_, iter_without_corr_data.v_dust1_vec_,
+				    {{"label", "iterative without correction"}, {"color", "b"}, {"linestyle", ":"}, {"marker", "s"}, {"markersize", "3"}});
+		matplotlibcpp::legend();
+		matplotlibcpp::xlabel("t");
+		matplotlibcpp::ylabel(R"($v_{d,1}$)");
+		matplotlibcpp::title("Dust1 Velocity");
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("./dust_damping_iteration_dust1_velocity.pdf");
 
-			// dust2 velocity
-			matplotlibcpp::clf();
-			matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust2_vec_,
-					    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
-			matplotlibcpp::plot(
-			    iter_with_corr_data.t_vec_, iter_with_corr_data.v_dust2_vec_,
-			    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
-			matplotlibcpp::plot(
-			    iter_without_corr_data.t_vec_, iter_without_corr_data.v_dust2_vec_,
-			    {{"label", "iterative without correction"}, {"color", "b"}, {"linestyle", ":"}, {"marker", "s"}, {"markersize", "3"}});
-			matplotlibcpp::legend();
-			matplotlibcpp::xlabel("t");
-			matplotlibcpp::ylabel(R"($v_{d,2}$)");
-			matplotlibcpp::title("Dust2 Velocity");
-			matplotlibcpp::tight_layout();
-			matplotlibcpp::save("./dust_damping_iteration_dust2_velocity.pdf");
+		// dust2 velocity
+		matplotlibcpp::clf();
+		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust2_vec_,
+				    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+		matplotlibcpp::plot(iter_with_corr_data.t_vec_, iter_with_corr_data.v_dust2_vec_,
+				    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
+		matplotlibcpp::plot(iter_without_corr_data.t_vec_, iter_without_corr_data.v_dust2_vec_,
+				    {{"label", "iterative without correction"}, {"color", "b"}, {"linestyle", ":"}, {"marker", "s"}, {"markersize", "3"}});
+		matplotlibcpp::legend();
+		matplotlibcpp::xlabel("t");
+		matplotlibcpp::ylabel(R"($v_{d,2}$)");
+		matplotlibcpp::title("Dust2 Velocity");
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("./dust_damping_iteration_dust2_velocity.pdf");
 
-			// gas energy
-			matplotlibcpp::clf();
-			matplotlibcpp::plot(ref_data.t_vec_, ref_data.E_gas_vec_,
-					    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
-			matplotlibcpp::plot(
-			    iter_with_corr_data.t_vec_, iter_with_corr_data.E_gas_vec_,
-			    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
-			matplotlibcpp::plot(
-			    iter_without_corr_data.t_vec_, iter_without_corr_data.E_gas_vec_,
-			    {{"label", "iterative without correction"}, {"color", "b"}, {"linestyle", ":"}, {"marker", "s"}, {"markersize", "3"}});
-			matplotlibcpp::legend();
-			matplotlibcpp::xlabel("t");
-			matplotlibcpp::ylabel(R"($E_g$)");
-			matplotlibcpp::title("Gas Energy");
-			matplotlibcpp::tight_layout();
-			matplotlibcpp::save("./dust_damping_iteration_gas_energy.pdf");
-		}
+		// gas energy
+		matplotlibcpp::clf();
+		matplotlibcpp::plot(ref_data.t_vec_, ref_data.E_gas_vec_,
+				    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+		matplotlibcpp::plot(iter_with_corr_data.t_vec_, iter_with_corr_data.E_gas_vec_,
+				    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
+		matplotlibcpp::plot(iter_without_corr_data.t_vec_, iter_without_corr_data.E_gas_vec_,
+				    {{"label", "iterative without correction"}, {"color", "b"}, {"linestyle", ":"}, {"marker", "s"}, {"markersize", "3"}});
+		matplotlibcpp::legend();
+		matplotlibcpp::xlabel("t");
+		matplotlibcpp::ylabel(R"($E_g$)");
+		matplotlibcpp::title("Gas Energy");
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("./dust_damping_iteration_gas_energy.pdf");
 #endif
 	}
 
