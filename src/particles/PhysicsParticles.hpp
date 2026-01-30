@@ -896,13 +896,14 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 				// Deposit supernova energy and momentum from all particles. This also updates the evolution stage of the particles.
 				auto [sn_count, vel] =
-				    SNDeposition<ContainerType, problem_t>(this->container_, state, state_fc, lev, time, dt, this->getMassIndex(),
+				    SNDeposition<particleType, ContainerType, problem_t>(this->container_, state, state_fc, lev, time, dt,
+												this->getMassIndex(),
 									   this->getEvolutionStageIndex(), this->getBirthTimeIndex());
 				num_sn_explosions = sn_count;
 				max_velocity = vel;
 			} else {
 				// Only update evolution stage but not deposit energy/momentum
-				SNFeedbackUtils::updateEvolutionStageAndDeathDensity<ContainerType, problem_t>(
+				SNFeedbackUtils::updateEvolutionStageAndDeathDensity<particleType, ContainerType, problem_t>(
 				    this->container_, state, lev, time + dt, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
 			}
 		}

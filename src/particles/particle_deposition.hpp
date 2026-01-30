@@ -270,7 +270,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
 	}
 }
 
-template <typename ContainerType, typename problem_t>
+template <ParticleType particleType, typename ContainerType, typename problem_t>
 void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_buffer, int lev, amrex::Real time, amrex::Real dt, int mass_index,
 		     int evolutionStageIndex, int birthTimeIndex, const SNScheme SN_scheme_d, int *p_sn_count = nullptr)
 {
@@ -357,7 +357,7 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 				const amrex::Real pos_y = p.pos(1);
 				const amrex::Real pos_z = p.pos(2);
 
-				if constexpr (ContainerType::ParticleType::NReal > StochasticStellarPopParticleDeathPosZIdx) {
+				if constexpr (particleType == ParticleType::StochasticStellarPop) {
 					p.rdata(StochasticStellarPopParticleDeathPosXIdx) = pos_x;
 					p.rdata(StochasticStellarPopParticleDeathPosYIdx) = pos_y;
 					p.rdata(StochasticStellarPopParticleDeathPosZIdx) = pos_z;
@@ -368,7 +368,7 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 				int iy = static_cast<int>(amrex::Math::floor((pos_y - plo_capture[1]) * dxi_capture[1]));
 				int iz = static_cast<int>(amrex::Math::floor((pos_z - plo_capture[2]) * dxi_capture[2]));
 
-				if constexpr (ContainerType::ParticleType::NReal > StochasticStellarPopParticleDeathDensityIdx) {
+				if constexpr (particleType == ParticleType::StochasticStellarPop) {
 					p.rdata(StochasticStellarPopParticleDeathDensityIdx) =
 					    local_state_capture(ix, iy, iz, HydroSystem<problem_t>::density_index);
 				}
@@ -609,7 +609,7 @@ void addBufferToState(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_
 }
 
 // Function to update particle evolution stages from SNProgenitor to SNRemnant
-template <typename ContainerType, typename problem_t>
+template <ParticleType particleType, typename ContainerType, typename problem_t>
 void updateEvolutionStageAndDeathDensity(ContainerType *container, amrex::MultiFab &state, int lev, amrex::Real step_end_time, int birthTimeIndex,
 					 int evolutionStageIndex)
 {
@@ -641,7 +641,7 @@ void updateEvolutionStageAndDeathDensity(ContainerType *container, amrex::MultiF
 			// Update the particle's evolution stage to SNRemnant if it's time
 			if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex + 1)) {
 				p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
-				if constexpr (ContainerType::ParticleType::NReal > StochasticStellarPopParticleDeathDensityIdx) {
+				if constexpr (particleType == ParticleType::StochasticStellarPop) {
 					const amrex::Real pos_x = p.pos(0);
 					const amrex::Real pos_y = p.pos(1);
 					const amrex::Real pos_z = p.pos(2);
@@ -660,7 +660,7 @@ void updateEvolutionStageAndDeathDensity(ContainerType *container, amrex::MultiF
 	}
 }
 
-template <typename ContainerType>
+template <ParticleType particleType, typename ContainerType>
 void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real step_end_time, int birthTimeIndex, int evolutionStageIndex)
 {
 	const BL_PROFILE("SNFeedbackUtils::updateEvolutionStage()");
@@ -683,7 +683,7 @@ void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real ste
 				// Update the particle's evolution stage to SNRemnant if it's time
 				if (is_sn_progenitor && step_end_time > p.rdata(birthTimeIndex + 1)) {
 					p.idata(evolutionStageIndex) = static_cast<int>(StellarEvolutionStage::SNRemnant);
-					if constexpr (ContainerType::ParticleType::NReal > StochasticStellarPopParticleDeathPosZIdx) {
+					if constexpr (particleType == ParticleType::StochasticStellarPop) {
 						p.rdata(StochasticStellarPopParticleDeathPosXIdx) = p.pos(0);
 						p.rdata(StochasticStellarPopParticleDeathPosYIdx) = p.pos(1);
 						p.rdata(StochasticStellarPopParticleDeathPosZIdx) = p.pos(2);
@@ -696,7 +696,7 @@ void updateEvolutionStage(ContainerType *container, int lev_min, amrex::Real ste
 
 } // namespace SNFeedbackUtils
 
-template <typename ContainerType, typename problem_t>
+template <ParticleType particleType, typename ContainerType, typename problem_t>
 auto SNDeposition(ContainerType *container, amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, amrex::Real time,
 		  amrex::Real dt, int mass_index, int evolutionStageIndex, int birthTimeIndex) -> std::pair<int, Real>
 {
@@ -720,7 +720,8 @@ auto SNDeposition(ContainerType *container, amrex::MultiFab &state, std::array<a
 	int *p_sn_count = sn_count_buffer.data();
 
 	// Step 1: Local deposition within each box
-	SNFeedbackUtils::depositToBuffer<ContainerType, problem_t>(container, state, state_buffer, lev, time, dt, mass_index, evolutionStageIndex,
+	SNFeedbackUtils::depositToBuffer<particleType, ContainerType, problem_t>(container, state, state_buffer, lev, time, dt, mass_index,
+										 evolutionStageIndex,
 								   birthTimeIndex, SN_scheme_d, p_sn_count);
 
 	// Step 2: Sum boundary values
