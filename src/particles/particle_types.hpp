@@ -196,6 +196,13 @@ AMREX_ENUM(StochasticStellarPopParticleRealIdx, // NOLINT
 	   vz,					// Velocity in z direction
 	   birth_time,				// Time when particle becomes active
 	   death_time,				// Time when particle becomes inactive
+	   birth_x,				// Birth position x
+	   birth_y,				// Birth position y
+	   birth_z,				// Birth position z
+	   death_x,				// Death position x
+	   death_y,				// Death position y
+	   death_z,				// Death position z
+	   death_density,			// Density at death
 	   mass_at_birth,			// Particle mass at birth
 	   luminosity				// Base luminosity component (expanded to luminosity_0, luminosity_1, ... in I/O)
 );
@@ -212,6 +219,13 @@ constexpr int StochasticStellarPopParticleVyIdx = static_cast<int>(StochasticSte
 constexpr int StochasticStellarPopParticleVzIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::vz);
 constexpr int StochasticStellarPopParticleBirthTimeIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::birth_time);
 constexpr int StochasticStellarPopParticleDeathTimeIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::death_time);
+constexpr int StochasticStellarPopParticleBirthPosXIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::birth_x);
+constexpr int StochasticStellarPopParticleBirthPosYIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::birth_y);
+constexpr int StochasticStellarPopParticleBirthPosZIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::birth_z);
+constexpr int StochasticStellarPopParticleDeathPosXIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::death_x);
+constexpr int StochasticStellarPopParticleDeathPosYIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::death_y);
+constexpr int StochasticStellarPopParticleDeathPosZIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::death_z);
+constexpr int StochasticStellarPopParticleDeathDensityIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::death_density);
 constexpr int StochasticStellarPopParticleMassAtBirthIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::mass_at_birth);
 constexpr int StochasticStellarPopParticleLumIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::luminosity); // Base index for luminosity components
 constexpr int StochasticStellarPopParticleStageIdx = static_cast<int>(StochasticStellarPopParticleIntIdx::evolution_stage);
