@@ -720,9 +720,8 @@ auto SNDeposition(ContainerType *container, amrex::MultiFab &state, std::array<a
 	int *p_sn_count = sn_count_buffer.data();
 
 	// Step 1: Local deposition within each box
-	SNFeedbackUtils::depositToBuffer<particleType, ContainerType, problem_t>(container, state, state_buffer, lev, time, dt, mass_index,
-										 evolutionStageIndex,
-								   birthTimeIndex, SN_scheme_d, p_sn_count);
+	SNFeedbackUtils::depositToBuffer<particleType, ContainerType, problem_t>(container, state, state_buffer, lev, time, dt, mass_index, evolutionStageIndex,
+										 birthTimeIndex, SN_scheme_d, p_sn_count);
 
 	// Step 2: Sum boundary values
 	state_buffer.SumBoundary(container->Geom(lev).periodicity());
