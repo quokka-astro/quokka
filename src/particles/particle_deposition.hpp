@@ -381,7 +381,8 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 							const int jjj = std::abs(jj);
 							const int kkk = std::abs(kk);
 							const double kernel = stencil_weights_gpu[iii][jjj][kkk];
-							avg_density += kernel * local_state_capture(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::density_index);
+							avg_density +=
+							    kernel * local_state_capture(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::density_index);
 						}
 					}
 				}
