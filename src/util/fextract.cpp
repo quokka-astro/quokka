@@ -1,7 +1,7 @@
-#include <limits>
-#include <tuple>
 #include <algorithm>
+#include <limits>
 #include <numeric>
+#include <tuple>
 
 #include "AMReX_Geometry.H"
 #include "AMReX_MultiFab.H"
@@ -232,9 +232,7 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 		std::vector<size_t> p(n_pts);
 		std::iota(p.begin(), p.end(), 0);
 
-		std::sort(p.begin(), p.end(), [&](size_t i, size_t j) {
-			return pos[i] < pos[j];
-		});
+		std::sort(p.begin(), p.end(), [&](size_t i, size_t j) { return pos[i] < pos[j]; });
 
 		Vector<Real> sorted_pos(n_pts);
 		for (size_t i = 0; i < n_pts; ++i) {
