@@ -567,8 +567,8 @@ auto problem_main() -> int
 			matplotlibcpp::tight_layout();
 			matplotlibcpp::save("./dust_damping_iteration_gas_energy.pdf");
 		}
-	}
 #endif
+	}
 
 	amrex::Print() << "\nTest complete.\n";
 	return status;
