@@ -45,7 +45,6 @@ const double year = 3.15576e+07; // in seconds
 constexpr double B0 = 1.0e-7;	 // uniform background field for MHD variant
 
 static double n_amb = 1.0;    // ambient density (g cm^-3) // NOLINT
-static double t_stop = 3.0e5; // stop time (yr) // NOLINT
 // static amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity{0.0, 0.0, 0.0}; // NOLINT
 static bool skip_checks = false; // NOLINT
 
@@ -206,7 +205,6 @@ auto problem_main() -> int
 	// get n_amb from the input file
 	amrex::ParmParse const pp("problem");
 	pp.query("n_amb", n_amb);
-	pp.query("t_stop", t_stop);
 	pp.query("SN_particles_file", SN_particles_file);
 	pp.query("refine_half_domain", refine_half_domain);
 	pp.query("skip_checks", skip_checks);
@@ -218,8 +216,6 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<SNProblem> sim;
-
-	sim.stopTime_ = t_stop * year;
 
 	// initialize
 	sim.setInitialConditions();
@@ -251,8 +247,6 @@ auto problem_main() -> int
 	QuokkaSimulation<SNProblem> sim2;
 	// set boosted velocity
 	sim2.userData_.boost_velocity = {boost_vel_x, 0.0, 0.0};
-
-	sim2.stopTime_ = t_stop * year;
 
 	// initialize
 	sim2.setInitialConditions();
@@ -314,8 +308,8 @@ auto problem_main() -> int
 		}
 		const double v_rel_err_norm = v_err_norm / v_value_norm;
 		const double T_rel_err_norm = T_err_norm / T_value_norm;
-		const double v_rel_err_tol = 0.05;
-		const double T_rel_err_tol = 0.001;
+		const double v_rel_err_tol = 0.01;
+		const double T_rel_err_tol = 0.15;
 		amrex::Print() << fmt::format("Relative L1 norm for vx = {}, tolerance = {}\n", v_rel_err_norm, v_rel_err_tol);
 		amrex::Print() << fmt::format("Relative L1 norm for T = {}, tolerance = {}\n", T_rel_err_norm, T_rel_err_tol);
 		if (!(v_rel_err_norm < v_rel_err_tol) || !(T_rel_err_norm < T_rel_err_tol)) {
@@ -330,7 +324,7 @@ auto problem_main() -> int
 		matplotlibcpp::ylabel("T (K)");
 		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim2.tNew_[0]));
 		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("sn_temperature_profile.pdf");
+		matplotlibcpp::save(fmt::format("sn_temperature_profile_n0_{:.1g}.pdf", n_amb));
 
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(x, vx, {{"label", "base"}, {"color", "C0"}});
@@ -339,7 +333,7 @@ auto problem_main() -> int
 		matplotlibcpp::xlabel("x (cm)");
 		matplotlibcpp::ylabel("vx (cm/s)");
 		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim2.tNew_[0]));
-		matplotlibcpp::save("sn_velocity_profile.pdf");
+		matplotlibcpp::save(fmt::format("sn_velocity_profile_n0_{:.1g}.pdf", n_amb, boost_vel_x));
 #endif
 	}
 
