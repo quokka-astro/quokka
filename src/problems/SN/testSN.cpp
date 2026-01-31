@@ -10,6 +10,7 @@
 #include "AMReX_Print.H"
 #include "AMReX_SPACE.H"
 #include "util/fextract.hpp"
+#include "math/interpolate.hpp"
 #include <fstream>
 #include <iomanip>
 
@@ -44,7 +45,6 @@ const double year = 3.15576e+07; // in seconds
 constexpr double B0 = 1.0e-7;	 // uniform background field for MHD variant
 
 static double n_amb = 1.0;    // ambient density (g cm^-3) // NOLINT
-static double T_amb = 100.0;  // ambient temperature (K) // NOLINT
 static double t_stop = 3.0e5; // stop time (yr) // NOLINT
 // static amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity{0.0, 0.0, 0.0}; // NOLINT
 static bool skip_checks = false; // NOLINT
@@ -116,6 +116,26 @@ template <> void QuokkaSimulation<SNProblem>::createInitialTestParticles()
 
 template <> void QuokkaSimulation<SNProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
+	std::vector<double> const n_amb_list = {0.1,	       0.12589254, 0.15848932,	0.19952623,  0.25118864,  0.31622777,  0.39810717,  0.50118723,
+						  0.63095734,  0.79432823, 1.,		1.25892541,  1.58489319,  1.99526231,  2.51188643,  3.16227766,
+						  3.98107171,  5.01187234, 6.30957344,	7.94328235,  10.,	  12.58925412, 15.84893192, 19.95262315,
+						  25.11886432, 31.6227766, 39.81071706, 50.11872336, 63.09573445, 79.43282347, 100.};
+	std::vector<double> const T_amb_list = {5802.24013246, 5654.93628944, 5453.30579455, 5213.67068722, 4869.63642975, 4149.54099069, 3907.79953306,
+					       3583.30375005, 3075.83243575, 1040.16133059, 718.24569694,  664.12747722,  609.83449913,	 549.88018839,
+					       476.83284222,  377.69995731,  359.34890804,  340.22591449,  318.36683039,  289.56818245,	 245.82521174,
+					       236.69671661,  227.20779715,  215.57381444,  200.14862878,  174.5847715,	  168.91080447,	 162.96050543,
+					       155.58880555,  144.9653022,   128.3144137};
+
+	// manual clamp
+	Real T_amb = NAN;
+	if (n_amb <= n_amb_list.front()) {
+		T_amb = T_amb_list.front();
+	} else if (n_amb >= n_amb_list.back()) {
+		T_amb = T_amb_list.back();
+	} else {
+		T_amb = interpolate_value(n_amb, n_amb_list.data(), T_amb_list.data(), static_cast<int>(n_amb_list.size()));
+	}
+
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const double rho_bg = n_amb * C::m_u / cloudy_H_mass_fraction;
@@ -186,7 +206,6 @@ auto problem_main() -> int
 	// get n_amb from the input file
 	amrex::ParmParse const pp("problem");
 	pp.query("n_amb", n_amb);
-	pp.query("T_amb", T_amb);
 	pp.query("t_stop", t_stop);
 	pp.query("SN_particles_file", SN_particles_file);
 	pp.query("refine_half_domain", refine_half_domain);

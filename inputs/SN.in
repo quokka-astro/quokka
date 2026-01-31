@@ -34,13 +34,11 @@ problem.SN_particles_file = "../inputs/SN.txt"
 problem.refine_half_domain = false
 
 problem.n_amb = 0.1
-problem.T_amb = 5.80e3
 problem.t_stop = 3.0e8
 particles.SN_scheme = SN_thermal_or_thermal_momentum
 particles.verbose = 1
 
 max_timesteps = 10
-initial_dt = 3.15576e4
 plotfile_interval = -1
 checkpoint_interval = -1
 
