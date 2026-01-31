@@ -242,6 +242,16 @@ auto problem_main() -> int
 
 	auto [position2, values2] = fextract(sim2.state_new_cc_[0], sim2.Geom(0), 0, 0, true);
 
+	// compute the spatial shift due to the boost velocity
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo2 = sim2.geom[0].ProbLoArray();
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi2 = sim2.geom[0].ProbHiArray();
+	const double dx2 = (prob_hi2[0] - prob_lo2[0]) / static_cast<double>(nx);
+	const double move = boost_vel_x * sim2.tNew_[0];
+	const int n_p = static_cast<int>(move / dx2);
+	const int half = static_cast<int>(nx / 2.0);
+	const double drift = move - static_cast<double>(n_p) * dx2;
+	const int shift = n_p - static_cast<int>((n_p + half) / nx) * nx;
+
 	std::vector<double> T2(nx);
 	std::vector<double> x2(nx);
 	std::vector<double> vx2_rel(nx);
@@ -256,16 +266,31 @@ auto problem_main() -> int
 		double T_value_norm = 0.0;
 		double T_err_norm = 0.0;
 		for (int i = 0; i < nx; ++i) {
+			// compute the remapped index to account for spatial shift
+			int index_ = 0;
+			if (shift >= 0) {
+				if (i < shift) {
+					index_ = nx - shift + i;
+				} else {
+					index_ = i - shift;
+				}
+			} else {
+				if (i <= nx - 1 + shift) {
+					index_ = i - shift;
+				} else {
+					index_ = i - (nx + shift);
+				}
+			}
 			const double rho = values2.at(HydroSystem<SNProblem>::density_index)[i];
 			const double Eint = values2.at(HydroSystem<SNProblem>::internalEnergy_index)[i];
 			const double vx_val = values2.at(HydroSystem<SNProblem>::x1Momentum_index)[i] / rho;
-			T2[i] = Eint / (rho * CV); // simplified, but good enough for the purpose
-			x2[i] = position2[i];
-			vx2_rel[i] = vx_val - boost_vel_x;
+			T2[index_] = Eint / (rho * CV); // simplified, but good enough for the purpose
+			x2[i] = position2[i] - drift;
+			vx2_rel[index_] = vx_val - boost_vel_x;
 			v_value_norm += std::abs(vx_val); // use raw vx to account for the large boost velocity
-			v_err_norm += std::abs(vx2_rel[i] - vx[i]);
-			T_value_norm += std::abs(T[i]);
-			T_err_norm += std::abs(T2[i] - T[i]);
+			v_err_norm += std::abs(vx2_rel[index_] - vx[index_]);
+			T_value_norm += std::abs(T[index_]);
+			T_err_norm += std::abs(T2[index_] - T[index_]);
 		}
 		const double v_rel_err_norm = v_err_norm / v_value_norm;
 		const double T_rel_err_norm = T_err_norm / T_value_norm;
