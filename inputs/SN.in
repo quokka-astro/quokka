@@ -36,10 +36,9 @@ problem.n_amb = 0.1
 problem.T_amb = 5.80e3
 problem.t_stop = 3.0e5
 particles.SN_scheme = SN_thermal_or_thermal_momentum
-#particles.SN_scheme = SN_thermal_only
 particles.verbose = 1
 
-max_timesteps = 10
+max_timesteps = 100
 initial_dt = 3.15576e4
 plotfile_interval = -1
 checkpoint_interval = -1
@@ -50,3 +49,4 @@ signal_speed_abort = 4e8
 
 suppress_output = 0
 tiny_profiler.enabled = 1
+
