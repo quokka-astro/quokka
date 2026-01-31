@@ -191,6 +191,8 @@ auto problem_main() -> int
 	pp.query("SN_particles_file", SN_particles_file);
 	pp.query("refine_half_domain", refine_half_domain);
 	pp.query("skip_checks", skip_checks);
+	double boost_vel_x = 1.0e8;
+	pp.query("boost_vel_x", boost_vel_x);
 
 	amrex::ParmParse const cpp("cooling");
 	cpp.query("cooling_table_type", coolingTableType_);
@@ -229,7 +231,6 @@ auto problem_main() -> int
 
 	QuokkaSimulation<SNProblem> sim2;
 	// set boosted velocity
-	const double boost_vel_x = 1.0e8;
 	sim2.userData_.boost_velocity = {boost_vel_x, 0.0, 0.0};
 
 	sim2.stopTime_ = t_stop * year;
@@ -283,6 +284,7 @@ auto problem_main() -> int
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("x (cm)");
 		matplotlibcpp::ylabel("T (K)");
+		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim2.tNew_[0]));
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("sn_temperature_profile.pdf");
 
@@ -292,6 +294,7 @@ auto problem_main() -> int
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("x (cm)");
 		matplotlibcpp::ylabel("vx (cm/s)");
+		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim2.tNew_[0]));
 		matplotlibcpp::save("sn_velocity_profile.pdf");
 #endif
 	}

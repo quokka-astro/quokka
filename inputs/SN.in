@@ -1,8 +1,8 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-geometry.prob_lo     =  -3.949667304e+20 -3.949667304e+20 -3.949667304e+20
-geometry.prob_hi     =  3.949667304e+20 3.949667304e+20 3.949667304e+20
+geometry.prob_lo     =  -3.949667304e+19 -3.949667304e+19 -3.949667304e+19
+geometry.prob_hi     =  3.949667304e+19 3.949667304e+19 3.949667304e+19
 quokka.bc = periodic periodic periodic
 
 # *****************************************************************
@@ -38,15 +38,21 @@ problem.t_stop = 3.0e5
 particles.SN_scheme = SN_thermal_or_thermal_momentum
 particles.verbose = 1
 
-max_timesteps = 100
-initial_dt = 3.15576e4
+max_timesteps = 2
 plotfile_interval = -1
 checkpoint_interval = -1
 
 #temperature_floor = 10
 density_floor = 1e-28
-signal_speed_abort = 4e8
+signal_speed_abort = 2e9
+problem.boost_vel_x = 1.0e9
 
 suppress_output = 0
 tiny_profiler.enabled = 1
 
+quokka.diagnostics = part
+quokka.part.type = ParticleTxt         # Diagnostic type
+quokka.part.file = part_plt             # Output file prefix (must end in "plt")
+quokka.part.int = 1
+#quokka.part.time_int = 4e13
+quokka.part.particles = Test_particles
