@@ -17,6 +17,8 @@
 #include <string>
 #include <vector>
 
+constexpr double TS = 0.1; // dust stopping time
+
 struct TurbulentBox {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
@@ -25,7 +27,7 @@ template <> struct Physics_Traits<TurbulentBox> {
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr bool is_self_gravity_enabled = false;
-	static constexpr bool is_dust_enabled = false;
+	static constexpr bool is_dust_enabled = true;
 	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr int numMassScalars = 0;
 	static constexpr int numPassiveScalars = numMassScalars + 1;
@@ -50,6 +52,16 @@ template <> struct SimulationData<TurbulentBox> {
 	std::vector<double> Disp3d_vec_;
 };
 
+template <>
+AMREX_GPU_HOST_DEVICE auto DustDrag<TurbulentBox>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
+										 amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/, double /*cs*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
+{
+	amrex::GpuArray<amrex::Real, 1> alpha{};
+	alpha[0] = 1.0 / TS;
+	return alpha;
+}
+
 template <> void QuokkaSimulation<TurbulentBox>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// set initial conditions
@@ -64,6 +76,14 @@ template <> void QuokkaSimulation<TurbulentBox>::setInitialConditionsOnGrid(quok
 		state_cc(i, j, k, HydroSystem<TurbulentBox>::energy_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<TurbulentBox>::internalEnergy_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<TurbulentBox>::scalar0_index) = 1.0;
+
+		if constexpr (Physics_Traits<TurbulentBox>::is_dust_enabled) {
+			// for dust1
+			state_cc(i, j, k, HydroSystem<TurbulentBox>::dustDensity_index) = 0.01;
+			state_cc(i, j, k, HydroSystem<TurbulentBox>::x1DustMomentum_index) = 0.0;
+			state_cc(i, j, k, HydroSystem<TurbulentBox>::x2DustMomentum_index) = 0.0;
+			state_cc(i, j, k, HydroSystem<TurbulentBox>::x3DustMomentum_index) = 0.0;
+		}
 	});
 }
 
