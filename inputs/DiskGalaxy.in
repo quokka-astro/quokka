@@ -4,7 +4,7 @@
 # Box size is [-600 kpc, 600 kpc]^3
 geometry.prob_lo     =  -1.8514065526075864e24 -1.8514065526075864e24 -1.8514065526075864e24
 geometry.prob_hi     =   1.8514065526075864e24  1.8514065526075864e24  1.8514065526075864e24
-quokka.bc = reflecting reflecting reflecting
+geometry.is_periodic =   0    0    0
 
 # *****************************************************************
 # VERBOSITY
@@ -15,54 +15,188 @@ amr.v              = 1       # verbosity in Amr
 # Resolution and refinement
 # *****************************************************************
 amr.n_cell          = 128 128 128
-amr.blocking_factor = 16    # grid size must be divisible by this
-amr.max_grid_size   = 64    # at least 128 for GPUs
-amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
+amr.max_level       = 5
+amr.blocking_factor = 32
+amr.max_grid_size   = 128
+amr.n_error_buf     = 3     # REQUIRED for correct grid generation
 amr.grid_eff        = 0.7
 regrid_interval     = -1    # static refinement only (do not regrid)
 
 do_reflux = 1
 do_subcycle = 0
-do_tracers = 1
-poisson_supercycle_interval = 5
+do_tracers = 0
+poisson_supercycle_interval = 10
+
+print_cycle_timing = 1
+max_walltime = 1:00:00
 
 cfl = 0.3
-max_timesteps = 2000
-stop_time = 6.3e15         # 200 Myr
+init_shrink = 0.01	# shrink first timestep by a factor of 100
+stop_time = 1.26e16     # 400 Myr
+dt_cutoff = 1.0e-12	# abort if the timestep is less than time*dt_cutoff
+max_timesteps = 1e7
+
+# MHD parameters
+hydro.artificial_viscosity_coefficient = 0.1
+hydro.reconstruction_order = 2
+hydro.plm_limiter = minmod
+mhd.emf_reconstruction_order = 2
+mhd.plm_limiter = minmod
+mhd.emf_compute_scheme = Quokka2026
+mhd.emf_averaging_scheme = LondrilloDelZanna2004
+
+mhd.project_initial_b_field = true
+mhd.update_initial_b_energy = true
 
 cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1
 cooling.cooling_table_type = resampled
 cooling.hdf5_data_file = "./CloudyData_UVB=HM2012_resampled.h5"
 temperature_floor = 100
-density_floor = 1e-30
-signal_speed_abort = 6e8
+density_floor = 1e-28
+density_floor_expr = "x1=x*1.0e-22; y1=y*1.0e-22; z1=z*1.0e-22; r2=x1*x1+y1*y1+z1*z1; rb2=3.08567758*3.08567758; base_density_floor * (rb2 / max(r2, rb2))"
 
-checkpoint_interval = 100
-plotfile_interval = 10
-derived_vars = temperature gpot
+checkpoint_interval = 10000
+plotfile_interval = 10000
+statistics_interval = 250
+derived_vars = temperature pressure entropy gpot radius_sph bfield_strength radial_velocity circular_velocity
 
-# max_level = 7 implies a maximum resolution of dx =  73.2 pc (LOW res).
-# max_level = 8 implies a maximum resolution of dx =  36.6 pc (MED res).
-# max_level = 9 implies a maximum resolution of dx =  18.3 pc (HI res).
-#
-amr.max_level              = 5
+# *****************************************************************
+# In-situ histogram diagnostics (radial profiles)
+# *****************************************************************
+quokka.diagnostics = slice_x slice_z volrender hist_rho hist_temp hist_bmag hist_vrad hist_press hist_entropy hist_rho_temp
 
-agora_galaxy.vcirc_file    = "./agora_halo_IC.dat"
-agora_galaxy.particle_file = "./AgoraGalaxy_particles_LOW.txt"
-agora_galaxy.refine_Rmax_kpc = 16.0         # kpc
-agora_galaxy.refine_zmax_kpc = 4.0          # kpc
+## in-situ slice output
+quokka.slice_x.type = DiagFramePlane         # Diagnostic type
+quokka.slice_x.file = slices/x/plt           # Output file prefix (must end in "plt")
+quokka.slice_x.normal = 0                    # Plane normal (0 == x, 1 == y, 2 == z)
+quokka.slice_x.center = 0.0                  # Coordinate in the normal direction
+quokka.slice_x.int    = 250                  # Output cadence (in number of coarse steps)
+quokka.slice_x.interpolation = Linear        # (Optional, default is Linear) Interpolation type: Linear or Quadratic
+quokka.slice_x.field_names = gasDensity x-GasMomentum y-GasMomentum z-GasMomentum gasEnergy gasInternalEnergy x-BField y-BField z-BField temperature pressure entropy gpot bfield_strength radial_velocity circular_velocity
 
-agora_galaxy.disk_gas_mass_Msun = 8.59322e9 # solar masses
-agora_galaxy.disk_Rscale_kpc = 3.43218      # kpc
-agora_galaxy.disk_zscale_kpc = 0.343218     # kpc
-agora_galaxy.disk_temperature = 1.0e4       # K
-agora_galaxy.disk_perturb_amplitude = 1.0   # dimensionless
-agora_galaxy.disk_perturb_Rmax_kpc = 20.0   # kpc
-agora_galaxy.magnetic_field_microgauss = 1.0 # uniform B-field strength (microgauss)
+quokka.slice_z.type = DiagFramePlane         # Diagnostic type
+quokka.slice_z.file = slices/z/plt           # Output file prefix (must end in "plt")
+quokka.slice_z.normal = 2                    # Plane normal (0 == x, 1 == y, 2 == z)
+quokka.slice_z.center = 0.0                  # Coordinate in the normal direction
+quokka.slice_z.int    = 250                  # Output cadence (in number of coarse steps)
+quokka.slice_z.interpolation = Linear        # (Optional, default is Linear) Interpolation type: Linear or Quadratic
+quokka.slice_z.field_names = gasDensity x-GasMomentum y-GasMomentum z-GasMomentum gasEnergy gasInternalEnergy x-BField y-BField z-BField temperature pressure entropy gpot bfield_strength radial_velocity circular_velocity
 
-quokka.project_initial_b_field = true
-quokka.update_initial_b_energy = true
+## in-situ volume rendering
+quokka.volrender.type = VolumeRender
+quokka.volrender.field = temperature
+quokka.volrender.log_scale_input = 1
+quokka.volrender.int = 10
+quokka.volrender.width = 512
+quokka.volrender.height = 512
+quokka.volrender.output_ext = png
+quokka.volrender.min_level = 4
+quokka.volrender.max_level = 5
+quokka.volrender.camera_up = 0 0 1
+quokka.volrender.color_map_values = 30 38.0767 48.3278 61.3387 77.8525 98.8121 125.415 159.179 202.033 256.425 325.461 413.082 524.293 665.445 844.598 1071.98 1360.58 1726.88 2191.8 2781.88 3530.83 4481.4 5687.9 7219.21 9162.78 11629.6 14760.6 18734.4 23778.2 30179.8 38304.9 48617.4 61706.3 78319 99404.3 126166 160133 203244 257962 327411 415558 527435 669433 849659 1.07841e+06 1.36874e+06 1.73723e+06 2.20494e+06 2.79855e+06 3.55199e+06 4.50826e+06 5.72199e+06 7.26248e+06 9.2177e+06 1.16993e+07 1.4849e+07 1.88467e+07 2.39207e+07 3.03607e+07 3.85344e+07 4.89088e+07 6.20761e+07 7.87884e+07 1e+08
+quokka.volrender.color_map_r = 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.267004 0.26851 0.26851 0.26851 0.269944 0.269944 0.271305 0.272594 0.273809 0.276022 0.277941 0.279566 0.281446 0.28291 0.283072 0.280868 0.273006 0.258965 0.235526 0.204903 0.169646 0.131172 0.150148 0.449368 0.993248
+quokka.volrender.color_map_g = 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.004874 0.009605 0.009605 0.009605 0.014625 0.014625 0.019942 0.025563 0.031497 0.044167 0.056324 0.067836 0.08432 0.105393 0.130895 0.160771 0.20452 0.251537 0.309527 0.375746 0.456262 0.555899 0.676631 0.813768 0.906157
+quokka.volrender.color_map_b = 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.329415 0.335427 0.335427 0.335427 0.341379 0.341379 0.347269 0.353093 0.358853 0.370164 0.381191 0.391917 0.407414 0.426902 0.449241 0.472899 0.501721 0.524736 0.542944 0.553533 0.55803 0.552459 0.506589 0.335384 0.143936
+quokka.volrender.color_map_a = 0.000271071 0.00130404 0.00528457 0.01804 0.0518768 0.125666 0.256434 0.440798 0.638284 0.778569 0.8 0.692456 0.5049 0.310129 0.160536 0.0703711 0.027673 0.0156358 0.0270541 0.0687977 0.157564 0.30569 0.499816 0.688437 0.798783 0.780734 0.642816 0.44584 0.260484 0.128201 0.0531513 0.0185628 0.00546114 0.00135342 0.000282547 4.96888e-05 7.36098e-06 9.18681e-07 9.79484e-08 2.61981e-08 1.90198e-07 1.71531e-06 1.30746e-05 8.39521e-05 0.000454094 0.00206904 0.00794147 0.0256769 0.0699349 0.160455 0.310116 0.504898 0.692456 0.8 0.778569 0.638284 0.440798 0.256434 0.125666 0.0518768 0.01804 0.00528457 0.00130404 0.000271071
 
-agora_galaxy.halo_temperature = 1.0e6       # K
-agora_galaxy.halo_number_density = 1.0e-4   # cm^-3
+quokka.hist_rho.type = DiagPDF
+quokka.hist_rho.file = pdfs/RadiusDensity/PDF
+quokka.hist_rho.int  = 250
+quokka.hist_rho.weight_by = volume
+quokka.hist_rho.var_names = radius_sph gasDensity  # radius_sph in kpc
+quokka.hist_rho.radius_sph.nBins = 120
+quokka.hist_rho.radius_sph.log_spaced_bins = 1
+quokka.hist_rho.radius_sph.range = 1.0 500.0
+quokka.hist_rho.gasDensity.nBins = 80
+quokka.hist_rho.gasDensity.log_spaced_bins = 1
+quokka.hist_rho.gasDensity.range = 1e-30 1e-20
+
+quokka.hist_temp.type = DiagPDF
+quokka.hist_temp.file = pdfs/RadiusTemperature/PDF
+quokka.hist_temp.int  = 250
+quokka.hist_temp.weight_by = volume
+quokka.hist_temp.var_names = radius_sph temperature  # radius_sph in kpc, temperature in K
+quokka.hist_temp.radius_sph.nBins = 120
+quokka.hist_temp.radius_sph.log_spaced_bins = 1
+quokka.hist_temp.radius_sph.range = 1.0 500.0
+quokka.hist_temp.temperature.nBins = 160
+quokka.hist_temp.temperature.log_spaced_bins = 1
+quokka.hist_temp.temperature.range = 10.0 1e9
+
+quokka.hist_bmag.type = DiagPDF
+quokka.hist_bmag.file = pdfs/RadiusBField/PDF
+quokka.hist_bmag.int  = 250
+quokka.hist_bmag.weight_by = volume
+quokka.hist_bmag.var_names = radius_sph bfield_strength  # radius_sph in kpc, bfield_strength in microgauss
+quokka.hist_bmag.radius_sph.nBins = 120
+quokka.hist_bmag.radius_sph.log_spaced_bins = 1
+quokka.hist_bmag.radius_sph.range = 1.0 500.0
+quokka.hist_bmag.bfield_strength.nBins = 80
+quokka.hist_bmag.bfield_strength.log_spaced_bins = 1
+quokka.hist_bmag.bfield_strength.range = 0.1 1000.0
+
+quokka.hist_vrad.type = DiagPDF
+quokka.hist_vrad.file = pdfs/RadiusRadialVelocity/PDF
+quokka.hist_vrad.int  = 250
+quokka.hist_vrad.weight_by = volume
+quokka.hist_vrad.var_names = radius_sph radial_velocity  # radius_sph in kpc, radial_velocity in km/s
+quokka.hist_vrad.radius_sph.nBins = 120
+quokka.hist_vrad.radius_sph.log_spaced_bins = 1
+quokka.hist_vrad.radius_sph.range = 1.0 500.0
+quokka.hist_vrad.radial_velocity.nBins = 400
+quokka.hist_vrad.radial_velocity.log_spaced_bins = 0
+quokka.hist_vrad.radial_velocity.range = -1000.0 1000.0
+
+quokka.hist_press.type = DiagPDF
+quokka.hist_press.file = pdfs/RadiusPressure/PDF
+quokka.hist_press.int  = 250
+quokka.hist_press.weight_by = volume
+quokka.hist_press.var_names = radius_sph pressure  # radius_sph in kpc, pressure in K cm^-3
+quokka.hist_press.radius_sph.nBins = 120
+quokka.hist_press.radius_sph.log_spaced_bins = 1
+quokka.hist_press.radius_sph.range = 1.0 500.0
+quokka.hist_press.pressure.nBins = 120
+quokka.hist_press.pressure.log_spaced_bins = 1
+quokka.hist_press.pressure.range = 10.0 1e5
+
+quokka.hist_entropy.type = DiagPDF
+quokka.hist_entropy.file = pdfs/RadiusEntropy/PDF
+quokka.hist_entropy.int  = 250
+quokka.hist_entropy.weight_by = volume
+quokka.hist_entropy.var_names = radius_sph entropy  # radius_sph in kpc
+quokka.hist_entropy.radius_sph.nBins = 120
+quokka.hist_entropy.radius_sph.log_spaced_bins = 1
+quokka.hist_entropy.radius_sph.range = 1.0 500.0
+quokka.hist_entropy.entropy.nBins = 120
+quokka.hist_entropy.entropy.log_spaced_bins = 1
+quokka.hist_entropy.entropy.range = 1e-4 2e2
+
+quokka.hist_rho_temp.type = DiagPDF
+quokka.hist_rho_temp.file = pdfs/DensityTemperature/PDF
+quokka.hist_rho_temp.int  = 250
+quokka.hist_rho_temp.weight_by = mass
+quokka.hist_rho_temp.var_names = gasDensity temperature
+quokka.hist_rho_temp.gasDensity.nBins = 80
+quokka.hist_rho_temp.gasDensity.log_spaced_bins = 1
+quokka.hist_rho_temp.gasDensity.range = 1e-30 1e-20
+quokka.hist_rho_temp.temperature.nBins = 160
+quokka.hist_rho_temp.temperature.log_spaced_bins = 1
+quokka.hist_rho_temp.temperature.range = 10.0 1e9
+
+##
+## Disk and halo parameters
+##
+
+disk_galaxy.vcirc_file    = "./vcirc_with_halo.csv"
+disk_galaxy.particle_file = "./AgoraGalaxy_particles_LOW.txt"
+disk_galaxy.refine_Rmax_kpc = 16.0          # kpc
+disk_galaxy.refine_zmax_kpc = 4.0           # kpc
+
+disk_galaxy.disk_gas_mass_Msun = 8.59322e9  # solar masses
+disk_galaxy.disk_Rscale_kpc = 3.43218       # kpc
+disk_galaxy.disk_zscale_kpc = 0.343218      # kpc
+disk_galaxy.disk_temperature = 1.0e4        # K
+disk_galaxy.disk_perturb_amplitude = 1.0    # dimensionless
+disk_galaxy.disk_perturb_Rmax_kpc = 20.0    # kpc
+disk_galaxy.magnetic_field_microgauss = 1.0 # B-field strength (microgauss)

@@ -47,6 +47,47 @@ void DiagVolumeRender::init(const std::string &a_prefix, std::string_view a_diag
 		m_scalarRange = std::make_pair(minVal, maxVal);
 	}
 
+	bool const hasColorMap = (pp.countval("color_map_values") > 0) || (pp.countval("color_map_r") > 0) || (pp.countval("color_map_g") > 0) ||
+				 (pp.countval("color_map_b") > 0) || (pp.countval("color_map_a") > 0);
+	if (hasColorMap) {
+		if ((pp.countval("color_map_values") == 0) || (pp.countval("color_map_r") == 0) || (pp.countval("color_map_g") == 0) ||
+		    (pp.countval("color_map_b") == 0) || (pp.countval("color_map_a") == 0)) {
+			amrex::Abort("DiagVolumeRender color_map_* requires color_map_values, color_map_r, color_map_g, color_map_b, and color_map_a.");
+		}
+
+		amrex::Vector<amrex::Real> values;
+		amrex::Vector<amrex::Real> reds;
+		amrex::Vector<amrex::Real> greens;
+		amrex::Vector<amrex::Real> blues;
+		amrex::Vector<amrex::Real> alphas;
+		pp.getarr("color_map_values", values);
+		pp.getarr("color_map_r", reds);
+		pp.getarr("color_map_g", greens);
+		pp.getarr("color_map_b", blues);
+		pp.getarr("color_map_a", alphas);
+
+		auto const count = values.size();
+		if (count < 2) {
+			amrex::Abort("DiagVolumeRender color_map_* must provide at least two control points.");
+		}
+		if ((reds.size() != count) || (greens.size() != count) || (blues.size() != count) || (alphas.size() != count)) {
+			amrex::Abort("DiagVolumeRender color_map_* arrays must have matching lengths.");
+		}
+
+		VolumeRenderer::ColorMap controlPoints;
+		controlPoints.reserve(count);
+		for (std::size_t i = 0; i < count; ++i) {
+			VolumeRenderer::ColorMapControlPoint point{};
+			point.value = static_cast<float>(values[i]);
+			point.red = static_cast<float>(reds[i]);
+			point.green = static_cast<float>(greens[i]);
+			point.blue = static_cast<float>(blues[i]);
+			point.alpha = static_cast<float>(alphas[i]);
+			controlPoints.push_back(point);
+		}
+		m_colorMap = std::move(controlPoints);
+	}
+
 	if (pp.countval("up_vector") > 0) {
 		amrex::Vector<amrex::Real> upVec;
 		pp.getarr("up_vector", upVec, 0, AMREX_SPACEDIM);

@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "AMReX_RealVect.H"
 #include "AMReX_Vector.H"
@@ -43,6 +44,7 @@ class DiagVolumeRender : public DiagBase::Register<DiagVolumeRender>
 	std::string m_outputExt{"png"};
 	std::optional<std::pair<float, float>> m_scalarRange;
 	std::optional<amrex::RealVect> m_upVector;
+	std::optional<VolumeRenderer::ColorMap> m_colorMap;
 	bool m_hasCamera{false};
 	amrex::RealVect m_cameraEye{AMREX_D_DECL(0.0, 0.0, 0.0)};
 	amrex::RealVect m_cameraLookAt{AMREX_D_DECL(0.0, 0.0, 0.0)};
@@ -79,6 +81,9 @@ template <typename problem_t> void DiagVolumeRender::processDiag(int a_nstep, co
 	options.outputFilename = outputFilename(a_nstep);
 	if (m_scalarRange.has_value()) {
 		options.scalarRange = *m_scalarRange;
+	}
+	if (m_colorMap.has_value()) {
+		options.colorMap = *m_colorMap;
 	}
 	if (m_upVector.has_value()) {
 		options.upVector = *m_upVector;

@@ -135,3 +135,13 @@ quokka.volrender.camera_up = 0 0 1
 # quokka.volrender.camera_near = 1.0e22
 # quokka.volrender.camera_far = 5.0e24
 ```
+
+*Optional explicit color map control points (value, r, g, b, a arrays with matching lengths):*
+
+``` ini
+quokka.volrender.color_map_values = 1.0e-28 1.0e-26 1.0e-24 1.0e-22
+quokka.volrender.color_map_r = 0.0 0.2 0.7 1.0
+quokka.volrender.color_map_g = 0.0 0.4 0.9 0.8
+quokka.volrender.color_map_b = 0.0 0.8 0.3 0.1
+quokka.volrender.color_map_a = 0.0 0.05 0.2 0.8
+```
