@@ -11,11 +11,23 @@ if(AMReX_SPACEDIM EQUAL 3)
     COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
   add_test(
-    NAME SN_long_grackle
-    COMMAND ${JOB_NAME} ../inputs/SN_long_grackle.in
+    NAME ${JOB_NAME}-n1.0
+    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in problem.n_amb=1.0
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
   add_test(
-    NAME SN_long_resampled
-    COMMAND ${JOB_NAME} ../inputs/SN_long_resampled.in
+    NAME ${JOB_NAME}-n0.1
+    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in problem.n_amb=0.1
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(
+    NAME ${JOB_NAME}-n10-no-smoothing
+    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in particles.SN_smooth_gas_velocity=false
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(
+    NAME ${JOB_NAME}-n1.0-no-smoothing
+    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in problem.n_amb=1.0 particles.SN_smooth_gas_velocity=false
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(
+    NAME ${JOB_NAME}-n0.1-no-smoothing
+    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in problem.n_amb=0.1 particles.SN_smooth_gas_velocity=false
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()
