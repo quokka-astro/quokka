@@ -205,8 +205,8 @@ SN feedback is operator-split from the hydrodynamics and applied after each time
 The deposition uses a roundoff-resistant algorithm to ensure bit-for-bit reproducibility across different processor counts. The algorithm:
 
 1. Deposits feedback into a temporary buffer with a count field
-2. Applies the Kahan compensated summation algorithm
-3. Removes low-order bits controlled by `particles.reproducibility_roundoff_redundancy`
+2. Communicates the buffer across ranks, which introduces roundoff errors due to non-associative floating-point arithmetic
+3. Removes low-order bits controlled by `particles.reproducibility_roundoff_redundancy` to remove this error
 
 #### AMR Considerations
 
