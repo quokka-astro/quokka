@@ -453,6 +453,10 @@ inline amrex::Real eps_ff = 0.01;	   // NOLINT
 // Scheme for SN feedback
 inline SNScheme SN_scheme = SNScheme::SN_thermal_or_thermal_momentum; // NOLINT
 
+// When true, homogenize gas velocity before SN injection to ensure energy conservation.
+// When false, do not homogenize gas velocity, causing an extra energy term whichis the cross product of the inhomogeneity and radial momentum.
+inline bool SN_smooth_gas_velocity = true; // NOLINT
+
 // Sink particle accretion
 inline bool sink_particle_use_uniform_kernel = false; // NOLINT. If true, use uniform accretion kernel in a (7 dx)^3 box
 
@@ -482,6 +486,9 @@ inline void particleParmParse()
 
 	// Handle SNScheme enum
 	pp.query("SN_scheme", SN_scheme);
+
+	// SN Galilean invariance option
+	pp.query("SN_smooth_gas_velocity", SN_smooth_gas_velocity);
 
 	// Stochastic SF parameters
 	pp.query("eps_ff", eps_ff);
