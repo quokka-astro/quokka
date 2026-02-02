@@ -15,18 +15,18 @@ Each particle also stores an integer **evolution stage** that tracks its lifecyc
 
 - `SNProgenitor`: High-mass star ($M > 8 M_{\odot}$) that will explode as a supernova
 - `SNRemnant`: Compact remnant left after supernova explosion
-- `LowMassStar`: Low-mass star that will not explode
+- `LowMassStar`: Low-mass star that will not explode (not used in the current star formation implementation)
 - `LowMassComposite`: Composite particle representing a population of low-mass stars
 
 ## Star Formation
 
 ### Overview
 
-The star formation module adds star particles through a lightweight stochastic prescription that plugs into the Stochastic Stellar Population specialisation.
+The star formation module adds star particles through a stochastic prescription that plugs into the Stochastic Stellar Population specialisation.
 
 - Runs once per hydro timestep and evaluates each cell independently.
-- Always spawns a low-mass star particle when a trial succeeds.
-- Adds high-mass particles probabilistically so the Chabrier (2005) initial mass function (IMF) is satisfied in expectation.
+- Always spawns a `LowMassComposite` particle when star formation is triggered.
+- Adds high-mass particles ($> 8~M_{\odot}$) probabilistically so the Chabrier (2005) initial mass function (IMF) is satisfied in expectation.
 
 ### Jeans instability filter
 
@@ -91,6 +91,7 @@ When a progenitor star reaches its death time, it explodes as a Type II supernov
 | Ejecta mass | $m_{\text{ej}}$ | $10 M_{\odot}$ | Mass expelled during explosion |
 | Terminal momentum | $p_{\text{snr},0}$ | $2.8 \times 10^5 M_{\odot} \, \text{km s}^{-1}$ | Asymptotic momentum of the SNR |
 | Remnant mass | $m_{\text{dead}}$ | $\geq 1.4 M_{\odot}$ | Mass of the compact remnant |
+| Kinetic energy | $E_{\text{kin}}$ | $0.5 m_{\text{ej}} v_{\text{star}}^2$ | Kinetic energy of the ejecta |
 
 The terminal momentum is density-dependent and scales as:
 
@@ -123,54 +124,28 @@ When $R_M < 1$, the Sedov-Taylor phase is resolved and the blast wave dynamics c
 Quokka provides four SN feedback schemes controlled by `particles.SN_scheme`:
 
 1. **`SN_thermal_only`**: Pure thermal energy injection
-   - Deposits $E_{\text{blast}} + E_{\text{kin}}$ as thermal energy
-   - Deposits ejecta mass and momentum $m_{\text{ej}} \vec{v}_{\text{ej}}$
-   - No resolution-dependent momentum injection
+   - Deposits $E_{\text{blast}} + E_{\text{kin}}$ into gas total energy
+   - Deposits ejecta mass $m_{\text{ej}}$ and momentum $m_{\text{ej}} \vec{v}_{\text{ej}}$ into gas momentum.  No further momentum injection
    - Simplest scheme, appropriate when Sedov-Taylor phase is well-resolved. Should only be used for testing. 
 
-2. **`SN_thermal_or_thermal_momentum`** (default):
-   - When $R_M < 0.027$: Pure thermal (like `SN_thermal_only`)
-   - When $0.027 \leq R_M < 1$: Partial momentum injection with $f = 0.529 \sqrt{R_M}$
-   - When $R_M \geq 1$: Full momentum injection with $f = 1$
-   - Based on Kim & Ostriker (2017) calibration: $f^2 = 0.28$ captures 28% kinetic energy fraction in the well-resolved limit
+2. Thermal and momentum schemes. The following schemes include resolution-dependent momentum injection. In these schemes, an energy of $E_{\text{blast}}$ + $E_{\text{kin}}$ is injected into the gas total energy, and a fraction $f$ of the asymptotic momentum $p_{\text{snr}}$ is injected as momentum: $ p_{\text{inject}} = f \, p_{\text{snr}} $. The difference between the injected total energy and kinetic energy remains as thermal energy. Note that there is always some amount of thermal energy injected, even when $f = 1$. The momentum fraction $f$ is determined by the resolution factor $R_M$ as follows:
 
-3. **`SN_thermal_kinetic_or_thermal_momentum`**:
-   - When $R_M < 0.027$: Pure kinetic injection with $f = \sqrt{2 R_M}$
-   - When $0.027 \leq R_M < 1$: Partial momentum injection with $f = 0.529 \sqrt{R_M}$
-   - When $R_M \geq 1$: Full momentum injection with $f = 1$
-   - In the well-resolved limit, converts thermal energy to kinetic to better represent early expansion
+	2.1 **`SN_thermal_or_thermal_momentum`** (default):
+	- When $R_M < 0.027$: Pure thermal (like `SN_thermal_only`) with $f = 0$
+	- When $0.027 \leq R_M < 1$: Partial momentum injection with $f = 0.529 \sqrt{R_M}$. Based on Kim & Ostriker (2017) calibration, $f^2 = 0.28 R_M$ means that 28% of the total energy is kinetic energy in this case.
+	- When $R_M \geq 1$: Full momentum injection with $f = 1$
 
-4. **`SN_pure_kinetic_or_thermal_momentum`**:
-   - When $R_M < 1$: Pure kinetic injection with $f = 1$
-   - When $R_M \geq 1$: Full momentum injection with $f = 1$
-   - Always injects full terminal momentum regardless of resolution
+	2.2 **`SN_thermal_kinetic_or_thermal_momentum`**:
+	- When $R_M < 0.027$: Pure kinetic injection with $f = \sqrt{2 R_M}$
+	- When $0.027 \leq R_M < 1$: Partial momentum injection with $f = 0.529 \sqrt{R_M}$
+	- When $R_M \geq 1$: Full momentum injection with $f = 1$
 
-The momentum fraction $f$ determines how much of the terminal momentum is injected:
-
-$$
-p_{\text{inject}} = f \, p_{\text{snr}}
-$$
+	2.3 **`SN_pure_kinetic_or_thermal_momentum`**: 
+	- Always injects full terminal momentum regardless of resolution with $f = 1$
 
 #### Momentum Deposition
 
-For schemes with momentum injection, the momentum is distributed radially from the particle position. For each cell $(i,j,k)$ in the stencil:
-
-1. Compute the unit vector $\hat{\mathbf{r}}_{ijk}$ from the particle to the cell center
-2. Distribute momentum proportional to the kernel weight:
-
-$$
-\Delta \mathbf{p}_{ijk} = f \, p_{\text{snr}} \, W_{ijk} \, \hat{\mathbf{r}}_{ijk}
-$$
-
-This creates an isotropic outward momentum distribution centered on the SN position.
-
-#### Galilean Invariance Option
-
-The parameter `particles.SN_use_galilean_invariant` (default: `1`) controls whether the momentum deposition is Galilean invariant:
-
-##### Galilean-Invariant Formulation (`SN_use_galilean_invariant = 1`, default)
-
-Uses a center-of-mass (COM) frame formulation that ensures the feedback is invariant under Galilean transformations:
+For schemes with momentum injection, the following momentum deposition procedure guarantees Galilean invariance for a single SN event:
 
 1. **Compute COM velocity** of the SNR (gas + ejecta):
 
@@ -198,44 +173,11 @@ The cross term $\vec{v}_{\text{COM}} \cdot \vec{p}_{\text{radial}}$ accounts for
 
 **Physical interpretation**: The gas velocity is first transformed to the COM frame, then isotropic expansion is added. This ensures that a boosted observer sees the same SN physics.
 
-##### Lab-frame Formulation (`SN_use_galilean_invariant = 0`)
-
-Uses a lab-frame formulation that is simpler but not Galilean invariant:
-
-1. **Deposit momentum** proportionally to preserve cell velocity:
-
-$$
-\Delta \vec{p}_{ijk} = \frac{\Delta \rho_{ijk}}{\rho_{ijk}} \vec{p}_{\text{old}} + \vec{p}_{\text{radial}}
-$$
-
-where $\Delta \rho_{ijk} = m_{\text{ej}} W_{ijk}$ is the deposited mass.
-
-2. **Energy deposition** uses lab-frame ejecta kinetic energy:
-
-$$
-\Delta E_{ijk} = \left(E_{\text{blast}} + \frac{1}{2} m_{\text{ej}} |\vec{v}_{\text{ej}}|^2\right) W_{ijk}
-$$
-
-**Physical interpretation**: The first term in the momentum deposition increases the momentum proportionally to maintain the cell's original velocity as mass is added. The radial momentum is then added on top. This is the legacy formulation from the original implementation.
-
-**When to use each**:
-- Galilean-invariant (default): Physically correct for moving systems, better for simulations with bulk flows
-- Lab-frame: Simpler, may give lower numerical errors in some static cases, preserves original behavior
-
-#### Thermal-Only Scheme
-
-The `SN_thermal_only` scheme always uses the energy-conserving (lab-frame) formulation since there is no radial momentum injection. It deposits:
-
-- **Mass**: $\Delta \rho_{ijk} = m_{\text{ej}} W_{ijk}$
-- **Momentum**: $\Delta \vec{p}_{ijk} = m_{\text{ej}} \vec{v}_{\text{ej}} W_{ijk}$ (ejecta momentum only)
-- **Energy**: $\Delta E_{ijk} = \left(E_{\text{blast}} + \frac{1}{2} m_{\text{ej}} |\vec{v}_{\text{ej}}|^2\right) W_{ijk}$
-
 ### Runtime Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `particles.SN_scheme` | String | `SN_thermal_or_thermal_momentum` | Feedback scheme (see above) |
-| `particles.SN_use_galilean_invariant` | Boolean | `1` | Use Galilean-invariant formulation for momentum schemes |
 | `particles.disable_SN_feedback` | Boolean | `0` | Disable SN feedback entirely |
 | `particles.verbose` | Integer | `0` | Verbosity level for particle diagnostics |
 | `particles.stellar_velocity_limit` | Float | $10^8$ cm/s | Maximum allowed stellar velocity (aborts if exceeded) |
@@ -288,22 +230,17 @@ The $R_M$ factor effectively measures whether the simulation has sufficient reso
 
 #### Basic SN Test
 
-The `SN` problem provides a canonical test with one or more SN progenitors in a uniform medium:
-
-```
-particles.SN_scheme = SN_thermal_or_thermal_momentum   # adaptive scheme
-particles.SN_use_galilean_invariant = 1                # use Galilean-invariant formulation
-particles.verbose = 1                                  # print SN diagnostics
-```
-
-#### Random Blast Test
-
-The `RandomBlast` problem tests multiple SN explosions with various ambient conditions and bulk flows:
+The `SN` problem provides a canonical test with one SN progenitor in a uniform medium:
 
 ```
 particles.SN_scheme = SN_thermal_or_thermal_momentum
-particles.SN_use_galilean_invariant = 1                # critical for moving medium
+problem.boost_vel_x = 1.0e8 # boost velocity in x direction
 ```
 
-The boost velocity tests demonstrate the importance of Galilean invariance. With `SN_use_galilean_invariant = 1`, the temperature and velocity profiles are identical in the boosted and rest frames (to numerical precision). With `SN_use_galilean_invariant = 0`, the profiles differ significantly.
+This test is run three times, with ambient density of $10, 1.0$, and $0.1 ~\mathrm{cm}^{-3}$, corresponding to a shell-formation radius of 7, 22, and 70 pc, respectively. The spatial resolution is 5 pc. The default `SN_thermal_or_thermal_momentum` scheme is used. The three ambient densities implies $R_M \approx (3 \Delta x / R_{\text{sf}})^3 = 10, 0.3$, and $0.01$, respectively, placing the scheme in the under-resolved, partially resolved, and well-resolved regimes, respectively.
 
+In each of the three tests, the simulation is run twice, one initially at rest and one with an initial boost velocity of $200$ km/s, to demonstrate Galilean invariance. The temperature and velocity profiles are identical in the boosted and rest frames (to some tolerance).
+
+#### Random Blast Test
+
+The `RandomBlast` problem provides a testbed for multiple SN explosions with various ambient conditions and bulk flows.
