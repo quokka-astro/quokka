@@ -123,27 +123,29 @@ When $R_M < 1$, the Sedov-Taylor phase is resolved and the blast wave dynamics c
 
 Quokka provides four SN feedback schemes controlled by `particles.SN_scheme`:
 
-1. **`SN_thermal_only`**: Pure thermal energy injection
-   - Deposits $E_{\text{blast}} + E_{\text{kin}}$ into gas total energy
-   - Deposits ejecta mass $m_{\text{ej}}$ and momentum $m_{\text{ej}} \vec{v}_{\text{ej}}$ into gas momentum.  No further momentum injection
-   - Simplest scheme, appropriate when Sedov-Taylor phase is well-resolved. Should only be used for testing. 
+1.  **`SN_thermal_only`**: Pure thermal energy injection
 
-2. Thermal and momentum schemes. The following schemes include resolution-dependent momentum injection. In these schemes, an energy of $E_{\text{blast}}$ + $E_{\text{kin}}$ is injected into the gas total energy, and a fraction $f$ of the asymptotic momentum $p_{\text{snr}}$ is injected as momentum: $ p_{\text{inject}} = f \, p_{\text{snr}} $. The difference between the injected total energy and kinetic energy remains as thermal energy. Note that there is always some amount of thermal energy injected, even when $f = 1$. The momentum fraction $f$ is determined by the resolution factor $R_M$ as follows:
+    - Deposits $E_{\text{blast}} + E_{\text{kin}}$ into gas total energy
+    - Deposits ejecta mass $m_{\text{ej}}$ and momentum $m_{\text{ej}} \vec{v}_{\text{ej}}$ into gas momentum. No further momentum injection
+    - Simplest scheme, appropriate when Sedov-Taylor phase is well-resolved. Should only be used for testing.
 
-	2.1 **`SN_thermal_or_thermal_momentum`** (default):
-	- When $R_M < 0.027$: Pure thermal (like `SN_thermal_only`) with $f = 0$
-	- When $0.027 \leq R_M < 1$: Partial momentum injection with $f = 0.529 \sqrt{R_M}$. Based on Kim & Ostriker (2017) calibration, $f^2 = 0.28 R_M$ means that 28% of the total energy is kinetic energy in this case.
-	- When $R_M \geq 1$: Full momentum injection with $f = 1$
+2.  **Thermal and momentum schemes**: The following schemes include resolution-dependent momentum injection. In these schemes, an energy of $E_{\text{blast}}$ + $E_{\text{kin}}$ is injected into the gas total energy, and a fraction $f$ of the asymptotic momentum $p_{\text{snr}}$ is injected as momentum: $p_{\text{inject}} = f \, p_{\text{snr}}$. The difference between the injected total energy and kinetic energy remains as thermal energy. Note that there is always some amount of thermal energy injected, even when $f = 1$. The momentum fraction $f$ is determined by the resolution factor $R_M$ as follows:
 
-	2.2 **`SN_thermal_kinetic_or_thermal_momentum`**:
-	
-	- When $R_M < 0.027$: Pure kinetic injection with $f = \sqrt{2 R_M}$
-	- When $0.027 \leq R_M < 1$: Partial momentum injection with $f = 0.529 \sqrt{R_M}$
-	- When $R_M \geq 1$: Full momentum injection with $f = 1$
-	
-	2.3 **`SN_pure_kinetic_or_thermal_momentum`**: 
-	
-	- Always injects full terminal momentum regardless of resolution with $f = 1$
+    a. **`SN_thermal_or_thermal_momentum`** (default):
+
+       - When $R_M < 0.027$: Pure thermal (like `SN_thermal_only`) with $f = 0$
+       - When $0.027 \leq R_M < 1$: Partial momentum injection with $f = 0.529 \sqrt{R_M}$. Based on Kim & Ostriker (2017) calibration, $f^2 = 0.28 R_M$ means that 28% of the total energy is kinetic energy in this case.
+       - When $R_M \geq 1$: Full momentum injection with $f = 1$
+
+    b. **`SN_thermal_kinetic_or_thermal_momentum`**:
+
+       - When $R_M < 0.027$: Pure kinetic injection with $f = \sqrt{2 R_M}$
+       - When $0.027 \leq R_M < 1$: Partial momentum injection with $f = 0.529 \sqrt{R_M}$
+       - When $R_M \geq 1$: Full momentum injection with $f = 1$
+
+    c. **`SN_pure_kinetic_or_thermal_momentum`**:
+
+       - Always injects full terminal momentum regardless of resolution with $f = 1$
 
 #### Momentum Deposition
 
@@ -173,11 +175,7 @@ $$
 
 The cross term $\vec{v}_{\text{COM}} \cdot \vec{p}_{\text{radial}}$ accounts for the kinetic energy change from the radial expansion, ensuring Galilean invariance. This term sums to zero over all cells in the stencil, (momentum is conserved), ensuring energy conservation.
 
-**Background smoothing**. To ensure the cross term cancels when summing over all cells in the stencil, the velocity field (but not the density) must be smoothed such that $\sum_i \vec{v}_{\text{COM}} \cdot \vec{p}_{\text{radial},i} = \vec{v}_{\text{COM}} \cdot \sum_i \vec{p}_{\text{radial},i} = 0$. In our tests, this smoothing also dramatically reduces peak velocities in SNR. In a shearing/turbulent background, this artificially homogenizes the gas velocity and changes kinetic energy unrelated to the SN. We provide a parameter `particles.SN_smooth_gas_velocity=0` to turn off this smoothing: $
-\Delta \vec{p}_{ijk} = m_{\text{ej}} \vec{v}_{\text{ej}} / V + \vec{p}_{\text{radial}}
-$ and $
-\Delta E_{ijk} = \left(E_{\text{blast}} + E_{\text{kin}}\right) W_{ijk} + \vec{v}_{i} \cdot \vec{p}_{\text{radial}}
-$ . In this case, the cross term sums to a non-zero value: $\sum_i \vec{v}_i \cdot \vec{p}_{\text{radial},i} = (\vec{v}_{\text{COM}} + \delta v_i) \cdot \sum_i \vec{p}_{\text{radial},i} = \sum_i \delta v_i \cdot \vec{p}_{\text{radial},i}$, where $\delta v_i$ is the velocity of cell $i$ relative to the COM frame.
+**Background smoothing**. To ensure the cross term cancels when summing over all cells in the stencil, the velocity field (but not the density) must be smoothed such that $\sum_i \vec{v}_{\text{COM}} \cdot \vec{p}_{\text{radial},i} = \vec{v}_{\text{COM}} \cdot \sum_i \vec{p}_{\text{radial},i} = 0$. In our tests, this smoothing also dramatically reduces peak velocities in SNR. In a shearing/turbulent background, this artificially homogenizes the gas velocity and changes kinetic energy unrelated to the SN. We provide a parameter `particles.SN_smooth_gas_velocity=0` to turn off this smoothing: $\Delta \vec{p}_{ijk} = m_{\text{ej}} \vec{v}_{\text{ej}} / V + \vec{p}_{\text{radial}}$ and $\Delta E_{ijk} = \left(E_{\text{blast}} + E_{\text{kin}}\right) W_{ijk} + \vec{v}_{i} \cdot \vec{p}_{\text{radial}}$. In this case, the cross term sums to a non-zero value: $\sum_i \vec{v}_i \cdot \vec{p}_{\text{radial},i} = (\vec{v}_{\text{COM}} + \delta v_i) \cdot \sum_i \vec{p}_{\text{radial},i} = \sum_i \delta v_i \cdot \vec{p}_{\text{radial},i}$, where $\delta v_i$ is the velocity of cell $i$ relative to the COM frame.
 
 ### Runtime Parameters
 
