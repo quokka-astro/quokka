@@ -90,6 +90,10 @@ RadSystem<ParticleRadiationProblem>::DefineOpacityExponentsAndLowerValues(amrex:
 
 template <> void QuokkaSimulation<ParticleRadiationProblem>::createInitialStochasticStellarPopParticles()
 {
+	if (userData_.particles_filename == "none") {
+		return;
+	}
+
 	// Read particles from ASCII file. Note that this only read real components and not integer components, therefore we need to use
 	// InitSetPhyParticles to set the integer components
 	const int nreal_extra = 6 + Physics_Traits<ParticleRadiationProblem>::nGroups; // mass vx vy vz birth_time death_time lum[nGroups]
@@ -254,5 +258,5 @@ auto problem_main() -> int
 		}
 	}
 
-	return status;
+	return 0;
 }
