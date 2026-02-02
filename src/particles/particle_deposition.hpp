@@ -367,7 +367,7 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 		const amrex::Real vol_inverse = AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]);
 		const amrex::Real vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
-		const bool SN_smooth_gas_velocity_d = SN_smooth_gas_velocity == 1;
+		const bool SN_smooth_gas_velocity_d = SN_smooth_gas_velocity;
 
 		// Deposit particle data into the local buffer
 		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
