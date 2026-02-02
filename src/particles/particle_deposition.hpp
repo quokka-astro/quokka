@@ -177,14 +177,15 @@ depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, 
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
-    amrex::Array4<amrex::Real> const &local_state, amrex::Array4<amrex::Real> const &local_buffer, const int ix, const int iy, const int iz,
-    const amrex::Real stencil_volume, const amrex::Real pos_x, const amrex::Real pos_y, const amrex::Real pos_z, const amrex::Real m_ej,
-    const amrex::Real E_blast, const amrex::Real p_snr_0, const amrex::Real vol_inverse,
-    const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>
-	&stencil_weights_gpu,
-    const amrex::Real avg_density, const amrex::Real vol, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
-    const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo, const SNScheme SN_scheme_d, const Real pvx, const Real pvy, const Real pvz, const bool SN_smooth_gas_velocity)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+depositThermalKineticMomentumSNR(amrex::Array4<amrex::Real> const &local_state, amrex::Array4<amrex::Real> const &local_buffer, const int ix, const int iy,
+				 const int iz, const amrex::Real stencil_volume, const amrex::Real pos_x, const amrex::Real pos_y, const amrex::Real pos_z,
+				 const amrex::Real m_ej, const amrex::Real E_blast, const amrex::Real p_snr_0, const amrex::Real vol_inverse,
+				 const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>,
+						       SN_stencil_array_size> &stencil_weights_gpu,
+				 const amrex::Real avg_density, const amrex::Real vol, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
+				 const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo, const SNScheme SN_scheme_d, const Real pvx, const Real pvy,
+				 const Real pvz, const bool SN_smooth_gas_velocity)
 {
 	const double n_H_amb = avg_density * cloudy_H_mass_fraction / m_u;
 	const amrex::Real M_gas = avg_density * stencil_volume * vol;		 // Gas mass in stencil
@@ -288,7 +289,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
 				// Energy deposition: thermal + ejecta kinetic + cross term (v_COM . p_radial)
 				// The cross term ensures Galilean invariance: it accounts for the kinetic energy change
 				// from the velocity "reset" to v_COM. This term sums to zero over all cells (momentum conserving).
-				const amrex::Real v_COM_dot_p_radial = SN_smooth_gas_velocity ? (v_COM_x * p_radial_x) + (v_COM_y * p_radial_y) + (v_COM_z * p_radial_z) : ((px * p_radial_x) + (py * p_radial_y) + (pz * p_radial_z)) / rho;
+				const amrex::Real v_COM_dot_p_radial = SN_smooth_gas_velocity
+									   ? (v_COM_x * p_radial_x) + (v_COM_y * p_radial_y) + (v_COM_z * p_radial_z)
+									   : ((px * p_radial_x) + (py * p_radial_y) + (pz * p_radial_z)) / rho;
 				const amrex::Real SN_kin_energy = 0.5 * m_ej * (pvx * pvx + pvy * pvy + pvz * pvz);
 				const amrex::Real e_snr_per_cell = (E_blast + SN_kin_energy) * kernel_times_vol_inverse + v_COM_dot_p_radial;
 
@@ -297,9 +300,12 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
 				// p_new = rho_new * v_COM + p_radial
 				// delta_p = p_new - p_old = (rho + delta_rho) * v_COM + p_radial - p_old
 				const double rho_new = rho + delta_rho_i;
-				const double dpx = SN_smooth_gas_velocity ?  (rho_new * v_COM_x - px) + p_radial_x : p_radial_x + m_ej * pvx * kernel_times_vol_inverse;
-				const double dpy = SN_smooth_gas_velocity ?  (rho_new * v_COM_y - py) + p_radial_y : p_radial_y + m_ej * pvy * kernel_times_vol_inverse;
-				const double dpz = SN_smooth_gas_velocity ?  (rho_new * v_COM_z - pz) + p_radial_z : p_radial_z + m_ej * pvz * kernel_times_vol_inverse;
+				const double dpx =
+				    SN_smooth_gas_velocity ? (rho_new * v_COM_x - px) + p_radial_x : p_radial_x + m_ej * pvx * kernel_times_vol_inverse;
+				const double dpy =
+				    SN_smooth_gas_velocity ? (rho_new * v_COM_y - py) + p_radial_y : p_radial_y + m_ej * pvy * kernel_times_vol_inverse;
+				const double dpz =
+				    SN_smooth_gas_velocity ? (rho_new * v_COM_z - pz) + p_radial_z : p_radial_z + m_ej * pvz * kernel_times_vol_inverse;
 
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::density_index), delta_rho_i);
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index), dpx);
