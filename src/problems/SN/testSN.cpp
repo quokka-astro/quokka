@@ -45,8 +45,6 @@ const double year = 3.15576e+07; // in seconds
 constexpr double B0 = 1.0e-7;	 // uniform background field for MHD variant
 
 static double n_amb = 1.0; // ambient density (g cm^-3) // NOLINT
-// static amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity{0.0, 0.0, 0.0}; // NOLINT
-static bool skip_checks = false; // NOLINT
 
 template <> struct Particle_Traits<SNProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
@@ -207,7 +205,6 @@ auto problem_main() -> int
 	pp.query("n_amb", n_amb);
 	pp.query("SN_particles_file", SN_particles_file);
 	pp.query("refine_half_domain", refine_half_domain);
-	pp.query("skip_checks", skip_checks);
 	double boost_vel_x = 1.0e8;
 	pp.query("boost_vel_x", boost_vel_x);
 
