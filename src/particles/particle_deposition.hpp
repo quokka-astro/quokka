@@ -288,7 +288,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
 				// Energy deposition: thermal + ejecta kinetic + cross term (v_COM . p_radial)
 				// The cross term ensures Galilean invariance: it accounts for the kinetic energy change
 				// from the velocity "reset" to v_COM. This term sums to zero over all cells (momentum conserving).
-				const amrex::Real v_COM_dot_p_radial = (v_COM_x * p_radial_x) + (v_COM_y * p_radial_y) + (v_COM_z * p_radial_z);
+				const amrex::Real v_COM_dot_p_radial = SN_smooth_gas_velocity ? (v_COM_x * p_radial_x) + (v_COM_y * p_radial_y) + (v_COM_z * p_radial_z) : ((px * p_radial_x) + (py * p_radial_y) + (pz * p_radial_z)) / rho;
 				const amrex::Real SN_kin_energy = 0.5 * m_ej * (pvx * pvx + pvy * pvy + pvz * pvz);
 				const amrex::Real e_snr_per_cell = (E_blast + SN_kin_energy) * kernel_times_vol_inverse + v_COM_dot_p_radial;
 
@@ -297,9 +297,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
 				// p_new = rho_new * v_COM + p_radial
 				// delta_p = p_new - p_old = (rho + delta_rho) * v_COM + p_radial - p_old
 				const double rho_new = rho + delta_rho_i;
-				const double dpx = (rho_new * v_COM_x - px) + p_radial_x;
-				const double dpy = (rho_new * v_COM_y - py) + p_radial_y;
-				const double dpz = (rho_new * v_COM_z - pz) + p_radial_z;
+				const double dpx = SN_smooth_gas_velocity ?  (rho_new * v_COM_x - px) + p_radial_x : p_radial_x + m_ej * pvx * kernel_times_vol_inverse;
+				const double dpy = SN_smooth_gas_velocity ?  (rho_new * v_COM_y - py) + p_radial_y : p_radial_y + m_ej * pvy * kernel_times_vol_inverse;
+				const double dpz = SN_smooth_gas_velocity ?  (rho_new * v_COM_z - pz) + p_radial_z : p_radial_z + m_ej * pvz * kernel_times_vol_inverse;
 
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::density_index), delta_rho_i);
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index), dpx);
@@ -367,7 +367,7 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 		const amrex::Real vol_inverse = AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]);
 		const amrex::Real vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
-		const int SN_smooth_gas_velocity_d = SN_smooth_gas_velocity;
+		const bool SN_smooth_gas_velocity_d = SN_smooth_gas_velocity == 1;
 
 		// Deposit particle data into the local buffer
 		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
