@@ -136,11 +136,13 @@ Quokka provides four SN feedback schemes controlled by `particles.SN_scheme`:
 	- When $R_M \geq 1$: Full momentum injection with $f = 1$
 
 	2.2 **`SN_thermal_kinetic_or_thermal_momentum`**:
+	
 	- When $R_M < 0.027$: Pure kinetic injection with $f = \sqrt{2 R_M}$
 	- When $0.027 \leq R_M < 1$: Partial momentum injection with $f = 0.529 \sqrt{R_M}$
 	- When $R_M \geq 1$: Full momentum injection with $f = 1$
-
+	
 	2.3 **`SN_pure_kinetic_or_thermal_momentum`**: 
+	
 	- Always injects full terminal momentum regardless of resolution with $f = 1$
 
 #### Momentum Deposition
@@ -169,9 +171,14 @@ $$
 \Delta E_{ijk} = \left(E_{\text{blast}} + E_{\text{kin}}\right) W_{ijk} + \vec{v}_{\text{COM}} \cdot \vec{p}_{\text{radial}}
 $$
 
-The cross term $\vec{v}_{\text{COM}} \cdot \vec{p}_{\text{radial}}$ accounts for the kinetic energy change from "resetting" the cell velocity to the COM frame before adding radial expansion. This term sums to zero over all cells (momentum is conserved), ensuring Galilean invariance.
+The cross term $\vec{v}_{\text{COM}} \cdot \vec{p}_{\text{radial}}$ accounts for the kinetic energy change from the radial expansion, ensuring Galilean invariance. This term sums to zero over all cells in the stencil, (momentum is conserved), ensuring energy conservation.
 
-**Physical interpretation**: The gas velocity is first transformed to the COM frame, then isotropic expansion is added. This ensures that a boosted observer sees the same SN physics.
+**Background smoothing**. To ensure the cross term cancels when summing over all cells in the stencil, the velocity field (but not the density) must be smoothed such that $\sum_i \vec{v}_{\text{COM}} \cdot \vec{p}_{\text{radial},i} = \vec{v}_{\text{COM}} \cdot \sum_i \vec{p}_{\text{radial},i} = 0$. In our tests, this smoothing also dramatically reduces peak velocities in SNR. In a shearing/turbulent background, this artificially homogenizes the gas velocity and changes kinetic energy unrelated to the SN. We provide a parameter `particles.SN_smooth_gas_velocity=0` to turn off this smoothing: $
+\Delta \vec{p}_{ijk} = m_{\rm ej} \vec{v}_{\rm ej} / V + \vec{p}_{\text{radial}}
+$ and $
+\Delta E_{ijk} = \left(E_{\text{blast}} + E_{\text{kin}}\right) W_{ijk} + \vec{v}_{i} \cdot \vec{p}_{\text{radial}}
+$ . In this case, the cross term sums to a non-zero value: $\sum_i \vec{v}_i \cdot \vec{p}_{\text{radial},i} = (\vec{v}_{\text{COM}} + \delta v_i) \cdot \sum_i \vec{p}_{\text{radial},i} = \sum_i \delta v_i \cdot \vec{p}_{\text{radial},i}$, where $\delta v_i$ is the velocity of cell $i$ relative to the COM frame.
+
 
 ### Runtime Parameters
 
@@ -181,8 +188,9 @@ The cross term $\vec{v}_{\text{COM}} \cdot \vec{p}_{\text{radial}}$ accounts for
 | `particles.disable_SN_feedback` | Boolean | `0` | Disable SN feedback entirely |
 | `particles.verbose` | Integer | `0` | Verbosity level for particle diagnostics |
 | `particles.stellar_velocity_limit` | Float | $10^8$ cm/s | Maximum allowed stellar velocity (aborts if exceeded) |
+| `particles.SN_smooth_gas_velocity` | Integer | `1` | Smooth gas velocity in the stencil to enforce energy concservation |
 
-### Implementation Notes
+### 	Implementation Notes
 
 #### Operator Splitting
 

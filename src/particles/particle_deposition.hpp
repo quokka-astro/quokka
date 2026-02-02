@@ -184,7 +184,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
     const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>
 	&stencil_weights_gpu,
     const amrex::Real avg_density, const amrex::Real vol, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
-    const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo, const SNScheme SN_scheme_d, const Real pvx, const Real pvy, const Real pvz)
+    const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo, const SNScheme SN_scheme_d, const Real pvx, const Real pvy, const Real pvz, const bool SN_smooth_gas_velocity)
 {
 	const double n_H_amb = avg_density * cloudy_H_mass_fraction / m_u;
 	const amrex::Real M_gas = avg_density * stencil_volume * vol;		 // Gas mass in stencil
@@ -280,17 +280,17 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void depositThermalKineticMomentumSNR(
 				const amrex::Real p_radial_y = momentum_per_cell * r_hat_y;
 				const amrex::Real p_radial_z = momentum_per_cell * r_hat_z;
 
+				const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
+				const double px = local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index);
+				const double py = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index);
+				const double pz = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index);
+
 				// Energy deposition: thermal + ejecta kinetic + cross term (v_COM . p_radial)
 				// The cross term ensures Galilean invariance: it accounts for the kinetic energy change
 				// from the velocity "reset" to v_COM. This term sums to zero over all cells (momentum conserving).
 				const amrex::Real v_COM_dot_p_radial = (v_COM_x * p_radial_x) + (v_COM_y * p_radial_y) + (v_COM_z * p_radial_z);
 				const amrex::Real SN_kin_energy = 0.5 * m_ej * (pvx * pvx + pvy * pvy + pvz * pvz);
 				const amrex::Real e_snr_per_cell = (E_blast + SN_kin_energy) * kernel_times_vol_inverse + v_COM_dot_p_radial;
-
-				const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
-				const double px = local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index);
-				const double py = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index);
-				const double pz = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index);
 
 				// Compute momentum change for Galilean invariance:
 				// After SN, cell velocity = v_COM + v_radial
@@ -367,6 +367,8 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 		const amrex::Real vol_inverse = AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]);
 		const amrex::Real vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
+		const int SN_smooth_gas_velocity_d = SN_smooth_gas_velocity;
+
 		// Deposit particle data into the local buffer
 		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 			auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
@@ -426,7 +428,7 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 					// (SN kinetic energy computed inside function using COM frame for Galilean invariance)
 					depositThermalKineticMomentumSNR<problem_t>(local_state, local_buffer, ix, iy, iz, stencil_volume, pos_x, pos_y, pos_z,
 										    m_ej, E_blast, p_snr_0, vol_inverse, stencil_weights_gpu, avg_density, vol,
-										    dx, plo, SN_scheme_d, p_vx, p_vy, p_vz);
+										    dx, plo, SN_scheme_d, p_vx, p_vy, p_vz, SN_smooth_gas_velocity_d);
 				}
 			}
 		});
