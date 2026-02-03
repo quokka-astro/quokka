@@ -152,6 +152,7 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 	template <typename problem_t> struct ParticleCreator {
 		int mass_idx;
 		int birth_time_index;
+		int death_time_index;
 		int evolution_stage_index;
 		int cpu_id;
 		amrex::Long pid_start;
@@ -159,10 +160,10 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 		amrex::Real dt;
 
 		AMREX_GPU_HOST_DEVICE
-		ParticleCreator(int mass_index, int birth_time_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index,
-				int /*mass_at_birth_index*/, amrex::Real current_time, amrex::Real dt)
-		    : mass_idx(mass_index), birth_time_index(birth_time_index), evolution_stage_index(evolution_stage_index), cpu_id(processor_id),
-		      pid_start(particle_id_start), current_time(current_time), dt(dt)
+		ParticleCreator(int mass_index, int birth_time_index, int death_time_index, int processor_id, amrex::Long particle_id_start,
+				int evolution_stage_index, int /*mass_at_birth_index*/, amrex::Real current_time, amrex::Real dt)
+		    : mass_idx(mass_index), birth_time_index(birth_time_index), death_time_index(death_time_index),
+		      evolution_stage_index(evolution_stage_index), cpu_id(processor_id), pid_start(particle_id_start), current_time(current_time), dt(dt)
 		{
 		}
 
@@ -203,7 +204,7 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 					// set birth time to current time
 					p.rdata(birth_time_index) = current_time;
 					// set death time to current time + 0.0025 (2.5 time steps, so will evolve into SNRemnant at step 3)
-					p.rdata(birth_time_index + 1) = current_time + 0.0025;
+					p.rdata(death_time_index) = current_time + 0.0025;
 
 					// Set particle evolution stage
 					p.idata(evolution_stage_index) = static_cast<int>(StellarEvolutionStage::SNProgenitor);
