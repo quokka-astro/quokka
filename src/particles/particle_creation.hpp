@@ -543,7 +543,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 						p.idata(evolution_stage_index) = interpolate_fate(p.rdata(mass_idx)) == 1
 										     ? static_cast<int>(StellarEvolutionStage::SNProgenitor)
-										     : static_cast<int>(StellarEvolutionStage::HighMassNoneProgenitor);
+										     : static_cast<int>(StellarEvolutionStage::HighMassNonExploding);
 						p.rdata(birth_time_index + 1) = interpolate_death_time(p.rdata(mass_idx));
 					}
 					// Set mass_at_birth
