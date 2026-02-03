@@ -22,7 +22,7 @@ namespace ParticleCreationImpl
 // Common implementation of particle creation logic
 template <typename problem_t, typename ContainerType, template <typename> class CheckerType, template <typename> class CreatorType>
 static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev,
-				amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1, int birth_time_index = -1,
+				amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1, int birth_time_index = -1, int death_time_index = -1,
 				int mass_at_birth_index = -1, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr, int verbose = 0)
 {
 	const BL_PROFILE("ParticleCreationImpl::createParticlesImpl()");
@@ -89,8 +89,8 @@ static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::M
 				const int cpu_id = amrex::ParallelDescriptor::MyProc();
 
 				// Initialize particle creator functor using the provided ParticleCreator type
-				CreatorType<problem_t> particle_creator(mass_idx, birth_time_index, cpu_id, pid, evolution_stage_index, mass_at_birth_index,
-									current_time, dt);
+				CreatorType<problem_t> particle_creator(mass_idx, birth_time_index, death_time_index, cpu_id, pid, evolution_stage_index,
+									mass_at_birth_index, current_time, dt);
 
 				amrex::ParallelForRNG(box, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::RandomEngine const &engine) {
 					const amrex::IntVect iv(AMREX_D_DECL(i, j, k));
@@ -148,6 +148,7 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 	template <typename problem_t> struct ParticleCreator {
 		int mass_idx;
 		int birth_time_index;
+		int death_time_index;
 		int evolution_stage_index;
 		int mass_at_birth_idx;
 		int cpu_id;
@@ -156,10 +157,11 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 		amrex::Real dt;
 
 		AMREX_GPU_HOST_DEVICE
-		ParticleCreator(int mass_index, int birth_time_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index,
-				int mass_at_birth_index, amrex::Real current_time, amrex::Real dt)
-		    : mass_idx(mass_index), birth_time_index(birth_time_index), evolution_stage_index(evolution_stage_index),
-		      mass_at_birth_idx(mass_at_birth_index), cpu_id(processor_id), pid_start(particle_id_start), current_time(current_time), dt(dt)
+		ParticleCreator(int mass_index, int birth_time_index, int death_time_index, int processor_id, amrex::Long particle_id_start,
+				int evolution_stage_index, int mass_at_birth_index, amrex::Real current_time, amrex::Real dt)
+		    : mass_idx(mass_index), birth_time_index(birth_time_index), death_time_index(death_time_index),
+		      evolution_stage_index(evolution_stage_index), mass_at_birth_idx(mass_at_birth_index), cpu_id(processor_id), pid_start(particle_id_start),
+		      current_time(current_time), dt(dt)
 		{
 		}
 
@@ -179,14 +181,15 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 	template <typename problem_t, typename ContainerType>
 	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev,
 				    amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1, int birth_time_index = -1,
-				    int mass_at_birth_index = -1, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr, int verbose = 0)
+				    int death_time_index = -1, int mass_at_birth_index = -1,
+				    std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr, int verbose = 0)
 	{
 		const BL_PROFILE("ParticleCreationTraits::createParticles()");
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<particleType>::template ParticleChecker,
 							  ParticleCreationTraits<particleType>::template ParticleCreator>(
-		    container, mass_idx, state, accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index, mass_at_birth_index, state_fc,
-		    verbose);
+		    container, mass_idx, state, accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index, death_time_index,
+		    mass_at_birth_index, state_fc, verbose);
 	}
 };
 
@@ -267,6 +270,7 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 	template <typename problem_t> struct ParticleCreator {
 		int mass_idx;
 		int birth_time_index;
+		int death_time_index;
 		int evolution_stage_index;
 		int mass_at_birth_idx;
 		int cpu_id;
@@ -279,10 +283,11 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 		static constexpr Real mu = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
 
 		AMREX_GPU_HOST_DEVICE
-		ParticleCreator(int mass_index, int birth_time_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index,
-				int mass_at_birth_index, amrex::Real current_time, amrex::Real dt)
-		    : mass_idx(mass_index), birth_time_index(birth_time_index), evolution_stage_index(evolution_stage_index),
-		      mass_at_birth_idx(mass_at_birth_index), cpu_id(processor_id), pid_start(particle_id_start), current_time(current_time), dt(dt)
+		ParticleCreator(int mass_index, int birth_time_index, int death_time_index, int processor_id, amrex::Long particle_id_start,
+				int evolution_stage_index, int mass_at_birth_index, amrex::Real current_time, amrex::Real dt)
+		    : mass_idx(mass_index), birth_time_index(birth_time_index), death_time_index(death_time_index),
+		      evolution_stage_index(evolution_stage_index), mass_at_birth_idx(mass_at_birth_index), cpu_id(processor_id), pid_start(particle_id_start),
+		      current_time(current_time), dt(dt)
 		{
 		}
 
@@ -353,13 +358,14 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 	template <typename problem_t, typename ContainerType>
 	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev,
 				    amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1, int birth_time_index = -1,
-				    int mass_at_birth_index = -1, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr, int verbose = 0)
+				    int death_time_index = -1, int mass_at_birth_index = -1,
+				    std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr, int verbose = 0)
 	{
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<ParticleType::Sink>::template ParticleChecker,
 							  ParticleCreationTraits<ParticleType::Sink>::template ParticleCreator>(
-		    container, mass_idx, state, accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index, mass_at_birth_index, state_fc,
-		    verbose);
+		    container, mass_idx, state, accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index, death_time_index,
+		    mass_at_birth_index, state_fc, verbose);
 	}
 };
 
@@ -431,6 +437,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	template <typename problem_t> struct ParticleCreator {
 		int mass_idx;
 		int birth_time_index;
+		int death_time_index;
 		int evolution_stage_index;
 		int mass_at_birth_idx;
 		int cpu_id;
@@ -443,10 +450,11 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		amrex::Real stellar_velocity_limit_ = stellar_velocity_limit;
 
 		AMREX_GPU_HOST_DEVICE
-		ParticleCreator(int mass_index, int birth_time_index, int processor_id, amrex::Long particle_id_start, int evolution_stage_index,
-				int mass_at_birth_index, amrex::Real current_time, amrex::Real dt)
-		    : mass_idx(mass_index), birth_time_index(birth_time_index), evolution_stage_index(evolution_stage_index),
-		      mass_at_birth_idx(mass_at_birth_index), cpu_id(processor_id), pid_start(particle_id_start), current_time(current_time), dt(dt)
+		ParticleCreator(int mass_index, int birth_time_index, int death_time_index, int processor_id, amrex::Long particle_id_start,
+				int evolution_stage_index, int mass_at_birth_index, amrex::Real current_time, amrex::Real dt)
+		    : mass_idx(mass_index), birth_time_index(birth_time_index), death_time_index(death_time_index),
+		      evolution_stage_index(evolution_stage_index), mass_at_birth_idx(mass_at_birth_index), cpu_id(processor_id), pid_start(particle_id_start),
+		      current_time(current_time), dt(dt)
 		{
 		}
 
@@ -510,7 +518,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					p.rdata(mass_idx + 2) = vy;
 					p.rdata(mass_idx + 3) = vz;
 
-					p.rdata(birth_time_index + 1) = std::numeric_limits<amrex::Real>::max();
+					p.rdata(death_time_index) = std::numeric_limits<amrex::Real>::max();
 					if (p_idx > 0) {
 						// This is the loop that sets the velocity of the high mass stars
 						double const km_per_s = 1.e5; // convert km/s to cm/s
@@ -550,9 +558,12 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						total_momy += p.rdata(mass_idx + 2) * p.rdata(mass_idx);
 						total_momz += p.rdata(mass_idx + 3) * p.rdata(mass_idx);
 
-						p.idata(evolution_stage_index) =
-						    interpolate_fate(p.rdata(mass_idx)) == 1 ? static_cast<int>(StellarEvolutionStage::SNProgenitor) : 0;
-						p.rdata(birth_time_index + 1) = current_time + interpolate_death_time(p.rdata(mass_idx));
+						// Determine the evolutionary stage based on whether this star will explode as a supernova
+						// interpolate_whether_SN_explosion returns true if the star will undergo a supernova explosion
+						p.idata(evolution_stage_index) = interpolate_whether_SN_explosion(p.rdata(mass_idx))
+										     ? static_cast<int>(StellarEvolutionStage::SNProgenitor)
+										     : static_cast<int>(StellarEvolutionStage::HighMassNonExploding);
+						p.rdata(death_time_index) = current_time + interpolate_death_time(p.rdata(mass_idx));
 					}
 					// Set mass_at_birth
 					if (mass_at_birth_idx >= 0) {
@@ -598,7 +609,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	template <typename problem_t, typename ContainerType>
 	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev,
 				    amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1, int birth_time_index = -1,
-				    int mass_at_birth_index = -1, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr, int verbose = 0)
+				    int death_time_index = -1, int mass_at_birth_index = -1,
+				    std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr, int verbose = 0)
 	{
 		const BL_PROFILE("ParticleCreationTraits<StochasticStellarPop>::createParticles()");
 		// Requires CGS units
@@ -608,8 +620,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType,
 							  ParticleCreationTraits<ParticleType::StochasticStellarPop>::template ParticleChecker,
 							  ParticleCreationTraits<ParticleType::StochasticStellarPop>::template ParticleCreator>(
-		    container, mass_idx, state, accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index, mass_at_birth_index, state_fc,
-		    verbose);
+		    container, mass_idx, state, accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index, death_time_index,
+		    mass_at_birth_index, state_fc, verbose);
 	}
 }; // ParticleCreationTraits<ParticleType::StochasticStellarPop>
 

@@ -178,13 +178,12 @@ template <typename problem_t> using CICRadParticleIterator = amrex::ParIter<CICR
 //-------------------- Stellar evolution stage enum --------------------
 
 // Enum for particle evolution stages. This is designed to be shared among several particle types. However, not all particle types will use all stages.
-// - LowMassStar: singular low mass star
-// - SNProgenitor: singular high-mass stars (> 9 Msun). Depending on the SF and SN scheme, these stars will either explode as supernovae in
-//   the end of their lifetime unconditionally, or conditionally according to their evolutional track.
+// - HighMassNonExploding: high-mass stars (> 9 Msun) that will not explode as supernovae in the end of their lifetime
+// - SNProgenitor: singular high-mass stars (> 9 Msun) that will explode as supernovae in the end of their lifetime
 // - SNRemnant: Supernova remnant stage
 // - LowMassComposite: composite of low-mass stars
 // - Removed: marked for removal
-enum class StellarEvolutionStage { LowMassStar, SNProgenitor, SNRemnant, LowMassComposite, Removed };
+enum class StellarEvolutionStage { HighMassNonExploding, SNProgenitor, SNRemnant, LowMassComposite, Removed };
 
 //-------------------- Stellar population particles --------------------
 
