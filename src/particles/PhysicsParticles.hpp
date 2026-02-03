@@ -792,7 +792,7 @@ template <typename problem_t> class PhysicsParticleRegister
 		// evolution_stage_idx, allows_accretion
 		if constexpr (particleType == ParticleType::Rad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(
-			    container, -1, RadParticleLumIdx, RadParticleBirthTimeIdx, RadParticleBirthTimeIdx + 1, false, false);
+			    container, -1, RadParticleLumIdx, RadParticleBirthTimeIdx, RadParticleDeathTimeIdx, false, false);
 		}
 #if AMREX_SPACEDIM == 3
 		else if constexpr (particleType == ParticleType::CIC) {
@@ -800,18 +800,18 @@ template <typename problem_t> class PhysicsParticleRegister
 															      -1, -1, false, false);
 		} else if constexpr (particleType == ParticleType::CICRad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
-			    container, CICRadParticleMassIdx, CICRadParticleLumIdx, CICRadParticleBirthTimeIdx, CICRadParticleBirthTimeIdx + 1, false, false);
+			    container, CICRadParticleMassIdx, CICRadParticleLumIdx, CICRadParticleBirthTimeIdx, CICRadParticleDeathTimeIdx, false, false);
 		} else if constexpr (particleType == ParticleType::StochasticStellarPop) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::StochasticStellarPop>>(
 			    container, StochasticStellarPopParticleMassIdx, StochasticStellarPopParticleLumIdx, StochasticStellarPopParticleBirthTimeIdx,
-			    StochasticStellarPopParticleBirthTimeIdx + 1, true, false, StochasticStellarPopParticleStageIdx, false,
+			    StochasticStellarPopParticleDeathTimeIdx, true, false, StochasticStellarPopParticleStageIdx, false,
 			    StochasticStellarPopParticleMassAtBirthIdx);
 		} else if constexpr (particleType == ParticleType::Sink) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Sink>>(
 			    container, SinkParticleMassIdx, -1, -1, -1, true, false, -1, true);
 		} else if constexpr (particleType == ParticleType::Test) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
-			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, TestParticleBirthTimeIdx + 1, true, true,
+			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, TestParticleDeathTimeIdx, true, true,
 			    TestParticleStageIdx, false);
 		}
 #endif // AMREX_SPACEDIM == 3
