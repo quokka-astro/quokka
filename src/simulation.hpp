@@ -491,9 +491,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void restartParticleContainerWithRefinement(std::unique_ptr<ParticleContainer> &particles, std::string const &restart_chkfile,
 						    std::string const &particle_type_name, amrex::Vector<amrex::BoxArray> const &header_box_arrays);
 
-	template <typename ContainerType>
-	void initializeParticleContainerFromCheckpoint(std::unique_ptr<ContainerType> &container, quokka::ParticleType particle_type,
-						       amrex::Vector<amrex::BoxArray> const &header_box_arrays);
+	template <quokka::ParticleType particle_type, typename ContainerType>
+	void initializeParticleContainerFromCheckpoint(std::unique_ptr<ContainerType> &container, amrex::Vector<amrex::BoxArray> const &header_box_arrays);
 
 	auto getGitHashForQuokka() const -> std::string;
 	auto getGitHashForAmrex() const -> std::string;
@@ -3378,7 +3377,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		RadParticles->SetVerbose(0);
 
 		// Register with particle register - Rad particles do not allow creation
-		particleRegister_.registerParticleType(RadParticles.get(), quokka::ParticleType::Rad);
+		particleRegister_.template registerParticleType<quokka::ParticleType::Rad>(RadParticles.get());
 
 		// Initialize particles through user-defined function
 		createInitialRadParticles();
@@ -3393,7 +3392,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		CICParticles->SetVerbose(0);
 
 		// Register with particle register - CIC particles allow creation
-		particleRegister_.registerParticleType(CICParticles.get(), quokka::ParticleType::CIC);
+		particleRegister_.template registerParticleType<quokka::ParticleType::CIC>(CICParticles.get());
 
 		// Initialize particles through user-defined function
 		createInitialCICParticles();
@@ -3407,7 +3406,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		CICRadParticles->SetVerbose(0);
 
 		// Register with particle register - CICRad particles do not allow creation
-		particleRegister_.registerParticleType(CICRadParticles.get(), quokka::ParticleType::CICRad);
+		particleRegister_.template registerParticleType<quokka::ParticleType::CICRad>(CICRadParticles.get());
 
 		// Initialize particles through user-defined function
 		createInitialCICRadParticles();
@@ -3423,7 +3422,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		StochasticStellarPopParticles->SetVerbose(0);
 
 		// Register with particle register - StochasticStellarPop particles allow creation
-		particleRegister_.registerParticleType(StochasticStellarPopParticles.get(), quokka::ParticleType::StochasticStellarPop);
+		particleRegister_.template registerParticleType<quokka::ParticleType::StochasticStellarPop>(StochasticStellarPopParticles.get());
 
 		// Initialize particles through user-defined function
 		createInitialStochasticStellarPopParticles();
@@ -3437,7 +3436,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		SinkParticles->SetVerbose(0);
 
 		// Register with particle register - Sink particles allow creation
-		particleRegister_.registerParticleType(SinkParticles.get(), quokka::ParticleType::Sink);
+		particleRegister_.template registerParticleType<quokka::ParticleType::Sink>(SinkParticles.get());
 
 		// Initialize particles through user-defined function
 		createInitialSinkParticles();
@@ -3450,7 +3449,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 		TestParticles->SetVerbose(0);
 
 		// Register with particle register - Test particles have all features enabled
-		particleRegister_.registerParticleType(TestParticles.get(), quokka::ParticleType::Test);
+		particleRegister_.template registerParticleType<quokka::ParticleType::Test>(TestParticles.get());
 
 		// Initialize particles through user-defined function
 		createInitialTestParticles();
@@ -4650,28 +4649,28 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	// 6. Initialize and register particle containers from checkpoint file
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Rad) {
-		initializeParticleContainerFromCheckpoint(RadParticles, quokka::ParticleType::Rad, header_box_arrays);
+		initializeParticleContainerFromCheckpoint<quokka::ParticleType::Rad>(RadParticles, header_box_arrays);
 	}
 
 #if AMREX_SPACEDIM == 3
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CIC) {
-		initializeParticleContainerFromCheckpoint(CICParticles, quokka::ParticleType::CIC, header_box_arrays);
+		initializeParticleContainerFromCheckpoint<quokka::ParticleType::CIC>(CICParticles, header_box_arrays);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CICRad) {
-		initializeParticleContainerFromCheckpoint(CICRadParticles, quokka::ParticleType::CICRad, header_box_arrays);
+		initializeParticleContainerFromCheckpoint<quokka::ParticleType::CICRad>(CICRadParticles, header_box_arrays);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::StochasticStellarPop) {
-		initializeParticleContainerFromCheckpoint(StochasticStellarPopParticles, quokka::ParticleType::StochasticStellarPop, header_box_arrays);
+		initializeParticleContainerFromCheckpoint<quokka::ParticleType::StochasticStellarPop>(StochasticStellarPopParticles, header_box_arrays);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) {
-		initializeParticleContainerFromCheckpoint(SinkParticles, quokka::ParticleType::Sink, header_box_arrays);
+		initializeParticleContainerFromCheckpoint<quokka::ParticleType::Sink>(SinkParticles, header_box_arrays);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Test) {
-		initializeParticleContainerFromCheckpoint(TestParticles, quokka::ParticleType::Test, header_box_arrays);
+		initializeParticleContainerFromCheckpoint<quokka::ParticleType::Test>(TestParticles, header_box_arrays);
 	}
 
 	// Read SFH data from metadata
@@ -4777,15 +4776,15 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 }
 
 template <typename problem_t>
-template <typename ContainerType>
-void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::unique_ptr<ContainerType> &container, quokka::ParticleType particle_type,
+template <quokka::ParticleType particle_type, typename ContainerType>
+void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::unique_ptr<ContainerType> &container,
 									 amrex::Vector<amrex::BoxArray> const &header_box_arrays)
 {
 	AMREX_ASSERT(container == nullptr);
 	container = std::make_unique<ContainerType>(this);
 
 	// Register container
-	particleRegister_.registerParticleType(container.get(), particle_type);
+	particleRegister_.template registerParticleType<particle_type>(container.get());
 
 	// Read particles
 	restartParticleContainerWithRefinement(container, restart_chkfile, particleRegister_.getParticleTypeName(particle_type), header_box_arrays);
