@@ -56,9 +56,8 @@ class PhysicsParticleDescriptorBase
 	bool forceFinestLevel_{false}; // Whether particles are forced to live in the finest level
 
       public:
-	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, int death_time_idx, bool allows_creation,
-				      bool allows_destruction = false, int evolution_stage_idx = -1, bool allows_accretion = false,
-				      int mass_at_birth_idx = -1)
+	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, int death_time_idx, bool allows_creation, bool allows_destruction = false,
+				      int evolution_stage_idx = -1, bool allows_accretion = false, int mass_at_birth_idx = -1)
 	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), deathTimeIndex_(death_time_idx), allowsCreation_(allows_creation),
 	      allowsDestruction_(allows_destruction), evolutionStageIndex_(evolution_stage_idx), allowsAccretion_(allows_accretion),
 	      massAtBirthIndex_(mass_at_birth_idx)
@@ -797,8 +796,8 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 #if AMREX_SPACEDIM == 3
 		else if constexpr (particleType == ParticleType::CIC) {
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(
-			    container, CICParticleMassIdx, -1, -1, -1, false, false);
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(container, CICParticleMassIdx, -1,
+															      -1, -1, false, false);
 		} else if constexpr (particleType == ParticleType::CICRad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
 			    container, CICRadParticleMassIdx, CICRadParticleLumIdx, CICRadParticleBirthTimeIdx, CICRadParticleBirthTimeIdx + 1, false, false);

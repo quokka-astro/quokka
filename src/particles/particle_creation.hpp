@@ -22,9 +22,8 @@ namespace ParticleCreationImpl
 // Common implementation of particle creation logic
 template <typename problem_t, typename ContainerType, template <typename> class CheckerType, template <typename> class CreatorType>
 static void createParticlesImpl(ContainerType *container, int mass_idx, amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev,
-				amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1, int birth_time_index = -1,
-				int death_time_index = -1, int mass_at_birth_index = -1,
-				std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr, int verbose = 0)
+				amrex::Real current_time, amrex::Real dt, int evolution_stage_index = -1, int birth_time_index = -1, int death_time_index = -1,
+				int mass_at_birth_index = -1, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr, int verbose = 0)
 {
 	const BL_PROFILE("ParticleCreationImpl::createParticlesImpl()");
 	if (container != nullptr) {
