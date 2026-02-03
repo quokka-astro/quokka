@@ -195,6 +195,13 @@ AMREX_ENUM(StochasticStellarPopParticleRealIdx, // NOLINT
 	   vz,					// Velocity in z direction
 	   birth_time,				// Time when particle becomes active
 	   death_time,				// Time when particle becomes inactive
+	   birth_x,				// Birth position x
+	   birth_y,				// Birth position y
+	   birth_z,				// Birth position z
+	   death_x,				// Death position x
+	   death_y,				// Death position y
+	   death_z,				// Death position z
+	   death_density,			// Density at death
 	   mass_at_birth,			// Particle mass at birth
 	   luminosity				// Base luminosity component (expanded to luminosity_0, luminosity_1, ... in I/O)
 );
@@ -211,17 +218,25 @@ constexpr int StochasticStellarPopParticleVyIdx = static_cast<int>(StochasticSte
 constexpr int StochasticStellarPopParticleVzIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::vz);
 constexpr int StochasticStellarPopParticleBirthTimeIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::birth_time);
 constexpr int StochasticStellarPopParticleDeathTimeIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::death_time);
+constexpr int StochasticStellarPopParticleBirthPosXIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::birth_x);
+constexpr int StochasticStellarPopParticleBirthPosYIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::birth_y);
+constexpr int StochasticStellarPopParticleBirthPosZIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::birth_z);
+constexpr int StochasticStellarPopParticleDeathPosXIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::death_x);
+constexpr int StochasticStellarPopParticleDeathPosYIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::death_y);
+constexpr int StochasticStellarPopParticleDeathPosZIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::death_z);
+constexpr int StochasticStellarPopParticleDeathDensityIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::death_density);
 constexpr int StochasticStellarPopParticleMassAtBirthIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::mass_at_birth);
 constexpr int StochasticStellarPopParticleLumIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::luminosity); // Base index for luminosity components
 constexpr int StochasticStellarPopParticleStageIdx = static_cast<int>(StochasticStellarPopParticleIntIdx::evolution_stage);
 
-// Number of real components for StochasticStellarPop_particles, mass + 3 velocity components + luminosity
+// Number of real components for StochasticStellarPop_particles, mass + 3 velocity components + times + positions + death density + luminosity
 template <typename problem_t>
 constexpr int StochasticStellarPopParticleRealComps = []() constexpr {
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
-		return 7 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, death_time, mass_at_birth, lum[nGroups]
+		return 14 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, death_time, birth_xyz, death_xyz, death_density, mass_at_birth,
+								// lum[nGroups]
 	} else {
-		return 7; // mass, vx, vy, vz, birth_time, death_time, mass_at_birth
+		return 14; // mass, vx, vy, vz, birth_time, death_time, birth_xyz, death_xyz, death_density, mass_at_birth
 	}
 }();
 
@@ -415,6 +430,13 @@ inline auto get_units_data() -> const auto &
 	       {"vz", {0, 1, -1, 0}},
 	       {"birth_time", {0, 0, 1, 0}},
 	       {"death_time", {0, 0, 1, 0}},
+	       {"birth_x", {0, 1, 0, 0}},
+	       {"birth_y", {0, 1, 0, 0}},
+	       {"birth_z", {0, 1, 0, 0}},
+	       {"death_x", {0, 1, 0, 0}},
+	       {"death_y", {0, 1, 0, 0}},
+	       {"death_z", {0, 1, 0, 0}},
+	       {"death_density", {1, -3, 0, 0}},
 	       {"mass_at_birth", {1, 0, 0, 0}},
 	       {"luminosity", {-1, 2, -3, 0}}}}},
 	    {ParticleType::Sink, {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}}}}},

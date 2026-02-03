@@ -6,8 +6,8 @@
 #include <cstdint>
 #include <map>
 #include <memory>
-#include <ranges>
 #include <string>
+#include <utility>
 
 #include <fmt/format.h>
 #include <yaml-cpp/yaml.h>
@@ -666,14 +666,14 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 				// Deposit supernova energy and momentum from all particles. This also updates the evolution stage of the particles.
 				auto [sn_count, vel] =
-				    SNDeposition<ContainerType, problem_t>(this->container_, state, state_fc, lev, time, dt, this->getMassIndex(),
-									   this->getEvolutionStageIndex(), this->getBirthTimeIndex());
+				    SNDeposition<particleType, ContainerType, problem_t>(this->container_, state, state_fc, lev, time, dt, this->getMassIndex(),
+											 this->getEvolutionStageIndex(), this->getBirthTimeIndex());
 				num_sn_explosions = sn_count;
 				max_velocity = vel;
 			} else {
 				// Only update evolution stage but not deposit energy/momentum
-				SNFeedbackUtils::updateEvolutionStage(this->container_, lev, time + dt, this->getBirthTimeIndex(),
-								      this->getEvolutionStageIndex());
+				SNFeedbackUtils::updateEvolutionStageAndDeathDensity<particleType, ContainerType, problem_t>(
+				    this->container_, state, lev, time + dt, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
 			}
 		}
 
@@ -781,41 +781,41 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Register a new particle type with specified properties
-	template <typename ContainerType> void registerParticleType(ContainerType *container, ParticleType type)
+	template <ParticleType particleType, typename ContainerType> void registerParticleType(ContainerType *container)
 	{
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
 
 		// Create the appropriate descriptor based on the particle type
 		// The parameters for the descriptor are: mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction, evolution_stage_idx,
 		// allows_accretion
-		if (type == ParticleType::Rad) {
+		if constexpr (particleType == ParticleType::Rad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(
 			    container, -1, RadParticleLumIdx, RadParticleBirthTimeIdx, false, false);
 		}
 #if AMREX_SPACEDIM == 3
-		else if (type == ParticleType::CIC) {
+		else if constexpr (particleType == ParticleType::CIC) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(container, CICParticleMassIdx, -1,
 															      -1, false, false);
-		} else if (type == ParticleType::CICRad) {
+		} else if constexpr (particleType == ParticleType::CICRad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
 			    container, CICRadParticleMassIdx, CICRadParticleLumIdx, CICRadParticleBirthTimeIdx, false, false);
-		} else if (type == ParticleType::StochasticStellarPop) {
+		} else if constexpr (particleType == ParticleType::StochasticStellarPop) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::StochasticStellarPop>>(
 			    container, StochasticStellarPopParticleMassIdx, StochasticStellarPopParticleLumIdx, StochasticStellarPopParticleBirthTimeIdx, true,
 			    false, StochasticStellarPopParticleStageIdx, false, StochasticStellarPopParticleMassAtBirthIdx);
-		} else if (type == ParticleType::Sink) {
+		} else if constexpr (particleType == ParticleType::Sink) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Sink>>(container, SinkParticleMassIdx,
 															       -1, -1, true, false, -1, true);
-		} else if (type == ParticleType::Test) {
+		} else if constexpr (particleType == ParticleType::Test) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
 			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, true, true, TestParticleStageIdx, false);
 		}
 #endif // AMREX_SPACEDIM == 3
 		else {
-			amrex::Abort("Unknown particle type for physics particles");
+			static_assert(particleType == ParticleType::Rad, "Unknown particle type for physics particles");
 		}
 
-		particleRegistry_[type] = std::move(descriptor);
+		particleRegistry_[particleType] = std::move(descriptor);
 	}
 
 	// Retrieve a particle descriptor by type
