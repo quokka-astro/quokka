@@ -183,7 +183,7 @@ template <typename problem_t> using CICRadParticleIterator = amrex::ParIter<CICR
 // - SNRemnant: Supernova remnant stage
 // - LowMassComposite: composite of low-mass stars
 // - Removed: marked for removal
-enum class StellarEvolutionStage { HighMassNoneProgenitor, SNProgenitor, SNRemnant, LowMassComposite, Removed };
+enum class StellarEvolutionStage { HighMassNonExploding, SNProgenitor, SNRemnant, LowMassComposite, Removed };
 
 //-------------------- Stellar population particles --------------------
 
