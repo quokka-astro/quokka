@@ -219,14 +219,14 @@ template <> struct ParticleCreationTraits<ParticleType::Test> {
 	// Main method to create particles - uses the helper implementation
 	template <typename problem_t, typename ContainerType>
 	static void createParticles(ContainerType *container, int mass_idx, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, int lev,
-				    amrex::Real current_time, amrex::Real dt, int evolution_stage_index, int birth_time_index, int mass_at_birth_index,
-				    std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr, int verbose = 0)
+				    amrex::Real current_time, amrex::Real dt, int evolution_stage_index, int birth_time_index, int death_time_index,
+				    int mass_at_birth_index, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr, int verbose = 0)
 	{
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<ParticleType::Test>::template ParticleChecker,
 							  ParticleCreationTraits<ParticleType::Test>::template ParticleCreator>(
-		    container, mass_idx, state, state_accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index, mass_at_birth_index,
-		    state_fc, verbose);
+		    container, mass_idx, state, state_accretion_rate, lev, current_time, dt, evolution_stage_index, birth_time_index, death_time_index,
+		    mass_at_birth_index, state_fc, verbose);
 	}
 };
 } // namespace quokka
