@@ -588,7 +588,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						real_particle_total_mass += particles[pp].rdata(mass_idx);
 					}
 
-					// Option 2 (preferred): Ensure COM velocity of all stars equals cell velocity (vx, vy, vz).
+					// Option 1 (preferred): Ensure COM velocity of all stars equals cell velocity (vx, vy, vz).
 					// This may violate momentum conservation because real_particle_total_mass != particle_mass
 					// due to stochastic sampling of high-mass star masses from the IMF.
 					// However, since mass conservation is already violated in a single cell due to stochasticity,
@@ -597,7 +597,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					plow.rdata(mass_idx + 2) = (real_particle_total_mass * vy - total_momy) / mass_low_mass_star;
 					plow.rdata(mass_idx + 3) = (real_particle_total_mass * vz - total_momz) / mass_low_mass_star;
 
-					// Option 1 (alternative): Guarantee momentum conservation.
+					// Option 2 (alternative): Guarantee momentum conservation.
 					// This uses particle_mass (the mass removed from the cell) instead of real_particle_total_mass.
 					// While this conserves momentum exactly, it results in incorrect COM velocity because
 					// real_particle_total_mass != particle_mass due to stochastic sampling.
