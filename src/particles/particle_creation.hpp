@@ -581,9 +581,29 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				if (num_particles > 1) { // Update momentum of the low mass star if there is(are) high mass star(s) in the cell
 					const int p_idx = 0;
 					auto &plow = particles[p_idx]; // NOLINT
-					plow.rdata(mass_idx + 1) = -total_momx / plow.rdata(mass_idx);
-					plow.rdata(mass_idx + 2) = -total_momy / plow.rdata(mass_idx);
-					plow.rdata(mass_idx + 3) = -total_momz / plow.rdata(mass_idx);
+
+					// Calculate the actual total mass of all particles (high-mass stars sampled from IMF + low-mass composite)
+					amrex::Real real_particle_total_mass = mass_low_mass_star;
+					for (int pp = 1; pp < num_particles; ++pp) {
+						real_particle_total_mass += particles[pp].rdata(mass_idx);
+					}
+
+					// Option 2 (preferred): Ensure COM velocity of all stars equals cell velocity (vx, vy, vz).
+					// This may violate momentum conservation because real_particle_total_mass != particle_mass
+					// due to stochastic sampling of high-mass star masses from the IMF.
+					// However, since mass conservation is already violated in a single cell due to stochasticity,
+					// it's more important to preserve correct velocities in a rotating disk.
+					plow.rdata(mass_idx + 1) = (real_particle_total_mass * vx - total_momx) / mass_low_mass_star;
+					plow.rdata(mass_idx + 2) = (real_particle_total_mass * vy - total_momy) / mass_low_mass_star;
+					plow.rdata(mass_idx + 3) = (real_particle_total_mass * vz - total_momz) / mass_low_mass_star;
+
+					// Option 1 (alternative): Guarantee momentum conservation.
+					// This uses particle_mass (the mass removed from the cell) instead of real_particle_total_mass.
+					// While this conserves momentum exactly, it results in incorrect COM velocity because
+					// real_particle_total_mass != particle_mass due to stochastic sampling.
+					// plow.rdata(mass_idx + 1) = (particle_mass * vx - total_momx) / mass_low_mass_star;
+					// plow.rdata(mass_idx + 2) = (particle_mass * vy - total_momy) / mass_low_mass_star;
+					// plow.rdata(mass_idx + 3) = (particle_mass * vz - total_momz) / mass_low_mass_star;
 				}
 
 				const double factor = (1. - particle_mass / cell_mass);
