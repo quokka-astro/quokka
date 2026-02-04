@@ -399,6 +399,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		amrex::Real param1 = particle_param1;
 		amrex::Real param2 = particle_param2;
 		amrex::Real eps_ff_ = eps_ff;
+		amrex::Real low_mass_composite_max_mass_ = low_mass_composite_max_mass;
 
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
 
@@ -426,8 +427,17 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			    random_draw < prob_star_formation) { // Create a particle only if LambdaJ < J*dx and prob_star_formation> random draw
 				const amrex::Real particle_mass = cell_density * cell_volume * eps_star;
 				const amrex::Real m_high_tot = particle_mass * fstar_high;
+				const amrex::Real mass_low_mass_star = particle_mass * (1.0 - fstar_high);
 				amrex::Real const num_high_mass_stars_exp = m_high_tot / m_star_high_avg;
-				num_star = static_cast<int>(1 + (amrex::RandomPoisson(num_high_mass_stars_exp, engine)));
+				const int num_high = static_cast<int>(amrex::RandomPoisson(num_high_mass_stars_exp, engine));
+				int num_low = 1;
+				if ((low_mass_composite_max_mass_ > 0.0) && (mass_low_mass_star > low_mass_composite_max_mass_)) {
+					num_low = static_cast<int>(mass_low_mass_star / low_mass_composite_max_mass_);
+					if (mass_low_mass_star > static_cast<amrex::Real>(num_low) * low_mass_composite_max_mass_) {
+						++num_low;
+					}
+				}
+				num_star = num_low + num_high;
 			}
 			return num_star;
 		}
@@ -448,6 +458,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		amrex::Real param2 = particle_param2;
 		amrex::Real eps_ff_ = eps_ff;
 		amrex::Real stellar_velocity_limit_ = stellar_velocity_limit;
+		amrex::Real low_mass_composite_max_mass_ = low_mass_composite_max_mass;
 
 		AMREX_GPU_HOST_DEVICE
 		ParticleCreator(int mass_index, int birth_time_index, int death_time_index, int processor_id, amrex::Long particle_id_start,
@@ -483,7 +494,20 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				double total_momy = 0.0;
 				double total_momz = 0.0;
 
-				// p_idx = 0 represents the low mass star and p_idx = 1, 2..  represent the high mass stars
+				int num_low = 1;
+				if ((low_mass_composite_max_mass_ > 0.0) && (mass_low_mass_star > low_mass_composite_max_mass_)) {
+					num_low = static_cast<int>(mass_low_mass_star / low_mass_composite_max_mass_);
+					if (mass_low_mass_star > static_cast<amrex::Real>(num_low) * low_mass_composite_max_mass_) {
+						++num_low;
+					}
+				}
+				if (num_low > num_particles) {
+					num_low = num_particles;
+				}
+				const int num_high = num_particles - num_low;
+				const amrex::Real mass_low_each = mass_low_mass_star / static_cast<amrex::Real>(num_low);
+
+				// p_idx = 0..(num_low-1) represent the low mass composites, p_idx = num_low.. represent the high mass stars
 
 				for (int p_idx = 0; p_idx < num_particles; ++p_idx) {
 					auto &p = particles[p_idx]; // NOLINT
@@ -499,10 +523,20 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					// This gets changed in the for loop below if this is a high mass star
 					p.idata(evolution_stage_index) = static_cast<int>(StellarEvolutionStage::LowMassComposite);
 
-					// Low Mass particle position at cell center
-					p.pos(0) = plo[0] + (i + 0.5) * dx[0];
-					p.pos(1) = plo[1] + (j + 0.5) * dx[1];
-					p.pos(2) = plo[2] + (k + 0.5) * dx[2];
+					if (p_idx < num_low) {
+						// Randomize LowMassComposite position within the cell
+						const amrex::Real rx = amrex::Random(engine);
+						const amrex::Real ry = amrex::Random(engine);
+						const amrex::Real rz = amrex::Random(engine);
+						p.pos(0) = plo[0] + (i + rx) * dx[0];
+						p.pos(1) = plo[1] + (j + ry) * dx[1];
+						p.pos(2) = plo[2] + (k + rz) * dx[2];
+					} else {
+						// High mass stars at cell center
+						p.pos(0) = plo[0] + (i + 0.5) * dx[0];
+						p.pos(1) = plo[1] + (j + 0.5) * dx[1];
+						p.pos(2) = plo[2] + (k + 0.5) * dx[2];
+					}
 
 					p.rdata(StochasticStellarPopParticleBirthPosXIdx) = p.pos(0);
 					p.rdata(StochasticStellarPopParticleBirthPosYIdx) = p.pos(1);
@@ -513,13 +547,13 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					p.rdata(StochasticStellarPopParticleDeathDensityIdx) = unset_position;
 
 					// Low Mass particle mass and velocity
-					p.rdata(mass_idx) = mass_low_mass_star;
+					p.rdata(mass_idx) = (p_idx < num_low) ? mass_low_each : 0.0;
 					p.rdata(mass_idx + 1) = vx;
 					p.rdata(mass_idx + 2) = vy;
 					p.rdata(mass_idx + 3) = vz;
 
 					p.rdata(death_time_index) = std::numeric_limits<amrex::Real>::max();
-					if (p_idx > 0) {
+					if (p_idx >= num_low) {
 						// This is the loop that sets the velocity of the high mass stars
 						double const km_per_s = 1.e5; // convert km/s to cm/s
 						double const v_min = 3.0;     // Minimum velocity from the distribution
@@ -571,12 +605,16 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					}
 				}
 
-				if (num_particles > 1) { // Update momentum of the low mass star if there is(are) high mass star(s) in the cell
-					const int p_idx = 0;
-					auto &plow = particles[p_idx]; // NOLINT
-					plow.rdata(mass_idx + 1) = -total_momx / plow.rdata(mass_idx);
-					plow.rdata(mass_idx + 2) = -total_momy / plow.rdata(mass_idx);
-					plow.rdata(mass_idx + 3) = -total_momz / plow.rdata(mass_idx);
+				if (num_high > 0) { // Update momentum of the low mass stars if there is(are) high mass star(s) in the cell
+					const amrex::Real vx_low = -total_momx / mass_low_mass_star;
+					const amrex::Real vy_low = -total_momy / mass_low_mass_star;
+					const amrex::Real vz_low = -total_momz / mass_low_mass_star;
+					for (int p_idx = 0; p_idx < num_low; ++p_idx) {
+						auto &plow = particles[p_idx]; // NOLINT
+						plow.rdata(mass_idx + 1) = vx_low;
+						plow.rdata(mass_idx + 2) = vy_low;
+						plow.rdata(mass_idx + 3) = vz_low;
+					}
 				}
 
 				const double factor = (1. - particle_mass / cell_mass);

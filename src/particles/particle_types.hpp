@@ -490,6 +490,9 @@ inline bool disable_particle_drift = false; // NOLINT
 // Maximum velocity limit for stellar particles in cm/s (default: 1000 km/s)
 inline amrex::Real stellar_velocity_limit = 1.0e8; // NOLINT
 
+// Maximum mass for LowMassComposite particles. If <= 0, no splitting is performed.
+inline amrex::Real low_mass_composite_max_mass = -1.0; // NOLINT
+
 inline int reproducibility_roundoff_redundancy = 20; // NOLINT; remove 20 bits from the significand
 
 // Function to parse particle parameters from input file
@@ -522,6 +525,9 @@ inline void particleParmParse()
 
 	// Stellar velocity limit parameter
 	pp.query("stellar_velocity_limit", stellar_velocity_limit);
+
+	// Low-mass composite particle mass cap (split into multiple particles if exceeded)
+	pp.query("low_mass_composite_max_mass", low_mass_composite_max_mass);
 
 	// Roundoff factor for particles
 	pp.query("reproducibility_roundoff_redundancy", reproducibility_roundoff_redundancy);
