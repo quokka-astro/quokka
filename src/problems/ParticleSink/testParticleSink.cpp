@@ -167,8 +167,8 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<SinkProblem> sim;
 
-	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
-	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
+	sim.reconstructionOrder_ = 3;  // 2=PLM, 3=PPM
+	sim.cflNumber_ = 0.3;	       // *must* be less than 1/3 in 3D!
 	sim.stopTime_ = 1000.0 * year; // 1000 years
 	sim.tempFloor_ = 10.0;	       // K
 
@@ -248,7 +248,7 @@ auto problem_main() -> int
 		}
 
 		// exact solution
-		const double rhodot = 7.078494865e-34; // g / cm3 / s
+		const double rhodot = 7.078494865e-34;	   // g / cm3 / s
 		const double drho = rhodot * sim.tNew_[0]; // use actual time evolved instead of dt_init
 
 		// compute density error
@@ -326,7 +326,7 @@ auto problem_main() -> int
 	sim2.reconstructionOrder_ = 3;
 	sim2.cflNumber_ = 0.3;
 	sim2.stopTime_ = 1000.0 * year; // 1000 years
-	sim2.initDt_ = 3e8; // set a small initial dt to limit the accreted mass to a small fraction of the total mass
+	sim2.initDt_ = 3e8;		// set a small initial dt to limit the accreted mass to a small fraction of the total mass
 	sim2.tempFloor_ = 10.0;
 
 	// initialize
@@ -344,7 +344,7 @@ auto problem_main() -> int
 	// solution with the same accuracy as the base simulation matches its analytical solution
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// Compute analytical solution for boosted case based on its actual evolution time
-		const double rhodot = 7.078494865e-34; // g / cm3 / s
+		const double rhodot = 7.078494865e-34;	     // g / cm3 / s
 		const double drho2 = rhodot * sim2.tNew_[0]; // use actual time evolved in boosted frame
 
 		// Compute density error for boosted simulation vs analytical solution
@@ -441,7 +441,8 @@ auto problem_main() -> int
 		amrex::Print() << "Final total mass = " << total_total_mass_phase3_final << "\n";
 
 		// compute relative error in the change of total mass
-		const double rel_error_total_mass_phase3 = std::abs(total_total_mass_phase3_final - total_total_mass_phase3_init) / total_total_mass_phase3_init;
+		const double rel_error_total_mass_phase3 =
+		    std::abs(total_total_mass_phase3_final - total_total_mass_phase3_init) / total_total_mass_phase3_init;
 		amrex::Print() << "Relative error in change of total mass = " << rel_error_total_mass_phase3 << "\n";
 
 		// Total mass should be conserved to machine precision
