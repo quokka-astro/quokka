@@ -201,7 +201,7 @@ auto problem_main() -> int
 	// ============================================================
 	amrex::Print() << "\n=== Phase 1: Base simulation (1 timestep) ===\n";
 	sim.maxTimesteps_ = 1;
-	sim.initShrink_ = 0.001; // set a small initial dt to limit the accreted mass to a small fraction of the total mass
+	sim.initDt_ = 1e8; // set a small initial dt to limit the accreted mass to a small fraction of the total mass
 	sim.evolve();
 
 	// get total gas mass in the final state
@@ -309,20 +309,9 @@ auto problem_main() -> int
 		matplotlibcpp::plot(xs, num_den, num_den_args);
 		matplotlibcpp::xlabel("x (cm)");
 		matplotlibcpp::ylabel("n (cm^-3)");
+		matplotlibcpp::title(fmt::format("t = {:.2e}", sim.tNew_[0]));
 		matplotlibcpp::legend();
 		matplotlibcpp::save("./sink_density.png");
-
-		matplotlibcpp::clf();
-		matplotlibcpp::ylim(0.0, 1.1);
-		matplotlibcpp::xlim(-12, 12);
-		num_den_args["label"] = "simulation";
-		num_den_args["color"] = "red";
-		num_den_args["linestyle"] = "--";
-		matplotlibcpp::plot(xs_over_dx, num_den, num_den_args);
-		matplotlibcpp::xlabel("x / dx");
-		matplotlibcpp::ylabel("n (cm^-3)");
-		matplotlibcpp::legend();
-		matplotlibcpp::save("./sink_density_vs_x_over_dx.png");
 #endif
 	}
 
@@ -337,7 +326,7 @@ auto problem_main() -> int
 	sim2.reconstructionOrder_ = 3;
 	sim2.cflNumber_ = 0.3;
 	sim2.stopTime_ = 1000.0 * year; // 1000 years
-	sim2.initShrink_ = 0.3; // set a small initial dt to limit the accreted mass to a small fraction of the total mass
+	sim2.initDt_ = 3e8; // set a small initial dt to limit the accreted mass to a small fraction of the total mass
 	sim2.tempFloor_ = 10.0;
 
 	// initialize
@@ -360,14 +349,16 @@ auto problem_main() -> int
 
 		// Compute density error for boosted simulation vs analytical solution
 		std::vector<double> rho2(nx);
+		std::vector<double> num_den2(nx);
 		std::vector<double> exact_den2(nx);
+		std::vector<double> exact_num_den2(nx);
 		double err_norm2 = 0.0;
 		double sol_norm2 = 0.0;
 
 		for (int i = 0; i < nx; ++i) {
 			const double x = position2[i];
 			rho2[i] = values2.at(HydroSystem<SinkProblem>::density_index)[i];
-
+			num_den2[i] = rho2[i] / C::m_p; // cm^-3
 			// Analytical solution (same formula as Phase 1, but with drho2)
 			if (std::abs(x) <= overlap_loc) {
 				exact_den2[i] = rho0 - 4 * drho2; // two particles overlapping
@@ -376,9 +367,9 @@ auto problem_main() -> int
 			} else {
 				exact_den2[i] = rho0;
 			}
-
-			sol_norm2 += exact_den2[i] / C::m_p;
-			err_norm2 += std::abs((rho2[i] - exact_den2[i]) / C::m_p);
+			exact_num_den2[i] = exact_den2[i] / C::m_p; // cm^-3
+			sol_norm2 += exact_num_den2[i];
+			err_norm2 += std::abs(num_den2[i] - exact_num_den2[i]);
 		}
 
 		const double rel_error2 = err_norm2 / sol_norm2;
@@ -389,13 +380,32 @@ auto problem_main() -> int
 
 		// Compare error in boosted case to error in base case to validate Galilean invariance
 		// Both should have similar accuracy relative to their respective analytical solutions
-		const double rel_error_tol = 0.01; // Should not expect better than 1% error due to grid drift
+		const double rel_error_tol = 1.0e-5;
 		if (!(std::abs(rel_error2) < rel_error_tol)) {
 			status = 1;
 			amrex::Print() << "Test failed: boosted simulation does not match analytic solution\n";
 		} else {
 			amrex::Print() << "Phase 2 passed: boosted simulation matches analytic solution (Galilean invariance validated)\n";
 		}
+
+#ifdef HAVE_PYTHON
+		matplotlibcpp::clf();
+		matplotlibcpp::ylim(0.0, 1.1);
+		std::map<std::string, std::string> exact_num_den_args;
+		exact_num_den_args["label"] = "exact";
+		exact_num_den_args["color"] = "black";
+		matplotlibcpp::plot(position2, exact_num_den2, exact_num_den_args);
+		std::map<std::string, std::string> num_den_args;
+		num_den_args["label"] = "simulation";
+		num_den_args["color"] = "red";
+		num_den_args["linestyle"] = "--";
+		matplotlibcpp::plot(position2, num_den2, num_den_args);
+		matplotlibcpp::xlabel("x (cm)");
+		matplotlibcpp::ylabel("n (cm^-3)");
+		matplotlibcpp::title(fmt::format("t = {:.2e}", sim2.tNew_[0]));
+		matplotlibcpp::legend();
+		matplotlibcpp::save("./sink_density_boosted.pdf");
+#endif
 	}
 
 	// ============================================================
