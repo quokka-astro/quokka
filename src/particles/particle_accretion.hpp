@@ -35,8 +35,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto get_delta_rho(double rho, double r
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
 compute_Mdot_and_r_K(const amrex::Array4<const amrex::Real> &local_state, int ix, int iy, int iz, double par_mass, double par_x, double par_y, double par_z,
-		     const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
-		     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc = nullptr) -> std::tuple<double, double>
+		     double par_vx, double par_vy, double par_vz, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
+		     const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc = nullptr)
+    -> std::tuple<double, double>
 {
 	const double dx_max = std::max({dx[0], dx[1], dx[2]});
 
@@ -87,9 +88,13 @@ compute_Mdot_and_r_K(const amrex::Array4<const amrex::Real> &local_state, int ix
 		}
 	}
 	const double rho_infty = sum_rho / n_cells;
-	const double vx_infty = sum_px / sum_rho;
-	const double vy_infty = sum_py / sum_rho;
-	const double vz_infty = sum_pz / sum_rho;
+	const double vx_grid = sum_px / sum_rho;
+	const double vy_grid = sum_py / sum_rho;
+	const double vz_grid = sum_pz / sum_rho;
+	// Transform velocities to the particle frame to ensure Galilean invariance
+	const double vx_infty = vx_grid - par_vx;
+	const double vy_infty = vy_grid - par_vy;
+	const double vz_infty = vz_grid - par_vz;
 	const double cs_infty = sum_cs / sum_rho;
 	AMREX_ASSERT(!std::isnan(rho_infty));
 	AMREX_ASSERT(rho_infty > 0.0);
@@ -155,8 +160,8 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 		int iz = static_cast<int>((p.pos(2) - plo[2]) / dx[2]);
 
 		auto const *fab_fc_ptr = (fab_fc[0]) ? &fab_fc : nullptr;
-		const auto [M_dot, r_K] =
-		    compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, p.rdata(0), p.pos(0), p.pos(1), p.pos(2), plo, dx, fab_fc_ptr);
+		const auto [M_dot, r_K] = compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, p.rdata(0), p.pos(0), p.pos(1), p.pos(2), p.rdata(1),
+									       p.rdata(2), p.rdata(3), plo, dx, fab_fc_ptr);
 		AMREX_ASSERT(M_dot >= 0.0);
 
 		// compute the sum of the accretion kernel weight function, w = exp(- r^2 / r_K^2)
@@ -324,8 +329,8 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 
 		// when state_fc is not populated (no fc variables), state_fc[0] will evaluate as false.
 		auto const *fab_fc_ptr = (fab_fc[0]) ? &fab_fc : nullptr;
-		const auto [M_dot, r_K] =
-		    compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, p.rdata(0), p.pos(0), p.pos(1), p.pos(2), plo, dx, fab_fc_ptr);
+		const auto [M_dot, r_K] = compute_Mdot_and_r_K<problem_t>(local_state, ix, iy, iz, p.rdata(0), p.pos(0), p.pos(1), p.pos(2), p.rdata(1),
+									       p.rdata(2), p.rdata(3), plo, dx, fab_fc_ptr);
 
 		// compute the sum of the accretion kernel weight function, w = exp(- r^2 / r_K^2)
 		double w_sum = 0.0;

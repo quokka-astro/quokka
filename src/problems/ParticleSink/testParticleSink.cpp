@@ -66,12 +66,39 @@ template <> struct Physics_Traits<SinkProblem> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
+template <> struct SimulationData<SinkProblem> {
+	AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity{0.0, 0.0, 0.0};
+};
+
 template <> void QuokkaSimulation<SinkProblem>::createInitialSinkParticles()
 {
 	// read particles from ASCII file
 	const int nreal_extra = 4; // mass vx vy vz
 	SinkParticles->SetVerbose(1);
 	SinkParticles->InitFromAsciiFile(particles_file, nreal_extra, nullptr);
+
+	// Apply boost velocity to particles if needed
+	for (int lev = 0; lev <= SinkParticles->finestLevel(); ++lev) {
+		auto &particles = SinkParticles->GetParticles(lev);
+
+		for (auto &kv : particles) {
+			auto &particle_array = kv.second.GetArrayOfStructs();
+			const int np = particle_array.numParticles();
+			auto *pdata = particle_array().data();
+			const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity = userData_.boost_velocity;
+
+			// Launch GPU kernel to apply boost velocity to particles
+			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
+				auto &p = pdata[i]; // NOLINT
+				p.rdata(quokka::SinkParticleVxIdx) += boost_velocity[0];
+				p.rdata(quokka::SinkParticleVyIdx) += boost_velocity[1];
+				p.rdata(quokka::SinkParticleVzIdx) += boost_velocity[2];
+			});
+		}
+	}
+
+	// Ensure GPU operations are complete
+	amrex::Gpu::streamSynchronize();
 }
 
 template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -80,14 +107,17 @@ template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokk
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const double rho_e = CV * T0 * rho0;
 	const double Emag = 0.5 * B0 * B0;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity = userData_.boost_velocity;
+	const double v2 = (userData_.boost_velocity[0] * userData_.boost_velocity[0]) + (userData_.boost_velocity[1] * userData_.boost_velocity[1]) +
+			  (userData_.boost_velocity[2] * userData_.boost_velocity[2]);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = rho0;
-		state_cc(i, j, k, HydroSystem<SinkProblem>::x1Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<SinkProblem>::x2Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<SinkProblem>::x3Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<SinkProblem>::energy_index) = rho_e + Emag;
+		state_cc(i, j, k, HydroSystem<SinkProblem>::x1Momentum_index) = rho0 * boost_velocity[0];
+		state_cc(i, j, k, HydroSystem<SinkProblem>::x2Momentum_index) = rho0 * boost_velocity[1];
+		state_cc(i, j, k, HydroSystem<SinkProblem>::x3Momentum_index) = rho0 * boost_velocity[2];
+		state_cc(i, j, k, HydroSystem<SinkProblem>::energy_index) = rho_e + Emag + 0.5 * rho0 * v2;
 		state_cc(i, j, k, HydroSystem<SinkProblem>::internalEnergy_index) = rho_e;
 	});
 }
@@ -131,14 +161,16 @@ auto problem_main() -> int
 	amrex::ParmParse const pp("problem");
 	pp.query("particles_file", particles_file);
 	pp.query("refine_half_domain", refine_half_domain);
+	double boost_vel_x = 1.0e8;
+	pp.query("boost_vel_x", boost_vel_x);
 
 	// Problem initialization
 	QuokkaSimulation<SinkProblem> sim;
 
 	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
 	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
-	sim.stopTime_ = 10.0 * dt_init;
-	sim.tempFloor_ = 10.0; // K
+	sim.stopTime_ = 1000.0 * year; // 1000 years
+	sim.tempFloor_ = 10.0;	       // K
 
 	// initialize
 	sim.setInitialConditions();
@@ -213,7 +245,7 @@ auto problem_main() -> int
 
 		// exact solution
 		const double rhodot = 7.078494865e-34; // g / cm3 / s
-		const double drho = rhodot * dt_init;
+		const double drho = rhodot * sim.tNew_[0]; // use actual time evolved instead of dt_init
 
 		// compute density error
 		std::vector<double> xs(nx);
@@ -318,8 +350,82 @@ auto problem_main() -> int
 			amrex::Print() << "Test failed: total mass is not conserved at the end of the simulation\n";
 		}
 
+	}
+
+	// Test Galilean invariance by running a boosted simulation
+	amrex::Print() << "\n=== Testing Galilean invariance ===\n";
+
+	QuokkaSimulation<SinkProblem> sim2;
+	sim2.userData_.boost_velocity = {boost_vel_x, 0.0, 0.0};
+
+	sim2.reconstructionOrder_ = 3;
+	sim2.cflNumber_ = 0.3;
+	sim2.stopTime_ = 1000.0 * year; // 1000 years
+	sim2.tempFloor_ = 10.0;
+
+	// initialize
+	sim2.setInitialConditions();
+
+	// evolve only one step to match sim's first evolution
+	sim2.maxTimesteps_ = 0;
+	sim2.evolve();
+
+	// Extract density profile from boosted simulation
+	auto [position2, values2] = fextract(sim2.state_new_cc_[0], sim2.Geom(0), 0, 0.0, true);
+
+	// Compute spatial shift due to boost velocity
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo2 = sim2.geom[0].ProbLoArray();
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi2 = sim2.geom[0].ProbHiArray();
+	const double dx2 = (prob_hi2[0] - prob_lo2[0]) / static_cast<double>(nx);
+	const double move = boost_vel_x * sim2.tNew_[0];
+	const int n_p = static_cast<int>(move / dx2);
+	const int half = static_cast<int>(nx / 2.0);
+	const double drift = move - static_cast<double>(n_p) * dx2;
+	const int shift = n_p - static_cast<int>((n_p + half) / nx) * nx;
+
+	std::vector<double> rho2(nx);
+
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		double rho_value_norm = 0.0;
+		double rho_err_norm = 0.0;
+
+		for (int i = 0; i < nx; ++i) {
+			// Compute the remapped index to account for spatial shift
+			int index_ = 0;
+			if (shift >= 0) {
+				if (i < shift) {
+					index_ = nx - shift + i;
+				} else {
+					index_ = i - shift;
+				}
+			} else {
+				if (i <= nx - 1 + shift) {
+					index_ = i - shift;
+				} else {
+					index_ = i - (nx + shift);
+				}
+			}
+
+			const double rho_base = values.at(HydroSystem<SinkProblem>::density_index)[index_];
+			rho2[index_] = values2.at(HydroSystem<SinkProblem>::density_index)[i];
+
+			rho_value_norm += std::abs(rho_base);
+			rho_err_norm += std::abs(rho2[index_] - rho_base);
+		}
+
+		const double rho_rel_err_norm = rho_err_norm / rho_value_norm;
+		const double rho_rel_err_tol = 0.01; // 1% tolerance for Galilean invariance
+		amrex::Print() << fmt::format("Relative L1 norm for density = {}, tolerance = {}\n", rho_rel_err_norm, rho_rel_err_tol);
+
+		if (!(rho_rel_err_norm < rho_rel_err_tol)) {
+			status = 1;
+			amrex::Print() << "Test failed: Galilean invariance not satisfied for density\n";
+		} else {
+			amrex::Print() << "Galilean invariance test passed for density\n";
+		}
+
 		if (status == 0) {
-			amrex::Print() << "Test passed\n";
+			amrex::Print() << "\nAll tests passed\n";
 		}
 	}
 

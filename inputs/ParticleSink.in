@@ -29,8 +29,7 @@ problem.refine_half_domain = false
 particles.verbose = 1
 particles.sink_particle_use_uniform_kernel = true
 
-max_timesteps = 1
-initial_dt = 9.46728e7
+init_shrink = 0.1  # shrink initial dt to avoid CFL violations with boost velocity
 particle_interval = 1
 
 tiny_profiler.enabled = 0
