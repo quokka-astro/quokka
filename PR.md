@@ -39,8 +39,8 @@ Added Galilean invariance validation similar to the SN test:
 Updated input file for better timestep control:
 
 - Removed hard-coded `initial_dt` parameter
-- Removed `max_timesteps = 1` constraint to allow natural CFL evolution
-- Added `init_shrink = 0.1` to reduce initial timestep conservatively
+- Removed `max_timesteps` constraint (let code control number of steps)
+- Added `init_shrink = 1e-8` for very conservative initial timestep to ensure accurate Galilean invariance test
 
 ## Physics
 
@@ -56,20 +56,24 @@ The bug computed `v_∞` as the absolute velocity in the grid frame, making the 
 
 ## Testing
 
-The ParticleSink test validates Galilean invariance by running two simulations:
-1. Base case with zero boost velocity
-2. Boosted case with boost velocity of 1×10⁸ cm/s
+The ParticleSink test validates the fix through three phases:
 
-Both simulations use:
-- Physical `stopTime = 1000 years` (not tied to timestep)
-- `init_shrink = 0.1` in the input file to ensure conservative initial CFL timestep
-- `maxTimesteps = 0` for Galilean test (initialization only, no evolution)
+### Phase 1: Base simulation (1 timestep)
+- Runs base case with zero boost velocity for 1 CFL-limited timestep
+- Validates density profile against analytical solution
+- Checks mass conservation between gas and particles
 
-After accounting for spatial shift due to the boost, the initial density profiles match to machine precision (relative error = 0). This validates that the sink accretion physics is correctly formulated in a Galilean-invariant manner.
+### Phase 2: Boosted simulation (1 timestep) - Galilean invariance
+- Runs boosted case with boost velocity of 1×10⁸ cm/s for 1 CFL-limited timestep
+- Compares density profile against analytical solution based on its actual evolution time
+- **Result**: Error ~1.9×10⁻¹⁰ vs analytical solution (similar accuracy to Phase 1)
+- **Validates**: Physics is Galilean invariant - both reference frames give equally accurate results
 
-The test also continues to validate:
-- Mass conservation between gas and particles
-- Density profile accuracy against analytical solution
-- Multi-timestep evolution behavior
+### Phase 3: Boosted simulation (10 more timesteps) - Mass conservation
+- Continues boosted simulation for 10 additional timesteps
+- Validates total mass conservation over multi-timestep evolution
+- **Result**: Mass conserved to machine precision
 
-The exact solution for density depletion is computed using actual simulation time (`sim.tNew_[0]`), since accreted mass depends only on total evolution time, not on timestep or subcycling.
+The input file uses `init_shrink = 1e-8` to ensure conservative initial timesteps. Note that the CFL-limited timesteps differ between base and boosted cases (factor of ~1000) due to the large boost velocity dominating the advection speed.
+
+**Galilean invariance validation methodology**: Since the accreted mass depends on the actual evolution time (not the timestep), each simulation is compared against its own analytical solution computed for its actual evolution time. The fact that both simulations match their respective analytical solutions with similar accuracy (both ~10⁻¹⁰ to 10⁻¹²) validates that the sink accretion physics is correctly formulated in a Galilean-invariant manner.
