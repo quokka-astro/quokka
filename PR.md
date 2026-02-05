@@ -59,21 +59,15 @@ The bug computed `v_∞` as the absolute velocity in the grid frame, making the 
 The ParticleSink test validates the fix through three phases:
 
 ### Phase 1: Base simulation (1 timestep)
-- Runs base case with zero boost velocity for 1 CFL-limited timestep
+- Runs base case with zero boost velocity for a fixed timestep
 - Validates density profile against analytical solution
-- Checks mass conservation between gas and particles
 
 ### Phase 2: Boosted simulation (1 timestep) - Galilean invariance
-- Runs boosted case with boost velocity of 1×10⁸ cm/s for 1 CFL-limited timestep
+- Runs boosted case with boost velocity of 1×10⁸ cm/s for a fixed timestep
 - Compares density profile against analytical solution based on its actual evolution time
-- **Result**: Error ~1.9×10⁻¹⁰ vs analytical solution (similar accuracy to Phase 1)
-- **Validates**: Physics is Galilean invariant - both reference frames give equally accurate results
+- Validates that Physics is Galilean invariant - both reference frames give equally accurate results
 
 ### Phase 3: Boosted simulation (10 more timesteps) - Mass conservation
 - Continues boosted simulation for 10 additional timesteps
 - Validates total mass conservation over multi-timestep evolution
-- **Result**: Mass conserved to machine precision
-
-The input file uses `init_shrink = 1e-8` to ensure conservative initial timesteps. Note that the CFL-limited timesteps differ between base and boosted cases (factor of ~1000) due to the large boost velocity dominating the advection speed.
-
-**Galilean invariance validation methodology**: Since the accreted mass depends on the actual evolution time (not the timestep), each simulation is compared against its own analytical solution computed for its actual evolution time. The fact that both simulations match their respective analytical solutions with similar accuracy (both ~10⁻¹⁰ to 10⁻¹²) validates that the sink accretion physics is correctly formulated in a Galilean-invariant manner.
+- Validates that Mass conserved to machine precision

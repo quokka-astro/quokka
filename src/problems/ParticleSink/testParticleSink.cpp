@@ -311,7 +311,7 @@ auto problem_main() -> int
 		matplotlibcpp::ylabel("n (cm^-3)");
 		matplotlibcpp::title(fmt::format("t = {:.2e}", sim.tNew_[0]));
 		matplotlibcpp::legend();
-		matplotlibcpp::save("./sink_density.png");
+		matplotlibcpp::save("./sink_density.pdf");
 #endif
 	}
 
