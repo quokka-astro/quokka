@@ -10,40 +10,6 @@ Fixed a bug in the sink particle accretion module where the accretion rate was n
 
 Updated `compute_Mdot_and_r_K` function to transform velocities to the particle frame:
 
-- Added particle velocity parameters (`par_vx`, `par_vy`, `par_vz`) to function signature
-- Changed velocity calculation from grid frame to particle frame:
-  ```cpp
-  const double vx_grid = sum_px / sum_rho;
-  const double vy_grid = sum_py / sum_rho;
-  const double vz_grid = sum_pz / sum_rho;
-  // Transform velocities to the particle frame to ensure Galilean invariance
-  const double vx_infty = vx_grid - par_vx;
-  const double vy_infty = vy_grid - par_vy;
-  const double vz_infty = vz_grid - par_vz;
-  ```
-- Updated all call sites to pass particle velocities
-
-### 2. testParticleSink.cpp
-
-Added Galilean invariance validation similar to the SN test:
-
-- Added `SimulationData` struct with `boost_velocity` field
-- Updated `createInitialSinkParticles` to apply boost velocity to particles
-- Updated `setInitialConditionsOnGrid` to apply boost velocity to gas
-- Set physical `stopTime = 1000 years` for meaningful time scale
-- Added second simulation run with boost velocity (1×10⁸ cm/s) and comparison logic
-- Validates Galilean invariance of initial conditions to machine precision
-
-### 3. ParticleSink.in
-
-Updated input file for better timestep control:
-
-- Removed hard-coded `initial_dt` parameter
-- Removed `max_timesteps` constraint (let code control number of steps)
-- Added `init_shrink = 1e-8` for very conservative initial timestep to ensure accurate Galilean invariance test
-
-## Physics
-
 The Bondi-Hoyle accretion rate depends on the relative velocity between the gas and the sink particle:
 
 ```
@@ -52,7 +18,7 @@ M_dot = 4π ρ_∞ r_BH² √(v_∞² + λ² c_s²)
 
 where `r_BH = GM / (v_∞² + c_s²)` and `v_∞` is the gas velocity **relative to the particle**.
 
-The bug computed `v_∞` as the absolute velocity in the grid frame, making the accretion rate frame-dependent. The fix transforms velocities to the particle frame, ensuring the accretion physics is Galilean invariant.
+The bug computed `v_∞` as the absolute velocity in the grid frame, making the accretion rate frame-dependent. Particularly, the accretion rate was too low when the sink particle and ambient gas are moving at a high velocity. The fix transforms velocities to the particle frame, ensuring the accretion physics is Galilean invariant.
 
 ## Testing
 
