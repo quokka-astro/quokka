@@ -374,7 +374,12 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	// Specialized nested ParticleChecker for StochasticStellarPop particles
 
 	static constexpr amrex::Real eps_star = 0.5; // fraction of gas mass that goes into star particles
-	static constexpr amrex::Real J = 0.5;	     // Jeans parameter
+	static constexpr amrex::Real J = 0.5;	     // Jeans number (Truelove et al. 1997)
+	// Truncating the collapse at sufficiently low Jeans number is needed to prevent
+	// runaway collapse to very high densities. This is absolutely critical to include because half
+	// of the cell mass will turn into stars and produce composite star particle masses
+	// that are so large they cause heating due to dynamical friction in the galaxy.
+	static constexpr amrex::Real J_truncate = 0.01 * J; // Jeans number for guaranteed star formation
 
 	// Constants for the Chabrier IMF
 	// These are the parameters used in extern/ChabrierIMGCalculation.nb
@@ -414,7 +419,9 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			const amrex::Real cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k, fab_fc);
 			const amrex::Real LambdaJ = cs / std::sqrt(C::Gconst * cell_density);
 			const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * cell_density));
-			const amrex::Real prob_star_formation = (eps_ff_ / eps_star) * (dt / t_ff);
+			const amrex::Real nominal_prob_star_formation = (eps_ff_ / eps_star) * (dt / t_ff);
+			// force P_sf to 1 if we are very far below the Jeans length (as determined by J_truncate)
+			const amrex::Real actual_prob_star_formation = (LambdaJ < (J_truncate * dx[0])) ? 1.0 : nominal_prob_star_formation;
 			const amrex::Real random_draw = amrex::Random(engine);
 			int num_star = 0;
 
@@ -423,7 +430,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			// Checkout docs/star_formation for more details
 
 			if ((LambdaJ < J * dx[0]) &&
-			    random_draw < prob_star_formation) { // Create a particle only if LambdaJ < J*dx and prob_star_formation> random draw
+			    random_draw < actual_prob_star_formation) { // Create a particle only if LambdaJ < J*dx and actual_prob_star_formation > random draw
 				const amrex::Real particle_mass = cell_density * cell_volume * eps_star;
 				const amrex::Real m_high_tot = particle_mass * fstar_high;
 				amrex::Real const num_high_mass_stars_exp = m_high_tot / m_star_high_avg;
@@ -574,9 +581,29 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				if (num_particles > 1) { // Update momentum of the low mass star if there is(are) high mass star(s) in the cell
 					const int p_idx = 0;
 					auto &plow = particles[p_idx]; // NOLINT
-					plow.rdata(mass_idx + 1) = -total_momx / plow.rdata(mass_idx);
-					plow.rdata(mass_idx + 2) = -total_momy / plow.rdata(mass_idx);
-					plow.rdata(mass_idx + 3) = -total_momz / plow.rdata(mass_idx);
+
+					// Calculate the actual total mass of all particles (high-mass stars sampled from IMF + low-mass composite)
+					amrex::Real real_particle_total_mass = mass_low_mass_star;
+					for (int pp = 1; pp < num_particles; ++pp) {
+						real_particle_total_mass += particles[pp].rdata(mass_idx);
+					}
+
+					// Option 1 (preferred): Ensure COM velocity of all stars equals cell velocity (vx, vy, vz).
+					// This may violate momentum conservation because real_particle_total_mass != particle_mass
+					// due to stochastic sampling of high-mass star masses from the IMF.
+					// However, since mass conservation is already violated in a single cell due to stochasticity,
+					// it's more important to preserve correct velocities in a rotating disk.
+					plow.rdata(mass_idx + 1) = (real_particle_total_mass * vx - total_momx) / mass_low_mass_star;
+					plow.rdata(mass_idx + 2) = (real_particle_total_mass * vy - total_momy) / mass_low_mass_star;
+					plow.rdata(mass_idx + 3) = (real_particle_total_mass * vz - total_momz) / mass_low_mass_star;
+
+					// Option 2 (alternative): Guarantee momentum conservation.
+					// This uses particle_mass (the mass removed from the cell) instead of real_particle_total_mass.
+					// While this conserves momentum exactly, it results in incorrect COM velocity because
+					// real_particle_total_mass != particle_mass due to stochastic sampling.
+					// plow.rdata(mass_idx + 1) = (particle_mass * vx - total_momx) / mass_low_mass_star;
+					// plow.rdata(mass_idx + 2) = (particle_mass * vy - total_momy) / mass_low_mass_star;
+					// plow.rdata(mass_idx + 3) = (particle_mass * vz - total_momz) / mass_low_mass_star;
 				}
 
 				const double factor = (1. - particle_mass / cell_mass);
