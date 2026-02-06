@@ -513,6 +513,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				}
 				const int num_high = num_particles - num_low;
 				const amrex::Real mass_low_each = mass_low_mass_star / static_cast<amrex::Real>(num_low);
+				const bool split_low_mass_composite = (num_low > 1);
 
 				// p_idx = 0..(num_low-1) represent the low mass composites, p_idx = num_low.. represent the high mass stars
 
@@ -530,8 +531,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					// This gets changed in the for loop below if this is a high mass star
 					p.idata(evolution_stage_index) = static_cast<int>(StellarEvolutionStage::LowMassComposite);
 
-					if (p_idx < num_low) {
-						// Randomize LowMassComposite position within the cell
+					if ((p_idx < num_low) && split_low_mass_composite) {
+						// Randomize LowMassComposite position within the cell only when split.
 						const amrex::Real rx = amrex::Random(engine);
 						const amrex::Real ry = amrex::Random(engine);
 						const amrex::Real rz = amrex::Random(engine);
