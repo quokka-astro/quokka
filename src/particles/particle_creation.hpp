@@ -508,9 +508,6 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						++num_low;
 					}
 				}
-				if (num_low > num_particles) {
-					num_low = num_particles;
-				}
 				const int num_high = num_particles - num_low;
 				const amrex::Real mass_low_each = mass_low_mass_star / static_cast<amrex::Real>(num_low);
 				const bool split_low_mass_composite = (num_low > 1);
