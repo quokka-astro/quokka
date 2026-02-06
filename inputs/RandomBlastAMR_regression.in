@@ -3,7 +3,7 @@
 # *****************************************************************
 geometry.prob_lo     =  0.0  0.0  0.0 
 geometry.prob_hi     =  3.086e19  3.086e19  3.086e19  # 10 x 10 x 10 pc
-quokka.bc = reflecting reflecting reflecting
+quokka.bc = periodic periodic periodic
 
 # *****************************************************************
 # VERBOSITY
@@ -41,3 +41,5 @@ cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1
 cooling.cooling_table_type = resampled
 cooling.hdf5_data_file = "./CloudyData_UVB=HM2012_resampled.h5"
+
+problem.boost_velocity = 0.0 0.0 0.0
