@@ -16,7 +16,7 @@ nav:
   - Citation: citation.md
   - Physics Modules:
     - Magnetohydrodynamics: mhd_module.md
-    - Star Formation: star_formation.md
+    - Star Formation and Feedback: particles.md
     - Dust Module: dust_module.md
   - Simulation gallery:
     - Hydro: gallery.md
