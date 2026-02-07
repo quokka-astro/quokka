@@ -26,7 +26,7 @@ problem.part_fn = "./particles_stochastic_n100.txt"
 do_reflux = 1
 do_subcycle = 0
 
-cfl = 0.2
+cfl = 0.3
 hydro.reconstruction_order = 3
 derived_vars = temperature
 
