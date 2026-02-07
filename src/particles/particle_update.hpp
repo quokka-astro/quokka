@@ -15,7 +15,7 @@ namespace quokka
 template <ParticleType particleType> struct ParticlePropertyUpdateTraits {
 	// Default implementation - does nothing
 	template <typename problem_t, typename ParticleType, int Nout>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType & /*p*/, amrex::Real /*current_time*/,
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType & /*p*/, amrex::Real /*current_time*/, Real /*dt*/,
 									 LuminosityGpuConstTables<Nout> const & /*gpu_tables*/) noexcept
 	{
 		// Default implementation does nothing
@@ -27,7 +27,7 @@ template <ParticleType particleType> struct ParticlePropertyUpdateTraits {
 // Currently, the default is updateLuminosity. In the future, we can add more properties to update
 template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarPop> {
 	template <typename problem_t, typename ParticleType, int Nout>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType &p, amrex::Real current_time,
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType &p, amrex::Real current_time, Real dt,
 									 LuminosityGpuConstTables<Nout> const &gpu_tables) noexcept
 	{
 		// Update luminosity using the LuminosityUpdate class
@@ -39,13 +39,13 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 // Uses stellar physics calculations (polytropic models, accretion, burning states)
 template <> struct ParticlePropertyUpdateTraits<ParticleType::Star> {
 	template <typename problem_t, typename ParticleType, int Nout>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType &p, amrex::Real current_time,
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType &p, amrex::Real current_time, Real dt,
 									 LuminosityGpuConstTables<Nout> const &gpu_tables) noexcept
 	{
 		// Update stellar properties using the StellarUpdate class
 		// Note: dt is passed via particle data or calculated from current_time
 	  //		amrex::Real dt = compute_time_step(p, current_time);
-		StellarUpdate::updateStellarProperties<problem_t>(p, dt);
+		StellarUpdate::updateStellarProperties<problem_t>(p, current_time, dt, gpu_tables);
 	}
 };
   

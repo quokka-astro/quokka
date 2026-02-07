@@ -174,7 +174,7 @@ class PhysicsParticleDescriptorBase
 	}
 
 	// Update particle properties (e.g., luminosity) based on current state
-	virtual void updateParticleProperties(amrex::Real current_time) { /* Default empty implementation */ }
+	virtual void updateParticleProperties(amrex::Real current_time, Real dt) { /* Default empty implementation */ }
 #endif // AMREX_SPACEDIM == 3
 };
 
@@ -622,7 +622,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	}
 
 	// Override updateParticleProperties for star particles
-	void updateParticleProperties(amrex::Real current_time) override
+	void updateParticleProperties(amrex::Real current_time, Real dt) override
 	{
 		// Use the traits system to update particle properties directly
 		if (this->container_ != nullptr) {
@@ -645,7 +645,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 							auto &p = pData[idx]; // NOLINT
 							ParticlePropertyUpdateTraits<particleType>::template updateProperties<
-							    problem_t, typename ContainerType::ParticleType, nGroups>(p, current_time, gpu_tables);
+							    problem_t, typename ContainerType::ParticleType, nGroups>(p, current_time, dt, gpu_tables);
 						});
 					}
 				}
@@ -1115,11 +1115,11 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Update particle properties for all registered particles
-	void updateParticleProperties(amrex::Real current_time)
+	void updateParticleProperties(amrex::Real current_time, Real dt)
 	{
 		const BL_PROFILE("PhysicsParticleRegister::updateParticleProperties()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
-			descriptor->updateParticleProperties(current_time);
+			descriptor->updateParticleProperties(current_time, dt);
 		}
 	}
 #endif // AMREX_SPACEDIM == 3

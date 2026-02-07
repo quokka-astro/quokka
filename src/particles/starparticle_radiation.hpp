@@ -419,12 +419,11 @@ class StellarUpdate
      template <typename problem_t, typename ParticleType, int Nout,
      quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp>
     AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateStellarProperties(
- 	  ParticleType &p, amrex::Real current_time,
+ 	  ParticleType &p, amrex::Real current_time, Real dt,
           LuminosityGpuConstTables<Nout, oob_policy> const &gpu_tables) noexcept
     {	  
         // Get dt from particle data or compute it
         constexpr int dt_idx = StarParticleDtIdx; // Define this constant
-        amrex::Real dt = p.rdata(dt_idx);
         
         // Call the internal update function
         updateStellarPropertiesImpl(p, dt);
@@ -479,16 +478,13 @@ private:
         }
         
         // Update burning state
-        switch (burn_state) {
-            case BurningState::None:
+        if (burn_state == BurningState::None) {
                 n = n_init(mdot);
                 if (temperature_central(mass, radius, n) > T_deuterium) {
                     burn_state = BurningState::VariableCoreDeuterium;
                     n = 1.5;
                 }
-                break;
-                
-            case BurningState::VariableCoreDeuterium:
+	} else if (burn_state == BurningState::VariableCoreDeuterium) {
                 // Deuterium burning reduces deuterium mass
                 // (simplified for example)
                 mdeut -= 0.1 * mdot * dt;
@@ -496,9 +492,7 @@ private:
                     burn_state = BurningState::SteadyCoreDeuterium;
                     mdeut = 0.0;
                 }
-                break;
-                
-            case BurningState::SteadyCoreDeuterium:
+	} else if (burn_state == BurningState::SteadyCoreDeuterium) {
                 mdeut = 0.0;
                 // Check for radiative barrier
                 // (simplified condition for example)
@@ -507,19 +501,14 @@ private:
                     n = 3.0;
                     radius *= shell_factor;
                 }
-                break;
-                
-            case BurningState::ShellDeuterium:
+	} else if (burn_state == BurningState::ShellDeuterium) {
                 mdeut = 0.0;
                 if (radius <= radius_ZAMS(mass)) {
                     burn_state = BurningState::ZAMS;
                     radius = radius_ZAMS(mass);
                 }
-                break;
-                
-            case BurningState::ZAMS:
+	} else if (burn_state == BurningState::ZAMS) {
                 mdeut = 0.0;
-                break;
         }
         
         // Update particle data
