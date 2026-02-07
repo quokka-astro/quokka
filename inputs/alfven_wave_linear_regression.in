@@ -3,7 +3,7 @@
 # *****************************************************************
 geometry.prob_lo     =  0.0  0.0  0.0 
 geometry.prob_hi     =  1.0  1.0  1.0
-geometry.is_periodic =  1    1    1
+quokka.bc = periodic periodic periodic
 
 # *****************************************************************
 # VERBOSITY
@@ -23,7 +23,7 @@ amr.blocking_factor_z = 64
 do_reflux = 0
 do_subcycle = 0
 
-plotfile_interval = 10
+plotfile_interval = 10000
 plotfile_prefix = alfven_wave_linear_plt
 checkpoint_interval = -1
 cfl = 0.3
@@ -37,6 +37,7 @@ hydro.use_dual_energy = 0
 
 mhd.emf_compute_scheme = Quokka2026
 mhd.emf_averaging_scheme = LondrilloDelZanna2004
+mhd.update_initial_b_energy = false
 
 
 setup.num_modes_x = 1

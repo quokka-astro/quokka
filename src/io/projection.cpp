@@ -570,7 +570,7 @@ void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex
 	}
 
 	// write mf_all to disk
-	const std::string filename = amrex::Concatenate(basename, istep, 5);
+	const std::string filename = amrex::Concatenate(basename, istep, 7);
 	const amrex::Vector<const amrex::MultiFab *> mfs = {&mf_all};
 	amrex::Print() << "Writing projection " << filename << "\n";
 

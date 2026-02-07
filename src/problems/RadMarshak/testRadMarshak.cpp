@@ -122,18 +122,7 @@ AMRSimulation<SuOlsonProblem>::setCustomBoundaryConditions(const amrex::IntVect 
 		return;
 	}
 
-#if (AMREX_SPACEDIM == 1)
-	auto i = iv.toArray()[0];
-	int j = 0;
-	int k = 0;
-#endif
-#if (AMREX_SPACEDIM == 2)
-	auto [i, j] = iv.toArray();
-	int k = 0;
-#endif
-#if (AMREX_SPACEDIM == 3)
-	auto [i, j, k] = iv.toArray();
-#endif
+	auto const [i, j, k] = iv.dim3();
 
 	if (i < 0) {
 		// Marshak boundary condition
@@ -202,17 +191,15 @@ auto problem_main() -> int
 	const int max_timesteps = 2e4;
 	const double CFL_number = 0.4;
 
-	const double initial_dtau = 1e-9; // dimensionless time
-	const double max_dtau = 1e-3;	  // dimensionless time
-	const double max_tau = 10.0;	  // dimensionless time
+	const double max_dtau = 1e-3; // dimensionless time
+	const double max_tau = 10.0;  // dimensionless time
 	// const double Lz = 20.0;	  // dimensionless length
 
 	// Su & Olson (1997) parameters
 	const double chi = rho0 * kappa; // cm^-1 (total matter opacity)
 	// const double Lx = Lz / chi;	// cm
-	const double max_time = max_tau / (eps_SuOlson * c * chi);	  // s
-	const double max_dt = max_dtau / (eps_SuOlson * c * chi);	  // s
-	const double initial_dt = initial_dtau / (eps_SuOlson * c * chi); // s
+	const double max_time = max_tau / (eps_SuOlson * c * chi); // s
+	const double max_dt = max_dtau / (eps_SuOlson * c * chi);  // s
 
 	constexpr int nvars = RadSystem<SuOlsonProblem>::nvar_; // NOLINT(cppcoreguidelines-init-variables)
 	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
@@ -230,7 +217,6 @@ auto problem_main() -> int
 
 	sim.stopTime_ = max_time;
 	sim.radiationCflNumber_ = CFL_number;
-	sim.initDt_ = initial_dt;
 	sim.maxDt_ = max_dt;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.plotfileInterval_ = -1;

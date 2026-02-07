@@ -254,11 +254,8 @@ void QuokkaSimulation<HighMachProblem>::computeReferenceSolution(amrex::MultiFab
 
 auto problem_main() -> int
 {
-	// Problem parameters
-	auto BCs_cc = quokka::BC<HighMachProblem>(quokka::BCType::int_dir);
-
 	// Problem initialization
-	QuokkaSimulation<HighMachProblem> sim(BCs_cc);
+	QuokkaSimulation<HighMachProblem> sim;
 
 	// initialize and evolve
 	sim.setInitialConditions();

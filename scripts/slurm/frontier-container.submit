@@ -1,0 +1,26 @@
+#!/bin/bash
+#SBATCH -t 00:05:00
+#SBATCH -A ast236
+#SBATCH -N 2
+#SBATCH -J frontier_gpu_aware_mpi_example
+#SBATCH -o logs/%x_%j.out
+#SBATCH -e logs/%x_%j.out
+#SBATCH --gpu-bind=closest
+
+module load rocm/6.4.2
+module load cray-mpich-abi/9.0.1
+
+## set Cray MPICH vars
+export MPICH_GPU_SUPPORT_ENABLED=1
+export MPICH_SMP_SINGLE_COPY_MODE=NONE # temporary workaround
+
+## import shared libraries from host filesystem
+export APPTAINER_BINDPATH=/usr/share/libdrm,/var/spool/slurmd,/opt/cray,${PWD}
+export APPTAINERENV_LD_LIBRARY_PATH="$CRAY_MPICH_ROOTDIR/gtl/lib:/opt/rocm/lib:/opt/rocm/lib64:$CRAY_LD_LIBRARY_PATH:$LD_LIBRARY_PATH:/opt/cray/pe/lib64"
+export APPTAINER_CONTAINLIBS="/usr/lib64/libcxi.so.1,/usr/lib64/libjson-c.so.5,/lib64/libtinfo.so.6,/usr/lib64/libnl-3.so.200,/usr/lib64/libgfortran.so.5,/usr/lib64/libjansson.so.4,/usr/lib64/libxpmem.so.0,/usr/lib64/libatomic.so.1"
+export APPTAINERENV_LD_PRELOAD=$CRAY_MPICH_ROOTDIR/gtl/lib/libmpi_gtl_hsa.so.0:
+
+## Run the simulation
+# NOTE: The --rocm flag is required to support AMD GPUs inside the container.
+# NOTE: The SLURM arguments are required. It will fail without them.
+srun -N2 --tasks-per-node=8 --gpus-per-task=1 apptainer exec --workdir `pwd` --rocm quokka_rocm-diskgalaxy.sif DiskGalaxy AgoraGalaxy.in

@@ -104,10 +104,7 @@ auto problem_main() -> int
 	const double max_time = 1.0;
 	const int max_timesteps = 2e4;
 
-	// Problem initialization
-	auto BCs_cc = quokka::BC<WaveProblem>(quokka::BCType::int_dir); // periodic
-
-	QuokkaSimulation<WaveProblem> sim(BCs_cc);
+	QuokkaSimulation<WaveProblem> sim;
 
 	sim.cflNumber_ = CFL_number;
 	sim.stopTime_ = max_time;

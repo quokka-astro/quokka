@@ -101,52 +101,53 @@ template <> void QuokkaSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int numcomp,
-							     amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
-							     int /*bcomp*/, int /*orig_comp*/)
+AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
+							     int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+							     const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
-#if (AMREX_SPACEDIM == 1)
-	auto i = iv.toArray()[0];
-	int j = 0;
-	int k = 0;
-#endif
-#if (AMREX_SPACEDIM == 2)
-	auto [i, j] = iv.toArray();
-	int k = 0;
-#endif
-#if (AMREX_SPACEDIM == 3)
-	auto [i, j, k] = iv.toArray();
-#endif
+	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
+	constexpr int nvar = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
+	const auto gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
 
-	amrex::Box const &box = geom.Domain();
-	amrex::GpuArray<int, 3> lo = box.loVect3d();
-	amrex::GpuArray<int, 3> hi = box.hiVect3d();
+	// Left state
+	const double vx_L = 0.0;
+	const double rho_L = 1.0;
+	const double P_L = (2. / 3.) * 1.0e-1;
+	const double Eint_L = P_L / (gamma - 1.);
+	const double E_L = Eint_L + 0.5 * rho_L * (vx_L * vx_L);
 
-	const double vx = 0.0;
-	double rho = NAN;
-	double P = NAN;
+	// Right state
+	const double vx_R = 0.0;
+	const double rho_R = 1.0e-3;
+	const double P_R = (2. / 3.) * 1.0e-10;
+	const double Eint_R = P_R / (gamma - 1.);
+	const double E_R = Eint_R + 0.5 * rho_R * (vx_R * vx_R);
 
-	if (i < lo[0]) {
-		rho = 1.0;
-		P = (2. / 3.) * 1.0e-1;
-	} else if (i >= hi[0]) {
-		rho = 1.0e-3;
-		P = (2. / 3.) * 1.0e-10;
+	// Prepare left boundary values
+	amrex::GpuArray<amrex::Real, nvar> low_bdr_cells{};
+
+	low_bdr_cells[RadSystem<ShocktubeProblem>::gasDensity_index] = rho_L;
+	low_bdr_cells[RadSystem<ShocktubeProblem>::x1GasMomentum_index] = rho_L * vx_L;
+	low_bdr_cells[RadSystem<ShocktubeProblem>::x2GasMomentum_index] = 0.;
+	low_bdr_cells[RadSystem<ShocktubeProblem>::x3GasMomentum_index] = 0.;
+	low_bdr_cells[RadSystem<ShocktubeProblem>::gasEnergy_index] = E_L;
+	low_bdr_cells[RadSystem<ShocktubeProblem>::gasInternalEnergy_index] = Eint_L;
+
+	// Prepare right boundary values
+	amrex::GpuArray<amrex::Real, nvar> high_bdr_cells{};
+	for (int n = 0; n < nvar; ++n) {
+		high_bdr_cells[n] = 0;
 	}
+	high_bdr_cells[RadSystem<ShocktubeProblem>::gasDensity_index] = rho_R;
+	high_bdr_cells[RadSystem<ShocktubeProblem>::x1GasMomentum_index] = rho_R * vx_R;
+	high_bdr_cells[RadSystem<ShocktubeProblem>::x2GasMomentum_index] = 0.;
+	high_bdr_cells[RadSystem<ShocktubeProblem>::x3GasMomentum_index] = 0.;
+	high_bdr_cells[RadSystem<ShocktubeProblem>::gasEnergy_index] = E_R;
+	high_bdr_cells[RadSystem<ShocktubeProblem>::gasInternalEnergy_index] = Eint_R;
 
-	double const Eint = P / (quokka::EOS_Traits<ShocktubeProblem>::gamma - 1.);
-	double const E = Eint + 0.5 * rho * (vx * vx);
-
-	for (int n = 0; n < numcomp; ++n) {
-		consVar(i, j, k, n) = 0;
-	}
-
-	consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho;
-	consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = rho * vx;
-	consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
-	consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
-	consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) = E;
-	consVar(i, j, k, RadSystem<ShocktubeProblem>::gasInternalEnergy_index) = Eint;
+	// Apply boundary conditions using helper functions (direction 0 = x-axis)
+	setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
+	setConstantDirichletBCHi<0>(iv, consVar, geom, high_bdr_cells);
 }
 
 template <>
@@ -349,18 +350,16 @@ auto problem_main() -> int
 	const double CFL_number = 0.1;
 	const double max_time = 6.0;
 	const double max_dt = 1e-3;
-	const double initial_dt = 1e-5;
 	const int max_timesteps = 50000;
 
 	auto BCs_cc = quokka::BC<ShocktubeProblem>(quokka::BCType::foextrap, quokka::BCType::int_dir, quokka::BCType::int_dir);
 
-	QuokkaSimulation<ShocktubeProblem> sim(BCs_cc);
+	QuokkaSimulation<ShocktubeProblem> sim;
 
 	sim.cflNumber_ = CFL_number;
 	sim.maxDt_ = max_dt;
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
-	sim.initDt_ = initial_dt;
 
 	sim.plotfileInterval_ = -1;
 

@@ -35,6 +35,7 @@ class DiagPDF : public DiagBase::Register<DiagPDF>
 	std::vector<bool> m_useFieldMinMax{};  // Use min/max from field
 	std::vector<amrex::Real> m_lowBnd{};   // User-defined low bound
 	std::vector<amrex::Real> m_highBnd{};  // User-defined high bound
+	bool m_reportedRange{false};
 
 	// Geometrical data
 	amrex::Vector<amrex::Geometry> m_geoms; // Squirrel away the geoms
@@ -84,6 +85,14 @@ template <typename problem_t> void DiagPDF::processDiag(int a_nstep, const amrex
 	amrex::Vector<amrex::Real> transformed_binWidth(nvars);
 	amrex::Vector<amrex::Real> transformed_lowBnd(nvars);
 
+	if (!m_reportedRange) {
+		for (int n = 0; n < fieldIdx.size(); ++n) {
+			amrex::ignore_unused(MFVecMin(a_state, fieldIdx[n]));
+			amrex::ignore_unused(MFVecMax(a_state, fieldIdx[n]));
+		}
+		m_reportedRange = true;
+	}
+
 	for (int n = 0; n < fieldIdx.size(); ++n) {
 		if (m_useFieldMinMax[n]) {
 			m_lowBnd[n] = MFVecMin(a_state, fieldIdx[n]);
@@ -100,7 +109,6 @@ template <typename problem_t> void DiagPDF::processDiag(int a_nstep, const amrex
 
 	// Populate the data from each level on each proc
 	for (int lev = 0; lev < a_state.size(); ++lev) {
-
 		// Make mask tagging fine-covered and filtered cells
 		amrex::iMultiFab mask;
 		if (lev == a_state.size() - 1) {

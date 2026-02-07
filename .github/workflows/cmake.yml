@@ -53,7 +53,7 @@ jobs:
       run: .github/workflows/dependencies/dependencies_ccache.sh
 
     - name: Set Up Cache
-      uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
         path: ~/.cache/ccache
         key: ccache-${{ github.workflow }}-${{ github.job }}-git-${{ github.sha }}
@@ -61,7 +61,7 @@ jobs:
              ccache-${{ github.workflow }}-${{ github.job }}-git-
 
     - name: Install Canary
-      run: python3 -m pip install "canary-wm @ git+https://github.com/sandialabs/canary"
+      run: python3 -m pip install canary-wm
 
     - name: Initialize ccache
       run: |

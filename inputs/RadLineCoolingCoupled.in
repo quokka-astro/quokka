@@ -3,7 +3,7 @@
 # *****************************************************************
 geometry.prob_lo     =  0.0  0.0  0.0 
 geometry.prob_hi     =  64.0  1.0  1.0
-geometry.is_periodic =  1    1    1
+quokka.bc = periodic periodic periodic
 
 # *****************************************************************
 # VERBOSITY
@@ -24,3 +24,4 @@ radiation.dust_gas_interaction_coeff = 1e20
 do_reflux = 0
 do_subcycle = 0
 suppress_output = 1
+initial_dt = 1.0e-2

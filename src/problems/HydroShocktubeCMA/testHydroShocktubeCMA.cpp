@@ -23,6 +23,7 @@
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
+#include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/ArrayUtil.hpp"
 #include "util/BC.hpp"
@@ -128,62 +129,51 @@ template <> void QuokkaSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int numcomp,
-							     amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
-							     int /*bcomp*/, int /*orig_comp*/)
+AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
+							     int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+							     const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
-#if (AMREX_SPACEDIM == 1)
-	auto i = iv.toArray()[0];
-	int const j = 0;
-	int const k = 0;
-#endif
-#if (AMREX_SPACEDIM == 2)
-	auto [i, j] = iv.toArray();
-	int const k = 0;
-#endif
-#if (AMREX_SPACEDIM == 3)
-	auto [i, j, k] = iv.toArray();
-#endif
-
-	amrex::Box const &box = geom.Domain();
-	amrex::GpuArray<int, 3> lo = box.loVect3d();
-	amrex::GpuArray<int, 3> hi = box.hiVect3d();
+	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
+	constexpr int nvar = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
 	const auto gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
 
-	if (i < lo[0]) {
-		// x1 left side boundary -- constant
-		for (int n = 0; n < numcomp; ++n) {
-			consVar(i, j, k, n) = 0;
-		}
-
-		consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) = P_L / (gamma - 1.);
-		consVar(i, j, k, RadSystem<ShocktubeProblem>::gasInternalEnergy_index) = P_L / (gamma - 1.);
-		consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho_L;
-		consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
-
-		consVar(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 0) = 0.8 * rho_L;
-		consVar(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 1) = 0.3 * pow(sin(20 * 3.14 * 0), 2) * rho_L;
-		consVar(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 2) = 1 - 0.8 - 0.3 * pow(sin(20 * 3.14 * 0), 2) * rho_L;
-
-	} else if (i >= hi[0]) {
-		// x1 right-side boundary -- constant
-		for (int n = 0; n < numcomp; ++n) {
-			consVar(i, j, k, n) = 0;
-		}
-
-		consVar(i, j, k, RadSystem<ShocktubeProblem>::gasEnergy_index) = P_R / (gamma - 1.);
-		consVar(i, j, k, RadSystem<ShocktubeProblem>::gasInternalEnergy_index) = P_R / (gamma - 1.);
-		consVar(i, j, k, RadSystem<ShocktubeProblem>::gasDensity_index) = rho_R;
-		consVar(i, j, k, RadSystem<ShocktubeProblem>::x1GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<ShocktubeProblem>::x2GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<ShocktubeProblem>::x3GasMomentum_index) = 0.;
-
-		consVar(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 0) = 0.1 * rho_R;
-		consVar(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 1) = 0.3 * pow(sin(20 * 3.14 * 1), 2) * rho_R;
-		consVar(i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 2) = 1 - 0.1 - 0.3 * pow(sin(20 * 3.14 * 1), 2) * rho_R;
+	// Prepare left boundary values (left state)
+	amrex::GpuArray<amrex::Real, nvar> low_bdr_cells{};
+	// Initialize all to 0 first
+	for (int n = 0; n < nvar; ++n) {
+		low_bdr_cells[n] = 0;
 	}
+	// Set specific values
+	low_bdr_cells[RadSystem<ShocktubeProblem>::gasEnergy_index] = P_L / (gamma - 1.);
+	low_bdr_cells[RadSystem<ShocktubeProblem>::gasInternalEnergy_index] = P_L / (gamma - 1.);
+	low_bdr_cells[RadSystem<ShocktubeProblem>::gasDensity_index] = rho_L;
+	low_bdr_cells[RadSystem<ShocktubeProblem>::x1GasMomentum_index] = 0.;
+	low_bdr_cells[RadSystem<ShocktubeProblem>::x2GasMomentum_index] = 0.;
+	low_bdr_cells[RadSystem<ShocktubeProblem>::x3GasMomentum_index] = 0.;
+	low_bdr_cells[HydroSystem<ShocktubeProblem>::scalar0_index + 0] = 0.8 * rho_L;
+	low_bdr_cells[HydroSystem<ShocktubeProblem>::scalar0_index + 1] = 0.3 * pow(sin(20 * 3.14 * 0), 2) * rho_L;
+	low_bdr_cells[HydroSystem<ShocktubeProblem>::scalar0_index + 2] = 1 - 0.8 - 0.3 * pow(sin(20 * 3.14 * 0), 2) * rho_L;
+
+	// Prepare right boundary values (right state)
+	amrex::GpuArray<amrex::Real, nvar> high_bdr_cells{};
+	// Initialize all to 0 first
+	for (int n = 0; n < nvar; ++n) {
+		high_bdr_cells[n] = 0;
+	}
+	// Set specific values
+	high_bdr_cells[RadSystem<ShocktubeProblem>::gasEnergy_index] = P_R / (gamma - 1.);
+	high_bdr_cells[RadSystem<ShocktubeProblem>::gasInternalEnergy_index] = P_R / (gamma - 1.);
+	high_bdr_cells[RadSystem<ShocktubeProblem>::gasDensity_index] = rho_R;
+	high_bdr_cells[RadSystem<ShocktubeProblem>::x1GasMomentum_index] = 0.;
+	high_bdr_cells[RadSystem<ShocktubeProblem>::x2GasMomentum_index] = 0.;
+	high_bdr_cells[RadSystem<ShocktubeProblem>::x3GasMomentum_index] = 0.;
+	high_bdr_cells[HydroSystem<ShocktubeProblem>::scalar0_index + 0] = 0.1 * rho_R;
+	high_bdr_cells[HydroSystem<ShocktubeProblem>::scalar0_index + 1] = 0.3 * pow(sin(20 * 3.14 * 1), 2) * rho_R;
+	high_bdr_cells[HydroSystem<ShocktubeProblem>::scalar0_index + 2] = 1 - 0.1 - 0.3 * pow(sin(20 * 3.14 * 1), 2) * rho_R;
+
+	// Apply boundary conditions using helper functions (direction 0 = x-axis)
+	setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
+	setConstantDirichletBCHi<0>(iv, consVar, geom, high_bdr_cells);
 }
 
 template <> void QuokkaSimulation<ShocktubeProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)
@@ -251,9 +241,7 @@ auto problem_main() -> int
 	const double max_time = 1.0;
 	const int max_timesteps = 80000;
 
-	auto BCs_cc = quokka::BC<ShocktubeProblem>(quokka::BCType::ext_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
-
-	QuokkaSimulation<ShocktubeProblem> sim(BCs_cc);
+	QuokkaSimulation<ShocktubeProblem> sim;
 
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;

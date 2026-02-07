@@ -3,7 +3,7 @@
 # *****************************************************************
 geometry.prob_lo     =  0.0  0.0  0.0 
 geometry.prob_hi     =  2.4688e+21  6.172e+20  6.172e+20  # 800 x 200 x 200 pc
-geometry.is_periodic =  0    1    1
+quokka.bc = ext_dir periodic periodic
 
 # *****************************************************************
 # VERBOSITY
@@ -62,7 +62,6 @@ quokka.slice_z.file = slicez_plt       # Output file prefix (should end in "plt"
 quokka.slice_z.normal = 2              # Plane normal (0 == x, 1 == y, 2 == z)
 quokka.slice_z.center = 3.086e20       # Coordinate in the normal direction
 quokka.slice_z.int    = 200            # Output interval (in number of coarse steps)
-quokka.slice_z.interpolation = Linear  # Interpolation type: Linear or Quadratic (default: Linear)
 quokka.slice_z.field_names = gasDensity pressure entropy nH temperature cooling_length \
 	       cloud_fraction lab_velocity_x mass velocity_mag c_s
 

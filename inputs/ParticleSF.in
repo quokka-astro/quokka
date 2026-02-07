@@ -3,7 +3,7 @@
 # *****************************************************************
 geometry.prob_lo     =  -3.949667304e+19 -3.949667304e+19 -3.949667304e+19
 geometry.prob_hi     =  3.949667304e+19 3.949667304e+19 3.949667304e+19
-geometry.is_periodic =  1    1    1
+quokka.bc = periodic periodic periodic
 
 # *****************************************************************
 # VERBOSITY
@@ -36,7 +36,18 @@ problem.n0 = 1.0e5
 problem.Tamb = 1.0e1
 
 max_timesteps = 10
+initial_dt = 3.15576e12
 plotfile_interval = 5
 checkpoint_interval = 5
-#SFH_interval = 3
-SFH_time_interval = 4e10
+
+# *****************************************************************
+# Cooling parameters
+# *****************************************************************
+cooling.enabled = 1
+cooling.cooling_table_type = resampled
+cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled_no_PE.h5"
+use_sfh_based_pe_heating = true
+sfh_to_pe_heating_table = "../extern/cooling/photoelectric_heating_from_sfh.csv"
+#sfh_interval = 3
+sfh_time_interval = 4e10 		# years
+sf_area_kpc2 = 1.0 					# kpc^2

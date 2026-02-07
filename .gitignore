@@ -6,6 +6,7 @@ compile_commands.json
 .vscode/
 codeql-db/
 build/
+build_lint/
 docs/doxygen/
 tests/last_chk
 tests/plt*
@@ -19,6 +20,8 @@ __pycache__
 *.code-workspace
 *.sarif
 Backtrace.*
+
+*.hdf5
 
 # Agora galaxy uncompressed data
 /extern/agora_data/vcirc.dat
@@ -102,3 +105,6 @@ KokkosCore_config.tmp
 *.exe
 *.out
 *.app
+
+# hdf5 files
+*.hdf5

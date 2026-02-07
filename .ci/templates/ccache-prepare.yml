@@ -1,0 +1,18 @@
+# Reusable template for preparing and configuring ccache
+steps:
+- script: |
+    mkdir -p "$CCACHE_DIR"
+    if command -v ccache >/dev/null 2>&1; then
+      ccache --set-config=max_size=5G
+      ccache --set-config=compression=true
+      ccache --set-config=compression_level=6
+      ccache --cleanup || true
+      ccache --zero-stats || true
+      echo "ccache configuration:"
+      ccache --show-config | grep -E "(max_size|compression)" || true
+    else
+      echo "ccache not installed; skipping zero-stats."
+    fi
+  displayName: Prepare ccache
+  env:
+    CCACHE_DIR: $(Agent.HomeDirectory)/cache/ccache

@@ -66,12 +66,39 @@ template <> struct Physics_Traits<SinkProblem> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
+template <> struct SimulationData<SinkProblem> {
+	AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity{0.0, 0.0, 0.0};
+};
+
 template <> void QuokkaSimulation<SinkProblem>::createInitialSinkParticles()
 {
 	// read particles from ASCII file
 	const int nreal_extra = 4; // mass vx vy vz
 	SinkParticles->SetVerbose(1);
 	SinkParticles->InitFromAsciiFile(particles_file, nreal_extra, nullptr);
+
+	// Apply boost velocity to particles if needed
+	for (int lev = 0; lev <= SinkParticles->finestLevel(); ++lev) {
+		auto &particles = SinkParticles->GetParticles(lev);
+
+		for (auto &kv : particles) {
+			auto &particle_array = kv.second.GetArrayOfStructs();
+			const int np = particle_array.numParticles();
+			auto *pdata = particle_array().data();
+			const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity = userData_.boost_velocity;
+
+			// Launch GPU kernel to apply boost velocity to particles
+			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
+				auto &p = pdata[i]; // NOLINT
+				p.rdata(quokka::SinkParticleVxIdx) += boost_velocity[0];
+				p.rdata(quokka::SinkParticleVyIdx) += boost_velocity[1];
+				p.rdata(quokka::SinkParticleVzIdx) += boost_velocity[2];
+			});
+		}
+	}
+
+	// Ensure GPU operations are complete
+	amrex::Gpu::streamSynchronize();
 }
 
 template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -80,14 +107,17 @@ template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokk
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const double rho_e = CV * T0 * rho0;
 	const double Emag = 0.5 * B0 * B0;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity = userData_.boost_velocity;
+	const double v2 = (userData_.boost_velocity[0] * userData_.boost_velocity[0]) + (userData_.boost_velocity[1] * userData_.boost_velocity[1]) +
+			  (userData_.boost_velocity[2] * userData_.boost_velocity[2]);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		state_cc(i, j, k, HydroSystem<SinkProblem>::density_index) = rho0;
-		state_cc(i, j, k, HydroSystem<SinkProblem>::x1Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<SinkProblem>::x2Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<SinkProblem>::x3Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<SinkProblem>::energy_index) = rho_e + Emag;
+		state_cc(i, j, k, HydroSystem<SinkProblem>::x1Momentum_index) = rho0 * boost_velocity[0];
+		state_cc(i, j, k, HydroSystem<SinkProblem>::x2Momentum_index) = rho0 * boost_velocity[1];
+		state_cc(i, j, k, HydroSystem<SinkProblem>::x3Momentum_index) = rho0 * boost_velocity[2];
+		state_cc(i, j, k, HydroSystem<SinkProblem>::energy_index) = rho_e + Emag + 0.5 * rho0 * v2;
 		state_cc(i, j, k, HydroSystem<SinkProblem>::internalEnergy_index) = rho_e;
 	});
 }
@@ -128,29 +158,19 @@ template <> void QuokkaSimulation<SinkProblem>::refineGrid(int lev, amrex::TagBo
 
 auto problem_main() -> int
 {
-	auto BCs_cc = quokka::BC<SinkProblem>(quokka::BCType::reflecting);
-
-	const int nvars_fc = Physics_Indices<SinkProblem>::nvarTotal_fc;
-	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
-	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_fc[icomp].setLo(idim, amrex::BCType::reflect_even);
-			BCs_fc[icomp].setHi(idim, amrex::BCType::reflect_even);
-		}
-	}
-
 	amrex::ParmParse const pp("problem");
 	pp.query("particles_file", particles_file);
 	pp.query("refine_half_domain", refine_half_domain);
+	double boost_vel_x = 1.0e8;
+	pp.query("boost_vel_x", boost_vel_x);
 
 	// Problem initialization
-	QuokkaSimulation<SinkProblem> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<SinkProblem> sim;
 
-	sim.reconstructionOrder_ = 3; // 2=PLM, 3=PPM
-	sim.cflNumber_ = 0.3;	      // *must* be less than 1/3 in 3D!
-	sim.stopTime_ = 10.0 * dt_init;
-	sim.initDt_ = dt_init;
-	sim.tempFloor_ = 10.0; // K
+	sim.reconstructionOrder_ = 3;  // 2=PLM, 3=PPM
+	sim.cflNumber_ = 0.3;	       // *must* be less than 1/3 in 3D!
+	sim.stopTime_ = 1000.0 * year; // 1000 years
+	sim.tempFloor_ = 10.0;	       // K
 
 	// initialize
 	sim.setInitialConditions();
@@ -176,8 +196,12 @@ auto problem_main() -> int
 
 	const double total_total_mass_init = total_mass_init + total_particle_mass;
 
-	// evolve
-	sim.maxTimesteps_ = 0;
+	// ============================================================
+	// Phase 1: Run base simulation for 1 timestep and validate against analytic solution
+	// ============================================================
+	amrex::Print() << "\n=== Phase 1: Base simulation (1 timestep) ===\n";
+	sim.maxTimesteps_ = 1;
+	sim.initDt_ = 1e8; // set a small initial dt to limit the accreted mass to a small fraction of the total mass
 	sim.evolve();
 
 	// get total gas mass in the final state
@@ -224,8 +248,8 @@ auto problem_main() -> int
 		}
 
 		// exact solution
-		const double rhodot = 7.078494865e-34; // g / cm3 / s
-		const double drho = rhodot * dt_init;
+		const double rhodot = 7.078494865e-34;	   // g / cm3 / s
+		const double drho = rhodot * sim.tNew_[0]; // use actual time evolved instead of dt_init
 
 		// compute density error
 		std::vector<double> xs(nx);
@@ -257,16 +281,18 @@ auto problem_main() -> int
 		}
 
 		const double rel_error = err_norm / sol_norm;
-		amrex::Print() << "\nCheck density profile:\n";
+		amrex::Print() << "\nCheck density profile vs analytic solution:\n";
 		amrex::Print() << "Error norm = " << err_norm << "\n";
 		amrex::Print() << "Solution norm = " << sol_norm << "\n";
 		amrex::Print() << "Relative L1 error norm = " << rel_error << "\n";
 
 		// The relative L1 error norm with respect to the exact solution could be large because there is a hydro update after sink accretion.
 		const double rel_error_tol = 3.0e-6;
-		if (!(rel_error < rel_error_tol)) {
+		if (!(std::abs(rel_error) < rel_error_tol)) {
 			status = 1;
-			amrex::Print() << "Test failed: density profile is not correct\n";
+			amrex::Print() << "Test failed: density profile does not match analytic solution\n";
+		} else {
+			amrex::Print() << "Phase 1 passed: density profile matches analytic solution\n";
 		}
 
 #ifdef HAVE_PYTHON
@@ -283,55 +309,153 @@ auto problem_main() -> int
 		matplotlibcpp::plot(xs, num_den, num_den_args);
 		matplotlibcpp::xlabel("x (cm)");
 		matplotlibcpp::ylabel("n (cm^-3)");
+		matplotlibcpp::title(fmt::format("t = {:.2e}", sim.tNew_[0]));
 		matplotlibcpp::legend();
-		matplotlibcpp::save("./sink_density.png");
-
-		matplotlibcpp::clf();
-		matplotlibcpp::ylim(0.0, 1.1);
-		matplotlibcpp::xlim(-12, 12);
-		num_den_args["label"] = "simulation";
-		num_den_args["color"] = "red";
-		num_den_args["linestyle"] = "--";
-		matplotlibcpp::plot(xs_over_dx, num_den, num_den_args);
-		matplotlibcpp::xlabel("x / dx");
-		matplotlibcpp::ylabel("n (cm^-3)");
-		matplotlibcpp::legend();
-		matplotlibcpp::save("./sink_density_vs_x_over_dx.png");
+		matplotlibcpp::save("./sink_density.pdf");
 #endif
 	}
 
-	// evolve
-	sim.maxTimesteps_ = 10;
-	sim.evolve();
+	// ============================================================
+	// Phase 2: Run boosted simulation for 1 timestep and validate Galilean invariance
+	// ============================================================
+	amrex::Print() << "\n=== Phase 2: Boosted simulation (1 timestep) - Galilean invariance test ===\n";
 
-	// get total particle mass in the final state
-	const auto &real_data_final = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
-	double total_particle_mass_final = 0.0;
-	for (const auto &p : real_data_final) {
-		total_particle_mass_final += p[3];
+	QuokkaSimulation<SinkProblem> sim2;
+	sim2.userData_.boost_velocity = {boost_vel_x, 0.0, 0.0};
+
+	sim2.reconstructionOrder_ = 3;
+	sim2.cflNumber_ = 0.3;
+	sim2.stopTime_ = 1000.0 * year; // 1000 years
+	sim2.initDt_ = 3e8;		// set a small initial dt to limit the accreted mass to a small fraction of the total mass
+	sim2.tempFloor_ = 10.0;
+
+	// initialize
+	sim2.setInitialConditions();
+
+	// evolve for 1 timestep to match sim's Phase 1
+	sim2.maxTimesteps_ = 1;
+	sim2.evolve();
+
+	// Extract density profile from boosted simulation
+	auto [position2, values2] = fextract(sim2.state_new_cc_[0], sim2.Geom(0), 0, 0.0, true);
+
+	// Validate boosted simulation against analytical solution (Galilean invariance test)
+	// If the physics is Galilean invariant, the boosted simulation should match its analytical
+	// solution with the same accuracy as the base simulation matches its analytical solution
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		// Compute analytical solution for boosted case based on its actual evolution time
+		const double rhodot = 7.078494865e-34;	     // g / cm3 / s
+		const double drho2 = rhodot * sim2.tNew_[0]; // use actual time evolved in boosted frame
+
+		// Compute density error for boosted simulation vs analytical solution
+		std::vector<double> rho2(nx);
+		std::vector<double> num_den2(nx);
+		std::vector<double> exact_den2(nx);
+		std::vector<double> exact_num_den2(nx);
+		double err_norm2 = 0.0;
+		double sol_norm2 = 0.0;
+
+		for (int i = 0; i < nx; ++i) {
+			const double x = position2[i];
+			rho2[i] = values2.at(HydroSystem<SinkProblem>::density_index)[i];
+			num_den2[i] = rho2[i] / C::m_p; // cm^-3
+			// Analytical solution (same formula as Phase 1, but with drho2)
+			if (std::abs(x) <= overlap_loc) {
+				exact_den2[i] = rho0 - 4 * drho2; // two particles overlapping
+			} else if (std::abs(x) <= outer_radius) {
+				exact_den2[i] = rho0 - 2 * drho2; // two particles non-overlapping
+			} else {
+				exact_den2[i] = rho0;
+			}
+			exact_num_den2[i] = exact_den2[i] / C::m_p; // cm^-3
+			sol_norm2 += exact_num_den2[i];
+			err_norm2 += std::abs(num_den2[i] - exact_num_den2[i]);
+		}
+
+		const double rel_error2 = err_norm2 / sol_norm2;
+		amrex::Print() << "\nCheck boosted density profile vs analytic solution:\n";
+		amrex::Print() << "Error norm = " << err_norm2 << "\n";
+		amrex::Print() << "Solution norm = " << sol_norm2 << "\n";
+		amrex::Print() << "Relative L1 error norm = " << rel_error2 << "\n";
+
+		// Compare error in boosted case to error in base case to validate Galilean invariance
+		// Both should have similar accuracy relative to their respective analytical solutions
+		const double rel_error_tol = 1.0e-5;
+		if (!(std::abs(rel_error2) < rel_error_tol)) {
+			status = 1;
+			amrex::Print() << "Test failed: boosted simulation does not match analytic solution\n";
+		} else {
+			amrex::Print() << "Phase 2 passed: boosted simulation matches analytic solution (Galilean invariance validated)\n";
+		}
+
+#ifdef HAVE_PYTHON
+		matplotlibcpp::clf();
+		matplotlibcpp::ylim(0.0, 1.1);
+		std::map<std::string, std::string> exact_num_den_args;
+		exact_num_den_args["label"] = "exact";
+		exact_num_den_args["color"] = "black";
+		matplotlibcpp::plot(position2, exact_num_den2, exact_num_den_args);
+		std::map<std::string, std::string> num_den_args;
+		num_den_args["label"] = "simulation";
+		num_den_args["color"] = "red";
+		num_den_args["linestyle"] = "--";
+		matplotlibcpp::plot(position2, num_den2, num_den_args);
+		matplotlibcpp::xlabel("x (cm)");
+		matplotlibcpp::ylabel("n (cm^-3)");
+		matplotlibcpp::title(fmt::format("t = {:.2e}", sim2.tNew_[0]));
+		matplotlibcpp::legend();
+		matplotlibcpp::save("./sink_density_boosted.pdf");
+#endif
 	}
-	amrex::Print() << "Total particle mass = " << total_particle_mass_final << "\n";
 
-	// get total gas mass in the final state
-	amrex::Real const total_mass_final = sim.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
+	// ============================================================
+	// Phase 3: Continue boosted simulation for 10 more timesteps and check mass conservation
+	// ============================================================
+	amrex::Print() << "\n=== Phase 3: Boosted simulation (10 more timesteps) - mass conservation test ===\n";
+
+	// Get initial mass for Phase 3
+	amrex::Real const total_mass_phase3_init = sim2.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
+	const auto &real_data_phase3_init = sim2.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
+	double total_particle_mass_phase3_init = 0.0;
+	for (const auto &p : real_data_phase3_init) {
+		total_particle_mass_phase3_init += p[3];
+	}
+	const double total_total_mass_phase3_init = total_mass_phase3_init + total_particle_mass_phase3_init;
+
+	// Continue evolution for 10 more timesteps
+	sim2.maxTimesteps_ = 11; // already did 1, so total will be 11
+	sim2.evolve();
+
+	// Get final mass for Phase 3
+	amrex::Real const total_mass_phase3_final = sim2.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
+	const auto &real_data_phase3_final = sim2.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
+	double total_particle_mass_phase3_final = 0.0;
+	for (const auto &p : real_data_phase3_final) {
+		total_particle_mass_phase3_final += p[3];
+	}
+	const double total_total_mass_phase3_final = total_mass_phase3_final + total_particle_mass_phase3_final;
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		amrex::Print() << "Total gas mass = " << total_mass_final << "\n";
-		const double total_total_mass_final = total_mass_final + total_particle_mass_final;
+		amrex::Print() << "\nPhase 3 mass conservation check:\n";
+		amrex::Print() << "Initial total mass = " << total_total_mass_phase3_init << "\n";
+		amrex::Print() << "Final total mass = " << total_total_mass_phase3_final << "\n";
 
 		// compute relative error in the change of total mass
-		const double rel_error_total_mass_final = std::abs(total_total_mass_final - total_total_mass_init) / total_total_mass_init;
-		amrex::Print() << "Relative error in change of total mass = " << rel_error_total_mass_final << "\n";
+		const double rel_error_total_mass_phase3 =
+		    std::abs(total_total_mass_phase3_final - total_total_mass_phase3_init) / total_total_mass_phase3_init;
+		amrex::Print() << "Relative error in change of total mass = " << rel_error_total_mass_phase3 << "\n";
 
 		// Total mass should be conserved to machine precision
 		const double mass_rel_error_tol = 1.0e-13;
-		if (!(rel_error_total_mass_final < mass_rel_error_tol)) {
+		if (!(rel_error_total_mass_phase3 < mass_rel_error_tol)) {
 			status = 1;
-			amrex::Print() << "Test failed: total mass is not conserved at the end of the simulation\n";
+			amrex::Print() << "Test failed: total mass is not conserved in Phase 3\n";
+		} else {
+			amrex::Print() << "Phase 3 passed: mass conservation satisfied\n";
 		}
 
 		if (status == 0) {
-			amrex::Print() << "Test passed\n";
+			amrex::Print() << "\n=== All phases passed ===\n";
 		}
 	}
 

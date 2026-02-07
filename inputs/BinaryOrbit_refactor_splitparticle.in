@@ -3,7 +3,7 @@
 # *****************************************************************
 geometry.prob_lo     =  -2.5e13 -2.5e13 -2.5e13
 geometry.prob_hi     =   2.5e13  2.5e13  2.5e13
-geometry.is_periodic =  1    1    1
+quokka.bc = periodic periodic periodic
 
 # *****************************************************************
 # VERBOSITY
@@ -32,6 +32,6 @@ stop_time = 5.0e7   # s
 checkpoint_interval = 20
 max_timesteps = 40
 plotfile_interval = -1
-restartfile = chk00020
+restartfile = chk0000020
 
 particles.split_particles_on_restart_refine = true

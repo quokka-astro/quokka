@@ -69,6 +69,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 #endif // AMREX_SPACEDIM == 3
 
 	explicit AdvectionSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : AMRSimulation<problem_t>(BCs_cc) { componentNames_cc_.push_back({"density"}); }
+	explicit AdvectionSimulation() : AMRSimulation<problem_t>() { componentNames_cc_.push_back({"density"}); }
 
 	void computeMaxSignalLocal(int level) override;
 	void printCellProperties(int lev, amrex::IntVect const &index) override;
@@ -462,7 +463,7 @@ void AdvectionSimulation<problem_t>::fluxFunction(amrex::MultiFab const &consSta
 // Save single-level plotfile
 // This is a wrapper around the WriteSingleLevelPlotfile function in the AMReX library.
 // The step number of the plotfile is set to istep[lev] and the time is set to the current time tNew_[lev].
-// Example usage: write debug_rhs00000 debug_rhs00001 etc with interval plotfileInterval_
+// Example usage: write debug_rhs0000000 debug_rhs0000001 etc with interval plotfileInterval_
 //   const int lev_debug = 0;
 //   amrex::Vector<std::string> flatCompNames{"rhs"};
 //   WriteSingleLevelPlotfileSimplified("debug_rhs", rhs[lev_debug], flatCompNames, lev_debug, plotfileInterval_);

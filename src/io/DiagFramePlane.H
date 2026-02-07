@@ -19,8 +19,6 @@ class DiagFramePlane : public DiagBase::Register<DiagFramePlane>
       public:
 	static auto identifier() -> std::string { return "DiagFramePlane"; }
 
-	enum InterpType { Linear, Quadratic };
-
 	void init(const std::string &a_prefix, std::string_view a_diagName) override;
 
 	void prepare(int a_nlevels, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<amrex::BoxArray> &a_grids,
@@ -68,7 +66,6 @@ class DiagFramePlane : public DiagBase::Register<DiagFramePlane>
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> m_center;
 
 	// Interpolation data
-	InterpType m_interpType;
 	amrex::Vector<amrex::GpuArray<amrex::Real, 3>> m_intwgt;
 	amrex::Vector<int> m_k0;
 
@@ -144,13 +141,12 @@ template <typename problem_t> void DiagFramePlane::processDiag(int a_nstep, cons
 			ref_ratio.push_back(rref);
 		}
 
-		// File name based on tep or time
+		// File name based on step or time
 		std::string diagfile;
-		if (m_interval > 0) {
-			diagfile = amrex::Concatenate(m_diagfile, a_nstep, 6);
-		}
 		if (m_per > 0.0) {
 			diagfile = m_diagfile + std::to_string(a_time);
+		} else {
+			diagfile = amrex::Concatenate(m_diagfile, a_nstep, 6);
 		}
 		amrex::Vector<int> const step_array(nlevs, a_nstep);
 		Write2DMultiLevelPlotfile(diagfile, nlevs, GetVecOfConstPtrs(planeData), m_fieldNames, pltGeoms, a_time, step_array, ref_ratio,
@@ -160,7 +156,6 @@ template <typename problem_t> void DiagFramePlane::processDiag(int a_nstep, cons
 		if (!m_particleTypes.empty()) {
 			auto *sim = getSim<problem_t>();
 			sim->particleRegister_.writePlotFileFiltered(diagfile, m_particleTypes);
-			amrex::Print() << "  Wrote particles to frame plane " << diagfile << "\n";
 		}
 	}
 }

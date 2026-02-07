@@ -3,7 +3,7 @@
 # *****************************************************************
 geometry.prob_lo     =  0.0  0.0  0.0 
 geometry.prob_hi     =  1.0  1.0  1.0
-geometry.is_periodic =  1    1    1
+quokka.bc = periodic periodic periodic
 
 # *****************************************************************
 # VERBOSITY
@@ -23,7 +23,7 @@ amr.blocking_factor_z = 8
 do_reflux = 0
 do_subcycle = 0
 
-plotfile_interval = 10
+plotfile_interval = 1000
 plotfile_prefix = alfven_wave_linear_plt
 checkpoint_interval = -1
 cfl = 0.3
@@ -38,3 +38,6 @@ setup.num_modes_x = 1
 setup.num_modes_y = 0
 setup.num_modes_z = 0
 setup.angle_between_k_b0 = 0
+
+mhd.emf_compute_scheme = Quokka2026
+mhd.emf_averaging_scheme = LondrilloDelZanna2004

@@ -3,8 +3,9 @@
 # Add steps that build, run tests, deploy, and more:
 # https://aka.ms/yaml
 
-trigger:
-- development
+# Disable automatic CI trigger on push/merge to development branch.
+# Pipeline can still be triggered manually via `/azp run` or on PR validation.
+trigger: none
 
 pr:
   autoCancel: true
@@ -13,38 +14,44 @@ pr:
     - development
   paths:
     include:
-    - src/*
-    - inputs/*
+    - src/**
+    - tests/**
+    - inputs/**
     - CMakeLists.txt
-    - .ci/*
+    - .ci/azure-pipelines.yml
+    - extern/cooling/*.h5
     - extern/amrex
+    - extern/amrex/**
     - extern/Microphysics
+    - extern/Microphysics/**
     - extern/fmt
+    - extern/fmt/**
     - extern/yaml-cpp
+    - extern/yaml-cpp/**
     - extern/openPMD-api
+    - extern/openPMD-api/**
+    - extern/AMReX-Hydro
+    - extern/AMReX-Hydro/**
+    - extern/turbulence
+    - extern/turbulence/**
     exclude:
-    - docs/*
-    - paper/*
-    - scripts/*
+    - docs/**
+    - paper/**
+    - scripts/**
     - '*.md'
     - '*.rst'
     - '*.txt'
 
-variables:
-  cacheKeySuffix: $[replace(variables['Build.SourceBranch'], '/', '_')]
 
 jobs:
   - job: CUDA_Build_Test
     pool: avatar
-    timeoutInMinutes: 120
+    timeoutInMinutes: 150
     steps:
-    - task: Cache@2
-      displayName: Restore ccache
-      inputs:
-        key: 'ccache | CUDA | $(Agent.OS) | $(cacheKeySuffix)'
-        restoreKeys: |
-          ccache | CUDA | $(Agent.OS)
-        path: $(Pipeline.Workspace)/ccache
+    - script: |
+        mkdir -p "$(Agent.HomeDirectory)/cache/ccache"
+        echo "Using shared local disk cache at $(Agent.HomeDirectory)/cache/ccache"
+      displayName: Prepare shared ccache directory
 
     - script: |
         if command -v ccache >/dev/null 2>&1; then
@@ -56,21 +63,12 @@ jobs:
         fi
       displayName: Detect ccache
 
-    - script: |
-        mkdir -p $(Pipeline.Workspace)/ccache
-        if command -v ccache >/dev/null 2>&1; then
-          ccache --zero-stats || true
-        else
-          echo "ccache not installed; skipping zero-stats."
-        fi
-      displayName: Prepare ccache
-      env:
-        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+    - template: templates/ccache-prepare.yml
 
     - task: CMake@1
       displayName: 'Configure CMake'
       env:
-        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+        CCACHE_DIR: $(Agent.HomeDirectory)/cache/ccache
         CCACHE_BASEDIR: $(Build.SourcesDirectory)
         CCACHE_NOHASHDIR: 1
       inputs:
@@ -79,7 +77,7 @@ jobs:
     - task: CMake@1
       displayName: 'Build Quokka'
       env:
-        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+        CCACHE_DIR: $(Agent.HomeDirectory)/cache/ccache
         CCACHE_BASEDIR: $(Build.SourcesDirectory)
         CCACHE_NOHASHDIR: 1
       inputs:
@@ -98,13 +96,4 @@ jobs:
       condition: succeededOrFailed()
       displayName: Publish test results
 
-    - script: |
-        if command -v ccache >/dev/null 2>&1; then
-          ccache --show-stats || true
-        else
-          echo "ccache not installed; no statistics to report."
-        fi
-      displayName: Report ccache statistics
-      condition: succeededOrFailed()
-      env:
-        CCACHE_DIR: $(Pipeline.Workspace)/ccache
+    - template: templates/ccache-stats.yml

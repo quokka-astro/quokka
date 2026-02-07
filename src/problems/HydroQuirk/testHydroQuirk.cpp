@@ -7,20 +7,14 @@
 /// \brief Defines a test problem for the odd-even decoupling instability.
 ///
 
-#ifdef HAVE_PYTHON
-#include "util/matplotlibcpp.h"
-#endif
 #include "hydro/hydro_system.hpp"
-#include "math/interpolate.hpp"
 #include <algorithm>
 #include <fmt/format.h>
-#include <fstream>
 #include <vector>
 
 #include "AMReX.H"
 #include "AMReX_Array.H"
 #include "AMReX_BCRec.H"
-#include "AMReX_BC_TYPES.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_Box.H"
 #include "AMReX_FabArrayBase.H"
@@ -34,9 +28,8 @@
 #include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
-#include "hydro/hydro_system.hpp"
+#include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
-#include "util/BC.hpp"
 
 using Real = amrex::Real;
 
@@ -216,57 +209,41 @@ AMRSimulation<QuirkProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 							 amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
 							 int /*bcomp*/, int /*orig_comp*/)
 {
-#if (AMREX_SPACEDIM == 1)
-	auto i = iv.toArray()[0];
-	int j = 0;
-	int k = 0;
-#endif
-#if (AMREX_SPACEDIM == 2)
-	auto [i, j] = iv.toArray();
-	int k = 0;
-#endif
-#if (AMREX_SPACEDIM == 3)
-	auto [i, j, k] = iv.toArray();
-#endif
-
-	amrex::Box const &box = geom.Domain();
-	amrex::GpuArray<int, 3> lo = box.loVect3d();
-	amrex::GpuArray<int, 3> hi = box.hiVect3d();
+	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
+	constexpr int nvar = Physics_Indices<QuirkProblem>::nvarTotal_cc;
 	const auto gamma = quokka::EOS_Traits<QuirkProblem>::gamma;
 
-	if (i < lo[0]) {
-		// x1 left side boundary
-		consVar(i, j, k, RadSystem<QuirkProblem>::gasEnergy_index) = pl / (gamma - 1.) + 0.5 * dl * ul * ul;
-		consVar(i, j, k, RadSystem<QuirkProblem>::gasInternalEnergy_index) = pl / (gamma - 1.);
-		consVar(i, j, k, RadSystem<QuirkProblem>::gasDensity_index) = dl;
-		consVar(i, j, k, RadSystem<QuirkProblem>::x1GasMomentum_index) = dl * ul;
-		consVar(i, j, k, RadSystem<QuirkProblem>::x2GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<QuirkProblem>::x3GasMomentum_index) = 0.;
-	} else if (i >= hi[0]) {
-		// x1 right-side boundary
-		consVar(i, j, k, RadSystem<QuirkProblem>::gasEnergy_index) = pr / (gamma - 1.) + 0.5 * dr * ur * ur;
-		consVar(i, j, k, RadSystem<QuirkProblem>::gasInternalEnergy_index) = pr / (gamma - 1.);
-		consVar(i, j, k, RadSystem<QuirkProblem>::gasDensity_index) = dr;
-		consVar(i, j, k, RadSystem<QuirkProblem>::x1GasMomentum_index) = dr * ur;
-		consVar(i, j, k, RadSystem<QuirkProblem>::x2GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<QuirkProblem>::x3GasMomentum_index) = 0.;
-	}
+	// Prepare left boundary values (left state)
+	amrex::GpuArray<amrex::Real, nvar> low_bdr_cells{};
+	low_bdr_cells[RadSystem<QuirkProblem>::gasEnergy_index] = pl / (gamma - 1.) + 0.5 * dl * ul * ul;
+	low_bdr_cells[RadSystem<QuirkProblem>::gasInternalEnergy_index] = pl / (gamma - 1.);
+	low_bdr_cells[RadSystem<QuirkProblem>::gasDensity_index] = dl;
+	low_bdr_cells[RadSystem<QuirkProblem>::x1GasMomentum_index] = dl * ul;
+	low_bdr_cells[RadSystem<QuirkProblem>::x2GasMomentum_index] = 0.;
+	low_bdr_cells[RadSystem<QuirkProblem>::x3GasMomentum_index] = 0.;
+
+	// Prepare right boundary values (right state)
+	amrex::GpuArray<amrex::Real, nvar> high_bdr_cells{};
+	high_bdr_cells[RadSystem<QuirkProblem>::gasEnergy_index] = pr / (gamma - 1.) + 0.5 * dr * ur * ur;
+	high_bdr_cells[RadSystem<QuirkProblem>::gasInternalEnergy_index] = pr / (gamma - 1.);
+	high_bdr_cells[RadSystem<QuirkProblem>::gasDensity_index] = dr;
+	high_bdr_cells[RadSystem<QuirkProblem>::x1GasMomentum_index] = dr * ur;
+	high_bdr_cells[RadSystem<QuirkProblem>::x2GasMomentum_index] = 0.;
+	high_bdr_cells[RadSystem<QuirkProblem>::x3GasMomentum_index] = 0.;
+
+	// Apply boundary conditions using helper functions (direction 0 = x-axis)
+	setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
+	setConstantDirichletBCHi<0>(iv, consVar, geom, high_bdr_cells);
 }
 
 auto problem_main() -> int
 {
-	// Boundary conditions: ext_dir in x, periodic in y and z
-	auto BCs_cc = quokka::BC<QuirkProblem>(quokka::BCType::ext_dir,	 // x: outflow
-					       quokka::BCType::int_dir,	 // y: periodic
-					       quokka::BCType::int_dir); // z: periodic
-
 	// Problem initialization
-	QuokkaSimulation<QuirkProblem> sim(BCs_cc);
+	QuokkaSimulation<QuirkProblem> sim;
 
 	sim.reconstructionOrder_ = 2; // PLM
 	sim.stopTime_ = 0.4;
 	sim.cflNumber_ = 0.4;
-	sim.maxTimesteps_ = 2000;
 	sim.plotfileInterval_ = -1;
 
 	// initialize
