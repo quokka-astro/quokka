@@ -440,10 +440,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				const int num_high = static_cast<int>(amrex::RandomPoisson(num_high_mass_stars_exp, engine));
 				int num_low = 1;
 				if ((low_mass_composite_max_mass_ > 0.0) && (mass_low_mass_star > low_mass_composite_max_mass_)) {
-					num_low = static_cast<int>(mass_low_mass_star / low_mass_composite_max_mass_);
-					if (mass_low_mass_star > static_cast<amrex::Real>(num_low) * low_mass_composite_max_mass_) {
-						++num_low;
-					}
+					num_low = static_cast<int>(std::ceil(mass_low_mass_star / low_mass_composite_max_mass_));
 				}
 				num_star = num_low + num_high;
 			}
@@ -497,13 +494,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				const amrex::Real particle_mass = cell_density * cell_volume * eps_star;
 				const amrex::Real mass_low_mass_star = particle_mass * (1.0 - fstar_high);
 
-				int num_low = 1;
-				if ((low_mass_composite_max_mass_ > 0.0) && (mass_low_mass_star > low_mass_composite_max_mass_)) {
-					num_low = static_cast<int>(mass_low_mass_star / low_mass_composite_max_mass_);
-					if (mass_low_mass_star > static_cast<amrex::Real>(num_low) * low_mass_composite_max_mass_) {
-						++num_low;
-					}
-				}
+				const int num_low = static_cast<int>(std::ceil(mass_low_mass_star / low_mass_composite_max_mass_));
 				const int num_high = num_particles - num_low;
 				const amrex::Real mass_low_each = mass_low_mass_star / static_cast<amrex::Real>(num_low);
 				const bool split_low_mass_composite = (num_low > 1);
