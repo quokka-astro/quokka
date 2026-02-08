@@ -542,7 +542,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 					// Everything is now set EXCEPT for mass, velocity, evolutionary stage, and mass at birth.
 					// (For SN progenitors, the death time will be overridden based on the interpolated lifetime.)
-					// (Mass at birth is set at the end of this loop. It MUST be set for all star particles, 
+					// (Mass at birth is set at the end of this loop. It MUST be set for all star particles,
 					// 	because it is used to calculate the star formation rate in outputs.)
 
 					// This is a LowMassComposite star particle
@@ -632,55 +632,55 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					}
 				}
 
-					// Update momentum of the low mass composite star particles if there is(are) high mass star(s)
-					if (num_high >= 1) {
-						// Calculate the actual total mass of all particles (high-mass stars sampled from IMF + low-mass composite)
-						amrex::Real real_particle_total_mass = 0.;
-						for (int pp = 0; pp < num_particles; ++pp) {
-							real_particle_total_mass += particles[pp].rdata(mass_idx);
-						}
-
-						// Option 1 (preferred): Ensure COM velocity of all stars equals cell velocity (vx, vy, vz).
-						// This may violate momentum conservation because real_particle_total_mass != particle_mass
-						// due to stochastic sampling of high-mass star masses from the IMF.
-						// However, since mass conservation is already violated in a single cell due to stochasticity,
-						// it's more important to preserve correct velocities in a rotating disk.
-						const amrex::Real target_low_momx = real_particle_total_mass * vx - total_high_momx;
-						const amrex::Real target_low_momy = real_particle_total_mass * vy - total_high_momy;
-						const amrex::Real target_low_momz = real_particle_total_mass * vz - total_high_momz;
-
-						amrex::Real low_momx = 0.0;
-						amrex::Real low_momy = 0.0;
-						amrex::Real low_momz = 0.0;
-						for (int pp = 0; pp < num_low; ++pp) {
-							auto &plow = particles[pp]; // NOLINT
-							low_momx += plow.rdata(mass_idx) * plow.rdata(StochasticStellarPopParticleVxIdx);
-							low_momy += plow.rdata(mass_idx) * plow.rdata(StochasticStellarPopParticleVyIdx);
-							low_momz += plow.rdata(mass_idx) * plow.rdata(StochasticStellarPopParticleVzIdx);
-						}
-
-						const amrex::Real delta_vx = (target_low_momx - low_momx) / mass_low_mass_star;
-						const amrex::Real delta_vy = (target_low_momy - low_momy) / mass_low_mass_star;
-						const amrex::Real delta_vz = (target_low_momz - low_momz) / mass_low_mass_star;
-
-						for (int pp = 0; pp < num_low; ++pp) {
-							auto &plow = particles[pp]; // NOLINT
-							plow.rdata(StochasticStellarPopParticleVxIdx) += delta_vx;
-							plow.rdata(StochasticStellarPopParticleVyIdx) += delta_vy;
-							plow.rdata(StochasticStellarPopParticleVzIdx) += delta_vz;
-						}
-
-						// Option 2 (alternative): Guarantee momentum conservation.
-						// This uses particle_mass (the mass removed from the cell) instead of real_particle_total_mass.
-						// While this conserves momentum exactly, it results in incorrect COM velocity because
-						// real_particle_total_mass != particle_mass due to stochastic sampling.
-						// const amrex::Real target_low_momx2 = particle_mass * vx - total_momx;
-						// const amrex::Real target_low_momy2 = particle_mass * vy - total_momy;
-						// const amrex::Real target_low_momz2 = particle_mass * vz - total_momz;
-						// const amrex::Real delta_vx2 = (target_low_momx2 - low_momx) / mass_low_mass_star;
-						// const amrex::Real delta_vy2 = (target_low_momy2 - low_momy) / mass_low_mass_star;
-						// const amrex::Real delta_vz2 = (target_low_momz2 - low_momz) / mass_low_mass_star;
+				// Update momentum of the low mass composite star particles if there is(are) high mass star(s)
+				if (num_high >= 1) {
+					// Calculate the actual total mass of all particles (high-mass stars sampled from IMF + low-mass composite)
+					amrex::Real real_particle_total_mass = 0.;
+					for (int pp = 0; pp < num_particles; ++pp) {
+						real_particle_total_mass += particles[pp].rdata(mass_idx);
 					}
+
+					// Option 1 (preferred): Ensure COM velocity of all stars equals cell velocity (vx, vy, vz).
+					// This may violate momentum conservation because real_particle_total_mass != particle_mass
+					// due to stochastic sampling of high-mass star masses from the IMF.
+					// However, since mass conservation is already violated in a single cell due to stochasticity,
+					// it's more important to preserve correct velocities in a rotating disk.
+					const amrex::Real target_low_momx = real_particle_total_mass * vx - total_high_momx;
+					const amrex::Real target_low_momy = real_particle_total_mass * vy - total_high_momy;
+					const amrex::Real target_low_momz = real_particle_total_mass * vz - total_high_momz;
+
+					amrex::Real low_momx = 0.0;
+					amrex::Real low_momy = 0.0;
+					amrex::Real low_momz = 0.0;
+					for (int pp = 0; pp < num_low; ++pp) {
+						auto &plow = particles[pp]; // NOLINT
+						low_momx += plow.rdata(mass_idx) * plow.rdata(StochasticStellarPopParticleVxIdx);
+						low_momy += plow.rdata(mass_idx) * plow.rdata(StochasticStellarPopParticleVyIdx);
+						low_momz += plow.rdata(mass_idx) * plow.rdata(StochasticStellarPopParticleVzIdx);
+					}
+
+					const amrex::Real delta_vx = (target_low_momx - low_momx) / mass_low_mass_star;
+					const amrex::Real delta_vy = (target_low_momy - low_momy) / mass_low_mass_star;
+					const amrex::Real delta_vz = (target_low_momz - low_momz) / mass_low_mass_star;
+
+					for (int pp = 0; pp < num_low; ++pp) {
+						auto &plow = particles[pp]; // NOLINT
+						plow.rdata(StochasticStellarPopParticleVxIdx) += delta_vx;
+						plow.rdata(StochasticStellarPopParticleVyIdx) += delta_vy;
+						plow.rdata(StochasticStellarPopParticleVzIdx) += delta_vz;
+					}
+
+					// Option 2 (alternative): Guarantee momentum conservation.
+					// This uses particle_mass (the mass removed from the cell) instead of real_particle_total_mass.
+					// While this conserves momentum exactly, it results in incorrect COM velocity because
+					// real_particle_total_mass != particle_mass due to stochastic sampling.
+					// const amrex::Real target_low_momx2 = particle_mass * vx - total_momx;
+					// const amrex::Real target_low_momy2 = particle_mass * vy - total_momy;
+					// const amrex::Real target_low_momz2 = particle_mass * vz - total_momz;
+					// const amrex::Real delta_vx2 = (target_low_momx2 - low_momx) / mass_low_mass_star;
+					// const amrex::Real delta_vy2 = (target_low_momy2 - low_momy) / mass_low_mass_star;
+					// const amrex::Real delta_vz2 = (target_low_momz2 - low_momz) / mass_low_mass_star;
+				}
 
 				// Update the hydro state to reflect the mass that was removed to create the star particle(s)
 				{
