@@ -551,7 +551,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 						p.idata(evolution_stage_index) = static_cast<int>(StellarEvolutionStage::LowMassComposite);
 						// Set particle mass
 						p.rdata(mass_idx) = mass_low_each;
-						// Set particle postion and velocity
+						// Set particle position and velocity
 						if (split_low_mass_composite) {
 							// Randomize velocity within the cell only when split
 							const amrex::Real rx = amrex::Random(engine);
@@ -696,7 +696,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) *= factor;
 					state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) *= factor;
 
-					// Update internal energy to relect mass change
+					// Update internal energy to reflect mass change
 					state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index) *= factor;
 
 					// Update total energy
