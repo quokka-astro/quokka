@@ -41,10 +41,11 @@ A self-contained bash script that:
 ```bash
 ./run-regression-tests.sh [OPTIONS]
   --ini-file PATH       # regression/quokka-tests.ini (default)
-  --web-dir PATH        # GitHub Pages web directory
   --ccache-dir PATH     # Compiler cache location
   --source-dir PATH     # Quokka source directory
 ```
+
+**Note:** The web output directory (`webTopDir`) is automatically parsed from the ini file, eliminating the need for manual configuration.
 
 ### Migration Path
 
@@ -79,7 +80,7 @@ Run the script in a Docker container:
 Or with custom configuration:
 ```bash
 ./run-regression-tests.sh \
-  --web-dir /custom/path/to/web \
+  --ini-file custom-tests.ini \
   --ccache-dir /tmp/ccache
 ```
 

@@ -10,31 +10,32 @@
 #
 # Options:
 #   --ini-file PATH       Path to regression ini file (default: regression/quokka-tests.ini)
-#   --web-dir PATH        Web output directory (default: /priv/avatar/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests/web)
 #   --ccache-dir PATH     Ccache directory (default: $HOME/cache/ccache)
 #   --source-dir PATH     Quokka source directory (default: $PWD)
 #   --help                Show this help message
 #
 # Environment variables (overridden by CLI args):
 #   REGRESSION_INI_FILE
-#   REGRESSION_WEB_DIR
 #   CCACHE_DIR
 #   REGRESSION_SOURCE_DIR
+#
+# Note: webTopDir is automatically parsed from the ini file.
 #
 
 set -uo pipefail
 
 # Default values
 DEFAULT_INI_FILE="regression/quokka-tests.ini"
-DEFAULT_WEB_DIR="/priv/avatar/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests/web"
 DEFAULT_CCACHE_DIR="$HOME/cache/ccache"
 DEFAULT_SOURCE_DIR="$PWD"
 
 # Initialize from environment variables or defaults
 INI_FILE="${REGRESSION_INI_FILE:-$DEFAULT_INI_FILE}"
-WEB_DIR="${REGRESSION_WEB_DIR:-$DEFAULT_WEB_DIR}"
 CCACHE_DIR="${CCACHE_DIR:-$DEFAULT_CCACHE_DIR}"
 SOURCE_DIR="${REGRESSION_SOURCE_DIR:-$DEFAULT_SOURCE_DIR}"
+
+# WEB_DIR will be parsed from ini file
+WEB_DIR=""
 
 #######################################
 # Print usage information
@@ -47,26 +48,26 @@ Standalone script to run Quokka regression tests and publish results to GitHub P
 
 Options:
   --ini-file PATH       Path to regression ini file (default: $DEFAULT_INI_FILE)
-  --web-dir PATH        Web output directory (default: $DEFAULT_WEB_DIR)
   --ccache-dir PATH     Ccache directory (default: $DEFAULT_CCACHE_DIR)
   --source-dir PATH     Quokka source directory (default: $DEFAULT_SOURCE_DIR)
   --help                Show this help message
 
 Environment variables (overridden by CLI args):
   REGRESSION_INI_FILE
-  REGRESSION_WEB_DIR
   CCACHE_DIR
   REGRESSION_SOURCE_DIR
+
+Note: webTopDir is automatically parsed from the ini file.
 
 Examples:
   # Run with defaults
   ./run-regression-tests.sh
 
-  # Override web directory
-  ./run-regression-tests.sh --web-dir /custom/web/path
+  # Override ini file
+  ./run-regression-tests.sh --ini-file custom-tests.ini
 
   # Use environment variables
-  export REGRESSION_WEB_DIR=/custom/web/path
+  export REGRESSION_INI_FILE=custom-tests.ini
   ./run-regression-tests.sh
 EOF
 }
@@ -79,10 +80,6 @@ parse_args() {
 		case $1 in
 		--ini-file)
 			INI_FILE="$2"
-			shift 2
-			;;
-		--web-dir)
-			WEB_DIR="$2"
 			shift 2
 			;;
 		--ccache-dir)
@@ -104,6 +101,27 @@ parse_args() {
 			;;
 		esac
 	done
+}
+
+#######################################
+# Parse webTopDir from ini file
+#######################################
+parse_web_dir() {
+	if [ ! -f "$INI_FILE" ]; then
+		echo "ERROR: Ini file not found: $INI_FILE"
+		exit 1
+	fi
+
+	# Extract webTopDir from ini file
+	# Format: webTopDir  = /path/to/web
+	WEB_DIR=$(grep -E "^webTopDir\s*=" "$INI_FILE" | sed -E 's/^webTopDir\s*=\s*//' | tr -d '\r')
+
+	if [ -z "$WEB_DIR" ]; then
+		echo "ERROR: Could not parse webTopDir from ini file: $INI_FILE"
+		exit 1
+	fi
+
+	echo "✓ Parsed webTopDir from ini file: $WEB_DIR"
 }
 
 #######################################
@@ -144,13 +162,6 @@ setup_environment() {
 	}
 	echo "✓ Source directory: $SOURCE_DIR"
 
-	# Verify ini file exists
-	if [ ! -f "$INI_FILE" ]; then
-		echo "ERROR: Ini file not found: $INI_FILE"
-		exit 1
-	fi
-	echo "✓ Ini file: $INI_FILE"
-
 	# Verify web directory parent exists (regtest.py will create the actual web dir)
 	local web_parent
 	web_parent=$(dirname "$WEB_DIR")
@@ -158,7 +169,6 @@ setup_environment() {
 		echo "WARNING: Web directory parent does not exist: $web_parent"
 		echo "         regtest.py may fail to create output directory"
 	fi
-	echo "✓ Web directory: $WEB_DIR"
 
 	# Print configuration summary
 	echo ""
@@ -426,6 +436,9 @@ main() {
 
 	# Parse command-line arguments
 	parse_args "$@"
+
+	# Parse web directory from ini file
+	parse_web_dir
 
 	# Setup environment
 	setup_environment
