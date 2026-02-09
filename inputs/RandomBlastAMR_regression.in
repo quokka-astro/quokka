@@ -26,13 +26,14 @@ problem.part_fn = "./particles_stochastic_n100.txt"
 do_reflux = 1
 do_subcycle = 0
 
-cfl = 0.2
+cfl = 0.3
 hydro.reconstruction_order = 3
+hydro.artificial_viscosity_coefficient = 0.1
 derived_vars = temperature
 
 plotfile_interval = 10000
 checkpoint_interval = -1
-max_timesteps = 10000
+max_timesteps = 10000 # set a maximum number of timesteps to avoid infinite loops
 
 dt_shrink = 0.01
 stop_time = 7.32505344665246e11
