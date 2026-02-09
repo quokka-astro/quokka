@@ -47,10 +47,9 @@ jobs:
       uses: actions/cache@v4
       with:
         path: build/
-        key: build-full-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt', '.git/modules/extern/*/HEAD') }}-v1
+        key: build-full-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt') }}-v1
         restore-keys: |
-          build-full-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt') }}-
-          build-full-${{ runner.os }}-
+          build-full-${{ runner.os }}-v1
 
     - uses: ZedThree/clang-tidy-review@a63ad24ca2c9f69340890c82dd235f295f7feac8 # v0.23.0
       id: review
