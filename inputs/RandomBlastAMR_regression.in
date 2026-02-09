@@ -33,7 +33,7 @@ derived_vars = temperature
 
 plotfile_interval = 10000
 checkpoint_interval = -1
-max_timesteps = 10000 # set a maximum number of timesteps to avoid infinite loops
+max_timesteps = 10000 # set to avoid running the simulation indefinitely
 
 dt_shrink = 0.01
 stop_time = 7.32505344665246e11
