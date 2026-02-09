@@ -2,7 +2,7 @@
 
 ## Summary
 
-Refactored the Azure Pipelines regression test workflow into a standalone bash script (`run-regression-tests.sh`) that can run inside Docker containers without Azure-specific dependencies or module configuration.
+Refactored the Azure Pipelines regression test workflow (running regression tests and pushing to GitHub) into a standalone bash script (`run-regression-tests.sh`). Then, we can set up a crontab job on avatargpu to run this script inside Docker containers without Azure-specific dependencies or module configuration.
 
 ## Changes
 
@@ -54,7 +54,6 @@ This script replaces `.ci/azure-pipelines-regression.yml` for containerized envi
 **Before (Azure Pipelines):**
 - Tied to Azure-specific infrastructure (pool: avatar)
 - Required Azure artifacts upload
-- Hardcoded paths and Azure-specific conditionals
 
 **After (Standalone Script):**
 - Runs in any Docker container
@@ -83,9 +82,3 @@ Or with custom configuration:
   --ini-file custom-tests.ini \
   --ccache-dir /tmp/ccache
 ```
-
-## Future Work
-
-- Azure Pipelines workflow (`.ci/azure-pipelines-regression.yml`) can be updated to use this script
-- Additional failure modes can be added to error detection as needed
-- Status file can be enhanced with more metadata (test counts, timing, etc.)
