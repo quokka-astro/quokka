@@ -3,7 +3,7 @@
 # *****************************************************************
 geometry.prob_lo     =  0.0  0.0  0.0 
 geometry.prob_hi     =  3.086e19  3.086e19  3.086e19  # 10 x 10 x 10 pc
-quokka.bc = reflecting reflecting reflecting
+quokka.bc = periodic periodic periodic
 
 # *****************************************************************
 # VERBOSITY
@@ -23,11 +23,11 @@ problem.refine_threshold = 0.1
 do_reflux = 1
 do_subcycle = 0
 
-cfl = 0.2
+cfl = 0.3
 hydro.reconstruction_order = 3
 derived_vars = temperature
 
-plotfile_interval = 200
+plotfile_interval = -1
 checkpoint_interval = -1
 max_timesteps = 1000
 
@@ -38,3 +38,7 @@ cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1
 cooling.cooling_table_type = resampled
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
+
+problem.boost_velocity = 0.0 0.0 0.0
+
+tiny_profiler.enabled = 0
