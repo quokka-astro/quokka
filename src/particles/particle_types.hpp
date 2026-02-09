@@ -490,8 +490,8 @@ inline bool disable_particle_drift = false; // NOLINT
 // Maximum velocity limit for stellar particles in cm/s (default: 1000 km/s)
 inline amrex::Real stellar_velocity_limit = 1.0e8; // NOLINT
 
-// Maximum mass for LowMassComposite particles. If <= 0, no splitting is performed.
-inline amrex::Real low_mass_composite_max_mass = -1.0; // NOLINT
+// Maximum mass for LowMassComposite particles. Default is set to max(), so no splitting is performed.
+inline amrex::Real low_mass_composite_max_mass = std::numeric_limits<amrex::Real>::max(); // NOLINT
 
 inline int reproducibility_roundoff_redundancy = 20; // NOLINT; remove 20 bits from the significand
 
