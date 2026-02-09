@@ -75,6 +75,11 @@ auto main(int argc, char **argv) -> int
 
 	amrex::Real const start_time = amrex::ParallelDescriptor::second();
 
+	// Check if we should ignore the return code from problem_main
+	int ignore_return = 0;
+	amrex::ParmParse const pp_quokka("quokka");
+	pp_quokka.query("ignore_return", ignore_return);
+
 	int result = 0;
 	{ // objects must be destroyed before amrex::finalize, so enter new
 		// scope here to do that automatically
@@ -94,5 +99,8 @@ auto main(int argc, char **argv) -> int
 
 	amrex::Finalize();
 
+	if (ignore_return != 0) {
+		return 0;
+	}
 	return result;
 }
