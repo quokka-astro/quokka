@@ -623,7 +623,6 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					}
 				}
 
-				
 				// Update momentum of the low mass composite star particles if there is(are) high mass star(s)
 				if (num_high >= 1 || split_low_mass_composite) {
 					// Calculate the actual total mass of all particles (high-mass stars sampled from IMF + low-mass composite)
