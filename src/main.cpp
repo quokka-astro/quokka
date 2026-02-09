@@ -96,3 +96,5 @@ auto main(int argc, char **argv) -> int
 
 	return result;
 }
+
+// dummy change to trigger a new CI build
