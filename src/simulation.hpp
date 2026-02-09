@@ -1565,7 +1565,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 	// Print final simulation time
 	if (suppress_output == 0) {
-		amrex::Print() << "\nSimulation ended at t = " << cur_time << " (" << (cur_time / stopTime_) * 100. << "%)\n";
+		if (stopTime_ > 0.0) {
+			amrex::Print() << "\nSimulation ended at t = " << cur_time << " (" << (cur_time / stopTime_) * 100. << "%)\n";
+		} else {
+			amrex::Print() << "\nSimulation ended at t = " << cur_time << "\n";
+		}
 	}
 
 	if (step == 0) {
