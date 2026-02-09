@@ -77,8 +77,8 @@ auto main(int argc, char **argv) -> int
 
 	// Check if we should ignore the return code from problem_main
 	int ignore_return = 0;
-	amrex::ParmParse const pp_quokka;
-	pp_quokka.query("ignore_return", ignore_return);
+	amrex::ParmParse const pp;
+	pp.query("ignore_return", ignore_return);
 
 	int result = 0;
 	{ // objects must be destroyed before amrex::finalize, so enter new
