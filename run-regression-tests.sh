@@ -187,13 +187,14 @@ run_regression_tests() {
 
 	echo "Command: ./extern/regression_testing/regtest.py --clean_testdir $INI_FILE"
 	echo "Log file: $log_file"
+	echo "Output will be written to log file (this may take a while)..."
 	echo ""
 
-	# Run regtest.py, capturing both stdout and stderr
+	# Run regtest.py, capturing both stdout and stderr to log file
 	# Don't exit on failure - we want to always publish results
 	set +e
 	./extern/regression_testing/regtest.py --clean_testdir "$INI_FILE" \
-		> >(tee "$log_file") 2>&1
+		> "$log_file" 2>&1
 	exit_code=$?
 	set -e
 
