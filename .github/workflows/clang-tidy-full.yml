@@ -50,6 +50,7 @@ jobs:
 
     # Layer 1: Cache build directory with compile_commands.json
     - name: Cache build directory
+      id: cache-build
       uses: actions/cache@v4
       with:
         path: build/
@@ -58,13 +59,31 @@ jobs:
           build-full-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt') }}-
           build-full-${{ runner.os }}-
 
+    # Install dependencies needed for CMake configuration
+    - name: Install dependencies
+      if: steps.cache-build.outputs.cache-hit != 'true'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ccache libopenmpi-dev libhdf5-mpi-dev python3-dev python3-numpy python3-matplotlib
+
+    # Only run CMake if compile_commands.json doesn't exist (cache miss)
+    - name: Generate compile_commands.json
+      if: steps.cache-build.outputs.cache-hit != 'true'
+      run: |
+        cmake . -B build \
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+          -DQUOKKA_PYTHON=ON \
+          -DQUOKKA_OPENPMD=ON \
+          -DopenPMD_USE_ADIOS2=OFF \
+          -DAMReX_SPACEDIM=3
+
     - uses: ZedThree/clang-tidy-review@a63ad24ca2c9f69340890c82dd235f295f7feac8 # v0.23.0
       id: review
       with:
         config_file: src/.clang-tidy-full
         build_dir: build
-        apt_packages: ccache,libopenmpi-dev,libhdf5-mpi-dev,python3-dev,python3-numpy,python3-matplotlib
-        cmake_command: cmake . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DQUOKKA_PYTHON=ON -DQUOKKA_OPENPMD=ON -DopenPMD_USE_ADIOS2=OFF -DAMReX_SPACEDIM=3
         split_workflow: true
 
     # Uploads an artefact containing clang_fixes.json
