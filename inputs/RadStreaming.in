@@ -19,8 +19,3 @@ amr.max_level       = 0     # number of levels = max_level + 1
 do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
-
-# *****************************************************************
-# QUOKKA parameters
-# *****************************************************************
-quokka.ignore_return = 1
