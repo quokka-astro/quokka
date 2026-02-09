@@ -30,12 +30,12 @@ cfl = 0.2
 hydro.reconstruction_order = 3
 derived_vars = temperature
 
-plotfile_interval = 1000
+plotfile_interval = 10000
 checkpoint_interval = -1
-max_timesteps = 1000
+max_timesteps = 10000
 
-dt_initial = 3.154e10       # 1000 yr
-stop_time = 3.154e13       # 1e6 yr
+dt_shrink = 0.01
+stop_time = 7.32505344665246e11
 
 cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1
