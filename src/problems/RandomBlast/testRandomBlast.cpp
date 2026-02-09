@@ -54,9 +54,8 @@ constexpr Real cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
 template <> struct SimulationData<RandomBlast> {
 	std::vector<int> SN_counter_arr; // Track cumulative number of SNe at all time
 
-	Real n_amb = 0.1;	     // ambient density (cm^-3)
-	Real T_amb = 1.0e4;	     // ambient temperature (K)
-	Real refine_threshold = 1.0; // gradient refinement threshold
+	Real n_amb = 0.1;   // ambient density (cm^-3)
+	Real T_amb = 1.0e4; // ambient temperature (K)
 	std::string part_fn = "../inputs/particles_stochastic_n100.txt";
 
 	std::vector<Real> boost_velocity{0.0, 0.0, 0.0}; // NOLINT
@@ -175,7 +174,6 @@ auto problem_main() -> int
 	amrex::ParmParse const pp("problem");
 	pp.query("n_amb", sim.userData_.n_amb);
 	pp.query("T_amb", sim.userData_.T_amb);
-	pp.query("refine_threshold", sim.userData_.refine_threshold); // dimensionless
 	pp.query("part_fn", sim.userData_.part_fn);
 
 	if (pp.queryarr("boost_velocity", sim.userData_.boost_velocity) == 0) {
