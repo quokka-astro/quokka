@@ -243,8 +243,8 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-		if (debug_parser_only_ic) {
-			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+	if (debug_parser_only_ic) {
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			const amrex::Real x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
 			const amrex::Real y = prob_lo[1] + (static_cast<amrex::Real>(j) + 0.5) * dx[1];
 			const amrex::Real z = prob_lo[2] + (static_cast<amrex::Real>(k) + 0.5) * dx[2];
@@ -263,12 +263,12 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 			state_cc(i, j, k, HydroSystem<DiskGalaxy>::x2Momentum_index) = momy;
 			state_cc(i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index) = momz;
 			state_cc(i, j, k, HydroSystem<DiskGalaxy>::energy_index) = Etot;
-				state_cc(i, j, k, HydroSystem<DiskGalaxy>::internalEnergy_index) = Eint;
-			});
-			amrex::Gpu::streamSynchronize();
-			amrex::Print() << "[DiskGalaxy] parser-only IC kernel completed successfully.\n";
-			return;
-		}
+			state_cc(i, j, k, HydroSystem<DiskGalaxy>::internalEnergy_index) = Eint;
+		});
+		amrex::Gpu::streamSynchronize();
+		amrex::Print() << "[DiskGalaxy] parser-only IC kernel completed successfully.\n";
+		return;
+	}
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// Cartesian coordinates
