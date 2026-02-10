@@ -2,28 +2,41 @@
 
 ## Summary
 
-Refactored the Azure Pipelines regression test workflow (running regression tests and pushing to GitHub) into a standalone bash script (`run-regression-tests.sh`). Then, we can set up a crontab job on avatargpu to run this script inside Docker containers without Azure-specific dependencies or module configuration.
+Refactored the Azure Pipelines regression test workflow into a standalone bash script (`run-regression-tests.sh`) that can be scheduled via crontab inside a Docker container on avatargpu, without Azure-specific dependencies or module configuration. Also adds GPU conflict detection to both the new script and the existing `azure-pipelines.yml` so that the cron job and Azure CI never contend for the single GPU simultaneously.
 
 ## Changes
 
 ### New Script: `run-regression-tests.sh`
 
 A self-contained bash script that:
+- Waits for the GPU to be free before starting (avoids conflicts with Azure CI jobs)
 - Runs Quokka regression tests using the AMReX regression testing framework
-- Automatically detects and classifies failures (compilation errors, crashes, OOM, disk quota)
+- Automatically detects and classifies failures (compilation errors, crashes, OOM, disk quota, timeout)
 - Creates a `status.json` file with test results and error details
-- Publishes results to GitHub Pages (always, even on failure)
+- Always publishes results to GitHub Pages, even on failure
 - Supports both CLI arguments and environment variables for configuration
 - Uses ccache for faster compilation (required)
+- Parses `webTopDir` automatically from the ini file
 
-### Key Features
+**Workflow:**
+1. **Wait** - Poll until GPU is free and no conflicting jobs are detected
+2. **Setup** - Configure ccache and validate paths
+3. **Run Tests** - Execute `regtest.py --clean_testdir`
+4. **Detect Errors** - Analyze logs for failure patterns
+5. **Create Status** - Generate `status.json` with results
+6. **Publish** - Git add/commit/push to GitHub Pages
 
-**Error Detection:**
-- Classifies failures into: `COMPILATION_ERROR`, `CRASH`, `OUT_OF_MEMORY`, `DISK_QUOTA`, `TIMEOUT`, `UNKNOWN_FAILURE`
-- Extracts relevant error context from test logs
-- Always publishes results regardless of test outcome
+**Configuration:**
+```bash
+./run-regression-tests.sh [OPTIONS]
+  --ini-file PATH       # regression/quokka-tests.ini (default)
+  --ccache-dir PATH     # Compiler cache location
+  --source-dir PATH     # Quokka source directory
+```
 
-**Status File Format:**
+Supports environment variables: `REGRESSION_INI_FILE`, `CCACHE_DIR`, `REGRESSION_SOURCE_DIR`.
+
+**Status file (`status.json`):**
 ```json
 {
   "timestamp": "2026-02-09T14:23:45Z",
@@ -37,48 +50,32 @@ A self-contained bash script that:
 }
 ```
 
-**Configuration Options:**
-```bash
-./run-regression-tests.sh [OPTIONS]
-  --ini-file PATH       # regression/quokka-tests.ini (default)
-  --ccache-dir PATH     # Compiler cache location
-  --source-dir PATH     # Quokka source directory
-```
+Failure statuses: `COMPILATION_ERROR`, `CRASH`, `OUT_OF_MEMORY`, `DISK_QUOTA`, `TIMEOUT`, `UNKNOWN_FAILURE`.
 
-**Note:** The web output directory (`webTopDir`) is automatically parsed from the ini file, eliminating the need for manual configuration.
+### GPU Conflict Detection
+
+Both the cron script and `azure-pipelines.yml` now wait for the GPU to be free before starting. Since both run in separate Docker containers on the same host, the check uses two layers:
+
+| Check | Method | Reliability |
+|---|---|---|
+| **Primary** | `nvidia-smi --query-compute-apps` | Cross-container (queries GPU driver directly) |
+| **Secondary** | `pgrep` for conflicting process | Best-effort (requires shared PID namespace) |
+
+The secondary check is asymmetric by design:
+- **Cron script**: looks for `Agent.Worker` (Azure CI worker process)
+- **Azure pipeline**: looks for `regtest.py` (cron regression script)
+
+### Updated: `.ci/azure-pipelines.yml`
+
+Added a "Wait for GPU to be free" step before CMake configure, using the same two-layer check as the cron script.
 
 ### Migration Path
 
-This script replaces `.ci/azure-pipelines-regression.yml` for containerized environments:
+`run-regression-tests.sh` replaces `.ci/azure-pipelines-regression.yml` for containerized environments:
 
-**Before (Azure Pipelines):**
-- Tied to Azure-specific infrastructure (pool: avatar)
-- Required Azure artifacts upload
-
-**After (Standalone Script):**
-- Runs in any Docker container
-- No Azure dependencies
-- Configurable via CLI args or environment variables
-- Self-contained with all logic in one file
-
-### Workflow
-
-1. **Setup** - Configure ccache and validate paths
-2. **Run Tests** - Execute `regtest.py --clean_testdir`
-3. **Detect Errors** - Analyze logs for failure patterns
-4. **Create Status** - Generate `status.json` with results
-5. **Publish** - Git add/commit/push to GitHub Pages
-
-### Testing
-
-Run the script in a Docker container:
-```bash
-./run-regression-tests.sh
-```
-
-Or with custom configuration:
-```bash
-./run-regression-tests.sh \
-  --ini-file custom-tests.ini \
-  --ccache-dir /tmp/ccache
-```
+| | Azure Pipelines (old) | Cron script (new) |
+|---|---|---|
+| Trigger | Scheduled via Azure | Crontab in Docker |
+| Dependencies | Azure agent, pool: avatar | None (self-contained) |
+| Artifacts | Azure Pipelines + GitHub Pages | GitHub Pages only |
+| GPU conflict handling | None | Wait loop (nvidia-smi) |
