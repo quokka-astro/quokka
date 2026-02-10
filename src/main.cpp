@@ -85,7 +85,7 @@ auto main(int argc, char **argv) -> int
 
 	} // destructors must be called before amrex::Finalize()
 
-  const int uninitliazed_varaible;
+  const int uninitliazed_varaible = 2;
 
 	// compute elapsed time
 	amrex::Real elapsed_sec = amrex::ParallelDescriptor::second() - start_time;
