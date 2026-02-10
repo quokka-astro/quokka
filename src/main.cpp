@@ -75,6 +75,11 @@ auto main(int argc, char **argv) -> int
 
 	amrex::Real const start_time = amrex::ParallelDescriptor::second();
 
+	// Check if we should ignore the return code from problem_main
+	bool ignore_return = false;
+	amrex::ParmParse const pp;
+	pp.query("ignore_return", ignore_return);
+
 	int result = 0;
 	{ // objects must be destroyed before amrex::finalize, so enter new
 		// scope here to do that automatically
@@ -94,5 +99,8 @@ auto main(int argc, char **argv) -> int
 
 	amrex::Finalize();
 
+	if (ignore_return) {
+		return 0;
+	}
 	return result;
 }
