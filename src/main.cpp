@@ -75,7 +75,7 @@ auto main(int argc, char **argv) -> int
 
 	amrex::Real const start_time = amrex::ParallelDescriptor::second();
 
-  int unused_variable = 1;
+	int unused_variable = 1;
 
 	int result = 0;
 	{ // objects must be destroyed before amrex::finalize, so enter new
@@ -85,7 +85,7 @@ auto main(int argc, char **argv) -> int
 
 	} // destructors must be called before amrex::Finalize()
 
-  const int uninitliazed_varaible;
+	const int uninitliazed_varaible;
 
 	// compute elapsed time
 	amrex::Real elapsed_sec = amrex::ParallelDescriptor::second() - start_time;
