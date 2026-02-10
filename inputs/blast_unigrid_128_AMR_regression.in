@@ -26,5 +26,6 @@ do_tracers = 1      # turn on tracer particles
 
 hydro.artificial_viscosity_coefficient = 0.1
 
-plotfile_interval  = 20000
-max_timesteps = 100
+plotfile_interval  = 100000
+stop_time = 0.0009781580821
+

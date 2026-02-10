@@ -6,8 +6,8 @@
 #include <cstdint>
 #include <map>
 #include <memory>
-#include <ranges>
 #include <string>
+#include <utility>
 
 #include <fmt/format.h>
 #include <yaml-cpp/yaml.h>
@@ -46,6 +46,7 @@ class PhysicsParticleDescriptorBase
 	int massIndex_{-1};		// Index for particle mass (-1 if not used)
 	int lumIndex_{-1};		// Index for radiation luminosity (-1 if not used)
 	int birthTimeIndex_{-1};	// Index for birth time (-1 if not used)
+	int deathTimeIndex_{-1};	// Index for death time (-1 if not used)
 	bool allowsCreation_{false};	// Whether particles can be created during simulation
 	bool allowsDestruction_{false}; // Whether particles can be destroyed during simulation
 	int evolutionStageIndex_{-1};	// Index for evolution stage (-1 if not used)
@@ -55,9 +56,9 @@ class PhysicsParticleDescriptorBase
 	bool forceFinestLevel_{false}; // Whether particles are forced to live in the finest level
 
       public:
-	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation, bool allows_destruction = false,
+	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, int death_time_idx, bool allows_creation, bool allows_destruction = false,
 				      int evolution_stage_idx = -1, bool allows_accretion = false, int mass_at_birth_idx = -1)
-	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), allowsCreation_(allows_creation),
+	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), deathTimeIndex_(death_time_idx), allowsCreation_(allows_creation),
 	      allowsDestruction_(allows_destruction), evolutionStageIndex_(evolution_stage_idx), allowsAccretion_(allows_accretion),
 	      massAtBirthIndex_(mass_at_birth_idx)
 	{
@@ -75,6 +76,7 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] AMREX_FORCE_INLINE auto getMassIndex() const -> int { return massIndex_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getLumIndex() const -> int { return lumIndex_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getBirthTimeIndex() const -> int { return birthTimeIndex_; }
+	[[nodiscard]] AMREX_FORCE_INLINE auto getDeathTimeIndex() const -> int { return deathTimeIndex_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getAllowsCreation() const -> bool { return allowsCreation_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getAllowsDestruction() const -> bool { return allowsDestruction_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getEvolutionStageIndex() const -> int { return evolutionStageIndex_; }
@@ -190,10 +192,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	[[nodiscard]] static constexpr auto getParticleType() -> ParticleType { return particleType_; }
 
 	// Constructor initializing descriptor with container and particle properties
-	PhysicsParticleDescriptor(ContainerType *container, int mass_idx, int lum_idx, int birth_time_idx, bool allows_creation,
+	PhysicsParticleDescriptor(ContainerType *container, int mass_idx, int lum_idx, int birth_time_idx, int death_time_idx, bool allows_creation,
 				  bool allows_destruction = false, int evolution_stage_idx = -1, bool allows_accretion = false, int mass_at_birth_idx = -1)
-	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction, evolution_stage_idx, allows_accretion,
-					    mass_at_birth_idx),
+	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, death_time_idx, allows_creation, allows_destruction, evolution_stage_idx,
+					    allows_accretion, mass_at_birth_idx),
 	      container_(container)
 	{
 	}
@@ -666,14 +668,14 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 				// Deposit supernova energy and momentum from all particles. This also updates the evolution stage of the particles.
 				auto [sn_count, vel] =
-				    SNDeposition<ContainerType, problem_t>(this->container_, state, state_fc, lev, time, dt, this->getMassIndex(),
-									   this->getEvolutionStageIndex(), this->getBirthTimeIndex());
+				    SNDeposition<particleType, ContainerType, problem_t>(this->container_, state, state_fc, lev, time, dt, this->getMassIndex(),
+											 this->getEvolutionStageIndex(), this->getBirthTimeIndex());
 				num_sn_explosions = sn_count;
 				max_velocity = vel;
 			} else {
 				// Only update evolution stage but not deposit energy/momentum
-				SNFeedbackUtils::updateEvolutionStage(this->container_, lev, time + dt, this->getBirthTimeIndex(),
-								      this->getEvolutionStageIndex());
+				SNFeedbackUtils::updateEvolutionStageAndDeathDensity<particleType, ContainerType, problem_t>(
+				    this->container_, state, lev, time + dt, this->getBirthTimeIndex(), this->getEvolutionStageIndex());
 			}
 		}
 
@@ -702,7 +704,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		// Use the traits class to implement the specialized behavior
 		ParticleCreationTraits<particleType>::template createParticles<problem_t, ContainerType>(
 		    this->container_, this->getMassIndex(), state, accretion_rate, lev, current_time, dt, this->getEvolutionStageIndex(),
-		    this->getBirthTimeIndex(), this->getMassAtBirthIndex(), state_fc, verbose);
+		    this->getBirthTimeIndex(), this->getDeathTimeIndex(), this->getMassAtBirthIndex(), state_fc, verbose);
 	}
 #endif // AMREX_SPACEDIM == 3
 };
@@ -781,41 +783,43 @@ template <typename problem_t> class PhysicsParticleRegister
 	}
 
 	// Register a new particle type with specified properties
-	template <typename ContainerType> void registerParticleType(ContainerType *container, ParticleType type)
+	template <ParticleType particleType, typename ContainerType> void registerParticleType(ContainerType *container)
 	{
 		std::unique_ptr<PhysicsParticleDescriptorBase> descriptor;
 
 		// Create the appropriate descriptor based on the particle type
-		// The parameters for the descriptor are: mass_idx, lum_idx, birth_time_idx, allows_creation, allows_destruction, evolution_stage_idx,
-		// allows_accretion
-		if (type == ParticleType::Rad) {
+		// The parameters for the descriptor are: mass_idx, lum_idx, birth_time_idx, death_time_idx, allows_creation, allows_destruction,
+		// evolution_stage_idx, allows_accretion
+		if constexpr (particleType == ParticleType::Rad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(
-			    container, -1, RadParticleLumIdx, RadParticleBirthTimeIdx, false, false);
+			    container, -1, RadParticleLumIdx, RadParticleBirthTimeIdx, RadParticleDeathTimeIdx, false, false);
 		}
 #if AMREX_SPACEDIM == 3
-		else if (type == ParticleType::CIC) {
+		else if constexpr (particleType == ParticleType::CIC) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(container, CICParticleMassIdx, -1,
-															      -1, false, false);
-		} else if (type == ParticleType::CICRad) {
+															      -1, -1, false, false);
+		} else if constexpr (particleType == ParticleType::CICRad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CICRad>>(
-			    container, CICRadParticleMassIdx, CICRadParticleLumIdx, CICRadParticleBirthTimeIdx, false, false);
-		} else if (type == ParticleType::StochasticStellarPop) {
+			    container, CICRadParticleMassIdx, CICRadParticleLumIdx, CICRadParticleBirthTimeIdx, CICRadParticleDeathTimeIdx, false, false);
+		} else if constexpr (particleType == ParticleType::StochasticStellarPop) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::StochasticStellarPop>>(
-			    container, StochasticStellarPopParticleMassIdx, StochasticStellarPopParticleLumIdx, StochasticStellarPopParticleBirthTimeIdx, true,
-			    false, StochasticStellarPopParticleStageIdx, false, StochasticStellarPopParticleMassAtBirthIdx);
-		} else if (type == ParticleType::Sink) {
-			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Sink>>(container, SinkParticleMassIdx,
-															       -1, -1, true, false, -1, true);
-		} else if (type == ParticleType::Test) {
+			    container, StochasticStellarPopParticleMassIdx, StochasticStellarPopParticleLumIdx, StochasticStellarPopParticleBirthTimeIdx,
+			    StochasticStellarPopParticleDeathTimeIdx, true, false, StochasticStellarPopParticleStageIdx, false,
+			    StochasticStellarPopParticleMassAtBirthIdx);
+		} else if constexpr (particleType == ParticleType::Sink) {
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Sink>>(
+			    container, SinkParticleMassIdx, -1, -1, -1, true, false, -1, true);
+		} else if constexpr (particleType == ParticleType::Test) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
-			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, true, true, TestParticleStageIdx, false);
+			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, TestParticleDeathTimeIdx, true, true,
+			    TestParticleStageIdx, false);
 		}
 #endif // AMREX_SPACEDIM == 3
 		else {
-			amrex::Abort("Unknown particle type for physics particles");
+			static_assert(particleType == ParticleType::Rad, "Unknown particle type for physics particles");
 		}
 
-		particleRegistry_[type] = std::move(descriptor);
+		particleRegistry_[particleType] = std::move(descriptor);
 	}
 
 	// Retrieve a particle descriptor by type

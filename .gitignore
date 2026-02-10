@@ -21,6 +21,8 @@ __pycache__
 *.sarif
 Backtrace.*
 
+*.hdf5
+
 # Agora galaxy uncompressed data
 /extern/agora_data/vcirc.dat
 /extern/agora_data/AgoraGalaxy_particles_LOW.txt
