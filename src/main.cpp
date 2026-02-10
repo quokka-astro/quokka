@@ -76,7 +76,7 @@ auto main(int argc, char **argv) -> int
 	amrex::Real const start_time = amrex::ParallelDescriptor::second();
 
 	// Check if we should ignore the return code from problem_main
-	int ignore_return = 0;
+	bool ignore_return = false;
 	amrex::ParmParse const pp;
 	pp.query("ignore_return", ignore_return);
 
@@ -99,7 +99,7 @@ auto main(int argc, char **argv) -> int
 
 	amrex::Finalize();
 
-	if (ignore_return != 0) {
+	if (ignore_return) {
 		return 0;
 	}
 	return result;
