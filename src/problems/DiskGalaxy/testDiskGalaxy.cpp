@@ -153,6 +153,16 @@ template <> void QuokkaSimulation<DiskGalaxy>::preCalculateInitialConditions()
 		if (userData_.haloVphiParserExe->m_device_executor == nullptr) {
 			amrex::Abort("disk_galaxy.halo_vphi_expr: device parser executor is null after compile<3>()");
 		}
+
+		// Smoke-test parser on device to isolate parser execution failures.
+		amrex::Gpu::PinnedVector<amrex::Real> parser_test_result(1, 0.0);
+		amrex::ParserExecutor<3> const parser_exe = *userData_.haloVphiParserExe;
+		amrex::Real *const parser_test_ptr = parser_test_result.data();
+		amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE(int) noexcept { parser_test_ptr[0] = parser_exe(0.0, 0.0, 0.0); });
+		amrex::Gpu::streamSynchronize();
+		if (!std::isfinite(parser_test_result[0])) {
+			amrex::Abort("disk_galaxy.halo_vphi_expr: device parser smoke test returned non-finite value at (0,0,0).");
+		}
 #endif
 	} else {
 		userData_.haloVphiParser.reset();
@@ -183,6 +193,8 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 	pp.query("disk_temperature", T_disk);
 	pp.query("disk_perturb_amplitude", disk_perturb_amplitude);
 	pp.query("disk_perturb_Rmax_kpc", disk_perturb_Rmax_kpc);
+	bool debug_parser_only_ic = false;
+	pp.query("debug_parser_only_ic", debug_parser_only_ic);
 	AMREX_ALWAYS_ASSERT(!std::isnan(disk_gas_mass_Msun));
 	AMREX_ALWAYS_ASSERT(!std::isnan(disk_Rscale_kpc));
 	AMREX_ALWAYS_ASSERT(!std::isnan(disk_zscale_kpc));
@@ -230,6 +242,33 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
+
+		if (debug_parser_only_ic) {
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			const amrex::Real x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
+			const amrex::Real y = prob_lo[1] + (static_cast<amrex::Real>(j) + 0.5) * dx[1];
+			const amrex::Real z = prob_lo[2] + (static_cast<amrex::Real>(k) + 0.5) * dx[2];
+			const amrex::Real R = std::sqrt(x * x + y * y);
+			const amrex::Real vphi = use_halo_vphi_parser ? halo_vphi_parser(x, y, z) : 0.0;
+			AMREX_ALWAYS_ASSERT(std::isfinite(vphi));
+			const amrex::Real rho = 1.0;
+			const amrex::Real momx = (R > 0.0) ? (-vphi * y / R) : 0.0;
+			const amrex::Real momy = (R > 0.0) ? (vphi * x / R) : 0.0;
+			const amrex::Real momz = 0.0;
+			const amrex::Real Eint = 1.0;
+			const amrex::Real Ekin = 0.5 * (momx * momx + momy * momy + momz * momz) / rho;
+			const amrex::Real Etot = Eint + Ekin;
+			state_cc(i, j, k, HydroSystem<DiskGalaxy>::density_index) = rho;
+			state_cc(i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index) = momx;
+			state_cc(i, j, k, HydroSystem<DiskGalaxy>::x2Momentum_index) = momy;
+			state_cc(i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index) = momz;
+			state_cc(i, j, k, HydroSystem<DiskGalaxy>::energy_index) = Etot;
+				state_cc(i, j, k, HydroSystem<DiskGalaxy>::internalEnergy_index) = Eint;
+			});
+			amrex::Gpu::streamSynchronize();
+			amrex::Print() << "[DiskGalaxy] parser-only IC kernel completed successfully.\n";
+			return;
+		}
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// Cartesian coordinates
