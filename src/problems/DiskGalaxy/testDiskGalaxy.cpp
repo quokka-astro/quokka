@@ -154,7 +154,6 @@ template <> void QuokkaSimulation<DiskGalaxy>::preCalculateInitialConditions()
 			amrex::Abort("disk_galaxy.halo_vphi_expr: device parser executor is null after compile<3>()");
 		}
 #endif
-		userData_.haloVphiParser.reset();
 	} else {
 		userData_.haloVphiParser.reset();
 		userData_.haloVphiParserExe.reset();
