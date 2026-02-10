@@ -327,7 +327,7 @@ create_status_file() {
 			}' >"$status_file"
 	else
 		# Fallback without jq - simple JSON escaping
-		error_details=$(printf '%s' "$error_details" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\n/\\n/g' | tr -d '\n')
+		error_details=$(printf '%s' "$error_details" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | paste -sd '\\n' -)
 		cat >"$status_file" <<EOF
 {
   "timestamp": "$timestamp",
