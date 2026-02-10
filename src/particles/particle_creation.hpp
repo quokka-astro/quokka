@@ -478,7 +478,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		AMREX_GPU_DEVICE void
 		operator()(ParticleType *particles, int num_particles, StateArray const &state_arr, StateArray const & /*accretion_rate_arr*/, int i, int j,
 			   int k, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
-			   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc, amrex::Long base_offset,
+			   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const * /*fab_fc*/, amrex::Long base_offset,
 			   amrex::RandomEngine const &engine) const
 		{
 			if (mass_idx + 3 < ParticleType::NReal) {
@@ -548,12 +548,17 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 							const amrex::Real rx = amrex::Random(engine);
 							const amrex::Real ry = amrex::Random(engine);
 							const amrex::Real rz = amrex::Random(engine);
-							// randomize velocity with velocity dispersion ~0.5*cs
-							const amrex::Real cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k, fab_fc);
-							constexpr amrex::Real vdisp_norm = 0.5 / std::numbers::sqrt3;
-							p.rdata(StochasticStellarPopParticleVxIdx) = vx + vdisp_norm * (rx - 0.5) * cs;
-							p.rdata(StochasticStellarPopParticleVyIdx) = vy + vdisp_norm * (ry - 0.5) * cs;
-							p.rdata(StochasticStellarPopParticleVzIdx) = vz + vdisp_norm * (rz - 0.5) * cs;
+							// Set velocity dispersion to the cell-scale escape speed of the LowMassComposite cluster:
+							// v_esc = sqrt(2 G M_cluster / dx), where M_cluster is the total low-mass composite mass in this cell.
+							const amrex::Real dx_cell = std::min({dx[0], dx[1], dx[2]});
+							const amrex::Real m_cluster = mass_low_mass_star;
+							const amrex::Real v_esc = std::sqrt(2.0 * C::Gconst * m_cluster / dx_cell);
+							// For U ~ Uniform[0,1], std(U - 0.5) = sqrt(1/12).
+							// Choose component std = v_esc / sqrt(3), so 3D RMS dispersion is v_esc.
+							const amrex::Real vdisp_norm = 2.0 * v_esc;
+							p.rdata(StochasticStellarPopParticleVxIdx) = vx + vdisp_norm * (rx - 0.5);
+							p.rdata(StochasticStellarPopParticleVyIdx) = vy + vdisp_norm * (ry - 0.5);
+							p.rdata(StochasticStellarPopParticleVzIdx) = vz + vdisp_norm * (rz - 0.5);
 						} else {
 							p.rdata(StochasticStellarPopParticleVxIdx) = vx;
 							p.rdata(StochasticStellarPopParticleVyIdx) = vy;
