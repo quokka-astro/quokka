@@ -426,6 +426,66 @@ publish_results() {
 }
 
 #######################################
+# Wait for GPU to be free before starting tests.
+#
+# Primary check: nvidia-smi --query-compute-apps, which queries the GPU
+# driver directly and sees CUDA processes from ALL Docker containers on
+# the host. This reliably detects Azure CI jobs running on the same GPU.
+#
+# Secondary check: pgrep for Agent.Worker (best-effort; only works if
+# the container shares the host PID namespace).
+#######################################
+wait_for_gpu() {
+	local check_interval=60
+	local waited=0
+
+	echo "=========================================="
+	echo "Checking for conflicting jobs on the GPU"
+	echo "=========================================="
+
+	while true; do
+		# Primary: check for active CUDA processes via GPU driver (cross-container)
+		local gpu_procs=""
+		gpu_procs=$(nvidia-smi --query-compute-apps=pid,name --format=csv,noheader 2>/dev/null || true)
+
+		# Secondary: check for Azure Agent.Worker process (best-effort)
+		local azure_running=0
+		if pgrep -f "Agent.Worker" > /dev/null 2>&1; then
+			azure_running=1
+		fi
+
+		# Proceed if GPU is free and no Azure worker detected
+		if [ -z "$gpu_procs" ] && [ "$azure_running" -eq 0 ]; then
+			if [ "$waited" -gt 0 ]; then
+				echo "✓ GPU is free and no Azure jobs detected, proceeding..."
+			else
+				echo "✓ GPU is free, proceeding..."
+			fi
+			echo ""
+			return
+		fi
+
+		# Build informative wait message
+		local reasons=""
+		if [ -n "$gpu_procs" ]; then
+			local count
+			count=$(echo "$gpu_procs" | grep -c '[0-9]' || true)
+			local names
+			names=$(echo "$gpu_procs" | awk -F',' '{print $2}' | tr '\n' ' ' | sed 's/ $//')
+			reasons="GPU has ${count} active CUDA process(es) [${names}]"
+		fi
+		if [ "$azure_running" -eq 1 ]; then
+			[ -n "$reasons" ] && reasons="${reasons}; "
+			reasons="${reasons}Azure Agent.Worker is running"
+		fi
+
+		echo "Waiting: ${reasons}. Rechecking in ${check_interval}s (${waited}s elapsed)..."
+		sleep "$check_interval"
+		waited=$((waited + check_interval))
+	done
+}
+
+#######################################
 # Main function - orchestrate the workflow
 #######################################
 main() {
@@ -442,6 +502,9 @@ main() {
 
 	# Setup environment
 	setup_environment
+
+	# Wait for GPU to be free before starting
+	wait_for_gpu
 
 	# Run regression tests (capture exit code)
 	local test_exit_code=0
