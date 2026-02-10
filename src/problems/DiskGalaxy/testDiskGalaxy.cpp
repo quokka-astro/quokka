@@ -26,7 +26,6 @@
 #include "fundamental_constants.H"
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
-#include "math/interpolate.hpp"
 #include "math/quadrature.hpp"
 #include "particles/particle_types.hpp"
 #include "physics_info.hpp"
@@ -72,23 +71,7 @@ template <> struct Particle_Traits<DiskGalaxy> {
 };
 
 template <> struct SimulationData<DiskGalaxy> {
-	amrex::Real r_inner{};
-	amrex::Real r_outer{};
-	amrex::Real vcirc_outer{};
-	amrex::Real rho_outer{};
-	amrex::Real velr_outer{};
-	amrex::Real temp_outer{};
-
-	amrex::Real vcirc_inner{};
-	amrex::Real rho_inner{};
-	amrex::Real velr_inner{};
-	amrex::Real temp_inner{};
-
-	amrex::Gpu::PinnedVector<amrex::Real> radius;
-	amrex::Gpu::PinnedVector<amrex::Real> vcirc;
-	amrex::Gpu::PinnedVector<amrex::Real> rho_halo;
-	amrex::Gpu::PinnedVector<amrex::Real> velr_halo;
-	amrex::Gpu::PinnedVector<amrex::Real> temp_halo;
+	quokka::DataTable<1, 4, quokka::OutOfBounds::clamp> halo_table;
 
 	std::string haloVphiExpr;
 	bool useHaloVphiParser = false;
@@ -104,43 +87,16 @@ template <> void QuokkaSimulation<DiskGalaxy>::preCalculateInitialConditions()
 	std::string filename;
 	pp.query("vcirc_file", filename);
 
-	auto halo_table = quokka::DataTable<1, 4, quokka::OutOfBounds::clamp>::CSVReader(filename, quokka::SpacingType::linear);
-	auto const halo_table_const = halo_table.const_tables();
+	userData_.halo_table = quokka::DataTable<1, 4, quokka::OutOfBounds::clamp>::CSVReader(filename, quokka::SpacingType::linear);
+	auto const halo_table_const = userData_.halo_table.const_tables();
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(halo_table_const.sizes[0] > 0, "disk_galaxy.vcirc_file contained no numeric rows.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(halo_table_const.spacing_types[0] == quokka::SpacingType::linear,
 					 "disk_galaxy.vcirc_file must use linear spacing for the radius coordinate.");
 
-	// 2. copy data to simData_.radius and simData_.vcirc
-	const auto N = static_cast<size_t>(halo_table_const.sizes[0]);
-	userData_.radius.resize(N);
-	userData_.vcirc.resize(N);
-	userData_.rho_halo.resize(N);
-	userData_.velr_halo.resize(N);
-	userData_.temp_halo.resize(N);
-
-	const double length_unit = 1.0e3 * C::parsec; // kpc
-	const double vel_unit = 1.0e5;		      // km/s
-	for (size_t i = 0; i < N; ++i) {
-		amrex::Real const radius = halo_table_const.coord_min[0] + static_cast<amrex::Real>(i) * halo_table_const.dcoord[0];
-		userData_.radius[i] = radius * length_unit;
-		userData_.vcirc[i] = halo_table_const.dataViewArrays[0](static_cast<int>(i)) * vel_unit;
-		userData_.rho_halo[i] = halo_table_const.dataViewArrays[1](static_cast<int>(i));
-		userData_.velr_halo[i] = halo_table_const.dataViewArrays[2](static_cast<int>(i));
-		userData_.temp_halo[i] = halo_table_const.dataViewArrays[3](static_cast<int>(i));
-	}
-
-	// save min/max radii
-	userData_.r_inner = halo_table_const.coord_min[0] * length_unit;
-	userData_.vcirc_inner = halo_table_const.dataViewArrays[0](0) * vel_unit;
-	userData_.rho_inner = halo_table_const.dataViewArrays[1](0);
-	userData_.velr_inner = halo_table_const.dataViewArrays[2](0);
-	userData_.temp_inner = halo_table_const.dataViewArrays[3](0);
-
-	userData_.r_outer = halo_table_const.coord_max[0] * length_unit;
-	userData_.vcirc_outer = halo_table_const.dataViewArrays[0](static_cast<int>(N - 1)) * vel_unit;
-	userData_.rho_outer = halo_table_const.dataViewArrays[1](static_cast<int>(N - 1));
-	userData_.velr_outer = halo_table_const.dataViewArrays[2](static_cast<int>(N - 1));
-	userData_.temp_outer = halo_table_const.dataViewArrays[3](static_cast<int>(N - 1));
+	AMREX_ALWAYS_ASSERT(halo_table_const.dataViewArrays[0].p != nullptr);
+	AMREX_ALWAYS_ASSERT(halo_table_const.dataViewArrays[1].p != nullptr);
+	AMREX_ALWAYS_ASSERT(halo_table_const.dataViewArrays[2].p != nullptr);
+	AMREX_ALWAYS_ASSERT(halo_table_const.dataViewArrays[3].p != nullptr);
 
 	// optional halo v_phi expression (variables: x, y, z)
 	userData_.haloVphiExpr.clear();
@@ -209,26 +165,11 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 	const double R_max_perturb = disk_perturb_Rmax_kpc * (1e3 * C::parsec);
 	const double rho_0 = disk_gas_mass / 4. / M_PI / (R_d * R_d) / z_d; // normalization constant
 
-	// read tables
-
-	double const *R_table = userData_.radius.dataPtr();
-	double const *vcirc_table = userData_.vcirc.dataPtr();
-	double const *rhoH_table = userData_.rho_halo.dataPtr();
-	double const *velr_table = userData_.velr_halo.dataPtr();
-	double const *temp_table = userData_.temp_halo.dataPtr();
-
-	auto const len_table = static_cast<int>(userData_.radius.size());
-	const amrex::Real R_table_min = userData_.r_inner;
-	const amrex::Real rho_inner = userData_.rho_inner;
-	const amrex::Real vcirc_inner = userData_.vcirc_inner;
-	const amrex::Real velr_inner = userData_.velr_inner;
-	const amrex::Real temp_inner = userData_.temp_inner;
-
-	const amrex::Real R_table_max = userData_.r_outer;
-	const amrex::Real vcirc_outer = userData_.vcirc_outer;
-	const amrex::Real rho_outer = userData_.rho_outer;
-	const amrex::Real velr_outer = userData_.velr_outer;
-	const amrex::Real temp_outer = userData_.temp_outer;
+	// read halo table views (DataTable storage is kept alive in userData_)
+	auto const halo_table_const = userData_.halo_table.const_tables();
+	AMREX_ALWAYS_ASSERT(halo_table_const.sizes[0] > 1);
+	const double length_unit = 1.0e3 * C::parsec; // kpc
+	const double vel_unit = 1.0e5;		      // km/s
 	const bool use_halo_vphi_parser = userData_.useHaloVphiParser;
 	amrex::ParserExecutor<3> halo_vphi_parser{};
 	if (use_halo_vphi_parser) {
@@ -295,17 +236,11 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 		}
 		amrex::Real const Emag = 0.5 * ((Bx * Bx) + (By * By));
 
-		auto vcirc_exact = [R_table_min, R_table_max, R_table, vcirc_inner, vcirc_outer, vcirc_table, len_table](const amrex::Real R) {
-			double vcirc = NAN;
-			if (R > R_table_min && R < R_table_max) {
-				vcirc = interpolate_value(R, R_table, vcirc_table, len_table);
-			} else if (R >= R_table_max) {
-				vcirc = vcirc_outer;
-			} else if (R <= R_table_min) {
-				vcirc = vcirc_inner;
-			}
-			return vcirc;
-		};
+			auto vcirc_exact = [halo_table_const, length_unit, vel_unit](const amrex::Real R) {
+				const std::array<amrex::Real, 1> point = {R / length_unit};
+				auto const halo_vals = halo_table_const.interpolate(point);
+				return static_cast<double>(halo_vals[0] * vel_unit);
+			};
 
 		// compute velocity profiles
 		auto vx_exact = [vcirc_exact](double x, double y, double /*z*/) {
@@ -320,41 +255,22 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 			return vcirc_exact(R) * std::sin(theta); // vy
 		};
 
-		auto rhoHalo = [R_table_min, R_table, R_table_max, rho_inner, rho_outer, rhoH_table, len_table](const amrex::Real R) {
-			double rho_H = NAN;
-			if (R > R_table_min && R < R_table_max) {
-				rho_H = interpolate_value(R, R_table, rhoH_table, len_table);
-			} else if (R <= R_table_min) {
-				rho_H = rho_inner;
-			} else {
-				rho_H = rho_outer;
-			}
-
-			return rho_H;
+		auto rhoHalo = [halo_table_const, length_unit](const amrex::Real R) {
+			const std::array<amrex::Real, 1> point = {R / length_unit};
+			auto const halo_vals = halo_table_const.interpolate(point);
+			return static_cast<double>(halo_vals[1]);
 		};
 
-		auto velHalo = [R_table_min, R_table, R_table_max, velr_inner, velr_outer, velr_table, len_table](const amrex::Real R) {
-			double vel_H = NAN;
-			if (R > R_table_min && R < R_table_max) {
-				vel_H = interpolate_value(R, R_table, velr_table, len_table);
-			} else if (R <= R_table_min) {
-				vel_H = velr_inner;
-			} else {
-				vel_H = velr_outer;
-			}
-			return -vel_H;
+		auto velHalo = [halo_table_const, length_unit](const amrex::Real R) {
+			const std::array<amrex::Real, 1> point = {R / length_unit};
+			auto const halo_vals = halo_table_const.interpolate(point);
+			return static_cast<double>(-halo_vals[2]);
 		};
 
-		auto tempHalo = [R_table_min, R_table, R_table_max, temp_inner, temp_outer, temp_table, len_table](const amrex::Real R) {
-			double temp_H = NAN;
-			if (R > R_table_min && R < R_table_max) {
-				temp_H = interpolate_value(R, R_table, temp_table, len_table);
-			} else if (R <= R_table_min) {
-				temp_H = temp_inner;
-			} else {
-				temp_H = temp_outer;
-			}
-			return temp_H;
+		auto tempHalo = [halo_table_const, length_unit](const amrex::Real R) {
+			const std::array<amrex::Real, 1> point = {R / length_unit};
+			auto const halo_vals = halo_table_const.interpolate(point);
+			return static_cast<double>(halo_vals[3]);
 		};
 
 		// compute density profiles
