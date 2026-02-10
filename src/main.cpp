@@ -75,6 +75,8 @@ auto main(int argc, char **argv) -> int
 
 	amrex::Real const start_time = amrex::ParallelDescriptor::second();
 
+	int unused_variable = 1;
+
 	int result = 0;
 	{ // objects must be destroyed before amrex::finalize, so enter new
 		// scope here to do that automatically
@@ -82,6 +84,8 @@ auto main(int argc, char **argv) -> int
 		result = problem_main();
 
 	} // destructors must be called before amrex::Finalize()
+
+	const int uninitliazed_varaible = 2;
 
 	// compute elapsed time
 	amrex::Real elapsed_sec = amrex::ParallelDescriptor::second() - start_time;
@@ -96,3 +100,5 @@ auto main(int argc, char **argv) -> int
 
 	return result;
 }
+
+// dummy change to trigger a new CI build
