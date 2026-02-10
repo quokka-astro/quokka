@@ -2,8 +2,8 @@ name: 🧹 clang-tidy-review
 
 # You can be more specific, but it currently only works on pull requests
 # Fiewer paths are ignored because some folders (e.g. scripts) are not relavent to code build but should be linted
-on:
-  pull_request:
+on:  
+  pull_request:  
 
 concurrency:
   group: ${{ github.ref }}-${{ github.head_ref }}-clang-tidy
