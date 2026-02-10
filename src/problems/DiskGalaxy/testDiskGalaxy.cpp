@@ -15,6 +15,7 @@
 #include "AMReX_FabArrayBase.H"
 #include "AMReX_GpuContainers.H"
 #include "AMReX_GpuDevice.H"
+#include "AMReX_GpuMemory.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_Parser.H"
 #include "AMReX_Print.H"
@@ -155,12 +156,12 @@ template <> void QuokkaSimulation<DiskGalaxy>::preCalculateInitialConditions()
 		}
 
 		// Smoke-test parser on device to isolate parser execution failures.
-		amrex::Gpu::PinnedVector<amrex::Real> parser_test_result(1, 0.0);
+		amrex::Gpu::DeviceScalar<amrex::Real> parser_test_result(0.0);
 		amrex::ParserExecutor<3> const parser_exe = *userData_.haloVphiParserExe;
-		amrex::Real *const parser_test_ptr = parser_test_result.data();
+		amrex::Real *const parser_test_ptr = parser_test_result.dataPtr();
 		amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE(int) noexcept { parser_test_ptr[0] = parser_exe(0.0, 0.0, 0.0); });
 		amrex::Gpu::streamSynchronize();
-		if (!std::isfinite(parser_test_result[0])) {
+		if (!std::isfinite(parser_test_result.dataValue())) {
 			amrex::Abort("disk_galaxy.halo_vphi_expr: device parser smoke test returned non-finite value at (0,0,0).");
 		}
 #endif
