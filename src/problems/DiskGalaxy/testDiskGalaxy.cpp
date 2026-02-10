@@ -236,11 +236,11 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 		}
 		amrex::Real const Emag = 0.5 * ((Bx * Bx) + (By * By));
 
-			auto vcirc_exact = [halo_table_const, length_unit, vel_unit](const amrex::Real R) {
-				const std::array<amrex::Real, 1> point = {R / length_unit};
-				auto const halo_vals = halo_table_const.interpolate(point);
-				return static_cast<double>(halo_vals[0] * vel_unit);
-			};
+		auto vcirc_exact = [halo_table_const, length_unit, vel_unit](const amrex::Real R) {
+			const std::array<amrex::Real, 1> point = {R / length_unit};
+			auto const halo_vals = halo_table_const.interpolate(point);
+			return static_cast<double>(halo_vals[0] * vel_unit);
+		};
 
 		// compute velocity profiles
 		auto vx_exact = [vcirc_exact](double x, double y, double /*z*/) {
