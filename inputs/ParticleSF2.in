@@ -38,8 +38,8 @@ problem.Tamb = 1.0e1
 restartfile = chk0000010
 max_timesteps = 20
 initial_dt = 3.15576e12
-plotfile_interval = 5
-checkpoint_interval = 5
+plotfile_interval = 10
+checkpoint_interval = -1
 
 # *****************************************************************
 # Cooling parameters
