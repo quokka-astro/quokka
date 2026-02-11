@@ -178,13 +178,12 @@ template <typename problem_t> using CICRadParticleIterator = amrex::ParIter<CICR
 //-------------------- Stellar evolution stage enum --------------------
 
 // Enum for particle evolution stages. This is designed to be shared among several particle types. However, not all particle types will use all stages.
-// - LowMassStar: singular low mass star
-// - SNProgenitor: singular high-mass stars (> 9 Msun). Depending on the SF and SN scheme, these stars will either explode as supernovae in
-//   the end of their lifetime unconditionally, or conditionally according to their evolutional track.
+// - HighMassNonExploding: high-mass stars (> 9 Msun) that will not explode as supernovae in the end of their lifetime
+// - SNProgenitor: singular high-mass stars (> 9 Msun) that will explode as supernovae in the end of their lifetime
 // - SNRemnant: Supernova remnant stage
 // - LowMassComposite: composite of low-mass stars
 // - Removed: marked for removal
-enum class StellarEvolutionStage { LowMassStar, SNProgenitor, SNRemnant, LowMassComposite, Removed };
+enum class StellarEvolutionStage { HighMassNonExploding, SNProgenitor, SNRemnant, LowMassComposite, Removed };
 
 //-------------------- Stellar population particles --------------------
 
@@ -196,6 +195,13 @@ AMREX_ENUM(StochasticStellarPopParticleRealIdx, // NOLINT
 	   vz,					// Velocity in z direction
 	   birth_time,				// Time when particle becomes active
 	   death_time,				// Time when particle becomes inactive
+	   birth_x,				// Birth position x
+	   birth_y,				// Birth position y
+	   birth_z,				// Birth position z
+	   death_x,				// Death position x
+	   death_y,				// Death position y
+	   death_z,				// Death position z
+	   death_density,			// Density at death
 	   mass_at_birth,			// Particle mass at birth
 	   luminosity				// Base luminosity component (expanded to luminosity_0, luminosity_1, ... in I/O)
 );
@@ -212,17 +218,25 @@ constexpr int StochasticStellarPopParticleVyIdx = static_cast<int>(StochasticSte
 constexpr int StochasticStellarPopParticleVzIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::vz);
 constexpr int StochasticStellarPopParticleBirthTimeIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::birth_time);
 constexpr int StochasticStellarPopParticleDeathTimeIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::death_time);
+constexpr int StochasticStellarPopParticleBirthPosXIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::birth_x);
+constexpr int StochasticStellarPopParticleBirthPosYIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::birth_y);
+constexpr int StochasticStellarPopParticleBirthPosZIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::birth_z);
+constexpr int StochasticStellarPopParticleDeathPosXIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::death_x);
+constexpr int StochasticStellarPopParticleDeathPosYIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::death_y);
+constexpr int StochasticStellarPopParticleDeathPosZIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::death_z);
+constexpr int StochasticStellarPopParticleDeathDensityIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::death_density);
 constexpr int StochasticStellarPopParticleMassAtBirthIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::mass_at_birth);
 constexpr int StochasticStellarPopParticleLumIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::luminosity); // Base index for luminosity components
 constexpr int StochasticStellarPopParticleStageIdx = static_cast<int>(StochasticStellarPopParticleIntIdx::evolution_stage);
 
-// Number of real components for StochasticStellarPop_particles, mass + 3 velocity components + luminosity
+// Number of real components for StochasticStellarPop_particles, mass + 3 velocity components + times + positions + death density + luminosity
 template <typename problem_t>
 constexpr int StochasticStellarPopParticleRealComps = []() constexpr {
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
-		return 7 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, death_time, mass_at_birth, lum[nGroups]
+		return 14 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, death_time, birth_xyz, death_xyz, death_density, mass_at_birth,
+								// lum[nGroups]
 	} else {
-		return 7; // mass, vx, vy, vz, birth_time, death_time, mass_at_birth
+		return 14; // mass, vx, vy, vz, birth_time, death_time, birth_xyz, death_xyz, death_density, mass_at_birth
 	}
 }();
 
@@ -416,6 +430,13 @@ inline auto get_units_data() -> const auto &
 	       {"vz", {0, 1, -1, 0}},
 	       {"birth_time", {0, 0, 1, 0}},
 	       {"death_time", {0, 0, 1, 0}},
+	       {"birth_x", {0, 1, 0, 0}},
+	       {"birth_y", {0, 1, 0, 0}},
+	       {"birth_z", {0, 1, 0, 0}},
+	       {"death_x", {0, 1, 0, 0}},
+	       {"death_y", {0, 1, 0, 0}},
+	       {"death_z", {0, 1, 0, 0}},
+	       {"death_density", {1, -3, 0, 0}},
 	       {"mass_at_birth", {1, 0, 0, 0}},
 	       {"luminosity", {-1, 2, -3, 0}}}}},
 	    {ParticleType::Sink, {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}}}}},
@@ -453,6 +474,10 @@ inline amrex::Real eps_ff = 0.01;	   // NOLINT
 // Scheme for SN feedback
 inline SNScheme SN_scheme = SNScheme::SN_thermal_or_thermal_momentum; // NOLINT
 
+// When true, homogenize gas velocity before SN injection to ensure energy conservation.
+// When false, do not homogenize gas velocity, causing an extra energy term whichis the cross product of the inhomogeneity and radial momentum.
+inline bool SN_smooth_gas_velocity = true; // NOLINT
+
 // Sink particle accretion
 inline bool sink_particle_use_uniform_kernel = false; // NOLINT. If true, use uniform accretion kernel in a (7 dx)^3 box
 
@@ -464,6 +489,9 @@ inline bool disable_particle_drift = false; // NOLINT
 
 // Maximum velocity limit for stellar particles in cm/s (default: 1000 km/s)
 inline amrex::Real stellar_velocity_limit = 1.0e8; // NOLINT
+
+// Maximum mass for LowMassComposite particles. Default is set to max(), so no splitting is performed.
+inline amrex::Real low_mass_composite_max_mass = std::numeric_limits<amrex::Real>::max(); // NOLINT
 
 inline int reproducibility_roundoff_redundancy = 20; // NOLINT; remove 20 bits from the significand
 
@@ -483,6 +511,9 @@ inline void particleParmParse()
 	// Handle SNScheme enum
 	pp.query("SN_scheme", SN_scheme);
 
+	// SN Galilean invariance option
+	pp.query("SN_smooth_gas_velocity", SN_smooth_gas_velocity);
+
 	// Stochastic SF parameters
 	pp.query("eps_ff", eps_ff);
 
@@ -494,6 +525,9 @@ inline void particleParmParse()
 
 	// Stellar velocity limit parameter
 	pp.query("stellar_velocity_limit", stellar_velocity_limit);
+
+	// Low-mass composite particle mass cap (split into multiple particles if exceeded)
+	pp.query("low_mass_composite_max_mass", low_mass_composite_max_mass);
 
 	// Roundoff factor for particles
 	pp.query("reproducibility_roundoff_redundancy", reproducibility_roundoff_redundancy);

@@ -23,7 +23,14 @@ static constexpr int FATE_ARR_SIZE = 201;
 static constexpr int AGE_ARR_SIZE = 197;
 static constexpr int YR_TO_SEC = 3.15576e7; // seconds in a year
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_fate(Real mass_star) -> int
+/// \brief Interpolate whether a star of given mass will undergo a supernova explosion
+/// \param mass_star Mass of the star in CGS units (grams)
+/// \return true if the star will explode as a supernova, false otherwise
+///
+/// This function uses tabulated data from stellar evolution models to determine
+/// the fate of a massive star. Stars that successfully explode as supernovae return
+/// true, while those that fail to explode (forming black holes directly) return false.
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_whether_SN_explosion(Real mass_star) -> bool
 {
 	const amrex::GpuArray<Real, FATE_ARR_SIZE> interp_mass_star = {
 	    // mass of stars in Msun
@@ -55,7 +62,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_fate(Real mass_star) -
 
 	// Interpolate to find the fate of all masses, using clamp policy to return first/last element for out-of-bounds
 	amrex::Real fate_interp = interpolate_value<BoundaryPolicy::Clamp>(mass_in_Msun, x_arr.data(), y_arr.data(), FATE_ARR_SIZE); // NOLINT
-	return (fate_interp < 0.5 ? 0 : 1);
+	return (fate_interp >= 0.5);
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_death_time(Real mass_star) -> Real

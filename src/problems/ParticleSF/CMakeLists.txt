@@ -9,5 +9,6 @@ if(AMReX_SPACEDIM EQUAL 3)
   add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
   add_test(NAME ${JOB_NAME}2 COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}2.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 
-	set_tests_properties(${JOB_NAME}2 PROPERTIES DEPENDS "${JOB_NAME}")
+	set_tests_properties(${JOB_NAME} PROPERTIES COST 100)
+	set_tests_properties(${JOB_NAME}2 PROPERTIES DEPENDS "${JOB_NAME}" COST 99)
 endif()
