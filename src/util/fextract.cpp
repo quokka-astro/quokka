@@ -240,14 +240,12 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 		}
 		pos = std::move(sorted_pos);
 
-		for (int n = 0; n < data.size(); ++n) {
-			Vector<Real> sorted_var(n_pts);
+		for (auto &var_vec : data) {
+			Gpu::HostVector<Real> sorted_var(var_vec.size());
 			for (size_t i = 0; i < n_pts; ++i) {
-				sorted_var[i] = data[n][p[i]];
+				sorted_var[i] = var_vec[p[i]];
 			}
-			for (size_t i = 0; i < n_pts; ++i) {
-				data[n][i] = sorted_var[i];
-			}
+			var_vec = std::move(sorted_var);
 		}
 	}
 	return std::make_tuple(pos, data);
