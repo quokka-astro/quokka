@@ -5,6 +5,7 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_Enum.H"
 #include "AMReX_Extension.H"
+#include "AMReX_GpuDevice.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_TableData.H"
 
@@ -417,8 +418,15 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> class DataTable
 {
       private:
-	std::array<std::unique_ptr<amrex::TableData<amrex::Real, 1>>, Ndim> coords_;
-	std::array<std::unique_ptr<amrex::TableData<amrex::Real, Ndim>>, Nout> data_; // Array of tables for multiple outputs
+	using coord_table_type = amrex::TableData<amrex::Real, 1>;
+	using data_table_type = amrex::TableData<amrex::Real, Ndim>;
+
+	// Host staging tables (pinned for efficient H2D copies in GPU builds).
+	std::array<std::unique_ptr<coord_table_type>, Ndim> coords_h_;
+	std::array<std::unique_ptr<data_table_type>, Nout> data_h_;
+	// Device-visible tables used by kernels via const_tables().
+	std::array<std::unique_ptr<coord_table_type>, Ndim> coords_d_;
+	std::array<std::unique_ptr<data_table_type>, Nout> data_d_;
 
 	// Type aliases for different dimensional data structures
 	using data_1d_type = std::array<amrex::Vector<amrex::Real>, Nout>;
@@ -613,12 +621,12 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 		std::array<amrex::Table1D<const amrex::Real>, Ndim> coord_tables{};
 		for (int i = 0; i < Ndim; ++i) {
-			coord_tables[i] = coords_[i]->const_table();
+			coord_tables[i] = coords_d_[i]->const_table();
 		}
 
 		std::array<typename DataTableGpuConst<Ndim, Nout, oob_policy>::single_data_table_type, Nout> data_tables{};
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-			data_tables[out_idx] = data_[out_idx]->const_table();
+			data_tables[out_idx] = data_d_[out_idx]->const_table();
 		}
 
 		DataTableGpuConst<Ndim, Nout, oob_policy> tables{
@@ -639,13 +647,13 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	{
 		// Check all coordinate arrays
 		for (int dim = 0; dim < Ndim; ++dim) {
-			if (coords_[dim] == nullptr) {
+			if (coords_h_[dim] == nullptr || coords_d_[dim] == nullptr) {
 				return false;
 			}
 		}
 		// Check all data tables
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-			if (data_[out_idx] == nullptr) {
+			if (data_h_[out_idx] == nullptr || data_d_[out_idx] == nullptr) {
 				return false;
 			}
 		}
@@ -701,6 +709,19 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
       private:
 	// Optimized initialization that takes bounds, sizes, and spacing directly
 	// coords parameter is optional - if empty, coordinates will be generated based on spacing type
+	void sync_tables_to_device()
+	{
+		for (int dim = 0; dim < Ndim; ++dim) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coords_h_[dim] != nullptr && coords_d_[dim] != nullptr, "Coordinate tables must be allocated before H2D copy.");
+			coords_d_[dim]->copy(*coords_h_[dim]);
+		}
+		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data_h_[out_idx] != nullptr && data_d_[out_idx] != nullptr, "Data tables must be allocated before H2D copy.");
+			data_d_[out_idx]->copy(*data_h_[out_idx]);
+		}
+		amrex::Gpu::streamSynchronize();
+	}
+
 	template <typename DataType>
 	void initialize_common(const std::array<amrex::Real, Ndim> &x_mins, const std::array<amrex::Real, Ndim> &x_maxs, const std::array<int, Ndim> &n_xs,
 			       const std::array<SpacingType, Ndim> &spacing_types, const std::array<amrex::Vector<amrex::Real>, Ndim> & /*coords*/,
@@ -723,8 +744,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 		// Create coordinate tables - either from provided coords or generate them
 		for (int dim = 0; dim < Ndim; ++dim) {
-			coords_[dim] = std::make_unique<amrex::TableData<amrex::Real, 1>>(amrex::Array<int, 1>{0}, amrex::Array<int, 1>{sizes_[dim] - 1},
-											  amrex::The_Pinned_Arena());
+			coords_h_[dim] =
+			    std::make_unique<coord_table_type>(amrex::Array<int, 1>{0}, amrex::Array<int, 1>{sizes_[dim] - 1}, amrex::The_Pinned_Arena());
+			coords_d_[dim] = std::make_unique<coord_table_type>(amrex::Array<int, 1>{0}, amrex::Array<int, 1>{sizes_[dim] - 1});
 
 			// Generate coordinates based on spacing type
 			if (spacing_types_[dim] == SpacingType::linear) {
@@ -748,15 +770,15 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 			// NOSONAR
 			// For future support of irregular spacing
-			// } else if (spacing_types_[dim] == SpacingType::irregular) {
-			// 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(static_cast<int>(coords[dim].size()) == sizes_[dim],
-			// 					 fmt::format("Provided coordinates size mismatch for dimension {}! (expected: {}, actual: {})",
-			// 						     dim, sizes_[dim], coords[dim].size()));
-			// 	auto coord_table = coords_[dim]->table();
-			// 	for (int i = 0; i < sizes_[dim]; ++i) {
-			// 		coord_table(i) = coords[dim][i];
-			// 	}
-		}
+				// } else if (spacing_types_[dim] == SpacingType::irregular) {
+				// 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(static_cast<int>(coords[dim].size()) == sizes_[dim],
+				// 					 fmt::format("Provided coordinates size mismatch for dimension {}! (expected: {}, actual: {})",
+				// 						     dim, sizes_[dim], coords[dim].size()));
+				// 	auto coord_table = coords_h_[dim]->table();
+				// 	for (int i = 0; i < sizes_[dim]; ++i) {
+				// 		coord_table(i) = coords[dim][i];
+				// 	}
+			}
 
 		// Calculate grid spacing (after taking necessary log of the coordinates)
 		for (int dim = 0; dim < Ndim; ++dim) {
@@ -773,8 +795,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 		// Create and populate data tables for each output
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-			data_[out_idx] = std::make_unique<amrex::TableData<amrex::Real, Ndim>>(lo, hi, amrex::The_Pinned_Arena());
-			auto data_table = data_[out_idx]->table();
+			data_h_[out_idx] = std::make_unique<data_table_type>(lo, hi, amrex::The_Pinned_Arena());
+			data_d_[out_idx] = std::make_unique<data_table_type>(lo, hi);
+			auto data_table = data_h_[out_idx]->table();
 
 			// Copy data for different dimensions
 			if constexpr (Ndim == 1) {
@@ -810,7 +833,10 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 					}
 				}
 			}
+
 		}
+		// Ensure kernels only see device-resident tables.
+		sync_tables_to_device();
 	}
 
 	// Backward compatibility wrapper: derive bounds, sizes, and spacing from coords
