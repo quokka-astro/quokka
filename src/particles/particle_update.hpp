@@ -68,7 +68,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 					amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 						auto &p = pData[idx]; // NOLINT
 						ParticlePropertyUpdateTraits<ParticleType::StochasticStellarPop>::template updateProperties<
-								problem_t, typename ContainerType::ParticleType, nGroups>(p, current_time, gpu_tables);
+						    problem_t, typename ContainerType::ParticleType, nGroups>(p, current_time, gpu_tables);
 					});
 				}
 			}
