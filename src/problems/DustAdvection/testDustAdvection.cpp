@@ -231,7 +231,6 @@ void QuokkaSimulation<DustAdvection>::computeReferenceSolution(amrex::MultiFab &
 auto problem_main() -> int
 {
 	// problem parameters
-	const double Lx = 1.0;
 	const double CFL_number = 0.8;
 
 	// problem initialization
