@@ -39,7 +39,7 @@ static std::string particles_file = "sink4.txt"; // NOLINT
 
 template <> struct Particle_Traits<SinkProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
-	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Sink;
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Star;
 };
 
 template <> struct quokka::EOS_Traits<SinkProblem> {
@@ -182,7 +182,7 @@ auto problem_main() -> int
 	double total_particle_mass = 0.0;
 
 	// get total particle mass
-	const auto &real_data = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
+	const auto &real_data = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Star)->getParticleDataAtLevel(0).first;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// const double total_particle_mass = std::accumulate(real_data.begin(), real_data.end(), 0.0, [](double sum, const auto &d) { return sum +
 		// d[3]; });
@@ -216,7 +216,7 @@ auto problem_main() -> int
 
 	int status = 0;
 
-	const auto &real_data_ste1 = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
+	const auto &real_data_ste1 = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Star)->getParticleDataAtLevel(0).first;
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// compute total particle mass and error
@@ -415,7 +415,7 @@ auto problem_main() -> int
 
 	// Get initial mass for Phase 3
 	amrex::Real const total_mass_phase3_init = sim2.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
-	const auto &real_data_phase3_init = sim2.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
+	const auto &real_data_phase3_init = sim2.particleRegister_.getParticleDescriptor(quokka::ParticleType::Star)->getParticleDataAtLevel(0).first;
 	double total_particle_mass_phase3_init = 0.0;
 	for (const auto &p : real_data_phase3_init) {
 		total_particle_mass_phase3_init += p[3];
@@ -428,7 +428,7 @@ auto problem_main() -> int
 
 	// Get final mass for Phase 3
 	amrex::Real const total_mass_phase3_final = sim2.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
-	const auto &real_data_phase3_final = sim2.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
+	const auto &real_data_phase3_final = sim2.particleRegister_.getParticleDescriptor(quokka::ParticleType::Star)->getParticleDataAtLevel(0).first;
 	double total_particle_mass_phase3_final = 0.0;
 	for (const auto &p : real_data_phase3_final) {
 		total_particle_mass_phase3_final += p[3];

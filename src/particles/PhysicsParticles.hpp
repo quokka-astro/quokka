@@ -776,6 +776,8 @@ template <typename problem_t> class PhysicsParticleRegister
 				return "StochasticStellarPop_particles";
 			case ParticleType::Sink:
 				return "Sink_particles";
+			case ParticleType::Star:
+				return "Star_particles";
 			default:
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, "Unknown particle type");
 				return "Unknown_particles";
@@ -809,6 +811,9 @@ template <typename problem_t> class PhysicsParticleRegister
 		} else if constexpr (particleType == ParticleType::Sink) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Sink>>(
 			    container, SinkParticleMassIdx, -1, -1, -1, true, false, -1, true);
+		} else if constexpr (particleType == ParticleType::Star) {
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Star>>(
+			    container, StarParticleMassIdx, StarParticleLumIdx, StarParticleBirthTimeIdx, StarParticleDeathTimeIdx, true, false, -1, true);
 		} else if constexpr (particleType == ParticleType::Test) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
 			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, TestParticleDeathTimeIdx, true, true,
