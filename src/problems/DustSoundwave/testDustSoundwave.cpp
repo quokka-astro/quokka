@@ -124,7 +124,6 @@ template <> void QuokkaSimulation<DustSoundwave>::setInitialConditionsOnGrid(quo
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
 
-		//----- gas initialization -----
 		// density perturbation: δρ_g = A_rho[Re(δρ_g^)cos(kx) - Im(δρ_g^)sin(kx)]
 		double const drho_g = A_rho * (Re_rho_g * cos(kk * x) - Im_rho_g * sin(kk * x));
 		amrex::Real const rho_gas_local = rho_g0 + drho_g;
@@ -139,7 +138,7 @@ template <> void QuokkaSimulation<DustSoundwave>::setInitialConditionsOnGrid(quo
 		state_cc(i, j, k, HydroSystem<DustSoundwave>::energy_index) = 0.5 * rho_gas_local * (du_g * du_g);
 		state_cc(i, j, k, HydroSystem<DustSoundwave>::internalEnergy_index) = 0.0;
 
-		// Compute dust values before constexpr-if to ensure proper capture
+		// compute dust values before constexpr-if to ensure proper capture
 		// density perturbation: δρ_d = A_rho[Re(δρ_d^)cos(kx) - Im(δρ_d^)sin(kx)]
 		double const drho_d = A_rho * (Re_rho_d * cos(kk * x) - Im_rho_d * sin(kk * x));
 		amrex::Real const rho_dust_local = rho_d0 + drho_d;
@@ -148,7 +147,6 @@ template <> void QuokkaSimulation<DustSoundwave>::setInitialConditionsOnGrid(quo
 		double const du_d = A_vel * (Re_u_d * cos(kk * x) - Im_u_d * sin(kk * x));
 
 		if constexpr (Physics_Traits<DustSoundwave>::is_dust_enabled) {
-			//----- dust initialization -----
 			state_cc(i, j, k, HydroSystem<DustSoundwave>::dustDensity_index) = rho_dust_local;
 			state_cc(i, j, k, HydroSystem<DustSoundwave>::x1DustMomentum_index) = rho_dust_local * du_d;
 			state_cc(i, j, k, HydroSystem<DustSoundwave>::x2DustMomentum_index) = 0.;
@@ -264,7 +262,7 @@ auto problem_main() -> int
 		norm_rho_dust_dense[i] = rho_dust_analytic(tt) / rho_d0;
 	}
 
-	// Relative L1 error function
+	// relative L1 error function
 	auto rel_err = [](const std::vector<double> &sim, const std::vector<double> &exact) {
 		double err = 0.0;
 		double sol = 0.0;
