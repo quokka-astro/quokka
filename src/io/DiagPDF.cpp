@@ -4,7 +4,9 @@
 #include "AMReX_Extension.H"
 #include "AMReX_GpuContainers.H"
 #include "AMReX_MultiFabUtil.H"
+#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
+#include "AMReX_Print.H"
 #include "AMReX_SPACE.H"
 
 #include "DiagPDF.H"
@@ -29,8 +31,6 @@ void DiagPDF::init(const std::string &a_prefix, std::string_view a_diagName)
 
 	for (int n = 0; n < ndims; ++n) {
 		std::string const var_prefix = a_prefix + "." + m_varNames[n];
-		amrex::Print() << "[DiagPDF] Reading parameters: " + var_prefix + "\n";
-
 		amrex::ParmParse const var_pp(var_prefix);
 		var_pp.get("nBins", m_nBins[n]);
 		var_pp.query("log_spaced_bins", m_useLogSpacedBins[n]);
@@ -127,11 +127,10 @@ auto DiagPDF::MFVecMax(const amrex::Vector<const amrex::MultiFab *> &a_state, in
 void DiagPDF::writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex::Vector<amrex::Real> &a_pdf)
 {
 	std::string diagfile;
-	if (m_interval > 0) {
-		diagfile = amrex::Concatenate(m_diagfile, a_nstep, 6);
-	}
 	if (m_per > 0.0) {
 		diagfile = m_diagfile + std::to_string(a_time);
+	} else {
+		diagfile = amrex::Concatenate(m_diagfile, a_nstep, 6);
 	}
 	diagfile = diagfile + ".dat";
 

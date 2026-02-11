@@ -1,8 +1,14 @@
-if (AMReX_SPACEDIM EQUAL 3)
-    add_executable(test_particle_SF test_particle_SF.cpp ${QuokkaObjSources})
-    if(AMReX_GPU_BACKEND MATCHES "CUDA")
-        setup_target_for_cuda_compilation(test_particle_SF)
-    endif()
+if(AMReX_SPACEDIM EQUAL 3)
+	set(JOB_NAME ParticleSF)
 
-    add_test(NAME ParticleSF COMMAND test_particle_SF ../inputs/ParticleSF.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+	add_executable(${JOB_NAME} test${JOB_NAME}.cpp ${QuokkaObjSources})
+	if(AMReX_GPU_BACKEND MATCHES "CUDA")
+		setup_target_for_cuda_compilation(${JOB_NAME})
+	endif()
+
+  add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(NAME ${JOB_NAME}2 COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}2.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+
+	set_tests_properties(${JOB_NAME} PROPERTIES COST 100)
+	set_tests_properties(${JOB_NAME}2 PROPERTIES DEPENDS "${JOB_NAME}" COST 99)
 endif()

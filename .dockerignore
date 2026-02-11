@@ -1,0 +1,19 @@
+.git
+.gitmodules
+.github/workflows/**/node_modules
+.vscode
+
+# Local build artifacts
+build/
+cmake-build-*/
+
+# Large CI/regression assets (not needed for container builds)
+tests/
+
+# Developer-facing content (not needed for container builds)
+docs/
+paper/
+scripts/
+
+# OS/editor noise
+**/.DS_Store

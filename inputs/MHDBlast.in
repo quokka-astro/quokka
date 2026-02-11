@@ -1,0 +1,30 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  -0.5 -0.5 -0.5
+geometry.prob_hi     =   0.5  0.5  0.5
+quokka.bc = periodic periodic periodic
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 1       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 64 64 64
+amr.max_level       = 1     # number of levels = max_level + 1
+amr.max_grid_size   = 32    # at least 128 for GPUs
+amr.blocking_factor = 16    # grid size must be divisible by this
+amr.n_error_buf     = 3     # minimum 3 cell buffer around tagged cells
+amr.grid_eff        = 0.9
+
+do_reflux = 1
+do_subcycle = 1
+do_tracers = 1      # turn on tracer particles
+
+plotfile_interval = 1000
+derived_vars = magnetic_divergence
+stop_time = 0.05
+

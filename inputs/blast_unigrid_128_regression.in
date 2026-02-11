@@ -3,7 +3,7 @@
 # *****************************************************************
 geometry.prob_lo     =  0.0  0.0  0.0 
 geometry.prob_hi     =  1.2  1.2  1.2
-geometry.is_periodic =  0    0    0
+quokka.bc = reflecting reflecting reflecting
 
 # *****************************************************************
 # VERBOSITY
@@ -26,4 +26,6 @@ do_tracers = 1      # turn on tracer particles
 
 hydro.artificial_viscosity_coefficient = 0.1
 
-plotfile_interval  = 20000
+plotfile_interval  = 100000
+stop_time = 1.0
+

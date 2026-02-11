@@ -1,4 +1,4 @@
-name: CodeQL
+name: 🔒 CodeQL
 
 on:
   push:
@@ -21,7 +21,7 @@ jobs:
     outputs:
       code-changed: ${{ steps.changes.outputs.code }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
         id: changes
         with:
@@ -34,6 +34,7 @@ jobs:
               - 'extern/grackle_data_files/**'
               - 'extern/openPMD-api/**'
               - 'extern/yaml-cpp/**'
+              - 'extern/turbulence/**'
               - 'inputs/**'
               - 'CMakeLists.txt'
               - '**/*.cpp'
@@ -58,7 +59,7 @@ jobs:
         language: [ python ]
     steps:
       - name: Checkout
-        uses: actions/checkout@ff7abcd0c3c05ccf6adc123a8cd1fd4fb30fb493 # v4.2.2
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v4.2.2
         with:
           submodules: true
           fetch-depth: 0
@@ -73,7 +74,7 @@ jobs:
 
       - name: Set Up Cache
         if: ${{ matrix.language == 'cpp' }}
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: ~/.cache/ccache
           key: ccache-${{ github.workflow }}-${{ github.job }}-git-${{ github.sha }}
@@ -90,14 +91,14 @@ jobs:
               -DCMAKE_CXX_COMPILER="/usr/local/bin/g++"
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@64d10c13136e1c5bce3e5fbde8d4906eeaafc885 # v3.29.5
+        uses: github/codeql-action/init@45cbd0c69e560cd9e7cd7f8c32362050c9b7ded2 # v3.29.5
         with:
           languages: ${{ matrix.language }}
           queries: +security-and-quality
           config-file: ./.github/workflows/codeql/codeql-config.yml
 
       - name: Build (py)
-        uses: github/codeql-action/autobuild@64d10c13136e1c5bce3e5fbde8d4906eeaafc885 # v3.29.5
+        uses: github/codeql-action/autobuild@45cbd0c69e560cd9e7cd7f8c32362050c9b7ded2 # v3.29.5
         if: ${{ matrix.language == 'python' }}
 
       - name: Build (C++)
@@ -120,7 +121,7 @@ jobs:
           make -j 4
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@64d10c13136e1c5bce3e5fbde8d4906eeaafc885 # v3.29.5
+        uses: github/codeql-action/analyze@45cbd0c69e560cd9e7cd7f8c32362050c9b7ded2 # v3.29.5
         with:
           category: "/language:${{ matrix.language }}"
 
@@ -154,7 +155,7 @@ jobs:
           PR_NUMBER: ${{ github.event.number }}
         run: |
           echo $PR_NUMBER > pr_number.txt
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: pr_number
           path: pr_number.txt

@@ -1,4 +1,4 @@
-name: Claude Code
+name: 🤖 Claude Code
 
 on:
   issue_comment:
@@ -26,13 +26,13 @@ jobs:
       actions: read # Required for Claude to read CI results on PRs
     steps:
       - name: Checkout repository
-        uses: actions/checkout@ff7abcd0c3c05ccf6adc123a8cd1fd4fb30fb493 # v4
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v4
         with:
           fetch-depth: 1
 
       - name: Run Claude Code
         id: claude
-        uses: anthropics/claude-code-action@90d189f3abd48655ec3e2c67c552cc23e92d6028 # beta
+        uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
@@ -40,8 +40,10 @@ jobs:
           additional_permissions: |
             actions: read
           
-          # Optional: Specify model (defaults to Claude Sonnet 4, uncomment for Claude Opus 4)
-          model: "claude-opus-4-20250514"
+          # Optional: Pass CLI arguments to Claude Code
+          claude_args: |
+            --model claude-opus-4-5-20251101
+            --max-turns 10
           
           # Optional: Customize the trigger phrase (default: @claude)
           # trigger_phrase: "/claude"

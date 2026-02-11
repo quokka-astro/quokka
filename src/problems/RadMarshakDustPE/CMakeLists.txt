@@ -1,8 +1,16 @@
-add_executable(test_radiation_marshak_dust_PE test_radiation_marshak_dust_and_PE.cpp ${QuokkaObjSources})
+set(JOB_NAME RadMarshakDustPE)
+
+add_executable(${JOB_NAME} test${JOB_NAME}.cpp ${QuokkaObjSources})
 
 if(AMReX_GPU_BACKEND MATCHES "CUDA")
-    setup_target_for_cuda_compilation(test_radiation_marshak_dust_PE)
+  setup_target_for_cuda_compilation(${JOB_NAME})
 endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-add_test(NAME RadiationMarshakDustPE-coupled COMMAND test_radiation_marshak_dust_PE ../inputs/RadMarshakDustPEcoupled.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-add_test(NAME RadiationMarshakDustPE-decoupled COMMAND test_radiation_marshak_dust_PE ../inputs/RadMarshakDustPEdecoupled.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+add_test(
+  NAME ${JOB_NAME}
+  COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in ${QuokkaTestParams}
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+add_test(
+  NAME RadiationMarshakDustPE-decoupled
+  COMMAND ${JOB_NAME} ../inputs/RadMarshakDustPEdecoupled.in ${QuokkaTestParams}
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)

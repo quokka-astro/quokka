@@ -1,0 +1,35 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  0.0  0.0  0.0 
+geometry.prob_hi     =  1.0  1.0  1.0
+quokka.bc = periodic periodic periodic
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 0       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 128 8 8
+amr.max_level       = 0     # number of levels = max_level + 1
+
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 0
+
+max_timesteps = 1000
+constant_dt = 0.005
+
+dust.omega = 1.0
+
+# test A
+#stop_time = 10.0
+
+# test B
+stop_time = 0.05
+
+# test C
+#stop_time = 0.3

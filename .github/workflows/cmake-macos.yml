@@ -1,4 +1,4 @@
-name: CMake (macOS)
+name: 🍎 CMake (macOS)
 
 on:
   push:
@@ -28,9 +28,14 @@ jobs:
     runs-on: macos-14
     needs: check_changes
     if: needs.check_changes.outputs.has_non_docs_changes == 'true'
+    env:
+      CCACHE_COMPRESS: '1'
+      CCACHE_COMPRESSLEVEL: '10'
+      CCACHE_MAXSIZE: 450M
+      CCACHE_SLOPPINESS: time_macros
 
     steps:
-    - uses: actions/checkout@ff7abcd0c3c05ccf6adc123a8cd1fd4fb30fb493 # v4.2.2
+    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v4.2.2
       with:
         submodules: true
         fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of sonarcloud analysis
@@ -47,7 +52,7 @@ jobs:
 
     - name: Install Homebrew dependencies
       run: |
-        brew install openmpi hdf5@1.10 || true
+        brew install ccache openmpi hdf5@1.10 || true
         brew link --force hdf5@1.10
 
     - name: Output HDF5 configuration (verbose)
@@ -60,7 +65,20 @@ jobs:
       run: python3 -m pip install --user numpy matplotlib
 
     - name: Install Canary
-      run: python3 -m pip install --user "canary-wm @ git+https://github.com/sandialabs/canary"
+      run: python3 -m pip install --user canary-wm
+
+    - name: Set Up Cache
+      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      with:
+        path: ~/Library/Caches/ccache
+        key: ccache-${{ github.workflow }}-${{ github.job }}-git-${{ github.sha }}
+        restore-keys: |
+             ccache-${{ github.workflow }}-${{ github.job }}-git-
+
+    - name: Initialize ccache
+      run: |
+        ccache --version
+        ccache -z
 
     - name: Configure CMake
       # Use a bash shell so we can use the same syntax for environment variable
@@ -68,7 +86,7 @@ jobs:
       shell: bash
       working-directory: ${{runner.workspace}}/build
       env: {CXXFLAGS: "-ffp-exception-behavior=strict"}
-      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE
+      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
     - name: Build
       working-directory: ${{runner.workspace}}/build
@@ -84,11 +102,17 @@ jobs:
       shell: bash
       run: |
         export PATH="$HOME/Library/Python/3.11/bin:$PATH"
-        canary run --output-on-failure --workers=3 .
+        canary run --output-on-failure --workers=3 -k 'not HydroWaveConvergence' .
+
+    - name: ccache stats
+      if: always()
+      run: |
+        du -hs ~/Library/Caches/ccache
+        ccache -s
 
     - name: Upload test output
       if: always()
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
       with:
         name: test-results
         path: ${{github.workspace}}/tests

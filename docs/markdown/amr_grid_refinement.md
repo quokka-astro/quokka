@@ -4,7 +4,9 @@ Quokka relies on the Berger-Collela AMR algorithm [@berger1989local] provided by
 
 ## Understanding the Refinement Workflow
 
-AMReX walks through a predictable sequence each time it builds or adjusts the mesh hierarchy. Cells are tagged inside `ErrorEst`, those tags are coarsened according to `blocking_factor/ref_ratio`, clustered by the Berger-Rigoutsos algorithm [@berger1991algorithm], and then promoted to new grids that honor `blocking_factor` and `max_grid_size`. The resulting hierarchy is averaged down so coarse levels remain consistent with fine ones. Keeping this loop in mind helps interpret why the mesh responds the way it does when the problem evolves or when you revisit the `ErrorEst` logic.
+AMReX walks through a predictable sequence each time it builds or adjusts the mesh hierarchy. Cells are tagged inside `ErrorEst`, those tags are coarsened according to `blocking_factor/ref_ratio`, clustered by the Berger-Rigoutsos algorithm [@berger1991algorithm], and then promoted to new grids that honor `blocking_factor` and `max_grid_size`. The resulting hierarchy is averaged down so coarse levels remain consistent with fine ones. Keeping this loop in mind helps interpret why the mesh responds the way it does when the problem evolves or when you revisit your refinement logic.
+
+In Quokka, AMReX still calls an `ErrorEst` function, but this is now a thin wrapper around `refineGrid` that also invokes `refineGridsAroundParticles` to tag cells surrounding particles. The user should therefore define `refineGrid` instead of `ErrorEst`; the wrapper will automatically call `refineGrid` and then add particle-based tags on top.
 
 ## Setting AMR Parameters
 
@@ -21,7 +23,7 @@ Choose these controls as a set: a generous `blocking_factor` demands tighter tag
 
 ## Performance and Scaling Considerations
 
-GPU runs typically favor `blocking_factor ≥ 32` so each patch keeps SMs busy; values below 32 almost always break memory coalescing across a warp and leave expensive kernels underutilized even when occupancy looks fine. CPU multigrid solves prefer at least 8. If you push those limits, guard your memory footprint by trimming the number of refinement levels or enlarging `max_grid_size` so patches do not proliferate. Also watch how frequently you trigger `regrid` calls—rapid regridding magnifies the cost of tag evaluation and repartitioning, so coarse control logic or hysteresis in `ErrorEst` can pay dividends on very dynamic problems.
+GPU runs typically favor `blocking_factor ≥ 32` so each patch keeps SMs busy; values below 32 almost always break memory coalescing across a warp and leave expensive kernels underutilized even when occupancy looks fine. CPU multigrid solves prefer at least 8. If you push those limits, guard your memory footprint by trimming the number of refinement levels or enlarging `max_grid_size` so patches do not proliferate. Also watch how frequently you trigger `regrid` calls—rapid regridding magnifies the cost of tag evaluation and repartitioning, so coarse control logic or hysteresis inside `refineGrid` can pay dividends on very dynamic problems.
 
 ## Observing and Adjusting the Hierarchy
 
@@ -44,9 +46,9 @@ The summary lines are the quickest health check: `volume` reports the percentage
 
 ### Example: Berger-Rigoutsos in Practice
 
-![Tagged cells and Berger-Rigoutsos boxes](amr_grid_refinement.svg)
+![Tagged cells and Berger-Rigoutsos boxes](media/amr_grid_refinement.svg)
 
-Compile Quokka with `-DAMReX_SPACEDIM=2`, then run the HydroBlast2D driver with the bundled `inputs/blast2d_amr_example.in`. That input sets `amr.n_cell = 128 128 4`, `amr.ref_ratio = 2 2 1`, `amr.blocking_factor = 32 32 4`, `amr.grid_eff = 0.8`, and `amr.n_error_buf = 1`. The third entry in each list is ignored in 2D, so the effective blocking factor is 32. The pressure-gradient trigger in `ErrorEst` tags a thin ring around the blast front. AMReX coarsens those tags by 16 cells before clustering, so the Berger-Rigoutsos pass finds four rectangles that tile the annulus: two long bands `(lo, hi) = (64,96)→(191,127)` and `(64,128)→(191,159)` plus two shorter bridges `(96,64)→(159,95)` and `(96,160)→(159,191)`. Running `amrex_fboxinfo --full plt00040` on the resulting plotfile shows the same coordinates, confirming that the level-one patches are multiples of 32 cells in each direction and fully envelop the tagged region after refinement. Comparing those boxes with the tags in the plotfile (as sketched above) is a quick way to verify that the clustering step is behaving the way you expect.
+Compile Quokka with `-DAMReX_SPACEDIM=2`, then run the HydroBlast2D driver with the bundled `inputs/blast2d_amr_example.in`. That input sets `amr.n_cell = 128 128 4`, `amr.ref_ratio = 2 2 1`, `amr.blocking_factor = 32 32 4`, `amr.grid_eff = 0.8`, and `amr.n_error_buf = 1`. The third entry in each list is ignored in 2D, so the effective blocking factor is 32. The pressure-gradient trigger in `refineGrid` tags a thin ring around the blast front. AMReX coarsens those tags by 16 cells before clustering, so the Berger-Rigoutsos pass finds four rectangles that tile the annulus: two long bands `(lo, hi) = (64,96)→(191,127)` and `(64,128)→(191,159)` plus two shorter bridges `(96,64)→(159,95)` and `(96,160)→(159,191)`. Running `amrex_fboxinfo --full plt00040` on the resulting plotfile shows the same coordinates, confirming that the level-one patches are multiples of 32 cells in each direction and fully envelop the tagged region after refinement. Comparing those boxes with the tags in the plotfile (as sketched above) is a quick way to verify that the clustering step is behaving the way you expect.
 
 ## Troubleshooting Patterns
 
