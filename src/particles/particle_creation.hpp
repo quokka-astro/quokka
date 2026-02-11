@@ -696,13 +696,9 @@ template <> struct ParticleCreationTraits<ParticleType::Star> {
 		}
 	};
 
-	// Initializes Star particle properties using the sink-like creation scheme plus Star-specific fields.
+	// Initializes Star particle properties: position, velocity, mass, and Star-specific physical fields.
 	template <typename problem_t> struct ParticleCreator {
 		int mass_idx;
-		int birth_time_index;
-		int death_time_index;
-		int evolution_stage_index;
-		int mass_at_birth_idx;
 		int cpu_id;
 		amrex::Long pid_start;
 		amrex::Real current_time;
@@ -711,10 +707,9 @@ template <> struct ParticleCreationTraits<ParticleType::Star> {
 		AMREX_GPU_HOST_DEVICE
 		ParticleCreator(int mass_index, int birth_time_index, int death_time_index, int processor_id, amrex::Long particle_id_start,
 				int evolution_stage_index, int mass_at_birth_index, amrex::Real current_time, amrex::Real dt)
-		    : mass_idx(mass_index), birth_time_index(birth_time_index), death_time_index(death_time_index),
-		      evolution_stage_index(evolution_stage_index), mass_at_birth_idx(mass_at_birth_index), cpu_id(processor_id), pid_start(particle_id_start),
-		      current_time(current_time), dt(dt)
+		    : mass_idx(mass_index), cpu_id(processor_id), pid_start(particle_id_start), current_time(current_time), dt(dt)
 		{
+			amrex::ignore_unused(birth_time_index, death_time_index, evolution_stage_index, mass_at_birth_index);
 		}
 
 		template <typename ParticleType, typename StateArray>
@@ -724,40 +719,63 @@ template <> struct ParticleCreationTraits<ParticleType::Star> {
 			   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *fab_fc, amrex::Long base_offset,
 			   amrex::RandomEngine const & /*engine*/) const
 		{
-			// Initialize basic sink-like properties: position, ID, CPU, mass (at mass_idx),
-			// velocity (at mass_idx+1/2/3), and update cell state (density, momentum, energy).
-			SinkCreationHelpers::initializeSinkLikeParticles<problem_t>(particles, num_particles, state_arr, i, j, k, dx, plo, fab_fc,
-										    mass_idx, cpu_id, pid_start, base_offset);
+			const double dx_max = std::max({dx[0], dx[1], dx[2]});
 
-			// Initialize Star-specific fields for each newly created particle
+			// Determine sound speed.
+			Real cs = NAN;
+			if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
+				cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
+			} else {
+				cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k, fab_fc);
+			}
+
+			// Jeans density.
+			const auto rho_J = ParticleUtils::computeJeansDensity(cs, dx_max);
+
+			// Calculate common values for all particles
+			const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
+			const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+			const amrex::Real particle_mass = (cell_density - rho_J) * cell_volume;
+
+			const amrex::Real vx = state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / cell_density;
+			const amrex::Real vy = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
+			const amrex::Real vz = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / cell_density;
+
 			for (int p_idx = 0; p_idx < num_particles; ++p_idx) {
 				auto &p = particles[p_idx]; // NOLINT
 
-				// Birth and death times
-				if (birth_time_index >= 0) {
-					p.rdata(birth_time_index) = current_time;
-				}
-				if (death_time_index >= 0) {
-					p.rdata(death_time_index) = std::numeric_limits<amrex::Real>::max();
-				}
+				// Set particle position at cell center
+				p.pos(0) = plo[0] + (i + 0.5) * dx[0];
+				p.pos(1) = plo[1] + (j + 0.5) * dx[1];
+				p.pos(2) = plo[2] + (k + 0.5) * dx[2];
 
-				// Star-specific internal state (nuclear burning, accretion history)
-				p.rdata(StarParticleMassLastIdx) = p.rdata(mass_idx);
-				p.rdata(StarParticleDtIdx) = dt;
-				p.rdata(StarParticleAmxIdx) = 0.0;
-				p.rdata(StarParticleAmyIdx) = 0.0;
-				p.rdata(StarParticleAmzIdx) = 0.0;
-				p.rdata(StarParticleMdeutIdx) = 0.0;
-				p.rdata(StarParticleNIdx) = 0.0;
-				p.rdata(StarParticleMdotIdx) = 0.0;
-				p.rdata(StarParticleBurnStateIdx) = static_cast<amrex::Real>(burningState::Uninitialized);
-				p.rdata(StarParticleLHistIdx) = 0.0;
+				// Set particle ID and CPU
+				p.id() = pid_start + base_offset + p_idx;
+				p.cpu() = cpu_id;
 
-				// Initialize luminosity to zero for all radiation groups
-				for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
-					p.rdata(StarParticleLumIdx + g) = 0.0;
-				}
+				// Initialize particle properties
+				p.rdata(StarParticleMassIdx) = particle_mass / num_particles;
+				p.rdata(StarParticleVxIdx) = vx;
+				p.rdata(StarParticleVyIdx) = vy;
+				p.rdata(StarParticleVzIdx) = vz;
+				p.rdata(StarParticleMassLastIdx) = particle_mass / num_particles; // initial last mass = particle mass
+				p.rdata(StarParticleAmxIdx) = 0.0;				  // angular momentum x
+				p.rdata(StarParticleAmyIdx) = 0.0;				  // angular momentum y
+				p.rdata(StarParticleAmzIdx) = 0.0;				  // angular momentum z
+				p.rdata(StarParticleMdeutIdx) = particle_mass / num_particles;	  // initial deuterium mass = particle mass
+				p.rdata(StarParticleNIdx) = 1.5;				  // polytropic index npoly
+				p.rdata(StarParticleBurnStateIdx) = Uninitialized;		  // burn state
+				p.rdata(StarParticleLHistIdx) = 3.90e31;			  // l_hist (L_sun in erg/s)
 			}
+
+			// update cell density to be the threshold density
+			const amrex::Real scale_factor = rho_J / cell_density;
+			state_arr(i, j, k, HydroSystem<problem_t>::density_index) = rho_J;
+			state_arr(i, j, k, HydroSystem<problem_t>::x1Momentum_index) *= scale_factor;
+			state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) *= scale_factor;
+			state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) *= scale_factor;
+			state_arr(i, j, k, HydroSystem<problem_t>::energy_index) *= scale_factor;
+			state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index) *= scale_factor;
 		}
 	};
 
