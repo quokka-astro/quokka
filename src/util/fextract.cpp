@@ -88,33 +88,86 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 
 	GpuArray<Real, AMREX_SPACEDIM> dx = dx0;
 
-	// compute position coordinates
+	// First pass: determine per-box offsets along the slice and total points
+	Vector<int> offsets;
+	int total_pts = 0;
 	for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
-		const Box &bx = mfi.validbox() & slice_box;
+		const Box bx = mfi.validbox() & slice_box;
 		if (bx.ok()) {
-			amrex::LoopOnCpu(bx, [problo, dx, idir, &pos](int i, int j, int k) {
-				Array<Real, AMREX_SPACEDIM> p = {AMREX_D_DECL(problo[0] + static_cast<Real>(i + 0.5) * dx[0],
-									      problo[1] + static_cast<Real>(j + 0.5) * dx[1],
-									      problo[2] + static_cast<Real>(k + 0.5) * dx[2])};
-				pos.push_back(p[idir]);
-			});
+			offsets.push_back(total_pts);
+			total_pts += bx.length(idir);
 		}
 	}
 
-	for (int ivar = 0; ivar < mf.nComp(); ++ivar) {
-		// allocate HostVector storage
-		data[ivar].resize(pos.size());
-		const auto &dataptr = data[ivar].data();
-		for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
-			const Box &bx = mfi.validbox() & slice_box;
-			if (bx.ok()) {
-				const auto &fab = mf.array(mfi);
+	pos.resize(total_pts);
+	for (auto &vec : data) {
+		vec.resize(total_pts);
+	}
+
+	// compute position coordinates using contiguous local indices
+	int box_idx = 0;
+	for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
+		const Box bx = mfi.validbox() & slice_box;
+		if (bx.ok()) {
+			const int offset = offsets[box_idx];
+			const int start_dir = bx.smallEnd(idir);
+			const int local_len = bx.length(idir);
+			amrex::LoopOnCpu(bx, [problo, dx, idir, offset, start_dir, local_len, &pos](int i, int j, int k) {
+				Array<Real, AMREX_SPACEDIM> p = {AMREX_D_DECL(problo[0] + static_cast<Real>(i + 0.5) * dx[0],
+									      problo[1] + static_cast<Real>(j + 0.5) * dx[1],
+									      problo[2] + static_cast<Real>(k + 0.5) * dx[2])};
+				int idx = offset;
+				if (idir == 0) {
+					idx += i - start_dir;
+				}
+#if AMREX_SPACEDIM >= 2
+				if (idir == 1) {
+					idx += j - start_dir;
+				}
+#endif
+#if AMREX_SPACEDIM == 3
+				if (idir == 2) {
+					idx += k - start_dir;
+				}
+#endif
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(idx >= offset && idx < offset + local_len, "fextract: position index out of bounds");
+				pos[idx] = p[idir];
+			});
+			++box_idx;
+		}
+	}
+
+	// fill data arrays with the same contiguous indexing
+	box_idx = 0;
+	for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
+		const Box bx = mfi.validbox() & slice_box;
+		if (bx.ok()) {
+			const int offset = offsets[box_idx];
+			const int start_dir = bx.smallEnd(idir);
+			const int local_len = bx.length(idir);
+			const auto &fab = mf.array(mfi);
+			for (int ivar = 0; ivar < mf.nComp(); ++ivar) {
+				auto *dataptr = data[ivar].data();
 				ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-					GpuArray<int, 3> idx_vec({i - lo0.x, j - lo0.y, k - lo0.z});
-					int idx = idx_vec[idir];
+					int idx = offset;
+					if (idir == 0) {
+						idx += i - start_dir;
+					}
+#if AMREX_SPACEDIM >= 2
+					if (idir == 1) {
+						idx += j - start_dir;
+					}
+#endif
+#if AMREX_SPACEDIM == 3
+					if (idir == 2) {
+						idx += k - start_dir;
+					}
+#endif
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(idx >= offset && idx < offset + local_len, "fextract: data index out of bounds");
 					dataptr[idx] = fab(i, j, k, ivar); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 				});
 			}
+			++box_idx;
 		}
 	}
 
