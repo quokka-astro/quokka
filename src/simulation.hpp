@@ -3442,6 +3442,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles()
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Star) {
 		AMREX_ASSERT(StarParticles == nullptr);
 
+		static_assert(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS, "UnitSystem must be CGS for Star particles");
+
 		// Create particle container
 		StarParticles = std::make_unique<quokka::StarParticleContainer>(this);
 		StarParticles->SetVerbose(0);
@@ -4680,6 +4682,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::StochasticStellarPop) {
 		initializeParticleContainerFromCheckpoint<quokka::ParticleType::StochasticStellarPop>(StochasticStellarPopParticles, header_box_arrays);
+	}
+
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Star) {
+		initializeParticleContainerFromCheckpoint<quokka::ParticleType::Star>(StarParticles, header_box_arrays);
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) {
