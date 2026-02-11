@@ -585,7 +585,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 							double const cos_theta_random = 2. * amrex::Random(engine) - 1.;
 							double const sin_theta_random = std::sqrt(1. - cos_theta_random * cos_theta_random);
 							// Sample phi from a uniform distribution between 0 and 2*pi
-							double const phi_random = (1. - amrex::Random(engine)) * 2. * std::numbers::pi;
+							double const phi_random = amrex::Random(engine) * 2. * std::numbers::pi;
 
 							double const vx_random = v_mag * sin_theta_random * std::cos(phi_random);
 							double const vy_random = v_mag * sin_theta_random * std::sin(phi_random);
