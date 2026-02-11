@@ -253,7 +253,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void defineComponentNames();
 	void defineDefaultPlotfileVariables();
 	void readParmParse();
-	void rereadRuntimeParameters(); // Re-read parameters to ensure runtime values override compile-time settings
+	void rereadRuntimeParameters() override; // Re-read parameters to ensure runtime values override compile-time settings
 
 	void checkHydroStates(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> &mf_fc, char const *file, int line);
 	void CheckHydroStates(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> &mf_fc,

@@ -261,7 +261,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void initialize();
 	void PerformanceHints();
 	void readParameters();
-	void rereadRuntimeParameters(); // Re-read parameters to ensure runtime values override compile-time settings
+	virtual void rereadRuntimeParameters(); // Re-read parameters to ensure runtime values override compile-time settings
 	void setInitialConditions();
 	void setInitialConditionsAtLevel_cc(int level, amrex::Real time);
 	void setInitialConditionsAtLevel_fc(int level, amrex::Real time);
