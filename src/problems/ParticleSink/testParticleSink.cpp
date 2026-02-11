@@ -70,16 +70,16 @@ template <> struct SimulationData<SinkProblem> {
 	AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity{0.0, 0.0, 0.0};
 };
 
-template <> void QuokkaSimulation<SinkProblem>::createInitialSinkParticles()
+template <> void QuokkaSimulation<SinkProblem>::createInitialStarParticles()
 {
 	// read particles from ASCII file
 	const int nreal_extra = 4; // mass vx vy vz
-	SinkParticles->SetVerbose(1);
-	SinkParticles->InitFromAsciiFile(particles_file, nreal_extra, nullptr);
+	StarParticles->SetVerbose(1);
+	StarParticles->InitFromAsciiFile(particles_file, nreal_extra, nullptr);
 
 	// Apply boost velocity to particles if needed
-	for (int lev = 0; lev <= SinkParticles->finestLevel(); ++lev) {
-		auto &particles = SinkParticles->GetParticles(lev);
+	for (int lev = 0; lev <= StarParticles->finestLevel(); ++lev) {
+		auto &particles = StarParticles->GetParticles(lev);
 
 		for (auto &kv : particles) {
 			auto &particle_array = kv.second.GetArrayOfStructs();
@@ -90,9 +90,9 @@ template <> void QuokkaSimulation<SinkProblem>::createInitialSinkParticles()
 			// Launch GPU kernel to apply boost velocity to particles
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
 				auto &p = pdata[i]; // NOLINT
-				p.rdata(quokka::SinkParticleVxIdx) += boost_velocity[0];
-				p.rdata(quokka::SinkParticleVyIdx) += boost_velocity[1];
-				p.rdata(quokka::SinkParticleVzIdx) += boost_velocity[2];
+				p.rdata(quokka::StarParticleVxIdx) += boost_velocity[0];
+				p.rdata(quokka::StarParticleVyIdx) += boost_velocity[1];
+				p.rdata(quokka::StarParticleVzIdx) += boost_velocity[2];
 			});
 		}
 	}
@@ -232,6 +232,8 @@ auto problem_main() -> int
 		const double rel_mass_error = gas_mass_change == 0.0 ? 0.0 : std::abs(gas_mass_change + particle_mass_change) / std::abs(gas_mass_change);
 		amrex::Print() << "\nAfter evolution:\n";
 		amrex::Print() << "Gas mass change = " << gas_mass_change << "\n";
+		amrex::Print() << "Particle mass at step 0 = " << total_particle_mass << "\n";
+		amrex::Print() << "Particle mass at step 1 = " << total_particle_mass_step1 << "\n";
 		amrex::Print() << "Particle mass change = " << particle_mass_change << "\n";
 		amrex::Print() << "Total mass change = " << gas_mass_change + particle_mass_change << "\n";
 		amrex::Print() << "Relative error in change of mass = " << rel_mass_error << "\n";
@@ -456,6 +458,8 @@ auto problem_main() -> int
 
 		if (status == 0) {
 			amrex::Print() << "\n=== All phases passed ===\n";
+		} else {
+			amrex::Print() << "\n=== Test failed ===\n";
 		}
 	}
 

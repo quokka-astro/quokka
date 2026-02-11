@@ -325,13 +325,13 @@ using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
 
 // Indices for Star_particles
 AMREX_ENUM(StarParticleDataIdx,
-  	birth_time, // Time when particle becomes active
-  	death_time, // Time when particle becomes inactive
-	mass_last,  // Mass of particle in the last time step
 	mass, // Mass of the particle
 	vx,	 // Velocity in x direction
 	vy,	 // Velocity in y direction
 	vz,	 // Velocity in z direction
+	mass_last,  // Mass of particle in the last time step
+  	birth_time, // Time when particle becomes active
+  	death_time, // Time when particle becomes inactive
 	dt,	 // Time step size
 	amx,  // Angular Momentum in x direction
 	amy,  // Angular Momentum in y direction
