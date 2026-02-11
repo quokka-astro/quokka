@@ -323,25 +323,29 @@ using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
 
 //-------------------- Star particles --------------------
 
-// Indices for Star_particles
+// Real component indices for Star_particles
 AMREX_ENUM(StarParticleDataIdx,
-	mass, // Mass of the particle
-	vx,	 // Velocity in x direction
-	vy,	 // Velocity in y direction
-	vz,	 // Velocity in z direction
+	mass,       // Mass of the particle
+	vx,         // Velocity in x direction
+	vy,         // Velocity in y direction
+	vz,         // Velocity in z direction
 	mass_last,  // Mass of particle in the last time step
-  	birth_time, // Time when particle becomes active
-  	death_time, // Time when particle becomes inactive
-	dt,	 // Time step size
-	amx,  // Angular Momentum in x direction
-	amy,  // Angular Momentum in y direction
-	amz,  // Angular Momentum in z direction
-	mdeut,  // Mass of gas that still contains deuterium
-	n,  // n
-	mdot,  // Current mass accretion rate
-	burnState,  // burnState
-	l_hist,  // Past masses
-	lum	  // Base index for luminosity components
+	birth_time, // Time when particle becomes active
+	death_time, // Time when particle becomes inactive
+	dt,         // Time step size
+	amx,        // Angular Momentum in x direction
+	amy,        // Angular Momentum in y direction
+	amz,        // Angular Momentum in z direction
+	mdeut,      // Mass of gas that still contains deuterium
+	n,          // Polytropic index
+	mdot,       // Current mass accretion rate
+	l_hist,     // Past luminosity
+	lum         // Base index for luminosity components
+);
+
+// Integer component indices for Star_particles
+AMREX_ENUM(StarParticleIntIdx,
+	burnState // Nuclear burning state
 );
 
 constexpr int StarParticleBirthTimeIdx = static_cast<int>(StarParticleDataIdx::birth_time);
@@ -358,15 +362,16 @@ constexpr int StarParticleAmzIdx = static_cast<int>(StarParticleDataIdx::amz);
 constexpr int StarParticleMdeutIdx = static_cast<int>(StarParticleDataIdx::mdeut);
 constexpr int StarParticleNIdx = static_cast<int>(StarParticleDataIdx::n);
 constexpr int StarParticleMdotIdx = static_cast<int>(StarParticleDataIdx::mdot);
-constexpr int StarParticleBurnStateIdx = static_cast<int>(StarParticleDataIdx::burnState);
 constexpr int StarParticleLHistIdx = static_cast<int>(StarParticleDataIdx::l_hist);
 constexpr int StarParticleLumIdx = static_cast<int>(StarParticleDataIdx::lum);
-// Number of real components for StarParticles
-constexpr int StarParticleRealComps = 17; // mass, vx, vy, vz, dt, amx, amy, amz, mdeut, n, mdot,burnState,l_hist
+constexpr int StarParticleBurnStateIdx = static_cast<int>(StarParticleIntIdx::burnState); // integer component
+// Number of real and integer components for StarParticles
+constexpr int StarParticleRealComps = 16; // mass, vx, vy, vz, mass_last, birth_time, death_time, dt, amx, amy, amz, mdeut, n, mdot, l_hist, lum
+constexpr int StarParticleIntComps = 1;   // burnState
 
 // Type definitions for Star_particles container and iterator
-using StarParticleContainer = amrex::AmrParticleContainer<StarParticleRealComps>;
-using StarParticleIterator = amrex::ParIter<StarParticleRealComps>;
+using StarParticleContainer = amrex::AmrParticleContainer<StarParticleRealComps, StarParticleIntComps>;
+using StarParticleIterator = amrex::ParIter<StarParticleRealComps, StarParticleIntComps>;
 
 // Indices for burnState
 enum burningState {
@@ -461,8 +466,9 @@ template <ParticleType particleType, typename problem_t> auto getParticleIntComp
 		names = {enum_names.begin(), enum_names.end()};
 	} else if constexpr (particleType == ParticleType::Sink) { // NOLINT
 								   // No integer components
-	} else if constexpr (particleType == ParticleType::Star) { // NOLINT
-								   // No integer components
+	} else if constexpr (particleType == ParticleType::Star) {
+		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<StarParticleIntIdx>();
+		names = {enum_names.begin(), enum_names.end()};
 	} else if constexpr (particleType == ParticleType::Test) {
 		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<TestParticleIntIdx>();
 		names = {enum_names.begin(), enum_names.end()};
@@ -519,7 +525,6 @@ inline auto get_units_data() -> const auto &
 	       {"mdeut", {1, 0, 0, 0}},
 	       {"n", {0, 0, 0, 0}},
 	       {"mdot", {1, 0, -1, 0}},
-	       {"burnState", {0, 0, 0, 0}},
 	       {"l_hist", {1, 0, 0, 0}},
 	       {"luminosity", {-1, 2, -3, 0}}}}},
 	    {ParticleType::Test,

@@ -764,7 +764,7 @@ template <> struct ParticleCreationTraits<ParticleType::Star> {
 				p.rdata(StarParticleAmzIdx) = 0.0;				  // angular momentum z
 				p.rdata(StarParticleMdeutIdx) = particle_mass / num_particles;	  // initial deuterium mass = particle mass
 				p.rdata(StarParticleNIdx) = 1.5;				  // polytropic index npoly
-				p.rdata(StarParticleBurnStateIdx) = Uninitialized;		  // burn state
+				p.idata(StarParticleBurnStateIdx) = Uninitialized;		  // burn state
 				p.rdata(StarParticleLHistIdx) = 3.90e31;			  // l_hist (L_sun in erg/s)
 			}
 
