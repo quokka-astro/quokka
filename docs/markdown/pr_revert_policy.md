@@ -7,12 +7,12 @@
 
 ## When to Revert
 
-Trigger a revert only for serious issues:
+Trigger a revert only for serious issues in parts of the code that are *not* marked as "beta":
 
 !!! danger "Typical revert triggers"
     - **Major correctness bugs** (e.g., broken conservation, highly unstable solver, incorrect physics equations).
     - **Significant performance regressions** on maintained benchmarks (typically >10–15% slower without an acceptable trade-off).
-    - **Broken builds or CI** on supported targets (CPU, CUDA, HIP) that cannot be repaired quickly.
+    - **Broken builds or CI** on supported targets (CPU, CUDA, HIP) that cannot be repaired quickly. This applies even for beta features.
     - **Incompatible output-format changes** that break existing plotfile readers.
     - **Unreproducible outputs or race conditions** exposed by deterministic reruns or sanitizer tooling.
     - **Security or licensing concerns** (e.g., unsafe dependency, incompatible license).
