@@ -43,8 +43,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 	}
 
 	// Container-level update for StochasticStellarPop particles
-	template <typename problem_t, typename ContainerType>
-	static void updateParticleProperties(ContainerType *container, amrex::Real current_time)
+	template <typename problem_t, typename ContainerType> static void updateParticleProperties(ContainerType *container, amrex::Real current_time)
 	{
 		const BL_PROFILE("ParticlePropertyUpdateTraits<StochasticStellarPop>::updateParticleProperties()");
 		if (container != nullptr) {
