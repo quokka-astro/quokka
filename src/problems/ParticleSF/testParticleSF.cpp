@@ -21,9 +21,9 @@ struct ParticleSFProblem {
 
 constexpr Real mu = 1.0 * C::m_p;
 constexpr Real gamma_ = 5. / 3.;
-constexpr Real year = 3.15576e+07; // in seconds
-static Real n0 = 1.0e4;		   // NOLINT
-static Real Tamb = 10.0;	   // NOLINT
+constexpr Real year = 3.15576e+07;	       // in seconds
+static Real n0 = 1.0e4;			       // NOLINT
+static Real Tamb = 10.0;		       // NOLINT
 static bool validate_initial_imf_stats = true; // NOLINT
 
 template <> struct Particle_Traits<ParticleSFProblem> {
@@ -94,8 +94,7 @@ template <> void QuokkaSimulation<ParticleSFProblem>::refineGrid(int lev, amrex:
 template <> void QuokkaSimulation<ParticleSFProblem>::computeAfterTimestep()
 {
 	const int step = istep[0];
-	const bool use_default_low_mass_cap =
-	    (quokka::low_mass_composite_max_mass >= 0.99 * std::numeric_limits<amrex::Real>::max());
+	const bool use_default_low_mass_cap = (quokka::low_mass_composite_max_mass >= 0.99 * std::numeric_limits<amrex::Real>::max());
 	if (step == 1 && validate_initial_imf_stats && use_default_low_mass_cap) {
 		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
 		const amrex::Real cell_volume = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
@@ -283,8 +282,7 @@ auto problem_main() -> int
 
 		if (amrex::ParallelDescriptor::IOProcessor()) {
 			for (int i = 0; i < static_cast<int>(real_data_restart.size()); ++i) {
-				const bool is_low_mass_composite =
-				    (idata_restart[i][0] == static_cast<int>(quokka::StellarEvolutionStage::LowMassComposite));
+				const bool is_low_mass_composite = (idata_restart[i][0] == static_cast<int>(quokka::StellarEvolutionStage::LowMassComposite));
 				if (is_low_mass_composite) {
 					num_low_mass_particles++;
 					if (real_data_restart[i][quokka::StochasticStellarPopParticleMassIdx] > (low_mass_cap + mass_tol)) {
