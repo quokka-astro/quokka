@@ -1566,6 +1566,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		}
 	}
 
+	// Print final simulation time
+	if (suppress_output == 0) {
+		if (stopTime_ > 0.0) {
+			amrex::Print() << "\nSimulation ended at t = " << cur_time << " (" << (cur_time / stopTime_) * 100. << "%)\n";
+		} else {
+			amrex::Print() << "\nSimulation ended at t = " << cur_time << "\n";
+		}
+	}
+
 	if (step == 0) {
 		amrex::Print() << "No cell updates performed!\n";
 #ifdef AMREX_USE_ASCENT
@@ -1953,6 +1962,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 
 	// Assume all SN progenitors are at the finest level
 	const int lev = finest_level;
+
+	// Enforce floors and limits on hydro state to ensure we have valid hydro states
+	FixupState(lev);
 
 	// Fill ghost zones before computing accretion rate. This is necessary because the computation of accretion rate uses 3 ghost cells, but the
 	// boundaries are not filled at this point.

@@ -35,6 +35,11 @@ Backtrace.*
 !/tests/matplotlibrc
 # !/tests/ascent_actions.yaml
 
+# agent files
+/.claude
+/.agent
+/.agents
+
 # LaTeX files
 *.aux
 *.dbl
