@@ -3,7 +3,7 @@
 # *****************************************************************
 geometry.prob_lo     =  0.0  0.0  0.0 
 geometry.prob_hi     =  3.086e19  3.086e19  3.086e19  # 10 x 10 x 10 pc
-quokka.bc = reflecting reflecting reflecting
+quokka.bc = periodic periodic periodic
 
 # *****************************************************************
 # VERBOSITY
@@ -26,18 +26,21 @@ problem.part_fn = "./particles_stochastic_n100.txt"
 do_reflux = 1
 do_subcycle = 0
 
-cfl = 0.2
+cfl = 0.3
 hydro.reconstruction_order = 3
+hydro.artificial_viscosity_coefficient = 0.1
 derived_vars = temperature
 
-plotfile_interval = 1000
+plotfile_interval = 10000
 checkpoint_interval = -1
-max_timesteps = 1000
+max_timesteps = 10000 # set to avoid running the simulation indefinitely
 
-dt_initial = 3.154e10       # 1000 yr
-stop_time = 3.154e13       # 1e6 yr
+dt_shrink = 0.01
+stop_time = 7.32505344665246e11
 
 cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1
 cooling.cooling_table_type = resampled
 cooling.hdf5_data_file = "./CloudyData_UVB=HM2012_resampled.h5"
+
+problem.boost_velocity = 0.0 0.0 0.0

@@ -92,7 +92,8 @@ template <> void QuokkaSimulation<ParticleRadiationProblem>::createInitialStocha
 {
 	// Read particles from ASCII file. Note that this only read real components and not integer components, therefore we need to use
 	// InitSetPhyParticles to set the integer components
-	const int nreal_extra = 6 + Physics_Traits<ParticleRadiationProblem>::nGroups; // mass vx vy vz birth_time death_time lum[nGroups]
+	// mass, vx, vy, vz, birth/death time, birth/death pos, death_density, mass_at_birth, lum[nGroups]
+	const int nreal_extra = quokka::StochasticStellarPopParticleRealComps<ParticleRadiationProblem>;
 	StochasticStellarPopParticles->SetVerbose(1);
 	StochasticStellarPopParticles->InitFromAsciiFile(userData_.particles_filename, nreal_extra, nullptr);
 
