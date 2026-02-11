@@ -87,7 +87,7 @@ template <> void QuokkaSimulation<DustyShock>::setInitialConditionsOnGrid(quokka
 
 		state_cc(i, j, k, HydroSystem<DustyShock>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<DustyShock>::energy_index) = E;
-		state_cc(i, j, k, HydroSystem<DustyShock>::internalEnergy_index) = E;
+		state_cc(i, j, k, HydroSystem<DustyShock>::internalEnergy_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<DustyShock>::x1Momentum_index) = rho * u;
 		state_cc(i, j, k, HydroSystem<DustyShock>::x2Momentum_index) = 0.;
 		state_cc(i, j, k, HydroSystem<DustyShock>::x3Momentum_index) = 0.;
