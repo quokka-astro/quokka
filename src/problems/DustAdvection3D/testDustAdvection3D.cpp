@@ -155,7 +155,8 @@ void QuokkaSimulation<DustAdvection3D>::computeReferenceSolution(amrex::MultiFab
 
 			// fill gas components
 			stateExact(i, j, k, HydroSystem<DustAdvection3D>::density_index) = rho_gas_exact;
-			stateExact(i, j, k, HydroSystem<DustAdvection3D>::energy_index) = Egas0 + 0.5 * rho_gas_exact * (v_gas * v_gas + v_gas * v_gas + v_gas * v_gas);
+			stateExact(i, j, k, HydroSystem<DustAdvection3D>::energy_index) =
+			    Egas0 + 0.5 * rho_gas_exact * (v_gas * v_gas + v_gas * v_gas + v_gas * v_gas);
 			stateExact(i, j, k, HydroSystem<DustAdvection3D>::internalEnergy_index) = Egas0;
 			stateExact(i, j, k, HydroSystem<DustAdvection3D>::x1Momentum_index) = rho_gas_exact * v_gas;
 			stateExact(i, j, k, HydroSystem<DustAdvection3D>::x2Momentum_index) = rho_gas_exact * v_gas;
