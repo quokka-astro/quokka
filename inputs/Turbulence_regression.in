@@ -19,8 +19,8 @@ amr.blocking_factor = 32 # grid size must be divisible by this
 amr.max_grid_size   = 64 # at least 128 for GPUs
 
 stop_time = 15
-plottime_interval = 15
-max_timesteps = 20000
+plotfile_interval = 100000
+max_timesteps = 100000
 
 do_reflux = 0
 do_subcycle = 0
