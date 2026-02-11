@@ -46,11 +46,17 @@ For quick definitions of terms used throughout this guide, see the [Glossary](gl
 5. **Boundary conditions and conservation (if applicable).**
    Describe how boundary conditions are applied and show that conserved quantities (mass, momentum, energy) remain correct within tolerance (norms or integrals over the mesh data).
 
+## Documentation Policy
+
+6. All PRs that add *new features* must include documentation in the Markdown `docs/` folder.
+
+7. New physics features must be marked in the documentation as "beta" if they have not been fully tested in a published scientific application. This is intended to warn users to exercise caution if they choose to use features that are not yet thoroughly tested. When a science paper is published, a new PR should be submitted to remove this marking.
+
 ---
 
 ## Stability Policy
 
-6. **Runtime `ParmParse` options (change rarely).**
+8. **Runtime `ParmParse` options (change rarely).**
     - **Default stance:** options are **stable**; avoid renaming/removing.
     - **If change is necessary:**
         - Provide **automatic compatibility** when feasible (accept old name, map to new, and warn).
@@ -58,19 +64,19 @@ For quick definitions of terms used throughout this guide, see the [Glossary](gl
         - Document the change prominently (release notes; “Upgrading” section).
         - Use the ADR process (below) for any non-trivial change in behavior or naming.
 
-7. **Output file format (must never change).**
+9. **Output file format (must never change).**
     - Do **not** modify existing structure, metadata, or semantics.
     - If new data must be written, use **additive** outputs that do not alter or invalidate existing files (e.g., auxiliary files or parallel sidecar outputs) so existing analysis tools remain valid.
     - Any proposal that risks incompatibility should be rejected outright or re-scoped to preserve the current format.
 
-8. **Core hydro integrator (`QuokkaSimulation::advanceHydroAtLevel`).**
+10. **Core hydro integrator (`QuokkaSimulation::advanceHydroAtLevel`).**
 
     !!! danger "Critical change protocol"
         - Treat every edit as **critical**: require an ADR with numerical justification, targeted regression coverage spanning CPU and at least one GPU backend, and explicit before/after plots or diagnostics for representative hydro problems.
         - Demand quantified performance data (solver wall time, per-stage timing, halo exchange cost) and call out any tolerable slowdowns or accuracy gains.
         - Double-check plotfile contents and conserved quantities for regressions before approving.
 
-9. **Problem-file interface (may change occasionally).**
+11. **Problem-file interface (may change occasionally).**
     - Changes are acceptable to support new physics/modules, but must be **intentional and documented**.
     - Require an **ADR** describing the motivation, alternatives, and migration plan.
     - Migrate all in-tree problem files in the same PR; out-of-tree problems are not supported and must supply their own migrations.
@@ -88,13 +94,13 @@ For quick definitions of terms used throughout this guide, see the [Glossary](gl
 
 ## Reproducibility
 
-10. **Define the reproducibility level and test it.**
+12. **Define the reproducibility level and test it.**
     - **Bitwise identical:** outputs match exactly.
     - **Within a tolerance:** values may differ slightly but within bounds.
     - **Statistically equivalent:** stochastic runs match in distribution with fixed seeds.
         Control randomness with documented seeds; avoid rank-dependent draw order.
 
-11. **Record run metadata (log/output).**
+13. **Record run metadata (log/output).**
     Always include: git commit hash; AMReX version; compiler and **GPU backend** (CUDA or HIP) + versions; MPI version; GPU model; key build flags; full `ParmParse` dump; and domain decomposition. Keep minimal input decks with tests so others can rerun them.
     Plotfiles and checkpoints automatically persist provenance to `metadata.yaml`, which records `quokka_version`, `git_hash_quokka`, `git_hash_amrex`, and the current unit and constant blocks by default. Update or extend that node (via `simulationMetadata_`) when additional diagnostics are essential for reruns.
 
@@ -102,7 +108,7 @@ For quick definitions of terms used throughout this guide, see the [Glossary](gl
 
 ## CI Gates
 
-12. **Automated checks must stay green (GitHub Actions).**
+14. **Automated checks must stay green (GitHub Actions).**
     - `CMake`: Ubuntu + GCC 11 Release with `-DENABLE_ASAN=ON`; builds the full 3D configuration and runs the main `canary` suite.
     - `CMake (macOS)`: macOS 14 + Apple Clang Release; runs the same `canary` list.
     - `linux-arm64-{debug,release,HWASan}`: ARM runners using Clang; run fast 1D smoke tests in Debug, Release, and HWASan configurations.
@@ -130,7 +136,7 @@ Use [Architecture Decision Records](adrs.md) for high-impact or hard-to-reverse 
 !!! warning "Need to undo a merge?"
     See the dedicated [PR Revert Policy](pr_revert_policy.md) for decision criteria and the step-by-step workflow.
 
-13. **Be explicit, kind, and disciplined.**
+15. **Be explicit, kind, and disciplined.**
     - Mark comments as **blocking** (must fix before merge) or **non-blocking** (suggestions).
     - If discussion becomes subjective (naming/style), time-box and move to an ADR.
     - **Timelines:**
