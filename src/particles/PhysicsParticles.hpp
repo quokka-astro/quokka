@@ -645,7 +645,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 							auto &p = pData[idx]; // NOLINT
 							ParticlePropertyUpdateTraits<particleType>::template updateProperties<
-							    problem_t, typename ContainerType::ParticleType, nGroups>(p, current_time, gpu_tables);
+							    problem_t, typename ContainerType::ParticleType, nGroups>(p, current_time, dt, gpu_tables);
 						});
 					}
 				}
