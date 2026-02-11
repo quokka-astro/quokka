@@ -3,6 +3,7 @@
 
 #include "AMReX_Extension.H"
 #include "particle_radiation.hpp"
+#include "starparticle_radiation.hpp"
 #include "particle_types.hpp"
 
 #if AMREX_SPACEDIM == 3
@@ -33,7 +34,21 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 		LuminosityUpdate::updateLuminosity<problem_t>(p, current_time, gpu_tables);
 	}
 };
-
+  
+// Specialization for StarParticle with stellar evolution
+// Uses stellar physics calculations (polytropic models, accretion, burning states)
+template <> struct ParticlePropertyUpdateTraits<ParticleType::Star> {
+	template <typename problem_t, typename ParticleType, int Nout>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType &p, amrex::Real current_time, Real dt,
+									 LuminosityGpuConstTables<Nout> const &gpu_tables) noexcept
+	{
+		// Update stellar properties using the StellarUpdate class
+		// Note: dt is passed via particle data or calculated from current_time
+	  //		amrex::Real dt = compute_time_step(p, current_time);
+		StellarUpdate::updateStellarProperties<problem_t>(p, current_time, dt, gpu_tables);
+	}
+};
+  
 // // Specialization for StochasticStellarPop particles from a simple analytical formula
 // // This is kept for debugging purpose.
 // template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarPop> {
