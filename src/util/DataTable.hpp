@@ -712,11 +712,13 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	void sync_tables_to_device()
 	{
 		for (int dim = 0; dim < Ndim; ++dim) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coords_h_[dim] != nullptr && coords_d_[dim] != nullptr, "Coordinate tables must be allocated before H2D copy.");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coords_h_[dim] != nullptr && coords_d_[dim] != nullptr,
+							 "Coordinate tables must be allocated before H2D copy.");
 			coords_d_[dim]->copy(*coords_h_[dim]);
 		}
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data_h_[out_idx] != nullptr && data_d_[out_idx] != nullptr, "Data tables must be allocated before H2D copy.");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data_h_[out_idx] != nullptr && data_d_[out_idx] != nullptr,
+							 "Data tables must be allocated before H2D copy.");
 			data_d_[out_idx]->copy(*data_h_[out_idx]);
 		}
 		amrex::Gpu::streamSynchronize();
@@ -770,15 +772,15 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 			// NOSONAR
 			// For future support of irregular spacing
-				// } else if (spacing_types_[dim] == SpacingType::irregular) {
-				// 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(static_cast<int>(coords[dim].size()) == sizes_[dim],
-				// 					 fmt::format("Provided coordinates size mismatch for dimension {}! (expected: {}, actual: {})",
-				// 						     dim, sizes_[dim], coords[dim].size()));
-				// 	auto coord_table = coords_h_[dim]->table();
-				// 	for (int i = 0; i < sizes_[dim]; ++i) {
-				// 		coord_table(i) = coords[dim][i];
-				// 	}
-			}
+			// } else if (spacing_types_[dim] == SpacingType::irregular) {
+			// 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(static_cast<int>(coords[dim].size()) == sizes_[dim],
+			// 					 fmt::format("Provided coordinates size mismatch for dimension {}! (expected: {}, actual: {})",
+			// 						     dim, sizes_[dim], coords[dim].size()));
+			// 	auto coord_table = coords_h_[dim]->table();
+			// 	for (int i = 0; i < sizes_[dim]; ++i) {
+			// 		coord_table(i) = coords[dim][i];
+			// 	}
+		}
 
 		// Calculate grid spacing (after taking necessary log of the coordinates)
 		for (int dim = 0; dim < Ndim; ++dim) {
@@ -833,7 +835,6 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 					}
 				}
 			}
-
 		}
 		// Ensure kernels only see device-resident tables.
 		sync_tables_to_device();
