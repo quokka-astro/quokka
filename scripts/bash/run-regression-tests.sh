@@ -3,7 +3,7 @@
 # run-regression-tests.sh
 #
 # Standalone script to run Quokka regression tests and publish results to GitHub Pages.
-# Designed to run inside Docker containers without Azure Pipelines dependencies.
+# Designed to run inside Docker containers independently of Azure Pipelines.
 #
 # Usage:
 #   ./run-regression-tests.sh [OPTIONS]
@@ -428,12 +428,10 @@ publish_results() {
 #######################################
 # Wait for GPU to be free before starting tests.
 #
-# Primary check: nvidia-smi --query-compute-apps, which queries the GPU
-# driver directly and sees CUDA processes from ALL Docker containers on
-# the host. This reliably detects Azure CI jobs running on the same GPU.
-#
-# Secondary check: pgrep for Agent.Worker (best-effort; only works if
-# the container shares the host PID namespace).
+# Checks nvidia-smi --query-compute-apps, which queries the GPU driver
+# directly and sees CUDA processes from ALL Docker containers on the host.
+# Only non-trivial compute processes (pid > 0) are counted to avoid
+# false alarms from transient or monitoring processes.
 #######################################
 wait_for_gpu() {
 	local check_interval=60
@@ -444,20 +442,14 @@ wait_for_gpu() {
 	echo "=========================================="
 
 	while true; do
-		# Primary: check for active CUDA processes via GPU driver (cross-container)
+		# Check for active CUDA processes via GPU driver (cross-container)
 		local gpu_procs=""
-		gpu_procs=$(nvidia-smi --query-compute-apps=pid,name --format=csv,noheader 2>/dev/null || true)
+		gpu_procs=$(nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader 2>/dev/null \
+			| grep -v "^0," || true)
 
-		# Secondary: check for Azure Agent.Worker process (best-effort)
-		local azure_running=0
-		if pgrep -f "Agent.Worker" > /dev/null 2>&1; then
-			azure_running=1
-		fi
-
-		# Proceed if GPU is free and no Azure worker detected
-		if [ -z "$gpu_procs" ] && [ "$azure_running" -eq 0 ]; then
+		if [ -z "$gpu_procs" ]; then
 			if [ "$waited" -gt 0 ]; then
-				echo "✓ GPU is free and no Azure jobs detected, proceeding..."
+				echo "✓ GPU is free, proceeding..."
 			else
 				echo "✓ GPU is free, proceeding..."
 			fi
@@ -465,21 +457,11 @@ wait_for_gpu() {
 			return
 		fi
 
-		# Build informative wait message
-		local reasons=""
-		if [ -n "$gpu_procs" ]; then
-			local count
-			count=$(echo "$gpu_procs" | grep -c '[0-9]' || true)
-			local names
-			names=$(echo "$gpu_procs" | awk -F',' '{print $2}' | tr '\n' ' ' | sed 's/ $//')
-			reasons="GPU has ${count} active CUDA process(es) [${names}]"
-		fi
-		if [ "$azure_running" -eq 1 ]; then
-			[ -n "$reasons" ] && reasons="${reasons}; "
-			reasons="${reasons}Azure Agent.Worker is running"
-		fi
-
-		echo "Waiting: ${reasons}. Rechecking in ${check_interval}s (${waited}s elapsed)..."
+		local count
+		count=$(echo "$gpu_procs" | grep -c '[0-9]' || true)
+		local now
+		now=$(date -u +%H:%M:%SZ)
+		echo "Waiting: GPU has ${count} active CUDA process(es). Rechecking in ${check_interval}s (${waited}s elapsed) [${now}]..."
 		sleep "$check_interval"
 		waited=$((waited + check_interval))
 	done
