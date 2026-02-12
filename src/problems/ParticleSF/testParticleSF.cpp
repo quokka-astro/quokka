@@ -257,9 +257,7 @@ auto problem_main() -> int
 
 	sim.evolve();
 
-	// If restarting from checkfile, return success. The initial gas mass is unknown, so there is nothing to compare with.
-	// We validate restarting from checkfile.
-
+	// We validate restarting from a checkpoint below when verify_low_mass_cap_on_restart is true.
 	std::string restartfile;
 	amrex::ParmParse const p3;
 	p3.query("restartfile", restartfile);
@@ -282,7 +280,7 @@ auto problem_main() -> int
 
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				for (std::size_t i = 0; i < real_data_restart.size(); ++i) {
-				const bool is_low_mass_composite = (idata_restart[i][0] == static_cast<int>(quokka::StellarEvolutionStage::LowMassComposite));
+				const bool is_low_mass_composite = (idata_restart[i][quokka::StochasticStellarPopParticleStageIdx] == static_cast<int>(quokka::StellarEvolutionStage::LowMassComposite));
 				if (is_low_mass_composite) {
 					num_low_mass_particles++;
 					if (real_data_restart[i][quokka::StochasticStellarPopParticleMassIdx] > (low_mass_cap + mass_tol)) {
@@ -305,7 +303,7 @@ auto problem_main() -> int
 		return 0; // success
 	}
 
-	// If not from checkpoint, validate mass sonservation (roughly)
+	// If not restarting from a checkpoint, validate mass sonservation (roughly)
 
 	const auto [real_data_final2, idata_final2] =
 	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->getParticleDataAtLevel(0);
