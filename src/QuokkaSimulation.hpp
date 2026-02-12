@@ -706,7 +706,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::rereadRuntimePar
 
 	// Re-read QuokkaSimulation-specific parameters
 	readParmParse();
-
 }
 
 template <typename problem_t> auto QuokkaSimulation<problem_t>::computeNumberOfRadiationSubsteps(int lev, amrex::Real dt_lev_hydro) -> int
