@@ -14,6 +14,7 @@ nav:
   - About: about.md
   - Equations: equations.md
   - Citation: citation.md
+  - Glossary: glossary.md
   - Physics Modules:
     - Magnetohydrodynamics: mhd_module.md
     - Star Formation and Feedback: particles.md
@@ -48,6 +49,10 @@ nav:
     - Assertions and error checking: error_checking.md
     - Performance tips: performance.md
     - How to use clang-tidy: howto_clang_tidy.md
+  - Maintainer Guide:
+    - Maintainer Guidelines: maintainer_guidelines.md
+    - Architecture Decision Records: adrs.md
+    - PR Revert Policy: pr_revert_policy.md
 
 plugins:
   - search
