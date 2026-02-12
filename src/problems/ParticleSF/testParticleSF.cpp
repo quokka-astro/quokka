@@ -280,8 +280,8 @@ auto problem_main() -> int
 		int num_cap_violations = 0;
 		int restart_validation_status = 0;
 
-		if (amrex::ParallelDescriptor::IOProcessor()) {
-			for (int i = 0; i < static_cast<int>(real_data_restart.size()); ++i) {
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				for (std::size_t i = 0; i < real_data_restart.size(); ++i) {
 				const bool is_low_mass_composite = (idata_restart[i][0] == static_cast<int>(quokka::StellarEvolutionStage::LowMassComposite));
 				if (is_low_mass_composite) {
 					num_low_mass_particles++;
