@@ -86,6 +86,11 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_OpenBC.H"
 #endif
 
+#ifdef AMREX_USE_ASCENT
+#include <AMReX_Conduit_Blueprint.H>
+#include <ascent.hpp>
+#endif
+
 // internal headers
 #include "fundamental_constants.H"
 #include "grid.hpp"
