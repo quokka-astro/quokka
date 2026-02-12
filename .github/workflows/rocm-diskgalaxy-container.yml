@@ -63,8 +63,8 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rocm-diskgalaxy
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rocm-diskgalaxy-${{ env.IMAGE_TAG_SHA }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=rocm-diskgalaxy-container
+          cache-to: type=gha,mode=max,scope=rocm-diskgalaxy-container
 
       - name: Print DiskGalaxy image URL (development)
         if: ${{ github.event_name == 'push' }}
@@ -83,8 +83,8 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rocm-diskgalaxy-pr-${{ github.event.pull_request.number }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:rocm-diskgalaxy-pr-${{ github.event.pull_request.number }}-${{ env.IMAGE_TAG_SHA }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=rocm-diskgalaxy-container
+          cache-to: type=gha,mode=max,scope=rocm-diskgalaxy-container
 
       - name: Print DiskGalaxy image URL (PR)
         if: ${{ env.IS_INTERNAL_PR == 'true' }}
@@ -101,5 +101,5 @@ jobs:
             AMREX_MPI=ON
           push: false
           tags: rocm-diskgalaxy-pr-${{ github.event.pull_request.number }}:${{ env.IMAGE_TAG_SHA }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=rocm-diskgalaxy-container
+          cache-to: type=gha,mode=max,scope=rocm-diskgalaxy-container
