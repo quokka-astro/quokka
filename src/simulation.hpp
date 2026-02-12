@@ -635,7 +635,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int do_tracers = 0;
 
       protected:
-	void InitParticles(); // create tracer particles
+	void InitParticles();									  // create tracer particles
 	void InitPhyParticles(amrex::Vector<amrex::BoxArray> const *header_box_arrays = nullptr); // create PhysicsParticles or load from checkpoint
 	std::unique_ptr<amrex::AmrTracerParticleContainer> TracerPC;
 	std::unique_ptr<quokka::RadParticleContainer<problem_t>> RadParticles;
@@ -3437,7 +3437,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::StochasticStellarPop) {
 		if (is_restart) {
-			initializeParticleContainerFromCheckpoint<quokka::ParticleType::StochasticStellarPop>(StochasticStellarPopParticles, *header_box_arrays);
+			initializeParticleContainerFromCheckpoint<quokka::ParticleType::StochasticStellarPop>(StochasticStellarPopParticles,
+													      *header_box_arrays);
 		} else {
 			AMREX_ASSERT(StochasticStellarPopParticles == nullptr);
 
