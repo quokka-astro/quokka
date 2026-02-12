@@ -33,6 +33,7 @@ DEFAULT_SOURCE_DIR="$PWD"
 INI_FILE="${REGRESSION_INI_FILE:-$DEFAULT_INI_FILE}"
 CCACHE_DIR="${CCACHE_DIR:-$DEFAULT_CCACHE_DIR}"
 SOURCE_DIR="${REGRESSION_SOURCE_DIR:-$DEFAULT_SOURCE_DIR}"
+SKIP_GPU_WAIT=0
 
 # WEB_DIR will be parsed from ini file
 WEB_DIR=""
@@ -50,6 +51,7 @@ Options:
   --ini-file PATH       Path to regression ini file (default: $DEFAULT_INI_FILE)
   --ccache-dir PATH     Ccache directory (default: $DEFAULT_CCACHE_DIR)
   --source-dir PATH     Quokka source directory (default: $DEFAULT_SOURCE_DIR)
+  --skip-gpu-wait       Skip the GPU occupancy check (use when the caller already checked)
   --help                Show this help message
 
 Environment variables (overridden by CLI args):
@@ -89,6 +91,10 @@ parse_args() {
 		--source-dir)
 			SOURCE_DIR="$2"
 			shift 2
+			;;
+		--skip-gpu-wait)
+			SKIP_GPU_WAIT=1
+			shift
 			;;
 		--help)
 			usage
@@ -485,8 +491,13 @@ main() {
 	# Setup environment
 	setup_environment
 
-	# Wait for GPU to be free before starting
-	wait_for_gpu
+	# Wait for GPU to be free before starting (skip if caller already checked)
+	if [ "$SKIP_GPU_WAIT" -eq 0 ]; then
+		wait_for_gpu
+	else
+		echo "✓ GPU wait skipped (pre-checked by caller)"
+		echo ""
+	fi
 
 	# Run regression tests (capture exit code)
 	local test_exit_code=0
