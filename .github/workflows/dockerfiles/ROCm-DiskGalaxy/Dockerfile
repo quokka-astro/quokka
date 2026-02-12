@@ -7,7 +7,6 @@ ARG MPICH_URL=https://www.mpich.org/static/downloads/4.1.2/mpich-4.1.2.tar.gz
 ARG AMREX_SPACEDIM=3
 ARG AMREX_MPI=ON
 ARG AMREX_AMD_ARCH=gfx90a
-ARG DOCKERFILES_DIR=.github/workflows/dockerfiles/ROCm-DiskGalaxy
 
 # Combine system updates, repo setup, and package installation
 RUN set -euo pipefail && \
@@ -42,34 +41,21 @@ ENV PATH="/opt/rocm/bin:${PATH}" \
     CC="amdclang" \
     CXX="amdclang++"
 
-COPY . /tmp/quokka-src
-WORKDIR /tmp/quokka-src
+COPY .github/workflows/dockerfiles/ROCm-DiskGalaxy/mpich-4.1.2-rocm-6.4-hip-pointer-attr.patch /tmp/mpich.patch
 
 # Combine MPICH download, patch, and build
 RUN set -euo pipefail && \
-    test -f CMakeLists.txt || { \
-      echo "ERROR: Quokka source not found in the Docker build context." >&2; \
-      echo "Build from the repo root, e.g.: docker build -f .github/workflows/dockerfiles/ROCm-DiskGalaxy/Dockerfile ." >&2; \
-      exit 1; \
-    } && \
-    if [ -f "/tmp/quokka-src/${DOCKERFILES_DIR}/mpich-4.1.2-rocm-6.4-hip-pointer-attr.patch" ]; then \
-        PATCH_PATH="/tmp/quokka-src/${DOCKERFILES_DIR}/mpich-4.1.2-rocm-6.4-hip-pointer-attr.patch"; \
-    elif [ -f "/tmp/quokka-src/mpich-4.1.2-rocm-6.4-hip-pointer-attr.patch" ]; then \
-        PATCH_PATH="/tmp/quokka-src/mpich-4.1.2-rocm-6.4-hip-pointer-attr.patch"; \
-    else \
-        echo "ERROR: MPICH patch not found." >&2; exit 1; \
-    fi && \
     mkdir -p /tmp/build-mpich && \
     cd /tmp/build-mpich && \
     wget -q "${MPICH_URL}" -O "mpich-${MPICH_VERSION}.tar.gz" && \
     tar xzf "mpich-${MPICH_VERSION}.tar.gz" && \
     cd "mpich-${MPICH_VERSION}" && \
-    patch -p1 < "$PATCH_PATH" && \
+    patch -p1 < /tmp/mpich.patch && \
     ./configure --with-device=ch4:ofi --disable-fortran --prefix="/opt/mpich/${MPICH_VERSION}" && \
     make -j"$(nproc)" && \
     make install && \
     cd .. && \
-    rm -rf mpich-4.1.2/ mpich-4.1.2.tar.gz /tmp/mpich-4.1.2-rocm-6.4-hip-pointer-attr.patch && \
+    rm -rf mpich-4.1.2/ mpich-4.1.2.tar.gz /tmp/mpich.patch && \
     cd / && \
     rm -rf /tmp/build-mpich
 
@@ -78,6 +64,9 @@ ENV MPICH_VERSION="${MPICH_VERSION}" \
     MPICH_DIR="/opt/mpich/${MPICH_VERSION}" \
     PATH="/opt/mpich/${MPICH_VERSION}/bin:${PATH}" \
     LD_LIBRARY_PATH="/opt/mpich/${MPICH_VERSION}/lib:${LD_LIBRARY_PATH}"
+
+COPY . /tmp/quokka-src
+WORKDIR /tmp/quokka-src
 
 # Build Quokka
 RUN set -euo pipefail && \
