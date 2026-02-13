@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <fstream>
 #include <limits>
+#include <utility>
 
 #include "AMReX.H"
 #include "AMReX_BC_TYPES.H"
@@ -130,7 +131,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 				if (do_split_particles) {
 					// For split particles, partition into two groups of equal size and use group COM separation.
 					const size_t n_particles = real_data.size();
-					const size_t group_size = static_cast<size_t>(split_factor);
+					const auto group_size = static_cast<size_t>(split_factor);
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n_particles == 2 * group_size, "Expected exactly two split groups.");
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n_particles <= 63, "Split-particle group search supports up to 63 particles.");
 
@@ -141,7 +142,7 @@ template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 
 					const uint64_t nmask = (uint64_t{1} << n_particles);
 					for (uint64_t mask = 0; mask < nmask; ++mask) {
-						if (((mask & 1U) == 0U) || (static_cast<size_t>(__builtin_popcountll(mask)) != group_size)) {
+						if (((mask & 1U) == 0U) || std::cmp_not_equal(__builtin_popcountll(mask), group_size)) {
 							continue;
 						}
 
