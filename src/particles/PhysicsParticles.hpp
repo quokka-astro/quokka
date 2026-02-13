@@ -22,6 +22,7 @@
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
 
+#include "fundamental_constants.H"
 #include "particle_IO.hpp"
 #include "particle_accretion.hpp"
 #include "particle_creation.hpp"
@@ -424,8 +425,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				const auto dxinv = geom.InvCellSizeArray();
 				const auto dx = geom.CellSizeArray();
 				const auto plo = geom.ProbLoArray();
+				const amrex::Real dx_cell = std::min({dx[0], dx[1], dx[2]});
 				const int cpu_id = amrex::ParallelDescriptor::MyProc();
 				const int mass_idx = this->getMassIndex();
+				const bool has_velocity_components = (mass_idx + 3) < ContainerType::ParticleType::NReal;
 				auto *pdata_old = particles().data();
 				auto *pdata_new = particles().data() + npart_old;
 
@@ -461,6 +464,17 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						p_new.pos(1) = y0 + dx[1] * amrex::Random(rng);
 						p_new.pos(2) = z0 + dx[2] * amrex::Random(rng);
 						p_new.rdata(mass_idx) = old_mass / static_cast<amrex::Real>(splitFactor);
+
+						if (has_velocity_components) {
+							// Match LowMassComposite splitting pattern: component-wise uniform velocity kick
+							// with RMS set by cell-scale escape speed.
+							const amrex::Real m_cluster = old_mass;
+							const amrex::Real v_esc = std::sqrt(2.0 * C::Gconst * m_cluster / dx_cell);
+							const amrex::Real vdisp_norm = 2.0 * v_esc;
+							p_new.rdata(mass_idx + 1) += vdisp_norm * (amrex::Random(rng) - 0.5);
+							p_new.rdata(mass_idx + 2) += vdisp_norm * (amrex::Random(rng) - 0.5);
+							p_new.rdata(mass_idx + 3) += vdisp_norm * (amrex::Random(rng) - 0.5);
+						}
 					}
 				});
 			}
