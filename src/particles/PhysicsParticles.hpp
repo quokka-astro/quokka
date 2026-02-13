@@ -433,14 +433,6 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				auto *pdata_new = particles().data() + npart_old;
 
 				amrex::ParallelForRNG(npart_old, [=] AMREX_GPU_DEVICE(int64_t idx, amrex::RandomEngine const &rng) {
-					// compute cell corner position (x0, y0, z0) of the old particle
-					const int i = static_cast<int>((pdata_old[idx].pos(0) - plo[0]) * dxinv[0]); // NOLINT
-					const int j = static_cast<int>((pdata_old[idx].pos(1) - plo[1]) * dxinv[1]); // NOLINT
-					const int k = static_cast<int>((pdata_old[idx].pos(2) - plo[2]) * dxinv[2]); // NOLINT
-					amrex::Real const x0 = plo[0] + (i * dx[0]);
-					amrex::Real const y0 = plo[1] + (j * dx[1]);
-					amrex::Real const z0 = plo[2] + (k * dx[2]);
-
 					// mark old particle for deletion
 					auto &p_old = pdata_old[idx]; // NOLINT
 					p_old.id() = -1;
@@ -461,18 +453,15 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 							p_new.idata(ic) = p_old.idata(ic);
 						}
 						// set new particle properties
+						// NOTE: we keep new particle at the position of the old particle,
+						// and instead add a random velocity dispersion to unbind the new set of split particles
 						p_new.cpu() = cpu_id;
 						p_new.id() = pid + idx * splitFactor + idx_new;
-						p_new.pos(0) = x0 + dx[0] * amrex::Random(rng);
-						p_new.pos(1) = y0 + dx[1] * amrex::Random(rng);
-						p_new.pos(2) = z0 + dx[2] * amrex::Random(rng);
 						p_new.rdata(mass_idx) = old_mass / static_cast<amrex::Real>(splitFactor);
 
 						if (has_velocity_components) {
-							// Apply a component-wise uniform velocity kick with RMS set by cell-scale
-							// escape speed.
-							const amrex::Real m_cluster = old_mass;
-							const amrex::Real v_esc = std::sqrt(2.0 * C::Gconst * m_cluster / dx_cell);
+							// Apply a component-wise uniform velocity kick with RMS set by cell-scale escape speed.
+							const amrex::Real v_esc = std::sqrt(2.0 * C::Gconst * old_mass / dx_cell);
 							const amrex::Real vdisp_norm = 2.0 * v_esc;
 							const amrex::Real kick_x = vdisp_norm * (amrex::Random(rng) - 0.5);
 							const amrex::Real kick_y = vdisp_norm * (amrex::Random(rng) - 0.5);
@@ -488,10 +477,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 					if (has_velocity_components) {
 						// Enforce exact momentum conservation for this split group by removing the mean kick.
-						const amrex::Real inv_split_factor = 1.0 / static_cast<amrex::Real>(splitFactor);
-						const amrex::Real kick_mean_x = kick_sum_x * inv_split_factor;
-						const amrex::Real kick_mean_y = kick_sum_y * inv_split_factor;
-						const amrex::Real kick_mean_z = kick_sum_z * inv_split_factor;
+						const amrex::Real kick_mean_x = kick_sum_x / static_cast<amrex::Real>(splitFactor);
+						const amrex::Real kick_mean_y = kick_sum_y / static_cast<amrex::Real>(splitFactor);
+						const amrex::Real kick_mean_z = kick_sum_z / static_cast<amrex::Real>(splitFactor);
 						for (int idx_new = 0; idx_new < splitFactor; ++idx_new) {
 							auto &p_new = new_particles[idx_new]; // NOLINT
 							p_new.rdata(mass_idx + 1) -= kick_mean_x;
