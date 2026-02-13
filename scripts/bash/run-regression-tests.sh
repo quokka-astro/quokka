@@ -308,7 +308,7 @@ create_status_file() {
 
 	# Get timestamp
 	local timestamp
-	timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+	timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S")
 
 	# Write JSON (using jq for proper escaping if available, otherwise printf)
 	if command -v jq &>/dev/null; then
@@ -466,7 +466,7 @@ wait_for_gpu() {
 		local count
 		count=$(echo "$gpu_procs" | grep -c '[0-9]' || true)
 		local now
-		now=$(date -u +%H:%M:%SZ)
+    now=$(date -u +"%Y-%m-%dT%H:%M:%S")
 		echo "Waiting: GPU has ${count} active CUDA process(es). Rechecking in ${check_interval}s (${waited}s elapsed) [${now}]..."
 		sleep "$check_interval"
 		waited=$((waited + check_interval))
