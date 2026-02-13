@@ -31,7 +31,7 @@ wait_for_gpu() {
         local count
         count=$(echo "$gpu_procs" | grep -c '[0-9]' || true)
         local now
-        now=$(date -u +%H:%M:%SZ)
+        now=$(date +%Y%m%d\ %H%M%S)
         echo "Waiting: GPU has ${count} active CUDA process(es). Rechecking in ${check_interval}s (${waited}s elapsed) [${now}]..."
         sleep "$check_interval"
         waited=$((waited + check_interval))
@@ -53,7 +53,8 @@ log="${TARGET}/reg-logs/crontab-reglog-$(date +%Y%m%d_%H%M%S).log"
 # This avoids false alarms from GPU memory allocated by Singularity's --nv init.
 wait_for_gpu
 
-singularity exec --nv \
+# 4 hours timeout 
+timeout 14400 singularity exec --nv \
     --bind $TARGET:$TARGET \
     --pwd $TARGET \
     $sif \
