@@ -444,6 +444,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					for (int idx_new = 0; idx_new < splitFactor; ++idx_new) {
 						auto &p_new = new_particles[idx_new]; // NOLINT
 						// copy old particle properties
+						for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+							p_new.pos(d) = p_old.pos(d);
+						}
 						for (int rc = 0; rc < ContainerType::ParticleType::NReal; ++rc) {
 							p_new.rdata(rc) = p_old.rdata(rc);
 						}
