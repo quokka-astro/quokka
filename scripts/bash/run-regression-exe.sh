@@ -11,13 +11,15 @@ export PATH="/opt/singularity-ce/4.3.0/bin:$PATH"
 #######################################
 wait_for_gpu() {
     local check_interval=60
+    local max_intervals=240
     local waited=0
 
     echo "=========================================="
     echo "Checking for conflicting jobs on the GPU"
     echo "=========================================="
 
-    while true; do
+    local intervals=0
+    while [ "$intervals" -lt "$max_intervals" ]; do
         local gpu_procs=""
         gpu_procs=$(nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader 2>/dev/null \
             | grep -v "^0," || true)
@@ -35,7 +37,12 @@ wait_for_gpu() {
         echo "Waiting: GPU has ${count} active CUDA process(es). Rechecking in ${check_interval}s (${waited}s elapsed) [${now}]..."
         sleep "$check_interval"
         waited=$((waited + check_interval))
+        intervals=$((intervals + 1))
     done
+
+    echo "Timed out waiting for GPU after ${waited}s. Aborting."
+    echo ""
+    exit 1
 }
 
 sif="quokka-linux-amd64-cuda-azp-agent-cached.sif"
@@ -53,7 +60,7 @@ log="${TARGET}/reg-logs/crontab-reglog-$(date +%Y%m%d_%H%M%S).log"
 # This avoids false alarms from GPU memory allocated by Singularity's --nv init.
 wait_for_gpu
 
-# 4 hours timeout 
+# 4 hours timeout
 timeout 14400 singularity exec --nv \
     --bind $TARGET:$TARGET \
     --pwd $TARGET \
@@ -61,5 +68,11 @@ timeout 14400 singularity exec --nv \
     bash quokka2/scripts/bash/run-regression-tests.sh --ini-file ${TARGET}/quokka/regression/quokka-tests.ini \
     --ccache-dir ${TARGET}/ccache --source-dir ${TARGET}/quokka \
     --skip-gpu-wait \
-    >"$log" 2>&1
+    >"$log" 2>&1 || {
+        rc=$?
+        if [ $rc -eq 124 ]; then
+            echo "ERROR: singularity exec timed out after 4 hours." >> "$log"
+        fi
+        exit $rc
+    }
 
