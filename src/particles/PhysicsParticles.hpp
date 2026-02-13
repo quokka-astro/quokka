@@ -448,6 +448,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 					// create new particles
 					auto *new_particles = &pdata_new[idx * splitFactor]; // NOLINT
+					amrex::Real kick_sum_x = 0;
+					amrex::Real kick_sum_y = 0;
+					amrex::Real kick_sum_z = 0;
 					for (int idx_new = 0; idx_new < splitFactor; ++idx_new) {
 						auto &p_new = new_particles[idx_new]; // NOLINT
 						// copy old particle properties
@@ -466,14 +469,34 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						p_new.rdata(mass_idx) = old_mass / static_cast<amrex::Real>(splitFactor);
 
 						if (has_velocity_components) {
-							// Match LowMassComposite splitting pattern: component-wise uniform velocity kick
-							// with RMS set by cell-scale escape speed.
+							// Apply a component-wise uniform velocity kick with RMS set by cell-scale
+							// escape speed.
 							const amrex::Real m_cluster = old_mass;
 							const amrex::Real v_esc = std::sqrt(2.0 * C::Gconst * m_cluster / dx_cell);
 							const amrex::Real vdisp_norm = 2.0 * v_esc;
-							p_new.rdata(mass_idx + 1) += vdisp_norm * (amrex::Random(rng) - 0.5);
-							p_new.rdata(mass_idx + 2) += vdisp_norm * (amrex::Random(rng) - 0.5);
-							p_new.rdata(mass_idx + 3) += vdisp_norm * (amrex::Random(rng) - 0.5);
+							const amrex::Real kick_x = vdisp_norm * (amrex::Random(rng) - 0.5);
+							const amrex::Real kick_y = vdisp_norm * (amrex::Random(rng) - 0.5);
+							const amrex::Real kick_z = vdisp_norm * (amrex::Random(rng) - 0.5);
+							p_new.rdata(mass_idx + 1) += kick_x;
+							p_new.rdata(mass_idx + 2) += kick_y;
+							p_new.rdata(mass_idx + 3) += kick_z;
+							kick_sum_x += kick_x;
+							kick_sum_y += kick_y;
+							kick_sum_z += kick_z;
+						}
+					}
+
+					if (has_velocity_components) {
+						// Enforce exact momentum conservation for this split group by removing the mean kick.
+						const amrex::Real inv_split_factor = 1.0 / static_cast<amrex::Real>(splitFactor);
+						const amrex::Real kick_mean_x = kick_sum_x * inv_split_factor;
+						const amrex::Real kick_mean_y = kick_sum_y * inv_split_factor;
+						const amrex::Real kick_mean_z = kick_sum_z * inv_split_factor;
+						for (int idx_new = 0; idx_new < splitFactor; ++idx_new) {
+							auto &p_new = new_particles[idx_new]; // NOLINT
+							p_new.rdata(mass_idx + 1) -= kick_mean_x;
+							p_new.rdata(mass_idx + 2) -= kick_mean_y;
+							p_new.rdata(mass_idx + 3) -= kick_mean_z;
 						}
 					}
 				});
