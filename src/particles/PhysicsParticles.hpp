@@ -422,9 +422,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 				// Create the particles
 				const auto &geom = container_->Geom(lev);
-				const auto dxinv = geom.InvCellSizeArray();
 				const auto dx = geom.CellSizeArray();
-				const auto plo = geom.ProbLoArray();
 				const amrex::Real dx_cell = std::min({dx[0], dx[1], dx[2]});
 				const int cpu_id = amrex::ParallelDescriptor::MyProc();
 				const int mass_idx = this->getMassIndex();
