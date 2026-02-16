@@ -1,9 +1,9 @@
 #ifndef DERIVED_FIELD_BASE_H_
 #define DERIVED_FIELD_BASE_H_
 
+#include <functional>
 #include <string>
 #include <string_view>
-#include <functional>
 
 #include "AMReX_BoxArray.H"
 #include "AMReX_DistributionMapping.H"

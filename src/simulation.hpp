@@ -74,8 +74,8 @@ namespace filesystem = experimental::filesystem;
 #include <AMReX_FluxRegister.H>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
-#include <yaml-cpp/yaml.h>
 #include <unordered_set>
+#include <yaml-cpp/yaml.h>
 
 #include "AMReX_AmrParticles.H"
 #include "particles/PhysicsParticles.hpp"
@@ -96,6 +96,8 @@ namespace filesystem = experimental::filesystem;
 // internal headers
 #include "fundamental_constants.H"
 #include "grid.hpp"
+#include "io/DerivedFieldBase.H"
+#include "io/DerivedParticleDeposition.H"
 #include "io/DiagBase.H"
 #include "io/DiagFramePlane.H"
 #include "io/DiagPDF.H"
@@ -103,8 +105,6 @@ namespace filesystem = experimental::filesystem;
 #include "io/DiagParticleTxt.H"
 #include "io/DiagPlotfile.H"
 #include "io/DiagProjectionPlot.H"
-#include "io/DerivedFieldBase.H"
-#include "io/DerivedParticleDeposition.H"
 #include "io/io_utils.hpp"
 #include "io/projection.hpp"
 #include "physics_info.hpp"
@@ -3830,13 +3830,13 @@ auto AMRSimulation<problem_t>::computeRuntimeDerivedVar(int lev, std::string con
 		if (particleType == "StochasticStellarPop") {
 			if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::StochasticStellarPop) {
 				if (StochasticStellarPopParticles != nullptr) {
-					quokka::depositParticleMassDensity(StochasticStellarPopParticles.get(), outMF, outLev, quokka::StochasticStellarPopParticleMassIdx,
-									   outComp);
+					quokka::depositParticleMassDensity(StochasticStellarPopParticles.get(), outMF, outLev,
+									   quokka::StochasticStellarPopParticleMassIdx, outComp);
 				}
 				return;
 			}
-			amrex::Abort(
-			    "Derived field requested particle type StochasticStellarPop, but ParticleSwitch::StochasticStellarPop is not enabled for this problem.");
+			amrex::Abort("Derived field requested particle type StochasticStellarPop, but ParticleSwitch::StochasticStellarPop is not enabled for "
+				     "this problem.");
 		}
 		if (particleType == "Sink") {
 			if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) {
