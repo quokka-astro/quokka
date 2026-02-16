@@ -516,6 +516,26 @@ auto transform_realbox_to_2D(amrex::Direction const &dir, amrex::RealBox const &
 	return {new_lo, new_hi};
 }
 
+auto transform_ref_ratio_to_2D(amrex::Direction const &dir, amrex::IntVect const &ref_ratio) -> amrex::IntVect
+{
+	amrex::IntVect new_ratio;
+	if (dir == amrex::Direction::x) { // y-z plane
+		new_ratio = amrex::IntVect(amrex::Dim3{.x = ref_ratio[1], .y = ref_ratio[2], .z = ref_ratio[0]});
+#if AMREX_SPACEDIM >= 2
+	} else if (dir == amrex::Direction::y) { // x-z plane
+		new_ratio = amrex::IntVect(amrex::Dim3{.x = ref_ratio[0], .y = ref_ratio[2], .z = ref_ratio[1]});
+#endif
+#if AMREX_SPACEDIM == 3
+	} else if (dir == amrex::Direction::z) { // x-y plane
+		new_ratio = amrex::IntVect(amrex::Dim3{.x = ref_ratio[0], .y = ref_ratio[1], .z = ref_ratio[2]});
+#endif
+	} else {
+		amrex::Abort("detail::transform_ref_ratio_to_2D: invalid direction!");
+	}
+
+	return new_ratio;
+}
+
 } // namespace detail
 
 void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> const &proj,
@@ -538,6 +558,11 @@ void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex
 		const amrex::Box box2d = detail::transform_box_to_2D(dir, geom[lev].Domain());
 		const amrex::RealBox domain2d = detail::transform_realbox_to_2D(dir, geom[lev].ProbDomain());
 		geom2d[lev] = amrex::Geometry(box2d, &domain2d);
+	}
+	amrex::Vector<amrex::IntVect> ref_ratio2d;
+	ref_ratio2d.reserve(ref_ratio.size());
+	for (const auto &ratio : ref_ratio) {
+		ref_ratio2d.push_back(detail::transform_ref_ratio_to_2D(dir, ratio));
 	}
 
 	// Copy projections into Vector<MultiFab> where each MultiFab holds all components for that level
@@ -588,10 +613,14 @@ void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex
 
 	// write mf_all to disk
 	const std::string filename = amrex::Concatenate(basename, istep, 7);
-	const amrex::Vector<const amrex::MultiFab *> mfs = {&mf_all};
+	amrex::Vector<const amrex::MultiFab *> mfs;
+	mfs.reserve(static_cast<size_t>(nlevels));
+	for (int lev = 0; lev < nlevels; ++lev) {
+		mfs.push_back(&mf_all[lev]);
+	}
 	amrex::Print() << "Writing projection " << filename << "\n";
 
-	detail::Write2DMultiLevelPlotfile(filename, nlevels, mfs, varnames, geom2d, time, amrex::Vector<int>(nlevels, istep), ref_ratio);
+	detail::Write2DMultiLevelPlotfile(filename, nlevels, mfs, varnames, geom2d, time, amrex::Vector<int>(nlevels, istep), ref_ratio2d);
 
 	// Write metadata file (inside the plotfile directory)
 	if (amrex::ParallelDescriptor::IOProcessor()) {
