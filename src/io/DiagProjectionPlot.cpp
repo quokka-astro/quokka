@@ -16,7 +16,7 @@ void DiagProjectionPlot::init(const std::string &a_prefix, std::string_view a_di
 
 	// Outputted variables
 	int const nOutFields = pp.countval("field_names");
-	AMREX_ASSERT(nOutFields > 0);
+	AMREX_ALWAYS_ASSERT(nOutFields > 0);
 	m_fieldNames.resize(nOutFields);
 	for (int f = 0; f < nOutFields; ++f) {
 		pp.get("field_names", m_fieldNames[f], f);
