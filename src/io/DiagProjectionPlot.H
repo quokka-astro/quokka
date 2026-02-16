@@ -60,8 +60,8 @@ template <typename problem_t> void DiagProjectionPlot::processDiag(int a_nstep, 
 		proj.reserve(m_fieldNames.size());
 		for (const auto &field : m_fieldNames) {
 			const int comp = getFieldIndex(field, *m_diagVars);
-			proj[field] = quokka::diagnostics::ComputePlaneProjectionFromMultiFab<amrex::ReduceOpSum>(
-			    *m_diagMF, sim->finestLevel(), *m_geoms, *m_refRatio, dir, comp);
+			proj[field] = quokka::diagnostics::ComputePlaneProjectionFromMultiFab<amrex::ReduceOpSum>(*m_diagMF, sim->finestLevel(), *m_geoms,
+														  *m_refRatio, dir, comp);
 		}
 
 		// Skip if no projection data

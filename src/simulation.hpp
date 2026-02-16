@@ -878,7 +878,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default output interval
 	pp.query("plotfile_interval", plotfileInterval_);
 
-
 	// Default output interval
 	// Default statistics interval
 	pp.query("statistics_interval", statisticsInterval_);
