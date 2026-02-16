@@ -104,6 +104,48 @@ quokka.hist_temp.dense.field_name = gasDensity         # Filter field
 quokka.hist_temp.dense.value_greater = 1e-25           # Filters: value_greater, value_less, value_inrange
 ```
 
+### Runtime Derived Fields
+
+Runtime-derived fields are produced by factory-registered providers at runtime and can be consumed by diagnostics (for example, `DiagPDF`) without adding problem-specific `ComputeDerivedVar(...)` specializations.
+
+Provider registry parameters:
+
+| Parameter Name        | Type        | Default | Description                                                                                          |
+|-----------------------|-------------|---------|------------------------------------------------------------------------------------------------------|
+| quokka.derived_fields | String list | Empty   | List of runtime-derived provider names. Each name maps to a `quokka.<name>.*` parameter namespace. |
+| quokka.\<name\>.type  | String      | None    | Factory type for this provider (for example, `DerivedParticleDeposition`).                          |
+
+`DerivedParticleDeposition` provider parameters:
+
+| Parameter Name                    | Type        | Default    | Description                                                                                                      |
+|-----------------------------------|-------------|------------|------------------------------------------------------------------------------------------------------------------|
+| quokka.\<name\>.particle_types    | String list | `CIC`      | Particle types to deposit. Supported values: `CIC`, `CICRad`, `StochasticStellarPop`, `Sink`, `Test`.         |
+| quokka.\<name\>.deposit_fields    | String list | `mass`     | Particle fields to deposit. Currently only `mass` is supported.                                                 |
+| quokka.\<name\>.prefix            | String      | `particle` | Output naming prefix. Output names are formed as `<prefix>.<ParticleType>.mass_density`.                       |
+
+Notes:
+- Runtime-derived outputs are registered as derived variables automatically.
+- These fields can be consumed by diagnostics by name.
+- Output name collisions with other derived fields are rejected at startup.
+
+Example:
+
+```ini
+quokka.derived_fields = partdep
+quokka.partdep.type = DerivedParticleDeposition
+quokka.partdep.particle_types = CIC Sink
+quokka.partdep.deposit_fields = mass
+quokka.partdep.prefix = particle
+
+quokka.diagnostics = slice_z
+quokka.slice_z.type = DiagFramePlane
+quokka.slice_z.file = slicez_plt
+quokka.slice_z.normal = 2
+quokka.slice_z.center = 2.4688e20
+quokka.slice_z.int = 10
+quokka.slice_z.field_names = particle.CIC.mass_density
+```
+
 ## Volume Rendering (Ascent)
 
 !!! Warning

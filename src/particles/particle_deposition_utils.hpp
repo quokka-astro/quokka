@@ -2,6 +2,7 @@
 #define PARTICLE_DEPOSITION_UTILS_HPP_
 
 #include "AMReX_MultiFab.H"
+#include "AMReX_ParticleMesh.H"
 #include "AMReX_ParticleInterpolators.H"
 #include "AMReX_REAL.H"
 

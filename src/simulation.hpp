@@ -75,9 +75,11 @@ namespace filesystem = experimental::filesystem;
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 #include <yaml-cpp/yaml.h>
+#include <unordered_set>
 
 #include "AMReX_AmrParticles.H"
 #include "particles/PhysicsParticles.hpp"
+#include "particles/particle_deposition_utils.hpp"
 
 #if AMREX_SPACEDIM == 3
 #include "AMReX_MLLinOp.H"
@@ -101,6 +103,8 @@ namespace filesystem = experimental::filesystem;
 #include "io/DiagParticleTxt.H"
 #include "io/DiagPlotfile.H"
 #include "io/DiagProjectionPlot.H"
+#include "io/DerivedFieldBase.H"
+#include "io/DerivedParticleDeposition.H"
 #include "io/io_utils.hpp"
 #include "io/projection.hpp"
 #include "physics_info.hpp"
@@ -454,6 +458,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	[[nodiscard]] auto PlotFileMFAtLevel_fc(int lev, int idim, int nghost_fc_) -> amrex::MultiFab;
 	void AverageDownDerived(const amrex::Vector<amrex::MultiFab *> &mfs, const amrex::Vector<std::string> &varnames) const;
 	void createDiagnostics();
+	void createRuntimeDerivedFields();
+	void updateRuntimeDerivedFields();
+	[[nodiscard]] auto computeRuntimeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const -> bool;
 	void updateDiagnostics();
 	void doDiagnostics();
 	void WriteMetadataFile(std::string const &MetadataFileName) const;
@@ -568,6 +575,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// Diagnostics
 	amrex::Vector<std::unique_ptr<DiagBase>> m_diagnostics;
 	amrex::Vector<std::string> m_diagVars;
+	amrex::Vector<std::unique_ptr<quokka::DerivedFieldBase>> m_runtimeDerivedFields;
+	amrex::Vector<std::string> m_runtimeDerivedVarNames;
 
 	/// AMR-specific parameters
 	int regrid_int = 2;	 // regrid interval (number of coarse steps)
@@ -935,6 +944,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Specify derived variables to save to plotfiles
 	pp.queryarr("derived_vars", derivedNames_);
+
+	// Configure runtime-derived field providers (factory-based)
+	createRuntimeDerivedFields();
 
 	// re-grid interval
 	pp.query("regrid_interval", regrid_int);
@@ -3592,6 +3604,10 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 				comp++;
 				continue;
 			}
+			if (computeRuntimeDerivedVar(lev, varname, plotMF, comp)) {
+				comp++;
+				continue;
+			}
 			ComputeDerivedVar(lev, varname, plotMF, comp);
 			comp++;
 			continue;
@@ -3724,6 +3740,138 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF_fc(const
 	return r_fc;
 }
 
+template <typename problem_t> void AMRSimulation<problem_t>::createRuntimeDerivedFields()
+{
+	std::string const code_prefix = "quokka";
+	amrex::ParmParse const pp(code_prefix);
+
+	// If parameters are re-read, remove previously-registered runtime-derived names
+	// before re-registering providers.
+	if (!m_runtimeDerivedVarNames.empty()) {
+		for (auto const &name : m_runtimeDerivedVarNames) {
+			auto const it = std::find(derivedNames_.begin(), derivedNames_.end(), name);
+			if (it != derivedNames_.end()) {
+				derivedNames_.erase(it);
+			}
+		}
+		m_runtimeDerivedVarNames.clear();
+	}
+	m_runtimeDerivedFields.clear();
+
+	int n_fields = pp.countval("derived_fields");
+	if (n_fields <= 0) {
+		return;
+	}
+
+	amrex::Vector<std::string> field_groups(n_fields);
+	pp.getarr("derived_fields", field_groups, 0, n_fields);
+	std::unordered_set<std::string> existingDerived(derivedNames_.begin(), derivedNames_.end());
+
+	for (int n = 0; n < n_fields; ++n) {
+		std::string const field_prefix = code_prefix + "." + field_groups[n];
+		amrex::ParmParse const ppf(field_prefix);
+		std::string field_type;
+		ppf.get("type", field_type);
+
+		auto provider = quokka::DerivedFieldBase::create(field_type);
+		provider->init(field_prefix, field_groups[n]);
+		amrex::Vector<std::string> providerVars;
+		provider->addVars(providerVars);
+		for (auto const &var : providerVars) {
+			if (var.empty()) {
+				amrex::Abort("Runtime derived field provider generated an empty output name.");
+			}
+			if (!existingDerived.insert(var).second) {
+				amrex::Abort("Duplicate derived field name from runtime provider: " + var);
+			}
+			derivedNames_.push_back(var);
+			m_runtimeDerivedVarNames.push_back(var);
+		}
+		m_runtimeDerivedFields.push_back(std::move(provider));
+	}
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::updateRuntimeDerivedFields()
+{
+	if (m_runtimeDerivedFields.empty()) {
+		return;
+	}
+
+	auto const geoms = Geom(0, finestLevel());
+	for (auto const &provider : m_runtimeDerivedFields) {
+		provider->prepare(finestLevel() + 1, geoms, boxArray(0, finestLevel()), dmap, GetPlotfileVarNames());
+	}
+}
+
+template <typename problem_t>
+auto AMRSimulation<problem_t>::computeRuntimeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const -> bool
+{
+	typename quokka::DerivedFieldBase::ComputeContext ctx{};
+	ctx.depositParticleMassDensity = [this](const std::string &particleType, amrex::MultiFab &outMF, int outLev, int outComp) {
+#if AMREX_SPACEDIM == 3
+		if (particleType == "CIC") {
+			if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CIC) {
+				if (CICParticles != nullptr) {
+					quokka::depositParticleMassDensity(CICParticles.get(), outMF, outLev, quokka::CICParticleMassIdx, outComp);
+				}
+				return;
+			}
+			amrex::Abort("Derived field requested particle type CIC, but ParticleSwitch::CIC is not enabled for this problem.");
+		}
+		if (particleType == "CICRad") {
+			if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CICRad) {
+				if (CICRadParticles != nullptr) {
+					quokka::depositParticleMassDensity(CICRadParticles.get(), outMF, outLev, quokka::CICRadParticleMassIdx, outComp);
+				}
+				return;
+			}
+			amrex::Abort("Derived field requested particle type CICRad, but ParticleSwitch::CICRad is not enabled for this problem.");
+		}
+		if (particleType == "StochasticStellarPop") {
+			if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::StochasticStellarPop) {
+				if (StochasticStellarPopParticles != nullptr) {
+					quokka::depositParticleMassDensity(StochasticStellarPopParticles.get(), outMF, outLev, quokka::StochasticStellarPopParticleMassIdx,
+									   outComp);
+				}
+				return;
+			}
+			amrex::Abort(
+			    "Derived field requested particle type StochasticStellarPop, but ParticleSwitch::StochasticStellarPop is not enabled for this problem.");
+		}
+		if (particleType == "Sink") {
+			if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) {
+				if (SinkParticles != nullptr) {
+					quokka::depositParticleMassDensity(SinkParticles.get(), outMF, outLev, quokka::SinkParticleMassIdx, outComp);
+				}
+				return;
+			}
+			amrex::Abort("Derived field requested particle type Sink, but ParticleSwitch::Sink is not enabled for this problem.");
+		}
+		if (particleType == "Test") {
+			if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Test) {
+				if (TestParticles != nullptr) {
+					quokka::depositParticleMassDensity(TestParticles.get(), outMF, outLev, quokka::TestParticleMassIdx, outComp);
+				}
+				return;
+			}
+			amrex::Abort("Derived field requested particle type Test, but ParticleSwitch::Test is not enabled for this problem.");
+		}
+		amrex::Abort("Unsupported particle type requested by runtime derived field provider: " + particleType);
+#else
+		amrex::ignore_unused(outMF, outLev, outComp);
+		amrex::Abort("Particle deposition runtime derived fields are supported only in 3D.");
+#endif
+	};
+
+	for (auto const &provider : m_runtimeDerivedFields) {
+		if (provider->computeField(lev, dname, mf, ncomp, ctx)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 template <typename problem_t> void AMRSimulation<problem_t>::createDiagnostics()
 {
 	std::string const code_prefix = "quokka";
@@ -3799,6 +3947,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::createDiagnostics()
 
 template <typename problem_t> void AMRSimulation<problem_t>::updateDiagnostics()
 {
+	updateRuntimeDerivedFields();
+
 	// Might need to update some internal data as the grid changes
 	for (const auto &m_diagnostic : m_diagnostics) {
 		if (m_diagnostic->needUpdate()) {
