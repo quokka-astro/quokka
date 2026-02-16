@@ -174,6 +174,8 @@ void depositParticleNumberDensity(ContainerType *container, amrex::MultiFab &dep
 // Particle Type Specific Deposition Functions
 //==============================================================================
 
+#if AMREX_SPACEDIM == 3
+
 /// Deposit properties for CIC particles
 template <typename ContainerType>
 void depositCICParticleProperties(ContainerType *container, amrex::MultiFab &mass_field, amrex::MultiFab &momentum_field, amrex::MultiFab &energy_field,
@@ -255,6 +257,8 @@ void depositTestParticleProperties(ContainerType *container, amrex::MultiFab &ma
 	depositParticleNumberDensity(container, number_field, lev, 0);
 }
 
+#endif // AMREX_SPACEDIM == 3
+
 //==============================================================================
 // Generic Particle Deposition Interface
 //==============================================================================
@@ -264,6 +268,7 @@ template <typename problem_t>
 void depositParticlePropertiesByType(const std::string &particleType, void *container, amrex::MultiFab &mass_field, amrex::MultiFab &momentum_field,
 				     amrex::MultiFab &energy_field, amrex::MultiFab &number_field, int lev)
 {
+#if AMREX_SPACEDIM == 3
 	if (particleType == "CIC") {
 		auto *cicContainer = static_cast<CICParticleContainer *>(container);
 		depositCICParticleProperties(cicContainer, mass_field, momentum_field, energy_field, number_field, lev);
@@ -279,6 +284,10 @@ void depositParticlePropertiesByType(const std::string &particleType, void *cont
 	} else {
 		amrex::Abort("Unsupported particle type for deposition: " + particleType);
 	}
+#else
+	amrex::ignore_unused(container, mass_field, momentum_field, energy_field, number_field, lev);
+	amrex::Abort("Particle deposition is only supported in 3D.");
+#endif
 }
 
 } // namespace quokka
