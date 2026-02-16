@@ -24,8 +24,15 @@ wait_for_gpu() {
         gpu_procs=$(nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader 2>/dev/null \
             | grep -v "^0," || true)
 
-        if [ -z "$gpu_procs" ]; then
-            echo "✓ GPU is free, proceeding..."
+        # Calculate total GPU memory usage
+        local total_memory=0
+        if [ -n "$gpu_procs" ]; then
+            total_memory=$(echo "$gpu_procs" | awk -F',' '{sum += $2} END {print int(sum)}')
+        fi
+
+        # Consider GPU free if memory usage is under 6000 MB
+        if [ "$total_memory" -le 6000 ]; then
+            echo "✓ GPU is free (${total_memory} MB used), proceeding..."
             echo ""
             return
         fi
@@ -34,7 +41,7 @@ wait_for_gpu() {
         count=$(echo "$gpu_procs" | grep -c '[0-9]' || true)
         local now
         now=$(date +%Y%m%d\ %H%M%S)
-        echo "Waiting: GPU has ${count} active CUDA process(es). Rechecking in ${check_interval}s (${waited}s elapsed) [${now}]..."
+        echo "Waiting: GPU has ${count} active CUDA process(es) using ${total_memory} MB (threshold: 6000 MB). Rechecking in ${check_interval}s (${waited}s elapsed) [${now}]..."
         sleep "$check_interval"
         waited=$((waited + check_interval))
         intervals=$((intervals + 1))
