@@ -20,8 +20,8 @@ struct ParticleMassDensityDeposition {
 
 	template <typename ContainerType>
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<amrex::Real> const &deposition_array,
-						    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
-						    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
+							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
 	{
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
 		interp.ParticleToMesh(p, deposition_array, mass_comp, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
