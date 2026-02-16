@@ -45,9 +45,6 @@ template <> struct Physics_Traits<ParticleDepositionProblem> {
 
 template <> struct SimulationData<ParticleDepositionProblem> {
 	std::vector<amrex::Real> totalMass;
-	std::vector<amrex::Real> totalMomentum;
-	std::vector<amrex::Real> totalEnergy;
-	std::vector<amrex::Real> totalNumber;
 };
 
 template <> void QuokkaSimulation<ParticleDepositionProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -75,7 +72,7 @@ template <> void QuokkaSimulation<ParticleDepositionProblem>::createInitialCICPa
 	const amrex::Real particleMass = 1.0e-2;
 	const amrex::Real particleVelocity = 1.0e5;
 
-	const std::string particleFile = "tests/particle_deposition_particles.txt";
+	const std::string particleFile = "particle_deposition_particles.txt";
 	std::ofstream outFile(particleFile);
 	outFile << nParticles << "\n";
 
@@ -102,34 +99,18 @@ template <> void QuokkaSimulation<ParticleDepositionProblem>::computeAfterTimest
 	const int nComp = 1;
 
 	amrex::MultiFab massField(grids[lev], dmap[lev], nComp, nGhost);
-	amrex::MultiFab momentumField(grids[lev], dmap[lev], AMREX_SPACEDIM, nGhost);
-	amrex::MultiFab energyField(grids[lev], dmap[lev], nComp, nGhost);
-	amrex::MultiFab numberField(grids[lev], dmap[lev], nComp, nGhost);
 
 	massField.setVal(0.0);
-	momentumField.setVal(0.0);
-	energyField.setVal(0.0);
-	numberField.setVal(0.0);
-
-	depositCICParticleProperties(CICParticles.get(), massField, momentumField, energyField, numberField, lev);
+	depositParticleMassDensity(CICParticles.get(), massField, lev, CICParticleMassIdx, 0);
 
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
 	const amrex::Real cellVol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 	const amrex::Real totalMass = massField.sum(0) * cellVol;
-	const amrex::Real totalMomentumX = momentumField.sum(0) * cellVol;
-	const amrex::Real totalMomentumY = momentumField.sum(1) * cellVol;
-	const amrex::Real totalMomentumZ = momentumField.sum(2) * cellVol;
-	const amrex::Real totalEnergy = energyField.sum(0) * cellVol;
-	const amrex::Real totalNumber = numberField.sum(0) * cellVol;
 
 	userData_.totalMass.push_back(totalMass);
-	userData_.totalMomentum.push_back(std::sqrt(totalMomentumX * totalMomentumX + totalMomentumY * totalMomentumY + totalMomentumZ * totalMomentumZ));
-	userData_.totalEnergy.push_back(totalEnergy);
-	userData_.totalNumber.push_back(totalNumber);
 
-	amrex::Print() << "Step " << istep[0] << ": Total mass = " << totalMass << ", Total momentum = " << userData_.totalMomentum.back()
-		       << ", Total energy = " << totalEnergy << ", Total number = " << totalNumber << "\n";
+	amrex::Print() << "Step " << istep[0] << ": Total mass = " << totalMass << "\n";
 }
 
 template <> void QuokkaSimulation<ParticleDepositionProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int /*ncomp*/) const
@@ -137,9 +118,6 @@ template <> void QuokkaSimulation<ParticleDepositionProblem>::ComputeDerivedVar(
 	if (dname == "particle_mass_density") {
 		mf.setVal(0.0);
 		depositParticleMassDensity(CICParticles.get(), mf, lev, CICParticleMassIdx, 0);
-	} else if (dname == "particle_number_density") {
-		mf.setVal(0.0);
-		depositParticleNumberDensity(CICParticles.get(), mf, lev, 0);
 	}
 }
 
@@ -149,33 +127,21 @@ auto problem_main() -> int
 	sim.setInitialConditions();
 	sim.evolve();
 
-	if (sim.userData_.totalMass.empty() || sim.userData_.totalNumber.empty()) {
+	if (sim.userData_.totalMass.empty()) {
 		amrex::Print() << "ERROR: No deposition diagnostics recorded.\n";
 		return 1;
 	}
 
 	const amrex::Real finalMass = sim.userData_.totalMass.back();
-	const amrex::Real finalMomentum = sim.userData_.totalMomentum.back();
-	const amrex::Real finalEnergy = sim.userData_.totalEnergy.back();
-	const amrex::Real finalNumber = sim.userData_.totalNumber.back();
 
 	amrex::Print() << "Final results:\n";
 	amrex::Print() << "  Total mass: " << finalMass << "\n";
-	amrex::Print() << "  Total momentum: " << finalMomentum << "\n";
-	amrex::Print() << "  Total energy: " << finalEnergy << "\n";
-	amrex::Print() << "  Total number: " << finalNumber << "\n";
 
 	const amrex::Real expectedMass = 10.0 * 1.0e-2;
-	const amrex::Real expectedNumber = 10.0;
 	const amrex::Real massTolerance = 1.0e-12;
-	const amrex::Real numberTolerance = 1.0e-12;
 
 	if (std::abs(finalMass - expectedMass) > massTolerance) {
 		amrex::Print() << "ERROR: Mass conservation failed! Expected " << expectedMass << ", got " << finalMass << "\n";
-		return 1;
-	}
-	if (std::abs(finalNumber - expectedNumber) > numberTolerance) {
-		amrex::Print() << "ERROR: Number conservation failed! Expected " << expectedNumber << ", got " << finalNumber << "\n";
 		return 1;
 	}
 

@@ -13,8 +13,7 @@
 namespace quokka
 {
 
-/// Diagnostic class for depositing particle properties into grid fields
-/// Supports per-species deposition of mass, momentum, and energy
+/// Diagnostic class for depositing particle mass into grid fields
 class DiagParticleDeposition : public DiagBase::Register<DiagParticleDeposition>
 {
       public:
@@ -31,7 +30,7 @@ class DiagParticleDeposition : public DiagBase::Register<DiagParticleDeposition>
 	/// Particle types to deposit (e.g., "CIC", "StochasticStellarPop")
 	std::vector<std::string> m_particleTypes;
 
-	/// Fields to deposit for each particle type (e.g., "mass", "momentum", "energy")
+	/// Fields to deposit for each particle type (currently supports only "mass")
 	std::vector<std::string> m_depositFields;
 
 	/// Output format: "plotfile" or "ascii"

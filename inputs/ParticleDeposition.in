@@ -26,13 +26,13 @@ particles.verbose = 1
 diag.particle_deposition.type = DiagParticleDeposition
 diag.particle_deposition.int = 5
 diag.particle_deposition.particle_types = CIC
-diag.particle_deposition.deposit_fields = mass momentum energy number
+diag.particle_deposition.deposit_fields = mass
 diag.particle_deposition.output_format = plotfile
 
 # I/O
 amr.plot_int = 10
 amr.plot_file = particle_deposition_
-amr.derived_var = particle_mass_density particle_number_density
+amr.derived_var = particle_mass_density
 amr.check_int = -1
 
 # Verbosity

@@ -42,6 +42,9 @@ void DiagParticleDeposition::init(const std::string &a_prefix, std::string_view 
 	// Parse deposit fields from string
 	std::istringstream iss2(depositFieldsStr);
 	while (iss2 >> token) {
+		if (token != "mass") {
+			amrex::Abort("DiagParticleDeposition currently supports only deposit_fields = mass");
+		}
 		m_depositFields.push_back(token);
 	}
 
@@ -147,11 +150,8 @@ void DiagParticleDeposition::writeOutput(int a_nstep, const amrex::Real &a_time,
 
 auto DiagParticleDeposition::getFieldComponents(const std::string &field) const -> int
 {
-	if (field == "mass" || field == "energy" || field == "number") {
+	if (field == "mass") {
 		return 1;
-	}
-	if (field == "momentum") {
-		return AMREX_SPACEDIM;
 	}
 	amrex::Abort("Unknown field type: " + field);
 	return 0;
@@ -162,12 +162,10 @@ auto DiagParticleDeposition::getFieldNames(const std::string &particleType, cons
 	std::vector<std::string> names;
 	const std::string prefix = particleType + "_" + field;
 
-	if (field == "mass" || field == "energy" || field == "number") {
+	if (field == "mass") {
 		names.push_back(prefix);
-	} else if (field == "momentum") {
-		names.push_back(prefix + "_x");
-		names.push_back(prefix + "_y");
-		names.push_back(prefix + "_z");
+	} else {
+		amrex::Abort("Unknown field type: " + field);
 	}
 
 	return names;
