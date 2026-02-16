@@ -186,9 +186,9 @@ auto ComputePlaneProjection(amrex::Vector<amrex::MultiFab> const &state_new, con
 	return projections_accum;
 }
 
-template <typename ReduceOp>
-auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::MultiFab *> &mfs, const int finest_level, amrex::Vector<amrex::Geometry> const &geom,
-					amrex::Vector<amrex::IntVect> const &ref_ratio, const amrex::Direction dir, const int comp)
+inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::MultiFab *> &mfs, const int finest_level,
+					       amrex::Vector<amrex::Geometry> const &geom, amrex::Vector<amrex::IntVect> const &ref_ratio,
+					       const amrex::Direction dir, const int comp)
     -> amrex::Vector<amrex::MultiFab>
 {
 	// compute plane-parallel projection of a single MultiFab component along the given axis.
@@ -229,23 +229,15 @@ auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::MultiFa
 		auto const &mask_arr = mask.const_arrays();
 		auto const &dx = geom[lev].CellSizeArray();
 
-		auto plane_local = amrex::ReduceToPlane<ReduceOp, amrex::Real>(static_cast<int>(dir), geom[lev].Domain(), *mfs[lev],
-									       [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
-										       if (mask_arr[box_no](i, j, k) == 0) {
-											       return 0.0;
-										       }
-										       return dx[static_cast<int>(dir)] * mf_arr[box_no](i, j, k, comp);
-									       });
+		auto plane_local = amrex::ReduceToPlane<amrex::ReduceOpSum, amrex::Real>(
+		    static_cast<int>(dir), geom[lev].Domain(), *mfs[lev], [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
+			    if (mask_arr[box_no](i, j, k) == 0) {
+				    return 0.0;
+			    }
+			    return dx[static_cast<int>(dir)] * mf_arr[box_no](i, j, k, comp);
+		    });
 		// GPU-aware MPI is required: reduce directly on the device buffer for performance.
-		if constexpr (std::is_same_v<ReduceOp, amrex::ReduceOpSum>) {
-			amrex::ParallelDescriptor::ReduceRealSum(plane_local.dataPtr(), static_cast<int>(plane_local.size()));
-		} else if constexpr (std::is_same_v<ReduceOp, amrex::ReduceOpMin>) {
-			amrex::ParallelDescriptor::ReduceRealMin(plane_local.dataPtr(), static_cast<int>(plane_local.size()));
-		} else if constexpr (std::is_same_v<ReduceOp, amrex::ReduceOpMax>) {
-			amrex::ParallelDescriptor::ReduceRealMax(plane_local.dataPtr(), static_cast<int>(plane_local.size()));
-		} else {
-			amrex::Abort("ReduceToPlane MPI reduction only supports ReduceOpSum/Min/Max.");
-		}
+		amrex::ParallelDescriptor::ReduceRealSum(plane_local.dataPtr(), static_cast<int>(plane_local.size()));
 
 		auto const plane_arr = plane_local.const_array();
 		auto const proj_arr = projections[lev].arrays();
