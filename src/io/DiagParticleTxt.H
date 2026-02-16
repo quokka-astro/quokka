@@ -39,7 +39,7 @@ template <typename problem_t> void DiagParticleTxt::processDiag(int a_nstep, con
 	auto *sim = getSim<problem_t>();
 
 	// Generate filename using step number
-	const std::string plotfilename = amrex::Concatenate(m_diagfile, a_nstep, 5);
+	const std::string plotfilename = amrex::Concatenate(m_diagfile, a_nstep, 7);
 
 	// Create directory if it doesn't exist
 	if (amrex::ParallelDescriptor::IOProcessor()) {

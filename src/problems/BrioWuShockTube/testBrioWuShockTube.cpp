@@ -22,8 +22,10 @@
 #include "AMReX_BC_TYPES.H"
 
 #include "QuokkaSimulation.hpp"
+#include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/ArrayUtil.hpp"
+#include "util/BC.hpp"
 #include "util/fextract.hpp"
 
 struct MHDShocktubeProblem {
@@ -142,57 +144,46 @@ template <> void QuokkaSimulation<MHDShocktubeProblem>::setInitialConditionsOnGr
 
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<MHDShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int numcomp,
-								amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
-								int /*bcomp*/, int /*orig_comp*/)
+AMRSimulation<MHDShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
+								int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+								const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
-#if (AMREX_SPACEDIM == 1)
-	auto i = iv.toArray()[0];
-	int j = 0;
-	int k = 0;
-#endif
-#if (AMREX_SPACEDIM == 2)
-	auto [i, j] = iv.toArray();
-	int k = 0;
-#endif
-#if (AMREX_SPACEDIM == 3)
-	auto [i, j, k] = iv.toArray();
-#endif
-
-	amrex::Box const &box = geom.Domain();
-	amrex::GpuArray<int, 3> lo = box.loVect3d();
-	amrex::GpuArray<int, 3> hi = box.hiVect3d();
+	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
+	constexpr int nvar = Physics_Indices<MHDShocktubeProblem>::nvarTotal_cc;
 	const auto gamma = quokka::EOS_Traits<MHDShocktubeProblem>::gamma;
 
 	const double Emag_L = 0.5 * (Bx * Bx + By_L * By_L + Bz * Bz);
 	const double Emag_R = 0.5 * (Bx * Bx + By_R * By_R + Bz * Bz);
 
-	if (i < lo[0]) {
-		// x1 left side boundary -- constant
-		for (int n = 0; n < numcomp; ++n) {
-			consVar(i, j, k, n) = 0;
-		}
+	// Prepare left boundary values (left state)
+	amrex::GpuArray<amrex::Real, nvar> low_bdr_cells{};
+	// Initialize all to 0 first
 
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::gasEnergy_index) = P_L / (gamma - 1.) + Emag_L;
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::gasInternalEnergy_index) = P_L / (gamma - 1.);
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::gasDensity_index) = rho_L;
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::x1GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::x2GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::x3GasMomentum_index) = 0.;
+	// Set specific values
+	low_bdr_cells[RadSystem<MHDShocktubeProblem>::gasEnergy_index] = P_L / (gamma - 1.) + Emag_L;
+	low_bdr_cells[RadSystem<MHDShocktubeProblem>::gasInternalEnergy_index] = P_L / (gamma - 1.);
+	low_bdr_cells[RadSystem<MHDShocktubeProblem>::gasDensity_index] = rho_L;
+	low_bdr_cells[RadSystem<MHDShocktubeProblem>::x1GasMomentum_index] = 0.;
+	low_bdr_cells[RadSystem<MHDShocktubeProblem>::x2GasMomentum_index] = 0.;
+	low_bdr_cells[RadSystem<MHDShocktubeProblem>::x3GasMomentum_index] = 0.;
 
-	} else if (i >= hi[0]) {
-		// x1 right-side boundary -- constant
-		for (int n = 0; n < numcomp; ++n) {
-			consVar(i, j, k, n) = 0;
-		}
-
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::gasEnergy_index) = P_R / (gamma - 1.) + Emag_R;
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::gasInternalEnergy_index) = P_R / (gamma - 1.);
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::gasDensity_index) = rho_R;
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::x1GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::x2GasMomentum_index) = 0.;
-		consVar(i, j, k, RadSystem<MHDShocktubeProblem>::x3GasMomentum_index) = 0.;
+	// Prepare right boundary values (right state)
+	amrex::GpuArray<amrex::Real, nvar> high_bdr_cells{};
+	// Initialize all to 0 first
+	for (int n = 0; n < nvar; ++n) {
+		high_bdr_cells[n] = 0;
 	}
+	// Set specific values
+	high_bdr_cells[RadSystem<MHDShocktubeProblem>::gasEnergy_index] = P_R / (gamma - 1.) + Emag_R;
+	high_bdr_cells[RadSystem<MHDShocktubeProblem>::gasInternalEnergy_index] = P_R / (gamma - 1.);
+	high_bdr_cells[RadSystem<MHDShocktubeProblem>::gasDensity_index] = rho_R;
+	high_bdr_cells[RadSystem<MHDShocktubeProblem>::x1GasMomentum_index] = 0.;
+	high_bdr_cells[RadSystem<MHDShocktubeProblem>::x2GasMomentum_index] = 0.;
+	high_bdr_cells[RadSystem<MHDShocktubeProblem>::x3GasMomentum_index] = 0.;
+
+	// Apply boundary conditions using helper functions (direction 0 = x-axis)
+	setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
+	setConstantDirichletBCHi<0>(iv, consVar, geom, high_bdr_cells);
 }
 
 template <>
@@ -202,52 +193,17 @@ AMRSimulation<MHDShocktubeProblem>::setCustomBoundaryConditionsFaceVar(const amr
 								       int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
 								       const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
-#if (AMREX_SPACEDIM == 1)
-	auto i = iv.toArray()[0];
-	int const j = 0;
-	int const k = 0;
-#endif
-#if (AMREX_SPACEDIM == 2)
-	auto [i, j] = iv.toArray();
-	int const k = 0;
-#endif
-#if (AMREX_SPACEDIM == 3)
-	auto [i, j, k] = iv.toArray();
-#endif
-	amrex::Box const &box = geom.Domain();
-	amrex::GpuArray<int, 3> lo = box.loVect3d();
-	amrex::GpuArray<int, 3> hi = box.hiVect3d();
+	// Prepare boundary values for each face direction: {x-face, y-face, z-face}
+	// For low boundary (left side)
+	const amrex::GpuArray<amrex::Real, 3> low_bdr_values = {Bx, By_L, Bz};
 
-	// Use direction to determine which boundaries to check
-	switch (dir) {
-		case quokka::direction::x:
-			if (i <= lo[0]) {
-				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = Bx;
-			} else if (i > hi[0]) {
-				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = Bx;
-			}
-			break;
-		case quokka::direction::y:
-			if (i < lo[0]) {
-				// Set y-direction left boundary values
-				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = By_L;
-			} else if (i > hi[0]) {
-				// Set y-direction right boundary values
-				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = By_R;
-			}
-			break;
-		case quokka::direction::z:
-			if (i < lo[0]) {
-				// Set z-direction left boundary values
-				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = Bz;
-			} else if (i > hi[0]) {
-				// Set z-direction right boundary values
-				consVar_fc(i, j, k, Physics_Indices<MHDShocktubeProblem>::mhdFirstIndex) = Bz;
-			}
-			break;
-		case quokka::direction::na:
-			break; // do nothing
-	}
+	// For high boundary (right side)
+	const amrex::GpuArray<amrex::Real, 3> high_bdr_values = {Bx, By_R, Bz};
+
+	// Apply boundary conditions using helper functions (boundary_dim 0 = x-axis)
+	// The helper functions will internally select the appropriate value based on face_dir
+	setConstantDirichletBCFaceVarLo<0, dir, 3>(iv, consVar_fc, geom, low_bdr_values);
+	setConstantDirichletBCFaceVarHi<0, dir, 3>(iv, consVar_fc, geom, high_bdr_values);
 }
 
 template <> void QuokkaSimulation<MHDShocktubeProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)

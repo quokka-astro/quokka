@@ -17,6 +17,7 @@
 #include "AMReX.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BLassert.H"
+#include "AMReX_Geometry.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
@@ -145,7 +146,9 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	AMREX_GPU_DEVICE static auto GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec) -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>;
 
-	static void EnforceLimits(amrex::Real densityFloor, amrex::Real tempFloor, amrex::MultiFab &state_mf);
+	template <typename DensityFloorFunc>
+	static void EnforceLimits(amrex::Real densityFloor, amrex::Real tempFloor, amrex::MultiFab &state_mf, amrex::Geometry const &geom,
+				  DensityFloorFunc const &density_floor_func);
 
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
@@ -933,19 +936,38 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 
 // to ensure that physical quantities are within reasonable
 // floors and ceilings which can be set in the param file
-template <typename problem_t> void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const tempFloor, amrex::MultiFab &state_mf)
+template <typename problem_t>
+template <typename DensityFloorFunc>
+void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const tempFloor, amrex::MultiFab &state_mf, amrex::Geometry const &geom,
+					   DensityFloorFunc const &density_floor_func)
 {
 	auto state = state_mf.arrays();
+	auto const prob_lo = geom.ProbLoArray();
+	auto const dx = geom.CellSizeArray();
 
 	amrex::ParallelFor(state_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + static_cast<amrex::Real>(0.5)) * dx[0];
+#if (AMREX_SPACEDIM >= 2)
+		amrex::Real const y = prob_lo[1] + (static_cast<amrex::Real>(j) + static_cast<amrex::Real>(0.5)) * dx[1];
+#else
+		amrex::Real const y = 0.0;
+#endif
+#if (AMREX_SPACEDIM == 3)
+		amrex::Real const z = prob_lo[2] + (static_cast<amrex::Real>(k) + static_cast<amrex::Real>(0.5)) * dx[2];
+#else
+		amrex::Real const z = 0.0;
+#endif
+
+		amrex::Real localDensityFloor = density_floor_func(x, y, z, densityFloor);
+
 		// Enforce density floor (do not adjust energies here!!)
 		amrex::Real rho_new = NAN;
 		{
 			amrex::Real const rho = state[bx](i, j, k, density_index);
 			rho_new = rho;
 
-			if (rho < densityFloor) {
-				rho_new = densityFloor;
+			if (rho < localDensityFloor) {
+				rho_new = localDensityFloor;
 				state[bx](i, j, k, density_index) = rho_new;
 
 				if (nscalars_ > 0) {
@@ -984,8 +1006,8 @@ template <typename problem_t> void HydroSystem<problem_t>::EnforceLimits(amrex::
 		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
 			for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
 				amrex::Real dust_rho = state[bx](i, j, k, dustDensity_index + g * numDustVars_);
-				if (dust_rho < densityFloor) {
-					state[bx](i, j, k, dustDensity_index + g * numDustVars_) = densityFloor;
+				if (dust_rho < localDensityFloor) {
+					state[bx](i, j, k, dustDensity_index + g * numDustVars_) = localDensityFloor;
 				}
 			}
 		}
@@ -1388,8 +1410,6 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			x1FSpds(i, j, k, 1) = fspd_p;
 		}
 
-		quokka::valarray<double, nHydroScalars_> F = F_canonical;
-
 		// add artificial viscosity
 		// following Colella & Woodward (1984), eq. (4.2)
 		const double div_v = AMREX_D_TERM(du, +0.5 * (dvl + dvr), +0.5 * (dwl + dwr));
@@ -1414,7 +1434,9 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			}
 		}
 
-		F = F + viscosity * (U_L - U_R);
+		F_canonical = F_canonical + viscosity * (U_L - U_R);
+
+		quokka::valarray<double, nHydroScalars_> F = F_canonical;
 
 		// permute momentum components according to flux direction DIR
 		F[velN_index] = F_canonical[x1Momentum_index];

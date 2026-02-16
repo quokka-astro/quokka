@@ -452,8 +452,6 @@ auto problem_main() -> int
 	sim.userData_.numdens_init = numdens_init;
 	sim.userData_.omega_sphere = omega_sphere;
 
-	sim.initDt_ = 1e6;
-
 	// initialize
 	sim.setInitialConditions();
 

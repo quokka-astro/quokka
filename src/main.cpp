@@ -44,6 +44,17 @@ auto main(int argc, char **argv) -> int
 			pp.add("use_gpu_aware_mpi", 1);
 		}
 
+		/// set number of grid generation iterations
+		/// when refining small regions on deeply nested AMR, it's necessary to
+		/// iterate the grid generation at least max(4, amr.max_level) times.
+		/// [see https://github.com/AMReX-Codes/amrex/pull/4903 for details]
+		amrex::ParmParse pp_amr("amr");
+		if (!pp_amr.contains("max_grid_iterations")) {
+			int amr_max_level = -1;
+			pp_amr.query("max_level", amr_max_level);
+			pp_amr.add("max_grid_iterations", std::max(4, amr_max_level));
+		}
+
 		/// override geometry.is_periodic based on quokka.bc
 		amrex::Vector<std::string> bc_str;
 		amrex::ParmParse const pp_quokka("quokka");
@@ -64,6 +75,11 @@ auto main(int argc, char **argv) -> int
 
 	amrex::Real const start_time = amrex::ParallelDescriptor::second();
 
+	// Check if we should ignore the return code from problem_main
+	bool ignore_return = false;
+	amrex::ParmParse const pp;
+	pp.query("ignore_return", ignore_return);
+
 	int result = 0;
 	{ // objects must be destroyed before amrex::finalize, so enter new
 		// scope here to do that automatically
@@ -83,5 +99,8 @@ auto main(int argc, char **argv) -> int
 
 	amrex::Finalize();
 
+	if (ignore_return) {
+		return 0;
+	}
 	return result;
 }

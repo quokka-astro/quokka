@@ -72,7 +72,7 @@ template <typename problem_t> void DiagProjectionPlot::processDiag(int a_nstep, 
 
 		// If particles are requested, write them
 		if (!m_particleTypes.empty()) {
-			const std::string filename = amrex::Concatenate(basename, a_nstep, 5);
+			const std::string filename = amrex::Concatenate(basename, a_nstep, 7);
 			sim->particleRegister_.writePlotFileFiltered(filename, m_particleTypes);
 			amrex::Print() << "  Wrote particles to projection " << filename << "\n";
 		}

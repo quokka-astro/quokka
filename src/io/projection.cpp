@@ -587,13 +587,9 @@ void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex
 	}
 
 	// write mf_all to disk
-	const std::string filename = amrex::Concatenate(basename, istep, 5);
-	amrex::Print() << "Writing multi-level projection " << filename << "\n";
-
-	amrex::Vector<const amrex::MultiFab *> mfs(nlevels);
-	for (int lev = 0; lev < nlevels; ++lev) {
-		mfs[lev] = &mf_all[lev];
-	}
+	const std::string filename = amrex::Concatenate(basename, istep, 7);
+	const amrex::Vector<const amrex::MultiFab *> mfs = {&mf_all};
+	amrex::Print() << "Writing projection " << filename << "\n";
 
 	detail::Write2DMultiLevelPlotfile(filename, nlevels, mfs, varnames, geom2d, time, amrex::Vector<int>(nlevels, istep), ref_ratio);
 

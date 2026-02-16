@@ -79,13 +79,7 @@ AMRSimulation<ShadowProblem>::setCustomBoundaryConditions(const amrex::IntVect &
 							  amrex::GeometryData const &geom, const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/,
 							  int /*bcomp*/, int /*orig_comp*/)
 {
-#if (AMREX_SPACEDIM == 2)
-	auto [i, j] = iv.toArray();
-	int k = 0;
-#endif
-#if (AMREX_SPACEDIM == 3)
-	auto [i, j, k] = iv.toArray();
-#endif
+	const auto [i, j, k] = iv.dim3();
 
 	const amrex::Box &box = geom.Domain();
 	amrex::GpuArray<int, 3> lo = box.loVect3d();

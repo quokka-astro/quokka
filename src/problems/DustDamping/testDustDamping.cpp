@@ -109,6 +109,17 @@ template <> struct Physics_Traits<DustDamping> {
 	static constexpr double radiation_constant = 1.0;
 };
 
+template <>
+AMREX_GPU_HOST_DEVICE auto DustDrag<DustDamping>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
+										amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/, double /*cs*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
+{
+	amrex::GpuArray<amrex::Real, 2> alpha{};
+	alpha[0] = 1.0 / TS1;
+	alpha[1] = 1.0 / TS2;
+	return alpha;
+}
+
 template <> void QuokkaSimulation<DustDamping>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
@@ -270,7 +281,6 @@ auto problem_main() -> int
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = CFL_number;
-	sim.constantDt_ = 0.005; // usually 0.005 for test B, 0.05 for test C
 
 	// initialize
 	sim.setInitialConditions();

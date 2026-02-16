@@ -35,10 +35,11 @@ particles.stellar_velocity_limit = 1.0e8
 problem.n0 = 1.0e5
 problem.Tamb = 1.0e1
 
-restartfile = chk00010
+restartfile = chk0000010
 max_timesteps = 20
-plotfile_interval = 5
-checkpoint_interval = 5
+initial_dt = 3.15576e12
+plotfile_interval = 10
+checkpoint_interval = -1
 
 # *****************************************************************
 # Cooling parameters

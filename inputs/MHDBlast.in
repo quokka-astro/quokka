@@ -24,7 +24,7 @@ do_reflux = 1
 do_subcycle = 1
 do_tracers = 1      # turn on tracer particles
 
-plotfile_interval = 500
+plotfile_interval = 1000
 derived_vars = magnetic_divergence
 stop_time = 0.05
 

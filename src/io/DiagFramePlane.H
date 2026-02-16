@@ -19,8 +19,6 @@ class DiagFramePlane : public DiagBase::Register<DiagFramePlane>
       public:
 	static auto identifier() -> std::string { return "DiagFramePlane"; }
 
-	enum InterpType { Linear, Quadratic };
-
 	void init(const std::string &a_prefix, std::string_view a_diagName) override;
 
 	void prepare(int a_nlevels, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<amrex::BoxArray> &a_grids,
@@ -68,7 +66,6 @@ class DiagFramePlane : public DiagBase::Register<DiagFramePlane>
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> m_center;
 
 	// Interpolation data
-	InterpType m_interpType;
 	amrex::Vector<amrex::GpuArray<amrex::Real, 3>> m_intwgt;
 	amrex::Vector<int> m_k0;
 

@@ -12,7 +12,7 @@ mpirun --use-hwthread-cpus -np $NPROC $BUILD_DIR/src/problems/HydroBlast3D/Hydro
 
 # [amr.plot_nfiles test] verify that the last plotfile contains two binary files per level
 plotfile=`ls -1drt plt* | head -1`
-nfiles_plt_actual=`ls -1 $plotfile/Level_0/Cell_D_* | wc -l`
+nfiles_plt_actual=`ls -1 $plotfile/Level_0/Cell_D_* | wc -l | tr -d ' '`
 if [ "$nfiles_plt_actual" = "$NFILES" ]; then
     echo "amr.plot_nfiles working as expected."
 else
@@ -22,7 +22,7 @@ fi
 
 # [amr.checkpoint_nfiles test] verify that the last checkpoint contains two binary files per level
 chkfile=`ls -1drt chk* | head -1`
-nfiles_chk_actual=`ls -1 $chkfile/Level_0/Cell_D_* | wc -l`
+nfiles_chk_actual=`ls -1 $chkfile/Level_0/Cell_D_* | wc -l | tr -d ' '`
 if [ "$nfiles_chk_actual" = "$NFILES" ]; then
     echo "amr.checkpoint_nfiles working as expected."
 else

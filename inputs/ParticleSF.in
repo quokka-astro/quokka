@@ -36,8 +36,9 @@ problem.n0 = 1.0e5
 problem.Tamb = 1.0e1
 
 max_timesteps = 10
-plotfile_interval = 5
-checkpoint_interval = 5
+initial_dt = 3.15576e12
+plotfile_interval = 10
+checkpoint_interval = 10
 
 # *****************************************************************
 # Cooling parameters

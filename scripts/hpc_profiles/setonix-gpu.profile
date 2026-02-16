@@ -37,8 +37,8 @@ export CXX=$(which hipcc)
 export FC=$(which ftn)
 
 # these flags are REQUIRED
-export CFLAGS="-I${MPICH_DIR}/include"
-export CXXFLAGS="-I${MPICH_DIR}/include"
+export CFLAGS="-I${MPICH_DIR}/include --gcc-install-dir=/usr/lib64/gcc/x86_64-suse-linux/14"
+export CXXFLAGS="-I${MPICH_DIR}/include --gcc-install-dir=/usr/lib64/gcc/x86_64-suse-linux/14"
 export LDFLAGS="-L${MPICH_DIR}/lib -lmpi \
   ${CRAY_XPMEM_POST_LINK_OPTS} -lxpmem \
   ${PE_MPICH_GTL_DIR_amd_gfx90a} ${PE_MPICH_GTL_LIBS_amd_gfx90a}"
