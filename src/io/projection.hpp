@@ -188,8 +188,7 @@ auto ComputePlaneProjection(amrex::Vector<amrex::MultiFab> const &state_new, con
 
 inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::MultiFab *> &mfs, const int finest_level,
 					       amrex::Vector<amrex::Geometry> const &geom, amrex::Vector<amrex::IntVect> const &ref_ratio,
-					       const amrex::Direction dir, const int comp)
-    -> amrex::Vector<amrex::MultiFab>
+					       const amrex::Direction dir, const int comp) -> amrex::Vector<amrex::MultiFab>
 {
 	// compute plane-parallel projection of a single MultiFab component along the given axis.
 	const BL_PROFILE("quokka::DiagProjection::computePlaneProjectionFromMultiFab()");
