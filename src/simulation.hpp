@@ -97,11 +97,9 @@ namespace filesystem = experimental::filesystem;
 #include "fundamental_constants.H"
 #include "grid.hpp"
 #include "io/DerivedFieldBase.H"
-#include "io/DerivedParticleDeposition.H"
 #include "io/DiagBase.H"
 #include "io/DiagFramePlane.H"
 #include "io/DiagPDF.H"
-#include "io/DiagParticleDeposition.H"
 #include "io/DiagParticleTxt.H"
 #include "io/DiagPlotfile.H"
 #include "io/DiagProjectionPlot.H"
@@ -4048,12 +4046,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 			auto *particleTxtDiag = dynamic_cast<DiagParticleTxt *>(diag);
 			if (particleTxtDiag != nullptr) {
 				particleTxtDiag->processDiag<problem_t>(istep[0], tNew_[0]);
-				continue;
-			}
-
-			auto *particleDepositionDiag = dynamic_cast<quokka::DiagParticleDeposition *>(diag);
-			if (particleDepositionDiag != nullptr) {
-				particleDepositionDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 				continue;
 			}
 
