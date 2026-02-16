@@ -8,7 +8,11 @@ if(AMReX_SPACEDIM EQUAL 3)
 
   add_test(NAME ${JOB_NAME} COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
   add_test(NAME ${JOB_NAME}2 COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}2.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(NAME ${JOB_NAME}_restart_cap COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}_restart_cap.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(NAME ${JOB_NAME}_restart_cap2 COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}_restart_cap2.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 
 	set_tests_properties(${JOB_NAME} PROPERTIES COST 100)
 	set_tests_properties(${JOB_NAME}2 PROPERTIES DEPENDS "${JOB_NAME}" COST 99)
+	set_tests_properties(${JOB_NAME}_restart_cap PROPERTIES COST 99)
+	set_tests_properties(${JOB_NAME}_restart_cap2 PROPERTIES DEPENDS "${JOB_NAME}_restart_cap" COST 98)
 endif()

@@ -21,9 +21,10 @@ struct ParticleSFProblem {
 
 constexpr Real mu = 1.0 * C::m_p;
 constexpr Real gamma_ = 5. / 3.;
-constexpr Real year = 3.15576e+07; // in seconds
-static Real n0 = 1.0e4;		   // NOLINT
-static Real Tamb = 10.0;	   // NOLINT
+constexpr Real year = 3.15576e+07;	       // in seconds
+static Real n0 = 1.0e4;			       // NOLINT
+static Real Tamb = 10.0;		       // NOLINT
+static bool validate_initial_imf_stats = true; // NOLINT
 
 template <> struct Particle_Traits<ParticleSFProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
@@ -93,7 +94,8 @@ template <> void QuokkaSimulation<ParticleSFProblem>::refineGrid(int lev, amrex:
 template <> void QuokkaSimulation<ParticleSFProblem>::computeAfterTimestep()
 {
 	const int step = istep[0];
-	if (step == 1) {
+	const bool use_default_low_mass_cap = (quokka::low_mass_composite_max_mass >= 0.99 * std::numeric_limits<amrex::Real>::max());
+	if (step == 1 && validate_initial_imf_stats && use_default_low_mass_cap) {
 		amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx0 = geom[0].CellSizeArray();
 		const amrex::Real cell_volume = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
 
@@ -242,6 +244,9 @@ auto problem_main() -> int
 	amrex::ParmParse const ppp("problem");
 	ppp.query("Tamb", Tamb);
 	ppp.query("n0", n0);
+	ppp.query("validate_initial_imf_stats", validate_initial_imf_stats);
+	bool verify_low_mass_cap_on_restart = false;
+	ppp.query("verify_low_mass_cap_on_restart", verify_low_mass_cap_on_restart);
 
 	sim.setInitialConditions();
 
@@ -252,17 +257,54 @@ auto problem_main() -> int
 
 	sim.evolve();
 
-	// If restarting from checkfile, return success. The initial gas mass is unknown, so there is nothing to compare with.
-	// We validate restarting from checkfile.
-
+	// We validate restarting from a checkpoint below when verify_low_mass_cap_on_restart is true.
 	std::string restartfile;
 	amrex::ParmParse const p3;
 	p3.query("restartfile", restartfile);
 	if (!restartfile.empty()) {
+		if (!verify_low_mass_cap_on_restart) {
+			return 0; // success
+		}
+
+		amrex::Real low_mass_cap = std::numeric_limits<amrex::Real>::max();
+		amrex::ParmParse const p_particles("particles");
+		p_particles.query("low_mass_composite_max_mass", low_mass_cap);
+
+		const auto [real_data_restart, idata_restart] =
+		    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->getParticleDataAtLevel(0);
+		const amrex::Real mass_tol = 1.0e-12 * std::max(low_mass_cap, static_cast<amrex::Real>(1.0));
+
+		int num_low_mass_particles = 0;
+		int num_cap_violations = 0;
+		int restart_validation_status = 0;
+
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			for (std::size_t i = 0; i < real_data_restart.size(); ++i) {
+				const bool is_low_mass_composite = (idata_restart[i][quokka::StochasticStellarPopParticleStageIdx] ==
+								    static_cast<int>(quokka::StellarEvolutionStage::LowMassComposite));
+				if (is_low_mass_composite) {
+					num_low_mass_particles++;
+					if (real_data_restart[i][quokka::StochasticStellarPopParticleMassIdx] > (low_mass_cap + mass_tol)) {
+						num_cap_violations++;
+					}
+				}
+			}
+
+			amrex::Print() << "Restart low-mass cap validation: LowMassComposite particles = " << num_low_mass_particles
+				       << ", cap violations = " << num_cap_violations << ", cap = " << low_mass_cap / C::M_solar << " Msun\n";
+			if (num_low_mass_particles == 0 || num_cap_violations != 0) {
+				restart_validation_status = 1;
+			}
+		}
+
+		amrex::ParallelDescriptor::Bcast(&restart_validation_status, 1, amrex::ParallelDescriptor::IOProcessorNumber());
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+		    restart_validation_status == 0,
+		    "Restart low-mass cap validation failed: either no LowMassComposite particles were found or at least one exceeded the mass cap.");
 		return 0; // success
 	}
 
-	// If not from checkpoint, validate mass sonservation (roughly)
+	// If not restarting from a checkpoint, validate mass sonservation (roughly)
 
 	const auto [real_data_final2, idata_final2] =
 	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::StochasticStellarPop)->getParticleDataAtLevel(0);
