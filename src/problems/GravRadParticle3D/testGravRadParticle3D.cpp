@@ -125,23 +125,6 @@ template <> void QuokkaSimulation<ParticleProblem>::setInitialConditionsOnGrid(q
 	});
 }
 
-template <>
-auto QuokkaSimulation<ParticleProblem>::ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>>
-{
-	std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> proj;
-
-	Real const H_mass_fraction = 1.0;
-
-	// compute (total) density projection
-	proj["nH"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
-	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    Real const rho = state(i, j, k, RadSystem<ParticleProblem>::gasDensity_index);
-		    return (H_mass_fraction * rho) / m_H;
-	    });
-
-	return proj;
-}
-
 auto problem_main() -> int
 {
 	// Problem parameters

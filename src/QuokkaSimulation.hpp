@@ -296,7 +296,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const override;
 
 	// compute projected vars
-	[[nodiscard]] auto ComputeProjections(amrex::Direction dir) const -> std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> override;
 
 	// compute statistics
 	auto ComputeStatistics() -> std::map<std::string, amrex::Real> override;
@@ -1041,13 +1040,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDensityFl
 		}
 	}
 	amrex::Gpu::streamSynchronize();
-}
-
-template <typename problem_t>
-auto QuokkaSimulation<problem_t>::ComputeProjections(const amrex::Direction /*dir*/) const -> std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>>
-{
-	// compute projections and return as unordered_map -- user should implement
-	return std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>>{};
 }
 
 template <typename problem_t> auto QuokkaSimulation<problem_t>::ComputeStatistics() -> std::map<std::string, amrex::Real>
