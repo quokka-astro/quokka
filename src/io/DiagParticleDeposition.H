@@ -23,8 +23,7 @@ class DiagParticleDeposition : public DiagBase::Register<DiagParticleDeposition>
 	void init(const std::string &a_prefix, std::string_view a_diagName) override;
 	void prepare(int a_nlevels, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Vector<amrex::BoxArray> &a_grids,
 		     const amrex::Vector<amrex::DistributionMapping> &a_dmap, const amrex::Vector<std::string> &a_varNames) override;
-	void processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
-			 const amrex::Vector<std::string> &a_varNames, const YAML::Node &simulationMetadata) override;
+	template <typename problem_t> void processDiag(int a_nstep, const amrex::Real &a_time);
 	void addVars(amrex::Vector<std::string> &a_varList) override;
 	void close() override {}
 
@@ -63,6 +62,24 @@ class DiagParticleDeposition : public DiagBase::Register<DiagParticleDeposition>
 	/// Get field names for a particle type and field
 	auto getFieldNames(const std::string &particleType, const std::string &field) const -> std::vector<std::string>;
 };
+
+template <typename problem_t> void DiagParticleDeposition::processDiag(int a_nstep, const amrex::Real &a_time)
+{
+	amrex::ignore_unused(a_nstep);
+	amrex::ignore_unused(a_time);
+	amrex::ignore_unused(getSim<problem_t>());
+
+	// Clear deposition data
+	for (auto &mf : m_depositionData) {
+		mf.setVal(0.0);
+	}
+
+	// Deposit particle properties
+	depositParticleProperties(a_nstep, a_time);
+
+	// Write output
+	writeOutput(a_nstep, a_time, *m_metadata);
+}
 
 } // namespace quokka
 

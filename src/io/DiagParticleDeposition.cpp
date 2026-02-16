@@ -9,6 +9,7 @@
 #include "yaml-cpp/yaml.h"
 #include <fstream>
 #include <iomanip>
+#include <sstream>
 
 namespace quokka
 {
@@ -76,21 +77,6 @@ void DiagParticleDeposition::prepare(int a_nlevels, const amrex::Vector<amrex::G
 	initializeDepositionData(a_nlevels, a_geoms, a_grids, a_dmap);
 }
 
-void DiagParticleDeposition::processDiag(int a_nstep, const amrex::Real &a_time, const amrex::Vector<const amrex::MultiFab *> &a_state,
-					 const amrex::Vector<std::string> &a_varNames, const YAML::Node &simulationMetadata)
-{
-	// Clear deposition data
-	for (auto &mf : m_depositionData) {
-		mf.setVal(0.0);
-	}
-
-	// Deposit particle properties
-	depositParticleProperties(a_nstep, a_time);
-
-	// Write output
-	writeOutput(a_nstep, a_time, simulationMetadata);
-}
-
 void DiagParticleDeposition::addVars(amrex::Vector<std::string> &a_varList)
 {
 	// Add variable names to the list
@@ -128,7 +114,7 @@ void DiagParticleDeposition::writeOutput(int a_nstep, const amrex::Real &a_time,
 {
 	if (m_outputFormat == "plotfile") {
 		// Write AMReX plotfile
-		std::string plotFileName = m_diagName + "_" + std::to_string(a_nstep);
+		std::string plotFileName = m_diagfile + "_" + std::to_string(a_nstep);
 
 		amrex::Vector<const amrex::MultiFab *> plotData(m_depositionData.size());
 		for (int lev = 0; lev < static_cast<int>(m_depositionData.size()); ++lev) {
@@ -140,7 +126,7 @@ void DiagParticleDeposition::writeOutput(int a_nstep, const amrex::Real &a_time,
 		amrex::Print() << "Would write plotfile: " << plotFileName << "\n";
 	} else if (m_outputFormat == "ascii") {
 		// Write ASCII output
-		std::string asciiFileName = m_diagName + "_" + std::to_string(a_nstep) + ".txt";
+		std::string asciiFileName = m_diagfile + "_" + std::to_string(a_nstep) + ".txt";
 		std::ofstream outFile(asciiFileName);
 
 		outFile << "# Particle deposition data at time " << a_time << "\n";

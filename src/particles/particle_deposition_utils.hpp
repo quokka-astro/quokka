@@ -49,12 +49,13 @@ struct ParticleMomentumDensityDeposition {
 	{
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
 		const amrex::Real cell_volume_inv = AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]);
+		const int local_mass_comp = mass_comp;
 
 		// Deposit momentum components (mass * velocity)
 		for (int dim = 0; dim < AMREX_SPACEDIM; ++dim) {
 			interp.ParticleToMesh(p, deposition_array, vel_start_comp + dim, start_mesh_comp + dim, 1,
 					      [=] AMREX_GPU_DEVICE(const ContainerType &part, int vel_comp) {
-						      const amrex::Real mass = part.rdata(mass_comp);
+						      const amrex::Real mass = part.rdata(local_mass_comp);
 						      const amrex::Real velocity = part.rdata(vel_comp);
 						      return mass * velocity * cell_volume_inv;
 					      });
@@ -75,13 +76,16 @@ struct ParticleKineticEnergyDensityDeposition {
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
 	{
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
+		const int local_mass_comp = mass_comp;
+		const int local_vel_start_comp = vel_start_comp;
+		const amrex::Real cell_volume_inv = AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]);
 		interp.ParticleToMesh(p, deposition_array, mass_comp, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
-			const amrex::Real mass = part.rdata(mass_comp);
-			const amrex::Real vx = part.rdata(vel_start_comp);
-			const amrex::Real vy = part.rdata(vel_start_comp + 1);
-			const amrex::Real vz = part.rdata(vel_start_comp + 2);
+			const amrex::Real mass = part.rdata(local_mass_comp);
+			const amrex::Real vx = part.rdata(local_vel_start_comp);
+			const amrex::Real vy = part.rdata(local_vel_start_comp + 1);
+			const amrex::Real vz = part.rdata(local_vel_start_comp + 2);
 			const amrex::Real kinetic_energy = 0.5 * mass * (vx * vx + vy * vy + vz * vz);
-			return kinetic_energy * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+			return kinetic_energy * cell_volume_inv;
 		});
 	}
 };
