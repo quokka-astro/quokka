@@ -54,8 +54,6 @@ fi
 
 TARGET=/priv/avatar/cche/azp-agent-in-docker-cuda/azp-agent-avatargpu/regression-tests
 
-log="${TARGET}/reg-logs/crontab-reglog-$(date +%Y%m%d_%H%M%S).log"
-
 # Check GPU occupancy on the host before launching the container.
 # This avoids false alarms from GPU memory allocated by Singularity's --nv init.
 wait_for_gpu
@@ -68,10 +66,10 @@ timeout 14400 singularity exec --nv \
     bash quokka2/scripts/bash/run-regression-tests.sh --ini-file ${TARGET}/quokka/regression/quokka-tests.ini \
     --ccache-dir ${TARGET}/ccache --source-dir ${TARGET}/quokka \
     --skip-gpu-wait \
-    >"$log" 2>&1 || {
+    || {
         rc=$?
         if [ $rc -eq 124 ]; then
-            echo "ERROR: singularity exec timed out after 4 hours." >> "$log"
+            echo "ERROR: singularity exec timed out after 4 hours."
         fi
         exit $rc
     }
