@@ -100,7 +100,9 @@ namespace filesystem = experimental::filesystem;
 #include "io/DiagPDF.H"
 #include "io/DiagParticleTxt.H"
 #include "io/DiagPlotfile.H"
+#if AMREX_SPACEDIM == 3
 #include "io/DiagProjectionPlot.H"
+#endif
 #include "io/io_utils.hpp"
 #include "io/projection.hpp"
 #include "physics_info.hpp"
@@ -168,7 +170,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 {
 	// Allow diagnostic classes to access protected members
 	friend class DiagPlotfile;
+#if AMREX_SPACEDIM == 3
 	friend class DiagProjectionPlot;
+#endif
 	friend class DiagPDF;
 	friend class DiagFramePlane;
 
@@ -3877,11 +3881,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 				continue;
 			}
 
+#if AMREX_SPACEDIM == 3
 			auto *projectionDiag = dynamic_cast<DiagProjectionPlot *>(diag);
 			if (projectionDiag != nullptr) {
 				projectionDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 				continue;
 			}
+#endif
 
 			auto *framePlaneDiag = dynamic_cast<DiagFramePlane *>(diag);
 			if (framePlaneDiag != nullptr) {
