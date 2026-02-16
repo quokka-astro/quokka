@@ -89,7 +89,7 @@ Implement `DerivedParticleDeposition` provider:
   - e.g. `particle.CIC.mass_density`
 - Compute behavior:
   - zero destination components
-  - call deposition helpers in `src/particles/particle_deposition_utils.hpp`
+  - call deposition helpers in `src/particles/particle_deposition.hpp`
   - deposit into output MultiFab components
 
 This provider must not write files or emit standalone diagnostic output.
@@ -193,7 +193,7 @@ Exit criteria:
 ## Suggested File Touch Points (initial)
 - `src/simulation.hpp`
 - `src/io/` (new derived-field base + manager)
-- `src/particles/particle_deposition_utils.hpp` (reuse)
+- `src/particles/particle_deposition.hpp` (reuse)
 - `src/CMakeLists.txt` (register new files)
 - `docs/markdown/parameters.md` (new runtime derived config docs)
 

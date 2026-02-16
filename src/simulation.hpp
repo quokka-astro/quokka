@@ -79,7 +79,7 @@ namespace filesystem = experimental::filesystem;
 
 #include "AMReX_AmrParticles.H"
 #include "particles/PhysicsParticles.hpp"
-#include "particles/particle_deposition_utils.hpp"
+#include "particles/particle_deposition.hpp"
 
 #if AMREX_SPACEDIM == 3
 #include "AMReX_MLLinOp.H"

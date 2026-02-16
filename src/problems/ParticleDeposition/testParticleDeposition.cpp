@@ -11,7 +11,7 @@
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 #include "particles/PhysicsParticles.hpp"
-#include "particles/particle_deposition_utils.hpp"
+#include "particles/particle_deposition.hpp"
 #include "particles/particle_types.hpp"
 #include "physics_info.hpp"
 
