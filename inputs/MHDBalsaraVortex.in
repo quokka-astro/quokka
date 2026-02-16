@@ -1,0 +1,39 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  -5.0  -5.0  -5.0 
+geometry.prob_hi     =   5.0   5.0   5.0
+geometry.is_periodic =   1     1     1
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v = 1
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell = 32 32 8
+amr.max_level = 0
+amr.max_grid_size = 32
+amr.blocking_factor_x = 32
+amr.blocking_factor_y = 32
+amr.blocking_factor_z = 8
+
+do_reflux = 0
+do_subcycle = 0
+
+plotfile_interval = -1
+plotfile_prefix = balsara_vortex_plt
+checkpoint_interval = -1
+cfl = 0.3
+max_timesteps = 10000
+
+hydro.rk_integrator_order = 2
+hydro.reconstruction_order = 5
+hydro.use_dual_energy = 0
+
+setup.vortex_Mach = 0.1
+setup.vortex_b_magn = 0.1
+setup.advection = 1
+setup.num_orbits = 3

@@ -1,0 +1,30 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  0.0  0.0  0.0 
+geometry.prob_hi     =  1.0  1.0  0.03125
+quokka.bc = reflecting reflecting reflecting
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 0       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 128 128 4
+amr.max_level       = 1     # number of levels = max_level + 1
+amr.ref_ratio       = 2 2 1
+amr.blocking_factor = 32 32 4
+amr.n_error_buf     = 1     # reduced buffer to satisfy 2D blocking
+
+## grid_eff = 1 forces refinement to respect symmetries of the tagged cells
+amr.grid_eff        = 0.8   # encourage compact boxes without over-fragmenting
+
+do_reflux = 0
+do_subcycle = 0
+do_tracers = 1
+max_timesteps = 160
+stop_time = 0.08
+plotfile_interval = 20

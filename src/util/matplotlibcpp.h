@@ -1691,7 +1691,12 @@ inline void save(const std::string &filename)
 
 inline void clf()
 {
+	fenv_t orig_feenv;
+	feholdexcept(&orig_feenv); // disable FPE
+
 	PyObject *res = PyObject_CallObject(detail::_interpreter::get().s_python_function_clf, detail::_interpreter::get().s_python_empty_tuple);
+
+	fesetenv(&orig_feenv); // restore FPE
 
 	if (!res)
 		throw std::runtime_error("Call to clf() failed.");

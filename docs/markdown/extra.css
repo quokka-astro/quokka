@@ -1,6 +1,5 @@
 /* extra.css */
 @font-face {
   font-size: 20px; /* Adjust the font size as needed */
-  /* font color to black */
-  color: #000;
+  color: #000; /* font color to black */
 }

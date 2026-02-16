@@ -1,0 +1,46 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  0.0  0.0  0.0 
+geometry.prob_hi     =  3.086e19  3.086e19  3.086e19  # 10 x 10 x 10 pc
+quokka.bc = periodic periodic periodic
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v               = 1     # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 128 128 128
+amr.max_level       = 1     # number of levels = max_level + 1
+amr.blocking_factor = 32    # grid size must be divisible by this
+amr.max_grid_size   = 128
+amr.n_error_buf     = 3     # 3 buffer cells around tagged cells
+amr.grid_eff        = 0.0   # must refine every tagged cells
+
+regrid_interval = 2
+problem.refine_threshold = 0.1
+problem.part_fn = "./particles_stochastic_n100.txt"
+do_reflux = 1
+do_subcycle = 0
+
+cfl = 0.3
+hydro.reconstruction_order = 3
+hydro.artificial_viscosity_coefficient = 0.1
+derived_vars = temperature
+
+plotfile_interval = 10000
+checkpoint_interval = -1
+max_timesteps = 10000 # set to avoid running the simulation indefinitely
+
+dt_shrink = 0.01
+stop_time = 7.32505344665246e11
+
+cooling.enabled = 1
+cooling.read_tables_even_if_disabled = 1
+cooling.cooling_table_type = resampled
+cooling.hdf5_data_file = "./CloudyData_UVB=HM2012_resampled.h5"
+
+problem.boost_velocity = 0.0 0.0 0.0

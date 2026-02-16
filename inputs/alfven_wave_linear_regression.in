@@ -1,0 +1,46 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  0.0  0.0  0.0 
+geometry.prob_hi     =  1.0  1.0  1.0
+quokka.bc = periodic periodic periodic
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 1       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell = 64 64 64
+amr.max_level = 0
+amr.max_grid_size = 64
+amr.blocking_factor_x = 64
+amr.blocking_factor_y = 64
+amr.blocking_factor_z = 64
+
+do_reflux = 0
+do_subcycle = 0
+
+plotfile_interval = 10000
+plotfile_prefix = alfven_wave_linear_plt
+checkpoint_interval = -1
+cfl = 0.3
+stop_time = 3.0
+max_timesteps = 10000
+
+hydro.rk_integrator_order = 2
+hydro.reconstruction_order = 5
+hydro.use_dual_energy = 0
+
+
+mhd.emf_compute_scheme = Quokka2026
+mhd.emf_averaging_scheme = LondrilloDelZanna2004
+mhd.update_initial_b_energy = false
+
+
+setup.num_modes_x = 1
+setup.num_modes_y = 2
+setup.num_modes_z = 3
+setup.angle_between_k_b0 = 45

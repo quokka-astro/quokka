@@ -3,7 +3,7 @@
 # *****************************************************************
 geometry.prob_lo     =  -2.0 -2.0 -2.0
 geometry.prob_hi     =  2.0 2.0 2.0
-geometry.is_periodic =  0    0    0
+quokka.bc = reflecting reflecting reflecting
 
 # *****************************************************************
 # VERBOSITY
@@ -29,6 +29,7 @@ particles.verbose = 1
 particles.disable_SN_feedback = true
 
 stop_time = 1.0
+initial_dt = 0.001
 max_timesteps = 4
 plotfile_interval = -1
 plottime_interval = 0.003

@@ -1,6 +1,3 @@
-if (AMReX_SPACEDIM EQUAL 3)
-    add_executable(test_hydro3d_rt test_hydro3d_rt.cpp ${QuokkaObjSources})
-    if(AMReX_GPU_BACKEND MATCHES "CUDA")
-        setup_target_for_cuda_compilation(test_hydro3d_rt)
-    endif()
+if(AMReX_SPACEDIM EQUAL 3)
+  quokka_add_problem(JOB_NAME RayleighTaylor3D ADD_TEST OFF)
 endif()

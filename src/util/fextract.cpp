@@ -1,4 +1,6 @@
+#include <algorithm>
 #include <limits>
+#include <numeric>
 #include <tuple>
 
 #include "AMReX_Geometry.H"
@@ -88,33 +90,86 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 
 	GpuArray<Real, AMREX_SPACEDIM> dx = dx0;
 
-	// compute position coordinates
+	// First pass: determine per-box offsets along the slice and total points
+	Vector<int> offsets;
+	int total_pts = 0;
 	for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
-		const Box &bx = mfi.validbox() & slice_box;
+		const Box bx = mfi.validbox() & slice_box;
 		if (bx.ok()) {
-			amrex::LoopOnCpu(bx, [problo, dx, idir, &pos](int i, int j, int k) {
-				Array<Real, AMREX_SPACEDIM> p = {AMREX_D_DECL(problo[0] + static_cast<Real>(i + 0.5) * dx[0],
-									      problo[1] + static_cast<Real>(j + 0.5) * dx[1],
-									      problo[2] + static_cast<Real>(k + 0.5) * dx[2])};
-				pos.push_back(p[idir]);
-			});
+			offsets.push_back(total_pts);
+			total_pts += bx.length(idir);
 		}
 	}
 
-	for (int ivar = 0; ivar < mf.nComp(); ++ivar) {
-		// allocate HostVector storage
-		data[ivar].resize(pos.size());
-		const auto &dataptr = data[ivar].data();
-		for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
-			const Box &bx = mfi.validbox() & slice_box;
-			if (bx.ok()) {
-				const auto &fab = mf.array(mfi);
+	pos.resize(total_pts);
+	for (auto &vec : data) {
+		vec.resize(total_pts);
+	}
+
+	// compute position coordinates using contiguous local indices
+	int box_idx = 0;
+	for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
+		const Box bx = mfi.validbox() & slice_box;
+		if (bx.ok()) {
+			const int offset = offsets[box_idx];
+			const int start_dir = bx.smallEnd(idir);
+			const int local_len = bx.length(idir);
+			amrex::LoopOnCpu(bx, [problo, dx, idir, offset, start_dir, local_len, &pos](int i, int j, int k) {
+				Array<Real, AMREX_SPACEDIM> p = {AMREX_D_DECL(problo[0] + static_cast<Real>(i + 0.5) * dx[0],
+									      problo[1] + static_cast<Real>(j + 0.5) * dx[1],
+									      problo[2] + static_cast<Real>(k + 0.5) * dx[2])};
+				int idx = offset;
+				if (idir == 0) {
+					idx += i - start_dir;
+				}
+#if AMREX_SPACEDIM >= 2
+				if (idir == 1) {
+					idx += j - start_dir;
+				}
+#endif
+#if AMREX_SPACEDIM == 3
+				if (idir == 2) {
+					idx += k - start_dir;
+				}
+#endif
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(idx >= offset && idx < offset + local_len, "fextract: position index out of bounds");
+				pos[idx] = p[idir];
+			});
+			++box_idx;
+		}
+	}
+
+	// fill data arrays with the same contiguous indexing
+	box_idx = 0;
+	for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
+		const Box bx = mfi.validbox() & slice_box;
+		if (bx.ok()) {
+			const int offset = offsets[box_idx];
+			const int start_dir = bx.smallEnd(idir);
+			const int local_len = bx.length(idir);
+			const auto &fab = mf.array(mfi);
+			for (int ivar = 0; ivar < mf.nComp(); ++ivar) {
+				auto *dataptr = data[ivar].data();
 				ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-					GpuArray<int, 3> idx_vec({i - lo0.x, j - lo0.y, k - lo0.z});
-					int idx = idx_vec[idir];
+					int idx = offset;
+					if (idir == 0) {
+						idx += i - start_dir;
+					}
+#if AMREX_SPACEDIM >= 2
+					if (idir == 1) {
+						idx += j - start_dir;
+					}
+#endif
+#if AMREX_SPACEDIM == 3
+					if (idir == 2) {
+						idx += k - start_dir;
+					}
+#endif
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(idx >= offset && idx < offset + local_len, "fextract: data index out of bounds");
 					dataptr[idx] = fab(i, j, k, ivar); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 				});
 			}
+			++box_idx;
 		}
 	}
 
@@ -151,9 +206,18 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 				v.resize(1);
 			}
 		}
-		ParallelDescriptor::Gatherv(pos.data(), numpts, allpos.data(), recvcnt, disp, ParallelDescriptor::IOProcessorNumber());
+		// Handle empty vectors to avoid null pointer issues in MPI gather operations
+		// Use static Real addresses when vectors are empty to provide non-null pointers
+		// MPI won't read from these addresses when numpts is 0
+		static Real static_real = 0.0;
+		const Real *pos_ptr = pos.empty() ? &static_real : pos.data();
+		Real *allpos_ptr = allpos.empty() ? &static_real : allpos.data();
+
+		ParallelDescriptor::Gatherv(pos_ptr, numpts, allpos_ptr, recvcnt, disp, ParallelDescriptor::IOProcessorNumber());
 		for (int i = 0; i < data.size(); ++i) {
-			ParallelDescriptor::Gatherv(data[i].data(), numpts, alldata[i].data(), recvcnt, disp, ParallelDescriptor::IOProcessorNumber());
+			const Real *data_ptr = data[i].empty() ? &static_real : data[i].data();
+			Real *alldata_ptr = alldata[i].empty() ? &static_real : alldata[i].data();
+			ParallelDescriptor::Gatherv(data_ptr, numpts, alldata_ptr, recvcnt, disp, ParallelDescriptor::IOProcessorNumber());
 		}
 		if (ParallelDescriptor::IOProcessor()) {
 			pos = std::move(allpos);
@@ -162,5 +226,27 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 	}
 #endif // AMREX_USE_MPI
 
+	// Permute data from different MPI processors
+	if (!pos.empty()) {
+		size_t const n_pts = pos.size();
+		std::vector<size_t> p(n_pts);
+		std::iota(p.begin(), p.end(), 0);
+
+		std::sort(p.begin(), p.end(), [&](size_t i, size_t j) { return pos[i] < pos[j]; });
+
+		Vector<Real> sorted_pos(n_pts);
+		for (size_t i = 0; i < n_pts; ++i) {
+			sorted_pos[i] = pos[p[i]];
+		}
+		pos = std::move(sorted_pos);
+
+		for (auto &var_vec : data) {
+			Gpu::HostVector<Real> sorted_var(var_vec.size());
+			for (size_t i = 0; i < n_pts; ++i) {
+				sorted_var[i] = var_vec[p[i]];
+			}
+			var_vec = std::move(sorted_var);
+		}
+	}
 	return std::make_tuple(pos, data);
 }
