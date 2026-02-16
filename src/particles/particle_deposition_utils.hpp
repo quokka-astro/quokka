@@ -123,7 +123,7 @@ void depositParticleMassDensity(ContainerType *container, amrex::MultiFab &depos
 	deposition_functor.start_mesh_comp = start_mesh_comp;
 	deposition_functor.num_comp = 1;
 
-	container->template ParticleToMesh<amrex::ParticleInterpolator::Linear>(*container, deposition_field, lev, deposition_functor, false, false);
+	amrex::ParticleToMesh(*container, deposition_field, lev, deposition_functor, false);
 }
 
 /// Deposit particle momentum density for a given particle type
@@ -138,7 +138,7 @@ void depositParticleMomentumDensity(ContainerType *container, amrex::MultiFab &d
 	deposition_functor.vel_start_comp = vel_start_comp;
 	deposition_functor.start_mesh_comp = start_mesh_comp;
 
-	container->template ParticleToMesh<amrex::ParticleInterpolator::Linear>(*container, deposition_field, lev, deposition_functor, false, false);
+	amrex::ParticleToMesh(*container, deposition_field, lev, deposition_functor, false);
 }
 
 /// Deposit particle kinetic energy density for a given particle type
@@ -154,7 +154,7 @@ void depositParticleKineticEnergyDensity(ContainerType *container, amrex::MultiF
 	deposition_functor.start_mesh_comp = start_mesh_comp;
 	deposition_functor.num_comp = 1;
 
-	container->template ParticleToMesh<amrex::ParticleInterpolator::Linear>(*container, deposition_field, lev, deposition_functor, false, false);
+	amrex::ParticleToMesh(*container, deposition_field, lev, deposition_functor, false);
 }
 
 /// Deposit particle number density for a given particle type
@@ -167,7 +167,7 @@ void depositParticleNumberDensity(ContainerType *container, amrex::MultiFab &dep
 	deposition_functor.start_mesh_comp = start_mesh_comp;
 	deposition_functor.num_comp = 1;
 
-	container->template ParticleToMesh<amrex::ParticleInterpolator::Linear>(*container, deposition_field, lev, deposition_functor, false, false);
+	amrex::ParticleToMesh(*container, deposition_field, lev, deposition_functor, false);
 }
 
 //==============================================================================
