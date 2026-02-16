@@ -132,8 +132,7 @@ template <> void QuokkaSimulation<ParticleDepositionProblem>::computeAfterTimest
 		       << ", Total energy = " << totalEnergy << ", Total number = " << totalNumber << "\n";
 }
 
-template <>
-void QuokkaSimulation<ParticleDepositionProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int /*ncomp*/) const
+template <> void QuokkaSimulation<ParticleDepositionProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int /*ncomp*/) const
 {
 	if (dname == "particle_mass_density") {
 		mf.setVal(0.0);
