@@ -20,7 +20,7 @@ void DerivedParticleDeposition::init(const std::string &a_prefix, std::string_vi
 {
 	DerivedFieldBase::init(a_prefix, a_fieldName);
 
-	amrex::ParmParse pp(a_prefix);
+	amrex::ParmParse const pp(a_prefix);
 	pp.query("prefix", m_prefix);
 
 	amrex::Vector<std::string> particleTypes = {"CIC"};

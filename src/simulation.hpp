@@ -3761,7 +3761,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::createRuntimeDerive
 	}
 	m_runtimeDerivedFields.clear();
 
-	int n_fields = pp.countval("derived_fields");
+	int const n_fields = pp.countval("derived_fields");
 	if (n_fields <= 0) {
 		return;
 	}
