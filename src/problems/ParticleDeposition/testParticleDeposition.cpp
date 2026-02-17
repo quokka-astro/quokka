@@ -21,7 +21,11 @@ struct ParticleDepositionProblem {
 };
 
 template <> struct Particle_Traits<ParticleDepositionProblem> {
+#if AMREX_SPACEDIM == 3
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
+#else
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
+#endif
 };
 
 template <> struct EOS_Traits<ParticleDepositionProblem> {
@@ -66,6 +70,8 @@ template <> void QuokkaSimulation<ParticleDepositionProblem>::setInitialConditio
 	});
 }
 
+// CIC particles are only supported in 3D builds.
+#if AMREX_SPACEDIM == 3
 template <> void QuokkaSimulation<ParticleDepositionProblem>::createInitialCICParticles()
 {
 	const int nParticles = 10;
@@ -91,9 +97,11 @@ template <> void QuokkaSimulation<ParticleDepositionProblem>::createInitialCICPa
 	const int nreal_extra = 4; // mass vx vy vz
 	CICParticles->InitFromAsciiFile(particleFile, nreal_extra, nullptr);
 }
+#endif
 
 template <> void QuokkaSimulation<ParticleDepositionProblem>::computeAfterTimestep()
 {
+#if AMREX_SPACEDIM == 3
 	const int lev = 0;
 	const int nGhost = 0;
 	const int nComp = 1;
@@ -111,18 +119,25 @@ template <> void QuokkaSimulation<ParticleDepositionProblem>::computeAfterTimest
 	userData_.totalMass.push_back(totalMass);
 
 	amrex::Print() << "Step " << istep[0] << ": Total mass = " << totalMass << "\n";
+#endif
 }
 
 template <> void QuokkaSimulation<ParticleDepositionProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int /*ncomp*/) const
 {
+#if AMREX_SPACEDIM == 3
 	if (dname == "particle_mass_density") {
 		mf.setVal(0.0);
 		depositParticleMassDensity(CICParticles.get(), mf, lev, CICParticleMassIdx, 0);
 	}
+#endif
 }
 
 auto problem_main() -> int
 {
+#if AMREX_SPACEDIM != 3
+	amrex::Print() << "Skipping ParticleDeposition test: CIC particles are only enabled in 3D.\n";
+	return 0;
+#else
 	QuokkaSimulation<ParticleDepositionProblem> sim;
 	sim.setInitialConditions();
 	sim.evolve();
@@ -147,4 +162,5 @@ auto problem_main() -> int
 
 	amrex::Print() << "SUCCESS: Particle deposition test passed!\n";
 	return 0;
+#endif
 }
