@@ -322,6 +322,46 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 			output[bx](i, j, k, ncomp) = nH;
 		});
 
+	} else if (dname == "nH_cloud") {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "ShockCloud diagnostics require resampled cooling tables.");
+		const int ncomp = ncomp_in;
+		auto const &output = mf.arrays();
+		auto const &state = state_new_cc_[lev].const_arrays();
+		auto tables = resampledTables_.const_tables();
+		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			Real const rho_cloud = state[bx](i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+			Real const nH = (tables.cloudy_H_mass_fraction * rho_cloud) / m_H;
+			output[bx](i, j, k, ncomp) = nH;
+		});
+
+	} else if (dname == "nH_wind") {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "ShockCloud diagnostics require resampled cooling tables.");
+		const int ncomp = ncomp_in;
+		auto const &output = mf.arrays();
+		auto const &state = state_new_cc_[lev].const_arrays();
+		auto tables = resampledTables_.const_tables();
+		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			Real const rho_wind = state[bx](i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
+			Real const nH = (tables.cloudy_H_mass_fraction * rho_wind) / m_H;
+			output[bx](i, j, k, ncomp) = nH;
+		});
+
+	} else if (dname == "nH_residual") {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "ShockCloud diagnostics require resampled cooling tables.");
+		const int ncomp = ncomp_in;
+		auto const &output = mf.arrays();
+		auto const &state = state_new_cc_[lev].const_arrays();
+		auto tables = resampledTables_.const_tables();
+		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
+			Real const rho_cloud = state[bx](i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+			Real const rho_wind = state[bx](i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
+			// Residual density not accounted for by cloud+wind tracers; should be ~0 up to truncation error.
+			Real const residual = rho - (rho_cloud + rho_wind);
+			Real const nH = (tables.cloudy_H_mass_fraction * residual) / m_H;
+			output[bx](i, j, k, ncomp) = nH;
+		});
+
 	} else if (dname == "pressure") {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "ShockCloud diagnostics require resampled cooling tables.");
 		const int ncomp = ncomp_in;
@@ -613,40 +653,6 @@ template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<s
 	stats["cloud_mass_fraction_01_09"] = M_cl_fraction_01_09 / solarmass_in_g;
 
 	return stats;
-}
-
-template <>
-auto QuokkaSimulation<ShockCloud>::ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
-{
-	std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
-
-	auto tables = resampledTables_.const_tables();
-	Real const H_mass_fraction = tables.cloudy_H_mass_fraction;
-
-	// compute (total) density projection
-	proj["nH"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
-	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		    return (H_mass_fraction * rho) / m_H;
-	    });
-
-	// compute cloud partial density projection
-	proj["nH_cloud"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
-	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    // partial cloud density
-		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-		    return (H_mass_fraction * rho_cloud) / m_H;
-	    });
-
-	// compute non-cloud partial density projection
-	proj["nH_wind"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
-	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    // partial wind density
-		    Real const rho_wind = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
-		    return (H_mass_fraction * rho_wind) / m_H;
-	    });
-
-	return proj;
 }
 
 template <> void QuokkaSimulation<ShockCloud>::refineGrid(int lev, amrex::TagBoxArray &tags, Real /*time*/, int /*ngrow*/)

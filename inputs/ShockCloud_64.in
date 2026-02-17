@@ -30,11 +30,9 @@ max_t_cc = 20.0
 
 checkpoint_interval = 500
 plotfile_interval = 200
-projection_interval = 20
-projection.dirs = x z
 ascent_interval = 20
 statistics_interval = 20
-derived_vars = pressure entropy nH temperature cooling_length \
+derived_vars = pressure entropy nH nH_cloud nH_wind nH_residual temperature cooling_length \
 	       cloud_fraction lab_velocity_x mass velocity_mag c_s
 
 cooling.enabled = 1
@@ -53,7 +51,7 @@ Mach_shock = 1.888892847795999
 
 do_tracers = 1		# enable tracer particles
 
-quokka.diagnostics = slice_z hist1 hist2 hist3 hist4
+quokka.diagnostics = slice_z hist1 hist2 hist3 hist4 proj_x proj_z
 
 ## z-slice output
 
@@ -64,6 +62,20 @@ quokka.slice_z.center = 3.086e20       # Coordinate in the normal direction
 quokka.slice_z.int    = 200            # Output interval (in number of coarse steps)
 quokka.slice_z.field_names = gasDensity pressure entropy nH temperature cooling_length \
 	       cloud_fraction lab_velocity_x mass velocity_mag c_s
+
+## projection output
+
+quokka.proj_x.type = ProjectionPlot
+quokka.proj_x.file = proj/x/plt
+quokka.proj_x.normal = 0
+quokka.proj_x.int = 20
+quokka.proj_x.field_names = nH nH_cloud nH_wind nH_residual
+
+quokka.proj_z.type = ProjectionPlot
+quokka.proj_z.file = proj/z/plt
+quokka.proj_z.normal = 2
+quokka.proj_z.int = 20
+quokka.proj_z.field_names = nH nH_cloud nH_wind nH_residual
 
 ## Histogram 1 output
 

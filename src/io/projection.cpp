@@ -7,6 +7,7 @@
 ///  \brief AMReX I/O for 2D projections
 
 #include "AMReX_Array.H"
+#include "AMReX_BoxList.H"
 #include "AMReX_DistributionMapping.H"
 #include "AMReX_FPC.H"
 #include "AMReX_Geometry.H"
@@ -16,6 +17,8 @@
 #include "AMReX_PlotFileUtil.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
+
+#include <utility>
 
 #include "projection.hpp"
 
@@ -27,21 +30,21 @@ namespace detail
 auto direction_to_string(const amrex::Direction dir) -> std::string
 {
 	if (dir == amrex::Direction::x) {
-		return std::string("x");
+		return {"x"};
 	}
 #if AMREX_SPACEDIM >= 2
 	if (dir == amrex::Direction::y) {
-		return std::string("y");
+		return {"y"};
 	}
 #endif
 #if AMREX_SPACEDIM == 3
 	if (dir == amrex::Direction::z) {
-		return std::string("z");
+		return {"z"};
 	}
 #endif
 
 	amrex::Error("invalid direction in quokka::diagnostics::direction_to_string!");
-	return std::string("");
+	return {""};
 }
 
 void printLowerDimIntVect(std::ostream &a_File, const amrex::IntVect &a_IntVect, int skipDim)
@@ -207,7 +210,7 @@ void VisMF2D(const amrex::MultiFab &a_mf, const std::string &a_mf_name)
 	for (const int i : pmap) {
 		procsWithData.insert(i);
 	}
-	if (static_cast<int>(procsWithData.size()) < nOutFiles) {
+	if (std::cmp_less(procsWithData.size(), nOutFiles)) {
 		useSparseFPP = true;
 		for (const int it : procsWithData) {
 			procsWithDataVector.push_back(it);
@@ -458,25 +461,30 @@ void write_2D_header(std::ostream &os, const amrex::FArrayBox &f, int nvar)
 auto transform_box_to_2D(amrex::Direction const &dir, amrex::Box const &box) -> amrex::Box
 {
 	// transform box dimensions (Nx, Ny, Nz) -> (Nx', Ny', 1) where *one* of Nx, Ny, Nz == 1.
-	// NOTE: smallBox is assumed to be {0, 0, 0}.
-	amrex::IntVect dim = box.bigEnd();
-	amrex::IntVect bigEnd;
+	// Preserve the original indices in the remaining dimensions.
+	amrex::IntVect smallEnd = box.smallEnd();
+	amrex::IntVect bigEnd = box.bigEnd();
+	amrex::IntVect smallEnd2d;
+	amrex::IntVect bigEnd2d;
 
 	if (dir == amrex::Direction::x) { // y-z plane
-		bigEnd = amrex::IntVect(amrex::Dim3{dim[1], dim[2], 0});
+		smallEnd2d = amrex::IntVect(amrex::Dim3{.x = smallEnd[1], .y = smallEnd[2], .z = 0});
+		bigEnd2d = amrex::IntVect(amrex::Dim3{.x = bigEnd[1], .y = bigEnd[2], .z = 0});
 #if AMREX_SPACEDIM >= 2
 	} else if (dir == amrex::Direction::y) { // x-z plane
-		bigEnd = amrex::IntVect(amrex::Dim3{dim[0], dim[2], 0});
+		smallEnd2d = amrex::IntVect(amrex::Dim3{.x = smallEnd[0], .y = smallEnd[2], .z = 0});
+		bigEnd2d = amrex::IntVect(amrex::Dim3{.x = bigEnd[0], .y = bigEnd[2], .z = 0});
 #endif
 #if AMREX_SPACEDIM == 3
 	} else if (dir == amrex::Direction::z) { // x-y plane
-		bigEnd = amrex::IntVect(amrex::Dim3{dim[0], dim[1], 0});
+		smallEnd2d = amrex::IntVect(amrex::Dim3{.x = smallEnd[0], .y = smallEnd[1], .z = 0});
+		bigEnd2d = amrex::IntVect(amrex::Dim3{.x = bigEnd[0], .y = bigEnd[1], .z = 0});
 #endif
 	} else {
 		amrex::Abort("detail::transform_box_to_2D: invalid direction!");
 	}
 
-	return amrex::Box(amrex::IntVect(amrex::Dim3{0, 0, 0}), bigEnd);
+	return {smallEnd2d, bigEnd2d};
 }
 
 auto transform_realbox_to_2D(amrex::Direction const &dir, amrex::RealBox const &box) -> amrex::RealBox
@@ -505,76 +513,114 @@ auto transform_realbox_to_2D(amrex::Direction const &dir, amrex::RealBox const &
 		amrex::Abort("detail::transform_box_to_2D: invalid direction!");
 	}
 
-	return amrex::RealBox(new_lo, new_hi);
+	return {new_lo, new_hi};
+}
+
+auto transform_ref_ratio_to_2D(amrex::Direction const &dir, amrex::IntVect const &ref_ratio) -> amrex::IntVect
+{
+	amrex::IntVect new_ratio;
+	if (dir == amrex::Direction::x) { // y-z plane
+		new_ratio = amrex::IntVect(amrex::Dim3{.x = ref_ratio[1], .y = ref_ratio[2], .z = ref_ratio[0]});
+#if AMREX_SPACEDIM >= 2
+	} else if (dir == amrex::Direction::y) { // x-z plane
+		new_ratio = amrex::IntVect(amrex::Dim3{.x = ref_ratio[0], .y = ref_ratio[2], .z = ref_ratio[1]});
+#endif
+#if AMREX_SPACEDIM == 3
+	} else if (dir == amrex::Direction::z) { // x-y plane
+		new_ratio = amrex::IntVect(amrex::Dim3{.x = ref_ratio[0], .y = ref_ratio[1], .z = ref_ratio[2]});
+#endif
+	} else {
+		amrex::Abort("detail::transform_ref_ratio_to_2D: invalid direction!");
+	}
+
+	return new_ratio;
 }
 
 } // namespace detail
 
-void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> const &proj, amrex::Real time, int istep,
+void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex::Vector<amrex::MultiFab>> const &proj,
+		     amrex::Vector<amrex::Geometry> const &geom, amrex::Vector<amrex::IntVect> const &ref_ratio, amrex::Real time, int istep,
 		     const std::string &basename, const YAML::Node &simulationMetadata)
 {
 	// write projections to plotfile
-	auto const &firstFab = proj.begin()->second;
+	auto const &firstVec = proj.begin()->second;
+	const int nlevels = static_cast<int>(firstVec.size());
 	amrex::Vector<std::string> varnames;
-
-	// NOTE: Write2DMultiLevelPlotfile assumes the slice lies in the x-y plane
-	//  (i.e. normal to the z axis) and the Geometry object corresponds to this.
-	//  For a z-projection, this works as expected. For an {x,y}-projection,
-	//  it is necessary to transform the geometry so that the data is stored in
-	//  the x-y plane.
-	amrex::Geometry geom3d{};
-	geom3d.Setup(); // read from ParmParse, NOLINT
-	const amrex::Box box2d = detail::transform_box_to_2D(dir, firstFab.box());
-	const amrex::RealBox domain2d = detail::transform_realbox_to_2D(dir, geom3d.ProbDomain());
-	const amrex::Geometry geom2d(box2d, &domain2d);
-	// amrex::Print() << box2d << "\n";
-	// amrex::Print() << domain2d << "\n";
-
-	// construct output multifab on rank 0
-	const amrex::BoxArray ba(box2d);
-	const amrex::DistributionMapping dm(amrex::Vector<int>{0});
 	const int ncomp = static_cast<int>(proj.size());
-	amrex::MultiFab mf_all(ba, dm, ncomp, 0);
 
-	// copy all projections into a single Multifab with x-y geometry
-	auto iter = proj.begin();
-	for (int icomp = 0; icomp < ncomp; ++icomp) {
-		const std::string &varname = iter->first;
-		const amrex::BaseFab<amrex::Real> &baseFab = iter->second;
-		varnames.push_back(varname);
-		// amrex::Print() << "varname: " << varname << " icomp: " << icomp << "\n";
+	for (const auto &[name, vec] : proj) {
+		varnames.push_back(name);
+	}
 
-		// copy mf_comp into mf_all
-		auto output_arr = mf_all.arrays();
-		auto const &input_arr = baseFab.const_array();
+	// Construct 2D geometry for all levels
+	amrex::Vector<amrex::Geometry> geom2d(nlevels);
+	for (int lev = 0; lev < nlevels; ++lev) {
+		const amrex::Box box2d = detail::transform_box_to_2D(dir, geom[lev].Domain());
+		const amrex::RealBox domain2d = detail::transform_realbox_to_2D(dir, geom[lev].ProbDomain());
+		geom2d[lev] = amrex::Geometry(box2d, &domain2d);
+	}
+	amrex::Vector<amrex::IntVect> ref_ratio2d;
+	ref_ratio2d.reserve(ref_ratio.size());
+	for (const auto &ratio : ref_ratio) {
+		ref_ratio2d.push_back(detail::transform_ref_ratio_to_2D(dir, ratio));
+	}
 
-		if (dir == amrex::Direction::x) {
-			amrex::ParallelFor(mf_all,
-					   [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { output_arr[bx](i, j, k, icomp) = input_arr(0, i, j); });
+	// Copy projections into Vector<MultiFab> where each MultiFab holds all components for that level
+	amrex::Vector<amrex::MultiFab> mf_all(nlevels);
+	for (int lev = 0; lev < nlevels; ++lev) {
+		// Use the BoxArray and DM from the first component's MultiFab on this level
+		const amrex::MultiFab &example_mf = firstVec[lev];
+		bool needs_union = false;
+		for (const auto &varname : varnames) {
+			const amrex::MultiFab &comp_mf = proj.at(varname)[lev];
+			const auto &example_ba = example_mf.boxArray();
+			const auto &comp_ba = comp_mf.boxArray();
+			const bool cover_match = example_ba.contains(comp_ba) && comp_ba.contains(example_ba);
+			if (!cover_match) {
+				needs_union = true;
+				break;
+			}
 		}
-#if AMREX_SPACEDIM >= 2
-		else if (dir == amrex::Direction::y) {
-			amrex::ParallelFor(mf_all,
-					   [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { output_arr[bx](i, j, k, icomp) = input_arr(i, 0, j); });
-		}
-#endif
-#if AMREX_SPACEDIM == 3
-		else if (dir == amrex::Direction::z) {
-			amrex::ParallelFor(mf_all,
-					   [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { output_arr[bx](i, j, k, icomp) = input_arr(i, j, 0); });
-		}
-#endif
 
-		amrex::Gpu::streamSynchronize();
-		++iter;
+		if (needs_union) {
+			amrex::BoxList bl_union(example_mf.boxArray());
+			for (const auto &varname : varnames) {
+				const amrex::MultiFab &comp_mf = proj.at(varname)[lev];
+				bl_union.join(comp_mf.boxArray().boxList());
+			}
+			bl_union.simplify();
+			const amrex::BoxArray ba_union(amrex::removeOverlap(bl_union));
+			const amrex::DistributionMapping dm_union(ba_union);
+			mf_all[lev].define(ba_union, dm_union, ncomp, 0);
+			mf_all[lev].setVal(0.0);
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				amrex::Print() << "Warning: projection components use different BoxArrays at level " << lev
+					       << "; using a union BoxArray for output.\n";
+			}
+		} else {
+			mf_all[lev].define(example_mf.boxArray(), example_mf.DistributionMap(), ncomp, 0);
+		}
+
+		int icomp = 0;
+		// Iterate in the same order as varnames
+		for (const auto &varname : varnames) {
+			const amrex::MultiFab &comp_mf = proj.at(varname)[lev];
+			// ParallelCopy handles differing DistributionMappings safely.
+			mf_all[lev].ParallelCopy(comp_mf, 0, icomp, 1, 0, 0);
+			icomp++;
+		}
 	}
 
 	// write mf_all to disk
 	const std::string filename = amrex::Concatenate(basename, istep, 7);
-	const amrex::Vector<const amrex::MultiFab *> mfs = {&mf_all};
+	amrex::Vector<const amrex::MultiFab *> mfs;
+	mfs.reserve(static_cast<size_t>(nlevels));
+	for (int lev = 0; lev < nlevels; ++lev) {
+		mfs.push_back(&mf_all[lev]);
+	}
 	amrex::Print() << "Writing projection " << filename << "\n";
 
-	detail::Write2DMultiLevelPlotfile(filename, 1, mfs, varnames, {geom2d}, time, {istep}, {});
+	detail::Write2DMultiLevelPlotfile(filename, nlevels, mfs, varnames, geom2d, time, amrex::Vector<int>(nlevels, istep), ref_ratio2d);
 
 	// Write metadata file (inside the plotfile directory)
 	if (amrex::ParallelDescriptor::IOProcessor()) {

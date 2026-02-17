@@ -10,6 +10,7 @@
 /// timestepping, solving, and I/O of a simulation.
 
 // c++ headers
+#include "AMReX_BaseFab.H"
 #include "AMReX_MFInterpolater.H"
 #include "AMReX_Periodicity.H"
 #include "AMReX_String.H"
@@ -99,7 +100,9 @@ namespace filesystem = experimental::filesystem;
 #include "io/DiagPDF.H"
 #include "io/DiagParticleTxt.H"
 #include "io/DiagPlotfile.H"
+#if AMREX_SPACEDIM == 3
 #include "io/DiagProjectionPlot.H"
+#endif
 #include "io/io_utils.hpp"
 #include "io/projection.hpp"
 #include "physics_info.hpp"
@@ -167,7 +170,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 {
 	// Allow diagnostic classes to access protected members
 	friend class DiagPlotfile;
+#if AMREX_SPACEDIM == 3
 	friend class DiagProjectionPlot;
+#endif
 	friend class DiagPDF;
 	friend class DiagFramePlane;
 
@@ -194,7 +199,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Long maxWalltime_ = 0;				     // default: no limit
 	int ascentInterval_ = -1;				     // -1 == no in-situ renders with Ascent
 	int plotfileInterval_ = -1;				     // -1 == no output
-	int projectionInterval_ = -1;				     // -1 == no output
 	int statisticsInterval_ = -1;				     // -1 == no output
 	amrex::Real plotTimeInterval_ = -1.0;			     // time interval for plt file
 	bool skipInitialPlotfile_ = false;			     // skip writing plotfile at t=0
@@ -300,9 +304,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// compute derived variables
 	virtual void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const = 0;
 	virtual void ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const;
-
-	// compute projected vars
-	[[nodiscard]] virtual auto ComputeProjections(amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> = 0;
 
 	// compute statistics
 	virtual auto ComputeStatistics() -> std::map<std::string, amrex::Real> = 0;
@@ -881,8 +882,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default output interval
 	pp.query("plotfile_interval", plotfileInterval_);
 
-	// Default projection interval
-	pp.query("projection_interval", projectionInterval_);
+	if (pp.contains("projection_interval")) {
+		amrex::Print() << "Warning: 'projection_interval' is deprecated and ignored. Use 'quokka.diagnostics' to configure projections.\n";
+	}
+	if (pp.contains("projection.dirs")) {
+		amrex::Print() << "Warning: 'projection.dirs' is deprecated and ignored. Use 'quokka.diagnostics' to configure projections.\n";
+	}
 
 	// Default output interval
 	// Default statistics interval
@@ -3876,11 +3881,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 				continue;
 			}
 
+#if AMREX_SPACEDIM == 3
 			auto *projectionDiag = dynamic_cast<DiagProjectionPlot *>(diag);
 			if (projectionDiag != nullptr) {
 				projectionDiag->processDiag<problem_t>(istep[0], tNew_[0]);
 				continue;
 			}
+#endif
 
 			auto *framePlaneDiag = dynamic_cast<DiagFramePlane *>(diag);
 			if (framePlaneDiag != nullptr) {

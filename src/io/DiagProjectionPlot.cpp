@@ -9,17 +9,20 @@ void DiagProjectionPlot::init(const std::string &a_prefix, std::string_view a_di
 
 	amrex::ParmParse const pp(a_prefix);
 
-	// Check if file prefix ends with "plt" - if not, warn and append it
-	if (m_diagfile.size() < 3 || m_diagfile.substr(m_diagfile.size() - 3) != "plt") {
-		if (m_diagfile != std::string(a_diagName)) {
-			// User specified a custom file prefix that doesn't end in plt
-			amrex::Print() << "Warning: DiagProjectionPlot file prefix '" << m_diagfile << "' does not end with 'plt'. Appending '_plt'.\n";
-			m_diagfile += "_plt";
-		} else {
-			// No custom prefix, use default
-			m_diagfile = "proj_plt";
-		}
+	if (!m_filters.empty()) {
+		amrex::Print() << " Filters are not available on DiagProjectionPlot and will be discarded \n";
+		m_filters.clear();
 	}
+
+	// Outputted variables
+	int const nOutFields = pp.countval("field_names");
+	AMREX_ALWAYS_ASSERT(nOutFields > 0);
+	m_fieldNames.resize(nOutFields);
+	for (int f = 0; f < nOutFields; ++f) {
+		pp.get("field_names", m_fieldNames[f], f);
+	}
+
+	// DiagFramePlane does not enforce a "plt" suffix; match that behavior here.
 
 	// Read particle types to include (optional, default to empty = no particles)
 	int const nParticleTypes = pp.countval("particles");
@@ -38,41 +41,36 @@ void DiagProjectionPlot::init(const std::string &a_prefix, std::string_view a_di
 		amrex::Print() << "DiagProjectionPlot: No particles will be included\n";
 	}
 
-	// Read projection directions (optional, default to all directions)
+	// Read projection direction (optional, default to x).
+	// Use "normal" to mirror DiagFramePlane.
+	int const nNormals = pp.countval("normal");
 	int const nDirs = pp.countval("dirs");
 	if (nDirs > 0) {
-		std::vector<std::string> dirStrings(nDirs);
-		for (int n = 0; n < nDirs; ++n) {
-			pp.get("dirs", dirStrings[n], n);
-		}
+		amrex::Abort("DiagProjectionPlot: 'dirs' is not supported. Use 'normal' (0==x,1==y,2==z).");
+	}
 
-		for (const auto &dirStr : dirStrings) {
-			if (dirStr == "x") {
-				m_projectionDirs.push_back(amrex::Direction::x);
-			}
-#if AMREX_SPACEDIM >= 2
-			else if (dirStr == "y") {
-				m_projectionDirs.push_back(amrex::Direction::y);
-			}
-#endif
-#if AMREX_SPACEDIM == 3
-			else if (dirStr == "z") {
-				m_projectionDirs.push_back(amrex::Direction::z);
-			}
-#endif
-			else {
-				amrex::Print() << "Warning: Unknown projection direction '" << dirStr << "' ignored\n";
-			}
+	if (nNormals > 0) {
+		int normal = 0;
+		pp.get("normal", normal);
+		if (normal < 0 || normal >= AMREX_SPACEDIM) {
+			amrex::Abort("DiagProjectionPlot: 'normal' must be in [0, AMREX_SPACEDIM).");
 		}
-	} else {
-		// Default to all directions
-		m_projectionDirs.push_back(amrex::Direction::x);
+		if (normal == 0) {
+			m_projectionDirs.push_back(amrex::Direction::x);
+		}
 #if AMREX_SPACEDIM >= 2
-		m_projectionDirs.push_back(amrex::Direction::y);
+		else if (normal == 1) {
+			m_projectionDirs.push_back(amrex::Direction::y);
+		}
 #endif
 #if AMREX_SPACEDIM == 3
-		m_projectionDirs.push_back(amrex::Direction::z);
+		else if (normal == 2) {
+			m_projectionDirs.push_back(amrex::Direction::z);
+		}
 #endif
+	} else {
+		// Default to x direction
+		m_projectionDirs.push_back(amrex::Direction::x);
 	}
 
 	amrex::Print() << "DiagProjectionPlot initialized: file=" << m_diagfile << ", interval=" << m_interval << ", dirs=";
@@ -95,15 +93,31 @@ void DiagProjectionPlot::init(const std::string &a_prefix, std::string_view a_di
 }
 
 void DiagProjectionPlot::prepare(int /*a_nlevels*/, const amrex::Vector<amrex::Geometry> & /*a_geoms*/, const amrex::Vector<amrex::BoxArray> & /*a_grids*/,
-				 const amrex::Vector<amrex::DistributionMapping> & /*a_dmap*/, const amrex::Vector<std::string> & /*a_varNames*/)
+				 const amrex::Vector<amrex::DistributionMapping> & /*a_dmap*/, const amrex::Vector<std::string> &a_varNames)
 {
+	if (first_time) {
+		for (auto const &field : m_fieldNames) {
+			bool found = false;
+			for (auto const &name : a_varNames) {
+				if (name == field) {
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				amrex::Abort("DiagProjectionPlot: Field '" + field + "' is not available!");
+			}
+		}
+	}
+
 	// DiagProjectionPlot doesn't need special preparation
-	// The base class prepare() handles filter setup if needed
-	DiagBase::prepare(0, {}, {}, {}, {});
+	DiagBase::prepare(0, {}, {}, {}, a_varNames);
 }
 
-void DiagProjectionPlot::addVars(amrex::Vector<std::string> & /*a_varList*/)
+void DiagProjectionPlot::addVars(amrex::Vector<std::string> &a_varList)
 {
-	// DiagProjectionPlot doesn't use the standard diagnostic variable extraction system
-	// It accesses the full state data directly, so we don't add variables here
+	DiagBase::addVars(a_varList);
+	for (const auto &v : m_fieldNames) {
+		a_varList.push_back(v);
+	}
 }
