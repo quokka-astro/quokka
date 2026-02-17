@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <array>
 #include <iterator>
-#include <sstream>
 #include <unordered_set>
 
 #include "AMReX_ParmParse.H"
@@ -24,21 +23,22 @@ void DerivedParticleDeposition::init(const std::string &a_prefix, std::string_vi
 	amrex::ParmParse pp(a_prefix);
 	pp.query("prefix", m_prefix);
 
-	std::string particleTypesStr = "CIC";
-	pp.query("particle_types", particleTypesStr);
-	std::string depositFieldsStr = "mass";
-	pp.query("deposit_fields", depositFieldsStr);
+	amrex::Vector<std::string> particleTypes = {"CIC"};
+	if (pp.countval("particle_types") > 0) {
+		pp.queryarr("particle_types", particleTypes);
+	}
+	amrex::Vector<std::string> depositFields = {"mass"};
+	if (pp.countval("deposit_fields") > 0) {
+		pp.queryarr("deposit_fields", depositFields);
+	}
 
-	std::istringstream pstream(particleTypesStr);
-	std::istringstream fstream(depositFieldsStr);
-	std::string token;
-	while (pstream >> token) {
+	for (auto const &token : particleTypes) {
 		if (!isSupportedParticleType(token)) {
 			amrex::Abort("Unsupported particle type in DerivedParticleDeposition: " + token);
 		}
 		m_particleTypes.push_back(token);
 	}
-	while (fstream >> token) {
+	for (auto const &token : depositFields) {
 		if (token != "mass") {
 			amrex::Abort("DerivedParticleDeposition currently supports only deposit_fields = mass");
 		}

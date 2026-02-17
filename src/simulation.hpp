@@ -3763,7 +3763,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::createRuntimeDerive
 
 	amrex::Vector<std::string> field_groups(n_fields);
 	pp.getarr("derived_fields", field_groups, 0, n_fields);
-	std::unordered_set<std::string> existingDerived(derivedNames_.begin(), derivedNames_.end());
+	std::unordered_set<std::string> existingVarNames;
+	existingVarNames.insert(componentNames_cc_.begin(), componentNames_cc_.end());
+	existingVarNames.insert(componentNames_fc_flat_.begin(), componentNames_fc_flat_.end());
+	existingVarNames.insert(derivedNames_.begin(), derivedNames_.end());
 
 	for (int n = 0; n < n_fields; ++n) {
 		std::string const field_prefix = code_prefix + "." + field_groups[n];
@@ -3779,8 +3782,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::createRuntimeDerive
 			if (var.empty()) {
 				amrex::Abort("Runtime derived field provider generated an empty output name.");
 			}
-			if (!existingDerived.insert(var).second) {
-				amrex::Abort("Duplicate derived field name from runtime provider: " + var);
+			if (!existingVarNames.insert(var).second) {
+				amrex::Abort("Runtime derived field name collides with an existing variable: " + var);
 			}
 			derivedNames_.push_back(var);
 			m_runtimeDerivedVarNames.push_back(var);
