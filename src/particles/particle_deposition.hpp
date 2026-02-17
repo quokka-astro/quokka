@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <numbers>
 
 #include "AMReX_Array.H"
@@ -94,8 +95,14 @@ struct RadDeposition {
 // Functor for depositing particle mass density onto the grid
 struct ParticleMassDensityDeposition {
 	int mass_comp{};
+	int birth_time_comp{-1};
 	int start_mesh_comp{};
 	int num_comp{};
+	amrex::Real mass_min{std::numeric_limits<amrex::Real>::lowest()};
+	amrex::Real mass_max{std::numeric_limits<amrex::Real>::max()};
+	bool use_age_filter{false};
+	amrex::Real current_time{};
+	amrex::Real age_max{std::numeric_limits<amrex::Real>::max()};
 
 	template <typename ContainerType>
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<amrex::Real> const &deposition_array,
@@ -103,21 +110,50 @@ struct ParticleMassDensityDeposition {
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
 	{
 		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
+		const auto massMin = mass_min;
+		const auto massMax = mass_max;
+		const auto birthTimeComp = birth_time_comp;
+		const auto useAgeFilter = use_age_filter;
+		const auto currentTime = current_time;
+		const auto ageMax = age_max;
 		interp.ParticleToMesh(p, deposition_array, mass_comp, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
-			return part.rdata(comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+			const auto mass = part.rdata(comp);
+			if (mass < massMin || mass > massMax) {
+				return 0.0;
+			}
+			if (useAgeFilter) {
+				const auto age = currentTime - part.rdata(birthTimeComp);
+				if (age > ageMax) {
+					return 0.0;
+				}
+			}
+			return mass * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
 		});
 	}
 };
 
 template <typename ContainerType>
-void depositParticleMassDensity(ContainerType *container, amrex::MultiFab &deposition_field, int lev, int mass_comp, int start_mesh_comp = 0)
+void depositParticleMassDensity(ContainerType *container, amrex::MultiFab &deposition_field, int lev, int mass_comp, int start_mesh_comp = 0,
+				amrex::Real mass_min = std::numeric_limits<amrex::Real>::lowest(),
+				amrex::Real mass_max = std::numeric_limits<amrex::Real>::max(), bool use_age_filter = false,
+				int birth_time_comp = -1, amrex::Real current_time = 0.0,
+				amrex::Real age_max = std::numeric_limits<amrex::Real>::max())
 {
 	const BL_PROFILE("depositParticleMassDensity");
+	if (use_age_filter && birth_time_comp < 0) {
+		amrex::Abort("depositParticleMassDensity: age filter requested, but birth_time_comp is invalid.");
+	}
 
 	ParticleMassDensityDeposition deposition_functor;
 	deposition_functor.mass_comp = mass_comp;
+	deposition_functor.birth_time_comp = birth_time_comp;
 	deposition_functor.start_mesh_comp = start_mesh_comp;
 	deposition_functor.num_comp = 1;
+	deposition_functor.mass_min = mass_min;
+	deposition_functor.mass_max = mass_max;
+	deposition_functor.use_age_filter = use_age_filter;
+	deposition_functor.current_time = current_time;
+	deposition_functor.age_max = age_max;
 
 	// ParticleToMesh uses tile-local buffers grown by mf.nGrowVect(). Linear deposition needs one
 	// grow cell to avoid out-of-bounds accesses near tile boundaries.

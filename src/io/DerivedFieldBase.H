@@ -28,7 +28,8 @@ class DerivedFieldBase : public Factory<DerivedFieldBase>
 
 	virtual void addVars(amrex::Vector<std::string> &a_varList);
 	struct ComputeContext {
-		std::function<void(const std::string &, amrex::MultiFab &, int, int)> depositParticleMassDensity;
+		std::function<void(const std::string &, const std::string &, amrex::MultiFab &, int, int, amrex::Real, amrex::Real, bool, amrex::Real)>
+		    depositParticleMassDensity;
 	};
 	virtual auto computeField(int lev, const std::string &fieldName, amrex::MultiFab &mf, int ncomp, ComputeContext const &ctx) const -> bool;
 
