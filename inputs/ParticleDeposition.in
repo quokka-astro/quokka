@@ -32,7 +32,7 @@ diag.particle_deposition.output_format = plotfile
 # I/O
 amr.plot_int = 10
 amr.plot_file = particle_deposition_
-amr.derived_var = particle_mass_density
+derived_vars = particle_mass_density
 amr.check_int = -1
 
 # Verbosity
