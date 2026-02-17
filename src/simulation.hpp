@@ -3761,19 +3761,40 @@ template <typename problem_t> void AMRSimulation<problem_t>::createRuntimeDerive
 	}
 	m_runtimeDerivedFields.clear();
 
-	int const n_fields = pp.countval("derived_fields");
-	if (n_fields <= 0) {
+	amrex::Vector<std::string> field_groups;
+	field_groups.reserve(derivedNames_.size());
+	for (auto const &derivedName : derivedNames_) {
+		std::string const field_prefix = code_prefix + "." + derivedName;
+		amrex::ParmParse const ppf(field_prefix);
+		if (ppf.contains("type")) {
+			field_groups.push_back(derivedName);
+		}
+	}
+
+	// Backward compatibility for early runtime-derived API:
+	// also accept quokka.derived_fields and merge.
+	int const n_legacy_fields = pp.countval("derived_fields");
+	if (n_legacy_fields > 0) {
+		amrex::Vector<std::string> legacy_field_groups(n_legacy_fields);
+		pp.getarr("derived_fields", legacy_field_groups, 0, n_legacy_fields);
+		for (auto const &legacy_name : legacy_field_groups) {
+			if (std::ranges::find(field_groups, legacy_name) == field_groups.end()) {
+				field_groups.push_back(legacy_name);
+			}
+		}
+	}
+
+	if (field_groups.empty()) {
 		return;
 	}
 
-	amrex::Vector<std::string> field_groups(n_fields);
-	pp.getarr("derived_fields", field_groups, 0, n_fields);
 	std::unordered_set<std::string> existingVarNames;
 	existingVarNames.insert(componentNames_cc_.begin(), componentNames_cc_.end());
 	existingVarNames.insert(componentNames_fc_flat_.begin(), componentNames_fc_flat_.end());
 	existingVarNames.insert(derivedNames_.begin(), derivedNames_.end());
 
-	for (int n = 0; n < n_fields; ++n) {
+	std::unordered_set<std::string> runtimeNameSet;
+	for (int n = 0; n < static_cast<int>(field_groups.size()); ++n) {
 		std::string const field_prefix = code_prefix + "." + field_groups[n];
 		amrex::ParmParse const ppf(field_prefix);
 		std::string field_type;
@@ -3787,11 +3808,16 @@ template <typename problem_t> void AMRSimulation<problem_t>::createRuntimeDerive
 			if (var.empty()) {
 				amrex::Abort("Runtime derived field provider generated an empty output name.");
 			}
-			if (!existingVarNames.insert(var).second) {
+			if (std::ranges::find(derivedNames_, var) == derivedNames_.end()) {
+				amrex::Abort("Runtime derived field output '" + var +
+					     "' is not listed in derived_vars. Add it to derived_vars to enable output.");
+			}
+			if (!existingVarNames.contains(var)) {
 				amrex::Abort("Runtime derived field name collides with an existing variable: " + var);
 			}
-			derivedNames_.push_back(var);
-			m_runtimeDerivedVarNames.push_back(var);
+			if (runtimeNameSet.insert(var).second) {
+				m_runtimeDerivedVarNames.push_back(var);
+			}
 		}
 		m_runtimeDerivedFields.push_back(std::move(provider));
 	}

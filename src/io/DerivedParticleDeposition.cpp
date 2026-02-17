@@ -22,6 +22,8 @@ void DerivedParticleDeposition::init(const std::string &a_prefix, std::string_vi
 
 	amrex::ParmParse const pp(a_prefix);
 	pp.query("prefix", m_prefix);
+	std::string explicitOutputName;
+	bool const hasExplicitOutputName = pp.query("output_name", explicitOutputName);
 
 	amrex::Vector<std::string> particleTypes = {"CIC"};
 	if (pp.countval("particle_types") > 0) {
@@ -53,10 +55,25 @@ void DerivedParticleDeposition::init(const std::string &a_prefix, std::string_vi
 		amrex::Abort("DerivedParticleDeposition requires at least one deposit field.");
 	}
 
+	const int totalOutputs = static_cast<int>(m_particleTypes.size() * m_depositFields.size());
+	if (hasExplicitOutputName && totalOutputs != 1) {
+		amrex::Abort("DerivedParticleDeposition: output_name is only valid when exactly one output is produced.");
+	}
+
 	std::unordered_set<std::string> outputSet;
 	for (auto const &ptype : m_particleTypes) {
 		for (auto const &field : m_depositFields) {
-			auto const outputName = getFieldName(ptype, field);
+			std::string outputName;
+			if (hasExplicitOutputName) {
+				outputName = explicitOutputName;
+			} else if (totalOutputs == 1) {
+				// Use the provider group name so users can configure via:
+				// derived_vars = <name>
+				// quokka.<name>.type = DerivedParticleDeposition
+				outputName = m_fieldGroupName;
+			} else {
+				outputName = getFieldName(ptype, field);
+			}
 			if (!outputSet.insert(outputName).second) {
 				amrex::Abort("Duplicate output field generated in DerivedParticleDeposition: " + outputName);
 			}
