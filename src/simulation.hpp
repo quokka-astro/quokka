@@ -3837,10 +3837,8 @@ template <typename problem_t>
 auto AMRSimulation<problem_t>::computeRuntimeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const -> bool
 {
 	typename quokka::DerivedFieldBase::ComputeContext ctx{};
-	ctx.depositParticleMassDensity =
-	    [this](const std::string &particleType, const std::string &depositField, amrex::MultiFab &outMF, int outLev, int outComp, amrex::Real massMin,
-		   amrex::Real massMax,
-		   bool hasAgeFilter, amrex::Real tAgeMax) {
+	ctx.depositParticleMassDensity = [this](const std::string &particleType, const std::string &depositField, amrex::MultiFab &outMF, int outLev,
+						int outComp, amrex::Real massMin, amrex::Real massMax, bool hasAgeFilter, amrex::Real tAgeMax) {
 #if AMREX_SPACEDIM == 3
 		if (particleType == "CIC") {
 			if (depositField != "mass") {
@@ -3865,7 +3863,8 @@ auto AMRSimulation<problem_t>::computeRuntimeDerivedVar(int lev, std::string con
 			if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CICRad) {
 				if (CICRadParticles != nullptr) {
 					quokka::depositParticleMassDensity(CICRadParticles.get(), outMF, outLev, quokka::CICRadParticleMassIdx, outComp,
-									   massMin, massMax, hasAgeFilter, quokka::CICRadParticleBirthTimeIdx, tNew_[0], tAgeMax);
+									   massMin, massMax, hasAgeFilter, quokka::CICRadParticleBirthTimeIdx, tNew_[0],
+									   tAgeMax);
 				}
 				return;
 			}
@@ -3875,13 +3874,13 @@ auto AMRSimulation<problem_t>::computeRuntimeDerivedVar(int lev, std::string con
 			if (depositField != "mass" && depositField != "birth_mass") {
 				amrex::Abort("Unsupported deposit field requested by runtime derived field provider: " + depositField);
 			}
-			const int massComp = (depositField == "birth_mass") ? quokka::StochasticStellarPopParticleMassAtBirthIdx
-									     : quokka::StochasticStellarPopParticleMassIdx;
+			const int massComp =
+			    (depositField == "birth_mass") ? quokka::StochasticStellarPopParticleMassAtBirthIdx : quokka::StochasticStellarPopParticleMassIdx;
 			if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::StochasticStellarPop) {
 				if (StochasticStellarPopParticles != nullptr) {
 					quokka::depositParticleMassDensity(StochasticStellarPopParticles.get(), outMF, outLev, massComp, outComp, massMin,
-									   massMax, hasAgeFilter,
-									   quokka::StochasticStellarPopParticleBirthTimeIdx, tNew_[0], tAgeMax);
+									   massMax, hasAgeFilter, quokka::StochasticStellarPopParticleBirthTimeIdx, tNew_[0],
+									   tAgeMax);
 				}
 				return;
 			}
@@ -3922,7 +3921,7 @@ auto AMRSimulation<problem_t>::computeRuntimeDerivedVar(int lev, std::string con
 		amrex::ignore_unused(depositField, outMF, outLev, outComp, massMin, massMax, hasAgeFilter, tAgeMax);
 		amrex::Abort("Particle deposition runtime derived fields are supported only in 3D.");
 #endif
-	    };
+	};
 
 	for (auto const &provider : m_runtimeDerivedFields) {
 		if (provider->computeField(lev, dname, mf, ncomp, ctx)) {

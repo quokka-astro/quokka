@@ -5,8 +5,8 @@
 #include <iterator>
 #include <unordered_set>
 
-#include "AMReX_Parser.H"
 #include "AMReX_ParmParse.H"
+#include "AMReX_Parser.H"
 #include "fundamental_constants.H"
 
 namespace quokka

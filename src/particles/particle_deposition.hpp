@@ -135,9 +135,8 @@ struct ParticleMassDensityDeposition {
 template <typename ContainerType>
 void depositParticleMassDensity(ContainerType *container, amrex::MultiFab &deposition_field, int lev, int mass_comp, int start_mesh_comp = 0,
 				amrex::Real mass_min = std::numeric_limits<amrex::Real>::lowest(),
-				amrex::Real mass_max = std::numeric_limits<amrex::Real>::max(), bool use_age_filter = false,
-				int birth_time_comp = -1, amrex::Real current_time = 0.0,
-				amrex::Real age_max = std::numeric_limits<amrex::Real>::max())
+				amrex::Real mass_max = std::numeric_limits<amrex::Real>::max(), bool use_age_filter = false, int birth_time_comp = -1,
+				amrex::Real current_time = 0.0, amrex::Real age_max = std::numeric_limits<amrex::Real>::max())
 {
 	const BL_PROFILE("depositParticleMassDensity");
 	if (use_age_filter && birth_time_comp < 0) {
