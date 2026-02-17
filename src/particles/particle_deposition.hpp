@@ -119,7 +119,20 @@ void depositParticleMassDensity(ContainerType *container, amrex::MultiFab &depos
 	deposition_functor.start_mesh_comp = start_mesh_comp;
 	deposition_functor.num_comp = 1;
 
-	amrex::ParticleToMesh(*container, deposition_field, lev, deposition_functor, false);
+	// ParticleToMesh uses tile-local buffers grown by mf.nGrowVect(). Linear deposition needs one
+	// grow cell to avoid out-of-bounds accesses near tile boundaries.
+	constexpr int required_n_grow = amrex::ParticleInterpolator::Linear::stencil_width - 1;
+	if (deposition_field.nGrowVect().allGE(required_n_grow)) {
+		amrex::ParticleToMesh(*container, deposition_field, lev, deposition_functor, false);
+		return;
+	}
+
+	amrex::MultiFab deposition_with_ghosts(deposition_field.boxArray(), deposition_field.DistributionMap(), deposition_field.nComp(),
+					       amrex::IntVect(required_n_grow));
+	deposition_with_ghosts.setVal(0.0);
+	amrex::ParticleToMesh(*container, deposition_with_ghosts, lev, deposition_functor, true);
+	deposition_field.ParallelAdd(deposition_with_ghosts, start_mesh_comp, start_mesh_comp, 1, amrex::IntVect(0), amrex::IntVect(0),
+				     container->Geom(lev).periodicity());
 }
 
 #if AMREX_SPACEDIM == 3
