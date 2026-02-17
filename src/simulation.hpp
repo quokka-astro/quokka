@@ -3789,7 +3789,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::createRuntimeDerive
 	std::unordered_set<std::string> existingVarNames;
 	existingVarNames.insert(componentNames_cc_.begin(), componentNames_cc_.end());
 	existingVarNames.insert(componentNames_fc_flat_.begin(), componentNames_fc_flat_.end());
-	existingVarNames.insert(derivedNames_.begin(), derivedNames_.end());
 
 	std::unordered_set<std::string> runtimeNameSet;
 	for (int n = 0; n < static_cast<int>(field_groups.size()); ++n) {
@@ -3810,12 +3809,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::createRuntimeDerive
 				amrex::Abort("Runtime derived field output '" + var +
 					     "' is not listed in derived_vars. Add it to derived_vars to enable output.");
 			}
-			if (!existingVarNames.contains(var)) {
+			if (existingVarNames.contains(var)) {
 				amrex::Abort("Runtime derived field name collides with an existing variable: " + var);
 			}
-			if (runtimeNameSet.insert(var).second) {
-				m_runtimeDerivedVarNames.push_back(var);
+			if (!runtimeNameSet.insert(var).second) {
+				amrex::Abort("Duplicate runtime derived field output name: " + var);
 			}
+			m_runtimeDerivedVarNames.push_back(var);
 		}
 		m_runtimeDerivedFields.push_back(std::move(provider));
 	}
