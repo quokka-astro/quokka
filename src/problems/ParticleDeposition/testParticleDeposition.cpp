@@ -15,8 +15,6 @@
 #include "particles/particle_types.hpp"
 #include "physics_info.hpp"
 
-using namespace quokka;
-
 struct ParticleDepositionProblem {
 };
 
@@ -28,7 +26,7 @@ template <> struct Particle_Traits<ParticleDepositionProblem> {
 #endif
 };
 
-template <> struct EOS_Traits<ParticleDepositionProblem> {
+template <> struct quokka::EOS_Traits<ParticleDepositionProblem> {
 	static constexpr double gamma = 5.0 / 3.0;
 	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double boltzmann_constant = C::k_B;
@@ -109,7 +107,7 @@ template <> void QuokkaSimulation<ParticleDepositionProblem>::computeAfterTimest
 	amrex::MultiFab massField(grids[lev], dmap[lev], nComp, nGhost);
 
 	massField.setVal(0.0);
-	depositParticleMassDensity(CICParticles.get(), massField, lev, CICParticleMassIdx, 0);
+	quokka::depositParticleMassDensity(CICParticles.get(), massField, lev, quokka::CICParticleMassIdx, 0);
 
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
 	const amrex::Real cellVol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
@@ -127,7 +125,7 @@ template <> void QuokkaSimulation<ParticleDepositionProblem>::ComputeDerivedVar(
 #if AMREX_SPACEDIM == 3
 	if (dname == "particle_mass_density") {
 		mf.setVal(0.0);
-		depositParticleMassDensity(CICParticles.get(), mf, lev, CICParticleMassIdx, 0);
+		quokka::depositParticleMassDensity(CICParticles.get(), mf, lev, quokka::CICParticleMassIdx, 0);
 	}
 #endif
 }
