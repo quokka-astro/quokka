@@ -26,9 +26,9 @@ void DerivedParticleDeposition::init(const std::string &a_prefix, std::string_vi
 	pp.query("prefix", m_prefix);
 	pp.query("mass_min", m_massMin);
 	pp.query("mass_max", m_massMax);
-	m_hasAgeFilter = pp.query("t_age", m_tAgeMax);
+	m_hasAgeFilter = (pp.query("t_age", m_tAgeMax) != 0);
 	std::string normalizationExpr;
-	if (pp.query("normalization_expr", normalizationExpr)) {
+	if (pp.query("normalization_expr", normalizationExpr) != 0) {
 		amrex::Parser parser(normalizationExpr);
 		parser.setConstant("Msun", C::M_solar);
 		parser.setConstant("yr", 3.15576e7);
@@ -37,7 +37,7 @@ void DerivedParticleDeposition::init(const std::string &a_prefix, std::string_vi
 		m_normalization = static_cast<amrex::Real>(parserExe());
 	}
 	std::string explicitOutputName;
-	bool const hasExplicitOutputName = pp.query("output_name", explicitOutputName);
+	bool const hasExplicitOutputName = (pp.query("output_name", explicitOutputName) != 0);
 
 	amrex::Vector<std::string> particleTypes = {"CIC"};
 	if (pp.countval("particle_types") > 0) {

@@ -3762,7 +3762,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::createRuntimeDerive
 	amrex::Vector<std::string> field_groups;
 	field_groups.reserve(derivedNames_.size());
 	for (auto const &derivedName : derivedNames_) {
-		std::string const field_prefix = code_prefix + "." + derivedName;
+		std::string field_prefix = code_prefix;
+		field_prefix += ".";
+		field_prefix += derivedName;
 		amrex::ParmParse const ppf(field_prefix);
 		if (ppf.contains("type")) {
 			field_groups.push_back(derivedName);
@@ -3791,14 +3793,16 @@ template <typename problem_t> void AMRSimulation<problem_t>::createRuntimeDerive
 	existingVarNames.insert(componentNames_fc_flat_.begin(), componentNames_fc_flat_.end());
 
 	std::unordered_set<std::string> runtimeNameSet;
-	for (int n = 0; n < static_cast<int>(field_groups.size()); ++n) {
-		std::string const field_prefix = code_prefix + "." + field_groups[n];
+	for (auto const &field_group : field_groups) {
+		std::string field_prefix = code_prefix;
+		field_prefix += ".";
+		field_prefix += field_group;
 		amrex::ParmParse const ppf(field_prefix);
 		std::string field_type;
 		ppf.get("type", field_type);
 
 		auto provider = quokka::DerivedFieldBase::create(field_type);
-		provider->init(field_prefix, field_groups[n]);
+		provider->init(field_prefix, field_group);
 		amrex::Vector<std::string> providerVars;
 		provider->addVars(providerVars);
 		for (auto const &var : providerVars) {
