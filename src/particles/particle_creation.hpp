@@ -758,7 +758,7 @@ template <> struct ParticleCreationTraits<ParticleType::Star> {
 				p.rdata(StarParticleVxIdx) = vx;
 				p.rdata(StarParticleVyIdx) = vy;
 				p.rdata(StarParticleVzIdx) = vz;
-				p.rdata(StarParticleMassLastIdx) = particle_mass / num_particles; // initial last mass = particle mass
+				p.rdata(StarParticleMdotIdx) = 0.0;				  // initial accretion rate = 0
 				p.rdata(StarParticleAmxIdx) = 0.0;				  // angular momentum x
 				p.rdata(StarParticleAmyIdx) = 0.0;				  // angular momentum y
 				p.rdata(StarParticleAmzIdx) = 0.0;				  // angular momentum z

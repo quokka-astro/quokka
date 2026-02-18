@@ -5,6 +5,7 @@
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
 #include "fundamental_constants.H"
+#include "particles/particle_radiation.hpp"
 #include <cmath>
 
 namespace quokka
@@ -18,7 +19,6 @@ namespace StellarConstants
     static constexpr amrex::Real M_solar = 1.99e33;
     static constexpr amrex::Real L_solar = 3.90e33;
     static constexpr amrex::Real R_solar = 6.96e10;
-  //    static constexpr amrex::Real seconds_per_year = 3.15576e7;
 
     // Physical constants
     static constexpr amrex::Real G = 6.67e-8;
@@ -413,113 +413,92 @@ namespace StellarPhysics
 
 // Main update function for stellar particles
 
+#if AMREX_SPACEDIM == 3
+
 class StellarUpdate
 {
   public:
-     template <typename problem_t, typename ParticleType, int Nout,
-     quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp>
+    template <typename problem_t, typename ParticleType, int Nout>
     AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateStellarProperties(
- 	  ParticleType &p, amrex::Real current_time, Real dt,
-          LuminosityGpuConstTables<Nout, oob_policy> const &gpu_tables) noexcept
-    {	  
-        // Get dt from particle data or compute it
-        constexpr int dt_idx = StarParticleDtIdx; // Define this constant
-        
+        ParticleType &p, amrex::Real /*current_time*/, amrex::Real dt,
+        LuminosityGpuConstTables<Nout> const & /*gpu_tables*/) noexcept
+    {
         // Call the internal update function
         updateStellarPropertiesImpl(p, dt);
     }
 
 private:
     template <typename ParticleType>
-    AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void 
+    AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void
     updateStellarPropertiesImpl(ParticleType &p, amrex::Real dt) noexcept
     {
         using namespace StellarConstants;
         using namespace StellarPhysics;
-        
-        // Particle data indices (these should match your particle type definition)
-        constexpr int mass_idx = 0;          // particle mass
-        constexpr int mlast_idx = 1;         // previous mass
-        constexpr int mdeut_idx = 2;         // deuterium mass
-        constexpr int mdot_idx = 3;          // accretion rate
-        constexpr int radius_idx = 4;        // stellar radius
-        constexpr int n_idx = 5;             // polytropic index
-        constexpr int burn_state_idx = 6;    // burning state (as int)
-        
-        // Get current values
-        amrex::Real mass = p.rdata(mass_idx);
-        amrex::Real mlast = p.rdata(mlast_idx);
-        amrex::Real mdeut = p.rdata(mdeut_idx);
-        amrex::Real mdot = p.rdata(mdot_idx);
-        amrex::Real radius = p.rdata(radius_idx);
-        amrex::Real n = p.rdata(n_idx);
-        auto burn_state = static_cast<BurningState>(static_cast<int>(p.rdata(burn_state_idx)));
-        
-        // Update accretion rate (simple difference)
-        mdot = (mass - mlast) / dt;
-        
-        // Update deuterium mass
-        mdeut += mass - mlast;
-        
+
+        // Get current values using correct StarParticle indices
+        const amrex::Real mass = p.rdata(StarParticleMassIdx);
+        amrex::Real mdeut = p.rdata(StarParticleMdeutIdx);
+        const amrex::Real mdot = p.rdata(StarParticleMdotIdx); // already computed by UpdateParticleMassAndMomentumInBox
+        amrex::Real n = p.rdata(StarParticleNIdx);
+        auto burn_state = static_cast<burningState>(p.idata(StarParticleBurnStateIdx));
+
+        // Update deuterium mass using already-computed mdot
+        mdeut += mdot * dt;
+
         // Initialize if needed
-        if (burn_state == BurningState::Uninitialized) {
+        if (burn_state == burningState::Uninitialized) {
             if (mass < M_rad_min || mdot == 0.0) {
-                p.rdata(mlast_idx) = mass;
                 return;
             }
-            
+
             n = n_init(mdot);
-            radius = rad_init(mdot);
-            burn_state = BurningState::None;
-            
-            p.rdata(n_idx) = n;
-            p.rdata(radius_idx) = radius;
-            p.rdata(burn_state_idx) = static_cast<amrex::Real>(static_cast<int>(burn_state));
+            burn_state = burningState::None;
+
+            p.rdata(StarParticleNIdx) = n;
+            p.idata(StarParticleBurnStateIdx) = static_cast<int>(burn_state);
         }
-        
+
+        // Stellar radius is not stored as a particle field; compute from current mass and n
+        // Note: this is a simplification - a persistent radius field would improve accuracy
+        amrex::Real radius = rad_init(mdot > 0.0 ? mdot : 1.0e-10);
+
         // Update burning state
-        if (burn_state == BurningState::None) {
-                n = n_init(mdot);
-                if (temperature_central(mass, radius, n) > T_deuterium) {
-                    burn_state = BurningState::VariableCoreDeuterium;
-                    n = 1.5;
-                }
-	} else if (burn_state == BurningState::VariableCoreDeuterium) {
-                // Deuterium burning reduces deuterium mass
-                // (simplified for example)
-                mdeut -= 0.1 * mdot * dt;
-                if (mdeut <= mdot * dt) {
-                    burn_state = BurningState::SteadyCoreDeuterium;
-                    mdeut = 0.0;
-                }
-	} else if (burn_state == BurningState::SteadyCoreDeuterium) {
+        if (burn_state == burningState::None) {
+            n = n_init(mdot);
+            if (temperature_central(mass, radius, n) > T_deuterium) {
+                burn_state = burningState::VariableCoreDeuterium;
+                n = 1.5;
+            }
+        } else if (burn_state == burningState::VariableCoreDeuterium) {
+            mdeut -= 0.1 * mdot * dt;
+            if (mdeut <= mdot * dt) {
+                burn_state = burningState::SteadyCoreDeuterium;
                 mdeut = 0.0;
-                // Check for radiative barrier
-                // (simplified condition for example)
-                if (luminosity_star(mass, radius, mdot) < F_rad * luminosity_ZAMS(mass)) {
-                    burn_state = BurningState::ShellDeuterium;
-                    n = 3.0;
-                    radius *= shell_factor;
-                }
-	} else if (burn_state == BurningState::ShellDeuterium) {
-                mdeut = 0.0;
-                if (radius <= radius_ZAMS(mass)) {
-                    burn_state = BurningState::ZAMS;
-                    radius = radius_ZAMS(mass);
-                }
-	} else if (burn_state == BurningState::ZAMS) {
-                mdeut = 0.0;
+            }
+        } else if (burn_state == burningState::SteadyCoreDeuterium) {
+            mdeut = 0.0;
+            if (luminosity_star(mass, radius, mdot) < F_rad * luminosity_ZAMS(mass)) {
+                burn_state = burningState::ShellDeuterium;
+                n = 3.0;
+                radius *= shell_factor;
+            }
+        } else if (burn_state == burningState::ShellDeuterium) {
+            mdeut = 0.0;
+            if (radius <= radius_ZAMS(mass)) {
+                burn_state = burningState::ZAMS;
+            }
+        } else if (burn_state == burningState::ZAMS) {
+            mdeut = 0.0;
         }
-        
+
         // Update particle data
-        p.rdata(mlast_idx) = mass;
-        p.rdata(mdeut_idx) = mdeut;
-        p.rdata(mdot_idx) = mdot;
-        p.rdata(radius_idx) = radius;
-        p.rdata(n_idx) = n;
-        p.rdata(burn_state_idx) = static_cast<amrex::Real>(static_cast<int>(burn_state));
+        p.rdata(StarParticleMdeutIdx) = mdeut;
+        p.rdata(StarParticleNIdx) = n;
+        p.idata(StarParticleBurnStateIdx) = static_cast<int>(burn_state);
     }
 };
+
+#endif // AMREX_SPACEDIM == 3
 
 } // namespace quokka
 

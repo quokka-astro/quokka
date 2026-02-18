@@ -305,7 +305,8 @@ AMREX_ENUM(SinkParticleRealIdx, // NOLINT
 	   mass,		// Mass of the particle
 	   vx,			// Velocity in x direction
 	   vy,			// Velocity in y direction
-	   vz			// Velocity in z direction
+	   vz,			// Velocity in z direction
+	   mdot			// Current mass accretion rate
 );
 
 // Backward compatibility aliases for existing code
@@ -313,9 +314,10 @@ constexpr int SinkParticleMassIdx = static_cast<int>(SinkParticleRealIdx::mass);
 constexpr int SinkParticleVxIdx = static_cast<int>(SinkParticleRealIdx::vx);
 constexpr int SinkParticleVyIdx = static_cast<int>(SinkParticleRealIdx::vy);
 constexpr int SinkParticleVzIdx = static_cast<int>(SinkParticleRealIdx::vz);
+constexpr int SinkParticleMdotIdx = static_cast<int>(SinkParticleRealIdx::mdot);
 
 // Number of real components for Sink_particles
-constexpr int SinkParticleRealComps = 4; // mass, vx, vy, vz
+constexpr int SinkParticleRealComps = 5; // mass, vx, vy, vz, mdot
 
 // Type definitions for Sink_particles container and iterator
 using SinkParticleContainer = amrex::AmrParticleContainer<SinkParticleRealComps>;
@@ -329,10 +331,8 @@ AMREX_ENUM(StarParticleDataIdx,
 	vx,         // Velocity in x direction
 	vy,         // Velocity in y direction
 	vz,         // Velocity in z direction
-	mass_last,  // Mass of particle in the last time step
 	birth_time, // Time when particle becomes active
 	death_time, // Time when particle becomes inactive
-	dt,         // Time step size
 	amx,        // Angular Momentum in x direction
 	amy,        // Angular Momentum in y direction
 	amz,        // Angular Momentum in z direction
@@ -350,12 +350,10 @@ AMREX_ENUM(StarParticleIntIdx,
 
 constexpr int StarParticleBirthTimeIdx = static_cast<int>(StarParticleDataIdx::birth_time);
 constexpr int StarParticleDeathTimeIdx = static_cast<int>(StarParticleDataIdx::death_time);
-constexpr int StarParticleMassLastIdx = static_cast<int>(StarParticleDataIdx::mass_last);
 constexpr int StarParticleMassIdx = static_cast<int>(StarParticleDataIdx::mass);
 constexpr int StarParticleVxIdx = static_cast<int>(StarParticleDataIdx::vx);
 constexpr int StarParticleVyIdx = static_cast<int>(StarParticleDataIdx::vy);
 constexpr int StarParticleVzIdx = static_cast<int>(StarParticleDataIdx::vz);
-constexpr int StarParticleDtIdx = static_cast<int>(StarParticleDataIdx::dt);
 constexpr int StarParticleAmxIdx = static_cast<int>(StarParticleDataIdx::amx);
 constexpr int StarParticleAmyIdx = static_cast<int>(StarParticleDataIdx::amy);
 constexpr int StarParticleAmzIdx = static_cast<int>(StarParticleDataIdx::amz);
@@ -366,7 +364,7 @@ constexpr int StarParticleLHistIdx = static_cast<int>(StarParticleDataIdx::l_his
 constexpr int StarParticleLumIdx = static_cast<int>(StarParticleDataIdx::lum);
 constexpr int StarParticleBurnStateIdx = static_cast<int>(StarParticleIntIdx::burnState); // integer component
 // Number of real and integer components for StarParticles
-constexpr int StarParticleRealComps = 16; // mass, vx, vy, vz, mass_last, birth_time, death_time, dt, amx, amy, amz, mdeut, n, mdot, l_hist, lum
+constexpr int StarParticleRealComps = 14; // mass, vx, vy, vz, birth_time, death_time, amx, amy, amz, mdeut, n, mdot, l_hist, lum
 constexpr int StarParticleIntComps = 1;   // burnState
 
 // Type definitions for Star_particles container and iterator
@@ -511,14 +509,15 @@ inline auto get_units_data() -> const auto &
 	       {"death_density", {1, -3, 0, 0}},
 	       {"mass_at_birth", {1, 0, 0, 0}},
 	       {"luminosity", {-1, 2, -3, 0}}}}},
-	    {ParticleType::Sink, {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}}}}},
+	    {ParticleType::Sink,
+	     {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}}, {"mdot", {1, 0, -1, 0}}}}},
 	    {ParticleType::Star,
-	     {{{"birth_time", {0, 0, 1, 0}},
-	       {"death_time", {0, 0, 1, 0}},
-				{"mass", {1, 0, 0, 0}},
+	     {{{"mass", {1, 0, 0, 0}},
 	       {"vx", {0, 1, -1, 0}},
 	       {"vy", {0, 1, -1, 0}},
 	       {"vz", {0, 1, -1, 0}},
+	       {"birth_time", {0, 0, 1, 0}},
+	       {"death_time", {0, 0, 1, 0}},
 	       {"amx", {1, 2, -1, 0}},
 	       {"amy", {1, 2, -1, 0}},
 	       {"amz", {1, 2, -1, 0}},
