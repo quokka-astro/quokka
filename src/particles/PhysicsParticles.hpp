@@ -58,10 +58,10 @@ class PhysicsParticleDescriptorBase
 
       public:
 	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, int death_time_idx, bool allows_creation, bool allows_destruction = false,
-				      int evolution_stage_idx = -1, bool allows_accretion = false, int mass_at_birth_idx = -1)
+				      int evolution_stage_idx = -1, bool allows_accretion = false, int mass_at_birth_idx = -1, int mdot_idx = -1)
 	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), deathTimeIndex_(death_time_idx), allowsCreation_(allows_creation),
 	      allowsDestruction_(allows_destruction), evolutionStageIndex_(evolution_stage_idx), allowsAccretion_(allows_accretion),
-	      massAtBirthIndex_(mass_at_birth_idx)
+	      massAtBirthIndex_(mass_at_birth_idx), mdotIndex_(mdot_idx)
 	{
 	}
 
@@ -87,10 +87,7 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] AMREX_FORCE_INLINE auto getMdotIndex() const -> int { return mdotIndex_; }
 
 	// setter methods for particle properties
-	AMREX_FORCE_INLINE void setEvolutionStageIndex(int evolution_stage_idx) { evolutionStageIndex_ = evolution_stage_idx; }
-	AMREX_FORCE_INLINE void setAllowsAccretion(bool allows_accretion) { allowsAccretion_ = allows_accretion; }
 	AMREX_FORCE_INLINE void setForceFinestLevel(bool force) { forceFinestLevel_ = force; }
-	AMREX_FORCE_INLINE void setMdotIndex(int mdot_idx) { mdotIndex_ = mdot_idx; }
 
 	// New method to get particle positions and data
 	[[nodiscard]] virtual auto getParticleDataAtAllLevels() const
@@ -196,9 +193,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 	// Constructor initializing descriptor with container and particle properties
 	PhysicsParticleDescriptor(ContainerType *container, int mass_idx, int lum_idx, int birth_time_idx, int death_time_idx, bool allows_creation,
-				  bool allows_destruction = false, int evolution_stage_idx = -1, bool allows_accretion = false, int mass_at_birth_idx = -1)
+				  bool allows_destruction = false, int evolution_stage_idx = -1, bool allows_accretion = false, int mass_at_birth_idx = -1,
+				  int mdot_idx = -1)
 	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, death_time_idx, allows_creation, allows_destruction, evolution_stage_idx,
-					    allows_accretion, mass_at_birth_idx),
+					    allows_accretion, mass_at_birth_idx, mdot_idx),
 	      container_(container)
 	{
 	}
@@ -768,7 +766,7 @@ template <typename problem_t> class PhysicsParticleRegister
 
 		// Create the appropriate descriptor based on the particle type
 		// The parameters for the descriptor are: mass_idx, lum_idx, birth_time_idx, death_time_idx, allows_creation, allows_destruction,
-		// evolution_stage_idx, allows_accretion
+		// evolution_stage_idx, allows_accretion, mass_at_birth_idx, mdot_idx
 		if constexpr (particleType == ParticleType::Rad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(
 			    container, -1, RadParticleLumIdx, RadParticleBirthTimeIdx, RadParticleDeathTimeIdx, false, false);
@@ -786,15 +784,12 @@ template <typename problem_t> class PhysicsParticleRegister
 			    StochasticStellarPopParticleDeathTimeIdx, true, false, StochasticStellarPopParticleStageIdx, false,
 			    StochasticStellarPopParticleMassAtBirthIdx);
 		} else if constexpr (particleType == ParticleType::Sink) {
-			auto sink_desc = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Sink>>(
-			    container, SinkParticleMassIdx, -1, -1, -1, true, false, -1, true);
-			sink_desc->setMdotIndex(SinkParticleMdotIdx);
-			descriptor = std::move(sink_desc);
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Sink>>(
+			    container, SinkParticleMassIdx, -1, -1, -1, true, false, -1, true, -1, SinkParticleMdotIdx);
 		} else if constexpr (particleType == ParticleType::Star) {
-			auto star_desc = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Star>>(
-			    container, StarParticleMassIdx, StarParticleLumIdx, StarParticleBirthTimeIdx, StarParticleDeathTimeIdx, true, false, -1, true);
-			star_desc->setMdotIndex(StarParticleMdotIdx);
-			descriptor = std::move(star_desc);
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Star>>(
+			    container, StarParticleMassIdx, StarParticleLumIdx, StarParticleBirthTimeIdx, StarParticleDeathTimeIdx, true, false, -1, true, -1,
+			    StarParticleMdotIdx);
 		} else if constexpr (particleType == ParticleType::Test) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
 			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, TestParticleDeathTimeIdx, true, true,
