@@ -26,8 +26,9 @@ do_reflux = 1
 do_subcycle = 0
 
 sfh_time_interval = 3.155760000e+12   # 1e5 yr
-stop_time     = 6.31152e15 # 200 Myr  
-max_timesteps = 20
+stop_time     = 6.31152e14 # 20 Myr  
+max_timesteps = 2000
+#plottime_interval = 3.155760000e+14   # 1e7 yr
 particle_csv_interval = 16
 suppress_output = 0
 regrid_interval = -1
@@ -67,4 +68,17 @@ problem.refine_zmax = 3.018e21 1.509e21  # refine to lev=1 with 1 kpc and lev=2 
 tiny_profiler.enabled = 1
 
 statistics_interval = 128
+
+derived_vars = temperature c_s
+
+
+quokka.diagnostics = slice_x
+quokka.slice_x.type = DiagFramePlane
+quokka.slice_x.file = slicex_plt
+quokka.slice_x.normal = 0              # Plane normal (0 == x, 1 == y, 2 == z)
+quokka.slice_x.center = 1.509001e21
+quokka.slice_x.time_int = 3.155760000e+13   # 1e6 yr
+quokka.slice_x.interpolation = Linear
+quokka.slice_x.field_names = gasDensity gasEnergy x-GasMomentum y-GasMomentum z-GasMomentum
+quokka.slice_x.particles = StochasticStellarPop_particles # List of particle types to include in output (default to none)
 
