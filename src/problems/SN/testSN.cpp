@@ -11,6 +11,7 @@
 #include "AMReX_SPACE.H"
 #include "math/interpolate.hpp"
 #include "util/fextract.hpp"
+#include <format>
 #include <fstream>
 #include <iomanip>
 
@@ -307,8 +308,8 @@ auto problem_main() -> int
 		const double T_rel_err_norm = T_err_norm / T_value_norm;
 		const double v_rel_err_tol = 0.01;
 		const double T_rel_err_tol = 0.15;
-		amrex::Print() << fmt::format("Relative L1 norm for vx = {}, tolerance = {}\n", v_rel_err_norm, v_rel_err_tol);
-		amrex::Print() << fmt::format("Relative L1 norm for T = {}, tolerance = {}\n", T_rel_err_norm, T_rel_err_tol);
+		amrex::Print() << std::format("Relative L1 norm for vx = {}, tolerance = {}\n", v_rel_err_norm, v_rel_err_tol);
+		amrex::Print() << std::format("Relative L1 norm for T = {}, tolerance = {}\n", T_rel_err_norm, T_rel_err_tol);
 		if (!(v_rel_err_norm < v_rel_err_tol) || !(T_rel_err_norm < T_rel_err_tol)) {
 			status = 1;
 		}
@@ -319,9 +320,9 @@ auto problem_main() -> int
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("x (cm)");
 		matplotlibcpp::ylabel("T (K)");
-		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim2.tNew_[0]));
+		matplotlibcpp::title(std::format("time t = {:.4g}", sim2.tNew_[0]));
 		matplotlibcpp::tight_layout();
-		matplotlibcpp::save(fmt::format("sn_temperature_profile_n0_{:.1g}.pdf", n_amb));
+		matplotlibcpp::save(std::format("sn_temperature_profile_n0_{:.1g}.pdf", n_amb));
 
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(x, vx, {{"label", "base"}, {"color", "C0"}});
@@ -329,8 +330,8 @@ auto problem_main() -> int
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("x (cm)");
 		matplotlibcpp::ylabel("vx (cm/s)");
-		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim2.tNew_[0]));
-		matplotlibcpp::save(fmt::format("sn_velocity_profile_n0_{:.1g}.pdf", n_amb, boost_vel_x));
+		matplotlibcpp::title(std::format("time t = {:.4g}", sim2.tNew_[0]));
+		matplotlibcpp::save(std::format("sn_velocity_profile_n0_{:.1g}.pdf", n_amb, boost_vel_x));
 #endif
 	}
 

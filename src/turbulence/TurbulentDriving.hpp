@@ -30,8 +30,8 @@
 #include "AMReX_iMultiFab.H"
 
 #include "TurbGenEx.h"
-#include "fmt/base.h"
-#include "fmt/core.h"
+#include <format>
+#include <format>
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "math/FastMath.hpp"

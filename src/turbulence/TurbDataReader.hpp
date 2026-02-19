@@ -15,7 +15,7 @@
 #include <iostream>
 #include <string>
 
-#include "fmt/core.h"
+#include <format>
 #include <H5Dpublic.h>
 #include <H5Ppublic.h>
 #include <hdf5.h>

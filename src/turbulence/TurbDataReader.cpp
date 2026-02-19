@@ -12,6 +12,7 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_Print.H"
 #include "AMReX_TableData.H"
+#include <format>
 #include <string>
 
 auto read_dataset(hid_t &file_id, char const *dataset_name) -> amrex::Table3D<double>
@@ -53,7 +54,7 @@ auto read_dataset(hid_t &file_id, char const *dataset_name) -> amrex::Table3D<do
 void initialize_turbdata(turb_data &data, std::string &data_file)
 {
 	amrex::Print() << "Initializing turbulence data...\n";
-	amrex::Print() << fmt::format("data_file: {}.\n", data_file);
+	amrex::Print() << std::format("data_file: {}.\n", data_file);
 
 	herr_t const h5_error = -1;
 
