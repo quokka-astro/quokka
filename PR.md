@@ -27,19 +27,6 @@ Adds support for depositing passive scalars (e.g., metals, dust) during supernov
 - Validate peak scalar enhancement (> 10× initial density)
 - Return non-zero status if validation fails
 
-## Testing
-
-**Test**: `SN` (2 supernova explosions)
-
-```bash
-cd tests && JOB=SN make b && JOB=SN make r
-```
-
-**Results**:
-- Scalar conservation error: 5.8×10⁻¹¹ < 1×10⁻¹⁰ ✓
-- Peak enhancement factor: 17,635× > 10× ✓
-- Galilean invariance tests still pass
-
 ## Verification
 
 The implementation correctly:
