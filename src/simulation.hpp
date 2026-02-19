@@ -119,9 +119,27 @@ using namespace ascent;
 // Quokka version string to be stored in metadata. This is used in post-processing tools like YT to do version checks.
 static constexpr auto QUOKKA_VERSION = "25.03";
 
-inline auto formatIntVect(amrex::IntVect const &iv) -> std::string { return std::format("({}, {}, {})", AMREX_D_DECL(iv[0], iv[1], iv[2])); }
+inline auto formatIntVect(amrex::IntVect const &iv) -> std::string
+{
+#if AMREX_SPACEDIM == 1
+	return std::format("({})", iv[0]);
+#elif AMREX_SPACEDIM == 2
+	return std::format("({}, {})", iv[0], iv[1]);
+#else
+	return std::format("({}, {}, {})", iv[0], iv[1], iv[2]);
+#endif
+}
 
-inline auto formatRealVect(amrex::RealVect const &rv) -> std::string { return std::format("({:.3e}, {:.3e}, {:.3e})", AMREX_D_DECL(rv[0], rv[1], rv[2])); }
+inline auto formatRealVect(amrex::RealVect const &rv) -> std::string
+{
+#if AMREX_SPACEDIM == 1
+	return std::format("({:.3e})", rv[0]);
+#elif AMREX_SPACEDIM == 2
+	return std::format("({:.3e}, {:.3e})", rv[0], rv[1]);
+#else
+	return std::format("({:.3e}, {:.3e}, {:.3e})", rv[0], rv[1], rv[2]);
+#endif
+}
 
 using variant_t = std::variant<amrex::Real, std::string>;
 
