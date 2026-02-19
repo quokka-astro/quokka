@@ -170,6 +170,7 @@ depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, 
 							     SNR_energy_per_cell);
 
 				// Deposit passive scalar if enabled
+				// TODO(cche): Add support for multiple passive scalars (currently only deposits to scalar0)
 				if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0) {
 					const amrex::Real scalar_per_cell = scalar_yield_per_SN_d * kernel_times_vol_inverse;
 					amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::scalar0_index),
@@ -322,6 +323,7 @@ depositThermalKineticMomentumSNR(amrex::Array4<amrex::Real> const &local_state, 
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::energy_index), e_snr_per_cell);
 
 				// Deposit passive scalar if enabled
+				// TODO(cche): Add support for multiple passive scalars (currently only deposits to scalar0)
 				if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0) {
 					const amrex::Real scalar_per_cell = scalar_yield_per_SN_d * kernel_times_vol_inverse;
 					amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::scalar0_index), scalar_per_cell);

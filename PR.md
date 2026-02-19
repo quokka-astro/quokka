@@ -2,7 +2,7 @@
 
 ## Summary
 
-Adds support for depositing passive scalars (e.g., metals, dust) during supernova explosions. Scalars are deposited alongside mass, momentum, and energy using the same spatial kernel, ensuring physical consistency.
+Adds support for depositing passive scalars (e.g., metals, dust) during supernova explosions. Scalars are deposited alongside mass, momentum, and energy using the same spatial kernel.
 
 ## Changes
 
@@ -18,6 +18,7 @@ Adds support for depositing passive scalars (e.g., metals, dust) during supernov
 - Used `constexpr if` for zero overhead when scalars disabled
 - **Bug fix**: Corrected `count_comp` index to `HydroSystem<problem_t>::nvar_` instead of `Physics_NumVars::numHydroVars` to prevent overwriting scalar component
 - Modified `addCompositeBufferToState()` and `addThermalOnlyBufferToState()` to transfer scalars from buffer to state
+- **Note**: Currently only deposits to first passive scalar (`scalar0_index`); TODO added for future multi-scalar support
 
 ### 3. Test Validation (`src/problems/SN/testSN.cpp`)
 - Enabled passive scalar (`numPassiveScalars = 1`)
