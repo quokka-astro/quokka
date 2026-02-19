@@ -41,7 +41,7 @@ max_timesteps = 100000
 plotfile_interval = -1
 checkpoint_interval = -1
 initial_dt = 3.0e7
-stop_time = 3.0e10
+stop_time = 1.0e10
 
 #temperature_floor = 10
 density_floor = 1e-28

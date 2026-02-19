@@ -1,6 +1,7 @@
 /// \file testSN.cpp
 /// \brief Defines a test problem for supernova feedback.
-///
+/// In this test, two supernova explode and in the end the gas temperature and velocity is checked for 
+/// Galilean invariance between a rest frame and a boost frame. 
 
 #include "AMReX.H"
 #include "AMReX_BC_TYPES.H"
@@ -33,7 +34,7 @@ static double max_Eint_global = 0.0;	       // NOLINT
 static std::vector<double> max_Eint_history{}; // NOLINT
 static std::vector<double> t_history{};	       // NOLINT
 
-static std::string SN_particles_file = "SN_particles.txt"; // NOLINT
+static std::string SN_particles_file = ""; // NOLINT
 static std::string coolingTableType_ = "resampled";	   // NOLINT
 
 constexpr double mu = 1.0 * C::m_u;
