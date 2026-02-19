@@ -1862,12 +1862,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 #endif
 }
 
+// Fills ghost cells of gravitational potential (phi) with zero at non-periodic physical boundaries,
+// consistent with the homogeneous Dirichlet BC used by the MLMG Poisson solver.
 struct setFunctorParticleAccel {
 	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, const int &dcomp, const int &numcomp,
 					 amrex::GeometryData const &geom, const amrex::Real &time, const amrex::BCRec *bcr, int bcomp,
 					 const int &orig_comp) const
 	{
-		amrex::ignore_unused(iv, dest, dcomp, numcomp, geom, time, bcr, bcomp, orig_comp);
+		amrex::ignore_unused(geom, time, bcr, bcomp, orig_comp);
+		for (int n = 0; n < numcomp; ++n) {
+			dest(iv, dcomp + n) = 0.0;
+		}
 	}
 };
 
