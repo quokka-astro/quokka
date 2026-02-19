@@ -35,3 +35,5 @@ The implementation correctly:
 3. Creates localized scalar enhancements at SN sites
 4. Works with all SN schemes (thermal-only, thermal+momentum, thermal+kinetic)
 5. Has zero overhead when passive scalars disabled via `constexpr if`
+
+Assistance with this PR was provided by Cursor.
