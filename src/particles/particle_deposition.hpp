@@ -385,15 +385,15 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 		const auto dxi = geom.InvCellSizeArray();
 		const auto dx = geom.CellSizeArray();
 
-	// Calculate inverse cell volume
-	const amrex::Real vol_inverse = AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]);
-	const amrex::Real vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+		// Calculate inverse cell volume
+		const amrex::Real vol_inverse = AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]);
+		const amrex::Real vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
-	const bool SN_smooth_gas_velocity_d = SN_smooth_gas_velocity;
-	const amrex::Real scalar_yield_per_SN_d = scalar_yield_per_SN;
+		const bool SN_smooth_gas_velocity_d = SN_smooth_gas_velocity;
+		const amrex::Real scalar_yield_per_SN_d = scalar_yield_per_SN;
 
-	// Deposit particle data into the local buffer
-	amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+		// Deposit particle data into the local buffer
+		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 			auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 			auto const local_state_capture = local_state;
 			auto const plo_capture = plo;
@@ -459,9 +459,9 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 				if (SN_scheme_d == SNScheme::SN_thermal_only) {
 					// For thermal-only scheme, compute lab-frame kinetic energy
 					const amrex::Real SN_kin_energy = 0.5 * m_ej * (p_vx * p_vx + p_vy * p_vy + p_vz * p_vz);
-				// Deposit mass and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
-				depositThermalSNR<problem_t>(local_buffer, ix, iy, iz, m_ej, E_blast, SN_kin_energy, p_vx, p_vy, p_vz, vol_inverse,
-							     stencil_weights_gpu, scalar_yield_per_SN_d);
+					// Deposit mass and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
+					depositThermalSNR<problem_t>(local_buffer, ix, iy, iz, m_ej, E_blast, SN_kin_energy, p_vx, p_vy, p_vz, vol_inverse,
+								     stencil_weights_gpu, scalar_yield_per_SN_d);
 				} else {
 					// Deposit momentum and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
 					// (SN kinetic energy computed inside function using COM frame for Galilean invariance)
