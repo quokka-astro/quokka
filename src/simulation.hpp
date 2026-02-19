@@ -121,10 +121,7 @@ static constexpr auto QUOKKA_VERSION = "25.03";
 
 inline auto formatIntVect(amrex::IntVect const &iv) -> std::string { return std::format("({}, {}, {})", AMREX_D_DECL(iv[0], iv[1], iv[2])); }
 
-inline auto formatRealVect(amrex::RealVect const &rv) -> std::string
-{
-	return std::format("({:.3e}, {:.3e}, {:.3e})", AMREX_D_DECL(rv[0], rv[1], rv[2]));
-}
+inline auto formatRealVect(amrex::RealVect const &rv) -> std::string { return std::format("({:.3e}, {:.3e}, {:.3e})", AMREX_D_DECL(rv[0], rv[1], rv[2])); }
 
 using variant_t = std::variant<amrex::Real, std::string>;
 

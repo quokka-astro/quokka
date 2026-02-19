@@ -15,12 +15,12 @@
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_iMultiFab.H"
 
-#include <format>
 #include "hydro/hydro_system.hpp"
 #include "math/FastMath.hpp"
 #include "math/ODEIntegrate.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/DataTable.hpp"
+#include <format>
 
 namespace quokka::ResampledCooling
 {

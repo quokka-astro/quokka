@@ -30,14 +30,13 @@
 #include "AMReX_iMultiFab.H"
 
 #include "TurbGenEx.h"
-#include <format>
-#include <format>
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "math/FastMath.hpp"
 #include "radiation/radiation_system.hpp"
 #include <array>
 #include <cmath>
+#include <format>
 #include <map>
 #include <string>
 #include <vector>
