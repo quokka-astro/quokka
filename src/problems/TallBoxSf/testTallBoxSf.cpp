@@ -270,6 +270,13 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 		state_cc(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = rho * vz;
 		state_cc(i, j, k, HydroSystem<TheProblem>::internalEnergy_index) = P / (gamma - 1.);
 		state_cc(i, j, k, HydroSystem<TheProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * (vx * vx + vy * vy + vz * vz);
+
+		// Initialize passive scalar field
+		if constexpr (Physics_Traits<TheProblem>::numPassiveScalars > 0) {
+			const amrex::Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+			const amrex::Real initial_scalar_density = 1.0e-6 * quokka::scalar_yield_per_SN / cell_vol;
+			state_cc(i, j, k, HydroSystem<TheProblem>::scalar0_index) = initial_scalar_density;
+		}
 	});
 }
 
