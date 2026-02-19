@@ -276,6 +276,9 @@ def plot_one(pltdir, args, suffix_idx=None):
                           'hotpink', 'orange', 'deepskyblue']
             # get domain width
             Lx = ds.domain_right_edge[0] - ds.domain_left_edge[0]
+            Ly = ds.domain_right_edge[1] - ds.domain_left_edge[1]
+            Lz = ds.domain_right_edge[2] - ds.domain_left_edge[2]
+            LL = min(Lx, Ly, Lz)
             for i, par in enumerate(particle):
                 if par not in ds['particle_info'].keys():
                     print("particle ", par, " not found in ", pltdir)
@@ -296,7 +299,7 @@ def plot_one(pltdir, args, suffix_idx=None):
                     # annotate particles at a depth of 0.1 * boxsize
                     color = p_color if p_color is not None else colors[i]
                     slc.annotate_particles(
-                        Lx * 0.1, p_size=p_size, col=color, marker=p_marker, ptype=par)
+                        LL * 0.9, p_size=p_size, col=color, marker=p_marker, ptype=par)
                 else:
                     print("no particles to annotate in ", pltdir)
                     print("pos =", pos)
@@ -481,6 +484,13 @@ def main(args):
     else:
         raise ValueError(f"kind {args.kind} not supported")
 
+    # Parse zlim from single quoted string to list of two strings
+    if args.zlim is not None:
+        parts = args.zlim.split()
+        if len(parts) != 2:
+            raise ValueError(f"--zlim must have exactly 2 values, got: {args.zlim!r}")
+        args.zlim = parts
+
     if args.weight_field in ["density", "rho", "den"]:
         args.weight_field = ("gas", "density")
     elif args.weight_field in ["volume", "vol"]:
@@ -566,8 +576,8 @@ def parse_args():
     parser.add_argument("-o", "--outdir", type=str, default=".",
                         help="Directory to save the figures. Default: .")
     # zlim
-    parser.add_argument("--zlim", type=str, nargs=2, default=None,
-                        help="zlim of the plot, e.g. 1 or 10_kpc. Default: None (automatic)")
+    parser.add_argument("--zlim", type=str, default=None,
+                        help="zlim as a quoted space-separated string 'zmin zmax', e.g. '--zlim \"1e3 1e6\"' or '--zlim \"-1e5 1e5\"'. Special values: 'min', 'max'. Default: None (automatic)")
     # view direction
     parser.add_argument("--dir", type=str, default="z",
                         help="view direction: x, y, or z. Default: z")
