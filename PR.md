@@ -6,6 +6,21 @@ Fix NaN assertion failure in `phi_extended` ghost cells during `kickParticlesAll
 
 **Fix:** Make `setFunctorParticleAccel` set phi ghost cells to zero at non-periodic physical boundaries, consistent with the homogeneous Dirichlet BC (`phi = 0`) used by the MLMG Poisson solver.
 
+## Why MLMG does not fill physical boundary ghost cells
+
+After `mlmg.solve()` returns, the ghost cells of `phi[lev]` at physical boundaries are **not** explicitly filled. Here is why:
+
+1. `phi[lev]` is defined with 1 ghost cell (`nghost_phi = 1` in `calculateGpotAllLevels`).
+2. In `MLMG::prepareForSolve` (`AMReX_MLMG.H:1079`), MLMG checks `nGrowVect(*a_sol[alev]) == ng_sol` (both `IntVect(1)`). Since they match, **`sol` is aliased to `phi[lev]`** — MLMG operates directly on `phi[lev]` in-place.
+3. During the V-cycle iterations, MLMG does fill ghost cells internally via `MLLinOp::applyBC` for its stencil operations. But these are internal working state, not a guaranteed post-solve result.
+4. After the solve loop completes:
+   - `linop.postSolve(sol)` is called, but `MLPoisson` does **not** override this (base class `MLLinOp::postSolve` at `AMReX_MLLinOp.H:550` is a no-op).
+   - `final_fill_bc` defaults to `0` (never changed by Quokka), so `ng_back = IntVect(0)`.
+   - Since `sol_is_alias[alev] = true`, the `LocalCopy` back to `a_sol` is **skipped** (`AMReX_MLMG.H:583`).
+5. **No explicit ghost cell filling of `phi` happens after the MLMG solve.**
+
+Therefore, the ghost cells of `phi[lev]` at physical boundaries are in an undefined state after the Poisson solve, and `kickParticlesAllLevels` must fill them independently when constructing `phi_extended`.
+
 ## How ghost cell filling works in `kickParticlesAllLevels`
 
 For a configuration like TallBoxSf (`periodic periodic ext_dir`), `phi_extended` ghost cells are filled through a multi-step process. The key question is: which ghost cells does `setFunctorParticleAccel` actually touch?
