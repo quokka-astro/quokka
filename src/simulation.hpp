@@ -1791,7 +1791,19 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 			// through the getSolvabilityOffset() and fixSolvabilityByOffset() methods.
 			// No manual RHS mean subtraction is needed.
 
-			// Solve the system
+			// Solve the system.
+			// NOTE: Because phi[lev] has exactly nghost_phi=1 ghost cell (matching MLMG's
+			// internal ng_sol=IntVect(1)), MLMG aliases its working solution directly to
+			// phi[lev] rather than making a copy (AMReX_MLMG.H::prepareForSolve). MLMG
+			// does fill phi ghost cells internally during V-cycle iterations via
+			// MLLinOp::applyBC, but it does NOT perform an explicit ghost cell fill after
+			// the solve completes:
+			//   - MLPoisson does not override postSolve(), so it is a no-op.
+			//   - final_fill_bc defaults to 0, giving ng_back = IntVect(0).
+			//   - Since sol is aliased, the LocalCopy back to a_sol is skipped entirely.
+			// Therefore, after mlmg.solve() returns, the physical-boundary ghost cells of
+			// phi[lev] are in an undefined state and must be filled explicitly by the
+			// caller before use (see kickParticlesAllLevels).
 			amrex::Real abstol = abstolPoisson_ * std::abs(rhs_min);
 			amrex::Real final_resnorm = mlmg.solve(amrex::GetVecOfPtrs(phi), amrex::GetVecOfConstPtrs(rhs), reltolPoisson_, abstol);
 
@@ -1862,8 +1874,28 @@ template <typename problem_t> void AMRSimulation<problem_t>::ellipticSolveAllLev
 #endif
 }
 
-// Fills ghost cells of gravitational potential (phi) with zero at non-periodic physical boundaries,
-// consistent with the homogeneous Dirichlet BC used by the MLMG Poisson solver.
+// GPU functor used by GpuBndryFuncFab to fill ghost cells of the gravitational potential phi
+// at non-periodic physical domain boundaries.
+//
+// AMReX calling convention (AMReX_PhysBCFunct.H, GpuBndryFuncFab::ccfcdoit):
+//   1. PhysBCFunct::operator() skips all FABs whose grown box lies entirely inside a "grown
+//      domain" (gdomain) that is expanded in periodic dimensions. Only FABs that protrude
+//      beyond a non-periodic face trigger the fill.
+//   2. For each ghost cell in the non-periodic boundary region, FilccCell (AMReX_FilCC_3D_C.H)
+//      is called first. FilccCell handles foextrap, hoextrap, reflect_even/odd automatically,
+//      but falls through to default:{break;} for ext_dir — doing nothing.
+//   3. This functor (f_user) is then called to provide the final value for ext_dir cells.
+//
+// Which cells are NOT touched by this functor:
+//   - Interior ghost cells between neighboring boxes: filled by FillBoundary via MPI copy.
+//   - Periodic-boundary ghost cells (x, y in TallBoxSf): filled by FillBoundary with periodicity.
+//   - Edge/corner cells where a periodic face meets a non-periodic face: gdomain is already
+//     grown in periodic dims, so these produce empty intersections and are never visited.
+//   - Coarse-fine boundary ghost cells on fine levels: handled by FillPatchTwoLevels
+//     interpolation, not by this functor.
+//
+// We set phi = 0 here, consistent with the homogeneous Dirichlet BC (phi = 0) that the MLMG
+// Poisson solver enforces at non-periodic boundaries.
 struct setFunctorParticleAccel {
 	AMREX_GPU_DEVICE void operator()(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, const int &dcomp, const int &numcomp,
 					 amrex::GeometryData const &geom, const amrex::Real &time, const amrex::BCRec *bcr, int bcomp,
@@ -1894,35 +1926,49 @@ template <typename problem_t> void AMRSimulation<problem_t>::kickParticlesAllLev
 		const int nghost_acc = 2;
 		const int nghost_phi = nghost_acc + 1; // Need extra ghost cell for centered difference
 
-		// Create potential MultiFab with sufficient ghost cells for gradient computation
+		// Create potential MultiFab with sufficient ghost cells for gradient computation.
+		// phi_extended has nghost_phi=3 ghost cells; phi[lev] only has 1 (from the Poisson
+		// solve). We must fill all ghost cells of phi_extended ourselves — MLMG leaves the
+		// physical-boundary ghost cells of phi[lev] in an undefined state after the solve
+		// (see the comment in calculateGpotAllLevels for details).
 		amrex::MultiFab phi_extended(boxArray(lev), DistributionMap(lev), 1, nghost_phi);
 
-		// Fill extended potential from existing phi using FillPatch
-		// This handles coarse-fine boundaries without InterpFromCoarseLevel
+		// Use the hydro BCRec (ext_dir in non-periodic dimensions) so that PhysBCFunct
+		// identifies which boundaries are non-periodic and routes them to our functor.
+		amrex::Vector<amrex::BCRec> phiBC(1);
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
+			phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
+		}
+		amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
+
 		if (lev == 0) {
-			// Base level: just copy real cells and and fill boundaries in periodic dimensions
+			// Step 1: copy valid cells from phi[lev] (0 ghost cells).
+			//         Ghost cells of phi_extended are left uninitialized here.
 			amrex::MultiFab::Copy(phi_extended, phi[lev], 0, 0, 1, 0);
+
+			// Step 2: FillBoundary fills ghost cells that can be satisfied by neighboring data:
+			//   - Interior ghost cells (between boxes on different MPI ranks): MPI copy.
+			//   - Periodic-boundary ghost cells (e.g. x, y in TallBoxSf): periodic wrapping.
+			//   - Non-periodic physical-boundary ghost cells (e.g. z): NOT filled here.
 			phi_extended.FillBoundary(geom[lev].periodicity());
 
-			// Apply physical boundary conditions to phi
-			amrex::Vector<amrex::BCRec> phiBC(1);
-			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-				phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
-				phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
-			}
-
-			amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
+			// Step 3: PhysBCFunct fills the remaining ghost cells at non-periodic physical
+			//         boundaries via setFunctorParticleAccel (phi = 0).
+			//         PhysBCFunct skips all FABs that lie entirely inside a "grown domain"
+			//         expanded in periodic dimensions — only FABs touching the non-periodic
+			//         faces are processed (see setFunctorParticleAccel for full details).
 			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
 			phiBdryFunct(phi_extended, 0, 1, phi_extended.nGrowVect(), 0., 0);
 		} else {
-			// Fine level: use FillPatchTwoLevels to properly handle coarse-fine boundaries
-			amrex::Vector<amrex::BCRec> phiBC(1);
-			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-				phiBC[0].setLo(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].lo(i));
-				phiBC[0].setHi(i, BCs_cc_[Physics_Indices<problem_t>::hydroFirstIndex].hi(i));
-			}
-
-			amrex::GpuBndryFuncFab<setFunctorParticleAccel> boundaryFunctor(setFunctorParticleAccel{});
+			// Fine level: FillPatchTwoLevels handles all three ghost cell sources:
+			//   1. Coarse-fine boundaries: interpolated from the coarse level via quadratic_interp.
+			//      FillPatchSingleLevel is called internally on the coarse patch with
+			//      phiCoarseBdryFunct, which applies the same ext_dir -> phi=0 rule at
+			//      non-periodic physical boundaries of the coarser domain.
+			//   2. Fine-level interior and periodic ghost cells: filled by FillBoundary.
+			//   3. Fine-level non-periodic physical boundaries: phiBdryFunct calls
+			//      setFunctorParticleAccel (phi = 0), same as the lev==0 case.
 			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiBdryFunct(geom[lev], phiBC, boundaryFunctor);
 			amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setFunctorParticleAccel>> phiCoarseBdryFunct(geom[lev - 1], phiBC, boundaryFunctor);
 
