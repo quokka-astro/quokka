@@ -9,7 +9,6 @@
 ///  \brief AMReX I/O for 2D projections
 
 #include <string>
-#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
@@ -67,125 +66,6 @@ void write_2D_header(std::ostream &os, const amrex::FArrayBox &f, int nvar);
 
 } // namespace detail
 
-template <typename ReduceOp, typename F>
-auto ComputePlaneProjection(amrex::Vector<amrex::MultiFab> const &state_new, const int finest_level, amrex::Vector<amrex::Geometry> const &geom,
-			    amrex::Vector<amrex::IntVect> const &ref_ratio, const amrex::Direction dir, F const &user_f) -> amrex::Vector<amrex::MultiFab>
-{
-	// compute plane-parallel projection of user_f(i, j, k, state) along the given axis.
-	const BL_PROFILE("quokka::DiagProjection::computePlaneProjection()");
-
-	amrex::Vector<amrex::MultiFab> projections(finest_level + 1);
-	amrex::Vector<amrex::Geometry> geom2d(finest_level + 1);
-
-	for (int lev = 0; lev <= finest_level; ++lev) {
-		const amrex::Box box2d = detail::transform_box_to_2D(dir, geom[lev].Domain());
-		const amrex::RealBox domain2d = detail::transform_realbox_to_2D(dir, geom[lev].ProbDomain());
-		geom2d[lev] = amrex::Geometry(box2d, &domain2d);
-	}
-
-	for (int lev = 0; lev <= finest_level; ++lev) {
-		auto const &level_ba = state_new[lev].boxArray();
-		amrex::BoxList bl(level_ba.ixType());
-		for (int i = 0; i < level_ba.size(); ++i) {
-			bl.push_back(detail::transform_box_to_2D(dir, level_ba[i]));
-		}
-		bl.simplify();
-		amrex::BoxArray ba2d(std::move(bl));
-		ba2d.removeOverlap();
-		const amrex::DistributionMapping dm2d(ba2d);
-
-		projections[lev].define(ba2d, dm2d, 1, 0);
-		projections[lev].setVal(0.0);
-
-		amrex::iMultiFab mask;
-		if (lev == finest_level) {
-			mask.define(state_new[lev].boxArray(), state_new[lev].DistributionMap(), 1, amrex::IntVect(0));
-			mask.setVal(1);
-		} else {
-			mask = amrex::makeFineMask(state_new[lev], state_new[lev + 1], amrex::IntVect(0), ref_ratio[lev], geom[lev].periodicity(), 1, 0);
-		}
-
-		auto const &state = state_new[lev].const_arrays();
-		auto const &mask_arr = mask.const_arrays();
-		auto const &dx = geom[lev].CellSizeArray();
-
-		auto plane_local = amrex::ReduceToPlane<ReduceOp, amrex::Real>(static_cast<int>(dir), geom[lev].Domain(), state_new[lev],
-									       [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
-										       if (mask_arr[box_no](i, j, k) == 0) {
-											       return 0.0;
-										       }
-										       return dx[static_cast<int>(dir)] * user_f(i, j, k, state[box_no]);
-									       });
-		// GPU-aware MPI is required: reduce directly on the device buffer for performance.
-		if constexpr (std::is_same_v<ReduceOp, amrex::ReduceOpSum>) {
-			amrex::ParallelDescriptor::ReduceRealSum(plane_local.dataPtr(), static_cast<int>(plane_local.size()));
-		} else if constexpr (std::is_same_v<ReduceOp, amrex::ReduceOpMin>) {
-			amrex::ParallelDescriptor::ReduceRealMin(plane_local.dataPtr(), static_cast<int>(plane_local.size()));
-		} else if constexpr (std::is_same_v<ReduceOp, amrex::ReduceOpMax>) {
-			amrex::ParallelDescriptor::ReduceRealMax(plane_local.dataPtr(), static_cast<int>(plane_local.size()));
-		} else {
-			amrex::Abort("ReduceToPlane MPI reduction only supports ReduceOpSum/Min/Max.");
-		}
-
-		auto const plane_arr = plane_local.const_array();
-		auto const proj_arr = projections[lev].arrays();
-		amrex::ParallelFor(projections[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
-			if (dir == amrex::Direction::x) {
-				proj_arr[bx](i, j, k) = plane_arr(0, i, j);
-#if AMREX_SPACEDIM >= 2
-			} else if (dir == amrex::Direction::y) {
-				proj_arr[bx](i, j, k) = plane_arr(i, 0, j);
-#endif
-#if AMREX_SPACEDIM == 3
-			} else if (dir == amrex::Direction::z) {
-				proj_arr[bx](i, j, k) = plane_arr(i, j, 0);
-#endif
-			} else {
-				proj_arr[bx](i, j, k) = 0.0;
-			}
-		});
-		amrex::Gpu::streamSynchronize();
-	}
-
-	amrex::Vector<amrex::MultiFab> projections_accum(finest_level + 1);
-	for (int lev = 0; lev <= finest_level; ++lev) {
-		projections_accum[lev].define(projections[lev].boxArray(), projections[lev].DistributionMap(), 1, 0);
-		projections_accum[lev].ParallelCopy(projections[lev], 0, 0, 1, 0, 0);
-	}
-
-	for (int lev = 0; lev < finest_level; ++lev) {
-		amrex::IntVect rr_2d{AMREX_D_DECL(1, 1, 1)};
-		if (dir == amrex::Direction::x) {
-			rr_2d = amrex::IntVect{AMREX_D_DECL(ref_ratio[lev][1], ref_ratio[lev][2], 1)};
-#if AMREX_SPACEDIM >= 2
-		} else if (dir == amrex::Direction::y) {
-			rr_2d = amrex::IntVect{AMREX_D_DECL(ref_ratio[lev][0], ref_ratio[lev][2], 1)};
-#endif
-#if AMREX_SPACEDIM == 3
-		} else if (dir == amrex::Direction::z) {
-			rr_2d = amrex::IntVect{AMREX_D_DECL(ref_ratio[lev][0], ref_ratio[lev][1], 1)};
-#endif
-		}
-
-		amrex::MultiFab coarse_refined(projections[lev + 1].boxArray(), projections[lev + 1].DistributionMap(), 1, 0);
-		coarse_refined.setVal(0.0);
-
-		amrex::Vector<amrex::BCRec> bcs(1);
-		for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-			bcs[0].setLo(d, amrex::BCType::int_dir);
-			bcs[0].setHi(d, amrex::BCType::int_dir);
-		}
-		amrex::PhysBCFunctNoOp coarseBdryFunct;
-		amrex::PhysBCFunctNoOp fineBdryFunct;
-		amrex::MFInterpolater *mapper = &amrex::mf_pc_interp;
-		amrex::InterpFromCoarseLevel(coarse_refined, 0.0, projections_accum[lev], 0, 0, 1, geom2d[lev], geom2d[lev + 1], coarseBdryFunct, 0,
-					     fineBdryFunct, 0, rr_2d, mapper, bcs, 0);
-		amrex::MultiFab::Add(projections_accum[lev + 1], coarse_refined, 0, 0, 1, 0);
-	}
-
-	return projections_accum;
-}
-
 inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::MultiFab *> &mfs, const int finest_level,
 					       amrex::Vector<amrex::Geometry> const &geom, amrex::Vector<amrex::IntVect> const &ref_ratio,
 					       const amrex::Direction dir, const int comp) -> amrex::Vector<amrex::MultiFab>
@@ -228,33 +108,16 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 		auto const &mask_arr = mask.const_arrays();
 		auto const &dx = geom[lev].CellSizeArray();
 
-		auto plane_local = amrex::ReduceToPlane<amrex::ReduceOpSum, amrex::Real>(
+		auto plane_pair = amrex::ReduceToPlaneMF2<amrex::ReduceOpSum>(
 		    static_cast<int>(dir), geom[lev].Domain(), *mfs[lev], [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
 			    if (mask_arr[box_no](i, j, k) == 0) {
 				    return 0.0;
 			    }
 			    return dx[static_cast<int>(dir)] * mf_arr[box_no](i, j, k, comp);
 		    });
-		// GPU-aware MPI is required: reduce directly on the device buffer for performance.
-		amrex::ParallelDescriptor::ReduceRealSum(plane_local.dataPtr(), static_cast<int>(plane_local.size()));
+		auto &plane_global = plane_pair.second;
 
-		auto const plane_arr = plane_local.const_array();
-		auto const proj_arr = projections[lev].arrays();
-		amrex::ParallelFor(projections[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
-			if (dir == amrex::Direction::x) {
-				proj_arr[bx](i, j, k) = plane_arr(0, i, j);
-#if AMREX_SPACEDIM >= 2
-			} else if (dir == amrex::Direction::y) {
-				proj_arr[bx](i, j, k) = plane_arr(i, 0, j);
-#endif
-#if AMREX_SPACEDIM == 3
-			} else if (dir == amrex::Direction::z) {
-				proj_arr[bx](i, j, k) = plane_arr(i, j, 0);
-#endif
-			} else {
-				proj_arr[bx](i, j, k) = 0.0;
-			}
-		});
+		projections[lev].ParallelCopy(plane_global, 0, 0, 1, 0, 0);
 		amrex::Gpu::streamSynchronize();
 	}
 
