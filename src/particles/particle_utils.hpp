@@ -76,9 +76,20 @@ constexpr kernel_weights_array_t kernel_spherical_uniform_3_weights = {{{{{1.000
 
 /// @brief Compute the Jeans density with optional MHD correction.
 ///
-/// The MHD-aware Jeans density replaces cs^2 with cs^2 * (1 + 0.74/beta),
-/// where beta is the plasma beta (ratio of thermal to magnetic pressure).
-/// This accounts for magnetic pressure support against gravitational collapse.
+/// Standard Jeans density (pure hydro):
+///   rho_J = J^2 * pi * cs^2 / (G * dx^2)
+///
+/// MHD-aware Jeans density:
+///   rho_J = J^2 * pi * cs_eff^2 / (G * dx^2)
+///   where cs_eff^2 = cs^2 * (1 + 0.74 / beta)
+///
+/// Plasma beta:
+///   beta = P_thermal / P_magnetic
+///   P_thermal = rho * cs^2 / gamma (ideal gas)
+///   P_magnetic = B^2 / (8*pi) (CGS units)
+///
+/// The factor 0.74 accounts for magnetic pressure support against gravitational
+/// collapse in the Jeans instability criterion (Mouschovias & Spitzer 1976).
 ///
 /// @param cs_cell Sound speed in the cell (cm/s)
 /// @param dx Cell size (cm)
@@ -87,18 +98,22 @@ constexpr kernel_weights_array_t kernel_spherical_uniform_3_weights = {{{{{1.000
 /// @return Jeans density (g/cm^3)
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto computeJeansDensity(double cs_cell, double dx, double plasma_beta = std::numeric_limits<double>::max()) -> double
 {
-	// MHD-aware effective sound speed squared: cs^2 * (1 + 0.74/beta)
-	// For beta -> infinity (non-MHD case), this reduces to cs^2
+	// cs_eff^2 = cs^2 * (1 + 0.74/beta)
+	// For beta -> infinity (non-MHD case), cs_eff^2 -> cs^2
 	const double cs_eff_sq = cs_cell * cs_cell * (1.0 + 0.74 / plasma_beta);
+	// rho_J = J^2 * pi * cs_eff^2 / (G * dx^2)
 	return jeansNo * jeansNo * M_PI * cs_eff_sq / (C::Gconst * (dx * dx));
 }
 
 /// @brief Compute plasma beta from thermal pressure and magnetic energy.
 ///
-/// Plasma beta is the ratio of thermal pressure to magnetic pressure.
-/// beta = P_thermal / P_magnetic
-/// In CGS units: P_magnetic = B^2 / (8*pi), and magnetic_energy = B^2 / 2
-/// So P_magnetic = magnetic_energy / (4*pi)
+/// Plasma beta:
+///   beta = P_thermal / P_magnetic
+///
+/// In CGS units:
+///   P_magnetic = B^2 / (8*pi)
+///   magnetic_energy = B^2 / 2 (erg/cm^3)
+///   Therefore: P_magnetic = magnetic_energy / (4*pi)
 ///
 /// @param pressure_thermal Thermal pressure (dyn/cm^2)
 /// @param magnetic_energy Magnetic energy density = B^2 / 2 (erg/cm^3)
@@ -108,8 +123,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto computePlasmaBeta(double pr
 	if (magnetic_energy <= 0.0) {
 		return std::numeric_limits<double>::max();
 	}
-	// P_magnetic = B^2 / (8*pi) = magnetic_energy / (4*pi)
+	// P_magnetic = B^2 / (8*pi) = (B^2/2) / (4*pi) = magnetic_energy / (4*pi)
 	const double pressure_magnetic = magnetic_energy / (4.0 * M_PI);
+	// beta = P_thermal / P_magnetic
 	return pressure_thermal / pressure_magnetic;
 }
 

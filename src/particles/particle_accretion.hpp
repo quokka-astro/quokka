@@ -288,7 +288,10 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 				cs_cell = quokka::EOS_Traits<problem_t>::cs_isothermal;
 			}
 
-			// Compute plasma beta for MHD-aware Jeans density
+			// Compute plasma beta for MHD-aware Jeans density:
+			//   beta = P_thermal / P_magnetic
+			//   P_magnetic = B^2 / (8*pi) = magnetic_energy / (4*pi)
+			//   where magnetic_energy = B^2 / 2
 			double plasma_beta = std::numeric_limits<double>::max();
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				if (fab_fc_ptr != nullptr) {
@@ -298,6 +301,10 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 				}
 			}
 
+			// Jeans density with MHD correction:
+			//   rho_J = J^2 * pi * cs_eff^2 / (G * dx^2)
+			//   cs_eff^2 = cs^2 * (1 + 0.74/beta)
+			// (For non-MHD, beta=inf, so cs_eff^2 = cs^2)
 			const double rho_J = ParticleUtils::computeJeansDensity(cs_cell, dx_max, plasma_beta);
 			const double rho_cell = local_state_arr[bx](i, j, k, HydroSystem<problem_t>::density_index);
 			if ((1.0 + accretion_rate_cell) * rho_cell > rho_J) {
