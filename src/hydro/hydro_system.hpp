@@ -124,7 +124,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr) -> amrex::Real;
 
 	AMREX_GPU_DEVICE static auto ComputeIsothermalSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
-							       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr) -> amrex::Real;
+								 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr)
+	    -> amrex::Real;
 
 	AMREX_GPU_DEVICE static auto ComputeMagneticEnergy(int i, int j, int k,
 							   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr)
@@ -615,9 +616,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpe
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeIsothermalSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
-										   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc)
-    -> amrex::Real
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
+HydroSystem<problem_t>::ComputeIsothermalSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
+						    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc) -> amrex::Real
 {
 	const auto rho = cons(i, j, k, density_index);
 	const auto px = cons(i, j, k, x1Momentum_index);
