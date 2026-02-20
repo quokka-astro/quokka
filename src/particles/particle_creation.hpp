@@ -220,12 +220,7 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 			const double dx_max = std::max({dx[0], dx[1], dx[2]});
 
 			// Determine sound speed.
-			Real cs = NAN;
-			if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
-				cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
-			} else {
-				cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k, fab_fc);
-			}
+			const Real cs = HydroSystem<problem_t>::ComputeIsothermalSoundSpeed(state_arr, i, j, k, fab_fc);
 
 			// Compute plasma beta for MHD-aware Jeans density:
 			//   beta = P_thermal / P_magnetic
@@ -316,12 +311,8 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 			const double dx_max = std::max({dx[0], dx[1], dx[2]});
 
 			// Determine sound speed.
-			Real cs = NAN;
-			if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
-				cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
-			} else {
-				cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k, fab_fc);
-			}
+			// ComputeIsothermalSoundSpeed internally handles the special case where gamma equals 1.0.
+			const Real cs = HydroSystem<problem_t>::ComputeIsothermalSoundSpeed(state_arr, i, j, k, fab_fc);
 
 			// Compute plasma beta for MHD-aware Jeans density:
 			//   beta = P_thermal / P_magnetic
@@ -446,7 +437,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 			const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 
-			const amrex::Real cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k, fab_fc);
+			// ComputeIsothermalSoundSpeed internally handles the special case where gamma equals 1.0.
+			const amrex::Real cs = HydroSystem<problem_t>::ComputeIsothermalSoundSpeed(state_arr, i, j, k, fab_fc);
 			const amrex::Real LambdaJ = cs / std::sqrt(C::Gconst * cell_density);
 			const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * cell_density));
 			const amrex::Real nominal_prob_star_formation = (eps_ff_ / eps_star) * (dt / t_ff);
