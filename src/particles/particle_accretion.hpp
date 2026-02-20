@@ -75,10 +75,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::
 				const double px = local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index);
 				const double py = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index);
 				const double pz = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index);
-				double cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, ii, jj, kk, fab_fc);
-				if constexpr (quokka::EOS_Traits<problem_t>::gamma == 1.0) {
-					cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
-				}
+				// note that ComputeIsothermalSoundSpeed takes care of the case when gamma_ == 1.0
+				const double cs = HydroSystem<problem_t>::ComputeIsothermalSoundSpeed(local_state, ii, jj, kk, fab_fc);
 				sum_rho += rho;
 				sum_px += px;
 				sum_py += py;
@@ -283,11 +281,24 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 				fab_fc_ptr = &fab_fc;
 			}
 
-			double cs_cell = HydroSystem<problem_t>::ComputeSoundSpeed(local_state_arr[bx], i, j, k, fab_fc_ptr);
-			if constexpr (quokka::EOS_Traits<problem_t>::gamma == 1.0) {
-				cs_cell = quokka::EOS_Traits<problem_t>::cs_isothermal;
+			// note that ComputeIsothermalSoundSpeed takes care of the case when gamma_ == 1.0
+			const double cs_cell = HydroSystem<problem_t>::ComputeIsothermalSoundSpeed(local_state_arr[bx], i, j, k, fab_fc_ptr);
+			// Compute plasma beta for MHD-aware Jeans density:
+			//   beta = P_thermal / P_magnetic
+			//   P_magnetic = B^2 / (8*pi) = magnetic_energy / (4*pi)
+			//   where magnetic_energy = B^2 / 2
+			double plasma_beta = std::numeric_limits<double>::max();
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				const double pressure_thermal = HydroSystem<problem_t>::ComputePressure(local_state_arr[bx], i, j, k, fab_fc_ptr);
+				const double magnetic_energy = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, fab_fc_ptr);
+				plasma_beta = ParticleUtils::computePlasmaBeta(pressure_thermal, magnetic_energy);
 			}
-			const double rho_J = ParticleUtils::computeJeansDensity(cs_cell, dx_max);
+
+			// Jeans density with MHD correction:
+			//   rho_J = J^2 * pi * cs_eff^2 / (G * dx^2)
+			//   cs_eff^2 = cs^2 * (1 + 0.74/beta)
+			// (For non-MHD, beta=inf, so cs_eff^2 = cs^2)
+			const double rho_J = ParticleUtils::computeJeansDensity(cs_cell, dx_max, plasma_beta);
 			const double rho_cell = local_state_arr[bx](i, j, k, HydroSystem<problem_t>::density_index);
 			if ((1.0 + accretion_rate_cell) * rho_cell > rho_J) {
 				const double accretion_rate_cell_new = rho_J / rho_cell - 1.0;
