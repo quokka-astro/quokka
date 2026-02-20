@@ -144,7 +144,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, const int iy, const int iz, const amrex::Real m_ej, const amrex::Real E_blast,
 		  const amrex::Real SN_kin_energy, const amrex::Real p_vx, const amrex::Real p_vy, const amrex::Real p_vz, const amrex::Real vol_inverse,
 		  const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>
-		      &stencil_weights_gpu) noexcept
+		      &stencil_weights_gpu,
+		  const amrex::Real scalar_yield_per_SN_d) noexcept
 {
 	for (int ii = -SN_stencil_size; ii <= SN_stencil_size; ++ii) {
 		for (int jj = -SN_stencil_size; jj <= SN_stencil_size; ++jj) {
@@ -168,8 +169,16 @@ depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, 
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::energy_index),
 							     SNR_energy_per_cell);
 
+				// Deposit passive scalar if enabled
+				// TODO(chongchonghe): Add support for multiple passive scalars (currently only deposits to scalar0)
+				if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0) {
+					const amrex::Real scalar_per_cell = scalar_yield_per_SN_d * kernel_times_vol_inverse;
+					amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::scalar0_index),
+								     scalar_per_cell);
+				}
+
 				// Deposit count into the last component for roundoff algorithm
-				const int count_comp = Physics_NumVars::numHydroVars; // Last component is the count
+				const int count_comp = HydroSystem<problem_t>::nHydroScalars_; // Last component is the count
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, count_comp), 1.0);
 			}
 		}
@@ -185,7 +194,7 @@ depositThermalKineticMomentumSNR(amrex::Array4<amrex::Real> const &local_state, 
 						       SN_stencil_array_size> &stencil_weights_gpu,
 				 const amrex::Real avg_density, const amrex::Real vol, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
 				 const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo, const SNScheme SN_scheme_d, const Real pvx, const Real pvy,
-				 const Real pvz, const bool SN_smooth_gas_velocity)
+				 const Real pvz, const bool SN_smooth_gas_velocity, const amrex::Real scalar_yield_per_SN_d)
 {
 	const double n_H_amb = avg_density * cloudy_H_mass_fraction / m_u;
 	const amrex::Real M_gas = avg_density * stencil_volume * vol;		 // Gas mass in stencil
@@ -313,8 +322,15 @@ depositThermalKineticMomentumSNR(amrex::Array4<amrex::Real> const &local_state, 
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index), dpz);
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::energy_index), e_snr_per_cell);
 
+				// Deposit passive scalar if enabled
+				// TODO(chongchonghe): Add support for multiple passive scalars (currently only deposits to scalar0)
+				if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0) {
+					const amrex::Real scalar_per_cell = scalar_yield_per_SN_d * kernel_times_vol_inverse;
+					amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::scalar0_index), scalar_per_cell);
+				}
+
 				// Deposit count into the last component for roundoff algorithm
-				const int count_comp = Physics_NumVars::numHydroVars; // Last component is the count
+				const int count_comp = HydroSystem<problem_t>::nHydroScalars_; // Last component is the count
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, count_comp), 1.0);
 			}
 		}
@@ -374,6 +390,7 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 		const amrex::Real vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 		const bool SN_smooth_gas_velocity_d = SN_smooth_gas_velocity;
+		const amrex::Real scalar_yield_per_SN_d = scalar_yield_per_SN;
 
 		// Deposit particle data into the local buffer
 		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
@@ -444,13 +461,14 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 					const amrex::Real SN_kin_energy = 0.5 * m_ej * (p_vx * p_vx + p_vy * p_vy + p_vz * p_vz);
 					// Deposit mass and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
 					depositThermalSNR<problem_t>(local_buffer, ix, iy, iz, m_ej, E_blast, SN_kin_energy, p_vx, p_vy, p_vz, vol_inverse,
-								     stencil_weights_gpu);
+								     stencil_weights_gpu, scalar_yield_per_SN_d);
 				} else {
 					// Deposit momentum and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
 					// (SN kinetic energy computed inside function using COM frame for Galilean invariance)
 					depositThermalKineticMomentumSNR<problem_t>(local_state, local_buffer, ix, iy, iz, stencil_volume, pos_x, pos_y, pos_z,
 										    m_ej, E_blast, p_snr_0, vol_inverse, stencil_weights_gpu, avg_density, vol,
-										    dx, plo, SN_scheme_d, p_vx, p_vy, p_vz, SN_smooth_gas_velocity_d);
+										    dx, plo, SN_scheme_d, p_vx, p_vy, p_vz, SN_smooth_gas_velocity_d,
+										    scalar_yield_per_SN_d);
 				}
 			}
 		});
@@ -563,6 +581,13 @@ addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::
 	local_state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = e_int_new;
 	local_state(i, j, k, HydroSystem<problem_t>::energy_index) = e_tot_new;
 
+	// Add passive scalars from buffer to state (scalars are conserved densities)
+	if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0) {
+		for (int n = 0; n < Physics_Traits<problem_t>::numPassiveScalars; ++n) {
+			local_state(i, j, k, HydroSystem<problem_t>::scalar0_index + n) += local_buffer(i, j, k, HydroSystem<problem_t>::scalar0_index + n);
+		}
+	}
+
 	// Compute sound speed
 	Real cs = NAN;
 	if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
@@ -619,6 +644,13 @@ addThermalOnlyBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex
 	local_state(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = pz_new;
 	local_state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = e_int_new;
 	local_state(i, j, k, HydroSystem<problem_t>::energy_index) = e_new;
+
+	// Add passive scalars from buffer to state (scalars are conserved densities)
+	if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0) {
+		for (int n = 0; n < Physics_Traits<problem_t>::numPassiveScalars; ++n) {
+			local_state(i, j, k, HydroSystem<problem_t>::scalar0_index + n) += local_buffer(i, j, k, HydroSystem<problem_t>::scalar0_index + n);
+		}
+	}
 
 	// Compute sound speed. For thermal-only feedback, the gas velocity stays unchanged, so we only report sound speed.
 	Real cs = NAN;
