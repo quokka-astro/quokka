@@ -233,11 +233,9 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 			//   where magnetic_energy = B^2 / 2
 			double plasma_beta = std::numeric_limits<double>::max();
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				if (fab_fc != nullptr) {
-					const double pressure_thermal = HydroSystem<problem_t>::ComputePressure(state_arr, i, j, k, fab_fc);
-					const double magnetic_energy = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, fab_fc);
-					plasma_beta = ParticleUtils::computePlasmaBeta(pressure_thermal, magnetic_energy);
-				}
+				const double pressure_thermal = HydroSystem<problem_t>::ComputePressure(state_arr, i, j, k, fab_fc);
+				const double magnetic_energy = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, fab_fc);
+				plasma_beta = ParticleUtils::computePlasmaBeta(pressure_thermal, magnetic_energy);
 			}
 
 			// Jeans density with MHD correction:
@@ -331,11 +329,9 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 			//   where magnetic_energy = B^2 / 2
 			double plasma_beta = std::numeric_limits<double>::max();
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				if (fab_fc != nullptr) {
-					const double pressure_thermal = HydroSystem<problem_t>::ComputePressure(state_arr, i, j, k, fab_fc);
-					const double magnetic_energy = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, fab_fc);
-					plasma_beta = ParticleUtils::computePlasmaBeta(pressure_thermal, magnetic_energy);
-				}
+				const double pressure_thermal = HydroSystem<problem_t>::ComputePressure(state_arr, i, j, k, fab_fc);
+				const double magnetic_energy = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, fab_fc);
+				plasma_beta = ParticleUtils::computePlasmaBeta(pressure_thermal, magnetic_energy);
 			}
 
 			// Jeans density with MHD correction:
