@@ -39,6 +39,10 @@ particles.verbose = 0
 particles.disable_SN_feedback = false
 particles.split_particles_on_restart_refine = false
 
+# metal scalar
+particles.scalar_yield_per_SN = 1.0e3
+problem.initial_scalar_per_cell = 1.0e-5
+
 density_floor = 1.67e-28 #in g cm^-3
 temperature_floor = 10.0 #K
 
