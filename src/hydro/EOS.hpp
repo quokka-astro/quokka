@@ -421,6 +421,10 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeIsothermalS
 {
 	amrex::Real cs = NAN;
 
+#ifdef CHEMISTRY
+  static_assert(gamma_ == 1.0, "ComputeIsothermalSoundSpeed does not support general EOS");
+#endif
+
 	if constexpr (gamma_ == 1.0) {
 		static_assert(EOS_Traits<problem_t>::cs_isothermal > 0.0, "EOS_Traits<problem_t>::cs_isothermal must be set when gamma=1.");
 		amrex::ignore_unused(rho);
