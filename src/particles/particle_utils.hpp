@@ -96,7 +96,8 @@ constexpr kernel_weights_array_t kernel_spherical_uniform_3_weights = {{{{{1.000
 /// @param plasma_beta Ratio of thermal pressure to magnetic pressure (P_thermal / P_magnetic).
 ///                    Set to infinity (or a very large value) for non-MHD cases.
 /// @return Jeans density (g/cm^3)
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto computeJeansDensity(double cs_cell, double dx, double plasma_beta = std::numeric_limits<double>::max()) -> double
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto computeJeansDensity(double cs_cell, double dx, double plasma_beta = std::numeric_limits<double>::max())
+    -> double
 {
 	// cs_eff^2 = cs^2 * (1 + 0.74/beta)
 	// For beta -> infinity (non-MHD case), cs_eff^2 -> cs^2
