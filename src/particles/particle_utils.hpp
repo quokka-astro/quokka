@@ -89,7 +89,7 @@ constexpr kernel_weights_array_t kernel_spherical_uniform_3_weights = {{{{{1.000
 ///   P_magnetic = B^2 / (8*pi) (CGS units)
 ///
 /// The factor 0.74 accounts for magnetic pressure support against gravitational
-/// collapse in the Jeans instability criterion (Mouschovias & Spitzer, 1976, ApJ, 
+/// collapse in the Jeans instability criterion (Mouschovias & Spitzer, 1976, ApJ,
 /// 210, 326; see also Myers et al, 2013, ApJ, 766, 97)
 
 ///
