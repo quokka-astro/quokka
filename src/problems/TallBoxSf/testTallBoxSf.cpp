@@ -243,7 +243,7 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	amrex::Real initial_scalar_density = 0.0;
 	if constexpr (Physics_Traits<TheProblem>::numPassiveScalars > 0) {
 		const amrex::Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-		initial_scalar_density = 1.0e-6 * quokka::scalar_yield_per_SN / cell_vol;
+		initial_scalar_density = 1.0e-5 / cell_vol;
 	}
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
