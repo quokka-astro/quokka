@@ -74,9 +74,43 @@ constexpr kernel_weights_array_t kernel_spherical_uniform_3_weights = {{{{{1.000
 									  {1.00000000000000, 1.00000000000000, 1.00000000000000, 1.00000000000000},
 									  {1.00000000000000, 1.00000000000000, 1.00000000000000, 1.00000000000000}}}}};
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto computeJeansDensity(double cs_cell, double dx) -> double
+/// @brief Compute the Jeans density with optional MHD correction.
+///
+/// The MHD-aware Jeans density replaces cs^2 with cs^2 * (1 + 0.74/beta),
+/// where beta is the plasma beta (ratio of thermal to magnetic pressure).
+/// This accounts for magnetic pressure support against gravitational collapse.
+///
+/// @param cs_cell Sound speed in the cell (cm/s)
+/// @param dx Cell size (cm)
+/// @param plasma_beta Ratio of thermal pressure to magnetic pressure (P_thermal / P_magnetic).
+///                    Set to infinity (or a very large value) for non-MHD cases.
+/// @return Jeans density (g/cm^3)
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto computeJeansDensity(double cs_cell, double dx, double plasma_beta = std::numeric_limits<double>::max()) -> double
 {
-	return jeansNo * jeansNo * M_PI * cs_cell * cs_cell / (C::Gconst * (dx * dx));
+	// MHD-aware effective sound speed squared: cs^2 * (1 + 0.74/beta)
+	// For beta -> infinity (non-MHD case), this reduces to cs^2
+	const double cs_eff_sq = cs_cell * cs_cell * (1.0 + 0.74 / plasma_beta);
+	return jeansNo * jeansNo * M_PI * cs_eff_sq / (C::Gconst * (dx * dx));
+}
+
+/// @brief Compute plasma beta from thermal pressure and magnetic energy.
+///
+/// Plasma beta is the ratio of thermal pressure to magnetic pressure.
+/// beta = P_thermal / P_magnetic
+/// In CGS units: P_magnetic = B^2 / (8*pi), and magnetic_energy = B^2 / 2
+/// So P_magnetic = magnetic_energy / (4*pi)
+///
+/// @param pressure_thermal Thermal pressure (dyn/cm^2)
+/// @param magnetic_energy Magnetic energy density = B^2 / 2 (erg/cm^3)
+/// @return Plasma beta. Returns infinity if magnetic energy is zero.
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto computePlasmaBeta(double pressure_thermal, double magnetic_energy) -> double
+{
+	if (magnetic_energy <= 0.0) {
+		return std::numeric_limits<double>::max();
+	}
+	// P_magnetic = B^2 / (8*pi) = magnetic_energy / (4*pi)
+	const double pressure_magnetic = magnetic_energy / (4.0 * M_PI);
+	return pressure_thermal / pressure_magnetic;
 }
 
 inline void roundoffMultiFab(amrex::MultiFab &mf)

@@ -227,8 +227,18 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 				cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k, fab_fc);
 			}
 
-			// Jeans density.
-			const auto rho_J = ParticleUtils::computeJeansDensity(cs, dx_max);
+			// Compute plasma beta for MHD-aware Jeans density
+			double plasma_beta = std::numeric_limits<double>::max();
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				if (fab_fc != nullptr) {
+					const double pressure_thermal = HydroSystem<problem_t>::ComputePressure(state_arr, i, j, k, fab_fc);
+					const double magnetic_energy = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, fab_fc);
+					plasma_beta = ParticleUtils::computePlasmaBeta(pressure_thermal, magnetic_energy);
+				}
+			}
+
+			// Jeans density with MHD correction.
+			const auto rho_J = ParticleUtils::computeJeansDensity(cs, dx_max, plasma_beta);
 			const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 			const double accretion_rate_cell = accretion_rate_arr(i, j, k);
 
@@ -309,8 +319,18 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 				cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k, fab_fc);
 			}
 
-			// Jeans density.
-			const auto rho_J = ParticleUtils::computeJeansDensity(cs, dx_max);
+			// Compute plasma beta for MHD-aware Jeans density
+			double plasma_beta = std::numeric_limits<double>::max();
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				if (fab_fc != nullptr) {
+					const double pressure_thermal = HydroSystem<problem_t>::ComputePressure(state_arr, i, j, k, fab_fc);
+					const double magnetic_energy = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, fab_fc);
+					plasma_beta = ParticleUtils::computePlasmaBeta(pressure_thermal, magnetic_energy);
+				}
+			}
+
+			// Jeans density with MHD correction.
+			const auto rho_J = ParticleUtils::computeJeansDensity(cs, dx_max, plasma_beta);
 
 			// Calculate common values for all particles
 			const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
