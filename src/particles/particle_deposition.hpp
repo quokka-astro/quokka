@@ -178,7 +178,7 @@ depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, 
 				}
 
 				// Deposit count into the last component for roundoff algorithm
-				const int count_comp = HydroSystem<problem_t>::nvar_; // Last component is the count
+				const int count_comp = HydroSystem<problem_t>::nHydroScalars_; // Last component is the count
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, count_comp), 1.0);
 			}
 		}
@@ -330,7 +330,7 @@ depositThermalKineticMomentumSNR(amrex::Array4<amrex::Real> const &local_state, 
 				}
 
 				// Deposit count into the last component for roundoff algorithm
-				const int count_comp = HydroSystem<problem_t>::nvar_; // Last component is the count
+				const int count_comp = HydroSystem<problem_t>::nHydroScalars_; // Last component is the count
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, count_comp), 1.0);
 			}
 		}
