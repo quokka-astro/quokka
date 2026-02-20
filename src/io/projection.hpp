@@ -108,13 +108,13 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 		auto const &mask_arr = mask.const_arrays();
 		auto const &dx = geom[lev].CellSizeArray();
 
-		auto plane_pair = amrex::ReduceToPlaneMF2<amrex::ReduceOpSum>(static_cast<int>(dir), geom[lev].Domain(), *mfs[lev],
-									      [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
-										      if (mask_arr[box_no](i, j, k) == 0) {
-											      return 0.0;
-										      }
-										      return dx[static_cast<int>(dir)] * mf_arr[box_no](i, j, k, comp);
-									      });
+		auto plane_pair = amrex::ReduceToPlaneMF2Patchy<amrex::ReduceOpSum>(
+		    static_cast<int>(dir), geom[lev].Domain(), *mfs[lev], [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
+			    if (mask_arr[box_no](i, j, k) == 0) {
+				    return 0.0;
+			    }
+			    return dx[static_cast<int>(dir)] * mf_arr[box_no](i, j, k, comp);
+		    });
 		auto &plane_global = plane_pair.second;
 
 		projections[lev].ParallelCopy(plane_global, 0, 0, 1, 0, 0);
