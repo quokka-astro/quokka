@@ -62,7 +62,7 @@ template <> struct Physics_Traits<DiskGalaxy> {
 	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr bool is_mhd_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
+	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars
 	static constexpr int nGroups = 1;			     // number of radiation groups
 };
 
@@ -71,6 +71,8 @@ template <> struct Particle_Traits<DiskGalaxy> {
 };
 
 template <> struct SimulationData<DiskGalaxy> {
+	amrex::Real initial_scalar_density = 0.0; // scalar density at cgs units (cm^-3)
+
 	amrex::Real r_inner{};
 	amrex::Real r_outer{};
 	amrex::Real vcirc_outer{};
@@ -231,6 +233,8 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
+
+	const amrex::Real initial_scalar_density = userData_.initial_scalar_density;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// Cartesian coordinates
@@ -422,6 +426,11 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 		state_cc(i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index) = momz_disk_halo;
 		state_cc(i, j, k, HydroSystem<DiskGalaxy>::energy_index) = Etot_disk_halo;
 		state_cc(i, j, k, HydroSystem<DiskGalaxy>::internalEnergy_index) = Eint_disk_halo;
+
+		// Initialize passive scalar field
+		if constexpr (Physics_Traits<DiskGalaxy>::numPassiveScalars > 0) {
+			state_cc(i, j, k, HydroSystem<DiskGalaxy>::scalar0_index) = initial_scalar_density;
+		}
 	});
 }
 
@@ -766,6 +775,10 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<DiskGalaxy> sim(BCs_cc, BCs_fc);
+
+	// read parameters
+	amrex::ParmParse const pp("disk_galaxy");
+	pp.query("initial_scalar_density", sim.userData_.initial_scalar_density);
 
 	// initialize
 	sim.setInitialConditions();
