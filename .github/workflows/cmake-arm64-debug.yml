@@ -27,7 +27,7 @@ jobs:
       workflow_file: '.github/workflows/cmake-arm64-debug.yml'
 
   build:
-    runs-on: ubuntu-24.04-arm
+    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
     needs: check_changes
     if: needs.check_changes.outputs.has_non_docs_changes == 'true'
     env:

@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   check-changes:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
       code-changed: ${{ steps.changes.outputs.code }}
     steps:
@@ -48,7 +48,7 @@ jobs:
     needs: check-changes
     if: ${{ needs.check-changes.outputs.code-changed == 'true' && (github.repository == 'quokka-astro/quokka' || github.event_name != 'schedule') }}
     name: Analyze
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       actions: read
       contents: read
@@ -129,7 +129,7 @@ jobs:
   codeql-success:
     needs: [check-changes, analyze]
     if: always()  # Run regardless of analyze job outcome
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: CodeQL Status
         run: |
@@ -148,7 +148,7 @@ jobs:
 
   save_pr_number:
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Save PR number
         env:

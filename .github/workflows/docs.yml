@@ -28,7 +28,7 @@ jobs:
       workflow_file: '.github/workflows/docs.yml'
 
   build:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: check_changes
     if: needs.check_changes.outputs.has_docs_changes == 'true' || needs.check_changes.outputs.has_specific_workflow_changes == 'true'
     steps:
@@ -75,7 +75,7 @@ jobs:
     environment:
       name: github-pages
       url: quokka-astro.github.io
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: [build, check_changes]
     steps:
       - name: Deploy to GitHub Pages

@@ -24,7 +24,7 @@ jobs:
       workflow_file: '.github/workflows/hydro-wave-convergence.yml'
 
   hydro_wave_convergence:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: check_changes
     if: needs.check_changes.outputs.has_non_docs_changes == 'true'
     steps:

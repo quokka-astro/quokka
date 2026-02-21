@@ -16,7 +16,7 @@ jobs:
       workflow_file: '.github/workflows/clang-tidy.yml'
 
   build:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: check_changes
     if: needs.check_changes.outputs.has_non_docs_changes == 'true' || needs.check_changes.outputs.has_scripts_changes == 'true'
 

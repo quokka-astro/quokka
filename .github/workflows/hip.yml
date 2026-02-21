@@ -25,7 +25,7 @@ jobs:
 
   tests-hip:
     name: HIP ROCm C++20
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: check_changes
     if: needs.check_changes.outputs.has_non_docs_changes == 'true'
     steps:
