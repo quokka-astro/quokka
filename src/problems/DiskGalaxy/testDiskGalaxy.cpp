@@ -178,7 +178,7 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 	double T_disk = NAN;		     // K
 	double disk_perturb_amplitude = NAN; // amplitude of harmonic mode perturbation
 	double disk_perturb_Rmax_kpc = NAN;  // max radius (in kpc) for harmonic mode perturbations
-	double initial_scalar_density = 0.0; // scalar density at cgs units (cm^-3)
+	double initial_scalar_density = NAN; // scalar density at cgs units (cm^-3)
 	pp.query("disk_gas_mass_Msun", disk_gas_mass_Msun);
 	pp.query("disk_Rscale_kpc", disk_Rscale_kpc);
 	pp.query("disk_zscale_kpc", disk_zscale_kpc);
@@ -192,6 +192,7 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 	AMREX_ALWAYS_ASSERT(!std::isnan(T_disk));
 	AMREX_ALWAYS_ASSERT(!std::isnan(disk_perturb_amplitude));
 	AMREX_ALWAYS_ASSERT(!std::isnan(disk_perturb_Rmax_kpc));
+	AMREX_ALWAYS_ASSERT(!std::isnan(initial_scalar_density));
 
 	const double disk_gas_mass = disk_gas_mass_Msun * C::M_solar;
 	const double R_d = disk_Rscale_kpc * (1.0e3 * C::parsec);
@@ -233,6 +234,15 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
+
+	// particles.scalar_yield_per_SN must be set as well, and it should be greater than (initial_scalar_density * (128 pc)^3),
+	// so that the SN ejected metal density in SN remnant is greater than the background density.
+	amrex::ParmParse const pp_particles("particles");
+	double scalar_yield_per_SN = NAN;
+	pp_particles.query("scalar_yield_per_SN", scalar_yield_per_SN);
+	AMREX_ALWAYS_ASSERT(!std::isnan(scalar_yield_per_SN));
+	const Real SNR_volume = std::pow(128.0 * C::parsec, 3);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(scalar_yield_per_SN > initial_scalar_density * SNR_volume, "particles.scalar_yield_per_SN must be greater than (initial_scalar_density * (128 pc)^3)");
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// Cartesian coordinates
