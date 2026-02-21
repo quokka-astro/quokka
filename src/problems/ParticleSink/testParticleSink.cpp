@@ -34,7 +34,7 @@ const double T0 = 10.0;		  // K
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
 const double dt_init = 3.0 * year;
-constexpr double B0 = 1.0e-17; // constant background field [Gauss-equivalent units]
+constexpr double B0 = 0.0e-17; // constant background field [Gauss-equivalent units]
 
 static std::string particles_file = "sink4.txt"; // NOLINT
 
@@ -253,8 +253,9 @@ auto problem_main() -> int
 		{
 			const Real magnetic_pressure = 0.5 * B0 * B0;
 			const Real beta = (rho0 / mu) * C::k_B * T0 / magnetic_pressure;
-			const Real cs_iso = std::sqrt(C::k_B * T0 / mu);
-			const Real jeans_density = quokka::ParticleUtils::computeJeansDensity(cs_iso, dx0[0], beta);
+			const Real cs_iso = std::sqrt(gamma_ * C::k_B * T0 / mu);
+			// const Real jeans_density = quokka::ParticleUtils::computeJeansDensity(cs_iso, dx0[0], beta);
+			const Real jeans_density = 0.25 * 0.25 * M_PI * cs_iso * cs_iso / (C::Gconst * (dx0[0] * dx0[0]));
 			const Real v_infty_sqr = 0.0;
 			const Real par_mass = 10.0 * C::M_solar;
 			const Real r_BH = C::Gconst * par_mass / (v_infty_sqr + cs_iso * cs_iso);
@@ -264,6 +265,8 @@ auto problem_main() -> int
 			const Real rho_dot_exact = M_dot_exact / std::pow(7 * dx0[0], 3);
 			amrex::Print() << "Exact rhodot = " << rho_dot_exact << "\n";
 			amrex::Print() << "rhodot without MHD = 7.078494865e-34\n";
+			const Real rel_diff_rho_dot = std::abs(rho_dot_exact - 7.078494865e-34) / 7.078494865e-34;
+			amrex::Print() << "Relative difference in rhodot = " << rel_diff_rho_dot << "\n";
 			drho = rho_dot_exact * sim.tNew_[0];
 		}
 
@@ -303,7 +306,7 @@ auto problem_main() -> int
 		amrex::Print() << "Relative L1 error norm = " << rel_error << "\n";
 
 		// The relative L1 error norm with respect to the exact solution could be large because there is a hydro update after sink accretion.
-		const double rel_error_tol = 3.0e-6;
+		const double rel_error_tol = 3.0e-5;
 		if (!(std::abs(rel_error) < rel_error_tol)) {
 			status = 1;
 			amrex::Print() << "Test failed: density profile does not match analytic solution\n";

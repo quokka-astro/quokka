@@ -113,10 +113,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto computeJeansDensity(double 
 /// Plasma beta:
 ///   beta = P_thermal / P_magnetic
 ///
-/// In CGS units:
-///   P_magnetic = B^2 / (8*pi)
-///   magnetic_energy = B^2 / 2 (erg/cm^3)
-///   Therefore: P_magnetic = magnetic_energy / (4*pi)
+/// In QUOKKA, we are carrying our magnetic field as B' = B / sqrt(4 pi), so
+///   magnetic_energy = B^2 / 2
+///   P_magnetic = B^2 / 2
+///   Therefore: P_magnetic = magnetic_energy
 ///
 /// @param pressure_thermal Thermal pressure (dyn/cm^2)
 /// @param magnetic_energy Magnetic energy density = B^2 / 2 (erg/cm^3)
@@ -127,7 +127,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto computePlasmaBeta(double pr
 		return std::numeric_limits<double>::max();
 	}
 	// P_magnetic = B^2 / (8*pi) = (B^2/2) / (4*pi) = magnetic_energy / (4*pi)
-	const double pressure_magnetic = magnetic_energy / (4.0 * M_PI);
+	const double pressure_magnetic = magnetic_energy;
 	// beta = P_thermal / P_magnetic
 	return pressure_thermal / pressure_magnetic;
 }
