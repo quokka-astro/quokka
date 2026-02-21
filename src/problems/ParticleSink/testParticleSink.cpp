@@ -202,7 +202,7 @@ auto problem_main() -> int
 	// ============================================================
 	amrex::Print() << "\n=== Phase 1: Base simulation (1 timestep) ===\n";
 	sim.maxTimesteps_ = 1;
-	sim.initDt_ = 1e8; // set a small initial dt to limit the accreted mass to a small fraction of the total mass
+	sim.initDt_ = 4e7; // set a small initial dt to limit the accreted mass to a small fraction of the total mass
 	sim.evolve();
 
 	// get total gas mass in the final state
@@ -216,6 +216,7 @@ auto problem_main() -> int
 	const double outer_radius = 5.0001 * dx0[0];
 
 	int status = 0;
+	Real rho_dot_exact = 0.0;
 
 	const auto &real_data_ste1 = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
 
@@ -249,11 +250,10 @@ auto problem_main() -> int
 		}
 
 		// compute exact accretion rate
-		Real drho = 0.0;
 		{
 			const Real magnetic_pressure = 0.5 * B0 * B0;
 			const Real beta = (rho0 / mu) * C::k_B * T0 / magnetic_pressure;
-			const Real cs_iso = std::sqrt(gamma_ * C::k_B * T0 / mu);
+			const Real cs_iso = std::sqrt(C::k_B * T0 / mu);
 			// const Real jeans_density = quokka::ParticleUtils::computeJeansDensity(cs_iso, dx0[0], beta);
 			const Real jeans_density = 0.25 * 0.25 * M_PI * cs_iso * cs_iso / (C::Gconst * (dx0[0] * dx0[0]));
 			const Real v_infty_sqr = 0.0;
@@ -262,12 +262,11 @@ auto problem_main() -> int
 			const Real lambda = gcem::exp(1.5) / 4.0;
 			// M_dot = 4 pi rho_infty r_BH^2 * sqrt(v_infty^2 + lambda^2 c_s^2), where lambda = exp(3/2) / 4
 			const Real M_dot_exact = 4.0 * M_PI * rho0 * r_BH * r_BH * std::sqrt(v_infty_sqr + lambda * lambda * cs_iso * cs_iso);
-			const Real rho_dot_exact = M_dot_exact / std::pow(7 * dx0[0], 3);
+			rho_dot_exact = M_dot_exact / std::pow(7 * dx0[0], 3);
 			amrex::Print() << "Exact rhodot = " << rho_dot_exact << "\n";
 			amrex::Print() << "rhodot without MHD = 7.078494865e-34\n";
 			const Real rel_diff_rho_dot = std::abs(rho_dot_exact - 7.078494865e-34) / 7.078494865e-34;
 			amrex::Print() << "Relative difference in rhodot = " << rel_diff_rho_dot << "\n";
-			drho = rho_dot_exact * sim.tNew_[0];
 		}
 
 		// compute density error
@@ -286,6 +285,7 @@ auto problem_main() -> int
 			num_den[i] = rho[i] / C::m_p; // cm^-3
 
 			// exact solution
+			const Real drho = rho_dot_exact * sim.tNew_[0];
 			if (std::abs(xs[i]) <= overlap_loc) {
 				exact_den[i] = rho0 - 4 * drho; // two particles at a position; overlapping
 			} else if (std::abs(xs[i]) <= outer_radius) {
@@ -345,7 +345,7 @@ auto problem_main() -> int
 	sim2.reconstructionOrder_ = 3;
 	sim2.cflNumber_ = 0.3;
 	sim2.stopTime_ = 1000.0 * year; // 1000 years
-	sim2.initDt_ = 3e8;		// set a small initial dt to limit the accreted mass to a small fraction of the total mass
+	sim2.initDt_ = 4e7;		// set a small initial dt to limit the accreted mass to a small fraction of the total mass
 	sim2.tempFloor_ = 10.0;
 
 	// initialize
@@ -363,8 +363,7 @@ auto problem_main() -> int
 	// solution with the same accuracy as the base simulation matches its analytical solution
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// Compute analytical solution for boosted case based on its actual evolution time
-		const double rhodot = 7.078494865e-34;	     // g / cm3 / s
-		const double drho2 = rhodot * sim2.tNew_[0]; // use actual time evolved in boosted frame
+		const Real drho2 = rho_dot_exact * sim2.tNew_[0];
 
 		// Compute density error for boosted simulation vs analytical solution
 		std::vector<double> rho2(nx);
@@ -475,6 +474,8 @@ auto problem_main() -> int
 
 		if (status == 0) {
 			amrex::Print() << "\n=== All phases passed ===\n";
+		} else {
+			amrex::Print() << "\n=== One of the 3 phases failed ===\n";
 		}
 	}
 
