@@ -34,8 +34,8 @@ const double T0 = 10.0;		  // K
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
 const double dt_init = 3.0 * year;
-constexpr double B0 = 1.0e-4; // constant background field [Gauss-equivalent units]. Set a large value so that 
-	// the magnetic pressure is much larger than the thermal pressure, .
+constexpr double B0 = 1.0e-4; // constant background field [Gauss-equivalent units]. Set a large value so that
+			      // the magnetic pressure is much larger than the thermal pressure, .
 
 static std::string particles_file = "sink4.txt"; // NOLINT
 
