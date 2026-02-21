@@ -255,8 +255,6 @@ auto problem_main() -> int
 			const Real magnetic_pressure = 0.5 * B0 * B0;
 			const Real beta = (rho0 / mu) * C::k_B * T0 / magnetic_pressure;
 			const Real cs_iso = std::sqrt(C::k_B * T0 / mu);
-			// const Real jeans_density = quokka::ParticleUtils::computeJeansDensity(cs_iso, dx0[0], beta);
-			const Real jeans_density = 0.25 * 0.25 * M_PI * cs_iso * cs_iso / (C::Gconst * (dx0[0] * dx0[0]));
 			const Real v_infty_sqr = 0.0;
 			const Real par_mass = 10.0 * C::M_solar;
 			const Real r_BH = C::Gconst * par_mass / (v_infty_sqr + cs_iso * cs_iso);
@@ -265,9 +263,6 @@ auto problem_main() -> int
 			const Real M_dot_exact = 4.0 * M_PI * rho0 * r_BH * r_BH * std::sqrt(v_infty_sqr + lambda * lambda * cs_iso * cs_iso);
 			rho_dot_exact = M_dot_exact / std::pow(7 * dx0[0], 3);
 			amrex::Print() << "Exact rhodot = " << rho_dot_exact << "\n";
-			amrex::Print() << "rhodot without MHD = 7.078494865e-34\n";
-			const Real rel_diff_rho_dot = std::abs(rho_dot_exact - 7.078494865e-34) / 7.078494865e-34;
-			amrex::Print() << "Relative difference in rhodot = " << rel_diff_rho_dot << "\n";
 		}
 
 		// compute density error
