@@ -256,15 +256,15 @@ auto problem_main() -> int
 			const Real cs_iso = std::sqrt(C::k_B * T0 / mu);
 			const Real jeans_density = quokka::ParticleUtils::computeJeansDensity(cs_iso, dx0[0], beta);
 			const Real v_infty_sqr = 0.0;
-			const Real par_mass = 1.0 * C::M_solar;
+			const Real par_mass = 10.0 * C::M_solar;
 			const Real r_BH = C::Gconst * par_mass / (v_infty_sqr + cs_iso * cs_iso);
 			const Real lambda = gcem::exp(1.5) / 4.0;
 			// M_dot = 4 pi rho_infty r_BH^2 * sqrt(v_infty^2 + lambda^2 c_s^2), where lambda = exp(3/2) / 4
 			const Real M_dot_exact = 4.0 * M_PI * rho0 * r_BH * r_BH * std::sqrt(v_infty_sqr + lambda * lambda * cs_iso * cs_iso);
-			const Real exact_rho_dot = M_dot_exact / (4. / 3. * M_PI * std::pow(3 * dx0[0], 3));
-			amrex::Print() << "Exact rhodot = " << exact_rho_dot << "\n";
+			const Real rho_dot_exact = M_dot_exact / std::pow(7 * dx0[0], 3);
+			amrex::Print() << "Exact rhodot = " << rho_dot_exact << "\n";
 			amrex::Print() << "rhodot without MHD = 7.078494865e-34\n";
-			drho = exact_rho_dot * sim.tNew_[0];
+			drho = rho_dot_exact * sim.tNew_[0];
 		}
 
 		// compute density error
