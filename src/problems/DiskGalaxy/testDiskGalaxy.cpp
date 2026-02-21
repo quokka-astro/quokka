@@ -242,7 +242,8 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 	pp_particles.query("scalar_yield_per_SN", scalar_yield_per_SN);
 	AMREX_ALWAYS_ASSERT(!std::isnan(scalar_yield_per_SN));
 	const Real SNR_volume = std::pow(128.0 * C::parsec, 3);
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(scalar_yield_per_SN > initial_scalar_density * SNR_volume, "particles.scalar_yield_per_SN must be greater than (initial_scalar_density * (128 pc)^3)");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(scalar_yield_per_SN > initial_scalar_density * SNR_volume,
+					 "particles.scalar_yield_per_SN must be greater than (initial_scalar_density * (128 pc)^3)");
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// Cartesian coordinates
