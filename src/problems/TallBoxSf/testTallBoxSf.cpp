@@ -38,7 +38,7 @@ template <> struct SimulationData<TheProblem> {
 	Real dv_rms_generated{};
 	Real turbulent_amplitude = 1500.0; // cm/s,  0.05 * cs at 10K (~0.3 km/s)
 	int turbulent_size = 128;
-	Real initial_scalar_per_cell  = 0.0; // the actual density is initial_scalar_per_cell / cell_volume 
+	Real initial_scalar_density = 0.0; // scalar density at cgs units (cm^-3)
 
 	Real refine_parameter = 1.0; // placeholder for refinement control
 	std::string stars_file;	     // default: no stars
@@ -241,11 +241,7 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	// Create GPU const tables for initial conditions if available
 	const auto &ic_table = userData_.ic_table.const_tables();
 
-	amrex::Real initial_scalar_density = 0.0;
-	if constexpr (Physics_Traits<TheProblem>::numPassiveScalars > 0) {
-		const amrex::Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-		initial_scalar_density = userData_.initial_scalar_per_cell / cell_vol;
-	}
+	const amrex::Real initial_scalar_density = userData_.initial_scalar_density;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const z = prob_lo[2] + ((k + static_cast<amrex::Real>(0.5)) * dx[2]);
@@ -284,6 +280,7 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 		state_cc(i, j, k, HydroSystem<TheProblem>::internalEnergy_index) = P / (gamma - 1.);
 		state_cc(i, j, k, HydroSystem<TheProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * (vx * vx + vy * vy + vz * vz);
 
+		// first capture on device
 		const auto initial_scalar_density_d = initial_scalar_density;
 
 		// Initialize passive scalar field
@@ -433,7 +430,7 @@ auto problem_main() -> int
 	pp.query("IC_file", sim.userData_.IC_file);
 	pp.query("rho01", sim.userData_.rho01);
 	pp.query("sigma1", sim.userData_.sigma1);
-	pp.query("initial_scalar_per_cell", sim.userData_.initial_scalar_per_cell);
+	pp.query("initial_scalar_density", sim.userData_.initial_scalar_density);
 
 	// preCalculate must be explicitly called here to ensure
 	// ic_table is initialized even when restarting from checkpoint
