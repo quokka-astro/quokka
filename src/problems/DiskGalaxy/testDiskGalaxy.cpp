@@ -71,8 +71,6 @@ template <> struct Particle_Traits<DiskGalaxy> {
 };
 
 template <> struct SimulationData<DiskGalaxy> {
-	amrex::Real initial_scalar_density = 0.0; // scalar density at cgs units (cm^-3)
-
 	amrex::Real r_inner{};
 	amrex::Real r_outer{};
 	amrex::Real vcirc_outer{};
@@ -180,12 +178,14 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 	double T_disk = NAN;		     // K
 	double disk_perturb_amplitude = NAN; // amplitude of harmonic mode perturbation
 	double disk_perturb_Rmax_kpc = NAN;  // max radius (in kpc) for harmonic mode perturbations
+	double initial_scalar_density = 0.0; // scalar density at cgs units (cm^-3)
 	pp.query("disk_gas_mass_Msun", disk_gas_mass_Msun);
 	pp.query("disk_Rscale_kpc", disk_Rscale_kpc);
 	pp.query("disk_zscale_kpc", disk_zscale_kpc);
 	pp.query("disk_temperature", T_disk);
 	pp.query("disk_perturb_amplitude", disk_perturb_amplitude);
 	pp.query("disk_perturb_Rmax_kpc", disk_perturb_Rmax_kpc);
+	pp.query("initial_scalar_density", initial_scalar_density);
 	AMREX_ALWAYS_ASSERT(!std::isnan(disk_gas_mass_Msun));
 	AMREX_ALWAYS_ASSERT(!std::isnan(disk_Rscale_kpc));
 	AMREX_ALWAYS_ASSERT(!std::isnan(disk_zscale_kpc));
@@ -233,8 +233,6 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-
-	const amrex::Real initial_scalar_density = userData_.initial_scalar_density;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// Cartesian coordinates
@@ -427,9 +425,12 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 		state_cc(i, j, k, HydroSystem<DiskGalaxy>::energy_index) = Etot_disk_halo;
 		state_cc(i, j, k, HydroSystem<DiskGalaxy>::internalEnergy_index) = Eint_disk_halo;
 
+		// first capture on device
+		const auto initial_scalar_density_d = initial_scalar_density;
+
 		// Initialize passive scalar field
 		if constexpr (Physics_Traits<DiskGalaxy>::numPassiveScalars > 0) {
-			state_cc(i, j, k, HydroSystem<DiskGalaxy>::scalar0_index) = initial_scalar_density;
+			state_cc(i, j, k, HydroSystem<DiskGalaxy>::scalar0_index) = initial_scalar_density_d;
 		}
 	});
 }
@@ -775,10 +776,6 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<DiskGalaxy> sim(BCs_cc, BCs_fc);
-
-	// read parameters
-	amrex::ParmParse const pp("disk_galaxy");
-	pp.query("initial_scalar_density", sim.userData_.initial_scalar_density);
 
 	// initialize
 	sim.setInitialConditions();
