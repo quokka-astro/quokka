@@ -15,6 +15,7 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
+#include "particles/particle_utils.hpp"
 #include "util/BC.hpp"
 
 #ifdef HAVE_PYTHON
@@ -33,7 +34,7 @@ const double T0 = 10.0;		  // K
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
 const double dt_init = 3.0 * year;
-constexpr double B0 = 1.0e-7; // constant background field [Gauss-equivalent units]
+constexpr double B0 = 1.0e-17; // constant background field [Gauss-equivalent units]
 
 static std::string particles_file = "sink4.txt"; // NOLINT
 
@@ -247,9 +248,24 @@ auto problem_main() -> int
 			amrex::Print() << "Test failed: total mass is not conserved at step 1\n";
 		}
 
-		// exact solution
-		const double rhodot = 7.078494865e-34;	   // g / cm3 / s
-		const double drho = rhodot * sim.tNew_[0]; // use actual time evolved instead of dt_init
+		// compute exact accretion rate
+		Real drho = 0.0;
+		{
+			const Real magnetic_pressure = 0.5 * B0 * B0;
+			const Real beta = (rho0 / mu) * C::k_B * T0 / magnetic_pressure;
+			const Real cs_iso = std::sqrt(C::k_B * T0 / mu);
+			const Real jeans_density = quokka::ParticleUtils::computeJeansDensity(cs_iso, dx0[0], beta);
+			const Real v_infty_sqr = 0.0;
+			const Real par_mass = 1.0 * C::M_solar;
+			const Real r_BH = C::Gconst * par_mass / (v_infty_sqr + cs_iso * cs_iso);
+			const Real lambda = gcem::exp(1.5) / 4.0;
+			// M_dot = 4 pi rho_infty r_BH^2 * sqrt(v_infty^2 + lambda^2 c_s^2), where lambda = exp(3/2) / 4
+			const Real M_dot_exact = 4.0 * M_PI * rho0 * r_BH * r_BH * std::sqrt(v_infty_sqr + lambda * lambda * cs_iso * cs_iso);
+			const Real exact_rho_dot = M_dot_exact / (4. / 3. * M_PI * std::pow(3 * dx0[0], 3));
+			amrex::Print() << "Exact rhodot = " << exact_rho_dot << "\n";
+			amrex::Print() << "rhodot without MHD = 7.078494865e-34\n";
+			drho = exact_rho_dot * sim.tNew_[0];
+		}
 
 		// compute density error
 		std::vector<double> xs(nx);
