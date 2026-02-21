@@ -509,6 +509,9 @@ inline amrex::Real low_mass_composite_max_mass = std::numeric_limits<amrex::Real
 
 inline int reproducibility_roundoff_redundancy = 20; // NOLINT; remove 20 bits from the significand
 
+// Scalar yield per supernova (total amount, not density)
+inline amrex::Real scalar_yield_per_SN = 1.0; // NOLINT
+
 // Function to parse particle parameters from input file
 // The 'inline' keyword allows this function to be defined in a header file without
 // causing multiple definition errors when the header is included in multiple source files.
@@ -545,6 +548,9 @@ inline void particleParmParse()
 
 	// Roundoff factor for particles
 	pp.query("reproducibility_roundoff_redundancy", reproducibility_roundoff_redundancy);
+
+	// Scalar yield per supernova
+	pp.query("scalar_yield_per_SN", scalar_yield_per_SN);
 
 	// Placeholder parameters for particles
 	pp.query("param1", particle_param1);
