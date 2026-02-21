@@ -1,6 +1,7 @@
 /// \file testSN.cpp
 /// \brief Defines a test problem for supernova feedback.
-///
+/// In this test, two supernova explode and in the end the gas temperature and velocity is checked for
+/// Galilean invariance between a rest frame and a boost frame.
 
 #include "AMReX.H"
 #include "AMReX_BC_TYPES.H"
@@ -33,8 +34,8 @@ static double max_Eint_global = 0.0;	       // NOLINT
 static std::vector<double> max_Eint_history{}; // NOLINT
 static std::vector<double> t_history{};	       // NOLINT
 
-static std::string SN_particles_file = "SN_particles.txt"; // NOLINT
-static std::string coolingTableType_ = "resampled";	   // NOLINT
+static std::string SN_particles_file = "";	    // NOLINT
+static std::string coolingTableType_ = "resampled"; // NOLINT
 
 constexpr double mu = 1.0 * C::m_u;
 // constexpr double mu = 1.295 * C::m_u; // neutral gas
@@ -65,7 +66,7 @@ template <> struct Physics_Traits<SNProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
+	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_dust_enabled = false;
 	static constexpr int nDustGroups = 1; // number of dust groups
@@ -133,6 +134,7 @@ template <> void QuokkaSimulation<SNProblem>::setInitialConditionsOnGrid(quokka:
 		T_amb = interpolate_value(n_amb, n_amb_list.data(), T_amb_list.data(), static_cast<int>(n_amb_list.size()));
 	}
 
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const double rho_bg = n_amb * C::m_u / cloudy_H_mass_fraction;
@@ -144,6 +146,12 @@ template <> void QuokkaSimulation<SNProblem>::setInitialConditionsOnGrid(quokka:
 	const double v2 = (userData_.boost_velocity[0] * userData_.boost_velocity[0]) + (userData_.boost_velocity[1] * userData_.boost_velocity[1]) +
 			  (userData_.boost_velocity[2] * userData_.boost_velocity[2]);
 
+	amrex::Real initial_scalar_density = 0.0;
+	if constexpr (Physics_Traits<SNProblem>::numPassiveScalars > 0) {
+		const amrex::Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+		initial_scalar_density = 1.0e-6 * quokka::scalar_yield_per_SN / cell_vol;
+	}
+
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		state_cc(i, j, k, HydroSystem<SNProblem>::density_index) = rho;
@@ -152,6 +160,13 @@ template <> void QuokkaSimulation<SNProblem>::setInitialConditionsOnGrid(quokka:
 		state_cc(i, j, k, HydroSystem<SNProblem>::x3Momentum_index) = rho * boost_velocity[2];
 		state_cc(i, j, k, HydroSystem<SNProblem>::energy_index) = rho_e + Emag + 0.5 * rho * v2;
 		state_cc(i, j, k, HydroSystem<SNProblem>::internalEnergy_index) = rho_e;
+
+		const auto initial_scalar_density_d = initial_scalar_density;
+
+		// Initialize passive scalar field
+		if constexpr (Physics_Traits<SNProblem>::numPassiveScalars > 0) {
+			state_cc(i, j, k, HydroSystem<SNProblem>::scalar0_index) = initial_scalar_density_d;
+		}
 	});
 }
 
@@ -217,8 +232,62 @@ auto problem_main() -> int
 	// initialize
 	sim.setInitialConditions();
 
+	// Compute initial scalar quantities for validation
+	amrex::Real total_scalar_init = 0.0;
+	amrex::Real initial_scalar_density = 0.0;
+	if constexpr (Physics_Traits<SNProblem>::numPassiveScalars > 0) {
+		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx0 = sim.geom[0].CellSizeArray();
+		const amrex::Real vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+		total_scalar_init = sim.state_new_cc_[0].sum(HydroSystem<SNProblem>::scalar0_index) * vol;
+		initial_scalar_density = 1.0e-6 * quokka::scalar_yield_per_SN / vol;
+	}
+
 	// evolve
 	sim.evolve();
+
+	// Validate passive scalar conservation and peak enhancement
+	int scalar_validation_status = 0;
+	if constexpr (Physics_Traits<SNProblem>::numPassiveScalars > 0) {
+		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx0 = sim.geom[0].CellSizeArray();
+		const amrex::Real vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
+		const amrex::Real total_scalar_final = sim.state_new_cc_[0].sum(HydroSystem<SNProblem>::scalar0_index) * vol;
+		const amrex::Real peak_scalar = sim.state_new_cc_[0].max(HydroSystem<SNProblem>::scalar0_index);
+
+		// Expected: initial + 2 SNe × scalar_yield_per_SN (there are 2 SNe in the test)
+		const int num_sn = 2;
+		const amrex::Real expected_total_scalar = total_scalar_init + num_sn * quokka::scalar_yield_per_SN;
+		const amrex::Real scalar_conservation_error = std::abs(total_scalar_final - expected_total_scalar) / expected_total_scalar;
+
+		// Check peak enhancement (should be > 10× initial density)
+		const amrex::Real peak_enhancement_factor = peak_scalar / initial_scalar_density;
+
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			amrex::Print() << "\n=== Passive Scalar Validation ===\n";
+			amrex::Print() << "Initial total scalar: " << total_scalar_init << "\n";
+			amrex::Print() << "Final total scalar: " << total_scalar_final << "\n";
+			amrex::Print() << "Expected total scalar: " << expected_total_scalar << "\n";
+			amrex::Print() << "Conservation error: " << scalar_conservation_error << "\n";
+			amrex::Print() << "Peak scalar density: " << peak_scalar << "\n";
+			amrex::Print() << "Initial scalar density: " << initial_scalar_density << "\n";
+			amrex::Print() << "Peak enhancement factor: " << peak_enhancement_factor << "\n";
+
+			// Validate conservation (< 1e-10 relative error)
+			if (scalar_conservation_error > 1.0e-10) {
+				amrex::Print() << "FAIL: Scalar conservation error too large!\n";
+				scalar_validation_status = 1;
+			} else {
+				amrex::Print() << "PASS: Scalar conservation\n";
+			}
+
+			// Validate peak enhancement (> 10× initial)
+			if (peak_enhancement_factor < 10.0) {
+				amrex::Print() << "FAIL: Peak scalar enhancement too small!\n";
+				scalar_validation_status = 1;
+			} else {
+				amrex::Print() << "PASS: Peak scalar enhancement\n";
+			}
+		}
+	}
 
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0, true);
 	const int nx = static_cast<int>(position.size());
@@ -334,5 +403,6 @@ auto problem_main() -> int
 #endif
 	}
 
-	return status;
+	// Return combined status (Galilean invariance + scalar validation)
+	return status + scalar_validation_status;
 }
