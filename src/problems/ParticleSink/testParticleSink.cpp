@@ -33,9 +33,9 @@ const double rho0 = 1.0 * C::m_p; // g cm^-3
 const double T0 = 10.0;		  // K
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
-const double dt_init = 3.0 * year;
-constexpr double B0 = 1.0e-4; // constant background field [Gauss-equivalent units]. Set a large value so that
-			      // the magnetic pressure is much larger than the thermal pressure, .
+const double dt_init = 2.0 * year;
+constexpr double B0 = 3.715708546e-08; // constant background field [Gauss-equivalent units]. Set a precise value so that
+			      // beta = 2.0
 
 static std::string particles_file = "sink4.txt"; // NOLINT
 
@@ -163,8 +163,9 @@ auto problem_main() -> int
 	amrex::ParmParse const pp("problem");
 	pp.query("particles_file", particles_file);
 	pp.query("refine_half_domain", refine_half_domain);
-	double boost_vel_x = 1.0e8;
+	double boost_vel_x = NAN;
 	pp.query("boost_vel_x", boost_vel_x);
+	AMREX_ASSERT_WITH_MESSAGE(boost_vel_x != NAN, "boost_vel_x must be set in the input file");
 
 	// Problem initialization
 	QuokkaSimulation<SinkProblem> sim;
@@ -203,7 +204,7 @@ auto problem_main() -> int
 	// ============================================================
 	amrex::Print() << "\n=== Phase 1: Base simulation (1 timestep) ===\n";
 	sim.maxTimesteps_ = 1;
-	sim.initDt_ = 4e7; // set a small initial dt to limit the accreted mass to a small fraction of the total mass
+	sim.initDt_ = dt_init; // set a small initial dt to limit the accreted mass to a small fraction of the total mass
 	sim.evolve();
 
 	// get total gas mass in the final state
@@ -304,7 +305,7 @@ auto problem_main() -> int
 		amrex::Print() << "Relative L1 error norm = " << rel_error << "\n";
 
 		// The relative L1 error norm with respect to the exact solution could be large because there is a hydro update after sink accretion.
-		const double rel_error_tol = 3.0e-5;
+		const double rel_error_tol = 1.0e-5;
 		if (!(std::abs(rel_error) < rel_error_tol)) {
 			status = 1;
 			amrex::Print() << "Test failed: density profile does not match analytic solution\n";
@@ -343,7 +344,7 @@ auto problem_main() -> int
 	sim2.reconstructionOrder_ = 3;
 	sim2.cflNumber_ = 0.3;
 	sim2.stopTime_ = 1000.0 * year; // 1000 years
-	sim2.initDt_ = 4e7;		// set a small initial dt to limit the accreted mass to a small fraction of the total mass
+	sim2.initDt_ = dt_init;		// set a small initial dt to limit the accreted mass to a small fraction of the total mass
 	sim2.tempFloor_ = 10.0;
 
 	// initialize
