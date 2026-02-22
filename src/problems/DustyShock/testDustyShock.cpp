@@ -339,7 +339,7 @@ auto problem_main() -> int
 		plot(x_an_plot, rho_d_an_plot, {{"label", "Dust Density (Analytic)"}, {"linestyle", "--"}, {"color", "black"}});
 		xlabel("x");
 		ylabel("Density");
-		title(fmt::format("Density Comparison at t = {:.4f}", sim.tNew_[0]));
+		title(std::format("Density Comparison at t = {:.4f}", sim.tNew_[0]));
 		legend();
 		tight_layout();
 		save("dusty_shock_density.pdf");
@@ -352,7 +352,7 @@ auto problem_main() -> int
 		plot(x_an_plot, u_d_an_plot, {{"label", "Dust Velocity (Analytic)"}, {"linestyle", "--"}, {"color", "black"}});
 		xlabel("x");
 		ylabel("Velocity");
-		title(fmt::format("Velocity Comparison at t = {:.4f}", sim.tNew_[0]));
+		title(std::format("Velocity Comparison at t = {:.4f}", sim.tNew_[0]));
 		legend();
 		tight_layout();
 		save("dusty_shock_velocity.pdf");

@@ -269,7 +269,7 @@ void QuokkaSimulation<DustAdvection3D>::computeReferenceSolution(amrex::MultiFab
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("x");
 		matplotlibcpp::ylabel("density");
-		matplotlibcpp::title(fmt::format("t = {:.4f}", t));
+		matplotlibcpp::title(std::format("t = {:.4f}", t));
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("./dust_advection_3d_density_x.pdf");
 
@@ -282,7 +282,7 @@ void QuokkaSimulation<DustAdvection3D>::computeReferenceSolution(amrex::MultiFab
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("x");
 		matplotlibcpp::ylabel("velocity");
-		matplotlibcpp::title(fmt::format("t = {:.4f}", t));
+		matplotlibcpp::title(std::format("t = {:.4f}", t));
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("./dust_advection_3d_velocity_x.pdf");
 
@@ -295,7 +295,7 @@ void QuokkaSimulation<DustAdvection3D>::computeReferenceSolution(amrex::MultiFab
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("y");
 		matplotlibcpp::ylabel("density");
-		matplotlibcpp::title(fmt::format("t = {:.4f}", t));
+		matplotlibcpp::title(std::format("t = {:.4f}", t));
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("./dust_advection_3d_density_y.pdf");
 
@@ -308,7 +308,7 @@ void QuokkaSimulation<DustAdvection3D>::computeReferenceSolution(amrex::MultiFab
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("y");
 		matplotlibcpp::ylabel("velocity");
-		matplotlibcpp::title(fmt::format("t = {:.4f}", t));
+		matplotlibcpp::title(std::format("t = {:.4f}", t));
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("./dust_advection_3d_velocity_y.pdf");
 
@@ -321,7 +321,7 @@ void QuokkaSimulation<DustAdvection3D>::computeReferenceSolution(amrex::MultiFab
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("z");
 		matplotlibcpp::ylabel("density");
-		matplotlibcpp::title(fmt::format("t = {:.4f}", t));
+		matplotlibcpp::title(std::format("t = {:.4f}", t));
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("./dust_advection_3d_density_z.pdf");
 
@@ -334,7 +334,7 @@ void QuokkaSimulation<DustAdvection3D>::computeReferenceSolution(amrex::MultiFab
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("z");
 		matplotlibcpp::ylabel("velocity");
-		matplotlibcpp::title(fmt::format("t = {:.4f}", t));
+		matplotlibcpp::title(std::format("t = {:.4f}", t));
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("./dust_advection_3d_velocity_z.pdf");
 	}
