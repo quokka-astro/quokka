@@ -35,7 +35,7 @@ const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
 const double dt_init = 2.0 * year;
 constexpr double B0 = 3.715708546e-08; // constant background field [Gauss-equivalent units]. Set a precise value so that
-			      // beta = 2.0
+				       // beta = 2.0
 
 static std::string particles_file = "sink4.txt"; // NOLINT
 
