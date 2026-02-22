@@ -495,6 +495,8 @@ auto problem_main() -> int
 	pp.query("rho01", sim.userData_.rho01);
 	pp.query("sigma1", sim.userData_.sigma1);
 	pp.query("initial_scalar_per_cell", sim.userData_.initial_scalar_per_cell);
+	pp.query("hot_T", sim.userData_.hot_T);
+	pp.query("warm_T", sim.userData_.warm_T);
 
 	// preCalculate must be explicitly called here to ensure
 	// ic_table is initialized even when restarting from checkpoint
