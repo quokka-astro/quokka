@@ -143,9 +143,9 @@ template <typename problem_t> void DiagPlotfile::processDiag(int a_nstep, const 
 		sim->TracerPC->WritePlotFile(plotfilename, "tracer_particles");
 	}
 
-	// Write face-centered data: always when no cc filter; when fc_dirs specified, write
-	// regardless of cc filter; when cc filter active and no fc_dirs, skip.
-	bool const write_fc = (!m_fcDirs.empty() || m_varNames.empty()) && !varnames_fc[0].empty();
+	// Write face-centered data whenever fc variables exist (i.e. MHD is enabled).
+	// fc_dirs selects which directions to include; empty means all directions.
+	bool const write_fc = !varnames_fc[0].empty();
 	if (write_fc) {
 		// Create fc_vars directory if it doesn't exist
 		const std::string fc_vars_dir = plotfilename + "/fc_vars";

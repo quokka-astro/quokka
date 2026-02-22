@@ -30,7 +30,7 @@ initial_dt = 3.15576e12
 
 tiny_profiler.enabled = 0
 
-derived_vars = temperature c_s
+derived_vars = temperature
 
 quokka.diagnostics = plt slice_z slice_x part
 
@@ -38,7 +38,7 @@ quokka.plt.type = PlotFile         # pltfile for the whole box
 quokka.plt.file = plt              # Output file prefix (default "plt", must end in "plt")
 quokka.plt.time_int  = 2e13        # Output cadence (in time intervals). For this test, expected outputs are: 6, 9, 12, 15, 18
 #quokka.plt.particles = # Default to all particle types
-quokka.plt.field_names = gasDensity gasInternalEnergy temperature
+quokka.plt.field_names = gasDensity x-GasMomentum y-GasMomentum z-GasMomentum temperature
 quokka.plt.fc_dirs = x y
 
 quokka.slice_z.type = DiagFramePlane         # Diagnostic type
