@@ -220,15 +220,15 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 			const double dx_max = std::max({dx[0], dx[1], dx[2]});
 
 			// Determine sound speed.
-			Real cs = NAN;
-			if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
-				cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
-			} else {
-				cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k, fab_fc);
-			}
+			const Real cs = HydroSystem<problem_t>::ComputeIsothermalSoundSpeed(state_arr, i, j, k, fab_fc);
+			// Compute plasma beta for MHD-aware Jeans density (returns inf for non-MHD)
+			const double plasma_beta = HydroSystem<problem_t>::ComputePlasmaBeta(state_arr, i, j, k, fab_fc);
 
-			// Jeans density.
-			const auto rho_J = ParticleUtils::computeJeansDensity(cs, dx_max);
+			// Jeans density with MHD correction:
+			//   rho_J = J^2 * pi * cs_eff^2 / (G * dx^2)
+			//   cs_eff^2 = cs^2 * (1 + 0.74/beta)
+			// (For non-MHD, beta=inf, so cs_eff^2 = cs^2)
+			const auto rho_J = ParticleUtils::computeJeansDensity(cs, dx_max, plasma_beta);
 			const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 			const double accretion_rate_cell = accretion_rate_arr(i, j, k);
 
@@ -302,15 +302,16 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 			const double dx_max = std::max({dx[0], dx[1], dx[2]});
 
 			// Determine sound speed.
-			Real cs = NAN;
-			if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
-				cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
-			} else {
-				cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k, fab_fc);
-			}
+			// ComputeIsothermalSoundSpeed internally handles the special case where gamma equals 1.0.
+			const Real cs = HydroSystem<problem_t>::ComputeIsothermalSoundSpeed(state_arr, i, j, k, fab_fc);
+			// Compute plasma beta for MHD-aware Jeans density (returns inf for non-MHD)
+			const double plasma_beta = HydroSystem<problem_t>::ComputePlasmaBeta(state_arr, i, j, k, fab_fc);
 
-			// Jeans density.
-			const auto rho_J = ParticleUtils::computeJeansDensity(cs, dx_max);
+			// Jeans density with MHD correction:
+			//   rho_J = J^2 * pi * cs_eff^2 / (G * dx^2)
+			//   cs_eff^2 = cs^2 * (1 + 0.74/beta)
+			// (For non-MHD, beta=inf, so cs_eff^2 = cs^2)
+			const auto rho_J = ParticleUtils::computeJeansDensity(cs, dx_max, plasma_beta);
 
 			// Calculate common values for all particles
 			const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
@@ -418,7 +419,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 			const amrex::Real cell_density = state_arr(i, j, k, HydroSystem<problem_t>::density_index);
 
-			const amrex::Real cs = HydroSystem<problem_t>::ComputeSoundSpeed(state_arr, i, j, k, fab_fc);
+			// ComputeIsothermalSoundSpeed internally handles the special case where gamma equals 1.0.
+			const amrex::Real cs = HydroSystem<problem_t>::ComputeIsothermalSoundSpeed(state_arr, i, j, k, fab_fc);
 			const amrex::Real LambdaJ = cs / std::sqrt(C::Gconst * cell_density);
 			const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * cell_density));
 			const amrex::Real nominal_prob_star_formation = (eps_ff_ / eps_star) * (dt / t_ff);

@@ -3,7 +3,7 @@
 
 #include "QuokkaSimulation.hpp"
 #include "util/fextract.hpp"
-#include <fmt/format.h>
+#include <format>
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif

@@ -16,7 +16,7 @@
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
-#include <fmt/format.h>
+#include <format>
 #include <fstream>
 
 struct MGProblem {
@@ -512,7 +512,7 @@ auto problem_main() -> int
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("temperature (K)");
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("nGroups = {}, time t = {:.4g}", n_groups_, sim.tNew_[0]));
+	matplotlibcpp::title(std::format("nGroups = {}, time t = {:.4g}", n_groups_, sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radhydro_pulse_MG_int_temperature.pdf");
 
@@ -530,7 +530,7 @@ auto problem_main() -> int
 	matplotlibcpp::xlabel("length x (cm)");
 	matplotlibcpp::ylabel("gas density (g cm^-3)");
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("nGroups = {}, time t = {:.4g}", n_groups_, sim.tNew_[0]));
+	matplotlibcpp::title(std::format("nGroups = {}, time t = {:.4g}", n_groups_, sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radhydro_pulse_MG_int_density.pdf");
 
@@ -549,7 +549,7 @@ auto problem_main() -> int
 	matplotlibcpp::ylabel("gas velocity (km s^-1)");
 	matplotlibcpp::ylim(-5., 5.);
 	matplotlibcpp::legend();
-	matplotlibcpp::title(fmt::format("nGroups = {}, time t = {:.4g}", n_groups_, sim.tNew_[0]));
+	matplotlibcpp::title(std::format("nGroups = {}, time t = {:.4g}", n_groups_, sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./radhydro_pulse_MG_int_velocity.pdf");
 #endif

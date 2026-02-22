@@ -5,7 +5,7 @@
 #include "QuokkaSimulation.hpp"
 #include "util/fextract.hpp"
 #include <cmath>
-#include <fmt/format.h>
+#include <format>
 #include <fstream>
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"

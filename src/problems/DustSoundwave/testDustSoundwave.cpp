@@ -4,7 +4,7 @@
 
 #include "QuokkaSimulation.hpp"
 #include "util/fextract.hpp"
-#include <fmt/format.h>
+#include <format>
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
@@ -322,7 +322,7 @@ auto problem_main() -> int
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel("Time");
 	matplotlibcpp::ylabel(R"($\delta u/(A c_s)$)");
-	matplotlibcpp::title(fmt::format("Velocity Evolution", plot_stride));
+	matplotlibcpp::title(std::format("Velocity Evolution", plot_stride));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./dust_soundwave_velocity.pdf");
 
@@ -336,7 +336,7 @@ auto problem_main() -> int
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel("Time");
 	matplotlibcpp::ylabel(R"($\delta \rho/(A \rho^0)$)");
-	matplotlibcpp::title(fmt::format("Density Evolution", plot_stride));
+	matplotlibcpp::title(std::format("Density Evolution", plot_stride));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./dust_soundwave_density.pdf");
 #endif // HAVE_PYTHON
