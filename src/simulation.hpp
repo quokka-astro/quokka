@@ -4872,8 +4872,8 @@ void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::un
 	if constexpr (quokka::ParticleTypeTraits<particle_type>::allow_restart_refine_splitting) {
 		if (restartRefineFactor_ > 1 && splitParticlesOnRestartRefine_) {
 			const int split_factor = gcem::pow(restartRefineFactor_, AMREX_SPACEDIM);
-		  amrex::Print() << std::format("Splitting {} using split_factor = {}\n", particleRegister_.getParticleTypeName(particle_type),
-                  split_factor);
+			amrex::Print() << std::format("Splitting {} using split_factor = {}\n", particleRegister_.getParticleTypeName(particle_type),
+						      split_factor);
 			auto descriptor = particleRegister_.getParticleDescriptor(particle_type);
 			for (int lev = 0; lev <= finestLevel(); ++lev) {
 				descriptor->splitParticles(lev, split_factor);
