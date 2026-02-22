@@ -299,105 +299,74 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 
 template <> void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in) const
 {
-	// compute derived variables and save in 'mf'
+	const int ncomp = ncomp_in;
+	auto const &output = mf.arrays();
+	auto const &state = state_new_cc_[lev].const_arrays();
 
-	// compute derived variables and save in 'mf'
 	if (dname == "gpot") {
-		const int ncomp = ncomp_in;
 		auto const &phi_arr = phi[lev].const_arrays();
-		auto output = mf.arrays();
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { output[bx](i, j, k, ncomp) = phi_arr[bx](i, j, k); });
 		amrex::Gpu::streamSynchronize();
 	} else if (dname == "temperature") {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "diagnostics require resampled cooling tables.");
-		const int ncomp = ncomp_in;
-		auto const &output = mf.arrays();
-		auto const &state = state_new_cc_[lev].const_arrays();
 		auto tables = resampledTables_.const_tables();
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
 			Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
-			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
-			output[bx](i, j, k, ncomp) = Tgas;
+			output[bx](i, j, k, ncomp) = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 		});
 	} else if (dname == "c_s") {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "diagnostics require resampled cooling tables.");
-		const int ncomp = ncomp_in;
-		auto const &output = mf.arrays();
-		auto const &state = state_new_cc_[lev].const_arrays();
 		auto tables = resampledTables_.const_tables();
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
 			Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
-			Real const cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, tables);
-			output[bx](i, j, k, ncomp) = cs / 1.0e5; // km/s
+			output[bx](i, j, k, ncomp) = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, tables) / 1.0e5; // km/s
 		});
 	} else if (dname == "scalar0_z_outflow_rate") {
-		const int ncomp = ncomp_in;
-		auto const &output = mf.arrays();
-		auto const &state = state_new_cc_[lev].const_arrays();
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
 			Real const vz = state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index) / rho;
 			Real const scalar0 = state[bx](i, j, k, HydroSystem<TheProblem>::scalar0_index);
 			output[bx](i, j, k, ncomp) = scalar0 * vz;
 		});
-	} else if (dname == "hot_gas_z_outflow_rate") {
-		const int ncomp = ncomp_in;
-		auto const &output = mf.arrays();
-		auto const &state = state_new_cc_[lev].const_arrays();
+	} else {
 		auto tables = resampledTables_.const_tables();
 		Real const hot_T = userData_.hot_T;
-		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
-			Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
-			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
-			Real const outflow = (Tgas > hot_T) ? state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index) : 0.0;
-			output[bx](i, j, k, ncomp) = outflow;
-		});
-	} else if (dname == "warm_gas_z_outflow_rate") {
-		const int ncomp = ncomp_in;
-		auto const &output = mf.arrays();
-		auto const &state = state_new_cc_[lev].const_arrays();
-		auto tables = resampledTables_.const_tables();
 		Real const warm_T = userData_.warm_T;
-		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
-			Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
-			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
-			Real const outflow = (Tgas < warm_T) ? state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index) : 0.0;
-			output[bx](i, j, k, ncomp) = outflow;
-		});
-	} else if (dname == "hot_scalar0_z_outflow_rate") {
-		const int ncomp = ncomp_in;
-		auto const &output = mf.arrays();
-		auto const &state = state_new_cc_[lev].const_arrays();
-		auto tables = resampledTables_.const_tables();
-		Real const hot_T = userData_.hot_T;
-		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
-			Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
-			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
-			Real const vz = state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index) / rho;
-			Real const scalar0 = state[bx](i, j, k, HydroSystem<TheProblem>::scalar0_index);
-			Real const outflow = (Tgas > hot_T) ? scalar0 * vz : 0.0;
-			output[bx](i, j, k, ncomp) = outflow;
-		});
-	} else if (dname == "warm_scalar0_z_outflow_rate") {
-		const int ncomp = ncomp_in;
-		auto const &output = mf.arrays();
-		auto const &state = state_new_cc_[lev].const_arrays();
-		auto tables = resampledTables_.const_tables();
-		Real const warm_T = userData_.warm_T;
-		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
-			Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
-			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
-			Real const vz = state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index) / rho;
-			Real const scalar0 = state[bx](i, j, k, HydroSystem<TheProblem>::scalar0_index);
-			Real const outflow = (Tgas < warm_T) ? scalar0 * vz : 0.0;
-			output[bx](i, j, k, ncomp) = outflow;
-		});
+		if (dname == "hot_gas_z_outflow_rate") {
+			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
+				Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
+				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+				output[bx](i, j, k, ncomp) = (Tgas > hot_T) ? state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index) : 0.0;
+			});
+		} else if (dname == "warm_gas_z_outflow_rate") {
+			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
+				Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
+				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+				output[bx](i, j, k, ncomp) = (Tgas < warm_T) ? state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index) : 0.0;
+			});
+		} else if (dname == "hot_scalar0_z_outflow_rate") {
+			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
+				Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
+				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+				Real const vz = state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index) / rho;
+				Real const scalar0 = state[bx](i, j, k, HydroSystem<TheProblem>::scalar0_index);
+				output[bx](i, j, k, ncomp) = (Tgas > hot_T) ? scalar0 * vz : 0.0;
+			});
+		} else if (dname == "warm_scalar0_z_outflow_rate") {
+			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
+				Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
+				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+				Real const vz = state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index) / rho;
+				Real const scalar0 = state[bx](i, j, k, HydroSystem<TheProblem>::scalar0_index);
+				output[bx](i, j, k, ncomp) = (Tgas < warm_T) ? scalar0 * vz : 0.0;
+			});
+		}
 	}
 	amrex::Gpu::streamSynchronizeAll();
 }
