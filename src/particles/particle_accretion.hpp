@@ -303,8 +303,7 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 			const double cs_cell = HydroSystem<problem_t>::ComputeIsothermalSoundSpeed(local_state_arr[bx], i, j, k, fab_fc_ptr);
 			// Compute plasma beta for MHD-aware Jeans density:
 			//   beta = P_thermal / P_magnetic
-			//   P_magnetic = B^2 / (8*pi) = magnetic_energy / (4*pi)
-			//   where magnetic_energy = B^2 / 2
+			//   P_magnetic = magnetic_energy = B^2 / 2
 			double plasma_beta = std::numeric_limits<double>::max();
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				const double pressure_thermal = HydroSystem<problem_t>::ComputePressure(local_state_arr[bx], i, j, k, fab_fc_ptr);
