@@ -76,8 +76,8 @@ quokka.slice_x.normal = 0              # Plane normal (0 == x, 1 == y, 2 == z)
 quokka.slice_x.center = 1.509001e21
 quokka.slice_x.time_int = 3.155760000e+13   # 1e6 yr
 quokka.slice_x.interpolation = Linear
-quokka.slice_x.field_names = gasDensity gasEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s
-quokka.slice_x.particles = StochasticStellarPop_particles # List of particle types to include in output (default to none)
+quokka.slice_x.field_names = gasDensity gasEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s gpot scalar0_z_outflow_rate hot_gas_z_outflow_rate warm_gas_z_outflow_rate hot_scalar0_z_outflow_rate warm_scalar0_z_outflow_rate
+quokka.slice_x.particles = StochasticStellarPop_particles
 
 quokka.slice_z.type = DiagFramePlane
 quokka.slice_z.file = slicez_plt
@@ -85,13 +85,13 @@ quokka.slice_z.normal = 2              # Plane normal (0 == x, 1 == y, 2 == z)
 quokka.slice_z.center = 1.0e12        # Domain center in the normal direction
 quokka.slice_z.time_int = 3.155760000e+13   # 1e6 yr
 quokka.slice_z.interpolation = Linear
-quokka.slice_z.field_names = gasDensity gasEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s
-quokka.slice_z.particles = StochasticStellarPop_particles # List of particle types to include in output (default to none)
+quokka.slice_z.field_names = gasDensity gasEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s gpot scalar0_z_outflow_rate hot_gas_z_outflow_rate warm_gas_z_outflow_rate hot_scalar0_z_outflow_rate warm_scalar0_z_outflow_rate
+quokka.slice_z.particles = StochasticStellarPop_particles
 
 quokka.proj.type = ProjectionPlot   # Projection plot diagnostic
 quokka.proj.file = proj_plt         # Output file prefix (must end in "plt")
 quokka.proj.time_int = 3.155760000e+13   # 1e6 yr
 quokka.proj.normal = 0              # Plane normal (0 == x, 1 == y, 2 == z)
-quokka.proj.field_names = gasDensity temperature z-GasMomentum
-quokka.proj.particles = StochasticStellarPop_particles # List of particle types to include in output (default to none)
+quokka.proj.field_names = gasDensity z-GasMomentum scalar0_z_outflow_rate hot_gas_z_outflow_rate warm_gas_z_outflow_rate hot_scalar0_z_outflow_rate warm_scalar0_z_outflow_rate
+quokka.proj.particles = StochasticStellarPop_particles
 
