@@ -57,6 +57,22 @@ void DiagPlotfile::init(const std::string &a_prefix, std::string_view a_diagName
 		amrex::Print() << "DiagPlotfile: Including all fields\n";
 	}
 
+	// Read fc field names to include (optional, empty means all)
+	int const nFcVarNames = pp.countval("fc_field_names");
+	if (nFcVarNames > 0) {
+		m_fcVarNames.resize(nFcVarNames);
+		for (int n = 0; n < nFcVarNames; ++n) {
+			pp.get("fc_field_names", m_fcVarNames[n], n);
+		}
+		amrex::Print() << "DiagPlotfile: Selecting fc fields: ";
+		for (const auto &v : m_fcVarNames) {
+			amrex::Print() << v << " ";
+		}
+		amrex::Print() << "\n";
+	} else {
+		amrex::Print() << "DiagPlotfile: Including all fc fields\n";
+	}
+
 	amrex::Print() << "DiagPlotfile initialized: file=" << m_diagfile << ", interval=" << m_interval << "\n";
 }
 
