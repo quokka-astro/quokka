@@ -7,7 +7,7 @@
 [![AMReX](https://amrex-codes.github.io/badges/powered%20by-AMReX-red.svg)](https://amrex-codes.github.io)
 [![yt-project](https://img.shields.io/static/v1?label="works%20with"&message="yt"&color="blueviolet")](https://yt-project.org)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/quokka-astro/quokka)
-[![Join Zulip Community](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)(https://quokka-astro.zulipchat.com/join/3sahu2rgvkengbkzwkpndc5h/)
+[![Join Zulip Community](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)](https://quokka-astro.zulipchat.com/join/3sahu2rgvkengbkzwkpndc5h/)
 
 # QUOKKA
 *Quadrilateral, Umbra-producing, Orthogonal, Kangaroo-conserving Kode for Astrophysics!*
