@@ -132,8 +132,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	    -> amrex::Real;
 
 	AMREX_GPU_DEVICE static auto ComputePlasmaBeta(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
-						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr)
-	    -> amrex::Real;
+						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr) -> amrex::Real;
 
 	AMREX_GPU_DEVICE static auto ComputeVelocityX1(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
 
@@ -668,7 +667,7 @@ HydroSystem<problem_t>::ComputeMagneticEnergy(int i, int j, int k, std::array<am
 
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePlasmaBeta(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
-										    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc)
+										   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc)
     -> amrex::Real
 {
 	if constexpr (!Physics_Traits<problem_t>::is_mhd_enabled) {
