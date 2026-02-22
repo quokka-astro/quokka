@@ -41,6 +41,22 @@ void DiagPlotfile::init(const std::string &a_prefix, std::string_view a_diagName
 	// Read number of output files (optional)
 	pp.query("nfiles", m_nfiles);
 
+	// Read field names to include (optional, empty means all)
+	int const nVarNames = pp.countval("field_names");
+	if (nVarNames > 0) {
+		m_varNames.resize(nVarNames);
+		for (int n = 0; n < nVarNames; ++n) {
+			pp.get("field_names", m_varNames[n], n);
+		}
+		amrex::Print() << "DiagPlotfile: Selecting fields: ";
+		for (const auto &v : m_varNames) {
+			amrex::Print() << v << " ";
+		}
+		amrex::Print() << "\n";
+	} else {
+		amrex::Print() << "DiagPlotfile: Including all fields\n";
+	}
+
 	amrex::Print() << "DiagPlotfile initialized: file=" << m_diagfile << ", interval=" << m_interval << "\n";
 }
 
