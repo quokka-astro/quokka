@@ -120,6 +120,9 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	AMREX_GPU_DEVICE static auto ComputePressure(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
 						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr) -> amrex::Real;
 
+	AMREX_GPU_DEVICE static auto ComputeInternalEnergy(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
+						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr) -> amrex::Real;
+
 	AMREX_GPU_DEVICE static auto ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
 						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr) -> amrex::Real;
 
@@ -588,7 +591,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePressure
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeInternalEnergy(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
 										   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc)
     -> amrex::Real
 {
@@ -597,15 +600,23 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpe
 	const auto py = cons(i, j, k, x2Momentum_index);
 	const auto pz = cons(i, j, k, x3Momentum_index);
 	const auto E = cons(i, j, k, energy_index); // *total* gas energy per unit volume
-	const auto vx = px / rho;
-	const auto vy = py / rho;
-	const auto vz = pz / rho;
+	const auto kinetic_energy = 0.5 * (px * px + py * py + pz * pz) / rho;
 	const auto magnetic_energy = ComputeMagneticEnergy(i, j, k, cons_fc);
-	const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
-	const auto thermal_energy = E - kinetic_energy - magnetic_energy;
+	const auto internal_energy = E - kinetic_energy - magnetic_energy;
+
+	return internal_energy;
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
+										   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc)
+    -> amrex::Real
+{
+	const auto rho = cons(i, j, k, density_index);
+	const auto Eint = ComputeInternalEnergy(cons, i, j, k, cons_fc);
 
 	amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
-	amrex::Real P = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
+	amrex::Real P = quokka::EOS<problem_t>::ComputePressure(rho, Eint, massScalars);
 	amrex::Real cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P, massScalars);
 
 	return cs;
