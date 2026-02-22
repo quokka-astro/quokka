@@ -38,6 +38,7 @@ template <> struct SimulationData<TheProblem> {
 	Real dv_rms_generated{};
 	Real turbulent_amplitude = 1500.0; // cm/s,  0.05 * cs at 10K (~0.3 km/s)
 	int turbulent_size = 128;
+	Real initial_scalar_per_cell  = 0.0; // the actual density is initial_scalar_per_cell / cell_volume 
 
 	Real refine_parameter = 1.0; // placeholder for refinement control
 	std::string stars_file;	     // default: no stars
@@ -171,6 +172,9 @@ template <> void QuokkaSimulation<TheProblem>::preCalculateInitialConditions()
 		amrex::Print() << "turbulent amplitude = " << userData_.turbulent_amplitude << " cm/s\n";
 
 		userData_.turbulent_size = turbData.dvx.end[0] - turbData.dvx.begin[0];
+		const int nturb_y = turbData.dvx.end[1] - turbData.dvx.begin[1];
+		const int nturb_z = turbData.dvx.end[2] - turbData.dvx.begin[2];
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(userData_.turbulent_size == nturb_y && nturb_y == nturb_z, "Turbulence data must be a cube");
 		amrex::Print() << "turbulence data size is: " << userData_.turbulent_size << "^3\n";
 
 		// copy to GPU
@@ -219,11 +223,14 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	amrex::Array<int, 3> turb_lo = userData_.dvx.lo();
 	amrex::Array<int, 3> turb_hi = userData_.dvx.hi();
 
-	// get simulation box x-dimension as reference
+	// get simulation box dimensions
 	const int nx = indexRange.length(0);
+	const int ny = indexRange.length(1);
+	const int nz = indexRange.length(2);
 	const int nturb = turb_hi[0] - turb_lo[0] + 1;
 
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nx <= nturb, "nx must be less than or equal to turbulent_size (128)");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ny >= nx && nz >= nx, "ny and nz must be greater than or equal to nx");
 
 	// Capture galaxy parameters from userData_ for GPU kernel
 	const Real sigma1_ic = userData_.sigma1;
@@ -237,7 +244,7 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	amrex::Real initial_scalar_density = 0.0;
 	if constexpr (Physics_Traits<TheProblem>::numPassiveScalars > 0) {
 		const amrex::Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-		initial_scalar_density = 1.0e-6 * quokka::scalar_yield_per_SN / cell_vol;
+		initial_scalar_density = userData_.initial_scalar_per_cell / cell_vol;
 	}
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -426,6 +433,7 @@ auto problem_main() -> int
 	pp.query("IC_file", sim.userData_.IC_file);
 	pp.query("rho01", sim.userData_.rho01);
 	pp.query("sigma1", sim.userData_.sigma1);
+	pp.query("initial_scalar_per_cell", sim.userData_.initial_scalar_per_cell);
 
 	// preCalculate must be explicitly called here to ensure
 	// ic_table is initialized even when restarting from checkpoint
