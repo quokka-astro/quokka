@@ -14,7 +14,7 @@
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
 #include <cmath>
-#include <fmt/format.h>
+#include <format>
 #include <fstream>
 #include <string>
 #include <unordered_map>
@@ -270,7 +270,7 @@ auto problem_main() -> int
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel("time t (s)");
 	matplotlibcpp::ylabel("<|delta eps|>");
-	matplotlibcpp::save(fmt::format("./shocktubeCMA.pdf"));
+	matplotlibcpp::save(std::format("./shocktubeCMA.pdf"));
 
 	matplotlibcpp::clf();
 

@@ -59,6 +59,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::
 	double sum_py = 0.0;
 	double sum_pz = 0.0;
 	double sum_cs = 0.0;
+	double sum_magnetic_energy = 0.0;
+	double sum_pressure = 0.0;
 	for (int ii = ix - rho_infty_stencil_size; ii <= ix + rho_infty_stencil_size; ++ii) {
 		for (int jj = iy - rho_infty_stencil_size; jj <= iy + rho_infty_stencil_size; ++jj) {
 			for (int kk = iz - rho_infty_stencil_size; kk <= iz + rho_infty_stencil_size; ++kk) {
@@ -75,16 +77,18 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::
 				const double px = local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index);
 				const double py = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index);
 				const double pz = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index);
-				double cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, ii, jj, kk, fab_fc);
-				if constexpr (quokka::EOS_Traits<problem_t>::gamma == 1.0) {
-					cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
-				}
+				// note that ComputeIsothermalSoundSpeed takes care of the case when gamma_ == 1.0
+				const double cs = HydroSystem<problem_t>::ComputeIsothermalSoundSpeed(local_state, ii, jj, kk, fab_fc);
 				sum_rho += rho;
 				sum_px += px;
 				sum_py += py;
 				sum_pz += pz;
 				sum_cs += cs * rho;
 				n_cells += 1;
+				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+					sum_magnetic_energy += HydroSystem<problem_t>::ComputeMagneticEnergy(ii, jj, kk, fab_fc);
+					sum_pressure += HydroSystem<problem_t>::ComputePressure(local_state, ii, jj, kk, fab_fc);
+				}
 			}
 		}
 	}
@@ -102,15 +106,26 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::
 	AMREX_ASSERT(!std::isnan(cs_infty));
 	AMREX_ASSERT(cs_infty > 0.0);
 
-	// compute Bondi-Hoyle accretion radius, r_BH = G M / (v^2 + c^2)
+	// Compute average plasma beta in the accretion zone
+	double mean_plasma_beta = std::numeric_limits<double>::max();
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		mean_plasma_beta = ParticleUtils::computePlasmaBeta(sum_pressure, sum_magnetic_energy);
+	}
+
+	// Compute MHD-aware effective fast magnetosonic speed:
+	//   cf^2 = cs^2 + vA^2 = cs^2 * (1 + 2/beta)  (using isothermal sound speed)
+	//   For non-MHD: cf = cs (beta -> infinity)
+	const double cf_infty_sqr = cs_infty * cs_infty * (1.0 + 2.0 / mean_plasma_beta);
+
+	// compute Bondi-Hoyle accretion radius, r_BH = G M / (v^2 + cf^2)
 	const double v_infty_sqr = vx_infty * vx_infty + vy_infty * vy_infty + vz_infty * vz_infty;
-	const double r_BH = C::Gconst * par_mass / (v_infty_sqr + cs_infty * cs_infty);
+	const double r_BH = C::Gconst * par_mass / (v_infty_sqr + cf_infty_sqr);
 
 	// Compute the accretion rate in the accretion zone,
-	// M_dot = 4 pi rho_infty r_BH^2 * sqrt(v_infty^2 + lambda^2 c_s^2), where lambda = exp(3/2) / 4
+	// M_dot = 4 pi rho_infty r_BH^2 * sqrt(v_infty^2 + lambda^2 cf^2), where lambda = exp(3/2) / 4
 	constexpr double lambda = gcem::exp(1.5) / 4.0;
 	AMREX_ASSERT(rho_infty > 0.0);
-	const double M_dot = 4.0 * M_PI * rho_infty * r_BH * r_BH * std::sqrt(v_infty_sqr + lambda * lambda * cs_infty * cs_infty);
+	const double M_dot = 4.0 * M_PI * rho_infty * r_BH * r_BH * std::sqrt(v_infty_sqr + lambda * lambda * cf_infty_sqr);
 	AMREX_ASSERT(M_dot >= 0.0);
 
 	// Compute accretion kernel radius,
@@ -283,11 +298,16 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 				fab_fc_ptr = &fab_fc;
 			}
 
-			double cs_cell = HydroSystem<problem_t>::ComputeSoundSpeed(local_state_arr[bx], i, j, k, fab_fc_ptr);
-			if constexpr (quokka::EOS_Traits<problem_t>::gamma == 1.0) {
-				cs_cell = quokka::EOS_Traits<problem_t>::cs_isothermal;
-			}
-			const double rho_J = ParticleUtils::computeJeansDensity(cs_cell, dx_max);
+			// note that ComputeIsothermalSoundSpeed takes care of the case when gamma_ == 1.0
+			const double cs_cell = HydroSystem<problem_t>::ComputeIsothermalSoundSpeed(local_state_arr[bx], i, j, k, fab_fc_ptr);
+			// Compute plasma beta for MHD-aware Jeans density (returns inf for non-MHD)
+			const double plasma_beta = HydroSystem<problem_t>::ComputePlasmaBeta(local_state_arr[bx], i, j, k, fab_fc_ptr);
+
+			// Jeans density with MHD correction:
+			//   rho_J = J^2 * pi * cs_eff^2 / (G * dx^2)
+			//   cs_eff^2 = cs^2 * (1 + 0.74/beta)
+			// (For non-MHD, beta=inf, so cs_eff^2 = cs^2)
+			const double rho_J = ParticleUtils::computeJeansDensity(cs_cell, dx_max, plasma_beta);
 			const double rho_cell = local_state_arr[bx](i, j, k, HydroSystem<problem_t>::density_index);
 			if ((1.0 + accretion_rate_cell) * rho_cell > rho_J) {
 				const double accretion_rate_cell_new = rho_J / rho_cell - 1.0;

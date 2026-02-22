@@ -9,7 +9,7 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_Geometry.H"
 #include "AMReX_MultiFab.H"
-#include <fmt/format.h>
+#include <format>
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
@@ -229,7 +229,7 @@ auto problem_main() -> int
 		matplotlibcpp::xlabel("z (cm)");
 		matplotlibcpp::ylabel("Temperature (K)");
 		matplotlibcpp::legend();
-		matplotlibcpp::title(fmt::format("time t = {:.1g} yr", sim.tNew_[0] / seconds_per_year));
+		matplotlibcpp::title(std::format("time t = {:.1g} yr", sim.tNew_[0] / seconds_per_year));
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("./RandomBlast_temperature_z.png");
 		amrex::Print() << "\nTemperature plot saved to RandomBlast_temperature_z.png\n";

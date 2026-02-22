@@ -9,7 +9,7 @@
 
 #include "hydro/hydro_system.hpp"
 #include <algorithm>
-#include <fmt/format.h>
+#include <format>
 #include <vector>
 
 #include "AMReX.H"

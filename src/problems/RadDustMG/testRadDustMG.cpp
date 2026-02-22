@@ -14,7 +14,7 @@
 #include "radiation/radiation_dust_system.hpp"
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
-#include <fmt/format.h>
+#include <format>
 #include <fstream>
 #include <vector>
 

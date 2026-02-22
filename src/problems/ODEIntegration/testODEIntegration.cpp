@@ -13,7 +13,7 @@
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 #include "util/valarray.hpp"
-#include <fmt/format.h>
+#include <format>
 
 struct ODETest {
 };
