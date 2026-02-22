@@ -51,7 +51,6 @@ problem.stars_file = ""
 problem.IC_file = ../extern/problems/TallBoxSf/disk_solution_datatable_Sigma13-Z1.csv
 problem.rho01 = 4.320441e-24
 problem.sigma1 = 7.0e5
-problem.boost_velocity = 0.0 0.0 0.0 # 0 km/s in x-direction
 
 cooling.enabled = 1
 cooling.cooling_table_type = "resampled"
@@ -75,7 +74,6 @@ quokka.slice_x.file = slicex_plt
 quokka.slice_x.normal = 0              # Plane normal (0 == x, 1 == y, 2 == z)
 quokka.slice_x.center = 1.509001e21
 quokka.slice_x.time_int = 3.155760000e+13   # 1e6 yr
-quokka.slice_x.interpolation = Linear
 quokka.slice_x.field_names = gasDensity gasEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s gpot scalar0_z_outflow_rate hot_gas_z_outflow_rate warm_gas_z_outflow_rate hot_scalar0_z_outflow_rate warm_scalar0_z_outflow_rate
 quokka.slice_x.particles = StochasticStellarPop_particles
 
@@ -84,7 +82,6 @@ quokka.slice_z.file = slicez_plt
 quokka.slice_z.normal = 2              # Plane normal (0 == x, 1 == y, 2 == z)
 quokka.slice_z.center = 1.0e12        # Domain center in the normal direction
 quokka.slice_z.time_int = 3.155760000e+13   # 1e6 yr
-quokka.slice_z.interpolation = Linear
 quokka.slice_z.field_names = gasDensity gasEnergy x-GasMomentum y-GasMomentum z-GasMomentum temperature c_s gpot scalar0_z_outflow_rate hot_gas_z_outflow_rate warm_gas_z_outflow_rate hot_scalar0_z_outflow_rate warm_scalar0_z_outflow_rate
 quokka.slice_z.particles = StochasticStellarPop_particles
 
