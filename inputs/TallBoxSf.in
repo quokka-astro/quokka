@@ -66,7 +66,7 @@ perturb.amplitude = 7e5 # 7 km/s
 
 statistics_interval = 512
 
-derived_vars = temperature c_s
+derived_vars = temperature c_s gpot scalar0_z_outflow_rate hot_gas_z_outflow_rate warm_gas_z_outflow_rate hot_scalar0_z_outflow_rate warm_scalar0_z_outflow_rate
 
 quokka.diagnostics = slice_x slice_z proj
 
