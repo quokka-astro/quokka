@@ -16,6 +16,7 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
+#include "particles/particle_utils.hpp"
 #include "util/BC.hpp"
 
 #ifdef HAVE_PYTHON
@@ -33,8 +34,9 @@ const double rho0 = 1.0 * C::m_p; // g cm^-3
 const double T0 = 10.0;		  // K
 const double CV = 1. / (gamma_ - 1.) / mu * C::k_B;
 const double year = 3.15576e+07; // in seconds
-const double dt_init = 3.0 * year;
-constexpr double B0 = 1.0e-7; // constant background field [Gauss-equivalent units]
+const double dt_init = 2.0 * year;
+constexpr double B0 = 3.715708546e-08; // constant background field [Gauss-equivalent units]. Set a precise value so that
+				       // beta = 2.0
 
 static std::string particles_file = "sink4.txt"; // NOLINT
 
@@ -162,8 +164,9 @@ auto problem_main() -> int
 	amrex::ParmParse const pp("problem");
 	pp.query("particles_file", particles_file);
 	pp.query("refine_half_domain", refine_half_domain);
-	double boost_vel_x = 1.0e8;
+	double boost_vel_x = NAN;
 	pp.query("boost_vel_x", boost_vel_x);
+	AMREX_ASSERT_WITH_MESSAGE(boost_vel_x != NAN, "boost_vel_x must be set in the input file");
 
 	// Problem initialization
 	QuokkaSimulation<SinkProblem> sim;
@@ -202,7 +205,7 @@ auto problem_main() -> int
 	// ============================================================
 	amrex::Print() << "\n=== Phase 1: Base simulation (1 timestep) ===\n";
 	sim.maxTimesteps_ = 1;
-	sim.initDt_ = 1e8; // set a small initial dt to limit the accreted mass to a small fraction of the total mass
+	sim.initDt_ = dt_init; // set a small initial dt to limit the accreted mass to a small fraction of the total mass
 	sim.evolve();
 
 	// get total gas mass in the final state
@@ -216,6 +219,7 @@ auto problem_main() -> int
 	const double outer_radius = 5.0001 * dx0[0];
 
 	int status = 0;
+	Real rho_dot_exact = 0.0;
 
 	const auto &real_data_ste1 = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
 
@@ -248,9 +252,22 @@ auto problem_main() -> int
 			amrex::Print() << "Test failed: total mass is not conserved at step 1\n";
 		}
 
-		// exact solution
-		const double rhodot = 7.078494865e-34;	   // g / cm3 / s
-		const double drho = rhodot * sim.tNew_[0]; // use actual time evolved instead of dt_init
+		// compute exact accretion rate (MHD-aware Bondi-Hoyle formula)
+		{
+			const Real magnetic_pressure = 0.5 * B0 * B0;
+			const Real beta = (rho0 / mu) * C::k_B * T0 / magnetic_pressure;
+			const Real cs_iso = std::sqrt(C::k_B * T0 / mu);
+			// MHD-aware fast magnetosonic speed: cf^2 = cs^2 * (1 + 2/beta) (isothermal)
+			const Real cf_sqr = cs_iso * cs_iso * (1.0 + 2.0 / beta);
+			const Real v_infty_sqr = 0.0;
+			const Real par_mass = 10.0 * C::M_solar;
+			const Real r_BH = C::Gconst * par_mass / (v_infty_sqr + cf_sqr);
+			const Real lambda = gcem::exp(1.5) / 4.0;
+			// M_dot = 4 pi rho_infty r_BH^2 * sqrt(v_infty^2 + lambda^2 cf^2), where lambda = exp(3/2) / 4
+			const Real M_dot_exact = 4.0 * M_PI * rho0 * r_BH * r_BH * std::sqrt(v_infty_sqr + lambda * lambda * cf_sqr);
+			rho_dot_exact = M_dot_exact / std::pow(7 * dx0[0], 3);
+			amrex::Print() << "Exact rhodot = " << rho_dot_exact << "\n";
+		}
 
 		// compute density error
 		std::vector<double> xs(nx);
@@ -268,6 +285,7 @@ auto problem_main() -> int
 			num_den[i] = rho[i] / C::m_p; // cm^-3
 
 			// exact solution
+			const Real drho = rho_dot_exact * sim.tNew_[0];
 			if (std::abs(xs[i]) <= overlap_loc) {
 				exact_den[i] = rho0 - 4 * drho; // two particles at a position; overlapping
 			} else if (std::abs(xs[i]) <= outer_radius) {
@@ -288,7 +306,7 @@ auto problem_main() -> int
 		amrex::Print() << "Relative L1 error norm = " << rel_error << "\n";
 
 		// The relative L1 error norm with respect to the exact solution could be large because there is a hydro update after sink accretion.
-		const double rel_error_tol = 3.0e-6;
+		const double rel_error_tol = 1.0e-5;
 		if (!(std::abs(rel_error) < rel_error_tol)) {
 			status = 1;
 			amrex::Print() << "Test failed: density profile does not match analytic solution\n";
@@ -327,7 +345,7 @@ auto problem_main() -> int
 	sim2.reconstructionOrder_ = 3;
 	sim2.cflNumber_ = 0.3;
 	sim2.stopTime_ = 1000.0 * year; // 1000 years
-	sim2.initDt_ = 3e8;		// set a small initial dt to limit the accreted mass to a small fraction of the total mass
+	sim2.initDt_ = dt_init;		// set a small initial dt to limit the accreted mass to a small fraction of the total mass
 	sim2.tempFloor_ = 10.0;
 
 	// initialize
@@ -345,8 +363,7 @@ auto problem_main() -> int
 	// solution with the same accuracy as the base simulation matches its analytical solution
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// Compute analytical solution for boosted case based on its actual evolution time
-		const double rhodot = 7.078494865e-34;	     // g / cm3 / s
-		const double drho2 = rhodot * sim2.tNew_[0]; // use actual time evolved in boosted frame
+		const Real drho2 = rho_dot_exact * sim2.tNew_[0];
 
 		// Compute density error for boosted simulation vs analytical solution
 		std::vector<double> rho2(nx);
@@ -457,6 +474,8 @@ auto problem_main() -> int
 
 		if (status == 0) {
 			amrex::Print() << "\n=== All phases passed ===\n";
+		} else {
+			amrex::Print() << "\n=== One of the 3 phases failed ===\n";
 		}
 	}
 

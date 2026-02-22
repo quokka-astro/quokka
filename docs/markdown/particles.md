@@ -32,8 +32,8 @@ The star formation module adds star particles through a stochastic prescription 
 
 Eligible cells are first identified through a Jeans-length check before any stochastic sampling occurs.
 
-- Compute the Jeans length \(\lambda_J = c_s / \sqrt{G \rho}\) in every cell.
-- Mark the cell as eligible when \(\lambda_J < J \cdot \Delta x\) with \(J = 0.5\).
+- Compute the Jeans density $\rho_J = J^2 \pi c_{\text{eff}}^2 / (G \Delta x^2)$, where $J = 0.25$ is the Jeans number and $c_{\text{eff}} = c_s \sqrt{1 + 0.74 / \beta}$ is the effective sound speed, accounting for thermal pressure and magnetic pressure with $\beta = P_{\text{thermal}} / P_{\text{magnetic}}$.
+- Mark the cell as eligible when $\rho > \rho_J$.
 - Only eligible cells continue to the sampling steps below.
 
 ### Controlling the formation rate
