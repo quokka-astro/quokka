@@ -21,7 +21,7 @@
 #include "AMReX_TagBox.H"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
-#include <fmt/format.h>
+#include <format>
 #include <fstream>
 
 #include "QuokkaSimulation.hpp"

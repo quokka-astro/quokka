@@ -10,6 +10,7 @@
 #include "AMReX_SPACE.H"
 #include "math/interpolate.hpp"
 #include "util/fextract.hpp"
+#include <format>
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
@@ -309,7 +310,7 @@ auto problem_main() -> int
 		matplotlibcpp::plot(xs, num_den, num_den_args);
 		matplotlibcpp::xlabel("x (cm)");
 		matplotlibcpp::ylabel("n (cm^-3)");
-		matplotlibcpp::title(fmt::format("t = {:.2e}", sim.tNew_[0]));
+		matplotlibcpp::title(std::format("t = {:.2e}", sim.tNew_[0]));
 		matplotlibcpp::legend();
 		matplotlibcpp::save("./sink_density.pdf");
 #endif
@@ -402,7 +403,7 @@ auto problem_main() -> int
 		matplotlibcpp::plot(position2, num_den2, num_den_args);
 		matplotlibcpp::xlabel("x (cm)");
 		matplotlibcpp::ylabel("n (cm^-3)");
-		matplotlibcpp::title(fmt::format("t = {:.2e}", sim2.tNew_[0]));
+		matplotlibcpp::title(std::format("t = {:.2e}", sim2.tNew_[0]));
 		matplotlibcpp::legend();
 		matplotlibcpp::save("./sink_density_boosted.pdf");
 #endif
