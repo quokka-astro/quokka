@@ -296,7 +296,7 @@ def plot_one(pltdir, args, suffix_idx=None):
                     continue
                 if len(pos) > 0:
                     # slc.annotate_particles(Lx, p_size=160., col=colors[i], marker='*', ptype=par)
-                    # annotate particles at a depth of 0.1 * boxsize
+                    # annotate particles at a depth of 0.9 * boxsize
                     color = p_color if p_color is not None else colors[i]
                     slc.annotate_particles(
                         LL * 0.9, p_size=p_size, col=color, marker=p_marker, ptype=par)
