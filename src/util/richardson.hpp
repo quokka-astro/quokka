@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-#include <fmt/format.h>
+#include <format>
 
 #include "AMReX.H"
 #include "AMReX_ParallelDescriptor.H"
@@ -57,7 +57,7 @@ template <typename Callable> auto run(const Parameters &params, Callable &&runTe
 
 	bool reached_target = false;
 
-	amrex::Print() << fmt::format("Running Richardson convergence test for {}:\n", params.test_name);
+	amrex::Print() << std::format("Running Richardson convergence test for {}:\n", params.test_name);
 	amrex::Print() << "Resolution\tError Norm\n";
 	amrex::Print() << "----------\t----------\n";
 
@@ -69,7 +69,7 @@ template <typename Callable> auto run(const Parameters &params, Callable &&runTe
 		errors.push_back(error);
 		dx_values.push_back(1.0 / static_cast<double>(nx)); // dx = L / nx for unit domain
 
-		amrex::Print() << fmt::format("{:10d}\t{:.6e}\n", nx, error);
+		amrex::Print() << std::format("{:10d}\t{:.6e}\n", nx, error);
 
 		if (error <= params.machine_precision_target) {
 			reached_target = true;
@@ -77,7 +77,7 @@ template <typename Callable> auto run(const Parameters &params, Callable &&runTe
 		}
 
 		if (nx == params.nx_max) {
-			amrex::Print() << fmt::format("\nReached maximum resolution (nx = {}) without achieving the target error {:.3e}\n", params.nx_max,
+			amrex::Print() << std::format("\nReached maximum resolution (nx = {}) without achieving the target error {:.3e}\n", params.nx_max,
 						      params.machine_precision_target);
 			break;
 		}
@@ -94,7 +94,7 @@ template <typename Callable> auto run(const Parameters &params, Callable &&runTe
 		double const log_dx_ratio = std::log(dx_values[i - 1] / dx_values[i]);
 		double const observed_rate = log_error_ratio / log_dx_ratio;
 
-		amrex::Print() << fmt::format("{:4d} -> {:4d}\t{:13.2f}\t{:13.1f}\n", resolutions[i - 1], resolutions[i], observed_rate, params.expected_rate);
+		amrex::Print() << std::format("{:4d} -> {:4d}\t{:13.2f}\t{:13.1f}\n", resolutions[i - 1], resolutions[i], observed_rate, params.expected_rate);
 
 		if (observed_rate + params.tolerance < params.expected_rate) {
 			convergence_passed = false;
@@ -106,8 +106,8 @@ template <typename Callable> auto run(const Parameters &params, Callable &&runTe
 		double const overall_log_dx_ratio = std::log(dx_values[0] / dx_values.back());
 		double const overall_rate = overall_log_error_ratio / overall_log_dx_ratio;
 
-		amrex::Print() << fmt::format("\nOverall convergence rate: {:.2f}\n", overall_rate);
-		amrex::Print() << fmt::format("Expected rate: {:.1f}\n", params.expected_rate);
+		amrex::Print() << std::format("\nOverall convergence rate: {:.2f}\n", overall_rate);
+		amrex::Print() << std::format("Expected rate: {:.1f}\n", params.expected_rate);
 
 		if (overall_rate + params.tolerance < params.expected_rate) {
 			convergence_passed = false;
@@ -118,15 +118,15 @@ template <typename Callable> auto run(const Parameters &params, Callable &&runTe
 		std::ofstream file(params.csv_filename);
 		file << "nx,dx,error\n";
 		for (int i = 0; i < resolutions.size(); ++i) {
-			file << fmt::format("{},{:.6e},{:.6e}\n", resolutions[i], dx_values[i], errors[i]);
+			file << std::format("{},{:.6e},{:.6e}\n", resolutions[i], dx_values[i], errors[i]);
 		}
 		file.close();
-		amrex::Print() << fmt::format("\nConvergence data written to {}\n", params.csv_filename);
+		amrex::Print() << std::format("\nConvergence data written to {}\n", params.csv_filename);
 	}
 
 	if (convergence_passed) {
 		if (reached_target) {
-			amrex::Print() << fmt::format("\n✓ Richardson convergence test PASSED (target error {:.3e} reached)\n",
+			amrex::Print() << std::format("\n✓ Richardson convergence test PASSED (target error {:.3e} reached)\n",
 						      params.machine_precision_target);
 		} else {
 			amrex::Print() << "\n✓ Richardson convergence test PASSED\n";

@@ -21,7 +21,7 @@
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_REAL.H"
 #include "linear_advection/linear_advection.hpp"
-#include <fmt/format.h>
+#include <format>
 
 #include "linear_advection/AdvectionSimulation.hpp"
 #include "util/BC.hpp"

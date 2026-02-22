@@ -9,7 +9,7 @@
 #include <string>
 #include <utility>
 
-#include <fmt/format.h>
+#include <format>
 #include <yaml-cpp/yaml.h>
 
 #include "AMReX_Array4.H"
@@ -1048,7 +1048,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	{
 		const BL_PROFILE("PhysicsParticleRegister::printParticleStatistics()");
 		amrex::Print() << "[PARTICLES] Statistics:\n";
-		amrex::Print() << fmt::format("{:<20}{:>15}\n", "Particle type", "Number of particles");
+		amrex::Print() << std::format("{:<20}{:>15}\n", "Particle type", "Number of particles");
 
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->printParticleStatistics();

@@ -23,7 +23,7 @@
 #include <vector>
 
 // For descriptive error messages
-#include <fmt/format.h>
+#include <format>
 
 namespace quokka
 {
@@ -109,7 +109,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 				// Check if point is out of bounds and abort if so
 				if (point[dim] < coord_start || point[dim] > coord_end) {
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-					    false, fmt::format("Point is out of bounds for dimension {}! (value: {}, valid range: [{}, {}])", dim, point[dim],
+					    false, std::format("Point is out of bounds for dimension {}! (value: {}, valid range: [{}, {}])", dim, point[dim],
 							       coord_start, coord_end)
 						       .c_str());
 				}
@@ -162,7 +162,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 					if (point[dim] <= 0.0) {
 						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 						    false,
-						    fmt::format("Invalid value for log interpolation in dimension {}: {} (must be positive)", dim, point[dim])
+						    std::format("Invalid value for log interpolation in dimension {}: {} (must be positive)", dim, point[dim])
 							.c_str());
 					}
 					point_[dim] = std::log(point[dim]);
@@ -178,7 +178,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 					// Check for non-positive values and abort if found
 					if (point[dim] <= 0.0) {
 						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-						    false, fmt::format("Invalid value for fast_log interpolation in dimension {}: {} (must be positive)", dim,
+						    false, std::format("Invalid value for fast_log interpolation in dimension {}: {} (must be positive)", dim,
 								       point[dim])
 							       .c_str());
 					}
@@ -232,7 +232,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 					if (point[dim] <= 0.0) {
 						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 						    false,
-						    fmt::format("Invalid value for log interpolation in dimension {}: {} (must be positive)", dim, point[dim])
+						    std::format("Invalid value for log interpolation in dimension {}: {} (must be positive)", dim, point[dim])
 							.c_str());
 					}
 					point_[dim] = std::log(point[dim]);
@@ -248,7 +248,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 					// Check for non-positive values and abort if found
 					if (point[dim] <= 0.0) {
 						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-						    false, fmt::format("Invalid value for fast_log interpolation in dimension {}: {} (must be positive)", dim,
+						    false, std::format("Invalid value for fast_log interpolation in dimension {}: {} (must be positive)", dim,
 								       point[dim])
 							       .c_str());
 					}
@@ -489,14 +489,14 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 		// Validate inputs
 		for (int dim = 0; dim < Ndim; ++dim) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), fmt::format("Coordinates for dimension {} cannot be empty!", dim));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), std::format("Coordinates for dimension {} cannot be empty!", dim));
 		}
 
 		// Validate data dimensions for each output
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 			    data[out_idx].size() == coords[0].size(),
-			    fmt::format("1D data must match coordinate size! (expected: {}, actual: {})", coords[0].size(), data[out_idx].size()));
+			    std::format("1D data must match coordinate size! (expected: {}, actual: {})", coords[0].size(), data[out_idx].size()));
 		}
 
 		initialize_common(coords, data);
@@ -509,21 +509,21 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 		// Validate inputs
 		for (int dim = 0; dim < Ndim; ++dim) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), fmt::format("Coordinates for dimension {} cannot be empty!", dim));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), std::format("Coordinates for dimension {} cannot be empty!", dim));
 		}
 
 		// Validate data dimensions for each output
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data[out_idx].empty(), fmt::format("Data for output {} cannot be empty!", out_idx));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data[out_idx].empty(), std::format("Data for output {} cannot be empty!", out_idx));
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 			    data[out_idx].size() == coords[0].size(),
-			    fmt::format("Data first dimension must match first coordinate size for output {}! (expected: {}, actual: {})", out_idx,
+			    std::format("Data first dimension must match first coordinate size for output {}! (expected: {}, actual: {})", out_idx,
 					coords[0].size(), data[out_idx].size()));
 			// Verify data dimensions
 			for (const auto &row : data[out_idx]) {
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 				    row.size() == coords[1].size(),
-				    fmt::format("All data rows must match second coordinate size for output {}! (expected: {}, actual: {})", out_idx,
+				    std::format("All data rows must match second coordinate size for output {}! (expected: {}, actual: {})", out_idx,
 						coords[1].size(), row.size()));
 			}
 		}
@@ -538,25 +538,25 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 		// Validate inputs
 		for (int dim = 0; dim < Ndim; ++dim) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), fmt::format("Coordinates for dimension {} cannot be empty!", dim));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), std::format("Coordinates for dimension {} cannot be empty!", dim));
 		}
 
 		// Validate data dimensions for each output
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data[out_idx].empty(), fmt::format("Data for output {} cannot be empty!", out_idx));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data[out_idx].empty(), std::format("Data for output {} cannot be empty!", out_idx));
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 			    data[out_idx].size() == coords[0].size(),
-			    fmt::format("Data first dimension must match first coordinate size for output {}! (expected: {}, actual: {})", out_idx,
+			    std::format("Data first dimension must match first coordinate size for output {}! (expected: {}, actual: {})", out_idx,
 					coords[0].size(), data[out_idx].size()));
 			for (const auto &plane : data[out_idx]) {
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 				    plane.size() == coords[1].size(),
-				    fmt::format("Data second dimension must match second coordinate size for output {}! (expected: {}, actual: {})", out_idx,
+				    std::format("Data second dimension must match second coordinate size for output {}! (expected: {}, actual: {})", out_idx,
 						coords[1].size(), plane.size()));
 				for (const auto &row : plane) {
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 					    row.size() == coords[2].size(),
-					    fmt::format("Data third dimension must match third coordinate size for output {}! (expected: {}, actual: {})",
+					    std::format("Data third dimension must match third coordinate size for output {}! (expected: {}, actual: {})",
 							out_idx, coords[2].size(), row.size()));
 				}
 			}
@@ -572,30 +572,30 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 		// Validate inputs
 		for (int dim = 0; dim < Ndim; ++dim) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), fmt::format("Coordinates for dimension {} cannot be empty!", dim));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), std::format("Coordinates for dimension {} cannot be empty!", dim));
 		}
 
 		// Validate data dimensions for each output
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data[out_idx].empty(), fmt::format("Data for output {} cannot be empty!", out_idx));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data[out_idx].empty(), std::format("Data for output {} cannot be empty!", out_idx));
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 			    data[out_idx].size() == coords[0].size(),
-			    fmt::format("Data first dimension must match first coordinate size for output {}! (expected: {}, actual: {})", out_idx,
+			    std::format("Data first dimension must match first coordinate size for output {}! (expected: {}, actual: {})", out_idx,
 					coords[0].size(), data[out_idx].size()));
 			for (const auto &volume : data[out_idx]) {
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 				    volume.size() == coords[1].size(),
-				    fmt::format("Data second dimension must match second coordinate size for output {}! (expected: {}, actual: {})", out_idx,
+				    std::format("Data second dimension must match second coordinate size for output {}! (expected: {}, actual: {})", out_idx,
 						coords[1].size(), volume.size()));
 				for (const auto &plane : volume) {
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 					    plane.size() == coords[2].size(),
-					    fmt::format("Data third dimension must match third coordinate size for output {}! (expected: {}, actual: {})",
+					    std::format("Data third dimension must match third coordinate size for output {}! (expected: {}, actual: {})",
 							out_idx, coords[2].size(), plane.size()));
 					for (const auto &row : plane) { // NOSONAR
 						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 						    row.size() == coords[3].size(),
-						    fmt::format(
+						    std::format(
 							"Data fourth dimension must match fourth coordinate size for output {}! (expected: {}, actual: {})",
 							out_idx, coords[3].size(), row.size()));
 					}
@@ -659,7 +659,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	[[nodiscard]] auto size(int dim) const -> int
 	{
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dim >= 0 && dim < Ndim,
-						 fmt::format("Dimension index out of bounds! (provided: {}, valid range: [0, {}])", dim, Ndim - 1));
+						 std::format("Dimension index out of bounds! (provided: {}, valid range: [0, {}])", dim, Ndim - 1));
 		return sizes_[dim];
 	}
 
@@ -676,25 +676,25 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	[[nodiscard]] auto input_name(int dim) const -> std::string
 	{
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dim >= 0 && dim < Ndim,
-						 fmt::format("Dimension index out of bounds! (provided: {}, valid range: [0, {}])", dim, Ndim - 1));
+						 std::format("Dimension index out of bounds! (provided: {}, valid range: [0, {}])", dim, Ndim - 1));
 		return input_names_[dim];
 	}
 	[[nodiscard]] auto output_name(int idx) const -> std::string
 	{
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(idx >= 0 && idx < Nout,
-						 fmt::format("Output index out of bounds! (provided: {}, valid range: [0, {}])", idx, Nout - 1));
+						 std::format("Output index out of bounds! (provided: {}, valid range: [0, {}])", idx, Nout - 1));
 		return output_names_[idx];
 	}
 	[[nodiscard]] auto input_unit(int dim) const -> std::string
 	{
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dim >= 0 && dim < Ndim,
-						 fmt::format("Dimension index out of bounds! (provided: {}, valid range: [0, {}])", dim, Ndim - 1));
+						 std::format("Dimension index out of bounds! (provided: {}, valid range: [0, {}])", dim, Ndim - 1));
 		return input_units_[dim];
 	}
 	[[nodiscard]] auto output_unit(int idx) const -> std::string
 	{
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(idx >= 0 && idx < Nout,
-						 fmt::format("Output index out of bounds! (provided: {}, valid range: [0, {}])", idx, Nout - 1));
+						 std::format("Output index out of bounds! (provided: {}, valid range: [0, {}])", idx, Nout - 1));
 		return output_units_[idx];
 	}
 
@@ -716,9 +716,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 		// Validate bounds
 		for (int dim = 0; dim < Ndim; ++dim) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_max_[dim] > coord_min_[dim], fmt::format("Invalid coordinate bounds for dimension {}: [{}, {}]",
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_max_[dim] > coord_min_[dim], std::format("Invalid coordinate bounds for dimension {}: [{}, {}]",
 													dim, coord_min_[dim], coord_max_[dim]));
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sizes_[dim] > 0, fmt::format("Invalid dimension size {} for dimension {}", sizes_[dim], dim));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sizes_[dim] > 0, std::format("Invalid dimension size {} for dimension {}", sizes_[dim], dim));
 		}
 
 		// Create coordinate tables - either from provided coords or generate them
@@ -734,14 +734,14 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				// Logarithmic spacing: store actual values, not logarithms
 				// Update coordinates to their log values in plance
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_min_[dim] > 0.0 && coord_max_[dim] > 0.0,
-								 fmt::format("Log spacing requires positive bounds for dimension {}", dim));
+								 std::format("Log spacing requires positive bounds for dimension {}", dim));
 				coord_min_[dim] = std::log(coord_min_[dim]);
 				coord_max_[dim] = std::log(coord_max_[dim]);
 			} else if (spacing_types_[dim] == SpacingType::fast_log) {
 				// Fast log spacing: store log(value) for fast interpolation
 				// Update coordinates to their log values in place
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_min_[dim] > 0.0 && coord_max_[dim] > 0.0,
-								 fmt::format("Fast log spacing requires positive bounds for dimension {}", dim));
+								 std::format("Fast log spacing requires positive bounds for dimension {}", dim));
 				coord_min_[dim] = FastMath::lg(coord_min_[dim]);
 				coord_max_[dim] = FastMath::lg(coord_max_[dim]);
 			}
@@ -750,7 +750,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			// For future support of irregular spacing
 			// } else if (spacing_types_[dim] == SpacingType::irregular) {
 			// 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(static_cast<int>(coords[dim].size()) == sizes_[dim],
-			// 					 fmt::format("Provided coordinates size mismatch for dimension {}! (expected: {}, actual: {})",
+			// 					 std::format("Provided coordinates size mismatch for dimension {}! (expected: {}, actual: {})",
 			// 						     dim, sizes_[dim], coords[dim].size()));
 			// 	auto coord_table = coords_[dim]->table();
 			// 	for (int i = 0; i < sizes_[dim]; ++i) {
@@ -818,7 +818,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	{
 		// Validate inputs
 		for (int dim = 0; dim < Ndim; ++dim) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), fmt::format("Coordinates for dimension {} cannot be empty!", dim));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), std::format("Coordinates for dimension {} cannot be empty!", dim));
 		}
 
 		// Derive bounds and sizes from coordinates
@@ -883,7 +883,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		// Line 1: Ndim
 		file >> n_dim;
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-		    n_dim == Ndim, fmt::format("CSV file dimension mismatch! File has {} dimensions, but DataTable is {}-dimensional", n_dim, Ndim));
+		    n_dim == Ndim, std::format("CSV file dimension mismatch! File has {} dimensions, but DataTable is {}-dimensional", n_dim, Ndim));
 
 		// Line 2: Nx (comma-separated)
 		std::string nx_line;
@@ -896,14 +896,14 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				if (dim < Ndim - 1) {
 					ss >> comma;
 				}
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sizes[dim] > 0, fmt::format("Invalid dimension size {} for dimension {}", sizes[dim], dim));
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sizes[dim] > 0, std::format("Invalid dimension size {} for dimension {}", sizes[dim], dim));
 			}
 		}
 
 		// Line 3: Nout
 		file >> n_out;
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n_out == Nout,
-						 fmt::format("CSV file output dimension mismatch! File has {} outputs, but DataTable expects {}", n_out, Nout));
+						 std::format("CSV file output dimension mismatch! File has {} outputs, but DataTable expects {}", n_out, Nout));
 
 		// Line 4: input_names (comma-separated, in metadata order)
 		std::array<std::string, Ndim> input_names{};
@@ -1023,7 +1023,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 			    coord_bounds[dim].second > coord_bounds[dim].first,
-			    fmt::format("Invalid coordinate bounds for dimension {}: [{}, {}]", dim, coord_bounds[dim].first, coord_bounds[dim].second));
+			    std::format("Invalid coordinate bounds for dimension {}: [{}, {}]", dim, coord_bounds[dim].first, coord_bounds[dim].second));
 		}
 
 		// Convert string spacing types to enum and validate spacing type
@@ -1034,7 +1034,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			} catch (const std::runtime_error &e) {
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 				    false,
-				    fmt::format("Invalid spacing type '{}' for dimension {}. Must be 'linear', 'log', or 'fast_log'", spacing_types[dim], dim));
+				    std::format("Invalid spacing type '{}' for dimension {}. Must be 'linear', 'log', or 'fast_log'", spacing_types[dim], dim));
 			}
 		}
 
@@ -1084,7 +1084,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 					for (int i = 0; i < sizes[0]; ++i) { // NOSONAR
 						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 						    data_array[out_idx][i] > 0.0,
-						    fmt::format("log output spacing requires positive values, got {} at output {} index {}",
+						    std::format("log output spacing requires positive values, got {} at output {} index {}",
 								data_array[out_idx][i], out_idx, i));
 						data_array[out_idx][i] = log_(data_array[out_idx][i]);
 					}
@@ -1134,7 +1134,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 						for (int i2 = 0; i2 < sizes[1]; ++i2) {
 							AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 							    data_array[out_idx][i1][i2] > 0.0,
-							    fmt::format("log output spacing requires positive values, got {} at output {} index ({}, {})",
+							    std::format("log output spacing requires positive values, got {} at output {} index ({}, {})",
 									data_array[out_idx][i1][i2], out_idx, i1, i2));
 							data_array[out_idx][i1][i2] = log_(data_array[out_idx][i1][i2]);
 						}
@@ -1190,7 +1190,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 						for (int i2 = 0; i2 < sizes[1]; ++i2) {		// NOSONAR
 							for (int i3 = 0; i3 < sizes[2]; ++i3) { // NOSONAR
 								AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data_array[out_idx][i1][i2][i3] > 0.0,
-												 fmt::format("log output spacing requires positive "
+												 std::format("log output spacing requires positive "
 													     "values, got {} at output {} index ({}, {}, {})",
 													     data_array[out_idx][i1][i2][i3], out_idx, i1, i2,
 													     i3));
@@ -1256,7 +1256,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 								for (int i4 = 0; i4 < sizes[3]; ++i4) { // NOSONAR
 									AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 									    data_array[out_idx][i1][i2][i3][i4] > 0.0,
-									    fmt::format("log output spacing requires positive values, got {} at output {} "
+									    std::format("log output spacing requires positive values, got {} at output {} "
 											"index ({}, {}, "
 											"{}, {})",
 											data_array[out_idx][i1][i2][i3][i4], out_idx, i1, i2, i3, i4));
@@ -1294,7 +1294,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		static_assert(Ndim >= 1 && Ndim <= 4, "H5Reader supports 1D-4D tables");
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 		    coord_names.size() == Ndim,
-		    fmt::format("H5Reader requires exactly Ndim coordinate names! (expected: {}, provided: {})", Ndim, coord_names.size()));
+		    std::format("H5Reader requires exactly Ndim coordinate names! (expected: {}, provided: {})", Ndim, coord_names.size()));
 
 		herr_t status = 0;
 		herr_t const h5_error = -1;
