@@ -106,17 +106,16 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::
 	AMREX_ASSERT(!std::isnan(cs_infty));
 	AMREX_ASSERT(cs_infty > 0.0);
 
+	// Compute average plasma beta in the accretion zone
+	double mean_plasma_beta = std::numeric_limits<double>::max();
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		mean_plasma_beta = ParticleUtils::computePlasmaBeta(sum_pressure, sum_magnetic_energy);
+	}
+
 	// Compute MHD-aware effective fast magnetosonic speed:
 	//   cf^2 = cs^2 + vA^2 = cs^2 * (1 + 2/beta)  (using isothermal sound speed)
-	// For non-MHD: cf = cs (beta -> infinity)
-	double cf_infty_sqr = cs_infty * cs_infty;
-	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		const double mean_magnetic_energy = sum_magnetic_energy / n_cells;
-		const double mean_pressure = sum_pressure / n_cells;
-		const double plasma_beta = ParticleUtils::computePlasmaBeta(mean_pressure, mean_magnetic_energy);
-		// cf^2 = cs^2 * (1 + 2/beta)
-		cf_infty_sqr = cs_infty * cs_infty * (1.0 + 2.0 / plasma_beta);
-	}
+	//   For non-MHD: cf = cs (beta -> infinity)
+	const double cf_infty_sqr = cs_infty * cs_infty * (1.0 + 2.0 / mean_plasma_beta);
 
 	// compute Bondi-Hoyle accretion radius, r_BH = G M / (v^2 + cf^2)
 	const double v_infty_sqr = vx_infty * vx_infty + vy_infty * vy_infty + vz_infty * vz_infty;
@@ -301,15 +300,8 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 
 			// note that ComputeIsothermalSoundSpeed takes care of the case when gamma_ == 1.0
 			const double cs_cell = HydroSystem<problem_t>::ComputeIsothermalSoundSpeed(local_state_arr[bx], i, j, k, fab_fc_ptr);
-			// Compute plasma beta for MHD-aware Jeans density:
-			//   beta = P_thermal / P_magnetic
-			//   P_magnetic = magnetic_energy = B^2 / 2
-			double plasma_beta = std::numeric_limits<double>::max();
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				const double pressure_thermal = HydroSystem<problem_t>::ComputePressure(local_state_arr[bx], i, j, k, fab_fc_ptr);
-				const double magnetic_energy = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, fab_fc_ptr);
-				plasma_beta = ParticleUtils::computePlasmaBeta(pressure_thermal, magnetic_energy);
-			}
+			// Compute plasma beta for MHD-aware Jeans density (returns inf for non-MHD)
+			const double plasma_beta = HydroSystem<problem_t>::ComputePlasmaBeta(local_state_arr[bx], i, j, k, fab_fc_ptr);
 
 			// Jeans density with MHD correction:
 			//   rho_J = J^2 * pi * cs_eff^2 / (G * dx^2)

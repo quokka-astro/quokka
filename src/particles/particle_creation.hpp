@@ -221,16 +221,8 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 
 			// Determine sound speed.
 			const Real cs = HydroSystem<problem_t>::ComputeIsothermalSoundSpeed(state_arr, i, j, k, fab_fc);
-
-			// Compute plasma beta for MHD-aware Jeans density:
-			//   beta = P_thermal / P_magnetic
-			//   P_magnetic = magnetic_energy = B^2 / 2
-			double plasma_beta = std::numeric_limits<double>::max();
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				const double pressure_thermal = HydroSystem<problem_t>::ComputePressure(state_arr, i, j, k, fab_fc);
-				const double magnetic_energy = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, fab_fc);
-				plasma_beta = ParticleUtils::computePlasmaBeta(pressure_thermal, magnetic_energy);
-			}
+			// Compute plasma beta for MHD-aware Jeans density (returns inf for non-MHD)
+			const double plasma_beta = HydroSystem<problem_t>::ComputePlasmaBeta(state_arr, i, j, k, fab_fc);
 
 			// Jeans density with MHD correction:
 			//   rho_J = J^2 * pi * cs_eff^2 / (G * dx^2)
@@ -312,16 +304,8 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 			// Determine sound speed.
 			// ComputeIsothermalSoundSpeed internally handles the special case where gamma equals 1.0.
 			const Real cs = HydroSystem<problem_t>::ComputeIsothermalSoundSpeed(state_arr, i, j, k, fab_fc);
-
-			// Compute plasma beta for MHD-aware Jeans density:
-			//   beta = P_thermal / P_magnetic
-			//   P_magnetic = magnetic_energy = B^2 / 2
-			double plasma_beta = std::numeric_limits<double>::max();
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				const double pressure_thermal = HydroSystem<problem_t>::ComputePressure(state_arr, i, j, k, fab_fc);
-				const double magnetic_energy = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, fab_fc);
-				plasma_beta = ParticleUtils::computePlasmaBeta(pressure_thermal, magnetic_energy);
-			}
+			// Compute plasma beta for MHD-aware Jeans density (returns inf for non-MHD)
+			const double plasma_beta = HydroSystem<problem_t>::ComputePlasmaBeta(state_arr, i, j, k, fab_fc);
 
 			// Jeans density with MHD correction:
 			//   rho_J = J^2 * pi * cs_eff^2 / (G * dx^2)

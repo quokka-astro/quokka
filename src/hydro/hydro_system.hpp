@@ -131,6 +131,10 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 							   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr)
 	    -> amrex::Real;
 
+	AMREX_GPU_DEVICE static auto ComputePlasmaBeta(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
+						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr)
+	    -> amrex::Real;
+
 	AMREX_GPU_DEVICE static auto ComputeVelocityX1(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
 
 	AMREX_GPU_DEVICE static auto ComputeVelocityX2(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
@@ -659,6 +663,23 @@ HydroSystem<problem_t>::ComputeMagneticEnergy(int i, int j, int k, std::array<am
 		const auto bx3 = 0.5 * (bx3_m + bx3_p);
 		const auto b_sq = bx1 * bx1 + bx2 * bx2 + bx3 * bx3;
 		return 0.5 * b_sq;
+	}
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePlasmaBeta(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
+										    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc)
+    -> amrex::Real
+{
+	if constexpr (!Physics_Traits<problem_t>::is_mhd_enabled) {
+		return std::numeric_limits<amrex::Real>::max();
+	} else {
+		const amrex::Real pressure_thermal = ComputePressure(cons, i, j, k, cons_fc);
+		const amrex::Real magnetic_energy = ComputeMagneticEnergy(i, j, k, cons_fc);
+		if (magnetic_energy <= 0.0) {
+			return std::numeric_limits<amrex::Real>::max();
+		}
+		return pressure_thermal / magnetic_energy;
 	}
 }
 

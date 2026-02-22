@@ -126,10 +126,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto computePlasmaBeta(double pr
 	if (magnetic_energy <= 0.0) {
 		return std::numeric_limits<double>::max();
 	}
-	// P_magnetic = B^2 / (8*pi) = (B^2/2) / (4*pi) = magnetic_energy / (4*pi)
-	const double pressure_magnetic = magnetic_energy;
-	// beta = P_thermal / P_magnetic
-	return pressure_thermal / pressure_magnetic;
+	return pressure_thermal / magnetic_energy;
 }
 
 inline void roundoffMultiFab(amrex::MultiFab &mf)
