@@ -13,6 +13,7 @@
 #include "cooling/ResampledCooling.hpp"
 
 #include "AMReX_Print.H"
+#include <format>
 
 namespace quokka::ResampledCooling
 {
@@ -23,7 +24,7 @@ constexpr double cloudy_H_mass_fraction = 1. / (1. + 0.1 * 3.971);
 auto readResampledData(std::string const &hdf5_file, resampled_tables &resampledTables) -> bool
 {
 	amrex::Print() << "Initializing resampled cooling.\n";
-	amrex::Print() << fmt::format("resampled_table_file: {}.\n", hdf5_file);
+	amrex::Print() << std::format("resampled_table_file: {}.\n", hdf5_file);
 
 	// Check if file exists
 	if (!amrex::FileSystem::Exists(hdf5_file)) {
@@ -58,9 +59,9 @@ auto readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 
 	resampledTables.cloudy_H_mass_fraction = cloudy_H_mass_fraction;
 
-	amrex::Print() << fmt::format("\tDensity range: {} to {} g/cm^3 ({} steps).\n", resampledTables.rho_min, resampledTables.rho_max, n_rho);
-	amrex::Print() << fmt::format("\tSpecific energy range: {} to {} erg/g ({} steps).\n", resampledTables.eint_min, resampledTables.eint_max, n_eint);
-	amrex::Print() << fmt::format("\tPhotoelectric heating: {}.\n", is_pe_enabled ? "enabled" : "disabled");
+	amrex::Print() << std::format("\tDensity range: {} to {} g/cm^3 ({} steps).\n", resampledTables.rho_min, resampledTables.rho_max, n_rho);
+	amrex::Print() << std::format("\tSpecific energy range: {} to {} erg/g ({} steps).\n", resampledTables.eint_min, resampledTables.eint_max, n_eint);
+	amrex::Print() << std::format("\tPhotoelectric heating: {}.\n", is_pe_enabled ? "enabled" : "disabled");
 
 	return is_pe_enabled;
 }

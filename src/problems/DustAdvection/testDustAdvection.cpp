@@ -4,7 +4,7 @@
 
 #include "QuokkaSimulation.hpp"
 #include "util/fextract.hpp"
-#include <fmt/format.h>
+#include <format>
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
@@ -224,7 +224,7 @@ auto problem_main() -> int
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel("x");
 	matplotlibcpp::ylabel("density");
-	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
+	matplotlibcpp::title(std::format("t = {:.4f}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./dust_drag_density.pdf");
 
@@ -261,7 +261,7 @@ auto problem_main() -> int
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel("x");
 	matplotlibcpp::ylabel("velocity");
-	matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
+	matplotlibcpp::title(std::format("t = {:.4f}", sim.tNew_[0]));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./dust_drag_velocity.pdf");
 #endif // HAVE_PYTHON
