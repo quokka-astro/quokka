@@ -38,7 +38,7 @@ template <> struct SimulationData<TheProblem> {
 	Real dv_rms_generated{};
 	Real turbulent_amplitude = 1500.0; // cm/s,  0.05 * cs at 10K (~0.3 km/s)
 	int turbulent_size = 128;
-	Real initial_scalar_per_cell  = 0.0; // the actual density is initial_scalar_per_cell / cell_volume 
+	Real initial_scalar_per_cell = 0.0; // the actual density is initial_scalar_per_cell / cell_volume
 
 	Real refine_parameter = 1.0; // placeholder for refinement control
 	std::string stars_file;	     // default: no stars
@@ -52,7 +52,7 @@ template <> struct SimulationData<TheProblem> {
 	Real sigma1 = 700000.0;
 
 	// hot and warm gas definitions
-	Real hot_T = 1.0e6; // K
+	Real hot_T = 1.0e6;  // K
 	Real warm_T = 2.0e4; // K
 };
 
