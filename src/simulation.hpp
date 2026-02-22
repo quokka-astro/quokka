@@ -201,8 +201,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real stopTime_ = 1.0;	      // default
 	amrex::Real cflNumber_ = 0.3;	      // default
 	amrex::Real particleCflNumber_ = 0.5; // default
+	static constexpr int max_signal_counts = 1000; // number of times signal speed can exceed abort threshold before aborting
 	amrex::Real signalSpeedAbort_ = -1.0;
 	amrex::Real particleSpeedAbort_ = -1.0;
+	int signalSpeedExceedCount_ = 0;
+	int particleSpeedExceedCount_ = 0;
 	amrex::Real dtToleranceFactor_ = 1.1; // default
 	amrex::Real dtCutoff_ = 0.0;	      // default: no cutoff (disabled when 0)
 	amrex::Real initShrink_ = 1.0;	      // default: no shrink
@@ -1160,11 +1163,16 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	const amrex::Real domain_signal_max = max_signal_speed_[lev].norminf();
 	const amrex::IntVect domain_signal_maxloc = max_signal_speed_[lev].maxIndex(0);
 	if (signalSpeedAbort_ > 0.0 && domain_signal_max > signalSpeedAbort_) {
-		const std::string abort_msg =
-		    std::format("[FATAL] Maximum signal speed ({:.3e} code units) exceeded abort threshold ({:.3e} code units) on level {} at cell {}",
-				domain_signal_max, signalSpeedAbort_, lev, formatIntVect(domain_signal_maxloc));
-		printCellProperties(lev, domain_signal_maxloc);
-		amrex::Abort(abort_msg.c_str());
+		++signalSpeedExceedCount_;
+		amrex::Print() << std::format("[WARNING] Maximum signal speed ({:.3e} code units) exceeded abort threshold ({:.3e} code units) on level {} at cell {} (count: {}/{})\n",
+					      domain_signal_max, signalSpeedAbort_, lev, formatIntVect(domain_signal_maxloc), signalSpeedExceedCount_, max_signal_counts);
+		if (signalSpeedExceedCount_ >= max_signal_counts) {
+			const std::string abort_msg =
+			    std::format("[FATAL] Maximum signal speed exceeded abort threshold {} times (max_signal_counts={}). Aborting.",
+					signalSpeedExceedCount_, max_signal_counts);
+			printCellProperties(lev, domain_signal_maxloc);
+			amrex::Abort(abort_msg.c_str());
+		}
 	}
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx = geom[lev].CellSizeArray();
 	const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
@@ -1186,10 +1194,16 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		AMREX_ALWAYS_ASSERT(!std::isnan(max_particle_speed.value));
 		AMREX_ALWAYS_ASSERT(std::isfinite(max_particle_speed.value));
 		if (particleSpeedAbort_ > 0.0 && max_particle_speed.value > particleSpeedAbort_) {
-			const std::string abort_msg = std::format(
-			    "[FATAL] Maximum particle speed ({:.3e} code units) exceeded abort threshold ({:.3e} code units) on level {} at position {}",
-			    max_particle_speed.value, particleSpeedAbort_, lev, formatRealVect(max_particle_speed.index));
-			amrex::Abort(abort_msg.c_str());
+			++particleSpeedExceedCount_;
+			amrex::Print() << std::format(
+			    "[WARNING] Maximum particle speed ({:.3e} code units) exceeded abort threshold ({:.3e} code units) on level {} at position {} (count: {}/{})\n",
+			    max_particle_speed.value, particleSpeedAbort_, lev, formatRealVect(max_particle_speed.index), particleSpeedExceedCount_, max_signal_counts);
+			if (particleSpeedExceedCount_ >= max_signal_counts) {
+				const std::string abort_msg =
+				    std::format("[FATAL] Maximum particle speed exceeded abort threshold {} times (max_signal_counts={}). Aborting.",
+						particleSpeedExceedCount_, max_signal_counts);
+				amrex::Abort(abort_msg.c_str());
+			}
 		}
 		// avoid division by zero by only computing dt if max_particle_speed is not too small
 		if (max_particle_speed.value > 1e-5 * (dx_min / hydro_dt.value)) {
