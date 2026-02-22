@@ -303,7 +303,7 @@ template <> void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::s
 
 	// compute derived variables and save in 'mf'
 	if (dname == "gpot") {
-		const int ncomp = ncomp_cc_in;
+		const int ncomp = ncomp_in;
 		auto const &phi_arr = phi[lev].const_arrays();
 		auto output = mf.arrays();
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept { output[bx](i, j, k, ncomp) = phi_arr[bx](i, j, k); });
@@ -346,6 +346,7 @@ template <> void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::s
 		const int ncomp = ncomp_in;
 		auto const &output = mf.arrays();
 		auto const &state = state_new_cc_[lev].const_arrays();
+		auto tables = resampledTables_.const_tables();
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
 			Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
@@ -357,6 +358,7 @@ template <> void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::s
 		const int ncomp = ncomp_in;
 		auto const &output = mf.arrays();
 		auto const &state = state_new_cc_[lev].const_arrays();
+		auto tables = resampledTables_.const_tables();
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
 			Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
@@ -368,6 +370,7 @@ template <> void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::s
 		const int ncomp = ncomp_in;
 		auto const &output = mf.arrays();
 		auto const &state = state_new_cc_[lev].const_arrays();
+		auto tables = resampledTables_.const_tables();
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
 			Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
@@ -381,6 +384,7 @@ template <> void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::s
 		const int ncomp = ncomp_in;
 		auto const &output = mf.arrays();
 		auto const &state = state_new_cc_[lev].const_arrays();
+		auto tables = resampledTables_.const_tables();
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
 			Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
