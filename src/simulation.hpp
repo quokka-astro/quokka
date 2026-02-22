@@ -73,8 +73,8 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_VisMF.H"
 #include "util/BC.hpp"
 #include <AMReX_FluxRegister.H>
-#include <fmt/format.h>
-#include <fmt/ranges.h>
+#include <format>
+
 #include <yaml-cpp/yaml.h>
 
 #include "AMReX_AmrParticles.H"
@@ -119,14 +119,27 @@ using namespace ascent;
 // Quokka version string to be stored in metadata. This is used in post-processing tools like YT to do version checks.
 static constexpr auto QUOKKA_VERSION = "25.03";
 
-template <> struct fmt::formatter<amrex::IntVect> : formatter<std::vector<int>> {
-	// parse is inherited from formatter<std::vector<int>>.
-	auto format(amrex::IntVect iv, format_context &ctx) const -> format_context::iterator
-	{
-		std::vector<int> const vec{AMREX_D_DECL(iv[0], iv[1], iv[2])};
-		return formatter<std::vector<int>>::format(vec, ctx);
-	};
-};
+inline auto formatIntVect(amrex::IntVect const &iv) -> std::string
+{
+#if AMREX_SPACEDIM == 1
+	return std::format("({})", iv[0]);
+#elif AMREX_SPACEDIM == 2
+	return std::format("({}, {})", iv[0], iv[1]);
+#else
+	return std::format("({}, {}, {})", iv[0], iv[1], iv[2]);
+#endif
+}
+
+inline auto formatRealVect(amrex::RealVect const &rv) -> std::string
+{
+#if AMREX_SPACEDIM == 1
+	return std::format("({:.3e})", rv[0]);
+#elif AMREX_SPACEDIM == 2
+	return std::format("({:.3e}, {:.3e})", rv[0], rv[1]);
+#else
+	return std::format("({:.3e}, {:.3e}, {:.3e})", rv[0], rv[1], rv[2]);
+#endif
+}
 
 using variant_t = std::variant<amrex::Real, std::string>;
 
@@ -986,7 +999,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	int nargs = std::sscanf(maxWalltimeInput.c_str(), "%d:%d:%d", &hours, &minutes, &seconds); // NOLINT
 	if (nargs == 3) {
 		maxWalltime_ = 3600 * hours + 60 * minutes + seconds;
-		amrex::Print() << fmt::format("Setting walltime limit to {} hours, {} minutes, {} seconds.\n", hours, minutes, seconds);
+		amrex::Print() << std::format("Setting walltime limit to {} hours, {} minutes, {} seconds.\n", hours, minutes, seconds);
 	}
 
 	// SFH parameters
@@ -1025,28 +1038,28 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 				luminosityTables_.luminosity = quokka::DataTable<2, nGroups>::CSVReader(luminosityTableFilename_, rad_table_output_spacing_);
 
 				amrex::Print() << "Luminosity table loaded successfully.\n";
-				amrex::Print() << fmt::format("\tTable dimensions: {} x {}\n", luminosityTables_.luminosity.size(0),
+				amrex::Print() << std::format("\tTable dimensions: {} x {}\n", luminosityTables_.luminosity.size(0),
 							      luminosityTables_.luminosity.size(1));
-				amrex::Print() << fmt::format("\tNumber of outputs: {}\n", luminosityTables_.luminosity.num_outputs());
+				amrex::Print() << std::format("\tNumber of outputs: {}\n", luminosityTables_.luminosity.num_outputs());
 
 				// Validate table metadata matches expected hardcoded values
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 				    luminosityTables_.luminosity.input_name(0) == "age",
-				    fmt::format("Luminosity table first input must be 'age', got '{}'", luminosityTables_.luminosity.input_name(0)));
+				    std::format("Luminosity table first input must be 'age', got '{}'", luminosityTables_.luminosity.input_name(0)));
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 				    luminosityTables_.luminosity.input_name(1) == "mass",
-				    fmt::format("Luminosity table second input must be 'mass', got '{}'", luminosityTables_.luminosity.input_name(1)));
+				    std::format("Luminosity table second input must be 'mass', got '{}'", luminosityTables_.luminosity.input_name(1)));
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 				    luminosityTables_.luminosity.input_unit(0) == "year",
-				    fmt::format("Luminosity table first input unit must be 'year', got '{}'", luminosityTables_.luminosity.input_unit(0)));
+				    std::format("Luminosity table first input unit must be 'year', got '{}'", luminosityTables_.luminosity.input_unit(0)));
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 				    luminosityTables_.luminosity.input_unit(1) == "Msun",
-				    fmt::format("Luminosity table second input unit must be 'Msun', got '{}'", luminosityTables_.luminosity.input_unit(1)));
+				    std::format("Luminosity table second input unit must be 'Msun', got '{}'", luminosityTables_.luminosity.input_unit(1)));
 
 				// Validate all output units are "erg/s"
 				for (int i = 0; i < nGroups; ++i) {
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(luminosityTables_.luminosity.output_unit(i) == "erg/s",
-									 fmt::format("Luminosity table output unit {} must be 'erg/s', got '{}'", i,
+									 std::format("Luminosity table output unit {} must be 'erg/s', got '{}'", i,
 										     luminosityTables_.luminosity.output_unit(i)));
 				}
 
@@ -1148,8 +1161,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	const amrex::IntVect domain_signal_maxloc = max_signal_speed_[lev].maxIndex(0);
 	if (signalSpeedAbort_ > 0.0 && domain_signal_max > signalSpeedAbort_) {
 		const std::string abort_msg =
-		    fmt::format("[FATAL] Maximum signal speed ({:.3e} code units) exceeded abort threshold ({:.3e} code units) on level {} at cell {}",
-				domain_signal_max, signalSpeedAbort_, lev, domain_signal_maxloc);
+		    std::format("[FATAL] Maximum signal speed ({:.3e} code units) exceeded abort threshold ({:.3e} code units) on level {} at cell {}",
+				domain_signal_max, signalSpeedAbort_, lev, formatIntVect(domain_signal_maxloc));
 		printCellProperties(lev, domain_signal_maxloc);
 		amrex::Abort(abort_msg.c_str());
 	}
@@ -1158,9 +1171,9 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	dtloc_t hydro_dt{.value = cflNumber_ * (dx_min / domain_signal_max), .index = domain_signal_maxloc};
 
 	if (verbose) {
-		amrex::Print() << fmt::format("...[level {}] estimated hydro timestep: {:e}\n", lev, hydro_dt.value);
-		amrex::Print() << fmt::format("...[level {}] \thydro timestep limited at cell {} with signal speed = {:e}\n", lev, hydro_dt.index,
-					      domain_signal_max);
+		amrex::Print() << std::format("...[level {}] estimated hydro timestep: {:e}\n", lev, hydro_dt.value);
+		amrex::Print() << std::format("...[level {}] \thydro timestep limited at cell {} with signal speed = {:e}\n", lev,
+					      formatIntVect(hydro_dt.index), domain_signal_max);
 		printCellProperties(lev, hydro_dt.index);
 	}
 
@@ -1173,9 +1186,9 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		AMREX_ALWAYS_ASSERT(!std::isnan(max_particle_speed.value));
 		AMREX_ALWAYS_ASSERT(std::isfinite(max_particle_speed.value));
 		if (particleSpeedAbort_ > 0.0 && max_particle_speed.value > particleSpeedAbort_) {
-			const std::string abort_msg = fmt::format(
-			    "[FATAL] Maximum particle speed ({:.3e} code units) exceeded abort threshold ({:.3e} code units) on level {} at position {::e}",
-			    max_particle_speed.value, particleSpeedAbort_, lev, max_particle_speed.index);
+			const std::string abort_msg = std::format(
+			    "[FATAL] Maximum particle speed ({:.3e} code units) exceeded abort threshold ({:.3e} code units) on level {} at position {}",
+			    max_particle_speed.value, particleSpeedAbort_, lev, formatRealVect(max_particle_speed.index));
 			amrex::Abort(abort_msg.c_str());
 		}
 		// avoid division by zero by only computing dt if max_particle_speed is not too small
@@ -1183,9 +1196,10 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 			particle_dt.value = particleCflNumber_ * (dx_min / max_particle_speed.value);
 		}
 		if (verbose) {
-			amrex::Print() << fmt::format("...[level {}] estimated particle timestep: {:e}\n", lev, particle_dt.value);
-			amrex::Print() << fmt::format("...[level {}] \tmax particle velocity: {:e}\n", lev, max_particle_speed.value);
-			amrex::Print() << fmt::format("...[level {}] \tparticle timestep limited at position {::e}\n", lev, max_particle_speed.index);
+			amrex::Print() << std::format("...[level {}] estimated particle timestep: {:e}\n", lev, particle_dt.value);
+			amrex::Print() << std::format("...[level {}] \tmax particle velocity: {:e}\n", lev, max_particle_speed.value);
+			amrex::Print() << std::format("...[level {}] \tparticle timestep limited at position {}\n", lev,
+						      formatRealVect(max_particle_speed.index));
 		}
 	}
 #endif
@@ -1197,9 +1211,9 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	if (verbose) {
 		// print the physics that limits the timestep
 		if (dt_min_ptr == &hydro_dt) {
-			amrex::Print() << fmt::format("...[level {}] timestep limited by HYDRO\n", lev);
+			amrex::Print() << std::format("...[level {}] timestep limited by HYDRO\n", lev);
 		} else if (dt_min_ptr == &particle_dt) {
-			amrex::Print() << fmt::format("...[level {}] timestep limited by PARTICLES\n", lev);
+			amrex::Print() << std::format("...[level {}] timestep limited by PARTICLES\n", lev);
 		}
 	}
 
@@ -1836,7 +1850,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLev
 		// check for NaN
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			// NOTE: this fails when multiple levels are fully refined when open boundary condition is used.
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!phi[lev].contains_nan(), fmt::format("NaN detected in phi at level {} after Poisson solve", lev));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!phi[lev].contains_nan(), std::format("NaN detected in phi at level {} after Poisson solve", lev));
 		}
 	}
 #endif
@@ -2063,7 +2077,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 
 	// Print SN explosion count if verbose and non-zero
 	if (verbose && num_sn_explosions > 0) {
-		amrex::Print() << fmt::format("[PARTICLES] SN explosions: Time: {} - {} stars went supernova at level {}\n", time, num_sn_explosions, lev);
+		amrex::Print() << std::format("[PARTICLES] SN explosions: Time: {} - {} stars went supernova at level {}\n", time, num_sn_explosions, lev);
 	}
 
 	// Check if the maximum velocity is greater than the threshold
@@ -4164,14 +4178,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadMetadataFile(st
 
 		if (value_real) {
 			simulationMetadata_[key] = value_real.value();
-			amrex::Print() << fmt::format("\t{} = {}\n", key, value_real.value());
+			amrex::Print() << std::format("\t{} = {}\n", key, value_real.value());
 		} else if (value_string) {
 			simulationMetadata_[key] = value_string.value();
-			amrex::Print() << fmt::format("\t{} = {}\n", key, value_string.value());
+			amrex::Print() << std::format("\t{} = {}\n", key, value_string.value());
 		} else {
 			// For complex types (sequences, maps), copy the entire node
 			simulationMetadata_[key] = it->second;
-			amrex::Print() << fmt::format("\t{} = (complex type)\n", key);
+			amrex::Print() << std::format("\t{} = (complex type)\n", key);
 		}
 	}
 
@@ -4857,7 +4871,7 @@ void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::un
 #if AMREX_SPACEDIM == 3
 	if (restartRefineFactor_ > 1 && splitParticlesOnRestartRefine_) {
 		const int split_factor = gcem::pow(restartRefineFactor_, AMREX_SPACEDIM);
-		amrex::Print() << fmt::format("Splitting {} using split_factor = {}\n", particleRegister_.getParticleTypeName(particle_type), split_factor);
+		amrex::Print() << std::format("Splitting {} using split_factor = {}\n", particleRegister_.getParticleTypeName(particle_type), split_factor);
 		auto descriptor = particleRegister_.getParticleDescriptor(particle_type);
 		for (int lev = 0; lev <= finestLevel(); ++lev) {
 			descriptor->splitParticles(lev, split_factor);
@@ -4870,7 +4884,7 @@ template <typename problem_t>
 void AMRSimulation<problem_t>::writeFaceVelocitiesToDisk(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &faceVelArrays, int lev, int timestep)
 {
 	// Create directory for face velocity outputs if it doesn't exist
-	std::string dirname = fmt::format("facevel_lev{}_step{}", lev, timestep);
+	std::string dirname = std::format("facevel_lev{}_step{}", lev, timestep);
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		amrex::UtilCreateDirectory(dirname, 0755);
 	}
@@ -4893,7 +4907,7 @@ void AMRSimulation<problem_t>::writeFaceVelocitiesToDisk(std::array<amrex::Multi
 			const amrex::FArrayBox &fab = faceVelArrays[idim][mfi];
 
 			// Create filename for this FAB
-			const std::string filename = fmt::format("{}/facevel_{}_box_{}.fab", dirname, dimname, mfi.index());
+			const std::string filename = std::format("{}/facevel_{}_box_{}.fab", dirname, dimname, mfi.index());
 
 			// Write FAB to disk in ASCII format
 			std::ofstream ofs(filename, std::ios::out);
@@ -4933,7 +4947,7 @@ void AMRSimulation<problem_t>::writeReconstructedStatesToDisk(std::array<amrex::
 							      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &rightState, int lev, int timestep)
 {
 	// Create directory for reconstructed state outputs if it doesn't exist
-	std::string dirname = fmt::format("reconst_lev{}_step{}", lev, timestep);
+	std::string dirname = std::format("reconst_lev{}_step{}", lev, timestep);
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		amrex::UtilCreateDirectory(dirname, 0755);
 	}
@@ -4957,8 +4971,8 @@ void AMRSimulation<problem_t>::writeReconstructedStatesToDisk(std::array<amrex::
 			const amrex::FArrayBox &rightFab = rightState[idim][mfi];
 
 			// Create filenames for this FAB's left and right states
-			const std::string leftFilename = fmt::format("{}/reconst_left_{}_box_{}.fab", dirname, dimname, mfi.index());
-			const std::string rightFilename = fmt::format("{}/reconst_right_{}_box_{}.fab", dirname, dimname, mfi.index());
+			const std::string leftFilename = std::format("{}/reconst_left_{}_box_{}.fab", dirname, dimname, mfi.index());
+			const std::string rightFilename = std::format("{}/reconst_right_{}_box_{}.fab", dirname, dimname, mfi.index());
 
 			// Write left state FAB to disk
 			std::ofstream leftOfs(leftFilename, std::ios::out);

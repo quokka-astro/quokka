@@ -16,7 +16,7 @@
 #include "AMReX_Print.H"
 #include "math/interpolate.hpp"
 #include "util/BC.hpp"
-#include <fmt/format.h>
+#include <format>
 #include <fstream>
 
 #include "QuokkaSimulation.hpp"

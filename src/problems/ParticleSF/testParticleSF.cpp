@@ -10,6 +10,7 @@
 #include "AMReX_Print.H"
 #include "AMReX_SPACE.H"
 #include "util/BC.hpp"
+#include <format>
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
@@ -318,7 +319,7 @@ auto problem_main() -> int
 		// get total gas mass
 		const double m_gas_final2 = sim.state_new_cc_[0].sum(HydroSystem<ParticleSFProblem>::density_index) * cell_volume;
 		const double m_gas_change2 = sim.userData_.m_gas_init - m_gas_final2;
-		amrex::Print() << fmt::format("Mass of all stars [expected]   = {:.6e} [{:.6e}] M_sol \n", m_star_tot2 / C::M_solar,
+		amrex::Print() << std::format("Mass of all stars [expected]   = {:.6e} [{:.6e}] M_sol \n", m_star_tot2 / C::M_solar,
 					      m_gas_change2 / C::M_solar);
 
 		const double tol_m_star_tot2 = 0.1;
