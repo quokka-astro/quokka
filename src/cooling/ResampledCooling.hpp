@@ -15,12 +15,12 @@
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_iMultiFab.H"
 
-#include "fmt/core.h"
 #include "hydro/hydro_system.hpp"
 #include "math/FastMath.hpp"
 #include "math/ODEIntegrate.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/DataTable.hpp"
+#include <format>
 
 namespace quokka::ResampledCooling
 {
@@ -226,7 +226,7 @@ auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &res
 
 	const int nmax = nsubstepsMF.max(0);
 	const Real navg = static_cast<Real>(nsubstepsMF.sum(0)) / static_cast<Real>(nsubstepsMF.boxArray().numPts());
-	amrex::Print() << fmt::format("\tcooling substeps (per cell): avg {}, max {}\n", navg, nmax);
+	amrex::Print() << std::format("\tcooling substeps (per cell): avg {}, max {}\n", navg, nmax);
 
 	// check if integration succeeded
 	if (nmax >= maxStepsODEIntegrate) {

@@ -8,7 +8,7 @@
 ///        Characteristic Boundary Conditions (NSCBC).
 ///
 #include "util/BC.hpp"
-#include <fmt/format.h>
+#include <format>
 #include <random>
 #include <tuple>
 #include <vector>

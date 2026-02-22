@@ -123,9 +123,16 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	AMREX_GPU_DEVICE static auto ComputeSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
 						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr) -> amrex::Real;
 
+	AMREX_GPU_DEVICE static auto ComputeIsothermalSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
+								 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr)
+	    -> amrex::Real;
+
 	AMREX_GPU_DEVICE static auto ComputeMagneticEnergy(int i, int j, int k,
 							   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr)
 	    -> amrex::Real;
+
+	AMREX_GPU_DEVICE static auto ComputePlasmaBeta(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
+						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr) -> amrex::Real;
 
 	AMREX_GPU_DEVICE static auto ComputeVelocityX1(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> amrex::Real;
 
@@ -613,6 +620,30 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputeSoundSpe
 
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
+HydroSystem<problem_t>::ComputeIsothermalSoundSpeed(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
+						    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc) -> amrex::Real
+{
+	const auto rho = cons(i, j, k, density_index);
+	const auto px = cons(i, j, k, x1Momentum_index);
+	const auto py = cons(i, j, k, x2Momentum_index);
+	const auto pz = cons(i, j, k, x3Momentum_index);
+	const auto E = cons(i, j, k, energy_index); // *total* gas energy per unit volume
+	const auto vx = px / rho;
+	const auto vy = py / rho;
+	const auto vz = pz / rho;
+	const auto magnetic_energy = ComputeMagneticEnergy(i, j, k, cons_fc);
+	const auto kinetic_energy = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
+	const auto thermal_energy = E - kinetic_energy - magnetic_energy;
+
+	amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+	amrex::Real P = quokka::EOS<problem_t>::ComputePressure(rho, thermal_energy, massScalars);
+	amrex::Real cs = quokka::EOS<problem_t>::ComputeIsothermalSoundSpeed(rho, P);
+
+	return cs;
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
 HydroSystem<problem_t>::ComputeMagneticEnergy(int i, int j, int k, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc) -> amrex::Real
 {
 	if constexpr (!Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -631,6 +662,23 @@ HydroSystem<problem_t>::ComputeMagneticEnergy(int i, int j, int k, std::array<am
 		const auto bx3 = 0.5 * (bx3_m + bx3_p);
 		const auto b_sq = bx1 * bx1 + bx2 * bx2 + bx3 * bx3;
 		return 0.5 * b_sq;
+	}
+}
+
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::ComputePlasmaBeta(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
+										   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc)
+    -> amrex::Real
+{
+	if constexpr (!Physics_Traits<problem_t>::is_mhd_enabled) {
+		return std::numeric_limits<amrex::Real>::max();
+	} else {
+		const amrex::Real pressure_thermal = ComputePressure(cons, i, j, k, cons_fc);
+		const amrex::Real magnetic_energy = ComputeMagneticEnergy(i, j, k, cons_fc);
+		if (magnetic_energy <= 0.0) {
+			return std::numeric_limits<amrex::Real>::max();
+		}
+		return pressure_thermal / magnetic_energy;
 	}
 }
 

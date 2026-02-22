@@ -11,7 +11,7 @@
 #include "util/matplotlibcpp.h"
 #endif
 #include "hydro/hydro_system.hpp"
-#include <fmt/format.h>
+#include <format>
 #include <valarray>
 
 #include "AMReX_Array.H"
@@ -194,8 +194,8 @@ auto problem_main() -> int
 		matplotlibcpp::plot(xs, d, d_args);
 		matplotlibcpp::plot(xs, density_exact, dinit_args);
 		matplotlibcpp::legend();
-		matplotlibcpp::title(fmt::format("t = {:.4f}", t));
-		matplotlibcpp::save(fmt::format("./density_{:.4f}.pdf", t));
+		matplotlibcpp::title(std::format("t = {:.4f}", t));
+		matplotlibcpp::save(std::format("./density_{:.4f}.pdf", t));
 
 		std::map<std::string, std::string> P_args;
 		std::map<std::string, std::string> Pinit_args;
@@ -207,8 +207,8 @@ auto problem_main() -> int
 		matplotlibcpp::plot(xs, P, P_args);
 		matplotlibcpp::plot(xs, pressure_exact, Pinit_args);
 		matplotlibcpp::legend();
-		matplotlibcpp::title(fmt::format("t = {:.4f}", t));
-		matplotlibcpp::save(fmt::format("./pressure_{:.4f}.pdf", t));
+		matplotlibcpp::title(std::format("t = {:.4f}", t));
+		matplotlibcpp::save(std::format("./pressure_{:.4f}.pdf", t));
 
 		std::map<std::string, std::string> v_args;
 		std::map<std::string, std::string> vinit_args;
@@ -220,8 +220,8 @@ auto problem_main() -> int
 		matplotlibcpp::plot(xs, vx, v_args);
 		matplotlibcpp::plot(xs, velocity_exact, vinit_args);
 		matplotlibcpp::legend();
-		matplotlibcpp::title(fmt::format("t = {:.4f}", t));
-		matplotlibcpp::save(fmt::format("./velocity_{:.4f}.pdf", t));
+		matplotlibcpp::title(std::format("t = {:.4f}", t));
+		matplotlibcpp::save(std::format("./velocity_{:.4f}.pdf", t));
 	}
 #endif
 

@@ -14,7 +14,7 @@
 #include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
-#include <fmt/format.h>
+#include <format>
 #include <fstream>
 
 #include "QuokkaSimulation.hpp"
