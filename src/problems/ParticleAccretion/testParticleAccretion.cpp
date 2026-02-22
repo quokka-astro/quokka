@@ -548,12 +548,21 @@ auto problem_main() -> int
 			amrex::Print() << "time = " << time[i] << ", Mstar = " << Mstar_[i] << "\n";
 		}
 
-		// compute exact accretion rate
-		const Real r_BH = C::Gconst * M_star_in_g / (cs0 * cs0);
-		const Real lam = std::exp(1.5) / 4.0;
+	// compute exact accretion rate (MHD-aware Bondi formula)
+	Real Mdot_exact = NAN;
+	{
+		const Real magnetic_pressure = 0.5 * B0 * B0;
 		const Real rho_bg = uniform_density > 0.0 ? uniform_density : rho0;
-		const Real Mdot_exact = 4.0 * M_PI * rho_bg * r_BH * r_BH * (lam * cs0);
+		const Real beta = (rho_bg / mu) * C::k_B * T0 / magnetic_pressure;
+		// MHD-aware fast magnetosonic speed: cf^2 = cs^2 * (1 + 2/beta) (isothermal)
+		const Real cf_sqr = cs0 * cs0 * (1.0 + 2.0 / beta);
+		const Real v_infty_sqr = 0.0;
+		const Real r_BH_mhd = C::Gconst * M_star_in_g / (v_infty_sqr + cf_sqr);
+		const Real lambda = gcem::exp(1.5) / 4.0;
+		// M_dot = 4 pi rho_infty r_BH^2 * sqrt(v_infty^2 + lambda^2 cf^2), where lambda = exp(3/2) / 4
+		Mdot_exact = 4.0 * M_PI * rho_bg * r_BH_mhd * r_BH_mhd * std::sqrt(v_infty_sqr + lambda * lambda * cf_sqr);
 		amrex::Print() << "Mdot_exact = " << Mdot_exact << "\n";
+	}
 
 		// Estimate the accretion rate from the particle data
 		const int last_step = static_cast<int>(time.size()) - 1;
