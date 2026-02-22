@@ -109,7 +109,7 @@ template <typename problem_t> void DiagPlotfile::processDiag(int a_nstep, const 
 				}
 			}
 			if (!found) {
-				amrex::Abort("DiagPlotfile: Requested field '" + name + "' not found in available variables!");
+				amrex::Abort("DiagPlotfile: Requested field in field_names '" + name + "' not found in available variables!");
 			}
 		}
 		int const nSelected = static_cast<int>(selected_indices.size());
