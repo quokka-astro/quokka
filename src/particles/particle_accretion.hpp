@@ -59,6 +59,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::
 	double sum_py = 0.0;
 	double sum_pz = 0.0;
 	double sum_cs = 0.0;
+	double sum_magnetic_energy = 0.0;
+	double sum_pressure = 0.0;
 	for (int ii = ix - rho_infty_stencil_size; ii <= ix + rho_infty_stencil_size; ++ii) {
 		for (int jj = iy - rho_infty_stencil_size; jj <= iy + rho_infty_stencil_size; ++jj) {
 			for (int kk = iz - rho_infty_stencil_size; kk <= iz + rho_infty_stencil_size; ++kk) {
@@ -83,6 +85,10 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::
 				sum_pz += pz;
 				sum_cs += cs * rho;
 				n_cells += 1;
+				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+					sum_magnetic_energy += HydroSystem<problem_t>::ComputeMagneticEnergy(ii, jj, kk, fab_fc);
+					sum_pressure += HydroSystem<problem_t>::ComputePressure(local_state, ii, jj, kk, fab_fc);
+				}
 			}
 		}
 	}
@@ -100,15 +106,27 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto compute_Mdot_and_r_K(const amrex::
 	AMREX_ASSERT(!std::isnan(cs_infty));
 	AMREX_ASSERT(cs_infty > 0.0);
 
-	// compute Bondi-Hoyle accretion radius, r_BH = G M / (v^2 + c^2)
+	// Compute MHD-aware effective fast magnetosonic speed:
+	//   cf^2 = cs^2 + vA^2 = cs^2 * (1 + 2/beta)  (using isothermal sound speed)
+	// For non-MHD: cf = cs (beta -> infinity)
+	double cf_infty_sqr = cs_infty * cs_infty;
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		const double mean_magnetic_energy = sum_magnetic_energy / n_cells;
+		const double mean_pressure = sum_pressure / n_cells;
+		const double plasma_beta = ParticleUtils::computePlasmaBeta(mean_pressure, mean_magnetic_energy);
+		// cf^2 = cs^2 * (1 + 2/beta)
+		cf_infty_sqr = cs_infty * cs_infty * (1.0 + 2.0 / plasma_beta);
+	}
+
+	// compute Bondi-Hoyle accretion radius, r_BH = G M / (v^2 + cf^2)
 	const double v_infty_sqr = vx_infty * vx_infty + vy_infty * vy_infty + vz_infty * vz_infty;
-	const double r_BH = C::Gconst * par_mass / (v_infty_sqr + cs_infty * cs_infty);
+	const double r_BH = C::Gconst * par_mass / (v_infty_sqr + cf_infty_sqr);
 
 	// Compute the accretion rate in the accretion zone,
-	// M_dot = 4 pi rho_infty r_BH^2 * sqrt(v_infty^2 + lambda^2 c_s^2), where lambda = exp(3/2) / 4
+	// M_dot = 4 pi rho_infty r_BH^2 * sqrt(v_infty^2 + lambda^2 cf^2), where lambda = exp(3/2) / 4
 	constexpr double lambda = gcem::exp(1.5) / 4.0;
 	AMREX_ASSERT(rho_infty > 0.0);
-	const double M_dot = 4.0 * M_PI * rho_infty * r_BH * r_BH * std::sqrt(v_infty_sqr + lambda * lambda * cs_infty * cs_infty);
+	const double M_dot = 4.0 * M_PI * rho_infty * r_BH * r_BH * std::sqrt(v_infty_sqr + lambda * lambda * cf_infty_sqr);
 	AMREX_ASSERT(M_dot >= 0.0);
 
 	// Compute accretion kernel radius,

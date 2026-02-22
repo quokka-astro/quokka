@@ -250,17 +250,19 @@ auto problem_main() -> int
 			amrex::Print() << "Test failed: total mass is not conserved at step 1\n";
 		}
 
-		// compute exact accretion rate
+		// compute exact accretion rate (MHD-aware Bondi-Hoyle formula)
 		{
 			const Real magnetic_pressure = 0.5 * B0 * B0;
 			const Real beta = (rho0 / mu) * C::k_B * T0 / magnetic_pressure;
 			const Real cs_iso = std::sqrt(C::k_B * T0 / mu);
+			// MHD-aware fast magnetosonic speed: cf^2 = cs^2 * (1 + 2/beta) (isothermal)
+			const Real cf_sqr = cs_iso * cs_iso * (1.0 + 2.0 / beta);
 			const Real v_infty_sqr = 0.0;
 			const Real par_mass = 10.0 * C::M_solar;
-			const Real r_BH = C::Gconst * par_mass / (v_infty_sqr + cs_iso * cs_iso);
+			const Real r_BH = C::Gconst * par_mass / (v_infty_sqr + cf_sqr);
 			const Real lambda = gcem::exp(1.5) / 4.0;
-			// M_dot = 4 pi rho_infty r_BH^2 * sqrt(v_infty^2 + lambda^2 c_s^2), where lambda = exp(3/2) / 4
-			const Real M_dot_exact = 4.0 * M_PI * rho0 * r_BH * r_BH * std::sqrt(v_infty_sqr + lambda * lambda * cs_iso * cs_iso);
+			// M_dot = 4 pi rho_infty r_BH^2 * sqrt(v_infty^2 + lambda^2 cf^2), where lambda = exp(3/2) / 4
+			const Real M_dot_exact = 4.0 * M_PI * rho0 * r_BH * r_BH * std::sqrt(v_infty_sqr + lambda * lambda * cf_sqr);
 			rho_dot_exact = M_dot_exact / std::pow(7 * dx0[0], 3);
 			amrex::Print() << "Exact rhodot = " << rho_dot_exact << "\n";
 		}
