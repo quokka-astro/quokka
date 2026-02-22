@@ -44,10 +44,8 @@ checkpoint_interval = -1
 ascent_interval = -1
 
 statistics_interval = 200
-projection_interval = -1
-projection.dirs = x z
 
-derived_vars = pressure entropy nH temperature cooling_length \
+derived_vars = pressure entropy nH nH_cloud nH_wind nH_residual temperature cooling_length \
 	       cloud_fraction lab_velocity_x mass velocity_mag c_s
 
 cooling.enabled = 1

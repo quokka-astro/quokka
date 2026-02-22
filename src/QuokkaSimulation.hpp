@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <format>
 #include <iostream>
 #include <set>
 #if __has_include(<filesystem>)
@@ -296,7 +297,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const override;
 
 	// compute projected vars
-	[[nodiscard]] auto ComputeProjections(amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> override;
 
 	// compute statistics
 	auto ComputeStatistics() -> std::map<std::string, amrex::Real> override;
@@ -533,7 +533,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::getScalarVariabl
 	names.reserve(nscalars);
 	for (int n = 0; n < nscalars; ++n) {
 		// write string 'scalar_1', etc.
-		names.push_back(fmt::format("scalar_{}", n));
+		names.push_back(std::format("scalar_{}", n));
 	}
 	return names;
 }
@@ -649,18 +649,18 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		peHeatingTables_.pe_heating = quokka::DataTable<1, 1>::CSVReader(sfh_to_pe_heating_table_filename_, quokka::SpacingType::fast_log);
 
 		amrex::Print() << "PE heating table loaded successfully.\n";
-		amrex::Print() << fmt::format("\tTable dimension: {}\n", peHeatingTables_.pe_heating.size(0));
-		amrex::Print() << fmt::format("\tNumber of outputs: {}\n", peHeatingTables_.pe_heating.num_outputs());
+		amrex::Print() << std::format("\tTable dimension: {}\n", peHeatingTables_.pe_heating.size(0));
+		amrex::Print() << std::format("\tNumber of outputs: {}\n", peHeatingTables_.pe_heating.num_outputs());
 
 		// Validate table metadata matches expected hardcoded values
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(peHeatingTables_.pe_heating.input_name(0) == "age",
-						 fmt::format("PE heating table input must be 'age', got '{}'", peHeatingTables_.pe_heating.input_name(0)));
+						 std::format("PE heating table input must be 'age', got '{}'", peHeatingTables_.pe_heating.input_name(0)));
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 		    peHeatingTables_.pe_heating.input_unit(0) == "year",
-		    fmt::format("PE heating table input unit must be 'year', got '{}'", peHeatingTables_.pe_heating.input_unit(0)));
+		    std::format("PE heating table input unit must be 'year', got '{}'", peHeatingTables_.pe_heating.input_unit(0)));
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 		    peHeatingTables_.pe_heating.output_unit(0) == "erg/s/Msun",
-		    fmt::format("PE heating table output unit must be 'erg/s/Msun', got '{}'", peHeatingTables_.pe_heating.output_unit(0)));
+		    std::format("PE heating table output unit must be 'erg/s/Msun', got '{}'", peHeatingTables_.pe_heating.output_unit(0)));
 
 		// Set global pointer for access from particle functions
 		quokka::g_pe_heating_tables_ptr<> = &peHeatingTables_;
@@ -786,7 +786,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::printCellPropert
 		const amrex::Real P = quokka::EOS<problem_t>::ComputePressure(rho, Eint);
 		const amrex::Real cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P);
 
-		amrex::AllPrint() << fmt::format("...[level {}] \tcell density = {:e}, |v| = {:e}, cs = {:e}\n", lev, rho, vel_mag, cs);
+		amrex::AllPrint() << std::format("...[level {}] \tcell density = {:e}, |v| = {:e}, cs = {:e}\n", lev, rho, vel_mag, cs);
 	}
 }
 
@@ -1041,13 +1041,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDensityFl
 		}
 	}
 	amrex::Gpu::streamSynchronize();
-}
-
-template <typename problem_t>
-auto QuokkaSimulation<problem_t>::ComputeProjections(const amrex::Direction /*dir*/) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
-{
-	// compute projections and return as unordered_map -- user should implement
-	return std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>{};
 }
 
 template <typename problem_t> auto QuokkaSimulation<problem_t>::ComputeStatistics() -> std::map<std::string, amrex::Real>

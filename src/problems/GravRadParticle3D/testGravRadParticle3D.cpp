@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
-#include <fmt/format.h>
+#include <format>
 
 #include "AMReX.H"
 #include "AMReX_BCRec.H"
@@ -123,23 +123,6 @@ template <> void QuokkaSimulation<ParticleProblem>::setInitialConditionsOnGrid(q
 		state_cc(i, j, k, RadSystem<ParticleProblem>::x2GasMomentum_index) = 0.;
 		state_cc(i, j, k, RadSystem<ParticleProblem>::x3GasMomentum_index) = 0.;
 	});
-}
-
-template <>
-auto QuokkaSimulation<ParticleProblem>::ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
-{
-	std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
-
-	Real const H_mass_fraction = 1.0;
-
-	// compute (total) density projection
-	proj["nH"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
-	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    Real const rho = state(i, j, k, RadSystem<ParticleProblem>::gasDensity_index);
-		    return (H_mass_fraction * rho) / m_H;
-	    });
-
-	return proj;
 }
 
 auto problem_main() -> int

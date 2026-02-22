@@ -12,7 +12,7 @@
 #endif
 #include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
-#include <fmt/format.h>
+#include <format>
 #include <vector>
 
 #include "QuokkaSimulation.hpp"
@@ -247,8 +247,8 @@ auto problem_main() -> int
 		matplotlibcpp::xlabel("time t (s)");
 		matplotlibcpp::ylabel("temperature T (K)");
 		// matplotlibcpp::title(
-		//    fmt::format("dt = {:.4g}\nt = {:.4g}", constant_dt, sim.tNew_));
-		matplotlibcpp::save(fmt::format("./radcoupling.pdf"));
+		//    std::format("dt = {:.4g}\nt = {:.4g}", constant_dt, sim.tNew_));
+		matplotlibcpp::save(std::format("./radcoupling.pdf"));
 
 		matplotlibcpp::clf();
 
@@ -259,7 +259,7 @@ auto problem_main() -> int
 		matplotlibcpp::plot(t, frac_err);
 		matplotlibcpp::xlabel("time t (s)");
 		matplotlibcpp::ylabel("fractional error in material temperature");
-		matplotlibcpp::save(fmt::format("./radcoupling_fractional_error.pdf"));
+		matplotlibcpp::save(std::format("./radcoupling_fractional_error.pdf"));
 #endif
 	}
 

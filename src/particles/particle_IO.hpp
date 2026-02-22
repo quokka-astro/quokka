@@ -10,7 +10,7 @@
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
 #include "particle_types.hpp"
-#include <fmt/format.h>
+#include <format>
 
 namespace quokka
 {
@@ -325,7 +325,7 @@ void printParticleStatistics(ContainerType *container, int massIndex, int evolut
 	if (container != nullptr) {
 		// Get particle type name
 		const std::string particle_type_name = PhysicsParticleRegister<problem_t>::getParticleTypeName(particleType);
-		amrex::Print() << fmt::format("number of {} = {}\n", particle_type_name, static_cast<int>(container->TotalNumberOfParticles(true, false)));
+		amrex::Print() << std::format("number of {} = {}\n", particle_type_name, static_cast<int>(container->TotalNumberOfParticles(true, false)));
 
 		const int max_number_to_print = 100;
 
@@ -337,9 +337,9 @@ void printParticleStatistics(ContainerType *container, int massIndex, int evolut
 				amrex::Print() << "Level " << lev << "\n";
 				// Print header for detailed particle data
 				if (evolutionStageIndex >= 0) {
-					amrex::Print() << fmt::format("\t{:>20} | {:>20}\n", "mass", "evolution stage");
+					amrex::Print() << std::format("\t{:>20} | {:>20}\n", "mass", "evolution stage");
 				} else {
-					amrex::Print() << fmt::format("\t{:>20}\n", "mass");
+					amrex::Print() << std::format("\t{:>20}\n", "mass");
 				}
 
 				// Print each particle's data with aligned columns
@@ -347,14 +347,14 @@ void printParticleStatistics(ContainerType *container, int massIndex, int evolut
 				int i = 0;
 				for (; i < n_print; ++i) {
 					if (evolutionStageIndex >= 0) {
-						amrex::Print() << fmt::format("\t{:20.13e} | {:>20}\n", real_data[i][AMREX_SPACEDIM + massIndex],
+						amrex::Print() << std::format("\t{:20.13e} | {:>20}\n", real_data[i][AMREX_SPACEDIM + massIndex],
 									      int_data[i][evolutionStageIndex]);
 					} else {
-						amrex::Print() << fmt::format("\t{:20.13e}\n", real_data[i][AMREX_SPACEDIM + massIndex]);
+						amrex::Print() << std::format("\t{:20.13e}\n", real_data[i][AMREX_SPACEDIM + massIndex]);
 					}
 				}
 				if (i == max_number_to_print) {
-					amrex::Print() << fmt::format("\t...\n");
+					amrex::Print() << std::format("\t...\n");
 				}
 			}
 		}

@@ -73,7 +73,7 @@ template <> struct Physics_Traits<TheProblem> {
 	static constexpr bool is_dust_enabled = false;
 	static constexpr int nDustGroups = 1;			     // number of dust groups
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
+	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars
 	static constexpr int nGroups = 1;			     // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
@@ -234,6 +234,12 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	// Create GPU const tables for initial conditions if available
 	const auto &ic_table = userData_.ic_table.const_tables();
 
+	amrex::Real initial_scalar_density = 0.0;
+	if constexpr (Physics_Traits<TheProblem>::numPassiveScalars > 0) {
+		const amrex::Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+		initial_scalar_density = 1.0e-6 * quokka::scalar_yield_per_SN / cell_vol;
+	}
+
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const z = prob_lo[2] + ((k + static_cast<amrex::Real>(0.5)) * dx[2]);
 
@@ -270,6 +276,13 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 		state_cc(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = rho * vz;
 		state_cc(i, j, k, HydroSystem<TheProblem>::internalEnergy_index) = P / (gamma - 1.);
 		state_cc(i, j, k, HydroSystem<TheProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * (vx * vx + vy * vy + vz * vz);
+
+		const auto initial_scalar_density_d = initial_scalar_density;
+
+		// Initialize passive scalar field
+		if constexpr (Physics_Traits<TheProblem>::numPassiveScalars > 0) {
+			state_cc(i, j, k, HydroSystem<TheProblem>::scalar0_index) = initial_scalar_density_d;
+		}
 	});
 }
 
@@ -383,21 +396,6 @@ template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::Mult
 			state(i, j, k, HydroSystem<TheProblem>::energy_index) = Egas_new;
 		});
 	}
-}
-
-// Code for producing in-situ Projection plots
-template <>
-auto QuokkaSimulation<TheProblem>::ComputeProjections(const amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
-{
-	// compute density projection
-	std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
-
-	proj["rho"] = quokka::diagnostics::ComputePlaneProjection<amrex::ReduceOpSum>(
-	    state_new_cc_, finestLevel(), geom, ref_ratio, dir, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		    Real const rho = state(i, j, k, HydroSystem<TheProblem>::density_index);
-		    return (rho);
-	    });
-	return proj;
 }
 
 // Implement User-defined diode BC

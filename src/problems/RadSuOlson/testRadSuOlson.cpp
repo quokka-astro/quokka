@@ -14,7 +14,7 @@
 #include "math/interpolate.hpp"
 #include "radiation/radiation_system.hpp"
 #include <cmath>
-#include <fmt/format.h>
+#include <format>
 #include <limits>
 
 #include "AMReX_Array.H"
@@ -339,7 +339,7 @@ auto problem_main() -> int
 		matplotlibcpp::legend();
 		matplotlibcpp::xlabel("length x (dimensionless)");
 		matplotlibcpp::ylabel("temperature (dimensionless)");
-		matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
+		matplotlibcpp::title(std::format("time t = {:.4g}", sim.tNew_[0]));
 		matplotlibcpp::xlim(0.1, 30.0); // cm
 		// matplotlibcpp::ylim(0.0, 1.3);	// dimensionless
 		matplotlibcpp::xscale("log");
