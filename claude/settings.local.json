@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make:*)",
+      "Bash(cat:*)",
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(ninja:*)",
+      "Bash(cmake:*)",
+      "Bash(make:*)",
+      "Bash(g++:*)",
+      "Bash(gcc:*)",
+      "Bash(clang:*)",
+      "Bash(clang++:*)",
+      "Bash(clang-format:*)",
+      "Bash(clang-tidy:*)",
+      "Bash(cd:*)",
+      "Bash(ls:*)",
+      "Bash(pwd:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(ctest:*)",
+      "Bash(JOB=SN make:*)",
+      "Bash(JOB=ParticleSink make:*)",
+      "Bash(JOB=RadStreaming make:*)",
+      "Bash(source:*)",
+      "Bash(echo:*)",
+      "Bash(../build/clang-1d/src/problems/RadStreaming/RadStreaming ../inputs/RadStreaming.in tiny_profiler.enabled=0 suppress_output=1 amr.v=0 max_timesteps=10)",
+      "Bash(../build/clang-1d/src/problems/RadStreaming/RadStreaming ../inputs/RadStreaming.in tiny_profiler.enabled=0 suppress_output=1 amr.v=0 max_timesteps=10 quokka.ignore_return=0)",
+      "Bash(chmod:*)",
+      "Bash(JOB=ParticleSinkFormation make b)",
+      "Bash(JOB=ParticleSinkFormation make r)",
+      "Bash(../build/clang-3d/src/problems/ParticleSinkFormation/ParticleSinkFormation:*)",
+      "Bash(../build/clang-3d-debug/src/problems/ParticleSinkFormation/ParticleSinkFormation ../inputs/ParticleSinkFormation.in tiny_profiler.enabled=0 suppress_output=1 amr.v=0)",
+      "Bash(JOB=ParticleSF make r)",
+      "Bash(JOB=ParticleSF make b)",
+      "Bash(tail:*)",
+      "Bash(head:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
