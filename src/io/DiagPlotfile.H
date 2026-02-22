@@ -51,7 +51,7 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
       private:
 	std::vector<std::string> m_particleTypes; // List of particle types to include (empty means all)
 	std::vector<std::string> m_varNames;	  // Selected cc field names (empty = all)
-	std::vector<std::string> m_fcVarNames;	  // Selected fc field names (empty = all)
+	std::vector<std::string> m_fcDirs;	  // Selected fc directions, e.g. "x" "y" "z" (empty = all)
 	int m_nfiles{-1};			  // Number of files for output (-1 means default)
 
 	// Helper function to write metadata file
@@ -143,9 +143,9 @@ template <typename problem_t> void DiagPlotfile::processDiag(int a_nstep, const 
 		sim->TracerPC->WritePlotFile(plotfilename, "tracer_particles");
 	}
 
-	// Write face-centered data: always when no cc filter; when fc_field_names specified, write
-	// regardless of cc filter; when cc filter active and no fc_field_names, skip.
-	bool const write_fc = (!m_fcVarNames.empty() || m_varNames.empty()) && !varnames_fc[0].empty();
+	// Write face-centered data: always when no cc filter; when fc_dirs specified, write
+	// regardless of cc filter; when cc filter active and no fc_dirs, skip.
+	bool const write_fc = (!m_fcDirs.empty() || m_varNames.empty()) && !varnames_fc[0].empty();
 	if (write_fc) {
 		// Create fc_vars directory if it doesn't exist
 		const std::string fc_vars_dir = plotfilename + "/fc_vars";
@@ -156,44 +156,24 @@ template <typename problem_t> void DiagPlotfile::processDiag(int a_nstep, const 
 
 		std::vector<std::string> dimNames = {"x", "y", "z"};
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			// Filter fc components for this dimension if fc_field_names is specified
-			amrex::Vector<std::string> varnames_fc_out;
-			amrex::Vector<amrex::MultiFab> mf_fc_filtered;
-			amrex::Vector<const amrex::MultiFab *> mf_fc_out_ptr;
-
-			if (m_fcVarNames.empty()) {
-				varnames_fc_out = varnames_fc[idim];
-				mf_fc_out_ptr = amrex::GetVecOfConstPtrs(mf_fc[idim]);
-			} else {
-				amrex::Vector<int> fc_selected_indices;
-				for (const auto &name : m_fcVarNames) {
-					for (int n = 0; n < static_cast<int>(varnames_fc[idim].size()); ++n) {
-						if (varnames_fc[idim][n] == name) {
-							varnames_fc_out.push_back(name);
-							fc_selected_indices.push_back(n);
-							break;
-						}
+			// Skip this direction if fc_dirs is specified and doesn't include it
+			if (!m_fcDirs.empty()) {
+				bool dirSelected = false;
+				for (const auto &d : m_fcDirs) {
+					if (d == dimNames[idim]) {
+						dirSelected = true;
+						break;
 					}
 				}
-				if (fc_selected_indices.empty()) {
-					continue; // no selected components in this dimension
+				if (!dirSelected) {
+					continue;
 				}
-				int const nFcSelected = static_cast<int>(fc_selected_indices.size());
-				for (int lev = 0; lev <= finest_level; ++lev) {
-					mf_fc_filtered.emplace_back(mf_fc[idim][lev].boxArray(), mf_fc[idim][lev].DistributionMap(), nFcSelected,
-								    mf_fc[idim][lev].nGrowVect());
-					for (int n = 0; n < nFcSelected; ++n) {
-						amrex::MultiFab::Copy(mf_fc_filtered.back(), mf_fc[idim][lev], fc_selected_indices[n], n, 1,
-								      mf_fc[idim][lev].nGrowVect());
-					}
-				}
-				mf_fc_out_ptr = amrex::GetVecOfConstPtrs(mf_fc_filtered);
 			}
 
 			auto plotfilename_base = plotfilename + "/fc_vars/" + dimNames[idim];
 			const std::string plotfilename_fc = amrex::Concatenate(plotfilename_base, sim->istep[0], 7);
-			amrex::WriteMultiLevelPlotfile(plotfilename_fc, finest_level + 1, mf_fc_out_ptr, varnames_fc_out, geoms, a_time, sim->istep,
-						       refRatio);
+			amrex::Vector<const amrex::MultiFab *> mf_fc_ptr = amrex::GetVecOfConstPtrs(mf_fc[idim]);
+			amrex::WriteMultiLevelPlotfile(plotfilename_fc, finest_level + 1, mf_fc_ptr, varnames_fc[idim], geoms, a_time, sim->istep, refRatio);
 			WriteMetadataFile(plotfilename_fc + "/metadata.yaml", sim->simulationMetadata_);
 		}
 	}

@@ -57,20 +57,20 @@ void DiagPlotfile::init(const std::string &a_prefix, std::string_view a_diagName
 		amrex::Print() << "DiagPlotfile: Including all fields\n";
 	}
 
-	// Read fc field names to include (optional, empty means all)
-	int const nFcVarNames = pp.countval("fc_field_names");
-	if (nFcVarNames > 0) {
-		m_fcVarNames.resize(nFcVarNames);
-		for (int n = 0; n < nFcVarNames; ++n) {
-			pp.get("fc_field_names", m_fcVarNames[n], n);
+	// Read fc directions to include (optional, empty means all), e.g. "x y z"
+	int const nFcDirs = pp.countval("fc_dirs");
+	if (nFcDirs > 0) {
+		m_fcDirs.resize(nFcDirs);
+		for (int n = 0; n < nFcDirs; ++n) {
+			pp.get("fc_dirs", m_fcDirs[n], n);
 		}
-		amrex::Print() << "DiagPlotfile: Selecting fc fields: ";
-		for (const auto &v : m_fcVarNames) {
-			amrex::Print() << v << " ";
+		amrex::Print() << "DiagPlotfile: Selecting fc directions: ";
+		for (const auto &d : m_fcDirs) {
+			amrex::Print() << d << " ";
 		}
 		amrex::Print() << "\n";
 	} else {
-		amrex::Print() << "DiagPlotfile: Including all fc fields\n";
+		amrex::Print() << "DiagPlotfile: Including all fc directions\n";
 	}
 
 	amrex::Print() << "DiagPlotfile initialized: file=" << m_diagfile << ", interval=" << m_interval << "\n";
