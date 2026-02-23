@@ -57,21 +57,9 @@ void DiagPlotfile::init(const std::string &a_prefix, std::string_view a_diagName
 		amrex::Print() << "DiagPlotfile: Including all fields\n";
 	}
 
-	// Read fc directions to include (optional, empty means all), e.g. "x y z"
-	int const nFcDirs = pp.countval("fc_dirs");
-	if (nFcDirs > 0) {
-		m_fcDirs.resize(nFcDirs);
-		for (int n = 0; n < nFcDirs; ++n) {
-			pp.get("fc_dirs", m_fcDirs[n], n);
-		}
-		amrex::Print() << "DiagPlotfile: Selecting fc directions: ";
-		for (const auto &d : m_fcDirs) {
-			amrex::Print() << d << " ";
-		}
-		amrex::Print() << "\n";
-	} else {
-		amrex::Print() << "DiagPlotfile: Including all fc directions\n";
-	}
+	// Read whether to include face-centered fields (optional, default: true)
+	pp.query("include_fc_fields", m_includeFcFields);
+	amrex::Print() << "DiagPlotfile: fc_vars output " << (m_includeFcFields ? "enabled" : "disabled") << "\n";
 
 	amrex::Print() << "DiagPlotfile initialized: file=" << m_diagfile << ", interval=" << m_interval << "\n";
 }

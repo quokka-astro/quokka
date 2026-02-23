@@ -51,7 +51,7 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
       private:
 	std::vector<std::string> m_particleTypes; // List of particle types to include (empty means all)
 	std::vector<std::string> m_varNames;	  // Selected cc field names (empty = all)
-	std::vector<std::string> m_fcDirs;	  // Selected fc directions, e.g. "x" "y" "z" (empty = all)
+	bool m_includeFcFields{true};		  // Whether to write fc_vars (default: true)
 	int m_nfiles{-1};			  // Number of files for output (-1 means default)
 
 	// Helper function to write metadata file
@@ -143,10 +143,8 @@ template <typename problem_t> void DiagPlotfile::processDiag(int a_nstep, const 
 		sim->TracerPC->WritePlotFile(plotfilename, "tracer_particles");
 	}
 
-	// Write face-centered data whenever fc variables exist (i.e. MHD is enabled).
-	// fc_dirs selects which directions to include; empty means all directions.
-	bool const write_fc = !varnames_fc[0].empty();
-	if (write_fc) {
+	// Write face-centered data whenever fc variables exist (MHD enabled) and include_fc_fields = 1
+	if (m_includeFcFields && !varnames_fc[0].empty()) {
 		// Create fc_vars directory if it doesn't exist
 		const std::string fc_vars_dir = plotfilename + "/fc_vars";
 		if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -156,20 +154,6 @@ template <typename problem_t> void DiagPlotfile::processDiag(int a_nstep, const 
 
 		std::vector<std::string> dimNames = {"x", "y", "z"};
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			// Skip this direction if fc_dirs is specified and doesn't include it
-			if (!m_fcDirs.empty()) {
-				bool dirSelected = false;
-				for (const auto &d : m_fcDirs) {
-					if (d == dimNames[idim]) {
-						dirSelected = true;
-						break;
-					}
-				}
-				if (!dirSelected) {
-					continue;
-				}
-			}
-
 			auto plotfilename_base = plotfilename + "/fc_vars/" + dimNames[idim];
 			const std::string plotfilename_fc = amrex::Concatenate(plotfilename_base, sim->istep[0], 7);
 			amrex::Vector<const amrex::MultiFab *> mf_fc_ptr = amrex::GetVecOfConstPtrs(mf_fc[idim]);

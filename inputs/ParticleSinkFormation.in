@@ -39,7 +39,7 @@ quokka.plt.file = plt              # Output file prefix (default "plt", must end
 quokka.plt.time_int  = 2e13        # Output cadence (in time intervals). For this test, expected outputs are: 6, 9, 12, 15, 18
 #quokka.plt.particles = # Default to all particle types
 quokka.plt.field_names = gasDensity x-GasMomentum y-GasMomentum z-GasMomentum temperature
-quokka.plt.fc_dirs = x y
+quokka.plt.include_fc_fields = false
 
 quokka.slice_z.type = DiagFramePlane         # Diagnostic type
 quokka.slice_z.file = slicez_plt             # Output file prefix (must end in "plt")
