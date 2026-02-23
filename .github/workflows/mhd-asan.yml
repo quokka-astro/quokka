@@ -27,7 +27,7 @@ jobs:
       workflow_file: '.github/workflows/mhd-asan.yml'
 
   build:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     needs: check_changes
     if: needs.check_changes.outputs.has_non_docs_changes == 'true'
     env:
@@ -90,7 +90,7 @@ jobs:
         # Read the executables and build them
         TARGETS=$(cat mhd_executables.txt | tr '\n' ' ')
         echo "Building targets: $TARGETS"
-        cmake --build . --config $BUILD_TYPE --parallel 4 --target $TARGETS
+        cmake --build . --config $BUILD_TYPE --parallel 8 --target $TARGETS
 
     - name: Create test output directory
       run: cmake -E make_directory $GITHUB_WORKSPACE/tests

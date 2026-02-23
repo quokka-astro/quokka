@@ -27,7 +27,7 @@ jobs:
       workflow_file: '.github/workflows/cmake-arm64-debug.yml'
 
   build:
-    runs-on: blacksmith-4vcpu-ubuntu-2404-arm
+    runs-on: blacksmith-8vcpu-ubuntu-2404-arm
     needs: check_changes
     if: needs.check_changes.outputs.has_non_docs_changes == 'true'
     env:
@@ -73,7 +73,7 @@ jobs:
     - name: Build
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      run: cmake --build . --config $BUILD_TYPE --parallel 4
+      run: cmake --build . --config $BUILD_TYPE --parallel 8
 
     - name: Create test output directory
       run: cmake -E make_directory $GITHUB_WORKSPACE/tests
