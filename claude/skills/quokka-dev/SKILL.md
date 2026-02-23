@@ -9,7 +9,7 @@ description: "Implement and validate new features in the Quokka radiation hydrod
 
 ### 1. Understand the Feature
 
-- Identify which module the feature belongs to: `src/hydro/`, `src/radiation/`, `src/cooling/`, `src/chemistry/`, or a new problem in `src/problems/`
+- Identify which module the feature belongs to: `src/hydro/`, `src/particles`, `src/radiation/`, `src/cooling/`, `src/chemistry/`, or a new problem in `src/problems/`
 - Review existing similar implementations for patterns
 
 ### 2. Create or Modify Code
