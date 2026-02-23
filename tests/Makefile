@@ -45,6 +45,9 @@ b:
 r:
 	for job in ${JOB}; do ../$(BD)/src/problems/$$job/$$job ../inputs/$$job.in $(ARGS) && echo "$$job Success" || (echo "$$job Failure" && exit 1); done
 
+# Build and run
+br: b r
+
 # Remove runtime output files produced by a test run.
 clean:
 	--rm -rf plt*
