@@ -1,38 +1,20 @@
 # =============================================================================
 # Code Validation Makefile  (working directory: tests/)
 #
-# PURPOSE: Build and run Quokka problem executables for code validation.
-#
 # AGENT WORKFLOW — to validate a problem named <JobName>:
 #
-#   Step 1 — Configure (once per build tree, or after CMake changes):
+#   Step 1 — Configure (once, or after CMake changes):
 #     cd tests && make config
 #
 #   Step 2 — Build:
 #     cd tests && JOB=<JobName> make b
-#     Exit code 0 = build success. Any non-zero exit = build failure.
 #
 #   Step 3 — Run:
 #     cd tests && JOB=<JobName> make r
-#     Exit code 0 = test passed. Any non-zero exit = test failed.
-#     On success the shell prints "<JobName> Success".
-#     On failure the shell prints "<JobName> Failure".
+#     Exit 0 = passed. Non-zero = failed. Prints "<JobName> Success/Failure".
+#     Equivalent to `cd tests && ../build/clang-3d/src/problems/<JobName>/<JobName> ../inputs/<JobName>.in`
 #
-#   Multiple jobs can be validated in one pass (space-separated):
-#     cd tests && JOB="Job1 Job2 Job3" make b && JOB="Job1 Job2 Job3" make r
-#
-# KEY VARIABLES:
-#   JOB    problem name(s), must match a directory under src/problems/  (default: SN)
-#   DIM    spatial dimensionality passed to CMake: 1, 2, or 3           (default: 3)
-#   NP     parallel build jobs for ninja                                 (default: 8)
-#   DEBUG  set to any non-empty value to use a Debug build              (default: off)
-#
-# BUILD TREE:
-#   Resolves to ../build/clang-<DIM>d[-debug]/  relative to tests/.
-#   The source tree root is ../../  (two levels up from the build dir).
-#
-# INPUT FILES:
-#   Each problem reads ../inputs/<JobName>.in at runtime.
+# NOTE: JOB must match a directory under src/problems/. Input file is ../inputs/<JobName>.in.
 # =============================================================================
 
 .PHONY: main config b r clean fullclean
