@@ -2934,6 +2934,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		// We use the IMEX PD-ARS scheme to evolve the radiation subsystem and radiation-matter coupling.
 
 		// Stage 1: advance hyperbolic radiation subsystem using Forward Euler method, starting from state_old_cc_ to state_new_cc_
+    // This advances a full step
 		advanceRadiationForwardEuler(lev, time_subcycle, dt_radiation, i, nsubSteps, fr_as_crse, fr_as_fine);
 
 		// new radiation state is stored in state_new_cc_
