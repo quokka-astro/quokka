@@ -122,14 +122,17 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 			const amrex::Box &bx = mfi.validbox();
 			const int box_no = mfi.LocalIndex();
 			if (dir == amrex::Direction::x) {
-				amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { dst_arr[box_no](i, j, k) = src_arr[box_no](0, i, j); });
+				amrex::ParallelFor(bx,
+						   [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { dst_arr[box_no](i, j, k) = src_arr[box_no](0, i, j); });
 #if AMREX_SPACEDIM >= 2
 			} else if (dir == amrex::Direction::y) {
-				amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { dst_arr[box_no](i, j, k) = src_arr[box_no](i, 0, j); });
+				amrex::ParallelFor(bx,
+						   [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { dst_arr[box_no](i, j, k) = src_arr[box_no](i, 0, j); });
 #endif
 #if AMREX_SPACEDIM == 3
 			} else if (dir == amrex::Direction::z) {
-				amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { dst_arr[box_no](i, j, k) = src_arr[box_no](i, j, 0); });
+				amrex::ParallelFor(bx,
+						   [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { dst_arr[box_no](i, j, k) = src_arr[box_no](i, j, 0); });
 #endif
 			}
 		}
