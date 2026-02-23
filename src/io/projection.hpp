@@ -83,19 +83,6 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 	}
 
 	for (int lev = 0; lev <= finest_level; ++lev) {
-		const auto &level_ba = mfs[lev]->boxArray();
-		amrex::BoxList bl(level_ba.ixType());
-		for (int i = 0; i < level_ba.size(); ++i) {
-			bl.push_back(detail::transform_box_to_2D(dir, level_ba[i]));
-		}
-		bl.simplify();
-		amrex::BoxArray ba2d(std::move(bl));
-		ba2d.removeOverlap();
-		const amrex::DistributionMapping dm2d(ba2d);
-
-		projections[lev].define(ba2d, dm2d, 1, 0);
-		projections[lev].setVal(0.0);
-
 		amrex::iMultiFab mask;
 		if (lev == finest_level) {
 			mask.define(mfs[lev]->boxArray(), mfs[lev]->DistributionMap(), 1, amrex::IntVect(0));
@@ -117,7 +104,35 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 										    });
 		auto &plane_global = plane_pair.second;
 
-		projections[lev].ParallelCopy(plane_global, 0, 0, 1, 0, 0);
+		// AMReX returns a reduced MF in the original index ordering with the projection axis
+		// collapsed to length 1 (e.g. x-projection lives on (0,y,z)). Remap to Quokka's
+		// canonical 2D layout with the collapsed axis in z (e.g. (y,z,0)) for x-projections.
+		const auto &src_ba = plane_global.boxArray();
+		amrex::BoxList bl2d(src_ba.ixType());
+		for (int i = 0; i < src_ba.size(); ++i) {
+			bl2d.push_back(detail::transform_box_to_2D(dir, src_ba[i]));
+		}
+		amrex::BoxArray ba2d(std::move(bl2d));
+		projections[lev].define(ba2d, plane_global.DistributionMap(), 1, 0);
+		projections[lev].setVal(0.0);
+
+		auto const &src_arr = plane_global.const_arrays();
+		auto const &dst_arr = projections[lev].arrays();
+		for (amrex::MFIter mfi(projections[lev]); mfi.isValid(); ++mfi) {
+			const amrex::Box &bx = mfi.validbox();
+			const int box_no = mfi.LocalIndex();
+			if (dir == amrex::Direction::x) {
+				amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { dst_arr[box_no](i, j, k) = src_arr[box_no](0, i, j); });
+#if AMREX_SPACEDIM >= 2
+			} else if (dir == amrex::Direction::y) {
+				amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { dst_arr[box_no](i, j, k) = src_arr[box_no](i, 0, j); });
+#endif
+#if AMREX_SPACEDIM == 3
+			} else if (dir == amrex::Direction::z) {
+				amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { dst_arr[box_no](i, j, k) = src_arr[box_no](i, j, 0); });
+#endif
+			}
+		}
 		amrex::Gpu::streamSynchronize();
 	}
 
