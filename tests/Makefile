@@ -17,10 +17,9 @@
 # NOTE: JOB must match a directory under src/problems/. Input file is ../inputs/<JobName>.in
 # =============================================================================
 
-.PHONY: main config b r clean fullclean
+.PHONY: main config b r br clean fullclean
 
-# required on macOS; remove on Linux
-SHELL := /bin/zsh
+SHELL := /bin/sh
 
 JOB     ?= ParticleSink
 DIM     ?= 3
@@ -29,7 +28,7 @@ NP      ?= 8
 ARGS    ?= tiny_profiler.enabled=0 suppress_output=1 amr.v=0
 
 DEBUG   :=
-BD      := build/clang-${DIM}d$(if $(DEBUG),-debug,)
+BD      := build/${DIM}d$(if $(DEBUG),-debug,)
 MPI     := 2
 
 main:
@@ -54,27 +53,23 @@ b:
 
 # Run the executable for JOB. Prints "<job> Success" or "<job> Failure".
 # Exit code 0 = all jobs passed; non-zero = at least one failed.
-# When JOB=<JobName>, this run `../build/clang-3d/src/problems/<JobName>/<JobName> ../inputs/<JobName>.in`
+# When JOB=<JobName>, this run `../build/3d/src/problems/<JobName>/<JobName> ../inputs/<JobName>.in`
 r:
 	for job in ${JOB}; do ../$(BD)/src/problems/$$job/$$job ../inputs/$$job.in $(ARGS) && echo "$$job Success" || (echo "$$job Failure" && exit 1); done
+
+rmpi:
+	for job in ${JOB}; do mpirun -np $(MPI) ../$(BD)/src/problems/$$job/$$job ../inputs/$$job.in $(ARGS) && echo "$$job Success" || (echo "$$job Failure" && exit 1); done
 
 # Build and run
 br: b r
 
 # Remove runtime output files produced by a test run.
 clean:
-	--rm -rf plt*
-	--rm -rf slice*
-	--rm -rf chk*
-	--rm -rf part_*
-	--rm -f *.csv
-	--rm -f *.pdf
-	--rm -f *.png
-	--rm -f Backtrace.*
-
-# Reset tests/ to a clean checkout state (removes all generated files).
-fullclean:
-	rm -rf *
-	git checkout -- matplotlibrc
-	git checkout -- Makefile
-	git checkout -- test_restart_refine.sh
+	-rm -rf plt*
+	-rm -rf slice*
+	-rm -rf chk*
+	-rm -rf part_*
+	-rm -f *.csv
+	-rm -f *.pdf
+	-rm -f *.png
+	-rm -f Backtrace.*
