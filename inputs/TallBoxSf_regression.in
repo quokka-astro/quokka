@@ -1,6 +1,7 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
+# 1x1x4 kpc box
 geometry.prob_lo     =  0.0       0.0       -6.036e+21
 geometry.prob_hi     =  3.018e21  3.018e21   6.036e+21
 quokka.bc = periodic periodic ext_dir
@@ -14,39 +15,43 @@ amr.v              = 1      # verbosity in Amr
 # Resolution and refinement
 # *****************************************************************
 amr.n_cell          = 64 64 256
-amr.max_level       = 2     # number of levels = max_level + 1
+amr.max_level       = 0     # number of levels = max_level + 1
 amr.max_grid_size   = 128   # at least 128 for GPUs
 amr.blocking_factor = 32   # grid size must be divisible by this
 amr.n_error_buf     = 0     # need 0 to enforce exact refinement boundaries
 amr.grid_eff        = 0.0
 
+cfl = 0.3
 do_reflux = 1
 do_subcycle = 0
-stop_time     = 9.462e+15
-particle_csv_interval = -1
-suppress_output = 1
-regrid_interval = -1
-#poisson_supercycle_interval = 4
 
+plottime_interval = 3.155760000e+14   # 1e7 yr
+checkpointtime_interval = 6.311520000e+14 # 2e7 yr
+stop_time     = 6.31152e15 # 200 Myr  
 max_timesteps = 100
-plotfile_interval = 100
-checkpoint_interval = -1
 #restartfile = last_chk
+suppress_output = 0
+regrid_interval = -1
+# be careful about Poisson supercycling
+poisson_supercycle_interval = 2
 
-particles.verbose = 1
+particles.verbose = 0
 particles.disable_SN_feedback = false
-#particles.rad_table = ../extern/problems/TallBoxSf/lum_data_4groups.csv
-#particles.rad_table_output_spacing = fast_log
 particles.split_particles_on_restart_refine = false
+
+# metal scalar
+particles.scalar_yield_per_SN = 1.0e3
+problem.initial_scalar_per_cell = 1.0e-5
 
 density_floor = 1.67e-28 #in g cm^-3
 temperature_floor = 10.0 #K
 
 particles.eps_ff = 0.01
-problem.stars_file = "" # no initial particles
+problem.stars_file = ""
 problem.IC_file = "disk_solution_datatable_Sigma13-Z1.csv"
 problem.rho01 = 4.320441e-24
 problem.sigma1 = 7.0e5
+problem.boost_velocity = 0.0 0.0 0.0 # 0 km/s in x-direction
 
 cooling.enabled = 1
 cooling.cooling_table_type = "resampled"
@@ -54,17 +59,12 @@ cooling.hdf5_data_file = "CloudyData_UVB=HM2012_shielded_resampled_noPE.h5"
 
 use_sfh_based_pe_heating = true
 sfh_to_pe_heating_table = "photoelectric_heating_from_sfh.csv"
-#sfh_interval = 3
-sfh_time_interval = 3.15576e+13 # =1 Myr
+sfh_time_interval = 3.155760000e+12   # 1e5 yr
 sf_area_kpc2 = 1.0 					# kpc^2
 
 perturb.filename = "zdrv.hdf5"
 perturb.amplitude = 7e5 # 7 km/s
 
-problem.refine_zmax = 3.018e21 1.509e21  # refine to lev=1 with 1 kpc and lev=2 with 0.5 kpc
+statistics_interval = 512
 
-tiny_profiler.enabled = 1
-
-statistics_interval = 128
-
-derived_vars = temperature c_s
+derived_vars = temperature c_s gpot scalar0_z_outflow_rate hot_gas_z_outflow_rate warm_gas_z_outflow_rate hot_scalar0_z_outflow_rate warm_scalar0_z_outflow_rate

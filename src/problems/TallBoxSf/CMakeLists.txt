@@ -16,4 +16,5 @@ if (AMReX_SPACEDIM EQUAL 3)
     # Ensure perturbations are computed before simulation runs
     set_tests_properties(ComputeTallBoxSfPerturbations PROPERTIES FIXTURES_SETUP TallBoxSf_fixture)
     set_tests_properties(TallBoxSf PROPERTIES FIXTURES_REQUIRED TallBoxSf_fixture)
+    set_tests_properties(TallBoxSf PROPERTIES COST 85)
 endif()
