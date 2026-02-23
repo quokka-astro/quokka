@@ -4,17 +4,26 @@
 SHELL := /bin/zsh
 
 JOB ?= SN
+DIM ?= 3
 JOBINI ?= ${JOB}.in
 NP ?= 8
 ARGS ?= tiny_profiler.enabled=0 suppress_output=1 amr.v=0
 
-DIM := 3
 DEBUG :=
 BD := build/clang-${DIM}d$(if $(DEBUG),-debug,)
 MPI := 2
 
 main:
-	echo 'Nothing. Run "make config" to config, "make b" to build, and "make r" to run'
+	@echo ''
+	@echo '  Targets:'
+	@echo '    make config              configure the CMake build (run once)'
+	@echo '    JOB=<name> make b        build a problem'
+	@echo '    JOB=<name> make r        run a problem'
+	@echo '    make clean               remove output files'
+	@echo ''
+	@echo '  Variables (with defaults):'
+	@echo '    JOB=$(JOB)   DIM=$(DIM)   NP=$(NP)   DEBUG=$(DEBUG)'
+	@echo ''
 
 config:
 	mkdir -p ../$(BD) && cd ../$(BD) && (ls CMakeCache.txt && rm -rf * || true) && cmake ../.. -DCMAKE_BUILD_TYPE=$(if $(DEBUG),Debug,Release) -DAMReX_SPACEDIM=$(DIM) -G Ninja
