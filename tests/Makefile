@@ -3,7 +3,7 @@
 # required on macOS; remove on Linux
 SHELL := /bin/zsh
 
-JOB     ?= SN
+JOB     ?= ParticleSink
 DIM     ?= 3
 JOBINI  ?= ${JOB}.in
 NP      ?= 8
@@ -18,9 +18,9 @@ main:
 	@echo '  Code Validation Makefile  (working directory: <RootPath>/tests/)'
 	@echo ''
 	@echo '  Workflow — to validate a problem named <JobName>:'
-	@echo '    Step 1  make config              # configure (once, or after CMake changes)'
-	@echo '    Step 2  JOB=<JobName> make b     # build'
-	@echo '    Step 3  JOB=<JobName> make r     # run'
+	@echo '    Step 1:  make config              # configure (once, or after CMake changes)'
+	@echo '    Step 2:  JOB=<JobName> make b     # build'
+	@echo '    Step 3:  JOB=<JobName> make r     # run'
 	@echo ''
 	@echo '  Exit 0 = passed. Non-zero = failed. Prints "<JobName> Success/Failure".'
 	@echo '  JobName must match a directory under src/problems/.'
