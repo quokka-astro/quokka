@@ -14,34 +14,36 @@ There are three built-in diagnostics that can be configured to output at periodi
 
 ### 2D Projections
 
-This diagnostic outputs 2D axis-aligned projections as AMReX plotfiles prefixed with ``proj``.
+This diagnostic outputs 2D axis-aligned projections as AMReX plotfiles prefixed with ``proj`` and is configured using the ``ProjectionPlot`` diagnostic type. Only one direction is supported per diagnostic; configure multiple diagnostics to output multiple directions.
 
-Currently, using this diagnostic requires implementing a custom function in the problem generator for your simulation. (In the future, this diagnostic may be improved so that it can be configured entirely with runtime parameters.)
+!!! Note
+    Filters are not supported for ProjectionPlot diagnostics and will be ignored with a warning.
 
-The problem generator must call ``computePlaneProjection(F const &user_f, const int dir)`` where ``user_f`` is a lambda function that returns the value to project and ``dir`` is the axis along which the projection is taken.
+!!! Note
+    Projection outputs are line integrals along the projection axis, using code length units. Each cell value is multiplied by ``dx[dir]`` and summed, so the output units are *(field units) × length*.
 
-*Example problem generator implementation:*
+    Examples: ``nH`` (cm^-3) → projected ``nH`` (cm^-2) column density; ``pressure`` (K cm^-3) → projected pressure (K cm^-2). Avoid projecting per-cell extensive quantities like ``mass = rho * dV`` unless you intentionally want an extra length factor.
 
-```cpp
-template <> auto RadhydroSimulation<ShockCloud>::ComputeProjections(const int dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
-{
-  // compute density projection
-  std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> proj;
-  proj["nH"] = computePlaneProjection<amrex::ReduceOpSum>(
-      [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-        Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-        return (quokka::cooling::cloudy_H_mass_fraction * rho) / m_H;
-      },
-      dir);
-  return proj;
-}
-```
+**AMR Structure Preservation**: As of recent updates, 2D projections now preserve the full AMR structure from the 3D simulation, maintaining higher resolution where needed instead of averaging down to level 0. This provides better detail but may result in larger output files.
 
-*Example input file configuration:*
+This diagnostic is configured entirely with runtime parameters. Use ``field_names`` to select which plotfile/derived variables to project along the selected direction.
+
+*Example input file configuration (defaults shown as inline comments):*
 
 ``` ini
-projection_interval = 200
-projection.dirs = x z
+quokka.diagnostics = proj_x proj_z        # enable two diagnostics with independent settings
+
+quokka.proj_x.type = ProjectionPlot       # required: selects 2D projections
+quokka.proj_x.file = proj/x/plt           # output path prefix (subdir + "pltNNNNNNN")
+quokka.proj_x.int = 200                   # output cadence (coarse steps)
+quokka.proj_x.normal = 0                  # 0==x, 1==y, 2==z (default: 0)
+quokka.proj_x.field_names = nH temperature # fields to project (plotfile/derived vars)
+
+quokka.proj_z.type = ProjectionPlot
+quokka.proj_z.file = proj/z/plt
+quokka.proj_z.int = 200
+quokka.proj_z.normal = 2
+quokka.proj_z.field_names = nH
 ```
 
 ### 2D Slices

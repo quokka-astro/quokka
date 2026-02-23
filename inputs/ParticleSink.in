@@ -25,7 +25,7 @@ do_subcycle = 0
 
 problem.particles_file = "../inputs/sink4.txt"
 problem.refine_half_domain = false
-problem.boost_vel_x = 1.0e8
+problem.boost_vel_x = 1.0e7
 
 particles.verbose = 0
 particles.sink_particle_use_uniform_kernel = true

@@ -10,7 +10,7 @@
 #include "hydro/mhd_system.hpp"
 #include <algorithm>
 #include <cassert>
-#include <fmt/format.h>
+#include <format>
 #include <limits>
 #include <ostream>
 #include <stdexcept>
@@ -178,7 +178,7 @@ void checkDivFreeRestart(QuokkaSimulation<FCQuantities> const &sim)
 	amrex::Real const tolerance = 1000.0 * std::numeric_limits<amrex::Real>::epsilon();
 	amrex::Print() << "Max |div B| * dx / |B| = " << max_div_ratio << "\n\n";
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(max_div_ratio <= tolerance,
-					 fmt::format("Face-centered divergence exceeds tolerance: {} > {}", max_div_ratio, tolerance));
+					 std::format("Face-centered divergence exceeds tolerance: {} > {}", max_div_ratio, tolerance));
 }
 
 auto problem_main() -> int
