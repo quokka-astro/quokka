@@ -112,7 +112,7 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 		for (int i = 0; i < src_ba.size(); ++i) {
 			bl2d.push_back(detail::transform_box_to_2D(dir, src_ba[i]));
 		}
-		amrex::BoxArray ba2d(std::move(bl2d));
+		amrex::BoxArray const ba2d(std::move(bl2d));
 		projections[lev].define(ba2d, plane_global.DistributionMap(), 1, 0);
 		projections[lev].setVal(0.0);
 
