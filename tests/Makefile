@@ -1,22 +1,3 @@
-# =============================================================================
-# Code Validation Makefile  (working directory: tests/)
-#
-# AGENT WORKFLOW — to validate a problem named <JobName>:
-#
-#   Step 1 — Configure (once, or after CMake changes):
-#     cd tests && make config
-#
-#   Step 2 — Build:
-#     cd tests && JOB=<JobName> make b
-#
-#   Step 3 — Run:
-#     cd tests && JOB=<JobName> make r
-#     Exit 0 = passed. Non-zero = failed. Prints "<JobName> Success/Failure".
-#     Equivalent to `cd tests && ../build/clang-3d/src/problems/<JobName>/<JobName> ../inputs/<JobName>.in`
-#
-# NOTE: JOB must match a directory under src/problems/. Input file is ../inputs/<JobName>.in.
-# =============================================================================
-
 .PHONY: main config b r clean fullclean
 
 # required on macOS; remove on Linux
@@ -34,10 +15,17 @@ MPI     := 2
 
 main:
 	@echo ''
-	@echo '  Targets:'
-	@echo '    make config              configure the CMake build (run once)'
-	@echo '    JOB=<name> make b        build a problem'
-	@echo '    JOB=<name> make r        run a problem'
+	@echo '  Code Validation Makefile  (working directory: <RootPath>/tests/)'
+	@echo ''
+	@echo '  Workflow — to validate a problem named <JobName>:'
+	@echo '    Step 1  make config              # configure (once, or after CMake changes)'
+	@echo '    Step 2  JOB=<JobName> make b     # build'
+	@echo '    Step 3  JOB=<JobName> make r     # run'
+	@echo ''
+	@echo '  Exit 0 = passed. Non-zero = failed. Prints "<JobName> Success/Failure".'
+	@echo '  JobName must match a directory under src/problems/.'
+	@echo ''
+	@echo '  Other targets:'
 	@echo '    make clean               remove output files'
 	@echo ''
 	@echo '  Variables (with defaults):'
