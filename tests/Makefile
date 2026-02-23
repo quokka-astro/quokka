@@ -19,8 +19,6 @@
 
 .PHONY: main config b r br clean fullclean
 
-SHELL := /bin/sh
-
 JOB     ?= ParticleSink
 DIM     ?= 3
 JOBINI  ?= ${JOB}.in
@@ -30,6 +28,7 @@ ARGS    ?= tiny_profiler.enabled=0 suppress_output=1 amr.v=0
 DEBUG   :=
 BD      := build/${DIM}d$(if $(DEBUG),-debug,)
 MPI     := 2
+SHELL := /bin/sh
 
 main:
 	@echo ''
@@ -73,3 +72,7 @@ clean:
 	-rm -f *.pdf
 	-rm -f *.png
 	-rm -f Backtrace.*
+
+tt:
+	echo "shell: $(SHELL), 0: $0, ${PATH}"
+
