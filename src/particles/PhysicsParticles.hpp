@@ -408,7 +408,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 	void splitParticles(int const lev, int const splitFactor) override
 	{
-		static_assert(Physics_Traits<problem_t>::UnitSystem == UnitSystem::CGS,
+		static_assert(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS,
 			      "The current implementation of velocity kick in particle splitting assumes cgs units."
 			      "Please implement the appropriate scaling for other unit systems.");
 
