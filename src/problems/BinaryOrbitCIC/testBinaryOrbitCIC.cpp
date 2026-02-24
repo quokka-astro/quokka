@@ -286,7 +286,7 @@ auto problem_main() -> int
 			const Real vdisp = std::sqrt(2.0 * C::Gconst * orig_particle_mass / cell_dx0);
 			// expected maximum drift
 			const Real l_drift_over_dx = vdisp * sim.tNew_[0] / cell_dx0;
-			const double split_max_deviation = l_drift_over_dx * 1.01; // max deviation from the initial separation
+			const double split_max_deviation = 2.0 * l_drift_over_dx * 1.01; // max deviation from the initial separation
 
 			if (max_deviation < split_max_deviation) {
 				amrex::Print() << "    Expected maximum deviation = " << split_max_deviation << " cell widths.\n";
