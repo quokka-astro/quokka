@@ -197,9 +197,9 @@ depositThermalKineticMomentumSNR(amrex::Array4<amrex::Real> const &local_state, 
 				 const Real pvz, const bool SN_smooth_gas_velocity, const amrex::Real scalar_yield_per_SN_d)
 {
 	const double n_H_amb = avg_density * cloudy_H_mass_fraction / m_u;
-	const amrex::Real M_gas = avg_density * stencil_volume * vol;	      // Gas mass in stencil
-	const amrex::Real M_snr = M_gas + m_ej;				      // SNR mass
-	constexpr amrex::Real M_sf_canonical = 1679.0 * C::M_solar;	      // canonical pre-factor [g], n_H^{-0.26} applied below
+	const amrex::Real M_gas = avg_density * stencil_volume * vol; // Gas mass in stencil
+	const amrex::Real M_snr = M_gas + m_ej;			      // SNR mass
+	constexpr amrex::Real M_sf_canonical = 1679.0 * C::M_solar;   // canonical pre-factor [g], n_H^{-0.26} applied below
 	constexpr amrex::Real p_snr_0_canonical = quokka::SN_p_term_Msunkmps_canonical * C::M_solar * 1.0e5; // canonical SN terminal momentum [g cm/s]
 	// Scale M_sf so that the kinetic energy p_snr^2 / (2 M_sf) is invariant under changes of p_snr_0:
 	//   M_sf_scaled = M_sf_canonical * (p_snr_0 / p_snr_0_canonical)^2
