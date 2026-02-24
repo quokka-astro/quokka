@@ -63,7 +63,7 @@ description: "Implement and validate new features in the Quokka radiation hydrod
 All build and run commands must be invoked from `<REPO_ROOT>/tests/`. Load modules and change directory once per shell session (substitute the actual `<REPO_ROOT>` path):
 
 ```bash
-source ~/rc/qk.rc && cd <REPO_ROOT>/tests
+cd <REPO_ROOT>/tests && source ./qk.rc
 ```
 
 Then build:
@@ -98,8 +98,6 @@ The language server shows many false-positive errors (`Use of undeclared identif
 - If no specific problem is specified, use the **SN** test as the default validation target
 - Ensure build completes without errors
 - Ensure test passes
-- Check for compiler warnings
-
 
 ## Architecture Reference
 
