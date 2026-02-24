@@ -371,7 +371,7 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 	constexpr double E_blast = 1.0e51;		       // ergs
 	constexpr double m_ej = 10.0 * C::M_solar;	       // ejecta mass in cgs
 	constexpr double m_dead_min = 1.4 * C::M_solar;	       // minimum mass of a dead star
-	const double p_snr_0 = quokka::SN_p_terminal; // SN terminal momentum in cgs (runtime parameter: particles.SN_p_terminal)
+	const double p_snr_0 = quokka::SN_p_term_Msunkmps * C::M_solar * 1.0e5; // SN terminal momentum in cgs (runtime parameter: particles.SN_p_term_Msunkmps [M_sun km/s])
 
 	// Step 1: Local deposition within each box
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
