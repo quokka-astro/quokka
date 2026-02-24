@@ -14,7 +14,7 @@
 # and not the global owner(s) will be requested for a review.
 
 # hydro
-src/hydro/ @BenWibking @markkrumholz @chongchonghe
+src/hydro/ @BenWibking @lizmcole @markkrumholz @chongchonghe
 
 # optically-thin radiative cooling (assuming ionization equilibrium)
 src/cooling/ @BenWibking @markkrumholz @chongchonghe
