@@ -250,40 +250,57 @@ auto problem_main() -> int
 	// get the number of particles
 	const int n_particles = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getNumParticles();
 
+	const auto &real_data = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleDataAtLevel(0).first;
+
 	int status = 0;
 
 	// check max abs particle distance
-	double max_err = 0.0;
+	double max_deviation = 0.0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		amrex::Print() << "Number of particles: " << n_particles << "\n";
+
+		// compute total particle mass and error
+		double max_part_mass = 0.0;
+		for (const auto &p : real_data) {
+			max_part_mass = std::max(max_part_mass, p[3]);
+		}
+		amrex::Print() << "Maximum particle mass: " << max_part_mass << "\n";
 
 		if (!sim.userData_.dist.empty()) {
 			auto result = std::max_element(sim.userData_.dist.begin(), sim.userData_.dist.end(),
 						       [](amrex::ParticleReal a, amrex::ParticleReal b) { return std::abs(a) < std::abs(b); });
-			max_err = std::abs(*result);
-			amrex::Print() << "max deviation from initial particle separation = " << max_err << " cell widths.\n";
+			max_deviation = std::abs(*result);
+			amrex::Print() << "max deviation from initial particle separation = " << max_deviation << " cell widths.\n";
 		} else {
-			max_err = 1.0;
+			max_deviation = 1.0;
 			amrex::Print() << "No particles in userData_.dist.\n";
 		}
 
 		if (do_split_particles) {
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.maxTimesteps_ <= 20, "maxTimesteps_ must be <= 20 when do_split_particles is true");
-			const double split_max_err_tol = 1.2; // max error tol in cell widths
-			if (max_err < split_max_err_tol) {
-				amrex::Print() << "Test passed (split particles)\n";
+			// compute velocity dispersion in particle splitting
+			// compute dx
+			const Real cell_dx0 = sim.geom[0].CellSize(0);
+			// compute vdisp
+			const Real orig_particle_mass = split_factor * max_part_mass;
+			const Real vdisp = std::sqrt(2.0 * C::Gconst * orig_particle_mass / cell_dx0);
+			// expected maximum drift
+			const Real l_drift_over_dx = vdisp * sim.tNew_[0] / cell_dx0;
+			const double split_max_deviation = l_drift_over_dx * 1.01; // max deviation from the initial separation
+
+			if (max_deviation < split_max_deviation) {
+				amrex::Print() << "    Expected maximum deviation = " << split_max_deviation << " cell widths.\n";
 			} else {
-				status = 1;
-				amrex::Print() << "Test failed (split particles)\n";
+				status += 1;
+				amrex::Print() << "    Expected maximum deviation = " << split_max_deviation << " cell widths.\n";
 			}
 			if (n_particles != 2 * split_factor) {
-				status = 1;
+				status += 1;
 				amrex::Print() << "Test failed (split particles, number of particles is not 2 * split_factor)\n";
 			}
 		} else if (!is_refactor) {
 			const double max_err_tol = 0.18; // max error tol in cell widths
-			if (max_err < max_err_tol) {
-				status = 0;
+			if (max_deviation < max_err_tol) {
 				amrex::Print() << "Test passed\n";
 			} else {
 				amrex::Print() << "Test failed\n";
@@ -295,16 +312,21 @@ auto problem_main() -> int
 				max_err_tol = 2.0;
 				n_particles_expected = 2 * 8; // 8 = 2^3 is the split factor and is hard-coded
 			}
-			if (max_err < max_err_tol) {
-				status = 0;
+			if (max_deviation < max_err_tol) {
 				amrex::Print() << "Test passed\n";
 			} else {
 				amrex::Print() << "Test failed\n";
 			}
 			if (n_particles != n_particles_expected) {
-				status = 1;
+				status += 1;
 				amrex::Print() << "Test failed (refactor, number of particles is not " << n_particles_expected << ")\n";
 			}
+		}
+
+		if (status > 0) {
+			amrex::Print() << "Test failed\n";
+		} else {
+			amrex::Print() << "Test passed\n";
 		}
 	}
 
