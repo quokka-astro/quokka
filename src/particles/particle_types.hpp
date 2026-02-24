@@ -499,7 +499,7 @@ inline int reproducibility_roundoff_redundancy = 20; // NOLINT; remove 20 bits f
 inline amrex::Real scalar_yield_per_SN = 1.0; // NOLINT
 
 // SN terminal momentum in units of M_sun * km/s (runtime-configurable). Default: canonical value from Kim & Ostriker 2015.
-inline constexpr amrex::Real SN_p_term_Msunkmps_canonical = 2.8e5; // [M_sun km/s]
+inline constexpr amrex::Real SN_p_term_Msunkmps_canonical = 2.8e5;    // [M_sun km/s]
 inline amrex::Real SN_p_term_Msunkmps = SN_p_term_Msunkmps_canonical; // NOLINT
 
 // Function to parse particle parameters from input file
