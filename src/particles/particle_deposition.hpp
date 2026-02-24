@@ -197,11 +197,16 @@ depositThermalKineticMomentumSNR(amrex::Array4<amrex::Real> const &local_state, 
 				 const Real pvz, const bool SN_smooth_gas_velocity, const amrex::Real scalar_yield_per_SN_d)
 {
 	const double n_H_amb = avg_density * cloudy_H_mass_fraction / m_u;
-	const amrex::Real M_gas = avg_density * stencil_volume * vol;		 // Gas mass in stencil
-	const amrex::Real M_snr = M_gas + m_ej;					 // SNR mass
-	const amrex::Real M_sf = 1679.0 * C::M_solar * std::pow(n_H_amb, -0.26); // Shell-formation mass
-	const amrex::Real RM = M_snr / M_sf;					 // R_M factor = M_snr / M_sf
-	const amrex::Real p_snr = p_snr_0 * std::pow(n_H_amb, -0.17);		 // = 1.89e5 when n = 10
+	const amrex::Real M_gas = avg_density * stencil_volume * vol;					// Gas mass in stencil
+	const amrex::Real M_snr = M_gas + m_ej;							// SNR mass
+	constexpr amrex::Real M_sf_canonical = 1679.0 * C::M_solar;					// canonical pre-factor [g], n_H^{-0.26} applied below
+	constexpr amrex::Real p_snr_0_canonical = 2.8e5 * C::M_solar * 1.0e5;				// canonical SN terminal momentum [g cm/s]
+	// Scale M_sf so that the kinetic energy p_snr^2 / (2 M_sf) is invariant under changes of p_snr_0:
+	//   M_sf_scaled = M_sf_canonical * (p_snr_0 / p_snr_0_canonical)^2
+	const amrex::Real p_ratio = p_snr_0 / p_snr_0_canonical;
+	const amrex::Real M_sf = M_sf_canonical * std::pow(n_H_amb, -0.26) * p_ratio * p_ratio;	// Shell-formation mass (scaled)
+	const amrex::Real RM = M_snr / M_sf;								// R_M factor = M_snr / M_sf
+	const amrex::Real p_snr = p_snr_0 * std::pow(n_H_amb, -0.17);					// = 1.89e5 when n = 10
 
 	// fraction of terminal SN momentum to go to gas momentum
 	amrex::Real f_factor = 1.0;
@@ -366,7 +371,7 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 	constexpr double E_blast = 1.0e51;		       // ergs
 	constexpr double m_ej = 10.0 * C::M_solar;	       // ejecta mass in cgs
 	constexpr double m_dead_min = 1.4 * C::M_solar;	       // minimum mass of a dead star
-	constexpr double p_snr_0 = 2.8e5 * C::M_solar * 1.0e5; // SN terminal momentum in cgs
+	const double p_snr_0 = quokka::SN_p_terminal; // SN terminal momentum in cgs (runtime parameter: particles.SN_p_terminal)
 
 	// Step 1: Local deposition within each box
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {

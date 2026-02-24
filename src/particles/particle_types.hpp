@@ -498,6 +498,12 @@ inline int reproducibility_roundoff_redundancy = 20; // NOLINT; remove 20 bits f
 // Scalar yield per supernova (total amount, not density)
 inline amrex::Real scalar_yield_per_SN = 1.0; // NOLINT
 
+// Canonical SN terminal momentum (Kim & Ostriker 2015), in cgs units
+constexpr double SN_p_terminal_canonical = 2.8e5 * C::M_solar * 1.0e5; // [g cm/s]
+
+// SN terminal momentum (runtime-configurable). Default is SN_p_terminal_canonical.
+inline amrex::Real SN_p_terminal = SN_p_terminal_canonical; // NOLINT
+
 // Function to parse particle parameters from input file
 // The 'inline' keyword allows this function to be defined in a header file without
 // causing multiple definition errors when the header is included in multiple source files.
@@ -537,6 +543,9 @@ inline void particleParmParse()
 
 	// Scalar yield per supernova
 	pp.query("scalar_yield_per_SN", scalar_yield_per_SN);
+
+	// SN terminal momentum (overrides canonical value if set)
+	pp.query("SN_p_terminal", SN_p_terminal);
 
 	// Placeholder parameters for particles
 	pp.query("param1", particle_param1);
