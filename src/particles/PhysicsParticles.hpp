@@ -409,8 +409,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	void splitParticles(int const lev, int const splitFactor) override
 	{
 		static_assert(Physics_Traits<problem_t>::UnitSystem == UnitSystem::CGS,
-			"The current implementation of velocity kick in particle splitting assumes cgs units."
-			"Please implement the appropriate scaling for other unit systems.");
+			      "The current implementation of velocity kick in particle splitting assumes cgs units."
+			      "Please implement the appropriate scaling for other unit systems.");
 
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
 			for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
