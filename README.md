@@ -34,3 +34,6 @@ This is a [a Kelvin-Helmholz instability simulated with Quokka](https://vimeo.co
 
 ## Problems?
 If you run into problems, please start a [Discussion](https://github.com/BenWibking/quokka/discussions) for technical support. If you discover a bug, please let us know by opening an [Issue](https://github.com/BenWibking/quokka/issues). You can also join our [Zulip community](https://quokka-astro.zulipchat.com/join/3sahu2rgvkengbkzwkpndc5h/).
+
+## Acknowledgements
+We thank Kandra Labs, Inc. (“Zulip”) for providing hosted [Zulip](https://zulip.com/) chat for our open-source community.
