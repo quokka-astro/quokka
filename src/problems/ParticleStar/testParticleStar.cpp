@@ -14,6 +14,7 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
+#include "particles/starparticle_radiation.hpp"
 #include "util/BC.hpp"
 
 #ifdef HAVE_PYTHON
@@ -222,7 +223,100 @@ auto problem_main() -> int
 	if (status > 0) {
 		amrex::Print() << "Test failed: mass not conserved to machine precision in the accretion step !!!\n";
 	} else {
-		amrex::Print() << "Test passed\n";
+		amrex::Print() << "Mass conservation test passed\n";
+	}
+
+	// ============================================================
+	// Validate stellar property updates (burn state, luminosity, polytropic index)
+	// ============================================================
+	amrex::Print() << "\n=== Stellar property validation ===\n";
+
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		// Offsets: getParticleDataAtAllLevels returns [pos_x, pos_y, pos_z, rdata[0], rdata[1], ...]
+		constexpr int pos_offset = AMREX_SPACEDIM; // 3 position components precede rdata
+
+		for (size_t p = 0; p < real_data_final.size(); ++p) {
+			const auto &rdata = real_data_final[p];
+			const auto &idata = int_data_final[p];
+
+			const double p_mass = rdata[pos_offset + quokka::StarParticleMassIdx];
+			const double p_mdot = rdata[pos_offset + quokka::StarParticleMdotIdx];
+			const double p_n = rdata[pos_offset + quokka::StarParticleNIdx];
+			const double p_mdeut = rdata[pos_offset + quokka::StarParticleMdeutIdx];
+			const double p_lum = rdata[pos_offset + quokka::StarParticleLumIdx];
+			const double p_lhist = rdata[pos_offset + quokka::StarParticleLHistIdx];
+			const auto p_burn_state = static_cast<quokka::burningState>(idata[quokka::StarParticleBurnStateIdx]);
+
+			amrex::Print() << "Particle " << p << ":\n";
+			amrex::Print() << "  mass     = " << p_mass << " g (" << p_mass / quokka::StellarConstants::M_solar << " M_sun)\n";
+			amrex::Print() << "  mdot     = " << p_mdot << " g/s\n";
+			amrex::Print() << "  n        = " << p_n << "\n";
+			amrex::Print() << "  mdeut    = " << p_mdeut << " g\n";
+			amrex::Print() << "  lum      = " << p_lum << " erg/s\n";
+			amrex::Print() << "  l_hist   = " << p_lhist << " erg/s\n";
+			amrex::Print() << "  burnState = " << static_cast<int>(p_burn_state) << "\n";
+
+			// Check 1: burn_state should have progressed from Uninitialized if mdot > 0
+			if (p_mdot > 0.0 && p_mass >= quokka::StellarConstants::M_rad_min) {
+				if (p_burn_state == quokka::burningState::Uninitialized) {
+					status += 1;
+					amrex::Print() << "  FAIL: burn_state is still Uninitialized despite mdot > 0 and mass >= M_rad_min\n";
+				} else {
+					amrex::Print() << "  PASS: burn_state has progressed from Uninitialized\n";
+				}
+			}
+
+			// Check 2: luminosity should be stored and match recomputation
+			// Note: luminosity is computed before accretion in each timestep, so the stored
+			// luminosity uses the mass/mdot from before the last accretion step. We allow
+			// a loose tolerance (1%) to account for this one-step lag.
+			const double radius = quokka::StellarPhysics::rad_init(p_mdot > 0.0 ? p_mdot : 1.0e-10);
+			const double expected_lum = quokka::StellarPhysics::luminosity_total(p_mass, radius, p_mdot, p_burn_state);
+
+			amrex::Print() << "  expected_lum = " << expected_lum << " erg/s\n";
+
+			if (expected_lum > 0.0) {
+				const double lum_rel_error = std::abs(p_lum - expected_lum) / expected_lum;
+				amrex::Print() << "  lum rel_error = " << lum_rel_error << "\n";
+				const double lum_tol = 1.0e-2; // 1% tolerance for one-step lag
+				if (lum_rel_error > lum_tol) {
+					status += 1;
+					amrex::Print() << "  FAIL: stored luminosity differs from expected by more than " << lum_tol * 100 << "%\n";
+				} else {
+					amrex::Print() << "  PASS: stored luminosity is consistent with expected value\n";
+				}
+			} else if (p_burn_state == quokka::burningState::Uninitialized) {
+				// Luminosity should be 0 for uninitialized particles
+				if (p_lum != 0.0) {
+					status += 1;
+					amrex::Print() << "  FAIL: luminosity should be 0 for Uninitialized burn_state\n";
+				} else {
+					amrex::Print() << "  PASS: luminosity is 0 for Uninitialized burn_state\n";
+				}
+			}
+
+			// Check: luminosity should be positive for active particles
+			if (p_burn_state != quokka::burningState::Uninitialized && p_lum <= 0.0) {
+				status += 1;
+				amrex::Print() << "  FAIL: luminosity should be positive for active burn_state\n";
+			}
+
+			// Check 3: polytropic index should be in valid range [1.5, 3.0]
+			if (p_burn_state != quokka::burningState::Uninitialized) {
+				if (p_n < 1.5 || p_n > 3.0) {
+					status += 1;
+					amrex::Print() << "  FAIL: polytropic index n = " << p_n << " is outside valid range [1.5, 3.0]\n";
+				} else {
+					amrex::Print() << "  PASS: polytropic index n is in valid range\n";
+				}
+			}
+		}
+	}
+
+	if (status == 0) {
+		amrex::Print() << "\n=== All tests passed ===\n";
+	} else {
+		amrex::Print() << "\n=== Test failed (status = " << status << ") ===\n";
 	}
 
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0, true);

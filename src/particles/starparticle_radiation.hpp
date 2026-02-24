@@ -110,15 +110,7 @@ namespace StellarTables
 
 namespace StellarPhysics
 {
-    // Burning state enum
-    enum class BurningState : int {
-        Uninitialized = 0,
-        None,
-        VariableCoreDeuterium,
-        SteadyCoreDeuterium,
-        ShellDeuterium,
-        ZAMS
-    };
+    // Uses burningState enum from particle_types.hpp
 
     // Bisection solver for GPU
     template<typename Func>
@@ -398,9 +390,9 @@ namespace StellarPhysics
 
     // Total luminosity
     AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto luminosity_total(amrex::Real mass, amrex::Real radius, amrex::Real mdot,
-                                                               BurningState burn_state) -> amrex::Real
+                                                               burningState burn_state) -> amrex::Real
     {
-        if (burn_state == BurningState::Uninitialized) {
+        if (burn_state == burningState::Uninitialized) {
             return 0.0;
         }
         
@@ -442,9 +434,6 @@ private:
         amrex::Real n = p.rdata(StarParticleNIdx);
         auto burn_state = static_cast<burningState>(p.idata(StarParticleBurnStateIdx));
 
-        // Update deuterium mass using already-computed mdot
-        mdeut += mdot * dt;
-
         // Initialize if needed
         if (burn_state == burningState::Uninitialized) {
             if (mass < M_rad_min || mdot == 0.0) {
@@ -457,6 +446,9 @@ private:
             p.rdata(StarParticleNIdx) = n;
             p.idata(StarParticleBurnStateIdx) = static_cast<int>(burn_state);
         }
+
+        // Update deuterium mass using already-computed mdot (after early return check)
+        mdeut += mdot * dt;
 
         // Stellar radius is not stored as a particle field; compute from current mass and n
         // Note: this is a simplification - a persistent radius field would improve accuracy
@@ -490,6 +482,10 @@ private:
         } else if (burn_state == burningState::ZAMS) {
             mdeut = 0.0;
         }
+
+        // Compute and store luminosity
+        const amrex::Real lum = luminosity_total(mass, radius, mdot, burn_state);
+        p.rdata(StarParticleLumIdx) = lum;
 
         // Update particle data
         p.rdata(StarParticleMdeutIdx) = mdeut;

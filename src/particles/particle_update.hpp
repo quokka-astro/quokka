@@ -31,26 +31,41 @@ struct ParticlePropertyUpdateBase {
 		}
 
 		constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
-		auto *host_tables_ptr = quokka::g_luminosity_tables_ptr<nGroups>;
+		constexpr bool needs_tables = ParticlePropertyUpdateTraits<particleType>::requires_luminosity_tables;
 
-		// Only proceed if tables are initialized
-		if (host_tables_ptr != nullptr && host_tables_ptr->is_initialized()) {
-			// Create GPU const tables by value to pass to device
-			auto const gpu_tables = host_tables_ptr->const_tables();
+		if constexpr (needs_tables) {
+			auto *host_tables_ptr = quokka::g_luminosity_tables_ptr<nGroups>;
 
-			// Apply the updater to all particles across all levels
-			for (int lev = 0; lev <= container->finestLevel(); ++lev) {
-				for (typename ContainerType::ParIterType pIter(*container, lev); pIter.isValid(); ++pIter) {
-					auto &particles = pIter.GetArrayOfStructs();
-					auto *pData = particles().data();
-					const amrex::Long np = pIter.numParticles();
+			// Only proceed if tables are initialized
+			if (host_tables_ptr != nullptr && host_tables_ptr->is_initialized()) {
+				auto const gpu_tables = host_tables_ptr->const_tables();
+				applyUpdate<problem_t, ContainerType>(container, current_time, dt, gpu_tables);
+			}
+		} else {
+			// Create a default-initialized tables struct (unused by the per-particle function)
+			LuminosityGpuConstTables<nGroups> const gpu_tables{};
+			applyUpdate<problem_t, ContainerType>(container, current_time, dt, gpu_tables);
+		}
+	}
 
-					amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
-						auto &p = pData[idx]; // NOLINT
-						ParticlePropertyUpdateTraits<particleType>::template updateProperties<
-						    problem_t, typename ContainerType::ParticleType, nGroups>(p, current_time, dt, gpu_tables);
-					});
-				}
+  private:
+	template <typename problem_t, typename ContainerType>
+	static void applyUpdate(ContainerType *container, amrex::Real current_time, amrex::Real dt,
+				LuminosityGpuConstTables<Physics_Traits<problem_t>::nGroups> const &gpu_tables) noexcept
+	{
+		constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
+		// Apply the updater to all particles across all levels
+		for (int lev = 0; lev <= container->finestLevel(); ++lev) {
+			for (typename ContainerType::ParIterType pIter(*container, lev); pIter.isValid(); ++pIter) {
+				auto &particles = pIter.GetArrayOfStructs();
+				auto *pData = particles().data();
+				const amrex::Long np = pIter.numParticles();
+
+				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+					auto &p = pData[idx]; // NOLINT
+					ParticlePropertyUpdateTraits<particleType>::template updateProperties<
+					    problem_t, typename ContainerType::ParticleType, nGroups>(p, current_time, dt, gpu_tables);
+				});
 			}
 		}
 	}
@@ -59,6 +74,8 @@ struct ParticlePropertyUpdateBase {
 // Traits class for specializing the per-particle update. Inherits updateParticleProperties from the base.
 // Specializations only need to override updateProperties.
 template <ParticleType particleType> struct ParticlePropertyUpdateTraits : ParticlePropertyUpdateBase<particleType> {
+	static constexpr bool requires_luminosity_tables = true;
+
 	// Default per-particle implementation - does nothing
 	template <typename problem_t, typename ParticleType, int Nout>
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType & /*p*/, amrex::Real /*current_time*/, amrex::Real /*dt*/,
@@ -70,6 +87,8 @@ template <ParticleType particleType> struct ParticlePropertyUpdateTraits : Parti
 
 // Specialization for StochasticStellarPop particles: updates luminosity via table interpolation.
 template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarPop> : ParticlePropertyUpdateBase<ParticleType::StochasticStellarPop> {
+	static constexpr bool requires_luminosity_tables = true;
+
 	template <typename problem_t, typename ParticleType, int Nout>
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType &p, amrex::Real current_time, amrex::Real /*dt*/,
 									 LuminosityGpuConstTables<Nout> const &gpu_tables) noexcept
@@ -79,7 +98,10 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 };
 
 // Specialization for Star particles: updates stellar properties (burning state, radius, luminosity).
+// Star particles do not require luminosity tables.
 template <> struct ParticlePropertyUpdateTraits<ParticleType::Star> : ParticlePropertyUpdateBase<ParticleType::Star> {
+	static constexpr bool requires_luminosity_tables = false;
+
 	template <typename problem_t, typename ParticleType, int Nout>
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType &p, amrex::Real current_time, amrex::Real dt,
 									 LuminosityGpuConstTables<Nout> const &gpu_tables) noexcept

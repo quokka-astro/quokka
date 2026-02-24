@@ -758,6 +758,8 @@ template <> struct ParticleCreationTraits<ParticleType::Star> {
 				p.rdata(StarParticleVxIdx) = vx;
 				p.rdata(StarParticleVyIdx) = vy;
 				p.rdata(StarParticleVzIdx) = vz;
+				p.rdata(StarParticleBirthTimeIdx) = current_time;		  // birth time
+				p.rdata(StarParticleDeathTimeIdx) = -1.0;			  // death time (unset)
 				p.rdata(StarParticleMdotIdx) = 0.0;				  // initial accretion rate = 0
 				p.rdata(StarParticleAmxIdx) = 0.0;				  // angular momentum x
 				p.rdata(StarParticleAmyIdx) = 0.0;				  // angular momentum y
@@ -766,6 +768,7 @@ template <> struct ParticleCreationTraits<ParticleType::Star> {
 				p.rdata(StarParticleNIdx) = 1.5;				  // polytropic index npoly
 				p.idata(StarParticleBurnStateIdx) = Uninitialized;		  // burn state
 				p.rdata(StarParticleLHistIdx) = 3.90e31;			  // l_hist (L_sun in erg/s)
+				p.rdata(StarParticleLumIdx) = 0.0;				  // luminosity (computed by updateStellarProperties)
 			}
 
 			// update cell density to be the threshold density
