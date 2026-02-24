@@ -408,6 +408,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 	void splitParticles(int const lev, int const splitFactor) override
 	{
+		static_assert(Physics_Traits<problem_t>::UnitSystem == UnitSystem::CGS,
+			"The current implementation of velocity kick in particle splitting assumes cgs units."
+			"Please implement the appropriate scaling for other unit systems.");
+
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
 			for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
 				// Update NextID to include particles that will be created
@@ -461,9 +465,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						p_new.rdata(mass_idx) = old_mass / static_cast<amrex::Real>(splitFactor);
 
 						if (has_velocity_components) {
-							// Apply a component-wise uniform velocity kick with RMS set by cell-scale escape speed.
-							const amrex::Real v_esc = std::sqrt(2.0 * C::Gconst * old_mass / dx_cell);
-							const amrex::Real vdisp_norm = 2.0 * v_esc;
+							// Apply a component-wise uniform velocity kick with RMS set by cell-scale virial velocity.
+							const amrex::Real v_virial = std::sqrt(C::Gconst * old_mass / dx_cell);
+							const amrex::Real vdisp_norm = 2.0 * v_virial;
 							const amrex::Real kick_x = vdisp_norm * (amrex::Random(rng) - 0.5);
 							const amrex::Real kick_y = vdisp_norm * (amrex::Random(rng) - 0.5);
 							const amrex::Real kick_z = vdisp_norm * (amrex::Random(rng) - 0.5);
