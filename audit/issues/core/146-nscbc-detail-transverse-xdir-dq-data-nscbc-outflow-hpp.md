@@ -18,3 +18,18 @@ in the `AMREX_SPACEDIM == 3` z-derivative branch, the computed derivative is ass
 
 ## Proposed Patch
 - Apply a targeted fix at the cited location, then add a regression/unit test that exercises the failing code path and confirms the corrected behavior.
+
+## Why This Is a Bug
+The z-derivative branch computes `dQ/dz` but stores it into `dQ_dy_data`, leaving `dQ_dz_data` unchanged (zero). In 3D x-boundary NSCBC, that silently drops the z-transverse contribution and overwrites the y-transverse derivative with the wrong quantity.
+
+## Complete Code Patch
+```diff
+diff --git a/src/hydro/NSCBC_outflow.hpp b/src/hydro/NSCBC_outflow.hpp
+--- a/src/hydro/NSCBC_outflow.hpp
++++ b/src/hydro/NSCBC_outflow.hpp
+@@
+-				dQ_dy_data = (Qp - Qm) / (2.0 * geom.CellSize(2));
++				dQ_dz_data = (Qp - Qm) / (2.0 * geom.CellSize(2));
+ 			}
+ 		}
+```

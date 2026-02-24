@@ -18,3 +18,18 @@ computes and stores `updated` (`src/turbulence/TurbulentDriving.hpp:58`) but alw
 
 ## Proposed Patch
 - Return the actual `updated` flag (or equivalent apply-result) so callers can distinguish no-op timesteps from applied turbulence forcing.
+
+## Why This Is a Bug
+The function computes `updated` specifically to indicate whether the driving field was refreshed, but then always returns `true`. That makes the return value misleading and unusable for callers that want to know whether a new forcing realization was actually applied this step.
+
+## Complete Code Patch
+```diff
+diff --git a/src/turbulence/TurbulentDriving.hpp b/src/turbulence/TurbulentDriving.hpp
+--- a/src/turbulence/TurbulentDriving.hpp
++++ b/src/turbulence/TurbulentDriving.hpp
+@@
+ 		amrex::Gpu::streamSynchronize();
+-		return true;
++		return updated;
+ 	}
+```
