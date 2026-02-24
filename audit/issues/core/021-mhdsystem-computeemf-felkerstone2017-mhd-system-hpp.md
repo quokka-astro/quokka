@@ -4,7 +4,7 @@
 hard-codes 3D indexing (`fcx_mf_cVars[2]`, `fcx_mf_fspds[2]`, `iedge < 3`) at `src/hydro/mhd_system.hpp:179-186` and `:338-340`, so it is not safe for 1D/2D MHD builds.
 
 ## Severity
-`Medium`
+`Low`
 
 ## Affected File
 `src/hydro/mhd_system.hpp`

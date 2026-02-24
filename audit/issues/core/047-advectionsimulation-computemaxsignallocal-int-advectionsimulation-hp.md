@@ -4,7 +4,7 @@
 uses `state_old_cc_[level]` (`src/linear_advection/AdvectionSimulation.hpp:134`) instead of the current state (`state_new_cc_`) when computing CFL speeds, unlike `QuokkaSimulation`. This can make the timestep estimate use stale data.
 
 ## Severity
-`Medium`
+`High`
 
 ## Affected File
 `src/linear_advection/AdvectionSimulation.hpp`

@@ -4,7 +4,7 @@
 hard-codes 3D indexing (`fcx_mf_vel[2]`, `fcx_mf_cVars[2]`, `fcx_mf_fspds[2]`, `iedge < 3`) at `src/hydro/mhd_system.hpp:371-385` and `:475-477`, causing out-of-bounds access in 1D/2D MHD builds.
 
 ## Severity
-`High`
+`Low`
 
 ## Affected File
 `src/hydro/mhd_system.hpp`

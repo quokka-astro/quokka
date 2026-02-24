@@ -4,7 +4,7 @@
 MHD face arrays are filled with `for (int idim = 0; idim < 3; ++idim)` (`src/QuokkaSimulation.hpp:735`) even though the container type is `std::array<..., AMREX_SPACEDIM>`. This is out-of-bounds for 1D/2D MHD builds.
 
 ## Severity
-`High`
+`Low`
 
 ## Affected File
 `src/QuokkaSimulation.hpp`

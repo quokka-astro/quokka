@@ -4,7 +4,7 @@
 Stage-2 face-centered ghost fill uses `time` instead of `time + dt_lev` (`src/QuokkaSimulation.hpp:2309`) while the cell-centered fill uses `time + dt_lev` (`src/QuokkaSimulation.hpp:2305`). This can apply inconsistent boundary states for time-dependent MHD boundary conditions during the RK2 corrector stage.
 
 ## Severity
-`Medium`
+`High`
 
 ## Affected File
 `src/QuokkaSimulation.hpp`

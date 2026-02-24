@@ -4,7 +4,7 @@
 loops `for (int iedge = 0; iedge < 3; ++iedge)` over `std::array<amrex::MultiFab, AMREX_SPACEDIM>` (`src/QuokkaSimulation.hpp:2507`), which is out-of-bounds for 1D/2D MHD builds.
 
 ## Severity
-`High`
+`Low`
 
 ## Affected File
 `src/QuokkaSimulation.hpp`

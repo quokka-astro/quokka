@@ -4,7 +4,7 @@
 loops over `w0 = 0..2` unconditionally (`src/hydro/mhd_system.hpp:957`) while operating on `std::array<..., AMREX_SPACEDIM>` containers. This is out-of-bounds for 1D/2D MHD builds and should use `AMREX_SPACEDIM`.
 
 ## Severity
-`High`
+`Low`
 
 ## Affected File
 `src/hydro/mhd_system.hpp`

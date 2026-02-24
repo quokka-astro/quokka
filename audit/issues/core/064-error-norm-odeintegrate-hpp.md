@@ -4,7 +4,7 @@
 weighting uses `reltol * y0[i] + abstol[i]` (`src/math/ODEIntegrate.hpp:118`) instead of `reltol * abs(y0[i]) + abstol[i]` (as in standard weighted RMS norms). Negative state values can shrink/cancel the denominator and distort timestep control.
 
 ## Severity
-`Medium`
+`High`
 
 ## Affected File
 `src/math/ODEIntegrate.hpp`

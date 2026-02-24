@@ -4,7 +4,7 @@
 MHD branch unconditionally reads `cons_fc[1]` and `cons_fc[2]` (`src/hydro/hydro_system.hpp:409-412`) from a `std::array<..., AMREX_SPACEDIM>`, causing out-of-bounds access for 1D/2D MHD builds.
 
 ## Severity
-`High`
+`Low`
 
 ## Affected File
 `src/hydro/hydro_system.hpp`

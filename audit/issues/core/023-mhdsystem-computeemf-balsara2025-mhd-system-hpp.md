@@ -4,7 +4,7 @@
 hard-codes 3D storage/loops (`cc_mf_EMF(...,3,...)`, `fcx_mf_cVars[2]`, `idim < 3`, `iedge < 3`) at `src/hydro/mhd_system.hpp:501-503`, `:514-523`, `:532`, and `:571`, so the implementation is not dimension-safe for 1D/2D MHD builds.
 
 ## Severity
-`Medium`
+`Low`
 
 ## Affected File
 `src/hydro/mhd_system.hpp`

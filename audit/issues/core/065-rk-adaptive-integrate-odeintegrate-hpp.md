@@ -4,7 +4,7 @@
 ignores the return code of the initial `rhs(t0, y0, ydot0)` call used for timestep estimation (`src/math/ODEIntegrate.hpp:137`), so an RHS failure can leave `ydot0` invalid and contaminate `dt_guess` / subsequent integration control.
 
 ## Severity
-`Medium`
+`High`
 
 ## Affected File
 `src/math/ODEIntegrate.hpp`

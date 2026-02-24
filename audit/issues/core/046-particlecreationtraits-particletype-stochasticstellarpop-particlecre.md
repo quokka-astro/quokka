@@ -4,7 +4,7 @@
 computes `num_low = ceil(mass_low_mass_star / low_mass_composite_max_mass_)` unconditionally (`src/particles/particle_creation.hpp:499`), but the checker explicitly treats `low_mass_composite_max_mass_ <= 0` as “no splitting” (`src/particles/particle_creation.hpp:444-446`). Non-positive `low_mass_composite_max_mass` can therefore trigger division by zero/invalid `num_low` in the creator path.
 
 ## Severity
-`High`
+`Medium`
 
 ## Affected File
 `src/particles/particle_creation.hpp`

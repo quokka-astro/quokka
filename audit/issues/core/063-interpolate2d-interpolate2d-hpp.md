@@ -4,7 +4,7 @@
 boundary-degenerate branch conditions mistakenly compare coordinate `yi` (double) instead of index `iy` (int) (`src/math/Interpolate2D.hpp:58`, `src/math/Interpolate2D.hpp:63`). This misroutes edge-case interpolation logic near table boundaries.
 
 ## Severity
-`Medium`
+`High`
 
 ## Affected File
 `src/math/Interpolate2D.hpp`

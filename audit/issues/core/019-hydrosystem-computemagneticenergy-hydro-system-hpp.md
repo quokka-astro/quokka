@@ -4,7 +4,7 @@
 MHD path unconditionally reads `(*cons_fc)[1]` and `(*cons_fc)[2]` (`src/hydro/hydro_system.hpp:668-671`) from a `std::array<..., AMREX_SPACEDIM>`, so it is out-of-bounds for 1D/2D MHD builds.
 
 ## Severity
-`High`
+`Low`
 
 ## Affected File
 `src/hydro/hydro_system.hpp`
