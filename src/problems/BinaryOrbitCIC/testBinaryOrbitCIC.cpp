@@ -214,7 +214,7 @@ auto problem_main() -> int
 			const Real cell_dx0 = sim.geom[0].CellSize(0);
 			// compute vdisp
 			const Real orig_particle_mass = split_factor * max_part_mass;
-			const Real vdisp = std::sqrt(2.0 * C::Gconst * orig_particle_mass / cell_dx0);
+			const Real vdisp = std::sqrt(C::Gconst * orig_particle_mass / cell_dx0);
 			// expected maximum drift
 			const Real l_drift_over_dx = vdisp * sim.tNew_[0] / cell_dx0;
 			const double split_max_deviation = 2.0 * l_drift_over_dx * 1.01; // max deviation from the initial separation
