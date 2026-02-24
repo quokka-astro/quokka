@@ -21,21 +21,21 @@
 
 ## Phases
 
-### Phase 1: Fix bugs in starparticle_radiation.hpp `[pending]`
+### Phase 1: Fix bugs in starparticle_radiation.hpp `[complete]`
 - [ ] Fix early return: write mdeut back before returning, or don't modify mdeut before the check
 - [ ] Add luminosity computation and storage at end of `updateStellarPropertiesImpl`
 - [ ] Remove duplicate `StellarPhysics::BurningState` enum, use the one from `particle_types.hpp`
 
-### Phase 2: Fix particle creation initialization `[pending]`
+### Phase 2: Fix particle creation initialization `[complete]`
 - [ ] Initialize `birth_time`, `death_time`, `lum` in Star particle creation (particle_creation.hpp)
 
-### Phase 3: Update test to validate stellar properties `[pending]`
+### Phase 3: Update test to validate stellar properties `[complete]`
 - [ ] Include `starparticle_radiation.hpp` in test file
 - [ ] After evolution, extract particle data via `getParticleDataAtLevel()`
 - [ ] Validate burning state, polytropic index n, luminosity against host-side computation using StellarPhysics functions
 - [ ] Print diagnostics for stellar properties
 
-### Phase 4: Build and run test `[pending]`
+### Phase 4: Build and run test `[complete]`
 
 - [ ] Build ParticleStar test
 - [ ] Run and verify all checks pass
