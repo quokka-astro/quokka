@@ -473,7 +473,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 							amrex::Real kick_y = 0.0;
 							amrex::Real kick_z = 0.0;
 							amrex::Real r2 = 0.0;
-							do {
+							do { // NOLINT(cppcoreguidelines-avoid-do-while)
 								// Rejection sample from the enclosing cube [-1,1]^3 to get a uniform point in the unit ball.
 								kick_x = (2.0 * amrex::Random(rng)) - 1.0;
 								kick_y = (2.0 * amrex::Random(rng)) - 1.0;
