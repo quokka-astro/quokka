@@ -89,7 +89,7 @@ When a progenitor star reaches its death time, it explodes as a Type II supernov
 |-----------|--------|-------|-------------|
 | Blast energy | $E_{\text{blast}}$ | $10^{51}$ erg | Thermal energy injected into the ISM |
 | Ejecta mass | $m_{\text{ej}}$ | $10 M_{\odot}$ | Mass expelled during explosion |
-| Terminal momentum | $p_{\text{snr},0}$ | $2.8 \times 10^5 M_{\odot} \, \text{km s}^{-1}$ | Asymptotic momentum of the SNR |
+| Terminal momentum | $p_{\text{snr},0}$ | $2.8 \times 10^5 M_{\odot} \, \text{km s}^{-1}$ | Asymptotic momentum of the SNR (configurable via `particles.SN_p_term_Msunkmps`) |
 | Remnant mass | $m_{\text{dead}}$ | $\geq 1.4 M_{\odot}$ | Mass of the compact remnant |
 | Kinetic energy | $E_{\text{kin}}$ | $0.5 m_{\text{ej}} v_{\text{star}}^2$ | Kinetic energy of the ejecta |
 
@@ -115,7 +115,7 @@ $$
 
 where:
 - $M_{\text{SNR}} = M_{\text{gas}} + m_{\text{ej}}$ is the total SNR mass (gas in stencil plus ejecta)
-- $M_{\text{sf}} = 1679 M_{\odot} \, n_{\text{H}}^{-0.26}$ is the shell-formation mass
+- $M_{\text{sf}} = 1679 M_{\odot} \, n_{\text{H}}^{-0.26} \left(p_{\text{snr},0} / p_{\text{snr},0}^{\text{canonical}}\right)^2$ is the shell-formation mass, scaled so that the kinetic energy $p_{\text{snr}}^2 / (2 M_{\text{sf}})$ is invariant when $p_{\text{snr},0}$ is changed
 
 When $R_M < 1$, the Sedov-Taylor phase is resolved and the blast wave dynamics can be captured. When $R_M \geq 1$, the resolution is insufficient and the code transitions to momentum-dominated feedback following Kim & Ostriker (2017).
 
@@ -182,10 +182,11 @@ The cross term $\vec{v}_{\text{COM}} \cdot \vec{p}_{\text{radial}}$ accounts for
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `particles.SN_scheme` | String | `SN_thermal_or_thermal_momentum` | Feedback scheme (see above) |
+| `particles.SN_p_term_Msunkmps` | Float | `2.8e5` | Terminal momentum $p_{\text{snr},0}$ in units of $M_\odot\,\mathrm{km\,s}^{-1}$. The shell-formation mass $M_\mathrm{sf}$ is scaled as $(p/p_\mathrm{canonical})^2$ to preserve the kinetic energy $p^2/(2M_\mathrm{sf})$. |
 | `particles.disable_SN_feedback` | Boolean | `0` | Disable SN feedback entirely |
 | `particles.verbose` | Integer | `0` | Verbosity level for particle diagnostics |
 | `particles.stellar_velocity_limit` | Float | $10^8$ cm/s | Maximum allowed stellar velocity (aborts if exceeded) |
-| `particles.SN_smooth_gas_velocity` | Integer | `1` | Smooth gas velocity in the stencil to enforce energy concservation |
+| `particles.SN_smooth_gas_velocity` | Integer | `1` | Smooth gas velocity in the stencil to enforce energy conservation |
 
 ### 	Implementation Notes
 

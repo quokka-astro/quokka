@@ -7,6 +7,7 @@
 [![AMReX](https://amrex-codes.github.io/badges/powered%20by-AMReX-red.svg)](https://amrex-codes.github.io)
 [![yt-project](https://img.shields.io/static/v1?label="works%20with"&message="yt"&color="blueviolet")](https://yt-project.org)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/quokka-astro/quokka)
+[![Join Zulip Community](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)](https://quokka-astro.zulipchat.com/join/3sahu2rgvkengbkzwkpndc5h/)
 
 # QUOKKA
 *Quadrilateral, Umbra-producing, Orthogonal, Kangaroo-conserving Kode for Astrophysics!*
@@ -32,4 +33,7 @@ This is a [a Kelvin-Helmholz instability simulated with Quokka](https://vimeo.co
 * ADIOS2 2.9+ with GPU-aware support (optional, for writing terabyte-sized or larger outputs)
 
 ## Problems?
-If you run into problems, please start a [Discussion](https://github.com/BenWibking/quokka/discussions) for technical support. If you discover a bug, please let us know by opening an [Issue](https://github.com/BenWibking/quokka/issues).
+If you run into problems, please start a [Discussion](https://github.com/BenWibking/quokka/discussions) for technical support. If you discover a bug, please let us know by opening an [Issue](https://github.com/BenWibking/quokka/issues). You can also join our [Zulip community](https://quokka-astro.zulipchat.com/join/3sahu2rgvkengbkzwkpndc5h/).
+
+## Acknowledgements
+We thank Kandra Labs, Inc. (“Zulip”) for providing hosted [Zulip](https://zulip.com/) chat for our open-source community.
