@@ -791,15 +791,8 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 				const amrex::Real r = std::sqrt(x * x + y * y + z * z);
 				const amrex::Real dr = std::abs(r - flux_sphere_radius);
 
-				if (dr >= 0.5 * shell_dr || r <= 0.0) {
-					result[bx](i, j, k, 0) = 0.0;
-					result[bx](i, j, k, 1) = 0.0;
-					result[bx](i, j, k, 2) = 0.0;
-					return;
-				}
-
 				const amrex::Real rho = state[bx](i, j, k, HydroSystem<DiskGalaxy>::density_index);
-				if (rho <= 0.0) {
+				if (dr >= 0.5 * shell_dr || r <= 0.0 || rho <= 0.0) {
 					result[bx](i, j, k, 0) = 0.0;
 					result[bx](i, j, k, 1) = 0.0;
 					result[bx](i, j, k, 2) = 0.0;
