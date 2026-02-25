@@ -465,12 +465,24 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						p_new.rdata(mass_idx) = old_mass / static_cast<amrex::Real>(splitFactor);
 
 						if (has_velocity_components) {
-							// Apply a component-wise uniform velocity kick with RMS set by cell-scale virial velocity.
+							// Sample a velocity kick uniformly in the volume of a sphere in velocity space.
+							// Keep the sphere radius equal to the previous per-component bound (the cell-scale virial speed)
+							// so restart-refine split drift limits remain unchanged.
 							const amrex::Real v_virial = std::sqrt(C::Gconst * old_mass / dx_cell);
-							const amrex::Real vdisp_norm = 2.0 * v_virial;
-							const amrex::Real kick_x = vdisp_norm * (amrex::Random(rng) - 0.5);
-							const amrex::Real kick_y = vdisp_norm * (amrex::Random(rng) - 0.5);
-							const amrex::Real kick_z = vdisp_norm * (amrex::Random(rng) - 0.5);
+							amrex::Real kick_x = 0.0;
+							amrex::Real kick_y = 0.0;
+							amrex::Real kick_z = 0.0;
+							amrex::Real r2 = 0.0;
+							do {
+								// Rejection sample from the enclosing cube [-1,1]^3 to get a uniform point in the unit ball.
+								kick_x = (2.0 * amrex::Random(rng)) - 1.0;
+								kick_y = (2.0 * amrex::Random(rng)) - 1.0;
+								kick_z = (2.0 * amrex::Random(rng)) - 1.0;
+								r2 = (kick_x * kick_x) + (kick_y * kick_y) + (kick_z * kick_z);
+							} while (r2 > 1.0);
+							kick_x *= v_virial;
+							kick_y *= v_virial;
+							kick_z *= v_virial;
 							p_new.rdata(mass_idx + 1) += kick_x;
 							p_new.rdata(mass_idx + 2) += kick_y;
 							p_new.rdata(mass_idx + 3) += kick_z;
