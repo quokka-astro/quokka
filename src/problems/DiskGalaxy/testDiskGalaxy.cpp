@@ -717,8 +717,10 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 	amrex::ParmParse const pp("disk_galaxy");
 	amrex::Real refine_Rmax_kpc = NAN;
 	amrex::Real refine_zmax_kpc = NAN;
+	amrex::Real flux_sphere_radius_kpc = NAN;
 	pp.query("refine_Rmax_kpc", refine_Rmax_kpc);
 	pp.query("refine_zmax_kpc", refine_zmax_kpc);
+	pp.query("flux_sphere_radius_kpc", flux_sphere_radius_kpc);
 	AMREX_ALWAYS_ASSERT(!std::isnan(refine_Rmax_kpc));
 	AMREX_ALWAYS_ASSERT(!std::isnan(refine_zmax_kpc));
 	const amrex::Real refine_Rmax = refine_Rmax_kpc * (1.0e3 * C::parsec);
@@ -761,6 +763,71 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 		return (Tgas < 1.0e4) ? rho : 0.0;
 	});
 	stats["mass_T_lt_1e4"] = cold_mass / C::M_solar;
+
+	if (!std::isnan(flux_sphere_radius_kpc)) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(flux_sphere_radius_kpc > 0.0, "disk_galaxy.flux_sphere_radius_kpc must be > 0.");
+		const amrex::Real flux_sphere_radius = flux_sphere_radius_kpc * (1.0e3 * C::parsec);
+		stats["flux_sphere_radius_kpc"] = flux_sphere_radius_kpc;
+
+		amrex::Vector<amrex::MultiFab> shell_flux;
+		shell_flux.resize(finest_level + 1);
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			shell_flux[lev].define(boxArray(lev), DistributionMap(lev), 3, 0);
+		}
+
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			const auto prob_lo = geom[lev].ProbLoArray();
+			const auto dx = geom[lev].CellSizeArray();
+			const amrex::Real cell_volume = dx[0] * dx[1] * dx[2];
+			const amrex::Real shell_dr = std::cbrt(cell_volume);
+			const amrex::Real inv_shell_dr = 1.0 / shell_dr;
+
+			auto const &state = state_new_cc_[lev].const_arrays();
+			auto const &result = shell_flux[lev].arrays();
+			amrex::ParallelFor(shell_flux[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+				const amrex::Real x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
+				const amrex::Real y = prob_lo[1] + (static_cast<amrex::Real>(j) + 0.5) * dx[1];
+				const amrex::Real z = prob_lo[2] + (static_cast<amrex::Real>(k) + 0.5) * dx[2];
+				const amrex::Real r = std::sqrt(x * x + y * y + z * z);
+				const amrex::Real dr = std::abs(r - flux_sphere_radius);
+
+				if (dr >= 0.5 * shell_dr || r <= 0.0) {
+					result[bx](i, j, k, 0) = 0.0;
+					result[bx](i, j, k, 1) = 0.0;
+					result[bx](i, j, k, 2) = 0.0;
+					return;
+				}
+
+				const amrex::Real rho = state[bx](i, j, k, HydroSystem<DiskGalaxy>::density_index);
+				if (rho <= 0.0) {
+					result[bx](i, j, k, 0) = 0.0;
+					result[bx](i, j, k, 1) = 0.0;
+					result[bx](i, j, k, 2) = 0.0;
+					return;
+				}
+
+				const amrex::Real momx = state[bx](i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index);
+				const amrex::Real momy = state[bx](i, j, k, HydroSystem<DiskGalaxy>::x2Momentum_index);
+				const amrex::Real momz = state[bx](i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index);
+				const amrex::Real vr = (x * momx + y * momy + z * momz) / (rho * r);
+
+				const amrex::Real mass_flux_density = rho * vr;
+				const amrex::Real energy_density = state[bx](i, j, k, HydroSystem<DiskGalaxy>::energy_index);
+				const amrex::Real scalar_density = state[bx](i, j, k, HydroSystem<DiskGalaxy>::scalar0_index);
+
+				// Approximate surface integral using a one-cell-thick spherical shell:
+				// \int_shell f dV / dr ~ \oint f dA
+				result[bx](i, j, k, 0) = mass_flux_density * inv_shell_dr;
+				result[bx](i, j, k, 1) = (energy_density * vr) * inv_shell_dr;
+				result[bx](i, j, k, 2) = (scalar_density * vr) * inv_shell_dr;
+			});
+		}
+		amrex::Gpu::streamSynchronize();
+
+		stats["mass_flux_sphere"] = amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(shell_flux), 0, geom, ref_ratio);
+		stats["energy_flux_sphere"] = amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(shell_flux), 1, geom, ref_ratio);
+		stats["passive_scalar_flux_sphere"] = amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(shell_flux), 2, geom, ref_ratio);
+	}
 
 	const amrex::Real stellar_mass_at_birth = particleRegister_.computeTotalStellarMassAtBirth();
 	stats["stellar_mass_at_birth"] = stellar_mass_at_birth / C::M_solar;
