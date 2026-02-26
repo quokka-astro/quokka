@@ -685,6 +685,10 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		ppp.query("stromgren_tempfloor_max_neighbor_hops", stochastic_stellar_pop_tempfloor_max_neighbor_hops_);
 
 		if (use_stochastic_stellar_pop_stromgren_tempfloor_) {
+#if AMREX_SPACEDIM != 3
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false,
+							 "particles.use_stromgren_tempfloor=true is only supported for AMREX_SPACEDIM=3.");
+#endif
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!stochastic_stellar_pop_qh0_table_hdf5_file_.empty(),
 							 "particles.use_stromgren_tempfloor=true requires particles.stromgren_qh0_table_hdf5_file");
 
@@ -771,9 +775,19 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 				H5Fclose(file_id);
 
 				bool inferred_axes_are_mass_age = true;
-				if (qh0_dims[0] == n_mass && qh0_dims[1] == n_age) {
+				bool const matches_mass_age = (qh0_dims[0] == n_mass && qh0_dims[1] == n_age);
+				bool const matches_age_mass = (qh0_dims[0] == n_age && qh0_dims[1] == n_mass);
+				if (matches_mass_age && matches_age_mass) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    false,
+					    std::format("Ambiguous QH0 axis ordering for square dimensions: dataset dims=({}, {}), n_mass={}, n_age={}. "
+							"Axis inference is unsupported for square QH0 tables; provide metadata or a non-square table.",
+							static_cast<unsigned long long>(qh0_dims[0]), static_cast<unsigned long long>(qh0_dims[1]),
+							static_cast<unsigned long long>(n_mass), static_cast<unsigned long long>(n_age))
+						.c_str());
+				} else if (matches_mass_age) {
 					inferred_axes_are_mass_age = true;
-				} else if (qh0_dims[0] == n_age && qh0_dims[1] == n_mass) {
+				} else if (matches_age_mass) {
 					inferred_axes_are_mass_age = false;
 				} else {
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
