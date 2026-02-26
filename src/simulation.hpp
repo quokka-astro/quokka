@@ -4347,6 +4347,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 	// write the cell-centred MultiFab data to, e.g., chk0000010/Level_0/
 	for (int lev = 0; lev <= finest_level; ++lev) {
 		amrex::VisMF::Write(state_new_cc_[lev], amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_", "Cell"));
+		amrex::VisMF::Write(temperature_floor_cc_[lev], amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_", "TemperatureFloor"));
 		amrex::ParallelDescriptor::Barrier(); // needed to avoid overwhelming Lustre I/O on Frontier
 	}
 
@@ -4646,6 +4647,24 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 		amrex::VisMF::Read(tmp, amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "Cell"));
 		interpolateMultiFabFromRestart(state_new_cc_[lev], tmp, context, coarse_geom, geom[lev], BCs_cc_);
 		AMREX_ALWAYS_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp())); // check valid cells
+
+		// temperature floor (optional for backward compatibility with old checkpoints)
+		const std::string temp_floor_path = amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "TemperatureFloor");
+		std::error_code ec;
+		if (std::filesystem::exists(temp_floor_path, ec) && !ec) {
+			amrex::MultiFab tmp_temp_floor;
+			amrex::VisMF::Read(tmp_temp_floor, temp_floor_path);
+			amrex::Vector<amrex::BCRec> temp_floor_bcs(1);
+			if (!BCs_cc_.empty()) {
+				temp_floor_bcs[0] = BCs_cc_[0];
+			}
+			interpolateMultiFabFromRestart(temperature_floor_cc_[lev], tmp_temp_floor, context, coarse_geom, geom[lev], temp_floor_bcs);
+		} else {
+			temperature_floor_cc_[lev].setVal(tempFloor_);
+			if (amrex::ParallelDescriptor::IOProcessor() && lev == 0) {
+				amrex::Print() << "WARNING: Checkpoint is missing TemperatureFloor MultiFab; using scalar temperature_floor for restart.\n";
+			}
+		}
 
 		// face-centred data
 		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
