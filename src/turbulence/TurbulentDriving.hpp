@@ -95,7 +95,7 @@ template <typename problem_t> class turbulentDriving
 		}
 
 		amrex::Gpu::streamSynchronize();
-		return true;
+		return updated;
 	}
 };
 
