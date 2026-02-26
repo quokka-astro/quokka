@@ -709,37 +709,10 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 				    (has_fast_log_mass && has_fast_log_age) || (has_linear_mass && has_linear_age),
 				    "Could not infer mass/age grid datasets in HDF5 file. Expected /grids/{mass,age} or /grids/fast_log_{mass,age}.");
 
-				// Infer the QH0 dataset by scanning /data for datasets and preferring a dataset named 'QH0'.
-				std::vector<std::string> data_datasets;
-				if (H5Lexists(file_id, "/data", H5P_DEFAULT) > 0) {
-					hid_t data_group = H5Gopen2(file_id, "/data", H5P_DEFAULT);
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data_group != h5_error, "Failed to open /data group in HDF5 file.");
-
-					auto callback = +[](hid_t group, const char *name, const H5L_info_t * /*info*/, void *op_data) -> herr_t {
-						auto *datasets = static_cast<std::vector<std::string> *>(op_data);
-						H5O_info_t obj_info{};
-#if H5_VERSION_GE(1, 12, 0)
-						herr_t const status = H5Oget_info_by_name3(group, name, &obj_info, H5O_INFO_BASIC, H5P_DEFAULT);
-#else
-						herr_t const status = H5Oget_info_by_name(group, name, &obj_info, H5P_DEFAULT);
-#endif
-						if (status >= 0 && obj_info.type == H5O_TYPE_DATASET) {
-							datasets->emplace_back(name);
-						}
-						return 0;
-					};
-					H5Literate(data_group, H5_INDEX_NAME, H5_ITER_NATIVE, nullptr, callback, &data_datasets);
-					H5Gclose(data_group);
-				}
-
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data_datasets.empty(), "No datasets found in HDF5 /data group.");
-				std::string inferred_dataset = "/data/" + data_datasets.front();
-				for (auto const &name : data_datasets) {
-					if (name == "QH0") {
-						inferred_dataset = "/data/QH0";
-						break;
-					}
-				}
+				// Require an exact /data/QH0 dataset to avoid ambiguous inference in multi-dataset files.
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(H5Lexists(file_id, "/data/QH0", H5P_DEFAULT) > 0,
+								 "Missing required HDF5 dataset /data/QH0 for Str\xC3\xB6mgren temperature floor table.");
+				std::string const inferred_dataset = "/data/QH0";
 
 				// Infer axis order by matching dataset dimensions against the mass/age grid lengths.
 				auto read_1d_len = [&](std::string const &path) -> hsize_t {
