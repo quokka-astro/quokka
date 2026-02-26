@@ -350,7 +350,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void FillPatchWithData(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::Vector<amrex::MultiFab *> &coarseData,
 			       amrex::Vector<amrex::Real> &coarseTime, amrex::Vector<amrex::MultiFab *> &fineData, amrex::Vector<amrex::Real> &fineTime,
 			       int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs, quokka::centering &cen, quokka::direction dir, FillPatchType fptype,
-			       PreInterpHook const &pre_interp, PostInterpHook const &post_interp, bool use_no_op_physbc = false);
+			       PreInterpHook const &pre_interp, PostInterpHook const &post_interp);
 
 	static void InterpHookNone(amrex::MultiFab &mf, int scomp, int ncomp);
 	virtual void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, quokka::centering cen, quokka::direction dir,
@@ -358,8 +358,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	auto getAmrInterpolaterCellCentered() -> amrex::MFInterpolater *;
 	auto getAmrInterpolaterFaceCentered() -> amrex::Interpolater *;
-	void FillCoarsePatchCellCenteredFromSource(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::MultiFab const &coarse_mf, int icomp, int ncomp,
-						   amrex::Vector<amrex::BCRec> &BCs, bool use_no_op_physbc = false);
 	void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs, quokka::centering cen,
 			     quokka::direction dir);
 	void FillCoarsePatchFaceArray(int lev, amrex::Real time, amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &mf_array, int icomp, int ncomp,
@@ -494,8 +492,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	auto detectRefinementContext(const amrex::BoxArray &restart_ba, const amrex::Geometry &current_geom) -> RefinementContext;
 	auto readCheckpointHeader(const std::string &restart_file) -> amrex::Vector<amrex::BoxArray>;
 	void interpolateMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source, const RefinementContext &context,
-					    const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom, const amrex::Vector<amrex::BCRec> &bcs,
-					    bool use_no_op_physbc = false);
+					    const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom, const amrex::Vector<amrex::BCRec> &bcs);
 	void interpolateFaceMultiFabFromRestart(int lev, const RefinementContext &context, const amrex::Vector<amrex::Geometry> &restart_geom,
 						amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> &restart_fc);
 	void loadMultiFabData(const RefinementContext &context);
@@ -3157,7 +3154,7 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 						 amrex::Vector<amrex::Real> &coarseTime, amrex::Vector<amrex::MultiFab *> &fineData,
 						 amrex::Vector<amrex::Real> &fineTime, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs,
 						 quokka::centering &cen, quokka::direction dir, FillPatchType fptype, PreInterpHook const &pre_interp,
-						 PostInterpHook const &post_interp, bool use_no_op_physbc)
+						 PostInterpHook const &post_interp)
 {
 	BL_PROFILE("AMRSimulation::FillPatchWithData()"); // NOLINT(misc-const-correctness)
 
@@ -3168,26 +3165,6 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 			fillpatcher_[lev] = std::make_unique<amrex::FillPatcher<amrex::MultiFab>>(
 			    grids[lev], dmap[lev], geom[lev], grids[lev - 1], dmap[lev - 1], geom[lev - 1], mf.nGrowVect(), mf.nComp(), mapper_cc);
 		}
-	}
-
-	if (use_no_op_physbc) {
-		AMREX_ASSERT(cen == quokka::centering::cc);
-		amrex::PhysBCFunctNoOp finePhysicalBoundaryFunctor_cc;
-		if (lev == 0) {
-			amrex::FillPatchSingleLevel(mf, time, fineData, fineTime, 0, icomp, ncomp, geom[lev], finePhysicalBoundaryFunctor_cc, 0);
-		} else {
-			amrex::PhysBCFunctNoOp coarsePhysicalBoundaryFunctor_cc;
-			if (fptype == FillPatchType::fillpatch_class) {
-				fillpatcher_[lev]->fill(mf, mf.nGrowVect(), time, coarseData, coarseTime, fineData, fineTime, 0, icomp, ncomp,
-							coarsePhysicalBoundaryFunctor_cc, 0, finePhysicalBoundaryFunctor_cc, 0, BCs, 0, pre_interp,
-							post_interp);
-			} else {
-				amrex::FillPatchTwoLevels(mf, time, coarseData, coarseTime, fineData, fineTime, 0, icomp, ncomp, geom[lev - 1], geom[lev],
-							  coarsePhysicalBoundaryFunctor_cc, 0, finePhysicalBoundaryFunctor_cc, 0, refRatio(lev - 1),
-							  getAmrInterpolaterCellCentered(), BCs, 0, pre_interp, post_interp);
-			}
-		}
-		return;
 	}
 
 	// create functor to fill ghost zones at domain boundaries
@@ -3244,30 +3221,6 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 
 // Fill an entire multifab by interpolating from the coarser level
 // this comes into play when a new level of refinement appears
-template <typename problem_t>
-void AMRSimulation<problem_t>::FillCoarsePatchCellCenteredFromSource(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::MultiFab const &coarse_mf,
-								     int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs, bool use_no_op_physbc)
-{
-	BL_PROFILE("AMRSimulation::FillCoarsePatchCellCenteredFromSource()"); // NOLINT(misc-const-correctness)
-
-	AMREX_ASSERT(lev > 0);
-
-	if (use_no_op_physbc) {
-		amrex::PhysBCFunctNoOp finePhysicalBoundaryFunctor;
-		amrex::PhysBCFunctNoOp coarsePhysicalBoundaryFunctor;
-		amrex::InterpFromCoarseLevel(mf, time, coarse_mf, 0, icomp, ncomp, geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
-					     finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), getAmrInterpolaterCellCentered(), BCs, 0);
-		return;
-	}
-
-	amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor(setBoundaryFunctor<problem_t>{});
-	amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> finePhysicalBoundaryFunctor(geom[lev], BCs, boundaryFunctor);
-	amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> coarsePhysicalBoundaryFunctor(geom[lev - 1], BCs, boundaryFunctor);
-
-	amrex::InterpFromCoarseLevel(mf, time, coarse_mf, 0, icomp, ncomp, geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
-				     finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), getAmrInterpolaterCellCentered(), BCs, 0);
-}
-
 template <typename problem_t>
 void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs,
 					       quokka::centering cen, quokka::direction dir)
@@ -4519,7 +4472,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::readCheckpointHeade
 template <typename problem_t>
 void AMRSimulation<problem_t>::interpolateMultiFabFromRestart(amrex::MultiFab &target, const amrex::MultiFab &source, const RefinementContext &context,
 							      const amrex::Geometry &coarse_geom, const amrex::Geometry &fine_geom,
-							      const amrex::Vector<amrex::BCRec> &bcs, bool use_no_op_physbc)
+							      const amrex::Vector<amrex::BCRec> &bcs)
 {
 	if (!context.needs_refinement()) {
 		// if not refining, ParallelCopy
@@ -4535,15 +4488,8 @@ void AMRSimulation<problem_t>::interpolateMultiFabFromRestart(amrex::MultiFab &t
 		//   with respect to the multifabs in the checkpoints! this means we can
 		//   only do piecewise **constant** refinement.
 		amrex::MFInterpolater *mapper = &amrex::mf_pc_interp;
-		if (use_no_op_physbc) {
-			amrex::PhysBCFunctNoOp fineBdryFunctNoOp;
-			amrex::PhysBCFunctNoOp coarseBdryFunctNoOp;
-			amrex::InterpFromCoarseLevel(target, 0., source, 0, 0, source.nComp(), coarse_geom, fine_geom, coarseBdryFunctNoOp, 0,
-						     fineBdryFunctNoOp, 0, restart_ref_ratio, mapper, bcs, 0);
-		} else {
-			amrex::InterpFromCoarseLevel(target, 0., source, 0, 0, source.nComp(), coarse_geom, fine_geom, coarseBdryFunct, 0, fineBdryFunct, 0,
-						     restart_ref_ratio, mapper, bcs, 0);
-		}
+		amrex::InterpFromCoarseLevel(target, 0., source, 0, 0, source.nComp(), coarse_geom, fine_geom, coarseBdryFunct, 0, fineBdryFunct, 0,
+					     restart_ref_ratio, mapper, bcs, 0);
 	}
 }
 
