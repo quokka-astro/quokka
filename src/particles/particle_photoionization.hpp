@@ -20,6 +20,7 @@
 namespace quokka::photoionization
 {
 
+#if AMREX_SPACEDIM == 3
 template <typename problem_t, quokka::OutOfBounds oob_policy>
 void FillTemperatureFloorFromStromgrenVolumes(quokka::StochasticStellarPopParticleContainer<problem_t> *stellar_particles, int lev, amrex::Real time,
 					      amrex::BoxArray const &ba_lev, amrex::DistributionMapping const &dm_lev, amrex::Geometry const &geom_lev,
@@ -31,12 +32,6 @@ void FillTemperatureFloorFromStromgrenVolumes(quokka::StochasticStellarPopPartic
 					      amrex::Real const ionized_temperature = 1.0e4, int max_neighbor_hops = 1,
 					      amrex::Real const photon_luminosity_tolerance = 1.0)
 {
-#if AMREX_SPACEDIM != 3
-	amrex::ignore_unused(stellar_particles, lev, time, ba_lev, dm_lev, geom_lev, state_cc, temp_floor_cc, qh0_table, mass_to_table_units,
-			     age_to_table_units, table_axes_are_mass_age, alphaB, mean_particle_mass_mu, mH, ionized_temperature, max_neighbor_hops,
-			     photon_luminosity_tolerance);
-	return;
-#else
 	if (stellar_particles == nullptr) {
 		return;
 	}
@@ -182,8 +177,8 @@ void FillTemperatureFloorFromStromgrenVolumes(quokka::StochasticStellarPopPartic
 		std::swap(photons_curr, photons_next);
 		photons_next.setVal(0.0);
 	}
-#endif
 }
+#endif
 
 } // namespace quokka::photoionization
 
