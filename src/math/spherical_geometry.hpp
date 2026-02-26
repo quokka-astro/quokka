@@ -200,12 +200,167 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto deltaPhiCircleRect(amrex::Real const rh
 	return dphi;
 }
 
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto addPointUnique(amrex::Real pts[][3], int &npts, int max_pts, amrex::Real x, amrex::Real y,
+							     amrex::Real z, amrex::Real tol) -> void
+{
+	const amrex::Real tol2 = tol * tol;
+	for (int i = 0; i < npts; ++i) {
+		const amrex::Real dx = pts[i][0] - x;
+		const amrex::Real dy = pts[i][1] - y;
+		const amrex::Real dz = pts[i][2] - z;
+		if ((dx * dx + dy * dy + dz * dz) <= tol2) {
+			return;
+		}
+	}
+	if (npts < max_pts) {
+		pts[npts][0] = x;
+		pts[npts][1] = y;
+		pts[npts][2] = z;
+		++npts;
+	}
+}
+
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto planeBoxSectionArea(amrex::Real const x0, amrex::Real const x1, amrex::Real const y0, amrex::Real const y1,
+								  amrex::Real const z0, amrex::Real const z1, amrex::Real const nx,
+								  amrex::Real const ny, amrex::Real const nz, amrex::Real const d)
+    -> amrex::Real
+{
+	// Plane: n·x = d. Compute exact area of intersection polygon with an axis-aligned box.
+	const amrex::Real scale = (std::abs(x0) + std::abs(x1) + std::abs(y0) + std::abs(y1) + std::abs(z0) + std::abs(z1) + std::abs(d) + 1.0);
+	const amrex::Real tol = 1.0e-12 * scale;
+
+	const amrex::Real verts[8][3] = {{x0, y0, z0}, {x1, y0, z0}, {x0, y1, z0}, {x1, y1, z0},
+					 {x0, y0, z1}, {x1, y0, z1}, {x0, y1, z1}, {x1, y1, z1}};
+	const int edges[12][2] = {{0, 1}, {2, 3}, {4, 5}, {6, 7}, {0, 2}, {1, 3}, {4, 6}, {5, 7}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
+
+	amrex::Real pts[16][3];
+	int npts = 0;
+
+	for (int e = 0; e < 12; ++e) {
+		const int i0 = edges[e][0];
+		const int i1 = edges[e][1];
+		const amrex::Real p0x = verts[i0][0];
+		const amrex::Real p0y = verts[i0][1];
+		const amrex::Real p0z = verts[i0][2];
+		const amrex::Real p1x = verts[i1][0];
+		const amrex::Real p1y = verts[i1][1];
+		const amrex::Real p1z = verts[i1][2];
+
+		amrex::Real f0 = nx * p0x + ny * p0y + nz * p0z - d;
+		amrex::Real f1 = nx * p1x + ny * p1y + nz * p1z - d;
+		if (std::abs(f0) <= tol) {
+			f0 = 0.0;
+		}
+		if (std::abs(f1) <= tol) {
+			f1 = 0.0;
+		}
+
+		if (f0 == 0.0 && f1 == 0.0) {
+			addPointUnique(pts, npts, 16, p0x, p0y, p0z, tol);
+			addPointUnique(pts, npts, 16, p1x, p1y, p1z, tol);
+			continue;
+		}
+		if (f0 == 0.0) {
+			addPointUnique(pts, npts, 16, p0x, p0y, p0z, tol);
+			continue;
+		}
+		if (f1 == 0.0) {
+			addPointUnique(pts, npts, 16, p1x, p1y, p1z, tol);
+			continue;
+		}
+		if ((f0 < 0.0 && f1 > 0.0) || (f0 > 0.0 && f1 < 0.0)) {
+			const amrex::Real t = f0 / (f0 - f1);
+			const amrex::Real x = p0x + t * (p1x - p0x);
+			const amrex::Real y = p0y + t * (p1y - p0y);
+			const amrex::Real z = p0z + t * (p1z - p0z);
+			addPointUnique(pts, npts, 16, x, y, z, tol);
+		}
+	}
+
+	if (npts < 3) {
+		return 0.0;
+	}
+
+	amrex::Real cx = 0.0;
+	amrex::Real cy = 0.0;
+	amrex::Real cz = 0.0;
+	for (int i = 0; i < npts; ++i) {
+		cx += pts[i][0];
+		cy += pts[i][1];
+		cz += pts[i][2];
+	}
+	cx /= static_cast<amrex::Real>(npts);
+	cy /= static_cast<amrex::Real>(npts);
+	cz /= static_cast<amrex::Real>(npts);
+
+	// Build an orthonormal basis (e1,e2) spanning the plane.
+	amrex::Real ax = 1.0;
+	amrex::Real ay = 0.0;
+	amrex::Real az = 0.0;
+	if (std::abs(nx) > 0.9) {
+		ax = 0.0;
+		ay = 1.0;
+		az = 0.0;
+	}
+	amrex::Real e1x = ny * az - nz * ay;
+	amrex::Real e1y = nz * ax - nx * az;
+	amrex::Real e1z = nx * ay - ny * ax;
+	const amrex::Real e1norm = std::sqrt(e1x * e1x + e1y * e1y + e1z * e1z);
+	if (e1norm <= 0.0) {
+		return 0.0;
+	}
+	e1x /= e1norm;
+	e1y /= e1norm;
+	e1z /= e1norm;
+
+	const amrex::Real e2x = ny * e1z - nz * e1y;
+	const amrex::Real e2y = nz * e1x - nx * e1z;
+	const amrex::Real e2z = nx * e1y - ny * e1x;
+
+	amrex::Real u[16];
+	amrex::Real v[16];
+	amrex::Real ang[16];
+	for (int i = 0; i < npts; ++i) {
+		const amrex::Real rx = pts[i][0] - cx;
+		const amrex::Real ry = pts[i][1] - cy;
+		const amrex::Real rz = pts[i][2] - cz;
+		u[i] = rx * e1x + ry * e1y + rz * e1z;
+		v[i] = rx * e2x + ry * e2y + rz * e2z;
+		ang[i] = std::atan2(v[i], u[i]);
+	}
+
+	for (int i = 1; i < npts; ++i) {
+		const amrex::Real key_ang = ang[i];
+		const amrex::Real key_u = u[i];
+		const amrex::Real key_v = v[i];
+		int j = i - 1;
+		while (j >= 0 && ang[j] > key_ang) {
+			ang[j + 1] = ang[j];
+			u[j + 1] = u[j];
+			v[j + 1] = v[j];
+			--j;
+		}
+		ang[j + 1] = key_ang;
+		u[j + 1] = key_u;
+		v[j + 1] = key_v;
+	}
+
+	amrex::Real area2 = 0.0;
+	for (int i = 0; i < npts; ++i) {
+		const int j = (i + 1 < npts) ? (i + 1) : 0;
+		area2 += u[i] * v[j] - v[i] * u[j];
+	}
+	return 0.5 * std::abs(area2);
+}
+
 } // namespace detail
 
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto sphericalSectionAreaInCell(amrex::Real const R, amrex::Real const x0, amrex::Real const x1,
 								    amrex::Real const y0, amrex::Real const y1, amrex::Real const z0,
 								    amrex::Real const z1) -> amrex::Real
 {
+	// Approximate the spherical section area by the exact area of the tangent
+	// plane section through the cell, using the sphere normal at the cell center.
 	const amrex::Real R2 = R * R;
 	const amrex::Real r2_min = detail::minDistSqToInterval(x0, x1) + detail::minDistSqToInterval(y0, y1) + detail::minDistSqToInterval(z0, z1);
 	const amrex::Real r2_max = detail::maxDistSqToInterval(x0, x1) + detail::maxDistSqToInterval(y0, y1) + detail::maxDistSqToInterval(z0, z1);
@@ -213,65 +368,26 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto sphericalSectionAreaInCell(amrex::Real 
 		return 0.0;
 	}
 
-	const amrex::Real zlo = (z0 > -R) ? z0 : -R;
-	const amrex::Real zhi = (z1 < R) ? z1 : R;
-	if (zhi <= zlo) {
+	const amrex::Real dx = x1 - x0;
+	const amrex::Real dy = y1 - y0;
+	const amrex::Real dz = z1 - z0;
+	const amrex::Real vol = dx * dy * dz;
+	if (vol <= 0.0) {
 		return 0.0;
 	}
 
-	const amrex::Real tol_z = 1.0e-12 * (1.0 + R);
-	constexpr int max_z_events = 32;
-	amrex::Real z_events[max_z_events];
-	int nz = 0;
-
-	detail::appendZEventIfInRange(z_events, nz, max_z_events, zlo, zlo, zhi, tol_z);
-	detail::appendZEventIfInRange(z_events, nz, max_z_events, zhi, zlo, zhi, tol_z);
-
-	const amrex::Real edge_vals[4] = {x0, x1, y0, y1};
-	for (int i = 0; i < 4; ++i) {
-		const amrex::Real a = std::abs(edge_vals[i]);
-		if (a <= R) {
-			const amrex::Real zc = std::sqrt((R2 - a * a > 0.0) ? (R2 - a * a) : 0.0);
-			detail::appendZEventIfInRange(z_events, nz, max_z_events, zc, zlo, zhi, tol_z);
-			detail::appendZEventIfInRange(z_events, nz, max_z_events, -zc, zlo, zhi, tol_z);
-		}
+	const amrex::Real xc = 0.5 * (x0 + x1);
+	const amrex::Real yc = 0.5 * (y0 + y1);
+	const amrex::Real zc = 0.5 * (z0 + z1);
+	const amrex::Real rc = std::sqrt(xc * xc + yc * yc + zc * zc);
+	if (rc <= 0.0) {
+		return 0.0;
 	}
 
-	const amrex::Real x_edges[2] = {x0, x1};
-	const amrex::Real y_edges[2] = {y0, y1};
-	for (int ix = 0; ix < 2; ++ix) {
-		for (int iy = 0; iy < 2; ++iy) {
-			const amrex::Real c2 = x_edges[ix] * x_edges[ix] + y_edges[iy] * y_edges[iy];
-			if (c2 <= R2) {
-				const amrex::Real zc = std::sqrt((R2 - c2 > 0.0) ? (R2 - c2) : 0.0);
-				detail::appendZEventIfInRange(z_events, nz, max_z_events, zc, zlo, zhi, tol_z);
-				detail::appendZEventIfInRange(z_events, nz, max_z_events, -zc, zlo, zhi, tol_z);
-			}
-		}
-	}
-
-	detail::sortSmallArray(z_events, nz);
-
-	amrex::Real area = 0.0;
-	for (int i = 0; i + 1 < nz; ++i) {
-		const amrex::Real za = z_events[i];
-		const amrex::Real zb = z_events[i + 1];
-		if (zb <= za) {
-			continue;
-		}
-		area += quad_1d(
-		    [=] AMREX_GPU_DEVICE(amrex::Real const z) -> amrex::Real {
-			    const amrex::Real rho2 = R2 - z * z;
-			    if (rho2 <= 0.0) {
-				    return 0.0;
-			    }
-			    const amrex::Real rho = std::sqrt(rho2);
-			    return R * detail::deltaPhiCircleRect(rho, x0, x1, y0, y1);
-		    },
-		    za, zb);
-	}
-
-	return area;
+	const amrex::Real nx = xc / rc;
+	const amrex::Real ny = yc / rc;
+	const amrex::Real nz = zc / rc;
+	return detail::planeBoxSectionArea(x0, x1, y0, y1, z0, z1, nx, ny, nz, R);
 }
 
 } // namespace quokka::math
