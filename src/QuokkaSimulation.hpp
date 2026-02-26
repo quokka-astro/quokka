@@ -688,9 +688,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		ppp.query("stromgren_tempfloor_max_neighbor_hops", stochastic_stellar_pop_tempfloor_max_neighbor_hops_);
 
 		if (use_stochastic_stellar_pop_stromgren_tempfloor_) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-			    !stochastic_stellar_pop_qh0_table_hdf5_file_.empty(),
-			    "particles.use_stromgren_tempfloor=true requires particles.stromgren_qh0_table_hdf5_file");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!stochastic_stellar_pop_qh0_table_hdf5_file_.empty(),
+							 "particles.use_stromgren_tempfloor=true requires particles.stromgren_qh0_table_hdf5_file");
 
 			std::vector<std::string> coord_names;
 			if (stochastic_stellar_pop_qh0_table_axes_are_mass_age_) {
@@ -701,9 +700,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 
 			amrex::Print() << "Loading StochasticStellarPop QH0 table for Strömgren temperature floor from: "
 				       << stochastic_stellar_pop_qh0_table_hdf5_file_ << " dataset " << stochastic_stellar_pop_qh0_table_dataset_ << "\n";
-			stochasticStellarPopQH0Table_ = quokka::DataTable<2, 1>::H5Reader(
-			    stochastic_stellar_pop_qh0_table_hdf5_file_, stochastic_stellar_pop_qh0_table_dataset_, coord_names,
-			    stochastic_stellar_pop_qh0_table_is_fast_log_);
+			stochasticStellarPopQH0Table_ =
+			    quokka::DataTable<2, 1>::H5Reader(stochastic_stellar_pop_qh0_table_hdf5_file_, stochastic_stellar_pop_qh0_table_dataset_,
+							      coord_names, stochastic_stellar_pop_qh0_table_is_fast_log_);
 		}
 	}
 

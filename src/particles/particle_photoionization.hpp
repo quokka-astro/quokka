@@ -21,13 +21,15 @@ namespace quokka::photoionization
 {
 
 template <typename problem_t, quokka::OutOfBounds oob_policy>
-void FillTemperatureFloorFromStromgrenVolumes(
-    quokka::StochasticStellarPopParticleContainer<problem_t> *stellar_particles, int lev, amrex::Real time, amrex::BoxArray const &ba_lev,
-    amrex::DistributionMapping const &dm_lev, amrex::Geometry const &geom_lev, amrex::MultiFab const &state_cc, amrex::MultiFab &temp_floor_cc,
-    quokka::DataTableGpuConst<2, 1, oob_policy> const &qh0_table, amrex::Real const mass_to_table_units = 1.0 / C::M_solar,
-    amrex::Real const age_to_table_units = 1.0 / 3.15576e7, bool const table_axes_are_mass_age = true, amrex::Real const alphaB = 2.6e-13,
-    amrex::Real const mean_particle_mass_mu = 1.27, amrex::Real const mH = 1.67e-24, amrex::Real const ionized_temperature = 1.0e4,
-    int max_neighbor_hops = 1, amrex::Real const photon_luminosity_tolerance = 1.0)
+void FillTemperatureFloorFromStromgrenVolumes(quokka::StochasticStellarPopParticleContainer<problem_t> *stellar_particles, int lev, amrex::Real time,
+					      amrex::BoxArray const &ba_lev, amrex::DistributionMapping const &dm_lev, amrex::Geometry const &geom_lev,
+					      amrex::MultiFab const &state_cc, amrex::MultiFab &temp_floor_cc,
+					      quokka::DataTableGpuConst<2, 1, oob_policy> const &qh0_table,
+					      amrex::Real const mass_to_table_units = 1.0 / C::M_solar, amrex::Real const age_to_table_units = 1.0 / 3.15576e7,
+					      bool const table_axes_are_mass_age = true, amrex::Real const alphaB = 2.6e-13,
+					      amrex::Real const mean_particle_mass_mu = 1.27, amrex::Real const mH = 1.67e-24,
+					      amrex::Real const ionized_temperature = 1.0e4, int max_neighbor_hops = 1,
+					      amrex::Real const photon_luminosity_tolerance = 1.0)
 {
 #if AMREX_SPACEDIM != 3
 	amrex::ignore_unused(stellar_particles, lev, time, ba_lev, dm_lev, geom_lev, state_cc, temp_floor_cc, qh0_table, mass_to_table_units,
@@ -75,9 +77,8 @@ void FillTemperatureFloorFromStromgrenVolumes(
 		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) noexcept {
 			auto const &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 			int const stage = p.idata(quokka::StochasticStellarPopParticleStageIdx);
-			bool const is_individual_ionizing_star =
-			    (stage == static_cast<int>(quokka::StellarEvolutionStage::HighMassNonExploding)) ||
-			    (stage == static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor));
+			bool const is_individual_ionizing_star = (stage == static_cast<int>(quokka::StellarEvolutionStage::HighMassNonExploding)) ||
+								 (stage == static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor));
 			if (!is_individual_ionizing_star) {
 				return;
 			}
