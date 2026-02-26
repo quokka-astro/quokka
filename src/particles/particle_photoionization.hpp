@@ -139,7 +139,7 @@ void FillTemperatureFloorFromStromgrenVolumes(quokka::StochasticStellarPopPartic
 			amrex::Real const n = (rho > 0.0) ? (rho / n_to_rho) : 0.0;
 			amrex::Real const S_absorb_cell = alphaB * n * n * cell_volume;
 
-			amrex::Real heated_temp = ionized_temperature;
+			amrex::Real heated_temp = 0.0;
 			amrex::Real S_esc = 0.0;
 			if (S_absorb_cell > 0.0) {
 				amrex::Real const frac = S_in / S_absorb_cell;
