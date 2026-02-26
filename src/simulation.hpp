@@ -358,6 +358,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	auto getAmrInterpolaterCellCentered() -> amrex::MFInterpolater *;
 	auto getAmrInterpolaterFaceCentered() -> amrex::Interpolater *;
+	void FillCoarsePatchCellCenteredFromSource(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::MultiFab const &coarse_mf, int icomp,
+						   int ncomp, amrex::Vector<amrex::BCRec> &BCs);
 	void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs, quokka::centering cen,
 			     quokka::direction dir);
 	void FillCoarsePatchFaceArray(int lev, amrex::Real time, amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &mf_array, int icomp, int ncomp,
@@ -2338,6 +2340,13 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real tim
 	temperature_floor_cc_[level].setVal(tempFloor_);
 	FillCoarsePatch(level, time, state_new_cc_[level], 0, ncomp_cc, BCs_cc_, quokka::centering::cc, quokka::direction::na);
 	FillCoarsePatch(level, time, state_old_cc_[level], 0, ncomp_cc, BCs_cc_, quokka::centering::cc, quokka::direction::na); // also necessary
+	{
+		amrex::Vector<amrex::BCRec> temp_floor_bcs(1);
+		if (!BCs_cc_.empty()) {
+			temp_floor_bcs[0] = BCs_cc_[0];
+		}
+		FillCoarsePatchCellCenteredFromSource(level, time, temperature_floor_cc_[level], temperature_floor_cc_[level - 1], 0, 1, temp_floor_bcs);
+	}
 
 	max_signal_speed_[level].define(ba, dm, 1, nghost_cc);
 	tNew_[level] = time;
@@ -2391,6 +2400,24 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 	amrex::MultiFab int_temperature_floor_cc(ba, dm, 1, 0);
 	int_temperature_floor_cc.setVal(tempFloor_);
 	FillPatch(level, time, int_state_new_cc, 0, ncomp_cc, quokka::centering::cc, quokka::direction::na, FillPatchType::fillpatch_function);
+	{
+		amrex::Vector<amrex::BCRec> temp_floor_bcs(1);
+		if (!BCs_cc_.empty()) {
+			temp_floor_bcs[0] = BCs_cc_[0];
+		}
+		amrex::Vector<amrex::MultiFab *> fine_data{&temperature_floor_cc_[level]};
+		amrex::Vector<amrex::Real> fine_time{tNew_[level]};
+		amrex::Vector<amrex::MultiFab *> coarse_data;
+		amrex::Vector<amrex::Real> coarse_time;
+		quokka::centering cen = quokka::centering::cc;
+		quokka::direction dir = quokka::direction::na;
+		if (level > 0) {
+			coarse_data.push_back(&temperature_floor_cc_[level - 1]);
+			coarse_time.push_back(tNew_[level - 1]);
+		}
+		FillPatchWithData(level, time, int_temperature_floor_cc, coarse_data, coarse_time, fine_data, fine_time, 0, 1, temp_floor_bcs, cen, dir,
+				  FillPatchType::fillpatch_function, InterpHookNone, InterpHookNone);
+	}
 	std::swap(int_state_new_cc, state_new_cc_[level]);
 	std::swap(int_state_old_cc, state_old_cc_[level]);
 	std::swap(int_temperature_floor_cc, temperature_floor_cc_[level]);
@@ -3231,6 +3258,23 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 
 // Fill an entire multifab by interpolating from the coarser level
 // this comes into play when a new level of refinement appears
+template <typename problem_t>
+void AMRSimulation<problem_t>::FillCoarsePatchCellCenteredFromSource(int lev, amrex::Real time, amrex::MultiFab &mf,
+								     amrex::MultiFab const &coarse_mf, int icomp, int ncomp,
+								     amrex::Vector<amrex::BCRec> &BCs)
+{
+	BL_PROFILE("AMRSimulation::FillCoarsePatchCellCenteredFromSource()"); // NOLINT(misc-const-correctness)
+
+	AMREX_ASSERT(lev > 0);
+
+	amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor(setBoundaryFunctor<problem_t>{});
+	amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> finePhysicalBoundaryFunctor(geom[lev], BCs, boundaryFunctor);
+	amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>> coarsePhysicalBoundaryFunctor(geom[lev - 1], BCs, boundaryFunctor);
+
+	amrex::InterpFromCoarseLevel(mf, time, coarse_mf, 0, icomp, ncomp, geom[lev - 1], geom[lev], coarsePhysicalBoundaryFunctor, 0,
+				     finePhysicalBoundaryFunctor, 0, refRatio(lev - 1), getAmrInterpolaterCellCentered(), BCs, 0);
+}
+
 template <typename problem_t>
 void AMRSimulation<problem_t>::FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs,
 					       quokka::centering cen, quokka::direction dir)
@@ -4650,8 +4694,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 
 		// temperature floor (optional for backward compatibility with old checkpoints)
 		const std::string temp_floor_path = amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "TemperatureFloor");
+		const std::string temp_floor_header_path = temp_floor_path + "_H";
 		std::error_code ec;
-		if (std::filesystem::exists(temp_floor_path, ec) && !ec) {
+		if (std::filesystem::exists(temp_floor_header_path, ec) && !ec) {
 			amrex::MultiFab tmp_temp_floor;
 			amrex::VisMF::Read(tmp_temp_floor, temp_floor_path);
 			amrex::Vector<amrex::BCRec> temp_floor_bcs(1);
