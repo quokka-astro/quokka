@@ -714,7 +714,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 					auto callback = +[](hid_t group, const char *name, const H5L_info_t * /*info*/, void *op_data) -> herr_t {
 						auto *datasets = static_cast<std::vector<std::string> *>(op_data);
 						H5O_info_t obj_info{};
-#if H5_VERSION_GE(1,12,0)
+#if H5_VERSION_GE(1, 12, 0)
 						herr_t const status = H5Oget_info_by_name3(group, name, &obj_info, H5O_INFO_BASIC, H5P_DEFAULT);
 #else
 						herr_t const status = H5Oget_info_by_name(group, name, &obj_info, H5P_DEFAULT);
@@ -760,7 +760,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 				hid_t qh0_dset_id = H5Dopen2(file_id, inferred_dataset.c_str(), H5P_DEFAULT);
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(qh0_dset_id != h5_error, ("Failed to open HDF5 dataset: " + inferred_dataset).c_str());
 				hid_t qh0_space_id = H5Dget_space(qh0_dset_id);
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(qh0_space_id != h5_error, ("Failed to get dataspace for HDF5 dataset: " + inferred_dataset).c_str());
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(qh0_space_id != h5_error,
+								 ("Failed to get dataspace for HDF5 dataset: " + inferred_dataset).c_str());
 				int const qh0_ndims = H5Sget_simple_extent_ndims(qh0_space_id);
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(qh0_ndims == 2, "QH0 dataset must be 2D for DataTable<2,1>.");
 				hsize_t qh0_dims[2] = {0, 0};
@@ -776,11 +777,10 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 					inferred_axes_are_mass_age = false;
 				} else {
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-					    false,
-					    std::format("Could not infer QH0 axis ordering from dimensions: dataset dims=({}, {}), n_mass={}, n_age={}",
-							static_cast<unsigned long long>(qh0_dims[0]), static_cast<unsigned long long>(qh0_dims[1]),
-							static_cast<unsigned long long>(n_mass), static_cast<unsigned long long>(n_age))
-							.c_str());
+					    false, std::format("Could not infer QH0 axis ordering from dimensions: dataset dims=({}, {}), n_mass={}, n_age={}",
+							       static_cast<unsigned long long>(qh0_dims[0]), static_cast<unsigned long long>(qh0_dims[1]),
+							       static_cast<unsigned long long>(n_mass), static_cast<unsigned long long>(n_age))
+						       .c_str());
 				}
 
 				return {inferred_dataset, inferred_axes_are_mass_age, inferred_is_fast_log};
@@ -805,9 +805,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 						      stochastic_stellar_pop_qh0_table_axes_are_mass_age_ ? "(mass, age)" : "(age, mass)");
 			amrex::Print() << std::format("\tInferred grid encoding: {}\n",
 						      (stochastic_stellar_pop_qh0_table_is_fast_log_ == 1) ? "fast_log" : "linear/log");
-			stochasticStellarPopQH0Table_ = quokka::DataTable<2, 1>::H5Reader(
-			    stochastic_stellar_pop_qh0_table_hdf5_file_, stochastic_stellar_pop_qh0_table_dataset_, coord_names,
-			    stochastic_stellar_pop_qh0_table_is_fast_log_);
+			stochasticStellarPopQH0Table_ =
+			    quokka::DataTable<2, 1>::H5Reader(stochastic_stellar_pop_qh0_table_hdf5_file_, stochastic_stellar_pop_qh0_table_dataset_,
+							      coord_names, stochastic_stellar_pop_qh0_table_is_fast_log_);
 		}
 	}
 
