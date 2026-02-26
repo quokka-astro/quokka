@@ -29,6 +29,7 @@
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
+#include "math/quadrature.hpp"
 #include "math/spherical_geometry.hpp"
 #include "particles/particle_types.hpp"
 #include "physics_info.hpp"
