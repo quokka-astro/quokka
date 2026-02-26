@@ -682,15 +682,116 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		amrex::ParmParse const ppp("particles");
 		ppp.query("use_stromgren_tempfloor", use_stochastic_stellar_pop_stromgren_tempfloor_);
 		ppp.query("stromgren_qh0_table_hdf5_file", stochastic_stellar_pop_qh0_table_hdf5_file_);
-		ppp.query("stromgren_qh0_table_dataset", stochastic_stellar_pop_qh0_table_dataset_);
-		ppp.query("stromgren_qh0_table_axes_are_mass_age", stochastic_stellar_pop_qh0_table_axes_are_mass_age_);
-		ppp.query("stromgren_qh0_table_is_fast_log", stochastic_stellar_pop_qh0_table_is_fast_log_);
 		ppp.query("stromgren_tempfloor_max_neighbor_hops", stochastic_stellar_pop_tempfloor_max_neighbor_hops_);
 
 		if (use_stochastic_stellar_pop_stromgren_tempfloor_) {
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 			    !stochastic_stellar_pop_qh0_table_hdf5_file_.empty(),
 			    "particles.use_stromgren_tempfloor=true requires particles.stromgren_qh0_table_hdf5_file");
+
+			// Infer dataset path, axis ordering, and whether the coordinate grids are stored in fast_log form
+			// directly from the HDF5 file, so users only need to provide the file path.
+			auto infer_stromgren_qh0_metadata = [](std::string const &file_path) -> std::tuple<std::string, bool, int> {
+				hid_t const h5_error = -1;
+				hid_t file_id = H5Fopen(file_path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file_id != h5_error, ("Failed to open HDF5 file: " + file_path).c_str());
+
+				// Infer whether coordinates are stored as fast_log_* datasets.
+				bool const has_fast_log_mass = (H5Lexists(file_id, "/grids/fast_log_mass", H5P_DEFAULT) > 0);
+				bool const has_fast_log_age = (H5Lexists(file_id, "/grids/fast_log_age", H5P_DEFAULT) > 0);
+				bool const has_linear_mass = (H5Lexists(file_id, "/grids/mass", H5P_DEFAULT) > 0);
+				bool const has_linear_age = (H5Lexists(file_id, "/grids/age", H5P_DEFAULT) > 0);
+				int const inferred_is_fast_log = (has_fast_log_mass && has_fast_log_age) ? 1 : 0;
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    (has_fast_log_mass && has_fast_log_age) || (has_linear_mass && has_linear_age),
+				    "Could not infer mass/age grid datasets in HDF5 file. Expected /grids/{mass,age} or /grids/fast_log_{mass,age}.");
+
+				// Infer the QH0 dataset by scanning /data for datasets and preferring a dataset named 'QH0'.
+				std::vector<std::string> data_datasets;
+				if (H5Lexists(file_id, "/data", H5P_DEFAULT) > 0) {
+					hid_t data_group = H5Gopen2(file_id, "/data", H5P_DEFAULT);
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data_group != h5_error, "Failed to open /data group in HDF5 file.");
+
+					auto callback = +[](hid_t group, const char *name, const H5L_info_t * /*info*/, void *op_data) -> herr_t {
+						auto *datasets = static_cast<std::vector<std::string> *>(op_data);
+						H5O_info_t obj_info{};
+#if H5_VERSION_GE(1,12,0)
+						herr_t const status = H5Oget_info_by_name3(group, name, &obj_info, H5O_INFO_BASIC, H5P_DEFAULT);
+#else
+						herr_t const status = H5Oget_info_by_name(group, name, &obj_info, H5P_DEFAULT);
+#endif
+						if (status >= 0 && obj_info.type == H5O_TYPE_DATASET) {
+							datasets->emplace_back(name);
+						}
+						return 0;
+					};
+					H5Literate(data_group, H5_INDEX_NAME, H5_ITER_NATIVE, nullptr, callback, &data_datasets);
+					H5Gclose(data_group);
+				}
+
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!data_datasets.empty(), "No datasets found in HDF5 /data group.");
+				std::string inferred_dataset = "/data/" + data_datasets.front();
+				for (auto const &name : data_datasets) {
+					if (name == "QH0") {
+						inferred_dataset = "/data/QH0";
+						break;
+					}
+				}
+
+				// Infer axis order by matching dataset dimensions against the mass/age grid lengths.
+				auto read_1d_len = [&](std::string const &path) -> hsize_t {
+					hid_t dset_id = H5Dopen2(file_id, path.c_str(), H5P_DEFAULT);
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dset_id != h5_error, ("Failed to open HDF5 dataset: " + path).c_str());
+					hid_t space_id = H5Dget_space(dset_id);
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(space_id != h5_error, ("Failed to get dataspace for HDF5 dataset: " + path).c_str());
+					int const ndims = H5Sget_simple_extent_ndims(space_id);
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ndims == 1, ("Expected 1D grid dataset: " + path).c_str());
+					hsize_t dims[1] = {0};
+					H5Sget_simple_extent_dims(space_id, dims, nullptr);
+					H5Sclose(space_id);
+					H5Dclose(dset_id);
+					return dims[0];
+				};
+
+				std::string const mass_grid = inferred_is_fast_log ? "/grids/fast_log_mass" : "/grids/mass";
+				std::string const age_grid = inferred_is_fast_log ? "/grids/fast_log_age" : "/grids/age";
+				hsize_t const n_mass = read_1d_len(mass_grid);
+				hsize_t const n_age = read_1d_len(age_grid);
+
+				hid_t qh0_dset_id = H5Dopen2(file_id, inferred_dataset.c_str(), H5P_DEFAULT);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(qh0_dset_id != h5_error, ("Failed to open HDF5 dataset: " + inferred_dataset).c_str());
+				hid_t qh0_space_id = H5Dget_space(qh0_dset_id);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(qh0_space_id != h5_error, ("Failed to get dataspace for HDF5 dataset: " + inferred_dataset).c_str());
+				int const qh0_ndims = H5Sget_simple_extent_ndims(qh0_space_id);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(qh0_ndims == 2, "QH0 dataset must be 2D for DataTable<2,1>.");
+				hsize_t qh0_dims[2] = {0, 0};
+				H5Sget_simple_extent_dims(qh0_space_id, qh0_dims, nullptr);
+				H5Sclose(qh0_space_id);
+				H5Dclose(qh0_dset_id);
+				H5Fclose(file_id);
+
+				bool inferred_axes_are_mass_age = true;
+				if (qh0_dims[0] == n_mass && qh0_dims[1] == n_age) {
+					inferred_axes_are_mass_age = true;
+				} else if (qh0_dims[0] == n_age && qh0_dims[1] == n_mass) {
+					inferred_axes_are_mass_age = false;
+				} else {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    false,
+					    std::format("Could not infer QH0 axis ordering from dimensions: dataset dims=({}, {}), n_mass={}, n_age={}",
+							static_cast<unsigned long long>(qh0_dims[0]), static_cast<unsigned long long>(qh0_dims[1]),
+							static_cast<unsigned long long>(n_mass), static_cast<unsigned long long>(n_age))
+							.c_str());
+				}
+
+				return {inferred_dataset, inferred_axes_are_mass_age, inferred_is_fast_log};
+			};
+
+			auto [inferred_dataset, inferred_axes_are_mass_age, inferred_is_fast_log] =
+			    infer_stromgren_qh0_metadata(stochastic_stellar_pop_qh0_table_hdf5_file_);
+			stochastic_stellar_pop_qh0_table_dataset_ = std::move(inferred_dataset);
+			stochastic_stellar_pop_qh0_table_axes_are_mass_age_ = inferred_axes_are_mass_age;
+			stochastic_stellar_pop_qh0_table_is_fast_log_ = inferred_is_fast_log;
 
 			std::vector<std::string> coord_names;
 			if (stochastic_stellar_pop_qh0_table_axes_are_mass_age_) {
@@ -701,6 +802,10 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 
 			amrex::Print() << "Loading StochasticStellarPop QH0 table for Strömgren temperature floor from: "
 				       << stochastic_stellar_pop_qh0_table_hdf5_file_ << " dataset " << stochastic_stellar_pop_qh0_table_dataset_ << "\n";
+			amrex::Print() << std::format("\tInferred axes order: {}\n",
+						      stochastic_stellar_pop_qh0_table_axes_are_mass_age_ ? "(mass, age)" : "(age, mass)");
+			amrex::Print() << std::format("\tInferred grid encoding: {}\n",
+						      (stochastic_stellar_pop_qh0_table_is_fast_log_ == 1) ? "fast_log" : "linear/log");
 			stochasticStellarPopQH0Table_ = quokka::DataTable<2, 1>::H5Reader(
 			    stochastic_stellar_pop_qh0_table_hdf5_file_, stochastic_stellar_pop_qh0_table_dataset_, coord_names,
 			    stochastic_stellar_pop_qh0_table_is_fast_log_);
