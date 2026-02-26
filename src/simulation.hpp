@@ -2335,18 +2335,8 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real tim
 	const int nghost_cc = state_new_cc_[level - 1].nGrow();
 	state_new_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
 	state_old_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
-	temperature_floor_cc_[level].define(ba, dm, 1, 0);
-	temperature_floor_cc_[level].setVal(tempFloor_);
 	FillCoarsePatch(level, time, state_new_cc_[level], 0, ncomp_cc, BCs_cc_, quokka::centering::cc, quokka::direction::na);
 	FillCoarsePatch(level, time, state_old_cc_[level], 0, ncomp_cc, BCs_cc_, quokka::centering::cc, quokka::direction::na); // also necessary
-	{
-		amrex::Vector<amrex::BCRec> temp_floor_bcs(1);
-		if (!BCs_cc_.empty()) {
-			temp_floor_bcs[0] = BCs_cc_[0];
-		}
-		// Temperature-floor data is a scalar field; do not apply hydro custom ext_dir BC callbacks.
-		FillCoarsePatchCellCenteredFromSource(level, time, temperature_floor_cc_[level], temperature_floor_cc_[level - 1], 0, 1, temp_floor_bcs, true);
-	}
 
 	max_signal_speed_[level].define(ba, dm, 1, nghost_cc);
 	tNew_[level] = time;
