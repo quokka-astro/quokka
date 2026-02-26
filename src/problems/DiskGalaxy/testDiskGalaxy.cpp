@@ -786,21 +786,27 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 		}
 
 		amrex::Real mass_flux_sphere = 0.0;
-		amrex::Real energy_flux_sphere = 0.0;
-		amrex::Real passive_scalar_flux_sphere = 0.0;
-		for (int lev = 0; lev <= finest_level; ++lev) {
-			const auto prob_lo = geom[lev].ProbLoArray();
-			const auto dx = geom[lev].CellSizeArray();
-			auto const &state = state_new_cc_[lev].const_arrays();
-			auto const &mask = flux_mask[lev].const_arrays();
+			amrex::Real hydro_energy_flux_sphere = 0.0;
+			amrex::Real mhd_energy_flux_sphere = 0.0;
+			amrex::Real passive_scalar_flux_sphere = 0.0;
+			for (int lev = 0; lev <= finest_level; ++lev) {
+				const auto prob_lo = geom[lev].ProbLoArray();
+				const auto dx = geom[lev].CellSizeArray();
+				auto const &state = state_new_cc_[lev].const_arrays();
+				auto const &state_fc = state_new_fc_[lev];
+				auto const &state_fc_x = state_fc[0].const_arrays();
+				auto const &state_fc_y = state_fc[1].const_arrays();
+				auto const &state_fc_z = state_fc[2].const_arrays();
+				auto const &mask = flux_mask[lev].const_arrays();
 
-			auto const level_flux = amrex::ParReduce(
-			    amrex::TypeList<amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum>{},
-			    amrex::TypeList<amrex::Real, amrex::Real, amrex::Real>{}, state_new_cc_[lev], amrex::IntVect(0),
-			    [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real> {
-				    if (mask[bx](i, j, k) == 0) {
-					    return {0.0, 0.0, 0.0};
-				    }
+				auto const level_flux = amrex::ParReduce(
+				    amrex::TypeList<amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum>{},
+				    amrex::TypeList<amrex::Real, amrex::Real, amrex::Real, amrex::Real>{}, state_new_cc_[lev], amrex::IntVect(0),
+				    [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept
+				    -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real, amrex::Real> {
+					    if (mask[bx](i, j, k) == 0) {
+						    return {0.0, 0.0, 0.0, 0.0};
+					    }
 
 				    const amrex::Real x0 = prob_lo[0] + static_cast<amrex::Real>(i) * dx[0];
 				    const amrex::Real y0 = prob_lo[1] + static_cast<amrex::Real>(j) * dx[1];
@@ -814,39 +820,69 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 				    const amrex::Real z = prob_lo[2] + (static_cast<amrex::Real>(k) + 0.5) * dx[2];
 				    const amrex::Real r = std::sqrt(x * x + y * y + z * z);
 
-				    const amrex::Real rho = state[bx](i, j, k, HydroSystem<DiskGalaxy>::density_index);
-				    if (r <= 0.0 || rho <= 0.0) {
-					    return {0.0, 0.0, 0.0};
-				    }
+					    const amrex::Real rho = state[bx](i, j, k, HydroSystem<DiskGalaxy>::density_index);
+					    if (r <= 0.0 || rho <= 0.0) {
+						    return {0.0, 0.0, 0.0, 0.0};
+					    }
 
-				    const amrex::Real momx = state[bx](i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index);
-				    const amrex::Real momy = state[bx](i, j, k, HydroSystem<DiskGalaxy>::x2Momentum_index);
-				    const amrex::Real momz = state[bx](i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index);
-				    const amrex::Real vr = (x * momx + y * momy + z * momz) / (rho * r);
+					    const amrex::Real momx = state[bx](i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index);
+					    const amrex::Real momy = state[bx](i, j, k, HydroSystem<DiskGalaxy>::x2Momentum_index);
+					    const amrex::Real momz = state[bx](i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index);
+					    const amrex::Real vx = momx / rho;
+					    const amrex::Real vy = momy / rho;
+					    const amrex::Real vz = momz / rho;
+					    const amrex::Real vr = (x * momx + y * momy + z * momz) / (rho * r);
+					    const amrex::Real rhat_x = x / r;
+					    const amrex::Real rhat_y = y / r;
+					    const amrex::Real rhat_z = z / r;
 
-				    const amrex::Real mass_flux_density = rho * vr;
-				    const amrex::Real energy_density = state[bx](i, j, k, HydroSystem<DiskGalaxy>::energy_index);
-				    const amrex::Real scalar_density = state[bx](i, j, k, HydroSystem<DiskGalaxy>::scalar0_index);
-				    const amrex::Real area = quokka::math::sphericalSectionAreaInCell(flux_sphere_radius, x0, x1, y0, y1, z0, z1);
-				    if (area <= 0.0) {
-					    return {0.0, 0.0, 0.0};
-				    }
+					    const amrex::Real mass_flux_density = rho * vr;
+					    const amrex::Real energy_density = state[bx](i, j, k, HydroSystem<DiskGalaxy>::energy_index);
+					    const amrex::Real scalar_density = state[bx](i, j, k, HydroSystem<DiskGalaxy>::scalar0_index);
+					    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const cons_fc{
+						AMREX_D_DECL(state_fc_x[bx], state_fc_y[bx], state_fc_z[bx])};
+					    const amrex::Real Pgas = HydroSystem<DiskGalaxy>::ComputePressure(state[bx], i, j, k, &cons_fc);
+					    const amrex::Real Emag = HydroSystem<DiskGalaxy>::ComputeMagneticEnergy(i, j, k, &cons_fc);
+					    const amrex::Real Ehydro = energy_density - Emag;
 
-				    return {mass_flux_density * area, (energy_density * vr) * area, (scalar_density * vr) * area};
-			    });
+					    const amrex::Real bx1_m = cons_fc[0](i, j, k, Physics_Indices<DiskGalaxy>::mhdFirstIndex);
+					    const amrex::Real bx1_p = cons_fc[0](i + 1, j, k, Physics_Indices<DiskGalaxy>::mhdFirstIndex);
+					    const amrex::Real bx2_m = cons_fc[1](i, j, k, Physics_Indices<DiskGalaxy>::mhdFirstIndex);
+					    const amrex::Real bx2_p = cons_fc[1](i, j + 1, k, Physics_Indices<DiskGalaxy>::mhdFirstIndex);
+					    const amrex::Real bx3_m = cons_fc[2](i, j, k, Physics_Indices<DiskGalaxy>::mhdFirstIndex);
+					    const amrex::Real bx3_p = cons_fc[2](i, j, k + 1, Physics_Indices<DiskGalaxy>::mhdFirstIndex);
+					    const amrex::Real Bx = 0.5 * (bx1_m + bx1_p);
+					    const amrex::Real By = 0.5 * (bx2_m + bx2_p);
+					    const amrex::Real Bz = 0.5 * (bx3_m + bx3_p);
+					    const amrex::Real Bdotv = vx * Bx + vy * By + vz * Bz;
+					    const amrex::Real Br = rhat_x * Bx + rhat_y * By + rhat_z * Bz;
 
-			mass_flux_sphere += amrex::get<0>(level_flux);
-			energy_flux_sphere += amrex::get<1>(level_flux);
-			passive_scalar_flux_sphere += amrex::get<2>(level_flux);
+					    const amrex::Real hydro_energy_flux_density = (Ehydro + Pgas) * vr;
+					    const amrex::Real mhd_energy_flux_density = (energy_density + Pgas + Emag) * vr - Bdotv * Br;
+					    const amrex::Real area = quokka::math::sphericalSectionAreaInCell(flux_sphere_radius, x0, x1, y0, y1, z0, z1);
+					    if (area <= 0.0) {
+						    return {0.0, 0.0, 0.0, 0.0};
+					    }
+
+					    return {mass_flux_density * area, hydro_energy_flux_density * area, mhd_energy_flux_density * area,
+						    (scalar_density * vr) * area};
+				    });
+
+				mass_flux_sphere += amrex::get<0>(level_flux);
+				hydro_energy_flux_sphere += amrex::get<1>(level_flux);
+				mhd_energy_flux_sphere += amrex::get<2>(level_flux);
+				passive_scalar_flux_sphere += amrex::get<3>(level_flux);
+			}
+			amrex::ParallelDescriptor::ReduceRealSum(mass_flux_sphere);
+			amrex::ParallelDescriptor::ReduceRealSum(hydro_energy_flux_sphere);
+			amrex::ParallelDescriptor::ReduceRealSum(mhd_energy_flux_sphere);
+			amrex::ParallelDescriptor::ReduceRealSum(passive_scalar_flux_sphere);
+
+			stats["mass_flux_sphere"] = mass_flux_sphere;
+			stats["hydro_energy_flux_sphere"] = hydro_energy_flux_sphere;
+			stats["mhd_energy_flux_sphere"] = mhd_energy_flux_sphere;
+			stats["passive_scalar_flux_sphere"] = passive_scalar_flux_sphere;
 		}
-		amrex::ParallelDescriptor::ReduceRealSum(mass_flux_sphere);
-		amrex::ParallelDescriptor::ReduceRealSum(energy_flux_sphere);
-		amrex::ParallelDescriptor::ReduceRealSum(passive_scalar_flux_sphere);
-
-		stats["mass_flux_sphere"] = mass_flux_sphere;
-		stats["energy_flux_sphere"] = energy_flux_sphere;
-		stats["passive_scalar_flux_sphere"] = passive_scalar_flux_sphere;
-	}
 
 	const amrex::Real stellar_mass_at_birth = particleRegister_.computeTotalStellarMassAtBirth();
 	stats["stellar_mass_at_birth"] = stellar_mass_at_birth / C::M_solar;
