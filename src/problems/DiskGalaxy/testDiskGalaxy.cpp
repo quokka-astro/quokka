@@ -16,9 +16,12 @@
 #include "AMReX_GpuContainers.H"
 #include "AMReX_GpuDevice.H"
 #include "AMReX_MultiFab.H"
+#include "AMReX_MultiFabUtil.H"
 #include "AMReX_Parser.H"
+#include "AMReX_Reduce.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
+#include "AMReX_iMultiFab.H"
 
 #include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
@@ -26,7 +29,7 @@
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
-#include "math/quadrature.hpp"
+#include "math/spherical_geometry.hpp"
 #include "particles/particle_types.hpp"
 #include "physics_info.hpp"
 #include "util/BC.hpp"
@@ -769,34 +772,50 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 		const amrex::Real flux_sphere_radius = flux_sphere_radius_kpc * (1.0e3 * C::parsec);
 		stats["flux_sphere_radius_kpc"] = flux_sphere_radius_kpc;
 
-		amrex::Vector<amrex::MultiFab> shell_flux;
-		shell_flux.resize(finest_level + 1);
+		amrex::Vector<amrex::iMultiFab> flux_mask;
+		flux_mask.resize(finest_level + 1);
 		for (int lev = 0; lev <= finest_level; ++lev) {
-			shell_flux[lev].define(boxArray(lev), DistributionMap(lev), 3, 0);
+			if (lev == finest_level) {
+				flux_mask[lev].define(boxArray(lev), DistributionMap(lev), 1, 0);
+				flux_mask[lev].setVal(1);
+			} else {
+				flux_mask[lev] = amrex::makeFineMask(state_new_cc_[lev], state_new_cc_[lev + 1], amrex::IntVect(0), ref_ratio[lev],
+								     geom[lev].periodicity(), 1, 0);
+			}
 		}
 
+		amrex::Real mass_flux_sphere = 0.0;
+		amrex::Real energy_flux_sphere = 0.0;
+		amrex::Real passive_scalar_flux_sphere = 0.0;
 		for (int lev = 0; lev <= finest_level; ++lev) {
 			const auto prob_lo = geom[lev].ProbLoArray();
 			const auto dx = geom[lev].CellSizeArray();
-			const amrex::Real cell_volume = dx[0] * dx[1] * dx[2];
-			const amrex::Real shell_dr = std::cbrt(cell_volume);
-			const amrex::Real inv_shell_dr = 1.0 / shell_dr;
-
 			auto const &state = state_new_cc_[lev].const_arrays();
-			auto const &result = shell_flux[lev].arrays();
-			amrex::ParallelFor(shell_flux[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			auto const &mask = flux_mask[lev].const_arrays();
+
+			auto const level_flux = amrex::ParReduce(
+			    amrex::TypeList<amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum>{},
+			    amrex::TypeList<amrex::Real, amrex::Real, amrex::Real>{}, state_new_cc_[lev], amrex::IntVect(0),
+			    [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real> {
+				if (mask[bx](i, j, k) == 0) {
+					return {0.0, 0.0, 0.0};
+				}
+
+				const amrex::Real x0 = prob_lo[0] + static_cast<amrex::Real>(i) * dx[0];
+				const amrex::Real y0 = prob_lo[1] + static_cast<amrex::Real>(j) * dx[1];
+				const amrex::Real z0 = prob_lo[2] + static_cast<amrex::Real>(k) * dx[2];
+				const amrex::Real x1 = x0 + dx[0];
+				const amrex::Real y1 = y0 + dx[1];
+				const amrex::Real z1 = z0 + dx[2];
+
 				const amrex::Real x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
 				const amrex::Real y = prob_lo[1] + (static_cast<amrex::Real>(j) + 0.5) * dx[1];
 				const amrex::Real z = prob_lo[2] + (static_cast<amrex::Real>(k) + 0.5) * dx[2];
 				const amrex::Real r = std::sqrt(x * x + y * y + z * z);
-				const amrex::Real dr = std::abs(r - flux_sphere_radius);
 
 				const amrex::Real rho = state[bx](i, j, k, HydroSystem<DiskGalaxy>::density_index);
-				if (dr >= 0.5 * shell_dr || r <= 0.0 || rho <= 0.0) {
-					result[bx](i, j, k, 0) = 0.0;
-					result[bx](i, j, k, 1) = 0.0;
-					result[bx](i, j, k, 2) = 0.0;
-					return;
+				if (r <= 0.0 || rho <= 0.0) {
+					return {0.0, 0.0, 0.0};
 				}
 
 				const amrex::Real momx = state[bx](i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index);
@@ -807,19 +826,25 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 				const amrex::Real mass_flux_density = rho * vr;
 				const amrex::Real energy_density = state[bx](i, j, k, HydroSystem<DiskGalaxy>::energy_index);
 				const amrex::Real scalar_density = state[bx](i, j, k, HydroSystem<DiskGalaxy>::scalar0_index);
+				const amrex::Real area = quokka::math::sphericalSectionAreaInCell(flux_sphere_radius, x0, x1, y0, y1, z0, z1);
+				if (area <= 0.0) {
+					return {0.0, 0.0, 0.0};
+				}
 
-				// Approximate surface integral using a one-cell-thick spherical shell:
-				// \int_shell f dV / dr ~ \oint f dA
-				result[bx](i, j, k, 0) = mass_flux_density * inv_shell_dr;
-				result[bx](i, j, k, 1) = (energy_density * vr) * inv_shell_dr;
-				result[bx](i, j, k, 2) = (scalar_density * vr) * inv_shell_dr;
+				return {mass_flux_density * area, (energy_density * vr) * area, (scalar_density * vr) * area};
 			});
-		}
-		amrex::Gpu::streamSynchronize();
 
-		stats["mass_flux_sphere"] = amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(shell_flux), 0, geom, ref_ratio);
-		stats["energy_flux_sphere"] = amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(shell_flux), 1, geom, ref_ratio);
-		stats["passive_scalar_flux_sphere"] = amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(shell_flux), 2, geom, ref_ratio);
+			mass_flux_sphere += amrex::get<0>(level_flux);
+			energy_flux_sphere += amrex::get<1>(level_flux);
+			passive_scalar_flux_sphere += amrex::get<2>(level_flux);
+		}
+		amrex::ParallelDescriptor::ReduceRealSum(mass_flux_sphere);
+		amrex::ParallelDescriptor::ReduceRealSum(energy_flux_sphere);
+		amrex::ParallelDescriptor::ReduceRealSum(passive_scalar_flux_sphere);
+
+		stats["mass_flux_sphere"] = mass_flux_sphere;
+		stats["energy_flux_sphere"] = energy_flux_sphere;
+		stats["passive_scalar_flux_sphere"] = passive_scalar_flux_sphere;
 	}
 
 	const amrex::Real stellar_mass_at_birth = particleRegister_.computeTotalStellarMassAtBirth();
