@@ -198,8 +198,8 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto deltaPhiCircleRect(amrex::Real const rh
 	return dphi;
 }
 
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto addPointUnique(amrex::Real pts[][3], int &npts, int max_pts, amrex::Real x, amrex::Real y,
-							     amrex::Real z, amrex::Real tol) -> void
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto addPointUnique(amrex::Real pts[][3], int &npts, int max_pts, amrex::Real x, amrex::Real y, amrex::Real z,
+							     amrex::Real tol) -> void
 {
 	const amrex::Real tol2 = tol * tol;
 	for (int i = 0; i < npts; ++i) {
@@ -219,16 +219,14 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto addPointUnique(amrex::Real pts[][3
 }
 
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto planeBoxSectionArea(amrex::Real const x0, amrex::Real const x1, amrex::Real const y0, amrex::Real const y1,
-								  amrex::Real const z0, amrex::Real const z1, amrex::Real const nx,
-								  amrex::Real const ny, amrex::Real const nz, amrex::Real const d)
-    -> amrex::Real
+								  amrex::Real const z0, amrex::Real const z1, amrex::Real const nx, amrex::Real const ny,
+								  amrex::Real const nz, amrex::Real const d) -> amrex::Real
 {
 	// Plane: n·x = d. Compute exact area of intersection polygon with an axis-aligned box.
 	const amrex::Real scale = (std::abs(x0) + std::abs(x1) + std::abs(y0) + std::abs(y1) + std::abs(z0) + std::abs(z1) + std::abs(d) + 1.0);
 	const amrex::Real tol = 1.0e-12 * scale;
 
-	const amrex::Real verts[8][3] = {{x0, y0, z0}, {x1, y0, z0}, {x0, y1, z0}, {x1, y1, z0},
-					 {x0, y0, z1}, {x1, y0, z1}, {x0, y1, z1}, {x1, y1, z1}};
+	const amrex::Real verts[8][3] = {{x0, y0, z0}, {x1, y0, z0}, {x0, y1, z0}, {x1, y1, z0}, {x0, y0, z1}, {x1, y0, z1}, {x0, y1, z1}, {x1, y1, z1}};
 	const int edges[12][2] = {{0, 1}, {2, 3}, {4, 5}, {6, 7}, {0, 2}, {1, 3}, {4, 6}, {5, 7}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
 
 	amrex::Real pts[16][3];
