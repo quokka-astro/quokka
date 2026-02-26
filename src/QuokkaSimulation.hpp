@@ -81,6 +81,7 @@ namespace filesystem = experimental::filesystem;
 #include "hydro/hydro_system.hpp"
 #include "hydro/mhd_system.hpp"
 #include "hyperbolic_system.hpp"
+#include "particles/particle_photoionization.hpp"
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
 #include "radiation/radiation_system.hpp"
@@ -157,6 +158,15 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	amrex::Real const_sfr_Msun_per_year_per_kpc2_ = -1.0; // constant star formation rate in Msun/year/kpc^2 (for computing the PE heating rate); will
 							      // override real star formation rate from the simulation if non-negative
 	quokka::PeHeatingTables<> peHeatingTables_;
+
+	// Stochastic stellar population photoionization temperature floor (Strömgren approximation)
+	bool use_stochastic_stellar_pop_stromgren_tempfloor_ = false;
+	std::string stochastic_stellar_pop_qh0_table_hdf5_file_;
+	std::string stochastic_stellar_pop_qh0_table_dataset_ = "/data/QH0";
+	bool stochastic_stellar_pop_qh0_table_axes_are_mass_age_ = true;
+	int stochastic_stellar_pop_qh0_table_is_fast_log_ = 0;
+	int stochastic_stellar_pop_tempfloor_max_neighbor_hops_ = 1;
+	quokka::DataTable<2, 1> stochasticStellarPopQH0Table_;
 
 	int enableCooling_ = 0;
 	int enableChemistry_ = 0;
@@ -665,6 +675,36 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 
 		// Set global pointer for access from particle functions
 		quokka::g_pe_heating_tables_ptr<> = &peHeatingTables_;
+	}
+
+	// Stochastic stellar population photoionization temperature floor (Strömgren approximation)
+	{
+		amrex::ParmParse const ppp("particles");
+		ppp.query("use_stromgren_tempfloor", use_stochastic_stellar_pop_stromgren_tempfloor_);
+		ppp.query("stromgren_qh0_table_hdf5_file", stochastic_stellar_pop_qh0_table_hdf5_file_);
+		ppp.query("stromgren_qh0_table_dataset", stochastic_stellar_pop_qh0_table_dataset_);
+		ppp.query("stromgren_qh0_table_axes_are_mass_age", stochastic_stellar_pop_qh0_table_axes_are_mass_age_);
+		ppp.query("stromgren_qh0_table_is_fast_log", stochastic_stellar_pop_qh0_table_is_fast_log_);
+		ppp.query("stromgren_tempfloor_max_neighbor_hops", stochastic_stellar_pop_tempfloor_max_neighbor_hops_);
+
+		if (use_stochastic_stellar_pop_stromgren_tempfloor_) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+			    !stochastic_stellar_pop_qh0_table_hdf5_file_.empty(),
+			    "particles.use_stromgren_tempfloor=true requires particles.stromgren_qh0_table_hdf5_file");
+
+			std::vector<std::string> coord_names;
+			if (stochastic_stellar_pop_qh0_table_axes_are_mass_age_) {
+				coord_names = {"mass", "age"};
+			} else {
+				coord_names = {"age", "mass"};
+			}
+
+			amrex::Print() << "Loading StochasticStellarPop QH0 table for Strömgren temperature floor from: "
+				       << stochastic_stellar_pop_qh0_table_hdf5_file_ << " dataset " << stochastic_stellar_pop_qh0_table_dataset_ << "\n";
+			stochasticStellarPopQH0Table_ = quokka::DataTable<2, 1>::H5Reader(
+			    stochastic_stellar_pop_qh0_table_hdf5_file_, stochastic_stellar_pop_qh0_table_dataset_, coord_names,
+			    stochastic_stellar_pop_qh0_table_is_fast_log_);
+		}
 	}
 
 #ifdef CHEMISTRY
@@ -1757,8 +1797,19 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::postInitializati
 template <typename problem_t>
 void QuokkaSimulation<problem_t>::FillTemperatureFloorAtLevel(int lev, amrex::Real time, amrex::MultiFab const &state_cc, amrex::MultiFab &temp_floor_cc)
 {
-	amrex::ignore_unused(lev, time, state_cc);
 	temp_floor_cc.setVal(tempFloor_);
+
+#if AMREX_SPACEDIM == 3
+	if (use_stochastic_stellar_pop_stromgren_tempfloor_) {
+		auto const qh0_table = stochasticStellarPopQH0Table_.const_tables();
+		quokka::photoionization::FillTemperatureFloorFromStromgrenVolumes<problem_t>(
+		    this->StochasticStellarPopParticles.get(), lev, time, grids[lev], dmap[lev], geom[lev], state_cc, temp_floor_cc, qh0_table,
+		    1.0 / C::M_solar, 1.0 / 3.15576e7, stochastic_stellar_pop_qh0_table_axes_are_mass_age_, 2.6e-13, 1.27, 1.67e-24, 1.0e4,
+		    stochastic_stellar_pop_tempfloor_max_neighbor_hops_);
+	}
+#else
+	amrex::ignore_unused(lev, time, state_cc);
+#endif
 }
 
 // fix-up any unphysical states created by AMR operations
