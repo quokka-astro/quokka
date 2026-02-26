@@ -685,9 +685,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		ppp.query("stromgren_tempfloor_max_neighbor_hops", stochastic_stellar_pop_tempfloor_max_neighbor_hops_);
 
 		if (use_stochastic_stellar_pop_stromgren_tempfloor_) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-			    !stochastic_stellar_pop_qh0_table_hdf5_file_.empty(),
-			    "particles.use_stromgren_tempfloor=true requires particles.stromgren_qh0_table_hdf5_file");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!stochastic_stellar_pop_qh0_table_hdf5_file_.empty(),
+							 "particles.use_stromgren_tempfloor=true requires particles.stromgren_qh0_table_hdf5_file");
 
 			// Infer dataset path, axis ordering, and whether the coordinate grids are stored in fast_log form
 			// directly from the HDF5 file, so users only need to provide the file path.
