@@ -49,8 +49,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto normalizeAngle0To2Pi(amrex::Real p
 	return phi;
 }
 
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto inClosedInterval(amrex::Real const x, amrex::Real const a, amrex::Real const b, amrex::Real const tol)
-    -> bool
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto inClosedInterval(amrex::Real const x, amrex::Real const a, amrex::Real const b, amrex::Real const tol) -> bool
 {
 	return (x >= (a - tol)) && (x <= (b + tol));
 }
@@ -68,8 +67,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto sortSmallArray(amrex::Real *vals, 
 	}
 }
 
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto appendAngleUnique(amrex::Real *angles, int &nangles, int max_angles, amrex::Real phi,
-									amrex::Real tol) -> void
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto appendAngleUnique(amrex::Real *angles, int &nangles, int max_angles, amrex::Real phi, amrex::Real tol) -> void
 {
 	phi = normalizeAngle0To2Pi(phi);
 	for (int i = 0; i < nangles; ++i) {
@@ -85,8 +83,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto appendAngleUnique(amrex::Real *ang
 	}
 }
 
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto appendZEventIfInRange(amrex::Real *zvals, int &nz, int max_nz, amrex::Real z, amrex::Real zlo,
-								    amrex::Real zhi, amrex::Real tol) -> void
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto appendZEventIfInRange(amrex::Real *zvals, int &nz, int max_nz, amrex::Real z, amrex::Real zlo, amrex::Real zhi,
+								    amrex::Real tol) -> void
 {
 	if (z < (zlo - tol) || z > (zhi + tol)) {
 		return;
@@ -202,9 +200,8 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto deltaPhiCircleRect(amrex::Real const rh
 
 } // namespace detail
 
-AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto sphericalSectionAreaInCell(amrex::Real const R, amrex::Real const x0, amrex::Real const x1,
-								    amrex::Real const y0, amrex::Real const y1, amrex::Real const z0,
-								    amrex::Real const z1) -> amrex::Real
+AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto sphericalSectionAreaInCell(amrex::Real const R, amrex::Real const x0, amrex::Real const x1, amrex::Real const y0,
+								    amrex::Real const y1, amrex::Real const z0, amrex::Real const z1) -> amrex::Real
 {
 	const amrex::Real R2 = R * R;
 	const amrex::Real r2_min = detail::minDistSqToInterval(x0, x1) + detail::minDistSqToInterval(y0, y1) + detail::minDistSqToInterval(z0, z1);
