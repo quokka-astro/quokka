@@ -358,8 +358,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	auto getAmrInterpolaterCellCentered() -> amrex::MFInterpolater *;
 	auto getAmrInterpolaterFaceCentered() -> amrex::Interpolater *;
-	void FillCoarsePatchCellCenteredFromSource(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::MultiFab const &coarse_mf, int icomp,
-						   int ncomp, amrex::Vector<amrex::BCRec> &BCs);
+	void FillCoarsePatchCellCenteredFromSource(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::MultiFab const &coarse_mf, int icomp, int ncomp,
+						   amrex::Vector<amrex::BCRec> &BCs);
 	void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs, quokka::centering cen,
 			     quokka::direction dir);
 	void FillCoarsePatchFaceArray(int lev, amrex::Real time, amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &mf_array, int icomp, int ncomp,
@@ -3259,9 +3259,8 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 // Fill an entire multifab by interpolating from the coarser level
 // this comes into play when a new level of refinement appears
 template <typename problem_t>
-void AMRSimulation<problem_t>::FillCoarsePatchCellCenteredFromSource(int lev, amrex::Real time, amrex::MultiFab &mf,
-								     amrex::MultiFab const &coarse_mf, int icomp, int ncomp,
-								     amrex::Vector<amrex::BCRec> &BCs)
+void AMRSimulation<problem_t>::FillCoarsePatchCellCenteredFromSource(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::MultiFab const &coarse_mf,
+								     int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs)
 {
 	BL_PROFILE("AMRSimulation::FillCoarsePatchCellCenteredFromSource()"); // NOLINT(misc-const-correctness)
 
