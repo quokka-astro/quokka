@@ -31,8 +31,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto maxDistSqToInterval(amrex::Real co
 	return amax * amax;
 }
 
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto addPointUnique(amrex::Real pts[][3], int &npts, int max_pts, amrex::Real x, amrex::Real y,
-							     amrex::Real z, amrex::Real tol) -> void
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto addPointUnique(amrex::Real pts[][3], int &npts, int max_pts, amrex::Real x, amrex::Real y, amrex::Real z,
+							     amrex::Real tol) -> void
 {
 	const amrex::Real tol2 = tol * tol;
 	for (int i = 0; i < npts; ++i) {
