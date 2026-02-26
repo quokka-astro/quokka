@@ -93,7 +93,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
       public:
 	using AMRSimulation<problem_t>::state_old_cc_;
 	using AMRSimulation<problem_t>::state_new_cc_;
-	using AMRSimulation<problem_t>::temperature_floor_cc_;
 	using AMRSimulation<problem_t>::max_signal_speed_;
 	using AMRSimulation<problem_t>::state_old_fc_;
 	using AMRSimulation<problem_t>::state_new_fc_;
@@ -304,6 +303,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	// fix-up states
 	void FixupState(int level) override;
+	void FillTemperatureFloorAtLevel(int lev, amrex::Real time, amrex::MultiFab const &state_cc, amrex::MultiFab &temp_floor_cc);
 
 	// implement FillPatch function
 	void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, quokka::centering cen, quokka::direction dir,
@@ -1754,11 +1754,20 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::postInitializati
 	}
 }
 
+template <typename problem_t>
+void QuokkaSimulation<problem_t>::FillTemperatureFloorAtLevel(int lev, amrex::Real time, amrex::MultiFab const &state_cc, amrex::MultiFab &temp_floor_cc)
+{
+	amrex::ignore_unused(lev, time, state_cc);
+	temp_floor_cc.setVal(tempFloor_);
+}
+
 // fix-up any unphysical states created by AMR operations
 // (e.g., caused by the flux register or from interpolation)
 template <typename problem_t> void QuokkaSimulation<problem_t>::FixupState(int lev)
 {
 	const BL_PROFILE("QuokkaSimulation::FixupState()");
+	amrex::MultiFab temp_floor_cc(grids[lev], dmap[lev], 1, 0);
+	FillTemperatureFloorAtLevel(lev, tNew_[lev], state_new_cc_[lev], temp_floor_cc);
 
 	// fix hydro state
 	if (this->useDensityFloorParser_) {
@@ -1767,13 +1776,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::FixupState(int l
 									  amrex::Real base_density_floor) -> amrex::Real {
 			return density_floor_parser(x, y, z, base_density_floor);
 		};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, temperature_floor_cc_[lev], state_new_cc_[lev], geom[lev], density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, temp_floor_cc, state_new_cc_[lev], geom[lev], density_floor_func);
 	} else {
 		auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
 									     amrex::Real base_density_floor) -> amrex::Real {
 			return densityFloor(x, y, z, base_density_floor);
 		};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, temperature_floor_cc_[lev], state_new_cc_[lev], geom[lev], density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, temp_floor_cc, state_new_cc_[lev], geom[lev], density_floor_func);
 	}
 
 	// sync internal energy and total energy
@@ -2090,6 +2099,11 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		return burn_success_first;
 	}
 
+	// Build the per-cell temperature floor once for this hydro update. Problem specializations
+	// should enforce any local floor via max(tempFloor_, local_floor(...)).
+	amrex::MultiFab temp_floor_cc(ba_cc, dm, 1, 0);
+	FillTemperatureFloorAtLevel(lev, time, state_old_cc_tmp, temp_floor_cc);
+
 	// create temporary multifab for intermediate state
 	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
 	state_inter_cc_.setVal(0); // prevent assert in fillBoundaryConditions when radiation is enabled
@@ -2284,13 +2298,13 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 										  amrex::Real base_density_floor) -> amrex::Real {
 				return density_floor_parser(x, y, z, base_density_floor);
 			};
-			HydroSystem<problem_t>::EnforceLimits(densityFloor_, temperature_floor_cc_[lev], stateNew_cc, geom[lev], density_floor_func);
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, temp_floor_cc, stateNew_cc, geom[lev], density_floor_func);
 		} else {
 			auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
 										     amrex::Real base_density_floor) -> amrex::Real {
 				return densityFloor(x, y, z, base_density_floor);
 			};
-			HydroSystem<problem_t>::EnforceLimits(densityFloor_, temperature_floor_cc_[lev], stateNew_cc, geom[lev], density_floor_func);
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, temp_floor_cc, stateNew_cc, geom[lev], density_floor_func);
 		}
 
 		if (useDualEnergy_ == 1) {
@@ -2408,13 +2422,13 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 										  amrex::Real base_density_floor) -> amrex::Real {
 				return density_floor_parser(x, y, z, base_density_floor);
 			};
-			HydroSystem<problem_t>::EnforceLimits(densityFloor_, temperature_floor_cc_[lev], stateFinal_cc, geom[lev], density_floor_func);
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, temp_floor_cc, stateFinal_cc, geom[lev], density_floor_func);
 		} else {
 			auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
 										     amrex::Real base_density_floor) -> amrex::Real {
 				return densityFloor(x, y, z, base_density_floor);
 			};
-			HydroSystem<problem_t>::EnforceLimits(densityFloor_, temperature_floor_cc_[lev], stateFinal_cc, geom[lev], density_floor_func);
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, temp_floor_cc, stateFinal_cc, geom[lev], density_floor_func);
 		}
 
 		if (useDualEnergy_ == 1) {

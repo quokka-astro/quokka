@@ -535,7 +535,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<amrex::BCRec> BCs_fc_; // on level 0
 	amrex::Vector<amrex::MultiFab> state_old_cc_;
 	amrex::Vector<amrex::MultiFab> state_new_cc_;
-	amrex::Vector<amrex::MultiFab> temperature_floor_cc_;
 	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> state_old_fc_;
 	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> state_new_fc_;
 	amrex::Vector<amrex::MultiFab> max_signal_speed_; // needed to compute CFL timestep
@@ -735,7 +734,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 	dt_.resize(nlevs_max, 1.e100);
 	state_new_cc_.resize(nlevs_max);
 	state_old_cc_.resize(nlevs_max);
-	temperature_floor_cc_.resize(nlevs_max);
 	state_new_fc_.resize(nlevs_max);
 	state_old_fc_.resize(nlevs_max);
 	max_signal_speed_.resize(nlevs_max);
@@ -2337,19 +2335,8 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real tim
 	const int nghost_cc = state_new_cc_[level - 1].nGrow();
 	state_new_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
 	state_old_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
-	temperature_floor_cc_[level].define(ba, dm, 1, 0);
-	temperature_floor_cc_[level].setVal(tempFloor_);
 	FillCoarsePatch(level, time, state_new_cc_[level], 0, ncomp_cc, BCs_cc_, quokka::centering::cc, quokka::direction::na);
 	FillCoarsePatch(level, time, state_old_cc_[level], 0, ncomp_cc, BCs_cc_, quokka::centering::cc, quokka::direction::na); // also necessary
-	{
-		amrex::Vector<amrex::BCRec> temp_floor_bcs(1);
-		if (!BCs_cc_.empty()) {
-			temp_floor_bcs[0] = BCs_cc_[0];
-		}
-		// Temperature-floor data is a scalar field; do not apply hydro custom ext_dir BC callbacks.
-		FillCoarsePatchCellCenteredFromSource(level, time, temperature_floor_cc_[level], temperature_floor_cc_[level - 1], 0, 1, temp_floor_bcs,
-						      true);
-	}
 
 	max_signal_speed_[level].define(ba, dm, 1, nghost_cc);
 	tNew_[level] = time;
@@ -2400,30 +2387,9 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 	const int nghost_cc = state_new_cc_[level].nGrow();
 	amrex::MultiFab int_state_new_cc(ba, dm, ncomp_cc, nghost_cc);
 	amrex::MultiFab int_state_old_cc(ba, dm, ncomp_cc, nghost_cc);
-	amrex::MultiFab int_temperature_floor_cc(ba, dm, 1, 0);
-	int_temperature_floor_cc.setVal(tempFloor_);
 	FillPatch(level, time, int_state_new_cc, 0, ncomp_cc, quokka::centering::cc, quokka::direction::na, FillPatchType::fillpatch_function);
-	{
-		amrex::Vector<amrex::BCRec> temp_floor_bcs(1);
-		if (!BCs_cc_.empty()) {
-			temp_floor_bcs[0] = BCs_cc_[0];
-		}
-		amrex::Vector<amrex::MultiFab *> fine_data{&temperature_floor_cc_[level]};
-		amrex::Vector<amrex::Real> fine_time{tNew_[level]};
-		amrex::Vector<amrex::MultiFab *> coarse_data;
-		amrex::Vector<amrex::Real> coarse_time;
-		quokka::centering cen = quokka::centering::cc;
-		quokka::direction dir = quokka::direction::na;
-		if (level > 0) {
-			coarse_data.push_back(&temperature_floor_cc_[level - 1]);
-			coarse_time.push_back(tNew_[level - 1]);
-		}
-		FillPatchWithData(level, time, int_temperature_floor_cc, coarse_data, coarse_time, fine_data, fine_time, 0, 1, temp_floor_bcs, cen, dir,
-				  FillPatchType::fillpatch_function, InterpHookNone, InterpHookNone, true);
-	}
 	std::swap(int_state_new_cc, state_new_cc_[level]);
 	std::swap(int_state_old_cc, state_old_cc_[level]);
-	std::swap(int_temperature_floor_cc, temperature_floor_cc_[level]);
 
 	amrex::MultiFab max_signal_speed(ba, dm, 1, nghost_cc);
 	std::swap(max_signal_speed, max_signal_speed_[level]);
@@ -2474,7 +2440,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::ClearLevel(int leve
 
 	state_new_cc_[level].clear();
 	state_old_cc_[level].clear();
-	temperature_floor_cc_[level].clear();
 	max_signal_speed_[level].clear();
 
 	flux_reg_[level].reset(nullptr);
@@ -3060,8 +3025,6 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 	const int nghost_cc = nghost_cc_;
 	state_new_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
 	state_old_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
-	temperature_floor_cc_[level].define(ba, dm, 1, 0);
-	temperature_floor_cc_[level].setVal(tempFloor_);
 	max_signal_speed_[level].define(ba, dm, 1, nghost_cc);
 
 	tNew_[level] = time;
@@ -4422,7 +4385,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 	// write the cell-centred MultiFab data to, e.g., chk0000010/Level_0/
 	for (int lev = 0; lev <= finest_level; ++lev) {
 		amrex::VisMF::Write(state_new_cc_[lev], amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_", "Cell"));
-		amrex::VisMF::Write(temperature_floor_cc_[lev], amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_", "TemperatureFloor"));
 		amrex::ParallelDescriptor::Barrier(); // needed to avoid overwhelming Lustre I/O on Frontier
 	}
 
@@ -4730,25 +4692,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::loadMultiFabData(co
 		interpolateMultiFabFromRestart(state_new_cc_[lev], tmp, context, coarse_geom, geom[lev], BCs_cc_);
 		AMREX_ALWAYS_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp())); // check valid cells
 
-		// temperature floor (optional for backward compatibility with old checkpoints)
-		const std::string temp_floor_path = amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", "TemperatureFloor");
-		const std::string temp_floor_header_path = temp_floor_path + "_H";
-		std::error_code ec;
-		if (std::filesystem::exists(temp_floor_header_path, ec) && !ec) {
-			amrex::MultiFab tmp_temp_floor;
-			amrex::VisMF::Read(tmp_temp_floor, temp_floor_path);
-			amrex::Vector<amrex::BCRec> temp_floor_bcs(1);
-			if (!BCs_cc_.empty()) {
-				temp_floor_bcs[0] = BCs_cc_[0];
-			}
-			interpolateMultiFabFromRestart(temperature_floor_cc_[lev], tmp_temp_floor, context, coarse_geom, geom[lev], temp_floor_bcs, true);
-		} else {
-			temperature_floor_cc_[lev].setVal(tempFloor_);
-			if (amrex::ParallelDescriptor::IOProcessor() && lev == 0) {
-				amrex::Print() << "WARNING: Checkpoint is missing TemperatureFloor MultiFab; using scalar temperature_floor for restart.\n";
-			}
-		}
-
 		// face-centred data
 		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 			interpolateFaceMultiFabFromRestart(lev, context, restart_geom, restart_fc);
@@ -4822,8 +4765,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		const int nghost_cc = nghost_cc_;
 		state_old_cc_[lev].define(grids[lev], dmap[lev], ncomp_cc, nghost_cc);
 		state_new_cc_[lev].define(grids[lev], dmap[lev], ncomp_cc, nghost_cc);
-		temperature_floor_cc_[lev].define(grids[lev], dmap[lev], 1, 0);
-		temperature_floor_cc_[lev].setVal(tempFloor_);
 		max_signal_speed_[lev].define(ba, dm, 1, nghost_cc);
 
 		if (lev > 0 && (do_reflux != 0)) {
