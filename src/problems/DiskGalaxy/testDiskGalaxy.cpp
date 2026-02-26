@@ -18,9 +18,9 @@
 #include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_Parser.H"
-#include "AMReX_Reduce.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
+#include "AMReX_Reduce.H"
 #include "AMReX_iMultiFab.H"
 
 #include "QuokkaSimulation.hpp"
@@ -797,42 +797,42 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 			    amrex::TypeList<amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum>{},
 			    amrex::TypeList<amrex::Real, amrex::Real, amrex::Real>{}, state_new_cc_[lev], amrex::IntVect(0),
 			    [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real> {
-				if (mask[bx](i, j, k) == 0) {
-					return {0.0, 0.0, 0.0};
-				}
+				    if (mask[bx](i, j, k) == 0) {
+					    return {0.0, 0.0, 0.0};
+				    }
 
-				const amrex::Real x0 = prob_lo[0] + static_cast<amrex::Real>(i) * dx[0];
-				const amrex::Real y0 = prob_lo[1] + static_cast<amrex::Real>(j) * dx[1];
-				const amrex::Real z0 = prob_lo[2] + static_cast<amrex::Real>(k) * dx[2];
-				const amrex::Real x1 = x0 + dx[0];
-				const amrex::Real y1 = y0 + dx[1];
-				const amrex::Real z1 = z0 + dx[2];
+				    const amrex::Real x0 = prob_lo[0] + static_cast<amrex::Real>(i) * dx[0];
+				    const amrex::Real y0 = prob_lo[1] + static_cast<amrex::Real>(j) * dx[1];
+				    const amrex::Real z0 = prob_lo[2] + static_cast<amrex::Real>(k) * dx[2];
+				    const amrex::Real x1 = x0 + dx[0];
+				    const amrex::Real y1 = y0 + dx[1];
+				    const amrex::Real z1 = z0 + dx[2];
 
-				const amrex::Real x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
-				const amrex::Real y = prob_lo[1] + (static_cast<amrex::Real>(j) + 0.5) * dx[1];
-				const amrex::Real z = prob_lo[2] + (static_cast<amrex::Real>(k) + 0.5) * dx[2];
-				const amrex::Real r = std::sqrt(x * x + y * y + z * z);
+				    const amrex::Real x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
+				    const amrex::Real y = prob_lo[1] + (static_cast<amrex::Real>(j) + 0.5) * dx[1];
+				    const amrex::Real z = prob_lo[2] + (static_cast<amrex::Real>(k) + 0.5) * dx[2];
+				    const amrex::Real r = std::sqrt(x * x + y * y + z * z);
 
-				const amrex::Real rho = state[bx](i, j, k, HydroSystem<DiskGalaxy>::density_index);
-				if (r <= 0.0 || rho <= 0.0) {
-					return {0.0, 0.0, 0.0};
-				}
+				    const amrex::Real rho = state[bx](i, j, k, HydroSystem<DiskGalaxy>::density_index);
+				    if (r <= 0.0 || rho <= 0.0) {
+					    return {0.0, 0.0, 0.0};
+				    }
 
-				const amrex::Real momx = state[bx](i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index);
-				const amrex::Real momy = state[bx](i, j, k, HydroSystem<DiskGalaxy>::x2Momentum_index);
-				const amrex::Real momz = state[bx](i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index);
-				const amrex::Real vr = (x * momx + y * momy + z * momz) / (rho * r);
+				    const amrex::Real momx = state[bx](i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index);
+				    const amrex::Real momy = state[bx](i, j, k, HydroSystem<DiskGalaxy>::x2Momentum_index);
+				    const amrex::Real momz = state[bx](i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index);
+				    const amrex::Real vr = (x * momx + y * momy + z * momz) / (rho * r);
 
-				const amrex::Real mass_flux_density = rho * vr;
-				const amrex::Real energy_density = state[bx](i, j, k, HydroSystem<DiskGalaxy>::energy_index);
-				const amrex::Real scalar_density = state[bx](i, j, k, HydroSystem<DiskGalaxy>::scalar0_index);
-				const amrex::Real area = quokka::math::sphericalSectionAreaInCell(flux_sphere_radius, x0, x1, y0, y1, z0, z1);
-				if (area <= 0.0) {
-					return {0.0, 0.0, 0.0};
-				}
+				    const amrex::Real mass_flux_density = rho * vr;
+				    const amrex::Real energy_density = state[bx](i, j, k, HydroSystem<DiskGalaxy>::energy_index);
+				    const amrex::Real scalar_density = state[bx](i, j, k, HydroSystem<DiskGalaxy>::scalar0_index);
+				    const amrex::Real area = quokka::math::sphericalSectionAreaInCell(flux_sphere_radius, x0, x1, y0, y1, z0, z1);
+				    if (area <= 0.0) {
+					    return {0.0, 0.0, 0.0};
+				    }
 
-				return {mass_flux_density * area, (energy_density * vr) * area, (scalar_density * vr) * area};
-			});
+				    return {mass_flux_density * area, (energy_density * vr) * area, (scalar_density * vr) * area};
+			    });
 
 			mass_flux_sphere += amrex::get<0>(level_flux);
 			energy_flux_sphere += amrex::get<1>(level_flux);
