@@ -532,6 +532,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<amrex::BCRec> BCs_fc_; // on level 0
 	amrex::Vector<amrex::MultiFab> state_old_cc_;
 	amrex::Vector<amrex::MultiFab> state_new_cc_;
+	amrex::Vector<amrex::MultiFab> temperature_floor_cc_;
 	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> state_old_fc_;
 	amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> state_new_fc_;
 	amrex::Vector<amrex::MultiFab> max_signal_speed_; // needed to compute CFL timestep
@@ -731,6 +732,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 	dt_.resize(nlevs_max, 1.e100);
 	state_new_cc_.resize(nlevs_max);
 	state_old_cc_.resize(nlevs_max);
+	temperature_floor_cc_.resize(nlevs_max);
 	state_new_fc_.resize(nlevs_max);
 	state_old_fc_.resize(nlevs_max);
 	max_signal_speed_.resize(nlevs_max);
@@ -2332,6 +2334,8 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real tim
 	const int nghost_cc = state_new_cc_[level - 1].nGrow();
 	state_new_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
 	state_old_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
+	temperature_floor_cc_[level].define(ba, dm, 1, 0);
+	temperature_floor_cc_[level].setVal(tempFloor_);
 	FillCoarsePatch(level, time, state_new_cc_[level], 0, ncomp_cc, BCs_cc_, quokka::centering::cc, quokka::direction::na);
 	FillCoarsePatch(level, time, state_old_cc_[level], 0, ncomp_cc, BCs_cc_, quokka::centering::cc, quokka::direction::na); // also necessary
 
@@ -2384,9 +2388,12 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 	const int nghost_cc = state_new_cc_[level].nGrow();
 	amrex::MultiFab int_state_new_cc(ba, dm, ncomp_cc, nghost_cc);
 	amrex::MultiFab int_state_old_cc(ba, dm, ncomp_cc, nghost_cc);
+	amrex::MultiFab int_temperature_floor_cc(ba, dm, 1, 0);
+	int_temperature_floor_cc.setVal(tempFloor_);
 	FillPatch(level, time, int_state_new_cc, 0, ncomp_cc, quokka::centering::cc, quokka::direction::na, FillPatchType::fillpatch_function);
 	std::swap(int_state_new_cc, state_new_cc_[level]);
 	std::swap(int_state_old_cc, state_old_cc_[level]);
+	std::swap(int_temperature_floor_cc, temperature_floor_cc_[level]);
 
 	amrex::MultiFab max_signal_speed(ba, dm, 1, nghost_cc);
 	std::swap(max_signal_speed, max_signal_speed_[level]);
@@ -2437,6 +2444,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ClearLevel(int leve
 
 	state_new_cc_[level].clear();
 	state_old_cc_[level].clear();
+	temperature_floor_cc_[level].clear();
 	max_signal_speed_[level].clear();
 
 	flux_reg_[level].reset(nullptr);
@@ -3022,6 +3030,8 @@ void AMRSimulation<problem_t>::MakeNewLevelFromScratch(int level, amrex::Real ti
 	const int nghost_cc = nghost_cc_;
 	state_new_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
 	state_old_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
+	temperature_floor_cc_[level].define(ba, dm, 1, 0);
+	temperature_floor_cc_[level].setVal(tempFloor_);
 	max_signal_speed_[level].define(ba, dm, 1, nghost_cc);
 
 	tNew_[level] = time;
@@ -4710,6 +4720,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		const int nghost_cc = nghost_cc_;
 		state_old_cc_[lev].define(grids[lev], dmap[lev], ncomp_cc, nghost_cc);
 		state_new_cc_[lev].define(grids[lev], dmap[lev], ncomp_cc, nghost_cc);
+		temperature_floor_cc_[lev].define(grids[lev], dmap[lev], 1, 0);
+		temperature_floor_cc_[lev].setVal(tempFloor_);
 		max_signal_speed_[lev].define(ba, dm, 1, nghost_cc);
 
 		if (lev > 0 && (do_reflux != 0)) {
