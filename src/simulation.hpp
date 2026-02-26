@@ -358,8 +358,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	auto getAmrInterpolaterCellCentered() -> amrex::MFInterpolater *;
 	auto getAmrInterpolaterFaceCentered() -> amrex::Interpolater *;
-	void FillCoarsePatchCellCenteredFromSource(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::MultiFab const &coarse_mf, int icomp,
-						   int ncomp, amrex::Vector<amrex::BCRec> &BCs, bool use_no_op_physbc = false);
+	void FillCoarsePatchCellCenteredFromSource(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::MultiFab const &coarse_mf, int icomp, int ncomp,
+						   amrex::Vector<amrex::BCRec> &BCs, bool use_no_op_physbc = false);
 	void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs, quokka::centering cen,
 			     quokka::direction dir);
 	void FillCoarsePatchFaceArray(int lev, amrex::Real time, amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &mf_array, int icomp, int ncomp,
@@ -2347,8 +2347,7 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real tim
 			temp_floor_bcs[0] = BCs_cc_[0];
 		}
 		// Temperature-floor data is a scalar field; do not apply hydro custom ext_dir BC callbacks.
-		FillCoarsePatchCellCenteredFromSource(level, time, temperature_floor_cc_[level], temperature_floor_cc_[level - 1], 0, 1, temp_floor_bcs,
-						      true);
+		FillCoarsePatchCellCenteredFromSource(level, time, temperature_floor_cc_[level], temperature_floor_cc_[level - 1], 0, 1, temp_floor_bcs, true);
 	}
 
 	max_signal_speed_[level].define(ba, dm, 1, nghost_cc);
@@ -3282,9 +3281,8 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 // Fill an entire multifab by interpolating from the coarser level
 // this comes into play when a new level of refinement appears
 template <typename problem_t>
-void AMRSimulation<problem_t>::FillCoarsePatchCellCenteredFromSource(int lev, amrex::Real time, amrex::MultiFab &mf,
-								     amrex::MultiFab const &coarse_mf, int icomp, int ncomp,
-								     amrex::Vector<amrex::BCRec> &BCs, bool use_no_op_physbc)
+void AMRSimulation<problem_t>::FillCoarsePatchCellCenteredFromSource(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::MultiFab const &coarse_mf,
+								     int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs, bool use_no_op_physbc)
 {
 	BL_PROFILE("AMRSimulation::FillCoarsePatchCellCenteredFromSource()"); // NOLINT(misc-const-correctness)
 
