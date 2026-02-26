@@ -358,8 +358,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	auto getAmrInterpolaterCellCentered() -> amrex::MFInterpolater *;
 	auto getAmrInterpolaterFaceCentered() -> amrex::Interpolater *;
-	void FillCoarsePatchCellCenteredFromSource(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::MultiFab const &coarse_mf, int icomp,
-						   int ncomp, amrex::Vector<amrex::BCRec> &BCs, bool use_no_op_physbc = false);
+	void FillCoarsePatchCellCenteredFromSource(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::MultiFab const &coarse_mf, int icomp, int ncomp,
+						   amrex::Vector<amrex::BCRec> &BCs, bool use_no_op_physbc = false);
 	void FillCoarsePatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs, quokka::centering cen,
 			     quokka::direction dir);
 	void FillCoarsePatchFaceArray(int lev, amrex::Real time, amrex::Array<amrex::MultiFab *, AMREX_SPACEDIM> &mf_array, int icomp, int ncomp,
@@ -2335,8 +2335,18 @@ void AMRSimulation<problem_t>::MakeNewLevelFromCoarse(int level, amrex::Real tim
 	const int nghost_cc = state_new_cc_[level - 1].nGrow();
 	state_new_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
 	state_old_cc_[level].define(ba, dm, ncomp_cc, nghost_cc);
+	temperature_floor_cc_[level].define(ba, dm, 1, 0);
+	temperature_floor_cc_[level].setVal(tempFloor_);
 	FillCoarsePatch(level, time, state_new_cc_[level], 0, ncomp_cc, BCs_cc_, quokka::centering::cc, quokka::direction::na);
 	FillCoarsePatch(level, time, state_old_cc_[level], 0, ncomp_cc, BCs_cc_, quokka::centering::cc, quokka::direction::na); // also necessary
+	{
+		amrex::Vector<amrex::BCRec> temp_floor_bcs(1);
+		if (!BCs_cc_.empty()) {
+			temp_floor_bcs[0] = BCs_cc_[0];
+		}
+		// Temperature-floor data is a scalar field; do not apply hydro custom ext_dir BC callbacks.
+		FillCoarsePatchCellCenteredFromSource(level, time, temperature_floor_cc_[level], temperature_floor_cc_[level - 1], 0, 1, temp_floor_bcs, true);
+	}
 
 	max_signal_speed_[level].define(ba, dm, 1, nghost_cc);
 	tNew_[level] = time;
@@ -3245,9 +3255,8 @@ void AMRSimulation<problem_t>::FillPatchWithData(int lev, amrex::Real time, amre
 // Fill an entire multifab by interpolating from the coarser level
 // this comes into play when a new level of refinement appears
 template <typename problem_t>
-void AMRSimulation<problem_t>::FillCoarsePatchCellCenteredFromSource(int lev, amrex::Real time, amrex::MultiFab &mf,
-								     amrex::MultiFab const &coarse_mf, int icomp, int ncomp,
-								     amrex::Vector<amrex::BCRec> &BCs, bool use_no_op_physbc)
+void AMRSimulation<problem_t>::FillCoarsePatchCellCenteredFromSource(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::MultiFab const &coarse_mf,
+								     int icomp, int ncomp, amrex::Vector<amrex::BCRec> &BCs, bool use_no_op_physbc)
 {
 	BL_PROFILE("AMRSimulation::FillCoarsePatchCellCenteredFromSource()"); // NOLINT(misc-const-correctness)
 
