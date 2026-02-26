@@ -695,7 +695,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 			// directly from the HDF5 file, so users only need to provide the file path.
 			auto infer_stromgren_qh0_metadata = [](std::string const &file_path) -> std::tuple<std::string, bool, int> {
 				hid_t const h5_error = -1;
-				hid_t file_id = H5Fopen(file_path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+				hid_t const file_id = H5Fopen(file_path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file_id != h5_error, ("Failed to open HDF5 file: " + file_path).c_str());
 
 				// Infer whether coordinates are stored as fast_log_* datasets.
@@ -715,14 +715,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 
 				// Infer axis order by matching dataset dimensions against the mass/age grid lengths.
 				auto read_1d_len = [&](std::string const &path) -> hsize_t {
-					hid_t dset_id = H5Dopen2(file_id, path.c_str(), H5P_DEFAULT);
+					hid_t const dset_id = H5Dopen2(file_id, path.c_str(), H5P_DEFAULT);
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dset_id != h5_error, ("Failed to open HDF5 dataset: " + path).c_str());
-					hid_t space_id = H5Dget_space(dset_id);
+					hid_t const space_id = H5Dget_space(dset_id);
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(space_id != h5_error, ("Failed to get dataspace for HDF5 dataset: " + path).c_str());
 					int const ndims = H5Sget_simple_extent_ndims(space_id);
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ndims == 1, ("Expected 1D grid dataset: " + path).c_str());
-					hsize_t dims[1] = {0};
-					H5Sget_simple_extent_dims(space_id, dims, nullptr);
+					std::array<hsize_t, 1> dims = {0};
+					H5Sget_simple_extent_dims(space_id, dims.data(), nullptr);
 					H5Sclose(space_id);
 					H5Dclose(dset_id);
 					return dims[0];
@@ -733,15 +733,15 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 				hsize_t const n_mass = read_1d_len(mass_grid);
 				hsize_t const n_age = read_1d_len(age_grid);
 
-				hid_t qh0_dset_id = H5Dopen2(file_id, inferred_dataset.c_str(), H5P_DEFAULT);
+				hid_t const qh0_dset_id = H5Dopen2(file_id, inferred_dataset.c_str(), H5P_DEFAULT);
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(qh0_dset_id != h5_error, ("Failed to open HDF5 dataset: " + inferred_dataset).c_str());
-				hid_t qh0_space_id = H5Dget_space(qh0_dset_id);
+				hid_t const qh0_space_id = H5Dget_space(qh0_dset_id);
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(qh0_space_id != h5_error,
 								 ("Failed to get dataspace for HDF5 dataset: " + inferred_dataset).c_str());
 				int const qh0_ndims = H5Sget_simple_extent_ndims(qh0_space_id);
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(qh0_ndims == 2, "QH0 dataset must be 2D for DataTable<2,1>.");
-				hsize_t qh0_dims[2] = {0, 0};
-				H5Sget_simple_extent_dims(qh0_space_id, qh0_dims, nullptr);
+				std::array<hsize_t, 2> qh0_dims = {0, 0};
+				H5Sget_simple_extent_dims(qh0_space_id, qh0_dims.data(), nullptr);
 				H5Sclose(qh0_space_id);
 				H5Dclose(qh0_dset_id);
 				H5Fclose(file_id);
