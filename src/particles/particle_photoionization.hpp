@@ -25,25 +25,23 @@ namespace quokka::photoionization
 
 #if AMREX_SPACEDIM == 3
 template <typename problem_t, quokka::OutOfBounds oob_policy>
-void FillTemperatureFloorFromStromgrenVolumes(quokka::StochasticStellarPopParticleContainer<problem_t> *stellar_particles, int lev, amrex::Real time,
-					      amrex::BoxArray const &ba_lev, amrex::DistributionMapping const &dm_lev, amrex::Geometry const &geom_lev,
-					      amrex::MultiFab const &state_cc, amrex::MultiFab &temp_floor_cc,
-					      quokka::DataTableGpuConst<2, 1, oob_policy> const &qh0_table,
-					      amrex::Real const mass_to_table_units = 1.0 / C::M_solar, amrex::Real const age_to_table_units = 1.0 / 3.15576e7,
-					      bool const table_axes_are_mass_age = true, amrex::Real const alphaB = 2.6e-13,
-					      amrex::Real const mean_particle_mass_mu = 1.27, amrex::Real const mH = 1.67e-24,
-					      amrex::Real const ionized_temperature = 1.0e4, amrex::Real const photon_luminosity_tolerance = 1.0,
-					      int const max_pseudo_iters = 20, int const log_every = 0, amrex::Real const init_rsrc = 3.0e17,
-					      amrex::Real const residual_tol = 1.0e-3)
+void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContainer<problem_t> *stellar_particles, int lev, amrex::Real time,
+				    amrex::BoxArray const &ba_lev, amrex::DistributionMapping const &dm_lev, amrex::Geometry const &geom_lev,
+				    amrex::MultiFab const &state_cc, amrex::MultiFab &n_gamma_cc,
+				    quokka::DataTableGpuConst<2, 1, oob_policy> const &qh0_table,
+				    amrex::Real const mass_to_table_units = 1.0 / C::M_solar, amrex::Real const age_to_table_units = 1.0 / 3.15576e7,
+				    bool const table_axes_are_mass_age = true, amrex::Real const alphaB = 2.6e-13,
+				    amrex::Real const mean_particle_mass_mu = 1.27, amrex::Real const mH = 1.67e-24, int const max_pseudo_iters = 20,
+				    int const log_every = 0, amrex::Real const init_rsrc = 3.0e17, amrex::Real const residual_tol = 1.0e-3)
 {
 	if (stellar_particles == nullptr) {
 		return;
 	}
 
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state_cc.boxArray() == temp_floor_cc.boxArray(), "state_cc and temp_floor_cc must have the same BoxArray.");
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state_cc.DistributionMap() == temp_floor_cc.DistributionMap(),
-					 "state_cc and temp_floor_cc must have the same DistributionMap.");
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(temp_floor_cc.nComp() >= 1, "temp_floor_cc must have at least one component.");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state_cc.boxArray() == n_gamma_cc.boxArray(), "state_cc and n_gamma_cc must have the same BoxArray.");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(state_cc.DistributionMap() == n_gamma_cc.DistributionMap(),
+					 "state_cc and n_gamma_cc must have the same DistributionMap.");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n_gamma_cc.nComp() >= 1, "n_gamma_cc must have at least one component.");
 
 	auto const dx = geom_lev.CellSizeArray();
 	auto const plo = geom_lev.ProbLoArray();
@@ -336,7 +334,6 @@ void FillTemperatureFloorFromStromgrenVolumes(quokka::StochasticStellarPopPartic
 		});
 	};
 
-	amrex::ignore_unused(photon_luminosity_tolerance);
 	amrex::Real const source_scale = amrex::max(source_q.norm0(0, 0, false) / cell_volume, 1.0e-60);
 
 	int iter = 0;
@@ -413,22 +410,10 @@ void FillTemperatureFloorFromStromgrenVolumes(quokka::StochasticStellarPopPartic
 		amrex::MultiFab::Copy(phi, phi_new, 0, 0, 1, 1);
 	}
 
-	auto temp_floor = temp_floor_cc.arrays();
 	auto const phi_arr = phi.const_arrays();
-	amrex::ParallelFor(temp_floor_cc, [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
-		amrex::Real const rho = state[nbx](i, j, k, HydroSystem<problem_t>::density_index);
-		amrex::Real const n = (rho > 0.0) ? (rho / n_to_rho) : 0.0;
-		amrex::Real const ng = amrex::max(phi_arr[nbx](i, j, k, 0), 0.0);
-		amrex::Real frac = 0.0;
-		if ((n > 0.0) && (ng > 0.0)) {
-			amrex::Real const a = alphaB * n;
-			amrex::Real const b = C::c_light * sigma_HI * ng;
-			amrex::Real const disc = b * b + 4.0 * a * b;
-			frac = (-b + std::sqrt(disc)) / (2.0 * a);
-			frac = amrex::min<amrex::Real>(1.0, amrex::max<amrex::Real>(0.0, frac));
-		}
-		amrex::Real const heated_temp = ionized_temperature * frac;
-		temp_floor[nbx](i, j, k, 0) = amrex::max(temp_floor[nbx](i, j, k, 0), heated_temp);
+	auto n_gamma = n_gamma_cc.arrays();
+	amrex::ParallelFor(n_gamma_cc, [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+		n_gamma[nbx](i, j, k, 0) = amrex::max(phi_arr[nbx](i, j, k, 0), 0.0);
 	});
 }
 #endif

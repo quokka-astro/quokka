@@ -158,7 +158,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	AMREX_GPU_DEVICE static auto GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec) -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>;
 
 	template <typename DensityFloorFunc>
-	static void EnforceLimits(amrex::Real densityFloor, amrex::MultiFab const &tempFloor_mf, amrex::MultiFab &state_mf, amrex::Geometry const &geom,
+	static void EnforceLimits(amrex::Real densityFloor, amrex::Real tempFloor, amrex::MultiFab &state_mf, amrex::Geometry const &geom,
 				  DensityFloorFunc const &density_floor_func);
 
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf,
@@ -998,11 +998,10 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 // floors and ceilings which can be set in the param file
 template <typename problem_t>
 template <typename DensityFloorFunc>
-void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::MultiFab const &tempFloor_mf, amrex::MultiFab &state_mf,
+void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const tempFloor, amrex::MultiFab &state_mf,
 					   amrex::Geometry const &geom, DensityFloorFunc const &density_floor_func)
 {
 	auto state = state_mf.arrays();
-	auto const tempFloor = tempFloor_mf.const_arrays();
 	auto const prob_lo = geom.ProbLoArray();
 	auto const dx = geom.CellSizeArray();
 
@@ -1075,7 +1074,6 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 
 		// Enforce temperature floor
 		if ((rho_new > std::numeric_limits<amrex::Real>::min()) && !HydroSystem<problem_t>::is_eos_isothermal()) {
-			amrex::Real const localTempFloor = tempFloor[bx](i, j, k, 0);
 			amrex::Real const vx1 = state[bx](i, j, k, x1Momentum_index) / rho_new;
 			amrex::Real const vx2 = state[bx](i, j, k, x2Momentum_index) / rho_new;
 			amrex::Real const vx3 = state[bx](i, j, k, x3Momentum_index) / rho_new;
@@ -1086,8 +1084,8 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			amrex::Real const Etot = state[bx](i, j, k, energy_index);
 			amrex::Real const primTemp = quokka::EOS<problem_t>::ComputeTgasFromEint(rho_new, (Etot - Ekin), massScalars);
 
-			if (primTemp < localTempFloor) {
-				amrex::Real const prim_eint = quokka::EOS<problem_t>::ComputeEintFromTgas(rho_new, localTempFloor, massScalars);
+			if (primTemp < tempFloor) {
+				amrex::Real const prim_eint = quokka::EOS<problem_t>::ComputeEintFromTgas(rho_new, tempFloor, massScalars);
 				state[bx](i, j, k, energy_index) = Ekin + prim_eint;
 			}
 
@@ -1095,8 +1093,8 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			amrex::Real const auxEint = state[bx](i, j, k, internalEnergy_index);
 			amrex::Real const auxTemp = quokka::EOS<problem_t>::ComputeTgasFromEint(rho_new, auxEint, massScalars);
 
-			if (auxTemp < localTempFloor) {
-				amrex::Real const new_Eint = quokka::EOS<problem_t>::ComputeEintFromTgas(rho_new, localTempFloor, massScalars);
+			if (auxTemp < tempFloor) {
+				amrex::Real const new_Eint = quokka::EOS<problem_t>::ComputeEintFromTgas(rho_new, tempFloor, massScalars);
 				state[bx](i, j, k, internalEnergy_index) = new_Eint;
 				// total energy should NOT be updated here
 			}

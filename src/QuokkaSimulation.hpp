@@ -159,7 +159,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 							      // override real star formation rate from the simulation if non-negative
 	quokka::PeHeatingTables<> peHeatingTables_;
 
-	// Stochastic stellar population photoionization temperature floor (Strömgren approximation)
+	// Stochastic stellar population photoionization heating (Strömgren approximation)
 	bool use_stochastic_stellar_pop_stromgren_tempfloor_ = false;
 	std::string stochastic_stellar_pop_qh0_table_hdf5_file_;
 	std::string stochastic_stellar_pop_qh0_table_dataset_ = "/data/QH0";
@@ -316,7 +316,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	// fix-up states
 	void FixupState(int level) override;
-	void FillTemperatureFloorAtLevel(int lev, amrex::Real time, amrex::MultiFab const &state_cc, amrex::MultiFab &temp_floor_cc);
+	void FillNGammaFromStromgrenAtLevel(int lev, amrex::Real time, amrex::MultiFab const &state_cc, amrex::MultiFab &n_gamma_cc);
 
 	// implement FillPatch function
 	void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, quokka::centering cen, quokka::direction dir,
@@ -357,7 +357,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
 	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int lev, amrex::Real time,
-					      amrex::Real dt_lev, amrex::MultiFab const *temp_floor_cc = nullptr) -> bool;
+					      amrex::Real dt_lev, amrex::MultiFab const *n_gamma_cc = nullptr) -> bool;
 
 	auto computePhotoelectricHeatingRate(Real current_time) -> amrex::Real;
 
@@ -1024,8 +1024,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computePhotoelec
 
 template <typename problem_t>
 auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int lev,
-									   amrex::Real time, amrex::Real dt,
-									   amrex::MultiFab const *temp_floor_cc) -> bool
+									   amrex::Real time, amrex::Real dt, amrex::MultiFab const *n_gamma_cc) -> bool
 {
 	// start by assuming cooling integrator is successful.
 	bool cool_success = true;
@@ -1035,8 +1034,9 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 		}
 		if (coolingTableType_ == "resampled") {
 			const Real const_heating_rate_per_H = computePhotoelectricHeatingRate(time); // unit: erg/s/H
-			if (temp_floor_cc != nullptr) {
-				cool_success = quokka::ResampledCooling::computeCooling<problem_t>(state, dt, resampledTables_, *temp_floor_cc, const_heating_rate_per_H);
+			if (n_gamma_cc != nullptr) {
+				cool_success =
+				    quokka::ResampledCooling::computeCooling<problem_t>(state, dt, resampledTables_, tempFloor_, *n_gamma_cc, const_heating_rate_per_H);
 			} else {
 				cool_success = quokka::ResampledCooling::computeCooling<problem_t>(state, dt, resampledTables_, tempFloor_, const_heating_rate_per_H);
 			}
@@ -1843,19 +1843,19 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::postInitializati
 }
 
 template <typename problem_t>
-void QuokkaSimulation<problem_t>::FillTemperatureFloorAtLevel(int lev, amrex::Real time, amrex::MultiFab const &state_cc, amrex::MultiFab &temp_floor_cc)
+void QuokkaSimulation<problem_t>::FillNGammaFromStromgrenAtLevel(int lev, amrex::Real time, amrex::MultiFab const &state_cc, amrex::MultiFab &n_gamma_cc)
 {
-	temp_floor_cc.setVal(tempFloor_);
+	n_gamma_cc.setVal(0.0);
 
 #if AMREX_SPACEDIM == 3
 	if (use_stochastic_stellar_pop_stromgren_tempfloor_) {
 		auto const qh0_table = stochasticStellarPopQH0Table_.const_tables();
-			quokka::photoionization::FillTemperatureFloorFromStromgrenVolumes<problem_t>(
-			    this->StochasticStellarPopParticles.get(), lev, time, grids[lev], dmap[lev], geom[lev], state_cc, temp_floor_cc, qh0_table,
-			    1.0 / C::M_solar, 1.0 / 3.15576e7, stochastic_stellar_pop_qh0_table_axes_are_mass_age_, 2.6e-13, 1.27, 1.67e-24, 1.0e4, 1.0,
-			    stochastic_stellar_pop_stromgren_max_pseudosteps_, stochastic_stellar_pop_stromgren_log_every_,
-			    stochastic_stellar_pop_stromgren_init_rsrc_, stochastic_stellar_pop_stromgren_residual_tol_);
-		}
+		quokka::photoionization::FillNGammaFromStromgrenVolumes<problem_t>(
+		    this->StochasticStellarPopParticles.get(), lev, time, grids[lev], dmap[lev], geom[lev], state_cc, n_gamma_cc, qh0_table,
+		    1.0 / C::M_solar, 1.0 / 3.15576e7, stochastic_stellar_pop_qh0_table_axes_are_mass_age_, 2.6e-13, 1.27, 1.67e-24,
+		    stochastic_stellar_pop_stromgren_max_pseudosteps_, stochastic_stellar_pop_stromgren_log_every_,
+		    stochastic_stellar_pop_stromgren_init_rsrc_, stochastic_stellar_pop_stromgren_residual_tol_);
+	}
 #else
 	amrex::ignore_unused(lev, time, state_cc);
 #endif
@@ -1866,8 +1866,6 @@ void QuokkaSimulation<problem_t>::FillTemperatureFloorAtLevel(int lev, amrex::Re
 template <typename problem_t> void QuokkaSimulation<problem_t>::FixupState(int lev)
 {
 	const BL_PROFILE("QuokkaSimulation::FixupState()");
-	amrex::MultiFab temp_floor_cc(grids[lev], dmap[lev], 1, 0);
-	FillTemperatureFloorAtLevel(lev, tNew_[lev], state_new_cc_[lev], temp_floor_cc);
 
 	// fix hydro state
 	if (this->useDensityFloorParser_) {
@@ -1876,13 +1874,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::FixupState(int l
 									  amrex::Real base_density_floor) -> amrex::Real {
 			return density_floor_parser(x, y, z, base_density_floor);
 		};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, temp_floor_cc, state_new_cc_[lev], geom[lev], density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev], geom[lev], density_floor_func);
 	} else {
 		auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
 									     amrex::Real base_density_floor) -> amrex::Real {
 			return densityFloor(x, y, z, base_density_floor);
 		};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, temp_floor_cc, state_new_cc_[lev], geom[lev], density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev], geom[lev], density_floor_func);
 	}
 
 	// sync internal energy and total energy
@@ -2191,21 +2189,16 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	auto dm = dmap[lev];
 	auto dx = geom[lev].CellSizeArray();
 
-	// Build a local floor field for source terms and hydro limit enforcement.
-	amrex::MultiFab temp_floor_cc(ba_cc, dm, 1, 0);
-	FillTemperatureFloorAtLevel(lev, time, state_old_cc_tmp, temp_floor_cc);
+	amrex::MultiFab n_gamma_cc(ba_cc, dm, 1, 0);
+	FillNGammaFromStromgrenAtLevel(lev, time, state_old_cc_tmp, n_gamma_cc);
 
 	// do Strang split source terms (first half-step)
-	auto burn_success_first = addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, state_old_fc_tmp, lev, time, 0.5 * dt_lev, &temp_floor_cc);
+	auto burn_success_first = addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, state_old_fc_tmp, lev, time, 0.5 * dt_lev, &n_gamma_cc);
 
 	// check if reactions failed for source terms. If it failed, return false.
 	if (!burn_success_first) {
 		return burn_success_first;
 	}
-
-	// Build the per-cell temperature floor once for this hydro update. Problem specializations
-	// should enforce any local floor via max(tempFloor_, local_floor(...)).
-	FillTemperatureFloorAtLevel(lev, time, state_old_cc_tmp, temp_floor_cc);
 
 	// create temporary multifab for intermediate state
 	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
@@ -2401,13 +2394,13 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 										  amrex::Real base_density_floor) -> amrex::Real {
 				return density_floor_parser(x, y, z, base_density_floor);
 			};
-			HydroSystem<problem_t>::EnforceLimits(densityFloor_, temp_floor_cc, stateNew_cc, geom[lev], density_floor_func);
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew_cc, geom[lev], density_floor_func);
 		} else {
 			auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
 										     amrex::Real base_density_floor) -> amrex::Real {
 				return densityFloor(x, y, z, base_density_floor);
 			};
-			HydroSystem<problem_t>::EnforceLimits(densityFloor_, temp_floor_cc, stateNew_cc, geom[lev], density_floor_func);
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew_cc, geom[lev], density_floor_func);
 		}
 
 		if (useDualEnergy_ == 1) {
@@ -2525,13 +2518,13 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 										  amrex::Real base_density_floor) -> amrex::Real {
 				return density_floor_parser(x, y, z, base_density_floor);
 			};
-			HydroSystem<problem_t>::EnforceLimits(densityFloor_, temp_floor_cc, stateFinal_cc, geom[lev], density_floor_func);
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal_cc, geom[lev], density_floor_func);
 		} else {
 			auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
 										     amrex::Real base_density_floor) -> amrex::Real {
 				return densityFloor(x, y, z, base_density_floor);
 			};
-			HydroSystem<problem_t>::EnforceLimits(densityFloor_, temp_floor_cc, stateFinal_cc, geom[lev], density_floor_func);
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal_cc, geom[lev], density_floor_func);
 		}
 
 		if (useDualEnergy_ == 1) {
@@ -2550,9 +2543,9 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	amrex::Gpu::streamSynchronizeAll();
 
 	// do Strang split source terms (second half-step)
-	FillTemperatureFloorAtLevel(lev, time + dt_lev, state_new_cc_[lev], temp_floor_cc);
+	FillNGammaFromStromgrenAtLevel(lev, time + dt_lev, state_new_cc_[lev], n_gamma_cc);
 	auto burn_success_second =
-	    addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], state_new_fc_[lev], lev, time + dt_lev, 0.5 * dt_lev, &temp_floor_cc);
+	    addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], state_new_fc_[lev], lev, time + dt_lev, 0.5 * dt_lev, &n_gamma_cc);
 
 	bool const cfl_ok = !isCflViolated(lev, time, dt_lev);
 	bool const final_success = (cfl_ok && burn_success_second);
