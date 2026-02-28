@@ -3,6 +3,7 @@
 ///
 
 #include "AMReX_Print.H"
+#include "AMReX_ParallelDescriptor.H"
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
@@ -204,8 +205,11 @@ auto problem_main() -> int
 	amrex::ParmParse const pp_particles("particles");
 	pp_particles.query("stromgren_qh0_table_hdf5_file", stromgren_qh0_file);
 
-	WriteQH0Table(stromgren_qh0_file, inputData.ionizingPhotonRate);
-	WriteSingleStarFile(inputData.stars_file, inputData.source_x, inputData.source_y, inputData.source_z);
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		WriteQH0Table(stromgren_qh0_file, inputData.ionizingPhotonRate);
+		WriteSingleStarFile(inputData.stars_file, inputData.source_x, inputData.source_y, inputData.source_z);
+	}
+	amrex::ParallelDescriptor::Barrier();
 
 	auto BCs_cc = quokka::BC<HIIRegionProblem>(quokka::BCType::int_dir);
 	QuokkaSimulation<HIIRegionProblem> sim(BCs_cc);

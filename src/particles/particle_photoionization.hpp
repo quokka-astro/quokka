@@ -121,10 +121,10 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 			for (int kk = 0; kk <= 1; ++kk) {
 				int kz = k0 + kk;
 				if (is_per[2] != 0) {
-					while (kz < dom_lo.z) {
+					while (kz < lo.z) {
 						kz += nz;
 					}
-					while (kz > dom_hi.z) {
+					while (kz > hi.z) {
 						kz -= nz;
 					}
 				}
@@ -133,10 +133,10 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 				for (int jj = 0; jj <= 1; ++jj) {
 					int jy = j0 + jj;
 					if (is_per[1] != 0) {
-						while (jy < dom_lo.y) {
+						while (jy < lo.y) {
 							jy += ny;
 						}
-						while (jy > dom_hi.y) {
+						while (jy > hi.y) {
 							jy -= ny;
 						}
 					}
@@ -145,10 +145,10 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 					for (int ii = 0; ii <= 1; ++ii) {
 						int ix = i0 + ii;
 						if (is_per[0] != 0) {
-							while (ix < dom_lo.x) {
+							while (ix < lo.x) {
 								ix += nx;
 							}
-							while (ix > dom_hi.x) {
+							while (ix > hi.x) {
 								ix -= nx;
 							}
 						}
