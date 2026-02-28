@@ -27,8 +27,7 @@ namespace quokka::photoionization
 template <typename problem_t, quokka::OutOfBounds oob_policy>
 void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContainer<problem_t> *stellar_particles, int lev, amrex::Real time,
 				    amrex::BoxArray const &ba_lev, amrex::DistributionMapping const &dm_lev, amrex::Geometry const &geom_lev,
-				    amrex::MultiFab const &state_cc, amrex::MultiFab &n_gamma_cc,
-				    quokka::DataTableGpuConst<2, 1, oob_policy> const &qh0_table,
+				    amrex::MultiFab const &state_cc, amrex::MultiFab &n_gamma_cc, quokka::DataTableGpuConst<2, 1, oob_policy> const &qh0_table,
 				    amrex::Real const mass_to_table_units = 1.0 / C::M_solar, amrex::Real const age_to_table_units = 1.0 / 3.15576e7,
 				    bool const table_axes_are_mass_age = true, amrex::Real const alphaB = 2.6e-13,
 				    amrex::Real const mean_particle_mass_mu = 1.27, amrex::Real const mH = 1.67e-24, int const max_pseudo_iters = 20,
@@ -339,13 +338,10 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 	int iter = 0;
 	for (; iter < max_pseudo_iters; ++iter) {
 		compute_explicit_and_reaction(phi, explicit_rhs, reaction_rate);
-		amrex::ParallelFor(residual,
-				   [phi_arr = phi.const_arrays(), E0_arr = explicit_rhs.const_arrays(),
-				    k0_arr = reaction_rate.const_arrays(), residual_arr = residual.arrays()] AMREX_GPU_DEVICE(int nbx, int i,
-													       int j, int k) noexcept {
-					   residual_arr[nbx](i, j, k, 0) =
-					       E0_arr[nbx](i, j, k, 0) - k0_arr[nbx](i, j, k, 0) * phi_arr[nbx](i, j, k, 0);
-				   });
+		amrex::ParallelFor(residual, [phi_arr = phi.const_arrays(), E0_arr = explicit_rhs.const_arrays(), k0_arr = reaction_rate.const_arrays(),
+					      residual_arr = residual.arrays()] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+			residual_arr[nbx](i, j, k, 0) = E0_arr[nbx](i, j, k, 0) - k0_arr[nbx](i, j, k, 0) * phi_arr[nbx](i, j, k, 0);
+		});
 		amrex::Real const rel_resid = residual.norm0(0, 0, false) / source_scale;
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(rel_resid), "Stromgren pseudo-time solve produced non-finite residual.");
 		if ((log_every > 0) && ((iter == 0) || (((iter + 1) % log_every) == 0))) {
@@ -361,14 +357,13 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 		amrex::Real dt_try = amrex::max(dtau, 1.0e-60);
 		bool accepted = false;
 		for (int retry = 0; retry < max_stage_retries; ++retry) {
-			amrex::ParallelFor(
-			    phi_stage,
-			    [phi_arr = phi.const_arrays(), E0_arr = explicit_rhs.const_arrays(), k0_arr = reaction_rate.const_arrays(),
-			     phi1_arr = phi_stage.arrays(), dt_try] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
-				    amrex::Real const numer = phi_arr[nbx](i, j, k, 0) + dt_try * E0_arr[nbx](i, j, k, 0);
-				    amrex::Real const denom = amrex::max(1.0 + dt_try * k0_arr[nbx](i, j, k, 0), 1.0e-60);
-				    phi1_arr[nbx](i, j, k, 0) = numer / denom;
-			    });
+			amrex::ParallelFor(phi_stage,
+					   [phi_arr = phi.const_arrays(), E0_arr = explicit_rhs.const_arrays(), k0_arr = reaction_rate.const_arrays(),
+					    phi1_arr = phi_stage.arrays(), dt_try] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+						   amrex::Real const numer = phi_arr[nbx](i, j, k, 0) + dt_try * E0_arr[nbx](i, j, k, 0);
+						   amrex::Real const denom = amrex::max(1.0 + dt_try * k0_arr[nbx](i, j, k, 0), 1.0e-60);
+						   phi1_arr[nbx](i, j, k, 0) = numer / denom;
+					   });
 			amrex::Real const phi1_min = phi_stage.min(0, 0, false);
 			if (!(phi1_min >= 0.0)) {
 				dt_try *= 0.5;
@@ -377,19 +372,16 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 
 			compute_explicit_and_reaction(phi_stage, explicit_rhs_stage, reaction_rate_stage);
 
-			amrex::ParallelFor(
-			    phi_new,
-			    [phi_arr = phi.const_arrays(), E0_arr = explicit_rhs.const_arrays(),
-			     E1_arr = explicit_rhs_stage.const_arrays(), k0_arr = reaction_rate.const_arrays(),
-			     k1_arr = reaction_rate_stage.const_arrays(), phi2_arr = phi_new.arrays(),
-			     dt_try] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
-				    amrex::Real const phi0 = phi_arr[nbx](i, j, k, 0);
-				    amrex::Real const numer =
-					phi0 + 0.5 * dt_try *
-						   (E0_arr[nbx](i, j, k, 0) + E1_arr[nbx](i, j, k, 0) - k0_arr[nbx](i, j, k, 0) * phi0);
-				    amrex::Real const denom = amrex::max(1.0 + 0.5 * dt_try * k1_arr[nbx](i, j, k, 0), 1.0e-60);
-				    phi2_arr[nbx](i, j, k, 0) = numer / denom;
-			    });
+			amrex::ParallelFor(phi_new, [phi_arr = phi.const_arrays(), E0_arr = explicit_rhs.const_arrays(),
+						     E1_arr = explicit_rhs_stage.const_arrays(), k0_arr = reaction_rate.const_arrays(),
+						     k1_arr = reaction_rate_stage.const_arrays(), phi2_arr = phi_new.arrays(),
+						     dt_try] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+				amrex::Real const phi0 = phi_arr[nbx](i, j, k, 0);
+				amrex::Real const numer =
+				    phi0 + 0.5 * dt_try * (E0_arr[nbx](i, j, k, 0) + E1_arr[nbx](i, j, k, 0) - k0_arr[nbx](i, j, k, 0) * phi0);
+				amrex::Real const denom = amrex::max(1.0 + 0.5 * dt_try * k1_arr[nbx](i, j, k, 0), 1.0e-60);
+				phi2_arr[nbx](i, j, k, 0) = numer / denom;
+			});
 			amrex::Real const phi2_min = phi_new.min(0, 0, false);
 			if (!(phi2_min >= 0.0)) {
 				dt_try *= 0.5;
@@ -412,9 +404,8 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 
 	auto const phi_arr = phi.const_arrays();
 	auto n_gamma = n_gamma_cc.arrays();
-	amrex::ParallelFor(n_gamma_cc, [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
-		n_gamma[nbx](i, j, k, 0) = amrex::max(phi_arr[nbx](i, j, k, 0), 0.0);
-	});
+	amrex::ParallelFor(
+	    n_gamma_cc, [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept { n_gamma[nbx](i, j, k, 0) = amrex::max(phi_arr[nbx](i, j, k, 0), 0.0); });
 }
 #endif
 

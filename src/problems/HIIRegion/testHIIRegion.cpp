@@ -18,13 +18,13 @@ struct HIIRegionProblem {
 };
 
 template <> struct SimulationData<HIIRegionProblem> {
-	amrex::Real nH0 = 1.0e3;			   // cm^-3
-	amrex::Real T0 = 500.0;			   // K
-	amrex::Real alphaB = 2.6e-13;		   // cm^3 s^-1
+	amrex::Real nH0 = 1.0e3;		 // cm^-3
+	amrex::Real T0 = 500.0;			 // K
+	amrex::Real alphaB = 2.6e-13;		 // cm^3 s^-1
 	amrex::Real ionizingPhotonRate = 1.0e49; // photons s^-1
-	amrex::Real source_x = 0.0;		   // cm
-	amrex::Real source_y = 0.0;		   // cm
-	amrex::Real source_z = 0.0;		   // cm
+	amrex::Real source_x = 0.0;		 // cm
+	amrex::Real source_y = 0.0;		 // cm
+	amrex::Real source_z = 0.0;		 // cm
 	std::string stars_file = "hii_stars.txt";
 	std::string qh0_file = "hii_qh0_table.h5";
 	amrex::Real volume_rel_tol = 0.70; // geometric/discrete tolerance
@@ -58,7 +58,8 @@ template <> struct Physics_Traits<HIIRegionProblem> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
-namespace {
+namespace
+{
 void WriteQH0Table(std::string const &fname, amrex::Real const qh0_rate)
 {
 	hid_t const file = H5Fcreate(fname.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
@@ -129,14 +130,14 @@ void WriteSingleStarFile(std::string const &fname, amrex::Real source_x, amrex::
 	// mass vx vy vz birth_time death_time birth_x birth_y birth_z death_x death_y death_z death_density mass_at_birth lum0
 	ofs << "1\n";
 	ofs << source_x << " " << source_y << " " << source_z << " ";
-	ofs << 30.0 * C::M_solar << " "; // mass
-	ofs << "0 0 0 ";		  // velocity
-	ofs << -1.0e12 << " ";	  // birth_time (ensures age > 0 at t=0)
-	ofs << 1.0e30 << " ";	  // death_time
+	ofs << 30.0 * C::M_solar << " ";			      // mass
+	ofs << "0 0 0 ";					      // velocity
+	ofs << -1.0e12 << " ";					      // birth_time (ensures age > 0 at t=0)
+	ofs << 1.0e30 << " ";					      // death_time
 	ofs << source_x << " " << source_y << " " << source_z << " "; // birth pos
 	ofs << source_x << " " << source_y << " " << source_z << " "; // death pos placeholder
 	ofs << 1.0e-21 << " ";					      // death_density placeholder
-	ofs << 30.0 * C::M_solar << " ";				      // mass_at_birth
+	ofs << 30.0 * C::M_solar << " ";			      // mass_at_birth
 	ofs << "0\n";						      // luminosity group 0 (unused here)
 }
 } // namespace
@@ -227,24 +228,24 @@ auto problem_main() -> int
 	const amrex::Real rs = std::cbrt((3.0 * Q) / (4.0 * M_PI * alphaB * nH * nH));
 	const amrex::Real core_radius = 0.8 * rs;
 
-	const amrex::Real hot_volume = sim.computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state) noexcept {
-		const amrex::Real rho = state(i, j, k, HydroSystem<HIIRegionProblem>::density_index);
-		const amrex::Real px = state(i, j, k, HydroSystem<HIIRegionProblem>::x1Momentum_index);
-		const amrex::Real py = state(i, j, k, HydroSystem<HIIRegionProblem>::x2Momentum_index);
-		const amrex::Real pz = state(i, j, k, HydroSystem<HIIRegionProblem>::x3Momentum_index);
-		const amrex::Real Egas = state(i, j, k, HydroSystem<HIIRegionProblem>::energy_index);
-		const amrex::Real Eint = RadSystem<HIIRegionProblem>::ComputeEintFromEgas(rho, px, py, pz, Egas);
-		const amrex::Real T = quokka::EOS<HIIRegionProblem>::ComputeTgasFromEint(rho, Eint, {});
-		return (T > 0.5 * T_ion) ? 1.0 : 0.0;
-	});
+	const amrex::Real hot_volume =
+	    sim.computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state) noexcept {
+		    const amrex::Real rho = state(i, j, k, HydroSystem<HIIRegionProblem>::density_index);
+		    const amrex::Real px = state(i, j, k, HydroSystem<HIIRegionProblem>::x1Momentum_index);
+		    const amrex::Real py = state(i, j, k, HydroSystem<HIIRegionProblem>::x2Momentum_index);
+		    const amrex::Real pz = state(i, j, k, HydroSystem<HIIRegionProblem>::x3Momentum_index);
+		    const amrex::Real Egas = state(i, j, k, HydroSystem<HIIRegionProblem>::energy_index);
+		    const amrex::Real Eint = RadSystem<HIIRegionProblem>::ComputeEintFromEgas(rho, px, py, pz, Egas);
+		    const amrex::Real T = quokka::EOS<HIIRegionProblem>::ComputeTgasFromEint(rho, Eint, {});
+		    return (T > 0.5 * T_ion) ? 1.0 : 0.0;
+	    });
 
-	const amrex::Real core_tmin_proxy = sim.computeVolumeIntegral(
-	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state) noexcept {
+	const amrex::Real core_tmin_proxy =
+	    sim.computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state) noexcept {
 		    const amrex::Real x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
 		    const amrex::Real y = prob_lo[1] + (static_cast<amrex::Real>(j) + 0.5) * dx[1];
 		    const amrex::Real z = prob_lo[2] + (static_cast<amrex::Real>(k) + 0.5) * dx[2];
-		    const amrex::Real r =
-			std::sqrt((x - source_x) * (x - source_x) + (y - source_y) * (y - source_y) + (z - source_z) * (z - source_z));
+		    const amrex::Real r = std::sqrt((x - source_x) * (x - source_x) + (y - source_y) * (y - source_y) + (z - source_z) * (z - source_z));
 		    if (r > core_radius) {
 			    return 0.0;
 		    }
@@ -263,8 +264,7 @@ auto problem_main() -> int
 		    const amrex::Real x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
 		    const amrex::Real y = prob_lo[1] + (static_cast<amrex::Real>(j) + 0.5) * dx[1];
 		    const amrex::Real z = prob_lo[2] + (static_cast<amrex::Real>(k) + 0.5) * dx[2];
-		    const amrex::Real r =
-			std::sqrt((x - source_x) * (x - source_x) + (y - source_y) * (y - source_y) + (z - source_z) * (z - source_z));
+		    const amrex::Real r = std::sqrt((x - source_x) * (x - source_x) + (y - source_y) * (y - source_y) + (z - source_z) * (z - source_z));
 		    return (r <= core_radius) ? 1.0 : 0.0;
 	    });
 

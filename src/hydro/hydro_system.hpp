@@ -998,8 +998,8 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 // floors and ceilings which can be set in the param file
 template <typename problem_t>
 template <typename DensityFloorFunc>
-void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const tempFloor, amrex::MultiFab &state_mf,
-					   amrex::Geometry const &geom, DensityFloorFunc const &density_floor_func)
+void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const tempFloor, amrex::MultiFab &state_mf, amrex::Geometry const &geom,
+					   DensityFloorFunc const &density_floor_func)
 {
 	auto state = state_mf.arrays();
 	auto const prob_lo = geom.ProbLoArray();

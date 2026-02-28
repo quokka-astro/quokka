@@ -681,14 +681,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	}
 
 	// Stochastic stellar population photoionization temperature floor (Strömgren approximation)
-		{
-			amrex::ParmParse const ppp("particles");
-			ppp.query("use_stromgren_tempfloor", use_stochastic_stellar_pop_stromgren_tempfloor_);
-			ppp.query("stromgren_qh0_table_hdf5_file", stochastic_stellar_pop_qh0_table_hdf5_file_);
-			ppp.query("stromgren_max_pseudosteps", stochastic_stellar_pop_stromgren_max_pseudosteps_);
-			ppp.query("stromgren_log_every", stochastic_stellar_pop_stromgren_log_every_);
-			ppp.query("stromgren_init_rsrc", stochastic_stellar_pop_stromgren_init_rsrc_);
-			ppp.query("stromgren_residual_tol", stochastic_stellar_pop_stromgren_residual_tol_);
+	{
+		amrex::ParmParse const ppp("particles");
+		ppp.query("use_stromgren_tempfloor", use_stochastic_stellar_pop_stromgren_tempfloor_);
+		ppp.query("stromgren_qh0_table_hdf5_file", stochastic_stellar_pop_qh0_table_hdf5_file_);
+		ppp.query("stromgren_max_pseudosteps", stochastic_stellar_pop_stromgren_max_pseudosteps_);
+		ppp.query("stromgren_log_every", stochastic_stellar_pop_stromgren_log_every_);
+		ppp.query("stromgren_init_rsrc", stochastic_stellar_pop_stromgren_init_rsrc_);
+		ppp.query("stromgren_residual_tol", stochastic_stellar_pop_stromgren_residual_tol_);
 
 		if (use_stochastic_stellar_pop_stromgren_tempfloor_) {
 #if AMREX_SPACEDIM != 3
@@ -698,12 +698,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 							 "particles.use_stromgren_tempfloor=true requires particles.stromgren_qh0_table_hdf5_file");
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_max_pseudosteps_ >= 1,
 							 "particles.stromgren_max_pseudosteps must be >= 1.");
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_log_every_ >= 0,
-							 "particles.stromgren_log_every must be >= 0.");
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_init_rsrc_ > 0.0,
-							 "particles.stromgren_init_rsrc must be > 0.");
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_residual_tol_ > 0.0,
-							 "particles.stromgren_residual_tol must be > 0.");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_log_every_ >= 0, "particles.stromgren_log_every must be >= 0.");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_init_rsrc_ > 0.0, "particles.stromgren_init_rsrc must be > 0.");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_residual_tol_ > 0.0, "particles.stromgren_residual_tol must be > 0.");
 
 			// Infer dataset path and whether the coordinate grids are stored in fast_log form
 			// directly from the HDF5 file, so users only need to provide the file path.
@@ -1024,7 +1021,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computePhotoelec
 
 template <typename problem_t>
 auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int lev,
-									   amrex::Real time, amrex::Real dt, amrex::MultiFab const *n_gamma_cc) -> bool
+								   amrex::Real time, amrex::Real dt, amrex::MultiFab const *n_gamma_cc) -> bool
 {
 	// start by assuming cooling integrator is successful.
 	bool cool_success = true;
@@ -1035,10 +1032,11 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 		if (coolingTableType_ == "resampled") {
 			const Real const_heating_rate_per_H = computePhotoelectricHeatingRate(time); // unit: erg/s/H
 			if (n_gamma_cc != nullptr) {
-				cool_success =
-				    quokka::ResampledCooling::computeCooling<problem_t>(state, dt, resampledTables_, tempFloor_, *n_gamma_cc, const_heating_rate_per_H);
+				cool_success = quokka::ResampledCooling::computeCooling<problem_t>(state, dt, resampledTables_, tempFloor_, *n_gamma_cc,
+												   const_heating_rate_per_H);
 			} else {
-				cool_success = quokka::ResampledCooling::computeCooling<problem_t>(state, dt, resampledTables_, tempFloor_, const_heating_rate_per_H);
+				cool_success =
+				    quokka::ResampledCooling::computeCooling<problem_t>(state, dt, resampledTables_, tempFloor_, const_heating_rate_per_H);
 			}
 		} else {
 			amrex::Abort("Invalid cooling table type! Only 'resampled' is supported.");
@@ -1851,10 +1849,10 @@ void QuokkaSimulation<problem_t>::FillNGammaFromStromgrenAtLevel(int lev, amrex:
 	if (use_stochastic_stellar_pop_stromgren_tempfloor_) {
 		auto const qh0_table = stochasticStellarPopQH0Table_.const_tables();
 		quokka::photoionization::FillNGammaFromStromgrenVolumes<problem_t>(
-		    this->StochasticStellarPopParticles.get(), lev, time, grids[lev], dmap[lev], geom[lev], state_cc, n_gamma_cc, qh0_table,
-		    1.0 / C::M_solar, 1.0 / 3.15576e7, stochastic_stellar_pop_qh0_table_axes_are_mass_age_, 2.6e-13, 1.27, 1.67e-24,
-		    stochastic_stellar_pop_stromgren_max_pseudosteps_, stochastic_stellar_pop_stromgren_log_every_,
-		    stochastic_stellar_pop_stromgren_init_rsrc_, stochastic_stellar_pop_stromgren_residual_tol_);
+		    this->StochasticStellarPopParticles.get(), lev, time, grids[lev], dmap[lev], geom[lev], state_cc, n_gamma_cc, qh0_table, 1.0 / C::M_solar,
+		    1.0 / 3.15576e7, stochastic_stellar_pop_qh0_table_axes_are_mass_age_, 2.6e-13, 1.27, 1.67e-24,
+		    stochastic_stellar_pop_stromgren_max_pseudosteps_, stochastic_stellar_pop_stromgren_log_every_, stochastic_stellar_pop_stromgren_init_rsrc_,
+		    stochastic_stellar_pop_stromgren_residual_tol_);
 	}
 #else
 	amrex::ignore_unused(lev, time, state_cc);
@@ -2544,8 +2542,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 	// do Strang split source terms (second half-step)
 	FillNGammaFromStromgrenAtLevel(lev, time + dt_lev, state_new_cc_[lev], n_gamma_cc);
-	auto burn_success_second =
-	    addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], state_new_fc_[lev], lev, time + dt_lev, 0.5 * dt_lev, &n_gamma_cc);
+	auto burn_success_second = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], state_new_fc_[lev], lev, time + dt_lev, 0.5 * dt_lev, &n_gamma_cc);
 
 	bool const cfl_ok = !isCflViolated(lev, time, dt_lev);
 	bool const final_success = (cfl_ok && burn_success_second);

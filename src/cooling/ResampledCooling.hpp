@@ -238,14 +238,13 @@ auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &res
 
 // const_heating_rate_per_H: unit erg/s/H
 template <typename problem_t>
-auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &resampledTables, const Real temp_floor,
-		    amrex::MultiFab const &n_gamma_mf, const Real const_heating_rate_per_H) -> bool
+auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &resampledTables, const Real temp_floor, amrex::MultiFab const &n_gamma_mf,
+		    const Real const_heating_rate_per_H) -> bool
 {
 	const BL_PROFILE("quokka::ResampledCooling::computeCooling()");
 
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(mf.boxArray() == n_gamma_mf.boxArray(), "mf and n_gamma_mf must have the same BoxArray.");
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(mf.DistributionMap() == n_gamma_mf.DistributionMap(),
-					 "mf and n_gamma_mf must have the same DistributionMap.");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(mf.DistributionMap() == n_gamma_mf.DistributionMap(), "mf and n_gamma_mf must have the same DistributionMap.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n_gamma_mf.nComp() >= 1, "n_gamma_mf must have at least one component.");
 
 	const Real dt = dt_in;
@@ -254,10 +253,10 @@ auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &res
 
 	auto tables = resampledTables.const_tables();
 
-	constexpr Real alphaB = 2.6e-13;		 // cm^3 / s
-	constexpr Real sigma_HI = 6.3e-18;		 // cm^2
-	constexpr Real mean_particle_mass_mu = 1.27;	 // dimensionless
-	constexpr Real mH = 1.67e-24;			 // g
+	constexpr Real alphaB = 2.6e-13;			 // cm^3 / s
+	constexpr Real sigma_HI = 6.3e-18;			 // cm^2
+	constexpr Real mean_particle_mass_mu = 1.27;		 // dimensionless
+	constexpr Real mH = 1.67e-24;				 // g
 	constexpr Real photoion_heat_per_abs = 13.6 * C::ev2erg; // erg
 
 	const auto &ba = mf.boxArray();
