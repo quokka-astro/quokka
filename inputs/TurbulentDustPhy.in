@@ -45,3 +45,6 @@ turbulence.nsteps_per_t_turb = 10
 #hydro.reconstruction_order = 2
 #hydro.plm_limiter = "minmod"
 density_floor = 1e-6
+
+dust.enable_iter_stoptime = 1
+dust.print_iteration_counts = 1
