@@ -88,6 +88,57 @@ The reported residual is
 \end{equation}
 with stopping criterion $\mathcal{R}_{\infty}<\texttt{tol}$ (or \texttt{max-iters} reached).
 
+\section{Quokka implementation (3D, production path)}
+The Python script above is a 1D spherical reference model. In Quokka, the corresponding implementation used by the H\,II-region temperature-floor path is a 3D Cartesian, GPU-parallel solve in
+\texttt{src/particles/particle\_photoionization.hpp}, called through
+\texttt{QuokkaSimulation::FillNGammaFromStromgrenAtLevel()}.
+
+\subsection*{Where it is used in the timestep}
+When \texttt{particles.use\_stromgren\_tempfloor = true}, Quokka:
+\begin{enumerate}
+\item Builds \texttt{n\_gamma\_cc} once per level at the start of \texttt{advanceHydroAtLevel()}.
+\item Passes \texttt{n\_gamma\_cc} into the Strang-split cooling source update.
+\item Reuses the same \texttt{n\_gamma\_cc} for both half source steps in that hydro step.
+\end{enumerate}
+The cooling operator then converts \texttt{n\_gamma} into a local photoionization heating term
+\[
+\Gamma_{\mathrm{pi}} = c\,\sigma_{\mathrm{HI}}\,n_{\mathrm{HI}}\,n_\gamma\,E_{\mathrm{ion}},
+\]
+with the same local equilibrium closure for $x$ as Eq.~\eqref{eq:xeq}.
+
+\subsection*{Source construction in Quokka}
+Unlike the 1D top-hat source, Quokka constructs a volumetric source from stellar particles:
+\begin{itemize}
+\item Ionizing luminosity $Q$ is read from the stellar $Q_{\mathrm{H0}}$ lookup table (\texttt{/data/QH0} in the HDF5 table).
+\item Only ionizing stellar stages contribute (high-mass non-exploding and SN progenitor stages).
+\item Particle luminosities are deposited to cell centers using CIC weighting, producing a grid field \texttt{source\_q} in photons s$^{-1}$ per cell.
+\item The volumetric source in the PDE is then $q_{\mathrm{vol}} = \texttt{source\_q}/\Delta V$.
+\end{itemize}
+
+\subsection*{Pseudo-time solver differences vs. the Python script}
+Quokka solves
+\[
+\partial_\tau n_\gamma = \nabla\!\cdot\!\left(D_{\mathrm{FLD}}\nabla n_\gamma\right) + q_{\mathrm{vol}} - k_{\mathrm{reac}} n_\gamma
+\]
+on the full 3D mesh, with
+\[
+k_{\mathrm{reac}} = c\,\sigma_{\mathrm{HI}}\,n_{\mathrm{HI}},
+\qquad
+D_{\mathrm{FLD}} = \frac{c\,\lambda(R)}{\kappa_F},
+\qquad
+\kappa_F = \frac{1}{L_{\mathrm{box}}}.
+\]
+Key implementation details:
+\begin{itemize}
+\item \textbf{Initialization:} Gaussian guess centered on the luminosity-weighted source centroid:
+$n_{\gamma,0}\propto \alpha_B n_H^2 \exp[-(r/r_{\mathrm{src}})^2]$.
+\item \textbf{FLD operator:} Face-centered fluxes in each Cartesian direction with Levermore--Pomraning limiter
+$\lambda=(2+R)/(6+3R+R^2)$.
+\item \textbf{Time integration in pseudo-time:} positivity-preserving two-stage explicit--implicit update (predictor + corrector), with adaptive step halving if any stage gives negative $n_\gamma$.
+\item \textbf{Convergence metric:} $\|E-k n_\gamma\|_\infty / \max(q_{\mathrm{vol}})$, where $E\equiv -\nabla\!\cdot F + q_{\mathrm{vol}}$.
+\end{itemize}
+So, unlike the 1D script's tridiagonal Picard solve, Quokka uses a 3D local-update pseudo-time integrator tailored for GPU execution and AMReX domain decomposition.
+
 \section{Parameters and script inputs}
 \begin{center}
 \begin{tabular}{lll}
