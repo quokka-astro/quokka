@@ -2187,11 +2187,16 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	auto dm = dmap[lev];
 	auto dx = geom[lev].CellSizeArray();
 
-	amrex::MultiFab n_gamma_cc(ba_cc, dm, 1, 0);
-	FillNGammaFromStromgrenAtLevel(lev, time, state_old_cc_tmp, n_gamma_cc);
+	amrex::MultiFab n_gamma_cc;
+	amrex::MultiFab const *n_gamma_cc_ptr = nullptr;
+	if (use_stochastic_stellar_pop_stromgren_tempfloor_) {
+		n_gamma_cc.define(ba_cc, dm, 1, 0);
+		FillNGammaFromStromgrenAtLevel(lev, time, state_old_cc_tmp, n_gamma_cc);
+		n_gamma_cc_ptr = &n_gamma_cc;
+	}
 
 	// do Strang split source terms (first half-step)
-	auto burn_success_first = addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, state_old_fc_tmp, lev, time, 0.5 * dt_lev, &n_gamma_cc);
+	auto burn_success_first = addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, state_old_fc_tmp, lev, time, 0.5 * dt_lev, n_gamma_cc_ptr);
 
 	// check if reactions failed for source terms. If it failed, return false.
 	if (!burn_success_first) {
@@ -2541,8 +2546,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	amrex::Gpu::streamSynchronizeAll();
 
 	// do Strang split source terms (second half-step)
-	FillNGammaFromStromgrenAtLevel(lev, time + dt_lev, state_new_cc_[lev], n_gamma_cc);
-	auto burn_success_second = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], state_new_fc_[lev], lev, time + dt_lev, 0.5 * dt_lev, &n_gamma_cc);
+	auto burn_success_second =
+	    addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], state_new_fc_[lev], lev, time + dt_lev, 0.5 * dt_lev, n_gamma_cc_ptr);
 
 	bool const cfl_ok = !isCflViolated(lev, time, dt_lev);
 	bool const final_success = (cfl_ok && burn_success_second);
