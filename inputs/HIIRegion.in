@@ -1,0 +1,60 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo = -6.0e18 -6.0e18 -6.0e18
+geometry.prob_hi =  6.0e18  6.0e18  6.0e18
+quokka.bc = periodic periodic periodic
+
+# *****************************************************************
+# Resolution and runtime
+# *****************************************************************
+amr.n_cell = 32 32 32
+amr.max_level = 0
+amr.max_grid_size = 32
+amr.blocking_factor = 8
+
+do_reflux = 0
+do_subcycle = 0
+
+cfl = 0.4
+initial_dt = 5.0e10
+stop_time = 2.0e11
+max_timesteps = 4
+
+plotfile_interval = -1
+checkpoint_interval = -1
+suppress_output = 1
+tiny_profiler.enabled = 0
+
+density_floor = 1.0e-30
+temperature_floor = 10.0
+
+# *****************************************************************
+# Cooling enabled (test exercises source-step cooling with local floor)
+# *****************************************************************
+cooling.enabled = 1
+cooling.cooling_table_type = "resampled"
+cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
+
+# *****************************************************************
+# Particle-based Strömgren temperature floor
+# *****************************************************************
+particles.use_stromgren_tempfloor = true
+particles.stromgren_qh0_table_hdf5_file = "hii_qh0_table.h5"
+particles.disable_SN_feedback = true
+particles.verbose = 0
+
+# *****************************************************************
+# Problem parameters
+# *****************************************************************
+problem.nH0 = 1.0e3
+problem.T0 = 500.0
+problem.alphaB = 2.6e-13
+problem.ionizing_photon_rate = 1.0e49
+problem.source_x = 0.0
+problem.source_y = 0.0
+problem.source_z = 0.0
+problem.stars_file = "hii_stars.txt"
+problem.qh0_file = "hii_qh0_table.h5"
+problem.volume_rel_tol = 0.70
+problem.core_temp_tol = 0.70

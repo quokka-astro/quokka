@@ -236,6 +236,87 @@ auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &res
 	return true; // success
 }
 
+// const_heating_rate_per_H: unit erg/s/H
+template <typename problem_t>
+auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &resampledTables, amrex::MultiFab const &temp_floor_mf,
+		    const Real const_heating_rate_per_H) -> bool
+{
+	const BL_PROFILE("quokka::ResampledCooling::computeCooling()");
+
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(mf.boxArray() == temp_floor_mf.boxArray(), "mf and temp_floor_mf must have the same BoxArray.");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(mf.DistributionMap() == temp_floor_mf.DistributionMap(),
+					 "mf and temp_floor_mf must have the same DistributionMap.");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(temp_floor_mf.nComp() >= 1, "temp_floor_mf must have at least one component.");
+
+	const Real dt = dt_in;
+	const Real reltol_floor = 0.01;
+	const Real rtol = 1.0e-4; // not recommended to change this
+
+	auto tables = resampledTables.const_tables();
+
+	const auto &ba = mf.boxArray();
+	const auto &dmap = mf.DistributionMap();
+	amrex::iMultiFab nsubstepsMF(ba, dmap, 1, 0);
+
+	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+		const amrex::Box &indexRange = iter.validbox();
+		auto const &state = mf.array(iter);
+		auto const &temp_floor = temp_floor_mf.const_array(iter);
+		auto const &nsubsteps = nsubstepsMF.array(iter);
+
+		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
+			const Real x1Mom = state(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
+			const Real x2Mom = state(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
+			const Real x3Mom = state(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
+			const Real Egas = state(i, j, k, HydroSystem<problem_t>::energy_index);
+
+			// number density
+			const Real nH = rho * tables.cloudy_H_mass_fraction / C::m_p; // unit: cm^-3
+
+			const auto massScalars = RadSystem<problem_t>::ComputeMassScalars(state, i, j, k);
+			const Real Eint_floor = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, temp_floor(i, j, k, 0), massScalars);
+
+			const Real Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			const ResampledCoolingFunctor user_rhs(rho, tables, const_heating_rate_per_H * nH); // unit: erg/cm^3/s
+			quokka::valarray<Real, 1> y = {Eint};
+			quokka::valarray<Real, 1> const abstol = {reltol_floor * Eint_floor};
+
+			// do integration with RK2 (Heun's method)
+			int nsteps = 0;
+			rk_adaptive_integrate(user_rhs, 0, y, dt, rtol, abstol, nsteps);
+			nsubsteps(i, j, k) = nsteps;
+
+			// check if integration failed
+			if (nsteps >= maxStepsODEIntegrate) {
+				Real const Edot = resampled_cooling_function(rho, Eint, tables) + const_heating_rate_per_H * nH; // unit: erg/cm^3/s
+				Real const t_cool = (Edot != 0.0) ? std::abs(Eint / Edot) : std::numeric_limits<Real>::max();
+				printf("max substeps exceeded! rho = %.17e, Eint = %.17e, cooling " // NOLINT
+				       "time = %g, dt = %.17e\n",
+				       rho, Eint, t_cool, dt);
+			}
+
+			Real Eint_new = y[0];
+			Eint_new = amrex::max(Eint_new, Eint_floor);
+			const Real dEint = Eint_new - Eint;
+
+			state(i, j, k, HydroSystem<problem_t>::energy_index) += dEint;
+			state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) += dEint;
+		});
+	}
+
+	const int nmax = nsubstepsMF.max(0);
+	const Real navg = static_cast<Real>(nsubstepsMF.sum(0)) / static_cast<Real>(nsubstepsMF.boxArray().numPts());
+	amrex::Print() << std::format("\tcooling substeps (per cell): avg {}, max {}\n", navg, nmax);
+
+	// check if integration succeeded
+	if (nmax >= maxStepsODEIntegrate) {
+		amrex::Print() << "\t[ResampledCooling] Reaction ODE failure! Retrying hydro update...\n";
+		return false;
+	}
+	return true; // success
+}
+
 auto readResampledData(std::string const &hdf5_file, resampled_tables &resampledTables) -> bool;
 
 } // namespace quokka::ResampledCooling

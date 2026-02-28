@@ -1,0 +1,119 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,booktabs,geometry}
+\geometry{margin=1in}
+
+\title{Spherical FLD Relaxation Model Used by \texttt{solve\_spherical\_fld\_relaxation.py}}
+\author{Quokka notes}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Purpose and physical motivation}
+This script computes a steady, spherically symmetric H\,II-region reference solution for a point-like ionizing source. The model is designed to match the FLD-style photon transport and local photoionization--recombination balance used in the code path being tested, while avoiding time-accurate transients.
+
+The physical goal is to obtain the stationary ionization structure from the competition between
+\begin{itemize}
+\item emission of ionizing photons from a central source,
+\item transport of photons by flux-limited diffusion (FLD), and
+\item local absorption/recombination balance in hydrogen.
+\end{itemize}
+
+\section{Governing equations}
+Let $\phi(r)$ denote the photon number density (labeled \texttt{phi} in the script, interpreted as $n_\gamma$). The steady spherical equation solved is
+\begin{equation}
+\frac{1}{r^2}\frac{d}{dr}\!\left(r^2 F_r\right) + S(r) - c\,\sigma_{\mathrm{HI}}\,n_{\mathrm{HI}}(\phi)\,\phi = 0,
+\label{eq:steady}
+\end{equation}
+with FLD closure
+\begin{equation}
+F_r = -D\,\frac{d\phi}{dr}, \qquad D = \frac{c\,\lambda(R)}{\kappa_F},
+\end{equation}
+\begin{equation}
+R = \frac{\left|d\phi/dr\right|}{\kappa_F\,\phi}, \qquad
+\lambda(R)=\frac{2+R}{6+3R+R^2}.
+\end{equation}
+
+The transport opacity is taken as a floor value
+\begin{equation}
+\kappa_F = \frac{1}{L_{\mathrm{box}}},
+\end{equation}
+so the mean free path floor is $L_{\mathrm{box}}$.
+
+The source is a finite-radius top-hat emitter:
+\begin{equation}
+S(r)=
+\begin{cases}
+\dfrac{3Q}{4\pi r_{\mathrm{src}}^3}, & r \le r_{\mathrm{src}},\\[4pt]
+0, & r>r_{\mathrm{src}}.
+\end{cases}
+\end{equation}
+
+Hydrogen chemistry is closed by local equilibrium,
+\begin{equation}
+c\,\sigma_{\mathrm{HI}}\,\phi\,(1-x)=\alpha_B\,n_H\,x^2,
+\label{eq:xeq}
+\end{equation}
+where $x$ is ionized fraction and $n_{\mathrm{HI}}=n_H(1-x)$. Solving Eq.~\eqref{eq:xeq} gives
+\begin{equation}
+x(\phi)=\frac{-b+\sqrt{b^2+4ab}}{2a},
+\quad a=\alpha_B n_H,\quad b=c\,\sigma_{\mathrm{HI}}\,\phi,
+\end{equation}
+clipped to $[0,1]$.
+
+\section{Boundary conditions}
+The radial domain is $r\in[0,r_{\max}]$ with
+\begin{align}
+F_r(0) &= 0 \quad \text{(spherical symmetry)},\\
+\phi(r_{\max}) &= 0 \quad \text{(outer Dirichlet boundary)}.
+\end{align}
+
+\section{Numerical method}
+The script uses a finite-volume discretization on a 1D radial mesh.
+Each nonlinear iteration does:
+\begin{enumerate}
+\item Picard lagging of $D$ and reaction coefficient $k_{\mathrm{reac}}=c\,\sigma_{\mathrm{HI}}\,n_{\mathrm{HI}}$ from the previous iterate.
+\item Assembly of a tridiagonal linear system for the updated $\phi$.
+\item Thomas-algorithm solve.
+\item Under-relaxation:
+\[
+\phi^{(m+1)} \leftarrow (1-\omega)\phi^{(m)} + \omega\,\phi_{\mathrm{lin}}.
+\]
+\item Residual evaluation from Eq.~\eqref{eq:steady} and convergence test.
+\end{enumerate}
+
+The reported residual is
+\begin{equation}
+\mathcal{R}_{\infty} = \frac{\max_i |\mathrm{RHS}_i|}{\max_i S_i},
+\end{equation}
+with stopping criterion $\mathcal{R}_{\infty}<\texttt{tol}$ (or \texttt{max-iters} reached).
+
+\section{Parameters and script inputs}
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+CLI flag & Symbol & Meaning \\
+\midrule
+\texttt{--Q} & $Q$ & Photon emission rate [s$^{-1}$] \\
+\texttt{--alphaB} & $\alpha_B$ & Case-B recombination coefficient [cm$^3$ s$^{-1}$] \\
+\texttt{--nH} & $n_H$ & Total hydrogen number density [cm$^{-3}$] \\
+\texttt{--sigma-HI} & $\sigma_{\mathrm{HI}}$ & Photoionization cross section [cm$^2$] \\
+\texttt{--c-light} & $c$ & Speed of light [cm s$^{-1}$] \\
+\texttt{--rmax} & $r_{\max}$ & Outer radius of radial domain [cm] \\
+\texttt{--r-src} & $r_{\mathrm{src}}$ & Source radius for top-hat emissivity [cm] \\
+\texttt{--box-size} & $L_{\mathrm{box}}$ & Size used for $\kappa_F=1/L_{\mathrm{box}}$ [cm] \\
+\texttt{--nr} & $N_r$ & Number of radial control volumes \\
+\texttt{--max-iters} & --- & Maximum nonlinear iterations \\
+\texttt{--tol} & --- & Residual tolerance \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Reference Str\"omgren scale}
+The script also reports the classical algebraic Str\"omgren radius,
+\begin{equation}
+R_S=\left(\frac{3Q}{4\pi\alpha_B n_H^2}\right)^{1/3},
+\end{equation}
+and a numerical $r_{50}$ where $x(r_{50})=0.5$, used for comparison diagnostics.
+
+\end{document}

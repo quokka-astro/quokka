@@ -165,7 +165,10 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	std::string stochastic_stellar_pop_qh0_table_dataset_ = "/data/QH0";
 	bool stochastic_stellar_pop_qh0_table_axes_are_mass_age_ = true;
 	int stochastic_stellar_pop_qh0_table_is_fast_log_ = 0;
-	int stochastic_stellar_pop_tempfloor_max_neighbor_hops_ = 1;
+	int stochastic_stellar_pop_stromgren_max_pseudosteps_ = 20;
+	int stochastic_stellar_pop_stromgren_log_every_ = 0;
+	amrex::Real stochastic_stellar_pop_stromgren_init_rsrc_ = 3.0e17;
+	amrex::Real stochastic_stellar_pop_stromgren_residual_tol_ = 1.0e-3;
 	quokka::DataTable<2, 1> stochasticStellarPopQH0Table_;
 
 	int enableCooling_ = 0;
@@ -354,7 +357,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
 	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int lev, amrex::Real time,
-					      amrex::Real dt_lev) -> bool;
+					      amrex::Real dt_lev, amrex::MultiFab const *temp_floor_cc = nullptr) -> bool;
 
 	auto computePhotoelectricHeatingRate(Real current_time) -> amrex::Real;
 
@@ -678,11 +681,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	}
 
 	// Stochastic stellar population photoionization temperature floor (Strömgren approximation)
-	{
-		amrex::ParmParse const ppp("particles");
-		ppp.query("use_stromgren_tempfloor", use_stochastic_stellar_pop_stromgren_tempfloor_);
-		ppp.query("stromgren_qh0_table_hdf5_file", stochastic_stellar_pop_qh0_table_hdf5_file_);
-		ppp.query("stromgren_tempfloor_max_neighbor_hops", stochastic_stellar_pop_tempfloor_max_neighbor_hops_);
+		{
+			amrex::ParmParse const ppp("particles");
+			ppp.query("use_stromgren_tempfloor", use_stochastic_stellar_pop_stromgren_tempfloor_);
+			ppp.query("stromgren_qh0_table_hdf5_file", stochastic_stellar_pop_qh0_table_hdf5_file_);
+			ppp.query("stromgren_max_pseudosteps", stochastic_stellar_pop_stromgren_max_pseudosteps_);
+			ppp.query("stromgren_log_every", stochastic_stellar_pop_stromgren_log_every_);
+			ppp.query("stromgren_init_rsrc", stochastic_stellar_pop_stromgren_init_rsrc_);
+			ppp.query("stromgren_residual_tol", stochastic_stellar_pop_stromgren_residual_tol_);
 
 		if (use_stochastic_stellar_pop_stromgren_tempfloor_) {
 #if AMREX_SPACEDIM != 3
@@ -690,6 +696,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 #endif
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!stochastic_stellar_pop_qh0_table_hdf5_file_.empty(),
 							 "particles.use_stromgren_tempfloor=true requires particles.stromgren_qh0_table_hdf5_file");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_max_pseudosteps_ >= 1,
+							 "particles.stromgren_max_pseudosteps must be >= 1.");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_log_every_ >= 0,
+							 "particles.stromgren_log_every must be >= 0.");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_init_rsrc_ > 0.0,
+							 "particles.stromgren_init_rsrc must be > 0.");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_residual_tol_ > 0.0,
+							 "particles.stromgren_residual_tol must be > 0.");
 
 			// Infer dataset path and whether the coordinate grids are stored in fast_log form
 			// directly from the HDF5 file, so users only need to provide the file path.
@@ -1010,7 +1024,8 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computePhotoelec
 
 template <typename problem_t>
 auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int lev,
-								   amrex::Real time, amrex::Real dt) -> bool
+									   amrex::Real time, amrex::Real dt,
+									   amrex::MultiFab const *temp_floor_cc) -> bool
 {
 	// start by assuming cooling integrator is successful.
 	bool cool_success = true;
@@ -1020,7 +1035,11 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 		}
 		if (coolingTableType_ == "resampled") {
 			const Real const_heating_rate_per_H = computePhotoelectricHeatingRate(time); // unit: erg/s/H
-			cool_success = quokka::ResampledCooling::computeCooling<problem_t>(state, dt, resampledTables_, tempFloor_, const_heating_rate_per_H);
+			if (temp_floor_cc != nullptr) {
+				cool_success = quokka::ResampledCooling::computeCooling<problem_t>(state, dt, resampledTables_, *temp_floor_cc, const_heating_rate_per_H);
+			} else {
+				cool_success = quokka::ResampledCooling::computeCooling<problem_t>(state, dt, resampledTables_, tempFloor_, const_heating_rate_per_H);
+			}
 		} else {
 			amrex::Abort("Invalid cooling table type! Only 'resampled' is supported.");
 		}
@@ -1831,11 +1850,12 @@ void QuokkaSimulation<problem_t>::FillTemperatureFloorAtLevel(int lev, amrex::Re
 #if AMREX_SPACEDIM == 3
 	if (use_stochastic_stellar_pop_stromgren_tempfloor_) {
 		auto const qh0_table = stochasticStellarPopQH0Table_.const_tables();
-		quokka::photoionization::FillTemperatureFloorFromStromgrenVolumes<problem_t>(
-		    this->StochasticStellarPopParticles.get(), lev, time, grids[lev], dmap[lev], geom[lev], state_cc, temp_floor_cc, qh0_table,
-		    1.0 / C::M_solar, 1.0 / 3.15576e7, stochastic_stellar_pop_qh0_table_axes_are_mass_age_, 2.6e-13, 1.27, 1.67e-24, 1.0e4,
-		    stochastic_stellar_pop_tempfloor_max_neighbor_hops_);
-	}
+			quokka::photoionization::FillTemperatureFloorFromStromgrenVolumes<problem_t>(
+			    this->StochasticStellarPopParticles.get(), lev, time, grids[lev], dmap[lev], geom[lev], state_cc, temp_floor_cc, qh0_table,
+			    1.0 / C::M_solar, 1.0 / 3.15576e7, stochastic_stellar_pop_qh0_table_axes_are_mass_age_, 2.6e-13, 1.27, 1.67e-24, 1.0e4, 1.0,
+			    stochastic_stellar_pop_stromgren_max_pseudosteps_, stochastic_stellar_pop_stromgren_log_every_,
+			    stochastic_stellar_pop_stromgren_init_rsrc_, stochastic_stellar_pop_stromgren_residual_tol_);
+		}
 #else
 	amrex::ignore_unused(lev, time, state_cc);
 #endif
@@ -2171,8 +2191,12 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	auto dm = dmap[lev];
 	auto dx = geom[lev].CellSizeArray();
 
+	// Build a local floor field for source terms and hydro limit enforcement.
+	amrex::MultiFab temp_floor_cc(ba_cc, dm, 1, 0);
+	FillTemperatureFloorAtLevel(lev, time, state_old_cc_tmp, temp_floor_cc);
+
 	// do Strang split source terms (first half-step)
-	auto burn_success_first = addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, state_old_fc_tmp, lev, time, 0.5 * dt_lev);
+	auto burn_success_first = addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, state_old_fc_tmp, lev, time, 0.5 * dt_lev, &temp_floor_cc);
 
 	// check if reactions failed for source terms. If it failed, return false.
 	if (!burn_success_first) {
@@ -2181,7 +2205,6 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 	// Build the per-cell temperature floor once for this hydro update. Problem specializations
 	// should enforce any local floor via max(tempFloor_, local_floor(...)).
-	amrex::MultiFab temp_floor_cc(ba_cc, dm, 1, 0);
 	FillTemperatureFloorAtLevel(lev, time, state_old_cc_tmp, temp_floor_cc);
 
 	// create temporary multifab for intermediate state
@@ -2527,7 +2550,9 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	amrex::Gpu::streamSynchronizeAll();
 
 	// do Strang split source terms (second half-step)
-	auto burn_success_second = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], state_new_fc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
+	FillTemperatureFloorAtLevel(lev, time + dt_lev, state_new_cc_[lev], temp_floor_cc);
+	auto burn_success_second =
+	    addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], state_new_fc_[lev], lev, time + dt_lev, 0.5 * dt_lev, &temp_floor_cc);
 
 	bool const cfl_ok = !isCflViolated(lev, time, dt_lev);
 	bool const final_success = (cfl_ok && burn_success_second);
