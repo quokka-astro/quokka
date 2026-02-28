@@ -2,8 +2,8 @@
 /// \brief Strömgren temperature-floor integration test with analytic radius comparison.
 ///
 
-#include "AMReX_Print.H"
 #include "AMReX_ParallelDescriptor.H"
+#include "AMReX_Print.H"
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
