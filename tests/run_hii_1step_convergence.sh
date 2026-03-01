@@ -97,7 +97,7 @@ if [[ ! -f "${QH0_FILE}" ]]; then
   exit 1
 fi
 
-STARS_FILE="${ROOT_DIR}/tests/hii_stars.txt"
+STARS_FILE="${ROOT_DIR}/inputs/hii_stars.txt"
 if [[ ! -f "${STARS_FILE}" ]]; then
   echo "Error: stars file not found: ${STARS_FILE}" >&2
   exit 1
