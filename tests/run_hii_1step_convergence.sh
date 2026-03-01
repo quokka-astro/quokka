@@ -108,14 +108,13 @@ for N in 16 32 64; do
   RUN_DIR="${ROOT_DIR}/tests/hii_runs/${N}"
   mkdir -p "${RUN_DIR}"
   cp "${BASE_IN}" "${RUN_DIR}/HIIRegion.in"
+  cp "${STARS_FILE}" "${RUN_DIR}/hii_stars.txt"
 
   sed -i '' "s|^amr.n_cell = .*|amr.n_cell = ${N} ${N} ${N}|" "${RUN_DIR}/HIIRegion.in"
   sed -i '' "s|^amr.max_grid_size = .*|amr.max_grid_size = ${N}|" "${RUN_DIR}/HIIRegion.in"
   sed -i '' "s|^plotfile_interval = .*|plotfile_interval = ${PLOTFILE_INTERVAL}|" "${RUN_DIR}/HIIRegion.in"
   sed -i '' "s|^cooling.hdf5_data_file = .*|cooling.hdf5_data_file = \"${COOLING_FILE}\"|" "${RUN_DIR}/HIIRegion.in"
   sed -i '' "s|^particles.stromgren_qh0_table_hdf5_file = .*|particles.stromgren_qh0_table_hdf5_file = \"${QH0_FILE}\"|" "${RUN_DIR}/HIIRegion.in"
-  sed -i '' "s|^problem.stars_file = .*|problem.stars_file = \"${STARS_FILE}\"|" "${RUN_DIR}/HIIRegion.in"
-  sed -i '' "s|^problem.qh0_file = .*|problem.qh0_file = \"${QH0_FILE}\"|" "${RUN_DIR}/HIIRegion.in"
 
   echo "Running HIIRegion ${N}^3 ..."
   (

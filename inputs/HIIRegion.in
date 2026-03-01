@@ -49,12 +49,5 @@ particles.verbose = 0
 # *****************************************************************
 problem.nH0 = 1.0e3
 problem.T0 = 500.0
-problem.alphaB = 2.6e-13
-problem.ionizing_photon_rate = 1.0e49
-problem.source_x = 0.0
-problem.source_y = 0.0
-problem.source_z = 0.0
-problem.stars_file = "hii_stars.txt"
-problem.qh0_file = "../extern/stellar_tables/QH0_mist_9to120_quokka_best.h5"
 problem.volume_rel_tol = 0.70
 problem.core_temp_tol = 0.70

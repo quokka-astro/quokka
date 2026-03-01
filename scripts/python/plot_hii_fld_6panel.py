@@ -27,21 +27,19 @@ def parse_header(plotfile: Path):
 	comp_names = [lines[2 + i].strip() for i in range(ncomp)]
 
 	box_line = next(l for l in lines if l.strip().startswith("((") and ") (" in l)
-	match = re.search(r"\(\(([-\d]+),([-\d]+),([-\d]+)\) \(([-\d]+),([-\d]+),([-\d]+)\) \(([-\d]+),([-\d]+),([-\d]+)\)\)", box_line)
-	if match is None:
+	box_triplets = re.findall(r"\(([-\d]+),([-\d]+),([-\d]+)\)", box_line)
+	if len(box_triplets) < 2:
 		raise RuntimeError(f"Could not parse domain box from {plotfile / 'Header'}")
-	lo = np.array([int(match.group(1)), int(match.group(2)), int(match.group(3))], dtype=int)
-	hi = np.array([int(match.group(4)), int(match.group(5)), int(match.group(6))], dtype=int)
+	lo = np.array([int(v) for v in box_triplets[0]], dtype=int)
+	hi = np.array([int(v) for v in box_triplets[1]], dtype=int)
 	ncell = hi - lo + 1
 
+	float_token = re.compile(r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eEdD][+-]?\d+)?$")
 	float3 = []
 	for line in lines:
 		toks = line.strip().split()
-		if len(toks) == 3:
-			try:
-				float3.append([float(t) for t in toks])
-			except ValueError:
-				pass
+		if len(toks) == 3 and all(float_token.match(t) for t in toks):
+			float3.append([float(t) for t in toks])
 	if len(float3) < 2:
 		raise RuntimeError(f"Could not parse prob_lo/prob_hi from {plotfile / 'Header'}")
 
@@ -80,11 +78,10 @@ def get_fields(plotdir: Path):
 	ratio = np.where(rho > 0.0, eint / rho, 0.0)
 	ratio_ref = np.median(ratio[ratio > 0.0])
 	temperature = np.where(ratio_ref > 0.0, T0 * ratio / ratio_ref, 0.0)
-	intensity = np.clip((temperature - T0) / (TION - T0), 0.0, 1.0)
 
 	zmid = ncell[2] // 2
 	extent_pc = [prob_lo[0] / CM_PER_PC, prob_hi[0] / CM_PER_PC, prob_lo[1] / CM_PER_PC, prob_hi[1] / CM_PER_PC]
-	return ncell[0], temperature[zmid, :, :], intensity[zmid, :, :], extent_pc
+	return ncell[0], temperature[zmid, :, :], extent_pc
 
 
 def main():
@@ -107,12 +104,12 @@ def main():
 		if not p.exists():
 			raise FileNotFoundError(f"Plotfile not found: {p}")
 
-	fig, axes = plt.subplots(2, 3, figsize=(13.5, 8.5), constrained_layout=True)
+	fig, axes = plt.subplots(1, 3, figsize=(13.5, 4.5), constrained_layout=True)
 
 	for col, plotdir in enumerate(plotfiles):
-		n, temp2d, inten2d, extent = get_fields(plotdir)
+		n, temp2d, extent = get_fields(plotdir)
 
-		ax_t = axes[0, col]
+		ax_t = axes[col]
 		im_t = ax_t.imshow(temp2d, origin="lower", extent=extent, cmap="inferno", vmin=T0, vmax=TION, interpolation="nearest")
 		ax_t.add_patch(plt.Circle((0.0, 0.0), RS_PC, color="cyan", fill=False, linewidth=1.6))
 		ax_t.set_title(f"Temperature (N={n}^3)")
@@ -120,18 +117,8 @@ def main():
 		ax_t.set_ylabel("y [pc]")
 		ax_t.set_aspect("equal")
 
-		ax_i = axes[1, col]
-		im_i = ax_i.imshow(inten2d, origin="lower", extent=extent, cmap="viridis", vmin=0.0, vmax=1.0, interpolation="nearest")
-		ax_i.add_patch(plt.Circle((0.0, 0.0), RS_PC, color="white", fill=False, linewidth=1.6))
-		ax_i.set_title(f"Photon Intensity Proxy (N={n}^3)")
-		ax_i.set_xlabel("x [pc]")
-		ax_i.set_ylabel("y [pc]")
-		ax_i.set_aspect("equal")
-
-	cbar_t = fig.colorbar(im_t, ax=axes[0, :], shrink=0.92, pad=0.02)
+	cbar_t = fig.colorbar(im_t, ax=axes, shrink=0.92, pad=0.02)
 	cbar_t.set_label("Temperature [K]")
-	cbar_i = fig.colorbar(im_i, ax=axes[1, :], shrink=0.92, pad=0.02)
-	cbar_i.set_label("Normalized intensity")
 
 	out = Path(args.output)
 	fig.savefig(out, dpi=220)
