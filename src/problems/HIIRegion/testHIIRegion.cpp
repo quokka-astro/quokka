@@ -11,8 +11,7 @@
 #include "util/BC.hpp"
 
 #include <cmath>
-#include <fstream>
-#include <hdf5.h>
+#include <filesystem>
 #include <limits>
 
 struct HIIRegionProblem {
@@ -27,7 +26,7 @@ template <> struct SimulationData<HIIRegionProblem> {
 	amrex::Real source_y = 0.0;		 // cm
 	amrex::Real source_z = 0.0;		 // cm
 	std::string stars_file = "hii_stars.txt";
-	std::string qh0_file = "hii_qh0_table.h5";
+	std::string qh0_file = "extern/stellar_tables/QH0_mist_9to120_quokka_best.h5";
 	amrex::Real volume_rel_tol = 0.70; // geometric/discrete tolerance
 	amrex::Real core_temp_tol = 0.70;  // core average T must be >= 0.70 * 1e4 K
 };
@@ -58,90 +57,6 @@ template <> struct Physics_Traits<HIIRegionProblem> {
 	static constexpr int nGroups = 1;
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
-
-namespace
-{
-void WriteQH0Table(std::string const &fname, amrex::Real const qh0_rate)
-{
-	hid_t const file = H5Fcreate(fname.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
-	AMREX_ALWAYS_ASSERT(file >= 0);
-
-	hid_t const g_grids = H5Gcreate2(file, "/grids", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-	hid_t const g_data = H5Gcreate2(file, "/data", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-	hid_t const g_meta = H5Gcreate2(file, "/metadata", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-	AMREX_ALWAYS_ASSERT(g_grids >= 0 && g_data >= 0 && g_meta >= 0);
-
-	double const mass[2] = {1.0, 100.0};
-	double const age[2] = {1.0e5, 1.0e9};
-	double const qh0[4] = {qh0_rate, qh0_rate, qh0_rate, qh0_rate};
-
-	hsize_t const d1[1] = {2};
-	hid_t const s1 = H5Screate_simple(1, d1, nullptr);
-	AMREX_ALWAYS_ASSERT(s1 >= 0);
-
-	hid_t dset = H5Dcreate2(file, "/grids/mass", H5T_NATIVE_DOUBLE, s1, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-	AMREX_ALWAYS_ASSERT(dset >= 0);
-	AMREX_ALWAYS_ASSERT(H5Dwrite(dset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, mass) >= 0);
-	H5Dclose(dset);
-
-	dset = H5Dcreate2(file, "/grids/age", H5T_NATIVE_DOUBLE, s1, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-	AMREX_ALWAYS_ASSERT(dset >= 0);
-	AMREX_ALWAYS_ASSERT(H5Dwrite(dset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, age) >= 0);
-	H5Dclose(dset);
-	H5Sclose(s1);
-
-	hsize_t const d2[2] = {2, 2};
-	hid_t const s2 = H5Screate_simple(2, d2, nullptr);
-	AMREX_ALWAYS_ASSERT(s2 >= 0);
-	dset = H5Dcreate2(file, "/data/QH0", H5T_NATIVE_DOUBLE, s2, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-	AMREX_ALWAYS_ASSERT(dset >= 0);
-	AMREX_ALWAYS_ASSERT(H5Dwrite(dset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, qh0) >= 0);
-	H5Dclose(dset);
-	H5Sclose(s2);
-
-	int const n_mass = 2;
-	int const n_age = 2;
-	hid_t const scalar = H5Screate(H5S_SCALAR);
-	AMREX_ALWAYS_ASSERT(scalar >= 0);
-
-	hid_t attr = H5Acreate2(g_meta, "n_mass", H5T_NATIVE_INT, scalar, H5P_DEFAULT, H5P_DEFAULT);
-	AMREX_ALWAYS_ASSERT(attr >= 0);
-	AMREX_ALWAYS_ASSERT(H5Awrite(attr, H5T_NATIVE_INT, &n_mass) >= 0);
-	H5Aclose(attr);
-
-	attr = H5Acreate2(g_meta, "n_age", H5T_NATIVE_INT, scalar, H5P_DEFAULT, H5P_DEFAULT);
-	AMREX_ALWAYS_ASSERT(attr >= 0);
-	AMREX_ALWAYS_ASSERT(H5Awrite(attr, H5T_NATIVE_INT, &n_age) >= 0);
-	H5Aclose(attr);
-	H5Sclose(scalar);
-
-	H5Gclose(g_meta);
-	H5Gclose(g_data);
-	H5Gclose(g_grids);
-	H5Fclose(file);
-}
-
-void WriteSingleStarFile(std::string const &fname, amrex::Real source_x, amrex::Real source_y, amrex::Real source_z)
-{
-	std::ofstream ofs(fname);
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ofs.good(), ("Failed to open star file: " + fname).c_str());
-
-	// One particle. Format: x y z + all real components.
-	// Real components:
-	// mass vx vy vz birth_time death_time birth_x birth_y birth_z death_x death_y death_z death_density mass_at_birth lum0
-	ofs << "1\n";
-	ofs << source_x << " " << source_y << " " << source_z << " ";
-	ofs << 30.0 * C::M_solar << " ";			      // mass
-	ofs << "0 0 0 ";					      // velocity
-	ofs << -1.0e12 << " ";					      // birth_time (ensures age > 0 at t=0)
-	ofs << 1.0e30 << " ";					      // death_time
-	ofs << source_x << " " << source_y << " " << source_z << " "; // birth pos
-	ofs << source_x << " " << source_y << " " << source_z << " "; // death pos placeholder
-	ofs << 1.0e-21 << " ";					      // death_density placeholder
-	ofs << 30.0 * C::M_solar << " ";			      // mass_at_birth
-	ofs << "0\n";						      // luminosity group 0 (unused here)
-}
-} // namespace
 
 template <> void QuokkaSimulation<HIIRegionProblem>::createInitialStochasticStellarPopParticles()
 {
@@ -206,8 +121,10 @@ auto problem_main() -> int
 	pp_particles.query("stromgren_qh0_table_hdf5_file", stromgren_qh0_file);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		WriteQH0Table(stromgren_qh0_file, inputData.ionizingPhotonRate);
-		WriteSingleStarFile(inputData.stars_file, inputData.source_x, inputData.source_y, inputData.source_z);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::filesystem::exists(stromgren_qh0_file),
+						 ("Failed to find QH0 HDF5 table: " + stromgren_qh0_file).c_str());
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::filesystem::exists(inputData.stars_file),
+						 ("Failed to find stellar particle file: " + inputData.stars_file).c_str());
 	}
 	amrex::ParallelDescriptor::Barrier();
 

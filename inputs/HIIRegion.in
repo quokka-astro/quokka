@@ -40,7 +40,7 @@ cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 # Particle-based Strömgren temperature floor
 # *****************************************************************
 particles.use_stromgren_tempfloor = true
-particles.stromgren_qh0_table_hdf5_file = "hii_qh0_table.h5"
+particles.stromgren_qh0_table_hdf5_file = "../extern/stellar_tables/QH0_mist_9to120_quokka_best.h5"
 particles.disable_SN_feedback = true
 particles.verbose = 0
 
@@ -55,6 +55,6 @@ problem.source_x = 0.0
 problem.source_y = 0.0
 problem.source_z = 0.0
 problem.stars_file = "hii_stars.txt"
-problem.qh0_file = "hii_qh0_table.h5"
+problem.qh0_file = "../extern/stellar_tables/QH0_mist_9to120_quokka_best.h5"
 problem.volume_rel_tol = 0.70
 problem.core_temp_tol = 0.70
