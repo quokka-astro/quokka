@@ -121,8 +121,7 @@ auto problem_main() -> int
 	pp_particles.query("stromgren_qh0_table_hdf5_file", stromgren_qh0_file);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::filesystem::exists(stromgren_qh0_file),
-						 ("Failed to find QH0 HDF5 table: " + stromgren_qh0_file).c_str());
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::filesystem::exists(stromgren_qh0_file), ("Failed to find QH0 HDF5 table: " + stromgren_qh0_file).c_str());
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::filesystem::exists(inputData.stars_file),
 						 ("Failed to find stellar particle file: " + inputData.stars_file).c_str());
 	}
