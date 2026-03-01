@@ -70,14 +70,11 @@ def get_fields(plotdir: Path):
 	comp_names, ncell, prob_lo, prob_hi = parse_header(plotdir)
 	data = read_single_fab_data(plotdir, ncell, len(comp_names))
 
-	idx_rho = comp_names.index("gasDensity")
-	idx_eint = comp_names.index("gasInternalEnergy")
-	rho = data[idx_rho]
-	eint = data[idx_eint]
-
-	ratio = np.where(rho > 0.0, eint / rho, 0.0)
-	ratio_ref = np.median(ratio[ratio > 0.0])
-	temperature = np.where(ratio_ref > 0.0, T0 * ratio / ratio_ref, 0.0)
+	try:
+		idx_temperature = comp_names.index("temperature")
+	except ValueError as exc:
+		raise RuntimeError(f"Plotfile {plotdir} is missing derived field 'temperature'.") from exc
+	temperature = data[idx_temperature]
 
 	zmid = ncell[2] // 2
 	extent_pc = [prob_lo[0] / CM_PER_PC, prob_hi[0] / CM_PER_PC, prob_lo[1] / CM_PER_PC, prob_hi[1] / CM_PER_PC]

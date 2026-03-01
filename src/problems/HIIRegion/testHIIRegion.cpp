@@ -97,6 +97,34 @@ template <> void QuokkaSimulation<HIIRegionProblem>::setInitialConditionsOnGrid(
 	});
 }
 
+template <>
+void QuokkaSimulation<HIIRegionProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
+{
+	// compute derived variables and save in 'mf'
+	if (dname == "temperature") {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "HIIRegion diagnostics require resampled cooling tables.");
+		const int ncomp = ncomp_cc_in;
+		auto tables = resampledTables_.const_tables();
+
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &output = mf.array(iter);
+			auto const &state = state_new_cc_[lev].const_array(iter);
+
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				Real const rho = state(i, j, k, HydroSystem<HIIRegionProblem>::density_index);
+				Real const x1Mom = state(i, j, k, HydroSystem<HIIRegionProblem>::x1Momentum_index);
+				Real const x2Mom = state(i, j, k, HydroSystem<HIIRegionProblem>::x2Momentum_index);
+				Real const x3Mom = state(i, j, k, HydroSystem<HIIRegionProblem>::x3Momentum_index);
+				Real const Egas = state(i, j, k, HydroSystem<HIIRegionProblem>::energy_index);
+				Real const Eint = RadSystem<HIIRegionProblem>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+				output(i, j, k, ncomp) = Tgas;
+			});
+		}
+	}
+}
+
 auto problem_main() -> int
 {
 	SimulationData<HIIRegionProblem> inputData;

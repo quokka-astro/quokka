@@ -26,6 +26,8 @@ checkpoint_interval = -1
 suppress_output = 1
 tiny_profiler.enabled = 0
 
+derived_vars = temperature
+
 density_floor = 1.0e-30
 temperature_floor = 10.0
 
