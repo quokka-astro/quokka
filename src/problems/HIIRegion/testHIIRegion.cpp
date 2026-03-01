@@ -139,8 +139,7 @@ auto problem_main() -> int
 	amrex::ParmParse const pp_particles("particles");
 	pp_particles.query("stromgren_qh0_table_hdf5_file", stromgren_qh0_file);
 
-	auto BCs_cc = quokka::BC<HIIRegionProblem>(quokka::BCType::int_dir);
-	QuokkaSimulation<HIIRegionProblem> sim(BCs_cc);
+	QuokkaSimulation<HIIRegionProblem> sim;
 	sim.userData_ = inputData;
 	sim.setInitialConditions();
 	sim.evolve();

@@ -3,23 +3,23 @@
 # *****************************************************************
 geometry.prob_lo = -3.0e19 -3.0e19 -3.0e19
 geometry.prob_hi =  3.0e19  3.0e19  3.0e19
-quokka.bc = periodic periodic periodic
+quokka.bc = foextrap foextrap foextrap
 
 # *****************************************************************
 # Resolution and runtime
 # *****************************************************************
-amr.n_cell = 32 32 32
+amr.n_cell = 64 64 64
 amr.max_level = 0
 amr.max_grid_size = 32
-amr.blocking_factor = 8
+amr.blocking_factor = 16
 
 do_reflux = 0
 do_subcycle = 0
 
-cfl = 0.4
+cfl = 0.3
 initial_dt = 5.0e10
-stop_time = 2.0e11
-max_timesteps = 4
+stop_time = 3.0e13
+max_timesteps = 200
 
 plotfile_interval = -1
 checkpoint_interval = -1
