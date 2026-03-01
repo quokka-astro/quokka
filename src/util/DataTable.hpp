@@ -1288,13 +1288,20 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	// Reads metadata, coordinates, and data all from the HDF5 file
 	// Optionally returns coordinate bounds via coord_bounds parameter
 	// Optionally returns whether photoelectric heating is enabled via include_pe parameter
-	static auto H5Reader(const std::string &file_path, const std::string &dataset_path, const std::vector<std::string> &coord_names, int is_fast_log = 0,
+	// is_fast_log mode:
+	//  -1 -> auto-detect from dataset layout/metadata
+	//   0 -> read /grids/{coord} and treat coordinates as linear
+	//   1 -> read /grids/fast_log_{coord}; coordinates are treated as already-transformed table coordinates (legacy behavior)
+	//   2 -> read /grids/{coord} where coordinates are already transformed via fast_log2; convert back to physical bounds
+	static auto H5Reader(const std::string &file_path, const std::string &dataset_path, const std::vector<std::string> &coord_names, int is_fast_log = -1,
 			     std::array<std::pair<amrex::Real, amrex::Real>, Ndim> *coord_bounds = nullptr, bool *include_pe = nullptr) -> DataTable
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "H5Reader supports 1D-4D tables");
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 		    coord_names.size() == Ndim,
 		    std::format("H5Reader requires exactly Ndim coordinate names! (expected: {}, provided: {})", Ndim, coord_names.size()));
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(is_fast_log == -1 || is_fast_log == 0 || is_fast_log == 1 || is_fast_log == 2,
+						 std::format("H5Reader invalid is_fast_log mode: {} (expected -1, 0, 1, or 2)", is_fast_log));
 
 		herr_t status = 0;
 		herr_t const h5_error = -1;
@@ -1371,14 +1378,75 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 		H5Gclose(metadata_group);
 
+		// Infer coordinate encoding mode when requested.
+		int coord_mode = is_fast_log;
+		if (coord_mode == -1) {
+			auto read_string_attr = [&](hid_t group_id, std::string const &attr_name) -> std::string {
+				if (H5Aexists(group_id, attr_name.c_str()) <= 0) {
+					return "";
+				}
+				hid_t const attr_id_local = H5Aopen(group_id, attr_name.c_str(), H5P_DEFAULT);
+				if (attr_id_local < 0) {
+					return "";
+				}
+
+				hid_t const attr_type = H5Aget_type(attr_id_local);
+				std::string value;
+				if (H5Tget_class(attr_type) == H5T_STRING) {
+					if (H5Tis_variable_str(attr_type) > 0) {
+						char *raw = nullptr;
+						if (H5Aread(attr_id_local, attr_type, &raw) >= 0 && raw != nullptr) {
+							value = raw;
+							H5free_memory(raw);
+						}
+					} else {
+						size_t const n = H5Tget_size(attr_type);
+						std::vector<char> buf(n + 1, '\0');
+						if (H5Aread(attr_id_local, attr_type, buf.data()) >= 0) {
+							value = buf.data();
+						}
+					}
+				}
+				H5Tclose(attr_type);
+				H5Aclose(attr_id_local);
+				return value;
+			};
+
+			bool has_fast_log_datasets = true;
+			bool has_linear_datasets = true;
+			bool metadata_says_fast_log2 = true;
+			hid_t const metadata_group = H5Gopen2(file_id, "/metadata", H5P_DEFAULT);
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(metadata_group != h5_error, "Failed to open metadata group!");
+
+			for (int dim = 0; dim < Ndim; ++dim) {
+				std::string const fast_name = "/grids/fast_log_" + coord_names[dim];
+				std::string const linear_name = "/grids/" + coord_names[dim];
+				has_fast_log_datasets = has_fast_log_datasets && (H5Lexists(file_id, fast_name.c_str(), H5P_DEFAULT) > 0);
+				has_linear_datasets = has_linear_datasets && (H5Lexists(file_id, linear_name.c_str(), H5P_DEFAULT) > 0);
+
+				std::string const transform_attr = coord_names[dim] + "_coord_transform";
+				std::string const transform = read_string_attr(metadata_group, transform_attr);
+				metadata_says_fast_log2 = metadata_says_fast_log2 && ((transform == "fast_log2") || (transform == "fast_log"));
+			}
+			H5Gclose(metadata_group);
+
+			if (has_fast_log_datasets) {
+				coord_mode = 1;
+			} else if (has_linear_datasets && metadata_says_fast_log2) {
+				coord_mode = 2;
+			} else {
+				coord_mode = 0;
+			}
+		}
+
 		// Read coordinate grids
 		std::vector<amrex::Vector<amrex::Real>> coords(Ndim);
 		for (int dim = 0; dim < Ndim; ++dim) {
 			coords[dim].resize(n_coords[dim]);
 		}
 
-		// Construct coordinate dataset names based on is_fast_log parameter
-		const std::string prefix = (is_fast_log == 1) ? "fast_log_" : "";
+		// Construct coordinate dataset names based on coord_mode.
+		const std::string prefix = (coord_mode == 1) ? "fast_log_" : "";
 		std::vector<std::string> coord_datasets(Ndim);
 		for (int dim = 0; dim < Ndim; ++dim) {
 			coord_datasets[dim] = "/grids/" + prefix + coord_names[dim];
@@ -1419,6 +1487,36 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			coord_arrays[dim] = coords[dim];
 		}
 
+		// Initialize using the appropriate spacing mode.
+		auto initialize_from_h5 = [&](DataTable &table, auto const &data_array) {
+			if (coord_mode == 0 || coord_mode == 1) {
+				// Preserve legacy behavior:
+				// mode 0 -> /grids/* linear coordinates
+				// mode 1 -> /grids/fast_log_* coordinates are already transformed and consumed as linear table coordinates
+				table.initialize(coord_arrays, data_array);
+				return;
+			}
+
+			std::array<amrex::Real, Ndim> x_mins{};
+			std::array<amrex::Real, Ndim> x_maxs{};
+			std::array<int, Ndim> n_xs{};
+			std::array<SpacingType, Ndim> spacing_types{};
+			std::array<amrex::Vector<amrex::Real>, Ndim> empty_coords;
+
+			for (int dim = 0; dim < Ndim; ++dim) {
+				n_xs[dim] = n_coords[dim];
+				spacing_types[dim] = SpacingType::fast_log;
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!coords[dim].empty(), std::format("H5Reader empty coordinate array for dimension {}", dim));
+
+				// coord_mode == 2:
+				// /grids/* stores transformed fast_log2 coordinates directly.
+				x_mins[dim] = FastMath::pow2(coords[dim].front());
+				x_maxs[dim] = FastMath::pow2(coords[dim].back());
+			}
+
+			table.initialize_common(x_mins, x_maxs, n_xs, spacing_types, empty_coords, data_array);
+		};
+
 		// Convert HDF5 C-order data to natural dimensional format
 		if constexpr (Ndim == 1) {
 			// For 1D: data[out_idx][i]
@@ -1432,7 +1530,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 			// Create and initialize DataTable
 			DataTable table;
-			table.initialize(coord_arrays, data_array);
+			initialize_from_h5(table, data_array);
 
 			// Close HDF5 file
 			H5Fclose(file_id);
@@ -1453,7 +1551,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 			// Create and initialize DataTable
 			DataTable table;
-			table.initialize(coord_arrays, data_array);
+			initialize_from_h5(table, data_array);
 
 			// Close HDF5 file
 			H5Fclose(file_id);
@@ -1478,7 +1576,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 			// Create and initialize DataTable
 			DataTable table;
-			table.initialize(coord_arrays, data_array);
+			initialize_from_h5(table, data_array);
 
 			// Close HDF5 file
 			H5Fclose(file_id);
@@ -1508,7 +1606,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 			// Create and initialize DataTable
 			DataTable table;
-			table.initialize(coord_arrays, data_array);
+			initialize_from_h5(table, data_array);
 
 			// Close HDF5 file
 			H5Fclose(file_id);
