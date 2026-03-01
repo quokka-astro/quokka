@@ -89,12 +89,12 @@ The reported residual is
 with stopping criterion $\mathcal{R}_{\infty}<\texttt{tol}$ (or \texttt{max-iters} reached).
 
 \section{Quokka implementation (3D, production path)}
-The Python script above is a 1D spherical reference model. In Quokka, the corresponding implementation used by the H\,II-region temperature-floor path is a 3D Cartesian, GPU-parallel solve in
+The Python script above is a 1D spherical reference model. In Quokka, the corresponding implementation used by the H\,II-region photoionization path is a 3D Cartesian, GPU-parallel solve in
 \texttt{src/particles/particle\_photoionization.hpp}, called through
 \texttt{QuokkaSimulation::FillNGammaFromStromgrenAtLevel()}.
 
 \subsection*{Where it is used in the timestep}
-When \texttt{particles.use\_stromgren\_tempfloor = true}, Quokka:
+When \texttt{particles.use\_stromgren\_photoionization = true}, Quokka:
 \begin{enumerate}
 \item Builds \texttt{n\_gamma\_cc} once per level at the start of \texttt{advanceHydroAtLevel()}.
 \item Passes \texttt{n\_gamma\_cc} into the Strang-split cooling source update.

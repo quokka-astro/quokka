@@ -39,9 +39,9 @@ cooling.cooling_table_type = "resampled"
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 
 # *****************************************************************
-# Particle-based Strömgren temperature floor
+# Particle-based Strömgren photoionization
 # *****************************************************************
-particles.use_stromgren_tempfloor = true
+particles.use_stromgren_photoionization = true
 particles.stromgren_qh0_table_hdf5_file = "../extern/stellar_tables/QH0_mist_9to120_quokka_best.h5"
 particles.disable_SN_feedback = true
 particles.verbose = 0
