@@ -91,6 +91,18 @@ if [[ ! -f "${COOLING_FILE}" ]]; then
   exit 1
 fi
 
+QH0_FILE="${ROOT_DIR}/extern/stellar_tables/QH0_mist_9to120_quokka_best.h5"
+if [[ ! -f "${QH0_FILE}" ]]; then
+  echo "Error: QH0 table not found: ${QH0_FILE}" >&2
+  exit 1
+fi
+
+STARS_FILE="${ROOT_DIR}/tests/hii_stars.txt"
+if [[ ! -f "${STARS_FILE}" ]]; then
+  echo "Error: stars file not found: ${STARS_FILE}" >&2
+  exit 1
+fi
+
 declare -a PLOTFILES=()
 for N in 16 32 64; do
   RUN_DIR="${ROOT_DIR}/tests/hii_runs/${N}"
@@ -101,6 +113,9 @@ for N in 16 32 64; do
   sed -i '' "s|^amr.max_grid_size = .*|amr.max_grid_size = ${N}|" "${RUN_DIR}/HIIRegion.in"
   sed -i '' "s|^plotfile_interval = .*|plotfile_interval = ${PLOTFILE_INTERVAL}|" "${RUN_DIR}/HIIRegion.in"
   sed -i '' "s|^cooling.hdf5_data_file = .*|cooling.hdf5_data_file = \"${COOLING_FILE}\"|" "${RUN_DIR}/HIIRegion.in"
+  sed -i '' "s|^particles.stromgren_qh0_table_hdf5_file = .*|particles.stromgren_qh0_table_hdf5_file = \"${QH0_FILE}\"|" "${RUN_DIR}/HIIRegion.in"
+  sed -i '' "s|^problem.stars_file = .*|problem.stars_file = \"${STARS_FILE}\"|" "${RUN_DIR}/HIIRegion.in"
+  sed -i '' "s|^problem.qh0_file = .*|problem.qh0_file = \"${QH0_FILE}\"|" "${RUN_DIR}/HIIRegion.in"
 
   echo "Running HIIRegion ${N}^3 ..."
   (
