@@ -14,7 +14,7 @@ import numpy as np
 CM_PER_PC = 3.08567758e18
 Q = 1.0e49
 ALPHAB = 2.6e-13
-NH = 1.0e3
+NH = 1.0e2
 T0 = 500.0
 TION = 1.0e4
 RS_CM = ((3.0 * Q) / (4.0 * math.pi * ALPHAB * NH * NH)) ** (1.0 / 3.0)
