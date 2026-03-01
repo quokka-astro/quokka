@@ -731,8 +731,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 				       << stochastic_stellar_pop_qh0_table_hdf5_file_ << " dataset " << stochastic_stellar_pop_qh0_table_dataset_ << "\n";
 			amrex::Print() << "\tUsing QH0 axis order convention: (mass, age)\n";
 			amrex::Print() << std::format("\tInferred grid encoding: {}\n",
-						      (stochastic_stellar_pop_qh0_table_is_fast_log_ == -1) ? "auto" :
-						      ((stochastic_stellar_pop_qh0_table_is_fast_log_ == 1) ? "fast_log" : "linear/log"));
+						      (stochastic_stellar_pop_qh0_table_is_fast_log_ == -1)
+							  ? "auto"
+							  : ((stochastic_stellar_pop_qh0_table_is_fast_log_ == 1) ? "fast_log" : "linear/log"));
 			stochasticStellarPopQH0Table_ =
 			    quokka::DataTable<2, 1>::H5Reader(stochastic_stellar_pop_qh0_table_hdf5_file_, stochastic_stellar_pop_qh0_table_dataset_,
 							      coord_names, stochastic_stellar_pop_qh0_table_is_fast_log_);
