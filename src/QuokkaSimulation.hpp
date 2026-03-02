@@ -73,6 +73,7 @@ namespace filesystem = experimental::filesystem;
 
 #include "SimulationData.hpp"
 #include "chemistry/Chemistry.hpp"
+#include "radiation/photochemistry.hpp"
 #include "cooling/ResampledCooling.hpp"
 #include "dust/DustDrag.hpp"
 #include "dust/dust_system.hpp"
@@ -159,6 +160,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	int enableCooling_ = 0;
 	int enableChemistry_ = 0;
+	int enablePhotoChemistry_ = 0;
 	int enableTurbulence_ = 0;
 	int enableIterDustStoptime_ = 0;
 	Real max_density_allowed = std::numeric_limits<amrex::Real>::max();
@@ -564,6 +566,16 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("project_initial_b_field", projectInitialBField_);
 		hpp.query("update_initial_b_energy", updateInitialMagneticEnergy_);
 	}
+
+#ifdef PHOTOCHEMISTRY
+	// set photochemistry runtime parameters
+	{
+		amrex::ParmParse const hpp("photochemistry");
+		hpp.query("enabled", enablePhotoChemistry_);
+		hpp.query("max_density_allowed", max_density_allowed);
+		hpp.query("min_density_allowed", min_density_allowed); // don't do photochemistry in cells with densities below the minimum density specified
+	}
+#endif
 
 	// set cooling runtime parameters
 	bool cooling_table_include_pe = false;
@@ -3036,6 +3048,12 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 									       p_iteration_failure_counter);
 			}
 		}
+#ifdef PHOTOCHEMISTRY
+		if (enablePhotoChemistry_ == 1) {
+			// compute photo-chemistry
+			quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], dt_radiation, 1, max_density_allowed, min_density_allowed);
+		}
+#endif
 
 		if (print_rad_counter_) {
 			auto *h_iteration_counter = iteration_counter.copyToHost();

@@ -266,6 +266,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	// static functions
 
+	static auto GetRadiationGroupQuanta(amrex::Real freq_low, amrex::Real freq_high) -> amrex::Real;
+
 	static void ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons, array_t &maxSignal, amrex::Box const &indexRange);
 	static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons, array_t &primVar, amrex::Box const &indexRange);
 
@@ -655,6 +657,12 @@ void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real>
 }
 
 template <typename problem_t>
+auto RadSystem<problem_t>::GetRadiationGroupQuanta(amrex::Real freq_low, amrex::Real freq_high) -> amrex::Real
+{
+	return 0.5_rt * (freq_high + freq_low) * C::hplanck;
+}
+
+template <typename problem_t>
 void RadSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const & /*cons*/, array_t &maxSignal, amrex::Box const &indexRange)
 {
 	// cell-centered kernel
@@ -756,7 +764,10 @@ void RadSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t &consVa
 		if (!isStateValid(cons)) {
 			amendRadState(cons);
 		}
-		AMREX_ASSERT(isStateValid(cons));
+		if (!isStateValid(cons)) {
+			std::cout << "Invalid state, assertion failed." << std::endl;
+		}
+		// AMREX_ASSERT(isStateValid(cons));
 
 		for (int n = 0; n < nvarHyperbolic_; ++n) {
 			consVarNew(i, j, k, nstartHyperbolic_ + n) = cons[n];

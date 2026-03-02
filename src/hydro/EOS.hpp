@@ -95,7 +95,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 	// return temperature for an ideal gas given density and internal energy
 	amrex::Real Tgas = NAN; // NOLINT(cppcoreguidelines-init-variables)
 
-#ifdef CHEMISTRY
+#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 	eos_t chemstate;
 	chemstate.rho = rho;
 	chemstate.e = Eint / rho;
@@ -137,7 +137,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 	// return internal energy density given density and temperature
 	amrex::Real Eint = NAN; // NOLINT(cppcoreguidelines-init-variables)
 
-#ifdef CHEMISTRY
+#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 	eos_t chemstate;
 	chemstate.rho = rho;
 	// Define and initialize Tgas here
@@ -180,7 +180,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromPre
 	// return internal energy density given density and pressure
 	amrex::Real Eint = NAN; // NOLINT(cppcoreguidelines-init-variables)
 
-#ifdef CHEMISTRY
+#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 	eos_t chemstate;
 	chemstate.rho = rho;
 	chemstate.p = Pressure;
@@ -221,7 +221,7 @@ EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Re
 	// compute derivative of internal energy w/r/t temperature, given density and temperature
 	amrex::Real dEint_dT = NAN;
 
-#ifdef CHEMISTRY
+#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 	amrex::ignore_unused(Tgas);
 	eos_t chemstate;
 	chemstate.rho = rho;
@@ -272,7 +272,7 @@ EOS<problem_t>::ComputeOtherDerivatives(const amrex::Real rho, const amrex::Real
 	// fundamental derivative
 	amrex::Real G = NAN;
 
-#ifdef CHEMISTRY
+#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 	eos_t chemstate;
 	chemstate.rho = rho;
 	chemstate.p = P;
@@ -329,7 +329,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputePressure(am
 		P = rho * EOS_Traits<problem_t>::cs_isothermal * EOS_Traits<problem_t>::cs_isothermal;
 		return P;
 	}
-#ifdef CHEMISTRY
+#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 	eos_t chemstate;
 	chemstate.rho = rho;
 	chemstate.e = Eint / rho;
@@ -382,7 +382,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeSoundSpeed(
 		return cs;
 	}
 
-#ifdef CHEMISTRY
+#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 	eos_t chemstate;
 	chemstate.rho = rho;
 	chemstate.p = Pressure;
