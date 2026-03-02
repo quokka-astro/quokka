@@ -1,0 +1,37 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  0.0  0.0  0.0 
+geometry.prob_hi     =  5e27 5e27 5e27
+geometry.is_periodic =  1    1    1
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 0       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 16 16 16
+amr.max_level       = 0     # number of levels = max_level + 1
+#max_timesteps = 10
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 0
+
+stromgen.tend = 1.58e16
+stromgen.primary_species_1 = 1.2e-6
+stromgen.primary_species_2 = 1.0e-3
+stromgen.primary_species_3 = 1.2e-6
+stromgen.Q = 5e48
+
+photochemistry.enabled = 1
+integrator.use_number_densities = 1
+integrator.do_species_clip = 0
+integrator.jacobian = 0
+integrator.renormalize_abundances = 0
+integrator.subtract_internal_energy = 0
+integrator.X_reject_buffer = 1e100
+
+plotfile_interval = 5000
