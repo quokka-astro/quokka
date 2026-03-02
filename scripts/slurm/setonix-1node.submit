@@ -50,15 +50,21 @@ write_chk_before_timeout() {
 	local tlimit
 	tlimit=$(squeue -j "${SLURM_JOB_ID}" --noheader --format="%l")
 
-	# Parse [D-]HH:MM:SS into total seconds
-	local days=0 hours=0 mins=0 secs=0
+	# Parse [D-]HH:MM:SS, [D-]MM:SS, [D-]SS right-to-left so any truncated prefix works
+	local days=0
 	local t="${tlimit}"
 	if [[ "${t}" == *-* ]]; then
 		days="${t%%-*}"
 		t="${t#*-}"
 	fi
-	IFS=: read -r hours mins secs <<< "${t}"
-	local total_seconds=$(( days*86400 + hours*3600 + mins*60 + secs ))
+	local parts
+	IFS=: read -ra parts <<< "${t}"
+	local n=${#parts[@]}
+	local multipliers=(1 60 3600)
+	local total_seconds=$(( days*86400 ))
+	for (( i=0; i<n; i++ )); do
+		total_seconds=$(( total_seconds + 10#${parts[n-1-i]} * ${multipliers[i]} ))
+	done
 
 	local sleep_time=$(( total_seconds - margin ))
 	if (( sleep_time <= 0 )); then
