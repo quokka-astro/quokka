@@ -182,6 +182,10 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 	amrex::MultiFab source_rhs(ba_lev, dm_lev, 1, 0);
 	amrex::MultiFab reaction_sink(ba_lev, dm_lev, 1, 0);
 	amrex::MultiFab residual(ba_lev, dm_lev, 1, 0);
+	amrex::MultiFab midpoint_scale(ba_lev, dm_lev, 1, 0);
+	amrex::MultiFab x_old(ba_lev, dm_lev, 1, 0);
+	amrex::MultiFab x_new(ba_lev, dm_lev, 1, 0);
+	amrex::MultiFab x_delta(ba_lev, dm_lev, 1, 0);
 	amrex::MultiFab phi_picard(ba_lev, dm_lev, 1, 1);
 	amrex::MultiFab phi_g_prev(ba_lev, dm_lev, 1, 1);
 	amrex::MultiFab correction(ba_lev, dm_lev, 1, 0);
@@ -195,6 +199,10 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 	source_rhs.setVal(0.0);
 	reaction_sink.setVal(0.0);
 	residual.setVal(0.0);
+	midpoint_scale.setVal(0.0);
+	x_old.setVal(0.0);
+	x_new.setVal(0.0);
+	x_delta.setVal(0.0);
 	phi_picard.setVal(0.0);
 	phi_g_prev.setVal(0.0);
 	correction.setVal(0.0);
@@ -204,15 +212,19 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 	auto const state = state_cc.const_arrays();
 	auto const source_arr = source_q.const_arrays();
 	if (init_xfrac > 0.0) {
-		amrex::Real const x = init_xfrac;
-		amrex::Real const denom = amrex::max(1.0 - x, 1.0e-12);
-		amrex::Real const n_gamma_per_nH = (alphaB * x * x) / (C::c_light * sigma_HI * denom);
+		amrex::Real const source_max = source_q.norm0(0, 0, false);
 		auto phi_arr = phi.arrays();
-		amrex::ParallelFor(phi, [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
-			amrex::Real const rho = state[nbx](i, j, k, HydroSystem<problem_t>::density_index);
-			amrex::Real const nH = (rho > 0.0) ? (rho / n_to_rho) : 0.0;
-			phi_arr[nbx](i, j, k, 0) = n_gamma_per_nH * nH;
-		});
+		if (source_max > 0.0) {
+			amrex::ParallelFor(phi, [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+				amrex::Real const rho = state[nbx](i, j, k, HydroSystem<problem_t>::density_index);
+				amrex::Real const nH = (rho > 0.0) ? (rho / n_to_rho) : 0.0;
+				amrex::Real const source_ratio = amrex::max(source_arr[nbx](i, j, k, 0), 0.0) / source_max;
+				amrex::Real const x = amrex::min<amrex::Real>(init_xfrac * source_ratio, 1.0 - 1.0e-12);
+				amrex::Real const denom = amrex::max(1.0 - x, 1.0e-12);
+				amrex::Real const n_gamma_per_nH = (alphaB * x * x) / (C::c_light * sigma_HI * denom);
+				phi_arr[nbx](i, j, k, 0) = n_gamma_per_nH * nH;
+			});
+		}
 		amrex::MultiFab::Copy(phi_new, phi, 0, 0, 1, 1);
 	}
 
@@ -231,8 +243,8 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 	// We use a lowest-order IMEX time discretization:
 	//   forward Euler for the explicit flux divergence and source terms,
 	//   and backward Euler for the reaction term.
-	// We iterate in pseudo-time until the residual of the steady-state PDE
-	//  is reduced by a user-specified factor, or until max iter is reached.
+	// We iterate in pseudo-time until the ionization fraction x converges:
+	//   mixed absolute/relative update norm in x is below threshold.
 	// We also enforce positivity of the solution with timestep retries.
 	//
 
@@ -343,13 +355,16 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 		});
 	};
 	amrex::Real const source_scale = amrex::max(source_q.norm0(0, 0, false) / cell_volume, 1.0e-60);
+	amrex::Real constexpr x_atol = 1.0e-6;
+	amrex::Real constexpr rel_change_floor = 1.0e-60;
 	amrex::Real constexpr dot_eps = 1.0e-300;
 	bool have_prev_picard = false;
 
 	int iter = 0;
 	bool converged = false;
-	amrex::Real final_rel_resid = std::numeric_limits<amrex::Real>::infinity();
-	amrex::Real prev_rel_resid = std::numeric_limits<amrex::Real>::quiet_NaN();
+	amrex::Real final_x_mixed_update = std::numeric_limits<amrex::Real>::infinity();
+	amrex::Real final_x_rel_change = std::numeric_limits<amrex::Real>::infinity();
+	amrex::Real prev_x_rel_change = std::numeric_limits<amrex::Real>::quiet_NaN();
 	for (; iter < max_pseudo_iters; ++iter) {
 		compute_explicit_and_reaction(phi, explicit_rhs, reaction_rate, transport_rhs, source_rhs, reaction_sink);
 
@@ -359,26 +374,7 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 		});
 
 		amrex::Real const rel_resid = residual.norm0(0, 0, false) / source_scale;
-		final_rel_resid = rel_resid;
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(rel_resid), "Stromgren pseudo-time solve produced non-finite residual.");
-
-		if ((log_every > 0) && ((iter == 0) || (((iter + 1) % log_every) == 0))) {
-			amrex::Real const phi_min = phi.min(0, 0, false);
-			amrex::Real const phi_max = phi.max(0, 0, false);
-			amrex::Real const explicit_inf = explicit_rhs.norm0(0, 0, false);
-			amrex::Real const transport_inf = transport_rhs.norm0(0, 0, false);
-			amrex::Real const source_inf = source_rhs.norm0(0, 0, false);
-			amrex::Real const reaction_inf = reaction_sink.norm0(0, 0, false);
-			amrex::Real const ratio = std::isfinite(prev_rel_resid) ? (rel_resid / amrex::max(prev_rel_resid, 1.0e-300)) : 1.0;
-			amrex::Print() << std::format(
-			    "[iter {:7d}] residual={:.6e} ratio={:.3e} phi_min={:.6e} phi_max={:.6e} |E|={:.6e} |T|={:.6e} |Q|={:.6e} |R|={:.6e}\n", iter + 1,
-			    rel_resid, ratio, phi_min, phi_max, explicit_inf, transport_inf, source_inf, reaction_inf);
-		}
-		prev_rel_resid = rel_resid;
-		if ((iter >= min_pseudo_iters) && (rel_resid < residual_tol)) {
-			converged = true;
-			break;
-		}
 
 		amrex::Real dt_try = amrex::max(dtau, 1.0e-60);
 		bool accepted = false;
@@ -447,17 +443,90 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 			amrex::Print() << std::format("[iter {:7d}] anderson beta={:.3e}\n", iter + 1, anderson_beta);
 		}
 
+		amrex::ParallelFor(x_old,
+				   [phi_arr = phi.const_arrays(), state, x_arr = x_old.arrays(), n_to_rho] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+			    amrex::Real const rho = state[nbx](i, j, k, HydroSystem<problem_t>::density_index);
+			    amrex::Real const nH = (rho > 0.0) ? (rho / n_to_rho) : 0.0;
+			    amrex::Real const ng = amrex::max(phi_arr[nbx](i, j, k, 0), 0.0);
+			    if ((nH <= 0.0) || (ng <= 0.0)) {
+				    x_arr[nbx](i, j, k, 0) = 0.0;
+			    } else {
+				    amrex::Real const a = alphaB * nH;
+				    amrex::Real const b = C::c_light * sigma_HI * ng;
+				    amrex::Real const disc = b * b + 4.0 * a * b;
+				    amrex::Real const x = (-b + std::sqrt(disc)) / (2.0 * a);
+				    x_arr[nbx](i, j, k, 0) = amrex::min<amrex::Real>(1.0, amrex::max<amrex::Real>(0.0, x));
+			    }
+		    });
+		amrex::ParallelFor(x_new,
+				   [phi_arr = phi_new.const_arrays(), state, x_arr = x_new.arrays(), n_to_rho] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+			    amrex::Real const rho = state[nbx](i, j, k, HydroSystem<problem_t>::density_index);
+			    amrex::Real const nH = (rho > 0.0) ? (rho / n_to_rho) : 0.0;
+			    amrex::Real const ng = amrex::max(phi_arr[nbx](i, j, k, 0), 0.0);
+			    if ((nH <= 0.0) || (ng <= 0.0)) {
+				    x_arr[nbx](i, j, k, 0) = 0.0;
+			    } else {
+				    amrex::Real const a = alphaB * nH;
+				    amrex::Real const b = C::c_light * sigma_HI * ng;
+				    amrex::Real const disc = b * b + 4.0 * a * b;
+				    amrex::Real const x = (-b + std::sqrt(disc)) / (2.0 * a);
+				    x_arr[nbx](i, j, k, 0) = amrex::min<amrex::Real>(1.0, amrex::max<amrex::Real>(0.0, x));
+			    }
+		    });
+		amrex::ParallelFor(
+		    x_delta, [x0_arr = x_old.const_arrays(), x1_arr = x_new.const_arrays(),
+			      dx_arr = x_delta.arrays()] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+			    dx_arr[nbx](i, j, k, 0) = std::abs(x1_arr[nbx](i, j, k, 0) - x0_arr[nbx](i, j, k, 0));
+		    });
+		amrex::ParallelFor(
+		    midpoint_scale, [x0_arr = x_old.const_arrays(), x1_arr = x_new.const_arrays(),
+				     midpoint_arr = midpoint_scale.arrays()] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+			    midpoint_arr[nbx](i, j, k, 0) = 0.5 * (std::abs(x1_arr[nbx](i, j, k, 0)) + std::abs(x0_arr[nbx](i, j, k, 0)));
+		    });
+		amrex::ParallelFor(residual,
+				   [delta_arr = x_delta.const_arrays(), midpoint_arr = midpoint_scale.const_arrays(), scaled_update_arr = residual.arrays(),
+				    x_atol, residual_tol] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+					   amrex::Real const denom = x_atol + residual_tol * midpoint_arr[nbx](i, j, k, 0);
+					   scaled_update_arr[nbx](i, j, k, 0) = delta_arr[nbx](i, j, k, 0) / amrex::max(denom, 1.0e-60);
+				   });
+		amrex::Real const x_mixed_update_norm = residual.norm0(0, 0, false);
+		final_x_mixed_update = x_mixed_update_norm;
+		amrex::Real const delta_inf = x_delta.norm0(0, 0, false);
+		amrex::Real const midpoint_inf = midpoint_scale.norm0(0, 0, false);
+		amrex::Real const x_rel_change = delta_inf / amrex::max(midpoint_inf, rel_change_floor);
+		final_x_rel_change = x_rel_change;
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(x_rel_change), "Stromgren pseudo-time solve produced non-finite x relative change.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(x_mixed_update_norm), "Stromgren pseudo-time solve produced non-finite x mixed update norm.");
+
+		if ((log_every > 0) && ((iter == 0) || (((iter + 1) % log_every) == 0))) {
+			amrex::Real const phi_min = phi_new.min(0, 0, false);
+			amrex::Real const phi_max = phi_new.max(0, 0, false);
+			amrex::Real const explicit_inf = explicit_rhs.norm0(0, 0, false);
+			amrex::Real const transport_inf = transport_rhs.norm0(0, 0, false);
+			amrex::Real const source_inf = source_rhs.norm0(0, 0, false);
+			amrex::Real const reaction_inf = reaction_sink.norm0(0, 0, false);
+			amrex::Real const ratio = std::isfinite(prev_x_rel_change) ? (x_rel_change / amrex::max(prev_x_rel_change, 1.0e-300)) : 1.0;
+			amrex::Print() << std::format(
+			    "[iter {:7d}] x_mixed_update={:.6e} x_rel_change={:.6e} ratio={:.3e} residual={:.6e} phi_min={:.6e} phi_max={:.6e} |E|={:.6e} |T|={:.6e} |Q|={:.6e} |R|={:.6e}\n",
+			    iter + 1, x_mixed_update_norm, x_rel_change, ratio, rel_resid, phi_min, phi_max, explicit_inf, transport_inf, source_inf, reaction_inf);
+		}
+		prev_x_rel_change = x_rel_change;
+
 		amrex::MultiFab::Copy(phi_g_prev, phi_picard, 0, 0, 1, 1);
 		amrex::MultiFab::Copy(correction_prev, correction, 0, 0, 1, 0);
 		have_prev_picard = true;
 		amrex::MultiFab::Copy(phi, phi_new, 0, 0, 1, 1);
+		if ((iter >= min_pseudo_iters) && (x_mixed_update_norm < 1.0)) {
+			converged = true;
+			break;
+		}
 	}
 	if (abort_on_max_iters && !converged) {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 		    false,
 		    std::format(
-			"Stromgren pseudo-time solve reached max iterations ({}) without satisfying residual tolerance (residual_tol={}, final_rel_resid={}).",
-			max_pseudo_iters, residual_tol, final_rel_resid)
+			"Stromgren pseudo-time solve reached max iterations ({}) without satisfying x-change tolerance (rtol={}, x_atol={}, final_x_mixed_update={} final_x_rel_change={}).",
+			max_pseudo_iters, residual_tol, x_atol, final_x_mixed_update, final_x_rel_change)
 			.c_str());
 	}
 
