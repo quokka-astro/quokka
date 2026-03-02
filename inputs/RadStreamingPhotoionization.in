@@ -1,0 +1,30 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  0.0  0.0  0.0 
+geometry.prob_hi     =  100000000000.0  100000000000.0  100000000000.0
+geometry.is_periodic =  1    1    1
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 0       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 8 8 8
+amr.max_level       = 0     # number of levels = max_level + 1
+#max_timesteps = 10
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 0
+
+photoionization.tend = 8000
+
+photochemistry.enabled = 1
+integrator.use_number_densities = 1
+integrator.do_species_clip = 0
+integrator.jacobian = 0
+integrator.renormalize_abundances = 0
+integrator.subtract_internal_energy = 0
