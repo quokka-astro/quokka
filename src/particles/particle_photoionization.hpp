@@ -352,9 +352,8 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 		bool accepted = false;
 		for (int retry = 0; retry < max_stage_retries; ++retry) {
 			// Lowest-order IMEX update: forward Euler for explicit terms + backward Euler for reaction.
-			amrex::ParallelFor(phi_new, [phi_arr = phi.const_arrays(), E0_arr = explicit_rhs.const_arrays(),
-						     k0_arr = reaction_rate.const_arrays(), phi1_arr = phi_new.arrays(),
-						     dt_try] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+			amrex::ParallelFor(phi_new, [phi_arr = phi.const_arrays(), E0_arr = explicit_rhs.const_arrays(), k0_arr = reaction_rate.const_arrays(),
+						     phi1_arr = phi_new.arrays(), dt_try] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
 				amrex::Real const numer = phi_arr[nbx](i, j, k, 0) + dt_try * E0_arr[nbx](i, j, k, 0);
 				amrex::Real const denom = amrex::max(1.0 + dt_try * k0_arr[nbx](i, j, k, 0), 1.0e-60);
 				phi1_arr[nbx](i, j, k, 0) = numer / denom;
