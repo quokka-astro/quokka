@@ -177,11 +177,17 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 	amrex::MultiFab phi_new(ba_lev, dm_lev, 1, 1);
 	amrex::MultiFab explicit_rhs(ba_lev, dm_lev, 1, 0);
 	amrex::MultiFab reaction_rate(ba_lev, dm_lev, 1, 0);
+	amrex::MultiFab transport_rhs(ba_lev, dm_lev, 1, 0);
+	amrex::MultiFab source_rhs(ba_lev, dm_lev, 1, 0);
+	amrex::MultiFab reaction_sink(ba_lev, dm_lev, 1, 0);
 	amrex::MultiFab residual(ba_lev, dm_lev, 1, 0);
 	phi.setVal(0.0);
 	phi_new.setVal(0.0);
 	explicit_rhs.setVal(0.0);
 	reaction_rate.setVal(0.0);
+	transport_rhs.setVal(0.0);
+	source_rhs.setVal(0.0);
+	reaction_sink.setVal(0.0);
 	residual.setVal(0.0);
 
 	auto const state = state_cc.const_arrays();
@@ -207,19 +213,26 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 	// We also enforce positivity of the solution with timestep retries.
 	//
 
-	amrex::Real const dx_min = std::min({dx[0], dx[1], dx[2]});
 	amrex::Real const Lbox = std::min({p_hi[0] - p_lo[0], p_hi[1] - p_lo[1], p_hi[2] - p_lo[2]});
 	amrex::Real const kappa_ref = 1.0 / Lbox;
-	amrex::Real const cfl = 0.8;
-	amrex::Real const dtau = cfl * dx_min / C::c_light;
+	amrex::Real const lambda_lp_max = 1.0 / 3.0;
+	amrex::Real const D_max = C::c_light * lambda_lp_max / kappa_ref;
+	amrex::Real const sum_inv_dx2 = (1.0 / (dx[0] * dx[0])) + (1.0 / (dx[1] * dx[1])) + (1.0 / (dx[2] * dx[2]));
+	amrex::Real const dtau_explicit_max = 1.0 / (2.0 * D_max * sum_inv_dx2);
+	amrex::Real const diffusion_cfl = 1.0;
+	amrex::Real const dtau = diffusion_cfl * dtau_explicit_max;
 	int const min_pseudo_iters = 4;
 	amrex::Real const eps_phi = 1.0e-30;
 
-	auto compute_explicit_and_reaction = [&](amrex::MultiFab &phi_in, amrex::MultiFab &explicit_out, amrex::MultiFab &k_out) {
+	auto compute_explicit_and_reaction = [&](amrex::MultiFab &phi_in, amrex::MultiFab &explicit_out, amrex::MultiFab &k_out, amrex::MultiFab &transport_out,
+						 amrex::MultiFab &source_out, amrex::MultiFab &reaction_out) {
 		phi_in.FillBoundary(geom_lev.periodicity());
 		auto const phi_arr = phi_in.const_arrays();
 		auto explicit_arr = explicit_out.arrays();
 		auto k_arr = k_out.arrays();
+		auto transport_arr = transport_out.arrays();
+		auto source_term_arr = source_out.arrays();
+		auto reaction_term_arr = reaction_out.arrays();
 
 		amrex::ParallelFor(explicit_out, [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
 			amrex::Real const phi_c = amrex::max(phi_arr[nbx](i, j, k, 0), 0.0);
@@ -295,8 +308,15 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 			amrex::Real const k_reac = C::c_light * sigma_HI * nHI_c;
 			amrex::Real const qsrc = source_arr[nbx](i, j, k, 0) / cell_volume;
 
-			explicit_arr[nbx](i, j, k, 0) = -divF + qsrc;
+			amrex::Real const transport_term = -divF;
+			amrex::Real const source_term = qsrc;
+			amrex::Real const reaction_term = k_reac * phi_c;
+
+			explicit_arr[nbx](i, j, k, 0) = transport_term + source_term;
 			k_arr[nbx](i, j, k, 0) = k_reac;
+			transport_arr[nbx](i, j, k, 0) = transport_term;
+			source_term_arr[nbx](i, j, k, 0) = source_term;
+			reaction_term_arr[nbx](i, j, k, 0) = reaction_term;
 		});
 	};
 
@@ -305,8 +325,9 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 	int iter = 0;
 	bool converged = false;
 	amrex::Real final_rel_resid = std::numeric_limits<amrex::Real>::infinity();
+	amrex::Real prev_rel_resid = std::numeric_limits<amrex::Real>::quiet_NaN();
 	for (; iter < max_pseudo_iters; ++iter) {
-		compute_explicit_and_reaction(phi, explicit_rhs, reaction_rate);
+		compute_explicit_and_reaction(phi, explicit_rhs, reaction_rate, transport_rhs, source_rhs, reaction_sink);
 
 		amrex::ParallelFor(residual, [phi_arr = phi.const_arrays(), E0_arr = explicit_rhs.const_arrays(), k0_arr = reaction_rate.const_arrays(),
 					      residual_arr = residual.arrays()] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
@@ -318,8 +339,18 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(rel_resid), "Stromgren pseudo-time solve produced non-finite residual.");
 
 		if ((log_every > 0) && ((iter == 0) || (((iter + 1) % log_every) == 0))) {
-			amrex::Print() << std::format("[iter {:7d}] residual={:.6e}\n", iter + 1, rel_resid);
+			amrex::Real const phi_min = phi.min(0, 0, false);
+			amrex::Real const phi_max = phi.max(0, 0, false);
+			amrex::Real const explicit_inf = explicit_rhs.norm0(0, 0, false);
+			amrex::Real const transport_inf = transport_rhs.norm0(0, 0, false);
+			amrex::Real const source_inf = source_rhs.norm0(0, 0, false);
+			amrex::Real const reaction_inf = reaction_sink.norm0(0, 0, false);
+			amrex::Real const ratio = std::isfinite(prev_rel_resid) ? (rel_resid / amrex::max(prev_rel_resid, 1.0e-300)) : 1.0;
+			amrex::Print() << std::format(
+			    "[iter {:7d}] residual={:.6e} ratio={:.3e} phi_min={:.6e} phi_max={:.6e} |E|={:.6e} |T|={:.6e} |Q|={:.6e} |R|={:.6e}\n",
+			    iter + 1, rel_resid, ratio, phi_min, phi_max, explicit_inf, transport_inf, source_inf, reaction_inf);
 		}
+		prev_rel_resid = rel_resid;
 		if ((iter >= min_pseudo_iters) && (rel_resid < residual_tol)) {
 			converged = true;
 			break;

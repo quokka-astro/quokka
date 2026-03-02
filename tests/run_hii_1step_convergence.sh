@@ -7,12 +7,11 @@ BASE_IN="${ROOT_DIR}/inputs/HIIRegion.in"
 PLOT_HELPER="${ROOT_DIR}/scripts/python/plot_hii_fld_6panel.py"
 
 # Defaults (override via env vars or CLI flags below)
-MAX_PSEUDOSTEPS="${MAX_PSEUDOSTEPS:-1000}"
-LOG_EVERY="${LOG_EVERY:-0}"
+LOG_EVERY="${LOG_EVERY:-1}"
 RESIDUAL_TOL="${RESIDUAL_TOL:-1e-3}"
 MAX_TIMESTEPS="${MAX_TIMESTEPS:-1}"
 PLOTFILE_INTERVAL="${PLOTFILE_INTERVAL:-1}"
-OUTPUT_PLOT="${OUTPUT_PLOT:-${ROOT_DIR}/tests/hii_fld_6panel_16_32_64_1step_iter${MAX_PSEUDOSTEPS}.png}"
+OUTPUT_PLOT="${OUTPUT_PLOT:-${ROOT_DIR}/tests/hii_fld_6panel_16_32_64_1step.png}"
 
 usage() {
   cat <<EOF
@@ -21,7 +20,6 @@ Usage: $(basename "$0") [options]
 Runs HIIRegion for N=16,32,64 with one hydro timestep by default, then makes a combined plot.
 
 Options:
-  --max-pseudosteps N   Set particles.stromgren_max_pseudosteps (default: ${MAX_PSEUDOSTEPS})
   --log-every N         Set particles.stromgren_log_every (default: ${LOG_EVERY})
   --residual-tol X      Set particles.stromgren_residual_tol (default: ${RESIDUAL_TOL})
   --max-timesteps N     Set max_timesteps (default: ${MAX_TIMESTEPS})
@@ -43,10 +41,6 @@ sed_in_place() {
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --max-pseudosteps)
-      MAX_PSEUDOSTEPS="$2"
-      shift 2
-      ;;
     --log-every)
       LOG_EVERY="$2"
       shift 2
@@ -130,14 +124,13 @@ for N in 16 32 64; do
   sed_in_place "s|^particles.stromgren_qh0_table_hdf5_file = .*|particles.stromgren_qh0_table_hdf5_file = \"${QH0_FILE}\"|" "${RUN_DIR}/HIIRegion.in"
 
   echo "Running HIIRegion ${N}^3 ..."
-  RUN_LOG="${RUN_DIR}/run_1step_iter${MAX_PSEUDOSTEPS}.log"
+  RUN_LOG="${RUN_DIR}/run_1step.log"
   if (
     cd "${RUN_DIR}"
     "${EXE}" HIIRegion.in \
       suppress_output=1 \
       max_timesteps="${MAX_TIMESTEPS}" \
       plotfile_interval="${PLOTFILE_INTERVAL}" \
-      particles.stromgren_max_pseudosteps="${MAX_PSEUDOSTEPS}" \
       particles.stromgren_log_every="${LOG_EVERY}" \
       particles.stromgren_residual_tol="${RESIDUAL_TOL}" \
       > "${RUN_LOG}" 2>&1
