@@ -237,7 +237,8 @@ auto problem_main() -> int
 		amrex::Print() << "\tApplying relaxed volume criterion: R_hot,eff in (R_s, 2 R_s).\n";
 	}
 
-	if (((vol_rel_error > sim.userData_.volume_rel_tol) && !oversized_but_within_2x) || !core_floor_ok || std::isnan(vol_rel_error) || std::isnan(core_tavg)) {
+	if (((vol_rel_error > sim.userData_.volume_rel_tol) && !oversized_but_within_2x) || !core_floor_ok || std::isnan(vol_rel_error) ||
+	    std::isnan(core_tavg)) {
 		amrex::Print() << "HIIRegion test FAILED.\n";
 		return 1;
 	}

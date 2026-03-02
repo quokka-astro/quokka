@@ -25,7 +25,7 @@ amrex::Real constexpr mass_to_table_units = 1.0 / C::M_solar;
 amrex::Real constexpr age_to_table_units = 1.0 / 3.15576e7;
 amrex::Real constexpr mH = 1.67e-24;
 amrex::Real constexpr mean_particle_mass_mu = 1.27;
-//amrex::Real constexpr init_rsrc = 3.0e17;
+// amrex::Real constexpr init_rsrc = 3.0e17;
 amrex::Real constexpr alphaB = 2.6e-13;
 amrex::Real constexpr sigma_HI = 6.3e-18; // cm^2
 bool constexpr table_axes_are_mass_age = true;
@@ -347,8 +347,8 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 			amrex::Real const reaction_inf = reaction_sink.norm0(0, 0, false);
 			amrex::Real const ratio = std::isfinite(prev_rel_resid) ? (rel_resid / amrex::max(prev_rel_resid, 1.0e-300)) : 1.0;
 			amrex::Print() << std::format(
-			    "[iter {:7d}] residual={:.6e} ratio={:.3e} phi_min={:.6e} phi_max={:.6e} |E|={:.6e} |T|={:.6e} |Q|={:.6e} |R|={:.6e}\n",
-			    iter + 1, rel_resid, ratio, phi_min, phi_max, explicit_inf, transport_inf, source_inf, reaction_inf);
+			    "[iter {:7d}] residual={:.6e} ratio={:.3e} phi_min={:.6e} phi_max={:.6e} |E|={:.6e} |T|={:.6e} |Q|={:.6e} |R|={:.6e}\n", iter + 1,
+			    rel_resid, ratio, phi_min, phi_max, explicit_inf, transport_inf, source_inf, reaction_inf);
 		}
 		prev_rel_resid = rel_resid;
 		if ((iter >= min_pseudo_iters) && (rel_resid < residual_tol)) {
@@ -390,8 +390,9 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 	if (abort_on_max_iters && !converged) {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 		    false,
-		    std::format("Stromgren pseudo-time solve reached max iterations ({}) without satisfying residual tolerance (residual_tol={}, final_rel_resid={}).",
-				max_pseudo_iters, residual_tol, final_rel_resid)
+		    std::format(
+			"Stromgren pseudo-time solve reached max iterations ({}) without satisfying residual tolerance (residual_tol={}, final_rel_resid={}).",
+			max_pseudo_iters, residual_tol, final_rel_resid)
 			.c_str());
 	}
 
