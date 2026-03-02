@@ -31,6 +31,16 @@ Options:
 EOF
 }
 
+sed_in_place() {
+  local expr="$1"
+  local file="$2"
+  local tmp
+
+  tmp="$(mktemp "${file}.tmp.XXXXXX")"
+  sed "${expr}" "${file}" > "${tmp}"
+  mv "${tmp}" "${file}"
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --max-pseudosteps)
@@ -104,20 +114,23 @@ if [[ ! -f "${STARS_FILE}" ]]; then
 fi
 
 declare -a PLOTFILES=()
+declare -a RUN_FAILED_CASES=()
+declare -a MISSING_PLOT_CASES=()
 for N in 16 32 64; do
   RUN_DIR="${ROOT_DIR}/tests/hii_runs/${N}"
   mkdir -p "${RUN_DIR}"
   cp "${BASE_IN}" "${RUN_DIR}/HIIRegion.in"
   cp "${STARS_FILE}" "${RUN_DIR}/hii_stars.txt"
+  rm -rf "${RUN_DIR}"/plt*
 
-  sed -i '' "s|^amr.n_cell = .*|amr.n_cell = ${N} ${N} ${N}|" "${RUN_DIR}/HIIRegion.in"
-  sed -i '' "s|^amr.max_grid_size = .*|amr.max_grid_size = ${N}|" "${RUN_DIR}/HIIRegion.in"
-  sed -i '' "s|^plotfile_interval = .*|plotfile_interval = ${PLOTFILE_INTERVAL}|" "${RUN_DIR}/HIIRegion.in"
-  sed -i '' "s|^cooling.hdf5_data_file = .*|cooling.hdf5_data_file = \"${COOLING_FILE}\"|" "${RUN_DIR}/HIIRegion.in"
-  sed -i '' "s|^particles.stromgren_qh0_table_hdf5_file = .*|particles.stromgren_qh0_table_hdf5_file = \"${QH0_FILE}\"|" "${RUN_DIR}/HIIRegion.in"
+  sed_in_place "s|^amr.n_cell = .*|amr.n_cell = ${N} ${N} ${N}|" "${RUN_DIR}/HIIRegion.in"
+  sed_in_place "s|^amr.max_grid_size = .*|amr.max_grid_size = ${N}|" "${RUN_DIR}/HIIRegion.in"
+  sed_in_place "s|^plotfile_interval = .*|plotfile_interval = ${PLOTFILE_INTERVAL}|" "${RUN_DIR}/HIIRegion.in"
+  sed_in_place "s|^cooling.hdf5_data_file = .*|cooling.hdf5_data_file = \"${COOLING_FILE}\"|" "${RUN_DIR}/HIIRegion.in"
+  sed_in_place "s|^particles.stromgren_qh0_table_hdf5_file = .*|particles.stromgren_qh0_table_hdf5_file = \"${QH0_FILE}\"|" "${RUN_DIR}/HIIRegion.in"
 
   echo "Running HIIRegion ${N}^3 ..."
-  (
+  if (
     cd "${RUN_DIR}"
     "${EXE}" HIIRegion.in \
       suppress_output=1 \
@@ -126,11 +139,31 @@ for N in 16 32 64; do
       particles.stromgren_max_pseudosteps="${MAX_PSEUDOSTEPS}" \
       particles.stromgren_log_every="${LOG_EVERY}" \
       particles.stromgren_residual_tol="${RESIDUAL_TOL}" \
-      > "run_1step_iter${MAX_PSEUDOSTEPS}.log" 2>&1 || true
-  )
+      > "run_1step_iter${MAX_PSEUDOSTEPS}.log" 2>&1
+  ); then
+    :
+  else
+    RUN_FAILED_CASES+=("${N}")
+    echo "Warning: HIIRegion ${N}^3 failed. See ${RUN_DIR}/run_1step_iter${MAX_PSEUDOSTEPS}.log" >&2
+  fi
 
-  PLOTFILES+=("${RUN_DIR}/plt0000001")
+  latest_plotfile="$(find "${RUN_DIR}" -maxdepth 1 -type d -name 'plt*' | sort | tail -n 1)"
+  if [[ -n "${latest_plotfile}" ]]; then
+    PLOTFILES+=("${latest_plotfile}")
+  else
+    MISSING_PLOT_CASES+=("${N}")
+    echo "Warning: missing plotfile for ${N}^3 in ${RUN_DIR}." >&2
+  fi
 done
+
+if [[ ${#RUN_FAILED_CASES[@]} -gt 0 ]]; then
+  echo "One or more runs returned non-zero: ${RUN_FAILED_CASES[*]}" >&2
+fi
+
+if [[ ${#MISSING_PLOT_CASES[@]} -gt 0 || ${#PLOTFILES[@]} -ne 3 ]]; then
+  echo "Skipping combined plot because not all three plotfiles were generated." >&2
+  exit 1
+fi
 
 echo "Generating combined plot ..."
 uv run "${PLOT_HELPER}" \
