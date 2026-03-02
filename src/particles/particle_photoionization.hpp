@@ -11,7 +11,6 @@
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_Math.H"
 #include "AMReX_MultiFab.H"
-#include "AMReX_ParallelDescriptor.H"
 
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
@@ -25,7 +24,6 @@ amrex::Real constexpr mass_to_table_units = 1.0 / C::M_solar;
 amrex::Real constexpr age_to_table_units = 1.0 / 3.15576e7;
 amrex::Real constexpr mH = 1.67e-24;
 amrex::Real constexpr mean_particle_mass_mu = 1.27;
-//amrex::Real constexpr init_rsrc = 3.0e17;
 amrex::Real constexpr alphaB = 2.6e-13;
 amrex::Real constexpr sigma_HI = 6.3e-18; // cm^2
 bool constexpr table_axes_are_mass_age = true;
@@ -219,7 +217,7 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 	amrex::Real const D_max = C::c_light * lambda_lp_max / kappa_ref;
 	amrex::Real const sum_inv_dx2 = (1.0 / (dx[0] * dx[0])) + (1.0 / (dx[1] * dx[1])) + (1.0 / (dx[2] * dx[2]));
 	amrex::Real const dtau_explicit_max = 1.0 / (2.0 * D_max * sum_inv_dx2);
-	amrex::Real const diffusion_cfl = 1.0;
+	amrex::Real const diffusion_cfl = 0.8;
 	amrex::Real const dtau = diffusion_cfl * dtau_explicit_max;
 	int const min_pseudo_iters = 4;
 	amrex::Real const eps_phi = 1.0e-30;
