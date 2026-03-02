@@ -144,6 +144,7 @@ These parameters are read in the `particleParmParse()` function in `src/particle
 | particles.rad_table                           | String        | **Required** if `particles.use_luminosity_table=1` and `Physics_Traits<problem_t>::is_radiation_enabled=true` | Path to the radiation luminosity table.                                                                                                                        |
 | particles.rad_table_output_spacing            | Integer       | `0` (fast_log)                                                                                                | Output spacing for radiation table.                                                                                                                            |
 | particles.split_particles_on_restart_refine   | Boolean (0/1) | `1` (Enabled)                                                                                                 | Whether to split particles when restarting with refinement.                                                                                                    |
+| particles.stromgren_abort_on_max_iters        | Boolean (0/1) | `0` (Disabled)                                                                                                | If set to 1, aborts when the Strömgren pseudo-time solver reaches `particles.stromgren_max_pseudosteps` without meeting `particles.stromgren_residual_tol`. |
 
 ## Turbulence
 

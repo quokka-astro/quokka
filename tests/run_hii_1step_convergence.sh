@@ -130,6 +130,7 @@ for N in 16 32 64; do
   sed_in_place "s|^particles.stromgren_qh0_table_hdf5_file = .*|particles.stromgren_qh0_table_hdf5_file = \"${QH0_FILE}\"|" "${RUN_DIR}/HIIRegion.in"
 
   echo "Running HIIRegion ${N}^3 ..."
+  RUN_LOG="${RUN_DIR}/run_1step_iter${MAX_PSEUDOSTEPS}.log"
   if (
     cd "${RUN_DIR}"
     "${EXE}" HIIRegion.in \
@@ -139,12 +140,12 @@ for N in 16 32 64; do
       particles.stromgren_max_pseudosteps="${MAX_PSEUDOSTEPS}" \
       particles.stromgren_log_every="${LOG_EVERY}" \
       particles.stromgren_residual_tol="${RESIDUAL_TOL}" \
-      > "run_1step_iter${MAX_PSEUDOSTEPS}.log" 2>&1
+      > "${RUN_LOG}" 2>&1
   ); then
     :
   else
     RUN_FAILED_CASES+=("${N}")
-    echo "Warning: HIIRegion ${N}^3 failed. See ${RUN_DIR}/run_1step_iter${MAX_PSEUDOSTEPS}.log" >&2
+    echo "Warning: HIIRegion ${N}^3 failed. See ${RUN_LOG}" >&2
   fi
 
   latest_plotfile="$(find "${RUN_DIR}" -maxdepth 1 -type d -name 'plt*' | sort | tail -n 1)"
@@ -158,6 +159,7 @@ done
 
 if [[ ${#RUN_FAILED_CASES[@]} -gt 0 ]]; then
   echo "One or more runs returned non-zero: ${RUN_FAILED_CASES[*]}" >&2
+  exit 1
 fi
 
 if [[ ${#MISSING_PLOT_CASES[@]} -gt 0 || ${#PLOTFILES[@]} -ne 3 ]]; then

@@ -20,7 +20,7 @@ template <> struct SimulationData<HIIRegionProblem> {
 	amrex::Real nH0 = 1.0e3; // cm^-3
 	amrex::Real T0 = 500.0;	 // K
 	std::string stars_file = "hii_stars.txt";
-	amrex::Real volume_rel_tol = 0.70; // geometric/discrete tolerance
+	amrex::Real volume_rel_tol = 0.20; // geometric/discrete tolerance
 	amrex::Real core_temp_tol = 0.70;  // core average T must be >= 0.70 * 1e4 K
 };
 

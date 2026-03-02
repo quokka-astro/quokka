@@ -43,6 +43,8 @@ cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 # *****************************************************************
 particles.use_stromgren_photoionization = true
 particles.stromgren_qh0_table_hdf5_file = "../extern/stellar_tables/QH0_mist_9to120_quokka_best.h5"
+particles.stromgren_abort_on_max_iters = true
+particles.stromgren_max_pseudosteps = 1000
 particles.disable_SN_feedback = true
 particles.verbose = 0
 
@@ -51,5 +53,5 @@ particles.verbose = 0
 # *****************************************************************
 problem.nH0 = 1.0e2
 problem.T0 = 500.0
-problem.volume_rel_tol = 0.70
-problem.core_temp_tol = 0.70
+problem.volume_rel_tol = 0.30
+problem.core_temp_tol = 0.80

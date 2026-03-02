@@ -167,8 +167,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int stochastic_stellar_pop_qh0_table_is_fast_log_ = 0;
 	int stochastic_stellar_pop_stromgren_max_pseudosteps_ = 20;
 	int stochastic_stellar_pop_stromgren_log_every_ = 0;
-	amrex::Real stochastic_stellar_pop_stromgren_init_rsrc_ = 3.0e17;
 	amrex::Real stochastic_stellar_pop_stromgren_residual_tol_ = 1.0e-3;
+	bool stochastic_stellar_pop_stromgren_abort_on_max_iters_ = false;
 	quokka::DataTable<2, 1> stochasticStellarPopQH0Table_;
 
 	int enableCooling_ = 0;
@@ -687,8 +687,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		ppp.query("stromgren_qh0_table_hdf5_file", stochastic_stellar_pop_qh0_table_hdf5_file_);
 		ppp.query("stromgren_max_pseudosteps", stochastic_stellar_pop_stromgren_max_pseudosteps_);
 		ppp.query("stromgren_log_every", stochastic_stellar_pop_stromgren_log_every_);
-		ppp.query("stromgren_init_rsrc", stochastic_stellar_pop_stromgren_init_rsrc_);
 		ppp.query("stromgren_residual_tol", stochastic_stellar_pop_stromgren_residual_tol_);
+		ppp.query("stromgren_abort_on_max_iters", stochastic_stellar_pop_stromgren_abort_on_max_iters_);
 
 		if (use_stochastic_stellar_pop_stromgren_photoionization_) {
 #if AMREX_SPACEDIM != 3
@@ -699,7 +699,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_max_pseudosteps_ >= 1,
 							 "particles.stromgren_max_pseudosteps must be >= 1.");
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_log_every_ >= 0, "particles.stromgren_log_every must be >= 0.");
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_init_rsrc_ > 0.0, "particles.stromgren_init_rsrc must be > 0.");
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_residual_tol_ > 0.0, "particles.stromgren_residual_tol must be > 0.");
 
 			// Infer dataset path directly from the HDF5 file. Coordinate encoding
@@ -1842,10 +1841,9 @@ void QuokkaSimulation<problem_t>::FillNGammaFromStromgrenAtLevel(int lev, amrex:
 	if (use_stochastic_stellar_pop_stromgren_photoionization_) {
 		auto const qh0_table = stochasticStellarPopQH0Table_.const_tables();
 		quokka::photoionization::FillNGammaFromStromgrenVolumes<problem_t>(
-		    this->StochasticStellarPopParticles.get(), lev, time, grids[lev], dmap[lev], geom[lev], state_cc, n_gamma_cc, qh0_table, 1.0 / C::M_solar,
-		    1.0 / 3.15576e7, stochastic_stellar_pop_qh0_table_axes_are_mass_age_, 2.6e-13, 1.27, 1.67e-24,
-		    stochastic_stellar_pop_stromgren_max_pseudosteps_, stochastic_stellar_pop_stromgren_log_every_, stochastic_stellar_pop_stromgren_init_rsrc_,
-		    stochastic_stellar_pop_stromgren_residual_tol_);
+		    this->StochasticStellarPopParticles.get(), lev, time, grids[lev], dmap[lev], geom[lev], state_cc, n_gamma_cc, qh0_table,
+		    stochastic_stellar_pop_stromgren_max_pseudosteps_, stochastic_stellar_pop_stromgren_residual_tol_,
+		    stochastic_stellar_pop_stromgren_log_every_, stochastic_stellar_pop_stromgren_abort_on_max_iters_);
 	}
 #else
 	amrex::ignore_unused(lev, time, state_cc);
