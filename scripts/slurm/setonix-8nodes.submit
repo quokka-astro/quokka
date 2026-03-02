@@ -50,7 +50,38 @@ NODES=${SLURM_NNODES}
 TASKS_PER_NODE=8                 # one task per GPU
 TOTAL_TASKS=$((NODES * TASKS_PER_NODE))
 
-srun -N $NODES -n ${TOTAL_TASKS} -c 8 --gres=gpu:8 --cpu-bind=${CPU_BIND} ./selectGPU_X.sh ${EXE} ${INPUTS}
+# Background timer: write checkpointNow 20 minutes before wall-time expires,
+# but only if srun is still running at that point.
+checkpoint_timer() {
+	local srun_pid=$1
+	local trigger_offset=1200  # 20 minutes in seconds
+	local sleep_secs=$(( SLURM_JOB_END_TIME - $(date +%s) - trigger_offset ))
+	if [ "${sleep_secs}" -le 0 ]; then
+		echo "# checkpoint_timer: trigger time already passed (sleep_secs=${sleep_secs}); skipping"
+		return
+	fi
+	echo "# checkpoint_timer: will write checkpointNow in ${sleep_secs}s (20 min before wall-time)"
+	sleep "${sleep_secs}"
+	if kill -0 "${srun_pid}" 2>/dev/null; then
+		echo "# checkpoint_timer: srun still running — writing checkpointNow"
+		touch checkpointNow
+	else
+		echo "# checkpoint_timer: srun already finished — skipping checkpointNow"
+	fi
+}
+
+srun -N $NODES -n ${TOTAL_TASKS} -c 8 --gres=gpu:8 --cpu-bind=${CPU_BIND} ./selectGPU_X.sh ${EXE} ${INPUTS} &
+SRUN_PID=$!
+
+checkpoint_timer ${SRUN_PID} &
+TIMER_PID=$!
+
+wait ${SRUN_PID}
+SRUN_EXIT=$?
+
+# Kill timer if srun finished before the checkpoint trigger
+kill ${TIMER_PID} 2>/dev/null
+wait ${TIMER_PID} 2>/dev/null
 
 echo -e "\n# sacct summary"
 sacct -j ${SLURM_JOBID} -o jobid%20,Start%20,elapsed%20
