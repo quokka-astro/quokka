@@ -21,6 +21,27 @@ export MPICH_OFI_NIC_POLICY=NUMA
 # QUOKKA does not use OpenMP, but it's good practice on Setonix to avoid accidental thread oversubscription
 export OMP_NUM_THREADS=1
 
+## Checkpoint watchdog: touches 'checkpointNow' CHECKPOINT_LEAD seconds before wall-time limit.
+## Quokka writes a checkpoint when it detects this file and removes it afterward.
+## The watchdog is killed after srun exits, so it never fires if the job ends early.
+CHECKPOINT_LEAD=1200  # seconds (20 minutes)
+
+checkpoint_watchdog() {
+	local now
+	now=$(date +%s)
+	local target=$((SLURM_JOB_END_TIME - CHECKPOINT_LEAD))
+	local delay=$((target - now))
+	if [ "$delay" -le 0 ]; then
+		return  # wall time too short for a pre-timeout checkpoint
+	fi
+	sleep "$delay"
+	touch checkpointNow
+	echo "# checkpointNow touched at $(date)"
+}
+
+checkpoint_watchdog &
+WATCHDOG_PID=$!
+
 ## run
 EXE="build/src/problems/HydroBlast3D/test_hydro3d_blast"
 INPUTS="inputs/benchmark_unigrid_1024.in"
@@ -51,6 +72,10 @@ TASKS_PER_NODE=8                 # one task per GPU
 TOTAL_TASKS=$((NODES * TASKS_PER_NODE))
 
 srun -N $NODES -n ${TOTAL_TASKS} -c 8 --gres=gpu:8 --cpu-bind=${CPU_BIND} ./selectGPU_X.sh ${EXE} ${INPUTS}
+
+# Kill the watchdog so it cannot touch checkpointNow after srun exits
+kill $WATCHDOG_PID 2>/dev/null
+wait $WATCHDOG_PID 2>/dev/null
 
 echo -e "\n# sacct summary"
 sacct -j ${SLURM_JOBID} -o jobid%20,Start%20,elapsed%20
