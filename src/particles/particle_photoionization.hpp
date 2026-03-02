@@ -37,8 +37,7 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 				    amrex::MultiFab const &state_cc, amrex::MultiFab &n_gamma_cc, quokka::DataTableGpuConst<2, 1, oob_policy> const &qh0_table,
 				    int const max_pseudo_iters = 20, amrex::Real const residual_tol = 1.0e-3, int const log_every = 0,
 				    bool const abort_on_max_iters = false, bool const use_anderson_accel = false,
-				    amrex::Real const anderson_beta_min = -0.25, amrex::Real const anderson_beta_max = 1.25,
-				    amrex::Real const init_xfrac = 1.0e-3)
+				    amrex::Real const anderson_beta_min = -0.25, amrex::Real const anderson_beta_max = 1.25)
 {
 	if (stellar_particles == nullptr) {
 		return;
@@ -211,22 +210,6 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 
 	auto const state = state_cc.const_arrays();
 	auto const source_arr = source_q.const_arrays();
-	if (init_xfrac > 0.0) {
-		amrex::Real const source_max = source_q.norm0(0, 0, false);
-		auto phi_arr = phi.arrays();
-		if (source_max > 0.0) {
-			amrex::ParallelFor(phi, [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
-				amrex::Real const rho = state[nbx](i, j, k, HydroSystem<problem_t>::density_index);
-				amrex::Real const nH = (rho > 0.0) ? (rho / n_to_rho) : 0.0;
-				amrex::Real const source_ratio = amrex::max(source_arr[nbx](i, j, k, 0), 0.0) / source_max;
-				amrex::Real const x = amrex::min<amrex::Real>(init_xfrac * source_ratio, 1.0 - 1.0e-12);
-				amrex::Real const denom = amrex::max(1.0 - x, 1.0e-12);
-				amrex::Real const n_gamma_per_nH = (alphaB * x * x) / (C::c_light * sigma_HI * denom);
-				phi_arr[nbx](i, j, k, 0) = n_gamma_per_nH * nH;
-			});
-		}
-		amrex::MultiFab::Copy(phi_new, phi, 0, 0, 1, 1);
-	}
 
 	//
 	// Pseudo-time FLD solve for photon number density:
@@ -355,9 +338,9 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 		});
 	};
 	amrex::Real const source_scale = amrex::max(source_q.norm0(0, 0, false) / cell_volume, 1.0e-60);
-	amrex::Real constexpr x_atol = 1.0e-6;
-	amrex::Real constexpr rel_change_floor = 1.0e-60;
-	amrex::Real constexpr dot_eps = 1.0e-300;
+	amrex::Real constexpr x_atol = 1.0e-3;
+	amrex::Real constexpr rel_change_floor = 1.0e-50;
+	amrex::Real constexpr dot_eps = 1.0e-100;
 	bool have_prev_picard = false;
 
 	int iter = 0;

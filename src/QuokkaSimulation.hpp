@@ -172,7 +172,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	bool stochastic_stellar_pop_stromgren_use_anderson_accel_ = false;
 	amrex::Real stochastic_stellar_pop_stromgren_anderson_beta_min_ = -0.25;
 	amrex::Real stochastic_stellar_pop_stromgren_anderson_beta_max_ = 1.25;
-	amrex::Real stochastic_stellar_pop_stromgren_init_xfrac_ = 1.0e-3;
 	quokka::DataTable<2, 1> stochasticStellarPopQH0Table_;
 
 	int enableCooling_ = 0;
@@ -696,7 +695,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		ppp.query("stromgren_use_anderson_accel", stochastic_stellar_pop_stromgren_use_anderson_accel_);
 		ppp.query("stromgren_anderson_beta_min", stochastic_stellar_pop_stromgren_anderson_beta_min_);
 		ppp.query("stromgren_anderson_beta_max", stochastic_stellar_pop_stromgren_anderson_beta_max_);
-		ppp.query("stromgren_init_xfrac", stochastic_stellar_pop_stromgren_init_xfrac_);
 
 		if (use_stochastic_stellar_pop_stromgren_photoionization_) {
 #if AMREX_SPACEDIM != 3
@@ -710,9 +708,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_residual_tol_ > 0.0, "particles.stromgren_residual_tol must be > 0.");
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_anderson_beta_min_ <= stochastic_stellar_pop_stromgren_anderson_beta_max_,
 							 "particles.stromgren_anderson_beta_min must be <= particles.stromgren_anderson_beta_max.");
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE((stochastic_stellar_pop_stromgren_init_xfrac_ >= 0.0) &&
-							     (stochastic_stellar_pop_stromgren_init_xfrac_ < 1.0),
-							 "particles.stromgren_init_xfrac must satisfy 0 <= x < 1.");
 
 			// Infer dataset path directly from the HDF5 file. Coordinate encoding
 			// is auto-detected in DataTable::H5Reader.
@@ -1858,7 +1853,7 @@ void QuokkaSimulation<problem_t>::FillNGammaFromStromgrenAtLevel(int lev, amrex:
 		    stochastic_stellar_pop_stromgren_max_pseudosteps_, stochastic_stellar_pop_stromgren_residual_tol_,
 		    stochastic_stellar_pop_stromgren_log_every_, stochastic_stellar_pop_stromgren_abort_on_max_iters_,
 		    stochastic_stellar_pop_stromgren_use_anderson_accel_, stochastic_stellar_pop_stromgren_anderson_beta_min_,
-		    stochastic_stellar_pop_stromgren_anderson_beta_max_, stochastic_stellar_pop_stromgren_init_xfrac_);
+		    stochastic_stellar_pop_stromgren_anderson_beta_max_);
 	}
 #else
 	amrex::ignore_unused(lev, time, state_cc);

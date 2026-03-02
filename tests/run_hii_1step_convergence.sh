@@ -39,6 +39,29 @@ sed_in_place() {
   mv "${tmp}" "${file}"
 }
 
+extract_stromgren_iterations() {
+  local log_file="$1"
+
+  awk '
+    match($0, /\[iter[[:space:]]*[0-9]+\]/) {
+      token = substr($0, RSTART, RLENGTH)
+      gsub(/[^0-9]/, "", token)
+      iter = token + 0
+      if (iter > max_iter) {
+        max_iter = iter
+      }
+      found = 1
+    }
+    END {
+      if (found) {
+        print max_iter
+      } else {
+        print "N/A"
+      }
+    }
+  ' "${log_file}"
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --log-every)
@@ -139,6 +162,12 @@ for N in 16 32 64; do
   else
     RUN_FAILED_CASES+=("${N}")
     echo "Warning: HIIRegion ${N}^3 failed. See ${RUN_LOG}" >&2
+  fi
+  if [[ -f "${RUN_LOG}" ]]; then
+    stromgren_iters="$(extract_stromgren_iterations "${RUN_LOG}")"
+    echo "Stromgren iterations (${N}^3): ${stromgren_iters}"
+  else
+    echo "Stromgren iterations (${N}^3): N/A (missing log)" >&2
   fi
 
   latest_plotfile="$(find "${RUN_DIR}" -maxdepth 1 -type d -name 'plt*' | sort | tail -n 1)"
