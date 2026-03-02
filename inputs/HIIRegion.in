@@ -45,6 +45,10 @@ particles.use_stromgren_photoionization = true
 particles.stromgren_qh0_table_hdf5_file = "../extern/stellar_tables/QH0_mist_9to120_quokka_best.h5"
 particles.stromgren_abort_on_max_iters = true
 particles.stromgren_max_pseudosteps = 2000
+particles.stromgren_use_anderson_accel = true
+particles.stromgren_anderson_beta_min = -1.00
+particles.stromgren_anderson_beta_max = 2.00
+particles.stromgren_init_xfrac = 1.0e-3
 particles.disable_SN_feedback = true
 particles.verbose = 0
 

@@ -2,6 +2,7 @@
 #define PARTICLE_PHOTOIONIZATION_HPP_
 
 #include <array>
+#include <algorithm>
 #include <cmath>
 #include <iomanip>
 #include <limits>
@@ -35,7 +36,9 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 				    amrex::BoxArray const &ba_lev, amrex::DistributionMapping const &dm_lev, amrex::Geometry const &geom_lev,
 				    amrex::MultiFab const &state_cc, amrex::MultiFab &n_gamma_cc, quokka::DataTableGpuConst<2, 1, oob_policy> const &qh0_table,
 				    int const max_pseudo_iters = 20, amrex::Real const residual_tol = 1.0e-3, int const log_every = 0,
-				    bool const abort_on_max_iters = false)
+				    bool const abort_on_max_iters = false, bool const use_anderson_accel = false,
+				    amrex::Real const anderson_beta_min = -0.25, amrex::Real const anderson_beta_max = 1.25,
+				    amrex::Real const init_xfrac = 1.0e-3)
 {
 	if (stellar_particles == nullptr) {
 		return;
@@ -179,6 +182,11 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 	amrex::MultiFab source_rhs(ba_lev, dm_lev, 1, 0);
 	amrex::MultiFab reaction_sink(ba_lev, dm_lev, 1, 0);
 	amrex::MultiFab residual(ba_lev, dm_lev, 1, 0);
+	amrex::MultiFab phi_picard(ba_lev, dm_lev, 1, 1);
+	amrex::MultiFab phi_g_prev(ba_lev, dm_lev, 1, 1);
+	amrex::MultiFab correction(ba_lev, dm_lev, 1, 0);
+	amrex::MultiFab correction_prev(ba_lev, dm_lev, 1, 0);
+	amrex::MultiFab correction_diff(ba_lev, dm_lev, 1, 0);
 	phi.setVal(0.0);
 	phi_new.setVal(0.0);
 	explicit_rhs.setVal(0.0);
@@ -187,9 +195,26 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 	source_rhs.setVal(0.0);
 	reaction_sink.setVal(0.0);
 	residual.setVal(0.0);
+	phi_picard.setVal(0.0);
+	phi_g_prev.setVal(0.0);
+	correction.setVal(0.0);
+	correction_prev.setVal(0.0);
+	correction_diff.setVal(0.0);
 
 	auto const state = state_cc.const_arrays();
 	auto const source_arr = source_q.const_arrays();
+	if (init_xfrac > 0.0) {
+		amrex::Real const x = init_xfrac;
+		amrex::Real const denom = amrex::max(1.0 - x, 1.0e-12);
+		amrex::Real const n_gamma_per_nH = (alphaB * x * x) / (C::c_light * sigma_HI * denom);
+		auto phi_arr = phi.arrays();
+		amrex::ParallelFor(phi, [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+			amrex::Real const rho = state[nbx](i, j, k, HydroSystem<problem_t>::density_index);
+			amrex::Real const nH = (rho > 0.0) ? (rho / n_to_rho) : 0.0;
+			phi_arr[nbx](i, j, k, 0) = n_gamma_per_nH * nH;
+		});
+		amrex::MultiFab::Copy(phi_new, phi, 0, 0, 1, 1);
+	}
 
 	//
 	// Pseudo-time FLD solve for photon number density:
@@ -317,8 +342,9 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 			reaction_term_arr[nbx](i, j, k, 0) = reaction_term;
 		});
 	};
-
 	amrex::Real const source_scale = amrex::max(source_q.norm0(0, 0, false) / cell_volume, 1.0e-60);
+	amrex::Real constexpr dot_eps = 1.0e-300;
+	bool have_prev_picard = false;
 
 	int iter = 0;
 	bool converged = false;
@@ -383,6 +409,47 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 			continue;
 		}
 
+		amrex::MultiFab::Copy(phi_picard, phi_new, 0, 0, 1, 1);
+		amrex::MultiFab::Copy(correction, phi_new, 0, 0, 1, 0);
+		amrex::MultiFab::Saxpy(correction, -1.0, phi, 0, 0, 1, 0);
+
+		amrex::Real anderson_beta = 0.0;
+		bool anderson_applied = false;
+		if (use_anderson_accel && have_prev_picard) {
+			amrex::MultiFab::Copy(correction_diff, correction, 0, 0, 1, 0);
+			amrex::MultiFab::Saxpy(correction_diff, -1.0, correction_prev, 0, 0, 1, 0);
+
+			amrex::Real const denom = amrex::MultiFab::Dot(correction_diff, 0, correction_diff, 0, 1, 0, false);
+			if (denom > dot_eps) {
+				amrex::Real const numer = amrex::MultiFab::Dot(correction, 0, correction_diff, 0, 1, 0, false);
+				anderson_beta = std::clamp(numer / denom, anderson_beta_min, anderson_beta_max);
+				if (std::abs(anderson_beta) > 1.0e-12) {
+					amrex::ParallelFor(
+					    phi_new,
+					    [phi1_arr = phi_new.arrays(), phi_picard_arr = phi_picard.const_arrays(), phi_prev_g_arr = phi_g_prev.const_arrays(),
+					     anderson_beta] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+						    phi1_arr[nbx](i, j, k, 0) = (1.0 - anderson_beta) * phi_picard_arr[nbx](i, j, k, 0) +
+										 anderson_beta * phi_prev_g_arr[nbx](i, j, k, 0);
+					    });
+
+					amrex::Real const phi1_min = phi_new.min(0, 0, false);
+					amrex::Real const phi1_max = phi_new.max(0, 0, false);
+					if (std::isfinite(phi1_min) && std::isfinite(phi1_max) && (phi1_min >= 0.0)) {
+						anderson_applied = true;
+					} else {
+						amrex::MultiFab::Copy(phi_new, phi_picard, 0, 0, 1, 1);
+					}
+				}
+			}
+		}
+
+		if ((log_every > 0) && anderson_applied && ((iter == 0) || (((iter + 1) % log_every) == 0))) {
+			amrex::Print() << std::format("[iter {:7d}] anderson beta={:.3e}\n", iter + 1, anderson_beta);
+		}
+
+		amrex::MultiFab::Copy(phi_g_prev, phi_picard, 0, 0, 1, 1);
+		amrex::MultiFab::Copy(correction_prev, correction, 0, 0, 1, 0);
+		have_prev_picard = true;
 		amrex::MultiFab::Copy(phi, phi_new, 0, 0, 1, 1);
 	}
 	if (abort_on_max_iters && !converged) {
