@@ -7,7 +7,6 @@ BASE_IN="${ROOT_DIR}/inputs/HIIRegion.in"
 PLOT_HELPER="${ROOT_DIR}/scripts/python/plot_hii_fld_6panel.py"
 
 # Defaults (override via env vars or CLI flags below)
-LOG_EVERY="${LOG_EVERY:-1}"
 RESIDUAL_TOL="${RESIDUAL_TOL:-1e-3}"
 MAX_TIMESTEPS="${MAX_TIMESTEPS:-1}"
 PLOTFILE_INTERVAL="${PLOTFILE_INTERVAL:-1}"
@@ -20,7 +19,6 @@ Usage: $(basename "$0") [options]
 Runs HIIRegion for N=16,32,64 with one hydro timestep by default, then makes a combined plot.
 
 Options:
-  --log-every N         Set particles.stromgren_log_every (default: ${LOG_EVERY})
   --residual-tol X      Set particles.stromgren_residual_tol (default: ${RESIDUAL_TOL})
   --max-timesteps N     Set max_timesteps (default: ${MAX_TIMESTEPS})
   --plotfile-interval N Set plotfile_interval (default: ${PLOTFILE_INTERVAL})
@@ -39,35 +37,8 @@ sed_in_place() {
   mv "${tmp}" "${file}"
 }
 
-extract_stromgren_iterations() {
-  local log_file="$1"
-
-  awk '
-    match($0, /\[iter[[:space:]]*[0-9]+\]/) {
-      token = substr($0, RSTART, RLENGTH)
-      gsub(/[^0-9]/, "", token)
-      iter = token + 0
-      if (iter > max_iter) {
-        max_iter = iter
-      }
-      found = 1
-    }
-    END {
-      if (found) {
-        print max_iter
-      } else {
-        print "N/A"
-      }
-    }
-  ' "${log_file}"
-}
-
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --log-every)
-      LOG_EVERY="$2"
-      shift 2
-      ;;
     --residual-tol)
       RESIDUAL_TOL="$2"
       shift 2
@@ -154,7 +125,6 @@ for N in 16 32 64; do
       suppress_output=1 \
       max_timesteps="${MAX_TIMESTEPS}" \
       plotfile_interval="${PLOTFILE_INTERVAL}" \
-      particles.stromgren_log_every="${LOG_EVERY}" \
       particles.stromgren_residual_tol="${RESIDUAL_TOL}" \
       > "${RUN_LOG}" 2>&1
   ); then
@@ -163,13 +133,6 @@ for N in 16 32 64; do
     RUN_FAILED_CASES+=("${N}")
     echo "Warning: HIIRegion ${N}^3 failed. See ${RUN_LOG}" >&2
   fi
-  if [[ -f "${RUN_LOG}" ]]; then
-    stromgren_iters="$(extract_stromgren_iterations "${RUN_LOG}")"
-    echo "Stromgren iterations (${N}^3): ${stromgren_iters}"
-  else
-    echo "Stromgren iterations (${N}^3): N/A (missing log)" >&2
-  fi
-
   latest_plotfile="$(find "${RUN_DIR}" -maxdepth 1 -type d -name 'plt*' | sort | tail -n 1)"
   if [[ -n "${latest_plotfile}" ]]; then
     PLOTFILES+=("${latest_plotfile}")

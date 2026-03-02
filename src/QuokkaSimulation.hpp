@@ -166,7 +166,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	bool stochastic_stellar_pop_qh0_table_axes_are_mass_age_ = true;
 	int stochastic_stellar_pop_qh0_table_is_fast_log_ = 0;
 	int stochastic_stellar_pop_stromgren_max_pseudosteps_ = 20;
-	int stochastic_stellar_pop_stromgren_log_every_ = 0;
 	amrex::Real stochastic_stellar_pop_stromgren_residual_tol_ = 1.0e-3;
 	bool stochastic_stellar_pop_stromgren_abort_on_max_iters_ = false;
 	bool stochastic_stellar_pop_stromgren_use_anderson_accel_ = false;
@@ -689,7 +688,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		ppp.query("use_stromgren_photoionization", use_stochastic_stellar_pop_stromgren_photoionization_);
 		ppp.query("stromgren_qh0_table_hdf5_file", stochastic_stellar_pop_qh0_table_hdf5_file_);
 		ppp.query("stromgren_max_pseudosteps", stochastic_stellar_pop_stromgren_max_pseudosteps_);
-		ppp.query("stromgren_log_every", stochastic_stellar_pop_stromgren_log_every_);
 		ppp.query("stromgren_residual_tol", stochastic_stellar_pop_stromgren_residual_tol_);
 		ppp.query("stromgren_abort_on_max_iters", stochastic_stellar_pop_stromgren_abort_on_max_iters_);
 		ppp.query("stromgren_use_anderson_accel", stochastic_stellar_pop_stromgren_use_anderson_accel_);
@@ -704,7 +702,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 							 "particles.use_stromgren_photoionization=true requires particles.stromgren_qh0_table_hdf5_file");
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_max_pseudosteps_ >= 1,
 							 "particles.stromgren_max_pseudosteps must be >= 1.");
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_log_every_ >= 0, "particles.stromgren_log_every must be >= 0.");
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_residual_tol_ > 0.0, "particles.stromgren_residual_tol must be > 0.");
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_anderson_beta_min_ <= stochastic_stellar_pop_stromgren_anderson_beta_max_,
 							 "particles.stromgren_anderson_beta_min must be <= particles.stromgren_anderson_beta_max.");
@@ -1851,8 +1848,8 @@ void QuokkaSimulation<problem_t>::FillNGammaFromStromgrenAtLevel(int lev, amrex:
 		quokka::photoionization::FillNGammaFromStromgrenVolumes<problem_t>(
 		    this->StochasticStellarPopParticles.get(), lev, time, grids[lev], dmap[lev], geom[lev], state_cc, n_gamma_cc, qh0_table,
 		    stochastic_stellar_pop_stromgren_max_pseudosteps_, stochastic_stellar_pop_stromgren_residual_tol_,
-		    stochastic_stellar_pop_stromgren_log_every_, stochastic_stellar_pop_stromgren_abort_on_max_iters_,
-		    stochastic_stellar_pop_stromgren_use_anderson_accel_, stochastic_stellar_pop_stromgren_anderson_beta_min_,
+		    stochastic_stellar_pop_stromgren_abort_on_max_iters_, stochastic_stellar_pop_stromgren_use_anderson_accel_,
+		    stochastic_stellar_pop_stromgren_anderson_beta_min_,
 		    stochastic_stellar_pop_stromgren_anderson_beta_max_);
 	}
 #else
