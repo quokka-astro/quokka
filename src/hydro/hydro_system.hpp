@@ -731,7 +731,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(am
 	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
 		for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
 			const amrex::Real dust_rho = cons(i, j, k, dustDensity_index + g * numDustVars_);
-			isDensityPositive = isDensityPositive && (dust_rho >= 0.);
+			isDensityPositive = isDensityPositive && (dust_rho > 0.);
 		}
 	}
 
