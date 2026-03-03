@@ -78,6 +78,20 @@ enum class ParticleType {
 	Test		      // Test particles with all features enabled
 };
 
+// Compile-time particle metadata.
+// Default policy: do not split particles during restart refinement unless explicitly enabled.
+template <ParticleType particleType> struct ParticleTypeTraits {
+	static constexpr bool allow_restart_refine_splitting = false;
+};
+
+template <> struct ParticleTypeTraits<ParticleType::CIC> {
+	static constexpr bool allow_restart_refine_splitting = true;
+};
+
+template <> struct ParticleTypeTraits<ParticleType::CICRad> {
+	static constexpr bool allow_restart_refine_splitting = true;
+};
+
 // Enum for SN schemes: ThermalOnly, ThermalAndMomentum
 AMREX_ENUM(SNScheme,				   // NOLINT
 	   SN_thermal_only,			   // pure thermal
@@ -498,6 +512,10 @@ inline int reproducibility_roundoff_redundancy = 20; // NOLINT; remove 20 bits f
 // Scalar yield per supernova (total amount, not density)
 inline amrex::Real scalar_yield_per_SN = 1.0; // NOLINT
 
+// SN terminal momentum in units of M_sun * km/s (runtime-configurable). Default: canonical value from Kim & Ostriker 2015.
+inline constexpr amrex::Real SN_p_term_Msunkmps_canonical = 2.8e5;    // [M_sun km/s]
+inline amrex::Real SN_p_term_Msunkmps = SN_p_term_Msunkmps_canonical; // NOLINT
+
 // Function to parse particle parameters from input file
 // The 'inline' keyword allows this function to be defined in a header file without
 // causing multiple definition errors when the header is included in multiple source files.
@@ -537,6 +555,9 @@ inline void particleParmParse()
 
 	// Scalar yield per supernova
 	pp.query("scalar_yield_per_SN", scalar_yield_per_SN);
+
+	// SN terminal momentum (overrides canonical value if set)
+	pp.query("SN_p_term_Msunkmps", SN_p_term_Msunkmps);
 
 	// Placeholder parameters for particles
 	pp.query("param1", particle_param1);

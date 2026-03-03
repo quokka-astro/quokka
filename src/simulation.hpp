@@ -2651,6 +2651,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCLo(
 			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::energy_index);
 			consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) =
 			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::internalEnergy_index);
+			// copy passive scalars
+			for (int n = 0; n < HydroSystem<problem_t>::nscalars_; ++n) {
+				consVar(i, j, k, HydroSystem<problem_t>::scalar0_index + n) =
+				    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::scalar0_index + n);
+			}
 		} else {
 			// Inflow: use reflection from mirror cell with flipped normal momentum
 			// Mirror cell: reflect around lower boundary face
@@ -2692,6 +2697,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCLo(
 			consVar(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = (dir == 2) ? mom_normal : x3Mom;
 			consVar(i, j, k, HydroSystem<problem_t>::energy_index) = etot;
 			consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = eint;
+			// copy passive scalars from mirror cell
+			for (int n = 0; n < HydroSystem<problem_t>::nscalars_; ++n) {
+				consVar(i, j, k, HydroSystem<problem_t>::scalar0_index + n) =
+				    consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::scalar0_index + n);
+			}
 		}
 	}
 }
@@ -2762,6 +2772,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCHi(
 			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::energy_index);
 			consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) =
 			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::internalEnergy_index);
+			// copy passive scalars
+			for (int n = 0; n < HydroSystem<problem_t>::nscalars_; ++n) {
+				consVar(i, j, k, HydroSystem<problem_t>::scalar0_index + n) =
+				    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::scalar0_index + n);
+			}
 		} else {
 			// Inflow: use reflection from mirror cell with flipped normal momentum
 			// Mirror cell: reflect around upper boundary face
@@ -2803,6 +2818,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCHi(
 			consVar(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = (dir == 2) ? mom_normal : x3Mom;
 			consVar(i, j, k, HydroSystem<problem_t>::energy_index) = etot;
 			consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = eint;
+			// copy passive scalars from mirror cell
+			for (int n = 0; n < HydroSystem<problem_t>::nscalars_; ++n) {
+				consVar(i, j, k, HydroSystem<problem_t>::scalar0_index + n) =
+				    consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::scalar0_index + n);
+			}
 		}
 	}
 }
@@ -4869,12 +4889,15 @@ void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::un
 
 	// Split particles
 #if AMREX_SPACEDIM == 3
-	if (restartRefineFactor_ > 1 && splitParticlesOnRestartRefine_) {
-		const int split_factor = gcem::pow(restartRefineFactor_, AMREX_SPACEDIM);
-		amrex::Print() << std::format("Splitting {} using split_factor = {}\n", particleRegister_.getParticleTypeName(particle_type), split_factor);
-		auto descriptor = particleRegister_.getParticleDescriptor(particle_type);
-		for (int lev = 0; lev <= finestLevel(); ++lev) {
-			descriptor->splitParticles(lev, split_factor);
+	if constexpr (quokka::ParticleTypeTraits<particle_type>::allow_restart_refine_splitting) {
+		if (restartRefineFactor_ > 1 && splitParticlesOnRestartRefine_) {
+			const int split_factor = gcem::pow(restartRefineFactor_, AMREX_SPACEDIM);
+			amrex::Print() << std::format("Splitting {} using split_factor = {}\n", particleRegister_.getParticleTypeName(particle_type),
+						      split_factor);
+			auto descriptor = particleRegister_.getParticleDescriptor(particle_type);
+			for (int lev = 0; lev <= finestLevel(); ++lev) {
+				descriptor->splitParticles(lev, split_factor);
+			}
 		}
 	}
 #endif
