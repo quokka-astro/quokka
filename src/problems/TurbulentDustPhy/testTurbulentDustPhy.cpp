@@ -54,9 +54,8 @@ template <> struct SimulationData<TurbulentBox> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustDrag<TurbulentBox>::ComputeReciprocalStoppingTime(amrex::Real rho_g,
-											      amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-											      amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag, double cs)
+AMREX_GPU_HOST_DEVICE auto DustDrag<TurbulentBox>::ComputeReciprocalStoppingTime(amrex::Real rho_g, amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
+										 amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag, double cs)
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, dust_grain_radius, dust_grain_density, true);
