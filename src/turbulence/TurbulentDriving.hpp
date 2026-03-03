@@ -54,8 +54,12 @@ template <typename problem_t> class turbulentDriving
 
 	void update(const amrex::Real &time, amrex::MultiFab &state)
 	{
-		disp = quokka::turbulence::calculate_dispersion<problem_t>(state);
-		updated = time == 0 ? tg.check_for_update(time) : tg.check_for_update(time, disp.data());
+		updated = tg.check_for_update(time);
+
+		if (updated) {
+			disp = quokka::turbulence::calculate_dispersion<problem_t>(state);
+			tg.check_for_update(time, disp.data());
+		}
 	}
 
       public:
