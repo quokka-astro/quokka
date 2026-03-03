@@ -232,8 +232,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int sn_count_ = 0;	      // number of SN explosions in a step (used for diagnostics)
 	int sn_count_cumulative_ = 0; // cumulative number of SN explosions (used for diagnostics)
 
-	amrex::Real densityFloor_ = 0.0; // default
-	amrex::Real tempFloor_ = 0.0;	 // default
+	amrex::Real densityFloor_ = 0.0;     // default
+	amrex::Real dustDensityFloor_ = 0.0; // default
+	amrex::Real tempFloor_ = 0.0;	     // default
 	bool useDensityFloorParser_ = false;
 	std::string densityFloorExpr_;
 	std::optional<amrex::Parser> densityFloorParser_;
