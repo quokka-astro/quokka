@@ -1070,14 +1070,12 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 		}
 
 		// Enforce dust density floor
+		amrex::Real const dust_floor = dustDensityFloor;
 		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
 			for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
-				amrex::Real const dust_floor = dustDensityFloor;
-				for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
-					amrex::Real dust_rho = state[bx](i, j, k, dustDensity_index + g * numDustVars_);
-					if (dust_rho < dust_floor) {
-						state[bx](i, j, k, dustDensity_index + g * numDustVars_) = dust_floor;
-					}
+				amrex::Real dust_rho = state[bx](i, j, k, dustDensity_index + g * numDustVars_);
+				if (dust_rho < dust_floor) {
+					state[bx](i, j, k, dustDensity_index + g * numDustVars_) = dust_floor;
 				}
 			}
 		}
