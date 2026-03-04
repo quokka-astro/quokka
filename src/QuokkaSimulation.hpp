@@ -167,6 +167,14 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	std::string coolingTableType_;
 	std::string coolingTableFilename_;
 
+	//Conduction parameters
+	int enableElectronConduction_ = 0;
+	amrex::Real electronConductionKappa0_ = 0.0;
+	amrex::Real electronConductionFluxLimiterPhi_ = 1.0;
+	amrex::Real electronConductionSaturationFactor_ = 5.0;
+	amrex::Real electronConductionTempFloor_ = 10.0;
+
+
 	std::map<std::string, std::string> turbParams_;
 
 	static constexpr int nvarTotal_cc_ = Physics_Indices<problem_t>::nvarTotal_cc;
@@ -601,6 +609,16 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		}
 	}
 
+	// set electron thermal conduction runtime parameters
+	{
+		amrex::ParmParse const hpp("conduction");
+		hpp.query("enabled", enableElectronConduction_);
+		hpp.query("conductivity_prefactor", electronConductionKappa0_);
+		hpp.query("flux_limiter_phi", electronConductionFluxLimiterPhi_);
+		hpp.query("saturation_factor", electronConductionSaturationFactor_);
+		hpp.query("temperature_floor", electronConductionTempFloor_);
+	}
+
 	// set turbulence runtime parameters
 	{
 		amrex::ParmParse const hpp("turbulence");
@@ -1001,6 +1019,15 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	if ((enableTurbulence_ == 1) && (time < turbulenceStopTime_)) {
 		auto const &cellSizes = geom[lev].CellSizeArray();
 		td->applyDriving(state, time, dt, cellSizes);
+	}
+
+	if (enableElectronConduction_ == 1) {
+		fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
+		const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_,
+								 .flux_limiter_phi = electronConductionFluxLimiterPhi_,
+								 .saturation_factor = electronConductionSaturationFactor_,
+								 .min_temperature = electronConductionTempFloor_};
+		quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params);
 	}
 	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
 		DustDrag<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega_, enableIterDustStoptime_, print_dust_counter_);
