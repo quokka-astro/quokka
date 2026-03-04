@@ -232,8 +232,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int sn_count_ = 0;	      // number of SN explosions in a step (used for diagnostics)
 	int sn_count_cumulative_ = 0; // cumulative number of SN explosions (used for diagnostics)
 
-	amrex::Real densityFloor_ = 0.0; // default
-	amrex::Real tempFloor_ = 0.0;	 // default
+	amrex::Real densityFloor_ = 0.0;     // default
+	amrex::Real dustDensityFloor_ = 0.0; // default
+	amrex::Real tempFloor_ = 0.0;	     // default
 	bool useDensityFloorParser_ = false;
 	std::string densityFloorExpr_;
 	std::optional<amrex::Parser> densityFloorParser_;
@@ -2651,6 +2652,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCLo(
 			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::energy_index);
 			consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) =
 			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::internalEnergy_index);
+			// copy passive scalars
+			for (int n = 0; n < HydroSystem<problem_t>::nscalars_; ++n) {
+				consVar(i, j, k, HydroSystem<problem_t>::scalar0_index + n) =
+				    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::scalar0_index + n);
+			}
 		} else {
 			// Inflow: use reflection from mirror cell with flipped normal momentum
 			// Mirror cell: reflect around lower boundary face
@@ -2692,6 +2698,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCLo(
 			consVar(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = (dir == 2) ? mom_normal : x3Mom;
 			consVar(i, j, k, HydroSystem<problem_t>::energy_index) = etot;
 			consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = eint;
+			// copy passive scalars from mirror cell
+			for (int n = 0; n < HydroSystem<problem_t>::nscalars_; ++n) {
+				consVar(i, j, k, HydroSystem<problem_t>::scalar0_index + n) =
+				    consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::scalar0_index + n);
+			}
 		}
 	}
 }
@@ -2762,6 +2773,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCHi(
 			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::energy_index);
 			consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) =
 			    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::internalEnergy_index);
+			// copy passive scalars
+			for (int n = 0; n < HydroSystem<problem_t>::nscalars_; ++n) {
+				consVar(i, j, k, HydroSystem<problem_t>::scalar0_index + n) =
+				    consVar(i_interior, j_interior, k_interior, HydroSystem<problem_t>::scalar0_index + n);
+			}
 		} else {
 			// Inflow: use reflection from mirror cell with flipped normal momentum
 			// Mirror cell: reflect around upper boundary face
@@ -2803,6 +2819,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<problem_t>::setDiodeBCHi(
 			consVar(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = (dir == 2) ? mom_normal : x3Mom;
 			consVar(i, j, k, HydroSystem<problem_t>::energy_index) = etot;
 			consVar(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = eint;
+			// copy passive scalars from mirror cell
+			for (int n = 0; n < HydroSystem<problem_t>::nscalars_; ++n) {
+				consVar(i, j, k, HydroSystem<problem_t>::scalar0_index + n) =
+				    consVar(i_mirror, j_mirror, k_mirror, HydroSystem<problem_t>::scalar0_index + n);
+			}
 		}
 	}
 }
