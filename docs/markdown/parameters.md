@@ -122,7 +122,7 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 | dust.enable_iter_stoptime   | Boolean (0/1) | `0` (Disabled) | If set to 1, enables iterative dust stopping time calculation.                                                                 |
 | dust.omega                  | Float         | `1.0`          | Controls the level of frictional heating, with omega = 0 turning it off and omega = 1 depositing all dissipation into the gas. |
 | dust.print_iteration_counts | Boolean (0/1) | `0` (Disabled) | If set to 1, prints dust drag iteration counts for debugging.                                                                  |
-
+| dust.density_floor | Float | `0.0` | The minimum dust density value allowed in the simulation. Enforced through EnforceLimits.                                                           |
 ## Particles
 
 These parameters are read in the `particleParmParse()` function in `src/particles/particle_types.hpp` and `readParmParse()` in `src/simulation.hpp`.
