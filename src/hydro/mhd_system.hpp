@@ -48,8 +48,8 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 	static void ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgScheme emf_avg_scheme,
-			       SlopeLimiter plmLimiter, EMFComputeScheme emf_compute_scheme,
-			       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real resistivity = 0.0);
+			       SlopeLimiter plmLimiter, EMFComputeScheme emf_compute_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+			       amrex::Real resistivity = 0.0);
 
 	static void AverageEMF(amrex::Array4<amrex::Real> const &E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_E_q, amrex::Box const &box_ec,
 			       std::array<int, 2> const &extrap_dirs, std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
@@ -87,8 +87,8 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 				  SlopeLimiter plmLimiter);
 
 	static void AddResistivity(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
-				   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
-				   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real resistivity);
+				   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+				   amrex::Real resistivity);
 
 	static void SolveInductionEqn(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fc_consVarOld_mf,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> &fc_consVarNew_mf,
@@ -100,8 +100,8 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgScheme emf_avg_scheme,
-				      SlopeLimiter plmLimiter, EMFComputeScheme emf_compute_scheme,
-				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real resistivity)
+				      SlopeLimiter plmLimiter, EMFComputeScheme emf_compute_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+				      amrex::Real resistivity)
 {
 	if (emf_compute_scheme == EMFComputeScheme::FelkerStone2017) {
 		MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, plmLimiter,
@@ -1005,8 +1005,8 @@ void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_S
 
 template <typename problem_t>
 void MHDSystem<problem_t>::AddResistivity(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
-					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
-					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real resistivity)
+					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+					  amrex::Real resistivity)
 {
 	const BL_PROFILE("MHDSystem::AddResistivity()");
 
@@ -1018,7 +1018,8 @@ void MHDSystem<problem_t>::AddResistivity(std::array<amrex::MultiFab, AMREX_SPAC
 			const int index_w0 = (iedge + 1) % 3;
 			const int index_w1 = (iedge + 2) % 3;
 
-			const amrex::Box box_ec = amrex::convert(box_cc, amrex::IntVect::TheDimensionVector(index_w0) + amrex::IntVect::TheDimensionVector(index_w1));
+			const amrex::Box box_ec =
+			    amrex::convert(box_cc, amrex::IntVect::TheDimensionVector(index_w0) + amrex::IntVect::TheDimensionVector(index_w1));
 
 			const auto &E_edge = ec_mf_emf_components[iedge][mfi].array();
 			const auto &B_w0 = fcx_mf_cVars[index_w0][mfi].const_array();
@@ -1036,7 +1037,8 @@ void MHDSystem<problem_t>::AddResistivity(std::array<amrex::MultiFab, AMREX_SPAC
 			// where J_iedge = curl(B)_iedge = d b_w1 / d w0 - d b_w0 / d w1,
 			// evaluated as a centred difference across the edge using the two surrounding face-centred B values.
 			amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-				const double J_iedge = (B_w1(i + vec_w0[0], j + vec_w0[1], k + vec_w0[2], bfield_idx) - B_w1(i, j, k, bfield_idx)) / dx_w0 - (B_w0(i + vec_w1[0], j + vec_w1[1], k + vec_w1[2], bfield_idx) - B_w0(i, j, k, bfield_idx)) / dx_w1;
+				const double J_iedge = (B_w1(i + vec_w0[0], j + vec_w0[1], k + vec_w0[2], bfield_idx) - B_w1(i, j, k, bfield_idx)) / dx_w0 -
+						       (B_w0(i + vec_w1[0], j + vec_w1[1], k + vec_w1[2], bfield_idx) - B_w0(i, j, k, bfield_idx)) / dx_w1;
 				E_edge(i, j, k) -= resistivity * J_iedge;
 			});
 		}
