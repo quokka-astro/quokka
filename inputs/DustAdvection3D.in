@@ -22,3 +22,5 @@ suppress_output = 0
 
 stop_time = 0.9
 max_timesteps = 5000
+
+dust.density_floor = 1e-6
