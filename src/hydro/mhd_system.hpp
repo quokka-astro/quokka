@@ -56,14 +56,14 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 			       std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_Bi_ieside, EMFAvgScheme emf_avg_scheme);
 
 	static void AddResistivity(amrex::Array4<amrex::Real> const &E_edge, amrex::Array4<const amrex::Real> const &B_w0,
-				      amrex::Array4<const amrex::Real> const &B_w1, amrex::IntVect vec_w0, amrex::IntVect vec_w1,
-				      amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real resistivity, amrex::Box const &box_ec);
+				   amrex::Array4<const amrex::Real> const &B_w1, amrex::IntVect vec_w0, amrex::IntVect vec_w1, amrex::Real dx_w0,
+				   amrex::Real dx_w1, amrex::Real resistivity, amrex::Box const &box_ec);
 
 	static void ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
-					       SlopeLimiter plmLimiter, EMFAvgScheme emf_avg_scheme,
-					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real resistivity = 0.0);
+					       SlopeLimiter plmLimiter, EMFAvgScheme emf_avg_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+					       amrex::Real resistivity = 0.0);
 
 	static void ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 					   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
@@ -105,11 +105,14 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				      amrex::Real resistivity)
 {
 	if (emf_compute_scheme == EMFComputeScheme::FelkerStone2017) {
-		MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, plmLimiter, emf_avg_scheme, dx, resistivity);
+		MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, plmLimiter,
+								 emf_avg_scheme, dx, resistivity);
 	} else if (emf_compute_scheme == EMFComputeScheme::Balsara2025) {
-		MHDSystem<problem_t>::ComputeEMF_Balsara2025(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, plmLimiter, emf_avg_scheme, dx, resistivity);
+		MHDSystem<problem_t>::ComputeEMF_Balsara2025(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, plmLimiter,
+							     emf_avg_scheme, dx, resistivity);
 	} else if (emf_compute_scheme == EMFComputeScheme::Quokka2026) {
-		MHDSystem<problem_t>::ComputeEMF_Quokka2026(ec_mf_emf_components, fcx_mf_vel, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, plmLimiter, emf_avg_scheme, dx, resistivity);
+		MHDSystem<problem_t>::ComputeEMF_Quokka2026(ec_mf_emf_components, fcx_mf_vel, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, plmLimiter,
+							    emf_avg_scheme, dx, resistivity);
 	} else {
 		throw std::runtime_error("Unsupported EMF-scheme. Expected either FelkerStone2017, Balsara2025, or Quokka2026.");
 	}
@@ -138,8 +141,8 @@ template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 						      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 						      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
-						      SlopeLimiter plmLimiter, EMFAvgScheme emf_avg_scheme,
-						      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real resistivity)
+						      SlopeLimiter plmLimiter, EMFAvgScheme emf_avg_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+						      amrex::Real resistivity)
 {
 	const BL_PROFILE("MHDSystem::ComputeEMF_FelkerStone2017()");
 	const int nghost_cc = 4; // we only need 4 cc ghost cells when reconstructing cc->fc->ec using PPM
@@ -343,11 +346,10 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 			std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi),
 										       fcx_mf_fspds[2].const_array(mfi)};
 			MHDSystem<problem_t>::AverageEMF(E2_ave, ec_fabs_E_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside, emf_avg_scheme);
-			MHDSystem<problem_t>::AddResistivity(E2_ave, fcx_mf_cVars[extrap_dirs[0]][mfi].const_array(),
-								fcx_mf_cVars[extrap_dirs[1]][mfi].const_array(),
-								amrex::IntVect::TheDimensionVector(extrap_dirs[0]),
-								amrex::IntVect::TheDimensionVector(extrap_dirs[1]),
-								dx[extrap_dirs[0]], dx[extrap_dirs[1]], resistivity, box_ec);
+			MHDSystem<problem_t>::AddResistivity(
+			    E2_ave, fcx_mf_cVars[extrap_dirs[0]][mfi].const_array(), fcx_mf_cVars[extrap_dirs[1]][mfi].const_array(),
+			    amrex::IntVect::TheDimensionVector(extrap_dirs[0]), amrex::IntVect::TheDimensionVector(extrap_dirs[1]), dx[extrap_dirs[0]],
+			    dx[extrap_dirs[1]], resistivity, box_ec);
 		}
 	}
 }
@@ -360,8 +362,8 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
 						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
-						 SlopeLimiter plmLimiter, EMFAvgScheme emf_avg_scheme,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real resistivity)
+						 SlopeLimiter plmLimiter, EMFAvgScheme emf_avg_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+						 amrex::Real resistivity)
 {
 	const BL_PROFILE("MHDSystem::ComputeEMF_Quokka2026()");
 
@@ -486,11 +488,10 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 			std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi),
 										       fcx_mf_fspds[2].const_array(mfi)};
 			MHDSystem<problem_t>::AverageEMF(E2_ave, ec_fabs_E_Q, box_ec, field_w_indices, fspds, ec_fabs_Bi_ieside, emf_avg_scheme);
-			MHDSystem<problem_t>::AddResistivity(E2_ave, fcx_mf_cVars[field_w_indices[0]][mfi].const_array(),
-								fcx_mf_cVars[field_w_indices[1]][mfi].const_array(),
-								amrex::IntVect::TheDimensionVector(field_w_indices[0]),
-								amrex::IntVect::TheDimensionVector(field_w_indices[1]),
-								dx[field_w_indices[0]], dx[field_w_indices[1]], resistivity, box_ec);
+			MHDSystem<problem_t>::AddResistivity(
+			    E2_ave, fcx_mf_cVars[field_w_indices[0]][mfi].const_array(), fcx_mf_cVars[field_w_indices[1]][mfi].const_array(),
+			    amrex::IntVect::TheDimensionVector(field_w_indices[0]), amrex::IntVect::TheDimensionVector(field_w_indices[1]),
+			    dx[field_w_indices[0]], dx[field_w_indices[1]], resistivity, box_ec);
 		}
 	}
 }
@@ -503,8 +504,8 @@ template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 						  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 						  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
-						  SlopeLimiter plmLimiter, EMFAvgScheme emf_avg_scheme,
-						  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real resistivity)
+						  SlopeLimiter plmLimiter, EMFAvgScheme emf_avg_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+						  amrex::Real resistivity)
 {
 	// calculating v x B at cell center, v already at cell center, B at face center
 
@@ -698,26 +699,26 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 			std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi),
 										       fcx_mf_fspds[2].const_array(mfi)};
 			MHDSystem<problem_t>::AverageEMF(E2_array, ec_fabs_EMF_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside, emf_avg_scheme);
-			MHDSystem<problem_t>::AddResistivity(E2_array, fcx_mf_cVars[extrap_dirs[0]][mfi].const_array(),
-								fcx_mf_cVars[extrap_dirs[1]][mfi].const_array(),
-								amrex::IntVect::TheDimensionVector(extrap_dirs[0]),
-								amrex::IntVect::TheDimensionVector(extrap_dirs[1]),
-								dx[extrap_dirs[0]], dx[extrap_dirs[1]], resistivity, box_ec);
+			MHDSystem<problem_t>::AddResistivity(
+			    E2_array, fcx_mf_cVars[extrap_dirs[0]][mfi].const_array(), fcx_mf_cVars[extrap_dirs[1]][mfi].const_array(),
+			    amrex::IntVect::TheDimensionVector(extrap_dirs[0]), amrex::IntVect::TheDimensionVector(extrap_dirs[1]), dx[extrap_dirs[0]],
+			    dx[extrap_dirs[1]], resistivity, box_ec);
 		}
 	}
 }
 
 template <typename problem_t>
 void MHDSystem<problem_t>::AddResistivity(amrex::Array4<amrex::Real> const &E_edge, amrex::Array4<const amrex::Real> const &B_w0,
-					     amrex::Array4<const amrex::Real> const &B_w1, amrex::IntVect vec_w0, amrex::IntVect vec_w1,
-					     amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real resistivity, amrex::Box const &box_ec)
+					  amrex::Array4<const amrex::Real> const &B_w1, amrex::IntVect vec_w0, amrex::IntVect vec_w1, amrex::Real dx_w0,
+					  amrex::Real dx_w1, amrex::Real resistivity, amrex::Box const &box_ec)
 {
 	if (resistivity == 0.0) {
 		return;
 	}
 	const int bfield_idx = MHDSystem<problem_t>::bfield_index;
 	amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		const double J_iedge = (B_w1(i + vec_w0[0], j + vec_w0[1], k + vec_w0[2], bfield_idx) - B_w1(i, j, k, bfield_idx)) / dx_w0 - (B_w0(i + vec_w1[0], j + vec_w1[1], k + vec_w1[2], bfield_idx) - B_w0(i, j, k, bfield_idx)) / dx_w1;
+		const double J_iedge = (B_w1(i + vec_w0[0], j + vec_w0[1], k + vec_w0[2], bfield_idx) - B_w1(i, j, k, bfield_idx)) / dx_w0 -
+				       (B_w0(i + vec_w1[0], j + vec_w1[1], k + vec_w1[2], bfield_idx) - B_w0(i, j, k, bfield_idx)) / dx_w1;
 		E_edge(i, j, k) -= resistivity * J_iedge;
 	});
 }
