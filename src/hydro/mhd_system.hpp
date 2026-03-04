@@ -1015,29 +1015,28 @@ void MHDSystem<problem_t>::AddResistivity(std::array<amrex::MultiFab, AMREX_SPAC
 
 		for (int iedge = 0; iedge < 3; ++iedge) {
 			// w0, w1 are the two face directions transverse to the edge direction iedge
-			const int w0 = (iedge + 1) % 3;
-			const int w1 = (iedge + 2) % 3;
+			const int index_w0 = (iedge + 1) % 3;
+			const int index_w1 = (iedge + 2) % 3;
 
-			const amrex::Box box_ec = amrex::convert(box_cc, amrex::IntVect::TheDimensionVector(w0) + amrex::IntVect::TheDimensionVector(w1));
+			const amrex::Box box_ec = amrex::convert(box_cc, amrex::IntVect::TheDimensionVector(index_w0) + amrex::IntVect::TheDimensionVector(index_w1));
 
 			const auto &E_edge = ec_mf_emf_components[iedge][mfi].array();
-			const auto &B_w0 = fcx_mf_cVars[w0][mfi].const_array();
-			const auto &B_w1 = fcx_mf_cVars[w1][mfi].const_array();
+			const auto &B_w0 = fcx_mf_cVars[index_w0][mfi].const_array();
+			const auto &B_w1 = fcx_mf_cVars[index_w1][mfi].const_array();
 
 			const int bfield_idx = MHDSystem<problem_t>::bfield_index;
-			const amrex::Real dx_w0 = dx[w0];
-			const amrex::Real dx_w1 = dx[w1];
+			const amrex::Real dx_w0 = dx[index_w0];
+			const amrex::Real dx_w1 = dx[index_w1];
 
 			// integer unit vector shifts for index arithmetic in the GPU kernel
-			std::array<int, 3> const ew0 = {(w0 == 0) ? 1 : 0, (w0 == 1) ? 1 : 0, (w0 == 2) ? 1 : 0};
-			std::array<int, 3> const ew1 = {(w1 == 0) ? 1 : 0, (w1 == 1) ? 1 : 0, (w1 == 2) ? 1 : 0};
+			const amrex::IntVect vec_w0 = amrex::IntVect::TheDimensionVector(index_w0);
+			const amrex::IntVect vec_w1 = amrex::IntVect::TheDimensionVector(index_w1);
 
-			// For edge iedge at (i,j,k), Stokes' theorem gives the resistive EMF as -eta*J_iedge,
-			// where J_iedge = curl(B)_iedge = dB_w1/d_w0 - dB_w0/d_w1,
+			// For edge iedge at (i,j,k), Stokes' theorem gives the resistive EMF as -eta * J_iedge,
+			// where J_iedge = curl(B)_iedge = d b_w1 / d w0 - d b_w0 / d w1,
 			// evaluated as a centred difference across the edge using the two surrounding face-centred B values.
 			amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-				const double J_iedge = (B_w1(i + ew0[0], j + ew0[1], k + ew0[2], bfield_idx) - B_w1(i, j, k, bfield_idx)) / dx_w0 -
-						       (B_w0(i + ew1[0], j + ew1[1], k + ew1[2], bfield_idx) - B_w0(i, j, k, bfield_idx)) / dx_w1;
+				const double J_iedge = (B_w1(i + vec_w0[0], j + vec_w0[1], k + vec_w0[2], bfield_idx) - B_w1(i, j, k, bfield_idx)) / dx_w0 - (B_w0(i + vec_w1[0], j + vec_w1[1], k + vec_w1[2], bfield_idx) - B_w0(i, j, k, bfield_idx)) / dx_w1;
 				E_edge(i, j, k) -= resistivity * J_iedge;
 			});
 		}
