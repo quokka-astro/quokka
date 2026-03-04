@@ -717,13 +717,8 @@ void MHDSystem<problem_t>::AddResistivity(amrex::Array4<amrex::Real> const &E_ed
 	}
 	const int bfield_idx = MHDSystem<problem_t>::bfield_index;
 	amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		const double J_iedge = (
-				B_w1(i, j, k)
-			- B_w1(i - vec_w0[0], j - vec_w0[1], k - vec_w0[2])
-		) / dx_w0 - (
-				B_w0(i, j, k)
-			- B_w0(i - vec_w1[0], j - vec_w1[1], k - vec_w1[2])
-		) / dx_w1;
+		const double J_iedge = (B_w1(i, j, k) - B_w1(i - vec_w0[0], j - vec_w0[1], k - vec_w0[2])) / dx_w0 -
+				       (B_w0(i, j, k) - B_w0(i - vec_w1[0], j - vec_w1[1], k - vec_w1[2])) / dx_w1;
 		E_edge(i, j, k) -= resistivity * J_iedge;
 	});
 }
