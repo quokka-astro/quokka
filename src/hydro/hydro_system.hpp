@@ -158,8 +158,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	AMREX_GPU_DEVICE static auto GetGradFixedPotential(amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> posvec) -> amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>;
 
 	template <typename DensityFloorFunc>
-	static void EnforceLimits(amrex::Real densityFloor, amrex::Real tempFloor, amrex::MultiFab &state_mf, amrex::Geometry const &geom,
-				  DensityFloorFunc const &density_floor_func);
+	static void EnforceLimits(amrex::Real densityFloor, amrex::Real dustDensityFloor, amrex::Real tempFloor, amrex::MultiFab &state_mf,
+				  amrex::Geometry const &geom, DensityFloorFunc const &density_floor_func);
 
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
@@ -726,7 +726,14 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(am
 {
 	// check if cons(i, j, k) is a valid state
 	const amrex::Real rho = cons(i, j, k, density_index);
-	bool const isDensityPositive = (rho > 0.);
+	bool isDensityPositive = (rho > 0.);
+
+	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+		for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
+			const amrex::Real dust_rho = cons(i, j, k, dustDensity_index + g * numDustVars_);
+			isDensityPositive = isDensityPositive && (dust_rho > 0.);
+		}
+	}
 
 	bool isMassScalarPositive = true;
 	if constexpr (nmscalars_ > 0) {
@@ -998,8 +1005,8 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 // floors and ceilings which can be set in the param file
 template <typename problem_t>
 template <typename DensityFloorFunc>
-void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const tempFloor, amrex::MultiFab &state_mf, amrex::Geometry const &geom,
-					   DensityFloorFunc const &density_floor_func)
+void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const dustDensityFloor, amrex::Real const tempFloor,
+					   amrex::MultiFab &state_mf, amrex::Geometry const &geom, DensityFloorFunc const &density_floor_func)
 {
 	auto state = state_mf.arrays();
 	auto const prob_lo = geom.ProbLoArray();
@@ -1058,6 +1065,17 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 				for (int idx = 0; idx < nmscalars_; ++idx) {
 					// renormalize
 					state[bx](i, j, k, scalar0_index + idx) /= sp_sum;
+				}
+			}
+		}
+
+		// Enforce dust density floor
+		amrex::Real const dust_floor = dustDensityFloor;
+		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+			for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
+				amrex::Real dust_rho = state[bx](i, j, k, dustDensity_index + g * numDustVars_);
+				if (dust_rho < dust_floor) {
+					state[bx](i, j, k, dustDensity_index + g * numDustVars_) = dust_floor;
 				}
 			}
 		}
