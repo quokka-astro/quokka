@@ -712,7 +712,7 @@ void MHDSystem<problem_t>::AddResistivity(amrex::Array4<amrex::Real> const &E_ed
 					  amrex::Array4<const amrex::Real> const &B_w1, amrex::IntVect vec_w0, amrex::IntVect vec_w1, amrex::Real dx_w0,
 					  amrex::Real dx_w1, amrex::Real resistivity, amrex::Box const &box_ec)
 {
-	if (resistivity == 0.0) {
+	if (std::abs(resistivity) <= std::numeric_limits<amrex::Real>::epsilon()) {
 		return;
 	}
 	const int bfield_idx = MHDSystem<problem_t>::bfield_index;

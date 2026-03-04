@@ -767,7 +767,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 
 		// diffusive CFL constraint for Ohmic resistivity
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			if (mhdResistivity_ != 0.0) {
+			if (std::abs(mhdResistivity_) > std::numeric_limits<amrex::Real>::epsilon()) {
 				const auto &dx = geom[level].CellSizeArray();
 				const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
 				const amrex::Real resistive_signal = 2.0 * AMREX_SPACEDIM * mhdResistivity_ / dx_min;
