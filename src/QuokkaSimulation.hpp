@@ -704,7 +704,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_max_pseudosteps_ >= 1,
 							 "particles.stromgren_max_pseudosteps must be >= 1.");
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_residual_tol_ > 0.0, "particles.stromgren_residual_tol must be > 0.");
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_anderson_beta_min_ <= stochastic_stellar_pop_stromgren_anderson_beta_max_,
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stochastic_stellar_pop_stromgren_anderson_beta_min_ <=
+							     stochastic_stellar_pop_stromgren_anderson_beta_max_,
 							 "particles.stromgren_anderson_beta_min must be <= particles.stromgren_anderson_beta_max.");
 
 			// Infer dataset path directly from the HDF5 file. Coordinate encoding
@@ -1851,8 +1852,7 @@ void QuokkaSimulation<problem_t>::FillNGammaFromStromgrenAtLevel(int lev, amrex:
 		    this->StochasticStellarPopParticles.get(), lev, time, grids[lev], dmap[lev], geom[lev], state_cc, n_gamma_cc, qh0_table,
 		    stochastic_stellar_pop_stromgren_max_pseudosteps_, stochastic_stellar_pop_stromgren_residual_tol_,
 		    stochastic_stellar_pop_stromgren_abort_on_max_iters_, stochastic_stellar_pop_stromgren_use_anderson_accel_,
-		    stochastic_stellar_pop_stromgren_anderson_beta_min_,
-		    stochastic_stellar_pop_stromgren_anderson_beta_max_);
+		    stochastic_stellar_pop_stromgren_anderson_beta_min_, stochastic_stellar_pop_stromgren_anderson_beta_max_);
 	}
 #else
 	amrex::ignore_unused(lev, time, state_cc);

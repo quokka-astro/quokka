@@ -1,8 +1,8 @@
 #ifndef PARTICLE_PHOTOIONIZATION_HPP_
 #define PARTICLE_PHOTOIONIZATION_HPP_
 
-#include <array>
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 
@@ -34,9 +34,9 @@ template <typename problem_t, quokka::OutOfBounds oob_policy>
 void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContainer<problem_t> *stellar_particles, int lev, amrex::Real time,
 				    amrex::BoxArray const &ba_lev, amrex::DistributionMapping const &dm_lev, amrex::Geometry const &geom_lev,
 				    amrex::MultiFab const &state_cc, amrex::MultiFab &n_gamma_cc, quokka::DataTableGpuConst<2, 1, oob_policy> const &qh0_table,
-				    int const max_pseudo_iters = 20, amrex::Real const residual_tol = 1.0e-3,
-				    bool const abort_on_max_iters = false, bool const use_anderson_accel = false,
-				    amrex::Real const anderson_beta_min = -0.25, amrex::Real const anderson_beta_max = 1.25)
+				    int const max_pseudo_iters = 20, amrex::Real const residual_tol = 1.0e-3, bool const abort_on_max_iters = false,
+				    bool const use_anderson_accel = false, amrex::Real const anderson_beta_min = -0.25,
+				    amrex::Real const anderson_beta_max = 1.25)
 {
 	if (stellar_particles == nullptr) {
 		return;
@@ -372,13 +372,12 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 				amrex::Real const numer = amrex::MultiFab::Dot(correction, 0, correction_diff, 0, 1, 0, false);
 				anderson_beta = std::clamp(numer / denom, anderson_beta_min, anderson_beta_max);
 				if (std::abs(anderson_beta) > 1.0e-12) {
-					amrex::ParallelFor(
-					    phi_new,
-					    [phi1_arr = phi_new.arrays(), phi_picard_arr = phi_picard.const_arrays(), phi_prev_g_arr = phi_g_prev.const_arrays(),
-					     anderson_beta] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
-						    phi1_arr[nbx](i, j, k, 0) = (1.0 - anderson_beta) * phi_picard_arr[nbx](i, j, k, 0) +
-										 anderson_beta * phi_prev_g_arr[nbx](i, j, k, 0);
-					    });
+					amrex::ParallelFor(phi_new, [phi1_arr = phi_new.arrays(), phi_picard_arr = phi_picard.const_arrays(),
+								     phi_prev_g_arr = phi_g_prev.const_arrays(),
+								     anderson_beta] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+						phi1_arr[nbx](i, j, k, 0) =
+						    (1.0 - anderson_beta) * phi_picard_arr[nbx](i, j, k, 0) + anderson_beta * phi_prev_g_arr[nbx](i, j, k, 0);
+					});
 
 					amrex::Real const phi1_min = phi_new.min(0, 0, false);
 					amrex::Real const phi1_max = phi_new.max(0, 0, false);
@@ -390,23 +389,8 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 			}
 		}
 
-		amrex::ParallelFor(x_old,
-				   [phi_arr = phi.const_arrays(), state, x_arr = x_old.arrays(), n_to_rho] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
-			    amrex::Real const rho = state[nbx](i, j, k, HydroSystem<problem_t>::density_index);
-			    amrex::Real const nH = (rho > 0.0) ? (rho / n_to_rho) : 0.0;
-			    amrex::Real const ng = amrex::max(phi_arr[nbx](i, j, k, 0), 0.0);
-			    if ((nH <= 0.0) || (ng <= 0.0)) {
-				    x_arr[nbx](i, j, k, 0) = 0.0;
-			    } else {
-				    amrex::Real const a = alphaB * nH;
-				    amrex::Real const b = C::c_light * sigma_HI * ng;
-				    amrex::Real const disc = b * b + 4.0 * a * b;
-				    amrex::Real const x = (-b + std::sqrt(disc)) / (2.0 * a);
-				    x_arr[nbx](i, j, k, 0) = amrex::min<amrex::Real>(1.0, amrex::max<amrex::Real>(0.0, x));
-			    }
-		    });
-		amrex::ParallelFor(x_new,
-				   [phi_arr = phi_new.const_arrays(), state, x_arr = x_new.arrays(), n_to_rho] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+		amrex::ParallelFor(
+		    x_old, [phi_arr = phi.const_arrays(), state, x_arr = x_old.arrays(), n_to_rho] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
 			    amrex::Real const rho = state[nbx](i, j, k, HydroSystem<problem_t>::density_index);
 			    amrex::Real const nH = (rho > 0.0) ? (rho / n_to_rho) : 0.0;
 			    amrex::Real const ng = amrex::max(phi_arr[nbx](i, j, k, 0), 0.0);
@@ -421,15 +405,28 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 			    }
 		    });
 		amrex::ParallelFor(
-		    x_delta, [x0_arr = x_old.const_arrays(), x1_arr = x_new.const_arrays(),
-			      dx_arr = x_delta.arrays()] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
-			    dx_arr[nbx](i, j, k, 0) = std::abs(x1_arr[nbx](i, j, k, 0) - x0_arr[nbx](i, j, k, 0));
+		    x_new, [phi_arr = phi_new.const_arrays(), state, x_arr = x_new.arrays(), n_to_rho] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+			    amrex::Real const rho = state[nbx](i, j, k, HydroSystem<problem_t>::density_index);
+			    amrex::Real const nH = (rho > 0.0) ? (rho / n_to_rho) : 0.0;
+			    amrex::Real const ng = amrex::max(phi_arr[nbx](i, j, k, 0), 0.0);
+			    if ((nH <= 0.0) || (ng <= 0.0)) {
+				    x_arr[nbx](i, j, k, 0) = 0.0;
+			    } else {
+				    amrex::Real const a = alphaB * nH;
+				    amrex::Real const b = C::c_light * sigma_HI * ng;
+				    amrex::Real const disc = b * b + 4.0 * a * b;
+				    amrex::Real const x = (-b + std::sqrt(disc)) / (2.0 * a);
+				    x_arr[nbx](i, j, k, 0) = amrex::min<amrex::Real>(1.0, amrex::max<amrex::Real>(0.0, x));
+			    }
 		    });
-		amrex::ParallelFor(
-		    midpoint_scale, [x0_arr = x_old.const_arrays(), x1_arr = x_new.const_arrays(),
-				     midpoint_arr = midpoint_scale.arrays()] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
-			    midpoint_arr[nbx](i, j, k, 0) = 0.5 * (std::abs(x1_arr[nbx](i, j, k, 0)) + std::abs(x0_arr[nbx](i, j, k, 0)));
-		    });
+		amrex::ParallelFor(x_delta, [x0_arr = x_old.const_arrays(), x1_arr = x_new.const_arrays(),
+					     dx_arr = x_delta.arrays()] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+			dx_arr[nbx](i, j, k, 0) = std::abs(x1_arr[nbx](i, j, k, 0) - x0_arr[nbx](i, j, k, 0));
+		});
+		amrex::ParallelFor(midpoint_scale, [x0_arr = x_old.const_arrays(), x1_arr = x_new.const_arrays(),
+						    midpoint_arr = midpoint_scale.arrays()] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+			midpoint_arr[nbx](i, j, k, 0) = 0.5 * (std::abs(x1_arr[nbx](i, j, k, 0)) + std::abs(x0_arr[nbx](i, j, k, 0)));
+		});
 		amrex::ParallelFor(residual,
 				   [delta_arr = x_delta.const_arrays(), midpoint_arr = midpoint_scale.const_arrays(), scaled_update_arr = residual.arrays(),
 				    x_atol, residual_tol] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
@@ -450,12 +447,10 @@ void FillNGammaFromStromgrenVolumes(quokka::StochasticStellarPopParticleContaine
 		}
 	}
 	if (abort_on_max_iters && !converged) {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-		    false,
-		    std::format(
-			"Stromgren pseudo-time solve reached max iterations ({}) without satisfying x-change tolerance (rtol={}, x_atol={}, final_x_mixed_update={}).",
-			max_pseudo_iters, residual_tol, x_atol, final_x_mixed_update)
-			.c_str());
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, std::format("Stromgren pseudo-time solve reached max iterations ({}) without satisfying x-change "
+								    "tolerance (rtol={}, x_atol={}, final_x_mixed_update={}).",
+								    max_pseudo_iters, residual_tol, x_atol, final_x_mixed_update)
+							    .c_str());
 	}
 
 	auto const phi_arr = phi.const_arrays();
