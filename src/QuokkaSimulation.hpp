@@ -764,6 +764,18 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 			amrex::Abort("At least one of hydro or radiation must be enabled! Cannot "
 				     "compute a time step.");
 		}
+
+		// diffusive CFL constraint for Ohmic resistivity
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			if (mhdResistivity_ != 0.0) {
+				const auto &dx = geom[level].CellSizeArray();
+				const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
+				const amrex::Real resistive_signal = 2.0 * AMREX_SPACEDIM * mhdResistivity_ / dx_min;
+				amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+					maxSignal(i, j, k) = std::max(maxSignal(i, j, k), resistive_signal);
+				});
+			}
+		}
 	}
 }
 
