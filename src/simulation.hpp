@@ -1238,37 +1238,43 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 		dt_tmp[level] = std::min(dt_tmp[level], change_max * dt_[level]);
 	}
 
-	// compute root level timestep
-	amrex::Real dt_0 = dt_tmp[0];
-	int level_that_sets_dt_0 = 0; // keep track of which level sets the min dt
-
-	// In the non-subcycled case, all levels share the same timestep, so constrain
-	// dt_0 by the most restrictive level.
-	if (do_subcycle == 0) {
-		for (int level = 1; level <= finest_level; ++level) {
-			const amrex::Real dt_0_ref = dt_0;
-			dt_0 = std::min(dt_0, dt_tmp[level]);
-			if (dt_0 < dt_0_ref) {
-				level_that_sets_dt_0 = level;
-			}
+	// set default subcycling pattern
+	if (do_subcycle == 1) {
+		for (int lev = 1; lev <= max_level; ++lev) {
+			nsubsteps[lev] = MaxRefRatio(lev - 1);
 		}
 	}
 
-	// apply global limiters to coarse timestep
-	dt_0 = std::min(dt_0, maxDt_);
+	// compute root level timestep given nsubsteps
+	amrex::Real dt_0 = dt_tmp[0];
+	int level_that_sets_dt_0 = 0; // keep track of which level sets the min dt
+	amrex::Long n_factor = 1;
 
-	if (tNew_[0] == 0.0) {
-		// first timestep
-		dt_0 = std::min(dt_0, initDt_);
-	}
-	if (constantDt_ > 0.0) {
-		// use constant timestep if set
-		dt_0 = constantDt_;
+	for (int level = 0; level <= finest_level; ++level) {
+		n_factor *= nsubsteps[level];
+		const amrex::Real dt_0_old = dt_0; // save old dt_0
+		dt_0 = std::min(dt_0, static_cast<amrex::Real>(n_factor) * dt_tmp[level]);
+		if (dt_0 < dt_0_old) {
+			// level 'level' has now set the timestep
+			level_that_sets_dt_0 = level;
+		}
+
+		dt_0 = std::min(dt_0, maxDt_); // limit to maxDt_
+
+		if (tNew_[level] == 0.0) { // first timestep
+			dt_0 = std::min(dt_0, initDt_);
+		}
+		if (constantDt_ > 0.0) { // use constant timestep if set
+			dt_0 = constantDt_;
+		}
 	}
 
-	if (tNew_[0] == 0.0) {
-		// shrink the initial timestep if requested
+	if (tNew_[0] == 0.0) { // shrink the initial timestep if requested
 		dt_0 *= initShrink_;
+	}
+
+	if (verbose) {
+		amrex::Print() << "...coarse timestep set by level " << level_that_sets_dt_0 << "\n";
 	}
 
 	// Limit dt to avoid overshooting stop_time
@@ -1278,38 +1284,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 		dt_0 = stopTime_ - tNew_[0];
 	}
 
-	if (verbose) {
-		amrex::Print() << "...coarse timestep set by level " << level_that_sets_dt_0 << "\n";
-	}
-
-	// assign coarse timestep
+	// assign timesteps on each level
 	dt_[0] = dt_0;
 
-	// Set a safe default nsubsteps for all possible levels up to max_level. This is
-	// needed when new levels are created by regridding mid-step (in
-	// timeStepWithSubcycling), at which point computeTimestep() has not yet run for
-	// the new level. Without this, nsubsteps for the new level would be 1 (the
-	// initialisation default), giving dt equal to the parent level, which may violate
-	// the fine-level CFL.
-	if (do_subcycle == 1) {
-		for (int level = 1; level <= max_level; ++level) {
-			nsubsteps[level] = MaxRefRatio(level - 1);
-		}
-	}
-
-	// assign fine level timesteps
-	// When subcycling, nsubsteps is computed dynamically from per-level dt constraints,
-	// overriding the safe default set above for all currently existing levels.
-	// For hyperbolic constraints (dt ~ dx), this recovers nsubsteps = ref_ratio.
-	// For parabolic constraints (dt ~ dx^2), this gives nsubsteps = ref_ratio^2,
-	// allowing each level to step at its own stability limit without over-constraining
-	// coarser levels.
-	// When not subcycling, nsubsteps[level] == 1 (set at initialisation), so all levels
-	// use dt_[0].
 	for (int level = 1; level <= finest_level; ++level) {
-		if (do_subcycle == 1) {
-			nsubsteps[level] = static_cast<int>(std::ceil(dt_[level - 1] / dt_tmp[level]));
-		}
 		dt_[level] = dt_[level - 1] / nsubsteps[level];
 	}
 }
