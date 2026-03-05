@@ -36,6 +36,8 @@ template <typename problem_t> auto computePhotoChemistry(amrex::MultiFab &mf, co
 	auto dt_stage = dt / stage;
 	auto energy_update_factor = stage / 1.0_rt;
 
+	auto ChemActiveRadFreqBounds_ = RadSystem_Traits<problem_t>::ChemActiveRadFreqBounds;
+
     const BL_PROFILE("PhotoChemistry::computePhotoChemistry()");
     for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
         const amrex::Box &indexRange = iter.validbox();
@@ -57,7 +59,7 @@ template <typename problem_t> auto computePhotoChemistry(amrex::MultiFab &mf, co
                 photochemstate.xn[nn] = state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) / spmasses[nn];
             }
 			for (int nn = 0; nn < NumChemActiveRadGroups; ++nn) {
-				quanta_energy = RadSystem<problem_t>::GetRadiationGroupQuanta(ChemActiveRadFreqBounds[nn], ChemActiveRadFreqBounds[nn + 1]);
+				quanta_energy = RadSystem<problem_t>::GetRadiationGroupQuanta(ChemActiveRadFreqBounds_[nn], ChemActiveRadFreqBounds_[nn + 1]);
 				photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] = state(i, j, k, RadSystem<problem_t>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * nn) / quanta_energy;
 				// // TODO(james471): Add check for isotropy
 				photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn] = 1.0_rt;
@@ -101,7 +103,7 @@ template <typename problem_t> auto computePhotoChemistry(amrex::MultiFab &mf, co
 				state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) = photochemstate.xn[nn] * spmasses[nn]; 
 			}
 			for (int nn = 0; nn < NumChemActiveRadGroups; ++nn) {
-				quanta_energy = RadSystem<problem_t>::GetRadiationGroupQuanta(ChemActiveRadFreqBounds[nn], ChemActiveRadFreqBounds[nn + 1]);
+				quanta_energy = RadSystem<problem_t>::GetRadiationGroupQuanta(ChemActiveRadFreqBounds_[nn], ChemActiveRadFreqBounds_[nn + 1]);
 				state(i, j, k, RadSystem<problem_t>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * nn) = 
 					photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] * quanta_energy;
 				state(i, j, k, RadSystem<problem_t>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * nn) = 

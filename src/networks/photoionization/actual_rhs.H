@@ -27,6 +27,7 @@ auto get_recombination_coefficient(Real T) -> Real
     return 2.6e-13 * std::pow((T / 1.0e4), -0.7);
 }
 
+AMREX_GPU_HOST_DEVICE AMREX_INLINE
 auto get_recombination_cooling_coefficient(Real T) -> Real
 {
     return C::k_B * T * get_recombination_coefficient(T) * (0.684 - 0.0416 * std::log(T / 1.0e4));
