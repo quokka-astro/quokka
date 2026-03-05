@@ -662,7 +662,7 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::G
 #endif
 
 template <typename problem_t>
-auto RadSystem<problem_t>::GetRadiationGroupQuanta(amrex::Real freq_low, amrex::Real freq_high) -> amrex::Real
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::GetRadiationGroupQuanta(amrex::Real freq_low, amrex::Real freq_high) -> amrex::Real
 {
 	return 0.5_rt * (freq_high + freq_low) * C::hplanck;
 }
@@ -769,10 +769,7 @@ void RadSystem<problem_t>::PredictStep(arrayconst_t &consVarOld, array_t &consVa
 		if (!isStateValid(cons)) {
 			amendRadState(cons);
 		}
-		if (!isStateValid(cons)) {
-			std::cout << "Invalid state, assertion failed." << std::endl;
-		}
-		// AMREX_ASSERT(isStateValid(cons));
+		AMREX_ASSERT(isStateValid(cons));
 
 		for (int n = 0; n < nvarHyperbolic_; ++n) {
 			consVarNew(i, j, k, nstartHyperbolic_ + n) = cons[n];
