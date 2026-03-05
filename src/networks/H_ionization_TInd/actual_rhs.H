@@ -20,6 +20,7 @@ auto get_recombination_coefficient(Real T) -> Real
     return 2.6e-13;
 }
 
+AMREX_GPU_HOST_DEVICE AMREX_INLINE
 auto get_recombination_cooling_coefficient(Real T) -> Real
 {
     return 0;
