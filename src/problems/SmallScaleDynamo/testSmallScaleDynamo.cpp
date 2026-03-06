@@ -87,7 +87,7 @@ template <> void QuokkaSimulation<SmallScaleDynamo>::setInitialConditionsOnGridF
 	const double seed_wavenumber = 2.0 * M_PI * seed_b_wavenumber / box_length;
 	const double seed_vecpot_amplitude = std::sqrt(seed_b_fraction) * target_vdisp / seed_wavenumber;
 
-	constexpr int mhd_index = Physics_Indices<SmallScaleDynamo>::mhdFirstIndex;
+	constexpr int b_index = Physics_Indices<SmallScaleDynamo>::mhdFirstIndex;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		if (dir == quokka::direction::x) {
@@ -101,7 +101,7 @@ template <> void QuokkaSimulation<SmallScaleDynamo>::setInitialConditionsOnGridF
 			const double vecpot_z_at_y_lo = seed_vecpot_amplitude * (std::sin(seed_wavenumber * y_lo) + std::cos(seed_wavenumber * x_face));
 			const double vecpot_y_at_z_hi = seed_vecpot_amplitude * (std::sin(seed_wavenumber * x_face) + std::cos(seed_wavenumber * z_hi));
 			const double vecpot_y_at_z_lo = seed_vecpot_amplitude * (std::sin(seed_wavenumber * x_face) + std::cos(seed_wavenumber * z_lo));
-			state_fc(i, j, k, mhd_index) = (vecpot_z_at_y_hi - vecpot_z_at_y_lo) / dx[1] - (vecpot_y_at_z_hi - vecpot_y_at_z_lo) / dx[2];
+			state_fc(i, j, k, b_index) = (vecpot_z_at_y_hi - vecpot_z_at_y_lo) / dx[1] - (vecpot_y_at_z_hi - vecpot_y_at_z_lo) / dx[2];
 		} else if (dir == quokka::direction::y) {
 			// y-face: B_y = dA_x/dz - dA_z/dx
 			const double y_face = prob_lo[1] + j * dx[1];
@@ -113,7 +113,7 @@ template <> void QuokkaSimulation<SmallScaleDynamo>::setInitialConditionsOnGridF
 			const double vecpot_x_at_z_lo = seed_vecpot_amplitude * (std::sin(seed_wavenumber * z_lo) + std::cos(seed_wavenumber * y_face));
 			const double vecpot_z_at_x_hi = seed_vecpot_amplitude * (std::sin(seed_wavenumber * y_face) + std::cos(seed_wavenumber * x_hi));
 			const double vecpot_z_at_x_lo = seed_vecpot_amplitude * (std::sin(seed_wavenumber * y_face) + std::cos(seed_wavenumber * x_lo));
-			state_fc(i, j, k, mhd_index) = (vecpot_x_at_z_hi - vecpot_x_at_z_lo) / dx[2] - (vecpot_z_at_x_hi - vecpot_z_at_x_lo) / dx[0];
+			state_fc(i, j, k, b_index) = (vecpot_x_at_z_hi - vecpot_x_at_z_lo) / dx[2] - (vecpot_z_at_x_hi - vecpot_z_at_x_lo) / dx[0];
 		} else if (dir == quokka::direction::z) {
 			// z-face: B_z = dA_y/dx - dA_x/dy
 			const double z_face = prob_lo[2] + k * dx[2];
@@ -125,7 +125,7 @@ template <> void QuokkaSimulation<SmallScaleDynamo>::setInitialConditionsOnGridF
 			const double vecpot_y_at_x_lo = seed_vecpot_amplitude * (std::sin(seed_wavenumber * x_lo) + std::cos(seed_wavenumber * z_face));
 			const double vecpot_x_at_y_hi = seed_vecpot_amplitude * (std::sin(seed_wavenumber * z_face) + std::cos(seed_wavenumber * y_hi));
 			const double vecpot_x_at_y_lo = seed_vecpot_amplitude * (std::sin(seed_wavenumber * z_face) + std::cos(seed_wavenumber * y_lo));
-			state_fc(i, j, k, mhd_index) = (vecpot_y_at_x_hi - vecpot_y_at_x_lo) / dx[0] - (vecpot_x_at_y_hi - vecpot_x_at_y_lo) / dx[1];
+			state_fc(i, j, k, b_index) = (vecpot_y_at_x_hi - vecpot_y_at_x_lo) / dx[0] - (vecpot_x_at_y_hi - vecpot_x_at_y_lo) / dx[1];
 		}
 	});
 }
