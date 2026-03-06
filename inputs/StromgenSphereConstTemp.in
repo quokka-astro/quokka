@@ -2,8 +2,8 @@
 # Problem size and geometry
 # *****************************************************************
 geometry.prob_lo     =  0.0  0.0  0.0 
-geometry.prob_hi     =  5e27 5e27 5e27
-geometry.is_periodic =  1    1    1
+geometry.prob_hi     =  9e18 9e18 9e18
+quokka.bc = reflecting reflecting reflecting
 
 # *****************************************************************
 # VERBOSITY
@@ -13,18 +13,18 @@ amr.v              = 0       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 16 16 16
+amr.n_cell          = 8 8 8
 amr.max_level       = 0     # number of levels = max_level + 1
 #max_timesteps = 10
 do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
 
-stromgen.tend = 1.58e16
-stromgen.primary_species_1 = 1.2e-6
-stromgen.primary_species_2 = 1.0e-3
-stromgen.primary_species_3 = 1.2e-6
-stromgen.Q = 5e48
+stromgen.tend = 1.2e10
+stromgen.primary_species_1 = 1.0e-10
+stromgen.primary_species_2 = 1670.0
+stromgen.primary_species_3 = 1.0e-10
+stromgen.Q = 1e51
 
 photochemistry.enabled = 1
 integrator.use_number_densities = 1

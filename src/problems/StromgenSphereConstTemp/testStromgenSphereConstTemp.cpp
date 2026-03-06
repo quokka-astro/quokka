@@ -10,6 +10,7 @@
 #include "AMReX_GpuComplex.H"
 #include "AMReX_ParmParse.H"
 #include "fundamental_constants.H"
+#include "physics_info.hpp"
 #include <cmath>
 #include <fstream>
 #include <iostream>
@@ -61,7 +62,7 @@ template <> struct Physics_Traits<StromgenSphereConstTempProblem> {
 };
 
 template <> struct RadSystem_Traits<StromgenSphereConstTempProblem> {
-	static constexpr double c_hat_over_c = C::c_light / C::c_light;
+	static constexpr double c_hat_over_c = Physics_Traits<StromgenSphereConstTempProblem>::c_light / C::c_light;
 	static constexpr double Erad_floor = 1e-99;
 	static constexpr int beta_order = 0;
 	static constexpr std::array<double, NumChemActiveRadGroups+1> ChemActiveRadFreqBounds = {3.29e15, 1.50e16}; // Hz
@@ -77,7 +78,14 @@ template <> void RadSystem<StromgenSphereConstTempProblem>::SetRadEnergySource(a
 	amrex::Real avg_freq = 0.5_rt * (RadSystem_Traits<StromgenSphereConstTempProblem>::ChemActiveRadFreqBounds[0] + RadSystem_Traits<StromgenSphereConstTempProblem>::ChemActiveRadFreqBounds[1]);
 	amrex::Real L_star = Q * C::hplanck * avg_freq;
 	amrex::Real volume = dx[0] * dx[1] * dx[2];
-	radEnergy(0, 0, 0) = L_star / volume;
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+		if ((i == 0) && (j == 0) && (k == 0)) {
+			radEnergy(i, j, k) = L_star / volume;
+		}
+		else {
+			radEnergy(i, j, k) = 0.0_rt;
+		}
+	});
 }
 
 template <> struct SimulationData<StromgenSphereConstTempProblem> {
@@ -247,18 +255,8 @@ auto problem_main() -> int
 	const double dt_max = 1e10;
 	const int max_timesteps = 5000000;
 
-	// Boundary conditions
-	constexpr int nvars = RadSystem<StromgenSphereConstTempProblem>::nvar_;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars);
-	for (int n = 0; n < nvars; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-			BCs_cc[n].setHi(i, amrex::BCType::int_dir);
-		}
-	}
-
 	// Problem initialization
-	QuokkaSimulation<StromgenSphereConstTempProblem> sim(BCs_cc);
+	QuokkaSimulation<StromgenSphereConstTempProblem> sim;
 
 	// initialize
 	sim.setInitialConditions();
