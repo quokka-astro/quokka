@@ -8,6 +8,7 @@
 #include "AMReX_BLassert.H"
 #include "AMReX_GpuQualifiers.H"
 
+#include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
 
 #ifdef PHOTOCHEMISTRY
@@ -55,6 +56,7 @@ template <typename problem_t> auto computePhotoChemistry(amrex::MultiFab &mf, co
 			burn_t photochemstate;
             photochemstate.success = true;
             int burn_failed = 0;
+			photochemstate.c_hat = RadSystem_Traits<problem_t>::c_hat_over_c * C::c_light;
             for (int nn = 0; nn < NumSpec; ++nn) {
                 photochemstate.xn[nn] = state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) / spmasses[nn];
             }
