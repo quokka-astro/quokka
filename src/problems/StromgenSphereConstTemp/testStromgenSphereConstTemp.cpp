@@ -76,9 +76,7 @@ void RadSystem<StromgenSphereConstTempProblem>::SetRadEnergySource(array_t &radE
 	amrex::ParmParse pp("stromgen");
 	amrex::Real Q = 1.0e49_rt;
 	pp.query("Q", Q);
-	amrex::Real avg_freq = 0.5_rt * (RadSystem_Traits<StromgenSphereConstTempProblem>::ChemActiveRadFreqBounds[0] +
-					 RadSystem_Traits<StromgenSphereConstTempProblem>::ChemActiveRadFreqBounds[1]);
-	amrex::Real L_star = Q * C::hplanck * avg_freq;
+	amrex::Real L_star = Q * RadSystem<StromgenSphereConstTempProblem>::GetChemActiveRadiationGroupQuanta(0) / 8.0_rt;
 	amrex::Real volume = dx[0] * dx[1] * dx[2];
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		if ((i == 0) && (j == 0) && (k == 0)) {
@@ -191,8 +189,7 @@ template <> void QuokkaSimulation<StromgenSphereConstTempProblem>::setInitialCon
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int g = 0; g < Physics_Traits<StromgenSphereConstTempProblem>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<StromgenSphereConstTempProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) =
-			    1.e-99_rt; // set a very low initial radiation energy density to avoid NaNs in the free-streaming regime
+			state_cc(i, j, k, RadSystem<StromgenSphereConstTempProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = 1.e-99_rt;
 			state_cc(i, j, k, RadSystem<StromgenSphereConstTempProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
 			state_cc(i, j, k, RadSystem<StromgenSphereConstTempProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
 			state_cc(i, j, k, RadSystem<StromgenSphereConstTempProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;

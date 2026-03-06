@@ -2,7 +2,7 @@
 # Problem size and geometry
 # *****************************************************************
 geometry.prob_lo     =  0.0  0.0  0.0 
-geometry.prob_hi     =  9e18 9e18 9e18
+geometry.prob_hi     =  1.0e19 1.0e19 1.0e19
 quokka.bc = reflecting reflecting reflecting
 
 # *****************************************************************
@@ -13,7 +13,7 @@ amr.v              = 0       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 8 8 8
+amr.n_cell          = 16 16 16
 amr.max_level       = 0     # number of levels = max_level + 1
 #max_timesteps = 10
 do_reflux = 0
@@ -34,4 +34,4 @@ integrator.renormalize_abundances = 0
 integrator.subtract_internal_energy = 0
 integrator.X_reject_buffer = 1e100
 
-plotfile_interval = 5000
+plotfile_interval = 10

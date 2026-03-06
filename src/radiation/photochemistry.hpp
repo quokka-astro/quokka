@@ -88,7 +88,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 			// which would otherwise slow down compilation due to the large RHS file
 			photochem_burner(photochemstate, dt_stage);
 
-			if (std::isnan(photochemstate.xn[0]) || std::isnan(photochemstate.rho)) {
+			if (std::isnan(photochemstate.xn[0]) || std::isnan(photochemstate.rho) || std::isnan(photochemstate.rn[0])) {
 				amrex::Abort("Burner returned NAN");
 			}
 
@@ -98,6 +98,15 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 
 			if (burn_failed) {
 				amrex::Gpu::Atomic::Add(p_num_failed, burn_failed);
+			}
+
+			// Ensure positivity
+			for (int nn = 0; nn < NumSpec; ++nn) {
+				photochemstate.xn[nn] = amrex::max(photochemstate.xn[nn], small_x);
+			}
+			for (int nn = 0; nn < NumChemActiveRadGroups; nn += MicrophysicsNumRadVarsPerGroup) {
+				// TODO (james471): Ensure that flux doesn't deviate from corrensponding energy density.
+				photochemstate.rn[nn] = amrex::max(photochemstate.rn[nn], small_x);
 			}
 
 			// get the updated specific eint

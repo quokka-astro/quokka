@@ -36,17 +36,17 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 	amrex::Real sigma_photo = network::sigma_photoionization; // photoionization cross-section in cm^2
 	amrex::Real E_ionization = network::E_ionization;	  // ionization energy released for hydrogen in ergs
 
-	// Photoionization with electrons being carried
-	amrex::Real ionization_term = state.xn[1] * c * sigma_photo * state.rn[0];
-	amrex::Real recombination_term = alpha_rec * state.xn[0] * state.xn[2];
-	amrex::Real ionization_energy = ionization_term * E_ionization;
-	amrex::Real recombination_cooling = state.xn[0] * state.xn[2] * Lambda_rec;
-	ydot(1) = ionization_term - recombination_term;
-	ydot(2) = -ydot(1);
-	ydot(3) = ydot(1);
-	ydot(net_ienuc) = (ionization_energy - recombination_cooling) / state.rho;
-	ydot(5) = -ionization_term;
-	ydot(6) = -state.xn[1] * c * sigma_photo;
+    // Photoionization with electrons being carried
+    amrex::Real ionization_term = state.xn[1] * c * sigma_photo * state.rn[0];
+    amrex::Real recombination_term = alpha_rec * state.xn[0] * state.xn[2];
+    amrex::Real ionization_energy = ionization_term * E_ionization;
+    amrex::Real recombination_cooling = state.xn[0] * state.xn[2] * Lambda_rec;
+    ydot(1) = ionization_term - recombination_term;
+    ydot(2) = -ydot(1);
+    ydot(3) = ydot(1);
+    ydot(net_ienuc) = (ionization_energy - recombination_cooling) / state.rho;
+    ydot(5) = -ionization_term;
+    ydot(6) = -state.xn[1] * c * sigma_photo * state.rn[1];
 }
 
 template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_jac(const burn_t &state, MatrixType &jac)
