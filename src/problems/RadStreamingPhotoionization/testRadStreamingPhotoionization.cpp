@@ -31,16 +31,15 @@
 #include "extern_parameters.H"
 #include "network.H"
 
-
 struct PhotoionizationStreamingProblem {
 };
 
 constexpr double initial_Erad = 2.93e-7;
 // constexpr double initial_Erad = 1.0;
 // constexpr double initial_Egas = 1.0e-5;
-constexpr double c = C::c_light;	   // speed of light
-constexpr double chat = C::c_light;	   // reduced speed of light
-constexpr double kappa0 = 0; // opacity
+constexpr double c = C::c_light;    // speed of light
+constexpr double chat = C::c_light; // reduced speed of light
+constexpr double kappa0 = 0;	    // opacity
 // constexpr double rho = 1.0;
 
 template <> struct quokka::EOS_Traits<PhotoionizationStreamingProblem> {
@@ -71,9 +70,8 @@ template <> struct RadSystem_Traits<PhotoionizationStreamingProblem> {
 	static constexpr double c_hat_over_c = chat / c;
 	static constexpr double Erad_floor = 0.0;
 	static constexpr int beta_order = 0;
-	static constexpr std::array<double, NumChemActiveRadGroups+1> ChemActiveRadFreqBounds = {3.29e15, 1.50e16}; // Hz
+	static constexpr std::array<double, NumChemActiveRadGroups + 1> ChemActiveRadFreqBounds = {3.29e15, 1.50e16}; // Hz
 	// static constexpr std::array<double, NumChemActiveRadGroups + 1> ChemActiveRadFreqBounds = {1.0, 5.0}; // Arbitrary units
-
 };
 
 template <> struct SimulationData<PhotoionizationStreamingProblem> {
@@ -116,7 +114,6 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::preCalculate
 
 	userData_.tend = 1000.0_rt;
 
-
 	pp.query("primary_species_1", userData_.primary_species_1);
 	pp.query("primary_species_2", userData_.primary_species_2);
 	pp.query("primary_species_3", userData_.primary_species_3);
@@ -129,12 +126,14 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::preCalculate
 	network_init();
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PhotoionizationStreamingProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<PhotoionizationStreamingProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
 	return kappa0;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<PhotoionizationStreamingProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<PhotoionizationStreamingProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
 	return kappa0;
 }
@@ -202,7 +201,8 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::setInitialCo
 		state_cc(i, j, k, RadSystem<PhotoionizationStreamingProblem>::x2GasMomentum_index) = 0.;
 		state_cc(i, j, k, RadSystem<PhotoionizationStreamingProblem>::x3GasMomentum_index) = 0.;
 		for (int nn = 0; nn < NumSpec; ++nn) {
-			state_cc(i, j, k, HydroSystem<PhotoionizationStreamingProblem>::scalar0_index + nn) = state.xn[nn] * spmasses[nn]; // scalar indices carry partial densities instead of number densities
+			state_cc(i, j, k, HydroSystem<PhotoionizationStreamingProblem>::scalar0_index + nn) =
+			    state.xn[nn] * spmasses[nn]; // scalar indices carry partial densities instead of number densities
 		}
 	});
 }
@@ -230,7 +230,9 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::computeAfter
 		const amrex::Real Egas_i = values.at(RadSystem<PhotoionizationStreamingProblem>::gasEnergy_index)[0];
 		quokka::optional<amrex::GpuArray<amrex::Real, NumSpec>> massScalars;
 		amrex::GpuArray<amrex::Real, NumSpec> scalars{};
-		scalars[0] = n_e * spmasses[0]; scalars[1] = n_HI * spmasses[1]; scalars[2] = n_HII * spmasses[2];
+		scalars[0] = n_e * spmasses[0];
+		scalars[1] = n_HI * spmasses[1];
+		scalars[2] = n_HII * spmasses[2];
 		massScalars = scalars;
 		const amrex::Real temp = quokka::EOS<PhotoionizationStreamingProblem>::ComputeTgasFromEint(rho, Egas_i, massScalars);
 
@@ -243,7 +245,8 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::computeAfter
 		userData_.gas_temp_vec_.push_back(temp);
 		userData_.Egas_vec_.push_back(Egas_i);
 
-		userData_.output_file_ << tNew_[0] << "," << Erad_i << "," << Flux_i << "," << n_e << "," << n_HI << "," << n_HII << "," << temp << "," <<Egas_i << "," << rho << "," << n_gamma << "\n";
+		userData_.output_file_ << tNew_[0] << "," << Erad_i << "," << Flux_i << "," << n_e << "," << n_HI << "," << n_HII << "," << temp << ","
+				       << Egas_i << "," << rho << "," << n_gamma << "\n";
 		// userData_.Tgas_vec_.push_back(quokka::EOS<PhotoionizationStreamingProblem>::ComputeTgasFromEint(rho, Egas_i));
 	}
 }

@@ -33,7 +33,6 @@
 #include "extern_parameters.H"
 #include "network.H"
 
-
 struct StromgenSphereConstTempProblem {
 };
 
@@ -65,24 +64,26 @@ template <> struct RadSystem_Traits<StromgenSphereConstTempProblem> {
 	static constexpr double c_hat_over_c = Physics_Traits<StromgenSphereConstTempProblem>::c_light / C::c_light;
 	static constexpr double Erad_floor = 1e-99;
 	static constexpr int beta_order = 0;
-	static constexpr std::array<double, NumChemActiveRadGroups+1> ChemActiveRadFreqBounds = {3.29e15, 1.50e16}; // Hz
+	static constexpr std::array<double, NumChemActiveRadGroups + 1> ChemActiveRadFreqBounds = {3.29e15, 1.50e16}; // Hz
 };
 
-template <> void RadSystem<StromgenSphereConstTempProblem>::SetRadEnergySource(array_t &radEnergy, const amrex::Box &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
+template <>
+void RadSystem<StromgenSphereConstTempProblem>::SetRadEnergySource(array_t &radEnergy, const amrex::Box &indexRange,
+								   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+								   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+								   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
 {
 	amrex::ParmParse pp("stromgen");
 	amrex::Real Q = 1.0e49_rt;
 	pp.query("Q", Q);
-	amrex::Real avg_freq = 0.5_rt * (RadSystem_Traits<StromgenSphereConstTempProblem>::ChemActiveRadFreqBounds[0] + RadSystem_Traits<StromgenSphereConstTempProblem>::ChemActiveRadFreqBounds[1]);
+	amrex::Real avg_freq = 0.5_rt * (RadSystem_Traits<StromgenSphereConstTempProblem>::ChemActiveRadFreqBounds[0] +
+					 RadSystem_Traits<StromgenSphereConstTempProblem>::ChemActiveRadFreqBounds[1]);
 	amrex::Real L_star = Q * C::hplanck * avg_freq;
 	amrex::Real volume = dx[0] * dx[1] * dx[2];
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		if ((i == 0) && (j == 0) && (k == 0)) {
 			radEnergy(i, j, k) = L_star / volume;
-		}
-		else {
+		} else {
 			radEnergy(i, j, k) = 0.0_rt;
 		}
 	});
@@ -136,12 +137,14 @@ template <> void QuokkaSimulation<StromgenSphereConstTempProblem>::preCalculateI
 	network_init();
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StromgenSphereConstTempProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<StromgenSphereConstTempProblem>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
 	return 0.0_rt;
 }
 
-template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StromgenSphereConstTempProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+template <>
+AMREX_GPU_HOST_DEVICE auto RadSystem<StromgenSphereConstTempProblem>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
 	return 0.0_rt;
 }
@@ -188,7 +191,8 @@ template <> void QuokkaSimulation<StromgenSphereConstTempProblem>::setInitialCon
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int g = 0; g < Physics_Traits<StromgenSphereConstTempProblem>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<StromgenSphereConstTempProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = 1.e-99_rt; // set a very low initial radiation energy density to avoid NaNs in the free-streaming regime
+			state_cc(i, j, k, RadSystem<StromgenSphereConstTempProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) =
+			    1.e-99_rt; // set a very low initial radiation energy density to avoid NaNs in the free-streaming regime
 			state_cc(i, j, k, RadSystem<StromgenSphereConstTempProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
 			state_cc(i, j, k, RadSystem<StromgenSphereConstTempProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
 			state_cc(i, j, k, RadSystem<StromgenSphereConstTempProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
@@ -200,7 +204,8 @@ template <> void QuokkaSimulation<StromgenSphereConstTempProblem>::setInitialCon
 		state_cc(i, j, k, RadSystem<StromgenSphereConstTempProblem>::x2GasMomentum_index) = 0.0_rt;
 		state_cc(i, j, k, RadSystem<StromgenSphereConstTempProblem>::x3GasMomentum_index) = 0.0_rt;
 		for (int nn = 0; nn < NumSpec; ++nn) {
-			state_cc(i, j, k, HydroSystem<StromgenSphereConstTempProblem>::scalar0_index + nn) = state.xn[nn] * spmasses[nn]; // scalar indices carry partial densities instead of number densities
+			state_cc(i, j, k, HydroSystem<StromgenSphereConstTempProblem>::scalar0_index + nn) =
+			    state.xn[nn] * spmasses[nn]; // scalar indices carry partial densities instead of number densities
 		}
 	});
 }
@@ -241,7 +246,8 @@ template <> void QuokkaSimulation<StromgenSphereConstTempProblem>::computeAfterT
 	// 	userData_.gas_temp_vec_.push_back(temp);
 	// 	userData_.Egas_vec_.push_back(Egas_i);
 
-	// 	userData_.output_file_ << tNew_[0] << "," << Erad_i << "," << Flux_i << "," << n_e << "," << n_HI << "," << n_HII << "," << temp << "," <<Egas_i << "," << rho << "," << n_gamma << "\n";
+	// 	userData_.output_file_ << tNew_[0] << "," << Erad_i << "," << Flux_i << "," << n_e << "," << n_HI << "," << n_HII << "," << temp << "," <<Egas_i
+	// << "," << rho << "," << n_gamma << "\n";
 	// 	// userData_.Tgas_vec_.push_back(quokka::EOS<PhotoionizationStreamingProblem>::ComputeTgasFromEint(rho, Egas_i));
 	// }
 }
@@ -311,51 +317,51 @@ auto problem_main() -> int
 	// }
 	// amrex::Print() << "Relative L1 norm = " << rel_err_norm << '\n';
 
-// #ifdef HAVE_PYTHON
-// 	// Plot results
-// 	matplotlibcpp::clf();
-// 	// matplotlibcpp::ylim(0.0, 1.1);
+	// #ifdef HAVE_PYTHON
+	// 	// Plot results
+	// 	matplotlibcpp::clf();
+	// 	// matplotlibcpp::ylim(0.0, 1.1);
 
-// 	std::map<std::string, std::string> erad_args;
-// 	std::map<std::string, std::string> n_HI_args;
-// 	std::map<std::string, std::string> n_HII_args;
-// 	std::map<std::string, std::string> temp_args;
-// 	std::map<std::string, std::string> Egas_args;
-// 	// std::map<std::string, std::string> erad_exact_args;
-// 	erad_args["label"] = "Erad";
-// 	n_HI_args["label"] = "n_HI";
-// 	n_HII_args["label"] = "n_HII";
-// 	temp_args["label"] = "gas temp";
-// 	Egas_args["label"] = "Egas";
-// 	// erad_exact_args["label"] = "exact solution";
-// 	// erad_exact_args["linestyle"] = "--";
-// 	// matplotlibcpp::plot(xs, erad, erad_args);
+	// 	std::map<std::string, std::string> erad_args;
+	// 	std::map<std::string, std::string> n_HI_args;
+	// 	std::map<std::string, std::string> n_HII_args;
+	// 	std::map<std::string, std::string> temp_args;
+	// 	std::map<std::string, std::string> Egas_args;
+	// 	// std::map<std::string, std::string> erad_exact_args;
+	// 	erad_args["label"] = "Erad";
+	// 	n_HI_args["label"] = "n_HI";
+	// 	n_HII_args["label"] = "n_HII";
+	// 	temp_args["label"] = "gas temp";
+	// 	Egas_args["label"] = "Egas";
+	// 	// erad_exact_args["label"] = "exact solution";
+	// 	// erad_exact_args["linestyle"] = "--";
+	// 	// matplotlibcpp::plot(xs, erad, erad_args);
 
-// 	matplotlibcpp::plot(t, n_HI, n_HI_args);
-// 	matplotlibcpp::plot(t, n_HII, n_HII_args);
-// 	// matplotlibcpp::plot(t, Erad, erad_args);
-// 	// matplotlibcpp::plot(xs, erad_exact, erad_exact_args);
-// 	// std::map<std::string, std::string> Erad_args;
-// 	// Erad_args["label"] = "Erad";
-// 	// matplotlibcpp::plot(t, Erad, Erad_args);
-// 	// matplotlibcpp::plot(t)
+	// 	matplotlibcpp::plot(t, n_HI, n_HI_args);
+	// 	matplotlibcpp::plot(t, n_HII, n_HII_args);
+	// 	// matplotlibcpp::plot(t, Erad, erad_args);
+	// 	// matplotlibcpp::plot(xs, erad_exact, erad_exact_args);
+	// 	// std::map<std::string, std::string> Erad_args;
+	// 	// Erad_args["label"] = "Erad";
+	// 	// matplotlibcpp::plot(t, Erad, Erad_args);
+	// 	// matplotlibcpp::plot(t)
 
-// 	matplotlibcpp::legend();
-// 	// matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
-// 	matplotlibcpp::save("./radiation_streaming_photoionization.pdf");
-// 	matplotlibcpp::clf();
-// 	matplotlibcpp::plot(t, Erad, erad_args);
-// 	matplotlibcpp::legend();
-// 	matplotlibcpp::save("./radiation_energy.pdf");
-// 	matplotlibcpp::clf();
-// 	matplotlibcpp::plot(t, gas_temp, temp_args);
-// 	matplotlibcpp::legend();
-// 	matplotlibcpp::save("./gas_temperature.pdf");
-// 	matplotlibcpp::clf();
-// 	matplotlibcpp::plot(t, Egas, Egas_args);
-// 	matplotlibcpp::legend();
-// 	matplotlibcpp::save("./gas_energy.pdf");
-// #endif // HAVE_PYTHON
+	// 	matplotlibcpp::legend();
+	// 	// matplotlibcpp::title(fmt::format("t = {:.4f}", sim.tNew_[0]));
+	// 	matplotlibcpp::save("./radiation_streaming_photoionization.pdf");
+	// 	matplotlibcpp::clf();
+	// 	matplotlibcpp::plot(t, Erad, erad_args);
+	// 	matplotlibcpp::legend();
+	// 	matplotlibcpp::save("./radiation_energy.pdf");
+	// 	matplotlibcpp::clf();
+	// 	matplotlibcpp::plot(t, gas_temp, temp_args);
+	// 	matplotlibcpp::legend();
+	// 	matplotlibcpp::save("./gas_temperature.pdf");
+	// 	matplotlibcpp::clf();
+	// 	matplotlibcpp::plot(t, Egas, Egas_args);
+	// 	matplotlibcpp::legend();
+	// 	matplotlibcpp::save("./gas_energy.pdf");
+	// #endif // HAVE_PYTHON
 
 	// Cleanup and exit
 	amrex::Print() << "Finished." << '\n';
