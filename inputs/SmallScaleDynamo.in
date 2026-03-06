@@ -1,0 +1,54 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  0.0  0.0  0.0
+geometry.prob_hi     =  1.0  1.0  1.0
+geometry.is_periodic =  1    1    1
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 0       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = 64 64 64
+amr.max_level       = 0     # number of levels = max_level + 1
+amr.blocking_factor = 32
+amr.max_grid_size   = 128   # at least 128 for GPUs
+
+stop_time = 10
+plotfile_interval = 100
+max_timesteps = 10000
+
+do_reflux = 1
+do_subcycle = 0
+hydro.artificial_viscosity_coefficient = 0.1
+
+# *****************************************************************
+# MHD
+# *****************************************************************
+# mhd.resistivity = 0.0   # Ohmic resistivity (requires do_subcycle = 0)
+
+# *****************************************************************
+# Seed magnetic field (ABC field, B = curl(A))
+# *****************************************************************
+# problem.seed_b_wavenumber = 2      # integer mode number n; k0 = 2*pi*n/L (default: 2)
+# problem.seed_b_fraction   = 1.0e-6 # E_mag/E_kin at t=0; B0 = sqrt(fraction) * target_vdisp (default: 0)
+
+# *****************************************************************
+# Turbulent driving
+# *****************************************************************
+turbulence.enabled           = 1
+turbulence.length            = 1.0     # physical box size L; integer mode n has wavenumber k = n * 2*pi / L
+turbulence.target_vdisp      = 0.5     # target velocity dispersion; equiv to Mach number since the plasma is isothermal
+turbulence.ampl_factor       = 0.5     # scales the driving amplitude as ampl_factor^1.5; tune to reach target_vdisp
+turbulence.ampl_auto_adjust  = 0       # keep off for SSD: varying amplitude complicates dynamo growth rate measurement
+turbulence.spect_form        = 1       # 0: band (flat), 1: parabola (peak at midpoint of k_min and k_max), 2: power law
+turbulence.k_min             = 2.0     # minimum driven wavenumber
+turbulence.k_max             = 3.0     # maximum driven wavenumber
+turbulence.k_driv            = 2.0     # OU autocorrelation time t_decay = L / (k_driv * vdisp); does not affect spectral shape
+turbulence.nsteps_per_t_turb = 10      # number of OU pattern updates per t_decay; controls temporal smoothness of forcing
+turbulence.sol_weight        = 1.0     # 0: purely compressive, 0.5: natural mix, 1: purely solenoidal
+turbulence.random_seed       = 260303  # random seed for the OU phase sequence
