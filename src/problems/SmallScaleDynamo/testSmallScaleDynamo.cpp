@@ -144,8 +144,8 @@ auto problem_main() -> int
 	pp_turb.query("ampl_auto_adjust", ampl_auto_adjust);
 	if (ampl_auto_adjust == 1) {
 		amrex::Print() << "WARNING: turbulence.ampl_auto_adjust = 1 is set. The driving amplitude will vary over time, "
-			          "which makes it harder to interpret the dynamo growth rate. Consider setting ampl_auto_adjust = 0 "
-			          "and tuning ampl_factor manually to achieve the desired velocity dispersion.\n";
+				  "which makes it harder to interpret the dynamo growth rate. Consider setting ampl_auto_adjust = 0 "
+				  "and tuning ampl_factor manually to achieve the desired velocity dispersion.\n";
 	}
 
 	auto BCs_cc = quokka::BC<SmallScaleDynamo>(quokka::BCType::int_dir);
