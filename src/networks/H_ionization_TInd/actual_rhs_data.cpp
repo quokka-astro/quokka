@@ -1,4 +1,3 @@
 #include <actual_rhs.H>
 
-void actual_rhs_init ()
-{}
+void actual_rhs_init() {}
