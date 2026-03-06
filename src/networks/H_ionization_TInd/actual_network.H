@@ -19,11 +19,19 @@ namespace network
 constexpr amrex::Real sigma_photoionization = 1.5e-18_rt; // photoionization cross-section in cm^2
 constexpr amrex::Real E_ionization = 6.4e-12_rt;	  // ionization energy for hydrogen in ergs
 } // namespace network
+<<<<<<< HEAD
 namespace Rates
 {
 
     };
 >>>>>>> d4a1d08d (Add photochemistry)
+=======
+
+namespace Rates
+{
+
+enum NetworkRates {};
+>>>>>>> 08efc8cd ([pre-commit.ci] auto fixes from pre-commit.com hooks)
 
 }
 

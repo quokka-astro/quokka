@@ -14,5 +14,15 @@
 namespace quokka::photochemistry
 {
 
+<<<<<<< HEAD
 AMREX_GPU_DEVICE void photochem_burner(burn_t &photochemstate, const Real dt) { burner(photochemstate, dt); }
+=======
+AMREX_GPU_DEVICE void photochem_burner(burn_t &photochemstate, const Real dt)
+{
+	// std::cout << "Entering photochem_burner with dt: " << dt << std::endl;
+	// std::cout << "photochem_burner()--> state.xn[1]: " << photochemstate.xn[1] << std::endl;
+	burner(photochemstate, dt);
+	// std::cout << "photochem_burner()--> state.xn[1] after burn: " << photochemstate.xn[1] << std::endl;
+}
+>>>>>>> dd0c55ae ([pre-commit.ci] auto fixes from pre-commit.com hooks)
 } // namespace quokka::photochemistry

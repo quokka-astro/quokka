@@ -36,8 +36,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 	ydot(6) = -state.xn[1] * c * sigma_photo;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_INLINE
-auto get_recombination_cooling_coefficient(Real T) -> Real
+template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_jac(const burn_t &state, MatrixType &jac)
 {
 	amrex::Real alpha_rec = get_recombination_coefficient(state.T);
 	amrex::Real Lambda_rec = get_recombination_cooling_coefficient(state.T);
