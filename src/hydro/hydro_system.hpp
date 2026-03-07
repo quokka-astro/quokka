@@ -1482,8 +1482,8 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 		// add artificial viscosity (numerical stabilizer, active only in compression)
 		// following Colella & Woodward (1984), eq. (4.2)
-		const double vel_div_unnorm = AMREX_D_TERM(du, +0.5 * (dvl + dvr), +0.5 * (dwl + dwr));
-		const double shock_viscosity = viscosity_artificial * std::max(-vel_div_unnorm, 0.);
+		const double vel_div_times_dx = AMREX_D_TERM(du, +0.5 * (dvl + dvr), +0.5 * (dwl + dwr));
+		const double shock_viscosity = viscosity_artificial * std::max(-vel_div_times_dx, 0.);
 
 		quokka::valarray<double, nHydroScalars_> U_L = {sL.rho, sL.rho * sL.u, sL.rho * sL.v, sL.rho * sL.w, sL.E, sL.Eint};
 		quokka::valarray<double, nHydroScalars_> U_R = {sR.rho, sR.rho * sR.u, sR.rho * sR.v, sR.rho * sR.w, sR.E, sR.Eint};
@@ -1507,9 +1507,9 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		F_canonical = F_canonical + shock_viscosity * (U_L - U_R);
 
 		// add physical bulk viscosity: effective pressure = -viscosity_bulk * div(v) opposes volume changes
-		// vel_div_unnorm is a sum of velocity differences (not gradients), so divide by dx_normal to get vel_divergence [1/time]
+		// vel_div_times_dx is a sum of velocity differences (not gradients), so divide by dx_normal to get vel_divergence [1/time]
 		if (viscosity_bulk != 0.0) {
-			const double vel_divergence = vel_div_unnorm / dx_normal;
+			const double vel_divergence = vel_div_times_dx / dx_normal;
 			F_canonical[x1Momentum_index] -= viscosity_bulk * vel_divergence;
 			if constexpr (!HydroSystem<problem_t>::is_eos_isothermal()) {
 				const double u_face = 0.5 * (sL.u + sR.u);
