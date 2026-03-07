@@ -73,7 +73,7 @@ double target_vdisp = 0.0;
 
 // we initialise the magnetic field using an ABC (Arnold-Beltrami-Childress) seed field:
 // a force-free, maximally helical field defined as the (discrete) curl of a sinusoidal vector potential.
-// the general ABC field has three independent amplitudes (per each spetial axis); here we choose them to be equal.
+// the general ABC field has three independent amplitudes (per spatial axis); here we choose them to be equal.
 template <> void QuokkaSimulation<SmallScaleDynamo>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
 {
 	const amrex::Array4<double> &state_fc = grid_elem.array_;
