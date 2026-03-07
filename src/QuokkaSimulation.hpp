@@ -259,8 +259,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 			}
 		}
 		if (viscosityShear_ != 0.0 || viscosityBulk_ != 0.0) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(AMREX_SPACEDIM == 3,
-							 "Physical viscosity (hydro.viscosity_shear, hydro.viscosity_bulk) requires a 3D simulation (AMREX_SPACEDIM == 3).");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+			    AMREX_SPACEDIM == 3,
+			    "Physical viscosity (hydro.viscosity_shear, hydro.viscosity_bulk) requires a 3D simulation (AMREX_SPACEDIM == 3).");
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(HydroSystem<problem_t>::is_eos_isothermal(),
 							 "Physical viscosity (hydro.viscosity_shear, hydro.viscosity_bulk) is only supported "
 							 "for isothermal EOS (gamma = 1). Set gamma = 1 and cs_isothermal, or disable viscosity.");
@@ -2832,12 +2833,12 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 	// interface-centered kernel
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, DIR>(
-		    flux, faceVel, leftState, rightState, leftState_bfield, rightState_bfield, primVar_mf, artificialViscosityK_,
-		    viscosityBulk_, viscosityShear_, dx, &x1FSpds, &consVar_fc[static_cast<int>(DIR)], nghost_Riemann);
+		    flux, faceVel, leftState, rightState, leftState_bfield, rightState_bfield, primVar_mf, artificialViscosityK_, viscosityBulk_,
+		    viscosityShear_, dx, &x1FSpds, &consVar_fc[static_cast<int>(DIR)], nghost_Riemann);
 	} else {
 		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLC, DIR>(flux, faceVel, leftState, rightState, leftState_bfield,
-											 rightState_bfield, primVar_mf, artificialViscosityK_,
-											 viscosityBulk_, viscosityShear_, dx, nullptr, nullptr, nghost_Riemann);
+											 rightState_bfield, primVar_mf, artificialViscosityK_, viscosityBulk_,
+											 viscosityShear_, dx, nullptr, nullptr, nghost_Riemann);
 	}
 }
 
@@ -2920,12 +2921,12 @@ void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab &primVar_m
 	// LLF solver
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF_MHD, DIR>(
-		    flux, faceVel, leftState, rightState, leftState_bfield, rightState_bfield, primVar_mf, artificialViscosityK_,
-		    viscosityBulk_, viscosityShear_, dx, &x1FSpds, &x1ConsVar_fc_mf[static_cast<int>(DIR)], nghost_Riemann);
+		    flux, faceVel, leftState, rightState, leftState_bfield, rightState_bfield, primVar_mf, artificialViscosityK_, viscosityBulk_,
+		    viscosityShear_, dx, &x1FSpds, &x1ConsVar_fc_mf[static_cast<int>(DIR)], nghost_Riemann);
 	} else {
 		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF, DIR>(flux, faceVel, leftState, rightState, leftState_bfield,
-											rightState_bfield, primVar_mf, artificialViscosityK_,
-											viscosityBulk_, viscosityShear_, dx, nullptr, nullptr, nghost_Riemann);
+											rightState_bfield, primVar_mf, artificialViscosityK_, viscosityBulk_,
+											viscosityShear_, dx, nullptr, nullptr, nghost_Riemann);
 	}
 }
 

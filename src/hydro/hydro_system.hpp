@@ -171,9 +171,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
 				  amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &leftState_bfield_mf,
 				  amrex::MultiFab const &rightState_bfield_mf, amrex::MultiFab const &primVar_mf, amrex::Real viscosity_artificial,
-				  amrex::Real viscosity_bulk = 0.0, amrex::Real viscosity_shear = 0.0,
-				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = {}, amrex::MultiFab *x1FSpds_mf = nullptr,
-				  amrex::MultiFab const *x1ConsVar_fc_mf = nullptr, int nghost_vel = 2);
+				  amrex::Real viscosity_bulk = 0.0, amrex::Real viscosity_shear = 0.0, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = {},
+				  amrex::MultiFab *x1FSpds_mf = nullptr, amrex::MultiFab const *x1ConsVar_fc_mf = nullptr, int nghost_vel = 2);
 
 	template <FluxDir DIR>
 	static void ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar, array_t &x1FluxDiffusive, amrex::Box const &indexRange);
@@ -1235,8 +1234,8 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 					   amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &x1LeftState_bfield_mf,
 					   amrex::MultiFab const &x1RightState_bfield_mf, amrex::MultiFab const &primVar_mf,
 					   const amrex::Real viscosity_artificial, const amrex::Real viscosity_bulk, const amrex::Real viscosity_shear,
-					   const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
-					   amrex::MultiFab *x1FSpds_mf, amrex::MultiFab const *x1ConsVar_fc_mf, const int nghost_vel)
+					   const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::MultiFab *x1FSpds_mf,
+					   amrex::MultiFab const *x1ConsVar_fc_mf, const int nghost_vel)
 {
 
 	// By convention, the interfaces are defined on the left edge of each
@@ -1531,30 +1530,18 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			const amrex::Real dfv_dxu = (q(i, j, k, velV_index) - q(i - 1, j, k, velV_index)) / dx_xu;
 			const amrex::Real dfw_dxu = (q(i, j, k, velW_index) - q(i - 1, j, k, velW_index)) / dx_xu;
 			// transverse-direction velocity gradients (2nd-order, averaged over both cells sharing the face)
-			const amrex::Real dfu_dxv = (
-				q(i,     j + 1, k, velN_index) +
-				q(i - 1, j + 1, k, velN_index) -
-				q(i,     j - 1, k, velN_index) -
-				q(i - 1, j - 1, k, velN_index)
-			) / (4.0 * dx_xv);
-			const amrex::Real dfv_dxv = (
-				q(i,     j + 1, k, velV_index) +
-				q(i - 1, j + 1, k, velV_index) -
-				q(i,     j - 1, k, velV_index) -
-				q(i - 1, j - 1, k, velV_index)
-			) / (4.0 * dx_xv);
-			const amrex::Real dfu_dxw = (
-				q(i,     j, k + 1, velN_index) +
-				q(i - 1, j, k + 1, velN_index) -
-				q(i,     j, k - 1, velN_index) -
-				q(i - 1, j, k - 1, velN_index)
-			) / (4.0 * dx_xw);
-			const amrex::Real dfw_dxw = (
-				q(i,     j, k + 1, velW_index) +
-				q(i - 1, j, k + 1, velW_index) -
-				q(i,     j, k - 1, velW_index) -
-				q(i - 1, j, k - 1, velW_index)
-			) / (4.0 * dx_xw);
+			const amrex::Real dfu_dxv =
+			    (q(i, j + 1, k, velN_index) + q(i - 1, j + 1, k, velN_index) - q(i, j - 1, k, velN_index) - q(i - 1, j - 1, k, velN_index)) /
+			    (4.0 * dx_xv);
+			const amrex::Real dfv_dxv =
+			    (q(i, j + 1, k, velV_index) + q(i - 1, j + 1, k, velV_index) - q(i, j - 1, k, velV_index) - q(i - 1, j - 1, k, velV_index)) /
+			    (4.0 * dx_xv);
+			const amrex::Real dfu_dxw =
+			    (q(i, j, k + 1, velN_index) + q(i - 1, j, k + 1, velN_index) - q(i, j, k - 1, velN_index) - q(i - 1, j, k - 1, velN_index)) /
+			    (4.0 * dx_xw);
+			const amrex::Real dfw_dxw =
+			    (q(i, j, k + 1, velW_index) + q(i - 1, j, k + 1, velW_index) - q(i, j, k - 1, velW_index) - q(i - 1, j, k - 1, velW_index)) /
+			    (4.0 * dx_xw);
 			// velocity divergence for the traceless part of visc_flux_uu
 			const amrex::Real div_v = dfu_dxu + dfv_dxv + dfw_dxw;
 			// viscous momentum flux components in canonical frame (spatial indices: xu=normal, xv=transverse1, xw=transverse2)
