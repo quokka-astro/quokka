@@ -171,8 +171,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
 				  amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &leftState_bfield_mf,
 				  amrex::MultiFab const &rightState_bfield_mf, amrex::MultiFab const &primVar_mf, amrex::Real viscosity_artificial,
-				  amrex::Real viscosity_bulk = 0.0, amrex::Real dx_normal = 1.0,
-				  amrex::MultiFab *x1FSpds_mf = nullptr, amrex::MultiFab const *x1ConsVar_fc_mf = nullptr, int nghost_vel = 2);
+				  amrex::Real viscosity_bulk = 0.0, amrex::Real dx_normal = 1.0, amrex::MultiFab *x1FSpds_mf = nullptr,
+				  amrex::MultiFab const *x1ConsVar_fc_mf = nullptr, int nghost_vel = 2);
 
 	template <FluxDir DIR>
 	static void ComputeFirstOrderFluxes(amrex::Array4<const amrex::Real> const &consVar, array_t &x1FluxDiffusive, amrex::Box const &indexRange);
@@ -1232,8 +1232,8 @@ template <typename problem_t>
 template <RiemannSolver RIEMANN, FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
 					   amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &x1LeftState_bfield_mf,
-					   amrex::MultiFab const &x1RightState_bfield_mf, amrex::MultiFab const &primVar_mf, const amrex::Real viscosity_artificial,
-					   const amrex::Real viscosity_bulk, const amrex::Real dx_normal,
+					   amrex::MultiFab const &x1RightState_bfield_mf, amrex::MultiFab const &primVar_mf,
+					   const amrex::Real viscosity_artificial, const amrex::Real viscosity_bulk, const amrex::Real dx_normal,
 					   amrex::MultiFab *x1FSpds_mf, amrex::MultiFab const *x1ConsVar_fc_mf, const int nghost_vel)
 {
 
