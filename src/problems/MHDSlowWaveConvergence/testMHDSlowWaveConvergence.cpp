@@ -1,9 +1,8 @@
 //==============================================================================
-// TwoMomentRad - a radiation transport library for patch-based AMR codes
-// Copyright 2020 Benjamin Wibking.
+// Copyright 2025 Elizabeth Cole-Kodikara.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file testSlowWaveConvergence.cpp
+/// \file testMHDSlowWaveConvergence.cpp
 /// \brief Defines a Richardson convergence test for the slow MHD wave.
 ///
 
@@ -25,16 +24,16 @@
 #include "util/BC.hpp"
 #include "util/richardson.hpp"
 
-struct SlowWaveConvergence {
+struct MHDSlowWaveConvergence {
 };
 
-template <> struct quokka::EOS_Traits<SlowWaveConvergence> {
+template <> struct quokka::EOS_Traits<MHDSlowWaveConvergence> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
-template <> struct Physics_Traits<SlowWaveConvergence> {
+template <> struct Physics_Traits<MHDSlowWaveConvergence> {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;
 	static constexpr int numPassiveScalars = numMassScalars + 0;
@@ -48,7 +47,7 @@ template <> struct Physics_Traits<SlowWaveConvergence> {
 };
 
 constexpr double sound_speed = 1.0;
-constexpr double gamma_gas = quokka::EOS_Traits<SlowWaveConvergence>::gamma;
+constexpr double gamma_gas = quokka::EOS_Traits<MHDSlowWaveConvergence>::gamma;
 constexpr double bg_density = 1.0;
 constexpr double bg_pressure = sound_speed * sound_speed * bg_density / gamma_gas;
 constexpr double b0_magn = 1.0;
@@ -321,12 +320,12 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const double Etot = Ekin + Emag + Eint;
 
 		// write state
-		state(i, j, k, HydroSystem<SlowWaveConvergence>::density_index) = density;
-		state(i, j, k, HydroSystem<SlowWaveConvergence>::x1Momentum_index) = v_prf[0] * density;
-		state(i, j, k, HydroSystem<SlowWaveConvergence>::x2Momentum_index) = v_prf[1] * density;
-		state(i, j, k, HydroSystem<SlowWaveConvergence>::x3Momentum_index) = v_prf[2] * density;
-		state(i, j, k, HydroSystem<SlowWaveConvergence>::energy_index) = Etot;
-		state(i, j, k, HydroSystem<SlowWaveConvergence>::internalEnergy_index) = Eint;
+		state(i, j, k, HydroSystem<MHDSlowWaveConvergence>::density_index) = density;
+		state(i, j, k, HydroSystem<MHDSlowWaveConvergence>::x1Momentum_index) = v_prf[0] * density;
+		state(i, j, k, HydroSystem<MHDSlowWaveConvergence>::x2Momentum_index) = v_prf[1] * density;
+		state(i, j, k, HydroSystem<MHDSlowWaveConvergence>::x3Momentum_index) = v_prf[2] * density;
+		state(i, j, k, HydroSystem<MHDSlowWaveConvergence>::energy_index) = Etot;
+		state(i, j, k, HydroSystem<MHDSlowWaveConvergence>::internalEnergy_index) = Eint;
 
 	} else if (cen == quokka::centering::fc) {
 		// compute b-field using the magnetic vector potential to preserve div(b) = 0 topology
@@ -336,26 +335,26 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 				dx[1] -
 			    (Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L + dx[2], time) - Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L, time)) /
 				dx[2];
-			state(i, j, k, MHDSystem<SlowWaveConvergence>::bfield_index) = b_x1;
+			state(i, j, k, MHDSystem<MHDSlowWaveConvergence>::bfield_index) = b_x1;
 		} else if (dir == quokka::direction::y) {
 			const double b_x2 =
 			    (Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L + dx[2], time) - Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time)) /
 				dx[2] -
 			    (Az_prf(x1_prf_L + dx[0], x2_prf_L, x3_prf_L + dx[2] / 2.0, time) - Az_prf(x1_prf_L, x2_prf_L, x3_prf_L + dx[2] / 2.0, time)) /
 				dx[0];
-			state(i, j, k, MHDSystem<SlowWaveConvergence>::bfield_index) = b_x2;
+			state(i, j, k, MHDSystem<MHDSlowWaveConvergence>::bfield_index) = b_x2;
 		} else if (dir == quokka::direction::z) {
 			const double b_x3 =
 			    (Ay_prf(x1_prf_L + dx[0], x2_prf_L + dx[1] / 2.0, x3_prf_L, time) - Ay_prf(x1_prf_L, x2_prf_L + dx[1] / 2.0, x3_prf_L, time)) /
 				dx[0] -
 			    (Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L + dx[1], x3_prf_L, time) - Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time)) /
 				dx[1];
-			state(i, j, k, MHDSystem<SlowWaveConvergence>::bfield_index) = b_x3;
+			state(i, j, k, MHDSystem<MHDSlowWaveConvergence>::bfield_index) = b_x3;
 		}
 	}
 }
 
-template <> void QuokkaSimulation<SlowWaveConvergence>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<MHDSlowWaveConvergence>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
@@ -364,7 +363,7 @@ template <> void QuokkaSimulation<SlowWaveConvergence>::setInitialConditionsOnGr
 	const quokka::centering cen = grid_elem.cen_;
 	const quokka::direction dir = grid_elem.dir_;
 
-	const int ncomp_cc = Physics_Indices<SlowWaveConvergence>::nvarTotal_cc;
+	const int ncomp_cc = Physics_Indices<MHDSlowWaveConvergence>::nvarTotal_cc;
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		for (int n = 0; n < ncomp_cc; ++n) {
 			state_cc(i, j, k, n) = 0;
@@ -373,7 +372,7 @@ template <> void QuokkaSimulation<SlowWaveConvergence>::setInitialConditionsOnGr
 	});
 }
 
-template <> void QuokkaSimulation<SlowWaveConvergence>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<MHDSlowWaveConvergence>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
 {
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
@@ -382,7 +381,7 @@ template <> void QuokkaSimulation<SlowWaveConvergence>::setInitialConditionsOnGr
 	const quokka::centering cen = grid_elem.cen_;
 	const quokka::direction dir = grid_elem.dir_;
 
-	const int ncomp_fc = Physics_Indices<SlowWaveConvergence>::nvarPerDim_fc;
+	const int ncomp_fc = Physics_Indices<MHDSlowWaveConvergence>::nvarPerDim_fc;
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		for (int n = 0; n < ncomp_fc; ++n) {
 			state_fc(i, j, k, n) = 0;
@@ -392,7 +391,7 @@ template <> void QuokkaSimulation<SlowWaveConvergence>::setInitialConditionsOnGr
 }
 
 template <>
-void QuokkaSimulation<SlowWaveConvergence>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+void QuokkaSimulation<MHDSlowWaveConvergence>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 								     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
@@ -410,7 +409,7 @@ void QuokkaSimulation<SlowWaveConvergence>::computeReferenceSolution(amrex::Mult
 }
 
 template <>
-void QuokkaSimulation<SlowWaveConvergence>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+void QuokkaSimulation<MHDSlowWaveConvergence>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 									amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
 									quokka::direction const dir)
 {
@@ -512,9 +511,9 @@ auto runWaveTest(int nx) -> double
 	pp_geom.addarr("is_periodic", is_periodic);
 
 	// Setup boundary conditions
-	auto BCs_cc = quokka::BC<SlowWaveConvergence>(quokka::BCType::int_dir);
+	auto BCs_cc = quokka::BC<MHDSlowWaveConvergence>(quokka::BCType::int_dir);
 
-	const int nvars_fc = Physics_Indices<SlowWaveConvergence>::nvarTotal_fc;
+	const int nvars_fc = Physics_Indices<MHDSlowWaveConvergence>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
 	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -524,7 +523,7 @@ auto runWaveTest(int nx) -> double
 	}
 
 	// Run simulation
-	QuokkaSimulation<SlowWaveConvergence> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<MHDSlowWaveConvergence> sim(BCs_cc, BCs_fc);
 
 	sim.cflNumber_ = CFL_number;
 	sim.stopTime_ = max_time;
