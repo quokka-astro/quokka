@@ -2830,15 +2830,13 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 	// interface-centered kernel
 	const amrex::Real dx_normal = dx[static_cast<int>(DIR)];
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, DIR>(flux, faceVel, leftState, rightState, leftState_bfield,
-											 rightState_bfield, primVar_mf, artificialViscosityK_,
-											 viscosityBulk_, dx_normal, &x1FSpds,
-											 &consVar_fc[static_cast<int>(DIR)], nghost_Riemann);
+		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, DIR>(
+		    flux, faceVel, leftState, rightState, leftState_bfield, rightState_bfield, primVar_mf, artificialViscosityK_, viscosityBulk_, dx_normal,
+		    &x1FSpds, &consVar_fc[static_cast<int>(DIR)], nghost_Riemann);
 	} else {
 		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLC, DIR>(flux, faceVel, leftState, rightState, leftState_bfield,
-											 rightState_bfield, primVar_mf, artificialViscosityK_,
-											 viscosityBulk_, dx_normal, nullptr, nullptr,
-											 nghost_Riemann);
+											 rightState_bfield, primVar_mf, artificialViscosityK_, viscosityBulk_,
+											 dx_normal, nullptr, nullptr, nghost_Riemann);
 	}
 }
 
@@ -2921,15 +2919,13 @@ void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab &primVar_m
 	// LLF solver
 	const amrex::Real dx_normal = dx[static_cast<int>(DIR)];
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF_MHD, DIR>(flux, faceVel, leftState, rightState, leftState_bfield,
-											    rightState_bfield, primVar_mf, artificialViscosityK_,
-											    viscosityBulk_, dx_normal, &x1FSpds,
-											    &x1ConsVar_fc_mf[static_cast<int>(DIR)], nghost_Riemann);
+		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF_MHD, DIR>(
+		    flux, faceVel, leftState, rightState, leftState_bfield, rightState_bfield, primVar_mf, artificialViscosityK_, viscosityBulk_, dx_normal,
+		    &x1FSpds, &x1ConsVar_fc_mf[static_cast<int>(DIR)], nghost_Riemann);
 	} else {
 		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF, DIR>(flux, faceVel, leftState, rightState, leftState_bfield,
-											rightState_bfield, primVar_mf, artificialViscosityK_,
-											viscosityBulk_, dx_normal, nullptr, nullptr,
-											nghost_Riemann);
+											rightState_bfield, primVar_mf, artificialViscosityK_, viscosityBulk_,
+											dx_normal, nullptr, nullptr, nghost_Riemann);
 	}
 }
 
