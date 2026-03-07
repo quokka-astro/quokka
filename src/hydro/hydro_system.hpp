@@ -171,7 +171,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	static void ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
 				  amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &leftState_bfield_mf,
 				  amrex::MultiFab const &rightState_bfield_mf, amrex::MultiFab const &primVar_mf, amrex::Real viscosity_artificial,
-				  amrex::Real viscosity_bulk = 0.0, amrex::Real dx_normal = 1.0, amrex::MultiFab *x1FSpds_mf = nullptr,
+				  amrex::Real viscosity_bulk = 0.0, amrex::Real viscosity_shear = 0.0,
+				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = {}, amrex::MultiFab *x1FSpds_mf = nullptr,
 				  amrex::MultiFab const *x1ConsVar_fc_mf = nullptr, int nghost_vel = 2);
 
 	template <FluxDir DIR>
@@ -1233,7 +1234,8 @@ template <RiemannSolver RIEMANN, FluxDir DIR>
 void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::MultiFab &x1FaceVel_mf, amrex::MultiFab const &x1LeftState_mf,
 					   amrex::MultiFab const &x1RightState_mf, amrex::MultiFab const &x1LeftState_bfield_mf,
 					   amrex::MultiFab const &x1RightState_bfield_mf, amrex::MultiFab const &primVar_mf,
-					   const amrex::Real viscosity_artificial, const amrex::Real viscosity_bulk, const amrex::Real dx_normal,
+					   const amrex::Real viscosity_artificial, const amrex::Real viscosity_bulk, const amrex::Real viscosity_shear,
+					   const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 					   amrex::MultiFab *x1FSpds_mf, amrex::MultiFab const *x1ConsVar_fc_mf, const int nghost_vel)
 {
 
@@ -1506,14 +1508,67 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 		F_canonical = F_canonical + shock_viscosity * (U_L - U_R);
 
+		constexpr int dir_xu = static_cast<int>(DIR);
+		const amrex::Real dx_xu = dx[dir_xu];
+
 		// add physical bulk viscosity: effective pressure = -viscosity_bulk * div(v) opposes volume changes
-		// vel_div_times_dx is a sum of velocity differences (not gradients), so divide by dx_normal to get vel_divergence [1/time]
+		// vel_div_times_dx is a sum of velocity differences (not gradients), so divide by dx_xu to get vel_divergence [1/time]
 		if (viscosity_bulk != 0.0) {
-			const double vel_divergence = vel_div_times_dx / dx_normal;
+			const double vel_divergence = vel_div_times_dx / dx_xu;
 			F_canonical[x1Momentum_index] -= viscosity_bulk * vel_divergence;
 			if constexpr (!HydroSystem<problem_t>::is_eos_isothermal()) {
-				const double u_face = 0.5 * (sL.u + sR.u);
-				F_canonical[energy_index] -= viscosity_bulk * vel_divergence * u_face;
+				const double fu_face = 0.5 * (sL.u + sR.u); // face-averaged normal velocity component
+				F_canonical[energy_index] -= viscosity_bulk * vel_divergence * fu_face;
+			}
+		}
+
+		// add physical shear viscosity: stress tensor = eta * (d_i u_j + d_j u_i - (2/3)*delta_ij * div(v))
+		if (viscosity_shear != 0.0) {
+			const amrex::Real dx_xv = dx[(dir_xu + 1) % 3];
+			const amrex::Real dx_xw = dx[(dir_xu + 2) % 3];
+			// normal-direction velocity gradients (1st-order, exact at the face)
+			const amrex::Real dfu_dxu = (q(i, j, k, velN_index) - q(i - 1, j, k, velN_index)) / dx_xu;
+			const amrex::Real dfv_dxu = (q(i, j, k, velV_index) - q(i - 1, j, k, velV_index)) / dx_xu;
+			const amrex::Real dfw_dxu = (q(i, j, k, velW_index) - q(i - 1, j, k, velW_index)) / dx_xu;
+			// transverse-direction velocity gradients (2nd-order, averaged over both cells sharing the face)
+			const amrex::Real dfu_dxv = (
+				q(i,     j + 1, k, velN_index) +
+				q(i - 1, j + 1, k, velN_index) -
+				q(i,     j - 1, k, velN_index) -
+				q(i - 1, j - 1, k, velN_index)
+			) / (4.0 * dx_xv);
+			const amrex::Real dfv_dxv = (
+				q(i,     j + 1, k, velV_index) +
+				q(i - 1, j + 1, k, velV_index) -
+				q(i,     j - 1, k, velV_index) -
+				q(i - 1, j - 1, k, velV_index)
+			) / (4.0 * dx_xv);
+			const amrex::Real dfu_dxw = (
+				q(i,     j, k + 1, velN_index) +
+				q(i - 1, j, k + 1, velN_index) -
+				q(i,     j, k - 1, velN_index) -
+				q(i - 1, j, k - 1, velN_index)
+			) / (4.0 * dx_xw);
+			const amrex::Real dfw_dxw = (
+				q(i,     j, k + 1, velW_index) +
+				q(i - 1, j, k + 1, velW_index) -
+				q(i,     j, k - 1, velW_index) -
+				q(i - 1, j, k - 1, velW_index)
+			) / (4.0 * dx_xw);
+			// velocity divergence for the traceless part of visc_flux_uu
+			const amrex::Real div_v = dfu_dxu + dfv_dxv + dfw_dxw;
+			// viscous momentum flux components in canonical frame (spatial indices: xu=normal, xv=transverse1, xw=transverse2)
+			const amrex::Real visc_flux_uu = viscosity_shear * (2.0 * dfu_dxu - (2.0 / 3.0) * div_v);
+			const amrex::Real visc_flux_uv = viscosity_shear * (dfu_dxv + dfv_dxu);
+			const amrex::Real visc_flux_uw = viscosity_shear * (dfu_dxw + dfw_dxu);
+			F_canonical[x1Momentum_index] += visc_flux_uu;
+			F_canonical[x2Momentum_index] += visc_flux_uv;
+			F_canonical[x3Momentum_index] += visc_flux_uw;
+			if constexpr (!HydroSystem<problem_t>::is_eos_isothermal()) {
+				const amrex::Real fu = 0.5 * (sL.u + sR.u); // face-averaged normal velocity component
+				const amrex::Real fv = 0.5 * (sL.v + sR.v); // face-averaged transverse-1 velocity component
+				const amrex::Real fw = 0.5 * (sL.w + sR.w); // face-averaged transverse-2 velocity component
+				F_canonical[energy_index] += visc_flux_uu * fu + visc_flux_uv * fv + visc_flux_uw * fw;
 			}
 		}
 
