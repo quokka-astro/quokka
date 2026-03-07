@@ -2,7 +2,7 @@
 // Copyright 2025 Elizabeth Cole-Kodikara.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file testEntropyWaveConvergence.cpp
+/// \file testMHDEntropyWaveConvergence.cpp
 /// \brief Setup a Richardson convergence test for an MHD entropy wave.
 ///
 
@@ -31,16 +31,16 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-struct EntropyWaveConvergence {
+struct MHDEntropyWaveConvergence {
 };
 
-template <> struct quokka::EOS_Traits<EntropyWaveConvergence> {
+template <> struct quokka::EOS_Traits<MHDEntropyWaveConvergence> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
-template <> struct Physics_Traits<EntropyWaveConvergence> {
+template <> struct Physics_Traits<MHDEntropyWaveConvergence> {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;
 	static constexpr int numPassiveScalars = numMassScalars + 0;
@@ -55,7 +55,7 @@ template <> struct Physics_Traits<EntropyWaveConvergence> {
 
 // Background and perturbation parameters
 constexpr double adv_speed = 1.0; // advection speed of the entropy wave (in MRF along k)
-constexpr double gamma_gas = quokka::EOS_Traits<EntropyWaveConvergence>::gamma;
+constexpr double gamma_gas = quokka::EOS_Traits<MHDEntropyWaveConvergence>::gamma;
 constexpr double bg_density = 1.0;
 constexpr double delta_rho_magn = 1e-6; // small density perturbation amplitude
 constexpr double sound_speed = 1.0;
@@ -198,12 +198,12 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const double Eint = pressure / (gamma_gas - 1.0);
 		const double Etot = Ekin + Emag + Eint;
 
-		state(i, j, k, HydroSystem<EntropyWaveConvergence>::density_index) = density;
-		state(i, j, k, HydroSystem<EntropyWaveConvergence>::x1Momentum_index) = v_x1_prf * density;
-		state(i, j, k, HydroSystem<EntropyWaveConvergence>::x2Momentum_index) = v_x2_prf * density;
-		state(i, j, k, HydroSystem<EntropyWaveConvergence>::x3Momentum_index) = v_x3_prf * density;
-		state(i, j, k, HydroSystem<EntropyWaveConvergence>::energy_index) = Etot;
-		state(i, j, k, HydroSystem<EntropyWaveConvergence>::internalEnergy_index) = Eint;
+		state(i, j, k, HydroSystem<MHDEntropyWaveConvergence>::density_index) = density;
+		state(i, j, k, HydroSystem<MHDEntropyWaveConvergence>::x1Momentum_index) = v_x1_prf * density;
+		state(i, j, k, HydroSystem<MHDEntropyWaveConvergence>::x2Momentum_index) = v_x2_prf * density;
+		state(i, j, k, HydroSystem<MHDEntropyWaveConvergence>::x3Momentum_index) = v_x3_prf * density;
+		state(i, j, k, HydroSystem<MHDEntropyWaveConvergence>::energy_index) = Etot;
+		state(i, j, k, HydroSystem<MHDEntropyWaveConvergence>::internalEnergy_index) = Eint;
 	} else if (cen == quokka::centering::fc) {
 		// compute b-field using the magnetic vector potential (background only) to preserve div(b)=0
 		const double b_x1 =
@@ -219,16 +219,16 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		    (Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L + dx[1], x3_prf_L, time) - Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time)) / dx[1];
 
 		if (dir == quokka::direction::x) {
-			state(i, j, k, MHDSystem<EntropyWaveConvergence>::bfield_index) = b_x1;
+			state(i, j, k, MHDSystem<MHDEntropyWaveConvergence>::bfield_index) = b_x1;
 		} else if (dir == quokka::direction::y) {
-			state(i, j, k, MHDSystem<EntropyWaveConvergence>::bfield_index) = b_x2;
+			state(i, j, k, MHDSystem<MHDEntropyWaveConvergence>::bfield_index) = b_x2;
 		} else if (dir == quokka::direction::z) {
-			state(i, j, k, MHDSystem<EntropyWaveConvergence>::bfield_index) = b_x3;
+			state(i, j, k, MHDSystem<MHDEntropyWaveConvergence>::bfield_index) = b_x3;
 		}
 	}
 }
 
-template <> void QuokkaSimulation<EntropyWaveConvergence>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<MHDEntropyWaveConvergence>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
@@ -237,7 +237,7 @@ template <> void QuokkaSimulation<EntropyWaveConvergence>::setInitialConditionsO
 	const quokka::centering cen = grid_elem.cen_;
 	const quokka::direction dir = grid_elem.dir_;
 
-	const int ncomp_cc = Physics_Indices<EntropyWaveConvergence>::nvarTotal_cc;
+	const int ncomp_cc = Physics_Indices<MHDEntropyWaveConvergence>::nvarTotal_cc;
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		for (int n = 0; n < ncomp_cc; ++n) {
 			state_cc(i, j, k, n) = 0; // fill unused quantities with zeros
@@ -246,7 +246,7 @@ template <> void QuokkaSimulation<EntropyWaveConvergence>::setInitialConditionsO
 	});
 }
 
-template <> void QuokkaSimulation<EntropyWaveConvergence>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<MHDEntropyWaveConvergence>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
 {
 	// extract grid information
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -256,7 +256,7 @@ template <> void QuokkaSimulation<EntropyWaveConvergence>::setInitialConditionsO
 	const quokka::centering cen = grid_elem.cen_;
 	const quokka::direction dir = grid_elem.dir_;
 
-	const int ncomp_fc = Physics_Indices<EntropyWaveConvergence>::nvarPerDim_fc;
+	const int ncomp_fc = Physics_Indices<MHDEntropyWaveConvergence>::nvarPerDim_fc;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		for (int n = 0; n < ncomp_fc; ++n) {
@@ -267,7 +267,7 @@ template <> void QuokkaSimulation<EntropyWaveConvergence>::setInitialConditionsO
 }
 
 template <>
-void QuokkaSimulation<EntropyWaveConvergence>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+void QuokkaSimulation<MHDEntropyWaveConvergence>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 								   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
@@ -285,7 +285,7 @@ void QuokkaSimulation<EntropyWaveConvergence>::computeReferenceSolution(amrex::M
 }
 
 template <>
-void QuokkaSimulation<EntropyWaveConvergence>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+void QuokkaSimulation<MHDEntropyWaveConvergence>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 								      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
@@ -383,9 +383,9 @@ auto runWaveTest(int nx) -> double
 	pp_geom.addarr("is_periodic", is_periodic);
 
 	// Setup boundary conditions
-	auto BCs_cc = quokka::BC<EntropyWaveConvergence>(quokka::BCType::int_dir);
+	auto BCs_cc = quokka::BC<MHDEntropyWaveConvergence>(quokka::BCType::int_dir);
 
-	const int nvars_fc = Physics_Indices<EntropyWaveConvergence>::nvarTotal_fc;
+	const int nvars_fc = Physics_Indices<MHDEntropyWaveConvergence>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
 	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -395,7 +395,7 @@ auto runWaveTest(int nx) -> double
 	}
 
 	// Run simulation
-	QuokkaSimulation<EntropyWaveConvergence> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<MHDEntropyWaveConvergence> sim(BCs_cc, BCs_fc);
 
 	sim.cflNumber_ = CFL_number;
 	sim.stopTime_ = max_time;
