@@ -790,7 +790,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 		}
 
 		// diffusive CFL constraint for Ohmic resistivity and physical viscosity
-		// resistivity signal: 2*d*eta_R/dx_min (uniform); viscosity signal: 2*d*eta_visc/(rho*dx_min) (per-cell)
 		{
 			const auto &dx = geom[level].CellSizeArray();
 			const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
