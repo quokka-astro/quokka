@@ -32,8 +32,8 @@ template <> struct quokka::EOS_Traits<SmallScaleDynamo> {
 
 template <> struct Physics_Traits<SmallScaleDynamo> {
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_mhd_enabled = true;
+	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_dust_enabled = false;
 	static constexpr int nDustGroups = 0;
@@ -132,10 +132,10 @@ template <> void QuokkaSimulation<SmallScaleDynamo>::setInitialConditionsOnGridF
 
 auto problem_main() -> int
 {
-	amrex::ParmParse const pp("problem");
+	amrex::ParmParse const pp("setup");
 	pp.query("seed_b_wavenumber", seed_b_wavenumber);
 	pp.query("seed_b_fraction", seed_b_fraction);
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(seed_b_wavenumber > 0, "problem.seed_b_wavenumber must be a positive integer");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(seed_b_wavenumber > 0, "setup.seed_b_wavenumber must be a positive integer");
 
 	amrex::ParmParse const pp_turb("turbulence");
 	pp_turb.query("target_vdisp", target_vdisp);

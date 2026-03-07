@@ -1,46 +1,54 @@
-# *****************************************************************
-# Problem size and geometry
-# *****************************************************************
-geometry.prob_lo     =  0.0  0.0  0.0
-geometry.prob_hi     =  1.0  1.0  1.0
-geometry.is_periodic =  1    1    1
+## *****************************************************************
+## Problem size and geometry
+## *****************************************************************
+geometry.prob_lo     =  0.0  0.0  0.0  # lower domain boundary (x, y, z)
+geometry.prob_hi     =  1.0  1.0  1.0  # upper domain boundary (x, y, z); sets box size L = prob_hi - prob_lo
+geometry.is_periodic =  1    1    1    # periodic boundary conditions in all directions
 
-# *****************************************************************
-# VERBOSITY
-# *****************************************************************
+## *****************************************************************
+## VERBOSITY
+## *****************************************************************
 amr.v              = 0       # verbosity in Amr
 
-# *****************************************************************
-# Resolution and refinement
-# *****************************************************************
-amr.n_cell          = 64 64 64
-amr.max_level       = 0     # number of levels = max_level + 1
-amr.blocking_factor = 32
-amr.max_grid_size   = 128   # at least 128 for GPUs
+## *****************************************************************
+## Resolution and refinement
+## *****************************************************************
+amr.n_cell          = 64 64 64  # base grid resolution (nx, ny, nz)
+amr.max_level       = 0         # number of AMR levels = max_level + 1
+amr.blocking_factor = 32        # grid patches must be divisible by this; must be >= nghost
+amr.max_grid_size   = 128       # maximum patch size per MPI rank; at least 128 for GPUs
 
-stop_time = 10
-plotfile_interval = 100
-max_timesteps = 10000
+## *****************************************************************
+## Timestepping
+## *****************************************************************
+stop_time     = 100     # simulation end time (in code units)
+max_timesteps = 100000  # hard cap on number of timesteps
+do_reflux     = 1       # apply flux correction at AMR level boundaries
+do_subcycle   = 0       # disable AMR subcycling (required for resistivity)
 
-do_reflux = 1
-do_subcycle = 0
-hydro.artificial_viscosity_coefficient = 0.1
+## *****************************************************************
+## Output
+## *****************************************************************
+plotfile_interval    = 100   # write a plotfile every N timesteps
+checkpoint_interval  = 1000  # write a restart checkpoint every N timesteps
 
-# *****************************************************************
-# MHD
-# *****************************************************************
-# mhd.resistivity = 0.0   # Ohmic resistivity (requires do_subcycle = 0)
+## *****************************************************************
+## Dissipation
+## *****************************************************************
+mhd.resistivity        = 0.0  # Ohmic resistivity (requires do_subcycle = 0)
+hydro.viscosity_shear  = 0.0  # physical shear viscosity eta (isothermal EOS only)
+hydro.viscosity_bulk   = 0.0  # physical bulk viscosity zeta (isothermal EOS only)
 
-# *****************************************************************
-# Seed magnetic field (ABC field, B = curl(A))
-# *****************************************************************
-# problem.seed_b_wavenumber = 2      # integer mode number n; k0 = 2*pi*n/L (default: 2)
-# problem.seed_b_fraction   = 1.0e-6 # E_mag/E_kin at t=0; B0 = sqrt(fraction) * target_vdisp (default: 0)
+## *****************************************************************
+## Seed magnetic field (ABC field)
+## *****************************************************************
+setup.seed_b_wavenumber = 2      # integer mode number n; k0 = 2*pi*n/L (default: 2)
+setup.seed_b_fraction   = 1.0e-6 # E_mag/E_kin at t=0; B0 = sqrt(fraction) * target_vdisp
 
-# *****************************************************************
-# Turbulent driving
-# *****************************************************************
-turbulence.enabled           = 1
+## *****************************************************************
+## Turbulent driving
+## *****************************************************************
+turbulence.enabled           = 1       # enable turbulent driving
 turbulence.length            = 1.0     # physical box size L; integer mode n has wavenumber k = n * 2*pi / L
 turbulence.target_vdisp      = 0.5     # target velocity dispersion; equiv to Mach number since the plasma is isothermal
 turbulence.ampl_factor       = 0.5     # scales the driving amplitude as ampl_factor^1.5; tune to reach target_vdisp
