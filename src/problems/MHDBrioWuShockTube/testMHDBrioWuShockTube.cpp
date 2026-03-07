@@ -3,7 +3,7 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file testMHDBrioWuShockTube.cpp
-/// \brief Setup a test problem for the Brio-Wu MHD shock tube.
+/// \brief Setup a Richardson convergence test for linearly polarised Alfvén waves.
 ///
 
 #ifdef HAVE_PYTHON
