@@ -1,5 +1,5 @@
 //==============================================================================
-// Copyright 2025 Neco Kriel.
+// Copyright 2026 Neco Kriel.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file testMHDBalsaraVortex.cpp

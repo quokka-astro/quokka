@@ -1,5 +1,5 @@
 //==============================================================================
-// Copyright 2022 Neco Kriel and Ben Wibking.
+// Copyright 2025 Ben Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file testMHDCurrentSheet.cpp

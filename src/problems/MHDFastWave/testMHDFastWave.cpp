@@ -1,5 +1,5 @@
 //==============================================================================
-// Copyright 2025 Neco Elizabeth Cole-Kodikara.
+// Copyright 2025 Elizabeth Cole-Kodikara.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file testMHDFastWave.cpp
