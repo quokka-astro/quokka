@@ -1,5 +1,5 @@
 //==============================================================================
-// Copyright 2020 Benjamin Wibking.
+// Copyright 2025 Elizabeth Cole-Kodikara
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file testMHDBrioWuShockTube.cpp
