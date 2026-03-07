@@ -3,7 +3,7 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file testMHDAlfvenWaveLinear.cpp
-/// \brief Defines a test problem to make sure face-centered quantities are created correctly.
+/// \brief Setup a test problem for linearly polarised Alfvén waves.
 ///
 
 #include <array>

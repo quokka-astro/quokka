@@ -3,7 +3,7 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file testMHDFieldLoop.cpp
-/// \brief
+/// \brief Setup a test problem for an advected magnetic field loop.
 ///   This problem is based on the test described here:
 ///   https://www.astro.princeton.edu/~jstone/Athena/tests/field-loop/Field-loop.html
 ///

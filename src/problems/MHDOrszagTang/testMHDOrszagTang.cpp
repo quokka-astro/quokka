@@ -3,7 +3,7 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file testMHDOrszagTang.cpp
-/// \brief
+/// \brief Setup a test problem for the Orszag-Tang MHD vortex.
 ///   This problem is based on the implementation here:
 ///   https://github.com/PrincetonUniversity/athena/blob/master/src/pgen/orszag_tang.cpp.
 ///	  (Phil Hopkins made several typos on this page, do not use:

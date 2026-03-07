@@ -3,7 +3,7 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file testMHDAlfvenWaveCircular.cpp
-/// \brief Defines a test problem to make sure face-centred quantities are created correctly.
+/// \brief Setup a test problem for circularly polarised Alfvén waves.
 ///
 
 #include <cassert>
