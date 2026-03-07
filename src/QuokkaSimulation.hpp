@@ -789,14 +789,21 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 				     "compute a time step.");
 		}
 
-		// diffusive CFL constraint for Ohmic resistivity
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			if (std::abs(mhdResistivity_) > std::numeric_limits<amrex::Real>::epsilon()) {
-				const auto &dx = geom[level].CellSizeArray();
-				const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
-				const amrex::Real resistive_signal = 2.0 * AMREX_SPACEDIM * mhdResistivity_ / dx_min;
+		// diffusive CFL constraint for Ohmic resistivity and physical viscosity
+		// resistivity signal: 2*d*eta_R/dx_min (uniform); viscosity signal: 2*d*eta_visc/(rho*dx_min) (per-cell)
+		{
+			const auto &dx = geom[level].CellSizeArray();
+			const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});
+			amrex::Real resistive_signal = 0.0;
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				resistive_signal = (mhdResistivity_ != 0.0) ? 2.0 * AMREX_SPACEDIM * mhdResistivity_ / dx_min : 0.0;
+			}
+			const amrex::Real max_viscosity = std::max(viscosityShear_, viscosityBulk_);
+			if (resistive_signal != 0.0 || max_viscosity != 0.0) {
 				amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-					maxSignal(i, j, k) = std::max(maxSignal(i, j, k), resistive_signal);
+					const amrex::Real rho = stateNew_cc(i, j, k, HydroSystem<problem_t>::density_index);
+					const amrex::Real viscous_signal = 2.0 * AMREX_SPACEDIM * max_viscosity / (rho * dx_min);
+					maxSignal(i, j, k) = std::max(maxSignal(i, j, k), std::max(resistive_signal, viscous_signal));
 				});
 			}
 		}
