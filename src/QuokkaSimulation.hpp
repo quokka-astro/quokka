@@ -213,7 +213,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	EMFComputeScheme emfComputingScheme_ = EMFComputeScheme::FelkerStone2017;
 	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::LondrilloDelZanna2004; // method to use to average EMF at edges
-	amrex::Real mhdResistivity_ = 0.0;					// physical (Ohmic) resistivity eta (default: ideal MHD)
+	amrex::Real mhdResistivity_ = 0.0;					// physical (Ohmic) resistivity (default: ideal MHD)
+	amrex::Real viscosityShear_ = 0.0;					// physical shear viscosity (default: inviscid); isothermal EOS only
+	amrex::Real viscosityBulk_ = 0.0;					// physical bulk viscosity (default: inviscid); isothermal EOS only
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 	std::unique_ptr<quokka::turbulence::turbulentDriving<problem_t>> td;
@@ -255,6 +257,11 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(do_subcycle == 0,
 								 "AMR subcycling is not supported with nonzero resistivity. Set do_subcycle = 0.");
 			}
+		}
+		if (viscosityShear_ != 0.0 || viscosityBulk_ != 0.0) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(HydroSystem<problem_t>::is_eos_isothermal(),
+							 "Physical viscosity (hydro.viscosity_shear, hydro.viscosity_bulk) is only supported "
+							 "for isothermal EOS (gamma = 1). Set gamma = 1 and cs_isothermal, or disable viscosity.");
 		}
 	}
 
@@ -572,6 +579,11 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("resistivity", mhdResistivity_);
 		hpp.query("project_initial_b_field", projectInitialBField_);
 		hpp.query("update_initial_b_energy", updateInitialMagneticEnergy_);
+	}
+	{
+		amrex::ParmParse const hpp("hydro");
+		hpp.query("viscosity_shear", viscosityShear_);
+		hpp.query("viscosity_bulk", viscosityBulk_);
 	}
 
 	// set cooling runtime parameters
