@@ -3,7 +3,7 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file testMHDBalsaraVortex.cpp
-/// \brief advecting MHD Balsara vortex.
+/// \brief Setup a advecting MHD Balsara vortex.
 ///
 
 #include <cassert>

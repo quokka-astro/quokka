@@ -3,7 +3,7 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file testMHDSlowWaveConvergence.cpp
-/// \brief Defines a Richardson convergence test for the slow MHD wave.
+/// \brief Setup a Richardson convergence test for the slow MHD wave.
 ///
 
 #include <algorithm>
