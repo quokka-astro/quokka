@@ -13,7 +13,6 @@
 
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
-#include "radiation/radiation_system.hpp"
 
 struct ViscousSedovShock {
 };
@@ -51,7 +50,6 @@ template <> void QuokkaSimulation<ViscousSedovShock>::setInitialConditionsOnGrid
 	const double blast_radius = 3.5 * dx[0];
 	const double blast_volume = (4.0 / 3.0) * M_PI * blast_radius * blast_radius * blast_radius;
 
-	
 	// isothermal: blast energy -> density enhancement
 	// gamma-law: blast energy -> pressure enhancement
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -79,9 +77,10 @@ template <> void QuokkaSimulation<ViscousSedovShock>::setInitialConditionsOnGrid
 		}
 
 		state_cc(i, j, k, HydroSystem<ViscousSedovShock>::density_index) = density;
-		state_cc(i, j, k, HydroSystem<ViscousSedovShock>::x1Momentum_index) = 0;
-		state_cc(i, j, k, HydroSystem<ViscousSedovShock>::x2Momentum_index) = 0;
-		state_cc(i, j, k, HydroSystem<ViscousSedovShock>::x3Momentum_index) = 0;
+		state_cc(i, j, k, HydroSystem<ViscousSedovShock>::x1Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<ViscousSedovShock>::x2Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<ViscousSedovShock>::x3Momentum_index) = 0.0;
+		// total energy = internal energy since velocity is zero (no kinetic energy)
 		state_cc(i, j, k, HydroSystem<ViscousSedovShock>::energy_index) = internal_energy;
 		state_cc(i, j, k, HydroSystem<ViscousSedovShock>::internalEnergy_index) = internal_energy;
 	});
