@@ -25,13 +25,13 @@ template <> struct quokka::EOS_Traits<ViscousSedovShock> {
 };
 
 template <> struct Physics_Traits<ViscousSedovShock> {
-	static constexpr bool is_hydro_enabled = true; // solve the Euler equations
-	static constexpr bool is_mhd_enabled = false; // no magnetic fields
+	static constexpr bool is_hydro_enabled = true;	    // solve the Euler equations
+	static constexpr bool is_mhd_enabled = false;	    // no magnetic fields
 	static constexpr bool is_radiation_enabled = false; // no radiation
-	static constexpr int nGroups = 1; // must be 1 even when radiation is off (used in compile-time array sizing)
-	static constexpr bool is_dust_enabled = false; // no dust
-	static constexpr int nDustGroups = 0; // no dust groups
-	static constexpr int numMassScalars = 0; // no species
+	static constexpr int nGroups = 1;		    // must be 1 even when radiation is off (used in compile-time array sizing)
+	static constexpr bool is_dust_enabled = false;	    // no dust
+	static constexpr int nDustGroups = 0;		    // no dust groups
+	static constexpr int numMassScalars = 0;	    // no species
 	static constexpr int numPassiveScalars = numMassScalars + 0;
 	static constexpr bool is_self_gravity_enabled = false; // no self-gravity
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
