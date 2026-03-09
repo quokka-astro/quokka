@@ -1516,8 +1516,8 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			const double vel_divergence = vel_div_times_dx / dxu;
 			F_canonical[x1Momentum_index] -= viscosity_bulk * vel_divergence;
 			if constexpr (!HydroSystem<problem_t>::is_eos_isothermal()) {
-				const double fu_face = 0.5 * (sL.u + sR.u); // face-averaged normal velocity component
-				F_canonical[energy_index] -= viscosity_bulk * vel_divergence * fu_face;
+				const double vel_u_face = 0.5 * (sL.u + sR.u); // face-averaged normal velocity component
+				F_canonical[energy_index] -= viscosity_bulk * vel_divergence * vel_u_face;
 			}
 		}
 
