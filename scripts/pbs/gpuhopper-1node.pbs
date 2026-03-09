@@ -16,4 +16,4 @@
 MPI_OPTIONS="-np $PBS_NGPUS --map-by numa:SPAN --bind-to numa --mca pml ucx"
 echo "Using MPI_OPTIONS = $MPI_OPTIONS"
 
-mpirun $MPI_OPTIONS ./build/src/problems/HydroBlast3D/HydroBlast3D inputs/blast_unigrid_512.in max_timesteps=1000 blast_problem.check_solution=false > quokka.log
+mpirun $MPI_OPTIONS ./build/src/problems/HydroBlast3D/HydroBlast3D inputs/blast_unigrid_512.toml max_timesteps=1000 blast_problem.check_solution=false > quokka.log

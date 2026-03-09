@@ -1,0 +1,34 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo = [-2.393565931e+17, -2.393565931e+17, -2.393565931e+17]
+geometry.prob_hi = [2.393565931e+17, 2.393565931e+17, 2.393565931e+17]
+quokka.bc = ["periodic", "periodic", "periodic"]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v = 0  # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell = [32, 32, 32]
+amr.max_level = 0  # number of levels = max_level + 1
+amr.blocking_factor = 16  # grid size must be divisible by this
+amr.max_grid_size = 16  # at least 128 for GPUs
+amr.n_error_buf = 2  # minimum 3 cell buffer around tagged cells
+amr.grid_eff = 0.7  # default
+
+do_reflux = 1
+do_subcycle = 0
+
+problem.particles_file = "../inputs/sink4.txt"
+problem.refine_half_domain = false
+problem.boost_vel_x = 1.0e7
+
+particles.verbose = 0
+particles.sink_particle_use_uniform_kernel = true
+
+tiny_profiler.enabled = 0
+suppress_output = 1

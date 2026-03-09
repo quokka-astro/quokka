@@ -13,4 +13,4 @@
 
 . scripts/delta_ai.profile
 
-srun build/src/problems/HydroBlast3D/test_hydro3d_blast tests/benchmark_unigrid_1024.in
+srun build/src/problems/HydroBlast3D/test_hydro3d_blast tests/benchmark_unigrid_1024.toml
