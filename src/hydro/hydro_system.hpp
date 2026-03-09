@@ -1508,12 +1508,12 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		F_canonical = F_canonical + shock_viscosity * (U_L - U_R);
 
 		constexpr int dir_xu = static_cast<int>(DIR);
-		const amrex::Real dx_xu = dx[dir_xu];
+		const amrex::Real dxu = dx[dir_xu];
 
 		// add physical bulk viscosity: effective pressure = -viscosity_bulk * div(v) opposes volume changes
-		// vel_div_times_dx is a sum of velocity differences (not gradients), so divide by dx_xu to get vel_divergence [1/time]
+		// vel_div_times_dx is a sum of velocity differences (not gradients), so divide by dxu to get vel_divergence [1/time]
 		if (viscosity_bulk != 0.0) {
-			const double vel_divergence = vel_div_times_dx / dx_xu;
+			const double vel_divergence = vel_div_times_dx / dxu;
 			F_canonical[x1Momentum_index] -= viscosity_bulk * vel_divergence;
 			if constexpr (!HydroSystem<problem_t>::is_eos_isothermal()) {
 				const double fu_face = 0.5 * (sL.u + sR.u); // face-averaged normal velocity component
@@ -1523,20 +1523,20 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 		// add physical shear viscosity: stress tensor = eta * (d_i u_j + d_j u_i - (2/3)*delta_ij * div(v))
 		if (viscosity_shear != 0.0) {
-			const amrex::Real dx_xv = dx[(dir_xu + 1) % 3];
-			const amrex::Real dx_xw = dx[(dir_xu + 2) % 3];
+			const amrex::Real dxv = dx[(dir_xu + 1) % 3];
+			const amrex::Real dxw = dx[(dir_xu + 2) % 3];
 			// normal-direction velocity gradients (1st-order, exact at the face)
-			const amrex::Real du_dxu = (q(i, j, k, velN_index) - q(i - 1, j, k, velN_index)) / dx_xu;
-			const amrex::Real dv_dxu = (q(i, j, k, velV_index) - q(i - 1, j, k, velV_index)) / dx_xu;
-			const amrex::Real dw_dxu = (q(i, j, k, velW_index) - q(i - 1, j, k, velW_index)) / dx_xu;
+			const amrex::Real du_dxu = (q(i, j, k, velN_index) - q(i - 1, j, k, velN_index)) / dxu;
+			const amrex::Real dv_dxu = (q(i, j, k, velV_index) - q(i - 1, j, k, velV_index)) / dxu;
+			const amrex::Real dw_dxu = (q(i, j, k, velW_index) - q(i - 1, j, k, velW_index)) / dxu;
 			// transverse-direction velocity gradients (2nd-order, averaged over both cells sharing the face)
 			auto grad_xv = [&](int vel_idx) -> amrex::Real {
 				return (q(i, j + 1, k, vel_idx) - q(i, j - 1, k, vel_idx) + q(i - 1, j + 1, k, vel_idx) - q(i - 1, j - 1, k, vel_idx)) /
-				       (4.0 * dx_xv);
+				       (4.0 * dxv);
 			};
 			auto grad_xw = [&](int vel_idx) -> amrex::Real {
 				return (q(i, j, k + 1, vel_idx) - q(i, j, k - 1, vel_idx) + q(i - 1, j, k + 1, vel_idx) - q(i - 1, j, k - 1, vel_idx)) /
-				       (4.0 * dx_xw);
+				       (4.0 * dxw);
 			};
 			const amrex::Real du_dxv = grad_xv(velN_index);
 			const amrex::Real dv_dxv = grad_xv(velV_index);
