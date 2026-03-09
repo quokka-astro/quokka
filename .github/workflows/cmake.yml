@@ -64,7 +64,7 @@ jobs:
       run: |
         python3 -m venv ${{runner.temp}}/canary-venv
         ${{runner.temp}}/canary-venv/bin/python -m pip install --upgrade pip
-        ${{runner.temp}}/canary-venv/bin/pip install canary-wm
+        ${{runner.temp}}/canary-venv/bin/pip install canary-wm==25.10.7
         echo "${{runner.temp}}/canary-venv/bin" >> "$GITHUB_PATH"
 
     - name: Initialize ccache
