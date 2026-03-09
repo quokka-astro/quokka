@@ -1,11 +1,13 @@
-module load nvidia
-module unload cray-mpich
-export MODULEPATH="/opt/cray/pe/lmod/modulefiles/comnet/nvidia/23.11/ofi/1.0:$MODULEPATH"
-module load cray-mpich
+module load cpe/25.09
+
+module load PrgEnv-gnu
+module load gcc-native/14
+module load cray-mpich/9.0.1
 module load craype-accel-nvidia90 
+module load cudatoolkit/25.5_12.9
 
 # hdf5
-module load cray-hdf5
+module load cray-hdf5/1.14.3.7
 
 # cmake
 module load cmake/3.30.2
@@ -29,3 +31,7 @@ export CXX=CC
 export FC=ftn
 export CUDACXX=$(which nvcc)
 export CUDAHOSTCXX=CC
+
+# an alias to request an interactive batch node for one hour
+#   for parallel execution, start on the batch node: srun <command>
+alias getNode="salloc -N 1 --ntasks-per-node=4 -t 1:00:00 --gpu-bind=none -c 32 -G 4 -A $proj"
