@@ -1526,28 +1526,26 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			const amrex::Real dx_xv = dx[(dir_xu + 1) % 3];
 			const amrex::Real dx_xw = dx[(dir_xu + 2) % 3];
 			// normal-direction velocity gradients (1st-order, exact at the face)
-			const amrex::Real dfu_dxu = (q(i, j, k, velN_index) - q(i - 1, j, k, velN_index)) / dx_xu;
-			const amrex::Real dfv_dxu = (q(i, j, k, velV_index) - q(i - 1, j, k, velV_index)) / dx_xu;
-			const amrex::Real dfw_dxu = (q(i, j, k, velW_index) - q(i - 1, j, k, velW_index)) / dx_xu;
+			const amrex::Real du_dxu = (q(i, j, k, velN_index) - q(i - 1, j, k, velN_index)) / dx_xu;
+			const amrex::Real dv_dxu = (q(i, j, k, velV_index) - q(i - 1, j, k, velV_index)) / dx_xu;
+			const amrex::Real dw_dxu = (q(i, j, k, velW_index) - q(i - 1, j, k, velW_index)) / dx_xu;
 			// transverse-direction velocity gradients (2nd-order, averaged over both cells sharing the face)
 			auto grad_xv = [&](int vel_idx) -> amrex::Real {
-				return (q(i, j + 1, k, vel_idx) + q(i - 1, j + 1, k, vel_idx) - q(i, j - 1, k, vel_idx) - q(i - 1, j - 1, k, vel_idx)) /
-				       (4.0 * dx_xv);
+				return (q(i, j + 1, k, vel_idx) - q(i, j - 1, k, vel_idx) + q(i - 1, j + 1, k, vel_idx) - q(i - 1, j - 1, k, vel_idx)) / (4.0 * dx_xv);
 			};
 			auto grad_xw = [&](int vel_idx) -> amrex::Real {
-				return (q(i, j, k + 1, vel_idx) + q(i - 1, j, k + 1, vel_idx) - q(i, j, k - 1, vel_idx) - q(i - 1, j, k - 1, vel_idx)) /
-				       (4.0 * dx_xw);
+				return (q(i, j, k + 1, vel_idx) - q(i, j, k - 1, vel_idx) + q(i - 1, j, k + 1, vel_idx) - q(i - 1, j, k - 1, vel_idx)) / (4.0 * dx_xw);
 			};
-			const amrex::Real dfu_dxv = grad_xv(velN_index);
-			const amrex::Real dfv_dxv = grad_xv(velV_index);
-			const amrex::Real dfu_dxw = grad_xw(velN_index);
-			const amrex::Real dfw_dxw = grad_xw(velW_index);
+			const amrex::Real du_dxv = grad_xv(velN_index);
+			const amrex::Real dv_dxv = grad_xv(velV_index);
+			const amrex::Real du_dxw = grad_xw(velN_index);
+			const amrex::Real dw_dxw = grad_xw(velW_index);
 			// velocity divergence for the traceless part of visc_flux_uu
-			const amrex::Real div_v = dfu_dxu + dfv_dxv + dfw_dxw;
+			const amrex::Real div_v = du_dxu + dv_dxv + dw_dxw;
 			// viscous momentum flux components in canonical frame (spatial indices: xu=normal, xv=transverse1, xw=transverse2)
-			const amrex::Real visc_flux_uu = viscosity_shear * (2.0 * dfu_dxu - (2.0 / 3.0) * div_v);
-			const amrex::Real visc_flux_uv = viscosity_shear * (dfu_dxv + dfv_dxu);
-			const amrex::Real visc_flux_uw = viscosity_shear * (dfu_dxw + dfw_dxu);
+			const amrex::Real visc_flux_uu = viscosity_shear * (2.0 * du_dxu - (2.0 / 3.0) * div_v);
+			const amrex::Real visc_flux_uv = viscosity_shear * (du_dxv + dv_dxu);
+			const amrex::Real visc_flux_uw = viscosity_shear * (du_dxw + dw_dxu);
 			F_canonical[x1Momentum_index] += visc_flux_uu;
 			F_canonical[x2Momentum_index] += visc_flux_uv;
 			F_canonical[x3Momentum_index] += visc_flux_uw;
