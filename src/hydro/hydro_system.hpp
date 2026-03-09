@@ -1550,10 +1550,10 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			F_canonical[x2Momentum_index] += visc_flux_uv;
 			F_canonical[x3Momentum_index] += visc_flux_uw;
 			if constexpr (!HydroSystem<problem_t>::is_eos_isothermal()) {
-				const amrex::Real fu = 0.5 * (sL.u + sR.u); // face-averaged normal velocity component
-				const amrex::Real fv = 0.5 * (sL.v + sR.v); // face-averaged transverse-1 velocity component
-				const amrex::Real fw = 0.5 * (sL.w + sR.w); // face-averaged transverse-2 velocity component
-				F_canonical[energy_index] += visc_flux_uu * fu + visc_flux_uv * fv + visc_flux_uw * fw;
+				const amrex::Real vel_u_face = 0.5 * (sL.u + sR.u); // face-averaged normal velocity component
+				const amrex::Real vel_v_face = 0.5 * (sL.v + sR.v); // face-averaged transverse-1 velocity component
+				const amrex::Real vel_w_face = 0.5 * (sL.w + sR.w); // face-averaged transverse-2 velocity component
+				F_canonical[energy_index] += visc_flux_uu * vel_u_face + visc_flux_uv * vel_v_face + visc_flux_uw * vel_w_face;
 			}
 		}
 
