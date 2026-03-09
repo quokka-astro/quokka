@@ -31,15 +31,15 @@ template <> struct quokka::EOS_Traits<SmallScaleDynamo> {
 };
 
 template <> struct Physics_Traits<SmallScaleDynamo> {
-	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_mhd_enabled = true;
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_self_gravity_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 0;
-	static constexpr int numMassScalars = 0;
+	static constexpr bool is_hydro_enabled = true; // solve the Euler equations
+	static constexpr bool is_mhd_enabled = true; // solve the MHD equations
+	static constexpr bool is_radiation_enabled = false; // no radiation
+	static constexpr int nGroups = 1; // must be >= 1 even when radiation is off (used in compile-time array sizing)
+	static constexpr bool is_dust_enabled = false; // no dust
+	static constexpr int nDustGroups = 0; // no dust groups
+	static constexpr int numMassScalars = 0; // no species
 	static constexpr int numPassiveScalars = 0;
-	static constexpr int nGroups = 1;
+	static constexpr bool is_self_gravity_enabled = false; // no self-gravity
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = C::k_B;
 	static constexpr amrex::Real gravitational_constant = 1.0;
