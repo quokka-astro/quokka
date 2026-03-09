@@ -1531,10 +1531,12 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			const amrex::Real dw_dxu = (q(i, j, k, velW_index) - q(i - 1, j, k, velW_index)) / dx_xu;
 			// transverse-direction velocity gradients (2nd-order, averaged over both cells sharing the face)
 			auto grad_xv = [&](int vel_idx) -> amrex::Real {
-				return (q(i, j + 1, k, vel_idx) - q(i, j - 1, k, vel_idx) + q(i - 1, j + 1, k, vel_idx) - q(i - 1, j - 1, k, vel_idx)) / (4.0 * dx_xv);
+				return (q(i, j + 1, k, vel_idx) - q(i, j - 1, k, vel_idx) + q(i - 1, j + 1, k, vel_idx) - q(i - 1, j - 1, k, vel_idx)) /
+				       (4.0 * dx_xv);
 			};
 			auto grad_xw = [&](int vel_idx) -> amrex::Real {
-				return (q(i, j, k + 1, vel_idx) - q(i, j, k - 1, vel_idx) + q(i - 1, j, k + 1, vel_idx) - q(i - 1, j, k - 1, vel_idx)) / (4.0 * dx_xw);
+				return (q(i, j, k + 1, vel_idx) - q(i, j, k - 1, vel_idx) + q(i - 1, j, k + 1, vel_idx) - q(i - 1, j, k - 1, vel_idx)) /
+				       (4.0 * dx_xw);
 			};
 			const amrex::Real du_dxv = grad_xv(velN_index);
 			const amrex::Real dv_dxv = grad_xv(velV_index);
