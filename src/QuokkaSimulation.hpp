@@ -262,9 +262,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 			    AMREX_SPACEDIM == 3,
 			    "Physical viscosity (hydro.viscosity_shear, hydro.viscosity_bulk) requires a 3D simulation (AMREX_SPACEDIM == 3).");
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(HydroSystem<problem_t>::is_eos_isothermal(),
-							 "Physical viscosity (hydro.viscosity_shear, hydro.viscosity_bulk) is only supported "
-							 "for isothermal EOS (gamma = 1). Set gamma = 1 and cs_isothermal, or disable viscosity.");
 		}
 	}
 
