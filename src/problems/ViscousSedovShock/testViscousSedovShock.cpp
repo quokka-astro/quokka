@@ -58,7 +58,7 @@ template <> void QuokkaSimulation<ViscousSedovShock>::setInitialConditionsOnGrid
 		const double z_mid = prob_lo[2] + (k + 0.5) * dx[2];
 		const double radius = std::sqrt(x_mid * x_mid + y_mid * y_mid + z_mid * z_mid);
 		const bool inside_blast = radius < blast_radius;
-		
+
 		double density = NAN;
 		double internal_energy = NAN;
 		if constexpr (gamma == 1.0) {
