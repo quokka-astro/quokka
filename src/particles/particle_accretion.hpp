@@ -286,7 +286,7 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 		// In the accretion zone, if (1 + accretion_rate_cell) * rho > rho_J, set accretion_rate_cell = rho_J / rho - 1
 		// The condition "accretion_rate_cell < 0.0" is essential as we only want to apply this to the accretion zone. There could be a
 		// Jeans-violating cell that is not in a accretion zone emerging at the beginning of a step.
-		if (accretion_rate_cell < -std::numeric_limits<double>::min()) {
+		if (accretion_rate_cell < 0.0) {
 			// Compute Jeans density rho_J = J^2 * pi * cs^2 / (G * dx^2)
 
 			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fab_fc{};
@@ -475,7 +475,7 @@ template <typename problem_t> void UpdateHydroState(amrex::MultiFab &state, amre
 		AMREX_ASSERT(accretion_rate_cell <= 0.0);
 		AMREX_ASSERT(accretion_rate_cell > -1.0);
 		const double accretion_down_factor = 1.0 + accretion_rate_cell;
-		AMREX_ASSERT(accretion_down_factor > std::numeric_limits<double>::min());
+		AMREX_ASSERT(accretion_down_factor > 0.0);
 		state_arr[bx](i, j, k, HydroSystem<problem_t>::density_index) *= accretion_down_factor;
 		state_arr[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index) *= accretion_down_factor;
 		state_arr[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) *= accretion_down_factor;
