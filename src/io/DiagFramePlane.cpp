@@ -52,13 +52,10 @@ void DiagFramePlane::init(const std::string &a_prefix, std::string_view a_diagNa
 	amrex::ParmParse const pp(a_prefix);
 
 	// Outputted variables
-	int const nOutFields = pp.countval("field_names");
+	pp.queryarr("field_names", m_fieldNames);
+	int const nOutFields = static_cast<int>(m_fieldNames.size());
 	AMREX_ASSERT(nOutFields > 0);
-	m_fieldNames.resize(nOutFields);
 	m_fieldIndices_d.resize(nOutFields);
-	for (int f{0}; f < nOutFields; ++f) {
-		pp.get("field_names", m_fieldNames[f], f);
-	}
 
 	// Plane normal
 	pp.get("normal", m_normal);
@@ -66,7 +63,7 @@ void DiagFramePlane::init(const std::string &a_prefix, std::string_view a_diagNa
 
 	// Plane center
 	amrex::Vector<amrex::Real> center;
-	pp.getarr("center", center, 0, pp.countval("center"));
+	pp.queryarr("center", center);
 	if (center.size() == AMREX_SPACEDIM) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
 			m_center[idim] = center[idim];
@@ -76,13 +73,9 @@ void DiagFramePlane::init(const std::string &a_prefix, std::string_view a_diagNa
 	}
 
 	// Read particle types to include (optional, default to empty = no particles)
-	int const nParticleTypes = pp.countval("particles");
+	pp.queryarr("particles", m_particleTypes);
+	int const nParticleTypes = static_cast<int>(m_particleTypes.size());
 	if (nParticleTypes > 0) {
-		m_particleTypes.resize(nParticleTypes);
-		for (int n = 0; n < nParticleTypes; ++n) {
-			pp.get("particles", m_particleTypes[n], n);
-		}
-
 		amrex::Print() << "DiagFramePlane: Including particles: ";
 		for (const auto &ptype : m_particleTypes) {
 			amrex::Print() << ptype << " ";

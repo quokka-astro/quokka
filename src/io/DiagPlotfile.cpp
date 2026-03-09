@@ -22,13 +22,9 @@ void DiagPlotfile::init(const std::string &a_prefix, std::string_view a_diagName
 	}
 
 	// Read particle types to include (optional, empty means all)
-	int const nParticleTypes = pp.countval("particles");
+	pp.queryarr("particles", m_particleTypes);
+	int const nParticleTypes = static_cast<int>(m_particleTypes.size());
 	if (nParticleTypes > 0) {
-		m_particleTypes.resize(nParticleTypes);
-		for (int n = 0; n < nParticleTypes; ++n) {
-			pp.get("particles", m_particleTypes[n], n);
-		}
-
 		amrex::Print() << "DiagPlotfile: Including only particles: ";
 		for (const auto &ptype : m_particleTypes) {
 			amrex::Print() << ptype << " ";
@@ -42,12 +38,9 @@ void DiagPlotfile::init(const std::string &a_prefix, std::string_view a_diagName
 	pp.query("nfiles", m_nfiles);
 
 	// Read field names to include (optional, empty means all)
-	int const nVarNames = pp.countval("field_names");
+	pp.queryarr("field_names", m_varNames);
+	int const nVarNames = static_cast<int>(m_varNames.size());
 	if (nVarNames > 0) {
-		m_varNames.resize(nVarNames);
-		for (int n = 0; n < nVarNames; ++n) {
-			pp.get("field_names", m_varNames[n], n);
-		}
 		amrex::Print() << "DiagPlotfile: Selecting fields: ";
 		for (const auto &v : m_varNames) {
 			amrex::Print() << v << " ";

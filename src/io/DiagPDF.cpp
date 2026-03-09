@@ -19,15 +19,14 @@ void DiagPDF::init(const std::string &a_prefix, std::string_view a_diagName)
 	hist_pp.query("weight_by", m_weightType); // "volume", "mass", "cell_counts"
 
 	// get number of histogram axes
-	const int ndims = hist_pp.countval("var_names");
+	hist_pp.queryarr("var_names", m_varNames);
+	const int ndims = static_cast<int>(m_varNames.size());
 	m_varNames.resize(ndims);
 	m_nBins.resize(ndims);
 	m_useLogSpacedBins.resize(ndims);
 	m_lowBnd.resize(ndims);
 	m_highBnd.resize(ndims);
 	m_useFieldMinMax.resize(ndims);
-
-	hist_pp.getarr("var_names", m_varNames, 0, ndims);
 
 	for (int n = 0; n < ndims; ++n) {
 		std::string const var_prefix = a_prefix + "." + m_varNames[n];

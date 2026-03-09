@@ -17,13 +17,9 @@ void DiagParticleTxt::init(const std::string &a_prefix, std::string_view a_diagN
 	}
 
 	// Read particle types to include (optional, empty means all)
-	int const nParticleTypes = pp.countval("particles");
+	pp.queryarr("particles", m_particleTypes);
+	int const nParticleTypes = static_cast<int>(m_particleTypes.size());
 	if (nParticleTypes > 0) {
-		m_particleTypes.resize(nParticleTypes);
-		for (int n = 0; n < nParticleTypes; ++n) {
-			pp.get("particles", m_particleTypes[n], n);
-		}
-
 		amrex::Print() << "DiagParticleTxt: Including only particles: ";
 		for (const auto &ptype : m_particleTypes) {
 			amrex::Print() << ptype << " ";
