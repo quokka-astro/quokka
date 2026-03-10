@@ -179,6 +179,7 @@ namespace StellarPhysics
     }
 
     // Interpolate from central density table
+    // TODO(cche): replace with interpolate_value from interpolate.hpp	
     AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto rho_factor_interp(amrex::Real n) -> amrex::Real
     {
         using namespace StellarTables;
