@@ -382,7 +382,7 @@ template <> void QuokkaSimulation<FastWaveConvergence>::setInitialConditionsOnGr
 
 template <>
 void QuokkaSimulation<FastWaveConvergence>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-									amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+								     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -400,8 +400,8 @@ void QuokkaSimulation<FastWaveConvergence>::computeReferenceSolution(amrex::Mult
 
 template <>
 void QuokkaSimulation<FastWaveConvergence>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-									   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-									   quokka::direction const dir)
+									amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+									quokka::direction const dir)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
