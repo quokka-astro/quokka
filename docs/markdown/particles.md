@@ -41,7 +41,7 @@ The integer component stores the **burning state** (index 0):
 Star particles form from Jeans-unstable cells using the same instability criterion as Sink particles: a cell is eligible when its density exceeds the local Jeans density,
 
 $$
-\rho_J = \frac{\pi c_s^2}{G \lambda_J^2} \quad \text{with} \quad \lambda_J = J \cdot \Delta x, \quad J = 0.5.
+\rho_J = \frac{\pi c_s^2}{G \lambda_J^2} \quad \text{with} \quad \lambda_J = J \cdot \Delta x, \quad J = 0.25.
 $$
 
 When formation triggers, the excess mass $(\rho_\text{cell} - \rho_J) \Delta V$ is removed from the gas and placed in a new Star particle at the cell center. The particle is initialized with `burn_state = Uninitialized`, `mdeut = mass`, `n = 1.5`, and `mdot = 0`.
@@ -77,23 +77,21 @@ using a bisection solver.
 
 The protostellar evolution advances through the following state machine each timestep. The stellar model activates once $M_\star \geq M_\text{rad,min} = 0.01\,M_\odot$ and $\dot{M} > 0$:
 
-```
-Uninitialized
-    │  M ≥ M_rad_min and ṁ > 0
-    ▼
-None  ──────────────────────────────────────────────────────────────
-    │  T_c > T_D = 1.5 × 10⁶ K                                    │
-    ▼                                                               │
-VariableCoreDeuterium   (mdeut depletes at 10% of Ṁ per step)      │
-    │  mdeut ≤ Ṁ Δt                                                │
-    ▼                                                               │
-SteadyCoreDeuterium   (mdeut = 0)                                  │
-    │  L_star < F_rad × L_ZAMS(M)                                  │
-    ▼                                                               │
-ShellDeuterium   (n → 3, R → 2.1 R)                               │
-    │  R ≤ R_ZAMS(M)                                               │
-    ▼                                                               │
-ZAMS ◄──────────────────────────────────────────────────────────────
+```mermaid
+flowchart TD
+    A[Uninitialized]
+    B[None]
+    C[VariableCoreDeuterium<br/>(mdeut depletes at 10% of Ṁ per step)]
+    D[SteadyCoreDeuterium<br/>(mdeut = 0)]
+    E[ShellDeuterium<br/>(n → 3, R → 2.1 R)]
+    F[ZAMS]
+
+    A -- "M ≥ M_rad_min and ṁ > 0" --> B
+    B -- "T_c > T_D = 1.5 × 10⁶ K" --> C
+    C -- "mdeut ≤ Ṁ Δt" --> D
+    D -- "L_star < F_rad × L_ZAMS(M)" --> E
+    E -- "R ≤ R_ZAMS(M)" --> F
+    F -- "" --> F
 ```
 
 Key parameters:
