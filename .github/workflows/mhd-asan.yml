@@ -74,11 +74,7 @@ jobs:
       working-directory: ${{runner.workspace}}/build
       shell: bash
       run: |
-        # Find all CTestTestfile.cmake files that contain MHD label and extract executable names
-        grep -l "LABELS.*MHD-ASAN" $(find . -name "CTestTestfile.cmake") | while read file; do
-          # Extract the executable path from add_test line
-          grep "add_test" "$file" | head -1 | sed 's/.*add_test([^"]*"//;s/".*//' | xargs basename
-        done | sort -u > mhd_executables.txt
+        ctest -N -L MHD-ASAN | grep "Test #" | awk '{print $NF}' | sort -u > mhd_executables.txt
         echo "MHD test executables to build:"
         cat mhd_executables.txt
 
