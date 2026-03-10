@@ -29,11 +29,12 @@ checkpoint_interval = -1
 cfl = 0.3
 max_timesteps = 10000
 
-hydro.rk_integrator_order = 2
-hydro.reconstruction_order = 5
 hydro.use_dual_energy = 0
+hydro.rk_integrator_order = 2
+hydro.reconstruction_order = 3
+mhd.emf_reconstruction_order = 5
 
 setup.vortex_Mach = 0.1
 setup.vortex_b_magn = 0.1
 setup.advection = 1
-setup.num_orbits = 3
+setup.num_orbits = 1
