@@ -97,6 +97,22 @@ push_results() {
     echo "Pushing results to GitHub Pages (host)"
     echo "=========================================="
 
+    # Validate that web_dir is within the expected base directory.
+    # The path is parsed from quokka-tests.ini which is part of the source tree;
+    # an attacker-controlled PR could point it at a directory containing a
+    # malicious .git/hooks/ or .git/config on the shared volume.
+    local expected_base
+    expected_base="$(realpath "$TARGET")"
+    local resolved_dir
+    resolved_dir="$(realpath "$web_dir" 2>/dev/null)" || {
+        echo "WARNING: Cannot resolve $web_dir, skipping push"
+        return 0
+    }
+    if [[ "$resolved_dir" != "$expected_base"* ]]; then
+        echo "WARNING: web_dir '$resolved_dir' is outside expected base '$expected_base', skipping push"
+        return 0
+    fi
+
     if [ ! -d "$web_dir/.git" ]; then
         echo "WARNING: $web_dir is not a git repository, skipping push"
         return 0
@@ -105,7 +121,12 @@ push_results() {
     cd "$web_dir" || { echo "WARNING: Cannot access $web_dir, skipping push"; return 0; }
 
     set +e
-    git -c core.hooksPath=/dev/null -c core.sshCommand=ssh push origin HEAD 2>&1
+    # Disable hooks and override sshCommand to prevent execution of anything
+    # written into .git/ by the container (e.g. a malicious pre-push hook or
+    # core.sshCommand in .git/config planted via a PR that changes webTopDir).
+    git -c core.hooksPath=/dev/null \
+        -c core.sshCommand=ssh \
+        push origin HEAD 2>&1
     local push_exit=$?
     set -e
 
