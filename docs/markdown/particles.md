@@ -1,5 +1,172 @@
 # Particles, star formation and feedback
 
+## Star Particle Type
+
+Star particles model individual protostars forming from gravitational collapse. Unlike `StochasticStellarPop` particles, each Star particle represents a single star and evolves through a physically-detailed protostellar model tracking deuterium burning, radius evolution, and luminosity.
+
+### Particle Attributes
+
+Each Star particle stores 14 real-valued components and 1 integer component:
+
+| Index | Name | Description |
+|-------|------|-------------|
+| 0 | `mass` | Current particle mass ($M_\star$) |
+| 1 | `vx` | Velocity $x$-component |
+| 2 | `vy` | Velocity $y$-component |
+| 3 | `vz` | Velocity $z$-component |
+| 4 | `birth_time` | Simulation time when the particle formed |
+| 5 | `death_time` | Reserved for future use (initialized to $-1$) |
+| 6 | `amx` | Angular momentum $x$-component |
+| 7 | `amy` | Angular momentum $y$-component |
+| 8 | `amz` | Angular momentum $z$-component |
+| 9 | `mdeut` | Deuterium mass reservoir |
+| 10 | `n` | Polytropic index ($1.5 \leq n \leq 3.0$) |
+| 11 | `mdot` | Mass accretion rate (set by the accretion module) |
+| 12 | `l_hist` | Historical luminosity (initialized to $L_\odot$) |
+| 13 | `lum` | Current total luminosity (updated every timestep) |
+
+The integer component stores the **burning state** (index 0):
+
+| Value | Name | Description |
+|-------|------|-------------|
+| 0 | `Uninitialized` | Newly created; stellar model not yet started |
+| 1 | `None` | Gravitational contraction; no nuclear burning |
+| 2 | `VariableCoreDeuterium` | Core deuterium burning at variable rate |
+| 3 | `SteadyCoreDeuterium` | Steady-state core deuterium burning |
+| 4 | `ShellDeuterium` | Shell deuterium burning; inflated radius |
+| 5 | `ZAMS` | Zero-Age Main Sequence reached |
+
+### Formation
+
+Star particles form from Jeans-unstable cells using the same instability criterion as Sink particles: a cell is eligible when its density exceeds the local Jeans density,
+
+$$
+\rho_J = \frac{\pi c_s^2}{G \lambda_J^2} \quad \text{with} \quad \lambda_J = J \cdot \Delta x, \quad J = 0.5.
+$$
+
+When formation triggers, the excess mass $(\rho_\text{cell} - \rho_J) \Delta V$ is removed from the gas and placed in a new Star particle at the cell center. The particle is initialized with `burn_state = Uninitialized`, `mdeut = mass`, `n = 1.5`, and `mdot = 0`.
+
+### Stellar Structure Model
+
+The stellar interior is approximated by a **polytropic model** with index $n$. The polytropic index traces the internal entropy state of the star and lies in the range $[1.5, 3.0]$:
+
+- $n = 1.5$: fully convective (pre-main-sequence default)
+- $n = 3.0$: radiation-pressure dominated (near ZAMS for massive stars)
+
+**Radius initialization.** The stellar radius is recomputed each timestep from the current accretion rate using an empirical fit:
+
+$$
+R_\star = R_\odot \cdot \max\!\left(2,\; 2.5 \left(\frac{\dot{M}}{10^{-5}\,M_\odot\,\text{yr}^{-1}}\right)^{0.2}\right).
+$$
+
+**Polytropic index initialization.** The initial $n$ is set from the accretion rate:
+
+$$
+\alpha_G = 1.475 + 0.07 \log_{10}\!\left(\frac{\dot{M}}{M_\odot\,\text{yr}^{-1}}\right), \quad n = \text{clamp}\!\left(5 - \frac{3}{\alpha_G},\; 1.5,\; 3.0\right).
+$$
+
+**Central conditions.** Given the polytropic structure, the central density and pressure are obtained from pre-tabulated Lane-Emden factors $(\rho_\text{mean}/\rho_c)$ and $(P_c / (G M^2 / R^4))$ interpolated over $n \in [1.5, 3.0]$. The central temperature is then solved from the full equation of state
+
+$$
+P_c = \frac{\rho_c k_B T_c}{\mu m_H} + \frac{a T_c^4}{3}
+$$
+
+using a bisection solver.
+
+### Burning State Transitions
+
+The protostellar evolution advances through the following state machine each timestep. The stellar model activates once $M_\star \geq M_\text{rad,min} = 0.01\,M_\odot$ and $\dot{M} > 0$:
+
+```
+Uninitialized
+    │  M ≥ M_rad_min and ṁ > 0
+    ▼
+None  ──────────────────────────────────────────────────────────────
+    │  T_c > T_D = 1.5 × 10⁶ K                                    │
+    ▼                                                               │
+VariableCoreDeuterium   (mdeut depletes at 10% of Ṁ per step)      │
+    │  mdeut ≤ Ṁ Δt                                                │
+    ▼                                                               │
+SteadyCoreDeuterium   (mdeut = 0)                                  │
+    │  L_star < F_rad × L_ZAMS(M)                                  │
+    ▼                                                               │
+ShellDeuterium   (n → 3, R → 2.1 R)                               │
+    │  R ≤ R_ZAMS(M)                                               │
+    ▼                                                               │
+ZAMS ◄──────────────────────────────────────────────────────────────
+```
+
+Key parameters:
+
+| Symbol | Value | Description |
+|--------|-------|-------------|
+| $T_D$ | $1.5 \times 10^6$ K | Deuterium ignition temperature |
+| $F_\text{rad}$ | $0.33$ | Radiative barrier fraction |
+| shell_factor | $2.1$ | Radius inflation in shell-burning phase |
+| $M_\text{rad,min}$ | $0.01\,M_\odot$ | Minimum mass to start stellar model |
+
+### Luminosity
+
+The total luminosity stored in `lum` is updated at the end of every stellar property update:
+
+$$
+L_\text{total} = L_\star + L_\text{disk}
+$$
+
+**Stellar luminosity** combines the ZAMS luminosity with accretion heating, clamped at the Hayashi limit ($T_\text{Hayashi} = 3000$ K):
+
+$$
+L_\star = \max\!\left(L_\text{ZAMS}(M) + F_\text{acc} F_k \frac{G M \dot{M}}{R},\quad 4\pi R^2 \sigma_\text{SB} T_\text{Hayashi}^4\right)
+$$
+
+where $F_\text{acc} = 0.5$ is the fraction of accreted energy radiated and $F_k = 0.5$ is the fraction of accretion energy intercepted from the inner disk.
+
+**Disk luminosity** from the outer disk:
+
+$$
+L_\text{disk} = (1 - F_k) \frac{G M \dot{M}}{R}
+$$
+
+**ZAMS luminosity and radius** follow the polynomial fitting formulae of Tout et al. (1996).
+
+Luminosity is zero for `Uninitialized` particles. It becomes non-zero once the stellar model activates and is stored in the `lum` particle field after each call to `updateStellarProperties`.
+
+### Update Sequence
+
+The stellar property update is operator-split from the hydrodynamics and runs once per coarse timestep:
+
+1. Hydrodynamics advances the gas state by $\Delta t$
+2. Accretion computes the new $\dot{M}$ and updates $M_\star$
+3. `updateStellarProperties` runs per-particle:
+   - Reads current $M$, $\dot{M}$, $n$, `mdeut`, `burn_state`
+   - If `Uninitialized` and conditions not met: returns early (no state change)
+   - Initializes $n$ from $\dot{M}$; advances `burn_state`; updates `mdeut`
+   - Computes and stores luminosity in `lum`
+4. Radiation from the luminosity is deposited into the radiation field
+
+### Physical Model Parameters
+
+| Parameter | Symbol | Value | Description |
+|-----------|--------|-------|-------------|
+| $F_\text{acc}$ | — | $0.5$ | Fraction of accreted energy radiated by the star |
+| $F_k$ | — | $0.5$ | Fraction of accretion energy from inner disk |
+| $F_\text{rad}$ | — | $0.33$ | Radiative barrier for ZAMS transition |
+| $T_D$ | — | $1.5 \times 10^6$ K | Deuterium ignition temperature |
+| $T_\text{Hayashi}$ | — | $3000$ K | Hayashi track temperature limit |
+| shell_factor | — | $2.1$ | Radius multiplier entering shell-burning phase |
+| $\mu$ | — | $0.613$ | Mean molecular weight |
+
+### Test Problem
+
+The `ParticleStar` problem provides a canonical validation test. A $32^3$ uniform grid with one super-Jeans-density cell creates a single Star particle in the first timestep. The test validates:
+
+- Mass conservation to machine precision during formation and accretion
+- Correct burn state progression from `Uninitialized` after accretion begins
+- Stored luminosity consistency with the `StellarPhysics` recomputation (within 1% to account for the one-timestep lag between accretion and the property update)
+- Polytropic index remaining in the valid range $[1.5, 3.0]$
+
+---
+
 ## StochasticStellarPop Particle Type
 
 StochasticStellarPop particles carry the following real-valued attributes:
