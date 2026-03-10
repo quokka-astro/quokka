@@ -195,6 +195,10 @@ run_regression_tests() {
 	echo "Running regression tests"
 	echo "=========================================="
 
+  # uncomment to dry-run
+  #echo Dry run
+  #return 0
+
 	local exit_code=0
 	local log_file="$WEB_DIR/regression-run.log"
 
@@ -208,11 +212,13 @@ run_regression_tests() {
 
 	# Run regtest.py, capturing both stdout and stderr to log file
 	# Don't exit on failure - we want to always publish results
+	# Note: do NOT restore set -e here; the script header uses set -uo pipefail
+	# (not set -e), so calling set -e would globally enable it and cause the
+	# non-zero return below to abort the script before publish_results runs.
 	set +e
 	./extern/regression_testing/regtest.py --clean_testdir "$INI_FILE" \
 		> "$log_file" 2>&1
 	exit_code=$?
-	set -e
 
 	echo ""
 	echo "Regression tests completed with exit code: $exit_code"
