@@ -283,10 +283,10 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 		AMREX_ASSERT(local_accretion_rate_arr[bx](i, j, k) <= 0.0);
 		AMREX_ASSERT(local_accretion_rate_arr[bx](i, j, k) > -1.0);
 
-		// In the accretion zone, if (1 + accretion_rate_cell) * rho > rho_J, set accretion_rate_cell = rho_J / rho - 1 to bring the 
+		// In the accretion zone, if (1 + accretion_rate_cell) * rho > rho_J, set accretion_rate_cell = rho_J / rho - 1 to bring the
 		// density down to the Jeans density.
 		// The condition "accretion_rate_cell < 0.0" is to skip the clause for the cells not in accretion zone. Note that accretion_rate_cell
-		// is always negative or zero, and negative means the cell is in a accretion zone. 
+		// is always negative or zero, and negative means the cell is in a accretion zone.
 		if (accretion_rate_cell < 0.0) {
 			// Compute Jeans density rho_J = J^2 * pi * cs^2 / (G * dx^2)
 
