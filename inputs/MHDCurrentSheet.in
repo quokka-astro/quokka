@@ -13,7 +13,7 @@ amr.v              = 1       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 32 32 8
+amr.n_cell          = 64 64 8
 amr.max_level       = 0 # number of levels = max_level + 1
 
 amr.max_grid_size_x = 128
@@ -32,7 +32,9 @@ cfl = 0.2
 stop_time = 1.0
 max_timesteps = 3e4
 
-hydro.use_dual_energy = 0
 hydro.rk_integrator_order = 2
 hydro.reconstruction_order = 3
-mhd.emf_reconstruction_order = 5
+
+# MHD parameters
+mhd.emf_reconstruction_order = 5  # xPPM for EMF
+mhd.emf_averaging_scheme = LondrilloDelZanna2004
