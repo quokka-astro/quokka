@@ -3820,15 +3820,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::createDiagnostics()
 	amrex::ParmParse const pp(code_prefix);
 	amrex::Vector<std::string> diags;
 
-	if (amrex::ParallelDescriptor::IOProcessor()) {
-		pp.queryarr("diagnostics", diags);
-	}
-	int n_diags = static_cast<int>(diags.size());
+	int n_diags = pp.countval("diagnostics");
 	const int io_rank = amrex::ParallelDescriptor::IOProcessorNumber();
 	amrex::ParallelDescriptor::Bcast(&n_diags, 1, io_rank);
 	if (n_diags > 0) {
 		m_diagnostics.resize(n_diags);
 		diags.resize(n_diags);
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			for (int n = 0; n < n_diags; ++n) {
+				pp.get("diagnostics", diags[n], n);
+			}
+		}
 		for (int n = 0; n < n_diags; ++n) {
 			int len = static_cast<int>(diags[n].size());
 			amrex::ParallelDescriptor::Bcast(&len, 1, io_rank);

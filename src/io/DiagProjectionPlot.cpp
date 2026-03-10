@@ -15,16 +15,23 @@ void DiagProjectionPlot::init(const std::string &a_prefix, std::string_view a_di
 	}
 
 	// Outputted variables
-	pp.queryarr("field_names", m_fieldNames);
-	int const nOutFields = static_cast<int>(m_fieldNames.size());
+	int const nOutFields = pp.countval("field_names");
 	AMREX_ALWAYS_ASSERT(nOutFields > 0);
+	m_fieldNames.resize(nOutFields);
+	for (int f = 0; f < nOutFields; ++f) {
+		pp.get("field_names", m_fieldNames[f], f);
+	}
 
 	// DiagFramePlane does not enforce a "plt" suffix; match that behavior here.
 
 	// Read particle types to include (optional, default to empty = no particles)
-	pp.queryarr("particles", m_particleTypes);
-	int const nParticleTypes = static_cast<int>(m_particleTypes.size());
+	int const nParticleTypes = pp.countval("particles");
 	if (nParticleTypes > 0) {
+		m_particleTypes.resize(nParticleTypes);
+		for (int n = 0; n < nParticleTypes; ++n) {
+			pp.get("particles", m_particleTypes[n], n);
+		}
+
 		amrex::Print() << "DiagProjectionPlot: Including particles: ";
 		for (const auto &ptype : m_particleTypes) {
 			amrex::Print() << ptype << " ";

@@ -19,13 +19,14 @@ void DiagBase::init(const std::string &a_prefix, std::string_view a_diagName)
 	}
 
 	// Filters
+	int const nFilters = pp.countval("filters");
 	amrex::Vector<std::string> filtersName;
-	pp.queryarr("filters", filtersName);
-	int const nFilters = static_cast<int>(filtersName.size());
 	if (nFilters > 0) {
 		m_filters.resize(nFilters);
+		filtersName.resize(nFilters);
 	}
 	for (int n = 0; n < nFilters; ++n) {
+		pp.get("filters", filtersName[n], n);
 		const std::string filter_prefix = a_prefix + "." + filtersName[n];
 		m_filters[n].init(filter_prefix);
 	}
