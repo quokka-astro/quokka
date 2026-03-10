@@ -21,16 +21,16 @@
 #include "physics_info.hpp"
 #include "util/BC.hpp"
 
-struct MHDCurrentSheet {
+struct CurrentSheet {
 };
 
-template <> struct quokka::EOS_Traits<MHDCurrentSheet> {
+template <> struct quokka::EOS_Traits<CurrentSheet> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
-template <> struct Physics_Traits<MHDCurrentSheet> {
+template <> struct Physics_Traits<CurrentSheet> {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
@@ -44,7 +44,7 @@ template <> struct Physics_Traits<MHDCurrentSheet> {
 };
 
 // constants
-constexpr double gamma_gas = quokka::EOS_Traits<MHDCurrentSheet>::gamma;
+constexpr double gamma_gas = quokka::EOS_Traits<CurrentSheet>::gamma;
 constexpr double beta = 0.1;
 constexpr double A = 0.1;
 
@@ -52,7 +52,7 @@ constexpr double A = 0.1;
 constexpr double rho0 = 1.0;
 constexpr double P0 = 0.5 * beta;
 
-template <> void QuokkaSimulation<MHDCurrentSheet>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<CurrentSheet>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract grid information
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -68,16 +68,16 @@ template <> void QuokkaSimulation<MHDCurrentSheet>::setInitialConditionsOnGrid(q
 		const double Eint = P0 / (gamma_gas - 1.0);
 		const double Emag = 0.5;
 
-		state_cc(i, j, k, HydroSystem<MHDCurrentSheet>::density_index) = rho0;
-		state_cc(i, j, k, HydroSystem<MHDCurrentSheet>::x1Momentum_index) = rho0 * vx;
-		state_cc(i, j, k, HydroSystem<MHDCurrentSheet>::x2Momentum_index) = 0;
-		state_cc(i, j, k, HydroSystem<MHDCurrentSheet>::x3Momentum_index) = 0;
-		state_cc(i, j, k, HydroSystem<MHDCurrentSheet>::internalEnergy_index) = Eint;
-		state_cc(i, j, k, HydroSystem<MHDCurrentSheet>::energy_index) = Eint + Ekin + Emag;
+		state_cc(i, j, k, HydroSystem<CurrentSheet>::density_index) = rho0;
+		state_cc(i, j, k, HydroSystem<CurrentSheet>::x1Momentum_index) = rho0 * vx;
+		state_cc(i, j, k, HydroSystem<CurrentSheet>::x2Momentum_index) = 0;
+		state_cc(i, j, k, HydroSystem<CurrentSheet>::x3Momentum_index) = 0;
+		state_cc(i, j, k, HydroSystem<CurrentSheet>::internalEnergy_index) = Eint;
+		state_cc(i, j, k, HydroSystem<CurrentSheet>::energy_index) = Eint + Ekin + Emag;
 	});
 }
 
-template <> void QuokkaSimulation<MHDCurrentSheet>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<CurrentSheet>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
 {
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
@@ -97,18 +97,18 @@ template <> void QuokkaSimulation<MHDCurrentSheet>::setInitialConditionsOnGridFa
 
 		// somehow this does not work -- the outputs show that x-BField is nonzero...
 		if (dir == quokka::direction::x) {
-			state_fc(i, j, k, Physics_Indices<MHDCurrentSheet>::mhdFirstIndex) = 0;
+			state_fc(i, j, k, Physics_Indices<CurrentSheet>::mhdFirstIndex) = 0;
 		} else if (dir == quokka::direction::y) {
-			state_fc(i, j, k, Physics_Indices<MHDCurrentSheet>::mhdFirstIndex) = by;
+			state_fc(i, j, k, Physics_Indices<CurrentSheet>::mhdFirstIndex) = by;
 		} else if (dir == quokka::direction::z) {
-			state_fc(i, j, k, Physics_Indices<MHDCurrentSheet>::mhdFirstIndex) = 0;
+			state_fc(i, j, k, Physics_Indices<CurrentSheet>::mhdFirstIndex) = 0;
 		}
 	});
 }
 
 auto problem_main() -> int
 {
-	const int nvars_fc = Physics_Indices<MHDCurrentSheet>::nvarTotal_fc;
+	const int nvars_fc = Physics_Indices<CurrentSheet>::nvarTotal_fc;
 	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
 	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -117,7 +117,7 @@ auto problem_main() -> int
 		}
 	}
 
-	QuokkaSimulation<MHDCurrentSheet> sim;
+	QuokkaSimulation<CurrentSheet> sim;
 	sim.setInitialConditions();
 	sim.evolve();
 	return 0;

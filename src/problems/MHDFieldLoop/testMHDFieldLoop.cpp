@@ -22,18 +22,18 @@
 #include "physics_info.hpp"
 #include "util/BC.hpp"
 
-struct MHDFieldLoop {
+struct FieldLoop {
 };
 
 AMREX_ENUM(RefineOn, Region, MagneticEnergy); // NOLINT
 
-template <> struct quokka::EOS_Traits<MHDFieldLoop> {
+template <> struct quokka::EOS_Traits<FieldLoop> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
-template <> struct Physics_Traits<MHDFieldLoop> {
+template <> struct Physics_Traits<FieldLoop> {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
@@ -49,7 +49,7 @@ template <> struct Physics_Traits<MHDFieldLoop> {
 constexpr double A = 1.0e-3;
 constexpr double R_0 = 0.3;
 
-template <> void QuokkaSimulation<MHDFieldLoop>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<FieldLoop>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract grid information
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -57,7 +57,7 @@ template <> void QuokkaSimulation<MHDFieldLoop>::setInitialConditionsOnGrid(quok
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 
-	constexpr double gamma_gas = quokka::EOS_Traits<MHDFieldLoop>::gamma;
+	constexpr double gamma_gas = quokka::EOS_Traits<FieldLoop>::gamma;
 	constexpr double rho0 = 1.0;
 	constexpr double P0 = 1.0;
 
@@ -84,16 +84,16 @@ template <> void QuokkaSimulation<MHDFieldLoop>::setInitialConditionsOnGrid(quok
 		const double by = 0.5 * (B_y(x - 0.5 * dx[0], y - 0.5 * dx[1]) + B_y(x - 0.5 * dx[0], y + 0.5 * dx[1]));
 		const double Emag = 0.5 * (bx * bx + by * by);
 
-		state_cc(i, j, k, HydroSystem<MHDFieldLoop>::density_index) = rho0;
-		state_cc(i, j, k, HydroSystem<MHDFieldLoop>::x1Momentum_index) = rho0 * vx;
-		state_cc(i, j, k, HydroSystem<MHDFieldLoop>::x2Momentum_index) = rho0 * vy;
-		state_cc(i, j, k, HydroSystem<MHDFieldLoop>::x3Momentum_index) = rho0 * vz;
-		state_cc(i, j, k, HydroSystem<MHDFieldLoop>::internalEnergy_index) = Eint;
-		state_cc(i, j, k, HydroSystem<MHDFieldLoop>::energy_index) = Eint + Ekin + Emag;
+		state_cc(i, j, k, HydroSystem<FieldLoop>::density_index) = rho0;
+		state_cc(i, j, k, HydroSystem<FieldLoop>::x1Momentum_index) = rho0 * vx;
+		state_cc(i, j, k, HydroSystem<FieldLoop>::x2Momentum_index) = rho0 * vy;
+		state_cc(i, j, k, HydroSystem<FieldLoop>::x3Momentum_index) = rho0 * vz;
+		state_cc(i, j, k, HydroSystem<FieldLoop>::internalEnergy_index) = Eint;
+		state_cc(i, j, k, HydroSystem<FieldLoop>::energy_index) = Eint + Ekin + Emag;
 	});
 }
 
-template <> void QuokkaSimulation<MHDFieldLoop>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<FieldLoop>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
 {
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
@@ -116,16 +116,16 @@ template <> void QuokkaSimulation<MHDFieldLoop>::setInitialConditionsOnGridFaceV
 		const double by = B_y(xL, yL);
 
 		if (dir == quokka::direction::x) {
-			state_fc(i, j, k, Physics_Indices<MHDFieldLoop>::mhdFirstIndex) = bx;
+			state_fc(i, j, k, Physics_Indices<FieldLoop>::mhdFirstIndex) = bx;
 		} else if (dir == quokka::direction::y) {
-			state_fc(i, j, k, Physics_Indices<MHDFieldLoop>::mhdFirstIndex) = by;
+			state_fc(i, j, k, Physics_Indices<FieldLoop>::mhdFirstIndex) = by;
 		} else if (dir == quokka::direction::z) {
-			state_fc(i, j, k, Physics_Indices<MHDFieldLoop>::mhdFirstIndex) = 0;
+			state_fc(i, j, k, Physics_Indices<FieldLoop>::mhdFirstIndex) = 0;
 		}
 	});
 }
 
-template <> void QuokkaSimulation<MHDFieldLoop>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+template <> void QuokkaSimulation<FieldLoop>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
 	RefineOn refine_based_on{};
 	amrex::ParmParse const pp("field_loop");
@@ -154,7 +154,7 @@ template <> void QuokkaSimulation<MHDFieldLoop>::refineGrid(int lev, amrex::TagB
 			});
 		} else if (refine_based_on == RefineOn::MagneticEnergy) {
 			// refine on magnetic energy density
-			constexpr int idx = Physics_Indices<MHDFieldLoop>::mhdFirstIndex;
+			constexpr int idx = Physics_Indices<FieldLoop>::mhdFirstIndex;
 			amrex::Real const threshold = 0.5 * A * A;
 			amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				const amrex::Real bx = 0.5 * (Bx_fc(i, j, k, idx) + Bx_fc(i + 1, j, k, idx));
@@ -169,7 +169,7 @@ template <> void QuokkaSimulation<MHDFieldLoop>::refineGrid(int lev, amrex::TagB
 	}
 }
 
-template <> void QuokkaSimulation<MHDFieldLoop>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp) const
+template <> void QuokkaSimulation<FieldLoop>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "magnetic_divergence") {
@@ -185,7 +185,7 @@ template <> void QuokkaSimulation<MHDFieldLoop>::ComputeDerivedVar(int lev, std:
 
 		amrex::ParallelFor(mf, {0, 0, 0}, [=] AMREX_GPU_DEVICE(int box, int i, int j, int k) noexcept {
 			// Compute divergence using finite differences
-			constexpr int idx = Physics_Indices<MHDFieldLoop>::mhdFirstIndex;
+			constexpr int idx = Physics_Indices<FieldLoop>::mhdFirstIndex;
 			amrex::Real const Bx_p = Bx_arr[box](i + 1, j, k, idx);
 			amrex::Real const Bx_m = Bx_arr[box](i, j, k, idx);
 			amrex::Real const By_p = By_arr[box](i, j + 1, k, idx);
@@ -203,7 +203,7 @@ template <> void QuokkaSimulation<MHDFieldLoop>::ComputeDerivedVar(int lev, std:
 
 auto problem_main() -> int
 {
-	QuokkaSimulation<MHDFieldLoop> sim;
+	QuokkaSimulation<FieldLoop> sim;
 	sim.setInitialConditions();
 	sim.evolve();
 	return 0;
