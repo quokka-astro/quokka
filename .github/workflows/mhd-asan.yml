@@ -75,7 +75,7 @@ jobs:
       shell: bash
       run: |
         # Find all CTestTestfile.cmake files that contain MHD label and extract executable names
-        grep -l "LABELS.*MHD" $(find . -name "CTestTestfile.cmake") | while read file; do
+        grep -l "LABELS.*MHD-ASAN" $(find . -name "CTestTestfile.cmake") | while read file; do
           # Extract the executable path from add_test line
           grep "add_test" "$file" | head -1 | sed 's/.*add_test([^"]*"//;s/".*//' | xargs basename
         done | sort -u > mhd_executables.txt
@@ -101,8 +101,8 @@ jobs:
       env:
         ASAN_OPTIONS: detect_leaks=0:print_stats=1:check_initialization_order=1:strict_string_checks=1:detect_stack_use_after_return=1
         UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
-      # Execute all tests with MHD label, excluding the slow cases
-      run: canary run --output-on-failure --workers=1 -k "MHD and not MHDFastWave and not MHDBrioWuShockTube and not MHDQuirk and not HydroWaveConvergence and not MHDFastWaveConvergence and not MHDEntropyWaveConvergence and not MHDAlfvenWaveLinearConvergence" .
+      # Execute only MHD-ASAN labelled tests (new tests must explicitly opt in via CMakeLists.txt)
+      run: canary run --output-on-failure --workers=1 -k 'MHD-ASAN' .
         
     - name: ccache stats
       if: always()
