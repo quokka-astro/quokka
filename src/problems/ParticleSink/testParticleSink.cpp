@@ -42,7 +42,7 @@ static std::string particles_file = "sink4.txt"; // NOLINT
 
 template <> struct Particle_Traits<SinkProblem> {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
-	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Star;
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Sink;
 };
 
 template <> struct quokka::EOS_Traits<SinkProblem> {
@@ -73,16 +73,16 @@ template <> struct SimulationData<SinkProblem> {
 	AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity{0.0, 0.0, 0.0};
 };
 
-template <> void QuokkaSimulation<SinkProblem>::createInitialStarParticles()
+template <> void QuokkaSimulation<SinkProblem>::createInitialSinkParticles()
 {
 	// read particles from ASCII file
 	const int nreal_extra = 4; // mass vx vy vz
-	StarParticles->SetVerbose(1);
-	StarParticles->InitFromAsciiFile(particles_file, nreal_extra, nullptr);
+	SinkParticles->SetVerbose(1);
+	SinkParticles->InitFromAsciiFile(particles_file, nreal_extra, nullptr);
 
 	// Apply boost velocity to particles if needed
-	for (int lev = 0; lev <= StarParticles->finestLevel(); ++lev) {
-		auto &particles = StarParticles->GetParticles(lev);
+	for (int lev = 0; lev <= SinkParticles->finestLevel(); ++lev) {
+		auto &particles = SinkParticles->GetParticles(lev);
 
 		for (auto &kv : particles) {
 			auto &particle_array = kv.second.GetArrayOfStructs();
@@ -93,9 +93,9 @@ template <> void QuokkaSimulation<SinkProblem>::createInitialStarParticles()
 			// Launch GPU kernel to apply boost velocity to particles
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
 				auto &p = pdata[i]; // NOLINT
-				p.rdata(quokka::StarParticleVxIdx) += boost_velocity[0];
-				p.rdata(quokka::StarParticleVyIdx) += boost_velocity[1];
-				p.rdata(quokka::StarParticleVzIdx) += boost_velocity[2];
+				p.rdata(quokka::SinkParticleVxIdx) += boost_velocity[0];
+				p.rdata(quokka::SinkParticleVyIdx) += boost_velocity[1];
+				p.rdata(quokka::SinkParticleVzIdx) += boost_velocity[2];
 			});
 		}
 	}
@@ -186,7 +186,7 @@ auto problem_main() -> int
 	double total_particle_mass = 0.0;
 
 	// get total particle mass
-	const auto &real_data = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Star)->getParticleDataAtLevel(0).first;
+	const auto &real_data = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// const double total_particle_mass = std::accumulate(real_data.begin(), real_data.end(), 0.0, [](double sum, const auto &d) { return sum +
 		// d[3]; });
@@ -221,7 +221,7 @@ auto problem_main() -> int
 	int status = 0;
 	Real rho_dot_exact = 0.0;
 
-	const auto &real_data_ste1 = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Star)->getParticleDataAtLevel(0).first;
+	const auto &real_data_ste1 = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// compute total particle mass and error
@@ -237,8 +237,6 @@ auto problem_main() -> int
 		const double rel_mass_error = gas_mass_change == 0.0 ? 0.0 : std::abs(gas_mass_change + particle_mass_change) / std::abs(gas_mass_change);
 		amrex::Print() << "\nAfter evolution:\n";
 		amrex::Print() << "Gas mass change = " << gas_mass_change << "\n";
-		amrex::Print() << "Particle mass at step 0 = " << total_particle_mass << "\n";
-		amrex::Print() << "Particle mass at step 1 = " << total_particle_mass_step1 << "\n";
 		amrex::Print() << "Particle mass change = " << particle_mass_change << "\n";
 		amrex::Print() << "Total mass change = " << gas_mass_change + particle_mass_change << "\n";
 		amrex::Print() << "Relative error in change of mass = " << rel_mass_error << "\n";
@@ -435,7 +433,7 @@ auto problem_main() -> int
 
 	// Get initial mass for Phase 3
 	amrex::Real const total_mass_phase3_init = sim2.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
-	const auto &real_data_phase3_init = sim2.particleRegister_.getParticleDescriptor(quokka::ParticleType::Star)->getParticleDataAtLevel(0).first;
+	const auto &real_data_phase3_init = sim2.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
 	double total_particle_mass_phase3_init = 0.0;
 	for (const auto &p : real_data_phase3_init) {
 		total_particle_mass_phase3_init += p[3];
@@ -448,7 +446,7 @@ auto problem_main() -> int
 
 	// Get final mass for Phase 3
 	amrex::Real const total_mass_phase3_final = sim2.state_new_cc_[0].sum(HydroSystem<SinkProblem>::density_index) * vol;
-	const auto &real_data_phase3_final = sim2.particleRegister_.getParticleDescriptor(quokka::ParticleType::Star)->getParticleDataAtLevel(0).first;
+	const auto &real_data_phase3_final = sim2.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
 	double total_particle_mass_phase3_final = 0.0;
 	for (const auto &p : real_data_phase3_final) {
 		total_particle_mass_phase3_final += p[3];
@@ -477,7 +475,7 @@ auto problem_main() -> int
 		if (status == 0) {
 			amrex::Print() << "\n=== All phases passed ===\n";
 		} else {
-			amrex::Print() << "\n=== Test failed ===\n";
+			amrex::Print() << "\n=== One of the 3 phases failed ===\n";
 		}
 	}
 
