@@ -81,9 +81,9 @@ The protostellar evolution advances through the following state machine each tim
 flowchart TD
     A[Uninitialized]
     B[None]
-    C[VariableCoreDeuterium<br/>(mdeut depletes at 10% of Ṁ per step)]
-    D[SteadyCoreDeuterium<br/>(mdeut = 0)]
-    E[ShellDeuterium<br/>(n → 3, R → 2.1 R)]
+    C[VariableCoreDeuterium -- mdeut depletes at 10% of Ṁ per step]
+    D[SteadyCoreDeuterium -- mdeut = 0]
+    E[ShellDeuterium -- n → 3, R → 2.1 R]
     F[ZAMS]
 
     A -- "M ≥ M_rad_min and ṁ > 0" --> B
@@ -91,7 +91,6 @@ flowchart TD
     C -- "mdeut ≤ Ṁ Δt" --> D
     D -- "L_star < F_rad × L_ZAMS(M)" --> E
     E -- "R ≤ R_ZAMS(M)" --> F
-    F -- "" --> F
 ```
 
 Key parameters:
@@ -120,7 +119,6 @@ $$
 where $F_\text{acc} = 0.5$ is the fraction of accreted energy radiated and $F_k = 0.5$ is the fraction of accretion energy intercepted from the inner disk.
 
 **Disk luminosity** from the outer disk:
-
 $$
 L_\text{disk} = (1 - F_k) \frac{G M \dot{M}}{R}
 $$
