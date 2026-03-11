@@ -476,6 +476,8 @@ auto problem_main() -> int
 
 		if (status == 0) {
 			amrex::Print() << "\n=== All phases passed ===\n";
+		} else {
+			amrex::Print() << "\n=== Test failed ===\n";
 		}
 	}
 

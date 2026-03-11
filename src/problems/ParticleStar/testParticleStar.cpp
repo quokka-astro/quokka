@@ -342,7 +342,7 @@ auto problem_main() -> int
 		matplotlibcpp::plot(xs, rho_x, rho_args);
 		matplotlibcpp::xlabel("x (cm)");
 		matplotlibcpp::ylabel("rho (g cm^-3)");
-		matplotlibcpp::title(fmt::format("t = {:.2e}", sim.tNew_[0]));
+		matplotlibcpp::title(std::format("t = {:.2e}", sim.tNew_[0]));
 		matplotlibcpp::legend();
 		matplotlibcpp::save("./star_particle_density.pdf");
 #endif
