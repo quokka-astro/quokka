@@ -194,7 +194,6 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 	}
 };
 
-#if AMREX_SPACEDIM == 3
 
 // Specialization for Sink particles
 template <> struct ParticleCreationTraits<ParticleType::Sink> {
@@ -731,7 +730,6 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 	}
 }; // ParticleCreationTraits<ParticleType::StochasticStellarPop>
 
-#endif // AMREX_SPACEDIM == 3
 
 } // namespace quokka
 

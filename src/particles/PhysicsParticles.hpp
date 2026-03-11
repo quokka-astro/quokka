@@ -129,7 +129,6 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] virtual auto computeStellarMassAtBirth() const -> amrex::Real = 0;
 	[[nodiscard]] virtual auto computeStellarMassAtBirthBornByTime(amrex::Real time) const -> amrex::Real = 0;
 
-#if AMREX_SPACEDIM == 3
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
 
 	// Drift particle at level lev_min and above for time dt. Note that subcycling is not supported.
@@ -176,7 +175,6 @@ class PhysicsParticleDescriptorBase
 
 	// Update particle properties (e.g., luminosity) based on current state
 	virtual void updateParticleProperties(amrex::Real current_time) { /* Default empty implementation */ }
-#endif // AMREX_SPACEDIM == 3
 };
 
 // Concrete implementation of particle descriptor for specific container types
@@ -316,7 +314,6 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		return total_mass;
 	}
 
-#if AMREX_SPACEDIM == 3
 
 	// Implementation of mass deposition from particles to grid
 	void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) override
@@ -556,7 +553,6 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		return max_speed;
 	}
 
-#endif // AMREX_SPACEDIM == 3
 
 	// Implementation of radiation deposition from particles to grid
 	void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) override
@@ -631,7 +627,6 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
-#if AMREX_SPACEDIM == 3
 	// Implement cell tagging around particles
 	void tagCellsAroundParticles(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/) const override
 	{
@@ -722,7 +717,6 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		    this->container_, this->getMassIndex(), state, accretion_rate, lev, current_time, dt, this->getEvolutionStageIndex(),
 		    this->getBirthTimeIndex(), this->getDeathTimeIndex(), this->getMassAtBirthIndex(), state_fc, verbose);
 	}
-#endif // AMREX_SPACEDIM == 3
 };
 
 // Registry managing different types of physics particles
@@ -810,7 +804,6 @@ template <typename problem_t> class PhysicsParticleRegister
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(
 			    container, -1, RadParticleLumIdx, RadParticleBirthTimeIdx, RadParticleDeathTimeIdx, false, false);
 		}
-#if AMREX_SPACEDIM == 3
 		else if constexpr (particleType == ParticleType::CIC) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(container, CICParticleMassIdx, -1,
 															      -1, -1, false, false);
@@ -830,7 +823,6 @@ template <typename problem_t> class PhysicsParticleRegister
 			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, TestParticleDeathTimeIdx, true, true,
 			    TestParticleStageIdx, false);
 		}
-#endif // AMREX_SPACEDIM == 3
 		else {
 			static_assert(particleType == ParticleType::Rad, "Unknown particle type for physics particles");
 		}
@@ -860,7 +852,6 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 	}
 
-#if AMREX_SPACEDIM == 3
 	// Deposit mass from all massive particles
 	void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst)
 	{
@@ -911,7 +902,6 @@ template <typename problem_t> class PhysicsParticleRegister
 			}
 		}
 	}
-#endif // AMREX_SPACEDIM == 3
 
 	// Redistribute all particles within a level
 	void redistribute(int lev) const
@@ -994,7 +984,6 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 	}
 
-#if AMREX_SPACEDIM == 3
 	// Update positions of all massive particles
 	void driftParticlesAllLevels(amrex::Real dt, int lev_max)
 	{
@@ -1083,7 +1072,6 @@ template <typename problem_t> class PhysicsParticleRegister
 			descriptor->updateParticleProperties(current_time);
 		}
 	}
-#endif // AMREX_SPACEDIM == 3
 
 	// Print particle statistics
 	void printParticleStatistics() const

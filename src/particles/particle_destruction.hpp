@@ -8,7 +8,6 @@
 namespace quokka
 {
 
-#if AMREX_SPACEDIM == 3
 
 // Helper namespace with implementation details for particle destruction
 namespace ParticleDestructionImpl
@@ -125,7 +124,6 @@ template <ParticleType particleType> struct ParticleDestructionTraits {
 	}
 };
 
-#endif // AMREX_SPACEDIM == 3
 
 } // namespace quokka
 

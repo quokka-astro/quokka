@@ -19,8 +19,6 @@ enum class AccretionScheme { Threshold = 0, BondiHoyle = 1 };
 // manually set the accretion scheme
 constexpr AccretionScheme accretion_scheme = AccretionScheme::BondiHoyle;
 
-#if AMREX_SPACEDIM == 3
-
 namespace SinkAccretionUtils
 {
 
@@ -543,8 +541,6 @@ void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mul
 }
 
 } // namespace SinkAccretionUtils
-
-#endif // AMREX_SPACEDIM == 3
 
 } // namespace quokka
 

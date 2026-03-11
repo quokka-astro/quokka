@@ -11,7 +11,6 @@ namespace quokka
 
 constexpr amrex::Real seconds_per_year = 3.15576e+07;
 
-#if AMREX_SPACEDIM == 3
 
 // GPU-friendly const table access for luminosity tables
 // Nout should match nGroups in the problem
@@ -76,7 +75,6 @@ class LuminosityUpdate
 	}
 };
 
-#endif // AMREX_SPACEDIM == 3
 
 } // namespace quokka
 
