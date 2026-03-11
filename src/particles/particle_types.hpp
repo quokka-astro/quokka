@@ -94,6 +94,20 @@ template <> struct ParticleTypeTraits<ParticleType::CICRad> {
 	static constexpr bool allow_restart_refine_splitting = true;
 };
 
+// Compile-time particle metadata.
+// Default policy: do not split particles during restart refinement unless explicitly enabled.
+template <ParticleType particleType> struct ParticleTypeTraits {
+	static constexpr bool allow_restart_refine_splitting = false;
+};
+
+template <> struct ParticleTypeTraits<ParticleType::CIC> {
+	static constexpr bool allow_restart_refine_splitting = true;
+};
+
+template <> struct ParticleTypeTraits<ParticleType::CICRad> {
+	static constexpr bool allow_restart_refine_splitting = true;
+};
+
 // Enum for SN schemes: ThermalOnly, ThermalAndMomentum
 AMREX_ENUM(SNScheme,				   // NOLINT
 	   SN_thermal_only,			   // pure thermal

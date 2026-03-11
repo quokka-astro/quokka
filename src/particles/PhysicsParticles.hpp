@@ -10,6 +10,7 @@
 #include <utility>
 
 #include <format>
+#include <format>
 #include <yaml-cpp/yaml.h>
 
 #include "AMReX_Array4.H"
@@ -22,6 +23,7 @@
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
 
+#include "fundamental_constants.H"
 #include "fundamental_constants.H"
 #include "particle_IO.hpp"
 #include "particle_accretion.hpp"
@@ -413,6 +415,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						 "The current implementation of velocity kick in particle splitting assumes cgs units."
 						 "Please implement the appropriate scaling for other unit systems.");
 
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS,
+						 "The current implementation of velocity kick in particle splitting assumes cgs units."
+						 "Please implement the appropriate scaling for other unit systems.");
+
 		if (container_ != nullptr && this->getMassIndex() >= 0) {
 			for (typename ContainerType::ParIterType pIter(*container_, lev); pIter.isValid(); ++pIter) {
 				// Update NextID to include particles that will be created
@@ -429,8 +435,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				const auto &geom = container_->Geom(lev);
 				const auto dx = geom.CellSizeArray();
 				const amrex::Real dx_cell = std::min({dx[0], dx[1], dx[2]});
+				const amrex::Real dx_cell = std::min({dx[0], dx[1], dx[2]});
 				const int cpu_id = amrex::ParallelDescriptor::MyProc();
 				const int mass_idx = this->getMassIndex();
+				const bool has_velocity_components = (mass_idx + 3) < ContainerType::ParticleType::NReal;
 				const bool has_velocity_components = (mass_idx + 3) < ContainerType::ParticleType::NReal;
 				auto *pdata_old = particles().data();
 				auto *pdata_new = particles().data() + npart_old;
@@ -446,9 +454,15 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					amrex::Real kick_sum_x = 0;
 					amrex::Real kick_sum_y = 0;
 					amrex::Real kick_sum_z = 0;
+					amrex::Real kick_sum_x = 0;
+					amrex::Real kick_sum_y = 0;
+					amrex::Real kick_sum_z = 0;
 					for (int idx_new = 0; idx_new < splitFactor; ++idx_new) {
 						auto &p_new = new_particles[idx_new]; // NOLINT
 						// copy old particle properties
+						for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+							p_new.pos(d) = p_old.pos(d);
+						}
 						for (int d = 0; d < AMREX_SPACEDIM; ++d) {
 							p_new.pos(d) = p_old.pos(d);
 						}
@@ -461,9 +475,51 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						// set new particle properties
 						// NOTE: we keep new particle at the position of the old particle,
 						// and instead add a random velocity dispersion to unbind the new set of split particles
+						// NOTE: we keep new particle at the position of the old particle,
+						// and instead add a random velocity dispersion to unbind the new set of split particles
 						p_new.cpu() = cpu_id;
 						p_new.id() = pid + idx * splitFactor + idx_new;
 						p_new.rdata(mass_idx) = old_mass / static_cast<amrex::Real>(splitFactor);
+
+						if (has_velocity_components) {
+							// Sample a velocity kick uniformly in the volume of a sphere in velocity space.
+							// Keep the sphere radius equal to the previous per-component bound (the cell-scale virial speed)
+							// so restart-refine split drift limits remain unchanged.
+							const amrex::Real v_virial = std::sqrt(C::Gconst * old_mass / dx_cell);
+							amrex::Real kick_x = 0.0;
+							amrex::Real kick_y = 0.0;
+							amrex::Real kick_z = 0.0;
+							amrex::Real r2 = 0.0;
+							do { // NOLINT(cppcoreguidelines-avoid-do-while)
+								// Rejection sample from the enclosing cube [-1,1]^3 to get a uniform point in the unit ball.
+								kick_x = (2.0 * amrex::Random(rng)) - 1.0;
+								kick_y = (2.0 * amrex::Random(rng)) - 1.0;
+								kick_z = (2.0 * amrex::Random(rng)) - 1.0;
+								r2 = (kick_x * kick_x) + (kick_y * kick_y) + (kick_z * kick_z);
+							} while (r2 > 1.0);
+							kick_x *= v_virial;
+							kick_y *= v_virial;
+							kick_z *= v_virial;
+							p_new.rdata(mass_idx + 1) += kick_x;
+							p_new.rdata(mass_idx + 2) += kick_y;
+							p_new.rdata(mass_idx + 3) += kick_z;
+							kick_sum_x += kick_x;
+							kick_sum_y += kick_y;
+							kick_sum_z += kick_z;
+						}
+					}
+
+					if (has_velocity_components) {
+						// Enforce exact momentum conservation for this split group by removing the mean kick.
+						const amrex::Real kick_mean_x = kick_sum_x / static_cast<amrex::Real>(splitFactor);
+						const amrex::Real kick_mean_y = kick_sum_y / static_cast<amrex::Real>(splitFactor);
+						const amrex::Real kick_mean_z = kick_sum_z / static_cast<amrex::Real>(splitFactor);
+						for (int idx_new = 0; idx_new < splitFactor; ++idx_new) {
+							auto &p_new = new_particles[idx_new]; // NOLINT
+							p_new.rdata(mass_idx + 1) -= kick_mean_x;
+							p_new.rdata(mass_idx + 2) -= kick_mean_y;
+							p_new.rdata(mass_idx + 3) -= kick_mean_z;
+						}
 
 						if (has_velocity_components) {
 							// Sample a velocity kick uniformly in the volume of a sphere in velocity space.
@@ -1097,6 +1153,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	{
 		const BL_PROFILE("PhysicsParticleRegister::printParticleStatistics()");
 		amrex::Print() << "[PARTICLES] Statistics:\n";
+		amrex::Print() << std::format("{:<20}{:>15}\n", "Particle type", "Number of particles");
 		amrex::Print() << std::format("{:<20}{:>15}\n", "Particle type", "Number of particles");
 
 		for (const auto &[type, descriptor] : particleRegistry_) {
