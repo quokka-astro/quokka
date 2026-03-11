@@ -769,6 +769,7 @@ template <> struct ParticleCreationTraits<ParticleType::Star> {
 				p.rdata(StarParticleNIdx) = 1.5;				  // polytropic index npoly
 				p.idata(StarParticleBurnStateIdx) = Uninitialized;		  // burn state
 				p.rdata(StarParticleLumIdx) = 0.0;				  // luminosity (computed by updateStellarProperties)
+				p.rdata(StarParticleRadiusIdx) = 2.0 * StellarPhysics::R_solar;			  // stellar radius (initialized by updateStellarProperties)
 			}
 
 			// update cell density to be the threshold density

@@ -339,7 +339,8 @@ AMREX_ENUM(StarParticleDataIdx,
 	mdeut,      // Mass of gas that still contains deuterium
 	n,          // Polytropic index
 	mdot,       // Current mass accretion rate
-	lum         // Base index for luminosity components
+	lum,        // Base index for luminosity components
+	radius      // Stellar radius
 );
 
 // Integer component indices for Star_particles
@@ -360,9 +361,10 @@ constexpr int StarParticleMdeutIdx = static_cast<int>(StarParticleDataIdx::mdeut
 constexpr int StarParticleNIdx = static_cast<int>(StarParticleDataIdx::n);
 constexpr int StarParticleMdotIdx = static_cast<int>(StarParticleDataIdx::mdot);
 constexpr int StarParticleLumIdx = static_cast<int>(StarParticleDataIdx::lum);
+constexpr int StarParticleRadiusIdx = static_cast<int>(StarParticleDataIdx::radius);
 constexpr int StarParticleBurnStateIdx = static_cast<int>(StarParticleIntIdx::burnState); // integer component
 // Number of real and integer components for StarParticles
-constexpr int StarParticleRealComps = 13; // mass, vx, vy, vz, birth_time, death_time, amx, amy, amz, mdeut, n, mdot, lum
+constexpr int StarParticleRealComps = 14; // mass, vx, vy, vz, birth_time, death_time, amx, amy, amz, mdeut, n, mdot, lum, radius
 constexpr int StarParticleIntComps = 1;   // burnState
 
 // Type definitions for Star_particles container and iterator

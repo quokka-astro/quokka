@@ -368,6 +368,7 @@ private:
         amrex::Real mdeut = p.rdata(StarParticleMdeutIdx);
         const amrex::Real mdot = p.rdata(StarParticleMdotIdx); // already computed by UpdateParticleMassAndMomentumInBox
         amrex::Real n = p.rdata(StarParticleNIdx);
+        amrex::Real radius = p.rdata(StarParticleRadiusIdx);
         auto burn_state = static_cast<burningState>(p.idata(StarParticleBurnStateIdx));
 
         // Initialize if needed
@@ -377,18 +378,16 @@ private:
             }
 
             n = StellarPhysics::n_init(mdot);
+            radius = StellarPhysics::rad_init(mdot);
             burn_state = burningState::None;
 
             p.rdata(StarParticleNIdx) = n;
+            p.rdata(StarParticleRadiusIdx) = radius;
             p.idata(StarParticleBurnStateIdx) = static_cast<int>(burn_state);
         }
 
         // Update deuterium mass using already-computed mdot (after early return check)
         mdeut += mdot * dt;
-
-        // Stellar radius is not stored as a particle field; compute from current mass and n
-        // Note: this is a simplification - a persistent radius field would improve accuracy
-        amrex::Real radius = StellarPhysics::rad_init(mdot > 0.0 ? mdot : 1.0e-10);
 
         // Update burning state
         if (burn_state == burningState::None) {
@@ -414,6 +413,7 @@ private:
             mdeut = 0.0;
             if (radius <= StellarPhysics::radius_ZAMS(mass)) {
                 burn_state = burningState::ZAMS;
+                radius = StellarPhysics::radius_ZAMS(mass);
             }
         } else if (burn_state == burningState::ZAMS) {
             mdeut = 0.0;
@@ -426,6 +426,7 @@ private:
         // Update particle data
         p.rdata(StarParticleMdeutIdx) = mdeut;
         p.rdata(StarParticleNIdx) = n;
+        p.rdata(StarParticleRadiusIdx) = radius;
         p.idata(StarParticleBurnStateIdx) = static_cast<int>(burn_state);
     }
 };
