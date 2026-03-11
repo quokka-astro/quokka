@@ -248,7 +248,7 @@ auto problem_main() -> int
 			const auto p_burn_state = static_cast<quokka::burningState>(idata[quokka::StarParticleBurnStateIdx]);
 
 			amrex::Print() << "Particle " << p << ":\n";
-			amrex::Print() << "  mass     = " << p_mass << " g (" << p_mass / quokka::StellarConstants::M_solar << " M_sun)\n";
+			amrex::Print() << "  mass     = " << p_mass << " g (" << p_mass / C::M_solar << " M_sun)\n";
 			amrex::Print() << "  mdot     = " << p_mdot << " g/s\n";
 			amrex::Print() << "  n        = " << p_n << "\n";
 			amrex::Print() << "  mdeut    = " << p_mdeut << " g\n";
