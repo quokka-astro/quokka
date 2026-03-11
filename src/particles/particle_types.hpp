@@ -353,8 +353,8 @@ AMREX_ENUM(StarParticleDataIdx,
 	mdeut,      // Mass of gas that still contains deuterium
 	n,          // Polytropic index
 	mdot,       // Current mass accretion rate
-	lum,        // Base index for luminosity components
-	radius      // Stellar radius
+	radius,     // Stellar radius
+	lum         // Base index for luminosity components (must be last; expanded to lum_0, lum_1, ... for nGroups)
 );
 
 // Integer component indices for Star_particles
@@ -377,13 +377,16 @@ constexpr int StarParticleMdotIdx = static_cast<int>(StarParticleDataIdx::mdot);
 constexpr int StarParticleLumIdx = static_cast<int>(StarParticleDataIdx::lum);
 constexpr int StarParticleRadiusIdx = static_cast<int>(StarParticleDataIdx::radius);
 constexpr int StarParticleBurnStateIdx = static_cast<int>(StarParticleIntIdx::burnState); // integer component
-// Number of real and integer components for StarParticles
-constexpr int StarParticleRealComps = 14; // mass, vx, vy, vz, birth_time, death_time, amx, amy, amz, mdeut, n, mdot, lum, radius
-constexpr int StarParticleIntComps = 1;   // burnState
+// Number of real components: mass, vx, vy, vz, birth_time, death_time, amx, amy, amz, mdeut, n, mdot, radius + lum[nGroups]
+template <typename problem_t>
+constexpr int StarParticleRealComps = []() constexpr {
+	return 13 + Physics_Traits<problem_t>::nGroups; // 13 non-lum fields + nGroups luminosity components
+}();
+constexpr int StarParticleIntComps = 1; // burnState
 
 // Type definitions for Star_particles container and iterator
-using StarParticleContainer = amrex::AmrParticleContainer<StarParticleRealComps, StarParticleIntComps>;
-using StarParticleIterator = amrex::ParIter<StarParticleRealComps, StarParticleIntComps>;
+template <typename problem_t> using StarParticleContainer = amrex::AmrParticleContainer<StarParticleRealComps<problem_t>, StarParticleIntComps>;
+template <typename problem_t> using StarParticleIterator = amrex::ParIter<StarParticleRealComps<problem_t>, StarParticleIntComps>;
 
 // Indices for burnState
 enum burningState {
@@ -449,7 +452,7 @@ template <ParticleType particleType, typename problem_t> auto getParticleRealCom
 	} else if constexpr (particleType == ParticleType::Sink) {
 		return expandEnumNames<SinkParticleRealIdx, SinkParticleRealComps, false>();
 	} else if constexpr (particleType == ParticleType::Star) {
-		return expandEnumNames<StarParticleDataIdx, StarParticleRealComps, true>();
+		return expandEnumNames<StarParticleDataIdx, StarParticleRealComps<problem_t>, true>();
 	} else if constexpr (particleType == ParticleType::Test) {
 		return expandEnumNames<TestParticleRealIdx, TestParticleRealComps<problem_t>, true>();
 	}

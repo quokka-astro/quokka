@@ -6,7 +6,7 @@ Star particles model individual protostars forming from gravitational collapse. 
 
 ### Particle Attributes
 
-Each Star particle stores 13 real-valued components and 1 integer component:
+Each Star particle stores $13 + N_\text{groups}$ real-valued components and 1 integer component, where $N_\text{groups}$ is the number of radiation frequency groups:
 
 | Index | Name | Description |
 |-------|------|-------------|
@@ -22,7 +22,10 @@ Each Star particle stores 13 real-valued components and 1 integer component:
 | 9 | `mdeut` | Deuterium mass reservoir |
 | 10 | `n` | Polytropic index ($1.5 \leq n \leq 3.0$) |
 | 11 | `mdot` | Mass accretion rate (set by the accretion module) |
-| 12 | `lum` | Current total luminosity (updated every timestep) |
+| 12 | `radius` | Stellar radius $R_\star$ (persistent; updated by state transitions) |
+| 13 … $12 + N_\text{groups}$ | `lum`, `lum_1`, … | Luminosity per radiation group (updated every timestep) |
+
+The `lum` field occupies the last $N_\text{groups}$ slots, matching the layout convention of `CICRad` particles.
 
 The integer component stores the **burning state** (index 0):
 
@@ -52,11 +55,13 @@ The stellar interior is approximated by a **polytropic model** with index $n$. T
 - $n = 1.5$: fully convective (pre-main-sequence default)
 - $n = 3.0$: radiation-pressure dominated (near ZAMS for massive stars)
 
-**Radius initialization.** The stellar radius is recomputed each timestep from the current accretion rate using an empirical fit:
+**Radius initialization.** When a particle first leaves the `Uninitialized` state, the stellar radius is initialized from the accretion rate using an empirical fit:
 
 $$
 R_\star = R_\odot \cdot \max\!\left(2,\; 2.5 \left(\frac{\dot{M}}{10^{-5}\,M_\odot\,\text{yr}^{-1}}\right)^{0.2}\right).
 $$
+
+The radius is stored as a persistent particle field (`radius`, index 13) and subsequently modified only by specific state transitions (see below), not recomputed every timestep.
 
 **Polytropic index initialization.** The initial $n$ is set from the accretion rate:
 
@@ -82,15 +87,20 @@ flowchart TD
     B[None]
     C[VariableCoreDeuterium -- mdeut depletes at 10% of Ṁ per step]
     D[SteadyCoreDeuterium -- mdeut = 0]
-    E[ShellDeuterium -- n → 3, R → 2.1 R]
-    F[ZAMS]
+    E[ShellDeuterium -- n → 3, R → shell_factor × R]
+    F[ZAMS -- R = R_ZAMS]
 
-    A -- "M ≥ M_rad_min and ṁ > 0" --> B
+    A -- "M ≥ M_rad_min and ṁ > 0\n(initialize n, R from Ṁ)" --> B
     B -- "T_c > T_D = 1.5 × 10⁶ K" --> C
     C -- "mdeut ≤ Ṁ Δt" --> D
     D -- "L_star < F_rad × L_ZAMS(M)" --> E
     E -- "R ≤ R_ZAMS(M)" --> F
 ```
+
+The radius $R_\star$ is updated at three transition points only:
+- **Uninitialized → None**: $R_\star$ is initialized with the empirical fit from $\dot{M}$.
+- **SteadyCoreDeuterium → ShellDeuterium**: $R_\star \mathrel{\times}= \text{shell\_factor} = 2.1$ (inflated radius for shell burning).
+- **ShellDeuterium → ZAMS**: $R_\star = R_\text{ZAMS}(M)$ (Tout et al. 1996 fitting formula).
 
 Key parameters:
 
@@ -133,10 +143,11 @@ The stellar property update is operator-split from the hydrodynamics and runs on
 1. Hydrodynamics advances the gas state by $\Delta t$
 2. Accretion computes the new $\dot{M}$ and updates $M_\star$
 3. `updateStellarProperties` runs per-particle:
-   - Reads current $M$, $\dot{M}$, $n$, `mdeut`, `burn_state`
+   - Reads current $M$, $\dot{M}$, $n$, $R_\star$, `mdeut`, `burn_state`
    - If `Uninitialized` and conditions not met: returns early (no state change)
-   - Initializes $n$ from $\dot{M}$; advances `burn_state`; updates `mdeut`
-   - Computes and stores luminosity in `lum`
+   - On first activation: initializes $n$ and $R_\star$ from $\dot{M}$
+   - Advances `burn_state`; updates `mdeut`; updates $R_\star$ at state transitions
+   - Computes and stores luminosity in `lum` and radius in `radius`
 4. Radiation from the luminosity is deposited into the radiation field
 
 ### Physical Model Parameters

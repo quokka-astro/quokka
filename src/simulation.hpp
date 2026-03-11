@@ -660,7 +660,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	std::unique_ptr<quokka::CICRadParticleContainer<problem_t>> CICRadParticles;
 	std::unique_ptr<quokka::StochasticStellarPopParticleContainer<problem_t>> StochasticStellarPopParticles;
 	std::unique_ptr<quokka::SinkParticleContainer> SinkParticles;
-	std::unique_ptr<quokka::StarParticleContainer> StarParticles;
+	std::unique_ptr<quokka::StarParticleContainer<problem_t>> StarParticles;
 	std::unique_ptr<quokka::TestParticleContainer<problem_t>> TestParticles;
 #endif // AMREX_SPACEDIM == 3
 
@@ -3555,7 +3555,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 		static_assert(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS, "UnitSystem must be CGS for Star particles");
 
 		// Create particle container
-		StarParticles = std::make_unique<quokka::StarParticleContainer>(this);
+		StarParticles = std::make_unique<quokka::StarParticleContainer<problem_t>>(this);
 		StarParticles->SetVerbose(0);
 
 		// Register with particle register - Star particles allow creation
