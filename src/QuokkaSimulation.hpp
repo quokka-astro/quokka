@@ -2902,8 +2902,8 @@ void QuokkaSimulation<problem_t>::hydroFOFluxFunction(amrex::MultiFab &primVar_m
 	// LLF solver
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF_MHD, DIR>(flux, faceVel, leftState, rightState, leftState_bfield,
-										    rightState_bfield, primVar_mf, artificialViscosityK_, &x1FSpds,
-										    &x1ConsVar_fc_mf[static_cast<int>(DIR)], nghost_Riemann);
+											    rightState_bfield, primVar_mf, artificialViscosityK_, &x1FSpds,
+											    &x1ConsVar_fc_mf[static_cast<int>(DIR)], nghost_Riemann);
 	} else {
 		HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF, DIR>(flux, faceVel, leftState, rightState, leftState_bfield,
 											rightState_bfield, primVar_mf, artificialViscosityK_, nullptr, nullptr,
