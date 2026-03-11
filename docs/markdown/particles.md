@@ -43,7 +43,7 @@ The particle inherits the gas velocity of the parent cell. The cell density is t
 
 ### Practical considerations
 
-- The local maximum check uses a strict inequality ($\rho_{\text{cell}} > \rho_{\text{neighbor}}$), so ties do not prevent formation. In practice, exact density ties only occur in artificial initial conditions.
+- The local maximum check uses a non-strict inequality ($\rho_{\text{cell}} \ge \rho_{\text{neighbor}}$), so ties do not prevent formation. In practice, exact density ties only occur in artificial initial conditions.
 - Sink formation is applied after sink accretion in each timestep, so newly formed particles do not overlap with existing accretion zones.
 
 ## Sink Particle Accretion
