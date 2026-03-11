@@ -97,7 +97,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::state_old_fc_;
 	using AMRSimulation<problem_t>::state_new_fc_;
 	using AMRSimulation<problem_t>::TracerPC;
+#if AMREX_SPACEDIM == 3
 	using AMRSimulation<problem_t>::particleRegister_;
+#endif
 
 	using AMRSimulation<problem_t>::nghost_cc_;
 	using AMRSimulation<problem_t>::nghost_fc_;
@@ -271,8 +273,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void projectFaceCenteredMagneticField();
 	void updateInitialMagneticEnergyFromFaceField();
 	void refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
-	void createInitialRadParticles() override;
 #if AMREX_SPACEDIM == 3
+	void createInitialRadParticles() override;
 	void createInitialCICParticles() override;
 	void createInitialCICRadParticles() override;
 	void createInitialStochasticStellarPopParticles() override;
@@ -841,6 +843,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::setInitialCondit
 	// note: an implementation is only required if face-centered vars are used
 }
 
+#if AMREX_SPACEDIM == 3
+
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialRadParticles()
 {
 	const BL_PROFILE("QuokkaSimulation::createInitialRadParticles()");
@@ -849,7 +853,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialRad
 	// note: an implementation is only required if Rad_particles are used
 }
 
-#if AMREX_SPACEDIM == 3
+
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialCICParticles()
 {
@@ -916,6 +920,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::addStrangSplitSo
 	// (when Strang splitting is enabled, dt is actually 0.5*dt_lev)
 }
 
+#if AMREX_SPACEDIM == 3
 template <typename problem_t> auto QuokkaSimulation<problem_t>::computePhotoelectricHeatingRate(amrex::Real current_time) -> amrex::Real
 {
 	amrex::Real heating_rate = 0.0;
@@ -939,6 +944,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computePhotoelec
 
 	return heating_rate;
 }
+#endif
 
 template <typename problem_t>
 auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int lev,
@@ -2966,7 +2972,9 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			// }
 
 			// Deposit radiation from all particles that have luminosity. When there are no particles with luminosity, this will do nothing.
+#if AMREX_SPACEDIM == 3
 			particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle);
+#endif
 
 			// for debugging, print the radEnergySource array
 			// if (i == 0) {
@@ -3008,7 +3016,9 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		radEnergySource.setVal(0.0); // Initialize the MultiFab to zero
 
 		// Deposit radiation from particles into radEnergySource. When there are no particles with luminosity, this will do nothing.
+#if AMREX_SPACEDIM == 3
 		particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle);
+#endif
 
 		// Add the matter-radiation exchange source terms to the radiation subsystem and evolve by (1 - IMEX_a32) * dt
 		for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {

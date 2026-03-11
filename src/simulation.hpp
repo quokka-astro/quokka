@@ -4796,7 +4796,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	areInitialConditionsDefined_ = true;
 }
 
-#if AMREX_SPACEDIM == 3
 template <typename problem_t>
 template <typename ParticleContainer>
 void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::unique_ptr<ParticleContainer> &particles, std::string const &restart_chkfile,
@@ -4892,6 +4891,7 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 	}
 }
 
+#if AMREX_SPACEDIM == 3
 template <typename problem_t>
 template <quokka::ParticleType particle_type, typename ContainerType>
 void AMRSimulation<problem_t>::initializeParticleContainerFromCheckpoint(std::unique_ptr<ContainerType> &container,
