@@ -5,6 +5,7 @@
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
 #include "fundamental_constants.H"
+#include "math/root_finding.hpp"
 #include "particles/particle_radiation.hpp"
 #include <cmath>
 
@@ -112,36 +113,6 @@ namespace StellarPhysics
 {
     // Uses burningState enum from particle_types.hpp
 
-    // Bisection solver for GPU
-    template<typename Func>
-    AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto bisection_solve(Func f, amrex::Real x1, amrex::Real x2, 
-                                                              int max_iter = 40, amrex::Real tol = 1.0e-7) -> amrex::Real
-    {
-        amrex::Real f1 = f(x1);
-        amrex::Real f2 = f(x2);
-        
-        if (f1 * f2 > 0) {
-            return x1; // No root in interval
-        }
-        
-        amrex::Real rtb = (f1 < 0) ? x1 : x2;
-        amrex::Real dx = (f1 < 0) ? (x2 - x1) : (x1 - x2);
-        
-        for (int j = 0; j < max_iter; ++j) {
-            dx *= 0.5;
-            amrex::Real xmid = rtb + dx;
-            amrex::Real fmid = f(xmid);
-            
-            if (fmid <= 0) {
-                rtb = xmid;
-            }
-            if (std::abs(dx) < tol * std::abs(xmid) || fmid == 0) {
-                return rtb;
-            }
-        }
-        return rtb; // Return best estimate
-    }
-
     // Initialize polytropic index from accretion rate
     AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto n_init(amrex::Real mdot) -> amrex::Real
     {
@@ -244,16 +215,18 @@ namespace StellarPhysics
         // Radiation temperature if gas pressure negligible
         amrex::Real T_rad = std::pow(3.0 * P_c / a_rad, 0.25);
         
-        // Use bisection to solve full EOS: P = ρkT/μm_H + aT⁴/3
+        // Solve full EOS: P = ρkT/μm_H + aT⁴/3 using TOMS 748 root finder
         auto pressure_func = [=](amrex::Real T) {
             return P_c - rho_c * k_B * T / (mu * m_H) - (a_rad * std::pow(T, 4)) / 3.0;
         };
-        
-        // Initial bounds
-        amrex::Real T_low = 0.0;
-        amrex::Real T_high = (T_rad > T_gas) ? 2.0 * T_rad : 2.0 * T_gas;
-        
-        return bisection_solve(pressure_func, T_low, T_high);
+
+        // Lower bound at 1 K (f > 0); upper bound at 2x the pure-gas or pure-radiation estimate (f < 0)
+        const amrex::Real T_low = 1.0;
+        const amrex::Real T_high = (T_rad > T_gas) ? 2.0 * T_rad : 2.0 * T_gas;
+        int max_iter = 60;
+        const auto [T_lo, T_hi] = quokka::math::toms748_solve(pressure_func, T_low, T_high,
+                                                               quokka::math::eps_tolerance<amrex::Real>(1.0e-7), max_iter);
+        return 0.5 * (T_lo + T_hi);
     }
 
     // Beta parameter (gas pressure / total pressure) for n=3 (Eddington quartic)
@@ -269,8 +242,12 @@ namespace StellarPhysics
         auto beta_func = [=](amrex::Real beta) {
             return std::pow(P_c, 3) - coefficient * (1.0 - beta) / std::pow(beta, 4);
         };
-        
-        return bisection_solve(beta_func, 1.0e-4, 1.0);
+
+        // f(1e-4) < 0 (radiation-dominated), f(1.0) = P_c^3 > 0 (gas-dominated)
+        int max_iter = 60;
+        const auto [beta_lo, beta_hi] = quokka::math::toms748_solve(beta_func, 1.0e-4, 1.0,
+                                                                     quokka::math::eps_tolerance<amrex::Real>(1.0e-7), max_iter);
+        return 0.5 * (beta_lo + beta_hi);
     }
 
     // Beta parameter from interpolation table
