@@ -2,13 +2,11 @@
 #define PARTICLE_UPDATE_HPP_
 
 #include "AMReX_BLProfiler.H"
-#include "AMReX_BLProfiler.H"
 #include "AMReX_Extension.H"
 #include "particle_radiation.hpp"
-#include "starparticle_radiation.hpp"
 #include "particle_types.hpp"
 #include "physics_info.hpp"
-#include "physics_info.hpp"
+#include "starparticle_radiation.hpp"
 
 #if AMREX_SPACEDIM == 3
 
@@ -24,8 +22,7 @@ template <ParticleType particleType> struct ParticlePropertyUpdateTraits;
 // to whichever specialization (or the default no-op) is appropriate for particleType.
 // Specializations that require luminosity tables should override updateParticleProperties to
 // load the tables before calling applyUpdate.
-template <ParticleType particleType>
-struct ParticlePropertyUpdateBase {
+template <ParticleType particleType> struct ParticlePropertyUpdateBase {
 	template <typename problem_t, typename ContainerType>
 	static void updateParticleProperties(ContainerType *container, amrex::Real current_time, amrex::Real dt) noexcept
 	{
@@ -40,7 +37,7 @@ struct ParticlePropertyUpdateBase {
 		applyUpdate<problem_t, ContainerType>(container, current_time, dt, gpu_tables);
 	}
 
-  public:
+      public:
 	template <typename problem_t, typename ContainerType>
 	static void applyUpdate(ContainerType *container, amrex::Real current_time, amrex::Real dt,
 				LuminosityGpuConstTables<Physics_Traits<problem_t>::nGroups> const &gpu_tables) noexcept
@@ -55,8 +52,8 @@ struct ParticlePropertyUpdateBase {
 
 				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 					auto &p = pData[idx]; // NOLINT
-					ParticlePropertyUpdateTraits<particleType>::template updateProperties<
-					    problem_t, typename ContainerType::ParticleType, nGroups>(p, current_time, dt, gpu_tables);
+					ParticlePropertyUpdateTraits<particleType>::template updateProperties<problem_t, typename ContainerType::ParticleType,
+													      nGroups>(p, current_time, dt, gpu_tables);
 				});
 			}
 		}
@@ -121,7 +118,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::Star> : ParticlePr
 		StellarUpdate::updateStellarProperties<problem_t>(p, current_time, dt, gpu_tables);
 	}
 };
-  
+
 // // Specialization for StochasticStellarPop particles from a simple analytical formula
 // // This is kept for debugging purpose.
 // template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarPop> {
