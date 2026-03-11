@@ -80,13 +80,6 @@ template <ParticleType particleType> struct ParticlePropertyUpdateTraits : Parti
 	{
 		// Default implementation does nothing
 	}
-
-	// Default container-level update - does nothing
-	template <typename problem_t, typename ContainerType>
-	static void updateParticleProperties(ContainerType * /*container*/, amrex::Real /*current_time*/) noexcept
-	{
-		// Default implementation does nothing
-	}
 };
 
 // Specialization for StochasticStellarPop particles: updates luminosity via table interpolation.
