@@ -54,16 +54,8 @@ RUN_TESTS=false
 TARGETS=""
 
 # Detect repository root
-# Try to find .git directory by walking up from current directory
-REPO_ROOT=""
-CURRENT_DIR="$(pwd)"
-while [[ "$CURRENT_DIR" != "/" ]]; do
-	if [[ -d "$CURRENT_DIR/.git" ]]; then
-		REPO_ROOT="$CURRENT_DIR"
-		break
-	fi
-	CURRENT_DIR="$(dirname "$CURRENT_DIR")"
-done
+# Use git to find the worktree root (works for both regular repos and git worktrees)
+REPO_ROOT="$(git -C "$(pwd)" rev-parse --show-toplevel 2>/dev/null)"
 
 if [[ -z "$REPO_ROOT" ]]; then
 	echo "Error: Could not find Quokka repository root (.git directory)"
@@ -100,8 +92,9 @@ else
 	IMAGE_NAME="ghcr.io/quokka-astro/quokka-linux-amd64-cuda:development"
 fi
 
-# Set container name
-CONTAINER_NAME="quokka-${ARCH}-cuda-container"
+# Set container name (include worktree name so each worktree gets its own container with the correct mount)
+WORKTREE_NAME="$(basename "$REPO_ROOT")"
+CONTAINER_NAME="quokka-${ARCH}-cuda-${WORKTREE_NAME}"
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
