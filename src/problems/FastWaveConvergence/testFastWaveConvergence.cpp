@@ -260,7 +260,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const double omega = cf * k_magn;
 		const double phase = omega * time - k_magn * x_vec_mrf_C[0];
 		const double cos_phase = std::cos(phase);
-		const double epsilon = delta_b_magn / b0_magn * (cf * cf - vA * vA * cosθ * cosθ) / (cf * cf * sinθ); // normalized amplitude
+		double epsilon = delta_b_magn / b0_magn * (cf * cf - vA * vA * cosθ * cosθ) / (cf * cf * sinθ); // normalized amplitude (undefined if sinθ=0; overridden below)
 		const double B0_1 = b0_magn * cosθ;
 		const double B0_2 = b0_magn * sinθ;
 
@@ -278,6 +278,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 				amrex::Warning(
 				    "Warning: angle between k and B0 is 0 or 180 deg. Fast wave reduces to pure sound wave with no magnetic perturbation.");
 			}
+			epsilon = delta_b_magn / b0_magn; // density/pressure perturbation amplitude (sinθ=0 case)
 			v1_mrf = -delta_b_magn / b0_magn * cf * cos_phase; // velocity along k̂ (parallel component)
 			v2_mrf = 0.0;					   // perpendicular velocity suppressed
 			delta_B2 = 0.0;					   // no transverse magnetic perturbation
