@@ -120,7 +120,7 @@ namespace StellarPhysics
     // Uses burningState enum from particle_types.hpp
 
     // Initialize polytropic index from accretion rate
-    AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto n_init(amrex::Real mdot) -> amrex::Real
+    AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto n_init(amrex::Real mdot) -> amrex::Real
     {
         if (mdot == 0.0) {
             return 1.5;
@@ -136,7 +136,7 @@ namespace StellarPhysics
     }
 
     // Initialize stellar radius from accretion rate
-    AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto rad_init(amrex::Real mdot) -> amrex::Real
+    AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rad_init(amrex::Real mdot) -> amrex::Real
     {
         amrex::Real mdot_norm = mdot * seconds_per_year / M_solar * 1.0e5;
         amrex::Real rad_factor = 2.5 * std::pow(mdot_norm, 0.2);
@@ -280,7 +280,7 @@ namespace StellarPhysics
     }
 
     // ZAMS luminosity from Tout et al. (1996)
-    AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto luminosity_ZAMS(amrex::Real mass) -> amrex::Real
+    AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto luminosity_ZAMS(amrex::Real mass) -> amrex::Real
     {
         amrex::Real m_sol = mass / M_solar;
         
@@ -293,7 +293,7 @@ namespace StellarPhysics
     }
 
     // ZAMS radius from Tout et al. (1996)
-    AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto radius_ZAMS(amrex::Real mass) -> amrex::Real
+    AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto radius_ZAMS(amrex::Real mass) -> amrex::Real
     {
         amrex::Real m_sol = mass / M_solar;
         
@@ -307,7 +307,7 @@ namespace StellarPhysics
     }
 
     // Stellar luminosity (ZAMS + accretion)
-    AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto luminosity_star(amrex::Real mass, amrex::Real radius, amrex::Real mdot) -> amrex::Real
+    AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto luminosity_star(amrex::Real mass, amrex::Real radius, amrex::Real mdot) -> amrex::Real
     {
         amrex::Real L_zams = luminosity_ZAMS(mass);
         amrex::Real L_acc = StellarConstants::F_acc * StellarConstants::F_k * Gconst * mass * mdot / radius;
@@ -322,13 +322,13 @@ namespace StellarPhysics
     }
 
     // Disk luminosity
-    AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto luminosity_disk(amrex::Real mass, amrex::Real radius, amrex::Real mdot) -> amrex::Real
+    AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto luminosity_disk(amrex::Real mass, amrex::Real radius, amrex::Real mdot) -> amrex::Real
     {
         return (1.0 - StellarConstants::F_k) * Gconst * mass * mdot / radius;
     }
 
     // Total luminosity
-    AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto luminosity_total(amrex::Real mass, amrex::Real radius, amrex::Real mdot,
+    AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto luminosity_total(amrex::Real mass, amrex::Real radius, amrex::Real mdot,
                                                                burningState burn_state) -> amrex::Real
     {
         if (burn_state == burningState::Uninitialized) {

@@ -38,7 +38,7 @@ struct ParticlePropertyUpdateBase {
 		applyUpdate<problem_t, ContainerType>(container, current_time, dt, gpu_tables);
 	}
 
-  protected:
+  public:
 	template <typename problem_t, typename ContainerType>
 	static void applyUpdate(ContainerType *container, amrex::Real current_time, amrex::Real dt,
 				LuminosityGpuConstTables<Physics_Traits<problem_t>::nGroups> const &gpu_tables) noexcept
