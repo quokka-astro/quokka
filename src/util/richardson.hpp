@@ -109,6 +109,10 @@ template <typename Callable> auto run(const Parameters &params, Callable &&runTe
 	if (resolutions.size() >= 2) {
 		if (!std::isfinite(errors[0]) || !std::isfinite(errors.back()) || errors.back() <= 0.0 || errors[0] <= 0.0) {
 			amrex::Print() << "\nOverall convergence rate: N/A (non-positive or non-finite errors)\n";
+			amrex::Print() << "Problematic values:\n";
+			for (int i = 0; i < resolutions.size(); ++i) {
+				amrex::Print() << std::format("  nx={:4d}  error={:.6e}\n", resolutions[i], errors[i]);
+			}
 		} else {
 			double const overall_log_error_ratio = std::log(errors[0] / errors.back());
 			double const overall_log_dx_ratio = std::log(dx_values[0] / dx_values.back());
