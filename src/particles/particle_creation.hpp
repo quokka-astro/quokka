@@ -8,6 +8,7 @@
 #include "particle_types.hpp"
 #include "particles/particle_utils.hpp"
 #include "stellarpop_data.hpp"
+#include "starparticle_radiation.hpp"
 #include <array>
 #include <cmath>
 #include <limits>
@@ -767,7 +768,7 @@ template <> struct ParticleCreationTraits<ParticleType::Star> {
 				p.rdata(StarParticleMdeutIdx) = particle_mass / num_particles;	  // initial deuterium mass = particle mass
 				p.rdata(StarParticleNIdx) = 1.5;				  // polytropic index npoly
 				p.idata(StarParticleBurnStateIdx) = Uninitialized;		  // burn state
-				p.rdata(StarParticleLHistIdx) = 3.90e31;			  // l_hist (L_sun in erg/s)
+				p.rdata(StarParticleLHistIdx) = 0.01 * StellarPhysics::L_solar;			  // l_hist (L_sun in erg/s)
 				p.rdata(StarParticleLumIdx) = 0.0;				  // luminosity (computed by updateStellarProperties)
 			}
 
