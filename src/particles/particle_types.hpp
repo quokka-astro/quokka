@@ -317,7 +317,8 @@ AMREX_ENUM(SinkParticleRealIdx, // NOLINT
 	   mass,		// Mass of the particle
 	   vx,			// Velocity in x direction
 	   vy,			// Velocity in y direction
-	   vz			// Velocity in z direction
+	   vz,			// Velocity in z direction
+	   mdot			// Current mass accretion rate
 );
 
 // Backward compatibility aliases for existing code
@@ -325,9 +326,10 @@ constexpr int SinkParticleMassIdx = static_cast<int>(SinkParticleRealIdx::mass);
 constexpr int SinkParticleVxIdx = static_cast<int>(SinkParticleRealIdx::vx);
 constexpr int SinkParticleVyIdx = static_cast<int>(SinkParticleRealIdx::vy);
 constexpr int SinkParticleVzIdx = static_cast<int>(SinkParticleRealIdx::vz);
+constexpr int SinkParticleMdotIdx = static_cast<int>(SinkParticleRealIdx::mdot);
 
 // Number of real components for Sink_particles
-constexpr int SinkParticleRealComps = 4; // mass, vx, vy, vz
+constexpr int SinkParticleRealComps = 5; // mass, vx, vy, vz, mdot
 
 // Type definitions for Sink_particles container and iterator
 using SinkParticleContainer = amrex::AmrParticleContainer<SinkParticleRealComps>;
@@ -391,6 +393,7 @@ template <ParticleType particleType, typename problem_t> auto getParticleRealCom
 	}
 #endif
 	else {
+		amrex::Abort("Unknown particle type");
 		return {};
 	}
 }
@@ -416,6 +419,8 @@ template <ParticleType particleType, typename problem_t> auto getParticleIntComp
 	} else if constexpr (particleType == ParticleType::Test) {
 		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<TestParticleIntIdx>();
 		names = {enum_names.begin(), enum_names.end()};
+	} else {
+		amrex::Abort("Unknown particle type");
 	}
 #endif
 	return names;
@@ -453,7 +458,7 @@ inline auto get_units_data() -> const auto &
 	       {"death_density", {1, -3, 0, 0}},
 	       {"mass_at_birth", {1, 0, 0, 0}},
 	       {"luminosity", {-1, 2, -3, 0}}}}},
-	    {ParticleType::Sink, {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}}}}},
+	    {ParticleType::Sink, {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}}, {"mdot", {1, 0, -1, 0}}}}},
 	    {ParticleType::Test,
 	     {{{"mass", {1, 0, 0, 0}},
 	       {"vx", {0, 1, -1, 0}},
