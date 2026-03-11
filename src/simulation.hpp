@@ -3565,22 +3565,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 		createInitialStarParticles();
 	}
 
-	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Star) {
-		AMREX_ASSERT(StarParticles == nullptr);
-
-		static_assert(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS, "UnitSystem must be CGS for Star particles");
-
-		// Create particle container
-		StarParticles = std::make_unique<quokka::StarParticleContainer>(this);
-		StarParticles->SetVerbose(0);
-
-		// Register with particle register - Star particles allow creation
-		particleRegister_.template registerParticleType<quokka::ParticleType::Star>(StarParticles.get());
-
-		// Initialize particles through user-defined function
-		createInitialStarParticles();
-	}
-
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) {
 		if (is_restart) {
 			initializeParticleContainerFromCheckpoint<quokka::ParticleType::Sink>(SinkParticles, *header_box_arrays);
@@ -4806,30 +4790,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	InitPhyParticles(&header_box_arrays);
 
 #if AMREX_SPACEDIM == 3
-	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CIC) {
-		initializeParticleContainerFromCheckpoint<quokka::ParticleType::CIC>(CICParticles, header_box_arrays);
-	}
-
-	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CICRad) {
-		initializeParticleContainerFromCheckpoint<quokka::ParticleType::CICRad>(CICRadParticles, header_box_arrays);
-	}
-
-	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::StochasticStellarPop) {
-		initializeParticleContainerFromCheckpoint<quokka::ParticleType::StochasticStellarPop>(StochasticStellarPopParticles, header_box_arrays);
-	}
-
-	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Star) {
-		initializeParticleContainerFromCheckpoint<quokka::ParticleType::Star>(StarParticles, header_box_arrays);
-	}
-
-	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) {
-		initializeParticleContainerFromCheckpoint<quokka::ParticleType::Sink>(SinkParticles, header_box_arrays);
-	}
-
-	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Test) {
-		initializeParticleContainerFromCheckpoint<quokka::ParticleType::Test>(TestParticles, header_box_arrays);
-	}
-
 	// Read SFH data from metadata
 	last_sfh_time_ = particleRegister_.readSFH(simulationMetadata_, sn_count_cumulative_);
 #endif // AMREX_SPACEDIM == 3

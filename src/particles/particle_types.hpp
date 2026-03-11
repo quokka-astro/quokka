@@ -538,7 +538,8 @@ inline auto get_units_data() -> const auto &
 	       {"mdeut", {1, 0, 0, 0}},
 	       {"n", {0, 0, 0, 0}},
 	       {"mdot", {1, 0, -1, 0}},
-	       {"luminosity", {-1, 2, -3, 0}}}}},
+	       {"luminosity", {-1, 2, -3, 0}},
+	       {"radius", {0, 1, 0, 0}}}}},
 	    {ParticleType::Test,
 	     {{{"mass", {1, 0, 0, 0}},
 	       {"vx", {0, 1, -1, 0}},
@@ -581,6 +582,7 @@ inline bool SN_smooth_gas_velocity = true; // NOLINT
 inline bool sink_particle_use_uniform_kernel = false; // NOLINT. If true, use uniform accretion kernel in a (7 dx)^3 box
 
 // Star particle accretion
+// TODO(cche): remove this
 inline bool star_particle_use_uniform_kernel = false; // NOLINT. If true, use uniform accretion kernel in a (7 dx)^3 box
 
 // Verbosity for particle operations
