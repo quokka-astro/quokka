@@ -1,23 +1,5 @@
 # Particles, star formation and feedback
 
-## StochasticStellarPop Particle Type
-
-StochasticStellarPop particles carry the following real-valued attributes:
-
-- **Mass**: Current particle mass ($M_{\star}$)
-- **Velocity**: Three-dimensional velocity vector $(v_x, v_y, v_z)$
-- **Birth time**: Simulation time when the particle formed
-- **Death time**: When the particle explodes as a supernova
-- **Mass at birth**: Initial mass before mass loss
-- **Luminosity**: Radiation luminosity (if radiation is enabled)
-
-Each particle also stores an integer **evolution stage** that tracks its lifecycle:
-
-- `SNProgenitor`: High-mass star ($M > 8 M_{\odot}$) that will explode as a supernova
-- `SNRemnant`: Compact remnant left after supernova explosion
-- `LowMassStar`: Low-mass star that will not explode (not used in the current star formation implementation)
-- `LowMassComposite`: Composite particle representing a population of low-mass stars
-
 ## Sink Particle Type
 
 Sink particles carry the following real-valued attributes:
@@ -153,6 +135,24 @@ The `ParticleSink` test validates Bondi-Hoyle accretion and Galilean invariance.
 1. **Base simulation**: Runs with zero boost velocity and validates the density profile against an analytical solution.
 2. **Boosted simulation**: Runs with a boost velocity of $10^8$ cm/s and verifies that the density profile matches the analytical solution, demonstrating Galilean invariance.
 3. **Multi-timestep evolution**: Continues the boosted simulation for additional timesteps and validates total mass conservation to machine precision.
+
+## StochasticStellarPop Particle Type
+
+StochasticStellarPop particles carry the following real-valued attributes:
+
+- **Mass**: Current particle mass ($M_{\star}$)
+- **Velocity**: Three-dimensional velocity vector $(v_x, v_y, v_z)$
+- **Birth time**: Simulation time when the particle formed
+- **Death time**: When the particle explodes as a supernova
+- **Mass at birth**: Initial mass before mass loss
+- **Luminosity**: Radiation luminosity (if radiation is enabled)
+
+Each particle also stores an integer **evolution stage** that tracks its lifecycle:
+
+- `SNProgenitor`: High-mass star ($M > 8 M_{\odot}$) that will explode as a supernova
+- `SNRemnant`: Compact remnant left after supernova explosion
+- `LowMassStar`: Low-mass star that will not explode (not used in the current star formation implementation)
+- `LowMassComposite`: Composite particle representing a population of low-mass stars
 
 ## Star Formation
 
