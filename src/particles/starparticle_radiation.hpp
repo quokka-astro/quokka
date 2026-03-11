@@ -18,17 +18,16 @@ namespace quokka
 namespace StellarConstants
 {
     // Solar properties
-    static constexpr amrex::Real M_solar = 1.99e33;
-    static constexpr amrex::Real L_solar = 3.90e33;
-    static constexpr amrex::Real R_solar = 6.96e10;
+    using C::M_solar;
+    static constexpr amrex::Real L_solar = 3.828e+33; // erg/s, CODATA 2022
+    using C::R_solar;
 
     // Physical constants
-    static constexpr amrex::Real G = 6.67e-8;
-    static constexpr amrex::Real pi = 3.14159265358979323846;
-    static constexpr amrex::Real a_rad = 7.56e-15;        // radiation constant
-    static constexpr amrex::Real k_B = 1.38e-16;          // Boltzmann constant
-    static constexpr amrex::Real m_H = 1.67e-24;          // hydrogen mass
-    static constexpr amrex::Real sigma_SB = 5.67e-5;      // Stefan-Boltzmann constant
+    using C::Gconst;
+    using C::a_rad;        // radiation constant
+		using C::k_B;
+		using C::m_u;
+		using C::sigma_SB;
     static constexpr amrex::Real mu = 0.613;              // mean molecular weight
 
     // Model parameters
@@ -170,7 +169,7 @@ namespace StellarPhysics
     {
         using namespace StellarConstants;
         
-        amrex::Real volume = (4.0 / 3.0) * pi * radius * radius * radius;
+        amrex::Real volume = (4.0 / 3.0) * M_PI * radius * radius * radius;
         amrex::Real rho_mean = mass / volume;
         amrex::Real rho_factor = rho_factor_interp(n);
         
@@ -183,7 +182,7 @@ namespace StellarPhysics
         using namespace StellarConstants;
         
         amrex::Real p_factor = pressure_factor_interp(n);
-        return p_factor * G * mass * mass / (radius * radius * radius * radius);
+        return p_factor * Gconst * mass * mass / (radius * radius * radius * radius);
     }
 
     // Central temperature from equation of state
@@ -195,14 +194,14 @@ namespace StellarPhysics
         amrex::Real P_c = pressure_central(mass, radius, n);
         
         // Gas temperature if radiation pressure negligible
-        amrex::Real T_gas = P_c * mu * m_H / (k_B * rho_c);
+        amrex::Real T_gas = P_c * mu * m_u / (k_B * rho_c);
         
         // Radiation temperature if gas pressure negligible
         amrex::Real T_rad = std::pow(3.0 * P_c / a_rad, 0.25);
         
-        // Solve full EOS: P = ρkT/μm_H + aT⁴/3 using TOMS 748 root finder
+        // Solve full EOS: P = ρkT/μm_u + aT⁴/3 using TOMS 748 root finder
         auto pressure_func = [=](amrex::Real T) {
-            return P_c - rho_c * k_B * T / (mu * m_H) - (a_rad * std::pow(T, 4)) / 3.0;
+            return P_c - rho_c * k_B * T / (mu * m_u) - (a_rad * std::pow(T, 4)) / 3.0;
         };
 
         // Lower bound at 1 K (f > 0); upper bound at 2x the pure-gas or pure-radiation estimate (f < 0)
@@ -222,7 +221,7 @@ namespace StellarPhysics
         amrex::Real rho_c = rho_central(mass, radius, n);
         amrex::Real P_c = pressure_central(mass, radius, n);
         
-        amrex::Real coefficient = 3.0 / a_rad * std::pow(k_B * rho_c / (mu * m_H), 4);
+        amrex::Real coefficient = 3.0 / a_rad * std::pow(k_B * rho_c / (mu * m_u), 4);
         
         auto beta_func = [=](amrex::Real beta) {
             return std::pow(P_c, 3) - coefficient * (1.0 - beta) / std::pow(beta, 4);
@@ -332,15 +331,15 @@ namespace StellarPhysics
         using namespace StellarConstants;
         
         amrex::Real L_zams = luminosity_ZAMS(mass);
-        amrex::Real L_acc = F_acc * F_k * G * mass * mdot / radius;
+        amrex::Real L_acc = F_acc * F_k * Gconst * mass * mdot / radius;
         amrex::Real L_total = L_zams + L_acc;
         
         // Hayashi limit check
-        amrex::Real T_eff = std::pow(L_total / (4.0 * pi * radius * radius * sigma_SB), 0.25);
+        amrex::Real T_eff = std::pow(L_total / (4.0 * M_PI * radius * radius * sigma_SB), 0.25);
         if (T_eff > T_Hayashi) {
             return L_total;
         } else {
-            return 4.0 * pi * radius * radius * sigma_SB * std::pow(T_Hayashi, 4);
+            return 4.0 * M_PI * radius * radius * sigma_SB * std::pow(T_Hayashi, 4);
         }
     }
 
@@ -348,7 +347,7 @@ namespace StellarPhysics
     AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto luminosity_disk(amrex::Real mass, amrex::Real radius, amrex::Real mdot) -> amrex::Real
     {
         using namespace StellarConstants;
-        return (1.0 - F_k) * G * mass * mdot / radius;
+        return (1.0 - F_k) * Gconst * mass * mdot / radius;
     }
 
     // Total luminosity

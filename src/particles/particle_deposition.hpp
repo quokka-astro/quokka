@@ -56,7 +56,7 @@ constexpr int SN_stencil_size = 3;
 constexpr int SN_stencil_array_size = SN_stencil_size + 1;
 
 constexpr double cloudy_H_mass_fraction = 1.0 / (1.0 + 0.1 * 3.971);
-constexpr double m_u = C::m_u;
+using C::m_u;
 
 //-------------------- Radiation depositions --------------------
 
