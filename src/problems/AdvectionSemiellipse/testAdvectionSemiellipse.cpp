@@ -17,7 +17,7 @@
 #endif
 #include "linear_advection/AdvectionSimulation.hpp"
 #include "linear_advection/linear_advection.hpp"
-#include <fmt/format.h>
+#include <format>
 #include <vector>
 
 #include "util/BC.hpp"

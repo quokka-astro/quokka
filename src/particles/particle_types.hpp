@@ -80,6 +80,20 @@ enum class ParticleType {
 	Star                       // Star particles
 };
 
+// Compile-time particle metadata.
+// Default policy: do not split particles during restart refinement unless explicitly enabled.
+template <ParticleType particleType> struct ParticleTypeTraits {
+	static constexpr bool allow_restart_refine_splitting = false;
+};
+
+template <> struct ParticleTypeTraits<ParticleType::CIC> {
+	static constexpr bool allow_restart_refine_splitting = true;
+};
+
+template <> struct ParticleTypeTraits<ParticleType::CICRad> {
+	static constexpr bool allow_restart_refine_splitting = true;
+};
+
 // Enum for SN schemes: ThermalOnly, ThermalAndMomentum
 AMREX_ENUM(SNScheme,				   // NOLINT
 	   SN_thermal_only,			   // pure thermal
@@ -578,7 +592,17 @@ inline bool disable_particle_drift = false; // NOLINT
 // Maximum velocity limit for stellar particles in cm/s (default: 1000 km/s)
 inline amrex::Real stellar_velocity_limit = 1.0e8; // NOLINT
 
+// Maximum mass for LowMassComposite particles. Default is set to max(), so no splitting is performed.
+inline amrex::Real low_mass_composite_max_mass = std::numeric_limits<amrex::Real>::max(); // NOLINT
+
 inline int reproducibility_roundoff_redundancy = 20; // NOLINT; remove 20 bits from the significand
+
+// Scalar yield per supernova (total amount, not density)
+inline amrex::Real scalar_yield_per_SN = 1.0; // NOLINT
+
+// SN terminal momentum in units of M_sun * km/s (runtime-configurable). Default: canonical value from Kim & Ostriker 2015.
+inline constexpr amrex::Real SN_p_term_Msunkmps_canonical = 2.8e5;    // [M_sun km/s]
+inline amrex::Real SN_p_term_Msunkmps = SN_p_term_Msunkmps_canonical; // NOLINT
 
 // Function to parse particle parameters from input file
 // The 'inline' keyword allows this function to be defined in a header file without
@@ -612,8 +636,17 @@ inline void particleParmParse()
 	// Stellar velocity limit parameter
 	pp.query("stellar_velocity_limit", stellar_velocity_limit);
 
+	// Low-mass composite particle mass cap (split into multiple particles if exceeded)
+	pp.query("low_mass_composite_max_mass", low_mass_composite_max_mass);
+
 	// Roundoff factor for particles
 	pp.query("reproducibility_roundoff_redundancy", reproducibility_roundoff_redundancy);
+
+	// Scalar yield per supernova
+	pp.query("scalar_yield_per_SN", scalar_yield_per_SN);
+
+	// SN terminal momentum (overrides canonical value if set)
+	pp.query("SN_p_term_Msunkmps", SN_p_term_Msunkmps);
 
 	// Placeholder parameters for particles
 	pp.query("param1", particle_param1);

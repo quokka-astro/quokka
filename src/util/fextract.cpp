@@ -1,4 +1,6 @@
+#include <algorithm>
 #include <limits>
+#include <numeric>
 #include <tuple>
 
 #include "AMReX_Geometry.H"
@@ -224,5 +226,27 @@ auto fextract(MultiFab &mf, Geometry &geom, const int idir, const Real slice_coo
 	}
 #endif // AMREX_USE_MPI
 
+	// Permute data from different MPI processors
+	if (!pos.empty()) {
+		size_t const n_pts = pos.size();
+		std::vector<size_t> p(n_pts);
+		std::iota(p.begin(), p.end(), 0);
+
+		std::sort(p.begin(), p.end(), [&](size_t i, size_t j) { return pos[i] < pos[j]; });
+
+		Vector<Real> sorted_pos(n_pts);
+		for (size_t i = 0; i < n_pts; ++i) {
+			sorted_pos[i] = pos[p[i]];
+		}
+		pos = std::move(sorted_pos);
+
+		for (auto &var_vec : data) {
+			Gpu::HostVector<Real> sorted_var(var_vec.size());
+			for (size_t i = 0; i < n_pts; ++i) {
+				sorted_var[i] = var_vec[p[i]];
+			}
+			var_vec = std::move(sorted_var);
+		}
+	}
 	return std::make_tuple(pos, data);
 }

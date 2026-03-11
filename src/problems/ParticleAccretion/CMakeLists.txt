@@ -14,4 +14,6 @@ if(AMReX_SPACEDIM EQUAL 3)
     NAME ParticleAccretionBH
     COMMAND ${JOB_NAME} ../inputs/ParticleAccretionBH.in
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+
+  set_tests_properties(${JOB_NAME} PROPERTIES COST 95)
 endif()

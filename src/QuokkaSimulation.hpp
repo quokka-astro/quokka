@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <format>
 #include <iostream>
 #include <set>
 #if __has_include(<filesystem>)
@@ -135,6 +136,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::Gconst_;
 
 	using AMRSimulation<problem_t>::densityFloor_;
+	using AMRSimulation<problem_t>::dustDensityFloor_;
 	using AMRSimulation<problem_t>::tempFloor_;
 
 	using AMRSimulation<problem_t>::max_level;
@@ -297,7 +299,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const override;
 
 	// compute projected vars
-	[[nodiscard]] auto ComputeProjections(amrex::Direction dir) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>> override;
 
 	// compute statistics
 	auto ComputeStatistics() -> std::map<std::string, amrex::Real> override;
@@ -534,7 +535,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::getScalarVariabl
 	names.reserve(nscalars);
 	for (int n = 0; n < nscalars; ++n) {
 		// write string 'scalar_1', etc.
-		names.push_back(fmt::format("scalar_{}", n));
+		names.push_back(std::format("scalar_{}", n));
 	}
 	return names;
 }
@@ -650,18 +651,18 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		peHeatingTables_.pe_heating = quokka::DataTable<1, 1>::CSVReader(sfh_to_pe_heating_table_filename_, quokka::SpacingType::fast_log);
 
 		amrex::Print() << "PE heating table loaded successfully.\n";
-		amrex::Print() << fmt::format("\tTable dimension: {}\n", peHeatingTables_.pe_heating.size(0));
-		amrex::Print() << fmt::format("\tNumber of outputs: {}\n", peHeatingTables_.pe_heating.num_outputs());
+		amrex::Print() << std::format("\tTable dimension: {}\n", peHeatingTables_.pe_heating.size(0));
+		amrex::Print() << std::format("\tNumber of outputs: {}\n", peHeatingTables_.pe_heating.num_outputs());
 
 		// Validate table metadata matches expected hardcoded values
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(peHeatingTables_.pe_heating.input_name(0) == "age",
-						 fmt::format("PE heating table input must be 'age', got '{}'", peHeatingTables_.pe_heating.input_name(0)));
+						 std::format("PE heating table input must be 'age', got '{}'", peHeatingTables_.pe_heating.input_name(0)));
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 		    peHeatingTables_.pe_heating.input_unit(0) == "year",
-		    fmt::format("PE heating table input unit must be 'year', got '{}'", peHeatingTables_.pe_heating.input_unit(0)));
+		    std::format("PE heating table input unit must be 'year', got '{}'", peHeatingTables_.pe_heating.input_unit(0)));
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 		    peHeatingTables_.pe_heating.output_unit(0) == "erg/s/Msun",
-		    fmt::format("PE heating table output unit must be 'erg/s/Msun', got '{}'", peHeatingTables_.pe_heating.output_unit(0)));
+		    std::format("PE heating table output unit must be 'erg/s/Msun', got '{}'", peHeatingTables_.pe_heating.output_unit(0)));
 
 		// Set global pointer for access from particle functions
 		quokka::g_pe_heating_tables_ptr<> = &peHeatingTables_;
@@ -683,6 +684,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		dpp.query("omega", dust_omega_);
 		dpp.query("enable_iter_stoptime", enableIterDustStoptime_);
 		dpp.query("print_iteration_counts", print_dust_counter_);
+		dpp.query("density_floor", dustDensityFloor_);
 	}
 
 	// set radiation runtime parameters
@@ -787,7 +789,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::printCellPropert
 		const amrex::Real P = quokka::EOS<problem_t>::ComputePressure(rho, Eint);
 		const amrex::Real cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P);
 
-		amrex::AllPrint() << fmt::format("...[level {}] \tcell density = {:e}, |v| = {:e}, cs = {:e}\n", lev, rho, vel_mag, cs);
+		amrex::AllPrint() << std::format("...[level {}] \tcell density = {:e}, |v| = {:e}, cs = {:e}\n", lev, rho, vel_mag, cs);
 	}
 }
 
@@ -1051,13 +1053,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDensityFl
 		}
 	}
 	amrex::Gpu::streamSynchronize();
-}
-
-template <typename problem_t>
-auto QuokkaSimulation<problem_t>::ComputeProjections(const amrex::Direction /*dir*/) const -> std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>
-{
-	// compute projections and return as unordered_map -- user should implement
-	return std::unordered_map<std::string, amrex::BaseFab<amrex::Real>>{};
 }
 
 template <typename problem_t> auto QuokkaSimulation<problem_t>::ComputeStatistics() -> std::map<std::string, amrex::Real>
@@ -1783,13 +1778,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::FixupState(int l
 									  amrex::Real base_density_floor) -> amrex::Real {
 			return density_floor_parser(x, y, z, base_density_floor);
 		};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev], geom[lev], density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_new_cc_[lev], geom[lev], density_floor_func);
 	} else {
 		auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
 									     amrex::Real base_density_floor) -> amrex::Real {
 			return densityFloor(x, y, z, base_density_floor);
 		};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev], geom[lev], density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_new_cc_[lev], geom[lev], density_floor_func);
 	}
 
 	// sync internal energy and total energy
@@ -2300,13 +2295,13 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 										  amrex::Real base_density_floor) -> amrex::Real {
 				return density_floor_parser(x, y, z, base_density_floor);
 			};
-			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew_cc, geom[lev], density_floor_func);
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, stateNew_cc, geom[lev], density_floor_func);
 		} else {
 			auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
 										     amrex::Real base_density_floor) -> amrex::Real {
 				return densityFloor(x, y, z, base_density_floor);
 			};
-			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew_cc, geom[lev], density_floor_func);
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, stateNew_cc, geom[lev], density_floor_func);
 		}
 
 		if (useDualEnergy_ == 1) {
@@ -2323,9 +2318,9 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				       PostInterpState);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				fillBoundaryConditions(state_inter_fc_[idim], state_inter_fc_[idim], lev, time, quokka::centering::fc, quokka::direction{idim},
-						       AMRSimulation<problem_t>::InterpHookNone, AMRSimulation<problem_t>::InterpHookNone,
-						       FillPatchType::fillpatch_function);
+				fillBoundaryConditions(state_inter_fc_[idim], state_inter_fc_[idim], lev, time + dt_lev, quokka::centering::fc,
+						       quokka::direction{idim}, AMRSimulation<problem_t>::InterpHookNone,
+						       AMRSimulation<problem_t>::InterpHookNone, FillPatchType::fillpatch_function);
 			}
 		}
 
@@ -2424,13 +2419,13 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 										  amrex::Real base_density_floor) -> amrex::Real {
 				return density_floor_parser(x, y, z, base_density_floor);
 			};
-			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal_cc, geom[lev], density_floor_func);
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, stateFinal_cc, geom[lev], density_floor_func);
 		} else {
 			auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
 										     amrex::Real base_density_floor) -> amrex::Real {
 				return densityFloor(x, y, z, base_density_floor);
 			};
-			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal_cc, geom[lev], density_floor_func);
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, stateFinal_cc, geom[lev], density_floor_func);
 		}
 
 		if (useDualEnergy_ == 1) {

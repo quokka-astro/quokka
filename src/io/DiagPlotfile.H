@@ -50,6 +50,8 @@ class DiagPlotfile : public DiagBase::Register<DiagPlotfile>
 
       private:
 	std::vector<std::string> m_particleTypes; // List of particle types to include (empty means all)
+	std::vector<std::string> m_varNames;	  // Selected cc field names (empty = all)
+	bool m_includeFcFields{true};		  // Whether to write fc_vars (default: true)
 	int m_nfiles{-1};			  // Number of files for output (-1 means default)
 
 	// Helper function to write metadata file
@@ -86,6 +88,40 @@ template <typename problem_t> void DiagPlotfile::processDiag(int a_nstep, const 
 	auto const geoms = sim->Geom(0, finest_level);
 	auto const refRatio = sim->refRatio();
 
+	// Filter variables if field_names specified
+	amrex::Vector<std::string> varnames_out;
+	amrex::Vector<amrex::MultiFab> mf_cc_filtered; // keep alive for scope
+	amrex::Vector<const amrex::MultiFab *> mf_cc_out_ptr;
+
+	if (m_varNames.empty()) {
+		varnames_out = varnames;
+		mf_cc_out_ptr = mf_cc_ptr;
+	} else {
+		amrex::Vector<int> selected_indices;
+		for (const auto &name : m_varNames) {
+			bool found = false;
+			for (int n = 0; n < static_cast<int>(varnames.size()); ++n) {
+				if (varnames[n] == name) {
+					varnames_out.push_back(name);
+					selected_indices.push_back(n);
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				amrex::Abort("DiagPlotfile: Requested field in field_names '" + name + "' not found in available variables!");
+			}
+		}
+		int const nSelected = static_cast<int>(selected_indices.size());
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			mf_cc_filtered.emplace_back(mf_cc[lev].boxArray(), mf_cc[lev].DistributionMap(), nSelected, mf_cc[lev].nGrowVect());
+			for (int n = 0; n < nSelected; ++n) {
+				amrex::MultiFab::Copy(mf_cc_filtered.back(), mf_cc[lev], selected_indices[n], n, 1, mf_cc[lev].nGrowVect());
+			}
+		}
+		mf_cc_out_ptr = amrex::GetVecOfConstPtrs(mf_cc_filtered);
+	}
+
 #ifdef QUOKKA_USE_OPENPMD
 	// Write using OpenPMD format
 	quokka::OpenPMDOutput::WriteFile(varnames, finest_level + 1, mf_cc_ptr, geoms, m_diagfile, a_time, sim->istep[0]);
@@ -97,7 +133,7 @@ template <typename problem_t> void DiagPlotfile::processDiag(int a_nstep, const 
 	quokka::ScopedVisMFNOutFiles scoped_nfiles(m_nfiles);
 
 	// Write the main plotfile data using standard AMReX format
-	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_cc_ptr, varnames, geoms, a_time, sim->istep, refRatio);
+	amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, mf_cc_out_ptr, varnames_out, geoms, a_time, sim->istep, refRatio);
 
 	// Write metadata file (inside the plotfile directory)
 	WriteMetadataFile(plotfilename + "/metadata.yaml", sim->simulationMetadata_);
@@ -107,8 +143,8 @@ template <typename problem_t> void DiagPlotfile::processDiag(int a_nstep, const 
 		sim->TracerPC->WritePlotFile(plotfilename, "tracer_particles");
 	}
 
-	// Write face-centered data
-	if (!varnames_fc[0].empty()) {
+	// Write face-centered data whenever fc variables exist (MHD enabled) and include_fc_fields = 1
+	if (m_includeFcFields && !varnames_fc[0].empty()) {
 		// Create fc_vars directory if it doesn't exist
 		const std::string fc_vars_dir = plotfilename + "/fc_vars";
 		if (amrex::ParallelDescriptor::IOProcessor()) {

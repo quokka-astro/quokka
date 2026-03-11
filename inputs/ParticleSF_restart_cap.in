@@ -29,17 +29,19 @@ hydro.artificial_viscosity_coefficient = 0.1
 particles.SN_scheme = SN_thermal_or_thermal_momentum
 particles.verbose = 0
 particles.eps_ff = 0.5
+particles.low_mass_composite_max_mass = 2.0e35
 # Maximum velocity limit for stellar particles (cm/s), default: 1.0e8 (1000 km/s)
 particles.stellar_velocity_limit = 1.0e8
 
 problem.n0 = 1.0e5
 problem.Tamb = 1.0e1
 
-restartfile = chk0000010
-max_timesteps = 20
+max_timesteps = 10
 initial_dt = 3.15576e12
+plotfile_prefix = plt_sf_cap
+checkpoint_prefix = chk_sf_cap
 plotfile_interval = 10
-checkpoint_interval = -1
+checkpoint_interval = 10
 
 # *****************************************************************
 # Cooling parameters
@@ -48,7 +50,9 @@ cooling.enabled = 1
 cooling.cooling_table_type = resampled
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled_no_PE.h5"
 use_sfh_based_pe_heating = true
-const_sfr_Msun_per_year_per_kpc2 = 3.0e-2
 sfh_to_pe_heating_table = "../extern/cooling/photoelectric_heating_from_sfh.csv"
 #sfh_interval = 3
-sfh_time_interval = 4e10
+sfh_time_interval = 4e10 		# years
+sf_area_kpc2 = 1.0 					# kpc^2
+
+problem.validate_initial_imf_stats = false
