@@ -577,7 +577,7 @@ inline bool SN_smooth_gas_velocity = true; // NOLINT
 inline bool sink_particle_use_uniform_kernel = false; // NOLINT. If true, use uniform accretion kernel in a (7 dx)^3 box
 
 // Star particle accretion
-// TODO(cche): remove this
+// TODO(CCHE): remove this
 inline bool star_particle_use_uniform_kernel = false; // NOLINT. If true, use uniform accretion kernel in a (7 dx)^3 box
 
 // Verbosity for particle operations
