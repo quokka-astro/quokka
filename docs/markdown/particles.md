@@ -43,7 +43,7 @@ The particle inherits the gas velocity of the parent cell. The cell density is t
 
 ### Practical considerations
 
-- The local maximum check uses a strict inequality ($\rho_{\text{neighbor}} > \rho_{\text{cell}}$), so ties do not prevent formation. In practice, exact density ties only occur in artificial initial conditions.
+- The local maximum check uses a strict inequality ($\rho_{\text{cell}} > \rho_{\text{neighbor}}$), so ties do not prevent formation. In practice, exact density ties only occur in artificial initial conditions.
 - Sink formation is applied after sink accretion in each timestep, so newly formed particles do not overlap with existing accretion zones.
 
 ## Sink Particle Accretion
@@ -60,7 +60,7 @@ $$
 r_{\text{BH}} = \frac{G M}{v_\infty^2 + c_{f,\infty}^2},
 $$
 
-where $M$ is the particle mass, $v_\infty$ is the gas velocity relative to the particle (mass-weighted mean over the accretion zone), and $c_{f,\infty}$ is the fast magnetosonic speed (mass-weighted mean over the accretion zone). For MHD, $c_f^2 = c_s^2 (1 + 2/\beta)$; for non-MHD, $c_f = c_s$.
+where $M$ is the particle mass, $v_\infty$ is the gas velocity relative to the particle (mass-weighted mean over the accretion zone), and $c_{f,\infty}$ is the fast magnetosonic speed. We take the upper bound of the fast speed (when the wave propagates perpendicular to the magnetic field): $c_f^2 = c_s^2 + v_A^2 = c_s^2 (1 + 2/\beta)$. For non-MHD, this reduces to $c_f = c_s$.
 
 The accretion rate is
 
@@ -168,7 +168,7 @@ The star formation module adds star particles through a stochastic prescription 
 
 Eligible cells are first identified through a Jeans-length check before any stochastic sampling occurs.
 
-- Compute the Jeans density $\rho_J = J^2 \pi c_{\text{eff}}^2 / (G \Delta x^2)$, where $J = 0.25$ is the Jeans number and $c_{\text{eff}} = c_s \sqrt{1 + 0.74 / \beta}$ is the effective sound speed, accounting for thermal pressure and magnetic pressure with $\beta = P_{\text{thermal}} / P_{\text{magnetic}}$.
+- Compute the Jeans density $\rho_J = J^2 \pi c_{\text{eff}}^2 / (G \Delta x^2)$, where $J = 0.25$ is the Jeans number and $c_{\text{eff}} = c_s \sqrt{1 + 0.74 / \beta}$ is the effective sound speed, accounting for thermal pressure and magnetic pressure with $\beta = P_{\text{thermal}} / P_{\text{magnetic}}$ (Mouschovias & Spitzer, 1976, ApJ, 210, 326; see also Myers et al, 2013, ApJ, 766, 97).
 - Mark the cell as eligible when $\rho > \rho_J$.
 - Only eligible cells continue to the sampling steps below.
 
