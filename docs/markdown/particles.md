@@ -88,7 +88,7 @@ r_{\text{acc}} / 2 & r_{\text{BH}} > r_{\text{acc}} / 2.
 \end{cases}
 $$
 
-The accretion rate deposited in each cell is $\dot{M} \, w_i / \sum_i w_i$. Optionally, a uniform kernel ($w = 1$ for all cells in the $(7 \Delta x)^3$ stencil) can be used for testing by setting `particles.sink_particle_use_uniform_kernel = 1`.
+The accretion rate deposited in each cell is $-\dot{M} \, w_i / \sum_i w_i$ (negative means accreting). Optionally, a uniform kernel ($w = 1$ for all cells in the $(7 \Delta x)^3$ stencil) can be used for testing by setting `particles.sink_particle_use_uniform_kernel = 1`.
 
 ### Accretion limiters
 
