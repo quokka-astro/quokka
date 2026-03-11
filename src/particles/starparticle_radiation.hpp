@@ -5,6 +5,7 @@
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
 #include "fundamental_constants.H"
+#include "math/interpolate.hpp"
 #include "math/root_finding.hpp"
 #include "particles/particle_radiation.hpp"
 #include <cmath>
@@ -46,6 +47,9 @@ namespace StellarTables
 {
     // rho_mean/rho_c table for n=1.5 to 3.0 (step 0.1)
     static constexpr int n_rho_table = 17;
+    AMREX_GPU_CONSTANT constexpr amrex::Real n_table[n_rho_table] = {
+        1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.0, 3.1
+    };
     AMREX_GPU_CONSTANT constexpr amrex::Real rho_factor_table[n_rho_table] = {
         0.166931, 0.14742, 0.129933, 0.114265, 0.100242,
         0.0877, 0.0764968, 0.0665109, 0.0576198, 0.0497216,
@@ -150,34 +154,15 @@ namespace StellarPhysics
     }
 
     // Interpolate from central density table
-    // TODO(cche): replace with interpolate_value from interpolate.hpp	
-    AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto rho_factor_interp(amrex::Real n) -> amrex::Real
+    AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rho_factor_interp(amrex::Real n) -> amrex::Real
     {
-        using namespace StellarTables;
-        
-        // n ranges from 1.5 to 3.0, table index 0-16
-        amrex::Real idx_real = (n - 1.5) / 0.1;
-        int idx = static_cast<int>(std::floor(idx_real));
-        amrex::Real weight = idx_real - idx;
-        
-        // Clamp indices to table bounds
-        idx = std::max(0, std::min(n_rho_table - 2, idx));
-        
-        return rho_factor_table[idx] * (1.0 - weight) + rho_factor_table[idx + 1] * weight;
+        return interpolate_value<BoundaryPolicy::Clamp>(n, StellarTables::n_table, StellarTables::rho_factor_table, StellarTables::n_rho_table);
     }
 
     // Interpolate from central pressure table
-    AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto pressure_factor_interp(amrex::Real n) -> amrex::Real
+    AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto pressure_factor_interp(amrex::Real n) -> amrex::Real
     {
-        using namespace StellarTables;
-        
-        amrex::Real idx_real = (n - 1.5) / 0.1;
-        int idx = static_cast<int>(std::floor(idx_real));
-        amrex::Real weight = idx_real - idx;
-        
-        idx = std::max(0, std::min(n_rho_table - 2, idx));
-        
-        return pressure_factor_table[idx] * (1.0 - weight) + pressure_factor_table[idx + 1] * weight;
+        return interpolate_value<BoundaryPolicy::Clamp>(n, StellarTables::n_table, StellarTables::pressure_factor_table, StellarTables::n_rho_table);
     }
 
     // Central density of polytropic star
