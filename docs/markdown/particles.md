@@ -6,7 +6,7 @@ Star particles model individual protostars forming from gravitational collapse. 
 
 ### Particle Attributes
 
-Each Star particle stores 14 real-valued components and 1 integer component:
+Each Star particle stores 13 real-valued components and 1 integer component:
 
 | Index | Name | Description |
 |-------|------|-------------|
@@ -22,8 +22,7 @@ Each Star particle stores 14 real-valued components and 1 integer component:
 | 9 | `mdeut` | Deuterium mass reservoir |
 | 10 | `n` | Polytropic index ($1.5 \leq n \leq 3.0$) |
 | 11 | `mdot` | Mass accretion rate (set by the accretion module) |
-| 12 | `l_hist` | Historical luminosity (initialized to $L_\odot$) |
-| 13 | `lum` | Current total luminosity (updated every timestep) |
+| 12 | `lum` | Current total luminosity (updated every timestep) |
 
 The integer component stores the **burning state** (index 0):
 

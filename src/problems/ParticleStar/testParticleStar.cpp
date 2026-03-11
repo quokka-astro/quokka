@@ -244,7 +244,6 @@ auto problem_main() -> int
 			const double p_n = rdata[pos_offset + quokka::StarParticleNIdx];
 			const double p_mdeut = rdata[pos_offset + quokka::StarParticleMdeutIdx];
 			const double p_lum = rdata[pos_offset + quokka::StarParticleLumIdx];
-			const double p_lhist = rdata[pos_offset + quokka::StarParticleLHistIdx];
 			const auto p_burn_state = static_cast<quokka::burningState>(idata[quokka::StarParticleBurnStateIdx]);
 
 			amrex::Print() << "Particle " << p << ":\n";
@@ -253,7 +252,6 @@ auto problem_main() -> int
 			amrex::Print() << "  n        = " << p_n << "\n";
 			amrex::Print() << "  mdeut    = " << p_mdeut << " g\n";
 			amrex::Print() << "  lum      = " << p_lum << " erg/s\n";
-			amrex::Print() << "  l_hist   = " << p_lhist << " erg/s\n";
 			amrex::Print() << "  burnState = " << static_cast<int>(p_burn_state) << "\n";
 
 			// Check 1: burn_state should have progressed from Uninitialized if mdot > 0
