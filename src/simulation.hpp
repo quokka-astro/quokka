@@ -648,7 +648,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int do_tracers = 0;
 
       protected:
-	void InitParticles();									  // create tracer particles
+	void InitParticles(); // create tracer particles
 	std::unique_ptr<amrex::AmrTracerParticleContainer> TracerPC;
 
 #if AMREX_SPACEDIM == 3

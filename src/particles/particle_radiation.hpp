@@ -11,7 +11,6 @@ namespace quokka
 
 constexpr amrex::Real seconds_per_year = 3.15576e+07;
 
-
 // GPU-friendly const table access for luminosity tables
 // Nout should match nGroups in the problem
 template <int Nout = 1, quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp> struct LuminosityGpuConstTables {
@@ -74,7 +73,6 @@ class LuminosityUpdate
 		}
 	}
 };
-
 
 } // namespace quokka
 

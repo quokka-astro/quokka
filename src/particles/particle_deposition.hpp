@@ -88,7 +88,6 @@ struct RadDeposition {
 	}
 };
 
-
 //-------------------- Mass depositions --------------------
 
 // Functor for depositing particle mass onto the grid
@@ -835,7 +834,6 @@ auto SNDeposition(ContainerType *container, amrex::MultiFab &state, std::array<a
 
 	return {sn_count, max_velocity};
 }
-
 
 } // namespace quokka
 

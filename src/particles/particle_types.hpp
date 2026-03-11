@@ -392,9 +392,9 @@ template <ParticleType particleType, typename problem_t> auto getParticleIntComp
 {
 	amrex::Vector<std::string> names;
 
-	if constexpr (particleType == ParticleType::Rad) { // NOLINT
-							   // No integer components
-	} else if constexpr (particleType == ParticleType::CIC) {	     // NOLINT
+	if constexpr (particleType == ParticleType::Rad) {	     // NOLINT
+								     // No integer components
+	} else if constexpr (particleType == ParticleType::CIC) {    // NOLINT
 								     // No integer components
 	} else if constexpr (particleType == ParticleType::CICRad) { // NOLINT
 								     // No integer components

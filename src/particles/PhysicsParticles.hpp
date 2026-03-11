@@ -314,7 +314,6 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		return total_mass;
 	}
 
-
 	// Implementation of mass deposition from particles to grid
 	void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) override
 	{
@@ -552,7 +551,6 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		amrex::ParallelAllReduce::Max(max_speed, amrex::ParallelContext::CommunicatorSub());
 		return max_speed;
 	}
-
 
 	// Implementation of radiation deposition from particles to grid
 	void depositRadiation(amrex::MultiFab &radEnergySource, int lev, amrex::Real current_time, int nGroups) override
@@ -803,8 +801,7 @@ template <typename problem_t> class PhysicsParticleRegister
 		if constexpr (particleType == ParticleType::Rad) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Rad>>(
 			    container, -1, RadParticleLumIdx, RadParticleBirthTimeIdx, RadParticleDeathTimeIdx, false, false);
-		}
-		else if constexpr (particleType == ParticleType::CIC) {
+		} else if constexpr (particleType == ParticleType::CIC) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::CIC>>(container, CICParticleMassIdx, -1,
 															      -1, -1, false, false);
 		} else if constexpr (particleType == ParticleType::CICRad) {
@@ -822,8 +819,7 @@ template <typename problem_t> class PhysicsParticleRegister
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
 			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, TestParticleDeathTimeIdx, true, true,
 			    TestParticleStageIdx, false);
-		}
-		else {
+		} else {
 			static_assert(particleType == ParticleType::Rad, "Unknown particle type for physics particles");
 		}
 

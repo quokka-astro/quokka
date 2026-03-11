@@ -853,8 +853,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialRad
 	// note: an implementation is only required if Rad_particles are used
 }
 
-
-
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialCICParticles()
 {
 	const BL_PROFILE("QuokkaSimulation::createInitialCICParticles()");

@@ -194,7 +194,6 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 	}
 };
 
-
 // Specialization for Sink particles
 template <> struct ParticleCreationTraits<ParticleType::Sink> {
 
@@ -729,7 +728,6 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		    mass_at_birth_index, state_fc, verbose);
 	}
 }; // ParticleCreationTraits<ParticleType::StochasticStellarPop>
-
 
 } // namespace quokka
 

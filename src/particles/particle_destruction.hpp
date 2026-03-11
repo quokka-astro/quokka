@@ -8,7 +8,6 @@
 namespace quokka
 {
 
-
 // Helper namespace with implementation details for particle destruction
 namespace ParticleDestructionImpl
 {
@@ -123,7 +122,6 @@ template <ParticleType particleType> struct ParticleDestructionTraits {
 		    container, mass_idx, lev_min, current_time, dt, birth_time_index, evolution_stage_index);
 	}
 };
-
 
 } // namespace quokka
 

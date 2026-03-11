@@ -7,7 +7,6 @@
 #include "particle_types.hpp"
 #include "physics_info.hpp"
 
-
 namespace quokka
 {
 
@@ -102,6 +101,5 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 // };
 
 } // namespace quokka
-
 
 #endif // PARTICLE_UPDATE_HPP_

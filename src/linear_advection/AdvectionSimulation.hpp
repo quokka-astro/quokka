@@ -180,8 +180,6 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::createInitial
 	// note: an implementation is only required if Rad particles are used
 }
 
-
-
 template <typename problem_t> void AdvectionSimulation<problem_t>::createInitialCICParticles()
 {
 	// default empty implementation
