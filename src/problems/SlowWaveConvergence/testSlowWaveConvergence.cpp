@@ -261,8 +261,8 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const double omega = cs * k_magn;
 		const double phase = omega * time - k_magn * x_vec_mrf_C[0];
 		const double cos_phase = std::cos(phase);
-		double epsilon = (std::abs(sinθ) < tiny) ? 0.0
-							     : (delta_b_magn / b0_magn * (cs * cs - vA * vA * cosθ * cosθ) / (cs * cs * sinθ)); // normalized amplitude
+		double epsilon =
+		    (std::abs(sinθ) < tiny) ? 0.0 : (delta_b_magn / b0_magn * (cs * cs - vA * vA * cosθ * cosθ) / (cs * cs * sinθ)); // normalized amplitude
 		const double B0_1 = b0_magn * cosθ;
 		const double B0_2 = b0_magn * sinθ;
 
