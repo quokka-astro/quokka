@@ -77,7 +77,7 @@ enum class ParticleType {
 	StochasticStellarPop, // Stellar population particles
 	Sink,		      // Sink particles
 	Test,		      // Test particles with all features enabled
-	Star                       // Star particles
+	Star		      // Star particles
 };
 
 // Compile-time particle metadata.
@@ -355,25 +355,25 @@ using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
 
 // Real component indices for Star_particles
 AMREX_ENUM(StarParticleDataIdx,
-	mass,       // Mass of the particle
-	vx,         // Velocity in x direction
-	vy,         // Velocity in y direction
-	vz,         // Velocity in z direction
-	birth_time, // Time when particle becomes active
-	death_time, // Time when particle becomes inactive
-	amx,        // Angular Momentum in x direction
-	amy,        // Angular Momentum in y direction
-	amz,        // Angular Momentum in z direction
-	mdeut,      // Mass of gas that still contains deuterium
-	n,          // Polytropic index
-	mdot,       // Current mass accretion rate
-	radius,     // Stellar radius
-	lum         // Base index for luminosity components (must be last; expanded to lum_0, lum_1, ... for nGroups)
+	   mass,       // Mass of the particle
+	   vx,	       // Velocity in x direction
+	   vy,	       // Velocity in y direction
+	   vz,	       // Velocity in z direction
+	   birth_time, // Time when particle becomes active
+	   death_time, // Time when particle becomes inactive
+	   amx,	       // Angular Momentum in x direction
+	   amy,	       // Angular Momentum in y direction
+	   amz,	       // Angular Momentum in z direction
+	   mdeut,      // Mass of gas that still contains deuterium
+	   n,	       // Polytropic index
+	   mdot,       // Current mass accretion rate
+	   radius,     // Stellar radius
+	   lum	       // Base index for luminosity components (must be last; expanded to lum_0, lum_1, ... for nGroups)
 );
 
 // Integer component indices for Star_particles
 AMREX_ENUM(StarParticleIntIdx,
-	burnState // Nuclear burning state
+	   burnState // Nuclear burning state
 );
 
 constexpr int StarParticleBirthTimeIdx = static_cast<int>(StarParticleDataIdx::birth_time);
@@ -403,15 +403,8 @@ template <typename problem_t> using StarParticleContainer = amrex::AmrParticleCo
 template <typename problem_t> using StarParticleIterator = amrex::ParIter<StarParticleRealComps<problem_t>, StarParticleIntComps>;
 
 // Indices for burnState
-enum burningState {
-	Uninitialized,
-	None,
-	VariableCoreDeuterium,
-	SteadyCoreDeuterium,
-	ShellDeuterium,
-	ZAMS
-};
-  
+enum burningState { Uninitialized, None, VariableCoreDeuterium, SteadyCoreDeuterium, ShellDeuterium, ZAMS };
+
 #endif // AMREX_SPACEDIM == 3
 
 //-------------------- Component Names for I/O --------------------
@@ -540,8 +533,7 @@ inline auto get_units_data() -> const auto &
 	       {"death_density", {1, -3, 0, 0}},
 	       {"mass_at_birth", {1, 0, 0, 0}},
 	       {"luminosity", {-1, 2, -3, 0}}}}},
-	    {ParticleType::Sink,
-	     {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}}, {"mdot", {1, 0, -1, 0}}}}},
+	    {ParticleType::Sink, {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}}, {"mdot", {1, 0, -1, 0}}}}},
 	    {ParticleType::Star,
 	     {{{"mass", {1, 0, 0, 0}},
 	       {"vx", {0, 1, -1, 0}},

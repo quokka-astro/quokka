@@ -10,7 +10,6 @@
 #include <utility>
 
 #include <format>
-#include <format>
 #include <yaml-cpp/yaml.h>
 
 #include "AMReX_Array4.H"
@@ -23,7 +22,6 @@
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
 
-#include "fundamental_constants.H"
 #include "fundamental_constants.H"
 #include "particle_IO.hpp"
 #include "particle_accretion.hpp"
