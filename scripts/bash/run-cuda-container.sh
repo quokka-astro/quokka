@@ -55,7 +55,7 @@ TARGETS=""
 
 # Detect repository root
 # Use git to find the worktree root (works for both regular repos and git worktrees)
-REPO_ROOT="$(git -C "$(pwd)" rev-parse --show-toplevel 2>/dev/null)"
+REPO_ROOT="$(git -c core.hooksPath=/dev/null rev-parse --show-toplevel 2>/dev/null)"
 
 if [[ -z "$REPO_ROOT" ]]; then
 	echo "Error: Could not find Quokka repository root (.git directory)"
