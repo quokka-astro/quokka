@@ -1,5 +1,7 @@
 # Particles, star formation and feedback
 
+All particle features can only be activated when compiled with `-DAMReX_SPACEDIM=3`.
+
 ## Sink Particle Type
 
 Sink particles carry the following real-valued attributes:
