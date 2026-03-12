@@ -93,7 +93,7 @@ else
 fi
 
 # Set container name (include worktree name so each worktree gets its own container with the correct mount)
-WORKTREE_NAME="$(basename "$REPO_ROOT")"
+WORKTREE_NAME="$(basename "$REPO_ROOT" | tr -cs 'a-zA-Z0-9_.-' '_')"
 CONTAINER_NAME="quokka-${ARCH}-cuda-${WORKTREE_NAME}"
 
 # Parse command line arguments
