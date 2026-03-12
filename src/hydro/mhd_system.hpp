@@ -308,26 +308,38 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 			// indexing: field[4: quadrant around edge]
 			std::array<amrex::FArrayBox, 4> ec_fabs_E_q;
 
-			// compute the EMF along the cell-edge
-			for (int iquad = 0; iquad < 4; ++iquad) {
-				// extract relevant velocity and magnetic field components
-				const auto &U0_qi = ec_fabs_Ui_q[0][iquad].const_array();
-				const auto &U1_qi = ec_fabs_Ui_q[1][iquad].const_array();
-				const auto &B0_qi = ec_fabs_Bi_ieside[0][(iquad == 0 || iquad == 3) ? 0 : 1].const_array();
-				const auto &B1_qi = ec_fabs_Bi_ieside[1][(iquad < 2) ? 0 : 1].const_array();
+			// compute the EMF along the cell-edge using a single kernel (all quadrants inside)
+			{
+				// bind read/write Array4 views on the host (required for GPU lambda capture)
+				std::array<amrex::Array4<const double>, 4> U0s;
+				std::array<amrex::Array4<const double>, 4> U1s;
+				std::array<amrex::Array4<const double>, 4> B0s;
+				std::array<amrex::Array4<const double>, 4> B1s;
+				std::array<amrex::Array4<double>, 4> E2s;
 
-				// compute electric field in the quadrant about the cell-edge: cross product between velocity and magnetic field in that
-				// define EMF FArrayBox
-				ec_fabs_E_q[iquad] = amrex::FArrayBox(box_ec, 1, amrex::The_Async_Arena());
-				const auto &E2_qi = ec_fabs_E_q[iquad].array();
+				for (int qi = 0; qi < 4; ++qi) {
+					// extract relevant velocity and magnetic field components (host: get Array4 views)
+					const int idx0 = (qi == 0 || qi == 3) ? 0 : 1; // B/T selector for dir-0
+					const int idx1 = (qi < 2) ? 0 : 1; // L/R selector for dir-1
+					U0s[qi] = ec_fabs_Ui_q[0][qi].const_array();     // component 0, index iquad
+					U1s[qi] = ec_fabs_Ui_q[1][qi].const_array();     // component 1, index iquad
+					B0s[qi] = ec_fabs_Bi_ieside[0][idx0].const_array(); // component 0, index idx0
+					B1s[qi] = ec_fabs_Bi_ieside[1][idx1].const_array(); // component 1, index idx1
 
-				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-					const double u0 = U0_qi(i, j, k);
-					const double u1 = U1_qi(i, j, k);
-					const double b0 = B0_qi(i, j, k);
-					const double b1 = B1_qi(i, j, k);
-					const double uxb = u0 * b1 - u1 * b0;
-					E2_qi(i, j, k) = uxb;
+					// define EMF FArrayBox for each quadrant (we need to allocate outside the kernel)
+					ec_fabs_E_q[qi] = amrex::FArrayBox(box_ec, 1, amrex::The_Async_Arena());
+					E2s[qi] = ec_fabs_E_q[qi].array();
+				}
+
+				// single kernel over the edge-centered box; compute E in all four quadrants
+				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+					for (int qi = 0; qi < 4; ++qi) {
+						const double u0 = U0s[qi](i, j, k);
+						const double u1 = U1s[qi](i, j, k);
+						const double b0 = B0s[qi](i, j, k);
+						const double b1 = B1s[qi](i, j, k);
+						E2s[qi](i, j, k) = u0 * b1 - u1 * b0; // cross product at the edge
+					}
 				});
 			}
 
