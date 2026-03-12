@@ -362,25 +362,33 @@ auto problem_main() -> int
 
 	int status = 0;
 
-	if (overdensity_factor <= 1.0) {
+	const double stability_tol = 0.10;
+	if (overdensity_factor == 1.0) {
 		// Stability test: density should not change significantly
 		// Allow up to 10% change (numerical diffusion causes some drift)
-		const double stability_tol = 0.10;
 		if (std::abs(rho_change_frac) > stability_tol) {
 			amrex::Print() << "FAIL: Sphere is not stable (density changed by " << rho_change_frac * 100.0 << "%)\n";
 			status = 1;
 		} else {
 			amrex::Print() << "PASS: Sphere remains approximately stable (density changed by " << rho_change_frac * 100.0 << "%)\n";
 		}
-	} else {
+	} else if (overdensity_factor > 1.0) {
 		// Collapse test: central density should increase
-		if (rho_change_frac <= 0.0) {
-			amrex::Print() << "FAIL: Sphere did not collapse (density did not increase)\n";
+		if (rho_change_frac < stability_tol) {
+			amrex::Print() << "FAIL: Sphere did not collapse (density did not increase by more than " << stability_tol << ")\n";
 			status = 1;
 		} else {
-			amrex::Print() << "PASS: Sphere is collapsing (density increased by " << rho_change_frac * 100.0 << "%)\n";
+			amrex::Print() << "PASS: Sphere is collapsing (density changed by " << rho_change_frac * 100.0 << "%)\n";
 		}
-	}
+	} else {
+		// Collapse test: central density should decrease
+		if (rho_change_frac > -stability_tol) {
+			amrex::Print() << "FAIL: Sphere did not collapse (density did not increase by more than " << stability_tol << ")\n";
+			status = 1;
+		} else {
+			amrex::Print() << "PASS: Sphere is expanding (density changed by " << rho_change_frac * 100.0 << "%)\n";
+		}
+  }
 
 	return status;
 }

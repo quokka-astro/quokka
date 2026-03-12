@@ -17,7 +17,7 @@ quokka.bc = ["reflecting", "reflecting", "reflecting"]
 # *****************************************************************
 # VERBOSITY
 # *****************************************************************
-amr.v = 1
+amr.v = 0
 
 # *****************************************************************
 # Resolution and refinement
@@ -35,7 +35,9 @@ amr.grid_eff = 0.7
 hydro.reconstruction_order = 3
 cfl = 0.3
 max_timesteps = 100
-stop_time = 1.2128e11  # ~0.1 t_ff (stability test)
+#stop_time = 1.2128e11  # ~0.1 t_ff (stability test)
+stop_time = 1.2128e12  # ~1 t_ff (stability test)
+init_shrink = 0.1
 
 do_reflux = 1
 do_subcycle = 0
@@ -49,4 +51,5 @@ problem.rho_c = 3.0e-18            # central density [g/cm^3]
 problem.overdensity_factor = 1.0    # 1.0 = critical (stable), >1.0 = collapse
 
 tiny_profiler.enabled = 0
-suppress_output = 1
+suppress_output = 0
+
