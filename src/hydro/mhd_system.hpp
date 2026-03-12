@@ -319,10 +319,10 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 
 				for (int qi = 0; qi < 4; ++qi) {
 					// extract relevant velocity and magnetic field components (host: get Array4 views)
-					const int idx0 = (qi == 0 || qi == 3) ? 0 : 1; // B/T selector for dir-0
-					const int idx1 = (qi < 2) ? 0 : 1; // L/R selector for dir-1
-					U0s[qi] = ec_fabs_Ui_q[0][qi].const_array();     // component 0, index iquad
-					U1s[qi] = ec_fabs_Ui_q[1][qi].const_array();     // component 1, index iquad
+					const int idx0 = (qi == 0 || qi == 3) ? 0 : 1;	    // B/T selector for dir-0
+					const int idx1 = (qi < 2) ? 0 : 1;		    // L/R selector for dir-1
+					U0s[qi] = ec_fabs_Ui_q[0][qi].const_array();	    // component 0, index iquad
+					U1s[qi] = ec_fabs_Ui_q[1][qi].const_array();	    // component 1, index iquad
 					B0s[qi] = ec_fabs_Bi_ieside[0][idx0].const_array(); // component 0, index idx0
 					B1s[qi] = ec_fabs_Bi_ieside[1][idx1].const_array(); // component 1, index idx1
 
