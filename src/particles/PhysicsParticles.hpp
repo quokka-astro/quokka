@@ -175,7 +175,6 @@ class PhysicsParticleDescriptorBase
 
 	// Update particle properties (e.g., luminosity) based on current state
 	virtual void updateParticleProperties(amrex::Real current_time, Real dt) { /* Default empty implementation */ }
-#endif // AMREX_SPACEDIM == 3
 };
 
 // Concrete implementation of particle descriptor for specific container types

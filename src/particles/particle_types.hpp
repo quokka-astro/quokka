@@ -384,9 +384,7 @@ template <ParticleType particleType, typename problem_t> auto getParticleRealCom
 		return expandEnumNames<SinkParticleRealIdx, SinkParticleRealComps, false>();
 	} else if constexpr (particleType == ParticleType::Test) {
 		return expandEnumNames<TestParticleRealIdx, TestParticleRealComps<problem_t>, true>();
-	}
-#endif
-	else {
+	} else {
 		amrex::Abort("Unknown particle type");
 		return {};
 	}
