@@ -10,25 +10,25 @@
 
 ## Typical Star Formation Parameters
 - T = 10 K, μ = 2.33 m_p (molecular H₂ + He)
-- c_s = sqrt(k_B T / μ) ≈ 1.9e4 cm/s
-- ρ_c ~ 10^-18 g/cm³
-- r_0 = c_s / sqrt(4π G ρ_c)
+- c_s = sqrt(k_B T / μ) ≈ 1.88e4 cm/s
+- ρ_c = 3e-18 g/cm³ → r_0 ≈ 1.19e16 cm (0.00385 pc)
+- R_sphere = 6.451 * r_0 ≈ 7.65e16 cm (0.0248 pc)
+- t_ff ≈ 1.21e12 s (38,432 yr), t_sc ≈ 4.07e12 s (128,871 yr)
 
-## Codebase Patterns (from ParticleSink)
+## Codebase Patterns (from ParticleSink / SphericalCollapse)
 - Physics_Traits enables `is_self_gravity_enabled = true`
 - EOS_Traits sets gamma and mean_molecular_weight
 - `setInitialConditionsOnGrid` uses GPU ParallelFor
 - ParmParse reads runtime parameters from input file
 - CMakeLists: `quokka_add_problem(JOB_NAME Name)`
 - Input file: TOML format with geometry, AMR, BC settings
-- For self-gravity without particles: no Particle_Traits needed
-- EOS: `ComputeEintFromTgas(rho, T)` for internal energy from temperature
-- BCs: "reflecting" for isolated sphere, or "outflow"
+- Valid BC names: `periodic`, `reflecting`, `foextrap`, `ext_dir` (NOT `outflow`)
+- `C::parsec` for parsec constant (not `C::pc`)
+- EOS: `ComputeEintFromPres(rho, P)` for internal energy from pressure
 
-## Implementation Strategy
-- Solve Lane-Emden ODE on CPU at init, store in amrex::Gpu::DeviceVector
-- Interpolate profile onto 3D grid in GPU kernel
-- Uniform external medium at ρ_edge, T = 10K
-- No particles, no MHD
-- Overdensity factor as runtime parameter (1.0 = stable, >1 = collapse)
-- Test: run a few timesteps, check density hasn't changed much (stable) or central density increased (collapse)
+## Key Implementation Details
+- Lane-Emden solved on CPU with RK4 (10000 points), copied to GPU DeviceVector
+- Profile interpolated with linear interpolation in GPU kernel
+- Overdensity factor multiplies density but NOT pressure → breaks equilibrium
+- External medium at edge density and pressure (pressure_contrast = 1)
+- gamma = 1.001 approximates isothermal behavior
