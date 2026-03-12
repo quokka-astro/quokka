@@ -40,10 +40,10 @@ if(AMReX_SPACEDIM EQUAL 3)
   set_property(
     DIRECTORY
     APPEND
-    PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/inputs/PopIII.in)
+    PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/inputs/PopIII.toml)
 
-  # Read the 'PopIII.in' file line by line
-  file(READ ${CMAKE_SOURCE_DIR}/inputs/PopIII.in pop_in_contents)
+  # Read the 'PopIII.toml' file line by line
+  file(READ ${CMAKE_SOURCE_DIR}/inputs/PopIII.toml pop_in_contents)
 
   # Split the file contents into lines
   string(REPLACE "\n" ";" pop_in_lines "${pop_in_contents}")
@@ -87,7 +87,7 @@ if(AMReX_SPACEDIM EQUAL 3)
   else()
     message(
       FATAL_ERROR
-        "No matching line found in ${CMAKE_SOURCE_DIR}/inputs/PopIII.in!")
+        "No matching line found in ${CMAKE_SOURCE_DIR}/inputs/PopIII.toml!")
   endif()
 
   add_test(
@@ -99,7 +99,7 @@ if(AMReX_SPACEDIM EQUAL 3)
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
   add_test(
     NAME PopIII
-    COMMAND ${JOB_NAME} ../inputs/PopIII.in ${QuokkaTestParams}
+    COMMAND ${JOB_NAME} ../inputs/PopIII.toml ${QuokkaTestParams}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
   set_tests_properties(ComputePerturbations PROPERTIES FIXTURES_SETUP
                                                        PopIII_fixture)
@@ -107,6 +107,6 @@ if(AMReX_SPACEDIM EQUAL 3)
 
   # AMR test only works on Setonix because Gadi and avatar do not have enough
   # memory per GPU add_test(NAME PopIIIAMR COMMAND ${JOB_NAME}
-  # ../inputs/popiii_AMR.in ${QuokkaTestParams} WORKING_DIRECTORY
+  # ../inputs/popiii_AMR.toml ${QuokkaTestParams} WORKING_DIRECTORY
   # ${CMAKE_SOURCE_DIR}/tests)
 endif()

@@ -8,11 +8,11 @@ if(AMReX_SPACEDIM EQUAL 3)
 
   add_test(
     NAME ${JOB_NAME}
-    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in
+    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
   add_test(
     NAME ParticleAccretionBH
-    COMMAND ${JOB_NAME} ../inputs/ParticleAccretionBH.in
+    COMMAND ${JOB_NAME} ../inputs/ParticleAccretionBH.toml
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 
   set_tests_properties(${JOB_NAME} PROPERTIES COST 95)
