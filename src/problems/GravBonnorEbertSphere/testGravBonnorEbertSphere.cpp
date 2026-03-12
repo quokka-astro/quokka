@@ -46,7 +46,8 @@ constexpr double pressure_contrast = 1.; // P_ext / P_edge (set to 1 for pressur
 
 // Runtime parameters (set from input file)
 static double rho_c = 3.0e-18;		// central density [g cm^-3] - NOLINT
-static double overdensity_factor = 1.0; // 1.0 = critical, >1.0 = collapse - NOLINT
+static double overdensity_factor = 1.0; // 1.0 = critical (stable), >1.0 = collapse - NOLINT
+static double overdensity_global = 1.0; // NOLINT
 
 // ============================================================
 // Template specializations
@@ -198,6 +199,7 @@ template <> void QuokkaSimulation<BESphereProblem>::setInitialConditionsOnGrid(q
 	const double P_ext = P_ext_global;
 	const double cs_val = cs_global;
 	const double rho_floor_val = rho_floor;
+	const double od_factor = overdensity_global;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const double x = prob_lo[0] + (i + 0.5) * dx[0];
@@ -209,7 +211,7 @@ template <> void QuokkaSimulation<BESphereProblem>::setInitialConditionsOnGrid(q
 		double P = 0.0;
 
 		if (r <= R_sph) {
-			// Inside the sphere: interpolate Lane-Emden profile
+			// Inside the sphere: interpolate Lane-Emden equilibrium profile
 			const double xi_val = r / r0_val;
 			const double dxi = xi_ptr[npts - 1] / static_cast<double>(npts - 1);
 			const int idx = static_cast<int>(xi_val / dxi);
@@ -223,8 +225,9 @@ template <> void QuokkaSimulation<BESphereProblem>::setInitialConditionsOnGrid(q
 				psi_val = psi_ptr[idx] + frac * (psi_ptr[idx + 1] - psi_ptr[idx]);
 			}
 
-			rho = rho_central * std::exp(-psi_val);
-			P = rho * cs_val * cs_val; // isothermal: P = ρ c_s²
+			const double rho_eq = rho_central * std::exp(-psi_val); // equilibrium density
+			rho = rho_eq * od_factor;				// apply overdensity
+			P = rho_eq * cs_val * cs_val;				// pressure from EQUILIBRIUM density (not enhanced)
 		} else {
 			// Outside the sphere: uniform ambient medium at edge pressure
 			rho = rho_edge;
@@ -288,36 +291,34 @@ auto problem_main() -> int
 	pp.query("rho_c", rho_c);
 	pp.query("overdensity_factor", overdensity_factor);
 
-	// Apply overdensity factor to central density
-	const double rho_central = rho_c * overdensity_factor;
-
 	amrex::Print() << "\n=== Bonnor-Ebert Sphere Test ===\n";
 	amrex::Print() << "Central density rho_c = " << rho_c << " g/cm^3\n";
 	amrex::Print() << "Overdensity factor = " << overdensity_factor << "\n";
-	amrex::Print() << "Effective central density = " << rho_central << " g/cm^3\n";
 	amrex::Print() << "Temperature = " << T0 << " K\n";
 	amrex::Print() << "Mean molecular weight = " << mu / C::m_p << " m_p\n";
 
-	// Solve Lane-Emden equation
-	const LaneEmdenSolution sol = solveLaneEmden(rho_central, xi_crit, n_profile);
+	// Solve Lane-Emden equation for the BASE central density (equilibrium profile)
+	// The overdensity factor is applied as a multiplicative perturbation on top of this.
+	const LaneEmdenSolution sol = solveLaneEmden(rho_c, xi_crit, n_profile);
 
 	amrex::Print() << "Sound speed c_s = " << sol.cs << " cm/s\n";
 	amrex::Print() << "Length scale r_0 = " << sol.r0 << " cm (" << sol.r0 / C::parsec << " pc)\n";
 	amrex::Print() << "Sphere radius R = " << sol.R_sphere << " cm (" << sol.R_sphere / C::parsec << " pc)\n";
 
-	// Density at the edge
+	// Density at the edge (equilibrium value)
 	const double psi_edge = sol.psi[n_profile - 1];
-	const double rho_edge = rho_central * std::exp(-psi_edge);
+	const double rho_edge = rho_c * std::exp(-psi_edge);
 	amrex::Print() << "Edge density rho_edge = " << rho_edge << " g/cm^3\n";
-	amrex::Print() << "Density contrast rho_c/rho_edge = " << rho_central / rho_edge << "\n";
+	amrex::Print() << "Density contrast rho_c/rho_edge = " << rho_c / rho_edge << "\n";
 
 	// Store globals for GPU
 	R_sphere_global = sol.R_sphere;
 	r0_global = sol.r0;
-	rho_c_global = rho_central;
+	rho_c_global = rho_c; // equilibrium central density
 	cs_global = sol.cs;
 	rho_edge_global = rho_edge;
 	P_ext_global = pressure_contrast * rho_edge * sol.cs * sol.cs;
+	overdensity_global = overdensity_factor;
 
 	// Copy profile to device
 	d_xi_arr.resize(n_profile);
@@ -325,8 +326,9 @@ auto problem_main() -> int
 	amrex::Gpu::copy(amrex::Gpu::hostToDevice, sol.xi.begin(), sol.xi.end(), d_xi_arr.begin());
 	amrex::Gpu::copy(amrex::Gpu::hostToDevice, sol.psi.begin(), sol.psi.end(), d_psi_arr.begin());
 
-	// Compute free-fall time for reference
-	const double t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * rho_central));
+	// Compute free-fall time for reference (using effective central density)
+	const double rho_eff = rho_c * overdensity_factor;
+	const double t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * rho_eff));
 	amrex::Print() << "Free-fall time t_ff = " << t_ff << " s (" << t_ff / (3.15576e7) << " yr)\n";
 
 	// Compute sound crossing time

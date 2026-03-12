@@ -12,7 +12,7 @@
 # Domain is ~4x the sphere radius for rho_c = 3e-18 g/cm^3
 geometry.prob_lo = [-1.6e17, -1.6e17, -1.6e17]
 geometry.prob_hi = [1.6e17, 1.6e17, 1.6e17]
-quokka.bc = ["outflow", "outflow", "outflow"]
+quokka.bc = ["reflecting", "reflecting", "reflecting"]
 
 # *****************************************************************
 # VERBOSITY
