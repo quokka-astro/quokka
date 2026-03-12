@@ -918,11 +918,11 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::addStrangSplitSo
 	// (when Strang splitting is enabled, dt is actually 0.5*dt_lev)
 }
 
-#if AMREX_SPACEDIM == 3
 template <typename problem_t> auto QuokkaSimulation<problem_t>::computePhotoelectricHeatingRate(amrex::Real current_time) -> amrex::Real
 {
 	amrex::Real heating_rate = 0.0;
 
+#if AMREX_SPACEDIM == 3
 	// Check if PE heating tables are initialized
 	// Note that this function is always called as long as cooling is turned on, so it is okay if g_pe_heating_tables_ptr is null
 	if (quokka::g_pe_heating_tables_ptr<> == nullptr || !quokka::g_pe_heating_tables_ptr<>->is_initialized()) {
@@ -939,10 +939,12 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computePhotoelec
 		// Real star formation history
 		heating_rate = particleRegister_.computePhotoelectricHeatingRate(current_time, gpu_tables, sf_area_kpc2_);
 	}
+#else
+	amrex::ignore_unused(current_time);
+#endif
 
 	return heating_rate;
 }
-#endif
 
 template <typename problem_t>
 auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int lev,
