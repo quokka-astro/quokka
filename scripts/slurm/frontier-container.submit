@@ -23,4 +23,4 @@ export APPTAINERENV_LD_PRELOAD=$CRAY_MPICH_ROOTDIR/gtl/lib/libmpi_gtl_hsa.so.0:
 ## Run the simulation
 # NOTE: The --rocm flag is required to support AMD GPUs inside the container.
 # NOTE: The SLURM arguments are required. It will fail without them.
-srun -N2 --tasks-per-node=8 --gpus-per-task=1 apptainer exec --workdir `pwd` --rocm quokka_rocm-diskgalaxy.sif DiskGalaxy AgoraGalaxy.in
+srun -N2 --tasks-per-node=8 --gpus-per-task=1 apptainer exec --workdir `pwd` --rocm quokka_rocm-diskgalaxy.sif DiskGalaxy /opt/quokka/share/quokka/inputs/DiskGalaxy.toml
