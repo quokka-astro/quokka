@@ -1,0 +1,52 @@
+# *****************************************************************
+# Bonnor-Ebert Sphere - Stability Test
+# *****************************************************************
+# An isothermal self-gravitating sphere at the critical Bonnor-Ebert
+# density. With overdensity_factor = 1.0, the sphere should remain
+# approximately stable. With overdensity_factor > 1.0, it collapses.
+# *****************************************************************
+
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+# Domain is ~4x the sphere radius for rho_c = 3e-18 g/cm^3
+geometry.prob_lo = [-1.6e17, -1.6e17, -1.6e17]
+geometry.prob_hi = [1.6e17, 1.6e17, 1.6e17]
+quokka.bc = ["outflow", "outflow", "outflow"]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v = 1
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell = [64, 64, 64]
+amr.max_level = 0
+amr.blocking_factor = 32
+amr.max_grid_size = 64
+amr.n_error_buf = 3
+amr.grid_eff = 0.7
+
+# *****************************************************************
+# Simulation control
+# *****************************************************************
+hydro.reconstruction_order = 3
+cfl = 0.3
+max_timesteps = 100
+stop_time = 1.2128e11  # ~0.1 t_ff (stability test)
+
+do_reflux = 1
+do_subcycle = 0
+
+derived_vars = "gpot"
+
+# *****************************************************************
+# Problem parameters
+# *****************************************************************
+problem.rho_c = 3.0e-18            # central density [g/cm^3]
+problem.overdensity_factor = 1.0    # 1.0 = critical (stable), >1.0 = collapse
+
+tiny_profiler.enabled = 0
+suppress_output = 1
