@@ -37,6 +37,8 @@ namespace StellarConstants
     static constexpr amrex::Real T_Hayashi = 3000.0;     // Hayashi temperature
     static constexpr amrex::Real T_deuterium = 1.5e6;    // deuterium ignition temperature
     static constexpr amrex::Real M_rad_min = 0.01 * M_solar; // minimum mass for model
+    static constexpr amrex::Real PSIION = 16.0 * ERGEV * NAVOG) // Energy per gram needed to dissociate and ionize a molecular gas with solar abundances. ERGEV=1.6e-12 number pf ergs per eV and NAVOG=6.022e23
+    static constexpr amrex::Real PSID = 100 * ERGEV * NAVOG //Energy per gram released by burning the deuterium in a gas with solar abundances
 }
 
 // Central density/pressure tables (GPU-compatible static data)
@@ -389,6 +391,65 @@ namespace StellarPhysics
         }
     }
 
+    // numerical derivative dlogBeta_dlogM
+  AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dlogBeta_dlogM(amrex::mass, amrex::Real beta_1) -> amrex::Real
+    {
+      Real beta1;
+      if (beta_1==-1.0)
+	{
+	  beta1 = beta(mass);
+	}else
+	{
+	  beta1 = beta_1;
+	}
+      amrex::Real beta2 = beta(1.01*mass);
+      return( mass/beta1 * (beta2-beta1) / (1.01*mass));
+}
+
+  // eDotIon
+  AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto eDotIon()(amrex:: mdot, amrex::PSIION)
+  {
+    return(mdot * PSIION);
+  }
+
+  // dlogBetaOverBetac_dlogM
+  AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dlogBetaOverBetac_dlogM(amrex::mass, amrex::beta_1)
+  {  
+    if (n==3) return(0.0);
+
+    // Otherwise take a numerical derivative
+    Real beta1;
+    if (beta_1==-1.0) beta1 = beta(mass);
+    else beta1 = beta_1;
+    Real beta2 = beta(1.01*mass);
+    Real betac1 = betac(mass);
+    Real betac2 = betac(1.01*mass);
+    return( mass/(beta1/betac1) * ((beta2/betac2) - (beta1/betac1)) / (0.01*mass) );
+}
+
+  // Deuterium luminosity
+  AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto L_Deut(amrex::Real mass, amrex::Real radius,BurningState burn_state) -> amrex::Real
+      {
+	switch (burnState) {
+	case Uninitialized:
+	  return(0.0);
+	  break;
+	case None:
+	  return(0.0);
+	  break;
+	case VariableCoreDeuterium: {
+	  if (beta1 == -1.0) beta1=beta(m);
+	  return( luminosity_star(mass,radius,mdot) + eDotIon() + G*mass*mdot/radius * (1.0 - F_k - aG(n)*beta1/2.0 * (1.0 + dlogBetaOverBetac_dlogM(mass,beta1))) );
+	  break;
+	}
+	case SteadyCoreDeuterium:
+	  return( mdot * PSID );
+	  break;
+	case ShellDeuterium:
+	  return( mdot * PSID );
+	  break;
+      }
+	
     // Disk luminosity
     AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto luminosity_disk(amrex::Real mass, amrex::Real radius, amrex::Real mdot) -> amrex::Real
     {
@@ -480,11 +541,12 @@ private:
 	// Update radius
 	if (burnState != ZAMS) {
 	  Real beta1 = beta(m);
-	  Real dr = (2.0*mdot/m*r*(FK/(aG()*beta1)+1.0-1.0/(aG()*beta1))
-		     + beta1/m * dlogBeta_dlogM(beta1) * mdot * r / beta1
-		     - 2.0/(beta1*aG())*r*r/(G*m*m)*(lStar()+eDotIon()-lDeut(beta1)));
-	  Real rdottime = fabs(r/dr)/100.0;
-	  Real mdottime = fabs(m/mdot)/100.0;
+	  Real dr = (2.0*mdot/mass*radius*(F_k/(aG(n)*beta1)+1.0-1.0/(aG(n)*beta1))
+		     + beta1/mass * dlogBeta_dlogM(mass,beta1) * mdot * radius / beta1
+		     - 2.0/(beta1*aG(n))*radius*radius/(G*mass*mass)*(luminosity_star(mass,radius,mdot)
+		    +eDotIon()-L_Deut(mass,beta1)));
+	  Real rdottime = fabs(radius/dr)/100.0;
+	  Real mdottime = fabs(mass/mdot)/100.0;
     
 	  if( rdottime < dt)
 	    {
@@ -494,11 +556,11 @@ private:
 
 	      for(int rdotloop = 0; rdotloop < rdotfac; rdotloop++)
 		{
-		  beta1 = beta(m);
-		  dr = (2.0*mdot/m*r*(FK/(aG()*beta1)+1.0-1.0/(aG()*beta1))
-			+ beta1/m * dlogBeta_dlogM(beta1) * mdot * r / beta1
-		        - 2.0/(beta1*aG())*r*r/(G*m*m)*(lStar()+eDotIon()-lDeut(beta1)));
-		  r += dtprime * dr;
+		  beta1 = beta(mass);
+		  dr = (2.0*mdot/mass*radius*(F_k/(aG(n)*beta1)+1.0-1.0/(aG(n)*beta1))
+			+ beta1/mass * dlogBeta_dlogM(mass,beta1) * mdot * radius / beta1
+		        - 2.0/(beta1*aG(n))*radius*radius/(G*mass*mass)*(luminosity_star(mass,radius,mdot)+eDotIon()-L_Deut(mass,beta1)));
+		  radius += dtprime * dr;
 		}
 	      
 	    }else if( mdottime < dt )
@@ -509,23 +571,23 @@ private:
 	      for(int mdotloop = 0; mdotloop < mdotfac; mdotloop++)
 		{
 		  beta1=beta(m);
-		  dr = (2.0*mdot/m*r*(FK/(aG()*beta1)+1.0-1.0/(aG()*beta1))
-			+ beta1/m * dlogBeta_dlogM(beta1) * mdot * r / beta1
-		        - 2.0/(beta1*aG())*r*r/(G*m*m)*(lStar()+eDotIon()-lDeut(beta1)));
-		  r += dtprime * dr;
+		  dr = (2.0*mdot/mass*radius*(F_k/(aG(n)*beta1)+1.0-1.0/(aG(n)*beta1))
+			+ beta1/mass * dlogBeta_dlogM(mass,beta1) * mdot * radius / beta1
+		        - 2.0/(beta1*aG(n))*radius*radius/(G*mass*mass)*(luminosity_star(mass,radius,mdot)+eDotIon()-lDeut(mass,beta1)));
+		  radius += dtprime * dr;
 		}
 	    } else
 	    {
-	      beta1=beta(m);
-	      dr = (2.0*mdot/m*r*(FK/(aG()*beta1)+1.0-1.0/(aG()*beta1))
-		    + beta1/m * dlogBeta_dlogM(beta1) * mdot * r / beta1
-		    - 2.0/(beta1*aG())*r*r/(G*m*m)*(lStar()+eDotIon()-lDeut(beta1)));
-	      r += dt * dr;
+	      beta1=beta(mass);
+	      dr = (2.0*mdot/mass*radius*(F_k/(aG(n)*beta1)+1.0-1.0/(aG(n)*beta1))
+		    + beta1/mass * dlogBeta_dlogM(mass,beta1) * mdot * radius / beta1
+		    - 2.0/(beta1*aG(n))*radius*radius/(G*mass*mass)*(luminosity_star(mass,radius,mdot)+eDotIon()-lDeut(mass,beta1)));
+	      radius += dt * dr;
 	    }
 	  // Resetting to 0.2 R_sun, if r is -ve.
 	  if(r < 0.0e0)
 	    {
-	      r = 0.2*6.96e10; //Worst case and we do get a neg radius. reset it
+	      radius = 0.2*6.96e10; //Worst case and we do get a neg radius. reset it
 	    }
 	}
 
