@@ -58,11 +58,6 @@ constexpr double dust_fraction = 1.0;	    // ρ_dust_total / ρ_gas (= f); dust 
 constexpr int n_dust_groups = 2;	    // number of dust groups (each gets dust_fraction/2)
 constexpr double t_stop_s = 1.0e8;	    // stopping time [s], << t_ff to enforce tight coupling. t_ff = 1.2e12 at critical density rho_c = 3.0e-18
 
-// Runtime parameters (set from input file)
-static double rho_c = 3.0e-18;		// total central density ρ_c_total [g cm^-3] - NOLINT
-static double overdensity_factor = 1.0; // 1.0 = critical (stable), >1.0 = collapse - NOLINT
-static double overdensity_global = 1.0; // NOLINT
-
 // ============================================================
 // Template specializations
 // ============================================================
@@ -132,7 +127,7 @@ auto solveLaneEmden(double rho_central_total, double xi_outer, int npts) -> Lane
 	// Sound speed
 	sol.cs = std::sqrt(C::k_B * T0 / mu);
 	// Length scale
-	sol.r0 = sol.cs / std::sqrt(4.0 * M_PI * C::Gconst * rho_central);
+	sol.r0 = sol.cs / std::sqrt(4.0 * M_PI * C::Gconst * rho_central_total);
 	sol.R_sphere = xi_outer * sol.r0;
 
 	const double dxi = xi_outer / static_cast<double>(npts - 1);
@@ -182,16 +177,77 @@ auto solveLaneEmden(double rho_central_total, double xi_outer, int npts) -> Lane
 }
 
 // ============================================================
-// Profile stored in device-accessible memory
+// Simulation data (host-computed, device-accessible)
 // ============================================================
-static amrex::Gpu::DeviceVector<double> d_xi_arr;  // NOLINT
-static amrex::Gpu::DeviceVector<double> d_psi_arr; // NOLINT
-static double R_sphere_global = 0.0;		    // NOLINT
-static double r0_global = 0.0;			    // NOLINT
-static double rho_c_total_global = 0.0;		    // total central density [g/cm³] - NOLINT
-static double cs_global = 0.0;			    // NOLINT
-static double rho_gas_edge_global = 0.0;	    // NOLINT
-static double P_ext_global = 0.0;		    // NOLINT
+template <> struct SimulationData<BESphereProblem> {
+	amrex::Gpu::DeviceVector<double> xi_arr;
+	amrex::Gpu::DeviceVector<double> psi_arr;
+	double R_sphere{};
+	double r0{};
+	double rho_c_total{};
+	double cs{};
+	double rho_gas_edge{};
+	double P_ext{};
+	double overdensity{1.0};
+};
+
+// ============================================================
+// Pre-calculate initial conditions: solve Lane-Emden and store profile
+// ============================================================
+template <> void QuokkaSimulation<BESphereProblem>::preCalculateInitialConditions()
+{
+	double rho_c = 3.0e-18;
+	double overdensity_factor = 1.0;
+	amrex::ParmParse const pp("problem");
+	pp.query("rho_c", rho_c);
+	pp.query("overdensity_factor", overdensity_factor);
+
+	amrex::Print() << "\n=== Bonnor-Ebert Sphere + Dust Test ===\n";
+	amrex::Print() << "Total central density rho_c = " << rho_c << " g/cm^3\n";
+	amrex::Print() << "  Gas central density = " << rho_c / (1.0 + dust_fraction) << " g/cm^3\n";
+	amrex::Print() << "  Dust central density (per group) = " << rho_c * dust_fraction / (n_dust_groups * (1.0 + dust_fraction)) << " g/cm^3\n";
+	amrex::Print() << "Dust fraction (rho_dust/rho_gas) = " << dust_fraction << "\n";
+	amrex::Print() << "  Gas provides " << 1.0 / (1.0 + dust_fraction) * 100.0 << "% of total gravity\n";
+	amrex::Print() << "  Dust provides " << dust_fraction / (1.0 + dust_fraction) * 100.0 << "% of total gravity\n";
+	amrex::Print() << "Overdensity factor = " << overdensity_factor << "\n";
+	amrex::Print() << "Temperature = " << T0 << " K\n";
+
+	// The correct length scale for gas+dust equilibrium is:
+	//   r_0 = c_s / sqrt(4*pi*G * (1+f) * rho_c_total)
+	// so we pass (1+f)*rho_c_total as the effective density to solveLaneEmden.
+	const LaneEmdenSolution sol = solveLaneEmden(rho_c * (1.0 + dust_fraction), xi_crit, n_profile);
+
+	amrex::Print() << "Sound speed c_s = " << sol.cs << " cm/s\n";
+	amrex::Print() << "Length scale r_0 = " << sol.r0 << " cm (" << sol.r0 / C::parsec << " pc)\n";
+	amrex::Print() << "Sphere radius R = " << sol.R_sphere << " cm (" << sol.R_sphere / C::parsec << " pc)\n";
+
+	const double psi_edge = sol.psi[n_profile - 1];
+	const double rho_total_edge = rho_c * std::exp(-psi_edge);
+	const double rho_gas_edge = rho_total_edge / (1.0 + dust_fraction);
+	amrex::Print() << "Total edge density = " << rho_total_edge << " g/cm^3\n";
+	amrex::Print() << "Gas edge density = " << rho_gas_edge << " g/cm^3\n";
+	amrex::Print() << "Total density contrast = " << rho_c / rho_total_edge << "\n";
+
+	const double rho_eff = rho_c * overdensity_factor;
+	const double t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * rho_eff));
+	const double t_sc = sol.R_sphere / sol.cs;
+	amrex::Print() << "Free-fall time t_ff = " << t_ff << " s (" << t_ff / (3.15576e7) << " yr)\n";
+	amrex::Print() << "Sound crossing time t_sc = " << t_sc << " s (" << t_sc / (3.15576e7) << " yr)\n";
+	amrex::Print() << "Stopping time t_stop = " << t_stop_s << " s (" << t_stop_s / t_ff << " t_ff) — tight coupling\n";
+
+	userData_.R_sphere = sol.R_sphere;
+	userData_.r0 = sol.r0;
+	userData_.rho_c_total = rho_c;
+	userData_.cs = sol.cs;
+	userData_.rho_gas_edge = rho_gas_edge;
+	userData_.P_ext = rho_gas_edge * sol.cs * sol.cs;
+	userData_.overdensity = overdensity_factor;
+
+	userData_.xi_arr.resize(n_profile);
+	userData_.psi_arr.resize(n_profile);
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, sol.xi.begin(), sol.xi.end(), userData_.xi_arr.begin());
+	amrex::Gpu::copy(amrex::Gpu::hostToDevice, sol.psi.begin(), sol.psi.end(), userData_.psi_arr.begin());
+}
 
 // ============================================================
 // Initial conditions
@@ -209,22 +265,21 @@ template <> void QuokkaSimulation<BESphereProblem>::setInitialConditionsOnGrid(q
 	const double y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
 	const double z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
 
-	// Capture profile data for GPU
-	const double *xi_ptr = d_xi_arr.data();
-	const double *psi_ptr = d_psi_arr.data();
-	const int npts = static_cast<int>(d_xi_arr.size());
-	const double R_sph = R_sphere_global;
-	const double r0_val = r0_global;
-	const double rho_c_tot = rho_c_total_global;
-	const double rho_gas_edge = rho_gas_edge_global;
-	const double P_ext = P_ext_global;
-	const double cs_val = cs_global;
+	const double *xi_ptr = userData_.xi_arr.data();
+	const double *psi_ptr = userData_.psi_arr.data();
+	const int npts = static_cast<int>(userData_.xi_arr.size());
+	const double R_sph = userData_.R_sphere;
+	const double r0_val = userData_.r0;
+	const double rho_c_tot = userData_.rho_c_total;
+	const double rho_gas_edge = userData_.rho_gas_edge;
+	const double P_ext = userData_.P_ext;
+	const double cs_val = userData_.cs;
+	const double od_factor = userData_.overdensity;
 	const double rho_floor_val = rho_floor;
-	const double od_factor = overdensity_global;
 
 	// Fractions of total density per species
-	// gas:         1 / (1 + dust_fraction)
-	// each dust group: (dust_fraction / n_dust_groups) / (1 + dust_fraction)
+	// gas:              1 / (1 + dust_fraction)
+	// each dust group:  (dust_fraction / n_dust_groups) / (1 + dust_fraction)
 	constexpr double gas_frac = 1.0 / (1.0 + dust_fraction);
 	constexpr double dust_frac_per_group = (dust_fraction / n_dust_groups) / (1.0 + dust_fraction);
 
@@ -252,10 +307,10 @@ template <> void QuokkaSimulation<BESphereProblem>::setInitialConditionsOnGrid(q
 				psi_val = psi_ptr[idx] + frac * (psi_ptr[idx + 1] - psi_ptr[idx]);
 			}
 
-			const double rho_total_eq = rho_c_tot * std::exp(-psi_val); // equilibrium total density
-			rho_gas = rho_total_eq * gas_frac * od_factor;		     // overdensity applied to gas
-			rho_dust_per_group = rho_total_eq * dust_frac_per_group * od_factor; // overdensity applied to dust
-			P = rho_total_eq * gas_frac * cs_val * cs_val;			     // pressure from EQUILIBRIUM gas density
+			const double rho_total_eq = rho_c_tot * std::exp(-psi_val);
+			rho_gas = rho_total_eq * gas_frac * od_factor;
+			rho_dust_per_group = rho_total_eq * dust_frac_per_group * od_factor;
+			P = rho_total_eq * gas_frac * cs_val * cs_val; // pressure from EQUILIBRIUM gas density
 		} else {
 			rho_gas = rho_gas_edge;
 			rho_dust_per_group = rho_gas_edge * (dust_fraction / n_dust_groups);
@@ -272,7 +327,6 @@ template <> void QuokkaSimulation<BESphereProblem>::setInitialConditionsOnGrid(q
 		state_cc(i, j, k, HydroSystem<BESphereProblem>::energy_index) = quokka::EOS<BESphereProblem>::ComputeEintFromPres(rho_gas, P);
 		state_cc(i, j, k, HydroSystem<BESphereProblem>::internalEnergy_index) = quokka::EOS<BESphereProblem>::ComputeEintFromPres(rho_gas, P);
 
-		// dust groups: each with rho_dust_per_group, zero velocity
 		for (int g = 0; g < n_dust_groups; ++g) {
 			const int stride = g * HydroSystem<BESphereProblem>::numDustVars_;
 			state_cc(i, j, k, HydroSystem<BESphereProblem>::dustDensity_index + stride) = rho_dust_per_group;
@@ -284,11 +338,11 @@ template <> void QuokkaSimulation<BESphereProblem>::setInitialConditionsOnGrid(q
 }
 
 // ============================================================
-// AMR refinement: tag on total density
+// AMR refinement: tag on gas density
 // ============================================================
 template <> void QuokkaSimulation<BESphereProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
-	const Real q_min = 2.0 * rho_gas_edge_global; // refine where density > 2x edge density
+	const Real q_min = 2.0 * userData_.rho_gas_edge;
 
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
@@ -323,63 +377,11 @@ void QuokkaSimulation<BESphereProblem>::ComputeDerivedVar(int lev, std::string c
 // ============================================================
 auto problem_main() -> int
 {
+	double overdensity_factor = 1.0;
 	amrex::ParmParse const pp("problem");
-	pp.query("rho_c", rho_c);
 	pp.query("overdensity_factor", overdensity_factor);
 
-	amrex::Print() << "\n=== Bonnor-Ebert Sphere + Dust Test ===\n";
-	amrex::Print() << "Total central density rho_c = " << rho_c << " g/cm^3\n";
-	amrex::Print() << "  Gas central density = " << rho_c / (1.0 + dust_fraction) << " g/cm^3\n";
-	amrex::Print() << "  Dust central density (per group) = " << rho_c * dust_fraction / (n_dust_groups * (1.0 + dust_fraction)) << " g/cm^3\n";
-	amrex::Print() << "Dust fraction (rho_dust/rho_gas) = " << dust_fraction << "\n";
-	amrex::Print() << "  Gas provides " << 1.0 / (1.0 + dust_fraction) * 100.0 << "% of total gravity\n";
-	amrex::Print() << "  Dust provides " << dust_fraction / (1.0 + dust_fraction) * 100.0 << "% of total gravity\n";
-	amrex::Print() << "Overdensity factor = " << overdensity_factor << "\n";
-	amrex::Print() << "Temperature = " << T0 << " K\n";
-
-	// Lane-Emden solution. The correct length scale for gas+dust equilibrium is:
-	//   r_0 = c_s / sqrt(4*pi*G * (1+f)^2 * rho_c_gas)
-	//       = c_s / sqrt(4*pi*G * (1+f) * rho_c_total)
-	// so we pass (1+f)*rho_c_total as the effective density to solveLaneEmden.
-	// The profile ψ(ξ) satisfies the standard isothermal Lane-Emden equation and
-	// maps to total density via ρ_total(r) = rho_c_total * exp(-ψ(r/r_0)).
-	const LaneEmdenSolution sol = solveLaneEmden(rho_c * (1.0 + dust_fraction), xi_crit, n_profile);
-
-	amrex::Print() << "Sound speed c_s = " << sol.cs << " cm/s\n";
-	amrex::Print() << "Length scale r_0 = " << sol.r0 << " cm (" << sol.r0 / C::parsec << " pc)\n";
-	amrex::Print() << "Sphere radius R = " << sol.R_sphere << " cm (" << sol.R_sphere / C::parsec << " pc)\n";
-
-	const double psi_edge = sol.psi[n_profile - 1];
-	const double rho_total_edge = rho_c * std::exp(-psi_edge);
-	const double rho_gas_edge = rho_total_edge / (1.0 + dust_fraction);
-	amrex::Print() << "Total edge density = " << rho_total_edge << " g/cm^3\n";
-	amrex::Print() << "Gas edge density = " << rho_gas_edge << " g/cm^3\n";
-	amrex::Print() << "Total density contrast = " << rho_c / rho_total_edge << "\n";
-
-	R_sphere_global = sol.R_sphere;
-	r0_global = sol.r0;
-	rho_c_total_global = rho_c;
-	cs_global = sol.cs;
-	rho_gas_edge_global = rho_gas_edge;
-	P_ext_global = rho_gas_edge * sol.cs * sol.cs;
-	overdensity_global = overdensity_factor;
-
-	// Copy profile to device
-	d_xi_arr.resize(n_profile);
-	d_psi_arr.resize(n_profile);
-	amrex::Gpu::copy(amrex::Gpu::hostToDevice, sol.xi.begin(), sol.xi.end(), d_xi_arr.begin());
-	amrex::Gpu::copy(amrex::Gpu::hostToDevice, sol.psi.begin(), sol.psi.end(), d_psi_arr.begin());
-
-	// Compute free-fall time for reference (using effective central density)
-	const double rho_eff = rho_c * overdensity_factor;
-	const double t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * rho_eff));
-	const double t_sc = sol.R_sphere / sol.cs;
-	amrex::Print() << "Free-fall time t_ff = " << t_ff << " s (" << t_ff / (3.15576e7) << " yr)\n";
-	amrex::Print() << "Sound crossing time t_sc = " << t_sc << " s (" << t_sc / (3.15576e7) << " yr)\n";
-	amrex::Print() << "Stopping time t_stop = " << t_stop_s << " s (" << t_stop_s / t_ff << " t_ff) — tight coupling\n";
-
 	QuokkaSimulation<BESphereProblem> sim;
-
 	sim.setInitialConditions();
 
 	const amrex::Real rho_max_init = sim.state_new_cc_[0].max(HydroSystem<BESphereProblem>::density_index);
@@ -394,8 +396,8 @@ auto problem_main() -> int
 	amrex::Print() << "Fractional change in max gas density = " << rho_change_frac << "\n";
 
 	int status = 0;
-
 	const double stability_tol = 0.10;
+
 	if (overdensity_factor == 1.0) {
 		// Stability test: density should not change significantly
 		// Allow up to 10% change (numerical diffusion causes some drift)
