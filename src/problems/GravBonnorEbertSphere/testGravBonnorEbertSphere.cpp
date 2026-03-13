@@ -11,9 +11,13 @@
 /// ## Dust setup
 /// Dust with total density ρ_dust = dust_fraction × ρ_gas is added, distributed
 /// evenly into two groups. Dust is perfectly coupled to gas (short stopping time).
-/// With dust contributing to the Poisson source, the equilibrium condition requires
-/// the Lane-Emden length scale r_0 to use the TOTAL central density ρ_c_total:
-///   r_0 = c_s / sqrt(4πG ρ_c_total)
+/// With dust contributing to the Poisson source, equilibrium requires balancing the
+/// pressure gradient of the gas against the total (gas+dust) gravitational force.
+/// Gas pressure is p = ρ_gas × cs², but total gravity sources from ρ_total = (1+f) × ρ_gas.
+/// For the pressure gradient to balance total gravity, the effective sound speed is:
+///   p = ρ_total × cs_eff²  →  cs_eff² = cs² / (1+f)  →  cs_eff = cs / sqrt(1+f)
+/// This sets the Lane-Emden length scale using the TOTAL central density ρ_c_total:
+///   r_0 = cs_eff / sqrt(4πG ρ_c_total) = cs / sqrt(4πG (1+f) ρ_c_total)
 ///
 /// The equilibrium density distribution is:
 ///   ρ_total(r) = ρ_c_total × e^{-ψ(ξ)}
@@ -208,11 +212,12 @@ template <> void QuokkaSimulation<BESphereProblem>::preCalculateInitialCondition
 	amrex::Print() << "Overdensity factor = " << overdensity_factor << "\n";
 	amrex::Print() << "Temperature = " << T0 << " K\n";
 
-	// In the tightly-coupled limit, gas and dust move together as an effective fluid
-	// with cs_eff = cs/sqrt(1+f). The critical length scale is:
-	//   r_0 = cs_eff / sqrt(4*pi*G * rho_c_total) = cs / sqrt(4*pi*G * (1+f) * rho_c_total)
-	// Pass (1+f)*rho_c_total so that solveLaneEmden (which uses cs_gas) yields the
-	// correct r_0 for the tightly coupled system.
+	// In the tightly-coupled limit, gas and dust move together as an effective fluid with sound speed cs_eff = cs/sqrt(1+f).
+	// This is because gas pressure is p = rho_gas * cs^2, but total gravity comes from rho_total = (1+f)*rho_gas.
+	// For pressure gradient to balance total gravity: p = rho_total * cs_eff^2, so
+	//   cs_eff = cs / sqrt(1+f)
+	// The Lane-Emden length scale is r_0 = cs_eff / sqrt(4*pi*G * rho_c_total) = cs / sqrt(4*pi*G * (1+f) * rho_c_total)
+	// solveLaneEmden uses cs_gas internally, so we pass (1+f)*rho_c_total to get the correct r_0.
 	const LaneEmdenSolution sol = solveLaneEmden(rho_c * (1.0 + dust_fraction), xi_crit, n_profile);
 
 	amrex::Print() << "Sound speed c_s = " << sol.cs << " cm/s\n";
