@@ -9,7 +9,8 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-# Domain is ~4x the sphere radius for rho_c = 3e-18 g/cm^3
+# Domain is ~3x the sphere radius for rho_c = 3e-18 g/cm^3
+# Sphere radius R = xi_crit * c_s/sqrt(4*pi*G*(1+f)*rho_c) = 5.41e16 cm
 geometry.prob_lo = [-1.6e17, -1.6e17, -1.6e17]
 geometry.prob_hi = [1.6e17, 1.6e17, 1.6e17]
 quokka.bc = ["reflecting", "reflecting", "reflecting"]

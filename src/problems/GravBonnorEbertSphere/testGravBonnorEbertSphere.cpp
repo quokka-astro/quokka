@@ -13,7 +13,7 @@
 /// evenly into two groups. Dust is perfectly coupled to gas (short stopping time).
 /// With dust contributing to the Poisson source, the equilibrium condition requires
 /// the Lane-Emden length scale r_0 to use the TOTAL central density ρ_c_total:
-///   r_0 = c_s / sqrt(4πG ρ_c_total)  where  ρ_c_total = (1 + dust_fraction) × ρ_c_gas
+///   r_0 = c_s / sqrt(4πG ρ_c_total)
 ///
 /// The equilibrium density distribution is:
 ///   ρ_total(r) = ρ_c_total × e^{-ψ(ξ)}
@@ -208,9 +208,11 @@ template <> void QuokkaSimulation<BESphereProblem>::preCalculateInitialCondition
 	amrex::Print() << "Overdensity factor = " << overdensity_factor << "\n";
 	amrex::Print() << "Temperature = " << T0 << " K\n";
 
-	// The correct length scale for gas+dust equilibrium is:
-	//   r_0 = c_s / sqrt(4*pi*G * (1+f) * rho_c_total)
-	// so we pass (1+f)*rho_c_total as the effective density to solveLaneEmden.
+	// In the tightly-coupled limit, gas and dust move together as an effective fluid
+	// with cs_eff = cs/sqrt(1+f). The critical length scale is:
+	//   r_0 = cs_eff / sqrt(4*pi*G * rho_c_total) = cs / sqrt(4*pi*G * (1+f) * rho_c_total)
+	// Pass (1+f)*rho_c_total so that solveLaneEmden (which uses cs_gas) yields the
+	// correct r_0 for the tightly coupled system.
 	const LaneEmdenSolution sol = solveLaneEmden(rho_c * (1.0 + dust_fraction), xi_crit, n_profile);
 
 	amrex::Print() << "Sound speed c_s = " << sol.cs << " cm/s\n";
