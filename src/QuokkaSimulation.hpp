@@ -1412,8 +1412,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::fillPoissonRhsAt
 		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
 			for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
 				rhs[bx](i, j, k) +=
-				    4.0 * M_PI * G *
-				    state[bx](i, j, k, HydroSystem<problem_t>::dustDensity_index + g * HydroSystem<problem_t>::numDustVars_);
+				    4.0 * M_PI * G * state[bx](i, j, k, HydroSystem<problem_t>::dustDensity_index + g * HydroSystem<problem_t>::numDustVars_);
 			}
 		}
 	});

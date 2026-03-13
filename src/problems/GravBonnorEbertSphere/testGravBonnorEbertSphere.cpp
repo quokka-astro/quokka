@@ -49,15 +49,15 @@ struct BESphereProblem {
 // ============================================================
 // Physical parameters (typical star-forming molecular cloud core)
 // ============================================================
-constexpr double mu = 2.33 * C::m_p;	    // mean molecular weight (molecular H2 + He)
-constexpr double gamma_ = 1.0;		    // isothermal
-constexpr double T0 = 10.0;		    // temperature [K]
-constexpr double xi_crit = 6.451;	    // critical dimensionless radius of BE sphere
-constexpr int n_profile = 10000;	    // number of points in Lane-Emden profile
-constexpr double rho_floor = 1.0e-25;	    // density floor [g cm^-3]
-constexpr double dust_fraction = 1.0;	    // ρ_dust_total / ρ_gas (= f); dust density equals gas density
-constexpr int n_dust_groups = 2;	    // number of dust groups (each gets dust_fraction/2)
-constexpr double t_stop_s = 1.0e8;	    // stopping time [s], << t_ff to enforce tight coupling. t_ff = 1.2e12 at critical density rho_c = 3.0e-18
+constexpr double mu = 2.33 * C::m_p;  // mean molecular weight (molecular H2 + He)
+constexpr double gamma_ = 1.0;	      // isothermal
+constexpr double T0 = 10.0;	      // temperature [K]
+constexpr double xi_crit = 6.451;     // critical dimensionless radius of BE sphere
+constexpr int n_profile = 10000;      // number of points in Lane-Emden profile
+constexpr double rho_floor = 1.0e-25; // density floor [g cm^-3]
+constexpr double dust_fraction = 1.0; // ρ_dust_total / ρ_gas (= f); dust density equals gas density
+constexpr int n_dust_groups = 2;      // number of dust groups (each gets dust_fraction/2)
+constexpr double t_stop_s = 1.0e8;    // stopping time [s], << t_ff to enforce tight coupling. t_ff = 1.2e12 at critical density rho_c = 3.0e-18
 
 // ============================================================
 // Template specializations
@@ -85,9 +85,8 @@ template <> struct Physics_Traits<BESphereProblem> {
 
 // Dust drag
 template <>
-AMREX_GPU_HOST_DEVICE auto
-DustDrag<BESphereProblem>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
-							 amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/, double /*cs*/)
+AMREX_GPU_HOST_DEVICE auto DustDrag<BESphereProblem>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
+										    amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/, double /*cs*/)
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, nDustGroups_> alpha{};
@@ -107,12 +106,12 @@ DustDrag<BESphereProblem>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, 
 // BCs: ψ(0) = 0, u(0) = 0
 // rho_central is the TOTAL central density (gas + all dust) used for r_0.
 struct LaneEmdenSolution {
-	std::vector<double> xi;  // dimensionless radius
+	std::vector<double> xi;	 // dimensionless radius
 	std::vector<double> psi; // ψ = ln(ρ_c_total/ρ_total)
-	double xi_max{};	  // outer dimensionless radius
-	double r0{};		  // length scale c_s / sqrt(4πGρ_c_total) [cm]
-	double cs{};		  // isothermal sound speed [cm/s]
-	double R_sphere{};	  // physical outer radius [cm]
+	double xi_max{};	 // outer dimensionless radius
+	double r0{};		 // length scale c_s / sqrt(4πGρ_c_total) [cm]
+	double cs{};		 // isothermal sound speed [cm/s]
+	double R_sphere{};	 // physical outer radius [cm]
 };
 
 auto solveLaneEmden(double rho_central_total, double xi_outer, int npts) -> LaneEmdenSolution
@@ -352,8 +351,7 @@ template <> void QuokkaSimulation<BESphereProblem>::refineGrid(int lev, amrex::T
 // ============================================================
 // Derived variable: gravitational potential
 // ============================================================
-template <>
-void QuokkaSimulation<BESphereProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
+template <> void QuokkaSimulation<BESphereProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
 {
 	if (dname == "gpot") {
 		const int ncomp = ncomp_cc_in;
