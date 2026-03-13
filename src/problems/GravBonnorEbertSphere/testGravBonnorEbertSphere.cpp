@@ -1,6 +1,6 @@
 /// \file testGravBonnorEbertSphere.cpp
 /// \brief Defines a test problem for a self-gravitating isothermal Bonnor-Ebert sphere
-///        with dust that contributes to the gravitational potential.
+///        with dust that contributes to the gravitational potential but not pressure.
 ///
 /// ## Physics
 /// The Bonnor-Ebert sphere is an isothermal self-gravitating gas sphere in
@@ -56,7 +56,7 @@ constexpr int n_profile = 10000;	    // number of points in Lane-Emden profile
 constexpr double rho_floor = 1.0e-25;	    // density floor [g cm^-3]
 constexpr double dust_fraction = 1.0;	    // ρ_dust_total / ρ_gas (= f); dust density equals gas density
 constexpr int n_dust_groups = 2;	    // number of dust groups (each gets dust_fraction/2)
-constexpr double t_stop_s = 1.0e8;	    // stopping time [s], << t_ff to enforce tight coupling
+constexpr double t_stop_s = 1.0e8;	    // stopping time [s], << t_ff to enforce tight coupling. t_ff = 1.2e12 at critical density rho_c = 3.0e-18
 
 // Runtime parameters (set from input file)
 static double rho_c = 3.0e-18;		// total central density ρ_c_total [g cm^-3] - NOLINT
@@ -90,9 +90,7 @@ template <> struct Physics_Traits<BESphereProblem> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
-// ============================================================
-// Dust drag: perfectly coupled (t_stop << t_ff)
-// ============================================================
+// Dust drag
 template <>
 AMREX_GPU_HOST_DEVICE auto
 DustDrag<BESphereProblem>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
@@ -110,7 +108,10 @@ DustDrag<BESphereProblem>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, 
 // Lane-Emden solver for isothermal sphere (RK4)
 // ============================================================
 // Solves: (1/ξ²) d/dξ(ξ² dψ/dξ) = e^(-ψ)
-// with BCs ψ(0) = 0, u(0) = 0
+// Rewritten as system:
+//   dψ/dξ = u
+//   du/dξ = e^(-ψ) - 2u/ξ
+// BCs: ψ(0) = 0, u(0) = 0
 // rho_central is the TOTAL central density (gas + all dust) used for r_0.
 struct LaneEmdenSolution {
 	std::vector<double> xi;  // dimensionless radius
@@ -128,17 +129,22 @@ auto solveLaneEmden(double rho_central_total, double xi_outer, int npts) -> Lane
 	sol.psi.resize(npts);
 	sol.xi_max = xi_outer;
 
+	// Sound speed
 	sol.cs = std::sqrt(C::k_B * T0 / mu);
-	sol.r0 = sol.cs / std::sqrt(4.0 * M_PI * C::Gconst * rho_central_total);
+	// Length scale
+	sol.r0 = sol.cs / std::sqrt(4.0 * M_PI * C::Gconst * rho_central);
 	sol.R_sphere = xi_outer * sol.r0;
 
 	const double dxi = xi_outer / static_cast<double>(npts - 1);
 
+	// Initial conditions at ξ = 0
+	// Use Taylor expansion near origin: ψ ≈ ξ²/6 - ξ⁴/120 + ...
 	sol.xi[0] = 0.0;
 	sol.psi[0] = 0.0;
-	double u = 0.0;
+	double u = 0.0; // dψ/dξ
 
 	auto dudt = [](double xi_val, double psi_val, double u_val) -> double {
+		// Handle ξ = 0 singularity using L'Hôpital: 2u/ξ -> 2/3 * e^(-ψ) at ξ=0
 		if (xi_val < 1.0e-10) {
 			return std::exp(-psi_val) / 3.0; // L'Hôpital at ξ=0
 		}
@@ -153,13 +159,16 @@ auto solveLaneEmden(double rho_central_total, double xi_outer, int npts) -> Lane
 		const double k1_psi = u_cur;
 		const double k1_u = dudt(xi_cur, psi_cur, u_cur);
 
+		// k2
 		const double xi_half = xi_cur + 0.5 * dxi;
 		const double k2_psi = u_cur + 0.5 * dxi * k1_u;
 		const double k2_u = dudt(xi_half, psi_cur + 0.5 * dxi * k1_psi, k2_psi);
 
+		// k3
 		const double k3_psi = u_cur + 0.5 * dxi * k2_u;
 		const double k3_u = dudt(xi_half, psi_cur + 0.5 * dxi * k2_psi, k3_psi);
 
+		// k4
 		const double xi_next = xi_cur + dxi;
 		const double k4_psi = u_cur + dxi * k3_u;
 		const double k4_u = dudt(xi_next, psi_cur + dxi * k3_psi, k4_psi);
@@ -195,10 +204,12 @@ template <> void QuokkaSimulation<BESphereProblem>::setInitialConditionsOnGrid(q
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
 
+	// Domain center
 	const double x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
 	const double y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
 	const double z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
 
+	// Capture profile data for GPU
 	const double *xi_ptr = d_xi_arr.data();
 	const double *psi_ptr = d_psi_arr.data();
 	const int npts = static_cast<int>(d_xi_arr.size());
@@ -277,7 +288,7 @@ template <> void QuokkaSimulation<BESphereProblem>::setInitialConditionsOnGrid(q
 // ============================================================
 template <> void QuokkaSimulation<BESphereProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
 {
-	const Real q_min = 2.0 * rho_gas_edge_global;
+	const Real q_min = 2.0 * rho_gas_edge_global; // refine where density > 2x edge density
 
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		const amrex::Box &box = mfi.validbox();
@@ -353,11 +364,13 @@ auto problem_main() -> int
 	P_ext_global = rho_gas_edge * sol.cs * sol.cs;
 	overdensity_global = overdensity_factor;
 
+	// Copy profile to device
 	d_xi_arr.resize(n_profile);
 	d_psi_arr.resize(n_profile);
 	amrex::Gpu::copy(amrex::Gpu::hostToDevice, sol.xi.begin(), sol.xi.end(), d_xi_arr.begin());
 	amrex::Gpu::copy(amrex::Gpu::hostToDevice, sol.psi.begin(), sol.psi.end(), d_psi_arr.begin());
 
+	// Compute free-fall time for reference (using effective central density)
 	const double rho_eff = rho_c * overdensity_factor;
 	const double t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * rho_eff));
 	const double t_sc = sol.R_sphere / sol.cs;
@@ -366,8 +379,6 @@ auto problem_main() -> int
 	amrex::Print() << "Stopping time t_stop = " << t_stop_s << " s (" << t_stop_s / t_ff << " t_ff) — tight coupling\n";
 
 	QuokkaSimulation<BESphereProblem> sim;
-	sim.reconstructionOrder_ = 3;
-	sim.cflNumber_ = 0.3;
 
 	sim.setInitialConditions();
 
@@ -386,6 +397,8 @@ auto problem_main() -> int
 
 	const double stability_tol = 0.10;
 	if (overdensity_factor == 1.0) {
+		// Stability test: density should not change significantly
+		// Allow up to 10% change (numerical diffusion causes some drift)
 		if (std::abs(rho_change_frac) > stability_tol) {
 			amrex::Print() << "FAIL: Sphere is not stable (density changed by " << rho_change_frac * 100.0 << "%)\n";
 			status = 1;
@@ -393,6 +406,7 @@ auto problem_main() -> int
 			amrex::Print() << "PASS: Sphere remains approximately stable (density changed by " << rho_change_frac * 100.0 << "%)\n";
 		}
 	} else if (overdensity_factor > 1.0) {
+		// Collapse test: central density should increase
 		if (rho_change_frac < stability_tol) {
 			amrex::Print() << "FAIL: Sphere did not collapse (density did not increase by more than " << stability_tol * 100.0 << "%)\n";
 			status = 1;
@@ -400,6 +414,7 @@ auto problem_main() -> int
 			amrex::Print() << "PASS: Sphere is collapsing (density changed by " << rho_change_frac * 100.0 << "%)\n";
 		}
 	} else {
+		// Collapse test: central density should decrease
 		if (rho_change_frac > -stability_tol) {
 			amrex::Print() << "FAIL: Sphere did not expand (density did not decrease by more than " << stability_tol * 100.0 << "%)\n";
 			status = 1;
