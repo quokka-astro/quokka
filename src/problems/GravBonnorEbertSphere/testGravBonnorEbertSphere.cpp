@@ -49,7 +49,7 @@ struct BESphereProblem {
 // Physical parameters (typical star-forming molecular cloud core)
 // ============================================================
 constexpr double mu = 2.33 * C::m_p;	    // mean molecular weight (molecular H2 + He)
-constexpr double gamma_ = 1.001;	    // nearly isothermal (gamma -> 1 limit)
+constexpr double gamma_ = 1.0;		    // isothermal
 constexpr double T0 = 10.0;		    // temperature [K]
 constexpr double xi_crit = 6.451;	    // critical dimensionless radius of BE sphere
 constexpr int n_profile = 10000;	    // number of points in Lane-Emden profile
@@ -58,16 +58,23 @@ constexpr double dust_fraction = 1.0;	    // ρ_dust_total / ρ_gas (= f); dust 
 constexpr int n_dust_groups = 2;	    // number of dust groups (each gets dust_fraction/2)
 constexpr double t_stop_s = 1.0e8;	    // stopping time [s], << t_ff to enforce tight coupling. t_ff = 1.2e12 at critical density rho_c = 3.0e-18
 
+// constexpr sqrt via Newton-Raphson (needed because std::sqrt is not constexpr in C++20)
+constexpr auto sqrt_constexpr(double x) -> double
+{
+	double r = x > 1.0 ? x : 1.0;
+	for (int i = 0; i < 64; ++i) {
+		r = 0.5 * (r + x / r);
+	}
+	return r;
+}
+
 // ============================================================
 // Template specializations
 // ============================================================
 template <> struct quokka::EOS_Traits<BESphereProblem> {
 	static constexpr double gamma = gamma_;
 	static constexpr double mean_molecular_weight = mu;
-};
-
-template <> struct HydroSystem_Traits<BESphereProblem> {
-	static constexpr bool reconstruct_eint = true;
+	static constexpr double cs_isothermal = sqrt_constexpr(C::k_B * T0 / mu); // [cm/s] for T0=10K
 };
 
 template <> struct Physics_Traits<BESphereProblem> {
@@ -187,7 +194,6 @@ template <> struct SimulationData<BESphereProblem> {
 	double rho_c_total{};
 	double cs{};
 	double rho_gas_edge{};
-	double P_ext{};
 	double overdensity{1.0};
 };
 
@@ -240,7 +246,6 @@ template <> void QuokkaSimulation<BESphereProblem>::preCalculateInitialCondition
 	userData_.rho_c_total = rho_c;
 	userData_.cs = sol.cs;
 	userData_.rho_gas_edge = rho_gas_edge;
-	userData_.P_ext = rho_gas_edge * sol.cs * sol.cs;
 	userData_.overdensity = overdensity_factor;
 
 	userData_.xi_arr.resize(n_profile);
@@ -272,8 +277,6 @@ template <> void QuokkaSimulation<BESphereProblem>::setInitialConditionsOnGrid(q
 	const double r0_val = userData_.r0;
 	const double rho_c_tot = userData_.rho_c_total;
 	const double rho_gas_edge = userData_.rho_gas_edge;
-	const double P_ext = userData_.P_ext;
-	const double cs_val = userData_.cs;
 	const double od_factor = userData_.overdensity;
 	const double rho_floor_val = rho_floor;
 
@@ -290,11 +293,9 @@ template <> void QuokkaSimulation<BESphereProblem>::setInitialConditionsOnGrid(q
 		const double r = std::sqrt((x - x0) * (x - x0) + (y - y0) * (y - y0) + (z - z0) * (z - z0));
 
 		double rho_gas = 0.0;
-		double P = 0.0;
 		double rho_dust_per_group = 0.0;
 
 		if (r <= R_sph) {
-			// Interpolate Lane-Emden equilibrium profile
 			const double xi_val = r / r0_val;
 			const double dxi_val = xi_ptr[npts - 1] / static_cast<double>(npts - 1);
 			const int idx = static_cast<int>(xi_val / dxi_val);
@@ -310,22 +311,21 @@ template <> void QuokkaSimulation<BESphereProblem>::setInitialConditionsOnGrid(q
 			const double rho_total_eq = rho_c_tot * std::exp(-psi_val);
 			rho_gas = rho_total_eq * gas_frac * od_factor;
 			rho_dust_per_group = rho_total_eq * dust_frac_per_group * od_factor;
-			P = rho_total_eq * gas_frac * cs_val * cs_val; // pressure from EQUILIBRIUM gas density
 		} else {
 			rho_gas = rho_gas_edge;
 			rho_dust_per_group = rho_gas_edge * (dust_fraction / n_dust_groups);
-			P = P_ext;
 		}
 
 		rho_gas = amrex::max(rho_gas, rho_floor_val);
 		rho_dust_per_group = amrex::max(rho_dust_per_group, rho_floor_val);
 
+		// isothermal EOS: pressure = rho * cs^2 is implicit; energy and internalEnergy = 0
 		state_cc(i, j, k, HydroSystem<BESphereProblem>::density_index) = rho_gas;
 		state_cc(i, j, k, HydroSystem<BESphereProblem>::x1Momentum_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<BESphereProblem>::x2Momentum_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<BESphereProblem>::x3Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<BESphereProblem>::energy_index) = quokka::EOS<BESphereProblem>::ComputeEintFromPres(rho_gas, P);
-		state_cc(i, j, k, HydroSystem<BESphereProblem>::internalEnergy_index) = quokka::EOS<BESphereProblem>::ComputeEintFromPres(rho_gas, P);
+		state_cc(i, j, k, HydroSystem<BESphereProblem>::energy_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<BESphereProblem>::internalEnergy_index) = 0.0;
 
 		for (int g = 0; g < n_dust_groups; ++g) {
 			const int stride = g * HydroSystem<BESphereProblem>::numDustVars_;
