@@ -1,25 +1,34 @@
-## Add GravBonnorEbertSphere test problem
+## Add dust to self-gravity + GravBonnorEbertSphere test
 
-New test problem that initializes an exact Bonnor-Ebert sphere — an isothermal self-gravitating gas sphere in hydrostatic equilibrium — with typical star formation parameters (T=10K, μ=2.33 m_p).
+Adds dust density to the gravitational potential and validates with a new test problem.
 
-### Physics
+### Core changes (`src/QuokkaSimulation.hpp`)
 
-The Bonnor-Ebert sphere is computed by solving the isothermal Lane-Emden equation using RK4 integration. The critical sphere has dimensionless radius ξ_max ≈ 6.451 and density contrast ρ_c/ρ_edge ≈ 14.04.
+- **`fillPoissonRhsAtLevel`**: when `is_dust_enabled`, each dust group's density is added to the Poisson source term (4πGρ_dust), so dust mass contributes to the gravitational potential.
+- **`applyPoissonGravityAtLevel`**: when `is_dust_enabled`, each dust group's momentum is kicked by `dt × ρ_dust × g` using the same gravitational acceleration as gas.
+
+### New test problem (`src/problems/GravBonnorEbertSphere/`)
+
+Initializes an exact Bonnor-Ebert sphere — an isothermal self-gravitating sphere in hydrostatic equilibrium — with:
+- **Gas**: T = 10 K, μ = 2.33 m_p, ρ_c_gas = 2×10⁻¹⁸ g/cm³
+- **Dust**: 2 groups with ρ_dust_total = ρ_gas/2 (f = 0.5), tightly coupled (t_stop = 10⁸ s ≪ t_ff)
+
+The equilibrium length scale accounts for the total (gas+dust) gravitational source:
+```
+r_0 = c_s / sqrt(4πG(1+f)ρ_c_total)
+```
+Gas provides 2/3 of total gravity, dust provides 1/3.
 
 ### Test modes
 
-- **Stability** (`overdensity_factor = 1.0`): The sphere remains approximately in hydrostatic equilibrium (~2% density change over 0.1 t_ff).
-- **Collapse** (`overdensity_factor > 1.0`): The density is enhanced by the factor while pressure stays at equilibrium, so gravity overcomes pressure support and the central density increases.
-
-### Files
-
-- `src/problems/GravBonnorEbertSphere/testGravBonnorEbertSphere.cpp` — Problem implementation with Lane-Emden solver
-- `src/problems/GravBonnorEbertSphere/CMakeLists.txt` — Build target (3D only)
-- `inputs/GravBonnorEbertSphere.toml` — Input file with default parameters
+| `overdensity_factor` | Expected | Result |
+|---|---|---|
+| 1.0 | Stable (~10% density drift) | −6.5% over 1 t_ff — PASS |
+| 1.5 | Collapse (density increases >10%) | +414% — PASS |
 
 ### Runtime parameters
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `problem.rho_c` | 3.0e-18 | Central density [g/cm³] |
-| `problem.overdensity_factor` | 1.0 | Density enhancement (1.0=stable, >1=collapse) |
+| `problem.rho_c` | 3.0e-18 | Total central density [g/cm³] |
+| `problem.overdensity_factor` | 1.0 | 1.0 = stable, >1 = collapse |

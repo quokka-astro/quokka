@@ -1,7 +1,8 @@
-# Task Plan: GravBonnorEbertSphere Test Problem
+# Task Plan: GravBonnorEbertSphere + Dust Self-Gravity
 
 ## Goal
-Create a new test problem that initializes an exact Bonnor-Ebert sphere with typical star formation parameters. Validate stability at critical density and collapse with overdensity.
+1. Add dust to the gravitational potential (Poisson RHS + dust gravity kick)
+2. Validate with a Bonnor-Ebert sphere test that includes dust
 
 ## Status: COMPLETE
 
@@ -9,30 +10,32 @@ Create a new test problem that initializes an exact Bonnor-Ebert sphere with typ
 
 ### Phase 1: Research — COMPLETE
 - [x] Study existing gravity/self-gravity test problems for patterns
-- [x] Study the Bonnor-Ebert sphere physics and Lane-Emden equation
-- [x] Identify how self-gravity is enabled and configured
-- [x] Review existing problem structure (CMakeLists, input files, etc.)
+- [x] Study fillPoissonRhsAtLevel and applyPoissonGravityAtLevel in QuokkaSimulation.hpp
+- [x] Study DustDrag/dust_system pattern from DustDamping problem
+- [x] Identify HydroSystem dust indices: dustDensity_index, x1DustMomentum_index, numDustVars_
 
-### Phase 2: Implementation — COMPLETE
-- [x] Create `src/problems/GravBonnorEbertSphere/` directory
-- [x] Implement `testGravBonnorEbertSphere.cpp` with Lane-Emden solver and IC setup
-- [x] Create `CMakeLists.txt` for the problem
-- [x] Create `inputs/GravBonnorEbertSphere.toml` input file
-- [x] Add overdensity parameter for collapse test
+### Phase 2: Core Implementation — COMPLETE
+- [x] fillPoissonRhsAtLevel: add dust density to Poisson source (if is_dust_enabled)
+- [x] applyPoissonGravityAtLevel: kick dust momentum by dt*rho_dust*g (if is_dust_enabled)
+- [x] Committed: 2e41ebfb2
 
-### Phase 3: Validation — COMPLETE
-- [x] Build the test
-- [x] Run with critical density (stable case) — density changed by -1.7%
-- [x] Run with overdensity (collapse case) — density increased by +4.2%
-- [x] Verify results and document
+### Phase 3: BE Sphere Test with Dust — COMPLETE
+- [x] Enable 2 dust groups (is_dust_enabled=true, nDustGroups=2)
+- [x] DustDrag::ComputeReciprocalStoppingTime: short stopping time (tight coupling)
+- [x] setInitialConditionsOnGrid: dust density = gas/2, split into 2 groups
+- [x] Fix Lane-Emden length scale: use (1+f)*rho_c_total so total gravity balances pressure
+- [x] Stability test: PASS (~6.5% drift over 1 t_ff)
+- [x] Collapse test (1.5x overdensity): PASS (+414%)
+- [x] Committed: e99232c49
 
 ### Phase 4: Documentation — COMPLETE
-- [x] Create PR.md
-- [x] Summarize changes
+- [x] PR.md updated
 
 ## Decisions
-- Based on ParticleSink problem (stripped particles and MHD)
-- Used gamma=1.001 (nearly isothermal) instead of true isothermal EOS
-- Overdensity applied as density multiplier on equilibrium profile, keeping equilibrium pressure — this breaks hydrostatic balance so gravity wins
-- Reflecting BCs with domain ~4x sphere radius
-- Lane-Emden solved with RK4 (10000 points), profile interpolated onto 3D grid via GPU kernel
+- Lane-Emden length scale: r_0 = c_s/sqrt(4πG(1+f)ρ_c_total), NOT c_s/sqrt(4πGρ_c_total)
+  - The (1+f) factor accounts for both gas and dust in the total gravitational source
+  - Without this fix the sphere collapses immediately (gravity too strong for given pressure)
+- Gas provides 2/3, dust provides 1/3 of total gravity with f=0.5 (not 1/2 each as user suggested)
+  - Equal split would require f=1 (ρ_dust = ρ_gas)
+- dust/DustDrag.hpp must NOT be included directly (it's pulled in by QuokkaSimulation.hpp)
+- Valid BC names: "reflecting", "foextrap", "periodic" (NOT "outflow")
