@@ -11,13 +11,13 @@ Adds dust density to the gravitational potential and validates with a new test p
 
 Initializes an exact Bonnor-Ebert sphere — an isothermal self-gravitating sphere in hydrostatic equilibrium — with:
 - **Gas**: T = 10 K, μ = 2.33 m_p, ρ_c_gas = 2×10⁻¹⁸ g/cm³
-- **Dust**: 2 groups with ρ_dust_total = ρ_gas/2 (f = 0.5), tightly coupled (t_stop = 10⁸ s ≪ t_ff)
+- **Dust**: 2 groups with ρ_dust_total = ρ_gas (f = 1), tightly coupled (t_stop = 10⁸ s ≪ t_ff)
 
 The equilibrium length scale accounts for the total (gas+dust) gravitational source:
 ```
 r_0 = c_s / sqrt(4πG(1+f)ρ_c_total)
 ```
-Gas provides 2/3 of total gravity, dust provides 1/3.
+Gas and dust each provide 1/2 of total gravity.
 
 ### Test modes
 

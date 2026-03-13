@@ -18,10 +18,9 @@
 /// The equilibrium density distribution is:
 ///   ρ_total(r) = ρ_c_total × e^{-ψ(ξ)}
 ///   ρ_gas(r)   = ρ_c_total / (1 + dust_fraction) × e^{-ψ(ξ)}
-///   ρ_dust_i(r) = ρ_c_total × dust_fraction/(2(1+dust_fraction)) × e^{-ψ(ξ)}
+///   ρ_dust(r) = ρ_c_total × dust_fraction / (1 + dust_fraction) × e^{-ψ(ξ)}
 ///
-/// Gas provides 1/(1+dust_fraction) = 2/3 of total gravity needed;
-/// dust provides dust_fraction/(1+dust_fraction) = 1/3.
+/// With dust_fraction = 1, gas and dust each provide 1/2 of total gravity needed.
 ///
 /// ## Validation
 ///   1. Stability: at critical total density the sphere stays in near-hydrostatic
@@ -55,7 +54,7 @@ constexpr double T0 = 10.0;		    // temperature [K]
 constexpr double xi_crit = 6.451;	    // critical dimensionless radius of BE sphere
 constexpr int n_profile = 10000;	    // number of points in Lane-Emden profile
 constexpr double rho_floor = 1.0e-25;	    // density floor [g cm^-3]
-constexpr double dust_fraction = 0.5;	    // ρ_dust_total / ρ_gas (= f)
+constexpr double dust_fraction = 1.0;	    // ρ_dust_total / ρ_gas (= f); dust density equals gas density
 constexpr int n_dust_groups = 2;	    // number of dust groups (each gets dust_fraction/2)
 constexpr double t_stop_s = 1.0e8;	    // stopping time [s], << t_ff to enforce tight coupling
 
