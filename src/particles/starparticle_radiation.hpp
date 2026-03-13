@@ -476,7 +476,59 @@ private:
             p.rdata(radius_idx) = radius;
             p.rdata(burn_state_idx) = static_cast<amrex::Real>(static_cast<int>(burn_state));
         }
-        
+
+	// Update radius
+	if (burnState != ZAMS) {
+	  Real beta1 = beta(m);
+	  Real dr = (2.0*mdot/m*r*(FK/(aG()*beta1)+1.0-1.0/(aG()*beta1))
+		     + beta1/m * dlogBeta_dlogM(beta1) * mdot * r / beta1
+		     - 2.0/(beta1*aG())*r*r/(G*m*m)*(lStar()+eDotIon()-lDeut(beta1)));
+	  Real rdottime = fabs(r/dr)/100.0;
+	  Real mdottime = fabs(m/mdot)/100.0;
+    
+	  if( rdottime < dt)
+	    {
+	      int rdotfac = ceil(dt/rdottime);
+	      Real rdotfacr = rdotfac;
+	      Real dtprime = dt/rdotfac;
+
+	      for(int rdotloop = 0; rdotloop < rdotfac; rdotloop++)
+		{
+		  beta1 = beta(m);
+		  dr = (2.0*mdot/m*r*(FK/(aG()*beta1)+1.0-1.0/(aG()*beta1))
+			+ beta1/m * dlogBeta_dlogM(beta1) * mdot * r / beta1
+		        - 2.0/(beta1*aG())*r*r/(G*m*m)*(lStar()+eDotIon()-lDeut(beta1)));
+		  r += dtprime * dr;
+		}
+	      
+	    }else if( mdottime < dt )
+	    {
+	      int mdotfac = ceil(dt/mdottime);
+	      Real mdotfacr = mdotfac;
+	      Real dtprime = dt/mdotfacr;
+	      for(int mdotloop = 0; mdotloop < mdotfac; mdotloop++)
+		{
+		  beta1=beta(m);
+		  dr = (2.0*mdot/m*r*(FK/(aG()*beta1)+1.0-1.0/(aG()*beta1))
+			+ beta1/m * dlogBeta_dlogM(beta1) * mdot * r / beta1
+		        - 2.0/(beta1*aG())*r*r/(G*m*m)*(lStar()+eDotIon()-lDeut(beta1)));
+		  r += dtprime * dr;
+		}
+	    } else
+	    {
+	      beta1=beta(m);
+	      dr = (2.0*mdot/m*r*(FK/(aG()*beta1)+1.0-1.0/(aG()*beta1))
+		    + beta1/m * dlogBeta_dlogM(beta1) * mdot * r / beta1
+		    - 2.0/(beta1*aG())*r*r/(G*m*m)*(lStar()+eDotIon()-lDeut(beta1)));
+	      r += dt * dr;
+	    }
+	  // Resetting to 0.2 R_sun, if r is -ve.
+	  if(r < 0.0e0)
+	    {
+	      r = 0.2*6.96e10; //Worst case and we do get a neg radius. reset it
+	    }
+	}
+
         // Update burning state
         if (burn_state == BurningState::None) {
                 n = n_init(mdot);
@@ -510,7 +562,7 @@ private:
 	} else if (burn_state == BurningState::ZAMS) {
                 mdeut = 0.0;
         }
-        
+
         // Update particle data
         p.rdata(mlast_idx) = mass;
         p.rdata(mdeut_idx) = mdeut;
