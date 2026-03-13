@@ -40,6 +40,7 @@
 #include "util/BC.hpp"
 
 #include <cmath>
+#include <gcem.hpp>
 #include <vector>
 
 struct BESphereProblem {
@@ -58,23 +59,13 @@ constexpr double dust_fraction = 1.0;	    // ρ_dust_total / ρ_gas (= f); dust 
 constexpr int n_dust_groups = 2;	    // number of dust groups (each gets dust_fraction/2)
 constexpr double t_stop_s = 1.0e8;	    // stopping time [s], << t_ff to enforce tight coupling. t_ff = 1.2e12 at critical density rho_c = 3.0e-18
 
-// constexpr sqrt via Newton-Raphson (needed because std::sqrt is not constexpr in C++20)
-constexpr auto sqrt_constexpr(double x) -> double
-{
-	double r = x > 1.0 ? x : 1.0;
-	for (int i = 0; i < 64; ++i) {
-		r = 0.5 * (r + x / r);
-	}
-	return r;
-}
-
 // ============================================================
 // Template specializations
 // ============================================================
 template <> struct quokka::EOS_Traits<BESphereProblem> {
 	static constexpr double gamma = gamma_;
 	static constexpr double mean_molecular_weight = mu;
-	static constexpr double cs_isothermal = sqrt_constexpr(C::k_B * T0 / mu); // [cm/s] for T0=10K
+	static constexpr double cs_isothermal = gcem::sqrt(C::k_B * T0 / mu); // [cm/s] for T0=10K
 };
 
 template <> struct Physics_Traits<BESphereProblem> {
