@@ -1407,14 +1407,14 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::fillPoissonRhsAt
 	amrex::ParallelFor(rhs_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		// *add* density to rhs_mf
 		// (N.B. particles **will not work** if you overwrite the density here!)
-		rhs[bx](i, j, k) += 4.0 * M_PI * G * state[bx](i, j, k, HydroSystem<problem_t>::density_index);
+		Real rho = state[bx](i, j, k, HydroSystem<problem_t>::density_index);
 		// add dust density contributions to the Poisson source term
 		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
 			for (int g = 0; g < Physics_Traits<problem_t>::nDustGroups; ++g) {
-				rhs[bx](i, j, k) +=
-				    4.0 * M_PI * G * state[bx](i, j, k, HydroSystem<problem_t>::dustDensity_index + g * HydroSystem<problem_t>::numDustVars_);
+				rho += state[bx](i, j, k, HydroSystem<problem_t>::dustDensity_index + g * HydroSystem<problem_t>::numDustVars_);
 			}
 		}
+		rhs[bx](i, j, k) += 4.0 * M_PI * G * rho;
 	});
 	amrex::Gpu::streamSynchronizeAll();
 }

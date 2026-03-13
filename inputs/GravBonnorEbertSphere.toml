@@ -1,10 +1,4 @@
-# *****************************************************************
-# Bonnor-Ebert Sphere - Stability Test
-# *****************************************************************
-# An isothermal self-gravitating sphere at the critical Bonnor-Ebert
-# density. With overdensity_factor = 1.0, the sphere should remain
-# approximately stable. With overdensity_factor > 1.0, it collapses.
-# *****************************************************************
+# Bonnor-Ebert Sphere with dust self-gravity
 
 # *****************************************************************
 # Problem size and geometry
@@ -49,8 +43,7 @@ derived_vars = "gpot"
 # Problem parameters
 # *****************************************************************
 problem.rho_c = 3.0e-18            # central density [g/cm^3]
-problem.overdensity_factor = 1.0    # 1.0 = critical (stable), >1.0 = collapse
+problem.overdensity_factor = 1.0    # 1.0 = critical (stable), >1.0 = collapse, <1.0 = expand
 
 tiny_profiler.enabled = 0
 suppress_output = 0
-
