@@ -330,6 +330,82 @@ template <> void QuokkaSimulation<BESphereProblem>::setInitialConditionsOnGrid(q
 }
 
 // ============================================================
+// Reference solution (equilibrium BE profile, used for stability test)
+// ============================================================
+template <>
+void QuokkaSimulation<BESphereProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+								 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+{
+	// The reference is the initial (t=0) equilibrium profile with overdensity = 1.
+	// This is only meaningful for the stability test (overdensity_factor == 1.0).
+
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = Geom(0).ProbHiArray();
+
+	const double x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
+	const double y0 = prob_lo[1] + 0.5 * (prob_hi[1] - prob_lo[1]);
+	const double z0 = prob_lo[2] + 0.5 * (prob_hi[2] - prob_lo[2]);
+
+	const double *xi_ptr = userData_.xi_arr.data();
+	const double *psi_ptr = userData_.psi_arr.data();
+	const int npts = static_cast<int>(userData_.xi_arr.size());
+	const double R_sph = userData_.R_sphere;
+	const double r0_val = userData_.r0;
+	const double rho_c_tot = userData_.rho_c_total;
+	const double rho_gas_edge = userData_.rho_gas_edge;
+	const double rho_floor_val = rho_floor;
+
+	constexpr double gas_frac = 1.0 / (1.0 + dust_fraction);
+	constexpr double dust_frac_per_group = (dust_fraction / n_dust_groups) / (1.0 + dust_fraction);
+
+	// Copy simulation state into ref first so that non-density components (momentum,
+	// energy) contribute zero error — we only validate density conservation here.
+	amrex::MultiFab::Copy(ref, state_new_cc_[0], 0, 0, ref.nComp(), 0);
+
+	for (amrex::MFIter mfi(ref); mfi.isValid(); ++mfi) {
+		const amrex::Box &box = mfi.validbox();
+		auto const &stateRef = ref.array(mfi);
+
+		amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			const double x = prob_lo[0] + (i + 0.5) * dx[0];
+			const double y = prob_lo[1] + (j + 0.5) * dx[1];
+			const double z = prob_lo[2] + (k + 0.5) * dx[2];
+			const double r = std::sqrt((x - x0) * (x - x0) + (y - y0) * (y - y0) + (z - z0) * (z - z0));
+
+			double rho_gas = 0.0;
+			double rho_dust_per_group = 0.0;
+
+			if (r <= R_sph) {
+				const double xi_val = r / r0_val;
+				const double dxi_val = xi_ptr[npts - 1] / static_cast<double>(npts - 1);
+				const int idx = static_cast<int>(xi_val / dxi_val);
+
+				double psi_val = 0.0;
+				if (idx >= npts - 1) {
+					psi_val = psi_ptr[npts - 1];
+				} else {
+					const double frac = (xi_val - xi_ptr[idx]) / (xi_ptr[idx + 1] - xi_ptr[idx]);
+					psi_val = psi_ptr[idx] + frac * (psi_ptr[idx + 1] - psi_ptr[idx]);
+				}
+
+				const double rho_total_eq = rho_c_tot * std::exp(-psi_val);
+				rho_gas = rho_total_eq * gas_frac;
+				rho_dust_per_group = rho_total_eq * dust_frac_per_group;
+			} else {
+				rho_gas = rho_gas_edge;
+				rho_dust_per_group = rho_gas_edge * (dust_fraction / n_dust_groups);
+			}
+
+			stateRef(i, j, k, HydroSystem<BESphereProblem>::density_index) = amrex::max(rho_gas, rho_floor_val);
+
+			for (int g = 0; g < n_dust_groups; ++g) {
+				const int stride = g * HydroSystem<BESphereProblem>::numDustVars_;
+				stateRef(i, j, k, HydroSystem<BESphereProblem>::dustDensity_index + stride) = amrex::max(rho_dust_per_group, rho_floor_val);
+			}
+		});
+	}
+}
+
+// ============================================================
 // AMR refinement: tag on gas density
 // ============================================================
 template <> void QuokkaSimulation<BESphereProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
@@ -390,13 +466,17 @@ auto problem_main() -> int
 	const double stability_tol = 0.10;
 
 	if (overdensity_factor == 1.0) {
-		// Stability test: density should not change significantly
-		// Allow up to 10% change (numerical diffusion causes some drift)
-		if (std::abs(rho_change_frac) > stability_tol) {
-			amrex::Print() << "FAIL: Sphere is not stable (density changed by " << rho_change_frac * 100.0 << "%)\n";
+		// Stability test: compare all cells against the initial equilibrium profile
+		const double error_norm = sim.computeErrorNorm();
+		const double error_tol = 0.20;
+		if (!std::isnan(error_norm) && error_norm > error_tol) {
+			amrex::Print() << "FAIL: Sphere deviated from equilibrium (relative L1 error = " << error_norm << " > " << error_tol << ")\n";
+			status = 1;
+		} else if (std::isnan(error_norm)) {
+			amrex::Print() << "FAIL: Could not compute error norm (no reference solution)\n";
 			status = 1;
 		} else {
-			amrex::Print() << "PASS: Sphere remains approximately stable (density changed by " << rho_change_frac * 100.0 << "%)\n";
+			amrex::Print() << "PASS: Sphere remains approximately stable (relative L1 error = " << error_norm << ")\n";
 		}
 	} else if (overdensity_factor > 1.0) {
 		// Collapse test: central density should increase
