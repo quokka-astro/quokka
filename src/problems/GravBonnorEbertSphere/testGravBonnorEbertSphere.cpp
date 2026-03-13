@@ -466,17 +466,24 @@ auto problem_main() -> int
 	const double stability_tol = 0.10;
 
 	if (overdensity_factor == 1.0) {
-		// Stability test: compare all cells against the initial equilibrium profile
-		const double error_norm = sim.computeErrorNorm();
-		const double error_tol = 0.20;
-		if (!std::isnan(error_norm) && error_norm > error_tol) {
-			amrex::Print() << "FAIL: Sphere deviated from equilibrium (relative L1 error = " << error_norm << " > " << error_tol << ")\n";
-			status = 1;
-		} else if (std::isnan(error_norm)) {
-			amrex::Print() << "FAIL: Could not compute error norm (no reference solution)\n";
+		// Stability test: (1) peak density must not change by more than 10%
+		if (std::abs(rho_change_frac) > stability_tol) {
+			amrex::Print() << "FAIL: Peak density changed by " << rho_change_frac * 100.0 << "% (> " << stability_tol * 100.0 << "%)\n";
 			status = 1;
 		} else {
-			amrex::Print() << "PASS: Sphere remains approximately stable (relative L1 error = " << error_norm << ")\n";
+			amrex::Print() << "PASS: Peak density stable (changed by " << rho_change_frac * 100.0 << "%)\n";
+		}
+		// (2) full-domain L1 error norm against initial equilibrium profile
+		const double error_norm = sim.computeErrorNorm();
+		const double error_tol = 0.20;
+		if (std::isnan(error_norm)) {
+			amrex::Print() << "FAIL: Could not compute error norm (no reference solution)\n";
+			status = 1;
+		} else if (error_norm > error_tol) {
+			amrex::Print() << "FAIL: Sphere deviated from equilibrium (relative L1 error = " << error_norm << " > " << error_tol << ")\n";
+			status = 1;
+		} else {
+			amrex::Print() << "PASS: Full-domain L1 error within tolerance (relative L1 error = " << error_norm << ")\n";
 		}
 	} else if (overdensity_factor > 1.0) {
 		// Collapse test: central density should increase
