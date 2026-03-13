@@ -59,9 +59,10 @@ constexpr double T0 = 10.0;	      // temperature [K]
 constexpr double xi_crit = 6.451;     // critical dimensionless radius of BE sphere
 constexpr int n_profile = 10000;      // number of points in Lane-Emden profile
 constexpr double rho_floor = 1.0e-25; // density floor [g cm^-3]
-constexpr double dust_fraction = 1.0; // ρ_dust_total / ρ_gas (= f); dust density equals gas density
 constexpr int n_dust_groups = 2;      // number of dust groups (each gets dust_fraction/2)
-constexpr double t_stop_s = 1.0e8;    // stopping time [s], << t_ff to enforce tight coupling. t_ff = 1.2e12 at critical density rho_c = 3.0e-18
+
+static double t_stop_s = 1.0e8;    // stopping time [s], << t_ff to enforce tight coupling. t_ff = 1.2e12 at critical density rho_c = 3.0e-18
+static double dust_fraction = 1.0; // ρ_dust_total / ρ_gas (= f); dust density equals gas density
 
 // ============================================================
 // Template specializations
@@ -280,8 +281,8 @@ template <> void QuokkaSimulation<BESphereProblem>::setInitialConditionsOnGrid(q
 	// Fractions of total density per species
 	// gas:              1 / (1 + dust_fraction)
 	// each dust group:  (dust_fraction / n_dust_groups) / (1 + dust_fraction)
-	constexpr double gas_frac = 1.0 / (1.0 + dust_fraction);
-	constexpr double dust_frac_per_group = (dust_fraction / n_dust_groups) / (1.0 + dust_fraction);
+	const double gas_frac = 1.0 / (1.0 + dust_fraction);
+	const double dust_frac_per_group = (dust_fraction / n_dust_groups) / (1.0 + dust_fraction);
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const double x = prob_lo[0] + (i + 0.5) * dx[0];
@@ -359,8 +360,8 @@ void QuokkaSimulation<BESphereProblem>::computeReferenceSolution(amrex::MultiFab
 	const double rho_gas_edge = userData_.rho_gas_edge;
 	const double rho_floor_val = rho_floor;
 
-	constexpr double gas_frac = 1.0 / (1.0 + dust_fraction);
-	constexpr double dust_frac_per_group = (dust_fraction / n_dust_groups) / (1.0 + dust_fraction);
+	const double gas_frac = 1.0 / (1.0 + dust_fraction);
+	const double dust_frac_per_group = (dust_fraction / n_dust_groups) / (1.0 + dust_fraction);
 
 	// Copy simulation state into ref first so that non-density components (momentum,
 	// energy) contribute zero error — we only validate density conservation here.
@@ -452,31 +453,45 @@ auto problem_main() -> int
 	double overdensity_factor = 1.0;
 	amrex::ParmParse const pp("problem");
 	pp.query("overdensity_factor", overdensity_factor);
+	pp.query("t_stop_s", t_stop_s);
+	pp.query("dust_fraction", dust_fraction);
 
 	QuokkaSimulation<BESphereProblem> sim;
 	sim.setInitialConditions();
 
 	const amrex::Real rho_max_init = sim.state_new_cc_[0].max(HydroSystem<BESphereProblem>::density_index);
-	amrex::Print() << "\nInitial max gas density = " << rho_max_init << " g/cm^3\n";
+	const amrex::Real dust_max_init = sim.state_new_cc_[0].max(HydroSystem<BESphereProblem>::dustDensity_index);
+	amrex::Print() << "\nInitial max gas density  = " << rho_max_init << " g/cm^3\n";
+	amrex::Print() << "Initial max dust density = " << dust_max_init << " g/cm^3\n";
 
 	sim.evolve();
 
 	const amrex::Real rho_max_final = sim.state_new_cc_[0].max(HydroSystem<BESphereProblem>::density_index);
-	amrex::Print() << "\nFinal max gas density = " << rho_max_final << " g/cm^3\n";
+	const amrex::Real dust_max_final = sim.state_new_cc_[0].max(HydroSystem<BESphereProblem>::dustDensity_index);
+	amrex::Print() << "\nFinal max gas density  = " << rho_max_final << " g/cm^3\n";
+	amrex::Print() << "Final max dust density = " << dust_max_final << " g/cm^3\n";
 
 	const double rho_change_frac = (rho_max_final - rho_max_init) / rho_max_init;
-	amrex::Print() << "Fractional change in max gas density = " << rho_change_frac << "\n";
+	const double dust_change_frac = (dust_max_final - dust_max_init) / dust_max_init;
+	amrex::Print() << "Fractional change in max gas density  = " << rho_change_frac << "\n";
+	amrex::Print() << "Fractional change in max dust density = " << dust_change_frac << "\n";
 
 	int status = 0;
 	const double stability_tol = 0.10;
 
 	if (overdensity_factor == 1.0) {
-		// Stability test: (1) peak density must not change by more than 10%
+		// Stability test: (1) peak gas and dust densities must not change by more than 10%
 		if (std::abs(rho_change_frac) > stability_tol) {
-			amrex::Print() << "FAIL: Peak density changed by " << rho_change_frac * 100.0 << "% (> " << stability_tol * 100.0 << "%)\n";
+			amrex::Print() << "FAIL: Peak gas density changed by " << rho_change_frac * 100.0 << "% (> " << stability_tol * 100.0 << "%)\n";
 			status = 1;
 		} else {
-			amrex::Print() << "PASS: Peak density stable (changed by " << rho_change_frac * 100.0 << "%)\n";
+			amrex::Print() << "PASS: Peak gas density stable (changed by " << rho_change_frac * 100.0 << "%)\n";
+		}
+		if (std::abs(dust_change_frac) > stability_tol) {
+			amrex::Print() << "FAIL: Peak dust density changed by " << dust_change_frac * 100.0 << "% (> " << stability_tol * 100.0 << "%)\n";
+			status = 1;
+		} else {
+			amrex::Print() << "PASS: Peak dust density stable (changed by " << dust_change_frac * 100.0 << "%)\n";
 		}
 		// (2) full-domain L1 error norm against initial equilibrium profile
 		const double error_norm = sim.computeErrorNorm();
@@ -491,20 +506,32 @@ auto problem_main() -> int
 			amrex::Print() << "PASS: Full-domain L1 error within tolerance (relative L1 error = " << error_norm << ")\n";
 		}
 	} else if (overdensity_factor > 1.0) {
-		// Collapse test: central density should increase
+		// Collapse test: both gas and dust central densities should increase
 		if (rho_change_frac < stability_tol) {
-			amrex::Print() << "FAIL: Sphere did not collapse (density did not increase by more than " << stability_tol * 100.0 << "%)\n";
+			amrex::Print() << "FAIL: Sphere did not collapse (gas density did not increase by more than " << stability_tol * 100.0 << "%)\n";
 			status = 1;
 		} else {
-			amrex::Print() << "PASS: Sphere is collapsing (density changed by " << rho_change_frac * 100.0 << "%)\n";
+			amrex::Print() << "PASS: Sphere is collapsing (gas density changed by " << rho_change_frac * 100.0 << "%)\n";
+		}
+		if (dust_change_frac < stability_tol) {
+			amrex::Print() << "FAIL: Sphere did not collapse (dust density did not increase by more than " << stability_tol * 100.0 << "%)\n";
+			status = 1;
+		} else {
+			amrex::Print() << "PASS: Dust collapsed with gas (dust density changed by " << dust_change_frac * 100.0 << "%)\n";
 		}
 	} else {
-		// Collapse test: central density should decrease
+		// Expansion test: both gas and dust central densities should decrease
 		if (rho_change_frac > -stability_tol) {
-			amrex::Print() << "FAIL: Sphere did not expand (density did not decrease by more than " << stability_tol * 100.0 << "%)\n";
+			amrex::Print() << "FAIL: Sphere did not expand (gas density did not decrease by more than " << stability_tol * 100.0 << "%)\n";
 			status = 1;
 		} else {
-			amrex::Print() << "PASS: Sphere is expanding (density changed by " << rho_change_frac * 100.0 << "%)\n";
+			amrex::Print() << "PASS: Sphere is expanding (gas density changed by " << rho_change_frac * 100.0 << "%)\n";
+		}
+		if (dust_change_frac > -stability_tol) {
+			amrex::Print() << "FAIL: Sphere did not expand (dust density did not decrease by more than " << stability_tol * 100.0 << "%)\n";
+			status = 1;
+		} else {
+			amrex::Print() << "PASS: Dust expanded with gas (dust density changed by " << dust_change_frac * 100.0 << "%)\n";
 		}
 	}
 

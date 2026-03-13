@@ -44,6 +44,8 @@ derived_vars = "gpot"
 # *****************************************************************
 problem.rho_c = 3.0e-18            # central density [g/cm^3]
 problem.overdensity_factor = 1.0    # 1.0 = critical (stable), >1.0 = collapse, <1.0 = expand
+problem.t_stop_s = 1.0e8            # stopping time [s], << t_ff to enforce tight coupling. t_ff = 1.2e12 at critical density rho_c = 3.0e-18
+problem.dust_fraction = 1.0         # ρ_dust_total / ρ_gas (= f); dust density equals gas density
 
 tiny_profiler.enabled = 0
 suppress_output = 0
