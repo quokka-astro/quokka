@@ -19,8 +19,6 @@ enum class AccretionScheme { Threshold = 0, BondiHoyle = 1 };
 // manually set the accretion scheme
 constexpr AccretionScheme accretion_scheme = AccretionScheme::BondiHoyle;
 
-#if AMREX_SPACEDIM == 3
-
 namespace SinkAccretionUtils
 {
 
@@ -283,10 +281,11 @@ void ComputeScaleDown(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, a
 		AMREX_ASSERT(local_accretion_rate_arr[bx](i, j, k) <= 0.0);
 		AMREX_ASSERT(local_accretion_rate_arr[bx](i, j, k) > -1.0);
 
-		// In the accretion zone, if (1 + accretion_rate_cell) * rho > rho_J, set accretion_rate_cell = rho_J / rho - 1
-		// The condition "accretion_rate_cell > 0.0" is essential as we only want to apply this to the accretion zone. There could be a
-		// Jeans-violating cell that is not in a accretion zone emerging at the beginning of a step.
-		if (accretion_rate_cell > std::numeric_limits<double>::min()) {
+		// In the accretion zone, if (1 + accretion_rate_cell) * rho > rho_J, set accretion_rate_cell = rho_J / rho - 1 to bring the
+		// density down to the Jeans density.
+		// The condition "accretion_rate_cell < 0.0" is to skip the clause for the cells not in accretion zone. Note that accretion_rate_cell
+		// is always negative or zero, and negative means the cell is in a accretion zone.
+		if (accretion_rate_cell < 0.0) {
 			// Compute Jeans density rho_J = J^2 * pi * cs^2 / (G * dx^2)
 
 			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fab_fc{};
@@ -329,7 +328,7 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 					const amrex::Array4<const amrex::Real> &local_scale_down, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
 					const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
 					std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fab_fc, int mass_index, amrex::Real /*time*/,
-					amrex::Real dt, amrex::Real /*vol*/)
+					amrex::Real dt, amrex::Real /*vol*/, int mdot_index = -1)
 {
 	const BL_PROFILE("SinkAccretionUtils::UpdateParticleMassAndMomentumInBox()");
 	// Get the particle array of structs
@@ -431,12 +430,16 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 		p.rdata(mass_index + 1) = (par_m * p.rdata(mass_index + 1) + accreted_momentum_x) / par_m_new;
 		p.rdata(mass_index + 2) = (par_m * p.rdata(mass_index + 2) + accreted_momentum_y) / par_m_new;
 		p.rdata(mass_index + 3) = (par_m * p.rdata(mass_index + 3) + accreted_momentum_z) / par_m_new;
+		if (mdot_index >= 0) {
+			p.rdata(mdot_index) = accreted_mass / dt;
+		}
 	});
 }
 
 template <typename ContainerType, typename problem_t>
 void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &scale_down,
-				   std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, int mass_index, amrex::Real time, amrex::Real dt)
+				   std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, int mass_index, amrex::Real time, amrex::Real dt,
+				   int mdot_index = -1)
 {
 	const BL_PROFILE("SinkAccretionUtils::UpdateParticleMassAndMomentum()");
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
@@ -460,7 +463,7 @@ void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &st
 
 		// Process particles in this box
 		UpdateParticleMassAndMomentumInBox<ContainerType, problem_t>(pti, local_state, local_scale_down, plo, dx, local_fab_fc, mass_index, time, dt,
-									     vol);
+									     vol, mdot_index);
 	}
 }
 
@@ -475,7 +478,7 @@ template <typename problem_t> void UpdateHydroState(amrex::MultiFab &state, amre
 		AMREX_ASSERT(accretion_rate_cell <= 0.0);
 		AMREX_ASSERT(accretion_rate_cell > -1.0);
 		const double accretion_down_factor = 1.0 + accretion_rate_cell;
-		AMREX_ASSERT(accretion_down_factor > std::numeric_limits<double>::min());
+		AMREX_ASSERT(accretion_down_factor > 0.0);
 		state_arr[bx](i, j, k, HydroSystem<problem_t>::density_index) *= accretion_down_factor;
 		state_arr[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index) *= accretion_down_factor;
 		state_arr[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index) *= accretion_down_factor;
@@ -524,7 +527,7 @@ void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 template <typename ContainerType, typename problem_t>
 void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate,
 		    std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, const amrex::Geometry &geom, int lev, amrex::Real time, amrex::Real dt,
-		    int mass_index)
+		    int mass_index, int mdot_index = -1)
 {
 	const BL_PROFILE("SinkAccretionUtils::applyAccretion()");
 	// Step 2: Compute the scale_down factor. We scale down the accretion rate to prevent accretion rates from exceeding 100%
@@ -534,16 +537,14 @@ void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mul
 	// Update accretion_rate and compute scale_down
 	ComputeScaleDown<problem_t>(state, state_accretion_rate, scale_down, geom, state_fc);
 
-	// Step 3: Update particle mass and momentum
-	UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, state_fc, lev, mass_index, time, dt);
+	// Step 3: Update particle mass, momentum, and accretion rate
+	UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, state_fc, lev, mass_index, time, dt, mdot_index);
 
 	// Step 4: Update the hydro state. We do this at last because the original state is needed for updating particles in step 3.
 	UpdateHydroState<problem_t>(state, state_accretion_rate);
 }
 
 } // namespace SinkAccretionUtils
-
-#endif // AMREX_SPACEDIM == 3
 
 } // namespace quokka
 
