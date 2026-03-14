@@ -7,8 +7,6 @@
 #include "particle_types.hpp"
 #include "physics_info.hpp"
 
-#if AMREX_SPACEDIM == 3
-
 namespace quokka
 {
 
@@ -134,7 +132,5 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 // };
 
 } // namespace quokka
-
-#endif // AMREX_SPACEDIM == 3
 
 #endif // PARTICLE_UPDATE_HPP_

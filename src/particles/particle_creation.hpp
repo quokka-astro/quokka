@@ -193,8 +193,6 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 	}
 };
 
-#if AMREX_SPACEDIM == 3
-
 // Helper namespace for Jeans-instability-based (sink-like) particle creation.
 // These helpers are shared between Sink and Star particle creation specializations.
 namespace SinkCreationHelpers
@@ -753,8 +751,6 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		    mass_at_birth_index, state_fc, verbose);
 	}
 }; // ParticleCreationTraits<ParticleType::StochasticStellarPop>
-
-#endif // AMREX_SPACEDIM == 3
 
 } // namespace quokka
 

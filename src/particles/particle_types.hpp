@@ -128,8 +128,6 @@ constexpr int RadParticleRealComps = []() constexpr {
 template <typename problem_t> using RadParticleContainer = amrex::AmrParticleContainer<RadParticleRealComps<problem_t>>;
 template <typename problem_t> using RadParticleIterator = amrex::ParIter<RadParticleRealComps<problem_t>>;
 
-#if AMREX_SPACEDIM == 3
-
 //-------------------- Gravitating particles --------------------
 
 // Indices for gravitating particles (CIC_particles) using AMREX_ENUM for automatic string conversion
@@ -335,8 +333,6 @@ constexpr int SinkParticleRealComps = 5; // mass, vx, vy, vz, mdot
 using SinkParticleContainer = amrex::AmrParticleContainer<SinkParticleRealComps>;
 using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
 
-#endif // AMREX_SPACEDIM == 3
-
 //-------------------- Component Names for I/O --------------------
 
 // Helper function to generate component names from an enum type
@@ -378,9 +374,7 @@ template <ParticleType particleType, typename problem_t> auto getParticleRealCom
 {
 	if constexpr (particleType == ParticleType::Rad) {
 		return expandEnumNames<RadParticleRealIdx, RadParticleRealComps<problem_t>, true>();
-	}
-#if AMREX_SPACEDIM == 3
-	else if constexpr (particleType == ParticleType::CIC) {
+	} else if constexpr (particleType == ParticleType::CIC) {
 		return expandEnumNames<CICParticleRealIdx, CICParticleRealComps, false>();
 	} else if constexpr (particleType == ParticleType::CICRad) {
 		return expandEnumNames<CICRadParticleRealIdx, CICRadParticleRealComps<problem_t>, true>();
@@ -390,9 +384,7 @@ template <ParticleType particleType, typename problem_t> auto getParticleRealCom
 		return expandEnumNames<SinkParticleRealIdx, SinkParticleRealComps, false>();
 	} else if constexpr (particleType == ParticleType::Test) {
 		return expandEnumNames<TestParticleRealIdx, TestParticleRealComps<problem_t>, true>();
-	}
-#endif
-	else {
+	} else {
 		amrex::Abort("Unknown particle type");
 		return {};
 	}
@@ -403,11 +395,9 @@ template <ParticleType particleType, typename problem_t> auto getParticleIntComp
 {
 	amrex::Vector<std::string> names;
 
-	if constexpr (particleType == ParticleType::Rad) { // NOLINT
-							   // No integer components
-	}
-#if AMREX_SPACEDIM == 3
-	else if constexpr (particleType == ParticleType::CIC) {	     // NOLINT
+	if constexpr (particleType == ParticleType::Rad) {	     // NOLINT
+								     // No integer components
+	} else if constexpr (particleType == ParticleType::CIC) {    // NOLINT
 								     // No integer components
 	} else if constexpr (particleType == ParticleType::CICRad) { // NOLINT
 								     // No integer components
@@ -422,7 +412,6 @@ template <ParticleType particleType, typename problem_t> auto getParticleIntComp
 	} else {
 		amrex::Abort("Unknown particle type");
 	}
-#endif
 	return names;
 }
 
