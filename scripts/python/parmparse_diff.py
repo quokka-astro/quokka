@@ -155,8 +155,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Semantic diff for AMReX ParmParse input files.",
     )
-    parser.add_argument("left", help="Left (reference) ParmParse .in file")
-    parser.add_argument("right", help="Right (comparison) ParmParse .in file")
+    parser.add_argument("left", help="Left (reference) ParmParse/TOML input file")
+    parser.add_argument("right", help="Right (comparison) ParmParse/TOML input file")
     parser.add_argument(
         "--show-equal",
         action="store_true",

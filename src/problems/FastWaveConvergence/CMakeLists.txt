@@ -9,7 +9,7 @@ if(AMReX_SPACEDIM EQUAL 3)
 
   add_test(
     NAME ${JOB_NAME}
-    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in
+    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
   set_tests_properties(FastWaveConvergence PROPERTIES LABELS "MHD")
 endif()

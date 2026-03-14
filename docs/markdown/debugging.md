@@ -67,12 +67,12 @@ GPU race conditions can cause non-deterministic behavior where the same simulati
 
 **Parameters:**
 - `-b <binary>`: Path to the test binary (e.g., `./build/src/FieldLoop/test_field_loop`)
-- `-i <input_file>`: Path to the input file (e.g., `inputs/field_loop.in`)
+- `-i <input_file>`: Path to the input file (e.g., `inputs/FieldLoop.toml`)
 - `-n <max_timesteps>`: Maximum number of timesteps to run
 
 **Example:**
 ```bash
-./scripts/bash/test_gpu_race.sh -b ./build/src/FieldLoop/test_field_loop -i inputs/field_loop.in -n 10
+./scripts/bash/test_gpu_race.sh -b ./build/src/FieldLoop/test_field_loop -i inputs/FieldLoop.toml -n 10
 ```
 
 **How it works:**

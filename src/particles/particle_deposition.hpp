@@ -23,9 +23,9 @@ namespace amrex::ParticleInterpolator
 struct NearestEight : public Base<NearestEight, amrex::Real> {
 	static constexpr int stencil_width = 2;
 
-	static constexpr int nx = (AMREX_SPACEDIM >= 1) ? stencil_width - 1 : 0; // NOLINT
-	static constexpr int ny = (AMREX_SPACEDIM >= 2) ? stencil_width - 1 : 0; // NOLINT
-	static constexpr int nz = (AMREX_SPACEDIM >= 3) ? stencil_width - 1 : 0; // NOLINT
+	static constexpr int nx = stencil_width - 1; // NOLINT
+	static constexpr int ny = stencil_width - 1; // NOLINT
+	static constexpr int nz = stencil_width - 1; // NOLINT
 
 	amrex::Real weights[3 * stencil_width]; // NOLINT
 
@@ -87,8 +87,6 @@ struct RadDeposition {
 				      });
 	}
 };
-
-#if AMREX_SPACEDIM == 3
 
 //-------------------- Mass depositions --------------------
 
@@ -836,8 +834,6 @@ auto SNDeposition(ContainerType *container, amrex::MultiFab &state, std::array<a
 
 	return {sn_count, max_velocity};
 }
-
-#endif // AMREX_SPACEDIM == 3
 
 } // namespace quokka
 
