@@ -61,7 +61,7 @@ constexpr int n_profile = 10000;      // number of points in Lane-Emden profile
 constexpr double rho_floor = 1.0e-25; // density floor [g cm^-3]
 constexpr int n_dust_groups = 2;      // number of dust groups (each gets dust_fraction/2)
 
-AMREX_GPU_MANAGED double t_stop_s = 1.0e8;	   // stopping time [s], << t_ff to enforce tight coupling. t_ff = 1.2e12 at critical density rho_c = 3.0e-18
+AMREX_GPU_MANAGED double t_stop_s = 1.0e8;    // stopping time [s], << t_ff to enforce tight coupling. t_ff = 1.2e12 at critical density rho_c = 3.0e-18
 AMREX_GPU_MANAGED double dust_fraction = 1.0; // ρ_dust_total / ρ_gas (= f); dust density equals gas density
 
 // ============================================================
