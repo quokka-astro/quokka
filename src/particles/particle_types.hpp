@@ -478,6 +478,7 @@ inline amrex::Real particle_param2 = -1.0; // NOLINT
 
 inline amrex::Real particle_param3 = -1.0; // NOLINT
 inline amrex::Real eps_ff = 0.01;	   // NOLINT
+inline bool use_low_jeans_sf_failsafe = true; // NOLINT
 
 // Scheme for SN feedback
 inline SNScheme SN_scheme = SNScheme::SN_thermal_or_thermal_momentum; // NOLINT
@@ -531,6 +532,7 @@ inline void particleParmParse()
 
 	// Stochastic SF parameters
 	pp.query("eps_ff", eps_ff);
+	pp.query("use_low_jeans_sf_failsafe", use_low_jeans_sf_failsafe);
 
 	// Handle integer verbose flag
 	pp.query("verbose", particle_verbose);

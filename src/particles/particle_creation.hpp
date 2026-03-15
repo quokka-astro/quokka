@@ -426,6 +426,7 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 		amrex::Real param1 = particle_param1;
 		amrex::Real param2 = particle_param2;
 		amrex::Real eps_ff_ = eps_ff;
+		bool use_low_jeans_sf_failsafe_ = use_low_jeans_sf_failsafe;
 		amrex::Real low_mass_composite_max_mass_ = low_mass_composite_max_mass;
 
 		AMREX_GPU_HOST_DEVICE ParticleChecker(amrex::Real current_time, amrex::Real dt) : current_time(current_time), dt(dt) {}
@@ -444,8 +445,9 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 			const amrex::Real LambdaJ = cs / std::sqrt(C::Gconst * cell_density);
 			const amrex::Real t_ff = std::sqrt(3.0 * M_PI / (32.0 * C::Gconst * cell_density));
 			const amrex::Real nominal_prob_star_formation = (eps_ff_ / eps_star) * (dt / t_ff);
-			// force P_sf to 1 if we are very far below the Jeans length (as determined by J_truncate)
-			const amrex::Real actual_prob_star_formation = (LambdaJ < (J_truncate * dx[0])) ? 1.0 : nominal_prob_star_formation;
+			// Optionally force P_sf to 1 if we are very far below the Jeans length (as determined by J_truncate).
+			const bool trigger_low_jeans_failsafe = use_low_jeans_sf_failsafe_ && (LambdaJ < (J_truncate * dx[0]));
+			const amrex::Real actual_prob_star_formation = trigger_low_jeans_failsafe ? 1.0 : nominal_prob_star_formation;
 			const amrex::Real random_draw = amrex::Random(engine);
 			int num_star = 0;
 

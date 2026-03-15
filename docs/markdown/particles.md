@@ -182,6 +182,7 @@ Two efficiency parameters tune how aggressively eligible gas is converted into s
 - \(\epsilon_{\star}\): fraction of the cell mass used when a particle is spawned.
 - The target stellar mass for the step is \(\epsilon_{ff} M_{cell} (\Delta t / t_{ff})\).
 - Bernoulli probability for spawning: \( P = \frac{\epsilon_{ff}}{\epsilon_{\star}} \frac{\Delta t}{t_{ff}} \).
+- If `particles.use_low_jeans_sf_failsafe = 1` (default), Quokka overrides the Bernoulli probability to \(P = 1\) once the local Jeans length falls below the low-Jeans truncation threshold \(J_\mathrm{truncate} \Delta x\).
 - The expectation value \(\langle M_{\star} \rangle = P \epsilon_{\star} M_{cell}\) matches the target mass provided \(\Delta t < t_{ff}\); the CFL condition typically enforces that inequality.
 
 ### Sampling the stellar population
