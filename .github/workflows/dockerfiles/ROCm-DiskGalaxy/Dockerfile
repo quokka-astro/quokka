@@ -108,7 +108,7 @@ RUN set -euo pipefail && \
     usermod -a -G render,video leap
 
 COPY --from=build /tmp/quokka-src/build/src/problems/DiskGalaxy/DiskGalaxy /opt/quokka/bin/DiskGalaxy
-COPY --from=build /tmp/quokka-src/inputs/DiskGalaxy.in /opt/quokka/share/quokka/inputs/DiskGalaxy.in
+COPY --from=build /tmp/quokka-src/inputs/DiskGalaxy.toml /opt/quokka/share/quokka/inputs/DiskGalaxy.toml
 COPY --from=build /tmp/quokka-src/extern/agora_data/ /opt/quokka/share/quokka/extern/agora_data/
 
 RUN chmod 0755 /opt/quokka/bin/DiskGalaxy && \

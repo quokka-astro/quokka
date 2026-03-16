@@ -9,6 +9,7 @@
 #include "AMReX_Print.H"
 #include "AMReX_SPACE.H"
 #include "util/fextract.hpp"
+#include <exception>
 #include <format>
 
 #include "QuokkaSimulation.hpp"
@@ -239,21 +240,25 @@ auto problem_main() -> int
 		}
 
 #ifdef HAVE_PYTHON
-		matplotlibcpp::clf();
-		std::map<std::string, std::string> rho0_args;
-		rho0_args["label"] = "rho0";
-		rho0_args["color"] = "blue";
-		matplotlibcpp::plot(xs, rho0_x, rho0_args);
-		std::map<std::string, std::string> rho_args;
-		rho_args["label"] = "rho";
-		rho_args["color"] = "red";
-		rho_args["linestyle"] = "--";
-		matplotlibcpp::plot(xs, rho_x, rho_args);
-		matplotlibcpp::xlabel("x (cm)");
-		matplotlibcpp::ylabel("rho (g cm^-3)");
-		matplotlibcpp::title(std::format("t = {:.2e}", sim.tNew_[0]));
-		matplotlibcpp::legend();
-		matplotlibcpp::save("./sink_formation_density.pdf");
+		try {
+			matplotlibcpp::clf();
+			std::map<std::string, std::string> rho0_args;
+			rho0_args["label"] = "rho0";
+			rho0_args["color"] = "blue";
+			matplotlibcpp::plot(xs, rho0_x, rho0_args);
+			std::map<std::string, std::string> rho_args;
+			rho_args["label"] = "rho";
+			rho_args["color"] = "red";
+			rho_args["linestyle"] = "--";
+			matplotlibcpp::plot(xs, rho_x, rho_args);
+			matplotlibcpp::xlabel("x (cm)");
+			matplotlibcpp::ylabel("rho (g cm^-3)");
+			matplotlibcpp::title(std::format("t = {:.2e}", sim.tNew_[0]));
+			matplotlibcpp::legend();
+			matplotlibcpp::save("./sink_formation_density.pdf");
+		} catch (std::exception const &e) {
+			amrex::Print() << "Skipping sink-formation plot: " << e.what() << "\n";
+		}
 #endif
 	}
 

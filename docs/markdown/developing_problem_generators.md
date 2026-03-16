@@ -9,7 +9,7 @@ Quokka problem generators live under `src/problems/`, each in its own subdirecto
    ```cmake
    quokka_add_problem(JOB_NAME MyProblem)
    ```
-   This creates an executable named `MyProblem` from `testMyProblem.cpp`, sets up CUDA compilation if needed, and registers a test that runs with `../inputs/MyProblem.in`. To disable the test, use `ADD_TEST OFF`:
+   This creates an executable named `MyProblem` from `testMyProblem.cpp`, sets up CUDA compilation if needed, and registers a test that runs with `../inputs/MyProblem.toml`. To disable the test, use `ADD_TEST OFF`:
    ```cmake
    quokka_add_problem(JOB_NAME MyProblem ADD_TEST OFF)
    ```
@@ -53,6 +53,6 @@ If your problem needs exact solutions, diagnostics, or error checks, compute the
 
 1. Regenerate or update your build tree with CMake (for example, `cmake -S . -B build -G Ninja` with the desired options). The compiled problem executables live under `build/src/problems/<ProblemName>/` once the build completes; the installation guide covers the workflow in the [build instructions](installation.md#installation).
 2. Ask CMake for the target corresponding to your new problem (e.g., `cmake --build build --target help`) and then build it with Ninja or your chosen generator. The executable name matches the `JOB_NAME` you specified in `quokka_add_problem` (e.g., `MyProblem`), as outlined in the [specific-target build section](installation.md#building-a-specific-test-problem).
-3. Run the binary from a working directory that can see your input deck, passing the `.in` file path as the first argument. The regression tests invoke the advection example as `Advection ../inputs/Advection.in` (note the executable name matches the `JOB_NAME`), which you can mimic for manual runs. The `quokka_add_problem` helper automatically configures tests to run from the `tests/` directory with the input file path `../inputs/${JOB_NAME}.in`.
+3. Run the binary from a working directory that can see your input deck, passing the `.toml` file path as the first argument. The regression tests invoke the advection example as `Advection ../inputs/Advection.toml` (note the executable name matches the `JOB_NAME`), which you can mimic for manual runs. The `quokka_add_problem` helper automatically configures tests to run from the `tests/` directory with the input file path `../inputs/${JOB_NAME}.toml`.
 
 Following the steps above should give you a fully integrated problem generator that participates in Quokka’s build system and can be exercised both manually and through CTest.

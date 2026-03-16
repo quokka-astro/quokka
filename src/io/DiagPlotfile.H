@@ -163,6 +163,7 @@ template <typename problem_t> void DiagPlotfile::processDiag(int a_nstep, const 
 	}
 
 	// Write physics particles
+#if AMREX_SPACEDIM == 3
 	if (m_particleTypes.empty()) {
 		// Write all particle types
 		sim->particleRegister_.redistribute(0, 0);
@@ -172,6 +173,7 @@ template <typename problem_t> void DiagPlotfile::processDiag(int a_nstep, const 
 		sim->particleRegister_.redistribute(0, 0);
 		sim->particleRegister_.writePlotFileFiltered(plotfilename, m_particleTypes);
 	}
+#endif // AMREX_SPACEDIM == 3
 #endif
 }
 
