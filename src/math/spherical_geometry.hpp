@@ -62,12 +62,10 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto planeBoxSectionArea(amrex::Real co
 	const amrex::Real scale = (std::abs(x0) + std::abs(x1) + std::abs(y0) + std::abs(y1) + std::abs(z0) + std::abs(z1) + std::abs(d) + 1.0);
 	const amrex::Real tol = 1.0e-12 * scale;
 
-	const amrex::GpuArray<Point, 8> verts{
-	    Point{x0, y0, z0}, Point{x1, y0, z0}, Point{x0, y1, z0}, Point{x1, y1, z0},
-	    Point{x0, y0, z1}, Point{x1, y0, z1}, Point{x0, y1, z1}, Point{x1, y1, z1}};
-	const amrex::GpuArray<Edge, 12> edges{
-	    Edge{0, 1}, Edge{2, 3}, Edge{4, 5}, Edge{6, 7}, Edge{0, 2}, Edge{1, 3},
-	    Edge{4, 6}, Edge{5, 7}, Edge{0, 4}, Edge{1, 5}, Edge{2, 6}, Edge{3, 7}};
+	const amrex::GpuArray<Point, 8> verts{Point{x0, y0, z0}, Point{x1, y0, z0}, Point{x0, y1, z0}, Point{x1, y1, z0},
+					      Point{x0, y0, z1}, Point{x1, y0, z1}, Point{x0, y1, z1}, Point{x1, y1, z1}};
+	const amrex::GpuArray<Edge, 12> edges{Edge{0, 1}, Edge{2, 3}, Edge{4, 5}, Edge{6, 7}, Edge{0, 2}, Edge{1, 3},
+					      Edge{4, 6}, Edge{5, 7}, Edge{0, 4}, Edge{1, 5}, Edge{2, 6}, Edge{3, 7}};
 
 	amrex::GpuArray<Point, 16> pts{};
 	int npts = 0;
