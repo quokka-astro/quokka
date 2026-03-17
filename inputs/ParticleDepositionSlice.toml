@@ -1,0 +1,44 @@
+# Runtime-derived particle deposition consumed by a slice diagnostic.
+
+max_timesteps = 5
+stop_time = 0.1
+quokka.bc = ["periodic", "periodic", "periodic"]
+
+geometry.is_periodic = [1, 1, 1]
+geometry.coord_sys = 0
+geometry.prob_lo = [0.0, 0.0, 0.0]
+geometry.prob_hi = [1.0, 1.0, 1.0]
+
+amr.n_cell = [64, 64, 64]
+amr.max_level = 0
+amr.max_grid_size = [32, 32, 32]
+amr.blocking_factor = [8, 8, 8]
+
+hydro.cfl = 0.4
+hydro.reconstruction_order = 2
+hydro.use_dual_energy = 0
+
+particles.verbose = 0
+
+# Runtime-derived field provider.
+derived_vars = "partdep"
+quokka.partdep.type = "DerivedParticleDeposition"
+quokka.partdep.particle_types = "CIC"
+quokka.partdep.deposit_fields = "mass"
+quokka.partdep.prefix = "particle"
+
+# Slice diagnostic consuming runtime-derived field.
+quokka.diagnostics = "slice_z"
+quokka.slice_z.type = "DiagFramePlane"
+quokka.slice_z.file = "slicez_plt"
+quokka.slice_z.normal = 2
+quokka.slice_z.center = 0.5
+quokka.slice_z.int = 1
+quokka.slice_z.field_names = "partdep"
+
+# I/O
+amr.plot_int = -1
+amr.check_int = -1
+
+# Verbosity
+amr.v = 1
