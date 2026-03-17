@@ -877,7 +877,7 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 
 		// MPI reduction
 		std::array<Real, 4> fluxes_sphere = {mass_flux_sphere, hydro_energy_flux_sphere, mhd_energy_flux_sphere, passive_scalar_flux_sphere};
-		amrex::ParallelAllReduce::Sum(fluxes_sphere.data(), 4, amrex::ParallelContext::CommunicatorSub());
+		amrex::ParallelAllReduce::Sum(fluxes_sphere.data(), fluxes_sphere.size(), amrex::ParallelContext::CommunicatorSub());
 		mass_flux_sphere = fluxes_sphere[0];
 		hydro_energy_flux_sphere = fluxes_sphere[1];
 		mhd_energy_flux_sphere = fluxes_sphere[2];
