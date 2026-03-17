@@ -17,6 +17,8 @@
 #include "AMReX_GpuDevice.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
+#include "AMReX_ParallelContext.H"
+#include "AMReX_ParallelReduce.H"
 #include "AMReX_Parser.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
@@ -872,10 +874,14 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 			mhd_energy_flux_sphere += amrex::get<2>(level_flux);
 			passive_scalar_flux_sphere += amrex::get<3>(level_flux);
 		}
-		amrex::ParallelDescriptor::ReduceRealSum(mass_flux_sphere);
-		amrex::ParallelDescriptor::ReduceRealSum(hydro_energy_flux_sphere);
-		amrex::ParallelDescriptor::ReduceRealSum(mhd_energy_flux_sphere);
-		amrex::ParallelDescriptor::ReduceRealSum(passive_scalar_flux_sphere);
+
+		// MPI reduction
+		std::array<Real, 4> fluxes_sphere = {mass_flux_sphere, hydro_energy_flux_sphere, mhd_energy_flux_sphere, passive_scalar_flux_sphere};
+		amrex::ParallelAllReduce::Sum(fluxes_sphere.data(), 4, amrex::ParallelContext::CommunicatorSub());
+		mass_flux_sphere = fluxes_sphere[0];
+		hydro_energy_flux_sphere = fluxes_sphere[1];
+		mhd_energy_flux_sphere = fluxes_sphere[2];
+		passive_scalar_flux_sphere = fluxes_sphere[3];
 
 		stats["mass_flux_sphere"] = mass_flux_sphere;
 		stats["hydro_energy_flux_sphere"] = hydro_energy_flux_sphere;
