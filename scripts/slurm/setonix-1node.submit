@@ -25,7 +25,7 @@ export OMP_NUM_THREADS=1
 
 ## run
 EXE="build/src/problems/HydroBlast3D/test_hydro3d_blast"
-INPUTS="inputs/benchmark_unigrid_512.in"
+INPUTS="inputs/benchmark_unigrid_512.toml"
 
 # Wrapper that sets ROCR_VISIBLE_DEVICES per task
 # Create it in the working directory

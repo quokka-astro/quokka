@@ -1,0 +1,30 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo = [0.0, 0.0, 0.0]
+geometry.prob_hi = [1.0, 1.0, 1.0]
+quokka.bc = ["periodic", "periodic", "periodic"]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v = 1
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell = [8, 8, 8]
+amr.max_level = 0
+amr.max_grid_size = 8
+amr.blocking_factor_x = 8
+amr.blocking_factor_y = 8
+amr.blocking_factor_z = 8
+
+do_reflux = 0
+do_subcycle = 0
+
+# Disable magnetic-energy rewrite so energy stays bitwise-defined by ICs
+mhd.update_initial_b_energy = 0
+
+plotfile_interval = -1
+checkpoint_interval = -1
