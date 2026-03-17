@@ -3,6 +3,7 @@
 
 #include <cmath>
 
+#include "AMReX_Array.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
 
@@ -11,6 +12,9 @@ namespace quokka::math
 
 namespace detail
 {
+
+using Point = amrex::GpuArray<amrex::Real, 3>;
+using Edge = amrex::GpuArray<int, 2>;
 
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto minDistSqToInterval(amrex::Real const a0, amrex::Real const a1) -> amrex::Real
 {
@@ -31,7 +35,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto maxDistSqToInterval(amrex::Real co
 	return amax * amax;
 }
 
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto addPointUnique(amrex::Real pts[][3], int &npts, int max_pts, amrex::Real x, amrex::Real y, amrex::Real z,
+template <unsigned int MaxPts>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto addPointUnique(amrex::GpuArray<Point, MaxPts> &pts, int &npts, amrex::Real x, amrex::Real y, amrex::Real z,
 							     amrex::Real tol) -> void
 {
 	const amrex::Real tol2 = tol * tol;
@@ -43,10 +48,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto addPointUnique(amrex::Real pts[][3
 			return;
 		}
 	}
-	if (npts < max_pts) {
-		pts[npts][0] = x;
-		pts[npts][1] = y;
-		pts[npts][2] = z;
+	if (npts < static_cast<int>(pts.size())) {
+		pts[npts] = Point{x, y, z};
 		++npts;
 	}
 }
@@ -59,15 +62,19 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto planeBoxSectionArea(amrex::Real co
 	const amrex::Real scale = (std::abs(x0) + std::abs(x1) + std::abs(y0) + std::abs(y1) + std::abs(z0) + std::abs(z1) + std::abs(d) + 1.0);
 	const amrex::Real tol = 1.0e-12 * scale;
 
-	const amrex::Real verts[8][3] = {{x0, y0, z0}, {x1, y0, z0}, {x0, y1, z0}, {x1, y1, z0}, {x0, y0, z1}, {x1, y0, z1}, {x0, y1, z1}, {x1, y1, z1}};
-	const int edges[12][2] = {{0, 1}, {2, 3}, {4, 5}, {6, 7}, {0, 2}, {1, 3}, {4, 6}, {5, 7}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
+	const amrex::GpuArray<Point, 8> verts{
+	    Point{x0, y0, z0}, Point{x1, y0, z0}, Point{x0, y1, z0}, Point{x1, y1, z0},
+	    Point{x0, y0, z1}, Point{x1, y0, z1}, Point{x0, y1, z1}, Point{x1, y1, z1}};
+	const amrex::GpuArray<Edge, 12> edges{
+	    Edge{0, 1}, Edge{2, 3}, Edge{4, 5}, Edge{6, 7}, Edge{0, 2}, Edge{1, 3},
+	    Edge{4, 6}, Edge{5, 7}, Edge{0, 4}, Edge{1, 5}, Edge{2, 6}, Edge{3, 7}};
 
-	amrex::Real pts[16][3];
+	amrex::GpuArray<Point, 16> pts{};
 	int npts = 0;
 
-	for (int e = 0; e < 12; ++e) {
-		const int i0 = edges[e][0];
-		const int i1 = edges[e][1];
+	for (auto const &edge : edges) {
+		const int i0 = edge[0];
+		const int i1 = edge[1];
 		const amrex::Real p0x = verts[i0][0];
 		const amrex::Real p0y = verts[i0][1];
 		const amrex::Real p0z = verts[i0][2];
@@ -85,16 +92,16 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto planeBoxSectionArea(amrex::Real co
 		}
 
 		if (f0 == 0.0 && f1 == 0.0) {
-			addPointUnique(pts, npts, 16, p0x, p0y, p0z, tol);
-			addPointUnique(pts, npts, 16, p1x, p1y, p1z, tol);
+			addPointUnique(pts, npts, p0x, p0y, p0z, tol);
+			addPointUnique(pts, npts, p1x, p1y, p1z, tol);
 			continue;
 		}
 		if (f0 == 0.0) {
-			addPointUnique(pts, npts, 16, p0x, p0y, p0z, tol);
+			addPointUnique(pts, npts, p0x, p0y, p0z, tol);
 			continue;
 		}
 		if (f1 == 0.0) {
-			addPointUnique(pts, npts, 16, p1x, p1y, p1z, tol);
+			addPointUnique(pts, npts, p1x, p1y, p1z, tol);
 			continue;
 		}
 		if ((f0 < 0.0 && f1 > 0.0) || (f0 > 0.0 && f1 < 0.0)) {
@@ -102,7 +109,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto planeBoxSectionArea(amrex::Real co
 			const amrex::Real x = p0x + t * (p1x - p0x);
 			const amrex::Real y = p0y + t * (p1y - p0y);
 			const amrex::Real z = p0z + t * (p1z - p0z);
-			addPointUnique(pts, npts, 16, x, y, z, tol);
+			addPointUnique(pts, npts, x, y, z, tol);
 		}
 	}
 
@@ -146,9 +153,9 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto planeBoxSectionArea(amrex::Real co
 	const amrex::Real e2y = nz * e1x - nx * e1z;
 	const amrex::Real e2z = nx * e1y - ny * e1x;
 
-	amrex::Real u[16];
-	amrex::Real v[16];
-	amrex::Real ang[16];
+	amrex::GpuArray<amrex::Real, 16> u{};
+	amrex::GpuArray<amrex::Real, 16> v{};
+	amrex::GpuArray<amrex::Real, 16> ang{};
 	for (int i = 0; i < npts; ++i) {
 		const amrex::Real rx = pts[i][0] - cx;
 		const amrex::Real ry = pts[i][1] - cy;
