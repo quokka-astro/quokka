@@ -330,6 +330,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// (e.g., caused by the flux register or from interpolation)
 	virtual void FixupState(int level) = 0;
 
+      protected:
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override = 0;
 
@@ -346,6 +347,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// DistributionMapping
 	void MakeNewLevelFromScratch(int lev, amrex::Real time, const amrex::BoxArray &ba, const amrex::DistributionMapping &dm) override;
 
+      public:
 	// AMR utility functions
 	template <typename PreInterpHook, typename PostInterpHook>
 	void fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state, int lev, amrex::Real time, quokka::centering cen, quokka::direction dir,
@@ -3473,7 +3475,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitParticles()
 		AMREX_ASSERT(TracerPC == nullptr);
 		TracerPC = std::make_unique<amrex::AmrTracerParticleContainer>(this);
 
-		const amrex::AmrTracerParticleContainer::ParticleInitData pdata = {{AMREX_D_DECL(0.0, 0.0, 0.0)}, {}, {}, {}};
+		const amrex::AmrTracerParticleContainer::ParticleInitData pdata = {
+		    .real_struct_data = {AMREX_D_DECL(0.0, 0.0, 0.0)},
+		    .int_struct_data = {},
+		    .real_array_data = {},
+		    .int_array_data = {},
+		};
 
 		TracerPC->SetVerbose(0);
 		TracerPC->InitOnePerCell(0.5, 0.5, 0.5, pdata);
@@ -3936,7 +3943,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::updateRuntimeDerive
 template <typename problem_t>
 auto AMRSimulation<problem_t>::computeRuntimeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const -> bool
 {
-	typename quokka::DerivedFieldBase::ComputeContext ctx{};
+	quokka::DerivedFieldBase::ComputeContext ctx{};
 	ctx.depositParticleMassDensity = [this](const std::string &particleType, const std::string &depositField, amrex::MultiFab &outMF, int outLev,
 						int outComp, amrex::Real massMin, amrex::Real massMax, bool hasAgeFilter, amrex::Real tAgeMax) {
 #if AMREX_SPACEDIM == 3
@@ -4622,7 +4629,7 @@ inline void GotoNextLine(std::istream &is)
 
 template <typename problem_t>
 auto AMRSimulation<problem_t>::detectRefinementContext(const amrex::BoxArray &restart_ba, const amrex::Geometry &current_geom) ->
-    typename AMRSimulation<problem_t>::RefinementContext
+    AMRSimulation<problem_t>::RefinementContext
 {
 	RefinementContext context;
 

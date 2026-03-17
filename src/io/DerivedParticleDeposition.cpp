@@ -97,7 +97,11 @@ void DerivedParticleDeposition::init(const std::string &a_prefix, std::string_vi
 			if (!outputSet.insert(outputName).second) {
 				amrex::Abort("Duplicate output field generated in DerivedParticleDeposition: " + outputName);
 			}
-			m_outputs.push_back({ptype, field, outputName});
+			m_outputs.push_back(OutputSpec{
+			    .particleType = ptype,
+			    .depositField = field,
+			    .outputName = outputName,
+			});
 			m_fieldNames.push_back(outputName);
 		}
 	}
