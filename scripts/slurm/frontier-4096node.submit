@@ -16,4 +16,4 @@
 # GPU-aware MPI
 export MPICH_GPU_SUPPORT_ENABLED=1
 
-srun build/src/problems/HydroBlast3D/test_hydro3d_blast tests/benchmark_unigrid_8192.in
+srun build/src/problems/HydroBlast3D/test_hydro3d_blast tests/benchmark_unigrid_8192.toml

@@ -17,6 +17,14 @@ BUILD_DIR=${BUILD_DIR:=../build}
 PLOTFILETOOLS_DIR=${PLOTFILETOOLS_DIR:=../extern/amrex/Tools/Plotfile}
 NPROC=${NPROC:=`nproc`}
 
+extract_checkpoint_time() {
+    awk 'NR == 5 { print $1; exit }' "$1/Header"
+}
+
+extract_plotfile_time() {
+    awk 'NR == 10 { print $1; exit }' "$1/Header"
+}
+
 # Detect OS for sed compatibility (macOS requires -i '', Linux requires -i)
 if [[ "$OSTYPE" == "darwin"* ]]; then
     SED_INPLACE="sed -i ''"
@@ -30,63 +38,63 @@ echo "=== Universal Refinement Test ==="
 rm -rf plt* 2>/dev/null || true
 rm -rf chk* 2>/dev/null || true
 rm -rf step* 2>/dev/null || true
-rm -f coarse_amr.in 2>/dev/null || true
-rm -f fine_amr.in 2>/dev/null || true
+rm -f coarse_amr.toml 2>/dev/null || true
+rm -f fine_amr.toml 2>/dev/null || true
 
 # Define simulation times (work within 1.0s hardcoded limit)
 CHECKPOINT_TIME=0.01 # Create checkpoint at t=0.01 (fewer steps)
 STOP_TIME=0.025       # Run until t=0.025 for comparison
 
-# Create coarse AMR input file (32^3 base with 1 AMR level) based on working blast_32.in
-# Try multiple possible locations for blast_32.in to handle different CI environments
-if [ -f "../inputs/blast_32.in" ]; then
-    cp "../inputs/blast_32.in" coarse_amr.in
-elif [ -f "blast_32.in" ]; then
-    cp "blast_32.in" coarse_amr.in
-elif [ -f "$BUILD_DIR/../inputs/blast_32.in" ]; then
-    cp "$BUILD_DIR/../inputs/blast_32.in" coarse_amr.in
+# Create coarse AMR input file (32^3 base with 1 AMR level) based on blast_32.toml
+# Try multiple possible locations for blast_32.toml to handle different CI environments
+if [ -f "../inputs/blast_32.toml" ]; then
+    cp "../inputs/blast_32.toml" coarse_amr.toml
+elif [ -f "blast_32.toml" ]; then
+    cp "blast_32.toml" coarse_amr.toml
+elif [ -f "$BUILD_DIR/../inputs/blast_32.toml" ]; then
+    cp "$BUILD_DIR/../inputs/blast_32.toml" coarse_amr.toml
 else
-    echo "❌ ERROR: Cannot find blast_32.in input file"
+    echo "❌ ERROR: Cannot find blast_32.toml input file"
     echo "Tried locations:"
-    echo "  ../inputs/blast_32.in (inputs directory)"
-    echo "  blast_32.in (current directory)"
-    echo "  $BUILD_DIR/../inputs/blast_32.in"
+    echo "  ../inputs/blast_32.toml (inputs directory)"
+    echo "  blast_32.toml (current directory)"
+    echo "  $BUILD_DIR/../inputs/blast_32.toml"
     echo "Current directory: $(pwd)"
     echo "Files in current directory: $(ls -la)"
     exit 1
 fi
-$SED_INPLACE 's/amr.max_level       = 0/amr.max_level       = 1/' coarse_amr.in
-#$SED_INPLACE 's/do_tracers = 1/do_tracers = 0/' coarse_amr.in
-$SED_INPLACE 's/do_reflux = 0/do_reflux = 1/' coarse_amr.in
-$SED_INPLACE 's/do_subcycle = 0/do_subcycle = 1/' coarse_amr.in
+$SED_INPLACE 's/amr.max_level = 0/amr.max_level = 1/' coarse_amr.toml
+#$SED_INPLACE 's/do_tracers = 1/do_tracers = 0/' coarse_amr.toml
+$SED_INPLACE 's/do_reflux = 0/do_reflux = 1/' coarse_amr.toml
+$SED_INPLACE 's/do_subcycle = 0/do_subcycle = 1/' coarse_amr.toml
 
-# Create fine AMR input file (64^3 base with 1 AMR level) based on working blast_32.in
-# Try multiple possible locations for blast_32.in to handle different CI environments  
-if [ -f "../inputs/blast_32.in" ]; then
-    cp "../inputs/blast_32.in" fine_amr.in
-elif [ -f "blast_32.in" ]; then
-    cp "blast_32.in" fine_amr.in
-elif [ -f "$BUILD_DIR/../inputs/blast_32.in" ]; then
-    cp "$BUILD_DIR/../inputs/blast_32.in" fine_amr.in
+# Create fine AMR input file (64^3 base with 1 AMR level) based on blast_32.toml
+# Try multiple possible locations for blast_32.toml to handle different CI environments
+if [ -f "../inputs/blast_32.toml" ]; then
+    cp "../inputs/blast_32.toml" fine_amr.toml
+elif [ -f "blast_32.toml" ]; then
+    cp "blast_32.toml" fine_amr.toml
+elif [ -f "$BUILD_DIR/../inputs/blast_32.toml" ]; then
+    cp "$BUILD_DIR/../inputs/blast_32.toml" fine_amr.toml
 else
-    echo "❌ ERROR: Cannot find blast_32.in input file for fine_amr.in"
+    echo "❌ ERROR: Cannot find blast_32.toml input file for fine_amr.toml"
     echo "Tried locations:"
-    echo "  ../inputs/blast_32.in (inputs directory)"
-    echo "  blast_32.in (current directory)"
-    echo "  $BUILD_DIR/../inputs/blast_32.in"
+    echo "  ../inputs/blast_32.toml (inputs directory)"
+    echo "  blast_32.toml (current directory)"
+    echo "  $BUILD_DIR/../inputs/blast_32.toml"
     echo "Current directory: $(pwd)"
     echo "Files in current directory: $(ls -la)"
     exit 1
 fi
-$SED_INPLACE 's/amr.n_cell          = 32 32 32/amr.n_cell          = 64 64 64/' fine_amr.in
-$SED_INPLACE 's/amr.max_level       = 0/amr.max_level       = 1/' fine_amr.in
-#$SED_INPLACE 's/do_tracers = 1/do_tracers = 0/' fine_amr.in
-$SED_INPLACE 's/do_reflux = 0/do_reflux = 1/' fine_amr.in
-$SED_INPLACE 's/do_subcycle = 0/do_subcycle = 1/' fine_amr.in
+$SED_INPLACE 's/amr.n_cell = \[32, 32, 32\]/amr.n_cell = [64, 64, 64]/' fine_amr.toml
+$SED_INPLACE 's/amr.max_level = 0/amr.max_level = 1/' fine_amr.toml
+#$SED_INPLACE 's/do_tracers = 1/do_tracers = 0/' fine_amr.toml
+$SED_INPLACE 's/do_reflux = 0/do_reflux = 1/' fine_amr.toml
+$SED_INPLACE 's/do_subcycle = 0/do_subcycle = 1/' fine_amr.toml
 
 echo "=== Step 1: Create coarse AMR checkpoint (32^3 base + 1 AMR level) ==="
 # Run coarse AMR simulation to create checkpoints
-mpirun --use-hwthread-cpus -n $NPROC $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D coarse_amr.in stop_time=$CHECKPOINT_TIME
+mpirun --use-hwthread-cpus -n $NPROC $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D coarse_amr.toml stop_time=$CHECKPOINT_TIME
 
 # Save and find last checkpoint
 mkdir -p step1_32cube
@@ -99,8 +107,8 @@ if [ -z "$last_chk" ]; then
     exit 1
 fi
 
-# Extract actual time from checkpoint (time is on line 4 of Header, take first value)
-checkpoint_time=$(sed -n '4p' $last_chk/Header | awk '{print $1}')
+# Extract actual time from checkpoint header
+checkpoint_time=$(extract_checkpoint_time "$last_chk")
 echo "Created coarse AMR checkpoint: $last_chk at time t=$checkpoint_time"
 
 # Verify that checkpoint contains the expected number of levels
@@ -132,7 +140,7 @@ fi
 
 echo ""
 echo "=== Step 2: Run native fine AMR simulation (64^3 base + 1 AMR level) ==="
-mpirun --use-hwthread-cpus -n $NPROC $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D fine_amr.in stop_time=$STOP_TIME
+mpirun --use-hwthread-cpus -n $NPROC $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D fine_amr.toml stop_time=$STOP_TIME
 
 # Save native results  
 mkdir -p step2_native_64cube
@@ -144,13 +152,13 @@ if [ -z "$native_final_plt" ]; then
     exit 1
 fi
 
-# Extract native final time (time is on line 13 of plotfile Header)
-native_time=$(sed -n '13p' $native_final_plt/Header)
+# Extract native final time from plotfile header
+native_time=$(extract_plotfile_time "$native_final_plt")
 echo "Native fine AMR simulation completed at time t=$native_time"
 
 echo ""
 echo "=== Step 3: Restart with multi-level universal refinement ==="
-mpirun --use-hwthread-cpus -n $NPROC $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D fine_amr.in restartfile=$last_chk stop_time=$STOP_TIME
+mpirun --use-hwthread-cpus -n $NPROC $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D fine_amr.toml restartfile=$last_chk stop_time=$STOP_TIME
 
 # Save restart results
 mkdir -p step3_restart_64cube
@@ -162,8 +170,8 @@ if [ -z "$restart_final_plt" ]; then
     exit 1
 fi
 
-# Extract restart final time (time is on line 13 of plotfile Header)
-restart_time=$(sed -n '13p' $restart_final_plt/Header)
+# Extract restart final time from plotfile header
+restart_time=$(extract_plotfile_time "$restart_final_plt")
 echo "Multi-level universal refinement simulation completed at time t=$restart_time"
 
 echo ""

@@ -82,12 +82,12 @@ Also, users can directly use the dust stopping time calculation helper `DustDrag
 $$
 t_{\mathrm{s}} = \frac{\sqrt{\pi \gamma}}{2\sqrt{2}} \frac{a \rho_{\mathrm{gr}}}{\rho_{\mathrm{g}} c_{\mathrm{s}}} \times 
 \begin{cases}
-\left( 1 + \dfrac{9\pi}{128} \left| \dfrac{\mathbf{v}_{\mathrm{d}} - \mathbf{v}_{\mathrm{g}}}{c_{\mathrm{s}}} \right|^2 \right)^{-1/2}, & \text{if supersonic correction is enabled,} \\[1.5em]
+\left( 1 + \dfrac{9\pi\gamma}{128} \left| \dfrac{\mathbf{v}_{\mathrm{d}} - \mathbf{v}_{\mathrm{g}}}{c_{\mathrm{s}}} \right|^2 \right)^{-1/2}, & \text{if supersonic correction is enabled,} \\[1.5em]
 1, & \text{if supersonic correction is disabled.}
 \end{cases}
 $$
 
-An example of its usage can be found in the `src/problems/DustDampingCorrection` test.
+When $\gamma=1$, this expression reduces exactly to the isothermal $t_s$. An example of its usage can be found in the `src/problems/DustDampingCorrection` test.
 
 ## CFL Condition for Dust
 

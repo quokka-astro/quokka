@@ -153,10 +153,12 @@ template <typename problem_t> void DiagFramePlane::processDiag(int a_nstep, cons
 					  simulationMetadata);
 
 		// If particles are requested, write them
+#if AMREX_SPACEDIM == 3
 		if (!m_particleTypes.empty()) {
 			auto *sim = getSim<problem_t>();
 			sim->particleRegister_.writePlotFileFiltered(diagfile, m_particleTypes);
 		}
+#endif
 	}
 }
 
