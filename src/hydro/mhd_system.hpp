@@ -247,6 +247,9 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 					const int wcomp = extrap_dirs[icomp];
 					std::array<amrex::FArrayBox, 2> fc_fabs_U_ifside = {amrex::FArrayBox(box_fc_U, 1, amrex::The_Async_Arena()),
 											    amrex::FArrayBox(box_fc_U, 1, amrex::The_Async_Arena())};
+					// initialise ghost cells outside box_cc_U that are not filled by the cc->fc step below
+					fc_fabs_U_ifside[0].setVal<amrex::RunOn::Device>(0.0);
+					fc_fabs_U_ifside[1].setVal<amrex::RunOn::Device>(0.0);
 
 					// extrapolate cell-centered velocity components to the cell-face
 					MHDSystem<problem_t>::ReconstructTo(dir2face, cc_fabs_Ux[wcomp].array(), fc_fabs_U_ifside[0].array(),
