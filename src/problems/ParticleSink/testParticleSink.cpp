@@ -392,25 +392,15 @@ auto problem_main() -> int
 		std::vector<int> idx1(npar);
 		std::iota(idx1.begin(), idx1.end(), 0);
 		std::sort(idx1.begin(), idx1.end(), [&](int a, int b) {
-			if (pos_phase1[a][0] != pos_phase1[b][0]) {
-				return pos_phase1[a][0] < pos_phase1[b][0];
-			}
-			if (pos_phase1[a][1] != pos_phase1[b][1]) {
-				return pos_phase1[a][1] < pos_phase1[b][1];
-			}
-			return pos_phase1[a][2] < pos_phase1[b][2];
+			return std::tie(pos_phase1[a][0], pos_phase1[a][1], pos_phase1[a][2]) <
+			       std::tie(pos_phase1[b][0], pos_phase1[b][1], pos_phase1[b][2]);
 		});
 
 		std::vector<int> idx2(npar);
 		std::iota(idx2.begin(), idx2.end(), 0);
 		std::sort(idx2.begin(), idx2.end(), [&](int a, int b) {
-			if (real_data_phase2[a][0] != real_data_phase2[b][0]) {
-				return real_data_phase2[a][0] < real_data_phase2[b][0];
-			}
-			if (real_data_phase2[a][1] != real_data_phase2[b][1]) {
-				return real_data_phase2[a][1] < real_data_phase2[b][1];
-			}
-			return real_data_phase2[a][2] < real_data_phase2[b][2];
+			return std::tie(real_data_phase2[a][0], real_data_phase2[a][1], real_data_phase2[a][2]) <
+			       std::tie(real_data_phase2[b][0], real_data_phase2[b][1], real_data_phase2[b][2]);
 		});
 
 		amrex::Print() << "\nAngular momentum Galilean invariance check:\n";
