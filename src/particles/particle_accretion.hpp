@@ -379,6 +379,11 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 			}
 		}
 
+		// get particle velocity
+		const double pvx = p.rdata(mass_index + 1);
+		const double pvy = p.rdata(mass_index + 2);
+		const double pvz = p.rdata(mass_index + 3);
+
 		// compute the accretion rate at each cell; use atomic operations
 		double accreted_mass = 0.0;
 		double accreted_momentum_x = 0.0;
@@ -416,9 +421,9 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 					// M_dot_cell is negative, so we multiply it by -1 to get the accreted mass
 					const double accreted_mass_cell = -M_dot_cell * dt * scale_down_factor;
 					const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
-					const double vx = local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index) / rho;
-					const double vy = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index) / rho;
-					const double vz = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index) / rho;
+					const double vx = local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index) / rho - pvx;
+					const double vy = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index) / rho - pvy;
+					const double vz = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index) / rho - pvz;
 					accreted_mass += accreted_mass_cell;
 					accreted_momentum_x += accreted_mass_cell * vx;
 					accreted_momentum_y += accreted_mass_cell * vy;

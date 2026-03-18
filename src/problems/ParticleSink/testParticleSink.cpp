@@ -471,7 +471,17 @@ auto problem_main() -> int
 	}
 	const double total_total_mass_phase3_final = total_mass_phase3_final + total_particle_mass_phase3_final;
 
+	const auto &real_data_phase3 = sim2.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
+
 	if (amrex::ParallelDescriptor::IOProcessor()) {
+		// Print angular momentum for each particle (data layout: x,y,z, mass,vx,vy,vz,mdot,Lx,Ly,Lz)
+		constexpr int Lx_offset = AMREX_SPACEDIM + quokka::SinkParticleLxIdx;
+		for (int pi = 0; pi < static_cast<int>(real_data_phase3.size()); ++pi) {
+			const auto &p = real_data_phase3[pi];
+			amrex::Print() << std::format("Particle {} angular momentum: Lx={:.4e} Ly={:.4e} Lz={:.4e}\n", pi, p[Lx_offset], p[Lx_offset + 1],
+						      p[Lx_offset + 2]);
+		}
+
 		amrex::Print() << "\nPhase 3 mass conservation check:\n";
 		amrex::Print() << "Initial total mass = " << total_total_mass_phase3_init << "\n";
 		amrex::Print() << "Final total mass = " << total_total_mass_phase3_final << "\n";
