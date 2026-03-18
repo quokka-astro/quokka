@@ -241,6 +241,14 @@ auto problem_main() -> int
 		amrex::Print() << "Total mass change = " << gas_mass_change + particle_mass_change << "\n";
 		amrex::Print() << "Relative error in change of mass = " << rel_mass_error << "\n";
 
+		// Print angular momentum for each particle (data layout: x,y,z, mass,vx,vy,vz,mdot,Lx,Ly,Lz)
+		constexpr int Lx_offset = AMREX_SPACEDIM + quokka::SinkParticleLxIdx;
+		for (int pi = 0; pi < static_cast<int>(real_data_ste1.size()); ++pi) {
+			const auto &p = real_data_ste1[pi];
+			amrex::Print() << std::format("Particle {} angular momentum: Lx={:.4e} Ly={:.4e} Lz={:.4e}\n", pi, p[Lx_offset], p[Lx_offset + 1],
+						      p[Lx_offset + 2]);
+		}
+
 		// compute relative error in the change of total mass
 		const double rel_error_total_mass = std::abs(total_total_mass_step1 - total_total_mass_init) / total_total_mass_init;
 		amrex::Print() << "Relative error in change of total mass = " << rel_error_total_mass << "\n";
@@ -355,6 +363,8 @@ auto problem_main() -> int
 	sim2.maxTimesteps_ = 1;
 	sim2.evolve();
 
+	const auto &real_data_phase2 = sim2.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
+
 	// Extract density profile from boosted simulation
 	auto [position2, values2] = fextract(sim2.state_new_cc_[0], sim2.Geom(0), 0, 0.0, true);
 
@@ -362,6 +372,14 @@ auto problem_main() -> int
 	// If the physics is Galilean invariant, the boosted simulation should match its analytical
 	// solution with the same accuracy as the base simulation matches its analytical solution
 	if (amrex::ParallelDescriptor::IOProcessor()) {
+		// Print angular momentum for each particle (data layout: x,y,z, mass,vx,vy,vz,mdot,Lx,Ly,Lz)
+		constexpr int Lx_offset = AMREX_SPACEDIM + quokka::SinkParticleLxIdx;
+		for (int pi = 0; pi < static_cast<int>(real_data_phase2.size()); ++pi) {
+			const auto &p = real_data_phase2[pi];
+			amrex::Print() << std::format("Particle {} angular momentum: Lx={:.4e} Ly={:.4e} Lz={:.4e}\n", pi, p[Lx_offset], p[Lx_offset + 1],
+									p[Lx_offset + 2]);
+		}
+
 		// Compute analytical solution for boosted case based on its actual evolution time
 		const Real drho2 = rho_dot_exact * sim2.tNew_[0];
 

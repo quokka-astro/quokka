@@ -328,7 +328,7 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 					const amrex::Array4<const amrex::Real> &local_scale_down, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo,
 					const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
 					std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> fab_fc, int mass_index, amrex::Real /*time*/,
-					amrex::Real dt, amrex::Real /*vol*/, int mdot_index = -1)
+					amrex::Real dt, amrex::Real /*vol*/, int mdot_index = -1, int ang_mom_index = -1)
 {
 	const BL_PROFILE("SinkAccretionUtils::UpdateParticleMassAndMomentumInBox()");
 	// Get the particle array of structs
@@ -384,9 +384,13 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 		double accreted_momentum_x = 0.0;
 		double accreted_momentum_y = 0.0;
 		double accreted_momentum_z = 0.0;
+		double accreted_ang_mom_x = 0.0;
+		double accreted_ang_mom_y = 0.0;
+		double accreted_ang_mom_z = 0.0;
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
+					// x,y,z = (particle_pos - cell_center), so cell-relative-to-particle = (-x,-y,-z)
 					const double x = p.pos(0) - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
 					const double y = p.pos(1) - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
 					const double z = p.pos(2) - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
@@ -419,6 +423,13 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 					accreted_momentum_x += accreted_mass_cell * vx;
 					accreted_momentum_y += accreted_mass_cell * vy;
 					accreted_momentum_z += accreted_mass_cell * vz;
+					// Angular momentum: L += dm * (r_cell × v_cell), where r_cell = cell_center - par_pos = (-x, -y, -z)
+					// L_x = dm * ((-y)*vz - (-z)*vy) = dm * (z*vy - y*vz)
+					// L_y = dm * ((-z)*vx - (-x)*vz) = dm * (x*vz - z*vx)
+					// L_z = dm * ((-x)*vy - (-y)*vx) = dm * (y*vx - x*vy)
+					accreted_ang_mom_x += accreted_mass_cell * (z * vy - y * vz);
+					accreted_ang_mom_y += accreted_mass_cell * (x * vz - z * vx);
+					accreted_ang_mom_z += accreted_mass_cell * (y * vx - x * vy);
 					//-----------------------------------------------------------------------------------------------------
 				}
 			}
@@ -433,13 +444,18 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 		if (mdot_index >= 0) {
 			p.rdata(mdot_index) = accreted_mass / dt;
 		}
+		if (ang_mom_index >= 0) {
+			p.rdata(ang_mom_index) += accreted_ang_mom_x;
+			p.rdata(ang_mom_index + 1) += accreted_ang_mom_y;
+			p.rdata(ang_mom_index + 2) += accreted_ang_mom_z;
+		}
 	});
 }
 
 template <typename ContainerType, typename problem_t>
 void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &scale_down,
 				   std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, int mass_index, amrex::Real time, amrex::Real dt,
-				   int mdot_index = -1)
+				   int mdot_index = -1, int ang_mom_index = -1)
 {
 	const BL_PROFILE("SinkAccretionUtils::UpdateParticleMassAndMomentum()");
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
@@ -463,7 +479,7 @@ void UpdateParticleMassAndMomentum(ContainerType *container, amrex::MultiFab &st
 
 		// Process particles in this box
 		UpdateParticleMassAndMomentumInBox<ContainerType, problem_t>(pti, local_state, local_scale_down, plo, dx, local_fab_fc, mass_index, time, dt,
-									     vol, mdot_index);
+									     vol, mdot_index, ang_mom_index);
 	}
 }
 
@@ -527,7 +543,7 @@ void computeAccretion(ContainerType *container, amrex::MultiFab &state, amrex::M
 template <typename ContainerType, typename problem_t>
 void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate,
 		    std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, const amrex::Geometry &geom, int lev, amrex::Real time, amrex::Real dt,
-		    int mass_index, int mdot_index = -1)
+		    int mass_index, int mdot_index = -1, int ang_mom_index = -1)
 {
 	const BL_PROFILE("SinkAccretionUtils::applyAccretion()");
 	// Step 2: Compute the scale_down factor. We scale down the accretion rate to prevent accretion rates from exceeding 100%
@@ -537,8 +553,9 @@ void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mul
 	// Update accretion_rate and compute scale_down
 	ComputeScaleDown<problem_t>(state, state_accretion_rate, scale_down, geom, state_fc);
 
-	// Step 3: Update particle mass, momentum, and accretion rate
-	UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, state_fc, lev, mass_index, time, dt, mdot_index);
+	// Step 3: Update particle mass, momentum, accretion rate, and angular momentum
+	UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, state_fc, lev, mass_index, time, dt, mdot_index,
+								ang_mom_index);
 
 	// Step 4: Update the hydro state. We do this at last because the original state is needed for updating particles in step 3.
 	UpdateHydroState<problem_t>(state, state_accretion_rate);
