@@ -575,8 +575,7 @@ void applyAccretion(ContainerType *container, amrex::MultiFab &state, amrex::Mul
 	ComputeScaleDown<problem_t>(state, state_accretion_rate, scale_down, geom, state_fc);
 
 	// Step 3: Update particle mass, momentum, accretion rate, and angular momentum
-	UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, state_fc, lev, mass_index, time, dt, mdot_index,
-								ang_mom_index);
+	UpdateParticleMassAndMomentum<ContainerType, problem_t>(container, state, scale_down, state_fc, lev, mass_index, time, dt, mdot_index, ang_mom_index);
 
 	// Step 4: Update the hydro state. We do this at last because the original state is needed for updating particles in step 3.
 	UpdateHydroState<problem_t>(state, state_accretion_rate);

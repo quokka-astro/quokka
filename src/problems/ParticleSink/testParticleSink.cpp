@@ -392,8 +392,7 @@ auto problem_main() -> int
 		std::vector<int> idx1(npar);
 		std::iota(idx1.begin(), idx1.end(), 0);
 		std::sort(idx1.begin(), idx1.end(), [&](int a, int b) {
-			return std::tie(pos_phase1[a][0], pos_phase1[a][1], pos_phase1[a][2]) <
-			       std::tie(pos_phase1[b][0], pos_phase1[b][1], pos_phase1[b][2]);
+			return std::tie(pos_phase1[a][0], pos_phase1[a][1], pos_phase1[a][2]) < std::tie(pos_phase1[b][0], pos_phase1[b][1], pos_phase1[b][2]);
 		});
 
 		std::vector<int> idx2(npar);
@@ -415,8 +414,7 @@ auto problem_main() -> int
 			const double Ly1 = ang_mom_phase1[idx1[pi]][1];
 			const double Lz1 = ang_mom_phase1[idx1[pi]][2];
 			const double L1_norm = std::sqrt(Lx1 * Lx1 + Ly1 * Ly1 + Lz1 * Lz1);
-			const double dL_norm =
-			    std::sqrt((Lx2 - Lx1) * (Lx2 - Lx1) + (Ly2 - Ly1) * (Ly2 - Ly1) + (Lz2 - Lz1) * (Lz2 - Lz1));
+			const double dL_norm = std::sqrt((Lx2 - Lx1) * (Lx2 - Lx1) + (Ly2 - Ly1) * (Ly2 - Ly1) + (Lz2 - Lz1) * (Lz2 - Lz1));
 			const double ang_mom_rel_error = (L1_norm > 0.0) ? dL_norm / L1_norm : dL_norm;
 			amrex::Print() << std::format("Particle {} angular momentum relative error (Phase1 vs Phase2): {:.4e}\n", pi, ang_mom_rel_error);
 			if (!(ang_mom_rel_error < ang_mom_rel_error_tol)) {
