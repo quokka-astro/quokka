@@ -39,5 +39,4 @@ setup.num_modes_y = 0
 setup.num_modes_z = 0
 setup.angle_between_k_b0 = 0
 
-mhd.emf_compute_scheme = "Quokka2026"
-mhd.emf_averaging_scheme = "LondrilloDelZanna2004"
+
