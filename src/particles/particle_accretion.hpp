@@ -421,18 +421,21 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 					// M_dot_cell is negative, so we multiply it by -1 to get the accreted mass
 					const double accreted_mass_cell = -M_dot_cell * dt * scale_down_factor;
 					const double rho = local_state(ii, jj, kk, HydroSystem<problem_t>::density_index);
-					const double vx = local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index) / rho - pvx;
-					const double vy = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index) / rho - pvy;
-					const double vz = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index) / rho - pvz;
+					const double vx_lab = local_state(ii, jj, kk, HydroSystem<problem_t>::x1Momentum_index) / rho;
+					const double vy_lab = local_state(ii, jj, kk, HydroSystem<problem_t>::x2Momentum_index) / rho;
+					const double vz_lab = local_state(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index) / rho;
+					const double vx_rel = vx_lab - pvx;
+					const double vy_rel = vy_lab - pvy;
+					const double vz_rel = vz_lab - pvz;
 					accreted_mass += accreted_mass_cell;
-					accreted_momentum_x += accreted_mass_cell * vx;
-					accreted_momentum_y += accreted_mass_cell * vy;
-					accreted_momentum_z += accreted_mass_cell * vz;
+					accreted_momentum_x += accreted_mass_cell * vx_lab;
+					accreted_momentum_y += accreted_mass_cell * vy_lab;
+					accreted_momentum_z += accreted_mass_cell * vz_lab;
 					// Angular momentum: L += dm * (r_cell × v_rel), where r_cell = cell_center - par_pos = (-x, -y, -z)
 					// and v_rel = v_gas - v_par (relative velocity, Galilean invariant by construction).
-					// L_x = dm * ((-y)*vz - (-z)*vy) = dm * (z*vy - y*vz)
-					// L_y = dm * ((-z)*vx - (-x)*vz) = dm * (x*vz - z*vx)
-					// L_z = dm * ((-x)*vy - (-y)*vx) = dm * (y*vx - x*vy)
+					// L_x = dm * ((-y)*vz_rel - (-z)*vy_rel) = dm * (z*vy_rel - y*vz_rel)
+					// L_y = dm * ((-z)*vx_rel - (-x)*vz_rel) = dm * (x*vz_rel - z*vx_rel)
+					// L_z = dm * ((-x)*vy_rel - (-y)*vx_rel) = dm * (y*vx_rel - x*vy_rel)
 					//
 					// NOTE: Galilean invariance of L is only approximate (~2% at typical boost/dt).
 					// The residual error arises because p.pos() here is the *post-drift* position:
@@ -445,9 +448,9 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 					// This might restore Galilean invariance for all particles. However, this breaks
 					// the order of operations of the current scheme, so it is not necessarily the
 					// right thing to do.
-					accreted_ang_mom_x += accreted_mass_cell * (z * vy - y * vz);
-					accreted_ang_mom_y += accreted_mass_cell * (x * vz - z * vx);
-					accreted_ang_mom_z += accreted_mass_cell * (y * vx - x * vy);
+					accreted_ang_mom_x += accreted_mass_cell * (z * vy_rel - y * vz_rel);
+					accreted_ang_mom_y += accreted_mass_cell * (x * vz_rel - z * vx_rel);
+					accreted_ang_mom_z += accreted_mass_cell * (y * vx_rel - x * vy_rel);
 					//-----------------------------------------------------------------------------------------------------
 				}
 			}
