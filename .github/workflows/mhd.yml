@@ -108,4 +108,6 @@ jobs:
       uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
       with:
         name: test-results
-        path: ${{github.workspace}}/tests
+        path: |
+          ${{github.workspace}}/tests
+          ${{runner.workspace}}/build/TestResults
