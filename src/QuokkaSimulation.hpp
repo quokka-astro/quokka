@@ -213,7 +213,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
 
 	EMFComputeScheme emfComputingScheme_ = EMFComputeScheme::Quokka2026;
-	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::Balsara2025; // method to use to average EMF at edges
+	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::Balsara2025;
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 	std::unique_ptr<quokka::turbulence::turbulentDriving<problem_t>> td;
