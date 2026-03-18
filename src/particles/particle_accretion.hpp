@@ -428,10 +428,23 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 					accreted_momentum_x += accreted_mass_cell * vx;
 					accreted_momentum_y += accreted_mass_cell * vy;
 					accreted_momentum_z += accreted_mass_cell * vz;
-					// Angular momentum: L += dm * (r_cell × v_cell), where r_cell = cell_center - par_pos = (-x, -y, -z)
+					// Angular momentum: L += dm * (r_cell × v_rel), where r_cell = cell_center - par_pos = (-x, -y, -z)
+					// and v_rel = v_gas - v_par (relative velocity, Galilean invariant by construction).
 					// L_x = dm * ((-y)*vz - (-z)*vy) = dm * (z*vy - y*vz)
 					// L_y = dm * ((-z)*vx - (-x)*vz) = dm * (x*vz - z*vx)
 					// L_z = dm * ((-x)*vy - (-y)*vx) = dm * (y*vx - x*vy)
+					//
+					// NOTE: Galilean invariance of L is only approximate (~2% at typical boost/dt).
+					// The residual error arises because p.pos() here is the *post-drift* position:
+					// the particle mover has already advanced the particle by v_par*dt before this
+					// accretion step is called. In a boosted frame, this shifts r_cell by -v_par*dt
+					// relative to the unboosted frame, breaking exact Galilean invariance of L.
+					// A potential solution is to use the pre-drift (rewound) particle position when
+					// computing r_cell for angular momentum, e.g.:
+					//   const double x_rewind = (p.pos(0) - pvx * dt) - plo[0] - (ii + 0.5) * dx[0];
+					// This might restore Galilean invariance for all particles. However, this breaks
+					// the order of operations of the current scheme, so it is not necessarily the
+					// right thing to do.
 					accreted_ang_mom_x += accreted_mass_cell * (z * vy - y * vz);
 					accreted_ang_mom_y += accreted_mass_cell * (x * vz - z * vx);
 					accreted_ang_mom_z += accreted_mass_cell * (y * vx - x * vy);
