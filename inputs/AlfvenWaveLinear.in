@@ -34,10 +34,10 @@ hydro.rk_integrator_order = 2
 hydro.reconstruction_order = 5
 hydro.use_dual_energy = 0
 
-setup.num_modes_x = 1
-setup.num_modes_y = 0
-setup.num_modes_z = 0
-setup.angle_between_k_b0 = 0
+setup.num_modes_0 = 1
+setup.num_modes_1 = 0
+setup.num_modes_2 = 0
+setup.angle_between_k_bg_b = 0
 
 mhd.emf_compute_scheme = Quokka2026
 mhd.emf_averaging_scheme = LondrilloDelZanna2004

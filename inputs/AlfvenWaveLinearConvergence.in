@@ -32,7 +32,7 @@ hydro.use_dual_energy = 0
 
 mhd.reconstruction_order = 3
 
-setup.num_modes_x = 1
-setup.num_modes_y = 0
-setup.num_modes_z = 0
-setup.angle_between_k_b0 = 0.0   # degrees
+setup.num_modes_0 = 1
+setup.num_modes_1 = 0
+setup.num_modes_2 = 0
+setup.angle_between_k_bg_b = 0.0   # degrees

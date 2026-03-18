@@ -40,7 +40,7 @@ mhd.emf_averaging_scheme = LondrilloDelZanna2004
 mhd.update_initial_b_energy = false
 
 
-setup.num_modes_x = 1
-setup.num_modes_y = 2
-setup.num_modes_z = 3
-setup.angle_between_k_b0 = 45
+setup.num_modes_0 = 1
+setup.num_modes_1 = 2
+setup.num_modes_2 = 3
+setup.angle_between_k_bg_b = 45
