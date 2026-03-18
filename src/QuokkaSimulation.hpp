@@ -212,8 +212,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
 	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
 
-	EMFComputeScheme emfComputingScheme_ = EMFComputeScheme::FelkerStone2017;
-	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::LondrilloDelZanna2004; // method to use to average EMF at edges
+	EMFComputeScheme emfComputingScheme_ = EMFComputeScheme::Quokka2026;
+	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::Balsara2025; // method to use to average EMF at edges
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 	std::unique_ptr<quokka::turbulence::turbulentDriving<problem_t>> td;
