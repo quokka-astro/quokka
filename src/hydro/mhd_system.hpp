@@ -236,9 +236,9 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 				const amrex::Box box_fc = amrex::convert(box_cc, vec_cc2fc);
 				// we expand the domain of cc-data, so that when we reconstruct cc->fc (we include enough ghost cells in the fc->ec dimension),
 				// we get as an output (from reconstructing fc->ec) data only in the valid domain
-				const amrex::Box box_cc_U =
-				    amrex::grow(box_cc, (nghost_cc - 1) * vec_fc2ec); // note, the reconstruct function will uniformly grow the bounds by 1
-				const amrex::Box box_fc_U = amrex::grow(box_fc, (nghost_cc - 1) * vec_fc2ec + 1);
+				// note: also grow by 1 in dir2face, since the fc->ec step reads one cell beyond box_fc in that direction
+				const amrex::Box box_cc_U = amrex::grow(box_cc, (nghost_cc - 1) * vec_fc2ec + vec_cc2fc);
+				const amrex::Box box_fc_U = amrex::grow(box_fc, (nghost_cc - 1) * vec_fc2ec + vec_cc2fc + 1);
 
 				// extrapolate both required cell-centered velocity fields to the cell-edge
 				for (int icomp = 0; icomp < 2; ++icomp) {
@@ -247,9 +247,6 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 					const int wcomp = extrap_dirs[icomp];
 					std::array<amrex::FArrayBox, 2> fc_fabs_U_ifside = {amrex::FArrayBox(box_fc_U, 1, amrex::The_Async_Arena()),
 											    amrex::FArrayBox(box_fc_U, 1, amrex::The_Async_Arena())};
-					// initialise ghost cells outside box_cc_U that are not filled by the cc->fc step below
-					fc_fabs_U_ifside[0].setVal<amrex::RunOn::Device>(0.0);
-					fc_fabs_U_ifside[1].setVal<amrex::RunOn::Device>(0.0);
 
 					// extrapolate cell-centered velocity components to the cell-face
 					MHDSystem<problem_t>::ReconstructTo(dir2face, cc_fabs_Ux[wcomp].array(), fc_fabs_U_ifside[0].array(),
