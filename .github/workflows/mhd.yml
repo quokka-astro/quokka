@@ -57,9 +57,6 @@ jobs:
         restore-keys: |
              ccache-${{ github.workflow }}-${{ github.job }}-git-
 
-    - name: Install Canary
-      run: python3 -m pip install canary-wm==25.10.7
-
     - name: Initialize ccache
       run: |
         ccache --version
@@ -94,8 +91,7 @@ jobs:
     - name: Test
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      # Execute the MHD tests while skipping the slow HydroWave case
-      run: canary run --output-on-failure --workers=2 -k 'MHD and not HydroWaveConvergence' .
+      run: ctest -L MHD --output-on-failure -j2
 
     - name: ccache stats
       if: always()
