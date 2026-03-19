@@ -6,9 +6,9 @@ geometry.prob_hi = [0.5, 0.5, 0.5]
 quokka.bc = ["periodic", "periodic", "periodic"]
 
 # *****************************************************************
-# VERBOSITY
+# Verbosity
 # *****************************************************************
-amr.v = 1  # verbosity in Amr
+amr.v = 1
 
 # *****************************************************************
 # Resolution and refinement
@@ -20,6 +20,9 @@ amr.blocking_factor = 16  # grid size must be divisible by this
 amr.n_error_buf = 3  # minimum 3 cell buffer around tagged cells
 amr.grid_eff = 0.9
 
+# *****************************************************************
+# Solver
+# *****************************************************************
 do_reflux = 1
 do_subcycle = 1
 do_tracers = 1  # turn on tracer particles

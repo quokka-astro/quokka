@@ -1,27 +1,23 @@
 # *****************************************************************
-# Problem size and geometry
+# Boundary conditions
 # *****************************************************************
-geometry.prob_lo = [0.0, 0.0, 0.0]
-geometry.prob_hi = [1.0, 1.0, 1.0]
 quokka.bc = ["periodic", "periodic", "periodic"]
 
 # *****************************************************************
-# VERBOSITY
+# Verbosity
 # *****************************************************************
-amr.v = 0  # verbosity in Amr
+amr.v = 0
 
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell = [128, 8, 8]
-amr.max_level = 0  # number of levels = max_level + 1
-amr.blocking_factor = 8  # grid size must be divisible by this
-amr.max_grid_size = 128  # maximum grid size to create 4 FABs of 25 cells each
+amr.max_level = 0
+amr.blocking_factor = 8
+amr.max_grid_size = 128
 
-do_reflux = 0
-do_subcycle = 0
-do_tracers = 1
-
+# *****************************************************************
+# Solver
+# *****************************************************************
 cfl = 0.3
 
 hydro.reconstruction_order = 5
@@ -29,6 +25,9 @@ hydro.use_dual_energy = 0
 
 mhd.emf_reconstruction_order = 5
 
+# *****************************************************************
+# Problem setup
+# *****************************************************************
 setup.num_modes_x = 1
 setup.num_modes_y = 0
 setup.num_modes_z = 0

@@ -6,9 +6,9 @@ geometry.prob_hi = [0.5, 0.5, 0.5]
 quokka.bc = ["periodic", "periodic", "periodic"]
 
 # *****************************************************************
-# VERBOSITY
+# Verbosity
 # *****************************************************************
-amr.v = 0  # verbosity in Amr
+amr.v = 0
 
 # *****************************************************************
 # Resolution and refinement
@@ -20,6 +20,9 @@ amr.blocking_factor_x = 32
 amr.blocking_factor_y = 32
 amr.blocking_factor_z = 8
 
+# *****************************************************************
+# Solver
+# *****************************************************************
 do_reflux = 0
 do_subcycle = 0
 
@@ -28,4 +31,3 @@ stop_time = 1.0
 max_timesteps = 2e4
 
 hydro.use_dual_energy = 0
-

@@ -6,7 +6,7 @@ geometry.prob_hi = [5.0, 5.0, 5.0]
 quokka.bc = ["periodic", "periodic", "periodic"]
 
 # *****************************************************************
-# VERBOSITY
+# Verbosity
 # *****************************************************************
 amr.v = 1
 
@@ -20,6 +20,9 @@ amr.blocking_factor_x = 32
 amr.blocking_factor_y = 32
 amr.blocking_factor_z = 8
 
+# *****************************************************************
+# Solver
+# *****************************************************************
 do_reflux = 0
 do_subcycle = 0
 
@@ -28,6 +31,9 @@ max_timesteps = 10000
 
 hydro.use_dual_energy = 0
 
+# *****************************************************************
+# Problem setup
+# *****************************************************************
 setup.vortex_Mach = 0.1
 setup.vortex_b_magn = 0.1
 setup.advection = 1
