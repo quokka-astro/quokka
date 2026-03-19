@@ -31,8 +31,6 @@ stop_time = 1.0
 max_timesteps = 2e4
 
 hydro.rk_integrator_order = 2
-hydro.reconstruction_order = 3
 
 # MHD parameters
-mhd.emf_reconstruction_order = 5  # xPPM for EMF
 mhd.emf_averaging_scheme = "LondrilloDelZanna2004"

@@ -31,7 +31,6 @@ stop_time = 2.0
 max_timesteps = 10000
 
 hydro.rk_integrator_order = 2
-hydro.reconstruction_order = 5
 hydro.use_dual_energy = 0
 
 mhd.emf_compute_scheme = "FelkerStone2017"

@@ -33,7 +33,6 @@ stop_time = 0.7071068
 max_timesteps = 2000
 
 hydro.rk_integrator_order = 2
-hydro.reconstruction_order = 5
 hydro.use_dual_energy = 0
 
 

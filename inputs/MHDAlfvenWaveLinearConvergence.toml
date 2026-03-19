@@ -30,7 +30,7 @@ hydro.rk_integrator_order = 2
 hydro.reconstruction_order = 3
 hydro.use_dual_energy = 0
 
-mhd.reconstruction_order = 3
+mhd.emf_reconstruction_order = 3
 
 setup.num_modes_x = 1
 setup.num_modes_y = 0
