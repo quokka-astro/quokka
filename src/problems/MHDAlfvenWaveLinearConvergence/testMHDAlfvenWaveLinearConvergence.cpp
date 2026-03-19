@@ -334,7 +334,7 @@ template <> void QuokkaSimulation<MHDAlfvenWaveLinearConvergence>::setInitialCon
 
 template <>
 void QuokkaSimulation<MHDAlfvenWaveLinearConvergence>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
+										amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -352,7 +352,8 @@ void QuokkaSimulation<MHDAlfvenWaveLinearConvergence>::computeReferenceSolution(
 
 template <>
 void QuokkaSimulation<MHDAlfvenWaveLinearConvergence>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
+										   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+										   quokka::direction const dir)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
