@@ -74,7 +74,7 @@ jobs:
       working-directory: ${{runner.workspace}}/build
       shell: bash
       run: |
-        ctest -N -L MHD | grep "Test #" | awk '{print $NF}' | sort -u > mhd_executables.txt
+        ctest -N -V -L MHD | grep "  Command:" | awk '{print $2}' | xargs -I{} basename {} | sort -u > mhd_executables.txt
         echo "MHD test executables to build:"
         cat mhd_executables.txt
 
