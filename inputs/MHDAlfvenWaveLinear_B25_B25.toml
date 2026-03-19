@@ -1,17 +1,17 @@
 # *****************************************************************
-# Problem size and geometry
+# PROBLEM SIZE AND GEOMETRY
 # *****************************************************************
 geometry.prob_lo = [0.0, 0.0, 0.0]
 geometry.prob_hi = [1.0, 1.0, 1.0]
 quokka.bc = ["periodic", "periodic", "periodic"]
 
 # *****************************************************************
-# Verbosity
+# VERBOSITY
 # *****************************************************************
 amr.v = 1
 
 # *****************************************************************
-# Resolution and refinement
+# RESOLUTION AND REFINEMENT
 # *****************************************************************
 amr.n_cell = [32, 8, 8]
 amr.max_level = 0
@@ -21,7 +21,7 @@ amr.blocking_factor_y = 8
 amr.blocking_factor_z = 8
 
 # *****************************************************************
-# Solver
+# SOLVER
 # *****************************************************************
 do_reflux = 0
 do_subcycle = 0
@@ -36,7 +36,7 @@ mhd.emf_compute_scheme = "Balsara2025"
 mhd.emf_averaging_scheme = "Balsara2025"
 
 # *****************************************************************
-# Problem setup
+# PROBLEM SETUP
 # *****************************************************************
 setup.num_modes_x = 1
 setup.num_modes_y = 0
