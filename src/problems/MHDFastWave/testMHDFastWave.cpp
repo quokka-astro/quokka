@@ -2,7 +2,7 @@
 // Copyright 2025 Elizabeth Cole-Kodikara.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file testMHDFastWave.cpp
+/// \file testMHDMHDFastWave.cpp
 /// \brief Setup a test problem for magnetosonic waves of the fast type.
 ///
 
@@ -22,16 +22,16 @@
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
 
-struct FastWave {
+struct MHDFastWave {
 };
 
-template <> struct quokka::EOS_Traits<FastWave> {
+template <> struct quokka::EOS_Traits<MHDFastWave> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
-template <> struct Physics_Traits<FastWave> {
+template <> struct Physics_Traits<MHDFastWave> {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
@@ -46,7 +46,7 @@ template <> struct Physics_Traits<FastWave> {
 
 // constants
 constexpr double sound_speed = 1.0;
-constexpr double gamma_gas = quokka::EOS_Traits<FastWave>::gamma;
+constexpr double gamma_gas = quokka::EOS_Traits<MHDFastWave>::gamma;
 
 // background states
 constexpr double bg_density = 1.0;
@@ -115,12 +115,12 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 		const double Eint = pressure / (gamma_gas - 1);
 		const double Etot = Ekin + Emag + Eint;
 
-		state(i, j, k, HydroSystem<FastWave>::density_index) = density;
-		state(i, j, k, HydroSystem<FastWave>::x1Momentum_index) = x1vel * density;
-		state(i, j, k, HydroSystem<FastWave>::x2Momentum_index) = x2vel * density;
-		state(i, j, k, HydroSystem<FastWave>::x3Momentum_index) = x3vel * density;
-		state(i, j, k, HydroSystem<FastWave>::energy_index) = Etot;
-		state(i, j, k, HydroSystem<FastWave>::internalEnergy_index) = Eint;
+		state(i, j, k, HydroSystem<MHDFastWave>::density_index) = density;
+		state(i, j, k, HydroSystem<MHDFastWave>::x1Momentum_index) = x1vel * density;
+		state(i, j, k, HydroSystem<MHDFastWave>::x2Momentum_index) = x2vel * density;
+		state(i, j, k, HydroSystem<MHDFastWave>::x3Momentum_index) = x3vel * density;
+		state(i, j, k, HydroSystem<MHDFastWave>::energy_index) = Etot;
+		state(i, j, k, HydroSystem<MHDFastWave>::internalEnergy_index) = Eint;
 	} else if (cen == quokka::centering::fc) {
 
 		const double x1mag = (computeMagneticVectorPotential_z(x1_L, x2_L + dx[1], x3_L + dx[2] / 2, time) -
@@ -144,16 +144,16 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 				      dx[1]);
 
 		if (dir == quokka::direction::x) {
-			state(i, j, k, MHDSystem<FastWave>::bfield_index) = x1mag;
+			state(i, j, k, MHDSystem<MHDFastWave>::bfield_index) = x1mag;
 		} else if (dir == quokka::direction::y) {
-			state(i, j, k, MHDSystem<FastWave>::bfield_index) = x2mag;
+			state(i, j, k, MHDSystem<MHDFastWave>::bfield_index) = x2mag;
 		} else if (dir == quokka::direction::z) {
-			state(i, j, k, MHDSystem<FastWave>::bfield_index) = x3mag;
+			state(i, j, k, MHDSystem<MHDFastWave>::bfield_index) = x3mag;
 		}
 	}
 }
 
-template <> void QuokkaSimulation<FastWave>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<MHDFastWave>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// extract grid information
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -163,7 +163,7 @@ template <> void QuokkaSimulation<FastWave>::setInitialConditionsOnGrid(quokka::
 	const quokka::centering cen = grid_elem.cen_;
 	const quokka::direction dir = grid_elem.dir_;
 
-	const int ncomp_cc = Physics_Indices<FastWave>::nvarTotal_cc;
+	const int ncomp_cc = Physics_Indices<MHDFastWave>::nvarTotal_cc;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int n = 0; n < ncomp_cc; ++n) {
@@ -173,7 +173,7 @@ template <> void QuokkaSimulation<FastWave>::setInitialConditionsOnGrid(quokka::
 	});
 }
 
-template <> void QuokkaSimulation<FastWave>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<MHDFastWave>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
 {
 	// extract grid information
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -183,7 +183,7 @@ template <> void QuokkaSimulation<FastWave>::setInitialConditionsOnGridFaceVars(
 	const quokka::centering cen = grid_elem.cen_;
 	const quokka::direction dir = grid_elem.dir_;
 
-	const int ncomp_fc = Physics_Indices<FastWave>::nvarPerDim_fc;
+	const int ncomp_fc = Physics_Indices<MHDFastWave>::nvarPerDim_fc;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int n = 0; n < ncomp_fc; ++n) {
@@ -194,7 +194,7 @@ template <> void QuokkaSimulation<FastWave>::setInitialConditionsOnGridFaceVars(
 }
 
 template <>
-void QuokkaSimulation<FastWave>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+void QuokkaSimulation<MHDFastWave>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 							  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
@@ -213,7 +213,7 @@ void QuokkaSimulation<FastWave>::computeReferenceSolution(amrex::MultiFab &ref, 
 }
 
 template <>
-void QuokkaSimulation<FastWave>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+void QuokkaSimulation<MHDFastWave>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
@@ -234,7 +234,7 @@ void QuokkaSimulation<FastWave>::computeReferenceSolution_fc(amrex::MultiFab &re
 auto problem_main() -> int
 {
 
-	QuokkaSimulation<FastWave> sim;
+	QuokkaSimulation<MHDFastWave> sim;
 
 	sim.setInitialConditions();
 	sim.evolve();

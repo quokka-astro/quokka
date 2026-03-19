@@ -2,7 +2,7 @@
 // Copyright 2025 Neco Kriel.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file testMHDAlfvenWaveLinear.cpp
+/// \file testMHDMHDAlfvenWaveLinear.cpp
 /// \brief Setup a test problem for linearly polarised Alfvén waves.
 ///
 
@@ -27,16 +27,16 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-struct AlfvenWaveLinear {
+struct MHDAlfvenWaveLinear {
 };
 
-template <> struct quokka::EOS_Traits<AlfvenWaveLinear> {
+template <> struct quokka::EOS_Traits<MHDAlfvenWaveLinear> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
-template <> struct Physics_Traits<AlfvenWaveLinear> {
+template <> struct Physics_Traits<MHDAlfvenWaveLinear> {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;
 	static constexpr int numPassiveScalars = numMassScalars + 0;
@@ -50,7 +50,7 @@ template <> struct Physics_Traits<AlfvenWaveLinear> {
 };
 
 constexpr double sound_speed = 1.0;
-constexpr double gamma_gas = quokka::EOS_Traits<AlfvenWaveLinear>::gamma;
+constexpr double gamma_gas = quokka::EOS_Traits<MHDAlfvenWaveLinear>::gamma;
 constexpr double bg_density = 1.0;
 constexpr double bg_pressure = sound_speed * sound_speed * bg_density / gamma_gas;
 constexpr double b0_magn = 1.0;
@@ -261,12 +261,12 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const double Eint = pressure / (gamma_gas - 1);
 		const double Etot = Ekin + Emag + Eint;
 
-		state(i, j, k, HydroSystem<AlfvenWaveLinear>::density_index) = density;
-		state(i, j, k, HydroSystem<AlfvenWaveLinear>::x1Momentum_index) = v_x1_prf * density;
-		state(i, j, k, HydroSystem<AlfvenWaveLinear>::x2Momentum_index) = v_x2_prf * density;
-		state(i, j, k, HydroSystem<AlfvenWaveLinear>::x3Momentum_index) = v_x3_prf * density;
-		state(i, j, k, HydroSystem<AlfvenWaveLinear>::energy_index) = Etot;
-		state(i, j, k, HydroSystem<AlfvenWaveLinear>::internalEnergy_index) = Eint;
+		state(i, j, k, HydroSystem<MHDAlfvenWaveLinear>::density_index) = density;
+		state(i, j, k, HydroSystem<MHDAlfvenWaveLinear>::x1Momentum_index) = v_x1_prf * density;
+		state(i, j, k, HydroSystem<MHDAlfvenWaveLinear>::x2Momentum_index) = v_x2_prf * density;
+		state(i, j, k, HydroSystem<MHDAlfvenWaveLinear>::x3Momentum_index) = v_x3_prf * density;
+		state(i, j, k, HydroSystem<MHDAlfvenWaveLinear>::energy_index) = Etot;
+		state(i, j, k, HydroSystem<MHDAlfvenWaveLinear>::internalEnergy_index) = Eint;
 	} else if (cen == quokka::centering::fc) {
 		// compute b-field using the magnetic vector potential to preserve div(b) = 0 topology
 		const double b_x1 =
@@ -282,16 +282,16 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		    (Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L + dx[1], x3_prf_L, time) - Ax_prf(x1_prf_L + dx[0] / 2.0, x2_prf_L, x3_prf_L, time)) / dx[1];
 
 		if (dir == quokka::direction::x) {
-			state(i, j, k, MHDSystem<AlfvenWaveLinear>::bfield_index) = b_x1;
+			state(i, j, k, MHDSystem<MHDAlfvenWaveLinear>::bfield_index) = b_x1;
 		} else if (dir == quokka::direction::y) {
-			state(i, j, k, MHDSystem<AlfvenWaveLinear>::bfield_index) = b_x2;
+			state(i, j, k, MHDSystem<MHDAlfvenWaveLinear>::bfield_index) = b_x2;
 		} else if (dir == quokka::direction::z) {
-			state(i, j, k, MHDSystem<AlfvenWaveLinear>::bfield_index) = b_x3;
+			state(i, j, k, MHDSystem<MHDAlfvenWaveLinear>::bfield_index) = b_x3;
 		}
 	}
 }
 
-template <> void QuokkaSimulation<AlfvenWaveLinear>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<MHDAlfvenWaveLinear>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
@@ -300,7 +300,7 @@ template <> void QuokkaSimulation<AlfvenWaveLinear>::setInitialConditionsOnGrid(
 	const quokka::centering cen = grid_elem.cen_;
 	const quokka::direction dir = grid_elem.dir_;
 
-	const int ncomp_cc = Physics_Indices<AlfvenWaveLinear>::nvarTotal_cc;
+	const int ncomp_cc = Physics_Indices<MHDAlfvenWaveLinear>::nvarTotal_cc;
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int n = 0; n < ncomp_cc; ++n) {
 			state_cc(i, j, k, n) = 0; // fill unused quantities with zeros
@@ -309,7 +309,7 @@ template <> void QuokkaSimulation<AlfvenWaveLinear>::setInitialConditionsOnGrid(
 	});
 }
 
-template <> void QuokkaSimulation<AlfvenWaveLinear>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<MHDAlfvenWaveLinear>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
 {
 	// extract grid information
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -319,7 +319,7 @@ template <> void QuokkaSimulation<AlfvenWaveLinear>::setInitialConditionsOnGridF
 	const quokka::centering cen = grid_elem.cen_;
 	const quokka::direction dir = grid_elem.dir_;
 
-	const int ncomp_fc = Physics_Indices<AlfvenWaveLinear>::nvarPerDim_fc;
+	const int ncomp_fc = Physics_Indices<MHDAlfvenWaveLinear>::nvarPerDim_fc;
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int n = 0; n < ncomp_fc; ++n) {
@@ -330,7 +330,7 @@ template <> void QuokkaSimulation<AlfvenWaveLinear>::setInitialConditionsOnGridF
 }
 
 template <>
-void QuokkaSimulation<AlfvenWaveLinear>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+void QuokkaSimulation<MHDAlfvenWaveLinear>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 								  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
@@ -349,7 +349,7 @@ void QuokkaSimulation<AlfvenWaveLinear>::computeReferenceSolution(amrex::MultiFa
 }
 
 template <>
-void QuokkaSimulation<AlfvenWaveLinear>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+void QuokkaSimulation<MHDAlfvenWaveLinear>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 								     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
 {
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
@@ -412,7 +412,7 @@ auto problem_main() -> int
 	outofplane_dir_prf = computeCrossProduct(k_dir_prf, inplane_dir_prf);
 	normalizeVector(outofplane_dir_prf);
 
-	QuokkaSimulation<AlfvenWaveLinear> sim;
+	QuokkaSimulation<MHDAlfvenWaveLinear> sim;
 
 	sim.setInitialConditions();
 	sim.evolve();
