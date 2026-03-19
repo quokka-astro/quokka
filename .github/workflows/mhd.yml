@@ -74,10 +74,12 @@ jobs:
       working-directory: ${{runner.workspace}}/build
       shell: bash
       run: |
-        # Find all source CMakeLists.txt files that contain MHD label and extract JOB_NAME
-        grep -l 'LABELS.*"MHD"' $(find $GITHUB_WORKSPACE/src/problems -name "CMakeLists.txt") | while read file; do
-          # Extract the JOB_NAME from set(JOB_NAME ...) line
-          grep "set(JOB_NAME" "$file" | sed 's/.*set(JOB_NAME \(.*\))/\1/' | tr -d ')'
+        # Find all problem directories whose CMakeLists.txt contains MHD label
+        # The directory name is the cmake target name
+        find $GITHUB_WORKSPACE/src/problems -name "CMakeLists.txt" | while read file; do
+          if grep -q 'LABELS.*MHD' "$file"; then
+            basename "$(dirname "$file")"
+          fi
         done | sort -u > mhd_executables.txt
         echo "MHD test executables to build:"
         cat mhd_executables.txt
