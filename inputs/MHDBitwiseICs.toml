@@ -23,8 +23,7 @@ amr.blocking_factor_z = 8
 do_reflux = 0
 do_subcycle = 0
 
+hydro.use_dual_energy = 0
+
 # Disable magnetic-energy rewrite so energy stays bitwise-defined by ICs
 mhd.update_initial_b_energy = 0
-
-plotfile_interval = -1
-checkpoint_interval = -1

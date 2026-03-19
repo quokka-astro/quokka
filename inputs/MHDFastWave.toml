@@ -15,7 +15,6 @@ amr.v = 1  # verbosity in Amr
 # *****************************************************************
 amr.n_cell = [64, 8, 8]
 amr.max_level = 0  # number of levels = max_level + 1
-
 amr.max_grid_size_x = 64
 amr.max_grid_size_y = 8
 amr.max_grid_size_z = 8
@@ -26,13 +25,9 @@ amr.blocking_factor_z = 8
 do_reflux = 0
 do_subcycle = 0
 
-plotfile_interval = -1
-checkpoint_interval = -1
 cfl = 0.3
 stop_time = 0.7071068
 max_timesteps = 2000
 
-hydro.rk_integrator_order = 2
 hydro.use_dual_energy = 0
-
 

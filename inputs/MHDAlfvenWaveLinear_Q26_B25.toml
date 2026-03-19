@@ -23,13 +23,10 @@ amr.blocking_factor_z = 8
 do_reflux = 0
 do_subcycle = 0
 
-plotfile_interval = -1
-checkpoint_interval = -1
 cfl = 0.3
 stop_time = 2.0
 max_timesteps = 10000
 
-hydro.rk_integrator_order = 2
 hydro.use_dual_energy = 0
 
 mhd.emf_compute_scheme = "Quokka2026"

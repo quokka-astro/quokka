@@ -23,14 +23,9 @@ amr.blocking_factor_z = 8
 do_reflux = 0
 do_subcycle = 0
 
-plotfile_interval = -1
-plotfile_prefix = "alfven_wave_circular_plt"
-checkpoint_interval = -1
 cfl = 0.3
 stop_time = 5.0
 max_timesteps = 8000
 
-hydro.rk_integrator_order = 2
 hydro.use_dual_energy = 0
-
 

@@ -3,7 +3,7 @@
 # *****************************************************************
 geometry.prob_lo = [0.0, 0.0, 0.0]
 geometry.prob_hi = [1.0, 1.0, 1.0]
-geometry.is_periodic = [1, 1, 1]
+quokka.bc = ["periodic", "periodic", "periodic"]
 
 # *****************************************************************
 # VERBOSITY
@@ -21,12 +21,9 @@ amr.max_grid_size = 128  # maximum grid size to create 4 FABs of 25 cells each
 do_reflux = 0
 do_subcycle = 0
 do_tracers = 1
-plotfile_interval = -1
 
 cfl = 0.3
 
-
-hydro.rk_integrator_order = 2
 hydro.reconstruction_order = 5
 hydro.use_dual_energy = 0
 

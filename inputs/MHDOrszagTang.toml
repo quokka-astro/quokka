@@ -15,7 +15,6 @@ amr.v = 0  # verbosity in Amr
 # *****************************************************************
 amr.n_cell = [128, 128, 8]
 amr.max_level = 0  # number of levels = max_level + 1
-
 amr.max_grid_size = 128
 amr.blocking_factor_x = 32
 amr.blocking_factor_y = 32
@@ -24,13 +23,9 @@ amr.blocking_factor_z = 8
 do_reflux = 0
 do_subcycle = 0
 
-plotfile_interval = -1
-checkpoint_interval = -1
 cfl = 0.2
 stop_time = 1.0
 max_timesteps = 2e4
 
-hydro.rk_integrator_order = 2
+hydro.use_dual_energy = 0
 
-# MHD parameters
-mhd.emf_averaging_scheme = "LondrilloDelZanna2004"
