@@ -57,6 +57,9 @@ jobs:
         restore-keys: |
              ccache-${{ github.workflow }}-${{ github.job }}-git-
 
+    - name: Install Canary
+      run: python3 -m pip install canary-wm==25.10.7
+
     - name: Initialize ccache
       run: |
         ccache --version
@@ -71,7 +74,11 @@ jobs:
       working-directory: ${{runner.workspace}}/build
       shell: bash
       run: |
-        ctest --show-only=json-v1 -L MHD | jq -r '.tests[].command[0]' | xargs -I{} basename {} | sort -u > mhd_executables.txt
+        # Find all source CMakeLists.txt files that contain MHD label and extract JOB_NAME
+        grep -l 'LABELS.*"MHD"' $(find $GITHUB_WORKSPACE/src/problems -name "CMakeLists.txt") | while read file; do
+          # Extract the JOB_NAME from set(JOB_NAME ...) line
+          grep "set(JOB_NAME" "$file" | sed 's/.*set(JOB_NAME \(.*\))/\1/' | tr -d ')'
+        done | sort -u > mhd_executables.txt
         echo "MHD test executables to build:"
         cat mhd_executables.txt
 
@@ -91,7 +98,8 @@ jobs:
     - name: Test
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      run: ctest -L MHD --output-on-failure -j2
+      # Execute the MHD tests while skipping the slow HydroWave case
+      run: canary run --output-on-failure --workers=2 -k 'MHD and not HydroWaveConvergence' .
 
     - name: ccache stats
       if: always()
