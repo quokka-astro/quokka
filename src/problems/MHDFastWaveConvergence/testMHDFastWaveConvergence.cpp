@@ -21,7 +21,6 @@
 #include "QuokkaSimulation.hpp"
 #include "grid.hpp"
 #include "physics_info.hpp"
-#include "util/BC.hpp"
 #include "util/richardson.hpp"
 
 struct FastWaveConvergence {
@@ -497,25 +496,11 @@ auto runWaveTest(int nx) -> double
 	amrex::ParmParse pp_geom("geometry");
 	amrex::Vector<double> const prob_lo = {0.0, 0.0, 0.0};
 	amrex::Vector<double> const prob_hi = {1.0, 1.0, 1.0};
-	amrex::Vector<int> const is_periodic = {1, 1, 1};
 	pp_geom.addarr("prob_lo", prob_lo);
 	pp_geom.addarr("prob_hi", prob_hi);
-	pp_geom.addarr("is_periodic", is_periodic);
-
-	// Setup boundary conditions
-	auto BCs_cc = quokka::BC<FastWaveConvergence>(quokka::BCType::int_dir);
-
-	const int nvars_fc = Physics_Indices<FastWaveConvergence>::nvarTotal_fc;
-	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
-	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_fc[icomp].setLo(idim, amrex::BCType::int_dir);
-			BCs_fc[icomp].setHi(idim, amrex::BCType::int_dir);
-		}
-	}
 
 	// Run simulation
-	QuokkaSimulation<FastWaveConvergence> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<FastWaveConvergence> sim;
 
 	sim.cflNumber_ = CFL_number;
 	sim.stopTime_ = max_time;
