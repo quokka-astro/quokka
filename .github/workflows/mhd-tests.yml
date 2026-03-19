@@ -24,7 +24,7 @@ jobs:
   check_changes:
     uses: ./.github/workflows/check_changes.yml
     with:
-      workflow_file: '.github/workflows/mhd.yml'
+      workflow_file: '.github/workflows/mhd-tests.yml'
 
   build:
     runs-on: ubuntu-latest
@@ -77,7 +77,7 @@ jobs:
         # Find all problem directories whose CMakeLists.txt contains MHD label
         # The directory name is the cmake target name
         find $GITHUB_WORKSPACE/src/problems -name "CMakeLists.txt" | while read file; do
-          if grep -q 'LABELS.*MHD' "$file"; then
+          if grep -q 'LABELS.*MHD-TEST' "$file"; then
             basename "$(dirname "$file")"
           fi
         done | sort -u > mhd_executables.txt
@@ -100,8 +100,7 @@ jobs:
     - name: Test
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      # Execute the MHD tests while skipping the slow HydroWave case
-      run: canary run --output-on-failure --workers=2 -k 'MHD and not HydroWaveConvergence' .
+      run: canary run --output-on-failure --workers=2 -k 'MHD-TEST' .
 
     - name: ccache stats
       if: always()
