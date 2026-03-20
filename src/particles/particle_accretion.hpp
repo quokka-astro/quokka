@@ -183,9 +183,9 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double x = p.pos(0) - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
-					const double y = p.pos(1) - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
-					const double z = p.pos(2) - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
+					const double x = plo[0] + (ii + static_cast<amrex::Real>(0.5)) * dx[0] - p.pos(0);
+					const double y = plo[1] + (jj + static_cast<amrex::Real>(0.5)) * dx[1] - p.pos(1);
+					const double z = plo[2] + (kk + static_cast<amrex::Real>(0.5)) * dx[2] - p.pos(2);
 					const double r_sqr = x * x + y * y + z * z;
 					double r_acc_sqr = stencil_size * stencil_size * dx_max * dx_max;
 					if (use_uniform_kernel) {
@@ -209,9 +209,9 @@ void ComputeAccretionRateInBox(const typename ContainerType::ParIterType &pti, c
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double x = p.pos(0) - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
-					const double y = p.pos(1) - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
-					const double z = p.pos(2) - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
+					const double x = plo[0] + (ii + static_cast<amrex::Real>(0.5)) * dx[0] - p.pos(0);
+					const double y = plo[1] + (jj + static_cast<amrex::Real>(0.5)) * dx[1] - p.pos(1);
+					const double z = plo[2] + (kk + static_cast<amrex::Real>(0.5)) * dx[2] - p.pos(2);
 					const double r_sqr = x * x + y * y + z * z;
 					double r_acc_sqr = stencil_size * stencil_size * dx_max * dx_max;
 					if (use_uniform_kernel) {
@@ -357,9 +357,9 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					const double x = p.pos(0) - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
-					const double y = p.pos(1) - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
-					const double z = p.pos(2) - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
+					const double x = plo[0] + (ii + static_cast<amrex::Real>(0.5)) * dx[0] - p.pos(0);
+					const double y = plo[1] + (jj + static_cast<amrex::Real>(0.5)) * dx[1] - p.pos(1);
+					const double z = plo[2] + (kk + static_cast<amrex::Real>(0.5)) * dx[2] - p.pos(2);
 					const double r_sqr = x * x + y * y + z * z;
 					double r_acc_sqr = stencil_size * stencil_size * dx_max * dx_max;
 					if (use_uniform_kernel) {
@@ -395,10 +395,10 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 		for (int ii = ix - stencil_size; ii <= ix + stencil_size; ++ii) {
 			for (int jj = iy - stencil_size; jj <= iy + stencil_size; ++jj) {
 				for (int kk = iz - stencil_size; kk <= iz + stencil_size; ++kk) {
-					// x,y,z = (particle_pos - cell_center), so cell-relative-to-particle = (-x,-y,-z)
-					const double x = p.pos(0) - plo[0] - (ii + static_cast<amrex::Real>(0.5)) * dx[0];
-					const double y = p.pos(1) - plo[1] - (jj + static_cast<amrex::Real>(0.5)) * dx[1];
-					const double z = p.pos(2) - plo[2] - (kk + static_cast<amrex::Real>(0.5)) * dx[2];
+					// x,y,z = r_cell = cell_center - par_pos (vector from particle to cell center)
+					const double x = plo[0] + (ii + static_cast<amrex::Real>(0.5)) * dx[0] - p.pos(0);
+					const double y = plo[1] + (jj + static_cast<amrex::Real>(0.5)) * dx[1] - p.pos(1);
+					const double z = plo[2] + (kk + static_cast<amrex::Real>(0.5)) * dx[2] - p.pos(2);
 					const double r_sqr = x * x + y * y + z * z;
 					double r_acc_sqr = stencil_size * stencil_size * dx_max * dx_max;
 					if (use_uniform_kernel) {
@@ -431,11 +431,11 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 					accreted_momentum_x += accreted_mass_cell * vx_lab;
 					accreted_momentum_y += accreted_mass_cell * vy_lab;
 					accreted_momentum_z += accreted_mass_cell * vz_lab;
-					// Angular momentum: L += dm * (r_cell × v_rel), where r_cell = cell_center - par_pos = (-x, -y, -z)
+					// Angular momentum: L += dm * (r_cell × v_rel), where r_cell = (x, y, z) = cell_center - par_pos
 					// and v_rel = v_gas - v_par (relative velocity, Galilean invariant by construction).
-					// L_x = dm * ((-y)*vz_rel - (-z)*vy_rel) = dm * (z*vy_rel - y*vz_rel)
-					// L_y = dm * ((-z)*vx_rel - (-x)*vz_rel) = dm * (x*vz_rel - z*vx_rel)
-					// L_z = dm * ((-x)*vy_rel - (-y)*vx_rel) = dm * (y*vx_rel - x*vy_rel)
+					// L_x = dm * (y*vz_rel - z*vy_rel)
+					// L_y = dm * (z*vx_rel - x*vz_rel)
+					// L_z = dm * (x*vy_rel - y*vx_rel)
 					//
 					// NOTE: Galilean invariance of L is only approximate (~2% at typical boost/dt).
 					// The residual error arises because p.pos() here is the *post-drift* position:
@@ -444,13 +444,13 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 					// relative to the unboosted frame, breaking exact Galilean invariance of L.
 					// A potential solution is to use the pre-drift (rewound) particle position when
 					// computing r_cell for angular momentum, e.g.:
-					//   const double x_rewind = (p.pos(0) - pvx * dt) - plo[0] - (ii + 0.5) * dx[0];
+					//   const double x_rewind = plo[0] + (ii + 0.5) * dx[0] - (p.pos(0) - pvx * dt);
 					// This might restore Galilean invariance for all particles. However, this breaks
 					// the order of operations of the current scheme, so it is not necessarily the
 					// right thing to do.
-					accreted_ang_mom_x += accreted_mass_cell * (z * vy_rel - y * vz_rel);
-					accreted_ang_mom_y += accreted_mass_cell * (x * vz_rel - z * vx_rel);
-					accreted_ang_mom_z += accreted_mass_cell * (y * vx_rel - x * vy_rel);
+					accreted_ang_mom_x += accreted_mass_cell * (y * vz_rel - z * vy_rel);
+					accreted_ang_mom_y += accreted_mass_cell * (z * vx_rel - x * vz_rel);
+					accreted_ang_mom_z += accreted_mass_cell * (x * vy_rel - y * vx_rel);
 					//-----------------------------------------------------------------------------------------------------
 				}
 			}
