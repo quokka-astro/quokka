@@ -448,9 +448,11 @@ void UpdateParticleMassAndMomentumInBox(const typename ContainerType::ParIterTyp
 					// This might restore Galilean invariance for all particles. However, this breaks
 					// the order of operations of the current scheme, so it is not necessarily the
 					// right thing to do.
-					accreted_ang_mom_x += accreted_mass_cell * (y * vz_rel - z * vy_rel);
-					accreted_ang_mom_y += accreted_mass_cell * (z * vx_rel - x * vz_rel);
-					accreted_ang_mom_z += accreted_mass_cell * (x * vy_rel - y * vx_rel);
+					if (ang_mom_index >= 0) {
+						accreted_ang_mom_x += accreted_mass_cell * (y * vz_rel - z * vy_rel);
+						accreted_ang_mom_y += accreted_mass_cell * (z * vx_rel - x * vz_rel);
+						accreted_ang_mom_z += accreted_mass_cell * (x * vy_rel - y * vx_rel);
+					}
 					//-----------------------------------------------------------------------------------------------------
 				}
 			}
