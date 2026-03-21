@@ -2320,9 +2320,60 @@ def format_result(result: CommandResult, as_json: bool) -> str:
     return json.dumps(payload, indent=2, sort_keys=True)
 
 
+def doctor_hint_command(profile: Optional[str], topic: Optional[str] = None) -> Optional[str]:
+    if not profile:
+        return None
+    args = ["quokka", "doctor"]
+    if topic is not None:
+        args.append(topic)
+    args.extend(["--profile", profile])
+    return shell_join(args)
+
+
+def stream_test_hint_command(profile: Optional[str], resource: Optional[Dict[str, Any]]) -> Optional[str]:
+    if not profile:
+        return None
+    args = ["quokka", "test"]
+    selector = None if resource is None else resource.get("selector")
+    resource_name = None if resource is None else resource.get("name")
+    if selector == "name" and isinstance(resource_name, str) and resource_name != "*":
+        args.append(resource_name)
+    elif selector == "regex" and isinstance(resource_name, str) and resource_name != "*":
+        args.extend(["--ctest-regex", resource_name])
+    args.extend(["--profile", profile, "--stream"])
+    return shell_join(args)
+
+
+def diagnostic_hints(error: DiagnosticError, command: Optional[str], profile: Optional[str]) -> List[str]:
+    effective_command = error.command or command
+    effective_profile = error.profile or profile
+    hints: List[str] = []
+
+    doctor_command = None
+    if error.diagnostic_id == "RESOURCE_LOCKED":
+        doctor_command = doctor_hint_command(effective_profile, "locking")
+    elif error.diagnostic_id in {"CONFIGURE_DRIFT", "PROFILE_UNCONFIGURED", "MISSING_ARTIFACT", "STALE_ARTIFACT"}:
+        doctor_command = doctor_hint_command(effective_profile, "profile")
+    elif error.diagnostic_id in {"TOOL_FAILED", "EXECUTOR_UNAVAILABLE", "STATE_CORRUPT"}:
+        doctor_command = doctor_hint_command(effective_profile)
+
+    if doctor_command is not None:
+        hints.append("Inspect the current environment with: {}".format(doctor_command))
+
+    if effective_command == "test" and error.diagnostic_id == "TOOL_FAILED":
+        stream_command = stream_test_hint_command(effective_profile, error.resource)
+        if stream_command is not None:
+            hints.append("For live CTest output, rerun with: {}".format(stream_command))
+
+    return hints
+
+
 def error_result(error: DiagnosticError, as_json: bool, command: Optional[str], profile: Optional[str]) -> str:
+    hints = diagnostic_hints(error, command, profile)
     if not as_json:
-        return error.args[0]
+        if not hints:
+            return error.args[0]
+        return "{}\nHints:\n- {}".format(error.args[0], "\n- ".join(hints))
     payload = {
         "schema": 1,
         "ok": False,
@@ -2334,6 +2385,7 @@ def error_result(error: DiagnosticError, as_json: bool, command: Optional[str], 
             "exit_code": error.exit_code,
             "message": error.args[0],
             "details": error.details,
+            "hints": hints,
         },
     }
     return json.dumps(payload, indent=2, sort_keys=True)
@@ -2420,18 +2472,23 @@ def cmd_test(context: CliContext, args: argparse.Namespace) -> CommandResult:
     if args.ctest_regex:
         ctest_args.extend(["-R", args.ctest_regex])
         resource_name = args.ctest_regex
+        resource_selector = "regex"
     elif args.test_name:
         ctest_args.extend(["-R", "^{}$".format(re.escape(args.test_name))])
         resource_name = args.test_name
+        resource_selector = "name"
     else:
         resource_name = "*"
+        resource_selector = "all"
+
+    test_resource = {"kind": "test", "name": resource_name, "selector": resource_selector}
 
     with acquire_lock(context, "run", "test"):
         run_command(
             ctest_args,
             command="test",
             profile=context.profile_name(),
-            resource={"kind": "test", "name": resource_name},
+            resource=test_resource,
             stdout_to_stderr=context.json_output,
         )
 
@@ -2445,7 +2502,7 @@ def cmd_test(context: CliContext, args: argparse.Namespace) -> CommandResult:
         context.profile_name(),
         " with streaming output" if args.stream else "",
     )
-    return CommandResult("test", context.profile_name(), {"kind": "test", "name": resource_name}, data, text)
+    return CommandResult("test", context.profile_name(), test_resource, data, text)
 
 
 def cmd_regression(context: CliContext, args: argparse.Namespace) -> CommandResult:

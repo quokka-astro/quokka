@@ -58,6 +58,7 @@ source scripts/bash/quokka-activate.sh host-default
 quokka build
 quokka list problems
 quokka status
+quokka doctor --profile host-default
 ```
 
 `quokka build` configures the selected profile if needed and builds the default target set. To build a specific problem instead, pass it explicitly:
@@ -84,6 +85,7 @@ For first-time local verification, start with a small smoke test rather than a l
 ```bash
 quokka list profiles
 quokka status --profile host-3d
+quokka doctor --profile host-3d
 ```
 
 - A good first smoke test is `ODEIntegration`, which builds quickly and has an explicit numerical tolerance:
@@ -104,10 +106,25 @@ quokka run ODEIntegration --input inputs/ODEIntegration.toml --profile host-3d -
 quokka test ODEIntegration --profile host-default --build-if-needed
 ```
 
+- If a build or test fails unexpectedly, inspect the current toolchain, locks, and profile state before retrying:
+
+```bash
+quokka doctor --profile host-3d
+quokka doctor runtime --profile host-3d
+quokka doctor profile --profile host-3d
+quokka doctor locking --profile host-3d
+```
+
 - Do not treat timings from one profile as representative of another. The biggest runtime drivers are build type (`Debug` vs. `Release`), MPI enablement, and CPU vs. GPU backend.
 - `HydroWave`, `Advection`, and similar evolution problems are useful tests, but they are not ideal first smoke tests because they advance to a fixed physical time and can take much longer than `ODEIntegration`.
 - The regression suites listed by `quokka regression` are primarily GPU/CI-oriented in this repository. They are specialized validation, not the default local sanity-check path.
-- If you need more direct test output than `quokka test` provides, you can fall back to raw CTest in the selected build directory after the first configure/build:
+- If you need live CTest progress and the full stdout/stderr stream while diagnosing a failing test, rerun with `--stream`:
+
+```bash
+quokka test ODEIntegration --profile host-3d --stream
+```
+
+- If you still need more direct test control, fall back to raw CTest in the selected build directory after the first configure/build:
 
 ```bash
 cd build/host-3d
@@ -152,6 +169,13 @@ quokka test <test-name> --profile host-default
 quokka test --ctest-regex Hydro --profile host-default
 ```
 
+When diagnosing a failure, add `--stream` to show live progress and test stdout/stderr:
+
+```bash
+quokka test <test-name> --profile host-default --stream
+quokka test --ctest-regex Hydro --profile host-default --stream
+```
+
 Run one or more regression suites from `regression/quokka-tests.ini`:
 
 ```bash
@@ -161,7 +185,16 @@ quokka regression <suite1> <suite2> --profile host-default
 
 As with `run`, both `test` and `regression` are validation-first by default. Add `--build-if-needed` when those commands should build required targets automatically.
 
-### Status, formatting, and static analysis
+### Diagnostics, status, formatting, and static analysis
+
+Inspect the runtime toolchain, Python stack, lock state, and profile drift:
+
+```bash
+quokka doctor --profile host-default
+quokka doctor runtime --profile host-default
+quokka doctor profile --profile host-default
+quokka doctor locking --profile host-default
+```
 
 Inspect the current profile, configure state, locks, and artifact freshness:
 
@@ -218,6 +251,8 @@ Use the built-in help for the top-level CLI or an individual subcommand:
 quokka --help
 quokka build --help
 quokka run --help
+quokka test --help
+quokka doctor --help
 ```
 
 If `quokka` cannot resolve a worktree, either activate the checkout first or use `-C /path/to/quokka`.
