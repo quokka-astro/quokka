@@ -2844,6 +2844,11 @@ def cmd_tidy(context: CliContext, args: argparse.Namespace) -> CommandResult:
             details={"compile_commands": str(compile_commands)},
         )
 
+    files = [file for file in git_changed_files(context.worktree_root, selector, "tidy", context.profile_name()) if file.endswith((".cpp", ".hpp"))]
+    if not files:
+        data = {"build_dir": str(profile.build_dir), "selector": selector, "fix": bool(args.fix), "files": [], "no_op": True}
+        return CommandResult("tidy", context.profile_name(), None, data, "No files selected for clang-tidy.")
+
     script = context.worktree_root / "scripts" / "bash" / "tidy.sh"
     cmd = [str(script)]
     if args.fix:
@@ -2851,7 +2856,7 @@ def cmd_tidy(context: CliContext, args: argparse.Namespace) -> CommandResult:
     cmd.extend([str(profile.build_dir), selector])
     run_command(cmd, cwd=context.worktree_root, command="tidy", profile=context.profile_name(), stdout_to_stderr=context.json_output)
 
-    data = {"build_dir": str(profile.build_dir), "selector": selector, "fix": bool(args.fix)}
+    data = {"build_dir": str(profile.build_dir), "selector": selector, "fix": bool(args.fix), "files": files}
     text = "Ran clang-tidy wrapper for profile {} with selector '{}'.".format(context.profile_name(), selector)
     return CommandResult("tidy", context.profile_name(), None, data, text)
 
