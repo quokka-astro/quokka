@@ -34,6 +34,17 @@ Common commands:
 
 Agents should verify `command -v quokka` before relying on the launcher. If it is unavailable, install it with `scripts/bash/install-quokka-bootstrap.sh` or invoke `python3 /path/to/quokka/scripts/python/quokka_cli.py -C /path/to/quokka ...` directly.
 
+## Profile Selection & Runtime Expectations
+Profile choice has a large effect on local runtime. Agents should check `quokka.toml` or `quokka list profiles` before drawing conclusions from slow builds or tests.
+
+- `host-default` is the default profile and is intended for debug-oriented local validation. It uses `build/`, `CMAKE_BUILD_TYPE=Debug`, `AMReX_MPI=ON`, and `AMReX_GPU_BACKEND=NONE`. Expect slower compile and test times than a release build.
+- `host-3d` is the faster local iteration profile in this checkout. It uses `build/host-3d`, `CMAKE_BUILD_TYPE=Release`, and `AMReX_MPI=OFF`. Prefer it for quick smoke tests unless MPI-specific behavior or debug instrumentation matters for the task.
+- The biggest runtime drivers are build type (`Debug` vs. `Release`), MPI enablement, and CPU vs. GPU backend. Do not treat timings from one profile as representative of another.
+- Before reporting that a test is unexpectedly slow, confirm which profile you used and mention it explicitly in the summary.
+- For first-time verification, prefer a quick smoke-test path before running longer hydro or radiation problems. A good starting point is `quokka test ODEIntegration --profile host-3d --build-if-needed` when that profile is available.
+- Some problem tests are inherently longer because the executable advances to a fixed physical time in the problem code. If a run seems slow, inspect the problem source and input file before assuming the wrapper is the bottleneck.
+- The regression suites listed by `quokka regression` are primarily GPU/CI-oriented in this repository. Treat them as specialized validation, not as the default local smoke-test path.
+
 ## Coding Style & Naming Conventions
 Follow the repository `.clang-format` (LLVM-derived, 160-column width, tabs at eight spaces) and `.clang-tidy`. Keep headers as `.hpp` and implementations `.cpp`. Prefer PascalCase for classes and methods, camelCase with trailing underscore for data members, and wrap even single statements in braces. Favor trailing return types for non-`void` functions and mark variables `const` whenever possible.
 

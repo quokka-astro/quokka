@@ -20,8 +20,18 @@ Quokka is a two-moment radiation hydrodynamics code using the piecewise-paraboli
 - Use `quokka format [changed|previous|origin|dev|all]` for formatting.
 - Add `--build-if-needed` to `run`, `test`, or `regression` when those commands should build required targets first.
 - Build configuration, including dimensionality and GPU backend, is selected through profiles defined in `quokka.toml`.
-- Test inputs are located in `inputs/` (`.in` files).
+- Runtime inputs are located in `inputs/` (primarily `.toml` files).
 - Agents should verify `command -v quokka` before relying on the launcher. If it is unavailable, install it or invoke `python3 /path/to/quokka/scripts/python/quokka_cli.py -C /path/to/quokka ...` directly.
+
+## Profile Selection & Runtime Expectations
+- Profile choice has a large effect on local runtime. Check `quokka.toml` or `quokka list profiles` before drawing conclusions from slow builds or tests.
+- `host-default` is the default profile and is intended for debug-oriented local validation. It uses `build/`, `CMAKE_BUILD_TYPE=Debug`, `AMReX_MPI=ON`, and `AMReX_GPU_BACKEND=NONE`. Expect slower compile and test times than a release build.
+- `host-3d` is the faster local iteration profile in this checkout. It uses `build/host-3d`, `CMAKE_BUILD_TYPE=Release`, and `AMReX_MPI=OFF`. Prefer it for quick smoke tests unless MPI-specific behavior or debug instrumentation matters for the task.
+- The biggest runtime drivers are build type (`Debug` vs. `Release`), MPI enablement, and CPU vs. GPU backend. Do not treat timings from one profile as representative of another.
+- Before reporting that a test is unexpectedly slow, confirm which profile you used and mention it explicitly in the summary.
+- For first-time verification, prefer a quick smoke-test path before running longer hydro or radiation problems. A good starting point is `quokka test ODEIntegration --profile host-3d --build-if-needed` when that profile is available.
+- Some problem tests are inherently longer because the executable advances to a fixed physical time in the problem code. If a run seems slow, inspect the problem source and input file before assuming the wrapper is the bottleneck.
+- The regression suites listed by `quokka regression` are primarily GPU/CI-oriented in this repository. Treat them as specialized validation, not as the default local smoke-test path.
 
 ## Architecture Overview
 - **Main entry**: `src/main.cpp` calls `problem_main()` defined in problem-specific files

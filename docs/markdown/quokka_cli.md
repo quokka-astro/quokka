@@ -74,6 +74,46 @@ quokka list tests
 quokka list suites
 ```
 
+## Fast local validation
+
+For first-time local verification, start with a small smoke test rather than a long hydro or radiation problem.
+
+- Profile choice matters. `host-default` is the default profile, but it is a `Debug` + MPI configuration intended for debug-oriented validation. `host-3d` is a faster `Release` + non-MPI profile and is usually the better first choice for local smoke tests.
+- Check which profiles are available before running anything expensive:
+
+```bash
+quokka list profiles
+quokka status --profile host-3d
+```
+
+- A good first smoke test is `ODEIntegration`, which builds quickly and has an explicit numerical tolerance:
+
+```bash
+quokka test ODEIntegration --profile host-3d --build-if-needed
+```
+
+- If you want to run the executable directly with its input file, use:
+
+```bash
+quokka run ODEIntegration --input inputs/ODEIntegration.toml --profile host-3d --build-if-needed
+```
+
+- Use `host-default` when MPI behavior, debug instrumentation, or the repository default configuration matters more than speed:
+
+```bash
+quokka test ODEIntegration --profile host-default --build-if-needed
+```
+
+- Do not treat timings from one profile as representative of another. The biggest runtime drivers are build type (`Debug` vs. `Release`), MPI enablement, and CPU vs. GPU backend.
+- `HydroWave`, `Advection`, and similar evolution problems are useful tests, but they are not ideal first smoke tests because they advance to a fixed physical time and can take much longer than `ODEIntegration`.
+- The regression suites listed by `quokka regression` are primarily GPU/CI-oriented in this repository. They are specialized validation, not the default local sanity-check path.
+- If you need more direct test output than `quokka test` provides, you can fall back to raw CTest in the selected build directory after the first configure/build:
+
+```bash
+cd build/host-3d
+ctest --output-on-failure -R ODEIntegration
+```
+
 ## Common commands
 
 ### Build and run
