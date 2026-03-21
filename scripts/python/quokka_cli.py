@@ -759,6 +759,89 @@ def cmake_version(command: str, profile: Optional[str]) -> str:
     return parts[2] if len(parts) >= 3 else first_line
 
 
+def resolve_executable_path(executable: str) -> Optional[str]:
+    candidate = Path(executable)
+    if candidate.is_absolute():
+        return str(candidate) if candidate.exists() else None
+    return shutil.which(executable)
+
+
+def first_nonempty_line(*texts: str) -> str:
+    for text in texts:
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped:
+                return stripped
+    return ""
+
+
+def run_probe_command(
+    args: Sequence[str],
+    *,
+    cwd: Optional[Path] = None,
+    env: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
+    try:
+        proc = subprocess.run(
+            list(args),
+            cwd=None if cwd is None else str(cwd),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=env,
+        )
+    except FileNotFoundError:
+        return {
+            "found": False,
+            "ok": False,
+            "exit_code": None,
+            "stdout": "",
+            "stderr": "",
+            "args": list(args),
+        }
+
+    return {
+        "found": True,
+        "ok": proc.returncode == 0,
+        "exit_code": proc.returncode,
+        "stdout": proc.stdout.strip(),
+        "stderr": proc.stderr.strip(),
+        "args": list(args),
+    }
+
+
+def tool_probe(executable: str, version_args: Sequence[str], *, label: Optional[str] = None) -> Dict[str, Any]:
+    name = label or Path(executable).name
+    path = resolve_executable_path(executable)
+    if path is None:
+        return {"tool": name, "path": None, "status": "missing", "version": None, "detail": "not found"}
+
+    probe = run_probe_command([path] + list(version_args))
+    version = first_nonempty_line(probe["stdout"], probe["stderr"])
+    return {
+        "tool": name,
+        "path": path,
+        "status": "ok" if probe["ok"] else "error",
+        "version": version or None,
+        "detail": None if probe["ok"] else first_nonempty_line(probe["stderr"], probe["stdout"]) or "probe failed",
+        "exit_code": probe["exit_code"],
+    }
+
+
+def generator_tool_probe(generator: str) -> Dict[str, Any]:
+    generator_tools = {
+        "Ninja": ("ninja", ["--version"]),
+        "Unix Makefiles": ("make", ["--version"]),
+        "Xcode": ("xcodebuild", ["-version"]),
+    }
+    if generator not in generator_tools:
+        return {"tool": generator, "path": None, "status": "skip", "version": None, "detail": "no probe for generator"}
+    executable, version_args = generator_tools[generator]
+    result = tool_probe(executable, version_args, label=generator)
+    result["generator"] = generator
+    return result
+
+
 def cmake_cache_path(build_dir: Path) -> Path:
     return build_dir / "CMakeCache.txt"
 
@@ -876,6 +959,120 @@ def format_define_mismatch_summary(mismatches: Sequence[Dict[str, Any]]) -> str:
             actual_text = str(actual)
         parts.append("{}={} (actual {})".format(mismatch.get("key"), mismatch.get("requested"), actual_text))
     return ", ".join(parts)
+
+
+def cache_entry_value(entries: Dict[str, Dict[str, str]], *keys: str) -> Optional[str]:
+    for key in keys:
+        entry = entries.get(key)
+        if entry is not None:
+            return entry["value"]
+    return None
+
+
+def doctor_python_executable(cache_entries: Dict[str, Dict[str, str]]) -> Tuple[Optional[str], str]:
+    cached = cache_entry_value(cache_entries, "_Python_EXECUTABLE", "Python_EXECUTABLE")
+    if cached:
+        return cached, "cache"
+    for candidate in ("python3", "python"):
+        path = resolve_executable_path(candidate)
+        if path is not None:
+            return path, "path"
+    return None, "missing"
+
+
+def probe_python_stack(python_executable: Optional[str], source: str) -> Dict[str, Any]:
+    if python_executable is None:
+        return {
+            "status": "missing",
+            "executable": None,
+            "source": source,
+            "numpy_available": False,
+            "plotting_available": False,
+            "failed_modules": ["numpy", "matplotlib", "matplotlib.pyplot", "matplotlib.cm", "PIL"],
+            "modules": {},
+        }
+
+    script = "\n".join(
+        [
+            "import json",
+            "results = {}",
+            "checks = [",
+            "    ('numpy', 'import numpy'),",
+            "    ('matplotlib', 'import matplotlib'),",
+            "    ('matplotlib.pyplot', 'import matplotlib.pyplot'),",
+            "    ('matplotlib.cm', 'import matplotlib.cm'),",
+            "    ('PIL', 'from PIL import Image'),",
+            "]",
+            "for name, stmt in checks:",
+            "    try:",
+            "        exec(stmt, {})",
+            "        results[name] = {'ok': True}",
+            "    except Exception as exc:",
+            "        results[name] = {'ok': False, 'error': f'{type(exc).__name__}: {exc}'}",
+            "print(json.dumps(results))",
+        ]
+    )
+    probe = run_probe_command([python_executable, "-c", script])
+    if not probe["found"]:
+        return {
+            "status": "missing",
+            "executable": python_executable,
+            "source": source,
+            "numpy_available": False,
+            "plotting_available": False,
+            "failed_modules": ["numpy", "matplotlib", "matplotlib.pyplot", "matplotlib.cm", "PIL"],
+            "modules": {},
+            "detail": "interpreter not found",
+        }
+    if not probe["ok"]:
+        return {
+            "status": "error",
+            "executable": python_executable,
+            "source": source,
+            "numpy_available": False,
+            "plotting_available": False,
+            "failed_modules": ["numpy", "matplotlib", "matplotlib.pyplot", "matplotlib.cm", "PIL"],
+            "modules": {},
+            "detail": first_nonempty_line(probe["stderr"], probe["stdout"]) or "probe failed",
+        }
+
+    try:
+        modules = json.loads(probe["stdout"]) if probe["stdout"] else {}
+    except json.JSONDecodeError:
+        return {
+            "status": "error",
+            "executable": python_executable,
+            "source": source,
+            "numpy_available": False,
+            "plotting_available": False,
+            "failed_modules": ["numpy", "matplotlib", "matplotlib.pyplot", "matplotlib.cm", "PIL"],
+            "modules": {},
+            "detail": "invalid probe output",
+        }
+
+    plotting_modules = ("matplotlib", "matplotlib.pyplot", "matplotlib.cm", "PIL")
+    check_order = ("numpy",) + plotting_modules
+    numpy_available = bool((modules.get("numpy") or {}).get("ok"))
+    plotting_available = all(bool((modules.get(name) or {}).get("ok")) for name in plotting_modules)
+    failed_modules = [name for name in check_order if not bool((modules.get(name) or {}).get("ok"))]
+    status = "ok" if plotting_available else ("partial" if numpy_available or any(payload.get("ok") for payload in modules.values()) else "error")
+    first_error = ""
+    for name in ("numpy",) + plotting_modules:
+        payload = modules.get(name) or {}
+        if not payload.get("ok"):
+            first_error = "{}: {}".format(name, payload.get("error", "probe failed"))
+            break
+
+    return {
+        "status": status,
+        "executable": python_executable,
+        "source": source,
+        "numpy_available": numpy_available,
+        "plotting_available": plotting_available,
+        "failed_modules": failed_modules,
+        "modules": modules,
+        "detail": first_error or None,
+    }
 
 
 def compute_configure_fingerprint(context: CliContext, command: str) -> str:
@@ -2141,16 +2338,61 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
     topic = args.topic or "all"
     data: Dict[str, Any] = {}
     lines: List[str] = []
+    profile: Optional[ProfileConfig] = None
+    configured = False
+    cache_entries: Dict[str, Dict[str, str]] = {}
+    define_state: Optional[Dict[str, Any]] = None
+    python_probe: Optional[Dict[str, Any]] = None
+
+    if topic in ("all", "runtime", "profile"):
+        profile = context.require_profile("doctor")
+        configured = is_build_configured(profile.build_dir)
+        define_state = profile_define_state(profile, "doctor", context.profile_name())
+        if configured:
+            cache_entries = read_cmake_cache(profile.build_dir, "doctor", context.profile_name())
+        python_executable, python_source = doctor_python_executable(cache_entries)
+        python_probe = probe_python_stack(python_executable, python_source)
 
     if topic in ("all", "runtime"):
         runtime_dir = context.resolve_runtime_dir("doctor")
         db = context.open_db("doctor")
+        assert profile is not None
+        assert python_probe is not None
+        tools = {
+            "cmake": tool_probe("cmake", ["--version"]),
+            "ctest": tool_probe("ctest", ["--version"]),
+            "git": tool_probe("git", ["--version"]),
+            "generator": generator_tool_probe(profile.generator),
+        }
         data["runtime"] = {
             "runtime_dir": str(runtime_dir),
             "state_db": str(context.db_path("doctor")),
             "sqlite_ok": db.execute("SELECT 1").fetchone()[0] == 1,
+            "tools": tools,
+            "python": python_probe,
         }
         lines.append("runtime: ok ({})".format(runtime_dir))
+        lines.append(
+            "tools: cmake={cmake}, ctest={ctest}, git={git}, {generator_label}={generator_status}".format(
+                cmake=tools["cmake"]["status"],
+                ctest=tools["ctest"]["status"],
+                git=tools["git"]["status"],
+                generator_label=profile.generator,
+                generator_status=tools["generator"]["status"],
+            )
+        )
+        plotting_state = "ok" if python_probe["plotting_available"] else "unavailable"
+        plotting_detail = ""
+        if python_probe["failed_modules"]:
+            plotting_detail = " ({})".format(", ".join(python_probe["failed_modules"]))
+        lines.append(
+            "python: interpreter={} numpy={} plotting={}{}".format(
+                python_probe["executable"] or "<missing>",
+                "ok" if python_probe["numpy_available"] else "missing",
+                plotting_state,
+                plotting_detail,
+            )
+        )
 
     if topic in ("all", "locking"):
         locks = []
@@ -2161,23 +2403,60 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
         lines.append("locking: {}".format(", ".join("{}={}".format(lock["lock_type"], "active" if lock["active"] else "idle") for lock in locks)))
 
     if topic in ("all", "profile"):
-        profile = context.require_profile("doctor")
-        define_state = profile_define_state(profile, "doctor", context.profile_name())
+        assert profile is not None
+        assert define_state is not None
+        assert python_probe is not None
+        compile_commands = profile.build_dir / "compile_commands.json"
+        build_summary = {
+            "generator": cache_entry_value(cache_entries, "CMAKE_GENERATOR") or profile.generator,
+            "build_type": cache_entry_value(cache_entries, "CMAKE_BUILD_TYPE") or define_state["requested_defines"].get("CMAKE_BUILD_TYPE"),
+            "mpi": cache_entry_value(cache_entries, "AMReX_MPI") or define_state["requested_defines"].get("AMReX_MPI"),
+            "gpu_backend": cache_entry_value(cache_entries, "AMReX_GPU_BACKEND") or define_state["requested_defines"].get("AMReX_GPU_BACKEND"),
+            "c_compiler": cache_entry_value(cache_entries, "CMAKE_C_COMPILER"),
+            "cxx_compiler": cache_entry_value(cache_entries, "CMAKE_CXX_COMPILER"),
+            "python_executable": cache_entry_value(cache_entries, "_Python_EXECUTABLE", "Python_EXECUTABLE") or python_probe["executable"],
+            "hdf5_dir": cache_entry_value(cache_entries, "HDF5_DIR"),
+            "hdf5_diff": cache_entry_value(cache_entries, "HDF5_DIFF_EXECUTABLE"),
+        }
         data["profile"] = {
             "profile": context.profile_name(),
             "build_dir": str(profile.build_dir),
-            "configured": is_build_configured(profile.build_dir),
-            "compile_commands": str(profile.build_dir / "compile_commands.json"),
+            "configured": configured,
+            "compile_commands": str(compile_commands),
+            "compile_commands_exists": compile_commands.exists(),
             "cache_path": define_state["cache_path"],
             "requested_defines": define_state["requested_defines"],
             "effective_defines": define_state["effective_defines"],
             "define_mismatches": define_state["mismatches"],
+            "build": build_summary,
+            "python": python_probe,
         }
         if define_state["mismatches"]:
             lines.append("profile: {} (configured, drift)".format(context.profile_name()))
             lines.append("profile drift: {}".format(format_define_mismatch_summary(define_state["mismatches"])))
         else:
-            lines.append("profile: {} ({})".format(context.profile_name(), "configured" if data["profile"]["configured"] else "unconfigured"))
+            lines.append("profile: {} ({})".format(context.profile_name(), "configured" if configured else "unconfigured"))
+        lines.append(
+            "profile build: type={} mpi={} gpu={} cxx={}".format(
+                build_summary["build_type"] or "<unknown>",
+                build_summary["mpi"] or "<unknown>",
+                build_summary["gpu_backend"] or "<unknown>",
+                build_summary["cxx_compiler"] or "<unknown>",
+            )
+        )
+        lines.append(
+            "compile_commands: {} ({})".format(
+                "present" if compile_commands.exists() else "missing",
+                compile_commands,
+            )
+        )
+        if build_summary["hdf5_dir"] or build_summary["python_executable"]:
+            lines.append(
+                "profile deps: hdf5={} python={}".format(
+                    build_summary["hdf5_dir"] or "<unknown>",
+                    build_summary["python_executable"] or "<unknown>",
+                )
+            )
 
     return CommandResult("doctor", context.profile_name(), None, data, "\n".join(lines))
 
