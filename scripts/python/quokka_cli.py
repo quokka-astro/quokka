@@ -2312,6 +2312,13 @@ def cmd_run(context: CliContext, args: argparse.Namespace) -> CommandResult:
 
 def cmd_test(context: CliContext, args: argparse.Namespace) -> CommandResult:
     profile = context.require_profile("test")
+    if args.stream and args.json:
+        raise DiagnosticError(
+            "USAGE_ERROR",
+            "--stream cannot be combined with --json.",
+            command="test",
+            profile=context.profile_name(),
+        )
     context.resolve_runtime_dir("test")
     context.open_db("test")
     ensure_no_conflicting_locks(context, ("build", "run"), "test")
@@ -2333,7 +2340,11 @@ def cmd_test(context: CliContext, args: argparse.Namespace) -> CommandResult:
     for target in unique_targets:
         ensure_artifact_ready(context, target, "test", target_inputs.get(target), build_if_needed=False)
 
-    ctest_args = ["ctest", "--test-dir", str(profile.build_dir), "--output-on-failure"]
+    ctest_args = ["ctest", "--test-dir", str(profile.build_dir)]
+    if args.stream:
+        ctest_args.extend(["--progress", "--verbose"])
+    else:
+        ctest_args.append("--output-on-failure")
     if args.ctest_regex:
         ctest_args.extend(["-R", args.ctest_regex])
         resource_name = args.ctest_regex
@@ -2349,8 +2360,13 @@ def cmd_test(context: CliContext, args: argparse.Namespace) -> CommandResult:
     data = {
         "selected_tests": [test.name for test in tests],
         "build_dir": str(profile.build_dir),
+        "streaming": bool(args.stream),
     }
-    text = "Ran {} test(s) in profile {}.".format(len(tests), context.profile_name())
+    text = "Ran {} test(s) in profile {}{}.".format(
+        len(tests),
+        context.profile_name(),
+        " with streaming output" if args.stream else "",
+    )
     return CommandResult("test", context.profile_name(), {"kind": "test", "name": resource_name}, data, text)
 
 
@@ -2831,6 +2847,7 @@ def create_parser() -> argparse.ArgumentParser:
     test.add_argument("test_name", nargs="?")
     test.add_argument("--ctest-regex")
     test.add_argument("--build-if-needed", action="store_true")
+    test.add_argument("--stream", action="store_true", help="Stream live test progress and stdout/stderr.")
     test.set_defaults(handler=cmd_test)
 
     regression = subparsers.add_parser("regression", parents=[common])
