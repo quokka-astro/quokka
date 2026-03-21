@@ -1,0 +1,20 @@
+schema = 1
+
+[policy]
+default_profile = "host-default"
+build_lock_scope = "worktree"
+run_lock_scope = "worktree"
+staleness = "strict"
+runtime_dir_mode = "local-only"
+
+[profile.host-default]
+build_dir = "build"
+generator = "Ninja"
+defines = { CMAKE_BUILD_TYPE = "Debug", AMReX_SPACEDIM = "3", AMReX_MPI = "ON", AMReX_GPU_BACKEND = "NONE" }
+executor = { kind = "local" }
+
+[profile.host-3d]
+build_dir = "build/host-3d"
+generator = "Ninja"
+defines = { CMAKE_BUILD_TYPE = "Release", AMReX_SPACEDIM = "3", AMReX_MPI = "OFF" }
+executor = { kind = "local" }

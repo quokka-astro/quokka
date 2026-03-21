@@ -80,7 +80,8 @@ trap cleanup_tmp_cdb EXIT
 # Deduplicate compile_commands entries so clang-tidy runs each file once
 cdb_dir="$BUILD_DIR"
 if command -v jq >/dev/null 2>&1; then
-    tmp_cdb_dir=$(mktemp -d)
+    # Keep scratch state on a sandbox-writable local filesystem.
+    tmp_cdb_dir=$(mktemp -d /tmp/quokka-tidy.XXXXXX)
     jq 'unique_by(.file)' "$compile_commands_path" > "$tmp_cdb_dir/compile_commands.json"
     cdb_dir="$tmp_cdb_dir"
 else
