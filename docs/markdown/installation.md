@@ -33,6 +33,8 @@ You should see output that indicates all tests have passed, like this:
 
     Total Test time (real) = 111.74 sec
 
+For day-to-day build, run, test, and formatting workflows after installation, see [Quokka CLI](quokka_cli.md).
+
 To run in 2D or 3D, build with the ``-DAMReX_SPACEDIM`` CMake option, for example:
 
     cmake .. -DCMAKE_BUILD_TYPE=Release -DAMReX_SPACEDIM=3 -G Ninja

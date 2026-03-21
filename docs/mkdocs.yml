@@ -23,6 +23,7 @@ nav:
     - Hydro: gallery.md
   - User guide:
     - Installation: installation.md
+    - Quokka CLI: quokka_cli.md
     - Running on HPC clusters: running_on_hpc_clusters.md
     - Grid refinement (AMR): amr_grid_refinement.md
     - Test problems:

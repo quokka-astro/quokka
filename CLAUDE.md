@@ -6,16 +6,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Quokka is a two-moment radiation hydrodynamics code using the piecewise-parabolic method with AMR and subcycling. It's built on AMReX and supports both CPU (MPI+vectorized) and GPU (CUDA/HIP) execution with a single C++20 codebase.
 
 ## Build & Test Commands
-- **Build**: `mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -G Ninja && ninja -j6` (keep in mind that `-DAMReX_SPACEDIM` must be set to specify the dimensionality of the code, and that some targets only build for certain dimensionality)
-- **GPU Support**: Add `-DAMReX_GPU_BACKEND=CUDA` (NVIDIA) or `-DAMReX_GPU_BACKEND=HIP` (AMD)
-- **Run all tests**: `ctest` or `ninja test`
-- **Run specific test**: `ctest -R TestName`
-- **Exclude tests**: `ctest -E "Pattern*"`
-- **List test targets**: `cmake --build . --target help`
-- **Test inputs**: Located in `inputs/` directory (`.in` files)
-- **Code formatting**: `clang-format -i file.cpp` (run from `src/` directory)
-- **Static analysis**: Use `scripts/tidy.sh build changed` to run clang-tidy on modified files
-- **Lint options**: `scripts/tidy.sh build [changed|previous|origin|dev] [--fix]`
+- Prefer the `quokka` CLI over raw `cmake` and `ctest` for routine local workflows.
+- Bootstrap the launcher once with `scripts/bash/install-quokka-bootstrap.sh`.
+- Activate a shell with `source scripts/bash/quokka-activate.sh` or `source scripts/bash/quokka-activate.sh host-default`.
+- For non-interactive use, prefer `quokka -C /path/to/quokka ...`.
+- List profiles with `quokka list profiles`.
+- Build problems with `quokka build [target...] --profile <profile>`.
+- Run a problem with `quokka run <problem> --input <input-file> --profile <profile>`.
+- Run tests with `quokka test [test-name] --profile <profile>` or `quokka test --ctest-regex <Pattern> --profile <profile>`.
+- Run regression suites with `quokka regression [suite...] --profile <profile>`.
+- Use `quokka status --profile <profile>` to inspect build and lock state.
+- Use `quokka tidy [changed|previous|origin|dev] --profile <profile>` for clang-tidy.
+- Use `quokka format [changed|previous|origin|dev|all]` for formatting.
+- Add `--build-if-needed` to `run`, `test`, or `regression` when those commands should build required targets first.
+- Build configuration, including dimensionality and GPU backend, is selected through profiles defined in `quokka.toml`.
+- Test inputs are located in `inputs/` (`.in` files).
+- Agents should verify `command -v quokka` before relying on the launcher. If it is unavailable, install it or invoke `python3 /path/to/quokka/scripts/python/quokka_cli.py -C /path/to/quokka ...` directly.
 
 ## Architecture Overview
 - **Main entry**: `src/main.cpp` calls `problem_main()` defined in problem-specific files

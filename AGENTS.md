@@ -4,7 +4,35 @@
 Core C++20 sources live in `src/`, with physics modules under `hydro/`, `radiation/`, `cooling/`, and `chemistry/`. Shared infrastructure such as `QuokkaSimulation.cpp` sits alongside module code, while scenario drivers compile from `src/problems/`. Runtime inputs (`*.in`) land in `inputs/`, docs in `docs/`, and helper utilities in `scripts/`. Generated builds and intermediates belong in `build/`; regression baselines and plotfiles stay under `tests/` and are tracked through `regression/quokka-tests.ini`.
 
 ## Build, Test, and Development Commands
-Configure once per build tree with `cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DAMReX_SPACEDIM=3`. Build everything via `cmake --build build --target all` (or `ninja -C build`). Discover executables using `cmake --build build --target help`. Run the full suite with `ctest --output-on-failure`; narrow runs using `ctest -R <Pattern>` or skip long GPU tests with `ctest -E "MatterEnergyExchange*"`. Apply clang-tidy to staged changes through `scripts/tidy.sh build changed`.
+Prefer the `quokka` CLI over raw `cmake` and `ctest` for routine local workflows. List available profiles with `quokka list profiles`, inspect problems with `quokka list problems --profile <profile>`, and build via `quokka build [target...] --profile <profile>`. Run a problem with `quokka run <problem> --input <input-file> --profile <profile>`, run tests with `quokka test [test-name] --profile <profile>` or `quokka test --ctest-regex <Pattern> --profile <profile>`, and run regression suites with `quokka regression [suite...] --profile <profile>`. Use `quokka status --profile <profile>` to inspect build and lock state, `quokka tidy [changed|previous|origin|dev] --profile <profile>` for clang-tidy, and `quokka format [changed|previous|origin|dev|all]` for formatting. Add `--build-if-needed` to `run`, `test`, or `regression` when those commands should build required targets first.
+
+## Quokka CLI
+Use the repository CLI for profile-aware local workflows.
+
+Bootstrap the launcher once for interactive use:
+`scripts/bash/install-quokka-bootstrap.sh`
+
+Activate the current worktree in a shell:
+`source scripts/bash/quokka-activate.sh`
+`source scripts/bash/quokka-activate.sh host-default`
+
+For non-interactive use, prefer explicit worktree selection:
+`quokka -C /path/to/quokka list profiles`
+`quokka -C /path/to/quokka build HydroWave --profile host-default`
+
+Common commands:
+`quokka list profiles`
+`quokka list problems --profile <profile>`
+`quokka build [target...] --profile <profile>`
+`quokka run <problem> --input <input-file> --profile <profile>`
+`quokka test [test-name] --profile <profile>`
+`quokka test --ctest-regex <regex> --profile <profile>`
+`quokka regression [suite...] --profile <profile>`
+`quokka status --profile <profile>`
+`quokka tidy [changed|previous|origin|dev] --profile <profile>`
+`quokka format [changed|previous|origin|dev|all]`
+
+Agents should verify `command -v quokka` before relying on the launcher. If it is unavailable, install it with `scripts/bash/install-quokka-bootstrap.sh` or invoke `python3 /path/to/quokka/scripts/python/quokka_cli.py -C /path/to/quokka ...` directly.
 
 ## Coding Style & Naming Conventions
 Follow the repository `.clang-format` (LLVM-derived, 160-column width, tabs at eight spaces) and `.clang-tidy`. Keep headers as `.hpp` and implementations `.cpp`. Prefer PascalCase for classes and methods, camelCase with trailing underscore for data members, and wrap even single statements in braces. Favor trailing return types for non-`void` functions and mark variables `const` whenever possible.
