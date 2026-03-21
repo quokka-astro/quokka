@@ -162,10 +162,11 @@ class LockHandle:
 
 
 class CliContext:
-    def __init__(self, worktree_root: Path, config: RepoConfig, profile: Optional[ProfileConfig]) -> None:
+    def __init__(self, worktree_root: Path, config: RepoConfig, profile: Optional[ProfileConfig], *, json_output: bool = False) -> None:
         self.worktree_root = worktree_root
         self.config = config
         self.profile = profile
+        self.json_output = json_output
         self.hostname = socket.gethostname()
         self.worktree_id = hashlib.sha256((self.hostname + "\n" + str(self.worktree_root)).encode("utf-8")).hexdigest()[:12]
         self._runtime_dir: Optional[Path] = None
@@ -546,13 +547,18 @@ def run_command(
     profile: Optional[str],
     resource: Optional[Dict[str, Any]] = None,
     env: Optional[Dict[str, str]] = None,
+    stdout_to_stderr: bool = False,
 ) -> None:
     try:
+        stdout_stream = sys.stderr if stdout_to_stderr else None
+        stderr_stream = sys.stderr if stdout_to_stderr else None
         subprocess.run(
             list(args),
             cwd=None if cwd is None else str(cwd),
             check=True,
             env=env,
+            stdout=stdout_stream,
+            stderr=stderr_stream,
         )
     except FileNotFoundError as exc:
         raise DiagnosticError(
@@ -2084,7 +2090,7 @@ def maybe_reconfigure(context: CliContext, command: str, reconfigure: bool) -> D
         args = ["cmake", "-S", str(context.worktree_root), "-B", str(profile.build_dir), "-G", profile.generator]
         for key in sorted(profile.defines):
             args.append("-D{}={}".format(key, profile.defines[key]))
-        run_command(args, command=command, profile=context.profile_name())
+        run_command(args, command=command, profile=context.profile_name(), stdout_to_stderr=context.json_output)
     define_state = profile_define_state(profile, command, context.profile_name())
     if define_state["mismatches"]:
         raise DiagnosticError(
@@ -2119,7 +2125,7 @@ def perform_build(context: CliContext, targets: Sequence[str], reconfigure: bool
         build_args = ["cmake", "--build", str(profile.build_dir)]
         if targets:
             build_args.extend(["--target"] + list(targets))
-        run_command(build_args, command=command, profile=context.profile_name())
+        run_command(build_args, command=command, profile=context.profile_name(), stdout_to_stderr=context.json_output)
 
         if targets:
             requested = list(dict.fromkeys(targets))
@@ -2299,6 +2305,7 @@ def cmd_run(context: CliContext, args: argparse.Namespace) -> CommandResult:
             command="run",
             profile=context.profile_name(),
             resource=resource,
+            stdout_to_stderr=context.json_output,
         )
 
     data = {
@@ -2355,7 +2362,13 @@ def cmd_test(context: CliContext, args: argparse.Namespace) -> CommandResult:
         resource_name = "*"
 
     with acquire_lock(context, "run", "test"):
-        run_command(ctest_args, command="test", profile=context.profile_name(), resource={"kind": "test", "name": resource_name})
+        run_command(
+            ctest_args,
+            command="test",
+            profile=context.profile_name(),
+            resource={"kind": "test", "name": resource_name},
+            stdout_to_stderr=context.json_output,
+        )
 
     data = {
         "selected_tests": [test.name for test in tests],
@@ -2430,7 +2443,13 @@ def cmd_regression(context: CliContext, args: argparse.Namespace) -> CommandResu
 
     try:
         with acquire_lock(context, "run", "regression"):
-            run_command([str(regtest), "--clean_testdir", str(ini_path)], cwd=context.worktree_root, command="regression", profile=context.profile_name())
+            run_command(
+                [str(regtest), "--clean_testdir", str(ini_path)],
+                cwd=context.worktree_root,
+                command="regression",
+                profile=context.profile_name(),
+                stdout_to_stderr=context.json_output,
+            )
     finally:
         if temp_ini is not None:
             with contextlib.suppress(FileNotFoundError):
@@ -2581,7 +2600,7 @@ def cmd_tidy(context: CliContext, args: argparse.Namespace) -> CommandResult:
     if args.fix:
         cmd.append("--fix")
     cmd.extend([str(profile.build_dir), selector])
-    run_command(cmd, cwd=context.worktree_root, command="tidy", profile=context.profile_name())
+    run_command(cmd, cwd=context.worktree_root, command="tidy", profile=context.profile_name(), stdout_to_stderr=context.json_output)
 
     data = {"build_dir": str(profile.build_dir), "selector": selector, "fix": bool(args.fix)}
     text = "Ran clang-tidy wrapper for profile {} with selector '{}'.".format(context.profile_name(), selector)
@@ -2607,7 +2626,13 @@ def cmd_format(context: CliContext, args: argparse.Namespace) -> CommandResult:
         )
 
     if selector == "all":
-        run_command(["pre-commit", "run", "clang-format", "--all-files"], cwd=context.worktree_root, command="format", profile=None)
+        run_command(
+            ["pre-commit", "run", "clang-format", "--all-files"],
+            cwd=context.worktree_root,
+            command="format",
+            profile=None,
+            stdout_to_stderr=context.json_output,
+        )
         data = {"selector": selector, "files": [], "all_files": True}
         text = "Ran clang-format hook over all eligible files."
         return CommandResult("format", None, None, data, text)
@@ -2617,7 +2642,13 @@ def cmd_format(context: CliContext, args: argparse.Namespace) -> CommandResult:
         data = {"selector": selector, "files": [], "no_op": True}
         return CommandResult("format", None, None, data, "No files selected for formatting.")
 
-    run_command(["pre-commit", "run", "clang-format", "--files"] + files, cwd=context.worktree_root, command="format", profile=None)
+    run_command(
+        ["pre-commit", "run", "clang-format", "--files"] + files,
+        cwd=context.worktree_root,
+        command="format",
+        profile=None,
+        stdout_to_stderr=context.json_output,
+    )
     data = {"selector": selector, "files": files}
     text = "Ran clang-format hook on {} file(s).".format(len(files))
     return CommandResult("format", None, None, data, text)
@@ -2894,6 +2925,7 @@ def context_for_args(args: argparse.Namespace) -> CliContext:
     worktree_root = resolve_worktree_root(args)
     config = load_repo_config(worktree_root)
     profile_name = getattr(args, "profile", None)
+    json_output = bool(getattr(args, "json", False))
     profile = None
     if args.command in {"format"}:
         profile = None
@@ -2901,7 +2933,7 @@ def context_for_args(args: argparse.Namespace) -> CliContext:
         profile = None
     else:
         profile = resolve_profile(config, profile_name, args.command)
-    return CliContext(worktree_root, config, profile)
+    return CliContext(worktree_root, config, profile, json_output=json_output)
 
 
 def main() -> int:
