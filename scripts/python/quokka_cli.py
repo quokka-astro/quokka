@@ -907,6 +907,21 @@ def cmake_cache_path(build_dir: Path) -> Path:
     return build_dir / "CMakeCache.txt"
 
 
+def ctest_root_testfile_path(build_dir: Path) -> Path:
+    return build_dir / "CTestTestfile.cmake"
+
+
+def buildtree_state(build_dir: Path) -> Dict[str, bool]:
+    cmake_cache_exists = cmake_cache_path(build_dir).exists()
+    ctest_metadata_exists = ctest_root_testfile_path(build_dir).exists()
+    return {
+        "cmake_cache_exists": cmake_cache_exists,
+        "ctest_metadata_exists": ctest_metadata_exists,
+        "configured": cmake_cache_exists and ctest_metadata_exists,
+        "partial_configure": cmake_cache_exists and not ctest_metadata_exists,
+    }
+
+
 def normalize_cmake_cache_value(entry_type: str, value: str) -> str:
     if entry_type == "BOOL":
         upper = value.upper()
@@ -1287,7 +1302,7 @@ def git_metadata(worktree_root: Path, command: str, profile: Optional[str]) -> D
 
 
 def parse_ctest_testfiles(build_dir: Path, command: str, profile: Optional[str]) -> List[TestSpec]:
-    root_testfile = build_dir / "CTestTestfile.cmake"
+    root_testfile = ctest_root_testfile_path(build_dir)
     if not root_testfile.exists():
         raise DiagnosticError(
             "PROFILE_UNCONFIGURED",
@@ -1687,7 +1702,7 @@ def discover_source_tests(worktree_root: Path, profile: ProfileConfig, command: 
 
 
 def discover_problems(build_dir: Path, command: str, profile: Optional[str]) -> List[str]:
-    root_testfile = build_dir / "CTestTestfile.cmake"
+    root_testfile = ctest_root_testfile_path(build_dir)
     if not root_testfile.exists():
         raise DiagnosticError(
             "PROFILE_UNCONFIGURED",
@@ -2206,7 +2221,7 @@ def break_locks(context: CliContext, command: str) -> List[str]:
 
 
 def is_build_configured(build_dir: Path) -> bool:
-    return cmake_cache_path(build_dir).exists()
+    return buildtree_state(build_dir)["configured"]
 
 
 def maybe_reconfigure(context: CliContext, command: str, reconfigure: bool) -> Dict[str, Any]:
@@ -2692,6 +2707,7 @@ def cmd_list(context: CliContext, args: argparse.Namespace) -> CommandResult:
 def cmd_status(context: CliContext, args: argparse.Namespace) -> CommandResult:
     profile = context.require_profile("status")
     runtime_dir = context.resolve_runtime_dir("status", create=False)
+    build_state = buildtree_state(profile.build_dir)
 
     locks = []
     for lock_type in LOCK_TYPES:
@@ -2705,10 +2721,10 @@ def cmd_status(context: CliContext, args: argparse.Namespace) -> CommandResult:
             }
         )
 
-    configured = is_build_configured(profile.build_dir)
+    configured = build_state["configured"]
     configure_receipt = configure_receipt_path(profile.build_dir)
     define_state = profile_define_state(profile, "status", context.profile_name())
-    cache_entries = read_cmake_cache(profile.build_dir, "status", context.profile_name()) if configured else {}
+    cache_entries = read_cmake_cache(profile.build_dir, "status", context.profile_name()) if build_state["cmake_cache_exists"] else {}
     build_summary = build_summary_from_cache(profile, cache_entries, define_state)
     compiler_info = compiler_metadata_from_build(profile.build_dir, cache_entries) if configured else {
         "c": {"path": None, "id": None, "version": None, "metadata_path": None},
@@ -2743,6 +2759,18 @@ def cmd_status(context: CliContext, args: argparse.Namespace) -> CommandResult:
             "receipt_path": str(configure_receipt),
             "configured_at": None,
             "state": "drift" if define_state["mismatches"] else "ready",
+            "cache_path": define_state["cache_path"],
+            "requested_defines": define_state["requested_defines"],
+            "effective_defines": define_state["effective_defines"],
+            "define_mismatches": define_state["mismatches"],
+            "compiler": compiler_info,
+            "build": build_summary,
+        }
+    elif build_state["partial_configure"]:
+        configure_state = {
+            "receipt_path": str(configure_receipt),
+            "configured_at": None,
+            "state": "incomplete",
             "cache_path": define_state["cache_path"],
             "requested_defines": define_state["requested_defines"],
             "effective_defines": define_state["effective_defines"],
@@ -2789,6 +2817,7 @@ def cmd_status(context: CliContext, args: argparse.Namespace) -> CommandResult:
         "runtime_dir": str(runtime_dir),
         "build_dir": str(profile.build_dir),
         "configured": configured,
+        "partial_configure": build_state["partial_configure"],
         "configure": configure_state,
         "locks": locks,
         "artifacts": problem_states,
@@ -2804,7 +2833,13 @@ def cmd_status(context: CliContext, args: argparse.Namespace) -> CommandResult:
         "locks: {}".format(", ".join("{}={}".format(lock["lock_type"], "active" if lock["active"] else "idle") for lock in locks)),
         "artifacts: ready={ready} missing={missing} stale_source={stale_source} stale_configure={stale_configure} unknown={unknown}".format(**problem_states),
     ]
-    if configure_state is not None and configure_state.get("define_mismatches"):
+    if build_state["partial_configure"]:
+        lines.append("configure: incomplete (CMake cache exists but CTest metadata is missing)")
+        if configure_state is not None and configure_state.get("define_mismatches"):
+            lines.append(
+                "configure drift: {}".format(format_define_mismatch_summary(configure_state["define_mismatches"]))
+            )
+    elif configure_state is not None and configure_state.get("define_mismatches"):
         lines.append(
             "configure: drift ({})".format(format_define_mismatch_summary(configure_state["define_mismatches"]))
         )
@@ -2965,15 +3000,17 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
     lines: List[str] = []
     profile: Optional[ProfileConfig] = None
     configured = False
+    build_state = {"cmake_cache_exists": False, "ctest_metadata_exists": False, "configured": False, "partial_configure": False}
     cache_entries: Dict[str, Dict[str, str]] = {}
     define_state: Optional[Dict[str, Any]] = None
     python_probe: Optional[Dict[str, Any]] = None
 
     if topic in ("all", "runtime", "profile"):
         profile = context.require_profile("doctor")
-        configured = is_build_configured(profile.build_dir)
+        build_state = buildtree_state(profile.build_dir)
+        configured = build_state["configured"]
         define_state = profile_define_state(profile, "doctor", context.profile_name())
-        if configured:
+        if build_state["cmake_cache_exists"]:
             cache_entries = read_cmake_cache(profile.build_dir, "doctor", context.profile_name())
         python_executable, python_source = doctor_python_executable(cache_entries)
         python_probe = probe_python_stack(python_executable, python_source)
@@ -3045,6 +3082,7 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
             "profile": context.profile_name(),
             "build_dir": str(profile.build_dir),
             "configured": configured,
+            "partial_configure": build_state["partial_configure"],
             "compile_commands": str(compile_commands),
             "compile_commands_exists": compile_commands.exists(),
             "cache_path": define_state["cache_path"],
@@ -3055,7 +3093,11 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
             "compiler": compiler_info,
             "python": python_probe,
         }
-        if define_state["mismatches"]:
+        if build_state["partial_configure"]:
+            lines.append("profile: {} (incomplete configure)".format(context.profile_name()))
+            if define_state["mismatches"]:
+                lines.append("profile drift: {}".format(format_define_mismatch_summary(define_state["mismatches"])))
+        elif define_state["mismatches"]:
             lines.append("profile: {} (configured, drift)".format(context.profile_name()))
             lines.append("profile drift: {}".format(format_define_mismatch_summary(define_state["mismatches"])))
         else:
@@ -3068,6 +3110,8 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
                 build_summary["cxx_compiler"] or "<unknown>",
             )
         )
+        if build_state["partial_configure"]:
+            lines.append("profile configure: CMake cache exists but CTest metadata is missing")
         lines.append(
             "compile_commands: {} ({})".format(
                 "present" if compile_commands.exists() else "missing",
