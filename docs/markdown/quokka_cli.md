@@ -79,7 +79,7 @@ quokka list suites
 
 For first-time local verification, start with a small smoke test rather than a long hydro or radiation problem.
 
-- Profile choice matters. `host-default` is the default profile, but it is a `Debug` + MPI configuration intended for debug-oriented validation. `host-3d` is a faster `Release` + non-MPI profile and is usually the better first choice for local smoke tests.
+- Profile choice matters. `host-default` is the default profile, but it is a `Debug` configuration intended for debug-oriented validation. `host-3d` is a faster `Release` profile and is usually the better first choice for local smoke tests.
 - Check which profiles are available before running anything expensive:
 
 ```bash
@@ -100,7 +100,7 @@ quokka test ODEIntegration --profile host-3d --build-if-needed
 quokka run ODEIntegration --input inputs/ODEIntegration.toml --profile host-3d --build-if-needed
 ```
 
-- Use `host-default` when MPI behavior, debug instrumentation, or the repository default configuration matters more than speed:
+- Use `host-default` when debug instrumentation or the repository default configuration matters more than speed:
 
 ```bash
 quokka test ODEIntegration --profile host-default --build-if-needed

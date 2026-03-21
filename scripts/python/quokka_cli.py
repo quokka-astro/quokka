@@ -41,6 +41,7 @@ SUBMODULE_PATHS = (
     "extern/yaml-cpp",
     "extern/turbulence",
 )
+IGNORED_PROFILE_DEFINES = frozenset({"AMReX_MPI"})
 ENV_OVERRIDE_KEYS = (
     "CC",
     "CXX",
@@ -494,6 +495,15 @@ def normalize_define_value(value: Any) -> str:
     return str(value)
 
 
+def normalize_profile_defines(raw_defines: Dict[str, Any]) -> Dict[str, str]:
+    defines: Dict[str, str] = {}
+    for key, value in raw_defines.items():
+        if key in IGNORED_PROFILE_DEFINES:
+            continue
+        defines[key] = normalize_define_value(value)
+    return defines
+
+
 def command_output(
     args: Sequence[str],
     *,
@@ -649,7 +659,7 @@ def load_repo_config(worktree_root: Path) -> RepoConfig:
                 "Profile '{}' has invalid defines.".format(profile_name),
                 details={"config_path": str(config_path)},
             )
-        defines = {key: normalize_define_value(value) for key, value in raw_defines.items()}
+        defines = normalize_profile_defines(raw_defines)
         build_dir = (worktree_root / build_dir_value).resolve()
         profiles[profile_name] = ProfileConfig(
             name=profile_name,

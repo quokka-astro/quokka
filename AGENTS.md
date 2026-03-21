@@ -37,8 +37,8 @@ Agents should verify `command -v quokka` before relying on the launcher. If it i
 ## Profile Selection & Runtime Expectations
 Profile choice has a large effect on local runtime. Agents should check `quokka.toml` or `quokka list profiles` before drawing conclusions from slow builds or tests.
 
-- `host-default` is the default profile and is intended for debug-oriented local validation. It uses `build/`, `CMAKE_BUILD_TYPE=Debug`, `AMReX_MPI=ON`, and `AMReX_GPU_BACKEND=NONE`. Expect slower compile and test times than a release build.
-- `host-3d` is the faster local iteration profile in this checkout. It uses `build/host-3d`, `CMAKE_BUILD_TYPE=Release`, and `AMReX_MPI=OFF`. Prefer it for quick smoke tests unless MPI-specific behavior or debug instrumentation matters for the task.
+- `host-default` is the default profile and is intended for debug-oriented local validation. It uses `build/`, `CMAKE_BUILD_TYPE=Debug`, and `AMReX_GPU_BACKEND=NONE`. Expect slower compile and test times than a release build.
+- `host-3d` is the faster local iteration profile in this checkout. It uses `build/host-3d` and `CMAKE_BUILD_TYPE=Release`. Prefer it for quick smoke tests unless debug instrumentation matters more than speed.
 - The biggest runtime drivers are build type (`Debug` vs. `Release`), MPI enablement, and CPU vs. GPU backend. Do not treat timings from one profile as representative of another.
 - Before reporting that a test is unexpectedly slow, confirm which profile you used and mention it explicitly in the summary.
 - For first-time verification, prefer a quick smoke-test path before running longer hydro or radiation problems. A good starting point is `quokka test ODEIntegration --profile host-3d --build-if-needed` when that profile is available.

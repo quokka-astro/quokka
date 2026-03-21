@@ -232,13 +232,13 @@ runtime_dir_mode = "local-only"
 [profile.host-3d]
 build_dir = "build/host-3d"
 generator = "Ninja"
-defines = { CMAKE_BUILD_TYPE = "Release", AMReX_SPACEDIM = "3", AMReX_MPI = "OFF" }
+defines = { CMAKE_BUILD_TYPE = "Release", AMReX_SPACEDIM = "3" }
 executor = { kind = "local" }
 
 [profile.cuda-3d]
 build_dir = "build/cuda-3d"
 generator = "Ninja"
-defines = { CMAKE_BUILD_TYPE = "Release", AMReX_SPACEDIM = "3", AMReX_MPI = "OFF", AMReX_GPU_BACKEND = "CUDA" }
+defines = { CMAKE_BUILD_TYPE = "Release", AMReX_SPACEDIM = "3", AMReX_GPU_BACKEND = "CUDA" }
 executor = { kind = "docker", image = "ghcr.io/quokka-astro/quokka-linux-amd64-cuda:development" }
 ```
 
@@ -575,7 +575,6 @@ CREATE TABLE event_log (
     "kind": "local"
   },
   "defines": {
-    "AMReX_MPI": "OFF",
     "AMReX_SPACEDIM": "3",
     "CMAKE_BUILD_TYPE": "Release"
   }
@@ -601,7 +600,6 @@ CREATE TABLE event_log (
   "build_dir": "/home/user/quokka/build/host-3d",
   "profile": "host-3d",
   "defines": {
-    "AMReX_MPI": "OFF",
     "AMReX_SPACEDIM": "3",
     "CMAKE_BUILD_TYPE": "Release"
   }

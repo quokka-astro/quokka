@@ -10,11 +10,11 @@ runtime_dir_mode = "local-only"
 [profile.host-default]
 build_dir = "build"
 generator = "Ninja"
-defines = { CMAKE_BUILD_TYPE = "Debug", AMReX_SPACEDIM = "3", AMReX_MPI = "ON", AMReX_GPU_BACKEND = "NONE" }
+defines = { CMAKE_BUILD_TYPE = "Debug", AMReX_SPACEDIM = "3", AMReX_GPU_BACKEND = "NONE" }
 executor = { kind = "local" }
 
 [profile.host-3d]
 build_dir = "build/host-3d"
 generator = "Ninja"
-defines = { CMAKE_BUILD_TYPE = "Release", AMReX_SPACEDIM = "3", AMReX_MPI = "OFF" }
+defines = { CMAKE_BUILD_TYPE = "Release", AMReX_SPACEDIM = "3" }
 executor = { kind = "local" }
