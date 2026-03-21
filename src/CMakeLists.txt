@@ -1,14 +1,41 @@
-if(QUOKKA_PYTHON) 
+set(QUOKKA_PYTHON_PLOTTING_AVAILABLE OFF)
+if(QUOKKA_PYTHON)
   message(STATUS "Building Quokka with Python support (to disable, add '-DQUOKKA_PYTHON=OFF' to the CMake command-line options)")
   find_package(Python COMPONENTS Interpreter Development NumPy)
+
+  if(Python_FOUND)
+    execute_process(
+      COMMAND "${Python_EXECUTABLE}" -c "import matplotlib; import matplotlib.pyplot; import matplotlib.cm; from PIL import Image"
+      RESULT_VARIABLE QUOKKA_PYTHON_PLOTTING_RESULT
+      OUTPUT_VARIABLE QUOKKA_PYTHON_PLOTTING_STDOUT
+      ERROR_VARIABLE QUOKKA_PYTHON_PLOTTING_STDERR
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_STRIP_TRAILING_WHITESPACE
+    )
+
+    if(QUOKKA_PYTHON_PLOTTING_RESULT EQUAL 0)
+      set(QUOKKA_PYTHON_PLOTTING_AVAILABLE ON)
+      message(STATUS "Python plotting support is enabled.")
+    else()
+      string(REPLACE "\n" "\n  " QUOKKA_PYTHON_PLOTTING_STDERR_INDENTED "${QUOKKA_PYTHON_PLOTTING_STDERR}")
+      message(WARNING
+        "Python, development headers, and NumPy were found, but the optional plotting stack is incomplete.\n"
+        "  Plot-generating test code will be disabled so numerical tests can still run.\n"
+        "  Checked interpreter: ${Python_EXECUTABLE}\n"
+        "  Import failure:\n"
+        "  ${QUOKKA_PYTHON_PLOTTING_STDERR_INDENTED}\n"
+        "  Install the missing Python plotting dependencies and re-run CMake to re-enable plotting."
+      )
+    endif()
+  endif()
 else()
   message(STATUS "Building Quokka *without* Python support")
 endif()
 
-if(Python_FOUND)
-    add_compile_definitions(HAVE_PYTHON)
-    include_directories(${Python_INCLUDE_DIRS} ${Python_NumPy_INCLUDE_DIRS})
-    link_libraries(${Python_LIBRARIES})
+if(Python_FOUND AND QUOKKA_PYTHON_PLOTTING_AVAILABLE)
+  add_compile_definitions(HAVE_PYTHON)
+  include_directories(${Python_INCLUDE_DIRS} ${Python_NumPy_INCLUDE_DIRS})
+  link_libraries(${Python_LIBRARIES})
 endif()
 
 if(QUOKKA_OPENPMD)

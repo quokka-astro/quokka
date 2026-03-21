@@ -759,6 +759,125 @@ def cmake_version(command: str, profile: Optional[str]) -> str:
     return parts[2] if len(parts) >= 3 else first_line
 
 
+def cmake_cache_path(build_dir: Path) -> Path:
+    return build_dir / "CMakeCache.txt"
+
+
+def normalize_cmake_cache_value(entry_type: str, value: str) -> str:
+    if entry_type == "BOOL":
+        upper = value.upper()
+        if upper in {"1", "ON", "TRUE", "YES", "Y"}:
+            return "ON"
+        if upper in {"0", "OFF", "FALSE", "NO", "N", "IGNORE", "NOTFOUND", ""}:
+            return "OFF"
+        return upper
+    return value
+
+
+def read_cmake_cache(build_dir: Path, command: str, profile: Optional[str]) -> Dict[str, Dict[str, str]]:
+    path = cmake_cache_path(build_dir)
+    if not path.exists():
+        raise DiagnosticError(
+            "PROFILE_UNCONFIGURED",
+            "Profile '{}' is not configured yet.".format(profile or "<none>"),
+            command=command,
+            profile=profile,
+            details={"build_dir": str(build_dir)},
+        )
+
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise DiagnosticError(
+            "STATE_CORRUPT",
+            "CMake cache '{}' is unreadable.".format(path),
+            command=command,
+            profile=profile,
+            details={"path": str(path)},
+        ) from exc
+
+    entries: Dict[str, Dict[str, str]] = {}
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line.startswith("//") or line.startswith("#"):
+            continue
+        key_type, sep, value = line.partition("=")
+        if not sep:
+            continue
+        key, type_sep, entry_type = key_type.partition(":")
+        if not type_sep or not key:
+            continue
+        entries[key] = {
+            "type": entry_type,
+            "raw_value": value,
+            "value": normalize_cmake_cache_value(entry_type, value),
+        }
+    return entries
+
+
+def profile_define_state(profile: ProfileConfig, command: str, profile_name: Optional[str]) -> Dict[str, Any]:
+    cache_path = cmake_cache_path(profile.build_dir)
+    requested = {key: normalize_define_value(profile.defines[key]) for key in sorted(profile.defines)}
+    if not cache_path.exists():
+        return {
+            "cache_path": str(cache_path),
+            "configured": False,
+            "requested_defines": requested,
+            "effective_defines": {},
+            "mismatches": [],
+        }
+
+    cache_entries = read_cmake_cache(profile.build_dir, command, profile_name)
+    effective: Dict[str, str] = {}
+    mismatches: List[Dict[str, Any]] = []
+    for key in sorted(requested):
+        entry = cache_entries.get(key)
+        if entry is None:
+            mismatches.append(
+                {
+                    "key": key,
+                    "requested": requested[key],
+                    "actual": None,
+                    "cache_type": None,
+                    "cache_raw_value": None,
+                    "reason": "missing",
+                }
+            )
+            continue
+        effective[key] = entry["value"]
+        if entry["value"] != requested[key]:
+            mismatches.append(
+                {
+                    "key": key,
+                    "requested": requested[key],
+                    "actual": entry["value"],
+                    "cache_type": entry["type"],
+                    "cache_raw_value": entry["raw_value"],
+                    "reason": "value_mismatch",
+                }
+            )
+
+    return {
+        "cache_path": str(cache_path),
+        "configured": True,
+        "requested_defines": requested,
+        "effective_defines": effective,
+        "mismatches": mismatches,
+    }
+
+
+def format_define_mismatch_summary(mismatches: Sequence[Dict[str, Any]]) -> str:
+    parts: List[str] = []
+    for mismatch in mismatches:
+        actual = mismatch.get("actual")
+        if actual is None:
+            actual_text = "<missing>"
+        else:
+            actual_text = str(actual)
+        parts.append("{}={} (actual {})".format(mismatch.get("key"), mismatch.get("requested"), actual_text))
+    return ", ".join(parts)
+
+
 def compute_configure_fingerprint(context: CliContext, command: str) -> str:
     profile = context.require_profile(command)
     payload = {
@@ -1114,6 +1233,16 @@ def state_for_artifact(context: CliContext, artifact_id: str, command: str, inpu
             "configure_fingerprint_current": current_configure,
         }
 
+    define_state = profile_define_state(profile, command, context.profile_name())
+    if define_state["mismatches"]:
+        return "stale_configure", {
+            "receipt_path": str(receipt_path),
+            "cache_path": define_state["cache_path"],
+            "requested_defines": define_state["requested_defines"],
+            "effective_defines": define_state["effective_defines"],
+            "define_mismatches": define_state["mismatches"],
+        }
+
     effective_input = input_path
     if effective_input is None:
         default_input_value = ((receipt.get("inputs") or {}).get("default_input")) if isinstance(receipt.get("inputs"), dict) else None
@@ -1207,8 +1336,10 @@ def write_profile_receipt(context: CliContext, command: str) -> None:
     write_json(profile_receipt_path(profile.build_dir), payload)
 
 
-def write_configure_receipt(context: CliContext, command: str) -> Dict[str, Any]:
+def write_configure_receipt(context: CliContext, command: str, define_state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     profile = context.require_profile(command)
+    if define_state is None:
+        define_state = profile_define_state(profile, command, context.profile_name())
     payload = {
         "schema": 1,
         "configured_at": utc_now(),
@@ -1223,6 +1354,8 @@ def write_configure_receipt(context: CliContext, command: str) -> Dict[str, Any]
         "build_dir": str(profile.build_dir),
         "profile": profile.name,
         "defines": profile.defines,
+        "cache_path": define_state["cache_path"],
+        "effective_defines": define_state["effective_defines"],
     }
     write_json(configure_receipt_path(profile.build_dir), payload)
     context.update_profile_index(payload["configure_fingerprint"], command)
@@ -1407,7 +1540,7 @@ def break_locks(context: CliContext, command: str) -> List[str]:
 
 
 def is_build_configured(build_dir: Path) -> bool:
-    return (build_dir / "CMakeCache.txt").exists()
+    return cmake_cache_path(build_dir).exists()
 
 
 def maybe_reconfigure(context: CliContext, command: str, reconfigure: bool) -> Dict[str, Any]:
@@ -1432,7 +1565,27 @@ def maybe_reconfigure(context: CliContext, command: str, reconfigure: bool) -> D
         for key in sorted(profile.defines):
             args.append("-D{}={}".format(key, profile.defines[key]))
         run_command(args, command=command, profile=context.profile_name())
-    return write_configure_receipt(context, command)
+    define_state = profile_define_state(profile, command, context.profile_name())
+    if define_state["mismatches"]:
+        raise DiagnosticError(
+            "CONFIGURE_DRIFT",
+            "Profile '{}' requested defines do not match the configured CMake cache: {}.".format(
+                context.profile_name(), format_define_mismatch_summary(define_state["mismatches"])
+            ),
+            command=command,
+            profile=context.profile_name(),
+            details=define_state,
+        )
+    return write_configure_receipt(context, command, define_state=define_state)
+
+
+def ensure_profile_configured(context: CliContext, command: str) -> Dict[str, Any]:
+    profile = context.require_profile(command)
+    if is_build_configured(profile.build_dir):
+        return profile_define_state(profile, command, context.profile_name())
+
+    with acquire_lock(context, "build", command):
+        return maybe_reconfigure(context, command, reconfigure=False)
 
 
 def perform_build(context: CliContext, targets: Sequence[str], reconfigure: bool) -> Dict[str, Any]:
@@ -1608,6 +1761,8 @@ def cmd_run(context: CliContext, args: argparse.Namespace) -> CommandResult:
     context.resolve_runtime_dir("run")
     context.open_db("run")
     ensure_no_conflicting_locks(context, ("build", "run"), "run")
+    if args.build_if_needed:
+        ensure_profile_configured(context, "run")
     input_path = resolve_run_input(context, args.problem, args.input, "run")
     readiness = ensure_artifact_ready(context, args.problem, "run", input_path, args.build_if_needed)
     binary_path = Path(readiness["binary_path"])
@@ -1640,6 +1795,8 @@ def cmd_test(context: CliContext, args: argparse.Namespace) -> CommandResult:
     context.resolve_runtime_dir("test")
     context.open_db("test")
     ensure_no_conflicting_locks(context, ("build", "run"), "test")
+    if args.build_if_needed:
+        ensure_profile_configured(context, "test")
     tests = ctest_selection(context, args)
 
     unique_targets: List[str] = []
@@ -1796,14 +1953,32 @@ def cmd_status(context: CliContext, args: argparse.Namespace) -> CommandResult:
 
     configured = is_build_configured(profile.build_dir)
     configure_receipt = configure_receipt_path(profile.build_dir)
+    define_state = profile_define_state(profile, "status", context.profile_name())
     configure_state = None
     if configure_receipt.exists():
         configure_data = read_json(configure_receipt, "status", context.profile_name())
         current_fingerprint = compute_configure_fingerprint(context, "status")
+        receipt_state = "ready" if configure_data.get("configure_fingerprint") == current_fingerprint else "stale"
+        if define_state["mismatches"]:
+            receipt_state = "drift"
         configure_state = {
             "receipt_path": str(configure_receipt),
             "configured_at": configure_data.get("configured_at"),
-            "state": "ready" if configure_data.get("configure_fingerprint") == current_fingerprint else "stale",
+            "state": receipt_state,
+            "cache_path": define_state["cache_path"],
+            "requested_defines": define_state["requested_defines"],
+            "effective_defines": define_state["effective_defines"],
+            "define_mismatches": define_state["mismatches"],
+        }
+    elif configured:
+        configure_state = {
+            "receipt_path": str(configure_receipt),
+            "configured_at": None,
+            "state": "drift" if define_state["mismatches"] else "ready",
+            "cache_path": define_state["cache_path"],
+            "requested_defines": define_state["requested_defines"],
+            "effective_defines": define_state["effective_defines"],
+            "define_mismatches": define_state["mismatches"],
         }
 
     problem_states: Dict[str, int] = {"ready": 0, "missing": 0, "stale_source": 0, "stale_configure": 0, "unknown": 0}
@@ -1832,6 +2007,10 @@ def cmd_status(context: CliContext, args: argparse.Namespace) -> CommandResult:
         "locks: {}".format(", ".join("{}={}".format(lock["lock_type"], "active" if lock["active"] else "idle") for lock in locks)),
         "artifacts: ready={ready} missing={missing} stale_source={stale_source} stale_configure={stale_configure} unknown={unknown}".format(**problem_states),
     ]
+    if configure_state is not None and configure_state.get("define_mismatches"):
+        lines.append(
+            "configure: drift ({})".format(format_define_mismatch_summary(configure_state["define_mismatches"]))
+        )
     return CommandResult("status", context.profile_name(), None, data, "\n".join(lines))
 
 
@@ -1983,13 +2162,22 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
 
     if topic in ("all", "profile"):
         profile = context.require_profile("doctor")
+        define_state = profile_define_state(profile, "doctor", context.profile_name())
         data["profile"] = {
             "profile": context.profile_name(),
             "build_dir": str(profile.build_dir),
             "configured": is_build_configured(profile.build_dir),
             "compile_commands": str(profile.build_dir / "compile_commands.json"),
+            "cache_path": define_state["cache_path"],
+            "requested_defines": define_state["requested_defines"],
+            "effective_defines": define_state["effective_defines"],
+            "define_mismatches": define_state["mismatches"],
         }
-        lines.append("profile: {} ({})".format(context.profile_name(), "configured" if data["profile"]["configured"] else "unconfigured"))
+        if define_state["mismatches"]:
+            lines.append("profile: {} (configured, drift)".format(context.profile_name()))
+            lines.append("profile drift: {}".format(format_define_mismatch_summary(define_state["mismatches"])))
+        else:
+            lines.append("profile: {} ({})".format(context.profile_name(), "configured" if data["profile"]["configured"] else "unconfigured"))
 
     return CommandResult("doctor", context.profile_name(), None, data, "\n".join(lines))
 
