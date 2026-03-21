@@ -975,6 +975,70 @@ def cache_entry_value(entries: Dict[str, Dict[str, str]], *keys: str) -> Optiona
     return None
 
 
+def read_cmake_set_file(path: Path) -> Dict[str, str]:
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return {}
+
+    assignments: Dict[str, str] = {}
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line.startswith("set(") or not line.endswith(")"):
+            continue
+        body = line[4:-1].strip()
+        if not body:
+            continue
+        try:
+            parts = shlex.split(body, comments=False, posix=True)
+        except ValueError:
+            continue
+        if len(parts) < 2:
+            continue
+        assignments[parts[0]] = " ".join(parts[1:])
+    return assignments
+
+
+def compiler_metadata_from_build(build_dir: Path, cache_entries: Dict[str, Dict[str, str]]) -> Dict[str, Dict[str, Optional[str]]]:
+    compiler_info: Dict[str, Dict[str, Optional[str]]] = {}
+    for language, key in (("C", "c"), ("CXX", "cxx")):
+        info: Dict[str, Optional[str]] = {
+            "path": cache_entry_value(cache_entries, "CMAKE_{}_COMPILER".format(language)),
+            "id": None,
+            "version": None,
+            "metadata_path": None,
+        }
+        for metadata_path in sorted((build_dir / "CMakeFiles").glob("*/CMake{}Compiler.cmake".format(language))):
+            assignments = read_cmake_set_file(metadata_path)
+            if not assignments:
+                continue
+            info["metadata_path"] = str(metadata_path)
+            info["id"] = assignments.get("CMAKE_{}_COMPILER_ID".format(language))
+            info["version"] = assignments.get("CMAKE_{}_COMPILER_VERSION".format(language))
+            break
+        compiler_info[key] = info
+    return compiler_info
+
+
+def build_summary_from_cache(
+    profile: ProfileConfig,
+    cache_entries: Dict[str, Dict[str, str]],
+    define_state: Dict[str, Any],
+) -> Dict[str, Optional[str]]:
+    requested = define_state["requested_defines"]
+    return {
+        "generator": cache_entry_value(cache_entries, "CMAKE_GENERATOR") or profile.generator,
+        "build_type": cache_entry_value(cache_entries, "CMAKE_BUILD_TYPE") or requested.get("CMAKE_BUILD_TYPE"),
+        "mpi": cache_entry_value(cache_entries, "AMReX_MPI") or requested.get("AMReX_MPI"),
+        "space_dim": cache_entry_value(cache_entries, "AMReX_SPACEDIM") or requested.get("AMReX_SPACEDIM"),
+        "gpu_backend": cache_entry_value(cache_entries, "AMReX_GPU_BACKEND") or requested.get("AMReX_GPU_BACKEND"),
+        "hdf5_dir": cache_entry_value(cache_entries, "HDF5_DIR", "HDF5_ROOT"),
+        "hdf5_diff": cache_entry_value(cache_entries, "HDF5_DIFF_EXECUTABLE"),
+        "python_enabled": cache_entry_value(cache_entries, "QUOKKA_PYTHON"),
+        "python_executable": cache_entry_value(cache_entries, "_Python_EXECUTABLE", "Python_EXECUTABLE"),
+    }
+
+
 def doctor_python_executable(cache_entries: Dict[str, Dict[str, str]]) -> Tuple[Optional[str], str]:
     cached = cache_entry_value(cache_entries, "_Python_EXECUTABLE", "Python_EXECUTABLE")
     if cached:
@@ -1866,15 +1930,16 @@ def write_configure_receipt(context: CliContext, command: str, define_state: Opt
     profile = context.require_profile(command)
     if define_state is None:
         define_state = profile_define_state(profile, command, context.profile_name())
+    cache_entries = read_cmake_cache(profile.build_dir, command, context.profile_name())
+    build_summary = build_summary_from_cache(profile, cache_entries, define_state)
+    compiler_info = compiler_metadata_from_build(profile.build_dir, cache_entries)
     payload = {
         "schema": 1,
         "configured_at": utc_now(),
         "configure_fingerprint": compute_configure_fingerprint(context, command),
         "cmake_version": cmake_version(command, context.profile_name()),
-        "compiler": {
-            "cxx": os.environ.get("CXX") or "",
-            "cxx_version": "",
-        },
+        "compiler": compiler_info,
+        "build": build_summary,
         "generator": profile.generator,
         "source_root": str(context.worktree_root),
         "build_dir": str(profile.build_dir),
@@ -2512,6 +2577,12 @@ def cmd_status(context: CliContext, args: argparse.Namespace) -> CommandResult:
     configured = is_build_configured(profile.build_dir)
     configure_receipt = configure_receipt_path(profile.build_dir)
     define_state = profile_define_state(profile, "status", context.profile_name())
+    cache_entries = read_cmake_cache(profile.build_dir, "status", context.profile_name()) if configured else {}
+    build_summary = build_summary_from_cache(profile, cache_entries, define_state)
+    compiler_info = compiler_metadata_from_build(profile.build_dir, cache_entries) if configured else {
+        "c": {"path": None, "id": None, "version": None, "metadata_path": None},
+        "cxx": {"path": None, "id": None, "version": None, "metadata_path": None},
+    }
     configure_state = None
     if configure_receipt.exists():
         configure_data = read_json(configure_receipt, "status", context.profile_name())
@@ -2519,6 +2590,12 @@ def cmd_status(context: CliContext, args: argparse.Namespace) -> CommandResult:
         receipt_state = "ready" if configure_data.get("configure_fingerprint") == current_fingerprint else "stale"
         if define_state["mismatches"]:
             receipt_state = "drift"
+        receipt_compiler = configure_data.get("compiler")
+        if not isinstance(receipt_compiler, dict) or "c" not in receipt_compiler or "cxx" not in receipt_compiler:
+            receipt_compiler = compiler_info
+        receipt_build = configure_data.get("build")
+        if not isinstance(receipt_build, dict) or "build_type" not in receipt_build:
+            receipt_build = build_summary
         configure_state = {
             "receipt_path": str(configure_receipt),
             "configured_at": configure_data.get("configured_at"),
@@ -2527,6 +2604,8 @@ def cmd_status(context: CliContext, args: argparse.Namespace) -> CommandResult:
             "requested_defines": define_state["requested_defines"],
             "effective_defines": define_state["effective_defines"],
             "define_mismatches": define_state["mismatches"],
+            "compiler": receipt_compiler,
+            "build": receipt_build,
         }
     elif configured:
         configure_state = {
@@ -2537,13 +2616,40 @@ def cmd_status(context: CliContext, args: argparse.Namespace) -> CommandResult:
             "requested_defines": define_state["requested_defines"],
             "effective_defines": define_state["effective_defines"],
             "define_mismatches": define_state["mismatches"],
+            "compiler": compiler_info,
+            "build": build_summary,
         }
 
     problem_states: Dict[str, int] = {"ready": 0, "missing": 0, "stale_source": 0, "stale_configure": 0, "unknown": 0}
+    problem_examples: Dict[str, List[Dict[str, Any]]] = {state: [] for state in problem_states}
+    repair_hints: Dict[str, str] = {}
     for problem in discover_problems(profile.build_dir, "status", context.profile_name()) if configured else []:
         default_input = default_input_for_problem(context, problem, "status")
-        state, _ = state_for_artifact(context, problem, "status", default_input)
+        state, details = state_for_artifact(context, problem, "status", default_input)
         problem_states[state] = problem_states.get(state, 0) + 1
+        if state == "ready" or len(problem_examples[state]) >= 3:
+            continue
+        if state == "missing":
+            hint = "quokka build {} --profile {}".format(problem, context.profile_name())
+            reason = "artifact has not been built for this profile"
+        elif state == "stale_source":
+            hint = "quokka build {} --profile {}".format(problem, context.profile_name())
+            reason = "sources or default input changed since the last build"
+        elif state == "stale_configure":
+            if details.get("define_mismatches"):
+                hint = "fix the profile/CMake drift, then run quokka build {} --profile {} --reconfigure".format(problem, context.profile_name())
+                reason = "build configuration drifted from the requested profile"
+            else:
+                hint = "quokka build {} --profile {} --reconfigure".format(problem, context.profile_name())
+                reason = "configure fingerprint changed since the artifact was built"
+        else:
+            hint = ""
+            reason = "artifact metadata is incomplete or unreadable"
+        example = {"name": problem, "reason": reason}
+        if hint:
+            example["repair_hint"] = hint
+            repair_hints.setdefault(state, hint)
+        problem_examples[state].append(example)
 
     data = {
         "worktree_root": str(context.worktree_root),
@@ -2555,6 +2661,8 @@ def cmd_status(context: CliContext, args: argparse.Namespace) -> CommandResult:
         "configure": configure_state,
         "locks": locks,
         "artifacts": problem_states,
+        "artifact_examples": problem_examples,
+        "repair_hints": repair_hints,
     }
     lines = [
         "worktree: {}".format(data["worktree_root"]),
@@ -2569,6 +2677,16 @@ def cmd_status(context: CliContext, args: argparse.Namespace) -> CommandResult:
         lines.append(
             "configure: drift ({})".format(format_define_mismatch_summary(configure_state["define_mismatches"]))
         )
+    for state in ("missing", "stale_source", "stale_configure", "unknown"):
+        examples = problem_examples.get(state) or []
+        if not examples:
+            continue
+        hidden = problem_states.get(state, 0) - len(examples)
+        suffix = " (+{} more)".format(hidden) if hidden > 0 else ""
+        lines.append("{} examples: {}{}".format(state, ", ".join(example["name"] for example in examples), suffix))
+        hint = repair_hints.get(state)
+        if hint:
+            lines.append("{} repair: {}".format(state, hint))
     return CommandResult("status", context.profile_name(), None, data, "\n".join(lines))
 
 
@@ -2780,16 +2898,13 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
         assert define_state is not None
         assert python_probe is not None
         compile_commands = profile.build_dir / "compile_commands.json"
-        build_summary = {
-            "generator": cache_entry_value(cache_entries, "CMAKE_GENERATOR") or profile.generator,
-            "build_type": cache_entry_value(cache_entries, "CMAKE_BUILD_TYPE") or define_state["requested_defines"].get("CMAKE_BUILD_TYPE"),
-            "mpi": cache_entry_value(cache_entries, "AMReX_MPI") or define_state["requested_defines"].get("AMReX_MPI"),
-            "gpu_backend": cache_entry_value(cache_entries, "AMReX_GPU_BACKEND") or define_state["requested_defines"].get("AMReX_GPU_BACKEND"),
-            "c_compiler": cache_entry_value(cache_entries, "CMAKE_C_COMPILER"),
-            "cxx_compiler": cache_entry_value(cache_entries, "CMAKE_CXX_COMPILER"),
-            "python_executable": cache_entry_value(cache_entries, "_Python_EXECUTABLE", "Python_EXECUTABLE") or python_probe["executable"],
-            "hdf5_dir": cache_entry_value(cache_entries, "HDF5_DIR"),
-            "hdf5_diff": cache_entry_value(cache_entries, "HDF5_DIFF_EXECUTABLE"),
+        build_summary = build_summary_from_cache(profile, cache_entries, define_state)
+        build_summary["python_executable"] = build_summary["python_executable"] or python_probe["executable"]
+        build_summary["c_compiler"] = cache_entry_value(cache_entries, "CMAKE_C_COMPILER")
+        build_summary["cxx_compiler"] = cache_entry_value(cache_entries, "CMAKE_CXX_COMPILER")
+        compiler_info = compiler_metadata_from_build(profile.build_dir, cache_entries) if configured else {
+            "c": {"path": None, "id": None, "version": None, "metadata_path": None},
+            "cxx": {"path": None, "id": None, "version": None, "metadata_path": None},
         }
         data["profile"] = {
             "profile": context.profile_name(),
@@ -2802,6 +2917,7 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
             "effective_defines": define_state["effective_defines"],
             "define_mismatches": define_state["mismatches"],
             "build": build_summary,
+            "compiler": compiler_info,
             "python": python_probe,
         }
         if define_state["mismatches"]:
