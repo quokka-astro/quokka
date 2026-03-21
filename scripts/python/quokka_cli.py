@@ -171,6 +171,7 @@ class CliContext:
         self.hostname = socket.gethostname()
         self.worktree_id = hashlib.sha256((self.hostname + "\n" + str(self.worktree_root)).encode("utf-8")).hexdigest()[:12]
         self._runtime_dir: Optional[Path] = None
+        self._runtime_dir_ready = False
         self._db: Optional[sqlite3.Connection] = None
 
     def profile_name(self) -> Optional[str]:
@@ -185,8 +186,28 @@ class CliContext:
             )
         return self.profile
 
-    def resolve_runtime_dir(self, command: str) -> Path:
+    def resolve_runtime_dir(self, command: str, *, create: bool = True) -> Path:
         if self._runtime_dir is not None:
+            if create and not self._runtime_dir_ready:
+                try:
+                    ensure_runtime_dir_layout(self._runtime_dir)
+                except OSError as exc:
+                    raise DiagnosticError(
+                        "TOOL_FAILED",
+                        "Unable to create a usable runtime directory.",
+                        command=command,
+                        profile=self.profile_name(),
+                        details={
+                            "attempts": [
+                                {
+                                    "runtime_dir": str(self._runtime_dir),
+                                    "resolved_runtime_dir": str(canonical_path(self._runtime_dir)),
+                                    "error": str(exc),
+                                }
+                            ]
+                        },
+                    ) from exc
+                self._runtime_dir_ready = True
             return self._runtime_dir
 
         env_runtime = os.environ.get("QUOKKA_RUNTIME_DIR")
@@ -231,9 +252,15 @@ class CliContext:
                     },
                 )
 
+            if not create:
+                self._runtime_dir = runtime_dir
+                self._runtime_dir_ready = runtime_dir.exists()
+                return runtime_dir
+
             try:
                 ensure_runtime_dir_layout(runtime_dir)
                 self._runtime_dir = runtime_dir
+                self._runtime_dir_ready = True
                 return runtime_dir
             except OSError as exc:
                 errors.append(
@@ -252,8 +279,8 @@ class CliContext:
             details={"attempts": errors},
         )
 
-    def db_path(self, command: str) -> Path:
-        return self.resolve_runtime_dir(command) / "state.db"
+    def db_path(self, command: str, *, create: bool = True) -> Path:
+        return self.resolve_runtime_dir(command, create=create) / "state.db"
 
     def open_db(self, command: str) -> sqlite3.Connection:
         if self._db is not None:
@@ -752,12 +779,30 @@ def ensure_buildtree_state_layout(build_dir: Path) -> None:
 
 def write_json(path: Path, payload: Dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=str(path.parent), delete=False) as handle:
+        handle.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        temp_path = Path(handle.name)
+    os.replace(temp_path, path)
 
 
 def read_json(path: Path, command: str, profile: Optional[str]) -> Dict[str, Any]:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise DiagnosticError(
+            "STATE_CORRUPT",
+            "State file '{}' is unreadable.".format(path),
+            command=command,
+            profile=profile,
+            details={"path": str(path)},
+        ) from exc
+
+
+def read_optional_json(path: Path, command: str, profile: Optional[str]) -> Optional[Dict[str, Any]]:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
     except Exception as exc:
         raise DiagnosticError(
             "STATE_CORRUPT",
@@ -2005,8 +2050,8 @@ def write_artifact_receipt(context: CliContext, artifact_id: str, binary_path: P
     return payload
 
 
-def build_lock_paths(context: CliContext, lock_type: str, command: str) -> Tuple[Path, Path]:
-    runtime_dir = context.resolve_runtime_dir(command)
+def build_lock_paths(context: CliContext, lock_type: str, command: str, *, create_runtime: bool = True) -> Tuple[Path, Path]:
+    runtime_dir = context.resolve_runtime_dir(command, create=create_runtime)
     lock_path = runtime_dir / "locks" / "wt-{}.{}.lock".format(context.worktree_id, lock_type)
     metadata_path = runtime_dir / "meta" / "wt-{}.{}.json".format(context.worktree_id, lock_type)
     return lock_path, metadata_path
@@ -2031,11 +2076,29 @@ def pid_is_alive(pid: int) -> bool:
         return True
 
 
-def inspect_lock(context: CliContext, lock_type: str, command: str) -> LockInfo:
-    lock_path, metadata_path = build_lock_paths(context, lock_type, command)
-    metadata = None
-    if metadata_path.exists():
-        metadata = read_json(metadata_path, command, context.profile_name())
+def lock_metadata_is_active(context: CliContext, metadata: Optional[Dict[str, Any]]) -> bool:
+    if not metadata:
+        return False
+    pid = metadata.get("pid")
+    if not isinstance(pid, int):
+        return False
+    hostname = metadata.get("hostname")
+    if isinstance(hostname, str) and hostname and hostname != context.hostname:
+        return False
+    boot_id = metadata.get("boot_id")
+    current = current_boot_id()
+    if isinstance(boot_id, str) and boot_id and current and boot_id != current:
+        return False
+    return pid_is_alive(pid)
+
+
+def inspect_lock(context: CliContext, lock_type: str, command: str, *, probe_active: bool = True) -> LockInfo:
+    lock_path, metadata_path = build_lock_paths(context, lock_type, command, create_runtime=probe_active)
+    metadata = read_optional_json(metadata_path, command, context.profile_name())
+    if not probe_active:
+        active = lock_path.exists() and lock_metadata_is_active(context, metadata)
+        return LockInfo(lock_type=lock_type, lock_path=lock_path, metadata_path=metadata_path, active=active, metadata=metadata)
+
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path.touch(exist_ok=True)
     handle = lock_path.open("a+")
@@ -2113,6 +2176,8 @@ def acquire_lock(context: CliContext, lock_type: str, command: str) -> LockHandl
 
 
 def break_locks(context: CliContext, command: str) -> List[str]:
+    context.resolve_runtime_dir(command)
+    context.open_db(command)
     broken: List[str] = []
     for lock_type in LOCK_TYPES:
         info = inspect_lock(context, lock_type, command)
@@ -2626,12 +2691,11 @@ def cmd_list(context: CliContext, args: argparse.Namespace) -> CommandResult:
 
 def cmd_status(context: CliContext, args: argparse.Namespace) -> CommandResult:
     profile = context.require_profile("status")
-    context.resolve_runtime_dir("status")
-    context.open_db("status")
+    runtime_dir = context.resolve_runtime_dir("status", create=False)
 
     locks = []
     for lock_type in LOCK_TYPES:
-        info = inspect_lock(context, lock_type, "status")
+        info = inspect_lock(context, lock_type, "status", probe_active=False)
         locks.append(
             {
                 "lock_type": lock_type,
@@ -2722,7 +2786,7 @@ def cmd_status(context: CliContext, args: argparse.Namespace) -> CommandResult:
         "worktree_root": str(context.worktree_root),
         "worktree_id": context.worktree_id,
         "profile": context.profile_name(),
-        "runtime_dir": str(context.resolve_runtime_dir("status")),
+        "runtime_dir": str(runtime_dir),
         "build_dir": str(profile.build_dir),
         "configured": configured,
         "configure": configure_state,
@@ -2840,12 +2904,10 @@ def cmd_format(context: CliContext, args: argparse.Namespace) -> CommandResult:
 
 
 def cmd_lock(context: CliContext, args: argparse.Namespace) -> CommandResult:
-    context.resolve_runtime_dir("lock")
-    context.open_db("lock")
     if args.lock_action == "ls":
         locks = []
         for lock_type in LOCK_TYPES:
-            info = inspect_lock(context, lock_type, "lock")
+            info = inspect_lock(context, lock_type, "lock", probe_active=False)
             locks.append(
                 {
                     "lock_type": lock_type,
@@ -2912,8 +2974,8 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
         python_probe = probe_python_stack(python_executable, python_source)
 
     if topic in ("all", "runtime"):
-        runtime_dir = context.resolve_runtime_dir("doctor")
-        db = context.open_db("doctor")
+        runtime_dir = context.resolve_runtime_dir("doctor", create=False)
+        state_db_path = context.db_path("doctor", create=False)
         assert profile is not None
         assert python_probe is not None
         tools = {
@@ -2924,8 +2986,9 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
         }
         data["runtime"] = {
             "runtime_dir": str(runtime_dir),
-            "state_db": str(context.db_path("doctor")),
-            "sqlite_ok": db.execute("SELECT 1").fetchone()[0] == 1,
+            "state_db": str(state_db_path),
+            "state_db_exists": state_db_path.exists(),
+            "sqlite_ok": True,
             "tools": tools,
             "python": python_probe,
         }
@@ -2955,7 +3018,7 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
     if topic in ("all", "locking"):
         locks = []
         for lock_type in LOCK_TYPES:
-            info = inspect_lock(context, lock_type, "doctor")
+            info = inspect_lock(context, lock_type, "doctor", probe_active=False)
             locks.append({"lock_type": lock_type, "active": info.active, "metadata": info.metadata})
         data["locking"] = {"locks": locks}
         lines.append("locking: {}".format(", ".join("{}={}".format(lock["lock_type"], "active" if lock["active"] else "idle") for lock in locks)))
