@@ -1118,6 +1118,7 @@ def compiler_metadata_from_build(build_dir: Path, cache_entries: Dict[str, Dict[
     for language, key in (("C", "c"), ("CXX", "cxx")):
         info: Dict[str, Optional[str]] = {
             "path": cache_entry_value(cache_entries, "CMAKE_{}_COMPILER".format(language)),
+            "source": "cache" if cache_entry_value(cache_entries, "CMAKE_{}_COMPILER".format(language)) else None,
             "id": None,
             "version": None,
             "metadata_path": None,
@@ -1132,6 +1133,89 @@ def compiler_metadata_from_build(build_dir: Path, cache_entries: Dict[str, Dict[
             break
         compiler_info[key] = info
     return compiler_info
+
+
+def active_env_overrides() -> Dict[str, str]:
+    return {key: os.environ.get(key) for key in ENV_OVERRIDE_KEYS if os.environ.get(key)}
+
+
+def toolchain_env_overrides_for_text(env_overrides: Dict[str, str]) -> Dict[str, str]:
+    keys = ("CC", "CXX", "CMAKE_GENERATOR", "CMAKE_C_COMPILER", "CMAKE_CXX_COMPILER", "CMAKE_CUDA_COMPILER")
+    return {key: env_overrides[key] for key in keys if key in env_overrides}
+
+
+def populate_compiler_candidates_from_env(
+    compiler_info: Dict[str, Dict[str, Optional[str]]],
+    env_overrides: Dict[str, str],
+) -> Dict[str, Dict[str, Optional[str]]]:
+    for language, key, env_keys in (
+        ("C", "c", ("CMAKE_C_COMPILER", "CC")),
+        ("CXX", "cxx", ("CMAKE_CXX_COMPILER", "CXX")),
+    ):
+        info = compiler_info[key]
+        if info.get("path"):
+            continue
+        for env_key in env_keys:
+            value = env_overrides.get(env_key)
+            if value:
+                info["path"] = value
+                info["source"] = "env:{}".format(env_key)
+                break
+    return compiler_info
+
+
+def format_tool_probe_short(tool: Dict[str, Any]) -> str:
+    path = tool.get("path")
+    version = tool.get("version")
+    if path and version:
+        return "{} ({})".format(path, version)
+    if path:
+        return str(path)
+    detail = tool.get("detail")
+    if detail:
+        return "<{}>".format(detail)
+    return "<missing>"
+
+
+def format_compiler_toolchain(info: Dict[str, Optional[str]], *, configured: bool) -> str:
+    path = info.get("path")
+    compiler_id = info.get("id")
+    version = info.get("version")
+    source = info.get("source")
+
+    if path is None:
+        return "<unresolved until configure>" if not configured else "<unknown>"
+
+    if compiler_id and version:
+        detail = "{} {}".format(compiler_id, version)
+    elif compiler_id:
+        detail = compiler_id
+    elif version:
+        detail = version
+    else:
+        detail = None
+
+    if detail and source and source != "cache":
+        return "{} ({}; {})".format(path, detail, source)
+    if detail:
+        return "{} ({})".format(path, detail)
+    if source and source != "cache":
+        return "{} ({})".format(path, source)
+    return path
+
+
+def format_python_resolution(executable: Optional[str], source: str, *, configured: bool) -> str:
+    if executable is None:
+        return "<unresolved until configure>" if not configured else "<missing>"
+
+    source_label = {
+        "cache": "CMake cache",
+        "path": "PATH candidate",
+        "missing": "missing",
+    }.get(source, source)
+    if not configured and source == "path":
+        return "{} ({}; configure to confirm)".format(executable, source_label)
+    return "{} ({})".format(executable, source_label)
 
 
 def build_summary_from_cache(
@@ -2441,7 +2525,7 @@ def diagnostic_hints(error: DiagnosticError, command: Optional[str], profile: Op
     elif error.diagnostic_id in {"CONFIGURE_DRIFT", "PROFILE_UNCONFIGURED", "MISSING_ARTIFACT", "STALE_ARTIFACT"}:
         doctor_command = doctor_hint_command(effective_profile, "profile")
     elif error.diagnostic_id in {"TOOL_FAILED", "EXECUTOR_UNAVAILABLE", "STATE_CORRUPT"}:
-        doctor_command = doctor_hint_command(effective_profile)
+        doctor_command = doctor_hint_command(effective_profile, "all")
 
     if doctor_command is not None:
         hints.append("Inspect the current environment with: {}".format(doctor_command))
@@ -2909,7 +2993,7 @@ def cmd_clean(context: CliContext, args: argparse.Namespace) -> CommandResult:
 
 
 def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
-    topic = args.topic or "all"
+    topic = args.topic or "profile"
     data: Dict[str, Any] = {}
     lines: List[str] = []
     profile: Optional[ProfileConfig] = None
@@ -2928,6 +3012,102 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
             cache_entries = read_cmake_cache(profile.build_dir, "doctor", context.profile_name())
         python_executable, python_source = doctor_python_executable(cache_entries)
         python_probe = probe_python_stack(python_executable, python_source)
+
+    if topic in ("all", "profile"):
+        assert profile is not None
+        assert define_state is not None
+        assert python_probe is not None
+        compile_commands = profile.build_dir / "compile_commands.json"
+        build_summary = build_summary_from_cache(profile, cache_entries, define_state)
+        build_summary["python_executable"] = build_summary["python_executable"] or python_probe["executable"]
+        build_summary["c_compiler"] = cache_entry_value(cache_entries, "CMAKE_C_COMPILER")
+        build_summary["cxx_compiler"] = cache_entry_value(cache_entries, "CMAKE_CXX_COMPILER")
+        env_overrides = active_env_overrides()
+        text_env_overrides = toolchain_env_overrides_for_text(env_overrides)
+        compiler_info = compiler_metadata_from_build(profile.build_dir, cache_entries) if configured else {
+            "c": {"path": None, "source": None, "id": None, "version": None, "metadata_path": None},
+            "cxx": {"path": None, "source": None, "id": None, "version": None, "metadata_path": None},
+        }
+        compiler_info = populate_compiler_candidates_from_env(compiler_info, env_overrides)
+        cmake_tool = tool_probe("cmake", ["--version"])
+        generator_tool = generator_tool_probe(build_summary["generator"] or profile.generator)
+        python_source = "cache" if cache_entry_value(cache_entries, "_Python_EXECUTABLE", "Python_EXECUTABLE") else python_probe["source"]
+        toolchain = {
+            "cmake": cmake_tool,
+            "generator": generator_tool,
+            "c": compiler_info["c"],
+            "cxx": compiler_info["cxx"],
+            "python": {
+                "executable": build_summary["python_executable"],
+                "source": python_source,
+                "status": "resolved" if build_summary["python_executable"] else "unresolved",
+            },
+            "env_overrides": env_overrides,
+        }
+        data["profile"] = {
+            "profile": context.profile_name(),
+            "build_dir": str(profile.build_dir),
+            "configured": configured,
+            "partial_configure": build_state["partial_configure"],
+            "compile_commands": str(compile_commands),
+            "compile_commands_exists": compile_commands.exists(),
+            "cache_path": define_state["cache_path"],
+            "requested_defines": define_state["requested_defines"],
+            "effective_defines": define_state["effective_defines"],
+            "define_mismatches": define_state["mismatches"],
+            "build": build_summary,
+            "compiler": compiler_info,
+            "python": python_probe,
+            "toolchain": toolchain,
+        }
+        if build_state["partial_configure"]:
+            lines.append("profile: {} (incomplete configure)".format(context.profile_name()))
+            if define_state["mismatches"]:
+                lines.append("profile drift: {}".format(format_define_mismatch_summary(define_state["mismatches"])))
+        elif define_state["mismatches"]:
+            lines.append("profile: {} (configured, drift)".format(context.profile_name()))
+            lines.append("profile drift: {}".format(format_define_mismatch_summary(define_state["mismatches"])))
+        else:
+            lines.append("profile: {} ({})".format(context.profile_name(), "configured" if configured else "unconfigured"))
+        lines.append(
+            "profile build: type={} mpi={} gpu={} generator={}".format(
+                build_summary["build_type"] or "<unknown>",
+                build_summary["mpi"] or "<unknown>",
+                build_summary["gpu_backend"] or "<unknown>",
+                build_summary["generator"] or profile.generator,
+            )
+        )
+        lines.append(
+            "profile configure tools: cmake={} generator={}".format(
+                format_tool_probe_short(cmake_tool),
+                format_tool_probe_short(generator_tool),
+            )
+        )
+        lines.append(
+            "profile toolchain: c={} cxx={}".format(
+                format_compiler_toolchain(compiler_info["c"], configured=configured),
+                format_compiler_toolchain(compiler_info["cxx"], configured=configured),
+            )
+        )
+        lines.append(
+            "profile python: {}".format(
+                format_python_resolution(build_summary["python_executable"], python_source, configured=configured)
+            )
+        )
+        if text_env_overrides:
+            lines.append(
+                "profile overrides: {}".format(", ".join("{}={}".format(key, text_env_overrides[key]) for key in sorted(text_env_overrides)))
+            )
+        if build_state["partial_configure"]:
+            lines.append("profile configure: CMake cache exists but CTest metadata is missing")
+        lines.append(
+            "compile_commands: {} ({})".format(
+                "present" if compile_commands.exists() else "missing",
+                compile_commands,
+            )
+        )
+        if build_summary["hdf5_dir"]:
+            lines.append("profile deps: hdf5={}".format(build_summary["hdf5_dir"]))
 
     if topic in ("all", "runtime"):
         runtime_dir = context.resolve_runtime_dir("doctor", create=False)
@@ -2978,67 +3158,6 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
             locks.append({"lock_type": lock_type, "active": info.active, "metadata": info.metadata})
         data["locking"] = {"locks": locks}
         lines.append("locking: {}".format(", ".join("{}={}".format(lock["lock_type"], "active" if lock["active"] else "idle") for lock in locks)))
-
-    if topic in ("all", "profile"):
-        assert profile is not None
-        assert define_state is not None
-        assert python_probe is not None
-        compile_commands = profile.build_dir / "compile_commands.json"
-        build_summary = build_summary_from_cache(profile, cache_entries, define_state)
-        build_summary["python_executable"] = build_summary["python_executable"] or python_probe["executable"]
-        build_summary["c_compiler"] = cache_entry_value(cache_entries, "CMAKE_C_COMPILER")
-        build_summary["cxx_compiler"] = cache_entry_value(cache_entries, "CMAKE_CXX_COMPILER")
-        compiler_info = compiler_metadata_from_build(profile.build_dir, cache_entries) if configured else {
-            "c": {"path": None, "id": None, "version": None, "metadata_path": None},
-            "cxx": {"path": None, "id": None, "version": None, "metadata_path": None},
-        }
-        data["profile"] = {
-            "profile": context.profile_name(),
-            "build_dir": str(profile.build_dir),
-            "configured": configured,
-            "partial_configure": build_state["partial_configure"],
-            "compile_commands": str(compile_commands),
-            "compile_commands_exists": compile_commands.exists(),
-            "cache_path": define_state["cache_path"],
-            "requested_defines": define_state["requested_defines"],
-            "effective_defines": define_state["effective_defines"],
-            "define_mismatches": define_state["mismatches"],
-            "build": build_summary,
-            "compiler": compiler_info,
-            "python": python_probe,
-        }
-        if build_state["partial_configure"]:
-            lines.append("profile: {} (incomplete configure)".format(context.profile_name()))
-            if define_state["mismatches"]:
-                lines.append("profile drift: {}".format(format_define_mismatch_summary(define_state["mismatches"])))
-        elif define_state["mismatches"]:
-            lines.append("profile: {} (configured, drift)".format(context.profile_name()))
-            lines.append("profile drift: {}".format(format_define_mismatch_summary(define_state["mismatches"])))
-        else:
-            lines.append("profile: {} ({})".format(context.profile_name(), "configured" if configured else "unconfigured"))
-        lines.append(
-            "profile build: type={} mpi={} gpu={} cxx={}".format(
-                build_summary["build_type"] or "<unknown>",
-                build_summary["mpi"] or "<unknown>",
-                build_summary["gpu_backend"] or "<unknown>",
-                build_summary["cxx_compiler"] or "<unknown>",
-            )
-        )
-        if build_state["partial_configure"]:
-            lines.append("profile configure: CMake cache exists but CTest metadata is missing")
-        lines.append(
-            "compile_commands: {} ({})".format(
-                "present" if compile_commands.exists() else "missing",
-                compile_commands,
-            )
-        )
-        if build_summary["hdf5_dir"] or build_summary["python_executable"]:
-            lines.append(
-                "profile deps: hdf5={} python={}".format(
-                    build_summary["hdf5_dir"] or "<unknown>",
-                    build_summary["python_executable"] or "<unknown>",
-                )
-            )
 
     return CommandResult("doctor", context.profile_name(), None, data, "\n".join(lines))
 
@@ -3116,7 +3235,7 @@ def create_parser() -> argparse.ArgumentParser:
     clean.set_defaults(handler=cmd_clean)
 
     doctor = subparsers.add_parser("doctor", parents=[common])
-    doctor.add_argument("topic", nargs="?", choices=["locking", "runtime", "profile"])
+    doctor.add_argument("topic", nargs="?", choices=["all", "locking", "runtime", "profile"])
     doctor.set_defaults(handler=cmd_doctor)
 
     activation = subparsers.add_parser("_activate-env", parents=[common], help=argparse.SUPPRESS)
