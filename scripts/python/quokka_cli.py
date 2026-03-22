@@ -33,7 +33,6 @@ SCHEMA = 1
 LOCK_TYPES = ("build", "run")
 TIDY_SELECTORS = {"changed", "previous", "origin", "dev"}
 FORMAT_SELECTORS = {"changed", "previous", "origin", "dev", "all"}
-VERIFY_SELECTORS = {"changed", "previous", "origin", "dev"}
 SUBMODULE_PATHS = (
     "extern/amrex",
     "extern/AMReX-Hydro",
@@ -1862,14 +1861,6 @@ def append_prerequisite_impact_lines(lines: List[str], impacts: Sequence[Dict[st
         lines.append("- {}: {}".format(impact["label"], impact["impact"]))
 
 
-def format_verify_pre_commit_readiness(profile: Optional[str], pre_commit: Dict[str, Any]) -> str:
-    if pre_commit.get("status") == "ok":
-        return "Format readiness: ok."
-    return "Format readiness: blocked (pre-commit unavailable; blocks tidy/format). Use {} for install guidance.".format(
-        bootstrap_hint_command(profile, fix=True)
-    )
-
-
 def build_summary_from_cache(
     profile: ProfileConfig,
     cache_entries: Dict[str, Dict[str, str]],
@@ -3326,86 +3317,6 @@ def summarize_runtime_output(stdout: str, stderr: str) -> List[str]:
     return fallback
 
 
-def tests_for_verification(context: CliContext, selector: str, command: str) -> Dict[str, Any]:
-    profile = context.require_profile(command)
-    changed_files = git_changed_files(context.worktree_root, selector, command, context.profile_name())
-    if not changed_files:
-        return {
-            "selector": selector,
-            "changed_files": [],
-            "tests": [],
-            "selection_mode": "none",
-            "reason": "no_changed_files",
-        }
-
-    configured = is_build_configured(profile.build_dir)
-    tests = discover_tests(profile.build_dir, command, context.profile_name()) if configured else discover_source_tests(context.worktree_root, profile, command)
-    changed_paths = {(context.worktree_root / file).resolve() for file in changed_files}
-    changed_problem_dirs = {
-        Path(file).parts[2]
-        for file in changed_files
-        if len(Path(file).parts) >= 3 and Path(file).parts[0] == "src" and Path(file).parts[1] == "problems"
-    }
-
-    matched: List[TestSpec] = []
-    reasons_by_test: Dict[str, List[str]] = {}
-    for test in tests:
-        reasons: List[str] = []
-        try:
-            problem_name = problem_for_test(test)
-        except DiagnosticError:
-            continue
-
-        if problem_name in changed_problem_dirs:
-            reasons.append("problem_source")
-
-        source_candidate = source_file_for_test(context, test)
-        if source_candidate is not None and source_candidate.resolve() in changed_paths:
-            reasons.append("test_source")
-
-        if test.source_path.resolve() in changed_paths:
-            reasons.append("cmake")
-
-        input_path = resolve_input_argument(test.command[1:], test.working_directory, context.worktree_root)
-        if input_path is not None and input_path.resolve() in changed_paths:
-            reasons.append("input")
-
-        if reasons:
-            matched.append(test)
-            reasons_by_test[test.name] = reasons
-
-    matched = sorted({test.name: test for test in matched}.values(), key=lambda spec: spec.name)
-    if matched:
-        return {
-            "selector": selector,
-            "changed_files": changed_files,
-            "tests": matched,
-            "selection_mode": "targeted",
-            "reason": "changed_problem_or_input",
-            "reasons_by_test": reasons_by_test,
-        }
-
-    fallback = next((test for test in tests if test.name == "ODEIntegration"), None)
-    if fallback is not None:
-        return {
-            "selector": selector,
-            "changed_files": changed_files,
-            "tests": [fallback],
-            "selection_mode": "fallback_smoke",
-            "reason": "no_targeted_tests",
-            "reasons_by_test": {"ODEIntegration": ["fallback_smoke"]},
-        }
-
-    return {
-        "selector": selector,
-        "changed_files": changed_files,
-        "tests": [],
-        "selection_mode": "none",
-        "reason": "no_targeted_tests",
-        "reasons_by_test": {},
-    }
-
-
 def format_result(result: CommandResult, as_json: bool) -> str:
     if not as_json:
         return result.text
@@ -3579,104 +3490,6 @@ def cmd_run(context: CliContext, args: argparse.Namespace) -> CommandResult:
     elif not args.verbose_runtime:
         text += "\nNo summary metrics were extracted. Re-run with --verbose-runtime for full program output."
     return CommandResult("run", context.profile_name(), resource, data, text)
-
-
-def cmd_verify(context: CliContext, args: argparse.Namespace) -> CommandResult:
-    selector = args.selector or "changed"
-    if selector not in VERIFY_SELECTORS:
-        raise DiagnosticError(
-            "USAGE_ERROR",
-            "Unsupported verify selector '{}'.".format(selector),
-            command="verify",
-            profile=context.profile_name(),
-        )
-    if (args.stream or args.compact_stream) and args.json:
-        raise DiagnosticError(
-            "USAGE_ERROR",
-            "--stream and --compact-stream cannot be combined with --json.",
-            command="verify",
-            profile=context.profile_name(),
-        )
-    if args.stream and args.compact_stream:
-        raise DiagnosticError(
-            "USAGE_ERROR",
-            "--stream and --compact-stream are mutually exclusive.",
-            command="verify",
-            profile=context.profile_name(),
-        )
-
-    bootstrap_result = cmd_bootstrap(context, argparse.Namespace(fix=False, include_optional=False))
-    selection = tests_for_verification(context, selector, "verify")
-    changed_files = selection["changed_files"]
-    if not changed_files:
-        data = {
-            "selector": selector,
-            "changed_files": [],
-            "bootstrap": bootstrap_result.data,
-            "tests": None,
-            "tidy": None,
-            "format_ready": bootstrap_result.data["pre_commit"]["status"] == "ok",
-            "no_op": True,
-        }
-        text = "No files selected for verification.\n{}".format(bootstrap_result.text)
-        return CommandResult("verify", context.profile_name(), None, data, text)
-
-    selected_tests: List[TestSpec] = selection["tests"]
-    test_name = selected_tests[0].name if len(selected_tests) == 1 else None
-    ctest_regex = None
-    if len(selected_tests) > 1:
-        ctest_regex = "^(?:{})$".format("|".join(re.escape(test.name) for test in selected_tests))
-
-    test_result = None
-    if selected_tests:
-        test_result = cmd_test(
-            context,
-            argparse.Namespace(
-                test_name=test_name,
-                ctest_regex=ctest_regex,
-                build_if_needed=True,
-                stream=bool(args.stream),
-                compact_stream=bool(args.compact_stream),
-                json=bool(args.json),
-            ),
-        )
-
-    tidy_result = cmd_tidy(context, argparse.Namespace(selector=selector, fix=False))
-    format_ready = bootstrap_result.data["pre_commit"]["status"] == "ok"
-    selected_test_names = [test.name for test in selected_tests]
-
-    data = {
-        "selector": selector,
-        "changed_files": changed_files,
-        "test_selection": {
-            "mode": selection["selection_mode"],
-            "reason": selection["reason"],
-            "tests": selected_test_names,
-            "reasons_by_test": selection.get("reasons_by_test", {}),
-        },
-        "bootstrap": bootstrap_result.data,
-        "tests": None if test_result is None else test_result.data,
-        "tidy": tidy_result.data,
-        "format_ready": format_ready,
-    }
-
-    text = "Verified selector '{}' in profile {}.".format(selector, context.profile_name())
-    text += "\nChanged files: {}".format(len(changed_files))
-    if selected_test_names:
-        if selection["selection_mode"] == "fallback_smoke":
-            text += "\nTest selection: {} (fallback smoke test; no changed problem-specific tests were identified).".format(
-                ", ".join(selected_test_names)
-            )
-        else:
-            text += "\nTest selection: {}.".format(", ".join(selected_test_names))
-    else:
-        text += "\nTest selection: none."
-    text += "\n{}".format(format_verify_pre_commit_readiness(context.profile_name(), bootstrap_result.data["pre_commit"]))
-    if test_result is not None:
-        text += "\n\n{}".format(test_result.text)
-    text += "\n\n{}".format(tidy_result.text)
-    text += "\n\n{}".format(bootstrap_result.text)
-    return CommandResult("verify", context.profile_name(), None, data, text)
 
 
 def cmd_test(context: CliContext, args: argparse.Namespace) -> CommandResult:
@@ -4573,23 +4386,6 @@ def create_parser() -> argparse.ArgumentParser:
         "  quokka format origin\n"
         "  quokka format all"
     )
-    verify_epilog = (
-        "Selectors:\n"
-        "  changed   Files modified in the working tree relative to HEAD (default)\n"
-        "  previous  Files modified in the previous commit\n"
-        "  origin    Files different from origin/<current-branch>\n"
-        "  dev       Files different from the local development branch\n"
-        "\n"
-        "Behavior:\n"
-        "  - checks formatting prerequisites\n"
-        "  - selects changed-problem tests when possible, otherwise falls back to ODEIntegration\n"
-        "  - runs tests with --build-if-needed\n"
-        "  - runs clang-tidy over changed C++ files\n"
-        "\n"
-        "Examples:\n"
-        "  quokka verify --profile host-3d-release\n"
-        "  quokka verify changed --profile host-3d-release --compact-stream"
-    )
     bootstrap_epilog = (
         "Checks developer prerequisites for the selected profile.\n"
         "\n"
@@ -4624,18 +4420,6 @@ def create_parser() -> argparse.ArgumentParser:
     smoke.add_argument("--stream", action="store_true", help="Stream live test progress and stdout/stderr; repetitive timestep banners are throttled.")
     smoke.add_argument("--compact-stream", action="store_true", help="Show compact live progress and write the full log to a file.")
     smoke.set_defaults(handler=cmd_smoke)
-
-    verify = subparsers.add_parser(
-        "verify",
-        parents=[common],
-        description="Run the changed-file local verification workflow.",
-        epilog=verify_epilog,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    verify.add_argument("selector", nargs="?", help="File selector: changed (default), previous, origin, or dev.")
-    verify.add_argument("--stream", action="store_true", help="Stream live test progress and stdout/stderr; repetitive timestep banners are throttled.")
-    verify.add_argument("--compact-stream", action="store_true", help="Show compact live progress and write the full log to a file.")
-    verify.set_defaults(handler=cmd_verify)
 
     tidy = subparsers.add_parser(
         "tidy",

@@ -100,13 +100,12 @@ quokka status --profile host-3d-release
 quokka doctor --profile host-3d-release
 ```
 
-- If you want a single post-edit verification command, use:
+- After code edits, run the relevant problem test directly and then run `clang-tidy` on the changed files:
 
 ```bash
-quokka verify changed --profile host-3d-release --compact-stream
+quokka test ODEIntegration --profile host-3d-release --build-if-needed --compact-stream
+quokka tidy changed --profile host-3d-release
 ```
-
-It checks formatting prerequisites, selects changed-problem tests when possible, falls back to `ODEIntegration` when no targeted test can be inferred, runs tests with `--build-if-needed`, and then runs `clang-tidy` over changed C++ files.
 
 - A good first smoke test is `ODEIntegration`, which builds quickly and has an explicit numerical tolerance:
 
@@ -317,7 +316,6 @@ quokka --help
 quokka build --help
 quokka run --help
 quokka test --help
-quokka verify --help
 quokka doctor --help
 quokka bootstrap --help
 quokka smoke --help
