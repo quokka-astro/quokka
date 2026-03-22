@@ -33,6 +33,7 @@ SCHEMA = 1
 LOCK_TYPES = ("build", "run")
 TIDY_SELECTORS = {"changed", "previous", "origin", "dev"}
 FORMAT_SELECTORS = {"changed", "previous", "origin", "dev", "all"}
+CLANG_TIDY_FILE_EXTENSIONS = (".cpp", ".hpp")
 SUBMODULE_PATHS = (
     "extern/amrex",
     "extern/AMReX-Hydro",
@@ -999,10 +1000,6 @@ def collect_mpi_state(
     return result
 
 
-def python_probe_is_provisional(python_probe: Dict[str, Any], *, configured: bool) -> bool:
-    return (not configured) and python_probe.get("source") != "cache"
-
-
 def run_command_capture_output(
     args: Sequence[str],
     *,
@@ -1756,16 +1753,27 @@ def format_compiler_toolchain(info: Dict[str, Optional[str]], *, configured: boo
 
 def format_python_resolution(executable: Optional[str], source: str, *, configured: bool) -> str:
     if executable is None:
-        return "<unresolved until configure>" if not configured else "<missing>"
+        return "<unresolved until configure>" if (not configured) or source == "unresolved" else "<missing>"
 
     source_label = {
         "cache": "CMake cache",
-        "path": "PATH candidate",
         "missing": "missing",
+        "unresolved": "unresolved until configure",
     }.get(source, source)
-    if not configured and source == "path":
-        return "{} ({}; provisional until configure, configured interpreter may differ)".format(executable, source_label)
     return "{} ({})".format(executable, source_label)
+
+
+def python_probe_status_text(
+    available: bool,
+    python_probe: Dict[str, Any],
+    *,
+    ok_label: str,
+    unavailable_label: str,
+    unresolved_label: str,
+) -> str:
+    if python_probe.get("status") == "unresolved":
+        return unresolved_label
+    return ok_label if available else unavailable_label
 
 
 def collect_runtime_python_probe(context: CliContext, command: str) -> Dict[str, Any]:
@@ -1774,9 +1782,8 @@ def collect_runtime_python_probe(context: CliContext, command: str) -> Dict[str,
     cache_entries: Dict[str, Dict[str, str]] = {}
     if build_state["cmake_cache_exists"]:
         cache_entries = read_cmake_cache(profile.build_dir, command, context.profile_name())
-    python_executable, python_source = doctor_python_executable(cache_entries)
+    python_executable, python_source = doctor_python_executable(cache_entries, configured=build_state["configured"])
     python_probe = probe_python_stack(python_executable, python_source)
-    python_probe["provisional"] = python_probe_is_provisional(python_probe, configured=build_state["configured"])
     python_probe["configured"] = build_state["configured"]
     return python_probe
 
@@ -1791,7 +1798,7 @@ def collect_bootstrap_state(context: CliContext, command: str) -> Dict[str, Any]
     mpi = collect_mpi_state(context, command, cache_entries=cache_entries, define_state=define_state)
     pre_commit = tool_probe("pre-commit", ["--version"], label="pre-commit")
     pre_commit["install_commands"] = pre_commit_install_commands() if pre_commit["status"] != "ok" else []
-    plotting_install_hint = None if python_probe.get("provisional") else python_probe.get("install_hint")
+    plotting_install_hint = python_probe.get("install_hint")
     impacts = prerequisite_impact_entries(mpi, pre_commit, python_probe)
     return {
         "mpi": mpi,
@@ -1837,16 +1844,23 @@ def prerequisite_impact_entries(mpi: Dict[str, Any], pre_commit: Dict[str, Any],
         )
 
     if not python_probe.get("plotting_available"):
+        if python_probe.get("status") == "unresolved":
+            entries.append(
+                {
+                    "name": "python",
+                    "label": "python interpreter unresolved until configure",
+                    "impact": "optional plotting only; configure the profile before checking plotting extras",
+                }
+            )
+            return entries
+
         failed_modules = list(python_probe.get("failed_modules") or [])
         modules_detail = " ({})".format(", ".join(failed_modules)) if failed_modules else ""
-        impact = "optional plotting only"
-        if python_probe.get("provisional"):
-            impact += "; configure first to lock the Python interpreter"
         entries.append(
             {
                 "name": "plotting",
                 "label": "plotting extras unavailable{}".format(modules_detail),
-                "impact": impact,
+                "impact": "optional plotting only",
             }
         )
 
@@ -1883,29 +1897,25 @@ def build_summary_from_cache(
     }
 
 
-def doctor_python_executable(cache_entries: Dict[str, Dict[str, str]]) -> Tuple[Optional[str], str]:
+def doctor_python_executable(cache_entries: Dict[str, Dict[str, str]], *, configured: bool) -> Tuple[Optional[str], str]:
     cached = cache_entry_value(cache_entries, "_Python_EXECUTABLE", "Python_EXECUTABLE")
     if cached:
         return cached, "cache"
-    for candidate in ("python3", "python"):
-        path = resolve_executable_path(candidate)
-        if path is not None:
-            return path, "path"
-    return None, "missing"
+    return (None, "missing") if configured else (None, "unresolved")
 
 
 def probe_python_stack(python_executable: Optional[str], source: str) -> Dict[str, Any]:
     if python_executable is None:
-        hint = python_install_hint({"executable": python_executable, "failed_modules": ["numpy", "matplotlib", "matplotlib.pyplot", "matplotlib.cm", "PIL"]})
+        status = "unresolved" if source == "unresolved" else "missing"
         return {
-            "status": "missing",
+            "status": status,
             "executable": None,
             "source": source,
             "numpy_available": False,
             "plotting_available": False,
-            "failed_modules": ["numpy", "matplotlib", "matplotlib.pyplot", "matplotlib.cm", "PIL"],
+            "failed_modules": [],
             "modules": {},
-            "install_hint": hint,
+            "install_hint": None,
         }
 
     script = "\n".join(
@@ -3207,6 +3217,13 @@ def git_changed_files(worktree_root: Path, selector: str, command: str, profile:
     return [line for line in output.splitlines() if line]
 
 
+def summarize_path_examples(paths: Sequence[str], *, limit: int = 3) -> str:
+    shown = list(paths[:limit])
+    hidden = len(paths) - len(shown)
+    suffix = " (+{} more)".format(hidden) if hidden > 0 else ""
+    return ", ".join(shown) + suffix
+
+
 def ctest_selection(context: CliContext, args: argparse.Namespace) -> List[TestSpec]:
     profile = context.require_profile("test")
     tests = discover_tests(profile.build_dir, "test", context.profile_name())
@@ -3390,7 +3407,10 @@ def diagnostic_hints(error: DiagnosticError, command: Optional[str], profile: Op
             hints.append("For live CTest output, rerun with: {}".format(stream_command))
 
     if error.diagnostic_id == "PRE_COMMIT_UNAVAILABLE":
-        hints.append("Use the onboarding helper: {}".format(bootstrap_hint_command(effective_profile, fix=True)))
+        bootstrap_command = error.details.get("bootstrap_command")
+        if not isinstance(bootstrap_command, str) or not bootstrap_command:
+            bootstrap_command = bootstrap_hint_command(effective_profile, fix=True)
+        hints.append("One-step fix: {}".format(bootstrap_command))
         install_commands = error.details.get("install_commands")
         if isinstance(install_commands, list):
             for command_text in install_commands:
@@ -3705,8 +3725,8 @@ def cmd_bootstrap(context: CliContext, args: argparse.Namespace) -> CommandResul
                 installed.append("pre-commit")
 
         if args.include_optional and not python_probe["plotting_available"]:
-            if python_probe.get("provisional"):
-                skipped.append("plotting extras (configure the profile first to lock the interpreter)")
+            if python_probe["status"] == "unresolved":
+                skipped.append("plotting extras (configure the profile first to resolve the interpreter)")
             else:
                 install_hint = state.get("plotting_install_hint")
                 if isinstance(install_hint, str) and install_hint:
@@ -3740,7 +3760,13 @@ def cmd_bootstrap(context: CliContext, args: argparse.Namespace) -> CommandResul
     if mpi["setting"] is not None:
         lines.append("MPI setting: {} ({})".format(mpi["setting"], mpi["source"]))
     launcher_state = "ok" if mpi["launcher"]["status"] == "ok" else "missing ({})".format(mpi["launcher"]["tool"])
-    plotting_state = "ok" if python_probe["plotting_available"] else "unavailable"
+    plotting_state = python_probe_status_text(
+        python_probe["plotting_available"],
+        python_probe,
+        ok_label="ok",
+        unavailable_label="unavailable",
+        unresolved_label="unresolved until configure",
+    )
     plotting_detail = ""
     if python_probe["failed_modules"]:
         plotting_detail = " ({})".format(", ".join(python_probe["failed_modules"]))
@@ -3759,7 +3785,7 @@ def cmd_bootstrap(context: CliContext, args: argparse.Namespace) -> CommandResul
     if pre_commit["status"] != "ok":
         next_steps.append(bootstrap_hint_command(context.profile_name(), fix=True))
     if not python_probe["plotting_available"]:
-        if python_probe.get("provisional"):
+        if python_probe["status"] == "unresolved":
             next_steps.append("Configure the profile first, then rerun {}.".format(bootstrap_hint_command(context.profile_name(), fix=True, include_optional=True)))
         else:
             next_steps.append(bootstrap_hint_command(context.profile_name(), fix=True, include_optional=True))
@@ -3983,10 +4009,22 @@ def cmd_tidy(context: CliContext, args: argparse.Namespace) -> CommandResult:
             details={"compile_commands": str(compile_commands)},
         )
 
-    files = [file for file in git_changed_files(context.worktree_root, selector, "tidy", context.profile_name()) if file.endswith((".cpp", ".hpp"))]
+    changed_files = git_changed_files(context.worktree_root, selector, "tidy", context.profile_name())
+    files = [file for file in changed_files if file.endswith(CLANG_TIDY_FILE_EXTENSIONS)]
+    skipped_files = [file for file in changed_files if not file.endswith(CLANG_TIDY_FILE_EXTENSIONS)]
     if not files:
-        data = {"build_dir": str(profile.build_dir), "selector": selector, "fix": bool(args.fix), "files": [], "no_op": True}
-        return CommandResult("tidy", context.profile_name(), None, data, "No files selected for clang-tidy.")
+        data = {
+            "build_dir": str(profile.build_dir),
+            "selector": selector,
+            "fix": bool(args.fix),
+            "files": [],
+            "skipped_files": skipped_files,
+            "no_op": True,
+        }
+        text = "No files selected for clang-tidy."
+        if skipped_files:
+            text += "\nSkipped non-C/C++ file(s): {}".format(summarize_path_examples(skipped_files))
+        return CommandResult("tidy", context.profile_name(), None, data, text)
 
     script = context.worktree_root / "scripts" / "bash" / "tidy.sh"
     cmd = [str(script)]
@@ -3995,8 +4033,16 @@ def cmd_tidy(context: CliContext, args: argparse.Namespace) -> CommandResult:
     cmd.extend([str(profile.build_dir), selector])
     run_command(cmd, cwd=context.worktree_root, command="tidy", profile=context.profile_name(), capture_output=context.json_output)
 
-    data = {"build_dir": str(profile.build_dir), "selector": selector, "fix": bool(args.fix), "files": files}
+    data = {
+        "build_dir": str(profile.build_dir),
+        "selector": selector,
+        "fix": bool(args.fix),
+        "files": files,
+        "skipped_files": skipped_files,
+    }
     text = "Ran clang-tidy wrapper for profile {} with selector '{}'.".format(context.profile_name(), selector)
+    if skipped_files:
+        text += "\nSkipped non-C/C++ file(s): {}".format(summarize_path_examples(skipped_files))
     return CommandResult("tidy", context.profile_name(), None, data, text)
 
 
@@ -4013,11 +4059,13 @@ def cmd_format(context: CliContext, args: argparse.Namespace) -> CommandResult:
 
     if shutil.which("pre-commit") is None:
         install_commands = pre_commit_install_commands()
+        bootstrap_command = bootstrap_hint_command(context.profile_name(), fix=True)
         raise DiagnosticError(
             "PRE_COMMIT_UNAVAILABLE",
-            "pre-commit is required but not installed.",
+            "pre-commit is required but not installed. Run {} to install it.".format(bootstrap_command),
             command="format",
             details={
+                "bootstrap_command": bootstrap_command,
                 "install_commands": install_commands,
                 "helper_script": str(context.worktree_root / "scripts" / "bash" / "format.sh"),
             },
@@ -4121,9 +4169,9 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
         define_state = profile_define_state(profile, "doctor", context.profile_name())
         if build_state["cmake_cache_exists"]:
             cache_entries = read_cmake_cache(profile.build_dir, "doctor", context.profile_name())
-        python_executable, python_source = doctor_python_executable(cache_entries)
+        python_executable, python_source = doctor_python_executable(cache_entries, configured=configured)
         python_probe = probe_python_stack(python_executable, python_source)
-        python_probe["provisional"] = python_probe_is_provisional(python_probe, configured=configured)
+        python_probe["configured"] = configured
 
     if topic in ("all", "profile"):
         assert profile is not None
@@ -4131,7 +4179,6 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
         assert python_probe is not None
         compile_commands = profile.build_dir / "compile_commands.json"
         build_summary = build_summary_from_cache(profile, cache_entries, define_state, context.worktree_root)
-        build_summary["python_executable"] = build_summary["python_executable"] or python_probe["executable"]
         build_summary["c_compiler"] = cache_entry_value(cache_entries, "CMAKE_C_COMPILER")
         build_summary["cxx_compiler"] = cache_entry_value(cache_entries, "CMAKE_CXX_COMPILER")
         env_overrides = active_env_overrides()
@@ -4153,7 +4200,9 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
             "python": {
                 "executable": build_summary["python_executable"],
                 "source": python_source,
-                "status": "resolved" if build_summary["python_executable"] else "unresolved",
+                "status": "resolved"
+                if build_summary["python_executable"]
+                else ("missing" if configured else "unresolved"),
             },
             "env_overrides": env_overrides,
         }
@@ -4284,7 +4333,13 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
         mpi_hint = mpi_state.get("install_hint")
         if isinstance(mpi_hint, str) and mpi_hint:
             lines.append("mpi hint: {}".format(mpi_hint))
-        plotting_state = "ok" if python_probe["plotting_available"] else "unavailable"
+        plotting_state = python_probe_status_text(
+            python_probe["plotting_available"],
+            python_probe,
+            ok_label="ok",
+            unavailable_label="unavailable",
+            unresolved_label="unresolved until configure",
+        )
         plotting_detail = ""
         if python_probe["failed_modules"]:
             plotting_detail = " ({})".format(", ".join(python_probe["failed_modules"]))
@@ -4293,21 +4348,23 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
             str(python_probe.get("source") or "missing"),
             configured=configured,
         )
-        if python_probe.get("provisional"):
-            plotting_detail += " [provisional until configure]"
         lines.append(
             "python: interpreter={} numpy={} plotting={}{}".format(
                 interpreter_text,
-                "ok" if python_probe["numpy_available"] else "missing",
+                python_probe_status_text(
+                    python_probe["numpy_available"],
+                    python_probe,
+                    ok_label="ok",
+                    unavailable_label="missing",
+                    unresolved_label="unresolved until configure",
+                ),
                 plotting_state,
                 plotting_detail,
             )
         )
         install_hint = python_probe.get("install_hint")
-        if python_probe.get("provisional"):
-            lines.append("python note: pre-configure interpreter selection is provisional; CMake may choose a different interpreter.")
-            if not python_probe["plotting_available"]:
-                lines.append("python note: configure the profile first before trusting install hints for plotting extras.")
+        if python_probe["status"] == "unresolved":
+            lines.append("python note: configure the profile first to resolve the CMake-selected interpreter.")
         elif isinstance(install_hint, str) and install_hint and not python_probe["plotting_available"]:
             lines.append("python hint: install plotting extras with {}".format(install_hint))
         append_prerequisite_impact_lines(lines, prerequisite_impact_entries(mpi_state, tools["pre_commit"], python_probe))
