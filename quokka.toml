@@ -1,20 +1,32 @@
 schema = 1
 
 [policy]
-default_profile = "host-default"
+default_profile = "host-3d-release"
 build_lock_scope = "worktree"
 run_lock_scope = "worktree"
 staleness = "strict"
 runtime_dir_mode = "local-only"
 
-[profile.host-default]
-build_dir = "build"
+[profile.host-3d-debug]
+build_dir = "build/host-3d-debug"
 generator = "Ninja"
 defines = { CMAKE_BUILD_TYPE = "Debug", AMReX_SPACEDIM = "3", AMReX_GPU_BACKEND = "NONE" }
 executor = { kind = "local" }
 
-[profile.host-3d]
-build_dir = "build/host-3d"
+[profile.host-3d-release]
+build_dir = "build/host-3d-release"
 generator = "Ninja"
-defines = { CMAKE_BUILD_TYPE = "Release", AMReX_SPACEDIM = "3" }
+defines = { CMAKE_BUILD_TYPE = "Release", AMReX_SPACEDIM = "3", AMReX_GPU_BACKEND = "NONE" }
+executor = { kind = "local" }
+
+[profile.host-1d-debug]
+build_dir = "build/host-1d-debug"
+generator = "Ninja"
+defines = { CMAKE_BUILD_TYPE = "Debug", AMReX_SPACEDIM = "1", AMReX_GPU_BACKEND = "NONE" }
+executor = { kind = "local" }
+
+[profile.host-1d-release]
+build_dir = "build/host-1d-release"
+generator = "Ninja"
+defines = { CMAKE_BUILD_TYPE = "Release", AMReX_SPACEDIM = "1", AMReX_GPU_BACKEND = "NONE" }
 executor = { kind = "local" }
