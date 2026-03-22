@@ -226,7 +226,7 @@ quokka doctor profile --profile host-3d-release
 quokka doctor locking --profile host-3d-release
 ```
 
-`doctor runtime` reports whether `pre-commit` is installed and whether the plotting extras are available for the selected Python interpreter. When those prerequisites are missing, it points to `quokka bootstrap`.
+`doctor runtime` reports whether `pre-commit` is installed and whether the plotting extras are available for the selected Python interpreter. When those prerequisites are missing, it labels their impact directly in the output so it is clear whether they block build/test, only block `tidy` or `format`, or only affect optional plotting workflows.
 
 Inspect the current profile, configure state, locks, and artifact freshness:
 
@@ -282,6 +282,8 @@ quokka bootstrap --profile host-3d-release
 quokka bootstrap --profile host-3d-release --fix
 quokka bootstrap --profile host-3d-release --fix --include-optional
 ```
+
+`bootstrap` distinguishes the impact of missing prerequisites so first-time users can tell whether something blocks build/test, only blocks `tidy` or `format`, or only affects optional plotting support.
 
 ## Profiles
 

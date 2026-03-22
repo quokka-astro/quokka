@@ -1793,6 +1793,7 @@ def collect_bootstrap_state(context: CliContext, command: str) -> Dict[str, Any]
     pre_commit = tool_probe("pre-commit", ["--version"], label="pre-commit")
     pre_commit["install_commands"] = pre_commit_install_commands() if pre_commit["status"] != "ok" else []
     plotting_install_hint = None if python_probe.get("provisional") else python_probe.get("install_hint")
+    impacts = prerequisite_impact_entries(mpi, pre_commit, python_probe)
     return {
         "mpi": mpi,
         "pre_commit": pre_commit,
@@ -1800,7 +1801,73 @@ def collect_bootstrap_state(context: CliContext, command: str) -> Dict[str, Any]
         "required_missing": bool(mpi["missing_required"]) or pre_commit["status"] != "ok",
         "optional_missing": not python_probe["plotting_available"],
         "plotting_install_hint": plotting_install_hint,
+        "impacts": impacts,
     }
+
+
+def prerequisite_impact_entries(mpi: Dict[str, Any], pre_commit: Dict[str, Any], python_probe: Dict[str, Any]) -> List[Dict[str, str]]:
+    entries: List[Dict[str, str]] = []
+
+    if mpi.get("enabled") is not False and mpi.get("missing_required"):
+        wrappers = ", ".join(str(tool) for tool in mpi["missing_required"])
+        entries.append(
+            {
+                "name": "mpi",
+                "label": "mpi wrappers unavailable ({})".format(wrappers),
+                "impact": "blocks build/test/run for this MPI-enabled profile",
+            }
+        )
+
+    if pre_commit.get("status") != "ok":
+        entries.append(
+            {
+                "name": "pre_commit",
+                "label": "pre-commit unavailable",
+                "impact": "blocks tidy/format",
+            }
+        )
+
+    if mpi.get("enabled") is not False and mpi.get("missing_optional"):
+        launchers = ", ".join(str(tool) for tool in mpi["missing_optional"])
+        entries.append(
+            {
+                "name": "mpi_launcher",
+                "label": "mpi launcher unavailable ({})".format(launchers),
+                "impact": "optional for single-rank build/test; needed for local multi-rank runs/tests",
+            }
+        )
+
+    if not python_probe.get("plotting_available"):
+        failed_modules = list(python_probe.get("failed_modules") or [])
+        modules_detail = " ({})".format(", ".join(failed_modules)) if failed_modules else ""
+        impact = "optional plotting only"
+        if python_probe.get("provisional"):
+            impact += "; configure first to lock the Python interpreter"
+        entries.append(
+            {
+                "name": "plotting",
+                "label": "plotting extras unavailable{}".format(modules_detail),
+                "impact": impact,
+            }
+        )
+
+    return entries
+
+
+def append_prerequisite_impact_lines(lines: List[str], impacts: Sequence[Dict[str, str]], *, header: str = "Impact") -> None:
+    if not impacts:
+        return
+    lines.append("{}:".format(header))
+    for impact in impacts:
+        lines.append("- {}: {}".format(impact["label"], impact["impact"]))
+
+
+def format_verify_pre_commit_readiness(profile: Optional[str], pre_commit: Dict[str, Any]) -> str:
+    if pre_commit.get("status") == "ok":
+        return "Format readiness: ok."
+    return "Format readiness: blocked (pre-commit unavailable; blocks tidy/format). Use {} for install guidance.".format(
+        bootstrap_hint_command(profile, fix=True)
+    )
 
 
 def build_summary_from_cache(
@@ -3604,12 +3671,7 @@ def cmd_verify(context: CliContext, args: argparse.Namespace) -> CommandResult:
             text += "\nTest selection: {}.".format(", ".join(selected_test_names))
     else:
         text += "\nTest selection: none."
-    if not format_ready:
-        text += "\nFormat readiness: pre-commit is missing. Use {} for install guidance.".format(
-            bootstrap_hint_command(context.profile_name(), fix=True)
-        )
-    else:
-        text += "\nFormat readiness: ok."
+    text += "\n{}".format(format_verify_pre_commit_readiness(context.profile_name(), bootstrap_result.data["pre_commit"]))
     if test_result is not None:
         text += "\n\n{}".format(test_result.text)
     text += "\n\n{}".format(tidy_result.text)
@@ -3852,6 +3914,7 @@ def cmd_bootstrap(context: CliContext, args: argparse.Namespace) -> CommandResul
         "mpi": mpi,
         "pre_commit": pre_commit,
         "python": python_probe,
+        "impacts": state["impacts"],
         "installed": installed,
         "skipped": skipped,
     }
@@ -3869,6 +3932,7 @@ def cmd_bootstrap(context: CliContext, args: argparse.Namespace) -> CommandResul
     if python_probe["failed_modules"]:
         plotting_detail = " ({})".format(", ".join(python_probe["failed_modules"]))
     lines.append("Optional: mpi launcher={}, plotting={}{}".format(launcher_state, plotting_state, plotting_detail))
+    append_prerequisite_impact_lines(lines, state["impacts"])
 
     if installed:
         lines.append("Installed: {}".format(", ".join(installed)))
@@ -4381,6 +4445,7 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
             "tools": tools,
             "mpi": mpi_state,
             "python": python_probe,
+            "impacts": prerequisite_impact_entries(mpi_state, tools["pre_commit"], python_probe),
         }
         lines.append("runtime: ok ({})".format(runtime_dir))
         lines.append(
@@ -4432,6 +4497,7 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
                 lines.append("python note: configure the profile first before trusting install hints for plotting extras.")
         elif isinstance(install_hint, str) and install_hint and not python_probe["plotting_available"]:
             lines.append("python hint: install plotting extras with {}".format(install_hint))
+        append_prerequisite_impact_lines(lines, prerequisite_impact_entries(mpi_state, tools["pre_commit"], python_probe))
         if mpi_state["status"] != "ok" or tools["pre_commit"]["status"] != "ok" or not python_probe["plotting_available"]:
             lines.append("bootstrap hint: {}".format(bootstrap_hint_command(context.profile_name())))
 
