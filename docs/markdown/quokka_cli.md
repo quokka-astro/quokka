@@ -79,6 +79,12 @@ quokka list tests
 For first-time local verification, start with a small smoke test rather than a long hydro or radiation problem.
 
 - Profile choice matters. `host-default` is the default profile, but it is a `Debug` configuration intended for debug-oriented validation. `host-3d` is a faster `Release` profile and is usually the better first choice for local smoke tests.
+- `quokka smoke` is the shortest first-run path. It checks the runtime and selected profile, configures the build tree if needed, and runs a small recommended test. By default it uses `ODEIntegration`.
+
+```bash
+quokka smoke --profile host-3d
+```
+
 - Check which profiles are available before running anything expensive:
 
 ```bash
@@ -121,6 +127,13 @@ quokka doctor locking --profile host-3d
 
 ```bash
 quokka test ODEIntegration --profile host-3d --stream
+```
+
+- If you want shorter live progress while still keeping the full configure/build/test output, use `--compact-stream`. The CLI prints a concise progress summary and writes the complete log to `QUOKKA_RUNTIME_DIR/runs/`:
+
+```bash
+quokka smoke --profile host-3d --compact-stream
+quokka test ODEIntegration --profile host-3d --build-if-needed --compact-stream
 ```
 
 - If you still need more direct test control, fall back to raw CTest in the selected build directory after the first configure/build:
@@ -175,6 +188,12 @@ quokka test <test-name> --profile host-default --stream
 quokka test --ctest-regex Hydro --profile host-default --stream
 ```
 
+For a shorter console summary with a full log file on disk, use `--compact-stream` instead:
+
+```bash
+quokka test <test-name> --profile host-default --compact-stream
+```
+
 As with `run`, `test` is validation-first by default. Add `--build-if-needed` when the command should build required targets automatically.
 
 ### Diagnostics, status, formatting, and static analysis
@@ -193,6 +212,8 @@ Inspect the current profile, configure state, locks, and artifact freshness:
 ```bash
 quokka status --profile host-default
 ```
+
+In `status`, `not_built` means the problem is known for the configured profile but has not been compiled yet. It is distinct from stale or broken build metadata.
 
 Run `clang-tidy` on files selected relative to your Git history:
 
@@ -245,6 +266,7 @@ quokka build --help
 quokka run --help
 quokka test --help
 quokka doctor --help
+quokka smoke --help
 ```
 
 If `quokka` cannot resolve a worktree, either activate the checkout first or use `-C /path/to/quokka`.

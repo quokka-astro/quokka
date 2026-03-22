@@ -6,6 +6,7 @@
 /// \file testODEIntegration.cpp
 /// \brief Defines a test problem for ODE integration.
 ///
+/// QUOKKA_EXPECT: Relative error <= 1.0e-4 against the equilibrium temperature 160.52611612610758 K.
 
 #include "eos.H"
 #include "extern_parameters.H"

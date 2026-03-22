@@ -71,6 +71,14 @@ DIAGNOSTIC_CODES = {
     "INTERNAL_ERROR": 30,
 }
 MAX_DIAGNOSTIC_OUTPUT_CHARS = 4000
+EXPECTATION_COMMENT_RE = re.compile(r"^\s*//[/!<]*\s*QUOKKA_EXPECT:\s*(.+?)\s*$")
+PYTHON_MODULE_PACKAGES = {
+    "numpy": "numpy",
+    "matplotlib": "matplotlib",
+    "matplotlib.pyplot": "matplotlib",
+    "matplotlib.cm": "matplotlib",
+    "PIL": "Pillow",
+}
 
 
 class DiagnosticError(RuntimeError):
@@ -534,6 +542,128 @@ def truncate_output_tail(output: Optional[str]) -> str:
     if not output:
         return ""
     return output[-MAX_DIAGNOSTIC_OUTPUT_CHARS:]
+
+
+def emit_notice(context: CliContext, message: str) -> None:
+    if context.json_output:
+        return
+    print(message, file=sys.stderr, flush=True)
+
+
+def sanitize_label(value: str) -> str:
+    sanitized = re.sub(r"[^A-Za-z0-9_.-]+", "-", value).strip("-")
+    return sanitized or "all"
+
+
+def command_log_path(context: CliContext, command: str, label: str) -> Path:
+    runtime_dir = context.resolve_runtime_dir(command)
+    timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    profile = sanitize_label(context.profile_name() or "no-profile")
+    return runtime_dir / "runs" / "{}-{}-{}-{}.log".format(timestamp, sanitize_label(command), profile, sanitize_label(label))
+
+
+def ctest_compact_console_line(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped:
+        return False
+    if stripped.startswith("Start "):
+        return True
+    if stripped.startswith("Test project "):
+        return True
+    if stripped.startswith("The following tests passed:"):
+        return True
+    if stripped.startswith("The following tests FAILED:"):
+        return True
+    if stripped.startswith("Total Test time"):
+        return True
+    if stripped.startswith("Errors while running CTest"):
+        return True
+    if stripped.startswith("Output from these tests are in:"):
+        return True
+    if "tests passed" in stripped and "%" in stripped:
+        return True
+    if re.match(r"^\d+/\d+\s+Test\s+#\d+:", stripped):
+        return True
+    return False
+
+
+def run_command_compact_logged(
+    args: Sequence[str],
+    *,
+    cwd: Optional[Path] = None,
+    command: str,
+    profile: Optional[str],
+    resource: Optional[Dict[str, Any]] = None,
+    env: Optional[Dict[str, str]] = None,
+    log_path: Path,
+    echo_filter: Optional[Any] = None,
+) -> None:
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    header_lines = [
+        "$ {}".format(shell_join(args)),
+        "# cwd: {}".format(str(cwd) if cwd is not None else os.getcwd()),
+        "# started_at: {}".format(utc_now()),
+        "",
+    ]
+    tail = ""
+    try:
+        with log_path.open("a", encoding="utf-8") as handle:
+            handle.write("\n".join(header_lines))
+            proc = subprocess.Popen(
+                list(args),
+                cwd=None if cwd is None else str(cwd),
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+            assert proc.stdout is not None
+            for raw_line in proc.stdout:
+                handle.write(raw_line)
+                tail = truncate_output_tail(tail + raw_line)
+                line = raw_line.rstrip("\n")
+                if echo_filter is not None and echo_filter(line):
+                    print(line, file=sys.stderr, flush=True)
+            returncode = proc.wait()
+            handle.write("\n# finished_at: {}\n".format(utc_now()))
+        if returncode != 0:
+            raise DiagnosticError(
+                "TOOL_FAILED",
+                "Command failed: {}".format(shell_join(args)),
+                command=command,
+                profile=profile,
+                resource=resource,
+                details={
+                    "tool": args[0],
+                    "exit_code": returncode,
+                    "stdout": tail,
+                    "stderr": "",
+                    "log_path": str(log_path),
+                },
+            )
+    except FileNotFoundError as exc:
+        raise DiagnosticError(
+            "EXECUTOR_UNAVAILABLE",
+            "Required tool '{}' is not available.".format(args[0]),
+            command=command,
+            profile=profile,
+            resource=resource,
+            details={"tool": args[0]},
+        ) from exc
+
+
+def python_install_hint(python_probe: Dict[str, Any]) -> Optional[str]:
+    failed_modules = python_probe.get("failed_modules") or []
+    packages: List[str] = []
+    for module_name in failed_modules:
+        package = PYTHON_MODULE_PACKAGES.get(str(module_name))
+        if package and package not in packages:
+            packages.append(package)
+    if not packages:
+        return None
+    executable = python_probe.get("executable") or "python3"
+    return "{} -m pip install {}".format(shlex.quote(str(executable)), " ".join(packages))
 
 
 def command_output(
@@ -1250,6 +1380,7 @@ def doctor_python_executable(cache_entries: Dict[str, Dict[str, str]]) -> Tuple[
 
 def probe_python_stack(python_executable: Optional[str], source: str) -> Dict[str, Any]:
     if python_executable is None:
+        hint = python_install_hint({"executable": python_executable, "failed_modules": ["numpy", "matplotlib", "matplotlib.pyplot", "matplotlib.cm", "PIL"]})
         return {
             "status": "missing",
             "executable": None,
@@ -1258,6 +1389,7 @@ def probe_python_stack(python_executable: Optional[str], source: str) -> Dict[st
             "plotting_available": False,
             "failed_modules": ["numpy", "matplotlib", "matplotlib.pyplot", "matplotlib.cm", "PIL"],
             "modules": {},
+            "install_hint": hint,
         }
 
     script = "\n".join(
@@ -1282,6 +1414,7 @@ def probe_python_stack(python_executable: Optional[str], source: str) -> Dict[st
     )
     probe = run_probe_command([python_executable, "-c", script])
     if not probe["found"]:
+        hint = python_install_hint({"executable": python_executable, "failed_modules": ["numpy", "matplotlib", "matplotlib.pyplot", "matplotlib.cm", "PIL"]})
         return {
             "status": "missing",
             "executable": python_executable,
@@ -1291,8 +1424,10 @@ def probe_python_stack(python_executable: Optional[str], source: str) -> Dict[st
             "failed_modules": ["numpy", "matplotlib", "matplotlib.pyplot", "matplotlib.cm", "PIL"],
             "modules": {},
             "detail": "interpreter not found",
+            "install_hint": hint,
         }
     if not probe["ok"]:
+        hint = python_install_hint({"executable": python_executable, "failed_modules": ["numpy", "matplotlib", "matplotlib.pyplot", "matplotlib.cm", "PIL"]})
         return {
             "status": "error",
             "executable": python_executable,
@@ -1302,11 +1437,13 @@ def probe_python_stack(python_executable: Optional[str], source: str) -> Dict[st
             "failed_modules": ["numpy", "matplotlib", "matplotlib.pyplot", "matplotlib.cm", "PIL"],
             "modules": {},
             "detail": first_nonempty_line(probe["stderr"], probe["stdout"]) or "probe failed",
+            "install_hint": hint,
         }
 
     try:
         modules = json.loads(probe["stdout"]) if probe["stdout"] else {}
     except json.JSONDecodeError:
+        hint = python_install_hint({"executable": python_executable, "failed_modules": ["numpy", "matplotlib", "matplotlib.pyplot", "matplotlib.cm", "PIL"]})
         return {
             "status": "error",
             "executable": python_executable,
@@ -1316,6 +1453,7 @@ def probe_python_stack(python_executable: Optional[str], source: str) -> Dict[st
             "failed_modules": ["numpy", "matplotlib", "matplotlib.pyplot", "matplotlib.cm", "PIL"],
             "modules": {},
             "detail": "invalid probe output",
+            "install_hint": hint,
         }
 
     plotting_modules = ("matplotlib", "matplotlib.pyplot", "matplotlib.cm", "PIL")
@@ -1331,7 +1469,7 @@ def probe_python_stack(python_executable: Optional[str], source: str) -> Dict[st
             first_error = "{}: {}".format(name, payload.get("error", "probe failed"))
             break
 
-    return {
+    result = {
         "status": status,
         "executable": python_executable,
         "source": source,
@@ -1341,6 +1479,8 @@ def probe_python_stack(python_executable: Optional[str], source: str) -> Dict[st
         "modules": modules,
         "detail": first_error or None,
     }
+    result["install_hint"] = python_install_hint(result)
+    return result
 
 
 def compute_configure_fingerprint(context: CliContext, command: str) -> str:
@@ -2336,7 +2476,7 @@ def is_build_configured(build_dir: Path) -> bool:
     return buildtree_state(build_dir)["configured"]
 
 
-def maybe_reconfigure(context: CliContext, command: str, reconfigure: bool) -> Dict[str, Any]:
+def maybe_reconfigure(context: CliContext, command: str, reconfigure: bool, *, compact_log_path: Optional[Path] = None) -> Dict[str, Any]:
     profile = context.require_profile(command)
     ensure_buildtree_state_layout(profile.build_dir)
     write_schema_receipt(profile)
@@ -2357,7 +2497,16 @@ def maybe_reconfigure(context: CliContext, command: str, reconfigure: bool) -> D
         args = ["cmake", "-S", str(context.worktree_root), "-B", str(profile.build_dir), "-G", profile.generator]
         for key in sorted(profile.defines):
             args.append("-D{}={}".format(key, profile.defines[key]))
-        run_command(args, command=command, profile=context.profile_name(), capture_output=context.json_output)
+        if compact_log_path is not None:
+            emit_notice(context, "Configuring profile {}. Full log: {}".format(context.profile_name(), compact_log_path))
+            run_command_compact_logged(
+                args,
+                command=command,
+                profile=context.profile_name(),
+                log_path=compact_log_path,
+            )
+        else:
+            run_command(args, command=command, profile=context.profile_name(), capture_output=context.json_output)
     define_state = profile_define_state(profile, command, context.profile_name())
     if define_state["mismatches"]:
         raise DiagnosticError(
@@ -2372,27 +2521,37 @@ def maybe_reconfigure(context: CliContext, command: str, reconfigure: bool) -> D
     return write_configure_receipt(context, command, define_state=define_state)
 
 
-def ensure_profile_configured(context: CliContext, command: str) -> Dict[str, Any]:
+def ensure_profile_configured(context: CliContext, command: str, *, compact_log_path: Optional[Path] = None) -> Dict[str, Any]:
     profile = context.require_profile(command)
     if is_build_configured(profile.build_dir):
         return profile_define_state(profile, command, context.profile_name())
 
     with acquire_lock(context, "build", command):
-        return maybe_reconfigure(context, command, reconfigure=False)
+        return maybe_reconfigure(context, command, reconfigure=False, compact_log_path=compact_log_path)
 
 
-def perform_build(context: CliContext, targets: Sequence[str], reconfigure: bool) -> Dict[str, Any]:
+def perform_build(context: CliContext, targets: Sequence[str], reconfigure: bool, *, compact_log_path: Optional[Path] = None) -> Dict[str, Any]:
     command = "build"
     profile = context.require_profile(command)
     context.resolve_runtime_dir(command)
     context.open_db(command)
 
     with acquire_lock(context, "build", command):
-        configure_receipt = maybe_reconfigure(context, command, reconfigure)
+        configure_receipt = maybe_reconfigure(context, command, reconfigure, compact_log_path=compact_log_path)
         build_args = ["cmake", "--build", str(profile.build_dir)]
         if targets:
             build_args.extend(["--target"] + list(targets))
-        run_command(build_args, command=command, profile=context.profile_name(), capture_output=context.json_output)
+        if compact_log_path is not None:
+            target_label = ", ".join(targets) if targets else "default target set"
+            emit_notice(context, "Building {} in profile {}. Full log: {}".format(target_label, context.profile_name(), compact_log_path))
+            run_command_compact_logged(
+                build_args,
+                command=command,
+                profile=context.profile_name(),
+                log_path=compact_log_path,
+            )
+        else:
+            run_command(build_args, command=command, profile=context.profile_name(), capture_output=context.json_output)
 
         if targets:
             requested = list(dict.fromkeys(targets))
@@ -2475,6 +2634,43 @@ def problem_for_test(test: TestSpec) -> str:
     return executable
 
 
+def source_file_for_test(context: CliContext, test: TestSpec) -> Optional[Path]:
+    problem = problem_for_test(test)
+    problem_dir = context.worktree_root / "src" / "problems" / problem
+    preferred = problem_dir / "test{}.cpp".format(problem)
+    if preferred.exists():
+        return preferred
+
+    if problem_dir.exists():
+        candidates = sorted(problem_dir.glob("test*.cpp"))
+        if len(candidates) == 1:
+            return candidates[0]
+    return None
+
+
+def expectation_summary_for_test(context: CliContext, test: TestSpec) -> Optional[Dict[str, Any]]:
+    source_path = source_file_for_test(context, test)
+    if source_path is None:
+        return None
+    try:
+        text = source_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+    summaries: List[str] = []
+    for line in text.splitlines():
+        match = EXPECTATION_COMMENT_RE.match(line)
+        if match:
+            summaries.append(match.group(1).strip())
+    if not summaries:
+        return None
+    return {
+        "test": test.name,
+        "summary": " ".join(summaries),
+        "source": str(source_path),
+    }
+
+
 def format_result(result: CommandResult, as_json: bool) -> str:
     if not as_json:
         return result.text
@@ -2518,6 +2714,7 @@ def diagnostic_hints(error: DiagnosticError, command: Optional[str], profile: Op
     effective_command = error.command or command
     effective_profile = error.profile or profile
     hints: List[str] = []
+    log_path = error.details.get("log_path")
 
     doctor_command = None
     if error.diagnostic_id == "RESOURCE_LOCKED":
@@ -2534,6 +2731,9 @@ def diagnostic_hints(error: DiagnosticError, command: Optional[str], profile: Op
         stream_command = stream_test_hint_command(effective_profile, error.resource)
         if stream_command is not None:
             hints.append("For live CTest output, rerun with: {}".format(stream_command))
+
+    if isinstance(log_path, str) and log_path:
+        hints.append("Full command log: {}".format(log_path))
 
     return hints
 
@@ -2606,36 +2806,68 @@ def cmd_run(context: CliContext, args: argparse.Namespace) -> CommandResult:
 
 def cmd_test(context: CliContext, args: argparse.Namespace) -> CommandResult:
     profile = context.require_profile("test")
-    if args.stream and args.json:
+    if (args.stream or args.compact_stream) and args.json:
         raise DiagnosticError(
             "USAGE_ERROR",
-            "--stream cannot be combined with --json.",
+            "--stream and --compact-stream cannot be combined with --json.",
+            command="test",
+            profile=context.profile_name(),
+        )
+    if args.stream and args.compact_stream:
+        raise DiagnosticError(
+            "USAGE_ERROR",
+            "--stream and --compact-stream are mutually exclusive.",
             command="test",
             profile=context.profile_name(),
         )
     context.resolve_runtime_dir("test")
     context.open_db("test")
     ensure_no_conflicting_locks(context, ("build", "run"), "test")
+    test_selector_label = args.ctest_regex or args.test_name or "all"
+    compact_log = command_log_path(context, "test", test_selector_label) if args.compact_stream else None
+    needs_initial_configure = args.build_if_needed and not is_build_configured(profile.build_dir)
+    if needs_initial_configure:
+        message = "Preparing profile {}: first build will configure CMake and compile dependencies before running tests.".format(
+            context.profile_name()
+        )
+        if compact_log is not None:
+            message = "{} Full log: {}".format(message, compact_log)
+        emit_notice(context, message)
     if args.build_if_needed:
-        ensure_profile_configured(context, "test")
+        ensure_profile_configured(context, "test", compact_log_path=compact_log)
     tests = ctest_selection(context, args)
 
     unique_targets: List[str] = []
     target_inputs: Dict[str, Optional[Path]] = {}
+    target_states: Dict[str, str] = {}
     for test in tests:
         problem = problem_for_test(test)
         if problem not in unique_targets:
             unique_targets.append(problem)
         target_inputs[problem] = resolve_input_argument(test.command[1:], test.working_directory, context.worktree_root)
+    for target in unique_targets:
+        state, _ = state_for_artifact(context, target, "test", target_inputs.get(target))
+        target_states[target] = state
+    needs_target_build = any(state != "ready" for state in target_states.values())
 
-    if args.build_if_needed:
-        perform_build(context, unique_targets, reconfigure=False)
+    if args.build_if_needed and not needs_initial_configure:
+        repair_targets = [target for target in unique_targets if target_states.get(target) != "ready"]
+        if repair_targets:
+            message = "Building or refreshing test target(s) before CTest: {}.".format(", ".join(repair_targets))
+            if compact_log is not None:
+                message = "{} Full log: {}".format(message, compact_log)
+            emit_notice(context, message)
+
+    if args.build_if_needed and (needs_initial_configure or needs_target_build):
+        perform_build(context, unique_targets, reconfigure=False, compact_log_path=compact_log)
 
     for target in unique_targets:
         ensure_artifact_ready(context, target, "test", target_inputs.get(target), build_if_needed=False)
 
     ctest_args = ["ctest", "--test-dir", str(profile.build_dir)]
     if args.stream:
+        ctest_args.extend(["--progress", "--verbose"])
+    elif args.compact_stream:
         ctest_args.extend(["--progress", "--verbose"])
     else:
         ctest_args.append("--output-on-failure")
@@ -2654,25 +2886,91 @@ def cmd_test(context: CliContext, args: argparse.Namespace) -> CommandResult:
     test_resource = {"kind": "test", "name": resource_name, "selector": resource_selector}
 
     with acquire_lock(context, "run", "test"):
-        run_command(
-            ctest_args,
-            command="test",
-            profile=context.profile_name(),
-            resource=test_resource,
-            capture_output=context.json_output,
-        )
+        if args.compact_stream:
+            assert compact_log is not None
+            emit_notice(context, "Running CTest with compact progress output. Full log: {}".format(compact_log))
+            run_command_compact_logged(
+                ctest_args,
+                command="test",
+                profile=context.profile_name(),
+                resource=test_resource,
+                log_path=compact_log,
+                echo_filter=ctest_compact_console_line,
+            )
+        else:
+            run_command(
+                ctest_args,
+                command="test",
+                profile=context.profile_name(),
+                resource=test_resource,
+                capture_output=context.json_output,
+            )
+
+    expectations = []
+    for test in tests:
+        expectation = expectation_summary_for_test(context, test)
+        if expectation is not None:
+            expectations.append(expectation)
 
     data = {
         "selected_tests": [test.name for test in tests],
         "build_dir": str(profile.build_dir),
         "streaming": bool(args.stream),
+        "compact_stream": bool(args.compact_stream),
+        "log_path": None if compact_log is None else str(compact_log),
+        "expectations": expectations,
     }
     text = "Ran {} test(s) in profile {}{}.".format(
         len(tests),
         context.profile_name(),
-        " with streaming output" if args.stream else "",
+        " with streaming output" if args.stream else (" with compact streaming output" if args.compact_stream else ""),
     )
+    if expectations:
+        text += "\nExpectations:"
+        for expectation in expectations:
+            text += "\n- {}: {}".format(expectation["test"], expectation["summary"])
+    if compact_log is not None:
+        text += "\nFull log: {}".format(compact_log)
     return CommandResult("test", context.profile_name(), test_resource, data, text)
+
+
+def cmd_smoke(context: CliContext, args: argparse.Namespace) -> CommandResult:
+    if (args.stream or args.compact_stream) and args.json:
+        raise DiagnosticError(
+            "USAGE_ERROR",
+            "--stream and --compact-stream cannot be combined with --json.",
+            command="smoke",
+            profile=context.profile_name(),
+        )
+    if args.stream and args.compact_stream:
+        raise DiagnosticError(
+            "USAGE_ERROR",
+            "--stream and --compact-stream are mutually exclusive.",
+            command="smoke",
+            profile=context.profile_name(),
+        )
+    runtime_result = cmd_doctor(context, argparse.Namespace(topic="runtime"))
+    profile_result = cmd_doctor(context, argparse.Namespace(topic="profile"))
+    if not context.json_output:
+        emit_notice(context, runtime_result.text)
+        emit_notice(context, profile_result.text)
+
+    test_args = argparse.Namespace(
+        test_name=args.test_name or "ODEIntegration",
+        ctest_regex=None,
+        build_if_needed=True,
+        stream=bool(args.stream),
+        compact_stream=bool(args.compact_stream),
+        json=bool(args.json),
+    )
+    test_result = cmd_test(context, test_args)
+    data = {
+        "runtime": runtime_result.data,
+        "profile": profile_result.data,
+        "test": test_result.data,
+    }
+    text = "Smoke test target: {} in profile {}.\n{}".format(test_args.test_name, context.profile_name(), test_result.text)
+    return CommandResult("smoke", context.profile_name(), {"kind": "test", "name": test_args.test_name}, data, text)
 
 
 def cmd_list(context: CliContext, args: argparse.Namespace) -> CommandResult:
@@ -2778,12 +3076,15 @@ def cmd_status(context: CliContext, args: argparse.Namespace) -> CommandResult:
         }
 
     problem_states: Dict[str, int] = {"ready": 0, "missing": 0, "stale_source": 0, "stale_configure": 0, "unknown": 0}
+    artifact_summary = {"ready": 0, "not_built": 0, "stale_source": 0, "stale_configure": 0, "unknown": 0}
     problem_examples: Dict[str, List[Dict[str, Any]]] = {state: [] for state in problem_states}
     repair_hints: Dict[str, str] = {}
     for problem in discover_problems(profile.build_dir, "status", context.profile_name()) if configured else []:
         default_input = default_input_for_problem(context, problem, "status")
         state, details = state_for_artifact(context, problem, "status", default_input)
         problem_states[state] = problem_states.get(state, 0) + 1
+        summary_state = "not_built" if state == "missing" else state
+        artifact_summary[summary_state] = artifact_summary.get(summary_state, 0) + 1
         if state == "ready" or len(problem_examples[state]) >= 3:
             continue
         if state == "missing":
@@ -2819,6 +3120,7 @@ def cmd_status(context: CliContext, args: argparse.Namespace) -> CommandResult:
         "configure": configure_state,
         "locks": locks,
         "artifacts": problem_states,
+        "artifact_summary": artifact_summary,
         "artifact_examples": problem_examples,
         "repair_hints": repair_hints,
     }
@@ -2829,8 +3131,12 @@ def cmd_status(context: CliContext, args: argparse.Namespace) -> CommandResult:
         "build_dir: {}".format(data["build_dir"]),
         "configured: {}".format("yes" if configured else "no"),
         "locks: {}".format(", ".join("{}={}".format(lock["lock_type"], "active" if lock["active"] else "idle") for lock in locks)),
-        "artifacts: ready={ready} missing={missing} stale_source={stale_source} stale_configure={stale_configure} unknown={unknown}".format(**problem_states),
+        "artifacts: ready={ready} not_built={not_built} stale_source={stale_source} stale_configure={stale_configure} unknown={unknown}".format(
+            **artifact_summary
+        ),
     ]
+    if artifact_summary["not_built"] > 0:
+        lines.append("not_built means the problem is known for this profile but has not been compiled yet.")
     if build_state["partial_configure"]:
         lines.append("configure: incomplete (CMake cache exists but CTest metadata is missing)")
         if configure_state is not None and configure_state.get("define_mismatches"):
@@ -2847,10 +3153,11 @@ def cmd_status(context: CliContext, args: argparse.Namespace) -> CommandResult:
             continue
         hidden = problem_states.get(state, 0) - len(examples)
         suffix = " (+{} more)".format(hidden) if hidden > 0 else ""
-        lines.append("{} examples: {}{}".format(state, ", ".join(example["name"] for example in examples), suffix))
+        label = "not_built" if state == "missing" else state
+        lines.append("{} examples: {}{}".format(label, ", ".join(example["name"] for example in examples), suffix))
         hint = repair_hints.get(state)
         if hint:
-            lines.append("{} repair: {}".format(state, hint))
+            lines.append("{} repair: {}".format(label, hint))
     return CommandResult("status", context.profile_name(), None, data, "\n".join(lines))
 
 
@@ -3150,6 +3457,9 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
                 plotting_detail,
             )
         )
+        install_hint = python_probe.get("install_hint")
+        if isinstance(install_hint, str) and install_hint and not python_probe["plotting_available"]:
+            lines.append("python hint: install plotting extras with {}".format(install_hint))
 
     if topic in ("all", "locking"):
         locks = []
@@ -3207,7 +3517,14 @@ def create_parser() -> argparse.ArgumentParser:
     test.add_argument("--ctest-regex")
     test.add_argument("--build-if-needed", action="store_true")
     test.add_argument("--stream", action="store_true", help="Stream live test progress and stdout/stderr.")
+    test.add_argument("--compact-stream", action="store_true", help="Show compact live progress and write the full log to a file.")
     test.set_defaults(handler=cmd_test)
+
+    smoke = subparsers.add_parser("smoke", parents=[common])
+    smoke.add_argument("test_name", nargs="?")
+    smoke.add_argument("--stream", action="store_true", help="Stream live test progress and stdout/stderr.")
+    smoke.add_argument("--compact-stream", action="store_true", help="Show compact live progress and write the full log to a file.")
+    smoke.set_defaults(handler=cmd_smoke)
 
     tidy = subparsers.add_parser("tidy", parents=[common])
     tidy.add_argument("selector", nargs="?")

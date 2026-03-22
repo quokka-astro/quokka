@@ -49,6 +49,8 @@ The `problem_main()` function is the entry point that `src/main.cpp` calls after
 
 If your problem needs exact solutions, diagnostics, or error checks, compute them before returning a status code from `problem_main()` so automated tests can detect failures.
 
+If the test has a clear numerical expectation, add a single-line source comment of the form `QUOKKA_EXPECT: ...` near the top of the driver file. The `quokka test` and `quokka smoke` summaries surface that comment so first-time users can see the intended pass criterion without opening the source manually.
+
 ## 5. Build and run the problem
 
 1. Regenerate or update your build tree with CMake (for example, `cmake -S . -B build -G Ninja` with the desired options). The compiled problem executables live under `build/src/problems/<ProblemName>/` once the build completes; the installation guide covers the workflow in the [build instructions](installation.md#installation).
