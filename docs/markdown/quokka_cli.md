@@ -17,7 +17,7 @@ By default this installs `quokka` to `$HOME/.local/bin/quokka`. Make sure that d
 For developer prerequisites inside the worktree, use:
 
 ```bash
-quokka bootstrap --profile host-default
+quokka bootstrap --profile host-3d-release
 ```
 
 ## Activate a worktree
@@ -26,7 +26,7 @@ Activate the current checkout by sourcing the activation script:
 
 ```bash
 source scripts/bash/quokka-activate.sh
-source scripts/bash/quokka-activate.sh host-default
+source scripts/bash/quokka-activate.sh host-3d-release
 ```
 
 Activation records a default worktree and profile for the current shell, so you can run `quokka` from anywhere. It also adds a prompt prefix and defines `quokka_deactivate` to leave the environment.
@@ -38,14 +38,14 @@ If you omit the profile name, the CLI uses `policy.default_profile` from `quokka
 For scripts or one-off commands, prefer explicit worktree selection with `-C`:
 
 ```bash
-quokka -C /path/to/quokka status --profile host-default
-quokka -C /path/to/quokka build HydroWave --profile host-default
+quokka -C /path/to/quokka status --profile host-3d-release
+quokka -C /path/to/quokka build HydroWave --profile host-3d-release
 ```
 
 If the launcher is not installed yet, you can invoke the worktree-local implementation directly:
 
 ```bash
-python3 /path/to/quokka/scripts/python/quokka_cli.py -C /path/to/quokka status --profile host-default
+python3 /path/to/quokka/scripts/python/quokka_cli.py -C /path/to/quokka status --profile host-3d-release
 ```
 
 Profile selection uses this order:
@@ -60,15 +60,15 @@ This is a typical interactive workflow:
 
 ```bash
 scripts/bash/install-quokka-bootstrap.sh
-source scripts/bash/quokka-activate.sh host-default
-quokka bootstrap --profile host-default
-quokka build
+source scripts/bash/quokka-activate.sh host-3d-release
+quokka bootstrap --profile host-3d-release
+quokka smoke
 quokka list problems
 quokka status
-quokka doctor --profile host-default
+quokka doctor --profile host-3d-release
 ```
 
-`quokka build` configures the selected profile if needed and builds the default target set. To build a specific problem instead, pass it explicitly:
+`quokka smoke` is the recommended first-day command. It checks the runtime and selected profile, configures the build tree if needed, and runs a small recommended test. Use `quokka build` when you want to compile the default target set or a specific problem without immediately running a test:
 
 ```bash
 quokka build <problem>
@@ -85,25 +85,25 @@ quokka list tests
 
 For first-time local verification, start with a small smoke test rather than a long hydro or radiation problem.
 
-- Profile choice matters. `host-default` is the default profile, but it is a `Debug` configuration intended for debug-oriented validation. `host-3d` is a faster `Release` profile and is usually the better first choice for local smoke tests.
+- Profile choice matters. `host-3d-release` is the current default profile and is usually the best first choice for local smoke tests. `host-3d-debug` is slower, but it is the better choice when debug instrumentation matters more than speed.
 - `quokka smoke` is the shortest first-run path. It checks the runtime and selected profile, configures the build tree if needed, and runs a small recommended test. By default it uses `ODEIntegration`.
 
 ```bash
-quokka smoke --profile host-3d
+quokka smoke
 ```
 
 - Check which profiles are available before running anything expensive:
 
 ```bash
 quokka list profiles
-quokka status --profile host-3d
-quokka doctor --profile host-3d
+quokka status --profile host-3d-release
+quokka doctor --profile host-3d-release
 ```
 
 - If you want a single post-edit verification command, use:
 
 ```bash
-quokka verify changed --profile host-3d --compact-stream
+quokka verify changed --profile host-3d-release --compact-stream
 ```
 
 It checks formatting prerequisites, selects changed-problem tests when possible, falls back to `ODEIntegration` when no targeted test can be inferred, runs tests with `--build-if-needed`, and then runs `clang-tidy` over changed C++ files.
@@ -111,28 +111,28 @@ It checks formatting prerequisites, selects changed-problem tests when possible,
 - A good first smoke test is `ODEIntegration`, which builds quickly and has an explicit numerical tolerance:
 
 ```bash
-quokka test ODEIntegration --profile host-3d --build-if-needed
+quokka test ODEIntegration --profile host-3d-release --build-if-needed
 ```
 
 - If you want to run the executable directly with its input file, use:
 
 ```bash
-quokka run ODEIntegration --input inputs/ODEIntegration.toml --profile host-3d --build-if-needed
+quokka run ODEIntegration --input inputs/ODEIntegration.toml --profile host-3d-release --build-if-needed
 ```
 
-- Use `host-default` when debug instrumentation or the repository default configuration matters more than speed:
+- Use `host-3d-debug` when debug instrumentation matters more than speed:
 
 ```bash
-quokka test ODEIntegration --profile host-default --build-if-needed
+quokka test ODEIntegration --profile host-3d-debug --build-if-needed
 ```
 
 - If a build or test fails unexpectedly, inspect the current toolchain, locks, and profile state before retrying:
 
 ```bash
-quokka doctor --profile host-3d
-quokka doctor runtime --profile host-3d
-quokka doctor profile --profile host-3d
-quokka doctor locking --profile host-3d
+quokka doctor --profile host-3d-release
+quokka doctor runtime --profile host-3d-release
+quokka doctor profile --profile host-3d-release
+quokka doctor locking --profile host-3d-release
 ```
 
 - Do not treat timings from one profile as representative of another. The biggest runtime drivers are build type (`Debug` vs. `Release`), MPI enablement, and CPU vs. GPU backend.
@@ -141,14 +141,15 @@ quokka doctor locking --profile host-3d
 - If you need live CTest progress and the full stdout/stderr stream while diagnosing a failing test, rerun with `--stream`:
 
 ```bash
-quokka test ODEIntegration --profile host-3d --stream
+quokka test ODEIntegration --profile host-3d-release --stream
 ```
 
-- If you want shorter live progress while still keeping the full configure/build/test output, use `--compact-stream`. The CLI prints a concise progress summary and writes the complete log to `QUOKKA_RUNTIME_DIR/runs/`:
+- `--stream` now throttles repetitive timestep banners from long-running evolution tests so the console stays readable while preserving the rest of the live output.
+- If you want shorter live progress plus a complete configure/build/test log on disk, use `--compact-stream`. The CLI prints a concise progress summary and writes the full log to `QUOKKA_RUNTIME_DIR/runs/`:
 
 ```bash
-quokka smoke --profile host-3d --compact-stream
-quokka test ODEIntegration --profile host-3d --build-if-needed --compact-stream
+quokka smoke --profile host-3d-release --compact-stream
+quokka test ODEIntegration --profile host-3d-release --build-if-needed --compact-stream
 ```
 
 During long build phases, compact streaming now emits periodic heartbeat lines with the current Ninja counter so first-time builds do not look stalled.
@@ -156,7 +157,7 @@ During long build phases, compact streaming now emits periodic heartbeat lines w
 - If you still need more direct test control, fall back to raw CTest in the selected build directory after the first configure/build:
 
 ```bash
-cd build/host-3d
+cd build/host-3d-release
 ctest --output-on-failure -R ODEIntegration
 ```
 
@@ -167,21 +168,21 @@ ctest --output-on-failure -R ODEIntegration
 Build one or more problems:
 
 ```bash
-quokka build HydroWave --profile host-default
-quokka build HydroWave OrszagTang --profile host-default
+quokka build HydroWave --profile host-3d-release
+quokka build HydroWave OrszagTang --profile host-3d-release
 ```
 
 Run a problem executable with an input file:
 
 ```bash
-quokka run <problem> --input <input-file> --profile host-default
+quokka run <problem> --input <input-file> --profile host-3d-release
 ```
 
 By default, `run` validates that the executable is present and up to date, captures the full runtime log, and prints a short summary of observed metrics. If you want the full stdout/stderr stream in the terminal, add `--verbose-runtime`. If you want it to build missing or stale targets first, add `--build-if-needed`:
 
 ```bash
-quokka run <problem> --input <input-file> --build-if-needed --profile host-default
-quokka run <problem> --input <input-file> --verbose-runtime --profile host-default
+quokka run <problem> --input <input-file> --build-if-needed --profile host-3d-release
+quokka run <problem> --input <input-file> --verbose-runtime --profile host-3d-release
 ```
 
 ### Tests
@@ -189,27 +190,27 @@ quokka run <problem> --input <input-file> --verbose-runtime --profile host-defau
 Run the full CTest suite for a configured profile:
 
 ```bash
-quokka test --profile host-default
+quokka test --profile host-3d-release
 ```
 
 Run one named test or a regex selection:
 
 ```bash
-quokka test <test-name> --profile host-default
-quokka test --ctest-regex Hydro --profile host-default
+quokka test <test-name> --profile host-3d-release
+quokka test --ctest-regex Hydro --profile host-3d-release
 ```
 
 When diagnosing a failure, add `--stream` to show live progress and test stdout/stderr:
 
 ```bash
-quokka test <test-name> --profile host-default --stream
-quokka test --ctest-regex Hydro --profile host-default --stream
+quokka test <test-name> --profile host-3d-release --stream
+quokka test --ctest-regex Hydro --profile host-3d-release --stream
 ```
 
 For a shorter console summary with a full log file on disk, use `--compact-stream` instead:
 
 ```bash
-quokka test <test-name> --profile host-default --compact-stream
+quokka test <test-name> --profile host-3d-release --compact-stream
 ```
 
 As with `run`, `test` is validation-first by default. Add `--build-if-needed` when the command should build required targets automatically.
@@ -219,10 +220,10 @@ As with `run`, `test` is validation-first by default. Add `--build-if-needed` wh
 Inspect the runtime toolchain, Python stack, lock state, and profile drift:
 
 ```bash
-quokka doctor --profile host-default
-quokka doctor runtime --profile host-default
-quokka doctor profile --profile host-default
-quokka doctor locking --profile host-default
+quokka doctor --profile host-3d-release
+quokka doctor runtime --profile host-3d-release
+quokka doctor profile --profile host-3d-release
+quokka doctor locking --profile host-3d-release
 ```
 
 `doctor runtime` reports whether `pre-commit` is installed and whether the plotting extras are available for the selected Python interpreter. When those prerequisites are missing, it points to `quokka bootstrap`.
@@ -230,7 +231,7 @@ quokka doctor locking --profile host-default
 Inspect the current profile, configure state, locks, and artifact freshness:
 
 ```bash
-quokka status --profile host-default
+quokka status --profile host-3d-release
 ```
 
 In `status`, `not_built` means the problem is known for the configured profile but has not been compiled yet. It is distinct from stale or broken build metadata.
@@ -238,9 +239,9 @@ In `status`, `not_built` means the problem is known for the configured profile b
 Run `clang-tidy` on files selected relative to your Git history:
 
 ```bash
-quokka tidy --profile host-default
-quokka tidy previous --profile host-default
-quokka tidy dev --fix --profile host-default
+quokka tidy --profile host-3d-release
+quokka tidy previous --profile host-3d-release
+quokka tidy dev --fix --profile host-3d-release
 ```
 
 Selectors:
@@ -277,9 +278,9 @@ Prerequisites:
 Use the onboarding helper to inspect or install the common developer prerequisites:
 
 ```bash
-quokka bootstrap --profile host-default
-quokka bootstrap --profile host-default --fix
-quokka bootstrap --profile host-default --fix --include-optional
+quokka bootstrap --profile host-3d-release
+quokka bootstrap --profile host-3d-release --fix
+quokka bootstrap --profile host-3d-release --fix --include-optional
 ```
 
 ## Profiles
@@ -299,7 +300,7 @@ If you need a different build configuration, add or edit a profile in `quokka.to
 Most commands support `--json` for scripting:
 
 ```bash
-quokka status --profile host-default --json
+quokka status --profile host-3d-release --json
 quokka list profiles --json
 ```
 

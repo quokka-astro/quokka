@@ -92,6 +92,9 @@ METRIC_KEYWORDS = (
     "residual",
     "final temperature",
 )
+AMREX_TIMESTEP_BANNER_RE = re.compile(
+    r"^(?P<prefix>\d+:\s+)?(?P<label>.*?\b)?STEP\s+(?P<step>\d+)\s+at\s+t\s*=\s*(?P<time>\S+)\s+\((?P<progress>[^)]+)\)\s+starts\s+\.\.\.\s*$"
+)
 
 
 class DiagnosticError(RuntimeError):
@@ -600,6 +603,45 @@ def ctest_compact_console_line(line: str) -> bool:
     return False
 
 
+def render_console_lines(rendered: Any, line: str) -> List[str]:
+    if isinstance(rendered, str):
+        return [rendered] if rendered else []
+    if isinstance(rendered, (list, tuple)):
+        lines: List[str] = []
+        for item in rendered:
+            if isinstance(item, str) and item:
+                lines.append(item)
+            elif item:
+                lines.append(line)
+        return lines
+    if rendered:
+        return [line]
+    return []
+
+
+def make_ctest_stream_console_filter(*, interval_seconds: float = 5.0) -> Any:
+    state = {"last_emit": 0.0}
+
+    def reporter(line: str) -> Any:
+        stripped = line.strip()
+        if not stripped or re.match(r"^\d+:\s*$", stripped):
+            return None
+
+        match = AMREX_TIMESTEP_BANNER_RE.match(stripped)
+        if match is None:
+            return True
+
+        step = int(match.group("step"))
+        progress = match.group("progress").strip()
+        now = time.monotonic()
+        if step == 1 or progress == "100%" or (now - state["last_emit"]) >= interval_seconds:
+            state["last_emit"] = now
+            return line
+        return None
+
+    return reporter
+
+
 def make_ninja_progress_heartbeat(label: str, *, interval_seconds: float = 5.0) -> Any:
     state = {"last_emit": 0.0}
 
@@ -747,11 +789,8 @@ def run_command_compact_logged(
                 tail = truncate_output_tail(tail + raw_line)
                 line = raw_line.rstrip("\n")
                 if echo_filter is not None:
-                    rendered = echo_filter(line)
-                    if isinstance(rendered, str) and rendered:
-                        print(rendered, file=sys.stderr, flush=True)
-                    elif rendered:
-                        print(line, file=sys.stderr, flush=True)
+                    for console_line in render_console_lines(echo_filter(line), line):
+                        print(console_line, file=sys.stderr, flush=True)
             returncode = proc.wait()
             handle.write("\n# finished_at: {}\n".format(utc_now()))
         if returncode != 0:
@@ -832,6 +871,133 @@ def pre_commit_install_commands() -> List[str]:
         if rendered not in commands:
             commands.append(rendered)
     return commands
+
+
+def cmake_bool_state(value: Optional[str]) -> Optional[bool]:
+    if value is None:
+        return None
+    upper = str(value).strip().upper()
+    if upper in {"1", "ON", "TRUE", "YES", "Y"}:
+        return True
+    if upper in {"0", "OFF", "FALSE", "NO", "N", "IGNORE", "NOTFOUND", ""}:
+        return False
+    return None
+
+
+def repo_default_amrex_mpi(worktree_root: Path) -> Optional[str]:
+    cmake_path = worktree_root / "CMakeLists.txt"
+    try:
+        lines = cmake_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+
+    pattern = re.compile(r"set\s*\(\s*AMReX_MPI\s+([^\s\)]+)", re.IGNORECASE)
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        match = pattern.match(line)
+        if match is None:
+            continue
+        return normalize_define_value(match.group(1).strip("\"'"))
+    return None
+
+
+def resolve_mpi_requirement(
+    worktree_root: Path,
+    define_state: Optional[Dict[str, Any]],
+    cache_entries: Dict[str, Dict[str, str]],
+) -> Dict[str, Any]:
+    cached = cache_entry_value(cache_entries, "AMReX_MPI")
+    if cached is not None:
+        return {"value": cached, "enabled": cmake_bool_state(cached), "source": "CMake cache"}
+
+    requested = None
+    if define_state is not None:
+        requested = (define_state.get("requested_defines") or {}).get("AMReX_MPI")
+    if requested is not None:
+        return {"value": requested, "enabled": cmake_bool_state(requested), "source": "profile define"}
+
+    repo_default = repo_default_amrex_mpi(worktree_root)
+    if repo_default is not None:
+        return {"value": repo_default, "enabled": cmake_bool_state(repo_default), "source": "repo CMake default"}
+
+    return {"value": None, "enabled": None, "source": "unknown"}
+
+
+def mpi_install_hint(mpi_state: Dict[str, Any]) -> Optional[str]:
+    if mpi_state.get("enabled") is False:
+        return None
+
+    missing_required = list(mpi_state.get("missing_required") or [])
+    if missing_required:
+        verb = "is" if len(missing_required) == 1 else "are"
+        tools = ", ".join(missing_required)
+        return "install or load an MPI toolchain so {} {} on PATH".format(tools, verb)
+
+    missing_optional = list(mpi_state.get("missing_optional") or [])
+    if missing_optional:
+        verb = "is" if len(missing_optional) == 1 else "are"
+        tools = ", ".join(missing_optional)
+        return "ensure {} {} on PATH for local multi-rank runs and tests".format(tools, verb)
+
+    return None
+
+
+def collect_mpi_state(
+    context: "CliContext",
+    command: str,
+    *,
+    cache_entries: Optional[Dict[str, Dict[str, str]]] = None,
+    define_state: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    profile = context.require_profile(command)
+    resolved_cache_entries = cache_entries
+    if resolved_cache_entries is None:
+        resolved_cache_entries = {}
+        if cmake_cache_path(profile.build_dir).exists():
+            resolved_cache_entries = read_cmake_cache(profile.build_dir, command, context.profile_name())
+    if define_state is None:
+        define_state = profile_define_state(profile, command, context.profile_name())
+
+    requirement = resolve_mpi_requirement(context.worktree_root, define_state, resolved_cache_entries)
+    c_wrapper = tool_probe("mpicc", ["--version"], label="mpicc")
+    cxx_wrapper = tool_probe("mpicxx", ["--version"], label="mpicxx")
+    launcher = tool_probe("mpirun", ["--version"], label="mpirun")
+
+    missing_required: List[str] = []
+    missing_optional: List[str] = []
+    enabled = requirement["enabled"]
+    if enabled is not False:
+        for probe in (c_wrapper, cxx_wrapper):
+            if probe["status"] != "ok":
+                missing_required.append(str(probe["tool"]))
+        if launcher["status"] != "ok":
+            missing_optional.append(str(launcher["tool"]))
+
+    if enabled is False:
+        status = "disabled"
+    elif missing_required:
+        status = "missing"
+    elif missing_optional:
+        status = "partial"
+    elif enabled is None:
+        status = "unknown"
+    else:
+        status = "ok"
+
+    result = {
+        "setting": requirement["value"],
+        "enabled": enabled,
+        "source": requirement["source"],
+        "status": status,
+        "wrappers": {"c": c_wrapper, "cxx": cxx_wrapper},
+        "launcher": launcher,
+        "missing_required": missing_required,
+        "missing_optional": missing_optional,
+    }
+    result["install_hint"] = mpi_install_hint(result)
+    return result
 
 
 def python_probe_is_provisional(python_probe: Dict[str, Any], *, configured: bool) -> bool:
@@ -938,6 +1104,7 @@ def run_command(
     resource: Optional[Dict[str, Any]] = None,
     env: Optional[Dict[str, str]] = None,
     capture_output: bool = False,
+    echo_filter: Optional[Any] = None,
 ) -> None:
     try:
         if capture_output:
@@ -976,7 +1143,39 @@ def run_command(
                             "stdout": truncate_output_tail(stdout_tail),
                             "stderr": truncate_output_tail(stderr_tail),
                         },
-                    )
+                        )
+        elif echo_filter is not None:
+            tail = ""
+            proc = subprocess.Popen(
+                list(args),
+                cwd=None if cwd is None else str(cwd),
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+            assert proc.stdout is not None
+            for raw_line in proc.stdout:
+                tail = truncate_output_tail(tail + raw_line)
+                line = raw_line.rstrip("\n")
+                for console_line in render_console_lines(echo_filter(line), line):
+                    print(console_line, file=sys.stderr, flush=True)
+            returncode = proc.wait()
+            if returncode != 0:
+                raise DiagnosticError(
+                    "TOOL_FAILED",
+                    "Command failed: {}".format(shell_join(args)),
+                    command=command,
+                    profile=profile,
+                    resource=resource,
+                    details={
+                        "tool": args[0],
+                        "exit_code": returncode,
+                        "stdout": tail,
+                        "stderr": "",
+                    },
+                )
         else:
             subprocess.run(
                 list(args),
@@ -1585,13 +1784,20 @@ def collect_runtime_python_probe(context: CliContext, command: str) -> Dict[str,
 
 def collect_bootstrap_state(context: CliContext, command: str) -> Dict[str, Any]:
     python_probe = collect_runtime_python_probe(context, command)
+    profile = context.require_profile(command)
+    cache_entries: Dict[str, Dict[str, str]] = {}
+    if cmake_cache_path(profile.build_dir).exists():
+        cache_entries = read_cmake_cache(profile.build_dir, command, context.profile_name())
+    define_state = profile_define_state(profile, command, context.profile_name())
+    mpi = collect_mpi_state(context, command, cache_entries=cache_entries, define_state=define_state)
     pre_commit = tool_probe("pre-commit", ["--version"], label="pre-commit")
     pre_commit["install_commands"] = pre_commit_install_commands() if pre_commit["status"] != "ok" else []
     plotting_install_hint = None if python_probe.get("provisional") else python_probe.get("install_hint")
     return {
+        "mpi": mpi,
         "pre_commit": pre_commit,
         "python": python_probe,
-        "required_missing": pre_commit["status"] != "ok",
+        "required_missing": bool(mpi["missing_required"]) or pre_commit["status"] != "ok",
         "optional_missing": not python_probe["plotting_available"],
         "plotting_install_hint": plotting_install_hint,
     }
@@ -1601,12 +1807,15 @@ def build_summary_from_cache(
     profile: ProfileConfig,
     cache_entries: Dict[str, Dict[str, str]],
     define_state: Dict[str, Any],
+    worktree_root: Path,
 ) -> Dict[str, Optional[str]]:
     requested = define_state["requested_defines"]
+    mpi_requirement = resolve_mpi_requirement(worktree_root, define_state, cache_entries)
     return {
         "generator": cache_entry_value(cache_entries, "CMAKE_GENERATOR") or profile.generator,
         "build_type": cache_entry_value(cache_entries, "CMAKE_BUILD_TYPE") or requested.get("CMAKE_BUILD_TYPE"),
-        "mpi": cache_entry_value(cache_entries, "AMReX_MPI") or requested.get("AMReX_MPI"),
+        "mpi": mpi_requirement["value"],
+        "mpi_source": mpi_requirement["source"],
         "space_dim": cache_entry_value(cache_entries, "AMReX_SPACEDIM") or requested.get("AMReX_SPACEDIM"),
         "gpu_backend": cache_entry_value(cache_entries, "AMReX_GPU_BACKEND") or requested.get("AMReX_GPU_BACKEND"),
         "hdf5_dir": cache_entry_value(cache_entries, "HDF5_DIR", "HDF5_ROOT"),
@@ -1732,18 +1941,47 @@ def probe_python_stack(python_executable: Optional[str], source: str) -> Dict[st
     return result
 
 
-def compute_configure_fingerprint(context: CliContext, command: str) -> str:
+def configure_fingerprint_payload(
+    context: CliContext,
+    command: str,
+    *,
+    cache_entries: Optional[Dict[str, Dict[str, str]]] = None,
+    define_state: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     profile = context.require_profile(command)
     payload = {
         "profile": profile.name,
         "build_dir": str(profile.build_dir),
         "generator": profile.generator,
-        "cmake_path": shutil.which("cmake"),
-        "cmake_version": cmake_version(command, context.profile_name()),
         "executor_kind": profile.executor_kind,
         "defines": {key: profile.defines[key] for key in sorted(profile.defines)},
-        "env_overrides": {key: os.environ.get(key) for key in ENV_OVERRIDE_KEYS if os.environ.get(key)},
     }
+
+    resolved_cache_entries = cache_entries
+    if resolved_cache_entries is None and cmake_cache_path(profile.build_dir).exists():
+        resolved_cache_entries = read_cmake_cache(profile.build_dir, command, context.profile_name())
+    if define_state is None:
+        define_state = profile_define_state(profile, command, context.profile_name())
+
+    if resolved_cache_entries:
+        build_summary = build_summary_from_cache(profile, resolved_cache_entries, define_state, context.worktree_root)
+        compiler_info = compiler_metadata_from_build(profile.build_dir, resolved_cache_entries)
+        payload["build"] = {
+            key: build_summary.get(key)
+            for key in ("generator", "build_type", "mpi", "space_dim", "gpu_backend", "hdf5_dir", "hdf5_diff", "python_enabled", "python_executable")
+        }
+        payload["compiler"] = {
+            language: {key: compiler_info[language].get(key) for key in ("path", "id", "version")}
+            for language in ("c", "cxx")
+        }
+    else:
+        payload["env_overrides"] = {key: os.environ.get(key) for key in ENV_OVERRIDE_KEYS if os.environ.get(key)}
+
+    return payload
+
+
+def compute_configure_fingerprint(context: CliContext, command: str) -> str:
+    payload = configure_fingerprint_payload(context, command)
     return "sha256:" + hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 
 
@@ -2386,15 +2624,36 @@ def state_for_artifact(context: CliContext, artifact_id: str, command: str, inpu
     receipt_configure = receipt.get("configure_fingerprint")
     if not isinstance(receipt_configure, str):
         return "unknown", {"receipt_path": str(receipt_path)}
-    current_configure = compute_configure_fingerprint(context, command)
-    if current_configure != receipt_configure:
+
+    define_state = profile_define_state(profile, command, context.profile_name())
+    cache_entries = read_cmake_cache(profile.build_dir, command, context.profile_name()) if cmake_cache_path(profile.build_dir).exists() else {}
+    build_summary = build_summary_from_cache(profile, cache_entries, define_state, context.worktree_root)
+    compiler_info = compiler_metadata_from_build(profile.build_dir, cache_entries) if cache_entries else {
+        "c": {"path": None, "source": None, "id": None, "version": None, "metadata_path": None},
+        "cxx": {"path": None, "source": None, "id": None, "version": None, "metadata_path": None},
+    }
+    configure_data = read_optional_json(configure_receipt_path(profile.build_dir), command, context.profile_name())
+    if configure_data is None:
+        return "stale_configure", {
+            "receipt_path": str(receipt_path),
+            "configure_receipt_path": str(configure_receipt_path(profile.build_dir)),
+            "reason": "configure receipt is missing",
+        }
+    if not configure_receipt_matches_current_build(configure_data, build_summary, compiler_info):
+        return "stale_configure", {
+            "receipt_path": str(receipt_path),
+            "configure_receipt_path": str(configure_receipt_path(profile.build_dir)),
+            "reason": "configure receipt does not match the current build cache",
+        }
+    accepted_fingerprints = set(configure_receipt_fingerprint_aliases(configure_data))
+    if receipt_configure not in accepted_fingerprints:
         return "stale_configure", {
             "receipt_path": str(receipt_path),
             "configure_fingerprint_previous": receipt_configure,
-            "configure_fingerprint_current": current_configure,
+            "configure_fingerprint_current": configure_data.get("configure_fingerprint"),
+            "configure_fingerprint_aliases": sorted(accepted_fingerprints),
         }
 
-    define_state = profile_define_state(profile, command, context.profile_name())
     if define_state["mismatches"]:
         return "stale_configure", {
             "receipt_path": str(receipt_path),
@@ -2502,12 +2761,20 @@ def write_configure_receipt(context: CliContext, command: str, define_state: Opt
     if define_state is None:
         define_state = profile_define_state(profile, command, context.profile_name())
     cache_entries = read_cmake_cache(profile.build_dir, command, context.profile_name())
-    build_summary = build_summary_from_cache(profile, cache_entries, define_state)
+    build_summary = build_summary_from_cache(profile, cache_entries, define_state, context.worktree_root)
     compiler_info = compiler_metadata_from_build(profile.build_dir, cache_entries)
+    previous_receipt = read_optional_json(configure_receipt_path(profile.build_dir), command, context.profile_name())
+    current_fingerprint = compute_configure_fingerprint(context, command)
+    fingerprint_aliases: List[str] = []
+    if previous_receipt is not None and configure_receipt_matches_current_build(previous_receipt, build_summary, compiler_info):
+        for fingerprint in configure_receipt_fingerprint_aliases(previous_receipt):
+            if fingerprint != current_fingerprint and fingerprint not in fingerprint_aliases:
+                fingerprint_aliases.append(fingerprint)
     payload = {
         "schema": 1,
         "configured_at": utc_now(),
-        "configure_fingerprint": compute_configure_fingerprint(context, command),
+        "configure_fingerprint": current_fingerprint,
+        "configure_fingerprint_aliases": fingerprint_aliases,
         "cmake_version": cmake_version(command, context.profile_name()),
         "compiler": compiler_info,
         "build": build_summary,
@@ -2564,6 +2831,53 @@ def write_artifact_receipt(context: CliContext, artifact_id: str, binary_path: P
     write_json(path, payload)
     context.update_artifact_index(artifact_id, payload, command)
     return payload
+
+
+def receipt_subset_matches(receipt_data: Dict[str, Any], current_data: Dict[str, Any], keys: Sequence[str]) -> bool:
+    for key in keys:
+        if key not in receipt_data or receipt_data.get(key) is None:
+            continue
+        if receipt_data.get(key) != current_data.get(key):
+            return False
+    return True
+
+
+def configure_receipt_matches_current_build(
+    configure_data: Dict[str, Any],
+    build_summary: Dict[str, Any],
+    compiler_info: Dict[str, Dict[str, Optional[str]]],
+) -> bool:
+    receipt_build = configure_data.get("build")
+    receipt_compiler = configure_data.get("compiler")
+    if not isinstance(receipt_build, dict) or not isinstance(receipt_compiler, dict):
+        return False
+    if not receipt_subset_matches(
+        receipt_build,
+        build_summary,
+        ("generator", "build_type", "mpi", "space_dim", "gpu_backend", "hdf5_dir", "hdf5_diff", "python_enabled", "python_executable"),
+    ):
+        return False
+    for key in ("c", "cxx"):
+        receipt_language = receipt_compiler.get(key)
+        current_language = compiler_info.get(key)
+        if not isinstance(receipt_language, dict) or not isinstance(current_language, dict):
+            return False
+        if not receipt_subset_matches(receipt_language, current_language, ("path", "id", "version")):
+            return False
+    return True
+
+
+def configure_receipt_fingerprint_aliases(configure_data: Dict[str, Any]) -> List[str]:
+    fingerprints: List[str] = []
+    primary = configure_data.get("configure_fingerprint")
+    if isinstance(primary, str) and primary:
+        fingerprints.append(primary)
+    aliases = configure_data.get("configure_fingerprint_aliases")
+    if isinstance(aliases, list):
+        for alias in aliases:
+            if isinstance(alias, str) and alias and alias not in fingerprints:
+                fingerprints.append(alias)
+    return fingerprints
 
 
 def build_lock_paths(context: CliContext, lock_type: str, command: str, *, create_runtime: bool = True) -> Tuple[Path, Path]:
@@ -2731,16 +3045,7 @@ def maybe_reconfigure(context: CliContext, command: str, reconfigure: bool, *, c
     write_schema_receipt(profile)
     write_profile_receipt(context, command)
 
-    configure_receipt = configure_receipt_path(profile.build_dir)
-    current_fingerprint = compute_configure_fingerprint(context, command)
     needs_configure = reconfigure or not is_build_configured(profile.build_dir)
-
-    if configure_receipt.exists() and not needs_configure:
-        receipt = read_json(configure_receipt, command, context.profile_name())
-        if receipt.get("configure_fingerprint") != current_fingerprint:
-            needs_configure = True
-    elif not configure_receipt.exists():
-        needs_configure = True
 
     if needs_configure:
         args = ["cmake", "-S", str(context.worktree_root), "-B", str(profile.build_dir), "-G", profile.generator]
@@ -3405,6 +3710,16 @@ def cmd_test(context: CliContext, args: argparse.Namespace) -> CommandResult:
                 log_path=compact_log,
                 echo_filter=ctest_compact_console_line,
             )
+        elif args.stream:
+            emit_notice(context, "Running CTest with live output. Repetitive timestep banners are throttled to periodic heartbeats.")
+            run_command(
+                ctest_args,
+                command="test",
+                profile=context.profile_name(),
+                resource=test_resource,
+                capture_output=context.json_output,
+                echo_filter=make_ctest_stream_console_filter(),
+            )
         else:
             run_command(
                 ctest_args,
@@ -3496,12 +3811,15 @@ def cmd_smoke(context: CliContext, args: argparse.Namespace) -> CommandResult:
 
 def cmd_bootstrap(context: CliContext, args: argparse.Namespace) -> CommandResult:
     state = collect_bootstrap_state(context, "bootstrap")
+    mpi = state["mpi"]
     pre_commit = state["pre_commit"]
     python_probe = state["python"]
     installed: List[str] = []
     skipped: List[str] = []
 
     if args.fix:
+        if mpi["status"] in {"missing", "partial", "unknown"}:
+            skipped.append("MPI toolchain (install or load manually)")
         if pre_commit["status"] != "ok":
             install_command = preferred_pre_commit_install_command()
             if install_command is None:
@@ -3525,11 +3843,13 @@ def cmd_bootstrap(context: CliContext, args: argparse.Namespace) -> CommandResul
                     skipped.append("plotting extras (no install hint available)")
 
         state = collect_bootstrap_state(context, "bootstrap")
+        mpi = state["mpi"]
         pre_commit = state["pre_commit"]
         python_probe = state["python"]
 
     data = {
         "profile": context.profile_name(),
+        "mpi": mpi,
         "pre_commit": pre_commit,
         "python": python_probe,
         "installed": installed,
@@ -3537,12 +3857,18 @@ def cmd_bootstrap(context: CliContext, args: argparse.Namespace) -> CommandResul
     }
 
     lines = ["Bootstrap status for profile {}.".format(context.profile_name())]
-    lines.append("Required: pre-commit={}".format(pre_commit["status"]))
+    mpi_required_state = mpi["status"]
+    if mpi["missing_required"]:
+        mpi_required_state += " ({})".format(", ".join(mpi["missing_required"]))
+    lines.append("Required: mpi={}, pre-commit={}".format(mpi_required_state, pre_commit["status"]))
+    if mpi["setting"] is not None:
+        lines.append("MPI setting: {} ({})".format(mpi["setting"], mpi["source"]))
+    launcher_state = "ok" if mpi["launcher"]["status"] == "ok" else "missing ({})".format(mpi["launcher"]["tool"])
     plotting_state = "ok" if python_probe["plotting_available"] else "unavailable"
     plotting_detail = ""
     if python_probe["failed_modules"]:
         plotting_detail = " ({})".format(", ".join(python_probe["failed_modules"]))
-    lines.append("Optional: plotting={}{}".format(plotting_state, plotting_detail))
+    lines.append("Optional: mpi launcher={}, plotting={}{}".format(launcher_state, plotting_state, plotting_detail))
 
     if installed:
         lines.append("Installed: {}".format(", ".join(installed)))
@@ -3550,6 +3876,9 @@ def cmd_bootstrap(context: CliContext, args: argparse.Namespace) -> CommandResul
         lines.append("Skipped: {}".format(", ".join(skipped)))
 
     next_steps: List[str] = []
+    mpi_hint = mpi.get("install_hint")
+    if isinstance(mpi_hint, str) and mpi_hint:
+        next_steps.append(mpi_hint)
     if pre_commit["status"] != "ok":
         next_steps.append(bootstrap_hint_command(context.profile_name(), fix=True))
     if not python_probe["plotting_available"]:
@@ -3615,7 +3944,7 @@ def cmd_status(context: CliContext, args: argparse.Namespace) -> CommandResult:
     configure_receipt = configure_receipt_path(profile.build_dir)
     define_state = profile_define_state(profile, "status", context.profile_name())
     cache_entries = read_cmake_cache(profile.build_dir, "status", context.profile_name()) if build_state["cmake_cache_exists"] else {}
-    build_summary = build_summary_from_cache(profile, cache_entries, define_state)
+    build_summary = build_summary_from_cache(profile, cache_entries, define_state, context.worktree_root)
     compiler_info = compiler_metadata_from_build(profile.build_dir, cache_entries) if configured else {
         "c": {"path": None, "id": None, "version": None, "metadata_path": None},
         "cxx": {"path": None, "id": None, "version": None, "metadata_path": None},
@@ -3623,8 +3952,7 @@ def cmd_status(context: CliContext, args: argparse.Namespace) -> CommandResult:
     configure_state = None
     if configure_receipt.exists():
         configure_data = read_json(configure_receipt, "status", context.profile_name())
-        current_fingerprint = compute_configure_fingerprint(context, "status")
-        receipt_state = "ready" if configure_data.get("configure_fingerprint") == current_fingerprint else "stale"
+        receipt_state = "ready" if configured and configure_receipt_matches_current_build(configure_data, build_summary, compiler_info) else "stale"
         if define_state["mismatches"]:
             receipt_state = "drift"
         receipt_compiler = configure_data.get("compiler")
@@ -3925,12 +4253,13 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
         assert define_state is not None
         assert python_probe is not None
         compile_commands = profile.build_dir / "compile_commands.json"
-        build_summary = build_summary_from_cache(profile, cache_entries, define_state)
+        build_summary = build_summary_from_cache(profile, cache_entries, define_state, context.worktree_root)
         build_summary["python_executable"] = build_summary["python_executable"] or python_probe["executable"]
         build_summary["c_compiler"] = cache_entry_value(cache_entries, "CMAKE_C_COMPILER")
         build_summary["cxx_compiler"] = cache_entry_value(cache_entries, "CMAKE_CXX_COMPILER")
         env_overrides = active_env_overrides()
         text_env_overrides = toolchain_env_overrides_for_text(env_overrides)
+        mpi_state = collect_mpi_state(context, "doctor", cache_entries=cache_entries, define_state=define_state)
         compiler_info = compiler_metadata_from_build(profile.build_dir, cache_entries) if configured else {
             "c": {"path": None, "source": None, "id": None, "version": None, "metadata_path": None},
             "cxx": {"path": None, "source": None, "id": None, "version": None, "metadata_path": None},
@@ -3964,6 +4293,7 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
             "define_mismatches": define_state["mismatches"],
             "build": build_summary,
             "compiler": compiler_info,
+            "mpi": mpi_state,
             "python": python_probe,
             "toolchain": toolchain,
         }
@@ -3976,10 +4306,14 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
             lines.append("profile drift: {}".format(format_define_mismatch_summary(define_state["mismatches"])))
         else:
             lines.append("profile: {} ({})".format(context.profile_name(), "configured" if configured else "unconfigured"))
+        mpi_text = build_summary["mpi"] or "<unknown>"
+        mpi_source = build_summary.get("mpi_source")
+        if mpi_source and mpi_source != "CMake cache":
+            mpi_text = "{} ({})".format(mpi_text, mpi_source)
         lines.append(
             "profile build: type={} mpi={} gpu={} generator={}".format(
                 build_summary["build_type"] or "<unknown>",
-                build_summary["mpi"] or "<unknown>",
+                mpi_text,
                 build_summary["gpu_backend"] or "<unknown>",
                 build_summary["generator"] or profile.generator,
             )
@@ -3990,6 +4324,16 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
                 format_tool_probe_short(generator_tool),
             )
         )
+        mpi_wrappers_text = "c={} cxx={}".format(
+            format_tool_probe_short(mpi_state["wrappers"]["c"]),
+            format_tool_probe_short(mpi_state["wrappers"]["cxx"]),
+        )
+        mpi_launcher_text = format_tool_probe_short(mpi_state["launcher"])
+        lines.append("profile mpi tools: {} launcher={}".format(mpi_wrappers_text, mpi_launcher_text))
+        if mpi_state["missing_required"]:
+            lines.append("profile mpi note: missing required MPI wrapper(s): {}".format(", ".join(mpi_state["missing_required"])))
+        elif mpi_state["missing_optional"]:
+            lines.append("profile mpi note: missing MPI launcher(s): {}".format(", ".join(mpi_state["missing_optional"])))
         lines.append(
             "profile toolchain: c={} cxx={}".format(
                 format_compiler_toolchain(compiler_info["c"], configured=configured),
@@ -4021,6 +4365,7 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
         state_db_path = context.db_path("doctor", create=False)
         assert profile is not None
         assert python_probe is not None
+        mpi_state = collect_mpi_state(context, "doctor", cache_entries=cache_entries, define_state=define_state)
         tools = {
             "cmake": tool_probe("cmake", ["--version"]),
             "ctest": tool_probe("ctest", ["--version"]),
@@ -4034,19 +4379,33 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
             "state_db_exists": state_db_path.exists(),
             "sqlite_ok": True,
             "tools": tools,
+            "mpi": mpi_state,
             "python": python_probe,
         }
         lines.append("runtime: ok ({})".format(runtime_dir))
         lines.append(
-            "tools: cmake={cmake}, ctest={ctest}, git={git}, {generator_label}={generator_status}, pre-commit={pre_commit}".format(
+            "tools: cmake={cmake}, ctest={ctest}, git={git}, {generator_label}={generator_status}, mpi={mpi}, pre-commit={pre_commit}".format(
                 cmake=tools["cmake"]["status"],
                 ctest=tools["ctest"]["status"],
                 git=tools["git"]["status"],
                 generator_label=profile.generator,
                 generator_status=tools["generator"]["status"],
+                mpi=mpi_state["status"],
                 pre_commit=tools["pre_commit"]["status"],
             )
         )
+        if mpi_state["setting"] is not None:
+            lines.append("mpi: setting={} ({})".format(mpi_state["setting"], mpi_state["source"]))
+        lines.append(
+            "mpi tools: c={} cxx={} launcher={}".format(
+                format_tool_probe_short(mpi_state["wrappers"]["c"]),
+                format_tool_probe_short(mpi_state["wrappers"]["cxx"]),
+                format_tool_probe_short(mpi_state["launcher"]),
+            )
+        )
+        mpi_hint = mpi_state.get("install_hint")
+        if isinstance(mpi_hint, str) and mpi_hint:
+            lines.append("mpi hint: {}".format(mpi_hint))
         plotting_state = "ok" if python_probe["plotting_available"] else "unavailable"
         plotting_detail = ""
         if python_probe["failed_modules"]:
@@ -4073,7 +4432,7 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
                 lines.append("python note: configure the profile first before trusting install hints for plotting extras.")
         elif isinstance(install_hint, str) and install_hint and not python_probe["plotting_available"]:
             lines.append("python hint: install plotting extras with {}".format(install_hint))
-        if tools["pre_commit"]["status"] != "ok" or not python_probe["plotting_available"]:
+        if mpi_state["status"] != "ok" or tools["pre_commit"]["status"] != "ok" or not python_probe["plotting_available"]:
             lines.append("bootstrap hint: {}".format(bootstrap_hint_command(context.profile_name())))
 
     if topic in ("all", "locking"):
@@ -4127,9 +4486,9 @@ def create_parser() -> argparse.ArgumentParser:
         "  - compile_commands.json must exist in the profile build directory.\n"
         "\n"
         "Examples:\n"
-        "  quokka tidy --profile host-3d\n"
-        "  quokka tidy previous --profile host-3d\n"
-        "  quokka tidy dev --fix --profile host-3d"
+        "  quokka tidy --profile host-3d-release\n"
+        "  quokka tidy previous --profile host-3d-release\n"
+        "  quokka tidy dev --fix --profile host-3d-release"
     )
     format_epilog = (
         "Selectors:\n"
@@ -4162,16 +4521,16 @@ def create_parser() -> argparse.ArgumentParser:
         "  - runs clang-tidy over changed C++ files\n"
         "\n"
         "Examples:\n"
-        "  quokka verify --profile host-3d\n"
-        "  quokka verify changed --profile host-3d --compact-stream"
+        "  quokka verify --profile host-3d-release\n"
+        "  quokka verify changed --profile host-3d-release --compact-stream"
     )
     bootstrap_epilog = (
         "Checks developer prerequisites for the selected profile.\n"
         "\n"
         "Examples:\n"
-        "  quokka bootstrap --profile host-3d\n"
-        "  quokka bootstrap --profile host-3d --fix\n"
-        "  quokka bootstrap --profile host-3d --fix --include-optional"
+        "  quokka bootstrap --profile host-3d-release\n"
+        "  quokka bootstrap --profile host-3d-release --fix\n"
+        "  quokka bootstrap --profile host-3d-release --fix --include-optional"
     )
 
     build = subparsers.add_parser("build", parents=[common])
@@ -4190,13 +4549,13 @@ def create_parser() -> argparse.ArgumentParser:
     test.add_argument("test_name", nargs="?")
     test.add_argument("--ctest-regex")
     test.add_argument("--build-if-needed", action="store_true")
-    test.add_argument("--stream", action="store_true", help="Stream live test progress and stdout/stderr.")
+    test.add_argument("--stream", action="store_true", help="Stream live test progress and stdout/stderr; repetitive timestep banners are throttled.")
     test.add_argument("--compact-stream", action="store_true", help="Show compact live progress and write the full log to a file.")
     test.set_defaults(handler=cmd_test)
 
     smoke = subparsers.add_parser("smoke", parents=[common])
     smoke.add_argument("test_name", nargs="?")
-    smoke.add_argument("--stream", action="store_true", help="Stream live test progress and stdout/stderr.")
+    smoke.add_argument("--stream", action="store_true", help="Stream live test progress and stdout/stderr; repetitive timestep banners are throttled.")
     smoke.add_argument("--compact-stream", action="store_true", help="Show compact live progress and write the full log to a file.")
     smoke.set_defaults(handler=cmd_smoke)
 
@@ -4208,7 +4567,7 @@ def create_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     verify.add_argument("selector", nargs="?", help="File selector: changed (default), previous, origin, or dev.")
-    verify.add_argument("--stream", action="store_true", help="Stream live test progress and stdout/stderr.")
+    verify.add_argument("--stream", action="store_true", help="Stream live test progress and stdout/stderr; repetitive timestep banners are throttled.")
     verify.add_argument("--compact-stream", action="store_true", help="Show compact live progress and write the full log to a file.")
     verify.set_defaults(handler=cmd_verify)
 

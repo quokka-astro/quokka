@@ -14,11 +14,11 @@ Bootstrap the launcher once for interactive use:
 
 Activate the current worktree in a shell:
 `source scripts/bash/quokka-activate.sh`
-`source scripts/bash/quokka-activate.sh host-default`
+`source scripts/bash/quokka-activate.sh host-3d-release`
 
 For non-interactive use, prefer explicit worktree selection:
 `quokka -C /path/to/quokka list profiles`
-`quokka -C /path/to/quokka build HydroWave --profile host-default`
+`quokka -C /path/to/quokka build HydroWave --profile host-3d-release`
 
 Common commands:
 `quokka list profiles`
@@ -36,13 +36,14 @@ Agents should verify `command -v quokka` before relying on the launcher. If it i
 ## Profile Selection & Runtime Expectations
 Profile choice has a large effect on local runtime. Agents should check `quokka.toml` or `quokka list profiles` before drawing conclusions from slow builds or tests.
 
-- `host-default` is the default profile and is intended for debug-oriented local validation. It uses `build/`, `CMAKE_BUILD_TYPE=Debug`, and `AMReX_GPU_BACKEND=NONE`. Expect slower compile and test times than a release build.
-- `host-3d` is the faster local iteration profile in this checkout. It uses `build/host-3d` and `CMAKE_BUILD_TYPE=Release`. Prefer it for quick smoke tests unless debug instrumentation matters more than speed.
+- `host-3d-release` is the current default profile in this checkout. It uses `build/host-3d-release`, `CMAKE_BUILD_TYPE=Release`, and `AMReX_GPU_BACKEND=NONE`. Prefer it for first-pass smoke tests and quick local iteration.
+- `host-3d-debug` is the debug-oriented 3D profile. It uses `build/host-3d-debug` and is slower than the release profile, but it is the better choice when debug instrumentation matters more than speed.
+- `host-1d-release` and `host-1d-debug` are the corresponding 1D profiles. Use them when a problem or local workflow is specifically 1D.
 - The biggest runtime drivers are build type (`Debug` vs. `Release`), MPI enablement, and CPU vs. GPU backend. Do not treat timings from one profile as representative of another.
 - Before reporting that a test is unexpectedly slow, confirm which profile you used and mention it explicitly in the summary.
-- For first-time verification, prefer a quick smoke-test path before running longer hydro or radiation problems. A good starting point is `quokka test ODEIntegration --profile host-3d --build-if-needed` when that profile is available.
+- For first-time verification, prefer a quick smoke-test path before running longer hydro or radiation problems. Start with `quokka smoke` or `quokka smoke --profile host-3d-release` before reaching for longer evolution tests.
 - Some problem tests are inherently longer because the executable advances to a fixed physical time in the problem code. If a run seems slow, inspect the problem source and input file before assuming the wrapper is the bottleneck.
-- The GPU/CI regression harness is not exposed through the `quokka` CLI in this repository. Treat local `build`, `run`, and `test` workflows as the default smoke-test path.
+- The GPU/CI regression harness is not exposed through the `quokka` CLI in this repository. Treat local `smoke`, `build`, `run`, and `test` workflows as the default local validation path.
 
 ## Coding Style & Naming Conventions
 Follow the repository `.clang-format` (LLVM-derived, 160-column width, tabs at eight spaces) and `.clang-tidy`. Keep headers as `.hpp` and implementations `.cpp`. Prefer PascalCase for classes and methods, camelCase with trailing underscore for data members, and wrap even single statements in braces. Favor trailing return types for non-`void` functions and mark variables `const` whenever possible.
