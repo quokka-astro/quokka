@@ -72,7 +72,6 @@ After the first successful configure/build, you can inspect the configured profi
 ```bash
 quokka list problems
 quokka list tests
-quokka list suites
 ```
 
 ## Fast local validation
@@ -117,7 +116,7 @@ quokka doctor locking --profile host-3d
 
 - Do not treat timings from one profile as representative of another. The biggest runtime drivers are build type (`Debug` vs. `Release`), MPI enablement, and CPU vs. GPU backend.
 - `HydroWave`, `Advection`, and similar evolution problems are useful tests, but they are not ideal first smoke tests because they advance to a fixed physical time and can take much longer than `ODEIntegration`.
-- The regression suites listed by `quokka regression` are primarily GPU/CI-oriented in this repository. They are specialized validation, not the default local sanity-check path.
+- The GPU/CI regression harness is not exposed through the `quokka` CLI in this repository. Use the local `build`, `run`, and `test` workflow for routine validation.
 - If you need live CTest progress and the full stdout/stderr stream while diagnosing a failing test, rerun with `--stream`:
 
 ```bash
@@ -154,7 +153,7 @@ By default, `run` validates that the executable is present and up to date. If yo
 quokka run <problem> --input <input-file> --build-if-needed --profile host-default
 ```
 
-### Tests and regression suites
+### Tests
 
 Run the full CTest suite for a configured profile:
 
@@ -176,14 +175,7 @@ quokka test <test-name> --profile host-default --stream
 quokka test --ctest-regex Hydro --profile host-default --stream
 ```
 
-Run one or more regression suites from `regression/quokka-tests.ini`:
-
-```bash
-quokka regression <suite> --profile host-default
-quokka regression <suite1> <suite2> --profile host-default
-```
-
-As with `run`, both `test` and `regression` are validation-first by default. Add `--build-if-needed` when those commands should build required targets automatically.
+As with `run`, `test` is validation-first by default. Add `--build-if-needed` when the command should build required targets automatically.
 
 ### Diagnostics, status, formatting, and static analysis
 

@@ -4,7 +4,7 @@
 Core C++20 sources live in `src/`, with physics modules under `hydro/`, `radiation/`, `cooling/`, and `chemistry/`. Shared infrastructure such as `QuokkaSimulation.cpp` sits alongside module code, while scenario drivers compile from `src/problems/`. Runtime inputs (`*.in`) land in `inputs/`, docs in `docs/`, and helper utilities in `scripts/`. Generated builds and intermediates belong in `build/`; regression baselines and plotfiles stay under `tests/` and are tracked through `regression/quokka-tests.ini`.
 
 ## Build, Test, and Development Commands
-Prefer the `quokka` CLI over raw `cmake` and `ctest` for routine local workflows. List available profiles with `quokka list profiles`, inspect problems with `quokka list problems --profile <profile>`, and build via `quokka build [target...] --profile <profile>`. Run a problem with `quokka run <problem> --input <input-file> --profile <profile>`, run tests with `quokka test [test-name] --profile <profile>` or `quokka test --ctest-regex <Pattern> --profile <profile>`, and run regression suites with `quokka regression [suite...] --profile <profile>`. Use `quokka status --profile <profile>` to inspect build and lock state, `quokka tidy [changed|previous|origin|dev] --profile <profile>` for clang-tidy, and `quokka format [changed|previous|origin|dev|all]` for formatting. Add `--build-if-needed` to `run`, `test`, or `regression` when those commands should build required targets first.
+Prefer the `quokka` CLI over raw `cmake` and `ctest` for routine local workflows. List available profiles with `quokka list profiles`, inspect problems with `quokka list problems --profile <profile>`, and build via `quokka build [target...] --profile <profile>`. Run a problem with `quokka run <problem> --input <input-file> --profile <profile>`, run tests with `quokka test [test-name] --profile <profile>` or `quokka test --ctest-regex <Pattern> --profile <profile>`. Use `quokka status --profile <profile>` to inspect build and lock state, `quokka tidy [changed|previous|origin|dev] --profile <profile>` for clang-tidy, and `quokka format [changed|previous|origin|dev|all]` for formatting. Add `--build-if-needed` to `run` or `test` when those commands should build required targets first.
 
 ## Quokka CLI
 Use the repository CLI for profile-aware local workflows.
@@ -27,7 +27,6 @@ Common commands:
 `quokka run <problem> --input <input-file> --profile <profile>`
 `quokka test [test-name] --profile <profile>`
 `quokka test --ctest-regex <regex> --profile <profile>`
-`quokka regression [suite...] --profile <profile>`
 `quokka status --profile <profile>`
 `quokka tidy [changed|previous|origin|dev] --profile <profile>`
 `quokka format [changed|previous|origin|dev|all]`
@@ -43,7 +42,7 @@ Profile choice has a large effect on local runtime. Agents should check `quokka.
 - Before reporting that a test is unexpectedly slow, confirm which profile you used and mention it explicitly in the summary.
 - For first-time verification, prefer a quick smoke-test path before running longer hydro or radiation problems. A good starting point is `quokka test ODEIntegration --profile host-3d --build-if-needed` when that profile is available.
 - Some problem tests are inherently longer because the executable advances to a fixed physical time in the problem code. If a run seems slow, inspect the problem source and input file before assuming the wrapper is the bottleneck.
-- The regression suites listed by `quokka regression` are primarily GPU/CI-oriented in this repository. Treat them as specialized validation, not as the default local smoke-test path.
+- The GPU/CI regression harness is not exposed through the `quokka` CLI in this repository. Treat local `build`, `run`, and `test` workflows as the default smoke-test path.
 
 ## Coding Style & Naming Conventions
 Follow the repository `.clang-format` (LLVM-derived, 160-column width, tabs at eight spaces) and `.clang-tidy`. Keep headers as `.hpp` and implementations `.cpp`. Prefer PascalCase for classes and methods, camelCase with trailing underscore for data members, and wrap even single statements in braces. Favor trailing return types for non-`void` functions and mark variables `const` whenever possible.

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import configparser
 import contextlib
 import dataclasses
 import datetime as dt
@@ -33,7 +32,6 @@ SCHEMA = 1
 LOCK_TYPES = ("build", "run")
 TIDY_SELECTORS = {"changed", "previous", "origin", "dev"}
 FORMAT_SELECTORS = {"changed", "previous", "origin", "dev", "all"}
-REGRESSION_META_SECTIONS = {"main", "AMReX", "source"}
 SUBMODULE_PATHS = (
     "extern/amrex",
     "extern/AMReX-Hydro",
@@ -1767,22 +1765,6 @@ def discover_tests(build_dir: Path, command: str, profile: Optional[str]) -> Lis
     return sorted(parse_ctest_testfiles(build_dir, command, profile), key=lambda spec: spec.name)
 
 
-def discover_suites(worktree_root: Path) -> Tuple[configparser.ConfigParser, List[str]]:
-    parser = configparser.ConfigParser()
-    parser.optionxform = str
-    ini_path = worktree_root / "regression" / "quokka-tests.ini"
-    if not ini_path.exists():
-        raise DiagnosticError(
-            "STATE_CORRUPT",
-            "regression/quokka-tests.ini is missing.",
-            command="regression",
-            details={"path": str(ini_path)},
-        )
-    parser.read(str(ini_path))
-    suites = [section for section in parser.sections() if section not in REGRESSION_META_SECTIONS]
-    return parser, sorted(suites)
-
-
 def resolve_buildtree_binary(context: CliContext, problem: str, command: str) -> Optional[Path]:
     profile = context.require_profile(command)
     receipt_path = artifact_receipt_path(profile.build_dir, problem)
@@ -2363,38 +2345,6 @@ def problem_for_test(test: TestSpec) -> str:
     return executable
 
 
-def selected_regression_suites(context: CliContext, requested: Sequence[str]) -> Tuple[configparser.ConfigParser, List[str]]:
-    parser, suites = discover_suites(context.worktree_root)
-    if not requested:
-        return parser, suites
-    missing = [suite for suite in requested if suite not in suites]
-    if missing:
-        raise DiagnosticError(
-            "UNKNOWN_RESOURCE",
-            "Unknown regression suite(s): {}.".format(", ".join(missing)),
-            command="regression",
-            profile=context.profile_name(),
-            resource={"kind": "suite", "name": missing[0]},
-            details={"known_suites": suites},
-        )
-    return parser, list(requested)
-
-
-def write_subset_regression_ini(parser: configparser.ConfigParser, suites: Sequence[str], worktree_root: Path) -> Path:
-    handle = tempfile.NamedTemporaryFile(prefix="quokka-regression-", suffix=".ini", dir=str(worktree_root / ".git"), delete=False)
-    temp_path = Path(handle.name)
-    handle.close()
-
-    subset = configparser.ConfigParser()
-    subset.optionxform = str
-    for section in parser.sections():
-        if section in REGRESSION_META_SECTIONS or section in suites:
-            subset[section] = dict(parser[section])
-    with temp_path.open("w", encoding="utf-8") as output:
-        subset.write(output)
-    return temp_path
-
-
 def format_result(result: CommandResult, as_json: bool) -> str:
     if not as_json:
         return result.text
@@ -2595,83 +2545,6 @@ def cmd_test(context: CliContext, args: argparse.Namespace) -> CommandResult:
     return CommandResult("test", context.profile_name(), test_resource, data, text)
 
 
-def cmd_regression(context: CliContext, args: argparse.Namespace) -> CommandResult:
-    profile = context.require_profile("regression")
-    context.resolve_runtime_dir("regression")
-    context.open_db("regression")
-    ensure_no_conflicting_locks(context, ("build", "run"), "regression")
-
-    parser, suites = selected_regression_suites(context, args.suites)
-    targets: List[str] = []
-    target_to_input: Dict[str, Optional[Path]] = {}
-    for suite in suites:
-        target = parser.get(suite, "target", fallback="")
-        if not target:
-            raise DiagnosticError(
-                "STATE_CORRUPT",
-                "Regression suite '{}' does not define a target.".format(suite),
-                command="regression",
-                profile=context.profile_name(),
-                resource={"kind": "suite", "name": suite},
-            )
-        input_file = parser.get(suite, "inputFile", fallback="")
-        input_path = None
-        if input_file:
-            input_path = (context.worktree_root / input_file).resolve()
-        if target not in targets:
-            targets.append(target)
-        target_to_input[target] = input_path
-
-    if args.build_if_needed:
-        perform_build(context, targets, reconfigure=False)
-
-    for target in targets:
-        ensure_artifact_ready(context, target, "regression", target_to_input.get(target), build_if_needed=False)
-
-    if profile.executor_kind != "local":
-        raise DiagnosticError(
-            "EXECUTOR_UNAVAILABLE",
-            "Regression executor kind '{}' is not implemented in the prototype.".format(profile.executor_kind),
-            command="regression",
-            profile=context.profile_name(),
-            details={"executor": profile.executor},
-        )
-
-    regtest = context.worktree_root / "extern" / "regression_testing" / "regtest.py"
-    if not regtest.exists():
-        raise DiagnosticError(
-            "EXECUTOR_UNAVAILABLE",
-            "Regression harness is unavailable because extern/regression_testing/regtest.py is missing.",
-            command="regression",
-            profile=context.profile_name(),
-            details={"path": str(regtest)},
-        )
-
-    temp_ini: Optional[Path] = None
-    ini_path = context.worktree_root / "regression" / "quokka-tests.ini"
-    if args.suites:
-        temp_ini = write_subset_regression_ini(parser, suites, context.worktree_root)
-        ini_path = temp_ini
-
-    try:
-        with acquire_lock(context, "run", "regression"):
-            run_command(
-                [str(regtest), "--clean_testdir", str(ini_path)],
-                cwd=context.worktree_root,
-                command="regression",
-                profile=context.profile_name(),
-                stdout_to_stderr=context.json_output,
-            )
-    finally:
-        if temp_ini is not None:
-            with contextlib.suppress(FileNotFoundError):
-                temp_ini.unlink()
-
-    data = {"suites": suites, "profile": context.profile_name(), "ini_file": str(ini_path)}
-    text = "Ran {} regression suite(s) in profile {}.".format(len(suites), context.profile_name())
-    return CommandResult("regression", context.profile_name(), {"kind": "suite", "name": suites[0] if suites else "*"}, data, text)
-
-
 def cmd_list(context: CliContext, args: argparse.Namespace) -> CommandResult:
     resource = None
     if args.list_kind == "profiles":
@@ -2694,11 +2567,6 @@ def cmd_list(context: CliContext, args: argparse.Namespace) -> CommandResult:
         data = {"tests": tests, "discovery": discovery}
         text = "\n".join(tests)
         resource = {"kind": "test", "name": "*"}
-    elif args.list_kind == "suites":
-        _, suites = discover_suites(context.worktree_root)
-        data = {"suites": suites}
-        text = "\n".join(suites)
-        resource = {"kind": "suite", "name": "*"}
     else:
         raise DiagnosticError("USAGE_ERROR", "Unsupported list kind '{}'.".format(args.list_kind), command="list")
     return CommandResult("list", context.profile_name(), resource, data, text)
@@ -3176,11 +3044,6 @@ def create_parser() -> argparse.ArgumentParser:
     test.add_argument("--stream", action="store_true", help="Stream live test progress and stdout/stderr.")
     test.set_defaults(handler=cmd_test)
 
-    regression = subparsers.add_parser("regression", parents=[common])
-    regression.add_argument("suites", nargs="*")
-    regression.add_argument("--build-if-needed", action="store_true")
-    regression.set_defaults(handler=cmd_regression)
-
     tidy = subparsers.add_parser("tidy", parents=[common])
     tidy.add_argument("selector", nargs="?")
     tidy.add_argument("--fix", action="store_true")
@@ -3191,7 +3054,7 @@ def create_parser() -> argparse.ArgumentParser:
     fmt.set_defaults(handler=cmd_format)
 
     list_cmd = subparsers.add_parser("list", parents=[common])
-    list_cmd.add_argument("list_kind", choices=["problems", "tests", "suites", "profiles"])
+    list_cmd.add_argument("list_kind", choices=["problems", "tests", "profiles"])
     list_cmd.set_defaults(handler=cmd_list)
 
     status = subparsers.add_parser("status", parents=[common])
