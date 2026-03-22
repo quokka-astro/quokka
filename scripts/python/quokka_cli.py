@@ -70,6 +70,7 @@ DIAGNOSTIC_CODES = {
     "STATE_CORRUPT": 26,
     "INTERNAL_ERROR": 30,
 }
+MAX_DIAGNOSTIC_OUTPUT_CHARS = 4000
 
 
 class DiagnosticError(RuntimeError):
@@ -529,6 +530,12 @@ def normalize_profile_defines(raw_defines: Dict[str, Any]) -> Dict[str, str]:
     return defines
 
 
+def truncate_output_tail(output: Optional[str]) -> str:
+    if not output:
+        return ""
+    return output[-MAX_DIAGNOSTIC_OUTPUT_CHARS:]
+
+
 def command_output(
     args: Sequence[str],
     *,
@@ -568,8 +575,8 @@ def command_output(
             details={
                 "tool": args[0],
                 "exit_code": exc.returncode,
-                "stdout": exc.stdout[-4000:] if exc.stdout else "",
-                "stderr": exc.stderr[-4000:] if exc.stderr else "",
+                "stdout": truncate_output_tail(exc.stdout),
+                "stderr": truncate_output_tail(exc.stderr),
             },
         ) from exc
 
@@ -582,19 +589,53 @@ def run_command(
     profile: Optional[str],
     resource: Optional[Dict[str, Any]] = None,
     env: Optional[Dict[str, str]] = None,
-    stdout_to_stderr: bool = False,
+    capture_output: bool = False,
 ) -> None:
     try:
-        stdout_stream = sys.stderr if stdout_to_stderr else None
-        stderr_stream = sys.stderr if stdout_to_stderr else None
-        subprocess.run(
-            list(args),
-            cwd=None if cwd is None else str(cwd),
-            check=True,
-            env=env,
-            stdout=stdout_stream,
-            stderr=stderr_stream,
-        )
+        if capture_output:
+            with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as stdout_capture, tempfile.TemporaryFile(
+                mode="w+t", encoding="utf-8"
+            ) as stderr_capture:
+                proc = subprocess.run(
+                    list(args),
+                    cwd=None if cwd is None else str(cwd),
+                    check=False,
+                    env=env,
+                    stdout=stdout_capture,
+                    stderr=stderr_capture,
+                    text=True,
+                )
+                if proc.returncode != 0:
+                    stdout_capture.seek(0, os.SEEK_END)
+                    stdout_size = stdout_capture.tell()
+                    stdout_capture.seek(max(stdout_size - MAX_DIAGNOSTIC_OUTPUT_CHARS, 0))
+                    stdout_tail = stdout_capture.read()
+
+                    stderr_capture.seek(0, os.SEEK_END)
+                    stderr_size = stderr_capture.tell()
+                    stderr_capture.seek(max(stderr_size - MAX_DIAGNOSTIC_OUTPUT_CHARS, 0))
+                    stderr_tail = stderr_capture.read()
+
+                    raise DiagnosticError(
+                        "TOOL_FAILED",
+                        "Command failed: {}".format(shell_join(args)),
+                        command=command,
+                        profile=profile,
+                        resource=resource,
+                        details={
+                            "tool": args[0],
+                            "exit_code": proc.returncode,
+                            "stdout": truncate_output_tail(stdout_tail),
+                            "stderr": truncate_output_tail(stderr_tail),
+                        },
+                    )
+        else:
+            subprocess.run(
+                list(args),
+                cwd=None if cwd is None else str(cwd),
+                check=True,
+                env=env,
+            )
     except FileNotFoundError as exc:
         raise DiagnosticError(
             "EXECUTOR_UNAVAILABLE",
@@ -611,7 +652,12 @@ def run_command(
             command=command,
             profile=profile,
             resource=resource,
-            details={"tool": args[0], "exit_code": exc.returncode},
+            details={
+                "tool": args[0],
+                "exit_code": exc.returncode,
+                "stdout": truncate_output_tail(exc.stdout),
+                "stderr": truncate_output_tail(exc.stderr),
+            },
         ) from exc
 
 
@@ -2227,7 +2273,7 @@ def maybe_reconfigure(context: CliContext, command: str, reconfigure: bool) -> D
         args = ["cmake", "-S", str(context.worktree_root), "-B", str(profile.build_dir), "-G", profile.generator]
         for key in sorted(profile.defines):
             args.append("-D{}={}".format(key, profile.defines[key]))
-        run_command(args, command=command, profile=context.profile_name(), stdout_to_stderr=context.json_output)
+        run_command(args, command=command, profile=context.profile_name(), capture_output=context.json_output)
     define_state = profile_define_state(profile, command, context.profile_name())
     if define_state["mismatches"]:
         raise DiagnosticError(
@@ -2262,7 +2308,7 @@ def perform_build(context: CliContext, targets: Sequence[str], reconfigure: bool
         build_args = ["cmake", "--build", str(profile.build_dir)]
         if targets:
             build_args.extend(["--target"] + list(targets))
-        run_command(build_args, command=command, profile=context.profile_name(), stdout_to_stderr=context.json_output)
+        run_command(build_args, command=command, profile=context.profile_name(), capture_output=context.json_output)
 
         if targets:
             requested = list(dict.fromkeys(targets))
@@ -2462,7 +2508,7 @@ def cmd_run(context: CliContext, args: argparse.Namespace) -> CommandResult:
             command="run",
             profile=context.profile_name(),
             resource=resource,
-            stdout_to_stderr=context.json_output,
+            capture_output=context.json_output,
         )
 
     data = {
@@ -2529,7 +2575,7 @@ def cmd_test(context: CliContext, args: argparse.Namespace) -> CommandResult:
             command="test",
             profile=context.profile_name(),
             resource=test_resource,
-            stdout_to_stderr=context.json_output,
+            capture_output=context.json_output,
         )
 
     data = {
@@ -2757,7 +2803,7 @@ def cmd_tidy(context: CliContext, args: argparse.Namespace) -> CommandResult:
     if args.fix:
         cmd.append("--fix")
     cmd.extend([str(profile.build_dir), selector])
-    run_command(cmd, cwd=context.worktree_root, command="tidy", profile=context.profile_name(), stdout_to_stderr=context.json_output)
+    run_command(cmd, cwd=context.worktree_root, command="tidy", profile=context.profile_name(), capture_output=context.json_output)
 
     data = {"build_dir": str(profile.build_dir), "selector": selector, "fix": bool(args.fix), "files": files}
     text = "Ran clang-tidy wrapper for profile {} with selector '{}'.".format(context.profile_name(), selector)
@@ -2788,7 +2834,7 @@ def cmd_format(context: CliContext, args: argparse.Namespace) -> CommandResult:
             cwd=context.worktree_root,
             command="format",
             profile=None,
-            stdout_to_stderr=context.json_output,
+            capture_output=context.json_output,
         )
         data = {"selector": selector, "files": [], "all_files": True}
         text = "Ran clang-format hook over all eligible files."
@@ -2804,7 +2850,7 @@ def cmd_format(context: CliContext, args: argparse.Namespace) -> CommandResult:
         cwd=context.worktree_root,
         command="format",
         profile=None,
-        stdout_to_stderr=context.json_output,
+        capture_output=context.json_output,
     )
     data = {"selector": selector, "files": files}
     text = "Ran clang-format hook on {} file(s).".format(len(files))
