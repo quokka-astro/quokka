@@ -223,6 +223,16 @@ quokka tidy previous --profile host-default
 quokka tidy dev --fix --profile host-default
 ```
 
+Selectors:
+- `changed` (default): files modified in the working tree relative to `HEAD`
+- `previous`: files modified in the previous commit
+- `origin`: files different from `origin/<current-branch>`
+- `dev`: files different from the local `development` branch
+
+Prerequisites:
+- the selected profile must already be configured
+- `compile_commands.json` must exist in the selected build directory
+
 Run the repository `clang-format` hook:
 
 ```bash
@@ -230,6 +240,17 @@ quokka format
 quokka format origin
 quokka format all
 ```
+
+Selectors:
+- `changed` (default): files modified in the working tree relative to `HEAD`
+- `previous`: files modified in the previous commit
+- `origin`: files different from `origin/<current-branch>`
+- `dev`: files different from the local `development` branch
+- `all`: all files covered by the `clang-format` pre-commit hook
+
+Prerequisites:
+- `pre-commit` must be installed and available on `PATH`
+- `format` uses the repository hook definition from `.pre-commit-config.yaml`
 
 `format` does not require a profile.
 

@@ -79,6 +79,16 @@ PYTHON_MODULE_PACKAGES = {
     "matplotlib.cm": "matplotlib",
     "PIL": "Pillow",
 }
+METRIC_KEYWORDS = (
+    "relative error",
+    "error norm",
+    "error norms",
+    "l1 error",
+    "l2 error",
+    "rms",
+    "residual",
+    "final temperature",
+)
 
 
 class DiagnosticError(RuntimeError):
@@ -587,6 +597,90 @@ def ctest_compact_console_line(line: str) -> bool:
     return False
 
 
+def ctest_lasttest_log_path(build_dir: Path) -> Path:
+    return build_dir / "Testing" / "Temporary" / "LastTest.log"
+
+
+def parse_ctest_lasttest_output(log_path: Path) -> Dict[str, List[str]]:
+    try:
+        lines = log_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return {}
+
+    outputs: Dict[str, List[str]] = {}
+    current_test: Optional[str] = None
+    collecting = False
+    current_output: List[str] = []
+    test_header_re = re.compile(r"^(?:\d+/\d+\s+)?Test:\s+(.+?)\s*$")
+
+    for line in lines:
+        match = test_header_re.match(line)
+        if match:
+            if current_test is not None and collecting:
+                outputs[current_test] = current_output[:]
+            current_test = match.group(1).strip()
+            collecting = False
+            current_output = []
+            continue
+        if line == "Output:":
+            collecting = True
+            current_output = []
+            continue
+        if line == "<end of output>":
+            if current_test is not None:
+                outputs[current_test] = current_output[:]
+            collecting = False
+            current_output = []
+            continue
+        if not collecting:
+            continue
+        if re.fullmatch(r"-{8,}", line):
+            continue
+        current_output.append(line.rstrip())
+
+    if current_test is not None and collecting:
+        outputs[current_test] = current_output[:]
+    return outputs
+
+
+def extract_metric_lines(output_lines: Sequence[str]) -> List[str]:
+    selected: List[str] = []
+    seen = set()
+    for raw_line in output_lines:
+        line = raw_line.strip()
+        if not line or line in seen:
+            continue
+        lower = line.lower()
+        if lower.startswith(("initial ", "elapsed time", "tinyprofiler", "unused parmparse", "pinned memory", "cpu memory", "name ", "mpi initialized", "amrex ")):
+            continue
+        if not has_numeric_token(line):
+            continue
+        if any(keyword in lower for keyword in METRIC_KEYWORDS):
+            selected.append(line)
+            seen.add(line)
+            continue
+        if len(selected) >= 5:
+            break
+    return selected
+
+
+def observed_metrics_from_lasttest(build_dir: Path, tests: Sequence[TestSpec]) -> List[Dict[str, Any]]:
+    outputs = parse_ctest_lasttest_output(ctest_lasttest_log_path(build_dir))
+    observed: List[Dict[str, Any]] = []
+    for test in tests:
+        lines = extract_metric_lines(outputs.get(test.name, []))
+        if not lines:
+            continue
+        observed.append(
+            {
+                "test": test.name,
+                "lines": lines,
+                "source": str(ctest_lasttest_log_path(build_dir)),
+            }
+        )
+    return observed
+
+
 def run_command_compact_logged(
     args: Sequence[str],
     *,
@@ -664,6 +758,32 @@ def python_install_hint(python_probe: Dict[str, Any]) -> Optional[str]:
         return None
     executable = python_probe.get("executable") or "python3"
     return "{} -m pip install {}".format(shlex.quote(str(executable)), " ".join(packages))
+
+
+def pre_commit_install_commands() -> List[str]:
+    commands: List[str] = []
+    in_virtualenv = bool(os.environ.get("VIRTUAL_ENV"))
+    uv_path = resolve_executable_path("uv")
+    python_path = resolve_executable_path("python3") or resolve_executable_path("python") or sys.executable
+    if uv_path is not None:
+        uv_command = [uv_path, "pip", "install"]
+        if not in_virtualenv:
+            uv_command.append("--user")
+        uv_command.append("pre-commit")
+        commands.append(shell_join(uv_command))
+    if python_path:
+        python_command = [python_path, "-m", "pip", "install"]
+        if not in_virtualenv:
+            python_command.append("--user")
+        python_command.append("pre-commit")
+        rendered = shell_join(python_command)
+        if rendered not in commands:
+            commands.append(rendered)
+    return commands
+
+
+def python_probe_is_provisional(python_probe: Dict[str, Any], *, configured: bool) -> bool:
+    return (not configured) and python_probe.get("source") != "cache"
 
 
 def command_output(
@@ -793,6 +913,10 @@ def run_command(
 
 def shell_join(parts: Sequence[str]) -> str:
     return " ".join(shlex.quote(part) for part in parts)
+
+
+def has_numeric_token(text: str) -> bool:
+    return bool(re.search(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?", text))
 
 
 def load_repo_config(worktree_root: Path) -> RepoConfig:
@@ -2732,6 +2856,16 @@ def diagnostic_hints(error: DiagnosticError, command: Optional[str], profile: Op
         if stream_command is not None:
             hints.append("For live CTest output, rerun with: {}".format(stream_command))
 
+    if error.diagnostic_id == "PRE_COMMIT_UNAVAILABLE":
+        install_commands = error.details.get("install_commands")
+        if isinstance(install_commands, list):
+            for command_text in install_commands:
+                if isinstance(command_text, str) and command_text:
+                    hints.append("Install pre-commit with: {}".format(command_text))
+        helper_script = error.details.get("helper_script")
+        if isinstance(helper_script, str) and helper_script:
+            hints.append("The repository formatter helper can install it interactively: {}".format(helper_script))
+
     if isinstance(log_path, str) and log_path:
         hints.append("Full command log: {}".format(log_path))
 
@@ -2911,6 +3045,9 @@ def cmd_test(context: CliContext, args: argparse.Namespace) -> CommandResult:
         expectation = expectation_summary_for_test(context, test)
         if expectation is not None:
             expectations.append(expectation)
+    observed_metrics: List[Dict[str, Any]] = []
+    if args.test_name or (args.ctest_regex and len(tests) <= 5):
+        observed_metrics = observed_metrics_from_lasttest(profile.build_dir, tests)
 
     data = {
         "selected_tests": [test.name for test in tests],
@@ -2919,6 +3056,7 @@ def cmd_test(context: CliContext, args: argparse.Namespace) -> CommandResult:
         "compact_stream": bool(args.compact_stream),
         "log_path": None if compact_log is None else str(compact_log),
         "expectations": expectations,
+        "observed_metrics": observed_metrics,
     }
     text = "Ran {} test(s) in profile {}{}.".format(
         len(tests),
@@ -2929,6 +3067,15 @@ def cmd_test(context: CliContext, args: argparse.Namespace) -> CommandResult:
         text += "\nExpectations:"
         for expectation in expectations:
             text += "\n- {}: {}".format(expectation["test"], expectation["summary"])
+    if observed_metrics:
+        text += "\nObserved metrics:"
+        single_test = len(observed_metrics) == 1
+        for observed in observed_metrics:
+            for line in observed["lines"]:
+                if single_test:
+                    text += "\n- {}".format(line)
+                else:
+                    text += "\n- {}: {}".format(observed["test"], line)
     if compact_log is not None:
         text += "\nFull log: {}".format(compact_log)
     return CommandResult("test", context.profile_name(), test_resource, data, text)
@@ -3213,10 +3360,15 @@ def cmd_format(context: CliContext, args: argparse.Namespace) -> CommandResult:
     ensure_no_conflicting_locks(context, ("build",), "format")
 
     if shutil.which("pre-commit") is None:
+        install_commands = pre_commit_install_commands()
         raise DiagnosticError(
             "PRE_COMMIT_UNAVAILABLE",
             "pre-commit is required but not installed.",
             command="format",
+            details={
+                "install_commands": install_commands,
+                "helper_script": str(context.worktree_root / "scripts" / "bash" / "format.sh"),
+            },
         )
 
     if selector == "all":
@@ -3319,6 +3471,7 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
             cache_entries = read_cmake_cache(profile.build_dir, "doctor", context.profile_name())
         python_executable, python_source = doctor_python_executable(cache_entries)
         python_probe = probe_python_stack(python_executable, python_source)
+        python_probe["provisional"] = python_probe_is_provisional(python_probe, configured=configured)
 
     if topic in ("all", "profile"):
         assert profile is not None
@@ -3449,16 +3602,26 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
         plotting_detail = ""
         if python_probe["failed_modules"]:
             plotting_detail = " ({})".format(", ".join(python_probe["failed_modules"]))
+        interpreter_text = format_python_resolution(
+            python_probe["executable"],
+            str(python_probe.get("source") or "missing"),
+            configured=configured,
+        )
+        if python_probe.get("provisional"):
+            plotting_detail += " [provisional until configure]"
         lines.append(
             "python: interpreter={} numpy={} plotting={}{}".format(
-                python_probe["executable"] or "<missing>",
+                interpreter_text,
                 "ok" if python_probe["numpy_available"] else "missing",
                 plotting_state,
                 plotting_detail,
             )
         )
         install_hint = python_probe.get("install_hint")
-        if isinstance(install_hint, str) and install_hint and not python_probe["plotting_available"]:
+        if python_probe.get("provisional"):
+            if not python_probe["plotting_available"]:
+                lines.append("python note: configure the profile first before trusting install hints for plotting extras.")
+        elif isinstance(install_hint, str) and install_hint and not python_probe["plotting_available"]:
             lines.append("python hint: install plotting extras with {}".format(install_hint))
 
     if topic in ("all", "locking"):
@@ -3500,6 +3663,39 @@ def create_parser() -> argparse.ArgumentParser:
     common_no_profile.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
 
     subparsers = parser.add_subparsers(dest="command", required=True)
+    tidy_epilog = (
+        "Selectors:\n"
+        "  changed   Files modified in the working tree relative to HEAD (default)\n"
+        "  previous  Files modified in the previous commit\n"
+        "  origin    Files different from origin/<current-branch>\n"
+        "  dev       Files different from the local development branch\n"
+        "\n"
+        "Prerequisites:\n"
+        "  - The selected profile must already be configured.\n"
+        "  - compile_commands.json must exist in the profile build directory.\n"
+        "\n"
+        "Examples:\n"
+        "  quokka tidy --profile host-3d\n"
+        "  quokka tidy previous --profile host-3d\n"
+        "  quokka tidy dev --fix --profile host-3d"
+    )
+    format_epilog = (
+        "Selectors:\n"
+        "  changed   Files modified in the working tree relative to HEAD (default)\n"
+        "  previous  Files modified in the previous commit\n"
+        "  origin    Files different from origin/<current-branch>\n"
+        "  dev       Files different from the local development branch\n"
+        "  all       All files covered by the clang-format pre-commit hook\n"
+        "\n"
+        "Prerequisites:\n"
+        "  - pre-commit must be installed and available on PATH.\n"
+        "  - format uses the repository clang-format hook from .pre-commit-config.yaml.\n"
+        "\n"
+        "Examples:\n"
+        "  quokka format\n"
+        "  quokka format origin\n"
+        "  quokka format all"
+    )
 
     build = subparsers.add_parser("build", parents=[common])
     build.add_argument("targets", nargs="*")
@@ -3526,13 +3722,25 @@ def create_parser() -> argparse.ArgumentParser:
     smoke.add_argument("--compact-stream", action="store_true", help="Show compact live progress and write the full log to a file.")
     smoke.set_defaults(handler=cmd_smoke)
 
-    tidy = subparsers.add_parser("tidy", parents=[common])
-    tidy.add_argument("selector", nargs="?")
-    tidy.add_argument("--fix", action="store_true")
+    tidy = subparsers.add_parser(
+        "tidy",
+        parents=[common],
+        description="Run clang-tidy on files selected relative to Git history.",
+        epilog=tidy_epilog,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    tidy.add_argument("selector", nargs="?", help="File selector: changed (default), previous, origin, or dev.")
+    tidy.add_argument("--fix", action="store_true", help="Apply clang-tidy fix-it hints.")
     tidy.set_defaults(handler=cmd_tidy)
 
-    fmt = subparsers.add_parser("format", parents=[common_no_profile])
-    fmt.add_argument("selector", nargs="?")
+    fmt = subparsers.add_parser(
+        "format",
+        parents=[common_no_profile],
+        description="Run the repository clang-format pre-commit hook on selected files.",
+        epilog=format_epilog,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    fmt.add_argument("selector", nargs="?", help="File selector: changed (default), previous, origin, dev, or all.")
     fmt.set_defaults(handler=cmd_format)
 
     list_cmd = subparsers.add_parser("list", parents=[common])
