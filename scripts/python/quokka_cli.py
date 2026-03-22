@@ -18,6 +18,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 import traceback
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
@@ -32,6 +33,7 @@ SCHEMA = 1
 LOCK_TYPES = ("build", "run")
 TIDY_SELECTORS = {"changed", "previous", "origin", "dev"}
 FORMAT_SELECTORS = {"changed", "previous", "origin", "dev", "all"}
+VERIFY_SELECTORS = {"changed", "previous", "origin", "dev"}
 SUBMODULE_PATHS = (
     "extern/amrex",
     "extern/AMReX-Hydro",
@@ -72,6 +74,7 @@ DIAGNOSTIC_CODES = {
 }
 MAX_DIAGNOSTIC_OUTPUT_CHARS = 4000
 EXPECTATION_COMMENT_RE = re.compile(r"^\s*//[/!<]*\s*QUOKKA_EXPECT:\s*(.+?)\s*$")
+NINJA_PROGRESS_RE = re.compile(r"^\[(\d+)/(\d+)\]\s+(.*)$")
 PYTHON_MODULE_PACKAGES = {
     "numpy": "numpy",
     "matplotlib": "matplotlib",
@@ -597,6 +600,32 @@ def ctest_compact_console_line(line: str) -> bool:
     return False
 
 
+def make_ninja_progress_heartbeat(label: str, *, interval_seconds: float = 5.0) -> Any:
+    state = {"last_emit": 0.0}
+
+    def reporter(line: str) -> Optional[str]:
+        stripped = line.strip()
+        if not stripped:
+            return None
+
+        match = NINJA_PROGRESS_RE.match(stripped)
+        if match is None:
+            if stripped.startswith(("FAILED:", "ninja: build stopped")):
+                return stripped
+            return None
+
+        current = int(match.group(1))
+        total = int(match.group(2))
+        target = match.group(3).strip()
+        now = time.monotonic()
+        if current == 1 or current == total or (now - state["last_emit"]) >= interval_seconds:
+            state["last_emit"] = now
+            return "{} heartbeat: [{}/{}] {}".format(label, current, total, target)
+        return None
+
+    return reporter
+
+
 def ctest_lasttest_log_path(build_dir: Path) -> Path:
     return build_dir / "Testing" / "Temporary" / "LastTest.log"
 
@@ -717,8 +746,12 @@ def run_command_compact_logged(
                 handle.write(raw_line)
                 tail = truncate_output_tail(tail + raw_line)
                 line = raw_line.rstrip("\n")
-                if echo_filter is not None and echo_filter(line):
-                    print(line, file=sys.stderr, flush=True)
+                if echo_filter is not None:
+                    rendered = echo_filter(line)
+                    if isinstance(rendered, str) and rendered:
+                        print(rendered, file=sys.stderr, flush=True)
+                    elif rendered:
+                        print(line, file=sys.stderr, flush=True)
             returncode = proc.wait()
             handle.write("\n# finished_at: {}\n".format(utc_now()))
         if returncode != 0:
@@ -760,6 +793,25 @@ def python_install_hint(python_probe: Dict[str, Any]) -> Optional[str]:
     return "{} -m pip install {}".format(shlex.quote(str(executable)), " ".join(packages))
 
 
+def preferred_pre_commit_install_command() -> Optional[List[str]]:
+    in_virtualenv = bool(os.environ.get("VIRTUAL_ENV"))
+    uv_path = resolve_executable_path("uv")
+    python_path = resolve_executable_path("python3") or resolve_executable_path("python") or sys.executable
+    if uv_path is not None:
+        command = [uv_path, "pip", "install"]
+        if not in_virtualenv:
+            command.append("--user")
+        command.append("pre-commit")
+        return command
+    if python_path:
+        command = [python_path, "-m", "pip", "install"]
+        if not in_virtualenv:
+            command.append("--user")
+        command.append("pre-commit")
+        return command
+    return None
+
+
 def pre_commit_install_commands() -> List[str]:
     commands: List[str] = []
     in_virtualenv = bool(os.environ.get("VIRTUAL_ENV"))
@@ -784,6 +836,52 @@ def pre_commit_install_commands() -> List[str]:
 
 def python_probe_is_provisional(python_probe: Dict[str, Any], *, configured: bool) -> bool:
     return (not configured) and python_probe.get("source") != "cache"
+
+
+def run_command_capture_output(
+    args: Sequence[str],
+    *,
+    cwd: Optional[Path] = None,
+    command: str,
+    profile: Optional[str],
+    resource: Optional[Dict[str, Any]] = None,
+    env: Optional[Dict[str, str]] = None,
+) -> Dict[str, str]:
+    try:
+        proc = subprocess.run(
+            list(args),
+            cwd=None if cwd is None else str(cwd),
+            check=False,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        raise DiagnosticError(
+            "EXECUTOR_UNAVAILABLE",
+            "Required tool '{}' is not available.".format(args[0]),
+            command=command,
+            profile=profile,
+            resource=resource,
+            details={"tool": args[0]},
+        ) from exc
+
+    if proc.returncode != 0:
+        raise DiagnosticError(
+            "TOOL_FAILED",
+            "Command failed: {}".format(shell_join(args)),
+            command=command,
+            profile=profile,
+            resource=resource,
+            details={
+                "tool": args[0],
+                "exit_code": proc.returncode,
+                "stdout": truncate_output_tail(proc.stdout),
+                "stderr": truncate_output_tail(proc.stderr),
+            },
+        )
+    return {"stdout": proc.stdout, "stderr": proc.stderr}
 
 
 def command_output(
@@ -1468,8 +1566,35 @@ def format_python_resolution(executable: Optional[str], source: str, *, configur
         "missing": "missing",
     }.get(source, source)
     if not configured and source == "path":
-        return "{} ({}; configure to confirm)".format(executable, source_label)
+        return "{} ({}; provisional until configure, configured interpreter may differ)".format(executable, source_label)
     return "{} ({})".format(executable, source_label)
+
+
+def collect_runtime_python_probe(context: CliContext, command: str) -> Dict[str, Any]:
+    profile = context.require_profile(command)
+    build_state = buildtree_state(profile.build_dir)
+    cache_entries: Dict[str, Dict[str, str]] = {}
+    if build_state["cmake_cache_exists"]:
+        cache_entries = read_cmake_cache(profile.build_dir, command, context.profile_name())
+    python_executable, python_source = doctor_python_executable(cache_entries)
+    python_probe = probe_python_stack(python_executable, python_source)
+    python_probe["provisional"] = python_probe_is_provisional(python_probe, configured=build_state["configured"])
+    python_probe["configured"] = build_state["configured"]
+    return python_probe
+
+
+def collect_bootstrap_state(context: CliContext, command: str) -> Dict[str, Any]:
+    python_probe = collect_runtime_python_probe(context, command)
+    pre_commit = tool_probe("pre-commit", ["--version"], label="pre-commit")
+    pre_commit["install_commands"] = pre_commit_install_commands() if pre_commit["status"] != "ok" else []
+    plotting_install_hint = None if python_probe.get("provisional") else python_probe.get("install_hint")
+    return {
+        "pre_commit": pre_commit,
+        "python": python_probe,
+        "required_missing": pre_commit["status"] != "ok",
+        "optional_missing": not python_probe["plotting_available"],
+        "plotting_install_hint": plotting_install_hint,
+    }
 
 
 def build_summary_from_cache(
@@ -2673,6 +2798,7 @@ def perform_build(context: CliContext, targets: Sequence[str], reconfigure: bool
                 command=command,
                 profile=context.profile_name(),
                 log_path=compact_log_path,
+                echo_filter=make_ninja_progress_heartbeat("Build"),
             )
         else:
             run_command(build_args, command=command, profile=context.profile_name(), capture_output=context.json_output)
@@ -2795,6 +2921,119 @@ def expectation_summary_for_test(context: CliContext, test: TestSpec) -> Optiona
     }
 
 
+def summarize_runtime_output(stdout: str, stderr: str) -> List[str]:
+    combined = stdout.splitlines() + stderr.splitlines()
+    metrics = extract_metric_lines(combined)
+    if metrics:
+        return metrics
+
+    fallback: List[str] = []
+    seen = set()
+    for raw_line in combined:
+        line = raw_line.strip()
+        if not line or line in seen:
+            continue
+        lower = line.lower()
+        if lower.startswith(
+            (
+                "initializing amrex",
+                "mpi initialized",
+                "amrex ",
+                "tinyprofiler",
+                "unused parmparse",
+                "pinned memory",
+                "cpu memory",
+                "name ",
+            )
+        ):
+            continue
+        fallback.append(line)
+        seen.add(line)
+        if len(fallback) >= 5:
+            break
+    return fallback
+
+
+def tests_for_verification(context: CliContext, selector: str, command: str) -> Dict[str, Any]:
+    profile = context.require_profile(command)
+    changed_files = git_changed_files(context.worktree_root, selector, command, context.profile_name())
+    if not changed_files:
+        return {
+            "selector": selector,
+            "changed_files": [],
+            "tests": [],
+            "selection_mode": "none",
+            "reason": "no_changed_files",
+        }
+
+    configured = is_build_configured(profile.build_dir)
+    tests = discover_tests(profile.build_dir, command, context.profile_name()) if configured else discover_source_tests(context.worktree_root, profile, command)
+    changed_paths = {(context.worktree_root / file).resolve() for file in changed_files}
+    changed_problem_dirs = {
+        Path(file).parts[2]
+        for file in changed_files
+        if len(Path(file).parts) >= 3 and Path(file).parts[0] == "src" and Path(file).parts[1] == "problems"
+    }
+
+    matched: List[TestSpec] = []
+    reasons_by_test: Dict[str, List[str]] = {}
+    for test in tests:
+        reasons: List[str] = []
+        try:
+            problem_name = problem_for_test(test)
+        except DiagnosticError:
+            continue
+
+        if problem_name in changed_problem_dirs:
+            reasons.append("problem_source")
+
+        source_candidate = source_file_for_test(context, test)
+        if source_candidate is not None and source_candidate.resolve() in changed_paths:
+            reasons.append("test_source")
+
+        if test.source_path.resolve() in changed_paths:
+            reasons.append("cmake")
+
+        input_path = resolve_input_argument(test.command[1:], test.working_directory, context.worktree_root)
+        if input_path is not None and input_path.resolve() in changed_paths:
+            reasons.append("input")
+
+        if reasons:
+            matched.append(test)
+            reasons_by_test[test.name] = reasons
+
+    matched = sorted({test.name: test for test in matched}.values(), key=lambda spec: spec.name)
+    if matched:
+        return {
+            "selector": selector,
+            "changed_files": changed_files,
+            "tests": matched,
+            "selection_mode": "targeted",
+            "reason": "changed_problem_or_input",
+            "reasons_by_test": reasons_by_test,
+        }
+
+    fallback = next((test for test in tests if test.name == "ODEIntegration"), None)
+    if fallback is not None:
+        return {
+            "selector": selector,
+            "changed_files": changed_files,
+            "tests": [fallback],
+            "selection_mode": "fallback_smoke",
+            "reason": "no_targeted_tests",
+            "reasons_by_test": {"ODEIntegration": ["fallback_smoke"]},
+        }
+
+    return {
+        "selector": selector,
+        "changed_files": changed_files,
+        "tests": [],
+        "selection_mode": "none",
+        "reason": "no_targeted_tests",
+        "reasons_by_test": {},
+    }
+
+
 def format_result(result: CommandResult, as_json: bool) -> str:
     if not as_json:
         return result.text
@@ -2808,6 +3047,17 @@ def format_result(result: CommandResult, as_json: bool) -> str:
         "data": result.data,
     }
     return json.dumps(payload, indent=2, sort_keys=True)
+
+
+def bootstrap_hint_command(profile: Optional[str], *, fix: bool = False, include_optional: bool = False) -> str:
+    args = ["quokka", "bootstrap"]
+    if fix:
+        args.append("--fix")
+    if include_optional:
+        args.append("--include-optional")
+    if profile:
+        args.extend(["--profile", profile])
+    return shell_join(args)
 
 
 def doctor_hint_command(profile: Optional[str], topic: Optional[str] = None) -> Optional[str]:
@@ -2857,6 +3107,7 @@ def diagnostic_hints(error: DiagnosticError, command: Optional[str], profile: Op
             hints.append("For live CTest output, rerun with: {}".format(stream_command))
 
     if error.diagnostic_id == "PRE_COMMIT_UNAVAILABLE":
+        hints.append("Use the onboarding helper: {}".format(bootstrap_hint_command(effective_profile, fix=True)))
         install_commands = error.details.get("install_commands")
         if isinstance(install_commands, list):
             for command_text in install_commands:
@@ -2920,22 +3171,145 @@ def cmd_run(context: CliContext, args: argparse.Namespace) -> CommandResult:
             working_dir = (context.worktree_root / str(working_dir_value)).resolve()
         else:
             working_dir = context.worktree_root / "tests"
-        run_command(
-            [str(binary_path), str(input_path)],
-            cwd=working_dir,
-            command="run",
-            profile=context.profile_name(),
-            resource=resource,
-            capture_output=context.json_output,
-        )
+        command_args = [str(binary_path), str(input_path)]
+        runtime_output = {"stdout": "", "stderr": ""}
+        if args.verbose_runtime:
+            run_command(
+                command_args,
+                cwd=working_dir,
+                command="run",
+                profile=context.profile_name(),
+                resource=resource,
+                capture_output=context.json_output,
+            )
+        else:
+            runtime_output = run_command_capture_output(
+                command_args,
+                cwd=working_dir,
+                command="run",
+                profile=context.profile_name(),
+                resource=resource,
+            )
 
+    summary_lines = summarize_runtime_output(runtime_output["stdout"], runtime_output["stderr"]) if not args.verbose_runtime else []
     data = {
         "binary_path": str(binary_path),
         "input": relative_or_absolute(input_path, context.worktree_root),
         "working_dir": str(working_dir),
+        "verbose_runtime": bool(args.verbose_runtime),
+        "summary_lines": summary_lines,
     }
     text = "Ran {} with {}.".format(args.problem, data["input"])
+    if summary_lines:
+        text += "\nObserved metrics:"
+        for line in summary_lines:
+            text += "\n- {}".format(line)
+    elif not args.verbose_runtime:
+        text += "\nNo summary metrics were extracted. Re-run with --verbose-runtime for full program output."
     return CommandResult("run", context.profile_name(), resource, data, text)
+
+
+def cmd_verify(context: CliContext, args: argparse.Namespace) -> CommandResult:
+    selector = args.selector or "changed"
+    if selector not in VERIFY_SELECTORS:
+        raise DiagnosticError(
+            "USAGE_ERROR",
+            "Unsupported verify selector '{}'.".format(selector),
+            command="verify",
+            profile=context.profile_name(),
+        )
+    if (args.stream or args.compact_stream) and args.json:
+        raise DiagnosticError(
+            "USAGE_ERROR",
+            "--stream and --compact-stream cannot be combined with --json.",
+            command="verify",
+            profile=context.profile_name(),
+        )
+    if args.stream and args.compact_stream:
+        raise DiagnosticError(
+            "USAGE_ERROR",
+            "--stream and --compact-stream are mutually exclusive.",
+            command="verify",
+            profile=context.profile_name(),
+        )
+
+    bootstrap_result = cmd_bootstrap(context, argparse.Namespace(fix=False, include_optional=False))
+    selection = tests_for_verification(context, selector, "verify")
+    changed_files = selection["changed_files"]
+    if not changed_files:
+        data = {
+            "selector": selector,
+            "changed_files": [],
+            "bootstrap": bootstrap_result.data,
+            "tests": None,
+            "tidy": None,
+            "format_ready": bootstrap_result.data["pre_commit"]["status"] == "ok",
+            "no_op": True,
+        }
+        text = "No files selected for verification.\n{}".format(bootstrap_result.text)
+        return CommandResult("verify", context.profile_name(), None, data, text)
+
+    selected_tests: List[TestSpec] = selection["tests"]
+    test_name = selected_tests[0].name if len(selected_tests) == 1 else None
+    ctest_regex = None
+    if len(selected_tests) > 1:
+        ctest_regex = "^(?:{})$".format("|".join(re.escape(test.name) for test in selected_tests))
+
+    test_result = None
+    if selected_tests:
+        test_result = cmd_test(
+            context,
+            argparse.Namespace(
+                test_name=test_name,
+                ctest_regex=ctest_regex,
+                build_if_needed=True,
+                stream=bool(args.stream),
+                compact_stream=bool(args.compact_stream),
+                json=bool(args.json),
+            ),
+        )
+
+    tidy_result = cmd_tidy(context, argparse.Namespace(selector=selector, fix=False))
+    format_ready = bootstrap_result.data["pre_commit"]["status"] == "ok"
+    selected_test_names = [test.name for test in selected_tests]
+
+    data = {
+        "selector": selector,
+        "changed_files": changed_files,
+        "test_selection": {
+            "mode": selection["selection_mode"],
+            "reason": selection["reason"],
+            "tests": selected_test_names,
+            "reasons_by_test": selection.get("reasons_by_test", {}),
+        },
+        "bootstrap": bootstrap_result.data,
+        "tests": None if test_result is None else test_result.data,
+        "tidy": tidy_result.data,
+        "format_ready": format_ready,
+    }
+
+    text = "Verified selector '{}' in profile {}.".format(selector, context.profile_name())
+    text += "\nChanged files: {}".format(len(changed_files))
+    if selected_test_names:
+        if selection["selection_mode"] == "fallback_smoke":
+            text += "\nTest selection: {} (fallback smoke test; no changed problem-specific tests were identified).".format(
+                ", ".join(selected_test_names)
+            )
+        else:
+            text += "\nTest selection: {}.".format(", ".join(selected_test_names))
+    else:
+        text += "\nTest selection: none."
+    if not format_ready:
+        text += "\nFormat readiness: pre-commit is missing. Use {} for install guidance.".format(
+            bootstrap_hint_command(context.profile_name(), fix=True)
+        )
+    else:
+        text += "\nFormat readiness: ok."
+    if test_result is not None:
+        text += "\n\n{}".format(test_result.text)
+    text += "\n\n{}".format(tidy_result.text)
+    text += "\n\n{}".format(bootstrap_result.text)
+    return CommandResult("verify", context.profile_name(), None, data, text)
 
 
 def cmd_test(context: CliContext, args: argparse.Namespace) -> CommandResult:
@@ -3118,6 +3492,79 @@ def cmd_smoke(context: CliContext, args: argparse.Namespace) -> CommandResult:
     }
     text = "Smoke test target: {} in profile {}.\n{}".format(test_args.test_name, context.profile_name(), test_result.text)
     return CommandResult("smoke", context.profile_name(), {"kind": "test", "name": test_args.test_name}, data, text)
+
+
+def cmd_bootstrap(context: CliContext, args: argparse.Namespace) -> CommandResult:
+    state = collect_bootstrap_state(context, "bootstrap")
+    pre_commit = state["pre_commit"]
+    python_probe = state["python"]
+    installed: List[str] = []
+    skipped: List[str] = []
+
+    if args.fix:
+        if pre_commit["status"] != "ok":
+            install_command = preferred_pre_commit_install_command()
+            if install_command is None:
+                skipped.append("pre-commit (no usable installer command found)")
+            else:
+                emit_notice(context, "Installing pre-commit with: {}".format(shell_join(install_command)))
+                run_command(install_command, command="bootstrap", profile=context.profile_name(), capture_output=context.json_output)
+                installed.append("pre-commit")
+
+        if args.include_optional and not python_probe["plotting_available"]:
+            if python_probe.get("provisional"):
+                skipped.append("plotting extras (configure the profile first to lock the interpreter)")
+            else:
+                install_hint = state.get("plotting_install_hint")
+                if isinstance(install_hint, str) and install_hint:
+                    install_command = shlex.split(install_hint)
+                    emit_notice(context, "Installing optional plotting extras with: {}".format(shell_join(install_command)))
+                    run_command(install_command, command="bootstrap", profile=context.profile_name(), capture_output=context.json_output)
+                    installed.append("plotting extras")
+                else:
+                    skipped.append("plotting extras (no install hint available)")
+
+        state = collect_bootstrap_state(context, "bootstrap")
+        pre_commit = state["pre_commit"]
+        python_probe = state["python"]
+
+    data = {
+        "profile": context.profile_name(),
+        "pre_commit": pre_commit,
+        "python": python_probe,
+        "installed": installed,
+        "skipped": skipped,
+    }
+
+    lines = ["Bootstrap status for profile {}.".format(context.profile_name())]
+    lines.append("Required: pre-commit={}".format(pre_commit["status"]))
+    plotting_state = "ok" if python_probe["plotting_available"] else "unavailable"
+    plotting_detail = ""
+    if python_probe["failed_modules"]:
+        plotting_detail = " ({})".format(", ".join(python_probe["failed_modules"]))
+    lines.append("Optional: plotting={}{}".format(plotting_state, plotting_detail))
+
+    if installed:
+        lines.append("Installed: {}".format(", ".join(installed)))
+    if skipped:
+        lines.append("Skipped: {}".format(", ".join(skipped)))
+
+    next_steps: List[str] = []
+    if pre_commit["status"] != "ok":
+        next_steps.append(bootstrap_hint_command(context.profile_name(), fix=True))
+    if not python_probe["plotting_available"]:
+        if python_probe.get("provisional"):
+            next_steps.append("Configure the profile first, then rerun {}.".format(bootstrap_hint_command(context.profile_name(), fix=True, include_optional=True)))
+        else:
+            next_steps.append(bootstrap_hint_command(context.profile_name(), fix=True, include_optional=True))
+    if next_steps:
+        lines.append("Next steps:")
+        for step in next_steps:
+            lines.append("- {}".format(step))
+    else:
+        lines.append("All checked prerequisites are ready.")
+
+    return CommandResult("bootstrap", context.profile_name(), None, data, "\n".join(lines))
 
 
 def cmd_list(context: CliContext, args: argparse.Namespace) -> CommandResult:
@@ -3579,6 +4026,7 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
             "ctest": tool_probe("ctest", ["--version"]),
             "git": tool_probe("git", ["--version"]),
             "generator": generator_tool_probe(profile.generator),
+            "pre_commit": tool_probe("pre-commit", ["--version"], label="pre-commit"),
         }
         data["runtime"] = {
             "runtime_dir": str(runtime_dir),
@@ -3590,12 +4038,13 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
         }
         lines.append("runtime: ok ({})".format(runtime_dir))
         lines.append(
-            "tools: cmake={cmake}, ctest={ctest}, git={git}, {generator_label}={generator_status}".format(
+            "tools: cmake={cmake}, ctest={ctest}, git={git}, {generator_label}={generator_status}, pre-commit={pre_commit}".format(
                 cmake=tools["cmake"]["status"],
                 ctest=tools["ctest"]["status"],
                 git=tools["git"]["status"],
                 generator_label=profile.generator,
                 generator_status=tools["generator"]["status"],
+                pre_commit=tools["pre_commit"]["status"],
             )
         )
         plotting_state = "ok" if python_probe["plotting_available"] else "unavailable"
@@ -3619,10 +4068,13 @@ def cmd_doctor(context: CliContext, args: argparse.Namespace) -> CommandResult:
         )
         install_hint = python_probe.get("install_hint")
         if python_probe.get("provisional"):
+            lines.append("python note: pre-configure interpreter selection is provisional; CMake may choose a different interpreter.")
             if not python_probe["plotting_available"]:
                 lines.append("python note: configure the profile first before trusting install hints for plotting extras.")
         elif isinstance(install_hint, str) and install_hint and not python_probe["plotting_available"]:
             lines.append("python hint: install plotting extras with {}".format(install_hint))
+        if tools["pre_commit"]["status"] != "ok" or not python_probe["plotting_available"]:
+            lines.append("bootstrap hint: {}".format(bootstrap_hint_command(context.profile_name())))
 
     if topic in ("all", "locking"):
         locks = []
@@ -3696,6 +4148,31 @@ def create_parser() -> argparse.ArgumentParser:
         "  quokka format origin\n"
         "  quokka format all"
     )
+    verify_epilog = (
+        "Selectors:\n"
+        "  changed   Files modified in the working tree relative to HEAD (default)\n"
+        "  previous  Files modified in the previous commit\n"
+        "  origin    Files different from origin/<current-branch>\n"
+        "  dev       Files different from the local development branch\n"
+        "\n"
+        "Behavior:\n"
+        "  - checks formatting prerequisites\n"
+        "  - selects changed-problem tests when possible, otherwise falls back to ODEIntegration\n"
+        "  - runs tests with --build-if-needed\n"
+        "  - runs clang-tidy over changed C++ files\n"
+        "\n"
+        "Examples:\n"
+        "  quokka verify --profile host-3d\n"
+        "  quokka verify changed --profile host-3d --compact-stream"
+    )
+    bootstrap_epilog = (
+        "Checks developer prerequisites for the selected profile.\n"
+        "\n"
+        "Examples:\n"
+        "  quokka bootstrap --profile host-3d\n"
+        "  quokka bootstrap --profile host-3d --fix\n"
+        "  quokka bootstrap --profile host-3d --fix --include-optional"
+    )
 
     build = subparsers.add_parser("build", parents=[common])
     build.add_argument("targets", nargs="*")
@@ -3706,6 +4183,7 @@ def create_parser() -> argparse.ArgumentParser:
     run.add_argument("problem")
     run.add_argument("--input")
     run.add_argument("--build-if-needed", action="store_true")
+    run.add_argument("--verbose-runtime", action="store_true", help="Show the full stdout/stderr emitted by the executable.")
     run.set_defaults(handler=cmd_run)
 
     test = subparsers.add_parser("test", parents=[common])
@@ -3721,6 +4199,18 @@ def create_parser() -> argparse.ArgumentParser:
     smoke.add_argument("--stream", action="store_true", help="Stream live test progress and stdout/stderr.")
     smoke.add_argument("--compact-stream", action="store_true", help="Show compact live progress and write the full log to a file.")
     smoke.set_defaults(handler=cmd_smoke)
+
+    verify = subparsers.add_parser(
+        "verify",
+        parents=[common],
+        description="Run the changed-file local verification workflow.",
+        epilog=verify_epilog,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    verify.add_argument("selector", nargs="?", help="File selector: changed (default), previous, origin, or dev.")
+    verify.add_argument("--stream", action="store_true", help="Stream live test progress and stdout/stderr.")
+    verify.add_argument("--compact-stream", action="store_true", help="Show compact live progress and write the full log to a file.")
+    verify.set_defaults(handler=cmd_verify)
 
     tidy = subparsers.add_parser(
         "tidy",
@@ -3762,6 +4252,21 @@ def create_parser() -> argparse.ArgumentParser:
     doctor = subparsers.add_parser("doctor", parents=[common])
     doctor.add_argument("topic", nargs="?", choices=["all", "locking", "runtime", "profile"])
     doctor.set_defaults(handler=cmd_doctor)
+
+    bootstrap = subparsers.add_parser(
+        "bootstrap",
+        parents=[common],
+        description="Check or install developer prerequisites for the selected profile.",
+        epilog=bootstrap_epilog,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    bootstrap.add_argument("--fix", action="store_true", help="Install missing required prerequisites when possible.")
+    bootstrap.add_argument(
+        "--include-optional",
+        action="store_true",
+        help="Also install optional plotting extras when the configured Python interpreter is known.",
+    )
+    bootstrap.set_defaults(handler=cmd_bootstrap)
 
     activation = subparsers.add_parser("_activate-env", parents=[common], help=argparse.SUPPRESS)
     activation.set_defaults(handler=cmd_activation_env)

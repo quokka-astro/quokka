@@ -14,6 +14,12 @@ scripts/bash/install-quokka-bootstrap.sh
 
 By default this installs `quokka` to `$HOME/.local/bin/quokka`. Make sure that directory is on your `PATH`.
 
+For developer prerequisites inside the worktree, use:
+
+```bash
+quokka bootstrap --profile host-default
+```
+
 ## Activate a worktree
 
 Activate the current checkout by sourcing the activation script:
@@ -55,6 +61,7 @@ This is a typical interactive workflow:
 ```bash
 scripts/bash/install-quokka-bootstrap.sh
 source scripts/bash/quokka-activate.sh host-default
+quokka bootstrap --profile host-default
 quokka build
 quokka list problems
 quokka status
@@ -92,6 +99,14 @@ quokka list profiles
 quokka status --profile host-3d
 quokka doctor --profile host-3d
 ```
+
+- If you want a single post-edit verification command, use:
+
+```bash
+quokka verify changed --profile host-3d --compact-stream
+```
+
+It checks formatting prerequisites, selects changed-problem tests when possible, falls back to `ODEIntegration` when no targeted test can be inferred, runs tests with `--build-if-needed`, and then runs `clang-tidy` over changed C++ files.
 
 - A good first smoke test is `ODEIntegration`, which builds quickly and has an explicit numerical tolerance:
 
@@ -136,6 +151,8 @@ quokka smoke --profile host-3d --compact-stream
 quokka test ODEIntegration --profile host-3d --build-if-needed --compact-stream
 ```
 
+During long build phases, compact streaming now emits periodic heartbeat lines with the current Ninja counter so first-time builds do not look stalled.
+
 - If you still need more direct test control, fall back to raw CTest in the selected build directory after the first configure/build:
 
 ```bash
@@ -160,10 +177,11 @@ Run a problem executable with an input file:
 quokka run <problem> --input <input-file> --profile host-default
 ```
 
-By default, `run` validates that the executable is present and up to date. If you want it to build missing or stale targets first, add `--build-if-needed`:
+By default, `run` validates that the executable is present and up to date, captures the full runtime log, and prints a short summary of observed metrics. If you want the full stdout/stderr stream in the terminal, add `--verbose-runtime`. If you want it to build missing or stale targets first, add `--build-if-needed`:
 
 ```bash
 quokka run <problem> --input <input-file> --build-if-needed --profile host-default
+quokka run <problem> --input <input-file> --verbose-runtime --profile host-default
 ```
 
 ### Tests
@@ -206,6 +224,8 @@ quokka doctor runtime --profile host-default
 quokka doctor profile --profile host-default
 quokka doctor locking --profile host-default
 ```
+
+`doctor runtime` reports whether `pre-commit` is installed and whether the plotting extras are available for the selected Python interpreter. When those prerequisites are missing, it points to `quokka bootstrap`.
 
 Inspect the current profile, configure state, locks, and artifact freshness:
 
@@ -254,6 +274,14 @@ Prerequisites:
 
 `format` does not require a profile.
 
+Use the onboarding helper to inspect or install the common developer prerequisites:
+
+```bash
+quokka bootstrap --profile host-default
+quokka bootstrap --profile host-default --fix
+quokka bootstrap --profile host-default --fix --include-optional
+```
+
 ## Profiles
 
 Profiles are defined in `quokka.toml`. Each profile selects a build directory, CMake generator, and CMake definitions such as dimensionality, MPI support, or GPU backend.
@@ -286,7 +314,9 @@ quokka --help
 quokka build --help
 quokka run --help
 quokka test --help
+quokka verify --help
 quokka doctor --help
+quokka bootstrap --help
 quokka smoke --help
 ```
 
