@@ -34,6 +34,7 @@ LOCK_TYPES = ("build", "run")
 TIDY_SELECTORS = {"changed", "previous", "origin", "dev"}
 FORMAT_SELECTORS = {"changed", "previous", "origin", "dev", "all"}
 CLANG_TIDY_FILE_EXTENSIONS = (".cpp", ".hpp")
+CLANG_FORMAT_FILE_EXTENSIONS = (".cpp", ".hpp", ".H")
 SUBMODULE_PATHS = (
     "extern/amrex",
     "extern/AMReX-Hydro",
@@ -1804,8 +1805,8 @@ def collect_bootstrap_state(context: CliContext, command: str) -> Dict[str, Any]
         "mpi": mpi,
         "pre_commit": pre_commit,
         "python": python_probe,
-        "required_missing": bool(mpi["missing_required"]) or pre_commit["status"] != "ok",
-        "optional_missing": not python_probe["plotting_available"],
+        "required_missing": bool(mpi["missing_required"]),
+        "optional_missing": pre_commit["status"] != "ok" or not python_probe["plotting_available"],
         "plotting_install_hint": plotting_install_hint,
         "impacts": impacts,
     }
@@ -1829,7 +1830,7 @@ def prerequisite_impact_entries(mpi: Dict[str, Any], pre_commit: Dict[str, Any],
             {
                 "name": "pre_commit",
                 "label": "pre-commit unavailable",
-                "impact": "blocks tidy/format",
+                "impact": "optional for repository hook workflows",
             }
         )
 
@@ -3224,6 +3225,29 @@ def summarize_path_examples(paths: Sequence[str], *, limit: int = 3) -> str:
     return ", ".join(shown) + suffix
 
 
+def clang_format_files(context: CliContext, files: Sequence[str]) -> List[str]:
+    formatter = shutil.which("clang-format")
+    if formatter is None:
+        raise DiagnosticError(
+            "EXECUTOR_UNAVAILABLE",
+            "clang-format is required but not installed or not available on PATH.",
+            command="format",
+        )
+
+    formatted_files = [file for file in files if file.endswith(CLANG_FORMAT_FILE_EXTENSIONS)]
+    if not formatted_files:
+        return []
+
+    run_command(
+        [formatter, "-i", "-style=file"] + formatted_files,
+        cwd=context.worktree_root,
+        command="format",
+        profile=None,
+        capture_output=context.json_output,
+    )
+    return formatted_files
+
+
 def ctest_selection(context: CliContext, args: argparse.Namespace) -> List[TestSpec]:
     profile = context.require_profile("test")
     tests = discover_tests(profile.build_dir, "test", context.profile_name())
@@ -3756,10 +3780,11 @@ def cmd_bootstrap(context: CliContext, args: argparse.Namespace) -> CommandResul
     mpi_required_state = mpi["status"]
     if mpi["missing_required"]:
         mpi_required_state += " ({})".format(", ".join(mpi["missing_required"]))
-    lines.append("Required: mpi={}, pre-commit={}".format(mpi_required_state, pre_commit["status"]))
+    lines.append("Required: mpi={}".format(mpi_required_state))
     if mpi["setting"] is not None:
         lines.append("MPI setting: {} ({})".format(mpi["setting"], mpi["source"]))
     launcher_state = "ok" if mpi["launcher"]["status"] == "ok" else "missing ({})".format(mpi["launcher"]["tool"])
+    pre_commit_state = pre_commit["status"]
     plotting_state = python_probe_status_text(
         python_probe["plotting_available"],
         python_probe,
@@ -3770,7 +3795,7 @@ def cmd_bootstrap(context: CliContext, args: argparse.Namespace) -> CommandResul
     plotting_detail = ""
     if python_probe["failed_modules"]:
         plotting_detail = " ({})".format(", ".join(python_probe["failed_modules"]))
-    lines.append("Optional: mpi launcher={}, plotting={}{}".format(launcher_state, plotting_state, plotting_detail))
+    lines.append("Optional: pre-commit={}, mpi launcher={}, plotting={}{}".format(pre_commit_state, launcher_state, plotting_state, plotting_detail))
     append_prerequisite_impact_lines(lines, state["impacts"])
 
     if installed:
@@ -3783,7 +3808,7 @@ def cmd_bootstrap(context: CliContext, args: argparse.Namespace) -> CommandResul
     if isinstance(mpi_hint, str) and mpi_hint:
         next_steps.append(mpi_hint)
     if pre_commit["status"] != "ok":
-        next_steps.append(bootstrap_hint_command(context.profile_name(), fix=True))
+        next_steps.append("Install pre-commit hooks tooling with: {}".format(bootstrap_hint_command(context.profile_name(), fix=True)))
     if not python_probe["plotting_available"]:
         if python_probe["status"] == "unresolved":
             next_steps.append("Configure the profile first, then rerun {}.".format(bootstrap_hint_command(context.profile_name(), fix=True, include_optional=True)))
@@ -4057,46 +4082,28 @@ def cmd_format(context: CliContext, args: argparse.Namespace) -> CommandResult:
     context.resolve_runtime_dir("format")
     ensure_no_conflicting_locks(context, ("build",), "format")
 
-    if shutil.which("pre-commit") is None:
-        install_commands = pre_commit_install_commands()
-        bootstrap_command = bootstrap_hint_command(context.profile_name(), fix=True)
-        raise DiagnosticError(
-            "PRE_COMMIT_UNAVAILABLE",
-            "pre-commit is required but not installed. Run {} to install it.".format(bootstrap_command),
-            command="format",
-            details={
-                "bootstrap_command": bootstrap_command,
-                "install_commands": install_commands,
-                "helper_script": str(context.worktree_root / "scripts" / "bash" / "format.sh"),
-            },
-        )
-
     if selector == "all":
-        run_command(
-            ["pre-commit", "run", "clang-format", "--all-files"],
-            cwd=context.worktree_root,
-            command="format",
-            profile=None,
-            capture_output=context.json_output,
-        )
-        data = {"selector": selector, "files": [], "all_files": True}
-        text = "Ran clang-format hook over all eligible files."
+        tracked_files = command_output(["git", "ls-files"], cwd=context.worktree_root, command="format", profile=None).splitlines()
+        files = clang_format_files(context, tracked_files)
+        data = {"selector": selector, "files": files, "all_files": True, "engine": "clang-format"}
+        text = "Ran clang-format directly over {} tracked file(s).".format(len(files))
         return CommandResult("format", None, None, data, text)
 
-    files = git_changed_files(context.worktree_root, selector, "format", None)
+    changed_files = git_changed_files(context.worktree_root, selector, "format", None)
+    files = [file for file in changed_files if file.endswith(CLANG_FORMAT_FILE_EXTENSIONS)]
+    skipped_files = [file for file in changed_files if not file.endswith(CLANG_FORMAT_FILE_EXTENSIONS)]
     if not files:
-        data = {"selector": selector, "files": [], "no_op": True}
-        return CommandResult("format", None, None, data, "No files selected for formatting.")
+        data = {"selector": selector, "files": [], "skipped_files": skipped_files, "no_op": True}
+        text = "No C/C++ files selected for formatting."
+        if skipped_files:
+            text += "\nSkipped non-C/C++ file(s): {}".format(summarize_path_examples(skipped_files))
+        return CommandResult("format", None, None, data, text)
 
-    run_command(
-        ["pre-commit", "run", "clang-format", "--files"] + files,
-        cwd=context.worktree_root,
-        command="format",
-        profile=None,
-        capture_output=context.json_output,
-    )
-    data = {"selector": selector, "files": files}
-    text = "Ran clang-format hook on {} file(s).".format(len(files))
+    clang_format_files(context, files)
+    data = {"selector": selector, "files": files, "skipped_files": skipped_files, "engine": "clang-format"}
+    text = "Ran clang-format directly on {} file(s).".format(len(files))
+    if skipped_files:
+        text += "\nSkipped non-C/C++ file(s): {}".format(summarize_path_examples(skipped_files))
     return CommandResult("format", None, None, data, text)
 
 
@@ -4432,11 +4439,11 @@ def create_parser() -> argparse.ArgumentParser:
         "  previous  Files modified in the previous commit\n"
         "  origin    Files different from origin/<current-branch>\n"
         "  dev       Files different from the local development branch\n"
-        "  all       All files covered by the clang-format pre-commit hook\n"
+        "  all       All tracked C/C++ files supported by clang-format\n"
         "\n"
         "Prerequisites:\n"
-        "  - pre-commit must be installed and available on PATH.\n"
-        "  - format uses the repository clang-format hook from .pre-commit-config.yaml.\n"
+        "  - clang-format must be installed and available on PATH.\n"
+        "  - format uses the repository .clang-format style.\n"
         "\n"
         "Examples:\n"
         "  quokka format\n"
@@ -4492,7 +4499,7 @@ def create_parser() -> argparse.ArgumentParser:
     fmt = subparsers.add_parser(
         "format",
         parents=[common_no_profile],
-        description="Run the repository clang-format pre-commit hook on selected files.",
+        description="Run clang-format directly on selected C/C++ files.",
         epilog=format_epilog,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )

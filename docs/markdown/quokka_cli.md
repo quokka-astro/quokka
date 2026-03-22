@@ -253,7 +253,7 @@ Prerequisites:
 - the selected profile must already be configured
 - `compile_commands.json` must exist in the selected build directory
 
-Run the repository `clang-format` hook:
+Run `clang-format` directly on tracked C/C++ files:
 
 ```bash
 quokka format
@@ -266,10 +266,11 @@ Selectors:
 - `previous`: files modified in the previous commit
 - `origin`: files different from `origin/<current-branch>`
 - `dev`: files different from the local `development` branch
-- `all`: all files covered by the `clang-format` pre-commit hook
+- `all`: all tracked C/C++ files supported by `clang-format`
 
 Prerequisites:
-- `pre-commit` must be installed and available on `PATH`
+- `clang-format` must be installed and available on `PATH`
+- formatting uses the repository `.clang-format` style
 - `format` uses the repository hook definition from `.pre-commit-config.yaml`
 
 `format` does not require a profile.
