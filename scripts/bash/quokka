@@ -98,8 +98,8 @@ run_problem() {
 	[ -x "$exe" ] || die "executable not found: ${exe}"
 	[ -f "$input_file" ] || die "input file not found: ${input_file}"
 
-	echo "+ ${exe} ${input_file} $*"
-	"$exe" "$input_file" "$@"
+	echo "+ cd ${ROOT}/tests && ${exe} ${input_file} $*"
+	cd "${ROOT}/tests" && "$exe" "$input_file" "$@"
 }
 
 list_problems() {
@@ -185,6 +185,7 @@ build)
 	;;
 run)
 	[ -n "$PROBLEM" ] || die "missing problem name"
+	[ -d "${ROOT}/tests" ] || die "tests directory not found: ${ROOT}/tests (use --root to specify the quokka root)"
 	if [ -z "$INPUT_FILE" ]; then
 		INPUT_FILE="${ROOT}/inputs/${PROBLEM}.toml"
 	elif [[ "$INPUT_FILE" != /* ]]; then
