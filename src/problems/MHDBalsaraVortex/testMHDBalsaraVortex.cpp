@@ -21,7 +21,6 @@
 #include "grid.hpp"
 #include "hydro/EOS.hpp"
 #include "physics_info.hpp"
-#include "util/BC.hpp"
 
 struct MHDBalsaraVortex {
 };
@@ -238,18 +237,7 @@ auto problem_main() -> int
 		amrex::Abort("vortex_radius must be > 0.");
 	}
 
-	auto BCs_cc = quokka::BC<MHDBalsaraVortex>(quokka::BCType::int_dir);
-
-	const int nvars_fc = Physics_Indices<MHDBalsaraVortex>::nvarTotal_fc;
-	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
-	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_fc[icomp].setLo(idim, amrex::BCType::int_dir);
-			BCs_fc[icomp].setHi(idim, amrex::BCType::int_dir);
-		}
-	}
-
-	QuokkaSimulation<MHDBalsaraVortex> sim(BCs_cc, BCs_fc);
+	QuokkaSimulation<MHDBalsaraVortex> sim;
 
 	double stop_time = 0.0;
 	if (is_advection_enabled) {
