@@ -237,8 +237,9 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 				// we expand the domain of cc-data, so that when we reconstruct cc->fc (we include enough ghost cells in the fc->ec dimension),
 				// we get as an output (from reconstructing fc->ec) data only in the valid domain
 				// note: also grow by 1 in dir2face, since the fc->ec step reads one cell beyond box_fc in that direction
-				const amrex::Box box_cc_U = amrex::grow(box_cc, (nghost_cc - 1) * vec_fc2ec + vec_cc2fc);
-				const amrex::Box box_fc_U = amrex::grow(box_fc, (nghost_cc - 1) * vec_fc2ec + vec_cc2fc + 1);
+				const amrex::IntVect grow_vec = (nghost_cc - 1) * vec_fc2ec + vec_cc2fc;
+				const amrex::Box box_cc_U = amrex::grow(box_cc, grow_vec);
+				const amrex::Box box_fc_U = amrex::grow(box_fc, grow_vec + 1);
 
 				// extrapolate both required cell-centered velocity fields to the cell-edge
 				for (int icomp = 0; icomp < 2; ++icomp) {
