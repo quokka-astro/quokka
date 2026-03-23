@@ -196,7 +196,7 @@ run)
 		)
 	fi
 
-	run_problem "$PROBLEM" "$INPUT_FILE" "${RUN_ARGS[@]}"
+	run_problem "$PROBLEM" "$INPUT_FILE" "${RUN_ARGS[@]+"${RUN_ARGS[@]}"}"
 	;;
 list)
 	[ -z "$PROBLEM" ] || die "list does not take a problem name"
