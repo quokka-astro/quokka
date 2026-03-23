@@ -1,1 +1,1 @@
-quokka_add_problem(JOB_NAME RadhydroPulseMGint INPUT_FILE RadhydroPulse.in)
+quokka_add_problem(JOB_NAME RadhydroPulseMGint INPUT_FILE RadhydroPulse.toml)

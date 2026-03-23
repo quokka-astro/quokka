@@ -76,8 +76,8 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	void preCalculateInitialConditions() override;
 	void setInitialConditionsOnGrid(quokka::grid const &grid_elem) override;
 	void setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem) override;
-	void createInitialRadParticles() override;
 #if AMREX_SPACEDIM == 3
+	void createInitialRadParticles() override;
 	void createInitialCICParticles() override;
 	void createInitialCICRadParticles() override;
 	void createInitialStochasticStellarPopParticles() override;
@@ -171,14 +171,14 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::setInitialCon
 	// note: an implementation is only required if face-centered vars are used
 }
 
+#if AMREX_SPACEDIM == 3
+
 template <typename problem_t> void AdvectionSimulation<problem_t>::createInitialRadParticles()
 {
 	// default empty implementation
 	// user should implement using problem-specific template specialization
 	// note: an implementation is only required if Rad particles are used
 }
-
-#if AMREX_SPACEDIM == 3
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::createInitialCICParticles()
 {

@@ -97,7 +97,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::state_old_fc_;
 	using AMRSimulation<problem_t>::state_new_fc_;
 	using AMRSimulation<problem_t>::TracerPC;
+#if AMREX_SPACEDIM == 3
 	using AMRSimulation<problem_t>::particleRegister_;
+#endif
 
 	using AMRSimulation<problem_t>::nghost_cc_;
 	using AMRSimulation<problem_t>::nghost_fc_;
@@ -136,6 +138,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::Gconst_;
 
 	using AMRSimulation<problem_t>::densityFloor_;
+	using AMRSimulation<problem_t>::dustDensityFloor_;
 	using AMRSimulation<problem_t>::tempFloor_;
 
 	using AMRSimulation<problem_t>::max_level;
@@ -270,8 +273,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void projectFaceCenteredMagneticField();
 	void updateInitialMagneticEnergyFromFaceField();
 	void refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override;
-	void createInitialRadParticles() override;
 #if AMREX_SPACEDIM == 3
+	void createInitialRadParticles() override;
 	void createInitialCICParticles() override;
 	void createInitialCICRadParticles() override;
 	void createInitialStochasticStellarPopParticles() override;
@@ -682,6 +685,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		dpp.query("omega", dust_omega_);
 		dpp.query("enable_iter_stoptime", enableIterDustStoptime_);
 		dpp.query("print_iteration_counts", print_dust_counter_);
+		dpp.query("density_floor", dustDensityFloor_);
 	}
 
 	// set radiation runtime parameters
@@ -839,6 +843,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::setInitialCondit
 	// note: an implementation is only required if face-centered vars are used
 }
 
+#if AMREX_SPACEDIM == 3
+
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialRadParticles()
 {
 	const BL_PROFILE("QuokkaSimulation::createInitialRadParticles()");
@@ -846,8 +852,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialRad
 	// user should implement using problem-specific template specialization
 	// note: an implementation is only required if Rad_particles are used
 }
-
-#if AMREX_SPACEDIM == 3
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialCICParticles()
 {
@@ -918,6 +922,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computePhotoelec
 {
 	amrex::Real heating_rate = 0.0;
 
+#if AMREX_SPACEDIM == 3
 	// Check if PE heating tables are initialized
 	// Note that this function is always called as long as cooling is turned on, so it is okay if g_pe_heating_tables_ptr is null
 	if (quokka::g_pe_heating_tables_ptr<> == nullptr || !quokka::g_pe_heating_tables_ptr<>->is_initialized()) {
@@ -934,6 +939,9 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computePhotoelec
 		// Real star formation history
 		heating_rate = particleRegister_.computePhotoelectricHeatingRate(current_time, gpu_tables, sf_area_kpc2_);
 	}
+#else
+	amrex::ignore_unused(current_time);
+#endif
 
 	return heating_rate;
 }
@@ -1766,13 +1774,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::FixupState(int l
 									  amrex::Real base_density_floor) -> amrex::Real {
 			return density_floor_parser(x, y, z, base_density_floor);
 		};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev], geom[lev], density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_new_cc_[lev], geom[lev], density_floor_func);
 	} else {
 		auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
 									     amrex::Real base_density_floor) -> amrex::Real {
 			return densityFloor(x, y, z, base_density_floor);
 		};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, state_new_cc_[lev], geom[lev], density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_new_cc_[lev], geom[lev], density_floor_func);
 	}
 
 	// sync internal energy and total energy
@@ -2283,13 +2291,13 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 										  amrex::Real base_density_floor) -> amrex::Real {
 				return density_floor_parser(x, y, z, base_density_floor);
 			};
-			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew_cc, geom[lev], density_floor_func);
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, stateNew_cc, geom[lev], density_floor_func);
 		} else {
 			auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
 										     amrex::Real base_density_floor) -> amrex::Real {
 				return densityFloor(x, y, z, base_density_floor);
 			};
-			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateNew_cc, geom[lev], density_floor_func);
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, stateNew_cc, geom[lev], density_floor_func);
 		}
 
 		if (useDualEnergy_ == 1) {
@@ -2306,9 +2314,9 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				       PostInterpState);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				fillBoundaryConditions(state_inter_fc_[idim], state_inter_fc_[idim], lev, time, quokka::centering::fc, quokka::direction{idim},
-						       AMRSimulation<problem_t>::InterpHookNone, AMRSimulation<problem_t>::InterpHookNone,
-						       FillPatchType::fillpatch_function);
+				fillBoundaryConditions(state_inter_fc_[idim], state_inter_fc_[idim], lev, time + dt_lev, quokka::centering::fc,
+						       quokka::direction{idim}, AMRSimulation<problem_t>::InterpHookNone,
+						       AMRSimulation<problem_t>::InterpHookNone, FillPatchType::fillpatch_function);
 			}
 		}
 
@@ -2407,13 +2415,13 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 										  amrex::Real base_density_floor) -> amrex::Real {
 				return density_floor_parser(x, y, z, base_density_floor);
 			};
-			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal_cc, geom[lev], density_floor_func);
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, stateFinal_cc, geom[lev], density_floor_func);
 		} else {
 			auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
 										     amrex::Real base_density_floor) -> amrex::Real {
 				return densityFloor(x, y, z, base_density_floor);
 			};
-			HydroSystem<problem_t>::EnforceLimits(densityFloor_, tempFloor_, stateFinal_cc, geom[lev], density_floor_func);
+			HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, stateFinal_cc, geom[lev], density_floor_func);
 		}
 
 		if (useDualEnergy_ == 1) {
@@ -2964,7 +2972,9 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			// }
 
 			// Deposit radiation from all particles that have luminosity. When there are no particles with luminosity, this will do nothing.
+#if AMREX_SPACEDIM == 3
 			particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle);
+#endif
 
 			// for debugging, print the radEnergySource array
 			// if (i == 0) {
@@ -3006,7 +3016,9 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		radEnergySource.setVal(0.0); // Initialize the MultiFab to zero
 
 		// Deposit radiation from particles into radEnergySource. When there are no particles with luminosity, this will do nothing.
+#if AMREX_SPACEDIM == 3
 		particleRegister_.depositRadiation(radEnergySource, lev, time_subcycle);
+#endif
 
 		// Add the matter-radiation exchange source terms to the radiation subsystem and evolve by (1 - IMEX_a32) * dt
 		for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {

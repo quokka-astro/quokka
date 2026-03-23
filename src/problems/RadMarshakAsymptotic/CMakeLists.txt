@@ -8,10 +8,10 @@ endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
 add_test(
   NAME ${JOB_NAME}
-  COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in ${QuokkaTestParams}
+  COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml ${QuokkaTestParams}
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 
 add_test(
   NAME MarshakWaveAsymptoticCorr
-  COMMAND ${JOB_NAME} ../inputs/MarshakAsymptoticCorr.in ${QuokkaTestParams}
+  COMMAND ${JOB_NAME} ../inputs/MarshakAsymptoticCorr.toml ${QuokkaTestParams}
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)

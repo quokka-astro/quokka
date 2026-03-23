@@ -8,9 +8,9 @@ endif()
 
 add_test(
   NAME ${JOB_NAME}
-  COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in ${QuokkaTestParams}
+  COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml ${QuokkaTestParams}
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 add_test(
   NAME HydroWaveFc
-  COMMAND ${JOB_NAME} ../inputs/HydroWaveFc.in ${QuokkaTestParams}
+  COMMAND ${JOB_NAME} ../inputs/HydroWaveFc.toml ${QuokkaTestParams}
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
