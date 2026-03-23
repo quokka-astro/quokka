@@ -5,7 +5,7 @@ set -euo pipefail
 resolve_from_cwd() {
   local dir="$PWD"
   while [[ "$dir" != "/" ]]; do
-    if [[ -f "$dir/quokka.toml" && -f "$dir/scripts/python/quokka_cli.py" ]]; then
+    if [[ -f "$dir/quokka.toml" && -f "$dir/src/quokka/__main__.py" ]]; then
       printf '%s\n' "$dir"
       return 0
     fi
@@ -51,8 +51,22 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 10
 fi
 
-if ((${#ARGS[@]})); then
-  exec python3 "$TARGET_ROOT/scripts/python/quokka_cli.py" "${ARGS[@]}"
+export PYTHONPATH="$TARGET_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
+
+if ! python3 - <<'PY' >/dev/null 2>&1
+import importlib.util
+import sys
+
+sys.exit(0 if importlib.util.find_spec("typer") is not None else 1)
+PY
+then
+  echo "quokka: Python dependency 'typer' is not installed for python3." >&2
+  echo "Run: $TARGET_ROOT/scripts/bash/install-quokka-bootstrap.sh" >&2
+  exit 10
 fi
 
-exec python3 "$TARGET_ROOT/scripts/python/quokka_cli.py"
+if ((${#ARGS[@]})); then
+  exec python3 -m quokka "${ARGS[@]}"
+fi
+
+exec python3 -m quokka

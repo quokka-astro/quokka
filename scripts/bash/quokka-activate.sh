@@ -37,7 +37,6 @@ quokka__unset_function() {
 quokka__activate() {
   local root=""
   local profile="${1:-}"
-  local cli=""
   local env_lines=""
   local exit_code=0
 
@@ -57,21 +56,32 @@ quokka__activate() {
     return 10
   fi
 
-  cli="$root/scripts/python/quokka_cli.py"
-  if [[ ! -f "$cli" ]]; then
-    echo "worktree-local quokka CLI script is missing: $cli" >&2
+  if [[ ! -f "$root/src/quokka/__main__.py" ]]; then
+    echo "worktree-local quokka package is missing: $root/src/quokka/__main__.py" >&2
+    return 10
+  fi
+
+  if ! python3 - <<'PY' >/dev/null 2>&1
+import importlib.util
+import sys
+
+sys.exit(0 if importlib.util.find_spec("typer") is not None else 1)
+PY
+  then
+    echo "python3 is missing the Quokka CLI Python dependencies." >&2
+    echo "Install them with: $root/scripts/bash/install-quokka-bootstrap.sh" >&2
     return 10
   fi
 
   # Re-resolve the activation environment without inheriting a stale runtime dir
   # from a previous activation.
-  local -a cli_env=(env -u QUOKKA_ACTIVE -u QUOKKA_WORKTREE_ROOT -u QUOKKA_WORKTREE_ID -u QUOKKA_PROFILE -u QUOKKA_RUNTIME_DIR -u QUOKKA_PROMPT_PREFIX)
+  local -a cli_env=(env -u QUOKKA_ACTIVE -u QUOKKA_WORKTREE_ROOT -u QUOKKA_WORKTREE_ID -u QUOKKA_PROFILE -u QUOKKA_RUNTIME_DIR -u QUOKKA_PROMPT_PREFIX PYTHONPATH="$root/src${PYTHONPATH:+:$PYTHONPATH}")
 
   if [[ -n "$profile" ]]; then
-    env_lines="$("${cli_env[@]}" python3 "$cli" -C "$root" _activate-env --profile "$profile")"
+    env_lines="$("${cli_env[@]}" python3 -m quokka -C "$root" _activate-env --profile "$profile")"
     exit_code=$?
   else
-    env_lines="$("${cli_env[@]}" python3 "$cli" -C "$root" _activate-env)"
+    env_lines="$("${cli_env[@]}" python3 -m quokka -C "$root" _activate-env)"
     exit_code=$?
   fi
   if [[ "$exit_code" -ne 0 ]]; then

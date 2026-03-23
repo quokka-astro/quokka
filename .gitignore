@@ -31,8 +31,10 @@ Backtrace.*
 *.sif
 
 # files in tests/ folder
-/tests/
+/tests/**
+!/tests/
 !/tests/matplotlibrc
+!/tests/test_*.py
 # !/tests/ascent_actions.yaml
 
 # agent files

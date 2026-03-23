@@ -12,7 +12,7 @@ For normal interactive use, install the small `quokka` launcher once:
 scripts/bash/install-quokka-bootstrap.sh
 ```
 
-By default this installs `quokka` to `$HOME/.local/bin/quokka`. Make sure that directory is on your `PATH`.
+By default this installs `quokka` to `$HOME/.local/bin/quokka` and installs the Python runtime dependencies needed by the launcher for the active `python3` interpreter. On newer `pip` versions the script installs the checkout in editable mode; on older or incompatible `pip` versions it installs only the launcher dependencies while the launcher continues to use the worktree sources directly. Make sure that directory is on your `PATH`.
 
 For developer prerequisites inside the worktree, use:
 
@@ -46,6 +46,13 @@ If the launcher is not installed yet, you can invoke the worktree-local implemen
 
 ```bash
 python3 /path/to/quokka/scripts/python/quokka_cli.py -C /path/to/quokka status --profile host-3d-release
+```
+
+If you want the Python package and dependencies without installing the launcher, use a modern `pip` and install the checkout in editable mode:
+
+```bash
+python3 -m pip install --user -e /path/to/quokka
+python3 -m quokka -C /path/to/quokka status --profile host-3d-release
 ```
 
 Profile selection uses this order:

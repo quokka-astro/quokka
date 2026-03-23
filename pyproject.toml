@@ -1,0 +1,25 @@
+[build-system]
+requires = [
+  "setuptools>=69",
+  "tomli>=2,<3; python_version < '3.11'",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quokka-cli"
+version = "0.1.0"
+description = "Repository-local Python CLI for Quokka workflows"
+requires-python = ">=3.9"
+dependencies = [
+  "tomli>=2,<3; python_version < '3.11'",
+  "typer>=0.12,<1",
+]
+
+[project.scripts]
+quokka-py = "quokka.cli.app:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
