@@ -6,7 +6,7 @@ usage() {
 	cat <<'EOF'
 Usage:
   quokka config <preset> [--root <path>]
-  quokka build <preset> <problem> [--root <path>]
+  quokka build <preset> <problem> [-j <N>] [--root <path>]
   quokka run <preset> <problem> [--input <file>] [--fpe] [--root <path>]
   quokka list <preset> [--root <path>]
   quokka target <preset> [--root <path>]
@@ -84,7 +84,7 @@ configure_build() {
 build_problem() {
 	local problem="$1"
 
-	cmake --build "$BUILD_DIR" --target "$problem"
+	cd "$BUILD_DIR" && ninja -j"$JOBS" "$problem"
 }
 
 run_problem() {
@@ -119,6 +119,7 @@ ROOT="."
 PROBLEM=""
 INPUT_FILE=""
 ENABLE_FPE=0
+JOBS=8
 
 while [ "$#" -gt 0 ]; do
 	case "$1" in
@@ -130,6 +131,11 @@ while [ "$#" -gt 0 ]; do
 	--input)
 		require_arg "$1" "${2:-}"
 		INPUT_FILE="$2"
+		shift 2
+		;;
+	-j)
+		require_arg "$1" "${2:-}"
+		JOBS="$2"
 		shift 2
 		;;
 	--fpe)
