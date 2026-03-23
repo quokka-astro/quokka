@@ -19,9 +19,19 @@ Presets:
 EOF
 }
 
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
 die() {
-	echo "Error: $*" >&2
+	echo -e "${RED}${BOLD}Error:${RESET} $*" >&2
 	exit 1
+}
+
+log_cmd() {
+	echo -e "${CYAN}+ $*${RESET}"
 }
 
 require_arg() {
@@ -78,14 +88,14 @@ configure_build() {
 		rm -rf ./*
 	fi
 
-	echo "+ cmake ../.. -G Ninja -DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DAMReX_SPACEDIM=${DIM}"
+	log_cmd "cmake ../.. -G Ninja -DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DAMReX_SPACEDIM=${DIM}"
 	cmake ../.. -G Ninja -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" -DAMReX_SPACEDIM="${DIM}"
 }
 
 build_problem() {
 	local problem="$1"
 
-	echo "+ ninja -j${JOBS} ${problem}"
+	log_cmd "ninja -j${JOBS} ${problem}"
 	cd "$BUILD_DIR" && ninja -j"$JOBS" "$problem"
 }
 
@@ -98,7 +108,7 @@ run_problem() {
 	[ -x "$exe" ] || die "executable not found: ${exe}"
 	[ -f "$input_file" ] || die "input file not found: ${input_file}"
 
-	echo "+ cd ${ROOT}/tests && ${exe} ${input_file} $*"
+	log_cmd "cd ${ROOT}/tests && ${exe} ${input_file} $*"
 	cd "${ROOT}/tests" && "$exe" "$input_file" "$@"
 }
 
@@ -107,7 +117,7 @@ list_problems() {
 }
 
 show_targets() {
-	echo "+ cmake --build ${BUILD_DIR} --target help"
+	log_cmd "cmake --build ${BUILD_DIR} --target help"
 	cmake --build "$BUILD_DIR" --target help
 }
 
@@ -201,7 +211,12 @@ run)
 		)
 	fi
 
-	run_problem "$PROBLEM" "$INPUT_FILE" "${RUN_ARGS[@]+"${RUN_ARGS[@]}"}"
+	if run_problem "$PROBLEM" "$INPUT_FILE" "${RUN_ARGS[@]+"${RUN_ARGS[@]}"}"; then
+		echo -e "${GREEN}${BOLD}${PROBLEM} SUCCESS${RESET}"
+	else
+		echo -e "${RED}${BOLD}${PROBLEM} FAIL${RESET}"
+		exit 1
+	fi
 	;;
 list)
 	[ -z "$PROBLEM" ] || die "list does not take a problem name"
