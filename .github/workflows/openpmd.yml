@@ -80,7 +80,7 @@ jobs:
     - name: Run
       working-directory: ${{github.workspace}}/tests
       shell: bash
-      run: mpirun $RUNNER_WORKSPACE/build/src/problems/HydroBlast3D/HydroBlast3D ../inputs/blast_32.in max_walltime=0:00:10 plotfile_interval=100 checkpoint_interval=100
+      run: mpirun $RUNNER_WORKSPACE/build/src/problems/HydroBlast3D/HydroBlast3D ../inputs/blast_32.toml max_walltime=0:00:10 plotfile_interval=100 checkpoint_interval=100
 
     - name: ccache stats
       if: always()
@@ -90,7 +90,7 @@ jobs:
 
     - name: Upload test output
       if: always()
-      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
       with:
         name: test-results
         path: ${{github.workspace}}/tests

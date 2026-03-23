@@ -50,6 +50,7 @@ template <typename problem_t> void DiagParticleTxt::processDiag(int a_nstep, con
 	amrex::ParallelDescriptor::Barrier();
 
 	// Get the particle registry
+#if AMREX_SPACEDIM == 3
 	auto &particleRegister = sim->GetParticleRegister();
 
 	if (!m_particleTypes.empty()) {
@@ -58,6 +59,7 @@ template <typename problem_t> void DiagParticleTxt::processDiag(int a_nstep, con
 	} else {
 		amrex::Print() << "DiagParticleTxt: No particle types specified, skipping output\n";
 	}
+#endif
 }
 
 #endif // DIAGPARTICLETXT_H

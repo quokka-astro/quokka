@@ -1,5 +1,143 @@
 # Particles, star formation and feedback
 
+All particle features can only be activated when compiled with `-DAMReX_SPACEDIM=3`.
+
+## Sink Particle Type
+
+Sink particles carry the following real-valued attributes:
+
+- **Mass**: Current particle mass ($M$)
+- **Velocity**: Three-dimensional velocity vector $(v_x, v_y, v_z)$
+
+Unlike StochasticStellarPop particles, sink particles have no evolution stage or birth/death metadata. They represent unresolved gravitationally-collapsed objects that accrete mass from the surrounding gas.
+
+## Sink Particle Formation
+
+### Overview
+
+The sink formation module creates sink particles from gas cells that violate the Jeans criterion (Truelove et al. 1997). The algorithm is operator-split from the hydrodynamics and runs once per hydro timestep at the finest AMR level.
+
+### Formation criteria
+
+A sink particle is created in a cell if **all** of the following conditions are met:
+
+1. **Jeans instability**: The cell density exceeds the local Jeans density,
+
+$$
+\rho > \rho_J = J^2 \frac{\pi c_{\text{eff}}^2}{G \Delta x^2},
+$$
+
+where $J = 0.25$ is the Jeans number and $c_{\text{eff}} = c_s \sqrt{1 + 0.74 / \beta}$ is the effective sound speed accounting for magnetic pressure support ($\beta = P_{\text{thermal}} / P_{\text{magnetic}}$). For non-MHD simulations, $\beta \to \infty$ and $c_{\text{eff}} = c_s$.
+
+2. **Not in an existing accretion zone**: The cell is not already being accreted by an existing sink particle (i.e., the accretion rate in the cell is zero).
+
+3. **Local density maximum**: The cell has the highest density among all cells within a sphere of radius $3 \Delta x$. This prevents multiple sink particles from forming in close proximity.
+
+### Mass and momentum assignment
+
+When a sink particle forms, it receives the excess mass above the Jeans density:
+
+$$
+m_{\text{particle}} = (\rho - \rho_J) \, \Delta x^3
+$$
+
+The particle inherits the gas velocity of the parent cell. The cell density is then set to $\rho_J$, and all conserved quantities (momentum, energy, internal energy) are scaled by the factor $\rho_J / \rho$.
+
+### Practical considerations
+
+- The local maximum check uses a non-strict inequality ($\rho_{\text{cell}} \ge \rho_{\text{neighbor}}$), so ties do not prevent formation. In practice, exact density ties only occur in artificial initial conditions.
+- Sink formation is applied after sink accretion in each timestep, so newly formed particles do not overlap with existing accretion zones.
+
+## Sink Particle Accretion
+
+### Overview
+
+Sink particle accretion follows the Bondi-Hoyle-Lyttleton prescription of Krumholz et al. (2004). Gas is removed from cells surrounding each sink particle and added to the particle's mass, with the accretion rate set by the local gas properties and the particle mass.
+
+### Accretion rate
+
+The Bondi-Hoyle radius is
+
+$$
+r_{\text{BH}} = \frac{G M}{v_\infty^2 + c_{f,\infty}^2},
+$$
+
+where $M$ is the particle mass, $v_\infty$ is the gas velocity relative to the particle (mass-weighted mean over the accretion zone), and $c_{f,\infty}$ is the fast magnetosonic speed. We take the upper bound of the fast speed (when the wave propagates perpendicular to the magnetic field): $c_f^2 = c_s^2 + v_A^2 = c_s^2 (1 + 2/\beta)$. For non-MHD, this reduces to $c_f = c_s$.
+
+The accretion rate is
+
+$$
+\dot{M} = 4 \pi \rho_\infty r_{\text{BH}}^2 \sqrt{v_\infty^2 + \lambda^2 c_{f,\infty}^2},
+$$
+
+where $\rho_\infty$ is the mean gas density in the accretion zone and $\lambda = e^{3/2}/4$.
+
+### Accretion kernel
+
+The accretion zone is a sphere of radius $r_{\text{acc}} = 3 \Delta x$ centered on the particle. Within this zone, each cell receives a Gaussian weight:
+
+$$
+w = \exp\left(-r^2 / r_K^2\right),
+$$
+
+where $r$ is the distance from the particle to the cell centre. The kernel radius $r_K$ is resolution-adaptive:
+
+$$
+r_K = \begin{cases}
+\Delta x / 4 & r_{\text{BH}} < \Delta x / 4, \\
+r_{\text{BH}} & \Delta x / 4 \leq r_{\text{BH}} \leq r_{\text{acc}} / 2, \\
+r_{\text{acc}} / 2 & r_{\text{BH}} > r_{\text{acc}} / 2.
+\end{cases}
+$$
+
+The accretion rate deposited in each cell is $-\dot{M} \, w_i / \sum_i w_i$ (negative means accreting). Optionally, a uniform kernel ($w = 1$ for all cells in the $(7 \Delta x)^3$ stencil) can be used for testing by setting `particles.sink_particle_use_uniform_kernel = 1`.
+
+### Accretion limiters
+
+Two corrections are applied to the per-cell accretion rate, in the following order:
+
+1. **Mass removal cap**: No more than 25% of a cell's mass may be removed in a single timestep (Krumholz et al. 2004). This prevents artificial sound waves from being launched by rapid density changes.
+
+2. **Jeans density floor**: If the post-accretion cell density would still exceed the Jeans density $\rho_J$, the accretion rate is increased so that the final density equals $\rho_J$. This is safe because such cells are at the centre of highly supersonic convergence and are causally disconnected from their surroundings.
+
+### Momentum accretion
+
+When gas is accreted, the particle gains both mass and momentum. The new particle velocity is computed from momentum conservation:
+
+$$
+\vec{v}_{\text{new}} = \frac{m_{\text{old}} \vec{v}_{\text{old}} + \Delta m \, \vec{v}_{\text{gas}}}{m_{\text{old}} + \Delta m},
+$$
+
+where $\Delta m$ is the total accreted mass and $\vec{v}_{\text{gas}}$ is the mass-weighted gas velocity over the accreted cells. The gas state is then updated by scaling all conserved quantities by $(1 + \dot{M}_{\text{cell}} \Delta t / (\rho V))$, which preserves the gas velocity field.
+
+### Galilean invariance
+
+The accretion rate is computed using gas velocities in the particle frame ($\vec{v}_\infty = \vec{v}_{\text{gas}} - \vec{v}_{\text{particle}}$), ensuring Galilean invariance.
+
+### Runtime Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `particles.sink_particle_use_uniform_kernel` | Boolean | `0` | Use uniform accretion kernel (for testing) |
+
+### Examples
+
+#### ParticleSinkFormation Test
+
+The `ParticleSinkFormation` test validates combined sink particle formation and accretion. The test checks:
+
+1. Exactly one star forms in the first timestep.
+2. Mass is conserved to machine precision during sink formation.
+3. Mass is conserved to machine precision during sink accretion.
+
+#### ParticleSink Test
+
+The `ParticleSink` test validates Bondi-Hoyle accretion and Galilean invariance. It runs in three phases:
+
+1. **Base simulation**: Runs with zero boost velocity and validates the density profile against an analytical solution.
+2. **Boosted simulation**: Runs with a boost velocity of $10^8$ cm/s and verifies that the density profile matches the analytical solution, demonstrating Galilean invariance.
+3. **Multi-timestep evolution**: Continues the boosted simulation for additional timesteps and validates total mass conservation to machine precision.
+
 ## StochasticStellarPop Particle Type
 
 StochasticStellarPop particles carry the following real-valued attributes:
@@ -32,7 +170,7 @@ The star formation module adds star particles through a stochastic prescription 
 
 Eligible cells are first identified through a Jeans-length check before any stochastic sampling occurs.
 
-- Compute the Jeans density $\rho_J = J^2 \pi c_{\text{eff}}^2 / (G \Delta x^2)$, where $J = 0.25$ is the Jeans number and $c_{\text{eff}} = c_s \sqrt{1 + 0.74 / \beta}$ is the effective sound speed, accounting for thermal pressure and magnetic pressure with $\beta = P_{\text{thermal}} / P_{\text{magnetic}}$.
+- Compute the Jeans density $\rho_J = J^2 \pi c_{\text{eff}}^2 / (G \Delta x^2)$, where $J = 0.25$ is the Jeans number and $c_{\text{eff}} = c_s \sqrt{1 + 0.74 / \beta}$ is the effective sound speed, accounting for thermal pressure and magnetic pressure with $\beta = P_{\text{thermal}} / P_{\text{magnetic}}$ (Mouschovias & Spitzer, 1976, ApJ, 210, 326; see also Myers et al, 2013, ApJ, 766, 97).
 - Mark the cell as eligible when $\rho > \rho_J$.
 - Only eligible cells continue to the sampling steps below.
 
@@ -89,7 +227,7 @@ When a progenitor star reaches its death time, it explodes as a Type II supernov
 |-----------|--------|-------|-------------|
 | Blast energy | $E_{\text{blast}}$ | $10^{51}$ erg | Thermal energy injected into the ISM |
 | Ejecta mass | $m_{\text{ej}}$ | $10 M_{\odot}$ | Mass expelled during explosion |
-| Terminal momentum | $p_{\text{snr},0}$ | $2.8 \times 10^5 M_{\odot} \, \text{km s}^{-1}$ | Asymptotic momentum of the SNR |
+| Terminal momentum | $p_{\text{snr},0}$ | $2.8 \times 10^5 M_{\odot} \, \text{km s}^{-1}$ | Asymptotic momentum of the SNR (configurable via `particles.SN_p_term_Msunkmps`) |
 | Remnant mass | $m_{\text{dead}}$ | $\geq 1.4 M_{\odot}$ | Mass of the compact remnant |
 | Kinetic energy | $E_{\text{kin}}$ | $0.5 m_{\text{ej}} v_{\text{star}}^2$ | Kinetic energy of the ejecta |
 
@@ -115,7 +253,7 @@ $$
 
 where:
 - $M_{\text{SNR}} = M_{\text{gas}} + m_{\text{ej}}$ is the total SNR mass (gas in stencil plus ejecta)
-- $M_{\text{sf}} = 1679 M_{\odot} \, n_{\text{H}}^{-0.26}$ is the shell-formation mass
+- $M_{\text{sf}} = 1679 M_{\odot} \, n_{\text{H}}^{-0.26} \left(p_{\text{snr},0} / p_{\text{snr},0}^{\text{canonical}}\right)^2$ is the shell-formation mass, scaled so that the kinetic energy $p_{\text{snr}}^2 / (2 M_{\text{sf}})$ is invariant when $p_{\text{snr},0}$ is changed
 
 When $R_M < 1$, the Sedov-Taylor phase is resolved and the blast wave dynamics can be captured. When $R_M \geq 1$, the resolution is insufficient and the code transitions to momentum-dominated feedback following Kim & Ostriker (2017).
 
@@ -182,10 +320,11 @@ The cross term $\vec{v}_{\text{COM}} \cdot \vec{p}_{\text{radial}}$ accounts for
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `particles.SN_scheme` | String | `SN_thermal_or_thermal_momentum` | Feedback scheme (see above) |
+| `particles.SN_p_term_Msunkmps` | Float | `2.8e5` | Terminal momentum $p_{\text{snr},0}$ in units of $M_\odot\,\mathrm{km\,s}^{-1}$. The shell-formation mass $M_\mathrm{sf}$ is scaled as $(p/p_\mathrm{canonical})^2$ to preserve the kinetic energy $p^2/(2M_\mathrm{sf})$. |
 | `particles.disable_SN_feedback` | Boolean | `0` | Disable SN feedback entirely |
 | `particles.verbose` | Integer | `0` | Verbosity level for particle diagnostics |
 | `particles.stellar_velocity_limit` | Float | $10^8$ cm/s | Maximum allowed stellar velocity (aborts if exceeded) |
-| `particles.SN_smooth_gas_velocity` | Integer | `1` | Smooth gas velocity in the stencil to enforce energy concservation |
+| `particles.SN_smooth_gas_velocity` | Integer | `1` | Smooth gas velocity in the stencil to enforce energy conservation |
 
 ### 	Implementation Notes
 

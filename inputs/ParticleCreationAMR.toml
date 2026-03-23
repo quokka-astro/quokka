@@ -1,0 +1,35 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo = [-2.0, -2.0, -2.0]
+geometry.prob_hi = [2.0, 2.0, 2.0]
+quokka.bc = ["reflecting", "reflecting", "reflecting"]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v = 1  # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell = [32, 32, 32]
+amr.max_level = 1  # number of levels = max_level + 1
+amr.blocking_factor = 16  # needs to be >= ceil(nghost/ref_ratio)*ref_ratio for proper nesting
+amr.max_grid_size = 16  # at least 128 for GPUs
+amr.n_error_buf = 2  # minimum 2 cell buffer around tagged cells
+amr.grid_eff = 1.0
+
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 0
+
+particles.param1 = 0.0015  # create particles at this time, which is step 2
+particles.verbose = 1
+particles.disable_SN_feedback = true
+
+stop_time = 1.0
+initial_dt = 0.001
+max_timesteps = 4
+plotfile_interval = -1
+checkpoint_interval = -1

@@ -78,6 +78,20 @@ enum class ParticleType {
 	Test		      // Test particles with all features enabled
 };
 
+// Compile-time particle metadata.
+// Default policy: do not split particles during restart refinement unless explicitly enabled.
+template <ParticleType particleType> struct ParticleTypeTraits {
+	static constexpr bool allow_restart_refine_splitting = false;
+};
+
+template <> struct ParticleTypeTraits<ParticleType::CIC> {
+	static constexpr bool allow_restart_refine_splitting = true;
+};
+
+template <> struct ParticleTypeTraits<ParticleType::CICRad> {
+	static constexpr bool allow_restart_refine_splitting = true;
+};
+
 // Enum for SN schemes: ThermalOnly, ThermalAndMomentum
 AMREX_ENUM(SNScheme,				   // NOLINT
 	   SN_thermal_only,			   // pure thermal
@@ -113,8 +127,6 @@ constexpr int RadParticleRealComps = []() constexpr {
 // Type definitions for Rad_particles container and iterator
 template <typename problem_t> using RadParticleContainer = amrex::AmrParticleContainer<RadParticleRealComps<problem_t>>;
 template <typename problem_t> using RadParticleIterator = amrex::ParIter<RadParticleRealComps<problem_t>>;
-
-#if AMREX_SPACEDIM == 3
 
 //-------------------- Gravitating particles --------------------
 
@@ -303,7 +315,8 @@ AMREX_ENUM(SinkParticleRealIdx, // NOLINT
 	   mass,		// Mass of the particle
 	   vx,			// Velocity in x direction
 	   vy,			// Velocity in y direction
-	   vz			// Velocity in z direction
+	   vz,			// Velocity in z direction
+	   mdot			// Current mass accretion rate
 );
 
 // Backward compatibility aliases for existing code
@@ -311,15 +324,14 @@ constexpr int SinkParticleMassIdx = static_cast<int>(SinkParticleRealIdx::mass);
 constexpr int SinkParticleVxIdx = static_cast<int>(SinkParticleRealIdx::vx);
 constexpr int SinkParticleVyIdx = static_cast<int>(SinkParticleRealIdx::vy);
 constexpr int SinkParticleVzIdx = static_cast<int>(SinkParticleRealIdx::vz);
+constexpr int SinkParticleMdotIdx = static_cast<int>(SinkParticleRealIdx::mdot);
 
 // Number of real components for Sink_particles
-constexpr int SinkParticleRealComps = 4; // mass, vx, vy, vz
+constexpr int SinkParticleRealComps = 5; // mass, vx, vy, vz, mdot
 
 // Type definitions for Sink_particles container and iterator
 using SinkParticleContainer = amrex::AmrParticleContainer<SinkParticleRealComps>;
 using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
-
-#endif // AMREX_SPACEDIM == 3
 
 //-------------------- Component Names for I/O --------------------
 
@@ -362,9 +374,7 @@ template <ParticleType particleType, typename problem_t> auto getParticleRealCom
 {
 	if constexpr (particleType == ParticleType::Rad) {
 		return expandEnumNames<RadParticleRealIdx, RadParticleRealComps<problem_t>, true>();
-	}
-#if AMREX_SPACEDIM == 3
-	else if constexpr (particleType == ParticleType::CIC) {
+	} else if constexpr (particleType == ParticleType::CIC) {
 		return expandEnumNames<CICParticleRealIdx, CICParticleRealComps, false>();
 	} else if constexpr (particleType == ParticleType::CICRad) {
 		return expandEnumNames<CICRadParticleRealIdx, CICRadParticleRealComps<problem_t>, true>();
@@ -374,9 +384,8 @@ template <ParticleType particleType, typename problem_t> auto getParticleRealCom
 		return expandEnumNames<SinkParticleRealIdx, SinkParticleRealComps, false>();
 	} else if constexpr (particleType == ParticleType::Test) {
 		return expandEnumNames<TestParticleRealIdx, TestParticleRealComps<problem_t>, true>();
-	}
-#endif
-	else {
+	} else {
+		amrex::Abort("Unknown particle type");
 		return {};
 	}
 }
@@ -386,11 +395,9 @@ template <ParticleType particleType, typename problem_t> auto getParticleIntComp
 {
 	amrex::Vector<std::string> names;
 
-	if constexpr (particleType == ParticleType::Rad) { // NOLINT
-							   // No integer components
-	}
-#if AMREX_SPACEDIM == 3
-	else if constexpr (particleType == ParticleType::CIC) {	     // NOLINT
+	if constexpr (particleType == ParticleType::Rad) {	     // NOLINT
+								     // No integer components
+	} else if constexpr (particleType == ParticleType::CIC) {    // NOLINT
 								     // No integer components
 	} else if constexpr (particleType == ParticleType::CICRad) { // NOLINT
 								     // No integer components
@@ -402,8 +409,9 @@ template <ParticleType particleType, typename problem_t> auto getParticleIntComp
 	} else if constexpr (particleType == ParticleType::Test) {
 		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<TestParticleIntIdx>();
 		names = {enum_names.begin(), enum_names.end()};
+	} else {
+		amrex::Abort("Unknown particle type");
 	}
-#endif
 	return names;
 }
 
@@ -439,7 +447,7 @@ inline auto get_units_data() -> const auto &
 	       {"death_density", {1, -3, 0, 0}},
 	       {"mass_at_birth", {1, 0, 0, 0}},
 	       {"luminosity", {-1, 2, -3, 0}}}}},
-	    {ParticleType::Sink, {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}}}}},
+	    {ParticleType::Sink, {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}}, {"mdot", {1, 0, -1, 0}}}}},
 	    {ParticleType::Test,
 	     {{{"mass", {1, 0, 0, 0}},
 	       {"vx", {0, 1, -1, 0}},
@@ -498,6 +506,10 @@ inline int reproducibility_roundoff_redundancy = 20; // NOLINT; remove 20 bits f
 // Scalar yield per supernova (total amount, not density)
 inline amrex::Real scalar_yield_per_SN = 1.0; // NOLINT
 
+// SN terminal momentum in units of M_sun * km/s (runtime-configurable). Default: canonical value from Kim & Ostriker 2015.
+inline constexpr amrex::Real SN_p_term_Msunkmps_canonical = 2.8e5;    // [M_sun km/s]
+inline amrex::Real SN_p_term_Msunkmps = SN_p_term_Msunkmps_canonical; // NOLINT
+
 // Function to parse particle parameters from input file
 // The 'inline' keyword allows this function to be defined in a header file without
 // causing multiple definition errors when the header is included in multiple source files.
@@ -537,6 +549,9 @@ inline void particleParmParse()
 
 	// Scalar yield per supernova
 	pp.query("scalar_yield_per_SN", scalar_yield_per_SN);
+
+	// SN terminal momentum (overrides canonical value if set)
+	pp.query("SN_p_term_Msunkmps", SN_p_term_Msunkmps);
 
 	// Placeholder parameters for particles
 	pp.query("param1", particle_param1);
