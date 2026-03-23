@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 from quokka.core.errors import DiagnosticError
-from quokka.core.types import CommandResult, ListRequest
-from quokka.model.tests import discover_problems, discover_source_problems, discover_source_tests, discover_tests
+from quokka.core.result import CommandResult
+from quokka.core.types import ListRequest
+from quokka.model.targets import discover_problems, discover_source_problems
+from quokka.model.tests import discover_source_tests, discover_tests
 from quokka.project.context import CliContext
+from quokka.project.presets import list_profiles
 from quokka.project.state import is_build_configured
 
 
 def run_list(context: CliContext, request: ListRequest) -> CommandResult:
     resource = None
     if request.list_kind == "profiles":
-        profile_names = sorted(context.config.profiles)
+        profile_names = list_profiles(context.config)
         data = {"profiles": profile_names}
         text = "\n".join(profile_names)
         return CommandResult("list", None, {"kind": "profiles", "name": "*"}, data, text)

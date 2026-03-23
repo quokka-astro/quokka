@@ -46,6 +46,13 @@ class CleanRequest(CommandRequest):
 
 
 @dataclass(frozen=True)
+class ConfigureRequest(CommandRequest):
+    reconfigure: bool = False
+
+    command_name: ClassVar[str] = "configure"
+
+
+@dataclass(frozen=True)
 class DoctorRequest(CommandRequest):
     topic: str = "profile"
 
@@ -121,15 +128,6 @@ class TidyRequest(CommandRequest):
     fix: bool = False
 
     command_name: ClassVar[str] = "tidy"
-
-
-@dataclass
-class CommandResult:
-    command: str
-    profile: str | None
-    resource: dict[str, Any] | None
-    data: dict[str, Any]
-    text: str
 
 
 @dataclass(frozen=True)

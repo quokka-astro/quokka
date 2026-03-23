@@ -1,47 +1,28 @@
 from __future__ import annotations
 
-import argparse
-import contextlib
-import dataclasses
-import datetime as dt
-import fcntl
-import hashlib
-import json
-import os
 import re
-import shlex
-import shutil
-import socket
-import sqlite3
-import subprocess
-import sys
-import tempfile
-import time
-import traceback
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
+from typing import Any, Optional, Sequence
 
-from quokka.core.constants import EXPECTATION_COMMENT_RE, METRIC_KEYWORDS
-
-from quokka.core.errors import DiagnosticError
-
+from quokka.core.constants import METRIC_KEYWORDS
 from quokka.core.subprocess import has_numeric_token
-
 from quokka.core.types import TestSpec
+
 
 def ctest_lasttest_log_path(build_dir: Path) -> Path:
     return build_dir / "Testing" / "Temporary" / "LastTest.log"
 
-def parse_ctest_lasttest_output(log_path: Path) -> Dict[str, List[str]]:
+
+def parse_ctest_lasttest_output(log_path: Path) -> dict[str, list[str]]:
     try:
         lines = log_path.read_text(encoding="utf-8").splitlines()
     except OSError:
         return {}
 
-    outputs: Dict[str, List[str]] = {}
+    outputs: dict[str, list[str]] = {}
     current_test: Optional[str] = None
     collecting = False
-    current_output: List[str] = []
+    current_output: list[str] = []
     test_header_re = re.compile(r"^(?:\d+/\d+\s+)?Test:\s+(.+?)\s*$")
 
     for line in lines:
@@ -73,8 +54,9 @@ def parse_ctest_lasttest_output(log_path: Path) -> Dict[str, List[str]]:
         outputs[current_test] = current_output[:]
     return outputs
 
-def extract_metric_lines(output_lines: Sequence[str]) -> List[str]:
-    selected: List[str] = []
+
+def extract_metric_lines(output_lines: Sequence[str]) -> list[str]:
+    selected: list[str] = []
     seen = set()
     for raw_line in output_lines:
         line = raw_line.strip()
@@ -93,9 +75,10 @@ def extract_metric_lines(output_lines: Sequence[str]) -> List[str]:
             break
     return selected
 
-def observed_metrics_from_lasttest(build_dir: Path, tests: Sequence[TestSpec]) -> List[Dict[str, Any]]:
+
+def observed_metrics_from_lasttest(build_dir: Path, tests: Sequence[TestSpec]) -> list[dict[str, Any]]:
     outputs = parse_ctest_lasttest_output(ctest_lasttest_log_path(build_dir))
-    observed: List[Dict[str, Any]] = []
+    observed: list[dict[str, Any]] = []
     for test in tests:
         lines = extract_metric_lines(outputs.get(test.name, []))
         if not lines:

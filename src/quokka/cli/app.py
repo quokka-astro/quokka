@@ -6,7 +6,7 @@ from typing import Optional
 import click
 import typer
 
-from quokka.cli import activation, bootstrap, build, clean, doctor, format, list_cmd, lock, run, smoke, status, test, tidy
+from quokka.cli import activation, bootstrap, build, clean, configure, doctor, format, list_cmd, lock, run, smoke, status, test, tidy
 from quokka.cli.common import worktree_option
 
 
@@ -28,6 +28,7 @@ def create_app() -> typer.Typer:
         ctx.obj["worktree"] = worktree
 
     build.register(app)
+    configure.register(app)
     run.register(app)
     test.register(app)
     smoke.register(app)

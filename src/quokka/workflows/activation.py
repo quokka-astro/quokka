@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import shlex
 
-from quokka.core.types import ActivationRequest, CommandResult
+from quokka.core.result import CommandResult
+from quokka.core.types import ActivationRequest
 from quokka.project.context import CliContext
 
 

@@ -1,3 +1,4 @@
+*.egg-info/
 plt*
 chk*
 last_chk

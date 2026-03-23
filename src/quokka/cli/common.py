@@ -7,8 +7,10 @@ from typing import Any, Callable, Optional, TypeVar
 import typer
 
 from quokka.core.errors import DiagnosticError
-from quokka.core.types import CommandRequest, CommandResult
-from quokka.output.console import error_result, format_result
+from quokka.core.result import CommandResult
+from quokka.core.types import CommandRequest
+from quokka.output.diagnostics import error_result
+from quokka.output.summary import format_result
 from quokka.project.context import CliContext, context_for_request
 
 RequestT = TypeVar("RequestT", bound=CommandRequest)

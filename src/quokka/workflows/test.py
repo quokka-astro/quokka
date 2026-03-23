@@ -4,8 +4,9 @@ import re
 from pathlib import Path
 
 from quokka.core.errors import DiagnosticError
+from quokka.core.result import CommandResult
 from quokka.core.subprocess import run_command, run_command_compact_logged
-from quokka.core.types import CommandResult, TestRequest
+from quokka.core.types import TestRequest
 from quokka.model.files import resolve_input_argument
 from quokka.model.selectors import ctest_selection
 from quokka.model.tests import expectation_summary_for_test, problem_for_test
@@ -13,8 +14,9 @@ from quokka.output.console import command_log_path, ctest_compact_console_line, 
 from quokka.project.context import CliContext
 from quokka.project.state import acquire_lock, ensure_no_conflicting_locks, is_build_configured, state_for_artifact
 from quokka.tools.ctest import observed_metrics_from_lasttest
-from quokka.workflows.build import ensure_profile_configured, perform_build
+from quokka.workflows.build import perform_build
 from quokka.workflows.common import ensure_artifact_ready
+from quokka.workflows.configure import ensure_profile_configured
 
 
 def run_test(context: CliContext, request: TestRequest) -> CommandResult:

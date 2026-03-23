@@ -25,11 +25,12 @@ from quokka.core.constants import ENV_OVERRIDE_KEYS, PYTHON_MODULE_PACKAGES
 
 from quokka.core.errors import DiagnosticError
 
-from quokka.core.subprocess import command_output, first_nonempty_line, resolve_executable_path, run_probe_command, shell_join
+from quokka.core.subprocess import command_output, first_nonempty_line, resolve_executable_path, run_command, run_command_compact_logged, run_probe_command, shell_join
 
 from quokka.core.types import ProfileConfig
 
 from quokka.project.config import normalize_define_value
+from quokka.project.discovery import buildtree_state, cmake_cache_path, ctest_root_testfile_path, compile_commands_path
 
 from quokka.project.root import is_subpath
 
@@ -216,6 +217,54 @@ def cmake_version(command: str, profile: Optional[str]) -> str:
     parts = first_line.split()
     return parts[2] if len(parts) >= 3 else first_line
 
+
+def configure_project(
+    source_dir: Path,
+    profile: ProfileConfig,
+    command: str,
+    profile_name: str | None,
+    *,
+    capture_output: bool,
+    compact_log_path: Path | None = None,
+) -> None:
+    args = ["cmake", "-S", str(source_dir), "-B", str(profile.build_dir), "-G", profile.generator]
+    for key in sorted(profile.defines):
+        args.append("-D{}={}".format(key, profile.defines[key]))
+    if compact_log_path is not None:
+        run_command_compact_logged(
+            args,
+            command=command,
+            profile=profile_name,
+            log_path=compact_log_path,
+        )
+        return
+    run_command(args, command=command, profile=profile_name, capture_output=capture_output)
+
+
+def build_targets(
+    profile: ProfileConfig,
+    command: str,
+    profile_name: str | None,
+    *,
+    targets: Sequence[str] = (),
+    capture_output: bool,
+    compact_log_path: Path | None = None,
+    echo_filter: Any = None,
+) -> None:
+    args = ["cmake", "--build", str(profile.build_dir)]
+    if targets:
+        args.extend(["--target"] + list(targets))
+    if compact_log_path is not None:
+        run_command_compact_logged(
+            args,
+            command=command,
+            profile=profile_name,
+            log_path=compact_log_path,
+            echo_filter=echo_filter,
+        )
+        return
+    run_command(args, command=command, profile=profile_name, capture_output=capture_output)
+
 def tool_probe(executable: str, version_args: Sequence[str], *, label: Optional[str] = None) -> Dict[str, Any]:
     name = label or Path(executable).name
     path = resolve_executable_path(executable)
@@ -245,22 +294,6 @@ def generator_tool_probe(generator: str) -> Dict[str, Any]:
     result = tool_probe(executable, version_args, label=generator)
     result["generator"] = generator
     return result
-
-def cmake_cache_path(build_dir: Path) -> Path:
-    return build_dir / "CMakeCache.txt"
-
-def ctest_root_testfile_path(build_dir: Path) -> Path:
-    return build_dir / "CTestTestfile.cmake"
-
-def buildtree_state(build_dir: Path) -> Dict[str, bool]:
-    cmake_cache_exists = cmake_cache_path(build_dir).exists()
-    ctest_metadata_exists = ctest_root_testfile_path(build_dir).exists()
-    return {
-        "cmake_cache_exists": cmake_cache_exists,
-        "ctest_metadata_exists": ctest_metadata_exists,
-        "configured": cmake_cache_exists and ctest_metadata_exists,
-        "partial_configure": cmake_cache_exists and not ctest_metadata_exists,
-    }
 
 def normalize_cmake_cache_value(entry_type: str, value: str) -> str:
     if entry_type == "BOOL":

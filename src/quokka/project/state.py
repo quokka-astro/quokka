@@ -29,11 +29,11 @@ from quokka.core.subprocess import command_output
 
 from quokka.core.types import ProfileConfig, TestSpec
 
+from quokka.project.discovery import buildtree_state, cmake_cache_path
 from quokka.project.root import utc_now
 
 from quokka.tools.cmake import (
     build_summary_from_cache,
-    cmake_cache_path,
     cmake_version,
     compiler_metadata_from_build,
     compute_configure_fingerprint,

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import shutil
 
-from quokka.core.types import CleanRequest, CommandResult
+from quokka.core.result import CommandResult
+from quokka.core.types import CleanRequest
 from quokka.project.context import CliContext
 from quokka.project.state import artifact_receipts_dir, break_locks, configure_receipt_path
 

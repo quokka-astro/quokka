@@ -1,31 +1,51 @@
 from __future__ import annotations
 
-import argparse
-import contextlib
 import dataclasses
-import datetime as dt
-import fcntl
-import hashlib
-import json
-import os
-import re
-import shlex
-import shutil
-import socket
-import sqlite3
-import subprocess
-import sys
-import tempfile
-import time
-import traceback
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
+from typing import Optional, Sequence
 
+from quokka.core.constants import CLANG_FORMAT_FILE_EXTENSIONS, CLANG_TIDY_FILE_EXTENSIONS
 from quokka.core.errors import DiagnosticError
-
-from quokka.project.root import is_subpath
-
 from quokka.project.context import CliContext
+from quokka.project.root import is_subpath
+from quokka.vcs.git import git_changed_files, git_tracked_files
+
+
+@dataclasses.dataclass(frozen=True)
+class FileSelection:
+    selector: str
+    files: list[str]
+    skipped_files: list[str]
+    all_files: bool = False
+
+
+def split_files_by_extension(paths: Sequence[str], extensions: tuple[str, ...]) -> tuple[list[str], list[str]]:
+    files: list[str] = []
+    skipped_files: list[str] = []
+    for path in paths:
+        if path.endswith(extensions):
+            files.append(path)
+        else:
+            skipped_files.append(path)
+    return files, skipped_files
+
+
+def select_format_files(context: CliContext, selector: str) -> FileSelection:
+    if selector == "all":
+        tracked_files = git_tracked_files(context.worktree_root, "format")
+        files, skipped_files = split_files_by_extension(tracked_files, CLANG_FORMAT_FILE_EXTENSIONS)
+        return FileSelection(selector=selector, files=files, skipped_files=skipped_files, all_files=True)
+
+    changed_files = git_changed_files(context.worktree_root, selector, "format", None)
+    files, skipped_files = split_files_by_extension(changed_files, CLANG_FORMAT_FILE_EXTENSIONS)
+    return FileSelection(selector=selector, files=files, skipped_files=skipped_files)
+
+
+def select_tidy_files(context: CliContext, selector: str) -> FileSelection:
+    changed_files = git_changed_files(context.worktree_root, selector, "tidy", context.profile_name())
+    files, skipped_files = split_files_by_extension(changed_files, CLANG_TIDY_FILE_EXTENSIONS)
+    return FileSelection(selector=selector, files=files, skipped_files=skipped_files)
+
 
 def resolve_buildtree_binary(context: CliContext, problem: str, command: str) -> Optional[Path]:
     from quokka.model.tests import discover_tests
@@ -53,6 +73,7 @@ def resolve_buildtree_binary(context: CliContext, problem: str, command: str) ->
             return Path(test.command[0]).resolve()
     return None
 
+
 def resolve_input_argument(arguments: Sequence[str], working_directory: Optional[Path], worktree_root: Path) -> Optional[Path]:
     if working_directory is None:
         bases = [worktree_root]
@@ -65,6 +86,7 @@ def resolve_input_argument(arguments: Sequence[str], working_directory: Optional
             if resolved.exists() and resolved.is_file():
                 return resolved
     return None
+
 
 def default_input_for_problem(context: CliContext, problem: str, command: str) -> Optional[Path]:
     from quokka.model.tests import discover_tests
@@ -81,6 +103,7 @@ def default_input_for_problem(context: CliContext, problem: str, command: str) -
     if candidate.exists():
         return candidate.resolve()
     return None
+
 
 def resolve_run_input(context: CliContext, problem: str, input_arg: Optional[str], command: str) -> Path:
     if input_arg:
@@ -109,6 +132,7 @@ def resolve_run_input(context: CliContext, problem: str, input_arg: Optional[str
         profile=context.profile_name(),
         resource={"kind": "problem", "name": problem},
     )
+
 
 def relative_or_absolute(path: Path, worktree_root: Path) -> str:
     if is_subpath(path, worktree_root):

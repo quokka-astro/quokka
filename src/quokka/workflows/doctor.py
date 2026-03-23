@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from quokka.core.constants import LOCK_TYPES
-from quokka.core.types import CommandResult, DoctorRequest, ProfileConfig
-from quokka.output.console import bootstrap_hint_command
+from quokka.core.result import CommandResult
+from quokka.core.types import DoctorRequest, ProfileConfig
+from quokka.output.diagnostics import bootstrap_hint_command
 from quokka.project.context import CliContext
+from quokka.project.discovery import buildtree_state, compile_commands_path
 from quokka.project.state import inspect_lock
-from quokka.tools.cmake import active_env_overrides, append_prerequisite_impact_lines, build_summary_from_cache, buildtree_state, cache_entry_value, collect_mpi_state, compiler_metadata_from_build, doctor_python_executable, format_compiler_toolchain, format_define_mismatch_summary, format_python_resolution, format_tool_probe_short, generator_tool_probe, populate_compiler_candidates_from_env, prerequisite_impact_entries, probe_python_stack, profile_define_state, python_probe_status_text, read_cmake_cache, tool_probe, toolchain_env_overrides_for_text
+from quokka.tools.cmake import active_env_overrides, append_prerequisite_impact_lines, build_summary_from_cache, cache_entry_value, collect_mpi_state, compiler_metadata_from_build, doctor_python_executable, format_compiler_toolchain, format_define_mismatch_summary, format_python_resolution, format_tool_probe_short, generator_tool_probe, populate_compiler_candidates_from_env, prerequisite_impact_entries, probe_python_stack, profile_define_state, python_probe_status_text, read_cmake_cache, tool_probe, toolchain_env_overrides_for_text
 
 
 def run_doctor(context: CliContext, request: DoctorRequest) -> CommandResult:
@@ -34,7 +36,7 @@ def run_doctor(context: CliContext, request: DoctorRequest) -> CommandResult:
         assert profile is not None
         assert define_state is not None
         assert python_probe is not None
-        compile_commands = profile.build_dir / "compile_commands.json"
+        compile_commands = compile_commands_path(profile.build_dir)
         build_summary = build_summary_from_cache(profile, cache_entries, define_state, context.worktree_root)
         build_summary["c_compiler"] = cache_entry_value(cache_entries, "CMAKE_C_COMPILER")
         build_summary["cxx_compiler"] = cache_entry_value(cache_entries, "CMAKE_CXX_COMPILER")

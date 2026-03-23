@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from quokka.core.constants import LOCK_TYPES
-from quokka.core.types import CommandResult, LockRequest
+from quokka.core.result import CommandResult
+from quokka.core.types import LockRequest
 from quokka.project.context import CliContext
 from quokka.project.state import break_locks, inspect_lock
 

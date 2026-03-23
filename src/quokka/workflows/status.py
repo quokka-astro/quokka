@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from quokka.core.constants import LOCK_TYPES
-from quokka.core.types import CommandResult, StatusRequest
+from quokka.core.result import CommandResult
+from quokka.core.types import StatusRequest
 from quokka.model.files import default_input_for_problem
-from quokka.model.tests import discover_problems
+from quokka.model.targets import discover_problems
 from quokka.project.context import CliContext
+from quokka.project.discovery import buildtree_state
 from quokka.project.state import configure_receipt_matches_current_build, configure_receipt_path, inspect_lock, read_json, state_for_artifact
-from quokka.tools.cmake import build_summary_from_cache, buildtree_state, compiler_metadata_from_build, format_define_mismatch_summary, profile_define_state, read_cmake_cache
+from quokka.tools.cmake import build_summary_from_cache, compiler_metadata_from_build, format_define_mismatch_summary, profile_define_state, read_cmake_cache
 
 
 def run_status(context: CliContext, request: StatusRequest) -> CommandResult:

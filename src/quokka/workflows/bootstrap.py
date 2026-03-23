@@ -3,8 +3,10 @@ from __future__ import annotations
 import shlex
 
 from quokka.core.subprocess import run_command, shell_join
-from quokka.core.types import BootstrapRequest, CommandResult
-from quokka.output.console import bootstrap_hint_command, emit_notice
+from quokka.core.result import CommandResult
+from quokka.core.types import BootstrapRequest
+from quokka.output.console import emit_notice
+from quokka.output.diagnostics import bootstrap_hint_command
 from quokka.project.context import CliContext
 from quokka.tools.cmake import append_prerequisite_impact_lines, collect_bootstrap_state, preferred_pre_commit_install_command, python_probe_status_text
 

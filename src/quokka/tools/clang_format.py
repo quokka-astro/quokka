@@ -1,35 +1,13 @@
 from __future__ import annotations
 
-import argparse
-import contextlib
-import dataclasses
-import datetime as dt
-import fcntl
-import hashlib
-import json
-import os
-import re
-import shlex
 import shutil
-import socket
-import sqlite3
-import subprocess
-import sys
-import tempfile
-import time
-import traceback
-from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
-
-from quokka.core.constants import CLANG_FORMAT_FILE_EXTENSIONS
+from typing import Sequence
 
 from quokka.core.errors import DiagnosticError
-
 from quokka.core.subprocess import run_command
-
 from quokka.project.context import CliContext
 
-def clang_format_files(context: CliContext, files: Sequence[str]) -> List[str]:
+def clang_format_files(context: CliContext, files: Sequence[str]) -> list[str]:
     formatter = shutil.which("clang-format")
     if formatter is None:
         raise DiagnosticError(
@@ -38,7 +16,7 @@ def clang_format_files(context: CliContext, files: Sequence[str]) -> List[str]:
             command="format",
         )
 
-    formatted_files = [file for file in files if file.endswith(CLANG_FORMAT_FILE_EXTENSIONS)]
+    formatted_files = list(files)
     if not formatted_files:
         return []
 

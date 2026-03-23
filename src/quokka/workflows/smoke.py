@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from quokka.core.errors import DiagnosticError
-from quokka.core.types import CommandResult, DoctorRequest, SmokeRequest, TestRequest
+from quokka.core.result import CommandResult
+from quokka.core.types import DoctorRequest, SmokeRequest, TestRequest
 from quokka.output.console import emit_notice
 from quokka.project.context import CliContext
 from quokka.workflows.doctor import run_doctor

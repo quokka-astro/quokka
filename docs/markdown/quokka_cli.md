@@ -78,6 +78,7 @@ quokka doctor --profile host-3d-release
 `quokka smoke` is the recommended first-day command. It checks the runtime and selected profile, configures the build tree if needed, and runs a small recommended test. Use `quokka build` when you want to compile the default target set or a specific problem without immediately running a test:
 
 ```bash
+quokka configure --profile host-3d-release
 quokka build <problem>
 ```
 
@@ -170,6 +171,13 @@ ctest --output-on-failure -R ODEIntegration
 ## Common commands
 
 ### Build and run
+
+Configure a profile explicitly:
+
+```bash
+quokka configure --profile host-3d-release
+quokka configure --profile host-3d-release --reconfigure
+```
 
 Build one or more problems:
 

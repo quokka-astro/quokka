@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from quokka.core.errors import DiagnosticError
-from quokka.core.types import CommandResult
+from quokka.core.result import CommandResult
 
 
 def success_payload(result: CommandResult) -> Dict[str, Any]:

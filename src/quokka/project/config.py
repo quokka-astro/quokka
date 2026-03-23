@@ -1,25 +1,7 @@
 from __future__ import annotations
 
-import argparse
-import contextlib
-import dataclasses
-import datetime as dt
-import fcntl
-import hashlib
-import json
-import os
-import re
-import shlex
-import shutil
-import socket
-import sqlite3
-import subprocess
-import sys
-import tempfile
-import time
-import traceback
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
+from typing import Any
 
 try:
     import tomllib  # type: ignore[attr-defined]
@@ -27,23 +9,24 @@ except ModuleNotFoundError:
     import tomli as tomllib  # type: ignore[no-redef]
 
 from quokka.core.constants import IGNORED_PROFILE_DEFINES
-
 from quokka.core.errors import DiagnosticError
-
 from quokka.core.types import ProfileConfig, RepoConfig
+
 
 def normalize_define_value(value: Any) -> str:
     if isinstance(value, bool):
         return "ON" if value else "OFF"
     return str(value)
 
-def normalize_profile_defines(raw_defines: Dict[str, Any]) -> Dict[str, str]:
-    defines: Dict[str, str] = {}
+
+def normalize_profile_defines(raw_defines: dict[str, Any]) -> dict[str, str]:
+    defines: dict[str, str] = {}
     for key, value in raw_defines.items():
         if key in IGNORED_PROFILE_DEFINES:
             continue
         defines[key] = normalize_define_value(value)
     return defines
+
 
 def load_repo_config(worktree_root: Path) -> RepoConfig:
     config_path = worktree_root / "quokka.toml"
@@ -79,7 +62,7 @@ def load_repo_config(worktree_root: Path) -> RepoConfig:
             details={"config_path": str(config_path)},
         )
 
-    profiles: Dict[str, ProfileConfig] = {}
+    profiles: dict[str, ProfileConfig] = {}
     for profile_name, raw_profile in raw_profiles.items():
         if not isinstance(raw_profile, dict):
             raise DiagnosticError(
@@ -135,15 +118,3 @@ def load_repo_config(worktree_root: Path) -> RepoConfig:
         profiles=profiles,
         policy=dict(policy),
     )
-
-def resolve_profile(config: RepoConfig, profile_name: Optional[str], command: str) -> ProfileConfig:
-    selected = profile_name or os.environ.get("QUOKKA_PROFILE") or config.default_profile
-    if selected not in config.profiles:
-        raise DiagnosticError(
-            "UNKNOWN_PROFILE",
-            "Profile '{}' is not defined in quokka.toml.".format(selected),
-            command=command,
-            profile=selected,
-            details={"known_profiles": sorted(config.profiles)},
-        )
-    return config.profiles[selected]

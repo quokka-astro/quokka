@@ -1,37 +1,13 @@
 from __future__ import annotations
 
-import argparse
-import contextlib
-import dataclasses
-import datetime as dt
-import fcntl
-import hashlib
-import json
-import os
-import re
-import shlex
-import shutil
-import socket
-import sqlite3
-import subprocess
-import sys
-import tempfile
-import time
-import traceback
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
+from typing import Any, Sequence
 
 from quokka.core.errors import DiagnosticError
-
-from quokka.output.console import emit_notice
-
 from quokka.project.context import CliContext
-
 from quokka.project.state import state_for_artifact
-
-from quokka.model.files import relative_or_absolute
-
 from quokka.tools.ctest import extract_metric_lines
+
 
 def summarize_path_examples(paths: Sequence[str], *, limit: int = 3) -> str:
     shown = list(paths[:limit])
@@ -39,13 +15,14 @@ def summarize_path_examples(paths: Sequence[str], *, limit: int = 3) -> str:
     suffix = " (+{} more)".format(hidden) if hidden > 0 else ""
     return ", ".join(shown) + suffix
 
-def summarize_runtime_output(stdout: str, stderr: str) -> List[str]:
+
+def summarize_runtime_output(stdout: str, stderr: str) -> list[str]:
     combined = stdout.splitlines() + stderr.splitlines()
     metrics = extract_metric_lines(combined)
     if metrics:
         return metrics
 
-    fallback: List[str] = []
+    fallback: list[str] = []
     seen = set()
     for raw_line in combined:
         line = raw_line.strip()
@@ -71,56 +48,57 @@ def summarize_runtime_output(stdout: str, stderr: str) -> List[str]:
             break
     return fallback
 
+
 def ensure_artifact_ready(
     context: CliContext,
     artifact_id: str,
     command: str,
     input_path: Path | None,
     build_if_needed: bool,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     from quokka.workflows.build import perform_build
 
     state, details = state_for_artifact(context, artifact_id, command, input_path)
-    if state == 'ready':
+    if state == "ready":
         return details
 
     if build_if_needed:
         perform_build(context, [artifact_id], reconfigure=False)
         state, details = state_for_artifact(context, artifact_id, command, input_path)
-        if state == 'ready':
+        if state == "ready":
             return details
 
-    resource = {'kind': 'problem', 'name': artifact_id}
-    if state == 'missing':
+    resource = {"kind": "problem", "name": artifact_id}
+    if state == "missing":
         raise DiagnosticError(
-            'MISSING_ARTIFACT',
-            '{} in profile {} is missing and must be built first.'.format(artifact_id, context.profile_name()),
+            "MISSING_ARTIFACT",
+            "{} in profile {} is missing and must be built first.".format(artifact_id, context.profile_name()),
             command=command,
             profile=context.profile_name(),
             resource=resource,
             details=details,
         )
-    if state == 'stale_configure':
+    if state == "stale_configure":
         raise DiagnosticError(
-            'CONFIGURE_DRIFT',
-            '{} in profile {} no longer matches the active build configuration.'.format(artifact_id, context.profile_name()),
+            "CONFIGURE_DRIFT",
+            "{} in profile {} no longer matches the active build configuration.".format(artifact_id, context.profile_name()),
             command=command,
             profile=context.profile_name(),
             resource=resource,
             details=details,
         )
-    if state == 'stale_source':
+    if state == "stale_source":
         raise DiagnosticError(
-            'STALE_ARTIFACT',
-            '{} in profile {} is stale and must be rebuilt before it can run.'.format(artifact_id, context.profile_name()),
+            "STALE_ARTIFACT",
+            "{} in profile {} is stale and must be rebuilt before it can run.".format(artifact_id, context.profile_name()),
             command=command,
             profile=context.profile_name(),
             resource=resource,
             details=details,
         )
     raise DiagnosticError(
-        'STATE_CORRUPT',
-        '{} has unreadable or inconsistent state.'.format(artifact_id),
+        "STATE_CORRUPT",
+        "{} has unreadable or inconsistent state.".format(artifact_id),
         command=command,
         profile=context.profile_name(),
         resource=resource,

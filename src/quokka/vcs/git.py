@@ -1,32 +1,13 @@
 from __future__ import annotations
 
-import argparse
 import contextlib
-import dataclasses
-import datetime as dt
-import fcntl
 import hashlib
-import json
-import os
-import re
-import shlex
-import shutil
-import socket
-import sqlite3
-import subprocess
-import sys
-import tempfile
-import time
-import traceback
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
+from typing import Any, Optional, Sequence
 
 from quokka.core.constants import SUBMODULE_PATHS
-
 from quokka.core.errors import DiagnosticError
-
 from quokka.core.subprocess import command_output
-
 from quokka.project.root import is_subpath
 
 def file_hash(path: Path) -> str:
@@ -39,7 +20,7 @@ def file_hash(path: Path) -> str:
             digest.update(chunk)
     return digest.hexdigest()
 
-def git_status_lines(worktree_root: Path, paths: Sequence[str]) -> List[str]:
+def git_status_lines(worktree_root: Path, paths: Sequence[str]) -> list[str]:
     args = ["git", "status", "--porcelain=v1", "--untracked-files=all", "--"] + list(paths)
     output = command_output(args, cwd=worktree_root, command="status", profile=None)
     if not output:
@@ -48,6 +29,11 @@ def git_status_lines(worktree_root: Path, paths: Sequence[str]) -> List[str]:
 
 def git_rev_parse(worktree_root: Path, rev: str) -> str:
     return command_output(["git", "rev-parse", rev], cwd=worktree_root, command="status", profile=None)
+
+def git_tracked_files(worktree_root: Path, command: str, profile: Optional[str] = None) -> list[str]:
+    output = command_output(["git", "ls-files"], cwd=worktree_root, command=command, profile=profile)
+    return [line for line in output.splitlines() if line]
+
 
 def compute_source_fingerprint(worktree_root: Path, input_path: Optional[Path], command: str, profile: Optional[str]) -> str:
     digest = hashlib.sha256()
@@ -84,10 +70,10 @@ def compute_source_fingerprint(worktree_root: Path, input_path: Optional[Path], 
 
     return "sha256:" + digest.hexdigest()
 
-def git_metadata(worktree_root: Path, command: str, profile: Optional[str]) -> Dict[str, Any]:
+def git_metadata(worktree_root: Path, command: str, profile: Optional[str]) -> dict[str, Any]:
     head = command_output(["git", "rev-parse", "HEAD"], cwd=worktree_root, command=command, profile=profile)
     dirty = bool(command_output(["git", "status", "--porcelain", "-uno"], cwd=worktree_root, command=command, profile=profile))
-    submodules: Dict[str, str] = {}
+    submodules: dict[str, str] = {}
     for submodule in SUBMODULE_PATHS:
         sub_path = worktree_root / submodule
         with contextlib.suppress(DiagnosticError):
@@ -95,7 +81,7 @@ def git_metadata(worktree_root: Path, command: str, profile: Optional[str]) -> D
                 submodules[submodule] = command_output(["git", "-C", str(sub_path), "rev-parse", "HEAD"], command=command, profile=profile)
     return {"head": head, "dirty": dirty, "submodules": submodules}
 
-def git_changed_files(worktree_root: Path, selector: str, command: str, profile: Optional[str]) -> List[str]:
+def git_changed_files(worktree_root: Path, selector: str, command: str, profile: Optional[str]) -> list[str]:
     if selector == "changed":
         output = command_output(["git", "diff", "--name-only", "HEAD"], cwd=worktree_root, command=command, profile=profile)
     elif selector == "previous":

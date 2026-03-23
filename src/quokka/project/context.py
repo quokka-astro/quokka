@@ -9,7 +9,8 @@ from pathlib import Path
 from quokka.core.constants import SCHEMA
 from quokka.core.errors import DiagnosticError
 from quokka.core.types import CommandRequest, ProfileConfig, RepoConfig
-from quokka.project.config import load_repo_config, resolve_profile
+from quokka.project.config import load_repo_config
+from quokka.project.presets import resolve_profile
 from quokka.project.root import canonical_path, current_uid_or_user, ensure_runtime_dir_layout, is_subpath, resolve_worktree_root, utc_now
 
 

@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from quokka.core.result import CommandResult
 from quokka.core.subprocess import run_command, run_command_capture_output
-from quokka.core.types import CommandResult, RunRequest
+from quokka.core.types import RunRequest
 from quokka.model.files import relative_or_absolute, resolve_run_input
 from quokka.project.context import CliContext
 from quokka.project.state import acquire_lock, ensure_no_conflicting_locks
-from quokka.workflows.build import ensure_profile_configured
 from quokka.workflows.common import ensure_artifact_ready, summarize_runtime_output
+from quokka.workflows.configure import ensure_profile_configured
 
 
 def run_problem(context: CliContext, request: RunRequest) -> CommandResult:
