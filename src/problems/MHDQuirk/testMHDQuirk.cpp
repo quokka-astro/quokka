@@ -255,8 +255,6 @@ AMRSimulation<MHDQuirk>::setCustomBoundaryConditions(const amrex::IntVect &iv, a
 
 auto problem_main() -> int
 {
-	// NOTE: geometry.is_periodic must also be set in the input file -- code-defined BCs bypass the
-	// quokka.bc pre-init hook that normally infers it, so AMReX won't know y/z are periodic otherwise.
 	// Boundary conditions: ext_dir in x, periodic in y and z
 	auto BCs_cc = quokka::BC<MHDQuirk>(quokka::BCType::ext_dir,  // x: outflow
 					   quokka::BCType::int_dir,  // y: periodic
