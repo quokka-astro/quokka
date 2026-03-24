@@ -106,6 +106,31 @@ quokka.hist_temp.dense.field_name = gasDensity         # Filter field
 quokka.hist_temp.dense.value_greater = 1e-25           # Filters: value_greater, value_less, value_inrange
 ```
 
+### Surface Fluxes
+
+This diagnostic computes integrated fluxes through one or more spherical surfaces, using the same surface-in-cell integration used by the `DiskGalaxy` statistics output. The output is a fixed-width text file, similar in style to `DiagPDF`, with one row per requested radius.
+
+The columns are:
+
+- `mass_flux`
+- `hydro_energy_flux`
+- `mhd_energy_flux`
+- `passive_scalar_flux` (for the first passive scalar; zero if none exist)
+
+*Example input file configuration:*
+
+``` ini
+quokka.flux_shells.type = DiagFlux                      # Diagnostic type
+quokka.flux_shells.file = FluxShells                   # Output file prefix
+quokka.flux_shells.int = 10                            # Output cadence (in number of coarse steps)
+quokka.flux_shells.radii_kpc = 1.0 10.0 50.0          # Spherical radii in kpc
+
+# Alternatively, provide radii directly in simulation length units:
+# quokka.flux_shells.radii = 3.08567758e21 3.08567758e22
+```
+
+Optional filters use the same syntax as `DiagPDF`.
+
 ## Volume Rendering (Ascent)
 
 !!! Warning

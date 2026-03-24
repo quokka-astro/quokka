@@ -140,6 +140,7 @@ include(CTest)
 
 set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagBase.cpp" 
+                        "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagFlux.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagFilter.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagFramePlane.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagPDF.cpp" 
