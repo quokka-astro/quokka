@@ -791,7 +791,8 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 		amrex::Real hydro_energy_flux_sphere = 0.0;
 		amrex::Real mhd_energy_flux_sphere = 0.0;
 		amrex::Real passive_scalar_flux_sphere = 0.0;
-		auto const fluxes = quokka::diagnostics::computeSphericalSurfaceFluxes<DiskGalaxy>(state_new_cc_, state_new_fc_, geom, flux_mask, flux_sphere_radius);
+		auto const fluxes =
+		    quokka::diagnostics::computeSphericalSurfaceFluxes<DiskGalaxy>(state_new_cc_, state_new_fc_, geom, flux_mask, flux_sphere_radius);
 		mass_flux_sphere = fluxes.mass_flux;
 		hydro_energy_flux_sphere = fluxes.hydro_energy_flux;
 		mhd_energy_flux_sphere = fluxes.mhd_energy_flux;

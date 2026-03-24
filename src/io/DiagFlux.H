@@ -58,26 +58,27 @@ template <typename problem_t> void DiagFlux::processDiag(int a_nstep, const amre
 			flux_mask[lev].define(state_cc[lev].boxArray(), state_cc[lev].DistributionMap(), 1, 0);
 			flux_mask[lev].setVal(1);
 		} else {
-			flux_mask[lev] = amrex::makeFineMask(state_cc[lev], state_cc[lev + 1], amrex::IntVect(0), ref_ratio[lev], geoms[lev].periodicity(), 1, 0);
+			flux_mask[lev] =
+			    amrex::makeFineMask(state_cc[lev], state_cc[lev + 1], amrex::IntVect(0), ref_ratio[lev], geoms[lev].periodicity(), 1, 0);
 		}
 
 		if (!m_filters.empty()) {
 			auto const &sarrs = a_state[lev]->const_arrays();
 			auto const &marrs = flux_mask[lev].arrays();
 			auto *fdata_p = m_filterData.data();
-			amrex::ParallelFor(
-			    *a_state[lev], amrex::IntVect(0), [=, nFilters = m_filters.size()] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
-				    if (marrs[box_no](i, j, k) == 0) {
-					    return;
-				    }
-				    for (int f = 0; f < nFilters; ++f) {
-					    amrex::Real const fval = sarrs[box_no](i, j, k, fdata_p[f].m_filterVarIdx); // NOLINT
-					    if (fval < fdata_p[f].m_low_val || fval > fdata_p[f].m_high_val) {	      // NOLINT
-						    marrs[box_no](i, j, k) = 0;
-						    return;
-					    }
-				    }
-			    });
+			amrex::ParallelFor(*a_state[lev], amrex::IntVect(0),
+					   [=, nFilters = m_filters.size()] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
+						   if (marrs[box_no](i, j, k) == 0) {
+							   return;
+						   }
+						   for (int f = 0; f < nFilters; ++f) {
+							   amrex::Real const fval = sarrs[box_no](i, j, k, fdata_p[f].m_filterVarIdx); // NOLINT
+							   if (fval < fdata_p[f].m_low_val || fval > fdata_p[f].m_high_val) {	       // NOLINT
+								   marrs[box_no](i, j, k) = 0;
+								   return;
+							   }
+						   }
+					   });
 		}
 	}
 	amrex::Gpu::streamSynchronize();
