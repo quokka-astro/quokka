@@ -82,7 +82,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 			AMREX_ASSERT(Egas0 > 0.0);
 		}
 
-		Real gas_update_factor = gas_update_factor_in;
+		const Real gas_update_factor = gas_update_factor_in;
 
 		double coeff_n = NAN;
 		const double H_num_den = ComputeNumberDensityH(rho, massScalars);
