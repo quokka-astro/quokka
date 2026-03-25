@@ -2956,7 +2956,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			swapRadiationState(state_old_cc_[lev], state_new_cc_[lev]);
 		}
 
-		// We use the IMEX PD-ARS scheme to evolve the radiation subsystem and radiation-matter coupling.
+		// We use the three-stage IMEX PD-ARS scheme to evolve the radiation subsystem and radiation-matter coupling.
 
 		// failure counter for: matter-radiation coupling, dust temperature, outer iteration
 		amrex::Gpu::Buffer<int> iteration_failure_counter({0, 0, 0});
@@ -2970,6 +2970,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		int const nghost = 1; // depositRadiation needs 1 ghost cell
 		amrex::MultiFab radEnergySource(grids[lev], dmap[lev], Physics_Traits<problem_t>::nGroups, nghost);
 
+		// === Stage 1: trivial U^(1) = U^n; skipped ===
+
 		// === Stage 2: explicit Forward Euler + implicit source terms on state_tmp1 ===
 
 		if constexpr (IMEX_Aim_22 > 0.0) {
@@ -2977,6 +2979,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			amrex::MultiFab::Copy(state_tmp1_cc, state_new_cc_[lev], 0, 0, state_tmp1_cc.nComp(), 0);
 
 			// Forward Euler: overwrites radiation vars in state_tmp1 from state_old
+			//   state_tmp1_rad = state_old_rad + dt * Aex_21 * s(state_old_rad)
+			//   state_tmp1_gas = gas_n (unchanged by PredictStep)
 			advanceRadiationForwardEuler(lev, time_subcycle, dt_radiation * IMEX_Aex_21, i, nsubSteps, fr_as_crse, fr_as_fine, state_tmp1_cc);
 
 			// Implicit source terms for stage 2
@@ -3013,9 +3017,14 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		// === Stage 3: explicit RK2 + gas LinComb + implicit source terms on state_new ===
 
 		// Midpoint RK2: explicit stage 3 for radiation, uses state_tmp1 as U^(2)
+		// calls AddFluxesRK2(alpha=0.5, Aex_s1_coeff=0, Aex_s2_coeff=0.5)
+		// → state_new_rad = (1 - alpha) * state_new_rad + alpha * state_tmp1_rad
+		//                   + dt * (Aex_31 - alpha * Aex_21) * s(U^(1))
+		//                   + dt * Aex_32 * s(state_tmp1_rad)
+		//                 = 0.5 * state_new_rad + 0.5 * state_tmp1_rad + dt * 0.5 * s(state_tmp1_rad)
 		advanceRadiationMidpointRK2(lev, time_subcycle, dt_radiation, i, nsubSteps, fr_as_crse, fr_as_fine, state_tmp1_cc);
 
-		// Apply Shu-Osher combination to gas variables (NOT handled by AddFluxesRK2)
+		// Apply Shu-Osher combination to gas variables (NOT handled by AddFluxesRK2 in advanceRadiationMidpointRK2)
 		// AddFluxesRK2 only operates on radiation hyperbolic variables (nstartHyperbolic_ to nstartHyperbolic_ + ncompHyperbolic_)
 		if constexpr (nstartHyperbolic_ > 0) {
 			for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
@@ -3026,24 +3035,6 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 						   [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
 							   stateNew(i, j, k, n) = (1.0 - IMEX_alpha) * stateNew(i, j, k, n) + IMEX_alpha * stateTmp(i, j, k, n);
 						   });
-			}
-		}
-		// Also combine any components after the radiation hyperbolic range
-		{
-			const int post_start = nstartHyperbolic_ + ncompHyperbolic_;
-			const int post_count = state_new_cc_[lev].nComp() - post_start;
-			if (post_count > 0) {
-				for (amrex::MFIter iter(state_new_cc_[lev]); iter.isValid(); ++iter) {
-					const amrex::Box &indexRange = iter.validbox();
-					auto const &stateNew = state_new_cc_[lev].array(iter);
-					auto const &stateTmp = state_tmp1_cc.const_array(iter);
-					amrex::ParallelFor(indexRange, post_count,
-							   [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-								   const int comp = post_start + n;
-								   stateNew(i, j, k, comp) =
-								       (1.0 - IMEX_alpha) * stateNew(i, j, k, comp) + IMEX_alpha * stateTmp(i, j, k, comp);
-							   });
-				}
 			}
 		}
 
