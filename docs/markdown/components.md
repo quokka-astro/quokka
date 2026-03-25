@@ -61,7 +61,7 @@ Defined in `src/physics_info.hpp`. Computes starting indices and total component
 | `mhdFirstIndex`     | 0                                                                      | Starting index of MHD variables within each face-centred `MultiFab`          |
 
 
-`**nvarTotal_cc` calculation:**
+**`nvarTotal_cc` calculation:**
 
 - If neither hydro nor radiation is enabled: `nvarTotal_cc = nvarTotal_cc_adv` (= 1, for pure advection).
 - Otherwise: `nvarTotal_cc = numHydroVars + numPassiveScalars + numDustVarsPerGroup * nDustGroups * is_dust_enabled + numRadVarsPerGroup * nGroups * is_radiation_enabled`.
