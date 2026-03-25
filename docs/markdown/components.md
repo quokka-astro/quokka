@@ -92,15 +92,12 @@ Defined by `HydroSystem<problem_t>::consVarIndex`:
 
 ### Passive scalar block (`numPassiveScalars` variables, starting at `pscalarFirstIndex = 6`)
 
+| Index            | Name            | Quantity                                       |
+|------------------|-----------------|------------------------------------------------|
+| 6 .. 6+Nms-1     | `scalar0_index` | Mass scalars (advected with density)           |
+| 6+Nms .. 6+Nps-1 |                 | Other passive scalars (advected independently) |
 
-| Index            | Name            | Quantity                                            |
-| ---------------- | --------------- | --------------------------------------------------- |
-| 6                | `scalar0_index` | First passive scalar                                |
-| 6+1 .. 6+Nms-1   |                 | Additional mass scalars (advected with density)     |
-| 6+Nms .. 6+Nps-1 |                 | Additional passive scalars (advected independently) |
-
-
-where `Nms = numMassScalars` and `Nps = numPassiveScalars`. Mass scalars are the first `numMassScalars` entries of the passive scalar block; they are advected proportional to the density field.
+where `Nms = numMassScalars` and `Nps = numPassiveScalars`. Mass scalars are the first `numMassScalars` entries of the passive scalar block; they are advected proportional to the density field. When `numMassScalars = 0`, the first component of the passive scalar block is 'other passive scalars'.
 
 ### Dust block (`numDustVarsPerGroup * nDustGroups` variables, starting at `dustFirstIndex`)
 
