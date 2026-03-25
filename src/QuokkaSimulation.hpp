@@ -3003,13 +3003,13 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 				// Full gas update (gas_update_factor = 1.0)
 				if constexpr (Physics_Traits<problem_t>::nGroups <= 1) {
-					RadSystem<problem_t>::AddSourceTermsSingleGroup(stateTmp1, radEnergySource_arr, indexRange, dt_stage2_implicit,
-											1.0, dustGasInteractionCoeff_, rad_tol, rad_tol_rel,
-											tempFloor, p_iteration_counter, p_iteration_failure_counter);
+					RadSystem<problem_t>::AddSourceTermsSingleGroup(stateTmp1, radEnergySource_arr, indexRange, dt_stage2_implicit, 1.0,
+											dustGasInteractionCoeff_, rad_tol, rad_tol_rel, tempFloor,
+											p_iteration_counter, p_iteration_failure_counter);
 				} else {
-					RadSystem<problem_t>::AddSourceTermsMultiGroup(stateTmp1, radEnergySource_arr, indexRange, dt_stage2_implicit,
-										       1.0, dustGasInteractionCoeff_, rad_tol, rad_tol_rel,
-										       tempFloor, p_iteration_counter, p_iteration_failure_counter);
+					RadSystem<problem_t>::AddSourceTermsMultiGroup(stateTmp1, radEnergySource_arr, indexRange, dt_stage2_implicit, 1.0,
+										       dustGasInteractionCoeff_, rad_tol, rad_tol_rel, tempFloor,
+										       p_iteration_counter, p_iteration_failure_counter);
 				}
 			}
 		}
@@ -3031,10 +3031,9 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				const amrex::Box &indexRange = iter.validbox();
 				auto const &stateNew = state_new_cc_[lev].array(iter);
 				auto const &stateTmp = state_tmp1_cc.const_array(iter);
-				amrex::ParallelFor(indexRange, nstartHyperbolic_,
-						   [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-							   stateNew(i, j, k, n) = (1.0 - IMEX_alpha) * stateNew(i, j, k, n) + IMEX_alpha * stateTmp(i, j, k, n);
-						   });
+				amrex::ParallelFor(indexRange, nstartHyperbolic_, [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
+					stateNew(i, j, k, n) = (1.0 - IMEX_alpha) * stateNew(i, j, k, n) + IMEX_alpha * stateTmp(i, j, k, n);
+				});
 			}
 		}
 
@@ -3059,12 +3058,12 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			// Full gas update (gas_update_factor = 1.0)
 			if constexpr (Physics_Traits<problem_t>::nGroups <= 1) {
 				RadSystem<problem_t>::AddSourceTermsSingleGroup(stateNew_cc, radEnergySource_arr, indexRange, dt_stage3_implicit, 1.0,
-										dustGasInteractionCoeff_, rad_tol, rad_tol_rel, tempFloor,
-										p_iteration_counter, p_iteration_failure_counter);
+										dustGasInteractionCoeff_, rad_tol, rad_tol_rel, tempFloor, p_iteration_counter,
+										p_iteration_failure_counter);
 			} else {
 				RadSystem<problem_t>::AddSourceTermsMultiGroup(stateNew_cc, radEnergySource_arr, indexRange, dt_stage3_implicit, 1.0,
-									       dustGasInteractionCoeff_, rad_tol, rad_tol_rel, tempFloor,
-									       p_iteration_counter, p_iteration_failure_counter);
+									       dustGasInteractionCoeff_, rad_tol, rad_tol_rel, tempFloor, p_iteration_counter,
+									       p_iteration_failure_counter);
 			}
 		}
 
