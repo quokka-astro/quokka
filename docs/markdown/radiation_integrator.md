@@ -94,7 +94,15 @@ U^(3)* = 0.5 * U^n + 0.5 * U^(2) + 0.5 * dt * s(U^(2))
 
 This is exactly the SSP-RK2 corrector formula, extended to also carry forward the implicit contribution from stage 2 through the `alpha * U^(2)` weight.
 
+The rest of stage 3 is a single backward Euler step: `U^(3) = U^(3)* + dt Aim_33 * g(U^(3))` 
+
 ## Implementation
+
+Define `state_xxx_cc = (state_xxx_gas, state_xxx_rad)`. 
+
+### Stage 1
+
+Trivial `state_new_cc_ = state_new_cc_`, skipped.
 
 ### Stage 2
 
@@ -118,32 +126,36 @@ AddSourceTerms(state_tmp1_cc, dt_implicit = Aim_22 * dt, gas_update_factor = 1.0
 // 4. Explicit corrector (radiation vars only — Shu-Osher form)
 advanceRadiationMidpointRK2(..., state_inter = state_tmp1_cc)
 //    calls AddFluxesRK2(alpha=0.5, Aex_s1_coeff=0, Aex_s2_coeff=0.5)
-//    → state_new_rad = 0.5*U^n_rad + 0.5*U^(2)_rad + 0.5*dt*s(U^(2)_rad)
+//  → state_new_rad = (1 - alpha) * state_new_rad + alpha * state_tmp1_rad
+//                    + dt * (Aex_31 - alpha * Aex_21) * s(U^(1))
+//                    + dt * Aex_32 * s(state_tmp1_rad)
+//                  = 0.5 * state_new_rad + 0.5 * state_tmp1_rad + dt * 0.5 * s(state_tmp1_rad)
 
 // 5. Shu-Osher combination for gas variables
 //    AddFluxesRK2 only touches radiation hyperbolic indices; gas must be combined
 //    explicitly via a ParallelFor kernel on components [0, nstartHyperbolic_)
 //    and [nstartHyperbolic_ + ncompHyperbolic_, nComp):
 //    state_new_gas = (1 - alpha) * state_new_gas + alpha * state_tmp1_gas
-//                 = 0.5 * gas_n + 0.5 * (gas_n + Δg_stage2)
-//                 = gas_n + 0.5 * Δg_stage2
+//                  = 0.5 * gas_n + 0.5 * state_tmp1_gas
 
-// 6. Implicit solve: full Newton-Raphson with dt_implicit = Aim_33 * dt = 0.5 * dt
+// 6. Implicit solve of `U^(3) = U^(3)* + dt Aim_33 * g(U^(3))`: Newton-Raphson with dt_implicit = Aim_33 * dt = 0.5 * dt
 AddSourceTerms(state_new_cc_, dt_implicit = Aim_33 * dt, gas_update_factor = 1.0)
 //    → state_new = U^(3)
 ```
 
 ### Key functions
 
-| Function | Role |
-|---|---|
-| `subcycleRadiationAtLevel` | Outer loop: substep count, state swap, per-substep IMEX stages |
-| `advanceRadiationForwardEuler` | Stage 2 explicit: `PredictStep` with `dt * Aex_21` into `state_out` |
-| `advanceRadiationMidpointRK2` | Stage 3 explicit: `AddFluxesRK2` with Shu-Osher coefficients, reading `state_inter` |
-| `RadSystem::AddFluxesRK2` | GPU kernel: `(1-alpha)*U0 + alpha*U1 + Aex_s1_coeff*F0 + Aex_s2_coeff*F1` for radiation |
-| `RadSystem::AddSourceTermsSingleGroup` | GPU kernel: Newton-Raphson implicit solve for single-group coupling |
-| `RadSystem::AddSourceTermsMultiGroup` | GPU kernel: Newton-Raphson implicit solve for multi-group coupling |
-| `swapRadiationState` | Copies radiation hyperbolic vars from `state_new` → `state_old` for next substep |
+
+| Function                               | Role                                                                                    |
+| -------------------------------------- | --------------------------------------------------------------------------------------- |
+| `subcycleRadiationAtLevel`             | Outer loop: substep count, state swap, per-substep IMEX stages                          |
+| `advanceRadiationForwardEuler`         | Stage 2 explicit: `PredictStep` with `dt * Aex_21` into `state_out`                     |
+| `advanceRadiationMidpointRK2`          | Stage 3 explicit: `AddFluxesRK2` with Shu-Osher coefficients, reading `state_inter`     |
+| `RadSystem::AddFluxesRK2`              | GPU kernel: `(1-alpha)*U0 + alpha*U1 + Aex_s1_coeff*F0 + Aex_s2_coeff*F1` for radiation |
+| `RadSystem::AddSourceTermsSingleGroup` | GPU kernel: Newton-Raphson implicit solve for single-group coupling                     |
+| `RadSystem::AddSourceTermsMultiGroup`  | GPU kernel: Newton-Raphson implicit solve for multi-group coupling                      |
+| `swapRadiationState`                   | Copies radiation hyperbolic vars from `state_new` → `state_old` for next substep        |
+
 
 ### Source term interface
 
