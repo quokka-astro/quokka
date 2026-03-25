@@ -34,9 +34,6 @@ Defined in `src/physics_info.hpp`. User-specialized per problem to enable/disabl
 | `numPassiveScalars`                                                             | Total number of passive scalars (must be >= `numMassScalars`)                       |
 | `nGroups`                                                                       | Number of radiation photon groups                                                   |
 | `nDustGroups`                                                                   | Number of dust groups                                                               |
-| `unit_system`                                                                   | Unit system: `CGS`, `CONSTANTS`, or `CUSTOM`                                        |
-| `c_light`, `radiation_constant`, `boltzmann_constant`, `gravitational_constant` | Physical constants (set automatically for CGS, user-defined for other unit systems) |
-| `unit_length`, `unit_mass`, `unit_time`, `unit_temperature`                     | Code unit definitions (only meaningful for `CUSTOM` unit system)                    |
 
 
 ## Cell-centred state vector layout
