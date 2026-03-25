@@ -1,4 +1,5 @@
-module load gcc/12.2.0
+module purge
+module load gcc/14.2.0
 module load cuda/12.9.0
 
 module unload openmpi
