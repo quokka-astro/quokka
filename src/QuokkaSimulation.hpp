@@ -3027,9 +3027,11 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		// Apply Shu-Osher combination to gas variables (NOT handled by AddFluxesRK2 in advanceRadiationMidpointRK2)
 		// AddFluxesRK2 only operates on radiation hyperbolic variables (nstartHyperbolic_ to nstartHyperbolic_ + ncompHyperbolic_)
 		if constexpr (nstartHyperbolic_ > 0) {
-			// LinComb dst = a*src_a + b*src_b, arguments: dst (destination FabArray), a (scalar), x (FabArray), xcomp (start comp of x), b (scalar), 
+			// LinComb dst = a*src_a + b*src_b, arguments: dst (destination FabArray), a (scalar), x (FabArray), xcomp (start comp of x), b
+			// (scalar),
 			//   y (FabArray), ycomp (start comp of y), dstcomp (start comp of dst), numcomp (number of comps), nghost (# ghost cells)
-			amrex::MultiFab::LinComb(state_new_cc_[lev], 1.0 - IMEX_alpha, state_new_cc_[lev], 0, IMEX_alpha, state_tmp1_cc, 0, 0, nstartHyperbolic_, 0);
+			amrex::MultiFab::LinComb(state_new_cc_[lev], 1.0 - IMEX_alpha, state_new_cc_[lev], 0, IMEX_alpha, state_tmp1_cc, 0, 0,
+						 nstartHyperbolic_, 0);
 		}
 
 		// Implicit source terms for stage 3
