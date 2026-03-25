@@ -69,6 +69,7 @@ namespace filesystem = experimental::filesystem;
 #include "SimulationData.hpp"
 #include "chemistry/Chemistry.hpp"
 #include "cooling/ResampledCooling.hpp"
+#include "conduction/ElectronConduction.hpp"
 #include "dust/DustDrag.hpp"
 #include "dust/dust_system.hpp"
 #include "eos.H"
@@ -167,12 +168,11 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	std::string coolingTableType_;
 	std::string coolingTableFilename_;
 
-	//Conduction parameters
 	int enableElectronConduction_ = 0;
 	amrex::Real electronConductionKappa0_ = 0.0;
 	amrex::Real electronConductionFluxLimiterPhi_ = 1.0;
 	amrex::Real electronConductionSaturationFactor_ = 5.0;
-	amrex::Real electronConductionTempFloor_ = 10.0;
+	amrex::Real electronConductionTempFloor_ = 0.0;
 
 
 	std::map<std::string, std::string> turbParams_;
