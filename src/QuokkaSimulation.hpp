@@ -181,6 +181,20 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	static constexpr int n_mhd_vars_per_dim_ = MHDSystem<problem_t>::nvar_per_dim_; // mhd
 	static constexpr int numDustVars_ = Physics_NumVars::numDustVarsPerGroup;	// number of dust variables for each dust group
 
+	// IMEX PD-ARS Butcher tableau
+	// Explicit tableau (strictly lower triangular): Aex_ij, i > j
+	static constexpr double IMEX_Aex_21 = 1.0;
+	static constexpr double IMEX_Aex_31 = 0.5;
+	static constexpr double IMEX_Aex_32 = 0.5;
+	// Implicit tableau (lower triangular with diagonal): Aim_ij, i >= j
+	static constexpr double IMEX_Aim_22 = 1.0;
+	static constexpr double IMEX_Aim_32 = 0.5;
+	static constexpr double IMEX_Aim_33 = 0.5;
+	// Derived coefficient for Shu-Osher form of stage 3
+	// Guard: IMEX_Aim_22 must be > 0 for the Shu-Osher form to be valid
+	static_assert(IMEX_Aim_22 > 0.0, "IMEX_Aim_22 must be > 0 for the IMEX PD-ARS scheme");
+	static constexpr double IMEX_alpha = IMEX_Aim_32 / IMEX_Aim_22; // = 0.5
+
 	static constexpr bool is_particle_enabled = Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None;
 
 	amrex::Real dust_omega_ = 1.0;
