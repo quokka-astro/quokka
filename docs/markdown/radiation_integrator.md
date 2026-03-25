@@ -37,15 +37,17 @@ c | A                    c | A
 
 The scheme is **stiffly accurate**: the quadrature weights b equal the last row of A in both tableaux, so the solution at the end of each step equals the last stage value. In code the entries are defined as `static constexpr` members of `QuokkaSimulation`:
 
-| Constant | Value | Meaning |
-|---|---|---|
-| `IMEX_Aex_21` | 1.0 | Explicit flux weight, stage 2 ← stage 1 |
-| `IMEX_Aex_31` | 0.5 | Explicit flux weight, stage 3 ← stage 1 |
-| `IMEX_Aex_32` | 0.5 | Explicit flux weight, stage 3 ← stage 2 |
-| `IMEX_Aim_22` | 1.0 | Implicit solve timestep fraction, stage 2 |
-| `IMEX_Aim_32` | 0.5 | Off-diagonal implicit weight, stage 3 ← stage 2 |
-| `IMEX_Aim_33` | 0.5 | Implicit solve timestep fraction, stage 3 |
-| `IMEX_alpha`  | 0.5 | Derived: Aim_32 / Aim_22 (Shu-Osher weight) |
+
+| Constant      | Value | Meaning                                         |
+| ------------- | ----- | ----------------------------------------------- |
+| `IMEX_Aex_21` | 1.0   | Explicit flux weight, stage 2 ← stage 1         |
+| `IMEX_Aex_31` | 0.5   | Explicit flux weight, stage 3 ← stage 1         |
+| `IMEX_Aex_32` | 0.5   | Explicit flux weight, stage 3 ← stage 2         |
+| `IMEX_Aim_22` | 1.0   | Implicit solve timestep fraction, stage 2       |
+| `IMEX_Aim_32` | 0.5   | Off-diagonal implicit weight, stage 3 ← stage 2 |
+| `IMEX_Aim_33` | 0.5   | Implicit solve timestep fraction, stage 3       |
+| `IMEX_alpha`  | 0.5   | Derived: Aim_32 / Aim_22 (Shu-Osher weight)     |
+
 
 ### Stage equations
 
