@@ -641,7 +641,13 @@ void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real>
 			const auto Fz = cons(i, j, k, x3RadFlux_index + numRadVars_ * g);
 
 			// check admissibility of states
-			AMREX_ASSERT(E_r > 0.0); // NOLINT
+			if (!(E_r > 0.0)) {
+				std::cout << "Value of E_r is " << E_r << std::endl;
+				std::cout << "Value of n_photon for this E_r is " << E_r / GetRadiationGroupQuanta(3.29e15, 1.50e16) << std::endl;
+				std::cout << "This happened in i,j,k = " << i << "," << j << "," << k << std::endl;
+				amrex::Abort();
+			}
+			// AMREX_ASSERT(E_r > 0.0); // NOLINT
 
 			primVar(i, j, k, primRadEnergy_index + numRadVars_ * g) = E_r;
 			primVar(i, j, k, x1ReducedFlux_index + numRadVars_ * g) = Fx / (c_light_ * E_r);
