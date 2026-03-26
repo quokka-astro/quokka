@@ -1,6 +1,6 @@
 # Radiation Integrator
 
-The radiation integrator advances the coupled radiation–matter system using the IMEX PD-ARS scheme. It is called once per AMR level from `AdvanceTimeStepOnLevel`, after the hydro advance, via `QuokkaSimulation<problem_t>::subcycleRadiationAtLevel`. Because the radiation CFL number is typically much tighter than the hydro CFL number (the reduced speed of light `c_hat` can still exceed the hydrodynamic wave speed), the radiation step is subdivided into multiple substeps within a single hydro timestep.
+The radiation integrator advances the coupled radiation–matter system using the IMEX PD-ARS scheme. It is called once per AMR level from `AdvanceTimeStepOnLevel`, after the hydro advance, via `QuokkaSimulation<problem_t>::subcycleRadiationAtLevel`. Because the radiation timestep is typically much smaller than the hydro timestep (the reduced speed of light `c_hat` can still exceed the hydrodynamic wave speed), the radiation step is subdivided into multiple substeps within a single hydro timestep.
 
 ## High-level workflow
 
