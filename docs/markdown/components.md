@@ -91,10 +91,14 @@ Defined by `HydroSystem<problem_t>::consVarIndex`:
 
 | Index            | Name            | Quantity                                       |
 |------------------|-----------------|------------------------------------------------|
-| 6 .. 6+Nms-1     | `scalar0_index` | Mass scalars (advected with density)           |
-| 6+Nms .. 6+Nps-1 |                 | Other passive scalars (advected independently) |
+| 6 .. 6+Nms-1     | `scalar0_index` | Mass scalars (partial densities; sum must equal total density; renormalized if not) |
+| 6+Nms .. 6+Nps-1 |                 | Ordinary passive scalars (arbitrary quantities; no constraints) |
 
-where `Nms = numMassScalars` and `Nps = numPassiveScalars`. Mass scalars are the first `numMassScalars` entries of the passive scalar block; they are advected proportional to the density field. When `numMassScalars = 0`, the first component of the passive scalar block is 'other passive scalars'.
+**Explanation**:  
+Here, `Nms = numMassScalars` and `Nps = numPassiveScalars`.  
+- The first `numMassScalars` entries in the passive scalar block correspond to *mass scalars*. Mass scalars represent partial densities whose sum should equal the total density at each cell, and they will be renormalized if this condition is not met.  
+- Any remaining entries (`Nps - Nms`) are *ordinary passive scalars*, which store arbitrary advected quantities and are not required to satisfy any normalization constraint.  
+- If `numMassScalars = 0`, then all components in the passive scalar block are ordinary passive scalars.
 
 ### Dust block (`numDustVarsPerGroup * nDustGroups` variables, starting at `dustFirstIndex`)
 
