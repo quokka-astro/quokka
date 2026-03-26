@@ -3031,6 +3031,11 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				const amrex::Box &indexRange = iter.validbox();
 				auto const &stateNew = state_new_cc_[lev].array(iter);
 				auto const &stateTmp = state_tmp1_cc.const_array(iter);
+				// gasInternalEnergy is the primary variable for the coupling source g; combine it directly.
+				// gasEnergy (total = internal + kinetic) is then derived from the combined Eint and momentum.
+				// Combining gasEnergy directly instead would introduce a spurious kinematic term
+				// alpha*(1-alpha)*|dMom|^2/(2*rho) in Egas0 extracted by AddSourceTerms, which can
+				// push the dust temperature negative in marginal cells near the radiation front.
 				amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 					const double rho = (1.0 - IMEX_alpha) * stateNew(i, j, k, RadSystem<problem_t>::gasDensity_index) +
 							   IMEX_alpha * stateTmp(i, j, k, RadSystem<problem_t>::gasDensity_index);
@@ -3040,16 +3045,16 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 							     IMEX_alpha * stateTmp(i, j, k, RadSystem<problem_t>::x2GasMomentum_index);
 					const double x3Mom = (1.0 - IMEX_alpha) * stateNew(i, j, k, RadSystem<problem_t>::x3GasMomentum_index) +
 							     IMEX_alpha * stateTmp(i, j, k, RadSystem<problem_t>::x3GasMomentum_index);
-					const double Etot = (1.0 - IMEX_alpha) * stateNew(i, j, k, RadSystem<problem_t>::gasEnergy_index) +
-							    IMEX_alpha * stateTmp(i, j, k, RadSystem<problem_t>::gasEnergy_index);
+					const double Eint = (1.0 - IMEX_alpha) * stateNew(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index) +
+							    IMEX_alpha * stateTmp(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index);
 					stateNew(i, j, k, RadSystem<problem_t>::gasDensity_index) = rho;
 					stateNew(i, j, k, RadSystem<problem_t>::x1GasMomentum_index) = x1Mom;
 					stateNew(i, j, k, RadSystem<problem_t>::x2GasMomentum_index) = x2Mom;
 					stateNew(i, j, k, RadSystem<problem_t>::x3GasMomentum_index) = x3Mom;
-					stateNew(i, j, k, RadSystem<problem_t>::gasEnergy_index) = Etot;
-					// Recompute gasInternalEnergy from gasEnergy (tot) - kinetic energy to restore consistency.
-					stateNew(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index) =
-					    RadSystem<problem_t>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Etot);
+					stateNew(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index) = Eint;
+					// Derive gasEnergy (total) from combined internal energy + kinetic energy of combined momentum.
+					stateNew(i, j, k, RadSystem<problem_t>::gasEnergy_index) =
+					    RadSystem<problem_t>::ComputeEgasFromEint(rho, x1Mom, x2Mom, x3Mom, Eint);
 				});
 			}
 		}
