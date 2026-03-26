@@ -189,7 +189,7 @@ template <> void QuokkaSimulation<StromgenSphereConstTempProblem>::setInitialCon
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int g = 0; g < Physics_Traits<StromgenSphereConstTempProblem>::nGroups; ++g) {
-			state_cc(i, j, k, RadSystem<StromgenSphereConstTempProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = 1.e-99_rt; 
+			state_cc(i, j, k, RadSystem<StromgenSphereConstTempProblem>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = 1.e-99_rt;
 			state_cc(i, j, k, RadSystem<StromgenSphereConstTempProblem>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
 			state_cc(i, j, k, RadSystem<StromgenSphereConstTempProblem>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;
 			state_cc(i, j, k, RadSystem<StromgenSphereConstTempProblem>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0.0_rt;

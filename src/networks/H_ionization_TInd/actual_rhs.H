@@ -20,32 +20,32 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_recombination_cooling_coefficient(Re
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Array1D<Real, 1, INT_NEQS> &ydot)
 {
-    amrex::Real alpha_rec = get_recombination_coefficient(state.T);
-    amrex::Real Lambda_rec = get_recombination_cooling_coefficient(state.T);
-    amrex::Real c = C::c_light; // speed of light in cm/s
-    amrex::Real sigma_photo = network::sigma_photoionization; // photoionization cross-section in cm^2
-    amrex::Real E_ionization = network::E_ionization; // ionization energy released for hydrogen in ergs
-    amrex::Real frac = 1.0_rt;
+	amrex::Real alpha_rec = get_recombination_coefficient(state.T);
+	amrex::Real Lambda_rec = get_recombination_cooling_coefficient(state.T);
+	amrex::Real c = C::c_light;				  // speed of light in cm/s
+	amrex::Real sigma_photo = network::sigma_photoionization; // photoionization cross-section in cm^2
+	amrex::Real E_ionization = network::E_ionization;	  // ionization energy released for hydrogen in ergs
+	amrex::Real frac = 1.0_rt;
 
-    // Photoionization with electrons being carried
-    amrex::Real ionization_term = state.xn[1] * c * sigma_photo * state.rn[0];
-    ydot(1) = ionization_term - alpha_rec * state.xn[0] * state.xn[2];
-    ydot(2) = -ydot(1);
-    ydot(3) = ydot(1);
-    ydot(net_ienuc) = 0;//(ionization_term * E_ionization - state.xn[0] * state.xn[2] * Lambda_rec) / state.rho;
-    ydot(5) = -ionization_term / frac;
-    ydot(6) = -state.xn[1] * c * sigma_photo * state.rn[1] / frac;
+	// Photoionization with electrons being carried
+	amrex::Real ionization_term = state.xn[1] * c * sigma_photo * state.rn[0];
+	ydot(1) = ionization_term - alpha_rec * state.xn[0] * state.xn[2];
+	ydot(2) = -ydot(1);
+	ydot(3) = ydot(1);
+	ydot(net_ienuc) = 0; //(ionization_term * E_ionization - state.xn[0] * state.xn[2] * Lambda_rec) / state.rho;
+	ydot(5) = -ionization_term / frac;
+	ydot(6) = -state.xn[1] * c * sigma_photo * state.rn[1] / frac;
 }
 
 template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_jac(const burn_t &state, MatrixType &jac)
 {
-    amrex::Real alpha_rec = get_recombination_coefficient(state.T);
-    amrex::Real Lambda_rec = get_recombination_cooling_coefficient(state.T);
-    amrex::Real c = C::c_light; // speed of light in cm/s
-    amrex::Real frac = 1.0_rt;
-    amrex::Real sigma_photo = network::sigma_photoionization; // photoionization cross-section in cm^2
-    amrex::Real E_ionization = network::E_ionization; // ionization energy for hydrogen in ergs
-    jac.zero();
+	amrex::Real alpha_rec = get_recombination_coefficient(state.T);
+	amrex::Real Lambda_rec = get_recombination_cooling_coefficient(state.T);
+	amrex::Real c = C::c_light; // speed of light in cm/s
+	amrex::Real frac = 1.0_rt;
+	amrex::Real sigma_photo = network::sigma_photoionization; // photoionization cross-section in cm^2
+	amrex::Real E_ionization = network::E_ionization;	  // ionization energy for hydrogen in ergs
+	jac.zero();
 
 	// Jacobian entries for photoionization with electrons being carried
 	jac(1, 1) = -alpha_rec * state.xn[2];
@@ -75,19 +75,19 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	// jac(net_ienuc, 5) = state.xn[1] * c * sigma_photo * E_ionization / state.rho;
 	// jac(net_ienuc, 6) = 0.0_rt;
 
-    jac(5, 1) = 0.0_rt;
-    jac(5, 2) = -c * sigma_photo * state.rn[0] / frac;
-    jac(5, 3) = 0.0_rt;
-    jac(5, net_ienuc) = 0.0_rt;
-    jac(5, 5) = -state.xn[1] * c * sigma_photo / frac;
-    jac(5, 6) = 0.0_rt;
+	jac(5, 1) = 0.0_rt;
+	jac(5, 2) = -c * sigma_photo * state.rn[0] / frac;
+	jac(5, 3) = 0.0_rt;
+	jac(5, net_ienuc) = 0.0_rt;
+	jac(5, 5) = -state.xn[1] * c * sigma_photo / frac;
+	jac(5, 6) = 0.0_rt;
 
-    jac(6, 1) = 0.0_rt;
-    jac(6, 2) = -c * sigma_photo * state.rn[1] / frac;
-    jac(6, 3) = 0.0_rt;
-    jac(6, net_ienuc) = 0.0_rt;
-    jac(6, 5) = 0.0_rt;
-    jac(6, 6) = -c * sigma_photo * state.xn[1] / frac;
+	jac(6, 1) = 0.0_rt;
+	jac(6, 2) = -c * sigma_photo * state.rn[1] / frac;
+	jac(6, 3) = 0.0_rt;
+	jac(6, net_ienuc) = 0.0_rt;
+	jac(6, 5) = 0.0_rt;
+	jac(6, 6) = -c * sigma_photo * state.xn[1] / frac;
 }
 
 #endif
