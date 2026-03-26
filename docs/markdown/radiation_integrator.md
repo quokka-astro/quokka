@@ -100,7 +100,7 @@ The rest of stage 3 is a single backward Euler step: `U^(3) = U^(3)* + dt Aim_33
 
 ## Implementation
 
-Define `state_xxx_cc = (state_xxx_gas, state_xxx_rad)`. 
+Define `state_xxx_gas` and `state_xxx_rad` as the gas and radiation components of `state_xxx_cc`, respectively, where `xxx` can be `new` or `tmp1`.
 
 ### Stage 1
 
