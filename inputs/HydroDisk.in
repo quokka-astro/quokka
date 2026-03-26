@@ -1,7 +1,7 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-# Box is [-10 kpc, 10 kpc] x [-10 kpc, 10 kpc] x [-1.25 kpc, 1.25 kpc]
+# Box is [-10 kpc, 10 kpc] x [-10 kpc, 10 kpc] x [-10 kpc, 10 kpc]
 geometry.prob_lo     = -3.0856775814913674e22 -3.0856775814913674e22 -3.0856775814913674e22
 geometry.prob_hi     =  3.0856775814913674e22  3.0856775814913674e22  3.0856775814913674e22
 quokka.bc = foextrap foextrap foextrap
@@ -10,25 +10,27 @@ quokka.bc = foextrap foextrap foextrap
 # *****************************************************************
 amr.n_cell          = 64 64 64
 amr.blocking_factor = 16
-amr.max_grid_size   = 64
-amr.max_level       = 1
-amr.n_error_buf     = 3
-amr.grid_eff        = 0.7
-regrid_interval     = -1
+amr.max_grid_size   = 32
+amr.max_level       = 3
+amr.n_error_buf     = 2
+amr.grid_eff        = 0.75
+regrid_interval     = -11
 do_reflux           = 1
 do_subcycle         = 0
+plotfile_prefix = "Toomre3_plt"
+density_floor = 1.0e-33
 # *****************************************************************
 # Time integration
 # *****************************************************************
 cfl                 = 0.3
-max_timesteps       = 10000
+max_timesteps       = 100000
 stop_time           = 2.9652e15   # ~94 Myr = 1 t_rot at R=3 kpc, vc=200 km/s
 # *****************************************************************
 # Output
 # *****************************************************************
-checkpoint_interval = 100
-plotfile_interval   = 10
-derived_vars        = gpot pressure radius_sph radial_velocity circular_velocity
+checkpoint_interval = 1000
+plotfile_interval   = 50
+derived_vars        = gpot pressure radius_sph radial_velocity circular_velocity mach
 # *****************************************************************
 # Physics
 # *****************************************************************
@@ -36,5 +38,5 @@ poisson_supercycle_interval = 5
 # *****************************************************************
 # Problem parameters (Table 1, Q1_M29)
 # *****************************************************************
-hd_galaxy.Q_mean    = 0.94
+hd_galaxy.Q_mean    = 3.
 hd_galaxy.Mc        = 28.6
