@@ -16,10 +16,10 @@ amr.v = 1  # verbosity in Amr
 amr.n_cell = [64, 8, 8]
 amr.max_level = 0  # number of levels = max_level + 1
 
-amr.max_grid_size_x = 64
+amr.max_grid_size_x = 32
 amr.max_grid_size_y = 8
 amr.max_grid_size_z = 8
-amr.blocking_factor_x = 32
+amr.blocking_factor_x = 16
 amr.blocking_factor_y = 8
 amr.blocking_factor_z = 8
 
@@ -36,5 +36,5 @@ hydro.rk_integrator_order = 2
 hydro.reconstruction_order = 5
 hydro.use_dual_energy = 0
 
-mhd.emf_compute_scheme = "Balsara2025"
+mhd.emf_compute_scheme = "FelkerStone2017"
 mhd.emf_averaging_scheme = "LondrilloDelZanna2004"
