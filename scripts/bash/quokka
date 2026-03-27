@@ -233,12 +233,16 @@ run)
 	[ -z "$PROBLEM" ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
 	[ -n "$PROBLEM" ] || [ -n "$FILTER_REGEX" ] || die "missing problem name or --filter"
 
+	FPE_ARGS=()
+	if [ "$ENABLE_FPE" -eq 1 ]; then
+		FPE_ARGS=(amrex.fpe_trap_invalid=1 amrex.fpe_trap_overflow=1 amrex.fpe_trap_zero=1)
+	fi
+
 	if [ -n "$FILTER_REGEX" ]; then
 		[ -z "$INPUT_FILE" ] || die "--filter does not accept --input"
 		CTEST_ARGS=()
-		if [ "$ENABLE_FPE" -eq 1 ]; then
-			CTEST_ARGS+=(--test-command-args
-				"amrex.fpe_trap_invalid=1 amrex.fpe_trap_overflow=1 amrex.fpe_trap_zero=1")
+		if [ "${#FPE_ARGS[@]}" -gt 0 ]; then
+			CTEST_ARGS+=(--test-command-args "${FPE_ARGS[*]}")
 		fi
 		run_filtered "$FILTER_REGEX" "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"
 	else
@@ -249,16 +253,7 @@ run)
 			INPUT_FILE="${ROOT}/${INPUT_FILE}"
 		fi
 
-		RUN_ARGS=()
-		if [ "$ENABLE_FPE" -eq 1 ]; then
-			RUN_ARGS+=(
-				amrex.fpe_trap_invalid=1
-				amrex.fpe_trap_overflow=1
-				amrex.fpe_trap_zero=1
-			)
-		fi
-
-		if run_problem "$PROBLEM" "$INPUT_FILE" "${RUN_ARGS[@]+"${RUN_ARGS[@]}"}"; then
+		if run_problem "$PROBLEM" "$INPUT_FILE" "${FPE_ARGS[@]+"${FPE_ARGS[@]}"}"; then
 			echo -e "${GREEN}${BOLD}${PROBLEM} SUCCESS${RESET}"
 		else
 			echo -e "${RED}${BOLD}${PROBLEM} FAIL${RESET}"
