@@ -10,6 +10,8 @@ Usage:
                                              Compile a specific problem target using ninja
   quokka run <preset> <problem> [--input <file>] [--fpe] [--root <path>]
                                              Run a problem executable from the tests/ directory
+  quokka run <preset> --filter <regex> [--fpe] [--root <path>]
+                                             Run all tests matching regex via ctest -R (exclusive with <problem>)
   quokka list <preset> [--root <path>]       List all available problem directories
   quokka target <preset> [--root <path>]     Show all available CMake build targets
   quokka clean [--root <path>]               Remove plotfiles, checkpoints, and output files from tests/
@@ -18,6 +20,7 @@ Options:
   --root <path>    Path to the quokka repository root (default: current directory)
   --input <file>   Input file to pass to the executable (default: inputs/<problem>.toml)
   --fpe            Enable floating-point exception traps (invalid, overflow, divide-by-zero)
+  --filter <regex> Run tests matching regex via ctest -R; exclusive with <problem>
   -j <N>           Number of parallel ninja jobs (default: 8)
 
 Presets:
@@ -121,6 +124,14 @@ run_problem() {
 	cd "${ROOT}/tests" && "$exe" "$input_file" "$@"
 }
 
+run_filtered() {
+	local regex="$1"
+	shift
+
+	log_cmd "ctest --test-dir ${BUILD_DIR} -R ${regex} $*"
+	ctest --test-dir "$BUILD_DIR" -R "$regex" "$@"
+}
+
 list_problems() {
 	find "${ROOT}/src/problems" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort
 }
@@ -151,6 +162,7 @@ ROOT="."
 PROBLEM=""
 INPUT_FILE=""
 ENABLE_FPE=0
+FILTER_REGEX=""
 JOBS=8
 
 while [ "$#" -gt 0 ]; do
@@ -173,6 +185,11 @@ while [ "$#" -gt 0 ]; do
 	--fpe)
 		ENABLE_FPE=1
 		shift
+		;;
+	--filter)
+		require_arg "$1" "${2:-}"
+		FILTER_REGEX="$2"
+		shift 2
 		;;
 	-h|--help)
 		usage
@@ -202,55 +219,72 @@ config)
 	[ -z "$PROBLEM" ] || die "config does not take a problem name"
 	[ -z "$INPUT_FILE" ] || die "config does not accept --input"
 	[ "$ENABLE_FPE" -eq 0 ] || die "config does not accept --fpe"
+	[ -z "$FILTER_REGEX" ] || die "config does not accept --filter"
 	configure_build
 	;;
 build)
 	[ -n "$PROBLEM" ] || die "missing problem name"
 	[ -z "$INPUT_FILE" ] || die "build does not accept --input"
 	[ "$ENABLE_FPE" -eq 0 ] || die "build does not accept --fpe"
+	[ -z "$FILTER_REGEX" ] || die "build does not accept --filter"
 	build_problem "$PROBLEM"
 	;;
 run)
-	[ -n "$PROBLEM" ] || die "missing problem name"
-	[ -d "${ROOT}/tests" ] || die "tests directory not found: ${ROOT}/tests (use --root to specify the quokka root)"
-	if [ -z "$INPUT_FILE" ]; then
-		INPUT_FILE="${ROOT}/inputs/${PROBLEM}.toml"
-	elif [[ "$INPUT_FILE" != /* ]]; then
-		INPUT_FILE="${ROOT}/${INPUT_FILE}"
-	fi
+	[ -z "$PROBLEM" ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
+	[ -n "$PROBLEM" ] || [ -n "$FILTER_REGEX" ] || die "missing problem name or --filter"
 
-	RUN_ARGS=()
-	if [ "$ENABLE_FPE" -eq 1 ]; then
-		RUN_ARGS+=(
-			amrex.fpe_trap_invalid=1
-			amrex.fpe_trap_overflow=1
-			amrex.fpe_trap_zero=1
-		)
-	fi
-
-	if run_problem "$PROBLEM" "$INPUT_FILE" "${RUN_ARGS[@]+"${RUN_ARGS[@]}"}"; then
-		echo -e "${GREEN}${BOLD}${PROBLEM} SUCCESS${RESET}"
+	if [ -n "$FILTER_REGEX" ]; then
+		[ -z "$INPUT_FILE" ] || die "--filter does not accept --input"
+		CTEST_ARGS=()
+		if [ "$ENABLE_FPE" -eq 1 ]; then
+			CTEST_ARGS+=(--test-command-args
+				"amrex.fpe_trap_invalid=1 amrex.fpe_trap_overflow=1 amrex.fpe_trap_zero=1")
+		fi
+		run_filtered "$FILTER_REGEX" "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"
 	else
-		echo -e "${RED}${BOLD}${PROBLEM} FAIL${RESET}"
-		exit 1
+		[ -d "${ROOT}/tests" ] || die "tests directory not found: ${ROOT}/tests (use --root to specify the quokka root)"
+		if [ -z "$INPUT_FILE" ]; then
+			INPUT_FILE="${ROOT}/inputs/${PROBLEM}.toml"
+		elif [[ "$INPUT_FILE" != /* ]]; then
+			INPUT_FILE="${ROOT}/${INPUT_FILE}"
+		fi
+
+		RUN_ARGS=()
+		if [ "$ENABLE_FPE" -eq 1 ]; then
+			RUN_ARGS+=(
+				amrex.fpe_trap_invalid=1
+				amrex.fpe_trap_overflow=1
+				amrex.fpe_trap_zero=1
+			)
+		fi
+
+		if run_problem "$PROBLEM" "$INPUT_FILE" "${RUN_ARGS[@]+"${RUN_ARGS[@]}"}"; then
+			echo -e "${GREEN}${BOLD}${PROBLEM} SUCCESS${RESET}"
+		else
+			echo -e "${RED}${BOLD}${PROBLEM} FAIL${RESET}"
+			exit 1
+		fi
 	fi
 	;;
 list)
 	[ -z "$PROBLEM" ] || die "list does not take a problem name"
 	[ -z "$INPUT_FILE" ] || die "list does not accept --input"
 	[ "$ENABLE_FPE" -eq 0 ] || die "list does not accept --fpe"
+	[ -z "$FILTER_REGEX" ] || die "list does not accept --filter"
 	list_problems
 	;;
 target)
 	[ -z "$PROBLEM" ] || die "target does not take a problem name"
 	[ -z "$INPUT_FILE" ] || die "target does not accept --input"
 	[ "$ENABLE_FPE" -eq 0 ] || die "target does not accept --fpe"
+	[ -z "$FILTER_REGEX" ] || die "target does not accept --filter"
 	show_targets
 	;;
 clean)
 	[ -z "$PROBLEM" ] || die "clean does not take a problem name"
 	[ -z "$INPUT_FILE" ] || die "clean does not accept --input"
 	[ "$ENABLE_FPE" -eq 0 ] || die "clean does not accept --fpe"
+	[ -z "$FILTER_REGEX" ] || die "clean does not accept --filter"
 	clean_tests
 	;;
 *)
