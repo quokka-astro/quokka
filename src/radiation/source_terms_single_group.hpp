@@ -7,16 +7,13 @@
 #define LARGE 1.0e100
 
 template <typename problem_t>
-void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, Real dt_radiation,
-						     const int stage, double dustGasCoeff, double tol_h, double /*tol_rel_h*/, double /*tempFloor*/,
+void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, Real dt_implicit,
+						     double gas_update_factor_in, double dustGasCoeff, double tol_h, double /*tol_rel_h*/, double /*tempFloor*/,
 						     int *p_iteration_counter, int *p_iteration_failure_counter)
 {
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;
-	auto dt = dt_radiation;
-	if (stage == 2) {
-		dt = (1.0 - IMEX_a32) * dt_radiation;
-	}
+	auto dt = dt_implicit;
 
 	// don't need radBoundaries_g for single-group
 
@@ -85,10 +82,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 			AMREX_ASSERT(Egas0 > 0.0);
 		}
 
-		Real gas_update_factor = 1.0;
-		if (stage == 1) {
-			gas_update_factor = IMEX_a32;
-		}
+		const Real gas_update_factor = gas_update_factor_in;
 
 		double coeff_n = NAN;
 		const double H_num_den = ComputeNumberDensityH(rho, massScalars);
