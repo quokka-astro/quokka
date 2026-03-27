@@ -47,14 +47,6 @@ static constexpr bool use_D_as_base = false;
 static const bool PPL_free_slope_st_total = false; // PPL with free slopes for all, but subject to the constraint sum_g alpha_g B_g = - sum_g B_g. Not working
 						   // well -- Newton iteration convergence issue.
 
-// Time integration scheme
-// IMEX PD-ARS
-static constexpr double IMEX_a22 = 1.0;
-static constexpr double IMEX_a32 = 0.5; // 0 < IMEX_a32 <= 0.5
-// SSP-RK2 + implicit radiation-matter exchange
-// static constexpr double IMEX_a22 = 0.0;
-// static constexpr double IMEX_a32 = 0.0;
-
 // physical constants in CGS units
 static constexpr double c_light_cgs_ = C::c_light;	    // cgs
 static constexpr double radiation_constant_cgs_ = C::a_rad; // cgs
@@ -276,7 +268,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static void AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayconst_t &U1, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArrayOld,
 				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray, amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArrayOld,
 				 amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxDiffusiveArray, double dt_in,
-				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars);
+				 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, int nvars, double alpha, double Aex_s1_coeff,
+				 double Aex_s2_coeff);
 
 	template <FluxDir DIR>
 	static void ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
@@ -290,13 +283,13 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_DEVICE static auto UpdateFlux(int i, int j, int k, arrayconst_t const &consPrev, NewtonIterationResult<problem_t> &energy, double dt,
 						double gas_update_factor, double Ekin0) -> FluxUpdateResult<problem_t>;
 
-	static void AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt, int stage,
-					     double dustGasCoeff, double tol_h, double tol_rel_h, double tempFloor, int *p_iteration_counter,
-					     int *p_iteration_failure_counter);
+	static void AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_implicit,
+					     double gas_update_factor, double dustGasCoeff, double tol_h, double tol_rel_h, double tempFloor,
+					     int *p_iteration_counter, int *p_iteration_failure_counter);
 
-	static void AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt, int stage,
-					      double dustGasCoeff, double tol_h, double tol_rel_h, double tempFloor, int *p_iteration_counter,
-					      int *p_iteration_failure_counter);
+	static void AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_implicit,
+					      double gas_update_factor, double dustGasCoeff, double tol_h, double tol_rel_h, double tempFloor,
+					      int *p_iteration_counter, int *p_iteration_failure_counter);
 
 	static void balanceMatterRadiation(arrayconst_t &consPrev, array_t &consNew, amrex::Box const &indexRange);
 
@@ -769,7 +762,8 @@ void RadSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayc
 					amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> fluxArray,
 					amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> /*fluxDiffusiveArrayOld*/,
 					amrex::GpuArray<arrayconst_t, AMREX_SPACEDIM> /*fluxDiffusiveArray*/, const double dt_in,
-					amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, const int /*nvars*/)
+					amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_in, amrex::Box const &indexRange, const int /*nvars*/,
+					const double alpha, const double Aex_s1_coeff, const double Aex_s2_coeff)
 {
 	// By convention, the fluxes are defined on the left edge of each zone,
 	// i.e. flux_(i) is the flux *into* zone i through the interface on the
@@ -794,8 +788,9 @@ void RadSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayc
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		std::array<amrex::Real, nvarHyperbolic_> cons_new{};
 
-		// y^n+1 = (1 - a32) y^n + a32 y^(2) + dt * (0.5 - a32) * s(y^n) + dt * 0.5 * s(y^(2)) + dt * (1 - a32) * f(y^n+1)          // the last term is
-		// implicit and not used here
+		// Shu-Osher form: y^(3)* = (1-alpha)*y^n + alpha*y^(2) + dt*Aex_s1_coeff*s(y^n) + dt*Aex_s2_coeff*s(y^(2))
+		// where alpha = Aim_32/Aim_22, Aex_s1_coeff = Aex_31 - alpha*Aex_21, Aex_s2_coeff = Aex_32
+		// The implicit term dt*Aim_33*g(y^(3)) is handled separately in subcycleRadiationAtLevel.
 		for (int n = 0; n < nvarHyperbolic_; ++n) {
 			const double U_0 = U0(i, j, k, nstartHyperbolic_ + n);
 			const double U_1 = U1(i, j, k, nstartHyperbolic_ + n);
@@ -810,8 +805,8 @@ void RadSystem<problem_t>::AddFluxesRK2(array_t &U_new, arrayconst_t &U0, arrayc
 			const double FzU_1 = (dt / dz) * (x3Flux(i, j, k, n) - x3Flux(i, j, k + 1, n));
 #endif
 			// save results in cons_new
-			cons_new[n] = (1.0 - IMEX_a32) * U_0 + IMEX_a32 * U_1 + ((0.5 - IMEX_a32) * (AMREX_D_TERM(FxU_0, +FyU_0, +FzU_0))) +
-				      (0.5 * (AMREX_D_TERM(FxU_1, +FyU_1, +FzU_1)));
+			cons_new[n] = (1.0 - alpha) * U_0 + alpha * U_1 + (Aex_s1_coeff * (AMREX_D_TERM(FxU_0, +FyU_0, +FzU_0))) +
+				      (Aex_s2_coeff * (AMREX_D_TERM(FxU_1, +FyU_1, +FzU_1)));
 		}
 
 		if (!isStateValid(cons_new)) {
