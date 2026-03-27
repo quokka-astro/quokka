@@ -21,8 +21,7 @@ void DiagFlux::init(const std::string &a_prefix, std::string_view a_diagName)
 	const int n_radii = pp.countval("radii");
 	const int n_radii_kpc = pp.countval("radii_kpc");
 
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE((n_radii > 0) != (n_radii_kpc > 0),
-					 "DiagFlux requires exactly one of 'radii' or 'radii_kpc' to be specified.");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE((n_radii > 0) != (n_radii_kpc > 0), "DiagFlux requires exactly one of 'radii' or 'radii_kpc' to be specified.");
 
 	if (n_radii > 0) {
 		pp.getarr("radii", m_radii, 0, n_radii);
@@ -64,8 +63,8 @@ void DiagFlux::prepare(int a_nlevels, const amrex::Vector<amrex::Geometry> &a_ge
 
 void DiagFlux::addVars(amrex::Vector<std::string> &a_varList) { DiagBase::addVars(a_varList); }
 
-void DiagFlux::writeFluxToFile(
-    int a_nstep, const amrex::Real &a_time, std::vector<std::pair<amrex::Real, quokka::diagnostics::SurfaceFluxes>> const &fluxes_by_radius) const
+void DiagFlux::writeFluxToFile(int a_nstep, const amrex::Real &a_time,
+			       std::vector<std::pair<amrex::Real, quokka::diagnostics::SurfaceFluxes>> const &fluxes_by_radius) const
 {
 	std::string diagfile;
 	if (m_per > 0.0) {
@@ -93,16 +92,16 @@ void DiagFlux::writeFluxToFile(
 			 << " " << std::setw(width) << "passive_scalar_flux" << "\n";
 
 		fluxFile << std::setw(width) << "radius_idx" << " " << std::setw(radius_width) << m_radiusLabel << " " << std::setw(width) << "mass_flux"
-			 << " " << std::setw(width) << "hydro_energy_flux" << " " << std::setw(width) << "mhd_energy_flux" << " "
-			 << std::setw(width) << "passive_scalar_flux" << "\n";
+			 << " " << std::setw(width) << "hydro_energy_flux" << " " << std::setw(width) << "mhd_energy_flux" << " " << std::setw(width)
+			 << "passive_scalar_flux" << "\n";
 
 		for (int n = 0; n < fluxes_by_radius.size(); ++n) {
 			auto const &[radius, fluxes] = fluxes_by_radius[n];
 			fluxFile << std::setw(width) << n << " " << std::setw(radius_width) << std::setprecision(prec) << std::scientific << radius << " "
 				 << std::setw(width) << std::setprecision(prec) << std::scientific << fluxes.mass_flux << " " << std::setw(width)
-				 << std::setprecision(prec) << std::scientific << fluxes.hydro_energy_flux << " " << std::setw(width)
-				 << std::setprecision(prec) << std::scientific << fluxes.mhd_energy_flux << " " << std::setw(width)
-				 << std::setprecision(prec) << std::scientific << fluxes.passive_scalar_flux << "\n";
+				 << std::setprecision(prec) << std::scientific << fluxes.hydro_energy_flux << " " << std::setw(width) << std::setprecision(prec)
+				 << std::scientific << fluxes.mhd_energy_flux << " " << std::setw(width) << std::setprecision(prec) << std::scientific
+				 << fluxes.passive_scalar_flux << "\n";
 		}
 
 		fluxFile.flush();

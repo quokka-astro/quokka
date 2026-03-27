@@ -26,8 +26,7 @@ struct SurfaceFluxes {
 };
 
 template <typename problem_t>
-auto computeSphericalSurfaceFluxes(amrex::Vector<amrex::MultiFab> const &state_cc,
-				   amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &state_fc,
+auto computeSphericalSurfaceFluxes(amrex::Vector<amrex::MultiFab> const &state_cc, amrex::Vector<amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>> const &state_fc,
 				   amrex::Vector<amrex::Geometry> const &geoms, amrex::Vector<amrex::iMultiFab> const &flux_mask,
 				   amrex::Real flux_sphere_radius) -> SurfaceFluxes
 {
