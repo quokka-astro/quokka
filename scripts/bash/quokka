@@ -5,18 +5,26 @@ set -euo pipefail
 usage() {
 	cat <<'EOF'
 Usage:
-  quokka config <preset> [--root <path>]
+  quokka config <preset> [--root <path>]     Configure CMake build directory for the given preset
   quokka build <preset> <problem> [-j <N>] [--root <path>]
+                                             Compile a specific problem target using ninja
   quokka run <preset> <problem> [--input <file>] [--fpe] [--root <path>]
-  quokka list <preset> [--root <path>]
-  quokka target <preset> [--root <path>]
-  quokka clean [--root <path>]
+                                             Run a problem executable from the tests/ directory
+  quokka list <preset> [--root <path>]       List all available problem directories
+  quokka target <preset> [--root <path>]     Show all available CMake build targets
+  quokka clean [--root <path>]               Remove plotfiles, checkpoints, and output files from tests/
+
+Options:
+  --root <path>    Path to the quokka repository root (default: current directory)
+  --input <file>   Input file to pass to the executable (default: inputs/<problem>.toml)
+  --fpe            Enable floating-point exception traps (invalid, overflow, divide-by-zero)
+  -j <N>           Number of parallel ninja jobs (default: 8)
 
 Presets:
-  1d
-  3d
-  1d-debug
-  3d-debug
+  1d              1D Release build
+  3d              3D Release build
+  1d-debug        1D Debug build
+  3d-debug        3D Debug build
 EOF
 }
 
