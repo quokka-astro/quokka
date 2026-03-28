@@ -76,3 +76,9 @@ Move prolonged or subjective debates into an ADR. After a decision:
 
 * Mark PR threads **resolved** or **superseded by ADR**.
 * Merge only after the ADR is **Accepted** and CI/tests reflect the choice.
+
+---
+
+## Current ADRs
+
+- [`ADR-0001: Centralize Conserved-To-Primitive And Primitive-To-Conserved State Conversions`](adrs/ADR-0001-centralize-state-conversions.md)
