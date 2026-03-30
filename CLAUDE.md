@@ -26,7 +26,7 @@ Presets: `1d`, `3d`, `1d-debug`, `3d-debug` (sets dimensionality and Release/Deb
 - **Build**: `ninja -j8 <problem>` (from build directory)
 - **Run all tests**: `ctest -j8`
 - **Run specific test**: `ctest -R TestName`
-- **List targets**: `cmake --build . --target help`
+- **List targets** (returns 1000 targets): `cmake --build . --target help` 
 
 - **Test inputs**: Located in `inputs/` directory (`.in` files)
 - **Code formatting**: `clang-format -i file.cpp` (run from `src/` directory)
@@ -45,12 +45,10 @@ Presets: `1d`, `3d`, `1d-debug`, `3d-debug` (sets dimensionality and Release/Deb
 
 ## Problem Structure
 - Each problem directory contains:
-  - `test_*.cpp`: Implementation with initial conditions and problem-specific physics
-  - `test_*.hpp`: Header with template specializations (removed in recent commits)
+  - `test*.cpp`: Implementation with initial conditions and problem-specific physics
   - `CMakeLists.txt`: Defines executable target
 - Problems use template specialization pattern for `QuokkaSimulation<ProblemName>`
-- Input files (`.in`) in `inputs/` configure geometry, AMR, physics parameters
-- Problems should ONLY contain `.cpp` files (no `.hpp` files per recent policy)
+- Input files (`.toml`) in `inputs/` configure geometry, AMR, physics parameters
 
 ## Key Dependencies
 - **AMReX**: Underlying AMR framework (external submodule)
@@ -62,7 +60,7 @@ Presets: `1d`, `3d`, `1d-debug`, `3d-debug` (sets dimensionality and Release/Deb
 
 ## Code Style Guidelines
 - Use `.clang-format` from `src/` directory for formatting (LLVM-based style)
-- 160 character line limit, 8-space indentation with tabs
+- 160 character line limit, indentation with tabs
 - Classes use PascalCase (e.g., `QuokkaSimulation`)
 - Member variables use camelCase with trailing underscore (e.g., `radiationCflNumber_`)
 - Member functions use PascalCase (e.g., `ReadCheckpointFile`)
@@ -71,5 +69,3 @@ Presets: `1d`, `3d`, `1d-debug`, `3d-debug` (sets dimensionality and Release/Deb
 - ALWAYS declare variables `const` when they are never modified after initialization.
 - Document APIs using Doxygen style comments
 - PRs should be focused on a single change and target the `development` branch
-- Static analysis with clang-tidy available for code quality checks
-- Comprehensive clang-tidy configuration in `src/.clang-tidy` with extensive checks enabled
