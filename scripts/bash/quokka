@@ -8,10 +8,10 @@ Usage:
   quokka config <preset> [--root <path>]     Configure CMake build directory for the given preset
   quokka build <preset> <problem> [-j <N>] [--root <path>]
                                              Compile a specific problem target using ninja
-  quokka run <preset> <problem> [--input <file>] [--fpe] [--root <path>]
+  quokka run <preset> [<problem>] [--input <file>] [-j <N>] [--fpe] [--root <path>]
                                              Run a problem executable from the tests/ directory
-  quokka run <preset> --filter <regex> [--fpe] [--root <path>]
-                                             Run all tests matching regex via ctest -R (exclusive with <problem>)
+  quokka run <preset> [--filter <regex>] [-j <N>] [--fpe] [--root <path>]
+                                             Run all tests (or matching regex via ctest -R)
   quokka list <preset> [--root <path>]       List all available problem directories
   quokka target <preset> [--root <path>]     Show all available CMake build targets
   quokka clean [--root <path>]               Remove plotfiles, checkpoints, and output files from tests/
@@ -21,7 +21,7 @@ Options:
   --input <file>   Input file to pass to the executable (default: inputs/<problem>.toml)
   --fpe            Enable floating-point exception traps (invalid, overflow, divide-by-zero)
   --filter <regex> Run tests matching regex via ctest -R; exclusive with <problem>
-  -j <N>           Number of parallel ninja jobs (default: 8)
+  -j <N>           Number of parallel jobs for ninja or ctest (default: 8)
 
 Presets:
   1d              1D Release build
@@ -128,8 +128,13 @@ run_filtered() {
 	local regex="$1"
 	shift
 
-	log_cmd "ctest --test-dir ${BUILD_DIR} -R ${regex} $*"
-	ctest --test-dir "$BUILD_DIR" -R "$regex" "$@"
+	log_cmd "ctest --test-dir ${BUILD_DIR} -j${JOBS} -R ${regex} $*"
+	ctest --test-dir "$BUILD_DIR" -j"$JOBS" -R "$regex" "$@"
+}
+
+run_all_tests() {
+	log_cmd "ctest --test-dir ${BUILD_DIR} -j${JOBS} $*"
+	ctest --test-dir "$BUILD_DIR" -j"$JOBS" "$@"
 }
 
 list_problems() {
@@ -231,7 +236,6 @@ build)
 	;;
 run)
 	[ -z "$PROBLEM" ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
-	[ -n "$PROBLEM" ] || [ -n "$FILTER_REGEX" ] || die "missing problem name or --filter"
 
 	FPE_ARGS=()
 	if [ "$ENABLE_FPE" -eq 1 ]; then
@@ -245,7 +249,7 @@ run)
 			CTEST_ARGS+=(--test-command-args "${FPE_ARGS[*]}")
 		fi
 		run_filtered "$FILTER_REGEX" "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"
-	else
+	elif [ -n "$PROBLEM" ]; then
 		[ -d "${ROOT}/tests" ] || die "tests directory not found: ${ROOT}/tests (use --root to specify the quokka root)"
 		if [ -z "$INPUT_FILE" ]; then
 			INPUT_FILE="${ROOT}/inputs/${PROBLEM}.toml"
@@ -259,6 +263,13 @@ run)
 			echo -e "${RED}${BOLD}${PROBLEM} FAIL${RESET}"
 			exit 1
 		fi
+	else
+		[ -z "$INPUT_FILE" ] || die "running all tests does not accept --input"
+		CTEST_ARGS=()
+		if [ "${#FPE_ARGS[@]}" -gt 0 ]; then
+			CTEST_ARGS+=(--test-command-args "${FPE_ARGS[*]}")
+		fi
+		run_all_tests "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"
 	fi
 	;;
 list)
