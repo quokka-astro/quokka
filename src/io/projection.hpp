@@ -106,11 +106,7 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 		amrex::Gpu::streamSynchronize();
 	}
 
-	amrex::Vector<amrex::MultiFab> projections_accum(finest_level + 1);
-	for (int lev = 0; lev <= finest_level; ++lev) {
-		projections_accum[lev].define(projections[lev].boxArray(), projections[lev].DistributionMap(), 1, 0);
-		projections_accum[lev].ParallelCopy(projections[lev], 0, 0, 1, 0, 0);
-	}
+	amrex::Vector<amrex::MultiFab> projections_accum = std::move(projections);
 
 	for (int lev = 0; lev < finest_level; ++lev) {
 		amrex::IntVect rr_2d{AMREX_D_DECL(1, 1, 1)};
@@ -126,7 +122,7 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 #endif
 		}
 
-		amrex::MultiFab coarse_refined(projections[lev + 1].boxArray(), projections[lev + 1].DistributionMap(), 1, 0);
+		amrex::MultiFab coarse_refined(projections_accum[lev + 1].boxArray(), projections_accum[lev + 1].DistributionMap(), 1, 0);
 		coarse_refined.setVal(0.0);
 
 		amrex::Vector<amrex::BCRec> bcs(1);
