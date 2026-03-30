@@ -83,19 +83,6 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 	}
 
 	for (int lev = 0; lev <= finest_level; ++lev) {
-		const auto &level_ba = mfs[lev]->boxArray();
-		amrex::BoxList bl(level_ba.ixType());
-		for (int i = 0; i < level_ba.size(); ++i) {
-			bl.push_back(detail::transform_box_to_2D(dir, level_ba[i]));
-		}
-		bl.simplify();
-		amrex::BoxArray ba2d(std::move(bl));
-		ba2d.removeOverlap();
-		const amrex::DistributionMapping dm2d(ba2d);
-
-		projections[lev].define(ba2d, dm2d, 1, 0);
-		projections[lev].setVal(0.0);
-
 		amrex::iMultiFab mask;
 		if (lev == finest_level) {
 			mask.define(mfs[lev]->boxArray(), mfs[lev]->DistributionMap(), 1, amrex::IntVect(0));
@@ -115,9 +102,7 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 											    }
 											    return dx[static_cast<int>(dir)] * mf_arr[box_no](i, j, k, comp);
 										    });
-		auto &plane_global = plane_pair.second;
-
-		projections[lev].ParallelCopy(plane_global, 0, 0, 1, 0, 0);
+		projections[lev] = std::move(plane_pair.second);
 		amrex::Gpu::streamSynchronize();
 	}
 
