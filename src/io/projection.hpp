@@ -112,6 +112,10 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 		amrex::BoxArray const ba2d(std::move(bl2d));
 		projections[lev].define(ba2d, plane_global.DistributionMap(), 1, 0);
 
+		// Safe on GPU: plain MFIter does a post-loop stream sync by default, so the
+		// transpose kernels below complete before the loop-local plane_global is destroyed.
+		// If this is changed to DisableDeviceSync() or run inside a NoSyncRegion, the
+		// temporary must be kept alive explicitly.
 		for (amrex::MFIter mfi(projections[lev]); mfi.isValid(); ++mfi) {
 			const amrex::Box &bx = mfi.validbox();
 			auto const &src = plane_global.const_array(mfi);
@@ -152,6 +156,9 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 
 		auto const &coarse_arr = coarse_on_fine_layout.const_arrays();
 		auto const &fine_arr = projections_accum[lev + 1].arrays();
+		// Safe on GPU for the same reason as above: MFIter synchronizes on exit unless
+		// no-sync mode is enabled, so coarse_on_fine_layout stays valid until the add
+		// kernels complete.
 		for (amrex::MFIter mfi(projections_accum[lev + 1]); mfi.isValid(); ++mfi) {
 			const amrex::Box &bx = mfi.validbox();
 			const int box_no = mfi.LocalIndex();
