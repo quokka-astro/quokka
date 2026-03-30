@@ -121,13 +121,13 @@ struct RadDeposition {
 	int num_comp{};	       // Number of components to deposit
 	int birthTimeIndex{};  // Index for particle birth time
 
-	// Operator to perform radiation deposition using linear interpolation
+	// Operator to perform radiation deposition using Gaussian kernel interpolation
 	template <typename ContainerType>
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<amrex::Real> const &radEnergySource,
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
 	{
-		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
+		amrex::ParticleInterpolator::Gaussian<> interp(p, plo, dxi);
 		const auto currentTime = current_time;
 		const auto birthIndex = birthTimeIndex;
 		// Deposit radiation energy only if particle is active
