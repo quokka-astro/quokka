@@ -6,12 +6,42 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Quokka is a two-moment radiation hydrodynamics code using the piecewise-parabolic method with AMR and subcycling. It's built on AMReX and supports both CPU (MPI+vectorized) and GPU (CUDA/HIP) execution with a single C++20 codebase.
 
 ## Build & Test Commands
-- **Build**: `mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -G Ninja && ninja -j6` (keep in mind that `-DAMReX_SPACEDIM` must be set to specify the dimensionality of the code, and that some targets only build for certain dimensionality)
+
+The `scripts/bash/quokka` script is the recommended way to configure, build, and run tests. Make sure it exists in your `PATH`; if not, install it once by copying it to a directory on your `PATH` (e.g. `~/.local/bin/`). All commands accept `--root <path>` to specify the repo root when not running from it.
+
+**Before running any build or test command**, source the environment file once per shell session:
+```bash
+source ~/.local/bin/quokka.rc
+```
+This sets compiler variables and activates the Python environment. The file is machine-specific and not checked in to the repository. A typical `quokka.rc` looks like:
+```sh
+# unset CC and CXX on macOS; on Linux, set e.g. CC=$(which mpicc)
+export CC=
+export CXX=
+
+# load python
+source ~/softwares/quokka/.venv/bin/activate
+```
+
+- **Configure**: `quokka config <preset>` — runs CMake with the correct dimensionality and build type
+- **Build a problem**: `quokka build <preset> <problem> [-j <N>]`
+- **Run a problem**: `quokka run <preset> <problem> [--input <file>] [--fpe]`
+- **Run all tests**: `quokka run <preset> [-j <N>]`
+- **Run matching tests**: `quokka run <preset> --filter <regex>`
+- **List problems**: `quokka list <preset>`
+- **Show targets**: `quokka target <preset>`
+- **Clean test output**: `quokka clean`
+
+Presets: `1d`, `3d`, `1d-debug`, `3d-debug` (sets dimensionality and Release/Debug build type).
+
+**Without the script (manual):**
+- **Configure**: `mkdir -p build/<preset> && cd build/<preset> && cmake ../.. -G Ninja -DCMAKE_BUILD_TYPE=<type> -DAMReX_SPACEDIM=<N>`
 - **GPU Support**: Add `-DAMReX_GPU_BACKEND=CUDA` (NVIDIA) or `-DAMReX_GPU_BACKEND=HIP` (AMD)
-- **Run all tests**: `ctest` or `ninja test`
+- **Build**: `ninja -j8 <problem>` (from build directory)
+- **Run all tests**: `ctest -j8`
 - **Run specific test**: `ctest -R TestName`
-- **Exclude tests**: `ctest -E "Pattern*"`
-- **List test targets**: `cmake --build . --target help`
+- **List targets** (returns 1000 targets): `cmake --build . --target help` 
+
 - **Test inputs**: Located in `inputs/` directory (`.in` files)
 - **Code formatting**: `clang-format -i file.cpp` (run from `src/` directory)
 - **Static analysis**: Use `scripts/tidy.sh build changed` to run clang-tidy on modified files
@@ -29,12 +59,10 @@ Quokka is a two-moment radiation hydrodynamics code using the piecewise-paraboli
 
 ## Problem Structure
 - Each problem directory contains:
-  - `test_*.cpp`: Implementation with initial conditions and problem-specific physics
-  - `test_*.hpp`: Header with template specializations (removed in recent commits)
+  - `test*.cpp`: Implementation with initial conditions and problem-specific physics
   - `CMakeLists.txt`: Defines executable target
 - Problems use template specialization pattern for `QuokkaSimulation<ProblemName>`
-- Input files (`.in`) in `inputs/` configure geometry, AMR, physics parameters
-- Problems should ONLY contain `.cpp` files (no `.hpp` files per recent policy)
+- Input files (`.toml`) in `inputs/` configure geometry, AMR, physics parameters
 
 ## Key Dependencies
 - **AMReX**: Underlying AMR framework (external submodule)
@@ -46,7 +74,7 @@ Quokka is a two-moment radiation hydrodynamics code using the piecewise-paraboli
 
 ## Code Style Guidelines
 - Use `.clang-format` from `src/` directory for formatting (LLVM-based style)
-- 160 character line limit, 8-space indentation with tabs
+- 160 character line limit, indentation with tabs
 - Classes use PascalCase (e.g., `QuokkaSimulation`)
 - Member variables use camelCase with trailing underscore (e.g., `radiationCflNumber_`)
 - Member functions use PascalCase (e.g., `ReadCheckpointFile`)
@@ -55,5 +83,3 @@ Quokka is a two-moment radiation hydrodynamics code using the piecewise-paraboli
 - ALWAYS declare variables `const` when they are never modified after initialization.
 - Document APIs using Doxygen style comments
 - PRs should be focused on a single change and target the `development` branch
-- Static analysis with clang-tidy available for code quality checks
-- Comprehensive clang-tidy configuration in `src/.clang-tidy` with extensive checks enabled

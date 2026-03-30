@@ -1,0 +1,315 @@
+#!/bin/bash
+
+set -euo pipefail
+
+usage() {
+	cat <<'EOF'
+Usage:
+  quokka config <preset> [--root <path>]     Configure CMake build directory for the given preset
+  quokka build <preset> <problem> [-j <N>] [--root <path>]
+                                             Compile a specific problem target using ninja
+  quokka run <preset> [<problem>] [--input <file>] [-j <N>] [--fpe] [--root <path>]
+                                             Run a problem executable from the tests/ directory
+  quokka run <preset> [--filter <regex>] [-j <N>] [--fpe] [--root <path>]
+                                             Run all tests (or matching regex via ctest -R)
+  quokka list <preset> [--root <path>]       List all available problem directories
+  quokka target <preset> [--root <path>]     Show all available CMake build targets
+  quokka clean [--root <path>]               Remove plotfiles, checkpoints, and output files from tests/
+
+Options:
+  --root <path>    Path to the quokka repository root (default: current directory)
+  --input <file>   Input file to pass to the executable (default: inputs/<problem>.toml)
+  --fpe            Enable floating-point exception traps (invalid, overflow, divide-by-zero)
+  --filter <regex> Run tests matching regex via ctest -R; exclusive with <problem>
+  -j <N>           Number of parallel jobs for ninja or ctest (default: 8)
+
+Presets:
+  1d              1D Release build
+  3d              3D Release build
+  1d-debug        1D Debug build
+  3d-debug        3D Debug build
+EOF
+}
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+MAGENTA='\033[0;35m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+die() {
+	echo -e "${RED}${BOLD}Error:${RESET} $*" >&2
+	exit 1
+}
+
+log_cmd() {
+	echo -e "${MAGENTA}+ $*${RESET}"
+}
+
+require_arg() {
+	local option="$1"
+	local value="${2:-}"
+	[ -n "$value" ] || die "missing value for ${option}"
+}
+
+parse_preset() {
+	local preset="$1"
+
+	case "$preset" in
+	1d)
+		DIM=1
+		BUILD_TYPE=Release
+		BUILD_NAME=1d
+		;;
+	3d)
+		DIM=3
+		BUILD_TYPE=Release
+		BUILD_NAME=3d
+		;;
+	1d-debug)
+		DIM=1
+		BUILD_TYPE=Debug
+		BUILD_NAME=1d-debug
+		;;
+	3d-debug)
+		DIM=3
+		BUILD_TYPE=Debug
+		BUILD_NAME=3d-debug
+		;;
+	*)
+		die "unsupported preset '${preset}'"
+		;;
+	esac
+
+	BUILD_DIR="${ROOT}/build/${BUILD_NAME}"
+}
+
+resolve_root() {
+	local root="$1"
+
+	if ! ROOT="$(cd "$root" && pwd)"; then
+		die "cannot access root '${root}'"
+	fi
+}
+
+configure_build() {
+	mkdir -p "$BUILD_DIR"
+	cd "$BUILD_DIR"
+
+	if [ -f CMakeCache.txt ]; then
+		rm -rf ./*
+	fi
+
+	log_cmd "cmake ../.. -G Ninja -DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DAMReX_SPACEDIM=${DIM}"
+	cmake ../.. -G Ninja -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" -DAMReX_SPACEDIM="${DIM}"
+}
+
+check_problem_defined() {
+	local problem="$1"
+	local cmake_file="${BUILD_DIR}/src/problems/${problem}/CTestTestfile.cmake"
+
+	if [ ! -f "$cmake_file" ]; then
+		die "problem '${problem}' is not defined (${cmake_file} not found; run 'quokka config ${PRESET}' first, or check the problem name)"
+	fi
+
+	local active_lines
+	active_lines=$(grep -cv '^\s*\(#\|$\)' "$cmake_file" || true)
+	if [ "$active_lines" -eq 0 ]; then
+		die "problem '${problem}' is not available for preset '${PRESET}' (it may require a higher-dimensionality preset, e.g. '3d')"
+	fi
+}
+
+build_problem() {
+	local problem="$1"
+
+	check_problem_defined "$problem"
+	log_cmd "ninja -j${JOBS} ${problem}"
+	cd "$BUILD_DIR" && ninja -j"$JOBS" "$problem"
+}
+
+run_problem() {
+	local problem="$1"
+	local input_file="$2"
+	shift 2
+
+	local exe="${BUILD_DIR}/src/problems/${problem}/${problem}"
+	[ -x "$exe" ] || die "executable not found: ${exe}"
+	[ -f "$input_file" ] || die "input file not found: ${input_file}"
+
+	log_cmd "cd ${ROOT}/tests && ${exe} ${input_file} $*"
+	cd "${ROOT}/tests" && "$exe" "$input_file" "$@"
+}
+
+run_filtered() {
+	local regex="$1"
+	shift
+
+	log_cmd "ctest --test-dir ${BUILD_DIR} -j${JOBS} -R ${regex} $*"
+	ctest --test-dir "$BUILD_DIR" -j"$JOBS" -R "$regex" "$@"
+}
+
+run_all_tests() {
+	log_cmd "ctest --test-dir ${BUILD_DIR} -j${JOBS} $*"
+	ctest --test-dir "$BUILD_DIR" -j"$JOBS" "$@"
+}
+
+list_problems() {
+	find "${ROOT}/src/problems" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort
+}
+
+clean_tests() {
+	local tests_dir="${ROOT}/tests"
+	[ -d "$tests_dir" ] || die "tests directory not found: ${tests_dir} (use --root to specify the quokka root)"
+	log_cmd "cd ${tests_dir} && rm -rf plt* slice* chk* part_* *.csv *.pdf *.png Backtrace.*"
+	cd "$tests_dir"
+	rm -rf plt* slice* chk* part_*
+	rm -f ./*.csv ./*.pdf ./*.png Backtrace.*
+}
+
+show_targets() {
+	log_cmd "cmake --build ${BUILD_DIR} --target help"
+	cmake --build "$BUILD_DIR" --target help
+}
+
+COMMAND="${1:-}"
+[ -n "$COMMAND" ] || {
+	usage
+	exit 1
+}
+shift
+
+PRESET=""
+ROOT="."
+PROBLEM=""
+INPUT_FILE=""
+ENABLE_FPE=0
+FILTER_REGEX=""
+JOBS=8
+
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+	--root)
+		require_arg "$1" "${2:-}"
+		ROOT="$2"
+		shift 2
+		;;
+	--input)
+		require_arg "$1" "${2:-}"
+		INPUT_FILE="$2"
+		shift 2
+		;;
+	-j)
+		require_arg "$1" "${2:-}"
+		JOBS="$2"
+		shift 2
+		;;
+	--fpe)
+		ENABLE_FPE=1
+		shift
+		;;
+	--filter)
+		require_arg "$1" "${2:-}"
+		FILTER_REGEX="$2"
+		shift 2
+		;;
+	-h|--help)
+		usage
+		exit 0
+		;;
+	-*)
+		die "unknown option '$1'"
+		;;
+	*)
+		if [ -z "$PRESET" ]; then
+			PRESET="$1"
+		elif [ -z "$PROBLEM" ]; then
+			PROBLEM="$1"
+		else
+			die "unexpected argument '$1'"
+		fi
+		shift
+		;;
+	esac
+done
+
+resolve_root "$ROOT"
+[ "$COMMAND" = clean ] || { [ -n "$PRESET" ] || die "missing preset"; parse_preset "$PRESET"; }
+
+case "$COMMAND" in
+config)
+	[ -z "$PROBLEM" ] || die "config does not take a problem name"
+	[ -z "$INPUT_FILE" ] || die "config does not accept --input"
+	[ "$ENABLE_FPE" -eq 0 ] || die "config does not accept --fpe"
+	[ -z "$FILTER_REGEX" ] || die "config does not accept --filter"
+	configure_build
+	;;
+build)
+	[ -n "$PROBLEM" ] || die "missing problem name"
+	[ -z "$INPUT_FILE" ] || die "build does not accept --input"
+	[ "$ENABLE_FPE" -eq 0 ] || die "build does not accept --fpe"
+	[ -z "$FILTER_REGEX" ] || die "build does not accept --filter"
+	build_problem "$PROBLEM"
+	;;
+run)
+	[ -z "$PROBLEM" ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
+
+	FPE_ARGS=()
+	if [ "$ENABLE_FPE" -eq 1 ]; then
+		FPE_ARGS=(amrex.fpe_trap_invalid=1 amrex.fpe_trap_overflow=1 amrex.fpe_trap_zero=1)
+	fi
+
+	if [ -n "$FILTER_REGEX" ]; then
+		[ -z "$INPUT_FILE" ] || die "--filter does not accept --input"
+		CTEST_ARGS=()
+		if [ "${#FPE_ARGS[@]}" -gt 0 ]; then
+			CTEST_ARGS+=(--test-command-args "${FPE_ARGS[*]}")
+		fi
+		run_filtered "$FILTER_REGEX" "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"
+	elif [ -n "$PROBLEM" ]; then
+		[ -d "${ROOT}/tests" ] || die "tests directory not found: ${ROOT}/tests (use --root to specify the quokka root)"
+		if [ -z "$INPUT_FILE" ]; then
+			INPUT_FILE="${ROOT}/inputs/${PROBLEM}.toml"
+		elif [[ "$INPUT_FILE" != /* ]]; then
+			INPUT_FILE="${ROOT}/${INPUT_FILE}"
+		fi
+
+		if run_problem "$PROBLEM" "$INPUT_FILE" "${FPE_ARGS[@]+"${FPE_ARGS[@]}"}"; then
+			echo -e "${GREEN}${BOLD}${PROBLEM} SUCCESS${RESET}"
+		else
+			echo -e "${RED}${BOLD}${PROBLEM} FAIL${RESET}"
+			exit 1
+		fi
+	else
+		[ -z "$INPUT_FILE" ] || die "running all tests does not accept --input"
+		CTEST_ARGS=()
+		if [ "${#FPE_ARGS[@]}" -gt 0 ]; then
+			CTEST_ARGS+=(--test-command-args "${FPE_ARGS[*]}")
+		fi
+		run_all_tests "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"
+	fi
+	;;
+list)
+	[ -z "$PROBLEM" ] || die "list does not take a problem name"
+	[ -z "$INPUT_FILE" ] || die "list does not accept --input"
+	[ "$ENABLE_FPE" -eq 0 ] || die "list does not accept --fpe"
+	[ -z "$FILTER_REGEX" ] || die "list does not accept --filter"
+	list_problems
+	;;
+target)
+	[ -z "$PROBLEM" ] || die "target does not take a problem name"
+	[ -z "$INPUT_FILE" ] || die "target does not accept --input"
+	[ "$ENABLE_FPE" -eq 0 ] || die "target does not accept --fpe"
+	[ -z "$FILTER_REGEX" ] || die "target does not accept --filter"
+	show_targets
+	;;
+clean)
+	[ -z "$PROBLEM" ] || die "clean does not take a problem name"
+	[ -z "$INPUT_FILE" ] || die "clean does not accept --input"
+	[ "$ENABLE_FPE" -eq 0 ] || die "clean does not accept --fpe"
+	[ -z "$FILTER_REGEX" ] || die "clean does not accept --filter"
+	clean_tests
+	;;
+*)
+	die "unknown command '${COMMAND}'"
+	;;
+esac
