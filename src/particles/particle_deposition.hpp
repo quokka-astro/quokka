@@ -47,6 +47,58 @@ struct NearestEight : public Base<NearestEight, amrex::Real> {
 		}
 	}
 };
+
+/** \brief A class that implements Gaussian kernel interpolation.
+ *
+ *  Template parameter N controls stencil extent: the kernel covers
+ *  2*N+1 cells per dimension (N cells in each direction from center).
+ *  N is limited by the number of ghost cells (max 6).
+ *  Weights are separable 1D Gaussians, normalized so the full 3D
+ *  product sums to 1, ensuring exact conservation of deposited quantities.
+ */
+template <int N = 3>
+struct Gaussian : public Base<Gaussian<N>, amrex::Real> {
+	static constexpr int stencil_width = 2 * N + 1;
+	static constexpr double sigma = 1.5; // Gaussian width in units of cell size (dx)
+
+	static constexpr int nx = (AMREX_SPACEDIM >= 1) ? stencil_width - 1 : 0; // NOLINT
+	static constexpr int ny = (AMREX_SPACEDIM >= 2) ? stencil_width - 1 : 0; // NOLINT
+	static constexpr int nz = (AMREX_SPACEDIM >= 3) ? stencil_width - 1 : 0; // NOLINT
+
+	amrex::Real weights[3 * stencil_width]; // NOLINT
+
+	template <typename P>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE Gaussian(const P &p, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, // NOLINT
+						     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi)
+	{
+		this->w = &weights[0]; // NOLINT
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			const amrex::Real l = (p.pos(i) - plo[i]) * dxi[i] + 0.5;
+			this->index[i] = static_cast<int>(amrex::Math::floor(l)) - N;
+			const amrex::Real frac = l - amrex::Math::floor(l);
+			// Compute unnormalized 1D Gaussian weights
+			amrex::Real sum = 0.0;
+			for (int j = 0; j <= 2 * N; ++j) {
+				const amrex::Real d = static_cast<amrex::Real>(N - j) + frac - 1.0;
+				const amrex::Real wt = std::exp(-0.5 * d * d / (sigma * sigma));
+				this->w[stencil_width * i + j] = wt;
+				sum += wt;
+			}
+			// Normalize so weights sum to 1 in this dimension
+			const amrex::Real inv_sum = 1.0 / sum;
+			for (int j = 0; j <= 2 * N; ++j) {
+				this->w[stencil_width * i + j] *= inv_sum;
+			}
+		}
+		for (int i = AMREX_SPACEDIM; i < 3; ++i) {
+			this->index[i] = 0;
+			this->w[stencil_width * i + 0] = 1.0;
+			for (int j = 1; j < stencil_width; ++j) {
+				this->w[stencil_width * i + j] = 0.0;
+			}
+		}
+	}
+};
 } // namespace amrex::ParticleInterpolator
 
 namespace quokka
