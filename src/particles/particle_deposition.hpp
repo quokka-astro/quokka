@@ -56,8 +56,7 @@ struct NearestEight : public Base<NearestEight, amrex::Real> {
  *  Weights are separable 1D Gaussians, normalized so the full 3D
  *  product sums to 1, ensuring exact conservation of deposited quantities.
  */
-template <int N = 3>
-struct Gaussian : public Base<Gaussian<N>, amrex::Real> {
+template <int N = 3> struct Gaussian : public Base<Gaussian<N>, amrex::Real> {
 	static_assert(N >= 1 && N <= 6, "N must be between 1 and 6 (limited by ghost cells)");
 	static constexpr int stencil_width = 2 * N + 1;
 	static constexpr amrex::Real sigma = 1.5; // Gaussian width in units of cell size (dx)
