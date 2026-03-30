@@ -95,9 +95,11 @@ template <int N = 3> struct Gaussian {
 		const int nz_loop = (AMREX_SPACEDIM >= 3) ? stencil_width : 1; // NOLINT(misc-redundant-expression)
 		const int ny_loop = (AMREX_SPACEDIM >= 2) ? stencil_width : 1; // NOLINT(misc-redundant-expression)
 		for (int kk = 0; kk < nz_loop; ++kk) {
-			const amrex::Real dz = (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(N - kk) + frac[2] - 1.0 : 0.0; // NOLINT(misc-redundant-expression)
+			const amrex::Real dz =
+			    (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(N - kk) + frac[2] - 1.0 : 0.0; // NOLINT(misc-redundant-expression)
 			for (int jj = 0; jj < ny_loop; ++jj) {
-				const amrex::Real dy = (AMREX_SPACEDIM >= 2) ? static_cast<amrex::Real>(N - jj) + frac[1] - 1.0 : 0.0; // NOLINT(misc-redundant-expression)
+				const amrex::Real dy =
+				    (AMREX_SPACEDIM >= 2) ? static_cast<amrex::Real>(N - jj) + frac[1] - 1.0 : 0.0; // NOLINT(misc-redundant-expression)
 				for (int ii = 0; ii < stencil_width; ++ii) {
 					const amrex::Real dx = static_cast<amrex::Real>(N - ii) + frac[0] - 1.0;
 					const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
@@ -122,7 +124,8 @@ template <int N = 3> struct Gaussian {
 		for (int ic = 0; ic < num_comps; ++ic) {
 			const auto pval = f(p, src_comp + ic);
 			for (int kk = 0; kk < nz_loop; ++kk) {
-				const amrex::Real dz = (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(N - kk) + frac[2] - 1.0 : 0.0; // NOLINT(misc-redundant-expression)
+				const amrex::Real dz =
+				    (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(N - kk) + frac[2] - 1.0 : 0.0; // NOLINT(misc-redundant-expression)
 				for (int jj = 0; jj < ny_loop; ++jj) {
 					const amrex::Real dy =
 					    (AMREX_SPACEDIM >= 2) ? static_cast<amrex::Real>(N - jj) + frac[1] - 1.0 : 0.0; // NOLINT(misc-redundant-expression)
