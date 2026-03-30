@@ -48,13 +48,21 @@ struct NearestEight : public Base<NearestEight, amrex::Real> {
 	}
 };
 
-/** \brief A class that implements Gaussian kernel interpolation.
+/** \brief A class that implements spherical Gaussian kernel interpolation.
  *
- *  Template parameter N controls stencil extent: the kernel covers
- *  2*N+1 cells per dimension (N cells in each direction from center).
+ *  Template parameter N controls stencil extent: the kernel covers a sphere
+ *  of radius N cell widths, embedded in a (2N+1)^3 cubic stencil. Cells
+ *  outside the sphere (3D distance > N dx) receive zero weight, eliminating
+ *  the geometric anisotropy that a cubic stencil would introduce.
  *  N is limited by the number of ghost cells (max 6).
- *  Weights are separable 1D Gaussians, normalized so the full 3D
- *  product sums to 1, ensuring exact conservation of deposited quantities.
+ *
+ *  The 3D Gaussian kernel is separable:
+ *    exp(-0.5*(dx^2+dy^2+dz^2)/sigma^2) = exp(-0.5*dx^2/sigma^2)
+ *                                        * exp(-0.5*dy^2/sigma^2)
+ *                                        * exp(-0.5*dz^2/sigma^2)
+ *  so 1D factors are stored per dimension and multiplied to form the 3D weight.
+ *  Normalization (Z = sum over all cells within the sphere) is computed by an
+ *  explicit 3D sum in GaussianParticleToMesh, ensuring exact conservation.
  */
 template <int N = 3> struct Gaussian : public Base<Gaussian<N>, amrex::Real> {
 	static_assert(N >= 1 && N <= 6, "N must be between 1 and 6 (limited by ghost cells)");
@@ -65,7 +73,8 @@ template <int N = 3> struct Gaussian : public Base<Gaussian<N>, amrex::Real> {
 	static constexpr int ny = (AMREX_SPACEDIM >= 2) ? stencil_width - 1 : 0; // NOLINT
 	static constexpr int nz = (AMREX_SPACEDIM >= 3) ? stencil_width - 1 : 0; // NOLINT
 
-	amrex::Real weights[3 * stencil_width]; // NOLINT
+	amrex::Real weights[3 * stencil_width]; // unnormalized 1D Gaussian factors per dimension // NOLINT
+	amrex::Real sq_dist[3 * stencil_width]; // squared 1D distances in cell units per dimension // NOLINT
 
 	template <typename P>
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE Gaussian(const P &p, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, // NOLINT
@@ -76,25 +85,78 @@ template <int N = 3> struct Gaussian : public Base<Gaussian<N>, amrex::Real> {
 			const amrex::Real l = (p.pos(i) - plo[i]) * dxi[i] + 0.5;
 			this->index[i] = static_cast<int>(amrex::Math::floor(l)) - N;
 			const amrex::Real frac = l - amrex::Math::floor(l);
-			// Compute unnormalized 1D Gaussian weights
-			amrex::Real sum = 0.0;
+			// Store unnormalized 1D Gaussian factors and squared distances.
+			// Because the 3D Gaussian is separable, the 3D weight for cell (ii,jj,kk)
+			// is simply w_x[ii]*w_y[jj]*w_z[kk]. Normalization Z is computed in
+			// GaussianParticleToMesh as an explicit 3D sum over the spherical stencil.
 			for (int j = 0; j <= 2 * N; ++j) {
 				const amrex::Real d = static_cast<amrex::Real>(N - j) + frac - 1.0;
-				const amrex::Real wt = std::exp(-0.5 * d * d / (sigma * sigma));
-				this->w[stencil_width * i + j] = wt;
-				sum += wt;
-			}
-			// Normalize so weights sum to 1 in this dimension
-			const amrex::Real inv_sum = 1.0 / sum;
-			for (int j = 0; j <= 2 * N; ++j) {
-				this->w[stencil_width * i + j] *= inv_sum;
+				this->w[stencil_width * i + j] = std::exp(-0.5 * d * d / (sigma * sigma));
+				sq_dist[stencil_width * i + j] = d * d;
 			}
 		}
+		// Unused dimensions: zero distance, unit weight so the 3D product is unaffected
 		for (int i = AMREX_SPACEDIM; i < 3; ++i) {
 			this->index[i] = 0;
 			this->w[stencil_width * i + 0] = 1.0;
+			sq_dist[stencil_width * i + 0] = 0.0;
 			for (int j = 1; j < stencil_width; ++j) {
 				this->w[stencil_width * i + j] = 0.0;
+				sq_dist[stencil_width * i + j] = 0.0;
+			}
+		}
+	}
+
+	/** \brief Deposit particle quantity to mesh using a spherical Gaussian kernel.
+	 *
+	 *  Applies a radial cutoff at N cell widths: only cells with 3D distance
+	 *  d = sqrt(dx^2+dy^2+dz^2) <= N dx contribute. This gives a spherical
+	 *  kernel, avoiding the geometric anisotropy of the cubic (2N+1)^3 stencil.
+	 *
+	 *  Normalization Z = sum_sphere exp(-0.5*d^2/sigma^2) is computed in a first
+	 *  pass so that total deposited quantity is conserved exactly.
+	 *
+	 *  Note: Base::ParticleToMesh is NOT used here because it applies weights
+	 *  over the full cube without a radial cutoff.
+	 */
+	template <typename P, typename V, typename F>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void GaussianParticleToMesh(const P &p, amrex::Array4<V> const &arr, int src_comp, int dst_comp,
+									int num_comps, F const &f) const
+	{
+		// Pass 1: compute Z = sum of 3D Gaussian weights within the sphere (d <= N)
+		amrex::Real Z_3D = 0.0;
+		for (int kk = 0; kk <= 2 * N; ++kk) {
+			for (int jj = 0; jj <= 2 * N; ++jj) {
+				for (int ii = 0; ii <= 2 * N; ++ii) {
+					const amrex::Real d2 = sq_dist[0 * stencil_width + ii] + sq_dist[1 * stencil_width + jj] +
+							       sq_dist[2 * stencil_width + kk];
+					if (d2 <= static_cast<amrex::Real>(N * N)) {
+						Z_3D += this->w[0 * stencil_width + ii] * this->w[1 * stencil_width + jj] *
+							this->w[2 * stencil_width + kk];
+					}
+				}
+			}
+		}
+		const amrex::Real inv_Z_3D = 1.0 / Z_3D;
+
+		// Pass 2: deposit with spherically-normalized 3D weights
+		for (int ic = 0; ic < num_comps; ++ic) {
+			const auto pval = f(p, src_comp + ic);
+			for (int kk = 0; kk <= 2 * N; ++kk) {
+				for (int jj = 0; jj <= 2 * N; ++jj) {
+					for (int ii = 0; ii <= 2 * N; ++ii) {
+						const amrex::Real d2 = sq_dist[0 * stencil_width + ii] +
+								       sq_dist[1 * stencil_width + jj] + sq_dist[2 * stencil_width + kk];
+						if (d2 <= static_cast<amrex::Real>(N * N)) {
+							const amrex::Real w3d = this->w[0 * stencil_width + ii] *
+										this->w[1 * stencil_width + jj] *
+										this->w[2 * stencil_width + kk] * inv_Z_3D;
+							amrex::Gpu::Atomic::AddNoRet(&arr(this->index[0] + ii, this->index[1] + jj,
+										      this->index[2] + kk, ic + dst_comp),
+										     w3d * pval);
+						}
+					}
+				}
 			}
 		}
 	}
@@ -129,14 +191,16 @@ struct RadDeposition {
 		amrex::ParticleInterpolator::Gaussian<> interp(p, plo, dxi);
 		const auto currentTime = current_time;
 		const auto birthIndex = birthTimeIndex;
-		// Deposit radiation energy only if particle is active
-		interp.ParticleToMesh(p, radEnergySource, start_part_comp, start_mesh_comp, num_comp,
-				      [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
-					      if (currentTime < part.rdata(birthIndex) || currentTime >= part.rdata(birthIndex + 1)) {
-						      return 0.0;
-					      }
-					      return part.rdata(comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
-				      });
+		// Deposit radiation energy only if particle is active.
+		// GaussianParticleToMesh applies a spherical radial cutoff (d <= N dx)
+		// and normalizes over the sphere, avoiding cubic-stencil anisotropy.
+		interp.GaussianParticleToMesh(p, radEnergySource, start_part_comp, start_mesh_comp, num_comp,
+					      [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
+						      if (currentTime < part.rdata(birthIndex) || currentTime >= part.rdata(birthIndex + 1)) {
+							      return 0.0;
+						      }
+						      return part.rdata(comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+					      });
 	}
 };
 
