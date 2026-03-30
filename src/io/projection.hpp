@@ -122,20 +122,22 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 #endif
 		}
 
-		amrex::MultiFab coarse_refined(projections_accum[lev + 1].boxArray(), projections_accum[lev + 1].DistributionMap(), 1, 0);
-		coarse_refined.setVal(0.0);
+		amrex::MultiFab coarse_on_fine_layout(amrex::coarsen(projections_accum[lev + 1].boxArray(), rr_2d),
+						      projections_accum[lev + 1].DistributionMap(), 1, 0);
+		coarse_on_fine_layout.ParallelCopy(projections_accum[lev], 0, 0, 1, 0, 0);
 
-		amrex::Vector<amrex::BCRec> bcs(1);
-		for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-			bcs[0].setLo(d, amrex::BCType::int_dir);
-			bcs[0].setHi(d, amrex::BCType::int_dir);
+		auto const &coarse_arr = coarse_on_fine_layout.const_arrays();
+		auto const &fine_arr = projections_accum[lev + 1].arrays();
+		for (amrex::MFIter mfi(projections_accum[lev + 1]); mfi.isValid(); ++mfi) {
+			const amrex::Box &bx = mfi.validbox();
+			const int box_no = mfi.LocalIndex();
+			auto const &coarse = coarse_arr[box_no];
+			auto const &fine = fine_arr[box_no];
+			amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				const amrex::IntVect iv{AMREX_D_DECL(i, j, k)};
+				fine(i, j, k, 0) += coarse(amrex::coarsen(iv, rr_2d), 0);
+			});
 		}
-		amrex::PhysBCFunctNoOp coarseBdryFunct;
-		amrex::PhysBCFunctNoOp fineBdryFunct;
-		amrex::MFInterpolater *mapper = &amrex::mf_pc_interp;
-		amrex::InterpFromCoarseLevel(coarse_refined, 0.0, projections_accum[lev], 0, 0, 1, geom2d[lev], geom2d[lev + 1], coarseBdryFunct, 0,
-					     fineBdryFunct, 0, rr_2d, mapper, bcs, 0);
-		amrex::MultiFab::Add(projections_accum[lev + 1], coarse_refined, 0, 0, 1, 0);
 	}
 
 	return projections_accum;
