@@ -102,7 +102,41 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 											    }
 											    return dx[static_cast<int>(dir)] * mf_arr[box_no](i, j, k, comp);
 										    });
-		projections[lev] = std::move(plane_pair.second);
+		auto &plane_global = plane_pair.second;
+		const auto &plane_ba = plane_global.boxArray();
+		amrex::BoxList bl2d(plane_ba.ixType());
+		for (int i = 0; i < plane_ba.size(); ++i) {
+			bl2d.push_back(detail::transform_box_to_2D(dir, plane_ba[i]));
+		}
+		amrex::BoxArray ba2d(std::move(bl2d));
+		projections[lev].define(ba2d, plane_global.DistributionMap(), 1, 0);
+
+		auto const &src_arr = plane_global.const_arrays();
+		auto const &dst_arr = projections[lev].arrays();
+		for (amrex::MFIter mfi(projections[lev]); mfi.isValid(); ++mfi) {
+			const amrex::Box &bx = mfi.validbox();
+			const int box_no = mfi.LocalIndex();
+			auto const &src = src_arr[box_no];
+			auto const &dst = dst_arr[box_no];
+			amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				const amrex::IntVect dst_iv{AMREX_D_DECL(i, j, k)};
+				amrex::IntVect src_iv;
+				if (dir == amrex::Direction::x) {
+					src_iv = amrex::IntVect{AMREX_D_DECL(0, i, j)};
+#if AMREX_SPACEDIM >= 2
+				} else if (dir == amrex::Direction::y) {
+					src_iv = amrex::IntVect{AMREX_D_DECL(i, 0, j)};
+#endif
+#if AMREX_SPACEDIM == 3
+				} else if (dir == amrex::Direction::z) {
+					src_iv = amrex::IntVect{AMREX_D_DECL(i, j, 0)};
+#endif
+				} else {
+					src_iv = dst_iv;
+				}
+				dst(dst_iv, 0) = src(src_iv, 0);
+			});
+		}
 		amrex::Gpu::streamSynchronize();
 	}
 
