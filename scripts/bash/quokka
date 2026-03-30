@@ -104,9 +104,25 @@ configure_build() {
 	cmake ../.. -G Ninja -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" -DAMReX_SPACEDIM="${DIM}"
 }
 
+check_problem_defined() {
+	local problem="$1"
+	local cmake_file="${BUILD_DIR}/src/problems/${problem}/CTestTestfile.cmake"
+
+	if [ ! -f "$cmake_file" ]; then
+		die "problem '${problem}' is not defined (${cmake_file} not found; run 'quokka config ${PRESET}' first, or check the problem name)"
+	fi
+
+	local active_lines
+	active_lines=$(grep -cv '^\s*\(#\|$\)' "$cmake_file" || true)
+	if [ "$active_lines" -eq 0 ]; then
+		die "problem '${problem}' is not available for preset '${PRESET}' (it may require a higher-dimensionality preset, e.g. '3d')"
+	fi
+}
+
 build_problem() {
 	local problem="$1"
 
+	check_problem_defined "$problem"
 	log_cmd "ninja -j${JOBS} ${problem}"
 	cd "$BUILD_DIR" && ninja -j"$JOBS" "$problem"
 }
