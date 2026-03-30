@@ -60,7 +60,7 @@ template <int N = 3>
 struct Gaussian : public Base<Gaussian<N>, amrex::Real> {
 	static_assert(N >= 1 && N <= 6, "N must be between 1 and 6 (limited by ghost cells)");
 	static constexpr int stencil_width = 2 * N + 1;
-	static constexpr double sigma = 1.5; // Gaussian width in units of cell size (dx)
+	static constexpr amrex::Real sigma = 1.5; // Gaussian width in units of cell size (dx)
 
 	static constexpr int nx = (AMREX_SPACEDIM >= 1) ? stencil_width - 1 : 0; // NOLINT
 	static constexpr int ny = (AMREX_SPACEDIM >= 2) ? stencil_width - 1 : 0; // NOLINT
