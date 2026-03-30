@@ -143,7 +143,7 @@ auto checkGasDensityProjection(const QuokkaSimulation<ParticleProblem> &sim) -> 
 
 	for (const auto dir : dirs) {
 		const auto projections = quokka::diagnostics::ComputePlaneProjectionFromMultiFab(state_mfs, sim.finestLevel(), sim.Geom(), sim.refRatio(), dir,
-													 RadSystem<ParticleProblem>::gasDensity_index);
+												 RadSystem<ParticleProblem>::gasDensity_index);
 		const amrex::MultiFab &projection = projections.front();
 		const amrex::Real projection_min = projection.min(0);
 		const amrex::Real projection_max = projection.max(0);
@@ -165,8 +165,8 @@ auto checkGasDensityProjection(const QuokkaSimulation<ParticleProblem> &sim) -> 
 
 		amrex::Print() << "Projected gasDensity statistics along " << dir_name << ": min=" << projection_min << " max=" << projection_max
 			       << " sum=" << projection_sum << "\n";
-		amrex::Print() << "Expected gasDensity projection along " << dir_name << ": value=" << expected_projection
-			       << " sum=" << expected_projection_sum << "\n";
+		amrex::Print() << "Expected gasDensity projection along " << dir_name << ": value=" << expected_projection << " sum=" << expected_projection_sum
+			       << "\n";
 
 		if (std::abs(projection_min - expected_projection) > projection_tol || std::abs(projection_max - expected_projection) > projection_tol ||
 		    std::abs(projection_sum - expected_projection_sum) > projection_sum_tol) {
