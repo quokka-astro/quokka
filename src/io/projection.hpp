@@ -112,29 +112,26 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 		amrex::BoxArray const ba2d(std::move(bl2d));
 		projections[lev].define(ba2d, plane_global.DistributionMap(), 1, 0);
 
-		auto const &src_arr = plane_global.const_arrays();
-		auto const &dst_arr = projections[lev].arrays();
 		for (amrex::MFIter mfi(projections[lev]); mfi.isValid(); ++mfi) {
 			const amrex::Box &bx = mfi.validbox();
-			const int box_no = mfi.LocalIndex();
-			auto const &src = src_arr[box_no];
-			auto const &dst = dst_arr[box_no];
-			amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-				const amrex::IntVect dst_iv{AMREX_D_DECL(i, j, k)};
-				amrex::IntVect src_iv;
-				if (dir == amrex::Direction::x) {
-					src_iv = amrex::IntVect{AMREX_D_DECL(0, i, j)};
-				} else if (dir == amrex::Direction::y) {
-					src_iv = amrex::IntVect{AMREX_D_DECL(i, 0, j)};
-				} else if (dir == amrex::Direction::z) {
-					src_iv = amrex::IntVect{AMREX_D_DECL(i, j, 0)};
-				} else {
+			auto const &src = plane_global.const_array(mfi);
+			auto dst = projections[lev].array(mfi);
+
+			switch (dir) {
+				case amrex::Direction::x:
+					amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { dst(i, j, k, 0) = src(0, i, j, 0); });
+					break;
+				case amrex::Direction::y:
+					amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { dst(i, j, k, 0) = src(i, 0, j, 0); });
+					break;
+				case amrex::Direction::z:
+					amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { dst(i, j, k, 0) = src(i, j, 0, 0); });
+					break;
+				default:
 					amrex::Abort("ComputePlaneProjectionFromMultiFab: Invalid direction!");
-				}
-				dst(dst_iv, 0) = src(src_iv, 0);
-			});
+					break;
+			}
 		}
-		amrex::Gpu::streamSynchronize();
 	}
 
 	amrex::Vector<amrex::MultiFab> projections_accum = std::move(projections);
