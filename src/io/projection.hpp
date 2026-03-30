@@ -35,6 +35,8 @@ template <typename problem_t> class PhysicsParticleRegister;
 namespace quokka::diagnostics
 {
 
+#if AMREX_SPACEDIM == 3
+
 namespace detail
 {
 
@@ -197,6 +199,8 @@ void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex
 
 	amrex::Print() << "  Wrote particles to projection " << filename << "\n";
 }
+
+#endif // AMREX_SPACEDIM == 3
 
 } // namespace quokka::diagnostics
 

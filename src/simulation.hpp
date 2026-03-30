@@ -101,9 +101,9 @@ namespace filesystem = experimental::filesystem;
 #include "io/DiagPlotfile.H"
 #if AMREX_SPACEDIM == 3
 #include "io/DiagProjectionPlot.H"
+#include "io/projection.hpp"
 #endif
 #include "io/io_utils.hpp"
-#include "io/projection.hpp"
 #include "physics_info.hpp"
 
 #ifdef QUOKKA_USE_OPENPMD
