@@ -13,7 +13,6 @@
 #include <vector>
 
 // AMReX headers
-#include "AMReX_FillPatchUtil.H"
 #include "AMReX_MFInterpolater.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
@@ -108,7 +107,7 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 		for (int i = 0; i < plane_ba.size(); ++i) {
 			bl2d.push_back(detail::transform_box_to_2D(dir, plane_ba[i]));
 		}
-		amrex::BoxArray ba2d(std::move(bl2d));
+		amrex::BoxArray const ba2d(std::move(bl2d));
 		projections[lev].define(ba2d, plane_global.DistributionMap(), 1, 0);
 
 		auto const &src_arr = plane_global.const_arrays();
@@ -123,16 +122,12 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 				amrex::IntVect src_iv;
 				if (dir == amrex::Direction::x) {
 					src_iv = amrex::IntVect{AMREX_D_DECL(0, i, j)};
-#if AMREX_SPACEDIM >= 2
 				} else if (dir == amrex::Direction::y) {
 					src_iv = amrex::IntVect{AMREX_D_DECL(i, 0, j)};
-#endif
-#if AMREX_SPACEDIM == 3
 				} else if (dir == amrex::Direction::z) {
 					src_iv = amrex::IntVect{AMREX_D_DECL(i, j, 0)};
-#endif
 				} else {
-					src_iv = dst_iv;
+					amrex::Abort("ComputePlaneProjectionFromMultiFab: Invalid direction!");
 				}
 				dst(dst_iv, 0) = src(src_iv, 0);
 			});
@@ -146,14 +141,10 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 		amrex::IntVect rr_2d{AMREX_D_DECL(1, 1, 1)};
 		if (dir == amrex::Direction::x) {
 			rr_2d = amrex::IntVect{AMREX_D_DECL(ref_ratio[lev][1], ref_ratio[lev][2], 1)};
-#if AMREX_SPACEDIM >= 2
 		} else if (dir == amrex::Direction::y) {
 			rr_2d = amrex::IntVect{AMREX_D_DECL(ref_ratio[lev][0], ref_ratio[lev][2], 1)};
-#endif
-#if AMREX_SPACEDIM == 3
 		} else if (dir == amrex::Direction::z) {
 			rr_2d = amrex::IntVect{AMREX_D_DECL(ref_ratio[lev][0], ref_ratio[lev][1], 1)};
-#endif
 		}
 
 		amrex::MultiFab coarse_on_fine_layout(amrex::coarsen(projections_accum[lev + 1].boxArray(), rr_2d),
