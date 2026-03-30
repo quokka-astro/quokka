@@ -48,63 +48,96 @@ struct NearestEight : public Base<NearestEight, amrex::Real> {
 	}
 };
 
-/** \brief A class that implements Gaussian kernel particle/mesh interpolation.
+/** \brief A class that implements Gaussian kernel particle/mesh interpolation
+ *  with a spherical radial cutoff.
  *
- *  Template parameter N controls stencil extent: deposits onto a (2N+1)^3
- *  stencil covering N cells in each direction from the particle.
+ *  Template parameter N controls stencil extent: the kernel is non-zero only
+ *  within a sphere of radius N*dx centred on the particle.  The stencil box
+ *  is (2N+1)^3 cells; cells outside the sphere receive zero weight.
  *  N is limited by the number of ghost cells (max 6).
  *
- *  The 3D Gaussian is separable:
- *    exp(-0.5*(dx^2+dy^2+dz^2)/sigma^2) = exp(-0.5*dx^2/sigma^2)
- *                                        * exp(-0.5*dy^2/sigma^2)
- *                                        * exp(-0.5*dz^2/sigma^2)
- *  so 1D weights per dimension are stored and multiplied by Base::ParticleToMesh.
- *  Because of separability, the full 3D normalization also factors:
- *    Z_3D = Z_x * Z_y * Z_z
- *  so normalizing each dimension independently (sum_j w_d[j] = 1) is exactly
- *  equivalent to dividing by Z_3D, ensuring exact conservation.
+ *  The kernel weight at distance r (in units of dx) is
+ *      W(r) = exp(-r^2 / (2 sigma^2))   for r <= N
+ *           = 0                           for r >  N
+ *  and the weights are normalised so that their sum over the sphere equals 1.
+ *
+ *  This struct does NOT inherit from amrex::ParticleInterpolator::Base because
+ *  the spherical cutoff breaks the separability assumed by Base::ParticleToMesh.
  */
-template <int N = 3> struct Gaussian : public Base<Gaussian<N>, amrex::Real> {
+template <int N = 3> struct Gaussian {
 	static_assert(N >= 1 && N <= 6, "N must be between 1 and 6 (limited by ghost cells)");
 	static constexpr int stencil_width = 2 * N + 1;
-	static constexpr amrex::Real sigma = 1.5; // Gaussian width in units of cell size (dx)
+	static constexpr amrex::Real sigma = 1.5;			   // Gaussian width in units of cell size (dx)
+	static constexpr amrex::Real cutoff_r2 = static_cast<amrex::Real>(N * N); // spherical cutoff radius squared
 
-	static constexpr int nx = (AMREX_SPACEDIM >= 1) ? stencil_width - 1 : 0; // NOLINT
-	static constexpr int ny = (AMREX_SPACEDIM >= 2) ? stencil_width - 1 : 0; // NOLINT
-	static constexpr int nz = (AMREX_SPACEDIM >= 3) ? stencil_width - 1 : 0; // NOLINT
-
-	amrex::Real weights[3 * stencil_width]; // NOLINT
+	int index[3]{};	     // NOLINT lower-left corner of stencil box
+	amrex::Real frac[3]{}; // NOLINT fractional cell position per dimension
+	amrex::Real inv_norm{}; // NOLINT 1 / (sum of weights within sphere)
 
 	template <typename P>
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE Gaussian(const P &p, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, // NOLINT
 						     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi)
 	{
-		this->w = &weights[0]; // NOLINT
+		// Compute stencil origin and fractional position for each active dimension
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 			const amrex::Real l = (p.pos(i) - plo[i]) * dxi[i] + 0.5;
-			this->index[i] = static_cast<int>(amrex::Math::floor(l)) - N;
-			const amrex::Real frac = l - amrex::Math::floor(l);
-			// Compute 1D Gaussian weights and normalize so their sum = 1.
-			// Because Z_3D = Z_x*Z_y*Z_z (separability), this per-dimension
-			// normalization is exactly equivalent to dividing by the full 3D sum Z_3D.
-			amrex::Real sum = 0.0;
-			for (int j = 0; j <= 2 * N; ++j) {
-				const amrex::Real d = static_cast<amrex::Real>(N - j) + frac - 1.0;
-				const amrex::Real wt = std::exp(-0.5 * d * d / (sigma * sigma));
-				this->w[stencil_width * i + j] = wt;
-				sum += wt;
-			}
-			const amrex::Real inv_sum = 1.0 / sum;
-			for (int j = 0; j <= 2 * N; ++j) {
-				this->w[stencil_width * i + j] *= inv_sum;
+			index[i] = static_cast<int>(amrex::Math::floor(l)) - N;
+			frac[i] = l - amrex::Math::floor(l);
+		}
+		for (int i = AMREX_SPACEDIM; i < 3; ++i) {
+			index[i] = 0;
+			frac[i] = 0.0;
+		}
+
+		// Compute normalization: sum of Gaussian weights within the sphere
+		const amrex::Real inv_2sigma2 = 0.5 / (sigma * sigma);
+		amrex::Real norm_sum = 0.0;
+		const int nz_loop = (AMREX_SPACEDIM >= 3) ? stencil_width : 1;
+		const int ny_loop = (AMREX_SPACEDIM >= 2) ? stencil_width : 1;
+		for (int kk = 0; kk < nz_loop; ++kk) {
+			const amrex::Real dz = (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(N - kk) + frac[2] - 1.0 : 0.0;
+			for (int jj = 0; jj < ny_loop; ++jj) {
+				const amrex::Real dy = (AMREX_SPACEDIM >= 2) ? static_cast<amrex::Real>(N - jj) + frac[1] - 1.0 : 0.0;
+				for (int ii = 0; ii < stencil_width; ++ii) {
+					const amrex::Real dx = static_cast<amrex::Real>(N - ii) + frac[0] - 1.0;
+					const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
+					if (r2 <= cutoff_r2) {
+						norm_sum += std::exp(-r2 * inv_2sigma2);
+					}
+				}
 			}
 		}
-		// Unused dimensions: unit weight so the 3D product is unaffected
-		for (int i = AMREX_SPACEDIM; i < 3; ++i) {
-			this->index[i] = 0;
-			this->w[stencil_width * i + 0] = 1.0;
-			for (int j = 1; j < stencil_width; ++j) {
-				this->w[stencil_width * i + j] = 0.0;
+		inv_norm = 1.0 / norm_sum;
+	}
+
+	/// Deposit particle data onto the mesh using the spherical Gaussian kernel.
+	/// Same interface as amrex::ParticleInterpolator::Base::ParticleToMesh.
+	template <typename P, typename V, typename F>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void ParticleToMesh(const P &p, amrex::Array4<V> const &arr, int src_comp, int dst_comp,
+								int num_comps, F const &f)
+	{
+		const amrex::Real inv_2sigma2 = 0.5 / (sigma * sigma);
+		const int nz_loop = (AMREX_SPACEDIM >= 3) ? stencil_width : 1;
+		const int ny_loop = (AMREX_SPACEDIM >= 2) ? stencil_width : 1;
+
+		for (int ic = 0; ic < num_comps; ++ic) {
+			const auto pval = f(p, src_comp + ic);
+			for (int kk = 0; kk < nz_loop; ++kk) {
+				const amrex::Real dz = (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(N - kk) + frac[2] - 1.0 : 0.0;
+				for (int jj = 0; jj < ny_loop; ++jj) {
+					const amrex::Real dy =
+					    (AMREX_SPACEDIM >= 2) ? static_cast<amrex::Real>(N - jj) + frac[1] - 1.0 : 0.0;
+					for (int ii = 0; ii < stencil_width; ++ii) {
+						const amrex::Real dx = static_cast<amrex::Real>(N - ii) + frac[0] - 1.0;
+						const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
+						if (r2 <= cutoff_r2) {
+							const amrex::Real wt = std::exp(-r2 * inv_2sigma2) * inv_norm;
+							amrex::Gpu::Atomic::AddNoRet(
+							    &arr(index[0] + ii, index[1] + jj, index[2] + kk, ic + dst_comp),
+							    static_cast<V>(wt * pval));
+						}
+					}
+				}
 			}
 		}
 	}
