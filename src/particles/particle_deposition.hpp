@@ -67,11 +67,11 @@ struct NearestEight : public Base<NearestEight, amrex::Real> {
 template <int N = 3> struct Gaussian {
 	static_assert(N >= 1 && N <= 6, "N must be between 1 and 6 (limited by ghost cells)");
 	static constexpr int stencil_width = 2 * N + 1;
-	static constexpr amrex::Real sigma = 1.5;			   // Gaussian width in units of cell size (dx)
+	static constexpr amrex::Real sigma = 1.5;				  // Gaussian width in units of cell size (dx)
 	static constexpr amrex::Real cutoff_r2 = static_cast<amrex::Real>(N * N); // spherical cutoff radius squared
 
-	int index[3]{};	     // NOLINT lower-left corner of stencil box
-	amrex::Real frac[3]{}; // NOLINT fractional cell position per dimension
+	int index[3]{};		// NOLINT lower-left corner of stencil box
+	amrex::Real frac[3]{};	// NOLINT fractional cell position per dimension
 	amrex::Real inv_norm{}; // NOLINT 1 / (sum of weights within sphere)
 
 	template <typename P>
@@ -113,8 +113,7 @@ template <int N = 3> struct Gaussian {
 	/// Deposit particle data onto the mesh using the spherical Gaussian kernel.
 	/// Same interface as amrex::ParticleInterpolator::Base::ParticleToMesh.
 	template <typename P, typename V, typename F>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void ParticleToMesh(const P &p, amrex::Array4<V> const &arr, int src_comp, int dst_comp,
-								int num_comps, F const &f)
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void ParticleToMesh(const P &p, amrex::Array4<V> const &arr, int src_comp, int dst_comp, int num_comps, F const &f)
 	{
 		const amrex::Real inv_2sigma2 = 0.5 / (sigma * sigma);
 		const int nz_loop = (AMREX_SPACEDIM >= 3) ? stencil_width : 1;
@@ -125,16 +124,14 @@ template <int N = 3> struct Gaussian {
 			for (int kk = 0; kk < nz_loop; ++kk) {
 				const amrex::Real dz = (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(N - kk) + frac[2] - 1.0 : 0.0;
 				for (int jj = 0; jj < ny_loop; ++jj) {
-					const amrex::Real dy =
-					    (AMREX_SPACEDIM >= 2) ? static_cast<amrex::Real>(N - jj) + frac[1] - 1.0 : 0.0;
+					const amrex::Real dy = (AMREX_SPACEDIM >= 2) ? static_cast<amrex::Real>(N - jj) + frac[1] - 1.0 : 0.0;
 					for (int ii = 0; ii < stencil_width; ++ii) {
 						const amrex::Real dx = static_cast<amrex::Real>(N - ii) + frac[0] - 1.0;
 						const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
 						if (r2 <= cutoff_r2) {
 							const amrex::Real wt = std::exp(-r2 * inv_2sigma2) * inv_norm;
-							amrex::Gpu::Atomic::AddNoRet(
-							    &arr(index[0] + ii, index[1] + jj, index[2] + kk, ic + dst_comp),
-							    static_cast<V>(wt * pval));
+							amrex::Gpu::Atomic::AddNoRet(&arr(index[0] + ii, index[1] + jj, index[2] + kk, ic + dst_comp),
+										     static_cast<V>(wt * pval));
 						}
 					}
 				}
@@ -174,12 +171,12 @@ struct RadDeposition {
 		const auto birthIndex = birthTimeIndex;
 		// Deposit radiation energy only if particle is active
 		interp.ParticleToMesh(p, radEnergySource, start_part_comp, start_mesh_comp, num_comp,
-					      [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
-						      if (currentTime < part.rdata(birthIndex) || currentTime >= part.rdata(birthIndex + 1)) {
-							      return 0.0;
-						      }
-						      return part.rdata(comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
-					      });
+				      [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
+					      if (currentTime < part.rdata(birthIndex) || currentTime >= part.rdata(birthIndex + 1)) {
+						      return 0.0;
+					      }
+					      return part.rdata(comp) * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+				      });
 	}
 };
 
