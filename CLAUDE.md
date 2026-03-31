@@ -13,15 +13,7 @@ The `scripts/bash/quokka` script is the recommended way to configure, build, and
 ```bash
 source ~/.local/bin/quokka.rc
 ```
-This sets compiler variables and activates the Python environment. The file is machine-specific and not checked in to the repository. A typical `quokka.rc` looks like:
-```sh
-# unset CC and CXX on macOS; on Linux, set e.g. CC=$(which mpicc)
-export CC=
-export CXX=
-
-# load python
-source ~/softwares/quokka/.venv/bin/activate
-```
+This sets compiler variables and activates the Python environment. The file is machine-specific and not checked in to the repository.
 
 - **Configure**: `quokka config <preset>` — runs CMake with the correct dimensionality and build type
 - **Build a problem**: `quokka build <preset> <problem> [-j <N>]`
