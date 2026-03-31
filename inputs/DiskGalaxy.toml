@@ -40,7 +40,7 @@ signal_speed_abort = 6e8
 
 checkpoint_interval = 100
 plotfile_interval = 10
-derived_vars = ["temperature", "gpot"]
+derived_vars = ["temperature", "gpot", "h2_mass"]
 
 # max_level = 7 implies a maximum resolution of dx =  73.2 pc (LOW res).
 # max_level = 8 implies a maximum resolution of dx =  36.6 pc (MED res).

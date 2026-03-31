@@ -42,6 +42,8 @@ namespace
 {
 constexpr double keV_in_ergs = 1000.0 * C::ev2erg; // ergs == 1 keV
 constexpr double seconds_per_year = 3.15576e7;
+constexpr double h2_pressure_scale = 1.7e4; // K cm^-3
+constexpr double h2_pressure_alpha = 0.8;
 } // namespace
 
 struct DiskGalaxy {
@@ -607,6 +609,44 @@ template <> void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::s
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				Real const Pgas = HydroSystem<DiskGalaxy>::ComputePressure(state, i, j, k, &cons_fc);
 				output(i, j, k, ncomp) = Pgas / C::k_B;
+			});
+		}
+	}
+
+	if (dname == "h2_mass") {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "DiskGalaxy h2_mass requires resampled cooling tables.");
+		const int ncomp = ncomp_cc_in;
+		auto tables = resampledTables_.const_tables();
+		const auto dx = geom[lev].CellSizeArray();
+		const Real dvol = dx[0] * dx[1] * dx[2];
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &output = mf.array(iter);
+			auto const &state = state_new_cc_[lev].const_array(iter);
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				Real const rho = state(i, j, k, HydroSystem<DiskGalaxy>::density_index);
+				if (rho <= 0.0) {
+					output(i, j, k, ncomp) = 0.0;
+					return;
+				}
+				Real const x1Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index);
+				Real const x2Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x2Momentum_index);
+				Real const x3Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index);
+				Real const Egas = state(i, j, k, HydroSystem<DiskGalaxy>::energy_index);
+				Real const Eint = RadSystem<DiskGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+				Real const Pgas = quokka::ResampledCooling::ComputePressureFromRhoEint(rho, Eint, tables);
+				Real const xHI = quokka::ResampledCooling::ComputeHIFractionApproxFromRhoPT(rho, Pgas, Tgas, tables);
+				Real const P_over_kB = Pgas / C::k_B;
+
+				Real h2_mass = 0.0;
+				if ((xHI > 0.0) && (P_over_kB > 0.0)) {
+					Real const neutral_h_mass = rho * dvol * tables.cloudy_H_mass_fraction * xHI;
+					Real const R_mol = std::pow((xHI * P_over_kB) / h2_pressure_scale, h2_pressure_alpha);
+					h2_mass = neutral_h_mass * (R_mol / (1.0 + R_mol));
+				}
+
+				output(i, j, k, ncomp) = h2_mass;
 			});
 		}
 	}

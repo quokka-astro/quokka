@@ -118,6 +118,86 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputePressureFromRhoEint(Real co
 	return P;
 }
 
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeMeanMolecularWeightFromRhoPT(Real const rho, Real const P, Real const T) -> Real
+{
+	if ((rho <= 0.0) || (P <= 0.0) || (T <= 0.0)) {
+		return 0.0;
+	}
+	return (rho * C::k_B * T) / (P * C::m_p);
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeElectronFractionFromRhoPT(Real const rho, Real const P, Real const T,
+									       resampledGpuConstTables const &tables) -> Real
+{
+	if ((rho <= 0.0) || (P <= 0.0) || (T <= 0.0) || (tables.cloudy_H_mass_fraction <= 0.0)) {
+		return 0.0;
+	}
+
+	const Real mu = ComputeMeanMolecularWeightFromRhoPT(rho, P, T);
+	if (mu <= 0.0) {
+		return 0.0;
+	}
+
+	// Match extern/cooling/grackle_tables.py: recover the free-electron abundance x_e = n_e / n_H
+	// from the photoionization-equilibrium mean molecular weight.
+	const Real X = tables.cloudy_H_mass_fraction;
+	const Real Z = 0.02;
+	const Real Y = 1.0 - X - Z;
+	const Real mean_metals_A = 16.0;
+	const Real electron_mass_over_hydrogen_mass = C::m_e / C::m_p;
+	const Real numerator = 1.0 - mu * (X + 0.25 * Y + (Z / mean_metals_A));
+	const Real denominator = X * (mu - electron_mass_over_hydrogen_mass);
+	if (denominator <= 0.0) {
+		return 0.0;
+	}
+
+	Real electron_fraction = numerator / denominator;
+	if (electron_fraction < 0.0) {
+		electron_fraction = 0.0;
+	}
+	return electron_fraction;
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeHIIFractionApproxFromRhoPT(Real const rho, Real const P, Real const T,
+										resampledGpuConstTables const &tables) -> Real
+{
+	const Real electron_fraction = ComputeElectronFractionFromRhoPT(rho, P, T, tables);
+
+	// Match the approximate closure used in the resampling scripts:
+	// assume H and He share a common ionization progress chi, such that
+	// x_e = n_e / n_H ~= chi * (1 + 2 n_He / n_H), with xHII = chi.
+	const Real X = tables.cloudy_H_mass_fraction;
+	const Real Z = 0.02;
+	const Real Y = 1.0 - X - Z;
+	const Real nHe_over_nH = Y / (4.0 * X);
+	const Real electron_capacity_per_H = 1.0 + 2.0 * nHe_over_nH;
+	if (electron_capacity_per_H <= 0.0) {
+		return 0.0;
+	}
+
+	Real ionized_fraction = electron_fraction / electron_capacity_per_H;
+	if (ionized_fraction < 0.0) {
+		ionized_fraction = 0.0;
+	}
+	if (ionized_fraction > 1.0) {
+		ionized_fraction = 1.0;
+	}
+	return ionized_fraction;
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeHIFractionApproxFromRhoPT(Real const rho, Real const P, Real const T,
+									       resampledGpuConstTables const &tables) -> Real
+{
+	Real neutral_fraction = 1.0 - ComputeHIIFractionApproxFromRhoPT(rho, P, T, tables);
+	if (neutral_fraction < 0.0) {
+		neutral_fraction = 0.0;
+	}
+	if (neutral_fraction > 1.0) {
+		neutral_fraction = 1.0;
+	}
+	return neutral_fraction;
+}
+
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEntropyFromRhoEint(Real const rho, Real const Eint, resampledGpuConstTables const &tables) -> Real
 {
 	// Convert Eint (energy density) to eint (specific energy) and then to fast log scale for interpolation
