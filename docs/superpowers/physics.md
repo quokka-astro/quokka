@@ -19,7 +19,7 @@ xidF[n] = rho * kappaF[n]
 ```
 
 - The reduced speed of light `chat` appears in the radiation update, while `c` is the physical speed of light used in the gas-radiation energy bookkeeping.
-- Additive non-core source terms are part of the coupling interface: stellar radiation injection through `Src[n]`, gas cooling `Lambda(n_H, T)`, and gas heating `Gamma(n_H, T)`.
+- The coupling interface admits an additive radiation source term `Src[n]`, representing externally injected radiation energy density in group `n`.
 
 ## Continuous local coupling model
 
@@ -115,11 +115,11 @@ where
 With these additive terms included, the residuals used by the source update are
 
 ```
-Egas    - Egas0    + (c / chat) * sum_n R[n] + dt * Lambda(n_H, T) - dt * Gamma(n_H, T) = 0
-Erad[n] - Erad0[n] - (R[n] + extra_src[n])                                  = 0
+Egas    - Egas0    + (c / chat) * sum_n R[n] = 0
+Erad[n] - Erad0[n] - (R[n] + extra_src[n]) = 0
 ```
 
-The gas cooling/heating terms above represent the non-core thermochemical hooks admitted by the coupling interface. They are evaluated in the gas energy equation, not in the definition of `R[n]`.
+The additive radiation source is part of the coupling interface, but it is not folded into the definition of `R[n]`.
 
 ## Reduced-basis formulation
 
@@ -170,7 +170,7 @@ The nonlinear solve is a Backward-Euler Newton-Raphson iteration on `(Egas, R[n]
 Define the residuals
 
 ```
-F[0] = Egas - Egas0 + (c / chat) * sum_n R[n] + dt * Lambda(n_H, T) - dt * Gamma(n_H, T)
+F[0] = Egas - Egas0 + (c / chat) * sum_n R[n]
 F[n] = Erad[n] - Erad0[n] - (R[n] + extra_src[n])
 ```
 
@@ -291,6 +291,6 @@ The important design constraint is not a particular class decomposition, but tha
 - The reduced-basis implementation stores `R[n]` directly; `D[n]` is dropped and `use_D_as_base = false` is assumed.
 - The weak-coupling decoupled-dust fallback is preserved.
 - The Newton Jacobian continues to neglect temperature derivatives of `kappaP[n]` and `kappaE[n]`, and this should be documented explicitly in inline comments.
-- The coupling interface admits additive non-core source terms: stellar radiation `Src[n]`, gas cooling `Lambda(n_H, T)`, and gas heating `Gamma(n_H, T)`.
+- The coupling interface admits the additive radiation source `Src[n]`.
 - Floors are enforced during iteration: `Erad_floor`, `Cv * tempFloor_`, and `dustTempFloor_`, with `dustTempFloor_` defaulting to `tempFloor_`.
 
