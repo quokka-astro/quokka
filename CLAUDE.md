@@ -32,9 +32,9 @@ Presets: `1d`, `3d`, `1d-debug`, `3d-debug` (sets dimensionality and Release/Deb
 - **Build**: `ninja -j8 <problem>` (from build directory)
 - **Run all tests**: `ctest -j8`
 - **Run specific test**: `ctest -R TestName`
-- **List targets** (returns 1000 targets): `cmake --build . --target help` 
+- **List targets** (returns 1000 targets): `cmake --build . --target help`
 
-- **Test inputs**: Located in `inputs/` directory (`.in` files)
+- **Test inputs**: Located in `inputs/` directory (`.toml` files)
 - **Code formatting**: `clang-format -i file.cpp` (run from `src/` directory)
 - **Static analysis**: Use `scripts/tidy.sh build changed` to run clang-tidy on modified files
 - **Lint options**: `scripts/tidy.sh build [changed|previous|origin|dev] [--fix]`
@@ -44,7 +44,7 @@ Presets: `1d`, `3d`, `1d-debug`, `3d-debug` (sets dimensionality and Release/Deb
 - **Core simulation**: `QuokkaSimulation` template class inherits from `AMRSimulation`
 - **Physics modules**: Located in `src/hydro/`, `src/radiation/`, `src/cooling/`, `src/chemistry/`
 - **Hyperbolic systems**: `HyperbolicSystem` template handles conservation laws and slope limiters
-- **Problem definitions**: Each problem in `src/problems/` has `.cpp/.hpp` files and CMake target
+- **Problem definitions**: Each problem in `src/problems/` has `.cpp` files and CMake target
 - **I/O and diagnostics**: `src/io/` contains output handling (plotfiles, checkpoints, openPMD)
 - **Math utilities**: `src/math/` has interpolation, quadrature, root finding, ODE integration
 - **Particles**: `src/particles/` handles stellar particles with accretion, creation, destruction
@@ -74,4 +74,15 @@ Presets: `1d`, `3d`, `1d-debug`, `3d-debug` (sets dimensionality and Release/Deb
 - Always use a trailing return type for functions that do not return `void`
 - ALWAYS declare variables `const` when they are never modified after initialization.
 - Document APIs using Doxygen style comments
+
+## GPU Lambda Safety
+- Never capture host pointers inside `AMREX_GPU_DEVICE` lambdas
+- Prefer device-safe value types: `amrex::GpuArray` via `geom.ProbLoArray()`, `geom.CellSizeArray()`, `geom.InvCellSizeArray()`
+- Never pass `Geometry::ProbLo()/CellSize()` raw pointers into device lambdas; use the array forms
+- Never capture raw pointers from `GeometryData` inside GPU lambdas
+- Avoid accessing `GeometryData` directly; this is almost never required
+
+## Commit & PR Guidelines
+- Use short, imperative commit subjects (e.g., `fix clang-tidy`)
+- Group related changes only and rebase onto `development` before opening a PR
 - PRs should be focused on a single change and target the `development` branch
