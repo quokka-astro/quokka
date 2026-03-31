@@ -273,14 +273,17 @@ Allowing clipping during iteration is intentional. Negative or zero `Erad`, `Ega
 
 ## Module boundaries for the reimplementation
 
-The reimplemented coupling module should be split into the following responsibilities:
+The reimplementation should enforce clear separations of responsibility, but the exact module/file layout is intentionally left open for the next design pass.
 
-- `OpacityEvaluator`: evaluate `kappaP[n]`, `kappaE[n]`, and `kappaF[n]` at a supplied `Td`.
-- `PlanckIntegrator`: compute `planck[n]` and its temperature derivative group-by-group.
-- `DustClosure`: recover `Td(T, R[n])` for the canonical gas-dust model, or enforce `Td = T` for the gas-only specialization.
-- `ThermalCouplingSolve`: assemble residuals/Jacobian in the reduced basis and carry out the Newton solve.
-- `FluxMomentumUpdate`: apply the preserved `Frad` relaxation and gas momentum update using the converged thermodynamic state.
-- `CouplingDriver`: orchestrate the inner thermal solve, outer lagged-work iteration, floors/clipping policy, and final per-cell state update.
+At minimum, the design should separate:
+
+- physics evaluation: opacity and thermal-emission calculations at a supplied thermodynamic state,
+- dust closure: the logic that determines `Td`, including the gas-only specialization `Td = T` and the weak-coupling fallback,
+- thermal nonlinear solve: residual assembly, Jacobian assembly, convergence checks, and floors/clipping for the reduced-basis solve in `(Egas, R[n])`,
+- flux and momentum update: the preserved `Frad` relaxation, gas-momentum coupling, and lagged work update,
+- orchestration: the outer iteration loop, data flow between the thermal solve and flux update, and the final write-back to the cell state.
+
+The important design constraint is not a particular class decomposition, but that these concerns become independently readable, testable, and debuggable.
 
 ## Implementation decisions now fixed
 
