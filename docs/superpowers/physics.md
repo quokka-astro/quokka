@@ -19,6 +19,7 @@ xidF[n] = rho * kappaF[n]
 ```
 
 - The reduced speed of light `chat` appears in the radiation update, while `c` is the physical speed of light used in the gas-radiation energy bookkeeping.
+- Additive non-core source terms are part of the coupling interface: stellar radiation injection through `Src[n]`, gas cooling `Lambda(n_H, T)`, and gas heating `Gamma(n_H, T)`.
 
 ## Continuous local coupling model
 
@@ -45,7 +46,7 @@ d/dt Erad[n] = -chat * G[n]
 
 so that gas internal energy and radiation energy exchange consistently in the reduced-speed-of-light formulation.
 
-This specification treats the thermal part of the coupling as the canonical nonlinear solve. Radiation flux `Frad[n]` and gas momentum exchange are updated by a separate submodule that uses the same opacities and the same converged temperatures, but is not part of the core thermal residual definition below.
+This specification treats the thermal part of the coupling as the canonical nonlinear solve. Radiation flux `Frad[n]` and gas momentum exchange are updated by a separate but coupled submodule that uses the same opacities and the same converged temperatures; in practice this submodule also provides the lagged work contribution that appears in the radiation energy residual.
 
 ## Dust closure
 
@@ -100,13 +101,25 @@ Erad[n] - Erad0[n] - R[n]                    = 0
 
 where `Egas0` and `Erad0[n]` denote the state at the beginning of the source step.
 
-If an external cell-centered radiation energy source `Src[n]` is injected during the same implicit step, the radiation residual becomes
+The practical source update includes additional additive terms:
 
 ```
-Erad[n] - Erad0[n] - (R[n] + Src[n]) = 0
+extra_src[n] = work[n] + Src[n]
 ```
 
-but `Src[n]` is conceptually an external hook, not part of the core matter-coupling physics.
+where
+
+- `Src[n]` is the cell-centered stellar radiation source passed in through `radEnergySource`, and
+- `work[n]` is the lagged velocity-dependent work contribution. In the algorithm this term is held fixed during the inner Newton iteration and updated by an outer iteration loop.
+
+With these additive terms included, the residuals used by the source update are
+
+```
+Egas    - Egas0    + (c / chat) * sum_n R[n] + dt * Lambda(n_H, T) - dt * Gamma(n_H, T) = 0
+Erad[n] - Erad0[n] - (R[n] + extra_src[n])                                  = 0
+```
+
+The gas cooling/heating terms above represent the non-core thermochemical hooks admitted by the coupling interface. They are evaluated in the gas energy equation, not in the definition of `R[n]`.
 
 ## Reduced-basis formulation
 
@@ -148,7 +161,7 @@ Once `Td` is known, the radiation energy in each group can be recovered from
 Erad[n] = X[n] * (planck[n] - R[n] / tau[n])
 ```
 
-This is the clean thermal form of the reduced-basis update. Any retained velocity-dependent work correction should be treated as a separate algorithmic layer on top of this definition, not folded into the physics meaning of `R[n]`.
+This is the clean thermal form of the reduced-basis update. The reimplementation should store `R[n]` directly and should not retain the older scaled variable `D[n] = R[n] / tau0[n]`.
 
 ## Newton solve for the thermal subsystem
 
@@ -157,11 +170,11 @@ The nonlinear solve is a Backward-Euler Newton-Raphson iteration on `(Egas, R[n]
 Define the residuals
 
 ```
-F[0] = Egas - Egas0 + (c / chat) * sum_n R[n]
-F[n] = Erad[n] - Erad0[n] - R[n]
+F[0] = Egas - Egas0 + (c / chat) * sum_n R[n] + dt * Lambda(n_H, T) - dt * Gamma(n_H, T)
+F[n] = Erad[n] - Erad0[n] - (R[n] + extra_src[n])
 ```
 
-with `Erad[n]` understood as the derived quantity above. Let
+with `extra_src[n] = work[n] + Src[n]`, and with `Erad[n]` understood as the derived quantity above. Let
 
 ```
 Cv = dEgas / dT
@@ -185,7 +198,7 @@ dTd / dT    = 3/2 - Td / (2 T)
 dTd / dR[n] = -1 / (Nd * sqrt(T))
 ```
 
-The Jacobian linearization assumes that `d/dT (kappaE[n]` and `d/dT (kappaP[n] / kappaE[n])` are neglected inside the Newton matrix. This should be stated explicitly in the implementation because it affects convergence behavior, but not the converged fixed point when the nonlinear solve succeeds.
+The Jacobian linearization assumes that temperature derivatives of the opacities are neglected inside the Newton matrix, i.e. `d/dT kappaP[n] = 0` and `d/dT kappaE[n] = 0` for the purpose of linearization. Equivalently, the temperature derivative of `kappaP[n] / kappaE[n]` is ignored. This should be stated explicitly in inline implementation comments because it affects convergence behavior, but not the converged fixed point when the nonlinear solve succeeds.
 
 ### Gas-only Jacobian
 
@@ -208,16 +221,55 @@ J[n][n] = -X[n] / tau[n] - 1
 
 ## Radiation flux and momentum update
 
-The new module should preserve the current optimized treatment of radiation flux relaxation and gas momentum exchange, but isolate it behind a separate interface.
+The new module should preserve the current optimized treatment of radiation flux relaxation and gas momentum exchange, but isolate it behind a separate interface. This part of the algorithm is not just a post-processing step: it participates in the outer fixed-point iteration through the lagged work term that enters `extra_src[n]`.
 
 The intended sequencing is
 
-1. Solve the thermal subsystem for `Egas`, `Erad[n]`, `T`, and `Td`.
-2. Re-evaluate the opacities needed by the flux update, especially `kappaF[n]`, at the converged `Td`.
-3. Apply the retained `Frad[n]` update and gas momentum exchange using the existing optimized formulas.
-4. Reconstruct gas total energy after momentum has been updated.
+1. Form the old-state quantities needed by the source step: `Egas0`, `Erad0[n]`, gas momentum, `Frad0[n]`, and any injected stellar source `Src[n]`.
+2. Start an outer iteration loop. The purpose of this loop is to lag the work term, solve the thermal subsystem with that work term held fixed, update `Frad[n]` and gas momentum, then re-evaluate whether the lagged work term is self-consistent.
+3. Inside each outer iteration, run an inner Newton-Raphson solve on the reduced basis `(Egas, R[n])`.
+4. After the inner solve converges, update `Frad[n]` and gas momentum using the preserved optimized flux-relaxation formulas and the converged thermodynamic state.
+5. Recompute the work term and check outer-loop convergence. If the work term has not converged, repeat from step 3 with the updated lagged work.
+6. Once the outer loop converges, commit `Erad[n]`, `Frad[n]`, gas momentum, gas internal energy, and gas total energy back to the cell state.
 
-This separation is important: the thermal solve defines the matter-radiation energy exchange model, while the `Frad` update is an algorithmic submodule that should be preserved and modularized, not re-derived in this document.
+### Inner Newton iteration
+
+The inner iteration solves the thermal residual system with `extra_src[n]` treated as fixed. In particular:
+
+- `Src[n]` is constant throughout the source step.
+- `work[n]` is also held fixed during one inner Newton solve.
+- `Td`, `planck[n]`, `kappaP[n]`, and `kappaE[n]` are updated every Newton iteration from the current iterate.
+- `kappaF[n]` is evaluated when needed for the flux/momentum update and for the work term.
+
+This separation is essential for robustness: the thermal solve sees a fixed additive source term, while the outer loop absorbs the nonlinearity associated with the work correction.
+
+### Outer lagged-work iteration
+
+The outer iteration preserves the current implementation strategy:
+
+- On the first outer iteration, compute `work[n]` from the old-state gas momentum and radiation flux.
+- Pass that lagged `work[n]` into the inner thermal solve through `extra_src[n]`.
+- Use the converged thermal state to update `Frad[n]` and gas momentum.
+- Recompute the work term implied by that updated state.
+- Compare the new work term against the previous lagged value. If the difference exceeds the lagged-work tolerance, continue outer iteration; otherwise accept the source update.
+
+This separation is important: the thermal solve defines the matter-radiation energy exchange model, while the `Frad` update and work-lag iteration are algorithmic submodules that should be preserved and modularized, not re-derived from scratch in this document.
+
+### Weak-coupling fallback
+
+The reimplementation should preserve the current decoupled-dust fallback path for very small `Theta_gd`. In that regime the fully coupled gas-dust thermal solve becomes numerically pathological because the dust balance can become effectively singular relative to the gas energy scale. The current threshold-based fallback should be kept as a deliberate part of the design rather than treated as a temporary workaround.
+
+### Floors and clipping policy
+
+The source update should enforce positivity floors during iteration, not only after convergence:
+
+- Radiation energy floor: `RadSystem_Traits::Erad_floor`
+- Gas internal-energy floor: `Cv * tempFloor_`
+- Dust temperature floor: `dustTempFloor_`
+
+`dustTempFloor_` should be added to `AMRSimulation` and should default to `tempFloor_`.
+
+Allowing clipping during iteration is intentional. Negative or zero `Erad`, `Egas`, or `Td` leads to undefined or nonphysical opacity and emission evaluations, so waiting until after convergence is not acceptable for a robust implementation.
 
 ## Module boundaries for the reimplementation
 
@@ -228,14 +280,14 @@ The reimplemented coupling module should be split into the following responsibil
 - `DustClosure`: recover `Td(T, R[n])` for the canonical gas-dust model, or enforce `Td = T` for the gas-only specialization.
 - `ThermalCouplingSolve`: assemble residuals/Jacobian in the reduced basis and carry out the Newton solve.
 - `FluxMomentumUpdate`: apply the preserved `Frad` relaxation and gas momentum update using the converged thermodynamic state.
-- `CouplingDriver`: orchestrate the two stages above and expose a single per-cell source-update interface.
+- `CouplingDriver`: orchestrate the inner thermal solve, outer lagged-work iteration, floors/clipping policy, and final per-cell state update.
 
-## Ambiguities and decisions to resolve before implementation
+## Implementation decisions now fixed
 
-- Meaning of `R[n]`: keep it as the pure thermal exchange variable defined above, or continue to fold lagged work corrections into the same reduced variable. For modularity, the recommended choice is to keep `R[n]` purely thermal.
-- Reduced basis exposed to code: store `R[n]` directly, or use the scaled variable `D[n] = R[n] / tau0[n]` internally for conditioning while keeping `R[n]` as the documented physics variable.
-- Weak gas-dust coupling: decide whether to preserve the current decoupled-dust fallback path for very small `Theta_gd`, or require the canonical coupled model everywhere and handle stiffness purely through solver robustness.
-- Opacity derivatives in the Jacobian: decide whether the new implementation should continue neglecting `d/dT (kappaP / kappaE)` in the Newton matrix, or optionally include it for difficult opacity laws.
-- External hooks: decide exactly which non-core source terms are admitted through the coupling driver interface. The recommended core set is radiation absorption/emission, radiation momentum exchange, and dust-gas thermal exchange only.
-- Floors and failure policy: define where positivity floors on `Erad`, `Egas`, and `Td` are enforced, and whether the thermal solver may clip during iteration or only after convergence checks.
+- `R[n]` remains the pure thermal exchange variable. The work term is included separately through `extra_src[n] = work[n] + Src[n]`.
+- The reduced-basis implementation stores `R[n]` directly; `D[n]` is dropped and `use_D_as_base = false` is assumed.
+- The weak-coupling decoupled-dust fallback is preserved.
+- The Newton Jacobian continues to neglect temperature derivatives of `kappaP[n]` and `kappaE[n]`, and this should be documented explicitly in inline comments.
+- The coupling interface admits additive non-core source terms: stellar radiation `Src[n]`, gas cooling `Lambda(n_H, T)`, and gas heating `Gamma(n_H, T)`.
+- Floors are enforced during iteration: `Erad_floor`, `Cv * tempFloor_`, and `dustTempFloor_`, with `dustTempFloor_` defaulting to `tempFloor_`.
 
