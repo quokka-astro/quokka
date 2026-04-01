@@ -3,9 +3,11 @@
 ///
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <format>
+#include <limits>
 
 #include "AMReX.H"
 #include "AMReX_BCRec.H"
@@ -14,6 +16,7 @@
 #include "AMReX_Vector.H"
 #include "QuokkaSimulation.hpp"
 #include "hydro/EOS.hpp"
+#include "io/projection.hpp"
 #include "particles/PhysicsParticles.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
@@ -125,6 +128,56 @@ template <> void QuokkaSimulation<ParticleProblem>::setInitialConditionsOnGrid(q
 	});
 }
 
+namespace
+{
+auto checkGasDensityProjection(const QuokkaSimulation<ParticleProblem> &sim) -> int
+{
+	const amrex::Vector<const amrex::MultiFab *> state_mfs = amrex::GetVecOfConstPtrs(sim.state_new_cc_);
+
+	constexpr std::array dirs = {amrex::Direction::x, amrex::Direction::y, amrex::Direction::z};
+	const amrex::Box &domain = sim.Geom(0).Domain();
+
+	for (const auto dir : dirs) {
+		const auto projections = quokka::diagnostics::ComputePlaneProjectionFromMultiFab(state_mfs, sim.finestLevel(), sim.Geom(), sim.refRatio(), dir,
+												 RadSystem<ParticleProblem>::gasDensity_index);
+		const amrex::MultiFab &projection = projections.front();
+		const amrex::Real projection_min = projection.min(0);
+		const amrex::Real projection_max = projection.max(0);
+		const amrex::Real projection_sum = projection.sum(0);
+
+		const int dir_index = static_cast<int>(dir);
+		amrex::Long n_plane_cells = 1;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			if (idim != dir_index) {
+				n_plane_cells *= static_cast<amrex::Long>(domain.length(idim));
+			}
+		}
+
+		const amrex::Real expected_projection = rho0 * (sim.Geom(0).ProbHi(dir_index) - sim.Geom(0).ProbLo(dir_index));
+		const amrex::Real expected_projection_sum = expected_projection * static_cast<amrex::Real>(n_plane_cells);
+		const amrex::Real projection_tol = 64.0 * std::numeric_limits<amrex::Real>::epsilon();
+		const amrex::Real projection_sum_tol = projection_tol * static_cast<amrex::Real>(n_plane_cells);
+		const char dir_name = "xyz"[dir_index];
+
+		amrex::Print() << "Projected gasDensity statistics along " << dir_name << ": min=" << projection_min << " max=" << projection_max
+			       << " sum=" << projection_sum << "\n";
+		amrex::Print() << "Expected gasDensity projection along " << dir_name << ": value=" << expected_projection << " sum=" << expected_projection_sum
+			       << "\n";
+
+		if (std::abs(projection_min - expected_projection) > projection_tol || std::abs(projection_max - expected_projection) > projection_tol ||
+		    std::abs(projection_sum - expected_projection_sum) > projection_sum_tol) {
+			amrex::Print() << std::format(
+			    "Projection check FAILED along {}: expected a uniform gasDensity projection with value {:.17g} and sum {:.17g}, but got "
+			    "min={:.17g}, max={:.17g}, sum={:.17g}.\n",
+			    dir_name, expected_projection, expected_projection_sum, projection_min, projection_max, projection_sum);
+			return 1;
+		}
+	}
+
+	return 0;
+}
+} // namespace
+
 auto problem_main() -> int
 {
 	// Problem parameters
@@ -143,6 +196,7 @@ auto problem_main() -> int
 	sim.evolve();
 
 	int status = 0;
+	const int projection_status = checkGasDensityProjection(sim);
 
 	// compute total radiation energy
 	const double total_Erad_over_vol = sim.state_new_cc_[0].sum(RadSystem<ParticleProblem>::radEnergy_index);
@@ -250,8 +304,8 @@ auto problem_main() -> int
 		const double rel_err_tol = 1.0e-7;
 		const double rel_position_error_tol = t_sim < 1.0 ? 2.0e-4 : 2.0e-3;
 		status = 1;
-		if (rel_err < rel_err_tol && rel_position_error_cicrad < rel_position_error_tol && rel_position_error_cic < rel_position_error_tol &&
-		    rel_position_error_rad < rel_position_error_tol) {
+		if (projection_status == 0 && rel_err < rel_err_tol && rel_position_error_cicrad < rel_position_error_tol &&
+		    rel_position_error_cic < rel_position_error_tol && rel_position_error_rad < rel_position_error_tol) {
 			status = 0;
 			amrex::Print() << "Relative error within tolerance.\n";
 		}

@@ -145,12 +145,12 @@ set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagPDF.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagPlotfile.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagParticleTxt.cpp"
-                        "${CMAKE_CURRENT_SOURCE_DIR}/io/projection.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/cooling/ResampledCooling.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/util/fextract.cpp"
                         "${openPMDSources}")
 
 if(AMReX_SPACEDIM EQUAL 3)
+  list(APPEND QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/io/projection.cpp")
   list(APPEND QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagProjectionPlot.cpp")
 endif()
 
