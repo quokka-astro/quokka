@@ -226,6 +226,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int sn_count_ = 0;	      // number of SN explosions in a step (used for diagnostics)
 	int sn_count_cumulative_ = 0; // cumulative number of SN explosions (used for diagnostics)
 
+	//Conduction parameters
+	amrex::Real electronConductionKappa0_ = 4.17;
+	int enableElectronConduction_ = 1;
+
 	amrex::Real densityFloor_ = 0.0;     // default
 	amrex::Real dustDensityFloor_ = 0.0; // default
 	amrex::Real tempFloor_ = 0.0;	     // default
@@ -1223,6 +1227,22 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		printCellProperties(lev, hydro_dt.index);
 	}
 
+   //compute timestep based on conduction parameters
+   amrex::ValLocPair<amrex::Real, amrex::IntVect> conduction_dt{.value = std::numeric_limits<amrex::Real>::max(),
+								   .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
+   if (enableElectronConduction_ == 1) {
+		const amrex::Real nsubcycle = 1;
+		conduction_dt.value = dx_min * dx_min / electronConductionKappa0_ / nsubcycle;
+		conduction_dt.index = domain_signal_maxloc;
+		
+																	 
+		if (verbose) {
+			amrex::Print() << std::format("...[level {}] \testimated conduction timestep: {:e}\n", lev, conduction_dt.value);
+			amrex::Print() << std::format("...[level {}] \tconduction timestep limited at cell {}\n", lev,
+						      formatIntVect(conduction_dt.index));
+		} 
+	}
+
 	// compute maximum particle speed on level 'lev'
 	amrex::ValLocPair<amrex::Real, amrex::IntVect> particle_dt{.value = std::numeric_limits<amrex::Real>::max(),
 								   .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
@@ -1251,7 +1271,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 #endif
 
 	// compute minimum timestep
-	std::vector<dtloc_t *> dts = {&hydro_dt, &particle_dt};
+	std::vector<dtloc_t *> dts = {&hydro_dt, &conduction_dt, &particle_dt};
 	auto *const dt_min_ptr = *std::min_element(dts.begin(), dts.end(), [](dtloc_t *const p1, dtloc_t *const p2) { return p1->value < p2->value; });
 
 	if (verbose) {
@@ -1260,6 +1280,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 			amrex::Print() << std::format("...[level {}] timestep limited by HYDRO\n", lev);
 		} else if (dt_min_ptr == &particle_dt) {
 			amrex::Print() << std::format("...[level {}] timestep limited by PARTICLES\n", lev);
+		} else if (dt_min_ptr == &conduction_dt) {
+			amrex::Print() << std::format("...[level {}] timestep limited by CONDUCTION\n", lev);
 		}
 	}
 
