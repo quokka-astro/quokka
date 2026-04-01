@@ -72,6 +72,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_Vector.H"
 #include "AMReX_VisMF.H"
 #include "util/BC.hpp"
+#include "util/time_units.hpp"
 #include <AMReX_FluxRegister.H>
 #include <format>
 #include <yaml-cpp/yaml.h>
@@ -866,9 +867,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	pp.query("particle_cfl", particleCflNumber_);
 
 	// Optional fixed timestep controls
-	pp.query("constant_dt", constantDt_);
-	pp.query("initial_dt", initDt_);
-	pp.query("max_dt", maxDt_);
+	quokka::queryTime(pp, "constant_dt", constantDt_);
+	quokka::queryTime(pp, "initial_dt", initDt_);
+	quokka::queryTime(pp, "max_dt", maxDt_);
 
 	const int dt_override_count =
 	    static_cast<int>(pp.contains("init_shrink")) + static_cast<int>(pp.contains("initial_dt")) + static_cast<int>(pp.contains("constant_dt"));
@@ -882,10 +883,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	pp.query("amr_interpolation_method", amrInterpMethod_);
 
 	// Default stopping time
-	pp.query("stop_time", stopTime_);
+	quokka::queryTime(pp, "stop_time", stopTime_);
 
 	// Default timestep cutoff (safety feature)
-	pp.query("dt_cutoff", dtCutoff_);
+	quokka::queryTime(pp, "dt_cutoff", dtCutoff_);
 
 	// Default initial timestep shrink factor
 	pp.query("init_shrink", initShrink_);
@@ -909,13 +910,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	pp.query("statistics_interval", statisticsInterval_);
 
 	// Default Time interval
-	pp.query("plottime_interval", plotTimeInterval_);
+	quokka::queryTime(pp, "plottime_interval", plotTimeInterval_);
 
 	// Skip initial plotfile
 	pp.query("skip_initial_plotfile", skipInitialPlotfile_);
 
 	// Default Time interval
-	pp.query("checkpointtime_interval", checkpointTimeInterval_);
+	quokka::queryTime(pp, "checkpointtime_interval", checkpointTimeInterval_);
 
 	// Default checkpoint interval
 	pp.query("checkpoint_interval", checkpointInterval_);
@@ -1006,7 +1007,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// SFH parameters
 	pp.query("sfh_interval", sfh_interval_);
-	pp.query("sfh_time_interval", sfh_time_interval_);
+	quokka::queryTime(pp, "sfh_time_interval", sfh_time_interval_);
 
 	// IO settings (following the AMReX convention for the Amr class)
 	// (Since we use AmrCore instead of Amr, we have to reimplement these.)
