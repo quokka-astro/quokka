@@ -36,8 +36,7 @@ inline constexpr double Gyr_in_s = 3.15576e16;
 /// \return value in CGS seconds
 inline auto parseTimeString(const std::string &s, const std::string &name) -> amrex::Real
 {
-	static const std::unordered_map<std::string, double> unitMap = {
-	    {"yr", yr_in_s}, {"kyr", kyr_in_s}, {"Myr", Myr_in_s}, {"Gyr", Gyr_in_s}};
+	static const std::unordered_map<std::string, double> unitMap = {{"yr", yr_in_s}, {"kyr", kyr_in_s}, {"Myr", Myr_in_s}, {"Gyr", Gyr_in_s}};
 
 	const auto pos = s.rfind('_');
 	if (pos != std::string::npos) {
@@ -45,8 +44,7 @@ inline auto parseTimeString(const std::string &s, const std::string &name) -> am
 		const std::string unit = s.substr(pos + 1);
 		const auto it = unitMap.find(unit);
 		if (it == unitMap.end()) {
-			amrex::Abort("queryTime: unrecognised time unit '" + unit + "' for parameter '" + name +
-				     "'. Supported units: yr, kyr, Myr, Gyr.");
+			amrex::Abort("queryTime: unrecognised time unit '" + unit + "' for parameter '" + name + "'. Supported units: yr, kyr, Myr, Gyr.");
 		}
 		return static_cast<amrex::Real>(std::stod(numStr) * it->second);
 	}
