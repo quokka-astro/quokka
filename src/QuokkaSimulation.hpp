@@ -244,6 +244,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	void initialize()
 	{
+		AMRSimulation<problem_t>::initialize();
+
 		static_assert(!(Physics_Traits<problem_t>::is_mhd_enabled && Physics_Traits<problem_t>::is_radiation_enabled),
 			      "MHD + Radiation is not supported yet.");
 #if (AMREX_SPACEDIM != 3)
@@ -2097,7 +2099,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	}
 
 	const amrex::Real stage1Weight = (integratorOrder_ == 2) ? 0.5 : 1.0;
-	const int nghost_Riemann = (Physics_Traits<problem_t>::is_mhd_enabled && emfComputingScheme_ == EMFComputeScheme::Quokka2026) ? 3 : 2;
+	const int nghost_Riemann =
+	    MinimumHydroRiemannGhost(Physics_Traits<problem_t>::is_mhd_enabled, emfComputingScheme_, emfAveragingScheme_, do_tracers != 0);
 
 	auto ba_cc = grids[lev];
 	auto dm = dmap[lev];
@@ -2622,11 +2625,12 @@ auto QuokkaSimulation<problem_t>::computeHydroFluxes(amrex::MultiFab const &cons
 	const auto ba = grids[lev];
 	const auto dm = dmap[lev];
 
-	// default is 2. we need +1 ghost to get fc-vels in the ghost-zones (for piecewise-constant reconstruction)
-	// for MHD we need to accommodate the higher order reconstruction we need to do in computeEMF
+	// Reconstruct one extra face layer beyond the requested ghosted Riemann outputs
+	// so the outermost ghost face has left/right interface states.
 	const int reconstructGhost = nghost_Riemann + 1;
 
-	// // we need two additional ghost cells in order to compute two ghost face velocities
+	// Shock flattening coefficients are computed one cell farther out than the
+	// reconstructed interfaces and use a +/-2 pressure stencil.
 	const int flatteningGhost = reconstructGhost + 1;
 
 	// allocate temporary MultiFabs
@@ -2831,8 +2835,8 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 	const auto ba = grids[lev];
 	const auto dm = dmap[lev];
 
-	// same as above: default is 2. we need +1 ghost to get fc-vels in the ghost-zones (for piecewise-constant reconstruction)
-	// for MHD we need to accommodate the higher order reconstruction we need to do in computeEMF
+	// Reconstruct one extra face layer beyond the requested ghosted Riemann outputs
+	// so the outermost ghost face has left/right interface states.
 	const int reconstructRange = nghost_Riemann + 1;
 
 	// allocate temporary MultiFabs
