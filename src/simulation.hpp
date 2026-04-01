@@ -244,14 +244,13 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	mutable YAML::Node simulationMetadata_;
 
 	// constructor
-	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : BCs_cc_(BCs_cc), BCs_fc_(BCs_fc) { initialize(); }
+	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : BCs_cc_(BCs_cc), BCs_fc_(BCs_fc) {}
 
-	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : BCs_cc_(BCs_cc), BCs_fc_(builtin_BCs_fc(BCs_cc)) { initialize(); }
+	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : BCs_cc_(BCs_cc), BCs_fc_(builtin_BCs_fc(BCs_cc)) {}
 
 	explicit AMRSimulation()
 	{
 		readBCs();
-		initialize();
 	}
 
 	auto builtin_BCs_fc(amrex::Vector<amrex::BCRec> & /*BCs_cc*/) -> amrex::Vector<amrex::BCRec>
@@ -288,6 +287,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	auto computeTimestepAtLevel(int lev) -> amrex::ValLocPair<amrex::Real, amrex::IntVect>;
 
 	void AverageFCToCC(amrex::MultiFab &mf_cc, const amrex::MultiFab &mf_fc, int idim, int dstcomp_start, int srccomp_start, int srccomp_total) const;
+	virtual void setCustomGhostCells() {}
 
 	virtual void computeMaxSignalLocal(int level) = 0;
 	virtual void printCellProperties(int lev, amrex::IntVect const &index) = 0;
@@ -873,6 +873,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	const int nghost_Riemann = MinimumHydroRiemannGhost(Physics_Traits<problem_t>::is_mhd_enabled, emf_compute_scheme, emf_avg_scheme, do_tracers != 0);
 	nghost_cc_ = nghost_Riemann + 4;
 	nghost_fc_ = nghost_cc_;
+	setCustomGhostCells();
 
 	// Default == true
 	pp.query("show_performance_hints", showPerformanceHints_);
