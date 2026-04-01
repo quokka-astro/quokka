@@ -94,6 +94,7 @@ namespace filesystem = experimental::filesystem;
 // internal headers
 #include "fundamental_constants.H"
 #include "grid.hpp"
+#include "hydro/mhd_system.hpp"
 #include "io/DiagBase.H"
 #include "io/DiagFramePlane.H"
 #include "io/DiagPDF.H"
@@ -547,10 +548,14 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// This is for fillpatch during timestepping, but not for regridding.
 	amrex::Vector<std::unique_ptr<amrex::FillPatcher<amrex::MultiFab>>> fillpatcher_;
 
-	// Nghost = number of ghost cells for each array
-	// For our new scheme MHD-scheme, we need 7 ghosts for MHD (4 base + 3 for EMF) or 6 otherwise
-	int nghost_cc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 7 : 6;
-	int nghost_fc_ = nghost_cc_;
+	// Persistent cell-/face-centered state ghost cells.
+	// `readParameters()` updates these before any AMR nesting checks:
+	// - 6 ghosts cover the standard MHD hydro path:
+	//   3 reconstructed ghost interfaces + 1 extra flattening-coefficient layer
+	//   + the +/-2 pressure stencil used to build those coefficients.
+	// - Quokka2026 needs one extra layer because it requests ghosted face-centered Riemann data.
+	int nghost_cc_ = 6;
+	int nghost_fc_ = 6;
 
 	amrex::Vector<std::string> componentNames_cc_;
 	amrex::Vector<std::string> componentNames_fc_flat_;
@@ -852,6 +857,21 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// ParmParse reads inputs from the *.inputs file
 	const amrex::ParmParse pp;
+
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		EMFComputeScheme emf_compute_scheme = EMFComputeScheme::FelkerStone2017;
+		amrex::ParmParse const mhd_pp("mhd");
+		mhd_pp.query("emf_compute_scheme", emf_compute_scheme);
+
+		// The face-centered state must track the cell-centered ghost count because
+		// converting B_face -> B_cell at the outermost cell ghost uses the adjacent
+		// high-side face.
+		nghost_cc_ = (emf_compute_scheme == EMFComputeScheme::Quokka2026) ? 7 : 6;
+		nghost_fc_ = nghost_cc_;
+	} else {
+		nghost_cc_ = 6;
+		nghost_fc_ = 6;
+	}
 
 	// Default == true
 	pp.query("show_performance_hints", showPerformanceHints_);
