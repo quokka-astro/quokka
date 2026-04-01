@@ -870,8 +870,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 		mhd_pp.query("emf_compute_scheme", emf_compute_scheme);
 		mhd_pp.query("emf_averaging_scheme", emf_avg_scheme);
 	}
-	const int nghost_Riemann =
-	    MinimumHydroRiemannGhost(Physics_Traits<problem_t>::is_mhd_enabled, emf_compute_scheme, emf_avg_scheme, do_tracers != 0);
+	const int nghost_Riemann = MinimumHydroRiemannGhost(Physics_Traits<problem_t>::is_mhd_enabled, emf_compute_scheme, emf_avg_scheme, do_tracers != 0);
 	nghost_cc_ = nghost_Riemann + 4;
 	nghost_fc_ = nghost_cc_;
 
