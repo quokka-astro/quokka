@@ -132,7 +132,7 @@ namespace
 {
 auto checkGasDensityProjection(const QuokkaSimulation<ParticleProblem> &sim) -> int
 {
-	amrex::Vector<const amrex::MultiFab *> state_mfs = amrex::GetVecOfConstPtrs(sim.state_new_cc_);
+	const amrex::Vector<const amrex::MultiFab *> state_mfs = amrex::GetVecOfConstPtrs(sim.state_new_cc_);
 
 	constexpr std::array dirs = {amrex::Direction::x, amrex::Direction::y, amrex::Direction::z};
 	const amrex::Box &domain = sim.Geom(0).Domain();
