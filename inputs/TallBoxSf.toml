@@ -40,8 +40,9 @@ particles.disable_SN_feedback = false
 particles.split_particles_on_restart_refine = false
 
 # metal scalar
-particles.scalar_yield_per_SN = 1.0e3
-problem.initial_scalar_per_cell = 1.0e-5
+particles.scalar_yield_per_SN = 1.99e33  # 1 Msun, given a density of 6e-29 when spreaded in a sphere of radius 64 pc
+problem.initial_scalar_density = 1.67e-35  # 1e-11 mH/cm^3
+
 
 density_floor = 1.67e-28  #in g cm^-3
 temperature_floor = 10.0  #K
@@ -59,9 +60,6 @@ use_sfh_based_pe_heating = true
 sfh_to_pe_heating_table = "../extern/cooling/photoelectric_heating_from_sfh.csv"
 sfh_time_interval = 3.155760000e+12  # 1e5 yr
 sf_area_kpc2 = 1.0  # kpc^2
-
-perturb.filename = "zdrv.hdf5"
-perturb.amplitude = 7e5  # 7 km/s
 
 statistics_interval = 512
 
