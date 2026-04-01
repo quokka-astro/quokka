@@ -26,7 +26,7 @@ do_tracers = 0  # turn on tracer particles
 
 particles.verbose = 1
 
-initial_dt = 3.15576e12
+initial_dt = "0.1_Myr"
 
 tiny_profiler.enabled = 0
 
@@ -36,7 +36,7 @@ quokka.diagnostics = ["plt", "slice_z", "slice_x", "part"]
 
 quokka.plt.type = "PlotFile"  # pltfile for the whole box
 quokka.plt.file = "plt"  # Output file prefix (default "plt", must end in "plt")
-quokka.plt.time_int = 3.155760000e+13 # Output cadence (in time intervals). 1 Myr, expected outputs are: 8 12 17
+quokka.plt.time_int = "1.0_Myr" # Output cadence. 1 Myr, expected outputs are: 8 12 17
 #quokka.plt.particles = Sink_particles # Default to all particle types
 quokka.plt.field_names = ["gasDensity", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "temperature"]
 #quokka.plt.include_fc_fields = true # default is true
@@ -53,12 +53,12 @@ quokka.slice_x.type = "DiagFramePlane"  # Diagnostic type
 quokka.slice_x.file = "slicex_plt"  # Output file prefix (must end in "plt")
 quokka.slice_x.normal = 0  # Plane normal (0 == x, 1 == y, 2 == z)
 quokka.slice_x.center = 1e10  # Coordinate in the normal direction (cannot lie *exactly* on domain boundary)
-quokka.slice_x.time_int = 3.155760000e+13 # Output cadence (in time intervals). 1 Myr, expected outputs are: 8 12 17
+quokka.slice_x.time_int = "1.0_Myr" # Output cadence. 1 Myr, expected outputs are: 8 12 17
 quokka.slice_x.particles = "Sink_particles"
 quokka.slice_x.field_names = ["gasDensity", "gasInternalEnergy"]  # List of variables included in output
 
 quokka.part.type = "ParticleTxt"  # Diagnostic type
 quokka.part.file = "part_plt"  # Output file prefix (must end in "plt")
 #quokka.part.int = 18
-quokka.part.time_int = 3.155760000e+13 # Output cadence (in time intervals). 1 Myr, expected outputs are: 8 12 17
+quokka.part.time_int = "1.0_Myr" # Output cadence. 1 Myr, expected outputs are: 8 12 17
 quokka.part.particles = "Sink_particles"
