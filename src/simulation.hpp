@@ -248,10 +248,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : BCs_cc_(BCs_cc), BCs_fc_(builtin_BCs_fc(BCs_cc)) {}
 
-	explicit AMRSimulation()
-	{
-		readBCs();
-	}
+	explicit AMRSimulation() { readBCs(); }
 
 	auto builtin_BCs_fc(amrex::Vector<amrex::BCRec> & /*BCs_cc*/) -> amrex::Vector<amrex::BCRec>
 	{
