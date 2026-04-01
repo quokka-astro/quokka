@@ -142,6 +142,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::sfh_interval_;
 	using AMRSimulation<problem_t>::sfh_time_interval_;
 
+	using AMRSimulation<problem_t>::enableElectronConduction_;
+	using AMRSimulation<problem_t>::electronConductionKappa0_;
+
 #if AMREX_SPACEDIM == 3
 	using AMRSimulation<problem_t>::luminosityTables_;
 #endif // AMREX_SPACEDIM == 3
@@ -168,8 +171,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	std::string coolingTableType_;
 	std::string coolingTableFilename_;
 
-	int enableElectronConduction_ = 0;
-	amrex::Real electronConductionKappa0_ = 0.0;
 	amrex::Real electronConductionFluxLimiterPhi_ = 1.0;
 	amrex::Real electronConductionSaturationFactor_ = 5.0;
 	amrex::Real electronConductionTempFloor_ = 0.0;
@@ -614,9 +615,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		amrex::ParmParse const hpp("conduction");
 		hpp.query("enabled", enableElectronConduction_);
 		hpp.query("conductivity_prefactor", electronConductionKappa0_);
-		hpp.query("flux_limiter_phi", electronConductionFluxLimiterPhi_);
-		hpp.query("saturation_factor", electronConductionSaturationFactor_);
-		hpp.query("temperature_floor", electronConductionTempFloor_);
+		// hpp.query("flux_limiter_phi", electronConductionFluxLimiterPhi_);
+		// hpp.query("saturation_factor", electronConductionSaturationFactor_);
+		// hpp.query("temperature_floor", electronConductionTempFloor_);
 	}
 
 	// set turbulence runtime parameters
@@ -1023,7 +1024,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 
 	if (enableElectronConduction_ == 1) {
 		fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
-		const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_,
+		const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_ * C::k_B,
 								 .flux_limiter_phi = electronConductionFluxLimiterPhi_,
 								 .saturation_factor = electronConductionSaturationFactor_,
 								 .min_temperature = electronConductionTempFloor_};
