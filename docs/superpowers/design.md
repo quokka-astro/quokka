@@ -159,7 +159,7 @@ All files in `src/radiation/`. Files that are unchanged are not listed.
 
 ### CouplingState
 
-Input state for one cell, assembled by the orchestration layer from the conserved variable array.
+Input state for one cell, assembled by the orchestration layer from the conserved variable array. Immutable after construction.
 
 ```cpp
 struct CouplingState {
@@ -173,6 +173,52 @@ struct CouplingState {
     amrex::GpuArray<double, nmscalars_> massScalars;
     double dt;
     double Etot0;                                     // conserved total for convergence scaling
+};
+```
+
+### RadMatterContext
+
+Immutable per-cell context for the entire radiation-matter coupling solve. Assembled once in the orchestration layer before the outer loop. Never modified during or between iterations.
+
+```cpp
+struct RadMatterContext {
+    CouplingState state;              // cell initial conditions (post-Step-A)
+    DustModel dust_model;             // gas_only / coupled / decoupled
+    double coeff_n;                   // dust coupling coefficient (= Nd in physics.md)
+    double lambda_gd_times_dt;        // precomputed gas-dust exchange for decoupled model
+    double T_d0;                      // initial dust temperature
+};
+```
+
+`extra_src` (= `Src + work`) is **not** part of `RadMatterContext` because `work` changes each outer iteration while the context is fixed. It is passed separately to `SolveRadiationMatterCoupling`.
+
+### NewtonIterateState
+
+Mutable state of the Newton iteration, updated every iteration. Passed to Jacobian and residual functions.
+
+```cpp
+struct NewtonIterateState {
+    double Egas;                                      // current gas internal energy guess
+    double T_gas;                                     // current gas temperature
+    double T_d;                                       // current dust temperature
+    quokka::valarray<double, nGroups_> Rvec;         // current R[n]
+    quokka::valarray<double, nGroups_> Erad;         // current Erad[n] (recovered from R[n])
+    quokka::valarray<double, nGroups_> tau;          // current optical depth: dt * rho * kappaP * chat
+    OpacityTerms<problem_t> opacity_terms;            // current opacities
+    double Cv;                                        // dEgas/dT at current state
+};
+```
+
+### SolverParams
+
+Solver control parameters. Not per-cell; set once from input file / compile-time constants.
+
+```cpp
+struct SolverParams {
+    double resid_tol;                 // relative residual tolerance
+    double rel_change_tol;            // relative change tolerance (0 to disable)
+    int max_newton_iter;              // max inner Newton iterations (default 100)
+    int max_outer_iter;               // max outer work-lag iterations (default 5)
 };
 ```
 
@@ -297,65 +343,82 @@ AMREX_GPU_DEVICE auto ComputeDustTemperature(
 
 The Newton loop. This is the core of the reimplementation.
 
+```cpp
+/// Solve the thermal radiation-matter coupling for one cell.
+/// ctx is immutable; extra_src changes each outer iteration.
+template <typename problem_t, bool debug_mode = false>
+AMREX_GPU_DEVICE auto SolveRadiationMatterCoupling(
+    RadMatterContext<problem_t> const& ctx,
+    quokka::valarray<double, nGroups_> const& extra_src,
+    SolverParams const& params
+) -> ThermalResult<problem_t, debug_mode>;
 ```
-SolveRadiationMatterCoupling(state, extra_src, dust_model, coeff_n, ...) -> ThermalResult:
 
-  Initialize:
-    Egas_guess = state.Egas0
-    Erad_guess = state.Erad0
-    R[n] = initial guess from first-iteration formula
+Pseudocode:
 
-  Newton loop (n = 0, 1, ..., maxIter):
-    T_gas = EOS::ComputeTgasFromEint(rho, Egas_guess)
-    T_d = ComputeDustTemperature(dust_model, T_gas, Rvec, coeff_n, n)
-    fourPiBoverC = ComputeThermalRadiation(T_d)
-    opacity_terms = EvaluateOpacities(T_d, rho, Erad_guess, n, ...)
+```
+SolveRadiationMatterCoupling(ctx, extra_src, params) -> ThermalResult:
+
+  Initialize NewtonIterateState iterate:
+    iterate.Egas = ctx.state.Egas0
+    iterate.Erad = ctx.state.Erad0
+    iterate.Rvec = initial guess from first-iteration formula
+
+  Newton loop (n = 0, 1, ..., params.max_newton_iter):
+    iterate.T_gas = EOS::ComputeTgasFromEint(ctx.state.rho, iterate.Egas)
+    iterate.T_d = ComputeDustTemperature(ctx.dust_model, iterate.T_gas, iterate.Rvec, ctx.coeff_n, n)
+    fourPiBoverC = ComputeThermalRadiation(iterate.T_d)
+    iterate.opacity_terms = EvaluateOpacities(iterate.T_d, ctx.state.rho, iterate.Erad, n, ...)
 
     if n == 0:
-      EvaluateFluxOpacities(T_d, rho, ..., opacity_terms)
-      tau0 = dt * rho * kappaP * chat
-      R[n] = (fourPiBoverC - Erad / kappaPoverE) * tau0 + work
+      EvaluateFluxOpacities(iterate.T_d, ctx.state.rho, ..., iterate.opacity_terms)
+      iterate.tau = ctx.state.dt * ctx.state.rho * kappaP * chat
+      iterate.Rvec = (fourPiBoverC - iterate.Erad / kappaPoverE) * iterate.tau + extra_src - ctx.state.Src
+      // Note: extra_src = Src + work, so this gives R = thermal_part + work
     else:
-      tau = dt * rho * kappaP * chat
-      Erad_guess[g] = kappaPoverE[g] * (fourPiBoverC[g] - (R[g] - work[g]) / tau[g])
-      enforce Erad floor (transfer excess to Egas)
+      iterate.tau = ctx.state.dt * ctx.state.rho * kappaP * chat
+      iterate.Erad[g] = kappaPoverE[g] * (fourPiBoverC[g] - (iterate.Rvec[g] - work[g]) / iterate.tau[g])
+      enforce Erad floor (transfer excess to iterate.Egas)
 
-    Compute residual F[0], F[n]
-    Check convergence: |F[0]| < tol * Etot0  AND  (c/chat) * sum|F[n]| < tol * Etot0
+    iterate.Cv = EOS::ComputeEintTempDerivative(ctx.state.rho, iterate.T_gas)
+
+    Compute residual F[0], F[n] using (iterate, ctx, extra_src)
+    Check convergence: |F[0]| < params.resid_tol * ctx.state.Etot0
+                   AND (c/chat) * sum|F[n]| < params.resid_tol * ctx.state.Etot0
     if converged: break
 
-    Compute Jacobian (dispatched by dust_model):
-      if gas_only:      ComputeJacobianGasOnly(...)
-      if coupled:        ComputeJacobianDustCoupled(...)
-      if decoupled:      ComputeJacobianDustDecoupled(...)
+    Compute Jacobian (dispatched by ctx.dust_model):
+      if gas_only:   ComputeJacobianGasOnly(iterate, ctx)
+      if coupled:    ComputeJacobianDustCoupled(iterate, ctx)
+      if decoupled:  ComputeJacobianDustDecoupled(iterate, ctx)
 
-    Solve arrowhead linear system -> (delta_x, delta_R[n])
+    SolveArrowheadSystem(jacobian) -> (delta_x, delta_R[n])
 
     Line-search damping:
       alpha = 1.0
       while alpha > alpha_min:
-        Egas_trial = Egas_guess + alpha * delta_x
-        R_trial = Rvec + alpha * delta_R
-        T_trial = EOS::ComputeTgasFromEint(rho, Egas_trial)
+        Egas_trial = iterate.Egas + alpha * delta_x
+        R_trial = iterate.Rvec + alpha * delta_R
+        T_trial = EOS::ComputeTgasFromEint(ctx.state.rho, Egas_trial)
         if T_trial > 0 and T_trial < some_bound:
           break
         alpha *= 0.5
-      Egas_guess = Egas_trial
-      Rvec = R_trial
+      iterate.Egas = Egas_trial
+      iterate.Rvec = R_trial
 
-    Enforce Egas floor: Egas_guess >= Cv * tempFloor_
+    Enforce Egas floor: iterate.Egas >= iterate.Cv * tempFloor_
 
     Record diagnostic snapshot if debug_mode
 
   Post-convergence:
     EvaluateFluxOpacities (temperature may have changed)
     Recover final Erad[n] from R[n]
-    Return ThermalResult
+    Return ThermalResult from iterate
 ```
 
 #### Jacobian functions
 
-Three static functions, all producing `JacobianResult`. The Newton loop selects which to call based on `dust_model`.
+Three static functions, all producing `JacobianResult`. The Newton loop selects which to call based on `ctx.dust_model`. Each takes `(iterate, ctx)` — the current Newton state and the immutable cell context.
 
 **Gas-only** (`Td = T`, `dTd/dT = 1`, `dTd/dR = 0`):
 
@@ -410,12 +473,12 @@ where `overshoot_factor` is a moderate constant (e.g., 2-4). If `alpha` falls be
 
 ```cpp
 /// Update radiation flux and gas momentum for all groups.
-/// Uses converged thermal state and opacities from ThermalResult.
+/// Uses the immutable cell context and converged thermal state.
 /// For beta_order_ == 0: simple exponential damping.
 /// For beta_order_ == 1: includes Planck and pressure terms.
 template <typename problem_t>
 AMREX_GPU_DEVICE auto UpdateFluxAndMomentum(
-    CouplingState const& state,
+    RadMatterContext<problem_t> const& ctx,
     ThermalResult<problem_t> const& thermal,
     double gas_update_factor
 ) -> FluxResult;
@@ -424,9 +487,9 @@ AMREX_GPU_DEVICE auto UpdateFluxAndMomentum(
 /// work[g] = (v . F[g]) * kappaF[g] * chat / c^2 * dt
 template <typename problem_t>
 AMREX_GPU_DEVICE auto ComputeWorkTerm(
+    RadMatterContext<problem_t> const& ctx,
     FluxResult const& flux,
-    OpacityTerms<problem_t> const& opacity_terms,
-    double dt
+    OpacityTerms<problem_t> const& opacity_terms
 ) -> quokka::valarray<double, nGroups_>;
 ```
 
@@ -468,48 +531,49 @@ AddSourceTerms(consVar, radEnergySource, indexRange, dt, ...):
 
     // Isothermal early return
     if constexpr (gamma_ == 1.0) {
-      auto flux = UpdateFluxAndMomentumIsothermal(state);
+      auto ctx = RadMatterContext{ state, DustModel::gas_only, 0.0, 0.0, 0.0 };
+      auto flux = UpdateFluxAndMomentumIsothermal(ctx);
       Writeback(consNew, flux, i, j, k);
       return;
     }
 
-    // Dust closure setup
-    DustModel dust_model;
-    double coeff_n;
+    // Assemble immutable per-cell context
+    RadMatterContext ctx;
+    ctx.state = state;
     if constexpr (enable_dust_gas_thermal_coupling_model_) {
-      coeff_n = ComputeDustCouplingCoefficient(state);
-      T_d0 = ComputeInitialDustTemperature(state, coeff_n);
-      dust_model = SelectDustModel(T_gas0, T_d0, state.Egas0, coeff_n);
+      ctx.coeff_n = ComputeDustCouplingCoefficient(state);
+      ctx.T_d0 = ComputeInitialDustTemperature(state, ctx.coeff_n);
+      ctx.dust_model = SelectDustModel(T_gas0, ctx.T_d0, state.Egas0, ctx.coeff_n);
+      if (ctx.dust_model == DustModel::decoupled) {
+        ctx.lambda_gd_times_dt = ctx.coeff_n * sqrt(T_gas0) * (T_gas0 - ctx.T_d0);
+      }
     } else {
-      dust_model = DustModel::gas_only;
-      coeff_n = 0.0;
+      ctx.dust_model = DustModel::gas_only;
+      ctx.coeff_n = 0.0;
     }
-
-    // Assemble extra_src[n] = Src[n] (work added inside outer loop)
-    auto extra_src = state.Src;
 
     // Outer work-lag iteration
     quokka::valarray<double, nGroups_> work{};
     quokka::valarray<double, nGroups_> work_prev{};
 
-    for (int outer = 0; outer < max_outer_iter; ++outer) {
+    for (int outer = 0; outer < params.max_outer_iter; ++outer) {
 
-      // Inner Newton solve
-      extra_src = state.Src + work;
-      auto thermal = SolveRadiationMatterCoupling(state, extra_src, dust_model, coeff_n, ...);
+      // Inner Newton solve (ctx is immutable; extra_src changes each outer iteration)
+      auto extra_src = ctx.state.Src + work;
+      auto thermal = SolveRadiationMatterCoupling(ctx, extra_src, params);
 
       // Flux/momentum update
-      auto flux = UpdateFluxAndMomentum(state, thermal, gas_update_factor);
+      auto flux = UpdateFluxAndMomentum(ctx, thermal, gas_update_factor);
 
       // Work-term convergence
       if constexpr (beta_order_ == 0 || !include_work_term_in_source) {
-        Writeback(consNew, thermal, flux, state, gas_update_factor, i, j, k);
+        Writeback(consNew, ctx, thermal, flux, gas_update_factor, i, j, k);
         break;
       }
       work_prev = work;
-      work = ComputeWorkTerm(flux, thermal.opacity_terms, state.dt);
-      if (WorkConverged(work, work_prev, flux, state.Etot0)) {
-        Writeback(consNew, thermal, flux, state, gas_update_factor, i, j, k);
+      work = ComputeWorkTerm(ctx, flux, thermal.opacity_terms);
+      if (WorkConverged(work, work_prev, flux, ctx.state.Etot0)) {
+        Writeback(consNew, ctx, thermal, flux, gas_update_factor, i, j, k);
         break;
       }
     }
