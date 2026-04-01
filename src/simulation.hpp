@@ -549,11 +549,15 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<std::unique_ptr<amrex::FillPatcher<amrex::MultiFab>>> fillpatcher_;
 
 	// Persistent cell-/face-centered state ghost cells.
-	// `readParameters()` updates these before any AMR nesting checks:
-	// - 6 ghosts cover the standard MHD hydro path:
-	//   3 reconstructed ghost interfaces + 1 extra flattening-coefficient layer
-	//   + the +/-2 pressure stencil used to build those coefficients.
-	// - Quokka2026 needs one extra layer because it requests ghosted face-centered Riemann data.
+	// `readParameters()` updates these before any AMR nesting checks.
+	// The hydro path needs `nghost_cc_ = nghost_Riemann + 4`:
+	// - 1 extra reconstructed interface layer beyond the ghosted Riemann outputs
+	// - 1 extra flattening-coefficient layer
+	// - the +/-2 pressure stencil used to build those coefficients
+	// The face-centered ghost count tracks the cell-centered ghost count. This
+	// is required for MHD because converting B_face -> B_cell at the outermost
+	// cell ghost uses the adjacent high-side face, and it also keeps generic
+	// plot/diagnostic code paths from truncating the available cell ghosts.
 	int nghost_cc_ = 6;
 	int nghost_fc_ = 6;
 
@@ -857,21 +861,19 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// ParmParse reads inputs from the *.inputs file
 	const amrex::ParmParse pp;
+	pp.query("do_tracers", do_tracers);
 
+	EMFComputeScheme emf_compute_scheme = EMFComputeScheme::FelkerStone2017;
+	EMFAvgScheme emf_avg_scheme = EMFAvgScheme::LondrilloDelZanna2004;
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		EMFComputeScheme emf_compute_scheme = EMFComputeScheme::FelkerStone2017;
 		amrex::ParmParse const mhd_pp("mhd");
 		mhd_pp.query("emf_compute_scheme", emf_compute_scheme);
-
-		// The face-centered state must track the cell-centered ghost count because
-		// converting B_face -> B_cell at the outermost cell ghost uses the adjacent
-		// high-side face.
-		nghost_cc_ = (emf_compute_scheme == EMFComputeScheme::Quokka2026) ? 7 : 6;
-		nghost_fc_ = nghost_cc_;
-	} else {
-		nghost_cc_ = 6;
-		nghost_fc_ = 6;
+		mhd_pp.query("emf_averaging_scheme", emf_avg_scheme);
 	}
+	const int nghost_Riemann =
+	    MinimumHydroRiemannGhost(Physics_Traits<problem_t>::is_mhd_enabled, emf_compute_scheme, emf_avg_scheme, do_tracers != 0);
+	nghost_cc_ = nghost_Riemann + 4;
+	nghost_fc_ = nghost_cc_;
 
 	// Default == true
 	pp.query("show_performance_hints", showPerformanceHints_);
@@ -958,9 +960,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default Poisson solver tolerances
 	pp.query("poisson_reltol", reltolPoisson_);
 	pp.query("poisson_abstol", abstolPoisson_);
-
-	// Default do_tracers = 0 (turns on/off tracer particles)
-	pp.query("do_tracers", do_tracers);
 
 	// Default suppress_output = 0
 	pp.query("suppress_output", suppress_output);
