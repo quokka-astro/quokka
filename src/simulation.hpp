@@ -851,6 +851,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 {
 	BL_PROFILE("AMRSimulation::readParameters()"); // NOLINT(misc-const-correctness)
 
+	// Register physical time unit constants (yr, kyr, Myr, Gyr) so that time-valued
+	// parameters can use expressions like "1.0*Myr" or "2.5*Gyr + 500*Myr".
+	quokka::registerTimeUnitConstants();
+
 	// ParmParse reads inputs from the *.inputs file
 	const amrex::ParmParse pp;
 
@@ -867,9 +871,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	pp.query("particle_cfl", particleCflNumber_);
 
 	// Optional fixed timestep controls
-	quokka::queryTime(pp, "constant_dt", constantDt_);
-	quokka::queryTime(pp, "initial_dt", initDt_);
-	quokka::queryTime(pp, "max_dt", maxDt_);
+	pp.queryWithParser("constant_dt", constantDt_);
+	pp.queryWithParser("initial_dt", initDt_);
+	pp.queryWithParser("max_dt", maxDt_);
 
 	const int dt_override_count =
 	    static_cast<int>(pp.contains("init_shrink")) + static_cast<int>(pp.contains("initial_dt")) + static_cast<int>(pp.contains("constant_dt"));
@@ -883,10 +887,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	pp.query("amr_interpolation_method", amrInterpMethod_);
 
 	// Default stopping time
-	quokka::queryTime(pp, "stop_time", stopTime_);
+	pp.queryWithParser("stop_time", stopTime_);
 
 	// Default timestep cutoff (safety feature)
-	quokka::queryTime(pp, "dt_cutoff", dtCutoff_);
+	pp.queryWithParser("dt_cutoff", dtCutoff_);
 
 	// Default initial timestep shrink factor
 	pp.query("init_shrink", initShrink_);
@@ -910,13 +914,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	pp.query("statistics_interval", statisticsInterval_);
 
 	// Default Time interval
-	quokka::queryTime(pp, "plottime_interval", plotTimeInterval_);
+	pp.queryWithParser("plottime_interval", plotTimeInterval_);
 
 	// Skip initial plotfile
 	pp.query("skip_initial_plotfile", skipInitialPlotfile_);
 
 	// Default Time interval
-	quokka::queryTime(pp, "checkpointtime_interval", checkpointTimeInterval_);
+	pp.queryWithParser("checkpointtime_interval", checkpointTimeInterval_);
 
 	// Default checkpoint interval
 	pp.query("checkpoint_interval", checkpointInterval_);
@@ -1007,7 +1011,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// SFH parameters
 	pp.query("sfh_interval", sfh_interval_);
-	quokka::queryTime(pp, "sfh_time_interval", sfh_time_interval_);
+	pp.queryWithParser("sfh_time_interval", sfh_time_interval_);
 
 	// IO settings (following the AMReX convention for the Amr class)
 	// (Since we use AmrCore instead of Amr, we have to reimplement these.)
