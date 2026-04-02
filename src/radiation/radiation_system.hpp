@@ -298,6 +298,17 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_DEVICE static auto UpdateFlux(int i, int j, int k, arrayconst_t const &consPrev, NewtonIterationResult<problem_t> &energy, double dt,
 						double gas_update_factor, double Ekin0) -> FluxUpdateResult<problem_t>;
 
+	AMREX_GPU_DEVICE static auto UpdateFluxAndMomentum(int i, int j, int k, arrayconst_t const &consPrev, NewtonIterationResult<problem_t> &energy,
+							   double dt, double gas_update_factor, double Ekin0) -> FluxUpdateResult<problem_t>;
+
+	AMREX_GPU_DEVICE static auto ComputeWorkTerm(amrex::GpuArray<amrex::Real, 3> const &gasMomentum,
+						     amrex::GpuArray<amrex::GpuArray<amrex::Real, nGroups_>, 3> const &Frad,
+						     OpacityTerms<problem_t> const &opacity_terms, double dt) -> quokka::valarray<double, nGroups_>;
+
+	AMREX_GPU_DEVICE static auto WorkConverged(quokka::valarray<double, nGroups_> const &work,
+						   quokka::valarray<double, nGroups_> const &work_prev, double rho,
+						   amrex::GpuArray<double, 3> const &gasMomentum, double Egas_guess) -> bool;
+
 	static void AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_implicit,
 					     double gas_update_factor, double dustGasCoeff, double tol_h, double tol_rel_h, double tempFloor,
 					     int *p_iteration_counter, int *p_iteration_failure_counter);
@@ -1608,6 +1619,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 #include "radiation/opacity_evaluation.hpp"        // IWYU pragma: export
 #include "radiation/dust_closure.hpp"               // IWYU pragma: export
 #include "radiation/thermal_solve.hpp"              // IWYU pragma: export
+#include "radiation/flux_update.hpp"                // IWYU pragma: export
 #include "radiation/source_terms_multi_group.hpp"  // IWYU pragma: export
 #include "radiation/source_terms_single_group.hpp" // IWYU pragma: export
 
