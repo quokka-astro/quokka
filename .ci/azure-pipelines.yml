@@ -46,7 +46,7 @@ pr:
 jobs:
   - job: CUDA_Build_Test
     pool: avatar
-    timeoutInMinutes: 330
+    timeoutInMinutes: 360
     steps:
     - script: |
         mkdir -p "$(Agent.HomeDirectory)/cache/ccache"
