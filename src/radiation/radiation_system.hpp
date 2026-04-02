@@ -27,6 +27,7 @@
 #include "hyperbolic_system.hpp"
 #include "math/math_impl.hpp"
 #include "physics_info.hpp"
+#include "radiation/coupling_types.hpp"
 #include "radiation/planck_integral.hpp"
 #include "util/valarray.hpp"
 
@@ -213,6 +214,16 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static constexpr bool enable_photoelectric_heating_ = ISM_Traits<problem_t>::enable_photoelectric_heating;
 
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
+	static constexpr int nChemicalGroups_ = Chemistry_Traits<problem_t>::nChemicalGroups;
+	static constexpr int nThermalGroups_ = nGroups_ - nChemicalGroups_;
+	static constexpr int PE_group_index_ = detail::FindChemicalBand<problem_t>(ChemicalBandRole::PE, nThermalGroups_);
+	static constexpr bool has_PE_heating_ = (PE_group_index_ >= 0);
+
+	static_assert(nChemicalGroups_ >= 0 && nChemicalGroups_ <= nGroups_);
+	static_assert(nThermalGroups_ >= 1, "Must have at least one thermal group");
+	static_assert(detail::CountChemicalBand<problem_t>(ChemicalBandRole::PE) <= 1, "At most one PE band allowed");
+	static_assert(detail::AllUniqueRoles<problem_t>(), "Chemical band roles must be unique");
+
 	static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = []() constexpr {
 		if constexpr (nGroups_ > 1) {
 			return RadSystem_Traits<problem_t>::radBoundaries;
