@@ -175,7 +175,7 @@ Migration impact:
 
 ## Links
 
-- Cosmology design note: [`docs/markdown/cosmology_plan.md`](/Users/benwibking/amrex_codes/quokka/docs/markdown/cosmology_plan.md)
-- ADR guidance: [`docs/markdown/adrs.md`](/Users/benwibking/amrex_codes/quokka/docs/markdown/adrs.md)
-- Hydro integrator overview: [`docs/markdown/hydro_integrator.md`](/Users/benwibking/amrex_codes/quokka/docs/markdown/hydro_integrator.md)
-- Reference bibliography entry: `Boris_1970` in [`docs/markdown/references.bib`](/Users/benwibking/amrex_codes/quokka/docs/markdown/references.bib)
+- Cosmology design note: [`docs/markdown/cosmology_plan.md`](../cosmology_plan.md)
+- ADR guidance: [`docs/markdown/adrs.md`](../adrs.md)
+- Hydro integrator overview: [`docs/markdown/hydro_integrator.md`](../hydro_integrator.md)
+- Reference bibliography entry: `Boris_1970` in [`docs/markdown/references.bib`](../references.bib)
