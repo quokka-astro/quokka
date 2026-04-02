@@ -69,7 +69,8 @@ void write_2D_header(std::ostream &os, const amrex::FArrayBox &f, int nvar);
 
 inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::MultiFab *> &mfs, const int finest_level,
 					       amrex::Vector<amrex::Geometry> const &geom, amrex::Vector<amrex::IntVect> const &ref_ratio,
-					       const amrex::Direction dir, const int comp) -> amrex::Vector<amrex::MultiFab>
+					       amrex::Vector<amrex::IntVect> const &max_grid_size, const amrex::Direction dir,
+					       const int comp) -> amrex::Vector<amrex::MultiFab>
 {
 	// compute plane-parallel projection of a single MultiFab component along the given axis.
 	const BL_PROFILE("quokka::DiagProjection::computePlaneProjectionFromMultiFab()");
@@ -84,6 +85,7 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 	}
 
 	for (int lev = 0; lev <= finest_level; ++lev) {
+		AMREX_ALWAYS_ASSERT(static_cast<int>(max_grid_size.size()) > lev);
 		amrex::iMultiFab mask;
 		if (lev == finest_level) {
 			mask.define(mfs[lev]->boxArray(), mfs[lev]->DistributionMap(), 1, amrex::IntVect(0));
@@ -95,14 +97,17 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 		auto const &mf_arr = mfs[lev]->const_arrays();
 		auto const &mask_arr = mask.const_arrays();
 		auto const &dx = geom[lev].CellSizeArray();
+		amrex::IntVect plane_max_grid_size = max_grid_size[lev];
+		plane_max_grid_size[static_cast<int>(dir)] = 1;
 
-		auto plane_pair = amrex::ReduceToPlaneMF2Patchy<amrex::ReduceOpSum>(static_cast<int>(dir), geom[lev].Domain(), *mfs[lev],
-										    [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
-											    if (mask_arr[box_no](i, j, k) == 0) {
-												    return 0.0;
-											    }
-											    return dx[static_cast<int>(dir)] * mf_arr[box_no](i, j, k, comp);
-										    });
+		auto plane_pair = amrex::ReduceToPlaneMF2Patchy<amrex::ReduceOpSum>(
+		    static_cast<int>(dir), geom[lev].Domain(), *mfs[lev], plane_max_grid_size,
+		    [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
+			    if (mask_arr[box_no](i, j, k) == 0) {
+				    return 0.0;
+			    }
+			    return dx[static_cast<int>(dir)] * mf_arr[box_no](i, j, k, comp);
+		    });
 		auto &plane_global = plane_pair.second;
 		const auto &plane_ba = plane_global.boxArray();
 		amrex::BoxList bl2d(plane_ba.ixType());
