@@ -351,7 +351,7 @@ git commit -m "rad: add opacity_evaluation.hpp wrapping opacity interface"
 - Create: `src/radiation/dust_closure.hpp`
 - Modify: `src/radiation/radiation_system.hpp` (add `#include`, add declarations)
 
-Extract `ComputeDustTemperatureBateKeto` from `radiation_dust_system.hpp` and `source_terms_single_group.hpp`. Add `SelectDustModel` and `ComputeDustTemperature` with the three-way dispatch (gas-only, coupled, decoupled).
+Extract `ComputeDustTemperatureBateKeto` from `radiation_dust_system.hpp` and `source_terms_single_group.hpp`. Add `SelectDustModel` (compile-time gas-only vs runtime coupled/decoupled) and `ComputeDustTemperatureFromIterate` (dust path only — gas-only is handled by the caller setting Td = T_gas). The dust temperature computation sums radiation energy from ALL groups (thermal + chemical) because chemical-band photons absorbed by dust heat it.
 
 - [ ] **Step 1: Create `dust_closure.hpp`**
 
@@ -383,37 +383,38 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SelectDustModel(
 }
 
 /// Compute dust temperature from the current Newton iterate.
-/// - gas_only: Td = T_gas (constexpr path, no dust logic compiled)
-/// - coupled: Td = T_gas - sum(R) / (Nd * sqrt(T_gas))
+/// When enable_dust_gas_thermal_coupling_model_ is false, SelectDustModel returns gas_only
+/// and the caller sets Td = T_gas directly — this function is only called for the dust path.
+///
+/// - coupled: Td = T_gas - sum(R_all) / (Nd * sqrt(T_gas))
+///   where R_all sums over ALL groups (thermal + chemical), because chemical-band
+///   photons absorbed by dust heat the dust.
 /// - decoupled: at n==0, use T_d0; thereafter, Td is updated by the Newton step (delta_x)
 ///
-/// Enforces dustTempFloor_ (which defaults to tempFloor_).
+/// Enforces tempFloor_ as dust temperature floor.
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureFromIterate(
     DustModel model, double T_gas,
-    quokka::valarray<double, nGroups_> const &Rvec,
+    quokka::valarray<double, nGroups_> const &Rvec_all,
     double coeff_n, double T_d0, int newton_iter) -> double
 {
+    // Note: when enable_dust_gas_thermal_coupling_model_ is true, model is always
+    // coupled or decoupled (never gas_only), so no need to check for gas_only here.
     double T_d = NAN;
 
-    if constexpr (!enable_dust_gas_thermal_coupling_model_) {
-        T_d = T_gas;
-    } else {
-        if (model == DustModel::gas_only) {
-            T_d = T_gas;
-        } else if (model == DustModel::coupled) {
-            if (newton_iter == 0) {
-                T_d = T_d0;
-            } else {
-                T_d = T_gas - sum(Rvec) / (coeff_n * std::sqrt(T_gas));
-            }
-        } else { // decoupled
-            if (newton_iter == 0) {
-                T_d = T_d0;
-            }
-            // For decoupled model at newton_iter > 0, T_d is updated by the Newton
-            // step (delta_x is applied to T_d directly). This is handled in the caller.
+    if (model == DustModel::coupled) {
+        if (newton_iter == 0) {
+            T_d = T_d0;
+        } else {
+            // sum over ALL groups (thermal + chemical)
+            T_d = T_gas - sum(Rvec_all) / (coeff_n * std::sqrt(T_gas));
         }
+    } else { // decoupled
+        if (newton_iter == 0) {
+            T_d = T_d0;
+        }
+        // For decoupled model at newton_iter > 0, T_d is updated by the Newton
+        // step (delta_x is applied to T_d directly). This is handled in the caller.
     }
 
     // Enforce dust temperature floor
@@ -485,7 +486,9 @@ The key changes from old code:
 - Unified single-group/multi-group via `constexpr if (nGroups_ == 1)`
 - Three Jacobian functions take `(NewtonIterateState, RadMatterContext)` instead of 12+ individual parameters
 - Line-search damping replaces `enable_dE_constrain`
-- Newton loop operates only on `nThermalGroups_` (not `nGroups_`)
+- Newton loop updates only the `nThermalGroups_` radiation unknowns (not `nGroups_`)
+- **Dust temperature uses ALL bands:** The dust temperature computation (`ComputeDustTemperatureFromIterate`) and opacity evaluation use total radiation energy from all `nGroups_` bands (thermal + advanced chemical), because chemical-band photons absorbed by dust heat it. The thermal Jacobian and residual vectors are `nThermalGroups_`-sized, but the dust temperature closure sums over all groups.
+- **Work term includes chemical bands:** After Step A advances chemical bands, their contribution enters the work-lag outer loop via the full `nGroups_`-sized flux array. The work term `w[g]` is computed for all groups.
 
 **This task is large. Implement it in sub-steps, building and testing incrementally.**
 
@@ -628,8 +631,9 @@ This is the main function. Port from `SolveGasRadiationEnergyExchange` (gas-only
 
 1. Uses `R[n]` directly (no `D[n]` scaling)
 2. Dispatches to the three Jacobian functions based on `dust_model`
-3. Operates on `nThermalGroups_` unknowns
-4. Uses line-search damping instead of `enable_dE_constrain`:
+3. Newton unknowns are `nThermalGroups_`-sized (Egas + R[0..nThermal-1])
+4. Dust temperature uses ALL `nGroups_` bands: `Rvec_all` includes the (fixed, post-Step-A) chemical-band contributions alongside the iterated thermal-band `Rvec`. This is assembled by concatenating the thermal `Rvec` with the known chemical-band `R_chem` before calling `ComputeDustTemperatureFromIterate`.
+5. Uses line-search damping instead of `enable_dE_constrain`:
 
 ```cpp
 // Line-search damping (replaces enable_dE_constrain)
@@ -654,8 +658,8 @@ iterate.Egas += alpha * delta_x;
 iterate.Rvec += alpha * delta_R;
 ```
 
-5. Records `DiagnosticTrace` snapshots when `debug_mode = true`
-6. For the decoupled dust model: post-convergence gas energy update via implicit cooling balance (port the `rhs` lambda and root-finding from `radiation_dust_system.hpp` lines 544-549)
+6. Records `DiagnosticTrace` snapshots when `debug_mode = true`
+7. For the decoupled dust model: post-convergence gas energy update via implicit cooling balance (port the `rhs` lambda and root-finding from `radiation_dust_system.hpp` lines 544-549)
 
 - [ ] **Step 6: Declare all new functions in `RadSystem` class and add `#include`**
 
@@ -842,12 +846,17 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
         // ... dust model selection, coeff_n computation ...
 
         // Outer work-lag iteration
+        // Work term spans ALL nGroups_ (thermal + chemical) since the flux update
+        // covers all groups and advanced chemical-band fluxes contribute to the work term.
         quokka::valarray<double, nGroups_> work{};
         quokka::valarray<double, nGroups_> work_prev{};
 
         for (int outer = 0; outer < params.max_outer_iter; ++outer) {
-            auto extra_src = /* Src + work */;
+            // SolveRadiationMatterCoupling operates on nThermalGroups_ unknowns,
+            // but receives advanced chemical-band Erad for dust temperature computation.
+            auto extra_src = /* Src + work (thermal groups only) */;
             auto thermal = SolveRadiationMatterCoupling(/* ctx, extra_src, params */);
+            // UpdateFluxAndMomentum operates on ALL nGroups_ for flux relaxation.
             auto flux = UpdateFluxAndMomentum(/* ... */);
 
             if constexpr (beta_order_ == 0 || !include_work_term_in_source) {
@@ -856,6 +865,7 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
             }
 
             work_prev = work;
+            // Work term computed for ALL nGroups_ (thermal + chemical bands).
             work = ComputeWorkTerm(/* ... */);
             if (WorkConverged(work, work_prev, /* Etot0 */)) {
                 // Write back and break
