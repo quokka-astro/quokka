@@ -69,7 +69,7 @@ jobs:
         # Keep the job idle during the restricted window [03:30, 07:00).
         blocked_start_minutes=$((3 * 60 + 30))
         blocked_end_minutes=$((7 * 60))
-        check_interval=600
+        time_check_interval=600
 
         while true; do
           hour=$(date +%H)
@@ -77,7 +77,7 @@ jobs:
           now_minutes=$((10#$hour * 60 + 10#$minute))
 
           if [ "$now_minutes" -lt "$blocked_start_minutes" ] || [ "$now_minutes" -ge "$blocked_end_minutes" ]; then
-            echo "Current time $(date '+%F %T') is outside restricted window. Proceeding."
+            echo "Current time $(date '+%F %T') is outside restricted window."
             break
           fi
 
@@ -85,13 +85,47 @@ jobs:
           remaining_seconds=$((remaining_minutes * 60))
           echo "Current time $(date '+%F %T') is within restricted window (03:30-07:00). Remaining wait: ${remaining_minutes}m."
 
-          if [ "$remaining_seconds" -le "$check_interval" ]; then
+          if [ "$remaining_seconds" -le "$time_check_interval" ]; then
             sleep "$remaining_seconds"
           else
-            sleep "$check_interval"
+            sleep "$time_check_interval"
           fi
         done
-      displayName: 'Wait for allowed CI start window'
+
+        echo "Checking for conflicting jobs on the GPU..."
+        gpu_check_interval=60
+        waited=0
+        while true; do
+          # Primary: check for active CUDA processes via GPU driver (cross-container reliable)
+          gpu_procs=$(nvidia-smi --query-compute-apps=pid,name --format=csv,noheader 2>/dev/null || true)
+          # Secondary: check for cron regression test script (best-effort; requires shared PID namespace)
+          regtest_running=0
+          if pgrep -f "regtest.py" > /dev/null 2>&1; then
+            regtest_running=1
+          fi
+          if [ -z "$gpu_procs" ] && [ "$regtest_running" -eq 0 ]; then
+            if [ "$waited" -gt 0 ]; then
+              echo "GPU is free and no regression test detected, proceeding..."
+            else
+              echo "GPU is free, proceeding..."
+            fi
+            break
+          fi
+          reasons=""
+          if [ -n "$gpu_procs" ]; then
+            count=$(echo "$gpu_procs" | grep -c '[0-9]' || true)
+            names=$(echo "$gpu_procs" | awk -F',' '{print $2}' | tr '\n' ' ' | sed 's/ $//')
+            reasons="GPU has ${count} active CUDA process(es) [${names}]"
+          fi
+          if [ "$regtest_running" -eq 1 ]; then
+            [ -n "$reasons" ] && reasons="${reasons}; "
+            reasons="${reasons}regression test (regtest.py) is running"
+          fi
+          echo "Waiting: ${reasons}. Rechecking in ${gpu_check_interval}s (${waited}s elapsed)..."
+          sleep "$gpu_check_interval"
+          waited=$((waited + gpu_check_interval))
+        done
+      displayName: 'Wait for allowed time and free GPU'
 
     - task: CMake@1
       displayName: 'Configure CMake'
