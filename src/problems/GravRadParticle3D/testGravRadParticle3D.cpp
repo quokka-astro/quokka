@@ -142,8 +142,8 @@ auto checkGasDensityProjection(const QuokkaSimulation<ParticleProblem> &sim) -> 
 	const amrex::Box &domain = sim.Geom(0).Domain();
 
 	for (const auto dir : dirs) {
-		const auto projections = quokka::diagnostics::ComputePlaneProjectionFromMultiFab(state_mfs, sim.finestLevel(), sim.Geom(), sim.refRatio(),
-												 max_grid_size, dir, RadSystem<ParticleProblem>::gasDensity_index);
+		const auto projections = quokka::diagnostics::ComputePlaneProjectionFromMultiFab(
+		    state_mfs, sim.finestLevel(), sim.Geom(), sim.refRatio(), max_grid_size, dir, RadSystem<ParticleProblem>::gasDensity_index);
 		const amrex::MultiFab &projection = projections.front();
 		const amrex::Real projection_min = projection.min(0);
 		const amrex::Real projection_max = projection.max(0);
