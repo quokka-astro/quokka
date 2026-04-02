@@ -67,8 +67,8 @@ jobs:
 
     - script: |
         # Keep the job idle during the restricted window [03:30, 07:00).
-        blocked_start_minutes=$((12 * 60 + 30))
-        blocked_end_minutes=$((14 * 60))
+        blocked_start_minutes=$((3 * 60 + 30))
+        blocked_end_minutes=$((7 * 60))
         check_interval=600
 
         while true; do
