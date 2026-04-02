@@ -317,6 +317,10 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 					      double gas_update_factor, double dustGasCoeff, double tol_h, double tol_rel_h, double tempFloor,
 					      int *p_iteration_counter, int *p_iteration_failure_counter);
 
+	static void AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_implicit,
+				   double gas_update_factor_in, double dustGasCoeff, double const tol_h, double const tol_rel_h, double const tempFloor_local,
+				   int *p_iteration_counter, int *p_iteration_failure_counter);
+
 	static void balanceMatterRadiation(arrayconst_t &consPrev, array_t &consNew, amrex::Box const &indexRange);
 
 	// Use an additionalr template for ComputeMassScalars as the Array type is not always the same
@@ -1622,5 +1626,6 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 #include "radiation/flux_update.hpp"                // IWYU pragma: export
 #include "radiation/source_terms_multi_group.hpp"  // IWYU pragma: export
 #include "radiation/source_terms_single_group.hpp" // IWYU pragma: export
+#include "radiation/source_terms.hpp"              // IWYU pragma: export
 
 #endif // RADIATION_SYSTEM_HPP_
