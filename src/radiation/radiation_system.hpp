@@ -413,6 +413,12 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 							   quokka::valarray<double, nGroups_> const &fourPiBoverC,
 							   OpacityTerms<problem_t> &opacity_terms);
 
+	AMREX_GPU_DEVICE static auto SelectDustModel(double T_gas0, double T_d0, double Egas0, double coeff_n) -> DustModel;
+
+	AMREX_GPU_DEVICE static auto ComputeDustTemperatureFromIterate(DustModel model, double T_gas,
+								       quokka::valarray<double, nGroups_> const &Rvec_all, double coeff_n,
+								       double T_d0, int newton_iter, double tempFloor) -> double;
+
 	AMREX_GPU_DEVICE static auto ComputeJacobianForGas(double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff,
 							   quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src,
 							   quokka::valarray<double, nGroups_> const &tau, double c_v,
@@ -1553,6 +1559,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 }
 
 #include "radiation/opacity_evaluation.hpp"        // IWYU pragma: export
+#include "radiation/dust_closure.hpp"               // IWYU pragma: export
 #include "radiation/source_terms_multi_group.hpp"  // IWYU pragma: export
 #include "radiation/source_terms_single_group.hpp" // IWYU pragma: export
 
