@@ -403,6 +403,16 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 									  amrex::GpuArray<double, nGroups_> const &alpha_E = {},
 									  amrex::GpuArray<double, nGroups_> const &alpha_P = {}) -> OpacityTerms<problem_t>;
 
+	AMREX_GPU_DEVICE static auto EvaluateOpacities(double T_d, double rho, quokka::valarray<double, nGroups_> const &Erad, int iteration_number,
+						       amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
+						       amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios,
+						       quokka::valarray<double, nGroups_> const &fourPiBoverC,
+						       OpacityTerms<problem_t> const &prev_opacity) -> OpacityTerms<problem_t>;
+
+	AMREX_GPU_DEVICE static void EvaluateFluxOpacities(double T_d, double rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
+							   quokka::valarray<double, nGroups_> const &fourPiBoverC,
+							   OpacityTerms<problem_t> &opacity_terms);
+
 	AMREX_GPU_DEVICE static auto ComputeJacobianForGas(double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff,
 							   quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src,
 							   quokka::valarray<double, nGroups_> const &tau, double c_v,
@@ -1542,6 +1552,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 	return T_d;
 }
 
+#include "radiation/opacity_evaluation.hpp"        // IWYU pragma: export
 #include "radiation/source_terms_multi_group.hpp"  // IWYU pragma: export
 #include "radiation/source_terms_single_group.hpp" // IWYU pragma: export
 
