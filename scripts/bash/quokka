@@ -322,16 +322,16 @@ run)
 	[ "${#PROBLEMS[@]}" -eq 0 ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
 	load_environment
 
-	FPE_ARGS=()
+	RUN_ARGS=(tiny_profiler.enabled=0 amr.v=0 suppress_output=1 particles.verbose=0)
 	if [ "$ENABLE_FPE" -eq 1 ]; then
-		FPE_ARGS=(amrex.fpe_trap_invalid=1 amrex.fpe_trap_overflow=1 amrex.fpe_trap_zero=1)
+		RUN_ARGS=(amrex.fpe_trap_invalid=1 amrex.fpe_trap_overflow=1 amrex.fpe_trap_zero=1)
 	fi
 
 	if [ -n "$FILTER_REGEX" ]; then
 		[ -z "$INPUT_FILE" ] || die "--filter does not accept --input"
 		CTEST_ARGS=()
-		if [ "${#FPE_ARGS[@]}" -gt 0 ]; then
-			CTEST_ARGS+=(--test-command-args "${FPE_ARGS[*]}")
+		if [ "${#RUN_ARGS[@]}" -gt 0 ]; then
+			CTEST_ARGS+=(--test-command-args "${RUN_ARGS[*]}")
 		fi
 		run_filtered "$FILTER_REGEX" "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"
 	elif [ "${#PROBLEMS[@]}" -gt 0 ]; then
@@ -346,7 +346,7 @@ run)
 				problem_input="${ROOT}/${problem_input}"
 			fi
 
-			if run_problem "$PROBLEM" "$problem_input" "${FPE_ARGS[@]+"${FPE_ARGS[@]}"}"; then
+			if run_problem "$PROBLEM" "$problem_input" "${RUN_ARGS[@]+"${RUN_ARGS[@]}"}"; then
 				echo -e "${GREEN}${BOLD}${PROBLEM} SUCCESS${RESET}"
 			else
 				echo -e "${RED}${BOLD}${PROBLEM} FAIL${RESET}"
@@ -357,8 +357,8 @@ run)
 	else
 		[ -z "$INPUT_FILE" ] || die "running all tests does not accept --input"
 		CTEST_ARGS=()
-		if [ "${#FPE_ARGS[@]}" -gt 0 ]; then
-			CTEST_ARGS+=(--test-command-args "${FPE_ARGS[*]}")
+		if [ "${#RUN_ARGS[@]}" -gt 0 ]; then
+			CTEST_ARGS+=(--test-command-args "${RUN_ARGS[*]}")
 		fi
 		run_all_tests "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"
 	fi
