@@ -8,6 +8,8 @@ Usage:
   quokka config <preset> [--root <path>]     Configure CMake build directory for the given preset
   quokka build <preset> <problem> [-j <N>] [--root <path>]
                                              Compile a specific problem target using ninja
+  quokka build <preset> --filter <glob> [-j <N>] [--root <path>]
+                                             Compile all problem targets matching glob (e.g., Rad*)
   quokka run <preset> [<problem>] [--input <file>] [-j <N>] [--fpe] [--root <path>]
                                              Run a problem executable from the tests/ directory
   quokka run <preset> [--filter <regex>] [-j <N>] [--fpe] [--root <path>]
@@ -20,7 +22,7 @@ Options:
   --root <path>    Path to the quokka repository root (default: current directory)
   --input <file>   Input file to pass to the executable (default: inputs/<problem>.toml)
   --fpe            Enable floating-point exception traps (invalid, overflow, divide-by-zero)
-  --filter <regex> Run tests matching regex via ctest -R; exclusive with <problem>
+  --filter <pattern> For run: ctest regex; for build: shell glob over problem names; exclusive with <problem>
   -j <N>           Number of parallel jobs for ninja or ctest (default: 8)
 
 Presets:
@@ -162,6 +164,27 @@ list_problems() {
 	find "${ROOT}/src/problems" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort
 }
 
+list_matching_problems() {
+	local pattern="$1"
+	local problem=""
+	while IFS= read -r problem; do
+		[[ "$problem" == $pattern ]] && echo "$problem"
+	done < <(list_problems)
+}
+
+build_filtered() {
+	local pattern="$1"
+	local problem=""
+	local matched_any=0
+
+	while IFS= read -r problem; do
+		matched_any=1
+		build_problem "$problem"
+	done < <(list_matching_problems "$pattern")
+
+	[ "$matched_any" -eq 1 ] || die "no problems matched filter '${pattern}'"
+}
+
 clean_tests() {
 	local tests_dir="${ROOT}/tests"
 	[ -d "$tests_dir" ] || die "tests directory not found: ${tests_dir} (use --root to specify the quokka root)"
@@ -256,11 +279,15 @@ config)
 	configure_build
 	;;
 build)
-	[ -n "$PROBLEM" ] || die "missing problem name"
+	[ -z "$PROBLEM" ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
 	_require_no_input
 	_require_no_fpe
-	_require_no_filter
-	build_problem "$PROBLEM"
+	if [ -n "$FILTER_REGEX" ]; then
+		build_filtered "$FILTER_REGEX"
+	else
+		[ -n "$PROBLEM" ] || die "missing problem name"
+		build_problem "$PROBLEM"
+	fi
 	;;
 run)
 	[ -z "$PROBLEM" ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
