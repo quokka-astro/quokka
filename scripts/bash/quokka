@@ -68,6 +68,21 @@ print_results() {
 	local result=""
 	local name=""
 	local status=""
+	local all_success=1
+
+	for result in "${RESULT_LINES[@]}"; do
+		status="${result##* }"
+		if [ "$status" != "SUCCESS" ]; then
+			all_success=0
+			break
+		fi
+	done
+
+	if [ "${#RESULT_LINES[@]}" -gt 0 ] && [ "$all_success" -eq 1 ]; then
+		echo -e "${GREEN}${BOLD}ALL PROBLEM SUCCESS${RESET}"
+		return
+	fi
+
 	for result in "${RESULT_LINES[@]}"; do
 		name="${result% *}"
 		status="${result##* }"
