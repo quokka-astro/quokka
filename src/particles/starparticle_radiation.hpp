@@ -392,17 +392,17 @@ namespace StellarPhysics
     }
 
     // numerical derivative dlogBeta_dlogM
-  AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dlogBeta_dlogM(amrex::mass, amrex::Real beta_1) -> amrex::Real
+  AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dlogBeta_dlogM(amrex::mass, amrex::Real beta_1, amrex::Real radius, amrex::Real n) -> amrex::Real
     {
       Real beta1;
       if (beta_1==-1.0)
 	{
-	  beta1 = beta(mass);
+	  beta1 = beta_total(mass, radius, n);
 	}else
 	{
 	  beta1 = beta_1;
 	}
-      amrex::Real beta2 = beta(1.01*mass);
+      amrex::Real beta2 = beta_total(1.01*mass, radius, n);
       return( mass/beta1 * (beta2-beta1) / (1.01*mass));
 }
 
@@ -413,41 +413,32 @@ namespace StellarPhysics
   }
 
   // dlogBetaOverBetac_dlogM
-  AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dlogBetaOverBetac_dlogM(amrex::mass, amrex::beta_1)
+  AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dlogBetaOverBetac_dlogM(amrex::mass, amrex::beta_1, amrex::Real radius, amrex::Real n)
   {  
     if (n==3) return(0.0);
 
     // Otherwise take a numerical derivative
     Real beta1;
-    if (beta_1==-1.0) beta1 = beta(mass);
+    if (beta_1==-1.0) beta1 = beta_total(mass, radius, n);
     else beta1 = beta_1;
-    Real beta2 = beta(1.01*mass);
+    Real beta2 = beta_total(1.01*mass, radius, n);
     Real betac1 = betac(mass);
     Real betac2 = betac(1.01*mass);
     return( mass/(beta1/betac1) * ((beta2/betac2) - (beta1/betac1)) / (0.01*mass) );
 }
 
   // Deuterium luminosity
-  AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto L_Deut(amrex::Real mass, amrex::Real radius,BurningState burn_state) -> amrex::Real
+  AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto L_Deut(amrex::Real mass, amrex::Real radius,amrex::Real n, BurningState burn_state) -> amrex::Real
       {
-	switch (burnState) {
-	case Uninitialized:
+	if (burn_state == BurningState::Uninitialized || burn_state == BurningState::None) {
 	  return(0.0);
-	  break;
-	case None:
-	  return(0.0);
-	  break;
-	case VariableCoreDeuterium: {
-	  if (beta1 == -1.0) beta1=beta(m);
-	  return( luminosity_star(mass,radius,mdot) + eDotIon() + G*mass*mdot/radius * (1.0 - F_k - aG(n)*beta1/2.0 * (1.0 + dlogBetaOverBetac_dlogM(mass,beta1))) );
-	  break;
-	}
-	case SteadyCoreDeuterium:
+	} else if (burn_state == BurningState::VariableCoreDeuterium) {
+	  if (beta1 == -1.0) beta1=beta_total(m, radius, n);
+	  return( luminosity_star(mass,radius,mdot) + eDotIon() + G*mass*mdot/radius * (1.0 - F_k - aG(n)*beta1/2.0 * (1.0 + dlogBetaOverBetac_dlogM(mass,beta1,radius,n))) );
+	} else if (burn_state ==	BurningState::SteadyCoreDeuterium) {
 	  return( mdot * PSID );
-	  break;
-	case ShellDeuterium:
+	} else if (burn_state == BurningState::ShellDeuterium) {
 	  return( mdot * PSID );
-	  break;
       }
 	
     // Disk luminosity
@@ -540,11 +531,11 @@ private:
 
 	// Update radius
 	if (burnState != ZAMS) {
-	  Real beta1 = beta(m);
+	  Real beta1 = beta_total(m, radius, n);
 	  Real dr = (2.0*mdot/mass*radius*(F_k/(aG(n)*beta1)+1.0-1.0/(aG(n)*beta1))
-		     + beta1/mass * dlogBeta_dlogM(mass,beta1) * mdot * radius / beta1
+		     + beta1/mass * dlogBeta_dlogM(mass,beta1,radius,n) * mdot * radius / beta1
 		     - 2.0/(beta1*aG(n))*radius*radius/(G*mass*mass)*(luminosity_star(mass,radius,mdot)
-		    +eDotIon()-L_Deut(mass,beta1)));
+		    +eDotIon()-L_Deut(mass,beta1,radius,n)));
 	  Real rdottime = fabs(radius/dr)/100.0;
 	  Real mdottime = fabs(mass/mdot)/100.0;
     
@@ -556,10 +547,11 @@ private:
 
 	      for(int rdotloop = 0; rdotloop < rdotfac; rdotloop++)
 		{
-		  beta1 = beta(mass);
+		  beta1 = beta_total(mass,radius,n);
 		  dr = (2.0*mdot/mass*radius*(F_k/(aG(n)*beta1)+1.0-1.0/(aG(n)*beta1))
-			+ beta1/mass * dlogBeta_dlogM(mass,beta1) * mdot * radius / beta1
-		        - 2.0/(beta1*aG(n))*radius*radius/(G*mass*mass)*(luminosity_star(mass,radius,mdot)+eDotIon()-L_Deut(mass,beta1)));
+		      + beta1/mass * dlogBeta_dlogM(mass,beta1,radius,n) * mdot * radius / beta1
+		       - 2.0/(beta1*aG(n))*radius*radius/(G*mass*mass)*(luminosity_star(mass,radius,mdot)+eDotIon()
+		       -L_Deut(mass,beta1,radius,n)));
 		  radius += dtprime * dr;
 		}
 	      
@@ -570,18 +562,20 @@ private:
 	      Real dtprime = dt/mdotfacr;
 	      for(int mdotloop = 0; mdotloop < mdotfac; mdotloop++)
 		{
-		  beta1=beta(m);
+		  beta1=beta_total(m,radius,n);
 		  dr = (2.0*mdot/mass*radius*(F_k/(aG(n)*beta1)+1.0-1.0/(aG(n)*beta1))
-			+ beta1/mass * dlogBeta_dlogM(mass,beta1) * mdot * radius / beta1
-		        - 2.0/(beta1*aG(n))*radius*radius/(G*mass*mass)*(luminosity_star(mass,radius,mdot)+eDotIon()-lDeut(mass,beta1)));
+		      + beta1/mass * dlogBeta_dlogM(mass,beta1,radius,n) * mdot * radius / beta1
+		       - 2.0/(beta1*aG(n))*radius*radius/(G*mass*mass)*(luminosity_star(mass,radius,mdot)
+		      + eDotIon() - lDeut(mass,beta1,radius,n)));
 		  radius += dtprime * dr;
 		}
 	    } else
 	    {
-	      beta1=beta(mass);
+	      beta1=beta_total(mass,radius,n);
 	      dr = (2.0*mdot/mass*radius*(F_k/(aG(n)*beta1)+1.0-1.0/(aG(n)*beta1))
-		    + beta1/mass * dlogBeta_dlogM(mass,beta1) * mdot * radius / beta1
-		    - 2.0/(beta1*aG(n))*radius*radius/(G*mass*mass)*(luminosity_star(mass,radius,mdot)+eDotIon()-lDeut(mass,beta1)));
+		    + beta1/mass * dlogBeta_dlogM(mass,beta1,radius,n) * mdot * radius / beta1
+		    - 2.0/(beta1*aG(n))*radius*radius/(G*mass*mass)*(luminosity_star(mass,radius,mdot)
+		    +eDotIon() - lDeut(mass,beta1,radius,n)));
 	      radius += dt * dr;
 	    }
 	  // Resetting to 0.2 R_sun, if r is -ve.
