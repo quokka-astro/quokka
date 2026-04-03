@@ -122,7 +122,11 @@ struct ParticleMassDensityDeposition {
 				return 0.0;
 			}
 			if (useAgeFilter) {
-				const auto age = currentTime - part.rdata(birthTimeComp);
+				const auto birthTime = part.rdata(birthTimeComp);
+				if (currentTime < birthTime) {
+					return 0.0;
+				}
+				const auto age = currentTime - birthTime;
 				if (age > ageMax) {
 					return 0.0;
 				}

@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <fstream>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -20,7 +21,7 @@ struct ParticleDepositionProblem {
 
 template <> struct Particle_Traits<ParticleDepositionProblem> {
 #if AMREX_SPACEDIM == 3
-	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
+	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | ParticleSwitch::Test;
 #else
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
 #endif
@@ -47,6 +48,7 @@ template <> struct Physics_Traits<ParticleDepositionProblem> {
 
 template <> struct SimulationData<ParticleDepositionProblem> {
 	std::vector<amrex::Real> totalMass;
+	std::vector<amrex::Real> ageFilteredTestMass;
 };
 
 template <> void QuokkaSimulation<ParticleDepositionProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -95,6 +97,25 @@ template <> void QuokkaSimulation<ParticleDepositionProblem>::createInitialCICPa
 	const int nreal_extra = 4; // mass vx vy vz
 	CICParticles->InitFromAsciiFile(particleFile, nreal_extra, nullptr);
 }
+
+template <> void QuokkaSimulation<ParticleDepositionProblem>::createInitialTestParticles()
+{
+	const std::string particleFile = "particle_deposition_test_particles.txt";
+	std::ofstream outFile(particleFile);
+	outFile << 2 << "\n";
+
+	// Active particle.
+	outFile << 0.25 << " " << 0.5 << " " << 0.5 << " " << 2.0e-2 << " " << 0.0 << " " << 0.0 << " " << 0.0 << " " << 0.0 << " " << 10.0 << " "
+		<< 0.0 << "\n";
+	// Not-yet-active particle: birth_time is beyond stop_time.
+	outFile << 0.75 << " " << 0.5 << " " << 0.5 << " " << 2.0e-2 << " " << 0.0 << " " << 0.0 << " " << 0.0 << " " << 1.0 << " " << 10.0 << " "
+		<< 0.0 << "\n";
+	outFile.close();
+
+	TestParticles->SetVerbose(0);
+	const int nreal_extra = quokka::TestParticleRealComps<ParticleDepositionProblem>;
+	TestParticles->InitFromAsciiFile(particleFile, nreal_extra, nullptr);
+}
 #endif
 
 template <> void QuokkaSimulation<ParticleDepositionProblem>::computeAfterTimestep()
@@ -105,18 +126,24 @@ template <> void QuokkaSimulation<ParticleDepositionProblem>::computeAfterTimest
 	const int nComp = 1;
 
 	amrex::MultiFab massField(grids[lev], dmap[lev], nComp, nGhost);
+	amrex::MultiFab ageFilteredTestMassField(grids[lev], dmap[lev], nComp, nGhost);
 
 	massField.setVal(0.0);
 	quokka::depositParticleMassDensity(CICParticles.get(), massField, lev, quokka::CICParticleMassIdx, 0);
+	ageFilteredTestMassField.setVal(0.0);
+	particleRegister_.depositParticleMassDensity("Test", false, ageFilteredTestMassField, lev, 0, std::numeric_limits<amrex::Real>::lowest(),
+						     std::numeric_limits<amrex::Real>::max(), true, tNew_[lev], 10.0);
 
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
 	const amrex::Real cellVol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 	const amrex::Real totalMass = massField.sum(0) * cellVol;
+	const amrex::Real ageFilteredTestMass = ageFilteredTestMassField.sum(0) * cellVol;
 
 	userData_.totalMass.push_back(totalMass);
+	userData_.ageFilteredTestMass.push_back(ageFilteredTestMass);
 
-	amrex::Print() << "Step " << istep[0] << ": Total mass = " << totalMass << "\n";
+	amrex::Print() << "Step " << istep[0] << ": Total mass = " << totalMass << ", age-filtered test mass = " << ageFilteredTestMass << "\n";
 #endif
 }
 
@@ -144,17 +171,29 @@ auto problem_main() -> int
 		amrex::Print() << "ERROR: No deposition diagnostics recorded.\n";
 		return 1;
 	}
+	if (sim.userData_.ageFilteredTestMass.empty()) {
+		amrex::Print() << "ERROR: No age-filtered deposition diagnostics recorded.\n";
+		return 1;
+	}
 
 	const amrex::Real finalMass = sim.userData_.totalMass.back();
+	const amrex::Real finalAgeFilteredTestMass = sim.userData_.ageFilteredTestMass.back();
 
 	amrex::Print() << "Final results:\n";
 	amrex::Print() << "  Total mass: " << finalMass << "\n";
+	amrex::Print() << "  Age-filtered test mass: " << finalAgeFilteredTestMass << "\n";
 
 	const amrex::Real expectedMass = 10.0 * 1.0e-2;
+	const amrex::Real expectedAgeFilteredTestMass = 2.0e-2;
 	const amrex::Real massTolerance = 1.0e-12;
 
 	if (std::abs(finalMass - expectedMass) > massTolerance) {
 		amrex::Print() << "ERROR: Mass conservation failed! Expected " << expectedMass << ", got " << finalMass << "\n";
+		return 1;
+	}
+	if (std::abs(finalAgeFilteredTestMass - expectedAgeFilteredTestMass) > massTolerance) {
+		amrex::Print() << "ERROR: Age-filtered mass deposition failed! Expected " << expectedAgeFilteredTestMass << ", got "
+			       << finalAgeFilteredTestMass << "\n";
 		return 1;
 	}
 

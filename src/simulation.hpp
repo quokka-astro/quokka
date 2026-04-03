@@ -3870,57 +3870,62 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF_fc(const
 template <typename problem_t> void AMRSimulation<problem_t>::createRuntimeDerivedFields()
 {
 	std::string const code_prefix = "quokka";
-	// If parameters are re-read, remove previously-registered runtime-derived names
-	// before re-registering providers.
-	//
-	// Do not erase entries from derivedNames_ here: those names come from user input
-	// and are required later by PlotFileMFAtLevel_cc() membership checks.
-	// We only need to clear the bookkeeping vector and rebuild providers.
+	std::string const code_prefix_with_dot = code_prefix + ".";
+	std::string const type_suffix = ".type";
+	// If parameters are re-read, rebuild the registered runtime-derived providers
+	// from scratch and re-validate that derived_vars lists emitted field names only.
 	if (!m_runtimeDerivedVarNames.empty()) {
 		m_runtimeDerivedVarNames.clear();
 	}
 	m_runtimeDerivedFields.clear();
 
-	amrex::Vector<std::string> field_groups;
-	field_groups.reserve(derivedNames_.size());
-	for (auto const &derivedName : derivedNames_) {
-		std::string field_prefix = code_prefix;
-		field_prefix += ".";
-		field_prefix += derivedName;
-		amrex::ParmParse const ppf(field_prefix);
-		if (ppf.contains("type")) {
-			field_groups.push_back(derivedName);
-		}
-	}
-
-	if (field_groups.empty()) {
-		return;
-	}
+	amrex::Vector<std::string> const requestedDerivedNames = derivedNames_;
 
 	std::unordered_set<std::string> existingVarNames;
 	existingVarNames.insert(componentNames_cc_.begin(), componentNames_cc_.end());
 	existingVarNames.insert(componentNames_fc_flat_.begin(), componentNames_fc_flat_.end());
 
 	std::unordered_set<std::string> runtimeNameSet;
-	for (auto const &field_group : field_groups) {
-		std::string field_prefix = code_prefix;
-		field_prefix += ".";
-		field_prefix += field_group;
+	for (auto const &entry : amrex::ParmParse::getEntries(code_prefix)) {
+		if (!entry.starts_with(code_prefix_with_dot) || !entry.ends_with(type_suffix)) {
+			continue;
+		}
+
+		std::string const field_group =
+		    entry.substr(code_prefix_with_dot.size(), entry.size() - code_prefix_with_dot.size() - type_suffix.size());
+		std::string const field_prefix = code_prefix_with_dot + field_group;
 		amrex::ParmParse const ppf(field_prefix);
 		std::string field_type;
 		ppf.get("type", field_type);
+		if (!quokka::DerivedFieldBase::contains(field_type)) {
+			continue;
+		}
+		if (std::ranges::find(requestedDerivedNames, field_group) != requestedDerivedNames.end()) {
+			amrex::Abort("Runtime derived field provider group '" + field_group +
+				     "' must not appear in derived_vars. List emitted output field names instead.");
+		}
 
 		auto provider = quokka::DerivedFieldBase::create(field_type);
 		provider->init(field_prefix, field_group);
 		amrex::Vector<std::string> providerVars;
 		provider->addVars(providerVars);
+		bool hasRequestedOutput = false;
+		for (auto const &var : providerVars) {
+			if (std::ranges::find(requestedDerivedNames, var) != requestedDerivedNames.end()) {
+				hasRequestedOutput = true;
+				break;
+			}
+		}
+		if (!hasRequestedOutput) {
+			continue;
+		}
+
 		for (auto const &var : providerVars) {
 			if (var.empty()) {
 				amrex::Abort("Runtime derived field provider generated an empty output name.");
 			}
-			if (std::ranges::find(derivedNames_, var) == derivedNames_.end()) {
-				amrex::Abort("Runtime derived field output '" + var +
-					     "' is not listed in derived_vars. Add it to derived_vars to enable output.");
+			if (std::ranges::find(requestedDerivedNames, var) == requestedDerivedNames.end()) {
+				continue;
 			}
 			if (existingVarNames.contains(var)) {
 				amrex::Abort("Runtime derived field name collides with an existing variable: " + var);

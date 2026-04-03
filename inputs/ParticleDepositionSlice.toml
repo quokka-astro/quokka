@@ -21,8 +21,8 @@ hydro.use_dual_energy = 0
 particles.verbose = 0
 
 # Runtime-derived field provider.
-# Include the provider group name and each emitted output field in derived_vars.
-derived_vars = ["partdep", "particle.CIC.mass_density"]
+# List only the emitted output fields you want to write.
+derived_vars = ["particle.CIC.mass_density"]
 quokka.partdep.type = "DerivedParticleDeposition"
 quokka.partdep.particle_types = "CIC"
 quokka.partdep.deposit_fields = "mass"
