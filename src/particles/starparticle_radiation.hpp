@@ -428,7 +428,7 @@ namespace StellarPhysics
 }
 
   // Deuterium luminosity
-  AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto L_Deut(amrex::Real mass, amrex::Real radius,amrex::Real n, BurningState burn_state) -> amrex::Real
+  AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto L_Deut(amrex::Real mass, amrex::Real beta1, amrex::Real radius,amrex::Real n, BurningState burn_state) -> amrex::Real
       {
 	if (burn_state == BurningState::Uninitialized || burn_state == BurningState::None) {
 	  return(0.0);
@@ -535,7 +535,7 @@ private:
 	  Real dr = (2.0*mdot/mass*radius*(F_k/(aG(n)*beta1)+1.0-1.0/(aG(n)*beta1))
 		     + beta1/mass * dlogBeta_dlogM(mass,beta1,radius,n) * mdot * radius / beta1
 		     - 2.0/(beta1*aG(n))*radius*radius/(G*mass*mass)*(luminosity_star(mass,radius,mdot)
-		    +eDotIon()-L_Deut(mass,beta1,radius,n)));
+		     + eDotIon()-L_Deut(mass,beta1,radius,n,burn_state)));
 	  Real rdottime = fabs(radius/dr)/100.0;
 	  Real mdottime = fabs(mass/mdot)/100.0;
     
@@ -551,7 +551,7 @@ private:
 		  dr = (2.0*mdot/mass*radius*(F_k/(aG(n)*beta1)+1.0-1.0/(aG(n)*beta1))
 		      + beta1/mass * dlogBeta_dlogM(mass,beta1,radius,n) * mdot * radius / beta1
 		       - 2.0/(beta1*aG(n))*radius*radius/(G*mass*mass)*(luminosity_star(mass,radius,mdot)+eDotIon()
-		       -L_Deut(mass,beta1,radius,n)));
+		       - L_Deut(mass,beta1,radius,n,burn_state)));
 		  radius += dtprime * dr;
 		}
 	      
@@ -566,7 +566,7 @@ private:
 		  dr = (2.0*mdot/mass*radius*(F_k/(aG(n)*beta1)+1.0-1.0/(aG(n)*beta1))
 		      + beta1/mass * dlogBeta_dlogM(mass,beta1,radius,n) * mdot * radius / beta1
 		       - 2.0/(beta1*aG(n))*radius*radius/(G*mass*mass)*(luminosity_star(mass,radius,mdot)
-		      + eDotIon() - lDeut(mass,beta1,radius,n)));
+		      + eDotIon() - L_Deut(mass,beta1,radius,n,burn_state)));
 		  radius += dtprime * dr;
 		}
 	    } else
@@ -575,7 +575,7 @@ private:
 	      dr = (2.0*mdot/mass*radius*(F_k/(aG(n)*beta1)+1.0-1.0/(aG(n)*beta1))
 		    + beta1/mass * dlogBeta_dlogM(mass,beta1,radius,n) * mdot * radius / beta1
 		    - 2.0/(beta1*aG(n))*radius*radius/(G*mass*mass)*(luminosity_star(mass,radius,mdot)
-		    +eDotIon() - lDeut(mass,beta1,radius,n)));
+		    +eDotIon() - L_Deut(mass,beta1,radius,n,burn_state)));
 	      radius += dt * dr;
 	    }
 	  // Resetting to 0.2 R_sun, if r is -ve.
