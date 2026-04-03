@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg width="480" height="480" viewBox="0 0 480 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
   <title id="title">Tagged cells and Berger-Rigoutsos boxes</title>
-  <desc id="desc">Tagged ring from the HydroBlast2D problem at t ≈ 0.004 and the four level-one grids produced by Berger-Rigoutsos clustering.</desc>
+  <desc id="desc">Tagged ring from an illustrative 2D blast-wave setup at t ≈ 0.004 and the four level-one grids produced by Berger-Rigoutsos clustering.</desc>
   <defs>
     <pattern id="tagged" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
       <rect width="8" height="8" fill="#ffe8cc" />

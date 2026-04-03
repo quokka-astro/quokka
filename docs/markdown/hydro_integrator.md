@@ -16,6 +16,41 @@ The hydro integrator advances the conservative gas (and optionally MHD) variable
 - Directional flux functions call the appropriate Riemann solver: `HLLC` for pure hydro, `HLLD` plus constrained transport (`SolveInductionEqn`) for MHD. The solver also returns face-centered velocities and the fastest MHD wave speeds used by the EMF update.
 - Before the second-order update, a first-order (donor-cell) set of fluxes is computed through `computeFOHydroFluxes`. These rely on the diffusive `LLF` solvers so that first-order flux correction has the most stable possible fallback without discarding the high-order solution everywhere.
 
+## Ghost-cell requirements
+The hydro update uses ghosted Riemann outputs with width `nghost_Riemann`. The
+minimum safe value depends on two independent constraints:
+
+- Tracer particles require `nghost_Riemann >= 2` because the time-averaged
+  face velocity used by `AdvectWithUmac` is stored with two ghost faces.
+- MHD may require additional Riemann ghosts for the EMF reconstruction and EMF
+  averaging stencils.
+
+For the persistent state, the current code uses:
+
+- All hydro and MHD paths: `nghost_cc_ = nghost_Riemann + 4`
+- `nghost_fc_ = nghost_cc_`
+
+The full case table is:
+
+| Physics path | Tracers | EMF compute | EMF averaging | `nghost_Riemann` | `nghost_cc_` | `nghost_fc_` |
+|---|---:|---|---|---:|---:|---:|
+| Hydro-only | off | n/a | n/a | 0 | 4 | 4 |
+| Hydro-only | on | n/a | n/a | 2 | 6 | 6 |
+| MHD | off | `FelkerStone2017` | `BalsaraSpicer2004` | 0 | 4 | 4 |
+| MHD | on | `FelkerStone2017` | `BalsaraSpicer2004` | 2 | 6 | 6 |
+| MHD | off | `FelkerStone2017` | `LondrilloDelZanna2004` | 1 | 5 | 5 |
+| MHD | on | `FelkerStone2017` | `LondrilloDelZanna2004` | 2 | 6 | 6 |
+| MHD | off | `FelkerStone2017` | `Balsara2025` | 2 | 6 | 6 |
+| MHD | on | `FelkerStone2017` | `Balsara2025` | 2 | 6 | 6 |
+| MHD | off | `Balsara2025` | `BalsaraSpicer2004` | 0 | 4 | 4 |
+| MHD | on | `Balsara2025` | `BalsaraSpicer2004` | 2 | 6 | 6 |
+| MHD | off | `Balsara2025` | `LondrilloDelZanna2004` | 1 | 5 | 5 |
+| MHD | on | `Balsara2025` | `LondrilloDelZanna2004` | 2 | 6 | 6 |
+| MHD | off | `Balsara2025` | `Balsara2025` | 2 | 6 | 6 |
+| MHD | on | `Balsara2025` | `Balsara2025` | 2 | 6 | 6 |
+| MHD | off | `Quokka2026` | any | 3 | 7 | 7 |
+| MHD | on | `Quokka2026` | any | 3 | 7 | 7 |
+
 ## First-order fallback and stability guards
 Throughout each timestep the solver decorates the update with physics-aware stability checks:
 - `HydroSystem<problem_t>::AddInternalEnergyPdV` and `PredictStep` compute the stage RHS and provisional states. `redoFlag` flips only when the provisional density in a cell becomes non-positive, so flagged cells have their fluxes replaced with the pre-computed first-order counterparts via `replaceFluxes`/`replaceEMFs`. The full timestep in those cells is therefore carried out at first order in both space and time.

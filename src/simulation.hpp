@@ -72,6 +72,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_Vector.H"
 #include "AMReX_VisMF.H"
 #include "util/BC.hpp"
+#include "util/time_units.hpp"
 #include <AMReX_FluxRegister.H>
 #include <format>
 #include <yaml-cpp/yaml.h>
@@ -94,6 +95,7 @@ namespace filesystem = experimental::filesystem;
 // internal headers
 #include "fundamental_constants.H"
 #include "grid.hpp"
+#include "hydro/mhd_system.hpp"
 #include "io/DiagBase.H"
 #include "io/DiagFramePlane.H"
 #include "io/DiagPDF.H"
@@ -101,9 +103,9 @@ namespace filesystem = experimental::filesystem;
 #include "io/DiagPlotfile.H"
 #if AMREX_SPACEDIM == 3
 #include "io/DiagProjectionPlot.H"
+#include "io/projection.hpp"
 #endif
 #include "io/io_utils.hpp"
-#include "io/projection.hpp"
 #include "physics_info.hpp"
 
 #ifdef QUOKKA_USE_OPENPMD
@@ -243,15 +245,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	mutable YAML::Node simulationMetadata_;
 
 	// constructor
-	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : BCs_cc_(BCs_cc), BCs_fc_(BCs_fc) { initialize(); }
+	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : BCs_cc_(BCs_cc), BCs_fc_(BCs_fc) {}
 
-	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : BCs_cc_(BCs_cc), BCs_fc_(builtin_BCs_fc(BCs_cc)) { initialize(); }
+	explicit AMRSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : BCs_cc_(BCs_cc), BCs_fc_(builtin_BCs_fc(BCs_cc)) {}
 
-	explicit AMRSimulation()
-	{
-		readBCs();
-		initialize();
-	}
+	explicit AMRSimulation() { readBCs(); }
 
 	auto builtin_BCs_fc(amrex::Vector<amrex::BCRec> & /*BCs_cc*/) -> amrex::Vector<amrex::BCRec>
 	{
@@ -287,6 +285,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	auto computeTimestepAtLevel(int lev) -> amrex::ValLocPair<amrex::Real, amrex::IntVect>;
 
 	void AverageFCToCC(amrex::MultiFab &mf_cc, const amrex::MultiFab &mf_fc, int idim, int dstcomp_start, int srccomp_start, int srccomp_total) const;
+	virtual void setCustomGhostCells() {}
 
 	virtual void computeMaxSignalLocal(int level) = 0;
 	virtual void printCellProperties(int lev, amrex::IntVect const &index) = 0;
@@ -547,10 +546,18 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// This is for fillpatch during timestepping, but not for regridding.
 	amrex::Vector<std::unique_ptr<amrex::FillPatcher<amrex::MultiFab>>> fillpatcher_;
 
-	// Nghost = number of ghost cells for each array
-	// For our new scheme MHD-scheme, we need 7 ghosts for MHD (4 base + 3 for EMF) or 6 otherwise
-	int nghost_cc_ = Physics_Traits<problem_t>::is_mhd_enabled ? 7 : 6;
-	int nghost_fc_ = nghost_cc_;
+	// Persistent cell-/face-centered state ghost cells.
+	// `readParameters()` updates these before any AMR nesting checks.
+	// The hydro path needs `nghost_cc_ = nghost_Riemann + 4`:
+	// - 1 extra reconstructed interface layer beyond the ghosted Riemann outputs
+	// - 1 extra flattening-coefficient layer
+	// - the +/-2 pressure stencil used to build those coefficients
+	// The face-centered ghost count tracks the cell-centered ghost count. This
+	// is required for MHD because converting B_face -> B_cell at the outermost
+	// cell ghost uses the adjacent high-side face, and it also keeps generic
+	// plot/diagnostic code paths from truncating the available cell ghosts.
+	int nghost_cc_ = 6;
+	int nghost_fc_ = 6;
 
 	amrex::Vector<std::string> componentNames_cc_;
 	amrex::Vector<std::string> componentNames_fc_flat_;
@@ -850,8 +857,25 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 {
 	BL_PROFILE("AMRSimulation::readParameters()"); // NOLINT(misc-const-correctness)
 
+	// Register physical time unit constants (yr, kyr, Myr, Gyr) so that time-valued
+	// parameters can use expressions like "1.0*Myr" or "2.5*Gyr + 500*Myr".
+	quokka::registerTimeUnitConstants();
+
 	// ParmParse reads inputs from the *.inputs file
 	const amrex::ParmParse pp;
+	pp.query("do_tracers", do_tracers);
+
+	EMFComputeScheme emf_compute_scheme = EMFComputeScheme::FelkerStone2017;
+	EMFAvgScheme emf_avg_scheme = EMFAvgScheme::LondrilloDelZanna2004;
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		amrex::ParmParse const mhd_pp("mhd");
+		mhd_pp.query("emf_compute_scheme", emf_compute_scheme);
+		mhd_pp.query("emf_averaging_scheme", emf_avg_scheme);
+	}
+	const int nghost_Riemann = MinimumHydroRiemannGhost(Physics_Traits<problem_t>::is_mhd_enabled, emf_compute_scheme, emf_avg_scheme, do_tracers != 0);
+	nghost_cc_ = nghost_Riemann + 4;
+	nghost_fc_ = nghost_cc_;
+	setCustomGhostCells();
 
 	// Default == true
 	pp.query("show_performance_hints", showPerformanceHints_);
@@ -866,9 +890,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	pp.query("particle_cfl", particleCflNumber_);
 
 	// Optional fixed timestep controls
-	pp.query("constant_dt", constantDt_);
-	pp.query("initial_dt", initDt_);
-	pp.query("max_dt", maxDt_);
+	pp.queryWithParser("constant_dt", constantDt_);
+	pp.queryWithParser("initial_dt", initDt_);
+	pp.queryWithParser("max_dt", maxDt_);
 
 	const int dt_override_count =
 	    static_cast<int>(pp.contains("init_shrink")) + static_cast<int>(pp.contains("initial_dt")) + static_cast<int>(pp.contains("constant_dt"));
@@ -882,10 +906,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	pp.query("amr_interpolation_method", amrInterpMethod_);
 
 	// Default stopping time
-	pp.query("stop_time", stopTime_);
+	pp.queryWithParser("stop_time", stopTime_);
 
 	// Default timestep cutoff (safety feature)
-	pp.query("dt_cutoff", dtCutoff_);
+	pp.queryWithParser("dt_cutoff", dtCutoff_);
 
 	// Default initial timestep shrink factor
 	pp.query("init_shrink", initShrink_);
@@ -909,13 +933,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	pp.query("statistics_interval", statisticsInterval_);
 
 	// Default Time interval
-	pp.query("plottime_interval", plotTimeInterval_);
+	pp.queryWithParser("plottime_interval", plotTimeInterval_);
 
 	// Skip initial plotfile
 	pp.query("skip_initial_plotfile", skipInitialPlotfile_);
 
 	// Default Time interval
-	pp.query("checkpointtime_interval", checkpointTimeInterval_);
+	pp.queryWithParser("checkpointtime_interval", checkpointTimeInterval_);
 
 	// Default checkpoint interval
 	pp.query("checkpoint_interval", checkpointInterval_);
@@ -938,9 +962,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default Poisson solver tolerances
 	pp.query("poisson_reltol", reltolPoisson_);
 	pp.query("poisson_abstol", abstolPoisson_);
-
-	// Default do_tracers = 0 (turns on/off tracer particles)
-	pp.query("do_tracers", do_tracers);
 
 	// Default suppress_output = 0
 	pp.query("suppress_output", suppress_output);
@@ -1006,7 +1027,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// SFH parameters
 	pp.query("sfh_interval", sfh_interval_);
-	pp.query("sfh_time_interval", sfh_time_interval_);
+	pp.queryWithParser("sfh_time_interval", sfh_time_interval_);
 
 	// IO settings (following the AMReX convention for the Amr class)
 	// (Since we use AmrCore instead of Amr, we have to reimplement these.)
