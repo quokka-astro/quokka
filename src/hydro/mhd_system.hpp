@@ -34,6 +34,29 @@ AMREX_ENUM(EMFAvgScheme, BalsaraSpicer2004, LondrilloDelZanna2004, Balsara2025);
 // Londrillo + Del Zanna (2004)
 // Balsara (2025): Higher-order averaging
 
+AMREX_FORCE_INLINE constexpr auto MinimumHydroRiemannGhost(bool is_mhd_enabled, EMFComputeScheme emf_compute_scheme, EMFAvgScheme emf_avg_scheme,
+							   bool require_tracer_ghosts = false) -> int
+{
+	int nghost = require_tracer_ghosts ? 2 : 0;
+	if (is_mhd_enabled) {
+		if (emf_compute_scheme == EMFComputeScheme::Quokka2026) {
+			nghost = std::max(nghost, 3);
+		} else {
+			switch (emf_avg_scheme) {
+				case EMFAvgScheme::BalsaraSpicer2004:
+					break;
+				case EMFAvgScheme::LondrilloDelZanna2004:
+					nghost = std::max(nghost, 1);
+					break;
+				case EMFAvgScheme::Balsara2025:
+					nghost = std::max(nghost, 2);
+					break;
+			}
+		}
+	}
+	return nghost;
+}
+
 /// Class for a MHD system of conservation laws
 template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_t>
 {
