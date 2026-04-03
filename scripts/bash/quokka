@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+ENV_RC="${HOME}/.local/bin/quokka.rc"
+
 usage() {
 	cat <<'EOF'
 Usage:
@@ -52,6 +54,16 @@ require_arg() {
 	local option="$1"
 	local value="${2:-}"
 	[ -n "$value" ] || die "missing value for ${option}"
+}
+
+load_environment() {
+	if [ -f "$ENV_RC" ]; then
+		if ! source "$ENV_RC"; then
+			echo "Warning: failed to source '${ENV_RC}'; continuing without environment setup." >&2
+		fi
+	else
+		echo "Warning: environment file '${ENV_RC}' not found; continuing without environment setup." >&2
+	fi
 }
 
 _require_no_problem()  { [ -z "$PROBLEM" ]          || die "'${COMMAND}' does not take a problem name"; }
@@ -276,12 +288,14 @@ config)
 	_require_no_input
 	_require_no_fpe
 	_require_no_filter
+	load_environment
 	configure_build
 	;;
 build)
 	[ -z "$PROBLEM" ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
 	_require_no_input
 	_require_no_fpe
+	load_environment
 	if [ -n "$FILTER_REGEX" ]; then
 		build_filtered "$FILTER_REGEX"
 	else
@@ -291,6 +305,7 @@ build)
 	;;
 run)
 	[ -z "$PROBLEM" ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
+	load_environment
 
 	FPE_ARGS=()
 	if [ "$ENABLE_FPE" -eq 1 ]; then
@@ -340,6 +355,7 @@ target)
 	_require_no_input
 	_require_no_fpe
 	_require_no_filter
+	load_environment
 	show_targets
 	;;
 clean)
