@@ -3870,8 +3870,6 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF_fc(const
 template <typename problem_t> void AMRSimulation<problem_t>::createRuntimeDerivedFields()
 {
 	std::string const code_prefix = "quokka";
-	amrex::ParmParse const pp(code_prefix);
-
 	// If parameters are re-read, remove previously-registered runtime-derived names
 	// before re-registering providers.
 	//
@@ -3892,19 +3890,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::createRuntimeDerive
 		amrex::ParmParse const ppf(field_prefix);
 		if (ppf.contains("type")) {
 			field_groups.push_back(derivedName);
-		}
-	}
-
-	// Backward compatibility for early runtime-derived API:
-	// also accept quokka.derived_fields and merge.
-	int const n_legacy_fields = pp.countval("derived_fields");
-	if (n_legacy_fields > 0) {
-		amrex::Vector<std::string> legacy_field_groups(n_legacy_fields);
-		pp.getarr("derived_fields", legacy_field_groups, 0, n_legacy_fields);
-		for (auto const &legacy_name : legacy_field_groups) {
-			if (std::ranges::find(field_groups, legacy_name) == field_groups.end()) {
-				field_groups.push_back(legacy_name);
-			}
 		}
 	}
 

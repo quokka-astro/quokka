@@ -110,11 +110,19 @@ quokka.hist_temp.dense.value_greater = 1e-25           # Filters: value_greater,
 
 Runtime-derived fields are produced by factory-registered providers at runtime and can be consumed by diagnostics (for example, `DiagPDF`) without adding problem-specific `ComputeDerivedVar(...)` specializations.
 
-Provider registry parameters:
+Provider discovery is driven by `derived_vars`. For each entry `<name>` in `derived_vars`, Quokka checks whether `quokka.<name>.type` exists; if it does, `<name>` is treated as a runtime-derived field provider group.
+
+To use a runtime-derived field:
+
+1. Add a unique provider group name to `derived_vars`.
+2. Configure the provider under `quokka.<group_name>.*`.
+3. Add the full names of every desired output field from that provider to `derived_vars` so they are available to plotfiles and diagnostics.
+
+Provider configuration parameters:
 
 | Parameter Name        | Type        | Default | Description                                                                                          |
 |-----------------------|-------------|---------|------------------------------------------------------------------------------------------------------|
-| quokka.derived_fields | String list | Empty   | List of runtime-derived provider names. Each name maps to a `quokka.<name>.*` parameter namespace. |
+| derived_vars          | String list | Empty   | Include the provider group name `<name>` to instantiate `quokka.<name>.*`, and include each emitted output field name to enable output. |
 | quokka.\<name\>.type  | String      | None    | Factory type for this provider (for example, `DerivedParticleDeposition`).                          |
 
 `DerivedParticleDeposition` provider parameters:
@@ -131,7 +139,7 @@ Provider registry parameters:
 | quokka.\<name\>.normalization_expr| String      | unset      | Optional AMReX parser expression for a multiplicative normalization constant applied after deposition.          |
 
 Notes:
-- Providers are registered via `quokka.derived_fields`; each emitted output must also be listed in `derived_vars`.
+- Each emitted output must be listed in `derived_vars`; otherwise Quokka aborts at startup.
 - These fields can be consumed by diagnostics by name.
 - Output name collisions with other derived fields are rejected at startup.
 - `output_name` is only valid when exactly one output is produced.
@@ -142,13 +150,16 @@ Notes:
 Example:
 
 ```ini
-derived_vars = particle.CIC.mass_density particle.Sink.mass_density
-quokka.derived_fields = partdep
+# List the provider group name and all desired output fields in derived_vars.
+derived_vars = partdep particle.CIC.mass_density particle.Sink.mass_density
+
+# Configure the provider under quokka.<group_name>.*
 quokka.partdep.type = DerivedParticleDeposition
 quokka.partdep.particle_types = CIC Sink
 quokka.partdep.deposit_fields = mass
 quokka.partdep.prefix = particle
 
+# Use one of the runtime-derived outputs in a diagnostic.
 quokka.diagnostics = slice_z
 quokka.slice_z.type = DiagFramePlane
 quokka.slice_z.file = slicez_plt
