@@ -10,6 +10,9 @@ geometry.coord_sys = 0  # Cartesian
 geometry.prob_lo = [0.0, 0.0, 0.0]
 geometry.prob_hi = [1.0, 1.0, 1.0]
 
+# Verbosity
+amr.v = 1
+
 amr.n_cell = [64, 64, 64]
 amr.max_level = 0
 amr.max_grid_size = [32, 32, 32]
@@ -22,20 +25,13 @@ hydro.use_dual_energy = 0
 # Particle parameters
 particles.verbose = 1
 
-# Particle deposition diagnostic
-diag.particle_deposition.type = "DiagParticleDeposition"
-diag.particle_deposition.int = 5
-diag.particle_deposition.particle_types = "CIC"
-diag.particle_deposition.deposit_fields = "mass"
-diag.particle_deposition.output_format = "plotfile"
-
 # I/O
-amr.plot_int = 10
-amr.plot_file = "particle_deposition_"
-derived_vars = "particle_mass_density"
-amr.check_int = -1
+plotfile_interval = 10
+plotfile_prefix = "particle_deposition_"
+derived_vars = "particle.CIC.mass_density"
 
-# Verbosity
-amr.v = 1
-amr.grid_log = "grdlog"
-amr.data_log = "datalog"
+# Particle deposition diagnostic
+quokka.particle_deposition.type = "DerivedParticleDeposition"
+quokka.particle_deposition.int = 5
+quokka.particle_deposition.particle_types = "CIC"
+quokka.particle_deposition.deposit_fields = "mass"
