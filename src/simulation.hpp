@@ -3891,8 +3891,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::createRuntimeDerive
 			continue;
 		}
 
-		std::string const field_group =
-		    entry.substr(code_prefix_with_dot.size(), entry.size() - code_prefix_with_dot.size() - type_suffix.size());
+		std::string const field_group = entry.substr(code_prefix_with_dot.size(), entry.size() - code_prefix_with_dot.size() - type_suffix.size());
 		std::string const field_prefix = code_prefix_with_dot + field_group;
 		amrex::ParmParse const ppf(field_prefix);
 		std::string field_type;
