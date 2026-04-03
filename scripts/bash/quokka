@@ -8,8 +8,8 @@ usage() {
 	cat <<'EOF'
 Usage:
   quokka config <preset> [--root <path>]     Configure CMake build directory for the given preset
-  quokka build <preset> <problem> [-j <N>] [--root <path>]
-                                             Compile a specific problem target using ninja
+  quokka build <preset> <problem> [<problem> ...] [-j <N>] [--root <path>]
+                                             Compile one or more specific problem targets using ninja
   quokka build <preset> --filter <glob> [-j <N>] [--root <path>]
                                              Compile all problem targets matching glob (e.g., Rad*)
   quokka run <preset> [<problem>] [--input <file>] [-j <N>] [--fpe] [--root <path>]
@@ -66,7 +66,7 @@ load_environment() {
 	fi
 }
 
-_require_no_problem()  { [ -z "$PROBLEM" ]          || die "'${COMMAND}' does not take a problem name"; }
+_require_no_problem()  { [ "${#PROBLEMS[@]}" -eq 0 ] || die "'${COMMAND}' does not take a problem name"; }
 _require_no_input()    { [ -z "$INPUT_FILE" ]        || die "'${COMMAND}' does not accept --input"; }
 _require_no_fpe()      { [ "$ENABLE_FPE" -eq 0 ]     || die "'${COMMAND}' does not accept --fpe"; }
 _require_no_filter()   { [ -z "$FILTER_REGEX" ]      || die "'${COMMAND}' does not accept --filter"; }
@@ -235,7 +235,7 @@ shift
 
 PRESET=""
 ROOT="."
-PROBLEM=""
+PROBLEMS=()
 INPUT_FILE=""
 ENABLE_FPE=0
 FILTER_REGEX=""
@@ -277,10 +277,8 @@ while [ "$#" -gt 0 ]; do
 	*)
 		if [ -z "$PRESET" ]; then
 			PRESET="$1"
-		elif [ -z "$PROBLEM" ]; then
-			PROBLEM="$1"
 		else
-			die "unexpected argument '$1'"
+			PROBLEMS+=("$1")
 		fi
 		shift
 		;;
@@ -307,19 +305,22 @@ config)
 	configure_build
 	;;
 build)
-	[ -z "$PROBLEM" ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
+	[ "${#PROBLEMS[@]}" -eq 0 ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
 	_require_no_input
 	_require_no_fpe
 	load_environment
 	if [ -n "$FILTER_REGEX" ]; then
 		build_filtered "$FILTER_REGEX"
 	else
-		[ -n "$PROBLEM" ] || die "missing problem name"
-		build_problem "$PROBLEM"
+		[ "${#PROBLEMS[@]}" -gt 0 ] || die "missing problem name"
+		for problem in "${PROBLEMS[@]}"; do
+			build_problem "$problem"
+		done
 	fi
 	;;
 run)
-	[ -z "$PROBLEM" ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
+	[ "${#PROBLEMS[@]}" -eq 0 ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
+	[ "${#PROBLEMS[@]}" -le 1 ] || die "run accepts at most one problem name"
 	load_environment
 
 	FPE_ARGS=()
@@ -334,7 +335,8 @@ run)
 			CTEST_ARGS+=(--test-command-args "${FPE_ARGS[*]}")
 		fi
 		run_filtered "$FILTER_REGEX" "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"
-	elif [ -n "$PROBLEM" ]; then
+	elif [ "${#PROBLEMS[@]}" -eq 1 ]; then
+		PROBLEM="${PROBLEMS[0]}"
 		[ -d "${ROOT}/tests" ] || die "tests directory not found: ${ROOT}/tests (use --root to specify the quokka root)"
 		if [ -z "$INPUT_FILE" ]; then
 			INPUT_FILE="${ROOT}/inputs/${PROBLEM}.toml"
