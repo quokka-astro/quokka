@@ -36,8 +36,6 @@ void DerivedParticleDeposition::init(const std::string &a_prefix, std::string_vi
 		auto const parserExe = parser.compileHost<0>();
 		m_normalization = static_cast<amrex::Real>(parserExe());
 	}
-	std::string explicitOutputName;
-	bool const hasExplicitOutputName = (pp.query("output_name", explicitOutputName) != 0);
 
 	amrex::Vector<std::string> particleTypes = {"CIC"};
 	if (pp.countval("particle_types") > 0) {
@@ -75,15 +73,10 @@ void DerivedParticleDeposition::init(const std::string &a_prefix, std::string_vi
 		amrex::Abort("DerivedParticleDeposition requires t_age >= 0 when provided.");
 	}
 
-	const int totalOutputs = static_cast<int>(m_particleTypes.size() * m_depositFields.size());
-	if (hasExplicitOutputName && totalOutputs != 1) {
-		amrex::Abort("DerivedParticleDeposition: output_name is only valid when exactly one output is produced.");
-	}
-
 	std::unordered_set<std::string> outputSet;
 	for (auto const &ptype : m_particleTypes) {
 		for (auto const &field : m_depositFields) {
-			std::string const outputName = hasExplicitOutputName ? explicitOutputName : getFieldName(ptype, field);
+			std::string const outputName = getFieldName(ptype, field);
 			if (!outputSet.insert(outputName).second) {
 				amrex::Abort("Duplicate output field generated in DerivedParticleDeposition: " + outputName);
 			}

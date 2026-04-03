@@ -132,7 +132,6 @@ Provider configuration parameters:
 | quokka.\<name\>.particle_types    | String list | `CIC`      | Particle types to deposit. Supported values: `CIC`, `CICRad`, `StochasticStellarPop`, `Sink`, `Test`.         |
 | quokka.\<name\>.deposit_fields    | String list | `mass`     | Particle fields to deposit. Supported: `mass`, `birth_mass` (only for `StochasticStellarPop`).                |
 | quokka.\<name\>.prefix            | String      | `particle` | Output naming prefix. Output names are formed as `<prefix>.<ParticleType>.mass_density`.                       |
-| quokka.\<name\>.output_name       | String      | unset      | Optional explicit output name when exactly one output is produced. Otherwise the canonical `<prefix>...` name is used. |
 | quokka.\<name\>.mass_min          | Real        | `-inf`     | Optional lower bound on particle mass for deposition. Particles with `mass < mass_min` are excluded.           |
 | quokka.\<name\>.mass_max          | Real        | `+inf`     | Optional upper bound on particle mass for deposition. Particles with `mass > mass_max` are excluded.           |
 | quokka.\<name\>.t_age             | Real        | unset      | Optional age threshold. When set, only particles with `(tNew[0] - birth_time) <= t_age` are deposited.        |
@@ -142,7 +141,6 @@ Notes:
 - Each emitted output must be listed in `derived_vars`; otherwise Quokka aborts at startup.
 - These fields can be consumed by diagnostics by name.
 - Output name collisions with other derived fields are rejected at startup.
-- `output_name` is only valid when exactly one output is produced.
 - `t_age` is only supported for particle types that include `birth_time` (`CICRad`, `StochasticStellarPop`, `Test`).
 - `birth_mass` is only supported for `StochasticStellarPop`; using it with other particle types aborts at startup/runtime.
 - `normalization_expr` must evaluate to a scalar constant. Parser constants available: `Msun`, `yr`, `kpc`.
