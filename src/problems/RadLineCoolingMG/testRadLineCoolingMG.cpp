@@ -8,7 +8,7 @@
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
-#include "radiation/radiation_dust_system.hpp"
+#include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 #include <cmath>
 #include <format>
