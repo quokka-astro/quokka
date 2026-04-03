@@ -13,7 +13,6 @@
 #include <vector>
 
 // AMReX headers
-#include "AMReX_FillPatchUtil.H"
 #include "AMReX_MFInterpolater.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
@@ -35,6 +34,8 @@ template <typename problem_t> class PhysicsParticleRegister;
 
 namespace quokka::diagnostics
 {
+
+#if AMREX_SPACEDIM == 3
 
 namespace detail
 {
@@ -103,76 +104,71 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 											    return dx[static_cast<int>(dir)] * mf_arr[box_no](i, j, k, comp);
 										    });
 		auto &plane_global = plane_pair.second;
-
-		// AMReX returns a reduced MF in the original index ordering with the projection axis
-		// collapsed to length 1 (e.g. x-projection lives on (0,y,z)). Remap to Quokka's
-		// canonical 2D layout with the collapsed axis in z (e.g. (y,z,0)) for x-projections.
-		const auto &src_ba = plane_global.boxArray();
-		amrex::BoxList bl2d(src_ba.ixType());
-		for (int i = 0; i < src_ba.size(); ++i) {
-			bl2d.push_back(detail::transform_box_to_2D(dir, src_ba[i]));
+		const auto &plane_ba = plane_global.boxArray();
+		amrex::BoxList bl2d(plane_ba.ixType());
+		for (int i = 0; i < plane_ba.size(); ++i) {
+			bl2d.push_back(detail::transform_box_to_2D(dir, plane_ba[i]));
 		}
 		amrex::BoxArray const ba2d(std::move(bl2d));
 		projections[lev].define(ba2d, plane_global.DistributionMap(), 1, 0);
-		projections[lev].setVal(0.0);
 
-		auto const &src_arr = plane_global.const_arrays();
-		auto const &dst_arr = projections[lev].arrays();
+		// Safe on GPU: plain MFIter does a post-loop stream sync by default, so the
+		// transpose kernels below complete before the loop-local plane_global is destroyed.
+		// If this is changed to DisableDeviceSync() or run inside a NoSyncRegion, the
+		// temporary must be kept alive explicitly.
 		for (amrex::MFIter mfi(projections[lev]); mfi.isValid(); ++mfi) {
 			const amrex::Box &bx = mfi.validbox();
-			const int box_no = mfi.LocalIndex();
-			if (dir == amrex::Direction::x) {
-				amrex::ParallelFor(bx,
-						   [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { dst_arr[box_no](i, j, k) = src_arr[box_no](0, i, j); });
-#if AMREX_SPACEDIM >= 2
-			} else if (dir == amrex::Direction::y) {
-				amrex::ParallelFor(bx,
-						   [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { dst_arr[box_no](i, j, k) = src_arr[box_no](i, 0, j); });
-#endif
-#if AMREX_SPACEDIM == 3
-			} else if (dir == amrex::Direction::z) {
-				amrex::ParallelFor(bx,
-						   [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { dst_arr[box_no](i, j, k) = src_arr[box_no](i, j, 0); });
-#endif
+			auto const &src = plane_global.const_array(mfi);
+			auto dst = projections[lev].array(mfi);
+
+			switch (dir) {
+				case amrex::Direction::x:
+					amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { dst(i, j, k, 0) = src(0, i, j, 0); });
+					break;
+				case amrex::Direction::y:
+					amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { dst(i, j, k, 0) = src(i, 0, j, 0); });
+					break;
+				case amrex::Direction::z:
+					amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept { dst(i, j, k, 0) = src(i, j, 0, 0); });
+					break;
+				default:
+					amrex::Abort("ComputePlaneProjectionFromMultiFab: Invalid direction!");
+					break;
 			}
 		}
-		amrex::Gpu::streamSynchronize();
 	}
 
-	amrex::Vector<amrex::MultiFab> projections_accum(finest_level + 1);
-	for (int lev = 0; lev <= finest_level; ++lev) {
-		projections_accum[lev].define(projections[lev].boxArray(), projections[lev].DistributionMap(), 1, 0);
-		projections_accum[lev].ParallelCopy(projections[lev], 0, 0, 1, 0, 0);
-	}
+	amrex::Vector<amrex::MultiFab> projections_accum = std::move(projections);
 
 	for (int lev = 0; lev < finest_level; ++lev) {
 		amrex::IntVect rr_2d{AMREX_D_DECL(1, 1, 1)};
 		if (dir == amrex::Direction::x) {
 			rr_2d = amrex::IntVect{AMREX_D_DECL(ref_ratio[lev][1], ref_ratio[lev][2], 1)};
-#if AMREX_SPACEDIM >= 2
 		} else if (dir == amrex::Direction::y) {
 			rr_2d = amrex::IntVect{AMREX_D_DECL(ref_ratio[lev][0], ref_ratio[lev][2], 1)};
-#endif
-#if AMREX_SPACEDIM == 3
 		} else if (dir == amrex::Direction::z) {
 			rr_2d = amrex::IntVect{AMREX_D_DECL(ref_ratio[lev][0], ref_ratio[lev][1], 1)};
-#endif
 		}
 
-		amrex::MultiFab coarse_refined(projections[lev + 1].boxArray(), projections[lev + 1].DistributionMap(), 1, 0);
-		coarse_refined.setVal(0.0);
+		amrex::MultiFab coarse_on_fine_layout(amrex::coarsen(projections_accum[lev + 1].boxArray(), rr_2d),
+						      projections_accum[lev + 1].DistributionMap(), 1, 0);
+		coarse_on_fine_layout.ParallelCopy(projections_accum[lev], 0, 0, 1, 0, 0);
 
-		amrex::Vector<amrex::BCRec> bcs(1);
-		for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-			bcs[0].setLo(d, amrex::BCType::int_dir);
-			bcs[0].setHi(d, amrex::BCType::int_dir);
+		auto const &coarse_arr = coarse_on_fine_layout.const_arrays();
+		auto const &fine_arr = projections_accum[lev + 1].arrays();
+		// Safe on GPU for the same reason as above: MFIter synchronizes on exit unless
+		// no-sync mode is enabled, so coarse_on_fine_layout stays valid until the add
+		// kernels complete.
+		for (amrex::MFIter mfi(projections_accum[lev + 1]); mfi.isValid(); ++mfi) {
+			const amrex::Box &bx = mfi.validbox();
+			const int box_no = mfi.LocalIndex();
+			auto const &coarse = coarse_arr[box_no];
+			auto const &fine = fine_arr[box_no];
+			amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				const amrex::IntVect iv{AMREX_D_DECL(i, j, k)};
+				fine(i, j, k, 0) += coarse(amrex::coarsen(iv, rr_2d), 0);
+			});
 		}
-		amrex::PhysBCFunctNoOp coarseBdryFunct;
-		amrex::PhysBCFunctNoOp fineBdryFunct;
-		amrex::MFInterpolater *mapper = &amrex::mf_pc_interp;
-		amrex::InterpFromCoarseLevel(coarse_refined, 0.0, projections_accum[lev], 0, 0, 1, geom2d[lev], geom2d[lev + 1], coarseBdryFunct, 0,
-					     fineBdryFunct, 0, rr_2d, mapper, bcs, 0);
-		amrex::MultiFab::Add(projections_accum[lev + 1], coarse_refined, 0, 0, 1, 0);
 	}
 
 	return projections_accum;
@@ -207,6 +203,8 @@ void WriteProjection(amrex::Direction dir, std::unordered_map<std::string, amrex
 
 	amrex::Print() << "  Wrote particles to projection " << filename << "\n";
 }
+
+#endif // AMREX_SPACEDIM == 3
 
 } // namespace quokka::diagnostics
 
