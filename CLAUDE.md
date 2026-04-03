@@ -12,14 +12,15 @@ The `scripts/bash/quokka` script is the recommended way to configure, build, and
 The script attempts to source `~/.local/bin/quokka.rc` for commands that need the build/test environment (`config`, `build`, `run`, `target`). This load is intentionally deferred as late as possible. If the file is missing (or sourcing fails), the script prints a warning and continues.
 
 - **Configure**: `quokka config <preset>` — runs CMake with the correct dimensionality and build type
-- **Build a problem**: `quokka build <preset> <problem> [-j <N>]`
+- **Build one or more problems**: `quokka build <preset> <problem> [<problem> ...] [-j <N>]`
 - **Build matching problems**: `quokka build <preset> --filter <glob> [-j <N>]` (e.g. `Rad*`)
-- **Run a problem**: `quokka run <preset> <problem> [--input <file>] [--fpe]`
+- **Run one or more problems**: `quokka run <preset> <problem> [<problem> ...] [--input <file>] [--fpe]` (`--input` only with one problem)
 - **Run all tests**: `quokka run <preset> [-j <N>]`
 - **Run matching tests**: `quokka run <preset> --filter <regex>`
 - **List problems**: `quokka list`
 - **Show targets**: `quokka target <preset>`
 - **Clean test output**: `quokka clean`
+- **Result summary**: `build` and `run` always print a final per-target summary line (`<name> SUCCESS|FAIL|SKIPPED`), so tooling/agents can reliably inspect outcomes by tailing the command output.
 
 Presets: `1d`, `3d`, `1d-debug`, `3d-debug` (sets dimensionality and Release/Debug build type).
 
