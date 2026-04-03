@@ -37,6 +37,7 @@ EOF
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
 MAGENTA='\033[0;35m'
 BOLD='\033[1m'
 RESET='\033[0m'
@@ -48,6 +49,39 @@ die() {
 
 log_cmd() {
 	echo -e "${MAGENTA}+ $*${RESET}"
+}
+
+record_result() {
+	local name="$1"
+	local status="$2"
+	RESULT_LINES+=("${name} ${status}")
+	if [ "$status" = "FAIL" ]; then
+		HAD_FAILURE=1
+	fi
+}
+
+print_results() {
+	local result=""
+	local name=""
+	local status=""
+	for result in "${RESULT_LINES[@]}"; do
+		name="${result% *}"
+		status="${result##* }"
+		case "$status" in
+		SUCCESS)
+			echo -e "${GREEN}${BOLD}${name} ${status}${RESET}"
+			;;
+		FAIL)
+			echo -e "${RED}${BOLD}${name} ${status}${RESET}"
+			;;
+		SKIPPED)
+			echo -e "${YELLOW}${BOLD}${name} ${status}${RESET}"
+			;;
+		*)
+			echo "$result"
+			;;
+		esac
+	done
 }
 
 require_arg() {
@@ -149,7 +183,7 @@ check_problem_defined() {
 build_problem() {
 	local problem="$1"
 
-	check_problem_defined "$problem"
+	check_problem_defined "$problem" 1 || return 1
 	log_cmd "ninja -j${JOBS} ${problem}"
 	cd "$BUILD_DIR" && ninja -j"$JOBS" "$problem"
 }
@@ -160,8 +194,14 @@ run_problem() {
 	shift 2
 
 	local exe="${BUILD_DIR}/src/problems/${problem}/${problem}"
-	[ -x "$exe" ] || die "executable not found: ${exe}"
-	[ -f "$input_file" ] || die "input file not found: ${input_file}"
+	if [ ! -x "$exe" ]; then
+		echo "Error: executable not found: ${exe}" >&2
+		return 1
+	fi
+	if [ ! -f "$input_file" ]; then
+		echo "Error: input file not found: ${input_file}" >&2
+		return 1
+	fi
 
 	log_cmd "cd ${ROOT}/tests && ${exe} ${input_file} $*"
 	cd "${ROOT}/tests" && "$exe" "$input_file" "$@"
@@ -196,20 +236,21 @@ build_filtered() {
 	local pattern="$1"
 	local problem=""
 	local matched_any=0
-	local built_any=0
 
 	while IFS= read -r problem; do
 		matched_any=1
 		if check_problem_defined "$problem" 1; then
-			build_problem "$problem"
-			built_any=1
+			if build_problem "$problem"; then
+				record_result "$problem" "SUCCESS"
+			else
+				record_result "$problem" "FAIL"
+			fi
 		else
-			echo "Skipping '${problem}' (not enabled for preset '${PRESET}')"
+			record_result "$problem" "SKIPPED"
 		fi
 	done < <(list_matching_problems "$pattern")
 
 	[ "$matched_any" -eq 1 ] || die "no problems matched filter '${pattern}'"
-	[ "$built_any" -eq 1 ] || die "no matched problems are enabled for preset '${PRESET}'"
 }
 
 clean_tests() {
@@ -309,18 +350,28 @@ build)
 	_require_no_input
 	_require_no_fpe
 	load_environment
+	RESULT_LINES=()
+	HAD_FAILURE=0
 	if [ -n "$FILTER_REGEX" ]; then
 		build_filtered "$FILTER_REGEX"
 	else
 		[ "${#PROBLEMS[@]}" -gt 0 ] || die "missing problem name"
 		for problem in "${PROBLEMS[@]}"; do
-			build_problem "$problem"
+			if build_problem "$problem"; then
+				record_result "$problem" "SUCCESS"
+			else
+				record_result "$problem" "FAIL"
+			fi
 		done
 	fi
+	print_results
+	[ "$HAD_FAILURE" -eq 0 ] || exit 1
 	;;
 run)
 	[ "${#PROBLEMS[@]}" -eq 0 ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
 	load_environment
+	RESULT_LINES=()
+	HAD_FAILURE=0
 
 	RUN_ARGS=(tiny_profiler.enabled=0 amr.v=0 suppress_output=1 particles.verbose=0)
 	if [ "$ENABLE_FPE" -eq 1 ]; then
@@ -333,11 +384,14 @@ run)
 		if [ "${#RUN_ARGS[@]}" -gt 0 ]; then
 			CTEST_ARGS+=(--test-command-args "${RUN_ARGS[*]}")
 		fi
-		run_filtered "$FILTER_REGEX" "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"
+		if run_filtered "$FILTER_REGEX" "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"; then
+			record_result "ctest" "SUCCESS"
+		else
+			record_result "ctest" "FAIL"
+		fi
 	elif [ "${#PROBLEMS[@]}" -gt 0 ]; then
 		[ "${#PROBLEMS[@]}" -le 1 ] || [ -z "$INPUT_FILE" ] || die "--input accepts only one <problem>"
 		[ -d "${ROOT}/tests" ] || die "tests directory not found: ${ROOT}/tests (use --root to specify the quokka root)"
-		any_failed=0
 		for PROBLEM in "${PROBLEMS[@]}"; do
 			problem_input="$INPUT_FILE"
 			if [ -z "$problem_input" ]; then
@@ -347,21 +401,25 @@ run)
 			fi
 
 			if run_problem "$PROBLEM" "$problem_input" "${RUN_ARGS[@]+"${RUN_ARGS[@]}"}"; then
-				echo -e "${GREEN}${BOLD}${PROBLEM} SUCCESS${RESET}"
+				record_result "$PROBLEM" "SUCCESS"
 			else
-				echo -e "${RED}${BOLD}${PROBLEM} FAIL${RESET}"
-				any_failed=1
+				record_result "$PROBLEM" "FAIL"
 			fi
 		done
-		[ "$any_failed" -eq 0 ] || exit 1
 	else
 		[ -z "$INPUT_FILE" ] || die "running all tests does not accept --input"
 		CTEST_ARGS=()
 		if [ "${#RUN_ARGS[@]}" -gt 0 ]; then
 			CTEST_ARGS+=(--test-command-args "${RUN_ARGS[*]}")
 		fi
-		run_all_tests "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"
+		if run_all_tests "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"; then
+			record_result "ctest" "SUCCESS"
+		else
+			record_result "ctest" "FAIL"
+		fi
 	fi
+	print_results
+	[ "$HAD_FAILURE" -eq 0 ] || exit 1
 	;;
 list)
 	[ -z "$PRESET" ] || die "'${COMMAND}' does not take a preset"
