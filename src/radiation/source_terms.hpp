@@ -143,9 +143,29 @@ void RadSystem<problem_t>::AddSourceTerms(array_t &consVar, arrayconst_t &radEne
 				}
 
 				// 1.3. Compute the gas and radiation energy update via the unified Newton solver.
-				auto thermal_result = SolveRadiationMatterCoupling(Egas0, Erad0Vec, rho, coeff_n, dt, massScalars, iter, work, vel_times_F, Src,
-										   radBoundaries_g_copy, tol, tol_rel, tempFloor, p_iteration_counter_local,
-										   p_iteration_failure_counter_local);
+				typename RadSystem<problem_t>::RadMatterCouplingInput_t coupling_state{};
+				coupling_state.Egas0 = Egas0;
+				coupling_state.Erad0 = Erad0Vec;
+				coupling_state.rho = rho;
+				coupling_state.coeff_n = coeff_n;
+				coupling_state.dt = dt;
+				coupling_state.massScalars = massScalars;
+				coupling_state.n_outer_iter = iter;
+				coupling_state.work = work;
+				coupling_state.vel_times_F = vel_times_F;
+				coupling_state.src = Src;
+				coupling_state.rad_boundaries = radBoundaries_g_copy;
+				coupling_state.tempFloor = tempFloor;
+				coupling_state.p_iteration_counter = p_iteration_counter_local;
+				coupling_state.p_iteration_failure_counter = p_iteration_failure_counter_local;
+
+				SolverParams solver_params{};
+				solver_params.resid_tol = tol;
+				solver_params.rel_change_tol = tol_rel;
+				solver_params.max_newton_iter = 100;
+				solver_params.max_outer_iter = max_iter;
+
+				auto thermal_result = SolveRadiationMatterCoupling(coupling_state, solver_params);
 
 				// Convert ThermalResult to NewtonIterationResult for UpdateFluxAndMomentum
 				updated_energy.Egas = thermal_result.Egas;

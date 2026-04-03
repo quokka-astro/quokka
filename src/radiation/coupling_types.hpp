@@ -2,7 +2,7 @@
 #define COUPLING_TYPES_HPP_
 
 #include "AMReX_Array.H"
-#include "AMReX_GpuQualifiers.H"
+#include "AMReX_REAL.H"
 #include "util/valarray.hpp"
 #include <array>
 
@@ -66,6 +66,42 @@ struct SolverParams {
 	double rel_change_tol;
 	int max_newton_iter;
 	int max_outer_iter;
+};
+
+/// Immutable per-cell inputs to the thermal coupling solve.
+template <int nGroups, int nmscalars> struct RadMatterCouplingInput {
+	double Egas0;
+	quokka::valarray<double, nGroups> Erad0;
+	double rho;
+	double coeff_n;
+	double dt;
+	amrex::GpuArray<amrex::Real, nmscalars> massScalars;
+	int n_outer_iter;
+	quokka::valarray<double, nGroups> work;
+	quokka::valarray<double, nGroups> vel_times_F;
+	quokka::valarray<double, nGroups> src;
+	amrex::GpuArray<double, nGroups + 1> rad_boundaries;
+	double tempFloor;
+	int *p_iteration_counter;
+	int *p_iteration_failure_counter;
+};
+
+/// Shared Jacobian inputs assembled from the current Newton iterate.
+template <int nGroups> struct JacobianInputs {
+	double T_gas;
+	double T_d;
+	double Egas_diff;
+	quokka::valarray<double, nGroups> Erad_diff;
+	quokka::valarray<double, nGroups> Rvec;
+	quokka::valarray<double, nGroups> Src;
+	double coeff_n;
+	quokka::valarray<double, nGroups> tau;
+	double c_v;
+	double lambda_gd_time_dt;
+	quokka::valarray<double, nGroups> kappaPoverE;
+	quokka::valarray<double, nGroups> d_fourpiboverc_d_t;
+	double num_den;
+	double dt;
 };
 
 /// Structured per-cell debug output. Compiled away when debug_mode = false.

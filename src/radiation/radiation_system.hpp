@@ -435,37 +435,21 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	AMREX_GPU_DEVICE static auto ComputeEddingtonTensor(double fx_L, double fy_L, double fz_L) -> std::array<std::array<double, 3>, 3>;
 
+	using RadMatterCouplingInput_t = RadMatterCouplingInput<nGroups_, nmscalars_>;
+	using JacobianInputs_t = JacobianInputs<nGroups_>;
+
 	// --- New unified thermal solver declarations ---
 	AMREX_GPU_HOST_DEVICE static void SolveArrowheadSystem(JacobianResult<problem_t> const &jacobian, double &x0, quokka::valarray<double, nGroups_> &xi);
 
-	AMREX_GPU_DEVICE static auto ComputeJacobianGasOnly(double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff,
-							    quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src,
-							    quokka::valarray<double, nGroups_> const &tau, double c_v,
-							    quokka::valarray<double, nGroups_> const &kappaPoverE,
-							    quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t, double num_den, double dt)
-	    -> JacobianResult<problem_t>;
+	AMREX_GPU_DEVICE static auto ComputeJacobianGasOnly(JacobianInputs_t const &inputs) -> JacobianResult<problem_t>;
 
-	AMREX_GPU_DEVICE static auto ComputeJacobianDustCoupled(double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff,
-								quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src,
-								double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v,
-								double lambda_gd_time_dt, quokka::valarray<double, nGroups_> const &kappaPoverE,
-								quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t, double num_den, double dt)
-	    -> JacobianResult<problem_t>;
+	AMREX_GPU_DEVICE static auto ComputeJacobianDustCoupled(JacobianInputs_t const &inputs) -> JacobianResult<problem_t>;
 
-	AMREX_GPU_DEVICE static auto ComputeJacobianDustDecoupled(double T_gas, double T_d, double Egas_diff,
-								  quokka::valarray<double, nGroups_> const &Erad_diff,
-								  quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src,
-								  double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v,
-								  double lambda_gd_time_dt, quokka::valarray<double, nGroups_> const &kappaPoverE,
-								  quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>;
+	AMREX_GPU_DEVICE static auto ComputeJacobianDustDecoupled(JacobianInputs_t const &inputs) -> JacobianResult<problem_t>;
 
 	template <bool debug_mode = false>
-	AMREX_GPU_DEVICE static auto
-	SolveRadiationMatterCoupling(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double coeff_n, double dt,
-				     amrex::GpuArray<Real, nmscalars_> const &massScalars, int n_outer_iter, quokka::valarray<double, nGroups_> const &work,
-				     quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
-				     amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double resid_tol, double rel_change_tol, double tempFloor,
-				     int *p_iteration_counter, int *p_iteration_failure_counter) -> ThermalResult<problem_t, debug_mode>;
+	AMREX_GPU_DEVICE static auto SolveRadiationMatterCoupling(RadMatterCouplingInput_t const &state, SolverParams const &params)
+	    -> ThermalResult<problem_t, debug_mode>;
 };
 
 // Compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
