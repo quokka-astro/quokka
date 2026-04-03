@@ -33,8 +33,11 @@ cp scripts/bash/quokka ~/.local/bin/
 quokka config <preset> [--root <path>]
     Configure the CMake build directory for the given preset.
 
-quokka build <preset> <problem> [-j <N>] [--root <path>]
-    Compile a specific problem target using ninja.
+quokka build <preset> <problem> [<problem> ...] [-j <N>] [--root <path>]
+    Compile one or more specific problem targets using ninja.
+
+quokka build <preset> --filter <glob> [-j <N>] [--root <path>]
+    Compile all problem targets matching a shell glob (e.g. `Rad*`).
 
 quokka run <preset> [<problem>] [--input <file>] [-j <N>] [--fpe] [--root <path>]
     Run a problem executable from the tests/ directory.
@@ -42,7 +45,7 @@ quokka run <preset> [<problem>] [--input <file>] [-j <N>] [--fpe] [--root <path>
 quokka run <preset> [--filter <regex>] [-j <N>] [--fpe] [--root <path>]
     Run all tests, or those matching a regex via ctest -R.
 
-quokka list <preset> [--root <path>]
+quokka list [--root <path>]
     List all available problem directories.
 
 quokka target <preset> [--root <path>]
@@ -68,7 +71,7 @@ quokka clean [--root <path>]
 | `--root <path>`  | Path to the quokka repository root (default: current directory)      |
 | `--input <file>` | Input file for the executable (default: `inputs/<problem>.toml`)     |
 | `--fpe`          | Enable floating-point exception traps (invalid, overflow, div-by-0)  |
-| `--filter <regex>` | Run tests matching regex via `ctest -R`; exclusive with `<problem>` |
+| `--filter <pattern>` | For `run`: ctest regex via `ctest -R`; for `build`: shell glob over problem names; exclusive with positional `<problem>` args |
 | `-j <N>`         | Number of parallel jobs for ninja or ctest (default: 8)              |
 
 ### Typical workflow
@@ -77,22 +80,29 @@ quokka clean [--root <path>]
 # 1. Configure (only needed once, or after CMakeLists changes)
 quokka config 3d
 
-# 2. Build a specific problem
+# 2. Build specific problems
 quokka build 3d ParticleSink
+quokka build 3d RadDust RadDustMG
 
-# 3. Run it
+# 3. Or build all matching problems
+quokka build 3d --filter "Rad*"
+
+# 4. Run one problem
 quokka run 3d ParticleSink
 
-# 4. Run with a custom input file and FPE traps enabled
+# 5. Run with a custom input file and FPE traps enabled
 quokka run 3d ParticleSink --input inputs/ParticleSink_custom.toml --fpe
 
-# 5. Run all 3D tests (8 parallel jobs)
+# 6. Run all 3D tests (8 parallel jobs)
 quokka run 3d -j 8
 
-# 6. Run tests matching a pattern
+# 7. Run tests matching a regex pattern
 quokka run 3d --filter "Particle*"
 
-# 7. Clean up test output
+# 8. List available problems (all presets)
+quokka list
+
+# 9. Clean up test output
 quokka clean
 ```
 
