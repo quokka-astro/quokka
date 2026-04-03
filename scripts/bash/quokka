@@ -257,6 +257,101 @@ build_filtered() {
 	[ "$matched_any" -eq 1 ] || die "no problems matched filter '${pattern}'"
 }
 
+init_results() {
+	RESULT_LINES=()
+	HAD_FAILURE=0
+}
+
+finalize_results() {
+	print_results
+	[ "$HAD_FAILURE" -eq 0 ]
+}
+
+execute_build() {
+	local allow_run_options="${1:-0}"
+	local problem=""
+
+	[ "${#PROBLEMS[@]}" -eq 0 ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
+	if [ "$allow_run_options" -eq 0 ]; then
+		_require_no_input
+		_require_no_fpe
+	fi
+
+	init_results
+	if [ -n "$FILTER_REGEX" ]; then
+		build_filtered "$FILTER_REGEX"
+	else
+		[ "${#PROBLEMS[@]}" -gt 0 ] || die "missing problem name"
+		for problem in "${PROBLEMS[@]}"; do
+			if build_problem "$problem"; then
+				record_result "$problem" "SUCCESS"
+			else
+				record_result "$problem" "FAIL"
+			fi
+		done
+	fi
+
+	finalize_results || return 1
+	return 0
+}
+
+execute_run() {
+	local PROBLEM=""
+	local problem_input=""
+
+	[ "${#PROBLEMS[@]}" -eq 0 ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
+	init_results
+
+	RUN_ARGS=(tiny_profiler.enabled=0 amr.v=0 suppress_output=1 particles.verbose=0)
+	if [ "$ENABLE_FPE" -eq 1 ]; then
+		RUN_ARGS=(amrex.fpe_trap_invalid=1 amrex.fpe_trap_overflow=1 amrex.fpe_trap_zero=1)
+	fi
+
+	if [ -n "$FILTER_REGEX" ]; then
+		[ -z "$INPUT_FILE" ] || die "--filter does not accept --input"
+		CTEST_ARGS=()
+		if [ "${#RUN_ARGS[@]}" -gt 0 ]; then
+			CTEST_ARGS+=(--test-command-args "${RUN_ARGS[*]}")
+		fi
+		if run_filtered "$FILTER_REGEX" "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"; then
+			record_result "ctest" "SUCCESS"
+		else
+			record_result "ctest" "FAIL"
+		fi
+	elif [ "${#PROBLEMS[@]}" -gt 0 ]; then
+		[ "${#PROBLEMS[@]}" -le 1 ] || [ -z "$INPUT_FILE" ] || die "--input accepts only one <problem>"
+		[ -d "${ROOT}/tests" ] || die "tests directory not found: ${ROOT}/tests (use --root to specify the quokka root)"
+		for PROBLEM in "${PROBLEMS[@]}"; do
+			problem_input="$INPUT_FILE"
+			if [ -z "$problem_input" ]; then
+				problem_input="${ROOT}/inputs/${PROBLEM}.toml"
+			elif [[ "$problem_input" != /* ]]; then
+				problem_input="${ROOT}/${problem_input}"
+			fi
+
+			if run_problem "$PROBLEM" "$problem_input" "${RUN_ARGS[@]+"${RUN_ARGS[@]}"}"; then
+				record_result "$PROBLEM" "SUCCESS"
+			else
+				record_result "$PROBLEM" "FAIL"
+			fi
+		done
+	else
+		[ -z "$INPUT_FILE" ] || die "running all tests does not accept --input"
+		CTEST_ARGS=()
+		if [ "${#RUN_ARGS[@]}" -gt 0 ]; then
+			CTEST_ARGS+=(--test-command-args "${RUN_ARGS[*]}")
+		fi
+		if run_all_tests "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"; then
+			record_result "ctest" "SUCCESS"
+		else
+			record_result "ctest" "FAIL"
+		fi
+	fi
+
+	finalize_results || return 1
+	return 0
+}
+
 clean_tests() {
 	local tests_dir="${ROOT}/tests"
 	[ -d "$tests_dir" ] || die "tests directory not found: ${tests_dir} (use --root to specify the quokka root)"
@@ -350,142 +445,18 @@ config)
 	configure_build
 	;;
 build)
-	[ "${#PROBLEMS[@]}" -eq 0 ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
-	_require_no_input
-	_require_no_fpe
 	load_environment
-	RESULT_LINES=()
-	HAD_FAILURE=0
-	if [ -n "$FILTER_REGEX" ]; then
-		build_filtered "$FILTER_REGEX"
-	else
-		[ "${#PROBLEMS[@]}" -gt 0 ] || die "missing problem name"
-		for problem in "${PROBLEMS[@]}"; do
-			if build_problem "$problem"; then
-				record_result "$problem" "SUCCESS"
-			else
-				record_result "$problem" "FAIL"
-			fi
-		done
-	fi
-	print_results
-	[ "$HAD_FAILURE" -eq 0 ] || exit 1
+	execute_build 0 || exit 1
 	;;
 buildrun)
-	[ "${#PROBLEMS[@]}" -eq 0 ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
 	[ "${#PROBLEMS[@]}" -gt 0 ] || [ -n "$FILTER_REGEX" ] || die "missing problem name (or provide --filter)"
 	load_environment
-
-	# Build phase (same behavior as `quokka build`)
-	RESULT_LINES=()
-	HAD_FAILURE=0
-	if [ -n "$FILTER_REGEX" ]; then
-		build_filtered "$FILTER_REGEX"
-	else
-		for problem in "${PROBLEMS[@]}"; do
-			if build_problem "$problem"; then
-				record_result "$problem" "SUCCESS"
-			else
-				record_result "$problem" "FAIL"
-			fi
-		done
-	fi
-	print_results
-	[ "$HAD_FAILURE" -eq 0 ] || exit 1
-
-	# Run phase (same behavior as `quokka run`)
-	RESULT_LINES=()
-	HAD_FAILURE=0
-	RUN_ARGS=(tiny_profiler.enabled=0 amr.v=0 suppress_output=1 particles.verbose=0)
-	if [ "$ENABLE_FPE" -eq 1 ]; then
-		RUN_ARGS=(amrex.fpe_trap_invalid=1 amrex.fpe_trap_overflow=1 amrex.fpe_trap_zero=1)
-	fi
-
-	if [ -n "$FILTER_REGEX" ]; then
-		[ -z "$INPUT_FILE" ] || die "--filter does not accept --input"
-		CTEST_ARGS=()
-		if [ "${#RUN_ARGS[@]}" -gt 0 ]; then
-			CTEST_ARGS+=(--test-command-args "${RUN_ARGS[*]}")
-		fi
-		if run_filtered "$FILTER_REGEX" "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"; then
-			record_result "ctest" "SUCCESS"
-		else
-			record_result "ctest" "FAIL"
-		fi
-	else
-		[ "${#PROBLEMS[@]}" -le 1 ] || [ -z "$INPUT_FILE" ] || die "--input accepts only one <problem>"
-		[ -d "${ROOT}/tests" ] || die "tests directory not found: ${ROOT}/tests (use --root to specify the quokka root)"
-		for PROBLEM in "${PROBLEMS[@]}"; do
-			problem_input="$INPUT_FILE"
-			if [ -z "$problem_input" ]; then
-				problem_input="${ROOT}/inputs/${PROBLEM}.toml"
-			elif [[ "$problem_input" != /* ]]; then
-				problem_input="${ROOT}/${problem_input}"
-			fi
-
-			if run_problem "$PROBLEM" "$problem_input" "${RUN_ARGS[@]+"${RUN_ARGS[@]}"}"; then
-				record_result "$PROBLEM" "SUCCESS"
-			else
-				record_result "$PROBLEM" "FAIL"
-			fi
-		done
-	fi
-	print_results
-	[ "$HAD_FAILURE" -eq 0 ] || exit 1
+	execute_build 1 || exit 1
+	execute_run || exit 1
 	;;
 run)
-	[ "${#PROBLEMS[@]}" -eq 0 ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
 	load_environment
-	RESULT_LINES=()
-	HAD_FAILURE=0
-
-	RUN_ARGS=(tiny_profiler.enabled=0 amr.v=0 suppress_output=1 particles.verbose=0)
-	if [ "$ENABLE_FPE" -eq 1 ]; then
-		RUN_ARGS=(amrex.fpe_trap_invalid=1 amrex.fpe_trap_overflow=1 amrex.fpe_trap_zero=1)
-	fi
-
-	if [ -n "$FILTER_REGEX" ]; then
-		[ -z "$INPUT_FILE" ] || die "--filter does not accept --input"
-		CTEST_ARGS=()
-		if [ "${#RUN_ARGS[@]}" -gt 0 ]; then
-			CTEST_ARGS+=(--test-command-args "${RUN_ARGS[*]}")
-		fi
-		if run_filtered "$FILTER_REGEX" "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"; then
-			record_result "ctest" "SUCCESS"
-		else
-			record_result "ctest" "FAIL"
-		fi
-	elif [ "${#PROBLEMS[@]}" -gt 0 ]; then
-		[ "${#PROBLEMS[@]}" -le 1 ] || [ -z "$INPUT_FILE" ] || die "--input accepts only one <problem>"
-		[ -d "${ROOT}/tests" ] || die "tests directory not found: ${ROOT}/tests (use --root to specify the quokka root)"
-		for PROBLEM in "${PROBLEMS[@]}"; do
-			problem_input="$INPUT_FILE"
-			if [ -z "$problem_input" ]; then
-				problem_input="${ROOT}/inputs/${PROBLEM}.toml"
-			elif [[ "$problem_input" != /* ]]; then
-				problem_input="${ROOT}/${problem_input}"
-			fi
-
-			if run_problem "$PROBLEM" "$problem_input" "${RUN_ARGS[@]+"${RUN_ARGS[@]}"}"; then
-				record_result "$PROBLEM" "SUCCESS"
-			else
-				record_result "$PROBLEM" "FAIL"
-			fi
-		done
-	else
-		[ -z "$INPUT_FILE" ] || die "running all tests does not accept --input"
-		CTEST_ARGS=()
-		if [ "${#RUN_ARGS[@]}" -gt 0 ]; then
-			CTEST_ARGS+=(--test-command-args "${RUN_ARGS[*]}")
-		fi
-		if run_all_tests "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"; then
-			record_result "ctest" "SUCCESS"
-		else
-			record_result "ctest" "FAIL"
-		fi
-	fi
-	print_results
-	[ "$HAD_FAILURE" -eq 0 ] || exit 1
+	execute_run || exit 1
 	;;
 list)
 	[ -z "$PRESET" ] || die "'${COMMAND}' does not take a preset"
