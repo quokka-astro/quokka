@@ -12,7 +12,7 @@ Usage:
                                              Run a problem executable from the tests/ directory
   quokka run <preset> [--filter <regex>] [-j <N>] [--fpe] [--root <path>]
                                              Run all tests (or matching regex via ctest -R)
-  quokka list <preset> [--root <path>]       List all available problem directories
+  quokka list [--root <path>]                List all available problem directories
   quokka target <preset> [--root <path>]     Show all available CMake build targets
   quokka clean [--root <path>]               Remove plotfiles, checkpoints, and output files from tests/
 
@@ -238,7 +238,14 @@ while [ "$#" -gt 0 ]; do
 done
 
 resolve_root "$ROOT"
-[ "$COMMAND" = clean ] || { [ -n "$PRESET" ] || die "missing preset"; parse_preset "$PRESET"; }
+case "$COMMAND" in
+clean|list)
+	;;
+*)
+	[ -n "$PRESET" ] || die "missing preset"
+	parse_preset "$PRESET"
+	;;
+esac
 
 case "$COMMAND" in
 config)
@@ -294,6 +301,7 @@ run)
 	fi
 	;;
 list)
+	[ -z "$PRESET" ] || die "'${COMMAND}' does not take a preset"
 	_require_no_problem
 	_require_no_input
 	_require_no_fpe
