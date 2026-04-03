@@ -9,18 +9,15 @@ Quokka is a two-moment radiation hydrodynamics code using the piecewise-paraboli
 
 The `scripts/bash/quokka` script is the recommended way to configure, build, and run tests. Make sure it exists in your `PATH`; if not, install it once by copying it to a directory on your `PATH` (e.g. `~/.local/bin/`). All commands accept `--root <path>` to specify the repo root when not running from it.
 
-**Before running any build or test command**, source the environment file once per shell session:
-```bash
-source ~/.local/bin/quokka.rc
-```
-This sets compiler variables and activates the Python environment. The file is machine-specific and not checked in to the repository.
+The script attempts to source `~/.local/bin/quokka.rc` for commands that need the build/test environment (`config`, `build`, `run`, `target`). This load is intentionally deferred as late as possible. If the file is missing (or sourcing fails), the script prints a warning and continues.
 
 - **Configure**: `quokka config <preset>` — runs CMake with the correct dimensionality and build type
 - **Build a problem**: `quokka build <preset> <problem> [-j <N>]`
+- **Build matching problems**: `quokka build <preset> --filter <glob> [-j <N>]` (e.g. `Rad*`)
 - **Run a problem**: `quokka run <preset> <problem> [--input <file>] [--fpe]`
 - **Run all tests**: `quokka run <preset> [-j <N>]`
 - **Run matching tests**: `quokka run <preset> --filter <regex>`
-- **List problems**: `quokka list <preset>`
+- **List problems**: `quokka list`
 - **Show targets**: `quokka target <preset>`
 - **Clean test output**: `quokka clean`
 
