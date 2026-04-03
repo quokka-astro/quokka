@@ -39,8 +39,8 @@ quokka build <preset> <problem> [<problem> ...] [-j <N>] [--root <path>]
 quokka build <preset> --filter <glob> [-j <N>] [--root <path>]
     Compile all problem targets matching a shell glob (e.g. `Rad*`).
 
-quokka run <preset> [<problem>] [--input <file>] [-j <N>] [--fpe] [--root <path>]
-    Run a problem executable from the tests/ directory.
+quokka run <preset> [<problem> ...] [--input <file>] [-j <N>] [--fpe] [--root <path>]
+    Run one or more problem executables from the tests/ directory.
 
 quokka run <preset> [--filter <regex>] [-j <N>] [--fpe] [--root <path>]
     Run all tests, or those matching a regex via ctest -R.
@@ -69,7 +69,7 @@ quokka clean [--root <path>]
 | Option           | Description                                                          |
 |------------------|----------------------------------------------------------------------|
 | `--root <path>`  | Path to the quokka repository root (default: current directory)      |
-| `--input <file>` | Input file for the executable (default: `inputs/<problem>.toml`)     |
+| `--input <file>` | Input file for the executable (default: `inputs/<problem>.toml`); valid only when running exactly one `<problem>` |
 | `--fpe`          | Enable floating-point exception traps (invalid, overflow, div-by-0)  |
 | `--filter <pattern>` | For `run`: ctest regex via `ctest -R`; for `build`: shell glob over problem names; exclusive with positional `<problem>` args |
 | `-j <N>`         | Number of parallel jobs for ninja or ctest (default: 8)              |
@@ -90,19 +90,22 @@ quokka build 3d --filter "Rad*"
 # 4. Run one problem
 quokka run 3d ParticleSink
 
-# 5. Run with a custom input file and FPE traps enabled
+# 5. Run multiple problems
+quokka run 3d RadDust RadDustMG
+
+# 6. Run with a custom input file and FPE traps enabled
 quokka run 3d ParticleSink --input inputs/ParticleSink_custom.toml --fpe
 
-# 6. Run all 3D tests (8 parallel jobs)
+# 7. Run all 3D tests (8 parallel jobs)
 quokka run 3d -j 8
 
-# 7. Run tests matching a regex pattern
+# 8. Run tests matching a regex pattern
 quokka run 3d --filter "Particle*"
 
-# 8. List available problems (all presets)
+# 9. List available problems (all presets)
 quokka list
 
-# 9. Clean up test output
+# 10. Clean up test output
 quokka clean
 ```
 

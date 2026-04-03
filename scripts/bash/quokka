@@ -12,8 +12,8 @@ Usage:
                                              Compile one or more specific problem targets using ninja
   quokka build <preset> --filter <glob> [-j <N>] [--root <path>]
                                              Compile all problem targets matching glob (e.g., Rad*)
-  quokka run <preset> [<problem>] [--input <file>] [-j <N>] [--fpe] [--root <path>]
-                                             Run a problem executable from the tests/ directory
+  quokka run <preset> [<problem> ...] [--input <file>] [-j <N>] [--fpe] [--root <path>]
+                                             Run one or more problem executables from the tests/ directory
   quokka run <preset> [--filter <regex>] [-j <N>] [--fpe] [--root <path>]
                                              Run all tests (or matching regex via ctest -R)
   quokka list [--root <path>]                List all available problem directories
@@ -320,7 +320,6 @@ build)
 	;;
 run)
 	[ "${#PROBLEMS[@]}" -eq 0 ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
-	[ "${#PROBLEMS[@]}" -le 1 ] || die "run accepts at most one problem name"
 	load_environment
 
 	FPE_ARGS=()
@@ -335,21 +334,26 @@ run)
 			CTEST_ARGS+=(--test-command-args "${FPE_ARGS[*]}")
 		fi
 		run_filtered "$FILTER_REGEX" "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"
-	elif [ "${#PROBLEMS[@]}" -eq 1 ]; then
-		PROBLEM="${PROBLEMS[0]}"
+	elif [ "${#PROBLEMS[@]}" -gt 0 ]; then
+		[ "${#PROBLEMS[@]}" -le 1 ] || [ -z "$INPUT_FILE" ] || die "--input accepts only one <problem>"
 		[ -d "${ROOT}/tests" ] || die "tests directory not found: ${ROOT}/tests (use --root to specify the quokka root)"
-		if [ -z "$INPUT_FILE" ]; then
-			INPUT_FILE="${ROOT}/inputs/${PROBLEM}.toml"
-		elif [[ "$INPUT_FILE" != /* ]]; then
-			INPUT_FILE="${ROOT}/${INPUT_FILE}"
-		fi
+		any_failed=0
+		for PROBLEM in "${PROBLEMS[@]}"; do
+			problem_input="$INPUT_FILE"
+			if [ -z "$problem_input" ]; then
+				problem_input="${ROOT}/inputs/${PROBLEM}.toml"
+			elif [[ "$problem_input" != /* ]]; then
+				problem_input="${ROOT}/${problem_input}"
+			fi
 
-		if run_problem "$PROBLEM" "$INPUT_FILE" "${FPE_ARGS[@]+"${FPE_ARGS[@]}"}"; then
-			echo -e "${GREEN}${BOLD}${PROBLEM} SUCCESS${RESET}"
-		else
-			echo -e "${RED}${BOLD}${PROBLEM} FAIL${RESET}"
-			exit 1
-		fi
+			if run_problem "$PROBLEM" "$problem_input" "${FPE_ARGS[@]+"${FPE_ARGS[@]}"}"; then
+				echo -e "${GREEN}${BOLD}${PROBLEM} SUCCESS${RESET}"
+			else
+				echo -e "${RED}${BOLD}${PROBLEM} FAIL${RESET}"
+				any_failed=1
+			fi
+		done
+		[ "$any_failed" -eq 0 ] || exit 1
 	else
 		[ -z "$INPUT_FILE" ] || die "running all tests does not accept --input"
 		CTEST_ARGS=()
