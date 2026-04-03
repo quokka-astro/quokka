@@ -125,17 +125,26 @@ configure_build() {
 
 check_problem_defined() {
 	local problem="$1"
+	local quiet="${2:-0}"
 	local cmake_file="${BUILD_DIR}/src/problems/${problem}/CTestTestfile.cmake"
 
 	if [ ! -f "$cmake_file" ]; then
+		if [ "$quiet" -eq 1 ]; then
+			return 1
+		fi
 		die "problem '${problem}' is not defined (${cmake_file} not found; run 'quokka config ${PRESET}' first, or check the problem name)"
 	fi
 
 	local active_lines
 	active_lines=$(grep -cv '^\s*\(#\|$\)' "$cmake_file" || true)
 	if [ "$active_lines" -eq 0 ]; then
+		if [ "$quiet" -eq 1 ]; then
+			return 1
+		fi
 		die "problem '${problem}' is not available for preset '${PRESET}' (it may require a higher-dimensionality preset, e.g. '3d')"
 	fi
+
+	return 0
 }
 
 build_problem() {
@@ -188,13 +197,20 @@ build_filtered() {
 	local pattern="$1"
 	local problem=""
 	local matched_any=0
+	local built_any=0
 
 	while IFS= read -r problem; do
 		matched_any=1
-		build_problem "$problem"
+		if check_problem_defined "$problem" 1; then
+			build_problem "$problem"
+			built_any=1
+		else
+			echo "Skipping '${problem}' (not enabled for preset '${PRESET}')"
+		fi
 	done < <(list_matching_problems "$pattern")
 
 	[ "$matched_any" -eq 1 ] || die "no problems matched filter '${pattern}'"
+	[ "$built_any" -eq 1 ] || die "no matched problems are enabled for preset '${PRESET}'"
 }
 
 clean_tests() {
