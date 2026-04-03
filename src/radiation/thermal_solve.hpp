@@ -284,7 +284,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveRadiationMatterCoupling(
 	// Compute Etot0 for convergence normalization
 	double Etot0 = NAN;
 	if (dust_model == DustModel::decoupled) {
-		const double fourPiBoverC_sum = sum(ComputeThermalRadiationMultiGroup(T_d0, rad_boundaries));
+		double fourPiBoverC_sum = NAN;
+		if constexpr (opacity_model_ == OpacityModel::single_group) {
+			fourPiBoverC_sum = ComputeThermalRadiationSingleGroup(T_d0);
+		} else {
+			fourPiBoverC_sum = sum(ComputeThermalRadiationMultiGroup(T_d0, rad_boundaries));
+		}
 		Etot0 = std::abs(lambda_gd_times_dt) + fourPiBoverC_sum + (sum(Erad0Vec) + sum(Src));
 	} else {
 		Etot0 = Egas0 + cscale * (sum(Erad0Vec) + sum(Src));
@@ -360,14 +365,32 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveRadiationMatterCoupling(
 		}
 
 		// 3. Compute opacities at dust temperature
-		fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d, rad_boundaries);
+		if constexpr (opacity_model_ == OpacityModel::single_group) {
+			fourPiBoverC[0] = ComputeThermalRadiationSingleGroup(T_d);
+		} else {
+			fourPiBoverC = ComputeThermalRadiationMultiGroup(T_d, rad_boundaries);
+		}
 
-		opacity_terms = ComputeModelDependentKappaEAndKappaP(T_d, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, EradVec_guess, n,
-								     opacity_terms.alpha_E, opacity_terms.alpha_P);
+		if constexpr (opacity_model_ == OpacityModel::single_group) {
+			opacity_terms.kappaP[0] = ComputePlanckOpacity(rho, T_d);
+			opacity_terms.kappaE[0] = ComputeEnergyMeanOpacity(rho, T_d);
+			if (opacity_terms.kappaE[0] > 0.0) {
+				opacity_terms.kappaPoverE[0] = opacity_terms.kappaP[0] / opacity_terms.kappaE[0];
+			} else {
+				opacity_terms.kappaPoverE[0] = 1.0;
+			}
+		} else {
+			opacity_terms = ComputeModelDependentKappaEAndKappaP(T_d, rho, rad_boundaries, rad_boundary_ratios, fourPiBoverC, EradVec_guess, n,
+									     opacity_terms.alpha_E, opacity_terms.alpha_P);
+		}
 
 		if (n == 0) {
 			// Compute kappaF and the delta_nu_kappa_B term
-			ComputeModelDependentKappaFAndDeltaTerms(T_d, rho, rad_boundaries, fourPiBoverC, opacity_terms);
+			if constexpr (opacity_model_ == OpacityModel::single_group) {
+				opacity_terms.kappaF[0] = ComputeFluxMeanOpacity(rho, T_d);
+			} else {
+				ComputeModelDependentKappaFAndDeltaTerms(T_d, rho, rad_boundaries, fourPiBoverC, opacity_terms);
+			}
 		}
 
 		// 4. Initialize or update R and Erad
@@ -376,7 +399,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveRadiationMatterCoupling(
 			if constexpr ((beta_order_ == 1) && (include_work_term_in_source)) {
 				if (n_outer_iter == 0) {
 					for (int g = 0; g < nGroups_; ++g) {
-						if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
+						if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity ||
+						     opacity_model_ == OpacityModel::single_group) {
 							work_local[g] = vel_times_F[g] * opacity_terms.kappaF[g] * chat / (c * c) * dt;
 						} else {
 							const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T_d);
@@ -410,7 +434,12 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveRadiationMatterCoupling(
 		}
 
 		// 5. Compute Cv and temperature derivatives
-		const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, rad_boundaries);
+		quokka::valarray<double, nGroups_> d_fourpiboverc_d_t{};
+		if constexpr (opacity_model_ == OpacityModel::single_group) {
+			d_fourpiboverc_d_t[0] = ComputeThermalRadiationTempDerivativeSingleGroup(T_d);
+		} else {
+			d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, rad_boundaries);
+		}
 		AMREX_ASSERT(!d_fourpiboverc_d_t.hasnan());
 		const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars);
 
@@ -525,7 +554,11 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveRadiationMatterCoupling(
 
 	// Recompute flux opacities if temperature changed
 	if (n > 0) {
-		ComputeModelDependentKappaFAndDeltaTerms(T_d, rho, rad_boundaries, fourPiBoverC, opacity_terms);
+		if constexpr (opacity_model_ == OpacityModel::single_group) {
+			opacity_terms.kappaF[0] = ComputeFluxMeanOpacity(rho, T_d);
+		} else {
+			ComputeModelDependentKappaFAndDeltaTerms(T_d, rho, rad_boundaries, fourPiBoverC, opacity_terms);
+		}
 	}
 
 	// Build result

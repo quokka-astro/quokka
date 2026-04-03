@@ -58,6 +58,21 @@ template <typename problem_t> constexpr auto AllUniqueRoles() -> bool
 }
 } // namespace detail
 
+/// Per-cell coupling state loaded from consVar at the top of AddSourceTerms.
+/// GPU-copyable (no pointers, no virtual functions).
+template <int nGroups, int nmscalars> struct CouplingState {
+	double rho;
+	double Egas0;
+	double Ekin0;
+	amrex::GpuArray<double, 3> gasMomentum0;
+	quokka::valarray<double, nGroups> Erad0;
+	quokka::valarray<double, nGroups> Src;
+	amrex::GpuArray<double, 3 * nGroups> Frad0_flat; // flattened [dim][nGroups] as [dim * nGroups]
+	amrex::GpuArray<amrex::Real, nmscalars> massScalars;
+	double dt;
+	double Etot0;
+};
+
 enum class DustModel { gas_only, coupled, decoupled };
 
 /// Solver control parameters. Not per-cell.

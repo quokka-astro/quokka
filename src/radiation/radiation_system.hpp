@@ -306,10 +306,6 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 						   quokka::valarray<double, nGroups_> const &work_prev, double rho,
 						   amrex::GpuArray<double, 3> const &gasMomentum, double Egas_guess) -> bool;
 
-	static void AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_implicit,
-					      double gas_update_factor, double dustGasCoeff, double tol_h, double tol_rel_h, double tempFloor,
-					      int *p_iteration_counter, int *p_iteration_failure_counter);
-
 	static void AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_implicit,
 				   double gas_update_factor_in, double dustGasCoeff, double const tol_h, double const tol_rel_h, double const tempFloor_local,
 				   int *p_iteration_counter, int *p_iteration_failure_counter);

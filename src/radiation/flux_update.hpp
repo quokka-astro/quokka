@@ -34,8 +34,16 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFluxAndMomentum(int const i, i
 	const double x3GasMom0 = consPrev(i, j, k, x3GasMomentum_index);
 	const std::array<double, 3> gasMtm0 = {x1GasMom0, x2GasMom0, x3GasMom0};
 
-	auto const fourPiBoverC = ComputeThermalRadiationMultiGroup(energy.T_d, radBoundaries_g);
-	auto const kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g, rho, energy.T_d);
+	quokka::valarray<double, nGroups_> fourPiBoverC{};
+	if constexpr (opacity_model_ == OpacityModel::single_group) {
+		fourPiBoverC[0] = ComputeThermalRadiationSingleGroup(energy.T_d);
+	} else {
+		fourPiBoverC = ComputeThermalRadiationMultiGroup(energy.T_d, radBoundaries_g);
+	}
+	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> kappa_expo_and_lower_value{};
+	if constexpr (opacity_model_ != OpacityModel::single_group) {
+		kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(radBoundaries_g, rho, energy.T_d);
+	}
 
 	const double chat = c_hat_;
 
@@ -64,7 +72,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFluxAndMomentum(int const i, i
 				// compute thermal radiation term
 				double Planck_term = NAN;
 
-				if constexpr (include_delta_B) {
+				if constexpr (opacity_model_ != OpacityModel::single_group && include_delta_B) {
 					Planck_term =
 					    energy.opacity_terms.kappaP[g] * fourPiBoverC[g] - 1.0 / 3.0 * energy.opacity_terms.delta_nu_kappa_B_at_edge[g];
 				} else {
@@ -79,7 +87,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFluxAndMomentum(int const i, i
 					pressure_term += gasMtm0[z] * Tedd[n][z] * erad;
 				}
 				// Simplification: assuming Eddington tensors are the same for all groups, we have kappaP = kappaE
-				if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
+				if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity || opacity_model_ == OpacityModel::single_group) {
 					pressure_term *= chat * dt * energy.opacity_terms.kappaE[g];
 				} else {
 					pressure_term *= chat * dt * (1.0 + kappa_expo_and_lower_value[0][g]) * energy.opacity_terms.kappaE[g];
@@ -123,7 +131,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFluxAndMomentum(int const i, i
 			for (int g = 0; g < nGroups_; ++g) {
 				// compute new work term from the updated radiation flux and velocity
 				// work = v * F * chi
-				if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
+				if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity || opacity_model_ == OpacityModel::single_group) {
 					energy.work[g] = (x1GasMom1 * Frad_t1[0][g] + x2GasMom1 * Frad_t1[1][g] + x3GasMom1 * Frad_t1[2][g]) *
 							 energy.opacity_terms.kappaF[g] * chat / (c_light_ * c_light_) * dt;
 				} else if constexpr (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum ||
