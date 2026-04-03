@@ -112,12 +112,11 @@ resolve_root() {
 }
 
 configure_build() {
+	if [ -f "${BUILD_DIR}/CMakeCache.txt" ]; then
+		rm -rf "${BUILD_DIR}"
+	fi
 	mkdir -p "$BUILD_DIR"
 	cd "$BUILD_DIR"
-
-	if [ -f CMakeCache.txt ]; then
-		rm -rf ./*
-	fi
 
 	log_cmd "cmake ../.. -G Ninja -DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DAMReX_SPACEDIM=${DIM}"
 	cmake ../.. -G Ninja -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" -DAMReX_SPACEDIM="${DIM}"
