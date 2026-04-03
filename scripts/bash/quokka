@@ -270,6 +270,8 @@ finalize_results() {
 execute_build() {
 	local allow_run_options="${1:-0}"
 	local problem=""
+	local targets=()
+	local log_targets=""
 
 	[ "${#PROBLEMS[@]}" -eq 0 ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
 	if [ "$allow_run_options" -eq 0 ]; then
@@ -283,12 +285,35 @@ execute_build() {
 	else
 		[ "${#PROBLEMS[@]}" -gt 0 ] || die "missing problem name"
 		for problem in "${PROBLEMS[@]}"; do
-			if build_problem "$problem"; then
-				record_result "$problem" "SUCCESS"
+			if check_problem_defined "$problem" 1; then
+				targets+=("$problem")
 			else
 				record_result "$problem" "FAIL"
 			fi
 		done
+
+		if [ "${#targets[@]}" -gt 0 ]; then
+			log_targets="${targets[*]}"
+			log_cmd "ninja -j${JOBS} ${log_targets}"
+			if (cd "$BUILD_DIR" && ninja -j"$JOBS" "${targets[@]}"); then
+				for problem in "${targets[@]}"; do
+					record_result "$problem" "SUCCESS"
+				done
+			else
+				if [ "${#targets[@]}" -gt 1 ]; then
+					echo -e "${YELLOW}${BOLD}Warning:${RESET} at least one job failed; rechecking targets individually for accurate summary."
+					for problem in "${targets[@]}"; do
+						if (cd "$BUILD_DIR" && ninja -j"$JOBS" "$problem" >/dev/null 2>&1); then
+							record_result "$problem" "SUCCESS"
+						else
+							record_result "$problem" "FAIL"
+						fi
+					done
+				else
+					record_result "${targets[0]}" "FAIL"
+				fi
+			fi
+		fi
 	fi
 
 	finalize_results || return 1
