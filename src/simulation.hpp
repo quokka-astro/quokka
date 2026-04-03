@@ -3953,83 +3953,12 @@ auto AMRSimulation<problem_t>::computeRuntimeDerivedVar(int lev, std::string con
 	ctx.depositParticleMassDensity = [this](const std::string &particleType, const std::string &depositField, amrex::MultiFab &outMF, int outLev,
 						int outComp, amrex::Real massMin, amrex::Real massMax, bool hasAgeFilter, amrex::Real tAgeMax) {
 #if AMREX_SPACEDIM == 3
-		if (particleType == "CIC") {
-			if (depositField != "mass") {
-				amrex::Abort("Derived field deposit_fields=birth_mass is not supported for particle type CIC.");
-			}
-			if (hasAgeFilter) {
-				amrex::Abort("Derived field age filter (t_age) is not supported for particle type CIC (missing birth_time).");
-			}
-			if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CIC) {
-				if (CICParticles != nullptr) {
-					quokka::depositParticleMassDensity(CICParticles.get(), outMF, outLev, quokka::CICParticleMassIdx, outComp, massMin,
-									   massMax);
-				}
-				return;
-			}
-			amrex::Abort("Derived field requested particle type CIC, but ParticleSwitch::CIC is not enabled for this problem.");
+		bool const deposit_birth_mass = (depositField == "birth_mass");
+		if (!deposit_birth_mass && depositField != "mass") {
+			amrex::Abort("Unsupported deposit field requested by runtime derived field provider: " + depositField);
 		}
-		if (particleType == "CICRad") {
-			if (depositField != "mass") {
-				amrex::Abort("Derived field deposit_fields=birth_mass is not supported for particle type CICRad.");
-			}
-			if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::CICRad) {
-				if (CICRadParticles != nullptr) {
-					quokka::depositParticleMassDensity(CICRadParticles.get(), outMF, outLev, quokka::CICRadParticleMassIdx, outComp,
-									   massMin, massMax, hasAgeFilter, quokka::CICRadParticleBirthTimeIdx, tNew_[0],
-									   tAgeMax);
-				}
-				return;
-			}
-			amrex::Abort("Derived field requested particle type CICRad, but ParticleSwitch::CICRad is not enabled for this problem.");
-		}
-		if (particleType == "StochasticStellarPop") {
-			if (depositField != "mass" && depositField != "birth_mass") {
-				amrex::Abort("Unsupported deposit field requested by runtime derived field provider: " + depositField);
-			}
-			const int massComp =
-			    (depositField == "birth_mass") ? quokka::StochasticStellarPopParticleMassAtBirthIdx : quokka::StochasticStellarPopParticleMassIdx;
-			if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::StochasticStellarPop) {
-				if (StochasticStellarPopParticles != nullptr) {
-					quokka::depositParticleMassDensity(StochasticStellarPopParticles.get(), outMF, outLev, massComp, outComp, massMin,
-									   massMax, hasAgeFilter, quokka::StochasticStellarPopParticleBirthTimeIdx, tNew_[0],
-									   tAgeMax);
-				}
-				return;
-			}
-			amrex::Abort("Derived field requested particle type StochasticStellarPop, but ParticleSwitch::StochasticStellarPop is not enabled for "
-				     "this problem.");
-		}
-		if (particleType == "Sink") {
-			if (depositField != "mass") {
-				amrex::Abort("Derived field deposit_fields=birth_mass is not supported for particle type Sink.");
-			}
-			if (hasAgeFilter) {
-				amrex::Abort("Derived field age filter (t_age) is not supported for particle type Sink (missing birth_time).");
-			}
-			if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) {
-				if (SinkParticles != nullptr) {
-					quokka::depositParticleMassDensity(SinkParticles.get(), outMF, outLev, quokka::SinkParticleMassIdx, outComp, massMin,
-									   massMax);
-				}
-				return;
-			}
-			amrex::Abort("Derived field requested particle type Sink, but ParticleSwitch::Sink is not enabled for this problem.");
-		}
-		if (particleType == "Test") {
-			if (depositField != "mass") {
-				amrex::Abort("Derived field deposit_fields=birth_mass is not supported for particle type Test.");
-			}
-			if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Test) {
-				if (TestParticles != nullptr) {
-					quokka::depositParticleMassDensity(TestParticles.get(), outMF, outLev, quokka::TestParticleMassIdx, outComp, massMin,
-									   massMax, hasAgeFilter, quokka::TestParticleBirthTimeIdx, tNew_[0], tAgeMax);
-				}
-				return;
-			}
-			amrex::Abort("Derived field requested particle type Test, but ParticleSwitch::Test is not enabled for this problem.");
-		}
-		amrex::Abort("Unsupported particle type requested by runtime derived field provider: " + particleType);
+		particleRegister_.depositParticleMassDensity(particleType, deposit_birth_mass, outMF, outLev, outComp, massMin, massMax, hasAgeFilter, tNew_[0],
+							     tAgeMax);
 #else
 		amrex::ignore_unused(depositField, outMF, outLev, outComp, massMin, massMax, hasAgeFilter, tAgeMax);
 		amrex::Abort("Particle deposition runtime derived fields are supported only in 3D.");
