@@ -83,17 +83,7 @@ void DerivedParticleDeposition::init(const std::string &a_prefix, std::string_vi
 	std::unordered_set<std::string> outputSet;
 	for (auto const &ptype : m_particleTypes) {
 		for (auto const &field : m_depositFields) {
-			std::string outputName;
-			if (hasExplicitOutputName) {
-				outputName = explicitOutputName;
-			} else if (totalOutputs == 1) {
-				// Use the provider group name so users can configure via:
-				// derived_vars = <name>
-				// quokka.<name>.type = DerivedParticleDeposition
-				outputName = m_fieldGroupName;
-			} else {
-				outputName = getFieldName(ptype, field);
-			}
+			std::string const outputName = hasExplicitOutputName ? explicitOutputName : getFieldName(ptype, field);
 			if (!outputSet.insert(outputName).second) {
 				amrex::Abort("Duplicate output field generated in DerivedParticleDeposition: " + outputName);
 			}
