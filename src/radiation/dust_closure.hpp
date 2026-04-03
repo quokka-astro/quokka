@@ -7,8 +7,7 @@
 /// Select dust model based on coupling strength.
 /// Returns gas_only when enable_dust_gas_thermal_coupling_model_ is false (constexpr path).
 /// Otherwise returns coupled or decoupled based on threshold.
-template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::SelectDustModel(double T_gas0, double T_d0, double Egas0, double coeff_n) -> DustModel
+template <typename problem_t> AMREX_GPU_DEVICE auto RadSystem<problem_t>::SelectDustModel(double T_gas0, double T_d0, double Egas0, double coeff_n) -> DustModel
 {
 	if constexpr (!enable_dust_gas_thermal_coupling_model_) {
 		return DustModel::gas_only;
@@ -30,9 +29,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SelectDustModel(double T_gas0, doubl
 ///   photons absorbed by dust heat the dust.
 /// - decoupled: at n==0, use T_d0; thereafter, Td is updated by the Newton step
 template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureFromIterate(DustModel model, double T_gas,
-									      quokka::valarray<double, nGroups_> const &Rvec_all, double coeff_n,
-									      double T_d0, int newton_iter, double tempFloor) -> double
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureFromIterate(DustModel model, double T_gas, quokka::valarray<double, nGroups_> const &Rvec_all,
+									      double coeff_n, double T_d0, int newton_iter, double tempFloor) -> double
 {
 	// When enable_dust_gas_thermal_coupling_model_ is true, model is always
 	// coupled or decoupled (never gas_only), so no need to check for gas_only here.

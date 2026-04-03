@@ -57,7 +57,7 @@ template <typename problem_t, bool debug_mode = false> struct ThermalResult {
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveArrowheadSystem(JacobianResult<problem_t> const &jacobian, double &x0,
-								       quokka::valarray<double, nGroups_> &xi)
+								      quokka::valarray<double, nGroups_> &xi)
 {
 	auto ratios = jacobian.J0g / jacobian.Jgg;
 	x0 = (sum(ratios * jacobian.Fg) - jacobian.F0) / (-sum(ratios * jacobian.Jg0) + jacobian.J00);
@@ -72,14 +72,12 @@ AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveArrowheadSystem(JacobianRe
 // convergence rate, not the converged solution).
 
 template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianGasOnly(double /*T_d*/, double Egas_diff,
-								    quokka::valarray<double, nGroups_> const &Erad_diff,
-								    quokka::valarray<double, nGroups_> const &Rvec,
-								    quokka::valarray<double, nGroups_> const &Src,
-								    quokka::valarray<double, nGroups_> const &tau, double c_v,
-								    quokka::valarray<double, nGroups_> const &kappaPoverE,
-								    quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t, double const num_den,
-								    double const dt) -> JacobianResult<problem_t>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianGasOnly(double /*T_d*/, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff,
+								   quokka::valarray<double, nGroups_> const &Rvec,
+								   quokka::valarray<double, nGroups_> const &Src, quokka::valarray<double, nGroups_> const &tau,
+								   double c_v, quokka::valarray<double, nGroups_> const &kappaPoverE,
+								   quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t, double const num_den,
+								   double const dt) -> JacobianResult<problem_t>
 {
 	JacobianResult<problem_t> result;
 
@@ -123,15 +121,11 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianGasOnly(double /*T_d*
 // are neglected.
 
 template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianDustCoupled(double T_gas, double T_d, double Egas_diff,
-									quokka::valarray<double, nGroups_> const &Erad_diff,
-									quokka::valarray<double, nGroups_> const &Rvec,
-									quokka::valarray<double, nGroups_> const &Src, double coeff_n,
-									quokka::valarray<double, nGroups_> const &tau, double c_v,
-									double /*lambda_gd_time_dt*/,
-									quokka::valarray<double, nGroups_> const &kappaPoverE,
-									quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t,
-									double const num_den, double const dt) -> JacobianResult<problem_t>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianDustCoupled(
+    double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff, quokka::valarray<double, nGroups_> const &Rvec,
+    quokka::valarray<double, nGroups_> const &Src, double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v, double /*lambda_gd_time_dt*/,
+    quokka::valarray<double, nGroups_> const &kappaPoverE, quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t, double const num_den, double const dt)
+    -> JacobianResult<problem_t>
 {
 	JacobianResult<problem_t> result;
 
@@ -188,15 +182,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianDustCoupled(double T_
 // Temperature derivatives of kappaP and kappaE are neglected.
 
 template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianDustDecoupled(double /*T_gas*/, double /*T_d*/, double /*Egas_diff*/,
-									  quokka::valarray<double, nGroups_> const &Erad_diff,
-									  quokka::valarray<double, nGroups_> const &Rvec,
-									  quokka::valarray<double, nGroups_> const &Src, double /*coeff_n*/,
-									  quokka::valarray<double, nGroups_> const &tau, double /*c_v*/,
-									  double lambda_gd_time_dt,
-									  quokka::valarray<double, nGroups_> const &kappaPoverE,
-									  quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t)
-    -> JacobianResult<problem_t>
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeJacobianDustDecoupled(
+    double /*T_gas*/, double /*T_d*/, double /*Egas_diff*/, quokka::valarray<double, nGroups_> const &Erad_diff, quokka::valarray<double, nGroups_> const &Rvec,
+    quokka::valarray<double, nGroups_> const &Src, double /*coeff_n*/, quokka::valarray<double, nGroups_> const &tau, double /*c_v*/, double lambda_gd_time_dt,
+    quokka::valarray<double, nGroups_> const &kappaPoverE, quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>
 {
 	JacobianResult<problem_t> result;
 
@@ -352,7 +341,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveRadiationMatterCoupling(
 				T_d = T_d0;
 			} else {
 				T_d = T_gas - sum(Rvec) / (coeff_n * std::sqrt(T_gas));
-				AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative! Consider increasing ISM_Traits::gas_dust_coupling_threshold");
+				AMREX_ASSERT_WITH_MESSAGE(T_d >= 0.,
+							  "Dust temperature is negative! Consider increasing ISM_Traits::gas_dust_coupling_threshold");
 			}
 		} else { // decoupled
 			if (n == 0) {
@@ -400,7 +390,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveRadiationMatterCoupling(
 				if (n_outer_iter == 0) {
 					for (int g = 0; g < nGroups_; ++g) {
 						if constexpr (opacity_model_ == OpacityModel::piecewise_constant_opacity ||
-						     opacity_model_ == OpacityModel::single_group) {
+							      opacity_model_ == OpacityModel::single_group) {
 							work_local[g] = vel_times_F[g] * opacity_terms.kappaF[g] * chat / (c * c) * dt;
 						} else {
 							const auto kappa_expo_and_lower_value = DefineOpacityExponentsAndLowerValues(rad_boundaries, rho, T_d);
@@ -503,9 +493,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveRadiationMatterCoupling(
 	}
 
 	// Update iteration counters
-	amrex::Gpu::Atomic::Add(&p_iteration_counter[0], 1);      // total number of radiation updates
-	amrex::Gpu::Atomic::Add(&p_iteration_counter[1], n + 1);  // total number of Newton-Raphson iterations
-	amrex::Gpu::Atomic::Max(&p_iteration_counter[2], n + 1);  // maximum number of Newton-Raphson iterations
+	amrex::Gpu::Atomic::Add(&p_iteration_counter[0], 1);	 // total number of radiation updates
+	amrex::Gpu::Atomic::Add(&p_iteration_counter[1], n + 1); // total number of Newton-Raphson iterations
+	amrex::Gpu::Atomic::Max(&p_iteration_counter[2], n + 1); // maximum number of Newton-Raphson iterations
 	if (dust_model == DustModel::decoupled) {
 		amrex::Gpu::Atomic::Add(&p_iteration_counter[3], 1); // total number of decoupled gas-dust iterations
 	}

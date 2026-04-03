@@ -18,8 +18,8 @@
 /// Also updates energy.Egas and energy.work when include_work_term_in_source is true.
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFluxAndMomentum(int const i, int const j, int const k, arrayconst_t const &consPrev,
-								  NewtonIterationResult<problem_t> &energy, double const dt,
-								  double const gas_update_factor, double const Ekin0) -> FluxUpdateResult<problem_t>
+								  NewtonIterationResult<problem_t> &energy, double const dt, double const gas_update_factor,
+								  double const Ekin0) -> FluxUpdateResult<problem_t>
 {
 	amrex::GpuArray<amrex::Real, 3> Frad_t0{};
 	amrex::GpuArray<amrex::Real, 3> dMomentum{0., 0., 0.};
@@ -192,8 +192,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFluxAndMomentum(int const i, i
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeWorkTerm(amrex::GpuArray<amrex::Real, 3> const &gasMomentum,
 							    amrex::GpuArray<amrex::GpuArray<amrex::Real, nGroups_>, 3> const &Frad,
-							    OpacityTerms<problem_t> const &opacity_terms, double const dt)
-    -> quokka::valarray<double, nGroups_>
+							    OpacityTerms<problem_t> const &opacity_terms, double const dt) -> quokka::valarray<double, nGroups_>
 {
 	// make a copy of radBoundaries_
 	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g = radBoundaries_;
@@ -223,9 +222,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeWorkTerm(amrex::GpuArray<amre
 /// Check convergence of the work term in the outer work-lag iteration.
 /// Returns true if the work term has converged or if work terms are not used.
 template <typename problem_t>
-AMREX_GPU_DEVICE auto RadSystem<problem_t>::WorkConverged(quokka::valarray<double, nGroups_> const &work,
-							  quokka::valarray<double, nGroups_> const &work_prev, double const rho,
-							  amrex::GpuArray<double, 3> const &gasMomentum, double const Egas_guess) -> bool
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::WorkConverged(quokka::valarray<double, nGroups_> const &work, quokka::valarray<double, nGroups_> const &work_prev,
+							  double const rho, amrex::GpuArray<double, 3> const &gasMomentum, double const Egas_guess) -> bool
 {
 	if constexpr ((beta_order_ == 0) || (gamma_ == 1.0) || (!include_work_term_in_source)) {
 		return true;

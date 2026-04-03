@@ -1,8 +1,8 @@
 #ifndef COUPLING_TYPES_HPP_
 #define COUPLING_TYPES_HPP_
 
-#include "AMReX_GpuQualifiers.H"
 #include "AMReX_Array.H"
+#include "AMReX_GpuQualifiers.H"
 #include "util/valarray.hpp"
 #include <array>
 
