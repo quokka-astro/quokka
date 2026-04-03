@@ -65,7 +65,6 @@ plugins:
       bib_file: markdown/references.bib
       bib_by_default: true
       csl_file: apa-6th-edition.csl
-      encoding: utf-8
   - mermaid2:
       version: 10.6.1
 
