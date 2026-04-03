@@ -98,8 +98,8 @@ namespace filesystem = experimental::filesystem;
 // internal headers
 #include "fundamental_constants.H"
 #include "grid.hpp"
-#include "io/DerivedFieldBase.H"
 #include "hydro/mhd_system.hpp"
+#include "io/DerivedFieldBase.H"
 #include "io/DiagBase.H"
 #include "io/DiagFramePlane.H"
 #include "io/DiagPDF.H"
