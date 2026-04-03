@@ -14,13 +14,15 @@ The script attempts to source `~/.local/bin/quokka.rc` for commands that need th
 - **Configure**: `quokka config <preset>` — runs CMake with the correct dimensionality and build type
 - **Build one or more problems**: `quokka build <preset> <problem> [<problem> ...] [-j <N>]`
 - **Build matching problems**: `quokka build <preset> --filter <glob> [-j <N>]` (e.g. `Rad*`)
+- **Build and run (combined)**: `quokka buildrun <preset> <problem> [<problem> ...] [-j <N>] [--fpe] [--input <file>]`
+- **Build and run (filtered)**: `quokka buildrun <preset> --filter <pattern> [-j <N>] [--fpe]`
 - **Run one or more problems**: `quokka run <preset> <problem> [<problem> ...] [--input <file>] [--fpe]` (`--input` only with one problem)
 - **Run all tests**: `quokka run <preset> [-j <N>]`
 - **Run matching tests**: `quokka run <preset> --filter <regex>`
 - **List problems**: `quokka list`
 - **Show targets**: `quokka target <preset>`
 - **Clean test output**: `quokka clean`
-- **Result summary**: `build` and `run` always print a final per-target summary line (`<name> SUCCESS|FAIL|SKIPPED`), so tooling/agents can reliably inspect outcomes by tailing the command output.
+- **Result summary**: `build`, `run`, and `buildrun` always print final per-target summary lines (`<name> SUCCESS|FAIL|SKIPPED`), so tooling/agents can reliably inspect outcomes by tailing the command output.
 
 Presets: `1d`, `3d`, `1d-debug`, `3d-debug` (sets dimensionality and Release/Debug build type).
 
