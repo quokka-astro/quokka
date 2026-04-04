@@ -68,22 +68,8 @@ print_results() {
 	local result=""
 	local name=""
 	local status=""
-	local all_success=1
 
-	for result in "${RESULT_LINES[@]}"; do
-		status="${result##* }"
-		if [ "$status" != "SUCCESS" ]; then
-			all_success=0
-			break
-		fi
-	done
-
-	if [ "${#RESULT_LINES[@]}" -gt 0 ] && [ "$all_success" -eq 1 ]; then
-		echo -e "${GREEN}${BOLD}ALL PROBLEM SUCCESS${RESET}"
-		return
-	fi
-
-	for result in "${RESULT_LINES[@]}"; do
+	for result in "${RESULT_LINES[@]+"${RESULT_LINES[@]}"}"; do
 		name="${result% *}"
 		status="${result##* }"
 		case "$status" in
@@ -370,11 +356,8 @@ execute_run() {
 				die "--fpe with ctest-based runs requires ctest support for --test-command-args"
 			fi
 		fi
-		if run_filtered "$FILTER_REGEX" "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"; then
-			record_result "ctest" "SUCCESS"
-		else
-			record_result "ctest" "FAIL"
-		fi
+		run_filtered "$FILTER_REGEX" "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"
+		return $?
 	elif [ "${#PROBLEMS[@]}" -gt 0 ]; then
 		[ "${#PROBLEMS[@]}" -le 1 ] || [ -z "$INPUT_FILE" ] || die "--input accepts only one <problem>"
 		[ -d "${ROOT}/tests" ] || die "tests directory not found: ${ROOT}/tests (use --root to specify the quokka root)"
@@ -402,11 +385,8 @@ execute_run() {
 				die "--fpe with ctest-based runs requires ctest support for --test-command-args"
 			fi
 		fi
-		if run_all_tests "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"; then
-			record_result "ctest" "SUCCESS"
-		else
-			record_result "ctest" "FAIL"
-		fi
+		run_all_tests "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"
+		return $?
 	fi
 
 	finalize_results || return 1
