@@ -84,7 +84,7 @@ RUN set -euo pipefail && \
     test -x build/src/problems/DiskGalaxy/DiskGalaxy
 
 # Runtime stage (reduced image size)
-FROM --platform=${TARGETPLATFORM} opensuse/leap:15.6
+FROM --platform=linux/amd64 opensuse/leap:15.6
 
 ARG MPICH_VERSION=4.2.2
 
