@@ -771,7 +771,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
 		initializeSimulationMetadata();
 	}
-
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::PerformanceHints()
@@ -1632,7 +1631,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	if (checkpointInterval_ > 0 && istep[0] > last_chk_file_step) {
 		WriteCheckpointFile();
 	}
-
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLevels()
