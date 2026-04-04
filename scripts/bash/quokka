@@ -246,6 +246,10 @@ run_all_tests() {
 	ctest --test-dir "$BUILD_DIR" -j"$JOBS" "$@"
 }
 
+ctest_supports_test_command_args() {
+	ctest --help 2>/dev/null | grep -q -- '--test-command-args'
+}
+
 list_problems() {
 	find "${ROOT}/src/problems" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort
 }
@@ -345,6 +349,7 @@ execute_build() {
 execute_run() {
 	local PROBLEM=""
 	local problem_input=""
+	local CTEST_TEST_ARGS=()
 
 	[ "${#PROBLEMS[@]}" -eq 0 ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
 	init_results
@@ -352,13 +357,18 @@ execute_run() {
 	RUN_ARGS=(tiny_profiler.enabled=0 amr.v=0 suppress_output=1 particles.verbose=0)
 	if [ "$ENABLE_FPE" -eq 1 ]; then
 		RUN_ARGS=(amrex.fpe_trap_invalid=1 amrex.fpe_trap_overflow=1 amrex.fpe_trap_zero=1)
+		CTEST_TEST_ARGS=(amrex.fpe_trap_invalid=1 amrex.fpe_trap_overflow=1 amrex.fpe_trap_zero=1)
 	fi
 
 	if [ -n "$FILTER_REGEX" ]; then
 		[ -z "$INPUT_FILE" ] || die "--filter does not accept --input"
 		CTEST_ARGS=()
-		if [ "${#RUN_ARGS[@]}" -gt 0 ]; then
-			CTEST_ARGS+=(--test-command-args "${RUN_ARGS[*]}")
+		if [ "${#CTEST_TEST_ARGS[@]}" -gt 0 ]; then
+			if ctest_supports_test_command_args; then
+				CTEST_ARGS+=(--test-command-args "${CTEST_TEST_ARGS[*]}")
+			else
+				die "--fpe with ctest-based runs requires ctest support for --test-command-args"
+			fi
 		fi
 		if run_filtered "$FILTER_REGEX" "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"; then
 			record_result "ctest" "SUCCESS"
@@ -385,8 +395,12 @@ execute_run() {
 	else
 		[ -z "$INPUT_FILE" ] || die "running all tests does not accept --input"
 		CTEST_ARGS=()
-		if [ "${#RUN_ARGS[@]}" -gt 0 ]; then
-			CTEST_ARGS+=(--test-command-args "${RUN_ARGS[*]}")
+		if [ "${#CTEST_TEST_ARGS[@]}" -gt 0 ]; then
+			if ctest_supports_test_command_args; then
+				CTEST_ARGS+=(--test-command-args "${CTEST_TEST_ARGS[*]}")
+			else
+				die "--fpe with ctest-based runs requires ctest support for --test-command-args"
+			fi
 		fi
 		if run_all_tests "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"; then
 			record_result "ctest" "SUCCESS"
