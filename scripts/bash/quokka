@@ -29,6 +29,7 @@ Options:
   --input <file>   Input file to pass to the executable (default: inputs/<problem>.toml)
   --fpe            Enable floating-point exception traps (invalid, overflow, divide-by-zero)
   --filter <pattern> For run: ctest regex; for build: shell glob over problem names; exclusive with <problem>
+                     Quote patterns to avoid expansion by your shell (e.g. --filter 'Rad*')
   --source <file>  Optional environment file to source before config/build/run/target commands
   --delete         For config only: delete existing preset build directory before reconfiguring
   -j <N>           Number of parallel jobs for ninja or ctest (default: 8)
