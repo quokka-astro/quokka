@@ -1,6 +1,4 @@
-ARG TARGETPLATFORM=linux/amd64
-
-FROM --platform=${TARGETPLATFORM} opensuse/leap:15.6 AS build
+FROM --platform=linux/amd64 opensuse/leap:15.6 AS build
 
 ARG ROCM_ZYPP_REPO_VERSION=7.2.0
 ARG ROCM_ZYPP_PACKAGES=
@@ -38,7 +36,7 @@ RUN set -euo pipefail && \
     ldconfig
 
 ENV PATH="/opt/rocm/bin:${PATH}" \
-    LD_LIBRARY_PATH="/opt/rocm/lib" \
+    LD_LIBRARY_PATH="/opt/rocm/lib:${LD_LIBRARY_PATH}" \
     ROCM_PATH="/opt/rocm" \
     AMREX_AMD_ARCH="${AMREX_AMD_ARCH}" \
     CC="amdclang" \
@@ -66,7 +64,7 @@ RUN set -euo pipefail && \
 ENV MPICH_VERSION="${MPICH_VERSION}" \
     MPICH_DIR="/opt/mpich/${MPICH_VERSION}" \
     PATH="/opt/mpich/${MPICH_VERSION}/bin:${PATH}" \
-    LD_LIBRARY_PATH="/opt/mpich/${MPICH_VERSION}/lib:/opt/rocm/lib"
+    LD_LIBRARY_PATH="/opt/mpich/${MPICH_VERSION}/lib:${LD_LIBRARY_PATH}"
 
 COPY . /tmp/quokka-src
 WORKDIR /tmp/quokka-src
@@ -119,7 +117,7 @@ RUN chmod 0755 /opt/quokka/bin/DiskGalaxy && \
 
 ENV MPICH_VERSION="${MPICH_VERSION}" \
     PATH="/opt/quokka/bin:/opt/mpich/${MPICH_VERSION}/bin:${PATH}" \
-    LD_LIBRARY_PATH="/opt/mpich/${MPICH_VERSION}/lib:/opt/rocm/lib"
+    LD_LIBRARY_PATH="/opt/mpich/${MPICH_VERSION}/lib:/opt/rocm/lib:${LD_LIBRARY_PATH}"
 
 USER leap
 WORKDIR /home/leap
