@@ -1,4 +1,6 @@
-FROM --platform=linux/amd64 opensuse/leap:15.6 AS build
+ARG TARGETPLATFORM=linux/amd64
+
+FROM --platform=${TARGETPLATFORM} opensuse/leap:15.6 AS build
 
 ARG ROCM_ZYPP_REPO_VERSION=7.2.0
 ARG ROCM_ZYPP_PACKAGES=
@@ -16,8 +18,9 @@ RUN set -euo pipefail && \
     if ! zypper repos -E | grep -q devel_languages_perl; then \
       zypper --non-interactive addrepo https://download.opensuse.org/repositories/devel:/languages:/perl/15.6/devel:languages:perl.repo; \
     fi && \
+    roc_repos_version="${ROCM_ZYPP_REPO_VERSION%.*}" && \
     printf "[ROCm-%s]\nname=ROCm%s\nbaseurl=https://repo.radeon.com/rocm/zyp/%s/main\nenabled=1\ngpgcheck=1\ngpgkey=https://repo.radeon.com/rocm/rocm.gpg.key\n" \
-      "${ROCM_ZYPP_REPO_VERSION}" "${ROCM_ZYPP_REPO_VERSION}" "${ROCM_ZYPP_REPO_VERSION}" > /etc/zypp/repos.d/rocm.repo && \
+      "${ROCM_ZYPP_REPO_VERSION}" "${ROCM_ZYPP_REPO_VERSION}" "${roc_repos_version}" > /etc/zypp/repos.d/rocm.repo && \
     zypper --non-interactive --gpg-auto-import-keys refresh && \
     if [ -n "${ROCM_ZYPP_PACKAGES}" ]; then \
       zypper --non-interactive install --no-recommends ${ROCM_ZYPP_PACKAGES}; \
@@ -35,7 +38,7 @@ RUN set -euo pipefail && \
     ldconfig
 
 ENV PATH="/opt/rocm/bin:${PATH}" \
-    LD_LIBRARY_PATH="/opt/rocm/lib:${LD_LIBRARY_PATH}" \
+    LD_LIBRARY_PATH="/opt/rocm/lib" \
     ROCM_PATH="/opt/rocm" \
     AMREX_AMD_ARCH="${AMREX_AMD_ARCH}" \
     CC="amdclang" \
@@ -63,7 +66,7 @@ RUN set -euo pipefail && \
 ENV MPICH_VERSION="${MPICH_VERSION}" \
     MPICH_DIR="/opt/mpich/${MPICH_VERSION}" \
     PATH="/opt/mpich/${MPICH_VERSION}/bin:${PATH}" \
-    LD_LIBRARY_PATH="/opt/mpich/${MPICH_VERSION}/lib:${LD_LIBRARY_PATH}"
+    LD_LIBRARY_PATH="/opt/mpich/${MPICH_VERSION}/lib:/opt/rocm/lib"
 
 COPY . /tmp/quokka-src
 WORKDIR /tmp/quokka-src
@@ -83,7 +86,7 @@ RUN set -euo pipefail && \
     test -x build/src/problems/DiskGalaxy/DiskGalaxy
 
 # Runtime stage (reduced image size)
-FROM --platform=linux/amd64 opensuse/leap:15.6
+FROM --platform=${TARGETPLATFORM} opensuse/leap:15.6
 
 ARG MPICH_VERSION=4.2.2
 
@@ -116,7 +119,7 @@ RUN chmod 0755 /opt/quokka/bin/DiskGalaxy && \
 
 ENV MPICH_VERSION="${MPICH_VERSION}" \
     PATH="/opt/quokka/bin:/opt/mpich/${MPICH_VERSION}/bin:${PATH}" \
-    LD_LIBRARY_PATH="/opt/mpich/${MPICH_VERSION}/lib:${LD_LIBRARY_PATH}"
+    LD_LIBRARY_PATH="/opt/mpich/${MPICH_VERSION}/lib:/opt/rocm/lib"
 
 USER leap
 WORKDIR /home/leap
