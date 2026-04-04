@@ -2,27 +2,26 @@
 
 set -euo pipefail
 
-ENV_RC="${HOME}/.local/bin/quokka.rc"
-
 usage() {
 	cat <<'EOF'
 Usage:
-  quokka config <preset> [--delete] [--root <path>]
+  quokka config <preset> [--delete] [--source <file>] [--root <path>]
                                              Configure CMake build directory for the given preset
-  quokka build <preset> <problem> [<problem> ...] [-j <N>] [--root <path>]
+  quokka build <preset> <problem> [<problem> ...] [-j <N>] [--source <file>] [--root <path>]
                                              Compile one or more specific problem targets using ninja
-  quokka build <preset> --filter <glob> [-j <N>] [--root <path>]
+  quokka build <preset> --filter <glob> [-j <N>] [--source <file>] [--root <path>]
                                              Compile all problem targets matching glob (e.g., Rad*)
-  quokka buildrun <preset> <problem> [<problem> ...] [-j <N>] [--fpe] [--input <file>] [--root <path>]
+  quokka buildrun <preset> <problem> [<problem> ...] [-j <N>] [--fpe] [--input <file>] [--source <file>] [--root <path>]
                                              Build then run one or more specific problems
-  quokka buildrun <preset> --filter <pattern> [-j <N>] [--fpe] [--root <path>]
+  quokka buildrun <preset> --filter <pattern> [-j <N>] [--fpe] [--source <file>] [--root <path>]
                                              Build matching problems then run matching tests
-  quokka run <preset> [<problem> ...] [--input <file>] [-j <N>] [--fpe] [--root <path>]
+  quokka run <preset> [<problem> ...] [--input <file>] [-j <N>] [--fpe] [--source <file>] [--root <path>]
                                              Run one or more problem executables from the tests/ directory
-  quokka run <preset> [--filter <regex>] [-j <N>] [--fpe] [--root <path>]
+  quokka run <preset> [--filter <regex>] [-j <N>] [--fpe] [--source <file>] [--root <path>]
                                              Run all tests (or matching regex via ctest -R)
   quokka list [--root <path>]                List all available problem directories
-  quokka target <preset> [--root <path>]     Show all available CMake build targets
+  quokka target <preset> [--source <file>] [--root <path>]
+                                             Show all available CMake build targets
   quokka clean [--root <path>]               Remove plotfiles, checkpoints, and output files from tests/
 
 Options:
@@ -30,6 +29,7 @@ Options:
   --input <file>   Input file to pass to the executable (default: inputs/<problem>.toml)
   --fpe            Enable floating-point exception traps (invalid, overflow, divide-by-zero)
   --filter <pattern> For run: ctest regex; for build: shell glob over problem names; exclusive with <problem>
+  --source <file>  Optional environment file to source before config/build/run/target commands
   --delete         For config only: delete existing preset build directory before reconfiguring
   -j <N>           Number of parallel jobs for ninja or ctest (default: 8)
 
@@ -98,12 +98,14 @@ require_arg() {
 }
 
 load_environment() {
-	if [ -f "$ENV_RC" ]; then
-		if ! source "$ENV_RC"; then
-			echo "Warning: failed to source '${ENV_RC}'; continuing without environment setup." >&2
-		fi
-	else
-		echo "Warning: environment file '${ENV_RC}' not found; continuing without environment setup." >&2
+	if [ -z "$SOURCE_FILE" ]; then
+		return
+	fi
+	if [ ! -f "$SOURCE_FILE" ]; then
+		die "environment file '${SOURCE_FILE}' not found"
+	fi
+	if ! source "$SOURCE_FILE"; then
+		die "failed to source environment file '${SOURCE_FILE}'"
 	fi
 }
 
@@ -111,6 +113,7 @@ _require_no_problem()  { [ "${#PROBLEMS[@]}" -eq 0 ] || die "'${COMMAND}' does n
 _require_no_input()    { [ -z "$INPUT_FILE" ]        || die "'${COMMAND}' does not accept --input"; }
 _require_no_fpe()      { [ "$ENABLE_FPE" -eq 0 ]     || die "'${COMMAND}' does not accept --fpe"; }
 _require_no_filter()   { [ -z "$FILTER_REGEX" ]      || die "'${COMMAND}' does not accept --filter"; }
+_require_no_source()   { [ -z "$SOURCE_FILE" ]       || die "'${COMMAND}' does not accept --source"; }
 _require_no_delete()   { [ "$DELETE_BUILD_DIR" -eq 0 ] || die "'${COMMAND}' does not accept --delete"; }
 
 parse_preset() {
@@ -432,6 +435,7 @@ PROBLEMS=()
 INPUT_FILE=""
 ENABLE_FPE=0
 FILTER_REGEX=""
+SOURCE_FILE=""
 DELETE_BUILD_DIR=0
 JOBS=8
 
@@ -459,6 +463,11 @@ while [ "$#" -gt 0 ]; do
 	--filter)
 		require_arg "$1" "${2:-}"
 		FILTER_REGEX="$2"
+		shift 2
+		;;
+	--source)
+		require_arg "$1" "${2:-}"
+		SOURCE_FILE="$2"
 		shift 2
 		;;
 	--delete)
@@ -525,6 +534,7 @@ list)
 	_require_no_input
 	_require_no_fpe
 	_require_no_filter
+	_require_no_source
 	_require_no_delete
 	list_problems
 	;;
@@ -542,6 +552,7 @@ clean)
 	_require_no_input
 	_require_no_fpe
 	_require_no_filter
+	_require_no_source
 	_require_no_delete
 	clean_tests
 	;;
