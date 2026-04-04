@@ -49,14 +49,14 @@ Here, `Dust` refers to the dedicated dust dynamics module enabled with `Physics_
 This matrix covers hydro, MHD, radiation, cooling, chemistry, particles, and the dedicated dust module. It does not include self-gravity.
 
 | Module | Hydro | MHD | Radiation | Cooling | Chemistry | Particles | Dust |
-| ------ | ----- | --- | --------- | ------- | --------- | --------- | ---- |
-| Hydro |  | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| MHD | ✅ |  | ❌ | ✅ | ⚠️ | ✅ | ⚠️ |
-| Radiation | ✅ | ❌ |  | ⚠️ |  | ✅ |  |
-| Cooling | ✅ | ✅ | ⚠️ |  | ⚠️ | ✅ |  |
-| Chemistry | ✅ | ⚠️ |  | ⚠️ |  |  |  |
-| Particles | ✅ | ✅ | ✅ | ✅ |  |  |  |
-| Dust | ✅ | ⚠️ |  |  |  |  |  |
+| ------ |:-----:|:---:|:---------:|:-------:|:---------:|:---------:|:----:|
+| Hydro | | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| MHD | | | ❌ | ✅ | ⚠️ | ✅ | ⚠️ |
+| Radiation | | | | ⚠️ | | ✅ | |
+| Cooling | | | | | ⚠️ | ✅ | |
+| Chemistry | | | | | | | |
+| Particles | | | | | | | |
+| Dust | | | | | | | |
 
 Notes:
 
