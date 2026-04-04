@@ -418,6 +418,12 @@ COMMAND="${1:-}"
 	usage
 	exit 1
 }
+case "$COMMAND" in
+-h|--help)
+	usage
+	exit 0
+	;;
+esac
 shift
 
 PRESET=""
