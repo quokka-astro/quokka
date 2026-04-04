@@ -1,6 +1,6 @@
 # In-situ analysis
 
-*In-situ analysis* refers to analyzing the simulations as they are running. There are two options: using the *runtime diagnostics* that are built-in to Quokka, and volume rendering using *Ascent*, a third-party library.
+*In-situ analysis* refers to analyzing simulations as they are running using Quokka's built-in runtime diagnostics.
 
 ## Diagnostics
 
@@ -105,66 +105,3 @@ quokka.hist_temp.filters = dense                       # (Optional) List of filt
 quokka.hist_temp.dense.field_name = gasDensity         # Filter field
 quokka.hist_temp.dense.value_greater = 1e-25           # Filters: value_greater, value_less, value_inrange
 ```
-
-## Volume Rendering (Ascent)
-
-!!! Warning
-    Ascent should only be used for volume rendering.  Other visualization features are not expected to work correctly, since we do **not** pass ghost cells to Ascent.
-
-Ascent allows you to generate raytraced volume renderings (saved as a sequence of PNG images) while the simulation is running.
-
-![](media/volume_render_sphere.png)
-
-*A volume rendering of the `SphericalCollapse` problem.*
-
-### Compiling Ascent on an HPC cluster
-
-1.  Download Spack and activate it in your environment.
-2.  Run `spack external find`.
-3.  Make sure there are entries listed for `slurm` and `mpi` in your `~/.spack/packages.yaml` file.
-4.  Add [buildable: False](https://spack.readthedocs.io/en/latest/build_settings.html#external-packages) to these entries.
-5.  Run `spack fetch --dependencies ascent@develop`
-6.  On a dedicated compute node, run `spack install ascent@develop`
-
-If you are running your simulation on GPU nodes, you should add either `+cuda` or `+rocm` to the Spack spec, e.g. `spack install ascent@develop+cuda`, depending on whether you are running on NVIDIA or AMD GPUs, respectively.
-
-### Compiling Quokka with Ascent support
-
-1.  Load Ascent: `spack load ascent`
-2.  Add `-DAMReX_ASCENT=ON -DAMReX_CONDUIT=ON` to your CMake options.
-3.  Compile your problem, e.g.: `ninja -j4 test_hydro3d_blast`
-
-### Running with Ascent
-
-Add `ascent_interval = N` to your ParmParse input file, where `N` is the number of coarse timesteps between Ascent outputs.
-
-### Customizing the rendering
-
-Add an [ascent_actions.yaml file](https://ascent.readthedocs.io/en/latest/Actions/Actions.html) to the simulation working directory. This example actions file will create a volume rendering with the given camera parameters:
-
-```yaml
-- action: "add_extracts"
-  extracts:
-    my_volume_extract:
-      type: "volume"
-      params:
-        field: "gasDensity"
-        filename: "volume%05d"
-        image_width: 512
-        image_height: 512
-        camera:
-          look_at: [0.5, 0.5, 0.5]
-          position: [-1.2, 0.499, 0.501]
-          up: [0.0, 0.0, 1.0]
-          fov: 60.0
-          xpan: 0.0
-          ypan: 0.0
-          zoom: 1.0
-          azimuth: 0.0
-          elevation: 0.0
-          near_plane: 0.01
-          far_plane: 10.0
-```
-
-!!! Warning
-    The `ascent_actions.yaml` file can be edited while the simulation is running, and the updated parameters will be used for subsequent renders. If invalid values are given, renders may stop working without notice.
