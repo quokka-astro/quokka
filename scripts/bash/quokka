@@ -7,7 +7,8 @@ ENV_RC="${HOME}/.local/bin/quokka.rc"
 usage() {
 	cat <<'EOF'
 Usage:
-  quokka config <preset> [--root <path>]     Configure CMake build directory for the given preset
+  quokka config <preset> [--delete] [--root <path>]
+                                             Configure CMake build directory for the given preset
   quokka build <preset> <problem> [<problem> ...] [-j <N>] [--root <path>]
                                              Compile one or more specific problem targets using ninja
   quokka build <preset> --filter <glob> [-j <N>] [--root <path>]
@@ -29,6 +30,7 @@ Options:
   --input <file>   Input file to pass to the executable (default: inputs/<problem>.toml)
   --fpe            Enable floating-point exception traps (invalid, overflow, divide-by-zero)
   --filter <pattern> For run: ctest regex; for build: shell glob over problem names; exclusive with <problem>
+  --delete         For config only: delete existing preset build directory before reconfiguring
   -j <N>           Number of parallel jobs for ninja or ctest (default: 8)
 
 Presets:
@@ -109,6 +111,7 @@ _require_no_problem()  { [ "${#PROBLEMS[@]}" -eq 0 ] || die "'${COMMAND}' does n
 _require_no_input()    { [ -z "$INPUT_FILE" ]        || die "'${COMMAND}' does not accept --input"; }
 _require_no_fpe()      { [ "$ENABLE_FPE" -eq 0 ]     || die "'${COMMAND}' does not accept --fpe"; }
 _require_no_filter()   { [ -z "$FILTER_REGEX" ]      || die "'${COMMAND}' does not accept --filter"; }
+_require_no_delete()   { [ "$DELETE_BUILD_DIR" -eq 0 ] || die "'${COMMAND}' does not accept --delete"; }
 
 parse_preset() {
 	local preset="$1"
@@ -151,7 +154,10 @@ resolve_root() {
 }
 
 configure_build() {
-	if [ -f "${BUILD_DIR}/CMakeCache.txt" ]; then
+	if [ -d "${BUILD_DIR}" ] && [ "$DELETE_BUILD_DIR" -eq 0 ]; then
+		die "build directory already exists: ${BUILD_DIR} (run 'quokka config ${PRESET} --delete' to force reconfig)"
+	fi
+	if [ -d "${BUILD_DIR}" ] && [ "$DELETE_BUILD_DIR" -eq 1 ]; then
 		rm -rf "${BUILD_DIR}"
 	fi
 	mkdir -p "$BUILD_DIR"
@@ -426,6 +432,7 @@ PROBLEMS=()
 INPUT_FILE=""
 ENABLE_FPE=0
 FILTER_REGEX=""
+DELETE_BUILD_DIR=0
 JOBS=8
 
 while [ "$#" -gt 0 ]; do
@@ -453,6 +460,10 @@ while [ "$#" -gt 0 ]; do
 		require_arg "$1" "${2:-}"
 		FILTER_REGEX="$2"
 		shift 2
+		;;
+	--delete)
+		DELETE_BUILD_DIR=1
+		shift
 		;;
 	-h|--help)
 		usage
@@ -492,16 +503,19 @@ config)
 	configure_build
 	;;
 build)
+	_require_no_delete
 	load_environment
 	execute_build 0 || exit 1
 	;;
 buildrun)
+	_require_no_delete
 	[ "${#PROBLEMS[@]}" -gt 0 ] || [ -n "$FILTER_REGEX" ] || die "missing problem name (or provide --filter)"
 	load_environment
 	execute_build 1 || exit 1
 	execute_run || exit 1
 	;;
 run)
+	_require_no_delete
 	load_environment
 	execute_run || exit 1
 	;;
@@ -511,6 +525,7 @@ list)
 	_require_no_input
 	_require_no_fpe
 	_require_no_filter
+	_require_no_delete
 	list_problems
 	;;
 target)
@@ -518,6 +533,7 @@ target)
 	_require_no_input
 	_require_no_fpe
 	_require_no_filter
+	_require_no_delete
 	load_environment
 	show_targets
 	;;
@@ -526,6 +542,7 @@ clean)
 	_require_no_input
 	_require_no_fpe
 	_require_no_filter
+	_require_no_delete
 	clean_tests
 	;;
 *)
