@@ -8,8 +8,8 @@ module load PrgEnv-cray
 module load craype-x86-trento
 module load craype-accel-amd-gfx90a
 
-module load rocm/6.3.1 # MUST use this version to avoid compiler bugs
-module load cray-mpich
+module load rocm/7.2.0
+module load cray-mpich/9.1.0
 module load cce/19.0.0
 
 # hdf5

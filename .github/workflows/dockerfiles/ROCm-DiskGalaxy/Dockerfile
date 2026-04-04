@@ -1,9 +1,9 @@
 FROM --platform=linux/amd64 opensuse/leap:15.6 AS build
 
-ARG ROCM_ZYPP_REPO_VERSION=6.4.2
+ARG ROCM_ZYPP_REPO_VERSION=7.2.0
 ARG ROCM_ZYPP_PACKAGES=
-ARG MPICH_VERSION=4.1.2
-ARG MPICH_URL=https://www.mpich.org/static/downloads/4.1.2/mpich-4.1.2.tar.gz
+ARG MPICH_VERSION=4.2.2
+ARG MPICH_URL=https://www.mpich.org/static/downloads/4.2.2/mpich-4.2.2.tar.gz
 ARG AMREX_SPACEDIM=3
 ARG AMREX_MPI=ON
 ARG AMREX_AMD_ARCH=gfx90a
@@ -41,7 +41,7 @@ ENV PATH="/opt/rocm/bin:${PATH}" \
     CC="amdclang" \
     CXX="amdclang++"
 
-COPY .github/workflows/dockerfiles/ROCm-DiskGalaxy/mpich-4.1.2-rocm-6.4-hip-pointer-attr.patch /tmp/mpich.patch
+COPY .github/workflows/dockerfiles/ROCm-DiskGalaxy/mpich-4.2.x-rocm-hip-pointer-attr.patch /tmp/mpich.patch
 
 # Combine MPICH download, patch, and build
 RUN set -euo pipefail && \
@@ -51,11 +51,11 @@ RUN set -euo pipefail && \
     tar xzf "mpich-${MPICH_VERSION}.tar.gz" && \
     cd "mpich-${MPICH_VERSION}" && \
     patch -p1 < /tmp/mpich.patch && \
-    ./configure --with-device=ch4:ofi --disable-fortran --prefix="/opt/mpich/${MPICH_VERSION}" && \
+    ./configure --with-device=ch4:ofi --with-hip=/opt/rocm --disable-fortran --prefix="/opt/mpich/${MPICH_VERSION}" && \
     make -j"$(nproc)" && \
     make install && \
     cd .. && \
-    rm -rf mpich-4.1.2/ mpich-4.1.2.tar.gz /tmp/mpich.patch && \
+    rm -rf "mpich-${MPICH_VERSION}/" "mpich-${MPICH_VERSION}.tar.gz" /tmp/mpich.patch && \
     cd / && \
     rm -rf /tmp/build-mpich
 
@@ -85,7 +85,7 @@ RUN set -euo pipefail && \
 # Runtime stage (reduced image size)
 FROM --platform=linux/amd64 opensuse/leap:15.6
 
-ARG MPICH_VERSION=4.1.2
+ARG MPICH_VERSION=4.2.2
 
 COPY --from=build /opt/rocm /opt/rocm
 COPY --from=build /opt/mpich /opt/mpich
