@@ -1,8 +1,8 @@
 #!/bin/bash
-source /opt/cray/pe/cpe/25.03/restore_lmod_system_defaults.sh
+source /opt/cray/pe/cpe/26.03/restore_lmod_system_defaults.sh
 
-module load Core/25.03
-module load cpe/25.03
+module load Core/26.03
+module load cpe/26.03
 
 module load PrgEnv-cray
 module load craype-x86-trento
@@ -10,7 +10,7 @@ module load craype-accel-amd-gfx90a
 
 module load rocm/7.2.0
 module load cray-mpich/9.1.0
-module load cce/19.0.0
+module load cce/21.0.0
 
 # hdf5
 module load cray-hdf5/1.14.3.3
