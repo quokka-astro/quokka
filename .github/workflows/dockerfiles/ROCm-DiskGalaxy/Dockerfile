@@ -35,6 +35,8 @@ RUN set -euo pipefail && \
     printf "%s\n" "/opt/rocm/lib" "/opt/rocm/lib64" >> /etc/ld.so.conf.d/rocm.conf && \
     ldconfig
 
+ENV LD_LIBRARY_PATH="/opt/rocm/lib"
+
 ENV PATH="/opt/rocm/bin:${PATH}" \
     LD_LIBRARY_PATH="/opt/rocm/lib:${LD_LIBRARY_PATH}" \
     ROCM_PATH="/opt/rocm" \
@@ -114,6 +116,8 @@ COPY --from=build /tmp/quokka-src/extern/agora_data/ /opt/quokka/share/quokka/ex
 
 RUN chmod 0755 /opt/quokka/bin/DiskGalaxy && \
     chown -R leap /opt/quokka
+
+ENV LD_LIBRARY_PATH="/opt/rocm/lib"
 
 ENV MPICH_VERSION="${MPICH_VERSION}" \
     PATH="/opt/quokka/bin:/opt/mpich/${MPICH_VERSION}/bin:${PATH}" \
