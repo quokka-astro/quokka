@@ -9,16 +9,16 @@ Quokka is a two-moment radiation hydrodynamics code using the piecewise-paraboli
 
 The `scripts/bash/quokka` script is the recommended way to configure, build, and run tests. Make sure it exists in your `PATH`; if not, install it once by copying it to a directory on your `PATH` (e.g. `~/.local/bin/`). All commands accept `--root <path>` to specify the repo root when not running from it.
 
-The script attempts to source `~/.local/bin/quokka.rc` for commands that need the build/test environment (`config`, `build`, `run`, `target`). This load is intentionally deferred as late as possible. If the file is missing (or sourcing fails), the script prints a warning and continues.
+The script optionally sources an environment file via `--source <file>` for commands that need the build/test environment (`config`, `build`, `buildrun`, `run`, `target`). If `--source` is omitted, no environment file is sourced.
 
-- **Configure**: `quokka config <preset>` — runs CMake with the correct dimensionality and build type
-- **Build one or more problems**: `quokka build <preset> <problem> [<problem> ...] [-j <N>]`
-- **Build matching problems**: `quokka build <preset> --filter <glob> [-j <N>]` (e.g. `Rad*`)
+- **Configure**: `quokka config <preset> [--delete] [--source <file>]` — runs CMake with the correct dimensionality and build type. Always run with `--delete` as it is required if the preset build dir already exists.
+- **Build one or more problems**: `quokka build <preset> <problem> [<problem> ...] [-j <N>] [--source <file>]`
+- **Build matching problems**: `quokka build <preset> --filter <glob> [-j <N>]` (e.g. `'Rad*'`; quote patterns)
 - **Build and run (combined)**: `quokka buildrun <preset> <problem> [<problem> ...] [-j <N>] [--fpe] [--input <file>]`
 - **Build and run (filtered)**: `quokka buildrun <preset> --filter <pattern> [-j <N>] [--fpe]`
 - **Run one or more problems**: `quokka run <preset> <problem> [<problem> ...] [--input <file>] [--fpe]` (`--input` only with one problem)
 - **Run all tests**: `quokka run <preset> [-j <N>]`
-- **Run matching tests**: `quokka run <preset> --filter <regex>`
+- **Run matching tests**: `quokka run <preset> --filter <regex>` (quote regex/globs to avoid shell expansion)
 - **List problems**: `quokka list`
 - **Show targets**: `quokka target <preset>`
 - **Clean test output**: `quokka clean`

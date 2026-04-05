@@ -30,31 +30,31 @@ cp scripts/bash/quokka ~/.local/bin/
 ### Commands
 
 ```
-quokka config <preset> [--root <path>]
+quokka config <preset> [--delete] [--source <file>] [--root <path>]
     Configure the CMake build directory for the given preset.
 
-quokka build <preset> <problem> [<problem> ...] [-j <N>] [--root <path>]
+quokka build <preset> <problem> [<problem> ...] [-j <N>] [--source <file>] [--root <path>]
     Compile one or more specific problem targets using ninja.
 
-quokka build <preset> --filter <glob> [-j <N>] [--root <path>]
+quokka build <preset> --filter <glob> [-j <N>] [--source <file>] [--root <path>]
     Compile all problem targets matching a shell glob (e.g. `Rad*`).
 
-quokka buildrun <preset> <problem> [<problem> ...] [-j <N>] [--fpe] [--input <file>] [--root <path>]
+quokka buildrun <preset> <problem> [<problem> ...] [-j <N>] [--fpe] [--input <file>] [--source <file>] [--root <path>]
     Build then run one or more specific problems.
 
-quokka buildrun <preset> --filter <pattern> [-j <N>] [--fpe] [--root <path>]
+quokka buildrun <preset> --filter <pattern> [-j <N>] [--fpe] [--source <file>] [--root <path>]
     Build matching problems then run matching tests.
 
-quokka run <preset> [<problem> ...] [--input <file>] [-j <N>] [--fpe] [--root <path>]
+quokka run <preset> [<problem> ...] [--input <file>] [-j <N>] [--fpe] [--source <file>] [--root <path>]
     Run one or more problem executables from the tests/ directory.
 
-quokka run <preset> [--filter <regex>] [-j <N>] [--fpe] [--root <path>]
+quokka run <preset> [--filter <regex>] [-j <N>] [--fpe] [--source <file>] [--root <path>]
     Run all tests, or those matching a regex via ctest -R.
 
 quokka list [--root <path>]
     List all available problem directories.
 
-quokka target <preset> [--root <path>]
+quokka target <preset> [--source <file>] [--root <path>]
     Show all available CMake build targets.
 
 quokka clean [--root <path>]
@@ -77,7 +77,9 @@ quokka clean [--root <path>]
 | `--root <path>`  | Path to the quokka repository root (default: current directory)      |
 | `--input <file>` | Input file for the executable (default: `inputs/<problem>.toml`); valid only when running exactly one `<problem>` |
 | `--fpe`          | Enable floating-point exception traps (invalid, overflow, div-by-0)  |
-| `--filter <pattern>` | For `run`: ctest regex via `ctest -R`; for `build`: shell glob over problem names; for `buildrun`: build via glob and run via ctest regex; exclusive with positional `<problem>` args |
+| `--filter <pattern>` | For `run`: ctest regex via `ctest -R`; for `build`: shell glob over problem names; for `buildrun`: build via glob and run via ctest regex; exclusive with positional `<problem>` args. Quote patterns like `'Rad*'` to avoid shell expansion before `quokka` sees them |
+| `--source <file>` | Optional environment file to source before `config`, `build`, `buildrun`, `run`, and `target` |
+| `--delete`       | `config` only: force reconfigure by deleting existing `build/<preset>` directory first |
 | `-j <N>`         | Number of parallel jobs for ninja or ctest (default: 8)              |
 
 `build`, `run`, and `buildrun` print final summary lines (`<name> SUCCESS|FAIL|SKIPPED`) to make tail-based status checks easy.
