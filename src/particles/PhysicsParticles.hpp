@@ -39,7 +39,7 @@
 namespace quokka
 {
 
-[[nodiscard]] static constexpr auto getParticleTypeShortName(ParticleType type) -> std::string_view
+[[nodiscard]] inline constexpr auto getParticleTypeShortName(ParticleType type) -> std::string_view
 {
 	switch (type) {
 		case ParticleType::Rad:
@@ -60,7 +60,7 @@ namespace quokka
 	}
 }
 
-[[nodiscard]] static constexpr auto getParticleSwitchName(ParticleType type) -> std::string_view
+[[nodiscard]] inline constexpr auto getParticleSwitchName(ParticleType type) -> std::string_view
 {
 	switch (type) {
 		case ParticleType::Rad:
@@ -81,7 +81,7 @@ namespace quokka
 	}
 }
 
-[[nodiscard]] static auto parseParticleTypeShortName(std::string_view particle_type_name) -> std::optional<ParticleType>
+[[nodiscard]] inline auto parseParticleTypeShortName(std::string_view particle_type_name) -> std::optional<ParticleType>
 {
 	if (particle_type_name == "Rad") {
 		return ParticleType::Rad;
