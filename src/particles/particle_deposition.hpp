@@ -162,6 +162,10 @@ void depositParticleMassDensity(ContainerType *container, amrex::MultiFab &depos
 	// grow cell to avoid out-of-bounds accesses near tile boundaries.
 	constexpr int required_n_grow = amrex::ParticleInterpolator::Linear::stencil_width - 1;
 	if (deposition_field.nGrowVect().allGE(required_n_grow)) {
+		// The final argument here is zero_out_input.
+		// In this AMReX overload, zero_out_input=false deposits into a temporary particle-grid
+		// MultiFab and then ParallelAdd's it back into deposition_field using src_nghost=mf.nGrowVect()
+		// and dst_nghost=0, so ghost-cell contributions are still folded into the valid region.
 		amrex::ParticleToMesh(*container, deposition_field, lev, deposition_functor, false);
 		return;
 	}

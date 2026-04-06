@@ -101,10 +101,6 @@ auto DerivedParticleDeposition::computeField(int lev, const std::string &fieldNa
 			continue;
 		}
 
-		if (output.depositField != "mass" && output.depositField != "birth_mass") {
-			amrex::Abort("DerivedParticleDeposition currently supports only deposit_fields = mass or birth_mass");
-		}
-
 		mf.setVal(0.0, ncomp, 1, mf.nGrow());
 		ctx.depositParticleMassDensity(output.particleType, output.depositField, mf, lev, ncomp, m_massMin, m_massMax, m_hasAgeFilter, m_tAgeMax);
 		mf.mult(m_normalization, ncomp, 1, mf.nGrow());
