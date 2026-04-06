@@ -4276,6 +4276,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 {
 	BL_PROFILE("AMRSimulation::WritePlotFile()"); // NOLINT(misc-const-correctness)
 
+	updateRuntimeDerivedFields();
+
 	if (amrex::AsyncOut::UseAsyncOut()) {
 		// ensure that we flush any plotfiles that are currently being written
 		amrex::AsyncOut::Finish();
