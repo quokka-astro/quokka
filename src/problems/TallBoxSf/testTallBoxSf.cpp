@@ -14,7 +14,6 @@
 #include "AMReX_Print.H"
 #include "AMReX_Random.H"
 #include "AMReX_SPACE.H"
-#include "AMReX_TableData.H"
 #include "util/BC.hpp"
 
 #include "QuokkaSimulation.hpp"
@@ -22,7 +21,6 @@
 #include "hydro/hydro_system.hpp"
 #include "io/projection.hpp"
 #include "math/interpolate.hpp"
-#include "turbulence/TurbDataReader.hpp"
 #include "util/DataTable.hpp"
 
 constexpr double mu = 1.0 * C::m_p;
@@ -31,14 +29,7 @@ struct TheProblem {
 };
 
 template <> struct SimulationData<TheProblem> {
-	// turbulent velocity fields
-	amrex::TableData<Real, 3> dvx;
-	amrex::TableData<Real, 3> dvy;
-	amrex::TableData<Real, 3> dvz;
-	Real dv_rms_generated{};
-	Real turbulent_amplitude = 1500.0; // cm/s,  0.05 * cs at 10K (~0.3 km/s)
-	int turbulent_size = 128;
-	Real initial_scalar_per_cell = 0.0; // the actual density is initial_scalar_per_cell / cell_volume
+	Real initial_scalar_density = NAN; // scalar density in cgs units
 
 	Real refine_parameter = 1.0; // placeholder for refinement control
 	std::string stars_file;	     // default: no stars
@@ -155,42 +146,6 @@ template <> void QuokkaSimulation<TheProblem>::preCalculateInitialConditions()
 {
 	static bool isSamplingDone = false;
 	if (!isSamplingDone) {
-		// read perturbations from file
-		turb_data turbData;
-		amrex::ParmParse const pp("perturb");
-		std::string turbdata_filename = "zdrv.hdf5";
-		pp.query("filename", turbdata_filename);
-		initialize_turbdata(turbData, turbdata_filename);
-
-		pp.query("amplitude", userData_.turbulent_amplitude); // amplitude in cm/s, default is 0.05 * 0.3 km/s = 1,500 cm/s
-
-		// copy to pinned memory
-		auto pinned_dvx = get_tabledata(turbData.dvx);
-		auto pinned_dvy = get_tabledata(turbData.dvy);
-		auto pinned_dvz = get_tabledata(turbData.dvz);
-
-		// compute normalisation
-		userData_.dv_rms_generated = computeRms(pinned_dvx, pinned_dvy, pinned_dvz);
-		amrex::Print() << "rms dv = " << userData_.dv_rms_generated << "\n";
-
-		amrex::Print() << "turbulent amplitude = " << userData_.turbulent_amplitude << " cm/s\n";
-
-		userData_.turbulent_size = turbData.dvx.end[0] - turbData.dvx.begin[0];
-		const int nturb_y = turbData.dvx.end[1] - turbData.dvx.begin[1];
-		const int nturb_z = turbData.dvx.end[2] - turbData.dvx.begin[2];
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(userData_.turbulent_size == nturb_y && nturb_y == nturb_z, "Turbulence data must be a cube");
-		amrex::Print() << "turbulence data size is: " << userData_.turbulent_size << "^3\n";
-
-		// copy to GPU
-		userData_.dvx.resize(pinned_dvx.lo(), pinned_dvx.hi());
-		userData_.dvx.copy(pinned_dvx);
-
-		userData_.dvy.resize(pinned_dvy.lo(), pinned_dvy.hi());
-		userData_.dvy.copy(pinned_dvy);
-
-		userData_.dvz.resize(pinned_dvz.lo(), pinned_dvz.hi());
-		userData_.dvz.copy(pinned_dvz);
-
 		// Read initial conditions from file if specified
 		if (!userData_.IC_file.empty()) {
 			amrex::Print() << "Reading initial conditions from: " << userData_.IC_file << "\n";
@@ -214,28 +169,6 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	// turbulence parameters
-	const Real turb_amp = userData_.turbulent_amplitude;
-	const Real dv_rms = userData_.dv_rms_generated;
-	const Real renorm_factor = (dv_rms > 0.0) ? turb_amp / dv_rms : 0.0;
-
-	auto const &dvx = userData_.dvx.const_table();
-	auto const &dvy = userData_.dvy.const_table();
-	auto const &dvz = userData_.dvz.const_table();
-
-	// get turbulence data bounds
-	amrex::Array<int, 3> turb_lo = userData_.dvx.lo();
-	amrex::Array<int, 3> turb_hi = userData_.dvx.hi();
-
-	// get simulation box dimensions
-	const int nx = indexRange.length(0);
-	const int ny = indexRange.length(1);
-	const int nz = indexRange.length(2);
-	const int nturb = turb_hi[0] - turb_lo[0] + 1;
-
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nx <= nturb, "nx must be less than or equal to turbulent_size (128)");
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ny >= nx && nz >= nx, "ny and nz must be greater than or equal to nx");
-
 	// Capture galaxy parameters from userData_ for GPU kernel
 	const Real sigma1_ic = userData_.sigma1;
 	const Real sigma2_ic = 10.0 * sigma1_ic;
@@ -245,11 +178,7 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	// Create GPU const tables for initial conditions if available
 	const auto &ic_table = userData_.ic_table.const_tables();
 
-	amrex::Real initial_scalar_density = 0.0;
-	if constexpr (Physics_Traits<TheProblem>::numPassiveScalars > 0) {
-		const amrex::Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-		initial_scalar_density = userData_.initial_scalar_per_cell / cell_vol;
-	}
+	const amrex::Real initial_scalar_density = userData_.initial_scalar_density;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const z = prob_lo[2] + ((k + static_cast<amrex::Real>(0.5)) * dx[2]);
@@ -273,20 +202,12 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 
 		const auto gamma = quokka::EOS_Traits<TheProblem>::gamma;
 
-		// add turbulent velocities
-		const int turb_i = turb_lo[0] + (i % nturb);
-		const int turb_j = turb_lo[1] + (j % nturb);
-		const int turb_k = turb_lo[2] + (k % nturb);
-		const double vx = dvx(turb_i, turb_j, turb_k) * renorm_factor;
-		const double vy = dvy(turb_i, turb_j, turb_k) * renorm_factor;
-		const double vz = dvz(turb_i, turb_j, turb_k) * renorm_factor;
-
 		state_cc(i, j, k, HydroSystem<TheProblem>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<TheProblem>::x1Momentum_index) = rho * vx;
-		state_cc(i, j, k, HydroSystem<TheProblem>::x2Momentum_index) = rho * vy;
-		state_cc(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = rho * vz;
+		state_cc(i, j, k, HydroSystem<TheProblem>::x1Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<TheProblem>::x2Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<TheProblem>::internalEnergy_index) = P / (gamma - 1.);
-		state_cc(i, j, k, HydroSystem<TheProblem>::energy_index) = P / (gamma - 1.) + 0.5 * rho * (vx * vx + vy * vy + vz * vz);
+		state_cc(i, j, k, HydroSystem<TheProblem>::energy_index) = P / (gamma - 1.);
 
 		const auto initial_scalar_density_d = initial_scalar_density;
 
@@ -471,9 +392,22 @@ auto problem_main() -> int
 	pp.query("IC_file", sim.userData_.IC_file);
 	pp.query("rho01", sim.userData_.rho01);
 	pp.query("sigma1", sim.userData_.sigma1);
-	pp.query("initial_scalar_per_cell", sim.userData_.initial_scalar_per_cell);
+	pp.query("initial_scalar_density", sim.userData_.initial_scalar_density);
 	pp.query("hot_T", sim.userData_.hot_T);
 	pp.query("warm_T", sim.userData_.warm_T);
+	if constexpr (Physics_Traits<TheProblem>::numPassiveScalars > 0) {
+		AMREX_ALWAYS_ASSERT(!std::isnan(sim.userData_.initial_scalar_density));
+	}
+
+	// particles.scalar_yield_per_SN must be set as well, and it should be greater than (initial_scalar_density * (128 pc)^3),
+	// so that the SN ejected metal density in SN remnant is greater than the background density.
+	amrex::ParmParse const pp_particles("particles");
+	double scalar_yield_per_SN = NAN;
+	pp_particles.query("scalar_yield_per_SN", scalar_yield_per_SN);
+	AMREX_ALWAYS_ASSERT(!std::isnan(scalar_yield_per_SN));
+	const Real SNR_volume = std::pow(128.0 * C::parsec, 3);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(scalar_yield_per_SN > sim.userData_.initial_scalar_density * SNR_volume,
+					 "particles.scalar_yield_per_SN must be greater than (initial_scalar_density * (128 pc)^3)");
 
 	// preCalculate must be explicitly called here to ensure
 	// ic_table is initialized even when restarting from checkpoint
