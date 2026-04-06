@@ -166,6 +166,12 @@ void depositParticleMassDensity(ContainerType *container, amrex::MultiFab &depos
 		return;
 	}
 
+	// Callers often provide a zero-ghost output MultiFab (e.g., diagnostics/derived fields),
+	// but AMReX ParticleToMesh sizes its internal temp/scratch storage from mf.nGrowVect(),
+	// and linear interpolation uses a 2-point stencil in each dimension. We therefore need
+	// one grow cell here so deposition near tile boundaries has valid storage. Deposit into a
+	// temporary MultiFab with sufficient ghost cells, then add the valid region back into the
+	// caller's field after ParticleToMesh has summed ghost contributions internally.
 	amrex::MultiFab deposition_with_ghosts(deposition_field.boxArray(), deposition_field.DistributionMap(), deposition_field.nComp(),
 					       amrex::IntVect(required_n_grow));
 	deposition_with_ghosts.setVal(0.0);
