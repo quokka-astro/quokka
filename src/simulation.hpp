@@ -3973,6 +3973,8 @@ auto AMRSimulation<problem_t>::computeRuntimeDerivedVar(int lev, std::string con
 		if (!deposit_birth_mass && depositField != "mass") {
 			amrex::Abort("Unsupported deposit field requested by runtime derived field provider: " + depositField);
 		}
+		// Runtime-derived fields are only evaluated for diagnostics/plotfiles after all AMR levels
+		// have been synchronized to the current coarse timestep boundary, so tNew_[0] == tNew_[outLev].
 		particleRegister_.depositParticleMassDensity(particleType, deposit_birth_mass, outMF, outLev, outComp, massMin, massMax, hasAgeFilter, tNew_[0],
 							     tAgeMax);
 #else
