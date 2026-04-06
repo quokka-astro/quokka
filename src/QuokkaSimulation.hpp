@@ -365,7 +365,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 					      amrex::Real dt_lev) -> bool;
 
 	auto computePhotoelectricHeatingRate(Real current_time) -> amrex::Real;
-	auto setHeatingRateFloor(Real current_time, Real dt) -> amrex::Real;
+	auto computeExternalHeatingRate(Real current_time, Real dt) -> amrex::Real;
 
 	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;
 
@@ -963,11 +963,11 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computePhotoelec
 	return heating_rate;
 }
 
-template <typename problem_t> auto QuokkaSimulation<problem_t>::setHeatingRateFloor(amrex::Real current_time, amrex::Real dt) -> amrex::Real
+template <typename problem_t> auto QuokkaSimulation<problem_t>::computeExternalHeatingRate(amrex::Real current_time, amrex::Real dt) -> amrex::Real
 {
-	if (this->useHeatingRateFloorParser_) {
-		auto const heating_rate_floor_parser = this->heatingRateFloorParserExe_.value();
-		return heating_rate_floor_parser(current_time, dt);
+	if (this->useHeatingRateExternalParser_) {
+		auto const heating_rate_external_parser = this->heatingRateExternalParserExe_.value();
+		return heating_rate_external_parser(current_time, dt);
 	}
 
 	return 0.0;
@@ -980,8 +980,8 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	// start by assuming cooling integrator is successful.
 	bool cool_success = true;
 	if (enableCooling_ == 1) {
-		const Real heating_rate_floor = setHeatingRateFloor(time, dt); // unit: erg/s/H
-		const Real const_heating_rate_per_H = std::max(heating_rate_floor, computePhotoelectricHeatingRate(time));
+		const Real external_heating_rate_per_H = computeExternalHeatingRate(time, dt); // unit: erg/s/H
+		const Real const_heating_rate_per_H = computePhotoelectricHeatingRate(time) + external_heating_rate_per_H;
 
 		if (coolingTableType_.empty()) {
 			coolingTableType_ = "resampled";
