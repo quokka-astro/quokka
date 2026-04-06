@@ -3885,6 +3885,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::createRuntimeDerive
 	existingVarNames.insert(componentNames_cc_.begin(), componentNames_cc_.end());
 	existingVarNames.insert(componentNames_fc_flat_.begin(), componentNames_fc_flat_.end());
 
+	std::unordered_set<std::string> emittedRuntimeVarNames;
 	std::unordered_set<std::string> runtimeNameSet;
 	for (auto const &entry : amrex::ParmParse::getEntries(code_prefix)) {
 		if (!entry.starts_with(code_prefix_with_dot) || !entry.ends_with(type_suffix)) {
@@ -3910,9 +3911,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::createRuntimeDerive
 		provider->addVars(providerVars);
 		bool hasRequestedOutput = false;
 		for (auto const &var : providerVars) {
+			if (var.empty()) {
+				amrex::Abort("Runtime derived field provider generated an empty output name.");
+			}
+			emittedRuntimeVarNames.insert(var);
 			if (std::ranges::find(requestedDerivedNames, var) != requestedDerivedNames.end()) {
 				hasRequestedOutput = true;
-				break;
 			}
 		}
 		if (!hasRequestedOutput) {
@@ -3920,9 +3924,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::createRuntimeDerive
 		}
 
 		for (auto const &var : providerVars) {
-			if (var.empty()) {
-				amrex::Abort("Runtime derived field provider generated an empty output name.");
-			}
 			if (std::ranges::find(requestedDerivedNames, var) == requestedDerivedNames.end()) {
 				continue;
 			}
@@ -3935,6 +3936,17 @@ template <typename problem_t> void AMRSimulation<problem_t>::createRuntimeDerive
 			m_runtimeDerivedVarNames.push_back(var);
 		}
 		m_runtimeDerivedFields.push_back(std::move(provider));
+	}
+
+	for (auto const &name : requestedDerivedNames) {
+		if (existingVarNames.contains(name) || emittedRuntimeVarNames.contains(name)) {
+			continue;
+		}
+		if (name.find('.') == std::string::npos) {
+			continue;
+		}
+		amrex::Abort("Requested runtime derived field output '" + name +
+			     "' is not emitted by any configured provider. List only provider output names that are actually emitted.");
 	}
 }
 
