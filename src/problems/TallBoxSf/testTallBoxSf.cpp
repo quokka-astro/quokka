@@ -292,12 +292,6 @@ template <> void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::s
 	amrex::Gpu::streamSynchronizeAll();
 }
 
-template <> auto QuokkaSimulation<TheProblem>::setHeatingRateFloor(amrex::Real time, amrex::Real dt) -> amrex::Real
-{
-	amrex::ignore_unused(time, dt);
-	return 0.0;
-}
-
 // Add Strang Split Source Term for External Fixed Potential Here
 template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::MultiFab &mf, int lev, amrex::Real time, amrex::Real dt_lev) // NOLINT
 {

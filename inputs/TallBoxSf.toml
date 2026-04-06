@@ -56,6 +56,7 @@ problem.sigma1 = 7.0e5
 cooling.enabled = 1
 cooling.cooling_table_type = "resampled"
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_shielded_resampled_noPE.h5"
+heating_rate_floor = "0.0"
 use_sfh_based_pe_heating = true
 sfh_to_pe_heating_table = "../extern/cooling/photoelectric_heating_from_sfh.csv"
 sfh_time_interval = 3.155760000e+12  # 1e5 yr

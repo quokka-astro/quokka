@@ -240,6 +240,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	std::string densityFloorExpr_;
 	std::optional<amrex::Parser> densityFloorParser_;
 	std::optional<amrex::ParserExecutor<4>> densityFloorParserExe_;
+	bool useHeatingRateFloorParser_ = false;
+	std::string heatingRateFloorExpr_;
+	std::optional<amrex::Parser> heatingRateFloorParser_;
+	std::optional<amrex::ParserExecutor<2>> heatingRateFloorParserExe_;
 	bool debugDensityFloorPlot_ = false; // default: disabled
 
 	mutable YAML::Node simulationMetadata_;
@@ -1001,6 +1005,24 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	} else {
 		densityFloorParser_.reset();
 		densityFloorParserExe_.reset();
+	}
+
+	// optional heating rate floor expression (variables: time, dt)
+	heatingRateFloorExpr_.clear();
+	pp.query("heating_rate_floor", heatingRateFloorExpr_);
+	useHeatingRateFloorParser_ = !heatingRateFloorExpr_.empty();
+	if (useHeatingRateFloorParser_) {
+		heatingRateFloorParser_.emplace(heatingRateFloorExpr_);
+		heatingRateFloorParser_->registerVariables({"time", "dt"});
+		heatingRateFloorParserExe_ = heatingRateFloorParser_->compile<2>();
+#ifdef AMREX_USE_GPU
+		if (heatingRateFloorParserExe_->m_device_executor == nullptr) {
+			amrex::Abort("heating_rate_floor: device parser executor is null after compile<2>()");
+		}
+#endif
+	} else {
+		heatingRateFloorParser_.reset();
+		heatingRateFloorParserExe_.reset();
 	}
 
 	// Optional debug output: spatially varying density floor

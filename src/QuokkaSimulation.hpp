@@ -965,7 +965,11 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computePhotoelec
 
 template <typename problem_t> auto QuokkaSimulation<problem_t>::setHeatingRateFloor(amrex::Real current_time, amrex::Real dt) -> amrex::Real
 {
-	amrex::ignore_unused(current_time, dt);
+	if (this->useHeatingRateFloorParser_) {
+		auto const heating_rate_floor_parser = this->heatingRateFloorParserExe_.value();
+		return heating_rate_floor_parser(current_time, dt);
+	}
+
 	return 0.0;
 }
 
