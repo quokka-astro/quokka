@@ -1013,6 +1013,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	useHeatingRateExternalParser_ = !heatingRateExternalExpr_.empty();
 	if (useHeatingRateExternalParser_) {
 		heatingRateExternalParser_.emplace(heatingRateExternalExpr_);
+		auto symbols = heatingRateExternalParser_->symbols();
+		symbols.erase("time");
+		symbols.erase("dt");
+		if (!amrex::ParmParse::ParserPrefix.empty()) {
+			amrex::ParmParse const parser_pp(amrex::ParmParse::ParserPrefix);
+			for (auto const &symbol : symbols) {
+				amrex::Real value = 0.0;
+				if (parser_pp.query(symbol, value)) {
+					heatingRateExternalParser_->setConstant(symbol, value);
+				}
+			}
+		}
 		heatingRateExternalParser_->registerVariables({"time", "dt"});
 		heatingRateExternalParserExe_ = heatingRateExternalParser_->compile<2>();
 #ifdef AMREX_USE_GPU
