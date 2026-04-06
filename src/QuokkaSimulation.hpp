@@ -365,6 +365,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 					      amrex::Real dt_lev) -> bool;
 
 	auto computePhotoelectricHeatingRate(Real current_time) -> amrex::Real;
+	auto setHeatingRateFloor(Real current_time, Real dt) -> amrex::Real;
 
 	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;
 
@@ -962,6 +963,12 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computePhotoelec
 	return heating_rate;
 }
 
+template <typename problem_t> auto QuokkaSimulation<problem_t>::setHeatingRateFloor(amrex::Real current_time, amrex::Real dt) -> amrex::Real
+{
+	amrex::ignore_unused(current_time, dt);
+	return 0.0;
+}
+
 template <typename problem_t>
 auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int lev,
 								   amrex::Real time, amrex::Real dt) -> bool
@@ -969,11 +976,13 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	// start by assuming cooling integrator is successful.
 	bool cool_success = true;
 	if (enableCooling_ == 1) {
+		const Real heating_rate_floor = setHeatingRateFloor(time, dt); // unit: erg/s/H
+		const Real const_heating_rate_per_H = std::max(heating_rate_floor, computePhotoelectricHeatingRate(time));
+
 		if (coolingTableType_.empty()) {
 			coolingTableType_ = "resampled";
 		}
 		if (coolingTableType_ == "resampled") {
-			const Real const_heating_rate_per_H = computePhotoelectricHeatingRate(time); // unit: erg/s/H
 			cool_success = quokka::ResampledCooling::computeCooling<problem_t>(state, dt, resampledTables_, tempFloor_, const_heating_rate_per_H);
 		} else {
 			amrex::Abort("Invalid cooling table type! Only 'resampled' is supported.");
