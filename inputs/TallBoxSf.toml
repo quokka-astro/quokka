@@ -66,6 +66,20 @@ sf_area_kpc2 = 1.0  # kpc^2
 perturb.filename = "zdrv.hdf5"
 perturb.amplitude = 7e5  # 7 km/s
 
+turbulence.enabled = 1
+turbulence.length = 3.018e21
+turbulence.target_vdisp = 2100000.0
+turbulence.ampl_factor = 0.2
+turbulence.ampl_auto_adjust = 1
+turbulence.k_driv = 139.6846031 # this actually sets the autocorrelation timescale via tau = (L/vdisp)/k_driv. (1 kpc / 7 km/s) / 10 Myr = 13.96846031
+turbulence.k_min = 2.0
+turbulence.k_max = 3.0
+turbulence.sol_weight = 1.0
+turbulence.spect_form = 1
+turbulence.random_seed = 140281
+turbulence.nsteps_per_t_turb = 10
+turbulence.stop_time = "32 * Myr"
+
 statistics_interval = 512
 
 derived_vars = ["temperature", "c_s", "gpot", "scalar0_z_outflow_rate", "hot_gas_z_outflow_rate", "warm_gas_z_outflow_rate", "hot_scalar0_z_outflow_rate", "warm_scalar0_z_outflow_rate"]
@@ -94,4 +108,3 @@ quokka.proj.time_int = 3.155760000e+13  # 1e6 yr
 quokka.proj.normal = 0  # Plane normal (0 == x, 1 == y, 2 == z)
 quokka.proj.field_names = ["gasDensity", "z-GasMomentum", "scalar0_z_outflow_rate", "hot_gas_z_outflow_rate", "warm_gas_z_outflow_rate", "hot_scalar0_z_outflow_rate", "warm_scalar0_z_outflow_rate"]
 quokka.proj.particles = "StochasticStellarPop_particles"
-
