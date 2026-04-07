@@ -22,21 +22,26 @@ jobs:
         run: sudo apt-get update && sudo apt-get install --yes shellcheck
 
       - name: Run shellcheck
+        shell: bash
         run: |
-          mapfile -t files < <(
-            rg --files \
-              -g '*.sh' \
-              -g '*.submit' \
-              -g '*.pbs' \
-              -g '*.profile' \
-              scripts \
-              .github/workflows \
-            | while IFS= read -r file; do
-                if head -n 1 "$file" | grep -Eq '^#!([[:space:]]*/usr/bin/env[[:space:]]+)?(bash|sh)$|^#![[:space:]]*/bin/(bash|sh)$'; then
-                  printf '%s\n' "$file"
-                fi
-              done
-          )
+          set -euo pipefail
+
+          tracked_files="$(git ls-files -- scripts .github/workflows)"
+          files=()
+          while IFS= read -r file; do
+            if [[ -z "$file" ]]; then
+              continue
+            fi
+
+            if [[ "$file" != *.sh && "$file" != *.submit && "$file" != *.pbs && "$file" != *.profile ]]; then
+              continue
+            fi
+
+            first_line="$(head -n 1 "$file")"
+            if printf '%s\n' "$first_line" | grep -Eq '^#!([[:space:]]*/usr/bin/env[[:space:]]+)?(bash|sh)$|^#![[:space:]]*/bin/(bash|sh)$'; then
+              files+=("$file")
+            fi
+          done <<< "$tracked_files"
 
           if [ "${#files[@]}" -eq 0 ]; then
             echo "No shell scripts found."
