@@ -79,19 +79,22 @@ template <> void QuokkaSimulation<ParticleDepositionProblem>::createInitialCICPa
 	const amrex::Real particleVelocity = 1.0e5;
 
 	const std::string particleFile = "particle_deposition_particles.txt";
-	std::ofstream outFile(particleFile);
-	outFile << nParticles << "\n";
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		std::ofstream outFile(particleFile);
+		outFile << nParticles << "\n";
 
-	for (int n = 0; n < nParticles; ++n) {
-		const amrex::Real x = 0.1 + 0.8 * static_cast<amrex::Real>(n) / static_cast<amrex::Real>(nParticles - 1);
-		const amrex::Real y = 0.5;
-		const amrex::Real z = 0.5;
-		const amrex::Real vx = particleVelocity * (0.5 - static_cast<amrex::Real>(n) / static_cast<amrex::Real>(nParticles - 1));
-		const amrex::Real vy = 0.0;
-		const amrex::Real vz = 0.0;
-		outFile << x << " " << y << " " << z << " " << particleMass << " " << vx << " " << vy << " " << vz << "\n";
+		for (int n = 0; n < nParticles; ++n) {
+			const amrex::Real x = 0.1 + 0.8 * static_cast<amrex::Real>(n) / static_cast<amrex::Real>(nParticles - 1);
+			const amrex::Real y = 0.5;
+			const amrex::Real z = 0.5;
+			const amrex::Real vx = particleVelocity * (0.5 - static_cast<amrex::Real>(n) / static_cast<amrex::Real>(nParticles - 1));
+			const amrex::Real vy = 0.0;
+			const amrex::Real vz = 0.0;
+			outFile << x << " " << y << " " << z << " " << particleMass << " " << vx << " " << vy << " " << vz << "\n";
+		}
+		outFile.close();
 	}
-	outFile.close();
+	amrex::ParallelDescriptor::Barrier();
 
 	CICParticles->SetVerbose(0);
 	const int nreal_extra = 4; // mass vx vy vz
@@ -101,16 +104,19 @@ template <> void QuokkaSimulation<ParticleDepositionProblem>::createInitialCICPa
 template <> void QuokkaSimulation<ParticleDepositionProblem>::createInitialTestParticles()
 {
 	const std::string particleFile = "particle_deposition_test_particles.txt";
-	std::ofstream outFile(particleFile);
-	outFile << 2 << "\n";
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		std::ofstream outFile(particleFile);
+		outFile << 2 << "\n";
 
-	// Active particle.
-	outFile << 0.25 << " " << 0.5 << " " << 0.5 << " " << 2.0e-2 << " " << 0.0 << " " << 0.0 << " " << 0.0 << " " << 0.0 << " " << 10.0 << " " << 0.0
-		<< "\n";
-	// Not-yet-active particle: birth_time is beyond stop_time.
-	outFile << 0.75 << " " << 0.5 << " " << 0.5 << " " << 2.0e-2 << " " << 0.0 << " " << 0.0 << " " << 0.0 << " " << 1.0 << " " << 10.0 << " " << 0.0
-		<< "\n";
-	outFile.close();
+		// Active particle.
+		outFile << 0.25 << " " << 0.5 << " " << 0.5 << " " << 2.0e-2 << " " << 0.0 << " " << 0.0 << " " << 0.0 << " " << 0.0 << " " << 10.0 << " " << 0.0
+			<< "\n";
+		// Not-yet-active particle: birth_time is beyond stop_time.
+		outFile << 0.75 << " " << 0.5 << " " << 0.5 << " " << 2.0e-2 << " " << 0.0 << " " << 0.0 << " " << 0.0 << " " << 1.0 << " " << 10.0 << " " << 0.0
+			<< "\n";
+		outFile.close();
+	}
+	amrex::ParallelDescriptor::Barrier();
 
 	TestParticles->SetVerbose(0);
 	const int nreal_extra = quokka::TestParticleRealComps<ParticleDepositionProblem>;
