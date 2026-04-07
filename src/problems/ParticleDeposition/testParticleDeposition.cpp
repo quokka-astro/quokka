@@ -109,11 +109,11 @@ template <> void QuokkaSimulation<ParticleDepositionProblem>::createInitialTestP
 		outFile << 2 << "\n";
 
 		// Active particle.
-		outFile << 0.25 << " " << 0.5 << " " << 0.5 << " " << 2.0e-2 << " " << 0.0 << " " << 0.0 << " " << 0.0 << " " << 0.0 << " " << 10.0 << " " << 0.0
-			<< "\n";
+		outFile << 0.25 << " " << 0.5 << " " << 0.5 << " " << 2.0e-2 << " " << 0.0 << " " << 0.0 << " " << 0.0 << " " << 0.0 << " " << 10.0 << " "
+			<< 0.0 << "\n";
 		// Not-yet-active particle: birth_time is beyond stop_time.
-		outFile << 0.75 << " " << 0.5 << " " << 0.5 << " " << 2.0e-2 << " " << 0.0 << " " << 0.0 << " " << 0.0 << " " << 1.0 << " " << 10.0 << " " << 0.0
-			<< "\n";
+		outFile << 0.75 << " " << 0.5 << " " << 0.5 << " " << 2.0e-2 << " " << 0.0 << " " << 0.0 << " " << 0.0 << " " << 1.0 << " " << 10.0 << " "
+			<< 0.0 << "\n";
 		outFile.close();
 	}
 	amrex::ParallelDescriptor::Barrier();
