@@ -598,6 +598,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Vector<std::string> m_diagVars;
 	amrex::Vector<std::unique_ptr<quokka::DerivedFieldBase>> m_runtimeDerivedFields;
 	amrex::Vector<std::string> m_runtimeDerivedVarNames;
+	quokka::DerivedFieldBase::ComputeContext computeContext_;
 
 	/// AMR-specific parameters
 	int regrid_int = 2;	 // regrid interval (number of coarse steps)
@@ -3935,10 +3936,27 @@ template <typename problem_t> void AMRSimulation<problem_t>::createRuntimeDerive
 			}
 			m_runtimeDerivedVarNames.push_back(var);
 		}
-		m_runtimeDerivedFields.push_back(std::move(provider));
+	m_runtimeDerivedFields.push_back(std::move(provider));
 	}
 
+	computeContext_.depositParticleMassDensity = [this](const std::string &particleType, const std::string &depositField, amrex::MultiFab &outMF, int outLev,
+						int outComp, amrex::Real massMin, amrex::Real massMax, bool hasAgeFilter, amrex::Real tAgeMax) {
+	#if AMREX_SPACEDIM == 3
+		bool const deposit_birth_mass = (depositField == "birth_mass");
+		if (!deposit_birth_mass && depositField != "mass") {
+			amrex::Abort("Unsupported deposit field requested by runtime derived field provider: " + depositField);
+		}
+		particleRegister_.depositParticleMassDensity(particleType, deposit_birth_mass, outMF, outLev, outComp, massMin, massMax, hasAgeFilter, tNew_[0],
+							     tAgeMax);
+	#else
+		amrex::ignore_unused(depositField, outMF, outLev, outComp, massMin, massMax, hasAgeFilter, tAgeMax);
+		amrex::Abort("Particle deposition runtime derived fields are supported only in 3D.");
+	#endif
+	};
+
 	for (auto const &name : requestedDerivedNames) {
+
+
 		if (existingVarNames.contains(name) || emittedRuntimeVarNames.contains(name)) {
 			continue;
 		}
@@ -3965,32 +3983,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::updateRuntimeDerive
 template <typename problem_t>
 auto AMRSimulation<problem_t>::computeRuntimeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const -> bool
 {
-	quokka::DerivedFieldBase::ComputeContext ctx{};
-	ctx.depositParticleMassDensity = [this](const std::string &particleType, const std::string &depositField, amrex::MultiFab &outMF, int outLev,
-						int outComp, amrex::Real massMin, amrex::Real massMax, bool hasAgeFilter, amrex::Real tAgeMax) {
-#if AMREX_SPACEDIM == 3
-		bool const deposit_birth_mass = (depositField == "birth_mass");
-		if (!deposit_birth_mass && depositField != "mass") {
-			amrex::Abort("Unsupported deposit field requested by runtime derived field provider: " + depositField);
-		}
-		// Runtime-derived fields are only evaluated for diagnostics/plotfiles after all AMR levels
-		// have been synchronized to the current coarse timestep boundary, so tNew_[0] == tNew_[outLev].
-		particleRegister_.depositParticleMassDensity(particleType, deposit_birth_mass, outMF, outLev, outComp, massMin, massMax, hasAgeFilter, tNew_[0],
-							     tAgeMax);
-#else
-		amrex::ignore_unused(depositField, outMF, outLev, outComp, massMin, massMax, hasAgeFilter, tAgeMax);
-		amrex::Abort("Particle deposition runtime derived fields are supported only in 3D.");
-#endif
-	};
-
 	for (auto const &provider : m_runtimeDerivedFields) {
-		if (provider->computeField(lev, dname, mf, ncomp, ctx)) {
+		if (provider->computeField(lev, dname, mf, ncomp, computeContext_)) {
 			return true;
 		}
 	}
 
 	return false;
 }
+
 
 template <typename problem_t> void AMRSimulation<problem_t>::createDiagnostics()
 {
