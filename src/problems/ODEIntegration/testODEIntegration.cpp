@@ -81,6 +81,7 @@ auto problem_main() -> int
 	std::cout << "Initial cooling time: " << tcool / seconds_in_year << '\n';
 	std::cout << "Initial edot = " << Edot0 << '\n';
 
+	std::cout << "Starting ODE integration...\n";
 	// solve cooling
 	ODECoolingFunctor const coolingFunctor(rho0);
 	quokka::valarray<Real, 1> y = {Eint0};
