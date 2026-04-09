@@ -164,6 +164,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int enableCooling_ = 0;
 	int enableChemistry_ = 0;
 	int enableTurbulence_ = 0;
+	amrex::Real turbulenceStopTime_ = std::numeric_limits<amrex::Real>::max();
 	int enableIterDustStoptime_ = 0;
 	Real max_density_allowed = std::numeric_limits<amrex::Real>::max();
 	Real min_density_allowed = std::numeric_limits<amrex::Real>::min();
@@ -609,6 +610,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	{
 		amrex::ParmParse const hpp("turbulence");
 		hpp.query("enabled", enableTurbulence_);
+		hpp.queryWithParser("stop_time", turbulenceStopTime_);
 		hpp.query("length", turbParams_["length"]);
 		hpp.query("target_vdisp", turbParams_["target_vdisp"]);
 		hpp.query("ampl_factor", turbParams_["ampl_factor"]);
@@ -989,7 +991,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	}
 #endif
 
-	if (enableTurbulence_ == 1) {
+	if ((enableTurbulence_ == 1) && (time < turbulenceStopTime_)) {
 		auto const &cellSizes = geom[lev].CellSizeArray();
 		td->applyDriving(state, time, dt, cellSizes);
 	}
