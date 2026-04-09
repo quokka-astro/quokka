@@ -240,6 +240,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	std::string densityFloorExpr_;
 	std::optional<amrex::Parser> densityFloorParser_;
 	std::optional<amrex::ParserExecutor<4>> densityFloorParserExe_;
+	bool useHeatingRateExternalParser_ = false;
+	std::string heatingRateExternalExpr_;
+	std::optional<amrex::Parser> heatingRateExternalParser_;
+	std::optional<amrex::ParserExecutor<2>> heatingRateExternalParserExe_;
 	bool debugDensityFloorPlot_ = false; // default: disabled
 
 	mutable YAML::Node simulationMetadata_;
@@ -1001,6 +1005,36 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	} else {
 		densityFloorParser_.reset();
 		densityFloorParserExe_.reset();
+	}
+
+	// optional external heating rate expression (variables: time, dt)
+	heatingRateExternalExpr_.clear();
+	pp.query("heating_rate_external", heatingRateExternalExpr_);
+	useHeatingRateExternalParser_ = !heatingRateExternalExpr_.empty();
+	if (useHeatingRateExternalParser_) {
+		heatingRateExternalParser_.emplace(heatingRateExternalExpr_);
+		auto symbols = heatingRateExternalParser_->symbols();
+		symbols.erase("time");
+		symbols.erase("dt");
+		if (!amrex::ParmParse::ParserPrefix.empty()) {
+			amrex::ParmParse const parser_pp(amrex::ParmParse::ParserPrefix);
+			for (auto const &symbol : symbols) {
+				amrex::Real value = 0.0;
+				if (parser_pp.query(symbol, value)) {
+					heatingRateExternalParser_->setConstant(symbol, value);
+				}
+			}
+		}
+		heatingRateExternalParser_->registerVariables({"time", "dt"});
+		heatingRateExternalParserExe_ = heatingRateExternalParser_->compile<2>();
+#ifdef AMREX_USE_GPU
+		if (heatingRateExternalParserExe_->m_device_executor == nullptr) {
+			amrex::Abort("heating_rate_external: device parser executor is null after compile<2>()");
+		}
+#endif
+	} else {
+		heatingRateExternalParser_.reset();
+		heatingRateExternalParserExe_.reset();
 	}
 
 	// Optional debug output: spatially varying density floor

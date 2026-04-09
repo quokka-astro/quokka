@@ -55,6 +55,8 @@ problem.sigma1 = 7.0e5
 cooling.enabled = 1
 cooling.cooling_table_type = "resampled"
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_shielded_resampled_noPE.h5"
+# rho=4.320441e-24 g/cm^3, tff = sqrt(3 pi / (32 G rho)), tff = 1.010633461e+15 s = 32.02504187 Myr
+heating_rate_external = "max(min(1.0, 2.0 - time / (32 * Myr)), 0.0024) * 2e-26" # unit: erg/s/H. Gamma_0 = 2e-26
 use_sfh_based_pe_heating = true
 sfh_to_pe_heating_table = "../extern/cooling/photoelectric_heating_from_sfh.csv"
 sfh_time_interval = 3.155760000e+12  # 1e5 yr
