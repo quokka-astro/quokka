@@ -86,6 +86,8 @@ quokka clean [--root <path>]
 
 `build`, `run`, and `buildrun` print final summary lines (`<name> SUCCESS|FAIL|SKIPPED`) to make tail-based status checks easy.
 
+`quokka run --filter <regex>` delegates directly to `ctest -R`, so it expects the matching executables to have already been built via `quokka build` or `quokka buildrun`.
+
 ### Typical workflow
 
 ```bash
@@ -123,6 +125,23 @@ quokka list
 # 11. Clean up test output
 quokka clean
 ```
+
+### Smoke-test workflow
+
+If you only need a quick local smoke test of the build/run/test flow, the following sequence keeps the dependency surface small and works well on systems without the optional Python plotting stack:
+
+```bash
+# Configure a fresh 1D build without Python plotting support
+quokka config -d 1d --delete -DQUOKKA_PYTHON=OFF
+
+# Build and run a fast 1D problem
+quokka buildrun -d 1d HydroWave -j 4
+
+# Re-run the same problem through the CTest path
+quokka run -d 1d --filter '^HydroWave$' -j 2
+```
+
+If you leave `QUOKKA_PYTHON` enabled, some problem runs may require optional Python imaging packages in addition to `matplotlib`.
 
 ## Git workflow
 
