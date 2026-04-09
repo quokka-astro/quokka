@@ -427,6 +427,11 @@ case "$COMMAND" in
 	usage
 	exit 0
 	;;
+config|build|buildrun|run|list|target|clean)
+	;;
+*)
+	die "unknown command '${COMMAND}'"
+	;;
 esac
 shift
 
@@ -495,11 +500,11 @@ done
 
 resolve_root "$ROOT"
 case "$COMMAND" in
-clean|list)
-	;;
-*)
+config|build|buildrun|run|target)
 	[ -n "$PRESET" ] || die "missing preset"
 	parse_preset "$PRESET"
+	;;
+clean|list)
 	;;
 esac
 
