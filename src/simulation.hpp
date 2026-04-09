@@ -75,6 +75,8 @@ namespace filesystem = experimental::filesystem;
 #include "util/time_units.hpp"
 #include <AMReX_FluxRegister.H>
 #include <format>
+#include <unordered_set>
+
 #include <yaml-cpp/yaml.h>
 
 #if AMREX_SPACEDIM == 3
@@ -85,6 +87,7 @@ namespace filesystem = experimental::filesystem;
 
 #include "AMReX_AmrParticles.H"
 #include "particles/PhysicsParticles.hpp"
+#include "particles/particle_deposition.hpp"
 #endif // AMREX_SPACEDIM == 3
 
 #ifdef AMREX_USE_ASCENT
@@ -96,6 +99,7 @@ namespace filesystem = experimental::filesystem;
 #include "fundamental_constants.H"
 #include "grid.hpp"
 #include "hydro/mhd_system.hpp"
+#include "io/DerivedFieldBase.H"
 #include "io/DiagBase.H"
 #include "io/DiagFramePlane.H"
 #include "io/DiagPDF.H"
@@ -329,6 +333,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// (e.g., caused by the flux register or from interpolation)
 	virtual void FixupState(int level) = 0;
 
+      protected:
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override = 0;
 
@@ -345,6 +350,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// DistributionMapping
 	void MakeNewLevelFromScratch(int lev, amrex::Real time, const amrex::BoxArray &ba, const amrex::DistributionMapping &dm) override;
 
+      public:
 	// AMR utility functions
 	template <typename PreInterpHook, typename PostInterpHook>
 	void fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state, int lev, amrex::Real time, quokka::centering cen, quokka::direction dir,
@@ -469,6 +475,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	[[nodiscard]] auto PlotFileMFAtLevel_fc(int lev, int idim, int nghost_fc_) -> amrex::MultiFab;
 	void AverageDownDerived(const amrex::Vector<amrex::MultiFab *> &mfs, const amrex::Vector<std::string> &varnames) const;
 	void createDiagnostics();
+	void createRuntimeDerivedFields();
+	void updateRuntimeDerivedFields();
+	[[nodiscard]] auto computeRuntimeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const -> bool;
 	void updateDiagnostics();
 	void doDiagnostics();
 	void WriteMetadataFile(std::string const &MetadataFileName) const;
@@ -591,6 +600,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// Diagnostics
 	amrex::Vector<std::unique_ptr<DiagBase>> m_diagnostics;
 	amrex::Vector<std::string> m_diagVars;
+	amrex::Vector<std::unique_ptr<quokka::DerivedFieldBase>> m_runtimeDerivedFields;
+	amrex::Vector<std::string> m_runtimeDerivedVarNames;
+	quokka::DerivedFieldBase::ComputeContext computeContext_;
 
 	/// AMR-specific parameters
 	int regrid_int = 2;	 // regrid interval (number of coarse steps)
@@ -979,6 +991,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Specify derived variables to save to plotfiles
 	pp.queryarr("derived_vars", derivedNames_);
+
+	// Configure runtime-derived field providers (factory-based)
+	createRuntimeDerivedFields();
 
 	// re-grid interval
 	pp.query("regrid_interval", regrid_int);
@@ -3516,7 +3531,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitParticles()
 		AMREX_ASSERT(TracerPC == nullptr);
 		TracerPC = std::make_unique<amrex::AmrTracerParticleContainer>(this);
 
-		const amrex::AmrTracerParticleContainer::ParticleInitData pdata = {{AMREX_D_DECL(0.0, 0.0, 0.0)}, {}, {}, {}};
+		const amrex::AmrTracerParticleContainer::ParticleInitData pdata = {
+		    .real_struct_data = {AMREX_D_DECL(0.0, 0.0, 0.0)},
+		    .int_struct_data = {},
+		    .real_array_data = {},
+		    .int_array_data = {},
+		};
 
 		TracerPC->SetVerbose(0);
 		TracerPC->InitOnePerCell(0.5, 0.5, 0.5, pdata);
@@ -3746,6 +3766,10 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 				comp++;
 				continue;
 			}
+			if (computeRuntimeDerivedVar(lev, varname, plotMF, comp)) {
+				comp++;
+				continue;
+			}
 			ComputeDerivedVar(lev, varname, plotMF, comp);
 			comp++;
 			continue;
@@ -3878,6 +3902,130 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF_fc(const
 	return r_fc;
 }
 
+template <typename problem_t> void AMRSimulation<problem_t>::createRuntimeDerivedFields()
+{
+	std::string const code_prefix = "quokka";
+	std::string const code_prefix_with_dot = code_prefix + ".";
+	std::string const type_suffix = ".type";
+	// If parameters are re-read, rebuild the registered runtime-derived providers
+	// from scratch and re-validate that derived_vars lists emitted field names only.
+	if (!m_runtimeDerivedVarNames.empty()) {
+		m_runtimeDerivedVarNames.clear();
+	}
+	m_runtimeDerivedFields.clear();
+
+	amrex::Vector<std::string> const requestedDerivedNames = derivedNames_;
+
+	std::unordered_set<std::string> existingVarNames;
+	existingVarNames.insert(componentNames_cc_.begin(), componentNames_cc_.end());
+	existingVarNames.insert(componentNames_fc_flat_.begin(), componentNames_fc_flat_.end());
+
+	std::unordered_set<std::string> emittedRuntimeVarNames;
+	std::unordered_set<std::string> runtimeNameSet;
+	for (auto const &entry : amrex::ParmParse::getEntries(code_prefix)) {
+		if (!entry.starts_with(code_prefix_with_dot) || !entry.ends_with(type_suffix)) {
+			continue;
+		}
+
+		std::string const field_group = entry.substr(code_prefix_with_dot.size(), entry.size() - code_prefix_with_dot.size() - type_suffix.size());
+		std::string const field_prefix = code_prefix_with_dot + field_group;
+		amrex::ParmParse const ppf(field_prefix);
+		std::string field_type;
+		ppf.get("type", field_type);
+		if (!quokka::DerivedFieldBase::contains(field_type)) {
+			continue;
+		}
+		if (std::ranges::find(requestedDerivedNames, field_group) != requestedDerivedNames.end()) {
+			amrex::Abort("Runtime derived field provider group '" + field_group +
+				     "' must not appear in derived_vars. List emitted output field names instead.");
+		}
+
+		auto provider = quokka::DerivedFieldBase::create(field_type);
+		provider->init(field_prefix, field_group);
+		amrex::Vector<std::string> providerVars;
+		provider->addVars(providerVars);
+		bool hasRequestedOutput = false;
+		for (auto const &var : providerVars) {
+			if (var.empty()) {
+				amrex::Abort("Runtime derived field provider generated an empty output name.");
+			}
+			emittedRuntimeVarNames.insert(var);
+			if (std::ranges::find(requestedDerivedNames, var) != requestedDerivedNames.end()) {
+				hasRequestedOutput = true;
+			}
+		}
+		if (!hasRequestedOutput) {
+			continue;
+		}
+
+		for (auto const &var : providerVars) {
+			if (std::ranges::find(requestedDerivedNames, var) == requestedDerivedNames.end()) {
+				continue;
+			}
+			if (existingVarNames.contains(var)) {
+				amrex::Abort("Runtime derived field name collides with an existing variable: " + var);
+			}
+			if (!runtimeNameSet.insert(var).second) {
+				amrex::Abort("Duplicate runtime derived field output name: " + var);
+			}
+			m_runtimeDerivedVarNames.push_back(var);
+		}
+		m_runtimeDerivedFields.push_back(std::move(provider));
+	}
+
+	computeContext_.depositParticleMassDensity = [this](const std::string &particleType, const std::string &depositField, amrex::MultiFab &outMF,
+							    int outLev, int outComp, amrex::Real massMin, amrex::Real massMax, bool hasAgeFilter,
+							    amrex::Real tAgeMax) {
+#if AMREX_SPACEDIM == 3
+		bool const deposit_birth_mass = (depositField == "birth_mass");
+		if (!deposit_birth_mass && depositField != "mass") {
+			amrex::Abort("Unsupported deposit field requested by runtime derived field provider: " + depositField);
+		}
+		particleRegister_.depositParticleMassDensity(particleType, deposit_birth_mass, outMF, outLev, outComp, massMin, massMax, hasAgeFilter, tNew_[0],
+							     tAgeMax);
+#else
+		amrex::ignore_unused(depositField, outMF, outLev, outComp, massMin, massMax, hasAgeFilter, tAgeMax);
+		amrex::Abort("Particle deposition runtime derived fields are supported only in 3D.");
+#endif
+	};
+
+	for (auto const &name : requestedDerivedNames) {
+
+		if (existingVarNames.contains(name) || emittedRuntimeVarNames.contains(name)) {
+			continue;
+		}
+		if (name.find('.') == std::string::npos) {
+			continue;
+		}
+		amrex::Abort("Requested runtime derived field output '" + name +
+			     "' is not emitted by any configured provider. List only provider output names that are actually emitted.");
+	}
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::updateRuntimeDerivedFields()
+{
+	if (m_runtimeDerivedFields.empty()) {
+		return;
+	}
+
+	auto const geoms = Geom(0, finestLevel());
+	for (auto const &provider : m_runtimeDerivedFields) {
+		provider->prepare(finestLevel() + 1, geoms, boxArray(0, finestLevel()), dmap, GetPlotfileVarNames());
+	}
+}
+
+template <typename problem_t>
+auto AMRSimulation<problem_t>::computeRuntimeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const -> bool
+{
+	for (auto const &provider : m_runtimeDerivedFields) {
+		if (provider->computeField(lev, dname, mf, ncomp, computeContext_)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 template <typename problem_t> void AMRSimulation<problem_t>::createDiagnostics()
 {
 	std::string const code_prefix = "quokka";
@@ -3953,6 +4101,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::createDiagnostics()
 
 template <typename problem_t> void AMRSimulation<problem_t>::updateDiagnostics()
 {
+	updateRuntimeDerivedFields();
+
 	// Might need to update some internal data as the grid changes
 	for (const auto &m_diagnostic : m_diagnostics) {
 		if (m_diagnostic->needUpdate()) {
@@ -4161,6 +4311,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::GetPlotfileVarNames
 template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 {
 	BL_PROFILE("AMRSimulation::WritePlotFile()"); // NOLINT(misc-const-correctness)
+
+	updateRuntimeDerivedFields();
 
 	if (amrex::AsyncOut::UseAsyncOut()) {
 		// ensure that we flush any plotfiles that are currently being written
@@ -4465,8 +4617,8 @@ inline void GotoNextLine(std::istream &is)
 }
 
 template <typename problem_t>
-auto AMRSimulation<problem_t>::detectRefinementContext(const amrex::BoxArray &restart_ba, const amrex::Geometry &current_geom) ->
-    typename AMRSimulation<problem_t>::RefinementContext
+auto AMRSimulation<problem_t>::detectRefinementContext(const amrex::BoxArray &restart_ba, const amrex::Geometry &current_geom)
+    -> AMRSimulation<problem_t>::RefinementContext
 {
 	RefinementContext context;
 
