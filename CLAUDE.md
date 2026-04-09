@@ -11,20 +11,20 @@ The `scripts/bash/quokka` script is the recommended way to configure, build, and
 
 The script optionally sources an environment file via `--source <file>` for commands that need the build/test environment (`config`, `build`, `buildrun`, `run`, `target`). If `--source` is omitted, no environment file is sourced.
 
-- **Configure**: `quokka config <preset> [--delete] [--source <file>]` — runs CMake with the correct dimensionality and build type. Always run with `--delete` as it is required if the preset build dir already exists.
-- **Build one or more problems**: `quokka build <preset> <problem> [<problem> ...] [-j <N>] [--source <file>]`
-- **Build matching problems**: `quokka build <preset> --filter <glob> [-j <N>]` (e.g. `'Rad*'`; quote patterns)
-- **Build and run (combined)**: `quokka buildrun <preset> <problem> [<problem> ...] [-j <N>] [--fpe] [--input <file>]`
-- **Build and run (filtered)**: `quokka buildrun <preset> --filter <pattern> [-j <N>] [--fpe]`
-- **Run one or more problems**: `quokka run <preset> <problem> [<problem> ...] [--input <file>] [--fpe]` (`--input` only with one problem)
-- **Run all tests**: `quokka run <preset> [-j <N>]`
-- **Run matching tests**: `quokka run <preset> --filter <regex>` (quote regex/globs to avoid shell expansion)
+- **Configure**: `quokka config [-d <preset>] [--delete] [--source <file>] [-D<k>=<v> ...]` — runs CMake with the selected preset (default `1d`).
+- **Build one or more problems**: `quokka build [-d <preset>] <problem> [<problem> ...] [-j <N>] [--source <file>]`
+- **Build matching problems**: `quokka build [-d <preset>] --filter <glob> [-j <N>]` (e.g. `'Rad*'`; quote patterns)
+- **Build and run (combined)**: `quokka buildrun [-d <preset>] <problem> [<problem> ...] [-j <N>] [--fpe] [--input <file>]`
+- **Build and run (filtered)**: `quokka buildrun [-d <preset>] --filter <pattern> [-j <N>] [--fpe]`
+- **Run one or more problems**: `quokka run [-d <preset>] <problem> [<problem> ...] [--input <file>] [--fpe]` (`--input` only with one problem)
+- **Run all tests**: `quokka run [-d <preset>] [-j <N>]`
+- **Run matching tests**: `quokka run [-d <preset>] --filter <regex>` (quote regex/globs to avoid shell expansion)
 - **List problems**: `quokka list`
-- **Show targets**: `quokka target <preset>`
+- **Show targets**: `quokka target [-d <preset>]`
 - **Clean test output**: `quokka clean`
 - **Result summary**: `build`, `run`, and `buildrun` always print final per-target summary lines (`<name> SUCCESS|FAIL|SKIPPED`), so tooling/agents can reliably inspect outcomes by tailing the command output.
 
-Presets: `1d`, `3d`, `1d-debug`, `3d-debug` (sets dimensionality and Release/Debug build type).
+Presets: `1d`, `3d`, `1d-debug`, `3d-debug` (sets dimensionality and Release/Debug build type). Default preset is `1d`.
 
 **Without the script (manual):**
 - **Configure**: `mkdir -p build/<preset> && cd build/<preset> && cmake ../.. -G Ninja -DCMAKE_BUILD_TYPE=<type> -DAMReX_SPACEDIM=<N>`
