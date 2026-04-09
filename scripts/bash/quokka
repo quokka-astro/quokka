@@ -25,7 +25,7 @@ Usage:
   quokka clean [--root <path>]               Remove plotfiles, checkpoints, and output files from tests/
 
 Options:
-  -d <preset>      Build preset to use (default: 1d)
+  -d <preset>      Build preset to use (default: QUOKKA_PRESET if set, otherwise 1d)
   --root <path>    Path to the quokka repository root (default: current directory)
   --input <file>   Input file to pass to the executable (default: inputs/<problem>.toml)
   --fpe            Enable floating-point exception traps (invalid, overflow, divide-by-zero)
@@ -35,6 +35,9 @@ Options:
   --delete         For config only: delete existing preset build directory before reconfiguring
   -D<k>=<v>        For config only: pass extra CMake cache definitions (repeatable)
   -j <N>           Number of parallel jobs for ninja or ctest (default: 8)
+
+Environment:
+  QUOKKA_PRESET    Default preset for config/build/buildrun/run/target when -d is omitted
 
 Presets:
   1d              1D Release build
@@ -444,7 +447,7 @@ config|build|buildrun|run|list|target|clean)
 esac
 shift
 
-PRESET="1d"
+PRESET="${QUOKKA_PRESET:-1d}"
 PRESET_EXPLICIT=0
 ROOT="."
 PROBLEMS=()

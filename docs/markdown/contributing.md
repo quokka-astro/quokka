@@ -74,7 +74,7 @@ quokka clean [--root <path>]
 
 | Option           | Description                                                          |
 |------------------|----------------------------------------------------------------------|
-| `-d <preset>`    | Preset to use: `1d`, `3d`, `1d-debug`, `3d-debug` (default: `1d`)    |
+| `-d <preset>`    | Preset to use: `1d`, `3d`, `1d-debug`, `3d-debug` (default: `QUOKKA_PRESET` if set, otherwise `1d`)    |
 | `--root <path>`  | Path to the quokka repository root (default: current directory)      |
 | `--input <file>` | Input file for the executable (default: `inputs/<problem>.toml`); valid only when running exactly one `<problem>` |
 | `--fpe`          | Enable floating-point exception traps (invalid, overflow, div-by-0)  |
@@ -83,6 +83,8 @@ quokka clean [--root <path>]
 | `--delete`       | `config` only: force reconfigure by deleting existing `build/<preset>` directory first |
 | `-D<k>=<v>`      | `config` only: pass extra CMake cache definitions (repeatable)       |
 | `-j <N>`         | Number of parallel jobs for ninja or ctest (default: 8)              |
+
+You can set `QUOKKA_PRESET` in your shell environment to change the default preset used by `config`, `build`, `buildrun`, `run`, and `target`. Passing `-d <preset>` still takes precedence.
 
 `build`, `run`, and `buildrun` print final summary lines (`<name> SUCCESS|FAIL|SKIPPED`) to make tail-based status checks easy.
 
