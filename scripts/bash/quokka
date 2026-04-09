@@ -187,28 +187,37 @@ check_problem_defined() {
 	local problem="$1"
 	local quiet="${2:-0}"
 	local report="${3:-0}"
-	local cmake_file="${BUILD_DIR}/src/problems/${problem}/CTestTestfile.cmake"
+	local source_dir="${ROOT}/src/problems/${problem}"
+	local build_ninja="${BUILD_DIR}/build.ninja"
 
-	if [ ! -f "$cmake_file" ]; then
+	if [ ! -d "$source_dir" ]; then
 		if [ "$quiet" -eq 1 ]; then
 			if [ "$report" -eq 1 ]; then
-				echo -e "${RED}${BOLD}Error:${RESET} problem '${problem}' is not defined (${cmake_file} not found; run 'quokka config -d ${PRESET}' first, or check the problem name)" >&2
+				echo -e "${RED}${BOLD}Error:${RESET} problem '${problem}' is not defined (source directory '${source_dir}' not found; check the problem name)" >&2
 			fi
 			return 1
 		fi
-		die "problem '${problem}' is not defined (${cmake_file} not found; run 'quokka config -d ${PRESET}' first, or check the problem name)"
+		die "problem '${problem}' is not defined (source directory '${source_dir}' not found; check the problem name)"
 	fi
 
-	local active_lines
-	active_lines=$(grep -cv '^\s*\(#\|$\)' "$cmake_file" || true)
-	if [ "$active_lines" -eq 0 ]; then
+	if [ ! -f "$build_ninja" ]; then
 		if [ "$quiet" -eq 1 ]; then
 			if [ "$report" -eq 1 ]; then
-				echo -e "${RED}${BOLD}Error:${RESET} problem '${problem}' is not available for preset '${PRESET}' (it may require a higher-dimensionality preset, e.g. '3d')" >&2
+				echo -e "${RED}${BOLD}Error:${RESET} problem '${problem}' is not defined (${build_ninja} not found; run 'quokka config -d ${PRESET}' first)" >&2
 			fi
 			return 1
 		fi
-		die "problem '${problem}' is not available for preset '${PRESET}' (it may require a higher-dimensionality preset, e.g. '3d')"
+		die "problem '${problem}' is not defined (${build_ninja} not found; run 'quokka config -d ${PRESET}' first)"
+	fi
+
+	if ! awk -v target="$problem" '$1 == "build" && $2 == (target ":") && $3 == "phony" { found = 1; exit } END { exit(found ? 0 : 1) }' "$build_ninja"; then
+		if [ "$quiet" -eq 1 ]; then
+			if [ "$report" -eq 1 ]; then
+				echo -e "${RED}${BOLD}Error:${RESET} problem '${problem}' is not available for preset '${PRESET}' (rerun 'quokka config -d ${PRESET} --delete' if this build tree is stale)" >&2
+			fi
+			return 1
+		fi
+		die "problem '${problem}' is not available for preset '${PRESET}' (rerun 'quokka config -d ${PRESET} --delete' if this build tree is stale)"
 	fi
 
 	return 0
