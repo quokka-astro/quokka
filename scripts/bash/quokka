@@ -5,7 +5,7 @@ set -euo pipefail
 usage() {
 	cat <<'EOF'
 Usage:
-  quokka config <preset> [--delete] [--source <file>] [--root <path>]
+  quokka config <preset> [--delete] [--source <file>] [--root <path>] [-D<name>=<value> ...]
                                              Configure CMake build directory for the given preset
   quokka build <preset> <problem> [<problem> ...] [-j <N>] [--source <file>] [--root <path>]
                                              Compile one or more specific problem targets using ninja
@@ -32,6 +32,7 @@ Options:
                      Quote patterns to avoid expansion by your shell (e.g. --filter 'Rad*')
   --source <file>  Optional environment file to source before config/build/run/target commands
   --delete         For config only: delete existing preset build directory before reconfiguring
+  -D<k>=<v>        For config only: pass extra CMake cache definitions (repeatable)
   -j <N>           Number of parallel jobs for ninja or ctest (default: 8)
 
 Presets:
@@ -158,6 +159,8 @@ resolve_root() {
 }
 
 configure_build() {
+	local cmake_args=()
+
 	if [ -d "${BUILD_DIR}" ] && [ "$DELETE_BUILD_DIR" -eq 0 ]; then
 		die "build directory already exists: ${BUILD_DIR} (run 'quokka config ${PRESET} --delete' to force reconfig)"
 	fi
@@ -167,8 +170,13 @@ configure_build() {
 	mkdir -p "$BUILD_DIR"
 	cd "$BUILD_DIR"
 
-	log_cmd "cmake ../.. -G Ninja -DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DAMReX_SPACEDIM=${DIM}"
-	cmake ../.. -G Ninja -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" -DAMReX_SPACEDIM="${DIM}"
+	cmake_args=(../.. -G Ninja "-DCMAKE_BUILD_TYPE=${BUILD_TYPE}" "-DAMReX_SPACEDIM=${DIM}")
+	if [ "${#CMAKE_DEFINES[@]}" -gt 0 ]; then
+		cmake_args+=("${CMAKE_DEFINES[@]}")
+	fi
+
+	log_cmd "cmake ${cmake_args[*]}"
+	cmake "${cmake_args[@]}"
 }
 
 check_problem_defined() {
@@ -444,6 +452,7 @@ FILTER_REGEX=""
 SOURCE_FILE=""
 DELETE_BUILD_DIR=0
 JOBS=8
+CMAKE_DEFINES=()
 
 while [ "$#" -gt 0 ]; do
 	case "$1" in
@@ -479,6 +488,14 @@ while [ "$#" -gt 0 ]; do
 	--delete)
 		DELETE_BUILD_DIR=1
 		shift
+		;;
+	-D*)
+		if [ "$COMMAND" = "config" ]; then
+			CMAKE_DEFINES+=("$1")
+			shift
+		else
+			die "unknown option '$1'"
+		fi
 		;;
 	-h|--help)
 		usage
