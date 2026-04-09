@@ -1039,6 +1039,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 					heatingRateExternalParser_->setConstant(symbol, value);
 				}
 			}
+		} else {
+			amrex::Abort("heating_rate_external requires a parser prefix with these symbols: yr, kyr, Myr, Gyr. Something is wrong; this should not happen.");
 		}
 		heatingRateExternalParser_->registerVariables({"time", "dt"});
 		heatingRateExternalParserExe_ = heatingRateExternalParser_->compile<2>();
