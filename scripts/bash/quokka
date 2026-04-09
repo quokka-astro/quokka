@@ -258,6 +258,14 @@ run_filtered() {
 	ctest --test-dir "$BUILD_DIR" -j"$JOBS" -R "$regex" "$@"
 }
 
+run_tests_from_file() {
+	local tests_file="$1"
+	shift
+
+	log_cmd "ctest --test-dir ${BUILD_DIR} -j${JOBS} --tests-from-file ${tests_file} $*"
+	ctest --test-dir "$BUILD_DIR" -j"$JOBS" --tests-from-file "$tests_file" "$@"
+}
+
 run_all_tests() {
 	log_cmd "ctest --test-dir ${BUILD_DIR} -j${JOBS} $*"
 	ctest --test-dir "$BUILD_DIR" -j"$JOBS" "$@"
@@ -279,23 +287,75 @@ list_matching_problems() {
 	done < <(list_problems)
 }
 
+list_problem_tests() {
+	local problem="$1"
+	local ctest_file="${BUILD_DIR}/src/problems/${problem}/CTestTestfile.cmake"
+
+	[ -f "$ctest_file" ] || return 0
+
+	awk '
+		/^add_test\(/ {
+			name = $0
+			sub(/^add_test\(/, "", name)
+			sub(/[[:space:]].*$/, "", name)
+			print name
+		}
+	' "$ctest_file"
+}
+
+prepare_buildrun_filter_selection() {
+	local pattern="$1"
+	local problem=""
+	local test=""
+
+	FILTER_MATCHED_PROBLEMS=()
+	FILTER_MATCHED_TESTS=()
+
+	while IFS= read -r problem; do
+		FILTER_MATCHED_PROBLEMS+=("$problem")
+		if check_problem_defined "$problem" 1; then
+			while IFS= read -r test; do
+				[ -n "$test" ] || continue
+				FILTER_MATCHED_TESTS+=("$test")
+			done < <(list_problem_tests "$problem")
+		fi
+	done < <(list_matching_problems "$pattern")
+
+	[ "${#FILTER_MATCHED_PROBLEMS[@]}" -gt 0 ] || die "no problems matched filter '${pattern}'"
+}
+
 build_filtered() {
 	local pattern="$1"
 	local problem=""
 	local matched_any=0
 
-	while IFS= read -r problem; do
-		matched_any=1
-		if check_problem_defined "$problem" 1; then
-			if build_problem "$problem"; then
-				record_result "$problem" "SUCCESS"
+	if [ "${#FILTER_MATCHED_PROBLEMS[@]}" -gt 0 ]; then
+		for problem in "${FILTER_MATCHED_PROBLEMS[@]}"; do
+			matched_any=1
+			if check_problem_defined "$problem" 1; then
+				if build_problem "$problem"; then
+					record_result "$problem" "SUCCESS"
+				else
+					record_result "$problem" "FAIL"
+				fi
 			else
-				record_result "$problem" "FAIL"
+				record_result "$problem" "SKIPPED"
 			fi
-		else
-			record_result "$problem" "SKIPPED"
-		fi
-	done < <(list_matching_problems "$pattern")
+		done
+	else
+		while IFS= read -r problem; do
+			matched_any=1
+			if check_problem_defined "$problem" 1; then
+				if build_problem "$problem"; then
+					record_result "$problem" "SUCCESS"
+				else
+					record_result "$problem" "FAIL"
+				fi
+			else
+				record_result "$problem" "SKIPPED"
+			fi
+		done < <(list_matching_problems "$pattern")
+	fi
 
 	[ "$matched_any" -eq 1 ] || die "no problems matched filter '${pattern}'"
 }
@@ -367,6 +427,8 @@ execute_run() {
 	local PROBLEM=""
 	local problem_input=""
 	local CTEST_TEST_ARGS=()
+	local ctest_status=0
+	local tests_file=""
 
 	[ "${#PROBLEMS[@]}" -eq 0 ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
 	init_results
@@ -387,7 +449,22 @@ execute_run() {
 				die "--fpe with ctest-based runs requires ctest support for --test-command-args"
 			fi
 		fi
-		run_filtered "$FILTER_REGEX" "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"
+		if [ "$COMMAND" = "buildrun" ]; then
+			if [ "${#FILTER_MATCHED_TESTS[@]}" -eq 0 ]; then
+				return 0
+			fi
+			tests_file="$(mktemp "${TMPDIR:-/tmp}/quokka-tests.XXXXXX")" || die "failed to create temporary ctest selection file"
+			printf '%s\n' "${FILTER_MATCHED_TESTS[@]}" >"$tests_file"
+			if run_tests_from_file "$tests_file" "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"; then
+				ctest_status=0
+			else
+				ctest_status=$?
+			fi
+			rm -f "$tests_file"
+			return "$ctest_status"
+		else
+			run_filtered "$FILTER_REGEX" "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"
+		fi
 		return $?
 	elif [ "${#PROBLEMS[@]}" -gt 0 ]; then
 		[ "${#PROBLEMS[@]}" -le 1 ] || [ -z "$INPUT_FILE" ] || die "--input accepts only one <problem>"
@@ -467,6 +544,8 @@ SOURCE_FILE=""
 DELETE_BUILD_DIR=0
 JOBS=8
 CMAKE_DEFINES=()
+FILTER_MATCHED_PROBLEMS=()
+FILTER_MATCHED_TESTS=()
 
 while [ "$#" -gt 0 ]; do
 	case "$1" in
@@ -558,6 +637,9 @@ buildrun)
 	_require_no_delete
 	[ "${#PROBLEMS[@]}" -gt 0 ] || [ -n "$FILTER_REGEX" ] || die "missing problem name (or provide --filter)"
 	load_environment
+	if [ -n "$FILTER_REGEX" ]; then
+		prepare_buildrun_filter_selection "$FILTER_REGEX"
+	fi
 	execute_build 1 || exit 1
 	execute_run || exit 1
 	;;
