@@ -1040,7 +1040,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 				}
 			}
 		} else {
-			amrex::Abort("heating_rate_external requires a parser prefix with these symbols: yr, kyr, Myr, Gyr. Something is wrong; this should not happen.");
+			amrex::Abort("Internal error: ParserPrefix is empty while parsing `heating_rate_external` unit symbols (`yr`, `kyr`, `Myr`, `Gyr`). "
+				     "This indicates a code regression. Please report this to Quokka maintainers and reference PR #1791. ");
 		}
 		heatingRateExternalParser_->registerVariables({"time", "dt"});
 		heatingRateExternalParserExe_ = heatingRateExternalParser_->compile<2>();
