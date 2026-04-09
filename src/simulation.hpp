@@ -1035,7 +1035,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 			amrex::ParmParse const parser_pp(amrex::ParmParse::ParserPrefix);
 			for (auto const &symbol : symbols) {
 				amrex::Real value = 0.0;
-				if (parser_pp.query(symbol, value)) {
+				if (parser_pp.query(symbol, value) != 0) {
 					heatingRateExternalParser_->setConstant(symbol, value);
 				}
 			}
