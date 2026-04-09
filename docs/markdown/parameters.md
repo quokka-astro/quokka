@@ -163,7 +163,7 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 | turbulence.spect_form        | Integer       | **Required** if `turbulence.enabled=1` | Spectral form of the driving amplitude. Can be 0 (band, rectangle, constant), 1 (paraboloid) or 2 (power law).                        |
 | turbulence.power_law_exp     | Float         | **Required** if `turbulence.spect_form=2` | If spect_form = 2, this sets the spectral power-law exponent (e.g., -5/3: Kolmogorov; -2: Burgers).                                   |
 | turbulence.angles_exp        | Float         | **Required** if `turbulence.spect_form=2` | If spect_form = 2, this sets the number of modes (angles) in k-shell such that it increases as $k^angles_exp$.                        |
-| turbulence.stop_time         | Float         | **Optional** if `turbulence.enabled=1` | Time at which to stop turbulence driving.                                                                                              |
+| turbulence.stop_time         | Float         | **Optional** if `turbulence.enabled=1` | Time at which to stop turbulence driving. Default is max, i.e. never stop.                                                                                              |
 | turbulence.random_seed       | Integer       | **Required** if `turbulence.enabled=1` | Random number seed for driving sequence.                                                                                              |
 | turbulence.nsteps_per_t_turb | Integer       | **Required** if `turbulence.enabled=1` | Number of turbulence driving pattern updates per turnover time.                                                                       |
 
