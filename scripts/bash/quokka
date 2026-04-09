@@ -5,26 +5,27 @@ set -euo pipefail
 usage() {
 	cat <<'EOF'
 Usage:
-  quokka config <preset> [--delete] [--source <file>] [--root <path>] [-D<name>=<value> ...]
+  quokka config [-d <preset>] [--delete] [--source <file>] [--root <path>] [-D<name>=<value> ...]
                                              Configure CMake build directory for the given preset
-  quokka build <preset> <problem> [<problem> ...] [-j <N>] [--source <file>] [--root <path>]
+  quokka build [-d <preset>] <problem> [<problem> ...] [-j <N>] [--source <file>] [--root <path>]
                                              Compile one or more specific problem targets using ninja
-  quokka build <preset> --filter <glob> [-j <N>] [--source <file>] [--root <path>]
+  quokka build [-d <preset>] --filter <glob> [-j <N>] [--source <file>] [--root <path>]
                                              Compile all problem targets matching glob (e.g., Rad*)
-  quokka buildrun <preset> <problem> [<problem> ...] [-j <N>] [--fpe] [--input <file>] [--source <file>] [--root <path>]
+  quokka buildrun [-d <preset>] <problem> [<problem> ...] [-j <N>] [--fpe] [--input <file>] [--source <file>] [--root <path>]
                                              Build then run one or more specific problems
-  quokka buildrun <preset> --filter <pattern> [-j <N>] [--fpe] [--source <file>] [--root <path>]
+  quokka buildrun [-d <preset>] --filter <pattern> [-j <N>] [--fpe] [--source <file>] [--root <path>]
                                              Build matching problems then run matching tests
-  quokka run <preset> [<problem> ...] [--input <file>] [-j <N>] [--fpe] [--source <file>] [--root <path>]
+  quokka run [-d <preset>] [<problem> ...] [--input <file>] [-j <N>] [--fpe] [--source <file>] [--root <path>]
                                              Run one or more problem executables from the tests/ directory
-  quokka run <preset> [--filter <regex>] [-j <N>] [--fpe] [--source <file>] [--root <path>]
+  quokka run [-d <preset>] [--filter <regex>] [-j <N>] [--fpe] [--source <file>] [--root <path>]
                                              Run all tests (or matching regex via ctest -R)
   quokka list [--root <path>]                List all available problem directories
-  quokka target <preset> [--source <file>] [--root <path>]
+  quokka target [-d <preset>] [--source <file>] [--root <path>]
                                              Show all available CMake build targets
   quokka clean [--root <path>]               Remove plotfiles, checkpoints, and output files from tests/
 
 Options:
+  -d <preset>      Build preset to use (default: 1d)
   --root <path>    Path to the quokka repository root (default: current directory)
   --input <file>   Input file to pass to the executable (default: inputs/<problem>.toml)
   --fpe            Enable floating-point exception traps (invalid, overflow, divide-by-zero)
@@ -162,7 +163,7 @@ configure_build() {
 	local cmake_args=()
 
 	if [ -d "${BUILD_DIR}" ] && [ "$DELETE_BUILD_DIR" -eq 0 ]; then
-		die "build directory already exists: ${BUILD_DIR} (run 'quokka config ${PRESET} --delete' to force reconfig)"
+		die "build directory already exists: ${BUILD_DIR} (run 'quokka config -d ${PRESET} --delete' to force reconfig)"
 	fi
 	if [ -d "${BUILD_DIR}" ] && [ "$DELETE_BUILD_DIR" -eq 1 ]; then
 		rm -rf "${BUILD_DIR}"
@@ -188,11 +189,11 @@ check_problem_defined() {
 	if [ ! -f "$cmake_file" ]; then
 		if [ "$quiet" -eq 1 ]; then
 			if [ "$report" -eq 1 ]; then
-				echo -e "${RED}${BOLD}Error:${RESET} problem '${problem}' is not defined (${cmake_file} not found; run 'quokka config ${PRESET}' first, or check the problem name)" >&2
+				echo -e "${RED}${BOLD}Error:${RESET} problem '${problem}' is not defined (${cmake_file} not found; run 'quokka config -d ${PRESET}' first, or check the problem name)" >&2
 			fi
 			return 1
 		fi
-		die "problem '${problem}' is not defined (${cmake_file} not found; run 'quokka config ${PRESET}' first, or check the problem name)"
+		die "problem '${problem}' is not defined (${cmake_file} not found; run 'quokka config -d ${PRESET}' first, or check the problem name)"
 	fi
 
 	local active_lines
@@ -443,7 +444,8 @@ config|build|buildrun|run|list|target|clean)
 esac
 shift
 
-PRESET=""
+PRESET="1d"
+PRESET_EXPLICIT=0
 ROOT="."
 PROBLEMS=()
 INPUT_FILE=""
@@ -456,6 +458,12 @@ CMAKE_DEFINES=()
 
 while [ "$#" -gt 0 ]; do
 	case "$1" in
+	-d)
+		require_arg "$1" "${2:-}"
+		PRESET="$2"
+		PRESET_EXPLICIT=1
+		shift 2
+		;;
 	--root)
 		require_arg "$1" "${2:-}"
 		ROOT="$2"
@@ -505,11 +513,7 @@ while [ "$#" -gt 0 ]; do
 		die "unknown option '$1'"
 		;;
 	*)
-		if [ -z "$PRESET" ]; then
-			PRESET="$1"
-		else
-			PROBLEMS+=("$1")
-		fi
+		PROBLEMS+=("$1")
 		shift
 		;;
 	esac
@@ -518,7 +522,6 @@ done
 resolve_root "$ROOT"
 case "$COMMAND" in
 config|build|buildrun|run|target)
-	[ -n "$PRESET" ] || die "missing preset"
 	parse_preset "$PRESET"
 	;;
 clean|list)
@@ -552,7 +555,7 @@ run)
 	execute_run || exit 1
 	;;
 list)
-	[ -z "$PRESET" ] || die "'${COMMAND}' does not take a preset"
+	[ "$PRESET_EXPLICIT" -eq 0 ] || die "'${COMMAND}' does not accept -d"
 	_require_no_problem
 	_require_no_input
 	_require_no_fpe
@@ -571,6 +574,7 @@ target)
 	show_targets
 	;;
 clean)
+	[ "$PRESET_EXPLICIT" -eq 0 ] || die "'${COMMAND}' does not accept -d"
 	_require_no_problem
 	_require_no_input
 	_require_no_fpe
