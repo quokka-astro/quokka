@@ -3,7 +3,7 @@
 // Copyright 2024 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file testDiskGalaxy.cpp
+/// \file testHydroDisk.cpp
 /// \brief Defines a simulation using disk galaxy initial conditions.
 ///
 
@@ -58,7 +58,7 @@ struct HDGalaxy {
 static_assert(AMREX_SPACEDIM == 3, "Hydro disk galaxy problem requires AMREX_SPACEDIM == 3.");
 
 template <> struct quokka::EOS_Traits<HDGalaxy> {
-	static constexpr double gamma = 1.01;
+	static constexpr double gamma = 1.0001;
 	static constexpr double mean_molecular_weight = 0.6 * C::m_u;
 	static constexpr double boltzmann_constant = C::k_B;
 	static constexpr double T_cgm =  1.0e7;// K, already defined in anonymous namespace
@@ -110,19 +110,26 @@ auto dPhiGas_dR(double R, double Sigma0) -> double
 {
 	const double y = R / (2.0 * Rd);
 
+	constexpr double eps = 1e-12;
+	if (std::abs(y) < eps) {
+		return 0.0;
+	}
+
 	// I0 via Abramowitz & Stegun 9.8.1 / 9.8.2
 	auto bessel_I0 = [](double x) -> double {
 		x = std::abs(x);
 		if (x <= 3.75) {
-			const double t = (x / 3.75) * (x / 3.75);
-			return 1.0 + t*(3.5156229 + t*(3.0899424 + t*(1.2067492
-			     + t*(0.2659732 + t*(0.0360768 + t*0.0045813)))));
+			const double t_sq = (x / 3.75) * (x / 3.75);
+			return 1.0 + t_sq*(3.5156229 + t_sq*(3.0899424 + t_sq*(1.2067492
+			     + t_sq*(0.2659732 + t_sq*(0.0360768 + t_sq*0.0045813)))));
 		}
-		const double t = 3.75 / x;
+		const double t_inv = 3.75 / x;
 		return (std::exp(x) / std::sqrt(x)) *
-		       (0.39894228 + t*(0.01328592 + t*(0.00225319 + t*(-0.00157565
-		     + t*(0.00916281 + t*(-0.02057706 + t*(0.02635537
-		     + t*(-0.01647633 + t*0.00392377))))))));
+		       (0.39894228 + t_inv*(0.01328592 
+			 + t_inv*(0.00225319 + t_inv*(-0.00157565
+		     + t_inv*(0.00916281 + t_inv*(-0.02057706 
+			 + t_inv*(0.02635537 + t_inv*(-0.01647633 
+			 					 + t_inv*0.00392377))))))));
 	};
 
 	// I1 via A&S 9.8.3 / 9.8.4
@@ -130,43 +137,52 @@ auto dPhiGas_dR(double R, double Sigma0) -> double
 		const double sign = (x >= 0.0) ? 1.0 : -1.0;
 		x = std::abs(x);
 		if (x <= 3.75) {
-			const double t = (x / 3.75) * (x / 3.75);
-			return sign * x * (0.5 + t*(0.87890594 + t*(0.51498869 + t*(0.15084934
-			     + t*(0.02658733 + t*(0.00301532 + t*0.00032411))))));
+			const double t_sq = (x / 3.75) * (x / 3.75);
+			return sign * x *
+			    (0.5 + t_sq*( 0.87890594 + t_sq*( 0.51498869 
+			  		 + t_sq*( 0.15084934 + t_sq*( 0.02658733 
+			 		 + t_sq*( 0.00301532 + t_sq*( 0.00032411)))))));
 		}
-		const double t = 3.75 / x;
+		const double t_inv = 3.75 / x;
 		return sign * (std::exp(x) / std::sqrt(x)) *
-		       (0.39894228 + t*(-0.03988024 + t*(-0.00362018 + t*(0.00163801
-		     + t*(-0.01031555 + t*(0.02282967 + t*(-0.02895312
-		     + t*(0.01787654 - t*0.00420059))))))));
+		       (0.39894228 + t_inv*(-0.03988024 + t_inv*(-0.00362018 + t_inv*( 0.00163801
+		    	 + t_inv*(-0.01031555 + t_inv*( 0.02282967 + t_inv*(-0.02895312
+		    	 + t_inv*( 0.01787654 - t_inv*( 0.00420059)))))))));
 	};
 
 	// K0 via A&S 9.8.5 / 9.8.6
 	auto bessel_K0 = [&bessel_I0](double x) -> double {
 		if (x <= 2.0) {
-			const double t = (x / 2.0) * (x / 2.0);
-			return -std::log(x / 2.0) * bessel_I0(x)
-			     + (-0.57721566 + t*(0.42278420 + t*(0.23069756 + t*(0.03488590
-			     + t*(0.00262698 + t*(0.00010750 + t*0.0000074))))));
+			const double t_sq = (x / 2.0) * (x / 2.0);
+			return -std::log(x / 2.0) * bessel_I0(x) + (-0.57721566 
+				 + t_sq*(0.42278420 + t_sq*(0.23069756 
+				 + t_sq*(0.03488590 + t_sq*(0.00262698 
+				 + t_sq*(0.00010750 + t_sq*(0.00000740)))))));
 		}
-		const double t = 2.0 / x;
+		const double t_inv = 2.0 / x;
 		return (std::exp(-x) / std::sqrt(x)) *
-		       (1.25331414 + t*(-0.07832358 + t*(0.02189568 + t*(-0.01062446
-		     + t*(0.00587872 + t*(-0.00251540 + t*0.00053208))))));
+		       (1.25331414 + t_inv*(-0.07832358 
+			  + t_inv*(0.02189568 + t_inv*(-0.01062446
+		      + t_inv*(0.00587872 + t_inv*(-0.00251540 
+								  + t_inv*( 0.00053208)))))));
 	};
 
 	// K1 via A&S 9.8.7 / 9.8.8
 	auto bessel_K1 = [&bessel_I1](double x) -> double {
 		if (x <= 2.0) {
-			const double t = (x / 2.0) * (x / 2.0);
-			return std::log(x / 2.0) * bessel_I1(x)
-			     + (1.0 / x) * (1.0 + t*(0.15443144 + t*(-0.67278579 + t*(-0.18156897
-			     + t*(-0.01919402 + t*(-0.00110404 + t*(-0.00004686)))))));
+			const double t_sq = (x / 2.0) * (x / 2.0);
+			return (1.0 / x) * 
+				(x * std::log(x / 2.0) * bessel_I1(x) +  (1.0 + t_sq*(0.15443144 
+				 + t_sq*(-0.67278579 + t_sq*(-0.18156897
+			     + t_sq*(-0.01919402 + t_sq*(-0.00110404 
+									 + t_sq*(-0.00004686))))))));
 		}
-		const double t = 2.0 / x;
+		const double t_inv = 2.0 / x;
 		return (std::exp(-x) / std::sqrt(x)) *
-		       (1.25331414 + t*(0.23498619 + t*(-0.03655620 + t*(0.01504268
-		     + t*(-0.00780353 + t*(0.00325614 - t*0.00068245))))));
+		       		(1.25331414 + t_inv*(0.23498619 
+				+ t_inv*(-0.03655620 + t_inv*( 0.01504268
+		  	    + t_inv*(-0.00780353 + t_inv*( 0.00325614 
+									 + t_inv*(-0.00068245)))))));
 	};
 
 	const double I0v = bessel_I0(y);
@@ -181,7 +197,7 @@ auto dPhiGas_dR(double R, double Sigma0) -> double
 
 template <> void QuokkaSimulation<HDGalaxy>::preCalculateInitialConditions()
 {
-    amrex::ParmParse const pp("hd_galaxy");
+	amrex::ParmParse const pp("hd_galaxy");
     pp.get("Mc",     userData_.Mc);
     pp.get("Q_mean", userData_.Q_mean);
 
@@ -193,25 +209,29 @@ template <> void QuokkaSimulation<HDGalaxy>::preCalculateInitialConditions()
 
     // Toomre Q integral uses cs_disk
     auto integrand = [=](double R) -> double {
-        const double Omega    = vc / std::sqrt(R * R + Rc * Rc);
-        const double dOmegadR = -vc * R / std::pow(R * R + Rc * Rc, 1.5);
+        const double D = R * R + Rc * Rc;
+		const double sqrtD = std::sqrt(D);
+		const double Omega    = vc / sqrtD;
+		const double dOmegadR = -vc * R / (D * sqrtD);
         const double kappa    = std::sqrt(std::max(4.0 * Omega * Omega + 2.0 * R * Omega * dOmegadR, 0.0));
         const double fR       = surfaceDensityProfile(R, 1.0);
         return kappa * cs_disk / (M_PI * C::Gconst * fR);
     };
 
-    const int N = 1000;
-    const double a = 0.1 * Rd;  // avoid R=0 singularity, but still capture the inner disk
-    const double b = Rmax;
-    const double h = (b - a) / N;
-    double integral = integrand(a) + integrand(b);
-    for (int i = 1; i < N; ++i) {
-        const double R = a + i * h;
-        integral += (i % 2 == 0 ? 2.0 : 4.0) * integrand(R);
-    }
-    integral *= h / 3.0;
+	constexpr int N = 1000;
+	static_assert(N % 2 == 0, "Simpson's rule requires even N");
+	const double a = 0.0;
+	const double b = Rmax;
+	const double h = (b - a) / N;
 
-    userData_.Sigma0 = integral / (userData_.Q_mean * (b-a));
+	double integral = integrand(a) + integrand(b);
+	for (int i = 1; i < N; ++i) {
+		const double R = a + i * h;
+		integral += (i % 2 == 0 ? 2.0 : 4.0) * integrand(R);
+	}
+	integral *= h / 3.0;
+
+	userData_.Sigma0 = integral / (userData_.Q_mean * Rmax);
 
     // Pressure matching: P = cs_disk^2 * rho_transition = cs_cgm^2 * rho_cgm
     userData_.rho_cgm = rho_transition * (cs_disk * cs_disk) / (cs_cgm * cs_cgm);
@@ -228,6 +248,8 @@ template <> void QuokkaSimulation<HDGalaxy>::preCalculateInitialConditions()
 
 template <> void QuokkaSimulation<HDGalaxy>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
+	amrex::Print() << "Setting initial conditions for HDGalaxy problem on grid with index range " << grid_elem.indexRange_ << "\n";
+	
 	const double vc      = userData_.vc;
 	const double Sigma0  = userData_.Sigma0;
 	const double cs_disk = quokka::EOS_Traits<HDGalaxy>::cs_disk;
@@ -262,13 +284,17 @@ template <> void QuokkaSimulation<HDGalaxy>::setInitialConditionsOnGrid(quokka::
 		// Using exact logarithmic derivative of the surface density profile
 		const double z_over_q = z / q_flatten;
 		const double D = R*R + Rc*Rc + z_over_q * z_over_q;
-		const double dlnSigma_dR = -1.0 / Rd;
-		const double vrot_sq = std::max(
-			vc*vc * R*R / D                        // d(phi_dm)/dR via flattened potential
-			+ cs_disk*cs_disk * R * dlnSigma_dR    // -cs^2 * d(R/Rd)/dR = -cs^2/Rd
-			- R * dPhiGas_dR(R, Sigma0)            // d(phi_g)/dR via Bessel functions
-			, 0.0);
-		const double vrot = in_disk ? std::sqrt(vrot_sq) : 0.0;
+
+		double vrot = 0.0;
+		if (in_disk) {
+			const double dlnSigma_dR = (1.0 / Rd) * (-1.0 + alpha_profile * beta_profile * std::exp(-alpha_profile * R / Rd));
+			const double vrot_sq = std::max(
+				vc*vc * R*R / D                        // DM halo: -d(phi_dm)/dR * R
+				+ cs_disk*cs_disk * R * dlnSigma_dR    // pressure gradient correction
+				+ R * dPhiGas_dR(R, Sigma0)            // gas self-gravity via Bessel functions
+				, 0.0);
+			vrot = std::sqrt(vrot_sq);
+		}
 
 		// Velocity components — CGM is at rest
 		double vx = 0.0;
@@ -326,15 +352,13 @@ template <> void QuokkaSimulation<HDGalaxy>::addStrangSplitSources(amrex::MultiF
 			const double z_over_q = z / q_flatten;
 			const double D = R2 + Rc*Rc + z_over_q * z_over_q;
 
-			// Radial acceleration from dark matter halo (Arora+25 Eq. A.3)
-			// Plus pressure gradient correction (Eq. A.4/A.5) for disk gas only.
-			// Note: gas self-gravity -d(phi_g)/dR is handled by the Poisson solver.
 			const bool in_disk = (rho > rho_transition);
 			double g_R = 0.0;
 			if (R > 0.0) {
 				g_R = -vc*vc * R / D;  // dark matter halo
 				if (in_disk) {
-					g_R += cs_disk*cs_disk * (-1.0 / Rd);  // pressure gradient correction
+					const double dlnSigma_dR = (1.0/Rd) * (-1.0 + alpha_profile * beta_profile * std::exp(-alpha_profile * R / Rd));
+					g_R += cs_disk * cs_disk * dlnSigma_dR;
 				}
 			}
 
@@ -412,7 +436,7 @@ template <> void QuokkaSimulation<HDGalaxy>::ComputeDerivedVar(int lev, std::str
 		auto const &phi_arr = phi[lev].const_arrays();
 		auto output = mf.arrays();
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			output[bx](i, j, k, ncomp) = phi_arr[bx](i, j, k);
+			output[bx](i, j, k, ncomp) = phi_arr[bx](i, j, k);  //cm^2/s^2
 		});
 		amrex::Gpu::streamSynchronize();
 	}
@@ -425,7 +449,7 @@ template <> void QuokkaSimulation<HDGalaxy>::ComputeDerivedVar(int lev, std::str
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				const double rho = state(i, j, k, HydroSystem<HDGalaxy>::density_index);
 				const double cs  = (rho > rho_transition) ? cs_disk : cs_cgm;
-				output(i, j, k, ncomp) = rho * cs * cs / C::k_B;
+				output(i, j, k, ncomp) = rho * cs * cs;  //dyne/cm^2
 			});
 		}
 	}
@@ -458,7 +482,7 @@ template <> void QuokkaSimulation<HDGalaxy>::ComputeDerivedVar(int lev, std::str
 				const double y    = prob_lo[1] + (static_cast<double>(j) + 0.5) * dx[1];
 				const double z    = prob_lo[2] + (static_cast<double>(k) + 0.5) * dx[2];
 				const double r_cm = std::sqrt(x * x + y * y + z * z);
-				output(i, j, k, ncomp) = (r_cm > 0.0) ? ((x * vx + y * vy + z * vz) / r_cm) / 1.0e5 : 0.0;
+				output(i, j, k, ncomp) = (r_cm > 0.0) ? ((x * vx + y * vy + z * vz) / r_cm) / 1.0e5 : 0.0;  // km/s
 			});
 		}
 	}
@@ -475,7 +499,7 @@ template <> void QuokkaSimulation<HDGalaxy>::ComputeDerivedVar(int lev, std::str
 				const double x     = prob_lo[0] + (static_cast<double>(i) + 0.5) * dx[0];
 				const double y     = prob_lo[1] + (static_cast<double>(j) + 0.5) * dx[1];
 				const double r_cyl = std::sqrt(x * x + y * y);
-				output(i, j, k, ncomp) = (r_cyl > 0.0) ? ((x * vy - y * vx) / r_cyl) / 1.0e5 : 0.0;
+				output(i, j, k, ncomp) = (r_cyl > 0.0) ? ((x * vy - y * vx) / r_cyl) / 1.0e5 : 0.0; // km/s
 			});
 		}
 	}
@@ -492,7 +516,7 @@ template <> void QuokkaSimulation<HDGalaxy>::ComputeDerivedVar(int lev, std::str
 				const double momz = state(i, j, k, HydroSystem<HDGalaxy>::x3Momentum_index);
 				const double cs   = (rho > rho_transition) ? cs_disk : cs_cgm;
 				const double v2   = (momx * momx + momy * momy + momz * momz) / (rho * rho);
-				output(i, j, k, ncomp) = std::sqrt(v2) / cs;
+				output(i, j, k, ncomp) = std::sqrt(v2) / cs;  // Mach number (unitless)
 			});
 		}
 	}
@@ -507,44 +531,52 @@ template <> auto QuokkaSimulation<HDGalaxy>::ComputeStatistics() -> std::map<std
 		amrex::Array4<const amrex::Real> const &state) noexcept {
 		return state(i, j, k, HydroSystem<HDGalaxy>::density_index);
 	});
-	stats["mean_density"] = mean_density;
+	stats["mean_density"] = mean_density / geom[0].ProbSize();  // g/cm³;
 
-	// Disk mass and volume (needed for mean disk density)
+	// Disk mass (rho integrated over disk cells)
 	const amrex::Real disk_mass = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k,
 		amrex::Array4<const amrex::Real> const &state) noexcept {
 		const amrex::Real rho = state(i, j, k, HydroSystem<HDGalaxy>::density_index);
-		return (rho > rho_transition) ? rho : 0.0;
+		return (rho > rho_transition) ? rho : amrex::Real(0.0); //M☉
 	});
 	stats["disk_mass"] = disk_mass / C::M_solar;
 
+	// Disk volume (cm^3) — needed to convert rho integral to mean density
 	const amrex::Real disk_volume = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k,
 		amrex::Array4<const amrex::Real> const &state) noexcept {
 		const amrex::Real rho = state(i, j, k, HydroSystem<HDGalaxy>::density_index);
-		return (rho > rho_transition) ? 1.0 : 0.0;
+		return (rho > rho_transition) ? amrex::Real(1.0) : amrex::Real(0.0);  //M☉
 	});
 
-	const amrex::Real mean_disk_density = disk_mass / disk_volume;
+	// Mass-weighted mean disk density: <rho> = disk_mass / disk_volume
+	// This is a host-side scalar — safe to capture by value into the next kernel
+	const amrex::Real mean_disk_density = (disk_volume > 0.0) ? (disk_mass / disk_volume) : amrex::Real(1.0);  // g/cm³
+	stats["mean_disk_density"] = mean_disk_density; // g/cm³;
+	stats["disk_mass"] = disk_mass / C::M_solar;  // convert to solar masses after
 
-	// Log-density variance over disk cells only
-	const amrex::Real sigma_eta_sq = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k,
+	// Volume-weighted log-density variance over disk cells:
+	// sigma_eta^2 = (1/V_disk) * int_{disk} [ln(rho/<rho>)]^2 dV
+	const amrex::Real sigma_eta_sq_times_vol = computeVolumeIntegral(
+		[=] AMREX_GPU_DEVICE(int i, int j, int k,
 		amrex::Array4<const amrex::Real> const &state) noexcept {
 		const amrex::Real rho = state(i, j, k, HydroSystem<HDGalaxy>::density_index);
-		if (rho <= rho_transition) return static_cast<amrex::Real>(0.0);
+		if (rho <= rho_transition) { return amrex::Real(0.0); }
 		const amrex::Real eta = std::log(rho / mean_disk_density);
 		return eta * eta;
 	});
-	stats["sigma_eta"] = std::sqrt(sigma_eta_sq / disk_volume);
+
+	stats["sigma_eta"] = (disk_volume > 0.0) ? std::sqrt(sigma_eta_sq_times_vol / disk_volume) : amrex::Real(0.0);
 
 	return stats;
 }
 
 auto problem_main() -> int
 {
-	auto BCs_cc = quokka::BC<HDGalaxy>(quokka::BCType::foextrap);
+    auto BCs_cc = quokka::BC<HDGalaxy>(quokka::BCType::foextrap);
+    QuokkaSimulation<HDGalaxy> sim(BCs_cc);
+    sim.preCalculateInitialConditions();
+    sim.setInitialConditions();
+    sim.evolve();
 
-	QuokkaSimulation<HDGalaxy> sim(BCs_cc);
-	sim.setInitialConditions();
-	sim.evolve();
-
-	return 0;
+    return 0;
 }

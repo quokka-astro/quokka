@@ -9,7 +9,7 @@ quokka.bc = foextrap foextrap foextrap
 # Resolution and refinement
 # *****************************************************************
 amr.n_cell          = 128 128 128
-amr.blocking_factor = 16
+amr.blocking_factor = 32
 amr.max_grid_size   = 32
 amr.max_level       = 3
 amr.n_error_buf     = 2
@@ -17,18 +17,18 @@ amr.grid_eff        = 0.75
 regrid_interval     = -11
 do_reflux           = 1
 do_subcycle         = 0
-plotfile_prefix = "Toomre3_plt"
+plotfile_prefix = "Toomre3b_plt"
 density_floor = 1.0e-32
 # *****************************************************************
 # Time integration
 # *****************************************************************
 cfl                 = 0.3
-max_timesteps       = 100000
+max_timesteps       = 200
 stop_time           = 2.9652e15   # ~94 Myr = 1 t_rot at R=3 kpc, vc=200 km/s
 # *****************************************************************
 # Output
 # *****************************************************************
-checkpoint_interval = 1000
+checkpoint_interval = 50
 plotfile_interval   = 5
 derived_vars        = gpot pressure radius_sph radial_velocity circular_velocity mach
 # *****************************************************************
