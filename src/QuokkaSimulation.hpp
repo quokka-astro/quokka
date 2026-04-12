@@ -3003,8 +3003,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 				// Full gas update (gas_update_factor = 1.0)
 				RadSystem<problem_t>::AddSourceTerms(stateTmp1, radEnergySource_arr, indexRange, dt_stage2_implicit, 1.0,
-								     dustGasInteractionCoeff_, rad_tol, rad_tol_rel, tempFloor,
-								     p_iteration_counter, p_iteration_failure_counter);
+								     dustGasInteractionCoeff_, rad_tol, rad_tol_rel, tempFloor, p_iteration_counter,
+								     p_iteration_failure_counter);
 			}
 		}
 
@@ -3072,9 +3072,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			RadSystem<problem_t>::SetRadEnergySource(radEnergySource_arr, indexRange, dx, prob_lo, prob_hi, time_subcycle + dt_radiation);
 
 			// Full gas update (gas_update_factor = 1.0)
-			RadSystem<problem_t>::AddSourceTerms(stateNew_cc, radEnergySource_arr, indexRange, dt_stage3_implicit, 1.0,
-							      dustGasInteractionCoeff_, rad_tol, rad_tol_rel, tempFloor, p_iteration_counter,
-							      p_iteration_failure_counter);
+			RadSystem<problem_t>::AddSourceTerms(stateNew_cc, radEnergySource_arr, indexRange, dt_stage3_implicit, 1.0, dustGasInteractionCoeff_,
+							     rad_tol, rad_tol_rel, tempFloor, p_iteration_counter, p_iteration_failure_counter);
 		}
 
 		if (print_rad_counter_) {
