@@ -27,6 +27,7 @@
 #include "hyperbolic_system.hpp"
 #include "math/math_impl.hpp"
 #include "physics_info.hpp"
+#include "radiation/coupling_types.hpp"
 #include "radiation/planck_integral.hpp"
 #include "util/valarray.hpp"
 
@@ -122,6 +123,10 @@ template <typename problem_t> struct JacobianResult {
 	quokka::valarray<double, Physics_Traits<problem_t>::nGroups> Fg;  // (g) components of the residual, g = 1, 2, ..., nGroups
 };
 
+// Forward declarations for structs defined in thermal_solve.hpp
+template <typename problem_t> struct NewtonIterateState;
+template <typename problem_t, bool debug_mode> struct ThermalResult;
+
 // A struct to hold the results of UpdateFlux(), containing the following elements:
 // Erad, gasMomentum, Frad
 template <typename problem_t> struct FluxUpdateResult {
@@ -213,6 +218,16 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static constexpr bool enable_photoelectric_heating_ = ISM_Traits<problem_t>::enable_photoelectric_heating;
 
 	static constexpr int nGroups_ = Physics_Traits<problem_t>::nGroups;
+	static constexpr int nChemicalGroups_ = Chemistry_Traits<problem_t>::nChemicalGroups;
+	static constexpr int nThermalGroups_ = nGroups_ - nChemicalGroups_;
+	static constexpr int PE_group_index_ = detail::FindChemicalBand<problem_t>(ChemicalBandRole::PE, nThermalGroups_);
+	static constexpr bool has_PE_heating_ = (PE_group_index_ >= 0);
+
+	static_assert(nChemicalGroups_ >= 0 && nChemicalGroups_ <= nGroups_);
+	static_assert(nThermalGroups_ >= 1, "Must have at least one thermal group");
+	static_assert(detail::CountChemicalBand<problem_t>(ChemicalBandRole::PE) <= 1, "At most one PE band allowed");
+	static_assert(detail::AllUniqueRoles<problem_t>(), "Chemical band roles must be unique");
+
 	static constexpr amrex::GpuArray<double, nGroups_ + 1> radBoundaries_ = []() constexpr {
 		if constexpr (nGroups_ > 1) {
 			return RadSystem_Traits<problem_t>::radBoundaries;
@@ -280,16 +295,19 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi,
 				       amrex::Real time);
 
-	AMREX_GPU_DEVICE static auto UpdateFlux(int i, int j, int k, arrayconst_t const &consPrev, NewtonIterationResult<problem_t> &energy, double dt,
-						double gas_update_factor, double Ekin0) -> FluxUpdateResult<problem_t>;
+	AMREX_GPU_DEVICE static auto UpdateFluxAndMomentum(int i, int j, int k, arrayconst_t const &consPrev, NewtonIterationResult<problem_t> &energy,
+							   double dt, double gas_update_factor, double Ekin0) -> FluxUpdateResult<problem_t>;
 
-	static void AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_implicit,
-					     double gas_update_factor, double dustGasCoeff, double tol_h, double tol_rel_h, double tempFloor,
-					     int *p_iteration_counter, int *p_iteration_failure_counter);
+	AMREX_GPU_DEVICE static auto ComputeWorkTerm(amrex::GpuArray<amrex::Real, 3> const &gasMomentum,
+						     amrex::GpuArray<amrex::GpuArray<amrex::Real, nGroups_>, 3> const &Frad,
+						     OpacityTerms<problem_t> const &opacity_terms, double dt) -> quokka::valarray<double, nGroups_>;
 
-	static void AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_implicit,
-					      double gas_update_factor, double dustGasCoeff, double tol_h, double tol_rel_h, double tempFloor,
-					      int *p_iteration_counter, int *p_iteration_failure_counter);
+	AMREX_GPU_DEVICE static auto WorkConverged(quokka::valarray<double, nGroups_> const &work, quokka::valarray<double, nGroups_> const &work_prev,
+						   double rho, amrex::GpuArray<double, 3> const &gasMomentum, double Egas_guess) -> bool;
+
+	static void AddSourceTerms(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_implicit,
+				   double gas_update_factor_in, double dustGasCoeff, double const tol_h, double const tol_rel_h, double const tempFloor_local,
+				   int *p_iteration_counter, int *p_iteration_failure_counter);
 
 	static void balanceMatterRadiation(arrayconst_t &consPrev, array_t &consNew, amrex::Box const &indexRange);
 
@@ -333,11 +351,6 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	template <typename ArrayType>
 	AMREX_GPU_HOST_DEVICE static auto ComputeRadQuantityExponents(ArrayType const &quant, amrex::GpuArray<double, nGroups_ + 1> const &boundaries)
 	    -> amrex::GpuArray<double, nGroups_>;
-
-	AMREX_GPU_HOST_DEVICE static void SolveLinearEqs(JacobianResult<problem_t> const &jacobian, double &x0, quokka::valarray<double, nGroups_> &xi);
-
-	AMREX_GPU_HOST_DEVICE static void SolveLinearEqsWithLastColumn(JacobianResult<problem_t> const &jacobian, double &x0,
-								       quokka::valarray<double, nGroups_> &xi);
 
 	AMREX_GPU_HOST_DEVICE static auto Solve3x3matrix(double C00, double C01, double C02, double C10, double C11, double C12, double C20, double C21,
 							 double C22, double Y0, double Y1, double Y2) -> std::tuple<amrex::Real, amrex::Real, amrex::Real>;
@@ -392,56 +405,19 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 									  amrex::GpuArray<double, nGroups_> const &alpha_E = {},
 									  amrex::GpuArray<double, nGroups_> const &alpha_P = {}) -> OpacityTerms<problem_t>;
 
-	AMREX_GPU_DEVICE static auto ComputeJacobianForGas(double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff,
-							   quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src,
-							   quokka::valarray<double, nGroups_> const &tau, double c_v,
-							   quokka::valarray<double, nGroups_> const &kappaPoverE,
-							   quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t, double num_den, double dt)
-	    -> JacobianResult<problem_t>;
+	AMREX_GPU_DEVICE static auto EvaluateOpacities(double T_d, double rho, quokka::valarray<double, nGroups_> const &Erad, int iteration_number,
+						       amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
+						       amrex::GpuArray<double, nGroups_> const &rad_boundary_ratios,
+						       quokka::valarray<double, nGroups_> const &fourPiBoverC, OpacityTerms<problem_t> const &prev_opacity)
+	    -> OpacityTerms<problem_t>;
 
-	AMREX_GPU_DEVICE static auto ComputeJacobianForGasAndDust(double T_gas, double T_d, double Egas_diff,
-								  quokka::valarray<double, nGroups_> const &Erad_diff,
-								  quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src,
-								  double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v,
-								  double lambda_gd_time_dt, quokka::valarray<double, nGroups_> const &kappaPoverE,
-								  quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t, double num_den, double dt)
-	    -> JacobianResult<problem_t>;
+	AMREX_GPU_DEVICE static void EvaluateFluxOpacities(double T_d, double rho, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
+							   quokka::valarray<double, nGroups_> const &fourPiBoverC, OpacityTerms<problem_t> &opacity_terms);
 
-	AMREX_GPU_DEVICE static auto ComputeJacobianForGasAndDustDecoupled(
-	    double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad_diff, quokka::valarray<double, nGroups_> const &Rvec,
-	    quokka::valarray<double, nGroups_> const &Src, double coeff_n, quokka::valarray<double, nGroups_> const &tau, double c_v, double lambda_gd_time_dt,
-	    quokka::valarray<double, nGroups_> const &kappaPoverE, quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t) -> JacobianResult<problem_t>;
+	AMREX_GPU_DEVICE static auto SelectDustModel(double T_gas0, double T_d0, double Egas0, double coeff_n) -> DustModel;
 
-	AMREX_GPU_DEVICE static auto ComputeJacobianForGasAndDustWithPE(
-	    double T_gas, double T_d, double Egas_diff, quokka::valarray<double, nGroups_> const &Erad, quokka::valarray<double, nGroups_> const &Erad0,
-	    double PE_heating_energy_derivative, quokka::valarray<double, nGroups_> const &Rvec, quokka::valarray<double, nGroups_> const &Src, double coeff_n,
-	    quokka::valarray<double, nGroups_> const &tau, double c_v, double lambda_gd_time_dt, quokka::valarray<double, nGroups_> const &kappaPoverE,
-	    quokka::valarray<double, nGroups_> const &d_fourpiboverc_d_t, double num_den, double dt) -> JacobianResult<problem_t>;
-
-	AMREX_GPU_DEVICE static auto
-	SolveGasRadiationEnergyExchange(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho, double dt,
-					amrex::GpuArray<Real, nmscalars_> const &massScalars, int n_outer_iter, quokka::valarray<double, nGroups_> const &work,
-					quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
-					amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double resid_tol, double rel_change_tol, double tempFloor,
-					int *p_iteration_counter, int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>;
-
-	AMREX_GPU_DEVICE static auto SolveGasDustRadiationEnergyExchange(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho,
-									 double coeff_n, double dt, amrex::GpuArray<Real, nmscalars_> const &massScalars,
-									 int n_outer_iter, quokka::valarray<double, nGroups_> const &work,
-									 quokka::valarray<double, nGroups_> const &vel_times_F,
-									 quokka::valarray<double, nGroups_> const &Src,
-									 amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double resid_tol,
-									 double rel_change_tol, double tempFloor, int *p_iteration_counter,
-									 int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>;
-
-	AMREX_GPU_DEVICE static auto SolveGasDustRadiationEnergyExchangeWithPE(double Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double rho,
-									       double coeff_n, double dt, amrex::GpuArray<Real, nmscalars_> const &massScalars,
-									       int n_outer_iter, quokka::valarray<double, nGroups_> const &work,
-									       quokka::valarray<double, nGroups_> const &vel_times_F,
-									       quokka::valarray<double, nGroups_> const &Src,
-									       amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double resid_tol,
-									       double rel_change_tol, double tempFloor, int *p_iteration_counter,
-									       int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t>;
+	AMREX_GPU_DEVICE static auto ComputeDustTemperatureFromIterate(DustModel model, double T_gas, quokka::valarray<double, nGroups_> const &Rvec_all,
+								       double coeff_n, double T_d0, int newton_iter, double tempFloor) -> double;
 
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
@@ -458,6 +434,22 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	    -> RadPressureResult;
 
 	AMREX_GPU_DEVICE static auto ComputeEddingtonTensor(double fx_L, double fy_L, double fz_L) -> std::array<std::array<double, 3>, 3>;
+
+	using RadMatterCouplingInput_t = RadMatterCouplingInput<nGroups_, nmscalars_>;
+	using JacobianInputs_t = JacobianInputs<nGroups_>;
+
+	// --- New unified thermal solver declarations ---
+	AMREX_GPU_HOST_DEVICE static void SolveArrowheadSystem(JacobianResult<problem_t> const &jacobian, double &x0, quokka::valarray<double, nGroups_> &xi);
+
+	AMREX_GPU_DEVICE static auto ComputeJacobianGasOnly(JacobianInputs_t const &inputs) -> JacobianResult<problem_t>;
+
+	AMREX_GPU_DEVICE static auto ComputeJacobianDustCoupled(JacobianInputs_t const &inputs) -> JacobianResult<problem_t>;
+
+	AMREX_GPU_DEVICE static auto ComputeJacobianDustDecoupled(JacobianInputs_t const &inputs) -> JacobianResult<problem_t>;
+
+	template <bool debug_mode = false>
+	AMREX_GPU_DEVICE static auto SolveRadiationMatterCoupling(RadMatterCouplingInput_t const &state, SolverParams const &params)
+	    -> ThermalResult<problem_t, debug_mode>;
 };
 
 // Compute radiation energy fractions for each photon group from a Planck function, given nGroups, radBoundaries, and temperature
@@ -574,19 +566,6 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineNetCoolingRateTempDerivat
 template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::DefineCosmicRayHeatingRate(amrex::Real const /*num_density*/) -> double
 {
 	return 0.0;
-}
-
-// Linear equation solver for matrix with non-zeros at the first row, first column, and diagonal only.
-// solve the linear system
-//   [J00 J0g] [x0] - [F0] = 0
-//   [Jg0 Jgg] [xg] - [Fg] = 0
-// for x0 and xg, where g = 1, 2, ..., nGroups
-template <typename problem_t>
-AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqs(JacobianResult<problem_t> const &jacobian, double &x0, quokka::valarray<double, nGroups_> &xi)
-{
-	auto ratios = jacobian.J0g / jacobian.Jgg;
-	x0 = (sum(ratios * jacobian.Fg) - jacobian.F0) / (-sum(ratios * jacobian.Jg0) + jacobian.J00);
-	xi = (-1.0 * jacobian.Fg - jacobian.Jg0 * x0) / jacobian.Jgg;
 }
 
 template <typename problem_t>
@@ -1531,7 +1510,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 	return T_d;
 }
 
-#include "radiation/source_terms_multi_group.hpp"  // IWYU pragma: export
-#include "radiation/source_terms_single_group.hpp" // IWYU pragma: export
+#include "radiation/dust_closure.hpp"	    // IWYU pragma: export
+#include "radiation/flux_update.hpp"	    // IWYU pragma: export
+#include "radiation/opacity_evaluation.hpp" // IWYU pragma: export
+#include "radiation/source_terms.hpp"	    // IWYU pragma: export
+#include "radiation/thermal_solve.hpp"	    // IWYU pragma: export
 
 #endif // RADIATION_SYSTEM_HPP_

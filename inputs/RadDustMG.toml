@@ -10,7 +10,7 @@ quokka.bc = ["periodic", "periodic", "periodic"]
 # *****************************************************************
 #radiation.cfl = 8.0
 radiation.dust_gas_interaction_coeff = 1.0e6
-radiation.print_iteration_counts = 1
+radiation.print_iteration_counts = 0
 
 # *****************************************************************
 # VERBOSITY
