@@ -265,6 +265,8 @@ Set `PYTHONPATH` to the `site-packages` directory of your Python environment. Fo
 export PYTHONPATH=~/softwares/quokka/.venv/lib/python3.14/site-packages
 ```
 
+If `PYTHONPATH` is unset or points to the wrong environment, post-processing imports may fail at runtime (for example `ModuleNotFoundError: No module named 'numpy'` or `ImportError: numpy._core.multiarray failed to import`), and tests such as `RadDust` can abort when loading `matplotlib`.
+
 If you skip this step, you can disable Python support later by adding `-DQUOKKA_PYTHON=OFF` to the CMake configuration.
 
 ### Building Quokka
