@@ -143,7 +143,7 @@ This guide provides detailed instructions for building Quokka on macOS systems.
 
 ### Prerequisites
 
-Before installing Quokka, you need to ensure that you have a working C++ compiler, MPI library, CMake, and Ninja installed on your system.
+Before installing Quokka, you need to ensure that you have a working C++ compiler, MPI library, CMake, Ninja, and HDF5 installed on your system.
 
 #### Step 1: Verify C++ Compiler
 
@@ -237,7 +237,15 @@ cmake --version
 ninja --version
 ```
 
-#### Step 4: Install Python Dependencies (Optional but Recommended)
+#### Step 4: Install HDF5 (Required)
+
+HDF5 is required to build Quokka. On macOS, we recommend installing it with Homebrew:
+
+```bash
+brew install hdf5
+```
+
+#### Step 5: Install Python Dependencies (Optional but Recommended)
 
 Some test problems use Python for plotting results. Install NumPy and matplotlib:
 
@@ -249,6 +257,12 @@ python3 -m pip install numpy matplotlib --user
 Using uv:
 ```bash
 uv pip install numpy matplotlib
+```
+
+Set `PYTHONPATH` to the `site-packages` directory of your Python environment. For example:
+
+```bash
+export PYTHONPATH=~/softwares/quokka/.venv/lib/python3.14/site-packages
 ```
 
 If you skip this step, you can disable Python support later by adding `-DQUOKKA_PYTHON=OFF` to the CMake configuration.
