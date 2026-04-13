@@ -1,4 +1,4 @@
-pybtex==0.24.0
+pybtex==0.26.1
 mkdocs-material>=9.5.9
 mkdocs-include-markdown-plugin>=6.0.4
 mkdocs-exclude>=1.0.2
