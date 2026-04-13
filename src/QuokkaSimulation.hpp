@@ -2163,8 +2163,10 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	// LOW LEVEL DEBUGGING: output state_old_cc_tmp (with ghost cells)
 	if (lowLevelDebuggingOutput_ == 1) {
 		// write AMReX plotfile
-		// WriteSingleLevelPlotfile(CustomPlotFileName("debug_stage1_filled_state_old", istep[lev]+1),
-		//    state_old_cc_tmp, componentNames_cc_, geom[lev], time, istep[lev]+1);
+		amrex::ParallelDescriptor::Barrier();
+		WriteSingleLevelPlotfile(CustomPlotFileName("debug_stage1_filled_state_old", istep[lev] + 1), state_old_cc_tmp, componentNames_cc_, geom[lev],
+					 time, istep[lev] + 1);
+		amrex::ParallelDescriptor::Barrier();
 	}
 
 	// check state validity
