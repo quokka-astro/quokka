@@ -105,3 +105,65 @@ quokka.hist_temp.filters = dense                       # (Optional) List of filt
 quokka.hist_temp.dense.field_name = gasDensity         # Filter field
 quokka.hist_temp.dense.value_greater = 1e-25           # Filters: value_greater, value_less, value_inrange
 ```
+
+
+### Runtime Derived Fields
+
+Runtime-derived fields are produced by factory-registered providers at runtime and can be consumed by diagnostics (for example, `DiagPDF`) without adding problem-specific `ComputeDerivedVar(...)` specializations.
+
+Provider discovery is driven by `quokka.<name>.type`. Quokka scans the configured `quokka.*.type` entries, instantiates the ones registered as runtime-derived field providers, and enables only the emitted output fields that appear in `derived_vars`.
+
+To use a runtime-derived field:
+
+1. Configure the provider under `quokka.<group_name>.*`.
+2. Add the full names of every desired output field from that provider to `derived_vars` so they are available to plotfiles and diagnostics.
+
+Provider configuration parameters:
+
+| Parameter Name        | Type        | Default | Description                                                                                          |
+|-----------------------|-------------|---------|------------------------------------------------------------------------------------------------------|
+| derived_vars          | String list | Empty   | List only the emitted output field names that should appear in plotfiles and diagnostics.           |
+| quokka.\<name\>.type  | String      | None    | Factory type for this provider (for example, `DerivedParticleDeposition`).                          |
+
+`DerivedParticleDeposition` provider parameters:
+
+| Parameter Name                    | Type        | Default    | Description                                                                                                      |
+|-----------------------------------|-------------|------------|------------------------------------------------------------------------------------------------------------------|
+| quokka.\<name\>.particle_types    | String list | `CIC`      | Particle types to deposit. Supported values: `CIC`, `CICRad`, `StochasticStellarPop`, `Sink`, `Test`.         |
+| quokka.\<name\>.deposit_fields    | String list | `mass`     | Particle fields to deposit. Supported: `mass`, `birth_mass` (only for `StochasticStellarPop`).                |
+| quokka.\<name\>.prefix            | String      | `particle` | Output naming prefix. Output names are formed as `<prefix>.<ParticleType>.mass_density` for `mass` and `<prefix>.<ParticleType>.birth_mass_density` for `birth_mass`. |
+| quokka.\<name\>.mass_min          | Real        | `-inf`     | Optional lower bound on particle mass for deposition. Particles with `mass < mass_min` are excluded.           |
+| quokka.\<name\>.mass_max          | Real        | `+inf`     | Optional upper bound on particle mass for deposition. Particles with `mass > mass_max` are excluded.           |
+| quokka.\<name\>.t_age             | Real        | unset      | Optional age threshold. When set, only particles with `(tNew[0] - birth_time) <= t_age` are deposited.        |
+| quokka.\<name\>.normalization_expr| String      | unset      | Optional AMReX parser expression for a multiplicative normalization constant applied after deposition.          |
+
+Notes:
+- Only emitted outputs listed in `derived_vars` are added to plotfiles and made available to diagnostics.
+- Provider group names are not valid `derived_vars` entries.
+- These fields can be consumed by diagnostics by name.
+- Output name collisions with other derived fields are rejected at startup.
+- `t_age` is only supported for particle types that include `birth_time` (`CICRad`, `StochasticStellarPop`, `Test`).
+- `birth_mass` is only supported for `StochasticStellarPop`; using it with other particle types aborts at startup/runtime.
+- `normalization_expr` must evaluate to a scalar constant. Parser constants available: `Msun`, `yr`, `kpc`.
+
+Example:
+
+```ini
+# List only the provider outputs you want to write.
+derived_vars = particle.CIC.mass_density particle.Sink.mass_density
+
+# Configure the provider under quokka.<group_name>.*
+quokka.partdep.type = DerivedParticleDeposition
+quokka.partdep.particle_types = CIC Sink
+quokka.partdep.deposit_fields = mass
+quokka.partdep.prefix = particle
+
+# Use one of the runtime-derived outputs in a diagnostic.
+quokka.diagnostics = slice_z
+quokka.slice_z.type = DiagFramePlane
+quokka.slice_z.file = slicez_plt
+quokka.slice_z.normal = 2
+quokka.slice_z.center = 2.4688e20
+quokka.slice_z.int = 10
+quokka.slice_z.field_names = particle.CIC.mass_density
+```

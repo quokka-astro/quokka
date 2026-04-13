@@ -36,14 +36,10 @@ The full case table is:
 |---|---:|---|---|---:|---:|---:|
 | Hydro-only | off | n/a | n/a | 0 | 4 | 4 |
 | Hydro-only | on | n/a | n/a | 2 | 6 | 6 |
-| MHD | off | `FelkerStone2017` | `BalsaraSpicer2004` | 0 | 4 | 4 |
-| MHD | on | `FelkerStone2017` | `BalsaraSpicer2004` | 2 | 6 | 6 |
 | MHD | off | `FelkerStone2017` | `LondrilloDelZanna2004` | 1 | 5 | 5 |
 | MHD | on | `FelkerStone2017` | `LondrilloDelZanna2004` | 2 | 6 | 6 |
 | MHD | off | `FelkerStone2017` | `Balsara2025` | 2 | 6 | 6 |
 | MHD | on | `FelkerStone2017` | `Balsara2025` | 2 | 6 | 6 |
-| MHD | off | `Balsara2025` | `BalsaraSpicer2004` | 0 | 4 | 4 |
-| MHD | on | `Balsara2025` | `BalsaraSpicer2004` | 2 | 6 | 6 |
 | MHD | off | `Balsara2025` | `LondrilloDelZanna2004` | 1 | 5 | 5 |
 | MHD | on | `Balsara2025` | `LondrilloDelZanna2004` | 2 | 6 | 6 |
 | MHD | off | `Balsara2025` | `Balsara2025` | 2 | 6 | 6 |
