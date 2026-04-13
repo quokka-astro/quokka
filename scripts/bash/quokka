@@ -28,7 +28,7 @@ Options:
   -d <preset>      Build preset to use (default: QUOKKA_PRESET if set, otherwise 1d)
   --root <path>    Path to the quokka repository root (default: current directory)
   --input <file>   Input file to pass to the executable (default: inputs/<problem>.toml)
-  --fpe            Enable floating-point exception traps (invalid, overflow, divide-by-zero)
+  --fpe            Enable floating-point exception traps for direct problem runs (ignored for ctest-based runs)
   --filter <pattern> For run: ctest regex; for build: shell glob over problem names; exclusive with <problem>
                      Quote patterns to avoid expansion by your shell (e.g. --filter 'Rad*')
   --source <file>  Optional environment file to source before config/build/run/target commands
@@ -271,10 +271,6 @@ run_all_tests() {
 	ctest --test-dir "$BUILD_DIR" -j"$JOBS" "$@"
 }
 
-ctest_supports_test_command_args() {
-	ctest --help 2>/dev/null | grep -q -- '--test-command-args'
-}
-
 list_problems() {
 	find "${ROOT}/src/problems" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort
 }
@@ -426,9 +422,9 @@ execute_build() {
 execute_run() {
 	local PROBLEM=""
 	local problem_input=""
-	local CTEST_TEST_ARGS=()
 	local ctest_status=0
 	local tests_file=""
+	local warned_ctest_fpe=0
 
 	[ "${#PROBLEMS[@]}" -eq 0 ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
 	init_results
@@ -436,18 +432,13 @@ execute_run() {
 	RUN_ARGS=(tiny_profiler.enabled=0 amr.v=0 suppress_output=1 particles.verbose=0)
 	if [ "$ENABLE_FPE" -eq 1 ]; then
 		RUN_ARGS=(amrex.fpe_trap_invalid=1 amrex.fpe_trap_overflow=1 amrex.fpe_trap_zero=1)
-		CTEST_TEST_ARGS=(amrex.fpe_trap_invalid=1 amrex.fpe_trap_overflow=1 amrex.fpe_trap_zero=1)
 	fi
 
 	if [ -n "$FILTER_REGEX" ]; then
 		[ -z "$INPUT_FILE" ] || die "--filter does not accept --input"
-		CTEST_ARGS=()
-		if [ "${#CTEST_TEST_ARGS[@]}" -gt 0 ]; then
-			if ctest_supports_test_command_args; then
-				CTEST_ARGS+=(--test-command-args "${CTEST_TEST_ARGS[*]}")
-			else
-				die "--fpe with ctest-based runs requires ctest support for --test-command-args"
-			fi
+		if [ "$ENABLE_FPE" -eq 1 ]; then
+			echo -e "${YELLOW}${BOLD}Warning:${RESET} --fpe is ignored for ctest-based runs; FPE behavior is defined by each CTest entry."
+			warned_ctest_fpe=1
 		fi
 		if [ "$COMMAND" = "buildrun" ]; then
 			if [ "${#FILTER_MATCHED_TESTS[@]}" -eq 0 ]; then
@@ -455,7 +446,7 @@ execute_run() {
 			fi
 			tests_file="$(mktemp "${TMPDIR:-/tmp}/quokka-tests.XXXXXX")" || die "failed to create temporary ctest selection file"
 			printf '%s\n' "${FILTER_MATCHED_TESTS[@]}" >"$tests_file"
-			if run_tests_from_file "$tests_file" "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"; then
+			if run_tests_from_file "$tests_file"; then
 				ctest_status=0
 			else
 				ctest_status=$?
@@ -463,7 +454,7 @@ execute_run() {
 			rm -f "$tests_file"
 			return "$ctest_status"
 		else
-			run_filtered "$FILTER_REGEX" "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"
+			run_filtered "$FILTER_REGEX"
 		fi
 		return $?
 	elif [ "${#PROBLEMS[@]}" -gt 0 ]; then
@@ -485,15 +476,10 @@ execute_run() {
 		done
 	else
 		[ -z "$INPUT_FILE" ] || die "running all tests does not accept --input"
-		CTEST_ARGS=()
-		if [ "${#CTEST_TEST_ARGS[@]}" -gt 0 ]; then
-			if ctest_supports_test_command_args; then
-				CTEST_ARGS+=(--test-command-args "${CTEST_TEST_ARGS[*]}")
-			else
-				die "--fpe with ctest-based runs requires ctest support for --test-command-args"
-			fi
+		if [ "$ENABLE_FPE" -eq 1 ] && [ "$warned_ctest_fpe" -eq 0 ]; then
+			echo -e "${YELLOW}${BOLD}Warning:${RESET} --fpe is ignored for ctest-based runs; FPE behavior is defined by each CTest entry."
 		fi
-		run_all_tests "${CTEST_ARGS[@]+"${CTEST_ARGS[@]}"}"
+		run_all_tests
 		return $?
 	fi
 
