@@ -1029,11 +1029,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	if (useHeatingRateExternalParser_) {
 		heatingRateExternalParser_.emplace(heatingRateExternalExpr_);
 		auto symbols = heatingRateExternalParser_->symbols();
-		symbols.erase("time");
-		symbols.erase("dt");
 		if (!amrex::ParmParse::ParserPrefix.empty()) {
 			amrex::ParmParse const parser_pp(amrex::ParmParse::ParserPrefix);
 			for (auto const &symbol : symbols) {
+				// `time` and `dt` are runtime parser inputs, not constants from ParmParse.
+				// Available ParmParse constants are: `yr`, `kyr`, `Myr`, `Gyr`.
+				if (symbol == "time" || symbol == "dt") {
+					continue;
+				}
 				amrex::Real value = 0.0;
 				if (parser_pp.query(symbol, value) != 0) {
 					heatingRateExternalParser_->setConstant(symbol, value);
