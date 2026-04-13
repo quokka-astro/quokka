@@ -58,9 +58,8 @@ combining face-centred magnetic fields with one of the three schemes selected by
 The stencil used in this reconstruction is controlled by `emf_reconstruction_order`
 with the same order options as the flux reconstruction. After reconstruction,
 Quokka averages the four quadrant-centred EMFs surrounding each edge using one of
-three formulas selected by `emf_averaging_scheme`:
+two formulas selected by `emf_averaging_scheme`:
 
-- `BalsaraSpicer2004` – arithmetic averaging of the four quadrants.
 - `LondrilloDelZanna2004` – the Londrillo & Del Zanna (2004) upwind constrained-transport
   formula, which weights the quadrants using characteristic MHD signal speeds.
 - `Balsara2025` - EMF averaging with a dissapative term from wavespeeds and magnetic field jumps 
@@ -122,7 +121,7 @@ more detail in [Runtime parameters](parameters.md):
 - `emf_reconstruction_order` – spatial order for the EMF reconstruction
   (default 5 = extrema-preserving PPM).
 - `emf_compute_scheme` – choose `FelkerStone2017`, `Balsara2025`, or `Quokka2026` for computing the emf either at cell-center or at the edge (default `Balsara2025`).
-- `emf_averaging_type` – choose `BalsaraSpicer2004`, `LondrilloDelZanna2004`, or `Balsara2025` for edge averaging
+- `emf_averaging_scheme` – choose `LondrilloDelZanna2004` or `Balsara2025` for edge averaging
   (default `Balsara2025`).
 - `artificial_viscosity_k` – optional scalar viscosity coefficient that adds a
   diffusive flux to the momentum equations and can damp post-shock oscillations.
