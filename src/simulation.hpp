@@ -4798,10 +4798,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		// exactly as MakeNewLevelFromCoarse does on a fresh start
 		const int ncomp_cc = state_new_cc_[0].nComp();
 		for (int lev = 1; lev <= finest_level; ++lev) {
-			FillCoarsePatch(lev, tNew_[lev], state_new_cc_[lev], 0, ncomp_cc,
-							BCs_cc_, quokka::centering::cc, quokka::direction::na);
-			FillCoarsePatch(lev, tNew_[lev], state_old_cc_[lev], 0, ncomp_cc,
-							BCs_cc_, quokka::centering::cc, quokka::direction::na);
+			FillPatch(lev, tNew_[lev], state_new_cc_[lev], 0, ncomp_cc,
+					quokka::centering::cc, quokka::direction::na,
+					FillPatchType::fillpatch_function);
+			state_old_cc_[lev].ParallelCopy(state_new_cc_[lev]);
+			FillPatch(lev, tNew_[lev], state_old_cc_[lev], 0, ncomp_cc,
+					quokka::centering::cc, quokka::direction::na,
+					FillPatchType::fillpatch_function);
 			tOld_[lev] = tNew_[lev] - 1.e200;
 		}
 	}
