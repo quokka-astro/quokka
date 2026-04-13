@@ -248,8 +248,6 @@ template <> void QuokkaSimulation<HDGalaxy>::preCalculateInitialConditions()
 
 template <> void QuokkaSimulation<HDGalaxy>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
-	amrex::Print() << "Setting initial conditions for HDGalaxy problem on grid with index range " << grid_elem.indexRange_ << "\n";
-	
 	const double vc      = userData_.vc;
 	const double Sigma0  = userData_.Sigma0;
 	const double cs_disk = quokka::EOS_Traits<HDGalaxy>::cs_disk;
@@ -287,11 +285,11 @@ template <> void QuokkaSimulation<HDGalaxy>::setInitialConditionsOnGrid(quokka::
 
 		double vrot = 0.0;
 		if (in_disk) {
-			const double dlnSigma_dR = (1.0 / Rd) * (-1.0 + alpha_profile * beta_profile * std::exp(-alpha_profile * R / Rd));
+			const double D_mid = R*R + Rc*Rc;  // z=0 midplane for rotation balance
 			const double vrot_sq = std::max(
-				vc*vc * R*R / D                        // DM halo: -d(phi_dm)/dR * R
-				+ cs_disk*cs_disk * R * dlnSigma_dR    // pressure gradient correction
-				+ R * dPhiGas_dR(R, Sigma0)            // gas self-gravity via Bessel functions
+				vc*vc * R*R / D_mid            // ∂ψ/∂R * R, from Eq. A.3
+				- cs_disk*cs_disk * R / Rd     // pressure gradient, pure exponential approx
+				+ R * dPhiGas_dR(R, Sigma0)   // ∂φ_g/∂R * R, Eq. A.2
 				, 0.0);
 			vrot = std::sqrt(vrot_sq);
 		}
@@ -327,9 +325,11 @@ template <> void QuokkaSimulation<HDGalaxy>::addStrangSplitSources(amrex::MultiF
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx     = geom[lev].CellSizeArray();
 	const amrex::Real dt = dt_lev;
+	const double Sigma0 = userData_.Sigma0;
 
 	const double vc      = userData_.vc;
 	constexpr double cs_disk = quokka::EOS_Traits<HDGalaxy>::cs_disk;
+	
 
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -356,10 +356,6 @@ template <> void QuokkaSimulation<HDGalaxy>::addStrangSplitSources(amrex::MultiF
 			double g_R = 0.0;
 			if (R > 0.0) {
 				g_R = -vc*vc * R / D;  // dark matter halo
-				if (in_disk) {
-					const double dlnSigma_dR = (1.0/Rd) * (-1.0 + alpha_profile * beta_profile * std::exp(-alpha_profile * R / Rd));
-					g_R += cs_disk * cs_disk * dlnSigma_dR;
-				}
 			}
 
 			// Vertical acceleration from dark matter halo (Arora+25 Eq. A.3)

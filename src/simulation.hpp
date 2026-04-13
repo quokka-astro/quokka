@@ -4777,6 +4777,34 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	loadMultiFabData(refinement_context);
 	// NOTE: postInitialization (including magnetic projection) is only for fresh ICs, not restarts.
 
+	// Fill ghost cells after restart, mirroring what MakeNewLevelFromCoarse does
+	// on a fresh start. loadMultiFabData only fills valid interior cells; ghost
+	// cells must be filled before the first hydro advance.
+	{
+		// Level 0: fill physical boundary ghost cells only (no coarse level exists)
+		amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>> boundaryFunctor{setBoundaryFunctor<problem_t>{}};
+		amrex::PhysBCFunct<amrex::GpuBndryFuncFab<setBoundaryFunctor<problem_t>>>
+			physBC0(geom[0], BCs_cc_, boundaryFunctor);
+		state_new_cc_[0].FillBoundary(geom[0].periodicity());
+		physBC0(state_new_cc_[0], 0, state_new_cc_[0].nComp(),
+				state_new_cc_[0].nGrowVect(), tNew_[0], 0);
+		state_old_cc_[0].ParallelCopy(state_new_cc_[0]);
+		state_old_cc_[0].FillBoundary(geom[0].periodicity());
+		physBC0(state_old_cc_[0], 0, state_old_cc_[0].nComp(),
+				state_old_cc_[0].nGrowVect(), tNew_[0], 0);
+		tOld_[0] = tNew_[0] - 1.e200;
+
+		// Fine levels: use FillCoarsePatch to fill ghost cells from coarse data,
+		// exactly as MakeNewLevelFromCoarse does on a fresh start
+		const int ncomp_cc = state_new_cc_[0].nComp();
+		for (int lev = 1; lev <= finest_level; ++lev) {
+			FillCoarsePatch(lev, tNew_[lev], state_new_cc_[lev], 0, ncomp_cc,
+							BCs_cc_, quokka::centering::cc, quokka::direction::na);
+			FillCoarsePatch(lev, tNew_[lev], state_old_cc_[lev], 0, ncomp_cc,
+							BCs_cc_, quokka::centering::cc, quokka::direction::na);
+			tOld_[lev] = tNew_[lev] - 1.e200;
+		}
+	}
 	// read particle data
 	if (do_tracers != 0) {
 		AMREX_ASSERT(TracerPC == nullptr);
