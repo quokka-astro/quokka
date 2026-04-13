@@ -15,7 +15,7 @@ The script optionally sources an environment file via `--source <file>` for comm
 - **Build one or more problems**: `quokka build [-d <preset>] <problem> [<problem> ...] [-j <N>] [--source <file>]`
 - **Build matching problems**: `quokka build [-d <preset>] --filter <glob> [-j <N>]` (e.g. `'Rad*'`; quote patterns)
 - **Build and run (combined)**: `quokka buildrun [-d <preset>] <problem> [<problem> ...] [-j <N>] [--fpe] [--input <file>]`
-- **Build and run (filtered)**: `quokka buildrun [-d <preset>] --filter <pattern> [-j <N>] [--fpe]`
+- **Build and run (filtered)**: `quokka buildrun [-d <preset>] --filter <pattern> [-j <N>]`
 - **Run one or more problems**: `quokka run [-d <preset>] <problem> [<problem> ...] [--input <file>] [--fpe]` (`--input` only with one problem)
 - **Run all tests**: `quokka run [-d <preset>] [-j <N>]`
 - **Run matching tests**: `quokka run [-d <preset>] --filter <regex>` (quote regex/globs to avoid shell expansion)

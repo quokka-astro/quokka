@@ -42,13 +42,13 @@ quokka build [-d <preset>] --filter <glob> [-j <N>] [--source <file>] [--root <p
 quokka buildrun [-d <preset>] <problem> [<problem> ...] [-j <N>] [--fpe] [--input <file>] [--source <file>] [--root <path>]
     Build then run one or more specific problems.
 
-quokka buildrun [-d <preset>] --filter <pattern> [-j <N>] [--fpe] [--source <file>] [--root <path>]
+quokka buildrun [-d <preset>] --filter <pattern> [-j <N>] [--source <file>] [--root <path>]
     Build matching problems then run matching tests.
 
-quokka run [-d <preset>] [<problem> ...] [--input <file>] [-j <N>] [--fpe] [--source <file>] [--root <path>]
+quokka run [-d <preset>] <problem> [<problem> ...] [--input <file>] [-j <N>] [--fpe] [--source <file>] [--root <path>]
     Run one or more problem executables from the tests/ directory.
 
-quokka run [-d <preset>] [--filter <regex>] [-j <N>] [--fpe] [--source <file>] [--root <path>]
+quokka run [-d <preset>] [--filter <regex>] [-j <N>] [--source <file>] [--root <path>]
     Run all tests, or those matching a regex via ctest -R.
 
 quokka list [--root <path>]
@@ -77,8 +77,8 @@ quokka clean [--root <path>]
 | `-d <preset>`    | Preset to use: `1d`, `3d`, `1d-debug`, `3d-debug` (default: `QUOKKA_PRESET` if set, otherwise `1d`)    |
 | `--root <path>`  | Path to the quokka repository root (default: current directory)      |
 | `--input <file>` | Input file for the executable (default: `inputs/<problem>.toml`); valid only when running exactly one `<problem>` |
-| `--fpe`          | Enable floating-point exception traps (invalid, overflow, div-by-0)  |
-| `--filter <pattern>` | For `run`: ctest regex via `ctest -R`; for `build`: shell glob over problem names; for `buildrun`: build via glob and run via ctest regex; exclusive with positional `<problem>` args. Quote patterns like `'Rad*'` to avoid shell expansion before `quokka` sees them |
+| `--fpe`          | Enable floating-point exception traps (invalid, overflow, div-by-0) for direct executable runs (`run <problem>`, `buildrun <problem>`) |
+| `--filter <pattern>` | For `run`: ctest regex via `ctest -R`; for `build`: shell glob over problem names; for `buildrun`: build via glob and run only the tests collected from the same matched problems; exclusive with positional `<problem>` args. Quote patterns like `'Rad*'` to avoid shell expansion before `quokka` sees them |
 | `--source <file>` | Optional environment file to source before `config`, `build`, `buildrun`, `run`, and `target` |
 | `--delete`       | `config` only: force reconfigure by deleting existing `build/<preset>` directory first |
 | `-D<k>=<v>`      | `config` only: pass extra CMake cache definitions (repeatable)       |
