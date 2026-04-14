@@ -2276,7 +2276,6 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::FluxRegister *fr_as
 
 	if (fr_as_crse != nullptr) {
 		AMREX_ASSERT(lev < finestLevel());
-		AMREX_ASSERT(fr_as_crse == flux_reg_[lev + 1].get());
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 			int const ncomp = fluxArrays[dir].nComp();
 			if (ncomp == 0) {
@@ -2288,7 +2287,6 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::FluxRegister *fr_as
 
 	if (fr_as_fine != nullptr) {
 		AMREX_ASSERT(lev > 0);
-		AMREX_ASSERT(fr_as_fine == flux_reg_[lev].get());
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 			int const ncomp = fluxArrays[dir].nComp();
 			if (ncomp == 0) {
@@ -2309,14 +2307,12 @@ void AMRSimulation<problem_t>::incrementEMFRegisters(amrex::EdgeFluxRegister *em
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		if (emf_as_crse != nullptr) {
 			AMREX_ASSERT(lev < finestLevel());
-			AMREX_ASSERT(emf_as_crse == emf_reg_[lev + 1].get());
 			emf_as_crse->CrseAdd(mfi, {ec_emf_components[0].fabPtr(mfi), ec_emf_components[1].fabPtr(mfi), ec_emf_components[2].fabPtr(mfi)},
 					     dt_lev);
 		}
 
 		if (emf_as_fine != nullptr) {
 			AMREX_ASSERT(lev > 0);
-			AMREX_ASSERT(emf_as_fine == emf_reg_[lev].get());
 			emf_as_fine->FineAdd(mfi, {ec_emf_components[0].fabPtr(mfi), ec_emf_components[1].fabPtr(mfi), ec_emf_components[2].fabPtr(mfi)},
 					     dt_lev);
 		}
