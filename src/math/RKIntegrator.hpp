@@ -41,8 +41,7 @@ using Real = amrex::Real;
 
 /// Non-owning view of a composite state with one cell-centered MultiFab and
 /// optional face-centered MultiFabs.
-struct CompositeStateView
-{
+struct CompositeStateView {
 	amrex::MultiFab *cc = nullptr;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> *fc_data = nullptr;
 	std::array<amrex::MultiFab *, AMREX_SPACEDIM> fc{};
@@ -61,8 +60,7 @@ struct CompositeStateView
 };
 
 /// Owned scratch state used by the integrator for intermediate RK stages.
-struct CompositeStateData
-{
+struct CompositeStateData {
 	amrex::MultiFab cc;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> fc{};
 	bool has_face_state = false;
@@ -111,8 +109,7 @@ struct CompositeStateData
 };
 
 /// Short-lived temporaries used while constructing and validating one RK stage.
-struct StageScratch
-{
+struct StageScratch {
 	amrex::MultiFab rhs_cc;
 	amrex::iMultiFab redo_flag;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> fluxes_hi{};
@@ -137,8 +134,7 @@ struct StageScratch
 };
 
 /// Running quantities that genuinely need to persist across RK stages.
-struct StepAccumulators
-{
+struct StepAccumulators {
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> avg_face_vel{};
 	bool has_avg_face_vel = false;
 
@@ -164,8 +160,18 @@ struct StepAccumulators
 };
 
 /// SSPRK2 stage description for Quokka's hydro update.
-struct SSPRK2Scheme
-{
+struct ForwardEulerScheme {
+	static constexpr int nstages = 1;
+
+	/// Stage time t_n.
+	static constexpr std::array<Real, nstages> c = {Real(0.0)};
+
+	/// Full-step weight for time-integrated face quantities.
+	static constexpr std::array<Real, nstages> stage_integral_weights = {Real(1.0)};
+};
+
+/// SSPRK2 stage description for Quokka's hydro update.
+struct SSPRK2Scheme {
 	static constexpr int nstages = 2;
 
 	/// Stage times t_n + c_s * dt.
@@ -178,15 +184,9 @@ struct SSPRK2Scheme
 
 namespace detail
 {
-template <typename Policy>
-concept HasDefine = requires(Policy &policy, int lev, CompositeStateView const &reference) {
-	{ policy.define(lev, reference) };
-};
+template <typename Policy> concept HasDefine = requires(Policy & policy, int lev, CompositeStateView const &reference) { {policy.define(lev, reference)}; };
 
-template <typename Policy>
-concept HasResetAccumulators = requires(Policy &policy, StepAccumulators &accum) {
-	{ policy.reset_accumulators(accum) };
-};
+template <typename Policy> concept HasResetAccumulators = requires(Policy & policy, StepAccumulators &accum) { {policy.reset_accumulators(accum)}; };
 } // namespace detail
 
 /// Generic stage-driven RK integrator for Quokka composite state.
@@ -199,10 +199,10 @@ concept HasResetAccumulators = requires(Policy &policy, StepAccumulators &accum)
 ///   void define_step_accumulators(StepAccumulators&, CompositeStateView const&, int lev) const;
 ///   void fill_boundary(int stage, CompositeStateView, Real stage_time) const;
 ///   void compute_stage(int stage, StageScratch&, CompositeStateView const&, Real stage_time, Real dt_stage) const;
-///   void update_stage(int stage, CompositeStateView, CompositeStateView const&, CompositeStateView const&,
-///                     StageScratch const&, Real dt) const;
 ///   auto validate_stage(int stage, CompositeStateView, CompositeStateView const&, CompositeStateView const&,
 ///                       StageScratch&, Real dt) const -> bool;
+///   void update_stage(int stage, CompositeStateView, CompositeStateView const&, CompositeStateView const&,
+///                     StageScratch const&, Real dt) const;
 ///   void post_stage(int stage, CompositeStateView, StageScratch const&, Real stage_time, Real dt) const;
 ///   void accumulate_stage(int stage, StageScratch const&, Real dt, StepAccumulators&) const;
 ///   void finalize_step(CompositeStateView, Real time, Real dt, StepAccumulators const&) const;
@@ -246,12 +246,11 @@ template <typename Policy, typename Scheme = SSPRK2Scheme> class RKIntegrator
 
 			policy_.fill_boundary(stage + 1, stage_input, stage_time);
 			policy_.compute_stage(stage + 1, scratch_, stage_input, stage_time, dt_stage);
-			policy_.update_stage(stage + 1, stage_output, old_state, stage_input, scratch_, dt);
-
 			const bool stage_ok = policy_.validate_stage(stage + 1, stage_output, old_state, stage_input, scratch_, dt);
 			if (!stage_ok) {
 				return false;
 			}
+			policy_.update_stage(stage + 1, stage_output, old_state, stage_input, scratch_, dt);
 
 			policy_.post_stage(stage + 1, stage_output, scratch_, stage_time, dt);
 			policy_.accumulate_stage(stage + 1, scratch_, dt, accumulators_);
@@ -278,8 +277,7 @@ template <typename Policy, typename Scheme = SSPRK2Scheme> class RKIntegrator
 /// This is an interface contract, not a base class with virtual dispatch.
 /// A concrete policy can be templated on `problem_t` and hold any Quokka state
 /// needed to compute fluxes, fill boundaries, and update reflux registers.
-struct HydroRKPolicyInterface
-{
+struct HydroRKPolicyInterface {
 	[[nodiscard]] auto nghost_cc() const -> int;
 	[[nodiscard]] auto nghost_fc() const -> int;
 
@@ -292,12 +290,12 @@ struct HydroRKPolicyInterface
 
 	void compute_stage(int stage, StageScratch &scratch, CompositeStateView const &input, Real stage_time, Real dt_stage) const;
 
-	void update_stage(int stage, CompositeStateView output, CompositeStateView const &old_state, CompositeStateView const &stage_input,
-			  StageScratch const &scratch, Real dt) const;
-
-	/// Returns false if the stage failed and the caller should reject the step.
 	auto validate_stage(int stage, CompositeStateView output, CompositeStateView const &old_state, CompositeStateView const &stage_input,
 			    StageScratch &scratch, Real dt) const -> bool;
+
+	/// Commit the accepted stage update after validation/fixup has completed.
+	void update_stage(int stage, CompositeStateView output, CompositeStateView const &old_state, CompositeStateView const &stage_input,
+			  StageScratch const &scratch, Real dt) const;
 
 	void post_stage(int stage, CompositeStateView output, StageScratch const &scratch, Real stage_time, Real dt) const;
 

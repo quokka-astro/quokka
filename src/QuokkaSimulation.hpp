@@ -2087,33 +2087,37 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		return burn_success_first;
 	}
 
-	if (integratorOrder_ == 2) {
+	if ((integratorOrder_ == 1) || (integratorOrder_ == 2)) {
 		std::unique_ptr<amrex::FluxRegister> step_fr_as_crse;
 		std::unique_ptr<amrex::FluxRegister> step_fr_as_fine;
 		std::unique_ptr<amrex::EdgeFluxRegister> step_emf_as_crse;
 		std::unique_ptr<amrex::EdgeFluxRegister> step_emf_as_fine;
 
 		if (fr_as_crse != nullptr) {
-			step_fr_as_crse = std::make_unique<amrex::FluxRegister>(boxArray(lev + 1), DistributionMap(lev + 1), refRatio(lev), lev + 1,
-										       nvarTotal_cc_);
+			step_fr_as_crse =
+			    std::make_unique<amrex::FluxRegister>(boxArray(lev + 1), DistributionMap(lev + 1), refRatio(lev), lev + 1, nvarTotal_cc_);
+			// FluxRegister boundary FABs start life as NaN, so a scratch register must be zeroed before any ADD accumulation.
+			step_fr_as_crse->setVal(0.0);
 		}
 		if (fr_as_fine != nullptr) {
 			step_fr_as_fine = std::make_unique<amrex::FluxRegister>(grids[lev], dmap[lev], refRatio(lev - 1), lev, nvarTotal_cc_);
+			step_fr_as_fine->setVal(0.0);
 		}
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			if (emf_as_crse != nullptr) {
-				step_emf_as_crse = std::make_unique<amrex::EdgeFluxRegister>(boxArray(lev + 1), boxArray(lev), DistributionMap(lev + 1), dmap[lev],
-												     geom[lev + 1], geom[lev], 1);
+				step_emf_as_crse = std::make_unique<amrex::EdgeFluxRegister>(boxArray(lev + 1), boxArray(lev), DistributionMap(lev + 1),
+											     dmap[lev], geom[lev + 1], geom[lev], 1);
+				step_emf_as_crse->reset();
 			}
 			if (emf_as_fine != nullptr) {
 				step_emf_as_fine = std::make_unique<amrex::EdgeFluxRegister>(grids[lev], boxArray(lev - 1), dmap[lev], DistributionMap(lev - 1),
-												     geom[lev], geom[lev - 1], 1);
+											     geom[lev], geom[lev - 1], 1);
+				step_emf_as_fine->reset();
 			}
 		}
 
-		HydroRKPolicy<problem_t> policy{*this, lev, nghost_Riemann, step_fr_as_crse.get(), step_fr_as_fine.get(), step_emf_as_crse.get(),
-						step_emf_as_fine.get()};
-		quokka::RKIntegrator<HydroRKPolicy<problem_t>> integrator(policy);
+		HydroRKPolicy<problem_t> policy{
+		    *this, lev, nghost_Riemann, step_fr_as_crse.get(), step_fr_as_fine.get(), step_emf_as_crse.get(), step_emf_as_fine.get()};
 
 		quokka::CompositeStateView old_state{};
 		old_state.cc = &state_old_cc_tmp;
@@ -2130,29 +2134,53 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			}
 		}
 
-		integrator.define(lev, old_state);
-		bool const rk_success = integrator.advance(old_state, new_state, time, dt_lev);
-		if (!rk_success) {
-			return false;
-		}
+		auto run_integrator = [&](auto scheme_tag) -> bool {
+			using scheme_t = typename decltype(scheme_tag)::type;
+			quokka::RKIntegrator<HydroRKPolicy<problem_t>, scheme_t> integrator(policy);
+
+			integrator.define(lev, old_state);
+			bool const rk_success = integrator.advance(old_state, new_state, time, dt_lev);
+			if (!rk_success) {
+				return false;
+			}
+			if (lowLevelDebuggingOutput_ != 0) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp()),
+								 std::format("NaN detected after RKIntegrator::advance on level {}", lev));
+			}
 
 			auto burn_success_second = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], state_new_fc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
+			if (lowLevelDebuggingOutput_ != 0) {
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp()),
+								 std::format("NaN detected after second Strang source step on level {}", lev));
+			}
 			bool const cfl_ok = !isCflViolated(lev, time, dt_lev);
 			bool const final_success = (cfl_ok && burn_success_second);
 
 			if (final_success) {
-				if (step_fr_as_crse) {
-					*flux_reg_[lev + 1] += *step_fr_as_crse;
+				fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, time + dt_lev, quokka::centering::cc, quokka::direction::na,
+						       PreInterpState, PostInterpState);
+				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+					for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+						fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, time + dt_lev,
+								       quokka::centering::fc, quokka::direction{idim}, AMRSimulation<problem_t>::InterpHookNone,
+								       AMRSimulation<problem_t>::InterpHookNone, FillPatchType::fillpatch_function);
+					}
 				}
-				if (step_fr_as_fine) {
-					*flux_reg_[lev] += *step_fr_as_fine;
+			}
+
+			if (final_success) {
+				if (fr_as_crse != nullptr) {
+					*fr_as_crse += *step_fr_as_crse;
+				}
+				if (fr_as_fine != nullptr) {
+					*fr_as_fine += *step_fr_as_fine;
 				}
 				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-					if (step_emf_as_crse) {
-						emf_reg_[lev + 1]->plus(*step_emf_as_crse);
+					if (emf_as_crse != nullptr) {
+						emf_as_crse->plus(*step_emf_as_crse);
 					}
-					if (step_emf_as_fine) {
-						emf_reg_[lev]->plus(*step_emf_as_fine);
+					if (emf_as_fine != nullptr) {
+						emf_as_fine->plus(*step_emf_as_fine);
 					}
 				}
 			}
@@ -2162,7 +2190,14 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				TracerPC->AdvectWithUmac(const_cast<amrex::MultiFab *>(accum.avg_face_vel.data()), lev, dt_lev);
 			}
 
-		return final_success;
+			return final_success;
+		};
+
+		if (integratorOrder_ == 1) {
+			return run_integrator(std::type_identity<quokka::ForwardEulerScheme>{});
+		}
+
+		return run_integrator(std::type_identity<quokka::SSPRK2Scheme>{});
 	}
 
 	// update ghost zones [old timestep]

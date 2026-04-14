@@ -6,8 +6,7 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 
-template <typename problem_t> struct HydroRKPolicy
-{
+template <typename problem_t> struct HydroRKPolicy {
 	QuokkaSimulation<problem_t> &sim_;
 	int lev_ = -1;
 	int nghost_Riemann_ = 0;
@@ -85,7 +84,7 @@ template <typename problem_t> struct HydroRKPolicy
 			}
 		} else if (sim.reconstructionOrder_ == 2) {
 			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars,
-												 sim.plmLimiter_);
+											sim.plmLimiter_);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR>(cc_bfield_perp_comps_mf, leftState_bfield, rightState_bfield,
 												ng_reconstruct, 2, sim.plmLimiter_);
@@ -93,8 +92,8 @@ template <typename problem_t> struct HydroRKPolicy
 		} else if (sim.reconstructionOrder_ == 1) {
 			HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(cc_bfield_perp_comps_mf, leftState_bfield, rightState_bfield,
-												     ng_reconstruct, 2);
+				HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(cc_bfield_perp_comps_mf, leftState_bfield,
+												     rightState_bfield, ng_reconstruct, 2);
 			}
 		} else {
 			amrex::Abort("Invalid reconstruction order specified!");
@@ -104,19 +103,18 @@ template <typename problem_t> struct HydroRKPolicy
 
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLD, DIR>(flux, faceVel, leftState, rightState, leftState_bfield,
-												 rightState_bfield, primVar_mf, sim.artificialViscosityK_, &x1FSpds,
-												 &consVar_fc[static_cast<int>(DIR)], nghost_Riemann);
+												 rightState_bfield, primVar_mf, sim.artificialViscosityK_,
+												 &x1FSpds, &consVar_fc[static_cast<int>(DIR)], nghost_Riemann);
 		} else {
 			HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::HLLC, DIR>(flux, faceVel, leftState, rightState, leftState_bfield,
-												 rightState_bfield, primVar_mf, sim.artificialViscosityK_, nullptr,
-												 nullptr, nghost_Riemann);
+												 rightState_bfield, primVar_mf, sim.artificialViscosityK_,
+												 nullptr, nullptr, nghost_Riemann);
 		}
 	}
 
 	static auto computeHydroFluxes(QuokkaSimulation<problem_t> &sim, amrex::MultiFab const &consVar_cc,
 				       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, int nvars, int nghost_Riemann, int lev)
-	    -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>,
-			  std::array<amrex::MultiFab, AMREX_SPACEDIM>>
+	    -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>
 	{
 		const BL_PROFILE("HydroRKPolicy::computeHydroFluxes()");
 
@@ -185,16 +183,16 @@ template <typename problem_t> struct HydroRKPolicy
 				if (amrex::ParallelDescriptor::IOProcessor()) {
 					std::filesystem::create_directories(plotfile_name + "/raw_fields/Level_" + std::to_string(lev));
 				}
-				std::string const fullprefix = amrex::MultiFabFileFullPrefix(lev, plotfile_name, "raw_fields/Level_",
-												 std::string("StateL_") + quokka::face_dir_str[idim]);
+				std::string const fullprefix =
+				    amrex::MultiFabFileFullPrefix(lev, plotfile_name, "raw_fields/Level_", std::string("StateL_") + quokka::face_dir_str[idim]);
 				amrex::VisMF::Write(leftState[idim], fullprefix);
 			}
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 				if (amrex::ParallelDescriptor::IOProcessor()) {
 					std::filesystem::create_directories(plotfile_name + "/raw_fields/Level_" + std::to_string(lev));
 				}
-				std::string const fullprefix = amrex::MultiFabFileFullPrefix(lev, plotfile_name, "raw_fields/Level_",
-												 std::string("StateR_") + quokka::face_dir_str[idim]);
+				std::string const fullprefix =
+				    amrex::MultiFabFileFullPrefix(lev, plotfile_name, "raw_fields/Level_", std::string("StateR_") + quokka::face_dir_str[idim]);
 				amrex::VisMF::Write(rightState[idim], fullprefix);
 			}
 		}
@@ -214,25 +212,24 @@ template <typename problem_t> struct HydroRKPolicy
 
 		HydroSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar_mf, leftState, rightState, ng_reconstruct, nvars);
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			HydroSystem<problem_t>::template ReconstructStatesConstant<DIR>(cc_bfield_perp_comps_mf, leftState_bfield, rightState_bfield, ng_reconstruct,
-											2);
+			HydroSystem<problem_t>::template ReconstructStatesConstant<DIR>(cc_bfield_perp_comps_mf, leftState_bfield, rightState_bfield,
+											ng_reconstruct, 2);
 		}
 
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF_MHD, DIR>(flux, faceVel, leftState, rightState, leftState_bfield,
-												    rightState_bfield, primVar_mf, sim.artificialViscosityK_, &x1FSpds,
-												    &consVar_fc[static_cast<int>(DIR)], nghost_Riemann);
+			HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF_MHD, DIR>(
+			    flux, faceVel, leftState, rightState, leftState_bfield, rightState_bfield, primVar_mf, sim.artificialViscosityK_, &x1FSpds,
+			    &consVar_fc[static_cast<int>(DIR)], nghost_Riemann);
 		} else {
 			HydroSystem<problem_t>::template ComputeFluxes<RiemannSolver::LLF, DIR>(flux, faceVel, leftState, rightState, leftState_bfield,
-												rightState_bfield, primVar_mf, sim.artificialViscosityK_, nullptr,
-												nullptr, nghost_Riemann);
+												rightState_bfield, primVar_mf, sim.artificialViscosityK_,
+												nullptr, nullptr, nghost_Riemann);
 		}
 	}
 
 	static auto computeFOHydroFluxes(QuokkaSimulation<problem_t> const &sim, amrex::MultiFab const &consVar_cc,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, int nvars, int nghost_Riemann, int lev)
-	    -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>,
-			  std::array<amrex::MultiFab, AMREX_SPACEDIM>>
+	    -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>
 	{
 		const BL_PROFILE("HydroRKPolicy::computeFOHydroFluxes()");
 
@@ -266,14 +263,14 @@ template <typename problem_t> struct HydroRKPolicy
 		HydroSystem<problem_t>::ConservedToPrimitive(consVar_cc, consVar_fc, primVar, sim.nghost_cc_);
 
 		AMREX_D_TERM(hydroFOFluxFunction<FluxDir::X1>(sim, primVar, cc_bfield_perp_comps, leftState[0], rightState[0], leftState_bfield[0],
-							      rightState_bfield[0], flux[0], facevel[0], fast_mhd_wavespeeds[0], consVar_fc,
-							      reconstructRange, nvars, nghost_Riemann);
+							      rightState_bfield[0], flux[0], facevel[0], fast_mhd_wavespeeds[0], consVar_fc, reconstructRange,
+							      nvars, nghost_Riemann);
 			     , hydroFOFluxFunction<FluxDir::X2>(sim, primVar, cc_bfield_perp_comps, leftState[1], rightState[1], leftState_bfield[1],
-								rightState_bfield[1], flux[1], facevel[1], fast_mhd_wavespeeds[1], consVar_fc,
-								reconstructRange, nvars, nghost_Riemann);
+								rightState_bfield[1], flux[1], facevel[1], fast_mhd_wavespeeds[1], consVar_fc, reconstructRange,
+								nvars, nghost_Riemann);
 			     , hydroFOFluxFunction<FluxDir::X3>(sim, primVar, cc_bfield_perp_comps, leftState[2], rightState[2], leftState_bfield[2],
-								rightState_bfield[2], flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc,
-								reconstructRange, nvars, nghost_Riemann);)
+								rightState_bfield[2], flux[2], facevel[2], fast_mhd_wavespeeds[2], consVar_fc, reconstructRange,
+								nvars, nghost_Riemann);)
 
 		amrex::Gpu::streamSynchronizeAll();
 
@@ -317,8 +314,8 @@ template <typename problem_t> struct HydroRKPolicy
 		}
 	}
 
-	static void replaceEMFs(std::array<amrex::MultiFab, AMREX_SPACEDIM> &emf_components,
-				std::array<amrex::MultiFab, AMREX_SPACEDIM> &FO_emf_components, amrex::iMultiFab &redoFlag)
+	static void replaceEMFs(std::array<amrex::MultiFab, AMREX_SPACEDIM> &emf_components, std::array<amrex::MultiFab, AMREX_SPACEDIM> &FO_emf_components,
+				amrex::iMultiFab &redoFlag)
 	{
 		const BL_PROFILE("HydroRKPolicy::replaceEMFs()");
 
@@ -382,8 +379,8 @@ template <typename problem_t> struct HydroRKPolicy
 
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				auto ba_ec = amrex::convert(reference.cc->boxArray(),
-							    amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
+				auto ba_ec =
+				    amrex::convert(reference.cc->boxArray(), amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 				scratch.emf[idim].define(ba_ec, reference.cc->DistributionMap(), 1, 0);
 			}
 		}
@@ -399,6 +396,14 @@ template <typename problem_t> struct HydroRKPolicy
 
 	void reset_accumulators(quokka::StepAccumulators &accum) const { accum.reset(); }
 
+	void debugAssertFinite(std::string const &label, amrex::MultiFab const &mf) const
+	{
+		if (sim_.lowLevelDebuggingOutput_ != 0) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!mf.contains_nan(0, mf.nComp()), label + " (valid cells)");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!mf.contains_nan(), label + " (including ghosts)");
+		}
+	}
+
 	void fill_boundary(int stage, quokka::CompositeStateView state, amrex::Real stage_time) const
 	{
 		sim_.fillBoundaryConditions(*state.cc, *state.cc, lev_, stage_time, quokka::centering::cc, quokka::direction::na,
@@ -412,6 +417,65 @@ template <typename problem_t> struct HydroRKPolicy
 			}
 		} else {
 			amrex::ignore_unused(stage);
+		}
+
+		debugAssertFinite(std::format("NaN detected in HydroRKPolicy::fill_boundary cc state on level {}", lev_), *state.cc);
+	}
+
+	void recompute_stage_rhs(quokka::StageScratch &scratch, quokka::CompositeStateView const &input) const
+	{
+		auto const dx = sim_.geom[lev_].CellSizeArray();
+		HydroSystem<problem_t>::ComputeRhsFromFluxes(scratch.rhs_cc, scratch.fluxes_hi, dx, QuokkaSimulation<problem_t>::nvars_);
+		HydroSystem<problem_t>::AddInternalEnergyPdV(scratch.rhs_cc, *input.cc, *input.fc_data, dx, scratch.face_vel, scratch.redo_flag);
+	}
+
+	void compute_stage_emf(std::array<amrex::MultiFab, AMREX_SPACEDIM> &emf, quokka::CompositeStateView const &input,
+			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &face_vel,
+			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fast_mhd_wavespeeds) const
+	{
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			for (auto &mf : emf) {
+				mf.setVal(0.0);
+			}
+			MHDSystem<problem_t>::ComputeEMF(emf, *input.cc, face_vel, *input.fc_data, fast_mhd_wavespeeds, sim_.emfReconstructionOrder_,
+							 sim_.emfAveragingScheme_, sim_.mhdPlmLimiter_, sim_.emfComputingScheme_);
+		} else {
+			amrex::ignore_unused(emf, input, face_vel, fast_mhd_wavespeeds);
+		}
+	}
+
+	void apply_provisional_update(quokka::CompositeStateView output, quokka::CompositeStateView const &stage_input, quokka::StageScratch const &scratch,
+				      amrex::Real dt) const
+	{
+		HydroSystem<problem_t>::PredictStep(*stage_input.cc, *output.cc, scratch.rhs_cc, dt, QuokkaSimulation<problem_t>::nvars_,
+						    const_cast<amrex::iMultiFab &>(scratch.redo_flag));
+	}
+
+	void apply_stage_update(int stage, quokka::CompositeStateView output, quokka::CompositeStateView const &old_state,
+				quokka::CompositeStateView const &stage_input, quokka::StageScratch const &scratch, amrex::Real dt) const
+	{
+		if (stage == 1) {
+			HydroSystem<problem_t>::PredictStep(*stage_input.cc, *output.cc, scratch.rhs_cc, dt, QuokkaSimulation<problem_t>::nvars_,
+							    const_cast<amrex::iMultiFab &>(scratch.redo_flag));
+
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				MHDSystem<problem_t>::SolveInductionEqn(*stage_input.fc_data, *output.fc_data, scratch.emf, dt,
+									sim_.geom[lev_].CellSizeArray());
+			}
+		} else {
+			HydroSystem<problem_t>::AddFluxesRK2(*output.cc, *old_state.cc, *stage_input.cc, scratch.rhs_cc, dt,
+							     QuokkaSimulation<problem_t>::nvars_, const_cast<amrex::iMultiFab &>(scratch.redo_flag));
+
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				MHDSystem<problem_t>::SolveInductionEqn(*old_state.fc_data, *output.fc_data, scratch.emf, 0.5 * dt,
+									sim_.geom[lev_].CellSizeArray());
+				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+					amrex::MultiFab::Saxpy((*output.fc_data)[idim], 0.5, (*stage_input.fc_data)[idim], 0, 0,
+							       (*output.fc_data)[idim].nComp(), 0);
+					amrex::MultiFab::Saxpy((*output.fc_data)[idim], -0.5, (*old_state.fc_data)[idim], 0, 0, (*output.fc_data)[idim].nComp(),
+							       0);
+				}
+			}
 		}
 	}
 
@@ -428,64 +492,89 @@ template <typename problem_t> struct HydroRKPolicy
 		scratch.face_vel = std::move(face_vel);
 		scratch.has_fluxes_hi = true;
 		scratch.has_face_vel = true;
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			debugAssertFinite(std::format("NaN detected in HydroRKPolicy::compute_stage fluxes_hi[{}] on level {}", idim, lev_),
+					  scratch.fluxes_hi[idim]);
+			debugAssertFinite(std::format("NaN detected in HydroRKPolicy::compute_stage face_vel[{}] on level {}", idim, lev_),
+					  scratch.face_vel[idim]);
+		}
 
-		auto const dx = sim_.geom[lev_].CellSizeArray();
-		HydroSystem<problem_t>::ComputeRhsFromFluxes(scratch.rhs_cc, scratch.fluxes_hi, dx, QuokkaSimulation<problem_t>::nvars_);
-		HydroSystem<problem_t>::AddInternalEnergyPdV(scratch.rhs_cc, *input.cc, *input.fc_data, dx, scratch.face_vel, scratch.redo_flag);
+		recompute_stage_rhs(scratch, input);
+		debugAssertFinite(std::format("NaN detected in HydroRKPolicy::compute_stage rhs_cc on level {}", lev_), scratch.rhs_cc);
 
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			for (auto &mf : scratch.emf) {
-				mf.setVal(0.0);
-			}
-			MHDSystem<problem_t>::ComputeEMF(scratch.emf, *input.cc, scratch.face_vel, *input.fc_data, fast_mhd_wavespeeds,
-							 sim_.emfReconstructionOrder_, sim_.emfAveragingScheme_, sim_.mhdPlmLimiter_,
-							 sim_.emfComputingScheme_);
+			compute_stage_emf(scratch.emf, input, scratch.face_vel, fast_mhd_wavespeeds);
 			scratch.has_emf = true;
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				debugAssertFinite(std::format("NaN detected in HydroRKPolicy::compute_stage emf[{}] on level {}", idim, lev_),
+						  scratch.emf[idim]);
+			}
 		}
 	}
 
 	void update_stage(int stage, quokka::CompositeStateView output, quokka::CompositeStateView const &old_state,
 			  quokka::CompositeStateView const &stage_input, quokka::StageScratch const &scratch, amrex::Real dt) const
 	{
-		if (stage == 1) {
-			HydroSystem<problem_t>::PredictStep(*old_state.cc, *output.cc, scratch.rhs_cc, dt, QuokkaSimulation<problem_t>::nvars_,
-							    const_cast<amrex::iMultiFab &>(scratch.redo_flag));
-
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				MHDSystem<problem_t>::SolveInductionEqn(*old_state.fc_data, *output.fc_data, scratch.emf, dt, sim_.geom[lev_].CellSizeArray());
-			}
-		} else {
-			HydroSystem<problem_t>::AddFluxesRK2(*output.cc, *old_state.cc, *stage_input.cc, scratch.rhs_cc, dt, QuokkaSimulation<problem_t>::nvars_,
-							     const_cast<amrex::iMultiFab &>(scratch.redo_flag));
-
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				MHDSystem<problem_t>::SolveInductionEqn(*old_state.fc_data, *output.fc_data, scratch.emf, 0.5 * dt,
-									sim_.geom[lev_].CellSizeArray());
-				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-					amrex::MultiFab::Saxpy((*output.fc_data)[idim], 0.5, (*stage_input.fc_data)[idim], 0, 0,
-							       (*output.fc_data)[idim].nComp(), 0);
-					amrex::MultiFab::Saxpy((*output.fc_data)[idim], -0.5, (*old_state.fc_data)[idim], 0, 0,
-							       (*output.fc_data)[idim].nComp(), 0);
-				}
-			}
-		}
+		apply_stage_update(stage, output, old_state, stage_input, scratch, dt);
+		debugAssertFinite(std::format("NaN detected in HydroRKPolicy::update_stage output on level {}", lev_), *output.cc);
 	}
 
-	auto validate_stage(int stage, quokka::CompositeStateView output, quokka::CompositeStateView const & /*old_state*/,
-			    quokka::CompositeStateView const & /*stage_input*/, quokka::StageScratch &scratch, amrex::Real /*dt*/) const -> bool
+	auto validate_stage(int stage, quokka::CompositeStateView output, quokka::CompositeStateView const &old_state,
+			    quokka::CompositeStateView const &stage_input, quokka::StageScratch &scratch, amrex::Real dt) const -> bool
 	{
+		amrex::ignore_unused(old_state);
+		apply_provisional_update(output, stage_input, scratch, dt);
 		amrex::Gpu::streamSynchronizeAll();
 		amrex::Long const ncells_bad = scratch.redo_flag.sum(0);
-		if (ncells_bad > 0) {
-			if (sim_.Verbose()) {
-				auto const cell_idx = scratch.redo_flag.maxIndex(0);
-				amrex::Print() << "[RK-" << stage << "] invalid hydro state in " << ncells_bad << " cells on level " << lev_ << "\n";
-				sim_.printCoordinates(lev_, cell_idx);
-				amrex::print_state(*output.cc, cell_idx);
-			}
-			return false;
+		if (ncells_bad == 0) {
+			debugAssertFinite(std::format("NaN detected in HydroRKPolicy::validate_stage accepted output on level {}", lev_), *output.cc);
+			return true;
 		}
-		return true;
+
+		if (sim_.Verbose()) {
+			auto const cell_idx = scratch.redo_flag.maxIndex(0);
+			amrex::Print() << "[FOFC-" << stage << "] flux correcting " << ncells_bad << " cells on level " << lev_ << "\n";
+			sim_.printCoordinates(lev_, cell_idx);
+			amrex::print_state(*output.cc, cell_idx);
+		}
+
+		scratch.redo_flag.FillBoundary(sim_.geom[lev_].periodicity());
+
+		auto [fo_fluxes, fo_face_vel, fo_fast_mhd_wavespeeds] =
+		    computeFOHydroFluxes(sim_, *stage_input.cc, *stage_input.fc_data, QuokkaSimulation<problem_t>::nvars_, nghost_Riemann_, lev_);
+
+		replaceFluxes(scratch.fluxes_hi, fo_fluxes, scratch.redo_flag);
+		replaceFluxes(scratch.face_vel, fo_face_vel, scratch.redo_flag);
+		recompute_stage_rhs(scratch, stage_input);
+
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			std::array<amrex::MultiFab, AMREX_SPACEDIM> fo_emf;
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				fo_emf[idim].define(scratch.emf[idim].boxArray(), scratch.emf[idim].DistributionMap(), scratch.emf[idim].nComp(),
+						    scratch.emf[idim].nGrowVect(), amrex::MFInfo(), scratch.emf[idim].Factory());
+			}
+			compute_stage_emf(fo_emf, stage_input, fo_face_vel, fo_fast_mhd_wavespeeds);
+			replaceEMFs(scratch.emf, fo_emf, scratch.redo_flag);
+		}
+
+		apply_provisional_update(output, stage_input, scratch, dt);
+
+		amrex::Gpu::streamSynchronizeAll();
+		amrex::Long const ncells_bad_after_fofc = scratch.redo_flag.sum(0);
+		if (ncells_bad_after_fofc == 0) {
+			debugAssertFinite(std::format("NaN detected in HydroRKPolicy::validate_stage FOFC output on level {}", lev_), *output.cc);
+			return true;
+		}
+
+		if (sim_.Verbose()) {
+			auto const cell_idx = scratch.redo_flag.maxIndex(0);
+			amrex::Print() << "[FOFC-" << stage << "] Flux correction failed:\n";
+			sim_.printCoordinates(lev_, cell_idx);
+			amrex::print_state(*output.cc, cell_idx);
+			amrex::Print() << "[FOFC-" << stage << "] failed for " << ncells_bad_after_fofc << " cells on level " << lev_ << "\n";
+		}
+
+		return sim_.abortOnFofcFailure_ == 0;
 	}
 
 	void post_stage(int /*stage*/, quokka::CompositeStateView output, quokka::StageScratch const & /*scratch*/, amrex::Real /*stage_time*/,
@@ -511,20 +600,24 @@ template <typename problem_t> struct HydroRKPolicy
 		if (sim_.useDualEnergy_ == 1) {
 			HydroSystem<problem_t>::SyncDualEnergy(*output.cc, *output.fc_data);
 		}
+
+		debugAssertFinite(std::format("NaN detected in HydroRKPolicy::post_stage output on level {}", lev_), *output.cc);
 	}
 
 	void accumulate_stage(int stage, quokka::StageScratch const &scratch, amrex::Real dt, quokka::StepAccumulators &accum) const
 	{
-		const amrex::Real weight = quokka::SSPRK2Scheme::stage_integral_weights[stage - 1];
+		amrex::Real weight = 1.0;
+		if (sim_.integratorOrder_ == 2) {
+			weight = quokka::SSPRK2Scheme::stage_integral_weights[stage - 1];
+		}
 
 		if ((step_fr_as_crse_ != nullptr) || (step_fr_as_fine_ != nullptr)) {
-			sim_.incrementFluxRegisters(step_fr_as_crse_, step_fr_as_fine_, const_cast<std::array<amrex::MultiFab, AMREX_SPACEDIM> &>(scratch.fluxes_hi),
-						    lev_, weight * dt);
+			sim_.incrementFluxRegisters(step_fr_as_crse_, step_fr_as_fine_,
+						    const_cast<std::array<amrex::MultiFab, AMREX_SPACEDIM> &>(scratch.fluxes_hi), lev_, weight * dt);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				if ((step_emf_as_crse_ != nullptr) || (step_emf_as_fine_ != nullptr)) {
 					sim_.incrementEMFRegisters(step_emf_as_crse_, step_emf_as_fine_,
-								   const_cast<std::array<amrex::MultiFab, AMREX_SPACEDIM> &>(scratch.emf), lev_,
-								   -weight * dt);
+								   const_cast<std::array<amrex::MultiFab, AMREX_SPACEDIM> &>(scratch.emf), lev_, -weight * dt);
 				}
 			}
 		}
@@ -536,8 +629,7 @@ template <typename problem_t> struct HydroRKPolicy
 		}
 	}
 
-	void finalize_step(quokka::CompositeStateView /*new_state*/, amrex::Real /*time*/, amrex::Real dt,
-			   quokka::StepAccumulators const & /*accum*/) const
+	void finalize_step(quokka::CompositeStateView /*new_state*/, amrex::Real /*time*/, amrex::Real dt, quokka::StepAccumulators const & /*accum*/) const
 	{
 		amrex::ignore_unused(dt);
 	}
