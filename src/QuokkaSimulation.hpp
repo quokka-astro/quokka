@@ -2094,25 +2094,25 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		std::unique_ptr<amrex::EdgeFluxRegister> step_emf_as_fine;
 
 		if (fr_as_crse != nullptr) {
-			step_fr_as_crse = std::make_unique<amrex::FluxRegister>(boxArray(lev + 1), DistributionMap(lev + 1), refRatio(lev), lev + 1,
-										       nvarTotal_cc_);
+			step_fr_as_crse =
+			    std::make_unique<amrex::FluxRegister>(boxArray(lev + 1), DistributionMap(lev + 1), refRatio(lev), lev + 1, nvarTotal_cc_);
 		}
 		if (fr_as_fine != nullptr) {
 			step_fr_as_fine = std::make_unique<amrex::FluxRegister>(grids[lev], dmap[lev], refRatio(lev - 1), lev, nvarTotal_cc_);
 		}
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			if (emf_as_crse != nullptr) {
-				step_emf_as_crse = std::make_unique<amrex::EdgeFluxRegister>(boxArray(lev + 1), boxArray(lev), DistributionMap(lev + 1), dmap[lev],
-												     geom[lev + 1], geom[lev], 1);
+				step_emf_as_crse = std::make_unique<amrex::EdgeFluxRegister>(boxArray(lev + 1), boxArray(lev), DistributionMap(lev + 1),
+											     dmap[lev], geom[lev + 1], geom[lev], 1);
 			}
 			if (emf_as_fine != nullptr) {
 				step_emf_as_fine = std::make_unique<amrex::EdgeFluxRegister>(grids[lev], boxArray(lev - 1), dmap[lev], DistributionMap(lev - 1),
-												     geom[lev], geom[lev - 1], 1);
+											     geom[lev], geom[lev - 1], 1);
 			}
 		}
 
-		HydroRKPolicy<problem_t> policy{*this, lev, nghost_Riemann, step_fr_as_crse.get(), step_fr_as_fine.get(), step_emf_as_crse.get(),
-						step_emf_as_fine.get()};
+		HydroRKPolicy<problem_t> policy{
+		    *this, lev, nghost_Riemann, step_fr_as_crse.get(), step_fr_as_fine.get(), step_emf_as_crse.get(), step_emf_as_fine.get()};
 		quokka::RKIntegrator<HydroRKPolicy<problem_t>> integrator(policy);
 
 		quokka::CompositeStateView old_state{};
@@ -2136,31 +2136,31 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			return false;
 		}
 
-			auto burn_success_second = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], state_new_fc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
-			bool const cfl_ok = !isCflViolated(lev, time, dt_lev);
-			bool const final_success = (cfl_ok && burn_success_second);
+		auto burn_success_second = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], state_new_fc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
+		bool const cfl_ok = !isCflViolated(lev, time, dt_lev);
+		bool const final_success = (cfl_ok && burn_success_second);
 
-			if (final_success) {
-				if (step_fr_as_crse) {
-					*flux_reg_[lev + 1] += *step_fr_as_crse;
+		if (final_success) {
+			if (step_fr_as_crse) {
+				*flux_reg_[lev + 1] += *step_fr_as_crse;
+			}
+			if (step_fr_as_fine) {
+				*flux_reg_[lev] += *step_fr_as_fine;
+			}
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				if (step_emf_as_crse) {
+					emf_reg_[lev + 1]->plus(*step_emf_as_crse);
 				}
-				if (step_fr_as_fine) {
-					*flux_reg_[lev] += *step_fr_as_fine;
-				}
-				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-					if (step_emf_as_crse) {
-						emf_reg_[lev + 1]->plus(*step_emf_as_crse);
-					}
-					if (step_emf_as_fine) {
-						emf_reg_[lev]->plus(*step_emf_as_fine);
-					}
+				if (step_emf_as_fine) {
+					emf_reg_[lev]->plus(*step_emf_as_fine);
 				}
 			}
+		}
 
-			if (do_tracers != 0 && final_success) {
-				auto const &accum = integrator.getAccumulators();
-				TracerPC->AdvectWithUmac(const_cast<amrex::MultiFab *>(accum.avg_face_vel.data()), lev, dt_lev);
-			}
+		if (do_tracers != 0 && final_success) {
+			auto const &accum = integrator.getAccumulators();
+			TracerPC->AdvectWithUmac(const_cast<amrex::MultiFab *>(accum.avg_face_vel.data()), lev, dt_lev);
+		}
 
 		return final_success;
 	}

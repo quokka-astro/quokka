@@ -41,8 +41,7 @@ using Real = amrex::Real;
 
 /// Non-owning view of a composite state with one cell-centered MultiFab and
 /// optional face-centered MultiFabs.
-struct CompositeStateView
-{
+struct CompositeStateView {
 	amrex::MultiFab *cc = nullptr;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> *fc_data = nullptr;
 	std::array<amrex::MultiFab *, AMREX_SPACEDIM> fc{};
@@ -61,8 +60,7 @@ struct CompositeStateView
 };
 
 /// Owned scratch state used by the integrator for intermediate RK stages.
-struct CompositeStateData
-{
+struct CompositeStateData {
 	amrex::MultiFab cc;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> fc{};
 	bool has_face_state = false;
@@ -111,8 +109,7 @@ struct CompositeStateData
 };
 
 /// Short-lived temporaries used while constructing and validating one RK stage.
-struct StageScratch
-{
+struct StageScratch {
 	amrex::MultiFab rhs_cc;
 	amrex::iMultiFab redo_flag;
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> fluxes_hi{};
@@ -137,8 +134,7 @@ struct StageScratch
 };
 
 /// Running quantities that genuinely need to persist across RK stages.
-struct StepAccumulators
-{
+struct StepAccumulators {
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> avg_face_vel{};
 	bool has_avg_face_vel = false;
 
@@ -164,8 +160,7 @@ struct StepAccumulators
 };
 
 /// SSPRK2 stage description for Quokka's hydro update.
-struct SSPRK2Scheme
-{
+struct SSPRK2Scheme {
 	static constexpr int nstages = 2;
 
 	/// Stage times t_n + c_s * dt.
@@ -178,15 +173,9 @@ struct SSPRK2Scheme
 
 namespace detail
 {
-template <typename Policy>
-concept HasDefine = requires(Policy &policy, int lev, CompositeStateView const &reference) {
-	{ policy.define(lev, reference) };
-};
+template <typename Policy> concept HasDefine = requires(Policy & policy, int lev, CompositeStateView const &reference) { {policy.define(lev, reference)}; };
 
-template <typename Policy>
-concept HasResetAccumulators = requires(Policy &policy, StepAccumulators &accum) {
-	{ policy.reset_accumulators(accum) };
-};
+template <typename Policy> concept HasResetAccumulators = requires(Policy & policy, StepAccumulators &accum) { {policy.reset_accumulators(accum)}; };
 } // namespace detail
 
 /// Generic stage-driven RK integrator for Quokka composite state.
@@ -278,8 +267,7 @@ template <typename Policy, typename Scheme = SSPRK2Scheme> class RKIntegrator
 /// This is an interface contract, not a base class with virtual dispatch.
 /// A concrete policy can be templated on `problem_t` and hold any Quokka state
 /// needed to compute fluxes, fill boundaries, and update reflux registers.
-struct HydroRKPolicyInterface
-{
+struct HydroRKPolicyInterface {
 	[[nodiscard]] auto nghost_cc() const -> int;
 	[[nodiscard]] auto nghost_fc() const -> int;
 
