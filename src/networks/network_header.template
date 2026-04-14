@@ -34,7 +34,7 @@ constexpr int NumSpecTotal = NumSpec + NumSpecExtra;
 constexpr int NumChemActiveRadGroups = @NUM_CHEM_ACTIVE_RAD_GROUPS@;
 constexpr int MicrophysicsNumRadVarsPerGroup = 2;
 constexpr int NumRadEqs = NumChemActiveRadGroups * MicrophysicsNumRadVarsPerGroup;
-constexpr amrex::GpuArray<double, NumChemActiveRadGroups + 1> ChemActiveRadFreqBounds{ @CHEM_ACTIVE_RAD_FREQ_BOUNDS@ };
+constexpr std::array<double, NumChemActiveRadGroups + 1> ChemActiveRadFreqBoundsHeader_{ @CHEM_ACTIVE_RAD_FREQ_BOUNDS@ };
 #endif
 
 // filled via the preprocessor by including NAUX_NETWORK
