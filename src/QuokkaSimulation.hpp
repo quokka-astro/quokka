@@ -2167,8 +2167,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			}
 		}
 
-		if (do_tracers != 0 && final_success)
-		{
+		if (do_tracers != 0 && final_success) {
 			auto const &accum = integrator.getAccumulators();
 			TracerPC->AdvectWithUmac(const_cast<amrex::MultiFab *>(accum.avg_face_vel.data()), lev, dt_lev);
 		}
