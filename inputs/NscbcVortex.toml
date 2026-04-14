@@ -29,7 +29,6 @@ stop_time = 1.0e-4
 
 checkpoint_interval = -1
 plotfile_interval = 500
-ascent_interval = -1
 
 hydro.rk_integrator_order = 2
 hydro.reconstruction_order = 3
