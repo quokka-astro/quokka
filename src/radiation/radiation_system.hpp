@@ -659,7 +659,8 @@ void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real>
 }
 
 #ifdef PHOTOCHEMISTRY
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::GetChemActiveRadiationGroupQuanta(int group_index) -> amrex::Real
+template <typename problem_t> 
+AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::GetChemActiveRadiationGroupQuanta(int group_index) -> amrex::Real
 {
 	amrex::Real freq_low = RadSystem_Traits<problem_t>::ChemActiveRadFreqBounds[group_index];
 	amrex::Real freq_high = RadSystem_Traits<problem_t>::ChemActiveRadFreqBounds[group_index + 1];
