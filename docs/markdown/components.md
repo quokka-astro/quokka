@@ -50,13 +50,13 @@ This matrix covers hydro, MHD, radiation, cooling, chemistry, particles, and the
 
 | Module | Hydro | MHD | Radiation | Cooling | Chemistry | Particles | Dust |
 | ------ |:-----:|:---:|:---------:|:-------:|:---------:|:---------:|:----:|
-| Hydro | | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| MHD | | | ❌ | ✅ | ⚠️ | ✅ | ⚠️ |
-| Radiation | | | | ⚠️ | | ✅ | |
-| Cooling | | | | | ⚠️ | ✅ | |
-| Chemistry | | | | | | | |
-| Particles | | | | | | | |
-| Dust | | | | | | | |
+| Hydro | - | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| MHD | - | - | ❌ | ✅ | ⚠️ | ✅ | ⚠️ |
+| Radiation | - | - | - | ⚠️ | | ✅ | |
+| Cooling | - | - | - | - | ⚠️ | ✅ | |
+| Chemistry | - | - | - | - | - | | |
+| Particles | - | - | - | - | - | - | |
+| Dust | - | - | - | - | - | - | - |
 
 Notes:
 
