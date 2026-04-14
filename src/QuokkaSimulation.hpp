@@ -2157,18 +2157,6 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			bool const final_success = (cfl_ok && burn_success_second);
 
 			if (final_success) {
-				fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, time + dt_lev, quokka::centering::cc, quokka::direction::na,
-						       PreInterpState, PostInterpState);
-				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-					for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-						fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, time + dt_lev,
-								       quokka::centering::fc, quokka::direction{idim}, AMRSimulation<problem_t>::InterpHookNone,
-								       AMRSimulation<problem_t>::InterpHookNone, FillPatchType::fillpatch_function);
-					}
-				}
-			}
-
-			if (final_success) {
 				if (fr_as_crse != nullptr) {
 					*fr_as_crse += *step_fr_as_crse;
 				}
@@ -2184,11 +2172,12 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 					}
 				}
 			}
+		}
 
-			if (do_tracers != 0 && final_success) {
-				auto const &accum = integrator.getAccumulators();
-				TracerPC->AdvectWithUmac(const_cast<amrex::MultiFab *>(accum.avg_face_vel.data()), lev, dt_lev);
-			}
+		if (do_tracers != 0 && final_success) {
+			auto const &accum = integrator.getAccumulators();
+			TracerPC->AdvectWithUmac(const_cast<amrex::MultiFab *>(accum.avg_face_vel.data()), lev, dt_lev);
+		}
 
 			return final_success;
 		};
