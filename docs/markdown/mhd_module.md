@@ -119,7 +119,7 @@ more detail in [Runtime parameters](parameters.md):
 - `emf_reconstruction_order` – spatial order for the EMF reconstruction
   (default 5 = extrema-preserving PPM).
 - `emf_compute_scheme` – choose `FelkerStone2017`, `Balsara2025`, or `Quokka2026` for computing the emf either at cell-center or at the edge (default `Balsara2025`).
-- `emf_averaging_scheme` – choose `BalsaraSpicer2004` or `LondrilloDelZanna2004` for edge averaging
+- `emf_averaging_scheme` – currently only `LondrilloDelZanna2004` for edge averaging
   (default `LondrilloDelZanna2004`).
 - `artificial_viscosity_k` – optional scalar viscosity coefficient that adds a
   diffusive flux to the momentum equations and can damp post-shock oscillations.
