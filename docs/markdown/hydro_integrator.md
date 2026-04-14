@@ -61,7 +61,7 @@ The retry loop surrounding the integrator helps prevent crashes in the presence 
 2. **Adaptive substepping:** Each retry chooses `total_substeps = 2^{cur_retry_level}` (with `cur_retry_level ≤ max_retries = 6`). Progress is recorded as an integer number of base units, where one unit represents `dt_lev / (2^{max_retries})`. This guarantees that any retry can reinterpret previously accepted work exactly on its canonical grid.
 3. **Substep execution:** For the current retry level the code computes `units_per_substep = 2^{max_retries - cur_retry_level}` and evaluates `start_substep = completed_units / units_per_substep`. Only the remaining substeps are executed. The floating-point time passed to `advanceHydroAtLevel` is reconstructed on demand as `current_substep_time = time + substep_index * dt_substep`.
 4. **Partial progress handling:** Accepting a substep immediately increments `completed_units` and calls `updateAcceptedHydroState()`. If a failure occurs after some substeps succeed, the retry level is bumped (capped by `max_retries`) so the next attempt uses smaller substeps; a fully successful pass exits the outer loop immediately.
-5. **Failure diagnostics:** Exceeding the retry budget triggers a fatal diagnostic: the code writes a `debug_hydro_state_fatal` plotfile (or Blueprint output when Ascent is enabled) and aborts, ensuring that difficult-to-integrate states can be debugged.
+5. **Failure diagnostics:** Exceeding the retry budget triggers a fatal diagnostic: the code writes a `debug_hydro_state_fatal` plotfile and aborts, ensuring that difficult-to-integrate states can be debugged.
 
 ### Pseudocode outline
 

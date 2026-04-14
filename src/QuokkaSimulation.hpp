@@ -66,12 +66,6 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 
-#ifdef AMREX_USE_ASCENT
-#include "AMReX_Conduit_Blueprint.H"
-#include <ascent.hpp>
-#include <conduit_node.hpp>
-#endif
-
 #include "SimulationData.hpp"
 #include "chemistry/Chemistry.hpp"
 #include "cooling/ResampledCooling.hpp"
@@ -2043,17 +2037,9 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 			       << "Hydro update exceeded max_retries on level " << lev << ". Cannot continue, crashing...\n"
 			       << std::endl; // NOLINT(performance-avoid-endl)
 
-		// write plotfile or Ascent Blueprint file
+		// write plotfile
 		amrex::ParallelDescriptor::Barrier();
-#ifdef AMREX_USE_ASCENT
-		conduit::Node mesh;
-		amrex::SingleLevelToBlueprint(state_new_cc_[lev], componentNames_cc_, geom[lev], time, istep[lev] + 1, mesh);
-		conduit::Node bpMeshHost;
-		bpMeshHost.set(mesh); // copy to host mem (needed for Blueprint HDF5 output)
-		amrex::WriteBlueprintFiles(bpMeshHost, "debug_hydro_state_fatal", istep[lev] + 1, "hdf5");
-#else
 		WriteSingleLevelPlotfileSimplified("debug_hydro_state_fatal", state_new_cc_[lev], componentNames_cc_, lev, 1);
-#endif
 		amrex::ParallelDescriptor::Barrier();
 
 		if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -2176,16 +2162,11 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 	// LOW LEVEL DEBUGGING: output state_old_cc_tmp (with ghost cells)
 	if (lowLevelDebuggingOutput_ == 1) {
-#ifdef AMREX_USE_ASCENT
-		// write Blueprint HDF5 files
-		conduit::Node mesh;
-		amrex::SingleLevelToBlueprint(state_old_cc_tmp, componentNames_cc_, geom[lev], time, istep[lev] + 1, mesh);
-		amrex::WriteBlueprintFiles(mesh, "debug_stage1_filled_state_old", istep[lev] + 1, "hdf5");
-#else
 		// write AMReX plotfile
-		// WriteSingleLevelPlotfile(CustomPlotFileName("debug_stage1_filled_state_old", istep[lev]+1),
-		//    state_old_cc_tmp, componentNames_cc_, geom[lev], time, istep[lev]+1);
-#endif
+		amrex::ParallelDescriptor::Barrier();
+		WriteSingleLevelPlotfile(CustomPlotFileName("debug_stage1_filled_state_old", istep[lev] + 1), state_old_cc_tmp, componentNames_cc_, geom[lev],
+					 time, istep[lev] + 1);
+		amrex::ParallelDescriptor::Barrier();
 	}
 
 	// check state validity

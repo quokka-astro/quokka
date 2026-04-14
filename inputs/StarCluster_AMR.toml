@@ -30,7 +30,6 @@ gravity.Gconst = 1.0  #gravitational constant
 do_reflux = 1
 do_subcycle = 0
 
-ascent_interval = 100
 plotfile_interval = 500
 checkpoint_interval = 1000
 
