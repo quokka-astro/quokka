@@ -1,0 +1,30 @@
+# Test for particle deposition utilities
+# This test verifies that particle properties can be correctly deposited onto the grid
+
+max_timesteps = 10
+stop_time = 0.1
+quokka.bc = ["periodic", "periodic", "periodic"]
+
+geometry.prob_lo = [0.0, 0.0, 0.0]
+geometry.prob_hi = [1.0, 1.0, 1.0]
+
+# Verbosity
+amr.v = 1
+
+amr.n_cell = [64, 64, 64]
+amr.max_level = 0
+amr.max_grid_size = [32, 32, 32]
+amr.blocking_factor = [8, 8, 8]
+
+# Particle parameters
+particles.verbose = 1
+
+# I/O
+plotfile_interval = 10
+plotfile_prefix = "particle_deposition_"
+derived_vars = "particle.CIC.mass_density"
+
+# Particle deposition diagnostic
+quokka.particle_deposition.type = "DerivedParticleDeposition"
+quokka.particle_deposition.particle_types = "CIC"
+quokka.particle_deposition.deposit_fields = "mass"

@@ -75,6 +75,8 @@ namespace filesystem = experimental::filesystem;
 #include "util/time_units.hpp"
 #include <AMReX_FluxRegister.H>
 #include <format>
+#include <unordered_set>
+
 #include <yaml-cpp/yaml.h>
 
 #if AMREX_SPACEDIM == 3
@@ -85,17 +87,14 @@ namespace filesystem = experimental::filesystem;
 
 #include "AMReX_AmrParticles.H"
 #include "particles/PhysicsParticles.hpp"
+#include "particles/particle_deposition.hpp"
 #endif // AMREX_SPACEDIM == 3
-
-#ifdef AMREX_USE_ASCENT
-#include <AMReX_Conduit_Blueprint.H>
-#include <ascent.hpp>
-#endif
 
 // internal headers
 #include "fundamental_constants.H"
 #include "grid.hpp"
 #include "hydro/mhd_system.hpp"
+#include "io/DerivedFieldBase.H"
 #include "io/DiagBase.H"
 #include "io/DiagFramePlane.H"
 #include "io/DiagPDF.H"
@@ -110,11 +109,6 @@ namespace filesystem = experimental::filesystem;
 
 #ifdef QUOKKA_USE_OPENPMD
 #include "io/openPMD.hpp"
-#endif
-
-#ifdef AMREX_USE_ASCENT
-using namespace conduit;
-using namespace ascent;
 #endif
 
 // Quokka version string to be stored in metadata. This is used in post-processing tools like YT to do version checks.
@@ -211,7 +205,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int printCycleTiming_ = 0;				     // default: don't print
 	amrex::Long maxTimesteps_ = std::numeric_limits<int>::max(); // default: no limit
 	amrex::Long maxWalltime_ = 0;				     // default: no limit
-	int ascentInterval_ = -1;				     // -1 == no in-situ renders with Ascent
 	int plotfileInterval_ = -1;				     // -1 == no output
 	int statisticsInterval_ = -1;				     // -1 == no output
 	amrex::Real plotTimeInterval_ = -1.0;			     // time interval for plt file
@@ -240,6 +233,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	std::string densityFloorExpr_;
 	std::optional<amrex::Parser> densityFloorParser_;
 	std::optional<amrex::ParserExecutor<4>> densityFloorParserExe_;
+	bool useHeatingRateExternalParser_ = false;
+	std::string heatingRateExternalExpr_;
+	std::optional<amrex::Parser> heatingRateExternalParser_;
+	std::optional<amrex::ParserExecutor<2>> heatingRateExternalParserExe_;
 	bool debugDensityFloorPlot_ = false; // default: disabled
 
 	mutable YAML::Node simulationMetadata_;
@@ -325,6 +322,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// (e.g., caused by the flux register or from interpolation)
 	virtual void FixupState(int level) = 0;
 
+      protected:
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override = 0;
 
@@ -341,6 +339,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// DistributionMapping
 	void MakeNewLevelFromScratch(int lev, amrex::Real time, const amrex::BoxArray &ba, const amrex::DistributionMapping &dm) override;
 
+      public:
 	// AMR utility functions
 	template <typename PreInterpHook, typename PostInterpHook>
 	void fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state, int lev, amrex::Real time, quokka::centering cen, quokka::direction dir,
@@ -465,6 +464,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	[[nodiscard]] auto PlotFileMFAtLevel_fc(int lev, int idim, int nghost_fc_) -> amrex::MultiFab;
 	void AverageDownDerived(const amrex::Vector<amrex::MultiFab *> &mfs, const amrex::Vector<std::string> &varnames) const;
 	void createDiagnostics();
+	void createRuntimeDerivedFields();
+	void updateRuntimeDerivedFields();
+	[[nodiscard]] auto computeRuntimeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const -> bool;
 	void updateDiagnostics();
 	void doDiagnostics();
 	void WriteMetadataFile(std::string const &MetadataFileName) const;
@@ -521,10 +523,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// simulation metadata
 	void initializeSimulationMetadata();
 
-#ifdef AMREX_USE_ASCENT
-	void AscentCustomActions(conduit::Node const &blueprintMesh);
-	void RenderAscent();
-#endif
       protected:
 	amrex::Vector<amrex::BCRec> BCs_cc_; // on level 0
 	amrex::Vector<amrex::BCRec> BCs_fc_; // on level 0
@@ -587,6 +585,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// Diagnostics
 	amrex::Vector<std::unique_ptr<DiagBase>> m_diagnostics;
 	amrex::Vector<std::string> m_diagVars;
+	amrex::Vector<std::unique_ptr<quokka::DerivedFieldBase>> m_runtimeDerivedFields;
+	amrex::Vector<std::string> m_runtimeDerivedVarNames;
+	quokka::DerivedFieldBase::ComputeContext computeContext_;
 
 	/// AMR-specific parameters
 	int regrid_int = 2;	 // regrid interval (number of coarse steps)
@@ -670,11 +671,6 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// Add PhysicsParticleRegister member
 	quokka::PhysicsParticleRegister<problem_t> particleRegister_;
 #endif // AMREX_SPACEDIM == 3
-
-	// external objects
-#ifdef AMREX_USE_ASCENT
-	Ascent ascent_;
-#endif
 
       public:
 #if AMREX_SPACEDIM == 3
@@ -791,13 +787,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
 		initializeSimulationMetadata();
 	}
-
-#ifdef AMREX_USE_ASCENT
-	// initialize Ascent
-	conduit::Node ascent_options;
-	ascent_options["mpi_comm"] = MPI_Comm_c2f(amrex::ParallelContext::CommunicatorSub());
-	ascent_.open(ascent_options);
-#endif
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::PerformanceHints()
@@ -915,9 +904,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	pp.query("init_shrink", initShrink_);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(initShrink_ > 0.0 && initShrink_ <= 1.0, "init_shrink must be in (0, 1].");
 
-	// Default ascent render interval
-	pp.query("ascent_interval", ascentInterval_);
-
 	// Default output interval
 	pp.query("plotfile_interval", plotfileInterval_);
 
@@ -976,6 +962,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Specify derived variables to save to plotfiles
 	pp.queryarr("derived_vars", derivedNames_);
 
+	// Configure runtime-derived field providers (factory-based)
+	createRuntimeDerivedFields();
+
 	// re-grid interval
 	pp.query("regrid_interval", regrid_int);
 
@@ -1001,6 +990,42 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	} else {
 		densityFloorParser_.reset();
 		densityFloorParserExe_.reset();
+	}
+
+	// optional external heating rate expression (variables: time, dt)
+	heatingRateExternalExpr_.clear();
+	pp.query("heating_rate_external", heatingRateExternalExpr_);
+	useHeatingRateExternalParser_ = !heatingRateExternalExpr_.empty();
+	if (useHeatingRateExternalParser_) {
+		heatingRateExternalParser_.emplace(heatingRateExternalExpr_);
+		auto symbols = heatingRateExternalParser_->symbols();
+		if (!amrex::ParmParse::ParserPrefix.empty()) {
+			amrex::ParmParse const parser_pp(amrex::ParmParse::ParserPrefix);
+			for (auto const &symbol : symbols) {
+				// `time` and `dt` are runtime parser inputs, not constants from ParmParse.
+				// Available ParmParse constants are: `yr`, `kyr`, `Myr`, `Gyr`.
+				if (symbol == "time" || symbol == "dt") {
+					continue;
+				}
+				amrex::Real value = 0.0;
+				if (parser_pp.query(symbol, value) != 0) {
+					heatingRateExternalParser_->setConstant(symbol, value);
+				}
+			}
+		} else {
+			amrex::Abort("Internal error: ParserPrefix is empty while parsing `heating_rate_external` unit symbols (`yr`, `kyr`, `Myr`, `Gyr`). "
+				     "This indicates a code regression. Please report this to Quokka maintainers and reference PR #1791. ");
+		}
+		heatingRateExternalParser_->registerVariables({"time", "dt"});
+		heatingRateExternalParserExe_ = heatingRateExternalParser_->compile<2>();
+#ifdef AMREX_USE_GPU
+		if (heatingRateExternalParserExe_->m_device_executor == nullptr) {
+			amrex::Abort("heating_rate_external: device parser executor is null after compile<2>()");
+		}
+#endif
+	} else {
+		heatingRateExternalParser_.reset();
+		heatingRateExternalParserExe_.reset();
 	}
 
 	// Optional debug output: spatially varying density floor
@@ -1149,12 +1174,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::setInitialCondition
 			       << std::endl; // NOLINT(performance-avoid-endl)
 		amrex::Abort();
 	}
-
-#ifdef AMREX_USE_ASCENT
-	if (ascentInterval_ > 0) {
-		RenderAscent();
-	}
-#endif
 
 	if ((plotfileInterval_ > 0 || plotTimeInterval_ > 0) && !skipInitialPlotfile_) {
 		WritePlotFile();
@@ -1345,9 +1364,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	rereadRuntimeParameters();
 
 	amrex::Real cur_time = tNew_[0];
-#ifdef AMREX_USE_ASCENT
-	int last_ascent_step = 0;
-#endif
 	int last_statistics_step = 0;
 	int last_plot_file_step = 0;
 	int last_chk_file_step = 0;
@@ -1489,13 +1505,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			tNew_[lev] = cur_time;
 		}
 
-#ifdef AMREX_USE_ASCENT
-		if (ascentInterval_ > 0 && (step + 1) % ascentInterval_ == 0) {
-			last_ascent_step = step + 1;
-			RenderAscent();
-		}
-#endif
-
 		if (statisticsInterval_ > 0 && (step + 1) % statisticsInterval_ == 0) {
 			last_statistics_step = step + 1;
 			WriteStatisticsFile();
@@ -1624,10 +1633,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 	if (step == 0) {
 		amrex::Print() << "No cell updates performed!\n";
-#ifdef AMREX_USE_ASCENT
-		// close Ascent
-		ascent_.close();
-#endif
 		return;
 	}
 
@@ -1681,11 +1686,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 	if (checkpointInterval_ > 0 && istep[0] > last_chk_file_step) {
 		WriteCheckpointFile();
 	}
-
-#ifdef AMREX_USE_ASCENT
-	// close Ascent
-	ascent_.close();
-#endif
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::calculateGpotAllLevels()
@@ -3482,7 +3482,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitParticles()
 		AMREX_ASSERT(TracerPC == nullptr);
 		TracerPC = std::make_unique<amrex::AmrTracerParticleContainer>(this);
 
-		const amrex::AmrTracerParticleContainer::ParticleInitData pdata = {{AMREX_D_DECL(0.0, 0.0, 0.0)}, {}, {}, {}};
+		const amrex::AmrTracerParticleContainer::ParticleInitData pdata = {
+		    .real_struct_data = {AMREX_D_DECL(0.0, 0.0, 0.0)},
+		    .int_struct_data = {},
+		    .real_array_data = {},
+		    .int_array_data = {},
+		};
 
 		TracerPC->SetVerbose(0);
 		TracerPC->InitOnePerCell(0.5, 0.5, 0.5, pdata);
@@ -3712,6 +3717,10 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 				comp++;
 				continue;
 			}
+			if (computeRuntimeDerivedVar(lev, varname, plotMF, comp)) {
+				comp++;
+				continue;
+			}
 			ComputeDerivedVar(lev, varname, plotMF, comp);
 			comp++;
 			continue;
@@ -3844,6 +3853,130 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMF_fc(const
 	return r_fc;
 }
 
+template <typename problem_t> void AMRSimulation<problem_t>::createRuntimeDerivedFields()
+{
+	std::string const code_prefix = "quokka";
+	std::string const code_prefix_with_dot = code_prefix + ".";
+	std::string const type_suffix = ".type";
+	// If parameters are re-read, rebuild the registered runtime-derived providers
+	// from scratch and re-validate that derived_vars lists emitted field names only.
+	if (!m_runtimeDerivedVarNames.empty()) {
+		m_runtimeDerivedVarNames.clear();
+	}
+	m_runtimeDerivedFields.clear();
+
+	amrex::Vector<std::string> const requestedDerivedNames = derivedNames_;
+
+	std::unordered_set<std::string> existingVarNames;
+	existingVarNames.insert(componentNames_cc_.begin(), componentNames_cc_.end());
+	existingVarNames.insert(componentNames_fc_flat_.begin(), componentNames_fc_flat_.end());
+
+	std::unordered_set<std::string> emittedRuntimeVarNames;
+	std::unordered_set<std::string> runtimeNameSet;
+	for (auto const &entry : amrex::ParmParse::getEntries(code_prefix)) {
+		if (!entry.starts_with(code_prefix_with_dot) || !entry.ends_with(type_suffix)) {
+			continue;
+		}
+
+		std::string const field_group = entry.substr(code_prefix_with_dot.size(), entry.size() - code_prefix_with_dot.size() - type_suffix.size());
+		std::string const field_prefix = code_prefix_with_dot + field_group;
+		amrex::ParmParse const ppf(field_prefix);
+		std::string field_type;
+		ppf.get("type", field_type);
+		if (!quokka::DerivedFieldBase::contains(field_type)) {
+			continue;
+		}
+		if (std::ranges::find(requestedDerivedNames, field_group) != requestedDerivedNames.end()) {
+			amrex::Abort("Runtime derived field provider group '" + field_group +
+				     "' must not appear in derived_vars. List emitted output field names instead.");
+		}
+
+		auto provider = quokka::DerivedFieldBase::create(field_type);
+		provider->init(field_prefix, field_group);
+		amrex::Vector<std::string> providerVars;
+		provider->addVars(providerVars);
+		bool hasRequestedOutput = false;
+		for (auto const &var : providerVars) {
+			if (var.empty()) {
+				amrex::Abort("Runtime derived field provider generated an empty output name.");
+			}
+			emittedRuntimeVarNames.insert(var);
+			if (std::ranges::find(requestedDerivedNames, var) != requestedDerivedNames.end()) {
+				hasRequestedOutput = true;
+			}
+		}
+		if (!hasRequestedOutput) {
+			continue;
+		}
+
+		for (auto const &var : providerVars) {
+			if (std::ranges::find(requestedDerivedNames, var) == requestedDerivedNames.end()) {
+				continue;
+			}
+			if (existingVarNames.contains(var)) {
+				amrex::Abort("Runtime derived field name collides with an existing variable: " + var);
+			}
+			if (!runtimeNameSet.insert(var).second) {
+				amrex::Abort("Duplicate runtime derived field output name: " + var);
+			}
+			m_runtimeDerivedVarNames.push_back(var);
+		}
+		m_runtimeDerivedFields.push_back(std::move(provider));
+	}
+
+	computeContext_.depositParticleMassDensity = [this](const std::string &particleType, const std::string &depositField, amrex::MultiFab &outMF,
+							    int outLev, int outComp, amrex::Real massMin, amrex::Real massMax, bool hasAgeFilter,
+							    amrex::Real tAgeMax) {
+#if AMREX_SPACEDIM == 3
+		bool const deposit_birth_mass = (depositField == "birth_mass");
+		if (!deposit_birth_mass && depositField != "mass") {
+			amrex::Abort("Unsupported deposit field requested by runtime derived field provider: " + depositField);
+		}
+		particleRegister_.depositParticleMassDensity(particleType, deposit_birth_mass, outMF, outLev, outComp, massMin, massMax, hasAgeFilter, tNew_[0],
+							     tAgeMax);
+#else
+		amrex::ignore_unused(depositField, outMF, outLev, outComp, massMin, massMax, hasAgeFilter, tAgeMax);
+		amrex::Abort("Particle deposition runtime derived fields are supported only in 3D.");
+#endif
+	};
+
+	for (auto const &name : requestedDerivedNames) {
+
+		if (existingVarNames.contains(name) || emittedRuntimeVarNames.contains(name)) {
+			continue;
+		}
+		if (name.find('.') == std::string::npos) {
+			continue;
+		}
+		amrex::Abort("Requested runtime derived field output '" + name +
+			     "' is not emitted by any configured provider. List only provider output names that are actually emitted.");
+	}
+}
+
+template <typename problem_t> void AMRSimulation<problem_t>::updateRuntimeDerivedFields()
+{
+	if (m_runtimeDerivedFields.empty()) {
+		return;
+	}
+
+	auto const geoms = Geom(0, finestLevel());
+	for (auto const &provider : m_runtimeDerivedFields) {
+		provider->prepare(finestLevel() + 1, geoms, boxArray(0, finestLevel()), dmap, GetPlotfileVarNames());
+	}
+}
+
+template <typename problem_t>
+auto AMRSimulation<problem_t>::computeRuntimeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const -> bool
+{
+	for (auto const &provider : m_runtimeDerivedFields) {
+		if (provider->computeField(lev, dname, mf, ncomp, computeContext_)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 template <typename problem_t> void AMRSimulation<problem_t>::createDiagnostics()
 {
 	std::string const code_prefix = "quokka";
@@ -3919,6 +4052,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::createDiagnostics()
 
 template <typename problem_t> void AMRSimulation<problem_t>::updateDiagnostics()
 {
+	updateRuntimeDerivedFields();
+
 	// Might need to update some internal data as the grid changes
 	for (const auto &m_diagnostic : m_diagnostics) {
 		if (m_diagnostic->needUpdate()) {
@@ -4029,85 +4164,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::doDiagnostics()
 	}
 }
 
-// do in-situ rendering with Ascent
-#ifdef AMREX_USE_ASCENT
-template <typename problem_t> void AMRSimulation<problem_t>::AscentCustomActions(conduit::Node const &blueprintMesh)
-{
-	BL_PROFILE("AMRSimulation::AscentCustomActions()"); // NOLINT(misc-const-correctness)
-
-	// add a scene with a pseudocolor plot
-	Node scenes;
-	scenes["s1/plots/p1/type"] = "pseudocolor";
-	scenes["s1/plots/p1/field"] = "gasDensity";
-
-	// set the output file name (ascent will add ".png")
-	scenes["s1/renders/r1/image_prefix"] = "render_density%05d";
-
-	// set camera position
-	amrex::Array<double, 3> position = {-0.6, -0.6, -0.8};
-	scenes["s1/renders/r1/camera/position"].set_float64_ptr(position.data(), 3);
-
-	// setup actions
-	Node actions;
-	Node &add_plots = actions.append();
-	add_plots["action"] = "add_scenes";
-	add_plots["scenes"] = scenes;
-	actions.append()["action"] = "execute";
-	actions.append()["action"] = "reset";
-
-	// send AMR mesh to ascent, do render
-	ascent_.publish(blueprintMesh);
-	ascent_.execute(actions); // will be replaced by ascent_actions.yml if present
-}
-
-// do Ascent render
-template <typename problem_t> void AMRSimulation<problem_t>::RenderAscent()
-{
-	BL_PROFILE("AMRSimulation::RenderAscent()"); // NOLINT(misc-const-correctness)
-
-	// combine multifabs
-	const int included_ghosts = std::min(nghost_cc_, nghost_fc_);
-	amrex::Vector<amrex::MultiFab> mf_overlapping = PlotFileMF_cc(included_ghosts);
-	amrex::Vector<const amrex::MultiFab *> mf_overlapping_ptr = amrex::GetVecOfConstPtrs(mf_overlapping);
-	amrex::Vector<std::string> varnames;
-	varnames.insert(varnames.end(), componentNames_cc_.begin(), componentNames_cc_.end());
-	varnames.insert(varnames.end(), derivedNames_.begin(), derivedNames_.end());
-
-	// convexify multifabs
-	// see: https://github.com/AMReX-Codes/amrex/pull/4013
-	amrex::Vector<amrex::MultiFab> mf_convex = amrex::convexify(mf_overlapping_ptr, refRatio());
-	amrex::Vector<const amrex::MultiFab *> mf_convex_ptr = amrex::GetVecOfConstPtrs(mf_convex);
-
-	// rescale geometry
-	// (Ascent fails to render if you use parsec-size boxes in units of cm...)
-	amrex::Vector<amrex::Geometry> rescaledGeom = Geom();
-	const amrex::Real length = geom[0].ProbLength(0);
-	for (int i = 0; i < rescaledGeom.size(); ++i) {
-		auto const &dlo = rescaledGeom[i].ProbLoArray();
-		auto const &dhi = rescaledGeom[i].ProbHiArray();
-		std::array<amrex::Real, AMREX_SPACEDIM> new_dlo{};
-		std::array<amrex::Real, AMREX_SPACEDIM> new_dhi{};
-		for (int k = 0; k < AMREX_SPACEDIM; ++k) {
-			new_dlo[k] = dlo[k] / length;
-			new_dhi[k] = dhi[k] / length;
-		}
-		amrex::RealBox rescaledRealBox(new_dlo, new_dhi);
-		rescaledGeom[i].ProbDomain(rescaledRealBox);
-	}
-
-	// wrap MultiFabs into a Blueprint mesh
-	conduit::Node blueprintMesh;
-	amrex::MultiLevelToBlueprint(finest_level + 1, mf_convex_ptr, varnames, rescaledGeom, tNew_[0], istep, refRatio(), blueprintMesh);
-
-	// copy to host mem (needed for DataBinning)
-	conduit::Node bpMeshHost;
-	bpMeshHost.set(blueprintMesh);
-
-	// pass Blueprint mesh to Ascent, run actions
-	AscentCustomActions(bpMeshHost);
-}
-#endif // AMREX_USE_ASCENT
-
 template <typename problem_t> auto AMRSimulation<problem_t>::GetPlotfileVarNames() const -> amrex::Vector<std::string> { return plotfileVarsToInclude_cc_; }
 
 template <typename problem_t> auto AMRSimulation<problem_t>::GetPlotfileVarNames_fc() const -> std::array<amrex::Vector<std::string>, AMREX_SPACEDIM>
@@ -4127,6 +4183,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::GetPlotfileVarNames
 template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 {
 	BL_PROFILE("AMRSimulation::WritePlotFile()"); // NOLINT(misc-const-correctness)
+
+	updateRuntimeDerivedFields();
 
 	if (amrex::AsyncOut::UseAsyncOut()) {
 		// ensure that we flush any plotfiles that are currently being written
@@ -4431,8 +4489,8 @@ inline void GotoNextLine(std::istream &is)
 }
 
 template <typename problem_t>
-auto AMRSimulation<problem_t>::detectRefinementContext(const amrex::BoxArray &restart_ba, const amrex::Geometry &current_geom) ->
-    typename AMRSimulation<problem_t>::RefinementContext
+auto AMRSimulation<problem_t>::detectRefinementContext(const amrex::BoxArray &restart_ba, const amrex::Geometry &current_geom)
+    -> AMRSimulation<problem_t>::RefinementContext
 {
 	RefinementContext context;
 
