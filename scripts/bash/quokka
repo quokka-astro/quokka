@@ -1,0 +1,669 @@
+#!/bin/bash
+
+set -euo pipefail
+
+usage() {
+	cat <<'EOF'
+Usage:
+  quokka config [-d <preset>] [--delete] [--source <file>] [--root <path>] [-D<name>=<value> ...]
+                                             Configure CMake build directory for the given preset
+  quokka build [-d <preset>] <problem> [<problem> ...] [-j <N>] [--source <file>] [--root <path>]
+                                             Compile one or more specific problem targets using ninja
+  quokka build [-d <preset>] --filter <glob> [-j <N>] [--source <file>] [--root <path>]
+                                             Compile all problem targets matching glob (e.g., Rad*)
+  quokka buildrun [-d <preset>] <problem> [<problem> ...] [-j <N>] [--fpe] [--input <file>] [--source <file>] [--root <path>]
+                                             Build then run one or more specific problems
+  quokka buildrun [-d <preset>] --filter <pattern> [-j <N>] [--fpe] [--source <file>] [--root <path>]
+                                             Build matching problems then run matching tests
+  quokka run [-d <preset>] [<problem> ...] [--input <file>] [-j <N>] [--fpe] [--source <file>] [--root <path>]
+                                             Run one or more problem executables from the tests/ directory
+  quokka run [-d <preset>] [--filter <regex>] [-j <N>] [--fpe] [--source <file>] [--root <path>]
+                                             Run all tests (or matching regex via ctest -R)
+  quokka list [--root <path>]                List all available problem directories
+  quokka target [-d <preset>] [--source <file>] [--root <path>]
+                                             Show all available CMake build targets
+  quokka clean [--root <path>]               Remove plotfiles, checkpoints, and output files from tests/
+
+Options:
+  -d <preset>      Build preset to use (default: QUOKKA_PRESET if set, otherwise 1d)
+  --root <path>    Path to the quokka repository root (default: current directory)
+  --input <file>   Input file to pass to the executable (default: inputs/<problem>.toml)
+  --fpe            Enable floating-point exception traps for direct problem runs (ignored for ctest-based runs)
+  --filter <pattern> For run: ctest regex; for build: shell glob over problem names; exclusive with <problem>
+                     Quote patterns to avoid expansion by your shell (e.g. --filter 'Rad*')
+  --source <file>  Optional environment file to source before config/build/run/target commands
+  --delete         For config only: delete existing preset build directory before reconfiguring
+  -D<k>=<v>        For config only: pass extra CMake cache definitions (repeatable)
+  -j <N>           Number of parallel jobs for ninja or ctest (default: 8)
+
+Environment:
+  QUOKKA_PRESET    Default preset for config/build/buildrun/run/target when -d is omitted
+
+Presets:
+  1d              1D Release build
+  3d              3D Release build
+  1d-debug        1D Debug build
+  3d-debug        3D Debug build
+EOF
+}
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+MAGENTA='\033[0;35m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+die() {
+	echo -e "${RED}${BOLD}Error:${RESET} $*" >&2
+	exit 1
+}
+
+log_cmd() {
+	echo -e "${MAGENTA}+ $*${RESET}"
+}
+
+record_result() {
+	local name="$1"
+	local status="$2"
+	RESULT_LINES+=("${name} ${status}")
+	if [ "$status" = "FAIL" ]; then
+		HAD_FAILURE=1
+	fi
+}
+
+print_results() {
+	local result=""
+	local name=""
+	local status=""
+
+	for result in "${RESULT_LINES[@]+"${RESULT_LINES[@]}"}"; do
+		name="${result% *}"
+		status="${result##* }"
+		case "$status" in
+		SUCCESS)
+			echo -e "${GREEN}${BOLD}${name} ${status}${RESET}"
+			;;
+		FAIL)
+			echo -e "${RED}${BOLD}${name} ${status}${RESET}"
+			;;
+		SKIPPED)
+			echo -e "${YELLOW}${BOLD}${name} ${status}${RESET}"
+			;;
+		*)
+			echo "$result"
+			;;
+		esac
+	done
+}
+
+require_arg() {
+	local option="$1"
+	local value="${2:-}"
+	[ -n "$value" ] || die "missing value for ${option}"
+}
+
+load_environment() {
+	if [ -z "$SOURCE_FILE" ]; then
+		return
+	fi
+	if [ ! -f "$SOURCE_FILE" ]; then
+		die "environment file '${SOURCE_FILE}' not found"
+	fi
+	if ! source "$SOURCE_FILE"; then
+		die "failed to source environment file '${SOURCE_FILE}'"
+	fi
+}
+
+_require_no_problem()  { [ "${#PROBLEMS[@]}" -eq 0 ] || die "'${COMMAND}' does not take a problem name"; }
+_require_no_input()    { [ -z "$INPUT_FILE" ]        || die "'${COMMAND}' does not accept --input"; }
+_require_no_fpe()      { [ "$ENABLE_FPE" -eq 0 ]     || die "'${COMMAND}' does not accept --fpe"; }
+_require_no_filter()   { [ -z "$FILTER_REGEX" ]      || die "'${COMMAND}' does not accept --filter"; }
+_require_no_source()   { [ -z "$SOURCE_FILE" ]       || die "'${COMMAND}' does not accept --source"; }
+_require_no_delete()   { [ "$DELETE_BUILD_DIR" -eq 0 ] || die "'${COMMAND}' does not accept --delete"; }
+
+parse_preset() {
+	local preset="$1"
+
+	case "$preset" in
+	1d)
+		DIM=1
+		BUILD_TYPE=Release
+		BUILD_NAME=1d
+		;;
+	3d)
+		DIM=3
+		BUILD_TYPE=Release
+		BUILD_NAME=3d
+		;;
+	1d-debug)
+		DIM=1
+		BUILD_TYPE=Debug
+		BUILD_NAME=1d-debug
+		;;
+	3d-debug)
+		DIM=3
+		BUILD_TYPE=Debug
+		BUILD_NAME=3d-debug
+		;;
+	*)
+		die "unsupported preset '${preset}'"
+		;;
+	esac
+
+	BUILD_DIR="${ROOT}/build/${BUILD_NAME}"
+}
+
+resolve_root() {
+	local root="$1"
+
+	if ! ROOT="$(cd "$root" && pwd)"; then
+		die "cannot access root '${root}'"
+	fi
+}
+
+configure_build() {
+	local cmake_args=()
+
+	if [ -d "${BUILD_DIR}" ] && [ "$DELETE_BUILD_DIR" -eq 0 ]; then
+		die "build directory already exists: ${BUILD_DIR} (run 'quokka config -d ${PRESET} --delete' to force reconfig)"
+	fi
+	if [ -d "${BUILD_DIR}" ] && [ "$DELETE_BUILD_DIR" -eq 1 ]; then
+		rm -rf "${BUILD_DIR}"
+	fi
+	mkdir -p "$BUILD_DIR"
+	cd "$BUILD_DIR"
+
+	cmake_args=(../.. -G Ninja "-DCMAKE_BUILD_TYPE=${BUILD_TYPE}" "-DAMReX_SPACEDIM=${DIM}")
+	if [ "${#CMAKE_DEFINES[@]}" -gt 0 ]; then
+		cmake_args+=("${CMAKE_DEFINES[@]}")
+	fi
+
+	log_cmd "cmake ${cmake_args[*]}"
+	cmake "${cmake_args[@]}"
+}
+
+check_problem_defined() {
+	local problem="$1"
+	local quiet="${2:-0}"
+	local report="${3:-0}"
+	local source_dir="${ROOT}/src/problems/${problem}"
+	local build_ninja="${BUILD_DIR}/build.ninja"
+
+	if [ ! -d "$source_dir" ]; then
+		if [ "$quiet" -eq 1 ]; then
+			if [ "$report" -eq 1 ]; then
+				echo -e "${RED}${BOLD}Error:${RESET} problem '${problem}' is not defined (source directory '${source_dir}' not found; check the problem name)" >&2
+			fi
+			return 1
+		fi
+		die "problem '${problem}' is not defined (source directory '${source_dir}' not found; check the problem name)"
+	fi
+
+	if [ ! -f "$build_ninja" ]; then
+		if [ "$quiet" -eq 1 ]; then
+			if [ "$report" -eq 1 ]; then
+				echo -e "${RED}${BOLD}Error:${RESET} problem '${problem}' is not defined (${build_ninja} not found; run 'quokka config -d ${PRESET}' first)" >&2
+			fi
+			return 1
+		fi
+		die "problem '${problem}' is not defined (${build_ninja} not found; run 'quokka config -d ${PRESET}' first)"
+	fi
+
+	if ! awk -v target="$problem" '$1 == "build" && $2 == (target ":") && $3 == "phony" { found = 1; exit } END { exit(found ? 0 : 1) }' "$build_ninja"; then
+		if [ "$quiet" -eq 1 ]; then
+			if [ "$report" -eq 1 ]; then
+				echo -e "${RED}${BOLD}Error:${RESET} problem '${problem}' is not available for preset '${PRESET}' (rerun 'quokka config -d ${PRESET} --delete' if this build tree is stale)" >&2
+			fi
+			return 1
+		fi
+		die "problem '${problem}' is not available for preset '${PRESET}' (rerun 'quokka config -d ${PRESET} --delete' if this build tree is stale)"
+	fi
+
+	return 0
+}
+
+build_problem() {
+	local problem="$1"
+
+	check_problem_defined "$problem" 1 || return 1
+	log_cmd "ninja -j${JOBS} ${problem}"
+	cd "$BUILD_DIR" && ninja -j"$JOBS" "$problem"
+}
+
+run_problem() {
+	local problem="$1"
+	local input_file="$2"
+	shift 2
+
+	local exe="${BUILD_DIR}/src/problems/${problem}/${problem}"
+	if [ ! -x "$exe" ]; then
+		echo "Error: executable not found: ${exe}" >&2
+		return 1
+	fi
+	if [ ! -f "$input_file" ]; then
+		echo "Error: input file not found: ${input_file}" >&2
+		return 1
+	fi
+
+	log_cmd "cd ${ROOT}/tests && ${exe} ${input_file} $*"
+	cd "${ROOT}/tests" && "$exe" "$input_file" "$@"
+}
+
+run_filtered() {
+	local regex="$1"
+	shift
+
+	log_cmd "ctest --test-dir ${BUILD_DIR} -j${JOBS} -R ${regex} $*"
+	ctest --test-dir "$BUILD_DIR" -j"$JOBS" -R "$regex" "$@"
+}
+
+run_tests_from_file() {
+	local tests_file="$1"
+	shift
+
+	log_cmd "ctest --test-dir ${BUILD_DIR} -j${JOBS} --tests-from-file ${tests_file} $*"
+	ctest --test-dir "$BUILD_DIR" -j"$JOBS" --tests-from-file "$tests_file" "$@"
+}
+
+run_all_tests() {
+	log_cmd "ctest --test-dir ${BUILD_DIR} -j${JOBS} $*"
+	ctest --test-dir "$BUILD_DIR" -j"$JOBS" "$@"
+}
+
+list_problems() {
+	find "${ROOT}/src/problems" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort
+}
+
+list_matching_problems() {
+	local pattern="$1"
+	local problem=""
+	while IFS= read -r problem; do
+		[[ "$problem" == $pattern ]] && echo "$problem"
+	done < <(list_problems)
+}
+
+list_problem_tests() {
+	local problem="$1"
+	local ctest_file="${BUILD_DIR}/src/problems/${problem}/CTestTestfile.cmake"
+
+	[ -f "$ctest_file" ] || return 0
+
+	awk '
+		/^add_test\(/ {
+			name = $0
+			sub(/^add_test\(/, "", name)
+			sub(/[[:space:]].*$/, "", name)
+			print name
+		}
+	' "$ctest_file"
+}
+
+prepare_buildrun_filter_selection() {
+	local pattern="$1"
+	local problem=""
+	local test=""
+
+	FILTER_MATCHED_PROBLEMS=()
+	FILTER_MATCHED_TESTS=()
+
+	while IFS= read -r problem; do
+		FILTER_MATCHED_PROBLEMS+=("$problem")
+		if check_problem_defined "$problem" 1; then
+			while IFS= read -r test; do
+				[ -n "$test" ] || continue
+				FILTER_MATCHED_TESTS+=("$test")
+			done < <(list_problem_tests "$problem")
+		fi
+	done < <(list_matching_problems "$pattern")
+
+	[ "${#FILTER_MATCHED_PROBLEMS[@]}" -gt 0 ] || die "no problems matched filter '${pattern}'"
+}
+
+build_filtered() {
+	local pattern="$1"
+	local problem=""
+	local matched_any=0
+
+	if [ "${#FILTER_MATCHED_PROBLEMS[@]}" -gt 0 ]; then
+		for problem in "${FILTER_MATCHED_PROBLEMS[@]}"; do
+			matched_any=1
+			if check_problem_defined "$problem" 1; then
+				if build_problem "$problem"; then
+					record_result "$problem" "SUCCESS"
+				else
+					record_result "$problem" "FAIL"
+				fi
+			else
+				record_result "$problem" "SKIPPED"
+			fi
+		done
+	else
+		while IFS= read -r problem; do
+			matched_any=1
+			if check_problem_defined "$problem" 1; then
+				if build_problem "$problem"; then
+					record_result "$problem" "SUCCESS"
+				else
+					record_result "$problem" "FAIL"
+				fi
+			else
+				record_result "$problem" "SKIPPED"
+			fi
+		done < <(list_matching_problems "$pattern")
+	fi
+
+	[ "$matched_any" -eq 1 ] || die "no problems matched filter '${pattern}'"
+}
+
+init_results() {
+	RESULT_LINES=()
+	HAD_FAILURE=0
+}
+
+finalize_results() {
+	print_results
+	[ "$HAD_FAILURE" -eq 0 ]
+}
+
+execute_build() {
+	local allow_run_options="${1:-0}"
+	local problem=""
+	local targets=()
+	local log_targets=""
+
+	[ "${#PROBLEMS[@]}" -eq 0 ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
+	if [ "$allow_run_options" -eq 0 ]; then
+		_require_no_input
+		_require_no_fpe
+	fi
+
+	init_results
+	if [ -n "$FILTER_REGEX" ]; then
+		build_filtered "$FILTER_REGEX"
+	else
+		[ "${#PROBLEMS[@]}" -gt 0 ] || die "missing problem name"
+		for problem in "${PROBLEMS[@]}"; do
+			if check_problem_defined "$problem" 1 1; then
+				targets+=("$problem")
+			else
+				record_result "$problem" "FAIL"
+			fi
+		done
+
+		if [ "${#targets[@]}" -gt 0 ]; then
+			log_targets="${targets[*]}"
+			log_cmd "ninja -j${JOBS} ${log_targets}"
+			if (cd "$BUILD_DIR" && ninja -j"$JOBS" "${targets[@]}"); then
+				for problem in "${targets[@]}"; do
+					record_result "$problem" "SUCCESS"
+				done
+			else
+				if [ "${#targets[@]}" -gt 1 ]; then
+					echo -e "${YELLOW}${BOLD}Warning:${RESET} at least one job failed; rechecking targets individually for accurate summary."
+					for problem in "${targets[@]}"; do
+						if (cd "$BUILD_DIR" && ninja -j"$JOBS" "$problem" >/dev/null 2>&1); then
+							record_result "$problem" "SUCCESS"
+						else
+							record_result "$problem" "FAIL"
+						fi
+					done
+				else
+					record_result "${targets[0]}" "FAIL"
+				fi
+			fi
+		fi
+	fi
+
+	finalize_results || return 1
+	return 0
+}
+
+execute_run() {
+	local PROBLEM=""
+	local problem_input=""
+	local ctest_status=0
+	local tests_file=""
+	local warned_ctest_fpe=0
+
+	[ "${#PROBLEMS[@]}" -eq 0 ] || [ -z "$FILTER_REGEX" ] || die "--filter and <problem> are mutually exclusive"
+	init_results
+
+	RUN_ARGS=(tiny_profiler.enabled=0 amr.v=0 suppress_output=1 particles.verbose=0)
+	if [ "$ENABLE_FPE" -eq 1 ]; then
+		RUN_ARGS=(amrex.fpe_trap_invalid=1 amrex.fpe_trap_overflow=1 amrex.fpe_trap_zero=1)
+	fi
+
+	if [ -n "$FILTER_REGEX" ]; then
+		[ -z "$INPUT_FILE" ] || die "--filter does not accept --input"
+		if [ "$ENABLE_FPE" -eq 1 ]; then
+			echo -e "${YELLOW}${BOLD}Warning:${RESET} --fpe is ignored for ctest-based runs; FPE behavior is defined by each CTest entry."
+			warned_ctest_fpe=1
+		fi
+		if [ "$COMMAND" = "buildrun" ]; then
+			if [ "${#FILTER_MATCHED_TESTS[@]}" -eq 0 ]; then
+				return 0
+			fi
+			tests_file="$(mktemp "${TMPDIR:-/tmp}/quokka-tests.XXXXXX")" || die "failed to create temporary ctest selection file"
+			printf '%s\n' "${FILTER_MATCHED_TESTS[@]}" >"$tests_file"
+			if run_tests_from_file "$tests_file"; then
+				ctest_status=0
+			else
+				ctest_status=$?
+			fi
+			rm -f "$tests_file"
+			return "$ctest_status"
+		else
+			run_filtered "$FILTER_REGEX"
+		fi
+		return $?
+	elif [ "${#PROBLEMS[@]}" -gt 0 ]; then
+		[ "${#PROBLEMS[@]}" -le 1 ] || [ -z "$INPUT_FILE" ] || die "--input accepts only one <problem>"
+		[ -d "${ROOT}/tests" ] || die "tests directory not found: ${ROOT}/tests (use --root to specify the quokka root)"
+		for PROBLEM in "${PROBLEMS[@]}"; do
+			problem_input="$INPUT_FILE"
+			if [ -z "$problem_input" ]; then
+				problem_input="${ROOT}/inputs/${PROBLEM}.toml"
+			elif [[ "$problem_input" != /* ]]; then
+				problem_input="${ROOT}/${problem_input}"
+			fi
+
+			if run_problem "$PROBLEM" "$problem_input" "${RUN_ARGS[@]+"${RUN_ARGS[@]}"}"; then
+				record_result "$PROBLEM" "SUCCESS"
+			else
+				record_result "$PROBLEM" "FAIL"
+			fi
+		done
+	else
+		[ -z "$INPUT_FILE" ] || die "running all tests does not accept --input"
+		if [ "$ENABLE_FPE" -eq 1 ] && [ "$warned_ctest_fpe" -eq 0 ]; then
+			echo -e "${YELLOW}${BOLD}Warning:${RESET} --fpe is ignored for ctest-based runs; FPE behavior is defined by each CTest entry."
+		fi
+		run_all_tests
+		return $?
+	fi
+
+	finalize_results || return 1
+	return 0
+}
+
+clean_tests() {
+	local tests_dir="${ROOT}/tests"
+	[ -d "$tests_dir" ] || die "tests directory not found: ${tests_dir} (use --root to specify the quokka root)"
+	log_cmd "cd ${tests_dir} && rm -rf plt* slice* chk* part_* *.csv *.pdf *.png Backtrace.*"
+	cd "$tests_dir"
+	rm -rf plt* slice* chk* part_*
+	rm -f ./*.csv ./*.pdf ./*.png Backtrace.*
+}
+
+show_targets() {
+	log_cmd "cmake --build ${BUILD_DIR} --target help"
+	cmake --build "$BUILD_DIR" --target help
+}
+
+COMMAND="${1:-}"
+[ -n "$COMMAND" ] || {
+	usage
+	exit 1
+}
+case "$COMMAND" in
+-h|--help)
+	usage
+	exit 0
+	;;
+config|build|buildrun|run|list|target|clean)
+	;;
+*)
+	die "unknown command '${COMMAND}'"
+	;;
+esac
+shift
+
+PRESET="${QUOKKA_PRESET:-1d}"
+PRESET_EXPLICIT=0
+ROOT="."
+PROBLEMS=()
+INPUT_FILE=""
+ENABLE_FPE=0
+FILTER_REGEX=""
+SOURCE_FILE=""
+DELETE_BUILD_DIR=0
+JOBS=8
+CMAKE_DEFINES=()
+FILTER_MATCHED_PROBLEMS=()
+FILTER_MATCHED_TESTS=()
+
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+	-d)
+		require_arg "$1" "${2:-}"
+		PRESET="$2"
+		PRESET_EXPLICIT=1
+		shift 2
+		;;
+	--root)
+		require_arg "$1" "${2:-}"
+		ROOT="$2"
+		shift 2
+		;;
+	--input)
+		require_arg "$1" "${2:-}"
+		INPUT_FILE="$2"
+		shift 2
+		;;
+	-j)
+		require_arg "$1" "${2:-}"
+		JOBS="$2"
+		shift 2
+		;;
+	--fpe)
+		ENABLE_FPE=1
+		shift
+		;;
+	--filter)
+		require_arg "$1" "${2:-}"
+		FILTER_REGEX="$2"
+		shift 2
+		;;
+	--source)
+		require_arg "$1" "${2:-}"
+		SOURCE_FILE="$2"
+		shift 2
+		;;
+	--delete)
+		DELETE_BUILD_DIR=1
+		shift
+		;;
+	-D*)
+		if [ "$COMMAND" = "config" ]; then
+			CMAKE_DEFINES+=("$1")
+			shift
+		else
+			die "unknown option '$1'"
+		fi
+		;;
+	-h|--help)
+		usage
+		exit 0
+		;;
+	-*)
+		die "unknown option '$1'"
+		;;
+	*)
+		PROBLEMS+=("$1")
+		shift
+		;;
+	esac
+done
+
+resolve_root "$ROOT"
+case "$COMMAND" in
+config|build|buildrun|run|target)
+	parse_preset "$PRESET"
+	;;
+clean|list)
+	;;
+esac
+
+case "$COMMAND" in
+config)
+	_require_no_problem
+	_require_no_input
+	_require_no_fpe
+	_require_no_filter
+	load_environment
+	configure_build
+	;;
+build)
+	_require_no_delete
+	load_environment
+	execute_build 0 || exit 1
+	;;
+buildrun)
+	_require_no_delete
+	[ "${#PROBLEMS[@]}" -gt 0 ] || [ -n "$FILTER_REGEX" ] || die "missing problem name (or provide --filter)"
+	load_environment
+	if [ -n "$FILTER_REGEX" ]; then
+		prepare_buildrun_filter_selection "$FILTER_REGEX"
+	fi
+	execute_build 1 || exit 1
+	execute_run || exit 1
+	;;
+run)
+	_require_no_delete
+	load_environment
+	execute_run || exit 1
+	;;
+list)
+	[ "$PRESET_EXPLICIT" -eq 0 ] || die "'${COMMAND}' does not accept -d"
+	_require_no_problem
+	_require_no_input
+	_require_no_fpe
+	_require_no_filter
+	_require_no_source
+	_require_no_delete
+	list_problems
+	;;
+target)
+	_require_no_problem
+	_require_no_input
+	_require_no_fpe
+	_require_no_filter
+	_require_no_delete
+	load_environment
+	show_targets
+	;;
+clean)
+	[ "$PRESET_EXPLICIT" -eq 0 ] || die "'${COMMAND}' does not accept -d"
+	_require_no_problem
+	_require_no_input
+	_require_no_fpe
+	_require_no_filter
+	_require_no_source
+	_require_no_delete
+	clean_tests
+	;;
+*)
+	die "unknown command '${COMMAND}'"
+	;;
+esac

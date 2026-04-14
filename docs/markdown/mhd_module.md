@@ -60,7 +60,6 @@ with the same order options as the flux reconstruction. After reconstruction,
 Quokka averages the four quadrant-centred EMFs surrounding each edge using one of
 two formulas selected by `emf_averaging_scheme`:
 
-- `BalsaraSpicer2004` – arithmetic averaging of the four quadrants.
 - `LondrilloDelZanna2004` – the Londrillo & Del Zanna (2004) upwind constrained-transport
   formula, which weights the quadrants using characteristic MHD signal speeds.
 During the LondrilloDelZanna2004 average, the code leverages the fast magnetosonic speeds

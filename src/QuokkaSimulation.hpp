@@ -164,6 +164,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int enableCooling_ = 0;
 	int enableChemistry_ = 0;
 	int enableTurbulence_ = 0;
+	amrex::Real turbulenceStopTime_ = std::numeric_limits<amrex::Real>::max();
 	int enableIterDustStoptime_ = 0;
 	Real max_density_allowed = std::numeric_limits<amrex::Real>::max();
 	Real min_density_allowed = std::numeric_limits<amrex::Real>::min();
@@ -365,6 +366,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 					      amrex::Real dt_lev) -> bool;
 
 	auto computePhotoelectricHeatingRate(Real current_time) -> amrex::Real;
+	auto computeExternalHeatingRate(Real current_time, Real dt) -> amrex::Real;
 
 	auto isCflViolated(int lev, amrex::Real time, amrex::Real dt_actual) -> bool;
 
@@ -609,6 +611,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	{
 		amrex::ParmParse const hpp("turbulence");
 		hpp.query("enabled", enableTurbulence_);
+		hpp.queryWithParser("stop_time", turbulenceStopTime_);
 		hpp.query("length", turbParams_["length"]);
 		hpp.query("target_vdisp", turbParams_["target_vdisp"]);
 		hpp.query("ampl_factor", turbParams_["ampl_factor"]);
@@ -962,6 +965,16 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computePhotoelec
 	return heating_rate;
 }
 
+template <typename problem_t> auto QuokkaSimulation<problem_t>::computeExternalHeatingRate(amrex::Real current_time, amrex::Real dt) -> amrex::Real
+{
+	if (this->useHeatingRateExternalParser_) {
+		auto const heating_rate_external_parser = this->heatingRateExternalParserExe_.value();
+		return heating_rate_external_parser(current_time, dt);
+	}
+
+	return 0.0;
+}
+
 template <typename problem_t>
 auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int lev,
 								   amrex::Real time, amrex::Real dt) -> bool
@@ -969,11 +982,13 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	// start by assuming cooling integrator is successful.
 	bool cool_success = true;
 	if (enableCooling_ == 1) {
+		const Real external_heating_rate_per_H = computeExternalHeatingRate(time, dt); // unit: erg/s/H
+		const Real const_heating_rate_per_H = computePhotoelectricHeatingRate(time) + external_heating_rate_per_H;
+
 		if (coolingTableType_.empty()) {
 			coolingTableType_ = "resampled";
 		}
 		if (coolingTableType_ == "resampled") {
-			const Real const_heating_rate_per_H = computePhotoelectricHeatingRate(time); // unit: erg/s/H
 			cool_success = quokka::ResampledCooling::computeCooling<problem_t>(state, dt, resampledTables_, tempFloor_, const_heating_rate_per_H);
 		} else {
 			amrex::Abort("Invalid cooling table type! Only 'resampled' is supported.");
@@ -989,7 +1004,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	}
 #endif
 
-	if (enableTurbulence_ == 1) {
+	if ((enableTurbulence_ == 1) && (time < turbulenceStopTime_)) {
 		auto const &cellSizes = geom[lev].CellSizeArray();
 		td->applyDriving(state, time, dt, cellSizes);
 	}

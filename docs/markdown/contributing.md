@@ -19,6 +19,113 @@ Bug fixes, questions, and contributions of new features are welcome!
     to install, use, modify, prepare derivative works, incorporate into other computer software,
     distribute, and sublicense such enhancements or derivative works thereof, in binary and source code form.
 
+## The `quokka` developer script
+
+The `scripts/bash/quokka` script provides a convenient interface for configuring, building, and running problems during development. Install it by copying it to a directory on your `PATH`, e.g.:
+
+```bash
+cp scripts/bash/quokka ~/.local/bin/
+```
+
+### Commands
+
+```
+quokka config [-d <preset>] [--delete] [--source <file>] [--root <path>] [-D<k>=<v> ...]
+    Configure the CMake build directory for the given preset.
+
+quokka build [-d <preset>] <problem> [<problem> ...] [-j <N>] [--source <file>] [--root <path>]
+    Compile one or more specific problem targets using ninja.
+
+quokka build [-d <preset>] --filter <glob> [-j <N>] [--source <file>] [--root <path>]
+    Compile all problem targets matching a shell glob (e.g. `Rad*`).
+
+quokka buildrun [-d <preset>] <problem> [<problem> ...] [-j <N>] [--fpe] [--input <file>] [--source <file>] [--root <path>]
+    Build then run one or more specific problems.
+
+quokka buildrun [-d <preset>] --filter <pattern> [-j <N>] [--source <file>] [--root <path>]
+    Build matching problems then run matching tests.
+
+quokka run [-d <preset>] <problem> [<problem> ...] [--input <file>] [-j <N>] [--fpe] [--source <file>] [--root <path>]
+    Run one or more problem executables from the tests/ directory.
+
+quokka run [-d <preset>] [--filter <regex>] [-j <N>] [--source <file>] [--root <path>]
+    Run all tests, or those matching a regex via ctest -R.
+
+quokka list [--root <path>]
+    List all available problem directories.
+
+quokka target [-d <preset>] [--source <file>] [--root <path>]
+    Show all available CMake build targets.
+
+quokka clean [--root <path>]
+    Remove plotfiles, checkpoints, and output files from tests/.
+```
+
+### Presets
+
+| Preset     | Dimensionality | Build type |
+|------------|---------------|------------|
+| `1d`       | 1D            | Release    |
+| `3d`       | 3D            | Release    |
+| `1d-debug` | 1D            | Debug      |
+| `3d-debug` | 3D            | Debug      |
+
+### Options
+
+| Option           | Description                                                          |
+|------------------|----------------------------------------------------------------------|
+| `-d <preset>`    | Preset to use: `1d`, `3d`, `1d-debug`, `3d-debug` (default: `QUOKKA_PRESET` if set, otherwise `1d`)    |
+| `--root <path>`  | Path to the quokka repository root (default: current directory)      |
+| `--input <file>` | Input file for the executable (default: `inputs/<problem>.toml`); valid only when running exactly one `<problem>` |
+| `--fpe`          | Enable floating-point exception traps (invalid, overflow, div-by-0) for direct executable runs (`run <problem>`, `buildrun <problem>`) |
+| `--filter <pattern>` | For `run`: ctest regex via `ctest -R`; for `build`: shell glob over problem names; for `buildrun`: build via glob and run only the tests collected from the same matched problems; exclusive with positional `<problem>` args. Quote patterns like `'Rad*'` to avoid shell expansion before `quokka` sees them |
+| `--source <file>` | Optional environment file to source before `config`, `build`, `buildrun`, `run`, and `target` |
+| `--delete`       | `config` only: force reconfigure by deleting existing `build/<preset>` directory first |
+| `-D<k>=<v>`      | `config` only: pass extra CMake cache definitions (repeatable)       |
+| `-j <N>`         | Number of parallel jobs for ninja or ctest (default: 8)              |
+
+You can set `QUOKKA_PRESET` in your shell environment to change the default preset used by `config`, `build`, `buildrun`, `run`, and `target`. Passing `-d <preset>` still takes precedence.
+
+`build`, `run`, and `buildrun` print final summary lines (`<name> SUCCESS|FAIL|SKIPPED`) to make tail-based status checks easy.
+
+### Typical workflow
+
+```bash
+# 1. Configure (only needed once, or after CMakeLists changes)
+quokka config -d 3d
+
+# 2. Build specific problems
+quokka build -d 3d ParticleSink
+quokka build -d 3d RadDust RadDustMG
+
+# 3. Or build all matching problems
+quokka build -d 3d --filter "Rad*"
+
+# 4. Build and run in one command
+quokka buildrun -d 3d RadDust RadTube
+
+# 5. Run one problem
+quokka run -d 3d ParticleSink
+
+# 6. Run multiple problems
+quokka run -d 3d RadDust RadDustMG
+
+# 7. Run with a custom input file and FPE traps enabled
+quokka run -d 3d ParticleSink --input inputs/ParticleSink_custom.toml --fpe
+
+# 8. Run all 3D tests (8 parallel jobs)
+quokka run -d 3d -j 8
+
+# 9. Run tests matching a regex pattern
+quokka run -d 3d --filter "Particle*"
+
+# 10. List available problems (all presets)
+quokka list
+
+# 11. Clean up test output
+quokka clean
+```
+
 ## Git workflow
 
 Quokka uses [git](https://git-scm.com) for version control. If you are new to git, you can follow one of these tutorials:

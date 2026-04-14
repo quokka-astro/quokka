@@ -28,7 +28,8 @@ do_subcycle = 0
 plottime_interval = 3.155760000e+14  # 1e7 yr
 checkpointtime_interval = 6.311520000e+14  # 2e7 yr
 stop_time = 6.31152e15  # 200 Myr  
-max_timesteps = 100
+max_timesteps = 200
+plotfile_interval = 200
 #restartfile = last_chk
 suppress_output = 0
 regrid_interval = -1
@@ -51,12 +52,12 @@ problem.stars_file = ""
 problem.IC_file = "disk_solution_datatable_Sigma13-Z1.csv"
 problem.rho01 = 4.320441e-24
 problem.sigma1 = 7.0e5
-problem.boost_velocity = [0.0, 0.0, 0.0]  # 0 km/s in x-direction
 
 cooling.enabled = 1
 cooling.cooling_table_type = "resampled"
 cooling.hdf5_data_file = "CloudyData_UVB=HM2012_shielded_resampled_noPE.h5"
-
+# rho=4.320441e-24 g/cm^3, tff = sqrt(3 pi / (32 G rho)), tff = 1.010633461e+15 s = 32.02504187 Myr
+heating_rate_external = "max(min(1.0, 2.0 - time / (32 * Myr)), 0.0024) * 2e-26" # unit: erg/s/H. Gamma_0 = 2e-26. Floor is 0.0024 G_0 FUV from the external galactic environment, taken from the first TIGRESS paper (and literature therein).
 use_sfh_based_pe_heating = true
 sfh_to_pe_heating_table = "photoelectric_heating_from_sfh.csv"
 sfh_time_interval = 3.155760000e+12  # 1e5 yr

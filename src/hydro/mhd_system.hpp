@@ -42,8 +42,6 @@ AMREX_FORCE_INLINE constexpr auto MinimumHydroRiemannGhost(bool is_mhd_enabled, 
 			nghost = std::max(nghost, 3);
 		} else {
 			switch (emf_avg_scheme) {
-				case EMFAvgScheme::BalsaraSpicer2004:
-					break;
 				case EMFAvgScheme::LondrilloDelZanna2004:
 					nghost = std::max(nghost, 1);
 					break;
@@ -89,9 +87,6 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, SlopeLimiter plmLimiter,
 					  EMFAvgScheme emf_avg_scheme);
 
-	static void EMFAverage_BalsaraSpicer2004(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
-						 amrex::Box const &box_ec);
-
 	static void EMFAverage_LondrilloDelZanna2004(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
 						     amrex::Box const &box_ec, std::array<int, 2> const &extrap_dirs,
 						     std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
@@ -131,9 +126,7 @@ void MHDSystem<problem_t>::AverageEMF(amrex::Array4<amrex::Real> const &E2_ave, 
 				      std::array<int, 2> const &extrap_dirs, std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
 				      std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_Bi_ieside, EMFAvgScheme emf_avg_scheme)
 {
-	if (emf_avg_scheme == EMFAvgScheme::BalsaraSpicer2004) {
-		EMFAverage_BalsaraSpicer2004(E2_ave, ec_fabs_E_q, box_ec);
-	} else if (emf_avg_scheme == EMFAvgScheme::LondrilloDelZanna2004) {
+	if (emf_avg_scheme == EMFAvgScheme::LondrilloDelZanna2004) {
 		EMFAverage_LondrilloDelZanna2004(E2_ave, ec_fabs_E_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside);
 	} else {
 		amrex::Abort("Unknown EMF averaging type");
@@ -708,29 +701,6 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 			MHDSystem<problem_t>::AverageEMF(E2_array, ec_fabs_EMF_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside, emf_avg_scheme);
 		}
 	}
-}
-
-// simplest emf solver: just average the quadrants
-template <typename problem_t>
-void MHDSystem<problem_t>::EMFAverage_BalsaraSpicer2004(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
-							amrex::Box const &box_ec)
-{
-	const BL_PROFILE("MHDSystem::EMFAverage_BalsaraSpicer2004()");
-
-	// Get const array views from each FArrayBox
-	const auto &E2_q0 = ec_fabs_EMF_q[0].const_array();
-	const auto &E2_q1 = ec_fabs_EMF_q[1].const_array();
-	const auto &E2_q2 = ec_fabs_EMF_q[2].const_array();
-	const auto &E2_q3 = ec_fabs_EMF_q[3].const_array();
-
-	amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		const double E2_q0_ = E2_q0(i, j, k);
-		const double E2_q1_ = E2_q1(i, j, k);
-		const double E2_q2_ = E2_q2(i, j, k);
-		const double E2_q3_ = E2_q3(i, j, k);
-		// Balsara & Spicer averaging scheme:
-		E2_ave(i, j, k) = 0.25 * (E2_q0_ + E2_q1_ + E2_q2_ + E2_q3_);
-	});
 }
 
 // more complex emf solver: uses information about the fast wave speeds to do a weighted average of the quadrants
