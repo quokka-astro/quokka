@@ -41,10 +41,8 @@ AMREX_FORCE_INLINE constexpr auto MinimumHydroRiemannGhost(bool is_mhd_enabled, 
 		if (emf_compute_scheme == EMFComputeScheme::Quokka2026) {
 			nghost = std::max(nghost, 3);
 		} else {
-			switch (emf_avg_scheme) {
-				case EMFAvgScheme::LondrilloDelZanna2004:
-					nghost = std::max(nghost, 1);
-					break;
+			if (emf_avg_scheme == EMFAvgScheme::LondrilloDelZanna2004) {
+			    nghost = std::max(nghost, 1);
 			}
 		}
 	}
