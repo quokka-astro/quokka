@@ -293,6 +293,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void createInitialTestParticles() override;
 #endif // AMREX_SPACEDIM == 3
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) override;
+	void implicitStrangSplitSourcesAllLevels(amrex::Real dt) override;
 	void computeBeforeTimestep() override;
 	void computeAfterTimestep() override;
 	void computeAfterLevelAdvance(int lev, amrex::Real time, amrex::Real dt_lev, int /*ncycle*/);
@@ -1002,9 +1003,6 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 		auto const &cellSizes = geom[lev].CellSizeArray();
 		td->applyDriving(state, time, dt, cellSizes);
 	}
-	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-		DustDrag<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega_, enableIterDustStoptime_, print_dust_counter_);
-	}
 
 	// compute user-specified sources
 	addStrangSplitSources(state, lev, time, dt);
@@ -1426,6 +1424,17 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::advanceSingleTim
 
 	// check state validity
 	AMREX_ASSERT(!state_new_cc_[lev].contains_nan(0, state_new_cc_[lev].nComp()));
+}
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::implicitStrangSplitSourcesAllLevels(amrex::Real dt)
+{
+	const BL_PROFILE("QuokkaSimulation::implicitStrangSplitSourcesAllLevels()");
+	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			DustDrag<problem_t>::computeDustDrag(state_new_cc_[lev], state_new_fc_[lev], dt, dust_omega_, enableIterDustStoptime_,
+							     print_dust_counter_);
+		}
+	}
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::fillPoissonRhsAtLevel(amrex::MultiFab &rhs_mf, const int lev)

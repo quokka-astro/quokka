@@ -322,6 +322,9 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// (e.g., caused by the flux register or from interpolation)
 	virtual void FixupState(int level) = 0;
 
+	// compute Strang split source terms implicitly over all levels
+	virtual void implicitStrangSplitSourcesAllLevels(amrex::Real dt) {}
+
       protected:
 	// tag cells for refinement
 	void ErrorEst(int lev, amrex::TagBoxArray &tags, amrex::Real time, int ngrow) override = 0;
@@ -1447,6 +1450,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 		}
 #endif
 
+		// do Strang split source terms (first half-step)
+		implicitStrangSplitSourcesAllLevels(0.5 * dt_[0]);
+
 		// hyperbolic advance over all levels
 		// (N.B. when AMR is enabled, regridding may happen during this function!)
 		// Particle redistribution is done here.
@@ -1466,6 +1472,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 
 		// elliptic solve over entire AMR grid (post-timestep)
 		ellipticSolveAllLevels(dt_[0]);
+
+		// do Strang split source terms (second half-step)
+		implicitStrangSplitSourcesAllLevels(0.5 * dt_[0]);
 
 		// do particle leapfrog (second kick at t + dt)
 #if AMREX_SPACEDIM == 3
