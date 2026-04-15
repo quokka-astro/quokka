@@ -160,14 +160,12 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 			vz = Mach * cs_wind; // 100 km/s
 			
 		}
-		// const amrex::Real T = Twind ; //+ (Tcloud - Twind) * (term1 + term2);	
-		// rho = rho_cloud * Tcloud / T; // g/cm^3
+		
 		if(i==0 & j==0 & k==0){
-			amrex::Print() << "i, j, k: " << i << " " << j << " " << k << " T: " << T  << std::endl;
-			amrex::Print() << "Eint: " << quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T) << std::endl;
-			amrex::Print() << "x: " << x << std::endl;
-			amrex::Print() << "y: " << y << std::endl;
-			amrex::Print() << "z: " << z << std::endl;
+			amrex::Print() << "Parameters of the cloud-wind problem: " << std::endl;
+			amrex::Print() << "Twind: " << Twind << std::endl;
+			amrex::Print() << "Tcloud: " << Tcloud << std::endl;
+			amrex::Print() << "Mach: " << Mach << std::endl;
 		}
 		/*-------------------------------------------------*/
 		amrex::Real Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T) ; 
