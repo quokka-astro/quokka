@@ -6,6 +6,7 @@
 #include "AMReX_Enum.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
+#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_TableData.H"
 
 // HDF5 includes for H5Reader functionality
@@ -15,10 +16,12 @@
 
 #include "math/FastMath.hpp"
 #include <array>
+#include <cstdint>
 #include <fstream>
 #include <limits>
 #include <memory>
 #include <sstream>
+#include <string>
 #include <type_traits>
 #include <vector>
 
@@ -444,6 +447,100 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	// Output spacing type: "linear" or "fast_log"
 	SpacingType output_spacing_ = SpacingType::linear;
 
+	[[nodiscard]] static constexpr auto ioProcessorNumber() -> int { return amrex::ParallelDescriptor::IOProcessorNumber(); }
+
+	template <typename T> static void bcastScalar(T &value) { amrex::ParallelDescriptor::Bcast(&value, 1, ioProcessorNumber()); }
+
+	template <typename T, std::size_t N> static void bcastArray(std::array<T, N> &values)
+	{
+		amrex::ParallelDescriptor::Bcast(values.data(), values.size(), ioProcessorNumber());
+	}
+
+	static void bcastString(std::string &value)
+	{
+		std::int64_t len = amrex::ParallelDescriptor::IOProcessor() ? static_cast<std::int64_t>(value.size()) : 0;
+		bcastScalar(len);
+		if (!amrex::ParallelDescriptor::IOProcessor()) {
+			value.resize(static_cast<std::size_t>(len));
+		}
+		if (len > 0) {
+			amrex::ParallelDescriptor::Bcast(value.data(), static_cast<std::size_t>(len), ioProcessorNumber());
+		}
+	}
+
+	template <std::size_t N> static void bcastStringArray(std::array<std::string, N> &values)
+	{
+		for (auto &value : values) {
+			bcastString(value);
+		}
+	}
+
+	template <typename T> static void bcastVector(amrex::Vector<T> &values)
+	{
+		std::int64_t count = amrex::ParallelDescriptor::IOProcessor() ? static_cast<std::int64_t>(values.size()) : 0;
+		bcastScalar(count);
+		if (!amrex::ParallelDescriptor::IOProcessor()) {
+			values.resize(static_cast<std::size_t>(count));
+		}
+		if (count > 0) {
+			amrex::ParallelDescriptor::Bcast(values.data(), static_cast<std::size_t>(count), ioProcessorNumber());
+		}
+	}
+
+	static void bcastSpacingType(SpacingType &value)
+	{
+		int spacing_value = amrex::ParallelDescriptor::IOProcessor() ? static_cast<int>(value) : 0;
+		bcastScalar(spacing_value);
+		if (!amrex::ParallelDescriptor::IOProcessor()) {
+			value = static_cast<SpacingType>(spacing_value);
+		}
+	}
+
+	static void bcastSpacingTypes(std::array<SpacingType, Ndim> &values)
+	{
+		std::array<int, Ndim> serialized{};
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			for (int dim = 0; dim < Ndim; ++dim) {
+				serialized[dim] = static_cast<int>(values[dim]);
+			}
+		}
+		bcastArray(serialized);
+		if (!amrex::ParallelDescriptor::IOProcessor()) {
+			for (int dim = 0; dim < Ndim; ++dim) {
+				values[dim] = static_cast<SpacingType>(serialized[dim]);
+			}
+		}
+	}
+
+	[[nodiscard]] static auto flatDataSize(const std::array<int, Ndim> &sizes) -> std::size_t
+	{
+		std::size_t count = static_cast<std::size_t>(Nout);
+		for (int dim = 0; dim < Ndim; ++dim) {
+			count *= static_cast<std::size_t>(sizes[dim]);
+		}
+		return count;
+	}
+
+	[[nodiscard]] static auto flatDataIndex(int out_idx, const std::array<int, Ndim> &sizes, const std::array<int, Ndim> &indices) -> std::size_t
+	{
+		std::size_t index = static_cast<std::size_t>(out_idx);
+		for (int dim = 0; dim < Ndim; ++dim) {
+			index = index * static_cast<std::size_t>(sizes[dim]) + static_cast<std::size_t>(indices[dim]);
+		}
+		return index;
+	}
+
+	void setMetadata(const std::array<std::string, Ndim> &input_names, const std::array<std::string, Nout> &output_names,
+			 const std::array<std::string, Ndim> &input_units, const std::array<std::string, Nout> &output_units,
+			 SpacingType output_spacing)
+	{
+		input_names_ = input_names;
+		output_names_ = output_names;
+		input_units_ = input_units;
+		output_units_ = output_units;
+		output_spacing_ = output_spacing;
+	}
+
       public:
 	// Default constructor
 	DataTable() = default;
@@ -699,71 +796,45 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	}
 
       private:
-	// Optimized initialization that takes bounds, sizes, and spacing directly
-	// coords parameter is optional - if empty, coordinates will be generated based on spacing type
-	template <typename DataType>
-	void initialize_common(const std::array<amrex::Real, Ndim> &x_mins, const std::array<amrex::Real, Ndim> &x_maxs, const std::array<int, Ndim> &n_xs,
-			       const std::array<SpacingType, Ndim> &spacing_types, const std::array<amrex::Vector<amrex::Real>, Ndim> & /*coords*/,
-			       const DataType &data)
+	void initializeStorage(const std::array<amrex::Real, Ndim> &x_mins, const std::array<amrex::Real, Ndim> &x_maxs, const std::array<int, Ndim> &n_xs,
+			       const std::array<SpacingType, Ndim> &spacing_types)
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "Only 1D-4D tables are supported");
 
-		// Store metadata
 		coord_min_ = x_mins;
 		coord_max_ = x_maxs;
 		sizes_ = n_xs;
 		spacing_types_ = spacing_types;
 
-		// Validate bounds
 		for (int dim = 0; dim < Ndim; ++dim) {
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_max_[dim] > coord_min_[dim], std::format("Invalid coordinate bounds for dimension {}: [{}, {}]",
 													dim, coord_min_[dim], coord_max_[dim]));
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sizes_[dim] > 0, std::format("Invalid dimension size {} for dimension {}", sizes_[dim], dim));
 		}
 
-		// Create coordinate tables - either from provided coords or generate them
 		for (int dim = 0; dim < Ndim; ++dim) {
 			coords_[dim] = std::make_unique<amrex::TableData<amrex::Real, 1>>(amrex::Array<int, 1>{0}, amrex::Array<int, 1>{sizes_[dim] - 1},
 											  amrex::The_Pinned_Arena());
 
-			// Generate coordinates based on spacing type
 			if (spacing_types_[dim] == SpacingType::linear) {
-				// Linear spacing: coordinates computed on-the-fly in GPU code, no need to populate table
-				// Table structure exists but remains unpopulated for memory efficiency
+				// Linear spacing: coordinates computed on-the-fly in GPU code, no need to populate table.
 			} else if (spacing_types_[dim] == SpacingType::log) {
-				// Logarithmic spacing: store actual values, not logarithms
-				// Update coordinates to their log values in plance
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_min_[dim] > 0.0 && coord_max_[dim] > 0.0,
 								 std::format("Log spacing requires positive bounds for dimension {}", dim));
 				coord_min_[dim] = std::log(coord_min_[dim]);
 				coord_max_[dim] = std::log(coord_max_[dim]);
 			} else if (spacing_types_[dim] == SpacingType::fast_log) {
-				// Fast log spacing: store log(value) for fast interpolation
-				// Update coordinates to their log values in place
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_min_[dim] > 0.0 && coord_max_[dim] > 0.0,
 								 std::format("Fast log spacing requires positive bounds for dimension {}", dim));
 				coord_min_[dim] = FastMath::lg(coord_min_[dim]);
 				coord_max_[dim] = FastMath::lg(coord_max_[dim]);
 			}
-
-			// NOSONAR
-			// For future support of irregular spacing
-			// } else if (spacing_types_[dim] == SpacingType::irregular) {
-			// 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(static_cast<int>(coords[dim].size()) == sizes_[dim],
-			// 					 std::format("Provided coordinates size mismatch for dimension {}! (expected: {}, actual: {})",
-			// 						     dim, sizes_[dim], coords[dim].size()));
-			// 	auto coord_table = coords_[dim]->table();
-			// 	for (int i = 0; i < sizes_[dim]; ++i) {
-			// 		coord_table(i) = coords[dim][i];
-			// 	}
 		}
 
-		// Calculate grid spacing (after taking necessary log of the coordinates)
 		for (int dim = 0; dim < Ndim; ++dim) {
 			dcoord_[dim] = (coord_max_[dim] - coord_min_[dim]) / static_cast<amrex::Real>(sizes_[dim] - 1);
 		}
 
-		// Create n-dimensional data tables for each output
 		amrex::Array<int, Ndim> lo{};
 		amrex::Array<int, Ndim> hi{};
 		for (int dim = 0; dim < Ndim; ++dim) {
@@ -771,26 +842,27 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			hi[dim] = sizes_[dim] - 1;
 		}
 
-		// Create and populate data tables for each output
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 			data_[out_idx] = std::make_unique<amrex::TableData<amrex::Real, Ndim>>(lo, hi, amrex::The_Pinned_Arena());
+		}
+	}
+
+	template <typename DataType> void fillDataTables(const DataType &data)
+	{
+		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 			auto data_table = data_[out_idx]->table();
 
-			// Copy data for different dimensions
 			if constexpr (Ndim == 1) {
-				// Copy 1D data: data[out_idx][i] -> table(i)
 				for (int i = 0; i < sizes_[0]; ++i) {
 					data_table(i) = data[out_idx][i];
 				}
 			} else if constexpr (Ndim == 2) {
-				// Copy 2D data: data[out_idx][i][j] -> table(i,j)
 				for (int i = 0; i < sizes_[0]; ++i) {
 					for (int j = 0; j < sizes_[1]; ++j) {
 						data_table(i, j) = data[out_idx][i][j];
 					}
 				}
 			} else if constexpr (Ndim == 3) {
-				// Copy 3D data: data[out_idx][i][j][k] -> table(i,j,k)
 				for (int i = 0; i < sizes_[0]; ++i) {
 					for (int j = 0; j < sizes_[1]; ++j) {
 						for (int k = 0; k < sizes_[2]; ++k) {
@@ -799,7 +871,6 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 					}
 				}
 			} else if constexpr (Ndim == 4) {
-				// Copy 4D data: data[out_idx][i][j][k][l] -> table(i,j,k,l)
 				for (int i = 0; i < sizes_[0]; ++i) {
 					for (int j = 0; j < sizes_[1]; ++j) {
 						for (int k = 0; k < sizes_[2]; ++k) {
@@ -811,6 +882,66 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				}
 			}
 		}
+	}
+
+	void fillDataTablesFlat(const amrex::Vector<amrex::Real> &flat_data)
+	{
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(flat_data.size() == flatDataSize(sizes_),
+						 std::format("Flat data size mismatch! (expected: {}, actual: {})", flatDataSize(sizes_), flat_data.size()));
+
+		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+			auto data_table = data_[out_idx]->table();
+
+			if constexpr (Ndim == 1) {
+				for (int i = 0; i < sizes_[0]; ++i) {
+					data_table(i) = flat_data[flatDataIndex(out_idx, sizes_, std::array<int, Ndim>{i})];
+				}
+			} else if constexpr (Ndim == 2) {
+				for (int i = 0; i < sizes_[0]; ++i) {
+					for (int j = 0; j < sizes_[1]; ++j) {
+						data_table(i, j) = flat_data[flatDataIndex(out_idx, sizes_, std::array<int, Ndim>{i, j})];
+					}
+				}
+			} else if constexpr (Ndim == 3) {
+				for (int i = 0; i < sizes_[0]; ++i) {
+					for (int j = 0; j < sizes_[1]; ++j) {
+						for (int k = 0; k < sizes_[2]; ++k) {
+							data_table(i, j, k) = flat_data[flatDataIndex(out_idx, sizes_, std::array<int, Ndim>{i, j, k})];
+						}
+					}
+				}
+			} else if constexpr (Ndim == 4) {
+				for (int i = 0; i < sizes_[0]; ++i) {
+					for (int j = 0; j < sizes_[1]; ++j) {
+						for (int k = 0; k < sizes_[2]; ++k) {
+							for (int l = 0; l < sizes_[3]; ++l) {
+								data_table(i, j, k, l) =
+								    flat_data[flatDataIndex(out_idx, sizes_, std::array<int, Ndim>{i, j, k, l})];
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	void initializeCommonFlat(const std::array<amrex::Real, Ndim> &x_mins, const std::array<amrex::Real, Ndim> &x_maxs,
+				  const std::array<int, Ndim> &n_xs, const std::array<SpacingType, Ndim> &spacing_types,
+				  const amrex::Vector<amrex::Real> &flat_data)
+	{
+		initializeStorage(x_mins, x_maxs, n_xs, spacing_types);
+		fillDataTablesFlat(flat_data);
+	}
+
+	// Optimized initialization that takes bounds, sizes, and spacing directly
+	// coords parameter is optional - if empty, coordinates will be generated based on spacing type
+	template <typename DataType>
+	void initialize_common(const std::array<amrex::Real, Ndim> &x_mins, const std::array<amrex::Real, Ndim> &x_maxs, const std::array<int, Ndim> &n_xs,
+			       const std::array<SpacingType, Ndim> &spacing_types, const std::array<amrex::Vector<amrex::Real>, Ndim> & /*coords*/,
+			       const DataType &data)
+	{
+		initializeStorage(x_mins, x_maxs, n_xs, spacing_types);
+		fillDataTables(data);
 	}
 
 	// Backward compatibility wrapper: derive bounds, sizes, and spacing from coords
@@ -870,418 +1001,277 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "CSVReader supports 1D-4D tables");
 
-		std::ifstream file(file_path);
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file.is_open(), ("Failed to open CSV file: " + file_path).c_str());
-
-		// Read header information
-		int n_dim = 0;
-		int n_out = 0;
-		std::array<int, Ndim> sizes{};
-		std::array<std::pair<amrex::Real, amrex::Real>, Ndim> coord_bounds{};
-		std::array<std::string, Ndim> spacing_types{};
-
-		// Line 1: Ndim
-		file >> n_dim;
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-		    n_dim == Ndim, std::format("CSV file dimension mismatch! File has {} dimensions, but DataTable is {}-dimensional", n_dim, Ndim));
-
-		// Line 2: Nx (comma-separated)
-		std::string nx_line;
-		std::getline(file >> std::ws, nx_line);
-		{
-			std::stringstream ss(nx_line);
-			for (int dim = 0; dim < Ndim; ++dim) {
-				char comma = ' ';
-				ss >> sizes[dim];
-				if (dim < Ndim - 1) {
-					ss >> comma;
-				}
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sizes[dim] > 0, std::format("Invalid dimension size {} for dimension {}", sizes[dim], dim));
-			}
-		}
-
-		// Line 3: Nout
-		file >> n_out;
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n_out == Nout,
-						 std::format("CSV file output dimension mismatch! File has {} outputs, but DataTable expects {}", n_out, Nout));
-
-		// Line 4: input_names (comma-separated, in metadata order)
-		std::array<std::string, Ndim> input_names{};
-		std::string input_names_line;
-		std::getline(file >> std::ws, input_names_line);
-		{
-			std::stringstream ss(input_names_line);
-			for (int i = 0; i < Ndim; ++i) {
-				if (i < Ndim - 1) {
-					std::getline(ss, input_names[i], ',');
-				} else {
-					ss >> input_names[i];
-				}
-			}
-		}
-
-		// Line 5: output_names (comma-separated)
-		std::array<std::string, Nout> output_names{};
-		std::string output_names_line;
-		std::getline(file >> std::ws, output_names_line);
-		{
-			std::stringstream ss(output_names_line);
-			for (int i = 0; i < Nout; ++i) {
-				if (i < Nout - 1) {
-					std::getline(ss, output_names[i], ',');
-				} else {
-					ss >> output_names[i];
-				}
-			}
-		}
-
-		// Line 6: input_units (comma-separated)
-		std::array<std::string, Ndim> input_units{};
-		std::string input_units_line;
-		std::getline(file >> std::ws, input_units_line);
-		{
-			std::stringstream ss(input_units_line);
-			for (int i = 0; i < Ndim; ++i) {
-				if (i < Ndim - 1) {
-					std::getline(ss, input_units[i], ',');
-				} else {
-					ss >> input_units[i];
-				}
-			}
-		}
-
-		// Line 7: output_units (comma-separated)
-		std::array<std::string, Nout> output_units{};
-		std::string output_units_line;
-		std::getline(file >> std::ws, output_units_line);
-		{
-			std::stringstream ss(output_units_line);
-			for (int i = 0; i < Nout; ++i) {
-				if (i < Nout - 1) {
-					std::getline(ss, output_units[i], ',');
-				} else {
-					ss >> output_units[i];
-				}
-			}
-		}
-
-		// Read metadata values (xlo, xhi, spacing) - these are in input_names order (metadata order)
-		std::array<amrex::Real, Ndim> xlo_metadata{};
-		std::array<amrex::Real, Ndim> xhi_metadata{};
-		std::array<std::string, Ndim> spacing_metadata{};
-
-		// Line 8: xlo (comma-separated, in metadata order)
-		std::string xlo_line;
-		std::getline(file >> std::ws, xlo_line);
-		{
-			std::stringstream ss(xlo_line);
-			for (int i = 0; i < Ndim; ++i) {
-				char comma = ' ';
-				ss >> xlo_metadata[i];
-				if (i < Ndim - 1) {
-					ss >> comma;
-				}
-			}
-		}
-
-		// Line 9: xhi (comma-separated, in metadata order)
-		std::string xhi_line;
-		std::getline(file >> std::ws, xhi_line);
-		{
-			std::stringstream ss(xhi_line);
-			for (int i = 0; i < Ndim; ++i) {
-				char comma = ' ';
-				ss >> xhi_metadata[i];
-				if (i < Ndim - 1) {
-					ss >> comma;
-				}
-			}
-		}
-
-		// Line 10: spacing (comma-separated, in metadata order)
-		std::string spacing_line;
-		std::getline(file >> std::ws, spacing_line);
-		{
-			std::stringstream ss(spacing_line);
-			for (int i = 0; i < Ndim; ++i) {
-				if (i < Ndim - 1) {
-					std::getline(ss, spacing_metadata[i], ',');
-				} else {
-					ss >> spacing_metadata[i];
-				}
-			}
-		}
-
-		// Copy metadata from input_names order (which should match Nx order)
-		// Nx = [nx1, nx2, ...] where x1, x2, ... correspond to dimensions in order
-		// metadata = [meta0, meta1, ...] in input_names order
-		// Assume input_names order matches Nx order (e.g., input_names="age,mass" means x1=age, x2=mass)
-		for (int dim = 0; dim < Ndim; ++dim) {
-			coord_bounds[dim].first = xlo_metadata[dim];
-			coord_bounds[dim].second = xhi_metadata[dim];
-			spacing_types[dim] = spacing_metadata[dim];
-
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-			    coord_bounds[dim].second > coord_bounds[dim].first,
-			    std::format("Invalid coordinate bounds for dimension {}: [{}, {}]", dim, coord_bounds[dim].first, coord_bounds[dim].second));
-		}
-
-		// Convert string spacing types to enum and validate spacing type
-		std::array<SpacingType, Ndim> spacing_types_enum{};
-		for (int dim = 0; dim < Ndim; ++dim) {
-			try {
-				spacing_types_enum[dim] = amrex::getEnumCaseInsensitive<SpacingType>(spacing_types[dim]);
-			} catch (const std::runtime_error &e) {
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-				    false,
-				    std::format("Invalid spacing type '{}' for dimension {}. Must be 'linear', 'log', or 'fast_log'", spacing_types[dim], dim));
-			}
-		}
-
-		// Prepare bounds and sizes for optimized initialization
 		std::array<amrex::Real, Ndim> x_mins{};
 		std::array<amrex::Real, Ndim> x_maxs{};
-		for (int dim = 0; dim < Ndim; ++dim) {
-			x_mins[dim] = coord_bounds[dim].first;
-			x_maxs[dim] = coord_bounds[dim].second;
-		}
+		std::array<int, Ndim> sizes{};
+		std::array<SpacingType, Ndim> spacing_types_enum{};
+		std::array<std::string, Ndim> input_names{};
+		std::array<std::string, Nout> output_names{};
+		std::array<std::string, Ndim> input_units{};
+		std::array<std::string, Nout> output_units{};
+		SpacingType output_spacing_bcast = output_spacing;
+		amrex::Vector<amrex::Real> flat_data;
 
-		// Empty coord arrays - will be generated automatically based on spacing type
-		std::array<amrex::Vector<amrex::Real>, Ndim> empty_coords{};
-		for (int dim = 0; dim < Ndim; ++dim) {
-			empty_coords[dim] = amrex::Vector<amrex::Real>(); // Empty vector
-		}
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			std::ifstream file(file_path);
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file.is_open(), ("Failed to open CSV file: " + file_path).c_str());
 
-		// lambda function for log
-		// For fast_log, use inverse_pow2 to find y such that pow2(y) = x exactly
-		// This ensures interpolation at grid points returns exact values
-		auto log_ = [output_spacing](amrex::Real x) {
-			if (output_spacing == SpacingType::fast_log) {
-				return FastMath::inverse_pow2(x);
-			}
-			return std::log(x);
-		};
+			int n_dim = 0;
+			int n_out = 0;
+			std::array<std::pair<amrex::Real, amrex::Real>, Ndim> coord_bounds{};
+			std::array<std::string, Ndim> spacing_types{};
 
-		// Read data values - layout is transposed from internal representation
-		// CSV layout: last dimensions as rows, first dimension as columns
-		if constexpr (Ndim == 1) {
-			// For 1D: single row with nx1 columns
-			data_1d_type data_array;
-			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-				data_array[out_idx].resize(sizes[0]);
-				for (int i = 0; i < sizes[0]; ++i) {
+			file >> n_dim;
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+			    n_dim == Ndim, std::format("CSV file dimension mismatch! File has {} dimensions, but DataTable is {}-dimensional", n_dim, Ndim));
+
+			std::string nx_line;
+			std::getline(file >> std::ws, nx_line);
+			{
+				std::stringstream ss(nx_line);
+				for (int dim = 0; dim < Ndim; ++dim) {
 					char comma = ' ';
-					file >> data_array[out_idx][i];
-					if (i < sizes[0] - 1) { // NOSONAR
-						file >> comma;
+					ss >> sizes[dim];
+					if (dim < Ndim - 1) {
+						ss >> comma;
+					}
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sizes[dim] > 0, std::format("Invalid dimension size {} for dimension {}", sizes[dim], dim));
+				}
+			}
+
+			file >> n_out;
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n_out == Nout,
+							 std::format("CSV file output dimension mismatch! File has {} outputs, but DataTable expects {}", n_out, Nout));
+
+			std::string input_names_line;
+			std::getline(file >> std::ws, input_names_line);
+			{
+				std::stringstream ss(input_names_line);
+				for (int i = 0; i < Ndim; ++i) {
+					if (i < Ndim - 1) {
+						std::getline(ss, input_names[i], ',');
+					} else {
+						ss >> input_names[i];
 					}
 				}
 			}
 
-			// Apply log transformation if output_spacing is fast_log or log
-			if (output_spacing == SpacingType::fast_log || output_spacing == SpacingType::log) {
+			std::string output_names_line;
+			std::getline(file >> std::ws, output_names_line);
+			{
+				std::stringstream ss(output_names_line);
+				for (int i = 0; i < Nout; ++i) {
+					if (i < Nout - 1) {
+						std::getline(ss, output_names[i], ',');
+					} else {
+						ss >> output_names[i];
+					}
+				}
+			}
+
+			std::string input_units_line;
+			std::getline(file >> std::ws, input_units_line);
+			{
+				std::stringstream ss(input_units_line);
+				for (int i = 0; i < Ndim; ++i) {
+					if (i < Ndim - 1) {
+						std::getline(ss, input_units[i], ',');
+					} else {
+						ss >> input_units[i];
+					}
+				}
+			}
+
+			std::string output_units_line;
+			std::getline(file >> std::ws, output_units_line);
+			{
+				std::stringstream ss(output_units_line);
+				for (int i = 0; i < Nout; ++i) {
+					if (i < Nout - 1) {
+						std::getline(ss, output_units[i], ',');
+					} else {
+						ss >> output_units[i];
+					}
+				}
+			}
+
+			std::array<amrex::Real, Ndim> xlo_metadata{};
+			std::array<amrex::Real, Ndim> xhi_metadata{};
+			std::array<std::string, Ndim> spacing_metadata{};
+
+			std::string xlo_line;
+			std::getline(file >> std::ws, xlo_line);
+			{
+				std::stringstream ss(xlo_line);
+				for (int i = 0; i < Ndim; ++i) {
+					char comma = ' ';
+					ss >> xlo_metadata[i];
+					if (i < Ndim - 1) {
+						ss >> comma;
+					}
+				}
+			}
+
+			std::string xhi_line;
+			std::getline(file >> std::ws, xhi_line);
+			{
+				std::stringstream ss(xhi_line);
+				for (int i = 0; i < Ndim; ++i) {
+					char comma = ' ';
+					ss >> xhi_metadata[i];
+					if (i < Ndim - 1) {
+						ss >> comma;
+					}
+				}
+			}
+
+			std::string spacing_line;
+			std::getline(file >> std::ws, spacing_line);
+			{
+				std::stringstream ss(spacing_line);
+				for (int i = 0; i < Ndim; ++i) {
+					if (i < Ndim - 1) {
+						std::getline(ss, spacing_metadata[i], ',');
+					} else {
+						ss >> spacing_metadata[i];
+					}
+				}
+			}
+
+			for (int dim = 0; dim < Ndim; ++dim) {
+				coord_bounds[dim].first = xlo_metadata[dim];
+				coord_bounds[dim].second = xhi_metadata[dim];
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    coord_bounds[dim].second > coord_bounds[dim].first,
+				    std::format("Invalid coordinate bounds for dimension {}: [{}, {}]", dim, coord_bounds[dim].first, coord_bounds[dim].second));
+
+				try {
+					spacing_types_enum[dim] = amrex::getEnumCaseInsensitive<SpacingType>(spacing_metadata[dim]);
+				} catch (const std::runtime_error &) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    false,
+					    std::format("Invalid spacing type '{}' for dimension {}. Must be 'linear', 'log', or 'fast_log'", spacing_metadata[dim], dim));
+				}
+
+				x_mins[dim] = coord_bounds[dim].first;
+				x_maxs[dim] = coord_bounds[dim].second;
+			}
+
+			auto log_ = [output_spacing_bcast](amrex::Real x) {
+				if (output_spacing_bcast == SpacingType::fast_log) {
+					return FastMath::inverse_pow2(x);
+				}
+				return std::log(x);
+			};
+
+			flat_data.resize(flatDataSize(sizes));
+
+			if constexpr (Ndim == 1) {
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-					for (int i = 0; i < sizes[0]; ++i) { // NOSONAR
-						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-						    data_array[out_idx][i] > 0.0,
-						    std::format("log output spacing requires positive values, got {} at output {} index {}",
-								data_array[out_idx][i], out_idx, i));
-						data_array[out_idx][i] = log_(data_array[out_idx][i]);
-					}
-				}
-			}
-
-			// Create and initialize DataTable using optimized path
-			DataTable table;
-			table.initialize_common(x_mins, x_maxs, sizes, spacing_types_enum, empty_coords, data_array);
-
-			// Store metadata
-			table.input_names_ = input_names;
-			table.output_names_ = output_names;
-			table.input_units_ = input_units;
-			table.output_units_ = output_units;
-			table.output_spacing_ = output_spacing;
-
-			file.close();
-			return table;
-
-		} else if constexpr (Ndim == 2) {
-			// For 2D: nx2 rows × nx1 columns
-			// CSV: data[row=i2][col=i1] -> DataTable: data[out_idx][i1][i2]
-			data_2d_type data_array;
-			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-				data_array[out_idx].resize(sizes[0]);
-				for (int i1 = 0; i1 < sizes[0]; ++i1) {
-					data_array[out_idx][i1].resize(sizes[1]);
-				}
-
-				// Read data in transposed order
-				for (int i2 = 0; i2 < sizes[1]; ++i2) {
-					for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
+					for (int i = 0; i < sizes[0]; ++i) {
 						char comma = ' ';
-						file >> data_array[out_idx][i1][i2];
-						if (i1 < sizes[0] - 1) {
+						amrex::Real value = 0.0;
+						file >> value;
+						if (i < sizes[0] - 1) {
 							file >> comma;
 						}
-					}
-				}
-			}
-
-			// Apply log transformation if output_spacing is fast_log or log
-			if (output_spacing == SpacingType::fast_log || output_spacing == SpacingType::log) {
-				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-					for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
-						for (int i2 = 0; i2 < sizes[1]; ++i2) {
+						if (output_spacing_bcast == SpacingType::fast_log || output_spacing_bcast == SpacingType::log) {
 							AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-							    data_array[out_idx][i1][i2] > 0.0,
-							    std::format("log output spacing requires positive values, got {} at output {} index ({}, {})",
-									data_array[out_idx][i1][i2], out_idx, i1, i2));
-							data_array[out_idx][i1][i2] = log_(data_array[out_idx][i1][i2]);
+							    value > 0.0,
+							    std::format("log output spacing requires positive values, got {} at output {} index {}", value, out_idx, i));
+							value = log_(value);
 						}
+						flat_data[flatDataIndex(out_idx, sizes, std::array<int, Ndim>{i})] = value;
 					}
 				}
-			}
-
-			// Create and initialize DataTable using optimized path
-			DataTable table;
-			table.initialize_common(x_mins, x_maxs, sizes, spacing_types_enum, empty_coords, data_array);
-
-			// Store metadata
-			table.input_names_ = input_names;
-			table.output_names_ = output_names;
-			table.input_units_ = input_units;
-			table.output_units_ = output_units;
-			table.output_spacing_ = output_spacing;
-
-			file.close();
-			return table;
-
-		} else if constexpr (Ndim == 3) {
-			// For 3D: (nx3 × nx2) rows × nx1 columns
-			// CSV: data[row=(i3*nx2+i2)][col=i1] -> DataTable: data[out_idx][i1][i2][i3]
-			data_3d_type data_array;
-			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-				data_array[out_idx].resize(sizes[0]);
-				for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
-					data_array[out_idx][i1].resize(sizes[1]);
-					for (int i2 = 0; i2 < sizes[1]; ++i2) { // NOSONAR
-						data_array[out_idx][i1][i2].resize(sizes[2]);
-					}
-				}
-
-				// Read data in transposed order
-				for (int i3 = 0; i3 < sizes[2]; ++i3) {
-					for (int i2 = 0; i2 < sizes[1]; ++i2) {		// NOSONAR
-						for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
+			} else if constexpr (Ndim == 2) {
+				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+					for (int i2 = 0; i2 < sizes[1]; ++i2) {
+						for (int i1 = 0; i1 < sizes[0]; ++i1) {
 							char comma = ' ';
-							file >> data_array[out_idx][i1][i2][i3];
+							amrex::Real value = 0.0;
+							file >> value;
 							if (i1 < sizes[0] - 1) {
 								file >> comma;
 							}
-						}
-					}
-				}
-			}
-
-			// Apply log transformation if output_spacing is fast_log or log
-			if (output_spacing == SpacingType::fast_log || output_spacing == SpacingType::log) {
-				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-					for (int i1 = 0; i1 < sizes[0]; ++i1) {			// NOSONAR
-						for (int i2 = 0; i2 < sizes[1]; ++i2) {		// NOSONAR
-							for (int i3 = 0; i3 < sizes[2]; ++i3) { // NOSONAR
-								AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data_array[out_idx][i1][i2][i3] > 0.0,
-												 std::format("log output spacing requires positive "
-													     "values, got {} at output {} index ({}, {}, {})",
-													     data_array[out_idx][i1][i2][i3], out_idx, i1, i2,
-													     i3));
-								data_array[out_idx][i1][i2][i3] = log_(data_array[out_idx][i1][i2][i3]);
+							if (output_spacing_bcast == SpacingType::fast_log || output_spacing_bcast == SpacingType::log) {
+								AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+								    value > 0.0,
+								    std::format("log output spacing requires positive values, got {} at output {} index ({}, {})", value,
+										out_idx, i1, i2));
+								value = log_(value);
 							}
+							flat_data[flatDataIndex(out_idx, sizes, std::array<int, Ndim>{i1, i2})] = value;
 						}
 					}
 				}
-			}
-
-			// Create and initialize DataTable using optimized path
-			DataTable table;
-			table.initialize_common(x_mins, x_maxs, sizes, spacing_types_enum, empty_coords, data_array);
-
-			// Store metadata
-			table.input_names_ = input_names;
-			table.output_names_ = output_names;
-			table.input_units_ = input_units;
-			table.output_units_ = output_units;
-			table.output_spacing_ = output_spacing;
-
-			file.close();
-			return table;
-
-		} else if constexpr (Ndim == 4) {
-			// For 4D: (nx4 × nx3 × nx2) rows × nx1 columns
-			// CSV: data[row=(i4*nx3*nx2+i3*nx2+i2)][col=i1] -> DataTable: data[out_idx][i1][i2][i3][i4]
-			data_4d_type data_array;
-			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-				data_array[out_idx].resize(sizes[0]);
-				for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
-					data_array[out_idx][i1].resize(sizes[1]);
-					for (int i2 = 0; i2 < sizes[1]; ++i2) { // NOSONAR
-						data_array[out_idx][i1][i2].resize(sizes[2]);
-						for (int i3 = 0; i3 < sizes[2]; ++i3) { // NOSONAR
-							data_array[out_idx][i1][i2][i3].resize(sizes[3]);
-						}
-					}
-				}
-
-				// Read data in transposed order
-				for (int i4 = 0; i4 < sizes[3]; ++i4) {
-					for (int i3 = 0; i3 < sizes[2]; ++i3) {			// NOSONAR
-						for (int i2 = 0; i2 < sizes[1]; ++i2) {		// NOSONAR
-							for (int i1 = 0; i1 < sizes[0]; ++i1) { // NOSONAR
+			} else if constexpr (Ndim == 3) {
+				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+					for (int i3 = 0; i3 < sizes[2]; ++i3) {
+						for (int i2 = 0; i2 < sizes[1]; ++i2) {
+							for (int i1 = 0; i1 < sizes[0]; ++i1) {
 								char comma = ' ';
-								file >> data_array[out_idx][i1][i2][i3][i4];
+								amrex::Real value = 0.0;
+								file >> value;
 								if (i1 < sizes[0] - 1) {
 									file >> comma;
 								}
+								if (output_spacing_bcast == SpacingType::fast_log || output_spacing_bcast == SpacingType::log) {
+									AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+									    value > 0.0,
+									    std::format("log output spacing requires positive values, got {} at output {} index ({}, {}, {})",
+											value, out_idx, i1, i2, i3));
+									value = log_(value);
+								}
+								flat_data[flatDataIndex(out_idx, sizes, std::array<int, Ndim>{i1, i2, i3})] = value;
 							}
 						}
 					}
 				}
-			}
-
-			// Apply log transformation if output_spacing is fast_log or log
-			if (output_spacing == SpacingType::fast_log || output_spacing == SpacingType::log) {
+			} else if constexpr (Ndim == 4) {
 				for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-					for (int i1 = 0; i1 < sizes[0]; ++i1) {				// NOSONAR
-						for (int i2 = 0; i2 < sizes[1]; ++i2) {			// NOSONAR
-							for (int i3 = 0; i3 < sizes[2]; ++i3) {		// NOSONAR
-								for (int i4 = 0; i4 < sizes[3]; ++i4) { // NOSONAR
-									AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-									    data_array[out_idx][i1][i2][i3][i4] > 0.0,
-									    std::format("log output spacing requires positive values, got {} at output {} "
-											"index ({}, {}, "
-											"{}, {})",
-											data_array[out_idx][i1][i2][i3][i4], out_idx, i1, i2, i3, i4));
-									data_array[out_idx][i1][i2][i3][i4] = log_(data_array[out_idx][i1][i2][i3][i4]);
+					for (int i4 = 0; i4 < sizes[3]; ++i4) {
+						for (int i3 = 0; i3 < sizes[2]; ++i3) {
+							for (int i2 = 0; i2 < sizes[1]; ++i2) {
+								for (int i1 = 0; i1 < sizes[0]; ++i1) {
+									char comma = ' ';
+									amrex::Real value = 0.0;
+									file >> value;
+									if (i1 < sizes[0] - 1) {
+										file >> comma;
+									}
+									if (output_spacing_bcast == SpacingType::fast_log || output_spacing_bcast == SpacingType::log) {
+										AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+										    value > 0.0,
+										    std::format(
+											"log output spacing requires positive values, got {} at output {} index ({}, {}, {}, {})",
+											value, out_idx, i1, i2, i3, i4));
+										value = log_(value);
+									}
+									flat_data[flatDataIndex(out_idx, sizes, std::array<int, Ndim>{i1, i2, i3, i4})] = value;
 								}
 							}
 						}
 					}
 				}
 			}
-
-			// Create and initialize DataTable using optimized path
-			DataTable table;
-			table.initialize_common(x_mins, x_maxs, sizes, spacing_types_enum, empty_coords, data_array);
-
-			// Store metadata
-			table.input_names_ = input_names;
-			table.output_names_ = output_names;
-			table.input_units_ = input_units;
-			table.output_units_ = output_units;
-			table.output_spacing_ = output_spacing;
-
-			file.close();
-			return table;
 		}
+
+		bcastArray(sizes);
+		bcastArray(x_mins);
+		bcastArray(x_maxs);
+		bcastSpacingTypes(spacing_types_enum);
+		bcastStringArray(input_names);
+		bcastStringArray(output_names);
+		bcastStringArray(input_units);
+		bcastStringArray(output_units);
+		bcastSpacingType(output_spacing_bcast);
+		bcastVector(flat_data);
+
+		DataTable table;
+		table.initializeCommonFlat(x_mins, x_maxs, sizes, spacing_types_enum, flat_data);
+		table.setMetadata(input_names, output_names, input_units, output_units, output_spacing_bcast);
+		return table;
 	}
 
 	// H5Reader: Generic static method to read n-dimensional data from HDF5 file and create DataTable
@@ -1296,224 +1286,129 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		    coord_names.size() == Ndim,
 		    std::format("H5Reader requires exactly Ndim coordinate names! (expected: {}, provided: {})", Ndim, coord_names.size()));
 
-		herr_t status = 0;
-		herr_t const h5_error = -1;
-		hid_t file_id = 0;
-		hid_t dset_id = 0;
-		hid_t attr_id = 0;
+		std::array<int, Ndim> sizes{};
+		std::array<amrex::Real, Ndim> coord_starts{};
+		std::array<amrex::Real, Ndim> coord_ends{};
+		std::array<SpacingType, Ndim> spacing_types{};
+		std::array<amrex::Real, Ndim> coord_bounds_min{};
+		std::array<amrex::Real, Ndim> coord_bounds_max{};
+		int include_pe_value = 0;
+		amrex::Vector<amrex::Real> flat_data;
 
-		// Open HDF5 file
-		file_id = H5Fopen(file_path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file_id != h5_error, ("Failed to open HDF5 file: " + file_path).c_str());
+		spacing_types.fill(SpacingType::linear);
 
-		// Read metadata group to get grid dimensions
-		hid_t const metadata_group = H5Gopen2(file_id, "/metadata", H5P_DEFAULT);
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(metadata_group != h5_error, "Failed to open metadata group!");
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			herr_t status = 0;
+			herr_t const h5_error = -1;
+			hid_t attr_id = 0;
+			hid_t dset_id = 0;
+			hid_t file_id = H5Fopen(file_path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file_id != h5_error, ("Failed to open HDF5 file: " + file_path).c_str());
 
-		// Read grid dimensions using generic names
-		std::vector<int> n_coords(Ndim);
-		std::vector<std::string> n_coord_attrs(Ndim);
+			hid_t const metadata_group = H5Gopen2(file_id, "/metadata", H5P_DEFAULT);
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(metadata_group != h5_error, "Failed to open metadata group!");
 
-		for (int dim = 0; dim < Ndim; ++dim) {
-			n_coord_attrs[dim] = "n_" + coord_names[dim];
-			attr_id = H5Aopen(metadata_group, n_coord_attrs[dim].c_str(), H5P_DEFAULT);
-			status = H5Aread(attr_id, H5T_NATIVE_INT, &n_coords[dim]);
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + n_coord_attrs[dim] + "!").c_str());
-			H5Aclose(attr_id);
-		}
-
-		// Read coordinate bounds if requested
-		if (coord_bounds != nullptr) {
 			for (int dim = 0; dim < Ndim; ++dim) {
-				const std::string min_attr = coord_names[dim] + "_min";
-				const std::string max_attr = coord_names[dim] + "_max";
-
-				attr_id = H5Aopen(metadata_group, min_attr.c_str(), H5P_DEFAULT);
-				status = H5Aread(attr_id, H5T_NATIVE_DOUBLE, &(*coord_bounds)[dim].first);
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + min_attr + "!").c_str());
+				const std::string n_coord_attr = "n_" + coord_names[dim];
+				attr_id = H5Aopen(metadata_group, n_coord_attr.c_str(), H5P_DEFAULT);
+				status = H5Aread(attr_id, H5T_NATIVE_INT, &sizes[dim]);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + n_coord_attr + "!").c_str());
 				H5Aclose(attr_id);
-
-				attr_id = H5Aopen(metadata_group, max_attr.c_str(), H5P_DEFAULT);
-				status = H5Aread(attr_id, H5T_NATIVE_DOUBLE, &(*coord_bounds)[dim].second);
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + max_attr + "!").c_str());
-				H5Aclose(attr_id);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sizes[dim] > 0, std::format("Invalid dimension size {} for dimension {}", sizes[dim], dim));
 			}
-		}
 
-		// Read include_pe if requested
-		if (include_pe != nullptr) {
-			if (H5Aexists(metadata_group, "include_pe") > 0) {
-				attr_id = H5Aopen(metadata_group, "include_pe", H5P_DEFAULT);
-				const hid_t attr_type = H5Aget_type(attr_id);
-				if (H5Tget_class(attr_type) == H5T_INTEGER) {
-					int cooling_include_pe = 0;
-					status = H5Aread(attr_id, H5T_NATIVE_INT, &cooling_include_pe);
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read include_pe (integer)!");
-					*include_pe = (cooling_include_pe != 0);
-				} else if (H5Tget_class(attr_type) == H5T_STRING) {
-					// Handle string written by older Python script versions ('0' or '1')
-					std::array<char, 4> buf{};
-					const hid_t mem_type = H5Tcopy(H5T_C_S1);
-					H5Tset_size(mem_type, 4);
-					status = H5Aread(attr_id, mem_type, buf.data());
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read include_pe (string)!");
-					*include_pe = (buf[0] == '1');
-					H5Tclose(mem_type);
-				} else {
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, "include_pe attribute is neither integer nor string!");
+			if (coord_bounds != nullptr) {
+				for (int dim = 0; dim < Ndim; ++dim) {
+					const std::string min_attr = coord_names[dim] + "_min";
+					const std::string max_attr = coord_names[dim] + "_max";
+
+					attr_id = H5Aopen(metadata_group, min_attr.c_str(), H5P_DEFAULT);
+					status = H5Aread(attr_id, H5T_NATIVE_DOUBLE, &coord_bounds_min[dim]);
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + min_attr + "!").c_str());
+					H5Aclose(attr_id);
+
+					attr_id = H5Aopen(metadata_group, max_attr.c_str(), H5P_DEFAULT);
+					status = H5Aread(attr_id, H5T_NATIVE_DOUBLE, &coord_bounds_max[dim]);
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + max_attr + "!").c_str());
+					H5Aclose(attr_id);
 				}
-				H5Tclose(attr_type);
-				H5Aclose(attr_id);
-			} else {
-				*include_pe = false;
 			}
-		}
 
-		H5Gclose(metadata_group);
+			if (include_pe != nullptr) {
+				if (H5Aexists(metadata_group, "include_pe") > 0) {
+					attr_id = H5Aopen(metadata_group, "include_pe", H5P_DEFAULT);
+					const hid_t attr_type = H5Aget_type(attr_id);
+					if (H5Tget_class(attr_type) == H5T_INTEGER) {
+						status = H5Aread(attr_id, H5T_NATIVE_INT, &include_pe_value);
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read include_pe (integer)!");
+					} else if (H5Tget_class(attr_type) == H5T_STRING) {
+						std::array<char, 4> buf{};
+						const hid_t mem_type = H5Tcopy(H5T_C_S1);
+						H5Tset_size(mem_type, 4);
+						status = H5Aread(attr_id, mem_type, buf.data());
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read include_pe (string)!");
+						include_pe_value = (buf[0] == '1') ? 1 : 0;
+						H5Tclose(mem_type);
+					} else {
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, "include_pe attribute is neither integer nor string!");
+					}
+					H5Tclose(attr_type);
+					H5Aclose(attr_id);
+				}
+			}
 
-		// Read coordinate grids
-		std::vector<amrex::Vector<amrex::Real>> coords(Ndim);
-		for (int dim = 0; dim < Ndim; ++dim) {
-			coords[dim].resize(n_coords[dim]);
-		}
+			H5Gclose(metadata_group);
 
-		// Construct coordinate dataset names based on is_fast_log parameter
-		const std::string prefix = (is_fast_log == 1) ? "fast_log_" : "";
-		std::vector<std::string> coord_datasets(Ndim);
-		for (int dim = 0; dim < Ndim; ++dim) {
-			coord_datasets[dim] = "/grids/" + prefix + coord_names[dim];
-		}
+			const std::string prefix = (is_fast_log == 1) ? "fast_log_" : "";
+			for (int dim = 0; dim < Ndim; ++dim) {
+				const std::string coord_dataset = "/grids/" + prefix + coord_names[dim];
+				std::vector<double> coord_data(static_cast<std::size_t>(sizes[dim]));
 
-		// Read coordinates using for loop
-		for (int dim = 0; dim < Ndim; ++dim) {
-			std::vector<double> temp_data(n_coords[dim]);
-			dset_id = H5Dopen2(file_id, coord_datasets[dim].c_str(), H5P_DEFAULT);
+				dset_id = H5Dopen2(file_id, coord_dataset.c_str(), H5P_DEFAULT);
+				status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, coord_data.data());
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + coord_dataset + " dataset!").c_str());
+				H5Dclose(dset_id);
+
+				coord_starts[dim] = static_cast<amrex::Real>(coord_data.front());
+				coord_ends[dim] = static_cast<amrex::Real>(coord_data.back());
+			}
+
+			std::vector<double> temp_data(flatDataSize(sizes));
+			dset_id = H5Dopen2(file_id, dataset_path.c_str(), H5P_DEFAULT);
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dset_id != h5_error, ("Failed to open HDF5 dataset: " + dataset_path).c_str());
 			status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data.data());
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + coord_datasets[dim] + " dataset!").c_str());
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read HDF5 dataset: " + dataset_path).c_str());
 			H5Dclose(dset_id);
+			H5Fclose(file_id);
 
-			for (int i = 0; i < n_coords[dim]; ++i) {
-				coords[dim][i] = temp_data[i];
+			flat_data.resize(temp_data.size());
+			for (std::size_t i = 0; i < temp_data.size(); ++i) {
+				flat_data[i] = static_cast<amrex::Real>(temp_data[i]);
 			}
 		}
 
-		// Read n-dimensional dataset from HDF5 file
-		// Calculate data_size as product of all dimensions
-		auto data_size = static_cast<int64_t>(Nout);
-		for (int dim = 0; dim < Ndim; ++dim) {
-			data_size *= static_cast<int64_t>(n_coords[dim]);
-		}
-		std::vector<double> temp_data(data_size);
+		bcastArray(sizes);
+		bcastArray(coord_starts);
+		bcastArray(coord_ends);
+		bcastVector(flat_data);
 
-		dset_id = H5Dopen2(file_id, dataset_path.c_str(), H5P_DEFAULT);
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dset_id != h5_error, ("Failed to open HDF5 dataset: " + dataset_path).c_str());
-
-		status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data.data());
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read HDF5 dataset: " + dataset_path).c_str());
-
-		H5Dclose(dset_id);
-
-		// Create coordinate arrays for any dimension
-		std::array<amrex::Vector<amrex::Real>, Ndim> coord_arrays;
-		for (int dim = 0; dim < Ndim; ++dim) {
-			coord_arrays[dim] = coords[dim];
+		if (coord_bounds != nullptr) {
+			bcastArray(coord_bounds_min);
+			bcastArray(coord_bounds_max);
+			for (int dim = 0; dim < Ndim; ++dim) {
+				(*coord_bounds)[dim].first = coord_bounds_min[dim];
+				(*coord_bounds)[dim].second = coord_bounds_max[dim];
+			}
 		}
 
-		// Convert HDF5 C-order data to natural dimensional format
-		if constexpr (Ndim == 1) {
-			// For 1D: data[out_idx][i]
-			data_1d_type data_array;
-			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-				data_array[out_idx].resize(n_coords[0]);
-				for (int i = 0; i < n_coords[0]; ++i) {
-					data_array[out_idx][i] = temp_data[out_idx * n_coords[0] + i];
-				}
-			}
-
-			// Create and initialize DataTable
-			DataTable table;
-			table.initialize(coord_arrays, data_array);
-
-			// Close HDF5 file
-			H5Fclose(file_id);
-			return table;
-
-		} else if constexpr (Ndim == 2) {
-			// For 2D: data[out_idx][i][j]
-			data_2d_type data_array;
-			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-				data_array[out_idx].resize(n_coords[0]);
-				for (int i = 0; i < n_coords[0]; ++i) {
-					data_array[out_idx][i].resize(n_coords[1]);
-					for (int j = 0; j < n_coords[1]; ++j) {
-						data_array[out_idx][i][j] = temp_data[out_idx * n_coords[0] * n_coords[1] + i * n_coords[1] + j];
-					}
-				}
-			}
-
-			// Create and initialize DataTable
-			DataTable table;
-			table.initialize(coord_arrays, data_array);
-
-			// Close HDF5 file
-			H5Fclose(file_id);
-			return table;
-
-		} else if constexpr (Ndim == 3) {
-			// For 3D: data[out_idx][i][j][k]
-			data_3d_type data_array;
-			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-				data_array[out_idx].resize(n_coords[0]);
-				for (int i = 0; i < n_coords[0]; ++i) {
-					data_array[out_idx][i].resize(n_coords[1]);
-					for (int j = 0; j < n_coords[1]; ++j) {
-						data_array[out_idx][i][j].resize(n_coords[2]);
-						for (int k = 0; k < n_coords[2]; ++k) {
-							data_array[out_idx][i][j][k] = temp_data[out_idx * n_coords[0] * n_coords[1] * n_coords[2] +
-												 i * n_coords[1] * n_coords[2] + j * n_coords[2] + k];
-						}
-					}
-				}
-			}
-
-			// Create and initialize DataTable
-			DataTable table;
-			table.initialize(coord_arrays, data_array);
-
-			// Close HDF5 file
-			H5Fclose(file_id);
-			return table;
-
-		} else if constexpr (Ndim == 4) {
-			// For 4D: data[out_idx][i][j][k][l]
-			data_4d_type data_array;
-			for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-				data_array[out_idx].resize(n_coords[0]);
-				for (int i = 0; i < n_coords[0]; ++i) {
-					data_array[out_idx][i].resize(n_coords[1]);
-					for (int j = 0; j < n_coords[1]; ++j) {
-						data_array[out_idx][i][j].resize(n_coords[2]);
-						for (int k = 0; k < n_coords[2]; ++k) {
-							data_array[out_idx][i][j][k].resize(n_coords[3]);
-							for (int l = 0; l < n_coords[3]; ++l) {
-								data_array[out_idx][i][j][k][l] =
-								    temp_data[out_idx * n_coords[0] * n_coords[1] * n_coords[2] * n_coords[3] +
-									      i * n_coords[1] * n_coords[2] * n_coords[3] + j * n_coords[2] * n_coords[3] +
-									      k * n_coords[3] + l];
-							}
-						}
-					}
-				}
-			}
-
-			// Create and initialize DataTable
-			DataTable table;
-			table.initialize(coord_arrays, data_array);
-
-			// Close HDF5 file
-			H5Fclose(file_id);
-			return table;
+		if (include_pe != nullptr) {
+			bcastScalar(include_pe_value);
+			*include_pe = (include_pe_value != 0);
 		}
+
+		DataTable table;
+		table.initializeCommonFlat(coord_starts, coord_ends, sizes, spacing_types, flat_data);
+		return table;
 	}
 };
 
