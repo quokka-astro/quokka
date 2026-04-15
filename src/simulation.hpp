@@ -228,6 +228,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	//Conduction parameters
 	amrex::Real electronConductionKappa0_ = 4.17;
+	amrex::Real conductionCFL = 0.2;
 	int enableElectronConduction_ = 1;
 
 	amrex::Real densityFloor_ = 0.0;     // default
@@ -1231,8 +1232,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
    amrex::ValLocPair<amrex::Real, amrex::IntVect> conduction_dt{.value = std::numeric_limits<amrex::Real>::max(),
 								   .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
    if (enableElectronConduction_ == 1) {
-		const amrex::Real nsubcycle = 1;
-		conduction_dt.value = dx_min * dx_min / electronConductionKappa0_ / nsubcycle;
+		conduction_dt.value = conductionCFL * dx_min * dx_min / electronConductionKappa0_;
 		conduction_dt.index = domain_signal_maxloc;
 		
 																	 
