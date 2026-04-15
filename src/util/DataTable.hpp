@@ -512,11 +512,11 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		}
 	}
 
-	[[nodiscard]] static auto flatDataSize(const std::array<int, Ndim> &sizes) -> std::size_t
+	[[nodiscard]] static auto flatDataSize(const std::array<int, Ndim> &sizes) -> amrex::Long
 	{
-		auto count = static_cast<std::size_t>(Nout);
+		auto count = static_cast<amrex::Long>(Nout);
 		for (int dim = 0; dim < Ndim; ++dim) {
-			count *= static_cast<std::size_t>(sizes[dim]);
+			count *= static_cast<amrex::Long>(sizes[dim]);
 		}
 		return count;
 	}
