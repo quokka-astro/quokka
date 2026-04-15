@@ -550,7 +550,8 @@ template <typename problem_t> struct HydroRKPolicy {
 		}
 
 		recompute_stage_rhs(scratch, input);
-		debugAssertFinite(std::format("NaN detected in HydroRKPolicy::compute_stage rhs_cc on level {}", lev_), scratch.rhs_cc);
+		debugAssertFinite(std::format("NaN detected in HydroRKPolicy::compute_stage rhs_cc on level {}", lev_), scratch.rhs_cc,
+				  QuokkaSimulation<problem_t>::nvars_);
 
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			compute_stage_emf(scratch.emf, input, scratch.face_vel, fast_mhd_wavespeeds);
