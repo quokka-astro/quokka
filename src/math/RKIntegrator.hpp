@@ -180,8 +180,7 @@ consteval void require_low_storage_form(bool ok)
 	}
 }
 
-template <int N>
-consteval auto derive_stage_advance_coefficients(ExplicitButcherTableau<N> const &tableau) -> std::array<StageAdvanceCoefficients, N>
+template <int N> consteval auto derive_stage_advance_coefficients(ExplicitButcherTableau<N> const &tableau) -> std::array<StageAdvanceCoefficients, N>
 {
 	// Reduce an explicit tableau to Quokka's low-storage recurrence
 	// U_out = a * U^n + b * U_in + g * dt * L(U_in), rejecting schemes that
@@ -246,8 +245,7 @@ struct SSPRK2Scheme {
 	static constexpr int nstages = 2;
 	static constexpr auto tableau = []() {
 		ExplicitButcherTableau<nstages> t{};
-		t.a = {{{static_cast<Real>(0.0), static_cast<Real>(0.0)},
-			{static_cast<Real>(1.0), static_cast<Real>(0.0)}}};
+		t.a = {{{static_cast<Real>(0.0), static_cast<Real>(0.0)}, {static_cast<Real>(1.0), static_cast<Real>(0.0)}}};
 		t.b = {static_cast<Real>(0.5), static_cast<Real>(0.5)};
 		t.c = {static_cast<Real>(0.0), static_cast<Real>(1.0)};
 		return t;

@@ -523,9 +523,8 @@ template <typename problem_t> struct HydroRKPolicy {
 		}
 	}
 
-	void apply_stage_update(quokka::CompositeStateView output, quokka::CompositeStateView const &old_state,
-				quokka::CompositeStateView const &stage_input, quokka::StageScratch &scratch,
-				quokka::StageAdvanceCoefficients const &coeffs, amrex::Real dt) const
+	void apply_stage_update(quokka::CompositeStateView output, quokka::CompositeStateView const &old_state, quokka::CompositeStateView const &stage_input,
+				quokka::StageScratch &scratch, quokka::StageAdvanceCoefficients const &coeffs, amrex::Real dt) const
 	{
 		apply_cell_centered_stage_update(output, old_state, stage_input, scratch, coeffs, dt);
 		apply_face_centered_stage_update(output, old_state, stage_input, scratch, coeffs, dt);
@@ -564,8 +563,8 @@ template <typename problem_t> struct HydroRKPolicy {
 	}
 
 	void update_stage(int /*stage*/, quokka::CompositeStateView output, quokka::CompositeStateView const &old_state,
-			  quokka::CompositeStateView const &stage_input, quokka::StageScratch &scratch,
-			  quokka::StageAdvanceCoefficients const &coeffs, amrex::Real dt) const
+			  quokka::CompositeStateView const &stage_input, quokka::StageScratch &scratch, quokka::StageAdvanceCoefficients const &coeffs,
+			  amrex::Real dt) const
 	{
 		apply_stage_update(output, old_state, stage_input, scratch, coeffs, dt);
 		debugAssertFinite(std::format("NaN detected in HydroRKPolicy::update_stage output on level {}", lev_), *output.cc,
@@ -573,8 +572,8 @@ template <typename problem_t> struct HydroRKPolicy {
 	}
 
 	auto validate_stage(int stage, quokka::CompositeStateView output, quokka::CompositeStateView const &old_state,
-			    quokka::CompositeStateView const &stage_input, quokka::StageScratch &scratch,
-			    quokka::StageAdvanceCoefficients const &coeffs, amrex::Real dt) const -> bool
+			    quokka::CompositeStateView const &stage_input, quokka::StageScratch &scratch, quokka::StageAdvanceCoefficients const &coeffs,
+			    amrex::Real dt) const -> bool
 	{
 		apply_stage_update(output, old_state, stage_input, scratch, coeffs, dt);
 		amrex::Gpu::streamSynchronizeAll();
@@ -666,8 +665,7 @@ template <typename problem_t> struct HydroRKPolicy {
 			sim_.incrementFluxRegisters(step_fr_as_crse_, step_fr_as_fine_, scratch.fluxes_hi, lev_, coeffs.accumulation_weight * dt);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				if ((step_emf_as_crse_ != nullptr) || (step_emf_as_fine_ != nullptr)) {
-					sim_.incrementEMFRegisters(step_emf_as_crse_, step_emf_as_fine_, scratch.emf, lev_,
-								   -coeffs.accumulation_weight * dt);
+					sim_.incrementEMFRegisters(step_emf_as_crse_, step_emf_as_fine_, scratch.emf, lev_, -coeffs.accumulation_weight * dt);
 				}
 			}
 		}
