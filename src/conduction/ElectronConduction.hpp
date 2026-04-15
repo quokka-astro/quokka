@@ -133,10 +133,7 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real q_sat_face = 0.5 * (qsat[bx](i, j, k) + qsat[bx](i - 1, j, k));
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
-			// if(limiter > 1.0) {
-			// printf("i=%d, j=%d, k=%d, gradT=%.3e, kappa_face=%.3e, q_classical=%.3e, q_sat_face=%.3e, limiter=%.3e\n", i, j, k, gradT, kappa_face, q_classical, q_sat_face, limiter);
-			// }
-			flux_x[bx](i, j, k) =  q_classical ;//  / limiter;
+			flux_x[bx](i, j, k) =  q_classical   / limiter;
 		});
 
 #if AMREX_SPACEDIM >= 2
@@ -147,7 +144,7 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real q_sat_face = 0.5 * (qsat[bx](i, j, k) + qsat[bx](i, j - 1, k));
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
-			flux_y[bx](i, j, k) =   q_classical ;// / limiter;
+			flux_y[bx](i, j, k) =   q_classical  / limiter;
 		});
 #endif
 
@@ -159,7 +156,7 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real q_sat_face = 0.5 * (qsat[bx](i, j, k) + qsat[bx](i, j, k - 1));
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
-			flux_z[bx](i, j, k) = q_classical  ;/// limiter;
+			flux_z[bx](i, j, k) = q_classical  / limiter;
 		});
 #endif
 
@@ -202,6 +199,20 @@ template <typename problem_t> class ElectronConduction
 #endif
 
 			amrex::Real Eint_new = Eint_old - dt * div_flux;
+			// if(i==185 && j==120 && k==122) {
+			// 	amrex::Print() << "i, j, k: " << i << " " << j << " " << k << std::endl;
+			// 	amrex::Print() << "Eint_old: " << Eint_old << std::endl;
+			// 	amrex::Print() << "div_flux: " << div_flux << std::endl;
+			// 	amrex::Print() << "Eint_new: " << Eint_new << std::endl;
+			// 	amrex::Print() << "flux_x at i: " << flux_x_const[bx](i, j, k) << std::endl;
+			// 	amrex::Print() << "flux_y at j: " << flux_y_const[bx](i, j, k) << std::endl;
+			// 	amrex::Print() << "flux_z at k: " << flux_z_const[bx](i, j, k) << std::endl;
+			// }
+			if(Eint_new < 0.0) {
+				amrex::Real Tmin = 10; 
+				Eint_new = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, Tmin);
+				// amrex::Print() << "Warning: Negative internal energy at i, j, k: " << i << " " << j << " " << k << std::endl;
+			}
 			state_out[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Eint_new + Ekin; // + Emag;
 			state_out[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index) = Eint_new;
 
