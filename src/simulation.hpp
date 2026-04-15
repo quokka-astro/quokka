@@ -343,7 +343,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// AMR utility functions
 	template <typename PreInterpHook, typename PostInterpHook>
 	void fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state, int lev, amrex::Real time, quokka::centering cen, quokka::direction dir,
-				    PreInterpHook const &pre_interp, PostInterpHook const &post_interp, FillPatchType fptype = FillPatchType::fillpatch_class);
+				    PreInterpHook const &pre_interp, PostInterpHook const &post_interp, FillPatchType fptype = FillPatchType::fillpatch_class,
+				    int checked_ncomp = -1);
 
 	template <typename PreInterpHook, typename PostInterpHook>
 	void FillPatchWithData(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::Vector<amrex::MultiFab *> &coarseData,
@@ -3113,7 +3114,7 @@ template <typename problem_t>
 template <typename PreInterpHook, typename PostInterpHook>
 void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state, int const lev, amrex::Real const time,
 						      quokka::centering cen, quokka::direction dir, PreInterpHook const &pre_interp,
-						      PostInterpHook const &post_interp, FillPatchType fptype)
+						      PostInterpHook const &post_interp, FillPatchType fptype, int checked_ncomp)
 {
 	BL_PROFILE("AMRSimulation::fillBoundaryConditions()"); // NOLINT(misc-const-correctness)
 
@@ -3132,6 +3133,11 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 		throw std::runtime_error("Only cell-centred (cc) and face-centred (fc) variables are supported, thus far.");
 	}
 
+	const int checked_comps = (checked_ncomp >= 0) ? checked_ncomp : state.nComp();
+	AMREX_ASSERT(checked_comps > 0);
+	AMREX_ASSERT(checked_comps <= state.nComp());
+	AMREX_ASSERT(checked_comps <= S_filled.nComp());
+
 	amrex::Vector<amrex::BCRec> BCs;
 	if (cen == quokka::centering::cc) {
 		BCs = BCs_cc_;
@@ -3147,11 +3153,11 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 
 		// returns old state, new state, or both depending on 'time'
 		GetData(lev - 1, time, coarseData, coarseTime, cen, dir);
-		AMREX_ASSERT(!state.contains_nan(0, state.nComp()));
+		AMREX_ASSERT(!state.contains_nan(0, checked_comps, state.nGrowVect()));
 
 		for (auto &i : coarseData) {
-			AMREX_ASSERT(!i->contains_nan(0, state.nComp()));
-			AMREX_ASSERT(!i->contains_nan()); // check ghost zones
+			AMREX_ASSERT(checked_comps <= i->nComp());
+			AMREX_ASSERT(!i->contains_nan(0, checked_comps, i->nGrowVect()));
 			amrex::ignore_unused(i);
 		}
 
@@ -3186,11 +3192,7 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 
 	// ensure that there are no NaNs (can happen when domain boundary filling is
 	// unimplemented or malfunctioning)
-	AMREX_ASSERT(!S_filled.contains_nan(0, S_filled.nComp()));
-	AMREX_ASSERT(!S_filled.contains_nan()); // check ghost zones (usually this is caused by
-						// forgetting to fill some components when
-						// using custom Dirichlet BCs, e.g., radiation
-						// variables in a hydro-only problem)
+	AMREX_ASSERT(!S_filled.contains_nan(0, checked_comps, S_filled.nGrowVect()));
 }
 
 // Compute a new multifab 'mf' by copying in state from given data and filling

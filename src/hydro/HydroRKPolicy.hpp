@@ -396,18 +396,19 @@ template <typename problem_t> struct HydroRKPolicy {
 
 	void reset_accumulators(quokka::StepAccumulators &accum) const { accum.reset(); }
 
-	void debugAssertFinite(std::string const &label, amrex::MultiFab const &mf) const
+	void debugAssertFinite(std::string const &label, amrex::MultiFab const &mf, int checked_ncomp = -1) const
 	{
 		if (sim_.lowLevelDebuggingOutput_ != 0) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!mf.contains_nan(0, mf.nComp()), label + " (valid cells)");
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!mf.contains_nan(), label + " (including ghosts)");
+			const int checked_comps = (checked_ncomp >= 0) ? checked_ncomp : mf.nComp();
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!mf.contains_nan(0, checked_comps, mf.nGrowVect()), label + " (including checked ghosts)");
 		}
 	}
 
 	void fill_boundary(int stage, quokka::CompositeStateView state, amrex::Real stage_time) const
 	{
 		sim_.fillBoundaryConditions(*state.cc, *state.cc, lev_, stage_time, quokka::centering::cc, quokka::direction::na,
-					    QuokkaSimulation<problem_t>::PreInterpState, QuokkaSimulation<problem_t>::PostInterpState);
+					    QuokkaSimulation<problem_t>::PreInterpState, QuokkaSimulation<problem_t>::PostInterpState,
+					    FillPatchType::fillpatch_class, QuokkaSimulation<problem_t>::nvars_);
 
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
@@ -419,7 +420,8 @@ template <typename problem_t> struct HydroRKPolicy {
 			amrex::ignore_unused(stage);
 		}
 
-		debugAssertFinite(std::format("NaN detected in HydroRKPolicy::fill_boundary cc state on level {}", lev_), *state.cc);
+		debugAssertFinite(std::format("NaN detected in HydroRKPolicy::fill_boundary cc state on level {}", lev_), *state.cc,
+				 QuokkaSimulation<problem_t>::nvars_);
 	}
 
 	void recompute_stage_rhs(quokka::StageScratch &scratch, quokka::CompositeStateView const &input) const
@@ -516,7 +518,8 @@ template <typename problem_t> struct HydroRKPolicy {
 			  quokka::CompositeStateView const &stage_input, quokka::StageScratch const &scratch, amrex::Real dt) const
 	{
 		apply_stage_update(stage, output, old_state, stage_input, scratch, dt);
-		debugAssertFinite(std::format("NaN detected in HydroRKPolicy::update_stage output on level {}", lev_), *output.cc);
+		debugAssertFinite(std::format("NaN detected in HydroRKPolicy::update_stage output on level {}", lev_), *output.cc,
+				 QuokkaSimulation<problem_t>::nvars_);
 	}
 
 	auto validate_stage(int stage, quokka::CompositeStateView output, quokka::CompositeStateView const &old_state,
@@ -527,7 +530,8 @@ template <typename problem_t> struct HydroRKPolicy {
 		amrex::Gpu::streamSynchronizeAll();
 		amrex::Long const ncells_bad = scratch.redo_flag.sum(0);
 		if (ncells_bad == 0) {
-			debugAssertFinite(std::format("NaN detected in HydroRKPolicy::validate_stage accepted output on level {}", lev_), *output.cc);
+			debugAssertFinite(std::format("NaN detected in HydroRKPolicy::validate_stage accepted output on level {}", lev_), *output.cc,
+					 QuokkaSimulation<problem_t>::nvars_);
 			return true;
 		}
 
@@ -562,7 +566,8 @@ template <typename problem_t> struct HydroRKPolicy {
 		amrex::Gpu::streamSynchronizeAll();
 		amrex::Long const ncells_bad_after_fofc = scratch.redo_flag.sum(0);
 		if (ncells_bad_after_fofc == 0) {
-			debugAssertFinite(std::format("NaN detected in HydroRKPolicy::validate_stage FOFC output on level {}", lev_), *output.cc);
+			debugAssertFinite(std::format("NaN detected in HydroRKPolicy::validate_stage FOFC output on level {}", lev_), *output.cc,
+					 QuokkaSimulation<problem_t>::nvars_);
 			return true;
 		}
 
@@ -601,7 +606,8 @@ template <typename problem_t> struct HydroRKPolicy {
 			HydroSystem<problem_t>::SyncDualEnergy(*output.cc, *output.fc_data);
 		}
 
-		debugAssertFinite(std::format("NaN detected in HydroRKPolicy::post_stage output on level {}", lev_), *output.cc);
+		debugAssertFinite(std::format("NaN detected in HydroRKPolicy::post_stage output on level {}", lev_), *output.cc,
+				 QuokkaSimulation<problem_t>::nvars_);
 	}
 
 	void accumulate_stage(int stage, quokka::StageScratch const &scratch, amrex::Real dt, quokka::StepAccumulators &accum) const
