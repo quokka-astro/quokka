@@ -3134,6 +3134,9 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 	}
 
 	const int checked_comps = (checked_ncomp >= 0) ? checked_ncomp : state.nComp();
+#if defined(NDEBUG) && !defined(AMREX_USE_ASSERTION)
+	amrex::ignore_unused(checked_comps);
+#endif
 	AMREX_ASSERT(checked_comps > 0);
 	AMREX_ASSERT(checked_comps <= state.nComp());
 	AMREX_ASSERT(checked_comps <= S_filled.nComp());
