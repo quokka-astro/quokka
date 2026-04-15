@@ -15,20 +15,20 @@ constexpr double LAMBDA2 = -0.8;
 
 // coefficients for the exact analytic solution (from Krapp 2024 eq 42, 43)
 // u(t) = A*exp(lambda1*t) + B*exp(lambda2*t) + D*t + E
-constexpr double C_GAS_A = 0.145014;
-constexpr double C_GAS_B = 0.059615;
-constexpr double C_GAS_D = 0.833333;
-constexpr double C_GAS_E = 1.79537;
+constexpr double C_GAS_A = 0.145014245014245;
+constexpr double C_GAS_B = 0.0596153846153846;
+constexpr double C_GAS_D = 0.833333333333333;
+constexpr double C_GAS_E = 1.79537037037037;
 
-constexpr double C_DUST1_A = -0.116011;
-constexpr double C_DUST1_B = 0.029808;
-constexpr double C_DUST1_D = 0.083333;
-constexpr double C_DUST1_E = 0.096204;
+constexpr double C_DUST1_A = -0.116011396011396;
+constexpr double C_DUST1_B = 0.0298076923076923;
+constexpr double C_DUST1_D = 0.0833333333333333;
+constexpr double C_DUST1_E = 0.0962037037037037;
 
-constexpr double C_DUST2_A = -0.029003;
-constexpr double C_DUST2_B = -0.089423;
-constexpr double C_DUST2_D = 0.083333;
-constexpr double C_DUST2_E = 0.068426;
+constexpr double C_DUST2_A = -0.029002849002849;
+constexpr double C_DUST2_B = -0.0894230769230769;
+constexpr double C_DUST2_D = 0.0833333333333333;
+constexpr double C_DUST2_E = 0.0684259259259259;
 
 constexpr double rho_gas = 1.0;
 constexpr double rho_dust1 = 0.1;
