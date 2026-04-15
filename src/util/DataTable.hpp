@@ -514,7 +514,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 	[[nodiscard]] static auto flatDataSize(const std::array<int, Ndim> &sizes) -> std::size_t
 	{
-		std::size_t count = static_cast<std::size_t>(Nout);
+		auto count = static_cast<std::size_t>(Nout);
 		for (int dim = 0; dim < Ndim; ++dim) {
 			count *= static_cast<std::size_t>(sizes[dim]);
 		}
@@ -523,7 +523,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 	[[nodiscard]] static auto flatDataIndex(int out_idx, const std::array<int, Ndim> &sizes, const std::array<int, Ndim> &indices) -> std::size_t
 	{
-		std::size_t index = static_cast<std::size_t>(out_idx);
+		auto index = static_cast<std::size_t>(out_idx);
 		for (int dim = 0; dim < Ndim; ++dim) {
 			index = index * static_cast<std::size_t>(sizes[dim]) + static_cast<std::size_t>(indices[dim]);
 		}
@@ -1302,7 +1302,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			herr_t const h5_error = -1;
 			hid_t attr_id = 0;
 			hid_t dset_id = 0;
-			hid_t file_id = H5Fopen(file_path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+			hid_t const file_id = H5Fopen(file_path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file_id != h5_error, ("Failed to open HDF5 file: " + file_path).c_str());
 
 			hid_t const metadata_group = H5Gopen2(file_id, "/metadata", H5P_DEFAULT);
