@@ -144,6 +144,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	using AMRSimulation<problem_t>::enableElectronConduction_;
 	using AMRSimulation<problem_t>::electronConductionKappa0_;
+	using AMRSimulation<problem_t>::conductionCFL;
 
 #if AMREX_SPACEDIM == 3
 	using AMRSimulation<problem_t>::luminosityTables_;
@@ -615,6 +616,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		amrex::ParmParse const hpp("conduction");
 		hpp.query("enabled", enableElectronConduction_);
 		hpp.query("conductivity_prefactor", electronConductionKappa0_);
+		hpp.query("conduction_cfl", conductionCFL);
 		// hpp.query("flux_limiter_phi", electronConductionFluxLimiterPhi_);
 		// hpp.query("saturation_factor", electronConductionSaturationFactor_);
 		// hpp.query("temperature_floor", electronConductionTempFloor_);
@@ -1030,6 +1032,8 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 								 .min_temperature = electronConductionTempFloor_};
 		quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params);
 	}
+
+
 	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
 		DustDrag<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega_, enableIterDustStoptime_, print_dust_counter_);
 	}
