@@ -24,6 +24,7 @@
 
 #include <algorithm>
 #include <array>
+#include <exception>
 #include <type_traits>
 #include <utility>
 
@@ -173,10 +174,17 @@ namespace detail
 {
 consteval auto abs_constexpr(Real x) -> Real { return (x < static_cast<Real>(0.0)) ? -x : x; }
 
+struct LowStorageFormError : std::exception {
+	[[nodiscard]] auto what() const noexcept -> char const * override
+	{
+		return "RK scheme cannot be represented with a single previous-stage state.";
+	}
+};
+
 consteval void require_low_storage_form(bool ok)
 {
 	if (!ok) {
-		throw "RK scheme cannot be represented with a single previous-stage state.";
+		throw LowStorageFormError{};
 	}
 }
 
