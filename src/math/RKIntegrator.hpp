@@ -156,29 +156,104 @@ struct StepAccumulators {
 	}
 };
 
-/// SSPRK2 stage description for Quokka's hydro update.
+template <int N> struct ExplicitButcherTableau {
+	std::array<std::array<Real, N>, N> a{};
+	std::array<Real, N> b{};
+	std::array<Real, N> c{};
+};
+
+struct StageAdvanceCoefficients {
+	Real old_state_weight = static_cast<Real>(0.0);
+	Real stage_input_weight = static_cast<Real>(1.0);
+	Real rhs_weight = static_cast<Real>(1.0);
+	Real accumulation_weight = static_cast<Real>(0.0);
+};
+
+namespace detail
+{
+consteval auto abs_constexpr(Real x) -> Real { return (x < static_cast<Real>(0.0)) ? -x : x; }
+
+consteval void require_low_storage_form(bool ok)
+{
+	if (!ok) {
+		throw "RK scheme cannot be represented with a single previous-stage state.";
+	}
+}
+
+template <int N>
+consteval auto derive_stage_advance_coefficients(ExplicitButcherTableau<N> const &tableau) -> std::array<StageAdvanceCoefficients, N>
+{
+	// Reduce an explicit tableau to Quokka's low-storage recurrence
+	// U_out = a * U^n + b * U_in + g * dt * L(U_in), rejecting schemes that
+	// cannot be represented with a single previous-stage state.
+	std::array<StageAdvanceCoefficients, N> coeffs{};
+	constexpr Real eps = static_cast<Real>(1.0e-12);
+
+	for (int stage = 0; stage < N; ++stage) {
+		coeffs[stage].accumulation_weight = tableau.b[stage];
+
+		if (stage == 0) {
+			coeffs[stage].rhs_weight = (N == 1) ? tableau.b[0] : tableau.a[1][0];
+			continue;
+		}
+
+		Real lambda = static_cast<Real>(0.0);
+		bool lambda_set = false;
+
+		for (int j = 0; j < stage; ++j) {
+			const Real prev = tableau.a[stage][j];
+			const Real target = (stage == (N - 1)) ? tableau.b[j] : tableau.a[stage + 1][j];
+			if (abs_constexpr(prev) > eps) {
+				lambda = target / prev;
+				lambda_set = true;
+				break;
+			}
+			require_low_storage_form(abs_constexpr(target) <= eps);
+		}
+
+		require_low_storage_form(lambda_set);
+
+		for (int j = 0; j < stage; ++j) {
+			const Real prev = tableau.a[stage][j];
+			const Real target = (stage == (N - 1)) ? tableau.b[j] : tableau.a[stage + 1][j];
+			require_low_storage_form(abs_constexpr(target - lambda * prev) <= eps);
+		}
+
+		coeffs[stage].old_state_weight = static_cast<Real>(1.0) - lambda;
+		coeffs[stage].stage_input_weight = lambda;
+		coeffs[stage].rhs_weight = (stage == (N - 1)) ? tableau.b[stage] : tableau.a[stage + 1][stage];
+	}
+
+	return coeffs;
+}
+} // namespace detail
+
+/// Forward Euler stage description for Quokka's hydro update.
 struct ForwardEulerScheme {
 	static constexpr int nstages = 1;
-
-	/// Stage time t_n.
-	static constexpr std::array<Real, nstages> c = {static_cast<Real>(0.0)};
-
-	/// Full-step weight for time-integrated face quantities.
-	static constexpr std::array<Real, nstages> stage_integral_weights = {static_cast<Real>(1.0)};
+	static constexpr auto tableau = []() {
+		ExplicitButcherTableau<nstages> t{};
+		t.a = {{{static_cast<Real>(0.0)}}};
+		t.b = {static_cast<Real>(1.0)};
+		t.c = {static_cast<Real>(0.0)};
+		return t;
+	}();
+	static constexpr auto stage_advance = detail::derive_stage_advance_coefficients(tableau);
 };
 
 /// SSPRK2 stage description for Quokka's hydro update.
 struct SSPRK2Scheme {
 	static constexpr int nstages = 2;
-
-	/// Stage times t_n + c_s * dt.
-	static constexpr std::array<Real, nstages> c = {static_cast<Real>(0.0), static_cast<Real>(1.0)};
-
-	/// Weights for time-integrated face quantities accumulated per stage, e.g.
-	/// flux-register increments or average face velocity.
-	static constexpr std::array<Real, nstages> stage_integral_weights = {static_cast<Real>(0.5), static_cast<Real>(0.5)};
+	static constexpr auto tableau = []() {
+		ExplicitButcherTableau<nstages> t{};
+		t.a = {{{static_cast<Real>(0.0), static_cast<Real>(0.0)},
+			{static_cast<Real>(1.0), static_cast<Real>(0.0)}}};
+		t.b = {static_cast<Real>(0.5), static_cast<Real>(0.5)};
+		t.c = {static_cast<Real>(0.0), static_cast<Real>(1.0)};
+		return t;
+	}();
+	static constexpr auto stage_advance = detail::derive_stage_advance_coefficients(tableau);
 };
-
 namespace detail
 {
 template <typename Policy> concept HasDefine = requires(Policy & policy, int lev, CompositeStateView const &reference) { {policy.define(lev, reference)}; };
@@ -195,13 +270,13 @@ template <typename Policy> concept HasResetAccumulators = requires(Policy & poli
 ///   void define_stage_scratch(StageScratch&, CompositeStateView const&, int lev) const;
 ///   void define_step_accumulators(StepAccumulators&, CompositeStateView const&, int lev) const;
 ///   void fill_boundary(int stage, CompositeStateView, Real stage_time) const;
-///   void compute_stage(int stage, StageScratch&, CompositeStateView const&, Real stage_time, Real dt_stage) const;
+///   void compute_stage(int stage, StageScratch&, CompositeStateView const&, Real stage_time) const;
 ///   auto validate_stage(int stage, CompositeStateView, CompositeStateView const&, CompositeStateView const&,
-///                       StageScratch&, Real dt) const -> bool;
+///                       StageScratch&, StageAdvanceCoefficients const&, Real dt) const -> bool;
 ///   void update_stage(int stage, CompositeStateView, CompositeStateView const&, CompositeStateView const&,
-///                     StageScratch&, Real dt) const;
-///   void post_stage(int stage, CompositeStateView, StageScratch const&, Real stage_time, Real dt) const;
-///   void accumulate_stage(int stage, StageScratch&, Real dt, StepAccumulators&) const;
+///                     StageScratch&, StageAdvanceCoefficients const&, Real dt) const;
+///   void post_stage(int stage, CompositeStateView, StageScratch const&, Real dt) const;
+///   void accumulate_stage(int stage, StageScratch&, StageAdvanceCoefficients const&, Real dt, StepAccumulators&) const;
 ///   void finalize_step(CompositeStateView, Real time, Real dt, StepAccumulators const&) const;
 template <typename Policy, typename Scheme = SSPRK2Scheme> class RKIntegrator
 {
@@ -237,20 +312,20 @@ template <typename Policy, typename Scheme = SSPRK2Scheme> class RKIntegrator
 		CompositeStateView stage_input = old_state;
 
 		for (int stage = 0; stage < Scheme::nstages; ++stage) {
-			const Real stage_time = time + Scheme::c[stage] * dt;
-			const Real dt_stage = Scheme::stage_integral_weights[stage] * dt;
+			auto const &coeffs = Scheme::stage_advance[stage];
+			const Real stage_time = time + Scheme::tableau.c[stage] * dt;
 			CompositeStateView stage_output = (stage == Scheme::nstages - 1) ? new_state : stage_state;
 
 			policy_.fill_boundary(stage + 1, stage_input, stage_time);
-			policy_.compute_stage(stage + 1, scratch_, stage_input, stage_time, dt_stage);
-			const bool stage_ok = policy_.validate_stage(stage + 1, stage_output, old_state, stage_input, scratch_, dt);
+			policy_.compute_stage(stage + 1, scratch_, stage_input, stage_time);
+			const bool stage_ok = policy_.validate_stage(stage + 1, stage_output, old_state, stage_input, scratch_, coeffs, dt);
 			if (!stage_ok) {
 				return false;
 			}
-			policy_.update_stage(stage + 1, stage_output, old_state, stage_input, scratch_, dt);
+			policy_.update_stage(stage + 1, stage_output, old_state, stage_input, scratch_, coeffs, dt);
 
-			policy_.post_stage(stage + 1, stage_output, scratch_, stage_time, dt);
-			policy_.accumulate_stage(stage + 1, scratch_, dt, accumulators_);
+			policy_.post_stage(stage + 1, stage_output, scratch_, dt);
+			policy_.accumulate_stage(stage + 1, scratch_, coeffs, dt, accumulators_);
 			stage_input = stage_output;
 		}
 
@@ -285,20 +360,20 @@ struct HydroRKPolicyInterface {
 
 	void fill_boundary(int stage, CompositeStateView state, Real stage_time) const;
 
-	void compute_stage(int stage, StageScratch &scratch, CompositeStateView const &input, Real stage_time, Real dt_stage) const;
+	void compute_stage(int stage, StageScratch &scratch, CompositeStateView const &input, Real stage_time) const;
 
 	auto validate_stage(int stage, CompositeStateView output, CompositeStateView const &old_state, CompositeStateView const &stage_input,
-			    StageScratch &scratch, Real dt) const -> bool;
+			    StageScratch &scratch, StageAdvanceCoefficients const &coeffs, Real dt) const -> bool;
 
 	/// Commit the accepted stage update after validation/fixup has completed.
 	void update_stage(int stage, CompositeStateView output, CompositeStateView const &old_state, CompositeStateView const &stage_input,
-			  StageScratch &scratch, Real dt) const;
+			  StageScratch &scratch, StageAdvanceCoefficients const &coeffs, Real dt) const;
 
-	void post_stage(int stage, CompositeStateView output, StageScratch const &scratch, Real stage_time, Real dt) const;
+	void post_stage(int stage, CompositeStateView output, StageScratch const &scratch, Real dt) const;
 
 	/// Perform per-stage flux-register / EMF-register increments and update any
 	/// step-spanning accumulators such as time-averaged face velocity.
-	void accumulate_stage(int stage, StageScratch &scratch, Real dt, StepAccumulators &accum) const;
+	void accumulate_stage(int stage, StageScratch &scratch, StageAdvanceCoefficients const &coeffs, Real dt, StepAccumulators &accum) const;
 
 	void finalize_step(CompositeStateView new_state, Real time, Real dt, StepAccumulators const &accum) const;
 };

@@ -472,42 +472,66 @@ template <typename problem_t> struct HydroRKPolicy {
 		}
 	}
 
-	void apply_provisional_update(quokka::CompositeStateView output, quokka::CompositeStateView const &stage_input, quokka::StageScratch &scratch,
-				      amrex::Real dt) const
+	void apply_cell_centered_stage_update(quokka::CompositeStateView output, quokka::CompositeStateView const &old_state,
+					      quokka::CompositeStateView const &stage_input, quokka::StageScratch &scratch,
+					      quokka::StageAdvanceCoefficients const &coeffs, amrex::Real dt) const
 	{
-		HydroSystem<problem_t>::PredictStep(*stage_input.cc, *output.cc, scratch.rhs_cc, dt, QuokkaSimulation<problem_t>::nvars_, scratch.redo_flag);
+		auto const &old_cc = old_state.cc->const_arrays();
+		auto const &stage_cc = stage_input.cc->const_arrays();
+		auto const &rhs = scratch.rhs_cc.const_arrays();
+		auto out_cc = output.cc->arrays();
+		auto redo_flag = scratch.redo_flag.arrays();
+		const amrex::Real rhs_dt = coeffs.rhs_weight * dt;
+		const amrex::Real old_weight = coeffs.old_state_weight;
+		const amrex::Real stage_weight = coeffs.stage_input_weight;
+
+		amrex::ParallelFor(*output.cc, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			for (int n = 0; n < QuokkaSimulation<problem_t>::nvars_; ++n) {
+				out_cc[bx](i, j, k, n) =
+				    old_weight * old_cc[bx](i, j, k, n) + stage_weight * stage_cc[bx](i, j, k, n) + rhs_dt * rhs[bx](i, j, k, n);
+			}
+
+			if (!HydroSystem<problem_t>::isStateValid(out_cc[bx], i, j, k)) {
+				redo_flag[bx](i, j, k) = quokka::redoFlag::redo;
+			} else {
+				redo_flag[bx](i, j, k) = quokka::redoFlag::none;
+			}
+		});
 	}
 
-	void apply_stage_update(int stage, quokka::CompositeStateView output, quokka::CompositeStateView const &old_state,
-				quokka::CompositeStateView const &stage_input, quokka::StageScratch &scratch, amrex::Real dt) const
+	void apply_face_centered_stage_update(quokka::CompositeStateView output, quokka::CompositeStateView const &old_state,
+					      quokka::CompositeStateView const &stage_input, quokka::StageScratch &scratch,
+					      quokka::StageAdvanceCoefficients const &coeffs, amrex::Real dt) const
 	{
-		if (stage == 1) {
-			HydroSystem<problem_t>::PredictStep(*stage_input.cc, *output.cc, scratch.rhs_cc, dt, QuokkaSimulation<problem_t>::nvars_,
-							    scratch.redo_flag);
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			MHDSystem<problem_t>::SolveInductionEqn(*stage_input.fc_data, *output.fc_data, scratch.emf, coeffs.rhs_weight * dt,
+								sim_.geom[lev_].CellSizeArray());
 
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				MHDSystem<problem_t>::SolveInductionEqn(*stage_input.fc_data, *output.fc_data, scratch.emf, dt,
-									sim_.geom[lev_].CellSizeArray());
-			}
-		} else {
-			HydroSystem<problem_t>::AddFluxesRK2(*output.cc, *old_state.cc, *stage_input.cc, scratch.rhs_cc, dt,
-							     QuokkaSimulation<problem_t>::nvars_, scratch.redo_flag);
-
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				MHDSystem<problem_t>::SolveInductionEqn(*old_state.fc_data, *output.fc_data, scratch.emf, 0.5 * dt,
-									sim_.geom[lev_].CellSizeArray());
-				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-					amrex::MultiFab::Saxpy((*output.fc_data)[idim], 0.5, (*stage_input.fc_data)[idim], 0, 0,
+			const amrex::Real stage_adjust = coeffs.stage_input_weight - 1.0;
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				if (coeffs.old_state_weight != 0.0) {
+					amrex::MultiFab::Saxpy((*output.fc_data)[idim], coeffs.old_state_weight, (*old_state.fc_data)[idim], 0, 0,
 							       (*output.fc_data)[idim].nComp(), 0);
-					amrex::MultiFab::Saxpy((*output.fc_data)[idim], -0.5, (*old_state.fc_data)[idim], 0, 0, (*output.fc_data)[idim].nComp(),
-							       0);
+				}
+				if (stage_adjust != 0.0) {
+					amrex::MultiFab::Saxpy((*output.fc_data)[idim], stage_adjust, (*stage_input.fc_data)[idim], 0, 0,
+							       (*output.fc_data)[idim].nComp(), 0);
 				}
 			}
+		} else {
+			amrex::ignore_unused(output, old_state, stage_input, scratch, coeffs, dt);
 		}
 	}
 
-	void compute_stage(int /*stage*/, quokka::StageScratch &scratch, quokka::CompositeStateView const &input, amrex::Real /*stage_time*/,
-			   amrex::Real /*dt_stage*/) const
+	void apply_stage_update(quokka::CompositeStateView output, quokka::CompositeStateView const &old_state,
+				quokka::CompositeStateView const &stage_input, quokka::StageScratch &scratch,
+				quokka::StageAdvanceCoefficients const &coeffs, amrex::Real dt) const
+	{
+		apply_cell_centered_stage_update(output, old_state, stage_input, scratch, coeffs, dt);
+		apply_face_centered_stage_update(output, old_state, stage_input, scratch, coeffs, dt);
+	}
+
+	void compute_stage(int /*stage*/, quokka::StageScratch &scratch, quokka::CompositeStateView const &input, amrex::Real /*stage_time*/) const
 	{
 		scratch.clearFlags();
 		scratch.redo_flag.setVal(quokka::redoFlag::none);
@@ -539,19 +563,20 @@ template <typename problem_t> struct HydroRKPolicy {
 		}
 	}
 
-	void update_stage(int stage, quokka::CompositeStateView output, quokka::CompositeStateView const &old_state,
-			  quokka::CompositeStateView const &stage_input, quokka::StageScratch &scratch, amrex::Real dt) const
+	void update_stage(int /*stage*/, quokka::CompositeStateView output, quokka::CompositeStateView const &old_state,
+			  quokka::CompositeStateView const &stage_input, quokka::StageScratch &scratch,
+			  quokka::StageAdvanceCoefficients const &coeffs, amrex::Real dt) const
 	{
-		apply_stage_update(stage, output, old_state, stage_input, scratch, dt);
+		apply_stage_update(output, old_state, stage_input, scratch, coeffs, dt);
 		debugAssertFinite(std::format("NaN detected in HydroRKPolicy::update_stage output on level {}", lev_), *output.cc,
 				  QuokkaSimulation<problem_t>::nvars_);
 	}
 
 	auto validate_stage(int stage, quokka::CompositeStateView output, quokka::CompositeStateView const &old_state,
-			    quokka::CompositeStateView const &stage_input, quokka::StageScratch &scratch, amrex::Real dt) const -> bool
+			    quokka::CompositeStateView const &stage_input, quokka::StageScratch &scratch,
+			    quokka::StageAdvanceCoefficients const &coeffs, amrex::Real dt) const -> bool
 	{
-		amrex::ignore_unused(old_state);
-		apply_provisional_update(output, stage_input, scratch, dt);
+		apply_stage_update(output, old_state, stage_input, scratch, coeffs, dt);
 		amrex::Gpu::streamSynchronizeAll();
 		amrex::Long const ncells_bad = scratch.redo_flag.sum(0);
 		if (ncells_bad == 0) {
@@ -586,7 +611,7 @@ template <typename problem_t> struct HydroRKPolicy {
 			replaceEMFs(scratch.emf, fo_emf, scratch.redo_flag);
 		}
 
-		apply_provisional_update(output, stage_input, scratch, dt);
+		apply_stage_update(output, old_state, stage_input, scratch, coeffs, dt);
 
 		amrex::Gpu::streamSynchronizeAll();
 		amrex::Long const ncells_bad_after_fofc = scratch.redo_flag.sum(0);
@@ -607,8 +632,7 @@ template <typename problem_t> struct HydroRKPolicy {
 		return sim_.abortOnFofcFailure_ == 0;
 	}
 
-	void post_stage(int /*stage*/, quokka::CompositeStateView output, quokka::StageScratch const & /*scratch*/, amrex::Real /*stage_time*/,
-			amrex::Real /*dt*/) const
+	void post_stage(int /*stage*/, quokka::CompositeStateView output, quokka::StageScratch const & /*scratch*/, amrex::Real /*dt*/) const
 	{
 		if (sim_.useDensityFloorParser_) {
 			auto const density_floor_parser = sim_.densityFloorParserExe_.value();
@@ -635,25 +659,22 @@ template <typename problem_t> struct HydroRKPolicy {
 				  QuokkaSimulation<problem_t>::nvars_);
 	}
 
-	void accumulate_stage(int stage, quokka::StageScratch &scratch, amrex::Real dt, quokka::StepAccumulators &accum) const
+	void accumulate_stage(int /*stage*/, quokka::StageScratch &scratch, quokka::StageAdvanceCoefficients const &coeffs, amrex::Real dt,
+			      quokka::StepAccumulators &accum) const
 	{
-		amrex::Real weight = 1.0;
-		if (sim_.integratorOrder_ == 2) {
-			weight = quokka::SSPRK2Scheme::stage_integral_weights[stage - 1];
-		}
-
 		if ((step_fr_as_crse_ != nullptr) || (step_fr_as_fine_ != nullptr)) {
-			sim_.incrementFluxRegisters(step_fr_as_crse_, step_fr_as_fine_, scratch.fluxes_hi, lev_, weight * dt);
+			sim_.incrementFluxRegisters(step_fr_as_crse_, step_fr_as_fine_, scratch.fluxes_hi, lev_, coeffs.accumulation_weight * dt);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				if ((step_emf_as_crse_ != nullptr) || (step_emf_as_fine_ != nullptr)) {
-					sim_.incrementEMFRegisters(step_emf_as_crse_, step_emf_as_fine_, scratch.emf, lev_, -weight * dt);
+					sim_.incrementEMFRegisters(step_emf_as_crse_, step_emf_as_fine_, scratch.emf, lev_,
+								   -coeffs.accumulation_weight * dt);
 				}
 			}
 		}
 
 		if (accum.has_avg_face_vel) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				amrex::MultiFab::Saxpy(accum.avg_face_vel[idim], weight, scratch.face_vel[idim], 0, 0, 1, 0);
+				amrex::MultiFab::Saxpy(accum.avg_face_vel[idim], coeffs.accumulation_weight, scratch.face_vel[idim], 0, 0, 1, 0);
 			}
 		}
 	}
