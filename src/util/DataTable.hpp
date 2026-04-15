@@ -531,8 +531,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	}
 
 	void setMetadata(const std::array<std::string, Ndim> &input_names, const std::array<std::string, Nout> &output_names,
-			 const std::array<std::string, Ndim> &input_units, const std::array<std::string, Nout> &output_units,
-			 SpacingType output_spacing)
+			 const std::array<std::string, Ndim> &input_units, const std::array<std::string, Nout> &output_units, SpacingType output_spacing)
 	{
 		input_names_ = input_names;
 		output_names_ = output_names;
@@ -925,9 +924,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		}
 	}
 
-	void initializeCommonFlat(const std::array<amrex::Real, Ndim> &x_mins, const std::array<amrex::Real, Ndim> &x_maxs,
-				  const std::array<int, Ndim> &n_xs, const std::array<SpacingType, Ndim> &spacing_types,
-				  const amrex::Vector<amrex::Real> &flat_data)
+	void initializeCommonFlat(const std::array<amrex::Real, Ndim> &x_mins, const std::array<amrex::Real, Ndim> &x_maxs, const std::array<int, Ndim> &n_xs,
+				  const std::array<SpacingType, Ndim> &spacing_types, const amrex::Vector<amrex::Real> &flat_data)
 	{
 		initializeStorage(x_mins, x_maxs, n_xs, spacing_types);
 		fillDataTablesFlat(flat_data);
@@ -1035,13 +1033,14 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 					if (dim < Ndim - 1) {
 						ss >> comma;
 					}
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sizes[dim] > 0, std::format("Invalid dimension size {} for dimension {}", sizes[dim], dim));
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sizes[dim] > 0,
+									 std::format("Invalid dimension size {} for dimension {}", sizes[dim], dim));
 				}
 			}
 
 			file >> n_out;
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n_out == Nout,
-							 std::format("CSV file output dimension mismatch! File has {} outputs, but DataTable expects {}", n_out, Nout));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+			    n_out == Nout, std::format("CSV file output dimension mismatch! File has {} outputs, but DataTable expects {}", n_out, Nout));
 
 			std::string input_names_line;
 			std::getline(file >> std::ws, input_names_line);
@@ -1141,16 +1140,16 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			for (int dim = 0; dim < Ndim; ++dim) {
 				coord_bounds[dim].first = xlo_metadata[dim];
 				coord_bounds[dim].second = xhi_metadata[dim];
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-				    coord_bounds[dim].second > coord_bounds[dim].first,
-				    std::format("Invalid coordinate bounds for dimension {}: [{}, {}]", dim, coord_bounds[dim].first, coord_bounds[dim].second));
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_bounds[dim].second > coord_bounds[dim].first,
+								 std::format("Invalid coordinate bounds for dimension {}: [{}, {}]", dim,
+									     coord_bounds[dim].first, coord_bounds[dim].second));
 
 				try {
 					spacing_types_enum[dim] = amrex::getEnumCaseInsensitive<SpacingType>(spacing_metadata[dim]);
 				} catch (const std::runtime_error &) {
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-					    false,
-					    std::format("Invalid spacing type '{}' for dimension {}. Must be 'linear', 'log', or 'fast_log'", spacing_metadata[dim], dim));
+					    false, std::format("Invalid spacing type '{}' for dimension {}. Must be 'linear', 'log', or 'fast_log'",
+							       spacing_metadata[dim], dim));
 				}
 
 				x_mins[dim] = coord_bounds[dim].first;
@@ -1178,7 +1177,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 						if (output_spacing_bcast == SpacingType::fast_log || output_spacing_bcast == SpacingType::log) {
 							AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 							    value > 0.0,
-							    std::format("log output spacing requires positive values, got {} at output {} index {}", value, out_idx, i));
+							    std::format("log output spacing requires positive values, got {} at output {} index {}", value,
+									out_idx, i));
 							value = log_(value);
 						}
 						flat_data[flatDataIndex(out_idx, sizes, std::array<int, Ndim>{i})] = value;
@@ -1197,8 +1197,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 							if (output_spacing_bcast == SpacingType::fast_log || output_spacing_bcast == SpacingType::log) {
 								AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 								    value > 0.0,
-								    std::format("log output spacing requires positive values, got {} at output {} index ({}, {})", value,
-										out_idx, i1, i2));
+								    std::format(
+									"log output spacing requires positive values, got {} at output {} index ({}, {})",
+									value, out_idx, i1, i2));
 								value = log_(value);
 							}
 							flat_data[flatDataIndex(out_idx, sizes, std::array<int, Ndim>{i1, i2})] = value;
@@ -1218,9 +1219,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 								}
 								if (output_spacing_bcast == SpacingType::fast_log || output_spacing_bcast == SpacingType::log) {
 									AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-									    value > 0.0,
-									    std::format("log output spacing requires positive values, got {} at output {} index ({}, {}, {})",
-											value, out_idx, i1, i2, i3));
+									    value > 0.0, std::format("log output spacing requires positive values, got {} at "
+												     "output {} index ({}, {}, {})",
+												     value, out_idx, i1, i2, i3));
 									value = log_(value);
 								}
 								flat_data[flatDataIndex(out_idx, sizes, std::array<int, Ndim>{i1, i2, i3})] = value;
@@ -1240,12 +1241,12 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 									if (i1 < sizes[0] - 1) {
 										file >> comma;
 									}
-									if (output_spacing_bcast == SpacingType::fast_log || output_spacing_bcast == SpacingType::log) {
+									if (output_spacing_bcast == SpacingType::fast_log ||
+									    output_spacing_bcast == SpacingType::log) {
 										AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-										    value > 0.0,
-										    std::format(
-											"log output spacing requires positive values, got {} at output {} index ({}, {}, {}, {})",
-											value, out_idx, i1, i2, i3, i4));
+										    value > 0.0, std::format("log output spacing requires positive values, got "
+													     "{} at output {} index ({}, {}, {}, {})",
+													     value, out_idx, i1, i2, i3, i4));
 										value = log_(value);
 									}
 									flat_data[flatDataIndex(out_idx, sizes, std::array<int, Ndim>{i1, i2, i3, i4})] = value;
