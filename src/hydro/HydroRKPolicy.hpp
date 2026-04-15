@@ -421,7 +421,7 @@ template <typename problem_t> struct HydroRKPolicy {
 		}
 
 		debugAssertFinite(std::format("NaN detected in HydroRKPolicy::fill_boundary cc state on level {}", lev_), *state.cc,
-				 QuokkaSimulation<problem_t>::nvars_);
+				  QuokkaSimulation<problem_t>::nvars_);
 	}
 
 	void recompute_stage_rhs(quokka::StageScratch &scratch, quokka::CompositeStateView const &input) const
@@ -519,7 +519,7 @@ template <typename problem_t> struct HydroRKPolicy {
 	{
 		apply_stage_update(stage, output, old_state, stage_input, scratch, dt);
 		debugAssertFinite(std::format("NaN detected in HydroRKPolicy::update_stage output on level {}", lev_), *output.cc,
-				 QuokkaSimulation<problem_t>::nvars_);
+				  QuokkaSimulation<problem_t>::nvars_);
 	}
 
 	auto validate_stage(int stage, quokka::CompositeStateView output, quokka::CompositeStateView const &old_state,
@@ -531,7 +531,7 @@ template <typename problem_t> struct HydroRKPolicy {
 		amrex::Long const ncells_bad = scratch.redo_flag.sum(0);
 		if (ncells_bad == 0) {
 			debugAssertFinite(std::format("NaN detected in HydroRKPolicy::validate_stage accepted output on level {}", lev_), *output.cc,
-					 QuokkaSimulation<problem_t>::nvars_);
+					  QuokkaSimulation<problem_t>::nvars_);
 			return true;
 		}
 
@@ -567,7 +567,7 @@ template <typename problem_t> struct HydroRKPolicy {
 		amrex::Long const ncells_bad_after_fofc = scratch.redo_flag.sum(0);
 		if (ncells_bad_after_fofc == 0) {
 			debugAssertFinite(std::format("NaN detected in HydroRKPolicy::validate_stage FOFC output on level {}", lev_), *output.cc,
-					 QuokkaSimulation<problem_t>::nvars_);
+					  QuokkaSimulation<problem_t>::nvars_);
 			return true;
 		}
 
@@ -607,7 +607,7 @@ template <typename problem_t> struct HydroRKPolicy {
 		}
 
 		debugAssertFinite(std::format("NaN detected in HydroRKPolicy::post_stage output on level {}", lev_), *output.cc,
-				 QuokkaSimulation<problem_t>::nvars_);
+				  QuokkaSimulation<problem_t>::nvars_);
 	}
 
 	void accumulate_stage(int stage, quokka::StageScratch const &scratch, amrex::Real dt, quokka::StepAccumulators &accum) const
