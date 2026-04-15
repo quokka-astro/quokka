@@ -3933,7 +3933,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::createRuntimeDerive
 		particleRegister_.depositParticleMassDensity(particleType, deposit_birth_mass, outMF, outLev, outComp, massMin, massMax, hasAgeFilter, tNew_[0],
 							     tAgeMax);
 #else
-		amrex::ignore_unused(depositField, outMF, outLev, outComp, massMin, massMax, hasAgeFilter, tAgeMax);
+		amrex::ignore_unused(particleType, depositField, outMF, outLev, outComp, massMin, massMax, hasAgeFilter, tAgeMax);
 		amrex::Abort("Particle deposition runtime derived fields are supported only in 3D.");
 #endif
 	};

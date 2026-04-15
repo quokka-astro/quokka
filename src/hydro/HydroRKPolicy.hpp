@@ -6,8 +6,34 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 
+#include <array>
+#include <format>
+#include <string>
+#include <tuple>
+#include <utility>
+
+#include "AMReX_BLProfiler.H"
+#include "AMReX_EdgeFluxRegister.H"
+#include "AMReX_FluxRegister.H"
+#include "AMReX_GpuControl.H"
+#include "AMReX_GpuDevice.H"
+#include "AMReX_GpuQualifiers.H"
+#include "AMReX_MultiFab.H"
+#include "AMReX_ParallelDescriptor.H"
+#include "AMReX_PlotFileUtil.H"
+#include "AMReX_Print.H"
+#include "AMReX_VisMF.H"
+#include "AMReX_iMultiFab.H"
+
+#include "hydro/hydro_system.hpp"
+#include "hydro/mhd_system.hpp"
+#include "math/RKIntegrator.hpp"
+#include "simulation.hpp"
+
+template <typename problem_t> class QuokkaSimulation;
+
 template <typename problem_t> struct HydroRKPolicy {
-	QuokkaSimulation<problem_t> &sim_;
+	QuokkaSimulation<problem_t> &sim_; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
 	int lev_ = -1;
 	int nghost_Riemann_ = 0;
 	amrex::FluxRegister *step_fr_as_crse_ = nullptr;
@@ -446,19 +472,18 @@ template <typename problem_t> struct HydroRKPolicy {
 		}
 	}
 
-	void apply_provisional_update(quokka::CompositeStateView output, quokka::CompositeStateView const &stage_input, quokka::StageScratch const &scratch,
+	void apply_provisional_update(quokka::CompositeStateView output, quokka::CompositeStateView const &stage_input, quokka::StageScratch &scratch,
 				      amrex::Real dt) const
 	{
-		HydroSystem<problem_t>::PredictStep(*stage_input.cc, *output.cc, scratch.rhs_cc, dt, QuokkaSimulation<problem_t>::nvars_,
-						    const_cast<amrex::iMultiFab &>(scratch.redo_flag));
+		HydroSystem<problem_t>::PredictStep(*stage_input.cc, *output.cc, scratch.rhs_cc, dt, QuokkaSimulation<problem_t>::nvars_, scratch.redo_flag);
 	}
 
 	void apply_stage_update(int stage, quokka::CompositeStateView output, quokka::CompositeStateView const &old_state,
-				quokka::CompositeStateView const &stage_input, quokka::StageScratch const &scratch, amrex::Real dt) const
+				quokka::CompositeStateView const &stage_input, quokka::StageScratch &scratch, amrex::Real dt) const
 	{
 		if (stage == 1) {
 			HydroSystem<problem_t>::PredictStep(*stage_input.cc, *output.cc, scratch.rhs_cc, dt, QuokkaSimulation<problem_t>::nvars_,
-							    const_cast<amrex::iMultiFab &>(scratch.redo_flag));
+							    scratch.redo_flag);
 
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				MHDSystem<problem_t>::SolveInductionEqn(*stage_input.fc_data, *output.fc_data, scratch.emf, dt,
@@ -466,7 +491,7 @@ template <typename problem_t> struct HydroRKPolicy {
 			}
 		} else {
 			HydroSystem<problem_t>::AddFluxesRK2(*output.cc, *old_state.cc, *stage_input.cc, scratch.rhs_cc, dt,
-							     QuokkaSimulation<problem_t>::nvars_, const_cast<amrex::iMultiFab &>(scratch.redo_flag));
+							     QuokkaSimulation<problem_t>::nvars_, scratch.redo_flag);
 
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				MHDSystem<problem_t>::SolveInductionEqn(*old_state.fc_data, *output.fc_data, scratch.emf, 0.5 * dt,
@@ -515,7 +540,7 @@ template <typename problem_t> struct HydroRKPolicy {
 	}
 
 	void update_stage(int stage, quokka::CompositeStateView output, quokka::CompositeStateView const &old_state,
-			  quokka::CompositeStateView const &stage_input, quokka::StageScratch const &scratch, amrex::Real dt) const
+			  quokka::CompositeStateView const &stage_input, quokka::StageScratch &scratch, amrex::Real dt) const
 	{
 		apply_stage_update(stage, output, old_state, stage_input, scratch, dt);
 		debugAssertFinite(std::format("NaN detected in HydroRKPolicy::update_stage output on level {}", lev_), *output.cc,
@@ -610,7 +635,7 @@ template <typename problem_t> struct HydroRKPolicy {
 				  QuokkaSimulation<problem_t>::nvars_);
 	}
 
-	void accumulate_stage(int stage, quokka::StageScratch const &scratch, amrex::Real dt, quokka::StepAccumulators &accum) const
+	void accumulate_stage(int stage, quokka::StageScratch &scratch, amrex::Real dt, quokka::StepAccumulators &accum) const
 	{
 		amrex::Real weight = 1.0;
 		if (sim_.integratorOrder_ == 2) {
@@ -618,12 +643,10 @@ template <typename problem_t> struct HydroRKPolicy {
 		}
 
 		if ((step_fr_as_crse_ != nullptr) || (step_fr_as_fine_ != nullptr)) {
-			sim_.incrementFluxRegisters(step_fr_as_crse_, step_fr_as_fine_,
-						    const_cast<std::array<amrex::MultiFab, AMREX_SPACEDIM> &>(scratch.fluxes_hi), lev_, weight * dt);
+			sim_.incrementFluxRegisters(step_fr_as_crse_, step_fr_as_fine_, scratch.fluxes_hi, lev_, weight * dt);
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				if ((step_emf_as_crse_ != nullptr) || (step_emf_as_fine_ != nullptr)) {
-					sim_.incrementEMFRegisters(step_emf_as_crse_, step_emf_as_fine_,
-								   const_cast<std::array<amrex::MultiFab, AMREX_SPACEDIM> &>(scratch.emf), lev_, -weight * dt);
+					sim_.incrementEMFRegisters(step_emf_as_crse_, step_emf_as_fine_, scratch.emf, lev_, -weight * dt);
 				}
 			}
 		}

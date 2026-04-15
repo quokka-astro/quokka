@@ -906,13 +906,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::addStrangSplitSo
 
 template <typename problem_t> auto QuokkaSimulation<problem_t>::computePhotoelectricHeatingRate(amrex::Real current_time) -> amrex::Real
 {
-	amrex::Real heating_rate = 0.0;
+	const amrex::Real heating_rate_default = 0.0;
 
 #if AMREX_SPACEDIM == 3
 	// Check if PE heating tables are initialized
 	// Note that this function is always called as long as cooling is turned on, so it is okay if g_pe_heating_tables_ptr is null
 	if (quokka::g_pe_heating_tables_ptr<> == nullptr || !quokka::g_pe_heating_tables_ptr<>->is_initialized()) {
-		return heating_rate; // Return 0 if tables not loaded
+		return heating_rate_default; // Return 0 if tables not loaded
 	}
 
 	// Get GPU-friendly const tables
@@ -920,16 +920,14 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computePhotoelec
 
 	if (const_sfr_Msun_per_year_per_kpc2_ > 0.0) {
 		// Constant star formation rate
-		heating_rate = quokka::PeHeatingFromConstSfr(const_sfr_Msun_per_year_per_kpc2_, gpu_tables);
-	} else {
-		// Real star formation history
-		heating_rate = particleRegister_.computePhotoelectricHeatingRate(current_time, gpu_tables, sf_area_kpc2_);
+		return quokka::PeHeatingFromConstSfr(const_sfr_Msun_per_year_per_kpc2_, gpu_tables);
 	}
+	// Real star formation history
+	return particleRegister_.computePhotoelectricHeatingRate(current_time, gpu_tables, sf_area_kpc2_);
 #else
 	amrex::ignore_unused(current_time);
+	return heating_rate_default;
 #endif
-
-	return heating_rate;
 }
 
 template <typename problem_t> auto QuokkaSimulation<problem_t>::computeExternalHeatingRate(amrex::Real current_time, amrex::Real dt) -> amrex::Real
@@ -2098,12 +2096,12 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		if (emf_as_crse != nullptr) {
 			step_emf_as_crse = std::make_unique<amrex::EdgeFluxRegister>(boxArray(lev + 1), boxArray(lev), DistributionMap(lev + 1), dmap[lev],
 										     geom[lev + 1], geom[lev], 1);
-			step_emf_as_crse->reset();
+			(*step_emf_as_crse).reset();
 		}
 		if (emf_as_fine != nullptr) {
 			step_emf_as_fine = std::make_unique<amrex::EdgeFluxRegister>(grids[lev], boxArray(lev - 1), dmap[lev], DistributionMap(lev - 1),
 										     geom[lev], geom[lev - 1], 1);
-			step_emf_as_fine->reset();
+			(*step_emf_as_fine).reset();
 		}
 	}
 
@@ -2129,7 +2127,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	}
 
 	auto run_integrator = [&](auto scheme_tag) -> bool {
-		using scheme_t = typename decltype(scheme_tag)::type;
+		using scheme_t = decltype(scheme_tag)::type;
 		quokka::RKIntegrator<HydroRKPolicy<problem_t>, scheme_t> integrator(policy);
 
 		integrator.define(lev, old_state);

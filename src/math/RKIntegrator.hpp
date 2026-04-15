@@ -22,6 +22,7 @@
 /// schedules stages and manages temporary storage.
 ///
 
+#include <algorithm>
 #include <array>
 #include <type_traits>
 #include <utility>
@@ -33,6 +34,7 @@
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_REAL.H"
+#include "AMReX_iMultiFab.H"
 
 namespace quokka
 {
@@ -50,12 +52,7 @@ struct CompositeStateView {
 
 	[[nodiscard]] auto hasFaceState() const -> bool
 	{
-		for (auto *ptr : fc) {
-			if (ptr != nullptr) {
-				return true;
-			}
-		}
-		return false;
+		return std::ranges::any_of(fc, [](auto const *ptr) { return ptr != nullptr; });
 	}
 };
 
@@ -164,10 +161,10 @@ struct ForwardEulerScheme {
 	static constexpr int nstages = 1;
 
 	/// Stage time t_n.
-	static constexpr std::array<Real, nstages> c = {Real(0.0)};
+	static constexpr std::array<Real, nstages> c = {static_cast<Real>(0.0)};
 
 	/// Full-step weight for time-integrated face quantities.
-	static constexpr std::array<Real, nstages> stage_integral_weights = {Real(1.0)};
+	static constexpr std::array<Real, nstages> stage_integral_weights = {static_cast<Real>(1.0)};
 };
 
 /// SSPRK2 stage description for Quokka's hydro update.
@@ -175,11 +172,11 @@ struct SSPRK2Scheme {
 	static constexpr int nstages = 2;
 
 	/// Stage times t_n + c_s * dt.
-	static constexpr std::array<Real, nstages> c = {Real(0.0), Real(1.0)};
+	static constexpr std::array<Real, nstages> c = {static_cast<Real>(0.0), static_cast<Real>(1.0)};
 
 	/// Weights for time-integrated face quantities accumulated per stage, e.g.
 	/// flux-register increments or average face velocity.
-	static constexpr std::array<Real, nstages> stage_integral_weights = {Real(0.5), Real(0.5)};
+	static constexpr std::array<Real, nstages> stage_integral_weights = {static_cast<Real>(0.5), static_cast<Real>(0.5)};
 };
 
 namespace detail
@@ -202,9 +199,9 @@ template <typename Policy> concept HasResetAccumulators = requires(Policy & poli
 ///   auto validate_stage(int stage, CompositeStateView, CompositeStateView const&, CompositeStateView const&,
 ///                       StageScratch&, Real dt) const -> bool;
 ///   void update_stage(int stage, CompositeStateView, CompositeStateView const&, CompositeStateView const&,
-///                     StageScratch const&, Real dt) const;
+///                     StageScratch&, Real dt) const;
 ///   void post_stage(int stage, CompositeStateView, StageScratch const&, Real stage_time, Real dt) const;
-///   void accumulate_stage(int stage, StageScratch const&, Real dt, StepAccumulators&) const;
+///   void accumulate_stage(int stage, StageScratch&, Real dt, StepAccumulators&) const;
 ///   void finalize_step(CompositeStateView, Real time, Real dt, StepAccumulators const&) const;
 template <typename Policy, typename Scheme = SSPRK2Scheme> class RKIntegrator
 {
@@ -295,13 +292,13 @@ struct HydroRKPolicyInterface {
 
 	/// Commit the accepted stage update after validation/fixup has completed.
 	void update_stage(int stage, CompositeStateView output, CompositeStateView const &old_state, CompositeStateView const &stage_input,
-			  StageScratch const &scratch, Real dt) const;
+			  StageScratch &scratch, Real dt) const;
 
 	void post_stage(int stage, CompositeStateView output, StageScratch const &scratch, Real stage_time, Real dt) const;
 
 	/// Perform per-stage flux-register / EMF-register increments and update any
 	/// step-spanning accumulators such as time-averaged face velocity.
-	void accumulate_stage(int stage, StageScratch const &scratch, Real dt, StepAccumulators &accum) const;
+	void accumulate_stage(int stage, StageScratch &scratch, Real dt, StepAccumulators &accum) const;
 
 	void finalize_step(CompositeStateView new_state, Real time, Real dt, StepAccumulators const &accum) const;
 };
