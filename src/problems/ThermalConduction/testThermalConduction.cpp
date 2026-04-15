@@ -143,6 +143,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		const amrex::Real Twind = 2.e6;
 		const amrex::Real Tcloud  = 1.e4;
 		amrex::Real rho_cloud = C::m_p; // g/cm^3
+		amrex::Real cs_wind = 0.0;
 		const amrex::Real Mach = 4.0; // Mach number of the wind
 		
 		amrex::Real T;
@@ -155,17 +156,19 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		else{
 			T = Twind; // g/cm^3
 			rho = rho_cloud * Twind / T; // g/cm^3
-			amrex::Real pressure = rho * Twind / C::k_B / C::m_u;
-			const amrex::Real cs_wind = quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho, pressure);
+			amrex::Real pressure = rho * Twind * C::k_B / C::m_u;
+			cs_wind = quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho, pressure);
 			vz = Mach * cs_wind; // 100 km/s
 			
 		}
-		
+
 		if(i==0 & j==0 & k==0){
 			amrex::Print() << "Parameters of the cloud-wind problem: " << std::endl;
 			amrex::Print() << "Twind: " << Twind << std::endl;
 			amrex::Print() << "Tcloud: " << Tcloud << std::endl;
 			amrex::Print() << "Mach: " << Mach << std::endl;
+			amrex::Print() << "Wind velocity: " << vz << std::endl;
+			amrex::Print() << "Sound speed in the wind: " << cs_wind << std::endl;
 		}
 		/*-------------------------------------------------*/
 		amrex::Real Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T) ; 
