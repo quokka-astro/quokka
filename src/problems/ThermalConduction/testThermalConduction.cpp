@@ -76,12 +76,12 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		
 		/*-------------------------------*/
 		// Problem 1----> Gaussian temperature profile
-		// const amrex::Real rho = C::m_p; // g/cm^3
-		// const amrex::Real T0 = 100.0; // peak temperature at the center
-		// const amrex::Real Tfloor = 1.e-7; // floor temperature at the edges
-		// const amrex::Real D = 3.e23 ; 
-		// const amrex::Real sigma2 = 2. * D * 1.e10; // width of the Gaussian
-		// amrex::Real T = T0 * std::exp(-x*x/sigma2/2.) * std::exp(-y*y/sigma2/2.) * std::exp(-z*z/sigma2/2.) + Tfloor;
+		const amrex::Real rho = C::m_p; // g/cm^3
+		const amrex::Real T0 = 100.0; // peak temperature at the center
+		const amrex::Real Tfloor = 1.e-7; // floor temperature at the edges
+		const amrex::Real D = 3.e23 ; 
+		const amrex::Real sigma2 = 2. * D * 1.e10; // width of the Gaussian
+		amrex::Real T = T0 * std::exp(-x*x/sigma2/2.) * std::exp(-y*y/sigma2/2.) * std::exp(-z*z/sigma2/2.) + Tfloor;
 
 		/*-------------------------------*/
 		//Problem 2----> Step Function temperature profile
@@ -116,7 +116,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		//Problem 4----> Spherical temperature profile with smooth boundary
 		
 		// const amrex::Real rho = C::m_p; // g/cm^3
-		double R = std::sqrt(x*x + y*y + z*z);
+		// double R = std::sqrt(x*x + y*y + z*z);
 		// const amrex::Real Tout = 10.0;
 		// const amrex::Real Tin  = 100.0;
 		// const amrex::Real D = 3.e23 ; 
@@ -136,46 +136,10 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		// 	amrex::Print() << "z: " << z << std::endl;
 		// }
 		/*-------------------------------------------------*/
-		/*------------------------------------------------*/
-		//Problem 5----> Top hat temperature profile with sharp boundary in wind
-		amrex::Real rho ; 
 		
-		const amrex::Real Twind = 2.e6;
-		const amrex::Real Tcloud  = 1.e4;
-		amrex::Real rho_cloud = C::m_p; // g/cm^3
-		amrex::Real cs_wind = 0.0;
-		const amrex::Real Mach = 4.0; // Mach number of the wind
-		
-		amrex::Real T;
-		amrex::Real vz;
-		if(R < R0){
-			T = Tcloud;
-			rho = rho_cloud; // g/cm^3
-			vz = 0.0; // cloud is stationary
-		}
-		else{
-			T = Twind; // g/cm^3
-			rho = rho_cloud * Twind / T; // g/cm^3
-			amrex::Real pressure = rho * Twind * C::k_B / C::m_u;
-			cs_wind = quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho, pressure);
-			vz = Mach * cs_wind; // 100 km/s
-			
-		}
-
-		if(i==0 & j==0 & k==0){
-			amrex::Print() << "Parameters of the cloud-wind problem: " << std::endl;
-			amrex::Print() << "Twind: " << Twind << std::endl;
-			amrex::Print() << "Tcloud: " << Tcloud << std::endl;
-			amrex::Print() << "Mach: " << Mach << std::endl;
-			amrex::Print() << "Wind velocity: " << vz << std::endl;
-			amrex::Print() << "Sound speed in the wind: " << cs_wind << std::endl;
-		}
-		/*-------------------------------------------------*/
 		amrex::Real Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T) ; 
-
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index) = rho * vz;
-		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint + 0.5 * rho * vz * vz; // total energy = internal energy + kinetic energy
+		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint ; // total energy = internal energy + kinetic energy
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = Eint;
 	});
 }
