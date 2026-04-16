@@ -72,12 +72,19 @@ template <typename problem_t> struct RadSystem_Traits {
 	static constexpr OpacityModel opacity_model = OpacityModel::single_group;
 };
 
+enum class ChemicalFeedbackSpecies {
+	H,
+	He,
+};
+
 // this struct is specialized by the user application code
 //
 template <typename problem_t> struct ISM_Traits {
 	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
 	static constexpr bool enable_photoelectric_heating = false;
 	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
+	static constexpr amrex::GpuArray<ChemicalFeedbackSpecies, 0> chemical_feedback_species = {};
+	static constexpr bool enable_chemical_feedback = false;
 };
 
 // A struct to hold the results of the ComputeRadPressure function.

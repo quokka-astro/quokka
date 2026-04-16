@@ -215,7 +215,7 @@ AMREX_ENUM(StochasticStellarPopParticleRealIdx, // NOLINT
 	   death_z,				// Death position z
 	   death_density,			// Density at death
 	   mass_at_birth,			// Particle mass at birth
-	   luminosity				// Base luminosity component (expanded to luminosity_0, luminosity_1, ... in I/O)
+	   chemical_first_index,		// Index of the first chemical feedback component
 );
 
 // Integer component indices using AMREX_ENUM
@@ -241,14 +241,22 @@ constexpr int StochasticStellarPopParticleMassAtBirthIdx = static_cast<int>(Stoc
 constexpr int StochasticStellarPopParticleLumIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::luminosity); // Base index for luminosity components
 constexpr int StochasticStellarPopParticleStageIdx = static_cast<int>(StochasticStellarPopParticleIntIdx::evolution_stage);
 
-// Number of real components for StochasticStellarPop_particles, mass + 3 velocity components + times + positions + death density + luminosity
+// Number of real components for StochasticStellarPop_particles, calculated as
+//   luminosity_first_index + nGroups
+// where
+//   luminosity_first_index = chemical_first_index + nchem * nchannel;
+// with chemical_first_index = static_cast<int>(StochasticStellarPopParticleRealIdx::chemical_first_index)
 template <typename problem_t>
 constexpr int StochasticStellarPopParticleRealComps = []() constexpr {
+	constexpr int chemical_first_index = static_cast<int>(StochasticStellarPopParticleRealIdx::chemical_first_index);
+	constexpr int nchem = Physics_Traits<problem_t>::n_chemical_feedback_components;
+	constexpr int nchannel = Physics_Traits<problem_t>::n_chemical_feedback_channels;
+	constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
+	constexpr int luminosity_first_index = chemical_first_index + nchem * nchannel;
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
-		return 14 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, death_time, birth_xyz, death_xyz, death_density, mass_at_birth,
-								// lum[nGroups]
+		return luminosity_first_index + nGroups;
 	} else {
-		return 14; // mass, vx, vy, vz, birth_time, death_time, birth_xyz, death_xyz, death_density, mass_at_birth
+		return luminosity_first_index;
 	}
 }();
 

@@ -102,6 +102,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 									 LuminosityGpuConstTables<Nout> const &gpu_tables) noexcept
 	{
 		LuminosityUpdate::updateLuminosity<problem_t>(p, current_time, gpu_tables);
+		ChemicalFeedbackUpdate::updateChemicalFeedback<problem_t>(p, current_time, gpu_tables);
 	}
 };
 

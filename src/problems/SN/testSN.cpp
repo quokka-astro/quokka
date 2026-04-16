@@ -26,6 +26,9 @@
 #include "util/matplotlibcpp.h"
 #endif
 
+constexpr int nchem = 2;
+constexpr int nchannel = 3;
+
 struct SNProblem {
 };
 
@@ -67,7 +70,7 @@ template <> struct Physics_Traits<SNProblem> {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars
+	static constexpr int numPassiveScalars = numMassScalars + nchem * nchannel; // number of passive scalars
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_dust_enabled = false;
 	static constexpr int nDustGroups = 1; // number of dust groups
@@ -79,6 +82,13 @@ template <> struct Physics_Traits<SNProblem> {
 
 template <> struct SimulationData<SNProblem> {
 	AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> boost_velocity{0.0, 0.0, 0.0};
+};
+
+template <typename problem_t> struct ISM_Traits {
+	static constexpr bool enable_dust_gas_thermal_coupling_model = false;
+	static constexpr bool enable_photoelectric_heating = false;
+	static constexpr double gas_dust_coupling_threshold = 1.0e-6;
+	static constexpr amrex::GpuArray<ChemicalFeedbackSpecies, nchem> chemical_feedback_species = {ChemicalFeedbackSpecies::H, ChemicalFeedbackSpecies::He};
 };
 
 template <> void QuokkaSimulation<SNProblem>::createInitialTestParticles()
@@ -166,7 +176,11 @@ template <> void QuokkaSimulation<SNProblem>::setInitialConditionsOnGrid(quokka:
 
 		// Initialize passive scalar field
 		if constexpr (Physics_Traits<SNProblem>::numPassiveScalars > 0) {
-			state_cc(i, j, k, HydroSystem<SNProblem>::scalar0_index) = initial_scalar_density_d;
+			for (int c = 0; c < nchannel; ++c) {
+				for (int n = 0; n < nchem; ++n) {
+					state_cc(i, j, k, HydroSystem<SNProblem>::scalar0_index + n + c * nchem) = initial_scalar_density_d;
+				}
+			}
 		}
 	});
 }
