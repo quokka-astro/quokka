@@ -3,6 +3,7 @@
 
 #include <fstream>
 #include <iomanip>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -315,6 +316,47 @@ void writeUnitsFile(ContainerType *container, const std::string &snapshot_name, 
 
 			outFile.close();
 		}
+	}
+}
+
+template <typename ContainerType> [[nodiscard]] auto getMaxParticlesPerGridOnThisRank(ContainerType *container) -> amrex::Long
+{
+	if (container == nullptr) {
+		return 0;
+	}
+
+	amrex::Long max_particles_per_grid = 0;
+	const auto &particles_by_level = container->GetParticles();
+
+	for (int lev = 0; lev < static_cast<int>(particles_by_level.size()); ++lev) {
+		std::map<int, amrex::Long> grid_particle_counts;
+
+		for (const auto &kv : particles_by_level[lev]) {
+			const int grid_id = kv.first.first;
+			grid_particle_counts[grid_id] += static_cast<amrex::Long>(kv.second.numParticles());
+		}
+
+		for (const auto &[grid_id, particle_count] : grid_particle_counts) {
+			amrex::ignore_unused(grid_id);
+			max_particles_per_grid = std::max(max_particles_per_grid, particle_count);
+		}
+	}
+
+	return max_particles_per_grid;
+}
+
+template <typename ContainerType, typename problem_t, ParticleType particleType> void printPlotfileParticleGridStatistics(ContainerType *container)
+{
+	if (container != nullptr) {
+		amrex::Long max_particles_per_grid = getMaxParticlesPerGridOnThisRank(container);
+		amrex::ParallelDescriptor::ReduceLongMax(max_particles_per_grid, amrex::ParallelDescriptor::IOProcessorNumber());
+		if (!amrex::ParallelDescriptor::IOProcessor()) {
+			return;
+		}
+
+		const std::string particle_type_name = PhysicsParticleRegister<problem_t>::getParticleTypeName(particleType);
+		amrex::Print() << std::format("[PARTICLES] Root-rank max particles/grid before plotfile for {} = {}\n", particle_type_name,
+					      max_particles_per_grid);
 	}
 }
 

@@ -188,6 +188,9 @@ class PhysicsParticleDescriptorBase
 	// Print statistics of particles
 	virtual void printParticleStatistics() const = 0;
 
+	// Print the maximum number of particles per grid on the root rank before writing a plotfile
+	virtual void printPlotfileParticleGridStatistics() const = 0;
+
 	// Save particle data to text file
 	virtual void saveParticleDataToTxtFile(const std::string &plotfilename, const std::string &name) = 0;
 
@@ -721,6 +724,13 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
+	void printPlotfileParticleGridStatistics() const override
+	{
+		if (container_ != nullptr) {
+			particle_io::printPlotfileParticleGridStatistics<ContainerType, problem_t, particleType_>(container_);
+		}
+	}
+
 	void saveParticleDataToTxtFile(const std::string &filename, const std::string &name) override
 	{
 		if (container_ != nullptr) {
@@ -1046,6 +1056,14 @@ template <typename problem_t> class PhysicsParticleRegister
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->writePlotFile(plotfilename, getParticleTypeName(type));
 			descriptor->writeUnitsFile(plotfilename, getParticleTypeName(type));
+		}
+	}
+
+	void printPlotfileParticleGridStatistics() const
+	{
+		const BL_PROFILE("PhysicsParticleRegister::printPlotfileParticleGridStatistics()");
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			descriptor->printPlotfileParticleGridStatistics();
 		}
 	}
 
