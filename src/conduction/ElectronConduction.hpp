@@ -26,7 +26,7 @@ namespace quokka::conduction
 {
 
 struct ElectronConductionParams {
-	amrex::Real conductivity_prefactor = 3.e34; 
+	amrex::Real conductivity_prefactor = 3.e34;
 	amrex::Real flux_limiter_phi = 0.1;
 	amrex::Real saturation_factor = 5.0;
 	amrex::Real min_temperature = 0.0;
@@ -39,7 +39,7 @@ template <typename problem_t> class ElectronConduction
 				    amrex::Real dt, ElectronConductionParams const &params)
 	{
 		static_assert(Physics_Traits<problem_t>::is_hydro_enabled, "Electron conduction requires hydro to be enabled.");
-		
+
 		if ((dt <= 0.0) || (params.conductivity_prefactor <= 0.0)) {
 			return;
 		}
@@ -97,7 +97,8 @@ template <typename problem_t> class ElectronConduction
 			amrex::Real Pgas = NAN;
 			amrex::Real cs_iso = NAN;
 			if constexpr (HydroSystem<problem_t>::nmscalars_ > 0) {
-				amrex::GpuArray<amrex::Real, HydroSystem<problem_t>::nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+				amrex::GpuArray<amrex::Real, HydroSystem<problem_t>::nmscalars_> massScalars =
+				    RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
 				Tgas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
 				Pgas = quokka::EOS<problem_t>::ComputePressure(rho, Eint, massScalars);
 				cs_iso = quokka::EOS<problem_t>::ComputeIsothermalSoundSpeed(rho, Pgas);
@@ -108,7 +109,7 @@ template <typename problem_t> class ElectronConduction
 			}
 
 			const amrex::Real Tuse = amrex::max(Tgas, t_min);
-			const amrex::Real kappa = params.conductivity_prefactor ;//* std::pow(Tuse, 2.5);
+			const amrex::Real kappa = params.conductivity_prefactor; //* std::pow(Tuse, 2.5);
 			const amrex::Real qsat = amrex::max(saturation_factor * flux_limiter_phi * rho * std::pow(cs_iso, 3), small);
 
 			temperature_arr[bx](i, j, k) = Tuse;
@@ -128,12 +129,12 @@ template <typename problem_t> class ElectronConduction
 		auto const &qsat = saturated_flux.const_arrays();
 		auto flux_x = heat_flux[0].arrays();
 		amrex::ParallelFor(heat_flux[0], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
-			const amrex::Real gradT = (temp[bx](i , j, k) - temp[bx](i - 1, j, k) ) / dx[0] ;
+			const amrex::Real gradT = (temp[bx](i, j, k) - temp[bx](i - 1, j, k)) / dx[0];
 			const amrex::Real kappa_face = 0.5 * (kappa[bx](i, j, k) + kappa[bx](i - 1, j, k));
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real q_sat_face = 0.5 * (qsat[bx](i, j, k) + qsat[bx](i - 1, j, k));
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
-			flux_x[bx](i, j, k) =  q_classical  ;
+			flux_x[bx](i, j, k) = q_classical;
 		});
 
 #if AMREX_SPACEDIM >= 2
@@ -144,7 +145,7 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real q_sat_face = 0.5 * (qsat[bx](i, j, k) + qsat[bx](i, j - 1, k));
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
-			flux_y[bx](i, j, k) =   q_classical  ;
+			flux_y[bx](i, j, k) = q_classical;
 		});
 #endif
 
@@ -156,7 +157,7 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real q_sat_face = 0.5 * (qsat[bx](i, j, k) + qsat[bx](i, j, k - 1));
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
-			flux_z[bx](i, j, k) = q_classical  ;
+			flux_z[bx](i, j, k) = q_classical;
 		});
 #endif
 
@@ -198,13 +199,12 @@ template <typename problem_t> class ElectronConduction
 #endif
 
 			amrex::Real Eint_new = Eint_old - dt * div_flux;
-			if(Eint_new < 0.0) {
-				amrex::Real Tmin = 1.e-7; 
+			if (Eint_new < 0.0) {
+				amrex::Real Tmin = 1.e-7;
 				Eint_new = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, Tmin);
 			}
-			state_out[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Eint_new + Ekin; 
+			state_out[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Eint_new + Ekin;
 			state_out[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index) = Eint_new;
-
 		});
 	}
 };
@@ -212,4 +212,3 @@ template <typename problem_t> class ElectronConduction
 } // namespace quokka::conduction
 
 #endif // ELECTRON_CONDUCTION_HPP_
-

@@ -226,7 +226,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int sn_count_ = 0;	      // number of SN explosions in a step (used for diagnostics)
 	int sn_count_cumulative_ = 0; // cumulative number of SN explosions (used for diagnostics)
 
-	//Conduction parameters
+	// Conduction parameters
 	amrex::Real electronConductionKappa0_ = 4.17;
 	amrex::Real conductionCFL = 0.2;
 	int enableElectronConduction_ = 1;
@@ -1228,19 +1228,17 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		printCellProperties(lev, hydro_dt.index);
 	}
 
-   //compute timestep based on conduction parameters
-   amrex::ValLocPair<amrex::Real, amrex::IntVect> conduction_dt{.value = std::numeric_limits<amrex::Real>::max(),
-								   .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
-   if (enableElectronConduction_ == 1) {
+	// compute timestep based on conduction parameters
+	amrex::ValLocPair<amrex::Real, amrex::IntVect> conduction_dt{.value = std::numeric_limits<amrex::Real>::max(),
+								     .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
+	if (enableElectronConduction_ == 1) {
 		conduction_dt.value = conductionCFL * dx_min * dx_min / electronConductionKappa0_;
 		conduction_dt.index = domain_signal_maxloc;
-		
-																	 
+
 		if (verbose) {
 			amrex::Print() << std::format("...[level {}] \testimated conduction timestep: {:e}\n", lev, conduction_dt.value);
-			amrex::Print() << std::format("...[level {}] \tconduction timestep limited at cell {}\n", lev,
-						      formatIntVect(conduction_dt.index));
-		} 
+			amrex::Print() << std::format("...[level {}] \tconduction timestep limited at cell {}\n", lev, formatIntVect(conduction_dt.index));
+		}
 	}
 
 	// compute maximum particle speed on level 'lev'

@@ -97,7 +97,8 @@ template <typename problem_t> class ElectronConduction
 			amrex::Real Pgas = NAN;
 			amrex::Real cs_iso = NAN;
 			if constexpr (HydroSystem<problem_t>::nmscalars_ > 0) {
-				amrex::GpuArray<amrex::Real, HydroSystem<problem_t>::nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+				amrex::GpuArray<amrex::Real, HydroSystem<problem_t>::nmscalars_> massScalars =
+				    RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
 				Tgas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
 				Pgas = quokka::EOS<problem_t>::ComputePressure(rho, Eint, massScalars);
 				cs_iso = quokka::EOS<problem_t>::ComputeIsothermalSoundSpeed(rho, Pgas);
@@ -220,4 +221,3 @@ template <typename problem_t> class ElectronConduction
 } // namespace quokka::conduction
 
 #endif // ELECTRON_CONDUCTION_HPP_
-

@@ -68,8 +68,8 @@ namespace filesystem = experimental::filesystem;
 
 #include "SimulationData.hpp"
 #include "chemistry/Chemistry.hpp"
-#include "cooling/ResampledCooling.hpp"
 #include "conduction/ElectronConduction.hpp"
+#include "cooling/ResampledCooling.hpp"
 #include "dust/DustDrag.hpp"
 #include "dust/dust_system.hpp"
 #include "eos.H"
@@ -175,7 +175,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	amrex::Real electronConductionFluxLimiterPhi_ = 1.0;
 	amrex::Real electronConductionSaturationFactor_ = 5.0;
 	amrex::Real electronConductionTempFloor_ = 0.0;
-
 
 	std::map<std::string, std::string> turbParams_;
 
@@ -1027,12 +1026,11 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	if (enableElectronConduction_ == 1) {
 		fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 		const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_ * C::k_B,
-								 .flux_limiter_phi = electronConductionFluxLimiterPhi_,
-								 .saturation_factor = electronConductionSaturationFactor_,
-								 .min_temperature = electronConductionTempFloor_};
+										     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
+										     .saturation_factor = electronConductionSaturationFactor_,
+										     .min_temperature = electronConductionTempFloor_};
 		quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params);
 	}
-
 
 	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
 		DustDrag<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega_, enableIterDustStoptime_, print_dust_counter_);

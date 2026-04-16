@@ -23,7 +23,6 @@
 struct ThermalConductionProblem {
 };
 
-
 bool test_passes = false; // if one of the energy checks fails, set to false. NOLINT
 
 template <> struct quokka::EOS_Traits<ThermalConductionProblem> {
@@ -54,11 +53,9 @@ template <> struct Physics_Traits<ThermalConductionProblem> {
 const double rho = 1.0;	   // g cm^-3
 double E_blast = 0.851072; // ergs. NOLINT
 
-
 template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// initialize a ThermalConduction test problem using parameters from
-	
 
 	// extract variables required from the geom object
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = grid_elem.dx_;
@@ -66,7 +63,6 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-	
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -74,7 +70,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 						  "implemented for octant symmetry!");
 		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 
-		if(x < 0.0) {
+		if (x < 0.0) {
 			state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = 1.0;
 		} else {
 			state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = 0.1;
@@ -85,7 +81,8 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		}
 
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index);
+		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) =
+		    state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index);
 	});
 }
 
@@ -121,17 +118,17 @@ auto problem_main() -> int
 	constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
-		BCs_cc[n].setLo(0, amrex::BCType::foextrap);  // left x1 -- Marshak
+		BCs_cc[n].setLo(0, amrex::BCType::foextrap); // left x1 -- Marshak
 		BCs_cc[n].setHi(0, amrex::BCType::foextrap); // right x1 -- extrapolate
-		// for (int i = 1; i < AMREX_SPACEDIM; ++i) {
-		// 	if (isNormalComp(n, i)) { // reflect lower
-		// 		BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
-		// 	} else {
-		// 		BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
-		// 	}
-		// 	// extrapolate upper
-		// 	BCs_cc[n].setHi(i, amrex::BCType::foextrap);
-		// }
+							     // for (int i = 1; i < AMREX_SPACEDIM; ++i) {
+							     // 	if (isNormalComp(n, i)) { // reflect lower
+							     // 		BCs_cc[n].setLo(i, amrex::BCType::reflect_odd);
+							     // 	} else {
+							     // 		BCs_cc[n].setLo(i, amrex::BCType::reflect_even);
+							     // 	}
+							     // 	// extrapolate upper
+							     // 	BCs_cc[n].setHi(i, amrex::BCType::foextrap);
+							     // }
 	}
 
 	// Problem initialization
