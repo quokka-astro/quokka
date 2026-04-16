@@ -70,18 +70,15 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const amrex::Real x = prob_lo[0] + (i + 0.5) * dx[0];
-		const amrex::Real y = prob_lo[1] + (j + 0.5) * dx[1];
-		const amrex::Real z = prob_lo[2] + (k + 0.5) * dx[2];
-		
 		
 		/*-------------------------------*/
 		// Problem 1----> Gaussian temperature profile
 		const amrex::Real rho = C::m_p; // g/cm^3
 		const amrex::Real T0 = 100.0; // peak temperature at the center
-		const amrex::Real Tfloor = 1.e-7; // floor temperature at the edges
+		const amrex::Real Tfloor = 1.e-10; // floor temperature at the edges
 		const amrex::Real D = 3.e23 ; 
 		const amrex::Real sigma2 = 2. * D * 1.e10; // width of the Gaussian
-		amrex::Real T = T0 * std::exp(-x*x/sigma2/2.) * std::exp(-y*y/sigma2/2.) * std::exp(-z*z/sigma2/2.) + Tfloor;
+		amrex::Real T = T0 * std::exp(-x*x/sigma2/2.) + Tfloor;
 
 		/*-------------------------------*/
 		//Problem 2----> Step Function temperature profile
@@ -149,19 +146,20 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 		auto const ncomp = ref.nComp();
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+			amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
+
 			const amrex::Real T0 = 100.0; // peak temperature at the center
-			const amrex::Real Tfloor = 1.e-7; // floor temperature at the edges
+			const amrex::Real Tfloor = 1.e-10; // floor temperature at the edges
 			const amrex::Real D = 3.e23 ; 
 			const amrex::Real sigma2_0 = 2. * D * 1.e10 ; // initial width of the Gaussian
 			const amrex::Real sigma2 = sigma2_0 + 2.0 * D * t; // width of the Gaussian at time t
+			const amrex::Real norm =  T0 * (std::sqrt(sigma2_0/sigma2)) ;
 			
-			
-			amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
 
-			amrex::Real T = T0 * std::exp(-x*x/sigma2/2.) ;
-			amrex::Real const T_exact = T0 * std::exp(-x*x/sigma2/2.) + Tfloor;
+			amrex::Real T_exact = norm * std::exp(-x*x/sigma2/2.) + Tfloor;
 			const amrex::Real rho = C::m_p; // g/cm^3
-			amrex::Real Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T) ; 	
+			amrex::Real Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T_exact) ; 	
+
 			// clear all components
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.;
