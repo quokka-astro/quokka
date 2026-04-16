@@ -2413,6 +2413,9 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 	amrex::MultiFab int_state_new_cc(ba, dm, ncomp_cc, nghost_cc);
 	amrex::MultiFab int_state_old_cc(ba, dm, ncomp_cc, nghost_cc);
 	FillPatch(level, time, int_state_new_cc, 0, ncomp_cc, quokka::centering::cc, quokka::direction::na, FillPatchType::fillpatch_function);
+	// Remapped fine data is defined at the current time only. Keep old/new in sync so
+	// the next timestep swap does not expose uninitialized cell-centered state.
+	int_state_old_cc.ParallelCopy(int_state_new_cc, 0, 0, ncomp_cc, nghost_cc, nghost_cc);
 	std::swap(int_state_new_cc, state_new_cc_[level]);
 	std::swap(int_state_old_cc, state_old_cc_[level]);
 
@@ -3156,7 +3159,9 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 
 		// returns old state, new state, or both depending on 'time'
 		GetData(lev - 1, time, coarseData, coarseTime, cen, dir);
-		AMREX_ASSERT(!state.contains_nan(0, checked_comps, state.nGrowVect()));
+		// The source MultiFab's valid region must be initialized here, but its ghost cells
+		// may still be undefined because this routine is about to fill them.
+		AMREX_ASSERT(!state.contains_nan(0, checked_comps));
 
 		for (auto &i : coarseData) {
 			AMREX_ASSERT(checked_comps <= i->nComp());
