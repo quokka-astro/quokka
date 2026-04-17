@@ -350,9 +350,9 @@ HyperbolicSystem<problem_t>::ReconstructStatesPLM(quokka::Array4View<amrex::Real
 
 	// Use piecewise-linear reconstruction
 	// (This converges at second order in spatial resolution.)
-	const auto lslope = HyperbolicSystem<problem_t>::template SlopeFunc<limiter>(q(i, j, k, n) - q(i - 1, j, k, n), q(i - 1, j, k, n) - q(i - 2, j, k, n));
+	const auto lslope = HyperbolicSystem<problem_t>::template SlopeFunc<limiter>(q(i + 1, j, k, n) - q(i, j, k, n), q(i, j, k, n) - q(i - 1, j, k, n));
 	const auto rslope = HyperbolicSystem<problem_t>::template SlopeFunc<limiter>(q(i + 1, j, k, n) - q(i, j, k, n), q(i, j, k, n) - q(i - 1, j, k, n));
-	leftState(i, j, k, n) = q(i - 1, j, k, n) + 0.5 * lslope; // NOLINT
+	leftState(i + 1, j, k, n) = q(i, j, k, n) + 0.5 * lslope; // NOLINT
 	rightState(i, j, k, n) = q(i, j, k, n) - 0.5 * rslope;	  // NOLINT
 }
 
