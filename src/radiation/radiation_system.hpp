@@ -642,13 +642,7 @@ void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real>
 			const auto Fz = cons(i, j, k, x3RadFlux_index + numRadVars_ * g);
 
 			// check admissibility of states
-			if (!(E_r > 0.0)) {
-				std::cout << "Value of E_r is " << E_r << std::endl;
-				std::cout << "Value of n_photon for this E_r is " << E_r / GetRadiationGroupQuanta(3.29e15, 1.50e16) << std::endl;
-				std::cout << "This happened in i,j,k = " << i << "," << j << "," << k << std::endl;
-				amrex::Abort();
-			}
-			// AMREX_ASSERT(E_r > 0.0); // NOLINT
+			AMREX_ASSERT(E_r > 0.0); // NOLINT
 
 			primVar(i, j, k, primRadEnergy_index + numRadVars_ * g) = E_r;
 			primVar(i, j, k, x1ReducedFlux_index + numRadVars_ * g) = Fx / (c_light_ * E_r);
@@ -659,11 +653,12 @@ void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real>
 }
 
 #ifdef PHOTOCHEMISTRY
-template <typename problem_t> 
+template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::GetChemActiveRadiationGroupQuanta(int group_index) -> amrex::Real
 {
-	amrex::Real freq_low = RadSystem_Traits<problem_t>::ChemActiveRadFreqBounds[group_index];
-	amrex::Real freq_high = RadSystem_Traits<problem_t>::ChemActiveRadFreqBounds[group_index + 1];
+	auto const freq_bounds = RadSystem_Traits<problem_t>::ChemActiveRadFreqBounds();
+	amrex::Real freq_low = freq_bounds[group_index];
+	amrex::Real freq_high = freq_bounds[group_index + 1];
 	return GetRadiationGroupQuanta(freq_low, freq_high);
 }
 #endif

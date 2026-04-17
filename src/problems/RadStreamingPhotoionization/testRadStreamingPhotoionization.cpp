@@ -61,7 +61,10 @@ template <> struct RadSystem_Traits<PhotoionizationStreamingProblem> {
 	static constexpr double c_hat_over_c = chat / c;
 	static constexpr double Erad_floor = 0.0;
 	static constexpr int beta_order = 0;
-	static constexpr auto ChemActiveRadFreqBounds = ChemActiveRadFreqBoundsHeader_;
+	AMREX_GPU_HOST_DEVICE static constexpr amrex::GpuArray<double, NumChemActiveRadGroups + 1> ChemActiveRadFreqBounds()
+	{
+		return ChemActiveRadFreqBoundsHeader_;
+	}
 };
 
 template <> struct SimulationData<PhotoionizationStreamingProblem> {
