@@ -1,5 +1,5 @@
 if(AMReX_SPACEDIM GREATER_EQUAL 2)
-  set(microphysics_network_name "H_ionization_TInd") # this will override
+  set(microphysics_network_name "photoionization") # this will override
                                                   # network_name to
                                                   # photoionization for this
                                                   # directory only
@@ -13,11 +13,10 @@ if(AMReX_SPACEDIM GREATER_EQUAL 2)
     BEFORE ${photoionization_dirs} "${CMAKE_CURRENT_BINARY_DIR}/"
     "includes/extern_parameters.H" "includes/network_properties.H")
 
-  set(JOB_NAME StromgenSphereConstTemp)
+  set(JOB_NAME StromgrenSphere)
 
   # Number of species
   set(NSPEC 3)
-  # set(NSPEC 2)
   set(NEXTRASPEC 0)
 
   # Species enums
@@ -78,7 +77,6 @@ if(AMReX_SPACEDIM GREATER_EQUAL 2)
   # Set photoionisation properties
   set(NUM_CHEM_ACTIVE_RAD_GROUPS 1)
   set(CHEM_ACTIVE_RAD_FREQ_BOUNDS "3.29e15, 1.50e16") # Hz
-  # set(CHEM_ACTIVE_RAD_FREQ_BOUNDS "1.0, 5.0") # Hz
 
   # Configure the header
   configure_file(
@@ -89,7 +87,7 @@ if(AMReX_SPACEDIM GREATER_EQUAL 2)
 
 
   add_executable(
-    ${JOB_NAME} testStromgenSphereConstTemp.cpp "${QuokkaSourcesNoEOS}"
+    ${JOB_NAME} testStromgrenSphere.cpp "${QuokkaSourcesNoEOS}"
                 ../../radiation/photochemistry.cpp ${photoionization_sources})
 
   # this will add #define CHEMISTRY
@@ -99,8 +97,6 @@ if(AMReX_SPACEDIM GREATER_EQUAL 2)
     setup_target_for_cuda_compilation(${JOB_NAME})
   endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-  add_test(
-    NAME ${JOB_NAME}
-    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in ${QuokkaTestParams}
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(NAME StromgrenSphereNoRecombination COMMAND ${JOB_NAME} ../inputs/PhotoionizationTests/StromgrenNoRecombination.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(NAME StromgrenSphereTempIndependentRecombination COMMAND ${JOB_NAME} ../inputs/PhotoionizationTests/StromgrenTempIndependentRecombination.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()
