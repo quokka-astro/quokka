@@ -355,8 +355,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 
 		const std::string particle_type_name = PhysicsParticleRegister<problem_t>::getParticleTypeName(particleType);
-		amrex::Print() << std::format("[PARTICLES] Global max particles/grid before plotfile for {} = {}\n", particle_type_name,
-					      max_particles_per_grid)
+		amrex::Print() << std::format("[PARTICLES] Global max particles/grid before plotfile for {} = {}\n", particle_type_name, max_particles_per_grid)
 			       << std::flush;
 	}
 }
