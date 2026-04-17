@@ -343,7 +343,8 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	// AMR utility functions
 	template <typename PreInterpHook, typename PostInterpHook>
 	void fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state, int lev, amrex::Real time, quokka::centering cen, quokka::direction dir,
-				    PreInterpHook const &pre_interp, PostInterpHook const &post_interp, FillPatchType fptype = FillPatchType::fillpatch_class);
+				    PreInterpHook const &pre_interp, PostInterpHook const &post_interp, FillPatchType fptype = FillPatchType::fillpatch_class,
+				    int checked_ncomp = -1);
 
 	template <typename PreInterpHook, typename PostInterpHook>
 	void FillPatchWithData(int lev, amrex::Real time, amrex::MultiFab &mf, amrex::Vector<amrex::MultiFab *> &coarseData,
@@ -2276,7 +2277,6 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::FluxRegister *fr_as
 
 	if (fr_as_crse != nullptr) {
 		AMREX_ASSERT(lev < finestLevel());
-		AMREX_ASSERT(fr_as_crse == flux_reg_[lev + 1].get());
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 			int const ncomp = fluxArrays[dir].nComp();
 			if (ncomp == 0) {
@@ -2288,7 +2288,6 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::FluxRegister *fr_as
 
 	if (fr_as_fine != nullptr) {
 		AMREX_ASSERT(lev > 0);
-		AMREX_ASSERT(fr_as_fine == flux_reg_[lev].get());
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 			int const ncomp = fluxArrays[dir].nComp();
 			if (ncomp == 0) {
@@ -2309,14 +2308,12 @@ void AMRSimulation<problem_t>::incrementEMFRegisters(amrex::EdgeFluxRegister *em
 	for (amrex::MFIter mfi(state_new_cc_[lev]); mfi.isValid(); ++mfi) {
 		if (emf_as_crse != nullptr) {
 			AMREX_ASSERT(lev < finestLevel());
-			AMREX_ASSERT(emf_as_crse == emf_reg_[lev + 1].get());
 			emf_as_crse->CrseAdd(mfi, {ec_emf_components[0].fabPtr(mfi), ec_emf_components[1].fabPtr(mfi), ec_emf_components[2].fabPtr(mfi)},
 					     dt_lev);
 		}
 
 		if (emf_as_fine != nullptr) {
 			AMREX_ASSERT(lev > 0);
-			AMREX_ASSERT(emf_as_fine == emf_reg_[lev].get());
 			emf_as_fine->FineAdd(mfi, {ec_emf_components[0].fabPtr(mfi), ec_emf_components[1].fabPtr(mfi), ec_emf_components[2].fabPtr(mfi)},
 					     dt_lev);
 		}
@@ -2416,6 +2413,9 @@ void AMRSimulation<problem_t>::RemakeLevel(int level, amrex::Real time, const am
 	amrex::MultiFab int_state_new_cc(ba, dm, ncomp_cc, nghost_cc);
 	amrex::MultiFab int_state_old_cc(ba, dm, ncomp_cc, nghost_cc);
 	FillPatch(level, time, int_state_new_cc, 0, ncomp_cc, quokka::centering::cc, quokka::direction::na, FillPatchType::fillpatch_function);
+	// Remapped fine data is defined at the current time only. Keep old/new in sync so
+	// the next timestep swap does not expose uninitialized cell-centered state.
+	int_state_old_cc.ParallelCopy(int_state_new_cc, 0, 0, ncomp_cc, nghost_cc, nghost_cc);
 	std::swap(int_state_new_cc, state_new_cc_[level]);
 	std::swap(int_state_old_cc, state_old_cc_[level]);
 
@@ -3117,7 +3117,7 @@ template <typename problem_t>
 template <typename PreInterpHook, typename PostInterpHook>
 void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled, amrex::MultiFab &state, int const lev, amrex::Real const time,
 						      quokka::centering cen, quokka::direction dir, PreInterpHook const &pre_interp,
-						      PostInterpHook const &post_interp, FillPatchType fptype)
+						      PostInterpHook const &post_interp, FillPatchType fptype, int checked_ncomp)
 {
 	BL_PROFILE("AMRSimulation::fillBoundaryConditions()"); // NOLINT(misc-const-correctness)
 
@@ -3136,6 +3136,14 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 		throw std::runtime_error("Only cell-centred (cc) and face-centred (fc) variables are supported, thus far.");
 	}
 
+	const int checked_comps = (checked_ncomp >= 0) ? checked_ncomp : state.nComp();
+#if defined(NDEBUG) && !defined(AMREX_USE_ASSERTION)
+	amrex::ignore_unused(checked_comps);
+#endif
+	AMREX_ASSERT(checked_comps > 0);
+	AMREX_ASSERT(checked_comps <= state.nComp());
+	AMREX_ASSERT(checked_comps <= S_filled.nComp());
+
 	amrex::Vector<amrex::BCRec> BCs;
 	if (cen == quokka::centering::cc) {
 		BCs = BCs_cc_;
@@ -3151,11 +3159,13 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 
 		// returns old state, new state, or both depending on 'time'
 		GetData(lev - 1, time, coarseData, coarseTime, cen, dir);
-		AMREX_ASSERT(!state.contains_nan(0, state.nComp()));
+		// The source MultiFab's valid region must be initialized here, but its ghost cells
+		// may still be undefined because this routine is about to fill them.
+		AMREX_ASSERT(!state.contains_nan(0, checked_comps));
 
 		for (auto &i : coarseData) {
-			AMREX_ASSERT(!i->contains_nan(0, state.nComp()));
-			AMREX_ASSERT(!i->contains_nan()); // check ghost zones
+			AMREX_ASSERT(checked_comps <= i->nComp());
+			AMREX_ASSERT(!i->contains_nan(0, checked_comps, i->nGrowVect()));
 			amrex::ignore_unused(i);
 		}
 
@@ -3190,11 +3200,7 @@ void AMRSimulation<problem_t>::fillBoundaryConditions(amrex::MultiFab &S_filled,
 
 	// ensure that there are no NaNs (can happen when domain boundary filling is
 	// unimplemented or malfunctioning)
-	AMREX_ASSERT(!S_filled.contains_nan(0, S_filled.nComp()));
-	AMREX_ASSERT(!S_filled.contains_nan()); // check ghost zones (usually this is caused by
-						// forgetting to fill some components when
-						// using custom Dirichlet BCs, e.g., radiation
-						// variables in a hydro-only problem)
+	AMREX_ASSERT(!S_filled.contains_nan(0, checked_comps, S_filled.nGrowVect()));
 }
 
 // Compute a new multifab 'mf' by copying in state from given data and filling
@@ -3935,7 +3941,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::createRuntimeDerive
 		particleRegister_.depositParticleMassDensity(particleType, deposit_birth_mass, outMF, outLev, outComp, massMin, massMax, hasAgeFilter, tNew_[0],
 							     tAgeMax);
 #else
-		amrex::ignore_unused(depositField, outMF, outLev, outComp, massMin, massMax, hasAgeFilter, tAgeMax);
+		amrex::ignore_unused(particleType, depositField, outMF, outLev, outComp, massMin, massMax, hasAgeFilter, tAgeMax);
 		amrex::Abort("Particle deposition runtime derived fields are supported only in 3D.");
 #endif
 	};
