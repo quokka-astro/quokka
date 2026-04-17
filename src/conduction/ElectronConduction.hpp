@@ -101,15 +101,15 @@ template <typename problem_t> class ElectronConduction
 				    RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
 				Tgas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
 				Pgas = quokka::EOS<problem_t>::ComputePressure(rho, Eint, massScalars);
-				cs_iso = quokka::EOS<problem_t>::ComputeIsothermalSoundSpeed(rho, Pgas);
+				cs_iso = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, Pgas);
 			} else {
 				Tgas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint);
 				Pgas = quokka::EOS<problem_t>::ComputePressure(rho, Eint);
-				cs_iso = quokka::EOS<problem_t>::ComputeIsothermalSoundSpeed(rho, Pgas);
+				cs_iso = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, Pgas);
 			}
 
 			const amrex::Real Tuse = amrex::max(Tgas, t_min);
-			const amrex::Real kappa = params.conductivity_prefactor; //* std::pow(Tuse, 2.5);
+			const amrex::Real kappa = params.conductivity_prefactor ; 
 			const amrex::Real qsat = amrex::max(saturation_factor * flux_limiter_phi * rho * std::pow(cs_iso, 3), small);
 
 			temperature_arr[bx](i, j, k) = Tuse;
