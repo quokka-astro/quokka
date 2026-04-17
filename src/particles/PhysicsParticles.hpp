@@ -1054,6 +1054,7 @@ template <typename problem_t> class PhysicsParticleRegister
 	{
 		const BL_PROFILE("PhysicsParticleRegister::writePlotFile()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
+			descriptor->printPlotfileParticleGridStatistics();
 			descriptor->writePlotFile(plotfilename, getParticleTypeName(type));
 			descriptor->writeUnitsFile(plotfilename, getParticleTypeName(type));
 		}
@@ -1078,6 +1079,7 @@ template <typename problem_t> class PhysicsParticleRegister
 
 			// Check if this particle type is in the requested list
 			if (std::ranges::find(particleTypeNames, typeName) != particleTypeNames.end()) {
+				descriptor->printPlotfileParticleGridStatistics();
 				descriptor->writePlotFile(plotfilename, typeName);
 				descriptor->writeUnitsFile(plotfilename, typeName);
 			}

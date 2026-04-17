@@ -4248,9 +4248,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::WritePlotFile()
 #if AMREX_SPACEDIM == 3
 	// write all particles in particleRegister_ to plotfile
 	particleRegister_.redistribute(0, 0);
-	if (quokka::particle_verbose > 0) {
-		particleRegister_.printPlotfileParticleGridStatistics();
-	}
 	particleRegister_.writePlotFile(plotfilename);
 #endif // AMREX_SPACEDIM == 3
 #endif // QUOKKA_USE_OPENPMD
