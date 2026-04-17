@@ -27,7 +27,6 @@ stop_time = 5.0e7  # s
 do_reflux = 1
 do_subcycle = 0
 
-ascent_interval = -1
 checkpoint_interval = -1
 #plottime_interval = 2.0e5 # s
 plotfile_interval = -1

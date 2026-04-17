@@ -23,7 +23,6 @@ amr.grid_eff = 1.0
 do_reflux = 1
 do_subcycle = 0
 
-ascent_interval = -1
 checkpoint_interval = -1
 plotfile_interval = -1
 

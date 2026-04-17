@@ -1,9 +1,9 @@
 FROM --platform=linux/amd64 opensuse/leap:15.6 AS build
 
-ARG ROCM_ZYPP_REPO_VERSION=6.4.2
+ARG ROCM_ZYPP_REPO_VERSION=7.2.0
 ARG ROCM_ZYPP_PACKAGES=
-ARG MPICH_VERSION=4.1.2
-ARG MPICH_URL=https://www.mpich.org/static/downloads/4.1.2/mpich-4.1.2.tar.gz
+ARG MPICH_VERSION=4.2.2
+ARG MPICH_URL=https://www.mpich.org/static/downloads/4.2.2/mpich-4.2.2.tar.gz
 ARG AMREX_SPACEDIM=3
 ARG AMREX_MPI=ON
 ARG AMREX_AMD_ARCH=gfx90a
@@ -16,8 +16,9 @@ RUN set -euo pipefail && \
     if ! zypper repos -E | grep -q devel_languages_perl; then \
       zypper --non-interactive addrepo https://download.opensuse.org/repositories/devel:/languages:/perl/15.6/devel:languages:perl.repo; \
     fi && \
+    roc_repos_version="${ROCM_ZYPP_REPO_VERSION%.*}" && \
     printf "[ROCm-%s]\nname=ROCm%s\nbaseurl=https://repo.radeon.com/rocm/zyp/%s/main\nenabled=1\ngpgcheck=1\ngpgkey=https://repo.radeon.com/rocm/rocm.gpg.key\n" \
-      "${ROCM_ZYPP_REPO_VERSION}" "${ROCM_ZYPP_REPO_VERSION}" "${ROCM_ZYPP_REPO_VERSION}" > /etc/zypp/repos.d/rocm.repo && \
+      "${ROCM_ZYPP_REPO_VERSION}" "${ROCM_ZYPP_REPO_VERSION}" "${roc_repos_version}" > /etc/zypp/repos.d/rocm.repo && \
     zypper --non-interactive --gpg-auto-import-keys refresh && \
     if [ -n "${ROCM_ZYPP_PACKAGES}" ]; then \
       zypper --non-interactive install --no-recommends ${ROCM_ZYPP_PACKAGES}; \
@@ -34,6 +35,8 @@ RUN set -euo pipefail && \
     printf "%s\n" "/opt/rocm/lib" "/opt/rocm/lib64" >> /etc/ld.so.conf.d/rocm.conf && \
     ldconfig
 
+ENV LD_LIBRARY_PATH="/opt/rocm/lib"
+
 ENV PATH="/opt/rocm/bin:${PATH}" \
     LD_LIBRARY_PATH="/opt/rocm/lib:${LD_LIBRARY_PATH}" \
     ROCM_PATH="/opt/rocm" \
@@ -41,7 +44,7 @@ ENV PATH="/opt/rocm/bin:${PATH}" \
     CC="amdclang" \
     CXX="amdclang++"
 
-COPY .github/workflows/dockerfiles/ROCm-DiskGalaxy/mpich-4.1.2-rocm-6.4-hip-pointer-attr.patch /tmp/mpich.patch
+COPY .github/workflows/dockerfiles/ROCm-DiskGalaxy/mpich-4.2.x-rocm-hip-pointer-attr.patch /tmp/mpich.patch
 
 # Combine MPICH download, patch, and build
 RUN set -euo pipefail && \
@@ -51,11 +54,11 @@ RUN set -euo pipefail && \
     tar xzf "mpich-${MPICH_VERSION}.tar.gz" && \
     cd "mpich-${MPICH_VERSION}" && \
     patch -p1 < /tmp/mpich.patch && \
-    ./configure --with-device=ch4:ofi --disable-fortran --prefix="/opt/mpich/${MPICH_VERSION}" && \
+    ./configure --with-device=ch4:ofi --with-hip=/opt/rocm --disable-fortran --prefix="/opt/mpich/${MPICH_VERSION}" && \
     make -j"$(nproc)" && \
     make install && \
     cd .. && \
-    rm -rf mpich-4.1.2/ mpich-4.1.2.tar.gz /tmp/mpich.patch && \
+    rm -rf "mpich-${MPICH_VERSION}/" "mpich-${MPICH_VERSION}.tar.gz" /tmp/mpich.patch && \
     cd / && \
     rm -rf /tmp/build-mpich
 
@@ -85,7 +88,7 @@ RUN set -euo pipefail && \
 # Runtime stage (reduced image size)
 FROM --platform=linux/amd64 opensuse/leap:15.6
 
-ARG MPICH_VERSION=4.1.2
+ARG MPICH_VERSION=4.2.2
 
 COPY --from=build /opt/rocm /opt/rocm
 COPY --from=build /opt/mpich /opt/mpich
@@ -114,9 +117,11 @@ COPY --from=build /tmp/quokka-src/extern/agora_data/ /opt/quokka/share/quokka/ex
 RUN chmod 0755 /opt/quokka/bin/DiskGalaxy && \
     chown -R leap /opt/quokka
 
+ENV LD_LIBRARY_PATH="/opt/rocm/lib"
+
 ENV MPICH_VERSION="${MPICH_VERSION}" \
     PATH="/opt/quokka/bin:/opt/mpich/${MPICH_VERSION}/bin:${PATH}" \
-    LD_LIBRARY_PATH="/opt/mpich/${MPICH_VERSION}/lib:${LD_LIBRARY_PATH}"
+    LD_LIBRARY_PATH="/opt/mpich/${MPICH_VERSION}/lib:/opt/rocm/lib:${LD_LIBRARY_PATH}"
 
 USER leap
 WORKDIR /home/leap

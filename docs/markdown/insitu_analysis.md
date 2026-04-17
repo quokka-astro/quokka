@@ -1,6 +1,6 @@
 # In-situ analysis
 
-*In-situ analysis* refers to analyzing the simulations as they are running. There are two options: using the *runtime diagnostics* that are built-in to Quokka, and volume rendering using *Ascent*, a third-party library.
+*In-situ analysis* refers to analyzing simulations as they are running using Quokka's built-in runtime diagnostics.
 
 ## Diagnostics
 
@@ -106,65 +106,64 @@ quokka.hist_temp.dense.field_name = gasDensity         # Filter field
 quokka.hist_temp.dense.value_greater = 1e-25           # Filters: value_greater, value_less, value_inrange
 ```
 
-## Volume Rendering (Ascent)
 
-!!! Warning
-    Ascent should only be used for volume rendering.  Other visualization features are not expected to work correctly, since we do **not** pass ghost cells to Ascent.
+### Runtime Derived Fields
 
-Ascent allows you to generate raytraced volume renderings (saved as a sequence of PNG images) while the simulation is running.
+Runtime-derived fields are produced by factory-registered providers at runtime and can be consumed by diagnostics (for example, `DiagPDF`) without adding problem-specific `ComputeDerivedVar(...)` specializations.
 
-![](media/volume_render_sphere.png)
+Provider discovery is driven by `quokka.<name>.type`. Quokka scans the configured `quokka.*.type` entries, instantiates the ones registered as runtime-derived field providers, and enables only the emitted output fields that appear in `derived_vars`.
 
-*A volume rendering of the `SphericalCollapse` problem.*
+To use a runtime-derived field:
 
-### Compiling Ascent on an HPC cluster
+1. Configure the provider under `quokka.<group_name>.*`.
+2. Add the full names of every desired output field from that provider to `derived_vars` so they are available to plotfiles and diagnostics.
 
-1.  Download Spack and activate it in your environment.
-2.  Run `spack external find`.
-3.  Make sure there are entries listed for `slurm` and `mpi` in your `~/.spack/packages.yaml` file.
-4.  Add [buildable: False](https://spack.readthedocs.io/en/latest/build_settings.html#external-packages) to these entries.
-5.  Run `spack fetch --dependencies ascent@develop`
-6.  On a dedicated compute node, run `spack install ascent@develop`
+Provider configuration parameters:
 
-If you are running your simulation on GPU nodes, you should add either `+cuda` or `+rocm` to the Spack spec, e.g. `spack install ascent@develop+cuda`, depending on whether you are running on NVIDIA or AMD GPUs, respectively.
+| Parameter Name        | Type        | Default | Description                                                                                          |
+|-----------------------|-------------|---------|------------------------------------------------------------------------------------------------------|
+| derived_vars          | String list | Empty   | List only the emitted output field names that should appear in plotfiles and diagnostics.           |
+| quokka.\<name\>.type  | String      | None    | Factory type for this provider (for example, `DerivedParticleDeposition`).                          |
 
-### Compiling Quokka with Ascent support
+`DerivedParticleDeposition` provider parameters:
 
-1.  Load Ascent: `spack load ascent`
-2.  Add `-DAMReX_ASCENT=ON -DAMReX_CONDUIT=ON` to your CMake options.
-3.  Compile your problem, e.g.: `ninja -j4 test_hydro3d_blast`
+| Parameter Name                    | Type        | Default    | Description                                                                                                      |
+|-----------------------------------|-------------|------------|------------------------------------------------------------------------------------------------------------------|
+| quokka.\<name\>.particle_types    | String list | `CIC`      | Particle types to deposit. Supported values: `CIC`, `CICRad`, `StochasticStellarPop`, `Sink`, `Test`.         |
+| quokka.\<name\>.deposit_fields    | String list | `mass`     | Particle fields to deposit. Supported: `mass`, `birth_mass` (only for `StochasticStellarPop`).                |
+| quokka.\<name\>.prefix            | String      | `particle` | Output naming prefix. Output names are formed as `<prefix>.<ParticleType>.mass_density` for `mass` and `<prefix>.<ParticleType>.birth_mass_density` for `birth_mass`. |
+| quokka.\<name\>.mass_min          | Real        | `-inf`     | Optional lower bound on particle mass for deposition. Particles with `mass < mass_min` are excluded.           |
+| quokka.\<name\>.mass_max          | Real        | `+inf`     | Optional upper bound on particle mass for deposition. Particles with `mass > mass_max` are excluded.           |
+| quokka.\<name\>.t_age             | Real        | unset      | Optional age threshold. When set, only particles with `(tNew[0] - birth_time) <= t_age` are deposited.        |
+| quokka.\<name\>.normalization_expr| String      | unset      | Optional AMReX parser expression for a multiplicative normalization constant applied after deposition.          |
 
-### Running with Ascent
+Notes:
+- Only emitted outputs listed in `derived_vars` are added to plotfiles and made available to diagnostics.
+- Provider group names are not valid `derived_vars` entries.
+- These fields can be consumed by diagnostics by name.
+- Output name collisions with other derived fields are rejected at startup.
+- `t_age` is only supported for particle types that include `birth_time` (`CICRad`, `StochasticStellarPop`, `Test`).
+- `birth_mass` is only supported for `StochasticStellarPop`; using it with other particle types aborts at startup/runtime.
+- `normalization_expr` must evaluate to a scalar constant. Parser constants available: `Msun`, `yr`, `kpc`.
 
-Add `ascent_interval = N` to your ParmParse input file, where `N` is the number of coarse timesteps between Ascent outputs.
+Example:
 
-### Customizing the rendering
+```ini
+# List only the provider outputs you want to write.
+derived_vars = particle.CIC.mass_density particle.Sink.mass_density
 
-Add an [ascent_actions.yaml file](https://ascent.readthedocs.io/en/latest/Actions/Actions.html) to the simulation working directory. This example actions file will create a volume rendering with the given camera parameters:
+# Configure the provider under quokka.<group_name>.*
+quokka.partdep.type = DerivedParticleDeposition
+quokka.partdep.particle_types = CIC Sink
+quokka.partdep.deposit_fields = mass
+quokka.partdep.prefix = particle
 
-```yaml
-- action: "add_extracts"
-  extracts:
-    my_volume_extract:
-      type: "volume"
-      params:
-        field: "gasDensity"
-        filename: "volume%05d"
-        image_width: 512
-        image_height: 512
-        camera:
-          look_at: [0.5, 0.5, 0.5]
-          position: [-1.2, 0.499, 0.501]
-          up: [0.0, 0.0, 1.0]
-          fov: 60.0
-          xpan: 0.0
-          ypan: 0.0
-          zoom: 1.0
-          azimuth: 0.0
-          elevation: 0.0
-          near_plane: 0.01
-          far_plane: 10.0
+# Use one of the runtime-derived outputs in a diagnostic.
+quokka.diagnostics = slice_z
+quokka.slice_z.type = DiagFramePlane
+quokka.slice_z.file = slicez_plt
+quokka.slice_z.normal = 2
+quokka.slice_z.center = 2.4688e20
+quokka.slice_z.int = 10
+quokka.slice_z.field_names = particle.CIC.mass_density
 ```
-
-!!! Warning
-    The `ascent_actions.yaml` file can be edited while the simulation is running, and the updated parameters will be used for subsequent renders. If invalid values are given, renders may stop working without notice.

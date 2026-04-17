@@ -11,6 +11,7 @@ theme:
     - content.code.copy
     - content.code.select
 nav:
+  - Home: index.md
   - About: about.md
   - Equations: equations.md
   - Citation: citation.md
