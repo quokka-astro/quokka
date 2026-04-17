@@ -186,7 +186,6 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real px = state_out[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
 			const amrex::Real py = state_out[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
 			const amrex::Real pz = state_out[bx](i, j, k, HydroSystem<problem_t>::x3Momentum_index);
-			const amrex::Real Egas_old = state_out[bx](i, j, k, HydroSystem<problem_t>::energy_index);
 
 			const amrex::Real Ekin = 0.5 * (px * px + py * py + pz * pz) / rho;
 			const amrex::Real Eint_old = HydroSystem<problem_t>::ComputeInternalEnergy(state_out[bx], i, j, k, &local_state_fc);
