@@ -109,7 +109,7 @@ template <typename problem_t> class ElectronConduction
 			}
 
 			const amrex::Real Tuse = amrex::max(Tgas, t_min);
-			const amrex::Real kappa = params.conductivity_prefactor ; 
+			const amrex::Real kappa = params.conductivity_prefactor;
 			const amrex::Real qsat = amrex::max(saturation_factor * flux_limiter_phi * rho * std::pow(cs_iso, 3), small);
 
 			temperature_arr[bx](i, j, k) = Tuse;
@@ -199,8 +199,8 @@ template <typename problem_t> class ElectronConduction
 #endif
 
 			amrex::Real Eint_new = Eint_old - dt * div_flux;
-		
-			state_out[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Eint_new + Ekin; 
+
+			state_out[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Eint_new + Ekin;
 			state_out[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index) = Eint_new;
 		});
 	}

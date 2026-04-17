@@ -226,10 +226,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int sn_count_ = 0;	      // number of SN explosions in a step (used for diagnostics)
 	int sn_count_cumulative_ = 0; // cumulative number of SN explosions (used for diagnostics)
 
-	//Conduction parameters
-	amrex::Real electronConductionKappa0_ = 4.17; //default
-	amrex::Real conductionCFL = 0.2; //default
-	int enableElectronConduction_ = 0; //default
+	// Conduction parameters
+	amrex::Real electronConductionKappa0_ = 4.17; // default
+	amrex::Real conductionCFL = 0.2;	      // default
+	int enableElectronConduction_ = 0;	      // default
 
 	amrex::Real densityFloor_ = 0.0;     // default
 	amrex::Real dustDensityFloor_ = 0.0; // default
