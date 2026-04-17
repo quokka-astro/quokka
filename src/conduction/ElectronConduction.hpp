@@ -134,7 +134,7 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real q_sat_face = 0.5 * (qsat[bx](i, j, k) + qsat[bx](i - 1, j, k));
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
-			flux_x[bx](i, j, k) = q_classical;
+			flux_x[bx](i, j, k) = q_classical / limiter;
 		});
 
 #if AMREX_SPACEDIM >= 2
@@ -145,7 +145,7 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real q_sat_face = 0.5 * (qsat[bx](i, j, k) + qsat[bx](i, j - 1, k));
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
-			flux_y[bx](i, j, k) = q_classical;
+			flux_y[bx](i, j, k) = q_classical / limiter;
 		});
 #endif
 
@@ -157,7 +157,7 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real q_sat_face = 0.5 * (qsat[bx](i, j, k) + qsat[bx](i, j, k - 1));
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
-			flux_z[bx](i, j, k) = q_classical;
+			flux_z[bx](i, j, k) = q_classical / limiter;
 		});
 #endif
 

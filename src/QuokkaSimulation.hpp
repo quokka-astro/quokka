@@ -616,9 +616,9 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("enabled", enableElectronConduction_);
 		hpp.query("conductivity_prefactor", electronConductionKappa0_);
 		hpp.query("conduction_cfl", conductionCFL);
-		// hpp.query("flux_limiter_phi", electronConductionFluxLimiterPhi_);
-		// hpp.query("saturation_factor", electronConductionSaturationFactor_);
-		// hpp.query("temperature_floor", electronConductionTempFloor_);
+		hpp.query("flux_limiter_phi", electronConductionFluxLimiterPhi_);
+		hpp.query("saturation_factor", electronConductionSaturationFactor_);
+		hpp.query("temperature_floor", electronConductionTempFloor_);
 	}
 
 	// set turbulence runtime parameters
