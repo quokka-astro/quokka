@@ -1,0 +1,29 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =   [-1.5428e+18, -1.5428e+18, -1.5428e+18]
+geometry.prob_hi     =    [1.5428e+18, 1.5428e+18, 1.5428e+18]
+quokka.bc = ["foextrap", "foextrap", "foextrap"]    
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 1      # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell = [128, 1, 1]
+amr.max_level = 0  # number of levels = max_level + 1
+amr.blocking_factor = 8  # grid size must be divisible by this
+
+
+cfl = 3.e-1
+temperature_floor = 1.e-10
+cooling.enabled = 0
+conduction.enabled = 1
+conduction.conductivity_prefactor = 3.e23
+conduction.flux_limiter_phi = 1
+conduction.saturation_factor = 1.e20
+conduction.temperature_floor = 1.e-10
+conduction.conduction_cfl = 0.2
