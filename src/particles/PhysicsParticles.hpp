@@ -188,7 +188,7 @@ class PhysicsParticleDescriptorBase
 	// Print statistics of particles
 	virtual void printParticleStatistics() const = 0;
 
-	// Print the maximum number of particles per grid on the root rank before writing a plotfile
+  	// Print the global maximum number of particles per grid before writing a plotfile
 	virtual void printPlotfileParticleGridStatistics() const = 0;
 
 	// Save particle data to text file
