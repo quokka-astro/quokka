@@ -131,33 +131,8 @@ $$
 \nabla \cdot \vec{B} = 0.
 $$
 
-Quokka stores $\vec{B}$ on faces and updates it with a constrained-transport discretization. MHD + radiation is currently unsupported.
+Quokka stores $\vec{B}$ on faces and updates it with a constrained-transport discretization. MHD + radiation is currently untested.
 
-## Dust source terms
-
-When the dedicated dust module is enabled, Quokka evolves one pressureless dust fluid per dust group. The full gas-dust transport system is described in the [Dust Module](dust_module.md); the drag source terms that couple the gas and dust are
-
-$$
-\left.\frac{\partial (\rho_{\mathrm{g}} \mathbf{v}_{\mathrm{g}})}{\partial t}\right|_{\mathrm{drag}}
-= \sum_{n=1}^{N} \rho_{\mathrm{d},n}
-\frac{\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}}{T_{\mathrm{s},n}},
-$$
-
-$$
-\left.\frac{\partial E_{\mathrm{g}}}{\partial t}\right|_{\mathrm{drag}}
-= \sum_{n=1}^{N} \rho_{\mathrm{d},n}
-\frac{\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}}{T_{\mathrm{s},n}} \cdot \mathbf{v}_{\mathrm{g}}
-+ \omega \sum_{n=1}^{N} \rho_{\mathrm{d},n}
-\frac{\left|\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right|^{2}}{T_{\mathrm{s},n}},
-$$
-
-$$
-\left.\frac{\partial (\rho_{\mathrm{d},n} \mathbf{v}_{\mathrm{d},n})}{\partial t}\right|_{\mathrm{drag}}
-= \rho_{\mathrm{d},n}
-\frac{\mathbf{v}_{\mathrm{g}} - \mathbf{v}_{\mathrm{d},n}}{T_{\mathrm{s},n}}.
-$$
-
-There is no drag source term in the gas or dust continuity equations. Here $T_{\mathrm{s},n}$ is the stopping time of dust group $n$, and $\omega$ controls how much of the frictional dissipation is deposited into the gas.
 
 ## Collisionless particles
 
