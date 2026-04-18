@@ -1,6 +1,6 @@
 # Equations
 
-## Fluids and radiation 
+## Fluids, radiation, and dust
 
 Assuming the speed of light is not reduced ($\hat{c} = c$), Quokka solves the system of conservation laws:
 
@@ -14,7 +14,9 @@ $$\begin{aligned}
   E_{\rm gas} \\
   \rho X_n \\
   E_g \\
-  \vec{F}_g
+  \vec{F}_g \\
+  \rho_{\mathrm{d},k} \\
+  \rho_{\mathrm{d},k} \vec{v}_{\mathrm{d},k}
 \end{array}\right], \;
 \vec{F}(U) = \left[
 \begin{array}{c}
@@ -23,25 +25,27 @@ $$\begin{aligned}
   (E_{\rm gas} + p) \vec{v} \\
   \rho X_n \vec{v} \\
   \vec{F}_g \\
-  c^2 \mathsf{P}_g
+  c^2 \mathsf{P}_g \\
+  \rho_{\mathrm{d},k} \vec{v}_{\mathrm{d},k} \\
+  \rho_{\mathrm{d},k} \vec{v}_{\mathrm{d},k} \otimes \vec{v}_{\mathrm{d},k}
 \end{array}\right], \;
 \vec{S}(U)=\left[
 \begin{array}{c}
   0 \\
-  \sum_g \vec{G}_g + \rho \vec{g} \\
-  c \sum_g G^0_{g} + \rho \vec{v} \cdot \vec{g} + \mathcal{H} - \mathcal{C} \\
+  \sum_g \vec{G}_g + \rho \vec{g} + \sum_{k=1}^{N_{\mathrm{dust}}} \rho_{\mathrm{d},k} \frac{\vec{v}_{\mathrm{d},k} - \vec{v}}{T_{\mathrm{s},k}} \\
+  c \sum_g G^0_{g} + \rho \vec{v} \cdot \vec{g} + \mathcal{H} - \mathcal{C} + \sum_{k=1}^{N_{\mathrm{dust}}} \rho_{\mathrm{d},k} \frac{\vec{v}_{\mathrm{d},k} - \vec{v}}{T_{\mathrm{s},k}} \cdot \vec{v} + \omega \sum_{k=1}^{N_{\mathrm{dust}}} \rho_{\mathrm{d},k} \frac{(\vec{v}_{\mathrm{d},k} - \vec{v})^{2}}{T_{\mathrm{s},k}} \\
   \rho \dot{X}_n \\
   - c G^0_{g} \\
-  - c^2 \vec{G}_g
+  - c^2 \vec{G}_g \\
+  0 \\
+  \rho_{\mathrm{d},k} \frac{\vec{v} - \vec{v}_{\mathrm{d},k}}{T_{\mathrm{s},k}}
 \end{array}\right],
 \end{aligned}$$
 
 along with the non-conservative auxiliary internal energy equation:
 
 $$\begin{aligned}
-\frac{\partial (\rho e_{\text{aux}})}{\partial t} =
-- \nabla \cdot (\rho e_{\text{aux}} \vec{v}) - p \nabla \cdot \vec{v}
-+ S_{\text{rad}} + \mathcal{H} - \mathcal{C}, \\
+\frac{\partial (\rho e_{\text{aux}})}{\partial t} = - \nabla \cdot (\rho e_{\text{aux}} \vec{v}) - p \nabla \cdot \vec{v} + S_{\text{rad}} + \mathcal{H} - \mathcal{C} + \omega \sum_{k=1}^{N_{\mathrm{dust}}} \rho_{\mathrm{d},k} \frac{(\vec{v}_{\mathrm{d},k} - \vec{v})^{2}}{T_{\mathrm{s},k}}, \\
 \Delta S_{\text{rad}} = \int \sum_g c G^0_g \ dt - \frac{1}{2} \Delta \left(\rho v^2 \right),
 \end{aligned}$$
 
@@ -70,7 +74,11 @@ where
 -   $\Delta S_{\text{rad}}$ is the change in gas internal energy due to radiation over a timestep,
 -   $\phi$ is the Newtonian gravitational potential,
 -   $\vec{g}$ is the gravitational acceleration,
--   $\rho_i$ is the mass density due to particle $i$.
+-   $\rho_i$ is the mass density due to particle $i$,
+-   $\rho_{\mathrm{d},k}$ is the dust mass density for dust species $k$ ($k \in [1, N_{\mathrm{dust}}]$),
+-   $\vec{v}_{\mathrm{d},k}$ is the dust velocity for dust species $k$,
+-   $T_{\mathrm{s},k}$ is the aerodynamic stopping time for dust species $k$,
+-   $\omega$ is the fraction of frictional heating deposited into the gas.
 
 Note that since work done by radiation on the gas is included in the $c \sum_g G^0_g$ term, $S_{\text{rad}}$ is not the same as $c \sum_g G^0_g$.
 
