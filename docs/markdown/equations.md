@@ -34,7 +34,9 @@ $$\begin{aligned}
   0 \\
   \sum_g \vec{G}_g + \rho \vec{g} + \sum_{k=1}^{N_{\mathrm{dust}}} \rho_{\mathrm{d},k} \frac{\vec{v}_{\mathrm{d},k} - \vec{v}}{T_{\mathrm{s},k}} \\
   c \sum_g G^0_{g} + \rho \vec{v} \cdot \vec{g} + \mathcal{H} - \mathcal{C} + \sum_{k=1}^{N_{\mathrm{dust}}} \rho_{\mathrm{d},k} \frac{\vec{v}_{\mathrm{d},k} - \vec{v}}{T_{\mathrm{s},k}} \cdot \vec{v} + \omega \sum_{k=1}^{N_{\mathrm{dust}}} \rho_{\mathrm{d},k} \frac{(\vec{v}_{\mathrm{d},k} - \vec{v})^{2}}{T_{\mathrm{s},k}} \\
-  \rho \dot{X}_n \\- c G^0_{g} \\- c^2 \vec{G}_g \\
+  \rho \dot{X}_n \\
+  - c G^0_{g} \\
+  - c^2 \vec{G}_g \\
   0 \\
   \rho_{\mathrm{d},k} \frac{\vec{v} - \vec{v}_{\mathrm{d},k}}{T_{\mathrm{s},k}}
 \end{array}\right],
