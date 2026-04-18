@@ -1,5 +1,8 @@
 # Particles, star formation and feedback
 
+!!! warning "Beta feature"
+    The particles, star-formation, and feedback module has not yet been exercised in a published science application with Quokka and should currently be treated as **beta**.
+
 All particle features can only be activated when compiled with `-DAMReX_SPACEDIM=3`.
 
 ## Sink Particle Type
