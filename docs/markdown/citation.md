@@ -1,6 +1,6 @@
 # Citation
 
-If you use Quokka or numerical methods originally implemented for Quokka in your research, always cite [@Wibking_2022].
+If you use Quokka or numerical methods originally implemented for Quokka in your research, please cite [@Wibking_2022].
 
 ```bibtex
 @ARTICLE{2022MNRAS.512.1430W,
@@ -27,11 +27,9 @@ If you use Quokka or numerical methods originally implemented for Quokka in your
 Please also cite the module- or method-specific papers that apply to your work.
 
 - Core Quokka hydro / AMR code: [@Wibking_2022]
-- Radiation-hydrodynamics time integration: [@Wibking_2022], [@He_2024]
-- Multigroup radiation-hydrodynamics: [@Wibking_2022], [@He_2024b]
-- Particle-mesh interactions: [@Wibking_2022], [@He_2025]
-- Beta modules without a dedicated methods paper yet (MHD, dust, chemistry, self-gravity): [@Wibking_2022] and the exact Quokka version / commit used in your methods section
-- Other beta particle capabilities without a dedicated methods paper yet (sink particles, star formation, and stellar feedback): [@Wibking_2022] and the exact Quokka version / commit used in your methods section
+- Radiation-hydrodynamics time integration: [@He_2024]
+- Multigroup radiation-hydrodynamics: [@He_2024b]
+- Particle-mesh interactions: [@He_2025]
 
 The following modules are currently marked as **beta** for science-use maturity in Quokka documentation: MHD, radiation, dust, particles, chemistry, and self-gravity. For beta capabilities, cite the relevant methods papers above when they exist, and report the exact Quokka version or commit hash used in your study.
 
