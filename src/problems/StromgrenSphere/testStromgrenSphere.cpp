@@ -355,7 +355,8 @@ template <> void QuokkaSimulation<StromgrenSphere>::computeAfterTimestep()
 					}
 					cum = next_cum;
 				}
-				amrex::Abort("Error in percentile_from_hist: target" + std::to_string(target) + " exceeds total count " + std::to_string(total_count));
+				amrex::Abort("Error in percentile_from_hist: target" + std::to_string(target) + " exceeds total count " +
+					     std::to_string(total_count));
 				return rmax;
 			};
 
@@ -446,8 +447,8 @@ auto problem_main() -> int
 				const amrex::Real lower_bound = analytical_radius - error_tol;
 				if ((r50_numerical < lower_bound) || (r50_numerical > upper_bound)) {
 					amrex::Print()
-					    << "Test failed at t = " << sim.userData_.t_vec_[i] << ": Numerical r50 = " << r50_numerical << " is not within [" << lower_bound << ", " << upper_bound << "] (analytical r50 = " << analytical_radius << ")"
-					    << '\n';
+					    << "Test failed at t = " << sim.userData_.t_vec_[i] << ": Numerical r50 = " << r50_numerical << " is not within ["
+					    << lower_bound << ", " << upper_bound << "] (analytical r50 = " << analytical_radius << ")" << '\n';
 					status = 1;
 				}
 			}
