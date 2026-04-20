@@ -58,12 +58,12 @@ template <typename problem_t> class DustDrag
 	using Mat6 = amrex::Array2D<amrex::Real, 0, 5, 0, 5, amrex::Order::C>;
 
 	struct DustStageAffineOperators {
-		Mat3 W1{};
-		Mat3 W2{};
-		Mat3 X1{};
-		Mat3 X2{};
-		Mat3 Y1{};
-		Mat3 Y2{};
+		Mat3 W1;
+		Mat3 W2;
+		Mat3 X1;
+		Mat3 X2;
+		Mat3 Y1;
+		Mat3 Y2;
 	};
 
 	// compute reciprocal of dust stopping time
