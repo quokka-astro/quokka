@@ -101,7 +101,8 @@ template <typename problem_t> class HyperbolicSystem
 
 	template <FluxDir DIR>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesConstant(arrayconst_t &q, array_t &leftState, array_t &rightState,
-										       amrex::Box const &cellRange, amrex::Box const &interfaceRange, int nvars);
+										       amrex::Box const &cellRange, amrex::Box const &interfaceRange,
+										       int nvars);
 
 	template <FluxDir DIR>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void
@@ -121,8 +122,7 @@ template <typename problem_t> class HyperbolicSystem
 
 	template <FluxDir DIR>
 	static void ReconstructStatesPLM(arrayconst_t &q, array_t &leftState, array_t &rightState, amrex::Box const &cellRange,
-					 amrex::Box const &interfaceRange, int nvars,
-					 SlopeLimiter limiter);
+					 amrex::Box const &interfaceRange, int nvars, SlopeLimiter limiter);
 
 	template <FluxDir DIR, SlopeLimiter limiter>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void
@@ -296,8 +296,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(amrex::MultiFab const &q_
 template <typename problem_t>
 template <FluxDir DIR, SlopeLimiter limiter>
 AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
-									     amrex::Box const &cellRange, amrex::Box const &interfaceRange,
-									     const int nvars)
+									     amrex::Box const &cellRange, amrex::Box const &interfaceRange, const int nvars)
 {
 	HyperbolicSystem<problem_t>::template AssertReconstructionRanges<DIR>(cellRange, interfaceRange);
 
@@ -329,7 +328,7 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q_in, array
 		}
 		case SlopeLimiter::mc: {
 			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::mc>(q_in, leftState_in, rightState_in, cellRange,
-												  interfaceRange, nvars);
+													  interfaceRange, nvars);
 			break;
 		}
 		default: {
@@ -366,7 +365,7 @@ HyperbolicSystem<problem_t>::ReconstructStatesPLM(quokka::Array4View<amrex::Real
 	// (This converges at second order in spatial resolution.)
 	const auto slope = HyperbolicSystem<problem_t>::template SlopeFunc<limiter>(q(i + 1, j, k, n) - q(i, j, k, n), q(i, j, k, n) - q(i - 1, j, k, n));
 	leftState(i + 1, j, k, n) = q(i, j, k, n) + 0.5 * slope; // NOLINT
-	rightState(i, j, k, n) = q(i, j, k, n) - 0.5 * slope;	  // NOLINT
+	rightState(i, j, k, n) = q(i, j, k, n) - 0.5 * slope;	 // NOLINT
 }
 
 template <typename problem_t>
@@ -395,8 +394,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_
 template <typename problem_t>
 template <FluxDir DIR>
 AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
-									     amrex::Box const &cellRange, amrex::Box const &interfaceRange,
-									     const int nvars, const int iReadFrom, const int iWriteFrom)
+									     amrex::Box const &cellRange, amrex::Box const &interfaceRange, const int nvars,
+									     const int iReadFrom, const int iWriteFrom)
 {
 	const BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM(Arrays)");
 	HyperbolicSystem<problem_t>::template AssertReconstructionRanges<DIR>(cellRange, interfaceRange);
@@ -623,8 +622,8 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(amrex::MultiFab const 
 template <typename problem_t>
 template <FluxDir DIR>
 AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
-										amrex::Box const &cellRange, amrex::Box const &interfaceRange,
-										const int nvars, const int iReadFrom, const int iWriteFrom)
+										amrex::Box const &cellRange, amrex::Box const &interfaceRange, const int nvars,
+										const int iReadFrom, const int iWriteFrom)
 {
 	const BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM(Arrays)");
 	HyperbolicSystem<problem_t>::template AssertReconstructionRanges<DIR>(cellRange, interfaceRange);
