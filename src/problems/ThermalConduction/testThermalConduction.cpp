@@ -120,12 +120,12 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		// const amrex::Real T = Tout + (Tin - Tout) * (term1 + term2);
 		/*-------------------------------------------------*/
 
-		for (int n = 0; n < ncomp_cc; ++n) {
-			state_cc(i, j, k, n) = 0.;
-		}
 
 		const amrex::Real Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T);
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho;
+		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::x1Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::x2Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint; // total energy = internal energy + kinetic energy
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = Eint;
 	});
