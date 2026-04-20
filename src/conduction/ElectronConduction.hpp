@@ -109,7 +109,7 @@ template <typename problem_t> class ElectronConduction
 
 		std::array<amrex::MultiFab, AMREX_SPACEDIM> heat_flux;
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			amrex::BoxArray ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
+			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
 			heat_flux[idim].define(ba_face, state.DistributionMap(), 1, 0);
 			heat_flux[idim].setVal(0.0);
 		}
