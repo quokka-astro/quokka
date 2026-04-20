@@ -49,10 +49,7 @@ template <> struct Physics_Traits<ThermalConductionProblem> {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
-// declare global variables
 
-double const temperature = 0.0; // K
-double R0 = 0.2 * C::parsec;
 template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	// initialize a ThermalConduction test problem using parameters from
@@ -94,6 +91,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 
 		/*-------------------------------*/
 		// Problem 3----> Spherical temperature profile with sharp boundary
+		// double const R0 = 0.2 * C::parsec;
 		//  const amrex::Real rho = C::m_p; // g/cm^3
 		//  const amrex::Real Tout = 10.0;
 		//  const amrex::Real Tin  = 100.0;
@@ -122,6 +120,11 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 
 		// const amrex::Real T = Tout + (Tin - Tout) * (term1 + term2);
 		/*-------------------------------------------------*/
+
+
+		for (int n = 0; n < ncomp_cc; ++n) {
+			state_cc(i, j, k, n) = 0.;
+		}
 
 		const amrex::Real Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T);
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho;
