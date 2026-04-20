@@ -90,12 +90,18 @@ template <typename problem_t> class HyperbolicSystem
 		return std::max(std::min(a, b), std::min(std::max(a, b), c));
 	}
 
+	template <FluxDir DIR> static void AssertReconstructionRanges(amrex::Box const &cellRange, amrex::Box const &interfaceRange)
+	{
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(amrex::surroundingNodes(cellRange, static_cast<int>(DIR)) == interfaceRange,
+						 "Reconstruction interfaceRange must equal surroundingNodes(cellRange, dir).");
+	}
+
 	template <FluxDir DIR>
 	static void ReconstructStatesConstant(amrex::MultiFab const &q, amrex::MultiFab &leftState, amrex::MultiFab &rightState, int nghost, int nvars);
 
 	template <FluxDir DIR>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesConstant(arrayconst_t &q, array_t &leftState, array_t &rightState,
-										       amrex::Box const &indexRange, int nvars);
+										       amrex::Box const &cellRange, amrex::Box const &interfaceRange, int nvars);
 
 	template <FluxDir DIR>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void
@@ -111,10 +117,11 @@ template <typename problem_t> class HyperbolicSystem
 
 	template <FluxDir DIR, SlopeLimiter limiter>
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void ReconstructStatesPLM(arrayconst_t &q, array_t &leftState, array_t &rightState,
-										  amrex::Box const &indexRange, int nvars);
+										  amrex::Box const &cellRange, amrex::Box const &interfaceRange, int nvars);
 
 	template <FluxDir DIR>
-	static void ReconstructStatesPLM(arrayconst_t &q, array_t &leftState, array_t &rightState, amrex::Box const &indexRange, int nvars,
+	static void ReconstructStatesPLM(arrayconst_t &q, array_t &leftState, array_t &rightState, amrex::Box const &cellRange,
+					 amrex::Box const &interfaceRange, int nvars,
 					 SlopeLimiter limiter);
 
 	template <FluxDir DIR, SlopeLimiter limiter>
@@ -207,14 +214,17 @@ void HyperbolicSystem<problem_t>::ReconstructStatesConstant(amrex::MultiFab cons
 template <typename problem_t>
 template <FluxDir DIR>
 AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesConstant(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
-										  amrex::Box const &indexRange, const int nvars)
+										  amrex::Box const &cellRange, amrex::Box const &interfaceRange,
+										  const int nvars)
 {
+	HyperbolicSystem<problem_t>::template AssertReconstructionRanges<DIR>(cellRange, interfaceRange);
+
 	// construct ArrayViews for permuted indices
 	quokka::Array4View<amrex::Real const, DIR> q(q_in);
 	quokka::Array4View<amrex::Real, DIR> leftState(leftState_in);
 	quokka::Array4View<amrex::Real, DIR> rightState(rightState_in);
 
-	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
+	amrex::ParallelFor(cellRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
 		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(q, leftState, rightState, n, i_in, j_in, k_in);
 	});
 }
@@ -234,7 +244,7 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesConstan
 	// is the "left"-side of the interface at the left edge of zone i, and xright_(i) is the
 	// "right"-side of the interface at the *left* edge of zone i. [Indexing note: There are (nx
 	// + 1) interfaces for nx zones.]
-	leftState(i, j, k, n) = q(i - 1, j, k, n);
+	leftState(i + 1, j, k, n) = q(i, j, k, n);
 	rightState(i, j, k, n) = q(i, j, k, n);
 }
 
@@ -286,36 +296,40 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPLM(amrex::MultiFab const &q_
 template <typename problem_t>
 template <FluxDir DIR, SlopeLimiter limiter>
 AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
-									     amrex::Box const &indexRange, const int nvars)
+									     amrex::Box const &cellRange, amrex::Box const &interfaceRange,
+									     const int nvars)
 {
+	HyperbolicSystem<problem_t>::template AssertReconstructionRanges<DIR>(cellRange, interfaceRange);
+
 	// construct ArrayViews for permuted indices
 	quokka::Array4View<amrex::Real const, DIR> q(q_in);
 	quokka::Array4View<amrex::Real, DIR> leftState(leftState_in);
 	quokka::Array4View<amrex::Real, DIR> rightState(rightState_in);
 
-	amrex::ParallelFor(indexRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
+	amrex::ParallelFor(cellRange, nvars, [=] AMREX_GPU_DEVICE(int i_in, int j_in, int k_in, int n) noexcept {
 		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, limiter>(q, leftState, rightState, n, i_in, j_in, k_in);
 	});
 }
 
 template <typename problem_t>
 template <FluxDir DIR>
-void HyperbolicSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &indexRange,
-						       const int nvars, SlopeLimiter limiter)
+void HyperbolicSystem<problem_t>::ReconstructStatesPLM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in, amrex::Box const &cellRange,
+						       amrex::Box const &interfaceRange, const int nvars, SlopeLimiter limiter)
 {
 	switch (limiter) {
 		case SlopeLimiter::minmod: {
-			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(q_in, leftState_in, rightState_in, indexRange,
-													      nvars);
+			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::minmod>(q_in, leftState_in, rightState_in, cellRange,
+													      interfaceRange, nvars);
 			break;
 		}
 		case SlopeLimiter::sweby: {
-			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::sweby>(q_in, leftState_in, rightState_in, indexRange,
-													     nvars);
+			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::sweby>(q_in, leftState_in, rightState_in, cellRange,
+													     interfaceRange, nvars);
 			break;
 		}
 		case SlopeLimiter::mc: {
-			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::mc>(q_in, leftState_in, rightState_in, indexRange, nvars);
+			HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::mc>(q_in, leftState_in, rightState_in, cellRange,
+												  interfaceRange, nvars);
 			break;
 		}
 		default: {
@@ -350,10 +364,9 @@ HyperbolicSystem<problem_t>::ReconstructStatesPLM(quokka::Array4View<amrex::Real
 
 	// Use piecewise-linear reconstruction
 	// (This converges at second order in spatial resolution.)
-	const auto lslope = HyperbolicSystem<problem_t>::template SlopeFunc<limiter>(q(i, j, k, n) - q(i - 1, j, k, n), q(i - 1, j, k, n) - q(i - 2, j, k, n));
-	const auto rslope = HyperbolicSystem<problem_t>::template SlopeFunc<limiter>(q(i + 1, j, k, n) - q(i, j, k, n), q(i, j, k, n) - q(i - 1, j, k, n));
-	leftState(i, j, k, n) = q(i - 1, j, k, n) + 0.5 * lslope; // NOLINT
-	rightState(i, j, k, n) = q(i, j, k, n) - 0.5 * rslope;	  // NOLINT
+	const auto slope = HyperbolicSystem<problem_t>::template SlopeFunc<limiter>(q(i + 1, j, k, n) - q(i, j, k, n), q(i, j, k, n) - q(i - 1, j, k, n));
+	leftState(i + 1, j, k, n) = q(i, j, k, n) + 0.5 * slope; // NOLINT
+	rightState(i, j, k, n) = q(i, j, k, n) - 0.5 * slope;	  // NOLINT
 }
 
 template <typename problem_t>
@@ -382,10 +395,11 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM(amrex::MultiFab const &q_
 template <typename problem_t>
 template <FluxDir DIR>
 AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
-									     amrex::Box const &cellRange, amrex::Box const & /*interfaceRange*/,
+									     amrex::Box const &cellRange, amrex::Box const &interfaceRange,
 									     const int nvars, const int iReadFrom, const int iWriteFrom)
 {
 	const BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM(Arrays)");
+	HyperbolicSystem<problem_t>::template AssertReconstructionRanges<DIR>(cellRange, interfaceRange);
 
 	// construct ArrayViews for permuted indices
 	quokka::Array4View<amrex::Real const, DIR> q(q_in);
@@ -609,10 +623,11 @@ void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(amrex::MultiFab const 
 template <typename problem_t>
 template <FluxDir DIR>
 AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM_EP(arrayconst_t &q_in, array_t &leftState_in, array_t &rightState_in,
-										amrex::Box const &cellRange, amrex::Box const & /*interfaceRange*/,
+										amrex::Box const &cellRange, amrex::Box const &interfaceRange,
 										const int nvars, const int iReadFrom, const int iWriteFrom)
 {
 	const BL_PROFILE("HyperbolicSystem::ReconstructStatesPPM(Arrays)");
+	HyperbolicSystem<problem_t>::template AssertReconstructionRanges<DIR>(cellRange, interfaceRange);
 
 	// construct ArrayViews for permuted indices
 	quokka::Array4View<amrex::Real const, DIR> q(q_in);
