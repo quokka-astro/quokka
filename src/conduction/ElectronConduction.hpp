@@ -21,6 +21,8 @@
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
 #include "hydro/hydro_system.hpp"
+#include "QuokkaSimulation.hpp"
+#include "cooling/ResampledCooling.hpp" 
 
 namespace quokka::conduction
 {
@@ -36,7 +38,7 @@ template <typename problem_t> class ElectronConduction
 {
       public:
 	static void ComputeExplicit(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Geometry const &geom,
-				    amrex::Real dt, ElectronConductionParams const &params)
+				    amrex::Real dt, ElectronConductionParams const &params, const quokka::ResampledCooling::resampled_tables &tables)
 	{
 		static_assert(Physics_Traits<problem_t>::is_hydro_enabled, "Electron conduction requires hydro to be enabled.");
 
@@ -56,6 +58,7 @@ template <typename problem_t> class ElectronConduction
 		const amrex::Real saturation_factor = params.saturation_factor;
 		const amrex::Real t_min = params.min_temperature;
 		const amrex::Real small = std::numeric_limits<amrex::Real>::min();
+		const auto tables_dev = tables.const_tables();
 
 		amrex::MultiFab temperature(state.boxArray(), state.DistributionMap(), 1, state.nGrow());
 		temperature.setVal(0.0);
@@ -93,24 +96,14 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
 			const amrex::Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(cons, i, j, k, &local_state_fc);
 
-			amrex::Real Tgas = NAN;
-			amrex::Real Pgas = NAN;
-			amrex::Real cs_iso = NAN;
-			if constexpr (HydroSystem<problem_t>::nmscalars_ > 0) {
-				amrex::GpuArray<amrex::Real, HydroSystem<problem_t>::nmscalars_> massScalars =
-				    RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
-				Tgas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
-				Pgas = quokka::EOS<problem_t>::ComputePressure(rho, Eint, massScalars);
-				cs_iso = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, Pgas);
-			} else {
-				Tgas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint);
-				Pgas = quokka::EOS<problem_t>::ComputePressure(rho, Eint);
-				cs_iso = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, Pgas);
-			}
+			
+			amrex::Real Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables_dev);
+			amrex::Real cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, tables_dev); 
+			
 
 			const amrex::Real Tuse = amrex::max(Tgas, t_min);
 			const amrex::Real kappa = params.conductivity_prefactor;
-			const amrex::Real qsat = amrex::max(saturation_factor * flux_limiter_phi * rho * std::pow(cs_iso, 3), small);
+			const amrex::Real qsat = amrex::max(saturation_factor * flux_limiter_phi * rho * std::pow(cs, 3), small);
 
 			temperature_arr[bx](i, j, k) = Tuse;
 			conductivity_arr[bx](i, j, k) = kappa;
@@ -189,6 +182,7 @@ template <typename problem_t> class ElectronConduction
 
 			const amrex::Real Ekin = 0.5 * (px * px + py * py + pz * pz) / rho;
 			const amrex::Real Eint_old = HydroSystem<problem_t>::ComputeInternalEnergy(state_out[bx], i, j, k, &local_state_fc);
+			const amrex::Real Emag = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, &local_state_fc);
 			amrex::Real div_flux = (flux_x_const[bx](i + 1, j, k) - flux_x_const[bx](i, j, k)) / dx[0];
 #if AMREX_SPACEDIM >= 2
 			div_flux += (flux_y_const[bx](i, j + 1, k) - flux_y_const[bx](i, j, k)) / dx[1];
@@ -199,7 +193,7 @@ template <typename problem_t> class ElectronConduction
 
 			amrex::Real Eint_new = Eint_old - dt * div_flux;
 
-			state_out[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Eint_new + Ekin;
+			state_out[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Eint_new + Ekin + Emag;
 			state_out[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index) = Eint_new;
 		});
 	}

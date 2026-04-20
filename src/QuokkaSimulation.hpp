@@ -1029,7 +1029,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 										     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
 										     .saturation_factor = electronConductionSaturationFactor_,
 										     .min_temperature = electronConductionTempFloor_};
-		quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params);
+		quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, resampledTables_);
 	}
 
 	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
