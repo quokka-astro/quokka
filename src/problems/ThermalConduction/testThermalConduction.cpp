@@ -186,7 +186,7 @@ auto problem_main() -> int
 		}
 	}
 
-	// Problem initialization
+	// // Problem initialization
 	QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
 
 	// initialize
