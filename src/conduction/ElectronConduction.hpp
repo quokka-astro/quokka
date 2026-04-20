@@ -20,17 +20,17 @@
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
-#include "hydro/hydro_system.hpp"
 #include "QuokkaSimulation.hpp"
-#include "cooling/ResampledCooling.hpp" 
+#include "cooling/ResampledCooling.hpp"
+#include "hydro/hydro_system.hpp"
 
 namespace quokka::conduction
 {
 
 struct ElectronConductionParams {
-	amrex::Real conductivity_prefactor = 3.e34;  //units of cm^2 s^{-1} 
+	amrex::Real conductivity_prefactor = 3.e34; // units of cm^2 s^{-1}
 	amrex::Real flux_limiter_phi = 0.1;
-	amrex::Real saturation_factor = 5.0; //refer to equation 8 of Cowee & McKee 1977
+	amrex::Real saturation_factor = 5.0; // refer to equation 8 of Cowee & McKee 1977
 	amrex::Real min_temperature = 0.0;
 };
 
@@ -96,10 +96,8 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
 			const amrex::Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(cons, i, j, k, &local_state_fc);
 
-			
 			amrex::Real Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables_dev);
-			amrex::Real cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, tables_dev); 
-			
+			amrex::Real cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, tables_dev);
 
 			const amrex::Real Tuse = amrex::max(Tgas, t_min);
 			const amrex::Real kappa = params.conductivity_prefactor;
