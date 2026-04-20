@@ -7,17 +7,17 @@
 /// \brief Defines a test problem for photoionization.
 ///
 
+#include "AMReX.H"
+#include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
+#include "radiation/radiation_system.hpp"
+#include "util/fextract.hpp"
+#include <fmt/format.h>
 #include <fstream>
 #include <iostream>
 #include <ostream>
 #include <string>
 #include <vector>
-#include "AMReX.H"
-#include "QuokkaSimulation.hpp"
-#include "radiation/radiation_system.hpp"
-#include "util/fextract.hpp"
-#include <fmt/format.h>
 
 #include "actual_eos_data.H"
 #include "burn_type.H"
@@ -27,7 +27,6 @@
 
 struct PhotoionizationStreamingProblem {
 };
-
 
 constexpr double c = C::c_light;    // speed of light
 constexpr double chat = C::c_light; // reduced speed of light
@@ -295,18 +294,18 @@ auto problem_main() -> int
 	}
 
 	std::ifstream file(filename);
-    std::string line;
-    std::vector<std::vector<double>> data;
+	std::string line;
+	std::vector<std::vector<double>> data;
 	std::getline(file, line);
-    while (std::getline(file, line)) {
-        std::stringstream ss(line);
-        std::string value;
-        std::vector<double> row;
-        while (std::getline(ss, value, ',')) {
-            row.push_back(std::stod(value));
-        }
-        data.push_back(row);
-    }
+	while (std::getline(file, line)) {
+		std::stringstream ss(line);
+		std::string value;
+		std::vector<double> row;
+		while (std::getline(ss, value, ',')) {
+			row.push_back(std::stod(value));
+		}
+		data.push_back(row);
+	}
 
 	std::vector<double> t_julia;
 	std::vector<double> n_e_julia;

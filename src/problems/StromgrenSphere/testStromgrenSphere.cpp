@@ -7,19 +7,19 @@
 /// \brief Defines a test problem for the static Stromgren sphere with no temperature dependence.
 ///
 
+#include "AMReX.H"
 #include "AMReX_Array.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_REAL.H"
 #include "AMReX_Vector.H"
+#include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "physics_info.hpp"
+#include "radiation/radiation_system.hpp"
 #include <algorithm>
 #include <cmath>
-#include <limits>
-#include "AMReX.H"
-#include "QuokkaSimulation.hpp"
-#include "radiation/radiation_system.hpp"
 #include <fmt/format.h>
+#include <limits>
 #include <string>
 
 #include "actual_eos_data.H"
@@ -68,10 +68,9 @@ template <> struct RadSystem_Traits<StromgrenSphere> {
 };
 
 template <>
-void RadSystem<StromgrenSphere>::SetRadEnergySource(array_t &radEnergy, const amrex::Box &indexRange,
-								   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-								   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-								   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
+void RadSystem<StromgrenSphere>::SetRadEnergySource(array_t &radEnergy, const amrex::Box &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
+						    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+						    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
 {
 	amrex::ParmParse pp("stromgen");
 	amrex::Real Q = 1.0e49_rt;
@@ -84,25 +83,26 @@ void RadSystem<StromgrenSphere>::SetRadEnergySource(array_t &radEnergy, const am
 	const amrex::Real y0 = 0.0_rt;
 	const amrex::Real z0 = 0.0_rt;
 	amrex::Real sum = 0.0_rt;
-	for (int i=0; i<=nCells; ++i) {
-		for (int j=0; j<=nCells; ++j) {
-			for (int k=0; k<=nCells; ++k) {
+	for (int i = 0; i <= nCells; ++i) {
+		for (int j = 0; j <= nCells; ++j) {
+			for (int k = 0; k <= nCells; ++k) {
 				amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
 				amrex::Real const y = prob_lo[1] + (j + 0.5) * dx[1];
 				amrex::Real const z = prob_lo[2] + (k + 0.5) * dx[2];
 				amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
-				sum += std::exp(-(r * r) / (2.0 * sigma_star * sigma_star)) * dx[0] * dx[1] * dx[2] / (std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5));
+				sum += std::exp(-(r * r) / (2.0 * sigma_star * sigma_star)) * dx[0] * dx[1] * dx[2] /
+				       (std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5));
 			}
 		}
 	}
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		if ((i <= nCells)  && (j <= nCells)  && (k <= nCells)) {
+		if ((i <= nCells) && (j <= nCells) && (k <= nCells)) {
 			amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
 			amrex::Real const y = prob_lo[1] + (j + 0.5) * dx[1];
 			amrex::Real const z = prob_lo[2] + (k + 0.5) * dx[2];
 			amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
 			amrex::Real w_i = std::exp(-(r * r) / (2.0 * sigma_star * sigma_star)) / (std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5));
-			amrex::Real val =  L_star * w_i / sum;
+			amrex::Real val = L_star * w_i / sum;
 			radEnergy(i, j, k) = val;
 		} else {
 			radEnergy(i, j, k) = 0.0_rt;
@@ -164,14 +164,12 @@ template <> void QuokkaSimulation<StromgrenSphere>::preCalculateInitialCondition
 	}
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<StromgrenSphere>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StromgrenSphere>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
 	return 0.0_rt;
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<StromgrenSphere>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<StromgrenSphere>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
 	return 0.0_rt;
 }
@@ -248,7 +246,8 @@ template <> void QuokkaSimulation<StromgrenSphere>::computeAfterTimestep()
 	const amrex::Real zmax = std::max(std::abs(prob_lo[2]), std::abs(prob_hi[2]));
 	const amrex::Real rmax = std::sqrt(xmax * xmax + ymax * ymax + zmax * zmax);
 
-	const int n_bins = 3 * static_cast<int>(CountCells(lev)); // The test is meant to be run with a small number of cells, so this narrowing static cast is fine.
+	const int n_bins =
+	    3 * static_cast<int>(CountCells(lev)); // The test is meant to be run with a small number of cells, so this narrowing static cast is fine.
 	using hist_t = unsigned long long;
 	amrex::Gpu::DeviceVector<hist_t> d_hist(n_bins, static_cast<hist_t>(0));
 
@@ -407,18 +406,14 @@ auto problem_main() -> int
 		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = sim.geom[0].CellSizeArray();
 		const amrex::Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 		const amrex::Real quanta = RadSystem<StromgrenSphere>::GetChemActiveRadiationGroupQuanta(0);
-		const amrex::Real n_photon_sum0 =
-			sim.state_new_cc_[0].sum(RadSystem<StromgrenSphere>::radEnergy_index) / quanta;
-		const amrex::Real n_e_sum0 =
-			sim.state_new_cc_[0].sum(HydroSystem<StromgrenSphere>::scalar0_index + 0) / C::m_e;
+		const amrex::Real n_photon_sum0 = sim.state_new_cc_[0].sum(RadSystem<StromgrenSphere>::radEnergy_index) / quanta;
+		const amrex::Real n_e_sum0 = sim.state_new_cc_[0].sum(HydroSystem<StromgrenSphere>::scalar0_index + 0) / C::m_e;
 
 		sim.evolve();
 
 		const amrex::Real error_tol = 1e-6;
-		const amrex::Real n_photon_sum =
-			sim.state_new_cc_[0].sum(RadSystem<StromgrenSphere>::radEnergy_index) / quanta;
-		const amrex::Real n_e_sum =
-			sim.state_new_cc_[0].sum(HydroSystem<StromgrenSphere>::scalar0_index + 0) / C::m_e;
+		const amrex::Real n_photon_sum = sim.state_new_cc_[0].sum(RadSystem<StromgrenSphere>::radEnergy_index) / quanta;
+		const amrex::Real n_e_sum = sim.state_new_cc_[0].sum(HydroSystem<StromgrenSphere>::scalar0_index + 0) / C::m_e;
 		amrex::Print() << fmt::format("Final total number of photons: {0}", n_photon_sum) << '\n';
 		amrex::Print() << fmt::format("Final total number of electrons: {0}", n_e_sum) << '\n';
 		const amrex::Real n_photon_added = sim.userData_.Q * sim.userData_.tend / 8.0_rt;
@@ -451,12 +446,17 @@ auto problem_main() -> int
 				const amrex::Real upper_bound = analytical_radius + error_tol;
 				const amrex::Real lower_bound = analytical_radius - error_tol;
 				if ((r50_numerical < lower_bound) || (r50_numerical > upper_bound)) {
-					amrex::Print() << fmt::format("Test failed at t = {0}: Numerical r50 = {1} is not within [{2}, {3}] (analytical r50 = {4})", sim.userData_.t_vec_[i], r50_numerical, lower_bound, upper_bound, analytical_radius) << '\n';
+					amrex::Print()
+					    << fmt::format("Test failed at t = {0}: Numerical r50 = {1} is not within [{2}, {3}] (analytical r50 = {4})",
+							   sim.userData_.t_vec_[i], r50_numerical, lower_bound, upper_bound, analytical_radius)
+					    << '\n';
 					status = 1;
 				}
 			}
 			if (status == 0) {
-				amrex::Print() << "Test passed: Numerical ionization front radii are within error tolerance of analytical solution at all output times." << '\n';
+				amrex::Print()
+				    << "Test passed: Numerical ionization front radii are within error tolerance of analytical solution at all output times."
+				    << '\n';
 			}
 		}
 	}

@@ -14,8 +14,5 @@
 namespace quokka::photochemistry
 {
 
-AMREX_GPU_DEVICE void photochem_burner(burn_t &photochemstate, const Real dt)
-{
-	burner(photochemstate, dt);
-}
+AMREX_GPU_DEVICE void photochem_burner(burn_t &photochemstate, const Real dt) { burner(photochemstate, dt); }
 } // namespace quokka::photochemistry
