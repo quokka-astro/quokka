@@ -20,8 +20,8 @@
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
+#include "cooling/ResampledCooling.hpp"
 #include "hydro/hydro_system.hpp"
-#include "cooling/ResampledCooling.hpp" 
 
 namespace quokka::conduction
 {
@@ -95,10 +95,8 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
 			const amrex::Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(cons, i, j, k, &local_state_fc);
 
-			
 			const amrex::Real Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables_dev);
-			const amrex::Real cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, tables_dev); 
-			
+			const amrex::Real cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, tables_dev);
 
 			const amrex::Real Tuse = amrex::max(Tgas, t_min);
 			const amrex::Real kappa = params.conductivity_prefactor;
