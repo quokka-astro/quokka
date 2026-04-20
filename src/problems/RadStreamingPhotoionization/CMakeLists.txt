@@ -96,6 +96,6 @@ if(AMReX_GPU_BACKEND MATCHES "CUDA")
   setup_target_for_cuda_compilation(${JOB_NAME})
 endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-add_test(NAME RadStreamingPhotoionizationNoEnergy COMMAND ${JOB_NAME} ../inputs/PhotoionizationTests/StreamingNoEnergyChange.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-add_test(NAME RadStreamingPhotoionizationWithEnergy COMMAND ${JOB_NAME} ../inputs/PhotoionizationTests/StreamingPhotoheatingRecCooling.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+add_test(NAME RadStreamingPhotoionizationNoEnergy COMMAND ${JOB_NAME} ../inputs/PhotoionizationTests/StreamingNoEnergyChange.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+add_test(NAME RadStreamingPhotoionizationWithEnergy COMMAND ${JOB_NAME} ../inputs/PhotoionizationTests/StreamingPhotoheatingRecCooling.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 

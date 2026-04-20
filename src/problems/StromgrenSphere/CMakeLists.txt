@@ -97,6 +97,6 @@ if(AMReX_SPACEDIM GREATER_EQUAL 2)
     setup_target_for_cuda_compilation(${JOB_NAME})
   endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-  add_test(NAME StromgrenSphereNoRecombination COMMAND ${JOB_NAME} ../inputs/PhotoionizationTests/StromgrenNoRecombination.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-  add_test(NAME StromgrenSphereTempIndependentRecombination COMMAND ${JOB_NAME} ../inputs/PhotoionizationTests/StromgrenTempIndependentRecombination.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(NAME StromgrenSphereNoRecombination COMMAND ${JOB_NAME} ../inputs/PhotoionizationTests/StromgrenNoRecombination.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(NAME StromgrenSphereTempIndependentRecombination COMMAND ${JOB_NAME} ../inputs/PhotoionizationTests/StromgrenTempIndependentRecombination.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

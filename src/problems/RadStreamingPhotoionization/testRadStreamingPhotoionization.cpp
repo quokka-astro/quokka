@@ -12,7 +12,6 @@
 #include "fundamental_constants.H"
 #include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
-#include <fmt/format.h>
 #include <fstream>
 #include <iostream>
 #include <ostream>

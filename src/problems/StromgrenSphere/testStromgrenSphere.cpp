@@ -18,7 +18,6 @@
 #include "radiation/radiation_system.hpp"
 #include <algorithm>
 #include <cmath>
-#include <fmt/format.h>
 #include <limits>
 #include <string>
 
@@ -158,7 +157,7 @@ template <> void QuokkaSimulation<StromgrenSphere>::preCalculateInitialCondition
 	eos_init(userData_.small_temp, userData_.small_dens);
 	network_init();
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		std::string filename = fmt::format("stromgren_sphere_radii.csv");
+		std::string filename = "stromgren_sphere_radii.csv";
 		userData_.output_file_.open(filename);
 		userData_.output_file_ << "time,r16,r50,r84\n";
 	}
@@ -338,7 +337,7 @@ template <> void QuokkaSimulation<StromgrenSphere>::computeAfterTimestep()
 		}
 
 		if (total_count == 0) {
-			amrex::Print() << fmt::format("t = {:e}: no cells with 0.01 <= x_HII <= 0.99", tNew_[lev]) << '\n';
+			amrex::Print() << "t = " << tNew_[lev] << ": no cells with 0.01 <= x_HII <= 0.99" << '\n';
 		} else {
 			auto percentile_from_hist = [=](amrex::Vector<hist_t> const &hist, amrex::Real q) -> amrex::Real {
 				const amrex::Real target = q * static_cast<amrex::Real>(total_count - 1);
@@ -356,7 +355,7 @@ template <> void QuokkaSimulation<StromgrenSphere>::computeAfterTimestep()
 					}
 					cum = next_cum;
 				}
-				amrex::Abort(fmt::format("Error in percentile_from_hist: target {} exceeds total count {}", target, total_count));
+				amrex::Abort("Error in percentile_from_hist: target" + std::to_string(target) + " exceeds total count " + std::to_string(total_count));
 				return rmax;
 			};
 
@@ -414,8 +413,8 @@ auto problem_main() -> int
 		const amrex::Real error_tol = 1e-6;
 		const amrex::Real n_photon_sum = sim.state_new_cc_[0].sum(RadSystem<StromgrenSphere>::radEnergy_index) / quanta;
 		const amrex::Real n_e_sum = sim.state_new_cc_[0].sum(HydroSystem<StromgrenSphere>::scalar0_index + 0) / C::m_e;
-		amrex::Print() << fmt::format("Final total number of photons: {0}", n_photon_sum) << '\n';
-		amrex::Print() << fmt::format("Final total number of electrons: {0}", n_e_sum) << '\n';
+		amrex::Print() << "Final total number of photons: " << n_photon_sum << '\n';
+		amrex::Print() << "Final total number of electrons: " << n_e_sum << '\n';
 		const amrex::Real n_photon_added = sim.userData_.Q * sim.userData_.tend / 8.0_rt;
 		const amrex::Real n_photon_inflight = (n_photon_sum - n_photon_sum0) * cell_vol;
 		const amrex::Real n_electron_added = (n_e_sum - n_e_sum0) * cell_vol;
@@ -423,10 +422,10 @@ auto problem_main() -> int
 
 		amrex::Real photon_err = std::abs((n_photon_added - (n_photon_inflight + photon_absorbed)) / n_photon_added);
 		if (photon_err > error_tol) {
-			amrex::Print() << fmt::format("Test failed: Relative photon conservation error is {0} (tolerance: {1})", photon_err, error_tol) << '\n';
+			amrex::Print() << "Test failed: Relative photon conservation error is " << photon_err << " (tolerance: " << error_tol << ")" << '\n';
 			status = 1;
 		} else {
-			amrex::Print() << fmt::format("Test passed: Relative photon conservation error is {0} (tolerance: {1})", photon_err, error_tol) << '\n';
+			amrex::Print() << "Test passed: Relative photon conservation error is " << photon_err << " (tolerance: " << error_tol << ")" << '\n';
 		}
 	} else {
 		sim.evolve();
@@ -447,8 +446,7 @@ auto problem_main() -> int
 				const amrex::Real lower_bound = analytical_radius - error_tol;
 				if ((r50_numerical < lower_bound) || (r50_numerical > upper_bound)) {
 					amrex::Print()
-					    << fmt::format("Test failed at t = {0}: Numerical r50 = {1} is not within [{2}, {3}] (analytical r50 = {4})",
-							   sim.userData_.t_vec_[i], r50_numerical, lower_bound, upper_bound, analytical_radius)
+					    << "Test failed at t = " << sim.userData_.t_vec_[i] << ": Numerical r50 = " << r50_numerical << " is not within [" << lower_bound << ", " << upper_bound << "] (analytical r50 = " << analytical_radius << ")"
 					    << '\n';
 					status = 1;
 				}

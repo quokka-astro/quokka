@@ -103,7 +103,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 				photochemstate.xn[nn] = amrex::max(photochemstate.xn[nn], small_x);
 			}
 			for (int nn = 0; nn < NumChemActiveRadGroups; nn += MicrophysicsNumRadVarsPerGroup) {
-				// TODO (james471): Ensure that flux doesn't deviate from corrensponding energy density.
+				// TODO (james471): Ensure that flux doesn't deviate from the corresponding energy density.
 				photochemstate.rn[nn] = amrex::max(photochemstate.rn[nn], small_x);
 			}
 
