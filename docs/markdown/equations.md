@@ -2,7 +2,7 @@
 
 ## Fluids, radiation, magnetic fields, and dust
 
-Assuming the speed of light is not reduced ($\hat{c} = c$), Quokka solves the system of conservation laws:
+Assuming the speed of light is not reduced ($\hat{c} = c$), Quokka solves the following conservation laws for the cell-centered variables, as written below in the [Heaviside–Lorentz system of units](https://en.wikipedia.org/wiki/Heaviside%E2%80%93Lorentz_units):
 
 $$\frac{\partial \vec{U}}{\partial t}+\nabla \cdot \vec{F}(\vec{U}) = \vec{S}(\vec{U}),$$
 
@@ -16,8 +16,7 @@ $$\begin{aligned}
   E_g \\
   \vec{F}_g \\
   \rho_{\mathrm{d},k} \\
-  \rho_{\mathrm{d},k} \vec{v}_{\mathrm{d},k} \\
-  \vec{B}
+  \rho_{\mathrm{d},k} \vec{v}_{\mathrm{d},k}
 \end{array}\right], \;
 \vec{F}(U) = \left[
 \begin{array}{c}
@@ -28,8 +27,7 @@ $$\begin{aligned}
   \vec{F}_g \\
   c^2 \mathsf{P}_g \\
   \rho_{\mathrm{d},k} \vec{v}_{\mathrm{d},k} \\
-  \rho_{\mathrm{d},k} \vec{v}_{\mathrm{d},k} \otimes \vec{v}_{\mathrm{d},k} \\
-  \vec{v} \otimes \vec{B} - \vec{B} \otimes \vec{v}
+  \rho_{\mathrm{d},k} \vec{v}_{\mathrm{d},k} \otimes \vec{v}_{\mathrm{d},k}
 \end{array}\right], \;
 \vec{S}(U)=\left[
 \begin{array}{c}
@@ -40,15 +38,20 @@ $$\begin{aligned}
   - c G^0_{g} \\
   - c^2 \vec{G}_g \\
   0 \\
-  \rho_{\mathrm{d},k} \frac{\vec{v} - \vec{v}_{\mathrm{d},k}}{T_{\mathrm{s},k}} \\
-  0
+  \rho_{\mathrm{d},k} \frac{\vec{v} - \vec{v}_{\mathrm{d},k}}{T_{\mathrm{s},k}}
 \end{array}\right],
 \end{aligned}$$
 
 where the total fluid energy is
 
 $$
-E = \rho e + \frac{1}{2} \rho v^2 + \frac{1}{2} B^2.
+E = \rho e + \frac{1}{2} \rho v^2 + \frac{1}{2} B^2 \, ,
+$$
+
+and the face-centered magnetic field is evolved according to the ideal MHD induction equation:
+
+$$
+\frac{\partial \vec{B}}{\partial t} - \nabla \times \left(\vec{v} \times \vec{B}\right) = 0.
 $$
 
 Quokka also solves the non-conservative auxiliary internal energy equation:
@@ -69,8 +72,8 @@ where
 
 -   $\rho$ is the gas density,
 -   $\vec{v}$ is the gas velocity,
--   $E$ is the total fluid energy, including magnetic energy when MHD is enabled,
--   $\rho e_{\text{aux}}$ is the auxiliary gas internal energy,
+-   $E$ is the total fluid energy density, including magnetic energy when MHD is enabled,
+-   $\rho e_{\text{aux}}$ is the auxiliary gas internal energy density,
 -   $X_n$ is the fractional concentration of species $n$,
 -   $\dot{X}_n$ is the chemical reaction term for species $n$,
 -   $\mathcal{H}$ is the optically-thin volumetric heating term (radiative and chemical),
@@ -93,11 +96,6 @@ where
 
 Note that since work done by radiation on the gas is included in the $c \sum_g G^0_g$ term, $S_{\text{rad}}$ is not the same as $c \sum_g G^0_g$.
 
-Unlike all other variables, Quokka stores $\vec{B}$ on faces and evolves it with a constrained transport discretization. If satisfied in the initial conditions, the magnetic field continues to satisfy the divergence constraint
-$$
-\nabla \cdot \vec{B} = 0
-$$
-to machine precision.
 
 ## Collisionless particles
 
