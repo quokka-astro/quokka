@@ -25,9 +25,9 @@ constexpr double B_Y = 0.4;
 constexpr double B_Z = 0.5;
 constexpr double MAGNETIC_ENERGY = 0.5 * (B_X * B_X + B_Y * B_Y + B_Z * B_Z);
 
- constexpr amrex::GpuArray<amrex::Real, 2> dust_grain_radius = {0.02, 0.01};
- constexpr amrex::GpuArray<amrex::Real, 2> dust_grain_density = {1.0, 1.0};
- constexpr bool enable_supersonic_correction = true;
+constexpr amrex::GpuArray<amrex::Real, 2> dust_grain_radius = {0.02, 0.01};
+constexpr amrex::GpuArray<amrex::Real, 2> dust_grain_density = {1.0, 1.0};
+constexpr bool enable_supersonic_correction = true;
 } // namespace
 
 struct DustDampingDragReference {
@@ -333,94 +333,94 @@ auto max_abs_component(const std::vector<double> &values) -> double
 
 auto problem_main() -> int
 {
-  auto ref_data = run_reference_simulation();
-  auto mhd_data = run_mhd_zero_charge_simulation();
+	auto ref_data = run_reference_simulation();
+	auto mhd_data = run_mhd_zero_charge_simulation();
 
-  double const rel_err_gas_vx = compute_relative_error(mhd_data.t_vec_, mhd_data.v_gas_x_vec_, ref_data.t_vec_, ref_data.v_gas_x_vec_);
-  double const rel_err_dust1_vx = compute_relative_error(mhd_data.t_vec_, mhd_data.v_dust1_x_vec_, ref_data.t_vec_, ref_data.v_dust1_x_vec_);
-  double const rel_err_dust2_vx = compute_relative_error(mhd_data.t_vec_, mhd_data.v_dust2_x_vec_, ref_data.t_vec_, ref_data.v_dust2_x_vec_);
-  double const rel_err_gas_E = compute_relative_error(mhd_data.t_vec_, mhd_data.E_gas_vec_, ref_data.t_vec_, ref_data.E_gas_vec_);
+	double const rel_err_gas_vx = compute_relative_error(mhd_data.t_vec_, mhd_data.v_gas_x_vec_, ref_data.t_vec_, ref_data.v_gas_x_vec_);
+	double const rel_err_dust1_vx = compute_relative_error(mhd_data.t_vec_, mhd_data.v_dust1_x_vec_, ref_data.t_vec_, ref_data.v_dust1_x_vec_);
+	double const rel_err_dust2_vx = compute_relative_error(mhd_data.t_vec_, mhd_data.v_dust2_x_vec_, ref_data.t_vec_, ref_data.v_dust2_x_vec_);
+	double const rel_err_gas_E = compute_relative_error(mhd_data.t_vec_, mhd_data.E_gas_vec_, ref_data.t_vec_, ref_data.E_gas_vec_);
 
-  double const max_transverse_velocity =
-      std::max({max_abs_component(mhd_data.v_gas_y_vec_), max_abs_component(mhd_data.v_gas_z_vec_), max_abs_component(mhd_data.v_dust1_y_vec_),
-          max_abs_component(mhd_data.v_dust1_z_vec_), max_abs_component(mhd_data.v_dust2_y_vec_), max_abs_component(mhd_data.v_dust2_z_vec_)});
+	double const max_transverse_velocity =
+	    std::max({max_abs_component(mhd_data.v_gas_y_vec_), max_abs_component(mhd_data.v_gas_z_vec_), max_abs_component(mhd_data.v_dust1_y_vec_),
+		      max_abs_component(mhd_data.v_dust1_z_vec_), max_abs_component(mhd_data.v_dust2_y_vec_), max_abs_component(mhd_data.v_dust2_z_vec_)});
 
-  amrex::Print() << "\nMHD zero-charge dust damping comparison:\n";
-  amrex::Print() << "  B = (" << B_X << ", " << B_Y << ", " << B_Z << ")\n";
-  amrex::Print() << "  Relative L1 norm for gas vx    = " << rel_err_gas_vx << "\n";
-  amrex::Print() << "  Relative L1 norm for dust1 vx  = " << rel_err_dust1_vx << "\n";
-  amrex::Print() << "  Relative L1 norm for dust2 vx  = " << rel_err_dust2_vx << "\n";
-  amrex::Print() << "  Relative L1 norm for gas E     = " << rel_err_gas_E << "\n";
-  amrex::Print() << "  Max transverse velocity        = " << max_transverse_velocity << "\n";
+	amrex::Print() << "\nMHD zero-charge dust damping comparison:\n";
+	amrex::Print() << "  B = (" << B_X << ", " << B_Y << ", " << B_Z << ")\n";
+	amrex::Print() << "  Relative L1 norm for gas vx    = " << rel_err_gas_vx << "\n";
+	amrex::Print() << "  Relative L1 norm for dust1 vx  = " << rel_err_dust1_vx << "\n";
+	amrex::Print() << "  Relative L1 norm for dust2 vx  = " << rel_err_dust2_vx << "\n";
+	amrex::Print() << "  Relative L1 norm for gas E     = " << rel_err_gas_E << "\n";
+	amrex::Print() << "  Max transverse velocity        = " << max_transverse_velocity << "\n";
 
-  int status = 0;
-  if (amrex::ParallelDescriptor::IOProcessor()) {
-    const double rel_err_tol = 0.01;
-    const double transverse_velocity_tol = 1.0e-12;
-    bool const passed = (rel_err_gas_vx <= rel_err_tol) && (rel_err_dust1_vx <= rel_err_tol) && (rel_err_dust2_vx <= rel_err_tol) &&
-            (rel_err_gas_E <= rel_err_tol) && (max_transverse_velocity <= transverse_velocity_tol);
+	int status = 0;
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		const double rel_err_tol = 0.01;
+		const double transverse_velocity_tol = 1.0e-12;
+		bool const passed = (rel_err_gas_vx <= rel_err_tol) && (rel_err_dust1_vx <= rel_err_tol) && (rel_err_dust2_vx <= rel_err_tol) &&
+				    (rel_err_gas_E <= rel_err_tol) && (max_transverse_velocity <= transverse_velocity_tol);
 
-    if (!passed) {
-      status = 1;
-      amrex::Print() << "\nTest FAILED: MHD zero-charge solution did not match pure drag reference.\n";
-    } else {
-      amrex::Print() << "\nTest PASSED: MHD zero-charge solution matches pure drag reference.\n";
-    }
+		if (!passed) {
+			status = 1;
+			amrex::Print() << "\nTest FAILED: MHD zero-charge solution did not match pure drag reference.\n";
+		} else {
+			amrex::Print() << "\nTest PASSED: MHD zero-charge solution matches pure drag reference.\n";
+		}
 
 #ifdef HAVE_PYTHON
-    // gas x-velocity
-    matplotlibcpp::clf();
-    matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_gas_x_vec_,
-            {{"label", "reference (pure drag)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
-    matplotlibcpp::plot(mhd_data.t_vec_, mhd_data.v_gas_x_vec_,
-            {{"label", "MHD zero-charge"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
-    matplotlibcpp::legend();
-    matplotlibcpp::xlabel("t");
-    matplotlibcpp::ylabel(R"($v_{g,x}$)");
-    matplotlibcpp::title("Gas X-Velocity");
-    matplotlibcpp::tight_layout();
-    matplotlibcpp::save("./dust_damping_iteration_mhd_gas_velocity_x.pdf");
+		// gas x-velocity
+		matplotlibcpp::clf();
+		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_gas_x_vec_,
+				    {{"label", "reference (pure drag)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+		matplotlibcpp::plot(mhd_data.t_vec_, mhd_data.v_gas_x_vec_,
+				    {{"label", "MHD zero-charge"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
+		matplotlibcpp::legend();
+		matplotlibcpp::xlabel("t");
+		matplotlibcpp::ylabel(R"($v_{g,x}$)");
+		matplotlibcpp::title("Gas X-Velocity");
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("./dust_damping_iteration_mhd_gas_velocity_x.pdf");
 
-    // dust1 x-velocity
-    matplotlibcpp::clf();
-    matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust1_x_vec_,
-            {{"label", "reference (pure drag)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
-    matplotlibcpp::plot(mhd_data.t_vec_, mhd_data.v_dust1_x_vec_,
-            {{"label", "MHD zero-charge"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
-    matplotlibcpp::legend();
-    matplotlibcpp::xlabel("t");
-    matplotlibcpp::ylabel(R"($v_{d1,x}$)");
-    matplotlibcpp::title("Dust1 X-Velocity");
-    matplotlibcpp::tight_layout();
-    matplotlibcpp::save("./dust_damping_iteration_mhd_dust1_velocity_x.pdf");
+		// dust1 x-velocity
+		matplotlibcpp::clf();
+		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust1_x_vec_,
+				    {{"label", "reference (pure drag)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+		matplotlibcpp::plot(mhd_data.t_vec_, mhd_data.v_dust1_x_vec_,
+				    {{"label", "MHD zero-charge"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
+		matplotlibcpp::legend();
+		matplotlibcpp::xlabel("t");
+		matplotlibcpp::ylabel(R"($v_{d1,x}$)");
+		matplotlibcpp::title("Dust1 X-Velocity");
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("./dust_damping_iteration_mhd_dust1_velocity_x.pdf");
 
-    // dust2 x-velocity
-    matplotlibcpp::clf();
-    matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust2_x_vec_,
-            {{"label", "reference (pure drag)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
-    matplotlibcpp::plot(mhd_data.t_vec_, mhd_data.v_dust2_x_vec_,
-            {{"label", "MHD zero-charge"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
-    matplotlibcpp::legend();
-    matplotlibcpp::xlabel("t");
-    matplotlibcpp::ylabel(R"($v_{d2,x}$)");
-    matplotlibcpp::title("Dust2 X-Velocity");
-    matplotlibcpp::tight_layout();
-    matplotlibcpp::save("./dust_damping_iteration_mhd_dust2_velocity_x.pdf");
+		// dust2 x-velocity
+		matplotlibcpp::clf();
+		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust2_x_vec_,
+				    {{"label", "reference (pure drag)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+		matplotlibcpp::plot(mhd_data.t_vec_, mhd_data.v_dust2_x_vec_,
+				    {{"label", "MHD zero-charge"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
+		matplotlibcpp::legend();
+		matplotlibcpp::xlabel("t");
+		matplotlibcpp::ylabel(R"($v_{d2,x}$)");
+		matplotlibcpp::title("Dust2 X-Velocity");
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("./dust_damping_iteration_mhd_dust2_velocity_x.pdf");
 
-    // gas energy
-    matplotlibcpp::clf();
-    matplotlibcpp::plot(ref_data.t_vec_, ref_data.E_gas_vec_,
-            {{"label", "reference (pure drag)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
-    matplotlibcpp::plot(mhd_data.t_vec_, mhd_data.E_gas_vec_,
-            {{"label", "MHD zero-charge"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
-    matplotlibcpp::legend();
-    matplotlibcpp::xlabel("t");
-    matplotlibcpp::ylabel(R"($E_g$)");
-    matplotlibcpp::title("Gas Energy");
-    matplotlibcpp::tight_layout();
-    matplotlibcpp::save("./dust_damping_iteration_mhd_gas_energy.pdf");
+		// gas energy
+		matplotlibcpp::clf();
+		matplotlibcpp::plot(ref_data.t_vec_, ref_data.E_gas_vec_,
+				    {{"label", "reference (pure drag)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+		matplotlibcpp::plot(mhd_data.t_vec_, mhd_data.E_gas_vec_,
+				    {{"label", "MHD zero-charge"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
+		matplotlibcpp::legend();
+		matplotlibcpp::xlabel("t");
+		matplotlibcpp::ylabel(R"($E_g$)");
+		matplotlibcpp::title("Gas Energy");
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("./dust_damping_iteration_mhd_gas_energy.pdf");
 #endif
-  }
+	}
 
-  return status;
+	return status;
 }
