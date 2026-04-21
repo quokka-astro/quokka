@@ -7,6 +7,9 @@ Quokka is a two-moment radiation hydrodynamics code that uses the piecewise-para
 !!! Note  
     The Quokka methods paper is now [available on arXiv](https://arxiv.org/abs/2110.01792).
 
+!!! warning "Beta physics modules"
+    The following modules should currently be treated as **beta** because they have not yet been exercised in a published science application with Quokka: MHD, radiation, dust, particles, chemistry, and self-gravity. See [Known Issues and Errata](known_issues.md) for the current status and caveats.
+
 
 We use the AMReX library [@AMReX_JOSS] to provide patch-based adaptive mesh functionality. We take advantage of the C++ loop abstractions in AMReX in order to run with high performance on either CPUs or GPUs.
 
