@@ -29,7 +29,7 @@ Please also cite the module- or method-specific papers that apply to your work.
 - Core Quokka hydro / AMR code: [@Wibking_2022]
 - Radiation-hydrodynamics time integration: [@He_2024]
 - Multigroup radiation-hydrodynamics: [@He_2024b]
-- Particle-mesh interactions: [@He_2025]
+- Particle-mesh interactions: [@He_2026]
 
 The following modules are currently marked as **beta** for science-use maturity in Quokka documentation: MHD, radiation, dust, particles, chemistry, and self-gravity. For beta capabilities, cite the relevant methods papers above when they exist, and report the exact Quokka version or commit hash used in your study.
 
