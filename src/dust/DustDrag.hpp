@@ -4,7 +4,7 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file DustDrag.hpp
-/// \brief Defines a class for integrating dust-gas drag force.
+/// \brief Defines a class for integrating dust-gas drag force and dust Lorentz force.
 ///
 
 #include "AMReX_LUSolver.H"
@@ -19,6 +19,7 @@ template <typename problem_t> class DustDrag
 {
       public:
 	static constexpr int nscalars_ = Physics_Traits<problem_t>::numPassiveScalars;
+	static constexpr int nMassScalars_ = Physics_Traits<problem_t>::numMassScalars;
 	static constexpr int nHydroScalars_ = Physics_NumVars::numHydroVars + nscalars_;
 	static constexpr int numDustVars_ = Physics_NumVars::numDustVarsPerGroup; // number of dust variables for each dust group
 	static constexpr int nDustGroups_ = Physics_Traits<problem_t>::nDustGroups;
@@ -76,9 +77,10 @@ template <typename problem_t> class DustDrag
 									    amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_radius,
 									    amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_density,
 									    bool enable_supersonic_correction) -> amrex::GpuArray<amrex::Real, nDustGroups_>;
-	AMREX_GPU_HOST_DEVICE static auto Norm(Vec3 const &a) -> amrex::Real;
 	AMREX_GPU_HOST_DEVICE static auto BuildCrossMatrix(Vec3 const &b_hat) -> Mat3;
-	AMREX_GPU_HOST_DEVICE static auto SolveLinearSystem6x6(Mat6 A, Vec6 b) -> Vec6;
+	AMREX_GPU_HOST_DEVICE static auto ComputeSoundSpeedFromGasState(amrex::Real rho_g, amrex::Real gas_momentum_sq, amrex::Real E_tot_g,
+									amrex::Real magnetic_energy,
+									amrex::GpuArray<amrex::Real, nMassScalars_> const &massScalars) -> amrex::Real;
 	AMREX_GPU_HOST_DEVICE static auto BuildCellCenteredMagneticField(int i, int j, int k,
 									 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc) -> Vec3;
 	AMREX_GPU_HOST_DEVICE static auto ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>;
@@ -131,8 +133,6 @@ AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::ComputeReciprocalStoppingTimeKwo
 	return alpha;
 }
 
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::Norm(Vec3 const &a) -> amrex::Real { return std::sqrt(a.dot(a)); }
-
 template <typename problem_t> AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::BuildCrossMatrix(Vec3 const &b_hat) -> Mat3
 {
 	Mat3 result = Mat3::Zero();
@@ -145,12 +145,25 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::Bu
 	return result;
 }
 
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::SolveLinearSystem6x6(Mat6 A, Vec6 b) -> Vec6
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::ComputeSoundSpeedFromGasState(amrex::Real rho_g, amrex::Real gas_momentum_sq, amrex::Real E_tot_g,
+									      amrex::Real magnetic_energy,
+									      amrex::GpuArray<amrex::Real, nMassScalars_> const &massScalars) -> amrex::Real
 {
-	amrex::LUSolver<6, amrex::Real> const solver(A);
-	Vec6 x{};
-	solver(x.begin(), b.begin());
-	return x;
+	if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
+		amrex::ignore_unused(rho_g);
+		amrex::ignore_unused(gas_momentum_sq);
+		amrex::ignore_unused(E_tot_g);
+		amrex::ignore_unused(magnetic_energy);
+		amrex::ignore_unused(massScalars);
+		return HydroSystem<problem_t>::cs_iso_;
+	} else {
+		AMREX_ALWAYS_ASSERT(rho_g > 0.0);
+		amrex::Real const kinetic_energy = 0.5 * gas_momentum_sq / rho_g;
+		amrex::Real const thermal_energy = E_tot_g - kinetic_energy - magnetic_energy;
+		amrex::Real const pressure = quokka::EOS<problem_t>::ComputePressure(rho_g, thermal_energy, massScalars);
+		return quokka::EOS<problem_t>::ComputeSoundSpeed(rho_g, pressure, massScalars);
+	}
 }
 
 template <typename problem_t>
@@ -173,7 +186,7 @@ AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::BuildCellCenteredMagneticField(i
 
 template <typename problem_t> AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	amrex::GpuArray<amrex::Real, nDustGroups_> charge_to_mass_ratio{};
+	amrex::GpuArray<amrex::Real, nDustGroups_> charge_to_mass_ratio;
 	for (int g = 0; g < nDustGroups_; ++g) {
 		charge_to_mass_ratio[g] = 1.0;
 	}
@@ -185,8 +198,8 @@ AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::ComputeDustStageAffineOperators(
 										amrex::Real gamma2, amrex::Real beta1, amrex::Real beta2)
     -> DustStageAffineOperators
 {
-	DustStageAffineOperators ops{};
-	Mat6 S{};
+	DustStageAffineOperators ops;
+	Mat6 S;
 	Mat3 const I3 = Mat3::Identity();
 	Mat3 const block11 = I3 + (gamma1 * dt) * T;
 	Mat3 const block12 = (beta1 * dt) * T;
@@ -201,6 +214,7 @@ AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::ComputeDustStageAffineOperators(
 			S(row + 3, col + 3) = block22(row, col);
 		}
 	}
+	amrex::LUSolver<6, amrex::Real> const solver(S);
 
 	for (int basis = 0; basis < 3; ++basis) {
 		Vec3 e = Vec3::Zero();
@@ -208,9 +222,9 @@ AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::ComputeDustStageAffineOperators(
 
 		Vec3 const T_e = T * e;
 
-		Vec6 rhs_q{};
-		Vec6 rhs_k1{};
-		Vec6 rhs_k2{};
+		Vec6 rhs_q;
+		Vec6 rhs_k1;
+		Vec6 rhs_k2;
 		for (int dir = 0; dir < 3; ++dir) {
 			rhs_q(dir) = T_e[dir];
 			rhs_q(dir + 3) = T_e[dir];
@@ -220,9 +234,12 @@ AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::ComputeDustStageAffineOperators(
 			rhs_k2(dir + 3) = gamma2 * dt * T_e[dir];
 		}
 
-		Vec6 const sol_q = SolveLinearSystem6x6(S, rhs_q);
-		Vec6 const sol_k1 = SolveLinearSystem6x6(S, rhs_k1);
-		Vec6 const sol_k2 = SolveLinearSystem6x6(S, rhs_k2);
+		Vec6 sol_q;
+		Vec6 sol_k1;
+		Vec6 sol_k2;
+		solver(sol_q.begin(), rhs_q.begin());
+		solver(sol_k1.begin(), rhs_k1.begin());
+		solver(sol_k2.begin(), rhs_k2.begin());
 
 		for (int row = 0; row < 3; ++row) {
 			ops.W1(row, basis) = sol_q(row);
@@ -298,15 +315,20 @@ void DustDrag<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::a
 		const int max_iterations = (enableIterDustStoptime_ != 0) ? 20 : 1;
 		const amrex::Real tolerance = 1.0e-6;
 		int cell_iteration_count = 0;
+		amrex::Real const dt_lev = 2.0 * dt;
+		amrex::GpuArray<amrex::Real, nMassScalars_> const massScalars = RadSystem<problem_t>::ComputeMassScalars(consVar_cc[bx], i, j, k);
+		amrex::Real const magnetic_energy = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, &cons_fc);
+		amrex::Real E_tot_iter_old = E_tot;
+		amrex::Real E_tot_iter_new = E_tot;
+		amrex::Real E_int_iter_new = E_int;
 
-		// initialize iteration intermediate variables
-		amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, nDustGroups_ + 1> vel_inter_old;
-		amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, nDustGroups_ + 1> vel_inter_new;
+		amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, nDustGroups_ + 1> vel_iter_old;
+		amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, nDustGroups_ + 1> vel_iter_new;
 
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-			vel_inter_old[0][dir] = vel_g_old[dir];
+			vel_iter_old[0][dir] = vel_g_old[dir];
 			for (int g = 0; g < nDustGroups_; ++g) {
-				vel_inter_old[1 + g][dir] = vel_d_old[g][dir];
+				vel_iter_old[1 + g][dir] = vel_d_old[g][dir];
 			}
 		}
 
@@ -314,22 +336,21 @@ void DustDrag<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::a
 		for (int iteration = 0; iteration < max_iterations; ++iteration) {
 			cell_iteration_count++;
 			// compute sound speed for stopping time calculation
-			double cs = 0.0;
-			if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
-				cs = HydroSystem<problem_t>::cs_iso_;
-			} else {
-				cs = HydroSystem<problem_t>::ComputeSoundSpeed(consVar_cc[bx], i, j, k, &cons_fc);
+			amrex::Real gas_momentum_sq = 0.0;
+			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				gas_momentum_sq += rho_g * rho_g * vel_iter_old[0][dir] * vel_iter_old[0][dir];
 			}
-			// compute relative velocity magnitudes for stopping time calculation
+			amrex::Real const cs = ComputeSoundSpeedFromGasState(rho_g, gas_momentum_sq, E_tot_iter_old, magnetic_energy, massScalars);
+
 			amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag;
 			for (int g = 0; g < nDustGroups_; ++g) {
 				amrex::Real rel_speed_sq = 0.0;
 				for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-					rel_speed_sq +=
-					    (vel_inter_old[1 + g][dir] - vel_inter_old[0][dir]) * (vel_inter_old[1 + g][dir] - vel_inter_old[0][dir]);
+					rel_speed_sq += (vel_iter_old[1 + g][dir] - vel_iter_old[0][dir]) * (vel_iter_old[1 + g][dir] - vel_iter_old[0][dir]);
 				}
 				rel_vel_mag[g] = std::sqrt(rel_speed_sq);
 			}
+
 			amrex::GpuArray<amrex::Real, nDustGroups_> alpha = ComputeReciprocalStoppingTime(rho_g, rho_d, rel_vel_mag, cs);
 			amrex::Real t_s_max = 0.0;
 			for (int g = 0; g < nDustGroups_; ++g) {
@@ -341,21 +362,18 @@ void DustDrag<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::a
 				t_s_max = amrex::max(t_s_max, t_s);
 			}
 
-			amrex::Real const dt_lev = 2.0 * dt;
 			amrex::Real gamma1 = 0; // NOLINT
 			amrex::Real gamma2 = 0;
 			amrex::Real beta1 = 0; // NOLINT
 			amrex::Real beta2 = 0;
 			amrex::Real b = 0;
 			if (dt_lev < t_s_max) {
-				// Δt < t_s^max
 				gamma1 = 1.0;
 				gamma2 = 0.0;
 				beta1 = -0.5;
 				beta2 = 2.0 / 3.0;
 				b = 1.0;
 			} else {
-				// Δt > t_s^max
 				gamma1 = 1.0;
 				gamma2 = 1.0;
 				beta1 = 1.0;
@@ -386,8 +404,8 @@ void DustDrag<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::a
 					u[1 + g] = rho_d[g] * v_d[g];
 				}
 
-				amrex::GpuArray<amrex::Real, nDustGroups_ + 1> k1 = {};
-				amrex::GpuArray<amrex::Real, nDustGroups_ + 1> k2 = {};
+				amrex::GpuArray<amrex::Real, nDustGroups_ + 1> k1;
+				amrex::GpuArray<amrex::Real, nDustGroups_ + 1> k2;
 				amrex::Real A1 = 0.0;
 				amrex::Real A2 = 0.0;
 				amrex::Real B1 = 0.0;
@@ -441,41 +459,39 @@ void DustDrag<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::a
 						     k1[0] * beta2 * epsilon[g] * dt);
 				}
 
-				vel_inter_new[0][dir] = vel_g_old[dir] + (rho_g > 0.0 ? dt * (b * k1[0] + (1.0 - b) * k2[0]) / rho_g : 0.0);
-
+				vel_iter_new[0][dir] = vel_g_old[dir] + (rho_g > 0.0 ? dt * (b * k1[0] + (1.0 - b) * k2[0]) / rho_g : 0.0);
 				for (int g = 0; g < nDustGroups_; ++g) {
-					vel_inter_new[1 + g][dir] =
+					vel_iter_new[1 + g][dir] =
 					    vel_d_old[g][dir] + (rho_d[g] > 0.0 ? dt * (b * k1[1 + g] + (1.0 - b) * k2[1 + g]) / rho_d[g] : 0.0);
 				}
 			}
 
-			// update momenta and energy
 			amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> delta_mom_g{};
 			amrex::GpuArray<amrex::GpuArray<amrex::Real, AMREX_SPACEDIM>, nDustGroups_> delta_mom_d;
 			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-				delta_mom_g[dir] = rho_g * (vel_inter_new[0][dir] - vel_g_old[dir]);
-				consVar_cc[bx](i, j, k, x1Momentum_index + dir) = rho_g * vel_g_old[dir] + delta_mom_g[dir];
+				delta_mom_g[dir] = rho_g * (vel_iter_new[0][dir] - vel_g_old[dir]);
 				for (int g = 0; g < nDustGroups_; ++g) {
-					delta_mom_d[g][dir] = rho_d[g] * (vel_inter_new[1 + g][dir] - vel_d_old[g][dir]);
-					consVar_cc[bx](i, j, k, x1DustMomentum_index + dir + g * numDustVars) =
-					    rho_d[g] * vel_d_old[g][dir] + delta_mom_d[g][dir];
+					delta_mom_d[g][dir] = rho_d[g] * (vel_iter_new[1 + g][dir] - vel_d_old[g][dir]);
 				}
 			}
+
 			amrex::Real delta_E_g1 = 0.0;
 			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-				amrex::Real const avg_v_g = 0.5 * (vel_g_old[dir] + vel_inter_new[0][dir]);
+				amrex::Real const avg_v_g = 0.5 * (vel_g_old[dir] + vel_iter_new[0][dir]);
 				delta_E_g1 += delta_mom_g[dir] * avg_v_g;
 			}
+
 			amrex::Real delta_E_g2 = delta_E_g1;
 			for (int g = 0; g < nDustGroups_; ++g) {
 				for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-					amrex::Real avg_v_d = 0.5 * (vel_d_old[g][dir] + vel_inter_new[1 + g][dir]);
+					amrex::Real const avg_v_d = 0.5 * (vel_d_old[g][dir] + vel_iter_new[1 + g][dir]);
 					delta_E_g2 += delta_mom_d[g][dir] * avg_v_d;
 				}
 			}
+
 			amrex::Real const delta_E = delta_E_g1 - omega * delta_E_g2;
-			consVar_cc[bx](i, j, k, energy_index) = E_tot + delta_E;
-			consVar_cc[bx](i, j, k, internalEnergy_index) = E_int - omega * delta_E_g2;
+			E_tot_iter_new = E_tot + delta_E;
+			E_int_iter_new = E_int - omega * delta_E_g2;
 
 			// check convergence conditions
 			// calculate the reference speed
@@ -483,14 +499,14 @@ void DustDrag<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::a
 			{
 				amrex::Real speed_sq = 0.0;
 				for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-					speed_sq += vel_inter_old[0][dir] * vel_inter_old[0][dir];
+					speed_sq += vel_iter_old[0][dir] * vel_iter_old[0][dir];
 				}
 				max_speed_old = std::sqrt(speed_sq);
 			}
 			for (int g = 0; g < nDustGroups_; ++g) {
 				amrex::Real speed_sq = 0.0;
 				for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-					speed_sq += vel_inter_old[1 + g][dir] * vel_inter_old[1 + g][dir];
+					speed_sq += vel_iter_old[1 + g][dir] * vel_iter_old[1 + g][dir];
 				}
 				max_speed_old = amrex::max(max_speed_old, std::sqrt(speed_sq));
 			}
@@ -501,21 +517,19 @@ void DustDrag<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::a
 				amrex::Real speed_sq_old = 0.0;
 				amrex::Real speed_sq_new = 0.0;
 				for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-					speed_sq_old += vel_inter_old[0][dir] * vel_inter_old[0][dir];
-					speed_sq_new += vel_inter_new[0][dir] * vel_inter_new[0][dir];
+					speed_sq_old += vel_iter_old[0][dir] * vel_iter_old[0][dir];
+					speed_sq_new += vel_iter_new[0][dir] * vel_iter_new[0][dir];
 				}
-				amrex::Real const speed_change = std::abs(std::sqrt(speed_sq_new) - std::sqrt(speed_sq_old));
-				max_speed_change = amrex::max(max_speed_change, speed_change);
+				max_speed_change = std::abs(std::sqrt(speed_sq_new) - std::sqrt(speed_sq_old));
 			}
 			for (int g = 0; g < nDustGroups_; ++g) {
 				amrex::Real speed_sq_old = 0.0;
 				amrex::Real speed_sq_new = 0.0;
 				for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-					speed_sq_old += vel_inter_old[1 + g][dir] * vel_inter_old[1 + g][dir];
-					speed_sq_new += vel_inter_new[1 + g][dir] * vel_inter_new[1 + g][dir];
+					speed_sq_old += vel_iter_old[1 + g][dir] * vel_iter_old[1 + g][dir];
+					speed_sq_new += vel_iter_new[1 + g][dir] * vel_iter_new[1 + g][dir];
 				}
-				amrex::Real const speed_change = std::abs(std::sqrt(speed_sq_new) - std::sqrt(speed_sq_old));
-				max_speed_change = amrex::max(max_speed_change, speed_change);
+				max_speed_change = amrex::max(max_speed_change, std::abs(std::sqrt(speed_sq_new) - std::sqrt(speed_sq_old)));
 			}
 
 			// if the maximum speed change is less than the absolute tolerance, exit the loop early
@@ -523,8 +537,18 @@ void DustDrag<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::a
 				break;
 			}
 
-			vel_inter_old = vel_inter_new;
+			vel_iter_old = vel_iter_new;
+			E_tot_iter_old = E_tot_iter_new;
 		}
+
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			consVar_cc[bx](i, j, k, x1Momentum_index + dir) = rho_g * vel_iter_new[0][dir];
+			for (int g = 0; g < nDustGroups_; ++g) {
+				consVar_cc[bx](i, j, k, x1DustMomentum_index + dir + g * numDustVars) = rho_d[g] * vel_iter_new[1 + g][dir];
+			}
+		}
+		consVar_cc[bx](i, j, k, energy_index) = E_tot_iter_new;
+		consVar_cc[bx](i, j, k, internalEnergy_index) = E_int_iter_new;
 		amrex::Gpu::Atomic::Add(&p_iteration_counter[0], cell_iteration_count); // sum of iterations
 		amrex::Gpu::Atomic::Add(&p_iteration_counter[1], 1);			// number of cells
 		amrex::Gpu::Atomic::Max(&p_iteration_counter[2], cell_iteration_count); // max iterations in any cell
@@ -588,79 +612,84 @@ void DustDrag<problem_t>::computeDustDragLorentz(amrex::MultiFab &consVar_cc_mf,
 		amrex::Real const E_tot = consVar_cc[bx](i, j, k, energy_index);
 		amrex::Real const E_int = consVar_cc[bx](i, j, k, internalEnergy_index);
 
-		amrex::GpuArray<amrex::Real, nDustGroups_> rho_d{};
-		amrex::GpuArray<amrex::Real, nDustGroups_> epsilon{};
+		amrex::GpuArray<amrex::Real, nDustGroups_> rho_d;
+		amrex::GpuArray<amrex::Real, nDustGroups_> epsilon;
 		for (int g = 0; g < nDustGroups_; ++g) {
 			rho_d[g] = consVar_cc[bx](i, j, k, dustDensity_index + g * numDustVars);
 			epsilon[g] = (rho_g > 0.0) ? rho_d[g] / rho_g : 0.0;
 		}
 
 		Vec3 p_g_old = Vec3::Zero();
-		Vec3 v_g_old = Vec3::Zero();
-		amrex::GpuArray<Vec3, nDustGroups_> p_d_old{};
-		amrex::GpuArray<Vec3, nDustGroups_> v_d_old{};
+		amrex::GpuArray<Vec3, nDustGroups_> p_d_old;
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 			p_g_old[dir] = consVar_cc[bx](i, j, k, x1Momentum_index + dir);
-			v_g_old[dir] = (rho_g > 0.0) ? p_g_old[dir] / rho_g : 0.0;
 			for (int g = 0; g < nDustGroups_; ++g) {
 				p_d_old[g][dir] = consVar_cc[bx](i, j, k, x1DustMomentum_index + dir + g * numDustVars);
-				v_d_old[g][dir] = (rho_d[g] > 0.0) ? p_d_old[g][dir] / rho_d[g] : 0.0;
 			}
 		}
-
-		Vec3 v_g_iter_old = v_g_old;
-		Vec3 v_g_iter_new = v_g_old;
-		amrex::GpuArray<Vec3, nDustGroups_> v_d_iter_old = v_d_old;
-		amrex::GpuArray<Vec3, nDustGroups_> v_d_iter_new = v_d_old;
 
 		const int max_iterations = (enableIterDustStoptime_ != 0) ? 20 : 1;
 		const amrex::Real tolerance = 1.0e-6;
 		int cell_iteration_count = 0;
+		amrex::GpuArray<amrex::Real, nMassScalars_> const massScalars = RadSystem<problem_t>::ComputeMassScalars(consVar_cc[bx], i, j, k);
 
-		Vec3 p_g_new = p_g_old;
-		amrex::GpuArray<Vec3, nDustGroups_> p_d_new = p_d_old;
-		amrex::GpuArray<amrex::Real, nDustGroups_> alpha{};
-		amrex::GpuArray<amrex::Real, nDustGroups_> omega_L{};
-		amrex::GpuArray<Vec3, nDustGroups_> q_n{};
-		amrex::GpuArray<Vec3, nDustGroups_> q1{};
-		amrex::GpuArray<Vec3, nDustGroups_> q2{};
+		Vec3 p_g_iter_old = p_g_old;
+		Vec3 p_g_iter_new = p_g_old;
+		amrex::GpuArray<Vec3, nDustGroups_> p_d_iter_old = p_d_old;
+		amrex::GpuArray<Vec3, nDustGroups_> p_d_iter_new = p_d_old;
+		amrex::GpuArray<amrex::Real, nDustGroups_> alpha;
+		amrex::GpuArray<amrex::Real, nDustGroups_> omega_L;
+		amrex::GpuArray<Vec3, nDustGroups_> q_n;
+		amrex::GpuArray<Vec3, nDustGroups_> q1;
+		amrex::GpuArray<Vec3, nDustGroups_> q2;
 		Vec3 k1_g = Vec3::Zero();
 		Vec3 k2_g = Vec3::Zero();
-		amrex::GpuArray<Vec3, nDustGroups_> k1_d{};
-		amrex::GpuArray<Vec3, nDustGroups_> k2_d{};
+		amrex::GpuArray<Vec3, nDustGroups_> k1_d;
+		amrex::GpuArray<Vec3, nDustGroups_> k2_d;
 		amrex::Real b = 1.0;
 		amrex::Real gamma1 = 1.0;
 		amrex::Real gamma2 = 0.0;
 		amrex::Real beta1 = -0.5;
 		amrex::Real beta2 = 2.0 / 3.0;
+		amrex::Real E_tot_iter_old = E_tot;
+		amrex::Real E_tot_iter_new = E_tot;
+		amrex::Real E_int_iter_new = E_int;
+		Vec3 const B_cc = BuildCellCenteredMagneticField(i, j, k, &cons_fc);
+		amrex::Real const B_mag = std::sqrt(B_cc.dot(B_cc));
+		amrex::Real const magnetic_energy = 0.5 * B_mag * B_mag;
+		Vec3 b_hat = Vec3::Zero();
+		if (B_mag > 0.0) {
+			b_hat = (1.0 / B_mag) * B_cc;
+		}
+		Mat3 const B_cross = BuildCrossMatrix(b_hat);
+		amrex::Real const dt_lev = 2.0 * dt;
+		for (int g = 0; g < nDustGroups_; ++g) {
+			omega_L[g] = charge_to_mass_ratio[g] * B_mag;
+			q_n[g] = epsilon[g] * p_g_old - p_d_old[g];
+		}
 
 		for (int iteration = 0; iteration < max_iterations; ++iteration) {
 			cell_iteration_count++;
+			amrex::Real const cs =
+			    ComputeSoundSpeedFromGasState(rho_g, p_g_iter_old.dot(p_g_iter_old), E_tot_iter_old, magnetic_energy, massScalars);
 
-			double cs = 0.0;
-			if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
-				cs = HydroSystem<problem_t>::cs_iso_;
-			} else {
-				cs = HydroSystem<problem_t>::ComputeSoundSpeed(consVar_cc[bx], i, j, k, &cons_fc);
-			}
-
-			amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag{};
+			amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag;
 			for (int g = 0; g < nDustGroups_; ++g) {
-				rel_vel_mag[g] = Norm(v_d_iter_old[g] - v_g_iter_old);
+				Vec3 v_g_iter_old = Vec3::Zero();
+				Vec3 v_d_iter_old = Vec3::Zero();
+				if (rho_g > 0.0) {
+					v_g_iter_old = (1.0 / rho_g) * p_g_iter_old;
+				}
+				if (rho_d[g] > 0.0) {
+					v_d_iter_old = (1.0 / rho_d[g]) * p_d_iter_old[g];
+				}
+				Vec3 const rel_vel = v_d_iter_old - v_g_iter_old;
+				rel_vel_mag[g] = std::sqrt(rel_vel.dot(rel_vel));
 			}
 			alpha = ComputeReciprocalStoppingTime(rho_g, rho_d, rel_vel_mag, cs);
 
-			Vec3 const B_cc = BuildCellCenteredMagneticField(i, j, k, &cons_fc);
-			amrex::Real const B_mag = Norm(B_cc);
-			Vec3 b_hat = Vec3::Zero();
-			if (B_mag > 0.0) {
-				b_hat = (1.0 / B_mag) * B_cc;
-			}
-			Mat3 const B_cross = BuildCrossMatrix(b_hat);
-
 			amrex::Real lambda_max = 0.0;
 			for (int g = 0; g < nDustGroups_; ++g) {
-				omega_L[g] = charge_to_mass_ratio[g] * B_mag;
 				amrex::Real const rate_mag = std::sqrt(alpha[g] * alpha[g] + omega_L[g] * omega_L[g]);
 				amrex::Real lambda = std::numeric_limits<amrex::Real>::max();
 				if (rate_mag > 0.0) {
@@ -669,7 +698,6 @@ void DustDrag<problem_t>::computeDustDragLorentz(amrex::MultiFab &consVar_cc_mf,
 				lambda_max = amrex::max(lambda_max, lambda);
 			}
 
-			amrex::Real const dt_lev = 2.0 * dt;
 			if (dt_lev < lambda_max) {
 				gamma1 = 1.0;
 				gamma2 = 0.0;
@@ -684,11 +712,10 @@ void DustDrag<problem_t>::computeDustDragLorentz(amrex::MultiFab &consVar_cc_mf,
 				b = 0.0;
 			}
 
-			amrex::GpuArray<DustStageAffineOperators, nDustGroups_> ops{};
+			amrex::GpuArray<DustStageAffineOperators, nDustGroups_> ops;
 			for (int g = 0; g < nDustGroups_; ++g) {
 				Mat3 const T = alpha[g] * Mat3::Identity() + omega_L[g] * B_cross;
 				ops[g] = ComputeDustStageAffineOperators(T, epsilon[g], dt, gamma1, gamma2, beta1, beta2);
-				q_n[g] = epsilon[g] * p_g_old - p_d_old[g];
 			}
 
 			Mat3 G1X = Mat3::Zero();
@@ -707,7 +734,7 @@ void DustDrag<problem_t>::computeDustDragLorentz(amrex::MultiFab &consVar_cc_mf,
 				G2Y += ops[g].Y2;
 			}
 
-			Mat6 S_g{};
+			Mat6 S_g;
 			Mat3 const I3 = Mat3::Identity();
 			Mat3 const block11 = I3 + G1X;
 			Mat3 const block12 = G1Y;
@@ -722,12 +749,14 @@ void DustDrag<problem_t>::computeDustDragLorentz(amrex::MultiFab &consVar_cc_mf,
 				}
 			}
 
-			Vec6 rhs_g{};
+			Vec6 rhs_g;
 			for (int dir = 0; dir < 3; ++dir) {
 				rhs_g(dir) = C1[dir];
 				rhs_g(dir + 3) = C2[dir];
 			}
-			Vec6 const sol_g = SolveLinearSystem6x6(S_g, rhs_g);
+			Vec6 sol_g;
+			amrex::LUSolver<6, amrex::Real> const solver(S_g);
+			solver(sol_g.begin(), rhs_g.begin());
 			for (int dir = 0; dir < 3; ++dir) {
 				k1_g[dir] = sol_g(dir);
 				k2_g[dir] = sol_g(dir + 3);
@@ -743,60 +772,79 @@ void DustDrag<problem_t>::computeDustDragLorentz(amrex::MultiFab &consVar_cc_mf,
 				q2[g] = q_n[g] + dt * (beta2 * k_rel1 + gamma2 * k_rel2);
 			}
 
-			p_g_new = p_g_old + dt * (b * k1_g + (1.0 - b) * k2_g);
-			v_g_iter_new = (rho_g > 0.0) ? (1.0 / rho_g) * p_g_new : Vec3::Zero();
+			p_g_iter_new = p_g_old + dt * (b * k1_g + (1.0 - b) * k2_g);
 			for (int g = 0; g < nDustGroups_; ++g) {
-				p_d_new[g] = p_d_old[g] + dt * (b * k1_d[g] + (1.0 - b) * k2_d[g]);
-				v_d_iter_new[g] = (rho_d[g] > 0.0) ? (1.0 / rho_d[g]) * p_d_new[g] : Vec3::Zero();
+				p_d_iter_new[g] = p_d_old[g] + dt * (b * k1_d[g] + (1.0 - b) * k2_d[g]);
 			}
 
-			amrex::Real max_speed_old = Norm(v_g_iter_old);
-			for (int g = 0; g < nDustGroups_; ++g) {
-				max_speed_old = amrex::max(max_speed_old, Norm(v_d_iter_old[g]));
+			Vec3 v_g_iter_old = Vec3::Zero();
+			Vec3 v_g_iter_new = Vec3::Zero();
+			if (rho_g > 0.0) {
+				v_g_iter_old = (1.0 / rho_g) * p_g_iter_old;
+				v_g_iter_new = (1.0 / rho_g) * p_g_iter_new;
 			}
-			amrex::Real max_speed_change = std::abs(Norm(v_g_iter_new) - Norm(v_g_iter_old));
+
+			amrex::Real max_speed_old = std::sqrt(v_g_iter_old.dot(v_g_iter_old));
 			for (int g = 0; g < nDustGroups_; ++g) {
-				max_speed_change = amrex::max(max_speed_change, std::abs(Norm(v_d_iter_new[g]) - Norm(v_d_iter_old[g])));
+				Vec3 v_d_iter_old = Vec3::Zero();
+				if (rho_d[g] > 0.0) {
+					v_d_iter_old = (1.0 / rho_d[g]) * p_d_iter_old[g];
+				}
+				max_speed_old = amrex::max(max_speed_old, std::sqrt(v_d_iter_old.dot(v_d_iter_old)));
+			}
+			amrex::Real max_speed_change = std::abs(std::sqrt(v_g_iter_new.dot(v_g_iter_new)) - std::sqrt(v_g_iter_old.dot(v_g_iter_old)));
+			for (int g = 0; g < nDustGroups_; ++g) {
+				Vec3 v_d_iter_old = Vec3::Zero();
+				Vec3 v_d_iter_new = Vec3::Zero();
+				if (rho_d[g] > 0.0) {
+					v_d_iter_old = (1.0 / rho_d[g]) * p_d_iter_old[g];
+					v_d_iter_new = (1.0 / rho_d[g]) * p_d_iter_new[g];
+				}
+				max_speed_change = amrex::max(max_speed_change,
+							      std::abs(std::sqrt(v_d_iter_new.dot(v_d_iter_new)) - std::sqrt(v_d_iter_old.dot(v_d_iter_old))));
 			}
 			amrex::Real const abs_tolerance = tolerance * amrex::max(max_speed_old, 1.0e-12);
+			amrex::Real delta_E_g_work = 0.0;
+			if (rho_g > 0.0) {
+				delta_E_g_work = (p_g_iter_new.dot(p_g_iter_new) - p_g_old.dot(p_g_old)) / (2.0 * rho_g);
+			}
+
+			amrex::Real delta_E_d_work_sum = 0.0;
+			for (int g = 0; g < nDustGroups_; ++g) {
+				if (rho_d[g] > 0.0) {
+					delta_E_d_work_sum += (p_d_iter_new[g].dot(p_d_iter_new[g]) - p_d_old[g].dot(p_d_old[g])) / (2.0 * rho_d[g]);
+				}
+			}
+
+			amrex::Real delta_E_heat_phy = 0.0;
+			for (int g = 0; g < nDustGroups_; ++g) {
+				if (rho_d[g] > 0.0) {
+					delta_E_heat_phy += dt * alpha[g] / rho_d[g] * (b * q1[g].dot(q1[g]) + (1.0 - b) * q2[g].dot(q2[g]));
+				}
+			}
+
+			amrex::Real const delta_E_heat_tot = -(delta_E_g_work + delta_E_d_work_sum);
+			amrex::Real const delta_E_heat_num = delta_E_heat_tot - delta_E_heat_phy;
+			E_tot_iter_new = E_tot + delta_E_g_work + omega1 * delta_E_heat_phy + omega2 * delta_E_heat_num;
+			E_int_iter_new = E_int + omega1 * delta_E_heat_phy + omega2 * delta_E_heat_num;
+
 			if (max_speed_change <= abs_tolerance) {
 				break;
 			}
 
-			v_g_iter_old = v_g_iter_new;
-			v_d_iter_old = v_d_iter_new;
+			p_g_iter_old = p_g_iter_new;
+			p_d_iter_old = p_d_iter_new;
+			E_tot_iter_old = E_tot_iter_new;
 		}
 
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-			consVar_cc[bx](i, j, k, x1Momentum_index + dir) = p_g_new[dir];
+			consVar_cc[bx](i, j, k, x1Momentum_index + dir) = p_g_iter_new[dir];
 			for (int g = 0; g < nDustGroups_; ++g) {
-				consVar_cc[bx](i, j, k, x1DustMomentum_index + dir + g * numDustVars) = p_d_new[g][dir];
+				consVar_cc[bx](i, j, k, x1DustMomentum_index + dir + g * numDustVars) = p_d_iter_new[g][dir];
 			}
 		}
-
-		amrex::Real delta_E_g_work = 0.0;
-		if (rho_g > 0.0) {
-			delta_E_g_work = (p_g_new.dot(p_g_new) - p_g_old.dot(p_g_old)) / (2.0 * rho_g);
-		}
-
-		amrex::Real delta_E_d_work_sum = 0.0;
-		for (int g = 0; g < nDustGroups_; ++g) {
-			if (rho_d[g] > 0.0) {
-				delta_E_d_work_sum += (p_d_new[g].dot(p_d_new[g]) - p_d_old[g].dot(p_d_old[g])) / (2.0 * rho_d[g]);
-			}
-		}
-
-		amrex::Real delta_E_heat_phy = 0.0;
-		for (int g = 0; g < nDustGroups_; ++g) {
-			if (rho_d[g] > 0.0) {
-				delta_E_heat_phy += dt * alpha[g] / rho_d[g] * (b * q1[g].dot(q1[g]) + (1.0 - b) * q2[g].dot(q2[g]));
-			}
-		}
-
-		amrex::Real const delta_E_heat_tot = -(delta_E_g_work + delta_E_d_work_sum);
-		amrex::Real const delta_E_heat_num = delta_E_heat_tot - delta_E_heat_phy;
-		consVar_cc[bx](i, j, k, energy_index) = E_tot + delta_E_g_work + omega1 * delta_E_heat_phy + omega2 * delta_E_heat_num;
-		consVar_cc[bx](i, j, k, internalEnergy_index) = E_int + omega1 * delta_E_heat_phy + omega2 * delta_E_heat_num;
+		consVar_cc[bx](i, j, k, energy_index) = E_tot_iter_new;
+		consVar_cc[bx](i, j, k, internalEnergy_index) = E_int_iter_new;
 
 		amrex::Gpu::Atomic::Add(&p_iteration_counter[0], cell_iteration_count); // sum of iterations
 		amrex::Gpu::Atomic::Add(&p_iteration_counter[1], 1);			// number of cells
