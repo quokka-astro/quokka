@@ -1,6 +1,6 @@
 # Citation
 
-If you use Quokka or the numerical methods originally implemented for Quokka in your research, please cite [@Wibking_2022]
+If you use Quokka or numerical methods originally implemented for Quokka in your research, please cite [@Wibking_2022].
 
 ```bibtex
 @ARTICLE{2022MNRAS.512.1430W,
@@ -19,18 +19,20 @@ If you use Quokka or the numerical methods originally implemented for Quokka in 
     primaryClass = {astro-ph.IM},
     adsurl = {https://ui.adsabs.harvard.edu/abs/2022MNRAS.512.1430W},
     adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+}
 ```
 
-## Additional methods papers
+## What to cite
 
-If you use any of the following numerical methods or physical modules, please also cite the publications corresponding to the methods used in your research.
+Please also cite the module- or method-specific papers that apply to your work.
 
-- Radiation-hydrodynamics: [@He_2024]
-
-- Multigroup Radiation-hydrodynamics: [@He_2024b]
-
+- Core Quokka hydro / AMR code: [@Wibking_2022]
+- Radiation-hydrodynamics time integration: [@He_2024]
+- Multigroup radiation-hydrodynamics: [@He_2024b]
 - Particle-mesh interactions: [@He_2026]
 
-## Scientific applications with Quokka
+The following modules are currently marked as **beta** for science-use maturity in Quokka documentation: MHD, radiation, dust, particles, chemistry, and self-gravity. For beta capabilities, cite the relevant methods papers above when they exist, and report the exact Quokka version or commit hash used in your study.
+
+## Published scientific applications with Quokka
 
 - Galactic outflows: [@Vijayan_2024], [@Huang_2025], [@Vijayan_2025]
