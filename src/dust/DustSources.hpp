@@ -187,9 +187,7 @@ AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::BuildCellCenteredMagneticFiel
 template <typename problem_t> AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, nDustGroups_> charge_to_mass_ratio;
-	for (int g = 0; g < nDustGroups_; ++g) {
-		charge_to_mass_ratio[g] = 1.0;
-	}
+	charge_to_mass_ratio.fill(0.0);
 	return charge_to_mass_ratio;
 }
 

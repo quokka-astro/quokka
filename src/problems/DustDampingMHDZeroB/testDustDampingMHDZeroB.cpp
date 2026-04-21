@@ -82,6 +82,13 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroB>::ComputeReciprocalSt
 	return alpha;
 }
 
+template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroB>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+{
+	amrex::GpuArray<amrex::Real, 2> charge_to_mass_ratio{};
+	charge_to_mass_ratio.fill(1.0);
+	return charge_to_mass_ratio;
+}
+
 template <> void QuokkaSimulation<DustDampingMHDZeroB>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
 {
 	const amrex::Array4<double> &state_fc = grid_elem.array_;
