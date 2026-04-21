@@ -13,10 +13,9 @@
 #include "AMReX_Array.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_FabArrayBase.H"
-#include "AMReX_GpuContainers.H"
+
 #include "AMReX_GpuDevice.H"
 #include "AMReX_MultiFab.H"
-#include "AMReX_Parser.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 
@@ -25,12 +24,10 @@
 #include "fundamental_constants.H"
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
-#include "math/interpolate.hpp"
-#include "math/quadrature.hpp"
 #include "particles/particle_types.hpp"
 #include "physics_info.hpp"
 #include "util/BC.hpp"
-#include "util/DataTable.hpp"
+
 
 namespace
 {
@@ -102,6 +99,41 @@ auto surfaceDensityProfile(double R, double Sigma0) -> double
 	const double x = R / Rd;
 	return Sigma0 * std::exp(-x - beta_profile * std::exp(-alpha_profile * x));
 }
+
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+double diskDensityAnalytic(double R, double z,
+                           double Sigma0,
+                           double vc,
+                           double cs)
+{
+    const double Sigma = surfaceDensityProfile(R, Sigma0);
+    if (Sigma <= 0.0) {
+        return 0.0;
+    }
+
+    // Isothermal disk scale height
+    const double H = cs*cs / (M_PI * C::Gconst * Sigma);
+
+    // Midplane density from exact normalization: Sigma = 2 rho0 H
+    const double rho0 =
+        (M_PI * C::Gconst * Sigma * Sigma) / (2.0 * cs*cs);
+
+	// Disk self-gravity (sech^2 profile)
+	const double sech = 1.0 / std::cosh(z / H);
+	const double disk_factor = sech * sech;
+
+    // Vertical confinement from flattened halo (exact ΔΦ)
+    const double denom = R*R + Rc*Rc;
+    const double halo_factor =
+        pow(
+            1.0 + (z*z) / (q_flatten*q_flatten * denom),
+            -vc*vc / (2.0 * cs*cs)
+        );
+
+    return rho0 * disk_factor * halo_factor;
+}
+
 
 /// Arora+25 Appendix A, Eq. A.2:
 ///   phi_g(R) = 4*pi*G*Sigma0*Rd * y^2 * [I0(y)*K0(y) - I1(y)*K1(y)],  y = R/(2*Rd)
@@ -232,6 +264,7 @@ template <> void QuokkaSimulation<HDGalaxy>::preCalculateInitialConditions()
 	integral *= h / 3.0;
 
 	userData_.Sigma0 = integral / (userData_.Q_mean * Rmax);
+	
 
     // Pressure matching: P = cs_disk^2 * rho_transition = cs_cgm^2 * rho_cgm
     userData_.rho_cgm = rho_transition * (cs_disk * cs_disk) / (cs_cgm * cs_cgm);
@@ -256,66 +289,55 @@ template <> void QuokkaSimulation<HDGalaxy>::setInitialConditionsOnGrid(quokka::
 	constexpr double gamma = quokka::EOS_Traits<HDGalaxy>::gamma;
 
 	const amrex::Box &indexRange                                = grid_elem.indexRange_;
-	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx      = grid_elem.dx_;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx       = grid_elem.dx_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
-	const amrex::Array4<double> &state_cc                       = grid_elem.array_;
+	const amrex::Array4<double> &state_cc                        = grid_elem.array_;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const double x = prob_lo[0] + (i + 0.5) * dx[0];
 		const double y = prob_lo[1] + (j + 0.5) * dx[1];
 		const double z = prob_lo[2] + (k + 0.5) * dx[2];
 		const double R = std::sqrt(x * x + y * y);
+		const double rho_disc_raw = diskDensityAnalytic(R, z, Sigma0, vc, cs_disk);
+		const double Sigma_R = surfaceDensityProfile(R, Sigma0);
 
-		// Disk vertical structure
-		const double Sigma_R  = surfaceDensityProfile(R, Sigma0);
-		const double h_disk   = cs_disk * cs_disk / (M_PI * C::Gconst * Sigma_R);
-		const double rho_mid  = Sigma_R / (std::sqrt(2.0 * M_PI) * h_disk);
-		const double rho_disc = rho_mid * std::exp(-0.5 * z * z / (h_disk * h_disk));
+		// 5. Two-phase assignment (Disk vs CGM)
 
-		// Two-phase assignment
-		const bool in_disk = (rho_disc > rho_transition);
-		const double rho   = std::max(in_disk ? rho_disc : rho_cgm, rho_cgm);
-		const double cs    = in_disk ? cs_disk : cs_cgm;
+		const bool in_disk = (rho_disc_raw > rho_transition);
 
-		// Rotation velocity from radial force balance (Arora+25 Eq. A.4)
-		// vrot^2/R = -d(phi_dm)/dR - (cs^2/rho) * d(rho)/dR
-		// Using exact logarithmic derivative of the surface density profile
-		const double z_over_q = z / q_flatten;
-		const double D = R*R + Rc*Rc + z_over_q * z_over_q;
+		const double rho =
+			in_disk ? amrex::max(rho_disc_raw, rho_transition*1e-6)
+					: rho_cgm;
+
+		const double cs  = in_disk ? cs_disk : cs_cgm;
+
+
+		// 6. Rotation velocity (Arora+25 Eq. A.4)
 
 		double vrot = 0.0;
-		if (in_disk) {
-			const double D_mid = R*R + Rc*Rc;  // z=0 midplane for rotation balance
-			const double vrot_sq = std::max(
-				vc*vc * R*R / D_mid            // ∂ψ/∂R * R, from Eq. A.3
-				- cs_disk*cs_disk * R / Rd     // pressure gradient, pure exponential approx
-				+ R * dPhiGas_dR(R, Sigma0)   // ∂φ_g/∂R * R, Eq. A.2
-				, 0.0);
-			vrot = std::sqrt(vrot_sq);
+		if (R > 0.0) {
+			vrot = vc * R / std::sqrt(R*R + Rc*Rc);
 		}
 
-		// Velocity components — CGM is at rest
+
+		// 7. Velocity components
 		double vx = 0.0;
 		double vy = 0.0;
-		const double vz = 0.0;
 		if (in_disk && R > 0.0) {
 			vx = -vrot * y / R;
 			vy =  vrot * x / R;
 		}
 
-		const double pressure = cs * cs * rho;
-		const double momx     = rho * vx;
-		const double momy     = rho * vy;
-		const double momz     = rho * vz;
-		const double Ekin     = 0.5 * rho * (vx * vx + vy * vy + vz * vz);
+		// 8. Conserved variables
+		const double pressure = rho * cs * cs;
 		const double Eint     = pressure / (gamma - 1.0);
-		const double Etot     = Ekin + Eint;
-
+		const double Ekin     = 0.5 * rho * (vx * vx + vy * vy);
+		
 		state_cc(i, j, k, HydroSystem<HDGalaxy>::density_index)        = rho;
-		state_cc(i, j, k, HydroSystem<HDGalaxy>::x1Momentum_index)     = momx;
-		state_cc(i, j, k, HydroSystem<HDGalaxy>::x2Momentum_index)     = momy;
-		state_cc(i, j, k, HydroSystem<HDGalaxy>::x3Momentum_index)     = momz;
-		state_cc(i, j, k, HydroSystem<HDGalaxy>::energy_index)         = Etot;
+		state_cc(i, j, k, HydroSystem<HDGalaxy>::x1Momentum_index)     = rho * vx;
+		state_cc(i, j, k, HydroSystem<HDGalaxy>::x2Momentum_index)     = rho * vy;
+		state_cc(i, j, k, HydroSystem<HDGalaxy>::x3Momentum_index)     = 0.0;
+		state_cc(i, j, k, HydroSystem<HDGalaxy>::energy_index)         = Ekin + Eint;
 		state_cc(i, j, k, HydroSystem<HDGalaxy>::internalEnergy_index) = Eint;
 	});
 }
@@ -323,13 +345,9 @@ template <> void QuokkaSimulation<HDGalaxy>::setInitialConditionsOnGrid(quokka::
 template <> void QuokkaSimulation<HDGalaxy>::addStrangSplitSources(amrex::MultiFab &mf, int lev, amrex::Real /*time*/, amrex::Real dt_lev)
 {
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = geom[lev].ProbLoArray();
-	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx     = geom[lev].CellSizeArray();
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx      = geom[lev].CellSizeArray();
 	const amrex::Real dt = dt_lev;
-	const double Sigma0 = userData_.Sigma0;
-
-	const double vc      = userData_.vc;
-	constexpr double cs_disk = quokka::EOS_Traits<HDGalaxy>::cs_disk;
-	
+	const double vc     = userData_.vc;
 
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -348,20 +366,23 @@ template <> void QuokkaSimulation<HDGalaxy>::addStrangSplitSources(amrex::MultiF
 			const double x3mom = state(i, j, k, HydroSystem<HDGalaxy>::x3Momentum_index);
 			const double Egas  = state(i, j, k, HydroSystem<HDGalaxy>::energy_index);
 
-			// Flattened denominator D = R^2 + Rc^2 + (z/q)^2  (Arora+25 Eq. A.3)
+			// 1. Flattened potential denominator (Arora+25 Eq. A.3)
 			const double z_over_q = z / q_flatten;
 			const double D = R2 + Rc*Rc + z_over_q * z_over_q;
 
-			const bool in_disk = (rho > rho_transition);
+			// 2. Radial Acceleration (g_R)
+			// We apply the background potential (DM) and subtract the initial gas potential
+			// because the Poisson solver is already providing the live gas gravity.
 			double g_R = 0.0;
 			if (R > 0.0) {
-				g_R = -vc*vc * R / D;  // dark matter halo
+				g_R = -(vc*vc * R / D);  // pure DM halo only
 			}
 
-			// Vertical acceleration from dark matter halo (Arora+25 Eq. A.3)
+			// 3. Vertical Acceleration (g_z)
+			// This provides the vertical "squeezing" from the DM halo.
 			const double g_z = -vc*vc * z / (q_flatten * q_flatten * D);
 
-			// Project radial acceleration into Cartesian components
+			// 4. Project radial acceleration into Cartesian components
 			double gx = 0.0;
 			double gy = 0.0;
 			if (R > 0.0) {
@@ -369,10 +390,7 @@ template <> void QuokkaSimulation<HDGalaxy>::addStrangSplitSources(amrex::MultiF
 				gy = g_R * y / R;
 			}
 
-			// Conserve internal energy across the momentum kick
-			const double Ekin = 0.5 * (x1mom*x1mom + x2mom*x2mom + x3mom*x3mom) / rho;
-			const double Eint = Egas - Ekin;
-
+			// 5. Update Momenta (Momentum Kick)
 			const double x1mom_new = x1mom + dt * rho * gx;
 			const double x2mom_new = x2mom + dt * rho * gy;
 			const double x3mom_new = x3mom + dt * rho * g_z;
@@ -381,8 +399,12 @@ template <> void QuokkaSimulation<HDGalaxy>::addStrangSplitSources(amrex::MultiF
 			state(i, j, k, HydroSystem<HDGalaxy>::x2Momentum_index) = x2mom_new;
 			state(i, j, k, HydroSystem<HDGalaxy>::x3Momentum_index) = x3mom_new;
 
-			// Update total energy keeping internal energy fixed
+			// 6. Update Total Energy (Conserve Internal Energy)
+			// This prevents the "source term heating" that can happen with large gravity steps
+			const double Ekin_old = 0.5 * (x1mom*x1mom + x2mom*x2mom + x3mom*x3mom) / rho;
+			const double Eint = Egas - Ekin_old;
 			const double Ekin_new = 0.5 * (x1mom_new*x1mom_new + x2mom_new*x2mom_new + x3mom_new*x3mom_new) / rho;
+			
 			state(i, j, k, HydroSystem<HDGalaxy>::energy_index) = Ekin_new + Eint;
 		});
 	}
@@ -533,7 +555,7 @@ template <> auto QuokkaSimulation<HDGalaxy>::ComputeStatistics() -> std::map<std
 	const amrex::Real disk_mass = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k,
 		amrex::Array4<const amrex::Real> const &state) noexcept {
 		const amrex::Real rho = state(i, j, k, HydroSystem<HDGalaxy>::density_index);
-		return (rho > rho_transition) ? rho : amrex::Real(0.0); //M☉
+		return (rho > rho_transition) ? rho : static_cast<amrex::Real>(0.0); //M☉
 	});
 	stats["disk_mass"] = disk_mass / C::M_solar;
 
@@ -541,12 +563,12 @@ template <> auto QuokkaSimulation<HDGalaxy>::ComputeStatistics() -> std::map<std
 	const amrex::Real disk_volume = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k,
 		amrex::Array4<const amrex::Real> const &state) noexcept {
 		const amrex::Real rho = state(i, j, k, HydroSystem<HDGalaxy>::density_index);
-		return (rho > rho_transition) ? amrex::Real(1.0) : amrex::Real(0.0);  //M☉
+		return (rho > rho_transition) ? static_cast<amrex::Real>(1.0) : static_cast<amrex::Real>(0.0);  //M☉
 	});
 
 	// Mass-weighted mean disk density: <rho> = disk_mass / disk_volume
 	// This is a host-side scalar — safe to capture by value into the next kernel
-	const amrex::Real mean_disk_density = (disk_volume > 0.0) ? (disk_mass / disk_volume) : amrex::Real(1.0);  // g/cm³
+	const amrex::Real mean_disk_density = (disk_volume > 0.0) ? (disk_mass / disk_volume) : 1.0;  // g/cm³
 	stats["mean_disk_density"] = mean_disk_density; // g/cm³;
 	stats["disk_mass"] = disk_mass / C::M_solar;  // convert to solar masses after
 
@@ -556,12 +578,12 @@ template <> auto QuokkaSimulation<HDGalaxy>::ComputeStatistics() -> std::map<std
 		[=] AMREX_GPU_DEVICE(int i, int j, int k,
 		amrex::Array4<const amrex::Real> const &state) noexcept {
 		const amrex::Real rho = state(i, j, k, HydroSystem<HDGalaxy>::density_index);
-		if (rho <= rho_transition) { return amrex::Real(0.0); }
+		if (rho <= rho_transition) { return static_cast<amrex::Real>(0.0); }
 		const amrex::Real eta = std::log(rho / mean_disk_density);
 		return eta * eta;
 	});
 
-	stats["sigma_eta"] = (disk_volume > 0.0) ? std::sqrt(sigma_eta_sq_times_vol / disk_volume) : amrex::Real(0.0);
+	stats["sigma_eta"] = (disk_volume > 0.0) ? std::sqrt(sigma_eta_sq_times_vol / disk_volume) : static_cast<amrex::Real>(0.0);
 
 	return stats;
 }
