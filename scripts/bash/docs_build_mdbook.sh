@@ -9,4 +9,5 @@ if ! command -v mdbook-bib >/dev/null 2>&1; then
     exit 1
 fi
 
+mdbook clean docs
 mdbook build docs

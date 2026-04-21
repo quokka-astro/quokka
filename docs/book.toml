@@ -22,9 +22,9 @@ order = "index"
 [output.html]
 default-theme = "light"
 preferred-dark-theme = "navy"
-mathjax-support = true
+mathjax-support = false
 no-section-label = true
-additional-js = ["javascripts/mermaid-init.js"]
+additional-js = ["javascripts/mathjax-init.js", "javascripts/mermaid-init.js"]
 git-repository-url = "https://github.com/quokka-astro/quokka"
 edit-url-template = "https://github.com/quokka-astro/quokka/edit/development/docs/markdown/{path}"
 site-url = "/quokka/"
@@ -37,4 +37,4 @@ use-boolean-and = true
 expand = true
 heading-split-level = 3
 
-# Mermaid is handled client-side via `docs/javascripts/mermaid-init.js`.
+# MathJax and Mermaid are handled client-side via `docs/javascripts/`.
