@@ -29,7 +29,7 @@ If you use any of the following numerical methods or physical modules, please al
 
 - Multigroup Radiation-hydrodynamics: [@He_2024b]
 
-- Particle-mesh interactions: [@He_2026]
+- Particle-mesh interactions: [@He_2025]
 
 ## Scientific applications with Quokka
 
