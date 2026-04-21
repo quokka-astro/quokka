@@ -67,7 +67,7 @@ $$
 \mathbf{u}^{n+1} = \mathcal{D}_{\Delta t/2} \mathcal{H}_{\Delta t} \mathcal{D}_{\Delta t/2} \mathbf{u}^n
 $$
 
-where $\mathcal{D}$ is the dust-gas drag operator and $\mathcal{H}$ is the hydrodynamics operator (including both gas and dust transport). The hydrodynamics operator $\mathcal{H}$ is handled using the explicit RK2 scheme. The drag operator $\mathcal{D}$ is implemented in `src/dust/DustDrag.hpp` and called in `QuokkaSimulation::addStrangSplitSourcesWithBuiltin` via `DustDrag::computeDustDrag`.
+where $\mathcal{D}$ is the dust-gas drag operator and $\mathcal{H}$ is the hydrodynamics operator (including both gas and dust transport). The hydrodynamics operator $\mathcal{H}$ is handled using the explicit RK2 scheme. The drag operator $\mathcal{D}$ is implemented in `src/dust/DustSources.hpp` and called in `QuokkaSimulation::addStrangSplitSourcesWithBuiltin` via `DustSources::computeDustDrag`.
 
 ### Optional Picard iteration for dust–gas drag
 
@@ -75,9 +75,9 @@ Users may optionally enable Picard iteration for the dust–gas drag operator $\
 
 ### User-defined dust stopping time
 
-For a given problem, users must define a problem-specific dust stopping time by implementing the `DustDrag::ComputeReciprocalStoppingTime` function (note that this function should return the reciprocal of the stopping time). An example can be found in the `src/problems/DustDamping` test.
+For a given problem, users must define a problem-specific dust stopping time by implementing the `DustSources::ComputeReciprocalStoppingTime` function (note that this function should return the reciprocal of the stopping time). An example can be found in the `src/problems/DustDamping` test.
 
-Also, users can directly use the dust stopping time calculation helper `DustDrag::ComputeReciprocalStoppingTimeKwok` to compute the physical dust stopping time, following Kwok (1975) with an optional supersonic correction. The stopping time of dust $t_{\mathrm{s}}$ is given by:
+Also, users can directly use the dust stopping time calculation helper `DustSources::ComputeReciprocalStoppingTimeKwok` to compute the physical dust stopping time, following Kwok (1975) with an optional supersonic correction. The stopping time of dust $t_{\mathrm{s}}$ is given by:
 
 $$
 t_{\mathrm{s}} = \frac{\sqrt{\pi \gamma}}{2\sqrt{2}} \frac{a \rho_{\mathrm{gr}}}{\rho_{\mathrm{g}} c_{\mathrm{s}}} \times 

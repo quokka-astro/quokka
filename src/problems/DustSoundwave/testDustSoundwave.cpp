@@ -83,7 +83,7 @@ template <> struct Physics_Traits<DustSoundwave> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustDrag<DustSoundwave>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
+AMREX_GPU_HOST_DEVICE auto DustSources<DustSoundwave>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
 										  amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/, double /*cs*/)
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
