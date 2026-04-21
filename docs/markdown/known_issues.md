@@ -19,10 +19,10 @@ Hydrodynamics and optically-thin cooling are not currently marked as beta.
 
 ## Current limitations
 
-- `MHD + radiation` is not yet tested and is currently explicitly disabled in the code.
 - Reflecting magnetic-field boundary conditions are not yet physically complete; Quokka currently applies `reflect_even` to all magnetic-field components.
+- `MHD + radiation` is not yet tested and is currently explicitly disabled in the code.
 - `MHD + dust` is not exercised by an in-tree problem and should be treated as untested.
-- Particle features require a 3D build (`-DAMReX_SPACEDIM=3`).
+- Dust currently neither contributes to, nor feels forces from, the gravitational potential.
 
 ## Errata
 
