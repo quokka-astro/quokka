@@ -62,6 +62,8 @@ Backtrace.*
 *.png
 
 /docs/site/*
+/docs/.venv/
+/docs/.cache/
 
 # Documentation build directory
 docs/api/

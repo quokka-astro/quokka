@@ -1,6 +1,7 @@
 #!/bin/bash
-set -e # Exit with nonzero exit code if anything fails
+set -euo pipefail
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 echo "Build the HTML documentation using MkDocs"
-cd docs
-mkdocs build
+bash "$SCRIPT_DIR/docs_mkdocs.sh" build "$@"
