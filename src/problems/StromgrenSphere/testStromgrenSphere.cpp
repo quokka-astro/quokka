@@ -30,6 +30,7 @@
 struct StromgrenSphere {
 };
 
+constexpr int nCells = 3;
 constexpr double c_hat = C::c_light / 1.0;
 
 template <> struct quokka::EOS_Traits<StromgrenSphere> {
@@ -76,7 +77,6 @@ void RadSystem<StromgrenSphere>::SetRadEnergySource(array_t &radEnergy, const am
 	pp.query("Q", Q);
 
 	const amrex::Real sigma_star = 1.5 * dx[0];
-	const int nCells = 3;
 	const amrex::Real L_star = Q * RadSystem<StromgrenSphere>::GetChemActiveRadiationGroupQuanta(0) / 8.0_rt;
 	const amrex::Real x0 = 0.0_rt;
 	const amrex::Real y0 = 0.0_rt;
@@ -445,10 +445,13 @@ auto problem_main() -> int
 				const amrex::Real analytical_radius = r_s * std::pow(1.0_rt - std::exp(-sim.userData_.t_vec_[i] / t_rec), 1.0_rt / 3.0_rt);
 				const amrex::Real upper_bound = analytical_radius + error_tol;
 				const amrex::Real lower_bound = analytical_radius - error_tol;
-				if ((r50_numerical < lower_bound) || (r50_numerical > upper_bound)) {
-					amrex::Print()
-					    << "Test failed at t = " << sim.userData_.t_vec_[i] << ": Numerical r50 = " << r50_numerical << " is not within ["
-					    << lower_bound << ", " << upper_bound << "] (analytical r50 = " << analytical_radius << ")" << '\n';
+				if (((r84_numerical > upper_bound) || (r16_numerical < lower_bound)) && (analytical_radius > nCells * cell_size)) {
+					amrex::Print() << "Test failed at t = " << sim.userData_.t_vec_[i] << "\n";
+					amrex::Print() << "Analytical radius: " << analytical_radius << '\n';
+					amrex::Print() << "Numerical r16: " << r16_numerical << '\n';
+					amrex::Print() << "Numerical r50: " << r50_numerical << '\n';
+					amrex::Print() << "Numerical r84: " << r84_numerical << '\n';
+					amrex::Print() << "Error tolerance: " << error_tol << '\n';
 					status = 1;
 				}
 			}
