@@ -11,6 +11,8 @@
 #include "math/interpolate.hpp"
 #include "util/fextract.hpp"
 #include <format>
+#include <numeric>
+#include <utility>
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
@@ -223,6 +225,10 @@ auto problem_main() -> int
 
 	const auto &real_data_ste1 = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
 
+	// Store Phase 1 particle positions and angular momentum for later Galilean invariance comparison
+	std::vector<std::array<double, 3>> ang_mom_phase1;
+	std::vector<std::array<double, 3>> pos_phase1;
+
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		// compute total particle mass and error
 		double total_particle_mass_step1 = 0.0;
@@ -240,6 +246,16 @@ auto problem_main() -> int
 		amrex::Print() << "Particle mass change = " << particle_mass_change << "\n";
 		amrex::Print() << "Total mass change = " << gas_mass_change + particle_mass_change << "\n";
 		amrex::Print() << "Relative error in change of mass = " << rel_mass_error << "\n";
+
+		// Print and store angular momentum for each particle (data layout: x,y,z, mass,vx,vy,vz,mdot,Lx,Ly,Lz)
+		constexpr int Lx_offset = AMREX_SPACEDIM + quokka::SinkParticleLxIdx;
+		for (int pi = 0; std::cmp_less(pi, real_data_ste1.size()); ++pi) {
+			const auto &p = real_data_ste1[pi];
+			amrex::Print() << std::format("Particle {} angular momentum: Lx={:.4e} Ly={:.4e} Lz={:.4e}\n", pi, p[Lx_offset], p[Lx_offset + 1],
+						      p[Lx_offset + 2]);
+			ang_mom_phase1.push_back({p[Lx_offset], p[Lx_offset + 1], p[Lx_offset + 2]});
+			pos_phase1.push_back({p[0], p[1], p[2]});
+		}
 
 		// compute relative error in the change of total mass
 		const double rel_error_total_mass = std::abs(total_total_mass_step1 - total_total_mass_init) / total_total_mass_init;
@@ -355,6 +371,8 @@ auto problem_main() -> int
 	sim2.maxTimesteps_ = 1;
 	sim2.evolve();
 
+	const auto &real_data_phase2 = sim2.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
+
 	// Extract density profile from boosted simulation
 	auto [position2, values2] = fextract(sim2.state_new_cc_[0], sim2.Geom(0), 0, 0.0, true);
 
@@ -362,6 +380,50 @@ auto problem_main() -> int
 	// If the physics is Galilean invariant, the boosted simulation should match its analytical
 	// solution with the same accuracy as the base simulation matches its analytical solution
 	if (amrex::ParallelDescriptor::IOProcessor()) {
+		// Compare angular momentum vs Phase 1 for Galilean invariance validation.
+		// Angular momentum is computed in the particle's rest frame (using relative velocity), so
+		// the accreted L must be identical regardless of the boost.
+		// Sort both Phase 1 and Phase 2 particles by position before comparing to ensure
+		// consistent ordering, since particle redistribution may change the array order.
+		constexpr int Lx_offset = AMREX_SPACEDIM + quokka::SinkParticleLxIdx;
+		const double ang_mom_rel_error_tol = 0.03; // 3% tolerance
+
+		// Build sorted index arrays for Phase 1 and Phase 2 by (x, y, z)
+		const int npar = static_cast<int>(ang_mom_phase1.size());
+		std::vector<int> idx1(npar);
+		std::iota(idx1.begin(), idx1.end(), 0);
+		std::sort(idx1.begin(), idx1.end(), [&](int a, int b) {
+			return std::tie(pos_phase1[a][0], pos_phase1[a][1], pos_phase1[a][2]) < std::tie(pos_phase1[b][0], pos_phase1[b][1], pos_phase1[b][2]);
+		});
+
+		std::vector<int> idx2(npar);
+		std::iota(idx2.begin(), idx2.end(), 0);
+		std::sort(idx2.begin(), idx2.end(), [&](int a, int b) {
+			return std::tie(real_data_phase2[a][0], real_data_phase2[a][1], real_data_phase2[a][2]) <
+			       std::tie(real_data_phase2[b][0], real_data_phase2[b][1], real_data_phase2[b][2]);
+		});
+
+		amrex::Print() << "\nAngular momentum Galilean invariance check:\n";
+		for (int pi = 0; pi < npar; ++pi) {
+			const auto &p2 = real_data_phase2[idx2[pi]];
+			const double Lx2 = p2[Lx_offset];
+			const double Ly2 = p2[Lx_offset + 1];
+			const double Lz2 = p2[Lx_offset + 2];
+			amrex::Print() << std::format("Particle {} (Phase2) angular momentum: Lx={:.4e} Ly={:.4e} Lz={:.4e}\n", pi, Lx2, Ly2, Lz2);
+
+			const double Lx1 = ang_mom_phase1[idx1[pi]][0];
+			const double Ly1 = ang_mom_phase1[idx1[pi]][1];
+			const double Lz1 = ang_mom_phase1[idx1[pi]][2];
+			const double L1_norm = std::sqrt(Lx1 * Lx1 + Ly1 * Ly1 + Lz1 * Lz1);
+			const double dL_norm = std::sqrt((Lx2 - Lx1) * (Lx2 - Lx1) + (Ly2 - Ly1) * (Ly2 - Ly1) + (Lz2 - Lz1) * (Lz2 - Lz1));
+			const double ang_mom_rel_error = (L1_norm > 0.0) ? dL_norm / L1_norm : dL_norm;
+			amrex::Print() << std::format("Particle {} angular momentum relative error (Phase1 vs Phase2): {:.4e}\n", pi, ang_mom_rel_error);
+			if (!(ang_mom_rel_error < ang_mom_rel_error_tol)) {
+				status = 1;
+				amrex::Print() << std::format("Test failed: angular momentum not Galilean invariant for particle {}\n", pi);
+			}
+		}
+
 		// Compute analytical solution for boosted case based on its actual evolution time
 		const Real drho2 = rho_dot_exact * sim2.tNew_[0];
 
@@ -453,7 +515,17 @@ auto problem_main() -> int
 	}
 	const double total_total_mass_phase3_final = total_mass_phase3_final + total_particle_mass_phase3_final;
 
+	const auto &real_data_phase3 = sim2.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->getParticleDataAtLevel(0).first;
+
 	if (amrex::ParallelDescriptor::IOProcessor()) {
+		// Print angular momentum for each particle (data layout: x,y,z, mass,vx,vy,vz,mdot,Lx,Ly,Lz)
+		constexpr int Lx_offset = AMREX_SPACEDIM + quokka::SinkParticleLxIdx;
+		for (int pi = 0; std::cmp_less(pi, real_data_phase3.size()); ++pi) {
+			const auto &p = real_data_phase3[pi];
+			amrex::Print() << std::format("Particle {} angular momentum: Lx={:.4e} Ly={:.4e} Lz={:.4e}\n", pi, p[Lx_offset], p[Lx_offset + 1],
+						      p[Lx_offset + 2]);
+		}
+
 		amrex::Print() << "\nPhase 3 mass conservation check:\n";
 		amrex::Print() << "Initial total mass = " << total_total_mass_phase3_init << "\n";
 		amrex::Print() << "Final total mass = " << total_total_mass_phase3_final << "\n";

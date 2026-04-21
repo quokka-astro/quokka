@@ -6,7 +6,9 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include <format>
@@ -37,6 +39,71 @@
 namespace quokka
 {
 
+[[nodiscard]] constexpr auto getParticleTypeShortName(ParticleType type) -> std::string_view
+{
+	switch (type) {
+		case ParticleType::Rad:
+			return "Rad";
+		case ParticleType::CIC:
+			return "CIC";
+		case ParticleType::CICRad:
+			return "CICRad";
+		case ParticleType::Test:
+			return "Test";
+		case ParticleType::StochasticStellarPop:
+			return "StochasticStellarPop";
+		case ParticleType::Sink:
+			return "Sink";
+		default:
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, "Unknown particle type");
+			return "Unknown";
+	}
+}
+
+[[nodiscard]] constexpr auto getParticleSwitchName(ParticleType type) -> std::string_view
+{
+	switch (type) {
+		case ParticleType::Rad:
+			return "ParticleSwitch::Rad";
+		case ParticleType::CIC:
+			return "ParticleSwitch::CIC";
+		case ParticleType::CICRad:
+			return "ParticleSwitch::CICRad";
+		case ParticleType::Test:
+			return "ParticleSwitch::Test";
+		case ParticleType::StochasticStellarPop:
+			return "ParticleSwitch::StochasticStellarPop";
+		case ParticleType::Sink:
+			return "ParticleSwitch::Sink";
+		default:
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, "Unknown particle type");
+			return "ParticleSwitch::Unknown";
+	}
+}
+
+[[nodiscard]] inline auto parseParticleTypeShortName(std::string_view particle_type_name) -> std::optional<ParticleType>
+{
+	if (particle_type_name == "Rad") {
+		return ParticleType::Rad;
+	}
+	if (particle_type_name == "CIC") {
+		return ParticleType::CIC;
+	}
+	if (particle_type_name == "CICRad") {
+		return ParticleType::CICRad;
+	}
+	if (particle_type_name == "Test") {
+		return ParticleType::Test;
+	}
+	if (particle_type_name == "StochasticStellarPop") {
+		return ParticleType::StochasticStellarPop;
+	}
+	if (particle_type_name == "Sink") {
+		return ParticleType::Sink;
+	}
+	return std::nullopt;
+}
+
 // Forward declarations
 template <typename problem_t> class PhysicsParticleRegister;
 
@@ -56,13 +123,15 @@ class PhysicsParticleDescriptorBase
 	int massAtBirthIndex_{-1};     // Index for particle mass at birth (-1 if not used)
 	bool forceFinestLevel_{false}; // Whether particles are forced to live in the finest level
 	int mdotIndex_{-1};	       // Index for accretion rate (-1 if not used)
+	int angMomIndex_{-1};	       // Index for angular momentum x-component (-1 if not used; Ly=+1, Lz=+2)
 
       public:
 	PhysicsParticleDescriptorBase(int mass_idx, int lum_idx, int birth_time_idx, int death_time_idx, bool allows_creation, bool allows_destruction = false,
-				      int evolution_stage_idx = -1, bool allows_accretion = false, int mass_at_birth_idx = -1, int mdot_idx = -1)
+				      int evolution_stage_idx = -1, bool allows_accretion = false, int mass_at_birth_idx = -1, int mdot_idx = -1,
+				      int ang_mom_idx = -1)
 	    : massIndex_(mass_idx), lumIndex_(lum_idx), birthTimeIndex_(birth_time_idx), deathTimeIndex_(death_time_idx), allowsCreation_(allows_creation),
 	      allowsDestruction_(allows_destruction), evolutionStageIndex_(evolution_stage_idx), allowsAccretion_(allows_accretion),
-	      massAtBirthIndex_(mass_at_birth_idx), mdotIndex_(mdot_idx)
+	      massAtBirthIndex_(mass_at_birth_idx), mdotIndex_(mdot_idx), angMomIndex_(ang_mom_idx)
 	{
 	}
 
@@ -86,6 +155,7 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] AMREX_FORCE_INLINE auto getMassAtBirthIndex() const -> int { return massAtBirthIndex_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getForceFinestLevel() const -> bool { return forceFinestLevel_; }
 	[[nodiscard]] AMREX_FORCE_INLINE auto getMdotIndex() const -> int { return mdotIndex_; }
+	[[nodiscard]] AMREX_FORCE_INLINE auto getAngMomIndex() const -> int { return angMomIndex_; }
 
 	// setter methods for particle properties
 	AMREX_FORCE_INLINE void setForceFinestLevel(bool force) { forceFinestLevel_ = force; }
@@ -130,6 +200,8 @@ class PhysicsParticleDescriptorBase
 	[[nodiscard]] virtual auto computeStellarMassAtBirthBornByTime(amrex::Real time) const -> amrex::Real = 0;
 
 	virtual void depositMass(const amrex::Vector<amrex::MultiFab *> &rhs, int finest_lev, amrex::Real Gconst) = 0;
+	virtual void depositParticleMassDensity(amrex::MultiFab &deposition_field, int lev, int start_mesh_comp, amrex::Real mass_min, amrex::Real mass_max,
+						bool use_age_filter, amrex::Real current_time, amrex::Real age_max, bool deposit_birth_mass) const = 0;
 
 	// Drift particle at level lev_min and above for time dt. Note that subcycling is not supported.
 	virtual void driftParticles(int lev_min, int lev_max, amrex::Real dt) const = 0;
@@ -193,9 +265,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	// Constructor initializing descriptor with container and particle properties
 	PhysicsParticleDescriptor(ContainerType *container, int mass_idx, int lum_idx, int birth_time_idx, int death_time_idx, bool allows_creation,
 				  bool allows_destruction = false, int evolution_stage_idx = -1, bool allows_accretion = false, int mass_at_birth_idx = -1,
-				  int mdot_idx = -1)
+				  int mdot_idx = -1, int ang_mom_idx = -1)
 	    : PhysicsParticleDescriptorBase(mass_idx, lum_idx, birth_time_idx, death_time_idx, allows_creation, allows_destruction, evolution_stage_idx,
-					    allows_accretion, mass_at_birth_idx, mdot_idx),
+					    allows_accretion, mass_at_birth_idx, mdot_idx, ang_mom_idx),
 	      container_(container)
 	{
 	}
@@ -326,6 +398,36 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			// Deposit count into the last component of rhs
 			const int count_comp = 1; // Second component is the count
 			amrex::ParticleToMesh(*container_, rhs, 0, finest_lev, DepositionCount{this->getMassIndex(), count_comp, 1}, false, false);
+		}
+	}
+
+	void depositParticleMassDensity(amrex::MultiFab &deposition_field, int lev, int start_mesh_comp, amrex::Real mass_min, amrex::Real mass_max,
+					bool use_age_filter, amrex::Real current_time, amrex::Real age_max, bool deposit_birth_mass) const override
+	{
+		const std::string particle_type_name{getParticleTypeShortName(particleType_)};
+
+		int mass_comp = this->getMassIndex();
+		if (deposit_birth_mass) {
+			mass_comp = this->getMassAtBirthIndex();
+			if (mass_comp < 0) {
+				amrex::Abort("Derived field deposit_fields=birth_mass is not supported for particle type " + particle_type_name + ".");
+			}
+		} else if (mass_comp < 0) {
+			amrex::Abort("Derived field deposit_fields=mass is not supported for particle type " + particle_type_name + ".");
+		}
+
+		int birth_time_comp = -1;
+		if (use_age_filter) {
+			birth_time_comp = this->getBirthTimeIndex();
+			if (birth_time_comp < 0) {
+				amrex::Abort("Derived field age filter (t_age) is not supported for particle type " + particle_type_name +
+					     " (missing birth_time).");
+			}
+		}
+
+		if (container_ != nullptr) {
+			quokka::depositParticleMassDensity(container_, deposition_field, lev, mass_comp, start_mesh_comp, mass_min, mass_max, use_age_filter,
+							   birth_time_comp, current_time, age_max);
 		}
 	}
 
@@ -705,7 +807,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				const amrex::Geometry &geom, int lev, amrex::Real time, amrex::Real dt) override
 	{
 		SinkAccretionUtils::applyAccretion<ContainerType, problem_t>(this->container_, state, state_accretion_rate, state_fc, geom, lev, time, dt,
-									     this->getMassIndex(), this->getMdotIndex());
+									     this->getMassIndex(), this->getMdotIndex(), this->getAngMomIndex());
 	}
 
 	void createParticlesFromState(amrex::MultiFab &state, amrex::MultiFab &accretion_rate, int lev, amrex::Real current_time, amrex::Real dt,
@@ -815,7 +917,7 @@ template <typename problem_t> class PhysicsParticleRegister
 			    StochasticStellarPopParticleMassAtBirthIdx);
 		} else if constexpr (particleType == ParticleType::Sink) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Sink>>(
-			    container, SinkParticleMassIdx, -1, -1, -1, true, false, -1, true, -1, SinkParticleMdotIdx);
+			    container, SinkParticleMassIdx, -1, -1, -1, true, false, -1, true, -1, SinkParticleMdotIdx, SinkParticleLxIdx);
 		} else if constexpr (particleType == ParticleType::Test) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
 			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, TestParticleDeathTimeIdx, true, true,
@@ -858,6 +960,25 @@ template <typename problem_t> class PhysicsParticleRegister
 				descriptor->depositMass(rhs, finest_lev, Gconst);
 			}
 		}
+	}
+
+	void depositParticleMassDensity(std::string_view particle_type_name, bool deposit_birth_mass, amrex::MultiFab &deposition_field, int lev,
+					int start_mesh_comp, amrex::Real mass_min, amrex::Real mass_max, bool use_age_filter, amrex::Real current_time,
+					amrex::Real age_max) const
+	{
+		auto const particle_type = parseParticleTypeShortName(particle_type_name);
+		if (!particle_type.has_value()) {
+			amrex::Abort("Unsupported particle type requested by runtime derived field provider: " + std::string(particle_type_name));
+		}
+
+		auto it = particleRegistry_.find(*particle_type);
+		if (it == particleRegistry_.end()) {
+			amrex::Abort("Derived field requested particle type " + std::string(particle_type_name) + ", but " +
+				     std::string(getParticleSwitchName(*particle_type)) + " is not enabled for this problem.");
+		}
+
+		it->second->depositParticleMassDensity(deposition_field, lev, start_mesh_comp, mass_min, mass_max, use_age_filter, current_time, age_max,
+						       deposit_birth_mass);
 	}
 
 	// Deposit supernova energy and momentum from all particles

@@ -11,6 +11,7 @@ theme:
     - content.code.copy
     - content.code.select
 nav:
+  - Home: index.md
   - About: about.md
   - Equations: equations.md
   - Citation: citation.md
@@ -45,6 +46,8 @@ nav:
     - Contributing Guide: contributing.md
     - Flowchart: flowchart.md
     - Hydro Integrator: hydro_integrator.md
+    - Radiation Integrator: radiation_integrator.md
+    - State Variable Component Indices: components.md
     - Debugging: debugging.md
     - Assertions and error checking: error_checking.md
     - Performance tips: performance.md

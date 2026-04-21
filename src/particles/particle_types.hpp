@@ -316,7 +316,10 @@ AMREX_ENUM(SinkParticleRealIdx, // NOLINT
 	   vx,			// Velocity in x direction
 	   vy,			// Velocity in y direction
 	   vz,			// Velocity in z direction
-	   mdot			// Current mass accretion rate
+	   mdot,		// Current mass accretion rate
+	   Lx,			// Angular momentum in x direction
+	   Ly,			// Angular momentum in y direction
+	   Lz			// Angular momentum in z direction
 );
 
 // Backward compatibility aliases for existing code
@@ -325,9 +328,12 @@ constexpr int SinkParticleVxIdx = static_cast<int>(SinkParticleRealIdx::vx);
 constexpr int SinkParticleVyIdx = static_cast<int>(SinkParticleRealIdx::vy);
 constexpr int SinkParticleVzIdx = static_cast<int>(SinkParticleRealIdx::vz);
 constexpr int SinkParticleMdotIdx = static_cast<int>(SinkParticleRealIdx::mdot);
+constexpr int SinkParticleLxIdx = static_cast<int>(SinkParticleRealIdx::Lx);
+constexpr int SinkParticleLyIdx = static_cast<int>(SinkParticleRealIdx::Ly);
+constexpr int SinkParticleLzIdx = static_cast<int>(SinkParticleRealIdx::Lz);
 
 // Number of real components for Sink_particles
-constexpr int SinkParticleRealComps = 5; // mass, vx, vy, vz, mdot
+constexpr int SinkParticleRealComps = 8; // mass, vx, vy, vz, mdot, Lx, Ly, Lz
 
 // Type definitions for Sink_particles container and iterator
 using SinkParticleContainer = amrex::AmrParticleContainer<SinkParticleRealComps>;
@@ -447,7 +453,15 @@ inline auto get_units_data() -> const auto &
 	       {"death_density", {1, -3, 0, 0}},
 	       {"mass_at_birth", {1, 0, 0, 0}},
 	       {"luminosity", {-1, 2, -3, 0}}}}},
-	    {ParticleType::Sink, {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}}, {"mdot", {1, 0, -1, 0}}}}},
+	    {ParticleType::Sink,
+	     {{{"mass", {1, 0, 0, 0}},
+	       {"vx", {0, 1, -1, 0}},
+	       {"vy", {0, 1, -1, 0}},
+	       {"vz", {0, 1, -1, 0}},
+	       {"mdot", {1, 0, -1, 0}},
+	       {"Lx", {1, 2, -1, 0}},
+	       {"Ly", {1, 2, -1, 0}},
+	       {"Lz", {1, 2, -1, 0}}}}},
 	    {ParticleType::Test,
 	     {{{"mass", {1, 0, 0, 0}},
 	       {"vx", {0, 1, -1, 0}},

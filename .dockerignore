@@ -1,5 +1,3 @@
-.git
-.gitmodules
 .github/workflows/**/node_modules
 .vscode
 
