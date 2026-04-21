@@ -268,7 +268,7 @@ auto run_reference_simulation() -> SimulationData<DustDampingWithCorrection>
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = 1000000.0;
-	sim.constantDt_ = 0.00001;
+	sim.constantDt_ = 0.00005;
 	sim.enableIterDustStoptime_ = 0;
 	sim.print_dust_counter_ = false;
 
@@ -500,7 +500,7 @@ auto problem_main() -> int
 		// gas velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_gas_vec_,
-				    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+				    {{"label", "reference (non-iter, dt=0.00005)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
 		matplotlibcpp::plot(iter_with_corr_data.t_vec_, iter_with_corr_data.v_gas_vec_,
 				    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::plot(iter_without_corr_data.t_vec_, iter_without_corr_data.v_gas_vec_,
@@ -515,7 +515,7 @@ auto problem_main() -> int
 		// dust1 velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust1_vec_,
-				    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+				    {{"label", "reference (non-iter, dt=0.00005)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
 		matplotlibcpp::plot(iter_with_corr_data.t_vec_, iter_with_corr_data.v_dust1_vec_,
 				    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::plot(iter_without_corr_data.t_vec_, iter_without_corr_data.v_dust1_vec_,
@@ -530,7 +530,7 @@ auto problem_main() -> int
 		// dust2 velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust2_vec_,
-				    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+				    {{"label", "reference (non-iter, dt=0.00005)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
 		matplotlibcpp::plot(iter_with_corr_data.t_vec_, iter_with_corr_data.v_dust2_vec_,
 				    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::plot(iter_without_corr_data.t_vec_, iter_without_corr_data.v_dust2_vec_,
@@ -545,7 +545,7 @@ auto problem_main() -> int
 		// gas energy
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(ref_data.t_vec_, ref_data.E_gas_vec_,
-				    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+				    {{"label", "reference (non-iter, dt=0.00005)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
 		matplotlibcpp::plot(iter_with_corr_data.t_vec_, iter_with_corr_data.E_gas_vec_,
 				    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::plot(iter_without_corr_data.t_vec_, iter_without_corr_data.E_gas_vec_,

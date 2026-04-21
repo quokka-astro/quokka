@@ -8,13 +8,13 @@ quokka.bc = ["periodic", "periodic", "periodic"]
 # *****************************************************************
 # VERBOSITY
 # *****************************************************************
-amr.v = 0  # verbosity in Amr
+amr.v = 0
 
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
 amr.n_cell = [8, 8, 8]
-amr.max_level = 0  # number of levels = max_level + 1
+amr.max_level = 0
 
 do_reflux = 0
 do_subcycle = 0
