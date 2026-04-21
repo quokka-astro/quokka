@@ -1,8 +1,14 @@
 # About
 
-![Quokka riding a rocket](media/quokka-favicon.svg)
+<p style="text-align: center;">
+  <img
+    src="media/quokka-favicon.svg"
+    alt="Quokka riding a rocket"
+    style="width: min(18rem, 45%); height: auto;"
+  >
+</p>
 
-*Quokka riding a rocket*
+<p style="text-align: center;"><em>Quokka riding a rocket</em></p>
 
 Quokka is a high-resolution shock capturing AMR radiation hydrodynamics code using the AMReX library [@AMReX_JOSS] to provide patch-based adaptive mesh functionality. We take advantage of the C++ loop abstractions in AMReX in order to run with high performance on either CPUs, NVIDIA GPUs, or AMD GPUs.
 
