@@ -14,7 +14,7 @@
 - `regression/`
     - The regression harness (`quokka-tests.ini`) enumerates long-running GPU test suites, including MPI launch commands, linked data files, and which executables to build ([regression/quokka-tests.ini](https://github.com/quokka-astro/quokka/blob/development/regression/quokka-tests.ini#L1-L146)).
 - `docs/`
-    - Source for the published documentation site (MkDocs). The landing page summarises Quokka’s goals and AMReX integration, and additional pages cover workflow diagrams, testing, debugging, and performance topics ([site overview](index.md), [simulation flowchart](flowchart.md), [test catalog](tests/index.md)).
+    - Source for the published documentation site (mdBook). The landing page summarises Quokka’s goals and AMReX integration, and additional pages cover workflow diagrams, testing, debugging, and performance topics ([site overview](index.md), [simulation flowchart](flowchart.md), [test catalog](tests/index.md)).
 
 ## Execution flow in practice
 - Start-up: `main.cpp` initialises AMReX, then calls `problem_main()` declared in `main.hpp` and implemented by each problem driver ([main.cpp](https://github.com/quokka-astro/quokka/blob/development/src/main.cpp#L1-L55), [main.hpp](https://github.com/quokka-astro/quokka/blob/development/src/main.hpp#L8-L19)).
@@ -28,10 +28,11 @@
 - **CUDA builds on macOS or Linux.** To build and test CUDA functionality locally, run `./scripts/bash/run-cuda-container.sh`. This script pulls the appropriate Docker image, launches a container, and performs a CUDA build—useful for catching CUDA-specific issues on your development machine.
 - **Writing and building documentation.** The developer is responsible for updating the documentation site. To build and view the documentation site locally:
 ```bash
-pip install -r docs/requirements.txt
-./scripts/bash/build_and_view_docs.sh
+cargo install mdbook --version 0.5.2 --locked
+cargo install mdbook-bib --locked
+./scripts/bash/docs_build_and_view.sh
 ```
-Then open `http://[::]:8000/` in your browser to view the documentation locally.
+Then open the printed `http://localhost:<port>/` URL in your browser to view the documentation locally.
 
 ## Where to dive deeper next
 1. **Physics modules.** Explore `src/hydro/` and `src/radiation/` alongside the corresponding documentation pages (`hydro_integrator.md`, radiation topics) to understand scheme implementations ([QuokkaSimulation.hpp](https://github.com/quokka-astro/quokka/blob/development/src/QuokkaSimulation.hpp#L66-L200), [overview page](index.md)).

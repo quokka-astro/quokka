@@ -37,15 +37,17 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Dependencies
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install mdBook tooling
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install pypandoc_binary 
-          python3 -m pip install -r docs/requirements.txt
+          cargo install mdbook --version 0.5.2 --locked
+          cargo install mdbook-bib --locked
 
       - name: Install and Build
         run: |
-          ./scripts/bash/docs_build.sh
+          ./scripts/bash/docs_build_mdbook.sh
 
       - name: Archive artifact
         shell: sh

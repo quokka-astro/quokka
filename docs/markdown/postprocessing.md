@@ -10,8 +10,10 @@ There are several ways to post-process the output of Quokka simulations. AMReX P
 
 The target directory is bind-mounted to `/home/vscode/data` in the container. The launcher prints a one-time password; open `http://localhost:8080`, paste the password, and use the `xterm` window to start `amrvis2d` or `amrvis3d` on your `plt*` directories.
 
-!!! Tip
-    On SLURM clusters with Apptainer, pull the image once with `apptainer pull amrvis-container.sif docker://ghcr.io/amrex-codes/amrvis-container:main`, then use `./launch_amrvis_browser_hpc.sh /path/to/plotfiles` on a compute node and follow the printed SSH tunnel instructions.
+> **Tip**
+>
+> On SLURM clusters with Apptainer, pull the image once with `apptainer pull amrvis-container.sif docker://ghcr.io/amrex-codes/amrvis-container:main`, then use `./launch_amrvis_browser_hpc.sh /path/to/plotfiles` on a compute node and follow the printed SSH tunnel instructions.
+>
 
 ## AMReX PlotfileTools
 
@@ -32,11 +34,15 @@ Other tools:
 
 ## yt
 
-!!! Warning
-    There are [known bugs](https://github.com/yt-project/yt/issues/3889) that affect Quokka outputs. PlotfileTools (see above) can be used instead for axis-aligned slice plots.
+> **Warning**
+>
+> There are [known bugs](https://github.com/yt-project/yt/issues/3889) that affect Quokka outputs. PlotfileTools (see above) can be used instead for axis-aligned slice plots.
+>
 
-!!! Tip
-    One of the most useful things to do is to convert the data into a uniform-resolution NumPy array with the [covering_grid](https://yt-project.org/doc/examining/low_level_inspection.html#examining-grid-data-in-a-fixed-resolution-array) function.
+> **Tip**
+>
+> One of the most useful things to do is to convert the data into a uniform-resolution NumPy array with the [covering_grid](https://yt-project.org/doc/examining/low_level_inspection.html#examining-grid-data-in-a-fixed-resolution-array) function.
+>
 
 We have a fork of YT that includes a customized Quokka frontend: [https://github.com/chongchonghe/yt](https://github.com/chongchonghe/yt). To install it, run `pip install "yt[quokka] @ git+https://github.com/chongchonghe/yt.git"`. A comprehensive documentation is available at [this link](https://github.com/chongchonghe/yt/blob/Rongjun-ANUquokka-frontend/doc/source/examining/loading_data.rst#quokka-data), and a Jupyter Notebook with tutorials is available at [README.ipynb](https://github.com/Rongjun-ANU/README-of-yt-frontend-for-QUOKKA/blob/main/README.ipynb).
 
@@ -62,5 +68,7 @@ If you want to read a timeseries of plotfiles, you can create a file with a ``.v
 
 Then select ``plotfiles.visit`` in VisIt's Open dialog box.
 
-!!! Warning
-    There are rendering bugs with unscaled box dimensions. Slices generally work. However, do not expect volume rendering to work when using, e.g. parsec-size boxes with cgs units.
+> **Warning**
+>
+> There are rendering bugs with unscaled box dimensions. Slices generally work. However, do not expect volume rendering to work when using, e.g. parsec-size boxes with cgs units.
+
