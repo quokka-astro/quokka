@@ -4,7 +4,7 @@
 recombination_switch                    int        1
 
 # Recombination is temperature dependent
-recombination_temperature_dependent     int        0
+recombination_temperature_dependent     int        1
 
 # Collisional ionization switch
 collisional_ionization_switch           int        1
