@@ -83,7 +83,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		//  else {
 		//  	T = 1.0; // lower temperature outside the center
 		//  }
-		
+
 		//   amrex::Real Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T);
 
 		/*-------------------------------*/
@@ -118,9 +118,9 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		// const amrex::Real T = Tout + (Tin - Tout) * (term1 + term2);
 		/*-------------------------------------------------*/
 
-		 for (int n = 0; n < state_cc.nComp(); ++n) {
-		 	state_cc(i, j, k, n) = 0.; // zero fill all components
-		 }
+		for (int n = 0; n < state_cc.nComp(); ++n) {
+			state_cc(i, j, k, n) = 0.; // zero fill all components
+		}
 
 		const amrex::Real Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T);
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho;
