@@ -11,7 +11,9 @@ function convertLegacyMathScripts() {
     const wrapper = document.createElement(isDisplay ? "div" : "span");
     const open = isDisplay ? "\\[" : "\\(";
     const close = isDisplay ? "\\]" : "\\)";
-    const body = script.textContent.trim();
+    // Markdown can turn TeX subscripts into literal <em>...</em> text before
+    // MathJax sees inline script blocks. Convert those markers back to "_".
+    const body = script.textContent.trim().replace(/<\/?em>/g, "_");
 
     wrapper.className = isDisplay ? "math math-display" : "math math-inline";
     wrapper.textContent = open + "\n" + body + "\n" + close;

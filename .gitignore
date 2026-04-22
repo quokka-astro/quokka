@@ -62,7 +62,6 @@ Backtrace.*
 *.png
 
 /docs/site/*
-/docs/site-mdbook/
 
 # Documentation build directory
 docs/api/

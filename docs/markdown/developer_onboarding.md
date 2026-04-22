@@ -29,7 +29,7 @@
 - **Writing and building documentation.** The developer is responsible for updating the documentation site. To build and view the documentation site locally:
 ```bash
 cargo install mdbook --version 0.5.2 --locked
-cargo install mdbook-bib --locked
+cargo install mdbook-bib --version 0.5.2 --locked
 ./scripts/bash/docs_build_and_view.sh
 ```
 Then open the printed `http://localhost:<port>/` URL in your browser to view the documentation locally.

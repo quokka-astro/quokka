@@ -127,7 +127,7 @@ For quick definitions of terms used throughout this guide, see the [Glossary](gl
     - `hip`: ROCm/clang toolchain compile of the full codebase (GitHub Actions build-only sanity check).
     - `OpenPMD`: builds with `QUOKKA_OPENPMD=ON` and runs the 3D blast problem under MPI to exercise ADIOS2/openPMD output.
     - Static analysis & lint: `clang-tidy-review` (with follow-up comment job) and `codespell`.
-    - Docs & metadata: `docs` (mdBook build), `docs-toctree`, `dependency-review`, `codeql`, and `scorecard`.
+    - Docs & metadata: `docs` (mdBook build), `mdBook validation`, `dependency-review`, `codeql`, and `scorecard`.
     - **Azure Pipelines (self-hosted GPUs):** manual `/azp run` trigger by a maintainer launches CUDA and HIP runtime tests on secured NVIDIA/AMD runners; required for accelerator-sensitive changes.
     - **Nightly regression suite:** runs the `regression/` harness against reference plotfiles on a separate pipeline; failures mean the gold data and code outputs diverged and need investigation.
     - Most jobs go through `check_changes.yml`; docs-only or workflow-only PRs will auto-skip compute-heavy runs, so double-check locally if you bypass CI by rebasing after review.
