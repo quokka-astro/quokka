@@ -47,7 +47,7 @@ jobs:
 
       - name: Install and Build
         run: |
-          ./scripts/bash/docs_build_mdbook.sh
+          ./scripts/bash/docs_build.sh
 
       - name: Archive artifact
         shell: sh

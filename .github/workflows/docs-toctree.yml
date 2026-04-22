@@ -26,4 +26,4 @@ jobs:
       - name: Check for unreachable Markdown pages
         run: python scripts/check_mdbook_summary.py
       - name: Build mdBook documentation
-        run: ./scripts/bash/docs_build_mdbook.sh
+        run: ./scripts/bash/docs_build.sh
