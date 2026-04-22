@@ -177,7 +177,7 @@ auto problem_main() -> int
 	constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int dir = 0; dir < 3; ++dir) {
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 			BCs_cc[n].setLo(dir, amrex::BCType::foextrap);
 			BCs_cc[n].setHi(dir, amrex::BCType::foextrap);
 		}
