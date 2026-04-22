@@ -1317,7 +1317,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 
 	for (int level = 0; level <= finest_level; ++level) {
 		n_factor *= nsubsteps[level];
-		if(enableElectronConduction_ == 1) {
+		if (enableElectronConduction_ == 1) {
 			// Conduction timestep scales as dx^2, so we need to use n_factor^2 here instead of n_factor.
 			n_factor = n_factor * n_factor;
 		}
