@@ -2,7 +2,7 @@ pybtex==0.26.1
 mkdocs-material>=9.5.9
 mkdocs-include-markdown-plugin>=7.2.2
 mkdocs-exclude>=1.0.2
-mkdocs-macros-plugin>=1.0.4
+mkdocs-macros-plugin>=1.5.0
 pymdown-extensions
 mkdocs-awesome-pages-plugin
 mkdocs-material
