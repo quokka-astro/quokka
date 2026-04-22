@@ -174,7 +174,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	amrex::Real electronConductionFluxLimiterPhi_ = 1.0;
 	amrex::Real electronConductionSaturationFactor_ = 5.0;
-	amrex::Real electronConductionTempFloor_ = 0.0;
 
 	std::map<std::string, std::string> turbParams_;
 
@@ -618,7 +617,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("conduction_cfl", conductionCFL);
 		hpp.query("flux_limiter_phi", electronConductionFluxLimiterPhi_);
 		hpp.query("saturation_factor", electronConductionSaturationFactor_);
-		hpp.query("temperature_floor", electronConductionTempFloor_);
 	}
 
 	// set turbulence runtime parameters
@@ -1031,7 +1029,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 		const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_ * C::k_B,
 										     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
 										     .saturation_factor = electronConductionSaturationFactor_,
-										     .min_temperature = electronConductionTempFloor_};
+										     .min_temperature = tempFloor_};
 		quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, resampledTables_);
 	}
 
