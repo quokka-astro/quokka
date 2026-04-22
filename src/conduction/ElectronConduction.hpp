@@ -30,7 +30,7 @@ struct ElectronConductionParams {
 	amrex::Real conductivity_prefactor = 3.e34; // units of cm^2 s^{-1}
 	amrex::Real flux_limiter_phi = 0.1;
 	amrex::Real saturation_factor = 5.0; // refer to equation 8 of Cowee & McKee 1977
-	amrex::Real min_temperature = 0.0;
+	amrex::Real min_temperature = 0.0; //default value will be overwritten by tempFloor_ during initialization 
 };
 
 template <typename problem_t> class ElectronConduction
