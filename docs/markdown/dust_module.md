@@ -1,5 +1,8 @@
 # Dust Module
 
+!!! warning "Beta feature"
+    The dedicated dust dynamics module has not yet been exercised in a published science application with Quokka and should currently be treated as **beta**.
+
 This module primarily implements two components: the dust transport term and the dust drag source term.
 
 ## Equations for Gas-Dust System

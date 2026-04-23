@@ -1,5 +1,8 @@
 # Magnetohydrodynamics Module
 
+!!! warning "Beta feature"
+    The MHD module has not yet been exercised in a published science application with Quokka and should currently be treated as **beta**.
+
 The magnetohydrodynamics (MHD) module augments Quokka's Euler solver with
 magnetic fields while keeping the discrete divergence of $\vec{B}$ exactly
 zero. It is built on the same method-of-lines framework described in

@@ -7,6 +7,23 @@
 
 Quokka is a high-resolution shock capturing AMR radiation hydrodynamics code using the AMReX library [@AMReX_JOSS] to provide patch-based adaptive mesh functionality. We take advantage of the C++ loop abstractions in AMReX in order to run with high performance on either CPUs, NVIDIA GPUs, or AMD GPUs.
 
+## Physics module status
+
+Per the documentation policy in the maintainer guide, physics features that have not yet been exercised in a published science application are marked as **beta**.
+
+| Module | Status | Notes |
+| ------ | :----: | ----- |
+| Radiation | beta | Two-moment radiation transport and matter-radiation coupling |
+| MHD | beta | Ideal MHD with constrained transport |
+| Dust | beta | Dedicated dust dynamics and drag source terms |
+| Particles | beta | Particle-mesh gravity, sink particles, star formation, and feedback |
+| Chemistry | beta | Primordial chemistry source terms |
+| Self-gravity | beta | Poisson solve for gas and particle mass |
+
+Hydrodynamics and optically-thin cooling are not currently marked as beta.
+
+See [Known Issues and Errata](known_issues.md) for the current caveats and unsupported combinations.
+
 ## Development methodology
 
 The code is written in modern C++20, using MPI for distributed-memory parallelism, with the AMReX GPU abstraction compiling as either native CUDA code or native HIP code when GPU support is enabled.
