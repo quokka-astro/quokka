@@ -3,9 +3,9 @@ set -e # Exit with nonzero exit code if anything fails
 
 echo "Build the HTML documentation using mdBook"
 
-if ! command -v mdbook-bib >/dev/null 2>&1; then
-    echo "Error: mdbook-bib is required for citation rendering."
-    echo "Install it with: cargo install mdbook-bib --version 0.5.2 --locked"
+if ! command -v mdbook >/dev/null 2>&1 || ! command -v mdbook-bib >/dev/null 2>&1; then
+    echo "Error: mdBook tooling is required to build the docs."
+    echo "Install it with: ./scripts/bash/install_mdbook.sh"
     exit 1
 fi
 

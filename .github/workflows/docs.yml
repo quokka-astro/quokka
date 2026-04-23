@@ -41,9 +41,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install mdBook tooling
-        run: |
-          cargo install mdbook --version 0.5.2 --locked
-          cargo install mdbook-bib --version 0.5.2 --locked
+        run: ./scripts/bash/install_mdbook.sh
 
       - name: Install and Build
         run: |

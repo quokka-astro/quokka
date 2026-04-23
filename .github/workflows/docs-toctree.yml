@@ -20,9 +20,7 @@ jobs:
         with:
           python-version: '3.x'
       - name: Install mdBook tooling
-        run: |
-          cargo install mdbook --version 0.5.2 --locked
-          cargo install mdbook-bib --version 0.5.2 --locked
+        run: ./scripts/bash/install_mdbook.sh
       - name: Check for unreachable Markdown pages
         run: python scripts/check_mdbook_summary.py
       - name: Build mdBook documentation

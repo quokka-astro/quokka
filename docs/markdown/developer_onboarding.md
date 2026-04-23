@@ -28,10 +28,10 @@
 - **CUDA builds on macOS or Linux.** To build and test CUDA functionality locally, run `./scripts/bash/run-cuda-container.sh`. This script pulls the appropriate Docker image, launches a container, and performs a CUDA build—useful for catching CUDA-specific issues on your development machine.
 - **Writing and building documentation.** The developer is responsible for updating the documentation site. To build and view the documentation site locally:
 ```bash
-cargo install mdbook --version 0.5.2 --locked
-cargo install mdbook-bib --version 0.5.2 --locked
+./scripts/bash/install_mdbook.sh
 ./scripts/bash/docs_build_and_view.sh
 ```
+This uses the same mdBook install commands as the GitHub Actions docs jobs.
 Then open the printed `http://localhost:<port>/` URL in your browser to view the documentation locally.
 
 ## Where to dive deeper next
