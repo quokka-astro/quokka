@@ -87,7 +87,7 @@ t_{\mathrm{s}} = \frac{\sqrt{\pi \gamma}}{2\sqrt{2}} \frac{a \rho_{\mathrm{gr}}}
 \end{cases}
 $$
 
-When $\gamma=1$, this expression reduces exactly to the isothermal $t_s$. An example of its usage can be found in the `src/problems/DustDampingCorrection` test.
+When $\gamma=1$, this expression reduces exactly to the isothermal $t_s$. An example of its usage can be found in the `src/problems/DustDampingIteration` test.
 
 ## CFL Condition for Dust
 
