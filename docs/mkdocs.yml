@@ -15,11 +15,12 @@ nav:
   - About: about.md
   - Equations: equations.md
   - Citation: citation.md
+  - Known Issues and Errata: known_issues.md
   - Glossary: glossary.md
   - Physics Modules:
-    - Magnetohydrodynamics: mhd_module.md
-    - Star Formation and Feedback: particles.md
-    - Dust Module: dust_module.md
+    - Magnetohydrodynamics (beta): mhd_module.md
+    - Star Formation and Feedback (beta): particles.md
+    - Dust Module (beta): dust_module.md
   - Simulation gallery:
     - Hydro: gallery.md
   - User guide:

@@ -1,8 +1,8 @@
 # Equations
 
-## Fluids, radiation, and dust
+## Fluids, radiation, magnetic fields, and dust
 
-Assuming the speed of light is not reduced ($\hat{c} = c$), Quokka solves the system of conservation laws:
+Assuming the speed of light is not reduced ($\hat{c} = c$), Quokka solves the following conservation laws for the cell-centered variables, as written below in the [Heaviside–Lorentz system of units](https://en.wikipedia.org/wiki/Heaviside%E2%80%93Lorentz_units):
 
 $$\frac{\partial \vec{U}}{\partial t}+\nabla \cdot \vec{F}(\vec{U}) = \vec{S}(\vec{U}),$$
 
@@ -11,7 +11,7 @@ $$\begin{aligned}
 \begin{array}{c}
   \rho \\
   \rho \vec{v} \\
-  E_{\rm gas} \\
+  E \\
   \rho X_n \\
   E_g \\
   \vec{F}_g \\
@@ -21,8 +21,8 @@ $$\begin{aligned}
 \vec{F}(U) = \left[
 \begin{array}{c}
   \rho \vec{v} \\
-  \rho \vec{v} \otimes \vec{v}+p \\
-  (E_{\rm gas} + p) \vec{v} \\
+  \rho \vec{v} \otimes \vec{v} + \left(p + \frac{1}{2} B^2\right)\mathsf{I} - \vec{B} \otimes \vec{B} \\
+  \left(E + p + \frac{1}{2} B^2\right)\vec{v} - (\vec{v} \cdot \vec{B}) \vec{B} \\
   \rho X_n \vec{v} \\
   \vec{F}_g \\
   c^2 \mathsf{P}_g \\
@@ -42,7 +42,19 @@ $$\begin{aligned}
 \end{array}\right],
 \end{aligned}$$
 
-along with the non-conservative auxiliary internal energy equation:
+where the total fluid energy is
+
+$$
+E = \rho e + \frac{1}{2} \rho v^2 + \frac{1}{2} B^2 \, ,
+$$
+
+and the face-centered magnetic field is evolved according to the ideal MHD induction equation:
+
+$$
+\frac{\partial \vec{B}}{\partial t} - \nabla \times \left(\vec{v} \times \vec{B}\right) = 0.
+$$
+
+Quokka also solves the non-conservative auxiliary internal energy equation:
 
 $$\begin{aligned}
 \frac{\partial (\rho e_{\text{aux}})}{\partial t} = - \nabla \cdot (\rho e_{\text{aux}} \vec{v}) - p \nabla \cdot \vec{v} + S_{\text{rad}} + \mathcal{H} - \mathcal{C} + \omega \sum_{k=1}^{N_{\mathrm{dust}}} \rho_{\mathrm{d},k} \frac{(\vec{v}_{\mathrm{d},k} - \vec{v})^{2}}{T_{\mathrm{s},k}}, \\
@@ -60,13 +72,15 @@ where
 
 -   $\rho$ is the gas density,
 -   $\vec{v}$ is the gas velocity,
--   $E_{\text{gas}}$ is the total gas energy,
--   $\rho e_{\text{aux}}$ is the auxiliary gas internal energy,
+-   $E$ is the total fluid energy density, including magnetic energy when MHD is enabled,
+-   $\rho e_{\text{aux}}$ is the auxiliary gas internal energy density,
 -   $X_n$ is the fractional concentration of species $n$,
 -   $\dot{X}_n$ is the chemical reaction term for species $n$,
 -   $\mathcal{H}$ is the optically-thin volumetric heating term (radiative and chemical),
 -   $\mathcal{C}$ is the optically-thin volumetric cooling term (radiative and chemical),
 -   $p(\rho, e)$ is the gas pressure derived from a general convex equation of state,
+-   $\vec{B}$ is the magnetic field,
+-   $\mathsf{I}$ is the identity tensor,
 -   $E_g$ is the radiation energy density for group $g$,
 -   $F_g$ is the radiation flux for group $g$,
 -   $\mathsf{P}_g$ is the radiation pressure tensor for group $g$,
@@ -81,6 +95,7 @@ where
 -   $\omega$ is the fraction of frictional heating deposited into the gas.
 
 Note that since work done by radiation on the gas is included in the $c \sum_g G^0_g$ term, $S_{\text{rad}}$ is not the same as $c \sum_g G^0_g$.
+
 
 ## Collisionless particles
 
