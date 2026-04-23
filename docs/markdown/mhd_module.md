@@ -71,6 +71,9 @@ During the LondrilloDelZanna2004 average, the code leverages the fast magnetoson
 computed at interfaces during the Riemann solve so that the EMF averaging is properly upwinded
 without requiring a full state reconstruction and eigenvalue computation.
 
+A code-level dependency diagram for the `FelkerStone2017` stencil is available in
+[Felker-Stone 2017 EMF stencil](fs18_emf_stencil.md).
+
 ## Constrained-transport update
 
 Once EMFs are available, `MHDSystem::SolveInductionEqn` updates the face-centred

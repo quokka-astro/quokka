@@ -1,0 +1,3 @@
+# The FS18EMFStencil driver directly constructs its test MultiFabs, so it does
+# not need runtime parameters. Keep this file so quokka_add_problem has the
+# usual input path to pass to AMReX.

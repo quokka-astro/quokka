@@ -1,0 +1,288 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1100" height="620" viewBox="0 0 1100 620" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Felker-Stone 2017 EMF dependency stencil</title>
+  <desc id="desc">Dependency diagram for the Felker-Stone 2017 edge EMF reconstruction, shown for E_z on the x-y plane. The left panel shows quadrant assembly around one edge. The right panel shows the full union of the order-dependent velocity and magnetic-field stencils.</desc>
+  <defs>
+    <style>
+      text {
+        font-family: Arial;
+        fill: #1f2933;
+      }
+      .panel {
+        fill: #fbfcfe;
+        stroke: #c9d6e2;
+        stroke-width: 2;
+        rx: 12;
+      }
+      .cell-line {
+        stroke: #8ca0b3;
+        stroke-width: 1.5;
+      }
+      .cc {
+        fill: #cfe8ff;
+        stroke: #2878b5;
+        stroke-width: 2;
+      }
+      .cc-direct {
+        fill: #5aa3e6;
+        stroke: #0f5d99;
+        stroke-width: 2.5;
+      }
+      .bx {
+        fill: #f9c97b;
+        stroke: #b87500;
+        stroke-width: 2;
+      }
+      .by {
+        fill: #8fd0b0;
+        stroke: #2f7d5c;
+        stroke-width: 2;
+      }
+      .fspd {
+        fill: #d8c8ff;
+        stroke: #7353ba;
+        stroke-width: 2;
+      }
+      .oop {
+        fill: #d6dbe1;
+        stroke: #7c8793;
+        stroke-width: 2;
+      }
+      .edge {
+        fill: #111827;
+      }
+      .ppm {
+        fill: none;
+        stroke: #2b6cb0;
+        stroke-width: 3;
+      }
+      .plm {
+        fill: none;
+        stroke: #dd6b20;
+        stroke-width: 3;
+        stroke-dasharray: 9 6;
+      }
+      .const {
+        fill: none;
+        stroke: #c53030;
+        stroke-width: 3;
+        stroke-dasharray: 4 4;
+      }
+      .caption {
+        font-size: 15px;
+        fill: #425466;
+      }
+      .label {
+        font-size: 14px;
+      }
+      .small {
+        font-size: 12px;
+      }
+      .title {
+        font-size: 24px;
+        font-weight: 700;
+      }
+      .subtitle {
+        font-size: 18px;
+        font-weight: 700;
+      }
+    </style>
+  </defs>
+
+  <text x="40" y="34" class="title">Felker-Stone 2017 EMF reconstruction dependencies</text>
+  <text x="40" y="58" class="caption">
+    <tspan x="40" dy="0">Shown for E_z(i+1/2,j+1/2,k) on the x-y plane.</tspan>
+    <tspan x="40" dy="18">E_x and E_y use the same stencil after cyclic permutation of coordinates.</tspan>
+  </text>
+
+  <rect x="40" y="90" width="310" height="420" class="panel" />
+  <text x="62" y="124" class="subtitle">
+    <tspan x="62" dy="0">Local quadrant</tspan>
+    <tspan x="62" dy="20">assembly</tspan>
+  </text>
+  <text x="62" y="158" class="caption">
+    <tspan x="62" dy="0">Four quadrant EMFs meet at one</tspan>
+    <tspan x="62" dy="18">edge-centered E_z.</tspan>
+  </text>
+
+  <g transform="translate(60,170)">
+    <rect x="20" y="20" width="220" height="220" fill="#f8fbff" stroke="#51697f" stroke-width="2" />
+    <line x1="130" y1="20" x2="130" y2="240" class="cell-line" />
+    <line x1="20" y1="130" x2="240" y2="130" class="cell-line" />
+
+    <circle cx="75" cy="75" r="14" class="cc-direct" />
+    <circle cx="185" cy="75" r="14" class="cc-direct" />
+    <circle cx="75" cy="185" r="14" class="cc-direct" />
+    <circle cx="185" cy="185" r="14" class="cc-direct" />
+
+    <rect x="123" y="63" width="14" height="24" class="bx" />
+    <rect x="123" y="173" width="14" height="24" class="bx" />
+    <rect x="63" y="123" width="24" height="14" class="by" />
+    <rect x="173" y="123" width="24" height="14" class="by" />
+
+    <circle cx="130" cy="130" r="8" class="edge" />
+
+  </g>
+
+  <text x="62" y="430" class="label">Quadrant formulas:</text>
+  <text x="62" y="450" class="small">
+    <tspan x="62" dy="0">q0 = U_x(q0) B_y,L</tspan>
+    <tspan x="62" dy="14">- U_y(q0) B_x,B</tspan>
+  </text>
+  <text x="208" y="450" class="small">
+    <tspan x="208" dy="0">q1 = U_x(q1) B_y,L</tspan>
+    <tspan x="208" dy="14">- U_y(q1) B_x,T</tspan>
+  </text>
+  <text x="62" y="488" class="small">
+    <tspan x="62" dy="0">q2 = U_x(q2) B_y,R</tspan>
+    <tspan x="62" dy="14">- U_y(q2) B_x,T</tspan>
+  </text>
+  <text x="208" y="488" class="small">
+    <tspan x="208" dy="0">q3 = U_x(q3) B_y,R</tspan>
+    <tspan x="208" dy="14">- U_y(q3) B_x,B</tspan>
+  </text>
+
+  <rect x="380" y="90" width="680" height="420" class="panel" />
+  <text x="402" y="124" class="subtitle">Full stencil union for one edge</text>
+  <text x="402" y="146" class="caption">
+    <tspan x="402" dy="0">The rectangles show how the final E_z footprint</tspan>
+    <tspan x="402" dy="18">grows with reconstruction order.</tspan>
+  </text>
+
+  <g transform="translate(400,170)">
+    <rect x="20" y="20" width="300" height="300" fill="#f8fbff" stroke="#51697f" stroke-width="2" />
+    <rect x="20" y="20" width="300" height="300" class="ppm" />
+    <rect x="70" y="70" width="200" height="200" class="plm" />
+    <rect x="120" y="120" width="100" height="100" class="const" />
+
+    <line x1="70" y1="20" x2="70" y2="320" class="cell-line" />
+    <line x1="120" y1="20" x2="120" y2="320" class="cell-line" />
+    <line x1="170" y1="20" x2="170" y2="320" class="cell-line" />
+    <line x1="220" y1="20" x2="220" y2="320" class="cell-line" />
+    <line x1="270" y1="20" x2="270" y2="320" class="cell-line" />
+
+    <line x1="20" y1="70" x2="320" y2="70" class="cell-line" />
+    <line x1="20" y1="120" x2="320" y2="120" class="cell-line" />
+    <line x1="20" y1="170" x2="320" y2="170" class="cell-line" />
+    <line x1="20" y1="220" x2="320" y2="220" class="cell-line" />
+    <line x1="20" y1="270" x2="320" y2="270" class="cell-line" />
+
+    <circle cx="45" cy="45" r="8" class="cc" />
+    <circle cx="95" cy="45" r="8" class="cc" />
+    <circle cx="145" cy="45" r="8" class="cc" />
+    <circle cx="195" cy="45" r="8" class="cc" />
+    <circle cx="245" cy="45" r="8" class="cc" />
+    <circle cx="295" cy="45" r="8" class="cc" />
+
+    <circle cx="45" cy="95" r="8" class="cc" />
+    <circle cx="95" cy="95" r="8" class="cc" />
+    <circle cx="145" cy="95" r="8" class="cc" />
+    <circle cx="195" cy="95" r="8" class="cc" />
+    <circle cx="245" cy="95" r="8" class="cc" />
+    <circle cx="295" cy="95" r="8" class="cc" />
+
+    <circle cx="45" cy="145" r="8" class="cc" />
+    <circle cx="95" cy="145" r="8" class="cc" />
+    <circle cx="145" cy="145" r="8" class="cc-direct" />
+    <circle cx="195" cy="145" r="8" class="cc-direct" />
+    <circle cx="245" cy="145" r="8" class="cc" />
+    <circle cx="295" cy="145" r="8" class="cc" />
+
+    <circle cx="45" cy="195" r="8" class="cc" />
+    <circle cx="95" cy="195" r="8" class="cc" />
+    <circle cx="145" cy="195" r="8" class="cc-direct" />
+    <circle cx="195" cy="195" r="8" class="cc-direct" />
+    <circle cx="245" cy="195" r="8" class="cc" />
+    <circle cx="295" cy="195" r="8" class="cc" />
+
+    <circle cx="45" cy="245" r="8" class="cc" />
+    <circle cx="95" cy="245" r="8" class="cc" />
+    <circle cx="145" cy="245" r="8" class="cc" />
+    <circle cx="195" cy="245" r="8" class="cc" />
+    <circle cx="245" cy="245" r="8" class="cc" />
+    <circle cx="295" cy="245" r="8" class="cc" />
+
+    <circle cx="45" cy="295" r="8" class="cc" />
+    <circle cx="95" cy="295" r="8" class="cc" />
+    <circle cx="145" cy="295" r="8" class="cc" />
+    <circle cx="195" cy="295" r="8" class="cc" />
+    <circle cx="245" cy="295" r="8" class="cc" />
+    <circle cx="295" cy="295" r="8" class="cc" />
+
+    <rect x="163" y="35" width="14" height="20" class="bx" />
+    <rect x="163" y="85" width="14" height="20" class="bx" />
+    <rect x="163" y="135" width="14" height="20" class="bx" />
+    <rect x="163" y="185" width="14" height="20" class="bx" />
+    <rect x="163" y="235" width="14" height="20" class="bx" />
+    <rect x="163" y="285" width="14" height="20" class="bx" />
+
+    <rect x="35" y="163" width="20" height="14" class="by" />
+    <rect x="85" y="163" width="20" height="14" class="by" />
+    <rect x="135" y="163" width="20" height="14" class="by" />
+    <rect x="185" y="163" width="20" height="14" class="by" />
+    <rect x="235" y="163" width="20" height="14" class="by" />
+    <rect x="285" y="163" width="20" height="14" class="by" />
+
+    <rect x="165" y="140" width="10" height="10" transform="rotate(45 170 145)" class="fspd" />
+    <rect x="165" y="190" width="10" height="10" transform="rotate(45 170 195)" class="fspd" />
+    <rect x="140" y="165" width="10" height="10" transform="rotate(45 145 170)" class="fspd" />
+    <rect x="190" y="165" width="10" height="10" transform="rotate(45 195 170)" class="fspd" />
+
+    <circle cx="170" cy="170" r="8" class="edge" />
+  </g>
+
+  <g transform="translate(760,180)">
+    <text x="0" y="0" class="label">Legend</text>
+
+    <circle cx="10" cy="28" r="8" class="cc" />
+    <text x="28" y="33" class="small">cell-centered U_x, U_y support</text>
+
+    <circle cx="10" cy="58" r="8" class="cc-direct" />
+    <text x="28" y="63" class="small">direct quadrant donor cells</text>
+
+    <rect x="2" y="81" width="16" height="16" class="bx" />
+    <text x="28" y="94" class="small">
+      <tspan x="28" dy="0">B_x face strip used in</tspan>
+      <tspan x="28" dy="16">fc -&gt; ec reconstruction</tspan>
+    </text>
+
+    <rect x="2" y="111" width="16" height="16" class="by" />
+    <text x="28" y="124" class="small">
+      <tspan x="28" dy="0">B_y face strip used in</tspan>
+      <tspan x="28" dy="16">fc -&gt; ec reconstruction</tspan>
+    </text>
+
+    <rect x="4" y="141" width="12" height="12" transform="rotate(45 10 147)" class="fspd" />
+    <text x="28" y="154" class="small">
+      <tspan x="28" dy="0">fast-wave speed samples</tspan>
+      <tspan x="28" dy="16">used by edge averaging</tspan>
+    </text>
+
+    <line x1="0" y1="216" x2="20" y2="216" class="ppm" />
+    <text x="28" y="221" class="small">
+      <tspan x="28" dy="0">PPM/xPPM velocity union:</tspan>
+      <tspan x="28" dy="16">6 x 6 cell centers</tspan>
+    </text>
+
+    <line x1="0" y1="262" x2="20" y2="262" class="plm" />
+    <text x="28" y="267" class="small">
+      <tspan x="28" dy="0">PLM velocity union:</tspan>
+      <tspan x="28" dy="16">4 x 4 cell centers</tspan>
+    </text>
+
+    <line x1="0" y1="308" x2="20" y2="308" class="const" />
+    <text x="28" y="313" class="small">
+      <tspan x="28" dy="0">donor-cell velocity union:</tspan>
+      <tspan x="28" dy="16">2 x 2 cell centers</tspan>
+    </text>
+  </g>
+
+  <text x="400" y="544" class="caption">
+    <tspan x="400" dy="0">For one quadrant alone, the cell-centered support is 1x1 (order 1),</tspan>
+    <tspan x="400" dy="18">3x3 (order 2), or 5x5 (order 3/5) around that quadrant's donor cell.</tspan>
+  </text>
+  <text x="400" y="586" class="caption">
+    <tspan x="400" dy="0">The magnetic reconstruction stays on the central face strips, and the four</tspan>
+    <tspan x="400" dy="18">wave-speed markers lie on the adjacent face centers used by edge averaging.</tspan>
+  </text>
+</svg>
