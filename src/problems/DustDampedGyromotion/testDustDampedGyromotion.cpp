@@ -490,8 +490,7 @@ auto problem_main() -> int
 		plotDriftX(epstein_no_b, epstein_no_b_exact, "./dust_gyromotion_PureDamping.pdf", "Pure Damping", alpha0, R"($t/t_{s,0}$)");
 		plotDriftX(gyro_no_drag, gyro_no_drag_exact, "./dust_gyromotion_UndampedGyromotion.pdf", "Undamped Gyromotion",
 			   GyroCaseParams<DustGyroNoDrag>::omega_L, R"($\omega_L t$)");
-		plotDriftX(epstein_with_b, epstein_with_b_exact, "./dust_gyromotion_DampedGyromotion.pdf", "Damped Gyromotion", alpha0,
-			   R"($t/t_{s,0}$)");
+		plotDriftX(epstein_with_b, epstein_with_b_exact, "./dust_gyromotion_DampedGyromotion.pdf", "Damped Gyromotion", alpha0, R"($t/t_{s,0}$)");
 #endif
 	}
 
