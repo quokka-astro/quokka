@@ -19,6 +19,8 @@
 #include "QuokkaSimulation.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
+#include "util/fextract.hpp"
+#include "util/richardson.hpp"
 
 struct ThermalConductionProblem {
 };
@@ -170,6 +172,62 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 	}
 }
 
+auto runConductionTest(int nx) -> double
+{
+	// Read problem parameters
+	const double max_time = 15.e10; //15 conduction times
+
+	// amrex::ParmParse const hpp("conduction");
+	// hpp.query("enabled", enableElectronConduction_);
+	// hpp.query("conductivity_prefactor", electronConductionKappa0_);
+	// hpp.query("conduction_cfl", conductionCFL);
+	// hpp.query("flux_limiter_phi", electronConductionFluxLimiterPhi_);
+	// hpp.query("saturation_factor", electronConductionSaturationFactor_);
+
+	const double CFL_number = 0.3;
+	const int max_timesteps = std::max(2000, nx * 100);
+
+	// Set grid dimensions using AMReX parameter system
+	amrex::ParmParse pp("amr");
+	amrex::Vector<int> const ncells = {nx, nx, nx};
+	pp.add("max_level", 0);
+	pp.addarr("n_cell", ncells);
+
+	// Set domain bounds using AMReX parameter system
+	amrex::ParmParse pp_geom("geometry");
+	amrex::Vector<double> const prob_lo = {-1.5428e+18, -1.5428e+18 , -1.5428e+18};
+	amrex::Vector<double> const prob_hi = {1.5428e+18, 1.5428e+18, 1.5428e+18};
+	amrex::Vector<int> const is_periodic = {0, 0, 0};
+	pp_geom.addarr("prob_lo", prob_lo);
+	pp_geom.addarr("prob_hi", prob_hi);
+	pp_geom.addarr("is_periodic", is_periodic);
+
+
+	// Setup boundary conditions
+	constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
+	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	for (int n = 0; n < ncomp_cc; ++n) {
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			BCs_cc[n].setLo(dir, amrex::BCType::foextrap);
+			BCs_cc[n].setHi(dir, amrex::BCType::foextrap);
+		}
+	}
+
+	// Run simulation
+	QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
+
+	sim.cflNumber_ = CFL_number;
+	sim.stopTime_ = max_time;
+	sim.maxTimesteps_ = max_timesteps;
+
+	// set initial conditions
+	sim.setInitialConditions();
+
+	sim.evolve();
+	return sim.computeErrorNorm();
+}
+
+
 auto problem_main() -> int
 {
 	// boundary conditions
@@ -198,6 +256,19 @@ auto problem_main() -> int
 	if (error_norm > rel_err_tol) {
 		status = 1;
 	}
+
+	// quokka::richardson::applyQuietDefaults();
+
+	// quokka::richardson::Parameters params{};
+	// params.machine_precision_target = 2.0e-9; // limit based on delta_b_magn, smaller values can be used if this is decreased
+	// params.nx_initial = 128;
+	// params.nx_max = 1024; 
+	// params.expected_rate = 2.0;
+	// params.tolerance = 0.3;
+	// params.test_name = "Thermal Conduction";
+	// params.csv_filename = "thermal_conduction_convergence.csv";
+
+	// return quokka::richardson::run(params, [](int nx) { return runConductionTest(nx); });
 
 	amrex::Print() << "Finished." << '\n';
 	return status;
