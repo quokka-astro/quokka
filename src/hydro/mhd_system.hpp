@@ -62,9 +62,7 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 	static constexpr int nvar_per_dim_ = Physics_NumVars::numMHDVars_per_dim;
 	static constexpr int nvar_tot_ = Physics_NumVars::numMHDVars_tot;
 
-	enum varIndex_perDim {
-		bfield_index = Physics_Indices<problem_t>::mhdFirstIndex,
-	};
+	static constexpr int bfield_index = Physics_Indices<problem_t>::mhdFirstIndex;
 
 	static void ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,

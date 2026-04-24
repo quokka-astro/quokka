@@ -72,7 +72,7 @@ constexpr int target_i = 8;
 constexpr int target_j = 8;
 constexpr int target_k = 8;
 
-auto targetEdgeIV() -> amrex::IntVect { return amrex::IntVect(AMREX_D_DECL(target_i, target_j, target_k)); }
+auto targetEdgeIV() -> amrex::IntVect { return {AMREX_D_DECL(target_i, target_j, target_k)}; }
 
 enum class PoisonMode {
 	none,
@@ -146,9 +146,9 @@ void fillBaselineCellCentered(amrex::MultiFab &cc_mf)
 		auto const state = cc_mf[mfi].array();
 
 		amrex::ParallelFor(full_box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			amrex::Real const ii = static_cast<amrex::Real>(i);
-			amrex::Real const jj = static_cast<amrex::Real>(j);
-			amrex::Real const kk = static_cast<amrex::Real>(k);
+			auto const ii = static_cast<amrex::Real>(i);
+			auto const jj = static_cast<amrex::Real>(j);
+			auto const kk = static_cast<amrex::Real>(k);
 			const amrex::Real rho = 1.0 + 2.0e-4 * ii * ii + 3.0e-4 * jj * jj + 1.0e-4 * kk * kk;
 			const amrex::Real vx = 1.0 + 0.015 * ii + 0.010 * jj + 0.008 * kk + 8.0e-4 * ii * ii + 3.0e-4 * jj * jj + 2.0e-4 * ii * jj;
 			const amrex::Real vy = 1.6 + 0.008 * ii + 0.020 * jj + 0.005 * kk + 4.0e-4 * ii * ii + 7.0e-4 * jj * jj + 3.0e-4 * ii * jj;
@@ -172,9 +172,9 @@ void fillBaselineFaceCentered(std::array<amrex::MultiFab, AMREX_SPACEDIM> &fc_mf
 			auto const state = fc_mf_cVars[dir][mfi].array();
 
 			amrex::ParallelFor(full_box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-				amrex::Real const ii = static_cast<amrex::Real>(i);
-				amrex::Real const jj = static_cast<amrex::Real>(j);
-				amrex::Real const kk = static_cast<amrex::Real>(k);
+				auto const ii = static_cast<amrex::Real>(i);
+				auto const jj = static_cast<amrex::Real>(j);
+				auto const kk = static_cast<amrex::Real>(k);
 				amrex::Real const base = 1.0 + static_cast<amrex::Real>(dir);
 				amrex::Real const bval =
 				    base + 0.012 * ii + 0.018 * jj + 0.007 * kk + 7.0e-4 * ii * ii + 9.0e-4 * jj * jj + 2.0e-4 * kk * kk + 1.5e-4 * ii * jj;
@@ -193,9 +193,9 @@ void fillBaselineWavespeeds(std::array<amrex::MultiFab, AMREX_SPACEDIM> &fc_mf_f
 			auto const state = fc_mf_fspds[dir][mfi].array();
 
 			amrex::ParallelFor(full_box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-				amrex::Real const ii = static_cast<amrex::Real>(i);
-				amrex::Real const jj = static_cast<amrex::Real>(j);
-				amrex::Real const kk = static_cast<amrex::Real>(k);
+				auto const ii = static_cast<amrex::Real>(i);
+				auto const jj = static_cast<amrex::Real>(j);
+				auto const kk = static_cast<amrex::Real>(k);
 				amrex::Real const offset = 0.25 * static_cast<amrex::Real>(dir);
 				state(i, j, k, 0) = 3.0 + offset + 0.006 * ii + 0.014 * jj + 0.005 * kk + 3.0e-4 * ii * ii + 5.0e-4 * jj * jj;
 				state(i, j, k, 1) = 4.0 + offset + 0.013 * ii + 0.007 * jj + 0.004 * kk + 5.0e-4 * ii * ii + 3.0e-4 * jj * jj;
@@ -404,7 +404,7 @@ auto readSingleValue(amrex::MultiFab const &mf, amrex::IntVect const &iv) -> amr
 			continue;
 		}
 
-#if defined(AMREX_USE_GPU)
+#ifdef AMREX_USE_GPU
 		amrex::FArrayBox host_fab(valid_box, mf.nComp(), amrex::The_Pinned_Arena());
 		static_cast<void>(mf[mfi].template copyToMem<amrex::RunOn::Device>(valid_box, 0, mf.nComp(), host_fab.dataPtr()));
 		amrex::Gpu::synchronize();
@@ -441,13 +441,13 @@ auto computeTargetEz(int reconstructionOrder, EMFAvgScheme scheme, PoisonMode po
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> ec_mf_emf_components;
 
 	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-		amrex::BoxArray ba_fc = amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(dir));
+		amrex::BoxArray const ba_fc = amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(dir));
 		fc_mf_cVars[dir].define(ba_fc, dm, Physics_Indices<FS18EMFStencil>::nvarPerDim_fc, nghost_fc);
 		fc_mf_fspds[dir].define(ba_fc, dm, 2, nghost_fc);
 
 		amrex::IntVect const edge_type =
 		    amrex::IntVect::TheDimensionVector((dir + 1) % AMREX_SPACEDIM) + amrex::IntVect::TheDimensionVector((dir + 2) % AMREX_SPACEDIM);
-		amrex::BoxArray ba_ec = amrex::convert(ba_cc, edge_type);
+		amrex::BoxArray const ba_ec = amrex::convert(ba_cc, edge_type);
 		ec_mf_emf_components[dir].define(ba_ec, dm, 1, 0);
 		ec_mf_emf_components[dir].setVal(0.0);
 	}
