@@ -3324,16 +3324,16 @@ void QuokkaSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> 
 		HyperbolicSystem<problem_t>::template ReconstructStatesPPM_EP<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
 										   x1ReconstructRange, nvars);
 	} else if (radiationReconstructionOrder_ == 3) {
-		// mixed interface/cell-centered kernel
+		// cell-centered kernel writing face-indexed outputs
 		HyperbolicSystem<problem_t>::template ReconstructStatesPPM<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(), reconstructRange,
 										x1ReconstructRange, nvars);
 	} else if (radiationReconstructionOrder_ == 2) {
-		// PLM and donor cell are interface-centered kernels
+		// cell-centered kernel writing face-indexed outputs
 		HyperbolicSystem<problem_t>::template ReconstructStatesPLM<DIR, SlopeLimiter::sweby>(primVar.array(), x1LeftState.array(), x1RightState.array(),
-												     x1ReconstructRange, nvars);
+												     reconstructRange, x1ReconstructRange, nvars);
 	} else if (radiationReconstructionOrder_ == 1) {
 		HyperbolicSystem<problem_t>::template ReconstructStatesConstant<DIR>(primVar.array(), x1LeftState.array(), x1RightState.array(),
-										     x1ReconstructRange, nvars);
+										     reconstructRange, x1ReconstructRange, nvars);
 	} else {
 		amrex::Abort("Invalid reconstruction order for radiation variables! Aborting...");
 	}

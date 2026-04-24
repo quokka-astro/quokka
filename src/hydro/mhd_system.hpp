@@ -880,53 +880,65 @@ void MHDSystem<problem_t>::ReconstructTo(FluxDir dir, arrayconst_t &cState, arra
 	const amrex::IntVect dir_vec = amrex::IntVect::TheDimensionVector(static_cast<int>(dir));
 	// PPM kernels loop over cells and fill left(i+1) and right(i), so include one extra cell in the reconstruction direction.
 	const amrex::Box box_cell_range = amrex::grow(amrex::enclosedCells(box_iValid, static_cast<int>(dir)), dir_vec);
+	const amrex::Box box_interface_range = amrex::surroundingNodes(box_cell_range, static_cast<int>(dir));
 	if (reconstructionOrder == 5) {
-		// note: only box_cell_range is used. box_iValid is unused.
 		switch (dir) {
 			case FluxDir::X1:
-				MHDSystem<problem_t>::template ReconstructStatesPPM_EP<FluxDir::X1>(cState, lState, rState, box_cell_range, box_iValid, 1);
+				MHDSystem<problem_t>::template ReconstructStatesPPM_EP<FluxDir::X1>(cState, lState, rState, box_cell_range,
+												   box_interface_range, 1);
 				break;
 			case FluxDir::X2:
-				MHDSystem<problem_t>::template ReconstructStatesPPM_EP<FluxDir::X2>(cState, lState, rState, box_cell_range, box_iValid, 1);
+				MHDSystem<problem_t>::template ReconstructStatesPPM_EP<FluxDir::X2>(cState, lState, rState, box_cell_range,
+												   box_interface_range, 1);
 				break;
 			case FluxDir::X3:
-				MHDSystem<problem_t>::template ReconstructStatesPPM_EP<FluxDir::X3>(cState, lState, rState, box_cell_range, box_iValid, 1);
+				MHDSystem<problem_t>::template ReconstructStatesPPM_EP<FluxDir::X3>(cState, lState, rState, box_cell_range,
+												   box_interface_range, 1);
 				break;
 		}
 	} else if (reconstructionOrder == 3) {
 		switch (dir) {
 			case FluxDir::X1:
-				MHDSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X1>(cState, lState, rState, box_cell_range, box_iValid, 1);
+				MHDSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X1>(cState, lState, rState, box_cell_range,
+												      box_interface_range, 1);
 				break;
 			case FluxDir::X2:
-				MHDSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X2>(cState, lState, rState, box_cell_range, box_iValid, 1);
+				MHDSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X2>(cState, lState, rState, box_cell_range,
+												      box_interface_range, 1);
 				break;
 			case FluxDir::X3:
-				MHDSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X3>(cState, lState, rState, box_cell_range, box_iValid, 1);
+				MHDSystem<problem_t>::template ReconstructStatesPPM<FluxDir::X3>(cState, lState, rState, box_cell_range,
+												      box_interface_range, 1);
 				break;
 		}
 	} else if (reconstructionOrder == 2) {
 		switch (dir) {
 			case FluxDir::X1:
-				MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X1>(cState, lState, rState, box_iValid, 1, plmLimiter);
+				MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X1>(cState, lState, rState, box_cell_range,
+												     box_interface_range, 1, plmLimiter);
 				break;
 			case FluxDir::X2:
-				MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X2>(cState, lState, rState, box_iValid, 1, plmLimiter);
+				MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X2>(cState, lState, rState, box_cell_range,
+												     box_interface_range, 1, plmLimiter);
 				break;
 			case FluxDir::X3:
-				MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X3>(cState, lState, rState, box_iValid, 1, plmLimiter);
+				MHDSystem<problem_t>::template ReconstructStatesPLM<FluxDir::X3>(cState, lState, rState, box_cell_range,
+												     box_interface_range, 1, plmLimiter);
 				break;
 		}
 	} else if (reconstructionOrder == 1) {
 		switch (dir) {
 			case FluxDir::X1:
-				MHDSystem<problem_t>::template ReconstructStatesConstant<FluxDir::X1>(cState, lState, rState, box_iValid, 1);
+				MHDSystem<problem_t>::template ReconstructStatesConstant<FluxDir::X1>(cState, lState, rState, box_cell_range,
+													 box_interface_range, 1);
 				break;
 			case FluxDir::X2:
-				MHDSystem<problem_t>::template ReconstructStatesConstant<FluxDir::X2>(cState, lState, rState, box_iValid, 1);
+				MHDSystem<problem_t>::template ReconstructStatesConstant<FluxDir::X2>(cState, lState, rState, box_cell_range,
+													 box_interface_range, 1);
 				break;
 			case FluxDir::X3:
-				MHDSystem<problem_t>::template ReconstructStatesConstant<FluxDir::X3>(cState, lState, rState, box_iValid, 1);
+				MHDSystem<problem_t>::template ReconstructStatesConstant<FluxDir::X3>(cState, lState, rState, box_cell_range,
+													 box_interface_range, 1);
 				break;
 		}
 	} else {

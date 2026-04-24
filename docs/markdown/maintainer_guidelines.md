@@ -2,16 +2,22 @@
 
 Quokka maintainers safeguard long-term technical direction and scientific integrity for a multi-physics AMReX application that must build across multiple toolchains and hardware platforms. You review pull requests (PRs = proposed code changes) to ensure they are **correct**, **efficient**, **portable** (CPU/GPU; CUDA or HIP; x86 or ARM; macOS or Linux), and **reproducible** (others can repeat results).
 
-!!! important "Stability expectations"
-    - **Problem-file interface** may change occasionally to support new features.
-    - **Runtime `ParmParse` options** should change **rarely**.
-    - **Output file format** must **never change**.
+> **Important: Stability expectations**
+>
+> - **Problem-file interface** may change occasionally to support new features.
+> - **Runtime `ParmParse` options** should change **rarely**.
+> - **Output file format** must **never change**.
+>
 
-!!! tip "Review tone"
-    Be explicit, patient, and educational. Assume the author is still learning; explain *what to change* and *why* with short examples or links.
+> **Tip: Review tone**
+>
+> Be explicit, patient, and educational. Assume the author is still learning; explain *what to change* and *why* with short examples or links.
+>
 
-!!! note "Long-term stewardship"
-    Publication deadlines or short-term milestones must never override the mandate to protect Quokka's scientific integrity and technical direction. When in doubt, slow down, request revisions, or defer merges until the change meets the bar.
+> **Note: Long-term stewardship**
+>
+> Publication deadlines or short-term milestones must never override the mandate to protect Quokka's scientific integrity and technical direction. When in doubt, slow down, request revisions, or defer merges until the change meets the bar.
+>
 
 For quick definitions of terms used throughout this guide, see the [Glossary](glossary.md).
 
@@ -71,10 +77,12 @@ For quick definitions of terms used throughout this guide, see the [Glossary](gl
 
 10. **Core hydro integrator (`QuokkaSimulation::advanceHydroAtLevel`).**
 
-    !!! danger "Critical change protocol"
-        - Treat every edit as **critical**: require an ADR with numerical justification, targeted regression coverage spanning CPU and at least one GPU backend, and explicit before/after plots or diagnostics for representative hydro problems.
-        - Demand quantified performance data (solver wall time, per-stage timing, halo exchange cost) and call out any tolerable slowdowns or accuracy gains.
-        - Double-check plotfile contents and conserved quantities for regressions before approving.
+> **Danger: Critical change protocol**
+>
+>     - Treat every edit as **critical**: require an ADR with numerical justification, targeted regression coverage spanning CPU and at least one GPU backend, and explicit before/after plots or diagnostics for representative hydro problems.
+>     - Demand quantified performance data (solver wall time, per-stage timing, halo exchange cost) and call out any tolerable slowdowns or accuracy gains.
+>     - Double-check plotfile contents and conserved quantities for regressions before approving.
+>
 
 11. **Problem-file interface (may change occasionally).**
     - Changes are acceptable to support new physics/modules, but must be **intentional and documented**.
@@ -85,10 +93,12 @@ For quick definitions of terms used throughout this guide, see the [Glossary](gl
 
 ## Specific Pitfalls to Avoid
 
-!!! warning "Watch for these regressions-in-waiting"
-    - **Renaming widely-used variables.** Mechanical symbol churn often leaves call sites or device code untouched, introducing subtle bugs in solver logic and diagnostics.
-    - **Adding redundant physics implementations.** Multiple solvers for the same physical process explode our validation matrix; prefer extending or generalising existing kernels.
-    - **Copy/pasting shared routines.** Duplicated flux or source-term code drifts out of sync; factor shared helpers instead so fixes land once.
+> **Warning: Watch for these regressions-in-waiting**
+>
+> - **Renaming widely-used variables.** Mechanical symbol churn often leaves call sites or device code untouched, introducing subtle bugs in solver logic and diagnostics.
+> - **Adding redundant physics implementations.** Multiple solvers for the same physical process explode our validation matrix; prefer extending or generalising existing kernels.
+> - **Copy/pasting shared routines.** Duplicated flux or source-term code drifts out of sync; factor shared helpers instead so fixes land once.
+>
 
 ---
 
@@ -117,13 +127,15 @@ For quick definitions of terms used throughout this guide, see the [Glossary](gl
     - `hip`: ROCm/clang toolchain compile of the full codebase (GitHub Actions build-only sanity check).
     - `OpenPMD`: builds with `QUOKKA_OPENPMD=ON` and runs the 3D blast problem under MPI to exercise ADIOS2/openPMD output.
     - Static analysis & lint: `clang-tidy-review` (with follow-up comment job) and `codespell`.
-    - Docs & metadata: `docs` (MkDocs build), `docs-toctree`, `dependency-review`, `codeql`, and `scorecard`.
+    - Docs & metadata: `docs` (mdBook build), `mdBook validation`, `dependency-review`, `codeql`, and `scorecard`.
     - **Azure Pipelines (self-hosted GPUs):** manual `/azp run` trigger by a maintainer launches CUDA and HIP runtime tests on secured NVIDIA/AMD runners; required for accelerator-sensitive changes.
     - **Nightly regression suite:** runs the `regression/` harness against reference plotfiles on a separate pipeline; failures mean the gold data and code outputs diverged and need investigation.
     - Most jobs go through `check_changes.yml`; docs-only or workflow-only PRs will auto-skip compute-heavy runs, so double-check locally if you bypass CI by rebasing after review.
 
-    !!! tip "Docs-only changes"
-        When automation skips builds, spot-check formatting and links locally (`./build_docs.sh`) before approving to avoid post-merge surprises.
+> **Tip: Docs-only changes**
+>
+>     When automation skips builds, spot-check formatting and links locally (`./scripts/bash/docs_build.sh`) before approving to avoid post-merge surprises.
+>
 
 ---
 
@@ -133,8 +145,10 @@ Use [Architecture Decision Records](adrs.md) for high-impact or hard-to-reverse 
 
 ## Merge Policy
 
-!!! warning "Need to undo a merge?"
-    See the dedicated [PR Revert Policy](pr_revert_policy.md) for decision criteria and the step-by-step workflow.
+> **Warning: Need to undo a merge?**
+>
+> See the dedicated [PR Revert Policy](pr_revert_policy.md) for decision criteria and the step-by-step workflow.
+>
 
 15. **Be explicit, kind, and disciplined.**
     - Mark comments as **blocking** (must fix before merge) or **non-blocking** (suggestions).
