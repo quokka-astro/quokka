@@ -22,7 +22,6 @@
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
 #include <iostream>
-#include <limits>
 
 AMREX_ENUM(EMFComputeScheme, FelkerStone2017, Balsara2025, Quokka2026); // NOLINT
 
@@ -152,10 +151,6 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 {
 	const BL_PROFILE("MHDSystem::ComputeEMF_FelkerStone2017()");
 	const int nghost_cc = 4; // we only need 4 cc ghost cells when reconstructing cc->fc->ec using PPM
-#ifndef NDEBUG
-	const amrex::Real poison = std::numeric_limits<amrex::Real>::quiet_NaN();
-	auto poisonFab = [poison](amrex::FArrayBox &fab) { fab.setVal<amrex::RunOn::Device>(poison); };
-#endif
 	// note: all the different centerings still have the same distribution mapping, so it is fine for us to attach our looping to cc FArrayBox
 	// note: cell-centered (cc), face-centered (fc), and edge-centered (ec) data all have a different number of cells
 
@@ -175,11 +170,6 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 		std::array<amrex::FArrayBox, 3> cc_fabs_Ux = {amrex::FArrayBox(box_cc_U, 1, amrex::The_Async_Arena()),
 							      amrex::FArrayBox(box_cc_U, 1, amrex::The_Async_Arena()),
 							      amrex::FArrayBox(box_cc_U, 1, amrex::The_Async_Arena())};
-#ifndef NDEBUG
-		for (auto &fab : cc_fabs_Ux) {
-			poisonFab(fab);
-		}
-#endif
 		{
 			const auto &cc_a4_Ux0 = cc_fabs_Ux[0].array();
 			const auto &cc_a4_Ux1 = cc_fabs_Ux[1].array();
@@ -223,11 +213,6 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 			// cell-face indexing: field[2: i-side of edge]
 			std::array<amrex::FArrayBox, 2> ec_fabs_U_ieside = {amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena()),
 									    amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena())};
-#ifndef NDEBUG
-			for (auto &fab : ec_fabs_U_ieside) {
-				poisonFab(fab);
-			}
-#endif
 
 			// indexing: field[2: i-compnent][2: i-side of edge]
 			// note: magnetic field components cannot be discontinuous along themselves (i.e., either side of the face where they are
@@ -242,10 +227,6 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 			for (int icomp = 0; icomp < 2; ++icomp) {
 				ec_fabs_Bi_ieside[icomp][0] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
 				ec_fabs_Bi_ieside[icomp][1] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
-#ifndef NDEBUG
-				poisonFab(ec_fabs_Bi_ieside[icomp][0]);
-				poisonFab(ec_fabs_Bi_ieside[icomp][1]);
-#endif
 				for (int iquad = 0; iquad < 4; ++iquad) {
 					ec_fabs_Ui_q[icomp][iquad] = amrex::FArrayBox(box_ec, 1, amrex::The_Async_Arena());
 					ec_fabs_Ui_q[icomp][iquad].setVal<amrex::RunOn::Device>(0.0);
@@ -278,11 +259,6 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 					const int wcomp = extrap_dirs[icomp];
 					std::array<amrex::FArrayBox, 2> fc_fabs_U_ifside = {amrex::FArrayBox(box_fc_U_scratch, 1, amrex::The_Async_Arena()),
 											    amrex::FArrayBox(box_fc_U_scratch, 1, amrex::The_Async_Arena())};
-#ifndef NDEBUG
-					for (auto &fab : fc_fabs_U_ifside) {
-						poisonFab(fab);
-					}
-#endif
 
 					// extrapolate cell-centered velocity components to the cell-face
 					MHDSystem<problem_t>::ReconstructTo(dir2face, cc_fabs_Ux[wcomp].array(), fc_fabs_U_ifside[0].array(),
@@ -362,9 +338,6 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 
 					// define EMF FArrayBox for each quadrant (we need to allocate outside the kernel)
 					ec_fabs_E_q[qi] = amrex::FArrayBox(box_ec, 1, amrex::The_Async_Arena());
-#ifndef NDEBUG
-					poisonFab(ec_fabs_E_q[qi]);
-#endif
 					E2s[qi] = ec_fabs_E_q[qi].array();
 				}
 
