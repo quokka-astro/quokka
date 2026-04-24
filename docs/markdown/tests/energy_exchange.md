@@ -6,23 +6,27 @@ This test problem demonstrates the correct coupled solution of the matter-radiat
 
 The initial energy densities are:
 
-$$\begin{aligned}
+<script type="math/tex; mode=display">
+\begin{aligned}
 E_r = 1.0 \times 10^{12} \, \text{erg} \, \text{cm}^{-3} \\
 E_\text{gas} = 1.0 \times 10^2 \, \text{erg} \, \text{cm}^{-3} \\
 \rho = 1.0 \times 10^{-7} \, \text{g} \, \text{cm}^{-3}
-\end{aligned}$$
+\end{aligned}
+</script>
 
-We assume a specific heat $c_v = \alpha T^3$ which enables an analytic solution. We adopt a reduced speed of light with $\hat c = 0.1 c$.
+We assume a specific heat \\(c_v = \alpha T^3\\) which enables an analytic solution. We adopt a reduced speed of light with \\(\hat c = 0.1 c\\).
 
 ## Solution
 
-The exact time-dependent solution for the matter temperature $T$ is:
+The exact time-dependent solution for the matter temperature \\(T\\) is:
 
-$$\begin{aligned}
+<script type="math/tex; mode=display">
+\begin{aligned}
 E_0 = E_{\text{gas}} + \frac{c}{\hat c} E_{\text{rad}} \\
 \tilde E_0 = \frac{E_0}{a_r + \frac{\hat c}{c} \frac{\alpha}{4}} \\
 T^4 = \left( T_{0}^4 - \frac{\hat c}{c} \tilde E_0 \right) \, \exp \left[ -\frac{4}{\alpha} \left( a_r + \frac{\hat c}{c} \frac{\alpha}{4} \right) \kappa \rho c t \right] \, + \, \frac{\hat c}{c} \tilde E_0 \, .
-\end{aligned}$$
+\end{aligned}
+</script>
 
 We show the numerical results below:
 

@@ -13,11 +13,13 @@ Bug fixes, questions, and contributions of new features are welcome!
         * **Please ensure that your PR title and first post are descriptive, since these will be used for a squashed commit message.**
         * **Don't group together unrelated changes in a single PR. Instead, create separate PRs for each logically-related set of changes to the code.**
 
-!!! Warning
-    **Please note:** If you choose to make contributions to the code,
-    you hereby grant a non-exclusive, royalty-free perpetual license
-    to install, use, modify, prepare derivative works, incorporate into other computer software,
-    distribute, and sublicense such enhancements or derivative works thereof, in binary and source code form.
+> **Warning**
+>
+> **Please note:** If you choose to make contributions to the code,
+> you hereby grant a non-exclusive, royalty-free perpetual license
+> to install, use, modify, prepare derivative works, incorporate into other computer software,
+> distribute, and sublicense such enhancements or derivative works thereof, in binary and source code form.
+>
 
 ## The `quokka` developer script
 
@@ -168,13 +170,15 @@ For instructions on setting up SSH access to your Github account on a new machin
 Now you are free to play with your fork (for additional information, you can visit the
 [Github fork help page](https://help.github.com/en/articles/fork-a-repo)).
 
-!!! Note  
-    You do not have to re-do the setup above every time.
-    Instead, in the future, you need to update the `development` branch on your fork with
-    ```
-    git checkout development
-    git pull
-    ```
+> **Note**
+>
+> You do not have to re-do the setup above every time.
+> Instead, in the future, you need to update the `development` branch on your fork with
+> ```
+> git checkout development
+> git pull
+> ```
+>
 
 Make sure you are on the `development` branch with
 ```
@@ -237,14 +241,16 @@ your PR. People who review your PR are happy to know
 * Press `Create pull request`. Now you can navigate through your PR, which
 highlights the changes you made.
 
-!!! Note
-    **Please *do not* write large Pull Requests, as they are very difficult and
-    time-consuming to review. As much as possible, split them into small, targeted PRs.**
-    For example, if you find typos in the documentation open a pull request that only fixes typos.
-    If you want to fix a bug, make a small pull request that only fixes a bug.
-    
-    If you want to implement a feature and are not sure how to split it,
-    just open a Discussion or Issue about your plans and request feedback from other Quokka developers.
+> **Note**
+>
+> **Please *do not* write large Pull Requests, as they are very difficult and
+> time-consuming to review. As much as possible, split them into small, targeted PRs.**
+> For example, if you find typos in the documentation open a pull request that only fixes typos.
+> If you want to fix a bug, make a small pull request that only fixes a bug.
+>
+> If you want to implement a feature and are not sure how to split it,
+> just open a Discussion or Issue about your plans and request feedback from other Quokka developers.
+>
 
 Even before your work is ready to merge, it can be convenient to create a PR
 (so you can use Github tools to visualize your changes). In this case, please
