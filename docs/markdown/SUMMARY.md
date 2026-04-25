@@ -49,7 +49,6 @@
 - [Radiation Integrator](radiation_integrator.md)
 - [State Variable Component Indices](components.md)
 - [Debugging](debugging.md)
-- [GPU Debugging with Agents: A Real-Life Example](cuda_debugging_agent_story.md)
 - [Assertions and error checking](error_checking.md)
 - [Performance tips](performance.md)
 - [How to use clang-tidy](howto_clang_tidy.md)
