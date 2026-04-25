@@ -251,7 +251,7 @@ template <typename problem_t> auto extractShockProfile(QuokkaSimulation<problem_
 	profile.v_dx_.resize(x.size());
 	profile.v_dy_.resize(x.size());
 
-	for (size_t i = 0; i < x.size(); ++i) {
+	for (size_t i = 0; i < static_cast<size_t>(x.size()); ++i) {
 		const double rho_g = values.at(HydroSystem<problem_t>::density_index)[i];
 		const double mom_gx = values.at(HydroSystem<problem_t>::x1Momentum_index)[i];
 		const double rho_d = values.at(HydroSystem<problem_t>::dustDensity_index)[i];
