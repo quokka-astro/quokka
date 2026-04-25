@@ -25,11 +25,47 @@ template <typename F>
 AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto quad_3d(F &&f, amrex::Real x0, amrex::Real x1, amrex::Real y0, amrex::Real y1, amrex::Real z0, amrex::Real z1)
     -> amrex::Real
 {
-	// integrate F over the rectangular domain [x0, y0, z0] -> [x1, y1, z1].
-	auto integrand = [=] AMREX_GPU_DEVICE(amrex::Real z) {
-		return quad_2d([=] AMREX_GPU_DEVICE(amrex::Real x, amrex::Real y) { return f(x, y, z); }, x0, x1, y0, y1);
-	};
-	return quad_1d(integrand, z0, z1);
+	// Use an explicit tensor-product quadrature here to avoid the deep stack growth
+	// from nesting device lambdas through quad_3d -> quad_2d -> quad_1d.
+	using Gauss7 = quokka::math::quadrature::gauss<amrex::Real, 7>;
+	auto const &abscissa = Gauss7::abscissa();
+	auto const &weights = Gauss7::weights();
+
+	const amrex::Real xAvg = 0.5 * (x0 + x1);
+	const amrex::Real yAvg = 0.5 * (y0 + y1);
+	const amrex::Real zAvg = 0.5 * (z0 + z1);
+	const amrex::Real xScale = 0.5 * (x1 - x0);
+	const amrex::Real yScale = 0.5 * (y1 - y0);
+	const amrex::Real zScale = 0.5 * (z1 - z0);
+
+	amrex::Real sum = 0.0;
+	for (int iz = 0; iz < static_cast<int>(abscissa.size()); ++iz) {
+		const amrex::Real zOffset = zScale * abscissa[iz];
+		const amrex::Real zWeight = weights[iz];
+		const int zCount = (iz == 0) ? 1 : 2;
+		for (int zSign = 0; zSign < zCount; ++zSign) {
+			const amrex::Real z = (zSign == 0) ? (zAvg + zOffset) : (zAvg - zOffset);
+			for (int iy = 0; iy < static_cast<int>(abscissa.size()); ++iy) {
+				const amrex::Real yOffset = yScale * abscissa[iy];
+				const amrex::Real yWeight = weights[iy];
+				const int yCount = (iy == 0) ? 1 : 2;
+				for (int ySign = 0; ySign < yCount; ++ySign) {
+					const amrex::Real y = (ySign == 0) ? (yAvg + yOffset) : (yAvg - yOffset);
+					for (int ix = 0; ix < static_cast<int>(abscissa.size()); ++ix) {
+						const amrex::Real xOffset = xScale * abscissa[ix];
+						const amrex::Real xWeight = weights[ix];
+						const int xCount = (ix == 0) ? 1 : 2;
+						for (int xSign = 0; xSign < xCount; ++xSign) {
+							const amrex::Real x = (xSign == 0) ? (xAvg + xOffset) : (xAvg - xOffset);
+							sum += xWeight * yWeight * zWeight * f(x, y, z);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return xScale * yScale * zScale * sum;
 }
 
 template <typename F> AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto quad_2d(F &&f, amrex::Real x0, amrex::Real x1, amrex::Real y0, amrex::Real y1) -> amrex::Real

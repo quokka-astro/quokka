@@ -608,6 +608,10 @@ template <class Real, unsigned N> class gauss : public detail::gauss_detail<Real
 	using base = detail::gauss_detail<Real, N, detail::gauss_constant_category<Real>::value>;
 
       public:
+	[[nodiscard]] AMREX_GPU_DEVICE static auto abscissa() -> decltype(base::abscissa()) { return base::abscissa(); }
+
+	[[nodiscard]] AMREX_GPU_DEVICE static auto weights() -> decltype(base::weights()) { return base::weights(); }
+
 	template <class F> AMREX_GPU_DEVICE static auto integrate(F f, Real *pL1 = nullptr) -> decltype(f(Real(0.0)))
 	{
 		// In many math texts, K represents the field of real or complex numbers.
