@@ -44,7 +44,7 @@ jobs:
       run: cmake -E make_directory ${{runner.workspace}}/build
 
     - name: Install dependencies
-      run: sudo apt-get update && sudo apt-get install python3-dev python3-numpy python3-matplotlib python3-pip libopenmpi-dev libhdf5-mpi-dev
+      run: sudo apt-get update && sudo apt-get install python3-dev python3-numpy python3-matplotlib python3-pip libopenmpi-dev libhdf5-mpi-dev libpng-dev
 
     - name: Install ccache
       run: .github/workflows/dependencies/dependencies_ccache.sh

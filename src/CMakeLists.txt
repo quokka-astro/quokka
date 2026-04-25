@@ -120,6 +120,9 @@ include_directories(${amrex_INCLUDE_DIRS_RET})
 include_directories(${HDF5_INCLUDE_DIRS})
 include_directories(${Boost_INCLUDE_DIRS_RET})
 include_directories(${CMAKE_SOURCE_DIR}/src)
+include_directories(${QuokkaCode_SOURCE_DIR}/extern/amrVolumeRenderer)
+include_directories(${QuokkaCode_BINARY_DIR}/amrVolumeRenderer/Common)
+include_directories(${QuokkaCode_BINARY_DIR}/amrVolumeRenderer/VolumeRenderer)
 
 # default network_name (for Microphysics EOS) for all tests:
 set(microphysics_network_name "gamma_law")
@@ -135,6 +138,9 @@ link_libraries(AMReX::amrex)
 link_libraries(${HDF5_LIBRARIES})
 link_libraries(yaml-cpp::yaml-cpp)
 link_libraries(turbulence::turbulence)
+if(TARGET amrVolumeRendererApi)
+  link_libraries(amrVolumeRendererApi)
+endif()
 
 include(CTest)
 
@@ -152,6 +158,7 @@ set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
                         "${openPMDSources}")
 
 if(AMReX_SPACEDIM EQUAL 3)
+  list(APPEND QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagVolumeRender.cpp")
   list(APPEND QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/io/projection.cpp")
   list(APPEND QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagProjectionPlot.cpp")
 endif()
@@ -159,3 +166,4 @@ endif()
 set (QuokkaObjSources "${QuokkaSourcesNoEOS}" "${gamma_law_sources}")
 
 add_subdirectory(problems)
+add_subdirectory(${QuokkaCode_SOURCE_DIR}/tools ${QuokkaCode_BINARY_DIR}/tools)

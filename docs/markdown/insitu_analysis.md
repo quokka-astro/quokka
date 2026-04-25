@@ -6,11 +6,12 @@
 
 Most of Quokka's diagnostics are adapted from the implementation included in the *Pele* suite of AMReX-based combustion codes. (See the documentation for [PeleLMeX diagnostics](https://amrex-combustion.github.io/PeleLMeX/manual/html/LMeXControls.html#run-time-diagnostics) for an explanation of the original implementation.)
 
-There are three built-in diagnostics that can be configured to output at periodic intervals while the simulation is running:
+There are four built-in diagnostics that can be configured to output at periodic intervals while the simulation is running:
 
 - axis-aligned 2D projections
 - axis-aligned 2D slices, and
-- N-dimensional probability distribution functions (PDFs).
+- N-dimensional probability distribution functions (PDFs), and
+- volume renderings via the AMReX volume renderer.
 
 ### 2D Projections
 
@@ -114,6 +115,46 @@ quokka.hist_temp.dense.field_name = gasDensity         # Filter field
 quokka.hist_temp.dense.value_greater = 1e-25           # Filters: value_greater, value_less, value_inrange
 ```
 
+### Volume Rendering
+
+This diagnostic generates raytraced volume renderings (one image per output interval) using the AMReX volume renderer. It requires `AMREX_SPACEDIM=3` and outputs images to the diagnostic file prefix with the selected `output_ext`. As with other diagnostics, include the diagnostic name in `quokka.diagnostics` to enable it.
+
+![Camera frustum for DiagVolumeRender](media/volrender_camera_frustum.svg)
+
+The camera parameters define a perspective frustum. `camera_eye` is the camera location, `camera_look_at` defines the view direction, and `camera_up` sets the roll. `camera_fov_y_degrees` is the vertical field of view, while `camera_near` and `camera_far` clip the view along the look direction.
+
+*Example input file configuration:*
+
+``` ini
+quokka.volrender.type = VolumeRender
+quokka.volrender.field = gasDensity
+quokka.volrender.scalar_range = 1.0e-23 1.0e-28
+quokka.volrender.log_scale_input = 1
+quokka.volrender.box_transparency = 0.7
+quokka.volrender.int = 10
+quokka.volrender.width = 512
+quokka.volrender.height = 512
+quokka.volrender.output_ext = png
+quokka.volrender.min_level = 4
+quokka.volrender.max_level = 5
+quokka.volrender.camera_up = 0 0 1
+# (optional)
+# quokka.volrender.camera_eye = 0.0 0.0 5.0e23
+# quokka.volrender.camera_look_at = 0.0 0.0 0.0
+# quokka.volrender.camera_fov_y_degrees = 40.0
+# quokka.volrender.camera_near = 1.0e22
+# quokka.volrender.camera_far = 5.0e24
+```
+
+*Optional explicit color map control points (value, r, g, b, a arrays with matching lengths):*
+
+``` ini
+quokka.volrender.color_map_values = 1.0e-28 1.0e-26 1.0e-24 1.0e-22
+quokka.volrender.color_map_r = 0.0 0.2 0.7 1.0
+quokka.volrender.color_map_g = 0.0 0.4 0.9 0.8
+quokka.volrender.color_map_b = 0.0 0.8 0.3 0.1
+quokka.volrender.color_map_a = 0.0 0.05 0.2 0.8
+```
 
 ### Runtime Derived Fields
 
