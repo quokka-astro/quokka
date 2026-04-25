@@ -5,8 +5,8 @@
 #include "util/fextract.hpp"
 #include <algorithm>
 #include <cmath>
-#include <fstream>
 #include <format>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -137,9 +137,8 @@ template <typename problem_t> void setShockInitialConditions(quokka::grid const 
 	const double rho_d = ShockCaseParams<problem_t>::dust_to_gas_ratio * rho_ambient;
 	const double bz = bz_ambient;
 
-	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		fillCellState<problem_t>(state_cc, i, j, k, rho_ambient, u_ambient, rho_d, 0.0, bz);
-	});
+	amrex::ParallelFor(indexRange,
+			   [=] AMREX_GPU_DEVICE(int i, int j, int k) { fillCellState<problem_t>(state_cc, i, j, k, rho_ambient, u_ambient, rho_d, 0.0, bz); });
 }
 
 template <typename problem_t> void setShockFaceVars(quokka::grid const &grid_elem)
@@ -176,7 +175,7 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto constantChargeToMassRat
 
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setShockBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
-							      amrex::GeometryData const &geom)
+								    amrex::GeometryData const &geom)
 {
 	constexpr int nvar = Physics_Indices<problem_t>::nvarTotal_cc;
 	amrex::GpuArray<amrex::Real, nvar> low_bdr_cells{};
@@ -201,7 +200,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setShockBoundaryConditions(const amrex:
 
 template <typename problem_t, quokka::direction dir>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setShockFaceBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar_fc,
-								 amrex::GeometryData const &geom)
+									amrex::GeometryData const &geom)
 {
 	const amrex::GpuArray<amrex::Real, 3> low_bdr_values = {0.0, 0.0, ShockCaseParams<problem_t>::bz_inflow};
 	AMRSimulation<problem_t>::template setConstantDirichletBCFaceVarLo<0, dir, 3>(iv, consVar_fc, geom, low_bdr_values);
@@ -349,8 +348,8 @@ void writeShockProfileCsv(const ShockProfile &profile, const std::vector<double>
 	file << "x,rho_g,v_gx,rho_d_scaled,v_dx,v_dy,v_guiding_x\n";
 
 	for (size_t i = 0; i < profile.x_.size(); ++i) {
-		file << profile.x_[i] << "," << profile.rho_g_[i] << "," << profile.v_gx_[i] << ","
-		     << profile.rho_d_[i] / std::max(profile.mu_, 1.0e-12) << "," << profile.v_dx_[i] << "," << profile.v_dy_[i] << ",";
+		file << profile.x_[i] << "," << profile.rho_g_[i] << "," << profile.v_gx_[i] << "," << profile.rho_d_[i] / std::max(profile.mu_, 1.0e-12) << ","
+		     << profile.v_dx_[i] << "," << profile.v_dy_[i] << ",";
 		if (guiding_vx != nullptr) {
 			file << (*guiding_vx)[i];
 		}
@@ -422,15 +421,15 @@ template <> struct Physics_Traits<DustLorentzShockChargedBackreacting> : ShockPh
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockRefNeutral>::ComputeReciprocalStoppingTime(
-    amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/,
-    double /*cs*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockRefNeutral>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/,
+												  amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
+												  amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/,
+												  double /*cs*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	return constantStoppingTime<DustLorentzShockRefNeutral>();
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockRefNeutral>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockRefNeutral>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	return constantChargeToMassRatio<DustLorentzShockRefNeutral>();
 }
@@ -446,31 +445,34 @@ template <> void QuokkaSimulation<DustLorentzShockRefNeutral>::setInitialConditi
 }
 
 template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<DustLorentzShockRefNeutral>::setCustomBoundaryConditions(
-    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-    const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<DustLorentzShockRefNeutral>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
+								       int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+								       const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	setShockBoundaryConditions<DustLorentzShockRefNeutral>(iv, consVar, geom);
 }
 
-template <> template <quokka::direction dir>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<DustLorentzShockRefNeutral>::setCustomBoundaryConditionsFaceVar(
-    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-    const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+template <>
+template <quokka::direction dir>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<DustLorentzShockRefNeutral>::setCustomBoundaryConditionsFaceVar(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int /*dcomp*/,
+									      int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+									      const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	setShockFaceBoundaryConditions<DustLorentzShockRefNeutral, dir>(iv, dest, geom);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockChargedDilute>::ComputeReciprocalStoppingTime(
-    amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/,
-    double /*cs*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto
+DustSources<DustLorentzShockChargedDilute>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
+									  amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/, double /*cs*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	return constantStoppingTime<DustLorentzShockChargedDilute>();
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockChargedDilute>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockChargedDilute>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	return constantChargeToMassRatio<DustLorentzShockChargedDilute>();
 }
@@ -486,14 +488,16 @@ template <> void QuokkaSimulation<DustLorentzShockChargedDilute>::setInitialCond
 }
 
 template <>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<DustLorentzShockChargedDilute>::setCustomBoundaryConditions(
-    const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-    const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<DustLorentzShockChargedDilute>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
+									  int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+									  const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	setShockBoundaryConditions<DustLorentzShockChargedDilute>(iv, consVar, geom);
 }
 
-template <> template <quokka::direction dir>
+template <>
+template <quokka::direction dir>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<DustLorentzShockChargedDilute>::setCustomBoundaryConditionsFaceVar(
     const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
     const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
@@ -502,9 +506,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<DustLorentzShockChargedDi
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustLorentzShockChargedBackreacting>::ComputeReciprocalStoppingTime(
-    amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/,
-    double /*cs*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto
+DustSources<DustLorentzShockChargedBackreacting>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
+										amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/, double /*cs*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	return constantStoppingTime<DustLorentzShockChargedBackreacting>();
 }
@@ -533,7 +538,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<DustLorentzShockChargedBa
 	setShockBoundaryConditions<DustLorentzShockChargedBackreacting>(iv, consVar, geom);
 }
 
-template <> template <quokka::direction dir>
+template <>
+template <quokka::direction dir>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<DustLorentzShockChargedBackreacting>::setCustomBoundaryConditionsFaceVar(
     const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &dest, int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
     const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
