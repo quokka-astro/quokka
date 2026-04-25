@@ -31,8 +31,12 @@ auto computeSphericalSurfaceFluxes(amrex::Vector<amrex::MultiFab> const &state_c
 				   amrex::Real flux_sphere_radius) -> SurfaceFluxes
 {
 	SurfaceFluxes result{};
+	const int nlevels = static_cast<int>(flux_mask.size());
+	AMREX_ALWAYS_ASSERT(static_cast<int>(geoms.size()) == nlevels);
+	AMREX_ALWAYS_ASSERT(static_cast<int>(state_cc.size()) >= nlevels);
+	AMREX_ALWAYS_ASSERT(static_cast<int>(state_fc.size()) >= nlevels);
 
-	for (int lev = 0; lev < state_cc.size(); ++lev) {
+	for (int lev = 0; lev < nlevels; ++lev) {
 		const auto prob_lo = geoms[lev].ProbLoArray();
 		const auto dx = geoms[lev].CellSizeArray();
 		auto const &state = state_cc[lev].const_arrays();

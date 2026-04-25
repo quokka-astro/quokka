@@ -52,9 +52,15 @@ template <typename problem_t> void DiagFlux::processDiag(int a_nstep, const amre
 	auto const &geoms = *m_geoms;
 	auto const &ref_ratio = *m_refRatio;
 
-	amrex::Vector<amrex::iMultiFab> flux_mask(state_cc.size());
-	for (int lev = 0; lev < state_cc.size(); ++lev) {
-		if (lev == state_cc.size() - 1) {
+	const int nlevels = static_cast<int>(geoms.size());
+	AMREX_ALWAYS_ASSERT(static_cast<int>(state_cc.size()) >= nlevels);
+	AMREX_ALWAYS_ASSERT(static_cast<int>(state_fc.size()) >= nlevels);
+	AMREX_ALWAYS_ASSERT(static_cast<int>(a_state.size()) >= nlevels);
+	AMREX_ALWAYS_ASSERT(static_cast<int>(ref_ratio.size()) >= nlevels - 1);
+
+	amrex::Vector<amrex::iMultiFab> flux_mask(nlevels);
+	for (int lev = 0; lev < nlevels; ++lev) {
+		if (lev == nlevels - 1) {
 			flux_mask[lev].define(state_cc[lev].boxArray(), state_cc[lev].DistributionMap(), 1, 0);
 			flux_mask[lev].setVal(1);
 		} else {
