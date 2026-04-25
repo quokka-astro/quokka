@@ -23,7 +23,6 @@ amr.grid_eff = 0.7
 do_reflux = 1
 do_subcycle = 0
 
-ascent_interval = -1
 
 tiny_profiler.enabled = 0
 

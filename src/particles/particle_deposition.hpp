@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <numbers>
 
 #include "AMReX_Array.H"
@@ -11,6 +12,7 @@
 #include "AMReX_Extension.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParticleInterpolators.H"
+#include "AMReX_ParticleMesh.H"
 #include "AMReX_REAL.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
@@ -87,6 +89,100 @@ struct RadDeposition {
 				      });
 	}
 };
+
+//-------------------- Particle property depositions --------------------
+
+// Functor for depositing particle mass density onto the grid
+struct ParticleMassDensityDeposition {
+	int mass_comp{};
+	int birth_time_comp{-1};
+	int start_mesh_comp{};
+	int num_comp{};
+	amrex::Real mass_min{std::numeric_limits<amrex::Real>::lowest()};
+	amrex::Real mass_max{std::numeric_limits<amrex::Real>::max()};
+	bool use_age_filter{false};
+	amrex::Real current_time{};
+	amrex::Real age_max{std::numeric_limits<amrex::Real>::max()};
+
+	template <typename ContainerType>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<amrex::Real> const &deposition_array,
+							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
+	{
+		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
+		const auto massMin = mass_min;
+		const auto massMax = mass_max;
+		const auto birthTimeComp = birth_time_comp;
+		const auto useAgeFilter = use_age_filter;
+		const auto currentTime = current_time;
+		const auto ageMax = age_max;
+		interp.ParticleToMesh(p, deposition_array, mass_comp, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
+			const auto mass = part.rdata(comp);
+			if (mass < massMin || mass > massMax) {
+				return 0.0;
+			}
+			if (useAgeFilter) {
+				const auto birthTime = part.rdata(birthTimeComp);
+				if (currentTime < birthTime) {
+					return 0.0;
+				}
+				const auto age = currentTime - birthTime;
+				if (age > ageMax) {
+					return 0.0;
+				}
+			}
+			return mass * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+		});
+	}
+};
+
+template <typename ContainerType>
+void depositParticleMassDensity(ContainerType *container, amrex::MultiFab &deposition_field, int lev, int mass_comp, int start_mesh_comp = 0,
+				amrex::Real mass_min = std::numeric_limits<amrex::Real>::lowest(),
+				amrex::Real mass_max = std::numeric_limits<amrex::Real>::max(), bool use_age_filter = false, int birth_time_comp = -1,
+				amrex::Real current_time = 0.0, amrex::Real age_max = std::numeric_limits<amrex::Real>::max())
+{
+	const BL_PROFILE("depositParticleMassDensity");
+	if (use_age_filter && birth_time_comp < 0) {
+		amrex::Abort("depositParticleMassDensity: age filter requested, but birth_time_comp is invalid.");
+	}
+
+	ParticleMassDensityDeposition deposition_functor;
+	deposition_functor.mass_comp = mass_comp;
+	deposition_functor.birth_time_comp = birth_time_comp;
+	deposition_functor.start_mesh_comp = start_mesh_comp;
+	deposition_functor.num_comp = 1;
+	deposition_functor.mass_min = mass_min;
+	deposition_functor.mass_max = mass_max;
+	deposition_functor.use_age_filter = use_age_filter;
+	deposition_functor.current_time = current_time;
+	deposition_functor.age_max = age_max;
+
+	// ParticleToMesh uses tile-local buffers grown by mf.nGrowVect(). Linear deposition needs one
+	// grow cell to avoid out-of-bounds accesses near tile boundaries.
+	constexpr int required_n_grow = amrex::ParticleInterpolator::Linear::stencil_width - 1;
+	if (deposition_field.nGrowVect().allGE(required_n_grow)) {
+		// The final argument here is zero_out_input.
+		// In this AMReX overload, zero_out_input=false deposits into a temporary particle-grid
+		// MultiFab and then ParallelAdd's it back into deposition_field using src_nghost=mf.nGrowVect()
+		// and dst_nghost=0, so ghost-cell contributions are still folded into the valid region.
+		amrex::ParticleToMesh(*container, deposition_field, lev, deposition_functor, false);
+		return;
+	}
+
+	// Callers often provide a zero-ghost output MultiFab (e.g., diagnostics/derived fields),
+	// but AMReX ParticleToMesh sizes its internal temp/scratch storage from mf.nGrowVect(),
+	// and linear interpolation uses a 2-point stencil in each dimension. We therefore need
+	// one grow cell here so deposition near tile boundaries has valid storage. Deposit into a
+	// temporary MultiFab with sufficient ghost cells, then add the valid region back into the
+	// caller's field after ParticleToMesh has summed ghost contributions internally.
+	amrex::MultiFab deposition_with_ghosts(deposition_field.boxArray(), deposition_field.DistributionMap(), deposition_field.nComp(),
+					       amrex::IntVect(required_n_grow));
+	deposition_with_ghosts.setVal(0.0);
+	amrex::ParticleToMesh(*container, deposition_with_ghosts, lev, deposition_functor, true);
+	deposition_field.ParallelAdd(deposition_with_ghosts, start_mesh_comp, start_mesh_comp, 1, amrex::IntVect(0), amrex::IntVect(0),
+				     container->Geom(lev).periodicity());
+}
 
 //-------------------- Mass depositions --------------------
 

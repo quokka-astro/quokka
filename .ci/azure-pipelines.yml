@@ -46,7 +46,7 @@ pr:
 jobs:
   - job: CUDA_Build_Test
     pool: avatar
-    timeoutInMinutes: 150
+    timeoutInMinutes: 360
     steps:
     - script: |
         mkdir -p "$(Agent.HomeDirectory)/cache/ccache"
@@ -66,8 +66,34 @@ jobs:
     - template: templates/ccache-prepare.yml
 
     - script: |
+        # Keep the job idle during the restricted window [03:30, 07:00).
+        blocked_start_minutes=$((3 * 60 + 30))
+        blocked_end_minutes=$((7 * 60))
+        time_check_interval=600
+
+        while true; do
+          hour=$(date +%H)
+          minute=$(date +%M)
+          now_minutes=$((10#$hour * 60 + 10#$minute))
+
+          if [ "$now_minutes" -lt "$blocked_start_minutes" ] || [ "$now_minutes" -ge "$blocked_end_minutes" ]; then
+            echo "Current time $(date '+%F %T') is outside restricted window."
+            break
+          fi
+
+          remaining_minutes=$((blocked_end_minutes - now_minutes))
+          remaining_seconds=$((remaining_minutes * 60))
+          echo "Current time $(date '+%F %T') is within restricted window (03:30-07:00). Remaining wait: ${remaining_minutes}m."
+
+          if [ "$remaining_seconds" -le "$time_check_interval" ]; then
+            sleep "$remaining_seconds"
+          else
+            sleep "$time_check_interval"
+          fi
+        done
+
         echo "Checking for conflicting jobs on the GPU..."
-        check_interval=60
+        gpu_check_interval=60
         waited=0
         while true; do
           # Primary: check for active CUDA processes via GPU driver (cross-container reliable)
@@ -95,11 +121,11 @@ jobs:
             [ -n "$reasons" ] && reasons="${reasons}; "
             reasons="${reasons}regression test (regtest.py) is running"
           fi
-          echo "Waiting: ${reasons}. Rechecking in ${check_interval}s (${waited}s elapsed)..."
-          sleep "$check_interval"
-          waited=$((waited + check_interval))
+          echo "Waiting: ${reasons}. Rechecking in ${gpu_check_interval}s (${waited}s elapsed)..."
+          sleep "$gpu_check_interval"
+          waited=$((waited + gpu_check_interval))
         done
-      displayName: 'Wait for GPU to be free'
+      displayName: 'Wait for allowed time and free GPU'
 
     - task: CMake@1
       displayName: 'Configure CMake'
