@@ -2,8 +2,8 @@
 #define QUADRATURE_HPP_
 
 // system headers
-#include <cstddef>
 #include <cmath>
+#include <cstddef>
 
 // library headers
 #include <AMReX.H>
