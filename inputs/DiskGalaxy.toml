@@ -87,7 +87,7 @@ particles.low_mass_composite_max_mass = 5.957650359245478e+35   # grams [= 299 M
 ## Disk and halo parameters
 ###################################
 
-disk_galaxy.vcirc_file    = "./vcirc_with_halo.csv"
+disk_galaxy.vcirc_file    = "./vcirc_with_constant_halo.csv"
 disk_galaxy.particle_file = "./AgoraGalaxy_particles_LOW.txt"
 disk_galaxy.refine_Rmax_kpc = 16.0          # kpc
 disk_galaxy.refine_zmax_kpc = 4.0           # kpc
