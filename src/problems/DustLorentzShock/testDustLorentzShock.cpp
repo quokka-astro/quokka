@@ -102,7 +102,7 @@ struct ShockPhysicsTraits {
 	static constexpr double radiation_constant = 1.0;
 };
 
-template <typename problem_t> auto computeGasEnergy(double rho, double vx, double bz) -> double
+template <typename problem_t> AMREX_GPU_DEVICE auto computeGasEnergy(double rho, double vx, double bz) -> double
 {
 	const double kinetic = 0.5 * rho * vx * vx;
 	const double magnetic = 0.5 * bz * bz;
@@ -110,7 +110,7 @@ template <typename problem_t> auto computeGasEnergy(double rho, double vx, doubl
 }
 
 template <typename problem_t>
-void fillCellState(const amrex::Array4<double> &state_cc, int i, int j, int k, double rho_g, double vx_g, double rho_d, double vx_d, double bz)
+AMREX_GPU_DEVICE void fillCellState(const amrex::Array4<double> &state_cc, int i, int j, int k, double rho_g, double vx_g, double rho_d, double vx_d, double bz)
 {
 	const int ncomp_cc = Physics_Indices<problem_t>::nvarTotal_cc;
 	for (int n = 0; n < ncomp_cc; ++n) {
