@@ -25,7 +25,6 @@ regrid_interval     = -1    # static refinement only (do not regrid)
 do_reflux = 1
 do_subcycle = 0
 do_tracers = 0
-poisson_supercycle_interval = 10
 
 max_walltime = "0:05:00"
 cfl = 0.3
@@ -76,7 +75,7 @@ quokka.stellarpop_particle_mass.type = "DerivedParticleDeposition"
 quokka.stellarpop_particle_mass.particle_types = "StochasticStellarPop"
 quokka.stellarpop_particle_mass.deposit_fields = "birth_mass"
 quokka.stellarpop_particle_mass.t_age = 1.57788e14   # 5 Myr in seconds
-quokka.stellarpop_particle_mass.normalization_expr = "kpc*kpc/(Msun*(5.0e6*yr))" # projected units: Msun/yr/kpc^2
+quokka.stellarpop_particle_mass.normalization_expr = "1.0/(5.0e6*yr)"
 
 
 ## star formation
@@ -100,8 +99,6 @@ disk_galaxy.disk_temperature = 1.0e4        # K
 disk_galaxy.disk_perturb_amplitude = 1.0    # dimensionless
 disk_galaxy.disk_perturb_Rmax_kpc = 20.0    # kpc
 
-# v_phi = v0 * (1 - exp(-R / R0)) / sqrt(1 + (max(R - Rt, 0) / Rs)^2)
-# with v0 = 230 km/s, R0 = 1.4 kpc, Rt = 15 kpc, Rs = 22 kpc
 disk_galaxy.halo_vphi_expr = "R=sqrt(x*x+y*y); R0=1.4e3*3.085677581e18; Rt=15.0e3*3.085677581e18; Rs=22.0e3*3.085677581e18; dR=max(R-Rt,0.0); 2.30e7*(1.0 - exp(-R / R0))/sqrt(1.0 + (dR/Rs)*(dR/Rs))"
 
 disk_galaxy.magnetic_field_microgauss = 1.0 # B-field strength (microgauss)
