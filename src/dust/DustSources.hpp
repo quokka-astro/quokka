@@ -712,7 +712,7 @@ void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_
 
 			amrex::GpuArray<DustStageAffineOperators, nDustGroups_> ops;
 			for (int g = 0; g < nDustGroups_; ++g) {
-				Mat3 const T = alpha[g] * Mat3::Identity() + omega_L[g] * B_cross;
+				Mat3 const T = alpha[g] * Mat3::Identity() - omega_L[g] * B_cross;
 				ops[g] = ComputeDustStageAffineOperators(T, epsilon[g], dt, gamma1, gamma2, beta1, beta2);
 			}
 

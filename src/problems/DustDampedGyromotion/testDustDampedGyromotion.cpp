@@ -25,8 +25,7 @@ constexpr double gamma_iso = 1.0;
 constexpr double eta = 9.0 * std::numbers::pi * gamma_iso / 128.0;
 constexpr double dust_grain_density = 1.0;
 constexpr double dust_grain_radius = 1.5957691216057308; // sqrt(8 / pi) gives alpha0 = 1 for gamma = rho_g = c_s = rho_gr = 1.
-constexpr double charge_to_mass_ratio = -1.0;
-constexpr double abs_charge_to_mass_ratio = (charge_to_mass_ratio < 0.0) ? -charge_to_mass_ratio : charge_to_mass_ratio;
+constexpr double charge_to_mass_ratio = 1.0;
 
 constexpr double gas_velocity_x0 = -epsilon * initial_drift / (1.0 + epsilon);
 constexpr double dust_velocity_x0 = initial_drift / (1.0 + epsilon);
@@ -71,7 +70,7 @@ template <> struct GyroCaseParams<DustGyroEpsteinNoB> {
 template <> struct GyroCaseParams<DustGyroNoDrag> {
 	static constexpr bool enable_epstein_drag = false;
 	static constexpr double magnetic_field_z = 5.0;
-	static constexpr double omega_L = abs_charge_to_mass_ratio * magnetic_field_z;
+	static constexpr double omega_L = charge_to_mass_ratio * magnetic_field_z;
 	static constexpr double stop_time = 2.0;
 	static constexpr double constant_dt = 0.1;
 };
@@ -79,7 +78,7 @@ template <> struct GyroCaseParams<DustGyroNoDrag> {
 template <> struct GyroCaseParams<DustGyroEpsteinWithB> {
 	static constexpr bool enable_epstein_drag = true;
 	static constexpr double magnetic_field_z = 5.0;
-	static constexpr double omega_L = abs_charge_to_mass_ratio * magnetic_field_z;
+	static constexpr double omega_L = charge_to_mass_ratio * magnetic_field_z;
 	static constexpr double stop_time = 2.0;
 	static constexpr double constant_dt = 0.1;
 };
