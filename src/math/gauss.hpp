@@ -9,6 +9,7 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <type_traits>
 
 #include "AMReX.H"
 
@@ -17,22 +18,42 @@ namespace quokka::math::quadrature
 namespace detail
 {
 
+// These tables come from Boost's Gauss quadrature constants. The long-double
+// literals are intentional, and several nodes happen to be close to named
+// constants without being those constants.
+// NOLINTBEGIN(google-runtime-float, modernize-use-std-numbers)
+
 template <class T> struct gauss_constant_category {
-	static const unsigned value =
-	    (std::numeric_limits<T>::is_specialized == 0) ? 999
-	    : (std::numeric_limits<T>::radix == 2)
-		? ((std::numeric_limits<T>::digits <= std::numeric_limits<float>::digits) && std::is_convertible<float, T>::value		? 0
-		   : (std::numeric_limits<T>::digits <= std::numeric_limits<double>::digits) && std::is_convertible<double, T>::value		? 1
-		   : (std::numeric_limits<T>::digits <= std::numeric_limits<long double>::digits) && std::is_convertible<long double, T>::value ? 2
-		   :
+      private:
+	static constexpr auto get_value() -> unsigned
+	{
+		if constexpr (!std::numeric_limits<T>::is_specialized) {
+			return 999U;
+		}
+		if constexpr (std::numeric_limits<T>::radix == 2) {
+			if constexpr ((std::numeric_limits<T>::digits <= std::numeric_limits<float>::digits) && std::is_convertible_v<float, T>) {
+				return 0U;
+			}
+			if constexpr ((std::numeric_limits<T>::digits <= std::numeric_limits<double>::digits) && std::is_convertible_v<double, T>) {
+				return 1U;
+			}
+			if constexpr ((std::numeric_limits<T>::digits <= std::numeric_limits<long double>::digits) && std::is_convertible_v<long double, T>) {
+				return 2U;
+			}
 #ifdef BOOST_HAS_FLOAT128
-		   (std::numeric_limits<T>::digits <= 113) && std::is_constructible<__float128, T>::value ? 3
-		   :
+			if constexpr ((std::numeric_limits<T>::digits <= 113) && std::is_constructible_v<__float128, T>) {
+				return 3U;
+			}
 #endif
-		   (std::numeric_limits<T>::digits10 <= 110) ? 4
-							     : 999)
-	    : (std::numeric_limits<T>::digits10 <= 110) ? 4
-							: 999;
+		}
+		if constexpr (std::numeric_limits<T>::digits10 <= 110) {
+			return 4U;
+		}
+		return 999U;
+	}
+
+      public:
+	static constexpr unsigned value = get_value();
 };
 
 template <class Real, unsigned N, unsigned Category> class gauss_detail;
@@ -601,6 +622,8 @@ template <class T> class gauss_detail<T, 30, 3>
 };
 #endif
 
+// NOLINTEND(google-runtime-float, modernize-use-std-numbers)
+
 } // namespace detail
 
 template <class Real, unsigned N> class gauss : public detail::gauss_detail<Real, N, detail::gauss_constant_category<Real>::value>
@@ -617,11 +640,11 @@ template <class Real, unsigned N> class gauss : public detail::gauss_detail<Real
 		// In many math texts, K represents the field of real or complex numbers.
 		// Too bad we can't put blackboard bold into C++ source!
 		using K = decltype(f(Real(0)));
-		static_assert(!std::is_integral<K>::value, "The return type cannot be integral, it must be either a real or complex floating point type.");
+		static_assert(!std::is_integral_v<K>, "The return type cannot be integral, it must be either a real or complex floating point type.");
 		using std::abs;
 		unsigned non_zero_start = 1;
 		K result = Real(0);
-		if (N & 1) {
+		if ((N % 2U) != 0U) {
 			result = f(Real(0)) * base::weights()[0];
 		} else {
 			result = 0;
