@@ -2,19 +2,19 @@
 # Problem size and geometry
 # *****************************************************************
 # Box size is [-600 kpc, 600 kpc]^3
-geometry.prob_lo     =  -1.8514065526075864e24 -1.8514065526075864e24 -1.8514065526075864e24
-geometry.prob_hi     =   1.8514065526075864e24  1.8514065526075864e24  1.8514065526075864e24
-geometry.is_periodic =   0    0    0
+geometry.prob_lo = [-1.8514065526075864e24, -1.8514065526075864e24, -1.8514065526075864e24]
+geometry.prob_hi = [1.8514065526075864e24, 1.8514065526075864e24, 1.8514065526075864e24]
+geometry.is_periodic = [0, 0, 0]
 
 # *****************************************************************
 # VERBOSITY
 # *****************************************************************
-amr.v              = 1       # verbosity in Amr
+amr.v = 1       # verbosity in Amr
 
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 128 128 128
+amr.n_cell = [128, 128, 128]
 amr.max_level       = 5
 amr.blocking_factor = 32
 amr.max_grid_size   = 128
@@ -27,7 +27,7 @@ do_subcycle = 0
 do_tracers = 0
 poisson_supercycle_interval = 10
 
-max_walltime = 0:05:00
+max_walltime = "0:05:00"
 cfl = 0.3
 init_shrink = 0.01	# shrink first timestep by a factor of 100
 stop_time = 3.1536e16   # 1 Gyr
@@ -38,15 +38,15 @@ max_timesteps = 1000
 hydro.artificial_viscosity_coefficient = 0.1
 hydro.reconstruction_order = 3
 mhd.emf_reconstruction_order = 3
-mhd.emf_compute_scheme = FelkerStone2017
-mhd.emf_averaging_scheme = LondrilloDelZanna2004
+mhd.emf_compute_scheme = "FelkerStone2017"
+mhd.emf_averaging_scheme = "LondrilloDelZanna2004"
 
 mhd.project_initial_b_field = true
 mhd.update_initial_b_energy = true
 
 cooling.enabled = 1
 cooling.read_tables_even_if_disabled = 1
-cooling.cooling_table_type = resampled
+cooling.cooling_table_type = "resampled"
 cooling.hdf5_data_file = "./CloudyData_UVB=HM2012_resampled.h5"
 temperature_floor = 1e4
 density_floor = 1e-28
@@ -55,16 +55,26 @@ density_floor_expr = "x1=x*1.0e-22; y1=y*1.0e-22; z1=z*1.0e-22; r2=x1*x1+y1*y1+z
 checkpoint_interval = 10000
 plotfile_interval = 10000
 statistics_interval = 250
-derived_vars = temperature pressure entropy gpot radius_sph bfield_strength \
-	     radial_velocity circular_velocity particle.CIC.mass_density particle.StochasticStellarPop.birth_mass_density
+derived_vars = [
+  "temperature",
+  "pressure",
+  "entropy",
+  "gpot",
+  "radius_sph",
+  "bfield_strength",
+  "radial_velocity",
+  "circular_velocity",
+  "particle.CIC.mass_density",
+  "particle.StochasticStellarPop.birth_mass_density",
+]
 
-quokka.cic_particle_mass.type = DerivedParticleDeposition
-quokka.cic_particle_mass.particle_types = CIC
-quokka.cic_particle_mass.deposit_fields = mass
+quokka.cic_particle_mass.type = "DerivedParticleDeposition"
+quokka.cic_particle_mass.particle_types = "CIC"
+quokka.cic_particle_mass.deposit_fields = "mass"
 
-quokka.stellarpop_particle_mass.type = DerivedParticleDeposition
-quokka.stellarpop_particle_mass.particle_types = StochasticStellarPop
-quokka.stellarpop_particle_mass.deposit_fields = birth_mass
+quokka.stellarpop_particle_mass.type = "DerivedParticleDeposition"
+quokka.stellarpop_particle_mass.particle_types = "StochasticStellarPop"
+quokka.stellarpop_particle_mass.deposit_fields = "birth_mass"
 quokka.stellarpop_particle_mass.t_age = 1.57788e14   # 5 Myr in seconds
 quokka.stellarpop_particle_mass.normalization_expr = "kpc*kpc/(Msun*(5.0e6*yr))" # projected units: Msun/yr/kpc^2
 
