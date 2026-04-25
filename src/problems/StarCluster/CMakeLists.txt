@@ -24,7 +24,7 @@ if(AMReX_SPACEDIM EQUAL 3)
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
   add_test(
     NAME StarCluster
-    COMMAND ${JOB_NAME} ../inputs/StarCluster.in ${QuokkaTestParams}
+    COMMAND ${JOB_NAME} ../inputs/StarCluster.toml ${QuokkaTestParams}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
   set_tests_properties(ComputeStarClusterPerturbations
                        PROPERTIES FIXTURES_SETUP StarCluster_fixture)
@@ -33,6 +33,6 @@ if(AMReX_SPACEDIM EQUAL 3)
 
   # AMR test only works on Setonix because Gadi and avatar do not have enough
   # memory per GPU add_test(NAME StarClusterAMR COMMAND ${JOB_NAME}
-  # ../inputs/StarCluster_AMR.in ${QuokkaTestParams} WORKING_DIRECTORY
+  # ../inputs/StarCluster_AMR.toml ${QuokkaTestParams} WORKING_DIRECTORY
   # ${CMAKE_SOURCE_DIR}/tests)
 endif()

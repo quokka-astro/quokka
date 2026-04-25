@@ -586,18 +586,15 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 }
 
 template <typename problem_t>
-void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_radiation,
-						    const int stage, double dustGasCoeff, double const tol_h, double const tol_rel_h,
+void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_implicit,
+						    double gas_update_factor_in, double dustGasCoeff, double const tol_h, double const tol_rel_h,
 						    double const tempFloor_local, int *p_iteration_counter, int *p_iteration_failure_counter)
 {
 	static_assert(beta_order_ == 0 || beta_order_ == 1);
 
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;
-	auto dt = dt_radiation;
-	if (stage == 2) {
-		dt = (1.0 - IMEX_a32) * dt_radiation;
-	}
+	auto dt = dt_implicit;
 
 	amrex::GpuArray<amrex::Real, nGroups_ + 1> radBoundaries_g = radBoundaries_;
 	const double tempFloor_h = tempFloor_local;
@@ -685,10 +682,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 			}
 		}
 
-		amrex::Real gas_update_factor = 1.0;
-		if (stage == 1) {
-			gas_update_factor = IMEX_a32;
-		}
+		amrex::Real gas_update_factor = gas_update_factor_in;
 
 		const double H_num_den = ComputeNumberDensityH(rho, massScalars);
 		const double cscale = c / chat;

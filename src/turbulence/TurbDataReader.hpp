@@ -15,9 +15,9 @@
 #include <iostream>
 #include <string>
 
-#include "fmt/core.h"
 #include <H5Dpublic.h>
 #include <H5Ppublic.h>
+#include <format>
 #include <hdf5.h>
 
 #include "AMReX.H"

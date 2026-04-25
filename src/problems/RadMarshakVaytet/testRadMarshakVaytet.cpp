@@ -6,7 +6,7 @@
 #include "util/matplotlibcpp.h"
 #endif
 #include "radiation/radiation_system.hpp"
-#include <fmt/format.h>
+#include <format>
 #include <fstream>
 
 #include "QuokkaSimulation.hpp"
@@ -446,7 +446,7 @@ auto problem_main() -> int
 
 		for (int g = 0; g < n_coll; ++g) {
 			std::map<std::string, std::string> Trad_coll_args;
-			Trad_coll_args["label"] = fmt::format("group {}", g);
+			Trad_coll_args["label"] = std::format("group {}", g);
 			Trad_coll_args["linestyle"] = "-";
 			Trad_coll_args["color"] = "C" + std::to_string(g);
 			matplotlibcpp::plot(xs, Trad_coll[g], Trad_coll_args);
@@ -462,7 +462,7 @@ auto problem_main() -> int
 		matplotlibcpp::xlabel("length x (cm)");
 		matplotlibcpp::ylabel("temperature (K)");
 		matplotlibcpp::legend();
-		// matplotlibcpp::title(fmt::format("time t = {:.4g}", sim.tNew_[0]));
+		// matplotlibcpp::title(std::format("time t = {:.4g}", sim.tNew_[0]));
 		if (opacity_model_ == OpacityModel::piecewise_constant_opacity) {
 			matplotlibcpp::title("PC");
 		} else if (opacity_model_ == OpacityModel::PPL_opacity_fixed_slope_spectrum) {

@@ -11,7 +11,7 @@
 #include "radiation/radiation_dust_system.hpp"
 #include "util/BC.hpp"
 #include <cmath>
-#include <fmt/format.h>
+#include <format>
 #include <fstream>
 
 #include "AMReX_Array.H"

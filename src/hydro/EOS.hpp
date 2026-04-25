@@ -71,6 +71,8 @@ template <typename problem_t> class EOS
 	ComputeSoundSpeed(amrex::Real rho, amrex::Real Pressure, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	    -> amrex::Real;
 
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto ComputeIsothermalSoundSpeed(amrex::Real rho, amrex::Real Pressure) -> amrex::Real;
+
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma; // needed for HLLD solver
 
 	static constexpr amrex::Real boltzmann_constant_ = []() constexpr {
@@ -410,6 +412,29 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeSoundSpeed(
 	eos(eos_input_rp, estate);
 	cs = estate.cs;
 #endif
+	return cs;
+}
+
+// compute isothermal sound speed
+template <typename problem_t>
+AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeIsothermalSoundSpeed(amrex::Real rho, amrex::Real Pressure) -> amrex::Real
+{
+	amrex::Real cs = NAN;
+
+#ifdef CHEMISTRY
+	static_assert(gamma_ == 1.0, "ComputeIsothermalSoundSpeed does not support general EOS");
+#endif
+
+	if constexpr (gamma_ == 1.0) {
+		static_assert(EOS_Traits<problem_t>::cs_isothermal > 0.0, "EOS_Traits<problem_t>::cs_isothermal must be set when gamma=1.");
+		amrex::ignore_unused(rho);
+		amrex::ignore_unused(Pressure);
+		cs = EOS_Traits<problem_t>::cs_isothermal;
+	} else {
+		// return isothermal sound speed for an ideal gas
+		cs = std::sqrt(Pressure / rho);
+	}
+
 	return cs;
 }
 

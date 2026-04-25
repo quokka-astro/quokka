@@ -15,7 +15,7 @@
 #include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 #include "util/fextract.hpp"
-#include <fmt/format.h>
+#include <format>
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
@@ -262,7 +262,7 @@ auto problem_main() -> int
 		matplotlibcpp::xlabel("time t (seconds)");
 		matplotlibcpp::ylabel("temperature T (Kelvins)");
 		matplotlibcpp::tight_layout();
-		matplotlibcpp::save(fmt::format("./radcoupling_rsla.pdf"));
+		matplotlibcpp::save(std::format("./radcoupling_rsla.pdf"));
 
 		matplotlibcpp::clf();
 
@@ -273,7 +273,7 @@ auto problem_main() -> int
 		matplotlibcpp::plot(t, frac_err);
 		matplotlibcpp::xlabel("time t (s)");
 		matplotlibcpp::ylabel("fractional error in material temperature");
-		matplotlibcpp::save(fmt::format("./radcoupling_rsla_fractional_error.pdf"));
+		matplotlibcpp::save(std::format("./radcoupling_rsla_fractional_error.pdf"));
 #endif
 	}
 

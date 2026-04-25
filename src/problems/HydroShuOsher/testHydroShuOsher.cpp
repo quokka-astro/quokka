@@ -13,7 +13,7 @@
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
 #include <cmath>
-#include <fmt/format.h>
+#include <format>
 #include <fstream>
 #include <vector>
 
@@ -262,11 +262,11 @@ void QuokkaSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::MultiFa
 		matplotlibcpp::plot(xs_exact, density_exact, dexact_args);
 
 		matplotlibcpp::legend();
-		// matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
+		// matplotlibcpp::title(std::format("t = {:.4f}", tNew_[0]));
 		matplotlibcpp::ylabel("density");
 		matplotlibcpp::xlabel("length x");
 		matplotlibcpp::tight_layout();
-		matplotlibcpp::save(fmt::format("./hydro_shuosher.pdf", tNew_[0]));
+		matplotlibcpp::save(std::format("./hydro_shuosher.pdf", tNew_[0]));
 	}
 #endif
 }

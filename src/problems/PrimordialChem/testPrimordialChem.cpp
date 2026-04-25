@@ -11,7 +11,7 @@
 #endif
 #include "util/BC.hpp"
 #include <array>
-#include <fmt/format.h>
+#include <format>
 #include <random>
 #include <vector>
 

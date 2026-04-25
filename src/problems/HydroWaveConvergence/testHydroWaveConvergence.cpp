@@ -8,7 +8,7 @@
 ///
 
 #include "hydro/hydro_system.hpp"
-#include <fmt/format.h>
+#include <format>
 #include <limits>
 #include <valarray>
 

@@ -15,7 +15,7 @@
 #include "AMReX_ParmParse.H"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
-#include <fmt/format.h>
+#include <format>
 #include <fstream>
 
 #include "QuokkaSimulation.hpp"
@@ -183,7 +183,7 @@ void QuokkaSimulation<ContactProblem>::computeReferenceSolution(amrex::MultiFab 
 		matplotlibcpp::plot(x, d_exact, dexact_args);
 
 		matplotlibcpp::legend();
-		matplotlibcpp::title(fmt::format("t = {:.4f}", tNew_[0]));
+		matplotlibcpp::title(std::format("t = {:.4f}", tNew_[0]));
 		matplotlibcpp::save("./hydro_contact.pdf");
 	}
 #endif

@@ -117,7 +117,6 @@ endif(WARNINGS_AS_ERRORS)
 # endif()
 
 include_directories(${amrex_INCLUDE_DIRS_RET})
-include_directories(${fmt_INCLUDE_DIRS_RET})
 include_directories(${HDF5_INCLUDE_DIRS})
 include_directories(${Boost_INCLUDE_DIRS_RET})
 include_directories(${CMAKE_SOURCE_DIR}/src)
@@ -136,7 +135,6 @@ if(TARGET amrex_hydro_api)
   link_libraries(amrex_hydro_api)
 endif()
 link_libraries(AMReX::amrex)
-link_libraries(fmt::fmt)
 link_libraries(${HDF5_LIBRARIES})
 link_libraries(yaml-cpp::yaml-cpp)
 link_libraries(turbulence::turbulence)
@@ -148,19 +146,21 @@ include(CTest)
 
 set (QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagBase.cpp" 
+                        "${CMAKE_CURRENT_SOURCE_DIR}/io/DerivedFieldBase.cpp"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/io/DerivedParticleDeposition.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagFilter.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagFramePlane.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagPDF.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagPlotfile.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagParticleTxt.cpp"
-                        "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagProjectionPlot.cpp"
-                        "${CMAKE_CURRENT_SOURCE_DIR}/io/projection.cpp" 
                         "${CMAKE_CURRENT_SOURCE_DIR}/cooling/ResampledCooling.cpp"
                         "${CMAKE_CURRENT_SOURCE_DIR}/util/fextract.cpp"
                         "${openPMDSources}")
 
 if(AMReX_SPACEDIM EQUAL 3)
   list(APPEND QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagVolumeRender.cpp")
+  list(APPEND QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/io/projection.cpp")
+  list(APPEND QuokkaSourcesNoEOS "${CMAKE_CURRENT_SOURCE_DIR}/io/DiagProjectionPlot.cpp")
 endif()
 
 set (QuokkaObjSources "${QuokkaSourcesNoEOS}" "${gamma_law_sources}")

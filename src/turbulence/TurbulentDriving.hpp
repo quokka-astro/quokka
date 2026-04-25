@@ -30,14 +30,13 @@
 #include "AMReX_iMultiFab.H"
 
 #include "TurbGenEx.h"
-#include "fmt/base.h"
-#include "fmt/core.h"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "math/FastMath.hpp"
 #include "radiation/radiation_system.hpp"
 #include <array>
 #include <cmath>
+#include <format>
 #include <map>
 #include <string>
 #include <vector>
@@ -55,8 +54,12 @@ template <typename problem_t> class turbulentDriving
 
 	void update(const amrex::Real &time, amrex::MultiFab &state)
 	{
-		disp = quokka::turbulence::calculate_dispersion<problem_t>(state);
-		updated = time == 0 ? tg.check_for_update(time) : tg.check_for_update(time, disp.data());
+		updated = tg.is_update_available(time);
+
+		if (updated) {
+			disp = quokka::turbulence::calculate_dispersion<problem_t>(state);
+			tg.check_for_update(time, disp.data());
+		}
 	}
 
       public:
@@ -96,7 +99,7 @@ template <typename problem_t> class turbulentDriving
 		}
 
 		amrex::Gpu::streamSynchronize();
-		return true;
+		return updated;
 	}
 };
 

@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <numbers>
 
 #include "AMReX_Array.H"
@@ -11,6 +12,7 @@
 #include "AMReX_Extension.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_ParticleInterpolators.H"
+#include "AMReX_ParticleMesh.H"
 #include "AMReX_REAL.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
@@ -23,9 +25,9 @@ namespace amrex::ParticleInterpolator
 struct NearestEight : public Base<NearestEight, amrex::Real> {
 	static constexpr int stencil_width = 2;
 
-	static constexpr int nx = (AMREX_SPACEDIM >= 1) ? stencil_width - 1 : 0; // NOLINT
-	static constexpr int ny = (AMREX_SPACEDIM >= 2) ? stencil_width - 1 : 0; // NOLINT
-	static constexpr int nz = (AMREX_SPACEDIM >= 3) ? stencil_width - 1 : 0; // NOLINT
+	static constexpr int nx = stencil_width - 1; // NOLINT
+	static constexpr int ny = stencil_width - 1; // NOLINT
+	static constexpr int nz = stencil_width - 1; // NOLINT
 
 	amrex::Real weights[3 * stencil_width]; // NOLINT
 
@@ -88,7 +90,99 @@ struct RadDeposition {
 	}
 };
 
-#if AMREX_SPACEDIM == 3
+//-------------------- Particle property depositions --------------------
+
+// Functor for depositing particle mass density onto the grid
+struct ParticleMassDensityDeposition {
+	int mass_comp{};
+	int birth_time_comp{-1};
+	int start_mesh_comp{};
+	int num_comp{};
+	amrex::Real mass_min{std::numeric_limits<amrex::Real>::lowest()};
+	amrex::Real mass_max{std::numeric_limits<amrex::Real>::max()};
+	bool use_age_filter{false};
+	amrex::Real current_time{};
+	amrex::Real age_max{std::numeric_limits<amrex::Real>::max()};
+
+	template <typename ContainerType>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<amrex::Real> const &deposition_array,
+							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
+							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
+	{
+		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
+		const auto massMin = mass_min;
+		const auto massMax = mass_max;
+		const auto birthTimeComp = birth_time_comp;
+		const auto useAgeFilter = use_age_filter;
+		const auto currentTime = current_time;
+		const auto ageMax = age_max;
+		interp.ParticleToMesh(p, deposition_array, mass_comp, start_mesh_comp, num_comp, [=] AMREX_GPU_DEVICE(const ContainerType &part, int comp) {
+			const auto mass = part.rdata(comp);
+			if (mass < massMin || mass > massMax) {
+				return 0.0;
+			}
+			if (useAgeFilter) {
+				const auto birthTime = part.rdata(birthTimeComp);
+				if (currentTime < birthTime) {
+					return 0.0;
+				}
+				const auto age = currentTime - birthTime;
+				if (age > ageMax) {
+					return 0.0;
+				}
+			}
+			return mass * (AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]));
+		});
+	}
+};
+
+template <typename ContainerType>
+void depositParticleMassDensity(ContainerType *container, amrex::MultiFab &deposition_field, int lev, int mass_comp, int start_mesh_comp = 0,
+				amrex::Real mass_min = std::numeric_limits<amrex::Real>::lowest(),
+				amrex::Real mass_max = std::numeric_limits<amrex::Real>::max(), bool use_age_filter = false, int birth_time_comp = -1,
+				amrex::Real current_time = 0.0, amrex::Real age_max = std::numeric_limits<amrex::Real>::max())
+{
+	const BL_PROFILE("depositParticleMassDensity");
+	if (use_age_filter && birth_time_comp < 0) {
+		amrex::Abort("depositParticleMassDensity: age filter requested, but birth_time_comp is invalid.");
+	}
+
+	ParticleMassDensityDeposition deposition_functor;
+	deposition_functor.mass_comp = mass_comp;
+	deposition_functor.birth_time_comp = birth_time_comp;
+	deposition_functor.start_mesh_comp = start_mesh_comp;
+	deposition_functor.num_comp = 1;
+	deposition_functor.mass_min = mass_min;
+	deposition_functor.mass_max = mass_max;
+	deposition_functor.use_age_filter = use_age_filter;
+	deposition_functor.current_time = current_time;
+	deposition_functor.age_max = age_max;
+
+	// ParticleToMesh uses tile-local buffers grown by mf.nGrowVect(). Linear deposition needs one
+	// grow cell to avoid out-of-bounds accesses near tile boundaries.
+	constexpr int required_n_grow = amrex::ParticleInterpolator::Linear::stencil_width - 1;
+	if (deposition_field.nGrowVect().allGE(required_n_grow)) {
+		// The final argument here is zero_out_input.
+		// In this AMReX overload, zero_out_input=false deposits into a temporary particle-grid
+		// MultiFab and then ParallelAdd's it back into deposition_field using src_nghost=mf.nGrowVect()
+		// and dst_nghost=0, so ghost-cell contributions are still folded into the valid region.
+		amrex::ParticleToMesh(*container, deposition_field, lev, deposition_functor, false);
+		return;
+	}
+
+	// Callers often provide a zero-ghost output MultiFab (e.g., diagnostics/derived fields),
+	// but AMReX ParticleToMesh sizes its internal temp/scratch storage from mf.nGrowVect(),
+	// and linear interpolation uses a 2-point stencil in each dimension. We therefore need
+	// one grow cell here so deposition near tile boundaries has valid storage. Deposit into a
+	// temporary MultiFab with sufficient ghost cells, then add the valid region back into the
+	// caller's field after ParticleToMesh has summed ghost contributions internally.
+	amrex::MultiFab deposition_with_ghosts(deposition_field.boxArray(), deposition_field.DistributionMap(), deposition_field.nComp(),
+					       amrex::IntVect(required_n_grow));
+	deposition_with_ghosts.setVal(0.0);
+	amrex::ParticleToMesh(*container, deposition_with_ghosts, lev, deposition_functor, true);
+	deposition_field.ParallelAdd(deposition_with_ghosts, start_mesh_comp, start_mesh_comp, 1, amrex::IntVect(0), amrex::IntVect(0),
+				     container->Geom(lev).periodicity());
+}
 
 //-------------------- Mass depositions --------------------
 
@@ -144,7 +238,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, const int iy, const int iz, const amrex::Real m_ej, const amrex::Real E_blast,
 		  const amrex::Real SN_kin_energy, const amrex::Real p_vx, const amrex::Real p_vy, const amrex::Real p_vz, const amrex::Real vol_inverse,
 		  const amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>
-		      &stencil_weights_gpu) noexcept
+		      &stencil_weights_gpu,
+		  const amrex::Real scalar_yield_per_SN_d) noexcept
 {
 	for (int ii = -SN_stencil_size; ii <= SN_stencil_size; ++ii) {
 		for (int jj = -SN_stencil_size; jj <= SN_stencil_size; ++jj) {
@@ -168,8 +263,16 @@ depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, 
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::energy_index),
 							     SNR_energy_per_cell);
 
+				// Deposit passive scalar if enabled
+				// TODO(chongchonghe): Add support for multiple passive scalars (currently only deposits to scalar0)
+				if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0) {
+					const amrex::Real scalar_per_cell = scalar_yield_per_SN_d * kernel_times_vol_inverse;
+					amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::scalar0_index),
+								     scalar_per_cell);
+				}
+
 				// Deposit count into the last component for roundoff algorithm
-				const int count_comp = Physics_NumVars::numHydroVars; // Last component is the count
+				const int count_comp = HydroSystem<problem_t>::nHydroScalars_; // Last component is the count
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, count_comp), 1.0);
 			}
 		}
@@ -185,14 +288,19 @@ depositThermalKineticMomentumSNR(amrex::Array4<amrex::Real> const &local_state, 
 						       SN_stencil_array_size> &stencil_weights_gpu,
 				 const amrex::Real avg_density, const amrex::Real vol, const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &dx,
 				 const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> &plo, const SNScheme SN_scheme_d, const Real pvx, const Real pvy,
-				 const Real pvz, const bool SN_smooth_gas_velocity)
+				 const Real pvz, const bool SN_smooth_gas_velocity, const amrex::Real scalar_yield_per_SN_d)
 {
 	const double n_H_amb = avg_density * cloudy_H_mass_fraction / m_u;
-	const amrex::Real M_gas = avg_density * stencil_volume * vol;		 // Gas mass in stencil
-	const amrex::Real M_snr = M_gas + m_ej;					 // SNR mass
-	const amrex::Real M_sf = 1679.0 * C::M_solar * std::pow(n_H_amb, -0.26); // Shell-formation mass
-	const amrex::Real RM = M_snr / M_sf;					 // R_M factor = M_snr / M_sf
-	const amrex::Real p_snr = p_snr_0 * std::pow(n_H_amb, -0.17);		 // = 1.89e5 when n = 10
+	const amrex::Real M_gas = avg_density * stencil_volume * vol; // Gas mass in stencil
+	const amrex::Real M_snr = M_gas + m_ej;			      // SNR mass
+	constexpr amrex::Real M_sf_canonical = 1679.0 * C::M_solar;   // canonical pre-factor [g], n_H^{-0.26} applied below
+	constexpr amrex::Real p_snr_0_canonical = quokka::SN_p_term_Msunkmps_canonical * C::M_solar * 1.0e5; // canonical SN terminal momentum [g cm/s]
+	// Scale M_sf so that the kinetic energy p_snr^2 / (2 M_sf) is invariant under changes of p_snr_0:
+	//   M_sf_scaled = M_sf_canonical * (p_snr_0 / p_snr_0_canonical)^2
+	const amrex::Real p_ratio = p_snr_0 / p_snr_0_canonical;
+	const amrex::Real M_sf = M_sf_canonical * std::pow(n_H_amb, -0.26) * p_ratio * p_ratio; // Shell-formation mass (scaled)
+	const amrex::Real RM = M_snr / M_sf;							// R_M factor = M_snr / M_sf
+	const amrex::Real p_snr = p_snr_0 * std::pow(n_H_amb, -0.17);				// = 1.89e5 when n = 10
 
 	// fraction of terminal SN momentum to go to gas momentum
 	amrex::Real f_factor = 1.0;
@@ -313,8 +421,15 @@ depositThermalKineticMomentumSNR(amrex::Array4<amrex::Real> const &local_state, 
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::x3Momentum_index), dpz);
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::energy_index), e_snr_per_cell);
 
+				// Deposit passive scalar if enabled
+				// TODO(chongchonghe): Add support for multiple passive scalars (currently only deposits to scalar0)
+				if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0) {
+					const amrex::Real scalar_per_cell = scalar_yield_per_SN_d * kernel_times_vol_inverse;
+					amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::scalar0_index), scalar_per_cell);
+				}
+
 				// Deposit count into the last component for roundoff algorithm
-				const int count_comp = Physics_NumVars::numHydroVars; // Last component is the count
+				const int count_comp = HydroSystem<problem_t>::nHydroScalars_; // Last component is the count
 				amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, count_comp), 1.0);
 			}
 		}
@@ -347,10 +462,11 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 
 	const amrex::Real step_end_time = time + dt;
 
-	constexpr double E_blast = 1.0e51;		       // ergs
-	constexpr double m_ej = 10.0 * C::M_solar;	       // ejecta mass in cgs
-	constexpr double m_dead_min = 1.4 * C::M_solar;	       // minimum mass of a dead star
-	constexpr double p_snr_0 = 2.8e5 * C::M_solar * 1.0e5; // SN terminal momentum in cgs
+	constexpr double E_blast = 1.0e51;		// ergs
+	constexpr double m_ej = 10.0 * C::M_solar;	// ejecta mass in cgs
+	constexpr double m_dead_min = 1.4 * C::M_solar; // minimum mass of a dead star
+	const double p_snr_0 =
+	    quokka::SN_p_term_Msunkmps * C::M_solar * 1.0e5; // SN terminal momentum in cgs (runtime parameter: particles.SN_p_term_Msunkmps [M_sun km/s])
 
 	// Step 1: Local deposition within each box
 	for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
@@ -374,6 +490,7 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 		const amrex::Real vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 
 		const bool SN_smooth_gas_velocity_d = SN_smooth_gas_velocity;
+		const amrex::Real scalar_yield_per_SN_d = scalar_yield_per_SN;
 
 		// Deposit particle data into the local buffer
 		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
@@ -444,13 +561,14 @@ void depositToBuffer(ContainerType *container, amrex::MultiFab &state, amrex::Mu
 					const amrex::Real SN_kin_energy = 0.5 * m_ej * (p_vx * p_vx + p_vy * p_vy + p_vz * p_vz);
 					// Deposit mass and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
 					depositThermalSNR<problem_t>(local_buffer, ix, iy, iz, m_ej, E_blast, SN_kin_energy, p_vx, p_vy, p_vz, vol_inverse,
-								     stencil_weights_gpu);
+								     stencil_weights_gpu, scalar_yield_per_SN_d);
 				} else {
 					// Deposit momentum and energy into (2 * stencil_width + 1)³ cells centered on the particle's cell
 					// (SN kinetic energy computed inside function using COM frame for Galilean invariance)
 					depositThermalKineticMomentumSNR<problem_t>(local_state, local_buffer, ix, iy, iz, stencil_volume, pos_x, pos_y, pos_z,
 										    m_ej, E_blast, p_snr_0, vol_inverse, stencil_weights_gpu, avg_density, vol,
-										    dx, plo, SN_scheme_d, p_vx, p_vy, p_vz, SN_smooth_gas_velocity_d);
+										    dx, plo, SN_scheme_d, p_vx, p_vy, p_vz, SN_smooth_gas_velocity_d,
+										    scalar_yield_per_SN_d);
 				}
 			}
 		});
@@ -563,6 +681,13 @@ addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::
 	local_state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = e_int_new;
 	local_state(i, j, k, HydroSystem<problem_t>::energy_index) = e_tot_new;
 
+	// Add passive scalars from buffer to state (scalars are conserved densities)
+	if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0) {
+		for (int n = 0; n < Physics_Traits<problem_t>::numPassiveScalars; ++n) {
+			local_state(i, j, k, HydroSystem<problem_t>::scalar0_index + n) += local_buffer(i, j, k, HydroSystem<problem_t>::scalar0_index + n);
+		}
+	}
+
 	// Compute sound speed
 	Real cs = NAN;
 	if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
@@ -619,6 +744,13 @@ addThermalOnlyBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex
 	local_state(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = pz_new;
 	local_state(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = e_int_new;
 	local_state(i, j, k, HydroSystem<problem_t>::energy_index) = e_new;
+
+	// Add passive scalars from buffer to state (scalars are conserved densities)
+	if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0) {
+		for (int n = 0; n < Physics_Traits<problem_t>::numPassiveScalars; ++n) {
+			local_state(i, j, k, HydroSystem<problem_t>::scalar0_index + n) += local_buffer(i, j, k, HydroSystem<problem_t>::scalar0_index + n);
+		}
+	}
 
 	// Compute sound speed. For thermal-only feedback, the gas velocity stays unchanged, so we only report sound speed.
 	Real cs = NAN;
@@ -798,8 +930,6 @@ auto SNDeposition(ContainerType *container, amrex::MultiFab &state, std::array<a
 
 	return {sn_count, max_velocity};
 }
-
-#endif // AMREX_SPACEDIM == 3
 
 } // namespace quokka
 

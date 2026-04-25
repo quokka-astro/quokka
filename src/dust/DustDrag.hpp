@@ -95,8 +95,9 @@ AMREX_GPU_HOST_DEVICE auto DustDrag<problem_t>::ComputeReciprocalStoppingTimeKwo
 		// compute stopping time t_s with/without supersonic correction
 		amrex::Real t_s_sub = std::sqrt(M_PI * quokka::EOS_Traits<problem_t>::gamma) * dust_grain_radius[g] * dust_grain_density[g] /
 				      (2.0 * std::numbers::sqrt2 * rho_g * cs);
-		amrex::Real const correction =
-		    1.0 + static_cast<int>(enable_supersonic_correction) * (9.0 * M_PI / 128.0) * (rel_vel_mag[g] * rel_vel_mag[g] / (cs * cs));
+		amrex::Real const correction = 1.0 + static_cast<int>(enable_supersonic_correction) *
+							 (9.0 * M_PI * quokka::EOS_Traits<problem_t>::gamma / 128.0) *
+							 (rel_vel_mag[g] * rel_vel_mag[g] / (cs * cs));
 		amrex::Real const t_s_fin = t_s_sub / std::sqrt(correction);
 
 		alpha[g] = (t_s_fin > 0.0) ? 1.0 / t_s_fin : 0.0;

@@ -50,7 +50,7 @@ jobs:
       run: .github/workflows/dependencies/dependencies_ccache.sh
 
     - name: Set Up Cache
-      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: ~/.cache/ccache
         key: ccache-${{ github.workflow }}-${{ github.job }}-git-${{ github.sha }}
@@ -58,7 +58,7 @@ jobs:
              ccache-${{ github.workflow }}-${{ github.job }}-git-
 
     - name: Install Canary
-      run: python3 -m pip install canary-wm
+      run: python3 -m pip install canary-wm==25.10.7
 
     - name: Initialize ccache
       run: |
@@ -109,7 +109,7 @@ jobs:
 
     - name: Upload test output
       if: always()
-      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: test-results
         path: ${{github.workspace}}/tests

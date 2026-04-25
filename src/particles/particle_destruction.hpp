@@ -3,12 +3,10 @@
 
 #include "AMReX_BLProfiler.H"
 #include "particle_types.hpp"
-#include <fmt/format.h>
+#include <format>
 
 namespace quokka
 {
-
-#if AMREX_SPACEDIM == 3
 
 // Helper namespace with implementation details for particle destruction
 namespace ParticleDestructionImpl
@@ -82,7 +80,7 @@ static void destroyParticlesImpl(ContainerType *container, int mass_idx, int lev
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				if (particle_verbose > 0) {
 					amrex::Print()
-					    << fmt::format("[PARTICLES] Particle destruction: Time: {} - Destroyed {} particles (from level {} and above)\n",
+					    << std::format("[PARTICLES] Particle destruction: Time: {} - Destroyed {} particles (from level {} and above)\n",
 							   current_time, global_total_destroyed, lev_min);
 				}
 			}
@@ -124,8 +122,6 @@ template <ParticleType particleType> struct ParticleDestructionTraits {
 		    container, mass_idx, lev_min, current_time, dt, birth_time_index, evolution_stage_index);
 	}
 };
-
-#endif // AMREX_SPACEDIM == 3
 
 } // namespace quokka
 

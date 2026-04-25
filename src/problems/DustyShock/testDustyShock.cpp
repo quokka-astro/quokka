@@ -3,7 +3,7 @@
 
 #include "QuokkaSimulation.hpp"
 #include "util/fextract.hpp"
-#include <fmt/format.h>
+#include <format>
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
@@ -70,7 +70,7 @@ template <> void QuokkaSimulation<DustyShock>::setInitialConditionsOnGrid(quokka
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = Geom(0).CellSizeArray();
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = Geom(0).ProbLoArray();
 
-	// Shock tube initial conditions
+	// shock tube initial conditions
 	const double shock_position = shock_position_init;
 	const double rho_left = rho_gas_left;
 	const double u_left = vel_gas_left;
@@ -87,7 +87,7 @@ template <> void QuokkaSimulation<DustyShock>::setInitialConditionsOnGrid(quokka
 
 		state_cc(i, j, k, HydroSystem<DustyShock>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<DustyShock>::energy_index) = E;
-		state_cc(i, j, k, HydroSystem<DustyShock>::internalEnergy_index) = E;
+		state_cc(i, j, k, HydroSystem<DustyShock>::internalEnergy_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<DustyShock>::x1Momentum_index) = rho * u;
 		state_cc(i, j, k, HydroSystem<DustyShock>::x2Momentum_index) = 0.;
 		state_cc(i, j, k, HydroSystem<DustyShock>::x3Momentum_index) = 0.;
@@ -169,231 +169,236 @@ auto problem_main() -> int
 	auto [position, values] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
 	const int nx = static_cast<int>(position.size());
 
-	// Extract numerical solution slices
-	std::vector<double> rho_g_num(nx);
-	std::vector<double> u_g_num(nx);
-	std::vector<double> rho_d_num(nx);
-	std::vector<double> u_d_num(nx);
-	for (int i = 0; i < nx; ++i) {
-		double const rho = values.at(HydroSystem<DustyShock>::density_index)[i];
-		double const mom = values.at(HydroSystem<DustyShock>::x1Momentum_index)[i];
-		double const rho_d = values.at(HydroSystem<DustyShock>::dustDensity_index)[i];
-		double const mom_d = values.at(HydroSystem<DustyShock>::x1DustMomentum_index)[i];
-		rho_g_num[i] = rho;
-		u_g_num[i] = (rho != 0.0) ? mom / rho : 0.0;
-		rho_d_num[i] = rho_d;
-		u_d_num[i] = (rho_d != 0.0) ? mom_d / rho_d : 0.0;
-	}
-
-	// locate shock position from numerical density gradient
-	std::vector<double> drho(nx > 1 ? nx - 1 : 0);
-	for (int i = 0; i < nx - 1; ++i) {
-		drho[i] = std::abs(rho_g_num[i + 1] - rho_g_num[i]);
-	}
-	int const shock_idx = (drho.empty()) ? 0 : static_cast<int>(std::distance(drho.begin(), std::max_element(drho.begin(), drho.end())));
-	double const shock_pos_numeric = position[shock_idx];
-
-	// Analytic solution parameters
-	const double v_s = vel_gas_left;
-	const double c_s = cs_isothermal;
-	const double M = v_s / c_s;
-	const double epsilon = 1.0;
-	const double K1 = drag_coefficient;
-	const double rho_d_left = rho_dust_left;
-	const double v_d_left = vel_dust_left;
-	const double K_over_rho_v = K1 / (rho_d_left * v_d_left);
-
-	// prepare analytic x grid
-	const int n_analytic = 1000;
-	std::vector<double> x_an(n_analytic);
-	for (int i = 0; i < n_analytic; ++i) {
-		x_an[i] = (Lx * static_cast<double>(i)) / static_cast<double>(n_analytic - 1);
-	}
-
-	// compute analytic omega_d and omega_g
-	std::vector<double> omega_d(n_analytic, 1.0);
-	std::vector<double> omega_g(n_analytic, 1.0);
-	// find analytic index corresponding to numeric shock position
-	int shock_idx_an = 0;
-	for (int i = 0; i < n_analytic; ++i) {
-		if (x_an[i] >= shock_pos_numeric) {
-			shock_idx_an = i;
-			break;
+	int status = 0;
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		// extract numerical solution slices
+		std::vector<double> rho_g_num(nx);
+		std::vector<double> u_g_num(nx);
+		std::vector<double> rho_d_num(nx);
+		std::vector<double> u_d_num(nx);
+		for (int i = 0; i < nx; ++i) {
+			double const rho = values.at(HydroSystem<DustyShock>::density_index)[i];
+			double const mom = values.at(HydroSystem<DustyShock>::x1Momentum_index)[i];
+			double const rho_d = values.at(HydroSystem<DustyShock>::dustDensity_index)[i];
+			double const mom_d = values.at(HydroSystem<DustyShock>::x1DustMomentum_index)[i];
+			rho_g_num[i] = rho;
+			u_g_num[i] = (rho != 0.0) ? mom / rho : 0.0;
+			rho_d_num[i] = rho_d;
+			u_d_num[i] = (rho_d != 0.0) ? mom_d / rho_d : 0.0;
 		}
-	}
 
-	// integrate to the right of the shock using RK4
-	for (int i = shock_idx_an; i < n_analytic - 1; ++i) {
-		double const x0 = x_an[i];
-		double const x1 = x_an[i + 1];
-		double const h = x1 - x0;
-		double const w0 = omega_d[i];
-
-		auto compute_omega_g = [&](double od) -> double {
-			double const a = 1.0;
-			double const b = epsilon * (od - 1.0) - 1.0 / (M * M) - 1.0;
-			double const c = 1.0 / (M * M);
-			return solve_quadratic_root_in_0_1(a, b, c);
-		};
-
-		auto deriv = [&](double /*xval*/, double wval) -> double {
-			double const og = compute_omega_g(wval);
-			if (!std::isfinite(og)) {
-				return 0.0;
-			}
-			return K_over_rho_v * (og - wval);
-		};
-
-		double const k1 = deriv(x0, w0);
-		double const k2 = deriv(x0 + 0.5 * h, w0 + 0.5 * h * k1);
-		double const k3 = deriv(x0 + 0.5 * h, w0 + 0.5 * h * k2);
-		double const k4 = deriv(x1, w0 + h * k3);
-
-		double const wnext = w0 + (h / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4);
-		omega_d[i + 1] = wnext;
-
-		double og_next = compute_omega_g(wnext);
-		if (!std::isfinite(og_next)) {
-			og_next = omega_g[i];
+		// locate shock position from numerical density gradient
+		std::vector<double> drho(nx > 1 ? nx - 1 : 0);
+		for (int i = 0; i < nx - 1; ++i) {
+			drho[i] = std::abs(rho_g_num[i + 1] - rho_g_num[i]);
 		}
-		omega_g[i + 1] = og_next;
-	}
+		int const shock_idx = (drho.empty()) ? 0 : static_cast<int>(std::distance(drho.begin(), std::max_element(drho.begin(), drho.end())));
+		double const shock_pos_numeric = position[shock_idx];
 
-	// build analytic density & velocity profiles from omega arrays
-	std::vector<double> rho_g_an(n_analytic);
-	std::vector<double> rho_d_an(n_analytic);
-	std::vector<double> u_g_an(n_analytic);
-	std::vector<double> u_d_an(n_analytic);
-	for (int i = 0; i < n_analytic; ++i) {
-		if (x_an[i] < shock_pos_numeric) {
-			rho_g_an[i] = 1.0;
-			rho_d_an[i] = rho_d_left;
-			u_g_an[i] = v_s;
-			u_d_an[i] = v_s;
-		} else {
-			double og = omega_g[i];
-			double od = omega_d[i];
-			if (!std::isfinite(og)) {
-				og = 1.0;
-			}
-			if (!std::isfinite(od)) {
-				od = 1.0;
-			}
-			u_g_an[i] = og * v_s;
-			u_d_an[i] = od * v_s;
-			double const denom_g = (og * v_s == 0.0) ? 1e-12 : (og * v_s);
-			double const denom_d = (od * v_s == 0.0) ? 1e-12 : (od * v_s);
-			rho_g_an[i] = 1.0 * v_d_left / denom_g;
-			rho_d_an[i] = rho_d_left * v_d_left / denom_d;
+		// analytic solution parameters
+		const double v_s = vel_gas_left;
+		const double c_s = cs_isothermal;
+		const double M = v_s / c_s;
+		const double epsilon = 1.0;
+		const double K1 = drag_coefficient;
+		const double rho_d_left = rho_dust_left;
+		const double v_d_left = vel_dust_left;
+		const double K_over_rho_v = K1 / (rho_d_left * v_d_left);
+
+		// prepare analytic x grid
+		const int n_analytic = 1000;
+		std::vector<double> x_an(n_analytic);
+		for (int i = 0; i < n_analytic; ++i) {
+			x_an[i] = (Lx * static_cast<double>(i)) / static_cast<double>(n_analytic - 1);
 		}
-	}
+
+		// compute analytic omega_d and omega_g
+		std::vector<double> omega_d(n_analytic, 1.0);
+		std::vector<double> omega_g(n_analytic, 1.0);
+		// find analytic index corresponding to numeric shock position
+		int shock_idx_an = 0;
+		for (int i = 0; i < n_analytic; ++i) {
+			if (x_an[i] >= shock_pos_numeric) {
+				shock_idx_an = i;
+				break;
+			}
+		}
+
+		// integrate to the right of the shock using RK4
+		for (int i = shock_idx_an; i < n_analytic - 1; ++i) {
+			double const x0 = x_an[i];
+			double const x1 = x_an[i + 1];
+			double const h = x1 - x0;
+			double const w0 = omega_d[i];
+
+			auto compute_omega_g = [&](double od) -> double {
+				double const a = 1.0;
+				double const b = epsilon * (od - 1.0) - 1.0 / (M * M) - 1.0;
+				double const c = 1.0 / (M * M);
+				return solve_quadratic_root_in_0_1(a, b, c);
+			};
+
+			auto deriv = [&](double /*xval*/, double wval) -> double {
+				double const og = compute_omega_g(wval);
+				if (!std::isfinite(og)) {
+					return 0.0;
+				}
+				return K_over_rho_v * (og - wval);
+			};
+
+			double const k1 = deriv(x0, w0);
+			double const k2 = deriv(x0 + 0.5 * h, w0 + 0.5 * h * k1);
+			double const k3 = deriv(x0 + 0.5 * h, w0 + 0.5 * h * k2);
+			double const k4 = deriv(x1, w0 + h * k3);
+
+			double const wnext = w0 + (h / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4);
+			omega_d[i + 1] = wnext;
+
+			double og_next = compute_omega_g(wnext);
+			if (!std::isfinite(og_next)) {
+				og_next = omega_g[i];
+			}
+			omega_g[i + 1] = og_next;
+		}
+
+		// build analytic density & velocity profiles from omega arrays
+		std::vector<double> rho_g_an(n_analytic);
+		std::vector<double> rho_d_an(n_analytic);
+		std::vector<double> u_g_an(n_analytic);
+		std::vector<double> u_d_an(n_analytic);
+		for (int i = 0; i < n_analytic; ++i) {
+			if (x_an[i] < shock_pos_numeric) {
+				rho_g_an[i] = 1.0;
+				rho_d_an[i] = rho_d_left;
+				u_g_an[i] = v_s;
+				u_d_an[i] = v_s;
+			} else {
+				double og = omega_g[i];
+				double od = omega_d[i];
+				if (!std::isfinite(og)) {
+					og = 1.0;
+				}
+				if (!std::isfinite(od)) {
+					od = 1.0;
+				}
+				u_g_an[i] = og * v_s;
+				u_d_an[i] = od * v_s;
+				double const denom_g = (og * v_s == 0.0) ? 1e-12 : (og * v_s);
+				double const denom_d = (od * v_s == 0.0) ? 1e-12 : (od * v_s);
+				rho_g_an[i] = 1.0 * v_d_left / denom_g;
+				rho_d_an[i] = rho_d_left * v_d_left / denom_d;
+			}
+		}
 #ifdef HAVE_PYTHON
-	using matplotlibcpp::clf;
-	using matplotlibcpp::legend;
-	using matplotlibcpp::plot;
-	using matplotlibcpp::save;
-	using matplotlibcpp::tight_layout;
-	using matplotlibcpp::title;
-	using matplotlibcpp::xlabel;
-	using matplotlibcpp::ylabel;
+		using matplotlibcpp::clf;
+		using matplotlibcpp::legend;
+		using matplotlibcpp::plot;
+		using matplotlibcpp::save;
+		using matplotlibcpp::tight_layout;
+		using matplotlibcpp::title;
+		using matplotlibcpp::xlabel;
+		using matplotlibcpp::ylabel;
 
-	// plotting: restrict to x in [0,20]
-	std::vector<double> x_plot;
-	std::vector<double> rho_g_plot;
-	std::vector<double> rho_d_plot;
-	std::vector<double> u_g_plot;
-	std::vector<double> u_d_plot;
-	for (int i = 0; i < nx; ++i) {
-		if (position[i] >= 0.0 && position[i] <= 20.0) {
-			x_plot.push_back(position[i]);
-			rho_g_plot.push_back(rho_g_num[i]);
-			rho_d_plot.push_back(rho_d_num[i]);
-			u_g_plot.push_back(u_g_num[i]);
-			u_d_plot.push_back(u_d_num[i]);
+		// plotting: restrict to x in [0,20]
+		std::vector<double> x_plot;
+		std::vector<double> rho_g_plot;
+		std::vector<double> rho_d_plot;
+		std::vector<double> u_g_plot;
+		std::vector<double> u_d_plot;
+		for (int i = 0; i < nx; ++i) {
+			if (position[i] >= 0.0 && position[i] <= 20.0) {
+				x_plot.push_back(position[i]);
+				rho_g_plot.push_back(rho_g_num[i]);
+				rho_d_plot.push_back(rho_d_num[i]);
+				u_g_plot.push_back(u_g_num[i]);
+				u_d_plot.push_back(u_d_num[i]);
+			}
 		}
-	}
 
-	// analytic curves limited to x in [0,20]
-	std::vector<double> x_an_plot;
-	std::vector<double> rho_g_an_plot;
-	std::vector<double> rho_d_an_plot;
-	std::vector<double> u_g_an_plot;
-	std::vector<double> u_d_an_plot;
-	for (int i = 0; i < n_analytic; ++i) {
-		if (x_an[i] >= 0.0 && x_an[i] <= 20.0) {
-			x_an_plot.push_back(x_an[i]);
-			rho_g_an_plot.push_back(rho_g_an[i]);
-			rho_d_an_plot.push_back(rho_d_an[i]);
-			u_g_an_plot.push_back(u_g_an[i]);
-			u_d_an_plot.push_back(u_d_an[i]);
+		// analytic curves limited to x in [0,20]
+		std::vector<double> x_an_plot;
+		std::vector<double> rho_g_an_plot;
+		std::vector<double> rho_d_an_plot;
+		std::vector<double> u_g_an_plot;
+		std::vector<double> u_d_an_plot;
+		for (int i = 0; i < n_analytic; ++i) {
+			if (x_an[i] >= 0.0 && x_an[i] <= 20.0) {
+				x_an_plot.push_back(x_an[i]);
+				rho_g_an_plot.push_back(rho_g_an[i]);
+				rho_d_an_plot.push_back(rho_d_an[i]);
+				u_g_an_plot.push_back(u_g_an[i]);
+				u_d_an_plot.push_back(u_d_an[i]);
+			}
 		}
-	}
 
-	// density plot
-	clf();
-	plot(x_plot, rho_g_plot, {{"label", "Gas Density (Numerical)"}, {"marker", "o"}, {"linestyle", "None"}, {"markersize", "2"}});
-	plot(x_plot, rho_d_plot, {{"label", "Dust Density (Numerical)"}, {"marker", "o"}, {"linestyle", "None"}, {"markersize", "2"}});
-	plot(x_an_plot, rho_g_an_plot, {{"label", "Gas Density (Analytic)"}, {"linestyle", "-"}, {"color", "black"}});
-	plot(x_an_plot, rho_d_an_plot, {{"label", "Dust Density (Analytic)"}, {"linestyle", "--"}, {"color", "black"}});
-	xlabel("x");
-	ylabel("Density");
-	title(fmt::format("Density Comparison at t = {:.4f}", sim.tNew_[0]));
-	legend();
-	tight_layout();
-	save("dusty_shock_density.pdf");
+		// density plot
+		clf();
+		plot(x_plot, rho_g_plot, {{"label", "Gas Density (Numerical)"}, {"marker", "o"}, {"linestyle", "None"}, {"markersize", "2"}});
+		plot(x_plot, rho_d_plot, {{"label", "Dust Density (Numerical)"}, {"marker", "o"}, {"linestyle", "None"}, {"markersize", "2"}});
+		plot(x_an_plot, rho_g_an_plot, {{"label", "Gas Density (Analytic)"}, {"linestyle", "-"}, {"color", "black"}});
+		plot(x_an_plot, rho_d_an_plot, {{"label", "Dust Density (Analytic)"}, {"linestyle", "--"}, {"color", "black"}});
+		xlabel("x");
+		ylabel("Density");
+		title(std::format("Density Comparison at t = {:.4f}", sim.tNew_[0]));
+		legend();
+		tight_layout();
+		save("dusty_shock_density.pdf");
 
-	// velocity plot
-	clf();
-	plot(x_plot, u_g_plot, {{"label", "Gas Velocity (Numerical)"}, {"marker", "o"}, {"linestyle", "None"}, {"markersize", "2"}});
-	plot(x_plot, u_d_plot, {{"label", "Dust Velocity (Numerical)"}, {"marker", "o"}, {"linestyle", "None"}, {"markersize", "2"}});
-	plot(x_an_plot, u_g_an_plot, {{"label", "Gas Velocity (Analytic)"}, {"linestyle", "-"}, {"color", "black"}});
-	plot(x_an_plot, u_d_an_plot, {{"label", "Dust Velocity (Analytic)"}, {"linestyle", "--"}, {"color", "black"}});
-	xlabel("x");
-	ylabel("Velocity");
-	title(fmt::format("Velocity Comparison at t = {:.4f}", sim.tNew_[0]));
-	legend();
-	tight_layout();
-	save("dusty_shock_velocity.pdf");
+		// velocity plot
+		clf();
+		plot(x_plot, u_g_plot, {{"label", "Gas Velocity (Numerical)"}, {"marker", "o"}, {"linestyle", "None"}, {"markersize", "2"}});
+		plot(x_plot, u_d_plot, {{"label", "Dust Velocity (Numerical)"}, {"marker", "o"}, {"linestyle", "None"}, {"markersize", "2"}});
+		plot(x_an_plot, u_g_an_plot, {{"label", "Gas Velocity (Analytic)"}, {"linestyle", "-"}, {"color", "black"}});
+		plot(x_an_plot, u_d_an_plot, {{"label", "Dust Velocity (Analytic)"}, {"linestyle", "--"}, {"color", "black"}});
+		xlabel("x");
+		ylabel("Velocity");
+		title(std::format("Velocity Comparison at t = {:.4f}", sim.tNew_[0]));
+		legend();
+		tight_layout();
+		save("dusty_shock_velocity.pdf");
 #endif // HAVE_PYTHON
 
-	// Interpolate analytic solution to numerical x positions, then compute relative L1 norms
-	std::vector<double> rho_g_an_at_num(nx);
-	std::vector<double> rho_d_an_at_num(nx);
-	std::vector<double> u_g_an_at_num(nx);
-	std::vector<double> u_d_an_at_num(nx);
-	for (int i = 0; i < nx; ++i) {
-		double const xi = position[i];
-		rho_g_an_at_num[i] = linear_interpolate(x_an, rho_g_an, xi);
-		rho_d_an_at_num[i] = linear_interpolate(x_an, rho_d_an, xi);
-		u_g_an_at_num[i] = linear_interpolate(x_an, u_g_an, xi);
-		u_d_an_at_num[i] = linear_interpolate(x_an, u_d_an, xi);
+		// interpolate analytic solution to numerical x positions, then compute relative L1 norms
+		std::vector<double> rho_g_an_at_num(nx);
+		std::vector<double> rho_d_an_at_num(nx);
+		std::vector<double> u_g_an_at_num(nx);
+		std::vector<double> u_d_an_at_num(nx);
+		for (int i = 0; i < nx; ++i) {
+			double const xi = position[i];
+			rho_g_an_at_num[i] = linear_interpolate(x_an, rho_g_an, xi);
+			rho_d_an_at_num[i] = linear_interpolate(x_an, rho_d_an, xi);
+			u_g_an_at_num[i] = linear_interpolate(x_an, u_g_an, xi);
+			u_d_an_at_num[i] = linear_interpolate(x_an, u_d_an, xi);
+		}
+
+		auto relative_L1 = [&](const std::vector<double> &num, const std::vector<double> &ana) -> double {
+			double err = 0.0;
+			double sol = 0.0;
+			for (size_t i = 0; i < num.size(); ++i) {
+				err += std::abs(num[i] - ana[i]);
+				sol += std::abs(ana[i]);
+			}
+			if (sol == 0.0) {
+				return (err == 0.0) ? 0.0 : std::numeric_limits<double>::infinity();
+			}
+			return err / sol;
+		};
+
+		double const err_rho_g = relative_L1(rho_g_num, rho_g_an_at_num);
+		double const err_rho_d = relative_L1(rho_d_num, rho_d_an_at_num);
+		double const err_u_g = relative_L1(u_g_num, u_g_an_at_num);
+		double const err_u_d = relative_L1(u_d_num, u_d_an_at_num);
+
+		amrex::Print() << "Relative L1 norm (gas density)  = " << err_rho_g << "\n";
+		amrex::Print() << "Relative L1 norm (dust density) = " << err_rho_d << "\n";
+		amrex::Print() << "Relative L1 norm (gas velocity) = " << err_u_g << "\n";
+		amrex::Print() << "Relative L1 norm (dust velocity)= " << err_u_d << "\n";
+
+		const double tol = 0.01;
+		if (err_rho_g > tol || err_rho_d > tol || err_u_g > tol || err_u_d > tol) {
+			status = 1;
+		}
+		amrex::Print() << (status == 0 ? "Test PASSED.\n" : "Test FAILED.\n");
 	}
-
-	auto relative_L1 = [&](const std::vector<double> &num, const std::vector<double> &ana) -> double {
-		double err = 0.0;
-		double sol = 0.0;
-		for (size_t i = 0; i < num.size(); ++i) {
-			err += std::abs(num[i] - ana[i]);
-			sol += std::abs(ana[i]);
-		}
-		if (sol == 0.0) {
-			return (err == 0.0) ? 0.0 : std::numeric_limits<double>::infinity();
-		}
-		return err / sol;
-	};
-
-	double const err_rho_g = relative_L1(rho_g_num, rho_g_an_at_num);
-	double const err_rho_d = relative_L1(rho_d_num, rho_d_an_at_num);
-	double const err_u_g = relative_L1(u_g_num, u_g_an_at_num);
-	double const err_u_d = relative_L1(u_d_num, u_d_an_at_num);
-
-	amrex::Print() << "Relative L1 norm (gas density)  = " << err_rho_g << "\n";
-	amrex::Print() << "Relative L1 norm (dust density) = " << err_rho_d << "\n";
-	amrex::Print() << "Relative L1 norm (gas velocity) = " << err_u_g << "\n";
-	amrex::Print() << "Relative L1 norm (dust velocity)= " << err_u_d << "\n";
-
-	const double tol = 0.01;
-	int const status = (err_rho_g < tol && err_rho_d < tol && err_u_g < tol && err_u_d < tol) ? 0 : 1;
-	amrex::Print() << (status == 0 ? "Test PASSED.\n" : "Test FAILED.\n");
 	return status;
 }

@@ -4,7 +4,7 @@
 
 #include "QuokkaSimulation.hpp"
 #include "util/fextract.hpp"
-#include <fmt/format.h>
+#include <format>
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
 #endif
@@ -124,7 +124,6 @@ template <> void QuokkaSimulation<DustSoundwave>::setInitialConditionsOnGrid(quo
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
 
-		//----- gas initialization -----
 		// density perturbation: δρ_g = A_rho[Re(δρ_g^)cos(kx) - Im(δρ_g^)sin(kx)]
 		double const drho_g = A_rho * (Re_rho_g * cos(kk * x) - Im_rho_g * sin(kk * x));
 		amrex::Real const rho_gas_local = rho_g0 + drho_g;
@@ -139,7 +138,7 @@ template <> void QuokkaSimulation<DustSoundwave>::setInitialConditionsOnGrid(quo
 		state_cc(i, j, k, HydroSystem<DustSoundwave>::energy_index) = 0.5 * rho_gas_local * (du_g * du_g);
 		state_cc(i, j, k, HydroSystem<DustSoundwave>::internalEnergy_index) = 0.0;
 
-		// Compute dust values before constexpr-if to ensure proper capture
+		// compute dust values before constexpr-if to ensure proper capture
 		// density perturbation: δρ_d = A_rho[Re(δρ_d^)cos(kx) - Im(δρ_d^)sin(kx)]
 		double const drho_d = A_rho * (Re_rho_d * cos(kk * x) - Im_rho_d * sin(kk * x));
 		amrex::Real const rho_dust_local = rho_d0 + drho_d;
@@ -148,7 +147,6 @@ template <> void QuokkaSimulation<DustSoundwave>::setInitialConditionsOnGrid(quo
 		double const du_d = A_vel * (Re_u_d * cos(kk * x) - Im_u_d * sin(kk * x));
 
 		if constexpr (Physics_Traits<DustSoundwave>::is_dust_enabled) {
-			//----- dust initialization -----
 			state_cc(i, j, k, HydroSystem<DustSoundwave>::dustDensity_index) = rho_dust_local;
 			state_cc(i, j, k, HydroSystem<DustSoundwave>::x1DustMomentum_index) = rho_dust_local * du_d;
 			state_cc(i, j, k, HydroSystem<DustSoundwave>::x2DustMomentum_index) = 0.;
@@ -157,30 +155,10 @@ template <> void QuokkaSimulation<DustSoundwave>::setInitialConditionsOnGrid(quo
 	});
 }
 
-template <> void QuokkaSimulation<DustSoundwave>::computeBeforeTimestep()
-{
-	if (amrex::ParallelDescriptor::IOProcessor() && userData_.t_vec_.empty()) {
-		auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.0);
-		userData_.t_vec_.push_back(0.0);
-		const double density = values.at(HydroSystem<DustSoundwave>::density_index)[0];
-		const double mom_x = values.at(HydroSystem<DustSoundwave>::x1Momentum_index)[0];
-		const double dust_density = values.at(HydroSystem<DustSoundwave>::dustDensity_index)[0];
-		const double dust_mom_x = values.at(HydroSystem<DustSoundwave>::x1DustMomentum_index)[0];
-		double const v_gas = mom_x / density;
-		double const rho_gas = density;
-		double const v_dust = dust_mom_x / dust_density;
-		double const rho_dust = dust_density;
-		userData_.v_gas_vec_.push_back(v_gas);
-		userData_.rho_gas_vec_.push_back(rho_gas);
-		userData_.v_dust_vec_.push_back(v_dust);
-		userData_.rho_dust_vec_.push_back(rho_dust);
-	}
-}
-
 template <> void QuokkaSimulation<DustSoundwave>::computeAfterTimestep()
 {
+	auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.0);
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.0);
 		userData_.t_vec_.push_back(tNew_[0]);
 		const double density = values.at(HydroSystem<DustSoundwave>::density_index)[0];
 		const double mom_x = values.at(HydroSystem<DustSoundwave>::x1Momentum_index)[0];
@@ -212,6 +190,25 @@ auto problem_main() -> int
 
 	// initialize
 	sim.setInitialConditions();
+
+	// store initial values for t=0 plotting
+
+	auto [position, val_ini] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.0);
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		sim.userData_.t_vec_.push_back(0.0);
+		const double density = val_ini.at(HydroSystem<DustSoundwave>::density_index)[0];
+		const double mom_x = val_ini.at(HydroSystem<DustSoundwave>::x1Momentum_index)[0];
+		const double dust_density = val_ini.at(HydroSystem<DustSoundwave>::dustDensity_index)[0];
+		const double dust_mom_x = val_ini.at(HydroSystem<DustSoundwave>::x1DustMomentum_index)[0];
+		double const v_gas = mom_x / density;
+		double const rho_gas = density;
+		double const v_dust = dust_mom_x / dust_density;
+		double const rho_dust = dust_density;
+		sim.userData_.v_gas_vec_.push_back(v_gas);
+		sim.userData_.rho_gas_vec_.push_back(rho_gas);
+		sim.userData_.v_dust_vec_.push_back(v_dust);
+		sim.userData_.rho_dust_vec_.push_back(rho_dust);
+	}
 
 	// evolve
 	sim.evolve();
@@ -265,7 +262,7 @@ auto problem_main() -> int
 		norm_rho_dust_dense[i] = rho_dust_analytic(tt) / rho_d0;
 	}
 
-	// Relative L1 error function
+	// relative L1 error function
 	auto rel_err = [](const std::vector<double> &sim, const std::vector<double> &exact) {
 		double err = 0.0;
 		double sol = 0.0;
@@ -325,7 +322,7 @@ auto problem_main() -> int
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel("Time");
 	matplotlibcpp::ylabel(R"($\delta u/(A c_s)$)");
-	matplotlibcpp::title(fmt::format("Velocity Evolution", plot_stride));
+	matplotlibcpp::title(std::format("Velocity Evolution", plot_stride));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./dust_soundwave_velocity.pdf");
 
@@ -339,7 +336,7 @@ auto problem_main() -> int
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel("Time");
 	matplotlibcpp::ylabel(R"($\delta \rho/(A \rho^0)$)");
-	matplotlibcpp::title(fmt::format("Density Evolution", plot_stride));
+	matplotlibcpp::title(std::format("Density Evolution", plot_stride));
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./dust_soundwave_density.pdf");
 #endif // HAVE_PYTHON
