@@ -200,7 +200,8 @@ struct ResampledCoolingFunctor {
 
 // const_heating_rate_per_H: unit erg/s/H
 template <typename problem_t>
-auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &resampledTables, const Real temp_floor, const Real const_heating_rate_per_H) -> bool
+auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &resampledTables, const Real temp_floor, const Real const_heating_rate_per_H)
+    -> bool
 {
 	const BL_PROFILE("quokka::ResampledCooling::computeCooling()");
 
