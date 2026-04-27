@@ -18,6 +18,7 @@
 #include "hydro/hydro_system.hpp"
 #include "math/FastMath.hpp"
 #include "math/ODEIntegrate.hpp"
+#include "math/root_finding.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/DataTable.hpp"
 #include <format>
@@ -104,18 +105,12 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEgasFromTgas(Real const rho
 		return Eint_max;
 	}
 
-	// Temperature is monotonic in the tabulated specific internal energy, so a log-space bisection is sufficient here.
-	Real Eint_lo = Eint_min;
-	Real Eint_hi = Eint_max;
-	for (int n = 0; n < 32; ++n) {
-		Real const Eint_mid = std::sqrt(Eint_lo * Eint_hi);
-		Real const T_mid = ComputeTgasFromEgas(rho, Eint_mid, tables);
-		if (T_mid < Tgas) {
-			Eint_lo = Eint_mid;
-		} else {
-			Eint_hi = Eint_mid;
-		}
-	}
+	// Temperature is monotonic in the tabulated specific internal energy, so root-finding on T(Eint) - Tgas converges.
+	auto f = [=](Real Eint) -> Real { return ComputeTgasFromEgas(rho, Eint, tables) - Tgas; };
+
+	int max_iter = 32;
+	auto tol = quokka::math::eps_tolerance<Real>{};
+	auto const [Eint_lo, Eint_hi] = quokka::math::toms748_solve(f, Eint_min, Eint_max, Tmin - Tgas, Tmax - Tgas, tol, max_iter);
 
 	return Eint_hi;
 }
