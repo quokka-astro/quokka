@@ -80,6 +80,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 	amrex::Real Lambda_ion_ff = get_ion_ff_cooling_coefficient(state.T);
 
 	amrex::Real c = C::c_light;
+	amrex::Real chat = state.c_hat;
+	amrex::Real frac = chat / c;
 
 	amrex::Real n_e = state.xn[0];
 	amrex::Real n_HI = state.xn[1];
@@ -105,8 +107,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 	ydot(2) = -ydot(1);
 	ydot(3) = ydot(1);
 	ydot(net_ienuc) = energy_switch * (photoionization_heating + KI_heating - recombination_cooling - KI_cooling - ion_ff_cooling) / state.rho;
-	ydot(5) = -photoionization_term;
-	ydot(6) = -n_HI * c * sigma_photo * n_gamma_flux;
+	ydot(5) = -photoionization_term * frac;
+	ydot(6) = -n_HI * c * sigma_photo * n_gamma_flux * frac;
 }
 
 template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_jac(const burn_t &state, MatrixType &jac)
@@ -122,6 +124,8 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	amrex::Real Lambda_ion_ff = get_ion_ff_cooling_coefficient(state.T);
 
 	amrex::Real c = C::c_light;
+	amrex::Real chat = state.c_hat;
+	amrex::Real frac = chat / c;
 
 	amrex::Real n_e = state.xn[0];
 	amrex::Real n_HI = state.xn[1];
@@ -173,10 +177,10 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	jac(net_ienuc, 6) = 0.0_rt;
 
 	jac(5, 1) = 0.0_rt;
-	jac(5, 2) = -photoionization_term / n_HI;
+	jac(5, 2) = -photoionization_term * frac / n_HI;
 	jac(5, 3) = 0.0_rt;
 	jac(5, net_ienuc) = 0.0_rt;
-	jac(5, 5) = -photoionization_term / n_gamma;
+	jac(5, 5) = -photoionization_term * frac / n_gamma;
 	jac(5, 6) = 0.0_rt;
 
 	jac(6, 1) = 0.0_rt;
