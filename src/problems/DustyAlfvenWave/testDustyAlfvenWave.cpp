@@ -40,8 +40,8 @@ constexpr size_t tracer_particle_count = 128;
 constexpr int numerical_tracer_substeps = 8;
 constexpr int reference_dense_history_points = 1001;
 
-double g_mu = 0.01;		 // NOLINT
-double g_stopping_time = 0.1;	 // NOLINT
+double g_mu = 0.01;			     // NOLINT
+double g_stopping_time = 0.1;		     // NOLINT
 double g_omega_l_target = -alfven_frequency; // NOLINT
 
 // input parameter table for a test case
@@ -416,10 +416,7 @@ auto tracerRhs(const TracerState &state, const HelicalFieldSample &field, const 
 	const double cross_y = wz * local.bx_ - wx * local.bz_;
 	const double cross_z = wx * local.by_ - wy * local.bx_;
 
-	return {.z_ = state.vz_,
-		.vx_ = -alpha * wx + qom * cross_x,
-		.vy_ = -alpha * wy + qom * cross_y,
-		.vz_ = -alpha * wz + qom * cross_z};
+	return {.z_ = state.vz_, .vx_ = -alpha * wx + qom * cross_x, .vy_ = -alpha * wy + qom * cross_y, .vz_ = -alpha * wz + qom * cross_z};
 }
 
 void rk4StepTracersWithSampledFields(std::vector<TracerState> &particles, double t, double dt, const std::vector<HelicalFieldSample> &field_history,
@@ -606,12 +603,12 @@ auto extractMagneticProfile(QuokkaSimulation<DustyAlfvenWave> &sim) -> amrex::Ve
 	auto const &fcy = sim.state_new_fc_[0][1].const_arrays();
 	auto const &fcz = sim.state_new_fc_[0][2].const_arrays();
 	amrex::ParallelFor(b_cc, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
-		b_cc_arrays[bx](i, j, k, 0) = 0.5 * (fcx[bx](i, j, k, MHDSystem<DustyAlfvenWave>::bfield_index) +
-						     fcx[bx](i + 1, j, k, MHDSystem<DustyAlfvenWave>::bfield_index));
-		b_cc_arrays[bx](i, j, k, 1) = 0.5 * (fcy[bx](i, j, k, MHDSystem<DustyAlfvenWave>::bfield_index) +
-						     fcy[bx](i, j + 1, k, MHDSystem<DustyAlfvenWave>::bfield_index));
-		b_cc_arrays[bx](i, j, k, 2) = 0.5 * (fcz[bx](i, j, k, MHDSystem<DustyAlfvenWave>::bfield_index) +
-						     fcz[bx](i, j, k + 1, MHDSystem<DustyAlfvenWave>::bfield_index));
+		b_cc_arrays[bx](i, j, k, 0) =
+		    0.5 * (fcx[bx](i, j, k, MHDSystem<DustyAlfvenWave>::bfield_index) + fcx[bx](i + 1, j, k, MHDSystem<DustyAlfvenWave>::bfield_index));
+		b_cc_arrays[bx](i, j, k, 1) =
+		    0.5 * (fcy[bx](i, j, k, MHDSystem<DustyAlfvenWave>::bfield_index) + fcy[bx](i, j + 1, k, MHDSystem<DustyAlfvenWave>::bfield_index));
+		b_cc_arrays[bx](i, j, k, 2) =
+		    0.5 * (fcz[bx](i, j, k, MHDSystem<DustyAlfvenWave>::bfield_index) + fcz[bx](i, j, k + 1, MHDSystem<DustyAlfvenWave>::bfield_index));
 	});
 	auto extracted = fextract(b_cc, sim.Geom(0), 2, 0.5, true);
 	return std::move(std::get<1>(extracted));
@@ -699,8 +696,8 @@ auto helicalResidual(const std::vector<double> &z, const std::vector<double> &vx
 	return (norm > 0.0) ? std::sqrt(residual_sq) / norm : std::sqrt(residual_sq);
 }
 
-auto relativeTransverseError(const std::vector<double> &vx, const std::vector<double> &vy, const std::vector<double> &ref_vx,
-			     const std::vector<double> &ref_vy) -> double
+auto relativeTransverseError(const std::vector<double> &vx, const std::vector<double> &vy, const std::vector<double> &ref_vx, const std::vector<double> &ref_vy)
+    -> double
 {
 	double err_sq = 0.0;
 	double ref_sq = 0.0;
@@ -734,11 +731,10 @@ void writeProfileCsv(const CaseResult &result)
 	std::ofstream file(std::format("dusty_alfven_{}_{}_profile.csv", result.config_.sweep_, result.config_.tag_));
 	file << "z,gas_vx,gas_vy,dust_vx,dust_vy,bx,by,ref_gas_vx,ref_gas_vy,ref_dust_vx,ref_dust_vy,ref_bx,ref_by\n";
 	for (size_t i = 0; i < result.profile_.z_.size(); ++i) {
-		file << result.profile_.z_[i] << "," << result.profile_.gas_vx_[i] << "," << result.profile_.gas_vy_[i] << ","
-		     << result.profile_.dust_vx_[i] << "," << result.profile_.dust_vy_[i] << "," << result.profile_.bx_[i] << ","
-		     << result.profile_.by_[i] << "," << result.profile_.ref_gas_vx_[i] << "," << result.profile_.ref_gas_vy_[i] << ","
-		     << result.profile_.ref_dust_vx_[i] << "," << result.profile_.ref_dust_vy_[i] << "," << result.profile_.ref_bx_[i] << ","
-		     << result.profile_.ref_by_[i] << "\n";
+		file << result.profile_.z_[i] << "," << result.profile_.gas_vx_[i] << "," << result.profile_.gas_vy_[i] << "," << result.profile_.dust_vx_[i]
+		     << "," << result.profile_.dust_vy_[i] << "," << result.profile_.bx_[i] << "," << result.profile_.by_[i] << ","
+		     << result.profile_.ref_gas_vx_[i] << "," << result.profile_.ref_gas_vy_[i] << "," << result.profile_.ref_dust_vx_[i] << ","
+		     << result.profile_.ref_dust_vy_[i] << "," << result.profile_.ref_bx_[i] << "," << result.profile_.ref_by_[i] << "\n";
 	}
 }
 
@@ -758,13 +754,15 @@ void writeTracerProfileCsv(const CaseResult &result)
 	const size_t nrows = std::max(result.tracer_profile_.z_num_.size(), result.tracer_profile_.z_ref_.size());
 	for (size_t i = 0; i < nrows; ++i) {
 		if (i < result.tracer_profile_.z_num_.size()) {
-			file << result.tracer_profile_.z_num_[i] << "," << result.tracer_profile_.gas_vx_num_[i] << "," << result.tracer_profile_.dust_vx_num_[i];
+			file << result.tracer_profile_.z_num_[i] << "," << result.tracer_profile_.gas_vx_num_[i] << ","
+			     << result.tracer_profile_.dust_vx_num_[i];
 		} else {
 			file << ",,";
 		}
 		file << ",";
 		if (i < result.tracer_profile_.z_ref_.size()) {
-			file << result.tracer_profile_.z_ref_[i] << "," << result.tracer_profile_.gas_vx_ref_[i] << "," << result.tracer_profile_.dust_vx_ref_[i];
+			file << result.tracer_profile_.z_ref_[i] << "," << result.tracer_profile_.gas_vx_ref_[i] << ","
+			     << result.tracer_profile_.dust_vx_ref_[i];
 		} else {
 			file << ",,";
 		}
@@ -800,7 +798,7 @@ auto runCase(const CaseConfig &config, int reference_steps) -> CaseResult
 
 	auto BCs_cc = quokka::BC<DustyAlfvenWave>(quokka::BCType::int_dir);
 	auto BCs_fc = quokka::BC_fc<DustyAlfvenWave>(quokka::BCType::mathematicalBndryTypes::periodic, quokka::BCType::mathematicalBndryTypes::periodic,
-						      quokka::BCType::mathematicalBndryTypes::periodic);
+						     quokka::BCType::mathematicalBndryTypes::periodic);
 	QuokkaSimulation<DustyAlfvenWave> sim(BCs_cc, BCs_fc);
 
 	sim.reconstructionOrder_ = 2;
@@ -819,8 +817,7 @@ auto runCase(const CaseConfig &config, int reference_steps) -> CaseResult
 	result.profile_ = extractProfile(sim);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		auto [reference_state, ref_dust_vx] =
-		    integrateReferenceToTimes(config, result.history_.t_, result.history_.sample_z_, reference_steps);
+		auto [reference_state, ref_dust_vx] = integrateReferenceToTimes(config, result.history_.t_, result.history_.sample_z_, reference_steps);
 		result.history_.ref_dust_vx_ = std::move(ref_dust_vx);
 		fillReferenceProfile(result.profile_, reference_state);
 
@@ -979,7 +976,8 @@ auto problem_main() -> int
 				writeTracerHistoryCsv(result);
 				writeTracerHistoryDenseCsv(result);
 			}
-			const bool case_passed = result.finite_ && result.gas_helical_error_ < 0.3 && result.b_helical_error_ < 0.3 && result.dust_profile_error_ < 0.3;
+			const bool case_passed =
+			    result.finite_ && result.gas_helical_error_ < 0.3 && result.b_helical_error_ < 0.3 && result.dust_profile_error_ < 0.3;
 			if (!case_passed) {
 				status = 1;
 			}
