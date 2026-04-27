@@ -68,7 +68,7 @@ jobs:
     - name: Configure CMake
       shell: bash
       working-directory: ${{runner.workspace}}/build
-      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DAMReX_SPACEDIM=3
+      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DAMReX_SPACEDIM=3 -DENABLE_TESTS_FPE=ON
 
     - name: Get MHD test executables
       working-directory: ${{runner.workspace}}/build
@@ -94,6 +94,21 @@ jobs:
 
     - name: Create test output directory
       run: cmake -E make_directory $GITHUB_WORKSPACE/tests
+
+    - name: Felker-Stone EMF FPE smoke test
+      working-directory: ${{github.workspace}}/tests
+      shell: bash
+      run: |
+        ${{runner.workspace}}/build/src/problems/FastWave/FastWave \
+          ../inputs/FastWave.toml \
+          amr.max_grid_size_x=32 \
+          amr.blocking_factor_x=16 \
+          mhd.emf_compute_scheme=FelkerStone2017 \
+          amrex.init_snan=1 \
+          amrex.fpe_trap_invalid=1 \
+          amrex.fpe_trap_overflow=1 \
+          amrex.fpe_trap_zero=1 \
+          max_timesteps=3
 
     - name: Test
       working-directory: ${{runner.workspace}}/build
