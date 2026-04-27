@@ -38,12 +38,8 @@ The full case table is:
 | Hydro-only | on | n/a | n/a | 2 | 6 | 6 |
 | MHD | off | `FelkerStone2017` | `LondrilloDelZanna2004` | 1 | 5 | 5 |
 | MHD | on | `FelkerStone2017` | `LondrilloDelZanna2004` | 2 | 6 | 6 |
-| MHD | off | `FelkerStone2017` | `Balsara2025` | 2 | 6 | 6 |
-| MHD | on | `FelkerStone2017` | `Balsara2025` | 2 | 6 | 6 |
 | MHD | off | `Balsara2025` | `LondrilloDelZanna2004` | 1 | 5 | 5 |
 | MHD | on | `Balsara2025` | `LondrilloDelZanna2004` | 2 | 6 | 6 |
-| MHD | off | `Balsara2025` | `Balsara2025` | 2 | 6 | 6 |
-| MHD | on | `Balsara2025` | `Balsara2025` | 2 | 6 | 6 |
 | MHD | off | `Quokka2026` | any | 3 | 7 | 7 |
 | MHD | on | `Quokka2026` | any | 3 | 7 | 7 |
 

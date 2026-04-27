@@ -67,8 +67,6 @@ two formulas selected by `emf_averaging_scheme`:
 
 - `LondrilloDelZanna2004` – the Londrillo & Del Zanna (2004) upwind constrained-transport
   formula, which weights the quadrants using characteristic MHD signal speeds.
-- `Balsara2025` - EMF averaging with a dissapative term from wavespeeds and magnetic field jumps 
-
 During the LondrilloDelZanna2004 average, the code leverages the fast magnetosonic speeds
 computed at interfaces during the Riemann solve so that the EMF averaging is properly upwinded
 without requiring a full state reconstruction and eigenvalue computation.
@@ -126,8 +124,8 @@ more detail in [Runtime parameters](parameters.md):
 - `emf_reconstruction_order` – spatial order for the EMF reconstruction
   (default 5 = extrema-preserving PPM).
 - `emf_compute_scheme` – choose `FelkerStone2017`, `Balsara2025`, or `Quokka2026` for computing the emf either at cell-center or at the edge (default `Balsara2025`).
-- `emf_averaging_scheme` – choose `LondrilloDelZanna2004` or `Balsara2025` for edge averaging
-  (default `Balsara2025`).
+- `emf_averaging_scheme` – currently only `LondrilloDelZanna2004` for edge averaging
+  (default `LondrilloDelZanna2004`).
 - `artificial_viscosity_k` – optional scalar viscosity coefficient that adds a
   diffusive flux to the momentum equations and can damp post-shock oscillations.
 - `quokka.bc` – (required) choose `periodic` or `reflecting` for the boundary conditions. For reflecting boundaries, we use `amrex::BCType::reflect_even` for all magnetic field components. Support for properly reflecting magnetic field boundaries will be added in the future.
