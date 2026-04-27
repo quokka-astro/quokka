@@ -29,10 +29,6 @@ cfl = 0.3
 stop_time = 0.3
 max_timesteps = 10000
 
-hydro.rk_integrator_order = 2
-hydro.reconstruction_order = 2
-hydro.use_dual_energy = 0
-
 mhd.emf_averaging_scheme = "Balsara2025"
 mhd.emf_compute_scheme = "Balsara2025"
 dust.density_floor = 1.0e-12

@@ -173,28 +173,34 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto constantChargeToMassRat
 	return charge_to_mass;
 }
 
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto makeShockInflowCellState()
+{
+	constexpr int nvar = Physics_Indices<problem_t>::nvarTotal_cc;
+	amrex::GpuArray<amrex::Real, nvar> inflow_state{};
+	inflow_state[HydroSystem<problem_t>::density_index] = ShockCaseParams<problem_t>::rho_inflow;
+	inflow_state[HydroSystem<problem_t>::energy_index] =
+	    computeGasEnergy<problem_t>(ShockCaseParams<problem_t>::rho_inflow, ShockCaseParams<problem_t>::u_inflow, ShockCaseParams<problem_t>::bz_inflow);
+	inflow_state[HydroSystem<problem_t>::internalEnergy_index] = 0.0;
+	inflow_state[HydroSystem<problem_t>::x1Momentum_index] = ShockCaseParams<problem_t>::rho_inflow * ShockCaseParams<problem_t>::u_inflow;
+	inflow_state[HydroSystem<problem_t>::x2Momentum_index] = 0.0;
+	inflow_state[HydroSystem<problem_t>::x3Momentum_index] = 0.0;
+	inflow_state[HydroSystem<problem_t>::dustDensity_index] = dust_density_floor;
+	inflow_state[HydroSystem<problem_t>::x1DustMomentum_index] = 0.0;
+	inflow_state[HydroSystem<problem_t>::x2DustMomentum_index] = 0.0;
+	inflow_state[HydroSystem<problem_t>::x3DustMomentum_index] = 0.0;
+	return inflow_state;
+}
+
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto makeShockInflowFaceState() -> amrex::GpuArray<amrex::Real, 3>
+{
+	return {0.0, 0.0, ShockCaseParams<problem_t>::bz_inflow};
+}
+
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setShockBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar,
 								    amrex::GeometryData const &geom)
 {
-	constexpr int nvar = Physics_Indices<problem_t>::nvarTotal_cc;
-	amrex::GpuArray<amrex::Real, nvar> low_bdr_cells{};
-	for (int n = 0; n < nvar; ++n) {
-		low_bdr_cells[n] = 0.0;
-	}
-
-	low_bdr_cells[HydroSystem<problem_t>::density_index] = ShockCaseParams<problem_t>::rho_inflow;
-	low_bdr_cells[HydroSystem<problem_t>::energy_index] =
-	    computeGasEnergy<problem_t>(ShockCaseParams<problem_t>::rho_inflow, ShockCaseParams<problem_t>::u_inflow, ShockCaseParams<problem_t>::bz_inflow);
-	low_bdr_cells[HydroSystem<problem_t>::internalEnergy_index] = 0.0;
-	low_bdr_cells[HydroSystem<problem_t>::x1Momentum_index] = ShockCaseParams<problem_t>::rho_inflow * ShockCaseParams<problem_t>::u_inflow;
-	low_bdr_cells[HydroSystem<problem_t>::x2Momentum_index] = 0.0;
-	low_bdr_cells[HydroSystem<problem_t>::x3Momentum_index] = 0.0;
-	low_bdr_cells[HydroSystem<problem_t>::dustDensity_index] = dust_density_floor;
-	low_bdr_cells[HydroSystem<problem_t>::x1DustMomentum_index] = 0.0;
-	low_bdr_cells[HydroSystem<problem_t>::x2DustMomentum_index] = 0.0;
-	low_bdr_cells[HydroSystem<problem_t>::x3DustMomentum_index] = 0.0;
-
+	const auto low_bdr_cells = makeShockInflowCellState<problem_t>();
 	AMRSimulation<problem_t>::template setConstantDirichletBCLo<0>(iv, consVar, geom, low_bdr_cells);
 }
 
@@ -202,37 +208,29 @@ template <typename problem_t, quokka::direction dir>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setShockFaceBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar_fc,
 									amrex::GeometryData const &geom)
 {
-	const amrex::GpuArray<amrex::Real, 3> low_bdr_values = {0.0, 0.0, ShockCaseParams<problem_t>::bz_inflow};
+	const auto low_bdr_values = makeShockInflowFaceState<problem_t>();
 	AMRSimulation<problem_t>::template setConstantDirichletBCFaceVarLo<0, dir, 3>(iv, consVar_fc, geom, low_bdr_values);
+}
+
+void setShockHiOutflow(amrex::Vector<amrex::BCRec> &bcs)
+{
+	for (auto &bc : bcs) {
+		bc.setHi(0, amrex::BCType::foextrap);
+	}
 }
 
 template <typename problem_t> auto makeShockBCsCC() -> amrex::Vector<amrex::BCRec>
 {
-	const int nvars_cc = Physics_Indices<problem_t>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(nvars_cc);
-	for (int icomp = 0; icomp < nvars_cc; ++icomp) {
-		BCs_cc[icomp].setLo(0, amrex::BCType::ext_dir);
-		BCs_cc[icomp].setHi(0, amrex::BCType::foextrap);
-		for (int idim = 1; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_cc[icomp].setLo(idim, amrex::BCType::int_dir);
-			BCs_cc[icomp].setHi(idim, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_cc = quokka::BC<problem_t>(quokka::BCType::ext_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
+	setShockHiOutflow(BCs_cc);
 	return BCs_cc;
 }
 
 template <typename problem_t> auto makeShockBCsFC() -> amrex::Vector<amrex::BCRec>
 {
-	const int nvars_fc = Physics_Indices<problem_t>::nvarTotal_fc;
-	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
-	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
-		BCs_fc[icomp].setLo(0, amrex::BCType::ext_dir);
-		BCs_fc[icomp].setHi(0, amrex::BCType::foextrap);
-		for (int idim = 1; idim < AMREX_SPACEDIM; ++idim) {
-			BCs_fc[icomp].setLo(idim, amrex::BCType::int_dir);
-			BCs_fc[icomp].setHi(idim, amrex::BCType::int_dir);
-		}
-	}
+	auto BCs_fc = quokka::BC_fc<problem_t>(quokka::BCType::mathematicalBndryTypes::ext_dir, quokka::BCType::mathematicalBndryTypes::periodic,
+					       quokka::BCType::mathematicalBndryTypes::periodic);
+	setShockHiOutflow(BCs_fc);
 	return BCs_fc;
 }
 
@@ -278,8 +276,6 @@ template <typename problem_t> auto runShockCase() -> ShockProfile
 
 	sim.reconstructionOrder_ = 2;
 	sim.plotfileInterval_ = -1;
-	sim.dust_omega1_ = 0.0;
-	sim.dust_omega2_ = 0.0;
 
 	sim.setInitialConditions();
 	sim.evolve();
@@ -389,10 +385,23 @@ auto runLowMachRegression(bool write_csv) -> int
 		writeShockProfileCsv(charged_dilute, &guiding_vx);
 	}
 
-	const bool neutral_uncharged = neutral_vy_max < 1.0e-8;
-	const bool charged_rotates = charged_vy_max > 5.0e-2;
-	const bool guiding_center_improves_coupling = mean_guiding_drift < 0.10 * mean_drift_charged;
-	const bool backreaction_slows_shock = shock_backreact < (shock_charged - 5.0e-3);
+	constexpr double neutral_vy_tol = 1.0e-8;
+	constexpr double charged_vy_min = 5.0e-2;
+	constexpr double guiding_center_factor = 0.10;
+	constexpr double shock_backreaction_margin = 5.0e-3;
+
+	amrex::Print() << std::format("  neutral_vy_max             = {:.6e} (pass if < {:.6e})\n", neutral_vy_max, neutral_vy_tol);
+	amrex::Print() << std::format("  charged_vy_max             = {:.6e} (pass if > {:.6e})\n", charged_vy_max, charged_vy_min);
+	amrex::Print() << std::format("  mean_drift_charged         = {:.6e}\n", mean_drift_charged);
+	amrex::Print() << std::format("  mean_guiding_drift         = {:.6e} (pass if < {:.6e})\n", mean_guiding_drift,
+				      guiding_center_factor * mean_drift_charged);
+	amrex::Print() << std::format("  shock_charged              = {:.6e}\n", shock_charged);
+	amrex::Print() << std::format("  shock_backreact            = {:.6e} (pass if < {:.6e})\n", shock_backreact, shock_charged - shock_backreaction_margin);
+
+	const bool neutral_uncharged = neutral_vy_max < neutral_vy_tol;
+	const bool charged_rotates = charged_vy_max > charged_vy_min;
+	const bool guiding_center_improves_coupling = mean_guiding_drift < guiding_center_factor * mean_drift_charged;
+	const bool backreaction_slows_shock = shock_backreact < (shock_charged - shock_backreaction_margin);
 
 	const bool passed = neutral_uncharged && charged_rotates && guiding_center_improves_coupling && backreaction_slows_shock;
 
@@ -549,14 +558,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<DustLorentzShockChargedBa
 
 auto problem_main() -> int
 {
-#if AMREX_SPACEDIM != 3
-	amrex::Print() << "Skipping DustLorentzShock: this test requires a 3D build.\n";
-	return 0;
-#else
 	bool write_csv = true;
 	amrex::ParmParse const pp("problem");
 	pp.query("write_csv", write_csv);
 
 	return runLowMachRegression(write_csv);
-#endif
 }
