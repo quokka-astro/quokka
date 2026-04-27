@@ -184,11 +184,11 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	jac(5, 6) = 0.0_rt;
 
 	jac(6, 1) = 0.0_rt;
-	jac(6, 2) = -c * sigma_photo * n_gamma_flux;
+	jac(6, 2) = -c * sigma_photo * n_gamma_flux * frac;
 	jac(6, 3) = 0.0_rt;
 	jac(6, net_ienuc) = 0.0_rt;
 	jac(6, 5) = 0.0_rt;
-	jac(6, 6) = -n_HI * c * sigma_photo;
+	jac(6, 6) = -n_HI * c * sigma_photo * frac;
 }
 
 #endif
