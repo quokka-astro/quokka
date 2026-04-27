@@ -248,11 +248,6 @@ auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &res
 				printf("max substeps exceeded! rho = %.17e, Eint = %.17e, cooling " // NOLINT
 				       "time = %g, dt = %.17e\n",
 				       rho, Eint, t_cool, dt);
-#if defined(__CUDA_ARCH__)
-				asm("trap;");
-#else
-				amrex::Abort("max substeps exceeded in ResampledCooling::computeCooling()");
-#endif
 			}
 			const Real Eint_new = (temp_floor > 0.0) ? amrex::max(y[0], Eint_floor) : y[0];
 			const Real dEint = Eint_new - Eint;
