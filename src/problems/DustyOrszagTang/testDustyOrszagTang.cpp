@@ -238,6 +238,7 @@ template <typename problem_t> auto extractSlice(QuokkaSimulation<problem_t> &sim
 	auto *mu_local_ptr = mu_local.data();
 	const double mu0 = config.mu0_;
 	const auto &state_mf = sim.state_new_cc_[0];
+	const amrex::Real tiny_number_local = tiny_number;
 
 	for (amrex::MFIter mfi(state_mf); mfi.isValid(); ++mfi) {
 		amrex::Box slice_box = mfi.validbox();
@@ -254,7 +255,7 @@ template <typename problem_t> auto extractSlice(QuokkaSimulation<problem_t> &sim
 			const double rho_g_cell = state(i, j, k, HydroSystem<problem_t>::density_index);
 			const double rho_d_cell = state(i, j, k, HydroSystem<problem_t>::dustDensity_index);
 			rho_g_ptr[idx] = rho_g_cell;
-			rho_d_scaled_ptr[idx] = rho_d_cell / amrex::max(mu0, tiny_number);
+			rho_d_scaled_ptr[idx] = rho_d_cell / amrex::max(mu0, tiny_number_local);
 			mu_local_ptr[idx] = (rho_g_cell > 0.0) ? rho_d_cell / rho_g_cell : 0.0;
 		});
 	}
@@ -301,6 +302,7 @@ template <typename problem_t> auto extractProfile(QuokkaSimulation<problem_t> &s
 	const int i_right = lo.x + nx / 2;
 	const double rescale = static_cast<double>(nx) / 2.0;
 	const double mu0 = config.mu0_;
+	const amrex::Real tiny_number_local = tiny_number;
 
 	auto rho_g_avg = sim.computeAxisAlignedProfile(1, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state) {
 		return ((i == i_left) || (i == i_right)) ? state(i, j, k, HydroSystem<problem_t>::density_index) : 0.0;
@@ -343,7 +345,7 @@ template <typename problem_t> auto extractProfile(QuokkaSimulation<problem_t> &s
 
 		profile.y_[j] = prob_lo[1] + (lo.y + j + 0.5) * dx[1];
 		profile.rho_g_[j] = rho_g;
-		profile.rho_d_scaled_[j] = rho_d / amrex::max(mu0, tiny_number);
+		profile.rho_d_scaled_[j] = rho_d / amrex::max(mu0, tiny_number_local);
 		profile.v_gx_[j] = (rho_g > 0.0) ? mom_gx / rho_g : 0.0;
 		profile.v_gy_[j] = (rho_g > 0.0) ? mom_gy / rho_g : 0.0;
 		profile.v_dx_[j] = (rho_d > 0.0) ? mom_dx / rho_d : 0.0;
