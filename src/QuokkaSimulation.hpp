@@ -357,7 +357,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
 	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int lev, amrex::Real time,
-					      amrex::Real dt_lev) -> bool;
+					      amrex::Real dt_lev, bool reverseOrder = false) -> bool;
 
 	auto computePhotoelectricHeatingRate(Real current_time) -> amrex::Real;
 	auto computeExternalHeatingRate(Real current_time, Real dt) -> amrex::Real;
@@ -971,43 +971,69 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeExternalH
 
 template <typename problem_t>
 auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int lev,
-								   amrex::Real time, amrex::Real dt) -> bool
+								   amrex::Real time, amrex::Real dt, bool reverseOrder) -> bool
 {
+	auto const applyDust = [&]() {
+		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+			DustDrag<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega_, enableIterDustStoptime_, print_dust_counter_);
+		}
+	};
+
 	// start by assuming cooling integrator is successful.
 	bool cool_success = true;
-	if (enableCooling_ == 1) {
-		const Real external_heating_rate_per_H = computeExternalHeatingRate(time, dt); // unit: erg/s/H
-		const Real const_heating_rate_per_H = computePhotoelectricHeatingRate(time) + external_heating_rate_per_H;
+	auto const applyCooling = [&]() {
+		if (enableCooling_ == 1) {
+			const Real external_heating_rate_per_H = computeExternalHeatingRate(time, dt); // unit: erg/s/H
+			const Real const_heating_rate_per_H = computePhotoelectricHeatingRate(time) + external_heating_rate_per_H;
 
-		if (coolingTableType_.empty()) {
-			coolingTableType_ = "resampled";
+			if (coolingTableType_.empty()) {
+				coolingTableType_ = "resampled";
+			}
+			if (coolingTableType_ == "resampled") {
+				cool_success =
+				    quokka::ResampledCooling::computeCooling<problem_t>(state, dt, resampledTables_, tempFloor_, const_heating_rate_per_H);
+			} else {
+				amrex::Abort("Invalid cooling table type! Only 'resampled' is supported.");
+			}
 		}
-		if (coolingTableType_ == "resampled") {
-			cool_success = quokka::ResampledCooling::computeCooling<problem_t>(state, dt, resampledTables_, tempFloor_, const_heating_rate_per_H);
-		} else {
-			amrex::Abort("Invalid cooling table type! Only 'resampled' is supported.");
-		}
-	}
+	};
 
 	// start by assuming chemistry burn is successful.
 	bool burn_success = true; // NOLINT
+	auto const applyChemistry = [&]() {
 #ifdef CHEMISTRY
-	if (enableChemistry_ == 1) {
-		// compute chemistry
-		burn_success = quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed);
-	}
+		if (enableChemistry_ == 1) {
+			// compute chemistry
+			burn_success = quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed);
+		}
 #endif
+	};
 
-	if ((enableTurbulence_ == 1) && (time < turbulenceStopTime_)) {
-		auto const &cellSizes = geom[lev].CellSizeArray();
-		td->applyDriving(state, time, dt, cellSizes);
-	}
-	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-		DustDrag<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega_, enableIterDustStoptime_, print_dust_counter_);
-	}
+	auto const applyTurbulence = [&]() {
+		if ((enableTurbulence_ == 1) && (time < turbulenceStopTime_)) {
+			auto const &cellSizes = geom[lev].CellSizeArray();
+			td->applyDriving(state, time, dt, cellSizes);
+		}
+	};
 
-	// compute user-specified sources
-	addStrangSplitSources(state, lev, time, dt);
+	auto const applyUserSources = [&]() {
+		// compute user-specified sources
+		addStrangSplitSources(state, lev, time, dt);
+	};
+
+	if (reverseOrder) {
+		applyUserSources();
+		applyTurbulence();
+		applyChemistry();
+		applyCooling();
+		applyDust();
+	} else {
+		applyDust();
+		applyCooling();
+		applyChemistry();
+		applyTurbulence();
+		applyUserSources();
+	}
 
 	return (burn_success && cool_success);
 }
@@ -2453,7 +2479,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	amrex::Gpu::streamSynchronizeAll();
 
 	// do Strang split source terms (second half-step)
-	auto burn_success_second = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], state_new_fc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
+	auto burn_success_second = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], state_new_fc_[lev], lev, time + dt_lev, 0.5 * dt_lev, true);
 
 	bool const cfl_ok = !isCflViolated(lev, time, dt_lev);
 	bool const final_success = (cfl_ok && burn_success_second);
