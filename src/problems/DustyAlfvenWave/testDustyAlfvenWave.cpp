@@ -40,8 +40,8 @@ constexpr size_t tracer_particle_count = 128;
 constexpr int numerical_tracer_substeps = 8;
 constexpr int reference_dense_history_points = 1001;
 
-AMREX_GPU_MANAGED double g_mu = 0.01;			     // NOLINT
-AMREX_GPU_MANAGED double g_stopping_time = 0.1;		     // NOLINT
+AMREX_GPU_MANAGED double g_mu = 0.01;			       // NOLINT
+AMREX_GPU_MANAGED double g_stopping_time = 0.1;		       // NOLINT
 AMREX_GPU_MANAGED double g_omega_l_target = -alfven_frequency; // NOLINT
 
 // input parameter table for a test case
