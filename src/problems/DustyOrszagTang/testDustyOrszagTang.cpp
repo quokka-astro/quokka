@@ -31,11 +31,11 @@ constexpr double first_snapshot_time = 0.25;
 constexpr double second_snapshot_time = 0.5;
 constexpr double shock_window_ymax = 0.3;
 
-AMREX_GPU_MANAGED double g_initial_dust_density = 1.0e-1; // NOLINT
-AMREX_GPU_MANAGED double g_stopping_time = stopping_time0; // NOLINT
+AMREX_GPU_MANAGED double g_initial_dust_density = 1.0e-1;    // NOLINT
+AMREX_GPU_MANAGED double g_stopping_time = stopping_time0;   // NOLINT
 AMREX_GPU_MANAGED double g_charge_to_mass = charge_to_mass0; // NOLINT
-std::string g_active_case_tag;				  // NOLINT
-std::string g_active_case_label;			  // NOLINT
+std::string g_active_case_tag;				     // NOLINT
+std::string g_active_case_label;			     // NOLINT
 
 // input parameters for one dusty Orszag-Tang run
 struct CaseConfig {
@@ -88,10 +88,7 @@ struct CaseResult {
 };
 
 // reconstruct the active case metadata for mid-run snapshot capture
-auto activeCaseConfig() -> CaseConfig
-{
-	return {g_active_case_tag, g_active_case_label, g_initial_dust_density, g_initial_dust_density / rho_gas0};
-}
+auto activeCaseConfig() -> CaseConfig { return {g_active_case_tag, g_active_case_label, g_initial_dust_density, g_initial_dust_density / rho_gas0}; }
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto vectorPotentialAz(double x, double y) -> double
 {
@@ -134,7 +131,8 @@ void writeSliceCsv(const SliceData &slice)
 	std::ofstream file(std::format("dusty_orszag_tang_{}_{}_slice.csv", slice.case_tag_, slice.snapshot_tag_));
 	file << "x,y,rho_g,rho_d_scaled,mu_local\n";
 	for (size_t idx = 0; idx < slice.x_.size(); ++idx) {
-		file << slice.x_[idx] << "," << slice.y_[idx] << "," << slice.rho_g_[idx] << "," << slice.rho_d_scaled_[idx] << "," << slice.mu_local_[idx] << "\n";
+		file << slice.x_[idx] << "," << slice.y_[idx] << "," << slice.rho_g_[idx] << "," << slice.rho_d_scaled_[idx] << "," << slice.mu_local_[idx]
+		     << "\n";
 	}
 }
 
@@ -143,8 +141,8 @@ void writeProfileCsv(const ProfileData &profile)
 	std::ofstream file(std::format("dusty_orszag_tang_{}_{}_profile.csv", profile.case_tag_, profile.snapshot_tag_));
 	file << "y,rho_g,rho_d_scaled,v_gx,v_gy,v_dx,v_dy\n";
 	for (size_t idx = 0; idx < profile.y_.size(); ++idx) {
-		file << profile.y_[idx] << "," << profile.rho_g_[idx] << "," << profile.rho_d_scaled_[idx] << "," << profile.v_gx_[idx] << "," << profile.v_gy_[idx]
-		     << "," << profile.v_dx_[idx] << "," << profile.v_dy_[idx] << "\n";
+		file << profile.y_[idx] << "," << profile.rho_g_[idx] << "," << profile.rho_d_scaled_[idx] << "," << profile.v_gx_[idx] << ","
+		     << profile.v_gy_[idx] << "," << profile.v_dx_[idx] << "," << profile.v_dy_[idx] << "\n";
 	}
 }
 
@@ -153,7 +151,8 @@ auto profileIsFinite(const ProfileData &profile) -> bool
 	auto const check = [](const std::vector<double> &values) {
 		return std::all_of(values.begin(), values.end(), [](double value) { return std::isfinite(value); });
 	};
-	return check(profile.rho_g_) && check(profile.rho_d_scaled_) && check(profile.v_gx_) && check(profile.v_gy_) && check(profile.v_dx_) && check(profile.v_dy_);
+	return check(profile.rho_g_) && check(profile.rho_d_scaled_) && check(profile.v_gx_) && check(profile.v_gy_) && check(profile.v_dx_) &&
+	       check(profile.v_dy_);
 }
 
 auto sliceIsFinite(const SliceData &slice) -> bool
@@ -498,9 +497,10 @@ template <> void QuokkaSimulation<DustyOrszagTang>::setInitialConditionsOnGridFa
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustyOrszagTang>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
-												amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/, double /*cs*/)
-    -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustyOrszagTang>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/,
+										       amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
+										       amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/,
+										       double /*cs*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, nDustGroups_> alpha{};
 	alpha[0] = 1.0 / g_stopping_time;
