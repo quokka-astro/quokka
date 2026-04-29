@@ -34,25 +34,24 @@ Other tools:
 
 ## yt
 
-> **Warning**
->
-> There are [known bugs](https://github.com/yt-project/yt/issues/3889) that affect Quokka outputs. PlotfileTools (see above) can be used instead for axis-aligned slice plots.
->
+yt can load Quokka AMReX plotfiles through its Quokka frontend, which is now available in the main [yt](https://github.com/yt-project/yt) repository. Until a released yt version includes the frontend, install yt from the main branch with the optional Quokka dependencies:
+
+    pip install "yt[quokka] @ git+https://github.com/yt-project/yt.git"
+
+After installation, load a plotfile with `yt.load("plt00000")` or point yt to any other Quokka plotfile directory. The upstream Quokka frontend documentation is available in the [yt documentation source](https://github.com/yt-project/yt/blob/main/doc/source/examining/loading_data.rst#quokka-data), and a tutorial notebook is available at [README.ipynb](https://github.com/Rongjun-ANU/README-of-yt-frontend-for-QUOKKA/blob/main/README.ipynb).
 
 > **Tip**
 >
 > One of the most useful things to do is to convert the data into a uniform-resolution NumPy array with the [covering_grid](https://yt-project.org/doc/examining/low_level_inspection.html#examining-grid-data-in-a-fixed-resolution-array) function.
 >
 
-We have a fork of YT that includes a customized Quokka frontend: [https://github.com/chongchonghe/yt](https://github.com/chongchonghe/yt). To install it, run `pip install "yt[quokka] @ git+https://github.com/chongchonghe/yt.git"`. A comprehensive documentation is available at [this link](https://github.com/chongchonghe/yt/blob/Rongjun-ANUquokka-frontend/doc/source/examining/loading_data.rst#quokka-data), and a Jupyter Notebook with tutorials is available at [README.ipynb](https://github.com/Rongjun-ANU/README-of-yt-frontend-for-QUOKKA/blob/main/README.ipynb).
-
 ### quick_plot script for batch processing
 
-The `quick_plot` script in `scripts/python/` is a convenient tool for visualizing Quokka outputs. It is a wrapper around YT for batch processing snapshots and generating slice or projection plots. The script has detailed documentation in the code itself, accessible at the top of the file and also by running `quick_plot -h`.
+The `quick_plot` script in `scripts/python/` wraps yt for batch visualization of Quokka outputs. It can process multiple snapshots and generate slice or projection plots. For usage details, see the documentation at the top of the script or run `quick_plot -h`.
 
 ### yt-studio for web-based visualization
 
-[yt-studio](https://github.com/chongchonghe/yt-studio) is a visualization tool for QUOKKA simulation data that provides both a web-based interface and Python API. Install it with `pip install git+https://github.com/chongchonghe/yt-studio.git`, then start the web interface with `yt-studio` and open http://localhost:5173 in your browser. The tool supports slice plots, projection plots, volume rendering, multiple colormaps, and high-resolution export, with optional particle overlay and AMR grid annotations. For programmatic use, the Python API offers `QuokkaPlotter` class methods like `slice()` and `project()` for generating publication-quality visualizations.
+[yt-studio](https://github.com/chongchonghe/yt-studio) provides a web interface and Python API for visualizing Quokka simulation data. Install it with `pip install git+https://github.com/chongchonghe/yt-studio.git`, then start the web interface with `yt-studio` and open http://localhost:5173 in your browser. It supports slice plots, projection plots, volume rendering, multiple colormaps, high-resolution export, optional particle overlays, and AMR grid annotations. For scripts and notebooks, use the `QuokkaPlotter` methods such as `slice()` and `project()`.
 
 ![yt-studio-screenshot](media/yt-studio-screenshot.jpg)
 
