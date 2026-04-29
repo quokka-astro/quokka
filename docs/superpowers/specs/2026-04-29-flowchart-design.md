@@ -25,7 +25,7 @@ One PlantUML activity diagram covering the full call chain top-to-bottom:
 - `setInitialConditions()`
 - Entry into `evolve()` main time loop
 
-### 2. Inside `evolve()` — main time loop (`group`)
+### 2. Inside `evolve()` — main time loop (`partition`)
 1. `computeTimestep()`
 2. `computeBeforeTimestep()` *(user hook)*
 3. Particle leapfrog kick ×1 *(3D + particles only)*
@@ -36,14 +36,14 @@ One PlantUML activity diagram covering the full call chain top-to-bottom:
 8. `computeAfterTimestep()` *(user hook)*
 9. Write plotfile / checkpoint *(if step/time interval reached)*
 
-### 3. `timeStepWithSubcycling(lev)` (`group`)
+### 3. `timeStepWithSubcycling(lev)` (`partition`)
 - **if** `regrid_int > 0` and step matches interval → `AMRCore::regrid()`
 - `advanceSingleTimestepAtLevel(lev)` — see section 4
 - **repeat** for `i = 1..nsubsteps[lev+1]`: recursive call `timeStepWithSubcycling(lev+1)` *(AMR subcycling)*
 - `FluxRegister::Reflux()` *(flux conservation across coarse/fine interface)*
 - `AverageDownTo(lev)` *(average fine level data down to coarse)*
 
-### 4. `advanceSingleTimestepAtLevel(lev)` (`group`)
+### 4. `advanceSingleTimestepAtLevel(lev)` (`partition`)
 1. Swap `state_old` ↔ `state_new`
 2. `CheckHydroStates` *(before update)*
 3. **if** hydro enabled → `advanceHydroAtLevelWithRetries()` — see section 5; **else** copy hydro vars old→new
@@ -53,7 +53,7 @@ One PlantUML activity diagram covering the full call chain top-to-bottom:
 7. `computeAfterLevelAdvance()` *(user hook)*
 8. `CheckHydroStates` *(after user work)*
 
-### 5. `advanceHydroAtLevelWithRetries()` + `advanceHydroAtLevel()` (`group`)
+### 5. `advanceHydroAtLevelWithRetries()` + `advanceHydroAtLevel()` (`partition`)
 
 **Retry loop** (`repeat...repeat while`):
 - Call `advanceHydroAtLevel(dt)`
@@ -72,7 +72,7 @@ One PlantUML activity diagram covering the full call chain top-to-bottom:
 5. **RK2-SSP Stage 2** — corrector: ½(`state_old` + `state_inter` + dt·F(`state_inter`)) → `state_new`
 6. `addStrangSplitSourcesWithBuiltin(dt/2)` *(same sub-steps as step 1)*
 
-### 6. `subcycleRadiationAtLevel()` — IMEX PD-ARS (`group`)
+### 6. `subcycleRadiationAtLevel()` — IMEX PD-ARS (`partition`)
 1. `computeNumberOfRadiationSubsteps()` → `nsubSteps`, `dt_rad`
 
 **Substep loop** (`repeat...repeat while i < nsubSteps`):
@@ -94,7 +94,7 @@ One PlantUML activity diagram covering the full call chain top-to-bottom:
 | File | Change |
 |------|--------|
 | `docs/markdown/flowchart.md` | Full rewrite: single `plantuml` fenced code block |
-| `scripts/bash/install_mdbook.sh` | Add `cargo install mdbook-plantuml --version <pinned>` |
+| `scripts/bash/install_mdbook.sh` | Add `cargo install mdbook-plantuml --version 2.0.0` |
 | `docs/book.toml` | Add `[preprocessor.plantuml]` section |
 | `.gitignore` | Add `.superpowers/` |
 
@@ -104,7 +104,7 @@ Mermaid support (`docs/javascripts/mermaid-init.js`, `additional-js` in `book.to
 
 | Need | Construct |
 |------|-----------|
-| Function grouping | `group FunctionName() ... end group` |
+| Function grouping | `partition "FunctionName()" { ... }` *(activity diagram syntax)* |
 | Retry / substep loops | `repeat ... repeat while (condition)` |
 | Conditional physics | `if (enabled?) then (yes) ... else ... endif` |
 | Inline annotations | `note right: ...` |
