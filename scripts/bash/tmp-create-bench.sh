@@ -1,1 +1,0 @@
-/home/cche/tools/scripts/rsaa-azure/avatargpu/run-create-bench.sh
