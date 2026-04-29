@@ -27,7 +27,7 @@ partition "AMRSimulation::evolve() — main time loop" {
     note right
       **AMRSimulation::timeStepWithSubcycling(lev)**
     end note
-    if (regrid_int > 0 && step % regrid_int == 0?) then (yes)
+    if (regrid_int > 0 && istep[lev] % regrid_int == 0?) then (yes)
       :AMRCore::regrid();
     endif
 
@@ -37,8 +37,10 @@ partition "AMRSimulation::evolve() — main time loop" {
 
       if (is_hydro_enabled?) then (yes)
         :**advanceHydroAtLevelWithRetries()**;
+        note right
+          On failure: halve dt and retry
+        end note
         repeat
-          :**advanceHydroAtLevel(dt)**;
           :addStrangSplitSourcesWithBuiltin(dt/2)\n• Cooling (resampled table, if enabled)\n• Chemistry / nuclear burn (if enabled)\n• Turbulence driving (if enabled && t < t_stop)\n• Dust drag (if enabled)\n• addStrangSplitSources() //[user hook]//;
           :fillBoundaryConditions();
           :**RK2-SSP Stage 1** — forward Euler flux update → state_inter;
@@ -91,6 +93,7 @@ partition "AMRSimulation::evolve() — main time loop" {
       -> no;
       :FluxRegister::Reflux() //(flux conservation: coarse/fine interface)//;
       :AverageDownTo(lev) //(average fine level data down to coarse)//;
+      :FixupState(lev) //(fix unphysical states after reflux/averaging)//;
     endif
 
     if (3D && particles?) then (yes)
@@ -100,7 +103,7 @@ partition "AMRSimulation::evolve() — main time loop" {
       :ellipticSolveAllLevels() //(Poisson solve)//;
     endif
     if (3D && particles?) then (yes)
-      :Particle kick ×2 + updateParticleProperties()\n+ particleMeshInteraction() + destroyParticles();
+      :Particle leapfrog kick ×2 //(second half-step)// + updateParticleProperties()\n+ particleMeshInteraction() + destroyParticles();
     endif
     :computeAfterTimestep() //[user hook]//;
     if (plotfile/checkpoint interval reached?) then (yes)
