@@ -19,6 +19,9 @@ title = "References"
 render-bib = "cited"
 order = "index"
 
+[preprocessor.plantuml]
+plantuml-cmd = "https://www.plantuml.com/plantuml"
+
 [output.html]
 default-theme = "light"
 preferred-dark-theme = "navy"
