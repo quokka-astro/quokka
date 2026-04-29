@@ -141,6 +141,32 @@ push_results() {
     echo ""
 }
 
+#######################################
+# Parse arguments
+#######################################
+MAKEBENCH_JOBS=()
+MAKEBENCH_TITLE="update$(date +%Y%m%d)"
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --title)
+            MAKEBENCH_TITLE="$2"
+            shift 2
+            ;;
+        --makebench)
+            shift
+            while [[ $# -gt 0 && "$1" != --* ]]; do
+                MAKEBENCH_JOBS+=("$1")
+                shift
+            done
+            ;;
+        *)
+            echo "ERROR: Unknown option: $1"
+            exit 1
+            ;;
+    esac
+done
+
 # Resolve web directory from ini file once, before launching the container.
 INI_FILE="${TARGET}/quokka/regression/quokka-tests.ini"
 WEB_DIR=$(parse_web_dir "$INI_FILE") || WEB_DIR=""
@@ -152,13 +178,36 @@ wait_for_gpu
 # 4 hours timeout.  Capture the exit code instead of exiting immediately so
 # that we can always attempt to push committed results afterwards.
 set +e
-timeout 14400 singularity exec --nv \
-    --bind $TARGET:$TARGET \
-    --pwd $TARGET \
-    $sif \
-    bash quokka2/scripts/bash/run-regression-tests.sh --ini-file ${TARGET}/quokka/regression/quokka-tests.ini \
-    --ccache-dir ${TARGET}/ccache --source-dir ${TARGET}/quokka \
-    --skip-gpu-wait
+if [ ${#MAKEBENCH_JOBS[@]} -gt 0 ]; then
+    # Benchmark creation mode: call regtest.py directly with --make_benchmarks.
+    REGTEST="${TARGET}/regression_testing/regtest.py"
+    if [ ${#MAKEBENCH_JOBS[@]} -eq 1 ]; then
+        timeout 14400 singularity exec --nv \
+            --bind $TARGET:$TARGET \
+            --pwd $TARGET \
+            $sif python3 "$REGTEST" \
+            --make_benchmarks "$MAKEBENCH_TITLE" \
+            --single_test "${MAKEBENCH_JOBS[0]}" \
+            "${TARGET}/quokka/regression/quokka-tests.ini"
+    else
+        JOBS_STR="${MAKEBENCH_JOBS[*]}"
+        timeout 14400 singularity exec --nv \
+            --bind $TARGET:$TARGET \
+            --pwd $TARGET \
+            $sif python3 "$REGTEST" \
+            --make_benchmarks "$MAKEBENCH_TITLE" \
+            --tests "$JOBS_STR" \
+            "${TARGET}/quokka/regression/quokka-tests.ini"
+    fi
+else
+    timeout 14400 singularity exec --nv \
+        --bind $TARGET:$TARGET \
+        --pwd $TARGET \
+        $sif \
+        bash quokka2/scripts/bash/run-regression-tests.sh --ini-file ${TARGET}/quokka/regression/quokka-tests.ini \
+        --ccache-dir ${TARGET}/ccache --source-dir ${TARGET}/quokka \
+        --skip-gpu-wait
+fi
 container_rc=$?
 set -e
 
@@ -169,10 +218,13 @@ fi
 # Push whatever was committed inside the container (log, status.json, html).
 # This runs on the host where SSH credentials are available and is reached
 # even when the container timed out, was OOM-killed, or exited with an error.
-if [ -n "$WEB_DIR" ]; then
-    push_results "$WEB_DIR"
-else
-    echo "WARNING: WEB_DIR unknown, skipping git push"
+# Benchmark creation does not commit results to the web repo, so skip the push.
+if [ ${#MAKEBENCH_JOBS[@]} -eq 0 ]; then
+    if [ -n "$WEB_DIR" ]; then
+        push_results "$WEB_DIR"
+    else
+        echo "WARNING: WEB_DIR unknown, skipping git push"
+    fi
 fi
 
 exit $container_rc
