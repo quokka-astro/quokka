@@ -227,6 +227,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 	std::unique_ptr<quokka::turbulence::turbulentDriving<problem_t>> td;
 
+	enum class SourceOrder { forward, reverse };
+
 	// member functions
 	explicit QuokkaSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : AMRSimulation<problem_t>(BCs_cc, BCs_fc)
 	{
@@ -356,8 +358,20 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 				 amrex::EdgeFluxRegister *emf_as_fine, int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
+	template <SourceOrder Order>
 	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int lev, amrex::Real time,
-					      amrex::Real dt_lev, bool reverseOrder = false) -> bool;
+					      amrex::Real dt_lev) -> bool;
+	template <SourceOrder Order, typename... Fs> static auto callInOrder(Fs &&...fs) -> void
+	{
+		auto funcs = std::forward_as_tuple(std::forward<Fs>(fs)...);
+		[&]<std::size_t... I>(std::index_sequence<I...> /*unused*/) {
+			if constexpr (Order == SourceOrder::forward) {
+				(std::invoke(std::get<I>(funcs)), ...);
+			} else {
+				(std::invoke(std::get<sizeof...(I) - 1U - I>(funcs)), ...);
+			}
+		}(std::index_sequence_for<Fs...>{});
+	}
 
 	auto computePhotoelectricHeatingRate(Real current_time) -> amrex::Real;
 	auto computeExternalHeatingRate(Real current_time, Real dt) -> amrex::Real;
@@ -970,8 +984,9 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeExternalH
 }
 
 template <typename problem_t>
+template <typename QuokkaSimulation<problem_t>::SourceOrder Order>
 auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int lev,
-								   amrex::Real time, amrex::Real dt, bool reverseOrder) -> bool
+								   amrex::Real time, amrex::Real dt) -> bool
 {
 	auto const applyDust = [&]() {
 		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
@@ -1021,19 +1036,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 		addStrangSplitSources(state, lev, time, dt);
 	};
 
-	if (reverseOrder) {
-		applyUserSources();
-		applyTurbulence();
-		applyChemistry();
-		applyCooling();
-		applyDust();
-	} else {
-		applyDust();
-		applyCooling();
-		applyChemistry();
-		applyTurbulence();
-		applyUserSources();
-	}
+	callInOrder<Order>(applyDust, applyCooling, applyChemistry, applyTurbulence, applyUserSources);
 
 	return (burn_success && cool_success);
 }
@@ -2134,7 +2137,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	auto dx = geom[lev].CellSizeArray();
 
 	// do Strang split source terms (first half-step)
-	auto burn_success_first = addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, state_old_fc_tmp, lev, time, 0.5 * dt_lev);
+	auto burn_success_first = addStrangSplitSourcesWithBuiltin<SourceOrder::forward>(state_old_cc_tmp, state_old_fc_tmp, lev, time, 0.5 * dt_lev);
 
 	// check if reactions failed for source terms. If it failed, return false.
 	if (!burn_success_first) {
@@ -2479,7 +2482,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	amrex::Gpu::streamSynchronizeAll();
 
 	// do Strang split source terms (second half-step)
-	auto burn_success_second = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], state_new_fc_[lev], lev, time + dt_lev, 0.5 * dt_lev, true);
+	auto burn_success_second =
+	    addStrangSplitSourcesWithBuiltin<SourceOrder::reverse>(state_new_cc_[lev], state_new_fc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
 
 	bool const cfl_ok = !isCflViolated(lev, time, dt_lev);
 	bool const final_success = (cfl_ok && burn_success_second);
