@@ -81,6 +81,7 @@ quokka.stellarpop_particle_mass.normalization_expr = "1.0/(5.0e6*yr)"
 ## star formation
 particles.eps_ff = 0.01
 particles.low_mass_composite_max_mass = 5.957650359245478e+35   # grams [= 299 Msun]
+particles.reproducibility_roundoff_redundancy = 28
 
 
 ###################################
