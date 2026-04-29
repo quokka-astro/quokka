@@ -12,6 +12,7 @@
 #   --ini-file PATH       Path to regression ini file (default: regression/quokka-tests.ini)
 #   --ccache-dir PATH     Ccache directory (default: $HOME/cache/ccache)
 #   --source-dir PATH     Quokka source directory (default: $PWD)
+#   --tests TEST [...]    Run only the named regression test target(s)
 #   --help                Show this help message
 #
 # Environment variables (overridden by CLI args):
@@ -34,6 +35,7 @@ INI_FILE="${REGRESSION_INI_FILE:-$DEFAULT_INI_FILE}"
 CCACHE_DIR="${CCACHE_DIR:-$DEFAULT_CCACHE_DIR}"
 SOURCE_DIR="${REGRESSION_SOURCE_DIR:-$DEFAULT_SOURCE_DIR}"
 SKIP_GPU_WAIT=0
+TEST_TARGETS=()
 
 # WEB_DIR will be parsed from ini file
 WEB_DIR=""
@@ -51,6 +53,7 @@ Options:
   --ini-file PATH       Path to regression ini file (default: $DEFAULT_INI_FILE)
   --ccache-dir PATH     Ccache directory (default: $DEFAULT_CCACHE_DIR)
   --source-dir PATH     Quokka source directory (default: $DEFAULT_SOURCE_DIR)
+  --tests TEST [...]    Run only the named regression test target(s)
   --skip-gpu-wait       Skip the GPU occupancy check (use when the caller already checked)
   --help                Show this help message
 
@@ -91,6 +94,18 @@ parse_args() {
 		--source-dir)
 			SOURCE_DIR="$2"
 			shift 2
+			;;
+		--tests)
+			shift
+			while [[ $# -gt 0 && "$1" != --* ]]; do
+				TEST_TARGETS+=("$1")
+				shift
+			done
+			if [ ${#TEST_TARGETS[@]} -eq 0 ]; then
+				echo "ERROR: --tests requires at least one test target"
+				usage
+				exit 1
+			fi
 			;;
 		--skip-gpu-wait)
 			SKIP_GPU_WAIT=1
@@ -201,11 +216,19 @@ run_regression_tests() {
 
 	local exit_code=0
 	local log_file="$WEB_DIR/regression-run.log"
+	local regtest_args=(--clean_testdir)
+
+	if [ ${#TEST_TARGETS[@]} -eq 1 ]; then
+		regtest_args+=(--single_test "${TEST_TARGETS[0]}")
+	elif [ ${#TEST_TARGETS[@]} -gt 1 ]; then
+		regtest_args+=(--tests "${TEST_TARGETS[*]}")
+	fi
+	regtest_args+=("$INI_FILE")
 
 	# Create web directory if it doesn't exist
 	mkdir -p "$WEB_DIR"
 
-	echo "Command: ./extern/regression_testing/regtest.py --clean_testdir $INI_FILE"
+	echo "Command: ./extern/regression_testing/regtest.py ${regtest_args[*]}"
 	echo "Log file: $log_file"
 	echo "Output will be written to log file (this may take a while)..."
 	echo ""
@@ -216,7 +239,7 @@ run_regression_tests() {
 	# (not set -e), so calling set -e would globally enable it and cause the
 	# non-zero return below to abort the script before publish_results runs.
 	set +e
-	./extern/regression_testing/regtest.py --clean_testdir "$INI_FILE" \
+	./extern/regression_testing/regtest.py "${regtest_args[@]}" \
 		> "$log_file" 2>&1
 	exit_code=$?
 

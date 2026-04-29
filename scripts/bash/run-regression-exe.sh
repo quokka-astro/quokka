@@ -146,11 +146,17 @@ push_results() {
 #######################################
 MAKEBENCH_JOBS=()
 MAKEBENCH_TITLE="update$(date +%Y%m%d)"
+MAKEBENCH_BRANCH=""
+RUN_TESTS=()
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --title)
             MAKEBENCH_TITLE="$2"
+            shift 2
+            ;;
+        --br)
+            MAKEBENCH_BRANCH="$2"
             shift 2
             ;;
         --makebench)
@@ -159,6 +165,21 @@ while [[ $# -gt 0 ]]; do
                 MAKEBENCH_JOBS+=("$1")
                 shift
             done
+            if [ ${#MAKEBENCH_JOBS[@]} -eq 0 ]; then
+                echo "ERROR: --makebench requires at least one test target"
+                exit 1
+            fi
+            ;;
+        --tests)
+            shift
+            while [[ $# -gt 0 && "$1" != --* ]]; do
+                RUN_TESTS+=("$1")
+                shift
+            done
+            if [ ${#RUN_TESTS[@]} -eq 0 ]; then
+                echo "ERROR: --tests requires at least one test target"
+                exit 1
+            fi
             ;;
         *)
             echo "ERROR: Unknown option: $1"
@@ -167,6 +188,11 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+if [ ${#MAKEBENCH_JOBS[@]} -gt 0 ] && [ ${#RUN_TESTS[@]} -gt 0 ]; then
+    echo "ERROR: --makebench and --tests cannot be used together"
+    exit 1
+fi
+
 # Resolve web directory from ini file once, before launching the container.
 INI_FILE="${TARGET}/quokka/regression/quokka-tests.ini"
 WEB_DIR=$(parse_web_dir "$INI_FILE") || WEB_DIR=""
@@ -174,6 +200,14 @@ WEB_DIR=$(parse_web_dir "$INI_FILE") || WEB_DIR=""
 # Check GPU occupancy on the host before launching the container.
 # This avoids false alarms from GPU memory allocated by Singularity's --nv init.
 wait_for_gpu
+
+MAKEBENCH_INI_FILE="${TARGET}/quokka/regression/quokka-tests.ini"
+SOURCE_BRANCH_ARGS=()
+if [ ${#MAKEBENCH_JOBS[@]} -gt 0 ] && [ -n "$MAKEBENCH_BRANCH" ]; then
+    MAKEBENCH_INI_FILE="/tmp/tmp-quokka-tests.ini"
+    wget "https://raw.githubusercontent.com/quokka-astro/quokka/refs/heads/${MAKEBENCH_BRANCH}/regression/quokka-tests.ini" -O "$MAKEBENCH_INI_FILE"
+    SOURCE_BRANCH_ARGS=(--source_branch "$MAKEBENCH_BRANCH")
+fi
 
 # 4 hours timeout.  Capture the exit code instead of exiting immediately so
 # that we can always attempt to push committed results afterwards.
@@ -188,7 +222,8 @@ if [ ${#MAKEBENCH_JOBS[@]} -gt 0 ]; then
             $sif python3 "$REGTEST" \
             --make_benchmarks "$MAKEBENCH_TITLE" \
             --single_test "${MAKEBENCH_JOBS[0]}" \
-            "${TARGET}/quokka/regression/quokka-tests.ini"
+            "${SOURCE_BRANCH_ARGS[@]}" \
+            "$MAKEBENCH_INI_FILE"
     else
         JOBS_STR="${MAKEBENCH_JOBS[*]}"
         timeout 14400 singularity exec --nv \
@@ -197,16 +232,22 @@ if [ ${#MAKEBENCH_JOBS[@]} -gt 0 ]; then
             $sif python3 "$REGTEST" \
             --make_benchmarks "$MAKEBENCH_TITLE" \
             --tests "$JOBS_STR" \
-            "${TARGET}/quokka/regression/quokka-tests.ini"
+            "${SOURCE_BRANCH_ARGS[@]}" \
+            "$MAKEBENCH_INI_FILE"
     fi
 else
+    RUN_TEST_ARGS=()
+    if [ ${#RUN_TESTS[@]} -gt 0 ]; then
+        RUN_TEST_ARGS=(--tests "${RUN_TESTS[@]}")
+    fi
     timeout 14400 singularity exec --nv \
         --bind $TARGET:$TARGET \
         --pwd $TARGET \
         $sif \
         bash quokka2/scripts/bash/run-regression-tests.sh --ini-file ${TARGET}/quokka/regression/quokka-tests.ini \
         --ccache-dir ${TARGET}/ccache --source-dir ${TARGET}/quokka \
-        --skip-gpu-wait
+        --skip-gpu-wait \
+        "${RUN_TEST_ARGS[@]}"
 fi
 container_rc=$?
 set -e
