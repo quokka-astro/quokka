@@ -19,6 +19,11 @@ title = "References"
 render-bib = "cited"
 order = "index"
 
+# Renders ```plantuml code blocks as inline SVG via the public PlantUML server.
+# Diagrams contain only non-sensitive code architecture; no Java required in CI.
+[preprocessor.plantuml]
+plantuml-cmd = "https://www.plantuml.com/plantuml"
+
 [output.html]
 default-theme = "light"
 preferred-dark-theme = "navy"
