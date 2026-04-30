@@ -992,17 +992,13 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 								   amrex::Real time, amrex::Real dt) -> bool
 {
 	auto const applyDust = [&]() {
-		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-			DustDrag<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega_, enableIterDustStoptime_, print_dust_counter_);
+		if constexpr (Physics_Traits<problem_t>::is_dust_enabled && Physics_Traits<problem_t>::is_mhd_enabled) {
+			DustSources<problem_t>::computeDustDragAndLorentz(state, state_fc, dt, dust_omega1_, dust_omega2_, enableIterDustStoptime_,
+									  print_dust_counter_);
+		} else if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+			DustSources<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega1_, enableIterDustStoptime_, print_dust_counter_);
 		}
 	};
-
-	if constexpr (Physics_Traits<problem_t>::is_dust_enabled && Physics_Traits<problem_t>::is_mhd_enabled) {
-		DustSources<problem_t>::computeDustDragAndLorentz(state, state_fc, dt, dust_omega1_, dust_omega2_, enableIterDustStoptime_,
-								  print_dust_counter_);
-	} else if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-		DustSources<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega1_, enableIterDustStoptime_, print_dust_counter_);
-	}
 
 	// start by assuming cooling integrator is successful.
 	bool cool_success = true;
