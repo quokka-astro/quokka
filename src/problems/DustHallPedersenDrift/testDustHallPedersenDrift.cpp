@@ -73,9 +73,10 @@ template <> struct Physics_Traits<DustHallPedersenDrift> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustHallPedersenDrift>::ComputeReciprocalStoppingTime(
-    amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/,
-    double /*cs*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustHallPedersenDrift>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/,
+											     amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
+											     amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/,
+											     double /*cs*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, 1> alpha{};
 	alpha[0] = alpha_d;
@@ -167,8 +168,7 @@ void recordHistory(QuokkaSimulation<DustHallPedersenDrift> &sim)
 
 template <> void QuokkaSimulation<DustHallPedersenDrift>::computeAfterTimestep() { recordHistory(*this); }
 
-template <>
-void QuokkaSimulation<DustHallPedersenDrift>::addStrangSplitSources(amrex::MultiFab &mf, int lev, amrex::Real time, amrex::Real dt_lev) // NOLINT
+template <> void QuokkaSimulation<DustHallPedersenDrift>::addStrangSplitSources(amrex::MultiFab &mf, int lev, amrex::Real time, amrex::Real dt_lev) // NOLINT
 {
 	amrex::ignore_unused(lev);
 	amrex::ignore_unused(time);
