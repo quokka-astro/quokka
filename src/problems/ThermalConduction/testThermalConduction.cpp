@@ -22,6 +22,15 @@
 #include "util/fextract.hpp"
 #include "util/richardson.hpp"
 
+/** Thermal conduction test problem */
+// The initial condition for the test problem is a Gaussian temperature profile with a constant density. 
+// The solution is also a Gaussian profile with an increasing (decreasing) width (peak) with time. 
+// We run the test for one conduction timescale and check that the numerical solution matches the analytic solution.
+// Physical parameters for the test problem are chosen to satisfy t_hydro / t_conduction >> 1, so that the gas does not have time to move
+// and the energy evolution is purely due to conduction.
+// The parameters below are fixed assuming t_hydro / t_conduction = 1.e3 = D / sigma / cs. Here sigma is the width of the gaussian, 
+// taken to be 5 * dx for nx = 128, and cs is the sound speed of the hotter medium. 
+
 double Eint0 = 2.505e-8; //equivalent to T = 2.e8 K
 double Efloor = 5.674216387016754e-11; //equivalent tp T = 2.e6 K
 double rho0 = 0.1 ; // g/cm^3
@@ -115,7 +124,7 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.;
 			}
-			
+
 			// fill gas components
 			stateExact(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho;
 			stateExact(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint_exact;
