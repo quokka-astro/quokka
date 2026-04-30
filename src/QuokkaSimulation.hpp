@@ -975,6 +975,13 @@ template <typename problem_t>
 auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int lev,
 								   amrex::Real time, amrex::Real dt) -> bool
 {
+	if constexpr (Physics_Traits<problem_t>::is_dust_enabled && Physics_Traits<problem_t>::is_mhd_enabled) {
+		DustSources<problem_t>::computeDustDragAndLorentz(state, state_fc, dt, dust_omega1_, dust_omega2_, enableIterDustStoptime_,
+								  print_dust_counter_);
+	} else if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+		DustSources<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega1_, enableIterDustStoptime_, print_dust_counter_);
+	}
+
 	// start by assuming cooling integrator is successful.
 	bool cool_success = true;
 	if (enableCooling_ == 1) {
@@ -1003,12 +1010,6 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	if ((enableTurbulence_ == 1) && (time < turbulenceStopTime_)) {
 		auto const &cellSizes = geom[lev].CellSizeArray();
 		td->applyDriving(state, time, dt, cellSizes);
-	}
-	if constexpr (Physics_Traits<problem_t>::is_dust_enabled && Physics_Traits<problem_t>::is_mhd_enabled) {
-		DustSources<problem_t>::computeDustDragAndLorentz(state, state_fc, dt, dust_omega1_, dust_omega2_, enableIterDustStoptime_,
-								  print_dust_counter_);
-	} else if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-		DustSources<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega1_, enableIterDustStoptime_, print_dust_counter_);
 	}
 
 	// compute user-specified sources
