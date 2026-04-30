@@ -1028,7 +1028,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 			amrex::Abort("Electron conduction not implemented for > 0 levels.");
 		}
 		fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
-		const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_ * C::k_B,
+		const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_,
 										     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
 										     .saturation_factor = electronConductionSaturationFactor_,
 										     .min_temperature = tempFloor_,
