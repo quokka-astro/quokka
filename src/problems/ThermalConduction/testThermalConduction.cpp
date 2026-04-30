@@ -161,8 +161,6 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 			const amrex::Real norm = Eint0 * (std::sqrt(sigma2_0 / sigma2_t));
 			const amrex::Real Eint_exact = norm *  std::exp(-x * x / sigma2_t / 2.) + Efloor ;
 			
-			
-
 			//Solution for the Step function temperature profile
 			// const amrex::Real rho = rho0 * C::m_p; // g/cm^3
 			// const amrex::Real Dt = D * 0.6 * C::m_u/rho0; // effective diffusivity
@@ -190,14 +188,7 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 auto runConductionTest(int nx) -> double
 {
 	// Read problem parameters
-	const double max_time = 15.e10; //15 conduction times
-
-	// amrex::ParmParse const hpp("conduction");
-	// hpp.query("enabled", enableElectronConduction_);
-	// hpp.query("conductivity_prefactor", electronConductionKappa0_);
-	// hpp.query("conduction_cfl", conductionCFL);
-	// hpp.query("flux_limiter_phi", electronConductionFluxLimiterPhi_);
-	// hpp.query("saturation_factor", electronConductionSaturationFactor_);
+	const double max_time = 469054.0075444166; //1 conduction time
 
 	const double CFL_number = 0.3;
 	const int max_timesteps = std::max(2000, nx * 100);
@@ -245,31 +236,6 @@ auto runConductionTest(int nx) -> double
 
 auto problem_main() -> int
 {
-	// boundary conditions
-	// constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
-	// amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	// for (int n = 0; n < ncomp_cc; ++n) {
-	// 	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-	// 		BCs_cc[n].setLo(dir, amrex::BCType::foextrap);
-	// 		BCs_cc[n].setHi(dir, amrex::BCType::foextrap);
-	// 	}
-	// }
-
-	// QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);	
-	// sim.setInitialConditions();
-	// sim.evolve();
-
-	// const double rel_err_tol = 0.03;
-	// int status = 0;
-	// const double error_norm = sim.computeErrorNorm();
-
-	// if (error_norm > rel_err_tol) {
-	// 	status = 1;
-	// }
-
-	// amrex::Print() << "Finished." << '\n';
-	// return status;
-
 	/***Richardson Extrapolation ****/
 
 	quokka::richardson::applyQuietDefaults();
