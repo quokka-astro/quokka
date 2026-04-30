@@ -228,6 +228,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 	std::unique_ptr<quokka::turbulence::turbulentDriving<problem_t>> td;
 
+	enum class SourceOrder { forward, reverse };
+
 	// member functions
 	explicit QuokkaSimulation(amrex::Vector<amrex::BCRec> &BCs_cc, amrex::Vector<amrex::BCRec> &BCs_fc) : AMRSimulation<problem_t>(BCs_cc, BCs_fc)
 	{
@@ -318,6 +320,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	// fix-up states
 	void FixupState(int level) override;
+	void ApplyHydroStateFixup(amrex::MultiFab &state_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, int lev);
 
 	// implement FillPatch function
 	void FillPatch(int lev, amrex::Real time, amrex::MultiFab &mf, int icomp, int ncomp, quokka::centering cen, quokka::direction dir,
@@ -357,8 +360,20 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 				 amrex::EdgeFluxRegister *emf_as_fine, int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
+	template <SourceOrder Order>
 	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int lev, amrex::Real time,
 					      amrex::Real dt_lev) -> bool;
+	template <SourceOrder Order, typename... Fs> static auto callInOrder(Fs &&...fs) -> void
+	{
+		auto funcs = std::forward_as_tuple(std::forward<Fs>(fs)...);
+		[&]<std::size_t... I>(std::index_sequence<I...> /*unused*/) {
+			if constexpr (Order == SourceOrder::forward) {
+				(std::invoke(std::get<I>(funcs)), ...);
+			} else {
+				(std::invoke(std::get<sizeof...(I) - 1U - I>(funcs)), ...);
+			}
+		}(std::index_sequence_for<Fs...>{});
+	}
 
 	auto computePhotoelectricHeatingRate(Real current_time) -> amrex::Real;
 	auto computeExternalHeatingRate(Real current_time, Real dt) -> amrex::Real;
@@ -972,9 +987,16 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeExternalH
 }
 
 template <typename problem_t>
+template <typename QuokkaSimulation<problem_t>::SourceOrder Order>
 auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int lev,
 								   amrex::Real time, amrex::Real dt) -> bool
 {
+	auto const applyDust = [&]() {
+		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+			DustDrag<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega_, enableIterDustStoptime_, print_dust_counter_);
+		}
+	};
+
 	if constexpr (Physics_Traits<problem_t>::is_dust_enabled && Physics_Traits<problem_t>::is_mhd_enabled) {
 		DustSources<problem_t>::computeDustDragAndLorentz(state, state_fc, dt, dust_omega1_, dust_omega2_, enableIterDustStoptime_,
 								  print_dust_counter_);
@@ -984,36 +1006,47 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 
 	// start by assuming cooling integrator is successful.
 	bool cool_success = true;
-	if (enableCooling_ == 1) {
-		const Real external_heating_rate_per_H = computeExternalHeatingRate(time, dt); // unit: erg/s/H
-		const Real const_heating_rate_per_H = computePhotoelectricHeatingRate(time) + external_heating_rate_per_H;
+	auto const applyCooling = [&]() {
+		if (enableCooling_ == 1) {
+			const Real external_heating_rate_per_H = computeExternalHeatingRate(time, dt); // unit: erg/s/H
+			const Real const_heating_rate_per_H = computePhotoelectricHeatingRate(time) + external_heating_rate_per_H;
 
-		if (coolingTableType_.empty()) {
-			coolingTableType_ = "resampled";
+			if (coolingTableType_.empty()) {
+				coolingTableType_ = "resampled";
+			}
+			if (coolingTableType_ == "resampled") {
+				cool_success =
+				    quokka::ResampledCooling::computeCooling<problem_t>(state, dt, resampledTables_, tempFloor_, const_heating_rate_per_H);
+			} else {
+				amrex::Abort("Invalid cooling table type! Only 'resampled' is supported.");
+			}
 		}
-		if (coolingTableType_ == "resampled") {
-			cool_success = quokka::ResampledCooling::computeCooling<problem_t>(state, dt, resampledTables_, tempFloor_, const_heating_rate_per_H);
-		} else {
-			amrex::Abort("Invalid cooling table type! Only 'resampled' is supported.");
-		}
-	}
+	};
 
 	// start by assuming chemistry burn is successful.
 	bool burn_success = true; // NOLINT
+	auto const applyChemistry = [&]() {
 #ifdef CHEMISTRY
-	if (enableChemistry_ == 1) {
-		// compute chemistry
-		burn_success = quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed);
-	}
+		if (enableChemistry_ == 1) {
+			// compute chemistry
+			burn_success = quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed);
+		}
 #endif
+	};
 
-	if ((enableTurbulence_ == 1) && (time < turbulenceStopTime_)) {
-		auto const &cellSizes = geom[lev].CellSizeArray();
-		td->applyDriving(state, time, dt, cellSizes);
-	}
+	auto const applyTurbulence = [&]() {
+		if ((enableTurbulence_ == 1) && (time < turbulenceStopTime_)) {
+			auto const &cellSizes = geom[lev].CellSizeArray();
+			td->applyDriving(state, time, dt, cellSizes);
+		}
+	};
 
-	// compute user-specified sources
-	addStrangSplitSources(state, lev, time, dt);
+	auto const applyUserSources = [&]() {
+		// compute user-specified sources
+		addStrangSplitSources(state, lev, time, dt);
+	};
+
+	callInOrder<Order>(applyDust, applyCooling, applyChemistry, applyTurbulence, applyUserSources);
 
 	return (burn_success && cool_success);
 }
@@ -1792,30 +1825,38 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::postInitializati
 	}
 }
 
-// fix-up any unphysical states created by AMR operations
-// (e.g., caused by the flux register or from interpolation)
-template <typename problem_t> void QuokkaSimulation<problem_t>::FixupState(int lev)
+template <typename problem_t>
+void QuokkaSimulation<problem_t>::ApplyHydroStateFixup(amrex::MultiFab &state_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, int lev)
 {
-	const BL_PROFILE("QuokkaSimulation::FixupState()");
-
-	// fix hydro state
+	// Apply the hydro floors after any operator-split state update before the next operator consumes the state.
 	if (this->useDensityFloorParser_) {
 		auto const density_floor_parser = this->densityFloorParserExe_.value();
 		auto const density_floor_func = [=] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
 									  amrex::Real base_density_floor) -> amrex::Real {
 			return density_floor_parser(x, y, z, base_density_floor);
 		};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_new_cc_[lev], geom[lev], density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_cc, geom[lev], density_floor_func);
 	} else {
 		auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
 									     amrex::Real base_density_floor) -> amrex::Real {
 			return densityFloor(x, y, z, base_density_floor);
 		};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_new_cc_[lev], geom[lev], density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_cc, geom[lev], density_floor_func);
 	}
 
-	// sync internal energy and total energy
-	HydroSystem<problem_t>::SyncDualEnergy(state_new_cc_[lev], state_new_fc_[lev]);
+	if (useDualEnergy_ == 1) {
+		// sync internal energy after floors have enforced positive density and temperature
+		HydroSystem<problem_t>::SyncDualEnergy(state_cc, state_fc);
+	}
+}
+
+// fix-up any unphysical states created by AMR operations
+// (e.g., caused by the flux register or from interpolation)
+template <typename problem_t> void QuokkaSimulation<problem_t>::FixupState(int lev)
+{
+	const BL_PROFILE("QuokkaSimulation::FixupState()");
+
+	ApplyHydroStateFixup(state_new_cc_[lev], state_new_fc_[lev], lev);
 }
 
 // Compute a new multifab 'mf' by copying in state from valid region and filling
@@ -2114,12 +2155,13 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	auto dx = geom[lev].CellSizeArray();
 
 	// do Strang split source terms (first half-step)
-	auto burn_success_first = addStrangSplitSourcesWithBuiltin(state_old_cc_tmp, state_old_fc_tmp, lev, time, 0.5 * dt_lev);
+	auto burn_success_first = addStrangSplitSourcesWithBuiltin<SourceOrder::forward>(state_old_cc_tmp, state_old_fc_tmp, lev, time, 0.5 * dt_lev);
 
 	// check if reactions failed for source terms. If it failed, return false.
 	if (!burn_success_first) {
 		return burn_success_first;
 	}
+	ApplyHydroStateFixup(state_old_cc_tmp, state_old_fc_tmp, lev);
 
 	// create temporary multifab for intermediate state
 	amrex::MultiFab state_inter_cc_(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
@@ -2303,26 +2345,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			amrex::MultiFab::Saxpy(avgFaceVel[idim], stage1Weight, faceVel[idim], 0, 0, 1, 0);
 		}
 
-		// prevent vacuum
-		if (this->useDensityFloorParser_) {
-			auto const density_floor_parser = this->densityFloorParserExe_.value();
-			auto const density_floor_func = [=] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
-										  amrex::Real base_density_floor) -> amrex::Real {
-				return density_floor_parser(x, y, z, base_density_floor);
-			};
-			HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, stateNew_cc, geom[lev], density_floor_func);
-		} else {
-			auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
-										     amrex::Real base_density_floor) -> amrex::Real {
-				return densityFloor(x, y, z, base_density_floor);
-			};
-			HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, stateNew_cc, geom[lev], density_floor_func);
-		}
-
-		if (useDualEnergy_ == 1) {
-			// sync internal energy (requires positive density)
-			HydroSystem<problem_t>::SyncDualEnergy(stateNew_cc, stateNew_fc);
-		}
+		ApplyHydroStateFixup(stateNew_cc, stateNew_fc, lev);
 	}
 	amrex::Gpu::streamSynchronizeAll();
 
@@ -2427,26 +2450,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			MHDSystem<problem_t>::SolveInductionEqn(stateOld_fc, stateFinal_fc, ec_emf_components_rk_ave, dt_lev, geom[lev].CellSizeArray());
 		}
 
-		// prevent vacuum
-		if (this->useDensityFloorParser_) {
-			auto const density_floor_parser = this->densityFloorParserExe_.value();
-			auto const density_floor_func = [=] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
-										  amrex::Real base_density_floor) -> amrex::Real {
-				return density_floor_parser(x, y, z, base_density_floor);
-			};
-			HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, stateFinal_cc, geom[lev], density_floor_func);
-		} else {
-			auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
-										     amrex::Real base_density_floor) -> amrex::Real {
-				return densityFloor(x, y, z, base_density_floor);
-			};
-			HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, stateFinal_cc, geom[lev], density_floor_func);
-		}
-
-		if (useDualEnergy_ == 1) {
-			// sync internal energy (requires positive density)
-			HydroSystem<problem_t>::SyncDualEnergy(stateFinal_cc, stateFinal_fc);
-		}
+		ApplyHydroStateFixup(stateFinal_cc, stateFinal_fc, lev);
 
 	} else { // we are only doing forward Euler
 		amrex::Copy(state_new_cc_[lev], state_inter_cc_, 0, 0, nvars_, 0);
@@ -2455,11 +2459,16 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				amrex::Copy(state_new_fc_[lev][idim], state_inter_fc_[idim], 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, 0);
 			}
 		}
+		ApplyHydroStateFixup(state_new_cc_[lev], state_new_fc_[lev], lev);
 	}
 	amrex::Gpu::streamSynchronizeAll();
 
 	// do Strang split source terms (second half-step)
-	auto burn_success_second = addStrangSplitSourcesWithBuiltin(state_new_cc_[lev], state_new_fc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
+	auto burn_success_second =
+	    addStrangSplitSourcesWithBuiltin<SourceOrder::reverse>(state_new_cc_[lev], state_new_fc_[lev], lev, time + dt_lev, 0.5 * dt_lev);
+	if (burn_success_second) {
+		ApplyHydroStateFixup(state_new_cc_[lev], state_new_fc_[lev], lev);
+	}
 
 	bool const cfl_ok = !isCflViolated(lev, time, dt_lev);
 	bool const final_success = (cfl_ok && burn_success_second);
