@@ -30,7 +30,8 @@ struct ElectronConductionParams {
 	amrex::Real conductivity_prefactor = 3.e34; // units of cm^2 s^{-1}
 	amrex::Real flux_limiter_phi = 0.1;
 	amrex::Real saturation_factor = 5.0; // refer to equation 8 of Cowee & McKee 1977
-	amrex::Real min_temperature = 0.0;   // default value will be overwritten by tempFloor_ during initialization
+	amrex::Real min_temperature = 0.0; //default value will be overwritten by tempFloor_ during initialization 
+	amrex::Real eos_flag = 1; // 1 == use quokka::EOS; 0 == use resampled cooling
 };
 
 template <typename problem_t> class ElectronConduction
@@ -94,10 +95,20 @@ template <typename problem_t> class ElectronConduction
 			auto const &cons = state_x0[bx];
 			const amrex::Real rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
 			const amrex::Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(cons, i, j, k, &local_state_fc);
-
-			const amrex::Real Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables_dev);
-			const amrex::Real cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, tables_dev);
-
+			amrex::Real Tgas, cs;
+			if(params.eos_flag == 0) {
+				Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables_dev);
+				cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, tables_dev);
+			}
+			else if(params.eos_flag == 1) {
+				Tgas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint);
+				amrex::Real Pgas = quokka::EOS<problem_t>::ComputePressure(rho, Eint);
+				cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, Pgas);
+			}
+			 else {
+				amrex::Abort("Invalid eos_flag value in ElectronConduction. Must be 0 (resampled cooling) or 1 (quokka::EOS).");
+			}
+			
 			const amrex::Real Tuse = amrex::max(Tgas, t_min);
 			const amrex::Real kappa = params.conductivity_prefactor;
 			const amrex::Real qsat = amrex::max(saturation_factor * flux_limiter_phi * rho * std::pow(cs, 3), small);
@@ -124,6 +135,9 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real q_sat_face = 0.5 * (qsat[bx](i, j, k) + qsat[bx](i - 1, j, k));
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
+			// if(i<302 & i>298) {
+			// 	amrex::Print() << "Debug2: " << ", i = " << i << ", gradT = " << gradT << ", kappa_face = " << kappa_face << ", q_classical = " << q_classical << ", q_sat_face = " << q_sat_face << ", limiter = " << limiter << "\n";
+			// }
 			flux_x[bx](i, j, k) = q_classical / limiter;
 		});
 
