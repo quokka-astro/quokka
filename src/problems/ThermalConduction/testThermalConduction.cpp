@@ -77,61 +77,11 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		const amrex::Real sigma2 = sigma*sigma; // width of the Gaussian
 		const amrex::Real Eint = Eint0 * std::exp(-x * x / sigma2 / 2.) + Efloor;
 		/*-------------------------------*/
-		// Problem 2----> Step Function temperature profile
-		//  const amrex::Real rho = rho0 * C::m_p; // g/cm^3s
-		//  amrex::Real Eint;
-		//  if(x<0.0) {
-		//  	Eint= Eint0; // higher temperature in the left half of the domain
-		//  }
-		//  else {
-		//  	Eint = Efloor; // lower temperature outside the center
-		//  }
-
-		/*-------------------------------*/
-		// Problem 3----> Spherical temperature profile with sharp boundary
-		// double const R0 = 0.2 * C::parsec;
-		//  const amrex::Real rho = C::m_p; // g/cm^3
-		//  const amrex::Real Tout = 10.0;
-		//  const amrex::Real Tin  = 100.0;
-		//  double R = std::sqrt(x*x + y*y + z*z);
-		//  amrex::Real Eint;
-		//  if(R<=R0){
-		//  	Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, Tout) ;
-		//  }
-		//  else{
-		//  	Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, Tin);
-		//  }
-
-		/*------------------------------------------------*/
-		// Problem 4----> Spherical temperature profile with smooth boundary
-
-		// const amrex::Real rho = C::m_p; // g/cm^3
-		// double R = std::sqrt(x*x + y*y + z*z);
-		// const amrex::Real Tout = 10.0;
-		// const amrex::Real Tin  = 100.0;
-		// const amrex::Real D = 3.e23 ;
-		// const amrex::Real chit = 4.0 * D * 1.e10;
-		// const amrex::Real sqrt_chit = std::sqrt(chit);
-		// const amrex::Real term1 = 0.5 * (std::erf((R0 + R) / sqrt_chit) + std::erf((R0 - R) / sqrt_chit));
-		// const amrex::Real term2 = (sqrt_chit / (2.0 * R * std::sqrt(M_PI))) * (std::exp(-((R0 + R) * (R0 + R)) / chit)
-		//                                                                 - std::exp(-((R0 - R) * (R0 - R)) / chit));
-
-		// const amrex::Real T = Tout + (Tin - Tout) * (term1 + term2);
-		/*-------------------------------------------------*/
 
 		for (int n = 0; n < state_cc.nComp(); ++n) {
 			state_cc(i, j, k, n) = 0.; // zero fill all components
 		}
 
-		// const amrex::Real Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T);
-		if(i==0){
-			amrex::Real Tgas1 =quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint0, tables);
-			amrex::Real cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint0, tables);
-			amrex::Print() << "Debug1: " << ", Eint = " <<  Eint0 << ", Tmax = " << Tgas1 << ", cs = " << cs/1.e5 << "\n";
-			Tgas1 =quokka::ResampledCooling::ComputeTgasFromEgas(rho, Efloor, tables);
-			cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Efloor, tables);
-			amrex::Print() << "Debug2: " << ", Eint = " << Efloor << ", Tfloor = " << Tgas1 << ", cs = " << cs/1.e5 << "\n";
-		}
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint; // total energy = internal energy + kinetic energy
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = Eint;
