@@ -34,7 +34,7 @@
 double Eint0 = 2.505e-8; //equivalent to T = 2.e8 K
 double Efloor = 5.674216387016754e-11; //equivalent tp T = 2.e6 K
 double rho0 = 0.1 ; // g/cm^3
-double D = 7.743518128921141e+27; // cm^2/s
+double D = 7.743518128921141e+27; // diffusion coefficient, in units of cm^2/s 
 double sigma = 6.0267140390625e+16; // conduction timescale in s
 
 struct ThermalConductionProblem {
