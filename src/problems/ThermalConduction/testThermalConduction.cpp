@@ -40,8 +40,6 @@ double sigma = 6.0267140390625e+16; // conduction timescale in s
 struct ThermalConductionProblem {
 };
 
-bool test_passes = false; // if one of the energy checks fails, set to false. NOLINT
-
 template <> struct quokka::EOS_Traits<ThermalConductionProblem> {
 	static constexpr double gamma = 2.;
 	static constexpr double mean_molecular_weight = C::m_u;
