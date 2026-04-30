@@ -72,7 +72,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		const amrex::Real x = prob_lo[0] + (i + 0.5) * dx[0];
 		
 		/*-------------------------------*/
-		// Problem 1----> Gaussian temperature profile
+		// Problem ----> Gaussian temperature profile
 		const amrex::Real rho = rho0 * C::m_p;	   // g/cm^3
 		const amrex::Real sigma2 = sigma*sigma; // width of the Gaussian
 		const amrex::Real Eint = Eint0 * std::exp(-x * x / sigma2 / 2.) + Efloor;
@@ -83,7 +83,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		}
 
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint; // total energy = internal energy + kinetic energy
+		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint; 
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = Eint;
 	});
 }
@@ -110,20 +110,12 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 			const amrex::Real sigma2_t = sigma2_0 + 2.0 * D * t * C::m_u/rho; // width of the Gaussian at time t
 			const amrex::Real norm = Eint0 * (std::sqrt(sigma2_0 / sigma2_t));
 			const amrex::Real Eint_exact = norm *  std::exp(-x * x / sigma2_t / 2.) + Efloor ;
-			
-			//Solution for the Step function temperature profile
-			// const amrex::Real rho = rho0 * C::m_p; // g/cm^3
-			// const amrex::Real Dt = D * 0.6 * C::m_u/rho0; // effective diffusivity
-			// // const amrex::Real Eint_exact = Efloor + (Eint0 - Efloor) * 0.5 * (1.0 - std::erf(-x / std::sqrt(4.0 * Dt * t)));
-			// const amrex::Real Eint_exact = 0.5 * (Eint0 + Efloor) + 0.5 * (Eint0 - Efloor) * std::erf(-x / std::sqrt(4.0 * Dt * t));
 
 			// clear all components
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.;
 			}
-			if(i==0){
-				amrex::Print() << "t=" << t << ", Sigma2_t: " << sigma2_t << "\n";
-			}
+			
 			// fill gas components
 			stateExact(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho;
 			stateExact(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint_exact;
