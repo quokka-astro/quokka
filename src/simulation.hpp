@@ -1321,10 +1321,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 	for (int level = 0; level <= finest_level; ++level) {
 		n_factor *= nsubsteps[level];
 
-		amrex::Real effective_factor = n_factor;
+		amrex::Real effective_factor = static_cast<amrex::Real>(n_factor);
 		if (enableElectronConduction_ == 1) {
 			// Conduction timestep scales as dx^2, so we need to use n_factor^2 here instead of n_factor.
-			effective_factor = n_factor * n_factor;
+			effective_factor = static_cast<amrex::Real>(n_factor) * static_cast<amrex::Real>(n_factor);
 		}
 
 		const amrex::Real dt_0_old = dt_0; // save old dt_0
