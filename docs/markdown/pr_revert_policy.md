@@ -1,7 +1,9 @@
 # Pull Request Revert Policy
 
-!!! warning "Purpose"
-    Reverts protect users, safeguard maintainability, and preserve scientific integrity when a merged change causes regressions that cannot wait for a fix-forward. They are not punitive—they provide a fast, low-risk way to restore a reliable baseline so contributors can investigate and reintroduce the change safely.
+> **Warning: Purpose**
+>
+> Reverts protect users, safeguard maintainability, and preserve scientific integrity when a merged change causes regressions that cannot wait for a fix-forward. They are not punitive—they provide a fast, low-risk way to restore a reliable baseline so contributors can investigate and reintroduce the change safely.
+>
 
 ---
 
@@ -9,13 +11,15 @@
 
 Trigger a revert only for serious issues in parts of the code that are *not* marked as "beta":
 
-!!! danger "Typical revert triggers"
-    - **Major correctness bugs** (e.g., broken conservation, highly unstable solver, incorrect physics equations).
-    - **Significant performance regressions** on maintained benchmarks (typically >10–15% slower without an acceptable trade-off).
-    - **Broken builds or CI** on supported targets (CPU, CUDA, HIP) that cannot be repaired quickly. This applies even for beta features.
-    - **Incompatible output-format changes** that break existing plotfile readers.
-    - **Unreproducible outputs or race conditions** exposed by deterministic reruns or sanitizer tooling.
-    - **Security or licensing concerns** (e.g., unsafe dependency, incompatible license).
+> **Danger: Typical revert triggers**
+>
+> - **Major correctness bugs** (e.g., broken conservation, highly unstable solver, incorrect physics equations).
+> - **Significant performance regressions** on maintained benchmarks (typically >10–15% slower without an acceptable trade-off).
+> - **Broken builds or CI** on supported targets (CPU, CUDA, HIP) that cannot be repaired quickly. This applies even for beta features.
+> - **Incompatible output-format changes** that break existing plotfile readers.
+> - **Unreproducible outputs or race conditions** exposed by deterministic reruns or sanitizer tooling.
+> - **Security or licensing concerns** (e.g., unsafe dependency, incompatible license).
+>
 
 ---
 
@@ -34,17 +38,21 @@ Trigger a revert only for serious issues in parts of the code that are *not* mar
 
 ## After the Revert
 
-!!! note "Post-merge checklist"
-    - File a follow-up issue to **fix forward**: root cause, new tests, ADR if architecture changes are involved.
-    - Note the revert in the **changelog** and backport to supported release branches if users rely on the affected feature.
-    - For `ParmParse` or problem-file interface changes, publish a **migration guide** before attempting re-introduction.
+> **Note: Post-merge checklist**
+>
+> - File a follow-up issue to **fix forward**: root cause, new tests, ADR if architecture changes are involved.
+> - Note the revert in the **changelog** and backport to supported release branches if users rely on the affected feature.
+> - For `ParmParse` or problem-file interface changes, publish a **migration guide** before attempting re-introduction.
+>
 
 ---
 
 ## Guiding Principles
 
-!!! tip "Guiding principles"
-    - Prefer a **temporary revert plus a clear follow-up plan** over leaving the code broken.
-    - Always attach **evidence** (inputs, logs, benchmarks) to justify the revert.
-    - Keep the revert PR **surgical** and traceable to the original change.
-    - Treat reverts as a collaborative safety measure; focus on the fix, not assigning blame.
+> **Tip: Guiding principles**
+>
+> - Prefer a **temporary revert plus a clear follow-up plan** over leaving the code broken.
+> - Always attach **evidence** (inputs, logs, benchmarks) to justify the revert.
+> - Keep the revert PR **surgical** and traceable to the original change.
+> - Treat reverts as a collaborative safety measure; focus on the fix, not assigning blame.
+
