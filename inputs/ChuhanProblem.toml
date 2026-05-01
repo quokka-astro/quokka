@@ -1,0 +1,53 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo = [-3.949667304e+19, -3.949667304e+19, -3.949667304e+19]
+geometry.prob_hi = [3.949667304e+19, 3.949667304e+19, 3.949667304e+19]
+quokka.bc = ["periodic", "periodic", "periodic"]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v = 1
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell = [32, 32, 32]
+amr.max_level = 0
+amr.blocking_factor = 16
+amr.max_grid_size = 16
+amr.n_error_buf = 2
+amr.grid_eff = 0.7
+
+do_reflux = 1
+do_subcycle = 0
+do_tracers = 0
+
+hydro.artificial_viscosity_coefficient = 0.1
+
+particles.SN_scheme = "SN_thermal_or_thermal_momentum"
+particles.verbose = 0
+particles.eps_ff = 0.5
+particles.stellar_velocity_limit = 1.0e8
+particles.enable_chemical_feedback = 1
+particles.enable_SNII_metal = 1
+particles.enable_WR_metal = 1
+particles.enable_AGB_metal = 1
+particles.store_channel_fields = 0
+particles.chemical_scalar_offset = 0
+particles.chemical_num_scalars = 3
+particles.use_table_driven_chemical_yield = 1
+particles.chemical_yield_table_file = "../extern/yields"
+particles.chemical_tracked_isotopes = "C12,N14,O16"
+particles.chemical_tracked_channels = "SNII,WR,AGB"
+
+problem.n0 = 1.0e5
+problem.Tamb = 1.0e1
+problem.validate_initial_imf_stats = true
+problem.initial_particles_file = "../inputs/ChuhanProblem_particles.txt"
+
+max_timesteps = 100
+initial_dt = 2.0e13
+plotfile_interval = 10
+checkpoint_interval = 10

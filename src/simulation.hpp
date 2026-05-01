@@ -1438,8 +1438,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::evolve()
 			}
 
 			// Stellar evolution and SN deposition; only apply to star particles
-			// Update particle properties (e.g., luminosity) before particle-mesh interaction
+			// Update particle properties (e.g., luminosity) and WR/AGB chemical feedback before particle-mesh interaction
 			particleRegister_.updateParticleProperties(cur_time, dt_[0]);
+			particleRegister_.updateChemicalFeedback(state_new_cc_[finest_level], finest_level, cur_time, dt_[0]);
 
 			// TODO(cch): Need to take care of AMR subcycling
 			particleMeshInteraction(cur_time, dt_[0]);
@@ -2075,6 +2076,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 
 	// We allow particle formation at the finest level only to avoid duplicate particle creation from multiple levels at the same location.
 	particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt, state_fc_ptr, verbose);
+
+	// #Chuhan_start: Once WR/AGB injection has been completed during the particle update phase, only SNII chemical deposition is performed.
+	// Deposit SNII chemical feedback into the chemistry fields.
+	particleRegister_.depositChemicalFeedback(state_new_cc_[lev], lev, time, dt);
+	// #Chuhan_end: Ensure that WR/AGB and SNII are placed in the update/deposition stages respectively.
 
 	// Deposit the SN particles into the MultiFab
 	const auto [num_sn_explosions, max_velocity] = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);

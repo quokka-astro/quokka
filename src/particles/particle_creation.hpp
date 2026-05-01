@@ -513,6 +513,8 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				const amrex::Real vy = state_arr(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / cell_density;
 				const amrex::Real vz = state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / cell_density;
 				constexpr int nscalars = Physics_Traits<problem_t>::numPassiveScalars;
+				const int scalar_offset = std::max(0, chemical_scalar_offset);
+				const int nchem = std::max(0, std::min(chemical_num_scalars, nscalars - scalar_offset));
 				const amrex::Real particle_mass = cell_density * cell_volume * eps_star;
 				const amrex::Real mass_low_mass_star = particle_mass * (1.0 - fstar_high);
 
@@ -530,6 +532,36 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 				for (int p_idx = 0; p_idx < num_particles; ++p_idx) {
 					auto &p = particles[p_idx]; // NOLINT
 
+					// #Chuhan_start: When stars form, copy the gas chemistry master block/channel block to the particle birth chemistry.
+					if (nchem > 0) {
+						const int chem_block_size = StochasticStellarPopParticleChemistryBlockSize<problem_t>();
+						const int chem_base = StochasticStellarPopParticleChemistryBaseIdx<problem_t>();
+						const int gas_total_block = scalar_offset;
+						const int gas_snii_block = scalar_offset + nchem;
+						const int gas_wr_block = gas_snii_block + nchem;
+						const int gas_agb_block = gas_wr_block + nchem;
+
+						for (int n = 0; n < nchem; ++n) {
+							if ((gas_total_block + n) < nscalars) {
+								p.rdata(chem_base + n) = state_arr(i, j, k, HydroSystem<problem_t>::scalar0_index + gas_total_block + n);
+							}
+						}
+
+						if (store_channel_fields) {
+							for (int n = 0; n < nchem; ++n) {
+								if (enable_SNII_metal && (gas_snii_block + n) < nscalars) {
+									p.rdata(chem_base + chem_block_size + n) = state_arr(i, j, k, HydroSystem<problem_t>::scalar0_index + gas_snii_block + n);
+								}
+								if (enable_WR_metal && (gas_wr_block + n) < nscalars) {
+									p.rdata(chem_base + 2 * chem_block_size + n) = state_arr(i, j, k, HydroSystem<problem_t>::scalar0_index + gas_wr_block + n);
+								}
+								if (enable_AGB_metal && (gas_agb_block + n) < nscalars) {
+									p.rdata(chem_base + 3 * chem_block_size + n) = state_arr(i, j, k, HydroSystem<problem_t>::scalar0_index + gas_agb_block + n);
+								}
+							}
+						}
+					}
+					// #Chuhan_end: Initialise the particle birth chemistry for subsequent isotope-by-isotope feedback deposition.
 					// Set particle ID and CPU
 					p.id() = pid_start + base_offset + p_idx;
 					p.cpu() = cpu_id;
@@ -552,7 +584,6 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 					p.rdata(StochasticStellarPopParticleDeathPosZIdx) = unset_position;
 					p.rdata(StochasticStellarPopParticleDeathTimeIdx) = unset_position;
 					p.rdata(StochasticStellarPopParticleDeathDensityIdx) = unset_position;
-
 					// Everything is now set EXCEPT for mass, velocity, evolutionary stage, and mass at birth.
 					// (For SN progenitors, the death time will be overridden based on the interpolated lifetime.)
 					// (Mass at birth is set at the end of this loop. It MUST be set for all star particles,

@@ -4,7 +4,15 @@
 #include "AMReX_AmrParticles.H"
 #include "AMReX_Enum.H"
 #include "AMReX_ParIter.H"
+#include "particles/particle_chemical_yield.hpp"
 #include "physics_info.hpp"
+
+#include <array>
+#include <algorithm>
+#include <cctype>
+#include <sstream>
+#include <string>
+#include <vector>
 
 // Function to create bit flags: bitflag(position) = 2^(position - 1)
 // Example: bitflag<1>() = 1, bitflag<2>() = 2, bitflag<3>() = 4, ...
@@ -67,6 +75,37 @@ template <typename problem_t> constexpr void verify_particle_switch_type()
 
 namespace quokka
 {
+
+// #Chuhan_start: Add support for parsing the runtime chemical field list and configured tracked isotopes/channels
+inline auto splitChemistryList(const std::string &input) -> std::vector<std::string>
+{
+	std::vector<std::string> items;
+	std::stringstream stream(input);
+	std::string token;
+	while (std::getline(stream, token, ',')) {
+		token.erase(std::remove_if(token.begin(), token.end(), [](unsigned char c) { return std::isspace(c) != 0; }), token.end());
+		if (!token.empty()) {
+			items.push_back(token);
+		}
+	}
+	return items;
+}
+
+inline std::string chemical_tracked_isotopes = "C12,N14,O16"; // NOLINT
+inline std::string chemical_tracked_channels = "SNII,WR,AGB";   // NOLINT
+inline std::vector<std::string> chemical_tracked_isotope_list = splitChemistryList(chemical_tracked_isotopes);   // NOLINT
+inline std::vector<std::string> chemical_tracked_channel_list = splitChemistryList(chemical_tracked_channels); // NOLINT
+
+inline auto chemicalTrackedIsotopeList() -> const std::vector<std::string> & { return chemical_tracked_isotope_list; }
+
+inline auto chemicalTrackedChannelList() -> const std::vector<std::string> & { return chemical_tracked_channel_list; }
+
+inline void refreshChemicalTrackedLists()
+{
+	chemical_tracked_isotope_list = splitChemistryList(chemical_tracked_isotopes);
+	chemical_tracked_channel_list = splitChemistryList(chemical_tracked_channels);
+}
+// #Chuhan_end: Provides runtime list sources for dynamic field naming and table initialization.
 
 // Enum class to identify different particle types
 enum class ParticleType {
@@ -241,14 +280,30 @@ constexpr int StochasticStellarPopParticleMassAtBirthIdx = static_cast<int>(Stoc
 constexpr int StochasticStellarPopParticleLumIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::luminosity); // Base index for luminosity components
 constexpr int StochasticStellarPopParticleStageIdx = static_cast<int>(StochasticStellarPopParticleIntIdx::evolution_stage);
 
+// #Chuhan_start: Define the dimensions and base address indexing rules for the Star Particle chemistry block.
+template <typename problem_t> constexpr int StochasticStellarPopParticleChemistryBlockSize()
+{
+	return Physics_Traits<problem_t>::numPassiveScalars;
+}
+
+template <typename problem_t> constexpr int StochasticStellarPopParticleChemistryBaseIdx()
+{
+	return 14 + Physics_Traits<problem_t>::nGroups;
+}
+
+template <typename problem_t> constexpr int StochasticStellarPopParticleChemistryBlockBaseIdx(int blockIndex)
+{
+	return StochasticStellarPopParticleChemistryBaseIdx<problem_t>() + blockIndex * StochasticStellarPopParticleChemistryBlockSize<problem_t>();
+}
+// #Chuhan_end: Provides unified position calculation for the master and channel blocks within the particle real components.
+
 // Number of real components for StochasticStellarPop_particles, mass + 3 velocity components + times + positions + death density + luminosity
 template <typename problem_t>
 constexpr int StochasticStellarPopParticleRealComps = []() constexpr {
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
-		return 14 + Physics_Traits<problem_t>::nGroups; // mass, vx, vy, vz, birth_time, death_time, birth_xyz, death_xyz, death_density, mass_at_birth,
-								// lum[nGroups]
+		return 14 + Physics_Traits<problem_t>::nGroups + 4 * Physics_Traits<problem_t>::numPassiveScalars;
 	} else {
-		return 14; // mass, vx, vy, vz, birth_time, death_time, birth_xyz, death_xyz, death_density, mass_at_birth
+		return 14 + 4 * Physics_Traits<problem_t>::numPassiveScalars;
 	}
 }();
 
@@ -385,7 +440,37 @@ template <ParticleType particleType, typename problem_t> auto getParticleRealCom
 	} else if constexpr (particleType == ParticleType::CICRad) {
 		return expandEnumNames<CICRadParticleRealIdx, CICRadParticleRealComps<problem_t>, true>();
 	} else if constexpr (particleType == ParticleType::StochasticStellarPop) {
-		return expandEnumNames<StochasticStellarPopParticleRealIdx, StochasticStellarPopParticleRealComps<problem_t>, true>();
+		// #Chuhan_start: Dynamically generate the ‘star particle chemistry’ field name based on the tracked isotope/channel.
+		amrex::Vector<std::string> names;
+		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<StochasticStellarPopParticleRealIdx>();
+		for (int i = 0; i < static_cast<int>(enum_names.size()) - 1; ++i) {
+			names.push_back(enum_names[i]);
+		}
+		if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
+			for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+				names.push_back(enum_names.back() + "_" + std::to_string(g));
+			}
+		}
+		const int nchem = Physics_Traits<problem_t>::numPassiveScalars;
+		const auto &isotopes = chemicalTrackedIsotopeList();
+		const auto isotopeName = [&](int idx) -> std::string {
+			if (idx >= 0 && idx < static_cast<int>(isotopes.size())) {
+				return isotopes[idx];
+			}
+			return "unused_" + std::to_string(idx);
+		};
+		const std::array<std::string, 3> channel_names = {"SNII", "WR", "AGB"};
+		for (int block = 0; block < 4; ++block) {
+			for (int n = 0; n < nchem; ++n) {
+				if (block == 0) {
+					names.push_back("chem_birth_total_" + isotopeName(n));
+				} else {
+					names.push_back("chem_birth_" + channel_names[block - 1] + "_" + isotopeName(n));
+				}
+			}
+		}
+		// #Chuhan_end: Ensure that output fields are automatically aligned with the runtime chemistry configuration.
+		return names;
 	} else if constexpr (particleType == ParticleType::Sink) {
 		return expandEnumNames<SinkParticleRealIdx, SinkParticleRealComps, false>();
 	} else if constexpr (particleType == ParticleType::Test) {
@@ -426,50 +511,63 @@ template <ParticleType particleType, typename problem_t> auto getParticleIntComp
 // Units data for each particle type as powers of Mass, Length, Time, Temperature
 inline auto get_units_data() -> const auto &
 {
-	static const auto units_data = std::map<ParticleType, std::vector<std::map<std::string, std::array<int, 4>>>>{
-	    {ParticleType::Rad, {{{"birth_time", {0, 0, 1, 0}}, {"death_time", {0, 0, 1, 0}}, {"luminosity", {-1, 2, -3, 0}}}}},
-	    {ParticleType::CIC, {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}}}}},
-	    {ParticleType::CICRad,
-	     {{{"mass", {1, 0, 0, 0}},
-	       {"vx", {0, 1, -1, 0}},
-	       {"vy", {0, 1, -1, 0}},
-	       {"vz", {0, 1, -1, 0}},
-	       {"birth_time", {0, 0, 1, 0}},
-	       {"death_time", {0, 0, 1, 0}},
-	       {"luminosity", {-1, 2, -3, 0}}}}},
-	    {ParticleType::StochasticStellarPop,
-	     {{{"mass", {1, 0, 0, 0}},
-	       {"vx", {0, 1, -1, 0}},
-	       {"vy", {0, 1, -1, 0}},
-	       {"vz", {0, 1, -1, 0}},
-	       {"birth_time", {0, 0, 1, 0}},
-	       {"death_time", {0, 0, 1, 0}},
-	       {"birth_x", {0, 1, 0, 0}},
-	       {"birth_y", {0, 1, 0, 0}},
-	       {"birth_z", {0, 1, 0, 0}},
-	       {"death_x", {0, 1, 0, 0}},
-	       {"death_y", {0, 1, 0, 0}},
-	       {"death_z", {0, 1, 0, 0}},
-	       {"death_density", {1, -3, 0, 0}},
-	       {"mass_at_birth", {1, 0, 0, 0}},
-	       {"luminosity", {-1, 2, -3, 0}}}}},
-	    {ParticleType::Sink,
-	     {{{"mass", {1, 0, 0, 0}},
-	       {"vx", {0, 1, -1, 0}},
-	       {"vy", {0, 1, -1, 0}},
-	       {"vz", {0, 1, -1, 0}},
-	       {"mdot", {1, 0, -1, 0}},
-	       {"Lx", {1, 2, -1, 0}},
-	       {"Ly", {1, 2, -1, 0}},
-	       {"Lz", {1, 2, -1, 0}}}}},
-	    {ParticleType::Test,
-	     {{{"mass", {1, 0, 0, 0}},
-	       {"vx", {0, 1, -1, 0}},
-	       {"vy", {0, 1, -1, 0}},
-	       {"vz", {0, 1, -1, 0}},
-	       {"birth_time", {0, 0, 1, 0}},
-	       {"death_time", {0, 0, 1, 0}},
-	       {"luminosity", {-1, 2, -3, 0}}}}}};
+	// #Chuhan_start: Generate and register unit metadata for dynamic chemistry fields.
+	static const auto units_data = []() {
+		std::map<ParticleType, std::vector<std::map<std::string, std::array<int, 4>>>> data;
+
+		data[ParticleType::Rad] = {{{"birth_time", {0, 0, 1, 0}}, {"death_time", {0, 0, 1, 0}}, {"luminosity", {-1, 2, -3, 0}}}};
+		data[ParticleType::CIC] = {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}}}};
+		data[ParticleType::CICRad] = {{{"mass", {1, 0, 0, 0}},
+						       {"vx", {0, 1, -1, 0}},
+						       {"vy", {0, 1, -1, 0}},
+						       {"vz", {0, 1, -1, 0}},
+						       {"birth_time", {0, 0, 1, 0}},
+						       {"death_time", {0, 0, 1, 0}},
+						       {"luminosity", {-1, 2, -3, 0}}}};
+
+		std::map<std::string, std::array<int, 4>> stellar_units{{"mass", {1, 0, 0, 0}},
+								      {"vx", {0, 1, -1, 0}},
+								      {"vy", {0, 1, -1, 0}},
+								      {"vz", {0, 1, -1, 0}},
+								      {"birth_time", {0, 0, 1, 0}},
+								      {"death_time", {0, 0, 1, 0}},
+								      {"birth_x", {0, 1, 0, 0}},
+								      {"birth_y", {0, 1, 0, 0}},
+								      {"birth_z", {0, 1, 0, 0}},
+								      {"death_x", {0, 1, 0, 0}},
+								      {"death_y", {0, 1, 0, 0}},
+								      {"death_z", {0, 1, 0, 0}},
+								      {"death_density", {1, -3, 0, 0}},
+								      {"mass_at_birth", {1, 0, 0, 0}},
+								      {"luminosity", {-1, 2, -3, 0}}};
+
+		for (const auto &iso : chemicalTrackedIsotopeList()) {
+			stellar_units["chem_birth_total_" + iso] = {0, 0, 0, 0};
+			stellar_units["chem_birth_SNII_" + iso] = {0, 0, 0, 0};
+			stellar_units["chem_birth_WR_" + iso] = {0, 0, 0, 0};
+			stellar_units["chem_birth_AGB_" + iso] = {0, 0, 0, 0};
+		}
+
+		data[ParticleType::StochasticStellarPop] = {std::move(stellar_units)};
+
+		data[ParticleType::Sink] = {{{"mass", {1, 0, 0, 0}},
+						       {"vx", {0, 1, -1, 0}},
+						       {"vy", {0, 1, -1, 0}},
+						       {"vz", {0, 1, -1, 0}},
+						       {"mdot", {1, 0, -1, 0}},
+						       {"Lx", {1, 2, -1, 0}},
+						       {"Ly", {1, 2, -1, 0}},
+						       {"Lz", {1, 2, -1, 0}}}};
+		data[ParticleType::Test] = {{{"mass", {1, 0, 0, 0}},
+						       {"vx", {0, 1, -1, 0}},
+						       {"vy", {0, 1, -1, 0}},
+						       {"vz", {0, 1, -1, 0}},
+						       {"birth_time", {0, 0, 1, 0}},
+						       {"death_time", {0, 0, 1, 0}},
+						       {"luminosity", {-1, 2, -3, 0}}}};
+		return data;
+	}();
+	// #Chuhan_end: Ensure that dynamic fields and the units table are consistent during the output stage.
 	return units_data;
 }
 
@@ -520,6 +618,36 @@ inline int reproducibility_roundoff_redundancy = 20; // NOLINT; remove 20 bits f
 // Scalar yield per supernova (total amount, not density)
 inline amrex::Real scalar_yield_per_SN = 1.0; // NOLINT
 
+// #Chuhan_start: Added default values for chemical feedback operating parameters and table-driven lookup parameters.
+// Chemical feedback controls
+inline bool enable_chemical_feedback = false; // NOLINT
+inline bool enable_SNII_metal = true;	      // NOLINT
+inline bool enable_WR_metal = true;	      // NOLINT
+inline bool enable_AGB_metal = true;	      // NOLINT
+inline bool store_channel_fields = true;      // NOLINT
+
+inline int chemical_scalar_offset = 0; // NOLINT
+inline int chemical_num_scalars = 1;   // NOLINT
+
+// SNII event yield model: M_Z,SNII = f_SNII * M_birth
+inline amrex::Real snii_metal_yield_fraction = 0.1; // NOLINT
+
+// Continuous channels: dM_Z/dt = rate_per_mass * M_birth
+inline amrex::Real wr_metal_yield_rate_per_mass = 0.0;  // NOLINT [1/s]
+inline amrex::Real agb_metal_yield_rate_per_mass = 0.0; // NOLINT [1/s]
+
+// Active time windows [s] after particle birth
+inline amrex::Real wr_age_start = 0.0;   // NOLINT
+inline amrex::Real wr_age_end = 0.0;     // NOLINT
+inline amrex::Real agb_age_start = 0.0;  // NOLINT
+inline amrex::Real agb_age_end = 0.0;    // NOLINT
+
+// If true, use table-driven channel yields by nearest (mass, Z_birth) lookup.
+inline bool use_table_driven_chemical_yield = true; // NOLINT
+inline std::string chemical_yield_table_file = "yields"; // NOLINT
+inline amrex::Real stellar_metallicity_fraction = 0.014; // NOLINT
+// #Chuhan_end: Centrally manage chemistry switches, time windows and rollback parameters.
+
 // SN terminal momentum in units of M_sun * km/s (runtime-configurable). Default: canonical value from Kim & Ostriker 2015.
 inline constexpr amrex::Real SN_p_term_Msunkmps_canonical = 2.8e5;    // [M_sun km/s]
 inline amrex::Real SN_p_term_Msunkmps = SN_p_term_Msunkmps_canonical; // NOLINT
@@ -563,6 +691,41 @@ inline void particleParmParse()
 
 	// Scalar yield per supernova
 	pp.query("scalar_yield_per_SN", scalar_yield_per_SN);
+
+	// #Chuhan_start: Retrieve the chemistry input parameters and refresh the tracked list/load lookup table data.
+	// Chemical feedback
+	pp.query("enable_chemical_feedback", enable_chemical_feedback);
+	pp.query("enable_SNII_metal", enable_SNII_metal);
+	pp.query("enable_WR_metal", enable_WR_metal);
+	pp.query("enable_AGB_metal", enable_AGB_metal);
+	pp.query("store_channel_fields", store_channel_fields);
+	pp.query("chemical_scalar_offset", chemical_scalar_offset);
+	pp.query("chemical_num_scalars", chemical_num_scalars);
+	pp.query("snii_metal_yield_fraction", snii_metal_yield_fraction);
+	pp.query("wr_metal_yield_rate_per_mass", wr_metal_yield_rate_per_mass);
+	pp.query("agb_metal_yield_rate_per_mass", agb_metal_yield_rate_per_mass);
+	pp.query("wr_age_start", wr_age_start);
+	pp.query("wr_age_end", wr_age_end);
+	pp.query("agb_age_start", agb_age_start);
+	pp.query("agb_age_end", agb_age_end);
+	pp.query("use_table_driven_chemical_yield", use_table_driven_chemical_yield);
+	pp.query("chemical_yield_table_file", chemical_yield_table_file);
+	pp.query("chemical_tracked_isotopes", chemical_tracked_isotopes);
+	pp.query("chemical_tracked_channels", chemical_tracked_channels);
+	refreshChemicalTrackedLists();
+	if (chemical_num_scalars <= 1) {
+		chemical_num_scalars = static_cast<int>(chemical_tracked_isotope_list.size());
+	}
+	pp.query("stellar_metallicity_fraction", stellar_metallicity_fraction);
+
+	if (enable_chemical_feedback && use_table_driven_chemical_yield) {
+		const bool loaded = ChemicalYieldLookup::loadTable(chemical_yield_table_file, chemical_tracked_isotope_list, chemical_tracked_channel_list);
+		if (!loaded) {
+			amrex::Print() << "WARNING: failed to load chemical yield table '" << chemical_yield_table_file
+				       << "'. Falling back to parameterized yields.\n";
+		}
+	}
+	// #Chuhan_end: Maps input parameters to runtime chemistry layouts and lookup table behaviour.
 
 	// SN terminal momentum (overrides canonical value if set)
 	pp.query("SN_p_term_Msunkmps", SN_p_term_Msunkmps);

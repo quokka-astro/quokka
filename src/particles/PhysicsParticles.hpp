@@ -157,6 +157,10 @@ class PhysicsParticleDescriptorBase
 		return {0, 0.0_rt};
 	}
 
+	// #Chuhan_start: Provide a unified chemical feedback deposition virtual interface for particle descriptors.
+	virtual void depositChemicalFeedback(amrex::MultiFab & /*state*/, int /*lev*/, amrex::Real /*time*/, amrex::Real /*dt*/) {}
+	// #Chuhan_end: The default implementation is empty; it is overridden by specific particle types as required.
+
 	virtual void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate,
 					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, amrex::Real time, amrex::Real dt)
 	{ /* Default empty implementation */
@@ -178,6 +182,9 @@ class PhysicsParticleDescriptorBase
 
 	// Update particle properties (e.g., luminosity) based on current state
 	virtual void updateParticleProperties(amrex::Real current_time, Real dt) { /* Default empty implementation */ }
+
+	// Update chemical feedback sources on the grid during the particle update stage
+	virtual void updateChemicalFeedback(amrex::MultiFab & /*state*/, int /*lev*/, amrex::Real /*current_time*/, amrex::Real /*dt*/) { /* Default empty implementation */ }
 };
 
 // Concrete implementation of particle descriptor for specific container types
@@ -666,6 +673,15 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		ParticlePropertyUpdateTraits<particleType>::template updateParticleProperties<problem_t, ContainerType>(this->container_, current_time, dt);
 	}
 
+	// Delegate chemical feedback update to the traits class
+	void updateChemicalFeedback(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt) override
+	{
+		if constexpr (particleType == ParticleType::StochasticStellarPop) {
+			ParticlePropertyUpdateTraits<particleType>::template updateChemicalFeedback<problem_t, ContainerType>(this->container_, state, lev, current_time,
+														 dt);
+		}
+	}
+
 	// Implementation of supernova energy and momentum deposition from particles to grid
 	auto depositSN(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, amrex::Real time, amrex::Real dt)
 	    -> std::pair<int, amrex::Real> override
@@ -694,6 +710,15 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 
 		return {num_sn_explosions, max_velocity};
 	}
+
+	// #Chuhan_start: Integrate the ChemicalFeedbackDeposition deposition logic into the stellar particle descriptor.
+	void depositChemicalFeedback(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt) override
+	{
+		if constexpr (particleType == ParticleType::StochasticStellarPop) {
+			ChemicalFeedbackDeposition<particleType, ContainerType, problem_t>(this->container_, state, lev, time, dt);
+		}
+	}
+	// #Chuhan_end: Enable chemical feedback deposition only for StochasticStellarPop.
 
 	// compute accretion rate
 	void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc,
@@ -878,6 +903,16 @@ template <typename problem_t> class PhysicsParticleRegister
 		}
 		return {total_sn_explosions, max_velocity};
 	}
+
+	// #Chuhan_start: Unify the scheduling of chemical feedback deposition for all particle types at the particle registrar layer.
+	void depositChemicalFeedback(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt)
+	{
+		const BL_PROFILE("PhysicsParticleRegister::depositChemicalFeedback()");
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			descriptor->depositChemicalFeedback(state, lev, time, dt);
+		}
+	}
+	// #Chuhan_end: Maintain a unified interface in the main thread that is agnostic to particle types.
 
 	// Implementation of computeSinkAccretion
 	void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate, std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc,
@@ -1070,6 +1105,15 @@ template <typename problem_t> class PhysicsParticleRegister
 		const BL_PROFILE("PhysicsParticleRegister::updateParticleProperties()");
 		for (const auto &[type, descriptor] : particleRegistry_) {
 			descriptor->updateParticleProperties(current_time, dt);
+		}
+	}
+
+	// Update chemical feedback sources for all registered particles
+	void updateChemicalFeedback(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt)
+	{
+		const BL_PROFILE("PhysicsParticleRegister::updateChemicalFeedback()");
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			descriptor->updateChemicalFeedback(state, lev, current_time, dt);
 		}
 	}
 
