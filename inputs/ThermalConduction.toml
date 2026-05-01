@@ -24,8 +24,6 @@ cooling.read_tables_even_if_disabled = 1
 cooling.cooling_table_type = "resampled"
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 
-
-cfl = 3.e-1
 temperature_floor = 10.0
 conduction.enabled = 1
 conduction.conductivity_prefactor = 0.3056958245467793e+12 #conduction prefactor in units of erg/s/cm/K.
