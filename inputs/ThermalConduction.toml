@@ -19,14 +19,17 @@ amr.blocking_factor = 8  # grid size must be divisible by this
 
 cfl = 0.3
 
+cooling.enabled = 0
 cooling.read_tables_even_if_disabled = 1
 cooling.cooling_table_type = "resampled"
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 
 
+cfl = 3.e-1
+temperature_floor = 10.0
 conduction.enabled = 1
-conduction.conductivity_prefactor = 3e23
+conduction.conductivity_prefactor = 0.3056958245467793e+12 #conduction prefactor in units of erg/s/cm/K.
 conduction.flux_limiter_phi = 1
-conduction.saturation_factor = 1e20
-conduction.temperature_floor = 1e-10
-conduction.conduction_cfl = 0.2
+conduction.saturation_factor = 1.e20
+conduction.conduction_cfl = 0.1
+conduction.eos_flag = 1
