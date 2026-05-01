@@ -77,7 +77,6 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
-	auto tables = resampledTables_.const_tables();
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const amrex::Real x = prob_lo[0] + (i + 0.5) * dx[0];
