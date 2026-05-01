@@ -29,7 +29,7 @@ We run the test for one conduction timescale and check that the numerical soluti
 Physical parameters for the test problem are chosen to satisfy t_hydro / t_conduction >> 1, so that the gas does not have time to move
 and the energy evolution is purely due to conduction.
 How to choose the parameters for the thermal conduction test problem
-1. Fix a box lenght L and a grid resolution nx which will set the resolution dx.
+1. Fix a box length L and a grid resolution nx which will set the resolution dx.
 2. Width of the gaussian = sigma = 5 * dx.
 3. Choose a peak temperature T0 and estimate the sound speed cs.
 4. Diffusion coefficient D = 1.e3 * sigma * cs. This will ensure that t_hydro / t_conduction = 1.e3.
