@@ -35,9 +35,9 @@ How to choose the parameters for the thermal conduction test problem
 4. Diffusion coefficient D = 1.e3 * sigma * cs. This will ensure that t_hydro / t_conduction = 1.e3.
 5. Conductivity prefactor = D * rho * c_v should be supplied in the input file. */
 
-const double Eint0 = 2.505e-8;	       // equivalent to T = 2.e8 K
+const double Eint0 = 2.505e-8;		     // equivalent to T = 2.e8 K
 const double Efloor = 5.674216387016754e-11; // equivalent tp T = 2.e6 K
-const double rho0 = 0.1;		       // g/cm^3
+const double rho0 = 0.1;		     // g/cm^3
 const double D = 2.1981515823750267e+28;     // diffusion coefficient, in units of cm^2/s
 const double sigma = 1.2053428078125e+17;    // conduction timescale in s
 
