@@ -1045,11 +1045,12 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 #endif
 	};
 
-<<<<<<< av/thermalconduction-clean
-	if ((enableTurbulence_ == 1) && (time < turbulenceStopTime_)) {
-		auto const &cellSizes = geom[lev].CellSizeArray();
-		td->applyDriving(state, time, dt, cellSizes);
-	}
+	auto const applyTurbulence = [&]() {
+		if ((enableTurbulence_ == 1) && (time < turbulenceStopTime_)) {
+			auto const &cellSizes = geom[lev].CellSizeArray();
+			td->applyDriving(state, time, dt, cellSizes);
+		}
+	};
 
 	if (enableElectronConduction_ == 1) {
 		if (max_level > 0) {
@@ -1064,17 +1065,6 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 		quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, resampledTables_);
 	}
 
-	if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-		DustDrag<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega_, enableIterDustStoptime_, print_dust_counter_);
-	}
-=======
-	auto const applyTurbulence = [&]() {
-		if ((enableTurbulence_ == 1) && (time < turbulenceStopTime_)) {
-			auto const &cellSizes = geom[lev].CellSizeArray();
-			td->applyDriving(state, time, dt, cellSizes);
-		}
-	};
->>>>>>> development
 
 	auto const applyUserSources = [&]() {
 		// compute user-specified sources
