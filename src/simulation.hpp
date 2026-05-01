@@ -1328,7 +1328,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 		}
 
 		const amrex::Real dt_0_old = dt_0; // save old dt_0
-		dt_0 = std::min(dt_0, static_cast<amrex::Real>(effective_factor) * dt_tmp[level]);
+		dt_0 = std::min(dt_0, effective_factor * dt_tmp[level]);
 		if (dt_0 < dt_0_old) {
 			// level 'level' has now set the timestep
 			level_that_sets_dt_0 = level;
