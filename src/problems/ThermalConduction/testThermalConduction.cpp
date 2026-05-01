@@ -22,25 +22,24 @@
 #include "util/fextract.hpp"
 #include "util/richardson.hpp"
 
-/** Thermal conduction test problem 
-The initial condition for the test problem is a Gaussian temperature profile with a constant density. 
-The solution is also a Gaussian profile with an increasing (decreasing) width (peak) with time. 
+/** Thermal conduction test problem
+The initial condition for the test problem is a Gaussian temperature profile with a constant density.
+The solution is also a Gaussian profile with an increasing (decreasing) width (peak) with time.
 We run the test for one conduction timescale and check that the numerical solution matches the analytic solution.
 Physical parameters for the test problem are chosen to satisfy t_hydro / t_conduction >> 1, so that the gas does not have time to move
 and the energy evolution is purely due to conduction.
-How to choose the parameters for the thermal conduction test problem 
+How to choose the parameters for the thermal conduction test problem
 1. Fix a box lenght L and a grid resolution nx which will set the resolution dx.
 2. Width of the gaussian = sigma = 5 * dx.
 3. Choose a peak temperature T0 and estimate the sound speed cs.
 4. Diffusion coefficient D = 1.e3 * sigma * cs. This will ensure that t_hydro / t_conduction = 1.e3.
 5. Conductivity prefactor = D * rho * c_v should be supplied in the input file. */
 
-
-double Eint0 = 2.505e-8; //equivalent to T = 2.e8 K
-double Efloor = 5.674216387016754e-11; //equivalent tp T = 2.e6 K
-double rho0 = 0.1 ; // g/cm^3
-double D = 2.1981515823750267e+28; // diffusion coefficient, in units of cm^2/s 
-double sigma = 1.2053428078125e+17; // conduction timescale in s
+double Eint0 = 2.505e-8;	       // equivalent to T = 2.e8 K
+double Efloor = 5.674216387016754e-11; // equivalent tp T = 2.e6 K
+double rho0 = 0.1;		       // g/cm^3
+double D = 2.1981515823750267e+28;     // diffusion coefficient, in units of cm^2/s
+double sigma = 1.2053428078125e+17;    // conduction timescale in s
 
 struct ThermalConductionProblem {
 };
@@ -82,11 +81,11 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const amrex::Real x = prob_lo[0] + (i + 0.5) * dx[0];
-		
+
 		/*-------------------------------*/
 		// Problem ----> Gaussian temperature profile
-		const amrex::Real rho = rho0 * C::m_p;	   // g/cm^3
-		const amrex::Real sigma2 = sigma*sigma; // width of the Gaussian
+		const amrex::Real rho = rho0 * C::m_p;	  // g/cm^3
+		const amrex::Real sigma2 = sigma * sigma; // width of the Gaussian
 		const amrex::Real Eint = Eint0 * std::exp(-x * x / sigma2 / 2.) + Efloor;
 		/*-------------------------------*/
 
@@ -95,7 +94,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		}
 
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint; 
+		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint;
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = Eint;
 	});
 }
@@ -115,19 +114,18 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
 
-
-			//Solution for the Gaussian temperature profile
-			const amrex::Real rho = rho0 * C::m_p; // g/cm^3
-			const amrex::Real sigma2_0 = sigma*sigma; // initial width of the Gaussian
-			const amrex::Real sigma2_t = sigma2_0 + 2.0 * D * t ; // width of the Gaussian at time t
+			// Solution for the Gaussian temperature profile
+			const amrex::Real rho = rho0 * C::m_p;		     // g/cm^3
+			const amrex::Real sigma2_0 = sigma * sigma;	     // initial width of the Gaussian
+			const amrex::Real sigma2_t = sigma2_0 + 2.0 * D * t; // width of the Gaussian at time t
 			const amrex::Real norm = Eint0 * (std::sqrt(sigma2_0 / sigma2_t));
-			const amrex::Real Eint_exact = norm *  std::exp(-x * x / sigma2_t / 2.) + Efloor ;
+			const amrex::Real Eint_exact = norm * std::exp(-x * x / sigma2_t / 2.) + Efloor;
 
 			// clear all components
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.;
 			}
-			
+
 			// fill gas components
 			stateExact(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho;
 			stateExact(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint_exact;
@@ -142,7 +140,7 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 auto runConductionTest(int nx) -> double
 {
 	// Read problem parameters
-	const double max_time = 469054.0075444166; //1 conduction time
+	const double max_time = 469054.0075444166; // 1 conduction time
 
 	const double CFL_number = 0.3;
 	const int max_timesteps = std::max(2000, nx * 100);
@@ -155,13 +153,12 @@ auto runConductionTest(int nx) -> double
 
 	// Set domain bounds using AMReX parameter system
 	amrex::ParmParse pp_geom("geometry");
-	amrex::Vector<double> const prob_lo = {-1.5428e+18, -1.5428e+18 , -1.5428e+18};
+	amrex::Vector<double> const prob_lo = {-1.5428e+18, -1.5428e+18, -1.5428e+18};
 	amrex::Vector<double> const prob_hi = {1.5428e+18, 1.5428e+18, 1.5428e+18};
 	amrex::Vector<int> const is_periodic = {0, 0, 0};
 	pp_geom.addarr("prob_lo", prob_lo);
 	pp_geom.addarr("prob_hi", prob_hi);
 	pp_geom.addarr("is_periodic", is_periodic);
-
 
 	// Setup boundary conditions
 	constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
@@ -187,7 +184,6 @@ auto runConductionTest(int nx) -> double
 	return sim.computeErrorNorm();
 }
 
-
 auto problem_main() -> int
 {
 	/***Richardson Extrapolation ****/
@@ -196,13 +192,11 @@ auto problem_main() -> int
 	quokka::richardson::Parameters params{};
 	params.machine_precision_target = 2.0e-9; // limit based on delta_b_magn, smaller values can be used if this is decreased
 	params.nx_initial = 128;
-	params.nx_max = 1024; 
+	params.nx_max = 1024;
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;
 	params.test_name = "Thermal Conduction";
 	params.csv_filename = "thermal_conduction_convergence.csv";
 
 	return quokka::richardson::run(params, [](int nx) { return runConductionTest(nx); });
-
-
 }

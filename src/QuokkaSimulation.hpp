@@ -1060,7 +1060,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 										     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
 										     .saturation_factor = electronConductionSaturationFactor_,
 										     .min_temperature = tempFloor_,
-											 .eos_flag = eosFlagForElectronConduction_};	
+										     .eos_flag = eosFlagForElectronConduction_};
 		quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, resampledTables_);
 	}
 
