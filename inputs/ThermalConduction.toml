@@ -26,8 +26,8 @@ cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 
 
 conduction.enabled = 1
-conduction.conductivity_prefactor = 0.3056958245467793e12 
+conduction.conductivity_prefactor = 3.056958245467793e11
 conduction.flux_limiter_phi = 1
-conduction.saturation_factor = 1.e20
+conduction.saturation_factor = 1.2e20
 conduction.conduction_cfl = 0.1
 conduction.eos_flag = 1
