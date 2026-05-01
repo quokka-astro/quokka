@@ -95,7 +95,8 @@ template <typename problem_t> class ElectronConduction
 			auto const &cons = state_x0[bx];
 			const amrex::Real rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
 			const amrex::Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(cons, i, j, k, &local_state_fc);
-			amrex::Real Tgas, cs;
+			amrex::Real Tga = NAN;
+			amrex::Real cs = NAN;
 			if (params.eos_flag == 0) {
 				Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables_dev);
 				cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, tables_dev);
