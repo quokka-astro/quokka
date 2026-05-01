@@ -22,20 +22,25 @@
 #include "util/fextract.hpp"
 #include "util/richardson.hpp"
 
-/** Thermal conduction test problem */
-// The initial condition for the test problem is a Gaussian temperature profile with a constant density. 
-// The solution is also a Gaussian profile with an increasing (decreasing) width (peak) with time. 
-// We run the test for one conduction timescale and check that the numerical solution matches the analytic solution.
-// Physical parameters for the test problem are chosen to satisfy t_hydro / t_conduction >> 1, so that the gas does not have time to move
-// and the energy evolution is purely due to conduction.
-// The parameters below are fixed assuming t_hydro / t_conduction = 1.e3 = D / sigma / cs. Here sigma is the width of the gaussian, 
-// taken to be 5 * dx for nx = 128, and cs is the sound speed of the hotter medium. 
+/** Thermal conduction test problem 
+The initial condition for the test problem is a Gaussian temperature profile with a constant density. 
+The solution is also a Gaussian profile with an increasing (decreasing) width (peak) with time. 
+We run the test for one conduction timescale and check that the numerical solution matches the analytic solution.
+Physical parameters for the test problem are chosen to satisfy t_hydro / t_conduction >> 1, so that the gas does not have time to move
+and the energy evolution is purely due to conduction.
+How to choose the parameters for the thermal conduction test problem 
+1. Fix a box lenght L and a grid resolution nx which will set the resolution dx.
+2. Width of the gaussian = sigma = 5 * dx.
+3. Choose a peak temperature T0 and estimate the sound speed cs.
+4. Diffusion coefficient D = 1.e3 * sigma * cs. This will ensure that t_hydro / t_conduction = 1.e3.
+5. Conductivity prefactor = D * rho * c_v should be supplied in the input file. */
+
 
 double Eint0 = 2.505e-8; //equivalent to T = 2.e8 K
 double Efloor = 5.674216387016754e-11; //equivalent tp T = 2.e6 K
 double rho0 = 0.1 ; // g/cm^3
-double D = 7.743518128921141e+27; // diffusion coefficient, in units of cm^2/s 
-double sigma = 6.0267140390625e+16; // conduction timescale in s
+double D = 2.1981515823750267e+28; // diffusion coefficient, in units of cm^2/s 
+double sigma = 1.2053428078125e+17; // conduction timescale in s
 
 struct ThermalConductionProblem {
 };
@@ -114,7 +119,7 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 			//Solution for the Gaussian temperature profile
 			const amrex::Real rho = rho0 * C::m_p; // g/cm^3
 			const amrex::Real sigma2_0 = sigma*sigma; // initial width of the Gaussian
-			const amrex::Real sigma2_t = sigma2_0 + 2.0 * D * t * C::m_u/rho; // width of the Gaussian at time t
+			const amrex::Real sigma2_t = sigma2_0 + 2.0 * D * t ; // width of the Gaussian at time t
 			const amrex::Real norm = Eint0 * (std::sqrt(sigma2_0 / sigma2_t));
 			const amrex::Real Eint_exact = norm *  std::exp(-x * x / sigma2_t / 2.) + Efloor ;
 
@@ -122,7 +127,7 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.;
 			}
-
+			
 			// fill gas components
 			stateExact(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho;
 			stateExact(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint_exact;
