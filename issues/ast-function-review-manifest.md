@@ -1,0 +1,554 @@
+# AST Function Review Manifest
+
+Generated from `issues/ast-function-index.md`. This manifest enumerates each named, non-GCC-internal function source location and records high-priority correctness pattern checks applied to its local source block.
+
+- Named non-internal AST function locations reviewed: 1032
+- Files with reviewed named functions: 173
+- Flagged function locations needing manual/pattern follow-up: 350
+
+## Pattern Checks
+
+- `nan_compare`: 2 function blocks matched
+- `nonperiodic_mask`: 2 function blocks matched
+- `geometry_raw_pointer`: 3 function blocks matched
+- `assert_only_runtime`: 42 function blocks matched
+- `int_trunc_index`: 67 function blocks matched
+- `size_minus_one`: 22 function blocks matched
+- `division`: 309 function blocks matched
+
+## High-Signal Disposition
+
+- `nan_compare`: both matches are reported in `particle-sink-boost-vel-nan-check.md` and `radiation-pressure-nan-assertions.md`.
+- `nonperiodic_mask`: `DiagPDF` is reported in `diagpdf-periodic-finemask-double-count.md`; `DiskGalaxy::ComputeStatistics` uses `geom[lev].periodicity()` and was not considered a bug.
+- `geometry_raw_pointer`: projection/OpenPMD writer uses are host-side I/O paths; the device-side hydrostatic boundary raw-pointer bug is reported in `hydrostatic-bc-geometry-raw-pointers.md`.
+- `int_trunc_index`: particle accretion cell-index truncation is reported in `sink-accretion-particle-cell-truncation.md`; remaining matches were loop counters, diagnostics/tests, or non-cell-index casts on inspection/pattern follow-up.
+- `size_minus_one`: reviewed as edge-risk patterns; no additional high-priority production bug beyond the existing DataTable single-point-dimension report was identified.
+
+## Flagged Function Locations
+
+- `src/QuokkaSimulation.hpp:242` `initialize`: division
+- `src/QuokkaSimulation.hpp:555` `getScalarVariableNames`: division
+- `src/QuokkaSimulation.hpp:757` `computeMaxSignalLocal`: division
+- `src/QuokkaSimulation.hpp:798` `printCellProperties`: division
+- `src/QuokkaSimulation.hpp:943` `addStrangSplitSources`: division
+- `src/QuokkaSimulation.hpp:1165` `computeComponentErrors`: division
+- `src/QuokkaSimulation.hpp:1280` `computeErrorNorm`: division
+- `src/QuokkaSimulation.hpp:1336` `computeAfterEvolve`: division
+- `src/QuokkaSimulation.hpp:1461` `fillPoissonRhsAtLevel`: division
+- `src/QuokkaSimulation.hpp:1800` `postInitialization`: int_trunc_index
+- `src/QuokkaSimulation.hpp:1885` `PreInterpState`: division
+- `src/QuokkaSimulation.hpp:1904` `PostInterpState`: division
+- `src/QuokkaSimulation.hpp:2089` `isCflViolated`: division
+- `src/QuokkaSimulation.hpp:2130` `advanceHydroAtLevel`: assert_only_runtime
+- `src/QuokkaSimulation.hpp:2483` `replaceFluxes`: assert_only_runtime
+- `src/QuokkaSimulation.hpp:2529` `replaceEMFs`: assert_only_runtime
+- `src/QuokkaSimulation.hpp:2601` `expandFluxArrays`: assert_only_runtime
+- `src/chemistry/Chemistry.hpp:31` `computeChemistry`: division
+- `src/cooling/PhotoelectricHeating.hpp:49` `PeHeatingFromSfh`: division
+- `src/cooling/PhotoelectricHeating.hpp:87` `PeHeatingFromConstSfr`: int_trunc_index, division
+- `src/cooling/ResampledCooling.hpp:81` `ComputeTgasFromEgas`: division
+- `src/cooling/ResampledCooling.hpp:118` `ComputeCoolingLength`: division
+- `src/cooling/ResampledCooling.hpp:198` `computeCooling`: division
+- `src/dust/DustDrag.hpp:110` `computeDustDrag`: division
+- `src/dust/dust_system.hpp:63` `ComputeDustFluxes`: assert_only_runtime
+- `src/hydro/EOS.hpp:93` `ComputeTgasFromEint`: division
+- `src/hydro/EOS.hpp:135` `ComputeEintFromTgas`: division
+- `src/hydro/EOS.hpp:178` `ComputeEintFromPres`: division
+- `src/hydro/EOS.hpp:263` `ComputeOtherDerivatives`: division
+- `src/hydro/EOS.hpp:320` `ComputePressure`: division
+- `src/hydro/EOS.hpp:371` `ComputeSoundSpeed`: division
+- `src/hydro/HLLC.hpp:22` `HLLC`: division
+- `src/hydro/HLLD.hpp:21` `HLLD`: division
+- `src/hydro/LLF_mhd.hpp:16` `LLF_MHD`: division
+- `src/hydro/NSCBC_inflow.hpp:25` `dQ_dx_inflow_x1_lower`: division
+- `src/hydro/NSCBC_inflow.hpp:107` `setInflowX1Lower`: division
+- `src/hydro/NSCBC_outflow.hpp:25` `dQ_dx_outflow`: division
+- `src/hydro/NSCBC_outflow.hpp:110` `transverse_xdir_dQ_data`: division
+- `src/hydro/NSCBC_outflow.hpp:144` `transverse_ydir_dQ_data`: division
+- `src/hydro/NSCBC_outflow.hpp:177` `transverse_zdir_dQ_data`: division
+- `src/hydro/NSCBC_outflow.hpp:263` `setOutflowBoundary`: division
+- `src/hydro/hydro_system.hpp:195` `ConservedToPrimitive`: assert_only_runtime, division
+- `src/hydro/hydro_system.hpp:337` `maxSignalSpeedLocal`: division
+- `src/hydro/hydro_system.hpp:380` `ComputeMaxSignalSpeed`: assert_only_runtime, division
+- `src/hydro/hydro_system.hpp:459` `CheckStatesValid`: division
+- `src/hydro/hydro_system.hpp:517` `ComputePrimVars`: division
+- `src/hydro/hydro_system.hpp:575` `ComputePressure`: division
+- `src/hydro/hydro_system.hpp:603` `ComputeInternalEnergy`: division
+- `src/hydro/hydro_system.hpp:681` `ComputePlasmaBeta`: division
+- `src/hydro/hydro_system.hpp:698` `ComputeVelocityX1`: division
+- `src/hydro/hydro_system.hpp:707` `ComputeVelocityX2`: division
+- `src/hydro/hydro_system.hpp:716` `ComputeVelocityX3`: division
+- `src/hydro/hydro_system.hpp:757` `ComputeRhsFromFluxes`: division
+- `src/hydro/hydro_system.hpp:938` `FlattenShocks`: division
+- `src/hydro/hydro_system.hpp:1008` `EnforceLimits`: division
+- `src/hydro/hydro_system.hpp:1114` `AddInternalEnergyPdV`: division
+- `src/hydro/hydro_system.hpp:1170` `SyncDualEnergy`: division
+- `src/hydro/hydro_system.hpp:1232` `ComputeFluxes`: assert_only_runtime, division
+- `src/hydro/mhd_system.hpp:371` `ComputeEMF_Quokka2026`: division
+- `src/hydro/mhd_system.hpp:507` `ComputeEMF_Balsara2025`: division
+- `src/hydro/mhd_system.hpp:777` `EMFAverage_Balsara2025`: division
+- `src/hydro/mhd_system.hpp:950` `SolveInductionEqn`: division
+- `src/hyperbolic_system.hpp:344` `ReconstructStatesPLM`: division
+- `src/hyperbolic_system.hpp:416` `ReconstructStatesPPM`: division
+- `src/hyperbolic_system.hpp:523` `ComputeSteepPPM`: division
+- `src/hyperbolic_system.hpp:539` `ComputeWENOMoments`: division
+- `src/hyperbolic_system.hpp:586` `ComputeWENO`: division
+- `src/hyperbolic_system.hpp:645` `ReconstructStatesPPM_EP`: division
+- `src/hyperbolic_system.hpp:713` `PredictStep`: division
+- `src/hyperbolic_system.hpp:754` `AddFluxesRK2`: division
+- `src/io/DiagBase.cpp:4` `init`: assert_only_runtime
+- `src/io/DiagBase.cpp:35` `prepare`: int_trunc_index
+- `src/io/DiagBase.cpp:53` `doDiag`: division
+- `src/io/DiagBase.cpp:98` `addVars`: int_trunc_index
+- `src/io/DiagFramePlane.H:80` `processDiag`: int_trunc_index
+- `src/io/DiagFramePlane.cpp:43` `init`: assert_only_runtime
+- `src/io/DiagFramePlane.cpp:104` `prepare`: int_trunc_index, division
+- `src/io/DiagFramePlane.cpp:284` `Write2DPlotfileHeader`: geometry_raw_pointer
+- `src/io/DiagFramePlane.cpp:351` `VisMF2D`: int_trunc_index
+- `src/io/DiagPDF.H:54` `getBinIndex1D`: division
+- `src/io/DiagPDF.H:72` `processDiag`: nonperiodic_mask, int_trunc_index, size_minus_one, division
+- `src/io/DiagPDF.cpp:68` `prepare`: int_trunc_index, division
+- `src/io/DiagPDF.cpp:86` `getIdxVec`: int_trunc_index, division
+- `src/io/DiagPDF.cpp:127` `writePDFToFile`: int_trunc_index, division
+- `src/io/DiagPlotfile.H:62` `processDiag`: int_trunc_index, size_minus_one
+- `src/io/openPMD.cpp:57` `SetupMeshComponent`: geometry_raw_pointer
+- `src/io/projection.cpp:118` `Write2DPlotfileHeader`: geometry_raw_pointer
+- `src/io/projection.cpp:541` `WriteProjection`: int_trunc_index
+- `src/linear_advection/AdvectionSimulation.hpp:279` `computeAfterEvolve`: division
+- `src/linear_advection/AdvectionSimulation.hpp:415` `computeFluxes`: division
+- `src/linear_advection/linear_advection.hpp:85` `PredictStep`: division
+- `src/linear_advection/linear_advection.hpp:120` `AddFluxesRK2`: division
+- `src/linear_advection/linear_advection.hpp:167` `ComputeFluxes`: division
+- `src/math/FastMath.hpp:74` `inverse_pow2`: division
+- `src/math/Interpolate2D.hpp:17` `interpolate2d`: assert_only_runtime, int_trunc_index, division
+- `src/math/ODEIntegrate.hpp:60` `rk23_single_step`: division
+- `src/math/ODEIntegrate.hpp:110` `error_norm`: division
+- `src/math/ODEIntegrate.hpp:128` `rk_adaptive_integrate`: assert_only_runtime, division
+- `src/math/gauss.hpp:666` `integrate`: division
+- `src/math/interpolate.hpp:112` `interpolate_arrays`: assert_only_runtime, division
+- `src/math/interpolate.hpp:139` `interpolate_value`: assert_only_runtime, division
+- `src/math/quadrature.hpp:14` `kernel_wendland_c2`: division
+- `src/math/root_finding.hpp:96` `bracket`: division
+- `src/math/root_finding.hpp:150` `safe_div`: division
+- `src/math/root_finding.hpp:167` `secant_interpolate`: division
+- `src/math/root_finding.hpp:237` `cubic_interpolate`: division
+- `src/math/root_finding.hpp:279` `toms748_solve`: division
+- `src/math/spherical_geometry.hpp:39` `addPointUnique`: int_trunc_index
+- `src/math/spherical_geometry.hpp:57` `planeBoxSectionArea`: division
+- `src/particles/PhysicsParticles.hpp:508` `splitParticles`: division
+- `src/particles/PhysicsParticles.hpp:614` `computeMaxParticleSpeed`: assert_only_runtime
+- `src/particles/PhysicsParticles.hpp:732` `tagCellsAroundParticles`: int_trunc_index
+- `src/particles/PhysicsParticles.hpp:1160` `computeMaxParticleSpeed`: assert_only_runtime
+- `src/particles/particle_IO.hpp:323` `printParticleStatistics`: int_trunc_index
+- `src/particles/particle_accretion.hpp:31` `get_delta_rho`: division
+- `src/particles/particle_accretion.hpp:34` `compute_Mdot_and_r_K`: assert_only_runtime, division
+- `src/particles/particle_accretion.hpp:253` `ComputeScaleDown`: assert_only_runtime, division
+- `src/particles/particle_accretion.hpp:509` `UpdateHydroState`: assert_only_runtime
+- `src/particles/particle_creation.hpp:205` `checkSinkCreation`: division
+- `src/particles/particle_deposition.hpp:440` `depositToBuffer`: assert_only_runtime, int_trunc_index, division
+- `src/particles/particle_radiation.hpp:45` `updateLuminosity`: division
+- `src/particles/particle_types.hpp:347` `expandEnumNames`: int_trunc_index, size_minus_one
+- `src/particles/particle_utils.hpp:101` `computeJeansDensity`: division
+- `src/particles/particle_utils.hpp:124` `computePlasmaBeta`: division
+- `src/particles/stellarpop_data.hpp:68` `interpolate_death_time`: assert_only_runtime, division
+- `src/problems/AdvectionSemiellipse/testAdvectionSemiellipse.cpp:44` `ComputeExactSolution`: division
+- `src/problems/AlfvenWaveCircular/testAlfvenWaveCircular.cpp:79` `computeWaveSolution`: division
+- `src/problems/AlfvenWaveLinear/testAlfvenWaveLinear.cpp:216` `computeWaveSolution`: division
+- `src/problems/AlfvenWaveLinear/testAlfvenWaveLinear.cpp:370` `problem_main`: division
+- `src/problems/AlfvenWaveLinearConvergence/testAlfvenWaveLinearConvergence.cpp:220` `computeWaveSolution`: division
+- `src/problems/AlfvenWaveLinearConvergence/testAlfvenWaveLinearConvergence.cpp:372` `runWaveTest`: division
+- `src/problems/BinaryOrbitCIC/testBinaryOrbitCIC.cpp:113` `computeAfterTimestep`: division
+- `src/problems/BinaryOrbitCIC/testBinaryOrbitCIC.cpp:157` `problem_main`: division
+- `src/problems/BrioWuShockTube/testBrioWuShockTube.cpp:209` `refineGrid`: division
+- `src/problems/DiskGalaxy/testDiskGalaxy.cpp:567` `ComputeDerivedVar`: division
+- `src/problems/DiskGalaxy/testDiskGalaxy.cpp:714` `ComputeStatistics`: nonperiodic_mask, division
+- `src/problems/DiskGalaxy/testDiskGalaxy.cpp:899` `problem_main`: division
+- `src/problems/DustDamping/testDustDamping.cpp:160` `computeAfterTimestep`: division
+- `src/problems/DustDamping/testDustDamping.cpp:205` `E_gas_analytic`: division
+- `src/problems/DustDamping/testDustDamping.cpp:236` `problem_main`: size_minus_one, division
+- `src/problems/DustDampingIteration/testDustDampingIteration.cpp:193` `computeAfterTimestep`: division
+- `src/problems/DustDampingIteration/testDustDampingIteration.cpp:228` `computeAfterTimestep`: division
+- `src/problems/DustDampingIteration/testDustDampingIteration.cpp:390` `compute_relative_error`: size_minus_one, division
+- `src/problems/DustDampingWithExternalForce/testDustDampingWithExternalForce.cpp:140` `computeAfterTimestep`: division
+- `src/problems/DustDampingWithExternalForce/testDustDampingWithExternalForce.cpp:175` `v_gas_analytic`: division
+- `src/problems/DustDampingWithExternalForce/testDustDampingWithExternalForce.cpp:177` `v_dust1_analytic`: division
+- `src/problems/DustDampingWithExternalForce/testDustDampingWithExternalForce.cpp:182` `v_dust2_analytic`: division
+- `src/problems/DustDampingWithExternalForce/testDustDampingWithExternalForce.cpp:187` `E_gas_analytic`: division
+- `src/problems/DustDampingWithExternalForce/testDustDampingWithExternalForce.cpp:223` `addStrangSplitSources`: assert_only_runtime
+- `src/problems/DustDampingWithExternalForce/testDustDampingWithExternalForce.cpp:257` `problem_main`: size_minus_one, division
+- `src/problems/DustSoundwave/testDustSoundwave.cpp:158` `computeAfterTimestep`: division
+- `src/problems/DustSoundwave/testDustSoundwave.cpp:178` `problem_main`: size_minus_one, division
+- `src/problems/DustyShock/testDustyShock.cpp:135` `linear_interpolate`: int_trunc_index, size_minus_one, division
+- `src/problems/DustyShock/testDustyShock.cpp:156` `problem_main`: int_trunc_index, division
+- `src/problems/EntropyWaveConvergence/testEntropyWaveConvergence.cpp:163` `computeWaveSolution`: division
+- `src/problems/EntropyWaveConvergence/testEntropyWaveConvergence.cpp:308` `runWaveTest`: division
+- `src/problems/FCQuantities/testFCQuantities.cpp:59` `computeWaveSolution`: division
+- `src/problems/FCQuantities/testFCQuantities.cpp:151` `checkDivFreeRestart`: division
+- `src/problems/FastWave/testFastWave.cpp:89` `computeWaveSolution`: division
+- `src/problems/FastWave/testFastWave.cpp:236` `problem_main`: division
+- `src/problems/FastWaveConvergence/testFastWaveConvergence.cpp:235` `computeWaveSolution`: division
+- `src/problems/FastWaveConvergence/testFastWaveConvergence.cpp:423` `runWaveTest`: division
+- `src/problems/FieldLoop/testFieldLoop.cpp:28` `amrex_get_enum_traits`: division
+- `src/problems/FieldLoop/testFieldLoop.cpp:128` `refineGrid`: division
+- `src/problems/FieldLoop/testFieldLoop.cpp:172` `ComputeDerivedVar`: division
+- `src/problems/GravRadParticle3D/testGravRadParticle3D.cpp:185` `problem_main`: division
+- `src/problems/HydroBlast3D/testHydroBlast3D.cpp:107` `refineGrid`: division
+- `src/problems/HydroBlast3D/testHydroBlast3D.cpp:142` `computeAfterEvolve`: division
+- `src/problems/HydroQuirk/testHydroQuirk.cpp:136` `computeAfterTimestep`: division
+- `src/problems/HydroShocktube/testHydroShocktube.cpp:146` `refineGrid`: division
+- `src/problems/HydroShocktubeCMA/testHydroShocktubeCMA.cpp:179` `refineGrid`: division
+- `src/problems/HydroShocktubeCMA/testHydroShocktubeCMA.cpp:205` `computeAfterTimestep`: int_trunc_index, division
+- `src/problems/HydroWave/testHydroWave.cpp:54` `computeWaveSolution`: division
+- `src/problems/HydroWave/testHydroWave.cpp:95` `problem_main`: int_trunc_index, division
+- `src/problems/HydroWaveConvergence/testHydroWaveConvergence.cpp:52` `computeWaveSolution`: division
+- `src/problems/HydroWaveConvergence/testHydroWaveConvergence.cpp:93` `runWaveTest`: int_trunc_index, division
+- `src/problems/MHDBalsaraVortex/testMHDBalsaraVortex.cpp:64` `computeRadiusSq`: division
+- `src/problems/MHDBalsaraVortex/testMHDBalsaraVortex.cpp:89` `computeVortexSolution`: division
+- `src/problems/MHDBalsaraVortex/testMHDBalsaraVortex.cpp:225` `problem_main`: division
+- `src/problems/MHDBitwiseICs/testMHDBitwiseICs.cpp:246` `problem_main`: int_trunc_index
+- `src/problems/MHDBlast/testMHDBlast.cpp:99` `refineGrid`: division
+- `src/problems/MHDBlast/testMHDBlast.cpp:134` `ComputeDerivedVar`: division
+- `src/problems/MHDQuirk/testMHDQuirk.cpp:151` `computeAfterTimestep`: division
+- `src/problems/NscbcChannel/testNscbcChannel.cpp:126` `problem_main`: int_trunc_index, division
+- `src/problems/ODEIntegration/testODEIntegration.cpp:39` `cooling_function`: division
+- `src/problems/ODEIntegration/testODEIntegration.cpp:66` `problem_main`: division
+- `src/problems/OrszagTang/testOrszagTang.cpp:51` `A_z`: division
+- `src/problems/OrszagTang/testOrszagTang.cpp:56` `B_x`: division
+- `src/problems/OrszagTang/testOrszagTang.cpp:61` `B_y`: division
+- `src/problems/ParticleAccretion/testParticleAccretion.cpp:422` `problem_main`: int_trunc_index, division
+- `src/problems/ParticleCreation/testParticleCreation.cpp:260` `problem_main`: division
+- `src/problems/ParticleDeposition/testParticleDeposition.cpp:166` `problem_main`: size_minus_one
+- `src/problems/ParticleRadiation/testParticleRadiation.cpp:153` `problem_main`: division
+- `src/problems/ParticleSF/testParticleSF.cpp:95` `computeAfterTimestep`: int_trunc_index, division
+- `src/problems/ParticleSF/testParticleSF.cpp:231` `problem_main`: int_trunc_index, division
+- `src/problems/ParticleSink/testParticleSink.cpp:140` `refineGrid`: division
+- `src/problems/ParticleSink/testParticleSink.cpp:164` `problem_main`: nan_compare, assert_only_runtime, int_trunc_index, division
+- `src/problems/ParticleSinkFormation/testParticleSinkFormation.cpp:128` `problem_main`: int_trunc_index, division
+- `src/problems/PassiveScalar/testPassiveScalar.cpp:222` `refineGrid`: division
+- `src/problems/PopIII/testPopIII.cpp:332` `refineGrid`: division
+- `src/problems/PopIII/testPopIII.cpp:368` `ComputeDerivedVar`: division
+- `src/problems/RadDust/testRadDust.cpp:84` `ComputePlanckOpacity`: division
+- `src/problems/RadDust/testRadDust.cpp:129` `computeAfterTimestep`: division
+- `src/problems/RadDust/testRadDust.cpp:149` `problem_main`: int_trunc_index, division
+- `src/problems/RadDustMG/testRadDustMG.cpp:150` `computeAfterTimestep`: division
+- `src/problems/RadDustMG/testRadDustMG.cpp:173` `problem_main`: int_trunc_index, division
+- `src/problems/RadForce/testRadForce.cpp:164` `problem_main`: int_trunc_index, division
+- `src/problems/RadLineCooling/testRadLineCooling.cpp:191` `problem_main`: division
+- `src/problems/RadLineCoolingMG/testRadLineCoolingMG.cpp:190` `problem_main`: int_trunc_index, division
+- `src/problems/RadMarshak/testRadMarshak.cpp:84` `ComputeTgasFromEint`: division
+- `src/problems/RadMarshak/testRadMarshak.cpp:92` `ComputeEintFromTgas`: division
+- `src/problems/RadMarshak/testRadMarshak.cpp:187` `problem_main`: int_trunc_index, division
+- `src/problems/RadMarshakAsymptotic/testRadMarshakAsymptotic.cpp:62` `ComputePlanckOpacity`: division
+- `src/problems/RadMarshakAsymptotic/testRadMarshakAsymptotic.cpp:74` `ComputeEddingtonFactor`: division
+- `src/problems/RadMarshakAsymptotic/testRadMarshakAsymptotic.cpp:167` `problem_main`: int_trunc_index, division
+- `src/problems/RadMarshakCGS/testRadMarshakCGS.cpp:82` `ComputeTgasFromEint`: division
+- `src/problems/RadMarshakCGS/testRadMarshakCGS.cpp:90` `ComputeEintFromTgas`: division
+- `src/problems/RadMarshakCGS/testRadMarshakCGS.cpp:197` `problem_main`: int_trunc_index, division
+- `src/problems/RadMarshakDust/testRadMarshakDust.cpp:178` `problem_main`: int_trunc_index, division
+- `src/problems/RadMarshakDustPE/testRadMarshakDustPE.cpp:182` `problem_main`: int_trunc_index, division
+- `src/problems/RadMarshakVaytet/testRadMarshakVaytet.cpp:249` `problem_main`: int_trunc_index, division
+- `src/problems/RadMatterCoupling/testRadMatterCoupling.cpp:76` `ComputeTgasFromEint`: division
+- `src/problems/RadMatterCoupling/testRadMatterCoupling.cpp:84` `ComputeEintFromTgas`: division
+- `src/problems/RadMatterCoupling/testRadMatterCoupling.cpp:130` `computeAfterTimestep`: division
+- `src/problems/RadMatterCoupling/testRadMatterCoupling.cpp:151` `problem_main`: int_trunc_index, size_minus_one, division
+- `src/problems/RadMatterCouplingRSLA/testRadMatterCouplingRSLA.cpp:79` `ComputeTgasFromEint`: division
+- `src/problems/RadMatterCouplingRSLA/testRadMatterCouplingRSLA.cpp:87` `ComputeEintFromTgas`: division
+- `src/problems/RadMatterCouplingRSLA/testRadMatterCouplingRSLA.cpp:133` `computeAfterTimestep`: division
+- `src/problems/RadMatterCouplingRSLA/testRadMatterCouplingRSLA.cpp:154` `problem_main`: int_trunc_index, size_minus_one, division
+- `src/problems/RadStreaming/testRadStreaming.cpp:157` `problem_main`: int_trunc_index, division
+- `src/problems/RadStreamingY/testRadStreamingY.cpp:143` `problem_main`: int_trunc_index, division
+- `src/problems/RadSuOlson/testRadSuOlson.cpp:85` `ComputePlanckOpacity`: division
+- `src/problems/RadSuOlson/testRadSuOlson.cpp:90` `ComputeFluxMeanOpacity`: division
+- `src/problems/RadSuOlson/testRadSuOlson.cpp:98` `ComputeTgasFromEint`: division
+- `src/problems/RadSuOlson/testRadSuOlson.cpp:106` `ComputeEintFromTgas`: division
+- `src/problems/RadSuOlson/testRadSuOlson.cpp:132` `SetRadEnergySource`: division
+- `src/problems/RadSuOlson/testRadSuOlson.cpp:181` `problem_main`: int_trunc_index, division
+- `src/problems/RadTube/testRadTube.cpp:251` `problem_main`: int_trunc_index, division
+- `src/problems/RadhydroBB/testRadhydroBB.cpp:158` `compute_exact_bb`: division
+- `src/problems/RadhydroBB/testRadhydroBB.cpp:191` `problem_main`: assert_only_runtime, int_trunc_index, size_minus_one, division
+- `src/problems/RadhydroPulse/testRadhydroPulse.cpp:92` `compute_initial_Tgas`: division
+- `src/problems/RadhydroPulse/testRadhydroPulse.cpp:100` `compute_exact_rho`: division
+- `src/problems/RadhydroPulse/testRadhydroPulse.cpp:197` `problem_main`: int_trunc_index, division
+- `src/problems/RadhydroPulseDyn/testRadhydroPulseDyn.cpp:92` `compute_initial_Tgas`: division
+- `src/problems/RadhydroPulseDyn/testRadhydroPulseDyn.cpp:100` `compute_exact_rho`: division
+- `src/problems/RadhydroPulseDyn/testRadhydroPulseDyn.cpp:197` `problem_main`: int_trunc_index, division
+- `src/problems/RadhydroPulseGrey/testRadhydroPulseGrey.cpp:93` `compute_initial_Tgas`: division
+- `src/problems/RadhydroPulseGrey/testRadhydroPulseGrey.cpp:101` `compute_exact_rho`: division
+- `src/problems/RadhydroPulseGrey/testRadhydroPulseGrey.cpp:108` `ComputePlanckOpacity`: division
+- `src/problems/RadhydroPulseGrey/testRadhydroPulseGrey.cpp:113` `ComputePlanckOpacity`: division
+- `src/problems/RadhydroPulseGrey/testRadhydroPulseGrey.cpp:119` `ComputeFluxMeanOpacity`: division
+- `src/problems/RadhydroPulseGrey/testRadhydroPulseGrey.cpp:124` `ComputeFluxMeanOpacity`: division
+- `src/problems/RadhydroPulseGrey/testRadhydroPulseGrey.cpp:194` `problem_main`: int_trunc_index, size_minus_one, division
+- `src/problems/RadhydroPulseMGconst/testRadhydroPulseMGconst.cpp:76` `compute_initial_Tgas`: division
+- `src/problems/RadhydroPulseMGconst/testRadhydroPulseMGconst.cpp:84` `compute_exact_rho`: division
+- `src/problems/RadhydroPulseMGconst/testRadhydroPulseMGconst.cpp:241` `problem_main`: int_trunc_index, division
+- `src/problems/RadhydroPulseMGint/testRadhydroPulseMGint.cpp:153` `compute_initial_Tgas`: division
+- `src/problems/RadhydroPulseMGint/testRadhydroPulseMGint.cpp:161` `compute_exact_rho`: division
+- `src/problems/RadhydroPulseMGint/testRadhydroPulseMGint.cpp:169` `compute_kappa`: division
+- `src/problems/RadhydroPulseMGint/testRadhydroPulseMGint.cpp:212` `ComputePlanckOpacity`: division
+- `src/problems/RadhydroPulseMGint/testRadhydroPulseMGint.cpp:218` `ComputeFluxMeanOpacity`: division
+- `src/problems/RadhydroPulseMGint/testRadhydroPulseMGint.cpp:299` `problem_main`: int_trunc_index, size_minus_one, division
+- `src/problems/RadhydroShell/testRadhydroShell.cpp:90` `SetRadEnergySource`: division
+- `src/problems/RadhydroShell/testRadhydroShell.cpp:255` `refineGrid`: division
+- `src/problems/RadhydroShell/testRadhydroShell.cpp:293` `problem_main`: division
+- `src/problems/RadhydroShock/testRadhydroShock.cpp:97` `ComputePlanckOpacity`: division
+- `src/problems/RadhydroShock/testRadhydroShock.cpp:107` `ComputeEddingtonFactor`: division
+- `src/problems/RadhydroShock/testRadhydroShock.cpp:215` `problem_main`: int_trunc_index, size_minus_one, division
+- `src/problems/RadhydroShockCGS/testRadhydroShockCGS.cpp:98` `ComputePlanckOpacity`: division
+- `src/problems/RadhydroShockCGS/testRadhydroShockCGS.cpp:108` `ComputeEddingtonFactor`: division
+- `src/problems/RadhydroShockCGS/testRadhydroShockCGS.cpp:232` `problem_main`: int_trunc_index, size_minus_one, division
+- `src/problems/RadhydroShockMultigroup/testRadhydroShockMultigroup.cpp:101` `ComputeEddingtonFactor`: division
+- `src/problems/RadhydroShockMultigroup/testRadhydroShockMultigroup.cpp:222` `problem_main`: int_trunc_index, size_minus_one, division
+- `src/problems/RadhydroUniformAdvecting/testRadhydroUniformAdvecting.cpp:139` `problem_main`: int_trunc_index, division
+- `src/problems/RandomBlast/testRandomBlast.cpp:166` `problem_main`: int_trunc_index, division
+- `src/problems/RayleighTaylor3D/testRayleighTaylor3D.cpp:109` `addStrangSplitSources`: division
+- `src/problems/RayleighTaylor3D/testRayleighTaylor3D.cpp:140` `refineGrid`: division
+- `src/problems/ResampledCoolingTest/testResampledCoolingTest.cpp:164` `problem_main`: int_trunc_index, size_minus_one, division
+- `src/problems/SN/testSN.cpp:184` `refineGrid`: division
+- `src/problems/SN/testSN.cpp:217` `problem_main`: int_trunc_index, division
+- `src/problems/ShockCloud/testShockCloud.cpp:207` `computeAfterTimestep`: division
+- `src/problems/ShockCloud/testShockCloud.cpp:275` `ComputeDerivedVar`: division
+- `src/problems/ShockCloud/testShockCloud.cpp:495` `ComputeStatistics`: division
+- `src/problems/ShockCloud/testShockCloud.cpp:688` `problem_main`: division
+- `src/problems/SlowWaveConvergence/testSlowWaveConvergence.cpp:236` `computeWaveSolution`: division
+- `src/problems/SlowWaveConvergence/testSlowWaveConvergence.cpp:432` `runWaveTest`: division
+- `src/problems/StarCluster/testStarCluster.cpp:175` `refineGrid`: division
+- `src/problems/TallBoxSf/testTallBoxSf.cpp:300` `ComputeDerivedVar`: division
+- `src/problems/TallBoxSf/testTallBoxSf.cpp:375` `addStrangSplitSources`: assert_only_runtime
+- `src/problems/TallBoxSf/testTallBoxSf.cpp:459` `problem_main`: division
+- `src/problems/Turbulence/testTurbulence.cpp:70` `refineGrid`: division
+- `src/problems/Turbulence/testTurbulence.cpp:114` `problem_main`: size_minus_one, division
+- `src/radiation/radiation_system.hpp:497` `ComputeNumberDensityH`: division
+- `src/radiation/radiation_system.hpp:585` `SolveLinearEqs`: division
+- `src/radiation/radiation_system.hpp:593` `Solve3x3matrix`: division
+- `src/radiation/radiation_system.hpp:624` `ConservedToPrimitive`: assert_only_runtime, division
+- `src/radiation/radiation_system.hpp:660` `isStateValid`: division
+- `src/radiation/radiation_system.hpp:680` `amendRadState`: division
+- `src/radiation/radiation_system.hpp:716` `PredictStep`: assert_only_runtime, division
+- `src/radiation/radiation_system.hpp:761` `AddFluxesRK2`: assert_only_runtime, division
+- `src/radiation/radiation_system.hpp:823` `ComputeEddingtonFactor`: division
+- `src/radiation/radiation_system.hpp:855` `ComputeCellOpticalDepth`: division
+- `src/radiation/radiation_system.hpp:924` `ComputeEddingtonTensor`: assert_only_runtime, division
+- `src/radiation/radiation_system.hpp:970` `ComputeRadPressure`: nan_compare, assert_only_runtime, division
+- `src/radiation/radiation_system.hpp:1037` `ComputeFluxes`: assert_only_runtime, division
+- `src/radiation/radiation_system.hpp:1302` `ComputeGroupMeanOpacity`: assert_only_runtime, division
+- `src/radiation/radiation_system.hpp:1340` `ComputeEintFromEgas`: assert_only_runtime, division
+- `src/radiation/radiation_system.hpp:1351` `ComputeEgasFromEint`: division
+- `src/radiation/radiation_system.hpp:1360` `PlanckFunction`: division
+- `src/radiation/radiation_system.hpp:1405` `ComputeBinCenterOpacity`: division
+- `src/radiation/source_terms_multi_group.hpp:106` `ComputeJacobianForGas`: division
+- `src/radiation/source_terms_multi_group.hpp:428` `UpdateFlux`: assert_only_runtime, division
+- `src/simulation.hpp:710` `initialize`: division
+- `src/simulation.hpp:792` `PerformanceHints`: division
+- `src/simulation.hpp:845` `readParameters`: division
+- `src/simulation.hpp:1197` `computeTimestepAtLevel`: division
+- `src/simulation.hpp:1269` `computeTimestep`: division
+- `src/simulation.hpp:1356` `evolve`: division
+- `src/simulation.hpp:1691` `calculateGpotAllLevels`: division
+- `src/simulation.hpp:1957` `kickParticlesAllLevels`: division
+- `src/simulation.hpp:2051` `particleMeshInteraction`: division
+- `src/simulation.hpp:2121` `timeStepWithSubcycling`: division
+- `src/simulation.hpp:2254` `incrementFluxRegisters`: assert_only_runtime
+- `src/simulation.hpp:2303` `incrementEMFRegisters`: assert_only_runtime
+- `src/simulation.hpp:3118` `fillBoundaryConditions`: assert_only_runtime, division
+- `src/simulation.hpp:3204` `FillPatchWithData`: division
+- `src/simulation.hpp:3276` `FillCoarsePatch`: assert_only_runtime
+- `src/simulation.hpp:3452` `computeVolumeIntegral`: division
+- `src/simulation.hpp:3478` `InitParticles`: assert_only_runtime
+- `src/simulation.hpp:3499` `InitPhyParticles`: assert_only_runtime
+- `src/simulation.hpp:3663` `PlotFileMFAtLevel_cc`: division
+- `src/simulation.hpp:3799` `AverageDownDerived`: int_trunc_index
+- `src/simulation.hpp:3980` `createDiagnostics`: int_trunc_index
+- `src/simulation.hpp:4065` `doDiagnostics`: int_trunc_index
+- `src/simulation.hpp:4256` `WriteMetadataFile`: division
+- `src/simulation.hpp:4492` `detectRefinementContext`: division
+- `src/simulation.hpp:4767` `loadBalanceOnRestart`: division
+- `src/simulation.hpp:4794` `ReadCheckpointFile`: assert_only_runtime
+- `src/turbulence/TurbulentDriving.hpp:69` `applyDriving`: division
+- `src/turbulence/TurbulentDriving.hpp:107` `calculate_dispersion`: division
+- `src/util/BC.hpp:131` `BC`: division
+- `src/util/BC.hpp:167` `BC_cc`: division
+- `src/util/BC.hpp:199` `BC_fc`: int_trunc_index
+- `src/util/CheckNaN.hpp:33` `CheckNaN`: assert_only_runtime
+- `src/util/DataTable.hpp:96` `find_interpolation_data`: int_trunc_index, division
+- `src/util/DataTable.hpp:798` `initializeStorage`: division
+- `src/util/DataTable.hpp:946` `initialize_common`: int_trunc_index, size_minus_one
+- `src/util/DataTable.hpp:1282` `H5Reader`: size_minus_one
+- `src/util/fextract.cpp:17` `fextract`: int_trunc_index, division
+- `src/util/richardson.hpp:52` `run`: size_minus_one, division
+
+## Reviewed Function Counts By File
+
+- `src/Factory.H`: 6
+- `src/QuokkaSimulation.hpp`: 43
+- `src/chemistry/Chemistry.cpp`: 1
+- `src/chemistry/Chemistry.hpp`: 2
+- `src/cooling/PhotoelectricHeating.hpp`: 4
+- `src/cooling/ResampledCooling.cpp`: 2
+- `src/cooling/ResampledCooling.hpp`: 6
+- `src/dust/DustDrag.hpp`: 1
+- `src/dust/dustRiemannSolver.hpp`: 1
+- `src/dust/dust_system.hpp`: 1
+- `src/hydro/EOS.hpp`: 6
+- `src/hydro/HLLC.hpp`: 1
+- `src/hydro/HLLD.hpp`: 1
+- `src/hydro/HydroState.hpp`: 2
+- `src/hydro/LLF.hpp`: 1
+- `src/hydro/LLF_mhd.hpp`: 1
+- `src/hydro/NSCBC_inflow.hpp`: 2
+- `src/hydro/NSCBC_outflow.hpp`: 7
+- `src/hydro/hydro_system.hpp`: 26
+- `src/hydro/mhd_system.hpp`: 9
+- `src/hyperbolic_system.hpp`: 24
+- `src/io/DerivedFieldBase.H`: 6
+- `src/io/DerivedFieldBase.cpp`: 5
+- `src/io/DerivedParticleDeposition.H`: 1
+- `src/io/DerivedParticleDeposition.cpp`: 4
+- `src/io/DiagBase.H`: 11
+- `src/io/DiagBase.cpp`: 6
+- `src/io/DiagFilter.H`: 2
+- `src/io/DiagFilter.cpp`: 2
+- `src/io/DiagFramePlane.H`: 12
+- `src/io/DiagFramePlane.cpp`: 10
+- `src/io/DiagPDF.H`: 12
+- `src/io/DiagPDF.cpp`: 7
+- `src/io/DiagParticleTxt.H`: 6
+- `src/io/DiagParticleTxt.cpp`: 3
+- `src/io/DiagPlotfile.H`: 9
+- `src/io/DiagPlotfile.cpp`: 3
+- `src/io/DiagProjectionPlot.H`: 7
+- `src/io/DiagProjectionPlot.cpp`: 3
+- `src/io/openPMD.cpp`: 5
+- `src/io/projection.cpp`: 11
+- `src/io/projection.hpp`: 12
+- `src/linear_advection/AdvectionSimulation.hpp`: 15
+- `src/linear_advection/linear_advection.hpp`: 6
+- `src/main.cpp`: 1
+- `src/main.hpp`: 1
+- `src/math/FastMath.hpp`: 7
+- `src/math/Interpolate2D.hpp`: 1
+- `src/math/ODEIntegrate.hpp`: 4
+- `src/math/gauss.hpp`: 41
+- `src/math/interpolate.hpp`: 2
+- `src/math/math_impl.hpp`: 2
+- `src/math/quadrature.hpp`: 4
+- `src/math/root_finding.hpp`: 7
+- `src/math/spherical_geometry.hpp`: 4
+- `src/particles/PhysicsParticles.hpp`: 81
+- `src/particles/particle_IO.hpp`: 3
+- `src/particles/particle_accretion.hpp`: 6
+- `src/particles/particle_creation.hpp`: 5
+- `src/particles/particle_deposition.hpp`: 5
+- `src/particles/particle_destruction.hpp`: 2
+- `src/particles/particle_radiation.hpp`: 3
+- `src/particles/particle_types.hpp`: 14
+- `src/particles/particle_update.hpp`: 3
+- `src/particles/particle_utils.hpp`: 3
+- `src/particles/stellarpop_data.hpp`: 1
+- `src/problems/Advection/testAdvection.cpp`: 2
+- `src/problems/AdvectionSemiellipse/testAdvectionSemiellipse.cpp`: 2
+- `src/problems/AlfvenWaveCircular/testAlfvenWaveCircular.cpp`: 2
+- `src/problems/AlfvenWaveLinear/testAlfvenWaveLinear.cpp`: 11
+- `src/problems/AlfvenWaveLinearConvergence/testAlfvenWaveLinearConvergence.cpp`: 12
+- `src/problems/BinaryOrbitCIC/testBinaryOrbitCIC.cpp`: 3
+- `src/problems/BrioWuShockTube/testBrioWuShockTube.cpp`: 2
+- `src/problems/CurrentSheet/testCurrentSheet.cpp`: 1
+- `src/problems/DiskGalaxy/testDiskGalaxy.cpp`: 4
+- `src/problems/DustAdvection/testDustAdvection.cpp`: 1
+- `src/problems/DustAdvection3D/testDustAdvection3D.cpp`: 1
+- `src/problems/DustDamping/testDustDamping.cpp`: 7
+- `src/problems/DustDampingIteration/testDustDampingIteration.cpp`: 4
+- `src/problems/DustDampingWithExternalForce/testDustDampingWithExternalForce.cpp`: 7
+- `src/problems/DustSoundwave/testDustSoundwave.cpp`: 7
+- `src/problems/DustyShock/testDustyShock.cpp`: 2
+- `src/problems/EntropyWaveConvergence/testEntropyWaveConvergence.cpp`: 12
+- `src/problems/FCQuantities/testFCQuantities.cpp`: 5
+- `src/problems/FastWave/testFastWave.cpp`: 2
+- `src/problems/FastWaveConvergence/testFastWaveConvergence.cpp`: 12
+- `src/problems/FieldLoop/testFieldLoop.cpp`: 4
+- `src/problems/GravRadParticle3D/testGravRadParticle3D.cpp`: 3
+- `src/problems/HydroBlast3D/testHydroBlast3D.cpp`: 3
+- `src/problems/HydroContact/testHydroContact.cpp`: 1
+- `src/problems/HydroHighMach/testHydroHighMach.cpp`: 1
+- `src/problems/HydroLeblanc/testHydroLeblanc.cpp`: 1
+- `src/problems/HydroQuirk/testHydroQuirk.cpp`: 4
+- `src/problems/HydroSMS/testHydroSMS.cpp`: 1
+- `src/problems/HydroShocktube/testHydroShocktube.cpp`: 2
+- `src/problems/HydroShocktubeCMA/testHydroShocktubeCMA.cpp`: 3
+- `src/problems/HydroShuOsher/testHydroShuOsher.cpp`: 1
+- `src/problems/HydroVacuum/testHydroVacuum.cpp`: 1
+- `src/problems/HydroWave/testHydroWave.cpp`: 2
+- `src/problems/HydroWaveConvergence/testHydroWaveConvergence.cpp`: 3
+- `src/problems/HydrostaticAtmosphere/testHydrostaticAtmosphere.cpp`: 1
+- `src/problems/MHDBalsaraVortex/testMHDBalsaraVortex.cpp`: 5
+- `src/problems/MHDBitwiseICs/testMHDBitwiseICs.cpp`: 3
+- `src/problems/MHDBlast/testMHDBlast.cpp`: 3
+- `src/problems/MHDQuirk/testMHDQuirk.cpp`: 4
+- `src/problems/NscbcChannel/testNscbcChannel.cpp`: 1
+- `src/problems/NscbcVortex/testNscbcVortex.cpp`: 1
+- `src/problems/ODEIntegration/testODEIntegration.cpp`: 2
+- `src/problems/OrszagTang/testOrszagTang.cpp`: 4
+- `src/problems/ParticleAccretion/testParticleAccretion.cpp`: 3
+- `src/problems/ParticleCreation/testParticleCreation.cpp`: 2
+- `src/problems/ParticleDeposition/testParticleDeposition.cpp`: 3
+- `src/problems/ParticleRadiation/testParticleRadiation.cpp`: 1
+- `src/problems/ParticleSF/testParticleSF.cpp`: 3
+- `src/problems/ParticleSink/testParticleSink.cpp`: 2
+- `src/problems/ParticleSinkFormation/testParticleSinkFormation.cpp`: 2
+- `src/problems/PassiveScalar/testPassiveScalar.cpp`: 2
+- `src/problems/PopIII/testPopIII.cpp`: 3
+- `src/problems/PrimordialChem/testPrimordialChem.cpp`: 1
+- `src/problems/RadDust/testRadDust.cpp`: 4
+- `src/problems/RadDustMG/testRadDustMG.cpp`: 2
+- `src/problems/RadForce/testRadForce.cpp`: 3
+- `src/problems/RadLineCooling/testRadLineCooling.cpp`: 5
+- `src/problems/RadLineCoolingMG/testRadLineCoolingMG.cpp`: 3
+- `src/problems/RadMarshak/testRadMarshak.cpp`: 5
+- `src/problems/RadMarshakAsymptotic/testRadMarshakAsymptotic.cpp`: 4
+- `src/problems/RadMarshakCGS/testRadMarshakCGS.cpp`: 5
+- `src/problems/RadMarshakDust/testRadMarshakDust.cpp`: 3
+- `src/problems/RadMarshakDustPE/testRadMarshakDustPE.cpp`: 1
+- `src/problems/RadMarshakVaytet/testRadMarshakVaytet.cpp`: 1
+- `src/problems/RadMatterCoupling/testRadMatterCoupling.cpp`: 6
+- `src/problems/RadMatterCouplingRSLA/testRadMatterCouplingRSLA.cpp`: 6
+- `src/problems/RadStreaming/testRadStreaming.cpp`: 3
+- `src/problems/RadStreamingY/testRadStreamingY.cpp`: 3
+- `src/problems/RadSuOlson/testRadSuOlson.cpp`: 6
+- `src/problems/RadTube/testRadTube.cpp`: 1
+- `src/problems/RadhydroBB/testRadhydroBB.cpp`: 2
+- `src/problems/RadhydroPulse/testRadhydroPulse.cpp`: 7
+- `src/problems/RadhydroPulseDyn/testRadhydroPulseDyn.cpp`: 7
+- `src/problems/RadhydroPulseGrey/testRadhydroPulseGrey.cpp`: 7
+- `src/problems/RadhydroPulseMGconst/testRadhydroPulseMGconst.cpp`: 5
+- `src/problems/RadhydroPulseMGint/testRadhydroPulseMGint.cpp`: 6
+- `src/problems/RadhydroShell/testRadhydroShell.cpp`: 5
+- `src/problems/RadhydroShock/testRadhydroShock.cpp`: 4
+- `src/problems/RadhydroShockCGS/testRadhydroShockCGS.cpp`: 4
+- `src/problems/RadhydroShockMultigroup/testRadhydroShockMultigroup.cpp`: 2
+- `src/problems/RadhydroUniformAdvecting/testRadhydroUniformAdvecting.cpp`: 3
+- `src/problems/RandomBlast/testRandomBlast.cpp`: 3
+- `src/problems/RayleighTaylor3D/testRayleighTaylor3D.cpp`: 4
+- `src/problems/ResampledCoolingTest/testResampledCoolingTest.cpp`: 3
+- `src/problems/SN/testSN.cpp`: 3
+- `src/problems/ShockCloud/testShockCloud.cpp`: 5
+- `src/problems/SlowWaveConvergence/testSlowWaveConvergence.cpp`: 12
+- `src/problems/SphericalCollapse/testSphericalCollapse.cpp`: 3
+- `src/problems/StarCluster/testStarCluster.cpp`: 3
+- `src/problems/TallBoxSf/testTallBoxSf.cpp`: 4
+- `src/problems/Turbulence/testTurbulence.cpp`: 3
+- `src/radiation/radiation_system.hpp`: 27
+- `src/radiation/source_terms_multi_group.hpp`: 2
+- `src/simulation.hpp`: 86
+- `src/turbulence/TurbDataReader.cpp`: 4
+- `src/turbulence/TurbDataReader.hpp`: 4
+- `src/turbulence/TurbulentDriving.hpp`: 3
+- `src/util/ArrayUtil.hpp`: 1
+- `src/util/ArrayView_2d.hpp`: 3
+- `src/util/ArrayView_3d.hpp`: 4
+- `src/util/BC.hpp`: 6
+- `src/util/CheckNaN.hpp`: 3
+- `src/util/DataTable.hpp`: 42
+- `src/util/fextract.cpp`: 1
+- `src/util/fextract.hpp`: 1
+- `src/util/richardson.hpp`: 2
+- `src/util/valarray.hpp`: 7
