@@ -9,6 +9,10 @@ if ! command -v doxygen >/dev/null 2>&1; then
     exit 1
 fi
 
+# Ensure the script runs from the project root and starts with a clean output directory
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../" && pwd)"
+cd "${PROJECT_ROOT}"
+rm -rf docs/site/api
 doxygen docs/Doxyfile
 
 if [ ! -f docs/site/api/index.html ]; then
