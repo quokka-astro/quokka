@@ -6,6 +6,7 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file main.hpp
+///
 
 #if defined(__INTEL_COMPILER)
 #error                                                                                                                                                         \
