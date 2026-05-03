@@ -32,7 +32,7 @@ struct StromgrenSphere {
 
 constexpr double c_hat = C::c_light / 1.0;
 constexpr double sigma_star_coeff = 1.5 / 16.0;
-constexpr double r_trunc_coeff = 2.5 ;
+constexpr double r_trunc_coeff = 2.5;
 
 template <> struct quokka::EOS_Traits<StromgrenSphere> {
 	static constexpr double mean_molecular_weight = 1.0;
@@ -97,7 +97,7 @@ void RadSystem<StromgrenSphere>::SetRadEnergySource(array_t &radEnergy, const am
 				amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
 				if (r <= r_trunc) {
 					sum += std::exp(-(r * r) / (2.0 * sigma_star * sigma_star)) * dx[0] * dx[1] * dx[2] /
-				       (std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5));
+					       (std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5));
 				}
 			}
 		}
