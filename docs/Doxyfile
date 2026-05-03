@@ -1,0 +1,74 @@
+# Quokka Doxygen configuration.
+
+PROJECT_NAME           = "Quokka"
+PROJECT_BRIEF          = "Radiation hydrodynamics code"
+OUTPUT_DIRECTORY       = docs/site
+HTML_OUTPUT            = api
+
+CREATE_SUBDIRS         = NO
+FULL_PATH_NAMES        = YES
+STRIP_FROM_PATH        = .
+STRIP_FROM_INC_PATH    = src
+
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_IF_DOC_ERROR      = YES
+WARN_NO_PARAMDOC       = NO
+WARN_AS_ERROR          = NO
+
+INPUT                  = README.md \
+                         src
+USE_MDFILE_AS_MAINPAGE = README.md
+FILE_PATTERNS          = *.h \
+                         *.H \
+                         *.hpp \
+                         *.c \
+                         *.cc \
+                         *.cpp \
+                         *.cxx \
+                         *.md
+RECURSIVE              = YES
+
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = YES
+HIDE_UNDOC_MEMBERS     = NO
+HIDE_UNDOC_CLASSES     = NO
+
+MARKDOWN_SUPPORT       = YES
+AUTOLINK_SUPPORT       = YES
+BUILTIN_STL_SUPPORT    = YES
+JAVADOC_AUTOBRIEF      = YES
+QT_AUTOBRIEF           = YES
+
+OPTIMIZE_OUTPUT_FOR_C  = NO
+OPTIMIZE_OUTPUT_JAVA   = NO
+OPTIMIZE_FOR_FORTRAN   = NO
+OPTIMIZE_OUTPUT_VHDL   = NO
+
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = YES
+SKIP_FUNCTION_MACROS   = YES
+PREDEFINED             = "AMREX_GPU_DEVICE=" \
+                         "AMREX_GPU_HOST=" \
+                         "AMREX_GPU_HOST_DEVICE=" \
+                         "AMREX_GPU_MANAGED=" \
+                         "AMREX_FORCE_INLINE=inline" \
+                         "AMREX_INLINE=inline" \
+                         "AMREX_SPACEDIM=3" \
+                         "AMREX_D_DECL(a,b,c)=a,b,c" \
+                         "AMREX_D_TERM(a,b,c)=a b c"
+
+GENERATE_HTML          = YES
+GENERATE_TREEVIEW      = YES
+SEARCHENGINE           = YES
+SERVER_BASED_SEARCH    = NO
+DISABLE_INDEX          = NO
+
+GENERATE_LATEX         = NO
+GENERATE_XML           = NO
+GENERATE_MAN           = NO
+GENERATE_RTF           = NO
+
+HAVE_DOT               = NO
