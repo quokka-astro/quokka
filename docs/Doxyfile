@@ -28,6 +28,7 @@ FILE_PATTERNS          = *.h \
                          *.cxx \
                          *.md
 RECURSIVE              = YES
+EXCLUDE                = src/problems
 
 EXTRACT_ALL            = YES
 EXTRACT_PRIVATE        = NO
