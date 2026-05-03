@@ -11,8 +11,8 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
-#include <fstream>
 #include <format>
+#include <fstream>
 #include <limits>
 #include <numbers>
 #include <string>
@@ -47,27 +47,27 @@ constexpr std::array<char const *, 3> face_tags = {"xface", "yface", "zface"};
 constexpr std::array<double, 3> snapshot_times_over_ts0_default = {6.2, 8.3, 17.0};
 constexpr double history_dt_over_ts0_default = 0.1;
 
-double g_history_dt_over_ts0 = history_dt_over_ts0_default;	     // NOLINT
-double g_history_dt_code = history_dt_over_ts0_default;		     // NOLINT
-int g_slice_thickness_cells = 4;		     // NOLINT
-bool g_write_csv = true;				     // NOLINT
+double g_history_dt_over_ts0 = history_dt_over_ts0_default;			   // NOLINT
+double g_history_dt_code = history_dt_over_ts0_default;				   // NOLINT
+int g_slice_thickness_cells = 4;						   // NOLINT
+bool g_write_csv = true;							   // NOLINT
 std::array<double, 3> g_snapshot_times_over_ts0 = snapshot_times_over_ts0_default; // NOLINT
-std::array<double, 3> g_snapshot_target_times = {0.0, 0.0, 0.0};		       // NOLINT
-double g_equilibrium_ts = 0.0;				       // NOLINT
+std::array<double, 3> g_snapshot_target_times = {0.0, 0.0, 0.0};		   // NOLINT
+double g_equilibrium_ts = 0.0;							   // NOLINT
 
 AMREX_GPU_MANAGED double g_grain_radius = epsilon_param / grain_density_param; // NOLINT
-AMREX_GPU_MANAGED double g_grain_density = grain_density_param;		   // NOLINT
-AMREX_GPU_MANAGED double g_charge_to_mass = xi_param;			   // NOLINT
-AMREX_GPU_MANAGED double g_noise_amplitude = noise_amplitude_param;	   // NOLINT
-AMREX_GPU_MANAGED double g_Bx0 = 0.0;			   // NOLINT
-AMREX_GPU_MANAGED double g_By0 = 0.0;			   // NOLINT
-AMREX_GPU_MANAGED double g_Bz0 = 1.0;			   // NOLINT
-AMREX_GPU_MANAGED double g_gas_vx0 = 0.0;		   // NOLINT
-AMREX_GPU_MANAGED double g_gas_vy0 = 0.0;		   // NOLINT
-AMREX_GPU_MANAGED double g_gas_vz0 = 0.0;		   // NOLINT
-AMREX_GPU_MANAGED double g_dust_vx0 = 0.0;		   // NOLINT
-AMREX_GPU_MANAGED double g_dust_vy0 = 0.0;		   // NOLINT
-AMREX_GPU_MANAGED double g_dust_vz0 = 0.0;		   // NOLINT
+AMREX_GPU_MANAGED double g_grain_density = grain_density_param;		       // NOLINT
+AMREX_GPU_MANAGED double g_charge_to_mass = xi_param;			       // NOLINT
+AMREX_GPU_MANAGED double g_noise_amplitude = noise_amplitude_param;	       // NOLINT
+AMREX_GPU_MANAGED double g_Bx0 = 0.0;					       // NOLINT
+AMREX_GPU_MANAGED double g_By0 = 0.0;					       // NOLINT
+AMREX_GPU_MANAGED double g_Bz0 = 1.0;					       // NOLINT
+AMREX_GPU_MANAGED double g_gas_vx0 = 0.0;				       // NOLINT
+AMREX_GPU_MANAGED double g_gas_vy0 = 0.0;				       // NOLINT
+AMREX_GPU_MANAGED double g_gas_vz0 = 0.0;				       // NOLINT
+AMREX_GPU_MANAGED double g_dust_vx0 = 0.0;				       // NOLINT
+AMREX_GPU_MANAGED double g_dust_vy0 = 0.0;				       // NOLINT
+AMREX_GPU_MANAGED double g_dust_vz0 = 0.0;				       // NOLINT
 
 struct EquilibriumState {
 	Vec3 drift_{};
@@ -129,10 +129,7 @@ template <typename T> auto square(T value) -> T { return value * value; }
 
 auto dot(Vec3 const &a, Vec3 const &b) -> double { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
 
-auto cross(Vec3 const &a, Vec3 const &b) -> Vec3
-{
-	return {a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]};
-}
+auto cross(Vec3 const &a, Vec3 const &b) -> Vec3 { return {a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]}; }
 
 auto norm(Vec3 const &a) -> double { return std::sqrt(dot(a, a)); }
 
@@ -299,9 +296,9 @@ template <typename problem_t> auto computeDiagnostics(QuokkaSimulation<problem_t
 			 amrex::ReduceOpSum>
 	    reduce_op;
 	using ReduceDataType =
-	    amrex::ReduceData<amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real,
-			      amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real,
-			      amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real>;
+	    amrex::ReduceData<amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real,
+			      amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real,
+			      amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real>;
 	ReduceDataType reduce_data(reduce_op);
 
 	auto &state_mf = sim.state_new_cc_[0];
@@ -315,11 +312,10 @@ template <typename problem_t> auto computeDiagnostics(QuokkaSimulation<problem_t
 
 		reduce_op.eval(
 		    box, reduce_data,
-		    [=] AMREX_GPU_DEVICE(int i, int j, int k) -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real,
-										  amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real,
-										  amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real,
-										  amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real,
-										  amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real> {
+		    [=] AMREX_GPU_DEVICE(int i, int j, int k)
+			-> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real,
+					   amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real,
+					   amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real, amrex::Real> {
 			    amrex::Real const rho_g = state(i, j, k, HydroSystem<problem_t>::density_index);
 			    amrex::Real const rho_d = state(i, j, k, HydroSystem<problem_t>::dustDensity_index);
 			    amrex::Real const vx_g = state(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / rho_g;
@@ -335,21 +331,40 @@ template <typename problem_t> auto computeDiagnostics(QuokkaSimulation<problem_t
 			    amrex::Real const log_rho_g = std::log(amrex::max(rho_g, static_cast<amrex::Real>(tiny_number)));
 			    amrex::Real const log_rho_d = std::log(amrex::max(rho_d, static_cast<amrex::Real>(dust_density_floor)));
 
-			    return {1.0_rt, log_rho_g, log_rho_g * log_rho_g, log_rho_d, log_rho_d * log_rho_d, vx_g, vx_g * vx_g,
-				    vy_g, vy_g * vy_g, vz_g, vz_g * vz_g, vx_d, vx_d * vx_d, vy_d, vy_d * vy_d, vz_d, vz_d * vz_d,
-				    bx, bx * bx, by, by * by, bz, bz * bz, bmag, bmag * bmag};
+			    return {1.0_rt,
+				    log_rho_g,
+				    log_rho_g * log_rho_g,
+				    log_rho_d,
+				    log_rho_d * log_rho_d,
+				    vx_g,
+				    vx_g * vx_g,
+				    vy_g,
+				    vy_g * vy_g,
+				    vz_g,
+				    vz_g * vz_g,
+				    vx_d,
+				    vx_d * vx_d,
+				    vy_d,
+				    vy_d * vy_d,
+				    vz_d,
+				    vz_d * vz_d,
+				    bx,
+				    bx * bx,
+				    by,
+				    by * by,
+				    bz,
+				    bz * bz,
+				    bmag,
+				    bmag * bmag};
 		    });
 	}
 
-	auto [count, sum_log_rho_g, sum_log_rho_g2, sum_log_rho_d, sum_log_rho_d2, sum_vgx, sum_vgx2, sum_vgy, sum_vgy2, sum_vgz, sum_vgz2,
-	      sum_vdx, sum_vdx2, sum_vdy, sum_vdy2, sum_vdz, sum_vdz2, sum_bx, sum_bx2, sum_by, sum_by2, sum_bz, sum_bz2, sum_bmag,
-	      sum_bmag2] =
-	    reduce_data.value();
+	auto [count, sum_log_rho_g, sum_log_rho_g2, sum_log_rho_d, sum_log_rho_d2, sum_vgx, sum_vgx2, sum_vgy, sum_vgy2, sum_vgz, sum_vgz2, sum_vdx, sum_vdx2,
+	      sum_vdy, sum_vdy2, sum_vdz, sum_vdz2, sum_bx, sum_bx2, sum_by, sum_by2, sum_bz, sum_bz2, sum_bmag, sum_bmag2] = reduce_data.value();
 
-	amrex::GpuArray<amrex::Real, 25> reduced = {count,	sum_log_rho_g, sum_log_rho_g2, sum_log_rho_d, sum_log_rho_d2, sum_vgx,  sum_vgx2,
-						    sum_vgy,	sum_vgy2,      sum_vgz,       sum_vgz2,      sum_vdx,  sum_vdx2, sum_vdy,
-						    sum_vdy2,	sum_vdz,       sum_vdz2,      sum_bx,	      sum_bx2,  sum_by,  sum_by2,
-						    sum_bz,	sum_bz2,       sum_bmag,      sum_bmag2};
+	amrex::GpuArray<amrex::Real, 25> reduced = {
+	    count,   sum_log_rho_g, sum_log_rho_g2, sum_log_rho_d, sum_log_rho_d2, sum_vgx, sum_vgx2, sum_vgy, sum_vgy2, sum_vgz, sum_vgz2, sum_vdx,  sum_vdx2,
+	    sum_vdy, sum_vdy2,	    sum_vdz,	    sum_vdz2,	   sum_bx,	   sum_bx2, sum_by,   sum_by2, sum_bz,	 sum_bz2, sum_bmag, sum_bmag2};
 	amrex::ParallelDescriptor::ReduceRealSum(reduced.data(), 25);
 
 	DiagnosticsRecord record;
@@ -650,7 +665,7 @@ template <> struct Physics_Traits<DustMagnetizedRDI> {
 
 template <>
 AMREX_GPU_HOST_DEVICE auto DustSources<DustMagnetizedRDI>::ComputeReciprocalStoppingTime(amrex::Real rho_g, amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-											  amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag, double cs)
+											 amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag, double cs)
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, nDustGroups_> const grain_radius = {g_grain_radius};
@@ -734,8 +749,7 @@ template <> void QuokkaSimulation<DustMagnetizedRDI>::setInitialConditionsOnGrid
 
 template <> void QuokkaSimulation<DustMagnetizedRDI>::computeAfterTimestep() { recordHistory(*this); }
 
-template <>
-void QuokkaSimulation<DustMagnetizedRDI>::addStrangSplitSources(amrex::MultiFab &mf, int lev, amrex::Real time, amrex::Real dt_lev) // NOLINT
+template <> void QuokkaSimulation<DustMagnetizedRDI>::addStrangSplitSources(amrex::MultiFab &mf, int lev, amrex::Real time, amrex::Real dt_lev) // NOLINT
 {
 	amrex::ignore_unused(lev);
 	amrex::ignore_unused(time);
@@ -787,8 +801,7 @@ auto problem_main() -> int
 	amrex::Print() << std::format("  history dt / t_s^0 = {:.6f}\n", g_history_dt_over_ts0);
 
 	auto BCs_cc = quokka::BC<DustMagnetizedRDI>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
-	auto BCs_fc = quokka::BC_fc<DustMagnetizedRDI>(quokka::BCType::mathematicalBndryTypes::periodic,
-						       quokka::BCType::mathematicalBndryTypes::periodic,
+	auto BCs_fc = quokka::BC_fc<DustMagnetizedRDI>(quokka::BCType::mathematicalBndryTypes::periodic, quokka::BCType::mathematicalBndryTypes::periodic,
 						       quokka::BCType::mathematicalBndryTypes::periodic);
 	QuokkaSimulation<DustMagnetizedRDI> sim(BCs_cc, BCs_fc);
 
@@ -808,7 +821,7 @@ auto problem_main() -> int
 	for (int i = 0; i < 3; ++i) {
 		if (!sim.userData_.snapshot_written_[i] && final_diagnostics.finite_) {
 			amrex::Print() << std::format("Warning: snapshot '{}' was not reached by the end of the run; writing the final state instead.\n",
-					      snapshot_tags[i]);
+						      snapshot_tags[i]);
 			captureSnapshot(sim, i, final_diagnostics);
 		}
 	}
