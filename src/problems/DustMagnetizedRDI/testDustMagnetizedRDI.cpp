@@ -100,7 +100,7 @@ struct DiagnosticsRecord {
 struct FaceProjection {
 	std::vector<double> u_;
 	std::vector<double> v_;
-	std::vector<double> bmag_minus_b0_;
+	std::vector<double> bvec_minus_b0_norm_;
 	std::vector<double> dust_overdensity_;
 };
 
@@ -442,13 +442,14 @@ void writeSummaryCsv(EquilibriumState const &equilibrium, DustMagnetizedRDIHisto
 void writeFaceProjectionCsv(std::string const &snapshot_tag, std::string const &face_tag, FaceProjection const &projection)
 {
 	std::ofstream file(std::format("dust_magnetized_rdi_{}_{}.csv", snapshot_tag, face_tag));
-	file << "u,v,bmag_minus_b0,dust_overdensity\n";
+	file << "u,v,bvec_minus_b0_norm,dust_overdensity\n";
 	for (size_t i = 0; i < projection.u_.size(); ++i) {
-		file << projection.u_[i] << "," << projection.v_[i] << "," << projection.bmag_minus_b0_[i] << "," << projection.dust_overdensity_[i] << "\n";
+		file << projection.u_[i] << "," << projection.v_[i] << "," << projection.bvec_minus_b0_norm_[i] << "," << projection.dust_overdensity_[i]
+		     << "\n";
 	}
 }
 
-template <typename problem_t> auto extractFaceProjection(QuokkaSimulation<problem_t> &sim, int normal_dir, double b0) -> FaceProjection
+template <typename problem_t> auto extractFaceProjection(QuokkaSimulation<problem_t> &sim, int normal_dir) -> FaceProjection
 {
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.finest_level == 0, "DustMagnetizedRDI face extraction only supports single-level runs.");
 
@@ -462,6 +463,9 @@ template <typename problem_t> auto extractFaceProjection(QuokkaSimulation<proble
 	const int nz = domain.length(2);
 	const int slab_cells = std::clamp(g_slice_thickness_cells, 1, domain.length(normal_dir));
 	const double mean_dust_density = std::max(mu_param * rho_gas0, dust_density_floor);
+	const double bx0 = g_Bx0;
+	const double by0 = g_By0;
+	const double bz0 = g_Bz0;
 	constexpr int mhd_idx = Physics_Indices<problem_t>::mhdFirstIndex;
 
 	int nu = 0;
@@ -490,10 +494,10 @@ template <typename problem_t> auto extractFaceProjection(QuokkaSimulation<proble
 	}
 
 	const int npts = nu * nv;
-	amrex::Gpu::DeviceVector<amrex::Real> bmag_minus_b0_sum_d(npts, 0.0);
+	amrex::Gpu::DeviceVector<amrex::Real> bvec_minus_b0_norm_sum_d(npts, 0.0);
 	amrex::Gpu::DeviceVector<amrex::Real> dust_sum_d(npts, 0.0);
 	amrex::Gpu::DeviceVector<amrex::Real> count_sum_d(npts, 0.0);
-	auto *bmag_minus_b0_ptr = bmag_minus_b0_sum_d.data();
+	auto *bvec_minus_b0_norm_ptr = bvec_minus_b0_norm_sum_d.data();
 	auto *dust_ptr = dust_sum_d.data();
 	auto *count_ptr = count_sum_d.data();
 
@@ -521,29 +525,32 @@ template <typename problem_t> auto extractFaceProjection(QuokkaSimulation<proble
 			amrex::Real const bx = 0.5_rt * (bx_fc(i, j, k, mhd_idx) + bx_fc(i + 1, j, k, mhd_idx));
 			amrex::Real const by = 0.5_rt * (by_fc(i, j, k, mhd_idx) + by_fc(i, j + 1, k, mhd_idx));
 			amrex::Real const bz = 0.5_rt * (bz_fc(i, j, k, mhd_idx) + bz_fc(i, j, k + 1, mhd_idx));
-			amrex::Real const bmag = std::sqrt(bx * bx + by * by + bz * bz);
+			amrex::Real const dbx = bx - bx0;
+			amrex::Real const dby = by - by0;
+			amrex::Real const dbz = bz - bz0;
+			amrex::Real const bvec_minus_b0_norm = std::sqrt(dbx * dbx + dby * dby + dbz * dbz);
 			amrex::Real const dust_overdensity = state(i, j, k, HydroSystem<problem_t>::dustDensity_index) / mean_dust_density;
 
-			amrex::Gpu::Atomic::Add(&bmag_minus_b0_ptr[idx], bmag - b0);
+			amrex::Gpu::Atomic::Add(&bvec_minus_b0_norm_ptr[idx], bvec_minus_b0_norm);
 			amrex::Gpu::Atomic::Add(&dust_ptr[idx], dust_overdensity);
 			amrex::Gpu::Atomic::Add(&count_ptr[idx], 1.0_rt);
 		});
 	}
 	amrex::Gpu::streamSynchronize();
-	amrex::Gpu::HostVector<amrex::Real> bmag_minus_b0_sum(npts);
+	amrex::Gpu::HostVector<amrex::Real> bvec_minus_b0_norm_sum(npts);
 	amrex::Gpu::HostVector<amrex::Real> dust_sum(npts);
 	amrex::Gpu::HostVector<amrex::Real> count_sum(npts);
-	amrex::Gpu::copy(amrex::Gpu::deviceToHost, bmag_minus_b0_sum_d.begin(), bmag_minus_b0_sum_d.end(), bmag_minus_b0_sum.begin());
+	amrex::Gpu::copy(amrex::Gpu::deviceToHost, bvec_minus_b0_norm_sum_d.begin(), bvec_minus_b0_norm_sum_d.end(), bvec_minus_b0_norm_sum.begin());
 	amrex::Gpu::copy(amrex::Gpu::deviceToHost, dust_sum_d.begin(), dust_sum_d.end(), dust_sum.begin());
 	amrex::Gpu::copy(amrex::Gpu::deviceToHost, count_sum_d.begin(), count_sum_d.end(), count_sum.begin());
-	amrex::ParallelDescriptor::ReduceRealSum(bmag_minus_b0_sum.data(), npts);
+	amrex::ParallelDescriptor::ReduceRealSum(bvec_minus_b0_norm_sum.data(), npts);
 	amrex::ParallelDescriptor::ReduceRealSum(dust_sum.data(), npts);
 	amrex::ParallelDescriptor::ReduceRealSum(count_sum.data(), npts);
 
 	FaceProjection projection;
 	projection.u_.resize(npts);
 	projection.v_.resize(npts);
-	projection.bmag_minus_b0_.resize(npts);
+	projection.bvec_minus_b0_norm_.resize(npts);
 	projection.dust_overdensity_.resize(npts);
 
 	for (int iv = 0; iv < nv; ++iv) {
@@ -564,7 +571,7 @@ template <typename problem_t> auto extractFaceProjection(QuokkaSimulation<proble
 			}
 			projection.u_[idx] = u;
 			projection.v_[idx] = v;
-			projection.bmag_minus_b0_[idx] = bmag_minus_b0_sum[idx] / count;
+			projection.bvec_minus_b0_norm_[idx] = bvec_minus_b0_norm_sum[idx] / count;
 			projection.dust_overdensity_[idx] = dust_sum[idx] / count;
 		}
 	}
@@ -579,9 +586,8 @@ template <typename problem_t> void captureSnapshot(QuokkaSimulation<problem_t> &
 	sim.userData_.snapshot_sigmas_[snapshot_index] = diagnostics.sigma_bmag_;
 
 	if (g_write_csv) {
-		double const b0 = std::sqrt(square(g_Bx0) + square(g_By0) + square(g_Bz0));
 		for (int face = 0; face < 3; ++face) {
-			FaceProjection const projection = extractFaceProjection(sim, face, b0);
+			FaceProjection const projection = extractFaceProjection(sim, face);
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				writeFaceProjectionCsv(snapshot_tags[snapshot_index], face_tags[face], projection);
 			}
