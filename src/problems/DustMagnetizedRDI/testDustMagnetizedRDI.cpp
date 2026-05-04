@@ -49,7 +49,7 @@ constexpr double history_dt_over_ts0_default = 0.1;
 
 double g_history_dt_over_ts0 = history_dt_over_ts0_default;			   // NOLINT
 double g_history_dt_code = history_dt_over_ts0_default;				   // NOLINT
-int g_slice_thickness_cells = 4;						   // NOLINT
+int g_slice_thickness_cells = 1;						   // NOLINT
 bool g_write_csv = true;							   // NOLINT
 std::array<double, 3> g_snapshot_times_over_ts0 = snapshot_times_over_ts0_default; // NOLINT
 std::array<double, 3> g_snapshot_target_times = {0.0, 0.0, 0.0};		   // NOLINT
@@ -483,14 +483,16 @@ template <typename problem_t> auto extractFaceProjection(QuokkaSimulation<proble
 
 	amrex::Box slab = domain;
 	if (normal_dir == 0) {
-		slab.setSmall(0, lo.x);
-		slab.setBig(0, lo.x + slab_cells - 1);
+		int const hi_x = lo.x + nx - 1;
+		slab.setSmall(0, hi_x - slab_cells + 1);
+		slab.setBig(0, hi_x);
 	} else if (normal_dir == 1) {
 		slab.setSmall(1, lo.y);
 		slab.setBig(1, lo.y + slab_cells - 1);
 	} else {
-		slab.setSmall(2, lo.z);
-		slab.setBig(2, lo.z + slab_cells - 1);
+		int const hi_z = lo.z + nz - 1;
+		slab.setSmall(2, hi_z - slab_cells + 1);
+		slab.setBig(2, hi_z);
 	}
 
 	const int npts = nu * nv;

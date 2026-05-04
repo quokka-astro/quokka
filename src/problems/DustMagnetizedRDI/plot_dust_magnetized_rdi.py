@@ -28,10 +28,11 @@ import numpy as np
 
 SNAPSHOT_TAGS = ("t6p2ts0", "t8p3ts0", "t17p0ts0")
 FACE_TAGS = ("xface", "yface", "zface")
-VISIBLE_FACE_ORDER = ("xface", "zface", "yface")
+VISIBLE_FACE_ORDER = ("yface", "xface", "zface")
 PROJ_X = np.array([1.0, -0.36])
 PROJ_Y = np.array([0.72, 0.42])
 PROJ_Z = np.array([0.0, 1.0])
+PROJECTION_ORIGIN = np.array([0.0, 0.0, 0.0])
 
 
 def read_csv_rows(path: Path) -> list[dict[str, float | str]]:
@@ -89,53 +90,62 @@ def compute_cell_edges(centers: np.ndarray) -> np.ndarray:
 
 
 def project_cube_coordinates(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    x2d = (PROJ_X[0] * x) + (PROJ_Y[0] * y) + (PROJ_Z[0] * z)
-    y2d = (PROJ_X[1] * x) + (PROJ_Y[1] * y) + (PROJ_Z[1] * z)
+    dx = x - PROJECTION_ORIGIN[0]
+    dy = y - PROJECTION_ORIGIN[1]
+    dz = z - PROJECTION_ORIGIN[2]
+    x2d = (PROJ_X[0] * dx) + (PROJ_Y[0] * dy) + (PROJ_Z[0] * dz)
+    y2d = (PROJ_X[1] * dx) + (PROJ_Y[1] * dy) + (PROJ_Z[1] * dz)
     return x2d, y2d
+
+
+def project_point(x: float, y: float, z: float) -> np.ndarray:
+    px, py = project_cube_coordinates(np.array(x), np.array(y), np.array(z))
+    return np.array([float(px), float(py)], dtype=float)
 
 
 def make_projected_face_grid(face_tag: str, uvals: np.ndarray, vvals: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     uedges = compute_cell_edges(uvals)
     vedges = compute_cell_edges(vvals)
     uu, vv = np.meshgrid(uedges, vedges, indexing="xy")
-    if face_tag == "xface":
-        xx = np.zeros_like(uu)
-        yy = uu
-        zz = vv
-    elif face_tag == "yface":
+
+    # The CSVs contain the three visible outer faces of the analog cube:
+    # y = y_min (front), x = x_max (right), and z = z_max (top).
+    if face_tag == "yface":
         xx = uu
         yy = np.zeros_like(uu)
         zz = vv
-    else:
+    elif face_tag == "xface":
+        xx = np.ones_like(uu)
+        yy = uu
+        zz = vv
+    elif face_tag == "zface":
         xx = uu
         yy = vv
-        zz = np.zeros_like(uu)
+        zz = np.ones_like(uu)
+    else:
+        raise ValueError(f"Unknown face tag '{face_tag}'.")
     return project_cube_coordinates(xx, yy, zz)
 
 
 def projected_cube_vertices() -> dict[str, np.ndarray]:
-    def project_point(x: float, y: float, z: float) -> np.ndarray:
-        px, py = project_cube_coordinates(np.array(x), np.array(y), np.array(z))
-        return np.array([float(px), float(py)])
-
     return {
-        "origin": project_point(0.0, 0.0, 0.0),
-        "x": project_point(1.0, 0.0, 0.0),
-        "y": project_point(0.0, 1.0, 0.0),
-        "z": project_point(0.0, 0.0, 1.0),
-        "xy": project_point(1.0, 1.0, 0.0),
-        "xz": project_point(1.0, 0.0, 1.0),
-        "yz": project_point(0.0, 1.0, 1.0),
-        "xyz": project_point(1.0, 1.0, 1.0),
+        "000": project_point(0.0, 0.0, 0.0),
+        "100": project_point(1.0, 0.0, 0.0),
+        "010": project_point(0.0, 1.0, 0.0),
+        "110": project_point(1.0, 1.0, 0.0),
+        "001": project_point(0.0, 0.0, 1.0),
+        "101": project_point(1.0, 0.0, 1.0),
+        "011": project_point(0.0, 1.0, 1.0),
+        "111": project_point(1.0, 1.0, 1.0),
     }
 
 
 def draw_projected_cube_outlines(ax: plt.Axes) -> None:
     vertices = projected_cube_vertices()
     visible_faces = (
-        ("origin", "y", "yz", "z", "origin"),
-        ("origin", "x", "xy", "y", "origin"),
-        ("origin", "x", "xz", "z", "origin"),
+        ("000", "100", "101", "001", "000"),
+        ("100", "110", "111", "101", "100"),
+        ("001", "101", "111", "011", "001"),
     )
     for face in visible_faces:
         polygon = np.array([vertices[name] for name in face])
@@ -143,15 +153,27 @@ def draw_projected_cube_outlines(ax: plt.Axes) -> None:
 
 
 def draw_projected_axis_triad(ax: plt.Axes) -> None:
+    vertices = projected_cube_vertices()
     axis_specs = (
-        (PROJ_X, "x", np.array([0.05, -0.05])),
-        (PROJ_Y, "y", np.array([0.05, 0.03])),
-        (PROJ_Z, "z", np.array([-0.05, 0.04])),
+        (vertices["000"], vertices["100"], "+x", np.array([0.06, -0.06])),
+        (vertices["100"], vertices["110"], "+y", np.array([0.06, 0.03])),
+        (vertices["000"], vertices["001"], "+z", np.array([-0.06, 0.05])),
     )
-    for direction, label, offset in axis_specs:
-        end = 1.08 * direction
-        ax.plot([0.0, end[0]], [0.0, end[1]], color="0.12", linewidth=0.95, solid_capstyle="round")
-        text_position = (1.14 * direction) + offset
+    for start, end, label, offset in axis_specs:
+        ax.annotate(
+            "",
+            xy=(end[0], end[1]),
+            xytext=(start[0], start[1]),
+            arrowprops={
+                "arrowstyle": "-|>",
+                "color": "0.12",
+                "linewidth": 0.95,
+                "mutation_scale": 10.0,
+                "shrinkA": 0.0,
+                "shrinkB": 0.0,
+            },
+        )
+        text_position = end + offset
         ax.text(text_position[0], text_position[1], label, fontsize=10, color="0.12")
 
 
@@ -170,6 +192,14 @@ def load_face_payload(data_dir: Path) -> dict[tuple[str, str], tuple[np.ndarray,
             rows = read_csv_rows(data_dir / f"dust_magnetized_rdi_{snapshot_tag}_{face_tag}.csv")
             payload[(snapshot_tag, face_tag)] = reshape_face(rows)
     return payload
+
+
+def magnetic_field_values(payload: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]) -> np.ndarray:
+    return payload[2]
+
+
+def dust_density_values(payload: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]) -> np.ndarray:
+    return payload[3]
 
 
 def make_snapshot_norms(
@@ -315,7 +345,6 @@ def render_projected_cube(
 
 
 def make_projected_cube_figure(
-    output_dir: Path,
     summary: dict[str, str],
     face_payload: dict[tuple[str, str], tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]],
     *,
@@ -338,45 +367,39 @@ def make_projected_cube_figure(
         cbar = fig.colorbar(mesh, cax=cax)
         cbar.set_label(colorbar_label)
 
-    output_path = output_dir / output_name
+    output_path = output_name
     fig.savefig(output_path)
     plt.close(fig)
     return output_path
 
 
-def make_fig9(data_dir: Path, output_dir: Path) -> Path:
-    summary = read_summary(data_dir / "dust_magnetized_rdi_summary.csv")
-    face_payload = load_face_payload(data_dir)
+def make_fig9(output_dir: Path, summary: dict[str, str], face_payload: dict[tuple[str, str], tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]) -> Path:
     rho_g0 = get_summary_float(summary, "rho_g0")
     cs0 = get_summary_float(summary, "cs0")
     p0 = rho_g0 * cs0 * cs0
     magnetic_scale = np.sqrt(4.0 * np.pi * p0)
-    norms = make_snapshot_norms(face_payload, lambda payload: payload[2] / magnetic_scale, lower_bound=0.0)
+    norms = make_snapshot_norms(face_payload, lambda payload: magnetic_field_values(payload) / magnetic_scale, lower_bound=0.0)
     return make_projected_cube_figure(
-        output_dir,
         summary,
         face_payload,
-        values_getter=lambda payload: payload[2] / magnetic_scale,
+        values_getter=lambda payload: magnetic_field_values(payload) / magnetic_scale,
         norms=norms,
         cmap="viridis",
         colorbar_label=r"$|\vec{B}-\vec{B}_0|/\sqrt{4\pi P_0}$",
-        output_name="dust_magnetized_rdi_fig9_analog.pdf",
+        output_name=output_dir / "dust_magnetized_rdi_fig9_analog.pdf",
     )
 
 
-def make_fig9_dust(data_dir: Path, output_dir: Path) -> Path:
-    summary = read_summary(data_dir / "dust_magnetized_rdi_summary.csv")
-    face_payload = load_face_payload(data_dir)
-    norms = make_snapshot_norms(face_payload, lambda payload: payload[3])
+def make_fig9_dust(output_dir: Path, summary: dict[str, str], face_payload: dict[tuple[str, str], tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]) -> Path:
+    norms = make_snapshot_norms(face_payload, dust_density_values)
     return make_projected_cube_figure(
-        output_dir,
         summary,
         face_payload,
-        values_getter=lambda payload: payload[3],
+        values_getter=dust_density_values,
         norms=norms,
         cmap="magma",
         colorbar_label=r"$\rho_d/\rho_{d,0}$",
-        output_name="dust_magnetized_rdi_fig9_dust_analog.pdf",
+        output_name=output_dir / "dust_magnetized_rdi_fig9_dust_analog.pdf",
     )
 
 
@@ -392,10 +415,12 @@ def main() -> int:
     data_dir = args.data_dir.resolve()
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
+    summary = read_summary(data_dir / "dust_magnetized_rdi_summary.csv")
+    face_payload = load_face_payload(data_dir)
 
     fig8 = make_fig8(data_dir, output_dir)
-    fig9 = make_fig9(data_dir, output_dir)
-    fig9_dust = make_fig9_dust(data_dir, output_dir)
+    fig9 = make_fig9(output_dir, summary, face_payload)
+    fig9_dust = make_fig9_dust(output_dir, summary, face_payload)
     print(fig8)
     print(fig9)
     print(fig9_dust)
