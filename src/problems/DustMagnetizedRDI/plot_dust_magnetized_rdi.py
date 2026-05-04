@@ -61,24 +61,34 @@ def reshape_face(rows: list[dict[str, float | str]]) -> tuple[np.ndarray, np.nda
     vvals = np.array(sorted({float(row["v"]) for row in rows}))
     nu = uvals.size
     nv = vvals.size
-    delta_b = np.empty((nv, nu))
+    bmag_minus_b0 = np.empty((nv, nu))
     dust = np.empty((nv, nu))
     u_index = {value: idx for idx, value in enumerate(uvals)}
     v_index = {value: idx for idx, value in enumerate(vvals)}
     for row in rows:
         iu = u_index[float(row["u"])]
         iv = v_index[float(row["v"])]
-        delta_b[iv, iu] = float(row["delta_b"])
+        bmag_minus_b0[iv, iu] = float(row["bmag_minus_b0"])
         dust[iv, iu] = float(row["dust_overdensity"])
-    return uvals, vvals, delta_b, dust
+    return uvals, vvals, bmag_minus_b0, dust
 
 
-def positive_reference(values: list[np.ndarray]) -> float:
-    positive = [arr[arr > 0.0] for arr in values]
-    positive = [arr for arr in positive if arr.size > 0]
-    if not positive:
-        return 1.0e-12
-    return float(min(np.min(arr) for arr in positive))
+def build_growth_guide(
+    t_code: np.ndarray,
+    t_over_ts0: np.ndarray,
+    series: np.ndarray,
+    growth_rate: float,
+    fit_window_over_ts0: tuple[float, float],
+) -> np.ndarray:
+    lo, hi = fit_window_over_ts0
+    positive = np.isfinite(series) & (series > 0.0)
+    fit_mask = positive & (t_over_ts0 >= lo) & (t_over_ts0 <= hi)
+    if np.count_nonzero(fit_mask) == 0:
+        fit_mask = positive
+    if np.count_nonzero(fit_mask) == 0:
+        return np.full_like(t_code, 1.0e-12, dtype=float)
+    intercept = float(np.median(np.log(series[fit_mask]) - growth_rate * t_code[fit_mask]))
+    return np.exp(intercept + growth_rate * t_code)
 
 
 def get_summary_float(summary: dict[str, str], key: str) -> float:
@@ -111,9 +121,8 @@ def make_fig8(data_dir: Path, output_dir: Path) -> Path:
     sig_by = np.array([float(row["sigma_by"]) for row in growth_rows]) / b0
     sig_bz = np.array([float(row["sigma_bz"]) for row in growth_rows]) / b0
 
-    ref0 = positive_reference([sig_log_rho_g, sig_vgx, sig_vdx, sig_bx])
-    guide_fast = ref0 * np.exp(t_code - t_code[0])
-    guide_slow = ref0 * np.exp(0.1 * (t_code - t_code[0]))
+    guide_fast = build_growth_guide(t_code, t_over_ts0, sig_log_rho_d, growth_rate=1.0, fit_window_over_ts0=(8.0, 12.0))
+    guide_slow = build_growth_guide(t_code, t_over_ts0, sig_log_rho_g, growth_rate=0.1, fit_window_over_ts0=(8.0, 12.0))
 
     fig, axes = plt.subplots(2, 2, figsize=(12.0, 8.5), sharex=True, constrained_layout=True)
 
@@ -223,18 +232,22 @@ def plot_face_dust_contours(
     if not valid_levels:
         return
 
-    xx, yy, zz = make_face_coordinates(face_tag, uvals, vvals)
+    uu, vv = np.meshgrid(uvals, vvals, indexing="xy")
+    contour_offset = -0.02
+    if face_tag == "xface":
+        xdata = uu
+        ydata = vv
+        zdir = "x"
+    elif face_tag == "yface":
+        xdata = uu
+        ydata = vv
+        zdir = "y"
+    else:
+        xdata = uu
+        ydata = vv
+        zdir = "z"
 
-    ax.contour(
-        xx,
-        yy,
-        zz,
-        dust,
-        levels=valid_levels,
-        colors="black",
-        linewidths=0.75,
-        linestyles="-",
-    )
+    ax.contour(xdata, ydata, dust, zdir=zdir, offset=contour_offset, levels=valid_levels, colors="black", linewidths=0.75, linestyles="-")
 
 
 def plot_cube_face(
@@ -242,60 +255,59 @@ def plot_cube_face(
     face_tag: str,
     uvals: np.ndarray,
     vvals: np.ndarray,
-    delta_b_norm: np.ndarray,
+    bfield_color_norm: np.ndarray,
     dust: np.ndarray,
     mapper: cm.ScalarMappable,
 ) -> None:
     xx, yy, zz = make_face_coordinates(face_tag, uvals, vvals)
-    facecolors = mapper.to_rgba(delta_b_norm)
+    facecolors = mapper.to_rgba(bfield_color_norm)
     ax.plot_surface(xx, yy, zz, rstride=1, cstride=1, facecolors=facecolors, shade=False, linewidth=0.0, antialiased=False)
     plot_face_dust_contours(ax, face_tag, uvals, vvals, dust)
 
 
 def make_fig9(data_dir: Path, output_dir: Path) -> Path:
     summary = read_summary(data_dir / "dust_magnetized_rdi_summary.csv")
-    b0 = np.sqrt(
-        get_summary_float(summary, "Bx0") ** 2
-        + get_summary_float(summary, "By0") ** 2
-        + get_summary_float(summary, "Bz0") ** 2
-    )
+    rho_g0 = get_summary_float(summary, "rho_g0")
+    cs0 = get_summary_float(summary, "cs0")
+    p0 = rho_g0 * cs0 * cs0
+    magnetic_scale = np.sqrt(4.0 * np.pi * p0)
     face_payload: dict[tuple[str, str], tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = {}
-    max_abs_db = 0.0
+    mappers: dict[str, cm.ScalarMappable] = {}
     for snapshot_tag in SNAPSHOT_TAGS:
+        max_abs_bfield = 0.0
         for face_tag in FACE_TAGS:
             rows = read_csv_rows(data_dir / f"dust_magnetized_rdi_{snapshot_tag}_{face_tag}.csv")
             payload = reshape_face(rows)
             face_payload[(snapshot_tag, face_tag)] = payload
-            max_abs_db = max(max_abs_db, float(np.max(np.abs(payload[2] / b0))))
+            max_abs_bfield = max(max_abs_bfield, float(np.max(np.abs(payload[2])) / magnetic_scale))
+        vmax = max(max_abs_bfield, 1.0e-12)
+        mappers[snapshot_tag] = cm.ScalarMappable(norm=colors.Normalize(vmin=0.0, vmax=vmax), cmap="viridis")
 
-    vmax = max(max_abs_db, 1.0e-8)
-    norm = colors.Normalize(vmin=-vmax, vmax=vmax)
-    mapper = cm.ScalarMappable(norm=norm, cmap="RdBu_r")
-
-    fig = plt.figure(figsize=(15.0, 5.6), constrained_layout=True)
-    axes = [fig.add_subplot(1, 3, idx + 1, projection="3d") for idx in range(3)]
+    fig = plt.figure(figsize=(7.2, 14.5), constrained_layout=True)
+    grid = fig.add_gridspec(3, 2, width_ratios=(1.0, 0.055))
 
     for idx, snapshot_tag in enumerate(SNAPSHOT_TAGS):
-        ax = axes[idx]
+        ax = fig.add_subplot(grid[idx, 0], projection="3d")
+        cax = fig.add_subplot(grid[idx, 1])
+        mapper = mappers[snapshot_tag]
         for face_tag in FACE_TAGS:
-            uvals, vvals, delta_b, dust = face_payload[(snapshot_tag, face_tag)]
-            plot_cube_face(ax, face_tag, uvals, vvals, delta_b / b0, dust, mapper)
+            uvals, vvals, bmag_minus_b0, dust = face_payload[(snapshot_tag, face_tag)]
+            plot_cube_face(ax, face_tag, uvals, vvals, np.abs(bmag_minus_b0) / magnetic_scale, dust, mapper)
 
         draw_cube_edges(ax)
         snapshot_time_over_ts0 = get_summary_float(summary, f"snapshot_{snapshot_tag}_time_ts0")
-        ax.set_title(rf"$t/t_s^0 = {snapshot_time_over_ts0:.1f}$", pad=2.0)
+        ax.set_title(rf"$t/t_s^0 = {snapshot_time_over_ts0:.1f}$", pad=6.0)
         ax.set_box_aspect((1.0, 1.0, 1.0))
-        ax.set_xlim(1.0, 0.0)
-        ax.set_ylim(1.0, 0.0)
-        ax.set_zlim(1.0, 0.0)
+        ax.set_xlim(1.0, -0.03)
+        ax.set_ylim(1.0, -0.03)
+        ax.set_zlim(1.0, -0.03)
         ax.view_init(elev=22.0, azim=35.0)
         ax.set_axis_off()
         ax.text(1.05, 0.0, 0.0, "x", fontsize=10)
         ax.text(0.0, 1.05, 0.0, "y", fontsize=10)
         ax.text(0.0, 0.0, 1.05, "z", fontsize=10)
-
-    cbar = fig.colorbar(mapper, ax=axes, fraction=0.032, pad=0.02)
-    cbar.set_label(r"$(|B|-\langle |B| \rangle)/B_0$")
+        cbar = fig.colorbar(mapper, cax=cax)
+        cbar.set_label(r"$\bigl||B|-B_0\bigr|/\sqrt{4\pi P_0}$")
 
     output_path = output_dir / "dust_magnetized_rdi_fig9_analog.pdf"
     fig.savefig(output_path)

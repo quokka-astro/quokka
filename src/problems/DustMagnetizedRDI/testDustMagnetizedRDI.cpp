@@ -94,14 +94,13 @@ struct DiagnosticsRecord {
 	double sigma_by_ = 0.0;
 	double sigma_bz_ = 0.0;
 	double sigma_bmag_ = 0.0;
-	double mean_bmag_ = 0.0;
 	bool finite_ = true;
 };
 
 struct FaceProjection {
 	std::vector<double> u_;
 	std::vector<double> v_;
-	std::vector<double> delta_b_;
+	std::vector<double> bmag_minus_b0_;
 	std::vector<double> dust_overdensity_;
 };
 
@@ -218,7 +217,8 @@ void loadProblemParameters()
 	pp.query("slice_thickness_cells", g_slice_thickness_cells);
 	amrex::Vector<double> snapshot_times_over_ts0_vec;
 	if (pp.queryarr("snapshot_times_over_ts0", snapshot_times_over_ts0_vec) != 0) {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(snapshot_times_over_ts0_vec.size() == g_snapshot_times_over_ts0.size(),
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(static_cast<amrex::Long>(snapshot_times_over_ts0_vec.size()) ==
+						     static_cast<amrex::Long>(g_snapshot_times_over_ts0.size()),
 						 "problem.snapshot_times_over_ts0 must contain exactly 3 values.");
 		for (std::size_t i = 0; i < g_snapshot_times_over_ts0.size(); ++i) {
 			g_snapshot_times_over_ts0[i] = snapshot_times_over_ts0_vec[i];
@@ -380,7 +380,6 @@ template <typename problem_t> auto computeDiagnostics(QuokkaSimulation<problem_t
 	record.sigma_bx_ = computeStd(reduced[17], reduced[18], reduced[0]);
 	record.sigma_by_ = computeStd(reduced[19], reduced[20], reduced[0]);
 	record.sigma_bz_ = computeStd(reduced[21], reduced[22], reduced[0]);
-	record.mean_bmag_ = (reduced[0] > 0.0) ? reduced[23] / reduced[0] : 0.0;
 	record.sigma_bmag_ = computeStd(reduced[23], reduced[24], reduced[0]);
 
 	record.finite_ = std::isfinite(record.sigma_log_rho_g_) && std::isfinite(record.sigma_log_rho_d_) && std::isfinite(record.sigma_vgx_) &&
@@ -443,13 +442,13 @@ void writeSummaryCsv(EquilibriumState const &equilibrium, DustMagnetizedRDIHisto
 void writeFaceProjectionCsv(std::string const &snapshot_tag, std::string const &face_tag, FaceProjection const &projection)
 {
 	std::ofstream file(std::format("dust_magnetized_rdi_{}_{}.csv", snapshot_tag, face_tag));
-	file << "u,v,delta_b,dust_overdensity\n";
+	file << "u,v,bmag_minus_b0,dust_overdensity\n";
 	for (size_t i = 0; i < projection.u_.size(); ++i) {
-		file << projection.u_[i] << "," << projection.v_[i] << "," << projection.delta_b_[i] << "," << projection.dust_overdensity_[i] << "\n";
+		file << projection.u_[i] << "," << projection.v_[i] << "," << projection.bmag_minus_b0_[i] << "," << projection.dust_overdensity_[i] << "\n";
 	}
 }
 
-template <typename problem_t> auto extractFaceProjection(QuokkaSimulation<problem_t> &sim, int normal_dir, double mean_bmag) -> FaceProjection
+template <typename problem_t> auto extractFaceProjection(QuokkaSimulation<problem_t> &sim, int normal_dir, double b0) -> FaceProjection
 {
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.finest_level == 0, "DustMagnetizedRDI face extraction only supports single-level runs.");
 
@@ -491,10 +490,10 @@ template <typename problem_t> auto extractFaceProjection(QuokkaSimulation<proble
 	}
 
 	const int npts = nu * nv;
-	amrex::Gpu::DeviceVector<amrex::Real> delta_sum_d(npts, 0.0);
+	amrex::Gpu::DeviceVector<amrex::Real> bmag_minus_b0_sum_d(npts, 0.0);
 	amrex::Gpu::DeviceVector<amrex::Real> dust_sum_d(npts, 0.0);
 	amrex::Gpu::DeviceVector<amrex::Real> count_sum_d(npts, 0.0);
-	auto *delta_ptr = delta_sum_d.data();
+	auto *bmag_minus_b0_ptr = bmag_minus_b0_sum_d.data();
 	auto *dust_ptr = dust_sum_d.data();
 	auto *count_ptr = count_sum_d.data();
 
@@ -525,26 +524,26 @@ template <typename problem_t> auto extractFaceProjection(QuokkaSimulation<proble
 			amrex::Real const bmag = std::sqrt(bx * bx + by * by + bz * bz);
 			amrex::Real const dust_overdensity = state(i, j, k, HydroSystem<problem_t>::dustDensity_index) / mean_dust_density;
 
-			amrex::Gpu::Atomic::Add(&delta_ptr[idx], bmag - mean_bmag);
+			amrex::Gpu::Atomic::Add(&bmag_minus_b0_ptr[idx], bmag - b0);
 			amrex::Gpu::Atomic::Add(&dust_ptr[idx], dust_overdensity);
 			amrex::Gpu::Atomic::Add(&count_ptr[idx], 1.0_rt);
 		});
 	}
 	amrex::Gpu::streamSynchronize();
-	amrex::Gpu::HostVector<amrex::Real> delta_sum(npts);
+	amrex::Gpu::HostVector<amrex::Real> bmag_minus_b0_sum(npts);
 	amrex::Gpu::HostVector<amrex::Real> dust_sum(npts);
 	amrex::Gpu::HostVector<amrex::Real> count_sum(npts);
-	amrex::Gpu::copy(amrex::Gpu::deviceToHost, delta_sum_d.begin(), delta_sum_d.end(), delta_sum.begin());
+	amrex::Gpu::copy(amrex::Gpu::deviceToHost, bmag_minus_b0_sum_d.begin(), bmag_minus_b0_sum_d.end(), bmag_minus_b0_sum.begin());
 	amrex::Gpu::copy(amrex::Gpu::deviceToHost, dust_sum_d.begin(), dust_sum_d.end(), dust_sum.begin());
 	amrex::Gpu::copy(amrex::Gpu::deviceToHost, count_sum_d.begin(), count_sum_d.end(), count_sum.begin());
-	amrex::ParallelDescriptor::ReduceRealSum(delta_sum.data(), npts);
+	amrex::ParallelDescriptor::ReduceRealSum(bmag_minus_b0_sum.data(), npts);
 	amrex::ParallelDescriptor::ReduceRealSum(dust_sum.data(), npts);
 	amrex::ParallelDescriptor::ReduceRealSum(count_sum.data(), npts);
 
 	FaceProjection projection;
 	projection.u_.resize(npts);
 	projection.v_.resize(npts);
-	projection.delta_b_.resize(npts);
+	projection.bmag_minus_b0_.resize(npts);
 	projection.dust_overdensity_.resize(npts);
 
 	for (int iv = 0; iv < nv; ++iv) {
@@ -565,7 +564,7 @@ template <typename problem_t> auto extractFaceProjection(QuokkaSimulation<proble
 			}
 			projection.u_[idx] = u;
 			projection.v_[idx] = v;
-			projection.delta_b_[idx] = delta_sum[idx] / count;
+			projection.bmag_minus_b0_[idx] = bmag_minus_b0_sum[idx] / count;
 			projection.dust_overdensity_[idx] = dust_sum[idx] / count;
 		}
 	}
@@ -580,8 +579,9 @@ template <typename problem_t> void captureSnapshot(QuokkaSimulation<problem_t> &
 	sim.userData_.snapshot_sigmas_[snapshot_index] = diagnostics.sigma_bmag_;
 
 	if (g_write_csv) {
+		double const b0 = std::sqrt(square(g_Bx0) + square(g_By0) + square(g_Bz0));
 		for (int face = 0; face < 3; ++face) {
-			FaceProjection const projection = extractFaceProjection(sim, face, diagnostics.mean_bmag_);
+			FaceProjection const projection = extractFaceProjection(sim, face, b0);
 			if (amrex::ParallelDescriptor::IOProcessor()) {
 				writeFaceProjectionCsv(snapshot_tags[snapshot_index], face_tags[face], projection);
 			}
