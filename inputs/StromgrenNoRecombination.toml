@@ -1,9 +1,9 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-geometry.prob_lo     =  0.0  0.0  0.0 
-geometry.prob_hi     =  5e13 5e13 5e13
-quokka.bc = reflecting reflecting reflecting
+geometry.prob_lo     =  [0.0, 0.0, 0.0]
+geometry.prob_hi     =  [5e13, 5e13, 5e13]
+quokka.bc = ["reflecting", "reflecting", "reflecting"]
 
 # *****************************************************************
 # VERBOSITY
@@ -13,7 +13,7 @@ amr.v              = 0       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 16 16 16
+amr.n_cell          = [16, 16, 16]
 amr.max_level       = 0     # number of levels = max_level + 1
 #max_timesteps = 10
 do_reflux = 0
@@ -45,7 +45,7 @@ integrator.rtol_rad_flux = 1e-14
 integrator.rtol_enuc = 1e-14
 
 plotfile_interval = 1
-plotfile_prefix = StrmNoRec
+plotfile_prefix = "StrmNoRec"
 
 network.recombination_switch = 0
 network.energy_switch = 0

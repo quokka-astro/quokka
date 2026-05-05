@@ -27,6 +27,7 @@ if(AMReX_SPACEDIM GREATER_EQUAL 2)
   )
 
   # Atomic masses (in atomic mass units)
+  # Electron mass is set to 1, but never used.
   set(AION
   "1.0,
   1.0,
@@ -75,8 +76,8 @@ if(AMReX_SPACEDIM GREATER_EQUAL 2)
   set(PROPERTIES "")
 
   # Set photoionisation properties
-  set(NUM_CHEM_ACTIVE_RAD_GROUPS 1)
-  set(CHEM_ACTIVE_RAD_FREQ_BOUNDS "3.29e15, 1.50e16") # Hz
+  set(NUM_CHEM_BANDS 1)
+  set(CHEM_BANDS "3.29e15, 1.50e16") # Hz
 
   # Configure the header
   configure_file(
@@ -90,13 +91,13 @@ if(AMReX_SPACEDIM GREATER_EQUAL 2)
     ${JOB_NAME} testStromgrenSphere.cpp "${QuokkaSourcesNoEOS}"
                 ../../radiation/photochemistry.cpp ${photoionization_sources})
 
-  # this will add #define CHEMISTRY
+  # this will add #define PHOTOCHEMISTRY
   target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY)
 
   if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(${JOB_NAME})
   endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-  add_test(NAME StromgrenSphereNoRecombination COMMAND ${JOB_NAME} ../inputs/PhotoionizationTests/StromgrenNoRecombination.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-  add_test(NAME StromgrenSphereTempIndependentRecombination COMMAND ${JOB_NAME} ../inputs/PhotoionizationTests/StromgrenTempIndependentRecombination.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(NAME StromgrenSphereNoRecombination COMMAND ${JOB_NAME} ../inputs/StromgrenNoRecombination.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(NAME StromgrenSphereTempIndependentRecombination COMMAND ${JOB_NAME} ../inputs/StromgrenTempIndependentRecombination.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

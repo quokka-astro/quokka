@@ -62,10 +62,7 @@ template <> struct RadSystem_Traits<StromgrenSphere> {
 	static constexpr double c_hat_over_c = c_hat / C::c_light;
 	static constexpr double Erad_floor = 1e-99;
 	static constexpr int beta_order = 0;
-	AMREX_GPU_HOST_DEVICE static constexpr amrex::GpuArray<double, NumChemActiveRadGroups + 1> ChemActiveRadFreqBounds()
-	{
-		return ChemActiveRadFreqBoundsHeader_;
-	}
+	static constexpr amrex::GpuArray<double, NumChemBands + 1> ChemBands() { return ChemBandsHeader_; }
 };
 
 template <>
@@ -83,7 +80,7 @@ void RadSystem<StromgrenSphere>::SetRadEnergySource(array_t &radEnergy, const am
 
 	const amrex::Real sigma_star = sigma_star_coeff * (prob_hi[0] - prob_lo[0]);
 	const amrex::Real r_trunc = r_trunc_coeff * sigma_star;
-	const amrex::Real L_star = Q * RadSystem<StromgrenSphere>::GetChemActiveRadiationGroupQuanta(0) / 8.0_rt;
+	const amrex::Real L_star = Q * RadSystem<StromgrenSphere>::GetChemBandQuanta(0) / 8.0_rt;
 	const amrex::Real x0 = 0.0_rt;
 	const amrex::Real y0 = 0.0_rt;
 	const amrex::Real z0 = 0.0_rt;
@@ -120,10 +117,11 @@ void RadSystem<StromgrenSphere>::SetRadEnergySource(array_t &radEnergy, const am
 // Numerically integrate dR/dt = (Q - 4*pi*R^3*alpha_B*n_HI0^2/3) / (Q/c + 4*pi*R^2*n_HI0)
 // Integrates forward by `dt_target` starting from `R0` using RK4 with step-doubling.
 // Aborts the run if convergence is not reached within allowed iterations.
-static amrex::Real integrate_radius(amrex::Real dt_target, amrex::Real Q, amrex::Real alpha_B, amrex::Real n_HI0,
-								   amrex::Real c_light, amrex::Real R0, amrex::Real r_s_est)
+static amrex::Real integrate_radius(amrex::Real dt_target, amrex::Real Q, amrex::Real alpha_B, amrex::Real n_HI0, amrex::Real c_light, amrex::Real R0,
+				    amrex::Real r_s_est)
 {
-	if (dt_target <= 0.0_rt) return R0;
+	if (dt_target <= 0.0_rt)
+		return R0;
 
 	auto rhs = [&](amrex::Real R) -> amrex::Real {
 		const amrex::Real num = Q - (4.0_rt * M_PI * R * R * R * alpha_B * n_HI0 * n_HI0) / 3.0_rt;
@@ -146,7 +144,7 @@ static amrex::Real integrate_radius(amrex::Real dt_target, amrex::Real Q, amrex:
 			const amrex::Real k3 = rhs(R + 0.5_rt * dt * k2);
 			const amrex::Real k4 = rhs(R + dt * k3);
 			R += (dt / 6.0_rt) * (k1 + 2.0_rt * k2 + 2.0_rt * k3 + k4);
-			if (R < 0.0_rt) R = 0.0_rt;
+			R = std::max(R, 0.0_rt); // ensure radius does not become negative
 		}
 
 		if (iter > 0 && std::abs(R - R_prev) < tol) {
@@ -159,7 +157,6 @@ static amrex::Real integrate_radius(amrex::Real dt_target, amrex::Real Q, amrex:
 	amrex::Abort("integrate_radius failed to converge within max_iters for dt=" + std::to_string(dt_target));
 	return R_prev; // unreachable
 }
-
 
 template <> struct SimulationData<StromgrenSphere> {
 	amrex::Real small_temp;
@@ -432,8 +429,7 @@ template <> void QuokkaSimulation<StromgrenSphere>::computeAfterTimestep()
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		const amrex::Real n_HI0 = userData_.primary_species_2;
 		const amrex::Real alpha_B = 2.6e-13;
-		const amrex::Real r_s =
-			std::pow((3.0_rt * userData_.Q) / (4.0_rt * M_PI * alpha_B * n_HI0 * n_HI0), 1.0_rt / 3.0_rt);
+		const amrex::Real r_s = std::pow((3.0_rt * userData_.Q) / (4.0_rt * M_PI * alpha_B * n_HI0 * n_HI0), 1.0_rt / 3.0_rt);
 
 		amrex::Real dt = tNew_[lev] - userData_.r_analytical_last_t;
 		if (dt < 0.0_rt) {
@@ -457,7 +453,7 @@ template <> void QuokkaSimulation<StromgrenSphere>::computeAfterTimestep()
 	userData_.r_analytical_vec_.push_back(r_analytical);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-			userData_.output_file_ << tNew_[lev] << ',' << r16 << ',' << r50 << ',' << r84 << ',' << r_analytical << '\n';
+		userData_.output_file_ << tNew_[lev] << ',' << r16 << ',' << r50 << ',' << r84 << ',' << r_analytical << '\n';
 	}
 }
 
@@ -486,7 +482,7 @@ auto problem_main() -> int
 	if (sim.userData_.recombination_switch == 0) {
 		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = sim.geom[0].CellSizeArray();
 		const amrex::Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-		const amrex::Real quanta = RadSystem<StromgrenSphere>::GetChemActiveRadiationGroupQuanta(0);
+		const amrex::Real quanta = RadSystem<StromgrenSphere>::GetChemBandQuanta(0);
 		const amrex::Real n_photon_sum0 = sim.state_new_cc_[0].sum(RadSystem<StromgrenSphere>::radEnergy_index) / quanta;
 		const amrex::Real n_e_sum0 = sim.state_new_cc_[0].sum(HydroSystem<StromgrenSphere>::scalar0_index + 0) / C::m_e;
 
@@ -515,8 +511,6 @@ auto problem_main() -> int
 		if (amrex::ParallelDescriptor::IOProcessor()) {
 			const amrex::Real n_HI0 = sim.userData_.primary_species_2;
 			const amrex::Real alpha_B = 2.6e-13;
-			const amrex::Real r_s = std::pow((3.0_rt * sim.userData_.Q) / (4.0_rt * M_PI * alpha_B * n_HI0 * n_HI0), 1.0_rt / 3.0_rt);
-			const amrex::Real t_rec = 1.0_rt / (alpha_B * n_HI0);
 			const amrex::Real cell_size = sim.geom[0].CellSizeArray()[0];
 			const amrex::Real error_tol = 2.0_rt * cell_size;
 			const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = sim.geom[0].ProbLoArray();

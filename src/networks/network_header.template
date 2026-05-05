@@ -31,10 +31,10 @@ constexpr int NumSpecExtra = @NEXTRASPEC@;
 constexpr int NumSpecTotal = NumSpec + NumSpecExtra;
 
 #ifdef PHOTOCHEMISTRY
-constexpr int NumChemActiveRadGroups = @NUM_CHEM_ACTIVE_RAD_GROUPS@;
+constexpr int NumChemBands = @NUM_CHEM_BANDS@;
 constexpr int MicrophysicsNumRadVarsPerGroup = 2;
-constexpr int NumRadEqs = NumChemActiveRadGroups * MicrophysicsNumRadVarsPerGroup;
-constexpr amrex::GpuArray<double, NumChemActiveRadGroups + 1> ChemActiveRadFreqBoundsHeader_{ @CHEM_ACTIVE_RAD_FREQ_BOUNDS@ };
+constexpr int NumRadEqs = NumChemBands * MicrophysicsNumRadVarsPerGroup;
+constexpr amrex::GpuArray<double, NumChemBands + 1> ChemBandsHeader_{ @CHEM_BANDS@ };
 #endif
 
 // filled via the preprocessor by including NAUX_NETWORK

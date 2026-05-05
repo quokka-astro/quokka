@@ -1,9 +1,9 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-geometry.prob_lo     =  0.0  0.0  0.0 
-geometry.prob_hi     =  100000000000.0  100000000000.0  100000000000.0
-geometry.is_periodic =  1    1    1
+geometry.prob_lo     =  [0.0, 0.0, 0.0]
+geometry.prob_hi     =  [8.3e18, 8.3e18, 8.3e18]
+quokka.bc = ["reflecting", "reflecting", "reflecting"]
 
 # *****************************************************************
 # VERBOSITY
@@ -13,12 +13,18 @@ amr.v              = 0       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 8 8 8
+amr.n_cell          = [16, 16, 16]
 amr.max_level       = 0     # number of levels = max_level + 1
-max_timesteps = 500000
+#max_timesteps = 10
 do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
+
+stromgen.tend = 1.2e10
+stromgen.primary_species_1 = 1.0e-30
+stromgen.primary_species_2 = 1670
+stromgen.primary_species_3 = 1.0e-30
+stromgen.Q = 1e51
 
 photochemistry.enabled = 1
 integrator.use_number_densities = 1
@@ -26,26 +32,13 @@ integrator.do_species_clip = 0
 integrator.jacobian = 0
 integrator.renormalize_abundances = 0
 integrator.subtract_internal_energy = 0
+integrator.X_reject_buffer = 1e100
 
-photoionization.primary_species_1 = 1e-10
-photoionization.primary_species_2 = 1e2
-photoionization.primary_species_3 = 1e-10
-photoionization.tend = 10000
-photoionization.n_photon = 5e3
-photoionization.temperature = 1e3
+plotfile_interval = 50
+plotfile_prefix = "StrmConstRec"
 
-integrator.atol_spec = 1e-14
-integrator.atol_rad_num = 1e-14
-integrator.atol_rad_flux = 1e-14
-integrator.atol_enuc = 1e-14
-
-integrator.rtol_spec = 1e-14
-integrator.rtol_rad_num = 1e-14
-integrator.rtol_rad_flux = 1e-14
-integrator.rtol_enuc = 1e-14
-
-network.energy_switch = 1
-network.KI_heating_switch = 0
-network.KI_cooling_switch = 0
-network.ion_ff_cooling_switch = 0
+network.recombination_switch = 1
+network.recombination_temperature_dependent = 0
+network.energy_switch = 0
 network.collisional_ionization_switch = 0
+network.assume_sharp_ionization_front = 1

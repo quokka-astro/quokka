@@ -35,8 +35,8 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 
 	int num_failed = 0;
 
-	auto dt_stage = dt / stage;
-	auto energy_update_factor = stage / 1.0_rt;
+	auto dt_stage = dt / static_cast<Real>(stage);
+	auto energy_update_factor = static_cast<Real>(stage) / 1.0_rt;
 
 	const BL_PROFILE("PhotoChemistry::computePhotoChemistry()");
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
@@ -59,8 +59,8 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 			for (int nn = 0; nn < NumSpec; ++nn) {
 				photochemstate.xn[nn] = state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) / spmasses[nn];
 			}
-			for (int nn = 0; nn < NumChemActiveRadGroups; ++nn) {
-				quanta_energy = RadSystem<problem_t>::GetChemActiveRadiationGroupQuanta(nn);
+			for (int nn = 0; nn < NumChemBands; ++nn) {
+				quanta_energy = RadSystem<problem_t>::GetChemBandQuanta(nn);
 				photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] =
 				    state(i, j, k, RadSystem<problem_t>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * nn) / quanta_energy;
 				// // TODO(james471): Add check for isotropy
@@ -70,13 +70,13 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 			photochemstate.e = Eint / rho;
 
 			// dont do photochemistry in cells with densities below the minimum density specified
-			// if (rho < min_density_allowed) {
-			// 	return;
-			// }
+			if (rho < min_density_allowed) {
+				return;
+			}
 			// stop the test if we have reached very high densities
-			// if (rho > max_density_allowed) {
-			// 	amrex::Abort("Density exceeded max_density_allowed!");
-			// }
+			if (rho > max_density_allowed) {
+				amrex::Abort("Density exceeded max_density_allowed!");
+			}
 
 			// call the EOS to set the temperature
 			eos(eos_input_re, photochemstate);
@@ -102,9 +102,9 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 			for (int nn = 0; nn < NumSpec; ++nn) {
 				photochemstate.xn[nn] = amrex::max(photochemstate.xn[nn], small_x);
 			}
-			for (int nn = 0; nn < NumChemActiveRadGroups; nn += MicrophysicsNumRadVarsPerGroup) {
+			for (int nn = 0; nn < NumChemBands; nn += 1) {
 				// TODO (james471): Ensure that flux doesn't deviate from the corresponding energy density.
-				photochemstate.rn[nn] = amrex::max(photochemstate.rn[nn], small_x);
+				photochemstate.rn[nn * MicrophysicsNumRadVarsPerGroup] = amrex::max(photochemstate.rn[nn], small_x);
 			}
 
 			// get the updated specific eint
@@ -113,8 +113,8 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 			for (int nn = 0; nn < NumSpec; ++nn) {
 				state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) = photochemstate.xn[nn] * spmasses[nn];
 			}
-			for (int nn = 0; nn < NumChemActiveRadGroups; ++nn) {
-				quanta_energy = RadSystem<problem_t>::GetChemActiveRadiationGroupQuanta(nn);
+			for (int nn = 0; nn < NumChemBands; ++nn) {
+				quanta_energy = RadSystem<problem_t>::GetChemBandQuanta(nn);
 				state(i, j, k, RadSystem<problem_t>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * nn) =
 				    photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] * quanta_energy;
 				state(i, j, k, RadSystem<problem_t>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * nn) =
@@ -140,7 +140,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 
 	num_failed = *(d_num_failed.copyToHost());
 
-	photochem_burn_success = !num_failed;
+	photochem_burn_success = num_failed == 0;
 	amrex::ParallelDescriptor::ReduceIntMin(photochem_burn_success);
 
 	if (!photochem_burn_success) {

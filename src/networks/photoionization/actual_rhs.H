@@ -5,7 +5,6 @@
 #include "AMReX_REAL.H"
 #include "burn_type.H"
 #include "fundamental_constants.H"
-#include "problems/RadStreamingPhotoionization/extern_parameters.H"
 #include <actual_network.H>
 #include <extern_parameters.H>
 #include <jacobian_utilities.H>
@@ -146,7 +145,7 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	jac(1, 2) = (photoionization_term + collisional_ionization_term) / n_HI;
 	jac(1, 3) = -recombination_term / n_HII_eff;
 	jac(1, net_ienuc) = 0.0_rt;
-	jac(1, 5) = -photoionization_term / n_gamma;
+	jac(1, 5) = photoionization_term / n_gamma;
 	jac(1, 6) = 0.0_rt;
 
 	jac(2, 1) = -jac(1, 1);
@@ -177,11 +176,11 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	jac(5, 6) = 0.0_rt;
 
 	jac(6, 1) = 0.0_rt;
-	jac(6, 2) = -photoionization_term / n_HI;
+	jac(6, 2) = -c * sigma_photo * n_gamma_flux;
 	jac(6, 3) = 0.0_rt;
 	jac(6, net_ienuc) = 0.0_rt;
 	jac(6, 5) = 0.0_rt;
-	jac(6, 6) = -photoionization_term / n_gamma_flux;
+	jac(6, 6) = -n_HI * c * sigma_photo;
 }
 
 #endif

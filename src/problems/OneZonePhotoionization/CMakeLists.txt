@@ -12,7 +12,7 @@ include_directories(
   BEFORE ${photoionization_dirs} "${CMAKE_CURRENT_BINARY_DIR}/"
   "includes/extern_parameters.H" "includes/network_properties.H")
 
-set(JOB_NAME RadStreamingPhotoionization)
+set(JOB_NAME OneZonePhotoionization)
 
 # Number of species
 set(NSPEC 3)
@@ -26,6 +26,7 @@ Hp"
 )
 
 # Atomic masses (in atomic mass units)
+# Electron mass is set to 1, but never used.
 set(AION
 "1.0,
  1.0,
@@ -74,8 +75,8 @@ set(SPEC_NAMES
 set(PROPERTIES "")
 
 # Set photoionisation properties
-set(NUM_CHEM_ACTIVE_RAD_GROUPS 1)
-set(CHEM_ACTIVE_RAD_FREQ_BOUNDS "3.29e15, 1.50e16") # Hz
+set(NUM_CHEM_BANDS 1)
+set(CHEM_BANDS "3.29e15, 1.50e16") # Hz
 
 # Configure the header
 configure_file(
@@ -86,7 +87,7 @@ configure_file(
 
 
 add_executable(
-  ${JOB_NAME} testRadStreamingPhotoionization.cpp "${QuokkaSourcesNoEOS}"
+  ${JOB_NAME} testOneZonePhotoionization.cpp "${QuokkaSourcesNoEOS}"
               ../../radiation/photochemistry.cpp ${photoionization_sources})
 
 # this will add #define PHOTOCHEMISTRY
@@ -96,6 +97,6 @@ if(AMReX_GPU_BACKEND MATCHES "CUDA")
   setup_target_for_cuda_compilation(${JOB_NAME})
 endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-add_test(NAME RadStreamingPhotoionizationNoEnergy COMMAND ${JOB_NAME} ../inputs/PhotoionizationTests/StreamingNoEnergyChange.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-add_test(NAME RadStreamingPhotoionizationWithEnergy COMMAND ${JOB_NAME} ../inputs/PhotoionizationTests/StreamingPhotoheatingRecCooling.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+add_test(NAME OneZonePhotoionizationNoEnergy COMMAND ${JOB_NAME} ../inputs/OneZonePhotoionizationNoEnergy.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+add_test(NAME OneZonePhotoionizationWithEnergy COMMAND ${JOB_NAME} ../inputs/OneZonePhotoionizationWithEnergy.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 

@@ -3,7 +3,7 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file testRadStreamingPhotoionization.cpp
+/// \file testOneZonePhotoionization.cpp
 /// \brief Defines a test problem for photoionization.
 ///
 
@@ -13,10 +13,17 @@
 #include "radiation/radiation_system.hpp"
 #include "util/fextract.hpp"
 #include <fstream>
+#include <iomanip>
 #include <iostream>
+#include <limits>
 #include <ostream>
+#include <sstream>
 #include <string>
 #include <vector>
+
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 
 #include "actual_eos_data.H"
 #include "burn_type.H"
@@ -49,20 +56,13 @@ template <> struct Physics_Traits<PhotoionizationStreamingProblem> {
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
-	static constexpr double boltzmann_constant = C::k_B;
-	static constexpr double gravitational_constant = C::Gconst;
-	static constexpr double c_light = c;
-	static constexpr double radiation_constant = C::a_rad;
 };
 
 template <> struct RadSystem_Traits<PhotoionizationStreamingProblem> {
 	static constexpr double c_hat_over_c = chat / c;
 	static constexpr double Erad_floor = 0.0;
 	static constexpr int beta_order = 0;
-	AMREX_GPU_HOST_DEVICE static constexpr amrex::GpuArray<double, NumChemActiveRadGroups + 1> ChemActiveRadFreqBounds()
-	{
-		return ChemActiveRadFreqBoundsHeader_;
-	}
+	static constexpr amrex::GpuArray<double, NumChemBands + 1> ChemBands() { return ChemBandsHeader_; }
 };
 
 template <> struct SimulationData<PhotoionizationStreamingProblem> {
@@ -81,6 +81,7 @@ template <> struct SimulationData<PhotoionizationStreamingProblem> {
 	std::vector<double> n_HII_vec_;
 	std::vector<double> n_gamma_vec_;
 	std::vector<double> Egas_vec_;
+	std::vector<double> temp_vec_;
 };
 
 template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::preCalculateInitialConditions()
@@ -182,7 +183,7 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::setInitialCo
 	// call the EOS to set initial internal energy e
 	eos(eos_input_rt, state);
 
-	const auto Erad0 = userData_.n_photon * RadSystem<PhotoionizationStreamingProblem>::GetChemActiveRadiationGroupQuanta(0);
+	const auto Erad0 = userData_.n_photon * RadSystem<PhotoionizationStreamingProblem>::GetChemBandQuanta(0);
 	const auto Egas0 = state.e * rhotot; // initial_Egas;
 
 	// loop over the grid and set the initial condition
@@ -216,16 +217,17 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::computeAfter
 		const amrex::Real n_e = values.at(HydroSystem<PhotoionizationStreamingProblem>::scalar0_index)[0] / spmasses[0];
 		const amrex::Real n_HI = values.at(HydroSystem<PhotoionizationStreamingProblem>::scalar0_index + 1)[0] / spmasses[1];
 		const amrex::Real n_HII = values.at(HydroSystem<PhotoionizationStreamingProblem>::scalar0_index + 2)[0] / spmasses[2];
-		const amrex::Real n_gamma = Erad_i / RadSystem<PhotoionizationStreamingProblem>::GetChemActiveRadiationGroupQuanta(0);
+		const amrex::Real n_gamma = Erad_i / RadSystem<PhotoionizationStreamingProblem>::GetChemBandQuanta(0);
 		const amrex::Real rho = values.at(RadSystem<PhotoionizationStreamingProblem>::gasDensity_index)[0];
 		const amrex::Real Egas_i = values.at(RadSystem<PhotoionizationStreamingProblem>::gasEnergy_index)[0];
+		const amrex::Real Eint_i = values.at(RadSystem<PhotoionizationStreamingProblem>::gasInternalEnergy_index)[0];
 		quokka::optional<amrex::GpuArray<amrex::Real, NumSpec>> massScalars;
 		amrex::GpuArray<amrex::Real, NumSpec> scalars{};
 		scalars[0] = n_e * spmasses[0];
 		scalars[1] = n_HI * spmasses[1];
 		scalars[2] = n_HII * spmasses[2];
 		massScalars = scalars;
-		const amrex::Real temp = quokka::EOS<PhotoionizationStreamingProblem>::ComputeTgasFromEint(rho, Egas_i, massScalars);
+		const amrex::Real temp = quokka::EOS<PhotoionizationStreamingProblem>::ComputeTgasFromEint(rho, Eint_i, massScalars);
 
 		userData_.t_vec_.push_back(time);
 		userData_.n_e_vec_.push_back(n_e);
@@ -233,6 +235,7 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::computeAfter
 		userData_.n_HII_vec_.push_back(n_HII);
 		userData_.n_gamma_vec_.push_back(n_gamma);
 		userData_.Egas_vec_.push_back(Egas_i);
+		userData_.temp_vec_.push_back(temp);
 
 		userData_.output_file_ << time << "," << n_e << "," << n_HI << "," << n_HII << "," << n_gamma << "," << Egas_i << "," << temp << "\n";
 	}
@@ -276,13 +279,14 @@ auto problem_main() -> int
 	std::vector<double> &n_HII = sim.userData_.n_HII_vec_;
 	std::vector<double> &n_gamma = sim.userData_.n_gamma_vec_;
 	std::vector<double> &Egas = sim.userData_.Egas_vec_;
+	std::vector<double> &temp = sim.userData_.temp_vec_;
 
 	int energy_switch = 1;
 
 	amrex::ParmParse const pp1("network");
 	pp1.query("energy_switch", energy_switch);
 
-	std::string filename = "../src/problems/RadStreamingPhotoionization/photoionization-julia/";
+	std::string filename = "../extern/photoionization-julia/";
 	if (energy_switch == 0) {
 		filename += "no_energy.csv";
 	} else if (energy_switch == 1) {
@@ -292,6 +296,9 @@ auto problem_main() -> int
 	}
 
 	std::ifstream file(filename);
+	if (!file.is_open()) {
+		amrex::Abort("Could not open file: " + filename + "\nPlease run this test from the <quokka-root>/tests/ folder.");
+	}
 	std::string line;
 	std::vector<std::vector<double>> data;
 	std::getline(file, line);
@@ -311,6 +318,7 @@ auto problem_main() -> int
 	std::vector<double> n_HII_julia;
 	std::vector<double> n_gamma_julia;
 	std::vector<double> Egas_julia;
+	std::vector<double> temp_julia;
 	for (size_t i = 1; i < data.size(); ++i) {
 		t_julia.push_back(data[i][0]);
 		n_e_julia.push_back(data[i][1]);
@@ -318,6 +326,7 @@ auto problem_main() -> int
 		n_HII_julia.push_back(data[i][3]);
 		n_gamma_julia.push_back(data[i][4]);
 		Egas_julia.push_back(data[i][5]);
+		temp_julia.push_back(data[i][6]);
 	}
 
 	int errors = 0;
@@ -371,6 +380,55 @@ auto problem_main() -> int
 	if (errors > 0) {
 		status = 1;
 	}
+
+#ifdef HAVE_PYTHON
+	// Plot n_HI and n_HII
+	matplotlibcpp::clf();
+	std::map<std::string, std::string> n_HI_args;
+	std::map<std::string, std::string> n_HII_args;
+	std::map<std::string, std::string> n_HI_julia_args;
+	std::map<std::string, std::string> n_HII_julia_args;
+	n_HI_args["label"] = "n_HI";
+	n_HI_args["color"] = "C0";
+	n_HII_args["label"] = "n_HII";
+	n_HII_args["color"] = "C1";
+	n_HI_julia_args["label"] = "Julia";
+	n_HI_julia_args["linestyle"] = "--";
+	n_HI_julia_args["color"] = "k";
+	n_HII_julia_args["linestyle"] = "--";
+	n_HII_julia_args["color"] = "k";
+	matplotlibcpp::plot(t, n_HI, n_HI_args);
+	matplotlibcpp::plot(t, n_HII, n_HII_args);
+	matplotlibcpp::plot(t_julia, n_HI_julia, n_HI_julia_args);
+	matplotlibcpp::plot(t_julia, n_HII_julia, n_HII_julia_args);
+	matplotlibcpp::yscale("log");
+	matplotlibcpp::xlabel("time (s)");
+	matplotlibcpp::ylabel("number density (cm^-3)");
+	matplotlibcpp::legend();
+	matplotlibcpp::tight_layout();
+	const std::string species_plot_filename =
+	    (energy_switch == 0) ? "./photoionization_species_no_energy.pdf" : "./photoionization_species_with_energy.pdf";
+	matplotlibcpp::save(species_plot_filename);
+
+	if (energy_switch == 1) {
+		// Plot temperature
+		matplotlibcpp::clf();
+		std::map<std::string, std::string> temp_args;
+		std::map<std::string, std::string> temp_julia_args;
+		temp_args["label"] = "T";
+		temp_args["color"] = "C2";
+		temp_julia_args["label"] = "Julia";
+		temp_julia_args["linestyle"] = "--";
+		temp_julia_args["color"] = "k";
+		matplotlibcpp::plot(t, temp, temp_args);
+		matplotlibcpp::plot(t_julia, temp_julia, temp_julia_args);
+		matplotlibcpp::xlabel("time (s)");
+		matplotlibcpp::ylabel("temperature (K)");
+		matplotlibcpp::legend();
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("./photoionization_temperature.pdf");
+	}
+#endif
 
 	// Cleanup and exit
 	amrex::Print() << "Finished." << '\n';

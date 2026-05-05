@@ -259,9 +259,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	// static functions
 
 #ifdef PHOTOCHEMISTRY
-	AMREX_GPU_HOST_DEVICE static auto GetChemActiveRadiationGroupQuanta(int group_index) -> amrex::Real;
+	AMREX_GPU_HOST_DEVICE static auto GetChemBandQuanta(int group_index) -> amrex::Real;
 #endif
-	AMREX_GPU_HOST_DEVICE static auto GetRadiationGroupQuanta(amrex::Real freq_low, amrex::Real freq_high) -> amrex::Real;
 
 	static void ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons, array_t &maxSignal, amrex::Box const &indexRange);
 	static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons, array_t &primVar, amrex::Box const &indexRange);
@@ -653,20 +652,14 @@ void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real>
 }
 
 #ifdef PHOTOCHEMISTRY
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::GetChemActiveRadiationGroupQuanta(int group_index) -> amrex::Real
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::GetChemBandQuanta(int group_index) -> amrex::Real
 {
-	auto const freq_bounds = RadSystem_Traits<problem_t>::ChemActiveRadFreqBounds();
+	auto const freq_bounds = RadSystem_Traits<problem_t>::ChemBands();
 	amrex::Real freq_low = freq_bounds[group_index];
 	amrex::Real freq_high = freq_bounds[group_index + 1];
-	return GetRadiationGroupQuanta(freq_low, freq_high);
-}
-#endif
-
-template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::GetRadiationGroupQuanta(amrex::Real freq_low, amrex::Real freq_high) -> amrex::Real
-{
 	return 0.5_rt * (freq_high + freq_low) * C::hplanck;
 }
+#endif
 
 template <typename problem_t>
 void RadSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const & /*cons*/, array_t &maxSignal, amrex::Box const &indexRange)
