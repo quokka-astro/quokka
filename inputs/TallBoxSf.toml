@@ -82,7 +82,29 @@ turbulence.stop_time = "32 * Myr"
 
 statistics_interval = 512
 
-derived_vars = ["temperature", "c_s", "gpot", "scalar0_z_outflow_rate", "hot_gas_z_outflow_rate", "warm_gas_z_outflow_rate", "hot_scalar0_z_outflow_rate", "warm_scalar0_z_outflow_rate"]
+derived_vars = [
+	"temperature",
+	"T_times_rho",
+	"c_s",
+	"gpot",
+	"scalar0_z_outflow_rate",
+	"true_hot_gas",
+	"true_warm_gas",
+	"true_cool_gas",
+	"true_cold_gas",
+	"true_hot_scalar0",
+	"true_warm_scalar0",
+	"true_cool_scalar0",
+	"true_cold_scalar0",
+	"true_hot_gas_z_outflow_rate",
+	"true_warm_gas_z_outflow_rate",
+	"true_cool_gas_z_outflow_rate",
+	"true_cold_gas_z_outflow_rate",
+	"true_hot_scalar0_z_outflow_rate",
+	"true_warm_scalar0_z_outflow_rate",
+	"true_cool_scalar0_z_outflow_rate",
+	"true_cold_scalar0_z_outflow_rate"
+]
 
 quokka.diagnostics = ["slice_x", "slice_z", "proj"]
 
@@ -106,5 +128,5 @@ quokka.proj.type = "ProjectionPlot"  # Projection plot diagnostic
 quokka.proj.file = "proj_plt"  # Output file prefix (must end in "plt")
 quokka.proj.time_int = 3.155760000e+13  # 1e6 yr
 quokka.proj.normal = 0  # Plane normal (0 == x, 1 == y, 2 == z)
-quokka.proj.field_names = ["gasDensity", "z-GasMomentum", "scalar_0", "scalar_0_z_outflow_rate", "true_hot_gas_z_outflow_rate", "true_warm_gas_z_outflow_rate", "true_cool_gas_z_outflow_rate", "true_cold_gas_z_outflow_rate", "true_hot_scalar0_z_outflow_rate", "true_warm_scalar0_z_outflow_rate", "true_cool_scalar0_z_outflow_rate", "true_cold_scalar0_z_outflow_rate"]
+quokka.proj.field_names = ["gasDensity", "z-GasMomentum", "T_times_rho", "scalar_0", "scalar_0_z_outflow_rate", "true_hot_gas_z_outflow_rate", "true_warm_gas_z_outflow_rate", "true_cool_gas_z_outflow_rate", "true_cold_gas_z_outflow_rate", "true_hot_scalar0_z_outflow_rate", "true_warm_scalar0_z_outflow_rate", "true_cool_scalar0_z_outflow_rate", "true_cold_scalar0_z_outflow_rate"]
 quokka.proj.particles = "StochasticStellarPop_particles"
