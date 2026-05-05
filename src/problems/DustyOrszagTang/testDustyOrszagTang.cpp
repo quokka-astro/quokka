@@ -90,10 +90,7 @@ struct CaseResult {
 // reconstruct the active case metadata for mid-run snapshot capture
 auto activeCaseConfig() -> CaseConfig
 {
-	return {.tag_ = g_active_case_tag,
-		.label_ = g_active_case_label,
-		.dust_density0_ = g_initial_dust_density,
-		.mu0_ = g_initial_dust_density / rho_gas0};
+	return {.tag_ = g_active_case_tag, .label_ = g_active_case_label, .dust_density0_ = g_initial_dust_density, .mu0_ = g_initial_dust_density / rho_gas0};
 }
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto vectorPotentialAz(double x, double y) -> double
