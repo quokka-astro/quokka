@@ -30,8 +30,9 @@
 struct StromgrenSphere {
 };
 
-constexpr int nCells = 3;
-constexpr double c_hat = C::c_light / 10.0;
+constexpr double c_hat = C::c_light / 100.0;
+constexpr double sigma_star_coeff = 1.5 / 16.0;
+constexpr double r_trunc_coeff = 2.5;
 
 template <> struct quokka::EOS_Traits<StromgrenSphere> {
 	static constexpr double mean_molecular_weight = 1.0;
@@ -76,30 +77,37 @@ void RadSystem<StromgrenSphere>::SetRadEnergySource(array_t &radEnergy, const am
 	amrex::Real Q = 1.0e49_rt;
 	pp.query("Q", Q);
 
-	const amrex::Real sigma_star = 1.5 * dx[0];
+	amrex::ParmParse pp2("amr");
+	int n = 16;
+	pp2.query("n_cell", n);
+
+	const amrex::Real sigma_star = sigma_star_coeff * (prob_hi[0] - prob_lo[0]);
+	const amrex::Real r_trunc = r_trunc_coeff * sigma_star;
 	const amrex::Real L_star = Q * RadSystem<StromgrenSphere>::GetChemActiveRadiationGroupQuanta(0) / 8.0_rt;
 	const amrex::Real x0 = 0.0_rt;
 	const amrex::Real y0 = 0.0_rt;
 	const amrex::Real z0 = 0.0_rt;
 	amrex::Real sum = 0.0_rt;
-	for (int i = 0; i <= nCells; ++i) {
-		for (int j = 0; j <= nCells; ++j) {
-			for (int k = 0; k <= nCells; ++k) {
+	for (int i = 0; i < n; ++i) {
+		for (int j = 0; j < n; ++j) {
+			for (int k = 0; k < n; ++k) {
 				amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
 				amrex::Real const y = prob_lo[1] + (j + 0.5) * dx[1];
 				amrex::Real const z = prob_lo[2] + (k + 0.5) * dx[2];
 				amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
-				sum += std::exp(-(r * r) / (2.0 * sigma_star * sigma_star)) * dx[0] * dx[1] * dx[2] /
-				       (std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5));
+				if (r <= r_trunc) {
+					sum += std::exp(-(r * r) / (2.0 * sigma_star * sigma_star)) * dx[0] * dx[1] * dx[2] /
+					       (std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5));
+				}
 			}
 		}
 	}
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		if ((i <= nCells) && (j <= nCells) && (k <= nCells)) {
-			amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
-			amrex::Real const y = prob_lo[1] + (j + 0.5) * dx[1];
-			amrex::Real const z = prob_lo[2] + (k + 0.5) * dx[2];
-			amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
+		amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
+		amrex::Real const y = prob_lo[1] + (j + 0.5) * dx[1];
+		amrex::Real const z = prob_lo[2] + (k + 0.5) * dx[2];
+		amrex::Real const r = std::sqrt(std::pow(x - x0, 2) + std::pow(y - y0, 2) + std::pow(z - z0, 2));
+		if (r <= r_trunc) {
 			amrex::Real w_i = std::exp(-(r * r) / (2.0 * sigma_star * sigma_star)) / (std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5));
 			amrex::Real val = L_star * w_i / sum;
 			radEnergy(i, j, k) = val;
