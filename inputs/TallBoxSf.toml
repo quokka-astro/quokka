@@ -106,13 +106,19 @@ derived_vars = [
 	"true_cold_scalar0_z_outflow_rate"
 ]
 
-quokka.diagnostics = ["slice_x", "slice_z", "proj"]
+quokka.diagnostics = ["plt", "slice_x", "slice_z", "proj"]
+
+quokka.plt.type = "PlotFile"  # pltfile for the whole box
+quokka.plt.file = "plt"  # Output file prefix (default "plt", must end in "plt")
+quokka.plt.time_int = "4*Myr"
+# quokka.plt.particles = []  # Default to all particle types
+quokka.plt.field_names = ["gasDensity", "gasEnergy", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "scalar_0", "temperature", "gpot"]
 
 quokka.slice_x.type = "DiagFramePlane"
 quokka.slice_x.file = "slicex_plt"
 quokka.slice_x.normal = 0  # Plane normal (0 == x, 1 == y, 2 == z)
 quokka.slice_x.center = 1.509001e21
-quokka.slice_x.time_int = 3.155760000e+13  # 1e6 yr
+quokka.slice_x.time_int = "1*Myr"
 quokka.slice_x.field_names = ["gasDensity", "gasEnergy", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "temperature", "c_s", "gpot", 
 	"scalar_0", "scalar0_z_outflow_rate", 
 	"true_hot_gas", "true_warm_gas", "true_cool_gas", "true_cold_gas", 
@@ -125,13 +131,13 @@ quokka.slice_z.type = "DiagFramePlane"
 quokka.slice_z.file = "slicez_plt"
 quokka.slice_z.normal = 2  # Plane normal (0 == x, 1 == y, 2 == z)
 quokka.slice_z.center = 1.0e12  # Domain center in the normal direction
-quokka.slice_z.time_int = 3.155760000e+13  # 1e6 yr
+quokka.slice_z.time_int = "1*Myr"
 quokka.slice_z.field_names = ["gasDensity", "gasEnergy", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "temperature", "c_s", "gpot", "scalar_0", ]
 quokka.slice_z.particles = "StochasticStellarPop_particles"
 
 quokka.proj.type = "ProjectionPlot"  # Projection plot diagnostic
 quokka.proj.file = "proj_plt"  # Output file prefix (must end in "plt")
-quokka.proj.time_int = 3.155760000e+13  # 1e6 yr
+quokka.proj.time_int = "1*Myr"
 quokka.proj.normal = 0  # Plane normal (0 == x, 1 == y, 2 == z)
 quokka.proj.field_names = ["gasDensity", "z-GasMomentum", "T_times_rho", 
 	"scalar_0", "scalar0_z_outflow_rate", 
