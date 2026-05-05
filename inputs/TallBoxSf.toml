@@ -1,9 +1,9 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-# 1x1x4 kpc box
-geometry.prob_lo = [0.0, 0.0, -6.036e+21]
-geometry.prob_hi = [3.018e21, 3.018e21, 6.036e+21]
+# 1x1x8 kpc
+geometry.prob_lo = [0.0, 0.0, -1.2072e22]
+geometry.prob_hi = [3.018e21, 3.018e21, 1.2072e22]
 quokka.bc = ["periodic", "periodic", "ext_dir"]
 
 # *****************************************************************
@@ -25,11 +25,10 @@ cfl = 0.3
 do_reflux = 1
 do_subcycle = 0
 
-plottime_interval = 3.155760000e+14  # 1e7 yr
-checkpointtime_interval = 6.311520000e+14  # 2e7 yr
-stop_time = 6.31152e15  # 200 Myr  
+checkpointtime_interval = "4*Myr"
+stop_time = "64*Myr"
 max_timesteps = 100
-#restartfile = last_chk
+init_shrink = 0.01
 suppress_output = 0
 regrid_interval = -1
 # be careful about Poisson supercycling
@@ -43,9 +42,9 @@ particles.split_particles_on_restart_refine = false
 particles.scalar_yield_per_SN = 1.99e33  # 1 Msun, given a density of 6e-29 when spreaded in a sphere of radius 64 pc
 problem.initial_scalar_density = 1.67e-35  # 1e-11 mH/cm^3
 
-
-density_floor = 1.67e-28  #in g cm^-3
-temperature_floor = 10.0  #K
+density_floor = 1.67e-27  # in g cm^-3
+density_floor_expr = "scaleheight=3.018e21; max(1.67e-28, base_density_floor * exp(-(z/scaleheight)*(z/scaleheight)))"
+temperature_floor = 10.0  # K
 
 particles.eps_ff = 0.01
 problem.stars_file = ""
@@ -57,24 +56,21 @@ cooling.enabled = 1
 cooling.cooling_table_type = "resampled"
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_shielded_resampled_noPE.h5"
 # rho=4.320441e-24 g/cm^3, tff = sqrt(3 pi / (32 G rho)), tff = 1.010633461e+15 s = 32.02504187 Myr
-heating_rate_external = "max(min(1.0, 2.0 - time / (32 * Myr)), 0.0024) * 2e-26" # unit: erg/s/H. Gamma_0 = 2e-26
+heating_rate_external = "max(min(1.0, 2.0 - time / (32 * Myr)), 0.0024) * 2e-26"  # unit: erg/s/H. Gamma_0 = 2e-26
 use_sfh_based_pe_heating = true
 sfh_to_pe_heating_table = "../extern/cooling/photoelectric_heating_from_sfh.csv"
 sfh_time_interval = 3.155760000e+12  # 1e5 yr
 sf_area_kpc2 = 1.0  # kpc^2
 
-perturb.filename = "zdrv.hdf5"
-perturb.amplitude = 7e5  # 7 km/s
-
 turbulence.enabled = 1
 turbulence.length = 3.018e21
-turbulence.target_vdisp = 2100000.0
+turbulence.target_vdisp = 700000.0
 turbulence.ampl_factor = 0.2
 turbulence.ampl_auto_adjust = 1
-turbulence.k_driv = 139.6846031 # this actually sets the autocorrelation timescale via tau = (L/vdisp)/k_driv. (1 kpc / 7 km/s) / 10 Myr = 13.96846031
+turbulence.k_driv = 69.84230155  # this actually sets the autocorrelation timescale via tau = (L/vdisp)/k_driv, so k_driv = (1 kpc / 7 km/s) / T. = 13.96846031 for T=10Myr, 69 for T=2Myr
 turbulence.k_min = 2.0
 turbulence.k_max = 3.0
-turbulence.sol_weight = 1.0
+turbulence.sol_weight = 0.5
 turbulence.spect_form = 1
 turbulence.random_seed = 140281
 turbulence.nsteps_per_t_turb = 10
@@ -110,7 +106,7 @@ quokka.diagnostics = ["plt", "slice_x", "slice_z", "proj"]
 
 quokka.plt.type = "PlotFile"  # pltfile for the whole box
 quokka.plt.file = "plt"  # Output file prefix (default "plt", must end in "plt")
-quokka.plt.time_int = "4*Myr"
+quokka.plt.time_int = "10*Myr"
 # quokka.plt.particles = []  # Default to all particle types
 quokka.plt.field_names = ["gasDensity", "gasEnergy", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "scalar_0", "temperature", "gpot"]
 
@@ -119,11 +115,11 @@ quokka.slice_x.file = "slicex_plt"
 quokka.slice_x.normal = 0  # Plane normal (0 == x, 1 == y, 2 == z)
 quokka.slice_x.center = 1.509001e21
 quokka.slice_x.time_int = "1*Myr"
-quokka.slice_x.field_names = ["gasDensity", "gasEnergy", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "temperature", "c_s", "gpot", 
-	"scalar_0", "scalar0_z_outflow_rate", 
-	"true_hot_gas", "true_warm_gas", "true_cool_gas", "true_cold_gas", 
+quokka.slice_x.field_names = ["gasDensity", "gasEnergy", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "temperature", "c_s", "gpot",
+	"scalar_0", "scalar0_z_outflow_rate",
+	"true_hot_gas", "true_warm_gas", "true_cool_gas", "true_cold_gas",
 	"true_hot_scalar0", "true_warm_scalar0", "true_cool_scalar0", "true_cold_scalar0",
-	"true_hot_gas_z_outflow_rate", "true_warm_gas_z_outflow_rate", "true_cool_gas_z_outflow_rate", "true_cold_gas_z_outflow_rate", 
+	"true_hot_gas_z_outflow_rate", "true_warm_gas_z_outflow_rate", "true_cool_gas_z_outflow_rate", "true_cold_gas_z_outflow_rate",
 	"true_hot_scalar0_z_outflow_rate", "true_warm_scalar0_z_outflow_rate", "true_cool_scalar0_z_outflow_rate", "true_cold_scalar0_z_outflow_rate"]
 quokka.slice_x.particles = "StochasticStellarPop_particles"
 
@@ -139,10 +135,10 @@ quokka.proj.type = "ProjectionPlot"  # Projection plot diagnostic
 quokka.proj.file = "proj_plt"  # Output file prefix (must end in "plt")
 quokka.proj.time_int = "1*Myr"
 quokka.proj.normal = 0  # Plane normal (0 == x, 1 == y, 2 == z)
-quokka.proj.field_names = ["gasDensity", "z-GasMomentum", "T_times_rho", 
-	"scalar_0", "scalar0_z_outflow_rate", 
-	"true_hot_gas", "true_warm_gas", "true_cool_gas", "true_cold_gas", 
+quokka.proj.field_names = ["gasDensity", "z-GasMomentum", "T_times_rho",
+	"scalar_0", "scalar0_z_outflow_rate",
+	"true_hot_gas", "true_warm_gas", "true_cool_gas", "true_cold_gas",
 	"true_hot_scalar0", "true_warm_scalar0", "true_cool_scalar0", "true_cold_scalar0",
-	"true_hot_gas_z_outflow_rate", "true_warm_gas_z_outflow_rate", "true_cool_gas_z_outflow_rate", "true_cold_gas_z_outflow_rate", 
+	"true_hot_gas_z_outflow_rate", "true_warm_gas_z_outflow_rate", "true_cool_gas_z_outflow_rate", "true_cold_gas_z_outflow_rate",
 	"true_hot_scalar0_z_outflow_rate", "true_warm_scalar0_z_outflow_rate", "true_cool_scalar0_z_outflow_rate", "true_cold_scalar0_z_outflow_rate"]
 quokka.proj.particles = "StochasticStellarPop_particles"
