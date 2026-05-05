@@ -103,7 +103,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 	amrex::Real recombination_cooling = recombination_cooling_switch * Lambda_rec * n_e_eff * n_HII_eff / scaling;
 	amrex::Real ion_ff_cooling = ion_ff_cooling_switch * Lambda_ion_ff * n_e_eff * n_HII_eff / scaling;
 
-	ydot(1) = photoionization_term + collisional_ionization_term - recombination_term;
+	ydot(1) = photoionization_term * frac + collisional_ionization_term - recombination_term;
 	ydot(2) = -ydot(1);
 	ydot(3) = ydot(1);
 	ydot(net_ienuc) = energy_switch * (photoionization_heating + KI_heating - recombination_cooling - KI_cooling - ion_ff_cooling) / state.rho;
@@ -150,10 +150,10 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	jac.zero();
 
 	jac(1, 1) = (collisional_ionization_term - recombination_term) / n_e_eff;
-	jac(1, 2) = (photoionization_term + collisional_ionization_term) / n_HI;
+	jac(1, 2) = (photoionization_term * frac + collisional_ionization_term) / n_HI;
 	jac(1, 3) = -recombination_term / n_HII_eff;
 	jac(1, net_ienuc) = 0.0_rt;
-	jac(1, 5) = photoionization_term / n_gamma;
+	jac(1, 5) = photoionization_term * frac / n_gamma;
 	jac(1, 6) = 0.0_rt;
 
 	jac(2, 1) = -jac(1, 1);
