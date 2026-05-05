@@ -117,6 +117,50 @@ void RadSystem<StromgrenSphere>::SetRadEnergySource(array_t &radEnergy, const am
 	});
 }
 
+// Numerically integrate dR/dt = (Q - 4*pi*R^3*alpha_B*n_HI0^2/3) / (Q/c + 4*pi*R^2*n_HI0)
+// Integrates forward by `dt_target` starting from `R0` using RK4 with step-doubling.
+// Aborts the run if convergence is not reached within allowed iterations.
+static amrex::Real integrate_radius(amrex::Real dt_target, amrex::Real Q, amrex::Real alpha_B, amrex::Real n_HI0,
+								   amrex::Real c_light, amrex::Real R0, amrex::Real r_s_est)
+{
+	if (dt_target <= 0.0_rt) return R0;
+
+	auto rhs = [&](amrex::Real R) -> amrex::Real {
+		const amrex::Real num = Q - (4.0_rt * M_PI * R * R * R * alpha_B * n_HI0 * n_HI0) / 3.0_rt;
+		const amrex::Real den = Q / c_light + 4.0_rt * M_PI * R * R * n_HI0;
+		return num / den;
+	};
+
+	int N = 256;
+	const int max_iters = 10;
+	const amrex::Real tol = 1e-6_rt * std::max(r_s_est, 1.0_rt);
+	amrex::Real R_prev = R0;
+
+	for (int iter = 0; iter < max_iters; ++iter) {
+		const amrex::Real dt = dt_target / static_cast<amrex::Real>(N);
+		amrex::Real R = R0;
+
+		for (int step = 0; step < N; ++step) {
+			const amrex::Real k1 = rhs(R);
+			const amrex::Real k2 = rhs(R + 0.5_rt * dt * k1);
+			const amrex::Real k3 = rhs(R + 0.5_rt * dt * k2);
+			const amrex::Real k4 = rhs(R + dt * k3);
+			R += (dt / 6.0_rt) * (k1 + 2.0_rt * k2 + 2.0_rt * k3 + k4);
+			if (R < 0.0_rt) R = 0.0_rt;
+		}
+
+		if (iter > 0 && std::abs(R - R_prev) < tol) {
+			return R;
+		}
+		R_prev = R;
+		N *= 2;
+	}
+
+	amrex::Abort("integrate_radius failed to converge within max_iters for dt=" + std::to_string(dt_target));
+	return R_prev; // unreachable
+}
+
+
 template <> struct SimulationData<StromgrenSphere> {
 	amrex::Real small_temp;
 	amrex::Real small_dens;
@@ -131,6 +175,9 @@ template <> struct SimulationData<StromgrenSphere> {
 	amrex::Vector<amrex::Real> r50_vec_;
 	amrex::Vector<amrex::Real> r16_vec_;
 	amrex::Vector<amrex::Real> r84_vec_;
+	amrex::Vector<amrex::Real> r_analytical_vec_;
+	amrex::Real r_analytical_last_t;
+	amrex::Real r_analytical_last_R;
 	std::ofstream output_file_;
 };
 
@@ -164,10 +211,13 @@ template <> void QuokkaSimulation<StromgrenSphere>::preCalculateInitialCondition
 
 	eos_init(userData_.small_temp, userData_.small_dens);
 	network_init();
+
+	userData_.r_analytical_last_t = 0.0_rt;
+	userData_.r_analytical_last_R = 0.0_rt;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		std::string filename = "stromgren_sphere_radii.csv";
 		userData_.output_file_.open(filename);
-		userData_.output_file_ << "time,r16,r50,r84\n";
+		userData_.output_file_ << "time,r16,r50,r84,r_analytical\n";
 	}
 }
 
@@ -378,13 +428,36 @@ template <> void QuokkaSimulation<StromgrenSphere>::computeAfterTimestep()
 	amrex::ParallelDescriptor::Bcast(&r50, 1, amrex::ParallelDescriptor::IOProcessorNumber());
 	amrex::ParallelDescriptor::Bcast(&r84, 1, amrex::ParallelDescriptor::IOProcessorNumber());
 
+	amrex::Real r_analytical = std::numeric_limits<amrex::Real>::quiet_NaN();
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		const amrex::Real n_HI0 = userData_.primary_species_2;
+		const amrex::Real alpha_B = 2.6e-13;
+		const amrex::Real r_s =
+			std::pow((3.0_rt * userData_.Q) / (4.0_rt * M_PI * alpha_B * n_HI0 * n_HI0), 1.0_rt / 3.0_rt);
+
+		amrex::Real dt = tNew_[lev] - userData_.r_analytical_last_t;
+		if (dt < 0.0_rt) {
+			// time went backwards or was reset; recompute from t=0
+			userData_.r_analytical_last_t = 0.0_rt;
+			userData_.r_analytical_last_R = 0.0_rt;
+			dt = tNew_[lev];
+		}
+		const amrex::Real R0 = userData_.r_analytical_last_R;
+		const amrex::Real r_new = integrate_radius(dt, userData_.Q, alpha_B, n_HI0, C::c_light, R0, r_s);
+		userData_.r_analytical_last_t = tNew_[lev];
+		userData_.r_analytical_last_R = r_new;
+		r_analytical = r_new;
+	}
+	amrex::ParallelDescriptor::Bcast(&r_analytical, 1, amrex::ParallelDescriptor::IOProcessorNumber());
+
 	userData_.t_vec_.push_back(tNew_[lev]);
 	userData_.r16_vec_.push_back(r16);
 	userData_.r50_vec_.push_back(r50);
 	userData_.r84_vec_.push_back(r84);
+	userData_.r_analytical_vec_.push_back(r_analytical);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		userData_.output_file_ << tNew_[lev] << ',' << r16 << ',' << r50 << ',' << r84 << '\n';
+			userData_.output_file_ << tNew_[lev] << ',' << r16 << ',' << r50 << ',' << r84 << ',' << r_analytical << '\n';
 	}
 }
 
@@ -454,7 +527,8 @@ auto problem_main() -> int
 				const amrex::Real r50_numerical = sim.userData_.r50_vec_[i];
 				const amrex::Real r16_numerical = sim.userData_.r16_vec_[i];
 				const amrex::Real r84_numerical = sim.userData_.r84_vec_[i];
-				const amrex::Real analytical_radius = r_s * std::pow(1.0_rt - std::exp(-sim.userData_.t_vec_[i] / t_rec), 1.0_rt / 3.0_rt);
+				// Use radius computed and stored at each timestep in computeAfterTimestep()
+				const amrex::Real analytical_radius = sim.userData_.r_analytical_vec_[i];
 				const amrex::Real upper_bound = analytical_radius + error_tol;
 				const amrex::Real lower_bound = analytical_radius - error_tol;
 				if (((r84_numerical > upper_bound) || (r16_numerical < lower_bound)) && (analytical_radius > r_trunc)) {
