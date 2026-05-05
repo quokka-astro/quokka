@@ -88,7 +88,13 @@ struct CaseResult {
 };
 
 // reconstruct the active case metadata for mid-run snapshot capture
-auto activeCaseConfig() -> CaseConfig { return {g_active_case_tag, g_active_case_label, g_initial_dust_density, g_initial_dust_density / rho_gas0}; }
+auto activeCaseConfig() -> CaseConfig
+{
+	return {.tag_ = g_active_case_tag,
+		.label_ = g_active_case_label,
+		.dust_density0_ = g_initial_dust_density,
+		.mu0_ = g_initial_dust_density / rho_gas0};
+}
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto vectorPotentialAz(double x, double y) -> double
 {
@@ -172,9 +178,7 @@ auto detectShockPosition(const ProfileData &profile) -> double
 			break;
 		}
 		const double jump = std::abs(profile.rho_g_[i + 1] - profile.rho_g_[i]);
-		if (jump > max_jump) {
-			max_jump = jump;
-		}
+		max_jump = std::max(jump, max_jump);
 	}
 
 	double shock_y = 0.0;
