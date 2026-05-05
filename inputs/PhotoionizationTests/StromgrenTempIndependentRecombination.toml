@@ -41,3 +41,4 @@ network.recombination_switch = 1
 network.recombination_temperature_dependent = 0
 network.energy_switch = 0
 network.collisional_ionization_switch = 0
+network.assume_sharp_ionization_front = 1

@@ -28,4 +28,4 @@ KI_cooling_switch                       int        1
 ion_ff_cooling_switch                   int        1
 
 # Assume a cell with ionization fraction x has a fraction x of its volume fully ionized 
-assume_sharp_ionization_front           int        1
+assume_sharp_ionization_front           int        0
