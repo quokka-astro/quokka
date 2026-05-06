@@ -71,7 +71,7 @@ Notes:
 - `Radiation + particles` is exercised by `ParticleRadiation` and `GravRadParticle3D`.
 - `Cooling + particles` is exercised by `ParticleSF`, `TallBoxSf`, `RandomBlast`, and `DiskGalaxy` through their input files.
 - `Hydro + dust` is exercised by the dust dynamics problems `DustAdvection*`, `DustDamping*`, `DustSoundwave`, and `DustyShock`.
-- `MHD + dust` is marked untested: the drag implementation contains MHD-aware code paths, but there is no in-tree problem that enables both `is_mhd_enabled` and `is_dust_enabled`.
+- `MHD + dust` is exercised by charged-dust and dust-MHD problems including `DustDampedGyromotion`, `DustDampingMHDZeroB`, `DustHallPedersenDrift`, `DustLorentzShock`, `DustMagnetizedRDI`, `DustyAlfvenWave`, and `DustyOrszagTang`.
 
 
 ## Cell-centred state vector layout
