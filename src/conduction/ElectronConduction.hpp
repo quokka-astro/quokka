@@ -31,7 +31,7 @@ struct ElectronConductionParams {
 	amrex::Real flux_limiter_phi = 0.1;
 	amrex::Real saturation_factor = 5.0; // refer to equation 8 of Cowee & McKee 1977
 	amrex::Real min_temperature = 0.0;   // default value will be overwritten by tempFloor_ during initialization
-	int eos_flag = 1;	     // 1 == use quokka::EOS; 0 == use resampled cooling
+	int eos_flag = 1;		     // 1 == use quokka::EOS; 0 == use resampled cooling
 };
 
 template <typename problem_t> class ElectronConduction
@@ -79,9 +79,9 @@ template <typename problem_t> class ElectronConduction
 		auto saturated_flux_arr = saturated_flux.arrays();
 		amrex::IntVect ng = amrex::IntVect(AMREX_D_DECL(2, 2, 2));
 		std::optional<decltype(tables.const_tables())> tables_dev;
-		if(params.eos_flag == 0) {
+		if (params.eos_flag == 0) {
 			tables_dev = tables.const_tables();
-		} else if(params.eos_flag != 0 && params.eos_flag != 1) {
+		} else if (params.eos_flag != 0 && params.eos_flag != 1) {
 			amrex::Abort("Invalid eos_flag value in ElectronConduction. Must be 0 (resampled cooling) or 1 (quokka::EOS).");
 		}
 
