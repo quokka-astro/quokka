@@ -37,3 +37,22 @@ mpirun --use-hwthread-cpus -np $NPROC $BUILD_DIR/src/problems/HydroBlast3D/Hydro
 old_plotfile=`ls -1drt plt*.old.* | head -1`
 plotfile=${old_plotfile%.old.*}
 $PLOTFILETOOLS_DIR/fcompare.gnu.ex $plotfile $old_plotfile
+
+# [default amr.plot_nfiles test] verify that -1 means one binary file per MPI rank
+nfiles_restart_plt_actual=`ls -1 $plotfile/Level_0/Cell_D_* | wc -l | tr -d ' '`
+if [ "$nfiles_restart_plt_actual" = "$NPROC" ]; then
+    echo "default amr.plot_nfiles working as expected."
+else
+    echo "TEST FAILED: Default number of binary cell data files in plotfiles should match MPI ranks!"
+    exit 1
+fi
+
+# [default amr.checkpoint_nfiles test] verify that -1 means one binary file per MPI rank
+chkfile=last_chk
+nfiles_restart_chk_actual=`ls -1 $chkfile/Level_0/Cell_D_* | wc -l | tr -d ' '`
+if [ "$nfiles_restart_chk_actual" = "$NPROC" ]; then
+    echo "default amr.checkpoint_nfiles working as expected."
+else
+    echo "TEST FAILED: Default number of binary cell data files in checkpoints should match MPI ranks!"
+    exit 1
+fi
