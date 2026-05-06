@@ -209,6 +209,14 @@ if [ ${#MAKEBENCH_JOBS[@]} -gt 0 ] && [ -n "$MAKEBENCH_BRANCH" ]; then
     SOURCE_BRANCH_ARGS=(--source_branch "$MAKEBENCH_BRANCH")
 fi
 
+RUN_INI_FILE="${TARGET}/quokka/regression/quokka-tests.ini"
+RUN_SOURCE_BRANCH_ARGS=()
+if [ ${#MAKEBENCH_JOBS[@]} -eq 0 ] && [ -n "$MAKEBENCH_BRANCH" ]; then
+    RUN_INI_FILE="/tmp/tmp-quokka-tests-run.ini"
+    wget "https://raw.githubusercontent.com/quokka-astro/quokka/refs/heads/${MAKEBENCH_BRANCH}/regression/quokka-tests.ini" -O "$RUN_INI_FILE"
+    RUN_SOURCE_BRANCH_ARGS=(--source-branch "$MAKEBENCH_BRANCH")
+fi
+
 # 4 hours timeout.  Capture the exit code instead of exiting immediately so
 # that we can always attempt to push committed results afterwards.
 set +e
@@ -244,9 +252,10 @@ else
         --bind $TARGET:$TARGET \
         --pwd $TARGET \
         $sif \
-        bash quokka2/scripts/bash/run-regression-tests.sh --ini-file ${TARGET}/quokka/regression/quokka-tests.ini \
+        bash quokka2/scripts/bash/run-regression-tests.sh --ini-file "$RUN_INI_FILE" \
         --ccache-dir ${TARGET}/ccache --source-dir ${TARGET}/quokka \
         --skip-gpu-wait \
+        "${RUN_SOURCE_BRANCH_ARGS[@]}" \
         "${RUN_TEST_ARGS[@]}"
 fi
 container_rc=$?

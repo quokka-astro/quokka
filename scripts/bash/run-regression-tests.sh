@@ -36,6 +36,7 @@ CCACHE_DIR="${CCACHE_DIR:-$DEFAULT_CCACHE_DIR}"
 SOURCE_DIR="${REGRESSION_SOURCE_DIR:-$DEFAULT_SOURCE_DIR}"
 SKIP_GPU_WAIT=0
 TEST_TARGETS=()
+SOURCE_BRANCH=""
 
 # WEB_DIR will be parsed from ini file
 WEB_DIR=""
@@ -54,6 +55,7 @@ Options:
   --ccache-dir PATH     Ccache directory (default: $DEFAULT_CCACHE_DIR)
   --source-dir PATH     Quokka source directory (default: $DEFAULT_SOURCE_DIR)
   --tests TEST [...]    Run only the named regression test target(s)
+  --source-branch BR    Check out this upstream branch before running tests
   --skip-gpu-wait       Skip the GPU occupancy check (use when the caller already checked)
   --help                Show this help message
 
@@ -106,6 +108,10 @@ parse_args() {
 				usage
 				exit 1
 			fi
+			;;
+		--source-branch)
+			SOURCE_BRANCH="$2"
+			shift 2
 			;;
 		--skip-gpu-wait)
 			SKIP_GPU_WAIT=1
@@ -222,6 +228,9 @@ run_regression_tests() {
 		regtest_args+=(--single_test "${TEST_TARGETS[0]}")
 	elif [ ${#TEST_TARGETS[@]} -gt 1 ]; then
 		regtest_args+=(--tests "${TEST_TARGETS[*]}")
+	fi
+	if [ -n "$SOURCE_BRANCH" ]; then
+		regtest_args+=(--source_branch "$SOURCE_BRANCH")
 	fi
 	regtest_args+=("$INI_FILE")
 
