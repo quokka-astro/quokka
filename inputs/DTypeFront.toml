@@ -2,7 +2,7 @@
 # Problem size and geometry
 # *****************************************************************
 geometry.prob_lo     =  0.0  0.0  0.0 
-geometry.prob_hi     =  2.1e22 2.1e22 2.1e22
+geometry.prob_hi     =  3.0e19 3.0e19 3.0e19
 quokka.bc = reflecting reflecting reflecting
 
 # *****************************************************************
@@ -20,11 +20,12 @@ do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
 
-stromgen.tend = 1.6e16
-stromgen.primary_species_1 = 1.0e-30
-stromgen.primary_species_2 = 1.0e-3
-stromgen.primary_species_3 = 1.0e-30
-stromgen.Q = 5e48
+stromgen.tend = 3.16e13
+stromgen.primary_species_1 = 1.0e-10
+stromgen.primary_species_2 = 139.9
+stromgen.primary_species_3 = 1.0e-10
+stromgen.Q = 4e46
+stromgen.temperature = 11
 
 photochemistry.enabled = 1
 integrator.use_number_densities = 1
@@ -33,12 +34,9 @@ integrator.jacobian = 0
 integrator.renormalize_abundances = 0
 integrator.subtract_internal_energy = 0
 integrator.X_reject_buffer = 1e100
+integrator.ode_max_steps = 1500000
 
-plotfile_interval = 500
-plotfile_prefix = StrmConstRecRSLA
+plotfile_interval = 10
+plotfile_prefix = DType
 
-network.recombination_switch = 1
-network.recombination_temperature_dependent = 0
-network.energy_switch = 0
-network.collisional_ionization_switch = 0
 network.assume_sharp_ionization_front = 1
