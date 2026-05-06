@@ -686,17 +686,17 @@ void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_
 			}
 			alpha = ComputeReciprocalStoppingTime(rho_g, rho_d, rel_vel_mag, cs);
 
-			amrex::Real lambda_max = 0.0;
+			amrex::Real timescale_max = 0.0;
 			for (int g = 0; g < nDustGroups_; ++g) {
 				amrex::Real const rate_mag = std::sqrt(alpha[g] * alpha[g] + omega_L[g] * omega_L[g]);
-				amrex::Real lambda = std::numeric_limits<amrex::Real>::max();
+				amrex::Real timescale = std::numeric_limits<amrex::Real>::max();
 				if (rate_mag > 0.0) {
-					lambda = 1.0 / rate_mag;
+					timescale = 1.0 / rate_mag;
 				}
-				lambda_max = amrex::max(lambda_max, lambda);
+				timescale_max = amrex::max(timescale_max, timescale);
 			}
 
-			if (dt_lev < lambda_max) {
+			if (dt_lev < timescale_max) {
 				gamma1 = 1.0;
 				gamma2 = 0.0;
 				beta1 = -0.5;
