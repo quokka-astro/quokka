@@ -199,10 +199,10 @@ AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeDustStageAffineOperato
 	DustStageAffineOperators ops;
 	Mat6 S;
 	Mat3 const I3 = Mat3::Identity();
-	Mat3 const block11 = I3 + (gamma1 * dt) * T;
-	Mat3 const block12 = (beta1 * dt) * T;
-	Mat3 const block21 = (beta2 * dt) * T;
-	Mat3 const block22 = I3 + (gamma2 * dt) * T;
+	Mat3 const block11 = I3 - (gamma1 * dt) * T;
+	Mat3 const block12 = -(beta1 * dt) * T;
+	Mat3 const block21 = -(beta2 * dt) * T;
+	Mat3 const block22 = I3 - (gamma2 * dt) * T;
 
 	for (int row = 0; row < 3; ++row) {
 		for (int col = 0; col < 3; ++col) {
@@ -226,10 +226,10 @@ AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeDustStageAffineOperato
 		for (int dir = 0; dir < 3; ++dir) {
 			rhs_q(dir) = T_e[dir];
 			rhs_q(dir + 3) = T_e[dir];
-			rhs_k1(dir) = gamma1 * dt * T_e[dir];
-			rhs_k1(dir + 3) = beta2 * dt * T_e[dir];
-			rhs_k2(dir) = beta1 * dt * T_e[dir];
-			rhs_k2(dir + 3) = gamma2 * dt * T_e[dir];
+			rhs_k1(dir) = -gamma1 * dt * T_e[dir];
+			rhs_k1(dir + 3) = -beta2 * dt * T_e[dir];
+			rhs_k2(dir) = -beta1 * dt * T_e[dir];
+			rhs_k2(dir + 3) = -gamma2 * dt * T_e[dir];
 		}
 
 		Vec6 sol_q;
@@ -663,7 +663,7 @@ void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_
 		amrex::Real const dt_lev = 2.0 * dt;
 		for (int g = 0; g < nDustGroups_; ++g) {
 			omega_L[g] = charge_to_mass_ratio[g] * B_mag;
-			q_n[g] = epsilon[g] * p_g_old - p_d_old[g];
+			q_n[g] = p_d_old[g] - epsilon[g] * p_g_old;
 		}
 
 		for (int iteration = 0; iteration < max_iterations; ++iteration) {
@@ -712,7 +712,7 @@ void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_
 
 			amrex::GpuArray<DustStageAffineOperators, nDustGroups_> ops;
 			for (int g = 0; g < nDustGroups_; ++g) {
-				Mat3 const T = alpha[g] * Mat3::Identity() - omega_L[g] * B_cross;
+				Mat3 const T = -alpha[g] * Mat3::Identity() + omega_L[g] * B_cross;
 				ops[g] = ComputeDustStageAffineOperators(T, epsilon[g], dt, gamma1, gamma2, beta1, beta2);
 			}
 
@@ -764,8 +764,8 @@ void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_
 				k1_d[g] = ops[g].W1 * q_n[g] + ops[g].X1 * k1_g + ops[g].Y1 * k2_g;
 				k2_d[g] = ops[g].W2 * q_n[g] + ops[g].X2 * k1_g + ops[g].Y2 * k2_g;
 
-				Vec3 const k_rel1 = epsilon[g] * k1_g - k1_d[g];
-				Vec3 const k_rel2 = epsilon[g] * k2_g - k2_d[g];
+				Vec3 const k_rel1 = k1_d[g] - epsilon[g] * k1_g;
+				Vec3 const k_rel2 = k2_d[g] - epsilon[g] * k2_g;
 				q1[g] = q_n[g] + dt * (gamma1 * k_rel1 + beta1 * k_rel2);
 				q2[g] = q_n[g] + dt * (beta2 * k_rel1 + gamma2 * k_rel2);
 			}
