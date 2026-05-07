@@ -1366,9 +1366,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(space_id != h5_error, ("Failed to get dataspace for " + dataset_name).c_str());
 
 				const int rank = H5Sget_simple_extent_ndims(space_id);
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(rank == static_cast<int>(expected_dims.size()),
-								 std::format("Unexpected rank for {}! (expected: {}, actual: {})", dataset_name,
-									     expected_dims.size(), rank));
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    rank == static_cast<int>(expected_dims.size()),
+				    std::format("Unexpected rank for {}! (expected: {}, actual: {})", dataset_name, expected_dims.size(), rank));
 
 				std::vector<hsize_t> dims(expected_dims.size());
 				status = H5Sget_simple_extent_dims(space_id, dims.data(), nullptr);
@@ -1376,10 +1376,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				H5Sclose(space_id);
 
 				for (std::size_t dim = 0; dim < expected_dims.size(); ++dim) {
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-					    dims[dim] == expected_dims[dim],
-					    std::format("Unexpected dimension {} for {}! (expected: {}, actual: {})", dim, dataset_name, expected_dims[dim],
-							dims[dim]));
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dims[dim] == expected_dims[dim],
+									 std::format("Unexpected dimension {} for {}! (expected: {}, actual: {})", dim,
+										     dataset_name, expected_dims[dim], dims[dim]));
 				}
 			};
 
