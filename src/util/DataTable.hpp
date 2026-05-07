@@ -1338,6 +1338,12 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			if (include_pe != nullptr) {
 				if (H5Aexists(metadata_group, "include_pe") > 0) {
 					attr_id = H5Aopen(metadata_group, "include_pe", H5P_DEFAULT);
+					const hid_t attr_space = H5Aget_space(attr_id);
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(attr_space != h5_error, "Failed to get include_pe dataspace!");
+					const hssize_t attr_npoints = H5Sget_simple_extent_npoints(attr_space);
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(attr_npoints == 1, "include_pe attribute must be scalar!");
+					H5Sclose(attr_space);
+
 					const hid_t attr_type = H5Aget_type(attr_id);
 					if (H5Tget_class(attr_type) == H5T_INTEGER) {
 						status = H5Aread(attr_id, H5T_NATIVE_INT, &include_pe_value);
