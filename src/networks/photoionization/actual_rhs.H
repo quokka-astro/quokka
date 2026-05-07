@@ -43,7 +43,8 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_KI_heating_coefficient(Real T) -> Re
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_KI_cooling_coefficient(Real T) -> Real
 {
-	return 2.0e-26 * (1.0e7 * std::exp(-114800.0 / (T + 1.0e3)) + 14 * std::sqrt(T) * std::exp(-92.0 / T));
+	// Fix KI cooling function based on Vazquez-Semadeni et al. (2007).
+	return 2.0e-26 * (1.0e7 * std::exp(-118400.0 / (T + 1.0e3)) + 1.4e-2 * std::sqrt(T) * std::exp(-92.0 / T));
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_recombination_cooling_coefficient(Real T) -> Real
