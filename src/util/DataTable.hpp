@@ -1361,11 +1361,35 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			H5Gclose(metadata_group);
 
 			const std::string prefix = (is_fast_log == 1) ? "fast_log_" : "";
+			auto validateDatasetDims = [&](hid_t dataset_id, const std::vector<hsize_t> &expected_dims, const std::string &dataset_name) {
+				const hid_t space_id = H5Dget_space(dataset_id);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(space_id != h5_error, ("Failed to get dataspace for " + dataset_name).c_str());
+
+				const int rank = H5Sget_simple_extent_ndims(space_id);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(rank == static_cast<int>(expected_dims.size()),
+								 std::format("Unexpected rank for {}! (expected: {}, actual: {})", dataset_name,
+									     expected_dims.size(), rank));
+
+				std::vector<hsize_t> dims(expected_dims.size());
+				status = H5Sget_simple_extent_dims(space_id, dims.data(), nullptr);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read dataspace for " + dataset_name).c_str());
+				H5Sclose(space_id);
+
+				for (std::size_t dim = 0; dim < expected_dims.size(); ++dim) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    dims[dim] == expected_dims[dim],
+					    std::format("Unexpected dimension {} for {}! (expected: {}, actual: {})", dim, dataset_name, expected_dims[dim],
+							dims[dim]));
+				}
+			};
+
 			for (int dim = 0; dim < Ndim; ++dim) {
 				const std::string coord_dataset = "/grids/" + prefix + coord_names[dim];
 				std::vector<double> coord_data(static_cast<std::size_t>(sizes[dim]));
 
 				dset_id = H5Dopen2(file_id, coord_dataset.c_str(), H5P_DEFAULT);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dset_id != h5_error, ("Failed to open HDF5 dataset: " + coord_dataset).c_str());
+				validateDatasetDims(dset_id, {static_cast<hsize_t>(sizes[dim])}, coord_dataset);
 				status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, coord_data.data());
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + coord_dataset + " dataset!").c_str());
 				H5Dclose(dset_id);
@@ -1377,6 +1401,11 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			std::vector<double> temp_data(flatDataSize(sizes));
 			dset_id = H5Dopen2(file_id, dataset_path.c_str(), H5P_DEFAULT);
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dset_id != h5_error, ("Failed to open HDF5 dataset: " + dataset_path).c_str());
+			std::vector<hsize_t> expected_data_dims{static_cast<hsize_t>(Nout)};
+			for (int dim = 0; dim < Ndim; ++dim) {
+				expected_data_dims.push_back(static_cast<hsize_t>(sizes[dim]));
+			}
+			validateDatasetDims(dset_id, expected_data_dims, dataset_path);
 			status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data.data());
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read HDF5 dataset: " + dataset_path).c_str());
 			H5Dclose(dset_id);
