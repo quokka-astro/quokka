@@ -13,6 +13,6 @@ if ! command -v cargo >/dev/null 2>&1; then
     exit 1
 fi
 
-cargo install mdbook --version "${MDBOOK_VERSION}"
-cargo install mdbook-bib --version "${MDBOOK_BIB_VERSION}"
-cargo install mdbook-plantuml --version "${MDBOOK_PLANTUML_VERSION}"
+cargo install mdbook --locked --version "${MDBOOK_VERSION}"
+cargo install mdbook-bib --locked --version "${MDBOOK_BIB_VERSION}"
+cargo install mdbook-plantuml --locked --version "${MDBOOK_PLANTUML_VERSION}"

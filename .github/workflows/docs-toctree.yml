@@ -14,7 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends rustc cargo
       - name: Set up Python
         uses: actions/setup-python@v6.2.0
         with:
