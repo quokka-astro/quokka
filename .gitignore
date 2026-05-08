@@ -24,7 +24,8 @@ Backtrace.*
 *.hdf5
 
 # Agora galaxy uncompressed data
-/extern/agora_data/vcirc.dat
+/extern/agora_data/vcirc_with_constant_halo.csv
+/extern/agora_data/._vcirc_with_constant_halo.csv
 /extern/agora_data/AgoraGalaxy_particles_LOW.txt
 
 # Singularity Docker images
