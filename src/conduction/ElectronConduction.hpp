@@ -174,8 +174,6 @@ template <typename problem_t> class ElectronConduction
 		auto const &flux_z_const = heat_flux[2].const_arrays();
 #endif
 
-		//Insert incrementFluxRegister here 
-		incrementFluxRegisters(fr_as_crse, fr_as_fine, heat_flux, lev, dt_lev);
 
 		amrex::ParallelFor(state, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};

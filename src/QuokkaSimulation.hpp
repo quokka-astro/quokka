@@ -1069,14 +1069,21 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 										     .min_temperature = tempFloor_,
 										     .eos_flag = eosFlagForElectronConduction_};
 		quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, resampledTables_, heat_flux);
-		if (do_reflux) {
-			// Pointers to your registers
-			amrex::FluxRegister *fr_as_crse = getFluxReg(lev);
-			amrex::FluxRegister *fr_as_fine = getFluxReg(lev - 1);
-
-			// Record fluxes applied to the state
-			this->incrementFluxRegisters(fr_as_crse, fr_as_fine, heat_flux, lev, dt);
-}
+		
+		amrex::FluxRegister *fr_as_crse = nullptr;
+	    amrex::FluxRegister *fr_as_fine = nullptr;
+	
+	if (do_reflux != 0) {
+		if (lev < finestLevel()) {
+			fr_as_crse = flux_reg_[lev + 1].get();
+			if (fr_as_crse != nullptr) {
+				fr_as_crse->setVal(0.0);
+			}}
+		if (lev > 0) {
+			fr_as_fine = flux_reg_[lev].get();
+		}
+	}		
+		incrementFluxRegisters(fr_as_crse, fr_as_fine, heat_flux, lev, dt);
 	}
 
 	auto const applyUserSources = [&]() {
