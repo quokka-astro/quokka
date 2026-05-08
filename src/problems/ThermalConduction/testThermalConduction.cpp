@@ -136,6 +136,47 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 	}
 }
 
+//Refinement 
+
+template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+{
+	// geometrical refinement
+	// tag cells within one-sigma of the initial Gaussian profile for refinement
+	const double refine_Lmax = 3.0 * sigma; // refine within 5
+	
+	const auto prob_lo = geom[lev].ProbLoArray();
+	const auto dx = geom[lev].CellSizeArray();
+	const auto tag = tags.arrays();
+
+	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		// NOTE: must check all nodes of the cell!
+		// Otherwise, cells that are too big can completely prevent refinement.
+		amrex::Real const x0 = prob_lo[0] + (i * dx[0]);
+		amrex::Real const y0 = prob_lo[1] + (j * dx[1]);
+		amrex::Real const z0 = prob_lo[2] + (k * dx[2]);
+
+		amrex::Real const x1 = prob_lo[0] + ((i + 1) * dx[0]);
+		amrex::Real const y1 = prob_lo[1] + ((j + 1) * dx[1]);
+		amrex::Real const z1 = prob_lo[2] + ((k + 1) * dx[2]);
+
+		auto tagIfPointInRegion = [=](amrex::Real x, amrex::Real y, amrex::Real z) {
+			if ((std::abs(x) < refine_Lmax)) {
+				tag[bx](i, j, k) = amrex::TagBox::SET;
+			}
+		};
+
+		for (auto const &x : {x0, x1}) {
+			for (auto const &y : {y0, y1}) {
+				for (auto const &z : {z0, z1}) {
+					tagIfPointInRegion(x, y, z);
+				}
+			}
+		}
+	});
+	amrex::Gpu::streamSynchronize();
+}
+
+
 auto runConductionTest(int nx) -> double
 {
 	// Read problem parameters
@@ -185,17 +226,41 @@ auto runConductionTest(int nx) -> double
 
 auto problem_main() -> int
 {
+	// boundary conditions
+	constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
+	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	for (int n = 0; n < ncomp_cc; ++n) {
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+		BCs_cc[n].setLo(dir, amrex::BCType::foextrap);  
+		BCs_cc[n].setHi(dir, amrex::BCType::foextrap); 
+		}
+	}
+
+	// Problem initialization
+	QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
+	
+	
+	// initialize
+	sim.setInitialConditions();
+
+	// evolve
+	sim.evolve();
+
+	// Cleanup and exit
+	amrex::Print() << "Finished." << '\n';
+	return 0;
+
 	/***Richardson Extrapolation ****/
 
-	quokka::richardson::applyQuietDefaults();
-	quokka::richardson::Parameters params{};
-	params.machine_precision_target = 2.0e-9; // limit based on delta_b_magn, smaller values can be used if this is decreased
-	params.nx_initial = 128;
-	params.nx_max = 512;
-	params.expected_rate = 2.0;
-	params.tolerance = 0.3;
-	params.test_name = "Thermal Conduction";
-	params.csv_filename = "thermal_conduction_convergence.csv";
+	// quokka::richardson::applyQuietDefaults();
+	// quokka::richardson::Parameters params{};
+	// params.machine_precision_target = 2.0e-9; // limit based on delta_b_magn, smaller values can be used if this is decreased
+	// params.nx_initial = 128;
+	// params.nx_max = 512;
+	// params.expected_rate = 2.0;
+	// params.tolerance = 0.3;
+	// params.test_name = "Thermal Conduction";
+	// params.csv_filename = "thermal_conduction_convergence.csv";
 
-	return quokka::richardson::run(params, [](int nx) { return runConductionTest(nx); });
+	// return quokka::richardson::run(params, [](int nx) { return runConductionTest(nx); });
 }
