@@ -168,7 +168,7 @@ auto problem_main() -> int
 	pp.query("refine_half_domain", refine_half_domain);
 	double boost_vel_x = NAN;
 	pp.query("boost_vel_x", boost_vel_x);
-	AMREX_ASSERT_WITH_MESSAGE(std::isfinite(boost_vel_x), "boost_vel_x must be set in the input file");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::isfinite(boost_vel_x), "boost_vel_x must be set in the input file");
 
 	// Problem initialization
 	QuokkaSimulation<SinkProblem> sim;
