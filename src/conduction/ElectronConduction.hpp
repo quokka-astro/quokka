@@ -204,8 +204,8 @@ template <typename problem_t> class ElectronConduction
 #endif
 
 			amrex::Real Eint_new = Eint_old - dt * div_flux;
-			if(i==126){
-				amrex::Print() << "Eint_old: " << Eint_old << ", div_flux: " << div_flux << ", Eint_new: " << Eint_new << "\n";
+			if(i==191 or i==192 or i==193 or i==194) {
+				amrex::Print() << "i: " << i << ", Eint_old: " << Eint_old << ", div_flux: " << div_flux << ", Eint_new: " << Eint_new << "\n";
 			}
 
 			state_out[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Eint_new + Ekin + Emag;
