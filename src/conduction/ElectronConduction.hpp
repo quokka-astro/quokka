@@ -38,7 +38,8 @@ template <typename problem_t> class ElectronConduction
 {
       public:
 	static void ComputeExplicit(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Geometry const &geom,
-				    amrex::Real dt, ElectronConductionParams const &params, const quokka::ResampledCooling::resampled_tables &tables)
+				    amrex::Real dt, ElectronConductionParams const &params, const quokka::ResampledCooling::resampled_tables &tables,
+				std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
 	{
 		static_assert(Physics_Traits<problem_t>::is_hydro_enabled, "Electron conduction requires hydro to be enabled.");
 
@@ -120,12 +121,12 @@ template <typename problem_t> class ElectronConduction
 			saturated_flux_arr[bx](i, j, k) = qsat;
 		});
 
-		std::array<amrex::MultiFab, AMREX_SPACEDIM> heat_flux;
-		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-			amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
-			heat_flux[idim].define(ba_face, state.DistributionMap(), 1, 0);
-			heat_flux[idim].setVal(0.0);
-		}
+		// std::array<amrex::MultiFab, AMREX_SPACEDIM> heat_flux;
+		// for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+		// 	amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
+		// 	heat_flux[idim].define(ba_face, state.DistributionMap(), 1, 0);
+		// 	heat_flux[idim].setVal(0.0);
+		// }
 
 		auto const &temp = temperature.const_arrays();
 		auto const &kappa = conductivity.const_arrays();
@@ -172,6 +173,9 @@ template <typename problem_t> class ElectronConduction
 #if AMREX_SPACEDIM == 3
 		auto const &flux_z_const = heat_flux[2].const_arrays();
 #endif
+
+		//Insert incrementFluxRegister here 
+		incrementFluxRegisters(fr_as_crse, fr_as_fine, heat_flux, lev, dt_lev);
 
 		amrex::ParallelFor(state, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
