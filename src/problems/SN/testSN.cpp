@@ -297,9 +297,8 @@ auto problem_main() -> int
 	std::vector<double> x(nx);
 	std::vector<double> vx(nx);
 
-	// plot the temperature and vx profile along the x axis at the center
+	// extract the temperature and vx profile along the x axis at the center
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-#ifdef HAVE_PYTHON
 		for (int i = 0; i < nx; ++i) {
 			const double rho = values.at(HydroSystem<SNProblem>::density_index)[i];
 			const double Eint = values.at(HydroSystem<SNProblem>::internalEnergy_index)[i];
@@ -308,7 +307,6 @@ auto problem_main() -> int
 			x[i] = position[i];
 			vx[i] = vx_val;
 		}
-#endif
 	}
 
 	QuokkaSimulation<SNProblem> sim2;
@@ -339,9 +337,8 @@ auto problem_main() -> int
 
 	int status = 0;
 
-	// plot the temperature and vx profile along the x axis at the center
+	// validate Galilean invariance and optionally plot profiles
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-#ifdef HAVE_PYTHON
 		double v_value_norm = 0.0;
 		double v_err_norm = 0.0;
 		double T_value_norm = 0.0;
@@ -383,6 +380,7 @@ auto problem_main() -> int
 			status = 1;
 		}
 
+#ifdef HAVE_PYTHON
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(x, T, {{"label", "base"}, {"color", "C0"}});
 		matplotlibcpp::plot(x2, T2, {{"label", "boosted"}, {"color", "C1"}, {"linestyle", "--"}});
