@@ -365,7 +365,7 @@ auto problem_main() -> int
 			T2[index_] = Eint / (rho * CV); // simplified, but good enough for the purpose
 			x2[i] = position2[i] - drift;
 			vx2_rel[index_] = vx_val - boost_vel_x;
-			v_value_norm += std::abs(vx_val); // use raw vx to account for the large boost velocity
+			v_value_norm += std::abs(vx[index_]); // normalize by rest-frame velocity to avoid masking errors
 			v_err_norm += std::abs(vx2_rel[index_] - vx[index_]);
 			T_value_norm += std::abs(T[index_]);
 			T_err_norm += std::abs(T2[index_] - T[index_]);
@@ -401,6 +401,10 @@ auto problem_main() -> int
 		matplotlibcpp::save(std::format("sn_velocity_profile_n0_{:.1g}.pdf", n_amb, boost_vel_x));
 #endif
 	}
+
+	// Synchronize status across all MPI ranks (only IO processor sets these)
+	amrex::ParallelDescriptor::ReduceIntMax(status);
+	amrex::ParallelDescriptor::ReduceIntMax(scalar_validation_status);
 
 	// Return combined status (Galilean invariance + scalar validation)
 	return status + scalar_validation_status;
