@@ -526,7 +526,10 @@ PROBLEMS=()
 INPUT_FILE=""
 ENABLE_FPE=0
 FILTER_REGEX=""
-SOURCE_FILE="${HOME}/.config/quokka/quokka.rc"
+SOURCE_FILE=""
+if [[ "$COMMAND" == "config" || "$COMMAND" == "build" || "$COMMAND" == "buildrun" || "$COMMAND" == "run" || "$COMMAND" == "target" ]]; then
+	[[ -f "${HOME}/.config/quokka/quokka.rc" ]] && SOURCE_FILE="${HOME}/.config/quokka/quokka.rc"
+fi
 DELETE_BUILD_DIR=0
 JOBS=8
 CMAKE_DEFINES=()
