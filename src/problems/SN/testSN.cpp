@@ -402,10 +402,6 @@ auto problem_main() -> int
 #endif
 	}
 
-	// Synchronize status across all MPI ranks (only IO processor sets these)
-	amrex::ParallelDescriptor::ReduceIntMax(status);
-	amrex::ParallelDescriptor::ReduceIntMax(scalar_validation_status);
-
 	// Return combined status (Galilean invariance + scalar validation)
 	return status + scalar_validation_status;
 }
