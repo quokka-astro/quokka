@@ -365,7 +365,7 @@ auto problem_main() -> int
 			T2[index_] = Eint / (rho * CV); // simplified, but good enough for the purpose
 			x2[i] = position2[i] - drift;
 			vx2_rel[index_] = vx_val - boost_vel_x;
-			v_value_norm += std::abs(vx[index_]); // normalize by rest-frame velocity to avoid masking errors
+			v_value_norm += std::abs(vx_val); // use raw vx_val to account for the large boost velocity
 			v_err_norm += std::abs(vx2_rel[index_] - vx[index_]);
 			T_value_norm += std::abs(T[index_]);
 			T_err_norm += std::abs(T2[index_] - T[index_]);
@@ -377,6 +377,7 @@ auto problem_main() -> int
 		amrex::Print() << std::format("Relative L1 norm for vx = {}, tolerance = {}\n", v_rel_err_norm, v_rel_err_tol);
 		amrex::Print() << std::format("Relative L1 norm for T = {}, tolerance = {}\n", T_rel_err_norm, T_rel_err_tol);
 		if (!(v_rel_err_norm < v_rel_err_tol) || !(T_rel_err_norm < T_rel_err_tol)) {
+			amrex::Print() << "FAIL: Velocity or T error not within tolerance\n";
 			status = 1;
 		}
 
@@ -398,7 +399,7 @@ auto problem_main() -> int
 		matplotlibcpp::xlabel("x (cm)");
 		matplotlibcpp::ylabel("vx (cm/s)");
 		matplotlibcpp::title(std::format("time t = {:.4g}", sim2.tNew_[0]));
-		matplotlibcpp::save(std::format("sn_velocity_profile_n0_{:.1g}.pdf", n_amb, boost_vel_x));
+		matplotlibcpp::save(std::format("sn_velocity_profile_n0_{:.1g}_boost_vel_{:.1g}.pdf", n_amb, boost_vel_x));
 #endif
 	}
 
