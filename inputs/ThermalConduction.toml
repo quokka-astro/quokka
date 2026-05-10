@@ -1,9 +1,9 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-geometry.prob_lo = [-1.5428e18, -1.5428e18, -1.5428e18]
-geometry.prob_hi = [1.5428e18, 1.5428e18, 1.5428e18]
-quokka.bc = ["foextrap", "foextrap", "foextrap"]
+geometry.prob_lo = [-1.5428e18]
+geometry.prob_hi = [1.5428e18]
+quokka.bc = ["foextrap"]
 
 # *****************************************************************
 # VERBOSITY
@@ -13,7 +13,7 @@ amr.v = 1      # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell = [128, 128, 128]
+amr.n_cell = [128, 1, 1]
 amr.max_level = 0  # number of levels = max_level + 1
 amr.blocking_factor = 8  # grid size must be divisible by this
 
