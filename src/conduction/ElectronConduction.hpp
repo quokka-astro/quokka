@@ -40,7 +40,8 @@ template <typename problem_t> class ElectronConduction
 	static void ComputeExplicit(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Geometry const &geom,
 				    amrex::Real dt, ElectronConductionParams const &params, const quokka::ResampledCooling::resampled_tables &tables,
 				std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
-	{
+	{ 	
+				
 		static_assert(Physics_Traits<problem_t>::is_hydro_enabled, "Electron conduction requires hydro to be enabled.");
 
 		if ((dt <= 0.0) || (params.conductivity_prefactor <= 0.0)) {
@@ -78,7 +79,7 @@ template <typename problem_t> class ElectronConduction
 		auto temperature_arr = temperature.arrays();
 		auto conductivity_arr = conductivity.arrays();
 		auto saturated_flux_arr = saturated_flux.arrays();
-		amrex::IntVect ng = amrex::IntVect(AMREX_D_DECL(2, 2, 2));
+		amrex::IntVect ng = amrex::IntVect(AMREX_D_DECL(state.nGrow(), state.nGrow(), state.nGrow()));
 		std::optional<decltype(tables.const_tables())> tables_dev;
 		if (params.eos_flag == 0) {
 			tables_dev = tables.const_tables();
@@ -111,7 +112,7 @@ template <typename problem_t> class ElectronConduction
 				amrex::Real Pgas = quokka::EOS<problem_t>::ComputePressure(rho, Eint);
 				cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, Pgas);
 			}
-
+		
 			const amrex::Real Tuse = amrex::max(Tgas, t_min);
 			const amrex::Real kappa = params.conductivity_prefactor;
 			const amrex::Real qsat = amrex::max(saturation_factor * flux_limiter_phi * rho * cs * cs * cs, small);
@@ -120,13 +121,6 @@ template <typename problem_t> class ElectronConduction
 			conductivity_arr[bx](i, j, k) = kappa;
 			saturated_flux_arr[bx](i, j, k) = qsat;
 		});
-
-		// std::array<amrex::MultiFab, AMREX_SPACEDIM> heat_flux;
-		// for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		// 	amrex::BoxArray const ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
-		// 	heat_flux[idim].define(ba_face, state.DistributionMap(), 1, 0);
-		// 	heat_flux[idim].setVal(0.0);
-		// }
 
 		auto const &temp = temperature.const_arrays();
 		auto const &kappa = conductivity.const_arrays();
@@ -138,7 +132,7 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real q_sat_face = 0.5 * (qsat[bx](i, j, k) + qsat[bx](i - 1, j, k));
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
-			flux_x[bx](i, j, k) = q_classical / limiter;
+			flux_x[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index) = q_classical / limiter;
 		});
 
 #if AMREX_SPACEDIM >= 2
@@ -149,7 +143,7 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real q_sat_face = 0.5 * (qsat[bx](i, j, k) + qsat[bx](i, j - 1, k));
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
-			flux_y[bx](i, j, k) = q_classical / limiter;
+			flux_y[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index) = q_classical / limiter;
 		});
 #endif
 
@@ -161,7 +155,7 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real q_classical = -kappa_face * gradT;
 			const amrex::Real q_sat_face = 0.5 * (qsat[bx](i, j, k) + qsat[bx](i, j, k - 1));
 			const amrex::Real limiter = 1.0 + std::abs(q_classical) / amrex::max(q_sat_face, small);
-			flux_z[bx](i, j, k) = q_classical / limiter;
+			flux_z[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index) = q_classical / limiter;
 		});
 #endif
 
@@ -195,19 +189,15 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real Ekin = 0.5 * (px * px + py * py + pz * pz) / rho;
 			const amrex::Real Eint_old = HydroSystem<problem_t>::ComputeInternalEnergy(state_out[bx], i, j, k, &local_state_fc);
 			const amrex::Real Emag = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, &local_state_fc);
-			amrex::Real div_flux = (flux_x_const[bx](i + 1, j, k) - flux_x_const[bx](i, j, k)) / dx[0];
+			amrex::Real div_flux = (flux_x_const[bx](i + 1, j, k, HydroSystem<problem_t>::internalEnergy_index) - flux_x_const[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index)) / dx[0];
 #if AMREX_SPACEDIM >= 2
-			div_flux += (flux_y_const[bx](i, j + 1, k) - flux_y_const[bx](i, j, k)) / dx[1];
+			div_flux += (flux_y_const[bx](i, j + 1, k, HydroSystem<problem_t>::internalEnergy_index) - flux_y_const[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index)) / dx[1];
 #endif
 #if AMREX_SPACEDIM == 3
-			div_flux += (flux_z_const[bx](i, j, k + 1) - flux_z_const[bx](i, j, k)) / dx[2];
+			div_flux += (flux_z_const[bx](i, j, k + 1, HydroSystem<problem_t>::internalEnergy_index) - flux_z_const[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index)) / dx[2];
 #endif
 
 			amrex::Real Eint_new = Eint_old - dt * div_flux;
-			if(i==191 or i==192 or i==193 or i==194) {
-				amrex::Print() << "i: " << i << ", Eint_old: " << Eint_old << ", div_flux: " << div_flux << ", Eint_new: " << Eint_new << "\n";
-			}
-
 			state_out[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Eint_new + Ekin + Emag;
 			state_out[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index) = Eint_new;
 		});

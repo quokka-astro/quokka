@@ -1056,11 +1056,14 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 		// if (max_level > 0) {
 		// 	amrex::Abort("Electron conduction not implemented for > 0 levels.");
 		// }
+		
 		fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
+		
 		std::array<amrex::MultiFab, AMREX_SPACEDIM> heat_flux;
+		
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 			auto ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
-			heat_flux[idim].define(ba_face, state.DistributionMap(), 1, 0);
+			heat_flux[idim].define(ba_face, state.DistributionMap(), state.nComp(), 0);
 			heat_flux[idim].setVal(0.0);
 		}
 		const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_,
