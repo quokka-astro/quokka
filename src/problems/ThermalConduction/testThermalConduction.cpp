@@ -152,8 +152,8 @@ auto runConductionTest(int nx) -> double
 
 	// Set domain bounds using AMReX parameter system
 	amrex::ParmParse pp_geom("geometry");
-	amrex::Vector<double> const prob_lo = {-1.5428e+18};
-	amrex::Vector<double> const prob_hi = {1.5428e+18};
+	amrex::Vector<double> const prob_lo = {-1.5428e18, -1.5428e18, -1.5428e18};
+	amrex::Vector<double> const prob_hi = {1.5428e+18, 1.5428e+18, 1.5428e+18};
 	amrex::Vector<int> const is_periodic = {0, 0, 0};
 	pp_geom.addarr("prob_lo", prob_lo);
 	pp_geom.addarr("prob_hi", prob_hi);
