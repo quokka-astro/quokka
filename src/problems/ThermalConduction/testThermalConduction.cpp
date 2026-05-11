@@ -146,7 +146,7 @@ auto runConductionTest(int nx) -> double
 
 	// Set grid dimensions using AMReX parameter system
 	amrex::ParmParse pp("amr");
-	amrex::Vector<int> const ncells = {nx, 1, 1};
+	amrex::Vector<int> const ncells = {nx, nx, nx};
 	pp.add("max_level", 0);
 	pp.addarr("n_cell", ncells);
 
