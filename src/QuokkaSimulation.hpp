@@ -1057,6 +1057,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 		// 	amrex::Abort("Electron conduction not implemented for > 0 levels.");
 		// }
 		
+		amrex::Print() << "Start applying electron thermal conduction...\n";
 		fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 		
 		std::array<amrex::MultiFab, AMREX_SPACEDIM> heat_flux;
@@ -1072,21 +1073,25 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 										     .min_temperature = tempFloor_,
 										     .eos_flag = eosFlagForElectronConduction_};
 		quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, resampledTables_, heat_flux);
-		
+		fillBoundaryConditions(state, state, lev, time, quokka::centering::cc,
+                           quokka::direction::na, PreInterpState, PostInterpState);
+		amrex::Print() << "Applied electron thermal conduction...\n";
 		amrex::FluxRegister *fr_as_crse = nullptr;
 	    amrex::FluxRegister *fr_as_fine = nullptr;
 	
 	if (do_reflux != 0) {
 		if (lev < finestLevel()) {
 			fr_as_crse = flux_reg_[lev + 1].get();
-			if (fr_as_crse != nullptr) {
-				fr_as_crse->setVal(0.0);
-			}}
+			// if (fr_as_crse != nullptr) {
+				// fr_as_crse->setVal(0.0);
+			// }
+		}
 		if (lev > 0) {
 			fr_as_fine = flux_reg_[lev].get();
 		}
-	}		
 		incrementFluxRegisters(fr_as_crse, fr_as_fine, heat_flux, lev, dt);
+		amrex::Print() << "Applied flux register...\n";
+	}
 	}
 
 	auto const applyUserSources = [&]() {
@@ -2204,7 +2209,6 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 	// do Strang split source terms (first half-step)
 	auto burn_success_first = addStrangSplitSourcesWithBuiltin<SourceOrder::forward>(state_old_cc_tmp, state_old_fc_tmp, lev, time, 0.5 * dt_lev);
-
 	// check if reactions failed for source terms. If it failed, return false.
 	if (!burn_success_first) {
 		return burn_success_first;

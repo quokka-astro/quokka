@@ -2288,6 +2288,7 @@ void AMRSimulation<problem_t>::incrementFluxRegisters(amrex::FluxRegister *fr_as
 	if ((fr_as_crse == nullptr) && (fr_as_fine == nullptr)) {
 		return;
 	}
+	amrex::Print() << "Incrementing flux registers at level " << lev << "\n";
 
 	const auto dx = geom[lev].CellSizeArray();
 	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> face_area{};

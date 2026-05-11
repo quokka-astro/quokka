@@ -41,6 +41,13 @@ const double rho0 = 0.1;		     // g/cm^3
 const double D = 2.1981515823750267e+28;     // diffusion coefficient, in units of cm^2/s
 const double sigma = 1.2053428078125e+17;    // conduction timescale in s
 
+const double Twind = 2.e6;
+const double Tcloud  = 1.e4;
+const double rho_cloud = C::m_p; // g/cm^3
+double cs_wind = 0.0;
+const double Mach = 4.0; // Mach number of the wind
+const double R0 = 0.1 * C::parsec; // radius of the cloud		
+
 struct ThermalConductionProblem {
 };
 
@@ -80,13 +87,44 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const amrex::Real x = prob_lo[0] + (i + 0.5) * dx[0];
+		const amrex::Real y = prob_lo[1] + (j + 0.5) * dx[1];
+		const amrex::Real z = prob_lo[2] + (k + 0.5) * dx[2];
 
 		/*-------------------------------*/
 		// Problem ----> Gaussian temperature profile
-		const amrex::Real rho = rho0 * C::m_p;	  // g/cm^3
-		const amrex::Real sigma2 = sigma * sigma; // width of the Gaussian
-		const amrex::Real Eint = Eint0 * std::exp(-x * x / sigma2 / 2.) + Efloor;
+		// const amrex::Real rho = rho0 * C::m_p;	  // g/cm^3
+		// const amrex::Real sigma2 = sigma * sigma; // width of the Gaussian
+		// const amrex::Real Eint = Eint0 * std::exp(-x * x / sigma2 / 2.) + Efloor;
 		/*-------------------------------*/
+
+		//Problem 5----> Top hat temperature profile with sharp boundary in wind
+		amrex::Real rho;	  // g/cm^3
+		amrex::Real T;
+		amrex::Real vz;
+		double R = std::sqrt(x*x + y*y + z*z);
+		if(R < R0){
+			T = Tcloud;
+			rho = rho_cloud; // g/cm^3
+			vz = 0.0; // cloud is stationary
+		}
+		else{
+			T = Twind; // g/cm^3
+			rho = rho_cloud * Twind / T; // g/cm^3
+			amrex::Real pressure = rho * Twind * C::k_B / C::m_u;
+			cs_wind = quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho, pressure);
+			vz = Mach * cs_wind; // 100 km/s
+			
+		}
+		const amrex::Real Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T);
+		if(i==0 & j==0 & k==0){
+			amrex::Print() << "Parameters of the cloud-wind problem: " << std::endl;
+			amrex::Print() << "Twind: " << Twind << std::endl;
+			amrex::Print() << "Tcloud: " << Tcloud << std::endl;
+			amrex::Print() << "Mach: " << Mach << std::endl;
+			amrex::Print() << "Wind velocity: " << vz << std::endl;
+			amrex::Print() << "Sound speed in the wind: " << cs_wind << std::endl;
+		}
+		/*-------------------------------------------------*/
 
 		for (int n = 0; n < state_cc.nComp(); ++n) {
 			state_cc(i, j, k, n) = 0.; // zero fill all components
@@ -142,7 +180,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 {
 	// geometrical refinement
 	// tag cells within one-sigma of the initial Gaussian profile for refinement
-	const double refine_Lmax = 0.2 * C::parsec ; // 0.2 pc
+	const double refine_Lmax = 1.1 * R0 ; // 0.2 pc
 	
 	const auto prob_lo = geom[lev].ProbLoArray();
 	const auto dx = geom[lev].CellSizeArray();

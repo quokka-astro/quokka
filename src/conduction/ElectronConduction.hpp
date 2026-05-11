@@ -41,7 +41,7 @@ template <typename problem_t> class ElectronConduction
 				    amrex::Real dt, ElectronConductionParams const &params, const quokka::ResampledCooling::resampled_tables &tables,
 				std::array<amrex::MultiFab, AMREX_SPACEDIM> &heat_flux)
 	{ 	
-				
+				amrex::Print() << "Entered electron thermal conduction...\n";
 		static_assert(Physics_Traits<problem_t>::is_hydro_enabled, "Electron conduction requires hydro to be enabled.");
 
 		if ((dt <= 0.0) || (params.conductivity_prefactor <= 0.0)) {
