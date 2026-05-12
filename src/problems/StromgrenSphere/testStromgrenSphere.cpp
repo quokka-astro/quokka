@@ -516,6 +516,11 @@ auto problem_main() -> int
 		sim.evolve();
 
 		if (amrex::ParallelDescriptor::IOProcessor()) {
+<<<<<<< HEAD
+=======
+			const amrex::Real n_HI0 = sim.userData_.primary_species_2;
+			const amrex::Real alpha_B = 2.6e-13;
+>>>>>>> 65e83ca8 (Refactor code, move julia code to extern and minor bug fixes)
 			const amrex::Real cell_size = sim.geom[0].CellSizeArray()[0];
 			const amrex::Real error_tol = 2.0_rt * cell_size;
 			const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = sim.geom[0].ProbLoArray();

@@ -672,6 +672,7 @@ AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::GetRadiationGroupQuanta(amrex::
 {
 	return 0.5_rt * (freq_high + freq_low) * C::hplanck;
 }
+#endif
 
 template <typename problem_t>
 void RadSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const & /*cons*/, array_t &maxSignal, amrex::Box const &indexRange)
