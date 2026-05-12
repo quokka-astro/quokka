@@ -15,9 +15,13 @@
 #include "cooling/ResampledCooling.hpp"
 #include "math/interpolate.hpp"
 #include "util/BC.hpp"
+#include <algorithm>
+#include <array>
+#include <cmath>
 #include <format>
 #include <fstream>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <vector>
 
@@ -97,7 +101,7 @@ template <> struct Physics_Traits<ResampledCoolingTest> {
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_dust_enabled = false;
 	static constexpr int nDustGroups = 1; // number of dust groups
-	static constexpr bool is_mhd_enabled = false;
+	static constexpr bool is_mhd_enabled = (AMREX_SPACEDIM == 3);
 	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
@@ -105,6 +109,16 @@ template <> struct Physics_Traits<ResampledCoolingTest> {
 // Initial conditions: hot gas that will cool down
 constexpr double T_initial = 1.0e7;	// K
 constexpr double rho_initial = 1.0e-26; // g cm^-3 (constant density for isochoric)
+constexpr double mu_initial = 0.6 * quokka::EOS_Traits<ResampledCoolingTest>::mean_molecular_weight;
+constexpr double pressure_initial = rho_initial * C::k_B * T_initial / mu_initial;
+constexpr double Bx_initial = 5.264491941623788e-06; // chosen so plasma beta = P_gas / (B^2 / 2) ~= 1
+constexpr double magnetic_energy_initial = 0.5 * Bx_initial * Bx_initial;
+
+auto computeInitialInternalEnergy() -> double
+{
+	constexpr double gamma = quokka::EOS_Traits<ResampledCoolingTest>::gamma;
+	return rho_initial * C::k_B * T_initial / ((gamma - 1.0) * mu_initial);
+}
 
 template <> void QuokkaSimulation<ResampledCoolingTest>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -114,13 +128,13 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::setInitialConditionsOnG
 	// Compute initial internal energy from temperature
 	const double k_B = C::k_B;
 	const double gamma = quokka::EOS_Traits<ResampledCoolingTest>::gamma;
-	const double mu = 0.6 * quokka::EOS_Traits<ResampledCoolingTest>::mean_molecular_weight;
 
 	// For ideal gas: P = (gamma - 1) * rho * e_int
 	// and P = rho * k_B * T / (mu * m_u)
 	// Therefore: e_int = k_B * T / ((gamma - 1) * mu * m_u)
-	const double e_int_initial = k_B * T_initial / ((gamma - 1.0) * mu);
+	const double e_int_initial = k_B * T_initial / ((gamma - 1.0) * mu_initial);
 	const double Eint_initial = rho_initial * e_int_initial;
+	const double Egas_initial = Eint_initial + magnetic_energy_initial;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -128,8 +142,23 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::setInitialConditionsOnG
 		state_cc(i, j, k, HydroSystem<ResampledCoolingTest>::x1Momentum_index) = 0.;
 		state_cc(i, j, k, HydroSystem<ResampledCoolingTest>::x2Momentum_index) = 0.;
 		state_cc(i, j, k, HydroSystem<ResampledCoolingTest>::x3Momentum_index) = 0.;
-		state_cc(i, j, k, HydroSystem<ResampledCoolingTest>::energy_index) = Eint_initial;
+		state_cc(i, j, k, HydroSystem<ResampledCoolingTest>::energy_index) = Egas_initial;
 		state_cc(i, j, k, HydroSystem<ResampledCoolingTest>::internalEnergy_index) = Eint_initial;
+	});
+}
+
+template <> void QuokkaSimulation<ResampledCoolingTest>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+{
+	const amrex::Array4<double> &state_fc = grid_elem.array_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const quokka::direction dir = grid_elem.dir_;
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		if (dir == quokka::direction::x) {
+			state_fc(i, j, k, Physics_Indices<ResampledCoolingTest>::mhdFirstIndex) = Bx_initial;
+		} else {
+			state_fc(i, j, k, Physics_Indices<ResampledCoolingTest>::mhdFirstIndex) = 0.0;
+		}
 	});
 }
 
@@ -143,8 +172,8 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::computeAfterTimestep()
 
 		const amrex::Real Etot = values.at(HydroSystem<ResampledCoolingTest>::energy_index)[0];
 		const amrex::Real rho = values.at(HydroSystem<ResampledCoolingTest>::density_index)[0];
-		// For isochoric cooling with no kinetic energy, Eint = Etot
-		const amrex::Real Eint = Etot;
+		// For isochoric cooling with no kinetic energy and a uniform magnetic field, subtract the constant magnetic energy.
+		const amrex::Real Eint = Etot - magnetic_energy_initial;
 
 		// Get temperature from tables
 		amrex::Real T = NAN;
@@ -158,6 +187,86 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::computeAfterTimestep()
 		}
 
 		userData_.T_vec_.push_back(T);
+	}
+}
+
+auto checkMagneticFieldCoolingEquivalence(QuokkaSimulation<ResampledCoolingTest> &sim) -> bool
+{
+	if constexpr (!Physics_Traits<ResampledCoolingTest>::is_mhd_enabled) {
+		return true;
+	} else {
+		constexpr amrex::Real test_dt = 1.0e14;
+		const amrex::Real const_heating_rate_per_H = sim.computePhotoelectricHeatingRate(0.0) + sim.computeExternalHeatingRate(0.0, test_dt);
+		auto const tables = sim.resampledTables_.const_tables();
+
+		const std::array<amrex::Real, 3> test_temperatures = {T_initial, 1.0e6, 1.0e5};
+		amrex::Real max_abs_diff = 0.0;
+		amrex::Real max_rel_diff = 0.0;
+
+		for (const amrex::Real Tgas : test_temperatures) {
+			const amrex::Real nominal_Eint =
+			    (Tgas == T_initial) ? computeInitialInternalEnergy() : quokka::ResampledCooling::ComputeEgasFromTgas(rho_initial, Tgas, tables);
+			const amrex::Real total_energy_with_field = nominal_Eint + magnetic_energy_initial;
+			const amrex::Real cooling_Eint = total_energy_with_field - magnetic_energy_initial;
+
+			amrex::Box const box(amrex::IntVect(AMREX_D_DECL(0, 0, 0)), amrex::IntVect(AMREX_D_DECL(0, 0, 0)));
+			amrex::BoxArray ba(box);
+			amrex::DistributionMapping dm(ba);
+			amrex::MultiFab state_with_field(ba, dm, Physics_Indices<ResampledCoolingTest>::nvarTotal_cc, 0);
+			amrex::MultiFab state_without_field(ba, dm, Physics_Indices<ResampledCoolingTest>::nvarTotal_cc, 0);
+			std::array<amrex::MultiFab, AMREX_SPACEDIM> face_with_field;
+			std::array<amrex::MultiFab, AMREX_SPACEDIM> face_without_field;
+
+			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+				auto ba_fc = amrex::convert(ba, amrex::IntVect::TheDimensionVector(dir));
+				face_with_field[dir] = amrex::MultiFab(ba_fc, dm, Physics_Indices<ResampledCoolingTest>::nvarPerDim_fc, 0);
+				face_without_field[dir] = amrex::MultiFab(ba_fc, dm, Physics_Indices<ResampledCoolingTest>::nvarPerDim_fc, 0);
+				face_with_field[dir].setVal(0.0);
+				face_without_field[dir].setVal(0.0);
+			}
+
+			auto initialize_state = [](amrex::MultiFab &state, amrex::Real total_energy, amrex::Real internal_energy) {
+				state.setVal(0.0);
+				state.setVal(rho_initial, HydroSystem<ResampledCoolingTest>::density_index, 1, 0);
+				state.setVal(total_energy, HydroSystem<ResampledCoolingTest>::energy_index, 1, 0);
+				state.setVal(internal_energy, HydroSystem<ResampledCoolingTest>::internalEnergy_index, 1, 0);
+			};
+			initialize_state(state_with_field, total_energy_with_field, cooling_Eint);
+			initialize_state(state_without_field, cooling_Eint, cooling_Eint);
+			face_with_field[0].setVal(Bx_initial, Physics_Indices<ResampledCoolingTest>::mhdFirstIndex, 1, 0);
+
+			const bool with_field_success = quokka::ResampledCooling::computeCooling<ResampledCoolingTest>(
+			    state_with_field, face_with_field, test_dt, sim.resampledTables_, sim.tempFloor_, const_heating_rate_per_H);
+			const bool without_field_success = quokka::ResampledCooling::computeCooling<ResampledCoolingTest>(
+			    state_without_field, face_without_field, test_dt, sim.resampledTables_, sim.tempFloor_, const_heating_rate_per_H);
+
+			if (!with_field_success || !without_field_success) {
+				amrex::Print() << "ERROR: Magnetic-field cooling equivalence check failed because the cooling integrator failed." << '\n';
+				return false;
+			}
+
+			const amrex::Real Eint_with_field = state_with_field.sum(HydroSystem<ResampledCoolingTest>::internalEnergy_index);
+			const amrex::Real Eint_without_field = state_without_field.sum(HydroSystem<ResampledCoolingTest>::internalEnergy_index);
+			const amrex::Real abs_diff = std::abs(Eint_with_field - Eint_without_field);
+			const amrex::Real scale = std::max({std::abs(Eint_with_field), std::abs(Eint_without_field), std::numeric_limits<amrex::Real>::min()});
+			const amrex::Real rel_diff = abs_diff / scale;
+			max_abs_diff = std::max(max_abs_diff, abs_diff);
+			max_rel_diff = std::max(max_rel_diff, rel_diff);
+		}
+
+		constexpr amrex::Real rel_tol = 64.0 * std::numeric_limits<amrex::Real>::epsilon();
+		amrex::Print() << "Magnetic-field cooling equivalence check:" << '\n';
+		amrex::Print() << "  max absolute internal-energy difference: " << max_abs_diff << '\n';
+		amrex::Print() << "  max relative internal-energy difference: " << max_rel_diff << '\n';
+		amrex::Print() << "  relative tolerance: " << rel_tol << '\n';
+
+		if (max_rel_diff > rel_tol) {
+			amrex::Print() << "ERROR: Cooling with a constant magnetic field does not match cooling without a magnetic field to machine precision."
+				       << '\n';
+			return false;
+		}
+
+		return true;
 	}
 }
 
@@ -181,6 +290,10 @@ auto problem_main() -> int
 
 	// initialize
 	sim.setInitialConditions();
+
+	if (!checkMagneticFieldCoolingEquivalence(sim)) {
+		return 1;
+	}
 
 	// Add initial condition to data vectors
 	if (amrex::ParallelDescriptor::IOProcessor()) {
