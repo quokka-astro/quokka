@@ -49,7 +49,7 @@ namespace
 	constexpr double Rmax_kpc = 8.0;
 	constexpr double Rmax = Rmax_kpc * 1.0e3 * C::parsec;
 	constexpr double refine_Rcyl_kpc = 6.0;
-	constexpr double refine_Hcyl_pc  = 100.0;
+	constexpr double refine_Hcyl_pc  = 300.0;
 	constexpr double refine_Rcyl     = refine_Rcyl_kpc * 1.0e3 * C::parsec;
 	constexpr double refine_Hcyl     = refine_Hcyl_pc  * C::parsec;
 } // namespace
@@ -106,6 +106,7 @@ template <> struct SimulationData<MHDGalaxy> {
 	amrex::Real seed_Rmax{}; 
 	amrex::Real seed_Lz{};
 	amrex::Real seed_B0_gauss{};
+	amrex::Real seed_B0_HL{};
 	amrex::Real seed{};
 };
 
@@ -280,6 +281,9 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 				else if (key == "B0_gauss") {
 					userData_.seed_B0_gauss = std::stod(val);
 				}
+				else if (key == "B0_HL") {
+					userData_.seed_B0_HL = std::stod(val);
+				}
 				else if (key == "seed") {
 					userData_.seed = std::stod(val);
 				}
@@ -328,12 +332,12 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	}
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(userData_.seed_nR > 0 && userData_.seed_nz > 0,
 	"Aphi_2d_meta.txt was not parsed correctly — nR/nz are zero");
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(userData_.seed_B0_gauss > 0.0,
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(userData_.seed_B0_HL > 0.0,
 	"B0_gauss not loaded from Aphi_2d_meta.txt");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(userData_.seed_nR > 0 && userData_.seed_nz > 0,
 	"Aphi_2d_meta.txt was not parsed correctly — nR/nz are zero");
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(userData_.seed_B0_gauss > 0.0,
-		"B0_gauss not loaded from Aphi_2d_meta.txt");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(userData_.seed_B0_HL > 0.0,
+		"B0_HL not loaded from Aphi_2d_meta.txt");
 	const double n_fine = userData_.n_cell * std::pow(2.0, userData_.max_level);
 	const double min_required_nR = n_fine * std::numbers::sqrt2 / 2.0; // 2*nR*sqrt(2) >= n_fine
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
@@ -354,7 +358,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 	const double cs_cgm  = quokka::EOS_Traits<MHDGalaxy>::cs_cgm;
 	const double rho_cgm = userData_.rho_cgm;
 	constexpr double gamma = quokka::EOS_Traits<MHDGalaxy>::gamma;
-	const double B0 = userData_.seed_B0_gauss;
+	const double B0 = userData_.seed_B0_HL;
 
 	const amrex::Box &indexRange                                = grid_elem.indexRange_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx       = grid_elem.dx_;
@@ -467,7 +471,7 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars
     const amrex::Array4<double> &state_fc = grid_elem.array_;
     const amrex::Box &indexRange = grid_elem.indexRange_;
     const quokka::direction dir = grid_elem.dir_;
-	const double B0 = userData_.seed_B0_gauss;
+	const double B0 = userData_.seed_B0_HL;
 
     const auto dx = grid_elem.dx_;
     const auto prob_lo = grid_elem.prob_lo_;
