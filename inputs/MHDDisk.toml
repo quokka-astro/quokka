@@ -20,7 +20,7 @@ do_reflux           = 1
 do_subcycle         = 0
 plotfile_prefix = "mhddisk3_plt"
 checkpoint_prefix = "mhddisk3_chk"
-density_floor = 1.0e-34
+#density_floor = 1.0e-34
 #restartfile = "test_chk0000080"
 # *****************************************************************
 # Time integration
