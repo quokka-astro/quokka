@@ -89,7 +89,7 @@ template <> void QuokkaSimulation<FieldLoop>::setInitialConditionsOnGrid(quokka:
 		state_cc(i, j, k, HydroSystem<FieldLoop>::x2Momentum_index) = rho0 * vy;
 		state_cc(i, j, k, HydroSystem<FieldLoop>::x3Momentum_index) = rho0 * vz;
 		state_cc(i, j, k, HydroSystem<FieldLoop>::internalEnergy_index) = Eint;
-		state_cc(i, j, k, HydroSystem<FieldLoop>::energy_index) = Eint +  + Emag;
+		state_cc(i, j, k, HydroSystem<FieldLoop>::energy_index) = Eint + Ekin + Emag;
 	});
 }
 
