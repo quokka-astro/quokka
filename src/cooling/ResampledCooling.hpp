@@ -217,6 +217,7 @@ auto computeCooling(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACE
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = mf.array(iter);
 		auto const &nsubsteps = nsubstepsMF.array(iter);
+
 		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> state_fc{};
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
@@ -225,23 +226,18 @@ auto computeCooling(amrex::MultiFab &mf, std::array<amrex::MultiFab, AMREX_SPACE
 		}
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
-			const Real x1Mom = state(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
-			const Real x2Mom = state(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
-			const Real x3Mom = state(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
-			const Real Egas = state(i, j, k, HydroSystem<problem_t>::energy_index);
-			const Real Ekin = (x1Mom * x1Mom + x2Mom * x2Mom + x3Mom * x3Mom) / (2.0 * rho);
-			const Real Emag = HydroSystem<problem_t>::ComputeMagneticEnergy(i, j, k, &state_fc);
+    		// cooling function
+    		const Real rho = state(i, j, k, HydroSystem<problem_t>::density_index);
+    		const Real nH = rho * tables.cloudy_H_mass_fraction / C::m_p; // unit: cm^-3
+    		const ResampledCoolingFunctor user_rhs(rho, tables, const_heating_rate_per_H * nH); // unit: erg/cm^3/s
 
-			// number density
-			const Real nH = rho * tables.cloudy_H_mass_fraction / C::m_p; // unit: cm^-3
+			// state vector
+			const Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(state, i, j, k, &state_fc);
+			quokka::valarray<Real, 1> y = {Eint};
 
-			const Real Eint = Egas - Ekin - Emag;
-			AMREX_ASSERT_WITH_MESSAGE(Eint > 0., "Gas internal energy is not positive!");
+			// integration tolerance
 			const Real Eint_floor = (temp_floor > 0.0) ? ComputeEgasFromTgas(rho, temp_floor, tables) : 0.0;
 			const Real abstol_floor = amrex::max(Eint_floor, std::numeric_limits<Real>::min());
-			const ResampledCoolingFunctor user_rhs(rho, tables, const_heating_rate_per_H * nH); // unit: erg/cm^3/s
-			quokka::valarray<Real, 1> y = {Eint};
 			quokka::valarray<Real, 1> const abstol = {reltol_floor * abstol_floor};
 
 			// do integration with RK2 (Heun's method)
