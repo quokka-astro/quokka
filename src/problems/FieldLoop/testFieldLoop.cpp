@@ -70,7 +70,7 @@ template <> void QuokkaSimulation<FieldLoop>::setInitialConditionsOnGrid(quokka:
 		const double vy = std::cos(M_PI / 3.0);
 		const double vz = 1.0; // this should not affect the solution!
 
-		const double Ekin = 0.5 * rho0 * (vx * vx + vy * vy);
+		const double Ekin = 0.5 * rho0 * (vx * vx + vy * vy + vz * vz);
 		const double Eint = P0 / (gamma_gas - 1.0);
 
 		// Az = MAX([A ( R0 - r )],0)
