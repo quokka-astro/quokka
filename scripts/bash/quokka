@@ -31,10 +31,12 @@ Options:
   --fpe            Enable floating-point exception traps for direct problem runs (ignored for ctest-based runs)
   --filter <pattern> For run: ctest regex; for build: shell glob over problem names; exclusive with <problem>
                      Quote patterns to avoid expansion by your shell (e.g. --filter 'Rad*')
-  --source [file]  Source an environment file before config/build/run/target commands.
-                   With no argument, sources ~/.config/quokka/quokka.rc (the default rc).
-                   With a path argument, sources that file instead.
-                   Omitting --source entirely skips sourcing (avoids slow 'module load' in active shells).
+  --source [--]    Source ~/.config/quokka/quokka.rc (the default rc).
+                   Use '--source --' when a problem name or other positional argument
+                   immediately follows, to avoid ambiguity (e.g. 'quokka build --source -- MyProblem').
+  --source <file>  Source the specified environment file instead of the default rc.
+                   Omitting --source entirely skips all sourcing (avoids slow 'module load' in active shells).
+                   NOTE: place positional arguments (problem names) before --source when possible.
   --delete         For config only: delete existing preset build directory before reconfiguring
   -D<k>=<v>        For config only: pass extra CMake cache definitions (repeatable)
   -j <N>           Number of parallel jobs for ninja or ctest (default: 8)
@@ -569,7 +571,11 @@ while [ "$#" -gt 0 ]; do
 		shift 2
 		;;
 	--source)
-		if [ $# -gt 1 ] && [[ "${2}" != -* ]]; then
+		if [ "${2:-}" = "--" ]; then
+			# '--source --' is the unambiguous form for "use default rc"
+			SOURCE_FILE="${HOME}/.config/quokka/quokka.rc"
+			shift 2
+		elif [ $# -gt 1 ] && [[ "${2}" != -* ]]; then
 			SOURCE_FILE="$2"
 			shift 2
 		else
