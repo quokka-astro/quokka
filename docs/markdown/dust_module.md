@@ -7,7 +7,7 @@
 
 This module implements dust transport and dust-gas source terms. When dust is enabled without MHD, the source term is aerodynamic drag. When both dust and MHD are enabled, Quokka integrates aerodynamic drag together with the charged-dust Lorentz force.
 
-## Equations for Gas-Dust System
+## Equations for Gas-Dust-MHD System
 
 <script type="math/tex; mode=display">
 \begin{align}
@@ -16,18 +16,29 @@ This module implements dust transport and dust-gas source terms. When dust is en
     &= 0, \\
 \frac{\partial (\rho_{\mathrm{g}} \mathbf{v}_{\mathrm{g}})}{\partial t}
     + \nabla \cdot (\rho_{\mathrm{g}} \mathbf{v}_{\mathrm{g}} \otimes \mathbf{v}_{\mathrm{g}} 
-        + P_{\mathrm{g}} \mathbf{I})
+        + (P_{\mathrm{g}} + \tfrac{1}{2} B^2) \mathbf{I}
+        - \mathbf{B} \otimes \mathbf{B})
     &= \sum_{n=1}^{N} \rho_{\mathrm{d},n} 
         \frac{\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}}{T_{\mathrm{s},n}}
         - \sum_{n=1}^{N} \rho_{\mathrm{d},n} \Omega_{\mathrm{L},n}
-        \left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right) \times \hat{\mathbf{b}}, \\
+        \left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right) \times \hat{\mathbf{b}}
+        + \rho_{\mathrm{g}} \mathbf{a}_{\mathrm{ext},\mathrm{g}}, \\
 \frac{\partial E_{\mathrm{g}}}{\partial t}
-    + \nabla \cdot \left[(E_{\mathrm{g}} + P_{\mathrm{g}}) \mathbf{v}_{\mathrm{g}}\right]
+    + \nabla \cdot \left[
+        (E_{\mathrm{g}} + P_{\mathrm{g}} + \tfrac{1}{2} B^2) \mathbf{v}_{\mathrm{g}}
+        - (\mathbf{v}_{\mathrm{g}} \cdot \mathbf{B}) \mathbf{B}\right]
     &= \sum_{n=1}^{N} \rho_{\mathrm{d},n}
         \frac{\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}}{T_{\mathrm{s},n}}
         \cdot \mathbf{v}_{\mathrm{g}}
+        - \sum_{n=1}^{N} \rho_{\mathrm{d},n} \Omega_{\mathrm{L},n}
+        \left[\left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right) \times \hat{\mathbf{b}}\right]
+        \cdot \mathbf{v}_{\mathrm{g}}
+        + \rho_{\mathrm{g}} \mathbf{a}_{\mathrm{ext},\mathrm{g}} \cdot \mathbf{v}_{\mathrm{g}}
         + \omega_1 \sum_{n=1}^{N} \rho_{\mathrm{d},n}
-        \frac{(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}})^{2}}{T_{\mathrm{s},n}}, \\
+        \frac{\left|\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right|^{2}}{T_{\mathrm{s},n}}, \\
+\frac{\partial \mathbf{B}}{\partial t}
+    - \nabla \times (\mathbf{v}_{\mathrm{g}} \times \mathbf{B})
+    &= 0, \\
 \frac{\partial \rho_{\mathrm{d},n}}{\partial t}
     + \nabla \cdot (\rho_{\mathrm{d},n} \mathbf{v}_{\mathrm{d},n})
     &= 0, \\
@@ -37,29 +48,46 @@ This module implements dust transport and dust-gas source terms. When dust is en
     &= \rho_{\mathrm{d},n} 
         \frac{\mathbf{v}_{\mathrm{g}} - \mathbf{v}_{\mathrm{d},n}}{T_{\mathrm{s},n}}
         + \rho_{\mathrm{d},n} \Omega_{\mathrm{L},n}
-        \left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right) \times \hat{\mathbf{b}},
+        \left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right) \times \hat{\mathbf{b}}
+        + \rho_{\mathrm{d},n} \mathbf{a}_{\mathrm{ext},\mathrm{d},n},
 \end{align}
 </script>
 
-where \\(\omega_1\\) controls the level of physical frictional heating, with \\(\omega_1 = 0\\) turning it off and \\(\omega_1 = 1\\) depositing all drag dissipation into the gas.
+where
+
+-   \\(\rho_{\mathrm{g}}\\) is the gas density,
+-   \\(\mathbf{v}_{\mathrm{g}}\\) is the gas velocity,
+-   \\(P_{\mathrm{g}}\\) is the gas pressure,
+-   \\(\mathbf{I}\\) is the identity tensor,
+-   \\(\mathbf{B}\\) is the magnetic field,
+-   \\(E_{\mathrm{g}}\\) is the gas total energy density, including magnetic energy when MHD is enabled,
+-   \\(\rho_{\mathrm{d},n}\\) is the dust mass density for dust species \\(n\\) (\\(n \in [1, N]\\)),
+-   \\(\mathbf{v}_{\mathrm{d},n}\\) is the dust velocity for dust species \\(n\\),
+-   \\(T_{\mathrm{s},n}\\) is the aerodynamic stopping time for dust species \\(n\\),
+-   \\(\xi_n\\) is the charge-to-mass ratio for dust species \\(n\\),
+-   \\(\Omega_{\mathrm{L},n}= \xi_n |\vec{B}|\\) is the dust gyrofrequency for dust species \\(n\\),
+-   \\(\hat{\mathbf{b}}\\) is the unit vector along the magnetic field,
+-   \\(\mathbf{a}_{\mathrm{ext},\mathrm{g}}\\) is the external acceleration applied to the gas,
+-   \\(\mathbf{a}_{\mathrm{ext},\mathrm{d},n}\\) is the external acceleration applied to dust species \\(n\\),
+-   \\(\omega_1\\) is the fraction of physical dust-drag dissipation deposited into the gas.
 
 ## Variable Storage
 
-The dust cell-centred conserved variables (\\(\rho_{\mathrm{d}}\\), \\(\rho_{\mathrm{d}}\vec{v_{\mathrm{d}}}\\)) are added to MultiFab.
+The dust cell-centred conserved variables (\\(\rho_{\mathrm{d}}\\), \\(\rho_{\mathrm{d}}\mathbf{v}_{\mathrm{d}}\\)) are added to MultiFab.
 
 ## Reconstruction and Riemann Solver
 
-Dust reconstruction is performed together with gas using the same method. The Riemann Solver used is as follows:
+Dust reconstruction is performed together with gas using the same method. The Riemann solver used is as follows:
 
-In one dimension along the x-direction, given the left/right states \\(W_d^{L/R}\\), one can provide the Riemann flux for conserved variables as follows. The density flux reads (Huang & Bai 2022):
+In one dimension along the x-direction, given the left/right states \\(W_{\mathrm{d}}^{\mathrm{L}/\mathrm{R}}\\), one can provide the Riemann flux for conserved variables as follows. The density flux reads (Huang & Bai 2022):
 
 <script type="math/tex; mode=display">
 \begin{align*}
-F^{\text a}_x(\rho_d) = 
+F_{x}^{\mathrm{a}}(\rho_{\mathrm{d}}) = 
 \begin{cases}
-\rho_d^L v_{d,x}^L & \text{if } v_{d,x}^L > 0, \, v_{d,x}^R \ge 0, \\
-\rho_d^R v_{d,x}^R & \text{if } v_{d,x}^L \le 0, \, v_{d,x}^R < 0, \\
-\rho_d^L v_{d,x}^L + \rho_d^R v_{d,x}^R & \text{if } v_{d,x}^L > 0, \, v_{d,x}^R < 0, \\
+\rho_{\mathrm{d}}^{\mathrm{L}} v_{\mathrm{d},x}^{\mathrm{L}} & \text{if } v_{\mathrm{d},x}^{\mathrm{L}} > 0, \, v_{\mathrm{d},x}^{\mathrm{R}} \ge 0, \\
+\rho_{\mathrm{d}}^{\mathrm{R}} v_{\mathrm{d},x}^{\mathrm{R}} & \text{if } v_{\mathrm{d},x}^{\mathrm{L}} \le 0, \, v_{\mathrm{d},x}^{\mathrm{R}} < 0, \\
+\rho_{\mathrm{d}}^{\mathrm{L}} v_{\mathrm{d},x}^{\mathrm{L}} + \rho_{\mathrm{d}}^{\mathrm{R}} v_{\mathrm{d},x}^{\mathrm{R}} & \text{if } v_{\mathrm{d},x}^{\mathrm{L}} > 0, \, v_{\mathrm{d},x}^{\mathrm{R}} < 0, \\
 0 & \text{else}.
 \end{cases}
 \end{align*}
@@ -102,16 +130,16 @@ t_{\mathrm{s}} = \frac{\sqrt{\pi \gamma}}{2\sqrt{2}} \frac{a \rho_{\mathrm{gr}}}
 \end{cases}
 </script>
 
-When \\(\gamma=1\\), this expression reduces exactly to the isothermal \\(t_s\\). An example of its usage can be found in the `src/problems/DustDampingIteration` test.
+When \\(\gamma=1\\), this expression reduces exactly to the isothermal \\(t_{\mathrm{s}}\\). An example of its usage can be found in the `src/problems/DustDampingIteration` test.
 
 For charged dust in MHD, users must also define the problem-specific dust charge-to-mass ratio by specializing `DustSources::ComputeDustChargeToMassRatio`. This function returns \\(\xi_n\\) for each dust group. The default implementation returns zero for all groups, so dust behaves as neutral dust unless a problem overrides it. Examples can be found in `src/problems/DustDampedGyromotion`.
 
 ## CFL Condition for Dust
 
-For the dust-gas coupled system with N dust species, we use the following CFL condition:
+For the dust-gas coupled system with \\(N\\) dust species, we use the following CFL condition:
 
 <script type="math/tex; mode=display">
-\Delta t_{\mathrm{CFL}} = C_{\mathrm{CFL}} \cdot \min_{\mathrm{cells}} \left( \frac{\Delta x}{\max\left( |v_{\mathrm{g}}| + c_s, \max_{n=1}^{N} |v_{\mathrm{d},n}|+c_s \right)} \right).
+\Delta t_{\mathrm{CFL}} = C_{\mathrm{CFL}} \cdot \min_{\mathrm{cells}} \left( \frac{\Delta x}{\max\left( |\mathbf{v}_{\mathrm{g}}| + c_{\mathrm{s}}, \max_{n=1}^{N} |\mathbf{v}_{\mathrm{d},n}| + c_{\mathrm{s}} \right)} \right).
 </script>
 
 ## Runtime Controls
