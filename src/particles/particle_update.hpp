@@ -173,10 +173,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 
 				for (int n = 0; n < nchem; ++n) {
 					const amrex::Real birth_iso_abundance = std::max<amrex::Real>(0.0, p.rdata(chem_base + n));
-					const amrex::Real z_wr_lookup = store_channel_fields ? std::max<amrex::Real>(1.0e-12, p.rdata(chem_base + 2 * chem_block_size + n))
-					                                                   : std::max<amrex::Real>(1.0e-12, birth_iso_abundance);
-					const amrex::Real z_agb_lookup = store_channel_fields ? std::max<amrex::Real>(1.0e-12, p.rdata(chem_base + 3 * chem_block_size + n))
-					                                                     : std::max<amrex::Real>(1.0e-12, birth_iso_abundance);
+					const amrex::Real z_lookup = std::max<amrex::Real>(1.0e-12, stellar_metallicity_fraction);
 
 					amrex::Real y_wr = 0.0;
 					if (enable_WR_metal) {
@@ -187,7 +184,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 							const amrex::Real wr_window = std::max<amrex::Real>(0.0, wr_age_end - wr_age_start);
 							amrex::Real wr_rate_per_mass = wr_metal_yield_rate_per_mass;
 							if (use_table_driven_chemical_yield && ChemicalYieldLookup::isLoaded() && wr_window > 0.0) {
-								wr_rate_per_mass = std::max<amrex::Real>(0.0, ChemicalYieldLookup::queryYieldFraction(1, n, mass_birth_msun, z_wr_lookup)) / wr_window;
+								wr_rate_per_mass = std::max<amrex::Real>(0.0, ChemicalYieldLookup::queryYieldFraction(1, n, mass_birth_msun, z_lookup)) / wr_window;
 							}
 							const amrex::Real baseline_wr_rate_per_mass = (wr_window > 0.0) ? (birth_iso_abundance / wr_window) : 0.0;
 							y_wr = std::max<amrex::Real>(0.0, (baseline_wr_rate_per_mass + wr_rate_per_mass) * mass_birth * dt);
@@ -202,7 +199,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 							const amrex::Real agb_window = std::max<amrex::Real>(0.0, agb_age_end - agb_age_start);
 							amrex::Real agb_rate_per_mass = agb_metal_yield_rate_per_mass;
 							if (use_table_driven_chemical_yield && ChemicalYieldLookup::isLoaded() && agb_window > 0.0) {
-								agb_rate_per_mass = std::max<amrex::Real>(0.0, ChemicalYieldLookup::queryYieldFraction(2, n, mass_birth_msun, z_agb_lookup)) / agb_window;
+								agb_rate_per_mass = std::max<amrex::Real>(0.0, ChemicalYieldLookup::queryYieldFraction(2, n, mass_birth_msun, z_lookup)) / agb_window;
 							}
 							const amrex::Real baseline_agb_rate_per_mass = (agb_window > 0.0) ? (birth_iso_abundance / agb_window) : 0.0;
 							y_agb = std::max<amrex::Real>(0.0, (baseline_agb_rate_per_mass + agb_rate_per_mass) * mass_birth * dt);

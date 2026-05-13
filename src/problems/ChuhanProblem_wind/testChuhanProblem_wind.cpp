@@ -64,19 +64,11 @@ template <> void QuokkaSimulation<ChuhanProblem_wind>::createInitialStochasticSt
             auto *pdata = particle_array().data();
 
             amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-                // default: mark all as on the WR/AGB paths; we'll pick first as WR, second as AGB
+                    // Default: mark particle 0 as WR and particle 1 as AGB, while preserving file-provided masses and times.
                 if (i == 0) {
                     pdata[i].idata(quokka::StochasticStellarPopParticleStageIdx) = static_cast<int>(quokka::StellarEvolutionStage::HighMassNonExploding);
-                    // mass at birth ~ 20 Msun
-                    pdata[i].rdata(quokka::StochasticStellarPopParticleMassAtBirthIdx) = 20.0 * C::M_solar;
-                    pdata[i].rdata(quokka::StochasticStellarPopParticleBirthTimeIdx) = 0.0;
-                    pdata[i].rdata(quokka::StochasticStellarPopParticleDeathTimeIdx) = 1.0e18; // very large so continuous WR active window covers it
                 } else {
                     pdata[i].idata(quokka::StochasticStellarPopParticleStageIdx) = static_cast<int>(quokka::StellarEvolutionStage::LowMassComposite);
-                    // mass at birth ~ 2 Msun
-                    pdata[i].rdata(quokka::StochasticStellarPopParticleMassAtBirthIdx) = 2.0 * C::M_solar;
-                    pdata[i].rdata(quokka::StochasticStellarPopParticleBirthTimeIdx) = 0.0;
-                    pdata[i].rdata(quokka::StochasticStellarPopParticleDeathTimeIdx) = 1.0e18;
                 }
             });
         }

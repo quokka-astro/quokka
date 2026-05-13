@@ -632,6 +632,176 @@ inline auto loadTable(const std::string &filename, const std::vector<std::string
 			}
 		}
 
+		// Parse WR (wind) yields from SNII_Sukhbold16 -> channel 1
+		const std::filesystem::path wr_root = input_path / "SNII_Sukhbold16";
+		if (std::filesystem::exists(wr_root) && std::filesystem::is_directory(wr_root)) {
+			const std::regex wr_mass_re(R"(s([0-9]+(?:\.[0-9]+)?)\.yield_table)");
+			// Sukhbold+16 tables are solar metallicity
+			constexpr amrex::Real wr_z = 0.014;
+			const int wr_zk = static_cast<int>(std::llround(wr_z * 1.0e6));
+
+			for (const auto &file_entry : std::filesystem::directory_iterator(wr_root)) {
+				if (!file_entry.is_regular_file()) {
+					continue;
+				}
+				const std::string fname = file_entry.path().filename().string();
+				std::smatch m;
+				if (!std::regex_match(fname, m, wr_mass_re)) {
+					continue;
+				}
+				const amrex::Real mass_msun = static_cast<amrex::Real>(std::stod(m[1].str()));
+				if (mass_msun <= 0.0) {
+					continue;
+				}
+
+				std::ifstream in(file_entry.path());
+				if (!in.is_open()) {
+					continue;
+				}
+
+				const int mk = static_cast<int>(std::llround(mass_msun * 1000.0));
+				auto &vals = sums[{mk, wr_zk}];
+				if (vals.empty()) {
+					const auto table_size = static_cast<std::vector<amrex::Real>::size_type>(kMaxTrackedChannels) *
+								static_cast<std::vector<amrex::Real>::size_type>(kMaxTrackedIsotopes);
+					vals.resize(table_size, 0.0);
+				}
+
+				std::string line;
+				while (std::getline(in, line)) {
+					if (line.empty() || line[0] == '[' || line[0] == '#') {
+						continue;
+					}
+					std::stringstream ss(line);
+					std::string isotope_name;
+					if (!(ss >> isotope_name)) {
+						continue;
+					}
+					// wind yield is the last numeric token on the line
+					amrex::Real wind_yield = 0.0;
+					bool has_value = false;
+					std::string token;
+					while (ss >> token) {
+						try {
+							wind_yield = static_cast<amrex::Real>(std::stod(normalizeNumericToken(token)));
+							has_value = true;
+						} catch (...) {
+						}
+					}
+					if (!has_value) {
+						continue;
+					}
+
+					const auto iso_it = iso_map.find(lowercase(isotope_name));
+					if (iso_it == iso_map.end()) {
+						continue;
+					}
+					const int iso_index = iso_it->second;
+					const amrex::Real frac = std::max<amrex::Real>(wind_yield / mass_msun, 0.0);
+					vals[1 * kMaxTrackedIsotopes + iso_index] += frac;
+				}
+			}
+		}
+
+		// Parse AGB yields from AGB_Karakas16 -> channel 2
+		const std::filesystem::path agb_root = input_path / "AGB_Karakas16";
+		if (std::filesystem::exists(agb_root) && std::filesystem::is_directory(agb_root)) {
+			// Filename-based mass/Z: m<mass>z<Z_digits>.<extra>.dat
+			const std::regex agb_fname_re(R"(m([0-9]+(?:\.[0-9]+)?)z([0-9]+).*\.dat)", std::regex::icase);
+			// Header-based mass/Z (for yield_z0001.dat style files)
+			const std::regex agb_header_re(
+			    R"(#\s*Initial\s+mass\s*=\s*([0-9]+(?:\.[0-9]+)?),\s*Z\s*=\s*([0-9]+(?:\.[0-9]+)?),.*M_mix\s*=\s*([0-9eE+\-.]+))",
+			    std::regex::icase);
+
+			for (const auto &dir_entry : std::filesystem::recursive_directory_iterator(agb_root)) {
+				if (!dir_entry.is_regular_file()) {
+					continue;
+				}
+				if (dir_entry.path().extension().string() != ".dat") {
+					continue;
+				}
+
+				const std::string fname = dir_entry.path().filename().string();
+				std::smatch fm;
+				amrex::Real agb_mass = -1.0;
+				amrex::Real agb_z = -1.0;
+
+				if (std::regex_match(fname, fm, agb_fname_re)) {
+					// Parse mass and Z from filename
+					agb_mass = static_cast<amrex::Real>(std::stod(fm[1].str()));
+					const std::string z_digits = fm[2].str();
+					const int numer = std::stoi(z_digits);
+					agb_z = static_cast<amrex::Real>(numer) / std::pow(10.0, static_cast<int>(z_digits.size()));
+				} else {
+					// Try header-based parsing for yield_z0001.dat style
+					std::ifstream header_in(dir_entry.path());
+					if (!header_in.is_open()) {
+						continue;
+					}
+					std::string hdr_line;
+					bool found = false;
+					while (std::getline(header_in, hdr_line)) {
+						std::smatch hm;
+						if (std::regex_search(hdr_line, hm, agb_header_re)) {
+							agb_mass = static_cast<amrex::Real>(std::stod(hm[1].str()));
+							agb_z = static_cast<amrex::Real>(std::stod(hm[2].str()));
+							found = true;
+							break;
+						}
+					}
+					if (!found) {
+						continue;
+					}
+				}
+
+				if (agb_mass <= 0.0 || agb_z <= 0.0) {
+					continue;
+				}
+
+				std::ifstream in(dir_entry.path());
+				if (!in.is_open()) {
+					continue;
+				}
+
+				const int mk = static_cast<int>(std::llround(agb_mass * 1000.0));
+				const int zk = static_cast<int>(std::llround(agb_z * 1.0e6));
+				auto &vals = sums[{mk, zk}];
+				if (vals.empty()) {
+					const auto table_size = static_cast<std::vector<amrex::Real>::size_type>(kMaxTrackedChannels) *
+								static_cast<std::vector<amrex::Real>::size_type>(kMaxTrackedIsotopes);
+					vals.resize(table_size, 0.0);
+				}
+
+				std::string line;
+				while (std::getline(in, line)) {
+					if (line.empty() || line[0] == '#') {
+						continue;
+					}
+
+					std::stringstream ss(line);
+					std::string species;
+					int A = 0;
+					std::string yld_token;
+					if (!(ss >> species >> A >> yld_token)) {
+						continue;
+					}
+					// species column already holds the isotope name, e.g. "c12", "o16", "ar40"
+					const auto iso_it = iso_map.find(lowercase(species));
+					if (iso_it == iso_map.end()) {
+						continue;
+					}
+					amrex::Real yld = 0.0;
+					try {
+						yld = static_cast<amrex::Real>(std::stod(normalizeNumericToken(yld_token)));
+					} catch (...) {
+						continue;
+					}
+					const amrex::Real frac = std::max<amrex::Real>(yld / agb_mass, 0.0);
+					vals[2 * kMaxTrackedIsotopes + iso_it->second] += frac;
+				}
+			}
+		}
+
 		g_num_entries = 0;
 		g_loaded = false;
 		for (const auto &[key, vals] : sums) {
@@ -677,16 +847,21 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto queryYieldFraction(int channel_ind
 	constexpr amrex::Real exact_tol = 1.0e-10;
 
 	for (int i = 0; i < g_num_entries; ++i) {
+		const int flat = i * kMaxTrackedChannels * kMaxTrackedIsotopes + channel_index * kMaxTrackedIsotopes + isotope_index;
+		const amrex::Real frac_i = g_channel_iso_frac[flat];
+		// Skip entries that have no data for this channel+isotope (e.g. SNII-only entries when querying WR)
+		if (frac_i <= 0.0) {
+			continue;
+		}
 		const amrex::Real dm = std::abs(std::log10(amrex::max<amrex::Real>(g_mass_msun[i], 1.0e-12)) - log_mass);
 		const amrex::Real dz = std::abs(std::log10(amrex::max<amrex::Real>(g_metallicity[i], 1.0e-12)) - log_z);
 		const amrex::Real dist2 = dm * dm + dz * dz;
-		const int flat = i * kMaxTrackedChannels * kMaxTrackedIsotopes + channel_index * kMaxTrackedIsotopes + isotope_index;
 		if (dist2 < exact_tol) {
-			return g_channel_iso_frac[flat];
+			return frac_i;
 		}
 		const amrex::Real w = 1.0 / (dist2 + eps);
 		wsum += w;
-		frac_sum += w * g_channel_iso_frac[flat];
+		frac_sum += w * frac_i;
 	}
 
 	return (wsum > 0.0) ? (frac_sum / wsum) : 0.0;
