@@ -70,7 +70,7 @@ template <> void QuokkaSimulation<FieldLoop>::setInitialConditionsOnGrid(quokka:
 		const double vy = std::cos(M_PI / 3.0);
 		const double vz = 1.0; // this should not affect the solution!
 
-		const double Ekin = 0.5 * rho0 * (vx * vx + vy * vy);
+		const double Ekin = 0.5 * rho0 * (vx * vx + vy * vy + vz * vz);
 		const double Eint = P0 / (gamma_gas - 1.0);
 
 		// Az = MAX([A ( R0 - r )],0)
@@ -89,7 +89,7 @@ template <> void QuokkaSimulation<FieldLoop>::setInitialConditionsOnGrid(quokka:
 		state_cc(i, j, k, HydroSystem<FieldLoop>::x2Momentum_index) = rho0 * vy;
 		state_cc(i, j, k, HydroSystem<FieldLoop>::x3Momentum_index) = rho0 * vz;
 		state_cc(i, j, k, HydroSystem<FieldLoop>::internalEnergy_index) = Eint;
-		state_cc(i, j, k, HydroSystem<FieldLoop>::energy_index) = Eint + Ekin + Emag;
+		state_cc(i, j, k, HydroSystem<FieldLoop>::energy_index) = Eint +  + Emag;
 	});
 }
 
