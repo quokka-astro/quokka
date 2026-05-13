@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdint>
 #include <limits>
 #include <string>
 
@@ -64,6 +65,7 @@ template <> struct RadSystem_Traits<StromgrenSphere> {
 	static constexpr double Erad_floor = 1e-99;
 	static constexpr int beta_order = 0;
 	static constexpr auto ChemBands() { return ChemBandsHeader_; }
+	static constexpr auto ChemBands() { return ChemBandsHeader_; }
 };
 
 template <>
@@ -72,9 +74,11 @@ void RadSystem<StromgrenSphere>::SetRadEnergySource(array_t &radEnergy, const am
 						    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
 {
 	amrex::ParmParse const pp("stromgen");
+	amrex::ParmParse const pp("stromgen");
 	amrex::Real Q = 1.0e49_rt;
 	pp.query("Q", Q);
 
+	amrex::ParmParse const pp2("amr");
 	amrex::ParmParse const pp2("amr");
 	int n = 16;
 	pp2.query("n_cell", n);
@@ -108,6 +112,8 @@ void RadSystem<StromgrenSphere>::SetRadEnergySource(array_t &radEnergy, const am
 		if (r <= r_trunc) {
 			amrex::Real const w_i = std::exp(-(r * r) / (2.0 * sigma_star * sigma_star)) / (std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5));
 			amrex::Real const val = L_star * w_i / sum;
+			amrex::Real const w_i = std::exp(-(r * r) / (2.0 * sigma_star * sigma_star)) / (std::pow(2.0 * M_PI * sigma_star * sigma_star, 1.5));
+			amrex::Real const val = L_star * w_i / sum;
 			radEnergy(i, j, k) = val;
 		} else {
 			radEnergy(i, j, k) = 0.0_rt;
@@ -118,14 +124,21 @@ void RadSystem<StromgrenSphere>::SetRadEnergySource(array_t &radEnergy, const am
 namespace
 {
 
+namespace
+{
+
 // Numerically integrate dR/dt = (Q - 4*pi*R^3*alpha_B*n_HI0^2/3) / (Q/c + 4*pi*R^2*n_HI0)
 // Integrates forward by `dt_target` starting from `R0` using RK4 with step-doubling.
 // Aborts the run if convergence is not reached within allowed iterations.
 auto integrate_radius(amrex::Real dt_target, amrex::Real Q, amrex::Real alpha_B, amrex::Real n_HI0, amrex::Real c_light, amrex::Real R0, amrex::Real r_s_est)
     -> amrex::Real
+auto integrate_radius(amrex::Real dt_target, amrex::Real Q, amrex::Real alpha_B, amrex::Real n_HI0, amrex::Real c_light, amrex::Real R0, amrex::Real r_s_est)
+    -> amrex::Real
 {
 	if (dt_target <= 0.0_rt) {
+	if (dt_target <= 0.0_rt) {
 		return R0;
+	}
 	}
 
 	auto rhs = [&](amrex::Real R) -> amrex::Real {
@@ -165,7 +178,18 @@ auto integrate_radius(amrex::Real dt_target, amrex::Real Q, amrex::Real alpha_B,
 
 } // namespace
 
+} // namespace
+
 template <> struct SimulationData<StromgrenSphere> {
+	amrex::Real small_temp{};
+	amrex::Real small_dens{};
+	amrex::Real temperature{};
+	amrex::Real primary_species_1{};
+	amrex::Real primary_species_2{};
+	amrex::Real primary_species_3{};
+	amrex::Real Q{};
+	amrex::Real tend{};
+	int recombination_switch{};
 	amrex::Real small_temp{};
 	amrex::Real small_dens{};
 	amrex::Real temperature{};
@@ -180,6 +204,8 @@ template <> struct SimulationData<StromgrenSphere> {
 	amrex::Vector<amrex::Real> r16_vec_;
 	amrex::Vector<amrex::Real> r84_vec_;
 	amrex::Vector<amrex::Real> r_analytical_vec_;
+	amrex::Real r_analytical_last_t{};
+	amrex::Real r_analytical_last_R{};
 	amrex::Real r_analytical_last_t{};
 	amrex::Real r_analytical_last_R{};
 	std::ofstream output_file_;
@@ -219,6 +245,7 @@ template <> void QuokkaSimulation<StromgrenSphere>::preCalculateInitialCondition
 	userData_.r_analytical_last_t = 0.0_rt;
 	userData_.r_analytical_last_R = 0.0_rt;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
+		std::string const filename = "stromgren_sphere_radii.csv";
 		std::string const filename = "stromgren_sphere_radii.csv";
 		userData_.output_file_.open(filename);
 		userData_.output_file_ << "time,r16,r50,r84,r_analytical\n";
@@ -309,6 +336,7 @@ template <> void QuokkaSimulation<StromgrenSphere>::computeAfterTimestep()
 
 	const int n_bins =
 	    3 * static_cast<int>(CountCells(lev)); // The test is meant to be run with a small number of cells, so this narrowing static cast is fine.
+	using hist_t = int;
 	using hist_t = int;
 	amrex::Gpu::DeviceVector<hist_t> d_hist(n_bins, static_cast<hist_t>(0));
 
@@ -506,6 +534,7 @@ auto problem_main() -> int
 		const amrex::Real photon_absorbed = n_electron_added;
 
 		amrex::Real const photon_err = std::abs((n_photon_added - (n_photon_inflight + photon_absorbed)) / n_photon_added);
+		amrex::Real const photon_err = std::abs((n_photon_added - (n_photon_inflight + photon_absorbed)) / n_photon_added);
 		if (photon_err > error_tol) {
 			amrex::Print() << "Test failed: Relative photon conservation error is " << photon_err << " (tolerance: " << error_tol << ")" << '\n';
 			status = 1;
@@ -516,11 +545,6 @@ auto problem_main() -> int
 		sim.evolve();
 
 		if (amrex::ParallelDescriptor::IOProcessor()) {
-<<<<<<< HEAD
-=======
-			const amrex::Real n_HI0 = sim.userData_.primary_species_2;
-			const amrex::Real alpha_B = 2.6e-13;
->>>>>>> 65e83ca8 (Refactor code, move julia code to extern and minor bug fixes)
 			const amrex::Real cell_size = sim.geom[0].CellSizeArray()[0];
 			const amrex::Real error_tol = 2.0_rt * cell_size;
 			const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = sim.geom[0].ProbLoArray();
