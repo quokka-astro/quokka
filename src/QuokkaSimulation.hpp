@@ -2973,7 +2973,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 		// Create a MultiFab to hold radEnergySource for the current AMR level
 		// radEnergySource should have the unit of luminosity density, erg s^-1 cm^-3
-		int const nghost = 4; // Gaussian<N=3>: stencil spans N=3 cells + 1 for possible particle drift
+		int const nghost = 3; // WendlandC2<N=2>: stencil spans N=2 cells + 1 for possible particle drift
 		amrex::MultiFab radEnergySource(grids[lev], dmap[lev], Physics_Traits<problem_t>::nGroups, nghost);
 
 		// === Stage 1: trivial U^(1) = U^n; skipped ===

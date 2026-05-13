@@ -15,6 +15,7 @@
 #include "AMReX_ParticleMesh.H"
 #include "AMReX_REAL.H"
 #include "hydro/hydro_system.hpp"
+#include "math/quadrature.hpp"
 #include "particles/particle_types.hpp"
 #include "particles/particle_utils.hpp"
 
@@ -50,26 +51,25 @@ struct NearestEight : public Base<NearestEight, amrex::Real> {
 	}
 };
 
-/** \brief A class that implements Gaussian kernel particle/mesh interpolation
- *  with a spherical radial cutoff.
+/** \brief SPH-like particle/mesh interpolator using the Wendland C2 kernel.
  *
- *  Template parameter N controls stencil extent: the kernel is non-zero only
- *  within a sphere of radius N*dx centred on the particle.  The stencil box
- *  is (2N+1)^3 cells; cells outside the sphere receive zero weight.
- *  N is limited by the number of ghost cells (max 6).
+ *  Template parameter N controls the support radius: the kernel is non-zero only
+ *  within a sphere of radius N*dx centred on the particle.  The stencil bounding
+ *  box is (2N+1)^3 cells; cells outside the sphere receive zero weight.
+ *  Requires N+1 ghost cells; N is capped at 7 (hard limit of 8 ghost cells).
  *
  *  The kernel weight at distance r (in units of dx) is
- *      W(r) = exp(-r^2 / (2 sigma^2))   for r <= N
- *           = 0                           for r >  N
- *  and the weights are normalised so that their sum over the sphere equals 1.
+ *      kernel_wendland_c2(r / N)   for r <= N
+ *      0                           for r >  N
+ *  and weights are re-normalised over the discrete stencil so their sum equals 1,
+ *  ensuring strict energy conservation.
  *
- *  This struct does NOT inherit from amrex::ParticleInterpolator::Base because
- *  the spherical cutoff breaks the separability assumed by Base::ParticleToMesh.
+ *  Does NOT inherit from amrex::ParticleInterpolator::Base — the spherical cutoff
+ *  breaks the separability assumed by Base::ParticleToMesh.
  */
-template <int N = 3> struct Gaussian {
-	static_assert(N >= 1 && N <= 6, "N must be between 1 and 6 (limited by ghost cells)");
+template <int N = 2> struct WendlandC2 {
+	static_assert(N >= 1 && N <= 7, "N must be between 1 and 7 (ghost-cell limit is 8)");
 	static constexpr int stencil_width = 2 * N + 1;
-	static constexpr amrex::Real sigma = 1.5;				  // Gaussian width in units of cell size (dx)
 	static constexpr amrex::Real cutoff_r2 = static_cast<amrex::Real>(N * N); // spherical cutoff radius squared
 
 	int index[3]{};		// NOLINT lower-left corner of stencil box
@@ -77,10 +77,9 @@ template <int N = 3> struct Gaussian {
 	amrex::Real inv_norm{}; // NOLINT 1 / (sum of weights within sphere)
 
 	template <typename P>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE Gaussian(const P &p, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, // NOLINT
-						     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi)
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE WendlandC2(const P &p, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, // NOLINT
+						       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi)
 	{
-		// Compute stencil origin and fractional position for each active dimension
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 			const amrex::Real l = (p.pos(i) - plo[i]) * dxi[i] + 0.5;
 			index[i] = static_cast<int>(amrex::Math::floor(l)) - N;
@@ -91,8 +90,8 @@ template <int N = 3> struct Gaussian {
 			frac[i] = 0.0;
 		}
 
-		// Compute normalization: sum of Gaussian weights within the sphere
-		const amrex::Real inv_2sigma2 = 0.5 / (sigma * sigma);
+		// Compute normalization: sum of Wendland C2 weights within the sphere
+		const amrex::Real inv_N = 1.0 / static_cast<amrex::Real>(N);
 		amrex::Real norm_sum = 0.0;
 		const int nz_loop = (AMREX_SPACEDIM >= 3) ? stencil_width : 1; // NOLINT(misc-redundant-expression)
 		const int ny_loop = (AMREX_SPACEDIM >= 2) ? stencil_width : 1; // NOLINT(misc-redundant-expression)
@@ -106,7 +105,7 @@ template <int N = 3> struct Gaussian {
 					const amrex::Real dx = static_cast<amrex::Real>(N - ii) + frac[0] - 1.0;
 					const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
 					if (r2 <= cutoff_r2) {
-						norm_sum += std::exp(-r2 * inv_2sigma2);
+						norm_sum += kernel_wendland_c2(std::sqrt(r2) * inv_N);
 					}
 				}
 			}
@@ -114,12 +113,12 @@ template <int N = 3> struct Gaussian {
 		inv_norm = 1.0 / norm_sum;
 	}
 
-	/// Deposit particle data onto the mesh using the spherical Gaussian kernel.
+	/// Deposit particle data onto the mesh using the Wendland C2 kernel.
 	/// Same interface as amrex::ParticleInterpolator::Base::ParticleToMesh.
 	template <typename P, typename V, typename F>
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void ParticleToMesh(const P &p, amrex::Array4<V> const &arr, int src_comp, int dst_comp, int num_comps, F const &f)
 	{
-		const amrex::Real inv_2sigma2 = 0.5 / (sigma * sigma);
+		const amrex::Real inv_N = 1.0 / static_cast<amrex::Real>(N);
 		const int nz_loop = (AMREX_SPACEDIM >= 3) ? stencil_width : 1; // NOLINT(misc-redundant-expression)
 		const int ny_loop = (AMREX_SPACEDIM >= 2) ? stencil_width : 1; // NOLINT(misc-redundant-expression)
 
@@ -135,7 +134,7 @@ template <int N = 3> struct Gaussian {
 						const amrex::Real dx = static_cast<amrex::Real>(N - ii) + frac[0] - 1.0;
 						const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
 						if (r2 <= cutoff_r2) {
-							const amrex::Real wt = std::exp(-r2 * inv_2sigma2) * inv_norm;
+							const amrex::Real wt = kernel_wendland_c2(std::sqrt(r2) * inv_N) * inv_norm;
 							amrex::Gpu::Atomic::AddNoRet(&arr(index[0] + ii, index[1] + jj, index[2] + kk, ic + dst_comp),
 										     static_cast<V>(wt * pval));
 						}
@@ -166,13 +165,13 @@ struct RadDeposition {
 	int num_comp{};	       // Number of components to deposit
 	int birthTimeIndex{};  // Index for particle birth time
 
-	// Operator to perform radiation deposition using Gaussian kernel interpolation
+	// Operator to perform radiation deposition using Wendland C2 SPH kernel interpolation
 	template <typename ContainerType>
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<amrex::Real> const &radEnergySource,
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
 	{
-		amrex::ParticleInterpolator::Gaussian<> interp(p, plo, dxi);
+		amrex::ParticleInterpolator::WendlandC2<> interp(p, plo, dxi);
 		const auto currentTime = current_time;
 		const auto birthIndex = birthTimeIndex;
 		// Deposit radiation energy only if particle is active
