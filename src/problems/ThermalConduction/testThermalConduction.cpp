@@ -131,6 +131,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		}
 
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho;
+		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index) = rho * vz;
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint;
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = Eint;
 	});
