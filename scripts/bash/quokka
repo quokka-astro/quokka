@@ -31,7 +31,9 @@ Options:
   --fpe            Enable floating-point exception traps for direct problem runs (ignored for ctest-based runs)
   --filter <pattern> For run: ctest regex; for build: shell glob over problem names; exclusive with <problem>
                      Quote patterns to avoid expansion by your shell (e.g. --filter 'Rad*')
-  --source <file>  Optional environment file to source before config/build/run/target commands
+  --source --      Source ~/.config/quokka/quokka.rc (the default rc).
+  --source <file>  Source the specified environment file instead of the default rc.
+                   Omitting --source entirely skips all sourcing (avoids slow 'module load' in active shells).
   --delete         For config only: delete existing preset build directory before reconfiguring
   -D<k>=<v>        For config only: pass extra CMake cache definitions (repeatable)
   -j <N>           Number of parallel jobs for ninja or ctest (default: 8)
@@ -527,9 +529,6 @@ INPUT_FILE=""
 ENABLE_FPE=0
 FILTER_REGEX=""
 SOURCE_FILE=""
-if [[ "$COMMAND" == "config" || "$COMMAND" == "build" || "$COMMAND" == "buildrun" || "$COMMAND" == "run" || "$COMMAND" == "target" ]]; then
-	[[ -f "${HOME}/.config/quokka/quokka.rc" ]] && SOURCE_FILE="${HOME}/.config/quokka/quokka.rc"
-fi
 DELETE_BUILD_DIR=0
 JOBS=8
 CMAKE_DEFINES=()
@@ -570,7 +569,11 @@ while [ "$#" -gt 0 ]; do
 		;;
 	--source)
 		require_arg "$1" "${2:-}"
-		SOURCE_FILE="$2"
+		if [ "$2" = "--" ]; then
+			SOURCE_FILE="${HOME}/.config/quokka/quokka.rc"
+		else
+			SOURCE_FILE="$2"
+		fi
 		shift 2
 		;;
 	--delete)
