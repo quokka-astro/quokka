@@ -113,6 +113,7 @@ constexpr double mu_initial = 0.6 * quokka::EOS_Traits<ResampledCoolingTest>::me
 constexpr double pressure_initial = rho_initial * C::k_B * T_initial / mu_initial;
 constexpr double Bx_initial = 5.264491941623788e-06; // chosen so plasma beta = P_gas / (B^2 / 2) ~= 1
 constexpr double magnetic_energy_initial = 0.5 * Bx_initial * Bx_initial;
+constexpr double active_magnetic_energy_initial = Physics_Traits<ResampledCoolingTest>::is_mhd_enabled ? magnetic_energy_initial : 0.0;
 
 auto computeInitialInternalEnergy() -> double
 {
@@ -134,7 +135,7 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::setInitialConditionsOnG
 	// Therefore: e_int = k_B * T / ((gamma - 1) * mu * m_u)
 	const double e_int_initial = k_B * T_initial / ((gamma - 1.0) * mu_initial);
 	const double Eint_initial = rho_initial * e_int_initial;
-	const double Egas_initial = Eint_initial + magnetic_energy_initial;
+	const double Egas_initial = Eint_initial + active_magnetic_energy_initial;
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -172,8 +173,8 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::computeAfterTimestep()
 
 		const amrex::Real Etot = values.at(HydroSystem<ResampledCoolingTest>::energy_index)[0];
 		const amrex::Real rho = values.at(HydroSystem<ResampledCoolingTest>::density_index)[0];
-		// For isochoric cooling with no kinetic energy and a uniform magnetic field, subtract the constant magnetic energy.
-		const amrex::Real Eint = Etot - magnetic_energy_initial;
+		// For isochoric MHD cooling with no kinetic energy and a uniform magnetic field, subtract the constant magnetic energy.
+		const amrex::Real Eint = Etot - active_magnetic_energy_initial;
 
 		// Get temperature from tables
 		amrex::Real T = NAN;
