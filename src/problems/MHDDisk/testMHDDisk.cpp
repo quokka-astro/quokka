@@ -108,6 +108,8 @@ template <> struct SimulationData<MHDGalaxy> {
 	amrex::Real seed_B0_gauss{};
 	amrex::Real seed_B0_HL{};
 	amrex::Real seed{};
+	amrex::Real dR_seed{};
+	amrex::Real dz_seed{};	
 };
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
@@ -287,6 +289,12 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 				else if (key == "seed") {
 					userData_.seed = std::stod(val);
 				}
+				else if (key == "dR_fine_cm") {
+					userData_.dR_seed = std::stod(val);
+				}
+				else if (key == "dz_fine_cm") {
+					userData_.dz_seed = std::stod(val);
+				}
 			} catch (const std::exception &e) {
 				amrex::Print()
 					<< "Warning: failed to parse line:\n"
@@ -339,15 +347,20 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(userData_.seed_B0_HL > 0.0,
 		"B0_HL not loaded from Aphi_2d_meta.txt");
 	const double n_fine = userData_.n_cell * std::pow(2.0, userData_.max_level);
-	const double min_required_nR = n_fine * std::numbers::sqrt2 / 2.0; // 2*nR*sqrt(2) >= n_fine
+	const double min_required_nR = 4.0 * n_fine * std::numbers::sqrt2 / 2.0;
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 		static_cast<double>(userData_.seed_nR) >= min_required_nR,
-		"Aphi_2d table radial resolution (nR) is coarser than the finest AMR level — "
-		"regenerate Aphi_2d.bin with higher resolution");
+		"Aphi_2d table radial resolution (nR) is coarser than 4x the finest AMR level — "
+		"regenerate Aphi_2d.bin with oversample=4");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-		static_cast<double>(userData_.seed_nz) >= n_fine,
-		"Aphi_2d table vertical resolution (nz) is coarser than the finest AMR level — "
-		"regenerate Aphi_2d.bin with higher resolution");
+		static_cast<double>(userData_.seed_nz) >= 4.0 * n_fine,
+		"Aphi_2d table vertical resolution (nz) is coarser than 4x the finest AMR level — "
+		"regenerate Aphi_2d.bin with oversample=4");	
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(userData_.dR_seed > 0.0,
+		"dR_fine_cm not loaded from metadata");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(userData_.dz_seed > 0.0,
+		"dz_fine_cm not loaded from metadata");
+
 }
 
 template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -371,7 +384,8 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 	const int nz   = userData_.seed_nz;
 	const double Rmax = userData_.seed_Rmax;
 	const double Lz   = userData_.seed_Lz;
-
+	const double dR_seed = userData_.dR_seed;
+	const double dz_seed = userData_.dz_seed;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const double x = prob_lo[0] + (i + 0.5) * dx[0];
@@ -407,53 +421,33 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 		const double Eint     = pressure / (gamma - 1.0);
 		const double Ekin     = 0.5 * rho * (vx * vx + vy * vy);
 
-		// --- reconstruct B at cell center ---
+		const double dz_fd = dz_seed;
+		const double dR_fd = dR_seed;
 
-		const double eps = 1e-12;
-
-		// finite differences
-		const double dz_fd = dx[2];
-		const double dR    = dx[0];
-
-		// RA samples
 		const double RA_zp = sample_RA(RA_ptr, nR, nz, Rmax, Lz, R, z + 0.5*dz_fd);
 		const double RA_zm = sample_RA(RA_ptr, nR, nz, Rmax, Lz, R, z - 0.5*dz_fd);
 
 		double BR = 0.0;
-		if (R > eps) {
-			BR = -(RA_zp - RA_zm) / (dz_fd * R);
+		if (R > dR_fd) {
+			BR = -(RA_zp - RA_zm) / (dz_fd * amrex::max(R, dR_fd));
 		}
 
 		double BZ = 0.0;
-		if (R > eps) {
-			const double ex = x / R;
-			const double ey = y / R;
-
-			const double Rp = std::sqrt((x + 0.5*dR*ex)*(x + 0.5*dR*ex) +
-										(y + 0.5*dR*ey)*(y + 0.5*dR*ey));
-
-			const double Rm = std::sqrt((x - 0.5*dR*ex)*(x - 0.5*dR*ex) +
-										(y - 0.5*dR*ey)*(y - 0.5*dR*ey));
-
-			const double RA_Rp = sample_RA(RA_ptr, nR, nz, Rmax, Lz, Rp, z);
-			const double RA_Rm = sample_RA(RA_ptr, nR, nz, Rmax, Lz, Rm, z);
-
-			BZ = (RA_Rp - RA_Rm) / (dR * R);
+		if (R > dR_fd) {
+			const double RA_Rp = sample_RA(RA_ptr, nR, nz, Rmax, Lz, R + 0.5*dR_fd, z);
+			const double RA_Rm = sample_RA(RA_ptr, nR, nz, Rmax, Lz, R - 0.5*dR_fd, z);
+			BZ = (RA_Rp - RA_Rm) / (dR_fd * amrex::max(R, dR_fd));
+		} else {
+			const double RA_Rp = sample_RA(RA_ptr, nR, nz, Rmax, Lz, R + 0.5*dR_fd, z);
+			const double RA_at = sample_RA(RA_ptr, nR, nz, Rmax, Lz, R,              z);
+			BZ = (RA_Rp - RA_at) / (0.5*dR_fd * amrex::max(R, dR_fd));
 		}
 
-		// convert cylindrical → Cartesian
-		double Bx = 0.0;
-		double By = 0.0;
+		const double Bx = (R > 1e-20) ? BR * x / R * B0 : 0.0;
+		const double By = (R > 1e-20) ? BR * y / R * B0 : 0.0;
+		const double Bz_cc = BZ * B0;
 
-		if (R > eps) {
-			Bx = BR * x / R;
-			By = BR * y / R;
-		}
-		Bx = Bx * B0;
-		By = By * B0;
-		BZ = BZ * B0;
-		
-		const double Emag = 0.5 * (Bx*Bx + By*By + BZ*BZ);
+		const double Emag = 0.5 * (Bx*Bx + By*By + Bz_cc*Bz_cc);
 
 		state_cc(i, j, k, HydroSystem<MHDGalaxy>::density_index)        = rho;
 		state_cc(i, j, k, HydroSystem<MHDGalaxy>::x1Momentum_index)     = rho * vx;
@@ -465,94 +459,127 @@ template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(quokka:
 }
 
 
-template <> void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars(
+
+template <>
+void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars(
     quokka::grid const &grid_elem)
 {
     const amrex::Array4<double> &state_fc = grid_elem.array_;
     const amrex::Box &indexRange = grid_elem.indexRange_;
     const quokka::direction dir = grid_elem.dir_;
-	const double B0 = userData_.seed_B0_HL;
 
+    const double B0 = userData_.seed_B0_HL;
     const auto dx = grid_elem.dx_;
     const auto prob_lo = grid_elem.prob_lo_;
 
     constexpr int mhd_index =
         Physics_Indices<MHDGalaxy>::mhdFirstIndex;
 
-    // ---- device pointer to RA ----
     const amrex::Real* RA_ptr = userData_.RA_device.dataPtr();
     const int nR = userData_.seed_nR;
     const int nz = userData_.seed_nz;
+
     const double Rmax = userData_.seed_Rmax;
     const double Lz   = userData_.seed_Lz;
+    const double dR   = userData_.dR_seed;
+    const double dz   = userData_.dz_seed;
 
-    constexpr double eps = 1e-12;
+    // half-steps for centred finite differences, capped at table spacing
+    // so we never step outside a single table cell pair
+    const double hR = amrex::min(0.5 * dx[0], 0.5 * dR);
+    const double hz = amrex::min(0.5 * dx[2], 0.5 * dz);
+
+    constexpr double eps = 1e-20;
 
     amrex::ParallelFor(indexRange,
     [=] AMREX_GPU_DEVICE(int i, int j, int k)
     {
-        const double x =
-            prob_lo[0] + i * dx[0] +
-            (dir == quokka::direction::x ? 0.0 : 0.5 * dx[0]);
+        // =============================
+        // 1. Face-centered coordinates
+        // =============================
 
-        const double y =
-            prob_lo[1] + j * dx[1] +
-            (dir == quokka::direction::y ? 0.0 : 0.5 * dx[1]);
+        double x = 0.0;
+        double y = 0.0;
+        double z = 0.0;
 
-        const double z =
-            prob_lo[2] + k * dx[2] +
-            (dir == quokka::direction::z ? 0.0 : 0.5 * dx[2]);
+        if (dir == quokka::direction::x) {
+            x = prob_lo[0] + i * dx[0];
+            y = prob_lo[1] + (j + 0.5) * dx[1];
+            z = prob_lo[2] + (k + 0.5) * dx[2];
+        } else if (dir == quokka::direction::y) {
+            x = prob_lo[0] + (i + 0.5) * dx[0];
+            y = prob_lo[1] + j * dx[1];
+            z = prob_lo[2] + (k + 0.5) * dx[2];
+        } else {
+            x = prob_lo[0] + (i + 0.5) * dx[0];
+            y = prob_lo[1] + (j + 0.5) * dx[1];
+            z = prob_lo[2] + k * dx[2];
+        }
 
         const double R = std::sqrt(x*x + y*y);
-        const double dR = dx[0];   // characteristic radial step
-        const double dz_fd = dx[2];
-        const double RA_zp = sample_RA(RA_ptr, nR, nz, Rmax, Lz,
-                                      R, z + 0.5*dz_fd);
-        const double RA_zm = sample_RA(RA_ptr, nR, nz, Rmax, Lz,
-                                      R, z - 0.5*dz_fd);
+
+        // =============================
+        // 2. Centred finite differences using sample_RA
+        //    B_R = -(1/R) d(RA)/dz
+        //    B_z =  (1/R) d(RA)/dR
+        // =============================
+
+        const double R_eff = amrex::max(R, dR);
+
         double BR = 0.0;
-        if (R > eps) {
-            BR = -(RA_zp - RA_zm) / (dz_fd * R);
-        }
         double BZ = 0.0;
-        if (R > eps) {
-            const double ex = x / R;
-            const double ey = y / R;
 
-            const double xp = x + 0.5 * dR * ex;
-            const double yp = y + 0.5 * dR * ey;
+        if (R > dR) {
+            // centred difference in z for B_R
+            const double RA_zp = sample_RA(RA_ptr, nR, nz, Rmax, Lz, R,      z + hz);
+            const double RA_zm = sample_RA(RA_ptr, nR, nz, Rmax, Lz, R,      z - hz);
+            BR = -(RA_zp - RA_zm) / (2.0 * hz * R_eff);
 
-            const double xm = x - 0.5 * dR * ex;
-            const double ym = y - 0.5 * dR * ey;
-
-            const double Rp = std::sqrt(xp*xp + yp*yp);
-            const double Rm = std::sqrt(xm*xm + ym*ym);
-
-            const double RA_Rp =
-                sample_RA(RA_ptr, nR, nz, Rmax, Lz, Rp, z);
-
-            const double RA_Rm =
-                sample_RA(RA_ptr, nR, nz, Rmax, Lz, Rm, z);
-            BZ = (RA_Rp - RA_Rm) / (dR * R);
+            // centred difference in R for B_z
+            const double RA_Rp = sample_RA(RA_ptr, nR, nz, Rmax, Lz, R + hR, z     );
+            const double RA_Rm = sample_RA(RA_ptr, nR, nz, Rmax, Lz, R - hR, z     );
+            BZ =  (RA_Rp - RA_Rm) / (2.0 * hR * R_eff);
+        } else {
+            // near-axis: B_R -> 0 by symmetry
+            // one-sided difference in R only
+            BR = 0.0;
+            const double RA_Rp = sample_RA(RA_ptr, nR, nz, Rmax, Lz, R + hR, z);
+            const double RA_at = sample_RA(RA_ptr, nR, nz, Rmax, Lz, R,      z);
+            BZ = (RA_Rp - RA_at) / (hR * R_eff);
         }
+
+        // =============================
+        // 3. Cylindrical -> Cartesian
+        // =============================
 
         double Bx = 0.0;
         double By = 0.0;
+        double Bz = BZ;
 
         if (R > eps) {
-            Bx = BR * x / R;
-            By = BR * y / R;
+            const double invR = 1.0 / R;
+            Bx = BR * x * invR;
+            By = BR * y * invR;
         }
 
+        // =============================
+        // 4. Store face-normal component
+        // =============================
+
+        double B_face = 0.0;
+
         if (dir == quokka::direction::x) {
-            state_fc(i,j,k,mhd_index) = Bx * B0;
+            B_face = Bx;
         } else if (dir == quokka::direction::y) {
-            state_fc(i,j,k,mhd_index) = By * B0;
-        } else if (dir == quokka::direction::z) {
-            state_fc(i,j,k,mhd_index) = BZ * B0;
+            B_face = By;
+        } else {
+            B_face = Bz;
         }
+
+        state_fc(i, j, k, mhd_index) = B_face * B0;
     });
 }
+
 
 
 
@@ -735,6 +762,55 @@ template <> void QuokkaSimulation<MHDGalaxy>::ComputeDerivedVar(int lev, std::st
 				const double cs   = (rho > rho_transition) ? cs_disk : cs_cgm;
 				const double v2   = (momx * momx + momy * momy + momz * momz) / (rho * rho);
 				output(i, j, k, ncomp) = std::sqrt(v2) / cs;  // Mach number (unitless)
+			});
+		}
+	}
+	if (dname == "plasma_beta") {
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &output = mf.array(iter);
+			auto const &state  = state_new_cc_[lev].const_array(iter);
+			amrex::ParallelFor(indexRange,
+			[=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				const double rho = state(i,j,k,
+					HydroSystem<MHDGalaxy>::density_index);
+				const double Eint = state(i,j,k,
+					HydroSystem<MHDGalaxy>::internalEnergy_index);
+				const double Etot = state(i,j,k,
+					HydroSystem<MHDGalaxy>::energy_index);
+				const double px = state(i,j,k,
+					HydroSystem<MHDGalaxy>::x1Momentum_index);
+				const double py = state(i,j,k,
+					HydroSystem<MHDGalaxy>::x2Momentum_index);
+				const double pz = state(i,j,k,
+					HydroSystem<MHDGalaxy>::x3Momentum_index);
+				const double rho_safe = amrex::max(rho, 1.0e-30);
+				const double Ekin =
+					0.5 * (px*px + py*py + pz*pz) / rho_safe;
+				const double Emag =
+					amrex::max(Etot - Ekin - Eint, 1.0e-30);
+				constexpr double gamma_ =
+					quokka::EOS_Traits<MHDGalaxy>::gamma;
+				const double Pth =
+					(gamma_ - 1.0) * Eint;
+				output(i,j,k,ncomp) = Pth / Emag;
+			});
+		}
+	}
+	if (dname == "divB") {
+		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
+			const amrex::Box &indexRange = iter.validbox();
+			auto const &output = mf.array(iter);
+			auto const &Bx_fc = state_new_fc_[lev][0].const_array(iter);
+			auto const &By_fc = state_new_fc_[lev][1].const_array(iter);
+			auto const &Bz_fc = state_new_fc_[lev][2].const_array(iter);
+			const auto dx = geom[lev].CellSizeArray();
+			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				const double divB =
+					(Bx_fc(i+1, j, k) - Bx_fc(i, j, k)) / dx[0] +
+					(By_fc(i, j+1, k) - By_fc(i, j, k)) / dx[1] +
+					(Bz_fc(i, j, k+1) - Bz_fc(i, j, k)) / dx[2];
+				output(i, j, k, ncomp) = divB;
 			});
 		}
 	}
