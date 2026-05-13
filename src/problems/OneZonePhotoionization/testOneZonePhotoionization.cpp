@@ -62,18 +62,18 @@ template <> struct RadSystem_Traits<PhotoionizationStreamingProblem> {
 	static constexpr double c_hat_over_c = chat / c;
 	static constexpr double Erad_floor = 0.0;
 	static constexpr int beta_order = 0;
-	static constexpr amrex::GpuArray<double, NumChemBands + 1> ChemBands() { return ChemBandsHeader_; }
+	static constexpr auto ChemBands() -> amrex::GpuArray<double, NumChemBands + 1> { return ChemBandsHeader_; }
 };
 
 template <> struct SimulationData<PhotoionizationStreamingProblem> {
-	amrex::Real small_temp;
-	amrex::Real small_dens;
-	amrex::Real temperature;
-	amrex::Real primary_species_1;
-	amrex::Real primary_species_2;
-	amrex::Real primary_species_3;
-	amrex::Real tend;
-	amrex::Real n_photon;
+	amrex::Real small_temp{};
+	amrex::Real small_dens{};
+	amrex::Real temperature{};
+	amrex::Real primary_species_1{};
+	amrex::Real primary_species_2{};
+	amrex::Real primary_species_3{};
+	amrex::Real tend{};
+	amrex::Real n_photon{};
 	std::ofstream output_file_;
 	std::vector<double> t_vec_;
 	std::vector<double> n_e_vec_;
@@ -273,13 +273,13 @@ auto problem_main() -> int
 	// evolve
 	sim.evolve();
 
-	std::vector<double> &t = sim.userData_.t_vec_;
-	std::vector<double> &n_e = sim.userData_.n_e_vec_;
-	std::vector<double> &n_HI = sim.userData_.n_HI_vec_;
-	std::vector<double> &n_HII = sim.userData_.n_HII_vec_;
-	std::vector<double> &n_gamma = sim.userData_.n_gamma_vec_;
-	std::vector<double> &Egas = sim.userData_.Egas_vec_;
-	std::vector<double> &temp = sim.userData_.temp_vec_;
+	std::vector<double> const &t = sim.userData_.t_vec_;
+	std::vector<double> const &n_e = sim.userData_.n_e_vec_;
+	std::vector<double> const &n_HI = sim.userData_.n_HI_vec_;
+	std::vector<double> const &n_HII = sim.userData_.n_HII_vec_;
+	std::vector<double> const &n_gamma = sim.userData_.n_gamma_vec_;
+	std::vector<double> const &Egas = sim.userData_.Egas_vec_;
+	std::vector<double> const &temp = sim.userData_.temp_vec_;
 
 	int energy_switch = 1;
 

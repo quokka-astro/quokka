@@ -1,10 +1,12 @@
 #ifndef actual_rhs_H
 #define actual_rhs_H
 
+#include "AMReX_BLassert.H"
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
 #include "burn_type.H"
 #include "fundamental_constants.H"
+#include "integrator_data.H"
 #include <actual_network.H>
 #include <extern_parameters.H>
 #include <jacobian_utilities.H>
@@ -55,6 +57,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_ionization_fraction_scaling(Real n_H
 {
 	// If sharp ionization front is assumed, scale densities by 1/x to account for
 	// the fact that only 1/x of the cell is ionized instead of the full cell.
+	AMREX_ASSERT(assume_sharp_ionization_front == 0); // We don't support it yet.
 	if (assume_sharp_ionization_front == 1) {
 		if (n_HII <= 0.0_rt) {
 			return 1.0_rt;

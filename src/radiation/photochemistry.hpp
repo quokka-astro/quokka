@@ -36,7 +36,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 	int num_failed = 0;
 
 	auto dt_stage = dt / static_cast<Real>(stage);
-	auto energy_update_factor = static_cast<Real>(stage) / 1.0_rt;
+	auto energy_update_factor = static_cast<Real>(stage);
 
 	const BL_PROFILE("PhotoChemistry::computePhotoChemistry()");
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
@@ -99,12 +99,13 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 			}
 
 			// Ensure positivity
-			for (int nn = 0; nn < NumSpec; ++nn) {
-				photochemstate.xn[nn] = amrex::max(photochemstate.xn[nn], small_x);
+			for (double &nn : photochemstate.xn) {
+				nn = amrex::max(nn, small_x);
 			}
 			for (int nn = 0; nn < NumChemBands; nn += 1) {
 				// TODO (james471): Ensure that flux doesn't deviate from the corresponding energy density.
-				photochemstate.rn[nn * MicrophysicsNumRadVarsPerGroup] = amrex::max(photochemstate.rn[nn], small_x);
+				photochemstate.rn[static_cast<std::size_t>(nn) * MicrophysicsNumRadVarsPerGroup] =
+				    amrex::max(photochemstate.rn[static_cast<std::size_t>(nn) * MicrophysicsNumRadVarsPerGroup], small_x);
 			}
 
 			// get the updated specific eint
@@ -133,7 +134,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 			state(i, j, k, RadSystem<problem_t>::gasEnergy_index) += dEint * energy_update_factor;
 		});
 
-#if defined(AMREX_USE_HIP)
+#ifdef AMREX_USE_HIP
 		amrex::Gpu::streamSynchronize(); // otherwise HIP may fail to allocate the necessary resources.
 #endif
 	}

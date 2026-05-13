@@ -46,14 +46,16 @@ end
 function get_T(state::State)
     γ_inv = get_γ_inv(state)
     ρ = get_ρ(state)
-    T = state.E * ρ / (k_B * γ_inv)
+    sum_ni = sum(state.n_spec)
+    T = state.E * ρ / (k_B * γ_inv * sum_ni)
     return T
 end
 
 function get_E(state::State, T::Float64)
     # The state should contain a dummy value for energy
     γ_inv = get_γ_inv(state)
-    E = γ_inv * k_B * T / get_ρ(state)
+    sum_ni = sum(state.n_spec)
+    E = γ_inv * k_B * T * sum_ni / get_ρ(state)
     return E
 end
 
