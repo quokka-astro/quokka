@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.special import j1, jn_zeros
+from scipy.ndimage import uniform_filter1d
 import matplotlib.pyplot as plt
 
 # ══════════════════════════════════════════════════════════════════
@@ -10,25 +11,55 @@ nR_coarse, nz_coarse = 64, 128
 levels               = 3
 SEED                 = 42
 
-mp = 1.6726219e-24
-kB = 1.380649e-16
+# Physical constants
+G_grav = 6.674e-8       # cm^3 g^-1 s^-2
+kpc    = 3.085677581e21 # cm
 
-rho = 1e-23
-T   = 1e4
-beta_target = 1e3
+# Disk parameters — must match EOS_Traits and SimulationData in testMHDDisk.cpp
+cs_disk  = 7.0e5        # cm/s — matches quokka::EOS_Traits<MHDGalaxy>::cs_disk
+Sigma0   = 0.01169      # g/cm^2 — from preCalculateInitialConditions output
+Rd_kpc   = 3.0          # disk scale length, matches anonymous namespace
+alpha_p  = 2.0          # surface density shape parameter
+beta_p   = 0.5          # surface density shape parameter
 
-refine_Hcyl = 0.100
-inner_taper_kpc = 0.5   # ramp up over 1 kpc from axis
-outer_taper_kpc = 0.5   # roll off over 1 kpc at outer edge
-B0 = 0.5e-6  # Gauss; physical scaling applied separately
+# Taper widths
+inner_taper_kpc = 0.5   # ramp up over this width from axis
+outer_taper_kpc = 0.5   # roll off over this width at outer edge
+
+# Seed field strength
+B0 = 4.0*0.127e-6           # Gauss — set for plasma beta ~ 1000 in disk midplane
+oversample           = 4.  # factor by which to oversample the spectral grid relative to the output grid
 
 # ══════════════════════════════════════════════════════════════════
-#  Physical k helpers  (operate in dimensionless units: Rmax=1, Lz=Lz/Rmax)
+#  Disk scale height (matches diskDensityAnalytic in testMHDDisk.cpp)
+#
+#  Sigma(R) = Sigma0 * exp(-R/Rd - beta * exp(-alpha * R/Rd))
+#  H(R)     = cs^2 / (pi * G * Sigma(R))
+#
+#  We use R=Rd as the representative radius since that is where
+#  most of the disk mass sits and the scale height is well-defined.
 # ══════════════════════════════════════════════════════════════════
 
+def disk_scale_height(Sigma0, cs, R_kpc, Rd_kpc, alpha_p, beta_p):
+    """
+    Isothermal disk scale height H = cs^2 / (pi G Sigma(R)).
+    Matches the formula in diskDensityAnalytic in testMHDDisk.cpp.
+    """
+    x     = R_kpc / Rd_kpc
+    Sigma = Sigma0 * np.exp(-x - beta_p * np.exp(-alpha_p * x))
+    H     = cs**2 / (np.pi * G_grav * Sigma)
+    return H, Sigma
+
+# ══════════════════════════════════════════════════════════════════
+#  Physical k helpers  (operate in dimensionless units: Rmax=1)
+# ══════════════════════════════════════════════════════════════════
 
 def physical_kmin(H_nd):
-    """kmin = one full wavelength across total disk thickness 2H."""
+    """
+    Largest turbulent scale = full disk thickness = 2H
+    (one scale height above and below midplane).
+    lambda_max = 2H  =>  kmin = 2*pi / lambda_max = pi / H
+    """
     return np.pi / H_nd
 
 
@@ -187,9 +218,9 @@ def curl_Aphi(RA, R, dR, dz):
 # ══════════════════════════════════════════════════════════════════
 
 def save_outputs(RA_phys, Br, Bz,
-                 nR, nz, nR_coarse, nz_coarse, levels, SEED,
+                 nR, nz, nR_coarse, nz_coarse, levels, oversample, SEED,
                  Rmax, Lz, dR, dz, kmin_nd, kmax_nd, Rmax_nd,
-                 B0_gauss=1e-9, stem="Aphi_2d"):
+                 H_phys_cm, B0_gauss=1e-9, stem="Aphi_2d"):
     import os
 
     bin_path  = stem + ".bin"
@@ -203,14 +234,14 @@ def save_outputs(RA_phys, Br, Bz,
     # rms of normalised B is 1 by construction; physical rms = B0_HL
     rms_B_HL = B0_HL
 
-    kpc = 3.085677581e21
     lines = [
         f"seed              = {SEED}",
-        f"nR                = {nR}",
-        f"nz                = {nz}",
-        f"nR_coarse         = {nR_coarse}",
-        f"nz_coarse         = {nz_coarse}",
-        f"amr_levels        = {levels}",
+        f"nR                = {int(nR)}",
+        f"nz                = {int(nz)}",
+        f"nR_coarse         = {int(nR_coarse)}",
+        f"nz_coarse         = {int(nz_coarse)}",
+        f"amr_levels        = {int(levels)}",
+        f"oversample        = {oversample}",
         f"Rmin_cm           = {0.0:e}",
         f"Rmax_cm           = {Rmax:e}",
         f"Lz_cm             = {Lz:e}",
@@ -218,6 +249,8 @@ def save_outputs(RA_phys, Br, Bz,
         f"Lz_kpc            = {Lz/kpc:.6f}",
         f"dR_fine_cm        = {dR:e}",
         f"dz_fine_cm        = {dz:e}",
+        f"H_disk_cm         = {H_phys_cm:e}  [scale height at R=Rd, used for kmin]",
+        f"H_disk_pc         = {H_phys_cm/kpc*1e3:.1f}",
         f"kmin_nd           = {kmin_nd:e}  [dimensionless, Rmax=1]",
         f"kmax_nd           = {kmax_nd:e}  [dimensionless, Rmax=1]",
         f"kmin_phys_cm-1    = {kmin_nd/Rmax:e}",
@@ -255,24 +288,28 @@ def save_outputs(RA_phys, Br, Bz,
 # ══════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    kpc  = 3.085677581e21          # cm
     Lz   = 20.0 * kpc              # physical box height
-    Rmax = 10.0 * np.sqrt(2) * kpc # physical outer radius
+    Rmax = 10.0 * np.sqrt(2) * kpc # physical outer radius — box diagonal / 2
 
-    n = rho / mp
-    P = n * kB * T
-    B_phys = np.sqrt(8.0 * np.pi * P / beta_target)
+    # ── Disk scale height at R=Rd ─────────────────────────────────
+    # Uses the same formula as diskDensityAnalytic in testMHDDisk.cpp:
+    #   H(R) = cs^2 / (pi * G * Sigma(R))
+    # Evaluated at R=Rd as the most representative disk radius.
+    H_phys, Sigma_Rd = disk_scale_height(
+        Sigma0, cs_disk, Rd_kpc, Rd_kpc, alpha_p, beta_p
+    )
+    print(f"Disk scale height at R=Rd ({Rd_kpc} kpc): {H_phys/kpc*1e3:.0f} pc")
+    print(f"Surface density at R=Rd: {Sigma_Rd:.4e} g/cm^2")
 
     # ── work in dimensionless units: length scale = Rmax ─────────
     Rmax_nd = 1.0
     Lz_nd   = Lz / Rmax            # ≈ 1.414...
 
-    H_phys = refine_Hcyl * kpc     # 100 pc in cm
-    H_nd   = H_phys / Rmax
+    H_nd    = H_phys / Rmax        # dimensionless scale height at R=Rd
 
     # ── fine physical grid (defined FIRST so modes match finest cells) ──
     factor = 2 ** levels
-    nz     = nz_coarse * factor
+    nz     = nz_coarse * factor * oversample
     nR     = int(np.ceil(nz * np.sqrt(2)))
     print(f"Output grid: nR={nR}, nz={nz}")
 
@@ -291,16 +328,19 @@ if __name__ == "__main__":
     dz_nd = Lz_nd   / nz
 
     # ── spectral modes at FINE grid resolution ───────────────────
-    # kmax now truly corresponds to the finest cell Nyquist diagonal;
-    # init_modes uses nR//2 and nz//2 Bessel/Fourier modes so the
-    # spectral basis spans exactly up to the fine-grid Nyquist.
-    kR, kz, k = init_modes(nR, nz, Rmax_nd, Lz_nd, seed=SEED)
+    kR, kz, k = init_modes(nR_coarse * factor, nz_coarse * factor, Rmax_nd, Lz_nd, seed=SEED)
 
     kmin_nd = physical_kmin(H_nd)
-    kmax_nd = np.sqrt((np.pi / dR_nd)**2 + (np.pi / dz_nd)**2)  # fine Nyquist diagonal
+
+    # kmax = one-cell wavelength on the AMR grid (not the table)
+    # lambda_min = dx_grid  =>  k = 2*pi/dx_grid
+    dR_grid_nd = Rmax_nd / (nR_coarse * factor)
+    dz_grid_nd = Lz_nd   / (nz_coarse * factor)
+    kmax_nd    = np.sqrt((2.0 * np.pi / dR_grid_nd)**2 + (2.0 * np.pi / dz_grid_nd)**2)
 
     print(f"k range (nd): [{k.min():.3e}, {k.max():.3e}]")
-    print(f"kmin (nd)   = {kmin_nd:.3e},  kmax (nd) = {kmax_nd:.3e}")
+    print(f"kmin (nd)   = {kmin_nd:.3e}  (lambda_max = 2H = {2*H_phys/kpc*1e3:.0f} pc)")
+    print(f"kmax (nd)   = {kmax_nd:.3e}  (fine Nyquist diagonal)")
     print(f"kmax/kmin   = {kmax_nd/kmin_nd:.1f}")
 
     # ── spectral coefficients ────────────────────────────────────
@@ -312,7 +352,6 @@ if __name__ == "__main__":
     # ── evaluate A_phi on dimensionless grid ─────────────────────
     print("Evaluating A_phi...")
     Aphi = evaluate_Aphi(R_nd, z_nd, kR, kz, coeff)
-    Aphi *= (B_phys * Rmax)  # scale so final B has correct physical units (Gauss)
 
     # Normalise to O(1) rms before tapers (avoids float arithmetic issues)
     Aphi /= np.sqrt(np.mean(Aphi**2))
@@ -337,7 +376,6 @@ if __name__ == "__main__":
     # ── radial rms equalisation on A_phi BEFORE curl ─────────────
     # Applied here so that RA[0]=RA[-1]=0 is preserved exactly after
     # rescaling, keeping div-B=0 and net flux cancellation analytic.
-    from scipy.ndimage import uniform_filter1d
     Aphi_rms_R      = np.sqrt(np.mean(Aphi**2, axis=1))          # (nR,)
     Aphi_rms_smooth = uniform_filter1d(Aphi_rms_R, size=max(1, nR//50))
     floor           = 0.01 * Aphi_rms_smooth.max()
@@ -391,11 +429,12 @@ if __name__ == "__main__":
     # ── save ─────────────────────────────────────────────────────
     save_outputs(
         RA_phys, Br, Bz,
-        nR=nR, nz=nz,
+        nR=nR, nz=nz, 
         nR_coarse=nR_coarse, nz_coarse=nz_coarse,
-        levels=levels, SEED=SEED,
+        levels=levels, oversample=oversample, SEED=SEED,
         Rmax=Rmax, Lz=Lz, dR=dR, dz=dz,
         kmin_nd=kmin_nd, kmax_nd=kmax_nd, Rmax_nd=Rmax_nd,
+        H_phys_cm=H_phys,
         B0_gauss=B0, stem="Aphi_2d",
     )
 
@@ -431,7 +470,6 @@ if __name__ == "__main__":
     print("Saved B_components.png")
 
     # ── A_phi spectrum ────────────────────────────────────────────
-    
     k_flat = k.ravel()
     P_flat = np.abs(coeff.ravel())**2
 
@@ -448,14 +486,11 @@ if __name__ == "__main__":
     P_plot = P[valid]
 
     # ── Convert RA → Aphi ─────────────────────────────
-    Aphi_plot = np.zeros_like(RA_phys)
     R_safe = R.copy()
     R_safe[0] = R_safe[1]   # avoid divide-by-zero at axis
-
     Aphi_plot = RA_phys / R_safe[:, None]
     Aphi_plot[0, :] = 0.0  # enforce regularity at axis
 
-    # ── Plot ─────────────────────────────────────────
     fig, ax = plt.subplots(1, 2, figsize=(12, 5))
 
     im = ax[0].imshow(
@@ -470,12 +505,12 @@ if __name__ == "__main__":
     ax[0].set_xlabel("R [kpc]")
     ax[0].set_ylabel("z [kpc]")
 
-    # ── Spectrum (unchanged, since coeff refers to Aphi modes) ──────
     if len(P_plot) > 1:
         mid  = len(P_plot) // 2
         norm = P_plot[mid] / k_plot[mid]**(-11/3)
         ax[1].loglog(k_plot, P_plot,              'o-', label="Measured")
         ax[1].loglog(k_plot, norm * k_plot**(-11/3), '--', label=r"$k^{-11/3}$")
+        ax[1].axvline(kmin_nd, color='g', ls=':', label=f"kmin (λ=2H={2*H_phys/kpc*1e3:.0f} pc)")
         ax[1].set_xlabel("k (dimensionless)")
         ax[1].set_ylabel(r"$|A_k|^2$")
         ax[1].legend()
@@ -483,7 +518,6 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.savefig("Aphi_2d_check.png", dpi=150)
     plt.show()
-
 
     # ── magnetic energy spectrum ──────────────────────────────────
     kR_grid, kz_grid = np.meshgrid(kR, kz, indexing='ij')
@@ -508,6 +542,7 @@ if __name__ == "__main__":
         norm = EB_plot[mid] / kB_plot[mid]**(-5/3)
         ax.loglog(kB_plot, EB_plot,                'o-', label="Measured")
         ax.loglog(kB_plot, norm * kB_plot**(-5/3), '--', label=r"$k^{-5/3}$")
+        ax.axvline(kmin_nd, color='g', ls=':', label=f"kmin (λ=2H={2*H_phys/kpc*1e3:.0f} pc)")
     ax.set_xlabel("k (dimensionless)")
     ax.set_ylabel(r"$E_B(k)$")
     ax.set_title("Magnetic Energy Spectrum")
@@ -549,8 +584,14 @@ if __name__ == "__main__":
     plt.show()
 
     print(f"\nFinal summary:")
+    print(f"  Scale height at R=Rd: {H_phys/kpc*1e3:.0f} pc")
+    print(f"  lambda_max = 2H:      {2*H_phys/kpc*1e3:.0f} pc")
+    print(f"  kmin (nd):            {kmin_nd:.3e}")
+    print(f"  kmax (nd):            {kmax_nd:.3e}")
+    print(f"  kmax/kmin:            {kmax_nd/kmin_nd:.1f}")
     print(f"  Br rms  = {np.sqrt(np.mean(Br**2)):.4f}")
     print(f"  Bz rms  = {np.sqrt(np.mean(Bz**2)):.4f}")
     print(f"  |B| rms = {np.sqrt(np.mean(Br**2+Bz**2)):.4f}")
     print(f"  Net flux mean = {np.mean(flux_per_z):.3e}  (dimensionless)")
     print(f"  Net flux std  = {np.std(flux_per_z):.3e}  (dimensionless)")
+    print(f"  B0_gauss = {B0:.3e} G  =>  B0_HL = {B0/(4*np.pi)**0.5:.3e} G (HL)")
