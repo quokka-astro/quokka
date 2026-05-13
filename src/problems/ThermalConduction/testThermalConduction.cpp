@@ -109,7 +109,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		}
 		else{
 			T = Twind; // g/cm^3
-			rho = rho_cloud * Twind / T; // g/cm^3
+			rho = rho_cloud * Tcloud / T; // g/cm^3
 			amrex::Real pressure = rho * Twind * C::k_B / C::m_u;
 			cs_wind = quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho, pressure);
 			vz = Mach * cs_wind; // 100 km/s
@@ -132,7 +132,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index) = rho * vz;
-		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint;
+		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint +  rho * vz * vz / 2.;
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = Eint;
 	});
 }
@@ -215,52 +215,49 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 	amrex::Gpu::streamSynchronize();
 }
 
-
-auto runConductionTest(int nx) -> double
+template <>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ThermalConductionProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar,
+                          int /*dcomp*/ , int /*numcomp*/, amrex::GeometryData const &geom,
+                           const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+                           int /*orig_comp*/ )
 {
-	// Read problem parameters
-	const double max_time = 469054.0075444166; // 1 conduction time
+  auto [i, j, k] = iv.dim3();
+  amrex::Box const &box = geom.Domain();
+  const auto &domain_lo = box.loVect3d();
+  const auto &domain_hi = box.hiVect3d();
+  const int klo = domain_lo[2];
+  const int khi = domain_hi[2];
+  int kedge, normal;
 
-	const double CFL_number = 0.3;
-	const int max_timesteps = std::max(2000, nx * 100);
+//    if (k < klo) {
+//       kedge = klo;
+//       normal = -1;
+// 	  consVar(i, j, k, HydroSystem<ThermalConductionProblem>::density_index)    =  rho_cloud * Tcloud / T;
+// 	consVar(i, j, k, HydroSystem<ThermalConductionProblem>::x1Momentum_index) =  x1Mom_edge;
+// 	consVar(i, j, k, HydroSystem<ThermalConductionProblem>::x2Momentum_index) =  x2Mom_edge;
+// 	consVar(i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index) =  x3Mom_edge;
+// 	consVar(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index)     = etot_edge;
+// 	consVar(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = eint_edge;
+// }
+//     const double rho_edge   = consVar(i, j, kedge, HydroSystem<ThermalConductionProblem>::density_index);
+//     const double x1Mom_edge = consVar(i, j, kedge, HydroSystem<ThermalConductionProblem>::x1Momentum_index);
+//     const double x2Mom_edge = consVar(i, j, kedge, HydroSystem<ThermalConductionProblem>::x2Momentum_index);
+//           double x3Mom_edge = consVar(i, j, kedge, HydroSystem<ThermalConductionProblem>::x3Momentum_index);
+//     const double etot_edge  = consVar(i, j, kedge, HydroSystem<ThermalConductionProblem>::energy_index);
+//     const double eint_edge  = consVar(i, j, kedge, HydroSystem<ThermalConductionProblem>::internalEnergy_index);
 
-	// Set grid dimensions using AMReX parameter system
-	amrex::ParmParse pp("amr");
-	amrex::Vector<int> const ncells = {nx, nx, nx};
-	pp.add("max_level", 0);
-	pp.addarr("n_cell", ncells);
 
-	// Set domain bounds using AMReX parameter system
-	amrex::ParmParse pp_geom("geometry");
-	amrex::Vector<double> const prob_lo = {-1.5428e+18, -1.5428e+18, -1.5428e+18};
-	amrex::Vector<double> const prob_hi = {1.5428e+18, 1.5428e+18, 1.5428e+18};
-	amrex::Vector<int> const is_periodic = {0, 0, 0};
-	pp_geom.addarr("prob_lo", prob_lo);
-	pp_geom.addarr("prob_hi", prob_hi);
-	pp_geom.addarr("is_periodic", is_periodic);
+//     if((x3Mom_edge*normal)<0){//gas is inflowing
+//       x3Mom_edge = -1. *consVar(i, j, kedge, HydroSystem<ThermalConductionProblem>::x3Momentum_index);
+//     }
 
-	// Setup boundary conditions
-	constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-			BCs_cc[n].setLo(dir, amrex::BCType::foextrap);
-			BCs_cc[n].setHi(dir, amrex::BCType::foextrap);
-		}
-	}
+        // consVar(i, j, k, HydroSystem<ThermalConductionProblem>::density_index)    = rho_edge ;
+        // consVar(i, j, k, HydroSystem<ThermalConductionProblem>::x1Momentum_index) =  x1Mom_edge;
+        // consVar(i, j, k, HydroSystem<ThermalConductionProblem>::x2Momentum_index) =  x2Mom_edge;
+        // consVar(i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index) =  x3Mom_edge;
+        // consVar(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index)     = etot_edge;
+        // consVar(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = eint_edge;
 
-	// Run simulation
-	QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
-
-	sim.cflNumber_ = CFL_number;
-	sim.stopTime_ = max_time;
-	sim.maxTimesteps_ = max_timesteps;
-
-	// set initial conditions
-	sim.setInitialConditions();
-
-	sim.evolve();
-	return sim.computeErrorNorm();
 }
 
 auto problem_main() -> int
@@ -269,9 +266,15 @@ auto problem_main() -> int
 	constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-		BCs_cc[n].setLo(dir, amrex::BCType::foextrap);  
-		BCs_cc[n].setHi(dir, amrex::BCType::foextrap); 
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			// constant inflow from zlow
+			if (i == 2) {
+				BCs_cc[n].setLo(i, amrex::BCType::foextrap); // inflow
+				BCs_cc[n].setHi(i, amrex::BCType::foextrap); // outflow
+			} else {
+				BCs_cc[n].setLo(i, amrex::BCType::foextrap); // periodic
+				BCs_cc[n].setHi(i, amrex::BCType::foextrap); // periodic
+			}
 		}
 	}
 
