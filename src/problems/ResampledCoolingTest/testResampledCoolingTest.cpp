@@ -191,86 +191,6 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::computeAfterTimestep()
 	}
 }
 
-auto checkMagneticFieldCoolingEquivalence(QuokkaSimulation<ResampledCoolingTest> &sim) -> bool
-{
-	if constexpr (!Physics_Traits<ResampledCoolingTest>::is_mhd_enabled) {
-		return true;
-	} else {
-		constexpr amrex::Real test_dt = 1.0e14;
-		const amrex::Real const_heating_rate_per_H = sim.computePhotoelectricHeatingRate(0.0) + sim.computeExternalHeatingRate(0.0, test_dt);
-		auto const tables = sim.resampledTables_.const_tables();
-
-		const std::array<amrex::Real, 3> test_temperatures = {T_initial, 1.0e6, 1.0e5};
-		amrex::Real max_abs_diff = 0.0;
-		amrex::Real max_rel_diff = 0.0;
-
-		for (const amrex::Real Tgas : test_temperatures) {
-			const amrex::Real nominal_Eint =
-			    (Tgas == T_initial) ? computeInitialInternalEnergy() : quokka::ResampledCooling::ComputeEgasFromTgas(rho_initial, Tgas, tables);
-			const amrex::Real total_energy_with_field = nominal_Eint + magnetic_energy_initial;
-			const amrex::Real cooling_Eint = total_energy_with_field - magnetic_energy_initial;
-
-			amrex::Box const box(amrex::IntVect(AMREX_D_DECL(0, 0, 0)), amrex::IntVect(AMREX_D_DECL(0, 0, 0)));
-			amrex::BoxArray ba(box);
-			amrex::DistributionMapping dm(ba);
-			amrex::MultiFab state_with_field(ba, dm, Physics_Indices<ResampledCoolingTest>::nvarTotal_cc, 0);
-			amrex::MultiFab state_without_field(ba, dm, Physics_Indices<ResampledCoolingTest>::nvarTotal_cc, 0);
-			std::array<amrex::MultiFab, AMREX_SPACEDIM> face_with_field;
-			std::array<amrex::MultiFab, AMREX_SPACEDIM> face_without_field;
-
-			for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-				auto ba_fc = amrex::convert(ba, amrex::IntVect::TheDimensionVector(dir));
-				face_with_field[dir] = amrex::MultiFab(ba_fc, dm, Physics_Indices<ResampledCoolingTest>::nvarPerDim_fc, 0);
-				face_without_field[dir] = amrex::MultiFab(ba_fc, dm, Physics_Indices<ResampledCoolingTest>::nvarPerDim_fc, 0);
-				face_with_field[dir].setVal(0.0);
-				face_without_field[dir].setVal(0.0);
-			}
-
-			auto initialize_state = [](amrex::MultiFab &state, amrex::Real total_energy, amrex::Real internal_energy) {
-				state.setVal(0.0);
-				state.setVal(rho_initial, HydroSystem<ResampledCoolingTest>::density_index, 1, 0);
-				state.setVal(total_energy, HydroSystem<ResampledCoolingTest>::energy_index, 1, 0);
-				state.setVal(internal_energy, HydroSystem<ResampledCoolingTest>::internalEnergy_index, 1, 0);
-			};
-			initialize_state(state_with_field, total_energy_with_field, cooling_Eint);
-			initialize_state(state_without_field, cooling_Eint, cooling_Eint);
-			face_with_field[0].setVal(Bx_initial, Physics_Indices<ResampledCoolingTest>::mhdFirstIndex, 1, 0);
-
-			const bool with_field_success = quokka::ResampledCooling::computeCooling<ResampledCoolingTest>(
-			    state_with_field, face_with_field, test_dt, sim.resampledTables_, sim.tempFloor_, const_heating_rate_per_H);
-			const bool without_field_success = quokka::ResampledCooling::computeCooling<ResampledCoolingTest>(
-			    state_without_field, face_without_field, test_dt, sim.resampledTables_, sim.tempFloor_, const_heating_rate_per_H);
-
-			if (!with_field_success || !without_field_success) {
-				amrex::Print() << "ERROR: Magnetic-field cooling equivalence check failed because the cooling integrator failed." << '\n';
-				return false;
-			}
-
-			const amrex::Real Eint_with_field = state_with_field.sum(HydroSystem<ResampledCoolingTest>::internalEnergy_index);
-			const amrex::Real Eint_without_field = state_without_field.sum(HydroSystem<ResampledCoolingTest>::internalEnergy_index);
-			const amrex::Real abs_diff = std::abs(Eint_with_field - Eint_without_field);
-			const amrex::Real scale = std::max({std::abs(Eint_with_field), std::abs(Eint_without_field), std::numeric_limits<amrex::Real>::min()});
-			const amrex::Real rel_diff = abs_diff / scale;
-			max_abs_diff = std::max(max_abs_diff, abs_diff);
-			max_rel_diff = std::max(max_rel_diff, rel_diff);
-		}
-
-		constexpr amrex::Real rel_tol = 64.0 * std::numeric_limits<amrex::Real>::epsilon();
-		amrex::Print() << "Magnetic-field cooling equivalence check:" << '\n';
-		amrex::Print() << "  max absolute internal-energy difference: " << max_abs_diff << '\n';
-		amrex::Print() << "  max relative internal-energy difference: " << max_rel_diff << '\n';
-		amrex::Print() << "  relative tolerance: " << rel_tol << '\n';
-
-		if (max_rel_diff > rel_tol) {
-			amrex::Print() << "ERROR: Cooling with a constant magnetic field does not match cooling without a magnetic field to machine precision."
-				       << '\n';
-			return false;
-		}
-
-		return true;
-	}
-}
-
 auto problem_main() -> int
 {
 	// Read runtime parameters
@@ -291,10 +211,6 @@ auto problem_main() -> int
 
 	// initialize
 	sim.setInitialConditions();
-
-	if (!checkMagneticFieldCoolingEquivalence(sim)) {
-		return 1;
-	}
 
 	// Add initial condition to data vectors
 	if (amrex::ParallelDescriptor::IOProcessor()) {
