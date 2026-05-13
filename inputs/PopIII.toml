@@ -29,7 +29,6 @@ initial_dt = 1.0e6
 do_reflux = 1
 do_subcycle = 0
 
-#ascent_interval = 50
 plotfile_interval = 50  #100
 checkpoint_interval = 200
 

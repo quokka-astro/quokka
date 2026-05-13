@@ -41,7 +41,6 @@ max_t_cc = 20.0
 
 plotfile_interval = -1
 checkpoint_interval = -1
-ascent_interval = -1
 
 statistics_interval = 200
 

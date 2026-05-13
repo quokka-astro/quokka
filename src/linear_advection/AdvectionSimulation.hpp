@@ -9,6 +9,7 @@
 /// \brief Implements classes and functions to organise the overall setup,
 /// timestepping, solving, and I/O of a simulation for linear advection.
 
+#include <algorithm>
 #include <array>
 #include <fstream>
 
@@ -40,6 +41,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	using AMRSimulation<problem_t>::dt_;
 	using AMRSimulation<problem_t>::BCs_cc_;
 	using AMRSimulation<problem_t>::nghost_cc_;
+	using AMRSimulation<problem_t>::nghost_fc_;
 	using AMRSimulation<problem_t>::cycleCount_;
 	using AMRSimulation<problem_t>::istep;
 	using AMRSimulation<problem_t>::areInitialConditionsDefined_;
@@ -68,8 +70,23 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	using AMRSimulation<problem_t>::luminosityTables_;
 #endif // AMREX_SPACEDIM == 3
 
-	explicit AdvectionSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : AMRSimulation<problem_t>(BCs_cc) { componentNames_cc_.push_back({"density"}); }
-	explicit AdvectionSimulation() : AMRSimulation<problem_t>() { componentNames_cc_.push_back({"density"}); }
+	explicit AdvectionSimulation(amrex::Vector<amrex::BCRec> &BCs_cc) : AMRSimulation<problem_t>(BCs_cc) { initialize(); }
+	explicit AdvectionSimulation() : AMRSimulation<problem_t>() { initialize(); }
+
+	void initialize()
+	{
+		AMRSimulation<problem_t>::initialize();
+		componentNames_cc_.push_back({"density"});
+	}
+
+	void setCustomGhostCells() override
+	{
+		// PPM_EP reconstructs a 3-cell ghost range with a 5-point stencil.
+		constexpr int reconstruct_ghost = 3;
+		constexpr int required_cell_ghost = reconstruct_ghost + 2;
+		nghost_cc_ = std::max(nghost_cc_, required_cell_ghost);
+		nghost_fc_ = std::max(nghost_fc_, nghost_cc_);
+	}
 
 	void computeMaxSignalLocal(int level) override;
 	void printCellProperties(int lev, amrex::IntVect const &index) override;
