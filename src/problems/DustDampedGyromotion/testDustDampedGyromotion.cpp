@@ -210,7 +210,7 @@ template <typename problem_t> void setDustGyroInitialConditions(quokka::grid con
 
 		state_cc(i, j, k, HydroSystem<problem_t>::density_index) = rho_gas;
 		state_cc(i, j, k, HydroSystem<problem_t>::energy_index) = gas_energy;
-		state_cc(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<problem_t>::internalEnergy_index) = 0.0; // isothermal setup
 		state_cc(i, j, k, HydroSystem<problem_t>::x1Momentum_index) = rho_gas * gas_velocity_x0;
 		state_cc(i, j, k, HydroSystem<problem_t>::x2Momentum_index) = 0.0;
 		state_cc(i, j, k, HydroSystem<problem_t>::x3Momentum_index) = 0.0;

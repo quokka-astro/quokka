@@ -618,7 +618,7 @@ void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_
 		}
 
 		Vec3 p_g_old = Vec3::Zero();
-		amrex::GpuArray<Vec3, nDustGroups_> p_d_old;
+		amrex::GpuArray<Vec3, nDustGroups_> p_d_old = Vec3::Zero();
 		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
 			p_g_old[dir] = consVar_cc[bx](i, j, k, x1Momentum_index + dir);
 			for (int g = 0; g < nDustGroups_; ++g) {
@@ -663,6 +663,7 @@ void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_
 		amrex::Real const dt_lev = 2.0 * dt;
 		for (int g = 0; g < nDustGroups_; ++g) {
 			omega_L[g] = charge_to_mass_ratio[g] * B_mag;
+			// initial relative momentum used for GIRK; do not update inside Picard loop
 			q_n[g] = p_d_old[g] - epsilon[g] * p_g_old;
 		}
 
