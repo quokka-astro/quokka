@@ -53,12 +53,13 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_ion_ff_cooling_coefficient(Real T) -
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_ionization_fraction_scaling(Real n_HI, Real n_HII) -> Real
 {
-	// Calculate ionization fraction
-	Real x_ionization = n_HII / (n_HI + n_HII);
 	// If sharp ionization front is assumed, scale densities by 1/x to account for
 	// the fact that only 1/x of the cell is ionized instead of the full cell.
 	if (assume_sharp_ionization_front == 1) {
-		return 1.0_rt / x_ionization;
+		if (n_HII <= 0.0_rt) {
+			return 1.0_rt;
+		}
+		return (n_HI + n_HII) / n_HII;
 	}
 	return 1.0_rt;
 }
