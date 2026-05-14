@@ -38,8 +38,8 @@ How to choose the parameters for the thermal conduction test problem
 const double Eint0 = 2.505e-8;		     // equivalent to T = 2.e8 K
 const double Efloor = 5.674216387016754e-11; // equivalent tp T = 2.e6 K
 const double rho0 = 0.1;		     // 1/cm^3
-const double D = 2.1981515823750267e+28;     // diffusion coefficient, in units of cm^2/s
-const double sigma = 1.2053428078125e+17;    // conduction timescale in s
+const double D = 4.396303164750053e+28;     // diffusion coefficient, in units of cm^2/s
+const double sigma = 2.410685615625e+17;    // conduction timescale in s
 
 struct ThermalConductionProblem {
 };
@@ -190,7 +190,7 @@ auto problem_main() -> int
 	quokka::richardson::applyQuietDefaults();
 	quokka::richardson::Parameters params{};
 	params.machine_precision_target = 2.0e-9; // limit based on delta_b_magn, smaller values can be used if this is decreased
-	params.nx_initial = 128;
+	params.nx_initial = 64;
 	params.nx_max = 256;
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;
