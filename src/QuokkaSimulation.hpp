@@ -1006,8 +1006,8 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 				coolingTableType_ = "resampled";
 			}
 			if (coolingTableType_ == "resampled") {
-				cool_success =
-				    quokka::ResampledCooling::computeCooling<problem_t>(state, dt, resampledTables_, tempFloor_, const_heating_rate_per_H);
+				cool_success = quokka::ResampledCooling::computeCooling<problem_t>(state, state_fc, dt, resampledTables_, tempFloor_,
+												   const_heating_rate_per_H);
 			} else {
 				amrex::Abort("Invalid cooling table type! Only 'resampled' is supported.");
 			}
