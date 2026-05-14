@@ -22,6 +22,7 @@
 #include "hydro/hydro_system.hpp"
 #include "io/projection.hpp"
 #include "math/interpolate.hpp"
+#include "particles/particle_types.hpp"
 #include "turbulence/TurbDataReader.hpp"
 #include "util/DataTable.hpp"
 
@@ -78,7 +79,7 @@ template <> struct Physics_Traits<TheProblem> {
 	static constexpr bool is_dust_enabled = false;
 	static constexpr int nDustGroups = 1;			     // number of dust groups
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars
+	static constexpr int numPassiveScalars = 30; // number of passive scalars (metal + chemistry)
 	static constexpr int nGroups = 1;			     // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
@@ -92,7 +93,7 @@ template <> void QuokkaSimulation<TheProblem>::createInitialStochasticStellarPop
 
 	// Read particles from ASCII file. Note that this only read real components and not integer components, therefore we need to use
 	// InitSetPhyParticles to set the integer components
-	const int nreal_extra = 7; // mass vx vy vz birth_time death_time lum
+	const int nreal_extra = quokka::StochasticStellarPopParticleRealComps<TheProblem>; // mass vx vy vz birth_time death_time lum + chemistry
 	StochasticStellarPopParticles->SetVerbose(1);
 	StochasticStellarPopParticles->InitFromAsciiFile(userData_.stars_file, nreal_extra, nullptr);
 

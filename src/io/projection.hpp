@@ -97,10 +97,9 @@ inline auto ComputePlaneProjectionFromMultiFab(const amrex::Vector<const amrex::
 		auto const &mf_arr = mfs[lev]->const_arrays();
 		auto const &mask_arr = mask.const_arrays();
 		auto const &dx = geom[lev].CellSizeArray();
-		amrex::IntVect plane_max_grid_size = max_grid_size[lev];
-		plane_max_grid_size[static_cast<int>(dir)] = 1;
 
-		auto plane_pair = amrex::ReduceToPlaneMF2Patchy<amrex::ReduceOpSum>(static_cast<int>(dir), geom[lev].Domain(), *mfs[lev], plane_max_grid_size,
+
+		auto plane_pair = amrex::ReduceToPlaneMF2Patchy<amrex::ReduceOpSum>(static_cast<int>(dir), geom[lev].Domain(), *mfs[lev],
 										    [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) -> amrex::Real {
 											    if (mask_arr[box_no](i, j, k) == 0) {
 												    return 0.0;

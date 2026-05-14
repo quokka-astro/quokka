@@ -9,6 +9,7 @@
 #include "AMReX_REAL.H"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
+#include "math/quadrature.hpp"
 #include "particle_chemical_yield.hpp"
 #include "particle_radiation.hpp"
 #include "particle_types.hpp"
@@ -159,6 +160,12 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 			const int chem_block_size = StochasticStellarPopParticleChemistryBlockSize<problem_t>();
 			const int chem_base = StochasticStellarPopParticleChemistryBaseIdx<problem_t>();
 
+			// Wendland C2 stencil parameters (N=2, stencil_width=5, support radius = 2*dx)
+			constexpr int W_stencil_N = 2;
+			constexpr int W_stencil_width = 2 * W_stencil_N + 1; // 5
+			constexpr amrex::Real W_cutoff_r2 = static_cast<amrex::Real>(W_stencil_N * W_stencil_N); // 4
+			constexpr amrex::Real W_inv_N = 1.0 / static_cast<amrex::Real>(W_stencil_N);
+
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 				auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
@@ -167,9 +174,8 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 				const amrex::Real age = time - p.rdata(StochasticStellarPopParticleBirthTimeIdx);
 				const int stage = p.idata(StochasticStellarPopParticleStageIdx);
 
-				const int ix = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
-				const int iy = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
-				const int iz = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
+				// Build Wendland C2 interpolator (computes normalization once per particle)
+				amrex::ParticleInterpolator::WendlandC2<W_stencil_N> interp(p, plo, dxi);
 
 				for (int n = 0; n < nchem; ++n) {
 					const amrex::Real birth_iso_abundance = std::max<amrex::Real>(0.0, p.rdata(chem_base + n));
@@ -206,21 +212,89 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 						}
 					}
 
-					const amrex::Real total_density_injection = (y_wr + y_agb) * vol_inverse;
-					const int total_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + n;
-					amrex::Gpu::Atomic::AddNoRet(&local_state(ix, iy, iz, total_comp), total_density_injection);
+					const amrex::Real total_mass = y_wr + y_agb;
+					if (total_mass <= 0.0) {
+						continue;
+					}
 
-					if (store_channel_fields) {
-						if (enable_WR_metal) {
-							const int wr_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + 2 * nchem + n;
-							if (wr_comp < HydroSystem<problem_t>::scalar0_index + nPassive) {
-								amrex::Gpu::Atomic::AddNoRet(&local_state(ix, iy, iz, wr_comp), y_wr * vol_inverse);
+					// Deposit total chemistry (WR+AGB) via Wendland C2 stencil
+					const int total_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + n;
+					const int nz_loop = (AMREX_SPACEDIM >= 3) ? W_stencil_width : 1;
+					const int ny_loop = (AMREX_SPACEDIM >= 2) ? W_stencil_width : 1;
+
+					for (int kk = 0; kk < nz_loop; ++kk) {
+						const amrex::Real dz = (AMREX_SPACEDIM >= 3)
+								       ? static_cast<amrex::Real>(kk - W_stencil_N) + 0.5 - interp.frac[2]
+								       : 0.0;
+						for (int jj = 0; jj < ny_loop; ++jj) {
+							const amrex::Real dy = (AMREX_SPACEDIM >= 2)
+									       ? static_cast<amrex::Real>(jj - W_stencil_N) + 0.5 - interp.frac[1]
+									       : 0.0;
+							for (int ii = 0; ii < W_stencil_width; ++ii) {
+								const amrex::Real dx = static_cast<amrex::Real>(ii - W_stencil_N) + 0.5 - interp.frac[0];
+								const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
+								if (r2 <= W_cutoff_r2) {
+									const amrex::Real wt = kernel_wendland_c2(std::sqrt(r2) * W_inv_N) * interp.inv_norm;
+									const amrex::Real val = static_cast<amrex::Real>(wt * total_mass * vol_inverse);
+									amrex::Gpu::Atomic::AddNoRet(
+									    &local_state(interp.index[0] + ii, interp.index[1] + jj, interp.index[2] + kk, total_comp), val);
+								}
 							}
 						}
-						if (enable_AGB_metal) {
+					}
+
+					// Deposit channel-separated fields via the same Wendland C2 stencil
+					if (store_channel_fields) {
+						if (enable_WR_metal && y_wr > 0.0) {
+							const int wr_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + 2 * nchem + n;
+							if (wr_comp < HydroSystem<problem_t>::scalar0_index + nPassive) {
+								for (int kk = 0; kk < nz_loop; ++kk) {
+									const amrex::Real dz = (AMREX_SPACEDIM >= 3)
+											       ? static_cast<amrex::Real>(kk - W_stencil_N) + 0.5 - interp.frac[2]
+											       : 0.0;
+									for (int jj = 0; jj < ny_loop; ++jj) {
+										const amrex::Real dy = (AMREX_SPACEDIM >= 2)
+												       ? static_cast<amrex::Real>(jj - W_stencil_N) + 0.5 - interp.frac[1]
+												       : 0.0;
+										for (int ii = 0; ii < W_stencil_width; ++ii) {
+											const amrex::Real dx = static_cast<amrex::Real>(ii - W_stencil_N) + 0.5 - interp.frac[0];
+											const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
+											if (r2 <= W_cutoff_r2) {
+												const amrex::Real wt = kernel_wendland_c2(std::sqrt(r2) * W_inv_N) * interp.inv_norm;
+												const amrex::Real val = static_cast<amrex::Real>(wt * y_wr * vol_inverse);
+												amrex::Gpu::Atomic::AddNoRet(
+												    &local_state(interp.index[0] + ii, interp.index[1] + jj, interp.index[2] + kk, wr_comp),
+												    val);
+											}
+										}
+									}
+								}
+							}
+						}
+						if (enable_AGB_metal && y_agb > 0.0) {
 							const int agb_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + 3 * nchem + n;
 							if (agb_comp < HydroSystem<problem_t>::scalar0_index + nPassive) {
-								amrex::Gpu::Atomic::AddNoRet(&local_state(ix, iy, iz, agb_comp), y_agb * vol_inverse);
+								for (int kk = 0; kk < nz_loop; ++kk) {
+									const amrex::Real dz = (AMREX_SPACEDIM >= 3)
+											       ? static_cast<amrex::Real>(kk - W_stencil_N) + 0.5 - interp.frac[2]
+											       : 0.0;
+									for (int jj = 0; jj < ny_loop; ++jj) {
+										const amrex::Real dy = (AMREX_SPACEDIM >= 2)
+												       ? static_cast<amrex::Real>(jj - W_stencil_N) + 0.5 - interp.frac[1]
+												       : 0.0;
+										for (int ii = 0; ii < W_stencil_width; ++ii) {
+											const amrex::Real dx = static_cast<amrex::Real>(ii - W_stencil_N) + 0.5 - interp.frac[0];
+											const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
+											if (r2 <= W_cutoff_r2) {
+												const amrex::Real wt = kernel_wendland_c2(std::sqrt(r2) * W_inv_N) * interp.inv_norm;
+												const amrex::Real val = static_cast<amrex::Real>(wt * y_agb * vol_inverse);
+												amrex::Gpu::Atomic::AddNoRet(
+												    &local_state(interp.index[0] + ii, interp.index[1] + jj, interp.index[2] + kk, agb_comp),
+												    val);
+											}
+										}
+									}
+								}
 							}
 						}
 					}
