@@ -37,11 +37,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Dependencies
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install pypandoc_binary 
-          python3 -m pip install -r docs/requirements.txt
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install mdBook tooling
+        run: ./scripts/bash/install_mdbook.sh
 
       - name: Install and Build
         run: |
@@ -64,7 +64,7 @@ jobs:
           INPUT_PATH: ./docs/site
 
       - name: Upload artifact
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: 'github-pages'
           path: ${{ runner.temp }}/artifact.tar
@@ -80,4 +80,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0

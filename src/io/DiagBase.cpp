@@ -8,7 +8,7 @@ void DiagBase::init(const std::string &a_prefix, std::string_view a_diagName)
 	// IO
 	pp.query("int", m_interval);
 	pp.query("per", m_per);
-	pp.query("time_int", m_time_interval); // time_int takes precedence over per
+	pp.queryWithParser("time_int", m_time_interval); // time_int takes precedence over per; supports unit expressions (e.g. "1.0*Myr")
 	m_diagfile = a_diagName;
 	pp.query("file", m_diagfile);
 	AMREX_ASSERT(m_interval > 0 || m_per > 0.0 || m_time_interval > 0.0);

@@ -18,6 +18,7 @@
 #include "hydro/hydro_system.hpp"
 #include "math/FastMath.hpp"
 #include "math/ODEIntegrate.hpp"
+#include "math/root_finding.hpp"
 #include "radiation/radiation_system.hpp"
 #include "util/DataTable.hpp"
 #include <format>
@@ -87,6 +88,31 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(Real const rho
 	const Real Tgas = tables.temperatures.interpolate_single(point);
 
 	return Tgas;
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEgasFromTgas(Real const rho, Real const Tgas, resampledGpuConstTables const &tables) -> Real
+{
+	const Real Eint_min = rho * tables.eint_min;
+	const Real Eint_max = rho * tables.eint_max;
+
+	const Real Tmin = ComputeTgasFromEgas(rho, Eint_min, tables);
+	if (Tgas <= Tmin) {
+		return Eint_min;
+	}
+
+	const Real Tmax = ComputeTgasFromEgas(rho, Eint_max, tables);
+	if (Tgas >= Tmax) {
+		return Eint_max;
+	}
+
+	// Temperature is monotonic in the tabulated specific internal energy, so root-finding on T(Eint) - Tgas converges.
+	auto f = [=](Real Eint) -> Real { return ComputeTgasFromEgas(rho, Eint, tables) - Tgas; };
+
+	int max_iter = 32;
+	auto tol = quokka::math::eps_tolerance<Real>{};
+	auto const [Eint_lo, Eint_hi] = quokka::math::toms748_solve(f, Eint_min, Eint_max, Tmin - Tgas, Tmax - Tgas, tol, max_iter);
+
+	return Eint_hi;
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(Real const rho, Real const Eint, resampledGpuConstTables const &tables,
@@ -169,9 +195,14 @@ struct ResampledCoolingFunctor {
 
 // const_heating_rate_per_H: unit erg/s/H
 template <typename problem_t>
-auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &resampledTables, const Real E_floor, const Real const_heating_rate_per_H) -> bool
+auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &resampledTables, const Real temp_floor, const Real const_heating_rate_per_H)
+    -> bool
 {
 	const BL_PROFILE("quokka::ResampledCooling::computeCooling()");
+
+	if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
+		amrex::Abort("Resampled cooling requires a non-isothermal EOS with positive gas internal energy.");
+	}
 
 	const Real dt = dt_in;
 	const Real reltol_floor = 0.01;
@@ -199,9 +230,11 @@ auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &res
 			const Real nH = rho * tables.cloudy_H_mass_fraction / C::m_p; // unit: cm^-3
 
 			const Real Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			const Real Eint_floor = (temp_floor > 0.0) ? ComputeEgasFromTgas(rho, temp_floor, tables) : 0.0;
+			const Real abstol_floor = amrex::max(Eint_floor, std::numeric_limits<Real>::min());
 			const ResampledCoolingFunctor user_rhs(rho, tables, const_heating_rate_per_H * nH); // unit: erg/cm^3/s
 			quokka::valarray<Real, 1> y = {Eint};
-			quokka::valarray<Real, 1> const abstol = {reltol_floor * E_floor};
+			quokka::valarray<Real, 1> const abstol = {reltol_floor * abstol_floor};
 
 			// do integration with RK2 (Heun's method)
 			int nsteps = 0;
@@ -216,7 +249,7 @@ auto computeCooling(amrex::MultiFab &mf, const Real dt_in, resampled_tables &res
 				       "time = %g, dt = %.17e\n",
 				       rho, Eint, t_cool, dt);
 			}
-			const Real Eint_new = y[0];
+			const Real Eint_new = (temp_floor > 0.0) ? amrex::max(y[0], Eint_floor) : y[0];
 			const Real dEint = Eint_new - Eint;
 
 			state(i, j, k, HydroSystem<problem_t>::energy_index) += dEint;

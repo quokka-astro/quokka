@@ -59,6 +59,7 @@ jobs:
               - '**/*.c'
               - '**/*.hpp'
               - '**/*.h'
+              - '.gitmodules'
             cpp:
               - '**/*.cpp'
               - '**/*.c'
@@ -72,6 +73,7 @@ jobs:
               - '.github/workflows/**/*.yaml'
             specific_workflow:
               - '${{ inputs.workflow_file }}'
+              - '.github/workflows/dockerfiles/ROCm-DiskGalaxy/**'
 
       - id: set-output
         env:
