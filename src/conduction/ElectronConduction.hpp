@@ -117,7 +117,7 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real qsat = amrex::max(saturation_factor * flux_limiter_phi * rho * cs * cs * cs, small);
 
 			temperature_arr[bx](i, j, k) = Tuse;
-			conductivity_arr[bx](i, j, k) = kappa;
+			conductivity_arr[bx](i, j, k) = kappa * std::pow(Tuse, 2.5);
 			saturated_flux_arr[bx](i, j, k) = qsat;
 		});
 
@@ -201,6 +201,64 @@ template <typename problem_t> class ElectronConduction
 			state_out[bx](i, j, k, HydroSystem<problem_t>::internalEnergy_index) = Eint_new;
 		});
 	}
+
+
+ static amrex::Real ComputeMinConductivity(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc,
+				    amrex::Real conductivity_prefactor, const quokka::ResampledCooling::resampled_tables &tables){
+					
+		amrex::MultiFab temperature(state.boxArray(), state.DistributionMap(), 1, state.nGrow());
+		temperature.setVal(0.0);
+		amrex::MultiFab conductivity(state.boxArray(), state.DistributionMap(), 1, state.nGrow());
+		conductivity.setVal(0.0);
+		
+		auto const &state_x0 = state.const_arrays();
+		auto const &state_fc_x0 = state_fc[0].const_arrays();
+		#if AMREX_SPACEDIM >= 2
+				auto const &state_fc_x1 = state_fc[1].const_arrays();
+		#endif
+		#if AMREX_SPACEDIM == 3
+				auto const &state_fc_x2 = state_fc[2].const_arrays();
+		#endif
+		auto temperature_arr = temperature.arrays();
+		auto conductivity_arr = conductivity.arrays();
+		amrex::IntVect ng = amrex::IntVect(AMREX_D_DECL(state.nGrow(), state.nGrow(), state.nGrow()));
+
+		std::optional<decltype(tables.const_tables())> tables_dev;
+		if (params.eos_flag == 0) {
+			tables_dev = tables.const_tables();
+		} else if (params.eos_flag != 0 && params.eos_flag != 1) {
+			amrex::Abort("Invalid eos_flag value in ElectronConduction. Must be 0 (resampled cooling) or 1 (quokka::EOS).");
+		}
+
+		amrex::ParallelFor(state, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
+			if (Physics_Traits<problem_t>::is_mhd_enabled) {
+				local_state_fc[0] = state_fc_x0[bx];
+			#if AMREX_SPACEDIM >= 2
+							local_state_fc[1] = state_fc_x1[bx];
+			#endif
+			#if AMREX_SPACEDIM == 3
+							local_state_fc[2] = state_fc_x2[bx];
+			#endif
+						}
+
+			auto const &cons = state_x0[bx];
+			const amrex::Real rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
+			const amrex::Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(cons, i, j, k, &local_state_fc);
+			amrex::Real Tgas = NAN;
+			if (params.eos_flag == 0) {
+				Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, *tables_dev);
+			} else if (params.eos_flag == 1) {
+				Tgas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint);
+			}
+		
+			// amrex::Real Tuse = amrex::max(Tgas, params.min_temperature);
+			temperature_arr[bx](i, j, k) = Tgas;
+			conductivity_arr[bx](i, j, k) = conductivity_prefactor * std::pow(Tgas, 2.5);
+		});	
+		amrex::Real max_cond = conductivity.max(0, 0);
+    	return max_cond;
+					}
 };
 
 } // namespace quokka::conduction
