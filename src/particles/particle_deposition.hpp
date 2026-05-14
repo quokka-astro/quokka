@@ -80,10 +80,16 @@ template <int N = 2> struct WendlandC2 {
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE WendlandC2(const P &p, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, // NOLINT
 						       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi)
 	{
+		// frac[i] is the fractional position of the particle within its containing cell,
+		// in [0, 1). The stencil spans index[i] .. index[i]+stencil_width-1, centred on
+		// the containing cell. Signed distance from particle to stencil cell ii is
+		//   (ii - N) + 0.5 - frac[i]
+		// which is exactly 0 at ii=N when the particle is at the cell centre (frac=0.5).
 		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			const amrex::Real l = (p.pos(i) - plo[i]) * dxi[i] + 0.5;
-			index[i] = static_cast<int>(amrex::Math::floor(l)) - N;
-			frac[i] = l - amrex::Math::floor(l);
+			const amrex::Real pos_in_cells = (p.pos(i) - plo[i]) * dxi[i];
+			const auto cell = static_cast<int>(amrex::Math::floor(pos_in_cells));
+			index[i] = cell - N;
+			frac[i] = pos_in_cells - static_cast<amrex::Real>(cell);
 		}
 		for (int i = AMREX_SPACEDIM; i < 3; ++i) {
 			index[i] = 0;
@@ -97,12 +103,12 @@ template <int N = 2> struct WendlandC2 {
 		const int ny_loop = (AMREX_SPACEDIM >= 2) ? stencil_width : 1; // NOLINT(misc-redundant-expression)
 		for (int kk = 0; kk < nz_loop; ++kk) {
 			const amrex::Real dz =
-			    (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(N - kk) + frac[2] - 1.0 : 0.0; // NOLINT(misc-redundant-expression)
+			    (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(kk - N) + 0.5 - frac[2] : 0.0; // NOLINT(misc-redundant-expression)
 			for (int jj = 0; jj < ny_loop; ++jj) {
 				const amrex::Real dy =
-				    (AMREX_SPACEDIM >= 2) ? static_cast<amrex::Real>(N - jj) + frac[1] - 1.0 : 0.0; // NOLINT(misc-redundant-expression)
+				    (AMREX_SPACEDIM >= 2) ? static_cast<amrex::Real>(jj - N) + 0.5 - frac[1] : 0.0; // NOLINT(misc-redundant-expression)
 				for (int ii = 0; ii < stencil_width; ++ii) {
-					const amrex::Real dx = static_cast<amrex::Real>(N - ii) + frac[0] - 1.0;
+					const amrex::Real dx = static_cast<amrex::Real>(ii - N) + 0.5 - frac[0];
 					const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
 					if (r2 <= cutoff_r2) {
 						norm_sum += kernel_wendland_c2(std::sqrt(r2) * inv_N);
@@ -126,12 +132,12 @@ template <int N = 2> struct WendlandC2 {
 			const auto pval = f(p, src_comp + ic);
 			for (int kk = 0; kk < nz_loop; ++kk) {
 				const amrex::Real dz =
-				    (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(N - kk) + frac[2] - 1.0 : 0.0; // NOLINT(misc-redundant-expression)
+				    (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(kk - N) + 0.5 - frac[2] : 0.0; // NOLINT(misc-redundant-expression)
 				for (int jj = 0; jj < ny_loop; ++jj) {
 					const amrex::Real dy =
-					    (AMREX_SPACEDIM >= 2) ? static_cast<amrex::Real>(N - jj) + frac[1] - 1.0 : 0.0; // NOLINT(misc-redundant-expression)
+					    (AMREX_SPACEDIM >= 2) ? static_cast<amrex::Real>(jj - N) + 0.5 - frac[1] : 0.0; // NOLINT(misc-redundant-expression)
 					for (int ii = 0; ii < stencil_width; ++ii) {
-						const amrex::Real dx = static_cast<amrex::Real>(N - ii) + frac[0] - 1.0;
+						const amrex::Real dx = static_cast<amrex::Real>(ii - N) + 0.5 - frac[0];
 						const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
 						if (r2 <= cutoff_r2) {
 							const amrex::Real wt = kernel_wendland_c2(std::sqrt(r2) * inv_N) * inv_norm;
