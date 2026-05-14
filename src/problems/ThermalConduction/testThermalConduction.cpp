@@ -132,7 +132,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index) = rho * vz;
-		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint;
+		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint + 0.5 * rho * vz * vz;
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = Eint;
 	});
 }
@@ -213,54 +213,6 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 		}
 	});
 	amrex::Gpu::streamSynchronize();
-}
-
-
-auto runConductionTest(int nx) -> double
-{
-	// Read problem parameters
-	const double max_time = 469054.0075444166; // 1 conduction time
-
-	const double CFL_number = 0.3;
-	const int max_timesteps = std::max(2000, nx * 100);
-
-	// Set grid dimensions using AMReX parameter system
-	amrex::ParmParse pp("amr");
-	amrex::Vector<int> const ncells = {nx, nx, nx};
-	pp.add("max_level", 0);
-	pp.addarr("n_cell", ncells);
-
-	// Set domain bounds using AMReX parameter system
-	amrex::ParmParse pp_geom("geometry");
-	amrex::Vector<double> const prob_lo = {-1.5428e+18, -1.5428e+18, -1.5428e+18};
-	amrex::Vector<double> const prob_hi = {1.5428e+18, 1.5428e+18, 1.5428e+18};
-	amrex::Vector<int> const is_periodic = {0, 0, 0};
-	pp_geom.addarr("prob_lo", prob_lo);
-	pp_geom.addarr("prob_hi", prob_hi);
-	pp_geom.addarr("is_periodic", is_periodic);
-
-	// Setup boundary conditions
-	constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-			BCs_cc[n].setLo(dir, amrex::BCType::foextrap);
-			BCs_cc[n].setHi(dir, amrex::BCType::foextrap);
-		}
-	}
-
-	// Run simulation
-	QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
-
-	sim.cflNumber_ = CFL_number;
-	sim.stopTime_ = max_time;
-	sim.maxTimesteps_ = max_timesteps;
-
-	// set initial conditions
-	sim.setInitialConditions();
-
-	sim.evolve();
-	return sim.computeErrorNorm();
 }
 
 auto problem_main() -> int
