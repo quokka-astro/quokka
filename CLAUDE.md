@@ -24,7 +24,7 @@ The script optionally sources an environment file via `--source <file>` for comm
 - **Clean test output**: `quokka clean`
 - **Result summary**: `build`, `run`, and `buildrun` always print final per-target summary lines (`<name> SUCCESS|FAIL|SKIPPED`), so tooling/agents can reliably inspect outcomes by tailing the command output.
 
-Presets: `1d`, `3d`, `1d-debug`, `3d-debug` (sets dimensionality and Release/Debug build type). Default preset is `1d`.
+Presets: `1d`, `2d`, `3d`, `1d-debug`, `2d-debug`, `3d-debug`, `1d-hip`, `2d-hip`, `3d-hip`, `1d-cuda`, `2d-cuda`, `3d-cuda` (sets dimensionality, Release/Debug build type, and optional GPU backend). Default preset is `1d`.
 
 **Without the script (manual):**
 - **Configure**: `mkdir -p build/<preset> && cd build/<preset> && cmake ../.. -G Ninja -DCMAKE_BUILD_TYPE=<type> -DAMReX_SPACEDIM=<N>`
