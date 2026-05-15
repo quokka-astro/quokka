@@ -121,7 +121,7 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 |-----------------------------|---------------|----------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
 | dust.enable_iter_stoptime   | Boolean (0/1) | `0` (Disabled) | If set to 1, enables iterative dust stopping time calculation.                                                                                    |
 | dust.omega1                 | Float         | `1.0`          | Controls deposition of physical dust-drag heating into the gas.                                                                                  |
-| dust.omega2                 | Float         | `1.0`          | Controls deposition of the numerical energy correction from the coupled dust drag-plus-Lorentz source update. Only relevant when dust and MHD are both enabled. |
+| dust.omega2                 | Float         | `1.0`          | Controls deposition of the numerical energy correction from the coupled dust drag-plus-Lorentz source update. Only relevant when dust and MHD are both enabled; this is not a physical Lorentz heating term. |
 | dust.print_iteration_counts | Boolean (0/1) | `0` (Disabled) | If set to 1, prints dust drag or dust drag-plus-Lorentz iteration counts for debugging.                                                           |
 | dust.density_floor          | Float         | `0.0`          | The minimum dust density value allowed in the simulation. Enforced through EnforceLimits.                                                        |
 

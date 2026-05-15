@@ -71,6 +71,28 @@ where
 -   \\(\mathbf{a}_{\mathrm{ext},\mathrm{d},n}\\) is the external acceleration applied to dust species \\(n\\),
 -   \\(\omega_1\\) is the fraction of physical dust-drag dissipation deposited into the gas.
 
+The Lorentz work term in the gas total-energy equation is the gas-side work from the dust back-reaction. It transfers kinetic energy between gas and dust, but it does not heat the combined gas-dust system. For each dust species,
+
+<script type="math/tex; mode=display">
+\begin{aligned}
+P_{\mathrm{L,g},n}
+&= - \rho_{\mathrm{d},n} \Omega_{\mathrm{L},n}
+   \left[\left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right) \times \hat{\mathbf{b}}\right]
+   \cdot \mathbf{v}_{\mathrm{g}}, \\
+P_{\mathrm{L,d},n}
+&= \rho_{\mathrm{d},n} \Omega_{\mathrm{L},n}
+   \left[\left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right) \times \hat{\mathbf{b}}\right]
+   \cdot \mathbf{v}_{\mathrm{d},n}, \\
+P_{\mathrm{L,g},n} + P_{\mathrm{L,d},n}
+&= \rho_{\mathrm{d},n} \Omega_{\mathrm{L},n}
+   \left[\left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right) \times \hat{\mathbf{b}}\right]
+   \cdot \left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right)
+ = 0 .
+\end{aligned}
+</script>
+
+Only aerodynamic drag produces physical gas heating in these equations, through the \\(\omega_1\\) term. The \\(\omega_2\\) runtime parameter used by the MHD dust source solver controls a numerical energy correction in the discrete drag-plus-Lorentz update; it is not a continuous Lorentz heating term.
+
 ## Variable Storage
 
 The dust cell-centred conserved variables (\\(\rho_{\mathrm{d}}\\), \\(\rho_{\mathrm{d}}\mathbf{v}_{\mathrm{d}}\\)) are added to MultiFab.
@@ -148,6 +170,6 @@ The following input parameters tune the dust module and are documented in more d
 
 - `enable_iter_stoptime` – switch of iterative dust stopping time calculation.
 - `omega1` – controls deposition of physical dust-drag heating into the gas.
-- `omega2` – controls deposition of the numerical energy correction from the coupled dust drag-plus-Lorentz source update. It is only relevant when MHD and dust are both enabled.
+- `omega2` – controls deposition of the numerical energy correction from the coupled dust drag-plus-Lorentz source update. It is only relevant when MHD and dust are both enabled, and it is not a physical Lorentz heating term.
 - `print_iteration_counts` - switch to turn on/off printing of dust source iteration counts for debugging.
 - `dust.density_floor` - the minimum dust density value allowed in the simulation.

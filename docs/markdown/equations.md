@@ -36,7 +36,7 @@ Assuming the speed of light is not reduced (\\(\hat{c} = c\\)), Quokka solves th
 \begin{array}{c}
   0 \\
   \sum_g \vec{G}_g + \rho \vec{g} + \sum_{k=1}^{N_{\mathrm{dust}}} \left[\rho_{\mathrm{d},k} \frac{\vec{v}_{\mathrm{d},k} - \vec{v}}{T_{\mathrm{s},k}} - \rho_{\mathrm{d},k} \Omega_{\mathrm{L},k} \left(\vec{v}_{\mathrm{d},k} - \vec{v}\right) \times \hat{\vec{b}}\right] \\
-  c \sum_g G^0_{g} + \rho \vec{v} \cdot \vec{g} + \mathcal{H} - \mathcal{C} + \sum_{k=1}^{N_{\mathrm{dust}}} \rho_{\mathrm{d},k} \frac{\vec{v}_{\mathrm{d},k} - \vec{v}}{T_{\mathrm{s},k}} \cdot \vec{v} + \omega_1 \sum_{k=1}^{N_{\mathrm{dust}}} \rho_{\mathrm{d},k} \frac{(\vec{v}_{\mathrm{d},k} - \vec{v})^{2}}{T_{\mathrm{s},k}} \\
+  c \sum_g G^0_{g} + \rho \vec{v} \cdot \vec{g} + \mathcal{H} - \mathcal{C} + \sum_{k=1}^{N_{\mathrm{dust}}} \rho_{\mathrm{d},k} \frac{\vec{v}_{\mathrm{d},k} - \vec{v}}{T_{\mathrm{s},k}} \cdot \vec{v} - \sum_{k=1}^{N_{\mathrm{dust}}} \rho_{\mathrm{d},k} \Omega_{\mathrm{L},k} \left[\left(\vec{v}_{\mathrm{d},k} - \vec{v}\right) \times \hat{\vec{b}}\right] \cdot \vec{v} + \omega_1 \sum_{k=1}^{N_{\mathrm{dust}}} \rho_{\mathrm{d},k} \frac{(\vec{v}_{\mathrm{d},k} - \vec{v})^{2}}{T_{\mathrm{s},k}} \\
   \rho \dot{X}_n \\
   - c G^0_{g} \\
   - c^2 \vec{G}_g \\
