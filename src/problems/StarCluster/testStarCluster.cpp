@@ -195,8 +195,7 @@ template <> void QuokkaSimulation<StarCluster>::refineGrid(int lev, amrex::TagBo
 
 template <>
 void QuokkaSimulation<StarCluster>::ComputeDerivedVar(int /*lev*/, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
-						      amrex::MultiFab const &state_cc,
-						      amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
+						      amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "log_density") {

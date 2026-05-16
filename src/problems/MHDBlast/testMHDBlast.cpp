@@ -133,8 +133,7 @@ template <> void QuokkaSimulation<MHDBlast>::refineGrid(int lev, amrex::TagBoxAr
 
 template <>
 void QuokkaSimulation<MHDBlast>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp,
-						   amrex::MultiFab const & /*state_cc*/,
-						   amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
+						   amrex::MultiFab const & /*state_cc*/, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "magnetic_divergence") {
