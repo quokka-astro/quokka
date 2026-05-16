@@ -3673,17 +3673,16 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 	if (included_ghosts > 0) {
 		scratch_cc.define(state_new_cc_[lev].boxArray(), state_new_cc_[lev].DistributionMap(), state_new_cc_[lev].nComp(), included_ghosts);
 		amrex::MultiFab::Copy(scratch_cc, state_new_cc_[lev], 0, 0, state_new_cc_[lev].nComp(), 0);
-		fillBoundaryConditions(scratch_cc, scratch_cc, lev, tNew_[lev], quokka::centering::cc, quokka::direction::na, InterpHookNone,
-				       InterpHookNone, FillPatchType::fillpatch_function);
+		fillBoundaryConditions(scratch_cc, scratch_cc, lev, tNew_[lev], quokka::centering::cc, quokka::direction::na, InterpHookNone, InterpHookNone,
+				       FillPatchType::fillpatch_function);
 
 		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 				scratch_fc[idim].define(state_new_fc_[lev][idim].boxArray(), state_new_fc_[lev][idim].DistributionMap(),
-						       state_new_fc_[lev][idim].nComp(), included_ghosts);
+							state_new_fc_[lev][idim].nComp(), included_ghosts);
 				amrex::MultiFab::Copy(scratch_fc[idim], state_new_fc_[lev][idim], 0, 0, state_new_fc_[lev][idim].nComp(), 0);
 				fillBoundaryConditions(scratch_fc[idim], scratch_fc[idim], lev, tNew_[lev], quokka::centering::fc,
-						       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone,
-						       FillPatchType::fillpatch_function);
+						       static_cast<quokka::direction>(idim), InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
 			}
 		}
 	}
@@ -3803,8 +3802,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_f
 		scratch_fc.define(state_new_fc_[lev][idim].boxArray(), state_new_fc_[lev][idim].DistributionMap(), state_new_fc_[lev][idim].nComp(),
 				  nghost_fc_);
 		amrex::MultiFab::Copy(scratch_fc, state_new_fc_[lev][idim], 0, 0, state_new_fc_[lev][idim].nComp(), 0);
-		fillBoundaryConditions(scratch_fc, scratch_fc, lev, tNew_[lev], quokka::centering::fc, static_cast<quokka::direction>(idim),
-				       InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+		fillBoundaryConditions(scratch_fc, scratch_fc, lev, tNew_[lev], quokka::centering::fc, static_cast<quokka::direction>(idim), InterpHookNone,
+				       InterpHookNone, FillPatchType::fillpatch_function);
 	}
 
 	// copy data from scratch (with filled ghost cells) to plot MF
@@ -4487,8 +4486,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::WriteCheckpointFile
 				amrex::MultiFab chkMF(state_new_fc_[lev][idim].boxArray(), state_new_fc_[lev][idim].DistributionMap(),
 						      state_new_fc_[lev][idim].nComp(), 0);
 				amrex::MultiFab::Copy(chkMF, state_new_fc_[lev][idim], 0, 0, state_new_fc_[lev][idim].nComp(), 0);
-				amrex::VisMF::Write(chkMF, amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_",
-											  std::string("Face_") + quokka::face_dir_str[idim]));
+				amrex::VisMF::Write(
+				    chkMF, amrex::MultiFabFileFullPrefix(lev, checkpointname, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
 				amrex::ParallelDescriptor::Barrier(); // needed to avoid overwhelming Lustre I/O on Frontier
 			}
 		}
@@ -4652,8 +4651,7 @@ void AMRSimulation<problem_t>::interpolateFaceMultiFabFromRestart(int lev, const
 			amrex::MultiFab tmp_read;
 			amrex::VisMF::Read(tmp_read,
 					   amrex::MultiFabFileFullPrefix(lev, restart_chkfile, "Level_", std::string("Face_") + quokka::face_dir_str[idim]));
-			state_new_fc_[lev][idim].ParallelCopy(tmp_read, 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, amrex::IntVect(0),
-							      amrex::IntVect(0));
+			state_new_fc_[lev][idim].ParallelCopy(tmp_read, 0, 0, Physics_Indices<problem_t>::nvarPerDim_fc, amrex::IntVect(0), amrex::IntVect(0));
 			AMREX_ALWAYS_ASSERT(!state_new_fc_[lev][idim].contains_nan(0, state_new_fc_[lev][idim].nComp())); // check valid faces
 		}
 	} else {
@@ -4893,8 +4891,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 	// explicitly populated before the first advance.  (See
 	// https://github.com/quokka-astro/quokka/issues/1868.)
 	for (int lev = 0; lev <= finest_level; ++lev) {
-		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, tNew_[lev], quokka::centering::cc, quokka::direction::na,
-				       InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+		fillBoundaryConditions(state_new_cc_[lev], state_new_cc_[lev], lev, tNew_[lev], quokka::centering::cc, quokka::direction::na, InterpHookNone,
+				       InterpHookNone, FillPatchType::fillpatch_function);
 		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 				fillBoundaryConditions(state_new_fc_[lev][idim], state_new_fc_[lev][idim], lev, tNew_[lev], quokka::centering::fc,
@@ -4907,8 +4905,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 		state_old_cc_[lev].ParallelCopy(state_new_cc_[lev], 0, 0, state_new_cc_[lev].nComp(), nghost_cc_, nghost_cc_);
 		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				state_old_fc_[lev][idim].ParallelCopy(state_new_fc_[lev][idim], 0, 0, state_new_fc_[lev][idim].nComp(), nghost_fc_,
-								      nghost_fc_);
+				state_old_fc_[lev][idim].ParallelCopy(state_new_fc_[lev][idim], 0, 0, state_new_fc_[lev][idim].nComp(), nghost_fc_, nghost_fc_);
 			}
 		}
 	}
