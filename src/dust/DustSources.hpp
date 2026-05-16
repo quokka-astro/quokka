@@ -818,17 +818,17 @@ void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_
 				}
 			}
 
-			amrex::Real delta_E_heat_phy = 0.0;
+			amrex::Real delta_E_heat_drag = 0.0;
 			for (int g = 0; g < nDustGroups_; ++g) {
 				if (rho_d[g] > 0.0) {
-					delta_E_heat_phy += dt * alpha[g] / rho_d[g] * (b * q1[g].dot(q1[g]) + (1.0 - b) * q2[g].dot(q2[g]));
+					delta_E_heat_drag += dt * alpha[g] / rho_d[g] * (b * q1[g].dot(q1[g]) + (1.0 - b) * q2[g].dot(q2[g]));
 				}
 			}
 
-			amrex::Real const delta_E_heat_tot = -(delta_E_g_work + delta_E_d_work_sum);
-			amrex::Real const delta_E_heat_num = delta_E_heat_tot - delta_E_heat_phy;
-			E_tot_iter_new = E_tot + delta_E_g_work + omega1 * delta_E_heat_phy + omega2 * delta_E_heat_num;
-			E_int_iter_new = E_int + omega1 * delta_E_heat_phy + omega2 * delta_E_heat_num;
+			amrex::Real const delta_E_cons = -(delta_E_g_work + delta_E_d_work_sum);
+			amrex::Real const delta_E_corr = delta_E_cons - delta_E_heat_drag;
+			E_tot_iter_new = E_tot + delta_E_g_work + omega1 * delta_E_heat_drag + omega2 * delta_E_corr;
+			E_int_iter_new = E_int + omega1 * delta_E_heat_drag + omega2 * delta_E_corr;
 
 			if (max_speed_change <= abs_tolerance) {
 				break;
