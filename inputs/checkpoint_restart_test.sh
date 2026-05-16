@@ -56,3 +56,57 @@ else
     echo "TEST FAILED: Default number of binary cell data files in checkpoints should match MPI ranks!"
     exit 1
 fi
+
+# [ghost-cell corruption test] verify that checkpoint files do not contain stale
+# ghost-cell data that could corrupt valid cells after restart with a different
+# MPI decomposition.  (See https://github.com/quokka-astro/quokka/issues/1868.)
+#
+# Strategy:
+#   1. Clean up output from the first phase.
+#   2. Run a fresh simulation that writes a checkpoint WITHOUT any prior
+#      plotfile (so ghost cells are never sanitized by fillBoundaryConditions).
+#   3. Save a plotfile written at the same step as the checkpoint.
+#   4. Restart from that checkpoint with a DIFFERENT number of MPI ranks
+#      (triggering re-boxing / load-balancing) and take one step.
+#   5. Compare the restarted plotfile against the saved one.
+#
+# If stale checkpoint ghost cells leak into valid cells after re-boxing,
+# fcompare will report differences.
+
+# Clean up from the first phase
+rm -rf plt* chk* last_chk 2>/dev/null || true
+
+NPROC_ORIG=4
+NPROC_RESTART=2
+
+# Run to generate a checkpoint (with NO prior plotfile sanitization)
+mpirun --use-hwthread-cpus -np $NPROC_ORIG $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D ../inputs/blast_32.toml max_walltime=0:00:10 plotfile_interval=0 checkpoint_interval=100 amr.checkpoint_nfiles=$NFILES
+
+# Save the checkpoint name
+chkfile_ghost=`ls -1drt chk* | head -1`
+if [ -z "$chkfile_ghost" ]; then
+    echo "TEST FAILED: No checkpoint produced for ghost-cell test!"
+    exit 1
+fi
+
+# Write a reference plotfile at the checkpoint time for later comparison
+mpirun --use-hwthread-cpus -np $NPROC_ORIG $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D ../inputs/blast_32.toml restartfile=$chkfile_ghost max_timesteps=0 plotfile_interval=1 checkpoint_interval=0
+ref_plotfile=`ls -1drt plt* | head -1`
+if [ -z "$ref_plotfile" ]; then
+    echo "TEST FAILED: No reference plotfile produced for ghost-cell test!"
+    exit 1
+fi
+mv "$ref_plotfile" ref_plotfile
+
+# Restart from checkpoint with a DIFFERENT MPI rank count and take one step
+mpirun --use-hwthread-cpus -np $NPROC_RESTART $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D ../inputs/blast_32.toml restartfile=$chkfile_ghost max_timesteps=1 plotfile_interval=1 checkpoint_interval=0
+restart_plotfile=`ls -1drt plt* | head -1`
+if [ -z "$restart_plotfile" ]; then
+    echo "TEST FAILED: No restart plotfile produced for ghost-cell test!"
+    exit 1
+fi
+
+# The first plotfile after restart (step 0) must match the reference.
+# If stale ghost cells from the checkpoint leaked into valid cells due to
+# re-boxing, fcompare will report a mismatch.
+$PLOTFILETOOLS_DIR/fcompare.gnu.ex -n 1 -r 0.001 --abs_tol 0.0025 ref_plotfile "$restart_plotfile"
