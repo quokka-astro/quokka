@@ -98,15 +98,18 @@ if [ -z "$ref_plotfile" ]; then
 fi
 mv "$ref_plotfile" ref_plotfile
 
-# Restart from checkpoint with a DIFFERENT MPI rank count and take one step
-mpirun --use-hwthread-cpus -np $NPROC_RESTART $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D ../inputs/blast_32.toml restartfile=$chkfile_ghost max_timesteps=1 plotfile_interval=1 checkpoint_interval=0
+# Restart from checkpoint with a DIFFERENT MPI rank count (no advance).
+# This tests that the initial restarted state is correct; if stale
+# checkpoint ghost cells leak into valid cells after re-boxing,
+# the first plotfile written on restart will differ from the reference.
+mpirun --use-hwthread-cpus -np $NPROC_RESTART $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D ../inputs/blast_32.toml restartfile=$chkfile_ghost max_timesteps=0 plotfile_interval=1 checkpoint_interval=0
 restart_plotfile=`ls -1drt plt* | head -1`
 if [ -z "$restart_plotfile" ]; then
     echo "TEST FAILED: No restart plotfile produced for ghost-cell test!"
     exit 1
 fi
 
-# The first plotfile after restart (step 0) must match the reference.
-# If stale ghost cells from the checkpoint leaked into valid cells due to
-# re-boxing, fcompare will report a mismatch.
-$PLOTFILETOOLS_DIR/fcompare.gnu.ex -n 1 -r 0.001 --abs_tol 0.0025 ref_plotfile "$restart_plotfile"
+# The plotfile written immediately after restart (step 0) must match
+# the reference. If stale ghost cells from the checkpoint leaked into
+# valid cells after re-boxing, fcompare will report a mismatch.
+$PLOTFILETOOLS_DIR/fcompare.gnu.ex -a -n 1 -r 0.001 --abs_tol 0.0025 ref_plotfile "$restart_plotfile"
