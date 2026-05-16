@@ -31,7 +31,9 @@ Options:
   --fpe            Enable floating-point exception traps for direct problem runs (ignored for ctest-based runs)
   --filter <pattern> For run: ctest regex; for build: shell glob over problem names; exclusive with <problem>
                      Quote patterns to avoid expansion by your shell (e.g. --filter 'Rad*')
-  --source <file>  Optional environment file to source before config/build/run/target commands
+  --source --      Source ~/.config/quokka/quokka.rc (the default rc).
+  --source <file>  Source the specified environment file instead of the default rc.
+                   Omitting --source entirely skips all sourcing (avoids slow 'module load' in active shells).
   --delete         For config only: delete existing preset build directory before reconfiguring
   -D<k>=<v>        For config only: pass extra CMake cache definitions (repeatable)
   -j <N>           Number of parallel jobs for ninja or ctest (default: 8)
@@ -41,9 +43,17 @@ Environment:
 
 Presets:
   1d              1D Release build
+  2d              2D Release build
   3d              3D Release build
   1d-debug        1D Debug build
+  2d-debug        2D Debug build
   3d-debug        3D Debug build
+  1d-hip          1D Release build with HIP GPU backend
+  2d-hip          2D Release build with HIP GPU backend
+  3d-hip          3D Release build with HIP GPU backend
+  1d-cuda         1D Release build with CUDA GPU backend
+  2d-cuda         2D Release build with CUDA GPU backend
+  3d-cuda         3D Release build with CUDA GPU backend
 EOF
 }
 
@@ -124,34 +134,27 @@ _require_no_delete()   { [ "$DELETE_BUILD_DIR" -eq 0 ] || die "'${COMMAND}' does
 
 parse_preset() {
 	local preset="$1"
+	GPU_BACKEND=""
 
 	case "$preset" in
-	1d)
-		DIM=1
-		BUILD_TYPE=Release
-		BUILD_NAME=1d
-		;;
-	3d)
-		DIM=3
-		BUILD_TYPE=Release
-		BUILD_NAME=3d
-		;;
-	1d-debug)
-		DIM=1
-		BUILD_TYPE=Debug
-		BUILD_NAME=1d-debug
-		;;
-	3d-debug)
-		DIM=3
-		BUILD_TYPE=Debug
-		BUILD_NAME=3d-debug
-		;;
+	1d)       DIM=1; BUILD_TYPE=Release ;;
+	2d)       DIM=2; BUILD_TYPE=Release ;;
+	3d)       DIM=3; BUILD_TYPE=Release ;;
+	1d-debug) DIM=1; BUILD_TYPE=Debug ;;
+	2d-debug) DIM=2; BUILD_TYPE=Debug ;;
+	3d-debug) DIM=3; BUILD_TYPE=Debug ;;
+	1d-hip)   DIM=1; BUILD_TYPE=Release; GPU_BACKEND=HIP ;;
+	2d-hip)   DIM=2; BUILD_TYPE=Release; GPU_BACKEND=HIP ;;
+	3d-hip)   DIM=3; BUILD_TYPE=Release; GPU_BACKEND=HIP ;;
+	1d-cuda)  DIM=1; BUILD_TYPE=Release; GPU_BACKEND=CUDA ;;
+	2d-cuda)  DIM=2; BUILD_TYPE=Release; GPU_BACKEND=CUDA ;;
+	3d-cuda)  DIM=3; BUILD_TYPE=Release; GPU_BACKEND=CUDA ;;
 	*)
 		die "unsupported preset '${preset}'"
 		;;
 	esac
 
-	BUILD_DIR="${ROOT}/build/${BUILD_NAME}"
+	BUILD_DIR="${ROOT}/build/${preset}"
 }
 
 resolve_root() {
@@ -175,6 +178,9 @@ configure_build() {
 	cd "$BUILD_DIR"
 
 	cmake_args=(../.. -G Ninja "-DCMAKE_BUILD_TYPE=${BUILD_TYPE}" "-DAMReX_SPACEDIM=${DIM}")
+	if [ -n "$GPU_BACKEND" ]; then
+		cmake_args+=("-DAMReX_GPU_BACKEND=${GPU_BACKEND}")
+	fi
 	if [ "${#CMAKE_DEFINES[@]}" -gt 0 ]; then
 		cmake_args+=("${CMAKE_DEFINES[@]}")
 	fi
@@ -527,14 +533,12 @@ INPUT_FILE=""
 ENABLE_FPE=0
 FILTER_REGEX=""
 SOURCE_FILE=""
-if [[ "$COMMAND" == "config" || "$COMMAND" == "build" || "$COMMAND" == "buildrun" || "$COMMAND" == "run" || "$COMMAND" == "target" ]]; then
-	[[ -f "${HOME}/.config/quokka/quokka.rc" ]] && SOURCE_FILE="${HOME}/.config/quokka/quokka.rc"
-fi
 DELETE_BUILD_DIR=0
 JOBS=8
 CMAKE_DEFINES=()
 FILTER_MATCHED_PROBLEMS=()
 FILTER_MATCHED_TESTS=()
+GPU_BACKEND=""
 
 while [ "$#" -gt 0 ]; do
 	case "$1" in
@@ -570,7 +574,11 @@ while [ "$#" -gt 0 ]; do
 		;;
 	--source)
 		require_arg "$1" "${2:-}"
-		SOURCE_FILE="$2"
+		if [ "$2" = "--" ]; then
+			SOURCE_FILE="${HOME}/.config/quokka/quokka.rc"
+		else
+			SOURCE_FILE="$2"
+		fi
 		shift 2
 		;;
 	--delete)
