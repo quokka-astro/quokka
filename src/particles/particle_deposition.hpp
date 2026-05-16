@@ -367,11 +367,12 @@ depositThermalSNR(amrex::Array4<amrex::Real> const &local_buffer, const int ix, 
 				// Deposit passive scalar if enabled
 				// TODO(chongchonghe): Add support for multiple passive scalars (currently only deposits to scalar0)
 				if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0) {
-					// #Chuhan_start: Disable legacy single-scalar SN injection when enabling new chemical feedback to prevent double counting.
+					// #Chuhan_start: Disable legacy single-scalar SN injection when enabling new chemical feedback to prevent double
+					// counting.
 					if (!enable_chemical_feedback) {
 						const amrex::Real scalar_per_cell = scalar_yield_per_SN_d * kernel_times_vol_inverse;
 						amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, HydroSystem<problem_t>::scalar0_index),
-									 scalar_per_cell);
+									     scalar_per_cell);
 					}
 					// #Chuhan_end: Legacy scalar injection only takes effect when new chemical feedback pathways are disabled.
 				}
@@ -529,7 +530,8 @@ depositThermalKineticMomentumSNR(amrex::Array4<amrex::Real> const &local_state, 
 				// Deposit passive scalar if enabled
 				// TODO(chongchonghe): Add support for multiple passive scalars (currently only deposits to scalar0)
 				if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0) {
-					// #Chuhan_start: Disable legacy single-scalar SN injection when enabling new chemical feedback to prevent double counting.
+					// #Chuhan_start: Disable legacy single-scalar SN injection when enabling new chemical feedback to prevent double
+					// counting.
 					if (!enable_chemical_feedback) {
 						const amrex::Real scalar_per_cell = scalar_yield_per_SN_d * kernel_times_vol_inverse;
 						amrex::Gpu::Atomic::AddNoRet(&local_buffer(ii, jj, kk, HydroSystem<problem_t>::scalar0_index), scalar_per_cell);
@@ -1062,8 +1064,9 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 
 			for (int n = 0; n < nchem; ++n) {
 				const amrex::Real birth_iso_abundance = std::max<amrex::Real>(0.0, p.rdata(chem_base + n));
-				const amrex::Real z_snii_lookup = store_channel_fields ? std::max<amrex::Real>(1.0e-12, p.rdata(chem_base + chem_block_size + n))
-				                                                     : std::max<amrex::Real>(1.0e-12, stellar_metallicity_fraction);
+				const amrex::Real z_snii_lookup = store_channel_fields
+								      ? std::max<amrex::Real>(1.0e-12, p.rdata(chem_base + chem_block_size + n))
+								      : std::max<amrex::Real>(1.0e-12, stellar_metallicity_fraction);
 
 				amrex::Real y_snii = 0.0;
 				if (enable_SNII_metal && stage == static_cast<int>(StellarEvolutionStage::SNProgenitor)) {
@@ -1071,7 +1074,8 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 					if ((time + dt) > death_time) {
 						amrex::Real snii_total_frac = snii_metal_yield_fraction;
 						if (use_table_driven_chemical_yield && ChemicalYieldLookup::isLoaded()) {
-							const amrex::Real queried_frac = ChemicalYieldLookup::queryYieldFraction(0, n, mass_birth_msun, z_snii_lookup);
+							const amrex::Real queried_frac =
+							    ChemicalYieldLookup::queryYieldFraction(0, n, mass_birth_msun, z_snii_lookup);
 							// Some table formats provide channel-integrated yields only; fall back to the runtime
 							// parameter when an isotope-specific query is unavailable.
 							if (queried_frac > 0.0) {
@@ -1091,7 +1095,8 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 							const int kkk = std::abs(kk);
 							const amrex::Real kernel_times_vol_inverse = stencil_weights_gpu[iii][jjj][kkk] * vol_inverse;
 							const amrex::Real total_density_injection = y_snii * kernel_times_vol_inverse;
-							amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, total_comp), total_density_injection);
+							amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, total_comp),
+										     total_density_injection);
 						}
 					}
 				}
@@ -1106,8 +1111,10 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 										const int iii = std::abs(ii);
 										const int jjj = std::abs(jj);
 										const int kkk = std::abs(kk);
-										const amrex::Real kernel_times_vol_inverse = stencil_weights_gpu[iii][jjj][kkk] * vol_inverse;
-										amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, sn_comp), y_snii * kernel_times_vol_inverse);
+										const amrex::Real kernel_times_vol_inverse =
+										    stencil_weights_gpu[iii][jjj][kkk] * vol_inverse;
+										amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, sn_comp),
+													     y_snii * kernel_times_vol_inverse);
 									}
 								}
 							}
@@ -1115,7 +1122,6 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 					}
 				}
 			}
-
 		});
 	}
 

@@ -7,8 +7,8 @@
 
 #include <algorithm>
 #include <array>
-#include <cmath>
 #include <cctype>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -29,16 +29,16 @@ constexpr int kMaxTrackedIsotopes = 32;
 constexpr int kMaxTrackedChannels = 5; // first version: SNII; 2nd version WR, AGB; 3rd version: SNIa, NSM
 constexpr int kMaxChemicalYieldEntries = 4096;
 
-AMREX_GPU_MANAGED inline int g_num_entries = 0; // NOLINT
-AMREX_GPU_MANAGED inline bool g_loaded = false; // NOLINT
+AMREX_GPU_MANAGED inline int g_num_entries = 0;		 // NOLINT
+AMREX_GPU_MANAGED inline bool g_loaded = false;		 // NOLINT
 AMREX_GPU_MANAGED inline int g_num_tracked_isotopes = 0; // NOLINT
 AMREX_GPU_MANAGED inline int g_num_tracked_channels = 0; // NOLINT
 
-AMREX_GPU_MANAGED inline amrex::GpuArray<amrex::Real, kMaxChemicalYieldEntries> g_mass_msun{};     // NOLINT
-AMREX_GPU_MANAGED inline amrex::GpuArray<amrex::Real, kMaxChemicalYieldEntries> g_metallicity{};   // NOLINT
-AMREX_GPU_MANAGED inline amrex::GpuArray<amrex::Real, kMaxChemicalYieldEntries * kMaxTrackedIsotopes> g_snii_frac{}; // NOLINT
-AMREX_GPU_MANAGED inline amrex::GpuArray<amrex::Real, kMaxChemicalYieldEntries * kMaxTrackedIsotopes> g_wr_frac{};   // NOLINT
-AMREX_GPU_MANAGED inline amrex::GpuArray<amrex::Real, kMaxChemicalYieldEntries * kMaxTrackedIsotopes> g_agb_frac{};  // NOLINT
+AMREX_GPU_MANAGED inline amrex::GpuArray<amrex::Real, kMaxChemicalYieldEntries> g_mass_msun{};							  // NOLINT
+AMREX_GPU_MANAGED inline amrex::GpuArray<amrex::Real, kMaxChemicalYieldEntries> g_metallicity{};						  // NOLINT
+AMREX_GPU_MANAGED inline amrex::GpuArray<amrex::Real, kMaxChemicalYieldEntries * kMaxTrackedIsotopes> g_snii_frac{};				  // NOLINT
+AMREX_GPU_MANAGED inline amrex::GpuArray<amrex::Real, kMaxChemicalYieldEntries * kMaxTrackedIsotopes> g_wr_frac{};				  // NOLINT
+AMREX_GPU_MANAGED inline amrex::GpuArray<amrex::Real, kMaxChemicalYieldEntries * kMaxTrackedIsotopes> g_agb_frac{};				  // NOLINT
 AMREX_GPU_MANAGED inline amrex::GpuArray<amrex::Real, kMaxChemicalYieldEntries * kMaxTrackedChannels * kMaxTrackedIsotopes> g_channel_iso_frac{}; // NOLINT
 
 inline auto lowercase(std::string s) -> std::string;
@@ -99,7 +99,7 @@ inline auto normalizeNumericToken(std::string token) -> std::string
 	replace_all("\xE2\x88\x92", "-"); // U+2212 minus sign
 	replace_all("\xE2\x80\x93", "-"); // U+2013 en dash
 	replace_all("\xE2\x80\x94", "-"); // U+2014 em dash
-	replace_all("\xC2\xA0", "");      // U+00A0 non-breaking space
+	replace_all("\xC2\xA0", "");	  // U+00A0 non-breaking space
 
 	return token;
 }
@@ -178,9 +178,9 @@ inline auto parseLegacyFiveColumnFile(const std::filesystem::path &file_path, st
 		}
 		std::stringstream ss(line);
 		YieldEntry e{};
-	amrex::Real snii_frac = 0.0;
-	amrex::Real wr_frac = 0.0;
-	amrex::Real agb_frac = 0.0;
+		amrex::Real snii_frac = 0.0;
+		amrex::Real wr_frac = 0.0;
+		amrex::Real agb_frac = 0.0;
 		if (!(ss >> e.mass_msun >> e.metallicity >> snii_frac >> wr_frac >> agb_frac)) {
 			continue;
 		}
@@ -327,9 +327,8 @@ inline auto parseKarakasAGBFile(const std::filesystem::path &file_path, std::vec
 		return;
 	}
 
-	const std::regex header_re(
-	    R"(#\s*Initial\s+mass\s*=\s*([0-9]+(?:\.[0-9]+)?),\s*Z\s*=\s*([0-9]+(?:\.[0-9]+)?),.*M_mix\s*=\s*([0-9eE+\-.]+))",
-	    std::regex::icase);
+	const std::regex header_re(R"(#\s*Initial\s+mass\s*=\s*([0-9]+(?:\.[0-9]+)?),\s*Z\s*=\s*([0-9]+(?:\.[0-9]+)?),.*M_mix\s*=\s*([0-9eE+\-.]+))",
+				   std::regex::icase);
 
 	std::string line;
 	amrex::Real current_mass = -1.0;
@@ -465,7 +464,8 @@ inline auto loadTable(const std::string &filename) -> bool
 	return false;
 }
 
-inline auto loadTable(const std::string &filename, const std::vector<std::string> &tracked_isotopes, const std::vector<std::string> & /*tracked_channels*/) -> bool
+inline auto loadTable(const std::string &filename, const std::vector<std::string> &tracked_isotopes, const std::vector<std::string> & /*tracked_channels*/)
+    -> bool
 {
 	g_num_tracked_isotopes = std::min(static_cast<int>(tracked_isotopes.size()), kMaxTrackedIsotopes);
 	g_num_tracked_channels = 3;
@@ -597,7 +597,7 @@ inline auto loadTable(const std::string &filename, const std::vector<std::string
 				auto &vals = sums[{mk, zk}];
 				if (vals.empty()) {
 					const auto table_size = static_cast<std::vector<amrex::Real>::size_type>(kMaxTrackedChannels) *
-							static_cast<std::vector<amrex::Real>::size_type>(kMaxTrackedIsotopes);
+								static_cast<std::vector<amrex::Real>::size_type>(kMaxTrackedIsotopes);
 					vals.resize(table_size, 0.0);
 				}
 
@@ -868,8 +868,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto queryYieldFraction(int channel_ind
 }
 
 // Returns [SNII total fraction, WR total fraction, AGB total fraction] from inverse-distance interpolation in (logM, logZ).
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto queryFractions(amrex::Real mass_msun, amrex::Real metallicity)
-    -> amrex::GpuArray<amrex::Real, 3>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto queryFractions(amrex::Real mass_msun, amrex::Real metallicity) -> amrex::GpuArray<amrex::Real, 3>
 {
 	if (!isLoaded()) {
 		return {0.0, 0.0, 0.0};

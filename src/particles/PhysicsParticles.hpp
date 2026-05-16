@@ -253,7 +253,8 @@ class PhysicsParticleDescriptorBase
 	virtual void updateParticleProperties(amrex::Real current_time, Real dt) { /* Default empty implementation */ }
 
 	// Update chemical feedback sources on the grid during the particle update stage
-	virtual void updateChemicalFeedback(amrex::MultiFab & /*state*/, int /*lev*/, amrex::Real /*current_time*/, amrex::Real /*dt*/) { /* Default empty implementation */ }
+	virtual void updateChemicalFeedback(amrex::MultiFab & /*state*/, int /*lev*/, amrex::Real /*current_time*/, amrex::Real /*dt*/)
+	{ /* Default empty implementation */ }
 };
 
 // Concrete implementation of particle descriptor for specific container types
@@ -776,8 +777,8 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 	void updateChemicalFeedback(amrex::MultiFab &state, int lev, amrex::Real current_time, amrex::Real dt) override
 	{
 		if constexpr (particleType == ParticleType::StochasticStellarPop) {
-			ParticlePropertyUpdateTraits<particleType>::template updateChemicalFeedback<problem_t, ContainerType>(this->container_, state, lev, current_time,
-														 dt);
+			ParticlePropertyUpdateTraits<particleType>::template updateChemicalFeedback<problem_t, ContainerType>(this->container_, state, lev,
+															      current_time, dt);
 		}
 	}
 

@@ -15,9 +15,9 @@ struct ChuhanProblem {
 
 constexpr Real gamma_ = 5. / 3.;
 constexpr Real year = 3.15576e+07;
-static Real n0 = 1.0e4; // NOLINT
-static Real Tamb = 10.0; // NOLINT
-static bool validate_initial_imf_stats = true; // NOLINT
+static Real n0 = 1.0e4;								     // NOLINT
+static Real Tamb = 10.0;							     // NOLINT
+static bool validate_initial_imf_stats = true;					     // NOLINT
 static std::string initial_particles_file = "../inputs/ChuhanProblem_particles.txt"; // NOLINT
 
 template <> struct quokka::EOS_Traits<ChuhanProblem> {

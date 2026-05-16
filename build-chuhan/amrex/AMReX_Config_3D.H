@@ -72,7 +72,8 @@
 /* #undef AMREX_IS_DLL */
 #ifdef __cplusplus
 #ifndef __llvm__
-static_assert(false,"libamrex was built with AppleClang. To avoid this error, reconfigure with -DAMReX_DIFFERENT_COMPILER=ON");
+static_assert(false, "libamrex was built with AppleClang. To avoid this error, "
+                     "reconfigure with -DAMReX_DIFFERENT_COMPILER=ON");
 #endif
 
 #endif
@@ -81,7 +82,8 @@ static_assert(false,"libamrex was built with AppleClang. To avoid this error, re
   https://rocmdocs.amd.com/en/latest/Programming_Guides/HIP-FAQ.html?highlight=_openmp#openmp-is-undefined-when-compiling-with-fopenmp
  */
 #if defined(AMREX_USE_OMP) && !defined(_OPENMP) && !defined(AMREX_USE_HIP)
-#error "libamrex was built with OpenMP, so the downstream project must activate it, too"
+#error                                                                         \
+    "libamrex was built with OpenMP, so the downstream project must activate it, too"
 #endif
 
 #endif /* AMREX_CONFIG_3D_H_ */

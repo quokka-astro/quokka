@@ -543,20 +543,24 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 						for (int n = 0; n < nchem; ++n) {
 							if ((gas_total_block + n) < nscalars) {
-								p.rdata(chem_base + n) = state_arr(i, j, k, HydroSystem<problem_t>::scalar0_index + gas_total_block + n);
+								p.rdata(chem_base + n) =
+								    state_arr(i, j, k, HydroSystem<problem_t>::scalar0_index + gas_total_block + n);
 							}
 						}
 
 						if (store_channel_fields) {
 							for (int n = 0; n < nchem; ++n) {
 								if (enable_SNII_metal && (gas_snii_block + n) < nscalars) {
-									p.rdata(chem_base + chem_block_size + n) = state_arr(i, j, k, HydroSystem<problem_t>::scalar0_index + gas_snii_block + n);
+									p.rdata(chem_base + chem_block_size + n) =
+									    state_arr(i, j, k, HydroSystem<problem_t>::scalar0_index + gas_snii_block + n);
 								}
 								if (enable_WR_metal && (gas_wr_block + n) < nscalars) {
-									p.rdata(chem_base + 2 * chem_block_size + n) = state_arr(i, j, k, HydroSystem<problem_t>::scalar0_index + gas_wr_block + n);
+									p.rdata(chem_base + 2 * chem_block_size + n) =
+									    state_arr(i, j, k, HydroSystem<problem_t>::scalar0_index + gas_wr_block + n);
 								}
 								if (enable_AGB_metal && (gas_agb_block + n) < nscalars) {
-									p.rdata(chem_base + 3 * chem_block_size + n) = state_arr(i, j, k, HydroSystem<problem_t>::scalar0_index + gas_agb_block + n);
+									p.rdata(chem_base + 3 * chem_block_size + n) =
+									    state_arr(i, j, k, HydroSystem<problem_t>::scalar0_index + gas_agb_block + n);
 								}
 							}
 						}

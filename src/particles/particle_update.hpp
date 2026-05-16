@@ -43,7 +43,8 @@ template <ParticleType particleType> struct ParticlePropertyUpdateBase {
 	}
 
 	template <typename problem_t, typename ContainerType>
-	static void updateChemicalFeedback(ContainerType * /*container*/, amrex::MultiFab & /*state*/, int /*lev*/, amrex::Real /*current_time*/, amrex::Real /*dt*/) noexcept
+	static void updateChemicalFeedback(ContainerType * /*container*/, amrex::MultiFab & /*state*/, int /*lev*/, amrex::Real /*current_time*/,
+					   amrex::Real /*dt*/) noexcept
 	{
 		// Default implementation does nothing.
 	}
@@ -90,7 +91,8 @@ template <ParticleType particleType> struct ParticlePropertyUpdateTraits : Parti
 	}
 
 	template <typename problem_t, typename ContainerType>
-	static void updateChemicalFeedback(ContainerType * /*container*/, amrex::MultiFab & /*state*/, int /*lev*/, amrex::Real /*current_time*/, amrex::Real /*dt*/) noexcept
+	static void updateChemicalFeedback(ContainerType * /*container*/, amrex::MultiFab & /*state*/, int /*lev*/, amrex::Real /*current_time*/,
+					   amrex::Real /*dt*/) noexcept
 	{
 		// Default implementation does nothing
 	}
@@ -162,7 +164,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 
 			// Wendland C2 stencil parameters (N=2, stencil_width=5, support radius = 2*dx)
 			constexpr int W_stencil_N = 2;
-			constexpr int W_stencil_width = 2 * W_stencil_N + 1; // 5
+			constexpr int W_stencil_width = 2 * W_stencil_N + 1;					 // 5
 			constexpr amrex::Real W_cutoff_r2 = static_cast<amrex::Real>(W_stencil_N * W_stencil_N); // 4
 			constexpr amrex::Real W_inv_N = 1.0 / static_cast<amrex::Real>(W_stencil_N);
 
@@ -190,9 +192,12 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 							const amrex::Real wr_window = std::max<amrex::Real>(0.0, wr_age_end - wr_age_start);
 							amrex::Real wr_rate_per_mass = wr_metal_yield_rate_per_mass;
 							if (use_table_driven_chemical_yield && ChemicalYieldLookup::isLoaded() && wr_window > 0.0) {
-								wr_rate_per_mass = std::max<amrex::Real>(0.0, ChemicalYieldLookup::queryYieldFraction(1, n, mass_birth_msun, z_lookup)) / wr_window;
+								wr_rate_per_mass = std::max<amrex::Real>(0.0, ChemicalYieldLookup::queryYieldFraction(
+														  1, n, mass_birth_msun, z_lookup)) /
+										   wr_window;
 							}
-							const amrex::Real baseline_wr_rate_per_mass = (wr_window > 0.0) ? (birth_iso_abundance / wr_window) : 0.0;
+							const amrex::Real baseline_wr_rate_per_mass =
+							    (wr_window > 0.0) ? (birth_iso_abundance / wr_window) : 0.0;
 							y_wr = std::max<amrex::Real>(0.0, (baseline_wr_rate_per_mass + wr_rate_per_mass) * mass_birth * dt);
 						}
 					}
@@ -205,9 +210,12 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 							const amrex::Real agb_window = std::max<amrex::Real>(0.0, agb_age_end - agb_age_start);
 							amrex::Real agb_rate_per_mass = agb_metal_yield_rate_per_mass;
 							if (use_table_driven_chemical_yield && ChemicalYieldLookup::isLoaded() && agb_window > 0.0) {
-								agb_rate_per_mass = std::max<amrex::Real>(0.0, ChemicalYieldLookup::queryYieldFraction(2, n, mass_birth_msun, z_lookup)) / agb_window;
+								agb_rate_per_mass = std::max<amrex::Real>(0.0, ChemicalYieldLookup::queryYieldFraction(
+														   2, n, mass_birth_msun, z_lookup)) /
+										    agb_window;
 							}
-							const amrex::Real baseline_agb_rate_per_mass = (agb_window > 0.0) ? (birth_iso_abundance / agb_window) : 0.0;
+							const amrex::Real baseline_agb_rate_per_mass =
+							    (agb_window > 0.0) ? (birth_iso_abundance / agb_window) : 0.0;
 							y_agb = std::max<amrex::Real>(0.0, (baseline_agb_rate_per_mass + agb_rate_per_mass) * mass_birth * dt);
 						}
 					}
@@ -223,21 +231,20 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 					const int ny_loop = (AMREX_SPACEDIM >= 2) ? W_stencil_width : 1;
 
 					for (int kk = 0; kk < nz_loop; ++kk) {
-						const amrex::Real dz = (AMREX_SPACEDIM >= 3)
-								       ? static_cast<amrex::Real>(kk - W_stencil_N) + 0.5 - interp.frac[2]
-								       : 0.0;
+						const amrex::Real dz =
+						    (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(kk - W_stencil_N) + 0.5 - interp.frac[2] : 0.0;
 						for (int jj = 0; jj < ny_loop; ++jj) {
-							const amrex::Real dy = (AMREX_SPACEDIM >= 2)
-									       ? static_cast<amrex::Real>(jj - W_stencil_N) + 0.5 - interp.frac[1]
-									       : 0.0;
+							const amrex::Real dy =
+							    (AMREX_SPACEDIM >= 2) ? static_cast<amrex::Real>(jj - W_stencil_N) + 0.5 - interp.frac[1] : 0.0;
 							for (int ii = 0; ii < W_stencil_width; ++ii) {
 								const amrex::Real dx = static_cast<amrex::Real>(ii - W_stencil_N) + 0.5 - interp.frac[0];
 								const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
 								if (r2 <= W_cutoff_r2) {
 									const amrex::Real wt = kernel_wendland_c2(std::sqrt(r2) * W_inv_N) * interp.inv_norm;
 									const amrex::Real val = static_cast<amrex::Real>(wt * total_mass * vol_inverse);
-									amrex::Gpu::Atomic::AddNoRet(
-									    &local_state(interp.index[0] + ii, interp.index[1] + jj, interp.index[2] + kk, total_comp), val);
+									amrex::Gpu::Atomic::AddNoRet(&local_state(interp.index[0] + ii, interp.index[1] + jj,
+														  interp.index[2] + kk, total_comp),
+												     val);
 								}
 							}
 						}
@@ -249,21 +256,28 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 							const int wr_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + 2 * nchem + n;
 							if (wr_comp < HydroSystem<problem_t>::scalar0_index + nPassive) {
 								for (int kk = 0; kk < nz_loop; ++kk) {
-									const amrex::Real dz = (AMREX_SPACEDIM >= 3)
-											       ? static_cast<amrex::Real>(kk - W_stencil_N) + 0.5 - interp.frac[2]
-											       : 0.0;
+									const amrex::Real dz =
+									    (AMREX_SPACEDIM >= 3)
+										? static_cast<amrex::Real>(kk - W_stencil_N) + 0.5 - interp.frac[2]
+										: 0.0;
 									for (int jj = 0; jj < ny_loop; ++jj) {
-										const amrex::Real dy = (AMREX_SPACEDIM >= 2)
-												       ? static_cast<amrex::Real>(jj - W_stencil_N) + 0.5 - interp.frac[1]
-												       : 0.0;
+										const amrex::Real dy =
+										    (AMREX_SPACEDIM >= 2)
+											? static_cast<amrex::Real>(jj - W_stencil_N) + 0.5 - interp.frac[1]
+											: 0.0;
 										for (int ii = 0; ii < W_stencil_width; ++ii) {
-											const amrex::Real dx = static_cast<amrex::Real>(ii - W_stencil_N) + 0.5 - interp.frac[0];
+											const amrex::Real dx =
+											    static_cast<amrex::Real>(ii - W_stencil_N) + 0.5 - interp.frac[0];
 											const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
 											if (r2 <= W_cutoff_r2) {
-												const amrex::Real wt = kernel_wendland_c2(std::sqrt(r2) * W_inv_N) * interp.inv_norm;
-												const amrex::Real val = static_cast<amrex::Real>(wt * y_wr * vol_inverse);
+												const amrex::Real wt =
+												    kernel_wendland_c2(std::sqrt(r2) * W_inv_N) *
+												    interp.inv_norm;
+												const amrex::Real val =
+												    static_cast<amrex::Real>(wt * y_wr * vol_inverse);
 												amrex::Gpu::Atomic::AddNoRet(
-												    &local_state(interp.index[0] + ii, interp.index[1] + jj, interp.index[2] + kk, wr_comp),
+												    &local_state(interp.index[0] + ii, interp.index[1] + jj,
+														 interp.index[2] + kk, wr_comp),
 												    val);
 											}
 										}
@@ -275,21 +289,28 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 							const int agb_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + 3 * nchem + n;
 							if (agb_comp < HydroSystem<problem_t>::scalar0_index + nPassive) {
 								for (int kk = 0; kk < nz_loop; ++kk) {
-									const amrex::Real dz = (AMREX_SPACEDIM >= 3)
-											       ? static_cast<amrex::Real>(kk - W_stencil_N) + 0.5 - interp.frac[2]
-											       : 0.0;
+									const amrex::Real dz =
+									    (AMREX_SPACEDIM >= 3)
+										? static_cast<amrex::Real>(kk - W_stencil_N) + 0.5 - interp.frac[2]
+										: 0.0;
 									for (int jj = 0; jj < ny_loop; ++jj) {
-										const amrex::Real dy = (AMREX_SPACEDIM >= 2)
-												       ? static_cast<amrex::Real>(jj - W_stencil_N) + 0.5 - interp.frac[1]
-												       : 0.0;
+										const amrex::Real dy =
+										    (AMREX_SPACEDIM >= 2)
+											? static_cast<amrex::Real>(jj - W_stencil_N) + 0.5 - interp.frac[1]
+											: 0.0;
 										for (int ii = 0; ii < W_stencil_width; ++ii) {
-											const amrex::Real dx = static_cast<amrex::Real>(ii - W_stencil_N) + 0.5 - interp.frac[0];
+											const amrex::Real dx =
+											    static_cast<amrex::Real>(ii - W_stencil_N) + 0.5 - interp.frac[0];
 											const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
 											if (r2 <= W_cutoff_r2) {
-												const amrex::Real wt = kernel_wendland_c2(std::sqrt(r2) * W_inv_N) * interp.inv_norm;
-												const amrex::Real val = static_cast<amrex::Real>(wt * y_agb * vol_inverse);
+												const amrex::Real wt =
+												    kernel_wendland_c2(std::sqrt(r2) * W_inv_N) *
+												    interp.inv_norm;
+												const amrex::Real val =
+												    static_cast<amrex::Real>(wt * y_agb * vol_inverse);
 												amrex::Gpu::Atomic::AddNoRet(
-												    &local_state(interp.index[0] + ii, interp.index[1] + jj, interp.index[2] + kk, agb_comp),
+												    &local_state(interp.index[0] + ii, interp.index[1] + jj,
+														 interp.index[2] + kk, agb_comp),
 												    val);
 											}
 										}

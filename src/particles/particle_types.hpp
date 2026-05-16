@@ -7,8 +7,8 @@
 #include "particles/particle_chemical_yield.hpp"
 #include "physics_info.hpp"
 
-#include <array>
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <sstream>
 #include <string>
@@ -91,9 +91,9 @@ inline auto splitChemistryList(const std::string &input) -> std::vector<std::str
 	return items;
 }
 
-inline std::string chemical_tracked_isotopes = "C12,N14,O16"; // NOLINT
-inline std::string chemical_tracked_channels = "SNII,WR,AGB";   // NOLINT
-inline std::vector<std::string> chemical_tracked_isotope_list = splitChemistryList(chemical_tracked_isotopes);   // NOLINT
+inline std::string chemical_tracked_isotopes = "C12,N14,O16";						       // NOLINT
+inline std::string chemical_tracked_channels = "SNII,WR,AGB";						       // NOLINT
+inline std::vector<std::string> chemical_tracked_isotope_list = splitChemistryList(chemical_tracked_isotopes); // NOLINT
 inline std::vector<std::string> chemical_tracked_channel_list = splitChemistryList(chemical_tracked_channels); // NOLINT
 
 inline auto chemicalTrackedIsotopeList() -> const std::vector<std::string> & { return chemical_tracked_isotope_list; }
@@ -281,15 +281,9 @@ constexpr int StochasticStellarPopParticleLumIdx = static_cast<int>(StochasticSt
 constexpr int StochasticStellarPopParticleStageIdx = static_cast<int>(StochasticStellarPopParticleIntIdx::evolution_stage);
 
 // #Chuhan_start: Define the dimensions and base address indexing rules for the Star Particle chemistry block.
-template <typename problem_t> constexpr int StochasticStellarPopParticleChemistryBlockSize()
-{
-	return Physics_Traits<problem_t>::numPassiveScalars;
-}
+template <typename problem_t> constexpr int StochasticStellarPopParticleChemistryBlockSize() { return Physics_Traits<problem_t>::numPassiveScalars; }
 
-template <typename problem_t> constexpr int StochasticStellarPopParticleChemistryBaseIdx()
-{
-	return 14 + Physics_Traits<problem_t>::nGroups;
-}
+template <typename problem_t> constexpr int StochasticStellarPopParticleChemistryBaseIdx() { return 14 + Physics_Traits<problem_t>::nGroups; }
 
 template <typename problem_t> constexpr int StochasticStellarPopParticleChemistryBlockBaseIdx(int blockIndex)
 {
@@ -518,28 +512,18 @@ inline auto get_units_data() -> const auto &
 		data[ParticleType::Rad] = {{{"birth_time", {0, 0, 1, 0}}, {"death_time", {0, 0, 1, 0}}, {"luminosity", {-1, 2, -3, 0}}}};
 		data[ParticleType::CIC] = {{{"mass", {1, 0, 0, 0}}, {"vx", {0, 1, -1, 0}}, {"vy", {0, 1, -1, 0}}, {"vz", {0, 1, -1, 0}}}};
 		data[ParticleType::CICRad] = {{{"mass", {1, 0, 0, 0}},
-						       {"vx", {0, 1, -1, 0}},
-						       {"vy", {0, 1, -1, 0}},
-						       {"vz", {0, 1, -1, 0}},
-						       {"birth_time", {0, 0, 1, 0}},
-						       {"death_time", {0, 0, 1, 0}},
-						       {"luminosity", {-1, 2, -3, 0}}}};
+					       {"vx", {0, 1, -1, 0}},
+					       {"vy", {0, 1, -1, 0}},
+					       {"vz", {0, 1, -1, 0}},
+					       {"birth_time", {0, 0, 1, 0}},
+					       {"death_time", {0, 0, 1, 0}},
+					       {"luminosity", {-1, 2, -3, 0}}}};
 
-		std::map<std::string, std::array<int, 4>> stellar_units{{"mass", {1, 0, 0, 0}},
-								      {"vx", {0, 1, -1, 0}},
-								      {"vy", {0, 1, -1, 0}},
-								      {"vz", {0, 1, -1, 0}},
-								      {"birth_time", {0, 0, 1, 0}},
-								      {"death_time", {0, 0, 1, 0}},
-								      {"birth_x", {0, 1, 0, 0}},
-								      {"birth_y", {0, 1, 0, 0}},
-								      {"birth_z", {0, 1, 0, 0}},
-								      {"death_x", {0, 1, 0, 0}},
-								      {"death_y", {0, 1, 0, 0}},
-								      {"death_z", {0, 1, 0, 0}},
-								      {"death_density", {1, -3, 0, 0}},
-								      {"mass_at_birth", {1, 0, 0, 0}},
-								      {"luminosity", {-1, 2, -3, 0}}};
+		std::map<std::string, std::array<int, 4>> stellar_units{
+		    {"mass", {1, 0, 0, 0}},	      {"vx", {0, 1, -1, 0}},	       {"vy", {0, 1, -1, 0}},	      {"vz", {0, 1, -1, 0}},
+		    {"birth_time", {0, 0, 1, 0}},     {"death_time", {0, 0, 1, 0}},    {"birth_x", {0, 1, 0, 0}},     {"birth_y", {0, 1, 0, 0}},
+		    {"birth_z", {0, 1, 0, 0}},	      {"death_x", {0, 1, 0, 0}},       {"death_y", {0, 1, 0, 0}},     {"death_z", {0, 1, 0, 0}},
+		    {"death_density", {1, -3, 0, 0}}, {"mass_at_birth", {1, 0, 0, 0}}, {"luminosity", {-1, 2, -3, 0}}};
 
 		for (const auto &iso : chemicalTrackedIsotopeList()) {
 			stellar_units["chem_birth_total_" + iso] = {0, 0, 0, 0};
@@ -551,20 +535,20 @@ inline auto get_units_data() -> const auto &
 		data[ParticleType::StochasticStellarPop] = {std::move(stellar_units)};
 
 		data[ParticleType::Sink] = {{{"mass", {1, 0, 0, 0}},
-						       {"vx", {0, 1, -1, 0}},
-						       {"vy", {0, 1, -1, 0}},
-						       {"vz", {0, 1, -1, 0}},
-						       {"mdot", {1, 0, -1, 0}},
-						       {"Lx", {1, 2, -1, 0}},
-						       {"Ly", {1, 2, -1, 0}},
-						       {"Lz", {1, 2, -1, 0}}}};
+					     {"vx", {0, 1, -1, 0}},
+					     {"vy", {0, 1, -1, 0}},
+					     {"vz", {0, 1, -1, 0}},
+					     {"mdot", {1, 0, -1, 0}},
+					     {"Lx", {1, 2, -1, 0}},
+					     {"Ly", {1, 2, -1, 0}},
+					     {"Lz", {1, 2, -1, 0}}}};
 		data[ParticleType::Test] = {{{"mass", {1, 0, 0, 0}},
-						       {"vx", {0, 1, -1, 0}},
-						       {"vy", {0, 1, -1, 0}},
-						       {"vz", {0, 1, -1, 0}},
-						       {"birth_time", {0, 0, 1, 0}},
-						       {"death_time", {0, 0, 1, 0}},
-						       {"luminosity", {-1, 2, -3, 0}}}};
+					     {"vx", {0, 1, -1, 0}},
+					     {"vy", {0, 1, -1, 0}},
+					     {"vz", {0, 1, -1, 0}},
+					     {"birth_time", {0, 0, 1, 0}},
+					     {"death_time", {0, 0, 1, 0}},
+					     {"luminosity", {-1, 2, -3, 0}}}};
 		return data;
 	}();
 	// #Chuhan_end: Ensure that dynamic fields and the units table are consistent during the output stage.
@@ -633,17 +617,17 @@ inline int chemical_num_scalars = 1;   // NOLINT
 inline amrex::Real snii_metal_yield_fraction = 0.1; // NOLINT
 
 // Continuous channels: dM_Z/dt = rate_per_mass * M_birth
-inline amrex::Real wr_metal_yield_rate_per_mass = 0.0;  // NOLINT [1/s]
+inline amrex::Real wr_metal_yield_rate_per_mass = 0.0;	// NOLINT [1/s]
 inline amrex::Real agb_metal_yield_rate_per_mass = 0.0; // NOLINT [1/s]
 
 // Active time windows [s] after particle birth
-inline amrex::Real wr_age_start = 0.0;   // NOLINT
-inline amrex::Real wr_age_end = 0.0;     // NOLINT
-inline amrex::Real agb_age_start = 0.0;  // NOLINT
-inline amrex::Real agb_age_end = 0.0;    // NOLINT
+inline amrex::Real wr_age_start = 0.0;	// NOLINT
+inline amrex::Real wr_age_end = 0.0;	// NOLINT
+inline amrex::Real agb_age_start = 0.0; // NOLINT
+inline amrex::Real agb_age_end = 0.0;	// NOLINT
 
 // If true, use table-driven channel yields by nearest (mass, Z_birth) lookup.
-inline bool use_table_driven_chemical_yield = true; // NOLINT
+inline bool use_table_driven_chemical_yield = true;	 // NOLINT
 inline std::string chemical_yield_table_file = "yields"; // NOLINT
 inline amrex::Real stellar_metallicity_fraction = 0.014; // NOLINT
 // #Chuhan_end: Centrally manage chemistry switches, time windows and rollback parameters.

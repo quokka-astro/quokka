@@ -3,8 +3,8 @@
 #include <string>
 #include <vector>
 
-#include <AMReX_BLFort.H>
 #include <AMReX_Array.H>
+#include <AMReX_BLFort.H>
 
 #ifndef NETWORK_PROPERTIES_H
 #define NETWORK_PROPERTIES_H
@@ -30,334 +30,327 @@ constexpr int NumSpecTotal = NumSpec + NumSpecExtra;
 // filled via the preprocessor by including NAUX_NETWORK
 constexpr int NumAux = NAUX_NET;
 
-
 namespace {
 
-    MICROPHYSICS_UNUSED HIP_CONSTEXPR AMREX_GPU_MANAGED amrex::Real aion[NumSpecTotal] = {
-       1.0,   // 0 
-       4.0,   // 1 
-       12.0,   // 2 
-       13.0,   // 3 
-       13.0,   // 4 
-       14.0,   // 5 
-       15.0,   // 6 
-       14.0,   // 7 
-       15.0,   // 8 
-       16.0,   // 9 
-       17.0,   // 10 
-       17.0,   // 11 
-       18.0,   // 12 
-       4.0,   // 13 
-    };
+MICROPHYSICS_UNUSED HIP_CONSTEXPR AMREX_GPU_MANAGED
+    amrex::Real aion[NumSpecTotal] = {
+        1.0,  // 0
+        4.0,  // 1
+        12.0, // 2
+        13.0, // 3
+        13.0, // 4
+        14.0, // 5
+        15.0, // 6
+        14.0, // 7
+        15.0, // 8
+        16.0, // 9
+        17.0, // 10
+        17.0, // 11
+        18.0, // 12
+        4.0,  // 13
+};
 
-    MICROPHYSICS_UNUSED HIP_CONSTEXPR AMREX_GPU_MANAGED amrex::Real aion_inv[NumSpecTotal] = {
-       1.0/1.0,   // 0 
-       1.0/4.0,   // 1 
-       1.0/12.0,   // 2 
-       1.0/13.0,   // 3 
-       1.0/13.0,   // 4 
-       1.0/14.0,   // 5 
-       1.0/15.0,   // 6 
-       1.0/14.0,   // 7 
-       1.0/15.0,   // 8 
-       1.0/16.0,   // 9 
-       1.0/17.0,   // 10 
-       1.0/17.0,   // 11 
-       1.0/18.0,   // 12 
-       1.0/4.0,   // 13 
-    };
+MICROPHYSICS_UNUSED HIP_CONSTEXPR AMREX_GPU_MANAGED
+    amrex::Real aion_inv[NumSpecTotal] = {
+        1.0 / 1.0,  // 0
+        1.0 / 4.0,  // 1
+        1.0 / 12.0, // 2
+        1.0 / 13.0, // 3
+        1.0 / 13.0, // 4
+        1.0 / 14.0, // 5
+        1.0 / 15.0, // 6
+        1.0 / 14.0, // 7
+        1.0 / 15.0, // 8
+        1.0 / 16.0, // 9
+        1.0 / 17.0, // 10
+        1.0 / 17.0, // 11
+        1.0 / 18.0, // 12
+        1.0 / 4.0,  // 13
+};
 
-    MICROPHYSICS_UNUSED HIP_CONSTEXPR AMREX_GPU_MANAGED amrex::Real zion[NumSpecTotal] = {
-       1.0,   // 0
-       2.0,   // 1
-       6.0,   // 2
-       6.0,   // 3
-       7.0,   // 4
-       7.0,   // 5
-       7.0,   // 6
-       8.0,   // 7
-       8.0,   // 8
-       8.0,   // 9
-       8.0,   // 10
-       9.0,   // 11
-       9.0,   // 12
-       2.0,   // 13
-    };
+MICROPHYSICS_UNUSED HIP_CONSTEXPR AMREX_GPU_MANAGED
+    amrex::Real zion[NumSpecTotal] = {
+        1.0, // 0
+        2.0, // 1
+        6.0, // 2
+        6.0, // 3
+        7.0, // 4
+        7.0, // 5
+        7.0, // 6
+        8.0, // 7
+        8.0, // 8
+        8.0, // 9
+        8.0, // 10
+        9.0, // 11
+        9.0, // 12
+        2.0, // 13
+};
 
-    MICROPHYSICS_UNUSED const std::vector<std::string> short_spec_names_cxx = {
-       "E",   // 0 
-       "Hp",   // 1 
-       "H",   // 2 
-       "Hm",   // 3 
-       "Dp",   // 4 
-       "D",   // 5 
-       "H2p",   // 6 
-       "Dm",   // 7 
-       "H2",   // 8 
-       "HDp",   // 9 
-       "HD",   // 10 
-       "HEpp",   // 11 
-       "HEp",   // 12 
-       "HE",   // 13 
-    };
+MICROPHYSICS_UNUSED const std::vector<std::string> short_spec_names_cxx = {
+    "E",    // 0
+    "Hp",   // 1
+    "H",    // 2
+    "Hm",   // 3
+    "Dp",   // 4
+    "D",    // 5
+    "H2p",  // 6
+    "Dm",   // 7
+    "H2",   // 8
+    "HDp",  // 9
+    "HD",   // 10
+    "HEpp", // 11
+    "HEp",  // 12
+    "HE",   // 13
+};
 
-    MICROPHYSICS_UNUSED const std::vector<std::string> spec_names_cxx = {
-       "elec",   // 0 
-       "hp",   // 1 
-       "h",   // 2 
-       "hm",   // 3 
-       "dp",   // 4 
-       "d",   // 5 
-       "h2p",   // 6 
-       "dm",   // 7 
-       "h2",   // 8 
-       "hdp",   // 9 
-       "hd",   // 10 
-       "hepp",   // 11 
-       "hep",   // 12 
-       "he",   // 13 
-    };
+MICROPHYSICS_UNUSED const std::vector<std::string> spec_names_cxx = {
+    "elec", // 0
+    "hp",   // 1
+    "h",    // 2
+    "hm",   // 3
+    "dp",   // 4
+    "d",    // 5
+    "h2p",  // 6
+    "dm",   // 7
+    "h2",   // 8
+    "hdp",  // 9
+    "hd",   // 10
+    "hepp", // 11
+    "hep",  // 12
+    "he",   // 13
+};
 
 #if NAUX_NET > 0
-    MICROPHYSICS_UNUSED const std::vector<std::string> short_aux_names_cxx = {
-       "Tdust",   // 0 
-    };
+MICROPHYSICS_UNUSED const std::vector<std::string> short_aux_names_cxx = {
+    "Tdust", // 0
+};
 
-    MICROPHYSICS_UNUSED const std::vector<std::string> aux_names_cxx = {
-       "Tdust",   // 0 
-    };
+MICROPHYSICS_UNUSED const std::vector<std::string> aux_names_cxx = {
+    "Tdust", // 0
+};
 #endif
-}
+} // namespace
 
 #if NAUX_NET > 0
 namespace AuxZero {
-   enum AuxIndices {
-     itdust=0,
-     NumberAux=itdust
-   };
+enum AuxIndices { itdust = 0, NumberAux = itdust };
 }
 #endif
 
 namespace Species {
-   enum NetworkSpecies {
-     E=1,
-     Hp,
-     H,
-     Hm,
-     Dp,
-     D,
-     H2p,
-     Dm,
-     H2,
-     Hdp,
-     Hd,
-     Hepp,
-     Hep,
-     He,
-     NumberSpecies=He
-   };
+enum NetworkSpecies {
+  E = 1,
+  Hp,
+  H,
+  Hm,
+  Dp,
+  D,
+  H2p,
+  Dm,
+  H2,
+  Hdp,
+  Hd,
+  Hepp,
+  Hep,
+  He,
+  NumberSpecies = He
+};
 }
 
 namespace NetworkProperties {
-   AMREX_GPU_HOST_DEVICE AMREX_INLINE constexpr amrex::Real aion (int spec)
-   {
-       using namespace Species;
+AMREX_GPU_HOST_DEVICE AMREX_INLINE constexpr amrex::Real aion(int spec) {
+  using namespace Species;
 
-       amrex::Real a = -1.0;
+  amrex::Real a = -1.0;
 
-       // NOLINTBEGIN(bugprone-branch-clone)
-       switch (spec) {  // NOLINT(bugprone-switch-missing-default-case)
+  // NOLINTBEGIN(bugprone-branch-clone)
+  switch (spec) { // NOLINT(bugprone-switch-missing-default-case)
 
-           case E:   // 1
-           {
-               a = 1.0;
-               break;
-           }
+  case E: // 1
+  {
+    a = 1.0;
+    break;
+  }
 
-           case Hp:   // 2
-           {
-               a = 4.0;
-               break;
-           }
+  case Hp: // 2
+  {
+    a = 4.0;
+    break;
+  }
 
-           case H:   // 3
-           {
-               a = 12.0;
-               break;
-           }
+  case H: // 3
+  {
+    a = 12.0;
+    break;
+  }
 
-           case Hm:   // 4
-           {
-               a = 13.0;
-               break;
-           }
+  case Hm: // 4
+  {
+    a = 13.0;
+    break;
+  }
 
-           case Dp:   // 5
-           {
-               a = 13.0;
-               break;
-           }
+  case Dp: // 5
+  {
+    a = 13.0;
+    break;
+  }
 
-           case D:   // 6
-           {
-               a = 14.0;
-               break;
-           }
+  case D: // 6
+  {
+    a = 14.0;
+    break;
+  }
 
-           case H2p:   // 7
-           {
-               a = 15.0;
-               break;
-           }
+  case H2p: // 7
+  {
+    a = 15.0;
+    break;
+  }
 
-           case Dm:   // 8
-           {
-               a = 14.0;
-               break;
-           }
+  case Dm: // 8
+  {
+    a = 14.0;
+    break;
+  }
 
-           case H2:   // 9
-           {
-               a = 15.0;
-               break;
-           }
+  case H2: // 9
+  {
+    a = 15.0;
+    break;
+  }
 
-           case Hdp:   // 10
-           {
-               a = 16.0;
-               break;
-           }
+  case Hdp: // 10
+  {
+    a = 16.0;
+    break;
+  }
 
-           case Hd:   // 11
-           {
-               a = 17.0;
-               break;
-           }
+  case Hd: // 11
+  {
+    a = 17.0;
+    break;
+  }
 
-           case Hepp:   // 12
-           {
-               a = 17.0;
-               break;
-           }
+  case Hepp: // 12
+  {
+    a = 17.0;
+    break;
+  }
 
-           case Hep:   // 13
-           {
-               a = 18.0;
-               break;
-           }
+  case Hep: // 13
+  {
+    a = 18.0;
+    break;
+  }
 
-           case He:   // 14
-           {
-               a = 4.0;
-               break;
-           }
+  case He: // 14
+  {
+    a = 4.0;
+    break;
+  }
+  }
+  // NOLINTEND(bugprone-branch-clone)
 
-
-       }
-       // NOLINTEND(bugprone-branch-clone)
-
-       return a;
-   }
-
-   AMREX_GPU_HOST_DEVICE AMREX_INLINE constexpr amrex::Real zion (int spec)
-   {
-       using namespace Species;
-
-       amrex::Real z = -1.0;
-
-       // NOLINTBEGIN(bugprone-branch-clone)
-       switch (spec) {  // NOLINT(bugprone-switch-missing-default-case)
-
-           case E:   // 1
-           {
-               z = 1.0;
-               break;
-           }
-
-           case Hp:   // 2
-           {
-               z = 2.0;
-               break;
-           }
-
-           case H:   // 3
-           {
-               z = 6.0;
-               break;
-           }
-
-           case Hm:   // 4
-           {
-               z = 6.0;
-               break;
-           }
-
-           case Dp:   // 5
-           {
-               z = 7.0;
-               break;
-           }
-
-           case D:   // 6
-           {
-               z = 7.0;
-               break;
-           }
-
-           case H2p:   // 7
-           {
-               z = 7.0;
-               break;
-           }
-
-           case Dm:   // 8
-           {
-               z = 8.0;
-               break;
-           }
-
-           case H2:   // 9
-           {
-               z = 8.0;
-               break;
-           }
-
-           case Hdp:   // 10
-           {
-               z = 8.0;
-               break;
-           }
-
-           case Hd:   // 11
-           {
-               z = 8.0;
-               break;
-           }
-
-           case Hepp:   // 12
-           {
-               z = 9.0;
-               break;
-           }
-
-           case Hep:   // 13
-           {
-               z = 9.0;
-               break;
-           }
-
-           case He:   // 14
-           {
-               z = 2.0;
-               break;
-           }
-
-
-       }
-       // NOLINTEND(bugprone-branch-clone)
-
-       return z;
-   }
-
+  return a;
 }
+
+AMREX_GPU_HOST_DEVICE AMREX_INLINE constexpr amrex::Real zion(int spec) {
+  using namespace Species;
+
+  amrex::Real z = -1.0;
+
+  // NOLINTBEGIN(bugprone-branch-clone)
+  switch (spec) { // NOLINT(bugprone-switch-missing-default-case)
+
+  case E: // 1
+  {
+    z = 1.0;
+    break;
+  }
+
+  case Hp: // 2
+  {
+    z = 2.0;
+    break;
+  }
+
+  case H: // 3
+  {
+    z = 6.0;
+    break;
+  }
+
+  case Hm: // 4
+  {
+    z = 6.0;
+    break;
+  }
+
+  case Dp: // 5
+  {
+    z = 7.0;
+    break;
+  }
+
+  case D: // 6
+  {
+    z = 7.0;
+    break;
+  }
+
+  case H2p: // 7
+  {
+    z = 7.0;
+    break;
+  }
+
+  case Dm: // 8
+  {
+    z = 8.0;
+    break;
+  }
+
+  case H2: // 9
+  {
+    z = 8.0;
+    break;
+  }
+
+  case Hdp: // 10
+  {
+    z = 8.0;
+    break;
+  }
+
+  case Hd: // 11
+  {
+    z = 8.0;
+    break;
+  }
+
+  case Hepp: // 12
+  {
+    z = 9.0;
+    break;
+  }
+
+  case Hep: // 13
+  {
+    z = 9.0;
+    break;
+  }
+
+  case He: // 14
+  {
+    z = 2.0;
+    break;
+  }
+  }
+  // NOLINTEND(bugprone-branch-clone)
+
+  return z;
+}
+
+} // namespace NetworkProperties
 #endif

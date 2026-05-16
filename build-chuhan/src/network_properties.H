@@ -3,8 +3,8 @@
 #include <string>
 #include <vector>
 
-#include <AMReX_BLFort.H>
 #include <AMReX_Array.H>
+#include <AMReX_BLFort.H>
 
 #ifndef NETWORK_PROPERTIES_H
 #define NETWORK_PROPERTIES_H
@@ -30,96 +30,86 @@ constexpr int NumSpecTotal = NumSpec + NumSpecExtra;
 // filled via the preprocessor by including NAUX_NETWORK
 constexpr int NumAux = NAUX_NET;
 
-
 namespace {
 
-    MICROPHYSICS_UNUSED HIP_CONSTEXPR AMREX_GPU_MANAGED amrex::Real aion[NumSpecTotal] = {
-       1.0,   // 0 
-    };
+MICROPHYSICS_UNUSED HIP_CONSTEXPR AMREX_GPU_MANAGED
+    amrex::Real aion[NumSpecTotal] = {
+        1.0, // 0
+};
 
-    MICROPHYSICS_UNUSED HIP_CONSTEXPR AMREX_GPU_MANAGED amrex::Real aion_inv[NumSpecTotal] = {
-       1.0/1.0,   // 0 
-    };
+MICROPHYSICS_UNUSED HIP_CONSTEXPR AMREX_GPU_MANAGED
+    amrex::Real aion_inv[NumSpecTotal] = {
+        1.0 / 1.0, // 0
+};
 
-    MICROPHYSICS_UNUSED HIP_CONSTEXPR AMREX_GPU_MANAGED amrex::Real zion[NumSpecTotal] = {
-       1.0,   // 0
-    };
+MICROPHYSICS_UNUSED HIP_CONSTEXPR AMREX_GPU_MANAGED
+    amrex::Real zion[NumSpecTotal] = {
+        1.0, // 0
+};
 
-    MICROPHYSICS_UNUSED const std::vector<std::string> short_spec_names_cxx = {
-       "X",   // 0 
-    };
+MICROPHYSICS_UNUSED const std::vector<std::string> short_spec_names_cxx = {
+    "X", // 0
+};
 
-    MICROPHYSICS_UNUSED const std::vector<std::string> spec_names_cxx = {
-       "X",   // 0 
-    };
+MICROPHYSICS_UNUSED const std::vector<std::string> spec_names_cxx = {
+    "X", // 0
+};
 
 #if NAUX_NET > 0
-    MICROPHYSICS_UNUSED const std::vector<std::string> short_aux_names_cxx = {
-    };
+MICROPHYSICS_UNUSED const std::vector<std::string> short_aux_names_cxx = {};
 
-    MICROPHYSICS_UNUSED const std::vector<std::string> aux_names_cxx = {
-    };
+MICROPHYSICS_UNUSED const std::vector<std::string> aux_names_cxx = {};
 #endif
-}
+} // namespace
 
 #if NAUX_NET > 0
 namespace AuxZero {
-   enum AuxIndices {
-   };
+enum AuxIndices {};
 }
 #endif
 
 namespace Species {
-   enum NetworkSpecies {
-     X=1,
-     NumberSpecies=X
-   };
+enum NetworkSpecies { X = 1, NumberSpecies = X };
 }
 
 namespace NetworkProperties {
-   AMREX_GPU_HOST_DEVICE AMREX_INLINE constexpr amrex::Real aion (int spec)
-   {
-       using namespace Species;
+AMREX_GPU_HOST_DEVICE AMREX_INLINE constexpr amrex::Real aion(int spec) {
+  using namespace Species;
 
-       amrex::Real a = -1.0;
+  amrex::Real a = -1.0;
 
-       // NOLINTBEGIN(bugprone-branch-clone)
-       switch (spec) {  // NOLINT(bugprone-switch-missing-default-case)
+  // NOLINTBEGIN(bugprone-branch-clone)
+  switch (spec) { // NOLINT(bugprone-switch-missing-default-case)
 
-           case X:   // 1
-           {
-               a = 1.0;
-               break;
-           }
+  case X: // 1
+  {
+    a = 1.0;
+    break;
+  }
+  }
+  // NOLINTEND(bugprone-branch-clone)
 
-
-       }
-       // NOLINTEND(bugprone-branch-clone)
-
-       return a;
-   }
-
-   AMREX_GPU_HOST_DEVICE AMREX_INLINE constexpr amrex::Real zion (int spec)
-   {
-       using namespace Species;
-
-       amrex::Real z = -1.0;
-
-       // NOLINTBEGIN(bugprone-branch-clone)
-       switch (spec) {  // NOLINT(bugprone-switch-missing-default-case)
-
-           case X:   // 1
-           {
-               z = 1.0;
-               break;
-           }
-
-
-       }
-       // NOLINTEND(bugprone-branch-clone)
-
-       return z;
-   }
-
+  return a;
 }
+
+AMREX_GPU_HOST_DEVICE AMREX_INLINE constexpr amrex::Real zion(int spec) {
+  using namespace Species;
+
+  amrex::Real z = -1.0;
+
+  // NOLINTBEGIN(bugprone-branch-clone)
+  switch (spec) { // NOLINT(bugprone-switch-missing-default-case)
+
+  case X: // 1
+  {
+    z = 1.0;
+    break;
+  }
+  }
+  // NOLINTEND(bugprone-branch-clone)
+
+  return z;
+}
+
+} // namespace NetworkProperties
 #endif
