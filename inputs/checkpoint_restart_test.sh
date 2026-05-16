@@ -81,7 +81,7 @@ NPROC_ORIG=4
 NPROC_RESTART=2
 
 # Run A: clean reference (normal run with plotfile output to get ground truth)
-mpirun --use-hwthread-cpus -np $NPROC_ORIG $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D ../inputs/blast_32.toml max_walltime=0:00:10 plotfile_interval=100 checkpoint_interval=0 amr.plot_nfiles=$NFILES
+mpirun --use-hwthread-cpus -np $NPROC_ORIG $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D ../inputs/blast_32.toml max_timesteps=300 plotfile_interval=300 checkpoint_interval=0 amr.plot_nfiles=$NFILES
 ref_plotfile=`ls -1drt plt* | head -1`
 if [ -z "$ref_plotfile" ]; then
     echo "TEST FAILED: No reference plotfile produced for ghost-cell test!"
@@ -92,7 +92,7 @@ mv "$ref_plotfile" ref_plotfile
 rm -rf plt* 2>/dev/null || true
 
 # Run B: generate a checkpoint with stale ghost cells (NO plotfile output)
-mpirun --use-hwthread-cpus -np $NPROC_ORIG $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D ../inputs/blast_32.toml max_walltime=0:00:10 plotfile_interval=0 checkpoint_interval=100 amr.checkpoint_nfiles=$NFILES
+mpirun --use-hwthread-cpus -np $NPROC_ORIG $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D ../inputs/blast_32.toml max_timesteps=300 plotfile_interval=0 checkpoint_interval=300 amr.checkpoint_nfiles=$NFILES
 chkfile_ghost=`ls -1drt chk* | head -1`
 if [ -z "$chkfile_ghost" ]; then
     echo "TEST FAILED: No checkpoint produced for ghost-cell test!"
