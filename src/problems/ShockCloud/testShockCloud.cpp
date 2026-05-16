@@ -274,8 +274,7 @@ template <> void QuokkaSimulation<ShockCloud>::computeAfterTimestep()
 
 template <>
 void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in,
-						     amrex::MultiFab const &state_cc,
-						     amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
+						     amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
 {
 	// compute derived variables and save in 'mf'
 

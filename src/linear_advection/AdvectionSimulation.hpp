@@ -242,8 +242,7 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::computeAfterT
 }
 
 template <typename problem_t>
-void AdvectionSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp,
-						       amrex::MultiFab const &state_cc,
+void AdvectionSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
 						       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
 	// user should implement
