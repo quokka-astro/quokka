@@ -3705,8 +3705,8 @@ void AMRSimulation<problem_t>::FillPlotFileScratchFaceData(const int finest_lev_
 				amrex::Vector<amrex::BCRec> BCs = BCs_fc_;
 				quokka::centering cen = quokka::centering::fc;
 
-				FillPatchWithData(lev, tNew_[lev], scratch_fc[lev], coarseData, coarseTime, fineData, fineTime, 0, scratch_fc[lev].nComp(),
-						  BCs, cen, dir, FillPatchType::fillpatch_function, InterpHookNone, InterpHookNone);
+				FillPatchWithData(lev, tNew_[lev], scratch_fc[lev], coarseData, coarseTime, fineData, fineTime, 0, scratch_fc[lev].nComp(), BCs,
+						  cen, dir, FillPatchType::fillpatch_function, InterpHookNone, InterpHookNone);
 			}
 
 			AMREX_ASSERT(!scratch_fc[lev].contains_nan(0, scratch_fc[lev].nComp()));
@@ -3730,8 +3730,8 @@ void AMRSimulation<problem_t>::FillPlotFileScratchData(const int finest_lev_to_f
 		amrex::MultiFab::Copy(scratch_cc[lev], state_new_cc_[lev], 0, 0, state_new_cc_[lev].nComp(), 0);
 
 		if (lev == 0) {
-			fillBoundaryConditions(scratch_cc[lev], scratch_cc[lev], lev, tNew_[lev], quokka::centering::cc, quokka::direction::na,
-					       InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+			fillBoundaryConditions(scratch_cc[lev], scratch_cc[lev], lev, tNew_[lev], quokka::centering::cc, quokka::direction::na, InterpHookNone,
+					       InterpHookNone, FillPatchType::fillpatch_function);
 		} else {
 			amrex::Vector<amrex::MultiFab *> coarseData{&scratch_cc[lev - 1]};
 			amrex::Vector<amrex::Real> coarseTime{tNew_[lev - 1]};
@@ -3740,8 +3740,8 @@ void AMRSimulation<problem_t>::FillPlotFileScratchData(const int finest_lev_to_f
 			amrex::Vector<amrex::BCRec> BCs = BCs_cc_;
 			quokka::centering cen = quokka::centering::cc;
 
-			FillPatchWithData(lev, tNew_[lev], scratch_cc[lev], coarseData, coarseTime, fineData, fineTime, 0, scratch_cc[lev].nComp(), BCs,
-					  cen, quokka::direction::na, FillPatchType::fillpatch_function, InterpHookNone, InterpHookNone);
+			FillPatchWithData(lev, tNew_[lev], scratch_cc[lev], coarseData, coarseTime, fineData, fineTime, 0, scratch_cc[lev].nComp(), BCs, cen,
+					  quokka::direction::na, FillPatchType::fillpatch_function, InterpHookNone, InterpHookNone);
 		}
 
 		AMREX_ASSERT(!scratch_cc[lev].contains_nan(0, scratch_cc[lev].nComp()));
@@ -3755,8 +3755,8 @@ void AMRSimulation<problem_t>::FillPlotFileScratchData(const int finest_lev_to_f
 
 				quokka::direction const dir = static_cast<quokka::direction>(idim);
 				if (lev == 0) {
-					fillBoundaryConditions(scratch_fc[lev][idim], scratch_fc[lev][idim], lev, tNew_[lev], quokka::centering::fc,
-							       dir, InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
+					fillBoundaryConditions(scratch_fc[lev][idim], scratch_fc[lev][idim], lev, tNew_[lev], quokka::centering::fc, dir,
+							       InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
 				} else {
 					amrex::Vector<amrex::MultiFab *> coarseData{&scratch_fc[lev - 1][idim]};
 					amrex::Vector<amrex::Real> coarseTime{tNew_[lev - 1]};
@@ -3791,7 +3791,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 
 template <typename problem_t>
 auto AMRSimulation<problem_t>::PlotFileMFAtLevel_cc(const int lev, const int included_ghosts, const amrex::MultiFab &src_cc,
-						   const amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &src_fc) -> amrex::MultiFab
+						    const amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> &src_fc) -> amrex::MultiFab
 {
 	const int ncomp_plotMF = plotfileVarsToInclude_cc_.size();
 	amrex::MultiFab plotMF(grids[lev], dmap[lev], ncomp_plotMF, included_ghosts);
