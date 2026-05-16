@@ -63,45 +63,45 @@ fi
 #
 # Strategy:
 #   1. Clean up output from the first phase.
-#   2. Run a fresh simulation that writes a checkpoint WITHOUT any prior
-#      plotfile (so ghost cells are never sanitized by fillBoundaryConditions).
-#   3. Save a plotfile written at the same step as the checkpoint.
-#   4. Restart from that checkpoint with a DIFFERENT number of MPI ranks
-#      (triggering re-boxing / load-balancing) and take one step.
-#   5. Compare the restarted plotfile against the saved one.
+#   2. Run A (clean reference): normal run that writes a plotfile at step N.
+#   3. Run B (stale checkpoint): separate run with plotfile_interval=0 that
+#      writes a checkpoint at step N (ghost cells are stale since no prior
+#      plotfile sanitized them).
+#   4. Restart from Run B's checkpoint with a DIFFERENT number of MPI ranks
+#      (triggering re-boxing / load-balancing) and write a plotfile immediately.
+#   5. Compare the restarted plotfile against Run A's clean reference.
 #
 # If stale checkpoint ghost cells leak into valid cells after re-boxing,
 # fcompare will report differences.
 
 # Clean up from the first phase
-rm -rf plt* chk* last_chk 2>/dev/null || true
+rm -rf plt* chk* last_chk ref_plotfile 2>/dev/null || true
 
 NPROC_ORIG=4
 NPROC_RESTART=2
 
-# Run to generate a checkpoint (with NO prior plotfile sanitization)
-mpirun --use-hwthread-cpus -np $NPROC_ORIG $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D ../inputs/blast_32.toml max_walltime=0:00:10 plotfile_interval=0 checkpoint_interval=100 amr.checkpoint_nfiles=$NFILES
-
-# Save the checkpoint name
-chkfile_ghost=`ls -1drt chk* | head -1`
-if [ -z "$chkfile_ghost" ]; then
-    echo "TEST FAILED: No checkpoint produced for ghost-cell test!"
-    exit 1
-fi
-
-# Write a reference plotfile at the checkpoint time for later comparison
-mpirun --use-hwthread-cpus -np $NPROC_ORIG $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D ../inputs/blast_32.toml restartfile=$chkfile_ghost max_timesteps=0 plotfile_interval=1 checkpoint_interval=0
+# Run A: clean reference (normal run with plotfile output to get ground truth)
+mpirun --use-hwthread-cpus -np $NPROC_ORIG $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D ../inputs/blast_32.toml max_walltime=0:00:10 plotfile_interval=100 checkpoint_interval=0 amr.plot_nfiles=$NFILES
 ref_plotfile=`ls -1drt plt* | head -1`
 if [ -z "$ref_plotfile" ]; then
     echo "TEST FAILED: No reference plotfile produced for ghost-cell test!"
     exit 1
 fi
 mv "$ref_plotfile" ref_plotfile
+# Clean up any other plotfiles from Run A
+rm -rf plt* 2>/dev/null || true
 
-# Restart from checkpoint with a DIFFERENT MPI rank count (no advance).
-# This tests that the initial restarted state is correct; if stale
-# checkpoint ghost cells leak into valid cells after re-boxing,
-# the first plotfile written on restart will differ from the reference.
+# Run B: generate a checkpoint with stale ghost cells (NO plotfile output)
+mpirun --use-hwthread-cpus -np $NPROC_ORIG $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D ../inputs/blast_32.toml max_walltime=0:00:10 plotfile_interval=0 checkpoint_interval=100 amr.checkpoint_nfiles=$NFILES
+chkfile_ghost=`ls -1drt chk* | head -1`
+if [ -z "$chkfile_ghost" ]; then
+    echo "TEST FAILED: No checkpoint produced for ghost-cell test!"
+    exit 1
+fi
+
+# Restart from Run B's checkpoint with a DIFFERENT MPI rank count (no advance).
+# If stale checkpoint ghost cells leak into valid cells after re-boxing,
+# the plotfile written on restart will differ from the clean reference.
 mpirun --use-hwthread-cpus -np $NPROC_RESTART $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D ../inputs/blast_32.toml restartfile=$chkfile_ghost max_timesteps=0 plotfile_interval=1 checkpoint_interval=0
 restart_plotfile=`ls -1drt plt* | head -1`
 if [ -z "$restart_plotfile" ]; then
