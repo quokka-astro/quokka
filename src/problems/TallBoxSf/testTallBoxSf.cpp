@@ -297,11 +297,14 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 	});
 }
 
-template <> void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in) const
+template <>
+void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in,
+						     amrex::MultiFab const &state_cc,
+						     amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
 {
 	const int ncomp = ncomp_in;
 	auto const &output = mf.arrays();
-	auto const &state = state_new_cc_[lev].const_arrays();
+	auto const &state = state_cc.const_arrays();
 
 	if (dname == "gpot") {
 		auto const &phi_arr = phi[lev].const_arrays();

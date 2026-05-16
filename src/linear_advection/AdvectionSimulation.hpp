@@ -113,7 +113,8 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	void applyPoissonGravityAtLevel(amrex::MultiFab const &phi, int lev, amrex::Real dt) override;
 
 	// compute derived variables
-	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
+	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
+			       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const override;
 	// compute projected vars
 
 	// compute statistics
@@ -240,9 +241,18 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::computeAfterT
 	// do nothing -- user should implement using problem-specific template specialization
 }
 
-template <typename problem_t> void AdvectionSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const
+template <typename problem_t>
+void AdvectionSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp,
+						       amrex::MultiFab const &state_cc,
+						       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
 	// user should implement
+	(void)lev;
+	(void)dname;
+	(void)mf;
+	(void)ncomp;
+	(void)state_cc;
+	(void)state_fc;
 }
 
 template <typename problem_t> auto AdvectionSimulation<problem_t>::ComputeStatistics() -> std::map<std::string, amrex::Real>

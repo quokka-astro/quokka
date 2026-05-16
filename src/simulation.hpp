@@ -311,8 +311,22 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void WriteSingleLevelPlotfileSimplified(const std::string &plotfile_prefix, const amrex::MultiFab &mf,
 							const amrex::Vector<std::string> &compNames, int lev, int interval) = 0;
 
-	// compute derived variables
-	virtual void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const = 0;
+	/**
+	 * Compute a problem-defined derived plotfile variable.
+	 *
+	 * Implementations must read cell-centered and face-centered simulation state
+	 * from `state_cc` and `state_fc`, not directly from `state_new_cc_` or
+	 * `state_new_fc_`.  Plotfile generation may pass scratch MultiFabs here
+	 * instead of the live simulation state; when plotfile ghost cells are
+	 * requested, those scratch MultiFabs contain freshly filled ghost zones.
+	 * The only permitted side effect is writing the derived field into component
+	 * `ncomp` of `mf`; implementations must not mutate simulation state or the
+	 * provided input state.
+	 * The level index is still provided for level-indexed auxiliary data such as
+	 * geometry, gravitational potential, particles, and problem-owned caches.
+	 */
+	virtual void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
+				       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const = 0;
 	virtual void ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const;
 
 	// compute statistics
@@ -3689,7 +3703,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 
 	// Select the source: scratch copies (with filled ghost cells) when
 	// included_ghosts > 0, otherwise the live simulation state directly.
-	amrex::MultiFab &src_cc = (included_ghosts > 0) ? scratch_cc : state_new_cc_[lev];
+	amrex::MultiFab const &src_cc = (included_ghosts > 0) ? scratch_cc : state_new_cc_[lev];
+	amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &src_fc = (included_ghosts > 0) ? scratch_fc : state_new_fc_[lev];
 
 	// Process each variable in the configurable list
 	int comp = 0;
@@ -3714,8 +3729,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 				const int var_idx = fc_comp_flat / AMREX_SPACEDIM; // which variable type
 				const int idim = fc_comp_flat % AMREX_SPACEDIM;	   // which dimension
 				const int fc_comp = var_idx;			   // component index within that dimension's MultiFab
-				amrex::MultiFab &src_fc_dim = (included_ghosts > 0) ? scratch_fc[idim] : state_new_fc_[lev][idim];
-				AverageFCToCC(plotMF, src_fc_dim, idim, comp, fc_comp, 1);
+				AverageFCToCC(plotMF, src_fc[idim], idim, comp, fc_comp, 1);
 				comp++;
 				continue;
 			}
@@ -3734,7 +3748,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::PlotFileMFAtLevel_c
 				comp++;
 				continue;
 			}
-			ComputeDerivedVar(lev, varname, plotMF, comp);
+			ComputeDerivedVar(lev, varname, plotMF, comp, src_cc, src_fc);
 			comp++;
 			continue;
 		}
