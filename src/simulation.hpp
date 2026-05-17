@@ -3687,7 +3687,7 @@ void AMRSimulation<problem_t>::FillPlotFileScratchFaceData(const int finest_lev_
 
 	if constexpr (Physics_Indices<problem_t>::nvarPerDim_fc > 0) {
 		scratch_fc.reserve(finest_lev_to_fill + 1);
-		quokka::direction const dir = static_cast<quokka::direction>(idim);
+		auto const dir = static_cast<quokka::direction>(idim);
 
 		for (int lev = 0; lev <= finest_lev_to_fill; ++lev) {
 			scratch_fc.emplace_back(state_new_fc_[lev][idim].boxArray(), state_new_fc_[lev][idim].DistributionMap(),
@@ -3753,7 +3753,7 @@ void AMRSimulation<problem_t>::FillPlotFileScratchData(const int finest_lev_to_f
 							     state_new_fc_[lev][idim].nComp(), included_ghosts);
 				amrex::MultiFab::Copy(scratch_fc[lev][idim], state_new_fc_[lev][idim], 0, 0, state_new_fc_[lev][idim].nComp(), 0);
 
-				quokka::direction const dir = static_cast<quokka::direction>(idim);
+				auto const dir = static_cast<quokka::direction>(idim);
 				if (lev == 0) {
 					fillBoundaryConditions(scratch_fc[lev][idim], scratch_fc[lev][idim], lev, tNew_[lev], quokka::centering::fc, dir,
 							       InterpHookNone, InterpHookNone, FillPatchType::fillpatch_function);
