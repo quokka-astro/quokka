@@ -62,10 +62,7 @@ template <> struct RadSystem_Traits<StromgrenSphere> {
 	static constexpr double c_hat_over_c = c_hat / C::c_light;
 	static constexpr double Erad_floor = 1e-99;
 	static constexpr int beta_order = 0;
-	AMREX_GPU_HOST_DEVICE static constexpr amrex::GpuArray<double, NumChemBands + 1> ChemBands()
-	{
-		return ChemBandsHeader_;
-	}
+	AMREX_GPU_HOST_DEVICE static constexpr amrex::GpuArray<double, NumChemBands + 1> ChemBands() { return ChemBandsHeader_; }
 };
 
 template <>
@@ -239,10 +236,7 @@ template <> void QuokkaSimulation<StromgrenSphere>::setInitialConditionsOnGrid(q
 	});
 }
 
-template <> void QuokkaSimulation<StromgrenSphere>::computeAfterTimestep()
-{
-
-}
+template <> void QuokkaSimulation<StromgrenSphere>::computeAfterTimestep() {}
 
 auto problem_main() -> int
 {

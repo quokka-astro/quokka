@@ -62,16 +62,13 @@ template <> struct RadSystem_Traits<DTypeFront> {
 	static constexpr double c_hat_over_c = c_hat / C::c_light;
 	static constexpr double Erad_floor = 1e-99;
 	static constexpr int beta_order = 0;
-	AMREX_GPU_HOST_DEVICE static constexpr amrex::GpuArray<double, NumChemBands + 1> ChemBands()
-	{
-		return ChemBandsHeader_;
-	}
+	AMREX_GPU_HOST_DEVICE static constexpr amrex::GpuArray<double, NumChemBands + 1> ChemBands() { return ChemBandsHeader_; }
 };
 
 template <>
 void RadSystem<DTypeFront>::SetRadEnergySource(array_t &radEnergy, const amrex::Box &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-						    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-						    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
+					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
+					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
 {
 	amrex::ParmParse pp("stromgen");
 	amrex::Real Q = 1.0e49_rt;
@@ -233,10 +230,7 @@ template <> void QuokkaSimulation<DTypeFront>::setInitialConditionsOnGrid(quokka
 	});
 }
 
-template <> void QuokkaSimulation<DTypeFront>::computeAfterTimestep()
-{
-
-}
+template <> void QuokkaSimulation<DTypeFront>::computeAfterTimestep() {}
 
 auto problem_main() -> int
 {
