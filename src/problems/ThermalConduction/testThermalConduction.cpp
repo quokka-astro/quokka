@@ -44,7 +44,6 @@ const double sigma = 1.2053428078125e+17;    // conduction timescale in s
 const double Twind = 2.e6;
 const double Tcloud  = 1.e4;
 const double rho_cloud = C::m_p; // g/cm^3
-double cs_wind = 0.0;
 const double Mach = 4.0; // Mach number of the wind
 const double R0 = 0.1 * C::parsec; // radius of the cloud		
 
@@ -101,6 +100,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		amrex::Real rho;	  // g/cm^3
 		amrex::Real T;
 		amrex::Real vz;
+		amrex::Real cs_wind = 0.0;
 		double R = std::sqrt(x*x + y*y + z*z);
 		if(R < R0){
 			T = Tcloud;
@@ -116,14 +116,14 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 			
 		}
 		const amrex::Real Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T);
-		if(i==0 & j==0 & k==0){
-			amrex::Print() << "Parameters of the cloud-wind problem: " << std::endl;
-			amrex::Print() << "Twind: " << Twind << std::endl;
-			amrex::Print() << "Tcloud: " << Tcloud << std::endl;
-			amrex::Print() << "Mach: " << Mach << std::endl;
-			amrex::Print() << "Wind velocity: " << vz << std::endl;
-			amrex::Print() << "Sound speed in the wind: " << cs_wind << std::endl;
-		}
+		// if(i==0 & j==0 & k==0){
+		// 	amrex::Print() << "Parameters of the cloud-wind problem: " << std::endl;
+		// 	amrex::Print() << "Twind: " << Twind << std::endl;
+		// 	amrex::Print() << "Tcloud: " << Tcloud << std::endl;
+		// 	amrex::Print() << "Mach: " << Mach << std::endl;
+		// 	amrex::Print() << "Wind velocity: " << vz << std::endl;
+		// 	amrex::Print() << "Sound speed in the wind: " << cs_wind << std::endl;
+		// }
 		/*-------------------------------------------------*/
 
 		for (int n = 0; n < state_cc.nComp(); ++n) {
