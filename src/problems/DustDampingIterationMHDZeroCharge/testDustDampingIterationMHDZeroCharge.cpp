@@ -237,8 +237,8 @@ auto run_reference_simulation() -> SimulationData<DustDampingDragReference>
 	sim.reconstructionOrder_ = 3;
 	sim.radiationReconstructionOrder_ = 3;
 	sim.plotfileInterval_ = -1;
-	sim.cflNumber_ = 1000000.0;
-	sim.constantDt_ = 0.00005;
+	sim.cflNumber_ = 1000000.0; // large CFL number to avoid CFL violation
+	sim.constantDt_ = 0.00005;  // fixed small timestep for reference solution
 	sim.enableIterDustStoptime_ = 0;
 	sim.print_dust_counter_ = false;
 

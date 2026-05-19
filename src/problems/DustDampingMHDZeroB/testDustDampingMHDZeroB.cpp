@@ -206,7 +206,7 @@ auto E_gas_analytic(double t) -> double
 
 auto problem_main() -> int
 {
-	const double CFL_number = 1000000.0;
+	const double CFL_number = 1000000.0; // large CFL number to avoid CFL violation
 
 	auto BCs_cc = quokka::BC<DustDampingMHDZeroB>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
 

@@ -331,7 +331,7 @@ template <typename problem_t> auto runDustGyroSimulation() -> SimulationData<pro
 	sim.reconstructionOrder_ = 3;
 	sim.radiationReconstructionOrder_ = 3;
 	sim.plotfileInterval_ = -1;
-	sim.cflNumber_ = 1000000.0;
+	sim.cflNumber_ = 1000000.0; // large CFL number to avoid CFL violation
 	sim.constantDt_ = GyroCaseParams<problem_t>::constant_dt;
 	sim.stopTime_ = GyroCaseParams<problem_t>::stop_time;
 	sim.maxTimesteps_ = 10000000;

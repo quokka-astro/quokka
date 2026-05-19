@@ -236,7 +236,7 @@ auto E_gas_analytic(double t) -> double
 auto problem_main() -> int
 {
 	// problem parameters
-	const double CFL_number = 1000000.0; // set large CFL to avoid CFL violation
+	const double CFL_number = 1000000.0; // large CFL number to avoid CFL violation
 
 	// problem initialization
 	QuokkaSimulation<DustDamping> sim;
