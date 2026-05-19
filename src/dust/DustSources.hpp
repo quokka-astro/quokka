@@ -59,8 +59,8 @@ template <typename problem_t> class DustSources
 	using Mat6 = amrex::Array2D<amrex::Real, 0, 5, 0, 5, amrex::Order::C>;
 
 	struct DustStageAffineOperators {
-		Mat3 W1;
-		Mat3 W2;
+		Mat3 Z1;
+		Mat3 Z2;
 		Mat3 X1;
 		Mat3 X2;
 		Mat3 Y1;
@@ -240,8 +240,8 @@ AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeDustStageAffineOperato
 		solver(sol_k2.begin(), rhs_k2.begin());
 
 		for (int row = 0; row < 3; ++row) {
-			ops.W1(row, basis) = sol_q(row);
-			ops.W2(row, basis) = sol_q(row + 3);
+			ops.Z1(row, basis) = sol_q(row);
+			ops.Z2(row, basis) = sol_q(row + 3);
 			ops.X1(row, basis) = epsilon * sol_k1(row);
 			ops.X2(row, basis) = epsilon * sol_k1(row + 3);
 			ops.Y1(row, basis) = epsilon * sol_k2(row);
@@ -728,8 +728,8 @@ void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_
 			Vec3 C2 = Vec3::Zero();
 
 			for (int g = 0; g < nDustGroups_; ++g) {
-				C1 -= ops[g].W1 * q_n[g];
-				C2 -= ops[g].W2 * q_n[g];
+				C1 -= ops[g].Z1 * q_n[g];
+				C2 -= ops[g].Z2 * q_n[g];
 				G1X += ops[g].X1;
 				G1Y += ops[g].Y1;
 				G2X += ops[g].X2;
@@ -765,8 +765,8 @@ void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_
 			}
 
 			for (int g = 0; g < nDustGroups_; ++g) {
-				k1_d[g] = ops[g].W1 * q_n[g] + ops[g].X1 * k1_g + ops[g].Y1 * k2_g;
-				k2_d[g] = ops[g].W2 * q_n[g] + ops[g].X2 * k1_g + ops[g].Y2 * k2_g;
+				k1_d[g] = ops[g].Z1 * q_n[g] + ops[g].X1 * k1_g + ops[g].Y1 * k2_g;
+				k2_d[g] = ops[g].Z2 * q_n[g] + ops[g].X2 * k1_g + ops[g].Y2 * k2_g;
 
 				Vec3 const k_rel1 = k1_d[g] - epsilon[g] * k1_g;
 				Vec3 const k_rel2 = k2_d[g] - epsilon[g] * k2_g;
