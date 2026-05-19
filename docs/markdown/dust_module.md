@@ -71,19 +71,16 @@ where
 -   \\(\mathbf{a}_{\mathrm{ext},\mathrm{d},n}\\) is the external acceleration applied to dust species \\(n\\),
 -   \\(\omega_1\\) is the fraction of physical dust-drag dissipation deposited into the gas.
 
-The Lorentz work term in the gas total-energy equation is the gas-side work from the dust back-reaction. It transfers kinetic energy between gas and dust, but it does not heat the combined gas-dust system. For each dust species,
+The Lorentz work term in the gas total-energy equation is the gas-side work from the dust back-reaction. It transfers kinetic energy between gas and dust, but it does not heat the combined gas-dust system. Adding the gas-side and dust-side Lorentz work terms for each dust species gives
 
 <script type="math/tex; mode=display">
 \begin{aligned}
-P_{\mathrm{L,g},n}
-&= - \rho_{\mathrm{d},n} \Omega_{\mathrm{L},n}
+&- \rho_{\mathrm{d},n} \Omega_{\mathrm{L},n}
    \left[\left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right) \times \hat{\mathbf{b}}\right]
-   \cdot \mathbf{v}_{\mathrm{g}}, \\
-P_{\mathrm{L,d},n}
-&= \rho_{\mathrm{d},n} \Omega_{\mathrm{L},n}
+   \cdot \mathbf{v}_{\mathrm{g}}
+ + \rho_{\mathrm{d},n} \Omega_{\mathrm{L},n}
    \left[\left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right) \times \hat{\mathbf{b}}\right]
-   \cdot \mathbf{v}_{\mathrm{d},n}, \\
-P_{\mathrm{L,g},n} + P_{\mathrm{L,d},n}
+   \cdot \mathbf{v}_{\mathrm{d},n} \\
 &= \rho_{\mathrm{d},n} \Omega_{\mathrm{L},n}
    \left[\left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right) \times \hat{\mathbf{b}}\right]
    \cdot \left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right)
@@ -91,7 +88,7 @@ P_{\mathrm{L,g},n} + P_{\mathrm{L,d},n}
 \end{aligned}
 </script>
 
-Only aerodynamic drag produces physical gas heating in these equations, through the \\(\omega_1\\) term. The \\(\omega_2\\) runtime parameter used by the MHD dust source solver controls a numerical energy correction in the discrete drag-plus-Lorentz update; it is not a continuous Lorentz heating term.
+Only aerodynamic drag produces physical gas heating in these equations, through the \\(\omega_1\\) term. The \\(\omega_2\\) runtime parameter controls a numerical energy correction in the discrete combined drag-plus-Lorentz update.
 
 ## Variable Storage
 
@@ -124,19 +121,19 @@ This is implemented in `src/dust/dustRiemannSolver.hpp` and called in `DustSyste
 A Strang-split method is used to integrate the dust-gas source terms together with the explicit transport update:
 
 <script type="math/tex; mode=display">
-\mathbf{u}^{n+1} = \mathcal{S}_{\Delta t/2} \mathcal{H}_{\Delta t} \mathcal{S}_{\Delta t/2} \mathbf{u}^n
+\mathbf{u}^{n+1} = \mathcal{C}_{\Delta t/2} \mathcal{H}_{\Delta t} \mathcal{C}_{\Delta t/2} \mathbf{u}^n
 </script>
 
-where \\(\mathcal{H}\\) is the hydrodynamics operator, including both gas and dust transport, and \\(\mathcal{S}\\) is the built-in dust source operator. The hydrodynamics operator \\(\mathcal{H}\\) is handled using the explicit RK2 scheme. The source operator \\(\mathcal{S}\\) is implemented in `src/dust/DustSources.hpp` and called by `QuokkaSimulation::addStrangSplitSourcesWithBuiltin`:
+where \\(\mathcal{H}\\) is the explicit gas/MHD and dust transport update, and \\(\mathcal{C}\\) denotes the local combined drag-plus-Lorentz update. In non-MHD runs, \\(\mathcal{C}\\) reduces to a drag-only update; in MHD runs, it integrates aerodynamic drag and the charged-dust Lorentz force in the same solve. The \\(\mathcal{C}\\) update is implemented in `src/dust/DustSources.hpp` and called from `QuokkaSimulation::addStrangSplitSourcesWithBuiltin`:
 
 - If `Physics_Traits<problem_t>::is_dust_enabled = true` and MHD is disabled, Quokka calls `DustSources::computeDustDrag`, following Tedeschi-Prades et al. (2025).
 - If both `Physics_Traits<problem_t>::is_dust_enabled = true` and `Physics_Traits<problem_t>::is_mhd_enabled = true`, Quokka calls `DustSources::computeDustDragAndLorentz`.
 
-`DustSources::computeDustDragAndLorentz` integrates drag and Lorentz forces in the same source solve; it does not operator-split the Lorentz force from drag. The method uses a two-stage generalized implicit Runge-Kutta (GIRK) update for the local gas and dust momenta. For dust species \\(n\\), the relevant local rates are the drag rate \\(\alpha_n = 1/T_{\mathrm{s},n}\\) and the gyrofrequency \\(\Omega_{\mathrm{L},n} = \xi_n |\mathbf{B}|\\). The implementation selects the non-stiff or stiff GIRK coefficients from the local source timescale, using \\((\alpha_n^2 + \Omega_{\mathrm{L},n}^2)^{-1/2}\\) for the drag-plus-Lorentz system.
+`DustSources::computeDustDragAndLorentz` integrates drag and Lorentz forces in the same source solve; it does not operator-split the Lorentz force from drag. The method uses a two-stage generalized implicit Runge-Kutta (GIRK) update for the local gas and dust momenta. For dust species \\(n\\), the relevant local rates are the drag rate \\(\alpha_n = 1/T_{\mathrm{s},n}\\) and the gyrofrequency \\(\Omega_{\mathrm{L},n} = \xi_n |\mathbf{B}|\\). The implementation selects the non-stiff or stiff GIRK coefficients from the local timescale, using \\((\alpha_n^2 + \Omega_{\mathrm{L},n}^2)^{-1/2}\\) for the drag-plus-Lorentz system.
 
-### Optional Picard iteration for dust–gas drag
+### Optional Picard iteration for dust–gas source update
 
-Users may optionally enable Picard iteration for the dust source operator \\(\mathcal{S}\\). When the stopping time depends on the gas or dust velocity, enabling iteration is required to maintain an implicit dust drag update. This option applies to both `DustSources::computeDustDrag` and `DustSources::computeDustDragAndLorentz`. See [Runtime parameters](parameters.md) for details.
+Users may optionally enable Picard iteration for the local update represented by \\(\mathcal{C}\\). When the stopping time depends on the gas or dust velocity, enabling iteration is required to maintain an implicit dust source update. This option applies to both `DustSources::computeDustDrag` and `DustSources::computeDustDragAndLorentz`. See [Runtime parameters](parameters.md) for details.
 
 ### User-defined dust stopping time and charge
 
@@ -170,6 +167,6 @@ The following input parameters tune the dust module and are documented in more d
 
 - `enable_iter_stoptime` – switch of iterative dust stopping time calculation.
 - `omega1` – controls deposition of physical dust-drag heating into the gas.
-- `omega2` – controls deposition of the numerical energy correction from the coupled dust drag-plus-Lorentz source update. It is only relevant when MHD and dust are both enabled, and it is not a physical Lorentz heating term.
+- `omega2` – controls deposition of the numerical energy correction from the combined dust drag-plus-Lorentz source update. It is only relevant when MHD and dust are both enabled.
 - `print_iteration_counts` - switch to turn on/off printing of dust source iteration counts for debugging.
 - `dust.density_floor` - the minimum dust density value allowed in the simulation.
