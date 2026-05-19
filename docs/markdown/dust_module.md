@@ -34,7 +34,7 @@ This module implements dust transport and dust-gas source terms. When dust is en
         \left[\left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right) \times \hat{\mathbf{b}}\right]
         \cdot \mathbf{v}_{\mathrm{g}}
         + \rho_{\mathrm{g}} \mathbf{a}_{\mathrm{ext},\mathrm{g}} \cdot \mathbf{v}_{\mathrm{g}}
-        + \omega_1 \sum_{n=1}^{N} \rho_{\mathrm{d},n}
+        + \omega_{\rm drag} \sum_{n=1}^{N} \rho_{\mathrm{d},n}
         \frac{\left|\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right|^{2}}{T_{\mathrm{s},n}}, \\
 \frac{\partial \mathbf{B}}{\partial t}
     - \nabla \times (\mathbf{v}_{\mathrm{g}} \times \mathbf{B})
@@ -69,7 +69,7 @@ where
 -   \\(\hat{\mathbf{b}}\\) is the unit vector along the magnetic field,
 -   \\(\mathbf{a}_{\mathrm{ext},\mathrm{g}}\\) is the external acceleration applied to the gas,
 -   \\(\mathbf{a}_{\mathrm{ext},\mathrm{d},n}\\) is the external acceleration applied to dust species \\(n\\),
--   \\(\omega_1\\) is the fraction of physical dust-drag dissipation deposited into the gas.
+-   \\(\omega_{\rm drag}\\) is the fraction of physical dust-drag dissipation deposited into the gas.
 
 The Lorentz work term in the gas total-energy equation is the gas-side work from the dust back-reaction. It transfers kinetic energy between gas and dust, but it does not heat the combined gas-dust system. Adding the gas-side and dust-side Lorentz work terms for each dust species gives
 
@@ -88,7 +88,7 @@ The Lorentz work term in the gas total-energy equation is the gas-side work from
 \end{aligned}
 </script>
 
-Only aerodynamic drag produces physical gas heating in these equations, through the \\(\omega_1\\) term. The \\(\omega_2\\) runtime parameter controls a numerical energy correction in the discrete combined drag-plus-Lorentz update.
+Only aerodynamic drag produces physical gas heating in these equations, through the \\(\omega_{\rm drag}\\) term. The `dust.omega_rk_residual` runtime parameter controls deposition of the discrete RK energy residual from the combined drag-plus-Lorentz update. This residual is not a separate physical heating rate and is not a Lorentz-heating parameter.
 
 ## Variable Storage
 
@@ -166,7 +166,7 @@ For the dust-gas coupled system with \\(N\\) dust species, we use the following 
 The following input parameters tune the dust module and are documented in more detail in [Runtime parameters](parameters.md):
 
 - `enable_iter_stoptime` – switch of iterative dust stopping time calculation.
-- `omega1` – controls deposition of physical dust-drag heating into the gas.
-- `omega2` – controls deposition of the numerical energy correction from the combined dust drag-plus-Lorentz source update. It is only relevant when MHD and dust are both enabled.
+- `omega_drag_heating` – controls deposition of physical dust-drag heating into the gas.
+- `omega_rk_residual` – controls deposition of the discrete RK energy residual from the combined dust drag-plus-Lorentz source update. It is only relevant when MHD and dust are both enabled.
 - `print_iteration_counts` - switch to turn on/off printing of dust source iteration counts for debugging.
 - `dust.density_floor` - the minimum dust density value allowed in the simulation.

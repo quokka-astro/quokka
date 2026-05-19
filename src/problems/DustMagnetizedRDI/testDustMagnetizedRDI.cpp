@@ -817,8 +817,7 @@ auto problem_main() -> int
 	sim.plotfileInterval_ = -1;
 	sim.enableIterDustStoptime_ = 1;
 	sim.print_dust_counter_ = false;
-	sim.dust_omega1_ = 1.0;
-	sim.dust_omega2_ = 1.0;
+	sim.dust_omega_res_ = 1.0;
 
 	sim.setInitialConditions();
 	recordHistory(sim, true);

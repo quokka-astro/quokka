@@ -335,8 +335,6 @@ template <typename problem_t> auto runDustGyroSimulation() -> SimulationData<pro
 	sim.constantDt_ = GyroCaseParams<problem_t>::constant_dt;
 	sim.stopTime_ = GyroCaseParams<problem_t>::stop_time;
 	sim.maxTimesteps_ = 10000000;
-	sim.dust_omega1_ = 0.0;
-	sim.dust_omega2_ = 0.0;
 	sim.enableIterDustStoptime_ = GyroCaseParams<problem_t>::enable_epstein_drag ? 1 : 0;
 	sim.print_dust_counter_ = false;
 

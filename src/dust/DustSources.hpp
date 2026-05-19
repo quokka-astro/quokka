@@ -88,9 +88,9 @@ template <typename problem_t> class DustSources
 									  amrex::Real gamma2, amrex::Real beta1, amrex::Real beta2) -> DustStageAffineOperators;
 	// compute dust source terms and update conserved variables
 	static void computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc_mf, amrex::Real dt,
-				    amrex::Real dust_omega_, int enableIterDustStoptime_, bool print_dust_counter_);
+				    amrex::Real dust_omega_drag_, int enableIterDustStoptime_, bool print_dust_counter_);
 	static void computeDustDragAndLorentz(amrex::MultiFab &consVar_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc_mf, amrex::Real dt,
-					      amrex::Real dust_omega1_, amrex::Real dust_omega2_, int enableIterDustStoptime_, bool print_dust_counter_);
+					      amrex::Real dust_omega_drag_, amrex::Real dust_omega_res_, int enableIterDustStoptime_, bool print_dust_counter_);
 };
 
 template <typename problem_t>
@@ -254,7 +254,7 @@ AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeDustStageAffineOperato
 
 template <typename problem_t>
 void DustSources<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc_mf, amrex::Real dt,
-					     amrex::Real dust_omega_, int enableIterDustStoptime_, bool print_dust_counter_)
+					     amrex::Real dust_omega_drag_, int enableIterDustStoptime_, bool print_dust_counter_)
 {
 	amrex::Gpu::Buffer<int> iteration_counter({0, 0, 0}); // [sum of iterations, number of cells, max iterations in any cell]
 	int *p_iteration_counter = iteration_counter.data();
@@ -268,7 +268,7 @@ void DustSources<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std
 #endif
 
 	int const numDustVars = Physics_NumVars::numDustVarsPerGroup;
-	amrex::Real const omega = dust_omega_;
+	amrex::Real const omega_drag = dust_omega_drag_;
 
 	// NOLINTNEXTLINE(modernize-use-trailing-return-type)
 	amrex::ParallelFor(consVar_cc_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
@@ -487,9 +487,9 @@ void DustSources<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std
 				}
 			}
 
-			amrex::Real const delta_E = delta_E_g1 - omega * delta_E_g2;
+			amrex::Real const delta_E = delta_E_g1 - omega_drag * delta_E_g2;
 			E_tot_iter_new = E_tot + delta_E;
-			E_int_iter_new = E_int - omega * delta_E_g2;
+			E_int_iter_new = E_int - omega_drag * delta_E_g2;
 
 			// check convergence conditions
 			// calculate the reference speed
@@ -575,7 +575,7 @@ void DustSources<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std
 
 template <typename problem_t>
 void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc_mf,
-						       amrex::Real dt, amrex::Real dust_omega1_, amrex::Real dust_omega2_, int enableIterDustStoptime_,
+						       amrex::Real dt, amrex::Real dust_omega_drag_, amrex::Real dust_omega_res_, int enableIterDustStoptime_,
 						       bool print_dust_counter_)
 {
 	amrex::Gpu::Buffer<int> iteration_counter({0, 0, 0}); // [sum of iterations, number of cells, max iterations in any cell]
@@ -590,8 +590,8 @@ void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_
 #endif
 
 	int const numDustVars = Physics_NumVars::numDustVarsPerGroup;
-	amrex::Real const omega1 = dust_omega1_;
-	amrex::Real const omega2 = dust_omega2_;
+	amrex::Real const omega_drag = dust_omega_drag_;
+	amrex::Real const omega_res = dust_omega_res_;
 	auto const charge_to_mass_ratio = ComputeDustChargeToMassRatio();
 
 	amrex::ParallelFor(consVar_cc_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
@@ -826,9 +826,9 @@ void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_
 			}
 
 			amrex::Real const delta_E_cons = -(delta_E_g_work + delta_E_d_work_sum);
-			amrex::Real const delta_E_corr = delta_E_cons - delta_E_heat_drag;
-			E_tot_iter_new = E_tot + delta_E_g_work + omega1 * delta_E_heat_drag + omega2 * delta_E_corr;
-			E_int_iter_new = E_int + omega1 * delta_E_heat_drag + omega2 * delta_E_corr;
+			amrex::Real const delta_E_res = delta_E_cons - delta_E_heat_drag;
+			E_tot_iter_new = E_tot + delta_E_g_work + omega_drag * delta_E_heat_drag + omega_res * delta_E_res;
+			E_int_iter_new = E_int + omega_drag * delta_E_heat_drag + omega_res * delta_E_res;
 
 			if (max_speed_change <= abs_tolerance) {
 				break;
