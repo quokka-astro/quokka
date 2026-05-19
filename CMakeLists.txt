@@ -150,6 +150,8 @@ add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/turbulence/plugins/AMReX ${Quok
 #they do not carry forward from Microphysics
 #We use Strang operator-spliting while integrating the network
 #NAUX_NET defines the number of auxiliary variables
-add_definitions(-DNAUX_NET -DSTRANG)
+#NET_LOOP_UNROLL_LEN is the unroll length used in Microphysics linpack/ArrayUtilities;
+#match Microphysics' CMake default of 1.
+add_definitions(-DNAUX_NET -DSTRANG -DNET_LOOP_UNROLL_LEN=1)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/extern/Microphysics ${QuokkaCode_BINARY_DIR}/Microphysics)
 add_subdirectory(${QuokkaCode_SOURCE_DIR}/src ${QuokkaCode_BINARY_DIR}/src)

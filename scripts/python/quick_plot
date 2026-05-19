@@ -68,7 +68,7 @@ KEY FUNCTIONS:
 
 TECHNICAL DETAILS:
 ==================
-- Requires yt installed from: https://github.com/chongchonghe/yt
+- Requires yt installed via: `pip install "yt[quokka] @ git+https://github.com/yt-project/yt.git"`
 - Supports AMReX/BoxLib simulation formats
 - Handles derived field creation for temperature and number density calculations, in which case mu = 1 m_p and gamma = 5/3 are assumed. The mean molecular weight can be specified with '--mean_molecular_weight' in atomic mass units.
 - Automatically filters out .old. directories

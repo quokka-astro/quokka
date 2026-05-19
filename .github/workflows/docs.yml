@@ -37,11 +37,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Dependencies
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install pypandoc_binary 
-          python3 -m pip install -r docs/requirements.txt
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install mdBook tooling
+        run: ./scripts/bash/install_mdbook.sh
 
       - name: Install and Build
         run: |
