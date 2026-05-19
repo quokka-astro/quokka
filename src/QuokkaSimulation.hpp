@@ -309,7 +309,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 						int lev, int interval) override;
 
 	// compute derived variables
-	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
+	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
+			       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const override;
 	void ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const override;
 
 	// compute projected vars
@@ -1042,13 +1043,17 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	return (burn_success && cool_success);
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp) const
+template <typename problem_t>
+void QuokkaSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp, amrex::MultiFab const &state_cc,
+						    amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
 	// compute derived variables and save in 'mf' -- user should implement
 	(void)lev;
 	(void)dname;
 	(void)mf;
 	(void)ncomp;
+	(void)state_cc;
+	(void)state_fc;
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const
