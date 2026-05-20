@@ -69,7 +69,7 @@ namespace filesystem = experimental::filesystem;
 #include "SimulationData.hpp"
 #include "chemistry/Chemistry.hpp"
 #include "cooling/ResampledCooling.hpp"
-#include "dust/DustDrag.hpp"
+#include "dust/DustSources.hpp"
 #include "dust/dust_system.hpp"
 #include "eos.H"
 #include "hydro/hydro_system.hpp"
@@ -192,7 +192,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	static constexpr bool is_particle_enabled = Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None;
 
-	amrex::Real dust_omega_ = 1.0;
+	amrex::Real dust_omega_drag_ = 1.0;
+	amrex::Real dust_omega_res_ = 0.0;
 	bool print_dust_counter_ = false;
 
 	amrex::Real radiationCflNumber_ = 0.3;
@@ -711,7 +712,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	// set dust runtime parameters
 	{
 		amrex::ParmParse const dpp("dust");
-		dpp.query("omega", dust_omega_);
+		dpp.query("omega_drag_heating", dust_omega_drag_);
+		dpp.query("omega_rk_residual", dust_omega_res_);
 		dpp.query("enable_iter_stoptime", enableIterDustStoptime_);
 		dpp.query("print_iteration_counts", print_dust_counter_);
 		dpp.query("density_floor", dustDensityFloor_);
@@ -991,8 +993,11 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 								   amrex::Real time, amrex::Real dt) -> bool
 {
 	auto const applyDust = [&]() {
-		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-			DustDrag<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega_, enableIterDustStoptime_, print_dust_counter_);
+		if constexpr (Physics_Traits<problem_t>::is_dust_enabled && Physics_Traits<problem_t>::is_mhd_enabled) {
+			DustSources<problem_t>::computeDustDragAndLorentz(state, state_fc, dt, dust_omega_drag_, dust_omega_res_, enableIterDustStoptime_,
+									  print_dust_counter_);
+		} else if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+			DustSources<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega_drag_, enableIterDustStoptime_, print_dust_counter_);
 		}
 	};
 

@@ -8,14 +8,14 @@ quokka.bc = ["periodic", "periodic", "periodic"]
 # *****************************************************************
 # VERBOSITY
 # *****************************************************************
-amr.v = 0  # verbosity in Amr
+amr.v = 0
 
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
 amr.n_cell = [128, 8, 8]
-amr.max_level = 0  # number of levels = max_level + 1
-amr.blocking_factor = 8  # grid size must be divisible by this
+amr.max_level = 0
+amr.blocking_factor = 8
 amr.max_grid_size = 8
 
 do_reflux = 0
@@ -23,6 +23,6 @@ do_subcycle = 0
 suppress_output = 0
 
 max_timesteps = 1000
-constant_dt = 0.1
+constant_dt = 0.005
 
-stop_time = 10.0
+stop_time = 0.05

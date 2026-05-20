@@ -21,14 +21,4 @@ do_subcycle = 0
 suppress_output = 0
 
 max_timesteps = 10000000
-
-dust.omega = 1.0
-
-# test A
-#stop_time = 10.0
-
-# test B
 stop_time = 0.05
-
-# test C
-#stop_time = 0.3

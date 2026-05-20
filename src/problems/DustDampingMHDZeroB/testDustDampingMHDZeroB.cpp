@@ -1,5 +1,5 @@
-/// \file testDustDamping.cpp
-/// \brief Defines a test problem for dust drag
+/// \file testDustDampingMHDZeroB.cpp
+/// \brief Dust drag damping test with MHD enabled and zero magnetic field.
 ///
 
 #include "QuokkaSimulation.hpp"
@@ -9,25 +9,6 @@
 #include "util/matplotlibcpp.h"
 #endif
 
-// // analytic solution parameters for test A
-// constexpr double V_COM = 1.16666666666667;
-// constexpr double LAMBDA1 = -0.63397459621556;
-// constexpr double LAMBDA2 = -2.36602540378444;
-// constexpr double C_GAS_1 = -0.22767090063074;
-// constexpr double C_GAS_2 = 0.06100423396407;
-// constexpr double C_DUST1_1 = 0.84967936855889;
-// constexpr double C_DUST1_2 = -0.01634603522555;
-// constexpr double C_DUST2_1 = -0.62200846792815;
-// constexpr double C_DUST2_2 = -0.04465819873852;
-
-// constexpr double rho_dust1 = 1.0;
-// constexpr double rho_dust2 = 1.0;
-// constexpr double TS1 = 2.0;
-// constexpr double TS2 = 1.0;
-// constexpr double OMEGA = 1.0;
-// constexpr double P_INITIAL = 1.0;
-
-// analytic solution parameters for test B
 constexpr double V_COM = 1.16666666666667;
 constexpr double LAMBDA1 = -141.742430504416;
 constexpr double LAMBDA2 = -1058.25756949558;
@@ -45,34 +26,15 @@ constexpr double TS2 = 0.002;
 constexpr double OMEGA = 1.0;
 constexpr double P_INITIAL = 1.0;
 
-// // analytic solution parameters for test C
-// constexpr double V_COM = 0.63963963963963;
-// constexpr double LAMBDA1 = -0.52370200744224;
-// constexpr double LAMBDA2 = -105.976297992557;
-// constexpr double C_GAS_1 = -0.06458203330249;
-// constexpr double C_GAS_2 = 0.42494239366285;
-// constexpr double C_DUST1_1 = 1.36237475791577;
-// constexpr double C_DUST1_2 = -0.00201439755542;
-// constexpr double C_DUST2_1 = -0.13559165545855;
-// constexpr double C_DUST2_2 = -0.00404798418109;
-
-// constexpr double rho_dust1 = 10.0;
-// constexpr double rho_dust2 = 100.0;
-// constexpr double TS1 = 2.0;
-// constexpr double TS2 = 1.0;
-// constexpr double OMEGA = 1.0;
-// constexpr double P_INITIAL = 1.0;
-
-// analytic solution function declarations
 auto v_gas_analytic(double t) -> double;
 auto v_dust1_analytic(double t) -> double;
 auto v_dust2_analytic(double t) -> double;
 auto E_gas_analytic(double t) -> double;
 
-struct DustDamping {
+struct DustDampingMHDZeroB {
 };
 
-template <> struct SimulationData<DustDamping> {
+template <> struct SimulationData<DustDampingMHDZeroB> {
 	std::vector<double> t_vec_;
 	std::vector<double> v_gas_vec_;
 	std::vector<double> v_dust1_vec_;
@@ -80,28 +42,27 @@ template <> struct SimulationData<DustDamping> {
 	std::vector<double> E_gas_vec_;
 };
 
-template <> struct quokka::EOS_Traits<DustDamping> {
+template <> struct quokka::EOS_Traits<DustDampingMHDZeroB> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 1.4;
-	// static constexpr double cs_isothermal = 1.0; // only used when gamma = 1
 };
 
 constexpr double rho = 1.0;
 constexpr double v0 = 1.0;
-constexpr double Egas0 = P_INITIAL / (quokka::EOS_Traits<DustDamping>::gamma - 1.0) + 0.5 * rho * v0 * v0;
-constexpr double Egas0_internal = P_INITIAL / (quokka::EOS_Traits<DustDamping>::gamma - 1.0);
+constexpr double Egas0 = P_INITIAL / (quokka::EOS_Traits<DustDampingMHDZeroB>::gamma - 1.0) + 0.5 * rho * v0 * v0;
+constexpr double Egas0_internal = P_INITIAL / (quokka::EOS_Traits<DustDampingMHDZeroB>::gamma - 1.0);
 constexpr int numDustVars = Physics_NumVars::numDustVarsPerGroup;
 
-template <> struct Physics_Traits<DustDamping> {
+template <> struct Physics_Traits<DustDampingMHDZeroB> {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
+	static constexpr int numMassScalars = 0;
+	static constexpr int numPassiveScalars = numMassScalars + 0;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_dust_enabled = true;
-	static constexpr int nDustGroups = 2; // number of dust groups
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1; // number of radiation groups
+	static constexpr int nDustGroups = 2;
+	static constexpr bool is_mhd_enabled = true;
+	static constexpr int nGroups = 1;
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = 1.0;
 	static constexpr double gravitational_constant = 1.0;
@@ -110,9 +71,10 @@ template <> struct Physics_Traits<DustDamping> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustDamping>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
-										   amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/, double /*cs*/)
-    -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroB>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/,
+											   amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
+											   amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/,
+											   double /*cs*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, 2> alpha{};
 	alpha[0] = 1.0 / TS1;
@@ -120,79 +82,89 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustDamping>::ComputeReciprocalStoppingTi
 	return alpha;
 }
 
-template <> void QuokkaSimulation<DustDamping>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroB>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	const amrex::Box &indexRange = grid_elem.indexRange_;
-	const amrex::Array4<double> &state_cc = grid_elem.array_;
+	amrex::GpuArray<amrex::Real, 2> charge_to_mass_ratio{};
+	charge_to_mass_ratio.fill(1.0);
+	return charge_to_mass_ratio;
+}
 
-	const auto vx0 = v0;		// gas velocity
-	const auto vx_dust1 = 2 * v0;	// dust1 velocity
-	const auto vx_dust2 = 0.5 * v0; // dust2 velocity
+template <> void QuokkaSimulation<DustDampingMHDZeroB>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+{
+	const amrex::Array4<double> &state_fc = grid_elem.array_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const int ncomp_fc = Physics_Indices<DustDampingMHDZeroB>::nvarPerDim_fc;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		// for gas
-		state_cc(i, j, k, HydroSystem<DustDamping>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<DustDamping>::energy_index) = Egas0;
-		state_cc(i, j, k, HydroSystem<DustDamping>::internalEnergy_index) = Egas0_internal;
-		state_cc(i, j, k, HydroSystem<DustDamping>::x1Momentum_index) = rho * vx0;
-		state_cc(i, j, k, HydroSystem<DustDamping>::x2Momentum_index) = 0.;
-		state_cc(i, j, k, HydroSystem<DustDamping>::x3Momentum_index) = 0.;
-
-		// first-capture for CUDA
-		const auto vx_dust1_local = vx_dust1;
-		const auto vx_dust2_local = vx_dust2;
-
-		if constexpr (Physics_Traits<DustDamping>::is_dust_enabled) {
-			// for dust1
-			state_cc(i, j, k, HydroSystem<DustDamping>::dustDensity_index) = rho_dust1;
-			state_cc(i, j, k, HydroSystem<DustDamping>::x1DustMomentum_index) = rho_dust1 * vx_dust1_local;
-			state_cc(i, j, k, HydroSystem<DustDamping>::x2DustMomentum_index) = 0.;
-			state_cc(i, j, k, HydroSystem<DustDamping>::x3DustMomentum_index) = 0.;
-			// for dust2
-			state_cc(i, j, k, HydroSystem<DustDamping>::dustDensity_index + numDustVars) = rho_dust2;
-			state_cc(i, j, k, HydroSystem<DustDamping>::x1DustMomentum_index + numDustVars) = rho_dust2 * vx_dust2_local;
-			state_cc(i, j, k, HydroSystem<DustDamping>::x2DustMomentum_index + numDustVars) = 0.;
-			state_cc(i, j, k, HydroSystem<DustDamping>::x3DustMomentum_index + numDustVars) = 0.;
+		for (int n = 0; n < ncomp_fc; ++n) {
+			state_fc(i, j, k, n) = 0.0;
 		}
 	});
 }
 
-template <> void QuokkaSimulation<DustDamping>::computeAfterTimestep()
+template <> void QuokkaSimulation<DustDampingMHDZeroB>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+{
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const amrex::Array4<double> &state_cc = grid_elem.array_;
+
+	const auto vx0 = v0;
+	const auto vx_dust1 = 2 * v0;
+	const auto vx_dust2 = 0.5 * v0;
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		state_cc(i, j, k, HydroSystem<DustDampingMHDZeroB>::density_index) = rho;
+		state_cc(i, j, k, HydroSystem<DustDampingMHDZeroB>::energy_index) = Egas0;
+		state_cc(i, j, k, HydroSystem<DustDampingMHDZeroB>::internalEnergy_index) = Egas0_internal;
+		state_cc(i, j, k, HydroSystem<DustDampingMHDZeroB>::x1Momentum_index) = rho * vx0;
+		state_cc(i, j, k, HydroSystem<DustDampingMHDZeroB>::x2Momentum_index) = 0.;
+		state_cc(i, j, k, HydroSystem<DustDampingMHDZeroB>::x3Momentum_index) = 0.;
+
+		const auto vx_dust1_local = vx_dust1;
+		const auto vx_dust2_local = vx_dust2;
+
+		if constexpr (Physics_Traits<DustDampingMHDZeroB>::is_dust_enabled) {
+			state_cc(i, j, k, HydroSystem<DustDampingMHDZeroB>::dustDensity_index) = rho_dust1;
+			state_cc(i, j, k, HydroSystem<DustDampingMHDZeroB>::x1DustMomentum_index) = rho_dust1 * vx_dust1_local;
+			state_cc(i, j, k, HydroSystem<DustDampingMHDZeroB>::x2DustMomentum_index) = 0.;
+			state_cc(i, j, k, HydroSystem<DustDampingMHDZeroB>::x3DustMomentum_index) = 0.;
+
+			state_cc(i, j, k, HydroSystem<DustDampingMHDZeroB>::dustDensity_index + numDustVars) = rho_dust2;
+			state_cc(i, j, k, HydroSystem<DustDampingMHDZeroB>::x1DustMomentum_index + numDustVars) = rho_dust2 * vx_dust2_local;
+			state_cc(i, j, k, HydroSystem<DustDampingMHDZeroB>::x2DustMomentum_index + numDustVars) = 0.;
+			state_cc(i, j, k, HydroSystem<DustDampingMHDZeroB>::x3DustMomentum_index + numDustVars) = 0.;
+		}
+	});
+}
+
+template <> void QuokkaSimulation<DustDampingMHDZeroB>::computeAfterTimestep()
 {
 	auto [_, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		userData_.t_vec_.push_back(tNew_[0]); // store current time
+		userData_.t_vec_.push_back(tNew_[0]);
 
-		// extract physical quantities
-		const double density = values.at(HydroSystem<DustDamping>::density_index)[0];
-		const double momentum_x = values.at(HydroSystem<DustDamping>::x1Momentum_index)[0];
-		const double Egas_total = values.at(HydroSystem<DustDamping>::energy_index)[0];
+		const double density = values.at(HydroSystem<DustDampingMHDZeroB>::density_index)[0];
+		const double momentum_x = values.at(HydroSystem<DustDampingMHDZeroB>::x1Momentum_index)[0];
+		const double Egas_total = values.at(HydroSystem<DustDampingMHDZeroB>::energy_index)[0];
 
-		// store gas velocity
 		const double v_gas = momentum_x / density;
 		userData_.v_gas_vec_.push_back(v_gas);
-
-		// store gas total energy
 		userData_.E_gas_vec_.push_back(Egas_total);
 
-		if constexpr (Physics_Traits<DustDamping>::is_dust_enabled) {
-			// store dust1 velocity
-			const double dust1_density = values.at(HydroSystem<DustDamping>::dustDensity_index)[0];
-			const double dust1_momentum_x = values.at(HydroSystem<DustDamping>::x1DustMomentum_index)[0];
+		if constexpr (Physics_Traits<DustDampingMHDZeroB>::is_dust_enabled) {
+			const double dust1_density = values.at(HydroSystem<DustDampingMHDZeroB>::dustDensity_index)[0];
+			const double dust1_momentum_x = values.at(HydroSystem<DustDampingMHDZeroB>::x1DustMomentum_index)[0];
 			const double v_dust1 = dust1_momentum_x / dust1_density;
 			userData_.v_dust1_vec_.push_back(v_dust1);
 
-			// store dust2 velocity
-			const double dust2_density = values.at(HydroSystem<DustDamping>::dustDensity_index + numDustVars)[0];
-			const double dust2_momentum_x = values.at(HydroSystem<DustDamping>::x1DustMomentum_index + numDustVars)[0];
+			const double dust2_density = values.at(HydroSystem<DustDampingMHDZeroB>::dustDensity_index + numDustVars)[0];
+			const double dust2_momentum_x = values.at(HydroSystem<DustDampingMHDZeroB>::x1DustMomentum_index + numDustVars)[0];
 			const double v_dust2 = dust2_momentum_x / dust2_density;
 			userData_.v_dust2_vec_.push_back(v_dust2);
 		}
 	}
 }
 
-// implementation of analytic solution functions
 auto analytic_velocity(double t, double c1, double c2) -> double { return V_COM + c1 * std::exp(LAMBDA1 * t) + c2 * std::exp(LAMBDA2 * t); }
 
 auto v_gas_analytic(double t) -> double { return analytic_velocity(t, C_GAS_1, C_GAS_2); }
@@ -201,7 +173,6 @@ auto v_dust1_analytic(double t) -> double { return analytic_velocity(t, C_DUST1_
 
 auto v_dust2_analytic(double t) -> double { return analytic_velocity(t, C_DUST2_1, C_DUST2_2); }
 
-// calculate analytic gas energy
 auto E_gas_analytic(double t) -> double
 {
 	const int n_points = 1000;
@@ -229,52 +200,58 @@ auto E_gas_analytic(double t) -> double
 		integral += 0.5 * (term1 + term2) * dt;
 	}
 
-	const double E_gas_initial = P_INITIAL / (quokka::EOS_Traits<DustDamping>::gamma - 1.0) + 0.5 * 1.0 * std::pow(v_gas_analytic(0), 2);
+	const double E_gas_initial = P_INITIAL / (quokka::EOS_Traits<DustDampingMHDZeroB>::gamma - 1.0) + 0.5 * std::pow(v_gas_analytic(0), 2);
 	return E_gas_initial + integral;
 }
 
 auto problem_main() -> int
 {
-	// problem parameters
 	const double CFL_number = 1000000.0; // large CFL number to avoid CFL violation
 
-	// problem initialization
-	QuokkaSimulation<DustDamping> sim;
+	auto BCs_cc = quokka::BC<DustDampingMHDZeroB>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
+
+	const int nvars_fc = Physics_Indices<DustDampingMHDZeroB>::nvarTotal_fc;
+	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
+	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			BCs_fc[icomp].setLo(idim, amrex::BCType::int_dir);
+			BCs_fc[icomp].setHi(idim, amrex::BCType::int_dir);
+		}
+	}
+
+	QuokkaSimulation<DustDampingMHDZeroB> sim(BCs_cc, BCs_fc);
 
 	sim.reconstructionOrder_ = 3;
-	sim.radiationReconstructionOrder_ = 3; // PPM
+	sim.radiationReconstructionOrder_ = 3;
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = CFL_number;
 
-	// initialize
 	sim.setInitialConditions();
 
-	// store initial values for t=0 plotting
 	auto [_, val_ini] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.5);
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		sim.userData_.t_vec_.push_back(0.0);
 
-		const double initial_density = val_ini.at(HydroSystem<DustDamping>::density_index)[0];
-		const double initial_momentum_x = val_ini.at(HydroSystem<DustDamping>::x1Momentum_index)[0];
-		const double initial_Egas_total = val_ini.at(HydroSystem<DustDamping>::energy_index)[0];
+		const double initial_density = val_ini.at(HydroSystem<DustDampingMHDZeroB>::density_index)[0];
+		const double initial_momentum_x = val_ini.at(HydroSystem<DustDampingMHDZeroB>::x1Momentum_index)[0];
+		const double initial_Egas_total = val_ini.at(HydroSystem<DustDampingMHDZeroB>::energy_index)[0];
 		const double initial_v_gas = initial_momentum_x / initial_density;
 		sim.userData_.v_gas_vec_.push_back(initial_v_gas);
 		sim.userData_.E_gas_vec_.push_back(initial_Egas_total);
 
-		if constexpr (Physics_Traits<DustDamping>::is_dust_enabled) {
-			const double initial_dust1_density = val_ini.at(HydroSystem<DustDamping>::dustDensity_index)[0];
-			const double initial_dust1_momentum_x = val_ini.at(HydroSystem<DustDamping>::x1DustMomentum_index)[0];
+		if constexpr (Physics_Traits<DustDampingMHDZeroB>::is_dust_enabled) {
+			const double initial_dust1_density = val_ini.at(HydroSystem<DustDampingMHDZeroB>::dustDensity_index)[0];
+			const double initial_dust1_momentum_x = val_ini.at(HydroSystem<DustDampingMHDZeroB>::x1DustMomentum_index)[0];
 			const double initial_v_dust1 = initial_dust1_momentum_x / initial_dust1_density;
 			sim.userData_.v_dust1_vec_.push_back(initial_v_dust1);
 
-			const double initial_dust2_density = val_ini.at(HydroSystem<DustDamping>::dustDensity_index + numDustVars)[0];
-			const double initial_dust2_momentum_x = val_ini.at(HydroSystem<DustDamping>::x1DustMomentum_index + numDustVars)[0];
+			const double initial_dust2_density = val_ini.at(HydroSystem<DustDampingMHDZeroB>::dustDensity_index + numDustVars)[0];
+			const double initial_dust2_momentum_x = val_ini.at(HydroSystem<DustDampingMHDZeroB>::x1DustMomentum_index + numDustVars)[0];
 			const double initial_v_dust2 = initial_dust2_momentum_x / initial_dust2_density;
 			sim.userData_.v_dust2_vec_.push_back(initial_v_dust2);
 		}
 	}
 
-	// evolve
 	sim.evolve();
 
 	int status = 0;
@@ -285,7 +262,6 @@ auto problem_main() -> int
 		std::vector<double> const &v_dust2 = sim.userData_.v_dust2_vec_;
 		std::vector<double> const &E_gas = sim.userData_.E_gas_vec_;
 
-		// calculate dense analytic solution for plotting
 		const size_t n_dense_points = 1000;
 		std::vector<double> t_dense(n_dense_points);
 		std::vector<double> v_gas_exact_dense(n_dense_points);
@@ -302,7 +278,6 @@ auto problem_main() -> int
 			E_gas_exact_dense[i] = E_gas_analytic(t_dense[i]);
 		}
 
-		// calculate relative L1 norm errors
 		std::vector<double> v_gas_exact(t.size());
 		std::vector<double> v_dust1_exact(t.size());
 		std::vector<double> v_dust2_exact(t.size());
@@ -315,12 +290,12 @@ auto problem_main() -> int
 			E_gas_exact[i] = E_gas_analytic(t[i]);
 		}
 
-		auto rel_err = [](const std::vector<double> &sim, const std::vector<double> &exact) {
+		auto rel_err = [](const std::vector<double> &sim_vals, const std::vector<double> &exact_vals) {
 			double err = 0.0;
 			double sol = 0.0;
-			for (size_t i = 0; i < sim.size(); ++i) {
-				err += std::abs(sim[i] - exact[i]);
-				sol += std::abs(exact[i]);
+			for (size_t i = 0; i < sim_vals.size(); ++i) {
+				err += std::abs(sim_vals[i] - exact_vals[i]);
+				sol += std::abs(exact_vals[i]);
 			}
 			return err / sol;
 		};
@@ -341,7 +316,6 @@ auto problem_main() -> int
 		}
 
 #ifdef HAVE_PYTHON
-		// plot gas velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(t, v_gas, {{"label", "numerical"}, {"color", "r"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::plot(t_dense, v_gas_exact_dense, {{"label", "analytic"}, {"color", "r"}, {"linestyle", "--"}});
@@ -350,9 +324,8 @@ auto problem_main() -> int
 		matplotlibcpp::ylabel(R"($v_g$)");
 		matplotlibcpp::title("Gas Velocity Evolution");
 		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./dust_damping_gas_velocity.pdf");
+		matplotlibcpp::save("./dust_damping_mhd_zero_b_gas_velocity.pdf");
 
-		// plot dust1 velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(t, v_dust1, {{"label", "numerical"}, {"color", "b"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::plot(t_dense, v_dust1_exact_dense, {{"label", "analytic"}, {"color", "b"}, {"linestyle", "--"}});
@@ -361,9 +334,8 @@ auto problem_main() -> int
 		matplotlibcpp::ylabel(R"($v_{d,1}$)");
 		matplotlibcpp::title("Dust1 Velocity Evolution");
 		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./dust_damping_dust1_velocity.pdf");
+		matplotlibcpp::save("./dust_damping_mhd_zero_b_dust1_velocity.pdf");
 
-		// plot dust2 velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(t, v_dust2, {{"label", "numerical"}, {"color", "g"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::plot(t_dense, v_dust2_exact_dense, {{"label", "analytic"}, {"color", "g"}, {"linestyle", "--"}});
@@ -372,9 +344,8 @@ auto problem_main() -> int
 		matplotlibcpp::ylabel(R"($v_{d,2}$)");
 		matplotlibcpp::title("Dust2 Velocity Evolution");
 		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./dust_damping_dust2_velocity.pdf");
+		matplotlibcpp::save("./dust_damping_mhd_zero_b_dust2_velocity.pdf");
 
-		// plot gas energy
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(t, E_gas, {{"label", "numerical"}, {"color", "m"}, {"linestyle", "-"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::plot(t_dense, E_gas_exact_dense, {{"label", "analytic"}, {"color", "m"}, {"linestyle", "--"}});
@@ -383,7 +354,7 @@ auto problem_main() -> int
 		matplotlibcpp::ylabel(R"($E_g$)");
 		matplotlibcpp::title("Gas Energy Evolution");
 		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./dust_damping_gas_energy.pdf");
+		matplotlibcpp::save("./dust_damping_mhd_zero_b_gas_energy.pdf");
 #endif
 		amrex::Print() << "Finished.\n";
 	}
