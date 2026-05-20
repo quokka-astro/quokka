@@ -17,7 +17,7 @@ jobs:
     name: Validate mdBook summary and build
     runs-on: ubuntu-latest
     needs: check_changes
-    if: needs.check_changes.outputs.has_docs_changes == 'true' || needs.check_changes.outputs.has_specific_workflow_changes == 'true'
+    if: needs.check_changes.outputs.has_docs_changes == 'true' || needs.check_changes.outputs.has_specific_workflow_changes == 'true' || needs.check_changes.outputs.has_scripts_changes == 'true'
     steps:
       - uses: actions/checkout@v6
       - name: Set up Rust
