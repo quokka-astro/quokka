@@ -9,6 +9,7 @@
 
 #include "AMReX.H"
 #include "AMReX_Array.H"
+#include "AMReX_GpuQualifiers.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_REAL.H"
 #include "AMReX_Vector.H"
@@ -16,8 +17,12 @@
 #include "fundamental_constants.H"
 #include "physics_info.hpp"
 #include "radiation/radiation_system.hpp"
+#ifdef HAVE_PYTHON
+#include "util/matplotlibcpp.h"
+#endif
 #include <algorithm>
 #include <cmath>
+#include <map>
 #include <math/quadrature.hpp>
 #include <limits>
 #include <string>
@@ -31,7 +36,7 @@
 struct DTypeFront {
 };
 
-constexpr double c_hat = C::c_light / 10.0;
+constexpr double c_hat = C::c_light / 100.0;
 
 template <> struct quokka::EOS_Traits<DTypeFront> {
 	static constexpr double mean_molecular_weight = 1.0;
@@ -51,10 +56,6 @@ template <> struct Physics_Traits<DTypeFront> {
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
-	static constexpr double boltzmann_constant = C::k_B;
-	static constexpr double gravitational_constant = C::Gconst;
-	static constexpr double c_light = C::c_light;
-	static constexpr double radiation_constant = C::a_rad;
 };
 
 template <> struct RadSystem_Traits<DTypeFront> {
@@ -64,7 +65,95 @@ template <> struct RadSystem_Traits<DTypeFront> {
 	static constexpr auto ChemBands() { return ChemBandsHeader_; }
 };
 
-AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto wendland_c2(amrex::Real r) -> amrex::Real
+template <> struct SimulationData<DTypeFront> {
+	amrex::Real small_temp{};
+	amrex::Real small_dens{};
+	amrex::Real temperature{};
+	amrex::Real primary_species_1{};
+	amrex::Real primary_species_2{};
+	amrex::Real primary_species_3{};
+	amrex::Real Q{};
+	amrex::Real tend{};
+	int recombination_switch{};
+	amrex::Vector<amrex::Real> t_vec_;
+	amrex::Vector<amrex::Real> r_effective_vec_;
+	amrex::Vector<amrex::Real> r_analytical_vec_;
+	amrex::Real r_analytical_last_t{};
+	amrex::Real r_analytical_last_R{};
+	std::ofstream output_file_;
+};
+
+namespace
+{
+
+auto compute_effective_radius(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) -> amrex::Real
+{
+	amrex::ReduceOps<amrex::ReduceOpSum> reduce_op;
+	amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
+	auto const state = state_mf.const_arrays();
+	const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+
+	reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data, [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::Real {
+		const amrex::Real n_HI = state[box_no](i, j, k, HydroSystem<DTypeFront>::scalar0_index + 1) / spmasses[1];
+		const amrex::Real n_HII = state[box_no](i, j, k, HydroSystem<DTypeFront>::scalar0_index + 2) / spmasses[2];
+		const amrex::Real denom = n_HI + n_HII;
+		if (denom <= 0.0_rt) {
+			return 0.0_rt;
+		}
+		const amrex::Real x_HI = n_HI / denom;
+		return cell_volume * (1.0_rt - x_HI);
+	});
+
+	auto const &hv = reduce_data.value(reduce_op);
+	amrex::Real total_ionized_volume = amrex::get<0>(hv);
+	amrex::ParallelAllReduce::Sum(total_ionized_volume, amrex::ParallelContext::CommunicatorSub());
+	return std::cbrt((3.0_rt * 8.0_rt * total_ionized_volume) / (4.0_rt * M_PI));
+}
+
+auto lambda_rec(double T) -> double
+{
+	if (T < 100.0) {
+		return 0.0;
+	}
+	return 6.1e-10 * 1.380649e-16 * T * std::pow(T, -0.89);
+}
+
+auto lambda_ion_ff(double T) -> double { return 1.4e-27 * std::sqrt(T) + 1.0e-19 * std::exp(-118348.0 / T); }
+
+auto net_energy_cavity(double T, double n_e) -> double
+{
+	const double alpha_B = 2.6e-13 * std::pow(T / 1.0e4, -0.7);
+	const double epsilon = 6.4e-12;
+	const double photoheating = alpha_B * n_e * n_e * epsilon;
+	const double recombination_cooling = n_e * n_e * lambda_rec(T);
+	const double ion_ff_cooling = n_e * n_e * lambda_ion_ff(T);
+	// Assume KI heating and cooling are negligible in the cavity since the neutral fraction is low.
+	const double KI_heating = 0.0;
+	const double KI_cooling = 0.0;
+	return photoheating - recombination_cooling - ion_ff_cooling + KI_heating - KI_cooling;
+}
+
+auto compute_equilibrium_temperature(double n_e) -> double
+{
+	double T_lo = 100.0;
+	double T_hi = 1.0e6;
+	for (int iter = 0; iter < 200; ++iter) {
+		const double T_mid = 0.5 * (T_lo + T_hi);
+		if (net_energy_cavity(T_mid, n_e) > 0.0) {
+			T_lo = T_mid;
+		} else {
+			T_hi = T_mid;
+		}
+		if ((T_hi - T_lo) < 1.0) {
+			break;
+		}
+	}
+	return 0.5 * (T_lo + T_hi);
+}
+
+} // namespace
+
+AMREX_GPU_HOST_DEVICE auto wendland_c2(amrex::Real r) -> amrex::Real
 {
 	if (r > 1.0) {
 		return 0.0;
@@ -75,9 +164,9 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto wendland_c2(amrex::Real r) -> amre
 template <>
 void RadSystem<DTypeFront>::SetRadEnergySource(array_t &radEnergy, const amrex::Box &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo,
-					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi, amrex::Real /*time*/)
+					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const & /*prob_hi*/, amrex::Real /*time*/)
 {
-	amrex::ParmParse pp("stromgen");
+	amrex::ParmParse const pp("stromgen");
 	amrex::Real Q = 1.0e49_rt;
 	pp.query("Q", Q);
 
@@ -92,7 +181,6 @@ void RadSystem<DTypeFront>::SetRadEnergySource(array_t &radEnergy, const amrex::
 	const amrex::Real volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
 	const amrex::Real inv_volume = 1.0 / volume;
 
-	// Cell containing the source and its fractional position within that cell
 	const int src_i = static_cast<int>(amrex::Math::floor((x0 - prob_lo[0]) / dx[0]));
 	const int src_j = static_cast<int>(amrex::Math::floor((y0 - prob_lo[1]) / dx[1]));
 	const int src_k = static_cast<int>(amrex::Math::floor((z0 - prob_lo[2]) / dx[2]));
@@ -100,7 +188,6 @@ void RadSystem<DTypeFront>::SetRadEnergySource(array_t &radEnergy, const amrex::
 	const amrex::Real frac_y = (y0 - prob_lo[1]) / dx[1] - static_cast<amrex::Real>(src_j);
 	const amrex::Real frac_z = (z0 - prob_lo[2]) / dx[2] - static_cast<amrex::Real>(src_k);
 
-	// Normalization: sum kernel weights over the compact (2N+1)^3 stencil
 	constexpr int stencil_width = 2 * N + 1;
 	const int nz_loop = (AMREX_SPACEDIM >= 3) ? stencil_width : 1;
 	const int ny_loop = (AMREX_SPACEDIM >= 2) ? stencil_width : 1;
@@ -134,26 +221,6 @@ void RadSystem<DTypeFront>::SetRadEnergySource(array_t &radEnergy, const amrex::
 	});
 }
 
-template <> struct SimulationData<DTypeFront> {
-	amrex::Real small_temp;
-	amrex::Real small_dens;
-	amrex::Real temperature;
-	amrex::Real primary_species_1;
-	amrex::Real primary_species_2;
-	amrex::Real primary_species_3;
-	amrex::Real Q;
-	amrex::Real tend;
-	int recombination_switch;
-	amrex::Vector<amrex::Real> t_vec_;
-	amrex::Vector<amrex::Real> r50_vec_;
-	amrex::Vector<amrex::Real> r16_vec_;
-	amrex::Vector<amrex::Real> r84_vec_;
-	amrex::Vector<amrex::Real> r_analytical_vec_;
-	amrex::Real r_analytical_last_t;
-	amrex::Real r_analytical_last_R;
-	std::ofstream output_file_;
-};
-
 template <> void QuokkaSimulation<DTypeFront>::preCalculateInitialConditions()
 {
 	// initialize microphysics routines
@@ -180,6 +247,13 @@ template <> void QuokkaSimulation<DTypeFront>::preCalculateInitialConditions()
 
 	eos_init(userData_.small_temp, userData_.small_dens);
 	network_init();
+	userData_.r_analytical_last_t = 0.0_rt;
+	userData_.r_analytical_last_R = 0.0_rt;
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		std::string const filename = "dtype_front_radii.csv";
+		userData_.output_file_.open(filename);
+		userData_.output_file_ << "time,r_effective,r_analytical\n";
+	}
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DTypeFront>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
@@ -250,7 +324,32 @@ template <> void QuokkaSimulation<DTypeFront>::setInitialConditionsOnGrid(quokka
 	});
 }
 
-template <> void QuokkaSimulation<DTypeFront>::computeAfterTimestep() {}
+template <> void QuokkaSimulation<DTypeFront>::computeAfterTimestep()
+{
+	const int lev = 0;
+	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
+	const amrex::Real r_effective = compute_effective_radius(state_new_cc_[lev], dx);
+	userData_.r_effective_vec_.push_back(r_effective);
+	userData_.t_vec_.push_back(tNew_[lev]);
+
+	const amrex::Real n_e = userData_.primary_species_2;
+	const double T_eq = compute_equilibrium_temperature(static_cast<double>(n_e));
+	const double alpha_B = 2.6e-13 * std::pow(T_eq / 1.0e4, -0.7);
+	const double c_i = std::sqrt(C::k_B * T_eq / (C::m_p)); // isothermal sound speed ci = sqrt(k_B * T / m_p)
+	const amrex::Real r_s = std::pow((3.0_rt * userData_.Q) / (4.0_rt * M_PI * alpha_B * n_e * n_e), 1.0_rt / 3.0_rt);
+	const amrex::Real t_s = r_s / static_cast<amrex::Real>(c_i);
+
+	const amrex::Real t = tNew_[lev];
+	amrex::Real r_analytical = 0.0_rt;
+	if (t_s > 0.0_rt) {
+		r_analytical = r_s * std::pow(1.0_rt + 7.0_rt * t / (4.0_rt * t_s), 4.0_rt / 7.0_rt);
+	}
+	userData_.r_analytical_vec_.push_back(r_analytical);
+
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		userData_.output_file_ << t << ',' << r_effective << ',' << r_analytical << '\n';
+	}
+}
 
 auto problem_main() -> int
 {
@@ -276,6 +375,80 @@ auto problem_main() -> int
 	int status = 0;
 
 	sim.evolve();
+
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = sim.geom[0].CellSizeArray();
+		const amrex::Real cell_size = dx[0];
+
+		const double ne_eq = sim.userData_.primary_species_2;
+		const double T_eq = compute_equilibrium_temperature(ne_eq);
+		const double alpha_B = 2.6e-13 * std::pow(T_eq / 1.0e4, -0.7);
+		const double c_i = std::sqrt(C::k_B * T_eq / C::m_p);
+		const double r_s = std::pow((3.0 * sim.userData_.Q) / (4.0 * M_PI * alpha_B * ne_eq * ne_eq), 1.0 / 3.0);
+		const double t_s = r_s / c_i;
+
+		for (int i = 0; i < static_cast<int>(sim.userData_.t_vec_.size()); ++i) {
+			const amrex::Real t = sim.userData_.t_vec_[i];
+			if (t < 10.0 * t_s) {
+				continue;
+			}
+			const amrex::Real r_analytical = sim.userData_.r_analytical_vec_[i];
+			const amrex::Real r_effective = sim.userData_.r_effective_vec_[i];
+			const amrex::Real delta_over_dx = (r_effective - r_analytical) / cell_size;
+			if ((delta_over_dx < -1.0_rt) || (delta_over_dx > 1.0_rt)) {
+				amrex::Print() << "Test failed at t = " << t << '\n';
+				amrex::Print() << "Analytical radius: " << r_analytical << '\n';
+				amrex::Print() << "Effective radius: " << r_effective << '\n';
+				amrex::Print() << "(r_effective - r_analytical) / dx = " << delta_over_dx << '\n';
+				amrex::Print() << "Expected range: [-1, 1]" << '\n';
+				status = 1;
+			}
+		}
+
+		if (status == 0) {
+			amrex::Print() << "Test passed: D-type front effective radius matches the analytical radius within one cell whenever t > 10*ts.\n";
+		}
+	}
+
+#ifdef HAVE_PYTHON
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		// Plot radii vs time
+		matplotlibcpp::clf();
+		std::map<std::string, std::string> numerical_args;
+		numerical_args["label"] = "numerical";
+		numerical_args["color"] = "C0";
+		std::map<std::string, std::string> analytical_args;
+		analytical_args["label"] = "analytical";
+		analytical_args["color"] = "k";
+		analytical_args["linestyle"] = "--";
+
+		matplotlibcpp::plot(sim.userData_.t_vec_, sim.userData_.r_effective_vec_, numerical_args);
+		matplotlibcpp::plot(sim.userData_.t_vec_, sim.userData_.r_analytical_vec_, analytical_args);
+		matplotlibcpp::xlabel("time (s)");
+		matplotlibcpp::ylabel("radius (cm)");
+		matplotlibcpp::legend();
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("./dtype_front_radii.pdf");
+
+		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = sim.geom[0].CellSizeArray();
+		const amrex::Real cell_size = dx[0];
+		std::vector<amrex::Real> delta_over_dx_vec(sim.userData_.t_vec_.size());
+		for (int i = 0; i < static_cast<int>(sim.userData_.t_vec_.size()); ++i) {
+			delta_over_dx_vec[i] = (sim.userData_.r_effective_vec_[i] - sim.userData_.r_analytical_vec_[i]) / cell_size;
+		}
+
+		matplotlibcpp::clf();
+		std::map<std::string, std::string> diff_args;
+		diff_args["label"] = "(r_effective - r_analytical) / dx";
+		diff_args["color"] = "C1";
+		matplotlibcpp::plot(sim.userData_.t_vec_, delta_over_dx_vec, diff_args);
+		matplotlibcpp::xlabel("time (s)");
+		matplotlibcpp::ylabel("delta r / dx");
+		matplotlibcpp::legend();
+		matplotlibcpp::tight_layout();
+		matplotlibcpp::save("./dtype_front_radii_difference.pdf");
+	}
+#endif
 
 	// Cleanup and exit
 	amrex::Print() << "Finished." << '\n';
