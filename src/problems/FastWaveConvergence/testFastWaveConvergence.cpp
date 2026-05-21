@@ -447,6 +447,8 @@ auto runWaveTest(int nx) -> double
 		amrex::Abort("Invalid k modes: the triplet (0,0,0) is not allowed.");
 	}
 
+
+
 	// we assume box length = 1.0
 	const std::array<amrex::Real, 3> k_vec_prf = {2.0 * M_PI * static_cast<amrex::Real>(num_modes_x), 2.0 * M_PI * static_cast<amrex::Real>(num_modes_y),
 						      2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)};
@@ -475,9 +477,8 @@ auto runWaveTest(int nx) -> double
 	amrex::ParmParse pp("amr");
 	amrex::Vector<int> const ncells = {nx, 8, 8};
 
-	const int blocking_x = std::max(16, nx);
 	if (!pp.contains("blocking_factor_x")) {
-		pp.add("blocking_factor_x", blocking_x);
+		pp.add("blocking_factor_x", 16);
 	}
 	if (!pp.contains("blocking_factor_y")) {
 		pp.add("blocking_factor_y", 8);
@@ -486,9 +487,8 @@ auto runWaveTest(int nx) -> double
 		pp.add("blocking_factor_z", 8);
 	}
 
-	const int max_grid_x = nx;
 	if (!pp.contains("max_grid_size")) {
-		pp.add("max_grid_size", max_grid_x);
+		pp.add("max_grid_size", 128);
 	}
 
 	pp.add("max_level", 0);
