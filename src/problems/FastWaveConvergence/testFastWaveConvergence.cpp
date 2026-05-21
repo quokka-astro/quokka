@@ -538,11 +538,12 @@ auto problem_main() -> int
 	quokka::richardson::applyQuietDefaults();
 
 	quokka::richardson::Parameters params{};
-	params.machine_precision_target = 2.0e-9; // limit based on delta_b_magn, smaller values can be used if this is decreased
+	params.machine_precision_target = 2.0e-9; // default; set to 0 via setup.machine_precision_target to disable early exit.
 	params.nx_initial = 16;
 	params.nx_max = 128; // default; override with setup.nx_max in the input file.
 	{
 		amrex::ParmParse const pp("setup");
+		pp.query("machine_precision_target", params.machine_precision_target);
 		pp.query("nx_max", params.nx_max);
 	}
 	params.expected_rate = 2.0;
