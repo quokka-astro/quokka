@@ -70,7 +70,7 @@ template <> void QuokkaSimulation<FieldLoop>::setInitialConditionsOnGrid(quokka:
 		const double vy = std::cos(M_PI / 3.0);
 		const double vz = 1.0; // this should not affect the solution!
 
-		const double Ekin = 0.5 * rho0 * (vx * vx + vy * vy);
+		const double Ekin = 0.5 * rho0 * (vx * vx + vy * vy + vz * vz);
 		const double Eint = P0 / (gamma_gas - 1.0);
 
 		// Az = MAX([A ( R0 - r )],0)
@@ -169,13 +169,14 @@ template <> void QuokkaSimulation<FieldLoop>::refineGrid(int lev, amrex::TagBoxA
 	}
 }
 
-template <> void QuokkaSimulation<FieldLoop>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp) const
+template <>
+void QuokkaSimulation<FieldLoop>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp,
+						    amrex::MultiFab const & /*state_cc*/, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "magnetic_divergence") {
 		const amrex::Geometry &geom_lev = geom[lev];
 		const auto dx = geom_lev.CellSizeArray();
-		auto const &state_fc = state_new_fc_[lev];
 		auto output = mf.arrays();
 
 		// Get the face-centered magnetic field arrays

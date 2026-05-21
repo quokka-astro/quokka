@@ -25,8 +25,6 @@ suppress_output = 0
 max_timesteps = 1000
 constant_dt = 0.005
 
-dust.omega = 1.0
-
 # test A
 #stop_time = 10.0
 

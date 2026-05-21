@@ -1018,10 +1018,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeRadPressure(const double erad
 		Tnz = T[2][2];
 	}
 
-	AMREX_ASSERT(Fn != NAN);
-	AMREX_ASSERT(Tnx != NAN);
-	AMREX_ASSERT(Tny != NAN);
-	AMREX_ASSERT(Tnz != NAN);
+	AMREX_ASSERT(std::isfinite(Fn));
+	AMREX_ASSERT(std::isfinite(Tnx));
+	AMREX_ASSERT(std::isfinite(Tny));
+	AMREX_ASSERT(std::isfinite(Tnz));
 
 	RadPressureResult result{};
 	result.F = {Fn, Tnx * erad, Tny * erad, Tnz * erad};

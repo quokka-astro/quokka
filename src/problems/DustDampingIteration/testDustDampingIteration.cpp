@@ -99,19 +99,19 @@ template <> struct Physics_Traits<DustDampingWithoutCorrection> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustDrag<DustDampingWithCorrection>::ComputeReciprocalStoppingTime(amrex::Real rho_g,
-											      amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-											      amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag, double cs)
-    -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingWithCorrection>::ComputeReciprocalStoppingTime(amrex::Real rho_g,
+												 amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
+												 amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag,
+												 double cs) -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, dust_grain_radius, dust_grain_density, enable_supersonic_correction_with);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustDrag<DustDampingWithoutCorrection>::ComputeReciprocalStoppingTime(amrex::Real rho_g,
-												 amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-												 amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag,
-												 double cs) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingWithoutCorrection>::ComputeReciprocalStoppingTime(amrex::Real rho_g,
+												    amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
+												    amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag,
+												    double cs) -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, dust_grain_radius, dust_grain_density, enable_supersonic_correction_without);
 }
@@ -267,8 +267,8 @@ auto run_reference_simulation() -> SimulationData<DustDampingWithCorrection>
 	sim.reconstructionOrder_ = 3;
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.plotfileInterval_ = -1;
-	sim.cflNumber_ = 1000000.0;
-	sim.constantDt_ = 0.00001;
+	sim.cflNumber_ = 1000000.0; // large CFL number to avoid CFL violation
+	sim.constantDt_ = 0.00005;  // fixed small timestep for reference solution
 	sim.enableIterDustStoptime_ = 0;
 	sim.print_dust_counter_ = false;
 
@@ -500,7 +500,7 @@ auto problem_main() -> int
 		// gas velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_gas_vec_,
-				    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+				    {{"label", "reference (non-iter, dt=0.00005)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
 		matplotlibcpp::plot(iter_with_corr_data.t_vec_, iter_with_corr_data.v_gas_vec_,
 				    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::plot(iter_without_corr_data.t_vec_, iter_without_corr_data.v_gas_vec_,
@@ -515,7 +515,7 @@ auto problem_main() -> int
 		// dust1 velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust1_vec_,
-				    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+				    {{"label", "reference (non-iter, dt=0.00005)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
 		matplotlibcpp::plot(iter_with_corr_data.t_vec_, iter_with_corr_data.v_dust1_vec_,
 				    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::plot(iter_without_corr_data.t_vec_, iter_without_corr_data.v_dust1_vec_,
@@ -530,7 +530,7 @@ auto problem_main() -> int
 		// dust2 velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust2_vec_,
-				    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+				    {{"label", "reference (non-iter, dt=0.00005)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
 		matplotlibcpp::plot(iter_with_corr_data.t_vec_, iter_with_corr_data.v_dust2_vec_,
 				    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::plot(iter_without_corr_data.t_vec_, iter_without_corr_data.v_dust2_vec_,
@@ -545,7 +545,7 @@ auto problem_main() -> int
 		// gas energy
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(ref_data.t_vec_, ref_data.E_gas_vec_,
-				    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+				    {{"label", "reference (non-iter, dt=0.00005)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
 		matplotlibcpp::plot(iter_with_corr_data.t_vec_, iter_with_corr_data.E_gas_vec_,
 				    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::plot(iter_without_corr_data.t_vec_, iter_without_corr_data.E_gas_vec_,
