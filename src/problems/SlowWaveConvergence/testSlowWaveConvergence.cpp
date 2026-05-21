@@ -456,6 +456,10 @@ auto runWaveTest(int nx) -> double
 		amrex::Abort("Invalid k modes: the triplet (0,0,0) is not allowed.");
 	}
 
+	if (num_modes_y != 0 || num_modes_z != 0) {
+		amrex::Abort("oblique modes are not supported: Richardson only refines nx, so transverse resolution is fixed and oblique waves will not converge.");
+	}
+
 
 
 	// we assume box length = 1.0
