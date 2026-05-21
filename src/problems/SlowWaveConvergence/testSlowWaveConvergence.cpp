@@ -457,7 +457,7 @@ auto runWaveTest(int nx) -> double
 	}
 
 	if (num_modes_y != 0 || num_modes_z != 0) {
-		amrex::Abort("oblique modes are not supported: Richardson only refines nx, so transverse resolution is fixed and oblique waves will not converge.");
+		amrex::Abort("Oblique modes are not supported: Richardson only refines nx, so transverse resolution is fixed and oblique waves will not converge.");
 	}
 
 
