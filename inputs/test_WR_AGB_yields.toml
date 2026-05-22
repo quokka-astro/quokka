@@ -1,0 +1,51 @@
+# Minimal input to exercise WR and AGB continuous yield deposition
+geometry.prob_lo = [-3.949667304e+19, -3.949667304e+19, -3.949667304e+19]
+geometry.prob_hi = [3.949667304e+19, 3.949667304e+19, 3.949667304e+19]
+quokka.bc = ["periodic", "periodic", "periodic"]
+
+amr.v = 1
+amr.n_cell = [32, 32, 32]
+amr.max_level = 0
+amr.blocking_factor = 16
+amr.max_grid_size = 16
+amr.n_error_buf = 2
+amr.grid_eff = 0.7
+
+do_reflux = 1
+do_subcycle = 0
+do_tracers = 0
+
+hydro.artificial_viscosity_coefficient = 0.1
+
+particles.verbose = 0
+particles.eps_ff = 0.5
+particles.enable_chemical_feedback = 1
+particles.enable_SNII_metal = 1
+particles.enable_WR_metal = 1
+particles.enable_AGB_metal = 1
+particles.store_channel_fields = 1
+particles.chemical_scalar_offset = 0
+particles.chemical_num_scalars = 3
+particles.use_table_driven_chemical_yield = 1
+particles.chemical_yield_table_file = "../extern/yields"
+particles.chemical_tracked_isotopes = "C12,O16,Fe56"
+particles.chemical_tracked_channels = "SNII,WR,AGB"
+particles.stellar_metallicity_fraction = 0.02
+
+# Make WR/AGB active over the simulation window
+particles.wr_age_start = 0.0
+particles.wr_age_end = 1.0e20
+particles.agb_age_start = 0.0
+particles.agb_age_end = 1.0e20
+
+problem.n0 = 1.0e5
+problem.Tamb = 1.0e1
+problem.initial_particles_file = "../inputs/test_WR_AGB_yields_particles.txt"
+
+max_timesteps = 10
+initial_dt = 1.0e13
+plotfile_interval = 10
+checkpoint_interval = -1
+
+plotfile_prefix = "test_WR_AGB_yields/plt"
+checkpoint_prefix = "test_WR_AGB_yields/chk"

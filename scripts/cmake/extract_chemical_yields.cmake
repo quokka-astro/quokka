@@ -1,0 +1,23 @@
+if(NOT DEFINED QUOKKA_YIELD_ARCHIVE)
+  message(FATAL_ERROR "QUOKKA_YIELD_ARCHIVE is required")
+endif()
+if(NOT DEFINED QUOKKA_YIELD_DESTINATION)
+  message(FATAL_ERROR "QUOKKA_YIELD_DESTINATION is required")
+endif()
+if(NOT DEFINED QUOKKA_YIELD_SENTINEL)
+  message(FATAL_ERROR "QUOKKA_YIELD_SENTINEL is required")
+endif()
+
+if(EXISTS "${QUOKKA_YIELD_SENTINEL}")
+  return()
+endif()
+
+if(NOT EXISTS "${QUOKKA_YIELD_ARCHIVE}")
+  message(FATAL_ERROR "Missing chemical yield archive: ${QUOKKA_YIELD_ARCHIVE}")
+endif()
+
+file(ARCHIVE_EXTRACT INPUT "${QUOKKA_YIELD_ARCHIVE}" DESTINATION "${QUOKKA_YIELD_DESTINATION}")
+
+if(NOT EXISTS "${QUOKKA_YIELD_SENTINEL}")
+  message(FATAL_ERROR "Chemical yield extraction did not create ${QUOKKA_YIELD_SENTINEL}")
+endif()
