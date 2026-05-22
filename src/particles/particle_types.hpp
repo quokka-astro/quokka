@@ -4,7 +4,14 @@
 #include "AMReX_AmrParticles.H"
 #include "AMReX_Enum.H"
 #include "AMReX_ParIter.H"
+#include "particles/particle_chemical_yield.hpp"
 #include "physics_info.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <sstream>
+#include <string>
+#include <vector>
 
 // Function to create bit flags: bitflag(position) = 2^(position - 1)
 // Example: bitflag<1>() = 1, bitflag<2>() = 2, bitflag<3>() = 4, ...
@@ -67,6 +74,35 @@ template <typename problem_t> constexpr void verify_particle_switch_type()
 
 namespace quokka
 {
+
+inline auto splitChemistryList(const std::string &input) -> std::vector<std::string>
+{
+	std::vector<std::string> items;
+	std::stringstream stream(input);
+	std::string token;
+	while (std::getline(stream, token, ',')) {
+		token.erase(std::remove_if(token.begin(), token.end(), [](unsigned char c) { return std::isspace(c) != 0; }), token.end());
+		if (!token.empty()) {
+			items.push_back(token);
+		}
+	}
+	return items;
+}
+
+inline std::string chemical_tracked_isotopes = "C12,N14,O16";						       // NOLINT
+inline std::string chemical_tracked_channels = "SNII,WR,AGB";						       // NOLINT
+inline std::vector<std::string> chemical_tracked_isotope_list = splitChemistryList(chemical_tracked_isotopes); // NOLINT
+inline std::vector<std::string> chemical_tracked_channel_list = splitChemistryList(chemical_tracked_channels); // NOLINT
+
+inline auto chemicalTrackedIsotopeList() -> const std::vector<std::string> & { return chemical_tracked_isotope_list; }
+
+inline auto chemicalTrackedChannelList() -> const std::vector<std::string> & { return chemical_tracked_channel_list; }
+
+inline void refreshChemicalTrackedLists()
+{
+	chemical_tracked_isotope_list = splitChemistryList(chemical_tracked_isotopes);
+	chemical_tracked_channel_list = splitChemistryList(chemical_tracked_channels);
+}
 
 // Enum class to identify different particle types
 enum class ParticleType {
@@ -241,6 +277,22 @@ constexpr int StochasticStellarPopParticleMassAtBirthIdx = static_cast<int>(Stoc
 constexpr int StochasticStellarPopParticleLumIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::luminosity); // Base index for luminosity components
 constexpr int StochasticStellarPopParticleStageIdx = static_cast<int>(StochasticStellarPopParticleIntIdx::evolution_stage);
 
+template <typename problem_t> constexpr int StochasticStellarPopParticleChemistryBlockSize() { return Physics_Traits<problem_t>::numPassiveScalars; }
+
+template <typename problem_t> constexpr int StochasticStellarPopParticleChemistryBaseIdx()
+{
+	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
+		return 14 + Physics_Traits<problem_t>::nGroups;
+	} else {
+		return 14;
+	}
+}
+
+template <typename problem_t> constexpr int StochasticStellarPopParticleChemistryBlockBaseIdx(int blockIndex)
+{
+	return StochasticStellarPopParticleChemistryBaseIdx<problem_t>() + blockIndex * StochasticStellarPopParticleChemistryBlockSize<problem_t>();
+}
+
 // Number of real components for StochasticStellarPop_particles, mass + 3 velocity components + times + positions + death density + luminosity
 template <typename problem_t>
 constexpr int StochasticStellarPopParticleRealComps = []() constexpr {
@@ -250,7 +302,7 @@ constexpr int StochasticStellarPopParticleRealComps = []() constexpr {
 	} else {
 		return 14; // mass, vx, vy, vz, birth_time, death_time, birth_xyz, death_xyz, death_density, mass_at_birth
 	}
-}();
+}() + 4 * Physics_Traits<problem_t>::numPassiveScalars;
 
 // Number of integer components for StochasticStellarPop_particles
 constexpr int StochasticStellarPopParticleIntComps = 1; // evolution stage
@@ -385,7 +437,34 @@ template <ParticleType particleType, typename problem_t> auto getParticleRealCom
 	} else if constexpr (particleType == ParticleType::CICRad) {
 		return expandEnumNames<CICRadParticleRealIdx, CICRadParticleRealComps<problem_t>, true>();
 	} else if constexpr (particleType == ParticleType::StochasticStellarPop) {
-		return expandEnumNames<StochasticStellarPopParticleRealIdx, StochasticStellarPopParticleRealComps<problem_t>, true>();
+		amrex::Vector<std::string> names;
+		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<StochasticStellarPopParticleRealIdx>();
+		for (int i = 0; i < static_cast<int>(enum_names.size()) - 1; ++i) {
+			names.push_back(enum_names[i]);
+		}
+		if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
+			for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+				names.push_back(enum_names.back() + "_" + std::to_string(g));
+			}
+		}
+		const auto &isotopes = chemicalTrackedIsotopeList();
+		const auto isotopeName = [&](int idx) -> std::string {
+			if (idx >= 0 && idx < static_cast<int>(isotopes.size())) {
+				return isotopes[idx];
+			}
+			return "unused_" + std::to_string(idx);
+		};
+		const std::array<std::string, 3> channel_names = {"SNII", "WR", "AGB"};
+		for (int block = 0; block < 4; ++block) {
+			for (int n = 0; n < Physics_Traits<problem_t>::numPassiveScalars; ++n) {
+				if (block == 0) {
+					names.push_back("chem_birth_total_" + isotopeName(n));
+				} else {
+					names.push_back("chem_birth_" + channel_names[block - 1] + "_" + isotopeName(n));
+				}
+			}
+		}
+		return names;
 	} else if constexpr (particleType == ParticleType::Sink) {
 		return expandEnumNames<SinkParticleRealIdx, SinkParticleRealComps, false>();
 	} else if constexpr (particleType == ParticleType::Test) {
@@ -520,6 +599,29 @@ inline int reproducibility_roundoff_redundancy = 20; // NOLINT; remove 20 bits f
 // Scalar yield per supernova (total amount, not density)
 inline amrex::Real scalar_yield_per_SN = 1.0; // NOLINT
 
+// Chemical feedback controls
+inline bool enable_chemical_feedback = false; // NOLINT
+inline bool enable_SNII_metal = true;	      // NOLINT
+inline bool enable_WR_metal = true;	      // NOLINT
+inline bool enable_AGB_metal = true;	      // NOLINT
+inline bool store_channel_fields = true;      // NOLINT
+
+inline int chemical_scalar_offset = 0; // NOLINT
+inline int chemical_num_scalars = 1;   // NOLINT
+
+inline amrex::Real snii_metal_yield_fraction = 0.1;   // NOLINT
+inline amrex::Real wr_metal_yield_rate_per_mass = 0.; // NOLINT [1/s]
+inline amrex::Real agb_metal_yield_rate_per_mass = 0; // NOLINT [1/s]
+
+inline amrex::Real wr_age_start = 0.;	// NOLINT [s]
+inline amrex::Real wr_age_end = 0.;	// NOLINT [s]
+inline amrex::Real agb_age_start = 0.; // NOLINT [s]
+inline amrex::Real agb_age_end = 0.;	// NOLINT [s]
+
+inline bool use_table_driven_chemical_yield = true;	 // NOLINT
+inline std::string chemical_yield_table_file = "yields"; // NOLINT
+inline amrex::Real stellar_metallicity_fraction = 0.014; // NOLINT
+
 // SN terminal momentum in units of M_sun * km/s (runtime-configurable). Default: canonical value from Kim & Ostriker 2015.
 inline constexpr amrex::Real SN_p_term_Msunkmps_canonical = 2.8e5;    // [M_sun km/s]
 inline amrex::Real SN_p_term_Msunkmps = SN_p_term_Msunkmps_canonical; // NOLINT
@@ -563,6 +665,38 @@ inline void particleParmParse()
 
 	// Scalar yield per supernova
 	pp.query("scalar_yield_per_SN", scalar_yield_per_SN);
+
+	pp.query("enable_chemical_feedback", enable_chemical_feedback);
+	pp.query("enable_SNII_metal", enable_SNII_metal);
+	pp.query("enable_WR_metal", enable_WR_metal);
+	pp.query("enable_AGB_metal", enable_AGB_metal);
+	pp.query("store_channel_fields", store_channel_fields);
+	pp.query("chemical_scalar_offset", chemical_scalar_offset);
+	pp.query("chemical_num_scalars", chemical_num_scalars);
+	pp.query("snii_metal_yield_fraction", snii_metal_yield_fraction);
+	pp.query("wr_metal_yield_rate_per_mass", wr_metal_yield_rate_per_mass);
+	pp.query("agb_metal_yield_rate_per_mass", agb_metal_yield_rate_per_mass);
+	pp.query("wr_age_start", wr_age_start);
+	pp.query("wr_age_end", wr_age_end);
+	pp.query("agb_age_start", agb_age_start);
+	pp.query("agb_age_end", agb_age_end);
+	pp.query("use_table_driven_chemical_yield", use_table_driven_chemical_yield);
+	pp.query("chemical_yield_table_file", chemical_yield_table_file);
+	pp.query("chemical_tracked_isotopes", chemical_tracked_isotopes);
+	pp.query("chemical_tracked_channels", chemical_tracked_channels);
+	refreshChemicalTrackedLists();
+	if (chemical_num_scalars <= 1) {
+		chemical_num_scalars = static_cast<int>(chemical_tracked_isotope_list.size());
+	}
+	pp.query("stellar_metallicity_fraction", stellar_metallicity_fraction);
+
+	if (enable_chemical_feedback && use_table_driven_chemical_yield) {
+		const bool loaded = ChemicalYieldLookup::loadTable(chemical_yield_table_file, chemical_tracked_isotope_list, chemical_tracked_channel_list);
+		if (!loaded) {
+			amrex::Print() << "WARNING: failed to load chemical yield table '" << chemical_yield_table_file
+				       << "'. Falling back to parameterized yields.\n";
+		}
+	}
 
 	// SN terminal momentum (overrides canonical value if set)
 	pp.query("SN_p_term_Msunkmps", SN_p_term_Msunkmps);
