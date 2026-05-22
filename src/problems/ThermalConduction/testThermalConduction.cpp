@@ -23,23 +23,9 @@
 #include "util/richardson.hpp"
 
 /** Thermal conduction test problem
-The initial condition for the test problem is a Gaussian temperature profile with a constant density.
-The solution is also a Gaussian profile with an increasing (decreasing) width (peak) with time.
-We run the test for one conduction timescale and check that the numerical solution matches the analytic solution.
-Physical parameters for the test problem are chosen to satisfy t_hydro / t_conduction >> 1, so that the gas does not have time to move
-and the energy evolution is purely due to conduction.
-How to choose the parameters for the thermal conduction test problem
-1. Fix a box length L and a grid resolution nx which will set the resolution dx.
-2. Width of the gaussian = sigma = 5 * dx.
-3. Choose a peak temperature T0 and estimate the sound speed cs.
-4. Diffusion coefficient D = 1.e3 * sigma * cs. This will ensure that t_hydro / t_conduction = 1.e3.
-5. Conductivity prefactor = D * rho * c_v should be supplied in the input file. */
+The initial condition for the test problem for running a wind-cloud problem. */
 
-const double Eint0 = 2.505e-8;		     // equivalent to T = 2.e8 K
-const double Efloor = 5.674216387016754e-11; // equivalent tp T = 2.e6 K
-const double rho0 = 0.1;		     // g/cm^3
-const double D = 2.1981515823750267e+28;     // diffusion coefficient, in units of cm^2/s
-const double sigma = 1.2053428078125e+17;    // conduction timescale in s
+
 
 const double Twind = 2.e6;
 const double Tcloud  = 1.e4;
@@ -108,8 +94,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 			vz = 0.0; // cloud is stationary
 		}
 		else{
-			T = Twind; // g/cm^3
-			rho = rho_cloud * Twind / T; // g/cm^3
+			rho = rho_cloud * Tcloud / Twind; // g/cm^3
 			amrex::Real pressure = rho * Twind * C::k_B / C::m_u;
 			cs_wind = quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho, pressure);
 			vz = Mach * cs_wind; // 100 km/s
@@ -135,44 +120,6 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint;
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = Eint;
 	});
-}
-
-template <>
-void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
-									  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
-{
-
-	const amrex::Real t = tNew_[0];
-
-	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
-		const amrex::Box &indexRange = iter.validbox();
-		auto const &stateExact = ref.array(iter);
-		auto const ncomp = ref.nComp();
-
-		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-			amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
-
-			// Solution for the Gaussian temperature profile
-			const amrex::Real rho = rho0 * C::m_p;		     // g/cm^3
-			const amrex::Real sigma2_0 = sigma * sigma;	     // initial width of the Gaussian
-			const amrex::Real sigma2_t = sigma2_0 + 2.0 * D * t; // width of the Gaussian at time t
-			const amrex::Real norm = Eint0 * (std::sqrt(sigma2_0 / sigma2_t));
-			const amrex::Real Eint_exact = norm * std::exp(-x * x / sigma2_t / 2.) + Efloor;
-
-			// clear all components
-			for (int n = 0; n < ncomp; ++n) {
-				stateExact(i, j, k, n) = 0.;
-			}
-
-			// fill gas components
-			stateExact(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho;
-			stateExact(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint_exact;
-			stateExact(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = Eint_exact;
-			stateExact(i, j, k, HydroSystem<ThermalConductionProblem>::x1Momentum_index) = 0.0;
-			stateExact(i, j, k, HydroSystem<ThermalConductionProblem>::x2Momentum_index) = 0.;
-			stateExact(i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index) = 0.;
-		});
-	}
 }
 
 //Refinement 
@@ -215,52 +162,51 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 	amrex::Gpu::streamSynchronize();
 }
 
-
-auto runConductionTest(int nx) -> double
+// Implement User-defined diode BC
+template <>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+AMRSimulation<ThermalConductionProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<Real> const &consVar, int /*dcomp*/, int /*numcomp*/,
+							 amrex::GeometryData const &geom, const Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
+							 int /*orig_comp*/)
 {
-	// Read problem parameters
-	const double max_time = 469054.0075444166; // 1 conduction time
+	auto [i, j, k] = iv.dim3();
+	amrex::Box const &box = geom.Domain();
+	const auto &domain_lo = box.loVect3d();
+	const auto &domain_hi = box.hiVect3d();
+	const int klo = domain_lo[2];
+	const int khi = domain_hi[2];
+	double rho_edge = NAN;
+	double x1Mom_edge = NAN;
+	double x2Mom_edge = NAN;
+	double x3Mom_edge = NAN;
+	double etot_edge = NAN;
+	double eint_edge = NAN;
 
-	const double CFL_number = 0.3;
-	const int max_timesteps = std::max(2000, nx * 100);
-
-	// Set grid dimensions using AMReX parameter system
-	amrex::ParmParse pp("amr");
-	amrex::Vector<int> const ncells = {nx, nx, nx};
-	pp.add("max_level", 0);
-	pp.addarr("n_cell", ncells);
-
-	// Set domain bounds using AMReX parameter system
-	amrex::ParmParse pp_geom("geometry");
-	amrex::Vector<double> const prob_lo = {-1.5428e+18, -1.5428e+18, -1.5428e+18};
-	amrex::Vector<double> const prob_hi = {1.5428e+18, 1.5428e+18, 1.5428e+18};
-	amrex::Vector<int> const is_periodic = {0, 0, 0};
-	pp_geom.addarr("prob_lo", prob_lo);
-	pp_geom.addarr("prob_hi", prob_hi);
-	pp_geom.addarr("is_periodic", is_periodic);
-
-	// Setup boundary conditions
-	constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-			BCs_cc[n].setLo(dir, amrex::BCType::foextrap);
-			BCs_cc[n].setHi(dir, amrex::BCType::foextrap);
-		}
+	if (k < klo) {
+		rho_edge = rho_cloud * Tcloud / Twind; // g/cm^3
+		const double cs_wind = quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho_edge, rho_edge * Twind * C::k_B / C::m_u);
+		x3Mom_edge = rho_edge * Mach * cs_wind; // 100 km/s
+		x1Mom_edge = 0.0;
+		x2Mom_edge = 0.0;
+		eint_edge = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho_edge, Twind);
+		etot_edge = eint_edge + 0.5 * (x1Mom_edge * x1Mom_edge + x2Mom_edge * x2Mom_edge + x3Mom_edge * x3Mom_edge) / rho_edge;
+	
+	} else if (k > khi) {
+		rho_edge = consVar(i, j, khi, HydroSystem<ThermalConductionProblem>::density_index);
+		x1Mom_edge = consVar(i, j, khi, HydroSystem<ThermalConductionProblem>::x1Momentum_index);
+		x2Mom_edge = consVar(i, j, khi, HydroSystem<ThermalConductionProblem>::x2Momentum_index);
+		x3Mom_edge = consVar(i, j, khi, HydroSystem<ThermalConductionProblem>::x3Momentum_index);
+		etot_edge = consVar(i, j, khi, HydroSystem<ThermalConductionProblem>::energy_index);
+		eint_edge = consVar(i, j, khi, HydroSystem<ThermalConductionProblem>::internalEnergy_index);
 	}
 
-	// Run simulation
-	QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
-
-	sim.cflNumber_ = CFL_number;
-	sim.stopTime_ = max_time;
-	sim.maxTimesteps_ = max_timesteps;
-
-	// set initial conditions
-	sim.setInitialConditions();
-
-	sim.evolve();
-	return sim.computeErrorNorm();
+	consVar(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho_edge;
+	consVar(i, j, k, HydroSystem<ThermalConductionProblem>::x1Momentum_index) = x1Mom_edge;
+	consVar(i, j, k, HydroSystem<ThermalConductionProblem>::x2Momentum_index) = x2Mom_edge;
+	consVar(i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index) = x3Mom_edge;
+	consVar(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = etot_edge;
+	consVar(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = eint_edge;
+	
 }
 
 auto problem_main() -> int
@@ -268,13 +214,24 @@ auto problem_main() -> int
 	// boundary conditions
 	constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-		BCs_cc[n].setLo(dir, amrex::BCType::foextrap);  
-		BCs_cc[n].setHi(dir, amrex::BCType::foextrap); 
+	// for (int n = 0; n < ncomp_cc; ++n) {
+	// 	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+	// 	BCs_cc[n].setLo(dir, amrex::BCType::foextrap);  
+	// 	BCs_cc[n].setHi(dir, amrex::BCType::foextrap); 
+	// 	}
+	// }
+    	for (int n = 0; n < ncomp_cc; ++n) {
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			// diode boundary conditions
+			if (i == 2) {
+				BCs_cc[n].setLo(i, amrex::BCType::ext_dir);
+				BCs_cc[n].setHi(i, amrex::BCType::ext_dir);
+			} else {
+				BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
+				BCs_cc[n].setHi(i, amrex::BCType::int_dir); // periodic
+			}
 		}
-	}
-
+	} 
 	// Problem initialization
 	QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
 	
