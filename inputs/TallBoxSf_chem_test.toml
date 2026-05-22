@@ -1,0 +1,72 @@
+# TallBoxSf chemical feedback test - tracking C, N, O, Mg, S
+# Reduced resolution + short time for quick validation
+geometry.prob_lo = [0.0, 0.0, -6.036e+21]
+geometry.prob_hi = [3.018e21, 3.018e21, 6.036e+21]
+quokka.bc = ["periodic", "periodic", "ext_dir"]
+
+amr.v = 1
+amr.n_cell = [16, 16, 64]
+amr.max_level = 0
+amr.max_grid_size = 64
+amr.blocking_factor = 16
+amr.n_error_buf = 0
+amr.grid_eff = 0.0
+
+cfl = 0.3
+do_reflux = 1
+do_subcycle = 0
+
+stop_time = 3.15576e14  # 10 Myr
+max_timesteps = 20000
+plotfile_interval = -1
+plottime_interval = 6.31152e12  # write one video frame every 0.2 Myr
+checkpoint_interval = -1
+suppress_output = 0
+
+# Chemical feedback - SNII + WR + AGB
+particles.verbose = 0
+particles.disable_SN_feedback = false
+particles.enable_chemical_feedback = 1
+particles.enable_SNII_metal = 1
+particles.enable_WR_metal = 1
+particles.enable_AGB_metal = 1
+particles.store_channel_fields = 1
+particles.chemical_scalar_offset = 1
+particles.chemical_num_scalars = 5
+particles.use_table_driven_chemical_yield = 1
+particles.chemical_yield_table_file = "../extern/yields"
+particles.chemical_tracked_isotopes = "C12,N14,O16,MG24,S32"
+particles.chemical_tracked_channels = "SNII,WR,AGB"
+particles.stellar_metallicity_fraction = 0.02
+particles.wr_age_start = 0.0
+particles.wr_age_end = 1.0e20
+particles.agb_age_start = 0.0
+particles.agb_age_end = 1.0e20
+
+# Metal scalar (existing scalar_0)
+particles.scalar_yield_per_SN = 1.0e3
+problem.initial_scalar_per_cell = 1.0e-5
+
+density_floor = 1.67e-28
+temperature_floor = 10.0
+
+particles.eps_ff = 0.01
+problem.stars_file = ""
+problem.IC_file = "../extern/problems/TallBoxSf/disk_solution_datatable_Sigma13-Z1.csv"
+problem.rho01 = 4.320441e-24
+problem.sigma1 = 7.0e5
+
+cooling.enabled = 1
+cooling.cooling_table_type = "resampled"
+cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_shielded_resampled_noPE.h5"
+use_sfh_based_pe_heating = true
+sfh_to_pe_heating_table = "../extern/cooling/photoelectric_heating_from_sfh.csv"
+sfh_time_interval = 3.155760000e+12
+sf_area_kpc2 = 1.0
+
+perturb.filename = "zdrv.hdf5"
+perturb.amplitude = 7e5
+
+statistics_interval = 512
+plotfile_prefix = "tallbox_chem/plt"
+checkpoint_prefix = "tallbox_chem/chk"
