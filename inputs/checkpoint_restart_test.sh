@@ -113,3 +113,11 @@ fi
 # the reference. If stale ghost cells from the checkpoint leaked into
 # valid cells after re-boxing, fcompare will report a mismatch.
 $PLOTFILETOOLS_DIR/fcompare.gnu.ex -a -n 1 -r 0.001 --abs_tol 0.0025 ref_plotfile "$restart_plotfile"
+
+# [AMR particle checkpoint-restart test] verify that particles at the finest AMR level
+# survive a checkpoint-restart with a different blocking_factor (issue #1544).
+# Uses blocking_factor=8 (vs 32 in the init) so that under multi-rank execution the
+# level-0 box arrays differ, exercising the dual-grid restart code path in AMReX.
+rm -rf plt* chk* last_chk ref_plotfile 2>/dev/null || true
+$BUILD_DIR/src/problems/BinaryOrbitCIC/BinaryOrbitCIC ../inputs/BinaryOrbitAMR.toml max_timesteps=3 checkpoint_interval=3
+$BUILD_DIR/src/problems/BinaryOrbitCIC/BinaryOrbitCIC ../inputs/BinaryOrbitCICAMR_checkpoint_restart.toml
