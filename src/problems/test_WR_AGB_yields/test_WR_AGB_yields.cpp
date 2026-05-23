@@ -40,7 +40,7 @@ template <> struct Physics_Traits<test_WR_AGB_yields> {
 	static constexpr int nDustGroups = 1;
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int numMassScalars = 0;
-	static constexpr int numPassiveScalars = 3; // track 3 isotopes by default
+	static constexpr int numPassiveScalars = 12; // total + SNII + WR + AGB for 3 isotopes
 	static constexpr int nGroups = 1;
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 	static constexpr double boltzmann_constant = C::k_B;
@@ -66,8 +66,8 @@ template <> void QuokkaSimulation<test_WR_AGB_yields>::createInitialStochasticSt
 			auto *pdata = particle_array().data();
 
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-				// Default: mark particle 0 as WR and particle 1 as AGB, while preserving file-provided masses and times.
-				if (i == 0) {
+				// Use mass to avoid depending on tile-local particle ordering.
+				if (pdata[i].rdata(quokka::StochasticStellarPopParticleMassAtBirthIdx) >= 8.0 * C::M_solar) {
 					pdata[i].idata(quokka::StochasticStellarPopParticleStageIdx) =
 					    static_cast<int>(quokka::StellarEvolutionStage::HighMassNonExploding);
 				} else {

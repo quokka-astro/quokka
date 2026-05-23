@@ -181,9 +181,11 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 					if (enable_WR_metal) {
 						const bool wr_stage = (stage == static_cast<int>(StellarEvolutionStage::SNProgenitor)) ||
 								      (stage == static_cast<int>(StellarEvolutionStage::HighMassNonExploding));
-						const bool wr_active = (age >= wr_age_start) && (age < wr_age_end);
+						const amrex::Real wr_lifetime =
+						    p.rdata(StochasticStellarPopParticleDeathTimeIdx) - p.rdata(StochasticStellarPopParticleBirthTimeIdx);
+						const amrex::Real wr_window = std::max<amrex::Real>(0.0, wr_lifetime - wr_age_start);
+						const bool wr_active = (age >= wr_age_start) && (age < wr_lifetime) && (wr_window > 0.0);
 						if (wr_stage && wr_active) {
-							const amrex::Real wr_window = std::max<amrex::Real>(0.0, wr_age_end - wr_age_start);
 							amrex::Real wr_rate_per_mass = wr_metal_yield_rate_per_mass;
 							if (use_table_driven_chemical_yield && ChemicalYieldLookup::isLoaded() && wr_window > 0.0) {
 								wr_rate_per_mass = std::max<amrex::Real>(0.0, ChemicalYieldLookup::queryYieldFraction(

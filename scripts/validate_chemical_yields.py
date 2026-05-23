@@ -152,10 +152,10 @@ def latest_plotfile(plotdir):
     return plotfiles[-1]
 
 
-def scalar_masses(ds):
+def scalar_masses(ds, start=0, count=3):
     data = ds.all_data()
     cell_volume = data[("index", "cell_volume")].to_value("cm**3")
-    return [float((data[("boxlib", f"scalar_{i}")].to_value() * cell_volume).sum()) for i in range(3)]
+    return [float((data[("boxlib", f"scalar_{start + i}")].to_value() * cell_volume).sum()) for i in range(count)]
 
 
 def validate_snii(args):
@@ -183,22 +183,40 @@ def validate_wr_agb(args):
     data = ds.all_data()
     stages = data[("StochasticStellarPop_particles", "particle_evolution_stage")].to_value()
     masses = data[("StochasticStellarPop_particles", "particle_mass_at_birth")].to_value()
-    wr_mass = float(masses[np.where(stages == 0)[0][0]])
+    birth_times = data[("StochasticStellarPop_particles", "particle_birth_time")].to_value()
+    death_times = data[("StochasticStellarPop_particles", "particle_death_time")].to_value()
+    wr_index = np.where(stages == 0)[0][0]
+    wr_mass = float(masses[wr_index])
     agb_mass = float(masses[np.where(stages == 3)[0][0]])
     elapsed = float(ds.current_time)
-    measured = scalar_masses(ds)
+    wr_lifetime = max(float(death_times[wr_index] - birth_times[wr_index]), 0.0)
+    wr_elapsed = min(elapsed, wr_lifetime)
+    if wr_lifetime <= 0.0:
+        raise SystemExit("WR particle has non-positive lifetime")
+    measured_total = scalar_masses(ds)
+    measured_snii = scalar_masses(ds, 3)
+    measured_wr = scalar_masses(ds, 6)
+    measured_agb = scalar_masses(ds, 9)
 
     print("test_WR_AGB_yields measured/expected:")
     max_error = 0.0
     for i, isotope in enumerate(isotopes):
-        wr_expected = query_fraction(entries, 1, i, wr_mass / MSUN_CGS, 0.02) * wr_mass * elapsed / WR_AGB_WINDOW
+        wr_expected = query_fraction(entries, 1, i, wr_mass / MSUN_CGS, 0.02) * wr_mass * wr_elapsed / wr_lifetime
         agb_expected = query_fraction(entries, 2, i, agb_mass / MSUN_CGS, 0.02) * agb_mass * elapsed / WR_AGB_WINDOW
         expected = wr_expected + agb_expected
-        ratio = measured[i] / expected
+        ratio = measured_total[i] / expected
+        wr_ratio = measured_wr[i] / wr_expected if wr_expected > 0.0 else 1.0
+        agb_ratio = measured_agb[i] / agb_expected if agb_expected > 0.0 else 1.0
+        snii_abs = abs(measured_snii[i])
         max_error = max(max_error, abs(ratio - 1.0))
+        max_error = max(max_error, abs(wr_ratio - 1.0))
+        max_error = max(max_error, abs(agb_ratio - 1.0))
+        max_error = max(max_error, snii_abs / max(expected, 1.0))
         print(
-            f"  {isotope:4s} scalar_{i}: measured={measured[i]:.8e} expected={expected:.8e} "
-            f"ratio={ratio:.8f} WR={wr_expected:.8e} AGB={agb_expected:.8e}"
+            f"  {isotope:4s} total scalar_{i}: measured={measured_total[i]:.8e} expected={expected:.8e} ratio={ratio:.8f} "
+            f"WR scalar_{6 + i}: measured={measured_wr[i]:.8e} expected={wr_expected:.8e} ratio={wr_ratio:.8f} "
+            f"AGB scalar_{9 + i}: measured={measured_agb[i]:.8e} expected={agb_expected:.8e} ratio={agb_ratio:.8f} "
+            f"SNII scalar_{3 + i}: measured={measured_snii[i]:.8e}"
         )
     return max_error
 

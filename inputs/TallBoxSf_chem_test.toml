@@ -1,5 +1,5 @@
 # TallBoxSf chemical feedback test - tracking C, N, O, Mg, S
-# Reduced resolution + short time for quick validation
+# Reduced resolution run with 1 Myr plotfile cadence for video frames.
 geometry.prob_lo = [0.0, 0.0, -6.036e+21]
 geometry.prob_hi = [3.018e21, 3.018e21, 6.036e+21]
 quokka.bc = ["periodic", "periodic", "ext_dir"]
@@ -16,10 +16,10 @@ cfl = 0.3
 do_reflux = 1
 do_subcycle = 0
 
-stop_time = 3.15576e14  # 10 Myr
-max_timesteps = 20000
+stop_time = "20*Myr"
+max_timesteps = 60000
 plotfile_interval = -1
-plottime_interval = 6.31152e12  # write one video frame every 0.2 Myr
+plottime_interval = "1*Myr"
 checkpoint_interval = -1
 suppress_output = 0
 
