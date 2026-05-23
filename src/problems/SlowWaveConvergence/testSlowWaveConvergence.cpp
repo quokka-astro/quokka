@@ -457,10 +457,9 @@ auto runWaveTest(int nx) -> double
 	}
 
 	if (num_modes_y != 0 || num_modes_z != 0) {
-		amrex::Abort("Oblique modes are not supported: Richardson only refines nx, so transverse resolution is fixed and oblique waves will not converge.");
+		amrex::Abort(
+		    "Oblique modes are not supported: Richardson only refines nx, so transverse resolution is fixed and oblique waves will not converge.");
 	}
-
-
 
 	// we assume box length = 1.0
 	const std::array<amrex::Real, 3> k_vec_prf = {2.0 * M_PI * static_cast<amrex::Real>(num_modes_x), 2.0 * M_PI * static_cast<amrex::Real>(num_modes_y),
