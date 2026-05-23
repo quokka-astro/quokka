@@ -701,11 +701,11 @@ void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_
 			}
 
 			if (dt_lev < timescale_max) {
-				gamma1 = 1.0;
-				gamma2 = 0.0;
-				beta1 = -0.5;
-				beta2 = 2.0 / 3.0;
-				b = 1.0;
+				gamma1 = 0.25;
+				gamma2 = 0.25;
+				beta1 = 0.25 - std::numbers::sqrt3 / 6.0;
+				beta2 = 0.25 + std::numbers::sqrt3 / 6.0;
+				b = 0.5;
 			} else {
 				gamma1 = 1.0;
 				gamma2 = 1.0;
