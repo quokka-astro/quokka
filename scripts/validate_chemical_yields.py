@@ -39,50 +39,37 @@ def load_yields(root, isotopes):
     entries = {}
     mass_re = re.compile(r"s([0-9]+(?:\.[0-9]+)?)\.yield_table")
 
-    for zdir in (root / "SNII_Kobayashi0611").iterdir():
-        if not zdir.is_dir():
-            continue
-        metallicity = parse_metallicity_folder(zdir.name)
-        if metallicity <= 0.0:
-            continue
-        for table in zdir.iterdir():
-            match = mass_re.fullmatch(table.name)
-            if not (table.is_file() and match):
-                continue
-            mass = float(match.group(1))
-            values = add_entry(entries, mass, metallicity)
-            for line in table.read_text(errors="ignore").splitlines():
-                if not line or line[0] in "[#":
-                    continue
-                parts = line.split()
-                if len(parts) < 2 or parts[0].lower() not in iso_index:
-                    continue
-                values[iso_index[parts[0].lower()]] += max(float(normalize_numeric(parts[1])) / mass, 0.0)
-
-    wr_root = root / "SNII_Sukhbold16"
-    if wr_root.is_dir():
-        for table in wr_root.iterdir():
+    sukhbold_root = root / "SNII_Sukhbold16"
+    if sukhbold_root.is_dir():
+        for table in sukhbold_root.iterdir():
             match = mass_re.fullmatch(table.name)
             if not (table.is_file() and match):
                 continue
             mass = float(match.group(1))
             values = add_entry(entries, mass, 0.014)
+            has_ejecta_col = False
+            has_wind_col = False
             for line in table.read_text(errors="ignore").splitlines():
-                if not line or line[0] in "[#":
+                if not line or line[0] == "#":
+                    continue
+                if line[0] == "[":
+                    has_ejecta_col = "[ejecta]" in line
+                    has_wind_col = "[wind]" in line
                     continue
                 parts = line.split()
                 if not parts or parts[0].lower() not in iso_index:
                     continue
-                found = False
-                wind_yield = 0.0
-                for token in parts[1:]:
-                    try:
-                        wind_yield = float(normalize_numeric(token))
-                        found = True
-                    except ValueError:
-                        pass
-                if found:
-                    values[3 + iso_index[parts[0].lower()]] += max(wind_yield / mass, 0.0)
+                isotope_index = iso_index[parts[0].lower()]
+                col = 1
+                if has_ejecta_col:
+                    if len(parts) <= col:
+                        continue
+                    values[isotope_index] += max(float(normalize_numeric(parts[col])) / mass, 0.0)
+                    col += 1
+                if has_wind_col:
+                    if len(parts) <= col:
+                        continue
+                    values[3 + isotope_index] += max(float(normalize_numeric(parts[col])) / mass, 0.0)
 
     agb_root = root / "AGB_Karakas16"
     filename_re = re.compile(r"m([0-9]+(?:\.[0-9]+)?)z([0-9]+).*\.dat", re.IGNORECASE)
@@ -120,6 +107,27 @@ def load_yields(root, isotopes):
                 if len(parts) < 3 or parts[0].lower() not in iso_index:
                     continue
                 values[6 + iso_index[parts[0].lower()]] += max(float(normalize_numeric(parts[2])) / mass, 0.0)
+
+    doherty_root = root / "superAGB_Doherty14"
+    header_re = re.compile(r"\s*([0-9]+(?:\.[0-9]+)?)M\s+Z=([0-9eE+\-.]+).*", re.IGNORECASE)
+    if doherty_root.is_dir():
+        for table in doherty_root.iterdir():
+            if not table.is_file():
+                continue
+            mass = -1.0
+            values = None
+            for line in table.read_text(errors="ignore").splitlines():
+                header = header_re.fullmatch(line)
+                if header:
+                    mass = float(header.group(1))
+                    values = add_entry(entries, mass, float(header.group(2)))
+                    continue
+                if values is None or mass <= 0.0 or not line or line[0] == "#":
+                    continue
+                parts = line.split()
+                if len(parts) < 2 or parts[0].lower() not in iso_index:
+                    continue
+                values[6 + iso_index[parts[0].lower()]] += max(float(normalize_numeric(parts[1])) / mass, 0.0)
 
     return [(max(k[0] / 1000.0, 1.0e-12), max(k[1] / 1.0e6, 1.0e-12), values) for k, values in entries.items()]
 

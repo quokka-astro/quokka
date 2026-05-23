@@ -213,105 +213,26 @@ inline auto loadTable(const std::string &filename, const std::vector<std::string
 	}
 
 	if (std::filesystem::exists(input_path) && std::filesystem::is_directory(input_path)) {
-		const std::filesystem::path snii_root = input_path / "SNII_Kobayashi0611";
-		if (!std::filesystem::exists(snii_root) || !std::filesystem::is_directory(snii_root)) {
-			return false;
-		}
-
 		std::map<std::string, int> iso_map;
 		for (int i = 0; i < g_num_tracked_isotopes; ++i) {
 			iso_map[lowercase(tracked_isotopes[i])] = i;
 		}
 
 		std::map<std::pair<int, int>, std::vector<amrex::Real>> sums;
-		const std::regex mass_re(R"(s([0-9]+(?:\.[0-9]+)?)\.yield_table)");
 
-		for (const auto &dir_entry : std::filesystem::directory_iterator(snii_root)) {
-			if (!dir_entry.is_directory()) {
-				continue;
-			}
-			const std::string zdir_name = dir_entry.path().filename().string();
-			const amrex::Real z = parseMetallicityFromFolderName(zdir_name);
-			if (z <= 0.0) {
-				continue;
-			}
+		const std::filesystem::path sukhbold_root = input_path / "SNII_Sukhbold16";
+		if (std::filesystem::exists(sukhbold_root) && std::filesystem::is_directory(sukhbold_root)) {
+			const std::regex sukhbold_mass_re(R"(s([0-9]+(?:\.[0-9]+)?)\.yield_table)");
+			constexpr amrex::Real sukhbold_z = 0.014;
+			const int sukhbold_zk = static_cast<int>(std::llround(sukhbold_z * 1.0e6));
 
-			for (const auto &file_entry : std::filesystem::directory_iterator(dir_entry.path())) {
-				if (!file_entry.is_regular_file()) {
-					continue;
-				}
-
-				const std::string fname = file_entry.path().filename().string();
-				std::smatch m;
-				if (!std::regex_match(fname, m, mass_re)) {
-					continue;
-				}
-
-				const amrex::Real mass_msun = static_cast<amrex::Real>(std::stod(m[1].str()));
-				if (mass_msun <= 0.0) {
-					continue;
-				}
-
-				std::ifstream in(file_entry.path());
-				if (!in.is_open()) {
-					continue;
-				}
-
-				const int mk = static_cast<int>(std::llround(mass_msun * 1000.0));
-				const int zk = static_cast<int>(std::llround(z * 1.0e6));
-				auto &vals = sums[{mk, zk}];
-				if (vals.empty()) {
-					const auto table_size = static_cast<std::vector<amrex::Real>::size_type>(kMaxTrackedChannels) *
-								static_cast<std::vector<amrex::Real>::size_type>(kMaxTrackedIsotopes);
-					vals.resize(table_size, 0.0);
-				}
-
-				std::string line;
-				while (std::getline(in, line)) {
-					if (line.empty() || line[0] == '[' || line[0] == '#') {
-						continue;
-					}
-
-					std::stringstream ss(line);
-					std::string isotope_name;
-					std::string yield_token;
-					if (!(ss >> isotope_name >> yield_token)) {
-						continue;
-					}
-					amrex::Real yield_mass = 0.0;
-					try {
-						yield_mass = static_cast<amrex::Real>(std::stod(normalizeNumericToken(yield_token)));
-					} catch (...) {
-						continue;
-					}
-
-					const auto iso_it = iso_map.find(lowercase(isotope_name));
-					if (iso_it == iso_map.end()) {
-						continue;
-					}
-
-					const int iso_index = iso_it->second;
-					const amrex::Real frac = std::max<amrex::Real>(yield_mass / mass_msun, 0.0);
-					vals[0 * kMaxTrackedIsotopes + iso_index] += frac;
-				}
-			}
-		}
-
-		// Parse WR (wind) yields from SNII_Sukhbold16 -> channel 1
-		const std::filesystem::path wr_root = input_path / "SNII_Sukhbold16";
-		if (std::filesystem::exists(wr_root) && std::filesystem::is_directory(wr_root)) {
-			const std::regex wr_mass_re(R"(s([0-9]+(?:\.[0-9]+)?)\.yield_table)");
-			// Sukhbold+16 tables are solar metallicity
-			constexpr amrex::Real wr_z = 0.014;
-			const int wr_zk = static_cast<int>(std::llround(wr_z * 1.0e6));
-
-			for (const auto &file_entry : std::filesystem::directory_iterator(wr_root)) {
+			for (const auto &file_entry : std::filesystem::directory_iterator(sukhbold_root)) {
 				if (!file_entry.is_regular_file()) {
 					continue;
 				}
 				const std::string fname = file_entry.path().filename().string();
 				std::smatch m;
-				if (!std::regex_match(fname, m, wr_mass_re)) {
+				if (!std::regex_match(fname, m, sukhbold_mass_re)) {
 					continue;
 				}
 				const amrex::Real mass_msun = static_cast<amrex::Real>(std::stod(m[1].str()));
@@ -325,7 +246,7 @@ inline auto loadTable(const std::string &filename, const std::vector<std::string
 				}
 
 				const int mk = static_cast<int>(std::llround(mass_msun * 1000.0));
-				auto &vals = sums[{mk, wr_zk}];
+				auto &vals = sums[{mk, sukhbold_zk}];
 				if (vals.empty()) {
 					const auto table_size = static_cast<std::vector<amrex::Real>::size_type>(kMaxTrackedChannels) *
 								static_cast<std::vector<amrex::Real>::size_type>(kMaxTrackedIsotopes);
@@ -333,47 +254,54 @@ inline auto loadTable(const std::string &filename, const std::vector<std::string
 				}
 
 				std::string line;
+				bool has_ejecta_col = false;
+				bool has_wind_col = false;
 				while (std::getline(in, line)) {
-					if (line.empty() || line[0] == '[' || line[0] == '#') {
+					if (line.empty() || line[0] == '#') {
+						continue;
+					}
+					if (line[0] == '[') {
+						has_ejecta_col = (line.find("[ejecta]") != std::string::npos);
+						has_wind_col = (line.find("[wind]") != std::string::npos);
 						continue;
 					}
 					std::stringstream ss(line);
 					std::string isotope_name;
+					std::string ejecta_token;
+					std::string wind_token;
 					if (!(ss >> isotope_name)) {
 						continue;
 					}
-					// wind yield is the last numeric token on the line
-					amrex::Real wind_yield = 0.0;
-					bool has_value = false;
-					std::string token;
-					while (ss >> token) {
-						try {
-							wind_yield = static_cast<amrex::Real>(std::stod(normalizeNumericToken(token)));
-							has_value = true;
-						} catch (...) {
-						}
-					}
-					if (!has_value) {
+					if (has_ejecta_col && !(ss >> ejecta_token)) {
 						continue;
 					}
-
+					if (has_wind_col && !(ss >> wind_token)) {
+						continue;
+					}
 					const auto iso_it = iso_map.find(lowercase(isotope_name));
 					if (iso_it == iso_map.end()) {
 						continue;
 					}
-					const int iso_index = iso_it->second;
-					const amrex::Real frac = std::max<amrex::Real>(wind_yield / mass_msun, 0.0);
-					vals[1 * kMaxTrackedIsotopes + iso_index] += frac;
+					try {
+						const int iso_index = iso_it->second;
+						if (has_ejecta_col) {
+							const amrex::Real ejecta_yield = static_cast<amrex::Real>(std::stod(normalizeNumericToken(ejecta_token)));
+							vals[0 * kMaxTrackedIsotopes + iso_index] += std::max<amrex::Real>(ejecta_yield / mass_msun, 0.0);
+						}
+						if (has_wind_col) {
+							const amrex::Real wind_yield = static_cast<amrex::Real>(std::stod(normalizeNumericToken(wind_token)));
+							vals[1 * kMaxTrackedIsotopes + iso_index] += std::max<amrex::Real>(wind_yield / mass_msun, 0.0);
+						}
+					} catch (...) {
+						continue;
+					}
 				}
 			}
 		}
 
-		// Parse AGB yields from AGB_Karakas16 -> channel 2
 		const std::filesystem::path agb_root = input_path / "AGB_Karakas16";
 		if (std::filesystem::exists(agb_root) && std::filesystem::is_directory(agb_root)) {
-			// Filename-based mass/Z: m<mass>z<Z_digits>.<extra>.dat
 			const std::regex agb_fname_re(R"(m([0-9]+(?:\.[0-9]+)?)z([0-9]+).*\.dat)", std::regex::icase);
-			// Header-based mass/Z (for yield_z0001.dat style files)
 			const std::regex agb_header_re(
 			    R"(#\s*Initial\s+mass\s*=\s*([0-9]+(?:\.[0-9]+)?),\s*Z\s*=\s*([0-9]+(?:\.[0-9]+)?),.*M_mix\s*=\s*([0-9eE+\-.]+))",
 			    std::regex::icase);
@@ -392,13 +320,11 @@ inline auto loadTable(const std::string &filename, const std::vector<std::string
 				amrex::Real agb_z = -1.0;
 
 				if (std::regex_match(fname, fm, agb_fname_re)) {
-					// Parse mass and Z from filename
 					agb_mass = static_cast<amrex::Real>(std::stod(fm[1].str()));
 					const std::string z_digits = fm[2].str();
 					const int numer = std::stoi(z_digits);
 					agb_z = static_cast<amrex::Real>(numer) / std::pow(10.0, static_cast<int>(z_digits.size()));
 				} else {
-					// Try header-based parsing for yield_z0001.dat style
 					std::ifstream header_in(dir_entry.path());
 					if (!header_in.is_open()) {
 						continue;
@@ -450,19 +376,72 @@ inline auto loadTable(const std::string &filename, const std::vector<std::string
 					if (!(ss >> species >> A >> yld_token)) {
 						continue;
 					}
-					// species column already holds the isotope name, e.g. "c12", "o16", "ar40"
 					const auto iso_it = iso_map.find(lowercase(species));
 					if (iso_it == iso_map.end()) {
 						continue;
 					}
-					amrex::Real yld = 0.0;
 					try {
-						yld = static_cast<amrex::Real>(std::stod(normalizeNumericToken(yld_token)));
+						const amrex::Real yld = static_cast<amrex::Real>(std::stod(normalizeNumericToken(yld_token)));
+						vals[2 * kMaxTrackedIsotopes + iso_it->second] += std::max<amrex::Real>(yld / agb_mass, 0.0);
 					} catch (...) {
 						continue;
 					}
-					const amrex::Real frac = std::max<amrex::Real>(yld / agb_mass, 0.0);
-					vals[2 * kMaxTrackedIsotopes + iso_it->second] += frac;
+				}
+			}
+		}
+
+		const std::filesystem::path doherty_root = input_path / "superAGB_Doherty14";
+		if (std::filesystem::exists(doherty_root) && std::filesystem::is_directory(doherty_root)) {
+			const std::regex doherty_header_re(R"(\s*([0-9]+(?:\.[0-9]+)?)M\s+Z=([0-9eE+\-.]+).*)", std::regex::icase);
+
+			for (const auto &file_entry : std::filesystem::directory_iterator(doherty_root)) {
+				if (!file_entry.is_regular_file()) {
+					continue;
+				}
+				std::ifstream in(file_entry.path());
+				if (!in.is_open()) {
+					continue;
+				}
+
+				amrex::Real doherty_mass = -1.0;
+				std::vector<amrex::Real> *vals_ptr = nullptr;
+				std::string line;
+				while (std::getline(in, line)) {
+					std::smatch hm;
+					if (std::regex_match(line, hm, doherty_header_re)) {
+						doherty_mass = static_cast<amrex::Real>(std::stod(hm[1].str()));
+						const amrex::Real doherty_z = static_cast<amrex::Real>(std::stod(hm[2].str()));
+						const int mk = static_cast<int>(std::llround(doherty_mass * 1000.0));
+						const int zk = static_cast<int>(std::llround(doherty_z * 1.0e6));
+						auto &vals = sums[{mk, zk}];
+						if (vals.empty()) {
+							const auto table_size = static_cast<std::vector<amrex::Real>::size_type>(kMaxTrackedChannels) *
+										static_cast<std::vector<amrex::Real>::size_type>(kMaxTrackedIsotopes);
+							vals.resize(table_size, 0.0);
+						}
+						vals_ptr = &vals;
+						continue;
+					}
+					if (vals_ptr == nullptr || doherty_mass <= 0.0 || line.empty() || line[0] == '#') {
+						continue;
+					}
+
+					std::stringstream ss(line);
+					std::string species;
+					std::string yld_token;
+					if (!(ss >> species >> yld_token)) {
+						continue;
+					}
+					const auto iso_it = iso_map.find(lowercase(species));
+					if (iso_it == iso_map.end()) {
+						continue;
+					}
+					try {
+						const amrex::Real yld = static_cast<amrex::Real>(std::stod(normalizeNumericToken(yld_token)));
+						(*vals_ptr)[2 * kMaxTrackedIsotopes + iso_it->second] += std::max<amrex::Real>(yld / doherty_mass, 0.0);
+					} catch (...) {
+						continue;
+					}
 				}
 			}
 		}

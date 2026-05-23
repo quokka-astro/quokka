@@ -15,7 +15,7 @@ if(AMReX_SPACEDIM EQUAL 3)
         COMMAND ${CMAKE_COMMAND}
             -DQUOKKA_YIELD_ARCHIVE=${CMAKE_SOURCE_DIR}/extern/yields/yields.tar.gz
             -DQUOKKA_YIELD_DESTINATION=${CMAKE_SOURCE_DIR}/extern/yields
-            -DQUOKKA_YIELD_SENTINEL=${CMAKE_SOURCE_DIR}/extern/yields/SNII_Kobayashi0611
+            -DQUOKKA_YIELD_SENTINEL=${CMAKE_SOURCE_DIR}/extern/yields/SNII_Sukhbold16
             -P ${CMAKE_SOURCE_DIR}/scripts/cmake/extract_chemical_yields.cmake)
     add_test(
         NAME ${JOB_NAME}_validate
