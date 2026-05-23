@@ -20,7 +20,7 @@ amr.max_grid_size = 128  # at least 128 for GPUs
 
 stop_time = 0.5
 plotfile_interval = -1
-plottime_interval = 0.005
+plottime_interval = 0.05
 checkpoint_interval = -1
 checkpointtime_interval = 0.1
 max_timesteps = 1000000
