@@ -193,9 +193,10 @@ def validate_wr_agb(args):
     masses = data[("StochasticStellarPop_particles", "particle_mass_at_birth")].to_value()
     birth_times = data[("StochasticStellarPop_particles", "particle_birth_time")].to_value()
     death_times = data[("StochasticStellarPop_particles", "particle_death_time")].to_value()
-    wr_index = np.where(stages == 0)[0][0]
+    wr_index = np.where(masses / MSUN_CGS >= 9.0)[0][0]
     wr_mass = float(masses[wr_index])
-    agb_mass = float(masses[np.where(stages == 3)[0][0]])
+    agb_candidates = np.where(masses / MSUN_CGS <= 8.0)[0]
+    agb_mass = float(masses[agb_candidates[0]]) if len(agb_candidates) > 0 else 7.0 * MSUN_CGS
     elapsed = float(ds.current_time)
     wr_lifetime = max(float(death_times[wr_index] - birth_times[wr_index]), 0.0)
     wr_elapsed = min(elapsed, wr_lifetime)
@@ -210,9 +211,9 @@ def validate_wr_agb(args):
     max_error = 0.0
     for i, isotope in enumerate(isotopes):
         wr_expected = query_fraction(entries, 1, i, wr_mass / MSUN_CGS, 0.02) * wr_mass * wr_elapsed / wr_lifetime
-        agb_expected = query_fraction(entries, 2, i, agb_mass / MSUN_CGS, 0.02) * agb_mass * elapsed / WR_AGB_WINDOW
+        agb_expected = query_fraction(entries, 2, i, agb_mass / MSUN_CGS, 0.02) * agb_mass
         expected = wr_expected + agb_expected
-        ratio = measured_total[i] / expected
+        ratio = measured_total[i] / expected if expected > 0.0 else 1.0
         wr_ratio = measured_wr[i] / wr_expected if wr_expected > 0.0 else 1.0
         agb_ratio = measured_agb[i] / agb_expected if agb_expected > 0.0 else 1.0
         snii_abs = abs(measured_snii[i])

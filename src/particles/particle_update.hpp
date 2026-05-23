@@ -179,8 +179,9 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 
 					amrex::Real y_wr = 0.0;
 					if (enable_WR_metal) {
-						const bool wr_stage = (stage == static_cast<int>(StellarEvolutionStage::SNProgenitor)) ||
-								      (stage == static_cast<int>(StellarEvolutionStage::HighMassNonExploding));
+						const bool wr_stage = ((stage == static_cast<int>(StellarEvolutionStage::SNProgenitor)) ||
+								       (stage == static_cast<int>(StellarEvolutionStage::HighMassNonExploding))) &&
+								      (mass_birth_msun >= 9.0);
 						const amrex::Real wr_lifetime =
 						    p.rdata(StochasticStellarPopParticleDeathTimeIdx) - p.rdata(StochasticStellarPopParticleBirthTimeIdx);
 						const amrex::Real wr_window = std::max<amrex::Real>(0.0, wr_lifetime - wr_age_start);
@@ -198,25 +199,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 						}
 					}
 
-					amrex::Real y_agb = 0.0;
-					if (enable_AGB_metal) {
-						const bool agb_stage = (stage == static_cast<int>(StellarEvolutionStage::LowMassComposite));
-						const bool agb_active = (age >= agb_age_start) && (age < agb_age_end);
-						if (agb_stage && agb_active) {
-							const amrex::Real agb_window = std::max<amrex::Real>(0.0, agb_age_end - agb_age_start);
-							amrex::Real agb_rate_per_mass = agb_metal_yield_rate_per_mass;
-							if (use_table_driven_chemical_yield && ChemicalYieldLookup::isLoaded() && agb_window > 0.0) {
-								agb_rate_per_mass = std::max<amrex::Real>(0.0, ChemicalYieldLookup::queryYieldFraction(
-														   2, n, mass_birth_msun, z_lookup)) /
-										    agb_window;
-							}
-							const amrex::Real baseline_agb_rate_per_mass =
-							    (agb_window > 0.0) ? (birth_iso_abundance / agb_window) : 0.0;
-							y_agb = std::max<amrex::Real>(0.0, (baseline_agb_rate_per_mass + agb_rate_per_mass) * mass_birth * dt);
-						}
-					}
-
-					const amrex::Real total_mass = y_wr + y_agb;
+					const amrex::Real total_mass = y_wr;
 					if (total_mass <= 0.0) {
 						continue;
 					}
@@ -251,18 +234,9 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 										}
 									}
 
-									if (store_channel_fields && enable_AGB_metal && y_agb > 0.0) {
-										const int agb_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + 3 * nchem + n;
-										if (agb_comp < HydroSystem<problem_t>::scalar0_index + nPassive) {
-											amrex::Gpu::Atomic::AddNoRet(&local_state(interp.index[0] + ii,
-															  interp.index[1] + jj,
-															  interp.index[2] + kk, agb_comp),
-														     wt * y_agb * vol_inverse);
-										}
 									}
 								}
 							}
-						}
 					}
 				}
 			});

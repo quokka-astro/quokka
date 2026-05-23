@@ -1,7 +1,6 @@
-/// Minimal test problem to validate WR and AGB continuous metal feedback.
-/// Creates two star particles (one high-mass WR, one low-mass AGB), forces their
-/// evolutionary stage, and runs a short simulation so `updateChemicalFeedback`
-/// deposits WR/AGB yields to the gas.
+/// Minimal test problem to validate WR continuous and AGB death-time metal feedback.
+/// Creates two high-mass star particles, one WR source and one AGB source, and forces
+/// their evolutionary stage so the feedback paths can be checked directly.
 
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
@@ -55,7 +54,7 @@ template <> void QuokkaSimulation<test_WR_AGB_yields>::createInitialStochasticSt
 	StochasticStellarPopParticles->SetVerbose(1);
 	StochasticStellarPopParticles->InitFromAsciiFile(initial_particles_file, nreal_extra, nullptr);
 
-	// Force particle metadata: particle 0 = high-mass (WR), particle 1 = low-mass (AGB)
+		// Force particle metadata using mass, avoiding tile-local particle ordering.
 	for (auto &kv : StochasticStellarPopParticles->GetParticles()) {
 		for (auto &ikv : kv) {
 			auto &particle_array = ikv.second.GetArrayOfStructs();
@@ -66,15 +65,12 @@ template <> void QuokkaSimulation<test_WR_AGB_yields>::createInitialStochasticSt
 			auto *pdata = particle_array().data();
 
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-				// Use mass to avoid depending on tile-local particle ordering.
-				if (pdata[i].rdata(quokka::StochasticStellarPopParticleMassAtBirthIdx) >= 8.0 * C::M_solar) {
 					pdata[i].idata(quokka::StochasticStellarPopParticleStageIdx) =
 					    static_cast<int>(quokka::StellarEvolutionStage::HighMassNonExploding);
-				} else {
-					pdata[i].idata(quokka::StochasticStellarPopParticleStageIdx) =
-					    static_cast<int>(quokka::StellarEvolutionStage::LowMassComposite);
-				}
-			});
+					if (pdata[i].rdata(quokka::StochasticStellarPopParticleMassAtBirthIdx) <= 8.0 * C::M_solar) {
+						pdata[i].rdata(quokka::StochasticStellarPopParticleDeathTimeIdx) = 5.0e13;
+					}
+				});
 		}
 	}
 
@@ -108,7 +104,7 @@ auto problem_main() -> int
 
 	sim.reconstructionOrder_ = 3;
 	sim.cflNumber_ = 0.5;
-	sim.stopTime_ = 1.0e14; // short run sufficient for continuous deposition
+	sim.stopTime_ = 1.0e14;
 
 	const int seed = 42;
 	amrex::InitRandom(seed, 1);

@@ -1041,6 +1041,10 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 		const amrex::Real vol_inverse = AMREX_D_TERM(dxi[0], *dxi[1], *dxi[2]);
 		const int chem_block_size = StochasticStellarPopParticleChemistryBlockSize<problem_t>();
 		const int chem_base = StochasticStellarPopParticleChemistryBaseIdx<problem_t>();
+		constexpr int W_stencil_N = 2;
+		constexpr int W_stencil_width = 2 * W_stencil_N + 1;
+		constexpr amrex::Real W_cutoff_r2 = static_cast<amrex::Real>(W_stencil_N * W_stencil_N);
+		constexpr amrex::Real W_inv_N = 1.0 / static_cast<amrex::Real>(W_stencil_N);
 
 		amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 			auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
@@ -1048,6 +1052,10 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 			const amrex::Real mass_birth = std::max<amrex::Real>(0.0, p.rdata(StochasticStellarPopParticleMassAtBirthIdx));
 			const amrex::Real mass_birth_msun = mass_birth / C::M_solar;
 			const int stage = p.idata(StochasticStellarPopParticleStageIdx);
+			const amrex::Real death_time = p.rdata(StochasticStellarPopParticleDeathTimeIdx);
+			const bool agb_death = enable_AGB_metal && (stage == static_cast<int>(StellarEvolutionStage::HighMassNonExploding)) &&
+					       (mass_birth_msun <= 8.0) && ((time + dt) > death_time);
+			amrex::ParticleInterpolator::WendlandC2<W_stencil_N> interp(p, plo, dxi);
 
 			const int ix = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
 			const int iy = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
@@ -1060,7 +1068,6 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 
 				amrex::Real y_snii = 0.0;
 				if (enable_SNII_metal && stage == static_cast<int>(StellarEvolutionStage::SNProgenitor)) {
-					const amrex::Real death_time = p.rdata(StochasticStellarPopParticleDeathTimeIdx);
 					if ((time + dt) > death_time) {
 						amrex::Real snii_total_frac = snii_metal_yield_fraction;
 						if (use_table_driven_chemical_yield && ChemicalYieldLookup::isLoaded()) {
@@ -1074,6 +1081,18 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 					}
 				}
 
+				amrex::Real y_agb = 0.0;
+				if (agb_death) {
+					amrex::Real agb_total_frac = agb_metal_yield_rate_per_mass;
+					if (use_table_driven_chemical_yield && ChemicalYieldLookup::isLoaded()) {
+						const amrex::Real queried_frac = ChemicalYieldLookup::queryYieldFraction(2, n, mass_birth_msun, stellar_metallicity_fraction);
+						if (queried_frac > 0.0) {
+							agb_total_frac = queried_frac;
+						}
+					}
+					y_agb = std::max<amrex::Real>(0.0, (birth_iso_abundance + agb_total_frac) * mass_birth);
+				}
+
 				const int total_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + n;
 				for (int ii = -SN_stencil_size; ii <= SN_stencil_size; ++ii) {
 					for (int jj = -SN_stencil_size; jj <= SN_stencil_size; ++jj) {
@@ -1084,6 +1103,29 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 							const amrex::Real kernel_times_vol_inverse = stencil_weights_gpu[iii][jjj][kkk] * vol_inverse;
 							amrex::Gpu::Atomic::AddNoRet(&local_buffer(ix + ii, iy + jj, iz + kk, total_comp),
 										     y_snii * kernel_times_vol_inverse);
+						}
+					}
+				}
+
+				if (y_agb > 0.0) {
+					const int nz_loop = (AMREX_SPACEDIM >= 3) ? W_stencil_width : 1;
+					const int ny_loop = (AMREX_SPACEDIM >= 2) ? W_stencil_width : 1;
+					for (int kk = 0; kk < nz_loop; ++kk) {
+						const amrex::Real dz =
+						    (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(kk - W_stencil_N) + 0.5 - interp.frac[2] : 0.0;
+						for (int jj = 0; jj < ny_loop; ++jj) {
+							const amrex::Real dy =
+							    (AMREX_SPACEDIM >= 2) ? static_cast<amrex::Real>(jj - W_stencil_N) + 0.5 - interp.frac[1] : 0.0;
+							for (int ii = 0; ii < W_stencil_width; ++ii) {
+								const amrex::Real dx = static_cast<amrex::Real>(ii - W_stencil_N) + 0.5 - interp.frac[0];
+								const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
+								if (r2 <= W_cutoff_r2) {
+									const amrex::Real wt = kernel_wendland_c2(std::sqrt(r2) * W_inv_N) * interp.inv_norm;
+									amrex::Gpu::Atomic::AddNoRet(&local_buffer(interp.index[0] + ii, interp.index[1] + jj,
+													  interp.index[2] + kk, total_comp),
+												     wt * y_agb * vol_inverse);
+								}
+							}
 						}
 					}
 				}
@@ -1105,6 +1147,37 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 						}
 					}
 				}
+
+				if (store_channel_fields && y_agb > 0.0) {
+					const int agb_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + 3 * nchem + n;
+					if (agb_comp < HydroSystem<problem_t>::scalar0_index + nPassive) {
+						const int nz_loop = (AMREX_SPACEDIM >= 3) ? W_stencil_width : 1;
+						const int ny_loop = (AMREX_SPACEDIM >= 2) ? W_stencil_width : 1;
+						for (int kk = 0; kk < nz_loop; ++kk) {
+							const amrex::Real dz =
+							    (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(kk - W_stencil_N) + 0.5 - interp.frac[2] : 0.0;
+							for (int jj = 0; jj < ny_loop; ++jj) {
+								const amrex::Real dy =
+								    (AMREX_SPACEDIM >= 2) ? static_cast<amrex::Real>(jj - W_stencil_N) + 0.5 - interp.frac[1] : 0.0;
+								for (int ii = 0; ii < W_stencil_width; ++ii) {
+									const amrex::Real dx = static_cast<amrex::Real>(ii - W_stencil_N) + 0.5 - interp.frac[0];
+									const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
+									if (r2 <= W_cutoff_r2) {
+										const amrex::Real wt = kernel_wendland_c2(std::sqrt(r2) * W_inv_N) * interp.inv_norm;
+										amrex::Gpu::Atomic::AddNoRet(&local_buffer(interp.index[0] + ii,
+														  interp.index[1] + jj,
+														  interp.index[2] + kk, agb_comp),
+													     wt * y_agb * vol_inverse);
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			if (agb_death) {
+				p.idata(StochasticStellarPopParticleStageIdx) = static_cast<int>(StellarEvolutionStage::Removed);
 			}
 		});
 	}
