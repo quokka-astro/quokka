@@ -210,7 +210,7 @@ auto problem_main() -> int
 	// CI runs on ARM64/clang have shown a ~0.001 error norm for this test,
 	// while x86 builds reproduce zero error. The root cause is unknown.
 	// We allow a small tolerance to prevent platform-specific failures.
-	const double error_tol = 1.0e-2;
+	const double error_tol = 0.002;
 	int status = 0;
 	amrex::Real const error_norm = sim.computeErrorNorm();
 	if (error_norm > error_tol) {
