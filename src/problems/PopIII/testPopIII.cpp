@@ -365,12 +365,14 @@ template <> void QuokkaSimulation<PopIII>::refineGrid(int lev, amrex::TagBoxArra
 	}
 }
 
-template <> void QuokkaSimulation<PopIII>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
+template <>
+void QuokkaSimulation<PopIII>::ComputeDerivedVar(int /*lev*/, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
+						 amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "temperature") {
 		const int ncomp = ncomp_cc_in;
-		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &state = state_cc.const_arrays();
 		auto output = mf.arrays();
 
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
@@ -386,7 +388,7 @@ template <> void QuokkaSimulation<PopIII>::ComputeDerivedVar(int lev, std::strin
 	if (dname == "pressure") {
 
 		const int ncomp = ncomp_cc_in;
-		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &state = state_cc.const_arrays();
 		auto output = mf.arrays();
 
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
@@ -398,7 +400,7 @@ template <> void QuokkaSimulation<PopIII>::ComputeDerivedVar(int lev, std::strin
 	if (dname == "velx") {
 
 		const int ncomp = ncomp_cc_in;
-		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &state = state_cc.const_arrays();
 		auto output = mf.arrays();
 
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
@@ -411,7 +413,7 @@ template <> void QuokkaSimulation<PopIII>::ComputeDerivedVar(int lev, std::strin
 	if (dname == "sound_speed") {
 
 		const int ncomp = ncomp_cc_in;
-		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &state = state_cc.const_arrays();
 		auto output = mf.arrays();
 
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {

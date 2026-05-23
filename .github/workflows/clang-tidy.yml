@@ -32,6 +32,9 @@ jobs:
         config_file: src/.clang-tidy
         build_dir: build
         apt_packages: libopenmpi-dev,libhdf5-mpi-dev,python3-dev,python3-numpy,python3-matplotlib
+        install_commands: >
+          git config --global --add safe.directory "$GITHUB_WORKSPACE" &&
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/extern/amrex"
         cmake_command: cmake . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DQUOKKA_PYTHON=ON -DQUOKKA_OPENPMD=ON -DopenPMD_USE_ADIOS2=OFF -DAMReX_SPACEDIM=3
         split_workflow: true
 

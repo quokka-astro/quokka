@@ -193,12 +193,14 @@ template <> void QuokkaSimulation<StarCluster>::refineGrid(int lev, amrex::TagBo
 	});
 }
 
-template <> void QuokkaSimulation<StarCluster>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
+template <>
+void QuokkaSimulation<StarCluster>::ComputeDerivedVar(int /*lev*/, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
+						      amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "log_density") {
 		const int ncomp = ncomp_cc_in;
-		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &state = state_cc.const_arrays();
 		auto output = mf.arrays();
 
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {

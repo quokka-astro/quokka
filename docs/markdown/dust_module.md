@@ -5,9 +5,9 @@
 > The dedicated dust dynamics module has not yet been exercised in a published science application with Quokka and should currently be treated as **beta**.
 >
 
-This module primarily implements two components: the dust transport term and the dust drag source term.
+This module implements dust transport and dust-gas source terms. When dust is enabled without MHD, the source term is aerodynamic drag. When both dust and MHD are enabled, Quokka integrates aerodynamic drag together with the charged-dust Lorentz force.
 
-## Equations for Gas-Dust System
+## Equations for Gas-Dust-MHD System
 
 <script type="math/tex; mode=display">
 \begin{align}
@@ -16,16 +16,29 @@ This module primarily implements two components: the dust transport term and the
     &= 0, \\
 \frac{\partial (\rho_{\mathrm{g}} \mathbf{v}_{\mathrm{g}})}{\partial t}
     + \nabla \cdot (\rho_{\mathrm{g}} \mathbf{v}_{\mathrm{g}} \otimes \mathbf{v}_{\mathrm{g}} 
-        + P_{\mathrm{g}} \mathbf{I})
-    &= \sum_{n=1}^{N} \rho_{\mathrm{d},n} 
-        \frac{\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}}{T_{\mathrm{s},n}}, \\
-\frac{\partial E_{\mathrm{g}}}{\partial t}
-    + \nabla \cdot \left[(E_{\mathrm{g}} + P_{\mathrm{g}}) \mathbf{v}_{\mathrm{g}}\right]
+        + (P_{\mathrm{g}} + \tfrac{1}{2} B^2) \mathbf{I}
+        - \mathbf{B} \otimes \mathbf{B})
     &= \sum_{n=1}^{N} \rho_{\mathrm{d},n} 
         \frac{\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}}{T_{\mathrm{s},n}}
+        - \sum_{n=1}^{N} \rho_{\mathrm{d},n} \Omega_{\mathrm{L},n}
+        \left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right) \times \hat{\mathbf{b}}
+        + \rho_{\mathrm{g}} \mathbf{a}_{\mathrm{ext},\mathrm{g}}, \\
+\frac{\partial E_{\mathrm{g}}}{\partial t}
+    + \nabla \cdot \left[
+        (E_{\mathrm{g}} + P_{\mathrm{g}} + \tfrac{1}{2} B^2) \mathbf{v}_{\mathrm{g}}
+        - (\mathbf{v}_{\mathrm{g}} \cdot \mathbf{B}) \mathbf{B}\right]
+    &= \sum_{n=1}^{N} \rho_{\mathrm{d},n}
+        \frac{\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}}{T_{\mathrm{s},n}}
         \cdot \mathbf{v}_{\mathrm{g}}
-        + \omega \sum_{n=1}^{N} \rho_{\mathrm{d},n} 
-        \frac{(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}})^{2}}{T_{\mathrm{s},n}}, \\
+        - \sum_{n=1}^{N} \rho_{\mathrm{d},n} \Omega_{\mathrm{L},n}
+        \left[\left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right) \times \hat{\mathbf{b}}\right]
+        \cdot \mathbf{v}_{\mathrm{g}}
+        + \rho_{\mathrm{g}} \mathbf{a}_{\mathrm{ext},\mathrm{g}} \cdot \mathbf{v}_{\mathrm{g}}
+        + \omega_{\rm drag} \sum_{n=1}^{N} \rho_{\mathrm{d},n}
+        \frac{\left|\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right|^{2}}{T_{\mathrm{s},n}}, \\
+\frac{\partial \mathbf{B}}{\partial t}
+    - \nabla \times (\mathbf{v}_{\mathrm{g}} \times \mathbf{B})
+    &= 0, \\
 \frac{\partial \rho_{\mathrm{d},n}}{\partial t}
     + \nabla \cdot (\rho_{\mathrm{d},n} \mathbf{v}_{\mathrm{d},n})
     &= 0, \\
@@ -33,29 +46,67 @@ This module primarily implements two components: the dust transport term and the
     + \nabla \cdot (\rho_{\mathrm{d},n} 
         \mathbf{v}_{\mathrm{d},n} \otimes \mathbf{v}_{\mathrm{d},n})
     &= \rho_{\mathrm{d},n} 
-        \frac{\mathbf{v}_{\mathrm{g}} - \mathbf{v}_{\mathrm{d},n}}{T_{\mathrm{s},n}},
+        \frac{\mathbf{v}_{\mathrm{g}} - \mathbf{v}_{\mathrm{d},n}}{T_{\mathrm{s},n}}
+        + \rho_{\mathrm{d},n} \Omega_{\mathrm{L},n}
+        \left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right) \times \hat{\mathbf{b}}
+        + \rho_{\mathrm{d},n} \mathbf{a}_{\mathrm{ext},\mathrm{d},n},
 \end{align}
 </script>
 
-where \\(\omega\\) controls the level of frictional heating, with \\(\omega = 0\\) turning it off and \\(\omega = 1\\) depositing all dissipation into the gas.
+where
+
+-   \\(\rho_{\mathrm{g}}\\) is the gas density,
+-   \\(\mathbf{v}_{\mathrm{g}}\\) is the gas velocity,
+-   \\(P_{\mathrm{g}}\\) is the gas pressure,
+-   \\(\mathbf{I}\\) is the identity tensor,
+-   \\(\mathbf{B}\\) is the magnetic field,
+-   \\(E_{\mathrm{g}}\\) is the gas total energy density, including magnetic energy when MHD is enabled,
+-   \\(\rho_{\mathrm{d},n}\\) is the dust mass density for dust species \\(n\\) (\\(n \in [1, N]\\)),
+-   \\(\mathbf{v}_{\mathrm{d},n}\\) is the dust velocity for dust species \\(n\\),
+-   \\(T_{\mathrm{s},n}\\) is the aerodynamic stopping time for dust species \\(n\\),
+-   \\(\xi_n\\) is the charge-to-mass ratio for dust species \\(n\\),
+-   \\(\Omega_{\mathrm{L},n}= \xi_n |\vec{B}|\\) is the dust gyrofrequency for dust species \\(n\\),
+-   \\(\hat{\mathbf{b}}\\) is the unit vector along the magnetic field,
+-   \\(\mathbf{a}_{\mathrm{ext},\mathrm{g}}\\) is the external acceleration applied to the gas,
+-   \\(\mathbf{a}_{\mathrm{ext},\mathrm{d},n}\\) is the external acceleration applied to dust species \\(n\\),
+-   \\(\omega_{\rm drag}\\) is the fraction of physical dust-drag dissipation deposited into the gas.
+
+The Lorentz work term in the gas total-energy equation is the gas-side work from the dust back-reaction. It transfers kinetic energy between gas and dust, but it does not heat the combined gas-dust system. Adding the gas-side and dust-side Lorentz work terms for each dust species gives
+
+<script type="math/tex; mode=display">
+\begin{aligned}
+&- \rho_{\mathrm{d},n} \Omega_{\mathrm{L},n}
+   \left[\left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right) \times \hat{\mathbf{b}}\right]
+   \cdot \mathbf{v}_{\mathrm{g}}
+ + \rho_{\mathrm{d},n} \Omega_{\mathrm{L},n}
+   \left[\left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right) \times \hat{\mathbf{b}}\right]
+   \cdot \mathbf{v}_{\mathrm{d},n} \\
+&= \rho_{\mathrm{d},n} \Omega_{\mathrm{L},n}
+   \left[\left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right) \times \hat{\mathbf{b}}\right]
+   \cdot \left(\mathbf{v}_{\mathrm{d},n} - \mathbf{v}_{\mathrm{g}}\right)
+ = 0 .
+\end{aligned}
+</script>
+
+Only aerodynamic drag produces physical gas heating in these equations, through the \\(\omega_{\rm drag}\\) term. The `dust.omega_rk_residual` runtime parameter controls deposition of the discrete RK energy residual from the combined drag-plus-Lorentz update. This residual is not a separate physical heating rate and is not a Lorentz-heating parameter.
 
 ## Variable Storage
 
-The dust cell-centred conserved variables (\\(\rho_{\mathrm{d}}\\), \\(\rho_{\mathrm{d}}\vec{v_{\mathrm{d}}}\\)) are added to MultiFab.
+The dust cell-centred conserved variables (\\(\rho_{\mathrm{d}}\\), \\(\rho_{\mathrm{d}}\mathbf{v}_{\mathrm{d}}\\)) are added to MultiFab.
 
 ## Reconstruction and Riemann Solver
 
-Dust reconstruction is performed together with gas using the same method. The Riemann Solver used is as follows:
+Dust reconstruction is performed together with gas using the same method. The Riemann solver used is as follows:
 
-In one dimension along the x-direction, given the left/right states \\(W_d^{L/R}\\), one can provide the Riemann flux for conserved variables as follows. The density flux reads (Huang & Bai 2022):
+In one dimension along the x-direction, given the left/right states \\(W_{\mathrm{d}}^{\mathrm{L}/\mathrm{R}}\\), one can provide the Riemann flux for conserved variables as follows. The density flux reads (Huang & Bai 2022):
 
 <script type="math/tex; mode=display">
 \begin{align*}
-F^{\text a}_x(\rho_d) = 
+F_{x}^{\mathrm{a}}(\rho_{\mathrm{d}}) = 
 \begin{cases}
-\rho_d^L v_{d,x}^L & \text{if } v_{d,x}^L > 0, \, v_{d,x}^R \ge 0, \\
-\rho_d^R v_{d,x}^R & \text{if } v_{d,x}^L \le 0, \, v_{d,x}^R < 0, \\
-\rho_d^L v_{d,x}^L + \rho_d^R v_{d,x}^R & \text{if } v_{d,x}^L > 0, \, v_{d,x}^R < 0, \\
+\rho_{\mathrm{d}}^{\mathrm{L}} v_{\mathrm{d},x}^{\mathrm{L}} & \text{if } v_{\mathrm{d},x}^{\mathrm{L}} > 0, \, v_{\mathrm{d},x}^{\mathrm{R}} \ge 0, \\
+\rho_{\mathrm{d}}^{\mathrm{R}} v_{\mathrm{d},x}^{\mathrm{R}} & \text{if } v_{\mathrm{d},x}^{\mathrm{L}} \le 0, \, v_{\mathrm{d},x}^{\mathrm{R}} < 0, \\
+\rho_{\mathrm{d}}^{\mathrm{L}} v_{\mathrm{d},x}^{\mathrm{L}} + \rho_{\mathrm{d}}^{\mathrm{R}} v_{\mathrm{d},x}^{\mathrm{R}} & \text{if } v_{\mathrm{d},x}^{\mathrm{L}} > 0, \, v_{\mathrm{d},x}^{\mathrm{R}} < 0, \\
 0 & \text{else}.
 \end{cases}
 \end{align*}
@@ -67,23 +118,28 @@ This is implemented in `src/dust/dustRiemannSolver.hpp` and called in `DustSyste
 
 ## Time Integrator
 
-A Strang-split method (Tedeschi-Prades et al. 2025) is used to integrate the dust-gas system. The Strang-split update can be expressed as:
+A Strang-split method is used to integrate the dust-gas source terms together with the explicit transport update:
 
 <script type="math/tex; mode=display">
-\mathbf{u}^{n+1} = \mathcal{D}_{\Delta t/2} \mathcal{H}_{\Delta t} \mathcal{D}_{\Delta t/2} \mathbf{u}^n
+\mathbf{u}^{n+1} = \mathcal{C}_{\Delta t/2} \mathcal{H}_{\Delta t} \mathcal{C}_{\Delta t/2} \mathbf{u}^n
 </script>
 
-where \\(\mathcal{D}\\) is the dust-gas drag operator and \\(\mathcal{H}\\) is the hydrodynamics operator (including both gas and dust transport). The hydrodynamics operator \\(\mathcal{H}\\) is handled using the explicit RK2 scheme. The drag operator \\(\mathcal{D}\\) is implemented in `src/dust/DustDrag.hpp` and called in `QuokkaSimulation::addStrangSplitSourcesWithBuiltin` via `DustDrag::computeDustDrag`.
+where \\(\mathcal{H}\\) is the explicit gas/MHD and dust transport update, and \\(\mathcal{C}\\) denotes the local combined drag-plus-Lorentz update. In non-MHD runs, \\(\mathcal{C}\\) reduces to a drag-only update; in MHD runs, it integrates aerodynamic drag and the charged-dust Lorentz force in the same solve. The \\(\mathcal{C}\\) update is implemented in `src/dust/DustSources.hpp` and called from `QuokkaSimulation::addStrangSplitSourcesWithBuiltin`:
 
-### Optional Picard iteration for dust–gas drag
+- If `Physics_Traits<problem_t>::is_dust_enabled = true` and MHD is disabled, Quokka calls `DustSources::computeDustDrag`, following Tedeschi-Prades et al. (2025).
+- If both `Physics_Traits<problem_t>::is_dust_enabled = true` and `Physics_Traits<problem_t>::is_mhd_enabled = true`, Quokka calls `DustSources::computeDustDragAndLorentz`.
 
-Users may optionally enable Picard iteration for the dust–gas drag operator \\(\mathcal{D}\\). When the stopping time depends on the gas or dust velocity, enabling iteration is required to maintain an implicit dust drag update. See [Runtime parameters](parameters.md) for details.
+`DustSources::computeDustDragAndLorentz` integrates drag and Lorentz forces in the same source solve; it does not operator-split the Lorentz force from drag. The method uses a two-stage generalized implicit Runge-Kutta (GIRK) update for the local gas and dust momenta. For dust species \\(n\\), the relevant local rates are the drag rate \\(\alpha_n = 1/T_{\mathrm{s},n}\\) and the gyrofrequency \\(\Omega_{\mathrm{L},n} = \xi_n |\mathbf{B}|\\). The implementation selects the non-stiff or stiff GIRK coefficients from the local timescale, using \\((\alpha_n^2 + \Omega_{\mathrm{L},n}^2)^{-1/2}\\) for the drag-plus-Lorentz system.
 
-### User-defined dust stopping time
+### Optional Picard iteration for dust–gas source update
 
-For a given problem, users must define a problem-specific dust stopping time by implementing the `DustDrag::ComputeReciprocalStoppingTime` function (note that this function should return the reciprocal of the stopping time). An example can be found in the `src/problems/DustDamping` test.
+Users may optionally enable Picard iteration for the local update represented by \\(\mathcal{C}\\). When the stopping time depends on the gas or dust velocity, enabling iteration is required to maintain an implicit dust source update. This option applies to both `DustSources::computeDustDrag` and `DustSources::computeDustDragAndLorentz`. See [Runtime parameters](parameters.md) for details.
 
-Also, users can directly use the dust stopping time calculation helper `DustDrag::ComputeReciprocalStoppingTimeKwok` to compute the physical dust stopping time, following Kwok (1975) with an optional supersonic correction. The stopping time of dust \\(t_{\mathrm{s}}\\) is given by:
+### User-defined dust stopping time and charge
+
+For a given problem, users must define a problem-specific dust stopping time by implementing the `DustSources::ComputeReciprocalStoppingTime` function (note that this function should return the reciprocal of the stopping time). An example can be found in the `src/problems/DustDamping` test.
+
+Users can directly use the dust stopping time calculation helper `DustSources::ComputeReciprocalStoppingTimeKwok` to compute the physical dust stopping time, following Kwok (1975) with an optional supersonic correction. Problem setups that use this helper must provide the dust grain radius \\(a\\) and material density \\(\rho_{\mathrm{gr}}\\) for each dust group. The stopping time of dust \\(t_{\mathrm{s}}\\) is given by:
 
 <script type="math/tex; mode=display">
 t_{\mathrm{s}} = \frac{\sqrt{\pi \gamma}}{2\sqrt{2}} \frac{a \rho_{\mathrm{gr}}}{\rho_{\mathrm{g}} c_{\mathrm{s}}} \times 
@@ -93,14 +149,16 @@ t_{\mathrm{s}} = \frac{\sqrt{\pi \gamma}}{2\sqrt{2}} \frac{a \rho_{\mathrm{gr}}}
 \end{cases}
 </script>
 
-When \\(\gamma=1\\), this expression reduces exactly to the isothermal \\(t_s\\). An example of its usage can be found in the `src/problems/DustDampingCorrection` test.
+When \\(\gamma=1\\), this expression reduces exactly to the isothermal \\(t_{\mathrm{s}}\\). An example of its usage can be found in the `src/problems/DustDampingIteration` test.
+
+For charged dust in MHD, users must also define the problem-specific dust charge-to-mass ratio by specializing `DustSources::ComputeDustChargeToMassRatio`. This function returns \\(\xi_n\\) for each dust group. The default implementation returns zero for all groups, so dust behaves as neutral dust unless a problem overrides it. Examples can be found in `src/problems/DustDampedGyromotion`.
 
 ## CFL Condition for Dust
 
-For the dust-gas coupled system with N dust species, we use the following CFL condition:
+For the dust-gas coupled system with \\(N\\) dust species, we use the following CFL condition:
 
 <script type="math/tex; mode=display">
-\Delta t_{\mathrm{CFL}} = C_{\mathrm{CFL}} \cdot \min_{\mathrm{cells}} \left( \frac{\Delta x}{\max\left( |v_{\mathrm{g}}| + c_s, \max_{n=1}^{N} |v_{\mathrm{d},n}|+c_s \right)} \right).
+\Delta t_{\mathrm{CFL}} = C_{\mathrm{CFL}} \cdot \min_{\mathrm{cells}} \left( \frac{\Delta x}{\max\left( |\mathbf{v}_{\mathrm{g}}| + c_{\mathrm{s}}, \max_{n=1}^{N} |\mathbf{v}_{\mathrm{d},n}| + c_{\mathrm{s}} \right)} \right).
 </script>
 
 ## Runtime Controls
@@ -108,6 +166,7 @@ For the dust-gas coupled system with N dust species, we use the following CFL co
 The following input parameters tune the dust module and are documented in more detail in [Runtime parameters](parameters.md):
 
 - `enable_iter_stoptime` – switch of iterative dust stopping time calculation.
-- `omega` – controls the level of frictional heating.
-- `print_iteration_counts` - switch to turn on/off printing of dust drag iteration counts for debugging.
+- `omega_drag_heating` – controls deposition of physical dust-drag heating into the gas.
+- `omega_rk_residual` – controls deposition of the discrete RK energy residual from the combined dust drag-plus-Lorentz source update. It is only relevant when MHD and dust are both enabled.
+- `print_iteration_counts` - switch to turn on/off printing of dust source iteration counts for debugging.
 - `dust.density_floor` - the minimum dust density value allowed in the simulation.

@@ -62,6 +62,10 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto LLF_MHD(quokka::HydroState<N_scalars, N
 	u_R.Eint = sR.Eint;
 	u_R.by = sR.by;
 	u_R.bz = sR.bz;
+	for (int n = 0; n < N_scalars; ++n) {
+		u_L.scalar[n] = sL.scalar[n];
+		u_R.scalar[n] = sR.scalar[n];
+	}
 
 	//--- Step 2.  Compute wave speeds in L,R states (see Toro eq. 10.43)
 

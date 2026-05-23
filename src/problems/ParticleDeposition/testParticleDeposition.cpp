@@ -153,7 +153,10 @@ template <> void QuokkaSimulation<ParticleDepositionProblem>::computeAfterTimest
 #endif
 }
 
-template <> void QuokkaSimulation<ParticleDepositionProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int /*ncomp*/) const
+template <>
+void QuokkaSimulation<ParticleDepositionProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int /*ncomp*/,
+								    amrex::MultiFab const & /*state_cc*/,
+								    amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
 {
 #if AMREX_SPACEDIM == 3
 	if (dname == "particle_mass_density") {

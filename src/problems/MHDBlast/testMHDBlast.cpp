@@ -131,13 +131,14 @@ template <> void QuokkaSimulation<MHDBlast>::refineGrid(int lev, amrex::TagBoxAr
 	}
 }
 
-template <> void QuokkaSimulation<MHDBlast>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp) const
+template <>
+void QuokkaSimulation<MHDBlast>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp,
+						   amrex::MultiFab const & /*state_cc*/, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "magnetic_divergence") {
 		const amrex::Geometry &geom_lev = geom[lev];
 		const auto dx = geom_lev.CellSizeArray();
-		auto const &state_fc = state_new_fc_[lev];
 		auto output = mf.arrays();
 
 		// Get the face-centered magnetic field arrays

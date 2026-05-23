@@ -69,7 +69,7 @@ namespace filesystem = experimental::filesystem;
 #include "SimulationData.hpp"
 #include "chemistry/Chemistry.hpp"
 #include "cooling/ResampledCooling.hpp"
-#include "dust/DustDrag.hpp"
+#include "dust/DustSources.hpp"
 #include "dust/dust_system.hpp"
 #include "eos.H"
 #include "hydro/hydro_system.hpp"
@@ -192,7 +192,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	static constexpr bool is_particle_enabled = Particle_Traits<problem_t>::particle_switch != ParticleSwitch::None;
 
-	amrex::Real dust_omega_ = 1.0;
+	amrex::Real dust_omega_drag_ = 1.0;
+	amrex::Real dust_omega_res_ = 0.0;
 	bool print_dust_counter_ = false;
 
 	amrex::Real radiationCflNumber_ = 0.3;
@@ -309,7 +310,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 						int lev, int interval) override;
 
 	// compute derived variables
-	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp) const override;
+	void ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int ncomp, amrex::MultiFab const &state_cc,
+			       amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const override;
 	void ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const override;
 
 	// compute projected vars
@@ -710,7 +712,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	// set dust runtime parameters
 	{
 		amrex::ParmParse const dpp("dust");
-		dpp.query("omega", dust_omega_);
+		dpp.query("omega_drag_heating", dust_omega_drag_);
+		dpp.query("omega_rk_residual", dust_omega_res_);
 		dpp.query("enable_iter_stoptime", enableIterDustStoptime_);
 		dpp.query("print_iteration_counts", print_dust_counter_);
 		dpp.query("density_floor", dustDensityFloor_);
@@ -990,8 +993,11 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 								   amrex::Real time, amrex::Real dt) -> bool
 {
 	auto const applyDust = [&]() {
-		if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-			DustDrag<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega_, enableIterDustStoptime_, print_dust_counter_);
+		if constexpr (Physics_Traits<problem_t>::is_dust_enabled && Physics_Traits<problem_t>::is_mhd_enabled) {
+			DustSources<problem_t>::computeDustDragAndLorentz(state, state_fc, dt, dust_omega_drag_, dust_omega_res_, enableIterDustStoptime_,
+									  print_dust_counter_);
+		} else if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+			DustSources<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega_drag_, enableIterDustStoptime_, print_dust_counter_);
 		}
 	};
 
@@ -1042,13 +1048,17 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	return (burn_success && cool_success);
 }
 
-template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp) const
+template <typename problem_t>
+void QuokkaSimulation<problem_t>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp, amrex::MultiFab const &state_cc,
+						    amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
 	// compute derived variables and save in 'mf' -- user should implement
 	(void)lev;
 	(void)dname;
 	(void)mf;
 	(void)ncomp;
+	(void)state_cc;
+	(void)state_fc;
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::ComputeDensityFloorDebug(int lev, amrex::MultiFab &mf, int ncomp) const
@@ -2973,7 +2983,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 		// Create a MultiFab to hold radEnergySource for the current AMR level
 		// radEnergySource should have the unit of luminosity density, erg s^-1 cm^-3
-		int const nghost = 1; // depositRadiation needs 1 ghost cell
+		int const nghost = 3; // WendlandC2<N=2>: stencil spans N=2 cells + 1 for possible particle drift
 		amrex::MultiFab radEnergySource(grids[lev], dmap[lev], Physics_Traits<problem_t>::nGroups, nghost);
 
 		// === Stage 1: trivial U^(1) = U^n; skipped ===
