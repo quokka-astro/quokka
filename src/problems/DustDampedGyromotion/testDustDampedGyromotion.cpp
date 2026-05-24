@@ -27,7 +27,7 @@ constexpr double default_grain_density = 1.0;
 constexpr double default_grain_radius = 1.5957691216057308; // sqrt(8 / pi) gives alpha0 = 1 for gamma = rho_g = c_s = rho_gr = 1.
 constexpr double charge_to_mass_ratio = 1.0;
 
-AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 1> g_dust_grain_radius = {default_grain_radius}; // NOLINT
+AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 1> g_dust_grain_radius = {default_grain_radius};	  // NOLINT
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 1> g_dust_grain_density = {default_grain_density}; // NOLINT
 
 constexpr double gas_velocity_x0 = -epsilon * initial_drift / (1.0 + epsilon);
@@ -50,8 +50,8 @@ struct DustGyroHistory {
 
 auto computeInitialReciprocalStoppingTime() -> double
 {
-	return (2.0 * std::numbers::sqrt2 * rho_gas * sound_speed) / (std::sqrt(std::numbers::pi * gamma_iso) * g_dust_grain_radius[0] *
-								      g_dust_grain_density[0]);
+	return (2.0 * std::numbers::sqrt2 * rho_gas * sound_speed) /
+	       (std::sqrt(std::numbers::pi * gamma_iso) * g_dust_grain_radius[0] * g_dust_grain_density[0]);
 }
 } // namespace
 
@@ -148,7 +148,8 @@ AMREX_GPU_HOST_DEVICE auto computeDustGyroReciprocalStoppingTime(amrex::Real rho
 								 amrex::GpuArray<amrex::Real, 1> rel_vel_mag, double cs) -> amrex::GpuArray<amrex::Real, 1>
 {
 	if constexpr (GyroCaseParams<problem_t>::enable_epstein_drag) {
-		return DustSources<problem_t>::ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, g_dust_grain_radius, g_dust_grain_density, true);
+		return DustSources<problem_t>::ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, g_dust_grain_radius, g_dust_grain_density,
+										 true);
 	} else {
 		amrex::GpuArray<amrex::Real, 1> alpha{};
 		alpha.fill(0.0);

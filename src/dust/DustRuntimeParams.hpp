@@ -10,8 +10,7 @@
 namespace quokka::dust
 {
 
-template <unsigned int nDustGroups>
-void queryPositiveArray(amrex::ParmParse const &pp, char const *name, amrex::GpuArray<amrex::Real, nDustGroups> &values)
+template <unsigned int nDustGroups> void queryPositiveArray(amrex::ParmParse const &pp, char const *name, amrex::GpuArray<amrex::Real, nDustGroups> &values)
 {
 	static_assert(nDustGroups > 0);
 

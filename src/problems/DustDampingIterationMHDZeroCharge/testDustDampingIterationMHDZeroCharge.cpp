@@ -27,7 +27,7 @@ constexpr double B_Z = 0.5;
 constexpr double MAGNETIC_ENERGY = 0.5 * (B_X * B_X + B_Y * B_Y + B_Z * B_Z);
 
 AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 2> g_dust_grain_radius = {0.02, 0.01}; // NOLINT
-AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 2> g_dust_grain_density = {1.0, 1.0}; // NOLINT
+AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 2> g_dust_grain_density = {1.0, 1.0};  // NOLINT
 constexpr bool enable_supersonic_correction = true;
 } // namespace
 

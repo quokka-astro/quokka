@@ -57,18 +57,18 @@ std::array<double, 3> g_snapshot_target_times = {0.0, 0.0, 0.0};		   // NOLINT
 double g_equilibrium_ts = 0.0;							   // NOLINT
 
 AMREX_GPU_MANAGED double g_grain_radius = grain_radius_density_param / grain_density0; // NOLINT
-AMREX_GPU_MANAGED double g_grain_density = grain_density0;			    // NOLINT
-AMREX_GPU_MANAGED double g_charge_to_mass = xi_param;			       // NOLINT
-AMREX_GPU_MANAGED double g_noise_amplitude = noise_amplitude_param;	       // NOLINT
-AMREX_GPU_MANAGED double g_Bx0 = 0.0;					       // NOLINT
-AMREX_GPU_MANAGED double g_By0 = 0.0;					       // NOLINT
-AMREX_GPU_MANAGED double g_Bz0 = 1.0;					       // NOLINT
-AMREX_GPU_MANAGED double g_gas_vx0 = 0.0;				       // NOLINT
-AMREX_GPU_MANAGED double g_gas_vy0 = 0.0;				       // NOLINT
-AMREX_GPU_MANAGED double g_gas_vz0 = 0.0;				       // NOLINT
-AMREX_GPU_MANAGED double g_dust_vx0 = 0.0;				       // NOLINT
-AMREX_GPU_MANAGED double g_dust_vy0 = 0.0;				       // NOLINT
-AMREX_GPU_MANAGED double g_dust_vz0 = 0.0;				       // NOLINT
+AMREX_GPU_MANAGED double g_grain_density = grain_density0;			       // NOLINT
+AMREX_GPU_MANAGED double g_charge_to_mass = xi_param;				       // NOLINT
+AMREX_GPU_MANAGED double g_noise_amplitude = noise_amplitude_param;		       // NOLINT
+AMREX_GPU_MANAGED double g_Bx0 = 0.0;						       // NOLINT
+AMREX_GPU_MANAGED double g_By0 = 0.0;						       // NOLINT
+AMREX_GPU_MANAGED double g_Bz0 = 1.0;						       // NOLINT
+AMREX_GPU_MANAGED double g_gas_vx0 = 0.0;					       // NOLINT
+AMREX_GPU_MANAGED double g_gas_vy0 = 0.0;					       // NOLINT
+AMREX_GPU_MANAGED double g_gas_vz0 = 0.0;					       // NOLINT
+AMREX_GPU_MANAGED double g_dust_vx0 = 0.0;					       // NOLINT
+AMREX_GPU_MANAGED double g_dust_vy0 = 0.0;					       // NOLINT
+AMREX_GPU_MANAGED double g_dust_vz0 = 0.0;					       // NOLINT
 
 struct EquilibriumState {
 	Vec3 drift_{};
