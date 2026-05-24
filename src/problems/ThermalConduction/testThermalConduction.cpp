@@ -31,7 +31,7 @@ const double Twind = 2.e6;
 const double Tcloud  = 1.e4;
 const double rho_cloud = C::m_p; // g/cm^3
 const double Mach = 4.0; // Mach number of the wind
-const double R0 = 0.1 * C::parsec; // radius of the cloud		
+const double R0 = 0.2 * C::parsec; // radius of the cloud		
 
 struct ThermalConductionProblem {
 };
@@ -94,30 +94,35 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 			vz = 0.0; // cloud is stationary
 		}
 		else{
+			T = Twind;
 			rho = rho_cloud * Tcloud / Twind; // g/cm^3
-			amrex::Real pressure = rho * Twind * C::k_B / C::m_u;
+			amrex::Real pressure = rho * T * C::k_B / C::m_u;
 			cs_wind = quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho, pressure);
 			vz = Mach * cs_wind; // 100 km/s
-			
 		}
 		const amrex::Real Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T);
-		// if(i==0 & j==0 & k==0){
-		// 	amrex::Print() << "Parameters of the cloud-wind problem: " << std::endl;
-		// 	amrex::Print() << "Twind: " << Twind << std::endl;
-		// 	amrex::Print() << "Tcloud: " << Tcloud << std::endl;
-		// 	amrex::Print() << "Mach: " << Mach << std::endl;
-		// 	amrex::Print() << "Wind velocity: " << vz << std::endl;
-		// 	amrex::Print() << "Sound speed in the wind: " << cs_wind << std::endl;
-		// }
+		if(i==0 & j==0 & k==0){
+			amrex::Print() << "Parameters of the cloud-wind problem: " << std::endl;
+			amrex::Print() << "Twind: " << Twind << std::endl;
+			amrex::Print() << "Tcloud: " << Tcloud << std::endl;
+			amrex::Print() << "Mach: " << Mach << std::endl;
+			amrex::Print() << "Wind velocity: " << vz << std::endl;
+			amrex::Print() << "Sound speed in the wind: " << cs_wind << std::endl;
+		}
 		/*-------------------------------------------------*/
 
 		for (int n = 0; n < state_cc.nComp(); ++n) {
 			state_cc(i, j, k, n) = 0.; // zero fill all components
 		}
-
+		if(i==127 & j==127 & k==127){
+			amrex::Print() << "Initial conditions at the center of the domain: " << std::endl;
+			amrex::Print() << "Density: " << rho << std::endl;
+			amrex::Print() << "Temperature: " << T << std::endl;
+			amrex::Print() << "Internal Energy: " << Eint << std::endl;
+		}
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index) = rho * vz;
-		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint;
+		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint + 0.5 * (rho * vz * vz);
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = Eint;
 	});
 }
@@ -214,24 +219,24 @@ auto problem_main() -> int
 	// boundary conditions
 	constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
 	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	// for (int n = 0; n < ncomp_cc; ++n) {
-	// 	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-	// 	BCs_cc[n].setLo(dir, amrex::BCType::foextrap);  
-	// 	BCs_cc[n].setHi(dir, amrex::BCType::foextrap); 
-	// 	}
-	// }
-    	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-			// diode boundary conditions
-			if (i == 2) {
-				BCs_cc[n].setLo(i, amrex::BCType::ext_dir);
-				BCs_cc[n].setHi(i, amrex::BCType::ext_dir);
-			} else {
-				BCs_cc[n].setLo(i, amrex::BCType::int_dir); // periodic
-				BCs_cc[n].setHi(i, amrex::BCType::int_dir); // periodic
-			}
+	for (int n = 0; n < ncomp_cc; ++n) {
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+		BCs_cc[n].setLo(dir, amrex::BCType::foextrap);  
+		BCs_cc[n].setHi(dir, amrex::BCType::foextrap); 
 		}
-	} 
+	}
+    	// for (int n = 0; n < ncomp_cc; ++n) {
+		// for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+		// 	// diode boundary conditions
+		// 	if (i == 2) {
+		// 		BCs_cc[n].setLo(i, amrex::BCType::foextrap);
+		// 		BCs_cc[n].setHi(i, amrex::BCType::foextrap);
+		// 	} else {
+		// 		BCs_cc[n].setLo(i, amrex::BCType::foextrap); // periodic
+		// 		BCs_cc[n].setHi(i, amrex::BCType::foextrap); // periodic
+		// 	}
+		// }
+	// } 
 	// Problem initialization
 	QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
 	
