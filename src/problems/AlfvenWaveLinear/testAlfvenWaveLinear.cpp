@@ -9,6 +9,7 @@
 #include <array>
 #include <cassert>
 #include <cmath>
+#include <limits>
 #include <gcem.hpp>
 
 #include "AMReX_Array.H"
@@ -143,11 +144,11 @@ AMREX_GPU_MANAGED std::array<amrex::Real, 3> outofplane_dir_prf{0.0, 0.0, 1.0}; 
 // wavefront
 AMREX_GPU_MANAGED double k_magn = 2.0 * M_PI; // NOLINT
 
-// resistive parameters for the Alfvén wave analytic solution:
-//   γ = ηk²/2,  ω_real = sqrt(ω₀² - γ²),  φ = arctan(γ/ω_real)
-AMREX_GPU_MANAGED double resistive_decay_rate = 0.0; // NOLINT: γ = ηk²/2
-AMREX_GPU_MANAGED double omega_real_alfven = 0.0;    // NOLINT: ω_real
-AMREX_GPU_MANAGED double resistive_phase_lag = 0.0;  // NOLINT: φ (velocity lags B)
+// resistive parameters for the Alfven wave analytic solution:
+//   gamma = eta*k^2/2,  omega_real = sqrt(omega_0^2 - gamma^2),  phi = arctan(gamma/omega_real)
+AMREX_GPU_MANAGED double resistive_decay_rate = 0.0; // NOLINT: gamma = eta*k^2/2
+AMREX_GPU_MANAGED double omega_real_alfven = 0.0;    // NOLINT: omega_real
+AMREX_GPU_MANAGED double resistive_phase_lag = 0.0;  // NOLINT: phi (velocity lags B)
 
 /// \brief Rotate a vector from PRF to MRF by multiplying with the rotation matrix R.
 /// \details Implements v_mrf = R * v_prf, where the rows of R are the
@@ -232,8 +233,8 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const amrex::Real x3_prf_C = x3_prf_L + static_cast<amrex::Real>(0.5) * dx[2];
 		const std::array<amrex::Real, 3> x_vec_mrf_C = rotatePRF2MRF({x1_prf_C, x2_prf_C, x3_prf_C});
 
-		// vec(k) dot vec(x) is rotation-invariant; B and u share the same envelope exp(-γt)
-		// but u lags B by the resistive phase φ = arctan(γ/ω_real)
+		// vec(k) dot vec(x) is rotation-invariant; B and u share the same envelope exp(-gamma*t)
+		// but u lags B by the resistive phase phi = arctan(gamma/omega_real)
 		const double cos_phase_b = std::cos(omega_real_alfven * time - k_magn * x_vec_mrf_C[0]);
 		const double cos_phase_u = std::cos(omega_real_alfven * time - k_magn * x_vec_mrf_C[0] - resistive_phase_lag);
 		const double decay = std::exp(-resistive_decay_rate * time);
@@ -402,15 +403,24 @@ auto problem_main() -> int
 	k_magn = computeMagnitude(k_vec_prf);
 	k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
 
-	// resistive Alfvén wave parameters (all zero when mhd.resistivity is absent)
+	// resistive Alfven wave parameters (all zero when mhd.resistivity is absent)
 	{
 		double eta = 0.0;
 		amrex::ParmParse const mhd_pp("mhd");
 		mhd_pp.query("resistivity", eta);
+		if (eta < 0.0) {
+			amrex::Abort("mhd.resistivity must be non-negative.");
+		}
 		const double omega0 = alfven_speed * k_magn * std::abs(std::cos(angle_between_k_b0_rad));
-		resistive_decay_rate = 0.5 * eta * k_magn * k_magn; // γ = ηk²/2
-		omega_real_alfven = std::sqrt(std::max(0.0, omega0 * omega0 - resistive_decay_rate * resistive_decay_rate));
-		resistive_phase_lag = std::atan2(resistive_decay_rate, omega_real_alfven); // φ = arctan(γ/ω_real)
+		resistive_decay_rate = 0.5 * eta * k_magn * k_magn; // gamma = eta*k^2/2
+		const double Rm = (resistive_decay_rate > 0.0) ? omega0 / resistive_decay_rate : std::numeric_limits<double>::infinity();
+		if (Rm < 1.0) {
+			amrex::Abort("Resistive Alfven wave is overdamped (Rm < 1); the sinusoidal initial condition is not a normal mode. Reduce eta or increase vA*|cos(theta)|/k.");
+		}
+		omega_real_alfven = std::sqrt(omega0 * omega0 - resistive_decay_rate * resistive_decay_rate);
+		resistive_phase_lag = std::atan2(resistive_decay_rate, omega_real_alfven); // phi = arctan(gamma/omega_real)
+		amrex::Print() << "Alfven wave (resistive): omega_0=" << omega0 << " gamma=" << resistive_decay_rate << " omega_real=" << omega_real_alfven
+			       << " Rm=" << Rm << " phi=" << resistive_phase_lag << " rad\n";
 	}
 
 	k_rotation_in_xy_rad = std::atan2(k_dir_prf[1], k_dir_prf[0]);
