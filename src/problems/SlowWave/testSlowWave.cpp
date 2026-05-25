@@ -87,7 +87,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE void normalizeVector(std::array<amrex::
 }
 
 // Set in problem_main from TOML, then used inside GPU kernels.
-AMREX_GPU_MANAGED double angle_between_k_b0_rad = 0.0;	  // NOLINT
+AMREX_GPU_MANAGED double angle_between_k_b0_rad = 0.0;				// NOLINT
 AMREX_GPU_MANAGED std::array<amrex::Real, 3> k_dir_prf{1.0, 0.0, 0.0};		// NOLINT
 AMREX_GPU_MANAGED std::array<amrex::Real, 3> inplane_dir_prf{0.0, 1.0, 0.0};	// NOLINT
 AMREX_GPU_MANAGED std::array<amrex::Real, 3> outofplane_dir_prf{0.0, 0.0, 1.0}; // NOLINT
@@ -132,8 +132,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	const double cos_th = std::cos(theta);
 	const double sin_th = std::sin(theta);
 
-	const double cs =
-	    std::sqrt(0.5 * (a * a + vA * vA - std::sqrt((a * a + vA * vA) * (a * a + vA * vA) - 4.0 * a * a * vA * vA * cos_th * cos_th)));
+	const double cs = std::sqrt(0.5 * (a * a + vA * vA - std::sqrt((a * a + vA * vA) * (a * a + vA * vA) - 4.0 * a * a * vA * vA * cos_th * cos_th)));
 
 	const double omega = cs * k_magn;
 	const double phase = omega * time - k_magn * x_vec_mrf[0];
@@ -199,8 +198,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const double omega = cs * k_magn;
 		const double phase = omega * time - k_magn * x_vec_mrf_C[0];
 		const double cos_phase = std::cos(phase);
-		double epsilon =
-		    (std::abs(sin_th) < tiny) ? 0.0 : (delta_b_magn / b0_magn * (cs * cs - vA * vA * cos_th * cos_th) / (cs * cs * sin_th));
+		double epsilon = (std::abs(sin_th) < tiny) ? 0.0 : (delta_b_magn / b0_magn * (cs * cs - vA * vA * cos_th * cos_th) / (cs * cs * sin_th));
 		const double B0_1 = b0_magn * cos_th;
 		const double B0_2 = b0_magn * sin_th;
 
