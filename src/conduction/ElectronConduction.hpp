@@ -107,9 +107,9 @@ template <typename problem_t> class ElectronConduction
 				cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, *tables_dev);
 			} else if (params.eos_flag == 1) {
 				const int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
-				quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {};
+				quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {};
 				if constexpr (nmscalars_ > 0) {
-					massScalars = HydroSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+					massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
 				}
 				Tgas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
 				amrex::Real Pgas = quokka::EOS<problem_t>::ComputePressure(rho, Eint, massScalars);
