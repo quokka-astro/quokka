@@ -106,9 +106,10 @@ template <typename problem_t> class ElectronConduction
 				Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, *tables_dev);
 				cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, *tables_dev);
 			} else if (params.eos_flag == 1) {
-				Tgas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint);
-				amrex::Real Pgas = quokka::EOS<problem_t>::ComputePressure(rho, Eint);
-				cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, Pgas);
+				quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars;
+				Tgas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
+				amrex::Real Pgas = quokka::EOS<problem_t>::ComputePressure(rho, Eint, massScalars);
+				cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, Pgas, massScalars);
 			}
 
 			const amrex::Real Tuse = amrex::max(Tgas, t_min);
