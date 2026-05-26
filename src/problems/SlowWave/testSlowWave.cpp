@@ -126,7 +126,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	const double cos_th = std::cos(angle_between_k_b0_rad);
 	const double sin_th = std::sin(angle_between_k_b0_rad);
 
-	const double cs = std::sqrt(0.5 * (sound_speed * sound_speed + alfven_speed * alfven_speed - std::sqrt((sound_speed * sound_speed + alfven_speed * alfven_speed) * (sound_speed * sound_speed + alfven_speed * alfven_speed) - 4.0 * sound_speed * sound_speed * alfven_speed * alfven_speed * cos_th * cos_th)));
+	const double cs =
+	    std::sqrt(0.5 * (sound_speed * sound_speed + alfven_speed * alfven_speed -
+			     std::sqrt((sound_speed * sound_speed + alfven_speed * alfven_speed) * (sound_speed * sound_speed + alfven_speed * alfven_speed) -
+				       4.0 * sound_speed * sound_speed * alfven_speed * alfven_speed * cos_th * cos_th)));
 
 	const double omega = cs * k_magn;
 	const double phase = omega * time - k_magn * x_vec_mrf[0];
@@ -180,13 +183,16 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const double cos_th = std::cos(angle_between_k_b0_rad);
 		const double sin_th = std::sin(angle_between_k_b0_rad);
 
-		const double cs =
-		    std::sqrt(0.5 * (sound_speed * sound_speed + alfven_speed * alfven_speed - std::sqrt((sound_speed * sound_speed + alfven_speed * alfven_speed) * (sound_speed * sound_speed + alfven_speed * alfven_speed) - 4.0 * sound_speed * sound_speed * alfven_speed * alfven_speed * cos_th * cos_th)));
+		const double cs = std::sqrt(
+		    0.5 * (sound_speed * sound_speed + alfven_speed * alfven_speed -
+			   std::sqrt((sound_speed * sound_speed + alfven_speed * alfven_speed) * (sound_speed * sound_speed + alfven_speed * alfven_speed) -
+				     4.0 * sound_speed * sound_speed * alfven_speed * alfven_speed * cos_th * cos_th)));
 
 		const double omega = cs * k_magn;
 		const double phase = omega * time - k_magn * x_vec_mrf_C[0];
 		const double cos_phase = std::cos(phase);
-		double epsilon = (std::abs(sin_th) < tiny) ? 0.0 : (delta_b_magn / b0_magn * (cs * cs - alfven_speed * alfven_speed * cos_th * cos_th) / (cs * cs * sin_th));
+		double epsilon =
+		    (std::abs(sin_th) < tiny) ? 0.0 : (delta_b_magn / b0_magn * (cs * cs - alfven_speed * alfven_speed * cos_th * cos_th) / (cs * cs * sin_th));
 		const double B0_1 = b0_magn * cos_th;
 		const double B0_2 = b0_magn * sin_th;
 
@@ -377,7 +383,11 @@ auto problem_main() -> int
 	normalizeVector(outofplane_dir_prf);
 
 	// Report slow-wave timing so a user can pick stop_time = integer * wave_period.
-	const double cs = std::sqrt(0.5 * (sound_speed * sound_speed + alfven_speed * alfven_speed - std::sqrt((sound_speed * sound_speed + alfven_speed * alfven_speed) * (sound_speed * sound_speed + alfven_speed * alfven_speed) - 4.0 * sound_speed * sound_speed * alfven_speed * alfven_speed * std::cos(angle_between_k_b0_rad) * std::cos(angle_between_k_b0_rad))));
+	const double cs = std::sqrt(
+	    0.5 *
+	    (sound_speed * sound_speed + alfven_speed * alfven_speed -
+	     std::sqrt((sound_speed * sound_speed + alfven_speed * alfven_speed) * (sound_speed * sound_speed + alfven_speed * alfven_speed) -
+		       4.0 * sound_speed * sound_speed * alfven_speed * alfven_speed * std::cos(angle_between_k_b0_rad) * std::cos(angle_between_k_b0_rad))));
 	const double wavelength = 2.0 * M_PI / k_magn;
 	const double wave_period = wavelength / cs;
 	amrex::Print() << std::string(70, '=') << "\n";
