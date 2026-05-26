@@ -86,7 +86,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE void normalizeVector(std::array<amrex::
 }
 
 // Set in problem_main from TOML, then used inside GPU kernels.
-AMREX_GPU_MANAGED double angle_between_k_b0_rad = 0.0;	  // NOLINT
+AMREX_GPU_MANAGED double angle_between_k_b0_rad = 0.0;				// NOLINT
 AMREX_GPU_MANAGED std::array<amrex::Real, 3> k_dir_prf{1.0, 0.0, 0.0};		// NOLINT
 AMREX_GPU_MANAGED std::array<amrex::Real, 3> inplane_dir_prf{0.0, 1.0, 0.0};	// NOLINT
 AMREX_GPU_MANAGED std::array<amrex::Real, 3> outofplane_dir_prf{0.0, 0.0, 1.0}; // NOLINT
@@ -116,21 +116,17 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	const std::array<amrex::Real, 3> x_vec_mrf = rotatePRF2MRF({x1_prf, x2_prf, x3_prf});
 	const double tiny = 1e-16;
 
-	const double theta = angle_between_k_b0_rad;
-	const double B0_1 = b0_magn * std::cos(theta);
-	const double B0_2 = b0_magn * std::sin(theta);
+	const double B0_1 = b0_magn * std::cos(angle_between_k_b0_rad);
+	const double B0_2 = b0_magn * std::sin(angle_between_k_b0_rad);
 
 	const double bg_A1 = 0.0;
 	const double bg_A2 = 0.0;
 	const double bg_A3 = -B0_2 * x_vec_mrf[0] + B0_1 * x_vec_mrf[1];
 
-	const double a = sound_speed;
-	const double vA = alfven_speed;
-	const double cos_th = std::cos(theta);
-	const double sin_th = std::sin(theta);
+	const double cos_th = std::cos(angle_between_k_b0_rad);
+	const double sin_th = std::sin(angle_between_k_b0_rad);
 
-	const double cs =
-	    std::sqrt(0.5 * (a * a + vA * vA - std::sqrt((a * a + vA * vA) * (a * a + vA * vA) - 4.0 * a * a * vA * vA * cos_th * cos_th)));
+	const double cs = std::sqrt(0.5 * (sound_speed * sound_speed + alfven_speed * alfven_speed - std::sqrt((sound_speed * sound_speed + alfven_speed * alfven_speed) * (sound_speed * sound_speed + alfven_speed * alfven_speed) - 4.0 * sound_speed * sound_speed * alfven_speed * alfven_speed * cos_th * cos_th)));
 
 	const double omega = cs * k_magn;
 	const double phase = omega * time - k_magn * x_vec_mrf[0];
@@ -142,8 +138,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 		// theta = 0 or 90 deg: no transverse B perturbation.
 		delta_A3 = 0.0;
 	} else {
-		const double dB2_mrf = delta_b_magn;
-		delta_A3 = (dB2_mrf / k_magn) * std::sin(phase);
+		delta_A3 = (delta_b_magn / k_magn) * std::sin(phase);
 	}
 	const double A1_mrf = bg_A1 + delta_A1;
 	const double A2_mrf = bg_A2 + delta_A2;
@@ -182,20 +177,16 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const amrex::Real x3_prf_C = x3_prf_L + static_cast<amrex::Real>(0.5) * dx[2];
 		const std::array<amrex::Real, 3> x_vec_mrf_C = rotatePRF2MRF({x1_prf_C, x2_prf_C, x3_prf_C});
 
-		const double a = sound_speed;
-		const double vA = alfven_speed;
-		const double theta = angle_between_k_b0_rad;
-		const double cos_th = std::cos(theta);
-		const double sin_th = std::sin(theta);
+		const double cos_th = std::cos(angle_between_k_b0_rad);
+		const double sin_th = std::sin(angle_between_k_b0_rad);
 
 		const double cs =
-		    std::sqrt(0.5 * (a * a + vA * vA - std::sqrt((a * a + vA * vA) * (a * a + vA * vA) - 4.0 * a * a * vA * vA * cos_th * cos_th)));
+		    std::sqrt(0.5 * (sound_speed * sound_speed + alfven_speed * alfven_speed - std::sqrt((sound_speed * sound_speed + alfven_speed * alfven_speed) * (sound_speed * sound_speed + alfven_speed * alfven_speed) - 4.0 * sound_speed * sound_speed * alfven_speed * alfven_speed * cos_th * cos_th)));
 
 		const double omega = cs * k_magn;
 		const double phase = omega * time - k_magn * x_vec_mrf_C[0];
 		const double cos_phase = std::cos(phase);
-		double epsilon =
-		    (std::abs(sin_th) < tiny) ? 0.0 : (delta_b_magn / b0_magn * (cs * cs - vA * vA * cos_th * cos_th) / (cs * cs * sin_th));
+		double epsilon = (std::abs(sin_th) < tiny) ? 0.0 : (delta_b_magn / b0_magn * (cs * cs - alfven_speed * alfven_speed * cos_th * cos_th) / (cs * cs * sin_th));
 		const double B0_1 = b0_magn * cos_th;
 		const double B0_2 = b0_magn * sin_th;
 
@@ -218,7 +209,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		} else {
 			delta_B2 = delta_b_magn * cos_phase;
 			v1_mrf = -epsilon * cs * cos_phase;
-			v2_mrf = delta_b_magn / b0_magn * vA * vA * cos_th / cs * cos_phase;
+			v2_mrf = delta_b_magn / b0_magn * alfven_speed * alfven_speed * cos_th / cs * cos_phase;
 		}
 
 		double const v3_mrf = 0.0;
@@ -386,10 +377,7 @@ auto problem_main() -> int
 	normalizeVector(outofplane_dir_prf);
 
 	// Report slow-wave timing so a user can pick stop_time = integer * wave_period.
-	const double a = sound_speed;
-	const double vA = alfven_speed;
-	const double cos_th = std::cos(angle_between_k_b0_rad);
-	const double cs = std::sqrt(0.5 * (a * a + vA * vA - std::sqrt((a * a + vA * vA) * (a * a + vA * vA) - 4.0 * a * a * vA * vA * cos_th * cos_th)));
+	const double cs = std::sqrt(0.5 * (sound_speed * sound_speed + alfven_speed * alfven_speed - std::sqrt((sound_speed * sound_speed + alfven_speed * alfven_speed) * (sound_speed * sound_speed + alfven_speed * alfven_speed) - 4.0 * sound_speed * sound_speed * alfven_speed * alfven_speed * std::cos(angle_between_k_b0_rad) * std::cos(angle_between_k_b0_rad))));
 	const double wavelength = 2.0 * M_PI / k_magn;
 	const double wave_period = wavelength / cs;
 	amrex::Print() << std::string(70, '=') << "\n";
