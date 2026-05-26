@@ -1065,12 +1065,13 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 			}
 			fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 			const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_,
-												.flux_limiter_phi = electronConductionFluxLimiterPhi_,
-												.saturation_factor = electronConductionSaturationFactor_,
-												.min_temperature = tempFloor_,
-												.eos_flag = eosFlagForElectronConduction_};
+											     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
+											     .saturation_factor = electronConductionSaturationFactor_,
+											     .min_temperature = tempFloor_,
+											     .eos_flag = eosFlagForElectronConduction_};
 			quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, resampledTables_);
-	}};
+		}
+	};
 
 	auto const applyUserSources = [&]() {
 		// compute user-specified sources
