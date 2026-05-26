@@ -123,13 +123,13 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	const double bg_A2 = 0.0;
 	const double bg_A3 = -B0_2 * x_vec_mrf[0] + B0_1 * x_vec_mrf[1];
 
-	const double cos_th = std::cos(angle_between_k_b0_rad);
-	const double sin_th = std::sin(angle_between_k_b0_rad);
+	const double cos_angle = std::cos(angle_between_k_b0_rad);
+	const double sin_angle = std::sin(angle_between_k_b0_rad);
 
 	const double cs =
 	    std::sqrt(0.5 * (sound_speed * sound_speed + alfven_speed * alfven_speed -
 			     std::sqrt((sound_speed * sound_speed + alfven_speed * alfven_speed) * (sound_speed * sound_speed + alfven_speed * alfven_speed) -
-				       4.0 * sound_speed * sound_speed * alfven_speed * alfven_speed * cos_th * cos_th)));
+				       4.0 * sound_speed * sound_speed * alfven_speed * alfven_speed * cos_angle * cos_angle)));
 
 	const double omega = cs * k_magn;
 	const double phase = omega * time - k_magn * x_vec_mrf[0];
@@ -137,7 +137,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	const double delta_A2 = 0.0;
 	double delta_A3 = 0.0;
 
-	if (std::abs(sin_th) < tiny || std::abs(cos_th) < tiny) {
+	if (std::abs(sin_angle) < tiny || std::abs(cos_angle) < tiny) {
 		// theta = 0 or 90 deg: no transverse B perturbation.
 		delta_A3 = 0.0;
 	} else {
@@ -180,32 +180,32 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const amrex::Real x3_prf_C = x3_prf_L + static_cast<amrex::Real>(0.5) * dx[2];
 		const std::array<amrex::Real, 3> x_vec_mrf_C = rotatePRF2MRF({x1_prf_C, x2_prf_C, x3_prf_C});
 
-		const double cos_th = std::cos(angle_between_k_b0_rad);
-		const double sin_th = std::sin(angle_between_k_b0_rad);
+		const double cos_angle = std::cos(angle_between_k_b0_rad);
+		const double sin_angle = std::sin(angle_between_k_b0_rad);
 
 		const double cs = std::sqrt(
 		    0.5 * (sound_speed * sound_speed + alfven_speed * alfven_speed -
 			   std::sqrt((sound_speed * sound_speed + alfven_speed * alfven_speed) * (sound_speed * sound_speed + alfven_speed * alfven_speed) -
-				     4.0 * sound_speed * sound_speed * alfven_speed * alfven_speed * cos_th * cos_th)));
+				     4.0 * sound_speed * sound_speed * alfven_speed * alfven_speed * cos_angle * cos_angle)));
 
 		const double omega = cs * k_magn;
 		const double phase = omega * time - k_magn * x_vec_mrf_C[0];
 		const double cos_phase = std::cos(phase);
 		double epsilon =
-		    (std::abs(sin_th) < tiny) ? 0.0 : (delta_b_magn / b0_magn * (cs * cs - alfven_speed * alfven_speed * cos_th * cos_th) / (cs * cs * sin_th));
-		const double B0_1 = b0_magn * cos_th;
-		const double B0_2 = b0_magn * sin_th;
+		    (std::abs(sin_angle) < tiny) ? 0.0 : (delta_b_magn / b0_magn * (cs * cs - alfven_speed * alfven_speed * cos_angle * cos_angle) / (cs * cs * sin_angle));
+		const double B0_1 = b0_magn * cos_angle;
+		const double B0_2 = b0_magn * sin_angle;
 
 		double v1_mrf = 0.0;
 		double v2_mrf = 0.0;
 		double delta_B2 = 0.0;
 
-		if (std::abs(sin_th) < tiny) {
+		if (std::abs(sin_angle) < tiny) {
 			// theta = 0 deg: slow mode reduces to a pure sound wave.
 			v1_mrf = -delta_b_magn / b0_magn * cs * cos_phase;
 			v2_mrf = 0.0;
 			delta_B2 = 0.0;
-		} else if (std::abs(cos_th) < tiny) {
+		} else if (std::abs(cos_angle) < tiny) {
 			// theta = 90 deg: c_s = 0; mode becomes a static pressure-balanced
 			// structure with no perturbation.
 			v1_mrf = 0.0;
@@ -215,7 +215,7 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		} else {
 			delta_B2 = delta_b_magn * cos_phase;
 			v1_mrf = -epsilon * cs * cos_phase;
-			v2_mrf = delta_b_magn / b0_magn * alfven_speed * alfven_speed * cos_th / cs * cos_phase;
+			v2_mrf = delta_b_magn / b0_magn * alfven_speed * alfven_speed * cos_angle / cs * cos_phase;
 		}
 
 		double const v3_mrf = 0.0;
