@@ -13,16 +13,11 @@ jobs:
   local-claude-review:
     if: >
       github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/local-review')
+      startsWith(github.event.comment.body, '/local-review') &&
+      contains(fromJSON('["BenWibking", "chongchonghe", "markkrumholz"]'), github.event.comment.user.login)
     runs-on: [self-hosted, local-desktop]
 
     steps:
-      - name: Checkout PR
-        uses: actions/checkout@v4
-        with:
-          ref: refs/pull/${{ github.event.issue.number }}/head
-          fetch-depth: 0
-
       - name: Ask Claude Code to review PR
         run: |
           mkdir -p tests
