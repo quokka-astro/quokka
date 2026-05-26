@@ -22,3 +22,6 @@ suppress_output = 0
 
 max_timesteps = 10000000
 stop_time = 0.05
+
+dust.grain_radius = [0.02, 0.01]
+dust.grain_density = [1.0, 1.0]

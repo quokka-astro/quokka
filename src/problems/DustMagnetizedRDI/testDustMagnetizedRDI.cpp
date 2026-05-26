@@ -7,6 +7,7 @@
 #include "AMReX_Reduce.H"
 #include "AMReX_Vector.H"
 #include "QuokkaSimulation.hpp"
+#include "dust/DustRuntimeParams.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -34,12 +35,12 @@ constexpr double dust_density_floor = 1.0e-12;
 constexpr double supersonic_eta = 9.0 * pi * gamma_iso / 128.0;
 constexpr double time_tolerance = 1.0e-10;
 constexpr double bar_a = 5.0;
-constexpr double epsilon_param = 5.0;
+constexpr double grain_radius_density_param = 5.0;
 constexpr double xi_param = 10.0;
 constexpr double mu_param = 0.01;
 constexpr double beta_param = 2.0;
 constexpr double theta_Ba_deg = 87.0;
-constexpr double grain_density_param = 1.0;
+constexpr double grain_density0 = 1.0;
 constexpr double noise_amplitude_param = 1.0e-7;
 
 constexpr std::array<char const *, 3> snapshot_tags = {"t6p2ts0", "t8p3ts0", "t17p0ts0"};
@@ -55,19 +56,19 @@ std::array<double, 3> g_snapshot_times_over_ts0 = snapshot_times_over_ts0_defaul
 std::array<double, 3> g_snapshot_target_times = {0.0, 0.0, 0.0};		   // NOLINT
 double g_equilibrium_ts = 0.0;							   // NOLINT
 
-AMREX_GPU_MANAGED double g_grain_radius = epsilon_param / grain_density_param; // NOLINT
-AMREX_GPU_MANAGED double g_grain_density = grain_density_param;		       // NOLINT
-AMREX_GPU_MANAGED double g_charge_to_mass = xi_param;			       // NOLINT
-AMREX_GPU_MANAGED double g_noise_amplitude = noise_amplitude_param;	       // NOLINT
-AMREX_GPU_MANAGED double g_Bx0 = 0.0;					       // NOLINT
-AMREX_GPU_MANAGED double g_By0 = 0.0;					       // NOLINT
-AMREX_GPU_MANAGED double g_Bz0 = 1.0;					       // NOLINT
-AMREX_GPU_MANAGED double g_gas_vx0 = 0.0;				       // NOLINT
-AMREX_GPU_MANAGED double g_gas_vy0 = 0.0;				       // NOLINT
-AMREX_GPU_MANAGED double g_gas_vz0 = 0.0;				       // NOLINT
-AMREX_GPU_MANAGED double g_dust_vx0 = 0.0;				       // NOLINT
-AMREX_GPU_MANAGED double g_dust_vy0 = 0.0;				       // NOLINT
-AMREX_GPU_MANAGED double g_dust_vz0 = 0.0;				       // NOLINT
+AMREX_GPU_MANAGED double g_grain_radius = grain_radius_density_param / grain_density0; // NOLINT
+AMREX_GPU_MANAGED double g_grain_density = grain_density0;			       // NOLINT
+AMREX_GPU_MANAGED double g_charge_to_mass = xi_param;				       // NOLINT
+AMREX_GPU_MANAGED double g_noise_amplitude = noise_amplitude_param;		       // NOLINT
+AMREX_GPU_MANAGED double g_Bx0 = 0.0;						       // NOLINT
+AMREX_GPU_MANAGED double g_By0 = 0.0;						       // NOLINT
+AMREX_GPU_MANAGED double g_Bz0 = 1.0;						       // NOLINT
+AMREX_GPU_MANAGED double g_gas_vx0 = 0.0;					       // NOLINT
+AMREX_GPU_MANAGED double g_gas_vy0 = 0.0;					       // NOLINT
+AMREX_GPU_MANAGED double g_gas_vz0 = 0.0;					       // NOLINT
+AMREX_GPU_MANAGED double g_dust_vx0 = 0.0;					       // NOLINT
+AMREX_GPU_MANAGED double g_dust_vy0 = 0.0;					       // NOLINT
+AMREX_GPU_MANAGED double g_dust_vz0 = 0.0;					       // NOLINT
 
 struct EquilibriumState {
 	Vec3 drift_{};
@@ -164,9 +165,11 @@ auto makeBackgroundMagneticField(double beta, double theta_Ba_deg) -> Vec3
 	return {Bmag * std::cos(theta), 0.0, Bmag * std::sin(theta)};
 }
 
-auto computeSubsonicStoppingTime(double epsilon_param) -> double
+auto grainRadiusDensityProduct() -> double { return g_grain_radius * g_grain_density; }
+
+auto computeSubsonicStoppingTime() -> double
 {
-	return std::sqrt(pi * gamma_iso) * epsilon_param / (2.0 * std::numbers::sqrt2 * rho_gas0 * sound_speed);
+	return std::sqrt(pi * gamma_iso) * grainRadiusDensityProduct() / (2.0 * std::numbers::sqrt2 * rho_gas0 * sound_speed);
 }
 
 auto solveDriftEquilibrium() -> EquilibriumState
@@ -178,7 +181,7 @@ auto solveDriftEquilibrium() -> EquilibriumState
 
 	Vec3 const acceleration = {bar_a, 0.0, 0.0};
 	Vec3 const b_hat = result.magnetic_field_ / magnetic_field_norm;
-	double const ts_sub = computeSubsonicStoppingTime(epsilon_param);
+	double const ts_sub = computeSubsonicStoppingTime();
 	double const omega_L = xi_param * magnetic_field_norm;
 
 	Vec3 drift = {(ts_sub / (1.0 + mu_param)) * bar_a, 0.0, 0.0};
@@ -211,6 +214,12 @@ auto solveDriftEquilibrium() -> EquilibriumState
 
 void loadProblemParameters()
 {
+	amrex::GpuArray<amrex::Real, 1> grain_radius = {g_grain_radius};
+	amrex::GpuArray<amrex::Real, 1> grain_density = {g_grain_density};
+	quokka::dust::readDustGrainParams(grain_radius, grain_density);
+	g_grain_radius = grain_radius[0];
+	g_grain_density = grain_density[0];
+
 	amrex::ParmParse const pp("problem");
 	pp.query("write_csv", g_write_csv);
 	pp.query("history_dt_over_ts0", g_history_dt_over_ts0);
@@ -406,12 +415,13 @@ void writeSummaryCsv(EquilibriumState const &equilibrium, DustMagnetizedRDIHisto
 	std::ofstream file("dust_magnetized_rdi_summary.csv");
 	file << "key,value\n";
 	file << "bar_a," << bar_a << "\n";
-	file << "epsilon," << epsilon_param << "\n";
+	file << "epsilon," << grainRadiusDensityProduct() << "\n";
 	file << "xi," << xi_param << "\n";
 	file << "mu," << mu_param << "\n";
 	file << "beta," << beta_param << "\n";
 	file << "theta_Ba_deg," << theta_Ba_deg << "\n";
-	file << "grain_density," << grain_density_param << "\n";
+	file << "grain_radius," << g_grain_radius << "\n";
+	file << "grain_density," << g_grain_density << "\n";
 	file << "noise_amplitude," << noise_amplitude_param << "\n";
 	file << "equilibrium_stop_time," << equilibrium.stop_time_ << "\n";
 	file << "equilibrium_tau," << equilibrium.tau_ << "\n";
@@ -797,7 +807,9 @@ auto problem_main() -> int
 
 	amrex::Print() << "DustMagnetizedRDI setup:\n";
 	amrex::Print() << std::format("  bar_a              = {:.6f}\n", bar_a);
-	amrex::Print() << std::format("  epsilon            = {:.6f}\n", epsilon_param);
+	amrex::Print() << std::format("  grain radius       = {:.6f}\n", g_grain_radius);
+	amrex::Print() << std::format("  grain density      = {:.6f}\n", g_grain_density);
+	amrex::Print() << std::format("  a * rho_gr         = {:.6f}\n", grainRadiusDensityProduct());
 	amrex::Print() << std::format("  xi                 = {:.6f}\n", xi_param);
 	amrex::Print() << std::format("  mu                 = {:.6f}\n", mu_param);
 	amrex::Print() << std::format("  beta               = {:.6f}\n", beta_param);

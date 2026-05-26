@@ -3,6 +3,7 @@
 ///
 
 #include "QuokkaSimulation.hpp"
+#include "dust/DustRuntimeParams.hpp"
 #include "util/fextract.hpp"
 #include <algorithm>
 #include <cmath>
@@ -20,12 +21,14 @@ constexpr double epsilon = 1.0;
 constexpr double rho_dust = epsilon * rho_gas;
 constexpr double sound_speed = 1.0;
 constexpr double initial_drift = 10.0 * sound_speed;
-constexpr double alpha0 = 1.0;
 constexpr double gamma_iso = 1.0;
 constexpr double eta = 9.0 * std::numbers::pi * gamma_iso / 128.0;
-constexpr double dust_grain_density = 1.0;
-constexpr double dust_grain_radius = 1.5957691216057308; // sqrt(8 / pi) gives alpha0 = 1 for gamma = rho_g = c_s = rho_gr = 1.
+constexpr double default_grain_density = 1.0;
+constexpr double default_grain_radius = 1.5957691216057308; // sqrt(8 / pi) gives alpha0 = 1 for gamma = rho_g = c_s = rho_gr = 1.
 constexpr double charge_to_mass_ratio = 1.0;
+
+AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 1> g_dust_grain_radius = {default_grain_radius};	  // NOLINT
+AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 1> g_dust_grain_density = {default_grain_density}; // NOLINT
 
 constexpr double gas_velocity_x0 = -epsilon * initial_drift / (1.0 + epsilon);
 constexpr double dust_velocity_x0 = initial_drift / (1.0 + epsilon);
@@ -44,6 +47,12 @@ struct DustGyroHistory {
 	std::vector<double> center_momentum_y_vec_;
 	std::vector<double> center_momentum_z_vec_;
 };
+
+auto computeInitialReciprocalStoppingTime() -> double
+{
+	return (2.0 * std::numbers::sqrt2 * rho_gas * sound_speed) /
+	       (std::sqrt(std::numbers::pi * gamma_iso) * g_dust_grain_radius[0] * g_dust_grain_density[0]);
+}
 } // namespace
 
 struct DustGyroEpsteinNoB {
@@ -139,9 +148,8 @@ AMREX_GPU_HOST_DEVICE auto computeDustGyroReciprocalStoppingTime(amrex::Real rho
 								 amrex::GpuArray<amrex::Real, 1> rel_vel_mag, double cs) -> amrex::GpuArray<amrex::Real, 1>
 {
 	if constexpr (GyroCaseParams<problem_t>::enable_epstein_drag) {
-		amrex::GpuArray<amrex::Real, 1> const grain_radius = {dust_grain_radius};
-		amrex::GpuArray<amrex::Real, 1> const grain_density = {dust_grain_density};
-		return DustSources<problem_t>::ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, grain_radius, grain_density, true);
+		return DustSources<problem_t>::ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, g_dust_grain_radius, g_dust_grain_density,
+										 true);
 	} else {
 		amrex::GpuArray<amrex::Real, 1> alpha{};
 		alpha.fill(0.0);
@@ -348,6 +356,7 @@ template <typename problem_t> auto runDustGyroSimulation() -> SimulationData<pro
 auto analyticEpsteinDrift(double t, double omega_L) -> DriftState
 {
 	const double drift_factor = std::sqrt(1.0 + eta * initial_drift * initial_drift / (sound_speed * sound_speed));
+	const double alpha0 = computeInitialReciprocalStoppingTime();
 	const double tau = (1.0 + epsilon) * alpha0 * t;
 	const double numerator = std::sinh(tau) + drift_factor * std::cosh(tau);
 	const double denominator = std::cosh(tau) + drift_factor * std::sinh(tau);
@@ -447,6 +456,8 @@ void plotDriftX(const DustGyroHistory &data, AnalyticFn analytic, const std::str
 
 auto problem_main() -> int
 {
+	quokka::dust::readDustGrainParams(g_dust_grain_radius, g_dust_grain_density);
+
 	auto epstein_no_b = runDustGyroSimulation<DustGyroEpsteinNoB>();
 	auto gyro_no_drag = runDustGyroSimulation<DustGyroNoDrag>();
 	auto epstein_with_b = runDustGyroSimulation<DustGyroEpsteinWithB>();
@@ -484,6 +495,7 @@ auto problem_main() -> int
 		}
 
 #ifdef HAVE_PYTHON
+		const double alpha0 = computeInitialReciprocalStoppingTime();
 		plotDriftX(epstein_no_b, epstein_no_b_exact, "./dust_gyromotion_PureDamping.pdf", "Pure Damping", alpha0, R"($t/t_{s,0}$)");
 		plotDriftX(gyro_no_drag, gyro_no_drag_exact, "./dust_gyromotion_UndampedGyromotion.pdf", "Undamped Gyromotion",
 			   GyroCaseParams<DustGyroNoDrag>::omega_L, R"($\omega_L t$)");
