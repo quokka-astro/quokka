@@ -1058,25 +1058,26 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 		}
 	};
 
-	if (enableElectronConduction_ == 1) {
-		if (max_level > 0) {
-			amrex::Abort("Electron conduction not implemented for > 0 levels.");
-		}
-		fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
-		const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_,
-										     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
-										     .saturation_factor = electronConductionSaturationFactor_,
-										     .min_temperature = tempFloor_,
-										     .eos_flag = eosFlagForElectronConduction_};
-		quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, resampledTables_);
-	}
+	auto const applyConduction = [&]() {
+		if (enableElectronConduction_ == 1) {
+			if (max_level > 0) {
+				amrex::Abort("Electron conduction not implemented for > 0 levels.");
+			}
+			fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
+			const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_,
+												.flux_limiter_phi = electronConductionFluxLimiterPhi_,
+												.saturation_factor = electronConductionSaturationFactor_,
+												.min_temperature = tempFloor_,
+												.eos_flag = eosFlagForElectronConduction_};
+			quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, resampledTables_);
+	}};
 
 	auto const applyUserSources = [&]() {
 		// compute user-specified sources
 		addStrangSplitSources(state, lev, time, dt);
 	};
 
-	callInOrder<Order>(applyDust, applyCooling, applyChemistry, applyTurbulence, applyUserSources);
+	callInOrder<Order>(applyDust, applyCooling, applyChemistry, applyTurbulence, applyConduction, applyUserSources);
 
 	return (burn_success && cool_success);
 }
