@@ -1,0 +1,40 @@
+name: Local Claude Review
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  local-claude-review:
+    if: >
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/local-review')
+    runs-on: [self-hosted, local-desktop]
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+          fetch-depth: 0
+
+      - name: Ask Claude Code to review PR
+        run: |
+          mkdir -p tests
+          claude -p "/quokka review PR ${{ github.event.issue.number }}"
+
+      - name: Publish Claude review
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ ! -s tests/review.md ]; then
+            echo "Claude did not produce tests/review.md" > tests/review.md
+          fi
+
+          gh pr comment ${{ github.event.issue.number }} \
+            --body-file tests/review.md
