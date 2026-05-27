@@ -15,6 +15,7 @@
 #include "AMReX_ParticleMesh.H"
 #include "AMReX_REAL.H"
 #include "hydro/hydro_system.hpp"
+#include "math/quadrature.hpp"
 #include "particles/particle_types.hpp"
 #include "particles/particle_utils.hpp"
 
@@ -49,6 +50,106 @@ struct NearestEight : public Base<NearestEight, amrex::Real> {
 		}
 	}
 };
+
+/** \brief SPH-like particle/mesh interpolator using the Wendland C2 kernel.
+ *
+ *  Template parameter N controls the support radius: the kernel is non-zero only
+ *  within a sphere of radius N*dx centred on the particle.  The stencil bounding
+ *  box is (2N+1)^3 cells; cells outside the sphere receive zero weight.
+ *  Requires N+1 ghost cells; N is capped at 7 (hard limit of 8 ghost cells).
+ *
+ *  The kernel weight at distance r (in units of dx) is
+ *      kernel_wendland_c2(r / N)   for r <= N
+ *      0                           for r >  N
+ *  and weights are re-normalised over the discrete stencil so their sum equals 1,
+ *  ensuring strict energy conservation.
+ *
+ *  Does NOT inherit from amrex::ParticleInterpolator::Base — the spherical cutoff
+ *  breaks the separability assumed by Base::ParticleToMesh.
+ */
+template <int N = 2> struct WendlandC2 {
+	static_assert(N >= 1 && N <= 7, "N must be between 1 and 7 (ghost-cell limit is 8)");
+	static constexpr int stencil_width = 2 * N + 1;
+	static constexpr amrex::Real cutoff_r2 = static_cast<amrex::Real>(N * N); // spherical cutoff radius squared
+
+	int index[3]{};		// NOLINT lower-left corner of stencil box
+	amrex::Real frac[3]{};	// NOLINT fractional cell position per dimension
+	amrex::Real inv_norm{}; // NOLINT 1 / (sum of weights within sphere)
+
+	template <typename P>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE WendlandC2(const P &p, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo, // NOLINT
+						       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi)
+	{
+		// frac[i] is the fractional position of the particle within its containing cell,
+		// in [0, 1). The stencil spans index[i] .. index[i]+stencil_width-1, centred on
+		// the containing cell. Signed distance from particle to stencil cell ii is
+		//   (ii - N) + 0.5 - frac[i]
+		// which is exactly 0 at ii=N when the particle is at the cell centre (frac=0.5).
+		for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+			const amrex::Real pos_in_cells = (p.pos(i) - plo[i]) * dxi[i];
+			const auto cell = static_cast<int>(amrex::Math::floor(pos_in_cells));
+			index[i] = cell - N;
+			frac[i] = pos_in_cells - static_cast<amrex::Real>(cell);
+		}
+		for (int i = AMREX_SPACEDIM; i < 3; ++i) {
+			index[i] = 0;
+			frac[i] = 0.0;
+		}
+
+		// Compute normalization: sum of Wendland C2 weights within the sphere
+		const amrex::Real inv_N = 1.0 / static_cast<amrex::Real>(N);
+		amrex::Real norm_sum = 0.0;
+		const int nz_loop = (AMREX_SPACEDIM >= 3) ? stencil_width : 1; // NOLINT(misc-redundant-expression)
+		const int ny_loop = (AMREX_SPACEDIM >= 2) ? stencil_width : 1; // NOLINT(misc-redundant-expression)
+		for (int kk = 0; kk < nz_loop; ++kk) {
+			const amrex::Real dz =
+			    (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(kk - N) + 0.5 - frac[2] : 0.0; // NOLINT(misc-redundant-expression)
+			for (int jj = 0; jj < ny_loop; ++jj) {
+				const amrex::Real dy =
+				    (AMREX_SPACEDIM >= 2) ? static_cast<amrex::Real>(jj - N) + 0.5 - frac[1] : 0.0; // NOLINT(misc-redundant-expression)
+				for (int ii = 0; ii < stencil_width; ++ii) {
+					const amrex::Real dx = static_cast<amrex::Real>(ii - N) + 0.5 - frac[0];
+					const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
+					if (r2 <= cutoff_r2) {
+						norm_sum += kernel_wendland_c2(std::sqrt(r2) * inv_N);
+					}
+				}
+			}
+		}
+		inv_norm = 1.0 / norm_sum;
+	}
+
+	/// Deposit particle data onto the mesh using the Wendland C2 kernel.
+	/// Same interface as amrex::ParticleInterpolator::Base::ParticleToMesh.
+	template <typename P, typename V, typename F>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void ParticleToMesh(const P &p, amrex::Array4<V> const &arr, int src_comp, int dst_comp, int num_comps, F const &f)
+	{
+		const amrex::Real inv_N = 1.0 / static_cast<amrex::Real>(N);
+		const int nz_loop = (AMREX_SPACEDIM >= 3) ? stencil_width : 1; // NOLINT(misc-redundant-expression)
+		const int ny_loop = (AMREX_SPACEDIM >= 2) ? stencil_width : 1; // NOLINT(misc-redundant-expression)
+
+		for (int ic = 0; ic < num_comps; ++ic) {
+			const auto pval = f(p, src_comp + ic);
+			for (int kk = 0; kk < nz_loop; ++kk) {
+				const amrex::Real dz =
+				    (AMREX_SPACEDIM >= 3) ? static_cast<amrex::Real>(kk - N) + 0.5 - frac[2] : 0.0; // NOLINT(misc-redundant-expression)
+				for (int jj = 0; jj < ny_loop; ++jj) {
+					const amrex::Real dy =
+					    (AMREX_SPACEDIM >= 2) ? static_cast<amrex::Real>(jj - N) + 0.5 - frac[1] : 0.0; // NOLINT(misc-redundant-expression)
+					for (int ii = 0; ii < stencil_width; ++ii) {
+						const amrex::Real dx = static_cast<amrex::Real>(ii - N) + 0.5 - frac[0];
+						const amrex::Real r2 = AMREX_D_TERM(dx * dx, +dy * dy, +dz * dz);
+						if (r2 <= cutoff_r2) {
+							const amrex::Real wt = kernel_wendland_c2(std::sqrt(r2) * inv_N) * inv_norm;
+							amrex::Gpu::Atomic::AddNoRet(&arr(index[0] + ii, index[1] + jj, index[2] + kk, ic + dst_comp),
+										     static_cast<V>(wt * pval));
+						}
+					}
+				}
+			}
+		}
+	}
+};
 } // namespace amrex::ParticleInterpolator
 
 namespace quokka
@@ -70,13 +171,13 @@ struct RadDeposition {
 	int num_comp{};	       // Number of components to deposit
 	int birthTimeIndex{};  // Index for particle birth time
 
-	// Operator to perform radiation deposition using linear interpolation
+	// Operator to perform radiation deposition using Wendland C2 SPH kernel interpolation
 	template <typename ContainerType>
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE void operator()(const ContainerType &p, amrex::Array4<amrex::Real> const &radEnergySource,
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &plo,
 							    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dxi) const noexcept
 	{
-		amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
+		amrex::ParticleInterpolator::WendlandC2<> interp(p, plo, dxi);
 		const auto currentTime = current_time;
 		const auto birthIndex = birthTimeIndex;
 		// Deposit radiation energy only if particle is active

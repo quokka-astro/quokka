@@ -130,7 +130,7 @@ void DiagPDF::writePDFToFile(int a_nstep, const amrex::Real &a_time, const amrex
 	if (m_per > 0.0) {
 		diagfile = m_diagfile + std::to_string(a_time);
 	} else {
-		diagfile = amrex::Concatenate(m_diagfile, a_nstep, 6);
+		diagfile = amrex::Concatenate(m_diagfile, a_nstep, 7);
 	}
 	diagfile = diagfile + ".dat";
 
