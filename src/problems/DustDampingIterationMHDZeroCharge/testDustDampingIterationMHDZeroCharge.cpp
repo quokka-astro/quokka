@@ -3,6 +3,7 @@
 ///
 
 #include "QuokkaSimulation.hpp"
+#include "dust/DustRuntimeParams.hpp"
 #include "util/fextract.hpp"
 #include <algorithm>
 #include <cmath>
@@ -25,8 +26,8 @@ constexpr double B_Y = 0.4;
 constexpr double B_Z = 0.5;
 constexpr double MAGNETIC_ENERGY = 0.5 * (B_X * B_X + B_Y * B_Y + B_Z * B_Z);
 
-constexpr amrex::GpuArray<amrex::Real, 2> dust_grain_radius = {0.02, 0.01};
-constexpr amrex::GpuArray<amrex::Real, 2> dust_grain_density = {1.0, 1.0};
+AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 2> g_dust_grain_radius = {0.02, 0.01}; // NOLINT
+AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 2> g_dust_grain_density = {1.0, 1.0};  // NOLINT
 constexpr bool enable_supersonic_correction = true;
 } // namespace
 
@@ -109,7 +110,7 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingDragReference>::ComputeRecipro
 												amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag,
 												double cs) -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, dust_grain_radius, dust_grain_density, enable_supersonic_correction);
+	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, g_dust_grain_radius, g_dust_grain_density, enable_supersonic_correction);
 }
 
 template <>
@@ -118,7 +119,7 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroCharge>::ComputeRecipro
 												amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag,
 												double cs) -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, dust_grain_radius, dust_grain_density, enable_supersonic_correction);
+	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, g_dust_grain_radius, g_dust_grain_density, enable_supersonic_correction);
 }
 
 template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroCharge>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
@@ -274,6 +275,7 @@ auto run_mhd_zero_charge_simulation() -> SimulationData<DustDampingMHDZeroCharge
 	sim.cflNumber_ = 0.3;
 	sim.constantDt_ = -1.0;
 	sim.enableIterDustStoptime_ = 1;
+	sim.dust_omega_res_ = 1.0; // make the energy calculation method in computeDustDragAndLorentz() the same as the reference solution
 	sim.print_dust_counter_ = true;
 
 	sim.setInitialConditions();
@@ -333,6 +335,8 @@ auto max_abs_component(const std::vector<double> &values) -> double
 
 auto problem_main() -> int
 {
+	quokka::dust::readDustGrainParams(g_dust_grain_radius, g_dust_grain_density);
+
 	auto ref_data = run_reference_simulation();
 	auto mhd_data = run_mhd_zero_charge_simulation();
 

@@ -21,3 +21,6 @@ do_subcycle = 0
 suppress_output = 1
 
 max_timesteps = 10000000
+
+dust.grain_radius = 1.5957691216057308
+dust.grain_density = 1.0
