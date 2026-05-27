@@ -392,6 +392,11 @@ auto runWaveTest(int nx) -> double
 		amrex::Abort("Invalid k modes: the triplet (0,0,0) is not allowed.");
 	}
 
+	if (num_modes_y != 0 || num_modes_z != 0) {
+		amrex::Abort(
+		    "Oblique modes are not supported: Richardson only refines nx, so transverse resolution is fixed and oblique waves will not converge.");
+	}
+
 	// we assume box length = 1.0
 	const std::array<amrex::Real, 3> k_vec_prf = {2.0 * M_PI * static_cast<amrex::Real>(num_modes_x), 2.0 * M_PI * static_cast<amrex::Real>(num_modes_y),
 						      2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)};
@@ -421,10 +426,8 @@ auto runWaveTest(int nx) -> double
 	amrex::Vector<int> const ncells = {nx, 8, 8};
 	pp.addarr("n_cell", ncells);
 
-	int blocking_x = std::max(16, ncells[0]);
-	pp.query("blocking_factor_x", blocking_x);
 	if (!pp.contains("blocking_factor_x")) {
-		pp.add("blocking_factor_x", blocking_x);
+		pp.add("blocking_factor_x", 16);
 	}
 	if (!pp.contains("blocking_factor_y")) {
 		pp.add("blocking_factor_y", 8);
@@ -433,10 +436,8 @@ auto runWaveTest(int nx) -> double
 		pp.add("blocking_factor_z", 8);
 	}
 
-	int max_grid_x = ncells[0];
-	pp.query("max_grid_size", max_grid_x);
 	if (!pp.contains("max_grid_size")) {
-		pp.add("max_grid_size", max_grid_x);
+		pp.add("max_grid_size", 128);
 	}
 
 	pp.add("max_level", 0);
@@ -481,9 +482,14 @@ auto problem_main() -> int
 	quokka::richardson::applyQuietDefaults();
 
 	quokka::richardson::Parameters params{};
-	params.machine_precision_target = 2.0e-10; // limit based on delta_b_magn, smaller values can be used if this is decreased
+	params.machine_precision_target = 2.0e-10; // default; set to 0 via setup.machine_precision_target to disable early exit.
 	params.nx_initial = 16;
-	params.nx_max = 128; // cap at 256 for quick tests. otherwise, it can take ~1-2 hours for 2048
+	params.nx_max = 128; // default; override with setup.nx_max in the input file.
+	{
+		amrex::ParmParse const pp("setup");
+		pp.query("machine_precision_target", params.machine_precision_target);
+		pp.query("nx_max", params.nx_max);
+	}
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;
 	params.test_name = "Alfven Wave";

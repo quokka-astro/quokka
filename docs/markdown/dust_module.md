@@ -139,7 +139,7 @@ Users may optionally enable Picard iteration for the local update represented by
 
 For a given problem, users must define a problem-specific dust stopping time by implementing the `DustSources::ComputeReciprocalStoppingTime` function (note that this function should return the reciprocal of the stopping time). An example can be found in the `src/problems/DustDamping` test.
 
-Users can directly use the dust stopping time calculation helper `DustSources::ComputeReciprocalStoppingTimeKwok` to compute the physical dust stopping time, following Kwok (1975) with an optional supersonic correction. Problem setups that use this helper must provide the dust grain radius \\(a\\) and material density \\(\rho_{\mathrm{gr}}\\) for each dust group. The stopping time of dust \\(t_{\mathrm{s}}\\) is given by:
+Users can directly use the dust stopping time calculation helper `DustSources::ComputeReciprocalStoppingTimeKwok` to compute the physical dust stopping time, following Kwok (1975) with an optional supersonic correction. Problem setups that use this helper must provide the dust grain radius \\(a\\) and material density \\(\rho_{\mathrm{gr}}\\) for each dust group. These values can be read from the optional runtime parameters `dust.grain_radius` and `dust.grain_density` by calling `quokka::dust::readDustGrainParams`. The stopping time of dust \\(t_{\mathrm{s}}\\) is given by:
 
 <script type="math/tex; mode=display">
 t_{\mathrm{s}} = \frac{\sqrt{\pi \gamma}}{2\sqrt{2}} \frac{a \rho_{\mathrm{gr}}}{\rho_{\mathrm{g}} c_{\mathrm{s}}} \times 
@@ -170,3 +170,5 @@ The following input parameters tune the dust module and are documented in more d
 - `omega_rk_residual` – controls deposition of the discrete RK energy residual from the combined dust drag-plus-Lorentz source update. It is only relevant when MHD and dust are both enabled.
 - `print_iteration_counts` - switch to turn on/off printing of dust source iteration counts for debugging.
 - `dust.density_floor` - the minimum dust density value allowed in the simulation.
+- `dust.grain_radius` - optional dust grain radius values for problem setups that use the Kwok stopping-time helper.
+- `dust.grain_density` - optional dust grain material density values for problem setups that use the Kwok stopping-time helper.

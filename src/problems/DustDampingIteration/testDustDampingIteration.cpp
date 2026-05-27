@@ -3,6 +3,7 @@
 ///
 
 #include "QuokkaSimulation.hpp"
+#include "dust/DustRuntimeParams.hpp"
 #include "util/fextract.hpp"
 #include <cmath>
 #include <format>
@@ -59,8 +60,12 @@ constexpr double Egas0_without_corr = P_INITIAL / (quokka::EOS_Traits<DustDampin
 constexpr double Egas0_internal_without_corr = P_INITIAL / (quokka::EOS_Traits<DustDampingWithoutCorrection>::gamma - 1.0);
 
 constexpr int numDustVars = Physics_NumVars::numDustVarsPerGroup;
-static constexpr amrex::GpuArray<amrex::Real, 2> dust_grain_radius = {0.02, 0.01};
-static constexpr amrex::GpuArray<amrex::Real, 2> dust_grain_density = {1.0, 1.0};
+namespace
+{
+// problem-specific grain defaults; input files may override them with dust.grain_radius and dust.grain_density
+AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 2> g_dust_grain_radius = {0.02, 0.01}; // NOLINT
+AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 2> g_dust_grain_density = {1.0, 1.0};  // NOLINT
+} // namespace
 static constexpr bool enable_supersonic_correction_with = true;
 static constexpr bool enable_supersonic_correction_without = false;
 
@@ -104,7 +109,7 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingWithCorrection>::ComputeRecipr
 												 amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag,
 												 double cs) -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, dust_grain_radius, dust_grain_density, enable_supersonic_correction_with);
+	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, g_dust_grain_radius, g_dust_grain_density, enable_supersonic_correction_with);
 }
 
 template <>
@@ -113,7 +118,8 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingWithoutCorrection>::ComputeRec
 												    amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag,
 												    double cs) -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, dust_grain_radius, dust_grain_density, enable_supersonic_correction_without);
+	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, g_dust_grain_radius, g_dust_grain_density,
+						 enable_supersonic_correction_without);
 }
 
 template <> void QuokkaSimulation<DustDampingWithCorrection>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -432,6 +438,8 @@ auto compute_relative_error(const std::vector<double> &t_test, const std::vector
 
 auto problem_main() -> int
 {
+	quokka::dust::readDustGrainParams(g_dust_grain_radius, g_dust_grain_density);
+
 	// step 1: run the reference solution (non-iterative, fixed small time step, with correction enabled)
 	auto ref_data = run_reference_simulation();
 
