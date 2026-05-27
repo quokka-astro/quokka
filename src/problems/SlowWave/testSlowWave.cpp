@@ -353,12 +353,12 @@ void QuokkaSimulation<SlowWave>::computeReferenceSolution_fc(amrex::MultiFab &re
 static void setupWaveGeometry()
 {
 	amrex::ParmParse const setup_pp("setup");
-	double angle_between_k_b0_deg = 0.0;
+	double angle_between_k_b0_deg = 45.0;
 	setup_pp.query("angle_between_k_b0", angle_between_k_b0_deg);
 	constexpr double deg2rad = M_PI / 180.0;
 	angle_between_k_b0_rad = deg2rad * angle_between_k_b0_deg;
 
-	int num_modes_x = 0;
+	int num_modes_x = 1;
 	int num_modes_y = 0;
 	int num_modes_z = 0;
 	setup_pp.query("num_modes_x", num_modes_x);
