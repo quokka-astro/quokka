@@ -3,12 +3,13 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file testSlowWave.cpp
-/// \brief Fixed-resolution slow magnetosonic wave test problem.
+/// \brief Combined slow-wave test: fixed-resolution answer test and
+///        Richardson convergence test in a single binary.
 ///
-/// Mirrors SlowWaveConvergence but runs at a single, TOML-specified
-/// resolution and stop_time. Intended for stability sweeps (e.g. probing the
-/// q26 EMF parasitic instability at nx >= 512) where the Richardson harness
-/// is not wanted.
+/// The answer test runs at the TOML-specified resolution and checks that the
+/// L1 error norm is below a threshold.  The convergence test sweeps
+/// resolutions with the Richardson harness and verifies second-order
+/// convergence.  Both tests must pass for the binary to exit with status 0.
 ///
 
 #include <algorithm>
@@ -27,6 +28,7 @@
 #include "grid.hpp"
 #include "physics_info.hpp"
 #include "util/BC.hpp"
+#include "util/richardson.hpp"
 
 struct SlowWave {
 };
@@ -58,6 +60,15 @@ constexpr double b0_magn = 1.0;
 constexpr double delta_b_magn = 1e-6;
 constexpr double alfven_speed = b0_magn / gcem::sqrt(bg_density);
 
+// Set in setupWaveGeometry() before any IC kernel launches.
+AMREX_GPU_MANAGED double angle_between_k_b0_rad = 0.0;				// NOLINT
+AMREX_GPU_MANAGED double k_rotation_in_xy_rad = 0.0;				// NOLINT
+AMREX_GPU_MANAGED double k_elevation_from_xy_rad = 0.0;				// NOLINT
+AMREX_GPU_MANAGED std::array<amrex::Real, 3> k_dir_prf{1.0, 0.0, 0.0};		// NOLINT
+AMREX_GPU_MANAGED std::array<amrex::Real, 3> inplane_dir_prf{0.0, 1.0, 0.0};	// NOLINT
+AMREX_GPU_MANAGED std::array<amrex::Real, 3> outofplane_dir_prf{0.0, 0.0, 1.0}; // NOLINT
+AMREX_GPU_MANAGED double k_magn = 2.0 * M_PI;					// NOLINT
+
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto computeMagnitude(const std::array<amrex::Real, 3> &vfield) -> double
 {
 	return std::sqrt(vfield[0] * vfield[0] + vfield[1] * vfield[1] + vfield[2] * vfield[2]);
@@ -85,17 +96,10 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE void normalizeVector(std::array<amrex::
 	}
 }
 
-// Set in problem_main from TOML, then used inside GPU kernels.
-AMREX_GPU_MANAGED double angle_between_k_b0_rad = 0.0;				// NOLINT
-AMREX_GPU_MANAGED std::array<amrex::Real, 3> k_dir_prf{1.0, 0.0, 0.0};		// NOLINT
-AMREX_GPU_MANAGED std::array<amrex::Real, 3> inplane_dir_prf{0.0, 1.0, 0.0};	// NOLINT
-AMREX_GPU_MANAGED std::array<amrex::Real, 3> outofplane_dir_prf{0.0, 0.0, 1.0}; // NOLINT
-AMREX_GPU_MANAGED double k_magn = 2.0 * M_PI;					// NOLINT
-
-// PRF<->MRF rotation. See SlowWaveConvergence for the full reference-frame
-// derivation; the slow-mode eigenvector is most naturally written in the MRF
-// (k along x1_mrf, B0 in (x1_mrf, x3_mrf) plane), then rotated back to the
-// PRF before being written into AMReX state arrays.
+// PRF<->MRF rotation. See the SlowWaveConvergence reference-frame derivation;
+// the slow-mode eigenvector is most naturally written in the MRF (k along
+// x1_mrf, B0 in the (x1_mrf, x3_mrf) plane), then rotated back to the PRF
+// before being written into AMReX state arrays.
 AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto rotatePRF2MRF(const std::array<amrex::Real, 3> &vec_prf) -> std::array<amrex::Real, 3>
 {
 	return {vec_prf[0] * k_dir_prf[0] + vec_prf[1] * k_dir_prf[1] + vec_prf[2] * k_dir_prf[2],
@@ -116,15 +120,14 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	const std::array<amrex::Real, 3> x_vec_mrf = rotatePRF2MRF({x1_prf, x2_prf, x3_prf});
 	const double tiny = 1e-16;
 
-	const double B0_1 = b0_magn * std::cos(angle_between_k_b0_rad);
-	const double B0_2 = b0_magn * std::sin(angle_between_k_b0_rad);
+	const double cos_angle = std::cos(angle_between_k_b0_rad);
+	const double sin_angle = std::sin(angle_between_k_b0_rad);
+	const double B0_1 = b0_magn * cos_angle;
+	const double B0_2 = b0_magn * sin_angle;
 
 	const double bg_A1 = 0.0;
 	const double bg_A2 = 0.0;
 	const double bg_A3 = -B0_2 * x_vec_mrf[0] + B0_1 * x_vec_mrf[1];
-
-	const double cos_angle = std::cos(angle_between_k_b0_rad);
-	const double sin_angle = std::sin(angle_between_k_b0_rad);
 
 	const double cs =
 	    std::sqrt(0.5 * (sound_speed * sound_speed + alfven_speed * alfven_speed -
@@ -138,7 +141,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeVectorPotentialComponent_prf(con
 	double delta_A3 = 0.0;
 
 	if (std::abs(sin_angle) < tiny || std::abs(cos_angle) < tiny) {
-		// theta = 0 or 90 deg: no transverse B perturbation.
 		delta_A3 = 0.0;
 	} else {
 		delta_A3 = (delta_b_magn / k_magn) * std::sin(phase);
@@ -346,16 +348,17 @@ void QuokkaSimulation<SlowWave>::computeReferenceSolution_fc(amrex::MultiFab &re
 	}
 }
 
-auto problem_main() -> int
+// Read wave-geometry parameters from the "setup" ParmParse table and populate
+// all GPU-managed globals (angle, k direction, orthonormal basis).
+static void setupWaveGeometry()
 {
-	// Read wave geometry from TOML so it is set before the IC kernel launches.
 	amrex::ParmParse const setup_pp("setup");
-	double angle_between_k_b0_deg = 45.0;
+	double angle_between_k_b0_deg = 0.0;
 	setup_pp.query("angle_between_k_b0", angle_between_k_b0_deg);
 	constexpr double deg2rad = M_PI / 180.0;
 	angle_between_k_b0_rad = deg2rad * angle_between_k_b0_deg;
 
-	int num_modes_x = 1;
+	int num_modes_x = 0;
 	int num_modes_y = 0;
 	int num_modes_z = 0;
 	setup_pp.query("num_modes_x", num_modes_x);
@@ -365,7 +368,6 @@ auto problem_main() -> int
 		amrex::Abort("Invalid k modes: the triplet (0,0,0) is not allowed.");
 	}
 
-	// box length is fixed to 1.0 in each direction (see SlowWave.toml).
 	const std::array<amrex::Real, 3> k_vec_prf = {2.0 * M_PI * static_cast<amrex::Real>(num_modes_x), 2.0 * M_PI * static_cast<amrex::Real>(num_modes_y),
 						      2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)};
 	k_magn = computeMagnitude(k_vec_prf);
@@ -373,6 +375,9 @@ auto problem_main() -> int
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(b0_magn) > tiny, "b0_magn must be nonzero.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(std::abs(k_magn) > tiny, "k_magn must be nonzero.");
 	k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
+
+	k_rotation_in_xy_rad = std::atan2(k_dir_prf[1], k_dir_prf[0]);
+	k_elevation_from_xy_rad = std::atan2(k_dir_prf[2], std::hypot(k_dir_prf[0], k_dir_prf[1]));
 
 	std::array<amrex::Real, 3> ref_prf{0.0, 0.0, 1.0};
 	if (std::abs(computeDotProduct(ref_prf, k_dir_prf)) > 0.9999) {
@@ -382,26 +387,29 @@ auto problem_main() -> int
 	normalizeVector(inplane_dir_prf);
 	outofplane_dir_prf = computeCrossProduct(k_dir_prf, inplane_dir_prf);
 	normalizeVector(outofplane_dir_prf);
+}
 
-	// Report slow-wave timing so a user can pick stop_time = integer * wave_period.
-	const double cs = std::sqrt(
-	    0.5 *
-	    (sound_speed * sound_speed + alfven_speed * alfven_speed -
-	     std::sqrt((sound_speed * sound_speed + alfven_speed * alfven_speed) * (sound_speed * sound_speed + alfven_speed * alfven_speed) -
-		       4.0 * sound_speed * sound_speed * alfven_speed * alfven_speed * std::cos(angle_between_k_b0_rad) * std::cos(angle_between_k_b0_rad))));
+// Run the fixed-resolution answer test using parameters from the TOML file.
+// Returns 0 on pass, 1 on failure.
+auto runAnswerTest() -> int
+{
+	setupWaveGeometry();
+
+	const double cos_angle = std::cos(angle_between_k_b0_rad);
+	const double cs =
+	    std::sqrt(0.5 * (sound_speed * sound_speed + alfven_speed * alfven_speed -
+			     std::sqrt((sound_speed * sound_speed + alfven_speed * alfven_speed) * (sound_speed * sound_speed + alfven_speed * alfven_speed) -
+				       4.0 * sound_speed * sound_speed * alfven_speed * alfven_speed * cos_angle * cos_angle)));
 	const double wavelength = 2.0 * M_PI / k_magn;
 	const double wave_period = wavelength / cs;
-	amrex::Print() << std::string(70, '=') << "\n";
-	amrex::Print() << "SlowWave setup: angle=" << angle_between_k_b0_deg << " deg, |k|=" << k_magn << ", c_s=" << cs << ", wave_period=" << wave_period
-		       << "\n";
-	amrex::Print() << std::string(70, '=') << "\n";
+
+	amrex::Print() << "SlowWave answer test: angle=" << angle_between_k_b0_rad * 180.0 / M_PI << " deg, |k|=" << k_magn << ", c_s=" << cs
+		       << ", wave_period=" << wave_period << "\n";
 
 	QuokkaSimulation<SlowWave> sim;
-
 	sim.setInitialConditions();
 	sim.evolve();
 
-	int status = 0;
 	const double error_tol = 0.002;
 	auto comp_errors = sim.computeComponentErrors();
 
@@ -419,21 +427,115 @@ auto problem_main() -> int
 
 	const amrex::Real err_norm = std::sqrt(sum_sq_err);
 	const amrex::Real sol_norm = std::sqrt(sum_sq_ref);
-
 	amrex::Real error_norm = 0.0;
 	if (sol_norm > 0.0) {
 		error_norm = err_norm / sol_norm;
-		amrex::Print() << std::string(70, '=') << "\n";
-		amrex::Print() << "\nRelative RMS L1 error norm = " << error_norm << "\n\n";
+		amrex::Print() << "Relative RMS L1 error norm = " << error_norm << "\n";
 	} else {
 		error_norm = err_norm;
-		amrex::Print() << std::string(70, '=') << "\n";
-		amrex::Print() << "\nAbsolute L1 error norm = " << error_norm << "\n\n";
+		amrex::Print() << "Absolute L1 error norm = " << error_norm << "\n";
 	}
 
-	if (error_norm > error_tol) {
-		status = 1;
+	return (error_norm > error_tol) ? 1 : 0;
+}
+
+// Run a single convergence-test simulation at resolution nx and return the
+// error norm.  Called repeatedly by the Richardson harness.
+// Note: uses unconditional pp.add() so that ParmParse's last-added-value
+// semantics override any per-direction entries already set by the TOML.
+auto runWaveTest(int nx) -> double
+{
+	setupWaveGeometry();
+
+	const double cos_angle = std::cos(angle_between_k_b0_rad);
+	const double cs =
+	    std::sqrt(0.5 * (sound_speed * sound_speed + alfven_speed * alfven_speed -
+			     std::sqrt((sound_speed * sound_speed + alfven_speed * alfven_speed) * (sound_speed * sound_speed + alfven_speed * alfven_speed) -
+				       4.0 * sound_speed * sound_speed * alfven_speed * alfven_speed * cos_angle * cos_angle)));
+	const int max_timesteps = std::max(20000, nx * 100);
+	const double wavelength = 2.0 * M_PI / k_magn;
+	const double max_time = wavelength / cs;
+
+	{
+		amrex::ParmParse pp("amr");
+		const amrex::Vector<int> ncells = {nx, 8, 8};
+		const int blocking_x = std::max(16, nx);
+		// Unconditional adds: ParmParse searches from the most-recently-added entry
+		// first, so these override any same-named entries already in the TOML.
+		pp.add("blocking_factor_x", blocking_x);
+		pp.add("blocking_factor_y", 8);
+		pp.add("blocking_factor_z", 8);
+		pp.add("max_grid_size", nx);
+		pp.add("max_grid_size_x", nx);
+		pp.add("max_level", 0);
+		pp.addarr("n_cell", ncells);
 	}
 
-	return status;
+	{
+		amrex::ParmParse pp_geom("geometry");
+		pp_geom.addarr("prob_lo", amrex::Vector<double>{0.0, 0.0, 0.0});
+		pp_geom.addarr("prob_hi", amrex::Vector<double>{1.0, 1.0, 1.0});
+		pp_geom.addarr("is_periodic", amrex::Vector<int>{1, 1, 1});
+	}
+
+	auto BCs_cc = quokka::BC<SlowWave>(quokka::BCType::int_dir);
+	const int nvars_fc = Physics_Indices<SlowWave>::nvarTotal_fc;
+	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
+	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			BCs_fc[icomp].setLo(idim, amrex::BCType::int_dir);
+			BCs_fc[icomp].setHi(idim, amrex::BCType::int_dir);
+		}
+	}
+
+	QuokkaSimulation<SlowWave> sim(BCs_cc, BCs_fc);
+	sim.cflNumber_ = 0.2;
+	sim.stopTime_ = max_time;
+	sim.maxTimesteps_ = max_timesteps;
+	sim.setInitialConditions();
+	sim.evolve();
+
+	return sim.computeErrorNorm();
+}
+
+// Run the Richardson convergence test. Returns 0 on pass, 1 on failure.
+auto runConvergenceTest() -> int
+{
+	quokka::richardson::applyQuietDefaults();
+
+	quokka::richardson::Parameters params{};
+	params.machine_precision_target = 2.0e-9;
+	params.nx_initial = 16;
+	params.nx_max = 128;
+	params.expected_rate = 2.0;
+	params.tolerance = 0.3;
+	params.test_name = "Slow Wave";
+	params.csv_filename = "slow_wave_convergence.csv";
+
+	return quokka::richardson::run(params, [](int nx) { return runWaveTest(nx); });
+}
+
+auto problem_main() -> int
+{
+	amrex::Print() << std::string(70, '=') << "\n";
+	amrex::Print() << "Running SlowWave answer test\n";
+	amrex::Print() << std::string(70, '=') << "\n";
+	const int answer_status = runAnswerTest();
+	amrex::Print() << "SlowWave answer test: " << (answer_status == 0 ? "PASSED" : "FAILED") << "\n\n";
+
+	amrex::Print() << std::string(70, '=') << "\n";
+	amrex::Print() << "Running SlowWave convergence test\n";
+	amrex::Print() << std::string(70, '=') << "\n";
+	const int convergence_status = runConvergenceTest();
+	amrex::Print() << "SlowWave convergence test: " << (convergence_status == 0 ? "PASSED" : "FAILED") << "\n\n";
+
+	amrex::Print() << std::string(70, '=') << "\n";
+	if (answer_status == 0 && convergence_status == 0) {
+		amrex::Print() << "All SlowWave tests PASSED\n";
+	} else {
+		amrex::Print() << "Some SlowWave tests FAILED\n";
+	}
+	amrex::Print() << std::string(70, '=') << "\n";
+
+	return (answer_status != 0 || convergence_status != 0) ? 1 : 0;
 }
