@@ -146,7 +146,7 @@ push_results() {
 #######################################
 MAKEBENCH=0
 MAKEBENCH_TITLE="update$(date +%Y%m%d)"
-MAKEBENCH_BRANCH=""
+MAKEBENCH_BRANCH="development"
 TESTS=()
 
 while [[ $# -gt 0 ]]; do
@@ -181,22 +181,17 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Resolve web directory from the local ini file once, before launching the container.
-LOCAL_INI_FILE="${TARGET}/quokka/regression/quokka-tests.ini"
-WEB_DIR=$(parse_web_dir "$LOCAL_INI_FILE") || WEB_DIR=""
+# Download quokka-tests.ini from the requested branch (default: development).
+INI_FILE="/tmp/tmp-quokka-tests.ini"
+wget -q "https://raw.githubusercontent.com/quokka-astro/quokka/refs/heads/${MAKEBENCH_BRANCH}/regression/quokka-tests.ini" -O "$INI_FILE"
+SOURCE_BRANCH_ARGS=(--source_branch "$MAKEBENCH_BRANCH")
+
+# Resolve web directory from the downloaded ini file.
+WEB_DIR=$(parse_web_dir "$INI_FILE") || WEB_DIR=""
 
 # Check GPU occupancy on the host before launching the container.
 # This avoids false alarms from GPU memory allocated by Singularity's --nv init.
 wait_for_gpu
-
-# Download quokka-tests.ini from the requested branch, or use the local copy.
-INI_FILE="$LOCAL_INI_FILE"
-SOURCE_BRANCH_ARGS=()
-if [ -n "$MAKEBENCH_BRANCH" ]; then
-    INI_FILE="/tmp/tmp-quokka-tests.ini"
-    wget "https://raw.githubusercontent.com/quokka-astro/quokka/refs/heads/${MAKEBENCH_BRANCH}/regression/quokka-tests.ini" -O "$INI_FILE"
-    SOURCE_BRANCH_ARGS=(--source_branch "$MAKEBENCH_BRANCH")
-fi
 
 # Build test-selection args (shared by both modes).
 TEST_ARGS=()
@@ -226,10 +221,7 @@ else
     if [ ${#TESTS[@]} -gt 0 ]; then
         RUN_TEST_ARGS=(--tests "${TESTS[@]}")
     fi
-    RUN_SOURCE_BRANCH_ARGS=()
-    if [ -n "$MAKEBENCH_BRANCH" ]; then
-        RUN_SOURCE_BRANCH_ARGS=(--source-branch "$MAKEBENCH_BRANCH")
-    fi
+    RUN_SOURCE_BRANCH_ARGS=(--source-branch "$MAKEBENCH_BRANCH")
     timeout 14400 singularity exec --nv \
         --bind $TARGET:$TARGET \
         --pwd $TARGET \
