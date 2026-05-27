@@ -29,7 +29,7 @@ namespace quokka::conduction
 struct ElectronConductionParams {
 	amrex::Real conductivity_prefactor = 3.e34; // units of erg cm^-1 s^-1 K^-1
 	amrex::Real flux_limiter_phi = 0.1;
-	amrex::Real saturation_factor = 5.0; // refer to equation 8 of Cowee & McKee 1977
+	amrex::Real saturation_factor = 5.0; // refer to equation 8 of Cowie & McKee 1977
 	amrex::Real min_temperature = 0.0;   // default value will be overwritten by tempFloor_ during initialization
 	int eos_flag = 1;		     // 1 == use quokka::EOS; 0 == use resampled cooling
 };
@@ -77,7 +77,7 @@ template <typename problem_t> class ElectronConduction
 		auto temperature_arr = temperature.arrays();
 		auto conductivity_arr = conductivity.arrays();
 		auto saturated_flux_arr = saturated_flux.arrays();
-		amrex::IntVect ng = amrex::IntVect(AMREX_D_DECL(2, 2, 2));
+		amrex::IntVect ng = amrex::IntVect(AMREX_D_DECL(state.nGrow(), state.nGrow(), state.nGrow()));
 		std::optional<decltype(tables.const_tables())> tables_dev;
 		if (params.eos_flag == 0) {
 			tables_dev = tables.const_tables();

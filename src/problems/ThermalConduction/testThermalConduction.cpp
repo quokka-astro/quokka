@@ -3,8 +3,8 @@
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file testHydroBlast3D.cpp
-/// \brief Defines a test problem for a 3D explosion.
+/// \file testThermalConduction.cpp
+/// \brief Defines a test problem for thermal conduction.
 ///
 #include "AMReX.H"
 #include "AMReX_BLassert.H"
@@ -39,7 +39,7 @@ const double Eint0 = 2.505e-8;		     // equivalent to T = 2.e8 K
 const double Efloor = 5.674216387016754e-11; // equivalent tp T = 2.e6 K
 const double rho0 = 0.1;		     // 1/cm^3
 const double D = 4.396303164750053e+28;	     // diffusion coefficient, in units of cm^2/s
-const double sigma = 2.410685615625e+17;     // conduction timescale in s
+const double sigma = 2.410685615625e+17;     // width of the Gaussian, in units of cm
 
 struct ThermalConductionProblem {
 };
