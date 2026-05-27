@@ -183,7 +183,7 @@ done
 
 # Download quokka-tests.ini from the requested branch (default: development).
 INI_FILE="/tmp/tmp-quokka-tests.ini"
-wget -q "https://raw.githubusercontent.com/quokka-astro/quokka/refs/heads/${MAKEBENCH_BRANCH}/regression/quokka-tests.ini" -O "$INI_FILE"
+wget -q "https://raw.githubusercontent.com/quokka-astro/quokka/${MAKEBENCH_BRANCH}/regression/quokka-tests.ini" -O "$INI_FILE"
 SOURCE_BRANCH_ARGS=(--source_branch "$MAKEBENCH_BRANCH")
 
 # Resolve web directory from the downloaded ini file.
