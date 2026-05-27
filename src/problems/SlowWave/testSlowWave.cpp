@@ -348,9 +348,11 @@ void QuokkaSimulation<SlowWave>::computeReferenceSolution_fc(amrex::MultiFab &re
 	}
 }
 
+namespace
+{
 // Read wave-geometry parameters from the "setup" ParmParse table and populate
 // all GPU-managed globals (angle, k direction, orthonormal basis).
-static void setupWaveGeometry()
+void setupWaveGeometry()
 {
 	amrex::ParmParse const setup_pp("setup");
 	double angle_between_k_b0_deg = 45.0;
@@ -388,6 +390,7 @@ static void setupWaveGeometry()
 	outofplane_dir_prf = computeCrossProduct(k_dir_prf, inplane_dir_prf);
 	normalizeVector(outofplane_dir_prf);
 }
+} // namespace
 
 // Run the fixed-resolution answer test using parameters from the TOML file.
 // Returns 0 on pass, 1 on failure.
