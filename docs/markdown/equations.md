@@ -103,7 +103,7 @@ where
 -   \\(\xi_k\\) is the charge-to-mass ratio for dust species \\(k\\),
 -   \\(\Omega_{\mathrm{L},k} = \xi_k |\vec{B}|\\) is the dust gyrofrequency for dust species \\(k\\),
 -   \\(\hat{\vec{b}} = \vec{B}/|\vec{B}|\\) is the unit vector along the magnetic field,
--   \\(\omega_{\rm drag}\\) is the fraction of physical dust-drag dissipation deposited into the gas.
+-   \\(\omega_{\rm drag}\\) is the fraction of dust-drag dissipation deposited into the gas.
 
 Note that since work done by radiation on the gas is included in the \\(c \sum_g G^0_g\\) term, \\(S_{\text{rad}}\\) is not the same as \\(c \sum_g G^0_g\\).
 

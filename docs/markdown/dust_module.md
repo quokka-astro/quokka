@@ -69,7 +69,7 @@ where
 -   \\(\hat{\mathbf{b}}\\) is the unit vector along the magnetic field,
 -   \\(\mathbf{a}_{\mathrm{ext},\mathrm{g}}\\) is the external acceleration applied to the gas,
 -   \\(\mathbf{a}_{\mathrm{ext},\mathrm{d},n}\\) is the external acceleration applied to dust species \\(n\\),
--   \\(\omega_{\rm drag}\\) is the fraction of physical dust-drag dissipation deposited into the gas.
+-   \\(\omega_{\rm drag}\\) is the fraction of dust-drag dissipation deposited into the gas.
 
 The Lorentz work term in the gas total-energy equation is the gas-side work from the dust back-reaction. It transfers kinetic energy between gas and dust, but it does not heat the combined gas-dust system. Adding the gas-side and dust-side Lorentz work terms for each dust species gives
 
@@ -88,7 +88,7 @@ The Lorentz work term in the gas total-energy equation is the gas-side work from
 \end{aligned}
 </script>
 
-Only aerodynamic drag produces physical gas heating in these equations, through the \\(\omega_{\rm drag}\\) term. The `dust.omega_rk_residual` runtime parameter controls deposition of the discrete RK energy residual from the combined drag-plus-Lorentz update. This residual is not a separate physical heating rate and is not a Lorentz-heating parameter.
+In `DustSources::computeDustDragAndLorentz`, Quokka splits the deposited gas-energy increment into a drag-like contribution controlled by `dust.omega_drag_heating` and a B-dependent residual contribution controlled by `dust.omega_magnetic_residual`. 
 
 ## Variable Storage
 
@@ -129,7 +129,7 @@ where \\(\mathcal{H}\\) is the explicit gas/MHD and dust transport update, and \
 - If `Physics_Traits<problem_t>::is_dust_enabled = true` and MHD is disabled, Quokka calls `DustSources::computeDustDrag`, following Tedeschi-Prades et al. (2025).
 - If both `Physics_Traits<problem_t>::is_dust_enabled = true` and `Physics_Traits<problem_t>::is_mhd_enabled = true`, Quokka calls `DustSources::computeDustDragAndLorentz`.
 
-`DustSources::computeDustDragAndLorentz` integrates drag and Lorentz forces in the same source solve; it does not operator-split the Lorentz force from drag. The method uses a two-stage generalized implicit Runge-Kutta (GIRK) update for the local gas and dust momenta. For dust species \\(n\\), the relevant local rates are the drag rate \\(\alpha_n = 1/T_{\mathrm{s},n}\\) and the gyrofrequency \\(\Omega_{\mathrm{L},n} = \xi_n |\mathbf{B}|\\). The implementation selects the non-stiff or stiff GIRK coefficients from the local timescale, using \\((\alpha_n^2 + \Omega_{\mathrm{L},n}^2)^{-1/2}\\) for the drag-plus-Lorentz system.
+`DustSources::computeDustDragAndLorentz` integrates drag and Lorentz forces in the same source solve; it does not operator-split the Lorentz force from drag. The method uses a two-stage generalized implicit Runge-Kutta (GIRK) update for the local gas and dust momenta. For dust species \\(n\\), the relevant local rates are the drag rate \\(\alpha_n = 1/T_{\mathrm{s},n}\\) and the gyrofrequency \\(\Omega_{\mathrm{L},n} = \xi_n |\mathbf{B}|\\). The implementation selects the resolved or stiff GIRK coefficients from the local timescale, using \\((\alpha_n^2 + \Omega_{\mathrm{L},n}^2)^{-1/2}\\) for the drag-plus-Lorentz system. The resolved coefficients used in `computeDustDragAndLorentz` may be selected at runtime with `dust.resolved_rk_scheme`: `GL4` chooses the current two-stage Gauss-Legendre coefficients, `Midpoint` chooses the implicit midpoint coefficients, and `TP2025` reuses the resolved-branch coefficients from `DustSources::computeDustDrag`.
 
 ### Optional Picard iteration for dust–gas source update
 
@@ -166,8 +166,9 @@ For the dust-gas coupled system with \\(N\\) dust species, we use the following 
 The following input parameters tune the dust module and are documented in more detail in [Runtime parameters](parameters.md):
 
 - `enable_iter_stoptime` – switch of iterative dust stopping time calculation.
-- `omega_drag_heating` – controls deposition of physical dust-drag heating into the gas.
-- `omega_rk_residual` – controls deposition of the discrete RK energy residual from the combined dust drag-plus-Lorentz source update. It is only relevant when MHD and dust are both enabled.
+- `omega_drag_heating` – controls deposition of the drag-like heating contribution in the dust source update.
+- `omega_magnetic_residual` – controls deposition of the B-dependent residual contribution in `computeDustDragAndLorentz`.
+- `resolved_rk_scheme` – selects the GIRK coefficients in resolved branch used by `DustSources::computeDustDragAndLorentz`. Supported values are `TP2025`, `GL4`, and `Midpoint`.
 - `print_iteration_counts` - switch to turn on/off printing of dust source iteration counts for debugging.
 - `dust.density_floor` - the minimum dust density value allowed in the simulation.
 - `dust.grain_radius` - optional dust grain radius values for problem setups that use the Kwok stopping-time helper.
