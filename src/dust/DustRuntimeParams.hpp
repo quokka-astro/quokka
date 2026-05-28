@@ -15,12 +15,12 @@ enum class ResolvedRkScheme { TP2025, GL4, Midpoint };
 inline auto resolvedRkSchemeName(ResolvedRkScheme scheme) -> char const *
 {
 	switch (scheme) {
-	case ResolvedRkScheme::TP2025:
-		return "TP2025";
-	case ResolvedRkScheme::GL4:
-		return "GL4";
-	case ResolvedRkScheme::Midpoint:
-		return "Midpoint";
+		case ResolvedRkScheme::TP2025:
+			return "TP2025";
+		case ResolvedRkScheme::GL4:
+			return "GL4";
+		case ResolvedRkScheme::Midpoint:
+			return "Midpoint";
 	}
 
 	return "unknown";

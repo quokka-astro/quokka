@@ -53,8 +53,7 @@ auto getAnalyticModeData() -> AnalyticModeData const &
 		double const epsilon1 = rho_dust1 / rho;
 		double const epsilon2 = rho_dust2 / rho;
 		double const total_mass = rho + rho_dust1 + rho_dust2;
-		double const v_com =
-		    (rho * gas_velocity_initial + rho_dust1 * dust1_velocity_initial + rho_dust2 * dust2_velocity_initial) / total_mass;
+		double const v_com = (rho * gas_velocity_initial + rho_dust1 * dust1_velocity_initial + rho_dust2 * dust2_velocity_initial) / total_mass;
 
 		double const spectral_sum = (1.0 + epsilon1) * alpha1 + (1.0 + epsilon2) * alpha2;
 		double const spectral_prod = alpha1 * alpha2 * (1.0 + epsilon1 + epsilon2);
@@ -125,15 +124,13 @@ auto E_gas_analytic(double t) -> double
 		AnalyticState const state1 = analyticState(t1);
 		AnalyticState const state2 = analyticState(t2);
 
-		double const term1 = (rho_dust1 * (state1.v_dust1 - state1.v_gas) / TS1 * state1.v_gas +
-				      rho_dust2 * (state1.v_dust2 - state1.v_gas) / TS2 * state1.v_gas +
-				      OMEGA * (rho_dust1 * std::pow(state1.v_dust1 - state1.v_gas, 2) / TS1 +
-					       rho_dust2 * std::pow(state1.v_dust2 - state1.v_gas, 2) / TS2));
+		double const term1 =
+		    (rho_dust1 * (state1.v_dust1 - state1.v_gas) / TS1 * state1.v_gas + rho_dust2 * (state1.v_dust2 - state1.v_gas) / TS2 * state1.v_gas +
+		     OMEGA * (rho_dust1 * std::pow(state1.v_dust1 - state1.v_gas, 2) / TS1 + rho_dust2 * std::pow(state1.v_dust2 - state1.v_gas, 2) / TS2));
 
-		double const term2 = (rho_dust1 * (state2.v_dust1 - state2.v_gas) / TS1 * state2.v_gas +
-				      rho_dust2 * (state2.v_dust2 - state2.v_gas) / TS2 * state2.v_gas +
-				      OMEGA * (rho_dust1 * std::pow(state2.v_dust1 - state2.v_gas, 2) / TS1 +
-					       rho_dust2 * std::pow(state2.v_dust2 - state2.v_gas, 2) / TS2));
+		double const term2 =
+		    (rho_dust1 * (state2.v_dust1 - state2.v_gas) / TS1 * state2.v_gas + rho_dust2 * (state2.v_dust2 - state2.v_gas) / TS2 * state2.v_gas +
+		     OMEGA * (rho_dust1 * std::pow(state2.v_dust1 - state2.v_gas, 2) / TS1 + rho_dust2 * std::pow(state2.v_dust2 - state2.v_gas, 2) / TS2));
 
 		integral += 0.5 * (term1 + term2) * dt;
 	}
@@ -161,8 +158,7 @@ template <> struct quokka::EOS_Traits<DustDampingMHDZeroBMixedStiff> {
 
 namespace
 {
-constexpr double Egas0 = P_INITIAL / (quokka::EOS_Traits<DustDampingMHDZeroBMixedStiff>::gamma - 1.0) +
-			 0.5 * rho * gas_velocity_initial * gas_velocity_initial;
+constexpr double Egas0 = P_INITIAL / (quokka::EOS_Traits<DustDampingMHDZeroBMixedStiff>::gamma - 1.0) + 0.5 * rho * gas_velocity_initial * gas_velocity_initial;
 constexpr double Egas0_internal = P_INITIAL / (quokka::EOS_Traits<DustDampingMHDZeroBMixedStiff>::gamma - 1.0);
 } // namespace
 
@@ -184,9 +180,10 @@ template <> struct Physics_Traits<DustDampingMHDZeroBMixedStiff> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroBMixedStiff>::ComputeReciprocalStoppingTime(
-    amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/,
-    double /*cs*/) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+AMREX_GPU_HOST_DEVICE auto
+DustSources<DustDampingMHDZeroBMixedStiff>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> /*rho_d*/,
+									  amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/, double /*cs*/)
+    -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, 2> alpha{};
 	alpha[0] = 1.0 / TS1;
@@ -194,8 +191,7 @@ AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroBMixedStiff>::ComputeRe
 	return alpha;
 }
 
-template <>
-AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroBMixedStiff>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
+template <> AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingMHDZeroBMixedStiff>::ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, 2> charge_to_mass_ratio{};
 	charge_to_mass_ratio.fill(1.0);
@@ -298,8 +294,7 @@ auto runDustDampingSimulation(ResolvedRkScheme scheme) -> SimulationData<DustDam
 {
 	const double CFL_number = 1000000.0; // large CFL number to avoid CFL violation
 
-	auto BCs_cc =
-	    quokka::BC<DustDampingMHDZeroBMixedStiff>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
+	auto BCs_cc = quokka::BC<DustDampingMHDZeroBMixedStiff>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
 	auto BCs_fc = makePeriodicFaceBCs();
 	QuokkaSimulation<DustDampingMHDZeroBMixedStiff> sim(BCs_cc, BCs_fc);
 
@@ -397,14 +392,14 @@ auto problem_main() -> int
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		const double rel_err_tol = 0.03;
 		for (auto const &run : runs) {
-			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for gas vx    = "
-				       << run.rel_err_gas_vx << "\n";
-			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for dust1 vx  = "
-				       << run.rel_err_dust1_vx << "\n";
-			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for dust2 vx  = "
-				       << run.rel_err_dust2_vx << "\n";
-			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for gas E     = "
-				       << run.rel_err_gas_E << "\n";
+			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for gas vx    = " << run.rel_err_gas_vx
+				       << "\n";
+			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for dust1 vx  = " << run.rel_err_dust1_vx
+				       << "\n";
+			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for dust2 vx  = " << run.rel_err_dust2_vx
+				       << "\n";
+			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for gas E     = " << run.rel_err_gas_E
+				       << "\n";
 			if (!std::isfinite(run.rel_err_gas_vx) || !std::isfinite(run.rel_err_dust1_vx) || !std::isfinite(run.rel_err_dust2_vx) ||
 			    !std::isfinite(run.rel_err_gas_E) || (run.rel_err_gas_vx > rel_err_tol) || (run.rel_err_dust1_vx > rel_err_tol) ||
 			    (run.rel_err_dust2_vx > rel_err_tol) || (run.rel_err_gas_E > rel_err_tol)) {
@@ -433,8 +428,11 @@ auto problem_main() -> int
 			for (size_t idx = 0; idx < runs.size(); ++idx) {
 				auto const &series = series_accessor(runs[idx].data);
 				matplotlibcpp::plot(runs[idx].data.t_vec_, series,
-						    {{"label", quokka::dust::resolvedRkSchemeName(runs[idx].scheme)}, {"color", scheme_colors[idx]},
-						     {"linestyle", "-"}, {"marker", scheme_markers[idx]}, {"markersize", "3"}});
+						    {{"label", quokka::dust::resolvedRkSchemeName(runs[idx].scheme)},
+						     {"color", scheme_colors[idx]},
+						     {"linestyle", "-"},
+						     {"marker", scheme_markers[idx]},
+						     {"markersize", "3"}});
 			}
 		};
 

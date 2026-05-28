@@ -717,7 +717,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		dpp.query("omega_magnetic_residual", dust_omega_magnetic_res_);
 		std::string resolved_rk_scheme_name;
 		if (dpp.query("resolved_rk_scheme", resolved_rk_scheme_name) != 0) {
-					dustResolvedRkScheme_ = quokka::dust::parseResolvedRkScheme(resolved_rk_scheme_name);
+			dustResolvedRkScheme_ = quokka::dust::parseResolvedRkScheme(resolved_rk_scheme_name);
 		}
 		dpp.query("enable_iter_stoptime", enableIterDustStoptime_);
 		dpp.query("print_iteration_counts", print_dust_counter_);
@@ -997,13 +997,12 @@ template <typename QuokkaSimulation<problem_t>::SourceOrder Order>
 auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int lev,
 								   amrex::Real time, amrex::Real dt) -> bool
 {
-		auto const applyDust = [&]() {
-			if constexpr (Physics_Traits<problem_t>::is_dust_enabled && Physics_Traits<problem_t>::is_mhd_enabled) {
-				DustSources<problem_t>::computeDustDragAndLorentz(state, state_fc, dt, dust_omega_drag_, dust_omega_magnetic_res_,
-											  dustResolvedRkScheme_, enableIterDustStoptime_,
-											  print_dust_counter_);
-			} else if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
-				DustSources<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega_drag_, enableIterDustStoptime_, print_dust_counter_);
+	auto const applyDust = [&]() {
+		if constexpr (Physics_Traits<problem_t>::is_dust_enabled && Physics_Traits<problem_t>::is_mhd_enabled) {
+			DustSources<problem_t>::computeDustDragAndLorentz(state, state_fc, dt, dust_omega_drag_, dust_omega_magnetic_res_,
+									  dustResolvedRkScheme_, enableIterDustStoptime_, print_dust_counter_);
+		} else if constexpr (Physics_Traits<problem_t>::is_dust_enabled) {
+			DustSources<problem_t>::computeDustDrag(state, state_fc, dt, dust_omega_drag_, enableIterDustStoptime_, print_dust_counter_);
 		}
 	};
 

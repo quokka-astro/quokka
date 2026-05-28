@@ -341,14 +341,14 @@ auto problem_main() -> int
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		const double rel_err_tol = 0.03;
 		for (auto const &run : runs) {
-			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for gas vx    = "
-				       << run.rel_err_gas_vx << "\n";
-			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for dust1 vx  = "
-				       << run.rel_err_dust1_vx << "\n";
-			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for dust2 vx  = "
-				       << run.rel_err_dust2_vx << "\n";
-			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for gas E     = "
-				       << run.rel_err_gas_E << "\n";
+			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for gas vx    = " << run.rel_err_gas_vx
+				       << "\n";
+			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for dust1 vx  = " << run.rel_err_dust1_vx
+				       << "\n";
+			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for dust2 vx  = " << run.rel_err_dust2_vx
+				       << "\n";
+			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for gas E     = " << run.rel_err_gas_E
+				       << "\n";
 			if (!std::isfinite(run.rel_err_gas_vx) || !std::isfinite(run.rel_err_dust1_vx) || !std::isfinite(run.rel_err_dust2_vx) ||
 			    !std::isfinite(run.rel_err_gas_E) || (run.rel_err_gas_vx > rel_err_tol) || (run.rel_err_dust1_vx > rel_err_tol) ||
 			    (run.rel_err_dust2_vx > rel_err_tol) || (run.rel_err_gas_E > rel_err_tol)) {
@@ -377,8 +377,11 @@ auto problem_main() -> int
 			for (size_t idx = 0; idx < runs.size(); ++idx) {
 				auto const &series = series_accessor(runs[idx].data);
 				matplotlibcpp::plot(runs[idx].data.t_vec_, series,
-						    {{"label", quokka::dust::resolvedRkSchemeName(runs[idx].scheme)}, {"color", scheme_colors[idx]},
-						     {"linestyle", "-"}, {"marker", scheme_markers[idx]}, {"markersize", "3"}});
+						    {{"label", quokka::dust::resolvedRkSchemeName(runs[idx].scheme)},
+						     {"color", scheme_colors[idx]},
+						     {"linestyle", "-"},
+						     {"marker", scheme_markers[idx]},
+						     {"markersize", "3"}});
 			}
 		};
 
