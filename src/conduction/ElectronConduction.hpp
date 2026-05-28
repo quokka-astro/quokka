@@ -35,7 +35,7 @@ struct ElectronConductionParams {
 	amrex::Real flux_limiter_phi = 0.1;
 	amrex::Real saturation_factor = 5.0; // refer to equation 8 of Cowie & McKee 1977
 	amrex::Real min_temperature = 0.0;   // default value will be overwritten by tempFloor_ during initialization
-	EOSFlagforConduction eos_flag;	     // default to using quokka::EOS;
+	EOSFlagforConduction eos_flag = EOSFlagforConduction::EOS;	     // default to using quokka::EOS;
 };
 
 template <typename problem_t> class ElectronConduction
