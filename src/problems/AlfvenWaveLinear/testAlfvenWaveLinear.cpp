@@ -9,8 +9,8 @@
 #include <array>
 #include <cassert>
 #include <cmath>
-#include <limits>
 #include <gcem.hpp>
+#include <limits>
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
@@ -415,7 +415,8 @@ auto problem_main() -> int
 		resistive_decay_rate = 0.5 * eta * k_magn * k_magn; // gamma = eta*k^2/2
 		const double Rm = (resistive_decay_rate > 0.0) ? omega0 / resistive_decay_rate : std::numeric_limits<double>::infinity();
 		if (Rm < 1.0) {
-			amrex::Abort("Resistive Alfven wave is overdamped (Rm < 1); the sinusoidal initial condition is not a normal mode. Reduce eta or increase vA*|cos(theta)|/k.");
+			amrex::Abort("Resistive Alfven wave is overdamped (Rm < 1); the sinusoidal initial condition is not a normal mode. Reduce eta or "
+				     "increase vA*|cos(theta)|/k.");
 		}
 		omega_real_alfven = std::sqrt(omega0 * omega0 - resistive_decay_rate * resistive_decay_rate);
 		resistive_phase_lag = std::atan2(resistive_decay_rate, omega_real_alfven); // phi = arctan(gamma/omega_real)
