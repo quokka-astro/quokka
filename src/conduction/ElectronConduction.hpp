@@ -23,6 +23,10 @@
 #include "cooling/ResampledCooling.hpp"
 #include "hydro/hydro_system.hpp"
 
+AMREX_ENUM(EOSFlagforConduction, // NOLINT
+	   ResampledCooling, // Use resampled cooling tables for EOS
+	   EOS	     // Use quokka::EOS for EOS calculations
+);
 namespace quokka::conduction
 {
 
@@ -31,7 +35,7 @@ struct ElectronConductionParams {
 	amrex::Real flux_limiter_phi = 0.1;
 	amrex::Real saturation_factor = 5.0; // refer to equation 8 of Cowie & McKee 1977
 	amrex::Real min_temperature = 0.0;   // default value will be overwritten by tempFloor_ during initialization
-	int eos_flag = 1;		     // 1 == use quokka::EOS; 0 == use resampled cooling
+	EOSFlagforConduction eos_flag ; // default to using quokka::EOS;
 };
 
 template <typename problem_t> class ElectronConduction
@@ -79,9 +83,9 @@ template <typename problem_t> class ElectronConduction
 		auto saturated_flux_arr = saturated_flux.arrays();
 		amrex::IntVect ng = amrex::IntVect(AMREX_D_DECL(state.nGrow(), state.nGrow(), state.nGrow()));
 		std::optional<decltype(tables.const_tables())> tables_dev;
-		if (params.eos_flag == 0) {
+		if (params.eos_flag == EOSFlagforConduction::ResampledCooling) {
 			tables_dev = tables.const_tables();
-		} else if (params.eos_flag != 0 && params.eos_flag != 1) {
+		} else if (params.eos_flag != EOSFlagforConduction::ResampledCooling && params.eos_flag != EOSFlagforConduction::EOS) {
 			amrex::Abort("Invalid eos_flag value in ElectronConduction. Must be 0 (resampled cooling) or 1 (quokka::EOS).");
 		}
 
@@ -102,10 +106,10 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(cons, i, j, k, &local_state_fc);
 			amrex::Real Tgas = NAN;
 			amrex::Real cs = NAN;
-			if (params.eos_flag == 0) {
+			if (params.eos_flag == EOSFlagforConduction::ResampledCooling) {
 				Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, *tables_dev);
 				cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, *tables_dev);
-			} else if (params.eos_flag == 1) {
+			} else if (params.eos_flag == EOSFlagforConduction::EOS) {
 				const int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
 				quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {};
 				if constexpr (nmscalars_ > 0) {
