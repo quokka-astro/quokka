@@ -530,10 +530,10 @@ auto problem_main() -> int
 
 		bool passed = true;
 		for (auto const &run : epstein_no_b_runs) {
-			amrex::Print() << "[Pure Damping][" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L2 drift error = "
-				       << run.drift_l2_error << "\n";
-			amrex::Print() << "[Pure Damping][" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Conservation error     = "
-				       << run.conservation_error << "\n";
+			amrex::Print() << "[Pure Damping][" << quokka::dust::resolvedRkSchemeName(run.scheme)
+				       << "] Relative L2 drift error = " << run.drift_l2_error << "\n";
+			amrex::Print() << "[Pure Damping][" << quokka::dust::resolvedRkSchemeName(run.scheme)
+				       << "] Conservation error     = " << run.conservation_error << "\n";
 			if ((run.drift_l2_error > epstein_no_b_tol) || (run.conservation_error > conservation_tol)) {
 				passed = false;
 			}
@@ -547,8 +547,7 @@ auto problem_main() -> int
 				       << "] Relative amplitude error = " << run.amplitude_error << "\n";
 			amrex::Print() << "[Undamped Gyromotion][" << quokka::dust::resolvedRkSchemeName(run.scheme)
 				       << "] Conservation error       = " << run.conservation_error << "\n";
-			if ((run.drift_l2_error > drift_tol) || (run.amplitude_error > gyro_amplitude_tol) ||
-			    (run.conservation_error > conservation_tol)) {
+			if ((run.drift_l2_error > drift_tol) || (run.amplitude_error > gyro_amplitude_tol) || (run.conservation_error > conservation_tol)) {
 				passed = false;
 			}
 		}
@@ -575,8 +574,7 @@ auto problem_main() -> int
 		plotDriftX(epstein_no_b_runs, epstein_no_b_exact, "./dust_gyromotion_PureDamping.pdf", "Pure Damping", alpha0, R"($t/t_{s,0}$)");
 		plotDriftX(gyro_no_drag_runs, gyro_no_drag_exact, "./dust_gyromotion_UndampedGyromotion.pdf", "Undamped Gyromotion",
 			   GyroCaseParams<DustGyroNoDrag>::omega_L, R"($\omega_L t$)");
-		plotDriftX(epstein_with_b_runs, epstein_with_b_exact, "./dust_gyromotion_DampedGyromotion.pdf", "Damped Gyromotion", alpha0,
-			   R"($t/t_{s,0}$)");
+		plotDriftX(epstein_with_b_runs, epstein_with_b_exact, "./dust_gyromotion_DampedGyromotion.pdf", "Damped Gyromotion", alpha0, R"($t/t_{s,0}$)");
 #endif
 	}
 
