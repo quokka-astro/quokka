@@ -66,62 +66,60 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 	static void ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgScheme emf_avg_scheme,
-			       SlopeLimiter plmLimiter, EMFComputeScheme emf_compute_scheme,
-			       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real resistivity = 0.0, amrex::Real artificialResistivityCoeff = 0.0);
+			       SlopeLimiter plmLimiter, EMFComputeScheme emf_compute_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+			       amrex::Real resistivity = 0.0, amrex::Real artificialResistivityCoeff = 0.0);
 
 	static void AverageEMF(amrex::Array4<amrex::Real> const &E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_E_q, amrex::Box const &box_ec,
 			       std::array<int, 2> const &extrap_dirs, std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
 			       std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_Bi_ieside, EMFAvgScheme emf_avg_scheme,
-			       amrex::Array4<const amrex::Real> const &cc_cVars,
-			       amrex::Array4<const amrex::Real> const &B_w0, amrex::Array4<const amrex::Real> const &B_w1,
-			       amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real resistivity, amrex::Real artificialResistivityCoeff);
+			       amrex::Array4<const amrex::Real> const &cc_cVars, amrex::Array4<const amrex::Real> const &B_w0,
+			       amrex::Array4<const amrex::Real> const &B_w1, amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real resistivity,
+			       amrex::Real artificialResistivityCoeff);
 
 	static void ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
-					       SlopeLimiter plmLimiter, EMFAvgScheme emf_avg_scheme,
-					       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real resistivity = 0.0, amrex::Real artificialResistivityCoeff = 0.0);
+					       SlopeLimiter plmLimiter, EMFAvgScheme emf_avg_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+					       amrex::Real resistivity = 0.0, amrex::Real artificialResistivityCoeff = 0.0);
 
 	static void ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 					   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 					   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, SlopeLimiter plmLimiter,
-					   EMFAvgScheme emf_avg_scheme,
-					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real resistivity = 0.0, amrex::Real artificialResistivityCoeff = 0.0);
+					   EMFAvgScheme emf_avg_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real resistivity = 0.0,
+					   amrex::Real artificialResistivityCoeff = 0.0);
 
 	static void ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
 					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, SlopeLimiter plmLimiter,
-					  EMFAvgScheme emf_avg_scheme,
-					  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real resistivity = 0.0, amrex::Real artificialResistivityCoeff = 0.0);
+					  EMFAvgScheme emf_avg_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real resistivity = 0.0,
+					  amrex::Real artificialResistivityCoeff = 0.0);
 
 	static void EMFAverage_LondrilloDelZanna2004(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q,
 						     amrex::Box const &box_ec, std::array<int, 2> const &extrap_dirs,
 						     std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
 						     std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_Bi_ieside,
-						     amrex::Array4<const amrex::Real> const &cc_cVars,
-						     amrex::Array4<const amrex::Real> const &B_w0, amrex::Array4<const amrex::Real> const &B_w1,
-						     amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real resistivity, amrex::Real artificialResistivityCoeff);
+						     amrex::Array4<const amrex::Real> const &cc_cVars, amrex::Array4<const amrex::Real> const &B_w0,
+						     amrex::Array4<const amrex::Real> const &B_w1, amrex::Real dx_w0, amrex::Real dx_w1,
+						     amrex::Real resistivity, amrex::Real artificialResistivityCoeff);
 
 	static void EMFAverage_Balsara2025(amrex::Array4<amrex::Real> E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_EMF_q, amrex::Box const &box_ec,
 					   std::array<int, 2> const &extrap_dirs, std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
 					   std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_Bi_ieside,
-					   amrex::Array4<const amrex::Real> const &cc_cVars,
-					   amrex::Array4<const amrex::Real> const &B_w0, amrex::Array4<const amrex::Real> const &B_w1,
-					   amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real resistivity, amrex::Real artificialResistivityCoeff);
+					   amrex::Array4<const amrex::Real> const &cc_cVars, amrex::Array4<const amrex::Real> const &B_w0,
+					   amrex::Array4<const amrex::Real> const &B_w1, amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real resistivity,
+					   amrex::Real artificialResistivityCoeff);
 
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto computeResistiveEMF(amrex::Array4<const amrex::Real> const &B_w0,
-								      amrex::Array4<const amrex::Real> const &B_w1, int i, int j, int k,
-								      std::array<int, 3> const &delta_w0, std::array<int, 3> const &delta_w1,
-								      amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real resistivity) -> amrex::Real;
+									    amrex::Array4<const amrex::Real> const &B_w1, int i, int j, int k,
+									    std::array<int, 3> const &delta_w0, std::array<int, 3> const &delta_w1,
+									    amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real resistivity) -> amrex::Real;
 
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto computeArtificialResistiveEMF(amrex::Array4<const amrex::Real> const &B_w0,
-								     amrex::Array4<const amrex::Real> const &B_w1,
-								     amrex::Array4<const amrex::Real> const &cc_cVars,
-								     int i, int j, int k,
-								     std::array<int, 3> const &delta_w0, std::array<int, 3> const &delta_w1,
-								     amrex::Real dx_w0, amrex::Real dx_w1,
-								     amrex::Real artificialResistivityCoeff) -> amrex::Real;
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto
+	computeArtificialResistiveEMF(amrex::Array4<const amrex::Real> const &B_w0, amrex::Array4<const amrex::Real> const &B_w1,
+				      amrex::Array4<const amrex::Real> const &cc_cVars, int i, int j, int k, std::array<int, 3> const &delta_w0,
+				      std::array<int, 3> const &delta_w1, amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real artificialResistivityCoeff)
+	    -> amrex::Real;
 
 	static void ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &box_iValid, int reconstructionOrder,
 				  SlopeLimiter plmLimiter);
@@ -129,7 +127,6 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 	static void SolveInductionEqn(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fc_consVarOld_mf,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> &fc_consVarNew_mf,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &ec_emf_mf, double dt, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx);
-
 };
 
 template <typename problem_t>
@@ -137,8 +134,8 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgScheme emf_avg_scheme,
-				      SlopeLimiter plmLimiter, EMFComputeScheme emf_compute_scheme,
-				      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real resistivity, amrex::Real artificialResistivityCoeff)
+				      SlopeLimiter plmLimiter, EMFComputeScheme emf_compute_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+				      amrex::Real resistivity, amrex::Real artificialResistivityCoeff)
 {
 	if (emf_compute_scheme == EMFComputeScheme::FelkerStone2017) {
 		MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, plmLimiter,
@@ -158,13 +155,13 @@ template <typename problem_t>
 void MHDSystem<problem_t>::AverageEMF(amrex::Array4<amrex::Real> const &E2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_E_q, amrex::Box const &box_ec,
 				      std::array<int, 2> const &extrap_dirs, std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
 				      std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_Bi_ieside, EMFAvgScheme emf_avg_scheme,
-				      amrex::Array4<const amrex::Real> const &cc_cVars,
-				      amrex::Array4<const amrex::Real> const &B_w0, amrex::Array4<const amrex::Real> const &B_w1,
-				      amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real resistivity, amrex::Real artificialResistivityCoeff)
+				      amrex::Array4<const amrex::Real> const &cc_cVars, amrex::Array4<const amrex::Real> const &B_w0,
+				      amrex::Array4<const amrex::Real> const &B_w1, amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real resistivity,
+				      amrex::Real artificialResistivityCoeff)
 {
 	if (emf_avg_scheme == EMFAvgScheme::LondrilloDelZanna2004) {
-		EMFAverage_LondrilloDelZanna2004(E2_ave, ec_fabs_E_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside, cc_cVars, B_w0, B_w1, dx_w0, dx_w1, resistivity,
-						 artificialResistivityCoeff);
+		EMFAverage_LondrilloDelZanna2004(E2_ave, ec_fabs_E_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside, cc_cVars, B_w0, B_w1, dx_w0, dx_w1,
+						 resistivity, artificialResistivityCoeff);
 	} else if (emf_avg_scheme == EMFAvgScheme::Balsara2025) {
 		EMFAverage_Balsara2025(E2_ave, ec_fabs_E_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside, cc_cVars, B_w0, B_w1, dx_w0, dx_w1, resistivity,
 				       artificialResistivityCoeff);
@@ -180,8 +177,8 @@ template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 						      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 						      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
-						      SlopeLimiter plmLimiter, EMFAvgScheme emf_avg_scheme,
-						      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real resistivity, amrex::Real artificialResistivityCoeff)
+						      SlopeLimiter plmLimiter, EMFAvgScheme emf_avg_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+						      amrex::Real resistivity, amrex::Real artificialResistivityCoeff)
 {
 	const BL_PROFILE("MHDSystem::ComputeEMF_FelkerStone2017()");
 	const int nghost_cc = 4; // we only need 4 cc ghost cells when reconstructing cc->fc->ec using PPM
@@ -394,10 +391,9 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 			std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi),
 										       fcx_mf_fspds[2].const_array(mfi)};
 			MHDSystem<problem_t>::AverageEMF(E2_ave, ec_fabs_E_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside, emf_avg_scheme,
-							 cc_mf_cVars.const_array(mfi),
-							 fcx_mf_cVars[extrap_dirs[0]][mfi].const_array(bfield_index),
-							 fcx_mf_cVars[extrap_dirs[1]][mfi].const_array(bfield_index),
-							 dx[extrap_dirs[0]], dx[extrap_dirs[1]], resistivity, artificialResistivityCoeff);
+							 cc_mf_cVars.const_array(mfi), fcx_mf_cVars[extrap_dirs[0]][mfi].const_array(bfield_index),
+							 fcx_mf_cVars[extrap_dirs[1]][mfi].const_array(bfield_index), dx[extrap_dirs[0]], dx[extrap_dirs[1]],
+							 resistivity, artificialResistivityCoeff);
 		}
 	}
 }
@@ -410,8 +406,8 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
 						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
-						 SlopeLimiter plmLimiter, EMFAvgScheme emf_avg_scheme,
-						 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real resistivity, amrex::Real artificialResistivityCoeff)
+						 SlopeLimiter plmLimiter, EMFAvgScheme emf_avg_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+						 amrex::Real resistivity, amrex::Real artificialResistivityCoeff)
 {
 	const BL_PROFILE("MHDSystem::ComputeEMF_Quokka2026()");
 
@@ -534,10 +530,9 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 			std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi),
 										       fcx_mf_fspds[2].const_array(mfi)};
 			MHDSystem<problem_t>::AverageEMF(E2_ave, ec_fabs_E_Q, box_ec, field_w_indices, fspds, ec_fabs_Bi_ieside, emf_avg_scheme,
-							 cc_mf_cVars.const_array(mfi),
-							 fcx_mf_cVars[field_w_indices[0]][mfi].const_array(bfield_index),
-							 fcx_mf_cVars[field_w_indices[1]][mfi].const_array(bfield_index),
-							 dx[field_w_indices[0]], dx[field_w_indices[1]], resistivity, artificialResistivityCoeff);
+							 cc_mf_cVars.const_array(mfi), fcx_mf_cVars[field_w_indices[0]][mfi].const_array(bfield_index),
+							 fcx_mf_cVars[field_w_indices[1]][mfi].const_array(bfield_index), dx[field_w_indices[0]],
+							 dx[field_w_indices[1]], resistivity, artificialResistivityCoeff);
 		}
 	}
 }
@@ -550,8 +545,8 @@ template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 						  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 						  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
-						  SlopeLimiter plmLimiter, EMFAvgScheme emf_avg_scheme,
-						  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real resistivity, amrex::Real artificialResistivityCoeff)
+						  SlopeLimiter plmLimiter, EMFAvgScheme emf_avg_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+						  amrex::Real resistivity, amrex::Real artificialResistivityCoeff)
 {
 	// calculating v x B at cell center, v already at cell center, B at face center
 
@@ -742,10 +737,9 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 			std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi),
 										       fcx_mf_fspds[2].const_array(mfi)};
 			MHDSystem<problem_t>::AverageEMF(E2_array, ec_fabs_EMF_q, box_ec, extrap_dirs, fspds, ec_fabs_Bi_ieside, emf_avg_scheme,
-							 cc_mf_cVars.const_array(mfi),
-							 fcx_mf_cVars[extrap_dirs[0]][mfi].const_array(bfield_index),
-							 fcx_mf_cVars[extrap_dirs[1]][mfi].const_array(bfield_index),
-							 dx[extrap_dirs[0]], dx[extrap_dirs[1]], resistivity, artificialResistivityCoeff);
+							 cc_mf_cVars.const_array(mfi), fcx_mf_cVars[extrap_dirs[0]][mfi].const_array(bfield_index),
+							 fcx_mf_cVars[extrap_dirs[1]][mfi].const_array(bfield_index), dx[extrap_dirs[0]], dx[extrap_dirs[1]],
+							 resistivity, artificialResistivityCoeff);
 		}
 	}
 }
@@ -757,9 +751,9 @@ void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(amrex::Array4<amrex:
 							    amrex::Box const &box_ec, std::array<int, 2> const &extrap_dirs,
 							    std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
 							    std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_Bi_ieside,
-							    amrex::Array4<const amrex::Real> const &cc_cVars,
-							    amrex::Array4<const amrex::Real> const &B_w0, amrex::Array4<const amrex::Real> const &B_w1,
-							    amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real resistivity, amrex::Real artificialResistivityCoeff)
+							    amrex::Array4<const amrex::Real> const &cc_cVars, amrex::Array4<const amrex::Real> const &B_w0,
+							    amrex::Array4<const amrex::Real> const &B_w1, amrex::Real dx_w0, amrex::Real dx_w1,
+							    amrex::Real resistivity, amrex::Real artificialResistivityCoeff)
 {
 	const BL_PROFILE("MHDSystem::EMFAverage_LondrilloDelZanna2004()");
 
@@ -818,9 +812,8 @@ void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(amrex::Array4<amrex:
 		//  // No sign error, just B1_p_ and B1_m_ were swapped relative to Felker & Stone's ByE and ByW
 		const double term2 = ((a1_m * a1_p) / (a1_m + a1_p)) * (B0_p_ - B0_m_) + ((a0_m * a0_p) / (a0_m + a0_p)) * (B1_m_ - B1_p_);
 
-		E2_ave(i, j, k) = (numerator / denominator) + term2
-		    - computeResistiveEMF(B_w0, B_w1, i, j, k, delta_w0, delta_w1, dx_w0, dx_w1, resistivity)
-		    - computeArtificialResistiveEMF(B_w0, B_w1, cc_cVars, i, j, k, delta_w0, delta_w1, dx_w0, dx_w1, artificialResistivityCoeff);
+		E2_ave(i, j, k) = (numerator / denominator) + term2 - computeResistiveEMF(B_w0, B_w1, i, j, k, delta_w0, delta_w1, dx_w0, dx_w1, resistivity) -
+				  computeArtificialResistiveEMF(B_w0, B_w1, cc_cVars, i, j, k, delta_w0, delta_w1, dx_w0, dx_w1, artificialResistivityCoeff);
 	});
 }
 
@@ -831,9 +824,9 @@ void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> E2_
 						  amrex::Box const &box_ec, std::array<int, 2> const &extrap_dirs,
 						  std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
 						  std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_Bi_ieside,
-						  amrex::Array4<const amrex::Real> const &cc_cVars,
-						  amrex::Array4<const amrex::Real> const &B_w0, amrex::Array4<const amrex::Real> const &B_w1,
-						  amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real resistivity, amrex::Real artificialResistivityCoeff)
+						  amrex::Array4<const amrex::Real> const &cc_cVars, amrex::Array4<const amrex::Real> const &B_w0,
+						  amrex::Array4<const amrex::Real> const &B_w1, amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real resistivity,
+						  amrex::Real artificialResistivityCoeff)
 {
 	const BL_PROFILE("MHDSystem::EMFAverage_Balsara2025()");
 	const auto &E2_q0 = ec_fabs_EMF_q[0].const_array();
@@ -927,9 +920,8 @@ void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> E2_
 			E2_result = E2_dstar;
 		}
 
-		E2_ave(i, j, k) = E2_result
-		    - computeResistiveEMF(B_w0, B_w1, i, j, k, delta_w0, delta_w1, dx_w0, dx_w1, resistivity)
-		    - computeArtificialResistiveEMF(B_w0, B_w1, cc_cVars, i, j, k, delta_w0, delta_w1, dx_w0, dx_w1, artificialResistivityCoeff);
+		E2_ave(i, j, k) = E2_result - computeResistiveEMF(B_w0, B_w1, i, j, k, delta_w0, delta_w1, dx_w0, dx_w1, resistivity) -
+				  computeArtificialResistiveEMF(B_w0, B_w1, cc_cVars, i, j, k, delta_w0, delta_w1, dx_w0, dx_w1, artificialResistivityCoeff);
 	});
 }
 
@@ -1064,9 +1056,9 @@ void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_S
 
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto MHDSystem<problem_t>::computeResistiveEMF(amrex::Array4<const amrex::Real> const &B_w0,
-										    amrex::Array4<const amrex::Real> const &B_w1, int i, int j, int k,
-										    std::array<int, 3> const &delta_w0, std::array<int, 3> const &delta_w1,
-										    amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real resistivity) -> amrex::Real
+										   amrex::Array4<const amrex::Real> const &B_w1, int i, int j, int k,
+										   std::array<int, 3> const &delta_w0, std::array<int, 3> const &delta_w1,
+										   amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real resistivity) -> amrex::Real
 {
 	const amrex::Real J_edge = (B_w1(i, j, k) - B_w1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2])) / dx_w0 -
 				   (B_w0(i, j, k) - B_w0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2])) / dx_w1;
@@ -1074,11 +1066,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto MHDSystem<problem_t>::computeResistiveE
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto MHDSystem<problem_t>::computeArtificialResistiveEMF(
-    amrex::Array4<const amrex::Real> const &B_w0, amrex::Array4<const amrex::Real> const &B_w1,
-    amrex::Array4<const amrex::Real> const &cc_cVars, int i, int j, int k,
-    std::array<int, 3> const &delta_w0, std::array<int, 3> const &delta_w1,
-    amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real artificialResistivityCoeff) -> amrex::Real
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto
+MHDSystem<problem_t>::computeArtificialResistiveEMF(amrex::Array4<const amrex::Real> const &B_w0, amrex::Array4<const amrex::Real> const &B_w1,
+						    amrex::Array4<const amrex::Real> const &cc_cVars, int i, int j, int k, std::array<int, 3> const &delta_w0,
+						    std::array<int, 3> const &delta_w1, amrex::Real dx_w0, amrex::Real dx_w1,
+						    amrex::Real artificialResistivityCoeff) -> amrex::Real
 {
 	if (artificialResistivityCoeff == 0.0) {
 		return 0.0;
@@ -1086,8 +1078,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto MHDSystem<problem_t>::computeArtificial
 	const amrex::Real J_edge = (B_w1(i, j, k) - B_w1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2])) / dx_w0 -
 				   (B_w0(i, j, k) - B_w0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2])) / dx_w1;
 	// average density and B at the four cell centres surrounding the edge
-	const amrex::Real rho_avg = 0.25 * (cc_cVars(i, j, k, 0) +
-					    cc_cVars(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2], 0) +
+	const amrex::Real rho_avg = 0.25 * (cc_cVars(i, j, k, 0) + cc_cVars(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2], 0) +
 					    cc_cVars(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 0) +
 					    cc_cVars(i - delta_w0[0] - delta_w1[0], j - delta_w0[1] - delta_w1[1], k - delta_w0[2] - delta_w1[2], 0));
 	// approximate |B| at the edge using the two available face-centred components (excludes edge-aligned component)

@@ -225,7 +225,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	EMFComputeScheme emfComputingScheme_ = EMFComputeScheme::FelkerStone2017;
 	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::LondrilloDelZanna2004; // method to use to average EMF at edges
-	amrex::Real mhdResistivity_ = 0.0;			       // Ohmic resistivity eta; parabolic limit: dt < dx^2 / (2*eta)
+	amrex::Real mhdResistivity_ = 0.0;					// Ohmic resistivity eta; parabolic limit: dt < dx^2 / (2*eta)
 	amrex::Real mhdArtificialResistivityCoeff_ = 0.0; // artificial resistivity coefficient c_art; eta_art = c_art * |J| * dx^2 / sqrt(rho)
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
@@ -270,8 +270,9 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 			if (mhdResistivity_ != 0.0) {
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(do_subcycle == 0,
 								 "AMR subcycling is not supported with nonzero resistivity. Set do_subcycle = 0.");
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(useDualEnergy_ == 0,
-								 "mhd.resistivity requires use_dual_energy = 0: Ohmic heating is not yet added to the auxiliary energy equation.");
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    useDualEnergy_ == 0,
+				    "mhd.resistivity requires use_dual_energy = 0: Ohmic heating is not yet added to the auxiliary energy equation.");
 			}
 		}
 	}
