@@ -91,12 +91,12 @@ auto getAnalyticModeData() -> AnalyticModeData const &
 auto analyticState(double t) -> AnalyticState
 {
 	AnalyticModeData const &mode = getAnalyticModeData();
-	double const exp1 = std::exp(mode.lambda1 * t);
-	double const exp2 = std::exp(mode.lambda2 * t);
+	double const lambda1_exp = std::exp(mode.lambda1 * t);
+	double const lambda2_exp = std::exp(mode.lambda2 * t);
 
-	double const gas_mode = mode.coeff1 * exp1 + mode.coeff2 * exp2;
-	double const dust1_mode = mode.coeff1 * mode.dust1_ratio1 * exp1 + mode.coeff2 * mode.dust1_ratio2 * exp2;
-	double const dust2_mode = mode.coeff1 * mode.dust2_ratio1 * exp1 + mode.coeff2 * mode.dust2_ratio2 * exp2;
+	double const gas_mode = mode.coeff1 * lambda1_exp + mode.coeff2 * lambda2_exp;
+	double const dust1_mode = mode.coeff1 * mode.dust1_ratio1 * lambda1_exp + mode.coeff2 * mode.dust1_ratio2 * lambda2_exp;
+	double const dust2_mode = mode.coeff1 * mode.dust2_ratio1 * lambda1_exp + mode.coeff2 * mode.dust2_ratio2 * lambda2_exp;
 
 	return AnalyticState{
 	    .v_gas = mode.v_com + gas_mode,
