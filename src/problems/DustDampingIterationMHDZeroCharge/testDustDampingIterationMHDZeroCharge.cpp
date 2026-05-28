@@ -275,7 +275,7 @@ auto run_mhd_zero_charge_simulation() -> SimulationData<DustDampingMHDZeroCharge
 	sim.cflNumber_ = 0.3;
 	sim.constantDt_ = -1.0;
 	sim.enableIterDustStoptime_ = 1;
-	sim.dust_omega_res_ = 1.0; // make the energy calculation method in computeDustDragAndLorentz() the same as the reference solution
+	sim.dustResolvedRkScheme_ = quokka::dust::ResolvedRkScheme::TP2025;
 	sim.print_dust_counter_ = true;
 
 	sim.setInitialConditions();
