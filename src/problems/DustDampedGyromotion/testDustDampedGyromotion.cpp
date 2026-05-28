@@ -6,9 +6,11 @@
 #include "dust/DustRuntimeParams.hpp"
 #include "util/fextract.hpp"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <numbers>
 #include <string>
+#include <utility>
 #include <vector>
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
@@ -114,6 +116,20 @@ struct DustGyroPhysicsTraits {
 	static constexpr double c_light = 1.0;
 	static constexpr double radiation_constant = 1.0;
 };
+
+using ResolvedRkScheme = quokka::dust::ResolvedRkScheme;
+
+struct SchemeRunResult {
+	ResolvedRkScheme scheme;
+	DustGyroHistory data;
+	double drift_l2_error;
+	double amplitude_error;
+	double conservation_error;
+};
+
+constexpr std::array<ResolvedRkScheme, 3> resolved_rk_schemes = {ResolvedRkScheme::TP2025, ResolvedRkScheme::GL4, ResolvedRkScheme::Midpoint};
+constexpr std::array<char const *, 3> scheme_colors = {"C0", "C1", "C2"};
+constexpr std::array<char const *, 3> scheme_markers = {"o", "s", "^"};
 } // namespace
 
 template <> struct SimulationData<DustGyroEpsteinNoB> : DustGyroHistory {
@@ -330,7 +346,7 @@ template <typename problem_t> auto makePeriodicFaceBCs() -> amrex::Vector<amrex:
 	return BCs_fc;
 }
 
-template <typename problem_t> auto runDustGyroSimulation() -> SimulationData<problem_t>
+template <typename problem_t> auto runDustGyroSimulation(ResolvedRkScheme scheme) -> SimulationData<problem_t>
 {
 	auto BCs_cc = quokka::BC<problem_t>(quokka::BCType::int_dir, quokka::BCType::int_dir, quokka::BCType::int_dir);
 	auto BCs_fc = makePeriodicFaceBCs<problem_t>();
@@ -344,6 +360,7 @@ template <typename problem_t> auto runDustGyroSimulation() -> SimulationData<pro
 	sim.stopTime_ = GyroCaseParams<problem_t>::stop_time;
 	sim.maxTimesteps_ = 10000000;
 	sim.enableIterDustStoptime_ = GyroCaseParams<problem_t>::enable_epstein_drag ? 1 : 0;
+	sim.dustResolvedRkScheme_ = scheme;
 	sim.print_dust_counter_ = false;
 
 	sim.setInitialConditions();
@@ -411,6 +428,22 @@ auto maxConservationError(const DustGyroHistory &data) -> double
 			 maxAbsVectorComponent(data.center_momentum_z_vec_), maxAbsVectorComponent(data.wz_vec_)});
 }
 
+template <typename problem_t, typename AnalyticFn>
+auto computeRunResult(ResolvedRkScheme scheme, SimulationData<problem_t> data, AnalyticFn analytic) -> SchemeRunResult
+{
+	SchemeRunResult result{
+	    .scheme = scheme,
+	    .data = std::move(data),
+	    .drift_l2_error = 0.0,
+	    .amplitude_error = 0.0,
+	    .conservation_error = 0.0,
+	};
+	result.drift_l2_error = relativeDriftL2Error(result.data, analytic);
+	result.amplitude_error = maxRelativeAmplitudeError(result.data);
+	result.conservation_error = maxConservationError(result.data);
+	return result;
+}
+
 template <typename AnalyticFn>
 void fillDenseDriftXData(const DustGyroHistory &data, AnalyticFn analytic, double x_scale, std::vector<double> &x_dense, std::vector<double> &wx_dense)
 {
@@ -428,23 +461,34 @@ void fillDenseDriftXData(const DustGyroHistory &data, AnalyticFn analytic, doubl
 
 #ifdef HAVE_PYTHON
 template <typename AnalyticFn>
-void plotDriftX(const DustGyroHistory &data, AnalyticFn analytic, const std::string &filename, const std::string &title, double x_scale,
+void plotDriftX(const std::vector<SchemeRunResult> &runs, AnalyticFn analytic, const std::string &filename, const std::string &title, double x_scale,
 		const std::string &xlabel)
 {
+	if (runs.empty()) {
+		return;
+	}
+
 	std::vector<double> x_dense;
 	std::vector<double> wx_dense;
-	fillDenseDriftXData(data, analytic, x_scale, x_dense, wx_dense);
-
-	std::vector<double> x_num(data.t_vec_.size());
-	std::vector<double> wx_num(data.wx_vec_.size());
-	for (size_t i = 0; i < data.wx_vec_.size(); ++i) {
-		x_num[i] = x_scale * data.t_vec_[i];
-		wx_num[i] = data.wx_vec_[i] / initial_drift;
-	}
+	fillDenseDriftXData(runs.front().data, analytic, x_scale, x_dense, wx_dense);
 
 	matplotlibcpp::clf();
 	matplotlibcpp::plot(x_dense, wx_dense, {{"label", "analytic"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "1.0"}});
-	matplotlibcpp::plot(x_num, wx_num, {{"label", "numerical"}, {"color", "C0"}, {"linestyle", "None"}, {"marker", "o"}, {"markersize", "3"}});
+	for (size_t idx = 0; idx < runs.size(); ++idx) {
+		std::vector<double> x_num(runs[idx].data.t_vec_.size());
+		std::vector<double> wx_num(runs[idx].data.wx_vec_.size());
+		for (size_t i = 0; i < runs[idx].data.wx_vec_.size(); ++i) {
+			x_num[i] = x_scale * runs[idx].data.t_vec_[i];
+			wx_num[i] = runs[idx].data.wx_vec_[i] / initial_drift;
+		}
+
+		matplotlibcpp::plot(x_num, wx_num,
+				    {{"label", quokka::dust::resolvedRkSchemeName(runs[idx].scheme)},
+				     {"color", scheme_colors[idx]},
+				     {"linestyle", "None"},
+				     {"marker", scheme_markers[idx]},
+				     {"markersize", "3"}});
+	}
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel(xlabel);
 	matplotlibcpp::ylabel(R"($w_x/w_0$)");
@@ -458,34 +502,66 @@ auto problem_main() -> int
 {
 	quokka::dust::readDustGrainParams(g_dust_grain_radius, g_dust_grain_density);
 
-	auto epstein_no_b = runDustGyroSimulation<DustGyroEpsteinNoB>();
-	auto gyro_no_drag = runDustGyroSimulation<DustGyroNoDrag>();
-	auto epstein_with_b = runDustGyroSimulation<DustGyroEpsteinWithB>();
+	auto epstein_no_b_exact = [](double t) { return analyticEpsteinDrift(t, GyroCaseParams<DustGyroEpsteinNoB>::omega_L); };
+	auto gyro_no_drag_exact = [](double t) { return analyticGyroDrift(t, GyroCaseParams<DustGyroNoDrag>::omega_L); };
+	auto epstein_with_b_exact = [](double t) { return analyticEpsteinDrift(t, GyroCaseParams<DustGyroEpsteinWithB>::omega_L); };
+
+	std::vector<SchemeRunResult> epstein_no_b_runs;
+	std::vector<SchemeRunResult> gyro_no_drag_runs;
+	std::vector<SchemeRunResult> epstein_with_b_runs;
+	epstein_no_b_runs.reserve(resolved_rk_schemes.size());
+	gyro_no_drag_runs.reserve(resolved_rk_schemes.size());
+	epstein_with_b_runs.reserve(resolved_rk_schemes.size());
+
+	for (ResolvedRkScheme const scheme : resolved_rk_schemes) {
+		epstein_no_b_runs.push_back(computeRunResult(scheme, runDustGyroSimulation<DustGyroEpsteinNoB>(scheme), epstein_no_b_exact));
+		gyro_no_drag_runs.push_back(computeRunResult(scheme, runDustGyroSimulation<DustGyroNoDrag>(scheme), gyro_no_drag_exact));
+		epstein_with_b_runs.push_back(computeRunResult(scheme, runDustGyroSimulation<DustGyroEpsteinWithB>(scheme), epstein_with_b_exact));
+	}
 
 	int status = 0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		auto epstein_no_b_exact = [](double t) { return analyticEpsteinDrift(t, GyroCaseParams<DustGyroEpsteinNoB>::omega_L); };
-		auto gyro_no_drag_exact = [](double t) { return analyticGyroDrift(t, GyroCaseParams<DustGyroNoDrag>::omega_L); };
-		auto epstein_with_b_exact = [](double t) { return analyticEpsteinDrift(t, GyroCaseParams<DustGyroEpsteinWithB>::omega_L); };
-
-		const double epstein_no_b_error = relativeDriftL2Error(epstein_no_b, epstein_no_b_exact);
-		const double gyro_no_drag_error = relativeDriftL2Error(gyro_no_drag, gyro_no_drag_exact);
-		const double epstein_with_b_error = relativeDriftL2Error(epstein_with_b, epstein_with_b_exact);
-		const double gyro_amplitude_error = maxRelativeAmplitudeError(gyro_no_drag);
-		const double epstein_no_b_conservation_error = maxConservationError(epstein_no_b);
-		const double gyro_no_drag_conservation_error = maxConservationError(gyro_no_drag);
-		const double epstein_with_b_conservation_error = maxConservationError(epstein_with_b);
-
 		const double epstein_no_b_tol = 5.0e-2;
 		const double gyro_no_drag_tol = 8.0e-2;
+		const double gyro_no_drag_midpoint_tol = 2.5e-1;
 		const double gyro_amplitude_tol = 0.1;
 		const double epstein_with_b_tol = 8.0e-2;
 		const double conservation_tol = 1.0e-10;
 
-		const bool passed = (epstein_no_b_error <= epstein_no_b_tol) && (gyro_no_drag_error <= gyro_no_drag_tol) &&
-				    (gyro_amplitude_error <= gyro_amplitude_tol) && (epstein_with_b_error <= epstein_with_b_tol) &&
-				    (epstein_no_b_conservation_error <= conservation_tol) && (gyro_no_drag_conservation_error <= conservation_tol) &&
-				    (epstein_with_b_conservation_error <= conservation_tol);
+		bool passed = true;
+		for (auto const &run : epstein_no_b_runs) {
+			amrex::Print() << "[Pure Damping][" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L2 drift error = "
+				       << run.drift_l2_error << "\n";
+			amrex::Print() << "[Pure Damping][" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Conservation error     = "
+				       << run.conservation_error << "\n";
+			if ((run.drift_l2_error > epstein_no_b_tol) || (run.conservation_error > conservation_tol)) {
+				passed = false;
+			}
+		}
+
+		for (auto const &run : gyro_no_drag_runs) {
+			const double drift_tol = (run.scheme == ResolvedRkScheme::Midpoint) ? gyro_no_drag_midpoint_tol : gyro_no_drag_tol;
+			amrex::Print() << "[Undamped Gyromotion][" << quokka::dust::resolvedRkSchemeName(run.scheme)
+				       << "] Relative L2 drift error = " << run.drift_l2_error << "\n";
+			amrex::Print() << "[Undamped Gyromotion][" << quokka::dust::resolvedRkSchemeName(run.scheme)
+				       << "] Relative amplitude error = " << run.amplitude_error << "\n";
+			amrex::Print() << "[Undamped Gyromotion][" << quokka::dust::resolvedRkSchemeName(run.scheme)
+				       << "] Conservation error       = " << run.conservation_error << "\n";
+			if ((run.drift_l2_error > drift_tol) || (run.amplitude_error > gyro_amplitude_tol) ||
+			    (run.conservation_error > conservation_tol)) {
+				passed = false;
+			}
+		}
+
+		for (auto const &run : epstein_with_b_runs) {
+			amrex::Print() << "[Damped Gyromotion][" << quokka::dust::resolvedRkSchemeName(run.scheme)
+				       << "] Relative L2 drift error = " << run.drift_l2_error << "\n";
+			amrex::Print() << "[Damped Gyromotion][" << quokka::dust::resolvedRkSchemeName(run.scheme)
+				       << "] Conservation error     = " << run.conservation_error << "\n";
+			if ((run.drift_l2_error > epstein_with_b_tol) || (run.conservation_error > conservation_tol)) {
+				passed = false;
+			}
+		}
 
 		if (!passed) {
 			status = 1;
@@ -496,10 +572,11 @@ auto problem_main() -> int
 
 #ifdef HAVE_PYTHON
 		const double alpha0 = computeInitialReciprocalStoppingTime();
-		plotDriftX(epstein_no_b, epstein_no_b_exact, "./dust_gyromotion_PureDamping.pdf", "Pure Damping", alpha0, R"($t/t_{s,0}$)");
-		plotDriftX(gyro_no_drag, gyro_no_drag_exact, "./dust_gyromotion_UndampedGyromotion.pdf", "Undamped Gyromotion",
+		plotDriftX(epstein_no_b_runs, epstein_no_b_exact, "./dust_gyromotion_PureDamping.pdf", "Pure Damping", alpha0, R"($t/t_{s,0}$)");
+		plotDriftX(gyro_no_drag_runs, gyro_no_drag_exact, "./dust_gyromotion_UndampedGyromotion.pdf", "Undamped Gyromotion",
 			   GyroCaseParams<DustGyroNoDrag>::omega_L, R"($\omega_L t$)");
-		plotDriftX(epstein_with_b, epstein_with_b_exact, "./dust_gyromotion_DampedGyromotion.pdf", "Damped Gyromotion", alpha0, R"($t/t_{s,0}$)");
+		plotDriftX(epstein_with_b_runs, epstein_with_b_exact, "./dust_gyromotion_DampedGyromotion.pdf", "Damped Gyromotion", alpha0,
+			   R"($t/t_{s,0}$)");
 #endif
 	}
 
