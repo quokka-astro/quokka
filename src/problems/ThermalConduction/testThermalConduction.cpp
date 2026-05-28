@@ -94,14 +94,11 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 			vz = 0.0; // cloud is stationary
 		}
 		else{
-			T = Tcloud;
-			rho = rho_cloud; // * Tcloud / Twind; // g/cm^3
+			T = Twind;
+			rho = rho_cloud * Tcloud / Twind; // g/cm^3
 			amrex::Real pressure = rho * T * C::k_B / C::m_u;
-			cs_wind = 0.0 * quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho, pressure);
+			cs_wind = quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho, pressure);
 			vz = Mach * cs_wind; // 100 km/s
-		}
-		if(i==64){
-			T = 30 * Tcloud;
 		}
 		const amrex::Real Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T);
 		/*-------------------------------------------------*/
