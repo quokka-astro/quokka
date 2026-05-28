@@ -30,4 +30,4 @@ conduction.conductivity_prefactor = 3.056958245467793e11
 conduction.flux_limiter_phi = 1
 conduction.saturation_factor = 1.2e20
 conduction.conduction_cfl = 0.1
-conduction.eos_flag = EOS    # use ResampledCooling for resampled cooling tables
+conduction.eos_flag = "EOS"    # use ResampledCooling for resampled cooling tables
