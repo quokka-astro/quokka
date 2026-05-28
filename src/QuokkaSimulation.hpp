@@ -225,7 +225,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	EMFComputeScheme emfComputingScheme_ = EMFComputeScheme::FelkerStone2017;
 	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::LondrilloDelZanna2004; // method to use to average EMF at edges
-	amrex::Real mhdResistivity_ = 0.0;				       // Ohmic resistivity eta; parabolic limit: dt < dx^2 / (2*eta)
+	amrex::Real mhdResistivity_ = 0.0;			       // Ohmic resistivity eta; parabolic limit: dt < dx^2 / (2*eta)
+	amrex::Real mhdArtificialResistivityCoeff_ = 0.0; // artificial resistivity coefficient c_art; eta_art = c_art * |J| * dx^2 / sqrt(rho)
 
 	amrex::Long radiationCellUpdates_ = 0; // total number of radiation cell-updates
 	std::unique_ptr<quokka::turbulence::turbulentDriving<problem_t>> td;
@@ -605,6 +606,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("update_initial_b_energy", updateInitialMagneticEnergy_);
 		hpp.query("resistivity", mhdResistivity_);
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(mhdResistivity_ >= 0.0, "mhd.resistivity must be >= 0.");
+		hpp.query("artificial_resistivity_coefficient", mhdArtificialResistivityCoeff_);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(mhdArtificialResistivityCoeff_ >= 0.0, "mhd.artificial_resistivity_coefficient must be >= 0.");
 	}
 
 	// set cooling runtime parameters
@@ -2260,7 +2263,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			ec_emf_components_fo[idim].define(ba_ec, dm, 1, 0);
 		}
 		MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, FOfaceVel, state_old_fc_tmp, FOfast_mhd_wavespeeds,
-						 emfReconstructionOrder_, emfAveragingScheme_, mhdPlmLimiter_, emfComputingScheme_, dx, mhdResistivity_);
+						 emfReconstructionOrder_, emfAveragingScheme_, mhdPlmLimiter_, emfComputingScheme_, dx, mhdResistivity_,
+						 mhdArtificialResistivityCoeff_);
 	}
 
 	// Stage 1 of RK2-SSP
@@ -2281,7 +2285,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				ec_emf_components_rk_stage1[idim].define(ba_ec, dm, 1, 0);
 			}
 			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage1, stateOld_cc, faceVel, stateOld_fc, fast_mhd_wavespeeds,
-							 emfReconstructionOrder_, emfAveragingScheme_, mhdPlmLimiter_, emfComputingScheme_, dx, mhdResistivity_);
+							 emfReconstructionOrder_, emfAveragingScheme_, mhdPlmLimiter_, emfComputingScheme_, dx, mhdResistivity_,
+							 mhdArtificialResistivityCoeff_);
 		}
 
 		amrex::MultiFab rhs(grids[lev], dmap[lev], nvars_, 0);
@@ -2413,7 +2418,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				ec_emf_components_rk_stage2[idim].define(ba_ec, dm, 1, 0);
 			}
 			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage2, stateInter_cc, faceVel, stateInter_fc, fast_mhd_wavespeeds,
-							 emfReconstructionOrder_, emfAveragingScheme_, mhdPlmLimiter_, emfComputingScheme_, dx, mhdResistivity_);
+							 emfReconstructionOrder_, emfAveragingScheme_, mhdPlmLimiter_, emfComputingScheme_, dx, mhdResistivity_,
+							 mhdArtificialResistivityCoeff_);
 		}
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
