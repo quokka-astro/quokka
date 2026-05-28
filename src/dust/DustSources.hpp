@@ -10,6 +10,7 @@
 #include "AMReX_LUSolver.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_SmallMatrix.H"
+#include "dust/DustRuntimeParams.hpp"
 #include "hydro/hydro_system.hpp"
 #include "physics_info.hpp"
 #include "util/ArrayView_3d.hpp"
@@ -90,7 +91,9 @@ template <typename problem_t> class DustSources
 	static void computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc_mf, amrex::Real dt,
 				    amrex::Real dust_omega_drag_, int enableIterDustStoptime_, bool print_dust_counter_);
 	static void computeDustDragAndLorentz(amrex::MultiFab &consVar_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc_mf, amrex::Real dt,
-					      amrex::Real dust_omega_drag_, amrex::Real dust_omega_res_, int enableIterDustStoptime_, bool print_dust_counter_);
+					      amrex::Real dust_omega_drag_, amrex::Real dust_omega_magnetic_res_,
+					      quokka::dust::ResolvedRkScheme resolved_rk_scheme_, int enableIterDustStoptime_,
+					      bool print_dust_counter_);
 };
 
 template <typename problem_t>
@@ -575,7 +578,8 @@ void DustSources<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std
 
 template <typename problem_t>
 void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc_mf,
-						       amrex::Real dt, amrex::Real dust_omega_drag_, amrex::Real dust_omega_res_, int enableIterDustStoptime_,
+						       amrex::Real dt, amrex::Real dust_omega_drag_, amrex::Real dust_omega_magnetic_res_,
+						       quokka::dust::ResolvedRkScheme resolved_rk_scheme_, int enableIterDustStoptime_,
 						       bool print_dust_counter_)
 {
 	amrex::Gpu::Buffer<int> iteration_counter({0, 0, 0}); // [sum of iterations, number of cells, max iterations in any cell]
@@ -591,7 +595,7 @@ void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_
 
 	int const numDustVars = Physics_NumVars::numDustVarsPerGroup;
 	amrex::Real const omega_drag = dust_omega_drag_;
-	amrex::Real const omega_res = dust_omega_res_;
+	amrex::Real const omega_magnetic_res = dust_omega_magnetic_res_;
 	auto const charge_to_mass_ratio = ComputeDustChargeToMassRatio();
 
 	amrex::ParallelFor(consVar_cc_mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
@@ -701,11 +705,25 @@ void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_
 			}
 
 			if (dt_lev < timescale_max) {
-				gamma1 = 0.25;
-				gamma2 = 0.25;
-				beta1 = 0.25 - std::numbers::sqrt3 / 6.0;
-				beta2 = 0.25 + std::numbers::sqrt3 / 6.0;
-				b = 0.5;
+				if (resolved_rk_scheme_ == quokka::dust::ResolvedRkScheme::TP2025) {
+					gamma1 = 1.0;
+					gamma2 = 0.0;
+					beta1 = -0.5;
+					beta2 = 2.0 / 3.0;
+					b = 1.0;
+				} else if (resolved_rk_scheme_ == quokka::dust::ResolvedRkScheme::GL4) {
+					gamma1 = 0.25;
+					gamma2 = 0.25;
+					beta1 = 0.25 - std::numbers::sqrt3 / 6.0;
+					beta2 = 0.25 + std::numbers::sqrt3 / 6.0;
+					b = 0.5;
+				} else {
+					gamma1 = 0.25;
+					gamma2 = 0.25;
+					beta1 = 0.25;
+					beta2 = 0.25;
+					b = 0.5;
+				}
 			} else {
 				gamma1 = 1.0;
 				gamma2 = 1.0;
@@ -819,16 +837,43 @@ void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_
 			}
 
 			amrex::Real delta_E_heat_drag = 0.0;
+			Vec3 k1_g_drag = Vec3::Zero();
+			Vec3 k2_g_drag = Vec3::Zero();
+			amrex::Real inner_drag_11 = 0.0;
+			amrex::Real inner_drag_12 = 0.0;
+			amrex::Real inner_drag_22 = 0.0;
 			for (int g = 0; g < nDustGroups_; ++g) {
 				if (rho_d[g] > 0.0) {
 					delta_E_heat_drag += dt * alpha[g] / rho_d[g] * (b * q1[g].dot(q1[g]) + (1.0 - b) * q2[g].dot(q2[g]));
+
+					Vec3 const k1_d_drag = -alpha[g] * q1[g];
+					Vec3 const k2_d_drag = -alpha[g] * q2[g];
+					k1_g_drag -= k1_d_drag;
+					k2_g_drag -= k2_d_drag;
+					inner_drag_11 += k1_d_drag.dot(k1_d_drag) / rho_d[g];
+					inner_drag_12 += k1_d_drag.dot(k2_d_drag) / rho_d[g];
+					inner_drag_22 += k2_d_drag.dot(k2_d_drag) / rho_d[g];
 				}
+			}
+			if (rho_g > 0.0) {
+				inner_drag_11 += k1_g_drag.dot(k1_g_drag) / rho_g;
+				inner_drag_12 += k1_g_drag.dot(k2_g_drag) / rho_g;
+				inner_drag_22 += k2_g_drag.dot(k2_g_drag) / rho_g;
 			}
 
 			amrex::Real const delta_E_cons = -(delta_E_g_work + delta_E_d_work_sum);
 			amrex::Real const delta_E_res = delta_E_cons - delta_E_heat_drag;
-			E_tot_iter_new = E_tot + delta_E_g_work + omega_drag * delta_E_heat_drag + omega_res * delta_E_res;
-			E_int_iter_new = E_int + omega_drag * delta_E_heat_drag + omega_res * delta_E_res;
+			amrex::Real const b1 = b;
+			amrex::Real const b2 = 1.0 - b;
+			amrex::Real const m11 = 2.0 * b1 * gamma1 - b1 * b1;
+			amrex::Real const m22 = 2.0 * b2 * gamma2 - b2 * b2;
+			amrex::Real const m12 = b1 * beta1 + b2 * beta2 - b1 * b2;
+			amrex::Real const delta_E_res_drag_only =
+			    0.5 * dt * dt * (m11 * inner_drag_11 + 2.0 * m12 * inner_drag_12 + m22 * inner_drag_22);
+			amrex::Real const delta_E_res_magnetic = delta_E_res - delta_E_res_drag_only;
+			amrex::Real const delta_E_heat_effective = delta_E_cons - delta_E_res_magnetic;
+			E_tot_iter_new = E_tot + delta_E_g_work + omega_drag * delta_E_heat_effective + omega_magnetic_res * delta_E_res_magnetic;
+			E_int_iter_new = E_int + omega_drag * delta_E_heat_effective + omega_magnetic_res * delta_E_res_magnetic;
 
 			if (max_speed_change <= abs_tolerance) {
 				break;
