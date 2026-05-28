@@ -174,7 +174,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	amrex::Real electronConductionFluxLimiterPhi_ = 1.0;
 	amrex::Real electronConductionSaturationFactor_ = 5.0;
-	EOSFlagforConduction eosFlagForElectronConduction_ = EOSFlagforConduction::EOS; 
+	EOSFlagforConduction eosFlagForElectronConduction_ = EOSFlagforConduction::EOS;
 
 	std::map<std::string, std::string> turbParams_;
 
