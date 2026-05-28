@@ -3,7 +3,8 @@
 # *****************************************************************
 geometry.prob_lo = [-3.703e18, -3.703e18, -3.703e18]
 geometry.prob_hi = [3.703e18, 3.703e18, 3.703e18]
-quokka.bc = ["foextrap", "foextrap", "foextrap"]
+quokka.bc = ["periodic", "periodic", "periodic"]
+gravity.poisson_bc = "open"
 #restartfile = "chk15360"
 # *****************************************************************
 # VERBOSITY
