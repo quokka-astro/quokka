@@ -93,7 +93,7 @@ template <typename problem_t> class DustSources
 			return {coeffIdentity / denom_perp, -coeffCross / denom_perp, inv_parallel - coeffIdentity / denom_perp};
 		}
 
-		AMREX_GPU_HOST_DEVICE [[nodiscard]] auto apply(Vec3 const &x, Vec3 const &b_hat) const -> Vec3
+		[[nodiscard]] AMREX_GPU_HOST_DEVICE auto apply(Vec3 const &x, Vec3 const &b_hat) const -> Vec3
 		{
 			amrex::Real const x_parallel = b_hat.dot(x);
 			Vec3 result = Vec3::Zero();
