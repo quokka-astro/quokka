@@ -1066,9 +1066,9 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 			fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 				auto &mutable_mf = const_cast<amrex::MultiFab &>(state_fc[idim]);
-				fillBoundaryConditions(mutable_mf, mutable_mf, lev, time, quokka::centering::fc,
-						       static_cast<quokka::direction>(idim), AMRSimulation<problem_t>::InterpHookNone,
-						       AMRSimulation<problem_t>::InterpHookNone, FillPatchType::fillpatch_function);
+				fillBoundaryConditions(mutable_mf, mutable_mf, lev, time, quokka::centering::fc, static_cast<quokka::direction>(idim),
+						       AMRSimulation<problem_t>::InterpHookNone, AMRSimulation<problem_t>::InterpHookNone,
+						       FillPatchType::fillpatch_function);
 			}
 			const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_,
 											     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
