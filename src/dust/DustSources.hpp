@@ -135,7 +135,8 @@ template <typename problem_t> class DustSources
 									 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc) -> Vec3;
 	AMREX_GPU_HOST_DEVICE static auto ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>;
 	AMREX_GPU_HOST_DEVICE static auto ComputeDustStageAffineOperators(amrex::Real alpha, amrex::Real omega_L, amrex::Real epsilon, amrex::Real dt,
-									  amrex::Real gamma1, amrex::Real gamma2, amrex::Real beta1, amrex::Real beta2)
+									  amrex::Real gamma1, amrex::Real gamma2, amrex::Real beta1,
+									  amrex::Real beta2) // NOLINT(misc-confusable-identifiers)
 	    -> DustStageAffineOperators;
 	AMREX_GPU_HOST_DEVICE static auto SolveGasStageRates(amrex::GpuArray<DustStageAffineOperators, nDustGroups_> const &ops,
 							     amrex::GpuArray<Vec3, nDustGroups_> const &q_n, Vec3 const &b_hat) -> GasStageRates;
@@ -234,7 +235,8 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>:
 
 template <typename problem_t>
 AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeDustStageAffineOperators(amrex::Real alpha, amrex::Real omega_L, amrex::Real epsilon, amrex::Real dt,
-										   amrex::Real gamma1, amrex::Real gamma2, amrex::Real beta1, amrex::Real beta2)
+										   amrex::Real gamma1, amrex::Real gamma2, amrex::Real beta1,
+										   amrex::Real beta2) // NOLINT(misc-confusable-identifiers)
     -> DustStageAffineOperators
 {
 	DustStageAffineOperators ops;
@@ -402,10 +404,12 @@ void DustSources<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std
 				t_s_max = amrex::max(t_s_max, t_s);
 			}
 
-			amrex::Real gamma1 = 0; // NOLINT
-			amrex::Real gamma2 = 0;
-			amrex::Real beta1 = 0; // NOLINT
-			amrex::Real beta2 = 0;
+			// NOLINTBEGIN(misc-confusable-identifiers)
+			amrex::Real gamma1 = 0.0;
+			amrex::Real gamma2 = 0.0;
+			amrex::Real beta1 = 0.0;
+			amrex::Real beta2 = 0.0;
+			// NOLINTEND(misc-confusable-identifiers)
 			amrex::Real b = 0;
 			if (dt_lev < t_s_max) {
 				gamma1 = 1.0;
@@ -690,10 +694,12 @@ void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_
 		amrex::GpuArray<Vec3, nDustGroups_> k1_d;
 		amrex::GpuArray<Vec3, nDustGroups_> k2_d;
 		amrex::Real b = 1.0;
+		// NOLINTBEGIN(misc-confusable-identifiers)
 		amrex::Real gamma1 = 1.0;
 		amrex::Real gamma2 = 0.0;
 		amrex::Real beta1 = -0.5;
 		amrex::Real beta2 = 2.0 / 3.0;
+		// NOLINTEND(misc-confusable-identifiers)
 		amrex::Real E_tot_iter_old = E_tot;
 		amrex::Real E_tot_iter_new = E_tot;
 		amrex::Real E_int_iter_new = E_int;
