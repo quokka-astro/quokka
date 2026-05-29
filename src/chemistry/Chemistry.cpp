@@ -16,4 +16,6 @@ namespace quokka::chemistry
 
 AMREX_GPU_DEVICE void chemburner(burn_t &chemstate, const Real dt) { burner(chemstate, dt); }
 
+void chemburnerHost(burn_t &chemstate, const Real dt) { burner(chemstate, dt); }
+
 } // namespace quokka::chemistry
