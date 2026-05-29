@@ -1031,8 +1031,8 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 		if (enableChemistry_ == 1) {
 			// compute chemistry
 			char const *source_stage = (Order == SourceOrder::forward) ? "first-half" : "second-half";
-			burn_success = quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed,
-											       burnFailureVerbose_, burnFailureCpuReplay_, lev, time, source_stage);
+			burn_success = quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed, burnFailureVerbose_,
+										      burnFailureCpuReplay_, lev, time, source_stage);
 		}
 #endif
 	};

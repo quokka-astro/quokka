@@ -31,8 +31,8 @@ AMREX_GPU_DEVICE void chemburner(burn_t &chemstate, Real dt);
 void chemburnerHost(burn_t &chemstate, Real dt);
 
 template <typename problem_t>
-void replayFailedBurnOnCpu(amrex::Vector<amrex::Real> const &cell_values, amrex::IntVect const &failed_index, const Real dt, const int lev,
-			       const Real time, char const *source_stage)
+void replayFailedBurnOnCpu(amrex::Vector<amrex::Real> const &cell_values, amrex::IntVect const &failed_index, const Real dt, const int lev, const Real time,
+			   char const *source_stage)
 {
 	if (cell_values.empty()) {
 		return;
@@ -65,9 +65,8 @@ void replayFailedBurnOnCpu(amrex::Vector<amrex::Real> const &cell_values, amrex:
 	replay_state.e = Eint / rho;
 	eos(eos_input_re, replay_state);
 
-	amrex::AllPrint() << "\t>> CPU replay of failed burn begins: level = " << lev << ", stage = " << source_stage << ", time = " << time
-			  << ", dt = " << dt << ", cell = " << failed_index << ", rho = " << replay_state.rho << ", T = " << replay_state.T
-			  << ", e = " << replay_state.e << "\n";
+	amrex::AllPrint() << "\t>> CPU replay of failed burn begins: level = " << lev << ", stage = " << source_stage << ", time = " << time << ", dt = " << dt
+			  << ", cell = " << failed_index << ", rho = " << replay_state.rho << ", T = " << replay_state.T << ", e = " << replay_state.e << "\n";
 	chemburnerHost(replay_state, dt);
 	amrex::AllPrint() << "\t>> CPU replay of failed burn ends: success = " << replay_state.success << ", error_code = " << replay_state.error_code
 			  << ", n_step = " << replay_state.n_step << ", n_rhs = " << replay_state.n_rhs << ", n_jac = " << replay_state.n_jac
@@ -75,8 +74,8 @@ void replayFailedBurnOnCpu(amrex::Vector<amrex::Real> const &cell_values, amrex:
 }
 
 template <typename problem_t>
-auto computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed, const Real min_density_allowed,
-		      const int burn_failure_verbose, const int burn_failure_cpu_replay, const int lev, const Real time, char const *source_stage) -> bool
+auto computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density_allowed, const Real min_density_allowed, const int burn_failure_verbose,
+		      const int burn_failure_cpu_replay, const int lev, const Real time, char const *source_stage) -> bool
 {
 
 	// Start off by assuming a successful burn.
@@ -241,9 +240,10 @@ auto computeChemistry(amrex::MultiFab &mf, const Real dt, const Real max_density
 			const int error_code = h_first_failed_cell[3];
 			amrex::AllPrint() << "\t>> Burn failure summary: level = " << lev << ", stage = " << source_stage << ", time = " << time
 					  << ", dt = " << dt << ", cell = " << failed_index << ", error_code = " << error_code << "\n";
-			amrex::AllPrint() << "\t>> Failed burn integrator diagnostics: n_step = " << h_first_failed_cell[4] << ", n_rhs = " << h_first_failed_cell[5]
-					  << ", n_jac = " << h_first_failed_cell[6] << ", burn_time_reached = " << h_first_failed_burn_state[0]
-					  << ", T = " << h_first_failed_burn_state[1] << ", e = " << h_first_failed_burn_state[2] << "\n";
+			amrex::AllPrint() << "\t>> Failed burn integrator diagnostics: n_step = " << h_first_failed_cell[4]
+					  << ", n_rhs = " << h_first_failed_cell[5] << ", n_jac = " << h_first_failed_cell[6]
+					  << ", burn_time_reached = " << h_first_failed_burn_state[0] << ", T = " << h_first_failed_burn_state[1]
+					  << ", e = " << h_first_failed_burn_state[2] << "\n";
 
 			amrex::Vector<amrex::Real> const cell_values = amrex::get_cell_data(mf, failed_index);
 			if (!cell_values.empty()) {
