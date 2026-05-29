@@ -5,7 +5,7 @@ geometry.prob_lo = [-3.703e18, -3.703e18, -3.703e18]
 geometry.prob_hi = [3.703e18, 3.703e18, 3.703e18]
 quokka.bc = ["periodic", "periodic", "periodic"]
 gravity.poisson_bc = "open"
-#restartfile = "chk15360"
+
 # *****************************************************************
 # VERBOSITY
 # *****************************************************************
@@ -22,7 +22,8 @@ amr.n_error_buf = 3  # minimum 3 cell buffer around tagged cells
 amr.grid_eff = 0.7  # default
 
 hydro.reconstruction_order = 3  # PPM
-cfl = 0.15
+hydro.artificial_viscosity_coefficient = 0.1
+cfl = 0.3
 max_timesteps = 10
 stop_time = 1e16
 initial_dt = 1.0e6
@@ -30,12 +31,12 @@ initial_dt = 1.0e6
 do_reflux = 1
 do_subcycle = 0
 
-plotfile_interval = 50  #100
+plotfile_interval = 100
 checkpoint_interval = 200
 
 perturb.cloud_radius = 3.086e18  #initial cloud radius in cm
 perturb.cloud_omega = 2.016008e-14  #initial cloud angular velocity in s^-1
-perturb.cloud_numdens = 0.90861183e+004  #initial cloud number density in cm^-3
+perturb.cloud_numdens = 2.72583549e4  #initial cloud number density in cm^-3
 perturb.rms_velocity = 1.8050e5  #initial cloud rms velocity (to drive turbulence)
 
 # params for jeans refinement
@@ -106,7 +107,7 @@ integrator.renormalize_abundances = 0
 integrator.rosenbrock_tableau = 0
 # tolerances
 integrator.rtol_spec = 1.0e-4
-integrator.atol_spec = 1.0e-4
+integrator.atol_spec = 1.0e-8
 
 #assumed redshift for Pop III star formation
 network.redshift = 30.0
