@@ -1,12 +1,49 @@
 #!/usr/bin/env python3
-"""Evaluate the thermal Jeans mass for inputs/PopIII_production.toml."""
+"""Evaluate the thermal Jeans mass for a PopIII input file."""
 
 from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 
 import sympy as sp
 
 
 def main() -> None:
+    # Parse command-line argument for input file
+    if len(sys.argv) > 1:
+        input_file = Path(sys.argv[1])
+    else:
+        input_file = Path("inputs/PopIII.toml")
+    
+    if not input_file.exists():
+        print(f"Error: Input file {input_file} not found")
+        sys.exit(1)
+    
+    # Parse the TOML file
+    with open(input_file, "rb") as f:
+        config = tomllib.load(f)
+    
+    # Extract cloud parameters from the TOML file
+    perturb = config.get("perturb", {})
+    primordial_chem = config.get("primordial_chem", {})
+    
+    cloud_radius = sp.Float(str(perturb.get("cloud_radius", 3.086e18)))
+    cloud_numdens = sp.Float(str(perturb.get("cloud_numdens", 0.90861183e4)))
+    cloud_temperature = sp.Float(str(primordial_chem.get("temperature", 264.15744)))
+    
+    # Extract species abundances from primordial_chem.primary_species_1..14
+    relative_numdens = []
+    for i in range(1, 15):
+        key = f"primary_species_{i}"
+        value = primordial_chem.get(key, 0.0)
+        relative_numdens.append(sp.Float(str(value)))
+    
     # CGS constants used by Quokka/Microphysics.
     G = sp.Float("6.67428e-8")
     k_B = sp.Float("1.380649e-16")
@@ -14,29 +51,6 @@ def main() -> None:
     m_p = sp.Float("1.67262192595e-24")
     m_sun = sp.Float("1.9884e33")
     parsec = sp.Float("3.085677581491367e18")
-
-    # Cloud parameters from inputs/PopIII_production.toml.
-    cloud_radius = sp.Float("3.086e18")
-    cloud_numdens = sp.Float("0.90861183e4")
-    cloud_temperature = sp.Float("0.26415744e3")
-
-    # primordial_chem.primary_species_1..14 from inputs/PopIII_production.toml.
-    relative_numdens = [
-        sp.Float("0.88499253e-006"),
-        sp.Float("0.88498062e-006"),
-        sp.Float("0.99932238e+000"),
-        sp.Float("0.54719550e-013"),
-        sp.Float("0.21957612e-010"),
-        sp.Float("0.29920413e-004"),
-        sp.Float("0.58304958e-015"),
-        sp.Float("0.22122496e-017"),
-        sp.Float("0.38932607e-003"),
-        sp.Float("0.36774691e-019"),
-        sp.Float("0.79574711e-007"),
-        sp.Float("0.39651766e-050"),
-        sp.Float("0.24136647e-043"),
-        sp.Float("0.77500001e-001"),
-    ]
 
     # Species masses and gammas from extern/Microphysics/EOS/primordial_chem/_parameters.
     species_masses = [
@@ -100,7 +114,7 @@ def main() -> None:
     print("Jeans mass expression:")
     print(f"  M_J = {jeans_mass_closed_expr}")
     print()
-    print("PopIII production cloud values:")
+    print(f"Input file: {input_file}")
     print(f"  rho                 = {float(rho):.8e} g cm^-3")
     print(f"  gamma_eff           = {float(gamma_eff):.8f}")
     print(f"  c_s                 = {float(sound_speed):.8e} cm s^-1")
