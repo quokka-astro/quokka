@@ -31,7 +31,7 @@ const double Twind = 2.e6;
 const double Tcloud  = 1.e4;
 const double rho_cloud = C::m_p; // g/cm^3
 const double Mach = 4.0; // Mach number of the wind
-const double R0 = 0.2 * C::parsec; // radius of the cloud		
+const double R0 = 40.0 * C::parsec; // radius of the cloud		
 
 struct ThermalConductionProblem {
 };
