@@ -157,8 +157,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	int enableCooling_ = 0;
 	int enableChemistry_ = 0;
-	int burnFailureVerbose_ = 0;
-	int burnFailureCpuReplay_ = 0;
 	int enableTurbulence_ = 0;
 	amrex::Real turbulenceStopTime_ = std::numeric_limits<amrex::Real>::max();
 	int enableIterDustStoptime_ = 0;
@@ -708,8 +706,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("enabled", enableChemistry_);
 		hpp.query("max_density_allowed", max_density_allowed); // chemistry is not accurate for densities > 3e-6
 		hpp.query("min_density_allowed", min_density_allowed); // don't do chemistry in cells with densities below the minimum density specified
-		hpp.query("burn_failure_verbose", burnFailureVerbose_);
-		hpp.query("replay_failed_burn_on_cpu", burnFailureCpuReplay_);
 	}
 #endif
 
@@ -1030,9 +1026,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 #ifdef CHEMISTRY
 		if (enableChemistry_ == 1) {
 			// compute chemistry
-			char const *source_stage = (Order == SourceOrder::forward) ? "first-half" : "second-half";
-			burn_success = quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed, burnFailureVerbose_,
-										      burnFailureCpuReplay_, lev, time, source_stage);
+			burn_success = quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed);
 		}
 #endif
 	};
