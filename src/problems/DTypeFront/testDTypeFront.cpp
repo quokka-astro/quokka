@@ -120,7 +120,15 @@ auto lambda_rec(double T) -> double
 
 auto lambda_ion_ff(double T) -> double { return 1.4e-27 * std::sqrt(T) + 1.0e-19 * std::exp(-118348.0 / T); }
 
-auto net_energy_cavity(double T, double n_e) -> double
+auto lambda_KI(double T) -> double
+{
+	if (T < 100.0) {
+		return 0.0;
+	}
+	return 1.0e-26 * std::sqrt(T);
+}
+
+auto net_energy_ionized(double T, double n_e) -> double
 {
 	const double alpha_B = 2.6e-13 * std::pow(T / 1.0e4, -0.7);
 	const double epsilon = 6.4e-12;
@@ -133,13 +141,43 @@ auto net_energy_cavity(double T, double n_e) -> double
 	return photoheating - recombination_cooling - ion_ff_cooling + KI_heating - KI_cooling;
 }
 
-auto compute_equilibrium_temperature(double n_e) -> double
+auto net_energy_neutral(double T, double n_HI) -> double
 {
-	double T_lo = 100.0;
-	double T_hi = 1.0e6;
-	for (int iter = 0; iter < 200; ++iter) {
+	const double photoheating = 0.0;
+	const double KI_heating = n_HI * 2e-26;
+	const double KI_cooling = n_HI * n_HI * lambda_KI(T);
+	const double recombination_cooling = 0.0;
+	const double ion_ff_cooling = 0.0;
+	return photoheating + KI_heating - recombination_cooling - KI_cooling - ion_ff_cooling;
+}
+
+auto compute_equilibrium_temperature_neutral(double n_HI) -> double
+{
+	double T_lo = 1;
+	double T_hi = 1000;
+	int const max_iter = 10000;
+	for (int iter = 0; iter < max_iter; ++iter) {
 		const double T_mid = 0.5 * (T_lo + T_hi);
-		if (net_energy_cavity(T_mid, n_e) > 0.0) {
+		if (net_energy_neutral(T_mid, n_HI) > 0.0) {
+			T_lo = T_mid;
+		} else {
+			T_hi = T_mid;
+		}
+		if ((T_hi - T_lo) < 1e-2) {
+			break;
+		}
+	}
+	return 0.5 * (T_lo + T_hi);
+}
+
+auto compute_equilibrium_temperature_ionized(double n_e) -> double
+{
+	double T_lo = 1000.0;
+	double T_hi = 1.0e5;
+	int const max_iter = 10000;
+	for (int iter = 0; iter < max_iter; ++iter) {
+		const double T_mid = 0.5 * (T_lo + T_hi);
+		if (net_energy_ionized(T_mid, n_e) > 0.0) {
 			T_lo = T_mid;
 		} else {
 			T_hi = T_mid;
@@ -333,7 +371,7 @@ template <> void QuokkaSimulation<DTypeFront>::computeAfterTimestep()
 	userData_.t_vec_.push_back(tNew_[lev]);
 
 	const amrex::Real n_e = userData_.primary_species_2;
-	const double T_eq = compute_equilibrium_temperature(static_cast<double>(n_e));
+	const double T_eq = compute_equilibrium_temperature_ionized(static_cast<double>(n_e));
 	const double alpha_B = 2.6e-13 * std::pow(T_eq / 1.0e4, -0.7);
 	const double c_i = std::sqrt(C::k_B * T_eq / (C::m_p)); // isothermal sound speed ci = sqrt(k_B * T / m_p)
 	const amrex::Real r_s = std::pow((3.0_rt * userData_.Q) / (4.0_rt * M_PI * alpha_B * n_e * n_e), 1.0_rt / 3.0_rt);
@@ -381,7 +419,7 @@ auto problem_main() -> int
 		const amrex::Real cell_size = dx[0];
 
 		const double ne_eq = sim.userData_.primary_species_2;
-		const double T_eq = compute_equilibrium_temperature(ne_eq);
+		const double T_eq = compute_equilibrium_temperature_ionized(static_cast<double>(ne_eq));
 		const double alpha_B = 2.6e-13 * std::pow(T_eq / 1.0e4, -0.7);
 		const double c_i = std::sqrt(C::k_B * T_eq / C::m_p);
 		const double r_s = std::pow((3.0 * sim.userData_.Q) / (4.0 * M_PI * alpha_B * ne_eq * ne_eq), 1.0 / 3.0);
