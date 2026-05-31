@@ -13,7 +13,7 @@ amr.v              = 0       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 64 64 64
+amr.n_cell          = 16 16 16
 amr.max_level       = 0     # number of levels = max_level + 1
 #max_timesteps = 10
 do_reflux = 0
