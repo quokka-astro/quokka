@@ -62,6 +62,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_PlotFileUtil.H"
+#include "AMReX_VisMF.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
@@ -359,7 +360,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	auto advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_old_fc_tmp,
 				 amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine, amrex::EdgeFluxRegister *emf_as_crse,
-				 amrex::EdgeFluxRegister *emf_as_fine, int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
+				 amrex::EdgeFluxRegister *emf_as_fine, int lev, amrex::Real time, amrex::Real dt_lev,
+				 bool write_fatal_debug) -> bool;
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
 	template <SourceOrder Order>
@@ -401,7 +403,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 						       std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
 
 	auto computeFOHydroFluxes(amrex::MultiFab const &consVar_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, int nvars,
-				  int nghost_Riemann, int lev)
+				  int nghost_Riemann, int lev, std::string const &fatal_debug_dir = "")
 	    -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>,
 			  std::array<amrex::MultiFab, AMREX_SPACEDIM>>;
 
@@ -2064,8 +2066,9 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 			}
 
 			const amrex::Real current_substep_time = time + static_cast<amrex::Real>(substep_index) * dt_substep;
+			const bool write_fatal_debug = (cur_retry_level == max_retries);
 			const bool substep_success = advanceHydroAtLevel(state_old_cc_tmp, state_old_fc_tmp, fr_as_crse, fr_as_fine, emf_as_crse, emf_as_fine,
-									 lev, current_substep_time, dt_substep);
+									 lev, current_substep_time, dt_substep, write_fatal_debug);
 			if (!substep_success) {
 				attempt_failed = true;
 				break;
@@ -2146,7 +2149,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::printCoordinates
 template <typename problem_t>
 auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_old_fc_tmp,
 						      amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine, amrex::EdgeFluxRegister *emf_as_crse,
-						      amrex::EdgeFluxRegister *emf_as_fine, int lev, amrex::Real time, amrex::Real dt_lev) -> bool
+						      amrex::EdgeFluxRegister *emf_as_fine, int lev, amrex::Real time, amrex::Real dt_lev,
+						      bool write_fatal_debug) -> bool
 {
 	const BL_PROFILE("QuokkaSimulation::advanceHydroAtLevel()");
 
@@ -2162,11 +2166,37 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	auto dm = dmap[lev];
 	auto dx = geom[lev].CellSizeArray();
 
+	const std::string fatal_debug_dir = write_fatal_debug ? CustomPlotFileName("debug_hydro_fatal_raw", istep[lev]) : std::string{};
+	auto fatalRawDir = [&]() -> std::string { return fatal_debug_dir + "/raw_fields/Level_" + std::to_string(lev); };
+	auto ensureFatalRawDir = [&]() {
+		if (!fatal_debug_dir.empty()) {
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				std::filesystem::create_directories(fatalRawDir());
+			}
+			amrex::ParallelDescriptor::Barrier();
+		}
+	};
+	auto writeFatalMultiFab = [&](amrex::MultiFab const &mf, std::string const &name) {
+		if (!fatal_debug_dir.empty()) {
+			amrex::Gpu::streamSynchronizeAll();
+			ensureFatalRawDir();
+			amrex::VisMF::Write(mf, fatalRawDir() + "/" + name);
+		}
+	};
+	auto writeFatalFaceMultiFabs = [&](std::array<amrex::MultiFab, AMREX_SPACEDIM> const &mfs, std::string const &prefix) {
+		if (!fatal_debug_dir.empty()) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				writeFatalMultiFab(mfs[idim], prefix + "_" + quokka::face_dir_str[idim]);
+			}
+		}
+	};
+
 	// do Strang split source terms (first half-step)
 	auto burn_success_first = addStrangSplitSourcesWithBuiltin<SourceOrder::forward>(state_old_cc_tmp, state_old_fc_tmp, lev, time, 0.5 * dt_lev);
 
 	// check if reactions failed for source terms. If it failed, return false.
 	if (!burn_success_first) {
+		writeFatalMultiFab(state_old_cc_tmp, "StateOldCCSourceFailed");
 		return burn_success_first;
 	}
 	ApplyHydroStateFixup(state_old_cc_tmp, state_old_fc_tmp, lev);
@@ -2225,11 +2255,14 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		amrex::ParallelDescriptor::Barrier();
 	}
 
+	writeFatalMultiFab(state_old_cc_tmp, "StateOldCCFilled");
+
 	// check state validity
 	AMREX_ASSERT(!state_old_cc_tmp.contains_nan(0, state_old_cc_tmp.nComp()));
 	AMREX_ASSERT(!state_old_cc_tmp.contains_nan()); // check ghost cells
 
-	auto [FOfluxArrays, FOfaceVel, FOfast_mhd_wavespeeds] = computeFOHydroFluxes(state_old_cc_tmp, state_old_fc_tmp, nvars_, nghost_Riemann, lev);
+	auto [FOfluxArrays, FOfaceVel, FOfast_mhd_wavespeeds] =
+	    computeFOHydroFluxes(state_old_cc_tmp, state_old_fc_tmp, nvars_, nghost_Riemann, lev, fatal_debug_dir);
 
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> ec_emf_components_fo;
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -2308,6 +2341,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				printCoordinates(lev, cell_idx);
 				amrex::print_state(stateNew_cc, cell_idx);
 			}
+			writeFatalMultiFab(stateNew_cc, "Stage1HighOrderFailedState");
 
 			// synchronize redoFlag across ranks
 			redoFlag.FillBoundary(geom[lev].periodicity());
@@ -2327,6 +2361,9 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			amrex::Long const ncells_bad = static_cast<int>(redoFlag.sum(0));
 			if (ncells_bad > 0) {
 				// FOFC failed
+				writeFatalMultiFab(stateNew_cc, "Stage1FOFCFailedState");
+				writeFatalFaceMultiFabs(fluxArrays, "Stage1FluxAfterFOFC");
+				writeFatalFaceMultiFabs(faceVel, "Stage1FaceVelAfterFOFC");
 				if (Verbose()) {
 					const amrex::IntVect cell_idx = redoFlag.maxIndex(0);
 					// print cell state
@@ -2420,6 +2457,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				printCoordinates(lev, cell_idx);
 				amrex::print_state(stateFinal_cc, cell_idx);
 			}
+			writeFatalMultiFab(stateFinal_cc, "Stage2HighOrderFailedState");
 
 			// synchronize redoFlag across ranks
 			redoFlag.FillBoundary(geom[lev].periodicity());
@@ -2440,6 +2478,9 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			amrex::Long const ncells_bad = redoFlag.sum(0);
 			if (ncells_bad > 0) {
 				// FOFC failed
+				writeFatalMultiFab(stateFinal_cc, "Stage2FOFCFailedState");
+				writeFatalFaceMultiFabs(flux_rk2, "Stage2FluxAfterFOFC");
+				writeFatalFaceMultiFabs(avgFaceVel, "Stage2FaceVelAfterFOFC");
 				if (Verbose()) {
 					const amrex::IntVect cell_idx = redoFlag.maxIndex(0);
 					// print cell state
@@ -2846,7 +2887,7 @@ void QuokkaSimulation<problem_t>::hydroFluxFunction(amrex::MultiFab &primVar_mf,
 
 template <typename problem_t>
 auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &consVar_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc,
-						       const int nvars, const int nghost_Riemann, const int lev)
+						       const int nvars, const int nghost_Riemann, const int lev, std::string const &fatal_debug_dir)
     -> std::tuple<std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>, std::array<amrex::MultiFab, AMREX_SPACEDIM>>
 {
 	const BL_PROFILE("QuokkaSimulation::computeFOHydroFluxes()");
@@ -2895,6 +2936,27 @@ auto QuokkaSimulation<problem_t>::computeFOHydroFluxes(amrex::MultiFab const &co
 
 	// synchronization point to prevent MultiFabs from going out of scope
 	amrex::Gpu::streamSynchronizeAll();
+
+	if (!fatal_debug_dir.empty()) {
+		const std::string raw_dir = fatal_debug_dir + "/raw_fields/Level_" + std::to_string(lev);
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			std::filesystem::create_directories(raw_dir);
+		}
+		amrex::ParallelDescriptor::Barrier();
+
+		amrex::VisMF::Write(primVar, raw_dir + "/FOPrimVar");
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			amrex::VisMF::Write(leftState[idim], raw_dir + "/FOStateL_" + quokka::face_dir_str[idim]);
+			amrex::VisMF::Write(rightState[idim], raw_dir + "/FOStateR_" + quokka::face_dir_str[idim]);
+			amrex::VisMF::Write(flux[idim], raw_dir + "/FOFlux_" + quokka::face_dir_str[idim]);
+			amrex::VisMF::Write(facevel[idim], raw_dir + "/FOFaceVel_" + quokka::face_dir_str[idim]);
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				amrex::VisMF::Write(leftState_bfield[idim], raw_dir + "/FOStateL_Bfield_" + quokka::face_dir_str[idim]);
+				amrex::VisMF::Write(rightState_bfield[idim], raw_dir + "/FOStateR_Bfield_" + quokka::face_dir_str[idim]);
+				amrex::VisMF::Write(fast_mhd_wavespeeds[idim], raw_dir + "/FOFastMHDWavespeeds_" + quokka::face_dir_str[idim]);
+			}
+		}
+	}
 
 	// return flux and face-centered velocities
 	return std::make_tuple(std::move(flux), std::move(facevel), std::move(fast_mhd_wavespeeds));
