@@ -24,20 +24,27 @@ amr.grid_eff = 0.7  # default
 hydro.reconstruction_order = 3  # PPM
 hydro.artificial_viscosity_coefficient = 0.1
 cfl = 0.3
-max_timesteps = 10
+max_timesteps = 100
 stop_time = 1e16
-initial_dt = 1.0e6
+init_shrink = 1e-2	# shrink initial timestep
 
 do_reflux = 1
 do_subcycle = 0
 
-plotfile_interval = 100
-checkpoint_interval = 200
+plotfile_interval = 500
+checkpoint_interval = 1000
 
 perturb.cloud_radius = 3.086e18  #initial cloud radius in cm
 perturb.cloud_omega = 2.016008e-14  #initial cloud angular velocity in s^-1
 perturb.cloud_numdens = 2.72583549e4  #initial cloud number density in cm^-3
 perturb.rms_velocity = 1.8050e5  #initial cloud rms velocity (to drive turbulence)
+
+# Jeans mass:
+#   M_J = pi**(5/2)*c_s**3/(6*G**(3/2)*sqrt(rho))
+#   c_s                 = 1.73437925e+05 cm s^-1
+#   M_J                 = 1814.81225646 Msun
+#   M_cloud             = 3699.98283653 Msun
+#   M_cloud / M_J       = 2.03876893
 
 # params for jeans refinement
 jeansRefine.ncells = 64  #refine on these many cells per jeans length
@@ -51,6 +58,23 @@ density_floor = 1e-25
 perturb.filename = "zdrv.hdf5"
 
 derived_vars = ["temperature", "velx", "pressure", "sound_speed"]
+
+quokka.diagnostics = ["slice_x", "proj_x"]
+
+## in-situ slice output
+quokka.slice_x.type = "DiagFramePlane"
+quokka.slice_x.file = "slices/x/plt"
+quokka.slice_x.normal = 0  # Plane normal (0 == x, 1 == y, 2 == z)
+quokka.slice_x.center = 0.0
+quokka.slice_x.int = 100
+quokka.slice_x.field_names = ["gasDensity", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "gasEnergy", "gasInternalEnergy", "temperature", "velx", "pressure", "sound_speed"]
+
+## in-situ projection output
+quokka.proj_x.type = "ProjectionPlot"
+quokka.proj_x.file = "proj/x/plt"
+quokka.proj_x.normal = 0  # Projection direction (0 == x, 1 == y, 2 == z)
+quokka.proj_x.int = 100
+quokka.proj_x.field_names = ["gasDensity"]
 
 amrex.throw_exception = 0
 amrex.signal_handling = 1
