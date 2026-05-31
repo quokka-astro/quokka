@@ -199,7 +199,7 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 
 	int molecular_process_switch = 1;
 	amrex::Real xHII = n_HII / (n_HI + n_HII);
-	if ((allow_mixed_cell_cooling == 1) && (xHII > mixed_cell_lb) && (xHII < mixed_cell_ub)) {
+	if ((allow_mixed_cell_cooling == 0) && (xHII > mixed_cell_lb) && (xHII < mixed_cell_ub)) {
 		molecular_process_switch = 0;
 	}
 
