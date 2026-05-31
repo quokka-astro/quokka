@@ -662,13 +662,6 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::G
 #endif
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::GetRadiationGroupQuanta(amrex::Real freq_low, amrex::Real freq_high) -> amrex::Real
-{
-	return 0.5_rt * (freq_high + freq_low) * C::hplanck;
-}
-#endif
-
-template <typename problem_t>
 void RadSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const & /*cons*/, array_t &maxSignal, amrex::Box const &indexRange)
 {
 	// cell-centered kernel

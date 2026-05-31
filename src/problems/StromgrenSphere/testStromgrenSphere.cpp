@@ -118,9 +118,6 @@ void RadSystem<StromgrenSphere>::SetRadEnergySource(array_t &radEnergy, const am
 namespace
 {
 
-namespace
-{
-
 // Numerically integrate dR/dt = (Q - 4*pi*R^3*alpha_B*n_HI0^2/3) / (Q/c + 4*pi*R^2*n_HI0)
 // Integrates forward by `dt_target` starting from `R0` using RK4 with step-doubling.
 // Aborts the run if convergence is not reached within allowed iterations.
@@ -128,9 +125,7 @@ auto integrate_radius(amrex::Real dt_target, amrex::Real Q, amrex::Real alpha_B,
     -> amrex::Real
 {
 	if (dt_target <= 0.0_rt) {
-		if (dt_target <= 0.0_rt) {
-			return R0;
-		}
+		return R0;
 	}
 
 	auto rhs = [&](amrex::Real R) -> amrex::Real {
@@ -167,8 +162,6 @@ auto integrate_radius(amrex::Real dt_target, amrex::Real Q, amrex::Real alpha_B,
 	amrex::Abort("integrate_radius failed to converge within max_iters for dt=" + std::to_string(dt_target));
 	return R_prev; // unreachable
 }
-
-} // namespace
 
 } // namespace
 
@@ -316,7 +309,6 @@ template <> void QuokkaSimulation<StromgrenSphere>::computeAfterTimestep()
 
 	const int n_bins =
 	    3 * static_cast<int>(CountCells(lev)); // The test is meant to be run with a small number of cells, so this narrowing static cast is fine.
-	using hist_t = int;
 	using hist_t = int;
 	amrex::Gpu::DeviceVector<hist_t> d_hist(n_bins, static_cast<hist_t>(0));
 
