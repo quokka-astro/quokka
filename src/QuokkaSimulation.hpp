@@ -62,10 +62,10 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_PlotFileUtil.H"
-#include "AMReX_VisMF.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
+#include "AMReX_VisMF.H"
 
 #include "SimulationData.hpp"
 #include "chemistry/Chemistry.hpp"
@@ -360,8 +360,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	auto advanceHydroAtLevel(amrex::MultiFab &state_old_cc_tmp, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_old_fc_tmp,
 				 amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine, amrex::EdgeFluxRegister *emf_as_crse,
-				 amrex::EdgeFluxRegister *emf_as_fine, int lev, amrex::Real time, amrex::Real dt_lev,
-				 bool write_fatal_debug) -> bool;
+				 amrex::EdgeFluxRegister *emf_as_fine, int lev, amrex::Real time, amrex::Real dt_lev, bool write_fatal_debug) -> bool;
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
 	template <SourceOrder Order>
