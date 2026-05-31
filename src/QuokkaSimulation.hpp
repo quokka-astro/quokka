@@ -118,6 +118,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::finestLevel;
 	using AMRSimulation<problem_t>::tNew_;
 	using AMRSimulation<problem_t>::do_reflux;
+	using AMRSimulation<problem_t>::do_subcycle;
 	using AMRSimulation<problem_t>::do_tracers;
 	using AMRSimulation<problem_t>::Verbose;
 	using AMRSimulation<problem_t>::constantDt_;
@@ -1025,8 +1026,14 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	auto const applyChemistry = [&]() {
 #ifdef CHEMISTRY
 		if (enableChemistry_ == 1) {
+			amrex::iMultiFab leaf_mask;
+			amrex::iMultiFab const *leaf_mask_ptr = nullptr;
+			if (do_subcycle == 0 && lev < finest_level) {
+				leaf_mask = amrex::makeFineMask(state, state_new_cc_[lev + 1], amrex::IntVect(0), refRatio(lev), geom[lev].periodicity(), 1, 0);
+				leaf_mask_ptr = &leaf_mask;
+			}
 			// compute chemistry
-			burn_success = quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed);
+			burn_success = quokka::chemistry::computeChemistry<problem_t>(state, dt, max_density_allowed, min_density_allowed, leaf_mask_ptr);
 		}
 #endif
 	};
