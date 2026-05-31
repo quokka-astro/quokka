@@ -1,4 +1,4 @@
-name: PR Diff Size
+name: 📏 PR Diff Size
 
 on:
   pull_request:
