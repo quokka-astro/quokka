@@ -235,8 +235,56 @@ template <> void QuokkaSimulation<ShocktubeProblem>::computeAfterTimestep()
 	}
 }
 
+namespace
+{
+void testMassScalarRepair()
+{
+	constexpr int ncomp_cc = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
+	constexpr int nmscalars = Physics_Traits<ShocktubeProblem>::numMassScalars;
+	static_assert(nmscalars > 0);
+
+	amrex::Box const domain(amrex::IntVect(AMREX_D_DECL(0, 0, 0)), amrex::IntVect(AMREX_D_DECL(1, 1, 1)));
+	amrex::BoxArray ba(domain);
+	ba.maxSize(1);
+	amrex::DistributionMapping dm(ba);
+	amrex::MultiFab state(ba, dm, ncomp_cc, 1);
+	state.setVal(0.0);
+
+	auto const state_arr = state.arrays();
+	amrex::ParallelFor(state, state.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		constexpr amrex::Real rho = 1.0;
+		state_arr[bx](i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
+		state_arr[bx](i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 0) = 1.1 * rho;
+		state_arr[bx](i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 1) = -1.0e-12 * rho;
+		state_arr[bx](i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + 2) = 0.0;
+	});
+
+	HydroSystem<ShocktubeProblem>::EnforceMassScalarLimits(state, state.nGrowVect());
+
+	auto const state_const = state.const_arrays();
+	auto const [min_scalar, max_sum_error] =
+	    amrex::ParReduce(amrex::TypeList<amrex::ReduceOpMin, amrex::ReduceOpMax>{}, amrex::TypeList<amrex::Real, amrex::Real>{}, state, state.nGrowVect(),
+			     [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real, amrex::Real> {
+				     amrex::Real local_min = state_const[bx](i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index);
+				     amrex::Real scalar_sum = 0.0;
+				     for (int n = 0; n < nmscalars; ++n) {
+					     amrex::Real const rho_scalar = state_const[bx](i, j, k, HydroSystem<ShocktubeProblem>::scalar0_index + n);
+					     local_min = std::min(local_min, rho_scalar);
+					     scalar_sum += rho_scalar;
+				     }
+				     amrex::Real const rho = state_const[bx](i, j, k, HydroSystem<ShocktubeProblem>::density_index);
+				     return {local_min, std::abs(scalar_sum - rho) / rho};
+			     });
+
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(min_scalar >= 0.0, "mass scalar repair left a negative partial density");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(max_sum_error < 1.0e-14, "mass scalar repair did not preserve sum(rho_s) = rho");
+}
+} // namespace
+
 auto problem_main() -> int
 {
+	testMassScalarRepair();
+
 	// Problem parameters
 	const double max_time = 1.0;
 	const int max_timesteps = 80000;
