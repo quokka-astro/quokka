@@ -2094,11 +2094,6 @@ void QuokkaSimulation<problem_t>::advanceHydroAtLevelWithRetries(int lev, amrex:
 			       << "Hydro update exceeded max_retries on level " << lev << ". Cannot continue, crashing...\n"
 			       << std::endl; // NOLINT(performance-avoid-endl)
 
-		// write plotfile
-		amrex::ParallelDescriptor::Barrier();
-		WriteSingleLevelPlotfileSimplified("debug_hydro_state_fatal", state_new_cc_[lev], componentNames_cc_, lev, 1);
-		amrex::ParallelDescriptor::Barrier();
-
 		if (amrex::ParallelDescriptor::IOProcessor()) {
 			amrex::ParallelDescriptor::Abort();
 		}
@@ -2189,6 +2184,21 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			}
 		}
 	};
+	auto writeFatalPlotfile = [&](amrex::MultiFab const &mf) {
+		if (!fatal_debug_dir.empty()) {
+			amrex::Gpu::streamSynchronizeAll();
+			amrex::ParallelDescriptor::Barrier();
+			WriteSingleLevelPlotfile(CustomPlotFileName("debug_hydro_state_fatal", istep[lev]), mf, componentNames_cc_, geom[lev], time,
+						 istep[lev]);
+			amrex::ParallelDescriptor::Barrier();
+		}
+	};
+	auto writeFatalFOHydroDebug = [&]() {
+		if (!fatal_debug_dir.empty()) {
+			writeFatalMultiFab(state_old_cc_tmp, "StateOldCCFilled");
+			(void)computeFOHydroFluxes(state_old_cc_tmp, state_old_fc_tmp, nvars_, nghost_Riemann, lev, fatal_debug_dir);
+		}
+	};
 
 	// do Strang split source terms (first half-step)
 	auto burn_success_first = addStrangSplitSourcesWithBuiltin<SourceOrder::forward>(state_old_cc_tmp, state_old_fc_tmp, lev, time, 0.5 * dt_lev);
@@ -2196,6 +2206,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	// check if reactions failed for source terms. If it failed, return false.
 	if (!burn_success_first) {
 		writeFatalMultiFab(state_old_cc_tmp, "StateOldCCSourceFailed");
+		writeFatalPlotfile(state_old_cc_tmp);
 		return burn_success_first;
 	}
 	ApplyHydroStateFixup(state_old_cc_tmp, state_old_fc_tmp, lev);
@@ -2254,14 +2265,11 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		amrex::ParallelDescriptor::Barrier();
 	}
 
-	writeFatalMultiFab(state_old_cc_tmp, "StateOldCCFilled");
-
 	// check state validity
 	AMREX_ASSERT(!state_old_cc_tmp.contains_nan(0, state_old_cc_tmp.nComp()));
 	AMREX_ASSERT(!state_old_cc_tmp.contains_nan()); // check ghost cells
 
-	auto [FOfluxArrays, FOfaceVel, FOfast_mhd_wavespeeds] =
-	    computeFOHydroFluxes(state_old_cc_tmp, state_old_fc_tmp, nvars_, nghost_Riemann, lev, fatal_debug_dir);
+	auto [FOfluxArrays, FOfaceVel, FOfast_mhd_wavespeeds] = computeFOHydroFluxes(state_old_cc_tmp, state_old_fc_tmp, nvars_, nghost_Riemann, lev);
 
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> ec_emf_components_fo;
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -2340,8 +2348,12 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				printCoordinates(lev, cell_idx);
 				amrex::print_state(stateNew_cc, cell_idx);
 			}
-			writeFatalMultiFab(stateNew_cc, "Stage1HighOrderFailedState");
-
+			std::unique_ptr<amrex::MultiFab> high_order_failed_state;
+			if (!fatal_debug_dir.empty() && abortOnFofcFailure_ != 0) {
+				high_order_failed_state =
+				    std::make_unique<amrex::MultiFab>(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
+				amrex::Copy(*high_order_failed_state, stateNew_cc, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
+			}
 			// synchronize redoFlag across ranks
 			redoFlag.FillBoundary(geom[lev].periodicity());
 
@@ -2360,9 +2372,6 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			amrex::Long const ncells_bad = static_cast<int>(redoFlag.sum(0));
 			if (ncells_bad > 0) {
 				// FOFC failed
-				writeFatalMultiFab(stateNew_cc, "Stage1FOFCFailedState");
-				writeFatalFaceMultiFabs(fluxArrays, "Stage1FluxAfterFOFC");
-				writeFatalFaceMultiFabs(faceVel, "Stage1FaceVelAfterFOFC");
 				if (Verbose()) {
 					const amrex::IntVect cell_idx = redoFlag.maxIndex(0);
 					// print cell state
@@ -2372,6 +2381,14 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 					amrex::Print() << "[FOFC-1] failed for " << ncells_bad << " cells on level " << lev << "\n";
 				}
 				if (abortOnFofcFailure_ != 0) {
+					writeFatalFOHydroDebug();
+					if (high_order_failed_state != nullptr) {
+						writeFatalMultiFab(*high_order_failed_state, "Stage1HighOrderFailedState");
+					}
+					writeFatalMultiFab(stateNew_cc, "Stage1FOFCFailedState");
+					writeFatalFaceMultiFabs(fluxArrays, "Stage1FluxAfterFOFC");
+					writeFatalFaceMultiFabs(faceVel, "Stage1FaceVelAfterFOFC");
+					writeFatalPlotfile(stateNew_cc);
 					return false;
 				}
 			}
@@ -2456,8 +2473,12 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				printCoordinates(lev, cell_idx);
 				amrex::print_state(stateFinal_cc, cell_idx);
 			}
-			writeFatalMultiFab(stateFinal_cc, "Stage2HighOrderFailedState");
-
+			std::unique_ptr<amrex::MultiFab> high_order_failed_state;
+			if (!fatal_debug_dir.empty() && abortOnFofcFailure_ != 0) {
+				high_order_failed_state =
+				    std::make_unique<amrex::MultiFab>(grids[lev], dmap[lev], Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
+				amrex::Copy(*high_order_failed_state, stateFinal_cc, 0, 0, Physics_Indices<problem_t>::nvarTotal_cc, nghost_cc_);
+			}
 			// synchronize redoFlag across ranks
 			redoFlag.FillBoundary(geom[lev].periodicity());
 
@@ -2477,9 +2498,6 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			amrex::Long const ncells_bad = redoFlag.sum(0);
 			if (ncells_bad > 0) {
 				// FOFC failed
-				writeFatalMultiFab(stateFinal_cc, "Stage2FOFCFailedState");
-				writeFatalFaceMultiFabs(flux_rk2, "Stage2FluxAfterFOFC");
-				writeFatalFaceMultiFabs(avgFaceVel, "Stage2FaceVelAfterFOFC");
 				if (Verbose()) {
 					const amrex::IntVect cell_idx = redoFlag.maxIndex(0);
 					// print cell state
@@ -2489,6 +2507,14 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 					amrex::Print() << "[FOFC-2] failed for " << ncells_bad << " cells on level " << lev << "\n";
 				}
 				if (abortOnFofcFailure_ != 0) {
+					writeFatalFOHydroDebug();
+					if (high_order_failed_state != nullptr) {
+						writeFatalMultiFab(*high_order_failed_state, "Stage2HighOrderFailedState");
+					}
+					writeFatalMultiFab(stateFinal_cc, "Stage2FOFCFailedState");
+					writeFatalFaceMultiFabs(flux_rk2, "Stage2FluxAfterFOFC");
+					writeFatalFaceMultiFabs(avgFaceVel, "Stage2FaceVelAfterFOFC");
+					writeFatalPlotfile(stateFinal_cc);
 					return false;
 				}
 			}
@@ -2520,6 +2546,17 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 
 	bool const cfl_ok = !isCflViolated(lev, time, dt_lev);
 	bool const final_success = (cfl_ok && burn_success_second);
+
+	if (!final_success) {
+		writeFatalFOHydroDebug();
+		if (!burn_success_second) {
+			writeFatalMultiFab(state_new_cc_[lev], "StateNewCCSourceFailed");
+		}
+		if (!cfl_ok) {
+			writeFatalMultiFab(state_new_cc_[lev], "StateNewCCCflFailed");
+		}
+		writeFatalPlotfile(state_new_cc_[lev]);
+	}
 
 	if (do_reflux == 1 && final_success) {
 		incrementFluxRegisters(fr_as_crse, fr_as_fine, flux_rk2, lev, dt_lev);
