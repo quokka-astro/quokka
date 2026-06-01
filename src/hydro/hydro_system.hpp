@@ -146,6 +146,10 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	AMREX_GPU_DEVICE static auto isStateValid(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k) -> bool;
 
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void EnforceMassScalarLimits(amrex::Array4<amrex::Real> const &state, int i, int j, int k);
+
+	static void EnforceMassScalarLimits(amrex::MultiFab &state_mf, amrex::IntVect const &ngrow);
+
 	static void ComputeRhsFromFluxes(amrex::MultiFab &rhs_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray,
 					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int nvars);
 
@@ -754,6 +758,57 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HydroSystem<problem_t>::isStateValid(am
 }
 
 template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void HydroSystem<problem_t>::EnforceMassScalarLimits(amrex::Array4<amrex::Real> const &state, int i, int j, int k)
+{
+	if constexpr (nmscalars_ > 0) {
+		amrex::Real const rho = state(i, j, k, density_index);
+		if (rho <= std::numeric_limits<amrex::Real>::min()) {
+			return;
+		}
+
+		amrex::Real const scalar_floor = network_rp::small_x * rho;
+		amrex::Real const floor_sum = static_cast<amrex::Real>(nmscalars_) * scalar_floor;
+		amrex::Real excess_sum = 0.0;
+		for (int idx = 0; idx < nmscalars_; ++idx) {
+			amrex::Real const rho_scalar = state(i, j, k, scalar0_index + idx);
+			excess_sum += (rho_scalar > scalar_floor) ? (rho_scalar - scalar_floor) : 0.0;
+		}
+
+		if (rho > floor_sum) {
+			amrex::Real const residual = rho - floor_sum;
+			if (excess_sum > std::numeric_limits<amrex::Real>::min()) {
+				amrex::Real const scale = residual / excess_sum;
+				for (int idx = 0; idx < nmscalars_; ++idx) {
+					amrex::Real const rho_scalar = state(i, j, k, scalar0_index + idx);
+					amrex::Real const excess = (rho_scalar > scalar_floor) ? (rho_scalar - scalar_floor) : 0.0;
+					state(i, j, k, scalar0_index + idx) = scalar_floor + excess * scale;
+				}
+			} else {
+				amrex::Real const scalar_share = rho / static_cast<amrex::Real>(nmscalars_);
+				for (int idx = 0; idx < nmscalars_; ++idx) {
+					state(i, j, k, scalar0_index + idx) = scalar_share;
+				}
+			}
+		} else {
+			amrex::Real const scalar_share = rho / static_cast<amrex::Real>(nmscalars_);
+			for (int idx = 0; idx < nmscalars_; ++idx) {
+				state(i, j, k, scalar0_index + idx) = scalar_share;
+			}
+		}
+	}
+}
+
+template <typename problem_t> void HydroSystem<problem_t>::EnforceMassScalarLimits(amrex::MultiFab &state_mf, amrex::IntVect const &ngrow)
+{
+	if constexpr (nmscalars_ > 0) {
+		auto const state = state_mf.arrays();
+		amrex::ParallelFor(state_mf, ngrow, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+			HydroSystem<problem_t>::EnforceMassScalarLimits(state[bx], i, j, k);
+		});
+	}
+}
+
+template <typename problem_t>
 void HydroSystem<problem_t>::ComputeRhsFromFluxes(amrex::MultiFab &rhs_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fluxArray,
 						  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, const int nvars)
 {
@@ -1049,25 +1104,8 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			}
 		}
 
-		// Enforce mass scalars floor
-		if (nmscalars_ > 0) {
-			amrex::Real sp_sum = 0.0;
-			for (int idx = 0; idx < nmscalars_; ++idx) {
-				if (state[bx](i, j, k, scalar0_index + idx) < 0.0) {
-					state[bx](i, j, k, scalar0_index + idx) = network_rp::small_x * rho_new;
-				}
-				// get sum to renormalize
-				sp_sum += state[bx](i, j, k, scalar0_index + idx);
-			}
-
-			if ((sp_sum > std::numeric_limits<amrex::Real>::min()) && (rho_new > std::numeric_limits<amrex::Real>::min())) {
-				sp_sum /= rho_new; // get mass fractions
-				for (int idx = 0; idx < nmscalars_; ++idx) {
-					// renormalize
-					state[bx](i, j, k, scalar0_index + idx) /= sp_sum;
-				}
-			}
-		}
+		// Enforce mass scalar floors and sum consistency.
+		EnforceMassScalarLimits(state[bx], i, j, k);
 
 		// Enforce dust density floor
 		amrex::Real const dust_floor = dustDensityFloor;
@@ -1488,18 +1526,10 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 
 		// conserve flux of mass scalars
 		// based on Plewa and Muller 1999, A&A, 342, 179 (equations 8 and 12)
-		amrex::Real fluxSum_U_L = 0;
-		amrex::Real fluxSum_U_R = 0;
-
 		for (int n = 0; n < nscalars_; ++n) {
 			const int nstart = nHydroScalars_ - nscalars_;
 			U_L[nstart + n] = sL.scalar[n];
 			U_R[nstart + n] = sR.scalar[n];
-
-			if (n < nmscalars_) {
-				fluxSum_U_L += U_L[nstart + n];
-				fluxSum_U_R += U_R[nstart + n];
-			}
 		}
 
 		F_canonical = F_canonical + viscosity * (U_L - U_R);
@@ -1531,23 +1561,44 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		x1FaceVel(i, j, k) = v_norm;
 
 		// use the same logic as above to scale and conserve specie fluxes
-		if (F[density_index] >= 0.) {
-			for (int n = 0; n < nmscalars_; ++n) {
-				const int nstart = nHydroScalars_ - nscalars_;
-				if (fluxSum_U_L > 0.) {
-					F[nstart + n] = F[density_index] * U_L[nstart + n] / fluxSum_U_L;
-				} else {
-					F[nstart + n] = 0.;
+		if constexpr (nmscalars_ > 0) {
+			auto set_mass_scalar_fluxes = [&F] AMREX_GPU_DEVICE(quokka::valarray<double, nHydroScalars_> const &U_upwind, amrex::Real rho_upwind) {
+				constexpr int nstart = nHydroScalars_ - nscalars_;
+				if (rho_upwind <= std::numeric_limits<amrex::Real>::min()) {
+					for (int n = 0; n < nmscalars_; ++n) {
+						F[nstart + n] = 0.;
+					}
+					return;
 				}
-			}
-		} else {
-			for (int n = 0; n < nmscalars_; ++n) {
-				const int nstart = nHydroScalars_ - nscalars_;
-				if (fluxSum_U_R > 0.) {
-					F[nstart + n] = F[density_index] * U_R[nstart + n] / fluxSum_U_R;
-				} else {
-					F[nstart + n] = 0.;
+
+				amrex::Real const scalar_floor = network_rp::small_x * rho_upwind;
+				amrex::Real const floor_sum = static_cast<amrex::Real>(nmscalars_) * scalar_floor;
+				amrex::Real excess_sum = 0.0;
+				for (int n = 0; n < nmscalars_; ++n) {
+					amrex::Real const rho_scalar = U_upwind[nstart + n];
+					excess_sum += (rho_scalar > scalar_floor) ? (rho_scalar - scalar_floor) : 0.0;
 				}
+
+				if ((rho_upwind > floor_sum) && (excess_sum > std::numeric_limits<amrex::Real>::min())) {
+					amrex::Real const scale = (rho_upwind - floor_sum) / excess_sum;
+					for (int n = 0; n < nmscalars_; ++n) {
+						amrex::Real const rho_scalar = U_upwind[nstart + n];
+						amrex::Real const excess = (rho_scalar > scalar_floor) ? (rho_scalar - scalar_floor) : 0.0;
+						amrex::Real const rho_scalar_limited = scalar_floor + excess * scale;
+						F[nstart + n] = F[density_index] * rho_scalar_limited / rho_upwind;
+					}
+				} else {
+					amrex::Real const mass_fraction = 1.0 / static_cast<amrex::Real>(nmscalars_);
+					for (int n = 0; n < nmscalars_; ++n) {
+						F[nstart + n] = F[density_index] * mass_fraction;
+					}
+				}
+			};
+
+			if (F[density_index] >= 0.) {
+				set_mass_scalar_fluxes(U_L, sL.rho);
+			} else {
+				set_mass_scalar_fluxes(U_R, sR.rho);
 			}
 		}
 
