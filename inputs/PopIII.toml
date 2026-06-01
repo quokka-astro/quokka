@@ -14,8 +14,8 @@ amr.v = 1  # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell = [64, 64, 64]
-amr.max_level = 0  # number of levels = max_level + 1
+amr.n_cell = [256, 256, 256]
+amr.max_level = 20  # number of levels = max_level + 1
 amr.blocking_factor = 32  # grid size must be divisible by this
 amr.max_grid_size = 128  # at least 128 for GPUs
 amr.n_error_buf = 3  # minimum 3 cell buffer around tagged cells
@@ -26,7 +26,7 @@ hydro.artificial_viscosity_coefficient = 0.1
 cfl = 0.3
 max_timesteps = 100
 stop_time = 1e16
-init_shrink = 1e-2	# shrink initial timestep
+init_shrink = 1e-2     # shrink initial timestep
 
 do_reflux = 1
 do_subcycle = 0
@@ -63,17 +63,17 @@ quokka.diagnostics = ["slice_x", "proj_x"]
 
 ## in-situ slice output
 quokka.slice_x.type = "DiagFramePlane"
-quokka.slice_x.file = "slices/x/plt"
+quokka.slice_x.file = "slices/plt"
 quokka.slice_x.normal = 0  # Plane normal (0 == x, 1 == y, 2 == z)
 quokka.slice_x.center = 0.0
-quokka.slice_x.int = 100
+quokka.slice_x.int = 20
 quokka.slice_x.field_names = ["gasDensity", "x-GasMomentum", "y-GasMomentum", "z-GasMomentum", "gasEnergy", "gasInternalEnergy", "temperature", "velx", "pressure", "sound_speed"]
 
 ## in-situ projection output
 quokka.proj_x.type = "ProjectionPlot"
-quokka.proj_x.file = "proj/x/plt"
+quokka.proj_x.file = "proj/plt"
 quokka.proj_x.normal = 0  # Projection direction (0 == x, 1 == y, 2 == z)
-quokka.proj_x.int = 100
+quokka.proj_x.int = 20
 quokka.proj_x.field_names = ["gasDensity"]
 
 amrex.throw_exception = 0
