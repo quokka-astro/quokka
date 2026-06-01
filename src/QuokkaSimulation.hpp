@@ -1936,6 +1936,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::PostInterpStateF
 	const bool includes_mass_scalars = (scomp == 0) && (ncomp >= mass_scalar_end);
 	auto const cons = fab.array();
 	amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		const bool do_mass_scalars = includes_mass_scalars;
 		const auto rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
 		const auto px = cons(i, j, k, HydroSystem<problem_t>::x1Momentum_index);
 		const auto py = cons(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
@@ -1949,7 +1950,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::PostInterpStateF
 		cons(i, j, k, HydroSystem<problem_t>::energy_index) = Etot;
 
 		if constexpr (HydroSystem<problem_t>::nmscalars_ > 0) {
-			if (includes_mass_scalars) {
+			if (do_mass_scalars) {
 				for (int idx = 0; idx < HydroSystem<problem_t>::nmscalars_; ++idx) {
 					cons(i, j, k, HydroSystem<problem_t>::scalar0_index + idx) *= rho;
 				}
@@ -1967,6 +1968,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::PreInterpState(a
 	const bool includes_mass_scalars = (scomp == 0) && (ncomp >= mass_scalar_end);
 	auto const &cons = mf.arrays();
 	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+		const bool do_mass_scalars = includes_mass_scalars;
 		const auto rho = cons[bx](i, j, k, HydroSystem<problem_t>::density_index);
 		const auto px = cons[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
 		const auto py = cons[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
@@ -1979,7 +1981,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::PreInterpState(a
 		cons[bx](i, j, k, HydroSystem<problem_t>::energy_index) = e;
 
 		if constexpr (HydroSystem<problem_t>::nmscalars_ > 0) {
-			if (includes_mass_scalars) {
+			if (do_mass_scalars) {
 				HydroSystem<problem_t>::EnforceMassScalarLimits(cons[bx], i, j, k);
 				for (int idx = 0; idx < HydroSystem<problem_t>::nmscalars_; ++idx) {
 					cons[bx](i, j, k, HydroSystem<problem_t>::scalar0_index + idx) /= rho;
@@ -1997,6 +1999,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::PostInterpState(
 	const bool includes_mass_scalars = (scomp == 0) && (ncomp >= mass_scalar_end);
 	auto const &cons = mf.arrays();
 	amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+		const bool do_mass_scalars = includes_mass_scalars;
 		const auto rho = cons[bx](i, j, k, HydroSystem<problem_t>::density_index);
 		const auto px = cons[bx](i, j, k, HydroSystem<problem_t>::x1Momentum_index);
 		const auto py = cons[bx](i, j, k, HydroSystem<problem_t>::x2Momentum_index);
@@ -2010,7 +2013,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::PostInterpState(
 		cons[bx](i, j, k, HydroSystem<problem_t>::energy_index) = Etot;
 
 		if constexpr (HydroSystem<problem_t>::nmscalars_ > 0) {
-			if (includes_mass_scalars) {
+			if (do_mass_scalars) {
 				for (int idx = 0; idx < HydroSystem<problem_t>::nmscalars_; ++idx) {
 					cons[bx](i, j, k, HydroSystem<problem_t>::scalar0_index + idx) *= rho;
 				}
