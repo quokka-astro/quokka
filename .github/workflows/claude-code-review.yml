@@ -52,6 +52,8 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 
           prompt: |
+            ${{ github.event_name == 'workflow_dispatch' && format('Review PR #{0} in {1}.', github.event.inputs.pr_number, github.repository) || '' }}
+
             You are reviewing a pull request to Quokka, a radiation magnetohydrodynamics code
             built on AMReX. Quokka uses C++20 with GPU support (CUDA/HIP) and a single codebase
             that runs on both CPU and GPU.
@@ -111,5 +113,5 @@ jobs:
           use_sticky_comment: true
 
           claude_args: |
-            --model claude-opus-4-8
+            --model claude-opus-4-7
             --max-turns 30

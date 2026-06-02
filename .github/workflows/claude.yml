@@ -38,6 +38,6 @@ jobs:
           additional_permissions: |
             actions: read
           claude_args: |
-            --model claude-opus-4-8
+            --model claude-opus-4-7
             --max-turns 30
 
