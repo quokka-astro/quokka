@@ -26,11 +26,15 @@ hydro.artificial_viscosity_coefficient = 0.1
 cfl = 0.3
 max_timesteps = 100
 stop_time = 1e16
-init_shrink = 1e-2     # shrink initial timestep
+initial_dt = 1.0e6
+
+max_walltime = 0:55:00
+print_cycle_timing = 1
 
 do_reflux = 1
 do_subcycle = 0
 
+statistics_interval = 20
 plotfile_interval = 500
 checkpoint_interval = 1000
 
