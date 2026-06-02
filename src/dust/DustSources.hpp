@@ -12,6 +12,7 @@
 #include "hydro/hydro_system.hpp"
 #include "physics_info.hpp"
 #include "util/ArrayView_3d.hpp"
+#include <cmath>
 #include <numbers>
 
 template <typename problem_t> class DustSources
@@ -89,7 +90,10 @@ template <typename problem_t> class DustSources
 		AMREX_GPU_HOST_DEVICE auto inverse() const -> ReducedOperator
 		{
 			amrex::Real const denom_perp = coeffIdentity * coeffIdentity + coeffCross * coeffCross;
-			amrex::Real const inv_parallel = 1.0 / (coeffIdentity + coeffParallel);
+			amrex::Real const parallel_denom = coeffIdentity + coeffParallel;
+			AMREX_ASSERT(denom_perp > 0.0);
+			AMREX_ASSERT(std::abs(parallel_denom) > 0.0);
+			amrex::Real const inv_parallel = 1.0 / parallel_denom;
 			return {coeffIdentity / denom_perp, -coeffCross / denom_perp, inv_parallel - coeffIdentity / denom_perp};
 		}
 
