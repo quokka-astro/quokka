@@ -19,7 +19,7 @@ jobs:
       (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
       issues: write
       id-token: write
@@ -38,6 +38,6 @@ jobs:
           additional_permissions: |
             actions: read
           claude_args: |
-            --model claude-opus-4-7
+            --model claude-opus-4-8
             --max-turns 30
 

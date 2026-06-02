@@ -111,5 +111,5 @@ jobs:
           use_sticky_comment: true
 
           claude_args: |
-            --model claude-opus-4-7
+            --model claude-opus-4-8
             --max-turns 30
