@@ -52,7 +52,7 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 
           prompt: |
-            You are reviewing a pull request to Quokka, a two-moment radiation hydrodynamics code
+            You are reviewing a pull request to Quokka, a radiation magnetohydrodynamics code
             built on AMReX. Quokka uses C++20 with GPU support (CUDA/HIP) and a single codebase
             that runs on both CPU and GPU.
 
