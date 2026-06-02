@@ -450,14 +450,14 @@ template <> auto QuokkaSimulation<PopIII>::ComputeStatistics() -> std::map<std::
 	for (int lev = 0; lev <= finest_level; ++lev) {
 		auto const &state = state_new_cc_[lev].const_arrays();
 		auto const &mask = valid_mask[lev].const_arrays();
-		auto const level_peak_density = amrex::ParReduce(
-		    amrex::TypeList<amrex::ReduceOpMax>{}, amrex::TypeList<amrex::Real>{}, state_new_cc_[lev], amrex::IntVect(0),
-		    [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real> {
-			    if (mask[bx](i, j, k) == 0) {
-				    return {no_cell};
-			    }
-			    return {state[bx](i, j, k, HydroSystem<PopIII>::density_index)};
-		    });
+		auto const level_peak_density =
+		    amrex::ParReduce(amrex::TypeList<amrex::ReduceOpMax>{}, amrex::TypeList<amrex::Real>{}, state_new_cc_[lev], amrex::IntVect(0),
+				     [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real> {
+					     if (mask[bx](i, j, k) == 0) {
+						     return {no_cell};
+					     }
+					     return {state[bx](i, j, k, HydroSystem<PopIII>::density_index)};
+				     });
 		peak_density = std::max(peak_density, level_peak_density);
 	}
 	amrex::ParallelAllReduce::Max(peak_density, amrex::ParallelContext::CommunicatorSub());
@@ -468,15 +468,15 @@ template <> auto QuokkaSimulation<PopIII>::ComputeStatistics() -> std::map<std::
 		auto const &state = state_new_cc_[lev].const_arrays();
 		auto const &mask = valid_mask[lev].const_arrays();
 		for (int nn = 0; nn < NumSpec; ++nn) {
-			auto const level_peak_numdens = amrex::ParReduce(
-			    amrex::TypeList<amrex::ReduceOpMax>{}, amrex::TypeList<amrex::Real>{}, state_new_cc_[lev], amrex::IntVect(0),
-			    [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real> {
-				    const amrex::Real rho = state[bx](i, j, k, HydroSystem<PopIII>::density_index);
-				    if (mask[bx](i, j, k) == 0 || rho != peak_density) {
-					    return {no_cell};
-				    }
-				    return {state[bx](i, j, k, HydroSystem<PopIII>::scalar0_index + nn) / spmasses[nn]};
-			    });
+			auto const level_peak_numdens =
+			    amrex::ParReduce(amrex::TypeList<amrex::ReduceOpMax>{}, amrex::TypeList<amrex::Real>{}, state_new_cc_[lev], amrex::IntVect(0),
+					     [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real> {
+						     const amrex::Real rho = state[bx](i, j, k, HydroSystem<PopIII>::density_index);
+						     if (mask[bx](i, j, k) == 0 || rho != peak_density) {
+							     return {no_cell};
+						     }
+						     return {state[bx](i, j, k, HydroSystem<PopIII>::scalar0_index + nn) / spmasses[nn]};
+					     });
 			peak_numdens[nn] = std::max(peak_numdens[nn], level_peak_numdens);
 		}
 	}
