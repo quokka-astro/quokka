@@ -226,6 +226,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int sn_count_ = 0;	      // number of SN explosions in a step (used for diagnostics)
 	int sn_count_cumulative_ = 0; // cumulative number of SN explosions (used for diagnostics)
 
+	// Conduction parameters
+	amrex::Real electronConductionKappa0_ = 4.17; // units of erg cm^-1 s^-1 K^-1
+	amrex::Real conductionCFL = 0.2;	      // default
+	int enableElectronConduction_ = 0;	      // default
+
 	amrex::Real densityFloor_ = 0.0;     // default
 	amrex::Real dustDensityFloor_ = 0.0; // default
 	amrex::Real tempFloor_ = 0.0;	     // default
@@ -1243,6 +1248,21 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		printCellProperties(lev, hydro_dt.index);
 	}
 
+	// compute timestep based on conduction parameters
+	amrex::ValLocPair<amrex::Real, amrex::IntVect> conduction_dt{.value = std::numeric_limits<amrex::Real>::max(),
+								     .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
+	if (enableElectronConduction_ == 1) {
+		double c_v = C::k_B / (quokka::EOS_Traits<problem_t>::mean_molecular_weight * (quokka::EOS_Traits<problem_t>::gamma - 1.0));
+		double diffusion_coefficient = electronConductionKappa0_ / (state_new_cc_[lev].min(0) * c_v);
+		conduction_dt.value = 0.5 * conductionCFL * dx_min * dx_min / diffusion_coefficient;
+		conduction_dt.index = domain_signal_maxloc;
+
+		if (verbose) {
+			amrex::Print() << std::format("...[level {}] \testimated conduction timestep: {:e}\n", lev, conduction_dt.value);
+			amrex::Print() << std::format("...[level {}] \tconduction timestep limited at cell {}\n", lev, formatIntVect(conduction_dt.index));
+		}
+	}
+
 	// compute maximum particle speed on level 'lev'
 	amrex::ValLocPair<amrex::Real, amrex::IntVect> particle_dt{.value = std::numeric_limits<amrex::Real>::max(),
 								   .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
@@ -1271,7 +1291,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 #endif
 
 	// compute minimum timestep
-	std::vector<dtloc_t *> dts = {&hydro_dt, &particle_dt};
+	std::vector<dtloc_t *> dts = {&hydro_dt, &conduction_dt, &particle_dt};
 	auto *const dt_min_ptr = *std::min_element(dts.begin(), dts.end(), [](dtloc_t *const p1, dtloc_t *const p2) { return p1->value < p2->value; });
 
 	if (verbose) {
@@ -1280,6 +1300,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 			amrex::Print() << std::format("...[level {}] timestep limited by HYDRO\n", lev);
 		} else if (dt_min_ptr == &particle_dt) {
 			amrex::Print() << std::format("...[level {}] timestep limited by PARTICLES\n", lev);
+		} else if (dt_min_ptr == &conduction_dt) {
+			amrex::Print() << std::format("...[level {}] timestep limited by CONDUCTION\n", lev);
 		}
 	}
 
@@ -1317,8 +1339,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 
 	for (int level = 0; level <= finest_level; ++level) {
 		n_factor *= nsubsteps[level];
+
+		auto effective_factor = static_cast<amrex::Real>(n_factor);
+		if (enableElectronConduction_ == 1) {
+			// Conduction timestep scales as dx^2, so we need to use n_factor^2 here instead of n_factor.
+			effective_factor = static_cast<amrex::Real>(n_factor) * static_cast<amrex::Real>(n_factor);
+		}
+
 		const amrex::Real dt_0_old = dt_0; // save old dt_0
-		dt_0 = std::min(dt_0, static_cast<amrex::Real>(n_factor) * dt_tmp[level]);
+		dt_0 = std::min(dt_0, effective_factor * dt_tmp[level]);
 		if (dt_0 < dt_0_old) {
 			// level 'level' has now set the timestep
 			level_that_sets_dt_0 = level;
