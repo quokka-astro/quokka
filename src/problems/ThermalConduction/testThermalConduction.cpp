@@ -80,12 +80,15 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const amrex::Real x = prob_lo[0] + (i + 0.5) * dx[0];
+		const amrex::Real y = prob_lo[1] + (j + 0.5) * dx[1];
+		const amrex::Real z = prob_lo[2] + (k + 0.5) * dx[2];
 
+		amrex::Real const r = std::sqrt(x * x + y * y + z * z);
 		/*-------------------------------*/
 		// Problem ----> Gaussian temperature profile
 		const amrex::Real rho = rho0 * C::m_p;	  // g/cm^3
 		const amrex::Real sigma2 = sigma * sigma; // width of the Gaussian
-		const amrex::Real Eint = Eint0 * std::exp(-x * x / sigma2 / 2.) + Efloor;
+		const amrex::Real Eint = Eint0 * std::exp(-r * r / sigma2 / 2.) + Efloor;
 		/*-------------------------------*/
 
 		for (int n = 0; n < state_cc.nComp(); ++n) {
@@ -96,6 +99,45 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::energy_index) = Eint;
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::internalEnergy_index) = Eint;
 	});
+}
+
+template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev, amrex::TagBoxArray &tags, amrex::Real /*time*/, int /*ngrow*/)
+{
+	// geometrical refinement
+	// tag cells within one-sigma of the initial Gaussian profile for refinement
+	const double refine_Lmax = 1.1 * sigma ; // 0.2 pc
+	
+	const auto prob_lo = geom[lev].ProbLoArray();
+	const auto dx = geom[lev].CellSizeArray();
+	const auto tag = tags.arrays();
+
+	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
+		// NOTE: must check all nodes of the cell!
+		// Otherwise, cells that are too big can completely prevent refinement.
+		amrex::Real const x0 = prob_lo[0] + (i * dx[0]);
+		amrex::Real const y0 = prob_lo[1] + (j * dx[1]);
+		amrex::Real const z0 = prob_lo[2] + (k * dx[2]);
+
+		amrex::Real const x1 = prob_lo[0] + ((i + 1) * dx[0]);
+		amrex::Real const y1 = prob_lo[1] + ((j + 1) * dx[1]);
+		amrex::Real const z1 = prob_lo[2] + ((k + 1) * dx[2]);
+
+		auto tagIfPointInRegion = [=](amrex::Real x, amrex::Real y, amrex::Real z) {
+			const amrex::Real r = std::sqrt(x * x + y * y + z * z);
+			if ((r < refine_Lmax)) {
+				tag[bx](i, j, k) = amrex::TagBox::SET;
+			}
+		};
+
+		for (auto const &x : {x0, x1}) {
+			for (auto const &y : {y0, y1}) {
+				for (auto const &z : {z0, z1}) {
+					tagIfPointInRegion(x, y, z);
+				}
+			}
+		}
+	});
+	amrex::Gpu::streamSynchronize();
 }
 
 template <>
@@ -112,13 +154,15 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
-
+			amrex::Real const y = prob_lo[1] + (j + 0.5) * dx[1];
+			amrex::Real const z = prob_lo[2] + (k + 0.5) * dx[2];
+			amrex::Real const r = std::sqrt(x * x + y * y + z * z);
 			// Solution for the Gaussian temperature profile
 			const amrex::Real rho = rho0 * C::m_p;		     // g/cm^3
 			const amrex::Real sigma2_0 = sigma * sigma;	     // initial width of the Gaussian
 			const amrex::Real sigma2_t = sigma2_0 + 2.0 * D * t; // width of the Gaussian at time t
 			const amrex::Real norm = Eint0 * (std::sqrt(sigma2_0 / sigma2_t));
-			const amrex::Real Eint_exact = norm * std::exp(-x * x / sigma2_t / 2.) + Efloor;
+			const amrex::Real Eint_exact = norm * std::exp(-r * r / sigma2_t / 2.) + Efloor;
 
 			// clear all components
 			for (int n = 0; n < ncomp; ++n) {
