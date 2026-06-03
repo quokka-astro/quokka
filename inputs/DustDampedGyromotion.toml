@@ -19,6 +19,7 @@ amr.max_level = 0
 do_reflux = 0
 do_subcycle = 0
 suppress_output = 1
+write_csv = 1
 
 max_timesteps = 10000000
 

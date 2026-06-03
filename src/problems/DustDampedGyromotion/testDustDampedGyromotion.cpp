@@ -8,13 +8,13 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <fstream>
+#include <iomanip>
 #include <numbers>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
-#ifdef HAVE_PYTHON
-#include "util/matplotlibcpp.h"
-#endif
 
 namespace
 {
@@ -128,8 +128,19 @@ struct SchemeRunResult {
 };
 
 constexpr std::array<ResolvedRkScheme, 3> resolved_rk_schemes = {ResolvedRkScheme::TP2025, ResolvedRkScheme::GL4, ResolvedRkScheme::Midpoint};
-constexpr std::array<char const *, 3> scheme_colors = {"C0", "C1", "C2"};
-constexpr std::array<char const *, 3> scheme_markers = {"o", "s", "^"};
+
+auto resolvedRkSchemeSlug(ResolvedRkScheme scheme) -> std::string_view
+{
+	switch (scheme) {
+	case ResolvedRkScheme::TP2025:
+		return "tp2025";
+	case ResolvedRkScheme::GL4:
+		return "gl4";
+	case ResolvedRkScheme::Midpoint:
+		return "midpoint";
+	}
+	return "unknown";
+}
 } // namespace
 
 template <> struct SimulationData<DustGyroEpsteinNoB> : DustGyroHistory {
@@ -445,61 +456,96 @@ auto computeRunResult(ResolvedRkScheme scheme, SimulationData<problem_t> data, A
 }
 
 template <typename AnalyticFn>
-void fillDenseDriftXData(const DustGyroHistory &data, AnalyticFn analytic, double x_scale, std::vector<double> &x_dense, std::vector<double> &wx_dense)
+void fillDenseDriftXData(const DustGyroHistory &data, AnalyticFn analytic, double x_scale, std::vector<double> &t_dense, std::vector<double> &x_dense,
+			 std::vector<double> &wx_dense)
 {
 	const size_t n_dense = 1000;
+	t_dense.resize(n_dense);
 	x_dense.resize(n_dense);
 	wx_dense.resize(n_dense);
 	const double t_max = data.t_vec_.empty() ? 0.0 : data.t_vec_.back();
 	for (size_t i = 0; i < n_dense; ++i) {
 		const double t = t_max * static_cast<double>(i) / static_cast<double>(n_dense - 1);
 		DriftState const exact = analytic(t);
+		t_dense[i] = t;
 		x_dense[i] = x_scale * t;
 		wx_dense[i] = exact.wx / initial_drift;
 	}
 }
 
-#ifdef HAVE_PYTHON
 template <typename AnalyticFn>
-void plotDriftX(const std::vector<SchemeRunResult> &runs, AnalyticFn analytic, const std::string &filename, const std::string &title, double x_scale,
-		const std::string &xlabel)
+void writeDenseExactCsv(const DustGyroHistory &data, AnalyticFn analytic, std::string_view filename, double x_scale)
+{
+	std::vector<double> t_dense;
+	std::vector<double> x_dense;
+	std::vector<double> wx_dense;
+	fillDenseDriftXData(data, analytic, x_scale, t_dense, x_dense, wx_dense);
+
+	std::ofstream file(filename.data());
+	file << std::setprecision(17);
+	file << "t,x_plot,wx_exact_norm\n";
+	for (size_t i = 0; i < t_dense.size(); ++i) {
+		file << t_dense[i] << "," << x_dense[i] << "," << wx_dense[i] << "\n";
+	}
+}
+
+template <typename AnalyticFn>
+void writeHistoryCsv(const std::vector<SchemeRunResult> &runs, AnalyticFn analytic, std::string_view filename, double x_scale)
 {
 	if (runs.empty()) {
 		return;
 	}
 
-	std::vector<double> x_dense;
-	std::vector<double> wx_dense;
-	fillDenseDriftXData(runs.front().data, analytic, x_scale, x_dense, wx_dense);
-
-	matplotlibcpp::clf();
-	matplotlibcpp::plot(x_dense, wx_dense, {{"label", "analytic"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "1.0"}});
-	for (size_t idx = 0; idx < runs.size(); ++idx) {
-		std::vector<double> x_num(runs[idx].data.t_vec_.size());
-		std::vector<double> wx_num(runs[idx].data.wx_vec_.size());
-		for (size_t i = 0; i < runs[idx].data.wx_vec_.size(); ++i) {
-			x_num[i] = x_scale * runs[idx].data.t_vec_[i];
-			wx_num[i] = runs[idx].data.wx_vec_[i] / initial_drift;
-		}
-
-		matplotlibcpp::plot(x_num, wx_num,
-				    {{"label", quokka::dust::resolvedRkSchemeName(runs[idx].scheme)},
-				     {"color", scheme_colors[idx]},
-				     {"linestyle", "None"},
-				     {"marker", scheme_markers[idx]},
-				     {"markersize", "3"}});
+	size_t n_samples = runs.front().data.t_vec_.size();
+	for (auto const &run : runs) {
+		n_samples = std::min(n_samples, run.data.t_vec_.size());
 	}
-	matplotlibcpp::legend();
-	matplotlibcpp::xlabel(xlabel);
-	matplotlibcpp::ylabel(R"($w_x/w_0$)");
-	matplotlibcpp::title(title);
-	matplotlibcpp::tight_layout();
-	matplotlibcpp::save(filename);
+
+	std::ofstream file(filename.data());
+	file << std::setprecision(17);
+	file << "t,x_plot";
+	for (auto const &run : runs) {
+		file << ",wx_" << resolvedRkSchemeSlug(run.scheme) << "_norm";
+	}
+	file << ",wx_exact_norm\n";
+
+	for (size_t i = 0; i < n_samples; ++i) {
+		double const t = runs.front().data.t_vec_[i];
+		file << t << "," << x_scale * t;
+		for (auto const &run : runs) {
+			file << "," << run.data.wx_vec_[i] / initial_drift;
+		}
+		file << "," << analytic(t).wx / initial_drift << "\n";
+	}
 }
-#endif
+
+template <typename AnalyticFn>
+void writeCaseOutputs(const std::vector<SchemeRunResult> &runs, AnalyticFn analytic, std::string_view case_tag, double x_scale)
+{
+	if (runs.empty()) {
+		return;
+	}
+
+	std::string const history_filename = "dust_damped_gyromotion_" + std::string(case_tag) + "_history.csv";
+	std::string const exact_filename = "dust_damped_gyromotion_" + std::string(case_tag) + "_exact.csv";
+	writeHistoryCsv(runs, analytic, history_filename, x_scale);
+	writeDenseExactCsv(runs.front().data, analytic, exact_filename, x_scale);
+}
+
+void writeSummaryCsv(const std::string_view case_tag, const std::vector<SchemeRunResult> &runs, std::ofstream &file)
+{
+	for (auto const &run : runs) {
+		file << case_tag << "," << resolvedRkSchemeSlug(run.scheme) << "," << run.drift_l2_error << "," << run.amplitude_error << ","
+		     << run.conservation_error << "\n";
+	}
+}
 
 auto problem_main() -> int
 {
+	bool write_csv = true;
+	amrex::ParmParse const pp("problem");
+	pp.query("write_csv", write_csv);
+
 	quokka::dust::readDustGrainParams(g_dust_grain_radius, g_dust_grain_density);
 
 	auto epstein_no_b_exact = [](double t) { return analyticEpsteinDrift(t, GyroCaseParams<DustGyroEpsteinNoB>::omega_L); };
@@ -568,14 +614,19 @@ auto problem_main() -> int
 		} else {
 			amrex::Print() << "\nTest PASSED: dust-gas gyromotion matches analytic solutions.\n";
 		}
+		if (write_csv) {
+			const double alpha0 = computeInitialReciprocalStoppingTime();
+			writeCaseOutputs(epstein_no_b_runs, epstein_no_b_exact, "pure_damping", alpha0);
+			writeCaseOutputs(gyro_no_drag_runs, gyro_no_drag_exact, "undamped_gyromotion", GyroCaseParams<DustGyroNoDrag>::omega_L);
+			writeCaseOutputs(epstein_with_b_runs, epstein_with_b_exact, "damped_gyromotion", alpha0);
 
-#ifdef HAVE_PYTHON
-		const double alpha0 = computeInitialReciprocalStoppingTime();
-		plotDriftX(epstein_no_b_runs, epstein_no_b_exact, "./dust_gyromotion_PureDamping.pdf", "Pure Damping", alpha0, R"($t/t_{s,0}$)");
-		plotDriftX(gyro_no_drag_runs, gyro_no_drag_exact, "./dust_gyromotion_UndampedGyromotion.pdf", "Undamped Gyromotion",
-			   GyroCaseParams<DustGyroNoDrag>::omega_L, R"($\omega_L t$)");
-		plotDriftX(epstein_with_b_runs, epstein_with_b_exact, "./dust_gyromotion_DampedGyromotion.pdf", "Damped Gyromotion", alpha0, R"($t/t_{s,0}$)");
-#endif
+			std::ofstream summary_file("dust_damped_gyromotion_summary.csv");
+			summary_file << std::setprecision(17);
+			summary_file << "case,scheme,drift_l2_error,amplitude_error,conservation_error\n";
+			writeSummaryCsv("pure_damping", epstein_no_b_runs, summary_file);
+			writeSummaryCsv("undamped_gyromotion", gyro_no_drag_runs, summary_file);
+			writeSummaryCsv("damped_gyromotion", epstein_with_b_runs, summary_file);
+		}
 	}
 
 	return status;
