@@ -7,13 +7,13 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <fstream>
+#include <iomanip>
 #include <limits>
 #include <numbers>
 #include <string>
+#include <string_view>
 #include <vector>
-#ifdef HAVE_PYTHON
-#include "util/matplotlibcpp.h"
-#endif
 
 struct DustGyromotionDiagnostics {
 };
@@ -38,8 +38,6 @@ using ResolvedRkScheme = quokka::dust::ResolvedRkScheme;
 
 constexpr std::array<double, 11> requested_dt_values = {1.0e-2, 3.0e-2, 1.0e-1, 2.0e-1, 3.0e-1, 5.0e-1, 1.0e0, 2.0e0, 4.0e0, 8.0e0, 1.6e1};
 constexpr std::array<ResolvedRkScheme, 3> resolved_rk_schemes = {ResolvedRkScheme::TP2025, ResolvedRkScheme::GL4, ResolvedRkScheme::Midpoint};
-constexpr std::array<char const *, 3> scheme_colors = {"C0", "C1", "C2"};
-constexpr std::array<char const *, 3> scheme_markers = {"o", "s", "^"};
 constexpr double plot_floor = 1.0e-16;
 
 struct DriftState {
@@ -67,6 +65,19 @@ struct SchemeSweepResult {
 	ResolvedRkScheme scheme;
 	std::vector<GyroSample> samples;
 };
+
+auto resolvedRkSchemeSlug(ResolvedRkScheme scheme) -> std::string_view
+{
+	switch (scheme) {
+	case ResolvedRkScheme::TP2025:
+		return "tp2025";
+	case ResolvedRkScheme::GL4:
+		return "gl4";
+	case ResolvedRkScheme::Midpoint:
+		return "midpoint";
+	}
+	return "unknown";
+}
 } // namespace
 
 template <> struct SimulationData<DustPureGyromotion> {
@@ -328,136 +339,29 @@ auto runSchemeSweep(ResolvedRkScheme scheme) -> SchemeSweepResult
 	return result;
 }
 
-#ifdef HAVE_PYTHON
-template <typename Accessor> auto collectSeries(SchemeSweepResult const &run, Accessor accessor) -> std::vector<double>
+void writeSweepCsv(std::vector<SchemeSweepResult> const &runs)
 {
-	std::vector<double> series;
-	series.reserve(run.samples.size());
-	for (auto const &sample : run.samples) {
-		series.push_back(accessor(sample));
-	}
-	return series;
-}
-
-template <typename Accessor>
-void plotSweepMetric(std::vector<SchemeSweepResult> const &runs, Accessor accessor, std::string const &ylabel, std::string const &title,
-		     std::string const &filename)
-{
-	matplotlibcpp::clf();
-	matplotlibcpp::figure_size(1200, 600);
-
-	double y_min = std::numeric_limits<double>::max();
-	double y_max = 0.0;
+	std::ofstream file("dust_gyromotion_diagnostics.csv");
+	file << std::setprecision(17);
+	file << "scheme,requested_dt,effective_dt,end_time,theta,amplitude_ratio,delta_log_amplitude,delta_phase,abs_delta_log_amplitude,abs_delta_phase,"
+		"theory_delta_log_amplitude,theory_delta_phase,conservation_error,used_resolved_branch,resolved_stiff_boundary_dt,plot_floor\n";
 	for (auto const &run : runs) {
 		for (auto const &sample : run.samples) {
-			const double value = accessor(sample);
-			if (std::isfinite(value) && (value > 0.0)) {
-				y_min = std::min(y_min, value);
-				y_max = std::max(y_max, value);
-			}
+			file << resolvedRkSchemeSlug(run.scheme) << "," << sample.requested_dt << "," << sample.effective_dt << "," << sample.end_time << ","
+			     << sample.theta << "," << sample.amplitude_ratio << "," << sample.delta_log_amplitude << "," << sample.delta_phase << ","
+			     << sample.abs_delta_log_amplitude << "," << sample.abs_delta_phase << "," << sample.theory_delta_log_amplitude << ","
+			     << sample.theory_delta_phase << "," << sample.conservation_error << "," << (sample.used_resolved_branch ? 1 : 0) << ","
+			     << resolvedBranchThresholdDt() << "," << plot_floor << "\n";
 		}
 	}
-	if (!(y_min < y_max)) {
-		y_min = plot_floor;
-		y_max = 1.0;
-	}
-
-	for (size_t idx = 0; idx < runs.size(); ++idx) {
-		std::vector<double> const requested_dt = collectSeries(runs[idx], [](GyroSample const &sample) { return sample.requested_dt; });
-		std::vector<double> const values = collectSeries(runs[idx], accessor);
-		matplotlibcpp::plot(requested_dt, values,
-				    {{"label", quokka::dust::resolvedRkSchemeName(runs[idx].scheme)},
-				     {"color", scheme_colors[idx]},
-				     {"linestyle", "-"},
-				     {"marker", scheme_markers[idx]},
-				     {"markersize", "4"}});
-	}
-
-	std::vector<double> const boundary_x = {resolvedBranchThresholdDt(), resolvedBranchThresholdDt()};
-	std::vector<double> const boundary_y = {y_min, y_max};
-	matplotlibcpp::plot(boundary_x, boundary_y, {{"label", "resolved/stiff boundary"}, {"color", "k"}, {"linestyle", ":"}, {"linewidth", "1.0"}});
-	matplotlibcpp::xscale("log");
-	matplotlibcpp::yscale("log");
-	matplotlibcpp::grid(true);
-	matplotlibcpp::legend();
-	matplotlibcpp::xlabel(R"(requested $\Delta t$)");
-	matplotlibcpp::ylabel(ylabel);
-	matplotlibcpp::title(title);
-	matplotlibcpp::tight_layout();
-	matplotlibcpp::save(filename);
 }
-
-template <typename ValueAccessor, typename TheoryAccessor>
-void plotSweepMetricWithTheory(std::vector<SchemeSweepResult> const &runs, ValueAccessor value_accessor, TheoryAccessor theory_accessor,
-			       std::string const &ylabel, std::string const &title, std::string const &filename)
-{
-	matplotlibcpp::clf();
-	matplotlibcpp::figure_size(1200, 600);
-
-	double y_min = std::numeric_limits<double>::max();
-	double y_max = 0.0;
-	for (auto const &run : runs) {
-		for (auto const &sample : run.samples) {
-			for (double const value : {value_accessor(sample), theory_accessor(sample)}) {
-				if (std::isfinite(value) && (value > 0.0)) {
-					y_min = std::min(y_min, value);
-					y_max = std::max(y_max, value);
-				}
-			}
-		}
-	}
-	if (!(y_min < y_max)) {
-		y_min = plot_floor;
-		y_max = 1.0;
-	}
-
-	for (size_t idx = 0; idx < runs.size(); ++idx) {
-		std::vector<double> const requested_dt = collectSeries(runs[idx], [](GyroSample const &sample) { return sample.requested_dt; });
-		std::vector<double> const values = collectSeries(runs[idx], value_accessor);
-		std::vector<double> const theory_values = collectSeries(runs[idx], theory_accessor);
-
-		matplotlibcpp::plot(requested_dt, values,
-				    {{"label", quokka::dust::resolvedRkSchemeName(runs[idx].scheme)},
-				     {"color", scheme_colors[idx]},
-				     {"linestyle", "-"},
-				     {"marker", scheme_markers[idx]},
-				     {"markersize", "4"}});
-		matplotlibcpp::plot(requested_dt, theory_values,
-				    {{"label", std::string(quokka::dust::resolvedRkSchemeName(runs[idx].scheme)) + " theory"},
-				     {"color", scheme_colors[idx]},
-				     {"linestyle", "--"},
-				     {"linewidth", "1.0"}});
-	}
-
-	std::vector<double> const boundary_x = {resolvedBranchThresholdDt(), resolvedBranchThresholdDt()};
-	std::vector<double> const boundary_y = {y_min, y_max};
-	matplotlibcpp::plot(boundary_x, boundary_y, {{"label", "resolved/stiff boundary"}, {"color", "k"}, {"linestyle", ":"}, {"linewidth", "1.0"}});
-	matplotlibcpp::xscale("log");
-	matplotlibcpp::yscale("log");
-	matplotlibcpp::grid(true);
-	matplotlibcpp::legend();
-	matplotlibcpp::xlabel(R"(requested $\Delta t$)");
-	matplotlibcpp::ylabel(ylabel);
-	matplotlibcpp::title(title);
-	matplotlibcpp::tight_layout();
-	matplotlibcpp::save(filename);
-}
-
-void plotGyroDiagnostics(std::vector<SchemeSweepResult> const &runs)
-{
-	plotSweepMetricWithTheory(
-	    runs, [](GyroSample const &sample) { return sample.abs_delta_log_amplitude; },
-	    [](GyroSample const &sample) { return std::max(std::abs(sample.theory_delta_log_amplitude), plot_floor); }, R"($|\delta a|$)",
-	    "Pure Gyromotion Log-Amplitude Error", "./dust_gyromotion_diagnostics_magnitude_error.pdf");
-	plotSweepMetricWithTheory(
-	    runs, [](GyroSample const &sample) { return sample.abs_delta_phase; },
-	    [](GyroSample const &sample) { return std::max(std::abs(sample.theory_delta_phase), plot_floor); }, R"($|\delta \phi|$)",
-	    "Pure Gyromotion Phase Error", "./dust_gyromotion_diagnostics_phase_error.pdf");
-}
-#endif
 
 auto problem_main() -> int
 {
+	bool write_csv = true;
+	amrex::ParmParse const pp("problem");
+	pp.query("write_csv", write_csv);
+
 	std::vector<SchemeSweepResult> runs;
 	runs.reserve(resolved_rk_schemes.size());
 	for (ResolvedRkScheme const scheme : resolved_rk_schemes) {
@@ -504,10 +408,9 @@ auto problem_main() -> int
 		} else {
 			amrex::Print() << "\nTest PASSED: pure gyromotion diagnostics completed with finite values.\n";
 		}
-
-#ifdef HAVE_PYTHON
-		plotGyroDiagnostics(runs);
-#endif
+		if (write_csv) {
+			writeSweepCsv(runs);
+		}
 	}
 
 	return status;
