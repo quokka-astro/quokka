@@ -169,7 +169,6 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
-			amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
 			amrex::Real r2 = x * x;
 #if (AMREX_SPACEDIM >= 2)
 			amrex::Real const y = prob_lo[1] + (j + 0.5) * dx[1];
