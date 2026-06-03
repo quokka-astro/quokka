@@ -371,9 +371,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
 	template <SourceOrder Order>
-	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, 
-									amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine,
-						int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
+	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, amrex::FluxRegister *fr_as_crse,
+					      amrex::FluxRegister *fr_as_fine, int lev, amrex::Real time, amrex::Real dt_lev) -> bool;
 	template <SourceOrder Order, typename... Fs> static auto callInOrder(Fs &&...fs) -> void
 	{
 		auto funcs = std::forward_as_tuple(std::forward<Fs>(fs)...);
@@ -1010,9 +1009,9 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeExternalH
 
 template <typename problem_t>
 template <typename QuokkaSimulation<problem_t>::SourceOrder Order>
-auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, 
-								amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine, int lev,
-								   amrex::Real time, amrex::Real dt) -> bool
+auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc,
+								   amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine, int lev, amrex::Real time,
+								   amrex::Real dt) -> bool
 {
 	auto const applyDust = [&]() {
 		if constexpr (Physics_Traits<problem_t>::is_dust_enabled && Physics_Traits<problem_t>::is_mhd_enabled) {
@@ -1068,11 +1067,11 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 			fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 			std::array<amrex::MultiFab, AMREX_SPACEDIM> heat_flux;
 
-        for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-            auto ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
-            heat_flux[idim].define(ba_face, state.DistributionMap(), state.nComp(), 0);
-            heat_flux[idim].setVal(0.0);
-        }
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				auto ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
+				heat_flux[idim].define(ba_face, state.DistributionMap(), state.nComp(), 0);
+				heat_flux[idim].setVal(0.0);
+			}
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 					fillBoundaryConditions(state_fc[idim], state_fc[idim], lev, time, quokka::centering::fc,
@@ -1085,13 +1084,12 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 											     .saturation_factor = electronConductionSaturationFactor_,
 											     .min_temperature = tempFloor_,
 											     .eos_flag = eosFlagForElectronConduction_};
-			quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, resampledTables_, 
-												 heat_flux);
+			quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, resampledTables_,
+											   heat_flux);
 			if (do_reflux) {
 				incrementFluxRegisters(fr_as_crse, fr_as_fine, heat_flux, lev, dt);
-    		}
+			}
 		}
-
 	};
 
 	auto const applyUserSources = [&]() {
@@ -2212,7 +2210,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	auto dx = geom[lev].CellSizeArray();
 
 	// do Strang split source terms (first half-step)
-	auto burn_success_first = addStrangSplitSourcesWithBuiltin<SourceOrder::forward>(state_old_cc_tmp, state_old_fc_tmp, fr_as_crse, fr_as_fine,lev, time, 0.5 * dt_lev);
+	auto burn_success_first =
+	    addStrangSplitSourcesWithBuiltin<SourceOrder::forward>(state_old_cc_tmp, state_old_fc_tmp, fr_as_crse, fr_as_fine, lev, time, 0.5 * dt_lev);
 
 	// check if reactions failed for source terms. If it failed, return false.
 	if (!burn_success_first) {
@@ -2521,8 +2520,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 	amrex::Gpu::streamSynchronizeAll();
 
 	// do Strang split source terms (second half-step)
-	auto burn_success_second =
-	    addStrangSplitSourcesWithBuiltin<SourceOrder::reverse>(state_new_cc_[lev], state_new_fc_[lev], fr_as_crse, fr_as_fine,lev, time + dt_lev, 0.5 * dt_lev);
+	auto burn_success_second = addStrangSplitSourcesWithBuiltin<SourceOrder::reverse>(state_new_cc_[lev], state_new_fc_[lev], fr_as_crse, fr_as_fine, lev,
+											  time + dt_lev, 0.5 * dt_lev);
 	if (burn_success_second) {
 		ApplyHydroStateFixup(state_new_cc_[lev], state_new_fc_[lev], lev);
 	}

@@ -105,8 +105,8 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 {
 	// geometrical refinement
 	// tag cells within one-sigma of the initial Gaussian profile for refinement
-	const double refine_Lmax = 1.1 * sigma ; // 0.2 pc
-	
+	const double refine_Lmax = 1.1 * sigma; // 0.2 pc
+
 	const auto prob_lo = geom[lev].ProbLoArray();
 	const auto dx = geom[lev].CellSizeArray();
 	const auto tag = tags.arrays();
