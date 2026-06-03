@@ -1064,6 +1064,13 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 				amrex::Abort("Electron conduction not implemented for > 0 levels.");
 			}
 			fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
+			std::array<amrex::MultiFab, AMREX_SPACEDIM> heat_flux;
+
+        for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+            auto ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
+            heat_flux[idim].define(ba_face, state.DistributionMap(), state.nComp(), 0);
+            heat_flux[idim].setVal(0.0);
+        }
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 					fillBoundaryConditions(state_fc[idim], state_fc[idim], lev, time, quokka::centering::fc,
@@ -1075,9 +1082,14 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 											     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
 											     .saturation_factor = electronConductionSaturationFactor_,
 											     .min_temperature = tempFloor_,
-											     .eos_flag = eosFlagForElectronConduction_};
+											     .eos_flag = eosFlagForElectronConduction_,
+												 heat_flux};
 			quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, resampledTables_);
+			if (do_reflux) {
+				incrementFluxRegisters(fr_as_crse, fr_as_fine, heat_flux, lev, dt);
+    		}
 		}
+
 	};
 
 	auto const applyUserSources = [&]() {
