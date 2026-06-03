@@ -150,7 +150,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 			for (auto const &y : {y0, y1}) {
 #endif
 #if (AMREX_SPACEDIM >= 3)
-			for (auto const &z : {z0, z1}) {
+				for (auto const &z : {z0, z1}) {
 #endif
 					tagIfPointInRegion(x, y, z);
 				}
