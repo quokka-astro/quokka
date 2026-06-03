@@ -7,13 +7,13 @@
 /// \brief Defines source-term integrators for dust-gas drag and dust Lorentz forces.
 ///
 
-#include "AMReX_LUSolver.H"
 #include "AMReX_MultiFab.H"
 #include "AMReX_SmallMatrix.H"
 #include "dust/DustRuntimeParams.hpp"
 #include "hydro/hydro_system.hpp"
 #include "physics_info.hpp"
 #include "util/ArrayView_3d.hpp"
+#include <cmath>
 #include <numbers>
 
 template <typename problem_t> class DustSources
@@ -55,17 +55,72 @@ template <typename problem_t> class DustSources
 	static constexpr int primDustFirstIndex = primScalar0_index + nscalars_;
 	enum primDustVarIndex { primDustDensity_index = primDustFirstIndex, x1DustVelocity_index, x2DustVelocity_index, x3DustVelocity_index }; // NOLINT
 	using Vec3 = amrex::SmallVector<amrex::Real, 3>;
-	using Mat3 = amrex::SmallMatrix<amrex::Real, 3, 3>;
-	using Vec6 = amrex::Array1D<amrex::Real, 0, 5>;
-	using Mat6 = amrex::Array2D<amrex::Real, 0, 5, 0, 5, amrex::Order::C>;
+
+	struct ReducedOperator {
+		amrex::Real coeffIdentity;
+		amrex::Real coeffCross;
+		amrex::Real coeffParallel;
+
+		AMREX_GPU_HOST_DEVICE auto operator+(ReducedOperator const &rhs) const -> ReducedOperator
+		{
+			return {coeffIdentity + rhs.coeffIdentity, coeffCross + rhs.coeffCross, coeffParallel + rhs.coeffParallel};
+		}
+
+		AMREX_GPU_HOST_DEVICE auto operator-(ReducedOperator const &rhs) const -> ReducedOperator
+		{
+			return {coeffIdentity - rhs.coeffIdentity, coeffCross - rhs.coeffCross, coeffParallel - rhs.coeffParallel};
+		}
+
+		AMREX_GPU_HOST_DEVICE auto operator*(ReducedOperator const &rhs) const -> ReducedOperator
+		{
+			ReducedOperator result{};
+			result.coeffIdentity = coeffIdentity * rhs.coeffIdentity - coeffCross * rhs.coeffCross;
+			result.coeffCross = coeffIdentity * rhs.coeffCross + coeffCross * rhs.coeffIdentity;
+			result.coeffParallel = coeffIdentity * rhs.coeffParallel + coeffParallel * rhs.coeffIdentity + coeffParallel * rhs.coeffParallel +
+					       coeffCross * rhs.coeffCross;
+			return result;
+		}
+
+		AMREX_GPU_HOST_DEVICE auto operator*(amrex::Real scale) const -> ReducedOperator
+		{
+			return {scale * coeffIdentity, scale * coeffCross, scale * coeffParallel};
+		}
+
+		friend AMREX_GPU_HOST_DEVICE auto operator*(amrex::Real scale, ReducedOperator const &op) -> ReducedOperator { return op * scale; }
+
+		AMREX_GPU_HOST_DEVICE auto inverse() const -> ReducedOperator
+		{
+			amrex::Real const denom_perp = coeffIdentity * coeffIdentity + coeffCross * coeffCross;
+			amrex::Real const parallel_denom = coeffIdentity + coeffParallel;
+			AMREX_ASSERT(denom_perp > 0.0);
+			AMREX_ASSERT(std::abs(parallel_denom) > 0.0);
+			amrex::Real const inv_parallel = 1.0 / parallel_denom;
+			return {coeffIdentity / denom_perp, -coeffCross / denom_perp, inv_parallel - coeffIdentity / denom_perp};
+		}
+
+		[[nodiscard]] AMREX_GPU_HOST_DEVICE auto apply(Vec3 const &x, Vec3 const &b_hat) const -> Vec3
+		{
+			amrex::Real const x_parallel = b_hat.dot(x);
+			Vec3 result = Vec3::Zero();
+			result[0] = coeffIdentity * x[0] + coeffCross * (x[1] * b_hat[2] - x[2] * b_hat[1]) + coeffParallel * x_parallel * b_hat[0];
+			result[1] = coeffIdentity * x[1] + coeffCross * (x[2] * b_hat[0] - x[0] * b_hat[2]) + coeffParallel * x_parallel * b_hat[1];
+			result[2] = coeffIdentity * x[2] + coeffCross * (x[0] * b_hat[1] - x[1] * b_hat[0]) + coeffParallel * x_parallel * b_hat[2];
+			return result;
+		}
+	};
 
 	struct DustStageAffineOperators {
-		Mat3 Z1;
-		Mat3 Z2;
-		Mat3 X1;
-		Mat3 X2;
-		Mat3 Y1;
-		Mat3 Y2;
+		ReducedOperator P1;
+		ReducedOperator P2;
+		ReducedOperator X1;
+		ReducedOperator X2;
+		ReducedOperator Y1;
+		ReducedOperator Y2;
+	};
+
+	struct GasStageRates {
+		Vec3 k1;
+		Vec3 k2;
 	};
 
 	// compute reciprocal of dust stopping time
@@ -78,15 +133,18 @@ template <typename problem_t> class DustSources
 									    amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_radius,
 									    amrex::GpuArray<amrex::Real, nDustGroups_> dust_grain_density,
 									    bool enable_supersonic_correction) -> amrex::GpuArray<amrex::Real, nDustGroups_>;
-	AMREX_GPU_HOST_DEVICE static auto BuildCrossMatrix(Vec3 const &b_hat) -> Mat3;
 	AMREX_GPU_HOST_DEVICE static auto ComputeSoundSpeedFromGasState(amrex::Real rho_g, amrex::Real gas_momentum_sq, amrex::Real E_tot_g,
 									amrex::Real magnetic_energy,
 									amrex::GpuArray<amrex::Real, nMassScalars_> const &massScalars) -> amrex::Real;
 	AMREX_GPU_HOST_DEVICE static auto BuildCellCenteredMagneticField(int i, int j, int k,
 									 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc) -> Vec3;
 	AMREX_GPU_HOST_DEVICE static auto ComputeDustChargeToMassRatio() -> amrex::GpuArray<amrex::Real, nDustGroups_>;
-	AMREX_GPU_HOST_DEVICE static auto ComputeDustStageAffineOperators(Mat3 const &T, amrex::Real epsilon, amrex::Real dt, amrex::Real gamma1,
-									  amrex::Real gamma2, amrex::Real beta1, amrex::Real beta2) -> DustStageAffineOperators;
+	AMREX_GPU_HOST_DEVICE static auto ComputeDustStageAffineOperators(amrex::Real alpha, amrex::Real omega_L, amrex::Real epsilon, amrex::Real dt,
+									  // NOLINTNEXTLINE(misc-confusable-identifiers)
+									  amrex::Real gamma1, amrex::Real gamma2, amrex::Real beta1, amrex::Real beta2)
+	    -> DustStageAffineOperators;
+	AMREX_GPU_HOST_DEVICE static auto SolveGasStageRates(amrex::GpuArray<DustStageAffineOperators, nDustGroups_> const &ops,
+							     amrex::GpuArray<Vec3, nDustGroups_> const &q_n, Vec3 const &b_hat) -> GasStageRates;
 	// compute dust source terms and update conserved variables
 	static void computeDustDrag(amrex::MultiFab &consVar_cc_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc_mf, amrex::Real dt,
 				    amrex::Real dust_omega_drag_, int enableIterDustStoptime_, bool print_dust_counter_);
@@ -133,18 +191,6 @@ AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeReciprocalStoppingTime
 	}
 
 	return alpha;
-}
-
-template <typename problem_t> AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::BuildCrossMatrix(Vec3 const &b_hat) -> Mat3
-{
-	Mat3 result = Mat3::Zero();
-	result(0, 1) = b_hat[2];
-	result(0, 2) = -b_hat[1];
-	result(1, 0) = -b_hat[2];
-	result(1, 2) = b_hat[0];
-	result(2, 0) = b_hat[1];
-	result(2, 1) = -b_hat[0];
-	return result;
 }
 
 template <typename problem_t>
@@ -194,64 +240,66 @@ template <typename problem_t> AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>:
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeDustStageAffineOperators(Mat3 const &T, amrex::Real epsilon, amrex::Real dt, amrex::Real gamma1,
-										   amrex::Real gamma2, amrex::Real beta1, amrex::Real beta2)
+AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::ComputeDustStageAffineOperators(amrex::Real alpha, amrex::Real omega_L, amrex::Real epsilon, amrex::Real dt,
+										   // NOLINTNEXTLINE(misc-confusable-identifiers)
+										   amrex::Real gamma1, amrex::Real gamma2, amrex::Real beta1, amrex::Real beta2)
     -> DustStageAffineOperators
 {
 	DustStageAffineOperators ops;
-	Mat6 S;
-	Mat3 const I3 = Mat3::Identity();
-	Mat3 const block11 = I3 - (gamma1 * dt) * T;
-	Mat3 const block12 = -(beta1 * dt) * T;
-	Mat3 const block21 = -(beta2 * dt) * T;
-	Mat3 const block22 = I3 - (gamma2 * dt) * T;
+	ReducedOperator const identity{1.0, 0.0, 0.0};
+	ReducedOperator const T = {-alpha, omega_L, 0.0};
+	ReducedOperator const L = dt * T;
 
-	for (int row = 0; row < 3; ++row) {
-		for (int col = 0; col < 3; ++col) {
-			S(row, col) = block11(row, col);
-			S(row, col + 3) = block12(row, col);
-			S(row + 3, col) = block21(row, col);
-			S(row + 3, col + 3) = block22(row, col);
-		}
-	}
-	amrex::LUSolver<6, amrex::Real> const solver(S);
+	ReducedOperator const block11 = identity - gamma1 * L;
+	ReducedOperator const block22 = identity - gamma2 * L;
+	ReducedOperator const L2 = L * L;
+	ReducedOperator const D = block11 * block22 - (beta1 * beta2) * L2;
+	ReducedOperator const D_inv = D.inverse();
 
-	for (int basis = 0; basis < 3; ++basis) {
-		Vec3 e = Vec3::Zero();
-		e[basis] = 1.0;
+	ReducedOperator const H11 = block22 * D_inv;
+	ReducedOperator const H12 = (beta1 * L) * D_inv;
+	ReducedOperator const H21 = (beta2 * L) * D_inv;
+	ReducedOperator const H22 = block11 * D_inv;
 
-		Vec3 const T_e = T * e;
-
-		Vec6 rhs_q;
-		Vec6 rhs_k1;
-		Vec6 rhs_k2;
-		for (int dir = 0; dir < 3; ++dir) {
-			rhs_q(dir) = T_e[dir];
-			rhs_q(dir + 3) = T_e[dir];
-			rhs_k1(dir) = -gamma1 * dt * T_e[dir];
-			rhs_k1(dir + 3) = -beta2 * dt * T_e[dir];
-			rhs_k2(dir) = -beta1 * dt * T_e[dir];
-			rhs_k2(dir + 3) = -gamma2 * dt * T_e[dir];
-		}
-
-		Vec6 sol_q;
-		Vec6 sol_k1;
-		Vec6 sol_k2;
-		solver(sol_q.begin(), rhs_q.begin());
-		solver(sol_k1.begin(), rhs_k1.begin());
-		solver(sol_k2.begin(), rhs_k2.begin());
-
-		for (int row = 0; row < 3; ++row) {
-			ops.Z1(row, basis) = sol_q(row);
-			ops.Z2(row, basis) = sol_q(row + 3);
-			ops.X1(row, basis) = epsilon * sol_k1(row);
-			ops.X2(row, basis) = epsilon * sol_k1(row + 3);
-			ops.Y1(row, basis) = epsilon * sol_k2(row);
-			ops.Y2(row, basis) = epsilon * sol_k2(row + 3);
-		}
-	}
+	ops.P1 = (H11 + H12) * T;
+	ops.P2 = (H21 + H22) * T;
+	ops.X1 = -epsilon * ((gamma1 * H11 + beta2 * H12) * L);
+	ops.Y1 = -epsilon * ((beta1 * H11 + gamma2 * H12) * L);
+	ops.X2 = -epsilon * ((gamma1 * H21 + beta2 * H22) * L);
+	ops.Y2 = -epsilon * ((beta1 * H21 + gamma2 * H22) * L);
 
 	return ops;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto DustSources<problem_t>::SolveGasStageRates(amrex::GpuArray<DustStageAffineOperators, nDustGroups_> const &ops,
+								      amrex::GpuArray<Vec3, nDustGroups_> const &q_n, Vec3 const &b_hat) -> GasStageRates
+{
+	GasStageRates rates{Vec3::Zero(), Vec3::Zero()};
+	ReducedOperator lambda11{1.0, 0.0, 0.0};
+	ReducedOperator lambda12{0.0, 0.0, 0.0};
+	ReducedOperator lambda21{0.0, 0.0, 0.0};
+	ReducedOperator lambda22{1.0, 0.0, 0.0};
+	Vec3 r1 = Vec3::Zero();
+	Vec3 r2 = Vec3::Zero();
+
+	for (int g = 0; g < nDustGroups_; ++g) {
+		lambda11 = lambda11 + ops[g].X1;
+		lambda12 = lambda12 + ops[g].Y1;
+		lambda21 = lambda21 + ops[g].X2;
+		lambda22 = lambda22 + ops[g].Y2;
+		r1 += ops[g].P1.apply(q_n[g], b_hat);
+		r2 += ops[g].P2.apply(q_n[g], b_hat);
+	}
+
+	ReducedOperator const delta_g = lambda11 * lambda22 - lambda12 * lambda21;
+	ReducedOperator const delta_g_inv = delta_g.inverse();
+	Vec3 const rhs1 = lambda22.apply(r1, b_hat) - lambda12.apply(r2, b_hat);
+	Vec3 const rhs2 = lambda11.apply(r2, b_hat) - lambda21.apply(r1, b_hat);
+
+	rates.k1 = -1.0 * delta_g_inv.apply(rhs1, b_hat);
+	rates.k2 = -1.0 * delta_g_inv.apply(rhs2, b_hat);
+	return rates;
 }
 
 template <typename problem_t>
@@ -362,10 +410,11 @@ void DustSources<problem_t>::computeDustDrag(amrex::MultiFab &consVar_cc_mf, std
 				t_s_max = amrex::max(t_s_max, t_s);
 			}
 
-			amrex::Real gamma1 = 0; // NOLINT
-			amrex::Real gamma2 = 0;
-			amrex::Real beta1 = 0; // NOLINT
-			amrex::Real beta2 = 0;
+			// NOLINTNEXTLINE(misc-confusable-identifiers)
+			amrex::Real gamma1 = 0.0;
+			amrex::Real gamma2 = 0.0;
+			amrex::Real beta1 = 0.0;
+			amrex::Real beta2 = 0.0;
 			amrex::Real b = 0;
 			if (dt_lev < t_s_max) {
 				gamma1 = 1.0;
@@ -651,6 +700,7 @@ void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_
 		amrex::GpuArray<Vec3, nDustGroups_> k1_d;
 		amrex::GpuArray<Vec3, nDustGroups_> k2_d;
 		amrex::Real b = 1.0;
+		// NOLINTNEXTLINE(misc-confusable-identifiers)
 		amrex::Real gamma1 = 1.0;
 		amrex::Real gamma2 = 0.0;
 		amrex::Real beta1 = -0.5;
@@ -665,7 +715,6 @@ void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_
 		if (B_mag > 0.0) {
 			b_hat = (1.0 / B_mag) * B_cc;
 		}
-		Mat3 const B_cross = BuildCrossMatrix(b_hat);
 		amrex::Real const dt_lev = 2.0 * dt;
 		for (int g = 0; g < nDustGroups_; ++g) {
 			omega_L[g] = charge_to_mass_ratio[g] * B_mag;
@@ -733,57 +782,16 @@ void DustSources<problem_t>::computeDustDragAndLorentz(amrex::MultiFab &consVar_
 
 			amrex::GpuArray<DustStageAffineOperators, nDustGroups_> ops;
 			for (int g = 0; g < nDustGroups_; ++g) {
-				Mat3 const T = -alpha[g] * Mat3::Identity() + omega_L[g] * B_cross;
-				ops[g] = ComputeDustStageAffineOperators(T, epsilon[g], dt, gamma1, gamma2, beta1, beta2);
+				ops[g] = ComputeDustStageAffineOperators(alpha[g], omega_L[g], epsilon[g], dt, gamma1, gamma2, beta1, beta2);
 			}
 
-			Mat3 G1X = Mat3::Zero();
-			Mat3 G1Y = Mat3::Zero();
-			Mat3 G2X = Mat3::Zero();
-			Mat3 G2Y = Mat3::Zero();
-			Vec3 C1 = Vec3::Zero();
-			Vec3 C2 = Vec3::Zero();
+			GasStageRates const gas_stage = SolveGasStageRates(ops, q_n, b_hat);
+			k1_g = gas_stage.k1;
+			k2_g = gas_stage.k2;
 
 			for (int g = 0; g < nDustGroups_; ++g) {
-				C1 -= ops[g].Z1 * q_n[g];
-				C2 -= ops[g].Z2 * q_n[g];
-				G1X += ops[g].X1;
-				G1Y += ops[g].Y1;
-				G2X += ops[g].X2;
-				G2Y += ops[g].Y2;
-			}
-
-			Mat6 S_g;
-			Mat3 const I3 = Mat3::Identity();
-			Mat3 const block11 = I3 + G1X;
-			Mat3 const block12 = G1Y;
-			Mat3 const block21 = G2X;
-			Mat3 const block22 = I3 + G2Y;
-			for (int row = 0; row < 3; ++row) {
-				for (int col = 0; col < 3; ++col) {
-					S_g(row, col) = block11(row, col);
-					S_g(row, col + 3) = block12(row, col);
-					S_g(row + 3, col) = block21(row, col);
-					S_g(row + 3, col + 3) = block22(row, col);
-				}
-			}
-
-			Vec6 rhs_g;
-			for (int dir = 0; dir < 3; ++dir) {
-				rhs_g(dir) = C1[dir];
-				rhs_g(dir + 3) = C2[dir];
-			}
-			Vec6 sol_g;
-			amrex::LUSolver<6, amrex::Real> const solver(S_g);
-			solver(sol_g.begin(), rhs_g.begin());
-			for (int dir = 0; dir < 3; ++dir) {
-				k1_g[dir] = sol_g(dir);
-				k2_g[dir] = sol_g(dir + 3);
-			}
-
-			for (int g = 0; g < nDustGroups_; ++g) {
-				k1_d[g] = ops[g].Z1 * q_n[g] + ops[g].X1 * k1_g + ops[g].Y1 * k2_g;
-				k2_d[g] = ops[g].Z2 * q_n[g] + ops[g].X2 * k1_g + ops[g].Y2 * k2_g;
+				k1_d[g] = ops[g].P1.apply(q_n[g], b_hat) + ops[g].X1.apply(k1_g, b_hat) + ops[g].Y1.apply(k2_g, b_hat);
+				k2_d[g] = ops[g].P2.apply(q_n[g], b_hat) + ops[g].X2.apply(k1_g, b_hat) + ops[g].Y2.apply(k2_g, b_hat);
 
 				Vec3 const k_rel1 = k1_d[g] - epsilon[g] * k1_g;
 				Vec3 const k_rel2 = k2_d[g] - epsilon[g] * k2_g;
