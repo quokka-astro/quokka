@@ -129,7 +129,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 
 		auto tagIfPointInRegion = [=](amrex::Real x, amrex::Real y, amrex::Real z) {
 			amrex::Real const r = std::sqrt(x * x + y * y + z * z);
-		
+
 			if ((r < refine_Lmax)) {
 				tag[bx](i, j, k) = amrex::TagBox::SET;
 			}
