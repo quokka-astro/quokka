@@ -39,5 +39,4 @@ integrator.ode_max_steps = 1500000
 plotfile_interval = 10
 plotfile_prefix = DType
 
-network.assume_sharp_ionization_front = 0
 network.allow_mixed_cell_cooling = 0
