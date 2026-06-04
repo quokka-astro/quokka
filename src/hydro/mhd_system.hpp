@@ -500,53 +500,73 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 										       fcx_mf_fspds[2].const_array(mfi)};
 			MHDSystem<problem_t>::AverageEMF(E2_ave, ec_fabs_E_Q, box_ec, field_w_indices, fspds, ec_fabs_Bi_ieside, emf_avg_scheme);
 
-			// Biharmonic resistivity: E2_ave += eta_hyp * laplacian(j)
-			// eta_hyp = c_hyp * c_A * (dx_w0 * dx_w1)^(3/2); always-on, amplitude-independent, N^4 scale selectivity
+			// Biharmonic resistivity: E2_ave += eta_hyper * laplacian(j)
+			// eta_hyper = c_hyper * c_A * (dw0 * dw1)^(3/2); always-on, amplitude-independent, N^4 scale selectivity
 			if (hyper_resistivity_coeff > 0.) {
-				const double dx_w0 = dx[field_w_indices[0]];
-				const double dx_w1 = dx[field_w_indices[1]];
+				const double dw0 = dx[field_w_indices[0]];
+				const double dw1 = dx[field_w_indices[1]];
 
-				const auto Bw0 = fc_fabs_Bx[field_w_indices[0]].const_array();
-				const auto Bw1 = fc_fabs_Bx[field_w_indices[1]].const_array();
-				const auto rho_w0 = fcx_mf_cVars[field_w_indices[0]][mfi].const_array(HydroSystem<problem_t>::density_index);
-				const auto rho_w1 = fcx_mf_cVars[field_w_indices[1]][mfi].const_array(HydroSystem<problem_t>::density_index);
+				const auto fc_a4_B_w0 = fc_fabs_Bx[field_w_indices[0]].const_array();
+				const auto fc_a4_B_w1 = fc_fabs_Bx[field_w_indices[1]].const_array();
+				const auto fc_a4_rho_w0 = fcx_mf_cVars[field_w_indices[0]][mfi].const_array(HydroSystem<problem_t>::density_index);
+				const auto fc_a4_rho_w1 = fcx_mf_cVars[field_w_indices[1]][mfi].const_array(HydroSystem<problem_t>::density_index);
 
-				const auto B0m = ec_fabs_Bi_ieside[0][0].const_array();
-				const auto B0p = ec_fabs_Bi_ieside[0][1].const_array();
-				const auto B1m = ec_fabs_Bi_ieside[1][0].const_array();
-				const auto B1p = ec_fabs_Bi_ieside[1][1].const_array();
+				const auto ec_a4_B_w0_m = ec_fabs_Bi_ieside[0][0].const_array();
+				const auto ec_a4_B_w0_p = ec_fabs_Bi_ieside[0][1].const_array();
+				const auto ec_a4_B_w1_m = ec_fabs_Bi_ieside[1][0].const_array();
+				const auto ec_a4_B_w1_p = ec_fabs_Bi_ieside[1][1].const_array();
 
-				// unit-vector components for the two perpendicular directions (plain ints for GPU capture)
-				const int d0i = (field_w_indices[0] == 0) ? 1 : 0;
-				const int d0j = (field_w_indices[0] == 1) ? 1 : 0;
-				const int d0k = (field_w_indices[0] == 2) ? 1 : 0;
-				const int d1i = (field_w_indices[1] == 0) ? 1 : 0;
-				const int d1j = (field_w_indices[1] == 1) ? 1 : 0;
-				const int d1k = (field_w_indices[1] == 2) ? 1 : 0;
+				// unit offsets along the two world directions perpendicular to the edge
+				std::array<int, 3> delta_w0 = {0, 0, 0};
+				std::array<int, 3> delta_w1 = {0, 0, 0};
+				delta_w0[field_w_indices[0]] = 1;
+				delta_w1[field_w_indices[1]] = 1;
 
 				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-					// j = (Bw1[+w0] - Bw1[0]) / dx_w0 - (Bw0[+w1] - Bw0[0]) / dx_w1 at the edge and its 4 neighbours
-					const double j_c   = (Bw1(i+d0i,       j+d0j,       k+d0k      ) - Bw1(i,       j,       k     )) / dx_w0
-					                   - (Bw0(i+d1i,       j+d1j,       k+d1k      ) - Bw0(i,       j,       k     )) / dx_w1;
-					const double j_pw0 = (Bw1(i+2*d0i,     j+2*d0j,     k+2*d0k    ) - Bw1(i+d0i,   j+d0j,   k+d0k  )) / dx_w0
-					                   - (Bw0(i+d0i+d1i,   j+d0j+d1j,   k+d0k+d1k  ) - Bw0(i+d0i,   j+d0j,   k+d0k  )) / dx_w1;
-					const double j_mw0 = (Bw1(i,           j,           k          ) - Bw1(i-d0i,   j-d0j,   k-d0k  )) / dx_w0
-					                   - (Bw0(i-d0i+d1i,   j-d0j+d1j,   k-d0k+d1k  ) - Bw0(i-d0i,   j-d0j,   k-d0k  )) / dx_w1;
-					const double j_pw1 = (Bw1(i+d0i+d1i,   j+d0j+d1j,   k+d0k+d1k  ) - Bw1(i+d1i,   j+d1j,   k+d1k  )) / dx_w0
-					                   - (Bw0(i+2*d1i,     j+2*d1j,     k+2*d1k    ) - Bw0(i+d1i,   j+d1j,   k+d1k  )) / dx_w1;
-					const double j_mw1 = (Bw1(i+d0i-d1i,   j+d0j-d1j,   k+d0k-d1k  ) - Bw1(i-d1i,   j-d1j,   k-d1k  )) / dx_w0
-					                   - (Bw0(i,           j,           k          ) - Bw0(i-d1i,   j-d1j,   k-d1k  )) / dx_w1;
+					// B_w1 samples (differenced along w0)
+					const double Bw1_c = fc_a4_B_w1(i, j, k);
+					const double Bw1_p1w0 = fc_a4_B_w1(i+delta_w0[0], j+delta_w0[1], k+delta_w0[2]);
+					const double Bw1_p2w0 = fc_a4_B_w1(i+2*delta_w0[0], j+2*delta_w0[1], k+2*delta_w0[2]);
+					const double Bw1_m1w0 = fc_a4_B_w1(i-delta_w0[0], j-delta_w0[1], k-delta_w0[2]);
+					const double Bw1_p1w1 = fc_a4_B_w1(i+delta_w1[0], j+delta_w1[1], k+delta_w1[2]);
+					const double Bw1_m1w1 = fc_a4_B_w1(i-delta_w1[0], j-delta_w1[1], k-delta_w1[2]);
+					const double Bw1_p1w0_p1w1 = fc_a4_B_w1(i+delta_w0[0]+delta_w1[0], j+delta_w0[1]+delta_w1[1], k+delta_w0[2]+delta_w1[2]);
+					const double Bw1_p1w0_m1w1 = fc_a4_B_w1(i+delta_w0[0]-delta_w1[0], j+delta_w0[1]-delta_w1[1], k+delta_w0[2]-delta_w1[2]);
+					// B_w0 samples (differenced along w1)
+					const double Bw0_c = fc_a4_B_w0(i, j, k);
+					const double Bw0_p1w1 = fc_a4_B_w0(i+delta_w1[0], j+delta_w1[1], k+delta_w1[2]);
+					const double Bw0_p2w1 = fc_a4_B_w0(i+2*delta_w1[0], j+2*delta_w1[1], k+2*delta_w1[2]);
+					const double Bw0_m1w1 = fc_a4_B_w0(i-delta_w1[0], j-delta_w1[1], k-delta_w1[2]);
+					const double Bw0_p1w0 = fc_a4_B_w0(i+delta_w0[0], j+delta_w0[1], k+delta_w0[2]);
+					const double Bw0_m1w0 = fc_a4_B_w0(i-delta_w0[0], j-delta_w0[1], k-delta_w0[2]);
+					const double Bw0_p1w0_p1w1 = fc_a4_B_w0(i+delta_w0[0]+delta_w1[0], j+delta_w0[1]+delta_w1[1], k+delta_w0[2]+delta_w1[2]);
+					const double Bw0_m1w0_p1w1 = fc_a4_B_w0(i-delta_w0[0]+delta_w1[0], j-delta_w0[1]+delta_w1[1], k-delta_w0[2]+delta_w1[2]);
+					// edge current j = d(B_w1)/dw0 - d(B_w0)/dw1, built from B samples around the edge
+					const double j_c   = (Bw1_p1w0 - Bw1_c) / dw0 - (Bw0_p1w1 - Bw0_c) / dw1;
+					const double j_p1w0 = (Bw1_p2w0 - Bw1_p1w0) / dw0 - (Bw0_p1w0_p1w1 - Bw0_p1w0) / dw1;
+					const double j_m1w0 = (Bw1_c - Bw1_m1w0) / dw0 - (Bw0_m1w0_p1w1 - Bw0_m1w0) / dw1;
+					const double j_p1w1 = (Bw1_p1w0_p1w1 - Bw1_p1w1) / dw0 - (Bw0_p2w1 - Bw0_p1w1) / dw1;
+					const double j_m1w1 = (Bw1_p1w0_m1w1 - Bw1_m1w1) / dw0 - (Bw0_c - Bw0_m1w1) / dw1;
 
-					const double lap_j = (j_pw0 - 2.0 * j_c + j_mw0) / (dx_w0 * dx_w0)
-					                   + (j_pw1 - 2.0 * j_c + j_mw1) / (dx_w1 * dx_w1);
+					const double laplacian_j = (j_p1w0 - 2.0 * j_c + j_m1w0) / (dw0 * dw0) +
+								   (j_p1w1 - 2.0 * j_c + j_m1w1) / (dw1 * dw1);
 
-					const double b0 = 0.5 * (B0m(i, j, k) + B0p(i, j, k));
-					const double b1 = 0.5 * (B1m(i, j, k) + B1p(i, j, k));
-					const double rho = 0.25 * (rho_w0(i, j, k) + rho_w0(i+d1i, j+d1j, k+d1k)
-					                         + rho_w1(i, j, k) + rho_w1(i+d0i, j+d0j, k+d0k));
-					const double eta_hyp = hyper_resistivity_coeff * std::sqrt((b0 * b0 + b1 * b1) / rho) * std::pow(dx_w0 * dx_w1, 1.5);
+					// edge B components, averaged over the two reconstructed sides
+					const double Bw0_m = ec_a4_B_w0_m(i, j, k);
+					const double Bw0_p = ec_a4_B_w0_p(i, j, k);
+					const double Bw1_m = ec_a4_B_w1_m(i, j, k);
+					const double Bw1_p = ec_a4_B_w1_p(i, j, k);
+					const double ave_Bw0 = 0.5 * (Bw0_m + Bw0_p);
+					const double ave_Bw1 = 0.5 * (Bw1_m + Bw1_p);
+					// density averaged from the four faces adjacent to the edge
+					const double rho_w0_c = fc_a4_rho_w0(i, j, k);
+					const double rho_w0_p1w1 = fc_a4_rho_w0(i+delta_w1[0], j+delta_w1[1], k+delta_w1[2]);
+					const double rho_w1_c = fc_a4_rho_w1(i, j, k);
+					const double rho_w1_p1w0 = fc_a4_rho_w1(i+delta_w0[0], j+delta_w0[1], k+delta_w0[2]);
+					const double rho = 0.25 * (rho_w0_c + rho_w0_p1w1 + rho_w1_c + rho_w1_p1w0);
+					const double eta_hyper = hyper_resistivity_coeff * std::sqrt((ave_Bw0 * ave_Bw0 + ave_Bw1 * ave_Bw1) / rho) * std::pow(dw0 * dw1, 1.5);
 
-					E2_ave(i, j, k) += eta_hyp * lap_j;
+					E2_ave(i, j, k) += eta_hyper * laplacian_j;
 				});
 			}
 		}
