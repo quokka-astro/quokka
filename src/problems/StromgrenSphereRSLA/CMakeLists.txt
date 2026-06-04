@@ -28,12 +28,12 @@ if(AMReX_SPACEDIM GREATER_EQUAL 2)
 
   # Atomic masses (in atomic mass units)
   set(AION
-  "1.0,
+  "5.4858e-4,
   1.0,
   1.0"
   )
   set(AION_INV
-  "1.0,
+  "1822.89,
   1.0,
   1.0"
   )
