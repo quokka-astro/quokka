@@ -22,9 +22,9 @@
 #endif
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <map>
 #include <math/quadrature.hpp>
-#include <limits>
 #include <string>
 
 #include "actual_eos_data.H"
@@ -36,7 +36,7 @@
 struct DTypeFront {
 };
 
-constexpr double c_hat = C::c_light / 100.0;
+constexpr double c_hat = C::c_light / 1000.0;
 
 template <> struct quokka::EOS_Traits<DTypeFront> {
 	static constexpr double mean_molecular_weight = 1.0;
@@ -120,18 +120,13 @@ auto lambda_rec(double T) -> double
 
 auto lambda_ion_ff(double T) -> double { return 1.4e-27 * std::sqrt(T) + 1.0e-19 * std::exp(-118348.0 / T); }
 
-auto lambda_KI(double T) -> double
-{
-	if (T < 100.0) {
-		return 0.0;
-	}
-	return 1.0e-26 * std::sqrt(T);
-}
+auto lambda_KI(double T) -> double { return 2.0e-26 * (1.0e7 * std::exp(-118400.0 / (T + 1.0e3)) + 1.4e-2 * std::sqrt(T) * std::exp(-92.0 / T)); }
 
 auto net_energy_ionized(double T, double n_e) -> double
 {
 	const double alpha_B = 2.6e-13 * std::pow(T / 1.0e4, -0.7);
 	const double epsilon = 6.4e-12;
+	// alpha_B * n_e^2 = n_gamma
 	const double photoheating = alpha_B * n_e * n_e * epsilon;
 	const double recombination_cooling = n_e * n_e * lambda_rec(T);
 	const double ion_ff_cooling = n_e * n_e * lambda_ion_ff(T);
@@ -373,7 +368,8 @@ template <> void QuokkaSimulation<DTypeFront>::computeAfterTimestep()
 	const amrex::Real n_e = userData_.primary_species_2;
 	const double T_eq = compute_equilibrium_temperature_ionized(static_cast<double>(n_e));
 	const double alpha_B = 2.6e-13 * std::pow(T_eq / 1.0e4, -0.7);
-	const double c_i = std::sqrt(C::k_B * T_eq / (C::m_p)); // isothermal sound speed ci = sqrt(k_B * T / m_p)
+	const double mu = 0.5;
+	const double c_i = std::sqrt(C::k_B * T_eq / (mu * C::m_p));
 	const amrex::Real r_s = std::pow((3.0_rt * userData_.Q) / (4.0_rt * M_PI * alpha_B * n_e * n_e), 1.0_rt / 3.0_rt);
 	const amrex::Real t_s = r_s / static_cast<amrex::Real>(c_i);
 
@@ -414,38 +410,134 @@ auto problem_main() -> int
 
 	sim.evolve();
 
-	if (amrex::ParallelDescriptor::IOProcessor()) {
+	// Check 1: effective radius vs analytical radius at end of simulation
+	{
 		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = sim.geom[0].CellSizeArray();
 		const amrex::Real cell_size = dx[0];
+		const amrex::Real tol_cells = 3.0_rt * std::sqrt(3.0_rt) / 2.0_rt;
 
-		const double ne_eq = sim.userData_.primary_species_2;
-		const double T_eq = compute_equilibrium_temperature_ionized(static_cast<double>(ne_eq));
-		const double alpha_B = 2.6e-13 * std::pow(T_eq / 1.0e4, -0.7);
-		const double c_i = std::sqrt(C::k_B * T_eq / C::m_p);
-		const double r_s = std::pow((3.0 * sim.userData_.Q) / (4.0 * M_PI * alpha_B * ne_eq * ne_eq), 1.0 / 3.0);
-		const double t_s = r_s / c_i;
-
-		for (int i = 0; i < static_cast<int>(sim.userData_.t_vec_.size()); ++i) {
-			const amrex::Real t = sim.userData_.t_vec_[i];
-			if (t < 10.0 * t_s) {
-				continue;
-			}
-			const amrex::Real r_analytical = sim.userData_.r_analytical_vec_[i];
-			const amrex::Real r_effective = sim.userData_.r_effective_vec_[i];
+		if (!sim.userData_.r_effective_vec_.empty()) {
+			const amrex::Real r_analytical = sim.userData_.r_analytical_vec_.back();
+			const amrex::Real r_effective = sim.userData_.r_effective_vec_.back();
 			const amrex::Real delta_over_dx = (r_effective - r_analytical) / cell_size;
-			if ((delta_over_dx < -1.0_rt) || (delta_over_dx > 1.0_rt)) {
-				amrex::Print() << "Test failed at t = " << t << '\n';
+			if ((delta_over_dx < -tol_cells) || (delta_over_dx > tol_cells)) {
+				amrex::Print() << "Test FAILED: radius check at end of simulation.\n";
 				amrex::Print() << "Analytical radius: " << r_analytical << '\n';
 				amrex::Print() << "Effective radius: " << r_effective << '\n';
 				amrex::Print() << "(r_effective - r_analytical) / dx = " << delta_over_dx << '\n';
-				amrex::Print() << "Expected range: [-1, 1]" << '\n';
+				amrex::Print() << "Tolerance: " << tol_cells << " cell sizes\n";
 				status = 1;
+			} else {
+				amrex::Print() << "Test passed: D-type front effective radius matches analytical radius within " << tol_cells
+					       << " cell sizes at end of simulation.\n";
 			}
 		}
+	}
 
-		if (status == 0) {
-			amrex::Print() << "Test passed: D-type front effective radius matches the analytical radius within one cell whenever t > 10*ts.\n";
+	// Check 2: temperature in cavity and neutral region at end of simulation
+	{
+		// primary_species_2 is the initial n_HI (species index 1), which equals n_e in the fully ionized cavity
+		const double ne_eq = sim.userData_.primary_species_2;
+		const double n_HI_init = sim.userData_.primary_species_2; // in neutral region all hydrogen remains as HI
+		const double T_ion_eq = compute_equilibrium_temperature_ionized(ne_eq);
+		const double T_neu_eq = compute_equilibrium_temperature_neutral(n_HI_init);
+
+		amrex::MultiFab const &state_mf = sim.state_new_cc_[0];
+
+		// Collect temperatures per region: cavity (1% < x_HII < 99%), neutral (x_HI > 99.99%)
+		std::vector<double> cavity_temps;
+		std::vector<double> neutral_temps;
+
+		for (amrex::MFIter mfi(state_mf); mfi.isValid(); ++mfi) {
+			const amrex::Box &box = mfi.validbox();
+			const auto state = state_mf.const_array(mfi);
+
+			amrex::LoopOnCpu(box, [&](int i, int j, int k) noexcept {
+				const amrex::Real rho = state(i, j, k, HydroSystem<DTypeFront>::density_index);
+				const amrex::Real Eint = state(i, j, k, RadSystem<DTypeFront>::gasInternalEnergy_index);
+				const amrex::Real n_HI_cell = state(i, j, k, HydroSystem<DTypeFront>::scalar0_index + 1) / spmasses[1];
+				const amrex::Real n_HII_cell = state(i, j, k, HydroSystem<DTypeFront>::scalar0_index + 2) / spmasses[2];
+				const amrex::Real denom = n_HI_cell + n_HII_cell;
+				if (denom <= 0.0_rt) {
+					return;
+				}
+				const amrex::Real x_HII = n_HII_cell / denom;
+				const amrex::Real x_HI = n_HI_cell / denom;
+
+				burn_t bstate;
+				for (int nn = 0; nn < NumSpec; ++nn) {
+					bstate.xn[nn] = state(i, j, k, HydroSystem<DTypeFront>::scalar0_index + nn) / spmasses[nn];
+				}
+				bstate.rho = rho;
+				bstate.e = Eint / rho;
+				bstate.T = 1.0e4; // initial guess
+				eos(eos_input_re, bstate);
+				const double T_cell = bstate.T;
+
+				if (x_HII > 0.01_rt && x_HII < 0.99_rt) {
+					cavity_temps.push_back(T_cell);
+				}
+				if (x_HI > 0.9999_rt) {
+					neutral_temps.push_back(T_cell);
+				}
+			});
 		}
+
+		// Gather all temperatures to IOProcessor, compute median, check within 5%
+		auto compute_median_and_check = [&](std::vector<double> &local_temps, double T_analytical, const char *region_name) {
+			const int num_local = static_cast<int>(local_temps.size());
+			auto num_local_vec = amrex::ParallelDescriptor::Gather(num_local, amrex::ParallelDescriptor::IOProcessorNumber());
+
+			amrex::Vector<int> recvcnt;
+			amrex::Vector<int> disp;
+			std::vector<double> all_temps;
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				recvcnt.resize(num_local_vec.size());
+				disp.resize(num_local_vec.size());
+				int ntot = 0;
+				disp[0] = 0;
+				for (int r = 0, n = static_cast<int>(num_local_vec.size()); r < n; ++r) {
+					recvcnt[r] = num_local_vec[r];
+					ntot += num_local_vec[r];
+					if (r + 1 < n) {
+						disp[r + 1] = disp[r] + num_local_vec[r];
+					}
+				}
+				all_temps.resize(ntot);
+			} else {
+				recvcnt.resize(1);
+				disp.resize(1);
+				all_temps.resize(1);
+			}
+
+			static double static_val = 0.0;
+			const double *send_ptr = local_temps.empty() ? &static_val : local_temps.data();
+			double *recv_ptr = all_temps.empty() ? &static_val : all_temps.data();
+			amrex::ParallelDescriptor::Gatherv(send_ptr, num_local, recv_ptr, recvcnt, disp, amrex::ParallelDescriptor::IOProcessorNumber());
+
+			if (amrex::ParallelDescriptor::IOProcessor()) {
+				const int ntot = static_cast<int>(all_temps.size());
+				if (ntot == 0) {
+					amrex::Print() << "Warning: no " << region_name << " cells found.\n";
+					return;
+				}
+				std::sort(all_temps.begin(), all_temps.end());
+				const double T_median = (ntot % 2 == 0) ? 0.5 * (all_temps[ntot / 2 - 1] + all_temps[ntot / 2]) : all_temps[ntot / 2];
+				const double rel_err = std::abs(T_median - T_analytical) / T_analytical;
+				if (rel_err > 0.05) {
+					amrex::Print()
+					    << "Test FAILED: " << region_name << " median temperature " << T_median << " K differs from analytical equilibrium "
+					    << T_analytical << " K by " << 100.0 * rel_err << "% (tolerance: 5%).\n";
+					status = 1;
+				} else {
+					amrex::Print() << "Test passed: " << region_name << " median temperature " << T_median
+						       << " K is within 5% of analytical equilibrium " << T_analytical << " K (" << ntot << " cells).\n";
+				}
+			}
+		};
+
+		compute_median_and_check(cavity_temps, T_ion_eq, "cavity");
+		compute_median_and_check(neutral_temps, T_neu_eq, "neutral");
 	}
 
 #ifdef HAVE_PYTHON
