@@ -80,21 +80,12 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const amrex::Real x = prob_lo[0] + (i + 0.5) * dx[0];
-		amrex::Real r2 = x * x;
-#if (AMREX_SPACEDIM >= 2)
-		const amrex::Real y = prob_lo[1] + (j + 0.5) * dx[1];
-		r2 += y * y;
-#endif
-#if (AMREX_SPACEDIM == 3)
-		const amrex::Real z = prob_lo[2] + (k + 0.5) * dx[2];
-		r2 += z * z;
-#endif
-		amrex::Real const r = std::sqrt(r2);
+
 		/*-------------------------------*/
 		// Problem ----> Gaussian temperature profile
 		const amrex::Real rho = rho0 * C::m_p;	  // g/cm^3
 		const amrex::Real sigma2 = sigma * sigma; // width of the Gaussian
-		const amrex::Real Eint = Eint0 * std::exp(-r * r / sigma2 / 2.) + Efloor;
+		const amrex::Real Eint = Eint0 * std::exp(-x * x / sigma2 / 2.) + Efloor;
 		/*-------------------------------*/
 
 		for (int n = 0; n < state_cc.nComp(); ++n) {
@@ -150,6 +141,7 @@ template <>
 void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 									  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
+
 	const amrex::Real t = tNew_[0];
 
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
@@ -159,22 +151,13 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			amrex::Real const x = prob_lo[0] + (i + 0.5) * dx[0];
-			amrex::Real r2 = x * x;
-#if (AMREX_SPACEDIM >= 2)
-			amrex::Real const y = prob_lo[1] + (j + 0.5) * dx[1];
-			r2 += y * y;
-#endif
-#if (AMREX_SPACEDIM == 3)
-			amrex::Real const z = prob_lo[2] + (k + 0.5) * dx[2];
-			r2 += z * z;
-#endif
-			amrex::Real const r = std::sqrt(r2);
+
 			// Solution for the Gaussian temperature profile
 			const amrex::Real rho = rho0 * C::m_p;		     // g/cm^3
 			const amrex::Real sigma2_0 = sigma * sigma;	     // initial width of the Gaussian
 			const amrex::Real sigma2_t = sigma2_0 + 2.0 * D * t; // width of the Gaussian at time t
 			const amrex::Real norm = Eint0 * (std::sqrt(sigma2_0 / sigma2_t));
-			const amrex::Real Eint_exact = norm * std::exp(-r * r / sigma2_t / 2.) + Efloor;
+			const amrex::Real Eint_exact = norm * std::exp(-x * x / sigma2_t / 2.) + Efloor;
 
 			// clear all components
 			for (int n = 0; n < ncomp; ++n) {
