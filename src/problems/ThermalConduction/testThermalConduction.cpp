@@ -113,6 +113,10 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 		// Otherwise, cells that are too big can completely prevent refinement.
 		amrex::Real const x0 = prob_lo[0] + (i * dx[0]);
 		amrex::Real const x1 = prob_lo[0] + ((i + 1) * dx[0]);
+		amrex::Real const y0 = prob_lo[1] + (j * dx[1]);
+		amrex::Real const y1 = prob_lo[1] + ((j + 1) * dx[1]);
+		amrex::Real const z0 = prob_lo[2] + (k * dx[2]);
+		amrex::Real const z1 = prob_lo[2] + ((k + 1) * dx[2]);
 
 		auto tagIfPointInRegion = [=](amrex::Real x, amrex::Real y, amrex::Real z) {
 			if ((std::abs(x) < refine_Lmax)) {
