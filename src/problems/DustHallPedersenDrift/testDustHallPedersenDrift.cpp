@@ -284,35 +284,31 @@ auto maxMomentumResidual(SimulationData<DustHallPedersenDrift> const &data) -> d
 void plotRelativeDrift(SimulationData<DustHallPedersenDrift> const &data)
 {
 	const size_t n_dense = 1000;
-	std::vector<double> t_dense;
-	std::vector<double> ux_dense;
-	std::vector<double> uy_dense;
+	std::vector<double> t_dense(n_dense);
+	std::vector<double> wx_dense(n_dense);
+	std::vector<double> wy_dense(n_dense);
 	const double t_max = data.t_vec_.empty() ? 0.0 : data.t_vec_.back();
-	t_dense.resize(n_dense);
-	ux_dense.resize(n_dense);
-	uy_dense.resize(n_dense);
 
 	for (size_t i = 0; i < n_dense; ++i) {
 		const double t = t_max * static_cast<double>(i) / static_cast<double>(n_dense - 1);
 		DriftState const exact = analyticRelativeDrift(t);
 		t_dense[i] = t;
-		ux_dense[i] = exact.ux;
-		uy_dense[i] = exact.uy;
+		wx_dense[i] = exact.ux;
+		wy_dense[i] = exact.uy;
 	}
 
 	matplotlibcpp::clf();
-	matplotlibcpp::plot(t_dense, ux_dense, {{"label", "u_x analytic"}, {"color", "C0"}, {"linestyle", "--"}, {"linewidth", "1.0"}});
+	matplotlibcpp::plot(t_dense, wx_dense, {{"label", R"(analytic $w_x$)"}, {"color", "C0"}, {"linestyle", "--"}, {"linewidth", "1.0"}});
 	matplotlibcpp::plot(data.t_vec_, data.ux_vec_,
-			    {{"label", "u_x numerical"}, {"color", "C0"}, {"linestyle", "None"}, {"marker", "o"}, {"markersize", "4"}});
-	matplotlibcpp::plot(t_dense, uy_dense, {{"label", "u_y analytic"}, {"color", "C1"}, {"linestyle", "--"}, {"linewidth", "1.0"}});
+			    {{"label", R"(numerical $w_x$)"}, {"color", "C0"}, {"linestyle", "None"}, {"marker", "o"}, {"markersize", "4"}});
+	matplotlibcpp::plot(t_dense, wy_dense, {{"label", R"(analytic $w_y$)"}, {"color", "C1"}, {"linestyle", "--"}, {"linewidth", "1.0"}});
 	matplotlibcpp::plot(data.t_vec_, data.uy_vec_,
-			    {{"label", "u_y numerical"}, {"color", "C1"}, {"linestyle", "None"}, {"marker", "s"}, {"markersize", "4"}});
+			    {{"label", R"(numerical $w_y$)"}, {"color", "C1"}, {"linestyle", "None"}, {"marker", "s"}, {"markersize", "4"}});
 	matplotlibcpp::legend();
 	matplotlibcpp::xlabel("t");
-	matplotlibcpp::ylabel(R"($u = v_d - v_g$)");
-	matplotlibcpp::title("Stiff Hall/Pedersen Drift");
+	matplotlibcpp::ylabel(R"($w_x,\ w_y$)");
 	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./dust_hall_pedersen_stiff.pdf");
+	matplotlibcpp::save("./dust_hall_pedersen_drift.pdf");
 }
 #endif
 
@@ -328,8 +324,8 @@ auto problem_main() -> int
 		const double momentum_residual = maxMomentumResidual(data);
 
 		amrex::Print() << "\nHall/Pedersen drift analytic steady state:\n";
-		amrex::Print() << "  u_x* = " << steady.ux << "\n";
-		amrex::Print() << "  u_y* = " << steady.uy << "\n";
+		amrex::Print() << "  w_x* = " << steady.ux << "\n";
+		amrex::Print() << "  w_y* = " << steady.uy << "\n";
 		amrex::Print() << "\nStiff-case diagnostics:\n";
 		amrex::Print() << "  relative drift L2 error = " << rel_error << "\n";
 		amrex::Print() << "  final drift error       = " << final_error << "\n";
@@ -347,7 +343,6 @@ auto problem_main() -> int
 		} else {
 			amrex::Print() << "\nTest PASSED: stiff Hall/Pedersen drift matches the analytic solution.\n";
 		}
-
 #ifdef HAVE_PYTHON
 		plotRelativeDrift(data);
 #endif

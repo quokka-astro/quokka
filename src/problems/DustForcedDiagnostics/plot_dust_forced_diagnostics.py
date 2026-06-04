@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Plot the pure-gyromotion timestep diagnostics into a 2x1 panel figure."""
+"""Plot the forced Hall-Pedersen timestep diagnostics into a 2x1 panel figure."""
 
 from __future__ import annotations
 
@@ -26,8 +26,8 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
 
-DATA_FILE = "dust_gyromotion_diagnostics.csv"
-OUTPUT_FILE = "dust_gyromotion_diagnostics_panels.pdf"
+DATA_FILE = "dust_forced_diagnostics.csv"
+OUTPUT_FILE = "dust_forced_diagnostics_panels.pdf"
 
 SCHEMES = (
     ("tp2025", "TP2025", "C0", "o"),
@@ -59,7 +59,15 @@ def group_by_scheme(rows: list[dict[str, float | str]]) -> dict[str, list[dict[s
     return grouped
 
 
-def plot_panel(ax, grouped: dict[str, list[dict[str, float | str]]], value_key: str, theory_key: str, ylabel: str, *, show_legend: bool) -> None:
+def plot_panel(
+    ax,
+    grouped: dict[str, list[dict[str, float | str]]],
+    value_key: str,
+    theory_key: str,
+    ylabel: str,
+    *,
+    show_legend: bool,
+) -> None:
     boundary_dt = None
 
     for slug, label, color, marker in SCHEMES:
@@ -68,8 +76,8 @@ def plot_panel(ax, grouped: dict[str, list[dict[str, float | str]]], value_key: 
             continue
 
         requested_dt = [float(row["requested_dt"]) for row in rows]
-        values = [float(row[value_key]) for row in rows]
-        theory_values = [max(abs(float(row[theory_key])), float(row["plot_floor"])) for row in rows]
+        values = [max(float(row[value_key]), float(row["plot_floor"])) for row in rows]
+        theory_values = [max(float(row[theory_key]), float(row["plot_floor"])) for row in rows]
         boundary_dt = float(rows[0]["resolved_stiff_boundary_dt"])
 
         ax.plot(
@@ -102,8 +110,8 @@ def plot_panel(ax, grouped: dict[str, list[dict[str, float | str]]], value_key: 
             for _, label, color, marker in SCHEMES
         ]
         style_handles = [
-            Line2D([], [], color="black", linestyle="-", linewidth=1.0, label="measured error"),
-            Line2D([], [], color="black", linestyle="--", linewidth=1.0, label="analytic prediction"),
+            Line2D([], [], color="black", linestyle="-", linewidth=1.0, label="simulation"),
+            Line2D([], [], color="black", linestyle="--", linewidth=1.0, label="discrete-map prediction"),
         ]
         ax.legend(handles=[*scheme_handles, *style_handles], loc="best", frameon=False)
 
@@ -113,8 +121,22 @@ def make_figure(data_dir: Path, output_dir: Path) -> Path:
 
     fig, axes = plt.subplots(2, 1, figsize=(7.0, 8.5), sharex=True)
 
-    plot_panel(axes[0], grouped, "abs_delta_log_amplitude", "theory_delta_log_amplitude", r"$|\delta a|$", show_legend=True)
-    plot_panel(axes[1], grouped, "abs_delta_phase", "theory_delta_phase", r"$|\delta \phi|$", show_legend=False)
+    plot_panel(
+        axes[0],
+        grouped,
+        "final_to_fixed_point_error",
+        "predicted_final_to_fixed_point_error",
+        r"$|w-w_{\rm fp}|$",
+        show_legend=True,
+    )
+    plot_panel(
+        axes[1],
+        grouped,
+        "final_data_error",
+        "predicted_final_data_error",
+        r"$|w-w_*|$",
+        show_legend=False,
+    )
 
     axes[1].set_xlabel(r"$\Delta t$")
     fig.tight_layout()
@@ -127,7 +149,7 @@ def make_figure(data_dir: Path, output_dir: Path) -> Path:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data-dir", type=Path, default=Path.cwd(), help="Directory containing dust_gyromotion_diagnostics.csv.")
+    parser.add_argument("--data-dir", type=Path, default=Path.cwd(), help="Directory containing dust_forced_diagnostics.csv.")
     parser.add_argument("--output-dir", type=Path, default=Path.cwd(), help="Directory for the output PDF.")
     return parser.parse_args()
 

@@ -8,12 +8,12 @@
 #include <array>
 #include <cmath>
 #include <complex>
+#include <fstream>
+#include <iomanip>
 #include <limits>
 #include <string>
+#include <string_view>
 #include <vector>
-#ifdef HAVE_PYTHON
-#include "util/matplotlibcpp.h"
-#endif
 
 struct DustForcedDiagnostics {
 };
@@ -40,10 +40,11 @@ constexpr double g_rel_x = -external_force / rho_gas;
 using ResolvedRkScheme = quokka::dust::ResolvedRkScheme;
 using Complex = std::complex<double>;
 
+// Sweep from resolved to stiff timesteps for comparison with the analytic
+// forced-response diagnostics.
 constexpr std::array<double, 7> requested_dt_values = {1.0e-3, 1.0e-2, 1.0e-1, 1.0e0, 1.0e1, 1.0e2, 1.0e3};
 constexpr std::array<ResolvedRkScheme, 3> resolved_rk_schemes = {ResolvedRkScheme::TP2025, ResolvedRkScheme::GL4, ResolvedRkScheme::Midpoint};
-constexpr std::array<char const *, 3> scheme_colors = {"C0", "C1", "C2"};
-constexpr std::array<char const *, 3> scheme_markers = {"o", "s", "^"};
+constexpr double plot_floor = 1.0e-16;
 
 struct DriftState {
 	double ux;
@@ -60,6 +61,7 @@ struct SweepSample {
 	double final_data_error;
 	double final_to_fixed_point_error;
 	double predicted_final_to_fixed_point_error;
+	double predicted_final_data_error;
 	double final_state_map_consistency_error;
 	double momentum_residual;
 	bool used_resolved_branch;
@@ -73,6 +75,19 @@ struct SchemeSweepResult {
 constexpr Complex lambda_rel{-alpha_rel, omega_rel};
 constexpr Complex forcing_rel{g_rel_x, 0.0};
 constexpr Complex initial_rel{0.0, 0.0};
+
+auto resolvedRkSchemeSlug(ResolvedRkScheme scheme) -> std::string_view
+{
+	switch (scheme) {
+	case ResolvedRkScheme::TP2025:
+		return "tp2025";
+	case ResolvedRkScheme::GL4:
+		return "gl4";
+	case ResolvedRkScheme::Midpoint:
+		return "midpoint";
+	}
+	return "unknown";
+}
 } // namespace
 
 template <> struct SimulationData<DustHallPedersenForcedDiagnostics> {
@@ -261,7 +276,11 @@ auto runForcedSimulation(ResolvedRkScheme scheme, double constant_dt) -> Simulat
 	sim.reconstructionOrder_ = 3;
 	sim.radiationReconstructionOrder_ = 3;
 	sim.plotfileInterval_ = -1;
-	sim.cflNumber_ = 1000000.0;
+	// This is a spatially uniform source-term diagnostic. Very large requested
+	// timesteps can generate large uniform center-of-mass velocities from the
+	// imposed forcing, which would otherwise trip the hydro CFL retry logic
+	// even though transport is physically inactive in this test.
+	sim.cflNumber_ = 1.0e12;
 	sim.constantDt_ = constant_dt;
 	sim.stopTime_ = run_stop_time;
 	sim.maxTimesteps_ = required_max_timesteps;
@@ -278,15 +297,6 @@ auto runForcedSimulation(ResolvedRkScheme scheme, double constant_dt) -> Simulat
 auto exactSteadyRelativeDrift() -> Complex { return -forcing_rel / lambda_rel; }
 
 auto exactRelativeDrift(double t) -> Complex { return exactSteadyRelativeDrift() + std::exp(lambda_rel * t) * (initial_rel - exactSteadyRelativeDrift()); }
-
-auto complexPow(Complex base, size_t exponent) -> Complex
-{
-	Complex result{1.0, 0.0};
-	for (size_t i = 0; i < exponent; ++i) {
-		result *= base;
-	}
-	return result;
-}
 
 auto stabilityFunction(ResolvedRkScheme scheme, Complex z, bool use_resolved_branch) -> Complex
 {
@@ -315,12 +325,13 @@ auto numericalFixedPoint(ResolvedRkScheme scheme, double effective_dt) -> Comple
 	return effective_dt * r * forcing_rel / (1.0 - g);
 }
 
-auto numericalAmplification(ResolvedRkScheme scheme, double effective_dt) -> Complex
+auto advanceDiscreteMapOneStep(ResolvedRkScheme scheme, double dt_step, Complex state_n) -> Complex
 {
-	const bool use_resolved_branch = usesResolvedBranch(effective_dt);
-	const Complex z = 0.5 * effective_dt * lambda_rel;
+	const bool use_resolved_branch = usesResolvedBranch(dt_step);
+	const Complex z = 0.5 * dt_step * lambda_rel;
 	const Complex r = stabilityFunction(scheme, z, use_resolved_branch);
-	return r * r;
+	const Complex g = r * r;
+	return g * state_n + dt_step * r * forcing_rel;
 }
 
 auto finalNumericalState(SimulationData<DustHallPedersenForcedDiagnostics> const &data) -> Complex
@@ -333,10 +344,14 @@ auto finalNumericalState(SimulationData<DustHallPedersenForcedDiagnostics> const
 	return {data.ux_vec_[i], -data.uy_vec_[i]};
 }
 
-auto predictedDiscreteFinalState(ResolvedRkScheme scheme, double effective_dt, size_t step_count, Complex numerical_fixed_point) -> Complex
+auto predictedDiscreteFinalState(ResolvedRkScheme scheme, SimulationData<DustHallPedersenForcedDiagnostics> const &data) -> Complex
 {
-	const Complex g = numericalAmplification(scheme, effective_dt);
-	return numerical_fixed_point + complexPow(g, step_count) * (initial_rel - numerical_fixed_point);
+	Complex state = initial_rel;
+	for (size_t i = 1; i < data.t_vec_.size(); ++i) {
+		double const dt_step = data.t_vec_[i] - data.t_vec_[i - 1];
+		state = advanceDiscreteMapOneStep(scheme, dt_step, state);
+	}
+	return state;
 }
 
 auto transientRelativeL2Error(SimulationData<DustHallPedersenForcedDiagnostics> const &data, Complex numerical_fixed_point) -> double
@@ -399,8 +414,7 @@ auto computeSweepSample(ResolvedRkScheme scheme, double requested_dt) -> SweepSa
 	}
 	const double end_time = data.t_vec_.empty() ? 0.0 : data.t_vec_.back();
 	const Complex numerical_fixed_point = numericalFixedPoint(scheme, effective_dt);
-	const size_t step_count = (!data.t_vec_.empty()) ? (data.t_vec_.size() - 1) : 0;
-	const Complex predicted_final_state = predictedDiscreteFinalState(scheme, effective_dt, step_count, numerical_fixed_point);
+	const Complex predicted_final_state = predictedDiscreteFinalState(scheme, data);
 	const Complex final_state = finalNumericalState(data);
 
 	return SweepSample{
@@ -413,6 +427,7 @@ auto computeSweepSample(ResolvedRkScheme scheme, double requested_dt) -> SweepSa
 	    .final_data_error = finalDataError(data),
 	    .final_to_fixed_point_error = std::abs(final_state - numerical_fixed_point),
 	    .predicted_final_to_fixed_point_error = std::abs(predicted_final_state - numerical_fixed_point),
+	    .predicted_final_data_error = std::abs(predicted_final_state - exactSteadyRelativeDrift()),
 	    .final_state_map_consistency_error = std::abs(final_state - predicted_final_state),
 	    .momentum_residual = maxMomentumResidual(data),
 	    .used_resolved_branch = usesResolvedBranch(effective_dt),
@@ -437,131 +452,31 @@ auto safeLogSlope(double x1, double y1, double x2, double y2) -> double
 	return std::log(y2 / y1) / std::log(x2 / x1);
 }
 
-#ifdef HAVE_PYTHON
-template <typename Accessor> auto collectSeries(SchemeSweepResult const &run, Accessor accessor) -> std::vector<double>
+void writeSweepCsv(std::vector<SchemeSweepResult> const &runs)
 {
-	std::vector<double> series;
-	series.reserve(run.samples.size());
-	for (auto const &sample : run.samples) {
-		series.push_back(accessor(sample));
-	}
-	return series;
-}
-
-template <typename Accessor>
-void plotSweepMetric(std::vector<SchemeSweepResult> const &runs, Accessor accessor, std::string const &ylabel, std::string const &title,
-		     std::string const &filename)
-{
-	matplotlibcpp::clf();
-	matplotlibcpp::figure_size(1200, 600);
-
-	double y_min = std::numeric_limits<double>::max();
-	double y_max = 0.0;
+	std::ofstream file("dust_forced_diagnostics.csv");
+	file << std::setprecision(17);
+	file << "scheme,requested_dt,effective_dt,end_time,transient_l2_error,transient_final_error,terminal_error,final_data_error,"
+		"final_to_fixed_point_error,predicted_final_to_fixed_point_error,predicted_final_data_error,"
+		"final_state_map_consistency_error,momentum_residual,"
+		"used_resolved_branch,resolved_stiff_boundary_dt,plot_floor\n";
 	for (auto const &run : runs) {
 		for (auto const &sample : run.samples) {
-			const double value = accessor(sample);
-			if (std::isfinite(value) && (value > 0.0)) {
-				y_min = std::min(y_min, value);
-				y_max = std::max(y_max, value);
-			}
+			file << resolvedRkSchemeSlug(run.scheme) << "," << sample.requested_dt << "," << sample.effective_dt << "," << sample.end_time << ","
+			     << sample.transient_l2_error << "," << sample.transient_final_error << "," << sample.terminal_error << ","
+			     << sample.final_data_error << "," << sample.final_to_fixed_point_error << "," << sample.predicted_final_to_fixed_point_error << ","
+			     << sample.predicted_final_data_error << "," << sample.final_state_map_consistency_error << "," << sample.momentum_residual << ","
+			     << (sample.used_resolved_branch ? 1 : 0) << "," << resolvedBranchThresholdDt() << "," << plot_floor << "\n";
 		}
 	}
-	if (!(y_min < y_max)) {
-		y_min = 1.0e-16;
-		y_max = 1.0;
-	}
-
-	for (size_t idx = 0; idx < runs.size(); ++idx) {
-		std::vector<double> const requested_dt = collectSeries(runs[idx], [](SweepSample const &sample) { return sample.requested_dt; });
-		std::vector<double> const values = collectSeries(runs[idx], accessor);
-		matplotlibcpp::plot(requested_dt, values,
-				    {{"label", quokka::dust::resolvedRkSchemeName(runs[idx].scheme)},
-				     {"color", scheme_colors[idx]},
-				     {"linestyle", "-"},
-				     {"marker", scheme_markers[idx]},
-				     {"markersize", "4"}});
-	}
-
-	std::vector<double> const boundary_x = {resolvedBranchThresholdDt(), resolvedBranchThresholdDt()};
-	std::vector<double> const boundary_y = {y_min, y_max};
-	matplotlibcpp::plot(boundary_x, boundary_y, {{"label", "resolved/stiff boundary"}, {"color", "k"}, {"linestyle", ":"}, {"linewidth", "1.0"}});
-	matplotlibcpp::xscale("log");
-	matplotlibcpp::yscale("log");
-	matplotlibcpp::grid(true);
-	matplotlibcpp::legend();
-	matplotlibcpp::xlabel(R"(requested $\Delta t$)");
-	matplotlibcpp::ylabel(ylabel);
-	matplotlibcpp::title(title);
-	matplotlibcpp::tight_layout();
-	matplotlibcpp::save(filename);
 }
-
-void plotTerminalDiagnostics(std::vector<SchemeSweepResult> const &runs)
-{
-	matplotlibcpp::clf();
-	matplotlibcpp::figure_size(1200, 600);
-
-	double y_min = std::numeric_limits<double>::max();
-	double y_max = 0.0;
-	for (auto const &run : runs) {
-		for (auto const &sample : run.samples) {
-			for (double const value : {sample.terminal_error, sample.final_data_error}) {
-				if (std::isfinite(value) && (value > 0.0)) {
-					y_min = std::min(y_min, value);
-					y_max = std::max(y_max, value);
-				}
-			}
-		}
-	}
-	if (!(y_min < y_max)) {
-		y_min = 1.0e-16;
-		y_max = 1.0;
-	}
-
-	for (size_t idx = 0; idx < runs.size(); ++idx) {
-		std::vector<double> const requested_dt = collectSeries(runs[idx], [](SweepSample const &sample) { return sample.requested_dt; });
-		std::vector<double> const terminal_values = collectSeries(runs[idx], [](SweepSample const &sample) { return sample.terminal_error; });
-		std::vector<double> const final_data_values = collectSeries(runs[idx], [](SweepSample const &sample) { return sample.final_data_error; });
-
-		matplotlibcpp::plot(requested_dt, terminal_values,
-				    {{"label", std::string(quokka::dust::resolvedRkSchemeName(runs[idx].scheme)) + " terminal bias"},
-				     {"color", scheme_colors[idx]},
-				     {"linestyle", "-"},
-				     {"marker", scheme_markers[idx]},
-				     {"markersize", "4"}});
-		matplotlibcpp::plot(requested_dt, final_data_values,
-				    {{"label", std::string(quokka::dust::resolvedRkSchemeName(runs[idx].scheme)) + " final data"},
-				     {"color", scheme_colors[idx]},
-				     {"linestyle", "--"},
-				     {"marker", "x"},
-				     {"markersize", "4"}});
-	}
-
-	std::vector<double> const boundary_x = {resolvedBranchThresholdDt(), resolvedBranchThresholdDt()};
-	std::vector<double> const boundary_y = {y_min, y_max};
-	matplotlibcpp::plot(boundary_x, boundary_y, {{"label", "resolved/stiff boundary"}, {"color", "k"}, {"linestyle", ":"}, {"linewidth", "1.0"}});
-	matplotlibcpp::xscale("log");
-	matplotlibcpp::yscale("log");
-	matplotlibcpp::grid(true);
-	matplotlibcpp::legend();
-	matplotlibcpp::xlabel(R"(requested $\Delta t$)");
-	matplotlibcpp::ylabel("terminal / final-state error");
-	matplotlibcpp::title("Forced Hall/Pedersen Terminal Drift Error");
-	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./dust_forced_diagnostics_terminal.pdf");
-}
-
-void plotForcedDiagnostics(std::vector<SchemeSweepResult> const &runs)
-{
-	plotSweepMetric(
-	    runs, [](SweepSample const &sample) { return sample.transient_final_error; }, "de-biased final transient error",
-	    "Forced Hall/Pedersen Transient Error", "./dust_forced_diagnostics_transient_final.pdf");
-	plotTerminalDiagnostics(runs);
-}
-#endif
 
 auto problem_main() -> int
 {
+	bool write_csv = true;
+	amrex::ParmParse const pp("problem");
+	pp.query("write_csv", write_csv);
+
 	std::vector<SchemeSweepResult> runs;
 	runs.reserve(resolved_rk_schemes.size());
 	for (ResolvedRkScheme const scheme : resolved_rk_schemes) {
@@ -580,8 +495,8 @@ auto problem_main() -> int
 		bool passed = true;
 
 		amrex::Print() << "\nForced Hall/Pedersen analytic steady state:\n";
-		amrex::Print() << "  u_x* = " << steady.ux << "\n";
-		amrex::Print() << "  u_y* = " << steady.uy << "\n";
+		amrex::Print() << "  w_x* = " << steady.ux << "\n";
+		amrex::Print() << "  w_y* = " << steady.uy << "\n";
 		amrex::Print() << "  resolved/stiff threshold dt = " << resolvedBranchThresholdDt() << "\n";
 		amrex::Print() << "\nForced Hall/Pedersen diagnostics:\n";
 
@@ -596,6 +511,7 @@ auto problem_main() -> int
 					       << ", terminal drift error = " << sample.terminal_error << ", final data error = " << sample.final_data_error
 					       << ", final-to-fixed-point error = " << sample.final_to_fixed_point_error
 					       << ", predicted final-to-fixed-point error = " << sample.predicted_final_to_fixed_point_error
+					       << ", predicted final-data error = " << sample.predicted_final_data_error
 					       << ", final-state map consistency error = " << sample.final_state_map_consistency_error
 					       << ", max momentum residual = " << sample.momentum_residual;
 				if (i > 0) {
@@ -616,7 +532,8 @@ auto problem_main() -> int
 				if (!std::isfinite(sample.transient_l2_error) || !std::isfinite(sample.transient_final_error) ||
 				    !std::isfinite(sample.terminal_error) || !std::isfinite(sample.final_data_error) ||
 				    !std::isfinite(sample.final_to_fixed_point_error) || !std::isfinite(sample.predicted_final_to_fixed_point_error) ||
-				    !std::isfinite(sample.final_state_map_consistency_error) || !std::isfinite(sample.momentum_residual) ||
+				    !std::isfinite(sample.predicted_final_data_error) || !std::isfinite(sample.final_state_map_consistency_error) ||
+				    !std::isfinite(sample.momentum_residual) ||
 				    (sample.momentum_residual > momentum_tol) || (sample.final_state_map_consistency_error > map_consistency_tol) ||
 				    (sample.predicted_final_to_fixed_point_error > small_transient_tol) ||
 				    (sample.final_to_fixed_point_error > small_transient_tol)) {
@@ -631,10 +548,9 @@ auto problem_main() -> int
 		} else {
 			amrex::Print() << "\nTest PASSED: forced Hall/Pedersen diagnostics completed with finite values.\n";
 		}
-
-#ifdef HAVE_PYTHON
-		plotForcedDiagnostics(runs);
-#endif
+		if (write_csv) {
+			writeSweepCsv(runs);
+		}
 	}
 
 	return status;
