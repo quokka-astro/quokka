@@ -150,6 +150,8 @@ auto compute_equilibrium_temperature_neutral(double n_HI) -> double
 {
 	double T_lo = 1;
 	double T_hi = 1000;
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(net_energy_neutral(T_lo, n_HI) > 0.0 && net_energy_neutral(T_hi, n_HI) < 0.0,
+					 "compute_equilibrium_temperature_neutral: brackets do not straddle a root");
 	int const max_iter = 10000;
 	for (int iter = 0; iter < max_iter; ++iter) {
 		const double T_mid = 0.5 * (T_lo + T_hi);
@@ -169,6 +171,8 @@ auto compute_equilibrium_temperature_ionized(double n_e) -> double
 {
 	double T_lo = 1000.0;
 	double T_hi = 1.0e5;
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(net_energy_ionized(T_lo, n_e) > 0.0 && net_energy_ionized(T_hi, n_e) < 0.0,
+					 "compute_equilibrium_temperature_ionized: brackets do not straddle a root");
 	int const max_iter = 10000;
 	for (int iter = 0; iter < max_iter; ++iter) {
 		const double T_mid = 0.5 * (T_lo + T_hi);
@@ -388,8 +392,6 @@ template <> void QuokkaSimulation<DTypeFront>::computeAfterTimestep()
 auto problem_main() -> int
 {
 	// Problem parameters
-	// const int nx = 1000;
-	// const double Lx = 1.0;
 	const double CFL_number = 0.3;
 	const double dt_max = 1e99;
 	const int max_timesteps = 5000000;

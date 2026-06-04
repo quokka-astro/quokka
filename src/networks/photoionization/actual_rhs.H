@@ -118,7 +118,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 	amrex::Real n_gamma_flux = state.rn[1];
 
 	int molecular_process_switch = 1;
-	amrex::Real xHII = n_HII / (n_HI + n_HII);
+	const amrex::Real n_H_total = n_HI + n_HII;
+	amrex::Real xHII = (n_H_total > 0.0_rt) ? (n_HII / n_H_total) : 0.0_rt;
 	if ((allow_mixed_cell_cooling == 0) && (xHII > mixed_cell_lb) && (xHII < mixed_cell_ub)) {
 		molecular_process_switch = 0;
 	}
@@ -171,7 +172,8 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	amrex::Real n_gamma_flux = state.rn[1];
 
 	int molecular_process_switch = 1;
-	amrex::Real xHII = n_HII / (n_HI + n_HII);
+	const amrex::Real n_H_total = n_HI + n_HII;
+	amrex::Real xHII = (n_H_total > 0.0_rt) ? (n_HII / n_H_total) : 0.0_rt;
 	if ((allow_mixed_cell_cooling == 0) && (xHII > mixed_cell_lb) && (xHII < mixed_cell_ub)) {
 		molecular_process_switch = 0;
 	}
