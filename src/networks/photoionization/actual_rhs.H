@@ -217,13 +217,16 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	jac(3, 5) = jac(1, 5);
 	jac(3, 6) = jac(1, 6);
 
-	jac(net_ienuc, 1) = energy_switch * (-Lambda_rec * n_HII - Lambda_ion_ff * n_HII) / state.rho;
-	jac(net_ienuc, 2) = energy_switch * (Gamma_photo * c * sigma_photo * n_gamma * frac + Gamma_KI - 2.0_rt * Lambda_KI * n_HI) / state.rho;
-	jac(net_ienuc, 3) = energy_switch * (-Lambda_rec * n_e - Lambda_ion_ff * n_e) / state.rho;
+	jac(net_ienuc, 1) = energy_switch * (-recombination_cooling_switch * Lambda_rec * n_HII - ion_ff_cooling_switch * Lambda_ion_ff * n_HII) / state.rho;
+	jac(net_ienuc, 2) = energy_switch *
+			    (photoheating_switch * Gamma_photo * c * sigma_photo * n_gamma * frac + molecular_process_switch * KI_heating_switch * Gamma_KI -
+			     2.0_rt * molecular_process_switch * KI_cooling_switch * Lambda_KI * n_HI) /
+			    state.rho;
+	jac(net_ienuc, 3) = energy_switch * (-recombination_cooling_switch * Lambda_rec * n_e - ion_ff_cooling_switch * Lambda_ion_ff * n_e) / state.rho;
 	jac(net_ienuc, net_ienuc) = energy_switch *
 				    (d_photoionization_heating_dT + d_KI_heating_dT - d_recombination_cooling_dT - d_KI_cooling_dT - d_ion_ff_cooling_dT) *
 				    dTde / state.rho;
-	jac(net_ienuc, 5) = energy_switch * (Gamma_photo * c * sigma_photo * n_HI * frac) / state.rho;
+	jac(net_ienuc, 5) = energy_switch * (photoheating_switch * Gamma_photo * c * sigma_photo * n_HI * frac) / state.rho;
 	jac(net_ienuc, 6) = 0.0_rt;
 
 	jac(5, 1) = 0.0_rt;
