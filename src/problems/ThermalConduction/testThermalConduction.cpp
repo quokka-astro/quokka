@@ -121,7 +121,11 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 		};
 
 		for (auto const &x : {x0, x1}) {
-			tagIfPointInRegion(x, y, z);
+			for (auto const &y : {y0, y1}) {
+				for (auto const &z : {z0, z1}) {
+					tagIfPointInRegion(x, y, z);
+				}
+			}
 		}
 	});
 	amrex::Gpu::streamSynchronize();
