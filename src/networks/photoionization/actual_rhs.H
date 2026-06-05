@@ -79,6 +79,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 	amrex::Real Lambda_rec = get_recombination_cooling_coefficient(state.T);
 	amrex::Real Lambda_ion_ff = get_ion_ff_cooling_coefficient(state.T);
 
+	AMREX_ASSERT(state.c_hat == C::c_light); // RSLA (c_hat != c) is not implemented
 	amrex::Real c = C::c_light;
 
 	amrex::Real n_e = state.xn[0];
@@ -121,6 +122,7 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	amrex::Real Lambda_rec = get_recombination_cooling_coefficient(state.T);
 	amrex::Real Lambda_ion_ff = get_ion_ff_cooling_coefficient(state.T);
 
+	AMREX_ASSERT(state.c_hat == C::c_light); // RSLA (c_hat != c) is not implemented
 	amrex::Real c = C::c_light;
 
 	amrex::Real n_e = state.xn[0];
