@@ -1066,12 +1066,7 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 			}
 			fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 			std::array<amrex::MultiFab, AMREX_SPACEDIM> heat_flux;
-
-			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-				auto ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
-				heat_flux[idim].define(ba_face, state.DistributionMap(), state.nComp(), 0);
-				heat_flux[idim].setVal(0.0);
-			}
+			
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
 					fillBoundaryConditions(state_fc[idim], state_fc[idim], lev, time, quokka::centering::fc,
