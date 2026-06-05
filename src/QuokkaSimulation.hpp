@@ -69,7 +69,6 @@ namespace filesystem = experimental::filesystem;
 #include "SimulationData.hpp"
 #include "chemistry/Chemistry.hpp"
 #include "conduction/ElectronConduction.hpp"
-#include "radiation/photochemistry.hpp"
 #include "cooling/ResampledCooling.hpp"
 #include "dust/DustSources.hpp"
 #include "dust/dust_system.hpp"
