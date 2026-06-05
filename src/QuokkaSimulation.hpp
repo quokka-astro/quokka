@@ -1086,9 +1086,16 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 											     .eos_flag = eosFlagForElectronConduction_};
 			quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, resampledTables_,
 											   heat_flux);
-			if (do_reflux) {
-				incrementFluxRegisters(fr_as_crse, fr_as_fine, heat_flux, lev, dt);
-			}
+			      if (do_reflux) {  
+                std::array<amrex::MultiFab, AMREX_SPACEDIM> recal_fluxes;  
+                for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {  
+                    recal_fluxes[idim].define(heat_flux[idim].boxArray(), heat_flux[idim].DistributionMap(), state.nComp(), 0);  
+                    recal_fluxes[idim].setVal(0.0);  
+                    amrex::MultiFab::Copy(recal_fluxes[idim], heat_flux[idim], 0, HydroSystem<problem_t>::energy_index, 1, 0);  
+                    amrex::MultiFab::Copy(recal_fluxes[idim], heat_flux[idim], 0, HydroSystem<problem_t>::internalEnergy_index, 1, 0);  
+                }  
+                incrementFluxRegisters(fr_as_crse, fr_as_fine, recal_fluxes, lev, dt);  
+            }
 		}
 	};
 
