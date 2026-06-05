@@ -3,7 +3,7 @@
 // Modified for Entropy wave (MHD) test.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file testEntropyWaveLinear.cpp
+/// \file testEntropyWaveConvergence.cpp
 /// \brief Defines a test problem for an MHD entropy wave (density perturbation
 ///        advected with background flow) and ensures face-centered quantities
 ///        are created correctly.
