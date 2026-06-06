@@ -78,6 +78,7 @@ namespace filesystem = experimental::filesystem;
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
+#include "radiation/photochemistry.hpp"
 #include "radiation/radiation_system.hpp"
 #include "simulation.hpp"
 #include "turbulence/TurbulentDriving.hpp"
@@ -162,6 +163,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	int enableCooling_ = 0;
 	int enableChemistry_ = 0;
+	int enablePhotoChemistry_ = 0;
 	int enableTurbulence_ = 0;
 	amrex::Real turbulenceStopTime_ = std::numeric_limits<amrex::Real>::max();
 	int enableIterDustStoptime_ = 0;
@@ -268,6 +270,10 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		eos.add("eos_gamma", quokka::EOS_Traits<problem_t>::gamma);
 		// initialize Microphysics params
 		init_extern_parameters();
+#if defined(PHOTOCHEMISTRY) || defined(CHEMISTRY)
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!integrator_rp::subtract_internal_energy,
+						 "integrator.subtract_internal_energy must be 0: Quokka reads total energy from burn_t::e, not the delta");
+#endif
 		// initialize Microphysics EOS
 		amrex::Real small_temp = 1e-10;
 		amrex::Real small_dens = 1e-100;
@@ -603,6 +609,16 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("project_initial_b_field", projectInitialBField_);
 		hpp.query("update_initial_b_energy", updateInitialMagneticEnergy_);
 	}
+
+#ifdef PHOTOCHEMISTRY
+	// set photochemistry runtime parameters
+	{
+		amrex::ParmParse const hpp("photochemistry");
+		hpp.query("enabled", enablePhotoChemistry_);
+		hpp.query("max_density_allowed", max_density_allowed);
+		hpp.query("min_density_allowed", min_density_allowed); // don't do photochemistry in cells with densities below the minimum density specified
+	}
+#endif
 
 	// set cooling runtime parameters
 	bool cooling_table_include_pe = false;
@@ -3146,6 +3162,12 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 									       p_iteration_failure_counter);
 			}
 		}
+#ifdef PHOTOCHEMISTRY
+		if (enablePhotoChemistry_ == 1) {
+			// compute photo-chemistry
+			quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], dt_radiation, 1, max_density_allowed, min_density_allowed);
+		}
+#endif
 
 		if (print_rad_counter_) {
 			auto *h_iteration_counter = iteration_counter.copyToHost();
