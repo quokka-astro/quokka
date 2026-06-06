@@ -165,10 +165,10 @@ jobs:
           echo "Running agent script: $AGENT_SCRIPT_PATH"
           if [ -n "$PROMPT_LOCATION" ]; then
             echo "Using prompt from: $PROMPT_LOCATION"
-            uv run python "$AGENT_SCRIPT_PATH" "$PROMPT_LOCATION"
+            python "$AGENT_SCRIPT_PATH" "$PROMPT_LOCATION"
           else
             echo "Using PROMPT_STRING (${#PROMPT_STRING} characters)"
-            uv run python "$AGENT_SCRIPT_PATH"
+            python "$AGENT_SCRIPT_PATH"
           fi
           test -s "$ACTION_PLAN_PATH"
           python -m json.tool "$ACTION_PLAN_PATH" >/dev/null

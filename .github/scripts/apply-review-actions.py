@@ -22,6 +22,8 @@ MAX_ACTIONS_PER_RUN = 20
 MAX_REVIEWERS_PER_ACTION = 3
 MAX_COMMENTS_PER_PR_PER_RUN = 1
 RECENT_COMMENT_SECONDS = 7 * 24 * 60 * 60
+STALE_AUTHOR_SECONDS = 5 * 24 * 60 * 60
+DRAFT_STALE_AUTHOR_SECONDS = 14 * 24 * 60 * 60
 
 ALLOWED_ACTION_TYPES = {"comment", "request_review"}
 ALLOWED_REASONS = {
@@ -130,6 +132,12 @@ def utc_now() -> datetime:
 
 def parse_time(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def update_latest_time(latest: datetime, value: Any) -> datetime:
+    if isinstance(value, str):
+        return max(latest, parse_time(value))
+    return latest
 
 
 def clean_login(value: Any) -> str:
@@ -268,6 +276,42 @@ def has_recent_automatic_comment(comments: list[dict[str, Any]], body: str) -> b
     return False
 
 
+def pr_author_action_is_stale(client: GitHubClient, pr: dict[str, Any]) -> bool:
+    pr_number = pr["number"]
+    latest = parse_time(pr["created_at"])
+
+    for field in ("updated_at", "closed_at", "merged_at"):
+        latest = update_latest_time(latest, pr.get(field))
+
+    for comment in client.paged(f"/issues/{pr_number}/comments"):
+        latest = update_latest_time(latest, comment.get("created_at"))
+        latest = update_latest_time(latest, comment.get("updated_at"))
+
+    for review_comment in client.paged(f"/pulls/{pr_number}/comments"):
+        latest = update_latest_time(latest, review_comment.get("created_at"))
+        latest = update_latest_time(latest, review_comment.get("updated_at"))
+
+    for review in client.paged(f"/pulls/{pr_number}/reviews"):
+        latest = update_latest_time(latest, review.get("submitted_at"))
+
+    for commit in client.paged(f"/pulls/{pr_number}/commits"):
+        commit_data = commit.get("commit") if isinstance(commit, dict) else None
+        if not isinstance(commit_data, dict):
+            continue
+        for role in ("author", "committer"):
+            actor = commit_data.get(role)
+            if isinstance(actor, dict):
+                latest = update_latest_time(latest, actor.get("date"))
+
+    threshold = DRAFT_STALE_AUTHOR_SECONDS if pr.get("draft") else STALE_AUTHOR_SECONDS
+    inactive_seconds = (utc_now() - latest).total_seconds()
+    if inactive_seconds <= threshold:
+        threshold_days = threshold // (24 * 60 * 60)
+        print(f"Skipping PR #{pr_number}: latest author-action activity is newer than {threshold_days} days")
+        return False
+    return True
+
+
 def has_blocking_review(client: GitHubClient, pr_number: int) -> bool:
     reviews = client.paged(f"/pulls/{pr_number}/reviews")
     latest_by_user: dict[str, str] = {}
@@ -377,7 +421,7 @@ def validate_reviewers(client: GitHubClient, pr: dict[str, Any], reviewers: tupl
     return valid
 
 
-def apply_action(client: GitHubClient, action: Action, comments_by_pr: dict[int, int]) -> None:
+def apply_action(client: GitHubClient, action: Action, comments_by_pr: dict[int, int], requested_reviewers_by_pr: dict[int, set[str]]) -> None:
     pr = client.request("GET", f"/pulls/{action.pr}")
     if pr.get("state") != "open":
         print(f"Skipping PR #{action.pr}: not open")
@@ -394,6 +438,8 @@ def apply_action(client: GitHubClient, action: Action, comments_by_pr: dict[int,
     if action.reason == "no_reviewers" and (pr.get("requested_reviewers") or pr.get("requested_teams")):
         print(f"Skipping PR #{action.pr}: reviewers already requested")
         return
+    if action.reason == "stale_author" and not pr_author_action_is_stale(client, pr):
+        return
 
     reviewers = validate_reviewers(client, pr, action.reviewers, allow_requested=action.type == "comment")
     action = Action(action.type, action.pr, action.reason, tuple(reviewers), action.body_template)
@@ -403,6 +449,7 @@ def apply_action(client: GitHubClient, action: Action, comments_by_pr: dict[int,
             print(f"Skipping PR #{action.pr}: no valid reviewers remain")
             return
         client.request("POST", f"/pulls/{action.pr}/requested_reviewers", {"reviewers": list(action.reviewers)})
+        requested_reviewers_by_pr.setdefault(action.pr, set()).update(action.reviewers)
         print(f"Requested reviewers on PR #{action.pr}: {', '.join('@' + reviewer for reviewer in action.reviewers)}")
         return
 
@@ -411,6 +458,9 @@ def apply_action(client: GitHubClient, action: Action, comments_by_pr: dict[int,
         return
     if action.body_template == "assigned_reviewer" and len(action.reviewers) != 1:
         print(f"Skipping PR #{action.pr}: assigned_reviewer comment requires exactly one valid reviewer")
+        return
+    if action.body_template == "assigned_reviewer" and action.reviewers[0] not in requested_reviewers_by_pr.get(action.pr, set()):
+        print(f"Skipping PR #{action.pr}: reviewer was not assigned by this run")
         return
 
     if comments_by_pr.get(action.pr, 0) >= MAX_COMMENTS_PER_PR_PER_RUN:
@@ -448,9 +498,10 @@ def main() -> int:
 
     client = GitHubClient(repository, token)
     comments_by_pr: dict[int, int] = {}
+    requested_reviewers_by_pr: dict[int, set[str]] = {}
 
     for action in actions:
-        apply_action(client, action, comments_by_pr)
+        apply_action(client, action, comments_by_pr, requested_reviewers_by_pr)
     return 0
 
 
