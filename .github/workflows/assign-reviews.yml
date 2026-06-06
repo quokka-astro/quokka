@@ -18,7 +18,7 @@ jobs:
   assign-reviews:
     runs-on: ubuntu-24.04
     env:
-      AGENT_SCRIPT_URL: https://raw.githubusercontent.com/OpenHands/agent-sdk/main/examples/03_github_workflows/01_basic_action/agent_script.py
+      AGENT_SCRIPT_PATH: .github/scripts/openhands-agent-script.py
       PROMPT_LOCATION: ""
       PROMPT_STRING: >
         Use GITHUB_TOKEN and the GitHub API to organize open pull requests in this repo.
@@ -68,19 +68,19 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: "3.13"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
         with:
           enable-cache: true
 
       - name: Install OpenHands dependencies
         run: |
-          uv pip install --system "openhands-sdk @ git+https://github.com/OpenHands/agent-sdk.git@main#subdirectory=openhands-sdk"
-          uv pip install --system "openhands-tools @ git+https://github.com/OpenHands/agent-sdk.git@main#subdirectory=openhands-tools"
+          uv pip install --system "openhands-sdk @ git+https://github.com/OpenHands/agent-sdk.git@46cf830ab0d95f977c675a43c1e3869fdb937d71#subdirectory=openhands-sdk"
+          uv pip install --system "openhands-tools @ git+https://github.com/OpenHands/agent-sdk.git@46cf830ab0d95f977c675a43c1e3869fdb937d71#subdirectory=openhands-tools"
 
       - name: Check required configuration
         env:
@@ -116,15 +116,7 @@ jobs:
           LLM_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           PYTHONPATH: ""
         run: |
-          echo "Running agent script: $AGENT_SCRIPT_URL"
-          if [[ "$AGENT_SCRIPT_URL" =~ ^https?:// ]]; then
-            echo "Downloading agent script from URL..."
-            curl -sSL "$AGENT_SCRIPT_URL" -o /tmp/agent_script.py
-            AGENT_SCRIPT_PATH="/tmp/agent_script.py"
-          else
-            AGENT_SCRIPT_PATH="$AGENT_SCRIPT_URL"
-          fi
-
+          echo "Running agent script: $AGENT_SCRIPT_PATH"
           if [ -n "$PROMPT_LOCATION" ]; then
             echo "Using prompt from: $PROMPT_LOCATION"
             uv run python "$AGENT_SCRIPT_PATH" "$PROMPT_LOCATION"
@@ -134,7 +126,7 @@ jobs:
           fi
 
       - name: Upload logs as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: openhands-assign-reviews-logs
