@@ -15,7 +15,8 @@ Arguments:
 
 Environment Variables:
     PROMPT_STRING: Direct prompt text (alternative to prompt_location)
-    LLM_API_KEY: API key for the LLM (required)
+    LLM_API_KEY: API key for the LLM (required; removed from the process
+                 environment before agent tools are created)
     LLM_MODEL: Language model to use (default: gpt-5.5)
     LLM_BASE_URL: Optional base URL for LLM API
 
@@ -120,7 +121,7 @@ def main():
         sys.exit(1)
 
     # Configure LLM
-    api_key = os.getenv("LLM_API_KEY")
+    api_key = os.environ.pop("LLM_API_KEY", None)
     if not api_key:
         logger.error("LLM_API_KEY environment variable is not set.")
         sys.exit(1)

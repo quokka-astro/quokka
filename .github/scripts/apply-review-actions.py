@@ -406,6 +406,13 @@ def apply_action(client: GitHubClient, action: Action, comments_by_pr: dict[int,
         print(f"Requested reviewers on PR #{action.pr}: {', '.join('@' + reviewer for reviewer in action.reviewers)}")
         return
 
+    if action.body_template == "waiting_for_review" and not action.reviewers:
+        print(f"Skipping PR #{action.pr}: no valid reviewers remain")
+        return
+    if action.body_template == "assigned_reviewer" and len(action.reviewers) != 1:
+        print(f"Skipping PR #{action.pr}: assigned_reviewer comment requires exactly one valid reviewer")
+        return
+
     if comments_by_pr.get(action.pr, 0) >= MAX_COMMENTS_PER_PR_PER_RUN:
         print(f"Skipping PR #{action.pr}: comment limit reached for this run")
         return
