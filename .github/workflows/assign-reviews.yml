@@ -173,14 +173,15 @@ jobs:
           test -s "$ACTION_PLAN_PATH"
           python -m json.tool "$ACTION_PLAN_PATH" >/dev/null
 
+      - name: Validate review action plan
+        run: python .github/scripts/apply-review-actions.py --validate-only "$ACTION_PLAN_PATH"
+
       - name: Upload logs as artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: always()
         with:
           name: openhands-assign-reviews-logs
-          path: |
-            *.log
-            output/
+          path: "*.log"
+          if-no-files-found: ignore
           retention-days: 7
 
       - name: Upload review action plan

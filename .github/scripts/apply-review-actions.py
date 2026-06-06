@@ -68,6 +68,16 @@ class GitHubClient:
         self.token = token
 
     def request(self, method: str, path: str, payload: dict[str, Any] | None = None) -> Any:
+        return self._request(f"{self.base_url}{path}", method, payload)
+
+    def graphql(self, query: str, variables: dict[str, Any]) -> Any:
+        response = self._request("https://api.github.com/graphql", "POST", {"query": query, "variables": variables})
+        errors = response.get("errors")
+        if errors:
+            raise RuntimeError(f"GitHub GraphQL query failed: {errors}")
+        return response.get("data")
+
+    def _request(self, url: str, method: str, payload: dict[str, Any] | None = None) -> Any:
         body = None
         headers = {
             "Accept": "application/vnd.github+json",
@@ -78,13 +88,13 @@ class GitHubClient:
         if payload is not None:
             body = json.dumps(payload).encode("utf-8")
             headers["Content-Type"] = "application/json"
-        request = Request(f"{self.base_url}{path}", data=body, headers=headers, method=method)
+        request = Request(url, data=body, headers=headers, method=method)
         try:
             with urlopen(request, timeout=30) as response:
                 data = response.read()
         except HTTPError as error:
             details = error.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"GitHub API {method} {path} failed: {error.code} {details}") from error
+            raise RuntimeError(f"GitHub API {method} {url} failed: {error.code} {details}") from error
         if not data:
             return None
         return json.loads(data.decode("utf-8"))
@@ -271,8 +281,47 @@ def has_blocking_review(client: GitHubClient, pr_number: int) -> bool:
 
 
 def has_open_review_threads(client: GitHubClient, pr_number: int) -> bool:
-    comments = client.paged(f"/pulls/{pr_number}/comments")
-    return any(not comment.get("in_reply_to_id") for comment in comments)
+    owner, name = client.repository.split("/", 1)
+    query = """
+query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      reviewThreads(first: 100, after: $cursor) {
+        nodes {
+          isResolved
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+      }
+    }
+  }
+}
+"""
+    cursor: str | None = None
+    for _ in range(10):
+        data = client.graphql(query, {"owner": owner, "name": name, "number": pr_number, "cursor": cursor})
+        repository = data.get("repository") if isinstance(data, dict) else None
+        pull_request = repository.get("pullRequest") if isinstance(repository, dict) else None
+        review_threads = pull_request.get("reviewThreads") if isinstance(pull_request, dict) else None
+        if not isinstance(review_threads, dict):
+            raise RuntimeError(f"Expected reviewThreads response for PR #{pr_number}")
+        nodes = review_threads.get("nodes")
+        if not isinstance(nodes, list):
+            raise RuntimeError(f"Expected reviewThreads nodes for PR #{pr_number}")
+        for thread in nodes:
+            if not isinstance(thread, dict) or not isinstance(thread.get("isResolved"), bool):
+                raise RuntimeError(f"Expected reviewThreads isResolved value for PR #{pr_number}")
+            if not thread["isResolved"]:
+                return True
+        page_info = review_threads.get("pageInfo")
+        if not isinstance(page_info, dict) or not page_info.get("hasNextPage"):
+            return False
+        cursor = page_info.get("endCursor")
+        if not isinstance(cursor, str):
+            raise RuntimeError(f"Expected reviewThreads endCursor for PR #{pr_number}")
+    raise RuntimeError(f"Too many review thread pages for PR #{pr_number}")
 
 
 def checks_are_clean(client: GitHubClient, sha: str) -> bool:
@@ -342,7 +391,7 @@ def apply_action(client: GitHubClient, action: Action, comments_by_pr: dict[int,
         if has_blocking_review(client, action.pr) or has_open_review_threads(client, action.pr):
             print(f"Skipping PR #{action.pr}: review is not currently clear")
             return
-    if action.reason == "no_reviewers" and pr.get("requested_reviewers"):
+    if action.reason == "no_reviewers" and (pr.get("requested_reviewers") or pr.get("requested_teams")):
         print(f"Skipping PR #{action.pr}: reviewers already requested")
         return
 
@@ -372,8 +421,14 @@ def apply_action(client: GitHubClient, action: Action, comments_by_pr: dict[int,
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--validate-only", action="store_true", help="Validate the action plan without applying actions")
     parser.add_argument("action_plan", help="Path to review-actions.json")
     args = parser.parse_args()
+
+    actions = load_actions(args.action_plan)
+    if args.validate_only:
+        print(f"Validated {len(actions)} review action(s)")
+        return 0
 
     token = os.environ.get("GITHUB_TOKEN")
     repository = os.environ.get("GITHUB_REPOSITORY")
@@ -384,7 +439,6 @@ def main() -> int:
         print("GITHUB_REPOSITORY is required", file=sys.stderr)
         return 2
 
-    actions = load_actions(args.action_plan)
     client = GitHubClient(repository, token)
     comments_by_pr: dict[int, int] = {}
 
