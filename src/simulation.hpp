@@ -231,6 +231,10 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	amrex::Real conductionCFL = 0.2;	      // default
 	int enableElectronConduction_ = 0;	      // default
 
+	// Hyper-resistivity (biharmonic EMF diffusion) parameters
+	amrex::Real hyperResistivityCoeff_ = 0.0; // c_hyper; 0 == off
+	amrex::Real hyperResistivityCFL = 0.015;  // 4th-order stability coeff (von Neumann, RK2; safety-factored)
+
 	amrex::Real densityFloor_ = 0.0;     // default
 	amrex::Real dustDensityFloor_ = 0.0; // default
 	amrex::Real tempFloor_ = 0.0;	     // default
@@ -1264,6 +1268,28 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		}
 	}
 
+	// compute timestep based on hyper-resistivity (4th-order biharmonic EMF diffusion)
+	amrex::ValLocPair<amrex::Real, amrex::IntVect> hyper_resistivity_dt{.value = std::numeric_limits<amrex::Real>::max(),
+									   .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
+	if (hyperResistivityCoeff_ > 0.0) {
+		// eta_hyper = c_hyper * speed * (dx*dy)^(3/2)  [see MHDSystem::ComputeEMF_Quokka2026]. The local
+		// speed (v_A, or max(v_A,c_s) once floored) is bounded above by the domain max signal speed already
+		// computed for the hydro step, so reuse it -- no extra reduction. The (dw0*dw1) factor is bounded
+		// over all edge orientations by the largest pairwise cell-area = cell_volume / smallest edge, which
+		// stays tight on anisotropic (slab) grids. MHD (hence hyper-resistivity) is 3D-only, but this base
+		// routine also compiles for lower-D problems, so use AMREX_D_TERM rather than a literal dx[2].
+		const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+		const amrex::Real max_area = cell_volume / dx_min;
+		const amrex::Real eta_hyper_max = hyperResistivityCoeff_ * domain_signal_max * std::pow(max_area, 1.5);
+		// explicit 4th-order stability limit: dt < hyperResistivityCFL * dx_min^4 / eta_hyper
+		hyper_resistivity_dt.value = hyperResistivityCFL * std::pow(dx_min, 4) / eta_hyper_max;
+		hyper_resistivity_dt.index = domain_signal_maxloc;
+
+		if (verbose) {
+			amrex::Print() << std::format("...[level {}] \testimated hyper-resistivity timestep: {:e}\n", lev, hyper_resistivity_dt.value);
+		}
+	}
+
 	// compute maximum particle speed on level 'lev'
 	amrex::ValLocPair<amrex::Real, amrex::IntVect> particle_dt{.value = std::numeric_limits<amrex::Real>::max(),
 								   .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
@@ -1292,7 +1318,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 #endif
 
 	// compute minimum timestep
-	std::vector<dtloc_t *> dts = {&hydro_dt, &conduction_dt, &particle_dt};
+	std::vector<dtloc_t *> dts = {&hydro_dt, &conduction_dt, &particle_dt, &hyper_resistivity_dt};
 	auto *const dt_min_ptr = *std::min_element(dts.begin(), dts.end(), [](dtloc_t *const p1, dtloc_t *const p2) { return p1->value < p2->value; });
 
 	if (verbose) {
@@ -1303,6 +1329,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 			amrex::Print() << std::format("...[level {}] timestep limited by PARTICLES\n", lev);
 		} else if (dt_min_ptr == &conduction_dt) {
 			amrex::Print() << std::format("...[level {}] timestep limited by CONDUCTION\n", lev);
+		} else if (dt_min_ptr == &hyper_resistivity_dt) {
+			amrex::Print() << std::format("...[level {}] timestep limited by HYPER-RESISTIVITY\n", lev);
 		}
 	}
 
@@ -1345,6 +1373,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 		if (enableElectronConduction_ == 1) {
 			// Conduction timestep scales as dx^2, so we need to use n_factor^2 here instead of n_factor.
 			effective_factor = static_cast<amrex::Real>(n_factor) * static_cast<amrex::Real>(n_factor);
+		}
+		if (hyperResistivityCoeff_ > 0.0) {
+			// Hyper-resistivity timestep scales as dx^4, so use n_factor^4 (steepest; assumes it is the limiter).
+			const auto nf = static_cast<amrex::Real>(n_factor);
+			effective_factor = nf * nf * nf * nf;
 		}
 
 		const amrex::Real dt_0_old = dt_0; // save old dt_0

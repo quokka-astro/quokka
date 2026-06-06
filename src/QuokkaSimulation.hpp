@@ -147,6 +147,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::enableElectronConduction_;
 	using AMRSimulation<problem_t>::electronConductionKappa0_;
 	using AMRSimulation<problem_t>::conductionCFL;
+	using AMRSimulation<problem_t>::hyperResistivityCoeff_;
+	using AMRSimulation<problem_t>::hyperResistivityCFL;
 
 #if AMREX_SPACEDIM == 3
 	using AMRSimulation<problem_t>::luminosityTables_;
@@ -233,7 +235,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	int useDualEnergy_ = 1;			// 0 == disabled; 1 == use auxiliary internal energy equation (default)
 	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
 	amrex::Real artificialViscosityK_ = 0.;    // artificial viscosity coefficient (default == None)
-	amrex::Real hyperResistivityCoeff_ = 0.;   // biharmonic EMF diffusion coefficient (default == 0)
 
 	EMFComputeScheme emfComputingScheme_ = EMFComputeScheme::FelkerStone2017;
 	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::LondrilloDelZanna2004; // method to use to average EMF at edges
@@ -627,6 +628,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(mhdResistivity_ >= 0.0, "mhd.resistivity must be >= 0.");
 		}
 		hpp.query("hyper_resistivity_coefficient", hyperResistivityCoeff_);
+		hpp.query("hyper_resistivity_cfl", hyperResistivityCFL);
 	}
 
 #ifdef PHOTOCHEMISTRY
