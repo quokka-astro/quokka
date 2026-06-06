@@ -86,7 +86,7 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 					   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, SlopeLimiter plmLimiter,
 					   EMFAvgScheme emf_avg_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real resistivity = 0.0);
 
-	static void ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
+	static void ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
 					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, SlopeLimiter plmLimiter,
@@ -152,8 +152,8 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 		MHDSystem<problem_t>::ComputeEMF_Balsara2025(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, plmLimiter,
 							     emf_avg_scheme, dx, resistivity);
 	} else if (emf_compute_scheme == EMFComputeScheme::Quokka2026) {
-		MHDSystem<problem_t>::ComputeEMF_Quokka2026(ec_mf_emf_components, fcx_mf_vel, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, plmLimiter,
-							    emf_avg_scheme, dx, hyper_resistivity_coeff);
+		MHDSystem<problem_t>::ComputeEMF_Quokka2026(ec_mf_emf_components, cc_mf_cVars, fcx_mf_vel, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder,
+							    plmLimiter, emf_avg_scheme, dx, hyper_resistivity_coeff);
 	} else {
 		throw std::runtime_error("Unsupported EMF-scheme. Expected either FelkerStone2017, Balsara2025, or Quokka2026.");
 	}
@@ -407,7 +407,7 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 // uses face-centered Riemann velocity and face-centered magnetic fields extrapolated to the cell-edge to compute the EMF
 
 template <typename problem_t>
-void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
+void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
 						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
@@ -547,8 +547,8 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 
 				const auto fc_a4_B_w0 = fc_fabs_Bx[field_w_indices[0]].const_array();
 				const auto fc_a4_B_w1 = fc_fabs_Bx[field_w_indices[1]].const_array();
-				const auto fc_a4_rho_w0 = fcx_mf_cVars[field_w_indices[0]][mfi].const_array(HydroSystem<problem_t>::density_index);
-				const auto fc_a4_rho_w1 = fcx_mf_cVars[field_w_indices[1]][mfi].const_array(HydroSystem<problem_t>::density_index);
+				// density lives on the cell-centred state (face state holds B, not rho); average it to the edge below
+				const auto cc_a4_rho = cc_mf_cVars[mfi].const_array(HydroSystem<problem_t>::density_index);
 
 				const auto ec_a4_B_w0_m = ec_fabs_Bi_ieside[0][0].const_array();
 				const auto ec_a4_B_w0_p = ec_fabs_Bi_ieside[0][1].const_array();
@@ -597,12 +597,13 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 					const double Bw1_p = ec_a4_B_w1_p(i, j, k);
 					const double ave_Bw0 = 0.5 * (Bw0_m + Bw0_p);
 					const double ave_Bw1 = 0.5 * (Bw1_m + Bw1_p);
-					// density averaged from the four faces adjacent to the edge
-					const double rho_w0_c = fc_a4_rho_w0(i, j, k);
-					const double rho_w0_p1w1 = fc_a4_rho_w0(i+delta_w1[0], j+delta_w1[1], k+delta_w1[2]);
-					const double rho_w1_c = fc_a4_rho_w1(i, j, k);
-					const double rho_w1_p1w0 = fc_a4_rho_w1(i+delta_w0[0], j+delta_w0[1], k+delta_w0[2]);
-					const double rho = 0.25 * (rho_w0_c + rho_w0_p1w1 + rho_w1_c + rho_w1_p1w0);
+					// density averaged from the four cell-centred cells sharing this edge (cc -> edge).
+					// the edge (i,j,k) is nodal in the two perpendicular directions; the four cells that
+					// share it are (i,j,k) and its neighbours one cell back along w0, w1, and w0+w1.
+					const double rho = 0.25 * (cc_a4_rho(i, j, k) +
+								   cc_a4_rho(i-delta_w0[0], j-delta_w0[1], k-delta_w0[2]) +
+								   cc_a4_rho(i-delta_w1[0], j-delta_w1[1], k-delta_w1[2]) +
+								   cc_a4_rho(i-delta_w0[0]-delta_w1[0], j-delta_w0[1]-delta_w1[1], k-delta_w0[2]-delta_w1[2]));
 					const double eta_hyper = hyper_resistivity_coeff * std::sqrt((ave_Bw0 * ave_Bw0 + ave_Bw1 * ave_Bw1) / rho) * std::pow(dw0 * dw1, 1.5);
 
 					E2_ave(i, j, k) += eta_hyper * laplacian_j;
