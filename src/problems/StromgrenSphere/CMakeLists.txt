@@ -1,4 +1,4 @@
-if(AMReX_SPACEDIM GREATER_EQUAL 2)
+if(AMReX_SPACEDIM EQUAL 3)
   set(microphysics_network_name "photoionization") # this will override
                                                   # network_name to
                                                   # photoionization for this
