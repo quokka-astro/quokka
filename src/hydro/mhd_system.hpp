@@ -587,8 +587,9 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 					const double j_p1w1 = (Bw1_p1w0_p1w1 - Bw1_p1w1) / dw0 - (Bw0_p2w1 - Bw0_p1w1) / dw1;
 					const double j_m1w1 = (Bw1_p1w0_m1w1 - Bw1_m1w1) / dw0 - (Bw0_c - Bw0_m1w1) / dw1;
 
-					const double laplacian_j = (j_p1w0 - 2.0 * j_c + j_m1w0) / (dw0 * dw0) +
-								   (j_p1w1 - 2.0 * j_c + j_m1w1) / (dw1 * dw1);
+					// per-direction second differences of the edge current (anisotropic hyper term)
+					const double d2j_w0 = (j_p1w0 - 2.0 * j_c + j_m1w0) / (dw0 * dw0);
+					const double d2j_w1 = (j_p1w1 - 2.0 * j_c + j_m1w1) / (dw1 * dw1);
 
 					// edge B components, averaged over the two reconstructed sides
 					const double Bw0_m = ec_a4_B_w0_m(i, j, k);
@@ -604,9 +605,11 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 								   cc_a4_rho(i-delta_w0[0], j-delta_w0[1], k-delta_w0[2]) +
 								   cc_a4_rho(i-delta_w1[0], j-delta_w1[1], k-delta_w1[2]) +
 								   cc_a4_rho(i-delta_w0[0]-delta_w1[0], j-delta_w0[1]-delta_w1[1], k-delta_w0[2]-delta_w1[2]));
-					const double eta_hyper = hyper_resistivity_coeff * std::sqrt((ave_Bw0 * ave_Bw0 + ave_Bw1 * ave_Bw1) / rho) * std::pow(dw0 * dw1, 1.5);
-
-					E2_ave(i, j, k) += eta_hyper * laplacian_j;
+					// anisotropic hyper resistivity: per-direction coefficient eta_d = c_hyper * v_A * dx_d^3,
+					// so each direction is damped at its own grid scale (reduces to the isotropic
+					// (dw0*dw1)^(3/2) form on cubic cells). v_A = sqrt(B^2 / rho).
+					const double v_hyper = hyper_resistivity_coeff * std::sqrt((ave_Bw0 * ave_Bw0 + ave_Bw1 * ave_Bw1) / rho);
+					E2_ave(i, j, k) += v_hyper * (dw0 * dw0 * dw0 * d2j_w0 + dw1 * dw1 * dw1 * d2j_w1);
 				});
 			}
 		}

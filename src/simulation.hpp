@@ -233,7 +233,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	// Hyper-resistivity (biharmonic EMF diffusion) parameters
 	amrex::Real hyperResistivityCoeff_ = 0.0; // c_hyper; 0 == off
-	amrex::Real hyperResistivityCFL = 0.015;  // 4th-order stability coeff (von Neumann, RK2; safety-factored)
+	amrex::Real hyperResistivityCFL = 1.5;	  // safety * integrator real-axis radius (RK2 ~ 2); geometry is in `stiffness`
 
 	amrex::Real densityFloor_ = 0.0;     // default
 	amrex::Real dustDensityFloor_ = 0.0; // default
@@ -1272,17 +1272,16 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	amrex::ValLocPair<amrex::Real, amrex::IntVect> hyper_resistivity_dt{.value = std::numeric_limits<amrex::Real>::max(),
 									   .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
 	if (hyperResistivityCoeff_ > 0.0) {
-		// eta_hyper = c_hyper * speed * (dx*dy)^(3/2)  [see MHDSystem::ComputeEMF_Quokka2026]. The local
-		// speed (v_A, or max(v_A,c_s) once floored) is bounded above by the domain max signal speed already
-		// computed for the hydro step, so reuse it -- no extra reduction. The (dw0*dw1) factor is bounded
-		// over all edge orientations by the largest pairwise cell-area = cell_volume / smallest edge, which
-		// stays tight on anisotropic (slab) grids. MHD (hence hyper-resistivity) is 3D-only, but this base
-		// routine also compiles for lower-D problems, so use AMREX_D_TERM rather than a literal dx[2].
-		const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
-		const amrex::Real max_area = cell_volume / dx_min;
-		const amrex::Real eta_hyper_max = hyperResistivityCoeff_ * domain_signal_max * std::pow(max_area, 1.5);
-		// explicit 4th-order stability limit: dt < hyperResistivityCFL * dx_min^4 / eta_hyper
-		hyper_resistivity_dt.value = hyperResistivityCFL * std::pow(dx_min, 4) / eta_hyper_max;
+		// Anisotropic hyper resistivity: per-direction coefficient eta_d = c_hyper * v_A * dx_d^3
+		// [see MHDSystem::ComputeEMF_Quokka2026]. The stiffest biharmonic symbol of the discrete operator
+		// is an upper bound |K|^2_max * max_edge|L| = [4*sum_d 1/dx_d^2] * [4*(two largest dx_d)], verified
+		// against the von Neumann scan (96 cubic, 1056 for a 32:1 slab). v_A <= domain_signal_max (already
+		// computed for the hydro step), so reuse it -- no extra reduction. hyperResistivityCFL is the
+		// safety-factored integrator real-axis radius (~2 for RK2); all geometry is in `stiffness`.
+		const amrex::Real inv_dx2_sum = AMREX_D_TERM(1.0 / (dx[0] * dx[0]), +1.0 / (dx[1] * dx[1]), +1.0 / (dx[2] * dx[2]));
+		const amrex::Real dx_sum = AMREX_D_TERM(dx[0], +dx[1], +dx[2]);
+		const amrex::Real stiffness = 16.0 * inv_dx2_sum * (dx_sum - dx_min); // max biharmonic symbol / (c_hyper*v_A)
+		hyper_resistivity_dt.value = hyperResistivityCFL / (hyperResistivityCoeff_ * domain_signal_max * stiffness);
 		hyper_resistivity_dt.index = domain_signal_maxloc;
 
 		if (verbose) {
@@ -1374,11 +1373,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 			// Conduction timestep scales as dx^2, so we need to use n_factor^2 here instead of n_factor.
 			effective_factor = static_cast<amrex::Real>(n_factor) * static_cast<amrex::Real>(n_factor);
 		}
-		if (hyperResistivityCoeff_ > 0.0) {
-			// Hyper-resistivity timestep scales as dx^4, so use n_factor^4 (steepest; assumes it is the limiter).
-			const auto nf = static_cast<amrex::Real>(n_factor);
-			effective_factor = nf * nf * nf * nf;
-		}
+		// Note: hyper-resistivity needs no special subcycling factor -- its self-scaling coefficient
+		// (eta_d ~ dx_d^3) makes the hyper timestep scale as dx^1 (advection-like), so the default
+		// n_factor already applies.
 
 		const amrex::Real dt_0_old = dt_0; // save old dt_0
 		dt_0 = std::min(dt_0, effective_factor * dt_tmp[level]);
