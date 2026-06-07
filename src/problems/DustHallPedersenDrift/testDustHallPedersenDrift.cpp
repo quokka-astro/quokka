@@ -305,8 +305,9 @@ void plotRelativeDrift(SimulationData<DustHallPedersenDrift> const &data)
 	matplotlibcpp::plot(data.t_vec_, data.uy_vec_,
 			    {{"label", R"(numerical $w_y$)"}, {"color", "C1"}, {"linestyle", "None"}, {"marker", "s"}, {"markersize", "4"}});
 	matplotlibcpp::legend();
-	matplotlibcpp::xlabel("t");
-	matplotlibcpp::ylabel(R"($w_x,\ w_y$)");
+	matplotlibcpp::tick_params({{"labelsize", "13"}});
+	matplotlibcpp::xlabel("t", {{"fontsize", "15"}});
+	matplotlibcpp::ylabel(R"($w_x,\ w_y$)", {{"fontsize", "15"}});
 	matplotlibcpp::tight_layout();
 	matplotlibcpp::save("./dust_hall_pedersen_drift.pdf");
 }

@@ -24,6 +24,20 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
+PAPER_LABEL_FONTSIZE = 15
+PAPER_TICK_FONTSIZE = 13
+PAPER_TITLE_FONTSIZE = 14
+PAPER_LEGEND_FONTSIZE = 12
+
+plt.rcParams.update({
+    "font.size": PAPER_TICK_FONTSIZE,
+    "axes.labelsize": PAPER_LABEL_FONTSIZE,
+    "axes.titlesize": PAPER_TITLE_FONTSIZE,
+    "xtick.labelsize": PAPER_TICK_FONTSIZE,
+    "ytick.labelsize": PAPER_TICK_FONTSIZE,
+    "legend.fontsize": PAPER_LEGEND_FONTSIZE,
+})
+
 
 CASE_INFO = {
     "high_mu": {"label": r"$\mu \approx 0.45$", "title": r"$\mu \approx 0.45$"},
@@ -81,7 +95,8 @@ def make_fig6(data_dir: Path, output_dir: Path) -> Path:
     axes[1, 0].set_xlabel("x")
     axes[1, 1].set_xlabel("x")
     cbar = fig.colorbar(mesh, ax=axes, fraction=0.046, pad=0.03)
-    cbar.set_label(r"$\rho_g$")
+    cbar.ax.tick_params(labelsize=PAPER_TICK_FONTSIZE)
+    cbar.set_label(r"$\rho_g$", fontsize=PAPER_LABEL_FONTSIZE)
     output_path = output_dir / "dusty_orszag_tang_fig6_analog.pdf"
     fig.savefig(output_path)
     plt.close(fig)

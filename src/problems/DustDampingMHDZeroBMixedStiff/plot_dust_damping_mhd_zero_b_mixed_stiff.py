@@ -23,6 +23,20 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+PAPER_LABEL_FONTSIZE = 15
+PAPER_TICK_FONTSIZE = 13
+PAPER_TITLE_FONTSIZE = 14
+PAPER_LEGEND_FONTSIZE = 12
+
+plt.rcParams.update({
+    "font.size": PAPER_TICK_FONTSIZE,
+    "axes.labelsize": PAPER_LABEL_FONTSIZE,
+    "axes.titlesize": PAPER_TITLE_FONTSIZE,
+    "xtick.labelsize": PAPER_TICK_FONTSIZE,
+    "ytick.labelsize": PAPER_TICK_FONTSIZE,
+    "legend.fontsize": PAPER_LEGEND_FONTSIZE,
+})
+
 
 HISTORY_FILE = "dust_damping_mhd_zero_b_mixed_stiff_history.csv"
 EXACT_FILE = "dust_damping_mhd_zero_b_mixed_stiff_exact.csv"

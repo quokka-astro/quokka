@@ -27,6 +27,20 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+PAPER_LABEL_FONTSIZE = 15
+PAPER_TICK_FONTSIZE = 13
+PAPER_TITLE_FONTSIZE = 14
+PAPER_LEGEND_FONTSIZE = 12
+
+plt.rcParams.update({
+    "font.size": PAPER_TICK_FONTSIZE,
+    "axes.labelsize": PAPER_LABEL_FONTSIZE,
+    "axes.titlesize": PAPER_TITLE_FONTSIZE,
+    "xtick.labelsize": PAPER_TICK_FONTSIZE,
+    "ytick.labelsize": PAPER_TICK_FONTSIZE,
+    "legend.fontsize": PAPER_LEGEND_FONTSIZE,
+})
+
 
 CASE_FILES = {
     "ref_neutral": "dust_lorentz_shock_ref_neutral.csv",
@@ -79,7 +93,7 @@ def make_low_mach_figure(data_dir: Path, output_dir: Path) -> Path:
     fig, axes = plt.subplots(2, 3, figsize=(15, 8.5), sharex="col")
 
     plot_velocity_panel(axes[0, 0], ref_neutral, "Neutral reference")
-    axes[0, 0].set_ylabel("v_x")
+    axes[0, 0].set_ylabel(r"$v_x$")
 
     plot_velocity_panel(axes[0, 1], charged_backreacting, "Charged, mu = 0.10")
 

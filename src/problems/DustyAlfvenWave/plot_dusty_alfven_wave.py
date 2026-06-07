@@ -23,6 +23,20 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+PAPER_LABEL_FONTSIZE = 15
+PAPER_TICK_FONTSIZE = 13
+PAPER_TITLE_FONTSIZE = 14
+PAPER_LEGEND_FONTSIZE = 12
+
+plt.rcParams.update({
+    "font.size": PAPER_TICK_FONTSIZE,
+    "axes.labelsize": PAPER_LABEL_FONTSIZE,
+    "axes.titlesize": PAPER_TITLE_FONTSIZE,
+    "xtick.labelsize": PAPER_TICK_FONTSIZE,
+    "ytick.labelsize": PAPER_TICK_FONTSIZE,
+    "legend.fontsize": PAPER_LEGEND_FONTSIZE,
+})
+
 
 MU_CASES = (
     ("mu0", r"$\mu=0$"),
@@ -119,7 +133,7 @@ def make_figure(data_dir: Path, output_dir: Path, sweep: str, cases: tuple[tuple
 
     axes[0, 0].set_ylabel(r"$x$ velocity at $t=5$")
     axes[1, 0].set_ylabel(r"$v_{d,x}$")
-    axes[0, 0].legend(loc="best", fontsize=8)
+    axes[0, 0].legend(loc="best", fontsize=PAPER_LEGEND_FONTSIZE)
     fig.tight_layout()
     output_path = output_dir / filename
     fig.savefig(output_path)
@@ -145,7 +159,7 @@ def make_particle_figure(data_dir: Path, output_dir: Path, sweep: str, cases: tu
 
     axes[0, 0].set_ylabel(r"tracer $x$ velocity at $t=5$")
     axes[1, 0].set_ylabel(r"$v_{d,x}$")
-    axes[0, 0].legend(loc="best", fontsize=8)
+    axes[0, 0].legend(loc="best", fontsize=PAPER_LEGEND_FONTSIZE)
     fig.tight_layout()
     output_path = output_dir / filename
     fig.savefig(output_path)
