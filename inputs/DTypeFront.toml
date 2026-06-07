@@ -1,9 +1,9 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-geometry.prob_lo     =  0.0  0.0  0.0 
-geometry.prob_hi     =  1.1e19 1.1e19 1.1e19
-quokka.bc = reflecting reflecting reflecting
+geometry.prob_lo     =  [0.0, 0.0, 0.0]
+geometry.prob_hi     =  [4.0e18, 4.0e18, 4.0e18]
+quokka.bc = ["reflecting", "reflecting", "reflecting"]
 
 # *****************************************************************
 # VERBOSITY
@@ -13,14 +13,15 @@ amr.v              = 0       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 64 64 64
+amr.n_cell          = [64, 64, 64]
 amr.max_level       = 0     # number of levels = max_level + 1
-#max_timesteps = 10
+amr.blocking_factor = 32  # grid size must be divisible by this
+amr.max_grid_size = 128  # at least 128 for GPUs
 do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
 
-stromgen.tend = 1.9e13
+stromgen.tend = 2.9e12
 stromgen.primary_species_1 = 1.0e-10
 stromgen.primary_species_2 = 139.9
 stromgen.primary_species_3 = 1.0e-10
