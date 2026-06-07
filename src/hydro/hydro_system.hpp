@@ -1517,18 +1517,11 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			F[internalEnergy_index] = 0;
 		}
 
-		// compute face-centered normal velocity
-		double v_norm = 0.0;
-		if (F[density_index] >= 0.) {
-			if (rho_R > 0.) {
-				v_norm = F[density_index] / rho_R;
-			}
-		} else {
-			if (rho_L > 0.) {
-				v_norm = F[density_index] / rho_L;
-			}
-		}
-		x1FaceVel(i, j, k) = v_norm;
+		// compute face-centered normal velocity using HLL star state
+		quokka::Array4View<amrex::Real, DIR> x1FSpds(x1FSpds_ref);
+		amrex::Real const fspd_m = x1FSpds(i, j, k, 0);
+		amrex::Real const fspd_p = x1FSpds(i, j, k, 1);
+		x1FaceVel(i, j, k) = (fspd_p * sL.u + fspd_m * sR.u) / (fspd_p + fspd_m);
 
 		// use the same logic as above to scale and conserve specie fluxes
 		if (F[density_index] >= 0.) {
