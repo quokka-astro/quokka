@@ -565,31 +565,31 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 					// B_w1 samples (differenced along w0)
 					const double Bw1_c = fc_a4_B_w1(i, j, k);
 					const double Bw1_p1w0 = fc_a4_B_w1(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2]);
-					const double Bw1_p2w0 = fc_a4_B_w1(i + 2 * delta_w0[0], j + 2 * delta_w0[1], k + 2 * delta_w0[2]);
 					const double Bw1_m1w0 = fc_a4_B_w1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2]);
+					const double Bw1_m2w0 = fc_a4_B_w1(i - 2 * delta_w0[0], j - 2 * delta_w0[1], k - 2 * delta_w0[2]);
 					const double Bw1_p1w1 = fc_a4_B_w1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2]);
 					const double Bw1_m1w1 = fc_a4_B_w1(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2]);
-					const double Bw1_p1w0_p1w1 =
-					    fc_a4_B_w1(i + delta_w0[0] + delta_w1[0], j + delta_w0[1] + delta_w1[1], k + delta_w0[2] + delta_w1[2]);
-					const double Bw1_p1w0_m1w1 =
-					    fc_a4_B_w1(i + delta_w0[0] - delta_w1[0], j + delta_w0[1] - delta_w1[1], k + delta_w0[2] - delta_w1[2]);
+					const double Bw1_m1w0_p1w1 =
+					    fc_a4_B_w1(i - delta_w0[0] + delta_w1[0], j - delta_w0[1] + delta_w1[1], k - delta_w0[2] + delta_w1[2]);
+					const double Bw1_m1w0_m1w1 =
+					    fc_a4_B_w1(i - delta_w0[0] - delta_w1[0], j - delta_w0[1] - delta_w1[1], k - delta_w0[2] - delta_w1[2]);
 					// B_w0 samples (differenced along w1)
 					const double Bw0_c = fc_a4_B_w0(i, j, k);
 					const double Bw0_p1w1 = fc_a4_B_w0(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2]);
-					const double Bw0_p2w1 = fc_a4_B_w0(i + 2 * delta_w1[0], j + 2 * delta_w1[1], k + 2 * delta_w1[2]);
 					const double Bw0_m1w1 = fc_a4_B_w0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2]);
+					const double Bw0_m2w1 = fc_a4_B_w0(i - 2 * delta_w1[0], j - 2 * delta_w1[1], k - 2 * delta_w1[2]);
 					const double Bw0_p1w0 = fc_a4_B_w0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2]);
 					const double Bw0_m1w0 = fc_a4_B_w0(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2]);
-					const double Bw0_p1w0_p1w1 =
-					    fc_a4_B_w0(i + delta_w0[0] + delta_w1[0], j + delta_w0[1] + delta_w1[1], k + delta_w0[2] + delta_w1[2]);
-					const double Bw0_m1w0_p1w1 =
-					    fc_a4_B_w0(i - delta_w0[0] + delta_w1[0], j - delta_w0[1] + delta_w1[1], k - delta_w0[2] + delta_w1[2]);
-					// edge current j = d(B_w1)/dw0 - d(B_w0)/dw1, built from B samples around the edge
-					const double j_c = (Bw1_p1w0 - Bw1_c) / dw0 - (Bw0_p1w1 - Bw0_c) / dw1;
-					const double j_p1w0 = (Bw1_p2w0 - Bw1_p1w0) / dw0 - (Bw0_p1w0_p1w1 - Bw0_p1w0) / dw1;
-					const double j_m1w0 = (Bw1_c - Bw1_m1w0) / dw0 - (Bw0_m1w0_p1w1 - Bw0_m1w0) / dw1;
-					const double j_p1w1 = (Bw1_p1w0_p1w1 - Bw1_p1w1) / dw0 - (Bw0_p2w1 - Bw0_p1w1) / dw1;
-					const double j_m1w1 = (Bw1_p1w0_m1w1 - Bw1_m1w1) / dw0 - (Bw0_c - Bw0_m1w1) / dw1;
+					const double Bw0_p1w0_m1w1 =
+					    fc_a4_B_w0(i + delta_w0[0] - delta_w1[0], j + delta_w0[1] - delta_w1[1], k + delta_w0[2] - delta_w1[2]);
+					const double Bw0_m1w0_m1w1 =
+					    fc_a4_B_w0(i - delta_w0[0] - delta_w1[0], j - delta_w0[1] - delta_w1[1], k - delta_w0[2] - delta_w1[2]);
+					// edge current j = d(B_w1)/dw0 - d(B_w0)/dw1; backward differences place j at the edge
+					const double j_c = (Bw1_c - Bw1_m1w0) / dw0 - (Bw0_c - Bw0_m1w1) / dw1;
+					const double j_p1w0 = (Bw1_p1w0 - Bw1_c) / dw0 - (Bw0_p1w0 - Bw0_p1w0_m1w1) / dw1;
+					const double j_m1w0 = (Bw1_m1w0 - Bw1_m2w0) / dw0 - (Bw0_m1w0 - Bw0_m1w0_m1w1) / dw1;
+					const double j_p1w1 = (Bw1_p1w1 - Bw1_m1w0_p1w1) / dw0 - (Bw0_p1w1 - Bw0_c) / dw1;
+					const double j_m1w1 = (Bw1_m1w1 - Bw1_m1w0_m1w1) / dw0 - (Bw0_m1w1 - Bw0_m2w1) / dw1;
 
 					// per-direction second differences of the edge current (anisotropic hyper term)
 					const double d2j_w0 = (j_p1w0 - 2.0 * j_c + j_m1w0) / (dw0 * dw0);
@@ -612,7 +612,7 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 					// anisotropic hyper resistivity: per-direction coefficient eta_d = c_hyper * v_A * dx_d^3,
 					// so each direction is damped at its own grid scale (reduces to the isotropic
 					// (dw0*dw1)^(3/2) form on cubic cells). v_A = sqrt(B^2 / rho).
-					const double v_hyper = hyper_resistivity_coeff * std::sqrt((ave_Bw0 * ave_Bw0 + ave_Bw1 * ave_Bw1) / rho);
+					const double v_hyper = (rho > 0.0) ? hyper_resistivity_coeff * std::sqrt((ave_Bw0 * ave_Bw0 + ave_Bw1 * ave_Bw1) / rho) : 0.0;
 					E2_ave(i, j, k) += v_hyper * (dw0 * dw0 * dw0 * d2j_w0 + dw1 * dw1 * dw1 * d2j_w1);
 				});
 			}
