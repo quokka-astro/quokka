@@ -2290,8 +2290,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		}
 		// first-order EMF for FOFC: donor-cell (order 1) reconstruction, mirroring the hydro FO path's
 		// ReconstructStatesConstant; the high-order EMF reconstruction is what the FO correction must escape.
-		MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, FOfaceVel, state_old_fc_tmp, FOfast_mhd_wavespeeds,
-						 1, emfAveragingScheme_, mhdPlmLimiter_, emfComputingScheme_);
+		MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, FOfaceVel, state_old_fc_tmp, FOfast_mhd_wavespeeds, 1,
+						 emfAveragingScheme_, mhdPlmLimiter_, emfComputingScheme_);
 	}
 
 	// Stage 1 of RK2-SSP
