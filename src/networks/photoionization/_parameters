@@ -1,0 +1,31 @@
+@namespace: network
+
+# Recombination switch
+recombination_switch                    int        1
+
+# Recombination is temperature dependent
+recombination_temperature_dependent     int        0
+
+# Collisional ionization switch
+collisional_ionization_switch           int        1
+
+# Heating/Cooling switch
+energy_switch                           int        1
+
+# Photoionization heating
+photoheating_switch                     int        1
+
+# KI heating
+KI_heating_switch                       int        1
+
+# Recombination cooling
+recombination_cooling_switch            int        1
+
+# KI cooling
+KI_cooling_switch                       int        1
+
+# Ion FF cooling
+ion_ff_cooling_switch                   int        1
+
+# Assume a cell with ionization fraction x has a fraction x of its volume fully ionized 
+assume_sharp_ionization_front           int        0

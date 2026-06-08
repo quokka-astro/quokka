@@ -1,0 +1,41 @@
+# Kriel et al. section 3.3 Orszag-Tang stress case.
+# Q26 EMF reconstruction, LD04 EMF averaging, PPM interpolation.
+
+# Problem size and geometry
+geometry.prob_lo = [-0.5, -0.5, -0.5]
+geometry.prob_hi = [0.5, 0.5, 0.5]
+quokka.bc = ["periodic", "periodic", "periodic"]
+
+# Verbosity
+amr.v = 0
+
+# Resolution and refinement
+amr.n_cell = [1024, 1024, 8]
+amr.max_level = 0
+
+amr.max_grid_size = 128
+amr.max_grid_size_z = 8
+amr.blocking_factor_x = 32
+amr.blocking_factor_y = 32
+amr.blocking_factor_z = 8
+
+do_reflux = 0
+do_subcycle = 0
+
+# The paper evolves to t = 1 and shows current-density slices at t = 0.5.
+plotfile_interval = -1
+checkpoint_interval = -1
+cfl = 0.2
+stop_time = 1.0
+max_timesteps = 20000
+
+hydro.rk_integrator_order = 2
+hydro.reconstruction_order = 3  # PPM
+
+# MHD parameters
+mhd.emf_compute_scheme = "Quokka2026"
+mhd.emf_averaging_scheme = "LondrilloDelZanna2004"
+mhd.emf_reconstruction_order = 5
+
+tiny_profiler.enabled = 0
+tiny_profiler.memprof_enabled = 0
