@@ -612,7 +612,8 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 					// anisotropic hyper resistivity: per-direction coefficient eta_d = c_hyper * v_A * dx_d^3,
 					// so each direction is damped at its own grid scale (reduces to the isotropic
 					// (dw0*dw1)^(3/2) form on cubic cells). v_A = sqrt(B^2 / rho).
-					const double v_hyper = (rho > 0.0) ? hyper_resistivity_coeff * std::sqrt((ave_Bw0 * ave_Bw0 + ave_Bw1 * ave_Bw1) / rho) : 0.0;
+					const double v_hyper =
+					    (rho > 0.0) ? hyper_resistivity_coeff * std::sqrt((ave_Bw0 * ave_Bw0 + ave_Bw1 * ave_Bw1) / rho) : 0.0;
 					E2_ave(i, j, k) += v_hyper * (dw0 * dw0 * dw0 * d2j_w0 + dw1 * dw1 * dw1 * d2j_w1);
 				});
 			}
