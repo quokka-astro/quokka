@@ -2288,8 +2288,6 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 			ec_emf_components_fo[idim].define(ba_ec, dm, 1, 0);
 		}
-		// first-order EMF for FOFC: donor-cell (order 1) reconstruction, mirroring the hydro FO path's
-		// ReconstructStatesConstant; the high-order EMF reconstruction is what the FO correction must escape.
 		MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, FOfaceVel, state_old_fc_tmp, FOfast_mhd_wavespeeds, 1,
 						 emfAveragingScheme_, mhdPlmLimiter_, emfComputingScheme_);
 	}
