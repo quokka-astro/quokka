@@ -233,7 +233,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	SlopeLimiter mhdPlmLimiter_ = SlopeLimiter::sweby;
 	int useDualEnergy_ = 1;			// 0 == disabled; 1 == use auxiliary internal energy equation (default)
 	int abortOnFofcFailure_ = 1;		// 0 == keep going, 1 == abort hydro advance if FOFC fails
-	amrex::Real artificialViscosityK_ = 0.;    // artificial viscosity coefficient (default == None)
+	amrex::Real artificialViscosityK_ = 0.; // artificial viscosity coefficient (default == None)
 
 	EMFComputeScheme emfComputingScheme_ = EMFComputeScheme::FelkerStone2017;
 	EMFAvgScheme emfAveragingScheme_ = EMFAvgScheme::LondrilloDelZanna2004; // method to use to average EMF at edges
@@ -2293,8 +2293,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			ec_emf_components_fo[idim].define(ba_ec, dm, 1, 0);
 		}
 		MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, FOfaceVel, state_old_fc_tmp, FOfast_mhd_wavespeeds,
-						 emfReconstructionOrder_, emfAveragingScheme_, mhdPlmLimiter_, emfComputingScheme_,
-						 hyperResistivityCoeff_, dx);
+						 emfReconstructionOrder_, emfAveragingScheme_, mhdPlmLimiter_, emfComputingScheme_, hyperResistivityCoeff_, dx);
 	}
 
 	// Stage 1 of RK2-SSP

@@ -525,24 +525,28 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 					// B_w1 samples (differenced along w0)
 					const double Bw1_c = fc_a4_B_w1(i, j, k);
-					const double Bw1_p1w0 = fc_a4_B_w1(i+delta_w0[0], j+delta_w0[1], k+delta_w0[2]);
-					const double Bw1_p2w0 = fc_a4_B_w1(i+2*delta_w0[0], j+2*delta_w0[1], k+2*delta_w0[2]);
-					const double Bw1_m1w0 = fc_a4_B_w1(i-delta_w0[0], j-delta_w0[1], k-delta_w0[2]);
-					const double Bw1_p1w1 = fc_a4_B_w1(i+delta_w1[0], j+delta_w1[1], k+delta_w1[2]);
-					const double Bw1_m1w1 = fc_a4_B_w1(i-delta_w1[0], j-delta_w1[1], k-delta_w1[2]);
-					const double Bw1_p1w0_p1w1 = fc_a4_B_w1(i+delta_w0[0]+delta_w1[0], j+delta_w0[1]+delta_w1[1], k+delta_w0[2]+delta_w1[2]);
-					const double Bw1_p1w0_m1w1 = fc_a4_B_w1(i+delta_w0[0]-delta_w1[0], j+delta_w0[1]-delta_w1[1], k+delta_w0[2]-delta_w1[2]);
+					const double Bw1_p1w0 = fc_a4_B_w1(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2]);
+					const double Bw1_p2w0 = fc_a4_B_w1(i + 2 * delta_w0[0], j + 2 * delta_w0[1], k + 2 * delta_w0[2]);
+					const double Bw1_m1w0 = fc_a4_B_w1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2]);
+					const double Bw1_p1w1 = fc_a4_B_w1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2]);
+					const double Bw1_m1w1 = fc_a4_B_w1(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2]);
+					const double Bw1_p1w0_p1w1 =
+					    fc_a4_B_w1(i + delta_w0[0] + delta_w1[0], j + delta_w0[1] + delta_w1[1], k + delta_w0[2] + delta_w1[2]);
+					const double Bw1_p1w0_m1w1 =
+					    fc_a4_B_w1(i + delta_w0[0] - delta_w1[0], j + delta_w0[1] - delta_w1[1], k + delta_w0[2] - delta_w1[2]);
 					// B_w0 samples (differenced along w1)
 					const double Bw0_c = fc_a4_B_w0(i, j, k);
-					const double Bw0_p1w1 = fc_a4_B_w0(i+delta_w1[0], j+delta_w1[1], k+delta_w1[2]);
-					const double Bw0_p2w1 = fc_a4_B_w0(i+2*delta_w1[0], j+2*delta_w1[1], k+2*delta_w1[2]);
-					const double Bw0_m1w1 = fc_a4_B_w0(i-delta_w1[0], j-delta_w1[1], k-delta_w1[2]);
-					const double Bw0_p1w0 = fc_a4_B_w0(i+delta_w0[0], j+delta_w0[1], k+delta_w0[2]);
-					const double Bw0_m1w0 = fc_a4_B_w0(i-delta_w0[0], j-delta_w0[1], k-delta_w0[2]);
-					const double Bw0_p1w0_p1w1 = fc_a4_B_w0(i+delta_w0[0]+delta_w1[0], j+delta_w0[1]+delta_w1[1], k+delta_w0[2]+delta_w1[2]);
-					const double Bw0_m1w0_p1w1 = fc_a4_B_w0(i-delta_w0[0]+delta_w1[0], j-delta_w0[1]+delta_w1[1], k-delta_w0[2]+delta_w1[2]);
+					const double Bw0_p1w1 = fc_a4_B_w0(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2]);
+					const double Bw0_p2w1 = fc_a4_B_w0(i + 2 * delta_w1[0], j + 2 * delta_w1[1], k + 2 * delta_w1[2]);
+					const double Bw0_m1w1 = fc_a4_B_w0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2]);
+					const double Bw0_p1w0 = fc_a4_B_w0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2]);
+					const double Bw0_m1w0 = fc_a4_B_w0(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2]);
+					const double Bw0_p1w0_p1w1 =
+					    fc_a4_B_w0(i + delta_w0[0] + delta_w1[0], j + delta_w0[1] + delta_w1[1], k + delta_w0[2] + delta_w1[2]);
+					const double Bw0_m1w0_p1w1 =
+					    fc_a4_B_w0(i - delta_w0[0] + delta_w1[0], j - delta_w0[1] + delta_w1[1], k - delta_w0[2] + delta_w1[2]);
 					// edge current j = d(B_w1)/dw0 - d(B_w0)/dw1, built from B samples around the edge
-					const double j_c   = (Bw1_p1w0 - Bw1_c) / dw0 - (Bw0_p1w1 - Bw0_c) / dw1;
+					const double j_c = (Bw1_p1w0 - Bw1_c) / dw0 - (Bw0_p1w1 - Bw0_c) / dw1;
 					const double j_p1w0 = (Bw1_p2w0 - Bw1_p1w0) / dw0 - (Bw0_p1w0_p1w1 - Bw0_p1w0) / dw1;
 					const double j_m1w0 = (Bw1_c - Bw1_m1w0) / dw0 - (Bw0_m1w0_p1w1 - Bw0_m1w0) / dw1;
 					const double j_p1w1 = (Bw1_p1w0_p1w1 - Bw1_p1w1) / dw0 - (Bw0_p2w1 - Bw0_p1w1) / dw1;
@@ -562,10 +566,10 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 					// density averaged from the four cell-centred cells sharing this edge (cc -> edge).
 					// the edge (i,j,k) is nodal in the two perpendicular directions; the four cells that
 					// share it are (i,j,k) and its neighbours one cell back along w0, w1, and w0+w1.
-					const double rho = 0.25 * (cc_a4_rho(i, j, k) +
-								   cc_a4_rho(i-delta_w0[0], j-delta_w0[1], k-delta_w0[2]) +
-								   cc_a4_rho(i-delta_w1[0], j-delta_w1[1], k-delta_w1[2]) +
-								   cc_a4_rho(i-delta_w0[0]-delta_w1[0], j-delta_w0[1]-delta_w1[1], k-delta_w0[2]-delta_w1[2]));
+					const double rho =
+					    0.25 * (cc_a4_rho(i, j, k) + cc_a4_rho(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2]) +
+						    cc_a4_rho(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2]) +
+						    cc_a4_rho(i - delta_w0[0] - delta_w1[0], j - delta_w0[1] - delta_w1[1], k - delta_w0[2] - delta_w1[2]));
 					// anisotropic hyper resistivity: per-direction coefficient eta_d = c_hyper * v_A * dx_d^3,
 					// so each direction is damped at its own grid scale (reduces to the isotropic
 					// (dw0*dw1)^(3/2) form on cubic cells). v_A = sqrt(B^2 / rho).

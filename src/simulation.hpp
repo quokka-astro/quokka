@@ -1269,7 +1269,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 
 	// compute timestep based on hyper-resistivity (4th-order biharmonic EMF diffusion)
 	amrex::ValLocPair<amrex::Real, amrex::IntVect> hyper_resistivity_dt{.value = std::numeric_limits<amrex::Real>::max(),
-									   .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
+									    .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
 	if (hyperResistivityCoeff_ > 0.0) {
 		// Anisotropic hyper resistivity: per-direction coefficient eta_d = c_hyper * v_A * dx_d^3
 		// [see MHDSystem::ComputeEMF_Quokka2026]. The stiffest biharmonic symbol of the discrete operator
