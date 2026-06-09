@@ -147,8 +147,7 @@ struct RadSystem_Has_Opacity_Model<problem_t, std::void_t<decltype(RadSystem_Tra
 template <typename problem_t, typename = void> struct RadSystem_Has_ChemBands : std::false_type {
 };
 
-template <typename problem_t>
-struct RadSystem_Has_ChemBands<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::ChemBands())>> : std::true_type {
+template <typename problem_t> struct RadSystem_Has_ChemBands<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::ChemBands())>> : std::true_type {
 };
 
 // Get NChemBands (number of chemistry frequency bands) from RadSystem_Traits<problem_t>.
@@ -157,8 +156,7 @@ template <typename problem_t, typename = void> struct RadSystem_NChemBands {
 	static constexpr int value = 0;
 };
 
-template <typename problem_t>
-struct RadSystem_NChemBands<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::ChemBands())>> {
+template <typename problem_t> struct RadSystem_NChemBands<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::ChemBands())>> {
 	static constexpr int value = static_cast<int>(decltype(RadSystem_Traits<problem_t>::ChemBands())::size()) - 1;
 };
 

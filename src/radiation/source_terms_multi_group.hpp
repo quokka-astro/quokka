@@ -643,8 +643,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 			// The last NChemBands groups are ionizing photon groups; do not apply cscale.
 			// All other (thermal) groups require scaling by chat/c (= 1/cscale).
 			if constexpr (NChemBands > 0) {
-				Src[g] = (g >= nGroups_ - NChemBands) ? dt * radEnergySource(i, j, k, g)
-								       : dt * (chat / c * radEnergySource(i, j, k, g));
+				Src[g] = (g >= nGroups_ - NChemBands) ? dt * radEnergySource(i, j, k, g) : dt * (chat / c * radEnergySource(i, j, k, g));
 			} else {
 				Src[g] = dt * (chat / c * radEnergySource(i, j, k, g));
 			}
