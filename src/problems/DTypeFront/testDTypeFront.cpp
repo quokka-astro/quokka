@@ -446,7 +446,16 @@ auto problem_main() -> int
 
 		for (amrex::MFIter mfi(state_mf); mfi.isValid(); ++mfi) {
 			const amrex::Box &box = mfi.validbox();
-			const auto state = state_mf.const_array(mfi);
+			// In GPU builds, MultiFab data resides on device; copy to pinned host memory before CPU access.
+#if defined(AMREX_USE_GPU)
+			amrex::FArrayBox host_fab(box, state_mf.nComp(), amrex::The_Pinned_Arena());
+			static_cast<void>(state_mf[mfi].template copyToMem<amrex::RunOn::Device>(box, 0, state_mf.nComp(), host_fab.dataPtr()));
+			amrex::Gpu::synchronize();
+#else
+			amrex::FArrayBox host_fab(box, state_mf.nComp());
+			static_cast<void>(state_mf[mfi].template copyToMem<amrex::RunOn::Host>(box, 0, state_mf.nComp(), host_fab.dataPtr()));
+#endif
+			const auto state = host_fab.const_array();
 
 			amrex::LoopOnCpu(box, [&](int i, int j, int k) noexcept {
 				const amrex::Real rho = state(i, j, k, HydroSystem<DTypeFront>::density_index);
