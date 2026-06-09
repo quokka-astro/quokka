@@ -638,8 +638,16 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		// plus advection source term (for well-balanced/SDC integrators)
 		// Note that radEnergySource should contain the luminosity volume density, L / V; unit: erg s^-1 cm^-3
 		quokka::valarray<double, nGroups_> Src;
+		constexpr int NChemBands = RadSystem_NChemBands<problem_t>::value;
 		for (int g = 0; g < nGroups_; ++g) {
-			Src[g] = dt * (chat / c * radEnergySource(i, j, k, g));
+			// The last NChemBands groups are ionizing photon groups; do not apply cscale.
+			// All other (thermal) groups require scaling by chat/c (= 1/cscale).
+			if constexpr (NChemBands > 0) {
+				Src[g] = (g >= nGroups_ - NChemBands) ? dt * radEnergySource(i, j, k, g)
+								       : dt * (chat / c * radEnergySource(i, j, k, g));
+			} else {
+				Src[g] = dt * (chat / c * radEnergySource(i, j, k, g));
+			}
 		}
 
 		double Egas0 = NAN;
