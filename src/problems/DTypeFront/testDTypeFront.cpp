@@ -73,7 +73,6 @@ template <> struct SimulationData<DTypeFront> {
 	amrex::Real primary_species_2{};
 	amrex::Real primary_species_3{};
 	amrex::Real Q{};
-	amrex::Real tend{};
 	int recombination_switch{};
 	amrex::Vector<amrex::Real> t_vec_;
 	amrex::Vector<amrex::Real> r_effective_vec_;
@@ -268,7 +267,6 @@ template <> void QuokkaSimulation<DTypeFront>::preCalculateInitialConditions()
 	userData_.small_temp = 1e-2;
 	userData_.small_dens = 1e-60;
 	userData_.temperature = 1.0e4;
-	userData_.tend = 1000.0_rt;
 	userData_.primary_species_1 = 0.0e0_rt;
 	userData_.primary_species_2 = 1.0e2_rt;
 	userData_.primary_species_3 = 0.0e0_rt;
@@ -276,7 +274,6 @@ template <> void QuokkaSimulation<DTypeFront>::preCalculateInitialConditions()
 	pp.query("small_temp", userData_.small_temp);
 	pp.query("small_dens", userData_.small_dens);
 	pp.query("temperature", userData_.temperature);
-	pp.query("tend", userData_.tend);
 	pp.query("primary_species_1", userData_.primary_species_1);
 	pp.query("primary_species_2", userData_.primary_species_2);
 	pp.query("primary_species_3", userData_.primary_species_3);
@@ -394,18 +391,15 @@ auto problem_main() -> int
 	// Problem parameters
 	const double CFL_number = 0.3;
 	const double dt_max = 1e99;
-	const int max_timesteps = 5000000;
 
 	// Problem initialization
 	QuokkaSimulation<DTypeFront> sim;
 
 	// initialize
 	sim.setInitialConditions();
-	sim.stopTime_ = sim.userData_.tend;
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.radiationCflNumber_ = CFL_number;
 	sim.maxDt_ = dt_max;
-	sim.maxTimesteps_ = max_timesteps;
 	sim.plotfileInterval_ = -1;
 
 	int status = 0;
