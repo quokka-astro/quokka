@@ -39,16 +39,16 @@ plt.rcParams.update({
 
 
 MU_CASES = (
-    ("mu0", r"$\mu=0$"),
-    ("mu0p01", r"$\mu=0.01$"),
-    ("mu0p1", r"$\mu=0.1$"),
-    ("mu1", r"$\mu=1$"),
+    ("mu0", r"$\epsilon=0$"),
+    ("mu0p01", r"$\epsilon=0.01$"),
+    ("mu0p1", r"$\epsilon=0.1$"),
+    ("mu1", r"$\epsilon=1$"),
 )
 
 OMEGA_CASES = (
-    ("omega_high", r"$-\omega_L/\Omega_{\rm AW}=10$"),
-    ("omega_resonant", r"$-\omega_L/\Omega_{\rm AW}=1$"),
-    ("omega_low", r"$-\omega_L/\Omega_{\rm AW}=0.1$"),
+    ("omega_high", r"$-\Omega_L/\Omega_{\rm AW}=10$"),
+    ("omega_resonant", r"$-\Omega_L/\Omega_{\rm AW}=1$"),
+    ("omega_low", r"$-\Omega_L/\Omega_{\rm AW}=0.1$"),
 )
 
 
@@ -116,7 +116,14 @@ def plot_particle_history_panel(ax, history: dict[str, list[float]], dense_histo
     ax.set_xlim(0.0, 5.0)
 
 
-def make_figure(data_dir: Path, output_dir: Path, sweep: str, cases: tuple[tuple[str, str], ...], filename: str) -> Path:
+def make_figure(
+    data_dir: Path,
+    output_dir: Path,
+    sweep: str,
+    cases: tuple[tuple[str, str], ...],
+    filename: str,
+    y_limits: tuple[float, float] | None = None,
+) -> Path:
     require_files(data_dir, sweep, cases)
 
     fig, axes = plt.subplots(2, len(cases), figsize=(4.0 * len(cases), 7.0), sharex="row")
@@ -130,6 +137,9 @@ def make_figure(data_dir: Path, output_dir: Path, sweep: str, cases: tuple[tuple
         plot_profile_panel(axes[0, column], profile, title)
         plot_history_panel(axes[1, column], history)
         axes[1, column].set_xlabel(r"$t$")
+        if y_limits is not None:
+            axes[0, column].set_ylim(*y_limits)
+            axes[1, column].set_ylim(*y_limits)
 
     axes[0, 0].set_ylabel(r"$x$ velocity at $t=5$")
     axes[1, 0].set_ylabel(r"$v_{d,x}$")
@@ -141,7 +151,14 @@ def make_figure(data_dir: Path, output_dir: Path, sweep: str, cases: tuple[tuple
     return output_path
 
 
-def make_particle_figure(data_dir: Path, output_dir: Path, sweep: str, cases: tuple[tuple[str, str], ...], filename: str) -> Path:
+def make_particle_figure(
+    data_dir: Path,
+    output_dir: Path,
+    sweep: str,
+    cases: tuple[tuple[str, str], ...],
+    filename: str,
+    y_limits: tuple[float, float] | None = None,
+) -> Path:
     require_particle_files(data_dir, sweep, cases)
 
     fig, axes = plt.subplots(2, len(cases), figsize=(4.0 * len(cases), 7.0), sharex="row")
@@ -156,6 +173,9 @@ def make_particle_figure(data_dir: Path, output_dir: Path, sweep: str, cases: tu
         plot_particle_profile_panel(axes[0, column], profile, title)
         plot_particle_history_panel(axes[1, column], history, dense_history)
         axes[1, column].set_xlabel(r"$t$")
+        if y_limits is not None:
+            axes[0, column].set_ylim(*y_limits)
+            axes[1, column].set_ylim(*y_limits)
 
     axes[0, 0].set_ylabel(r"tracer $x$ velocity at $t=5$")
     axes[1, 0].set_ylabel(r"$v_{d,x}$")
@@ -182,9 +202,9 @@ def main() -> int:
 
     outputs = [
         make_figure(data_dir, output_dir, "mu", MU_CASES, "dusty_alfven_mu.pdf"),
-        make_figure(data_dir, output_dir, "omega", OMEGA_CASES, "dusty_alfven_omega.pdf"),
+        make_figure(data_dir, output_dir, "omega", OMEGA_CASES, "dusty_alfven_omega.pdf", y_limits=(-0.5, 0.5)),
         make_particle_figure(data_dir, output_dir, "mu", MU_CASES, "dusty_alfven_mu_paper_like.pdf"),
-        make_particle_figure(data_dir, output_dir, "omega", OMEGA_CASES, "dusty_alfven_omega_paper_like.pdf"),
+        make_particle_figure(data_dir, output_dir, "omega", OMEGA_CASES, "dusty_alfven_omega_paper_like.pdf", y_limits=(-0.5, 0.5)),
     ]
     for output in outputs:
         print(output)
