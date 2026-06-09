@@ -22,7 +22,7 @@ do_subcycle = 0
 suppress_output = 0
 
 max_timesteps = 10000
-t_stop = 2.9e12
+stop_time = 2.9e12
 
 stromgen.primary_species_1 = 1.0e-10
 stromgen.primary_species_2 = 139.9
