@@ -143,6 +143,23 @@ template <typename problem_t>
 struct RadSystem_Has_Opacity_Model<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::opacity_model)>> : std::true_type {
 };
 
+// Use SFINAE to check if ChemBands() is defined in RadSystem_Traits<problem_t> (indicates photoionization group)
+template <typename problem_t, typename = void> struct RadSystem_Has_ChemBands : std::false_type {
+};
+
+template <typename problem_t> struct RadSystem_Has_ChemBands<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::ChemBands())>> : std::true_type {
+};
+
+// Get NChemBands (number of chemistry frequency bands) from RadSystem_Traits<problem_t>.
+// Returns 0 if ChemBands() is not defined (no photoionization groups).
+template <typename problem_t, typename = void> struct RadSystem_NChemBands {
+	static constexpr int value = 0;
+};
+
+template <typename problem_t> struct RadSystem_NChemBands<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::ChemBands())>> {
+	static constexpr int value = static_cast<int>(decltype(RadSystem_Traits<problem_t>::ChemBands())::size()) - 1;
+};
+
 /// Class for the radiation moment equations
 ///
 template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_t>
@@ -239,6 +256,10 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	// Assertion: PPL_opacity_full_spectrum requires at least 3 photon groups
 	static_assert(!(nGroups_ < 3 && opacity_model_ == OpacityModel::PPL_opacity_full_spectrum), // NOLINT
 		      "PPL_opacity_full_spectrum requires at least 3 photon groups.");
+
+	// Assertion: mixed thermal+chemical band configurations are untested
+	static_assert(RadSystem_NChemBands<problem_t>::value == 0 || RadSystem_NChemBands<problem_t>::value == nGroups_,
+		      "Mixed thermal and chemical radiation bands are not supported.");
 
 	static constexpr double mean_molecular_mass_ = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
 	static constexpr double gamma_ = quokka::EOS_Traits<problem_t>::gamma;

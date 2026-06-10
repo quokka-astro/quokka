@@ -4,7 +4,7 @@
 recombination_switch                    int        1
 
 # Recombination is temperature dependent
-recombination_temperature_dependent     int        0
+recombination_temperature_dependent     int        1
 
 # Collisional ionization switch
 collisional_ionization_switch           int        1
@@ -27,5 +27,7 @@ KI_cooling_switch                       int        1
 # Ion FF cooling
 ion_ff_cooling_switch                   int        1
 
-# Assume a cell with ionization fraction x has a fraction x of its volume fully ionized 
-assume_sharp_ionization_front           int        0
+# Switch off cooling in mixed cells
+allow_mixed_cell_cooling                int        1
+mixed_cell_lb                           real       0.01
+mixed_cell_ub                           real       0.99

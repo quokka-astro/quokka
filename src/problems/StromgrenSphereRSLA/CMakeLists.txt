@@ -1,4 +1,4 @@
-if(AMReX_SPACEDIM EQUAL 3)
+if(AMReX_SPACEDIM GREATER_EQUAL 2)
   set(microphysics_network_name "photoionization") # this will override
                                                   # network_name to
                                                   # photoionization for this
@@ -13,7 +13,7 @@ if(AMReX_SPACEDIM EQUAL 3)
     BEFORE ${photoionization_dirs} "${CMAKE_CURRENT_BINARY_DIR}/"
     "includes/extern_parameters.H" "includes/network_properties.H")
 
-  set(JOB_NAME StromgrenSphere)
+  set(JOB_NAME StromgrenSphereRSLA)
 
   # Number of species
   set(NSPEC 3)
@@ -87,16 +87,15 @@ if(AMReX_SPACEDIM EQUAL 3)
 
 
   add_executable(
-    ${JOB_NAME} testStromgrenSphere.cpp "${QuokkaSourcesNoEOS}"
+    ${JOB_NAME} testStromgrenSphereRSLA.cpp "${QuokkaSourcesNoEOS}"
                 ../../radiation/photochemistry.cpp ${photoionization_sources})
 
-  # this will add #define PHOTOCHEMISTRY
+  # this will add #define CHEMISTRY
   target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY)
 
   if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(${JOB_NAME})
   endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-  add_test(NAME StromgrenSphereNoRecombination COMMAND ${JOB_NAME} ../inputs/StromgrenNoRecombination.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-  add_test(NAME StromgrenSphereTempIndependentRecombination COMMAND ${JOB_NAME} ../inputs/StromgrenTempIndependentRecombination.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(NAME StromgrenSphereRSLA COMMAND ${JOB_NAME} ../inputs/StromgrenRSLA.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()
