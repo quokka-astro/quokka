@@ -38,6 +38,12 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 	auto dt_stage = dt / static_cast<Real>(stage);
 	auto energy_update_factor = static_cast<Real>(stage);
 
+	const int firstChemIndex = RadSystem<problem_t>::radEnergy_index +
+				   RadSystem<problem_t>::numRadVars_ * (RadSystem<problem_t>::nGroups_ - RadSystem_NChemBands<problem_t>::value);
+	const int firstChemFxIndex = firstChemIndex + 1;
+	const int firstChemFyIndex = firstChemFxIndex + 1;
+	const int firstChemFzIndex = firstChemFyIndex + 1;
+
 	const BL_PROFILE("PhotoChemistry::computePhotoChemistry()");
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -62,8 +68,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 			for (int nn = 0; nn < NumChemBands; ++nn) {
 				quanta_energy = RadSystem<problem_t>::GetChemBandQuanta(nn);
 				photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] =
-				    state(i, j, k, RadSystem<problem_t>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * nn) / quanta_energy;
-				// // TODO(james471): Add check for isotropy
+				    state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) / quanta_energy;
 				photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn] = 1.0_rt;
 			}
 			photochemstate.rho = rho;
@@ -116,17 +121,17 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 			}
 			for (int nn = 0; nn < NumChemBands; ++nn) {
 				quanta_energy = RadSystem<problem_t>::GetChemBandQuanta(nn);
-				state(i, j, k, RadSystem<problem_t>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * nn) =
+				state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) =
 				    photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] * quanta_energy;
-				state(i, j, k, RadSystem<problem_t>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * nn) =
+				state(i, j, k, firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn) =
 				    photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn] *
-				    state(i, j, k, RadSystem<problem_t>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * nn);
-				state(i, j, k, RadSystem<problem_t>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * nn) =
+				    state(i, j, k, firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn);
+				state(i, j, k, firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn) =
 				    photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn] *
-				    state(i, j, k, RadSystem<problem_t>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * nn);
-				state(i, j, k, RadSystem<problem_t>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * nn) =
+				    state(i, j, k, firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn);
+				state(i, j, k, firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn) =
 				    photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn] *
-				    state(i, j, k, RadSystem<problem_t>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * nn);
+				    state(i, j, k, firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn);
 			}
 			// Quokka uses rho*eint
 			const Real dEint = (photochemstate.e * photochemstate.rho) - Eint;
