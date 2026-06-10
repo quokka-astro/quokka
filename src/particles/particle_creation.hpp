@@ -3,6 +3,7 @@
 
 #include "AMReX_BLProfiler.H"
 #include "AMReX_BLassert.H"
+#include "AMReX_ParmParse.H"
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "particle_types.hpp"
@@ -383,6 +384,43 @@ template <> struct ParticleCreationTraits<ParticleType::Sink> {
 				    int death_time_index = -1, int mass_at_birth_index = -1,
 				    std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc = nullptr, int verbose = 0)
 	{
+		const BL_PROFILE("ParticleCreationTraits<Sink>::createParticles()");
+
+		if (container == nullptr) {
+			return;
+		}
+
+		// Read the configured highest AMR level from the input file:
+		//
+		//     amr.max_level = 2
+		//
+		// This is different from the currently existing finest level.
+		// We intentionally use amr.max_level here because we do NOT want sink particles
+		// to form on level 0 just because level 0 is currently the finest existing level.
+		static const int sink_creation_level = []() {
+			int max_level_from_input = 0;
+
+			amrex::ParmParse pp_amr("amr");
+			pp_amr.query("max_level", max_level_from_input);
+
+			// Optional override:
+			//
+			//     sink.creation_level = 2
+			//
+			// If this parameter is absent, sink particles are created only on amr.max_level.
+			int level = max_level_from_input;
+			amrex::ParmParse pp_sink("sink");
+			pp_sink.query("creation_level", level);
+
+			return level;
+		}();
+
+		// Only allow sink particle creation on the chosen highest level.
+		// For example, if amr.max_level = 2, then lev = 0 and lev = 1 return immediately.
+		if (lev != sink_creation_level) {
+			return;
+		}
+
 		// Use the common implementation with our checker and creator types
 		ParticleCreationImpl::createParticlesImpl<problem_t, ContainerType, ParticleCreationTraits<ParticleType::Sink>::template ParticleChecker,
 							  ParticleCreationTraits<ParticleType::Sink>::template ParticleCreator>(
