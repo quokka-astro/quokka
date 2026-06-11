@@ -39,7 +39,18 @@ integrator.subtract_internal_energy = 0
 integrator.X_reject_buffer = 1e100
 integrator.ode_max_steps = 50000
 
+integrator.atol_spec = 1e-7
+integrator.atol_rad_num = 1e-7
+integrator.atol_rad_flux = 1e-8
+integrator.atol_enuc = 1e+4
+
+integrator.rtol_spec = 1e-2
+integrator.rtol_rad_num = 1e-2
+integrator.rtol_rad_flux = 1e-2
+integrator.rtol_enuc = 1e-2
+
 plotfile_interval = 1000000
 plotfile_prefix = "DType"
 
 network.allow_mixed_cell_cooling = 0
+network.small_x = 1e-10
