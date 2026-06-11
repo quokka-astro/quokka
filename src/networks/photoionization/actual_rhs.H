@@ -31,7 +31,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_recombination_coefficient(Real T) ->
 	if (recombination_temperature_dependent == 0) {
 		return 2.6e-13_rt;
 	}
-	return 2.6e-13 * (1.0 + recombination_temperature_dependent * (std::pow(T / 1.0e4, -0.7) - 1.0));
+	return 2.6e-13 * (1.0 + std::pow(T / 1.0e4, -0.7) - 1.0);
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto dRecombination_coefficient_dT(Real T) -> Real
@@ -111,14 +111,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 	}
 
 	const amrex::Real photoionization_term = chat_sigma_photo * n_HI * n_gamma;
-	amrex::Real collisional_ionization_term = 0.0_rt;
-	if (collisional_ionization_switch != 0) {
-		collisional_ionization_term = n_e * n_HI * get_collisional_ionization_coefficient(state.T);
-	}
-	amrex::Real recombination_term = 0.0_rt;
-	if (recombination_switch != 0) {
-		recombination_term = get_recombination_coefficient(state.T) * n_e * n_HII;
-	}
+	amrex::Real collisional_ionization_term = (collisional_ionization_switch != 0) ? n_e * n_HI * get_collisional_ionization_coefficient(state.T) : 0.0_rt;
+	amrex::Real recombination_term = (recombination_switch != 0) ? get_recombination_coefficient(state.T) * n_e * n_HII : 0.0_rt;
 
 	ydot(1) = photoionization_term + collisional_ionization_term - recombination_term;
 	ydot(2) = -ydot(1);
@@ -168,24 +162,12 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 
 	const amrex::Real Gamma_photo = ((energy_switch != 0) && (photoheating_switch != 0)) ? get_ionization_heating_coefficient(state.T) : 0.0_rt;
 	const amrex::Real Gamma_KI = ((energy_switch != 0) && (KI_heating_switch != 0)) ? get_KI_heating_coefficient(state.T) : 0.0_rt;
-	amrex::Real Lambda_KI = 0.0_rt;
-	amrex::Real d_Lambda_KI_dT = 0.0_rt;
-	if ((energy_switch != 0) && (KI_cooling_switch != 0)) {
-		Lambda_KI = get_KI_cooling_coefficient(state.T);
-		d_Lambda_KI_dT = dKI_cooling_coefficient_dT(state.T);
-	}
-	amrex::Real Lambda_rec = 0.0_rt;
-	amrex::Real d_Lambda_rec_dT = 0.0_rt;
-	if ((energy_switch != 0) && (recombination_cooling_switch != 0)) {
-		Lambda_rec = get_recombination_cooling_coefficient(state.T);
-		d_Lambda_rec_dT = dRecombination_cooling_coefficient_dT(state.T);
-	}
-	amrex::Real Lambda_ion_ff = 0.0_rt;
-	amrex::Real d_Lambda_ion_ff_dT = 0.0_rt;
-	if ((energy_switch != 0) && (ion_ff_cooling_switch != 0)) {
-		Lambda_ion_ff = get_ion_ff_cooling_coefficient(state.T);
-		d_Lambda_ion_ff_dT = d_ion_ff_cooling_coefficient_dT(state.T);
-	}
+	const amrex::Real Lambda_KI = ((energy_switch != 0) && (KI_cooling_switch != 0)) ? get_KI_cooling_coefficient(state.T) : 0.0_rt;
+	const amrex::Real d_Lambda_KI_dT = ((energy_switch != 0) && (KI_cooling_switch != 0)) ? dKI_cooling_coefficient_dT(state.T) : 0.0_rt;
+	const amrex::Real Lambda_rec = ((energy_switch != 0) && (recombination_cooling_switch != 0)) ? get_recombination_cooling_coefficient(state.T) : 0.0_rt;
+	const amrex::Real d_Lambda_rec_dT = ((energy_switch != 0) && (recombination_cooling_switch != 0)) ? dRecombination_cooling_coefficient_dT(state.T) : 0.0_rt;
+	const amrex::Real Lambda_ion_ff = ((energy_switch != 0) && (ion_ff_cooling_switch != 0)) ? get_ion_ff_cooling_coefficient(state.T) : 0.0_rt;
+	const amrex::Real d_Lambda_ion_ff_dT = ((energy_switch != 0) && (ion_ff_cooling_switch != 0)) ? d_ion_ff_cooling_coefficient_dT(state.T) : 0.0_rt;
 
 	const amrex::Real n_e = state.xn[0];
 	const amrex::Real n_HI = state.xn[1];
