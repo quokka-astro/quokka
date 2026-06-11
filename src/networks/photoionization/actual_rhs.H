@@ -111,7 +111,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 	}
 
 	const amrex::Real photoionization_term = chat_sigma_photo * n_HI * n_gamma;
-	const amrex::Real collisional_ionization_term = (collisional_ionization_switch != 0) ? n_e * n_HI * get_collisional_ionization_coefficient(state.T) : 0.0_rt;
+	const amrex::Real collisional_ionization_term =
+	    (collisional_ionization_switch != 0) ? n_e * n_HI * get_collisional_ionization_coefficient(state.T) : 0.0_rt;
 	const amrex::Real recombination_term = (recombination_switch != 0) ? get_recombination_coefficient(state.T) * n_e * n_HII : 0.0_rt;
 
 	ydot(1) = photoionization_term + collisional_ionization_term - recombination_term;
