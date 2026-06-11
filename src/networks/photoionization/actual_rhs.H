@@ -28,7 +28,10 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_photoionization_coefficient(Real T) 
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_recombination_coefficient(Real T) -> Real
 {
-	return 2.6e-13 * (1.0 + recombination_temperature_dependent * (std::pow(T / 1.0e4, -0.7) - 1.0));
+	if (recombination_temperature_dependent == 0) {
+		return 2.6e-13_rt;
+	}
+	return 2.6e-13 * (1.0 + std::pow(T / 1.0e4, -0.7) - 1.0);
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto dRecombination_coefficient_dT(Real T) -> Real
@@ -91,99 +94,111 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto d_ion_ff_cooling_coefficient_dT(Real T) 
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Array1D<Real, 1, INT_NEQS> &ydot)
 {
-	amrex::Real sigma_photo = get_photoionization_coefficient(state.T);
-	amrex::Real sigma_coll = get_collisional_ionization_coefficient(state.T);
-	amrex::Real alpha_rec = get_recombination_coefficient(state.T);
+	const amrex::Real sigma_photo = get_photoionization_coefficient(state.T);
+	const amrex::Real chat_sigma_photo = state.c_hat * sigma_photo;
 
-	amrex::Real Gamma_photo = get_ionization_heating_coefficient(state.T);
-	amrex::Real Gamma_KI = get_KI_heating_coefficient(state.T);
-	amrex::Real Lambda_KI = get_KI_cooling_coefficient(state.T);
-	amrex::Real Lambda_rec = get_recombination_cooling_coefficient(state.T);
-	amrex::Real Lambda_ion_ff = get_ion_ff_cooling_coefficient(state.T);
-
-	amrex::Real c = C::c_light;
-	amrex::Real chat = state.c_hat;
-	amrex::Real frac = chat / c;
-
-	amrex::Real n_e = state.xn[0];
-	amrex::Real n_HI = state.xn[1];
-	amrex::Real n_HII = state.xn[2];
-	amrex::Real n_gamma = state.rn[0];
-	amrex::Real n_gamma_flux = state.rn[1];
+	const amrex::Real n_e = state.xn[0];
+	const amrex::Real n_HI = state.xn[1];
+	const amrex::Real n_HII = state.xn[2];
+	const amrex::Real n_gamma = state.rn[0];
+	const amrex::Real n_gamma_flux = state.rn[1];
 
 	int molecular_process_switch = 1;
 	const amrex::Real n_H_total = n_HI + n_HII;
-	amrex::Real xHII = (n_H_total > 0.0_rt) ? (n_HII / n_H_total) : 0.0_rt;
+	const amrex::Real xHII = (n_H_total > 0.0_rt) ? (n_HII / n_H_total) : 0.0_rt;
 	if ((allow_mixed_cell_cooling == 0) && (xHII > mixed_cell_lb) && (xHII < mixed_cell_ub)) {
 		molecular_process_switch = 0;
 	}
 
-	amrex::Real photoionization_term = c * sigma_photo * n_HI * n_gamma;
-	amrex::Real collisional_ionization_term = collisional_ionization_switch * n_e * n_HI * sigma_coll;
-	amrex::Real recombination_term = recombination_switch * alpha_rec * n_e * n_HII;
-	amrex::Real photoionization_heating = photoheating_switch * Gamma_photo * photoionization_term;
-	amrex::Real KI_heating = molecular_process_switch * KI_heating_switch * Gamma_KI * n_HI;
-	amrex::Real KI_cooling = molecular_process_switch * KI_cooling_switch * Lambda_KI * n_HI * n_HI;
-	amrex::Real recombination_cooling = recombination_cooling_switch * Lambda_rec * n_e * n_HII;
-	amrex::Real ion_ff_cooling = ion_ff_cooling_switch * Lambda_ion_ff * n_e * n_HII;
+	const amrex::Real photoionization_term = chat_sigma_photo * n_HI * n_gamma;
+	const amrex::Real collisional_ionization_term =
+	    (collisional_ionization_switch != 0) ? n_e * n_HI * get_collisional_ionization_coefficient(state.T) : 0.0_rt;
+	const amrex::Real recombination_term = (recombination_switch != 0) ? get_recombination_coefficient(state.T) * n_e * n_HII : 0.0_rt;
 
-	ydot(1) = photoionization_term * frac + collisional_ionization_term - recombination_term;
+	ydot(1) = photoionization_term + collisional_ionization_term - recombination_term;
 	ydot(2) = -ydot(1);
 	ydot(3) = ydot(1);
-	ydot(net_ienuc) = energy_switch * (photoionization_heating * frac + KI_heating - recombination_cooling - KI_cooling - ion_ff_cooling) / state.rho;
-	ydot(5) = -photoionization_term * frac;
-	ydot(6) = -n_HI * c * sigma_photo * n_gamma_flux * frac;
+	ydot(net_ienuc) = 0.0_rt;
+	if (energy_switch != 0) {
+		amrex::Real energy_source = 0.0_rt;
+		if (photoheating_switch != 0) {
+			energy_source += get_ionization_heating_coefficient(state.T) * photoionization_term;
+		}
+		if (molecular_process_switch != 0) {
+			if (KI_heating_switch != 0) {
+				energy_source += get_KI_heating_coefficient(state.T) * n_HI;
+			}
+			if (KI_cooling_switch != 0) {
+				energy_source -= get_KI_cooling_coefficient(state.T) * n_HI * n_HI;
+			}
+		}
+		if (recombination_cooling_switch != 0) {
+			energy_source -= get_recombination_cooling_coefficient(state.T) * n_e * n_HII;
+		}
+		if (ion_ff_cooling_switch != 0) {
+			energy_source -= get_ion_ff_cooling_coefficient(state.T) * n_e * n_HII;
+		}
+		ydot(net_ienuc) = energy_source / state.rho;
+	}
+	ydot(5) = -photoionization_term;
+	ydot(6) = -chat_sigma_photo * n_HI * n_gamma_flux;
 }
 
 template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_jac(const burn_t &state, MatrixType &jac)
 {
-	amrex::Real sigma_photo = get_photoionization_coefficient(state.T);
-	amrex::Real sigma_coll = get_collisional_ionization_coefficient(state.T);
-	amrex::Real d_sigma_coll_dT = dCollisional_ionization_coefficient_dT(state.T);
-	amrex::Real alpha_rec = get_recombination_coefficient(state.T);
-	amrex::Real d_alpha_rec_dT = dRecombination_coefficient_dT(state.T);
+	const amrex::Real sigma_photo = get_photoionization_coefficient(state.T);
+	const amrex::Real chat_sigma_photo = state.c_hat * sigma_photo;
+	amrex::Real sigma_coll = 0.0_rt;
+	amrex::Real d_sigma_coll_dT = 0.0_rt;
+	if (collisional_ionization_switch != 0) {
+		sigma_coll = get_collisional_ionization_coefficient(state.T);
+		d_sigma_coll_dT = dCollisional_ionization_coefficient_dT(state.T);
+	}
+	amrex::Real alpha_rec = 0.0_rt;
+	amrex::Real d_alpha_rec_dT = 0.0_rt;
+	if (recombination_switch != 0) {
+		alpha_rec = get_recombination_coefficient(state.T);
+		d_alpha_rec_dT = dRecombination_coefficient_dT(state.T);
+	}
 
-	amrex::Real Gamma_photo = get_ionization_heating_coefficient(state.T);
-	amrex::Real Gamma_KI = get_KI_heating_coefficient(state.T);
-	amrex::Real Lambda_KI = get_KI_cooling_coefficient(state.T);
-	amrex::Real d_Lambda_KI_dT = dKI_cooling_coefficient_dT(state.T);
-	amrex::Real Lambda_rec = get_recombination_cooling_coefficient(state.T);
-	amrex::Real d_Lambda_rec_dT = dRecombination_cooling_coefficient_dT(state.T);
-	amrex::Real Lambda_ion_ff = get_ion_ff_cooling_coefficient(state.T);
-	amrex::Real d_Lambda_ion_ff_dT = d_ion_ff_cooling_coefficient_dT(state.T);
+	const amrex::Real Gamma_photo = ((energy_switch != 0) && (photoheating_switch != 0)) ? get_ionization_heating_coefficient(state.T) : 0.0_rt;
+	const amrex::Real Gamma_KI = ((energy_switch != 0) && (KI_heating_switch != 0)) ? get_KI_heating_coefficient(state.T) : 0.0_rt;
+	const amrex::Real Lambda_KI = ((energy_switch != 0) && (KI_cooling_switch != 0)) ? get_KI_cooling_coefficient(state.T) : 0.0_rt;
+	const amrex::Real d_Lambda_KI_dT = ((energy_switch != 0) && (KI_cooling_switch != 0)) ? dKI_cooling_coefficient_dT(state.T) : 0.0_rt;
+	const amrex::Real Lambda_rec = ((energy_switch != 0) && (recombination_cooling_switch != 0)) ? get_recombination_cooling_coefficient(state.T) : 0.0_rt;
+	const amrex::Real d_Lambda_rec_dT =
+	    ((energy_switch != 0) && (recombination_cooling_switch != 0)) ? dRecombination_cooling_coefficient_dT(state.T) : 0.0_rt;
+	const amrex::Real Lambda_ion_ff = ((energy_switch != 0) && (ion_ff_cooling_switch != 0)) ? get_ion_ff_cooling_coefficient(state.T) : 0.0_rt;
+	const amrex::Real d_Lambda_ion_ff_dT = ((energy_switch != 0) && (ion_ff_cooling_switch != 0)) ? d_ion_ff_cooling_coefficient_dT(state.T) : 0.0_rt;
 
-	amrex::Real c = C::c_light;
-	amrex::Real chat = state.c_hat;
-	amrex::Real frac = chat / c;
-
-	amrex::Real n_e = state.xn[0];
-	amrex::Real n_HI = state.xn[1];
-	amrex::Real n_HII = state.xn[2];
-	amrex::Real n_gamma = state.rn[0];
-	amrex::Real n_gamma_flux = state.rn[1];
+	const amrex::Real n_e = state.xn[0];
+	const amrex::Real n_HI = state.xn[1];
+	const amrex::Real n_HII = state.xn[2];
+	const amrex::Real n_gamma = state.rn[0];
+	const amrex::Real n_gamma_flux = state.rn[1];
 
 	int molecular_process_switch = 1;
 	const amrex::Real n_H_total = n_HI + n_HII;
-	amrex::Real xHII = (n_H_total > 0.0_rt) ? (n_HII / n_H_total) : 0.0_rt;
+	const amrex::Real xHII = (n_H_total > 0.0_rt) ? (n_HII / n_H_total) : 0.0_rt;
 	if ((allow_mixed_cell_cooling == 0) && (xHII > mixed_cell_lb) && (xHII < mixed_cell_ub)) {
 		molecular_process_switch = 0;
 	}
 
-	amrex::Real d_collisional_ionization_term_dT = collisional_ionization_switch * n_e * n_HI * d_sigma_coll_dT;
-	amrex::Real d_recombination_term_dT = recombination_switch * (d_alpha_rec_dT * n_e * n_HII);
-	amrex::Real d_KI_cooling_dT = molecular_process_switch * KI_cooling_switch * (d_Lambda_KI_dT * n_HI * n_HI);
-	amrex::Real d_recombination_cooling_dT = recombination_cooling_switch * (d_Lambda_rec_dT * n_e * n_HII);
-	amrex::Real d_ion_ff_cooling_dT = ion_ff_cooling_switch * (d_Lambda_ion_ff_dT * n_e * n_HII);
+	const amrex::Real d_collisional_ionization_term_dT = collisional_ionization_switch * n_e * n_HI * d_sigma_coll_dT;
+	const amrex::Real d_recombination_term_dT = recombination_switch * (d_alpha_rec_dT * n_e * n_HII);
+	const amrex::Real d_KI_cooling_dT = molecular_process_switch * KI_cooling_switch * (d_Lambda_KI_dT * n_HI * n_HI);
+	const amrex::Real d_recombination_cooling_dT = recombination_cooling_switch * (d_Lambda_rec_dT * n_e * n_HII);
+	const amrex::Real d_ion_ff_cooling_dT = ion_ff_cooling_switch * (d_Lambda_ion_ff_dT * n_e * n_HII);
 
-	amrex::Real dTde = 1 / state.dedT;
+	const amrex::Real dTde = 1 / state.dedT;
 
 	jac.zero();
 
 	jac(1, 1) = (collisional_ionization_switch * n_HI * sigma_coll - recombination_switch * alpha_rec * n_HII);
-	jac(1, 2) = (c * sigma_photo * n_gamma * frac + collisional_ionization_switch * n_e * sigma_coll);
+	jac(1, 2) = (chat_sigma_photo * n_gamma + collisional_ionization_switch * n_e * sigma_coll);
 	jac(1, 3) = -recombination_switch * alpha_rec * n_e;
 	jac(1, net_ienuc) = (d_collisional_ionization_term_dT - d_recombination_term_dT) * dTde;
-	jac(1, 5) = c * sigma_photo * n_HI * frac;
+	jac(1, 5) = chat_sigma_photo * n_HI;
 	jac(1, 6) = 0.0_rt;
 
 	jac(2, 1) = -jac(1, 1);
@@ -201,27 +216,27 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 
 	jac(net_ienuc, 1) = energy_switch * (-recombination_cooling_switch * Lambda_rec * n_HII - ion_ff_cooling_switch * Lambda_ion_ff * n_HII) / state.rho;
 	jac(net_ienuc, 2) = energy_switch *
-			    (photoheating_switch * Gamma_photo * c * sigma_photo * n_gamma * frac + molecular_process_switch * KI_heating_switch * Gamma_KI -
+			    (photoheating_switch * Gamma_photo * chat_sigma_photo * n_gamma + molecular_process_switch * KI_heating_switch * Gamma_KI -
 			     2.0_rt * molecular_process_switch * KI_cooling_switch * Lambda_KI * n_HI) /
 			    state.rho;
 	jac(net_ienuc, 3) = energy_switch * (-recombination_cooling_switch * Lambda_rec * n_e - ion_ff_cooling_switch * Lambda_ion_ff * n_e) / state.rho;
 	jac(net_ienuc, net_ienuc) = energy_switch * (-d_recombination_cooling_dT - d_KI_cooling_dT - d_ion_ff_cooling_dT) * dTde / state.rho;
-	jac(net_ienuc, 5) = energy_switch * (photoheating_switch * Gamma_photo * c * sigma_photo * n_HI * frac) / state.rho;
+	jac(net_ienuc, 5) = energy_switch * (photoheating_switch * Gamma_photo * chat_sigma_photo * n_HI) / state.rho;
 	jac(net_ienuc, 6) = 0.0_rt;
 
 	jac(5, 1) = 0.0_rt;
-	jac(5, 2) = -c * sigma_photo * n_gamma * frac;
+	jac(5, 2) = -chat_sigma_photo * n_gamma;
 	jac(5, 3) = 0.0_rt;
 	jac(5, net_ienuc) = 0.0_rt;
-	jac(5, 5) = -c * sigma_photo * n_HI * frac;
+	jac(5, 5) = -chat_sigma_photo * n_HI;
 	jac(5, 6) = 0.0_rt;
 
 	jac(6, 1) = 0.0_rt;
-	jac(6, 2) = -c * sigma_photo * n_gamma_flux * frac;
+	jac(6, 2) = -chat_sigma_photo * n_gamma_flux;
 	jac(6, 3) = 0.0_rt;
 	jac(6, net_ienuc) = 0.0_rt;
 	jac(6, 5) = 0.0_rt;
-	jac(6, 6) = -n_HI * c * sigma_photo * frac;
+	jac(6, 6) = -n_HI * chat_sigma_photo;
 }
 
 #endif

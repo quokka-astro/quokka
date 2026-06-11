@@ -44,6 +44,13 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 	const int firstChemFyIndex = firstChemFxIndex + 1;
 	const int firstChemFzIndex = firstChemFyIndex + 1;
 
+	amrex::GpuArray<Real, NumChemBands> chemBandQuanta{};
+	amrex::GpuArray<Real, NumChemBands> invChemBandQuanta{};
+	for (int nn = 0; nn < NumChemBands; ++nn) {
+		chemBandQuanta[nn] = RadSystem<problem_t>::GetChemBandQuanta(nn);
+		invChemBandQuanta[nn] = 1.0_rt / chemBandQuanta[nn];
+	}
+
 	const BL_PROFILE("PhotoChemistry::computePhotoChemistry()");
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -51,29 +58,6 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			const Real rho = state(i, j, k, RadSystem<problem_t>::gasDensity_index);
-			const Real xmom = state(i, j, k, RadSystem<problem_t>::x1GasMomentum_index);
-			const Real ymom = state(i, j, k, RadSystem<problem_t>::x2GasMomentum_index);
-			const Real zmom = state(i, j, k, RadSystem<problem_t>::x3GasMomentum_index);
-			const Real Ener = state(i, j, k, RadSystem<problem_t>::gasEnergy_index);
-			const Real Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener);
-
-			Real quanta_energy = 0.0_rt;
-			burn_t photochemstate;
-			photochemstate.success = true;
-			int burn_failed = 0;
-			photochemstate.c_hat = RadSystem_Traits<problem_t>::c_hat_over_c * C::c_light;
-			for (int nn = 0; nn < NumSpec; ++nn) {
-				photochemstate.xn[nn] = state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) / spmasses[nn];
-			}
-			for (int nn = 0; nn < NumChemBands; ++nn) {
-				quanta_energy = RadSystem<problem_t>::GetChemBandQuanta(nn);
-				photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] =
-				    state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) / quanta_energy;
-				photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn] = 1.0_rt;
-			}
-			photochemstate.rho = rho;
-			photochemstate.e = Eint / rho;
-
 			// dont do photochemistry in cells with densities below the minimum density specified
 			if (rho < min_density_allowed) {
 				return;
@@ -82,6 +66,27 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 			if (rho > max_density_allowed) {
 				amrex::Abort("Density exceeded max_density_allowed!");
 			}
+
+			const Real xmom = state(i, j, k, RadSystem<problem_t>::x1GasMomentum_index);
+			const Real ymom = state(i, j, k, RadSystem<problem_t>::x2GasMomentum_index);
+			const Real zmom = state(i, j, k, RadSystem<problem_t>::x3GasMomentum_index);
+			const Real Ener = state(i, j, k, RadSystem<problem_t>::gasEnergy_index);
+			const Real Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener);
+
+			burn_t photochemstate;
+			photochemstate.success = true;
+			int burn_failed = 0;
+			photochemstate.c_hat = RadSystem_Traits<problem_t>::c_hat_over_c * C::c_light;
+			for (int nn = 0; nn < NumSpec; ++nn) {
+				photochemstate.xn[nn] = state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) / spmasses[nn];
+			}
+			for (int nn = 0; nn < NumChemBands; ++nn) {
+				photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] =
+				    state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) * invChemBandQuanta[nn];
+				photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn] = 1.0_rt;
+			}
+			photochemstate.rho = rho;
+			photochemstate.e = Eint / rho;
 
 			// call the EOS to set the temperature
 			eos(eos_input_re, photochemstate);
@@ -120,9 +125,8 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 				state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) = photochemstate.xn[nn] * spmasses[nn];
 			}
 			for (int nn = 0; nn < NumChemBands; ++nn) {
-				quanta_energy = RadSystem<problem_t>::GetChemBandQuanta(nn);
 				state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) =
-				    photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] * quanta_energy;
+				    photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] * chemBandQuanta[nn];
 				state(i, j, k, firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn) =
 				    photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn] *
 				    state(i, j, k, firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn);
