@@ -46,6 +46,7 @@ template <> struct Physics_Traits<AlfvenWaveLinear> {
 	static constexpr bool is_dust_enabled = false;
 	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr bool is_mhd_enabled = true;
+	static constexpr ResistivityModel resistivity_model = ResistivityModel::constant;
 	static constexpr int nGroups = 1;
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };

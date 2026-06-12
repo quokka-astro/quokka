@@ -280,7 +280,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		amrex::Real small_temp = 1e-10;
 		amrex::Real small_dens = 1e-100;
 		eos_init(small_temp, small_dens);
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::constant) {
 			if (mhdResistivity_ != 0.0) {
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(do_subcycle == 0,
 								 "AMR subcycling is not supported with nonzero resistivity. Set do_subcycle = 0.");
@@ -619,8 +619,10 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("plm_limiter", mhdPlmLimiter_);
 		hpp.query("project_initial_b_field", projectInitialBField_);
 		hpp.query("update_initial_b_energy", updateInitialMagneticEnergy_);
-		hpp.query("resistivity", mhdResistivity_);
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(mhdResistivity_ >= 0.0, "mhd.resistivity must be >= 0.");
+		if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::constant) {
+			hpp.query("resistivity", mhdResistivity_);
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(mhdResistivity_ >= 0.0, "mhd.resistivity must be >= 0.");
+		}
 	}
 
 #ifdef PHOTOCHEMISTRY
@@ -848,7 +850,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 
 	// diffusive CFL constraint for Ohmic resistivity: dt <= cfl * dx^2 / (2*eta)
 	// in N dimensions the true stability limit requires cfl < 1/N, so for 3D use cfl < 1/3
-	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+	if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::constant) {
 		if (mhdResistivity_ != 0.0) {
 			const auto &dx = geom[level].CellSizeArray();
 			const amrex::Real dx_min = std::min({AMREX_D_DECL(dx[0], dx[1], dx[2])});

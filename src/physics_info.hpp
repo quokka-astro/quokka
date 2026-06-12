@@ -11,6 +11,13 @@ using Real = amrex::Real;
 // enum for unit system, one of CGS, CONSTANTS, CUSTOM
 enum class UnitSystem { CGS, CONSTANTS, CUSTOM };
 
+// enum for MHD resistivity model
+enum class ResistivityModel {
+	none,		    // no resistivity; resistive terms eliminated at compile time
+	constant,	    // uniform eta read from mhd.resistivity in the TOML input file
+	spatially_varying,  // per-cell eta supplied by a problem-specific computeResistivity device function
+};
+
 // this struct is specialized by the user application code.
 template <typename problem_t> struct Physics_Traits {
 	static constexpr bool is_hydro_enabled = false;
@@ -20,6 +27,7 @@ template <typename problem_t> struct Physics_Traits {
 	static constexpr bool is_dust_enabled = false;
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
 	static constexpr int nGroups = 1;     // number of radiation groups
 	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;

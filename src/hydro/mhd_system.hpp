@@ -797,7 +797,11 @@ void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(amrex::Array4<amrex:
 		//  // No sign error, just B1_p_ and B1_m_ were swapped relative to Felker & Stone's ByE and ByW
 		const double term2 = ((a1_m * a1_p) / (a1_m + a1_p)) * (B0_p_ - B0_m_) + ((a0_m * a0_p) / (a0_m + a0_p)) * (B1_m_ - B1_p_);
 
-		E2_ave(i, j, k) = (numerator / denominator) + term2 - computeResistiveEMF(B_w0, B_w1, i, j, k, delta_w0, delta_w1, dx_w0, dx_w1, resistivity);
+		if constexpr (Physics_Traits<problem_t>::resistivity_model != ResistivityModel::none) {
+			E2_ave(i, j, k) = (numerator / denominator) + term2 - computeResistiveEMF(B_w0, B_w1, i, j, k, delta_w0, delta_w1, dx_w0, dx_w1, resistivity);
+		} else {
+			E2_ave(i, j, k) = (numerator / denominator) + term2;
+		}
 	});
 }
 
@@ -903,7 +907,11 @@ void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> E2_
 			E2_result = E2_dstar;
 		}
 
-		E2_ave(i, j, k) = E2_result - computeResistiveEMF(B_w0, B_w1, i, j, k, delta_w0, delta_w1, dx_w0, dx_w1, resistivity);
+		if constexpr (Physics_Traits<problem_t>::resistivity_model != ResistivityModel::none) {
+			E2_ave(i, j, k) = E2_result - computeResistiveEMF(B_w0, B_w1, i, j, k, delta_w0, delta_w1, dx_w0, dx_w1, resistivity);
+		} else {
+			E2_ave(i, j, k) = E2_result;
+		}
 	});
 }
 
