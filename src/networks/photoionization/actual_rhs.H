@@ -22,7 +22,8 @@ void actual_rhs_init();
 // Species 2 (Index 2 in the state)         = ionized hydrogen
 // Index net_ienuc(=3)                      = specific internal energy
 // Radiation index 0 (Index 4 in the state) = number density of photons
-// Radiation index 1 (Index 5 in the state) = flux of photons normalized by the flux magnitude before the burn (therefore, it is 1.0 at the beginning of burn)
+// Radiation flux is NOT integrated in the ODE; it is attenuated algebraically
+// in computePhotoChemistry using the optical depth from the photon density equation.
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_photoionization_coefficient(Real T) -> Real { return 1.5e-18_rt; }
 
@@ -101,7 +102,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 	const amrex::Real n_HI = state.xn[1];
 	const amrex::Real n_HII = state.xn[2];
 	const amrex::Real n_gamma = state.rn[0];
-	const amrex::Real n_gamma_flux = state.rn[1];
 
 	int molecular_process_switch = 1;
 	const amrex::Real n_H_total = n_HI + n_HII;
@@ -141,7 +141,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 		ydot(net_ienuc) = energy_source / state.rho;
 	}
 	ydot(5) = -photoionization_term;
-	ydot(6) = -chat_sigma_photo * n_HI * n_gamma_flux;
 }
 
 template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_jac(const burn_t &state, MatrixType &jac)
@@ -175,7 +174,6 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	const amrex::Real n_HI = state.xn[1];
 	const amrex::Real n_HII = state.xn[2];
 	const amrex::Real n_gamma = state.rn[0];
-	const amrex::Real n_gamma_flux = state.rn[1];
 
 	int molecular_process_switch = 1;
 	const amrex::Real n_H_total = n_HI + n_HII;
@@ -199,20 +197,17 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	jac(1, 3) = -recombination_switch * alpha_rec * n_e;
 	jac(1, net_ienuc) = (d_collisional_ionization_term_dT - d_recombination_term_dT) * dTde;
 	jac(1, 5) = chat_sigma_photo * n_HI;
-	jac(1, 6) = 0.0_rt;
 
 	jac(2, 1) = -jac(1, 1);
 	jac(2, 2) = -jac(1, 2);
 	jac(2, 3) = -jac(1, 3);
 	jac(2, net_ienuc) = -jac(1, net_ienuc);
 	jac(2, 5) = -jac(1, 5);
-	jac(2, 6) = -jac(1, 6);
 	jac(3, 1) = jac(1, 1);
 	jac(3, 2) = jac(1, 2);
 	jac(3, 3) = jac(1, 3);
 	jac(3, net_ienuc) = jac(1, net_ienuc);
 	jac(3, 5) = jac(1, 5);
-	jac(3, 6) = jac(1, 6);
 
 	jac(net_ienuc, 1) = energy_switch * (-recombination_cooling_switch * Lambda_rec * n_HII - ion_ff_cooling_switch * Lambda_ion_ff * n_HII) / state.rho;
 	jac(net_ienuc, 2) = energy_switch *
@@ -222,21 +217,12 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	jac(net_ienuc, 3) = energy_switch * (-recombination_cooling_switch * Lambda_rec * n_e - ion_ff_cooling_switch * Lambda_ion_ff * n_e) / state.rho;
 	jac(net_ienuc, net_ienuc) = energy_switch * (-d_recombination_cooling_dT - d_KI_cooling_dT - d_ion_ff_cooling_dT) * dTde / state.rho;
 	jac(net_ienuc, 5) = energy_switch * (photoheating_switch * Gamma_photo * chat_sigma_photo * n_HI) / state.rho;
-	jac(net_ienuc, 6) = 0.0_rt;
 
 	jac(5, 1) = 0.0_rt;
 	jac(5, 2) = -chat_sigma_photo * n_gamma;
 	jac(5, 3) = 0.0_rt;
 	jac(5, net_ienuc) = 0.0_rt;
 	jac(5, 5) = -chat_sigma_photo * n_HI;
-	jac(5, 6) = 0.0_rt;
-
-	jac(6, 1) = 0.0_rt;
-	jac(6, 2) = -chat_sigma_photo * n_gamma_flux;
-	jac(6, 3) = 0.0_rt;
-	jac(6, net_ienuc) = 0.0_rt;
-	jac(6, 5) = 0.0_rt;
-	jac(6, 6) = -n_HI * chat_sigma_photo;
 }
 
 #endif

@@ -544,6 +544,15 @@ auto problem_main() -> int
 
 #ifdef HAVE_PYTHON
 	if (amrex::ParallelDescriptor::IOProcessor()) {
+		amrex::ParmParse const pp("dtype_front");
+		bool plot_radii = true;
+		pp.query("plot_radii", plot_radii);
+		if (!plot_radii) {
+			amrex::Print() << "Skipping DTypeFront radius plots.\n";
+			amrex::Print() << "Finished." << '\n';
+			return status;
+		}
+
 		// Plot radii vs time
 		matplotlibcpp::clf();
 		std::map<std::string, std::string> numerical_args;

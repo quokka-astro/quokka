@@ -3547,7 +3547,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 {
 	const BL_PROFILE("AMRSimulation::InitPhyParticles()");
 	// Verify that particle_switch is of the correct type
-	detail::verify_particle_switch_type<problem_t>();
+	::detail::verify_particle_switch_type<problem_t>();
 
 	// Read particle parameters from input file
 	quokka::particleParmParse();

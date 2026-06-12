@@ -32,7 +32,7 @@ constexpr int NumSpecTotal = NumSpec + NumSpecExtra;
 
 #ifdef PHOTOCHEMISTRY
 constexpr int NumChemBands = @NUM_CHEM_BANDS@;
-constexpr int MicrophysicsNumRadVarsPerGroup = 2;
+constexpr int MicrophysicsNumRadVarsPerGroup = 1;
 constexpr int NumRadEqs = NumChemBands * MicrophysicsNumRadVarsPerGroup;
 constexpr amrex::GpuArray<double, NumChemBands + 1> ChemBandsHeader_{ @CHEM_BANDS@ };
 #endif

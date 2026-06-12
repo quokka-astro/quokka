@@ -97,5 +97,5 @@ if(AMReX_SPACEDIM GREATER_EQUAL 2)
     setup_target_for_cuda_compilation(${JOB_NAME})
   endif(AMReX_GPU_BACKEND MATCHES "CUDA")
 
-  add_test(NAME DTypeFront COMMAND ${JOB_NAME} ../inputs/DTypeFront.toml ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(NAME DTypeFront COMMAND ${JOB_NAME} ../inputs/DTypeFront.toml dtype_front.plot_radii=0 ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()
