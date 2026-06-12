@@ -124,7 +124,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 			// -chat*sigma*n_HI*y(6) has the same attenuation factor as
 			// the photon density equation dy(5)/dt = -chat*sigma*n_HI*y(5),
 			// so flux_attenuation = n_gamma_final / n_gamma_initial.
-			const Real flux_attenuation = (n_gamma_initial > 0.0_rt) ? (photochemstate.rn[0] / n_gamma_initial) : 1.0_rt;
+			const Real flux_attenuation = (n_gamma_initial > 0.0_rt) ? amrex::min(photochemstate.rn[0] / n_gamma_initial, 1.0_rt) : 1.0_rt;
 
 			// get the updated specific eint
 			eos(eos_input_re, photochemstate);
