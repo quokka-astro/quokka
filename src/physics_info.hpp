@@ -15,7 +15,7 @@ enum class UnitSystem { CGS, CONSTANTS, CUSTOM };
 enum class ResistivityModel {
 	none,		    // no resistivity; resistive terms eliminated at compile time
 	constant,	    // uniform eta read from mhd.resistivity in the TOML input file
-	spatially_varying,  // per-cell eta supplied by a problem-specific computeResistivity device function
+	problem_defined,    // per-cell eta supplied by a problem-specific computeResistivity device function
 };
 
 // this struct is specialized by the user application code.
