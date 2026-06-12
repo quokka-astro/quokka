@@ -797,8 +797,11 @@ void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(amrex::Array4<amrex:
 		//  // No sign error, just B1_p_ and B1_m_ were swapped relative to Felker & Stone's ByE and ByW
 		const double term2 = ((a1_m * a1_p) / (a1_m + a1_p)) * (B0_p_ - B0_m_) + ((a0_m * a0_p) / (a0_m + a0_p)) * (B1_m_ - B1_p_);
 
-		if constexpr (Physics_Traits<problem_t>::resistivity_model != ResistivityModel::none) {
+		if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::constant) {
 			E2_ave(i, j, k) = (numerator / denominator) + term2 - computeResistiveEMF(B_w0, B_w1, i, j, k, delta_w0, delta_w1, dx_w0, dx_w1, resistivity);
+		} else if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::problem_defined) {
+			const amrex::Real eta = computeResistivity<problem_t>(i, j, k, B_w0, B_w1, dx_w0, dx_w1);
+			E2_ave(i, j, k) = (numerator / denominator) + term2 - computeResistiveEMF(B_w0, B_w1, i, j, k, delta_w0, delta_w1, dx_w0, dx_w1, eta);
 		} else {
 			E2_ave(i, j, k) = (numerator / denominator) + term2;
 		}
@@ -907,8 +910,11 @@ void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> E2_
 			E2_result = E2_dstar;
 		}
 
-		if constexpr (Physics_Traits<problem_t>::resistivity_model != ResistivityModel::none) {
+		if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::constant) {
 			E2_ave(i, j, k) = E2_result - computeResistiveEMF(B_w0, B_w1, i, j, k, delta_w0, delta_w1, dx_w0, dx_w1, resistivity);
+		} else if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::problem_defined) {
+			const amrex::Real eta = computeResistivity<problem_t>(i, j, k, B_w0, B_w1, dx_w0, dx_w1);
+			E2_ave(i, j, k) = E2_result - computeResistiveEMF(B_w0, B_w1, i, j, k, delta_w0, delta_w1, dx_w0, dx_w1, eta);
 		} else {
 			E2_ave(i, j, k) = E2_result;
 		}
@@ -1053,6 +1059,25 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto MHDSystem<problem_t>::computeResistiveE
 	const amrex::Real J_edge = (B_w1(i, j, k) - B_w1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2])) / dx_w0 -
 				   (B_w0(i, j, k) - B_w0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2])) / dx_w1;
 	return resistivity * J_edge;
+}
+
+// Default implementation: fires a compile-time error when ResistivityModel::problem_defined is used
+// without a problem-specific explicit specialization.
+// To use problem_defined resistivity, specialize this function in the problem file:
+//   template <>
+//   AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeResistivity<MyProblem>(
+//       int i, int j, int k,
+//       amrex::Array4<const amrex::Real> const &B_w0,
+//       amrex::Array4<const amrex::Real> const &B_w1,
+//       amrex::Real dx_w0, amrex::Real dx_w1) -> amrex::Real { ... }
+template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeResistivity(int /*i*/, int /*j*/, int /*k*/,
+							    amrex::Array4<const amrex::Real> const & /*B_w0*/,
+							    amrex::Array4<const amrex::Real> const & /*B_w1*/,
+							    amrex::Real /*dx_w0*/, amrex::Real /*dx_w1*/) -> amrex::Real
+{
+	static_assert(sizeof(problem_t) == 0, "computeResistivity must be specialized in the problem file when using ResistivityModel::problem_defined");
+	return 0.0;
 }
 
 #endif // HYDRO_SYSTEM_HPP_
