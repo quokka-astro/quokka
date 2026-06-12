@@ -136,14 +136,11 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 				state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) =
 				    photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] * chemBandQuanta[nn];
 				state(i, j, k, firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn) =
-				    flux_attenuation *
-				    state(i, j, k, firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn);
+				    flux_attenuation * state(i, j, k, firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn);
 				state(i, j, k, firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn) =
-				    flux_attenuation *
-				    state(i, j, k, firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn);
+				    flux_attenuation * state(i, j, k, firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn);
 				state(i, j, k, firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn) =
-				    flux_attenuation *
-				    state(i, j, k, firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn);
+				    flux_attenuation * state(i, j, k, firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn);
 			}
 			// Quokka uses rho*eint
 			const Real dEint = (photochemstate.e * photochemstate.rho) - Eint;
