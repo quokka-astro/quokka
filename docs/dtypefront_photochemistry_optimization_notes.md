@@ -31,3 +31,20 @@ Baseline: `0.2940853086 us/zone-update`, `PhotoChemistry::computePhotoChemistry(
 10. Added approximate `__expf` only in KI cooling on top of iteration 9: `0.2839270308 us/zone-update`, delta `-0.0101582778 us/zone-update` (`-3.45%`), photochemistry `1.178 s`; improved over baseline but regressed relative to iteration 9, so the KI `__expf` change was reverted.
 
 Final retained fast-transcendental change: CUDA device `sqrtf` for KI cooling and ion/free-free cooling `sqrt(T)`, plus CUDA device `powf` for recombination cooling `T^-0.89`; FP64 `pow` remains for recombination rate and FP64 `exp` remains everywhere. Final best measured FoM: `0.2806844664 us/zone-update`, delta `-0.0134008422 us/zone-update` (`-4.56%`) from this pass baseline. Built-in verification passed with `ctest --test-dir /mnt/ffs24/home/wibkingb/quokka/build/3d-cuda -R '^DTypeFront$' --output-on-failure` on the final rebuilt artifact.
+
+## Jacobian/Linear-Solve Specialization Pass
+
+Baseline: `0.2790360415 us/zone-update`, `PhotoChemistry::computePhotoChemistry() = 1.158 s`, measured on 1 GPU for 20 hydro timesteps with default timestepping after the fast-transcendental pass.
+
+1. Runtime probe with `integrator.linalg_do_pivoting=0`: `0.2730121685 us/zone-update`, delta `-0.0060238730 us/zone-update` (`-2.16%`), photochemistry `1.126 s`; passed checks and showed no-pivot solve was viable for this problem.
+2. Compiled a `PHOTOCHEMISTRY && int_neqs == 5` VODE specialization that calls the existing no-pivot LU/solve templates by default: `0.2727757460 us/zone-update`, delta `-0.0062602955 us/zone-update` (`-2.24%`), photochemistry `1.123 s`.
+3. Combined the 5x5 matrix scale and identity-add into one direct array pass: `0.2749696930 us/zone-update`, delta `-0.0040663485 us/zone-update` (`-1.46%`), photochemistry `1.125 s`; regressed relative to iteration 2 and was reverted.
+4. Added specialized 5x5 no-pivot LU/solve helpers with explicit unroll pragmas, bypassing the global `NET_LOOP_UNROLL_LEN=1`: `0.2551331923 us/zone-update`, delta `-0.0239028492 us/zone-update` (`-8.57%`), photochemistry `1.027 s`.
+5. Rewrote the specialized 5x5 helpers as straight-line scalar matrix operations: `0.2546186224 us/zone-update`, delta `-0.0244174191 us/zone-update` (`-8.75%`), photochemistry `1.018 s`.
+6. Rewrote the triangular solve to use local scalar RHS variables and write back once: `0.2552359426 us/zone-update`, delta `-0.0238000989 us/zone-update` (`-8.53%`), photochemistry `1.018 s`; regressed relative to iteration 5 and was reverted.
+7. Runtime probe with `integrator.use_jacobian_caching=1`: `0.2544819857 us/zone-update`, delta `-0.0245540558 us/zone-update` (`-8.80%`), photochemistry `1.025 s`; non-default setting and no clear photochemistry win, so not retained.
+8. Removed zero-pivot checks from the specialized DTypeFront no-pivot factorization: `0.2537714922 us/zone-update`, delta `-0.0252645493 us/zone-update` (`-9.05%`), photochemistry `1.015 s`.
+9. Returned immediately from the specialized factorization branch before the generic `IER` error check: `0.2526407473 us/zone-update`, delta `-0.0263952942 us/zone-update` (`-9.46%`), photochemistry `1.018 s`.
+10. Removed the unused factorization status argument and moved the generic `IER` variable below the specialized early return: `0.2523315582 us/zone-update`, delta `-0.0267044833 us/zone-update` (`-9.57%`), photochemistry `1.014 s`.
+
+Final retained Jacobian/linear-solve change: a `PHOTOCHEMISTRY && int_neqs == 5` VODE path using straight-line no-pivot 5x5 LU factorization and solve helpers. Final best measured FoM: `0.2523315582 us/zone-update`, delta `-0.0267044833 us/zone-update` (`-9.57%`) from this pass baseline. Built-in 20-step checks passed on every retained benchmark run. Final verification passed with `ctest --test-dir /mnt/ffs24/home/wibkingb/quokka/build/3d-cuda -R '^DTypeFront$' --output-on-failure` in `12.20 s`.
