@@ -13,15 +13,14 @@ amr.v              = 0       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = [64, 64, 64]
+amr.n_cell          = [16, 16, 16]
 amr.max_level       = 0     # number of levels = max_level + 1
-amr.blocking_factor = 32  # grid size must be divisible by this
+amr.blocking_factor = 8  # grid size must be divisible by this
 amr.max_grid_size = 128  # at least 128 for GPUs
 do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
 
-max_timesteps = 10000
 stop_time = 2.9e12
 
 stromgen.primary_species_1 = 1.0e-10
@@ -43,3 +42,17 @@ plotfile_interval = 1000000
 plotfile_prefix = "DType"
 
 network.allow_mixed_cell_cooling = 0
+
+
+max_timesteps = 10
+
+integrator.atol_spec = 1.0e-10
+integrator.atol_enuc = 1.237486116e8
+integrator.atol_rad_num = 1.0e-10
+integrator.atol_rad_flux = 1.0e-2
+
+integrator.rtol_spec = 1.0e-2
+integrator.rtol_enuc = 1.0e-2
+integrator.rtol_rad_num = 1.0e-2
+integrator.rtol_rad_flux = 1.0e-2
+
