@@ -3,6 +3,7 @@
 
 #include <array>
 #include <iostream>
+#include <limits>
 
 #include "AMReX.H"
 #include "AMReX_BLassert.H"
@@ -32,6 +33,8 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 
 	amrex::Gpu::Buffer<int> d_num_failed({0});
 	auto *p_num_failed = d_num_failed.data();
+	amrex::Gpu::Buffer<int> d_error_code({std::numeric_limits<int>::max()});
+	auto *p_error_code = d_error_code.data();
 
 	int num_failed = 0;
 
@@ -104,6 +107,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 
 			if (!photochemstate.success) {
 				burn_failed = 1;
+				amrex::Gpu::Atomic::Min(p_error_code, static_cast<int>(photochemstate.error_code));
 			}
 
 			if (burn_failed) {
@@ -154,12 +158,16 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 	}
 
 	num_failed = *(d_num_failed.copyToHost());
+	int error_code = *(d_error_code.copyToHost());
+	if (error_code == std::numeric_limits<int>::max()) {
+		error_code = 0;
+	}
 
 	photochem_burn_success = num_failed == 0;
 	amrex::ParallelDescriptor::ReduceIntMin(photochem_burn_success);
 
 	if (!photochem_burn_success) {
-		amrex::Abort("Burn failed in VODE. Aborting.");
+		amrex::Abort(std::string("Burn failed in VODE. Aborting. error_code=") + std::to_string(error_code));
 	}
 
 	return photochem_burn_success;
