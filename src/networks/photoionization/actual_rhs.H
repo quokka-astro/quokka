@@ -84,7 +84,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_KI_cooling_coefficient(Real T) -> Re
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto dKI_cooling_coefficient_dT(Real T, Real exp_hot, Real sqrt_T, Real exp_cold) -> Real
 {
 	return 2.0e-26_rt * (1.0e7_rt * exp_hot * 118400.0_rt / ((T + 1.0e3_rt) * (T + 1.0e3_rt)) +
-			      1.4e-2_rt * (0.5_rt * exp_cold / sqrt_T + sqrt_T * exp_cold * 92.0_rt / (T * T)));
+			     1.4e-2_rt * (0.5_rt * exp_cold / sqrt_T + sqrt_T * exp_cold * 92.0_rt / (T * T)));
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto get_recombination_cooling_coefficient(Real T) -> Real
@@ -134,8 +134,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 	}
 
 	const amrex::Real photoionization_term = chat_sigma_photo * n_HI * n_gamma;
-	const amrex::Real collisional_ionization_term =
-	    (collisional_ionization_switch != 0) ? n_e * n_HI * get_collisional_ionization_coefficient(T) : 0.0_rt;
+	const amrex::Real collisional_ionization_term = (collisional_ionization_switch != 0) ? n_e * n_HI * get_collisional_ionization_coefficient(T) : 0.0_rt;
 	const amrex::Real recombination_term = (recombination_switch != 0) ? get_recombination_coefficient(T) * n_e * n_HII : 0.0_rt;
 
 	ydot(1) = photoionization_term + collisional_ionization_term - recombination_term;
@@ -197,8 +196,7 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 		d_Lambda_KI_dT = dKI_cooling_coefficient_dT(T, exp_hot, sqrt_T, exp_cold);
 	}
 	const amrex::Real Lambda_rec = ((energy_switch != 0) && (recombination_cooling_switch != 0)) ? get_recombination_cooling_coefficient(T) : 0.0_rt;
-	const amrex::Real d_Lambda_rec_dT =
-	    ((energy_switch != 0) && (recombination_cooling_switch != 0)) ? dRecombination_cooling_coefficient_dT(T) : 0.0_rt;
+	const amrex::Real d_Lambda_rec_dT = ((energy_switch != 0) && (recombination_cooling_switch != 0)) ? dRecombination_cooling_coefficient_dT(T) : 0.0_rt;
 	amrex::Real Lambda_ion_ff = 0.0_rt;
 	amrex::Real d_Lambda_ion_ff_dT = 0.0_rt;
 	if ((energy_switch != 0) && (ion_ff_cooling_switch != 0)) {
