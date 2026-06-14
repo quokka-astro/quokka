@@ -119,6 +119,15 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 };
 
 template <typename problem_t>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeResistivity(int /*i*/, int /*j*/, int /*k*/, amrex::Array4<const amrex::Real> const & /*B_w0*/,
+							    amrex::Array4<const amrex::Real> const & /*B_w1*/, amrex::Real /*dx_w0*/, amrex::Real /*dx_w1*/)
+    -> amrex::Real
+{
+	static_assert(sizeof(problem_t) == 0, "computeResistivity must be specialized in the problem file when using ResistivityModel::problem_defined");
+	return 0.0;
+}
+
+template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
@@ -1055,15 +1064,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto MHDSystem<problem_t>::computeResistiveE
 	const amrex::Real J_edge = (B_w1(i, j, k) - B_w1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2])) / dx_w0 -
 				   (B_w0(i, j, k) - B_w0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2])) / dx_w1;
 	return resistivity * J_edge;
-}
-
-template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeResistivity(int /*i*/, int /*j*/, int /*k*/, amrex::Array4<const amrex::Real> const & /*B_w0*/,
-							    amrex::Array4<const amrex::Real> const & /*B_w1*/, amrex::Real /*dx_w0*/, amrex::Real /*dx_w1*/)
-    -> amrex::Real
-{
-	static_assert(sizeof(problem_t) == 0, "computeResistivity must be specialized in the problem file when using ResistivityModel::problem_defined");
-	return 0.0;
 }
 
 #endif // HYDRO_SYSTEM_HPP_
