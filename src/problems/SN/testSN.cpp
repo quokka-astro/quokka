@@ -62,7 +62,7 @@ template <> struct HydroSystem_Traits<SNProblem> {
 	static constexpr bool reconstruct_eint = true; // need to reconstruct temperature
 };
 
-template <> struct Physics_Traits<SNProblem> : PhysicsTraitsDefaults {
+template <> struct Physics_Traits<SNProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars

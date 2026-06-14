@@ -36,7 +36,7 @@ template <> struct quokka::EOS_Traits<MHDBitwiseICs> {
 	static constexpr amrex::Real boltzmann_constant = C::k_B;
 };
 
-template <> struct Physics_Traits<MHDBitwiseICs> : PhysicsTraitsDefaults {
+template <> struct Physics_Traits<MHDBitwiseICs> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = true;
 };

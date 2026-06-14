@@ -55,7 +55,7 @@ template <> struct quokka::EOS_Traits<DustHallPedersenDrift> {
 	static constexpr double cs_isothermal = sound_speed;
 };
 
-template <> struct Physics_Traits<DustHallPedersenDrift> : PhysicsTraitsDefaults {
+template <> struct Physics_Traits<DustHallPedersenDrift> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;

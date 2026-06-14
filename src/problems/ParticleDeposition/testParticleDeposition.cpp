@@ -33,7 +33,7 @@ template <> struct quokka::EOS_Traits<ParticleDepositionProblem> {
 	static constexpr double boltzmann_constant = C::k_B;
 };
 
-template <> struct Physics_Traits<ParticleDepositionProblem> : PhysicsTraitsDefaults {
+template <> struct Physics_Traits<ParticleDepositionProblem> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_radiation_enabled = false;

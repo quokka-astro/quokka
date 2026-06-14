@@ -29,7 +29,7 @@ template <> struct quokka::EOS_Traits<HydrostaticAtmosphereProblem> {
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct Physics_Traits<HydrostaticAtmosphereProblem> : PhysicsTraitsDefaults {
+template <> struct Physics_Traits<HydrostaticAtmosphereProblem> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;

@@ -70,7 +70,7 @@ template <> struct quokka::EOS_Traits<DustDampingMHDZeroCharge> {
 constexpr double Egas0 = P_INITIAL / (quokka::EOS_Traits<DustDampingDragReference>::gamma - 1.0) + 0.5 * rho * v0 * v0;
 constexpr double Egas0_internal = P_INITIAL / (quokka::EOS_Traits<DustDampingDragReference>::gamma - 1.0);
 
-template <> struct Physics_Traits<DustDampingDragReference> : PhysicsTraitsDefaults {
+template <> struct Physics_Traits<DustDampingDragReference> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;
@@ -87,7 +87,7 @@ template <> struct Physics_Traits<DustDampingDragReference> : PhysicsTraitsDefau
 	static constexpr double radiation_constant = 1.0;
 };
 
-template <> struct Physics_Traits<DustDampingMHDZeroCharge> : PhysicsTraitsDefaults {
+template <> struct Physics_Traits<DustDampingMHDZeroCharge> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;

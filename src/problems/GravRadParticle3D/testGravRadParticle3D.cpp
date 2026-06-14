@@ -46,7 +46,7 @@ template <> struct Particle_Traits<ParticleProblem> {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | ParticleSwitch::Rad | ParticleSwitch::CICRad;
 };
 
-template <> struct Physics_Traits<ParticleProblem> : PhysicsTraitsDefaults {
+template <> struct Physics_Traits<ParticleProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars

@@ -29,7 +29,7 @@ template <> struct quokka::EOS_Traits<CurrentSheet> {
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct Physics_Traits<CurrentSheet> : PhysicsTraitsDefaults {
+template <> struct Physics_Traits<CurrentSheet> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = true;
 };

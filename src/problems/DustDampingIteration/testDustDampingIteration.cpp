@@ -69,7 +69,7 @@ AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 2> g_dust_grain_density = {1.0, 1
 static constexpr bool enable_supersonic_correction_with = true;
 static constexpr bool enable_supersonic_correction_without = false;
 
-template <> struct Physics_Traits<DustDampingWithCorrection> : PhysicsTraitsDefaults {
+template <> struct Physics_Traits<DustDampingWithCorrection> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
@@ -86,7 +86,7 @@ template <> struct Physics_Traits<DustDampingWithCorrection> : PhysicsTraitsDefa
 	static constexpr double radiation_constant = 1.0;
 };
 
-template <> struct Physics_Traits<DustDampingWithoutCorrection> : PhysicsTraitsDefaults {
+template <> struct Physics_Traits<DustDampingWithoutCorrection> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars

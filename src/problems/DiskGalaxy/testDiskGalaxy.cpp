@@ -58,7 +58,7 @@ template <> struct HydroSystem_Traits<DiskGalaxy> {
 	static constexpr bool reconstruct_eint = true;
 };
 
-template <> struct Physics_Traits<DiskGalaxy> : PhysicsTraitsDefaults {
+template <> struct Physics_Traits<DiskGalaxy> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_self_gravity_enabled = true;
 	static constexpr bool is_mhd_enabled = true;

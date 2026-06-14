@@ -664,7 +664,7 @@ template <> struct quokka::EOS_Traits<DustMagnetizedRDI> {
 	static constexpr double cs_isothermal = sound_speed;
 };
 
-template <> struct Physics_Traits<DustMagnetizedRDI> : PhysicsTraitsDefaults {
+template <> struct Physics_Traits<DustMagnetizedRDI> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;

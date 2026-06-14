@@ -93,7 +93,7 @@ template <> struct quokka::EOS_Traits<ResampledCoolingTest> {
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct Physics_Traits<ResampledCoolingTest> : PhysicsTraitsDefaults {
+template <> struct Physics_Traits<ResampledCoolingTest> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars

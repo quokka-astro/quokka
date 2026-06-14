@@ -36,7 +36,7 @@ template <> struct quokka::EOS_Traits<FCQuantities> {
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct Physics_Traits<FCQuantities> : PhysicsTraitsDefaults {
+template <> struct Physics_Traits<FCQuantities> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	// face-centred

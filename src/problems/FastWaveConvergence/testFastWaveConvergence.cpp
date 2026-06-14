@@ -33,7 +33,7 @@ template <> struct quokka::EOS_Traits<FastWaveConvergence> {
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct Physics_Traits<FastWaveConvergence> : PhysicsTraitsDefaults {
+template <> struct Physics_Traits<FastWaveConvergence> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = true;
 };

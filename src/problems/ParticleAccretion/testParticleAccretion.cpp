@@ -65,7 +65,7 @@ template <> struct HydroSystem_Traits<AccretionProblem> {
 	static constexpr bool reconstruct_eint = false;
 };
 
-template <> struct Physics_Traits<AccretionProblem> : PhysicsTraitsDefaults {
+template <> struct Physics_Traits<AccretionProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_self_gravity_enabled = true;

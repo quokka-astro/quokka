@@ -13,7 +13,7 @@ enum class UnitSystem { CGS, CONSTANTS, CUSTOM };
 
 // default values for all Physics_Traits fields; specialize Physics_Traits by inheriting from this
 // struct and overriding only the fields that differ from the defaults
-struct PhysicsTraitsDefaults {
+struct DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr int numMassScalars = 0;
 	static constexpr int numPassiveScalars = numMassScalars + 0;
@@ -35,7 +35,7 @@ struct PhysicsTraitsDefaults {
 };
 
 // this struct is specialized by the user application code.
-template <typename problem_t> struct Physics_Traits : PhysicsTraitsDefaults {};
+template <typename problem_t> struct Physics_Traits : DefaultPhysicsTraits {};
 
 // this struct stores the indices at which quantities start
 template <typename problem_t> struct Physics_Indices {

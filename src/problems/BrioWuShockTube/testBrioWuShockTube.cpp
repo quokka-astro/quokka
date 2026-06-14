@@ -36,7 +36,7 @@ template <> struct quokka::EOS_Traits<MHDShocktubeProblem> {
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct Physics_Traits<MHDShocktubeProblem> : PhysicsTraitsDefaults {
+template <> struct Physics_Traits<MHDShocktubeProblem> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = true;
 };

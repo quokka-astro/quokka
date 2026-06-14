@@ -20,7 +20,7 @@
 struct TurbulentBox {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-template <> struct Physics_Traits<TurbulentBox> : PhysicsTraitsDefaults {
+template <> struct Physics_Traits<TurbulentBox> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_mhd_enabled = false;

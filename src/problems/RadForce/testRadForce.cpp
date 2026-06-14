@@ -56,7 +56,7 @@ template <> struct quokka::EOS_Traits<TubeProblem> {
 	static constexpr double cs_isothermal = a0; // only used when gamma = 1
 };
 
-template <> struct Physics_Traits<TubeProblem> : PhysicsTraitsDefaults {
+template <> struct Physics_Traits<TubeProblem> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;

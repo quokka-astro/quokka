@@ -68,7 +68,7 @@ template <> struct RadSystem_Traits<PulseProblem> {
 	static constexpr int beta_order = beta_order_;
 };
 
-template <> struct Physics_Traits<PulseProblem> : PhysicsTraitsDefaults {
+template <> struct Physics_Traits<PulseProblem> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;

@@ -31,7 +31,7 @@ template <> struct quokka::EOS_Traits<MHDBalsaraVortex> {
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct Physics_Traits<MHDBalsaraVortex> : PhysicsTraitsDefaults {
+template <> struct Physics_Traits<MHDBalsaraVortex> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = true;
 };

@@ -42,7 +42,7 @@ template <> struct quokka::EOS_Traits<EntropyWaveLinear> {
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct Physics_Traits<EntropyWaveLinear> : PhysicsTraitsDefaults {
+template <> struct Physics_Traits<EntropyWaveLinear> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = true;
 };
