@@ -31,20 +31,11 @@ struct SlowWaveConvergence {
 template <> struct quokka::EOS_Traits<SlowWaveConvergence> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
-	static constexpr double boltzmann_constant = C::k_B;
 };
 
-template <> struct Physics_Traits<SlowWaveConvergence> {
+template <> struct Physics_Traits<SlowWaveConvergence> : PhysicsTraitsDefaults {
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;
-	static constexpr int numPassiveScalars = numMassScalars + 0;
-	static constexpr bool is_self_gravity_enabled = false;
-	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_mhd_enabled = true;
-	static constexpr int nGroups = 1;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 constexpr double sound_speed = 1.0;
