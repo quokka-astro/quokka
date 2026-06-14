@@ -16,7 +16,7 @@ enum class UnitSystem { CGS, CONSTANTS, CUSTOM };
 struct PhysicsTraitsDefaults {
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr int numMassScalars = 0;
-	static constexpr int numPassiveScalars = 0;
+	static constexpr int numPassiveScalars = numMassScalars + 0;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_dust_enabled = false;
 	static constexpr bool is_self_gravity_enabled = false;
