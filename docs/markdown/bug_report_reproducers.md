@@ -10,6 +10,65 @@ A good bug report lets another person run the same case, see the same failure, a
 >
 > A complete small case is more useful than a large production run. If the production run needs a full cluster allocation or terabytes of data, first reduce it to the smallest case that still fails.
 
+## Preferred format: a self-contained tarball
+
+The preferred way to share a reproducer is to upload a single compressed tarball to the GitHub issue. The tarball should be self-contained: after unpacking it next to a clean Quokka checkout, a maintainer should be able to read `README.md`, run one script, and reproduce the reported behavior.
+
+Use this layout when possible:
+
+```text
+quokka-reproducer-<short-description>/
+|-- README.md
+|-- run.sh
+|-- input/
+|   `-- <problem>.toml
+|-- data/
+|   `-- <tables-or-small-input-files>
+|-- patches/
+|   `-- quokka.patch
+`-- output/
+    |-- failure.log
+    `-- expected.txt
+```
+
+The files should have these roles:
+
+- `README.md`: one-page summary of the bug, the expected behavior, the observed behavior, the Quokka commit, and the exact platform used.
+- `run.sh`: a bash script that configures, compiles, and runs the smallest failing case.
+- `input/`: the complete input deck, with no required parameters omitted.
+- `data/`: every data table or auxiliary input file needed by the run. Keep these files small enough to attach to the issue whenever possible.
+- `patches/quokka.patch`: the local code changes required to reproduce the bug, generated with `git diff`. Omit this file only when the bug reproduces on an unmodified checkout.
+- `output/failure.log`: the full terminal output from the failing run, including the first useful error message.
+- `output/expected.txt`: a short note describing what result you expected instead.
+
+Create the tarball from the parent directory:
+
+```bash
+tar -czf quokka-reproducer-<short-description>.tar.gz quokka-reproducer-<short-description>/
+```
+
+Before uploading it, test the tarball in a fresh directory if practical:
+
+```bash
+tar -xzf quokka-reproducer-<short-description>.tar.gz
+cd quokka-reproducer-<short-description>
+bash run.sh
+```
+
+Quokka also provides a helper script that creates this directory tree and captures code changes from your current worktree. By default, the patch is generated relative to the merge-base with `origin/development`, so it includes both committed branch changes and uncommitted tracked-file edits. Untracked files are copied separately under `patches/untracked-files/` because `git diff` cannot represent files that Git has never seen.
+
+```bash
+./scripts/python/create_bug_reproducer.py <short-description> \
+  --input inputs/MyProblem.toml \
+  --data path/to/table.dat
+```
+
+Review and edit the generated directory before creating the final tarball.
+
+> **Warning**
+>
+> Do not include full build directories, large plotfile series, checkpoints, core dumps, or private machine paths unless they are essential to the bug. If a large artifact is essential, describe why and include the smallest possible version.
+
 ## What to include
 
 Please provide the following items when opening a [GitHub Issue](https://github.com/quokka-astro/quokka/issues):
@@ -19,7 +78,7 @@ Please provide the following items when opening a [GitHub Issue](https://github.
 2. **All required data tables and auxiliary files.**
    Include opacity tables, cooling tables, restart/checkpoint dependencies, particle initial condition files, or any other non-generated data needed by the run. If a file is too large to attach, explain how it was produced and provide a smaller replacement if possible.
 3. **Any code modifications.**
-   If the bug appears only with local edits, provide a patch, a branch, or the exact modified files. Include enough context for maintainers to rebuild the same executable.
+   If the bug appears only with local edits, provide a patch, a branch, or the exact modified files. For tarball reproducers, include the patch as `patches/quokka.patch`.
 4. **Exact build information.**
    Report the Quokka commit hash, submodule state if relevant, dimensionality, build type, compiler, MPI implementation, GPU backend (`CUDA`, `HIP`, or CPU-only), GPU architecture, and important CMake options.
 5. **The exact run command.**
@@ -44,9 +103,9 @@ Before filing the issue, try to reduce the reproducer while preserving the failu
 >
 > Do not shrink the case so far that it no longer demonstrates the reported bug. If a smaller version changes the failure mode, include the smallest faithful reproducer and explain what changed during reduction.
 
-## Prefer a runnable script
+## Write a runnable script
 
-Ideally, attach a short bash script that compiles and runs the failing problem from a clean checkout. This removes ambiguity about paths, presets, MPI rank counts, and environment variables.
+Every tarball should include a short bash script that compiles and runs the failing problem from a clean checkout. This removes ambiguity about paths, presets, MPI rank counts, and environment variables.
 
 For routine local builds, prefer the `scripts/bash/quokka` helper described in the [Contributing Guide](contributing.md#the-quokka-developer-script):
 
