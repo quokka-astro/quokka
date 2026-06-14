@@ -1058,10 +1058,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto MHDSystem<problem_t>::computeResistiveE
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeResistivity(int /*i*/, int /*j*/, int /*k*/,
-							    amrex::Array4<const amrex::Real> const & /*B_w0*/,
-							    amrex::Array4<const amrex::Real> const & /*B_w1*/,
-							    amrex::Real /*dx_w0*/, amrex::Real /*dx_w1*/) -> amrex::Real
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeResistivity(int /*i*/, int /*j*/, int /*k*/, amrex::Array4<const amrex::Real> const & /*B_w0*/,
+							    amrex::Array4<const amrex::Real> const & /*B_w1*/, amrex::Real /*dx_w0*/, amrex::Real /*dx_w1*/)
+    -> amrex::Real
 {
 	static_assert(sizeof(problem_t) == 0, "computeResistivity must be specialized in the problem file when using ResistivityModel::problem_defined");
 	return 0.0;

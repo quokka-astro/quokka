@@ -13,9 +13,9 @@ enum class UnitSystem { CGS, CONSTANTS, CUSTOM };
 
 // enum for MHD resistivity model
 enum class ResistivityModel {
-	none,		    // no physical resistivity model
-	constant,	    // uniform Ohmic resistivity; eta read from mhd.resistivity in the TOML input file
-	problem_defined,    // per-cell Ohmic resistivity; eta returned by a problem-specific computeResistivity device function
+	none,		 // no physical resistivity model
+	constant,	 // uniform Ohmic resistivity; eta read from mhd.resistivity in the TOML input file
+	problem_defined, // per-cell Ohmic resistivity; eta returned by a problem-specific computeResistivity device function
 };
 
 // this struct is specialized by the user application code.

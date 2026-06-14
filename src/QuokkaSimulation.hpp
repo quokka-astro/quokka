@@ -281,8 +281,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		amrex::Real small_dens = 1e-100;
 		eos_init(small_temp, small_dens);
 		if constexpr (Physics_Traits<problem_t>::resistivity_model != ResistivityModel::none) {
-			const bool resistivity_active = (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::problem_defined) ||
-							(mhdResistivity_ != 0.0);
+			const bool resistivity_active =
+			    (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::problem_defined) || (mhdResistivity_ != 0.0);
 			if (resistivity_active) {
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(do_subcycle == 0,
 								 "AMR subcycling is not supported with nonzero resistivity. Set do_subcycle = 0.");
