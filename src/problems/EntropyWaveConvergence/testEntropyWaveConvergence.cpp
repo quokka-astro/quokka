@@ -50,6 +50,7 @@ template <> struct Physics_Traits<EntropyWaveLinear> {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_mhd_enabled = true;
+	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
 	static constexpr int nGroups = 1;
 	static constexpr bool is_dust_enabled = false;
 	static constexpr int nDustGroups = 1; // number of dust groups
