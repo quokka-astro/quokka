@@ -42,6 +42,7 @@ template <> struct Physics_Traits<SawtoothProblem> {
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 

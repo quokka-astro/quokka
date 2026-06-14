@@ -53,6 +53,7 @@ template <> struct Physics_Traits<ShockCloud> {
 	static constexpr bool is_dust_enabled = false;
 	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
 	static constexpr int numMassScalars = 0;
 	static constexpr int numPassiveScalars = numMassScalars + 3;
 	static constexpr int nGroups = 1; // number of radiation groups

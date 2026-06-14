@@ -37,6 +37,7 @@ template <> struct Physics_Traits<HydrostaticAtmosphereProblem> {
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_dust_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
 	static constexpr int nGroups = 1;
 	static constexpr int nDustGroups = 1;
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;

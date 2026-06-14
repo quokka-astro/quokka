@@ -66,6 +66,7 @@ template <> struct Physics_Traits<CoolingProblem> {
 	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
 	static constexpr int nGroups = 1;
 	// A custom unit system is used here to replicate a dimentionless unit system (c = k_B = a_rad = G = 1), for testing units conversion
 	static constexpr UnitSystem unit_system = UnitSystem::CUSTOM;

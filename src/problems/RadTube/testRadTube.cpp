@@ -61,6 +61,7 @@ template <> struct Physics_Traits<TubeProblem> {
 	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
 	// number of radiation groups
 	static constexpr int nGroups = 2;
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;

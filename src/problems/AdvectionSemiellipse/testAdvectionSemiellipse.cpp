@@ -38,6 +38,7 @@ template <> struct Physics_Traits<SemiellipseProblem> {
 	static constexpr int nGroups = 1;     // number of radiation groups, need to set despite radiation is not enabled.
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
