@@ -1063,11 +1063,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto MHDSystem<problem_t>::computeResistiveE
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE void MHDSystem<problem_t>::applyResistiveCorrection(amrex::Array4<amrex::Real> const &E2_ave, int i, int j, int k,
-											 amrex::Array4<const amrex::Real> const &B_w0,
-											 amrex::Array4<const amrex::Real> const &B_w1,
-											 std::array<int, 3> const &delta_w0, std::array<int, 3> const &delta_w1,
-											 amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real resistivity)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
+MHDSystem<problem_t>::applyResistiveCorrection(amrex::Array4<amrex::Real> const &E2_ave, int i, int j, int k, amrex::Array4<const amrex::Real> const &B_w0,
+					       amrex::Array4<const amrex::Real> const &B_w1, std::array<int, 3> const &delta_w0,
+					       std::array<int, 3> const &delta_w1, amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real resistivity)
 {
 	if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::constant) {
 		E2_ave(i, j, k) -= computeResistiveEMF(B_w0, B_w1, i, j, k, delta_w0, delta_w1, dx_w0, dx_w1, resistivity);
