@@ -16,6 +16,9 @@ enum class UnitSystem { CGS, CONSTANTS, CUSTOM };
 struct DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr int numMassScalars = 0;
+	// NOTE: numPassiveScalars is evaluated at the point of definition of DefaultPhysicsTraits, not
+	// at the point of specialization. If you override numMassScalars, you MUST also explicitly
+	// override numPassiveScalars, or it will silently inherit the pre-evaluated default of 0.
 	static constexpr int numPassiveScalars = numMassScalars + 0;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_dust_enabled = false;
