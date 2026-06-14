@@ -1061,15 +1061,6 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto MHDSystem<problem_t>::computeResistiveE
 	return resistivity * J_edge;
 }
 
-// Default implementation: fires a compile-time error when ResistivityModel::problem_defined is used
-// without a problem-specific explicit specialization.
-// To use problem_defined resistivity, specialize this function in the problem file:
-//   template <>
-//   AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeResistivity<MyProblem>(
-//       int i, int j, int k,
-//       amrex::Array4<const amrex::Real> const &B_w0,
-//       amrex::Array4<const amrex::Real> const &B_w1,
-//       amrex::Real dx_w0, amrex::Real dx_w1) -> amrex::Real { ... }
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeResistivity(int /*i*/, int /*j*/, int /*k*/,
 							    amrex::Array4<const amrex::Real> const & /*B_w0*/,

@@ -852,6 +852,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::computeMaxSignal
 
 	// diffusive CFL constraint for Ohmic resistivity: dt <= cfl * dx^2 / (2*eta)
 	// in N dimensions the true stability limit requires cfl < 1/N, so for 3D use cfl < 1/3
+	// not enforced for problem_defined resistivity; the problem must ensure stability
 	if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::constant) {
 		if (mhdResistivity_ != 0.0) {
 			const auto &dx = geom[level].CellSizeArray();
