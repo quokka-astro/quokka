@@ -55,7 +55,7 @@ cd quokka-reproducer-<short-description>
 bash run.sh
 ```
 
-Quokka also provides a helper script that creates this directory tree and captures code changes from your current worktree. By default, the patch is generated relative to the merge-base with `origin/development`, so it includes both committed branch changes and uncommitted tracked-file edits. Untracked files are copied separately under `patches/untracked-files/` because `git diff` cannot represent files that Git has never seen.
+Quokka also provides a helper script that creates this directory tree and captures code changes from your current worktree. By default, the patch is generated relative to the merge-base with `origin/development`, so it includes both committed branch changes and uncommitted tracked-file edits. The merge-base commit is recorded in `README.md`, `patches/README.md`, and `run.sh` so the person running the reproducer knows the original base for the patch. Untracked files are copied separately under `patches/untracked-files/` because `git diff` cannot represent files that Git has never seen.
 
 ```bash
 ./scripts/python/create_bug_reproducer.py <short-description> \

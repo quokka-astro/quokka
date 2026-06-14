@@ -127,7 +127,7 @@ bash run.sh
 - Branch: `{branch}`
 - Commit: `{commit}`
 - Patch base ref: `{base_ref}`
-- Patch base commit: `{base_commit}`
+- Patch base commit: `{base_commit}` (merge-base of `HEAD` and `{base_ref}`)
 
 ## Platform
 
@@ -167,37 +167,45 @@ bash run.sh
 """
 
 
-def build_run_script() -> str:
-    return """#!/usr/bin/env bash
+def build_run_script(base_ref: str, base_commit: str) -> str:
+    return f"""#!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${{BASH_SOURCE[0]}}")" && pwd)"
+
+# The patch in patches/quokka.patch was generated relative to this commit.
+PATCH_BASE_REF="{base_ref}"
+PATCH_BASE_COMMIT="{base_commit}"
 
 # Edit these values before uploading the reproducer.
-QUOKKA_ROOT="${QUOKKA_ROOT:-${SCRIPT_DIR}/../quokka}"
-PRESET="${PRESET:-3d}"
-PROBLEM="${PROBLEM:-MyProblem}"
-INPUT="${INPUT:-${SCRIPT_DIR}/input/MyProblem.toml}"
-MPI_RANKS="${MPI_RANKS:-1}"
+QUOKKA_ROOT="${{QUOKKA_ROOT:-${{SCRIPT_DIR}}/../quokka}}"
+PRESET="${{PRESET:-3d}}"
+PROBLEM="${{PROBLEM:-MyProblem}}"
+INPUT="${{INPUT:-${{SCRIPT_DIR}}/input/MyProblem.toml}}"
+MPI_RANKS="${{MPI_RANKS:-1}}"
 
-cd "${QUOKKA_ROOT}"
+cd "${{QUOKKA_ROOT}}"
+
+echo "Patch base ref: ${{PATCH_BASE_REF}}"
+echo "Patch base commit: ${{PATCH_BASE_COMMIT}}"
+echo "Current Quokka commit: $(git rev-parse HEAD)"
 
 # Apply local code changes if this reproducer includes any.
 # The patch was generated relative to the base commit recorded in README.md.
-if [[ -s "${SCRIPT_DIR}/patches/quokka.patch" ]]; then
-  git apply --check "${SCRIPT_DIR}/patches/quokka.patch"
-  git apply "${SCRIPT_DIR}/patches/quokka.patch"
+if [[ -s "${{SCRIPT_DIR}}/patches/quokka.patch" ]]; then
+  git apply --check "${{SCRIPT_DIR}}/patches/quokka.patch"
+  git apply "${{SCRIPT_DIR}}/patches/quokka.patch"
 fi
 
 # Restore untracked files that cannot be represented by git diff.
-if [[ -d "${SCRIPT_DIR}/patches/untracked-files" ]]; then
-  cp -R "${SCRIPT_DIR}/patches/untracked-files/." .
+if [[ -d "${{SCRIPT_DIR}}/patches/untracked-files" ]]; then
+  cp -R "${{SCRIPT_DIR}}/patches/untracked-files/." .
 fi
 
-./scripts/bash/quokka config -d "${PRESET}"
-./scripts/bash/quokka build -d "${PRESET}" "${PROBLEM}"
+./scripts/bash/quokka config -d "${{PRESET}}"
+./scripts/bash/quokka build -d "${{PRESET}}" "${{PROBLEM}}"
 
-mpirun -np "${MPI_RANKS}" "./build/${PRESET}/src/problems/${PROBLEM}/${PROBLEM}" "${INPUT}"
+mpirun -np "${{MPI_RANKS}}" "./build/${{PRESET}}/src/problems/${{PROBLEM}}/${{PROBLEM}}" "${{INPUT}}"
 """
 
 
@@ -231,12 +239,13 @@ def create_reproducer(args: argparse.Namespace) -> Path:
         patches_dir / "README.md",
         f"quokka.patch was generated with: git diff {base_commit} --binary\n"
         f"Base ref used to find that commit: {args.base_ref}\n"
+        f"Base commit is the merge-base of HEAD and {args.base_ref}: {base_commit}\n"
         "Place additional patch notes here if the diff needs explanation.\n",
     )
     copy_untracked_files(untracked, untracked_files_dir, worktree)
 
     write_text(repro_dir / "README.md", build_readme(slug, worktree, branch, commit, args.base_ref, base_commit, status, untracked))
-    write_text(repro_dir / "run.sh", build_run_script(), executable=True)
+    write_text(repro_dir / "run.sh", build_run_script(args.base_ref, base_commit), executable=True)
     write_text(input_dir / "README.md", "Put the complete Quokka input deck here, including every required parameter.\n")
     write_text(data_dir / "README.md", "Put required data tables and auxiliary input files here.\n")
     write_text(output_dir / "failure.log", "Paste the full failing terminal output here.\n")
