@@ -234,8 +234,8 @@ void computeWaveSolution(int i, int j, int k, amrex::Array4<amrex::Real> const &
 		const amrex::Real x3_prf_C = x3_prf_L + static_cast<amrex::Real>(0.5) * dx[2];
 		const std::array<amrex::Real, 3> x_vec_mrf_C = rotatePRF2MRF({x1_prf_C, x2_prf_C, x3_prf_C});
 
-		// vec(k) dot vec(x) is rotation-invariant; B and u share the same envelope exp(-gamma*t)
-		// but u lags B by the resistive phase phi = arctan(gamma/omega_real)
+		// vec(k) dot vec(x) is rotation-invariant; b and u share the same envelope exp(-gamma*t)
+		// but u lags b by the resistive phase phi = arctan(gamma/omega_real)
 		const double cos_phase_b = std::cos(omega_real_alfven * time - k_magn * x_vec_mrf_C[0]);
 		const double cos_phase_u = std::cos(omega_real_alfven * time - k_magn * x_vec_mrf_C[0] - resistive_phase_lag);
 		const double decay = std::exp(-resistive_decay_rate * time);
@@ -404,7 +404,7 @@ auto problem_main() -> int
 	k_magn = computeMagnitude(k_vec_prf);
 	k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
 
-	// resistive Alfven wave parameters (all zero when mhd.resistivity is absent)
+	// resistive Alfven wave parameters; decay and phase lag are zero when mhd.resistivity is absent
 	{
 		double eta = 0.0;
 		amrex::ParmParse const mhd_pp("mhd");
