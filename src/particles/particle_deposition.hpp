@@ -1007,6 +1007,11 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 	if (nchem <= 0) {
 		return;
 	}
+	const bool use_chemical_tables = use_table_driven_chemical_yield && ChemicalYieldLookup::isLoaded();
+	ChemicalYieldLookup::ChemicalYieldGpuConstTables yield_tables{};
+	if (use_chemical_tables) {
+		yield_tables = ChemicalYieldLookup::constTables();
+	}
 
 	constexpr amrex::GpuArray<amrex::GpuArray<amrex::GpuArray<amrex::Real, SN_stencil_array_size>, SN_stencil_array_size>, SN_stencil_array_size>
 	    stencil_weights_gpu = {{{{{0.00884198143074, 0.00884198143074, 0.00884198143074, 0.00416240696843},
@@ -1070,9 +1075,9 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 				if (enable_SNII_metal && stage == static_cast<int>(StellarEvolutionStage::SNProgenitor)) {
 					if ((time + dt) > death_time) {
 						amrex::Real snii_total_frac = snii_metal_yield_fraction;
-						if (use_table_driven_chemical_yield && ChemicalYieldLookup::isLoaded()) {
+						if (use_chemical_tables) {
 							const amrex::Real queried_frac =
-							    ChemicalYieldLookup::queryYieldFraction(0, n, mass_birth_msun, z_snii_lookup);
+							    ChemicalYieldLookup::queryYieldFraction(yield_tables, 0, n, mass_birth_msun, z_snii_lookup);
 							if (queried_frac > 0.0) {
 								snii_total_frac = queried_frac;
 							}
@@ -1084,8 +1089,9 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 				amrex::Real y_agb = 0.0;
 				if (agb_death) {
 					amrex::Real agb_total_frac = agb_metal_yield_rate_per_mass;
-					if (use_table_driven_chemical_yield && ChemicalYieldLookup::isLoaded()) {
-						const amrex::Real queried_frac = ChemicalYieldLookup::queryYieldFraction(2, n, mass_birth_msun, stellar_metallicity_fraction);
+					if (use_chemical_tables) {
+						const amrex::Real queried_frac =
+						    ChemicalYieldLookup::queryYieldFraction(yield_tables, 2, n, mass_birth_msun, stellar_metallicity_fraction);
 						if (queried_frac > 0.0) {
 							agb_total_frac = queried_frac;
 						}

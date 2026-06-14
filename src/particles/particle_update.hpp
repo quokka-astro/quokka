@@ -143,6 +143,11 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 		if (nchem <= 0) {
 			return;
 		}
+		const bool use_chemical_tables = use_table_driven_chemical_yield && ChemicalYieldLookup::isLoaded();
+		ChemicalYieldLookup::ChemicalYieldGpuConstTables yield_tables{};
+		if (use_chemical_tables) {
+			yield_tables = ChemicalYieldLookup::constTables();
+		}
 
 		amrex::MultiFab state_buffer(state.boxArray(), state.DistributionMap(), state.nComp(), state.nGrow());
 		state_buffer.setVal(0.0);
@@ -188,9 +193,9 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 						const bool wr_active = (age >= wr_age_start) && (age < wr_lifetime) && (wr_window > 0.0);
 						if (wr_stage && wr_active) {
 							amrex::Real wr_rate_per_mass = wr_metal_yield_rate_per_mass;
-							if (use_table_driven_chemical_yield && ChemicalYieldLookup::isLoaded() && wr_window > 0.0) {
+							if (use_chemical_tables && wr_window > 0.0) {
 								wr_rate_per_mass = std::max<amrex::Real>(0.0, ChemicalYieldLookup::queryYieldFraction(
-														  1, n, mass_birth_msun, z_lookup)) /
+														  yield_tables, 1, n, mass_birth_msun, z_lookup)) /
 										   wr_window;
 							}
 							const amrex::Real baseline_wr_rate_per_mass =

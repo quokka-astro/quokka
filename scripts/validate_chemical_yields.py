@@ -4,7 +4,6 @@
 import argparse
 import glob
 import math
-import re
 from pathlib import Path
 
 import numpy as np
@@ -13,144 +12,69 @@ import yt
 MSUN_CGS = 1.9884e33
 WR_AGB_WINDOW = 1.0e20
 
+CHANNEL_TABLES = {
+    "SNII": "SNII_yield_table.csv",
+    "WR": "WR_yield_table.csv",
+    "AGB": "AGB_yield_table.csv",
+}
+
 
 def normalize_numeric(token):
     return token.replace("\u2212", "-").replace("\u2013", "-").replace("\u2014", "-").replace("\xa0", "")
 
 
-def parse_metallicity_folder(name):
-    pos = name.find("models")
-    if len(name) < 7 or not name.startswith("z") or pos <= 1:
-        return -1.0
-    digits = name[1:pos]
-    return int(digits) / (10 ** len(digits))
+def load_datatable(path):
+    lines = [line.strip() for line in Path(path).read_text().splitlines() if line.strip()]
+    if int(lines[0]) != 1:
+        raise SystemExit(f"{path} is not a 1D DataTable")
+    n_x = int(lines[1])
+    n_out = int(lines[2])
+    input_name = lines[3]
+    output_names = [name.strip().lower() for name in lines[4].split(",")]
+    input_unit = lines[5]
+    xlo = float(normalize_numeric(lines[7]))
+    xhi = float(normalize_numeric(lines[8]))
+    spacing = lines[9].lower()
+    if input_name != "mass" or input_unit != "Msun":
+        raise SystemExit(f"{path} must use mass [Msun] as its coordinate")
+    if len(output_names) != n_out:
+        raise SystemExit(f"{path} output metadata length does not match Nout")
+    values = {}
+    for name, row in zip(output_names, lines[10 : 10 + n_out]):
+        data = [float(normalize_numeric(token)) for token in row.split(",")]
+        if len(data) != n_x:
+            raise SystemExit(f"{path} row for {name} has {len(data)} values, expected {n_x}")
+        values[name] = np.array(data)
+    return {"n_x": n_x, "xlo": xlo, "xhi": xhi, "spacing": spacing, "values": values}
 
 
-def add_entry(entries, mass, metallicity):
-    key = (round(mass * 1000.0), round(metallicity * 1.0e6))
-    if key not in entries:
-        entries[key] = [0.0] * 9
-    return entries[key]
-
-
-def load_yields(root, isotopes):
+def load_yield_tables(root):
     root = Path(root)
-    iso_index = {name.lower(): i for i, name in enumerate(isotopes)}
-    entries = {}
-    mass_re = re.compile(r"s([0-9]+(?:\.[0-9]+)?)\.yield_table")
-
-    sukhbold_root = root / "SNII_Sukhbold16"
-    if sukhbold_root.is_dir():
-        for table in sukhbold_root.iterdir():
-            match = mass_re.fullmatch(table.name)
-            if not (table.is_file() and match):
-                continue
-            mass = float(match.group(1))
-            values = add_entry(entries, mass, 0.014)
-            has_ejecta_col = False
-            has_wind_col = False
-            for line in table.read_text(errors="ignore").splitlines():
-                if not line or line[0] == "#":
-                    continue
-                if line[0] == "[":
-                    has_ejecta_col = "[ejecta]" in line
-                    has_wind_col = "[wind]" in line
-                    continue
-                parts = line.split()
-                if not parts or parts[0].lower() not in iso_index:
-                    continue
-                isotope_index = iso_index[parts[0].lower()]
-                col = 1
-                if has_ejecta_col:
-                    if len(parts) <= col:
-                        continue
-                    values[isotope_index] += max(float(normalize_numeric(parts[col])) / mass, 0.0)
-                    col += 1
-                if has_wind_col:
-                    if len(parts) <= col:
-                        continue
-                    values[3 + isotope_index] += max(float(normalize_numeric(parts[col])) / mass, 0.0)
-
-    agb_root = root / "AGB_Karakas16"
-    filename_re = re.compile(r"m([0-9]+(?:\.[0-9]+)?)z([0-9]+).*\.dat", re.IGNORECASE)
-    header_re = re.compile(
-        r"#\s*Initial\s+mass\s*=\s*([0-9]+(?:\.[0-9]+)?),\s*Z\s*=\s*([0-9]+(?:\.[0-9]+)?),.*M_mix\s*=\s*([0-9eE+\-.]+)",
-        re.IGNORECASE,
-    )
-    if agb_root.is_dir():
-        for table in agb_root.rglob("*.dat"):
-            text = None
-            mass = -1.0
-            metallicity = -1.0
-            match = filename_re.fullmatch(table.name)
-            if match:
-                mass = float(match.group(1))
-                z_digits = match.group(2)
-                metallicity = int(z_digits) / (10 ** len(z_digits))
-            else:
-                text = table.read_text(errors="ignore")
-                for line in text.splitlines():
-                    header = header_re.search(line)
-                    if header:
-                        mass = float(header.group(1))
-                        metallicity = float(header.group(2))
-                        break
-            if mass <= 0.0 or metallicity <= 0.0:
-                continue
-            if text is None:
-                text = table.read_text(errors="ignore")
-            values = add_entry(entries, mass, metallicity)
-            for line in text.splitlines():
-                if not line or line[0] == "#":
-                    continue
-                parts = line.split()
-                if len(parts) < 3 or parts[0].lower() not in iso_index:
-                    continue
-                values[6 + iso_index[parts[0].lower()]] += max(float(normalize_numeric(parts[2])) / mass, 0.0)
-
-    doherty_root = root / "superAGB_Doherty14"
-    header_re = re.compile(r"\s*([0-9]+(?:\.[0-9]+)?)M\s+Z=([0-9eE+\-.]+).*", re.IGNORECASE)
-    if doherty_root.is_dir():
-        for table in doherty_root.iterdir():
-            if not table.is_file():
-                continue
-            mass = -1.0
-            values = None
-            for line in table.read_text(errors="ignore").splitlines():
-                header = header_re.fullmatch(line)
-                if header:
-                    mass = float(header.group(1))
-                    values = add_entry(entries, mass, float(header.group(2)))
-                    continue
-                if values is None or mass <= 0.0 or not line or line[0] == "#":
-                    continue
-                parts = line.split()
-                if len(parts) < 2 or parts[0].lower() not in iso_index:
-                    continue
-                values[6 + iso_index[parts[0].lower()]] += max(float(normalize_numeric(parts[1])) / mass, 0.0)
-
-    return [(max(k[0] / 1000.0, 1.0e-12), max(k[1] / 1.0e6, 1.0e-12), values) for k, values in entries.items()]
+    return {channel: load_datatable(root / filename) for channel, filename in CHANNEL_TABLES.items()}
 
 
-def query_fraction(entries, channel, isotope_index, mass_msun, metallicity):
-    log_mass = math.log10(max(mass_msun, 1.0e-12))
-    log_z = math.log10(max(metallicity, 1.0e-12))
-    weighted_sum = 0.0
-    weight_total = 0.0
-    flat_index = 3 * channel + isotope_index
+def coordinate(table, mass_msun):
+    mass_msun = max(mass_msun, 1.0e-12)
+    if table["spacing"] in ("log", "fast_log"):
+        return math.log(mass_msun)
+    return mass_msun
 
-    for entry_mass, entry_z, values in entries:
-        frac = values[flat_index]
-        if frac <= 0.0:
-            continue
-        dist2 = (math.log10(entry_mass) - log_mass) ** 2 + (math.log10(entry_z) - log_z) ** 2
-        if dist2 < 1.0e-10:
-            return frac
-        weight = 1.0 / (dist2 + 1.0e-20)
-        weighted_sum += weight * frac
-        weight_total += weight
 
-    return weighted_sum / weight_total if weight_total > 0.0 else 0.0
+def query_fraction(tables, channel, isotope, mass_msun):
+    table = tables[channel]
+    values = table["values"].get(isotope.lower())
+    if values is None:
+        raise SystemExit(f"isotope {isotope} not found in {channel} yield table")
+    xlo = coordinate(table, table["xlo"])
+    xhi = coordinate(table, table["xhi"])
+    x = min(max(coordinate(table, mass_msun), xlo), xhi)
+    position = (x - xlo) / ((xhi - xlo) / (table["n_x"] - 1))
+    nearest = round(position)
+    if 0 <= nearest < table["n_x"] and abs(position - nearest) < 1.0e-10:
+        return float(values[nearest])
+    lower = min(max(math.floor(position), 0), table["n_x"] - 2)
+    frac = min(max(position - lower, 0.0), 1.0)
+    return float((1.0 - frac) * values[lower] + frac * values[lower + 1])
 
 
 def latest_plotfile(plotdir):
@@ -168,25 +92,25 @@ def scalar_masses(ds, start=0, count=3):
 
 def validate_snii(args):
     isotopes = ["C12", "N14", "O16"]
-    entries = load_yields(args.yield_root, isotopes)
+    tables = load_yield_tables(args.yield_root)
     ds = yt.load(latest_plotfile(args.plotdir))
     data = ds.all_data()
     mass = float(data[("StochasticStellarPop_particles", "particle_mass_at_birth")].to_value()[0])
     measured = scalar_masses(ds)
 
-    print("test_SNII_Yields measured/expected:")
+    print("test_SNII_Yields simulated/table:")
     max_error = 0.0
     for i, isotope in enumerate(isotopes):
-        expected = query_fraction(entries, 0, i, mass / MSUN_CGS, 0.014) * mass
+        expected = query_fraction(tables, "SNII", isotope, mass / MSUN_CGS) * mass
         ratio = measured[i] / expected
         max_error = max(max_error, abs(ratio - 1.0))
-        print(f"  {isotope:4s} scalar_{i}: measured={measured[i]:.8e} expected={expected:.8e} ratio={ratio:.8f}")
+        print(f"  {isotope:4s} scalar_{i}: simulated={measured[i]:.8e} table={expected:.8e} sim/table={ratio:.8f}")
     return max_error
 
 
 def validate_wr_agb(args):
     isotopes = ["C12", "O16", "Fe56"]
-    entries = load_yields(args.yield_root, isotopes)
+    tables = load_yield_tables(args.yield_root)
     ds = yt.load(latest_plotfile(args.plotdir))
     data = ds.all_data()
     stages = data[("StochasticStellarPop_particles", "particle_evolution_stage")].to_value()
@@ -207,11 +131,11 @@ def validate_wr_agb(args):
     measured_wr = scalar_masses(ds, 6)
     measured_agb = scalar_masses(ds, 9)
 
-    print("test_WR_AGB_yields measured/expected:")
+    print("test_WR_AGB_yields simulated/table:")
     max_error = 0.0
     for i, isotope in enumerate(isotopes):
-        wr_expected = query_fraction(entries, 1, i, wr_mass / MSUN_CGS, 0.02) * wr_mass * wr_elapsed / wr_lifetime
-        agb_expected = query_fraction(entries, 2, i, agb_mass / MSUN_CGS, 0.02) * agb_mass
+        wr_expected = query_fraction(tables, "WR", isotope, wr_mass / MSUN_CGS) * wr_mass * wr_elapsed / wr_lifetime
+        agb_expected = query_fraction(tables, "AGB", isotope, agb_mass / MSUN_CGS) * agb_mass
         expected = wr_expected + agb_expected
         ratio = measured_total[i] / expected if expected > 0.0 else 1.0
         wr_ratio = measured_wr[i] / wr_expected if wr_expected > 0.0 else 1.0
@@ -222,10 +146,10 @@ def validate_wr_agb(args):
         max_error = max(max_error, abs(agb_ratio - 1.0))
         max_error = max(max_error, snii_abs / max(expected, 1.0))
         print(
-            f"  {isotope:4s} total scalar_{i}: measured={measured_total[i]:.8e} expected={expected:.8e} ratio={ratio:.8f} "
-            f"WR scalar_{6 + i}: measured={measured_wr[i]:.8e} expected={wr_expected:.8e} ratio={wr_ratio:.8f} "
-            f"AGB scalar_{9 + i}: measured={measured_agb[i]:.8e} expected={agb_expected:.8e} ratio={agb_ratio:.8f} "
-            f"SNII scalar_{3 + i}: measured={measured_snii[i]:.8e}"
+            f"  {isotope:4s} total scalar_{i}: simulated={measured_total[i]:.8e} table={expected:.8e} sim/table={ratio:.8f} "
+            f"WR scalar_{6 + i}: simulated={measured_wr[i]:.8e} table={wr_expected:.8e} sim/table={wr_ratio:.8f} "
+            f"AGB scalar_{9 + i}: simulated={measured_agb[i]:.8e} table={agb_expected:.8e} sim/table={agb_ratio:.8f} "
+            f"SNII scalar_{3 + i}: simulated={measured_snii[i]:.8e}"
         )
     return max_error
 
