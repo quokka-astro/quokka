@@ -425,7 +425,7 @@ template <> struct quokka::EOS_Traits<DustyOrszagTang> {
 	static constexpr double boltzmann_constant = 1.0;
 };
 
-template <> struct Physics_Traits<DustyOrszagTang> {
+template <> struct Physics_Traits<DustyOrszagTang> : PhysicsTraitsDefaults {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;

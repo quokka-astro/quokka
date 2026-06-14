@@ -53,7 +53,7 @@ constexpr double shock_position = 0.0130; // 0.0132; // cm (shock position drift
 					  // we initialize slightly to the left...)
 constexpr double Lx = 0.01575;		  // cm
 
-template <> struct Physics_Traits<ShockProblem> {
+template <> struct Physics_Traits<ShockProblem> : PhysicsTraitsDefaults {
 	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;

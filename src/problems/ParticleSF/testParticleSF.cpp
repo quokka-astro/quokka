@@ -41,7 +41,7 @@ template <> struct HydroSystem_Traits<ParticleSFProblem> {
 	static constexpr bool reconstruct_eint = true; // need to reconstruct temperature
 };
 
-template <> struct Physics_Traits<ParticleSFProblem> {
+template <> struct Physics_Traits<ParticleSFProblem> : PhysicsTraitsDefaults {
 	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;

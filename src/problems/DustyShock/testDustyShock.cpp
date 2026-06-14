@@ -34,7 +34,7 @@ template <> struct quokka::EOS_Traits<DustyShock> {
 	static constexpr double cs_isothermal = 1.0; // only used when gamma = 1
 };
 
-template <> struct Physics_Traits<DustyShock> {
+template <> struct Physics_Traits<DustyShock> : PhysicsTraitsDefaults {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;

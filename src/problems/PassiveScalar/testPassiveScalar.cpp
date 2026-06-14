@@ -34,7 +34,7 @@ template <> struct quokka::EOS_Traits<ScalarProblem> {
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct Physics_Traits<ScalarProblem> {
+template <> struct Physics_Traits<ScalarProblem> : PhysicsTraitsDefaults {
 	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;

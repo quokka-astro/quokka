@@ -27,7 +27,7 @@ struct RandomBlast {
 constexpr double m_H = C::m_p + C::m_e;	     // mass of hydrogen atom
 constexpr double seconds_per_year = 3.154e7; // seconds per year
 
-template <> struct Physics_Traits<RandomBlast> {
+template <> struct Physics_Traits<RandomBlast> : PhysicsTraitsDefaults {
 	static constexpr bool is_self_gravity_enabled = true;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;

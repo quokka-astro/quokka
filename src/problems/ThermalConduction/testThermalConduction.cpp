@@ -53,7 +53,7 @@ template <> struct HydroSystem_Traits<ThermalConductionProblem> {
 	static constexpr bool reconstruct_eint = false;
 };
 
-template <> struct Physics_Traits<ThermalConductionProblem> {
+template <> struct Physics_Traits<ThermalConductionProblem> : PhysicsTraitsDefaults {
 	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;

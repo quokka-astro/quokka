@@ -93,7 +93,7 @@ template <> struct quokka::EOS_Traits<SGProblem> {
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct Physics_Traits<SGProblem> {
+template <> struct Physics_Traits<SGProblem> : PhysicsTraitsDefaults {
 	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
@@ -159,7 +159,7 @@ template <> struct quokka::EOS_Traits<MGproblem> {
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct Physics_Traits<MGproblem> {
+template <> struct Physics_Traits<MGproblem> : PhysicsTraitsDefaults {
 	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;

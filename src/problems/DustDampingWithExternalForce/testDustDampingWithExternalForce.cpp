@@ -71,7 +71,7 @@ constexpr double Egas0 = P_INITIAL / (quokka::EOS_Traits<DustDampingWithExternal
 constexpr double Egas0_internal = P_INITIAL / (quokka::EOS_Traits<DustDampingWithExternalForce>::gamma - 1.0);
 constexpr int numDustVars = Physics_NumVars::numDustVarsPerGroup;
 
-template <> struct Physics_Traits<DustDampingWithExternalForce> {
+template <> struct Physics_Traits<DustDampingWithExternalForce> : PhysicsTraitsDefaults {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars

@@ -30,7 +30,7 @@
 struct SawtoothProblem {
 };
 
-template <> struct Physics_Traits<SawtoothProblem> {
+template <> struct Physics_Traits<SawtoothProblem> : PhysicsTraitsDefaults {
 	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;

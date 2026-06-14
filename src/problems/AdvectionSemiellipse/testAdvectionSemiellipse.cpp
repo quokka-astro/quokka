@@ -26,7 +26,7 @@
 struct SemiellipseProblem {
 };
 
-template <> struct Physics_Traits<SemiellipseProblem> {
+template <> struct Physics_Traits<SemiellipseProblem> : PhysicsTraitsDefaults {
 	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;

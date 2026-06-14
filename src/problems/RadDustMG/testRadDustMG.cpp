@@ -51,7 +51,7 @@ template <> struct quokka::EOS_Traits<DustProblem> {
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct Physics_Traits<DustProblem> {
+template <> struct Physics_Traits<DustProblem> : PhysicsTraitsDefaults {
 	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
