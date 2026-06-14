@@ -11,11 +11,12 @@ using Real = amrex::Real;
 // enum for unit system, one of CGS, CONSTANTS, CUSTOM
 enum class UnitSystem { CGS, CONSTANTS, CUSTOM };
 
-// this struct is specialized by the user application code.
-template <typename problem_t> struct Physics_Traits {
+// default values for all Physics_Traits fields; specialize Physics_Traits by inheriting from this
+// struct and overriding only the fields that differ from the defaults
+struct PhysicsTraitsDefaults {
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr int numMassScalars = 0;
-	static constexpr int numPassiveScalars = numMassScalars + 0;
+	static constexpr int numPassiveScalars = 0;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_dust_enabled = false;
 	static constexpr bool is_self_gravity_enabled = false;
@@ -32,6 +33,9 @@ template <typename problem_t> struct Physics_Traits {
 	static constexpr double unit_time = 1.0;
 	static constexpr double unit_temperature = 1.0;
 };
+
+// this struct is specialized by the user application code.
+template <typename problem_t> struct Physics_Traits : PhysicsTraitsDefaults {};
 
 // this struct stores the indices at which quantities start
 template <typename problem_t> struct Physics_Indices {
