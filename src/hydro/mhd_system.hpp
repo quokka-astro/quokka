@@ -116,6 +116,10 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 										 std::array<int, 3> const &delta_w0, std::array<int, 3> const &delta_w1,
 										 amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real resistivity);
 
+	static void AddResistiveEnergyFlux(std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays,
+					   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
+					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real resistivity);
+
 	static void ReconstructTo(FluxDir dir, arrayconst_t &cState, array_t &lState, array_t &rState, const amrex::Box &box_iValid, int reconstructionOrder,
 				  SlopeLimiter plmLimiter);
 
@@ -1073,6 +1077,90 @@ MHDSystem<problem_t>::applyResistiveCorrection(amrex::Array4<amrex::Real> const 
 	} else if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::problem_defined) {
 		const amrex::Real eta = computeResistivity<problem_t>(i, j, k, B_w0, B_w1, dx_w0, dx_w1);
 		E2_ave(i, j, k) -= computeResistiveEMF(B_w0, B_w1, i, j, k, delta_w0, delta_w1, dx_w0, dx_w1, eta);
+	}
+}
+
+template <typename problem_t>
+void MHDSystem<problem_t>::AddResistiveEnergyFlux(std::array<amrex::MultiFab, AMREX_SPACEDIM> &fluxArrays,
+						  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
+						  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real resistivity)
+{
+	if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
+		return;
+	}
+	if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::none) {
+		return;
+	}
+
+	const BL_PROFILE("MHDSystem::AddResistiveEnergyFlux()");
+
+	for (int iface = 0; iface < AMREX_SPACEDIM; ++iface) {
+		const int a = (iface + 1) % 3;
+		const int b = (iface + 2) % 3;
+
+		std::array<int, 3> delta_iface = {0, 0, 0};
+		std::array<int, 3> delta_a = {0, 0, 0};
+		std::array<int, 3> delta_b = {0, 0, 0};
+		delta_iface[iface] = 1;
+		delta_a[a] = 1;
+		delta_b[b] = 1;
+
+		const amrex::Real dx_iface = dx[iface];
+		const amrex::Real dx_a = dx[a];
+		const amrex::Real dx_b = dx[b];
+		const int energy_idx = HydroSystem<problem_t>::energy_index;
+
+		for (amrex::MFIter mfi(fluxArrays[iface]); mfi.isValid(); ++mfi) {
+			const amrex::Box &box_face = mfi.validbox();
+
+			// B_a on a-faces, B_b on b-faces, B_iface on iface-faces (aliased, no copy)
+			const auto B_a = fcx_mf_cVars[a][mfi].const_array(bfield_index);
+			const auto B_b = fcx_mf_cVars[b][mfi].const_array(bfield_index);
+			const auto B_iface = fcx_mf_cVars[iface][mfi].const_array(bfield_index);
+			auto flux = fluxArrays[iface][mfi].array();
+
+			// a-edge: B_w0=B_b, delta_w0=delta_b, dx_w0=dx_b; B_w1=B_iface, delta_w1=delta_iface, dx_w1=dx_iface
+			// b-edge: B_w0=B_iface, delta_w0=delta_iface, dx_w0=dx_iface; B_w1=B_a, delta_w1=delta_a, dx_w1=dx_a
+			amrex::ParallelFor(box_face, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+				amrex::Real R_a0 = 0.0;
+				amrex::Real R_a1 = 0.0;
+				amrex::Real R_b0 = 0.0;
+				amrex::Real R_b1 = 0.0;
+				if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::constant) {
+					R_a0 = computeResistiveEMF(B_b, B_iface, i, j, k, delta_b, delta_iface, dx_b, dx_iface, resistivity);
+					R_a1 = computeResistiveEMF(B_b, B_iface, i + delta_b[0], j + delta_b[1], k + delta_b[2],
+								   delta_b, delta_iface, dx_b, dx_iface, resistivity);
+					R_b0 = computeResistiveEMF(B_iface, B_a, i, j, k, delta_iface, delta_a, dx_iface, dx_a, resistivity);
+					R_b1 = computeResistiveEMF(B_iface, B_a, i + delta_a[0], j + delta_a[1], k + delta_a[2],
+								   delta_iface, delta_a, dx_iface, dx_a, resistivity);
+				} else if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::problem_defined) {
+					const amrex::Real eta_a0 = computeResistivity<problem_t>(i, j, k, B_b, B_iface, dx_b, dx_iface);
+					R_a0 = computeResistiveEMF(B_b, B_iface, i, j, k, delta_b, delta_iface, dx_b, dx_iface, eta_a0);
+					const amrex::Real eta_a1 = computeResistivity<problem_t>(i + delta_b[0], j + delta_b[1], k + delta_b[2],
+												     B_b, B_iface, dx_b, dx_iface);
+					R_a1 = computeResistiveEMF(B_b, B_iface, i + delta_b[0], j + delta_b[1], k + delta_b[2],
+								   delta_b, delta_iface, dx_b, dx_iface, eta_a1);
+					const amrex::Real eta_b0 = computeResistivity<problem_t>(i, j, k, B_iface, B_a, dx_iface, dx_a);
+					R_b0 = computeResistiveEMF(B_iface, B_a, i, j, k, delta_iface, delta_a, dx_iface, dx_a, eta_b0);
+					const amrex::Real eta_b1 = computeResistivity<problem_t>(i + delta_a[0], j + delta_a[1], k + delta_a[2],
+												     B_iface, B_a, dx_iface, dx_a);
+					R_b1 = computeResistiveEMF(B_iface, B_a, i + delta_a[0], j + delta_a[1], k + delta_a[2],
+								   delta_iface, delta_a, dx_iface, dx_a, eta_b1);
+				}
+
+				// Average face-B to each edge position across the face-normal direction
+				const amrex::Real avg_Bb_0 = 0.5 * (B_b(i, j, k) + B_b(i - delta_iface[0], j - delta_iface[1], k - delta_iface[2]));
+				const amrex::Real avg_Bb_1 = 0.5 * (B_b(i + delta_b[0], j + delta_b[1], k + delta_b[2]) +
+								     B_b(i + delta_b[0] - delta_iface[0], j + delta_b[1] - delta_iface[1], k + delta_b[2] - delta_iface[2]));
+				const amrex::Real avg_Ba_0 = 0.5 * (B_a(i, j, k) + B_a(i - delta_iface[0], j - delta_iface[1], k - delta_iface[2]));
+				const amrex::Real avg_Ba_1 = 0.5 * (B_a(i + delta_a[0], j + delta_a[1], k + delta_a[2]) +
+								     B_a(i + delta_a[0] - delta_iface[0], j + delta_a[1] - delta_iface[1], k + delta_a[2] - delta_iface[2]));
+
+				// F_eta = (eta J x B)_iface = eta J_a * B_b - eta J_b * B_a, averaged over the two bounding edges
+				const amrex::Real F_eta = 0.25 * (R_a0 * avg_Bb_0 + R_a1 * avg_Bb_1 - R_b0 * avg_Ba_0 - R_b1 * avg_Ba_1);
+				flux(i, j, k, energy_idx) += F_eta;
+			});
+		}
 	}
 }
 

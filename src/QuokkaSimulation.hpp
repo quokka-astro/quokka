@@ -2347,6 +2347,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage1, stateOld_cc, faceVel, stateOld_fc, fast_mhd_wavespeeds,
 							 emfReconstructionOrder_, emfAveragingScheme_, mhdPlmLimiter_, emfComputingScheme_, dx,
 							 mhdResistivity_);
+			MHDSystem<problem_t>::AddResistiveEnergyFlux(fluxArrays, stateOld_fc, dx, mhdResistivity_);
 		}
 
 		amrex::MultiFab rhs(grids[lev], dmap[lev], nvars_, 0);
@@ -2480,6 +2481,7 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage2, stateInter_cc, faceVel, stateInter_fc, fast_mhd_wavespeeds,
 							 emfReconstructionOrder_, emfAveragingScheme_, mhdPlmLimiter_, emfComputingScheme_, dx,
 							 mhdResistivity_);
+			MHDSystem<problem_t>::AddResistiveEnergyFlux(fluxArrays, stateInter_fc, dx, mhdResistivity_);
 		}
 
 		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
