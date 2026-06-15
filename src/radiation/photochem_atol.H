@@ -37,7 +37,9 @@ auto hasRawAtolParams() -> bool
 // into ParmParse so init_extern_parameters() picks them up.
 //
 // Call between readParmParse() and init_extern_parameters() in QuokkaSimulation::Initialize().
-// No-op when neither integrator.typical_* nor integrator.atol_* keys appear in the toml.
+// Aborts when neither integrator.typical_* nor integrator.atol_* keys appear in the toml —
+// VODE's built-in defaults (~1e-10) are unusably tight for photochemistry and will cause
+// the integrator to stall.
 //
 // Note: Erad_floor (the M1 radiation floor) is a compile-time constexpr in RadSystem_Traits
 // and is set independently in each problem's specialization. typical_minimal_radiation_T only
@@ -47,11 +49,19 @@ auto hasRawAtolParams() -> bool
 // per cm^3 — and can be overridden in the toml.
 template <typename problem_t> void SetAtolFromPhysics()
 {
-	if (!detail::hasTypicalParams()) {
-		return; // backward-compatible: VODE defaults or hand-tuned atol_* take effect
+	if (!detail::hasTypicalParams() && !detail::hasRawAtolParams()) {
+		amrex::Abort(
+		    "No integrator tolerances specified. Either set integrator.typical_* (recommended) "
+		    "or integrator.atol_* parameters. VODE's built-in defaults (~1e-10) are unusably "
+		    "tight for photochemistry and will cause the integrator to stall. "
+		    "See docs/markdown/photoionization.md.");
 	}
-	if (detail::hasRawAtolParams()) {
+	if (detail::hasTypicalParams() && detail::hasRawAtolParams()) {
 		amrex::Abort("integrator.typical_* and integrator.atol_* are mutually exclusive. Remove one set.");
+	}
+
+	if (!detail::hasTypicalParams()) {
+		return; // user chose hand-tuned atol_*; nothing to derive
 	}
 
 	amrex::ParmParse const pp("integrator");

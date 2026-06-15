@@ -77,9 +77,9 @@ blackbody level is numerically negligible.
 ### Mutual exclusivity
 
 The `integrator.typical_*` parameters and hand-tuned `integrator.atol_*` parameters
-are **mutually exclusive**.  Using both triggers an error.  If neither is present,
-`SetAtolFromPhysics` is a no-op and VODE uses its built-in defaults — this ensures
-backwards compatibility with existing input files.
+are **mutually exclusive** — using both triggers an error.  Specifying neither also
+triggers an error, because VODE's built-in defaults (~1e-10) are unusably tight for
+photochemistry and will cause the integrator to stall.
 
 ### Setting up a new problem
 
