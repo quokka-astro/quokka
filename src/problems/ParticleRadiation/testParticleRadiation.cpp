@@ -54,7 +54,7 @@ template <> struct HydroSystem_Traits<ParticleRadiationProblem> {
 template <> struct Physics_Traits<ParticleRadiationProblem> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = true;
-	static constexpr int nGroups = 2;			     // number of radiation groups
+	static constexpr int nGroups = 2; // number of radiation groups
 };
 
 template <> struct RadSystem_Traits<ParticleRadiationProblem> {
