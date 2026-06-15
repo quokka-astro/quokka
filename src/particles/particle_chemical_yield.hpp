@@ -12,6 +12,7 @@
 #include <cmath>
 #include <filesystem>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace quokka
@@ -20,44 +21,48 @@ namespace quokka
 namespace ChemicalYieldLookup
 {
 
-constexpr int kMaxTrackedIsotopes = 32;
-constexpr int kMaxTrackedChannels = 3;
-constexpr int kChemicalYieldTableNumIsotopes = 389;
-constexpr amrex::Real kFixedYieldMetallicity = 0.02;
+constexpr int max_tracked_isotopes = 32;
+constexpr int max_tracked_channels = 3;
+constexpr int chemical_yield_table_num_isotopes = 389;
 
-using FullChemicalYieldDataTable = quokka::DataTable<1, kChemicalYieldTableNumIsotopes, quokka::OutOfBounds::clamp>;
-using SelectedChemicalYieldDataTable = quokka::DataTable<1, kMaxTrackedIsotopes, quokka::OutOfBounds::clamp>;
+using FullChemicalYieldDataTable = quokka::DataTable<1, chemical_yield_table_num_isotopes, quokka::OutOfBounds::clamp>;
+using SelectedChemicalYieldDataTable = quokka::DataTable<1, max_tracked_isotopes, quokka::OutOfBounds::clamp>;
+using WRMassLossDistributionDataTable = quokka::DataTable<2, 1, quokka::OutOfBounds::clamp>;
 
 struct ChemicalYieldGpuConstTables {
-	std::array<quokka::DataTableGpuConst<1, kMaxTrackedIsotopes, quokka::OutOfBounds::clamp>, kMaxTrackedChannels> channels{};
+	std::array<quokka::DataTableGpuConst<1, max_tracked_isotopes, quokka::OutOfBounds::clamp>, max_tracked_channels> channels{};
+	quokka::DataTableGpuConst<2, 1, quokka::OutOfBounds::clamp> wr_mass_loss_distribution{};
 };
 
 class ChemicalYieldTables
 {
       public:
-	std::array<SelectedChemicalYieldDataTable, kMaxTrackedChannels> channels{};
+	std::array<SelectedChemicalYieldDataTable, max_tracked_channels> channels{};
+	WRMassLossDistributionDataTable wr_mass_loss_distribution{};
 
 	[[nodiscard]] auto const_tables() const -> ChemicalYieldGpuConstTables
 	{
 		ChemicalYieldGpuConstTables tables{};
-		for (int c = 0; c < kMaxTrackedChannels; ++c) {
+		for (int c = 0; c < max_tracked_channels; ++c) {
 			tables.channels[static_cast<std::size_t>(c)] = channels[static_cast<std::size_t>(c)].const_tables();
 		}
+		tables.wr_mass_loss_distribution = wr_mass_loss_distribution.const_tables();
 		return tables;
 	}
 };
 
-inline ChemicalYieldTables *g_tables = nullptr;					       // NOLINT
-AMREX_GPU_MANAGED inline bool g_loaded = false;				       // NOLINT
-AMREX_GPU_MANAGED inline int g_num_tracked_isotopes = 0;		       // NOLINT
-AMREX_GPU_MANAGED inline amrex::GpuArray<int, kMaxTrackedChannels> g_channel_enabled{}; // NOLINT
+inline ChemicalYieldTables *tables_ptr = nullptr;						    // NOLINT
+AMREX_GPU_MANAGED inline bool tables_loaded = false;					    // NOLINT
+AMREX_GPU_MANAGED inline bool wr_mass_loss_distribution_loaded = false;			    // NOLINT
+AMREX_GPU_MANAGED inline int num_tracked_isotopes = 0;					    // NOLINT
+AMREX_GPU_MANAGED inline amrex::GpuArray<int, max_tracked_channels> channel_enabled{}; // NOLINT
 
 inline auto mutableTables() -> ChemicalYieldTables &
 {
-	if (g_tables == nullptr) {
-		g_tables = new ChemicalYieldTables(); // NOLINT(cppcoreguidelines-owning-memory)
+	if (tables_ptr == nullptr) {
+		tables_ptr = new ChemicalYieldTables(); // NOLINT(cppcoreguidelines-owning-memory)
 	}
-	return *g_tables;
+	return *tables_ptr;
 }
 
 inline auto lowercase(std::string s) -> std::string
@@ -87,24 +92,24 @@ inline auto resolveInputPath(const std::string &filename) -> std::filesystem::pa
 
 inline auto channelName(int channel_index) -> std::string
 {
-	static const std::array<std::string, kMaxTrackedChannels> names{"snii", "wr", "agb"};
+	static const std::array<std::string, max_tracked_channels> names{"snii", "wr", "agb"};
 	return names.at(static_cast<std::size_t>(channel_index));
 }
 
 inline auto channelTableName(int channel_index) -> std::string
 {
-	static const std::array<std::string, kMaxTrackedChannels> names{"SNII_yield_table.csv", "WR_yield_table.csv", "AGB_yield_table.csv"};
+	static const std::array<std::string, max_tracked_channels> names{"SNII_yield_table.csv", "WR_yield_table.csv", "AGB_yield_table.csv"};
 	return names.at(static_cast<std::size_t>(channel_index));
 }
 
-inline auto requestedChannelMap(const std::vector<std::string> &tracked_channels) -> std::array<bool, kMaxTrackedChannels>
+inline auto requestedChannelMap(const std::vector<std::string> &tracked_channels) -> std::array<bool, max_tracked_channels>
 {
-	std::array<bool, kMaxTrackedChannels> requested{true, true, true};
+	std::array<bool, max_tracked_channels> requested{true, true, true};
 	if (!tracked_channels.empty()) {
 		requested = {false, false, false};
 		for (const auto &channel : tracked_channels) {
 			const std::string name = lowercase(channel);
-			for (int c = 0; c < kMaxTrackedChannels; ++c) {
+			for (int c = 0; c < max_tracked_channels; ++c) {
 				if (name == channelName(c)) {
 					requested[static_cast<std::size_t>(c)] = true;
 				}
@@ -118,7 +123,7 @@ inline auto outputIndex(const FullChemicalYieldDataTable &table, const std::stri
 {
 	const std::string requested = lowercase(isotope_name);
 	const auto output_names = table.output_names();
-	for (int i = 0; i < kChemicalYieldTableNumIsotopes; ++i) {
+	for (int i = 0; i < chemical_yield_table_num_isotopes; ++i) {
 		if (lowercase(output_names[static_cast<std::size_t>(i)]) == requested) {
 			return i;
 		}
@@ -137,10 +142,10 @@ inline auto physicalCoordinateBound(amrex::Real coord, quokka::SpacingType spaci
 	return coord;
 }
 
-inline auto makeOutputNames(const std::vector<std::string> &tracked_isotopes) -> std::array<std::string, kMaxTrackedIsotopes>
+inline auto makeOutputNames(const std::vector<std::string> &tracked_isotopes) -> std::array<std::string, max_tracked_isotopes>
 {
-	std::array<std::string, kMaxTrackedIsotopes> names{};
-	for (int i = 0; i < kMaxTrackedIsotopes; ++i) {
+	std::array<std::string, max_tracked_isotopes> names{};
+	for (int i = 0; i < max_tracked_isotopes; ++i) {
 		if (i < static_cast<int>(tracked_isotopes.size())) {
 			names[static_cast<std::size_t>(i)] = lowercase(tracked_isotopes[static_cast<std::size_t>(i)]);
 		} else {
@@ -150,9 +155,9 @@ inline auto makeOutputNames(const std::vector<std::string> &tracked_isotopes) ->
 	return names;
 }
 
-inline auto makeOutputUnits() -> std::array<std::string, kMaxTrackedIsotopes>
+inline auto makeOutputUnits() -> std::array<std::string, max_tracked_isotopes>
 {
-	std::array<std::string, kMaxTrackedIsotopes> units{};
+	std::array<std::string, max_tracked_isotopes> units{};
 	units.fill("fraction");
 	return units;
 }
@@ -167,9 +172,24 @@ inline auto makeZeroTable() -> SelectedChemicalYieldDataTable
 	const std::array<std::string, 1> input_units{"Msun"};
 	const auto output_names = makeOutputNames({});
 	const auto output_units = makeOutputUnits();
-	amrex::Vector<amrex::Real> flat_data(static_cast<std::size_t>(kMaxTrackedIsotopes * n_xs[0]), 0.0);
+	amrex::Vector<amrex::Real> flat_data(static_cast<std::size_t>(max_tracked_isotopes * n_xs[0]), 0.0);
 	return SelectedChemicalYieldDataTable::FromFlatData(x_mins, x_maxs, n_xs, spacing, flat_data, input_names, output_names, input_units,
 							    output_units, quokka::SpacingType::linear);
+}
+
+inline auto makeZeroWRMassLossDistributionTable() -> WRMassLossDistributionDataTable
+{
+	const std::array<amrex::Real, 2> x_mins{0.0, 1.0};
+	const std::array<amrex::Real, 2> x_maxs{1.0, 2.0};
+	const std::array<int, 2> n_xs{2, 2};
+	const std::array<quokka::SpacingType, 2> spacing{quokka::SpacingType::linear, quokka::SpacingType::linear};
+	const std::array<std::string, 2> input_names{"age", "mass"};
+	const std::array<std::string, 1> output_names{"cumulative_fraction"};
+	const std::array<std::string, 2> input_units{"s", "Msun"};
+	const std::array<std::string, 1> output_units{"fraction"};
+	amrex::Vector<amrex::Real> flat_data(4, 0.0);
+	return WRMassLossDistributionDataTable::FromFlatData(x_mins, x_maxs, n_xs, spacing, flat_data, input_names, output_names, input_units, output_units,
+							     quokka::SpacingType::linear);
 }
 
 inline auto loadChannelTable(const std::filesystem::path &table_path, int channel_index, const std::vector<std::string> &tracked_isotopes) -> bool
@@ -200,8 +220,8 @@ inline auto loadChannelTable(const std::filesystem::path &table_path, int channe
 	const auto output_names = makeOutputNames(tracked_isotopes);
 	const auto output_units = makeOutputUnits();
 
-	amrex::Vector<amrex::Real> flat_data(static_cast<std::size_t>(kMaxTrackedIsotopes * num_entries), 0.0);
-	for (int isotope_index = 0; isotope_index < g_num_tracked_isotopes; ++isotope_index) {
+	amrex::Vector<amrex::Real> flat_data(static_cast<std::size_t>(max_tracked_isotopes * num_entries), 0.0);
+	for (int isotope_index = 0; isotope_index < num_tracked_isotopes; ++isotope_index) {
 		const int out_idx = outputIndex(full_table, tracked_isotopes[static_cast<std::size_t>(isotope_index)]);
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(out_idx >= 0, ("chemical yield isotope not found in table: " + tracked_isotopes[static_cast<std::size_t>(isotope_index)]).c_str());
 		const auto data = full_const.dataViewArrays[static_cast<std::size_t>(out_idx)];
@@ -213,21 +233,46 @@ inline auto loadChannelTable(const std::filesystem::path &table_path, int channe
 	mutableTables().channels[static_cast<std::size_t>(channel_index)] =
 	    SelectedChemicalYieldDataTable::FromFlatData(x_mins, x_maxs, n_xs, spacing_types, flat_data, input_names, output_names, input_units, output_units,
 							 quokka::SpacingType::linear);
-	g_channel_enabled[channel_index] = 1;
+	channel_enabled[channel_index] = 1;
+	return true;
+}
+
+inline auto loadWRMassLossDistributionTable(const std::filesystem::path &table_path) -> bool
+{
+	if (!std::filesystem::exists(table_path)) {
+		return false;
+	}
+
+	auto distribution_table = WRMassLossDistributionDataTable::CSVReader(table_path.string(), quokka::SpacingType::linear);
+	if (!distribution_table.is_initialized()) {
+		return false;
+	}
+
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(distribution_table.input_name(0) == "age", "WR mass-loss distribution table must use 'age' as input 0");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(distribution_table.input_name(1) == "mass", "WR mass-loss distribution table must use 'mass' as input 1");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(distribution_table.input_unit(0) == "s", "WR mass-loss distribution age coordinate must use 's'");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(distribution_table.input_unit(1) == "Msun", "WR mass-loss distribution mass coordinate must use 'Msun'");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(distribution_table.output_name(0) == "cumulative_fraction",
+					 "WR mass-loss distribution table must output 'cumulative_fraction'");
+
+	mutableTables().wr_mass_loss_distribution = std::move(distribution_table);
+	wr_mass_loss_distribution_loaded = true;
 	return true;
 }
 
 inline auto loadTable(const std::string &filename, const std::vector<std::string> &tracked_isotopes, const std::vector<std::string> &tracked_channels)
     -> bool
 {
-	g_loaded = false;
-	g_num_tracked_isotopes = std::min(static_cast<int>(tracked_isotopes.size()), kMaxTrackedIsotopes);
+	tables_loaded = false;
+	wr_mass_loss_distribution_loaded = false;
+	num_tracked_isotopes = std::min(static_cast<int>(tracked_isotopes.size()), max_tracked_isotopes);
 	auto &tables = mutableTables();
-	for (int c = 0; c < kMaxTrackedChannels; ++c) {
-		g_channel_enabled[c] = 0;
+	for (int c = 0; c < max_tracked_channels; ++c) {
+		channel_enabled[c] = 0;
 		tables.channels[static_cast<std::size_t>(c)] = makeZeroTable();
 	}
-	if (g_num_tracked_isotopes <= 0) {
+	tables.wr_mass_loss_distribution = makeZeroWRMassLossDistributionTable();
+	if (num_tracked_isotopes <= 0) {
 		return false;
 	}
 
@@ -236,33 +281,51 @@ inline auto loadTable(const std::string &filename, const std::vector<std::string
 	const auto requested_channels = requestedChannelMap(tracked_channels);
 
 	bool loaded_any = false;
-	for (int c = 0; c < kMaxTrackedChannels; ++c) {
+	for (int c = 0; c < max_tracked_channels; ++c) {
 		if (!requested_channels[static_cast<std::size_t>(c)]) {
 			continue;
 		}
 		const std::filesystem::path table_path = table_dir / channelTableName(c);
-		loaded_any = loadChannelTable(table_path, c, tracked_isotopes) || loaded_any;
+		const bool loaded_channel = loadChannelTable(table_path, c, tracked_isotopes);
+		if (loaded_channel && c == 1) {
+			const std::filesystem::path wr_distribution_path = table_dir / "WR_mass_loss_distribution_table.csv";
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(loadWRMassLossDistributionTable(wr_distribution_path),
+							 ("failed to load WR mass-loss distribution table: " + wr_distribution_path.string()).c_str());
+		}
+		loaded_any = loaded_channel || loaded_any;
 	}
 
-	g_loaded = loaded_any;
-	return g_loaded;
+	tables_loaded = loaded_any;
+	return tables_loaded;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto isLoaded() -> bool { return g_loaded && (g_num_tracked_isotopes > 0); }
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto isLoaded() -> bool { return tables_loaded && (num_tracked_isotopes > 0); }
 
 inline auto constTables() -> ChemicalYieldGpuConstTables { return mutableTables().const_tables(); }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto queryYieldFraction(ChemicalYieldGpuConstTables const &tables, int channel_index, int isotope_index,
 								 amrex::Real mass_msun, amrex::Real /*metallicity*/) -> amrex::Real
 {
-	if (!isLoaded() || channel_index < 0 || isotope_index < 0 || channel_index >= kMaxTrackedChannels ||
-	    isotope_index >= g_num_tracked_isotopes || g_channel_enabled[channel_index] == 0) {
+	if (!isLoaded() || channel_index < 0 || isotope_index < 0 || channel_index >= max_tracked_channels ||
+	    isotope_index >= num_tracked_isotopes || channel_enabled[channel_index] == 0) {
 		return 0.0;
 	}
 
 	std::array<amrex::Real, 1> const point{mass_msun};
 	const auto values = tables.channels[static_cast<std::size_t>(channel_index)].interpolate(point);
 	return std::max<amrex::Real>(values[static_cast<std::size_t>(isotope_index)], 0.0);
+}
+
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto queryWRMassLossCumulativeFraction(ChemicalYieldGpuConstTables const &tables, amrex::Real age,
+										amrex::Real mass_msun) -> amrex::Real
+{
+	if (!isLoaded() || !wr_mass_loss_distribution_loaded || mass_msun <= 0.0) {
+		return 0.0;
+	}
+
+	std::array<amrex::Real, 2> const point{std::max<amrex::Real>(0.0, age), mass_msun};
+	const auto values = tables.wr_mass_loss_distribution.interpolate(point);
+	return std::min<amrex::Real>(1.0, std::max<amrex::Real>(0.0, values[0]));
 }
 
 } // namespace ChemicalYieldLookup
