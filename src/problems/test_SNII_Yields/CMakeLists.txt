@@ -13,9 +13,9 @@ if(AMReX_SPACEDIM EQUAL 3)
 	add_test(
 		NAME ${JOB_NAME}_prepare_yields
 		COMMAND ${CMAKE_COMMAND}
-			-DQUOKKA_YIELD_ARCHIVE=${CMAKE_SOURCE_DIR}/extern/yields/yields.tar.gz
+			-DQUOKKA_YIELD_ARCHIVE=${CMAKE_SOURCE_DIR}/extern/yields/quokka_yield_tables.tar.gz
 			-DQUOKKA_YIELD_DESTINATION=${CMAKE_SOURCE_DIR}/extern/yields
-			-DQUOKKA_YIELD_SENTINEL=${CMAKE_SOURCE_DIR}/extern/yields/SNII_Sukhbold16
+			-DQUOKKA_YIELD_SENTINEL=${CMAKE_SOURCE_DIR}/extern/yields/WR_mass_loss_distribution_table.csv
 			-P ${CMAKE_SOURCE_DIR}/scripts/cmake/extract_chemical_yields.cmake)
 	add_test(
 		NAME ${JOB_NAME}_validate
