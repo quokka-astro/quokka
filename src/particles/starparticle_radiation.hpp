@@ -6,7 +6,7 @@
 #include "AMReX_REAL.H"
 
 #include "particles/particle_radiation.hpp" // LuminosityGpuConstTables
-#include "particles/particle_types.hpp"     // StarParticle*Idx, ParticleType, Particle_Traits
+#include "particles/particle_types.hpp"	    // StarParticle*Idx, ParticleType, Particle_Traits
 
 #if AMREX_SPACEDIM == 3
 

@@ -4,8 +4,8 @@
 #include "AMReX_AmrParticles.H"
 #include "AMReX_Enum.H"
 #include "AMReX_ParIter.H"
-#include "physics_info.hpp"
 #include "particles/stellar_models.hpp"
+#include "physics_info.hpp"
 
 // Function to create bit flags: bitflag(position) = 2^(position - 1)
 // Example: bitflag<1>() = 1, bitflag<2>() = 2, bitflag<3>() = 4, ...
@@ -53,7 +53,7 @@ constexpr auto operator&(ParticleSwitch flags, ParticleSwitch flag) -> bool
 // - static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | TestEnum::MISTAKE;
 struct DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::None; // Determines which particle types are enabled using bitwise flags.
-	using stellar_model = quokka::ToyStellarModel; // Default stellar-evolution model
+	using stellar_model = quokka::ToyStellarModel;				// Default stellar-evolution model
 };
 
 // This struct should be specialized by the user application code to configure particle behavior.
@@ -351,14 +351,14 @@ using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
 //-------------------- Star particles --------------------
 
 AMREX_ENUM(StarParticleDataIdx, // NOLINT
-	   mass,	// Mass of the particle
-	   vx,		// Velocity x
-	   vy,		// Velocity y
-	   vz,		// Velocity z
-	   birth_time,	// Simulation time when the particle was created
-	   mdot,	// Current mass accretion rate (set by the accretion module)
-	   radius,	// Stellar radius (set by the stellar-evolution model)
-	   lum		// Base index for luminosity components (MUST be last; expands to lum_0, lum_1, ... for nGroups)
+	   mass,		// Mass of the particle
+	   vx,			// Velocity x
+	   vy,			// Velocity y
+	   vz,			// Velocity z
+	   birth_time,		// Simulation time when the particle was created
+	   mdot,		// Current mass accretion rate (set by the accretion module)
+	   radius,		// Stellar radius (set by the stellar-evolution model)
+	   lum			// Base index for luminosity components (MUST be last; expands to lum_0, lum_1, ... for nGroups)
 );
 
 constexpr int StarParticleMassIdx = static_cast<int>(StarParticleDataIdx::mass);
@@ -377,8 +377,7 @@ template <typename problem_t>
 constexpr int StarParticleRealComps = 7 + Physics_Traits<problem_t>::nGroups + Particle_Traits<problem_t>::stellar_model::nExtraReal;
 template <typename problem_t> constexpr int StarParticleIntComps = Particle_Traits<problem_t>::stellar_model::nExtraInt;
 
-template <typename problem_t>
-using StarParticleContainer = amrex::AmrParticleContainer<StarParticleRealComps<problem_t>, StarParticleIntComps<problem_t>>;
+template <typename problem_t> using StarParticleContainer = amrex::AmrParticleContainer<StarParticleRealComps<problem_t>, StarParticleIntComps<problem_t>>;
 template <typename problem_t> using StarParticleIterator = amrex::ParIter<StarParticleRealComps<problem_t>, StarParticleIntComps<problem_t>>;
 
 //-------------------- Component Names for I/O --------------------
@@ -451,8 +450,8 @@ template <ParticleType particleType, typename problem_t> auto getParticleIntComp
 								     // No integer components
 	} else if constexpr (particleType == ParticleType::CICRad) { // NOLINT
 								     // No integer components
-	} else if constexpr (particleType == ParticleType::Star) { // NOLINT
-									   // No integer components
+	} else if constexpr (particleType == ParticleType::Star) {   // NOLINT
+								     // No integer components
 	} else if constexpr (particleType == ParticleType::StochasticStellarPop) {
 		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<StochasticStellarPopParticleIntIdx>();
 		names = {enum_names.begin(), enum_names.end()};

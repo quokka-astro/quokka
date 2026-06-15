@@ -5,8 +5,8 @@
 #include "AMReX.H"
 #include "AMReX_BLassert.H"
 #include "AMReX_MultiFab.H"
-#include "AMReX_ParmParse.H"
 #include "AMReX_ParallelDescriptor.H"
+#include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 
 #include "QuokkaSimulation.hpp"
@@ -26,14 +26,14 @@ struct StarEvolutionProblem {
 };
 
 // Ambient medium (matches ParticleAccretion: cold, dense, isothermal)
-constexpr double T0 = 10.0;            // K
-constexpr double mu = 2.33 * C::m_p;   // mean molecular weight
-constexpr double cs0 = 1.882195750e4;  // sqrt(k_B T0 / mu) cm/s for T0=10 K, mu=2.33 m_p
-constexpr double B0 = 1.0e-11;         // negligible field so that cf ~ cs (beta >> 1)
+constexpr double T0 = 10.0;	      // K
+constexpr double mu = 2.33 * C::m_p;  // mean molecular weight
+constexpr double cs0 = 1.882195750e4; // sqrt(k_B T0 / mu) cm/s for T0=10 K, mu=2.33 m_p
+constexpr double B0 = 1.0e-11;	      // negligible field so that cf ~ cs (beta >> 1)
 
-double rho0 = C::m_p;                  // NOLINT background density (n_H ~ 1)
-double M0_in_Msun = 0.1;               // NOLINT initial particle mass
-double t_end_over_t_b = 300.0;         // NOLINT run length in Bondi times
+double rho0 = C::m_p;	       // NOLINT background density (n_H ~ 1)
+double M0_in_Msun = 0.1;       // NOLINT initial particle mass
+double t_end_over_t_b = 300.0; // NOLINT run length in Bondi times
 
 template <> struct Particle_Traits<StarEvolutionProblem> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Star;
@@ -187,9 +187,8 @@ auto problem_main() -> int
 		std::vector<int> n_cell(AMREX_SPACEDIM);
 		pp_amr.getarr("n_cell", n_cell);
 		const double dx0 = (prob_hi[0] - prob_lo[0]) / n_cell[0];
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(r_B < 0.1 * dx0,
-			"r_B must be at least 10x smaller than dx for the sub-grid Bondi regime. "
-			"Adjust M0_in_Msun, geometry.prob_*, or amr.n_cell.");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(r_B < 0.1 * dx0, "r_B must be at least 10x smaller than dx for the sub-grid Bondi regime. "
+								  "Adjust M0_in_Msun, geometry.prob_*, or amr.n_cell.");
 	}
 
 	QuokkaSimulation<StarEvolutionProblem> sim;
@@ -259,7 +258,7 @@ auto problem_main() -> int
 		}
 
 		amrex::Print() << (status == 0 ? "\n=== All stellar-evolution checks passed ===\n"
-					     : "\n=== Test FAILED (status=" + std::to_string(status) + ") ===\n");
+					       : "\n=== Test FAILED (status=" + std::to_string(status) + ") ===\n");
 	}
 
 	amrex::ParallelDescriptor::Bcast(&status, 1, amrex::ParallelDescriptor::IOProcessorNumber());
