@@ -31,18 +31,8 @@ struct SawtoothProblem {
 };
 
 template <> struct Physics_Traits<SawtoothProblem> : DefaultPhysicsTraits {
-	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1;			     // number of dust groups
-	static constexpr int nGroups = 1;			     // number of radiation groups, need to set despite radiation is not enabled.
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	// face-centred
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 AMREX_GPU_DEVICE void ComputeExactSolution(int i, int j, int k, int n, amrex::Array4<amrex::Real> const &exact_arr,
