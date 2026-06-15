@@ -44,8 +44,8 @@ Let `T_min ≡ typical_minimal_radiation_T` for brevity.
 | ----------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `atol_spec`                   | `spec_abundance_tol × typical_n_H`           | Species below this fraction of `n_H` are negligible                                                                    |
 | `atol_enuc`                   | `c_v × desired_accuracy_on_T_at_typical_n_H` | Converts temperature accuracy to internal energy tolerance (`c_v = 3/2 × k_B / m_p`)                                   |
-| `atol_rad_num`                | `1e-6 × a_rad × T_min⁴ / E_photon`           | Photon density at 1 ppm of the blackbody field at `T_min` — radiation below this is negligible                         |
-| `atol_rad_flux`               | `rtol_rad_flux`                              | Normalized flux in [0,1]; setting atol = rtol gives crossover `y_cross = 1` (always under absolute control)            |
+| `atol_rad_num`                | `1e-6 × a_rad × T_min⁴ / E_photon`           | One millionth of the blackbody photon density at `T_min` — radiation below this is negligible                         |
+| `atol_rad_flux`               | `= rtol_rad_flux`                              | Normalized flux in [0,1]; setting atol = rtol gives crossover `y_cross = 1` (always under absolute control)            |
 | `radiation_failure_tolerance` | 0.01 (fixed default)                         | Physical guard, not derived — 0.01 photons/cm³ is negligible in any astrophysical context. Overridable via input file. |
 
 ### The 1e-6 prefactor
