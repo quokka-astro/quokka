@@ -60,7 +60,7 @@ template <> struct Physics_Traits<DTypeFront> {
 
 template <> struct RadSystem_Traits<DTypeFront> {
 	static constexpr double c_hat_over_c = c_hat / C::c_light;
-	static constexpr double Erad_floor = C::a_rad * 1.0e4; // a_rad * (10 K)^4 — physical radiation floor
+	static constexpr double Erad_floor = C::a_rad * 1.0; // a_rad * (1 K)^4; N_gamma_floor ~ 3.5e-4 cm^-3 < atol_rad_num, negligible ionization over 10 steps
 	static constexpr int beta_order = 0;
 	static constexpr auto ChemBands() { return ChemBandsHeader_; }
 };
