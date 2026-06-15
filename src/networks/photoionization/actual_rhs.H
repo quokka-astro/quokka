@@ -100,7 +100,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 	const amrex::Real n_e = state.xn[0];
 	const amrex::Real n_HI = state.xn[1];
 	const amrex::Real n_HII = state.xn[2];
-	const amrex::Real n_gamma = amrex::max(state.rn[0], 0.0_rt); // clamp at zero: prevents sign reversal if VODE steps rn[0] slightly negative within tolerance
+	const amrex::Real n_gamma =
+	    amrex::max(state.rn[0], 0.0_rt); // clamp at zero: prevents sign reversal if VODE steps rn[0] slightly negative within tolerance
 	const amrex::Real n_gamma_flux = state.rn[1];
 
 	int molecular_process_switch = 1;
@@ -174,7 +175,8 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	const amrex::Real n_e = state.xn[0];
 	const amrex::Real n_HI = state.xn[1];
 	const amrex::Real n_HII = state.xn[2];
-	const amrex::Real n_gamma = amrex::max(state.rn[0], 0.0_rt); // clamp at zero: prevents sign reversal if VODE steps rn[0] slightly negative within tolerance
+	const amrex::Real n_gamma =
+	    amrex::max(state.rn[0], 0.0_rt); // clamp at zero: prevents sign reversal if VODE steps rn[0] slightly negative within tolerance
 	const amrex::Real n_gamma_flux = state.rn[1];
 
 	int molecular_process_switch = 1;
