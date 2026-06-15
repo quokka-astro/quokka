@@ -18,6 +18,7 @@
 
 #include <cmath>
 #include <numeric>
+#include <string>
 #include <vector>
 
 using amrex::Real;
@@ -75,42 +76,34 @@ template <> struct SimulationData<StarEvolutionProblem> {
 // Place a single Star particle of mass M0 at the domain center (cell-center of the origin cell).
 template <> void QuokkaSimulation<StarEvolutionProblem>::createInitialStarParticles()
 {
+	// Read a single particle from file (position placeholder, mass placeholder, zero velocity).
+	// InitFromAsciiFile handles MPI correctly: only rank 0 reads the file,
+	// so exactly one particle is created regardless of the number of ranks.
+	constexpr int nreal_extra = 5; // mass, vx, vy, vz, birth_time
+	const std::string star_file = "../inputs/star.txt";
+	StarParticles->InitFromAsciiFile(star_file, nreal_extra, nullptr);
+
 	const int lev = 0;
-	using ContainerType = quokka::StarParticleContainer<StarEvolutionProblem>;
-
-	// Update NextID for the particle we will create
-	const amrex::Long pid = ContainerType::ParticleType::NextID();
-	ContainerType::ParticleType::NextID(pid + 1);
-
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
-	const int cpu_id = amrex::ParallelDescriptor::MyProc();
 
-	// Create a particle tile at level 0
-	for (amrex::MFIter mfi = StarParticles->MakeMFIter(lev); mfi.isValid(); ++mfi) {
-		auto &particle_tile = StarParticles->DefineAndReturnParticleTile(lev, mfi);
-		auto &aos = particle_tile.GetArrayOfStructs();
-		const int old_size = aos.size();
-		constexpr int max_new_particles = 1;
-		aos.resize(old_size + max_new_particles);
-
-		auto *pdata = aos.data() + old_size;
-
-		amrex::ParallelFor(max_new_particles, [=] AMREX_GPU_DEVICE(int i) {
-			auto &p = pdata[i]; // NOLINT
-			p.id() = pid + i;
-			p.cpu() = cpu_id;
-			p.pos(0) = 0.5 * dx[0];
-			p.pos(1) = 0.5 * dx[1];
-			p.pos(2) = 0.5 * dx[2];
-
-			constexpr int NReal = quokka::StarParticleRealComps<StarEvolutionProblem>;
-			for (int j = 0; j < NReal; ++j) {
-				p.rdata(j) = 0.0;
+	// Adjust position to cell center and set the problem-specified mass.
+	for (auto &kv : StarParticles->GetParticles()) {
+		for (auto &ikv : kv) {
+			auto &particle_array = ikv.second.GetArrayOfStructs();
+			const int np = particle_array.numParticles();
+			if (np == 0) {
+				continue;
 			}
-			p.rdata(quokka::StarParticleMassIdx) = M0_in_Msun * C::M_solar;
-			p.rdata(quokka::StarParticleBirthTimeIdx) = 0.0;
-		});
-		break; // Only create on the first grid
+			auto *pdata = particle_array().data();
+			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
+				auto &p = pdata[i]; // NOLINT
+				p.pos(0) = 0.5 * dx[0];
+				p.pos(1) = 0.5 * dx[1];
+				p.pos(2) = 0.5 * dx[2];
+				p.rdata(quokka::StarParticleMassIdx) = M0_in_Msun * C::M_solar;
+				p.rdata(quokka::StarParticleBirthTimeIdx) = 0.0;
+			});
+		}
 	}
 	amrex::Gpu::streamSynchronize();
 	StarParticles->Redistribute();

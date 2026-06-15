@@ -14,6 +14,8 @@ do_reflux = 1
 do_subcycle = 0
 do_tracers = 0
 
+max_timesteps = 10
+
 particles.verbose = 1
 
 problem.M0_in_Msun = 0.1
