@@ -110,7 +110,7 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 									    std::array<int, 3> const &delta_w0, std::array<int, 3> const &delta_w1,
 									    amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real resistivity) -> amrex::Real;
 
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void applyResistiveCorrection(amrex::Array4<amrex::Real> const &E2_ave, int i, int j, int k,
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void ApplyResistiveCorrection(amrex::Array4<amrex::Real> const &E2_ave, int i, int j, int k,
 										 amrex::Array4<const amrex::Real> const &B_w0,
 										 amrex::Array4<const amrex::Real> const &B_w1,
 										 std::array<int, 3> const &delta_w0, std::array<int, 3> const &delta_w1,
@@ -817,7 +817,7 @@ void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(amrex::Array4<amrex:
 		const double term2 = ((a1_m * a1_p) / (a1_m + a1_p)) * (B0_p_ - B0_m_) + ((a0_m * a0_p) / (a0_m + a0_p)) * (B1_m_ - B1_p_);
 
 		E2_ave(i, j, k) = (numerator / denominator) + term2;
-		MHDSystem<problem_t>::applyResistiveCorrection(E2_ave, i, j, k, B_w0, B_w1, delta_w0, delta_w1, dx_w0, dx_w1, resistivity);
+		MHDSystem<problem_t>::ApplyResistiveCorrection(E2_ave, i, j, k, B_w0, B_w1, delta_w0, delta_w1, dx_w0, dx_w1, resistivity);
 	});
 }
 
@@ -922,7 +922,7 @@ void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> E2_
 			E2_ave(i, j, k) = E2_dstar;
 		}
 
-		MHDSystem<problem_t>::applyResistiveCorrection(E2_ave, i, j, k, B_w0, B_w1, delta_w0, delta_w1, dx_w0, dx_w1, resistivity);
+		MHDSystem<problem_t>::ApplyResistiveCorrection(E2_ave, i, j, k, B_w0, B_w1, delta_w0, delta_w1, dx_w0, dx_w1, resistivity);
 	});
 }
 
@@ -1068,7 +1068,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto MHDSystem<problem_t>::computeResistiveE
 
 template <typename problem_t>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-MHDSystem<problem_t>::applyResistiveCorrection(amrex::Array4<amrex::Real> const &E2_ave, int i, int j, int k, amrex::Array4<const amrex::Real> const &B_w0,
+MHDSystem<problem_t>::ApplyResistiveCorrection(amrex::Array4<amrex::Real> const &E2_ave, int i, int j, int k, amrex::Array4<const amrex::Real> const &B_w0,
 					       amrex::Array4<const amrex::Real> const &B_w1, std::array<int, 3> const &delta_w0,
 					       std::array<int, 3> const &delta_w1, amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real resistivity)
 {
