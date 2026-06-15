@@ -119,18 +119,18 @@ These parameters control the VODE ODE integrator used for chemistry and photoche
 
 ### High-level physical parameters (recommended)
 
-When any `integrator.typical_*` parameter is present, `SetAtolFromPhysics()` derives the `atol_*` values from physical scales and injects them before `init_extern_parameters()` reads them. Mutually exclusive with the raw `atol_*` parameters below.
+When any `integrator.typical_*` parameter is present, `SetAtolFromPhysics()` derives the `atol_*` values from physical scales and injects them before `init_extern_parameters()` reads them. Mutually exclusive with the raw `atol_*` parameters below. At least one set must be specified — VODE's built-in defaults (~1e-10) are unusably tight for photochemistry.
 
 | Parameter Name | Type | Default | Description |
 |---|---|---|---|
-| `integrator.typical_n_H` | Float | **Required** if using `typical_*` | Representative total H number density (cm⁻³). Sets `atol_spec` via `spec_abundance_tol × typical_n_H`. |
-| `integrator.typical_minimal_radiation_T` | Float | **Required** if using `typical_*` | Minimum physically meaningful radiation temperature (K). Sets `atol_rad_num` via `1e-6 × a_rad × T⁴ / E_photon`. |
+| `integrator.typical_n_H` | Float | **Required** if photochemistry is enabled and `atol_*` is not set | Representative total H number density (cm⁻³). Sets `atol_spec` via `spec_abundance_tol × typical_n_H`. |
+| `integrator.typical_minimal_radiation_T` | Float | **Required** if photochemistry is enabled and `atol_*` is not set | Minimum physically meaningful radiation temperature (K). Sets `atol_rad_num` via `1e-6 × a_rad × T⁴ / E_photon`. |
 | `integrator.desired_accuracy_on_T_at_typical_n_H` | Float | `1.0` | Desired temperature accuracy (K). Sets `atol_enuc` via `c_v × accuracy`. |
 | `integrator.spec_abundance_tol` | Float | `1.0e-5` | Species negligibility threshold as a fraction of `typical_n_H`. |
 
 ### Raw tolerance parameters (legacy)
 
-Mutually exclusive with the `typical_*` parameters. If neither set is present, Microphysics built-in defaults apply.
+Mutually exclusive with the `typical_*` parameters. Specifying neither set of tolerances will abort the simulation.
 
 | Parameter Name | Type | Default | Description |
 |---|---|---|---|
