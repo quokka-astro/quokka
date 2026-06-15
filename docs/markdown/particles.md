@@ -393,3 +393,39 @@ In each of the three tests, the simulation is run twice, one initially at rest a
 #### Random Blast Test
 
 The `RandomBlast` problem provides a testbed for multiple SN explosions with various ambient conditions and bulk flows.
+
+## Star Particle Type (modular stellar evolution)
+
+Star particles (`ParticleSwitch::Star`) represent individual stars whose radius and
+luminosity evolve through a **pluggable stellar-evolution model** selected at compile time.
+
+### Particle attributes
+
+Real components: `mass`, `vx`, `vy`, `vz`, `birth_time`, `mdot` (accretion rate, set by the
+accretion module), `radius` (set by the stellar model), and `lum` (luminosity per radiation
+group; occupies the last `nGroups` slots). A model may declare extra real/integer components
+via `nExtraReal` / `nExtraInt`.
+
+### Choosing a model
+
+The model is chosen with the `StellarModel_Traits<problem_t>` trait (default
+`ToyStellarModel`). A model is a struct of GPU device functions; the dispatcher
+`StellarUpdate::updateStellarProperties` reads the particle's `mass` and `mdot`, calls the
+model, and stores `radius` and `lum` once per coarse step (operator-split, after accretion).
+
+### Toy model
+
+`ToyStellarModel` is stateless:
+
+- Radius: $R = R_\odot (M/M_\odot)^{0.4}$
+- Stellar luminosity: $L_\star = L_\odot (M/M_\odot)^{3.5}$
+- Accretion luminosity: $L_\mathrm{acc} = G M \dot{M} / R$
+- Stored luminosity: $L = L_\star + L_\mathrm{acc}$
+
+### Validation test
+
+`ParticleStarEvolution` places one Star particle in a uniform medium and lets it accrete via
+the grid Bondi accretion module (small-mass regime, $\dot{M}\approx$ const). It asserts, each
+step, that the particle's stored radius and luminosity match the closed-form laws above
+within ~2% (the tolerance absorbing the one-timestep lag between accretion and the stellar
+update), and reports the mean accretion rate against the analytic Bondi value.
