@@ -28,8 +28,8 @@ particles.chemical_scalar_offset = 0
 particles.chemical_num_scalars = 3
 particles.use_table_driven_chemical_yield = 1
 particles.chemical_yield_table_file = "../extern/yields"
-particles.chemical_tracked_isotopes = "C12,O16,Fe56"
-particles.chemical_tracked_channels = "SNII,WR,AGB"
+particles.chemical_tracked_isotopes = ["C12", "O16", "Fe56"]
+particles.chemical_tracked_channels = ["SNII", "WR", "AGB"]
 particles.stellar_metallicity_fraction = 0.02
 
 # Make WR active over the simulation window

@@ -39,8 +39,8 @@ particles.chemical_scalar_offset = 0
 particles.chemical_num_scalars = 3
 particles.use_table_driven_chemical_yield = 1
 particles.chemical_yield_table_file = "../extern/yields"
-particles.chemical_tracked_isotopes = "C12,N14,O16"
-particles.chemical_tracked_channels = "SNII,WR,AGB"
+particles.chemical_tracked_isotopes = ["C12", "N14", "O16"]
+particles.chemical_tracked_channels = ["SNII", "WR", "AGB"]
 
 problem.n0 = 1.0e5
 problem.Tamb = 1.0e1

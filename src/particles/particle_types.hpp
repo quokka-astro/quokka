@@ -4,12 +4,10 @@
 #include "AMReX_AmrParticles.H"
 #include "AMReX_Enum.H"
 #include "AMReX_ParIter.H"
+#include "AMReX_Vector.H"
 #include "particles/particle_chemical_yield.hpp"
 #include "physics_info.hpp"
 
-#include <algorithm>
-#include <cctype>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -75,34 +73,12 @@ template <typename problem_t> constexpr void verify_particle_switch_type()
 namespace quokka
 {
 
-inline auto splitChemistryList(const std::string &input) -> std::vector<std::string>
-{
-	std::vector<std::string> items;
-	std::stringstream stream(input);
-	std::string token;
-	while (std::getline(stream, token, ',')) {
-		token.erase(std::remove_if(token.begin(), token.end(), [](unsigned char c) { return std::isspace(c) != 0; }), token.end());
-		if (!token.empty()) {
-			items.push_back(token);
-		}
-	}
-	return items;
-}
-
-inline std::string chemical_tracked_isotopes = "C12,N14,O16";						       // NOLINT
-inline std::string chemical_tracked_channels = "SNII,WR,AGB";						       // NOLINT
-inline std::vector<std::string> chemical_tracked_isotope_list = splitChemistryList(chemical_tracked_isotopes); // NOLINT
-inline std::vector<std::string> chemical_tracked_channel_list = splitChemistryList(chemical_tracked_channels); // NOLINT
+inline std::vector<std::string> chemical_tracked_isotope_list{"C12", "N14", "O16"}; // NOLINT
+inline std::vector<std::string> chemical_tracked_channel_list{"SNII", "WR", "AGB"}; // NOLINT
 
 inline auto chemicalTrackedIsotopeList() -> const std::vector<std::string> & { return chemical_tracked_isotope_list; }
 
 inline auto chemicalTrackedChannelList() -> const std::vector<std::string> & { return chemical_tracked_channel_list; }
-
-inline void refreshChemicalTrackedLists()
-{
-	chemical_tracked_isotope_list = splitChemistryList(chemical_tracked_isotopes);
-	chemical_tracked_channel_list = splitChemistryList(chemical_tracked_channels);
-}
 
 // Enum class to identify different particle types
 enum class ParticleType {
@@ -682,9 +658,12 @@ inline void particleParmParse()
 	pp.query("agb_age_end", agb_age_end);
 	pp.query("use_table_driven_chemical_yield", use_table_driven_chemical_yield);
 	pp.query("chemical_yield_table_file", chemical_yield_table_file);
-	pp.query("chemical_tracked_isotopes", chemical_tracked_isotopes);
-	pp.query("chemical_tracked_channels", chemical_tracked_channels);
-	refreshChemicalTrackedLists();
+	amrex::Vector<std::string> tracked_isotopes(chemical_tracked_isotope_list.begin(), chemical_tracked_isotope_list.end());
+	amrex::Vector<std::string> tracked_channels(chemical_tracked_channel_list.begin(), chemical_tracked_channel_list.end());
+	pp.queryarr("chemical_tracked_isotopes", tracked_isotopes);
+	pp.queryarr("chemical_tracked_channels", tracked_channels);
+	chemical_tracked_isotope_list.assign(tracked_isotopes.begin(), tracked_isotopes.end());
+	chemical_tracked_channel_list.assign(tracked_channels.begin(), tracked_channels.end());
 	if (chemical_num_scalars <= 1) {
 		chemical_num_scalars = static_cast<int>(chemical_tracked_isotope_list.size());
 	}
