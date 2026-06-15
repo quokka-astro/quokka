@@ -51,7 +51,7 @@ template <> struct quokka::EOS_Traits<Vortex> {
 	static constexpr double mean_molecular_weight = 28.96 * C::m_u; // air
 };
 
-template <> struct Physics_Traits<Vortex> {
+template <> struct Physics_Traits<Vortex> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_mhd_enabled = false;

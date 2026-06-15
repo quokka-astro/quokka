@@ -30,20 +30,11 @@ struct OrszagTang {
 template <> struct quokka::EOS_Traits<OrszagTang> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
-	static constexpr double boltzmann_constant = C::k_B;
 };
 
-template <> struct Physics_Traits<OrszagTang> {
+template <> struct Physics_Traits<OrszagTang> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr bool is_self_gravity_enabled = false;
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr bool is_mhd_enabled = true;
-	static constexpr int nGroups = 1; // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 constexpr double B0 = 1.0 / gcem::sqrt(4.0 * PI);

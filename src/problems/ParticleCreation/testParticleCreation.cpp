@@ -51,7 +51,7 @@ template <> struct HydroSystem_Traits<TestParticle> {
 	static constexpr bool reconstruct_eint = false;
 };
 
-template <> struct Physics_Traits<TestParticle> {
+template <> struct Physics_Traits<TestParticle> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_self_gravity_enabled = true;
 	static constexpr bool is_radiation_enabled = false;

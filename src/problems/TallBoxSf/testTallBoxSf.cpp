@@ -69,7 +69,7 @@ template <> struct quokka::EOS_Traits<TheProblem> {
 	static constexpr double mean_molecular_weight = mu;
 };
 
-template <> struct Physics_Traits<TheProblem> {
+template <> struct Physics_Traits<TheProblem> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = true;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
