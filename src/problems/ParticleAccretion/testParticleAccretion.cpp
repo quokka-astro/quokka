@@ -50,7 +50,7 @@ bool refine_center = true;			 // NOLINT
 
 // constexpr double r_B = C::Gconst * C::M_solar / (cs0 * cs0);
 
-template <> struct Particle_Traits<AccretionProblem> {
+template <> struct Particle_Traits<AccretionProblem> : DefaultParticleTraits {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Sink;
 };

@@ -42,7 +42,7 @@ template <> struct quokka::EOS_Traits<ParticleProblem> {
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct Particle_Traits<ParticleProblem> {
+template <> struct Particle_Traits<ParticleProblem> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | ParticleSwitch::Rad | ParticleSwitch::CICRad;
 };
 

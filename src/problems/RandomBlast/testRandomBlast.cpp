@@ -45,7 +45,7 @@ template <> struct quokka::EOS_Traits<RandomBlast> {
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct Particle_Traits<RandomBlast> {
+template <> struct Particle_Traits<RandomBlast> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
 };
 

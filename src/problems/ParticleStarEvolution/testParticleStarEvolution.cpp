@@ -14,7 +14,6 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
-#include "particles/stellar_models.hpp"
 #include "util/BC.hpp"
 
 #include <cmath>
@@ -36,7 +35,7 @@ double rho0 = C::m_p;                  // NOLINT background density (n_H ~ 1)
 double M0_in_Msun = 1.0;               // NOLINT initial particle mass
 double t_end_over_t_b = 30.0;          // NOLINT run length in Bondi times
 
-template <> struct Particle_Traits<StarEvolutionProblem> {
+template <> struct Particle_Traits<StarEvolutionProblem> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Star;
 };
 

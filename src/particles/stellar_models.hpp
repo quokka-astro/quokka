@@ -54,12 +54,6 @@ struct ToyStellarModel {
 	}
 };
 
-// Compile-time selection of the stellar-evolution model for a problem.
-// Specialize this for a problem to choose a different model.
-template <typename problem_t> struct StellarModel_Traits {
-	using type = ToyStellarModel;
-};
-
 } // namespace quokka
 
 #endif // STELLAR_MODELS_HPP_

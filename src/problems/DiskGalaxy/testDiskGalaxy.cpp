@@ -72,7 +72,7 @@ template <> struct Physics_Traits<DiskGalaxy> {
 	static constexpr int nGroups = 1;			     // number of radiation groups
 };
 
-template <> struct Particle_Traits<DiskGalaxy> {
+template <> struct Particle_Traits<DiskGalaxy> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | ParticleSwitch::StochasticStellarPop;
 };
 

@@ -48,7 +48,7 @@ constexpr double B0 = 1.0e-7;	 // uniform background field for MHD variant
 
 static double n_amb = 1.0; // ambient density (g cm^-3) // NOLINT
 
-template <> struct Particle_Traits<SNProblem> {
+template <> struct Particle_Traits<SNProblem> : DefaultParticleTraits {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Test;
 };

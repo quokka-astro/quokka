@@ -6,8 +6,7 @@
 #include "AMReX_REAL.H"
 
 #include "particles/particle_radiation.hpp" // LuminosityGpuConstTables
-#include "particles/particle_types.hpp"     // StarParticle*Idx, ParticleType
-#include "particles/stellar_models.hpp"     // StellarModel_Traits
+#include "particles/particle_types.hpp"     // StarParticle*Idx, ParticleType, Particle_Traits
 
 #if AMREX_SPACEDIM == 3
 
@@ -16,7 +15,7 @@ namespace quokka
 
 // Framework dispatcher for per-particle stellar-evolution updates.
 // Reads the particle's mass and accretion rate, calls the model selected by
-// StellarModel_Traits<problem_t>, and stores the resulting radius and luminosity.
+// Particle_Traits<problem_t>::stellar_model, and stores the resulting radius and luminosity.
 class StellarUpdate
 {
       public:
@@ -24,7 +23,7 @@ class StellarUpdate
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateStellarProperties(ParticleType &p, amrex::Real /*current_time*/, amrex::Real dt,
 										LuminosityGpuConstTables<Nout> const & /*gpu_tables*/) noexcept
 	{
-		using Model = typename StellarModel_Traits<problem_t>::type;
+		using Model = typename Particle_Traits<problem_t>::stellar_model;
 
 		const amrex::Real mass = p.rdata(StarParticleMassIdx);
 		const amrex::Real mdot = p.rdata(StarParticleMdotIdx);

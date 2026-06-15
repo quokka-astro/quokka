@@ -31,7 +31,7 @@ template <> struct quokka::EOS_Traits<CollapseProblem> {
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct Particle_Traits<CollapseProblem> {
+template <> struct Particle_Traits<CollapseProblem> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
 };
 

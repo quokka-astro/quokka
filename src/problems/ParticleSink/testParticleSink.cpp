@@ -42,7 +42,7 @@ constexpr double B0 = 3.715708546e-08; // constant background field [Gauss-equiv
 
 static std::string particles_file = "sink4.txt"; // NOLINT
 
-template <> struct Particle_Traits<SinkProblem> {
+template <> struct Particle_Traits<SinkProblem> : DefaultParticleTraits {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Sink;
 };

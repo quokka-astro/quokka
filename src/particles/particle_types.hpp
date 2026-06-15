@@ -4,8 +4,8 @@
 #include "AMReX_AmrParticles.H"
 #include "AMReX_Enum.H"
 #include "AMReX_ParIter.H"
-#include "particles/stellar_models.hpp"
 #include "physics_info.hpp"
+#include "particles/stellar_models.hpp"
 
 // Function to create bit flags: bitflag(position) = 2^(position - 1)
 // Example: bitflag<1>() = 1, bitflag<2>() = 2, bitflag<3>() = 4, ...
@@ -51,8 +51,14 @@ constexpr auto operator&(ParticleSwitch flags, ParticleSwitch flag) -> bool
 // };
 // - static constexpr TestEnum particle_switch = TestEnum::MISTAKE;
 // - static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | TestEnum::MISTAKE;
-template <typename problem_t> struct Particle_Traits {
+struct DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::None; // Determines which particle types are enabled using bitwise flags.
+	using stellar_model = quokka::ToyStellarModel; // Default stellar-evolution model
+};
+
+// This struct should be specialized by the user application code to configure particle behavior.
+// Inherits from DefaultParticleTraits so that new parameters added to it don't require updating every problem.
+template <typename problem_t> struct Particle_Traits : DefaultParticleTraits {
 };
 
 // Static assertion helper to verify that particle_switch is of the correct type
@@ -368,8 +374,8 @@ static_assert(static_cast<int>(StarParticleDataIdx::lum) == 7);
 
 // Number of components = base scalars (7: mass..radius) + nGroups luminosity slots + model extras.
 template <typename problem_t>
-constexpr int StarParticleRealComps = 7 + Physics_Traits<problem_t>::nGroups + StellarModel_Traits<problem_t>::type::nExtraReal;
-template <typename problem_t> constexpr int StarParticleIntComps = StellarModel_Traits<problem_t>::type::nExtraInt;
+constexpr int StarParticleRealComps = 7 + Physics_Traits<problem_t>::nGroups + Particle_Traits<problem_t>::stellar_model::nExtraReal;
+template <typename problem_t> constexpr int StarParticleIntComps = Particle_Traits<problem_t>::stellar_model::nExtraInt;
 
 template <typename problem_t>
 using StarParticleContainer = amrex::AmrParticleContainer<StarParticleRealComps<problem_t>, StarParticleIntComps<problem_t>>;
