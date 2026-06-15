@@ -21,8 +21,8 @@ namespace detail
 auto hasTypicalParams() -> bool
 {
 	amrex::ParmParse const pp("integrator");
-	return pp.contains("typical_n_H") || pp.contains("typical_minimal_radiation_T") ||
-	       pp.contains("desired_accuracy_on_T_at_typical_n_H") || pp.contains("spec_abundance_tol");
+	return pp.contains("typical_n_H") || pp.contains("typical_minimal_radiation_T") || pp.contains("desired_accuracy_on_T_at_typical_n_H") ||
+	       pp.contains("spec_abundance_tol");
 }
 
 // Returns true if any integrator.atol_* key appears explicitly in the toml
@@ -50,11 +50,10 @@ auto hasRawAtolParams() -> bool
 template <typename problem_t> void SetAtolFromPhysics()
 {
 	if (!detail::hasTypicalParams() && !detail::hasRawAtolParams()) {
-		amrex::Abort(
-		    "No integrator tolerances specified. Either set integrator.typical_* (recommended) "
-		    "or integrator.atol_* parameters. VODE's built-in defaults (~1e-10) are unusably "
-		    "tight for photochemistry and will cause the integrator to stall. "
-		    "See docs/markdown/photoionization.md.");
+		amrex::Abort("No integrator tolerances specified. Either set integrator.typical_* (recommended) "
+			     "or integrator.atol_* parameters. VODE's built-in defaults (~1e-10) are unusably "
+			     "tight for photochemistry and will cause the integrator to stall. "
+			     "See docs/markdown/photoionization.md.");
 	}
 	if (detail::hasTypicalParams() && detail::hasRawAtolParams()) {
 		amrex::Abort("integrator.typical_* and integrator.atol_* are mutually exclusive. Remove one set.");
@@ -92,7 +91,7 @@ template <typename problem_t> void SetAtolFromPhysics()
 
 	// --- Physical constants ---
 	const amrex::Real E_photon = RadSystem<problem_t>::GetChemBandQuanta(0); // midpoint energy of first chem band (erg)
-	const amrex::Real c_v = 1.5 * C::k_B / C::m_p;			       // erg/g/K; monatomic hydrogen
+	const amrex::Real c_v = 1.5 * C::k_B / C::m_p;				 // erg/g/K; monatomic hydrogen
 
 	// --- atol_spec: species negligibility floor ---
 	const amrex::Real atol_spec = spec_abundance_tol * typical_n_H;
