@@ -1,0 +1,120 @@
+#ifndef PHOTOCHEM_ATOL_H_ // NOLINT
+#define PHOTOCHEM_ATOL_H_
+
+#include <cmath>
+
+#include "AMReX.H"
+#include "AMReX_ParmParse.H"
+#include "AMReX_Print.H"
+
+#include "fundamental_constants.H"
+#include "radiation/radiation_system.hpp"
+
+#ifdef PHOTOCHEMISTRY
+
+namespace quokka::photochemistry
+{
+
+namespace detail
+{
+// Returns true if any integrator.typical_* key appears in the toml
+auto hasTypicalParams() -> bool
+{
+	amrex::ParmParse const pp("integrator");
+	return pp.contains("typical_n_H") || pp.contains("typical_minimal_radiation_T") ||
+	       pp.contains("desired_accuracy_on_T_at_typical_n_H") || pp.contains("spec_abundance_tol");
+}
+
+// Returns true if any integrator.atol_* key appears explicitly in the toml
+auto hasRawAtolParams() -> bool
+{
+	amrex::ParmParse const pp("integrator");
+	return pp.contains("atol_spec") || pp.contains("atol_enuc") || pp.contains("atol_rad_num") || pp.contains("atol_rad_flux");
+}
+} // namespace detail
+
+// SetAtolFromPhysics: derive VODE absolute tolerances from physical scales and inject them
+// into ParmParse so init_extern_parameters() picks them up.
+//
+// Call between readParmParse() and init_extern_parameters() in QuokkaSimulation::Initialize().
+// No-op when neither integrator.typical_* nor integrator.atol_* keys appear in the toml.
+//
+// Note: Erad_floor (the M1 radiation floor) is a compile-time constexpr in RadSystem_Traits
+// and is set independently in each problem's specialization. typical_minimal_radiation_T only
+// controls the VODE tolerance, not Erad_floor.
+template <typename problem_t> void SetAtolFromPhysics()
+{
+	if (!detail::hasTypicalParams()) {
+		return; // backward-compatible: VODE defaults or hand-tuned atol_* take effect
+	}
+	if (detail::hasRawAtolParams()) {
+		amrex::Abort("integrator.typical_* and integrator.atol_* are mutually exclusive. Remove one set.");
+	}
+
+	amrex::ParmParse const pp("integrator");
+
+	if (!pp.contains("typical_n_H")) {
+		amrex::Abort("integrator.typical_n_H is required when using integrator.typical_* parameters.");
+	}
+	if (!pp.contains("typical_minimal_radiation_T")) {
+		amrex::Abort("integrator.typical_minimal_radiation_T is required when using integrator.typical_* parameters.");
+	}
+
+	// --- Read required inputs ---
+	amrex::Real typical_n_H = NAN;
+	pp.get("typical_n_H", typical_n_H);
+
+	amrex::Real typical_minimal_radiation_T = NAN;
+	pp.get("typical_minimal_radiation_T", typical_minimal_radiation_T);
+
+	// --- Read optional inputs ---
+	amrex::Real desired_accuracy_on_T_at_typical_n_H = 1.0; // K
+	pp.query("desired_accuracy_on_T_at_typical_n_H", desired_accuracy_on_T_at_typical_n_H);
+
+	amrex::Real spec_abundance_tol = 1.0e-5; // fraction of n_H
+	pp.query("spec_abundance_tol", spec_abundance_tol);
+
+	amrex::Real rtol_rad_flux = 1.0e-2;
+	pp.query("rtol_rad_flux", rtol_rad_flux);
+
+	// --- Physical constants ---
+	const amrex::Real E_photon = RadSystem<problem_t>::GetChemBandQuanta(0); // midpoint energy of first chem band (erg)
+	const amrex::Real c_v = 1.5 * C::k_B / C::m_p;			       // erg/g/K; monatomic hydrogen
+
+	// --- atol_spec: species negligibility floor ---
+	const amrex::Real atol_spec = spec_abundance_tol * typical_n_H;
+
+	// --- atol_enuc: temperature accuracy requirement ---
+	const amrex::Real atol_enuc = c_v * desired_accuracy_on_T_at_typical_n_H;
+
+	// --- atol_rad_num: photon number density tolerance ---
+	// Set to 1e-6 × the blackbody photon density at typical_minimal_radiation_T.
+	// This makes photon counts below 1 ppm of the minimum meaningful radiation field
+	// negligible to VODE, so dark cells (Erad ≈ Erad_floor << a*T^4) return in one BDF step.
+	// typical_minimal_radiation_T is NOT Erad_floor; Erad_floor is set in RadSystem_Traits.
+	const amrex::Real atol_rad_num = 1.0e-6 * C::a_rad * std::pow(typical_minimal_radiation_T, 4.0) / E_photon;
+
+	// --- atol_rad_flux: normalized flux in [0,1] ---
+	// Set equal to rtol so y_cross = atol/rtol = 1: always under absolute control.
+	const amrex::Real atol_rad_flux = rtol_rad_flux;
+
+	// --- radiation_failure_tolerance ---
+	// Must exceed atol_rad_num so a burn is not flagged failed when VODE legitimately
+	// steps N_gamma to -atol in a fully-absorbed cell.
+	const amrex::Real radiation_failure_tolerance = 10.0 * atol_rad_num;
+
+	// --- Inject into ParmParse (init_extern_parameters reads these) ---
+	amrex::ParmParse pp_int("integrator");
+	pp_int.add("atol_spec", atol_spec);
+	pp_int.add("atol_enuc", atol_enuc);
+	pp_int.add("atol_rad_num", atol_rad_num);
+	pp_int.add("atol_rad_flux", atol_rad_flux);
+	pp_int.add("radiation_failure_tolerance", radiation_failure_tolerance);
+
+	amrex::Print() << "SetAtolFromPhysics: atol_spec=" << atol_spec << " atol_enuc=" << atol_enuc << " atol_rad_num=" << atol_rad_num
+		       << " atol_rad_flux=" << atol_rad_flux << " radiation_failure_tolerance=" << radiation_failure_tolerance << "\n";
+}
+
+} // namespace quokka::photochemistry
+#endif // PHOTOCHEMISTRY
+#endif // PHOTOCHEM_ATOL_H_

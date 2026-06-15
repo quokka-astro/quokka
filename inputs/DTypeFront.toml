@@ -46,12 +46,13 @@ network.allow_mixed_cell_cooling = 0
 
 max_timesteps = 1000000  # stop_time governs; no artificial step cap
 
-integrator.atol_spec = 1e-3   # cm^-3; 1e-4 × n_H = physical negligibility floor
-integrator.rtol_spec = 1e-2
-integrator.atol_rad_num = 1e-2  # cm^-3; must exceed N_gamma_floor = Erad_floor/E_photon ~ 3.5e-8 so dark cells return in one VODE step
-integrator.radiation_failure_tolerance = 0.1  # N_gamma can dip to -atol_rad_num = -0.01 in cells where photons are fully absorbed; must exceed atol_rad_num
-integrator.rtol_rad_num = 1e-2
-integrator.atol_rad_flux = 1e-2  # normalized flux (dimensionless); crossover y_cross = atol/rtol = 1, always absolute control
+# Physical scales: SetAtolFromPhysics() derives all integrator.atol_* values from these.
+# Erad_floor (the M1 floor) is set separately in testDTypeFront.cpp as a_rad*(0.1K)^4.
+integrator.typical_n_H                      = 139.9  # cm^-3; representative total H number density
+integrator.desired_accuracy_on_T_at_typical_n_H = 1.0   # K; temperature accuracy (sets atol_enuc)
+integrator.typical_minimal_radiation_T      = 100.0  # K; minimum physically significant radiation T
+
+integrator.rtol_spec     = 1e-2
+integrator.rtol_rad_num  = 1e-2
 integrator.rtol_rad_flux = 1e-2
-integrator.atol_enuc = 1.24e8  # erg/g; ~2.5% of e at T=37 K neutral gas
-integrator.rtol_enuc = 1e-2
+integrator.rtol_enuc     = 1e-2
