@@ -17,13 +17,14 @@ CHANNEL_TABLES = {
     "WR": "WR_yield_table.csv",
     "AGB": "AGB_yield_table.csv",
 }
+WR_DISTRIBUTION_TABLE = "WR_mass_loss_distribution_table.csv"
 
 
 def normalize_numeric(token):
     return token.replace("\u2212", "-").replace("\u2013", "-").replace("\u2014", "-").replace("\xa0", "")
 
 
-def load_datatable(path):
+def load_datatable_1d(path):
     lines = [line.strip() for line in Path(path).read_text().splitlines() if line.strip()]
     if int(lines[0]) != 1:
         raise SystemExit(f"{path} is not a 1D DataTable")
@@ -48,9 +49,34 @@ def load_datatable(path):
     return {"n_x": n_x, "xlo": xlo, "xhi": xhi, "spacing": spacing, "values": values}
 
 
+def load_wr_distribution_table(path):
+    lines = [line.strip() for line in Path(path).read_text().splitlines() if line.strip()]
+    if int(lines[0]) != 2:
+        raise SystemExit(f"{path} is not a 2D DataTable")
+    n_age, n_mass = [int(part) for part in lines[1].split(",")]
+    n_out = int(lines[2])
+    input_names = [name.strip() for name in lines[3].split(",")]
+    output_names = [name.strip() for name in lines[4].split(",")]
+    input_units = [unit.strip() for unit in lines[5].split(",")]
+    xlo = [float(normalize_numeric(part)) for part in lines[7].split(",")]
+    xhi = [float(normalize_numeric(part)) for part in lines[8].split(",")]
+    spacing = [part.strip().lower() for part in lines[9].split(",")]
+    if n_out != 1 or input_names != ["age", "mass"] or output_names != ["cumulative_fraction"] or input_units != ["s", "Msun"]:
+        raise SystemExit(f"{path} has unexpected WR distribution metadata")
+    rows = []
+    for row in lines[10 : 10 + n_mass]:
+        data = [float(normalize_numeric(token)) for token in row.split(",")]
+        if len(data) != n_age:
+            raise SystemExit(f"{path} WR distribution row has {len(data)} values, expected {n_age}")
+        rows.append(np.array(data))
+    return {"n_age": n_age, "n_mass": n_mass, "xlo": xlo, "xhi": xhi, "spacing": spacing, "values": np.array(rows)}
+
+
 def load_yield_tables(root):
     root = Path(root)
-    return {channel: load_datatable(root / filename) for channel, filename in CHANNEL_TABLES.items()}
+    tables = {channel: load_datatable_1d(root / filename) for channel, filename in CHANNEL_TABLES.items()}
+    tables["WR_distribution"] = load_wr_distribution_table(root / WR_DISTRIBUTION_TABLE)
+    return tables
 
 
 def coordinate(table, mass_msun):
@@ -75,6 +101,35 @@ def query_fraction(tables, channel, isotope, mass_msun):
     lower = min(max(math.floor(position), 0), table["n_x"] - 2)
     frac = min(max(position - lower, 0.0), 1.0)
     return float((1.0 - frac) * values[lower] + frac * values[lower + 1])
+
+
+def query_wr_distribution(tables, age, mass_msun):
+    table = tables["WR_distribution"]
+    age = min(max(age, table["xlo"][0]), table["xhi"][0])
+    mass_msun = max(mass_msun, 1.0e-12)
+    if table["spacing"][1] in ("log", "fast_log"):
+        mass_coord = math.log(mass_msun)
+        mass_lo = math.log(table["xlo"][1])
+        mass_hi = math.log(table["xhi"][1])
+    else:
+        mass_coord = mass_msun
+        mass_lo = table["xlo"][1]
+        mass_hi = table["xhi"][1]
+    mass_coord = min(max(mass_coord, mass_lo), mass_hi)
+
+    age_pos = (age - table["xlo"][0]) / ((table["xhi"][0] - table["xlo"][0]) / (table["n_age"] - 1))
+    mass_pos = (mass_coord - mass_lo) / ((mass_hi - mass_lo) / (table["n_mass"] - 1))
+    age_lower = min(max(math.floor(age_pos), 0), table["n_age"] - 2)
+    mass_lower = min(max(math.floor(mass_pos), 0), table["n_mass"] - 2)
+    age_frac = min(max(age_pos - age_lower, 0.0), 1.0)
+    mass_frac = min(max(mass_pos - mass_lower, 0.0), 1.0)
+    values = table["values"]
+    v00 = values[mass_lower, age_lower]
+    v10 = values[mass_lower, age_lower + 1]
+    v01 = values[mass_lower + 1, age_lower]
+    v11 = values[mass_lower + 1, age_lower + 1]
+    value = (1.0 - mass_frac) * ((1.0 - age_frac) * v00 + age_frac * v10) + mass_frac * ((1.0 - age_frac) * v01 + age_frac * v11)
+    return float(min(max(value, 0.0), 1.0))
 
 
 def latest_plotfile(plotdir):
@@ -134,7 +189,8 @@ def validate_wr_agb(args):
     print("test_WR_AGB_yields simulated/table:")
     max_error = 0.0
     for i, isotope in enumerate(isotopes):
-        wr_expected = query_fraction(tables, "WR", isotope, wr_mass / MSUN_CGS) * wr_mass * wr_elapsed / wr_lifetime
+        wr_distribution = query_wr_distribution(tables, wr_elapsed, wr_mass / MSUN_CGS)
+        wr_expected = query_fraction(tables, "WR", isotope, wr_mass / MSUN_CGS) * wr_mass * wr_distribution
         agb_expected = query_fraction(tables, "AGB", isotope, agb_mass / MSUN_CGS) * agb_mass
         expected = wr_expected + agb_expected
         ratio = measured_total[i] / expected if expected > 0.0 else 1.0
