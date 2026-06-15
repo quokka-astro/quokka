@@ -106,6 +106,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 	}
 };
 
+#if AMREX_SPACEDIM == 3
 // Specialization for Star particles: dispatches to the modular stellar-evolution framework.
 template <> struct ParticlePropertyUpdateTraits<ParticleType::Star> : ParticlePropertyUpdateBase<ParticleType::Star> {
 	template <typename problem_t, typename ParticleType, int Nout>
@@ -127,6 +128,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::Star> : ParticlePr
 		applyUpdate<problem_t, ContainerType>(container, current_time, dt, gpu_tables);
 	}
 };
+#endif // AMREX_SPACEDIM == 3
 
 // // Specialization for StochasticStellarPop particles from a simple analytical formula
 // // This is kept for debugging purpose.
