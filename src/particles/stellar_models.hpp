@@ -28,11 +28,17 @@ struct ToyStellarModel {
 
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto radius(amrex::Real mass) -> amrex::Real
 	{
+		if (mass <= 0.0) {
+			return 0.0;
+		}
 		return C::R_solar * std::pow(mass / C::M_solar, radius_exponent);
 	}
 
 	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static auto luminosityStar(amrex::Real mass) -> amrex::Real
 	{
+		if (mass <= 0.0) {
+			return 0.0;
+		}
 		return L_solar * std::pow(mass / C::M_solar, luminosity_exponent);
 	}
 

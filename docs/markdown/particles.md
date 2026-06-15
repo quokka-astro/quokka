@@ -408,10 +408,12 @@ via `nExtraReal` / `nExtraInt`.
 
 ### Choosing a model
 
-The model is chosen with the `StellarModel_Traits<problem_t>` trait (default
-`ToyStellarModel`). A model is a struct of GPU device functions; the dispatcher
-`StellarUpdate::updateStellarProperties` reads the particle's `mass` and `mdot`, calls the
-model, and stores `radius` and `lum` once per coarse step (operator-split, after accretion).
+The model is selected via `Particle_Traits<problem_t>::stellar_model`, which defaults to
+`ToyStellarModel` through `DefaultParticleTraits`. A problem can override it by adding
+`using stellar_model = MyModel;` to its `Particle_Traits` specialization. A model is a struct
+of GPU device functions; the dispatcher `StellarUpdate::updateStellarProperties` reads the
+particle's `mass` and `mdot`, calls the model, and stores `radius` and `lum` once per coarse
+step (operator-split, after accretion).
 
 ### Toy model
 
