@@ -13,15 +13,15 @@ amr.v              = 0       # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = [8, 8, 8]
+amr.n_cell          = [64, 64, 64]
 amr.max_level       = 0     # number of levels = max_level + 1
-amr.blocking_factor = 8  # grid size must be divisible by this
+amr.blocking_factor = 32  # grid size must be divisible by this
 amr.max_grid_size = 128  # at least 128 for GPUs
 do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
 
-stop_time = 2.9e12
+stop_time = 2.9e12 # = 3 t_s
 
 stromgen.primary_species_1 = 1.0e-10
 stromgen.primary_species_2 = 139.9
