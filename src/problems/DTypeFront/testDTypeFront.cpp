@@ -60,8 +60,18 @@ template <> struct Physics_Traits<DTypeFront> {
 
 template <> struct RadSystem_Traits<DTypeFront> {
 	static constexpr double c_hat_over_c = c_hat / C::c_light;
-	// a_rad*(0.1 K)^4: N_gamma_floor=3.5e-8 cm^-3 << atol_rad_num; equilibrium dark-cell x_HII~0.002%, safe for any n_steps
-	static constexpr double Erad_floor = C::a_rad * 1.0e-4;
+	// Erad_floor sets the M1 radiation energy density floor (erg cm^-3), defined here as a
+	// blackbody at T=0.01 K.  The corresponding photon number density floor is
+	//   N_gamma_floor = Erad_floor / E_photon ~ 1.25e-10 cm^-3.
+	//
+	// SetAtolFromPhysics() derives atol_rad_num = 1e-6 * a_rad * T_min^4 / E_photon, where
+	// T_min = typical_minimal_radiation_T.  With T_min = 10 K, atol_rad_num ~ 1.25e-6 cm^-3.
+	// The ratio atol_rad_num / N_gamma_floor ~ 1e4 ensures that VODE returns in one BDF step
+	// even in the darkest cells.
+	//
+	// The 1e-6 prefactor means radiation at T_min becomes numerically negligible after
+	// ~1e6 VODE steps (accumulated local error stays below the physically meaningful level).
+	static constexpr double Erad_floor = C::a_rad * 1.0e-8;
 	static constexpr int beta_order = 0;
 	static constexpr auto ChemBands() { return ChemBandsHeader_; }
 };

@@ -47,10 +47,12 @@ network.allow_mixed_cell_cooling = 0
 max_timesteps = 1000000  # stop_time governs; no artificial step cap
 
 # Physical scales: SetAtolFromPhysics() derives all integrator.atol_* values from these.
-# Erad_floor (the M1 floor) is set separately in testDTypeFront.cpp as a_rad*(0.1K)^4.
+# typical_minimal_radiation_T = 10 K is the minimum temperature at which radiation is physically
+# meaningful (photon field at this T becomes negligible after ~1e6 VODE steps via the 1e-6 prefactor).
+# Erad_floor (M1 floor) is C::a_rad * 1e-8 (T~0.01 K) in testDTypeFront.cpp — see docs/markdown/photoionization.md.
 integrator.typical_n_H                      = 139.9  # cm^-3; representative total H number density
 integrator.desired_accuracy_on_T_at_typical_n_H = 1.0   # K; temperature accuracy (sets atol_enuc)
-integrator.typical_minimal_radiation_T      = 100.0  # K; minimum physically significant radiation T
+integrator.typical_minimal_radiation_T      = 10.0  # K; minimum physically significant radiation T
 
 integrator.rtol_spec     = 1e-2
 integrator.rtol_rad_num  = 1e-2

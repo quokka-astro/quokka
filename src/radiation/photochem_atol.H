@@ -42,6 +42,9 @@ auto hasRawAtolParams() -> bool
 // Note: Erad_floor (the M1 radiation floor) is a compile-time constexpr in RadSystem_Traits
 // and is set independently in each problem's specialization. typical_minimal_radiation_T only
 // controls the VODE tolerance, not Erad_floor.
+//
+// radiation_failure_tolerance defaults to 0.01 cm^-3 — a physically negligible photon count
+// per cm^3 — and can be overridden in the toml.
 template <typename problem_t> void SetAtolFromPhysics()
 {
 	if (!detail::hasTypicalParams()) {
@@ -99,9 +102,10 @@ template <typename problem_t> void SetAtolFromPhysics()
 	const amrex::Real atol_rad_flux = rtol_rad_flux;
 
 	// --- radiation_failure_tolerance ---
-	// Must exceed atol_rad_num so a burn is not flagged failed when VODE legitimately
-	// steps N_gamma to -atol in a fully-absorbed cell.
-	const amrex::Real radiation_failure_tolerance = 10.0 * atol_rad_num;
+	// Physical guard: maximum allowed negative photon number density (cm^-3).
+	// 0.01 photons/cm^3 is negligible in any astrophysical context.
+	amrex::Real radiation_failure_tolerance = 1.0e-2;
+	pp.query("radiation_failure_tolerance", radiation_failure_tolerance);
 
 	// --- Inject into ParmParse (init_extern_parameters reads these) ---
 	amrex::ParmParse pp_int("integrator");
