@@ -549,8 +549,7 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 }
 
 template <typename problem_t>
-void MHDSystem<problem_t>::ApplyHyperResistiveCorrection(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
-							 amrex::MultiFab const &cc_mf_cVars,
+void MHDSystem<problem_t>::ApplyHyperResistiveCorrection(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
 							 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars, double hyper_resistivity_coeff,
 							 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx)
 {
