@@ -6,6 +6,7 @@
 #include "particle_radiation.hpp"
 #include "particle_types.hpp"
 #include "physics_info.hpp"
+#include "starparticle_radiation.hpp"
 
 namespace quokka
 {
@@ -102,6 +103,28 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 									 LuminosityGpuConstTables<Nout> const &gpu_tables) noexcept
 	{
 		LuminosityUpdate::updateLuminosity<problem_t>(p, current_time, gpu_tables);
+	}
+};
+
+// Specialization for Star particles: dispatches to the modular stellar-evolution framework.
+template <> struct ParticlePropertyUpdateTraits<ParticleType::Star> : ParticlePropertyUpdateBase<ParticleType::Star> {
+	template <typename problem_t, typename ParticleType, int Nout>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType &p, amrex::Real current_time, amrex::Real dt,
+									 LuminosityGpuConstTables<Nout> const &gpu_tables) noexcept
+	{
+		StellarUpdate::updateStellarProperties<problem_t>(p, current_time, dt, gpu_tables);
+	}
+
+	template <typename problem_t, typename ContainerType>
+	static void updateParticleProperties(ContainerType *container, amrex::Real current_time, amrex::Real dt) noexcept
+	{
+		const BL_PROFILE("ParticlePropertyUpdateTraits<Star>::updateParticleProperties()");
+		if (container == nullptr) {
+			return;
+		}
+		constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
+		LuminosityGpuConstTables<nGroups> const gpu_tables{}; // unused by the stellar model, passed for signature parity
+		applyUpdate<problem_t, ContainerType>(container, current_time, dt, gpu_tables);
 	}
 };
 
