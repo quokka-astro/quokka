@@ -149,7 +149,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 			yield_tables = ChemicalYieldLookup::constTables();
 		}
 
-		amrex::MultiFab state_buffer(state.boxArray(), state.DistributionMap(), state.nComp(), state.nGrow());
+		amrex::MultiFab state_buffer(state.boxArray(), state.DistributionMap(), state.nComp() + 1, state.nGrow());
 		state_buffer.setVal(0.0);
 
 		for (typename ContainerType::ParIterType pti(*container, lev); pti.isValid(); ++pti) {
@@ -189,18 +189,27 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 								      (mass_birth_msun >= 9.0);
 						const amrex::Real wr_lifetime =
 						    p.rdata(StochasticStellarPopParticleDeathTimeIdx) - p.rdata(StochasticStellarPopParticleBirthTimeIdx);
-						const amrex::Real wr_window = std::max<amrex::Real>(0.0, wr_lifetime - wr_age_start);
-						const bool wr_active = (age >= wr_age_start) && (age < wr_lifetime) && (wr_window > 0.0);
+						const bool wr_active = (age < wr_lifetime) && (wr_lifetime > 0.0);
 						if (wr_stage && wr_active) {
-							amrex::Real wr_rate_per_mass = wr_metal_yield_rate_per_mass;
-							if (use_chemical_tables && wr_window > 0.0) {
-								wr_rate_per_mass = std::max<amrex::Real>(0.0, ChemicalYieldLookup::queryYieldFraction(
-														  yield_tables, 1, n, mass_birth_msun, z_lookup)) /
-										   wr_window;
+							if (use_chemical_tables) {
+								const amrex::Real wr_total_frac = ChemicalYieldLookup::queryYieldFraction(yield_tables, 1, n,
+															       mass_birth_msun, z_lookup);
+								const amrex::Real age_begin = std::max<amrex::Real>(0.0, age);
+								const amrex::Real age_end = std::min<amrex::Real>(wr_lifetime, age_begin + dt);
+								const amrex::Real f_begin =
+								    ChemicalYieldLookup::queryWRMassLossCumulativeFraction(yield_tables, age_begin, mass_birth_msun);
+								const amrex::Real f_end =
+								    ChemicalYieldLookup::queryWRMassLossCumulativeFraction(yield_tables, age_end, mass_birth_msun);
+								const amrex::Real delta_fraction = std::max<amrex::Real>(0.0, f_end - f_begin);
+								y_wr = std::max<amrex::Real>(0.0, wr_total_frac * mass_birth * delta_fraction);
+							} else {
+								const amrex::Real wr_window = std::max<amrex::Real>(0.0, wr_lifetime - wr_age_start);
+								if (age >= wr_age_start && wr_window > 0.0) {
+									const amrex::Real baseline_wr_rate_per_mass = birth_iso_abundance / wr_window;
+									y_wr = std::max<amrex::Real>(
+									    0.0, (baseline_wr_rate_per_mass + wr_metal_yield_rate_per_mass) * mass_birth * dt);
+								}
 							}
-							const amrex::Real baseline_wr_rate_per_mass =
-							    (wr_window > 0.0) ? (birth_iso_abundance / wr_window) : 0.0;
-							y_wr = std::max<amrex::Real>(0.0, (baseline_wr_rate_per_mass + wr_rate_per_mass) * mass_birth * dt);
 						}
 					}
 
@@ -225,6 +234,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 								if (r2 <= W_cutoff_r2) {
 									const amrex::Real wt = kernel_wendland_c2(std::sqrt(r2) * W_inv_N) * interp.inv_norm;
 									const amrex::Real total_val = wt * total_mass * vol_inverse;
+									// WR metals are injected with the stellar-wind kernel, matching the continuous WR feedback channel.
 									amrex::Gpu::Atomic::AddNoRet(&local_state(interp.index[0] + ii, interp.index[1] + jj,
 														  interp.index[2] + kk, total_comp),
 												     total_val);
