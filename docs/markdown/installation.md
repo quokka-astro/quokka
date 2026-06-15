@@ -6,7 +6,9 @@ This instruction works on both Linux and macOS. If you come across any issues on
 
 To run Quokka, download this repository and its submodules to your local machine:
 
-    git clone --recursive https://github.com/quokka-astro/quokka.git
+    git clone --branch development --single-branch --recursive https://github.com/quokka-astro/quokka.git
+
+The ``--branch development`` option selects the main development branch, and ``--single-branch`` fetches only the history of that branch. Quokka has a large number of development branches, so omitting ``--single-branch`` would clone the full history of all branches, which can be significantly slower.
 
 Quokka uses CMake (and optionally, Ninja) as its build system. If you don't have CMake and Ninja installed, the easiest way to install them is to run:
 
