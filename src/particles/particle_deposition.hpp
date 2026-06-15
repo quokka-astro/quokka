@@ -994,11 +994,10 @@ struct ChemicalChannelYields {
 	amrex::Real agb_mass = 0.0;
 };
 
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeSNIIChannelYield(ChemicalYieldLookup::ChemicalYieldGpuConstTables const &yield_tables,
-								bool use_chemical_tables, int isotope_index, amrex::Real mass_birth,
-								amrex::Real mass_birth_msun, amrex::Real birth_iso_abundance,
-								amrex::Real metallicity_lookup, int stage, amrex::Real step_end_time,
-								amrex::Real death_time) -> amrex::Real
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeSNIIChannelYield(ChemicalYieldLookup::ChemicalYieldGpuConstTables const &yield_tables, bool use_chemical_tables,
+								 int isotope_index, amrex::Real mass_birth, amrex::Real mass_birth_msun,
+								 amrex::Real birth_iso_abundance, amrex::Real metallicity_lookup, int stage,
+								 amrex::Real step_end_time, amrex::Real death_time) -> amrex::Real
 {
 	if (!enable_SNII_metal || stage != static_cast<int>(StellarEvolutionStage::SNProgenitor) || step_end_time <= death_time) {
 		return 0.0;
@@ -1014,10 +1013,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeSNIIChannelYield(ChemicalYieldLo
 	return std::max<amrex::Real>(0.0, (birth_iso_abundance + snii_total_frac) * mass_birth);
 }
 
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeAGBChannelYield(ChemicalYieldLookup::ChemicalYieldGpuConstTables const &yield_tables,
-							       bool use_chemical_tables, int isotope_index, amrex::Real mass_birth,
-							       amrex::Real mass_birth_msun, amrex::Real birth_iso_abundance,
-							       bool agb_death) -> amrex::Real
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeAGBChannelYield(ChemicalYieldLookup::ChemicalYieldGpuConstTables const &yield_tables, bool use_chemical_tables,
+								int isotope_index, amrex::Real mass_birth, amrex::Real mass_birth_msun,
+								amrex::Real birth_iso_abundance, bool agb_death) -> amrex::Real
 {
 	if (!agb_death) {
 		return 0.0;
@@ -1034,17 +1032,15 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeAGBChannelYield(ChemicalYieldLoo
 	return std::max<amrex::Real>(0.0, (birth_iso_abundance + agb_total_frac) * mass_birth);
 }
 
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeChannelYields(ChemicalYieldLookup::ChemicalYieldGpuConstTables const &yield_tables,
-						     bool use_chemical_tables, int isotope_index, amrex::Real mass_birth,
-						     amrex::Real mass_birth_msun, amrex::Real birth_iso_abundance,
-						     amrex::Real metallicity_lookup, int stage, amrex::Real step_end_time,
-						     amrex::Real death_time, bool agb_death) -> ChemicalChannelYields
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeChannelYields(ChemicalYieldLookup::ChemicalYieldGpuConstTables const &yield_tables, bool use_chemical_tables,
+							      int isotope_index, amrex::Real mass_birth, amrex::Real mass_birth_msun,
+							      amrex::Real birth_iso_abundance, amrex::Real metallicity_lookup, int stage,
+							      amrex::Real step_end_time, amrex::Real death_time, bool agb_death) -> ChemicalChannelYields
 {
 	ChemicalChannelYields yields{};
 	yields.snii_mass = computeSNIIChannelYield(yield_tables, use_chemical_tables, isotope_index, mass_birth, mass_birth_msun, birth_iso_abundance,
 						   metallicity_lookup, stage, step_end_time, death_time);
-	yields.agb_mass =
-	    computeAGBChannelYield(yield_tables, use_chemical_tables, isotope_index, mass_birth, mass_birth_msun, birth_iso_abundance, agb_death);
+	yields.agb_mass = computeAGBChannelYield(yield_tables, use_chemical_tables, isotope_index, mass_birth, mass_birth_msun, birth_iso_abundance, agb_death);
 	return yields;
 }
 
@@ -1156,8 +1152,9 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 
 			for (int n = 0; n < nchem; ++n) {
 				const amrex::Real birth_iso_abundance = std::max<amrex::Real>(0.0, p.rdata(chem_base + n));
-				const amrex::Real z_snii_lookup = store_channel_fields ? std::max<amrex::Real>(1.0e-12, p.rdata(chem_base + chem_block_size + n))
-										       : std::max<amrex::Real>(1.0e-12, stellar_metallicity_fraction);
+				const amrex::Real z_snii_lookup = store_channel_fields
+								      ? std::max<amrex::Real>(1.0e-12, p.rdata(chem_base + chem_block_size + n))
+								      : std::max<amrex::Real>(1.0e-12, stellar_metallicity_fraction);
 				const auto channel_yields =
 				    ChemicalFeedbackUtils::computeChannelYields(yield_tables, use_chemical_tables, n, mass_birth, mass_birth_msun,
 										birth_iso_abundance, z_snii_lookup, stage, time + dt, death_time, agb_death);
@@ -1172,7 +1169,8 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 				if (store_channel_fields && enable_SNII_metal) {
 					const int sn_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + nchem + n;
 					if (sn_comp < HydroSystem<problem_t>::scalar0_index + nPassive) {
-						ChemicalFeedbackUtils::depositSNStencil(local_buffer, ix, iy, iz, sn_comp, channel_yields.snii_mass, vol_inverse);
+						ChemicalFeedbackUtils::depositSNStencil(local_buffer, ix, iy, iz, sn_comp, channel_yields.snii_mass,
+											vol_inverse);
 					}
 				}
 

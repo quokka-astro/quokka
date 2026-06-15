@@ -227,8 +227,7 @@ class PhysicsParticleDescriptorBase
 	}
 
 	virtual void depositChemicalFeedback(amrex::MultiFab & /*state*/, int /*lev*/, amrex::Real /*time*/, amrex::Real /*dt*/)
-	{ /* Default empty implementation */
-	}
+	{ /* Default empty implementation */ }
 
 	virtual void computeSinkAccretion(amrex::MultiFab &state, amrex::MultiFab &state_accretion_rate,
 					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const *state_fc, int lev, amrex::Real time, amrex::Real dt)
@@ -253,8 +252,7 @@ class PhysicsParticleDescriptorBase
 	virtual void updateParticleProperties(amrex::Real current_time, Real dt) { /* Default empty implementation */ }
 
 	virtual void updateChemicalFeedback(amrex::MultiFab & /*state*/, int /*lev*/, amrex::Real /*current_time*/, amrex::Real /*dt*/)
-	{ /* Default empty implementation */
-	}
+	{ /* Default empty implementation */ }
 };
 
 // Concrete implementation of particle descriptor for specific container types

@@ -51,10 +51,10 @@ class ChemicalYieldTables
 	}
 };
 
-inline ChemicalYieldTables *tables_ptr = nullptr;						    // NOLINT
-AMREX_GPU_MANAGED inline bool tables_loaded = false;					    // NOLINT
-AMREX_GPU_MANAGED inline bool wr_mass_loss_distribution_loaded = false;			    // NOLINT
-AMREX_GPU_MANAGED inline int num_tracked_isotopes = 0;					    // NOLINT
+inline ChemicalYieldTables *tables_ptr = nullptr;				       // NOLINT
+AMREX_GPU_MANAGED inline bool tables_loaded = false;				       // NOLINT
+AMREX_GPU_MANAGED inline bool wr_mass_loss_distribution_loaded = false;		       // NOLINT
+AMREX_GPU_MANAGED inline int num_tracked_isotopes = 0;				       // NOLINT
 AMREX_GPU_MANAGED inline amrex::GpuArray<int, max_tracked_channels> channel_enabled{}; // NOLINT
 
 inline auto mutableTables() -> ChemicalYieldTables &
@@ -173,8 +173,8 @@ inline auto makeZeroTable() -> SelectedChemicalYieldDataTable
 	const auto output_names = makeOutputNames({});
 	const auto output_units = makeOutputUnits();
 	amrex::Vector<amrex::Real> flat_data(static_cast<std::size_t>(max_tracked_isotopes * n_xs[0]), 0.0);
-	return SelectedChemicalYieldDataTable::FromFlatData(x_mins, x_maxs, n_xs, spacing, flat_data, input_names, output_names, input_units,
-							    output_units, quokka::SpacingType::linear);
+	return SelectedChemicalYieldDataTable::FromFlatData(x_mins, x_maxs, n_xs, spacing, flat_data, input_names, output_names, input_units, output_units,
+							    quokka::SpacingType::linear);
 }
 
 inline auto makeZeroWRMassLossDistributionTable() -> WRMassLossDistributionDataTable
@@ -223,16 +223,16 @@ inline auto loadChannelTable(const std::filesystem::path &table_path, int channe
 	amrex::Vector<amrex::Real> flat_data(static_cast<std::size_t>(max_tracked_isotopes * num_entries), 0.0);
 	for (int isotope_index = 0; isotope_index < num_tracked_isotopes; ++isotope_index) {
 		const int out_idx = outputIndex(full_table, tracked_isotopes[static_cast<std::size_t>(isotope_index)]);
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(out_idx >= 0, ("chemical yield isotope not found in table: " + tracked_isotopes[static_cast<std::size_t>(isotope_index)]).c_str());
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+		    out_idx >= 0, ("chemical yield isotope not found in table: " + tracked_isotopes[static_cast<std::size_t>(isotope_index)]).c_str());
 		const auto data = full_const.dataViewArrays[static_cast<std::size_t>(out_idx)];
 		for (int i = 0; i < num_entries; ++i) {
 			flat_data[static_cast<std::size_t>(isotope_index * num_entries + i)] = std::max<amrex::Real>(data(i), 0.0);
 		}
 	}
 
-	mutableTables().channels[static_cast<std::size_t>(channel_index)] =
-	    SelectedChemicalYieldDataTable::FromFlatData(x_mins, x_maxs, n_xs, spacing_types, flat_data, input_names, output_names, input_units, output_units,
-							 quokka::SpacingType::linear);
+	mutableTables().channels[static_cast<std::size_t>(channel_index)] = SelectedChemicalYieldDataTable::FromFlatData(
+	    x_mins, x_maxs, n_xs, spacing_types, flat_data, input_names, output_names, input_units, output_units, quokka::SpacingType::linear);
 	channel_enabled[channel_index] = 1;
 	return true;
 }
@@ -260,8 +260,7 @@ inline auto loadWRMassLossDistributionTable(const std::filesystem::path &table_p
 	return true;
 }
 
-inline auto loadTable(const std::string &filename, const std::vector<std::string> &tracked_isotopes, const std::vector<std::string> &tracked_channels)
-    -> bool
+inline auto loadTable(const std::string &filename, const std::vector<std::string> &tracked_isotopes, const std::vector<std::string> &tracked_channels) -> bool
 {
 	tables_loaded = false;
 	wr_mass_loss_distribution_loaded = false;
@@ -306,8 +305,8 @@ inline auto constTables() -> ChemicalYieldGpuConstTables { return mutableTables(
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto queryYieldFraction(ChemicalYieldGpuConstTables const &tables, int channel_index, int isotope_index,
 								 amrex::Real mass_msun, amrex::Real /*metallicity*/) -> amrex::Real
 {
-	if (!isLoaded() || channel_index < 0 || isotope_index < 0 || channel_index >= max_tracked_channels ||
-	    isotope_index >= num_tracked_isotopes || channel_enabled[channel_index] == 0) {
+	if (!isLoaded() || channel_index < 0 || isotope_index < 0 || channel_index >= max_tracked_channels || isotope_index >= num_tracked_isotopes ||
+	    channel_enabled[channel_index] == 0) {
 		return 0.0;
 	}
 

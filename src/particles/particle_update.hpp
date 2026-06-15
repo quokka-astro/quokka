@@ -192,14 +192,14 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 						const bool wr_active = (age < wr_lifetime) && (wr_lifetime > 0.0);
 						if (wr_stage && wr_active) {
 							if (use_chemical_tables) {
-								const amrex::Real wr_total_frac = ChemicalYieldLookup::queryYieldFraction(yield_tables, 1, n,
-															       mass_birth_msun, z_lookup);
+								const amrex::Real wr_total_frac =
+								    ChemicalYieldLookup::queryYieldFraction(yield_tables, 1, n, mass_birth_msun, z_lookup);
 								const amrex::Real age_begin = std::max<amrex::Real>(0.0, age);
 								const amrex::Real age_end = std::min<amrex::Real>(wr_lifetime, age_begin + dt);
-								const amrex::Real f_begin =
-								    ChemicalYieldLookup::queryWRMassLossCumulativeFraction(yield_tables, age_begin, mass_birth_msun);
-								const amrex::Real f_end =
-								    ChemicalYieldLookup::queryWRMassLossCumulativeFraction(yield_tables, age_end, mass_birth_msun);
+								const amrex::Real f_begin = ChemicalYieldLookup::queryWRMassLossCumulativeFraction(
+								    yield_tables, age_begin, mass_birth_msun);
+								const amrex::Real f_end = ChemicalYieldLookup::queryWRMassLossCumulativeFraction(
+								    yield_tables, age_end, mass_birth_msun);
 								const amrex::Real delta_fraction = std::max<amrex::Real>(0.0, f_end - f_begin);
 								y_wr = std::max<amrex::Real>(0.0, wr_total_frac * mass_birth * delta_fraction);
 							} else {
@@ -234,24 +234,25 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 								if (r2 <= W_cutoff_r2) {
 									const amrex::Real wt = kernel_wendland_c2(std::sqrt(r2) * W_inv_N) * interp.inv_norm;
 									const amrex::Real total_val = wt * total_mass * vol_inverse;
-									// WR metals are injected with the stellar-wind kernel, matching the continuous WR feedback channel.
+									// WR metals are injected with the stellar-wind kernel, matching the continuous WR
+									// feedback channel.
 									amrex::Gpu::Atomic::AddNoRet(&local_state(interp.index[0] + ii, interp.index[1] + jj,
 														  interp.index[2] + kk, total_comp),
 												     total_val);
 
 									if (store_channel_fields && enable_WR_metal && y_wr > 0.0) {
-										const int wr_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + 2 * nchem + n;
+										const int wr_comp =
+										    HydroSystem<problem_t>::scalar0_index + scalar_offset + 2 * nchem + n;
 										if (wr_comp < HydroSystem<problem_t>::scalar0_index + nPassive) {
-											amrex::Gpu::Atomic::AddNoRet(&local_state(interp.index[0] + ii,
-															  interp.index[1] + jj,
-															  interp.index[2] + kk, wr_comp),
-														     wt * y_wr * vol_inverse);
+											amrex::Gpu::Atomic::AddNoRet(
+											    &local_state(interp.index[0] + ii, interp.index[1] + jj,
+													 interp.index[2] + kk, wr_comp),
+											    wt * y_wr * vol_inverse);
 										}
-									}
-
 									}
 								}
 							}
+						}
 					}
 				}
 			});

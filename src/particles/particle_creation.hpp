@@ -671,10 +671,11 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 							if (store_channel_fields_) {
 								for (int block = 1; block < 4; ++block) {
-									const int channel_scalar = HydroSystem<problem_t>::scalar0_index + scalar_offset + block * nchem + nn;
+									const int channel_scalar =
+									    HydroSystem<problem_t>::scalar0_index + scalar_offset + block * nchem + nn;
 									if (channel_scalar < HydroSystem<problem_t>::scalar0_index + nscalars) {
-										p.rdata(chem_base + block * chem_block_size + nn) =
-										    std::max<amrex::Real>(0.0, state_arr(i, j, k, channel_scalar) / cell_density);
+										p.rdata(chem_base + block * chem_block_size + nn) = std::max<amrex::Real>(
+										    0.0, state_arr(i, j, k, channel_scalar) / cell_density);
 									}
 								}
 							}

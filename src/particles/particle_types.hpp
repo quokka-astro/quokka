@@ -589,10 +589,10 @@ inline amrex::Real snii_metal_yield_fraction = 0.1;   // NOLINT
 inline amrex::Real wr_metal_yield_rate_per_mass = 0.; // NOLINT [1/s]
 inline amrex::Real agb_metal_yield_rate_per_mass = 0; // NOLINT [1/s]
 
-inline amrex::Real wr_age_start = 0.;	// NOLINT [s]
-inline amrex::Real wr_age_end = 0.;	// NOLINT [s]
+inline amrex::Real wr_age_start = 0.;  // NOLINT [s]
+inline amrex::Real wr_age_end = 0.;    // NOLINT [s]
 inline amrex::Real agb_age_start = 0.; // NOLINT [s]
-inline amrex::Real agb_age_end = 0.;	// NOLINT [s]
+inline amrex::Real agb_age_end = 0.;   // NOLINT [s]
 
 inline bool use_table_driven_chemical_yield = true;	 // NOLINT
 inline std::string chemical_yield_table_file = "yields"; // NOLINT

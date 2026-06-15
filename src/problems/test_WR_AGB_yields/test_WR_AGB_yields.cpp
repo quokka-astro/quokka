@@ -54,7 +54,7 @@ template <> void QuokkaSimulation<test_WR_AGB_yields>::createInitialStochasticSt
 	StochasticStellarPopParticles->SetVerbose(1);
 	StochasticStellarPopParticles->InitFromAsciiFile(initial_particles_file, nreal_extra, nullptr);
 
-		// Force particle metadata using mass, avoiding tile-local particle ordering.
+	// Force particle metadata using mass, avoiding tile-local particle ordering.
 	for (auto &kv : StochasticStellarPopParticles->GetParticles()) {
 		for (auto &ikv : kv) {
 			auto &particle_array = ikv.second.GetArrayOfStructs();
@@ -65,12 +65,12 @@ template <> void QuokkaSimulation<test_WR_AGB_yields>::createInitialStochasticSt
 			auto *pdata = particle_array().data();
 
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-					pdata[i].idata(quokka::StochasticStellarPopParticleStageIdx) =
-					    static_cast<int>(quokka::StellarEvolutionStage::HighMassNonExploding);
-					if (pdata[i].rdata(quokka::StochasticStellarPopParticleMassAtBirthIdx) <= 8.0 * C::M_solar) {
-						pdata[i].rdata(quokka::StochasticStellarPopParticleDeathTimeIdx) = 5.0e13;
-					}
-				});
+				pdata[i].idata(quokka::StochasticStellarPopParticleStageIdx) =
+				    static_cast<int>(quokka::StellarEvolutionStage::HighMassNonExploding);
+				if (pdata[i].rdata(quokka::StochasticStellarPopParticleMassAtBirthIdx) <= 8.0 * C::M_solar) {
+					pdata[i].rdata(quokka::StochasticStellarPopParticleDeathTimeIdx) = 5.0e13;
+				}
+			});
 		}
 	}
 

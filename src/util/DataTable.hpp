@@ -975,34 +975,34 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	}
 
       public:
-		static auto FromFlatData(const std::array<amrex::Real, Ndim> &x_mins, const std::array<amrex::Real, Ndim> &x_maxs,
-					 const std::array<int, Ndim> &n_xs, const std::array<SpacingType, Ndim> &spacing_types,
-					 const amrex::Vector<amrex::Real> &flat_data, const std::array<std::string, Ndim> &input_names,
-					 const std::array<std::string, Nout> &output_names, const std::array<std::string, Ndim> &input_units,
-					 const std::array<std::string, Nout> &output_units, SpacingType output_spacing) -> DataTable
-		{
-			DataTable table;
-			table.initializeCommonFlat(x_mins, x_maxs, n_xs, spacing_types, flat_data);
-			table.setMetadata(input_names, output_names, input_units, output_units, output_spacing);
-			return table;
-		}
+	static auto FromFlatData(const std::array<amrex::Real, Ndim> &x_mins, const std::array<amrex::Real, Ndim> &x_maxs, const std::array<int, Ndim> &n_xs,
+				 const std::array<SpacingType, Ndim> &spacing_types, const amrex::Vector<amrex::Real> &flat_data,
+				 const std::array<std::string, Ndim> &input_names, const std::array<std::string, Nout> &output_names,
+				 const std::array<std::string, Ndim> &input_units, const std::array<std::string, Nout> &output_units,
+				 SpacingType output_spacing) -> DataTable
+	{
+		DataTable table;
+		table.initializeCommonFlat(x_mins, x_maxs, n_xs, spacing_types, flat_data);
+		table.setMetadata(input_names, output_names, input_units, output_units, output_spacing);
+		return table;
+	}
 
-		// CSVReader: Generic static method to read n-dimensional data from CSV file and create DataTable
-		// CSV format:
-		//   Line 1: Ndim (number of input dimensions)
-		//   Line 2: Nx (comma-separated sizes for each dimension)
-		//   Line 3: Nout (number of outputs)
-		//   Line 4: input_names (comma-separated names for each input dimension)
-		//   Line 5: output_names (comma-separated names for each output)
-		//   Line 6: input_units (comma-separated units for each input dimension)
-		//   Line 7: output_units (comma-separated units for each output)
-		//   Line 8: xlo (comma-separated lower bounds for each dimension)
-		//   Line 9: xhi (comma-separated upper bounds for each dimension)
-		//   Line 10: spacing (comma-separated spacing types: linear, log, fast_log)
-		//   Remaining lines: data values
-		//     For 2D: nx2 rows x nx1 columns (last dimension varies fastest in rows)
-		//     For 3D: (nx3 x nx2) rows x nx1 columns
-		//     For 4D: (nx4 x nx3 x nx2) rows x nx1 columns
+	// CSVReader: Generic static method to read n-dimensional data from CSV file and create DataTable
+	// CSV format:
+	//   Line 1: Ndim (number of input dimensions)
+	//   Line 2: Nx (comma-separated sizes for each dimension)
+	//   Line 3: Nout (number of outputs)
+	//   Line 4: input_names (comma-separated names for each input dimension)
+	//   Line 5: output_names (comma-separated names for each output)
+	//   Line 6: input_units (comma-separated units for each input dimension)
+	//   Line 7: output_units (comma-separated units for each output)
+	//   Line 8: xlo (comma-separated lower bounds for each dimension)
+	//   Line 9: xhi (comma-separated upper bounds for each dimension)
+	//   Line 10: spacing (comma-separated spacing types: linear, log, fast_log)
+	//   Remaining lines: data values
+	//     For 2D: nx2 rows x nx1 columns (last dimension varies fastest in rows)
+	//     For 3D: (nx3 x nx2) rows x nx1 columns
+	//     For 4D: (nx4 x nx3 x nx2) rows x nx1 columns
 	//
 	// @param file_path Path to the CSV file
 	// @param output_spacing Spacing type for output values: linear, log, or fast_log
