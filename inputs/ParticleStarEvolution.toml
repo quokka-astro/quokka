@@ -1,8 +1,8 @@
 # Uniform-grid Bondi accretion onto a single Star particle (toy stellar evolution validation)
+# Domain sized so that r_B ~ 0.1 * dx, putting the accretion in the sub-grid Bondi regime.
 
-# Domain: +/- 16 r_B with r_B(1 Msun, 10 K) ~ 3.75e17 cm  ->  half-size ~ 6.0e18 cm
-geometry.prob_lo = [-6.0e18, -6.0e18, -6.0e18]
-geometry.prob_hi = [6.0e18, 6.0e18, 6.0e18]
+geometry.prob_lo = [-1.2e19, -1.2e19, -1.2e19]
+geometry.prob_hi = [ 1.2e19,  1.2e19,  1.2e19]
 quokka.bc = ["foextrap", "foextrap", "foextrap"]
 
 amr.n_cell = [64, 64, 64]
@@ -16,9 +16,9 @@ do_tracers = 0
 
 particles.verbose = 1
 
-problem.M0_in_Msun = 1.0
+problem.M0_in_Msun = 0.1
 problem.rho0 = 1.6726e-24  # ~ m_p (n_H ~ 1)
-problem.t_end_over_t_b = 30.0
+problem.t_end_over_t_b = 300.0
 
 plotfile_interval = -1
 checkpoint_interval = -1

@@ -29,11 +29,11 @@ struct StarEvolutionProblem {
 constexpr double T0 = 10.0;            // K
 constexpr double mu = 2.33 * C::m_p;   // mean molecular weight
 constexpr double cs0 = 1.882195750e4;  // sqrt(k_B T0 / mu) cm/s for T0=10 K, mu=2.33 m_p
-constexpr double B0 = 1.0e-7;          // tiny background field (MHD enabled to mirror ParticleAccretion)
+constexpr double B0 = 1.0e-11;         // negligible field so that cf ~ cs (beta >> 1)
 
 double rho0 = C::m_p;                  // NOLINT background density (n_H ~ 1)
-double M0_in_Msun = 1.0;               // NOLINT initial particle mass
-double t_end_over_t_b = 30.0;          // NOLINT run length in Bondi times
+double M0_in_Msun = 0.1;               // NOLINT initial particle mass
+double t_end_over_t_b = 300.0;         // NOLINT run length in Bondi times
 
 template <> struct Particle_Traits<StarEvolutionProblem> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Star;
@@ -176,6 +176,22 @@ auto problem_main() -> int
 	const double r_B = C::Gconst * M0_g / (cs0 * cs0);
 	const double t_B = r_B / cs0;
 
+	// Require r_B << dx so that accretion is in the sub-grid Bondi regime.
+	{
+		amrex::ParmParse const pp_geom("geometry");
+		std::vector<amrex::Real> prob_lo(AMREX_SPACEDIM);
+		std::vector<amrex::Real> prob_hi(AMREX_SPACEDIM);
+		pp_geom.getarr("prob_lo", prob_lo);
+		pp_geom.getarr("prob_hi", prob_hi);
+		amrex::ParmParse const pp_amr("amr");
+		std::vector<int> n_cell(AMREX_SPACEDIM);
+		pp_amr.getarr("n_cell", n_cell);
+		const double dx0 = (prob_hi[0] - prob_lo[0]) / n_cell[0];
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(r_B < 0.1 * dx0,
+			"r_B must be at least 10x smaller than dx for the sub-grid Bondi regime. "
+			"Adjust M0_in_Msun, geometry.prob_*, or amr.n_cell.");
+	}
+
 	QuokkaSimulation<StarEvolutionProblem> sim;
 	sim.reconstructionOrder_ = 3;
 	sim.cflNumber_ = 0.3;
@@ -207,7 +223,7 @@ auto problem_main() -> int
 				continue; // skip pre-activation samples
 			}
 			const double R_pred = Model::radius(M[i]);
-			const double L_pred = Model::luminosityStar(M[i]) + Model::luminosityAcc(M[i], mdot[i], R[i]);
+			const double L_pred = Model::luminosityStar(M[i]) + Model::luminosityAcc(M[i], (i > 0) ? mdot[i - 1] : 0.0, R[i]);
 
 			const double R_err = std::abs(R[i] - R_pred) / R_pred;
 			const double L_err = (L_pred > 0.0) ? std::abs(L[i] - L_pred) / L_pred : std::abs(L[i]);
@@ -228,13 +244,18 @@ auto problem_main() -> int
 			amrex::Print() << "  FAIL: no active samples (particle never activated / never accreted)\n";
 		}
 
-		// Informational: linear mass growth and Bondi rate (coarse grid -> not asserted).
+		// Verify the numerical accretion rate matches the analytic Bondi rate.
 		if (n >= 2) {
 			const double mdot_fit = (M[n - 1] - M[0]) / (t[n - 1] - t[0]);
 			const double lambda = std::exp(1.5) / 4.0;
 			const double Mdot_bondi = 4.0 * M_PI * rho0 * r_B * r_B * lambda * cs0;
-			amrex::Print() << "Mean dM/dt = " << mdot_fit << " g/s; analytic Bondi (hydro) ~ " << Mdot_bondi << " g/s\n";
+			const double mdot_err = std::abs(mdot_fit - Mdot_bondi) / Mdot_bondi;
+			amrex::Print() << "Mean dM/dt = " << mdot_fit << " g/s; analytic Bondi = " << Mdot_bondi << " g/s\n";
 			amrex::Print() << "Mass growth over run: " << (M[n - 1] / M[0] - 1.0) * 100.0 << " %\n";
+			if (mdot_err > 0.10) {
+				status += 1;
+				amrex::Print() << "  FAIL: accretion rate mismatch, rel_err=" << mdot_err << " (tolerance 10%)\n";
+			}
 		}
 
 		amrex::Print() << (status == 0 ? "\n=== All stellar-evolution checks passed ===\n"
