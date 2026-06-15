@@ -48,7 +48,8 @@ max_timesteps = 10
 
 integrator.atol_spec = 1e-3   # cm^-3; 1e-4 × n_H = physical negligibility floor
 integrator.rtol_spec = 1e-2
-integrator.atol_rad_num = 1e-5  # cm^-3; must satisfy atol << n_HI * rtol / (c_hat * sigma * dt) to prevent VODE stepping N_gamma negative
+integrator.atol_rad_num = 1e-2  # cm^-3; absolute tolerance on N_gamma (above the floor after floor subtraction in photochemistry.hpp)
+integrator.radiation_failure_tolerance = 0.1  # N_gamma can dip to -atol_rad_num = -0.01 when fully absorbed; must exceed atol_rad_num
 integrator.rtol_rad_num = 1e-2
 integrator.atol_rad_flux = 1e-2  # normalized flux (dimensionless); crossover y_cross = atol/rtol = 1, always absolute control
 integrator.rtol_rad_flux = 1e-2

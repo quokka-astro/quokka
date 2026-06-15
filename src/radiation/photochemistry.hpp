@@ -81,8 +81,9 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 				photochemstate.xn[nn] = state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) / spmasses[nn];
 			}
 			for (int nn = 0; nn < NumChemBands; ++nn) {
+				const amrex::Real Erad_cell = state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn);
 				photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] =
-				    state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) * invChemBandQuanta[nn];
+				    amrex::max(Erad_cell - RadSystem<problem_t>::Erad_floor_, 0.0_rt) * invChemBandQuanta[nn];
 				photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn] = 1.0_rt;
 			}
 			photochemstate.rho = rho;
@@ -126,7 +127,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 			}
 			for (int nn = 0; nn < NumChemBands; ++nn) {
 				state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) =
-				    photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] * chemBandQuanta[nn];
+				    photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] * chemBandQuanta[nn] + RadSystem<problem_t>::Erad_floor_;
 				state(i, j, k, firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn) =
 				    photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn] *
 				    state(i, j, k, firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn);
