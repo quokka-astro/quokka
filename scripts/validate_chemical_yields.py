@@ -168,7 +168,6 @@ def validate_wr_agb(args):
     tables = load_yield_tables(args.yield_root)
     ds = yt.load(latest_plotfile(args.plotdir))
     data = ds.all_data()
-    stages = data[("StochasticStellarPop_particles", "particle_evolution_stage")].to_value()
     masses = data[("StochasticStellarPop_particles", "particle_mass_at_birth")].to_value()
     birth_times = data[("StochasticStellarPop_particles", "particle_birth_time")].to_value()
     death_times = data[("StochasticStellarPop_particles", "particle_death_time")].to_value()
