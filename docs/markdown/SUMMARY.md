@@ -14,6 +14,7 @@
 
 - [Magnetohydrodynamics (beta)](mhd_module.md)
 - [Star Formation and Feedback (beta)](particles.md)
+- [Photoionization](photoionization.md)
 - [Dust Module (beta)](dust_module.md)
 
 # Simulation Gallery
