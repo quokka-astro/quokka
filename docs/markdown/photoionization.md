@@ -8,45 +8,56 @@ reionization based on a local Eddington tensor" (ATON paper, arXiv:0709.1544)
 ### 1.1 M1 Radiative Transfer for Ionizing Photons
 
 Taking the first two moments of the radiative transfer equation gives conservation laws
-for the ionizing photon number density `N_γ` and flux density `F_γ`:
+for the ionizing photon number density $N_\gamma$ and flux density $\mathbf{F}_\gamma$:
 
-```
-∂N_γ/∂t + ∇·F_γ = -n_HI c σ_γ N_γ + n_e n_H+(α_A − α_B) + Ṅ*_γ
-∂F_γ/∂t + c² ∇·P_γ = -n_HI c σ_γ F_γ
-```
+$$
+\frac{\partial N_\gamma}{\partial t} + \nabla \cdot \mathbf{F}_\gamma =
+- n_{\rm H^0} c \sigma_\gamma N_\gamma
++ n_e n_{\rm H^+} (\alpha_A - \alpha_B)
++ \dot{N}^*_\gamma,
+$$
+
+$$
+\frac{\partial \mathbf{F}_\gamma}{\partial t} + c^2 \nabla \cdot \mathsf{P}_\gamma =
+- n_{\rm H^0} c \sigma_\gamma \mathbf{F}_\gamma.
+$$
 
 | Symbol | Definition |
 |--------|------------|
-| `N_γ` | Ionizing photon number density (cm⁻³) |
-| `F_γ` | Ionizing photon number flux density (cm⁻² s⁻¹) |
-| `P_γ` | Radiation pressure tensor (= D F_γ, cm⁻³) |
-| `n_HI` | Neutral hydrogen number density |
-| `n_H+` = `n_e` | Ionized hydrogen / electron number density |
-| `σ_γ` | Frequency-averaged photoionization cross-section |
-| `α_A, α_B` | Case A / B recombination coefficients |
-| `Ṅ*_γ` | Stellar ionizing photon emission rate (cm⁻³ s⁻¹) |
+| $N_\gamma$ | Ionizing photon number density (cm⁻³) |
+| $\mathbf{F}_\gamma$ | Ionizing photon number flux density (cm⁻² s⁻¹) |
+| $\mathsf{P}_\gamma$ | Radiation pressure tensor ($= \mathsf{D}\,F_\gamma$, cm⁻³) |
+| $n_{\rm H^0}$ | Neutral hydrogen number density |
+| $n_{\rm H^+} = n_e$ | Ionized hydrogen / electron number density |
+| $\sigma_\gamma$ | Frequency-averaged photoionization cross-section |
+| $\alpha_A, \alpha_B$ | Case A / B recombination coefficients |
+| $\dot{N}^*_\gamma$ | Stellar ionizing photon emission rate (cm⁻³ s⁻¹) |
 
-The source term `n_e n_H+(α_A − α_B)` represents diffuse recombination radiation —
-photons re-emitted when H recombines directly to the ground state (case A minus case B).
+The source term $n_e n_{\rm H^+}(\alpha_A - \alpha_B)$ represents diffuse recombination
+radiation — photons re-emitted when H recombines directly to the ground state (case A
+minus case B correction).
 
 ### 1.2 Hydrogen Thermochemistry
 
-```
-D n_HI / Dt = α_A n_e n_H+ − β n_e n_HI − Γ_γHI n_HI
-```
+The neutral hydrogen fraction evolves as:
 
-with `n_H+ = n_e` (charge conservation), `n_H+ + n_HI = n_H` (nuclei conservation),
-and the photoionization rate `Γ_γHI = c σ_γ N_γ`.
+$$
+\frac{D n_{\rm H^0}}{Dt} = \alpha_A n_e n_{\rm H^+} - \beta n_e n_{\rm H^0} - \Gamma_{\gamma {\rm H}^0} n_{\rm H^0},
+$$
+
+with $n_{\rm H^+} = n_e$ (charge conservation), $n_{\rm H^+} + n_{\rm H^0} = n_{\rm H}$
+(nuclei conservation), and the photoionization rate $\Gamma_{\gamma {\rm H}^0} = c \sigma_\gamma N_\gamma$.
 
 The gas thermal energy evolves as:
 
-```
-ρ D(e/ρ)/Dt = H_photo − L
-```
+$$
+\rho \frac{D}{Dt}\!\left(\frac{e}{\rho}\right) = \mathcal{H}_{\rm photo} - \mathcal{L},
+$$
 
-where `H_photo = n_HI c σ_γ ε_γ N_γ` is the photoheating rate and `ε_γ = h(ν̄ − ν_HI)`
-is the mean excess photon energy above the ionization threshold (29.65 eV for a 10⁵ K
-blackbody). The cooling rate `L` includes case A recombination cooling, collisional
+where $\mathcal{H}_{\rm photo} = n_{\rm H^0} c \sigma_\gamma \epsilon_\gamma N_\gamma$ is
+the photoheating rate and $\epsilon_\gamma = h(\bar{\nu} - \nu_{{\rm H}^0})$ is the mean
+excess photon energy above the ionization threshold (29.65 eV for a $10^5$ K blackbody).
+The cooling rate $\mathcal{L}$ includes case A recombination cooling, collisional
 excitation of H, collisional ionization cooling, and Bremsstrahlung. Rate coefficients
 follow Hui & Gnedin (1997) and Maselli et al. (2003).
 
@@ -58,20 +69,24 @@ atom. The **on-the-spot approximation** assumes this photon is re-absorbed local
 within the same resolution element — so recombinations to n = 1 have no net effect on
 the ionization state.
 
-Under OTSA, one replaces `α_A → α_B` everywhere and drops the diffuse recombination
-source term from the radiation equation:
+Under OTSA, one replaces $\alpha_A \to \alpha_B$ everywhere and drops the diffuse
+recombination source term from the radiation equation:
 
-```
-∂N_γ/∂t + ∇·F_γ = -n_HI c σ_γ N_γ + Ṅ*_γ
-D n_HI/Dt = α_B n_e n_H+ − β n_e n_HI − Γ_γHI n_HI
-```
+$$
+\frac{\partial N_\gamma}{\partial t} + \nabla \cdot \mathbf{F}_\gamma =
+- n_{\rm H^0} c \sigma_\gamma N_\gamma + \dot{N}^*_\gamma,
+$$
+
+$$
+\frac{D n_{\rm H^0}}{Dt} = \alpha_B n_e n_{\rm H^+} - \beta n_e n_{\rm H^0} - \Gamma_{\gamma {\rm H}^0} n_{\rm H^0}.
+$$
 
 OTSA is valid when the mean free path of a recombination photon is much smaller than
 the size of the ionized region — a good approximation deep inside large HII regions.
 It breaks down near ionization fronts and in low-density, nearly fully ionized gas.
 
-Quokka currently uses OTSA. The full `(α_A − α_B)` diffuse source term is planned for
-a future phase.
+Quokka currently uses OTSA. The full $(\alpha_A - \alpha_B)$ diffuse source term is
+planned for a future phase.
 
 ## 2. Numerical Scheme
 
@@ -91,27 +106,33 @@ in each cell. Quokka replaces the analytic cubic-polynomial solve used in ATON (
 cannot generalize to more complex networks) with a call to **VODE**, a variable-order,
 variable-step stiff ODE integrator.
 
-Under OTSA, VODE integrates the following system over the implicit timestep `Δt`:
+Under OTSA, VODE integrates the following system over the implicit timestep $\Delta t$:
 
-```
-dN_γ/dt  = -n_HI ĉ σ_γ N_γ + Ṅ
-dF_γ/dt  = -n_HI ĉ σ_γ F_γ
-dn_HI/dt = α_B n_e n_H+ − β n_e n_HI − ĉ σ_γ N_γ n_HI
-dn_H+/dt = −α_B n_e n_H+ + β n_e n_HI + ĉ σ_γ N_γ n_HI
-de/dt    = n_HI ĉ σ_γ ε_γ N_γ − [cooling terms]
-```
+$$
+\begin{aligned}
+\frac{d N_\gamma}{d t} &= - n_{\rm H^0} \hat{c} \sigma_\gamma N_\gamma + \dot{N}, \\[2pt]
+\frac{d F_{\gamma,i}}{d t} &= - n_{\rm H^0} \hat{c} \sigma_\gamma F_{\gamma,i} \quad (i = x, y, z), \\[2pt]
+\frac{d n_{\rm H^0}}{d t} &= \alpha_B n_e n_{\rm H^+} - \beta n_e n_{\rm H^0} - \hat{c} \sigma_\gamma N_\gamma n_{\rm H^0}, \\[2pt]
+\frac{d n_{\rm H^+}}{d t} &= -\alpha_B n_e n_{\rm H^+} + \beta n_e n_{\rm H^0} + \hat{c} \sigma_\gamma N_\gamma n_{\rm H^0}, \\[2pt]
+\frac{d e}{d t} &= n_{\rm H^0} \hat{c} \sigma_\gamma \epsilon_\gamma N_\gamma - \text{[cooling terms]}.
+\end{aligned}
+$$
 
-where `ĉ` is the reduced speed of light. The state vector has 6 components for a
-single chemical band: `(n_e, n_HI, n_H+, e, N_γ, F_γ)`.
+where $\hat{c}$ is the reduced speed of light. Only one directional flux component is
+integrated (normalized to 1.0 before the burn); the other two are scaled proportionally
+after the ODE solve. The state vector has 6 components for a single chemical band:
+$(n_e, n_{\rm H^0}, n_{\rm H^+}, e, N_\gamma, F_\gamma)$.
 
-Note that `n_H+ = n_H − n_HI` and `n_e = n_H+` by construction. Although only one of
-`n_HI` or `n_H+` is an independent variable, both are integrated for symmetry.
+Note that $n_{\rm H^+} = n_{\rm H} - n_{\rm H^0}$ and $n_e = n_{\rm H^+}$ by
+construction. Although only one of $n_{\rm H^0}$ or $n_{\rm H^+}$ is an independent
+variable, both are integrated for symmetry.
 
-The flux ODE `dF_γ/dt = −n_HI ĉ σ_γ F_γ` is similar to the absorption term in N_gamma,
-but N_gamma has an additional isotropic source term (stellar emission Ṅ). Isotropic
-sources add photons uniformly in all directions — they contribute to N_gamma but
-produce no net flux. Flux must be integrated to track the attenuation of the
-directional radiation field across the timestep.
+The flux ODE $dF_\gamma/dt = -n_{\rm H^0} \hat{c} \sigma_\gamma F_\gamma$ is similar
+to the absorption term in $N_\gamma$, but $N_\gamma$ has an additional isotropic source
+term (stellar emission $\dot{N}$). Isotropic sources add photons uniformly in all
+directions — they contribute to $N_\gamma$ but produce no net flux. Flux must be
+integrated to track the attenuation of the directional radiation field across the
+timestep.
 
 ## 3. VODE Tolerances
 
@@ -143,18 +164,18 @@ in the input file as usual.
 The radiation flux `F_γ` (normalized to 1.0 before the ODE) is integrated alongside the
 other variables, but does not participate in any VODE convergence or error checks.
 
-**Why flux is in the ODE.** The flux ODE is `dF/dt = -(ĉ σ) n_HI F`. This is similar
-to the absorption term in N_gamma, but N_gamma also has an isotropic source term
-(stellar emission in OTSA, or `n_e n_H+(α_A − α_B)` recombination radiation in case A).
-Since isotropic sources contribute photons uniformly in all directions, they add to the
-photon number density but produce no net flux. Flux must be integrated separately to
-track the attenuation of the directional radiation field.
+**Why flux is in the ODE.** The flux ODE is $dF/dt = -(\hat{c}\sigma)\,n_{\rm H^0} F$.
+This is similar to the absorption term in $N_\gamma$, but $N_\gamma$ also has an
+isotropic source term (stellar emission in OTSA, or $n_e n_{\rm H^+}(\alpha_A - \alpha_B)$
+recombination radiation in case A). Since isotropic sources contribute photons uniformly
+in all directions, they add to the photon number density but produce no net flux. Flux
+must be integrated separately to track the attenuation of the directional radiation field.
 
 **Why flux is excluded from convergence.** Flux is a passive scalar — its RHS depends
-on `n_HI` but flux does *not* appear in any other equation (species, energy, or N_gamma).
-Convergence should be driven by the physically consequential quantities, not by a
-diagnostic variable. In dark cells where flux → 0, demanding 1% accuracy on a near-zero
-value wastes VODE steps with no physical benefit.
+on $n_{\rm H^0}$ but flux does *not* appear in any other equation (species, energy, or
+$N_\gamma$). Convergence should be driven by the physically consequential quantities, not
+by a diagnostic variable. In dark cells where flux → 0, demanding 1% accuracy on a
+near-zero value wastes VODE steps with no physical benefit.
 
 Excluding flux from convergence gave a **3.8× speedup** in photochemistry on CPU and a
 **2.2× speedup** on GPU for the DTypeFront test.
@@ -173,27 +194,26 @@ Excluding flux from convergence gave a **3.8× speedup** in photochemistry on CP
 
 ### 3.5 Derived atol values
 
-Let `T_min ≡ typical_minimal_radiation_T` for brevity.
+Let $T_{\rm min} \equiv$ `typical_minimal_radiation_T` for brevity.
 `SetAtolFromPhysics` computes:
 
+| Variable | Formula | Rationale |
+|---|---|---|
+| `atol_spec` | $\texttt{spec\_abundance\_tol} \times \texttt{typical\_n\_H}$ | Species below this fraction of $n_{\rm H}$ are negligible |
+| `atol_enuc` | $c_v \times \texttt{desired\_accuracy\_on\_T\_at\_typical\_n\_H}$ | Converts temperature accuracy to internal energy tolerance ($c_v = \tfrac{3}{2} k_B / m_p$) |
+| `atol_rad_num` | $10^{-6} \times a_{\rm rad} \times T_{\rm min}^4 / E_{\rm photon}$ | One millionth of the blackbody photon density at $T_{\rm min}$ — radiation below this is negligible |
+| `radiation_failure_tolerance` | 0.05 (fixed default) | Physical guard, not derived. Overridable (see §3.7). |
 
-| Variable                      | Formula                                      | Rationale                                                                                                              |
-| ----------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `atol_spec`                   | `spec_abundance_tol × typical_n_H`           | Species below this fraction of `n_H` are negligible                                                                    |
-| `atol_enuc`                   | `c_v × desired_accuracy_on_T_at_typical_n_H` | Converts temperature accuracy to internal energy tolerance (`c_v = 3/2 × k_B / m_p`)                                   |
-| `atol_rad_num`                | `1e-6 × a_rad × T_min⁴ / E_photon`           | One millionth of the blackbody photon density at `T_min` — radiation below this is negligible                          |
-| `radiation_failure_tolerance` | 0.05 (fixed default)                         | Physical guard, not derived. Overridable via input file (see below for the rule of thumb). |
 
+### 3.6 The $10^{-6}$ prefactor
 
-### 3.6 The 1e-6 prefactor
+The factor $10^{-6}$ in `atol_rad_num` has a specific physical meaning:
 
-The factor `1e-6` in `atol_rad_num` has a specific physical meaning:
-
-- It sets the tolerance to 1 part per million of the blackbody photon density at `T_min`.
-- After roughly 10⁶ VODE steps, the accumulated local error in photon number remains
-below the physically meaningful radiation level at the minimum temperature.
+- It sets the tolerance to 1 part per million of the blackbody photon density at $T_{\rm min}$.
+- After roughly $10^6$ VODE steps, the accumulated local error in photon number remains
+  below the physically meaningful radiation level at the minimum temperature.
 - Cells with radiation below this threshold are considered "dark" and VODE
-returns in a single BDF step.
+  returns in a single BDF step.
 
 ### 3.7 radiation_failure_tolerance
 
@@ -203,10 +223,11 @@ many spurious photons can be "created from nothing" by VODE's Newton overshoot.
 
 Whether this matters depends on two regimes:
 
-1. **Bright cells** (`N_gamma ≳ n_H`): the cell is fully ionized. A few percent error in
-  photon count does not change the outcome.
-2. **Dark cells** (`N_gamma ≪ n_H`): the spurious ionization is at most
-  `radiation_failure_tolerance / n_H`. If this ratio is ≪ 1 %, it is negligible.
+1. **Bright cells** ($N_\gamma \gtrsim n_{\rm H}$): the cell is fully ionized. A few
+   percent error in photon count does not change the outcome.
+2. **Dark cells** ($N_\gamma \ll n_{\rm H}$): the spurious ionization is at most
+   $\texttt{radiation\_failure\_tolerance} / n_{\rm H}$. If this ratio is $\ll 1\%$,
+   it is negligible.
 
 The default of 0.05 cm⁻³ is appropriate for galactic disk or GMC environments, where the
 typical ionized gas density is ~10²–10⁴ cm⁻³ (ratio ≤ 5×10⁻⁴). For low-density environments
@@ -230,39 +251,42 @@ These are two distinct parameters that serve different purposes:
 | `typical_minimal_radiation_T` | Input file (`integrator.typical_minimal_radiation_T`) | VODE tolerance — set to the typical temperature of the cold (neutral) gas in the domain |
 
 
-Define the equivalent floor temperature `T_floor` by `Erad_floor ≡ a_rad × T_floor⁴`.
-The photon number density at the floor is `N_gamma_floor = Erad_floor / E_photon`.
+Define the equivalent floor temperature $T_{\rm floor}$ by $E_{\rm rad, floor} \equiv a_{\rm rad} T_{\rm floor}^4$.
+The photon number density at the floor is $N_{\gamma,{\rm floor}} = E_{\rm rad, floor} / E_{\rm photon}$.
 
-Dark cells (where `Erad ≈ Erad_floor`) converge in one VODE step when
-`atol_rad_num ≫ N_gamma_floor`.  Since `E_photon` cancels, the ratio simplifies to
-a function of the two temperatures alone:
+Dark cells (where $E_{\rm rad} \approx E_{\rm rad, floor}$) converge in one VODE step when
+$\texttt{atol\_rad\_num} \gg N_{\gamma,{\rm floor}}$.  Since $E_{\rm photon}$ cancels,
+the ratio simplifies to a function of the two temperatures alone:
 
-```
-atol_rad_num / N_gamma_floor = (1e-6 × a_rad × T_min⁴ / E_photon) / (a_rad × T_floor⁴ / E_photon)
-                              = 1e-6 × (T_min / T_floor)⁴
-```
+$$
+\frac{\texttt{atol\_rad\_num}}{N_{\gamma,{\rm floor}}}
+= \frac{10^{-6} \, a_{\rm rad} \, T_{\rm min}^4 / E_{\rm photon}}
+       {a_{\rm rad} \, T_{\rm floor}^4 / E_{\rm photon}}
+= 10^{-6} \left( \frac{T_{\rm min}}{T_{\rm floor}} \right)^{\!4}.
+$$
 
-A ratio of ≥ 10⁴ is sufficient, which requires `T_floor ≤ T_min / 316`.
+A ratio of $\geq 10^4$ is sufficient, which requires $T_{\rm floor} \leq T_{\rm min} / 316$.
 
-**Example (DTypeFront):** `T_min = 10 K`, `Erad_floor = a_rad × (0.01 K)⁴` → `T_floor = 0.01 K`.
-Ratio = `1e-6 × (10 / 0.01)⁴ = 10⁶` ✓.
+**Example (DTypeFront):** $T_{\rm min} = 10\ {\rm K}$, $E_{\rm rad, floor} = a_{\rm rad} (0.01\ {\rm K})^4$ → $T_{\rm floor} = 0.01\ {\rm K}$.
+Ratio = $10^{-6} \times (10 / 0.01)^4 = 10^6$ ✓.
 
 ### 3.9 Mutual exclusivity
 
-The `integrator.typical_`* parameters and hand-tuned `integrator.atol_*` parameters
+The `integrator.typical_*` parameters and hand-tuned `integrator.atol_*` parameters
 are **mutually exclusive** — using both triggers an error.  Specifying neither also
-triggers an error, because VODE's built-in defaults (~1e-10) are unusably tight for
-photochemistry and will cause the integrator to stall.
+triggers an error, because VODE's built-in defaults ($\sim 10^{-10}$) are unusably
+tight for photochemistry and will cause the integrator to stall.
 
 ### 3.10 Setting up a new problem
 
 1. Set `Erad_floor` in `RadSystem_Traits<problem_t>` to a blackbody temperature low
-  enough that it does not produce spurious ionization (typical: 0.01–1 K).
+   enough that it does not produce spurious ionization (typical: $0.01$–$1$ K).
 2. Choose `typical_n_H` as the representative hydrogen density of the problem.
 3. Choose `typical_minimal_radiation_T` as the typical temperature of the cold
-  (neutral) gas in the domain.
-4. Check `1e-6 × (T_min / T_floor)⁴ ≥ 10⁴`, i.e. `T_floor ≤ T_min / 316`.
-  If this fails, either lower `Erad_floor` or raise `typical_minimal_radiation_T`.
-5. The `1e-6` prefactor and `desired_accuracy_on_T_at_typical_n_H = 1.0 K` are
-  reasonable defaults for most problems.
+   (neutral) gas in the domain.
+4. Check $10^{-6} \, (T_{\rm min} / T_{\rm floor})^4 \geq 10^4$, i.e.
+   $T_{\rm floor} \leq T_{\rm min} / 316$.
+   If this fails, either lower `Erad_floor` or raise `typical_minimal_radiation_T`.
+5. The $10^{-6}$ prefactor and `desired_accuracy_on_T_at_typical_n_H = 1.0 K` are
+   reasonable defaults for most problems.
 
