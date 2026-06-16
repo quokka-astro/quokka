@@ -138,7 +138,7 @@ timestep.
 
 ### 3.1 Overview
 
-Quokka uses CVODE/VODE (via Microphysics) to integrate the chemistry and internal energy
+Quokka uses VODE (via Microphysics) to integrate the chemistry and internal energy
 source terms.  The integrator requires absolute tolerances (`atol`) for each solution
 variable.  Rather than hand-tuning these tolerances, `SetAtolFromPhysics<problem_t>()`
 (in `src/radiation/photochem_atol.H`) derives them from high-level physical
