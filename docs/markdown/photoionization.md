@@ -18,7 +18,7 @@ parameters specified in the input file.
 | Parameter                                         | Required | Default | Description                                                                              |
 | ------------------------------------------------- | -------- | ------- | ---------------------------------------------------------------------------------------- |
 | `integrator.typical_n_H`                          | yes      | —       | Representative total H number density (cm⁻³)                                             |
-| `integrator.typical_minimal_radiation_T`          | yes      | —       | Minimum temperature (K) at which the radiation field is physically meaningful            |
+| `integrator.typical_minimal_radiation_T`          | yes      | —       | Typical temperature of the cold (neutral) gas in the domain (K). Sets the photon density below which radiation is numerically negligible. |
 | `integrator.desired_accuracy_on_T_at_typical_n_H` | no       | 1.0 K   | Desired temperature accuracy at `typical_n_H`                                            |
 | `integrator.spec_abundance_tol`                   | no       | 1e-5    | Species negligibility threshold, as a fraction of `typical_n_H`                          |
 | `integrator.radiation_failure_tolerance`          | no       | 0.01    | Maximum allowed negative photon number density (cm⁻³) before a burn is flagged as failed |
@@ -96,7 +96,7 @@ These are two distinct parameters that serve different purposes:
 | Parameter                     | Where set                                             | Purpose                                                                                                 |
 | ----------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `Erad_floor`                  | `constexpr` in `RadSystem_Traits<problem_t>`          | M1 hyperbolic solver floor — prevents the radiation moment solver from encountering zero energy density |
-| `typical_minimal_radiation_T` | Input file (`integrator.typical_minimal_radiation_T`) | VODE tolerance — defines the minimum physically meaningful radiation temperature                        |
+| `typical_minimal_radiation_T` | Input file (`integrator.typical_minimal_radiation_T`) | VODE tolerance — set to the typical temperature of the cold (neutral) gas in the domain |
 
 
 Define the equivalent floor temperature `T_floor` by `Erad_floor ≡ a_rad × T_floor⁴`.
@@ -128,8 +128,8 @@ photochemistry and will cause the integrator to stall.
 1. Set `Erad_floor` in `RadSystem_Traits<problem_t>` to a blackbody temperature low
   enough that it does not produce spurious ionization (typical: 0.01–1 K).
 2. Choose `typical_n_H` as the representative hydrogen density of the problem.
-3. Choose `typical_minimal_radiation_T` as the lowest temperature at which radiation
-  is physically important (e.g. the minimum gas temperature in the domain).
+3. Choose `typical_minimal_radiation_T` as the typical temperature of the cold
+  (neutral) gas in the domain.
 4. Check `1e-6 × (T_min / T_floor)⁴ ≥ 10⁴`, i.e. `T_floor ≤ T_min / 316`.
   If this fails, either lower `Erad_floor` or raise `typical_minimal_radiation_T`.
 5. The `1e-6` prefactor and `desired_accuracy_on_T_at_typical_n_H = 1.0 K` are
