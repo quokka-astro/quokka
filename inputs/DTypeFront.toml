@@ -21,7 +21,7 @@ do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
 
-stop_time = 2.9e12 # = 3 t_s
+stop_time = 1.93e13 # = 20 t_s
 
 stromgen.primary_species_1 = 1.0e-10
 stromgen.primary_species_2 = 139.9
