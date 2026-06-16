@@ -114,7 +114,6 @@ template <> struct Physics_Traits<MGProblem> : DefaultPhysicsTraits {
 	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
-	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
 	static constexpr int nGroups = n_groups_;
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
@@ -129,7 +128,6 @@ template <> struct Physics_Traits<ExactProblem> : DefaultPhysicsTraits {
 	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
-	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
 	static constexpr int nGroups = 1;
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };

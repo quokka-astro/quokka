@@ -57,7 +57,6 @@ template <> struct Physics_Traits<ParticleProblem> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = true;
 	// face-centred
 	static constexpr bool is_mhd_enabled = false;
-	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
 	static constexpr int nGroups = nGroups_; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = 1.0;

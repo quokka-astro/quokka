@@ -58,7 +58,6 @@ template <> struct Physics_Traits<ParticleRadiationProblem> : DefaultPhysicsTrai
 	static constexpr bool is_dust_enabled = false;
 	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr bool is_mhd_enabled = false;
-	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
 	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr int nGroups = 2;			     // number of radiation groups

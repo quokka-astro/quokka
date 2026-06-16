@@ -94,7 +94,6 @@ struct ShockPhysicsTraits {
 	static constexpr bool is_dust_enabled = true;
 	static constexpr int nDustGroups = 1;
 	static constexpr bool is_mhd_enabled = true;
-	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
 	static constexpr int nGroups = 1;
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = 1.0;
