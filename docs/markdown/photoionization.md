@@ -63,9 +63,19 @@ The factor `1e-6` in `atol_rad_num` has a specific physical meaning:
 This is a **physical guard**, not a numerical tolerance. It defines the maximum allowed
 negative photon number density (cm⁻³) before a burn is declared failed. The default of
 0.01 cm⁻³ means that up to 0.01 photons per cm³ can be "created from nothing" by VODE's
-Newton overshoot — negligible in any astrophysical context. This parameter does not scale
-with `atol_rad_num` because the Newton overshoot in the stiff radiation-chemistry system
-has a floor independent of the tolerance.
+Newton overshoot — negligible in galactic disk or GMC environments where the electron
+density is ~10²–10⁴ cm⁻³.
+
+For low-density environments such as the CGM or IGM, where the electron number density
+can be comparable to or below 0.01 cm⁻³, this default is too high and would allow
+unphysical photon creation at a level that competes with the physical ionization
+equilibrium. In such problems, override `radiation_failure_tolerance` in the input file.
+
+**Rule of thumb:** set `radiation_failure_tolerance` to at least two orders of magnitude
+below the lowest gas number density expected anywhere in the simulation domain. This
+ensures that numerical photon creation cannot measurably affect the ionization state.
+This parameter does not scale with `atol_rad_num` because the Newton overshoot in the
+stiff radiation-chemistry system has a floor independent of the tolerance.
 
 ### Relationship between Erad_floor and typical_minimal_radiation_T
 
