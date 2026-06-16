@@ -39,7 +39,7 @@ template <> struct quokka::EOS_Traits<HighMachProblem> {
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct Physics_Traits<HighMachProblem> {
+template <> struct Physics_Traits<HighMachProblem> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;

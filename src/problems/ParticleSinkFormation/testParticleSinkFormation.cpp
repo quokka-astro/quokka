@@ -49,7 +49,7 @@ template <> struct HydroSystem_Traits<SinkProblem> {
 	static constexpr bool reconstruct_eint = true; // need to reconstruct temperature
 };
 
-template <> struct Physics_Traits<SinkProblem> {
+template <> struct Physics_Traits<SinkProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_self_gravity_enabled = true;

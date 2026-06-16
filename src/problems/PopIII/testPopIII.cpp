@@ -42,7 +42,7 @@ template <> struct HydroSystem_Traits<PopIII> {
 	static constexpr bool reconstruct_eint = true;
 };
 
-template <> struct Physics_Traits<PopIII> {
+template <> struct Physics_Traits<PopIII> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_self_gravity_enabled = true;

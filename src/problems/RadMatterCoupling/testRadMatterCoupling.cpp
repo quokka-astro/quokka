@@ -45,7 +45,7 @@ template <> struct RadSystem_Traits<CouplingProblem> {
 	static constexpr int beta_order = 1;
 };
 
-template <> struct Physics_Traits<CouplingProblem> {
+template <> struct Physics_Traits<CouplingProblem> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;

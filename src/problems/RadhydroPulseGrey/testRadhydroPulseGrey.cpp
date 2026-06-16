@@ -60,7 +60,7 @@ template <> struct RadSystem_Traits<AdvPulseProblem> {
 	static constexpr int beta_order = 2;
 };
 
-template <> struct Physics_Traits<PulseProblem> {
+template <> struct Physics_Traits<PulseProblem> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
@@ -75,7 +75,7 @@ template <> struct Physics_Traits<PulseProblem> {
 	static constexpr int nGroups = 1;
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
-template <> struct Physics_Traits<AdvPulseProblem> {
+template <> struct Physics_Traits<AdvPulseProblem> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
