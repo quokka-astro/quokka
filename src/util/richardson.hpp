@@ -62,6 +62,10 @@ template <typename Callable> auto run(const Parameters &params, Callable &&runTe
 	amrex::Print() << "Resolution\tError Norm\n";
 	amrex::Print() << "----------\t----------\n";
 
+	if (params.refine_n_dims < 1 || params.refine_n_dims > 3) {
+		amrex::Abort("refine_n_dims must be 1, 2, or 3.");
+	}
+
 	for (int nx = params.nx_initial; nx <= params.nx_max; nx *= 2) {
 		const int ny = (params.refine_n_dims >= 2) ? nx : 8;
 		const int nz = (params.refine_n_dims >= 3) ? nx : 8;
