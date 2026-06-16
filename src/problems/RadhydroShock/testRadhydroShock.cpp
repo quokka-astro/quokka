@@ -75,7 +75,7 @@ template <> struct quokka::EOS_Traits<ShockProblem> {
 	static constexpr double gamma = gamma_gas;
 };
 
-template <> struct Physics_Traits<ShockProblem> {
+template <> struct Physics_Traits<ShockProblem> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;

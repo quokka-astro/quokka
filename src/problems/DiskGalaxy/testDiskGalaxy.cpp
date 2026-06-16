@@ -52,14 +52,13 @@ static_assert(AMREX_SPACEDIM == 3, "DiskGalaxy problem requires AMREX_SPACEDIM =
 template <> struct quokka::EOS_Traits<DiskGalaxy> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = 0.6 * C::m_u;
-	static constexpr double boltzmann_constant = C::k_B;
 };
 
 template <> struct HydroSystem_Traits<DiskGalaxy> {
 	static constexpr bool reconstruct_eint = true;
 };
 
-template <> struct Physics_Traits<DiskGalaxy> {
+template <> struct Physics_Traits<DiskGalaxy> : DefaultPhysicsTraits {
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_self_gravity_enabled = true;
