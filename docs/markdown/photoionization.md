@@ -1,10 +1,121 @@
 # Photoionization Module
 
-> **Note:** This page currently documents only the VODE tolerance (atol/rtol) configuration.
-> Full documentation of the photoionization module (chemistry network, cross sections,
-> radiation coupling) will be added later.
+**Reference:** Aubert & Teyssier (2008), "A radiative transfer scheme for cosmological
+reionization based on a local Eddington tensor" (ATON paper, arXiv:0709.1544)
 
-## VODE Absolute Tolerances
+## 1. Governing Equations
+
+### 1.1 M1 Radiative Transfer for Ionizing Photons
+
+Taking the first two moments of the radiative transfer equation gives conservation laws
+for the ionizing photon number density `N_γ` and flux density `F_γ`:
+
+```
+∂N_γ/∂t + ∇·F_γ = -n_HI c σ_γ N_γ + n_e n_H+(α_A − α_B) + Ṅ*_γ
+∂F_γ/∂t + c² ∇·P_γ = -n_HI c σ_γ F_γ
+```
+
+| Symbol | Definition |
+|--------|------------|
+| `N_γ` | Ionizing photon number density (cm⁻³) |
+| `F_γ` | Ionizing photon number flux density (cm⁻² s⁻¹) |
+| `P_γ` | Radiation pressure tensor (= D F_γ, cm⁻³) |
+| `n_HI` | Neutral hydrogen number density |
+| `n_H+` = `n_e` | Ionized hydrogen / electron number density |
+| `σ_γ` | Frequency-averaged photoionization cross-section |
+| `α_A, α_B` | Case A / B recombination coefficients |
+| `Ṅ*_γ` | Stellar ionizing photon emission rate (cm⁻³ s⁻¹) |
+
+The source term `n_e n_H+(α_A − α_B)` represents diffuse recombination radiation —
+photons re-emitted when H recombines directly to the ground state (case A minus case B).
+
+### 1.2 Hydrogen Thermochemistry
+
+```
+D n_HI / Dt = α_A n_e n_H+ − β n_e n_HI − Γ_γHI n_HI
+```
+
+with `n_H+ = n_e` (charge conservation), `n_H+ + n_HI = n_H` (nuclei conservation),
+and the photoionization rate `Γ_γHI = c σ_γ N_γ`.
+
+The gas thermal energy evolves as:
+
+```
+ρ D(e/ρ)/Dt = H_photo − L
+```
+
+where `H_photo = n_HI c σ_γ ε_γ N_γ` is the photoheating rate and `ε_γ = h(ν̄ − ν_HI)`
+is the mean excess photon energy above the ionization threshold (29.65 eV for a 10⁵ K
+blackbody). The cooling rate `L` includes case A recombination cooling, collisional
+excitation of H, collisional ionization cooling, and Bremsstrahlung. Rate coefficients
+follow Hui & Gnedin (1997) and Maselli et al. (2003).
+
+### 1.3 On-the-Spot Approximation (OTSA)
+
+When a hydrogen ion recombines directly to the ground state (n = 1), the emitted
+Lyman-continuum photon is immediately capable of re-ionizing a nearby neutral hydrogen
+atom. The **on-the-spot approximation** assumes this photon is re-absorbed locally —
+within the same resolution element — so recombinations to n = 1 have no net effect on
+the ionization state.
+
+Under OTSA, one replaces `α_A → α_B` everywhere and drops the diffuse recombination
+source term from the radiation equation:
+
+```
+∂N_γ/∂t + ∇·F_γ = -n_HI c σ_γ N_γ + Ṅ*_γ
+D n_HI/Dt = α_B n_e n_H+ − β n_e n_HI − Γ_γHI n_HI
+```
+
+OTSA is valid when the mean free path of a recombination photon is much smaller than
+the size of the ionized region — a good approximation deep inside large HII regions.
+It breaks down near ionization fronts and in low-density, nearly fully ionized gas.
+
+Quokka currently uses OTSA. The full `(α_A − α_B)` diffuse source term is planned for
+a future phase.
+
+## 2. Numerical Scheme
+
+The update is decomposed into three sequential operators per timestep, following ATON:
+
+```
+1. Stellar source step     Particle injection → radEnergySource
+2. Transport step           Explicit RK stages: advanceRadiation*
+3. Thermochemical step      VODE ODE integration over the coupled
+                            photoionization network
+```
+
+### 2.1 Thermochemical Implicit Solve via VODE
+
+The stiffest part is the coupled, non-linear evolution of the photoionization network
+in each cell. Quokka replaces the analytic cubic-polynomial solve used in ATON (which
+cannot generalize to more complex networks) with a call to **VODE**, a variable-order,
+variable-step stiff ODE integrator.
+
+Under OTSA, VODE integrates the following system over the implicit timestep `Δt`:
+
+```
+dN_γ/dt  = -n_HI ĉ σ_γ N_γ + Ṅ
+dF_γ/dt  = -n_HI ĉ σ_γ F_γ
+dn_HI/dt = α_B n_e n_H+ − β n_e n_HI − ĉ σ_γ N_γ n_HI
+dn_H+/dt = −α_B n_e n_H+ + β n_e n_HI + ĉ σ_γ N_γ n_HI
+de/dt    = n_HI ĉ σ_γ ε_γ N_γ − [cooling terms]
+```
+
+where `ĉ` is the reduced speed of light. The state vector has 6 components for a
+single chemical band: `(n_e, n_HI, n_H+, e, N_γ, F_γ)`.
+
+Note that `n_H+ = n_H − n_HI` and `n_e = n_H+` by construction. Although only one of
+`n_HI` or `n_H+` is an independent variable, both are integrated for symmetry.
+
+The flux ODE `dF_γ/dt = −n_HI ĉ σ_γ F_γ` is similar to the absorption term in N_gamma,
+but N_gamma has an additional isotropic source term (stellar emission Ṅ). Isotropic
+sources add photons uniformly in all directions — they contribute to N_gamma but
+produce no net flux. Flux must be integrated to track the attenuation of the
+directional radiation field across the timestep.
+
+## 3. VODE Tolerances
+
+### 3.1 Overview
 
 Quokka uses CVODE/VODE (via Microphysics) to integrate the chemistry and internal energy
 source terms.  The integrator requires absolute tolerances (`atol`) for each solution
@@ -12,7 +123,7 @@ variable.  Rather than hand-tuning these tolerances, `SetAtolFromPhysics<problem
 (in `src/radiation/photochem_atol.H`) derives them from high-level physical
 parameters specified in the input file.
 
-### Input parameters
+### 3.2 Input parameters
 
 
 | Parameter                                         | Required | Default | Description                                                                              |
@@ -27,26 +138,28 @@ parameters specified in the input file.
 The relative tolerances (`rtol_spec`, `rtol_enuc`, `rtol_rad_num`) are specified directly
 in the input file as usual.
 
-### Why flux is excluded from convergence checks
+### 3.3 Why flux is excluded from convergence
 
-The radiation flux variable `F_γ` (normalized to 1.0 before the ODE) is excluded from
-all VODE convergence and error checks. There are two reasons:
+The radiation flux `F_γ` (normalized to 1.0 before the ODE) is integrated alongside the
+other variables, but does not participate in any VODE convergence or error checks.
 
-1. **Flux is a passive scalar.** Its ODE is `dF/dt = -(c_hat σ) n_HI F`, which depends on
-   `n_HI` but does *not* feed back into any other variable — flux does not appear in the
-   species, energy, or N_gamma equations. The accuracy and timestep of the ODE solve are
-   determined entirely by the other quantities.
+**Why flux is in the ODE.** The flux ODE is `dF/dt = -(ĉ σ) n_HI F`. This is similar
+to the absorption term in N_gamma, but N_gamma also has an isotropic source term
+(stellar emission in OTSA, or `n_e n_H+(α_A − α_B)` recombination radiation in case A).
+Since isotropic sources contribute photons uniformly in all directions, they add to the
+photon number density but produce no net flux. Flux must be integrated separately to
+track the attenuation of the directional radiation field.
 
-2. **Flux decays identically to N_gamma.** Both obey the same differential equation with
-   the same time-dependent coefficient `-(c_hat σ) n_HI(t)`. Therefore
-   `F(t) / F(0) = N_γ(t) / N_γ(0)` exactly — flux is analytically determined by N_gamma.
-   Converging N_gamma guarantees convergence of flux.
+**Why flux is excluded from convergence.** Flux is a passive scalar — its RHS depends
+on `n_HI` but flux does *not* appear in any other equation (species, energy, or N_gamma).
+Convergence should be driven by the physically consequential quantities, not by a
+diagnostic variable. In dark cells where flux → 0, demanding 1% accuracy on a near-zero
+value wastes VODE steps with no physical benefit.
 
-In dark cells where flux → 0, demanding 1% accuracy on a near-zero value wastes VODE
-steps with no physical benefit. Excluding flux from convergence gave a **3.8× speedup**
-in photochemistry on CPU and a **2.2× speedup** on GPU for the DTypeFront test.
+Excluding flux from convergence gave a **3.8× speedup** in photochemistry on CPU and a
+**2.2× speedup** on GPU for the DTypeFront test.
 
-### Physical constants
+### 3.4 Physical constants
 
 
 | Symbol     | Value                                  | Description                                                                                                    |
@@ -58,7 +171,7 @@ in photochemistry on CPU and a **2.2× speedup** on GPU for the DTypeFront test.
 | `E_photon` | problem-dependent                      | Midpoint energy of the first chemistry radiation band (erg), from `RadSystem<problem_t>::GetChemBandQuanta(0)` |
 
 
-### Derived atol values
+### 3.5 Derived atol values
 
 Let `T_min ≡ typical_minimal_radiation_T` for brevity.
 `SetAtolFromPhysics` computes:
@@ -72,7 +185,7 @@ Let `T_min ≡ typical_minimal_radiation_T` for brevity.
 | `radiation_failure_tolerance` | 0.05 (fixed default)                         | Physical guard, not derived. Overridable via input file (see below for the rule of thumb). |
 
 
-### The 1e-6 prefactor
+### 3.6 The 1e-6 prefactor
 
 The factor `1e-6` in `atol_rad_num` has a specific physical meaning:
 
@@ -82,7 +195,7 @@ below the physically meaningful radiation level at the minimum temperature.
 - Cells with radiation below this threshold are considered "dark" and VODE
 returns in a single BDF step.
 
-### radiation_failure_tolerance
+### 3.7 radiation_failure_tolerance
 
 This is a **physical guard**, not a numerical tolerance. It defines the maximum allowed
 negative photon number density (cm⁻³) before a burn is declared failed — at most this
@@ -106,7 +219,7 @@ photon creation cannot measurably affect the ionization fraction. The value does
 scale with `atol_rad_num` because the Newton overshoot in the stiff radiation-chemistry
 system has a floor independent of the tolerance.
 
-### Relationship between Erad_floor and typical_minimal_radiation_T
+### 3.8 Relationship between Erad_floor and typical_minimal_radiation_T
 
 These are two distinct parameters that serve different purposes:
 
@@ -134,14 +247,14 @@ A ratio of ≥ 10⁴ is sufficient, which requires `T_floor ≤ T_min / 316`.
 **Example (DTypeFront):** `T_min = 10 K`, `Erad_floor = a_rad × (0.01 K)⁴` → `T_floor = 0.01 K`.
 Ratio = `1e-6 × (10 / 0.01)⁴ = 10⁶` ✓.
 
-### Mutual exclusivity
+### 3.9 Mutual exclusivity
 
 The `integrator.typical_`* parameters and hand-tuned `integrator.atol_*` parameters
 are **mutually exclusive** — using both triggers an error.  Specifying neither also
 triggers an error, because VODE's built-in defaults (~1e-10) are unusably tight for
 photochemistry and will cause the integrator to stall.
 
-### Setting up a new problem
+### 3.10 Setting up a new problem
 
 1. Set `Erad_floor` in `RadSystem_Traits<problem_t>` to a blackbody temperature low
   enough that it does not produce spurious ionization (typical: 0.01–1 K).
