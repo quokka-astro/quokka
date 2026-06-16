@@ -318,6 +318,13 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 		amrex::Abort("Invalid k modes: the triplet (0,0,0) is not allowed.");
 	}
 
+	if (num_modes_y != 0 && ny == 8) {
+		amrex::Abort("num_modes_y != 0 requires refine_n_dims >= 2 to converge.");
+	}
+	if (num_modes_z != 0 && nz == 8) {
+		amrex::Abort("num_modes_z != 0 requires refine_n_dims >= 3 to converge.");
+	}
+
 	// we assume box length = 1.0
 	const std::array<amrex::Real, 3> k_vec_prf = {2.0 * M_PI * static_cast<amrex::Real>(num_modes_x), 2.0 * M_PI * static_cast<amrex::Real>(num_modes_y),
 						      2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)};
