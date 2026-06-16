@@ -18,8 +18,8 @@ enum class ResistivityModel {
 	problem_defined, // per-cell Ohmic resistivity; eta returned by a problem-specific computeResistivity device function
 };
 
-// this struct is specialized by the user application code.
-template <typename problem_t> struct Physics_Traits {
+// default values inherited by all Physics_Traits specializations.
+struct DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr int numMassScalars = 0;
 	// NOTE: numPassiveScalars is evaluated at the point of definition of DefaultPhysicsTraits, not
