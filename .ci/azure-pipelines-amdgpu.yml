@@ -82,11 +82,13 @@ jobs:
         CCACHE_BASEDIR: $(Build.SourcesDirectory)
         CCACHE_NOHASHDIR: 1
       inputs:
+        # TEMPORARY: scoped to DTypeFront for GPU validation — revert before merging
         cmakeArgs: '--build . --parallel 16 --target DTypeFront'
     
     - task: CMake@1
       displayName: 'Run CTest'
       inputs:
+        # TEMPORARY: scoped to DTypeFront for GPU validation — revert before merging
         cmakeArgs: '-E chdir . ctest -R "DTypeFront" -T Test --output-on-failure'
     
     - task: PublishTestResults@2
