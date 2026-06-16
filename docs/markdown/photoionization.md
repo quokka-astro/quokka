@@ -61,21 +61,25 @@ The factor `1e-6` in `atol_rad_num` has a specific physical meaning:
 ### radiation_failure_tolerance
 
 This is a **physical guard**, not a numerical tolerance. It defines the maximum allowed
-negative photon number density (cm⁻³) before a burn is declared failed. The default of
-0.01 cm⁻³ means that up to 0.01 photons per cm³ can be "created from nothing" by VODE's
-Newton overshoot — negligible in galactic disk or GMC environments where the electron
-density is ~10²–10⁴ cm⁻³.
+negative photon number density (cm⁻³) before a burn is declared failed — at most this
+many spurious photons can be "created from nothing" by VODE's Newton overshoot.
 
-For low-density environments such as the CGM or IGM, where the electron number density
-can be comparable to or below 0.01 cm⁻³, this default is too high and would allow
-unphysical photon creation at a level that competes with the physical ionization
-equilibrium. In such problems, override `radiation_failure_tolerance` in the input file.
+Whether this matters depends on two regimes:
+1. **Bright cells** (`N_gamma ≳ n_H`): the cell is fully ionized. A few percent error in
+   photon count does not change the outcome.
+2. **Dark cells** (`N_gamma ≪ n_H`): the spurious ionization is at most
+   `radiation_failure_tolerance / n_H`. If this ratio is ≪ 1 %, it is negligible.
+
+The default of 0.01 cm⁻³ is appropriate for galactic disk or GMC environments, where the
+typical ionized gas density is ~10²–10⁴ cm⁻³ (ratio ≤ 10⁻⁴). For low-density environments
+such as the CGM or IGM, where the ionized gas density can be ~10⁻⁴–10⁻³ cm⁻³, this
+default competes with the physical ionization equilibrium — override it in the input file.
 
 **Rule of thumb:** set `radiation_failure_tolerance` to at least two orders of magnitude
-below the lowest gas number density expected anywhere in the simulation domain. This
-ensures that numerical photon creation cannot measurably affect the ionization state.
-This parameter does not scale with `atol_rad_num` because the Newton overshoot in the
-stiff radiation-chemistry system has a floor independent of the tolerance.
+below the **typical density of ionized gas** in the problem. This ensures that spurious
+photon creation cannot measurably affect the ionization fraction. The value does not
+scale with `atol_rad_num` because the Newton overshoot in the stiff radiation-chemistry
+system has a floor independent of the tolerance.
 
 ### Relationship between Erad_floor and typical_minimal_radiation_T
 
