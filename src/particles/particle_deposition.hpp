@@ -1034,11 +1034,11 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeAGBChannelYield(ChemicalYieldLoo
 }
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeChannelYields(ChemicalYieldLookup::ChemicalYieldGpuConstTables const &yield_tables, bool use_chemical_tables,
-								      int isotope_index, amrex::Real mass_birth, amrex::Real mass_birth_msun,
-								      amrex::Real birth_iso_abundance, amrex::Real metallicity_lookup, int stage,
-								      amrex::Real step_end_time, amrex::Real death_time, bool agb_death,
-								      bool enable_snii_metal, amrex::Real snii_fallback_yield_fraction,
-								      amrex::Real agb_fallback_yield_fraction, amrex::Real agb_metallicity_lookup) -> ChemicalChannelYields
+							      int isotope_index, amrex::Real mass_birth, amrex::Real mass_birth_msun,
+							      amrex::Real birth_iso_abundance, amrex::Real metallicity_lookup, int stage,
+							      amrex::Real step_end_time, amrex::Real death_time, bool agb_death, bool enable_snii_metal,
+							      amrex::Real snii_fallback_yield_fraction, amrex::Real agb_fallback_yield_fraction,
+							      amrex::Real agb_metallicity_lookup) -> ChemicalChannelYields
 {
 	ChemicalChannelYields yields{};
 	yields.snii_mass = computeSNIIChannelYield(yield_tables, use_chemical_tables, isotope_index, mass_birth, mass_birth_msun, birth_iso_abundance,
@@ -1166,11 +1166,9 @@ void ChemicalFeedbackDeposition(ContainerType *container, amrex::MultiFab &state
 								      ? std::max<amrex::Real>(1.0e-12, p.rdata(chem_base + chem_block_size + n))
 								      : std::max<amrex::Real>(1.0e-12, stellar_metallicity_lookup);
 				const amrex::Real z_agb_lookup = std::max<amrex::Real>(1.0e-12, stellar_metallicity_lookup);
-				const auto channel_yields =
-				    ChemicalFeedbackUtils::computeChannelYields(yield_tables, use_chemical_tables, n, mass_birth, mass_birth_msun,
-										birth_iso_abundance, z_snii_lookup, stage, time + dt, death_time, agb_death,
-										enable_snii_metal, snii_fallback_yield_fraction, agb_fallback_yield_fraction,
-										z_agb_lookup);
+				const auto channel_yields = ChemicalFeedbackUtils::computeChannelYields(
+				    yield_tables, use_chemical_tables, n, mass_birth, mass_birth_msun, birth_iso_abundance, z_snii_lookup, stage, time + dt,
+				    death_time, agb_death, enable_snii_metal, snii_fallback_yield_fraction, agb_fallback_yield_fraction, z_agb_lookup);
 
 				const int total_comp = HydroSystem<problem_t>::scalar0_index + scalar_offset + n;
 				ChemicalFeedbackUtils::depositSNStencil(local_buffer, ix, iy, iz, total_comp, channel_yields.snii_mass, vol_inverse);
