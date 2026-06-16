@@ -36,12 +36,10 @@ photoionization.temperature = 1e3
 
 integrator.atol_spec = 1e-14
 integrator.atol_rad_num = 1e-14
-integrator.atol_rad_flux = 1e-14
 integrator.atol_enuc = 1e-14
 
 integrator.rtol_spec = 1e-14
 integrator.rtol_rad_num = 1e-14
-integrator.rtol_rad_flux = 1e-14
 integrator.rtol_enuc = 1e-14
 
 network.energy_switch = 1

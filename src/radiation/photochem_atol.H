@@ -29,7 +29,7 @@ auto hasTypicalParams() -> bool
 auto hasRawAtolParams() -> bool
 {
 	amrex::ParmParse const pp("integrator");
-	return pp.contains("atol_spec") || pp.contains("atol_enuc") || pp.contains("atol_rad_num") || pp.contains("atol_rad_flux");
+	return pp.contains("atol_spec") || pp.contains("atol_enuc") || pp.contains("atol_rad_num");
 }
 } // namespace detail
 
@@ -86,9 +86,6 @@ template <typename problem_t> void SetAtolFromPhysics()
 	amrex::Real spec_abundance_tol = 1.0e-5; // fraction of n_H
 	pp.query("spec_abundance_tol", spec_abundance_tol);
 
-	amrex::Real rtol_rad_flux = 1.0e-2;
-	pp.query("rtol_rad_flux", rtol_rad_flux);
-
 	// --- Physical constants ---
 	const amrex::Real E_photon = RadSystem<problem_t>::GetChemBandQuanta(0); // midpoint energy of first chem band (erg)
 	const amrex::Real c_v = 1.5 * C::k_B / C::m_p;				 // erg/g/K; monatomic hydrogen
@@ -106,10 +103,6 @@ template <typename problem_t> void SetAtolFromPhysics()
 	// typical_minimal_radiation_T is NOT Erad_floor; Erad_floor is set in RadSystem_Traits.
 	const amrex::Real atol_rad_num = 1.0e-6 * C::a_rad * std::pow(typical_minimal_radiation_T, 4.0) / E_photon;
 
-	// --- atol_rad_flux: normalized flux in [0,1] ---
-	// Set equal to rtol so y_cross = atol/rtol = 1: always under absolute control.
-	const amrex::Real atol_rad_flux = rtol_rad_flux;
-
 	// --- radiation_failure_tolerance ---
 	// Physical guard: maximum allowed negative photon number density (cm^-3).
 	// 0.01 photons/cm^3 is negligible in any astrophysical context.
@@ -121,11 +114,10 @@ template <typename problem_t> void SetAtolFromPhysics()
 	pp_int.add("atol_spec", atol_spec);
 	pp_int.add("atol_enuc", atol_enuc);
 	pp_int.add("atol_rad_num", atol_rad_num);
-	pp_int.add("atol_rad_flux", atol_rad_flux);
 	pp_int.add("radiation_failure_tolerance", radiation_failure_tolerance);
 
 	amrex::Print() << "SetAtolFromPhysics: atol_spec=" << atol_spec << " atol_enuc=" << atol_enuc << " atol_rad_num=" << atol_rad_num
-		       << " atol_rad_flux=" << atol_rad_flux << " radiation_failure_tolerance=" << radiation_failure_tolerance << "\n";
+		       << " radiation_failure_tolerance=" << radiation_failure_tolerance << "\n";
 }
 
 } // namespace quokka::photochemistry

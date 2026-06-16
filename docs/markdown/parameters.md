@@ -140,8 +140,6 @@ Mutually exclusive with the `typical_*` parameters. Specifying neither set of to
 | `integrator.rtol_enuc` | Float | `1.e-10` | Relative tolerance for internal energy. |
 | `integrator.atol_rad_num` | Float | `1.e-10` | Absolute tolerance for radiation number density (cm⁻³). |
 | `integrator.rtol_rad_num` | Float | `1.e-10` | Relative tolerance for radiation number density. |
-| `integrator.atol_rad_flux` | Float | `1.e-10` | Absolute tolerance for radiation flux (dimensionless, in [0,1]). |
-| `integrator.rtol_rad_flux` | Float | `1.e-10` | Relative tolerance for radiation flux. |
 | `integrator.radiation_failure_tolerance` | Float | `0.01` | Maximum allowed negative photon number density (cm⁻³) before the burn is declared failed. Physical guard, not a numerical tolerance. |
 | `integrator.species_failure_tolerance` | Float | `0.01` | Maximum violation of `0 ≤ X ≤ 1` before the burn is declared failed. |
 

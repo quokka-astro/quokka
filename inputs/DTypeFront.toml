@@ -58,10 +58,8 @@ integrator.typical_minimal_radiation_T      = 10.0  # K; minimum physically sign
 #   atol_spec                    = 1.4e-3     # cm^-3;   spec_abundance_tol (1e-5) × typical_n_H
 #   atol_enuc                    = 1.24e8     # erg/g;   c_v × desired_accuracy_on_T (1 K)
 #   atol_rad_num                 = 1.25e-6    # cm^-3;   1e-6 × a_rad × T_min^4 / E_photon
-#   atol_rad_flux                = 1e-2       # —;       = rtol_rad_flux, always absolute control
 #   radiation_failure_tolerance  = 0.01       # cm^-3;   physical guard, overridable (default)
 
 integrator.rtol_spec     = 1e-2
 integrator.rtol_rad_num  = 1e-2
-integrator.rtol_rad_flux = 1e-2
 integrator.rtol_enuc     = 1e-2
