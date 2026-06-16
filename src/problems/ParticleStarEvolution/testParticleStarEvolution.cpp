@@ -32,9 +32,9 @@ constexpr double mu = 2.33 * C::m_p;  // mean molecular weight
 constexpr double cs0 = 1.882195750e4; // sqrt(k_B T0 / mu) cm/s for T0=10 K, mu=2.33 m_p
 constexpr double B0 = 1.0e-11;	      // negligible field so that cf ~ cs (beta >> 1)
 
-double rho0 = C::m_p;	       // NOLINT background density (n_H ~ 1)
-AMREX_GPU_MANAGED double M0_in_Msun = 0.1;       // NOLINT initial particle mass
-double t_end_over_t_b = 300.0; // NOLINT run length in Bondi times
+double rho0 = C::m_p;			   // NOLINT background density (n_H ~ 1)
+AMREX_GPU_MANAGED double M0_in_Msun = 0.1; // NOLINT initial particle mass
+double t_end_over_t_b = 300.0;		   // NOLINT run length in Bondi times
 
 template <> struct Particle_Traits<StarEvolutionProblem> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Star;

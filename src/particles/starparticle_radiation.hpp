@@ -32,13 +32,13 @@ class StellarUpdate
 		amrex::Real lum_val = 0.0;
 		Model::evolve(mass, mdot, dt, radius_val, lum_val);
 
-			p.rdata(StarParticleRadiusIdx) = radius_val;
-			if constexpr (Nout > 0) {
-				p.rdata(StarParticleLumIdx) = lum_val;
-				for (int g = 1; g < Nout; ++g) {
-					p.rdata(StarParticleLumIdx + g) = 0.0;
-				}
+		p.rdata(StarParticleRadiusIdx) = radius_val;
+		if constexpr (Nout > 0) {
+			p.rdata(StarParticleLumIdx) = lum_val;
+			for (int g = 1; g < Nout; ++g) {
+				p.rdata(StarParticleLumIdx + g) = 0.0;
 			}
+		}
 	}
 };
 
