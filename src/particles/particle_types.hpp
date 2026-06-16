@@ -8,6 +8,7 @@
 #include "particles/particle_chemical_yield.hpp"
 #include "physics_info.hpp"
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -253,9 +254,9 @@ constexpr int StochasticStellarPopParticleMassAtBirthIdx = static_cast<int>(Stoc
 constexpr int StochasticStellarPopParticleLumIdx = static_cast<int>(StochasticStellarPopParticleRealIdx::luminosity); // Base index for luminosity components
 constexpr int StochasticStellarPopParticleStageIdx = static_cast<int>(StochasticStellarPopParticleIntIdx::evolution_stage);
 
-template <typename problem_t> constexpr int StochasticStellarPopParticleChemistryBlockSize() { return Physics_Traits<problem_t>::numPassiveScalars; }
+template <typename problem_t> constexpr auto StochasticStellarPopParticleChemistryBlockSize() -> int { return Physics_Traits<problem_t>::numPassiveScalars; }
 
-template <typename problem_t> constexpr int StochasticStellarPopParticleChemistryBaseIdx()
+template <typename problem_t> constexpr auto StochasticStellarPopParticleChemistryBaseIdx() -> int
 {
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
 		return 14 + Physics_Traits<problem_t>::nGroups;
@@ -264,7 +265,7 @@ template <typename problem_t> constexpr int StochasticStellarPopParticleChemistr
 	}
 }
 
-template <typename problem_t> constexpr int StochasticStellarPopParticleChemistryBlockBaseIdx(int blockIndex)
+template <typename problem_t> constexpr auto StochasticStellarPopParticleChemistryBlockBaseIdx(int blockIndex) -> int
 {
 	return StochasticStellarPopParticleChemistryBaseIdx<problem_t>() + blockIndex * StochasticStellarPopParticleChemistryBlockSize<problem_t>();
 }
@@ -424,9 +425,10 @@ template <ParticleType particleType, typename problem_t> auto getParticleRealCom
 			}
 		}
 		const auto &isotopes = chemicalTrackedIsotopeList();
+		const auto isotope_count = static_cast<int>(isotopes.size());
 		const auto isotopeName = [&](int idx) -> std::string {
-			if (idx >= 0 && idx < static_cast<int>(isotopes.size())) {
-				return isotopes[idx];
+			if (idx >= 0 && idx < isotope_count) {
+				return isotopes[static_cast<std::size_t>(idx)];
 			}
 			return "unused_" + std::to_string(idx);
 		};
