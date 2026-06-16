@@ -918,6 +918,7 @@ template <typename problem_t> class PhysicsParticleRegister
 		} else if constexpr (particleType == ParticleType::Sink) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Sink>>(
 			    container, SinkParticleMassIdx, -1, -1, -1, true, false, -1, true, -1, SinkParticleMdotIdx, SinkParticleLxIdx);
+			descriptor->setForceFinestLevel(true); // sink particles must always reside on the finest AMR level
 		} else if constexpr (particleType == ParticleType::Test) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
 			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, TestParticleDeathTimeIdx, true, true,
@@ -1168,6 +1169,17 @@ template <typename problem_t> class PhysicsParticleRegister
 			}
 		}
 		return max_speed;
+	}
+
+	// Returns true if any registered particle type requires all particles to reside on the finest level
+	[[nodiscard]] auto anyParticleRequiresFinestLevel() const -> bool
+	{
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			if (descriptor->getForceFinestLevel()) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// Refine grids around particles that require finest level

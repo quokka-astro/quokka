@@ -3664,6 +3664,16 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 		}
 	}
 
+	// With AMR subcycling (do_subcycle=1) and max_level >= 2, a level-L regrid can only
+	// rebuild level L+1 while level L is held fixed. A particle on level L that is too
+	// close to the level-L patch boundary cannot receive a properly-nested level-(L+1)
+	// box around it, so it is left without finest-level coverage — violating the
+	// ForceFinestLevel invariant and causing mass non-conservation.
+	// Without subcycling, every regrid spans all levels, so this cannot happen.
+	if (particleRegister_.anyParticleRequiresFinestLevel() && max_level >= 2 && do_subcycle == 1) {
+		amrex::Abort("Particles with ForceFinestLevel=true and max_level >= 2 require AMR subcycling to be disabled. Set do_subcycle = 0.");
+	}
+
 	particleRegister_.redistribute(0);
 }
 #endif // AMREX_SPACEDIM == 3
