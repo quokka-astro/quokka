@@ -14,6 +14,7 @@ parameters specified in the input file.
 
 ### Input parameters
 
+
 | Parameter                                         | Required | Default | Description                                                                              |
 | ------------------------------------------------- | -------- | ------- | ---------------------------------------------------------------------------------------- |
 | `integrator.typical_n_H`                          | yes      | —       | Representative total H number density (cm⁻³)                                             |
@@ -22,31 +23,36 @@ parameters specified in the input file.
 | `integrator.spec_abundance_tol`                   | no       | 1e-5    | Species negligibility threshold, as a fraction of `typical_n_H`                          |
 | `integrator.radiation_failure_tolerance`          | no       | 0.01    | Maximum allowed negative photon number density (cm⁻³) before a burn is flagged as failed |
 
+
 The relative tolerances (`rtol_spec`, `rtol_enuc`, `rtol_rad_num`) are specified directly
 in the input file as usual. Flux is excluded from VODE convergence checks (it is a passive
 scalar, one-way coupled to the chemistry).
 
 ### Physical constants
 
-| Symbol | Value | Description |
-| ------ | ----- | ----------- |
-| `a_rad` | `7.5657e-15 erg cm⁻³ K⁻⁴` | Radiation constant (from `fundamental_constants.H`) |
-| `k_B` | `1.380649e-16 erg K⁻¹` | Boltzmann constant |
-| `m_p` | `1.67262192e-24 g` | Proton mass |
-| `c_v` | `3/2 × k_B / m_p ≈ 1.24e8 erg g⁻¹ K⁻¹` | Specific heat of monatomic hydrogen gas |
-| `E_photon` | problem-dependent | Midpoint energy of the first chemistry radiation band (erg), from `RadSystem<problem_t>::GetChemBandQuanta(0)` |
+
+| Symbol     | Value                                  | Description                                                                                                    |
+| ---------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `a_rad`    | `7.5657e-15 erg cm⁻³ K⁻⁴`              | Radiation constant (from `fundamental_constants.H`)                                                            |
+| `k_B`      | `1.380649e-16 erg K⁻¹`                 | Boltzmann constant                                                                                             |
+| `m_p`      | `1.67262192e-24 g`                     | Proton mass                                                                                                    |
+| `c_v`      | `3/2 × k_B / m_p ≈ 1.24e8 erg g⁻¹ K⁻¹` | Specific heat of monatomic hydrogen gas                                                                        |
+| `E_photon` | problem-dependent                      | Midpoint energy of the first chemistry radiation band (erg), from `RadSystem<problem_t>::GetChemBandQuanta(0)` |
+
 
 ### Derived atol values
 
 Let `T_min ≡ typical_minimal_radiation_T` for brevity.
 `SetAtolFromPhysics` computes:
 
+
 | Variable                      | Formula                                      | Rationale                                                                                                              |
 | ----------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `atol_spec`                   | `spec_abundance_tol × typical_n_H`           | Species below this fraction of `n_H` are negligible                                                                    |
 | `atol_enuc`                   | `c_v × desired_accuracy_on_T_at_typical_n_H` | Converts temperature accuracy to internal energy tolerance (`c_v = 3/2 × k_B / m_p`)                                   |
-| `atol_rad_num`                | `1e-6 × a_rad × T_min⁴ / E_photon`           | One millionth of the blackbody photon density at `T_min` — radiation below this is negligible                         |
-| `radiation_failure_tolerance` | 0.01 (fixed default)                         | Physical guard, not derived — 0.01 photons/cm³ is negligible in any astrophysical context. Overridable via input file. |
+| `atol_rad_num`                | `1e-6 × a_rad × T_min⁴ / E_photon`           | One millionth of the blackbody photon density at `T_min` — radiation below this is negligible                          |
+| `radiation_failure_tolerance` | 0.05 (fixed default)                         | Physical guard, not derived. Overridable via input file (see below for the rule of thumb). |
+
 
 ### The 1e-6 prefactor
 
@@ -54,9 +60,9 @@ The factor `1e-6` in `atol_rad_num` has a specific physical meaning:
 
 - It sets the tolerance to 1 part per million of the blackbody photon density at `T_min`.
 - After roughly 10⁶ VODE steps, the accumulated local error in photon number remains
-  below the physically meaningful radiation level at the minimum temperature.
+below the physically meaningful radiation level at the minimum temperature.
 - Cells with radiation below this threshold are considered "dark" and VODE
-  returns in a single BDF step.
+returns in a single BDF step.
 
 ### radiation_failure_tolerance
 
@@ -65,13 +71,14 @@ negative photon number density (cm⁻³) before a burn is declared failed — at
 many spurious photons can be "created from nothing" by VODE's Newton overshoot.
 
 Whether this matters depends on two regimes:
-1. **Bright cells** (`N_gamma ≳ n_H`): the cell is fully ionized. A few percent error in
-   photon count does not change the outcome.
-2. **Dark cells** (`N_gamma ≪ n_H`): the spurious ionization is at most
-   `radiation_failure_tolerance / n_H`. If this ratio is ≪ 1 %, it is negligible.
 
-The default of 0.01 cm⁻³ is appropriate for galactic disk or GMC environments, where the
-typical ionized gas density is ~10²–10⁴ cm⁻³ (ratio ≤ 10⁻⁴). For low-density environments
+1. **Bright cells** (`N_gamma ≳ n_H`): the cell is fully ionized. A few percent error in
+  photon count does not change the outcome.
+2. **Dark cells** (`N_gamma ≪ n_H`): the spurious ionization is at most
+  `radiation_failure_tolerance / n_H`. If this ratio is ≪ 1 %, it is negligible.
+
+The default of 0.05 cm⁻³ is appropriate for galactic disk or GMC environments, where the
+typical ionized gas density is ~10²–10⁴ cm⁻³ (ratio ≤ 5×10⁻⁴). For low-density environments
 such as the CGM or IGM, where the ionized gas density can be ~10⁻⁴–10⁻³ cm⁻³, this
 default competes with the physical ionization equilibrium — override it in the input file.
 
@@ -85,10 +92,12 @@ system has a floor independent of the tolerance.
 
 These are two distinct parameters that serve different purposes:
 
-| Parameter                         | Where set                                             | Purpose                                                                                                 |
-| --------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `Erad_floor`                      | `constexpr` in `RadSystem_Traits<problem_t>`          | M1 hyperbolic solver floor — prevents the radiation moment solver from encountering zero energy density |
-| `typical_minimal_radiation_T`     | Input file (`integrator.typical_minimal_radiation_T`) | VODE tolerance — defines the minimum physically meaningful radiation temperature                        |
+
+| Parameter                     | Where set                                             | Purpose                                                                                                 |
+| ----------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `Erad_floor`                  | `constexpr` in `RadSystem_Traits<problem_t>`          | M1 hyperbolic solver floor — prevents the radiation moment solver from encountering zero energy density |
+| `typical_minimal_radiation_T` | Input file (`integrator.typical_minimal_radiation_T`) | VODE tolerance — defines the minimum physically meaningful radiation temperature                        |
+
 
 Define the equivalent floor temperature `T_floor` by `Erad_floor ≡ a_rad × T_floor⁴`.
 The photon number density at the floor is `N_gamma_floor = Erad_floor / E_photon`.
@@ -109,7 +118,7 @@ Ratio = `1e-6 × (10 / 0.01)⁴ = 10⁶` ✓.
 
 ### Mutual exclusivity
 
-The `integrator.typical_*` parameters and hand-tuned `integrator.atol_*` parameters
+The `integrator.typical_`* parameters and hand-tuned `integrator.atol_*` parameters
 are **mutually exclusive** — using both triggers an error.  Specifying neither also
 triggers an error, because VODE's built-in defaults (~1e-10) are unusably tight for
 photochemistry and will cause the integrator to stall.
@@ -117,11 +126,12 @@ photochemistry and will cause the integrator to stall.
 ### Setting up a new problem
 
 1. Set `Erad_floor` in `RadSystem_Traits<problem_t>` to a blackbody temperature low
-   enough that it does not produce spurious ionization (typical: 0.01–1 K).
+  enough that it does not produce spurious ionization (typical: 0.01–1 K).
 2. Choose `typical_n_H` as the representative hydrogen density of the problem.
 3. Choose `typical_minimal_radiation_T` as the lowest temperature at which radiation
-   is physically important (e.g. the minimum gas temperature in the domain).
+  is physically important (e.g. the minimum gas temperature in the domain).
 4. Check `1e-6 × (T_min / T_floor)⁴ ≥ 10⁴`, i.e. `T_floor ≤ T_min / 316`.
-   If this fails, either lower `Erad_floor` or raise `typical_minimal_radiation_T`.
+  If this fails, either lower `Erad_floor` or raise `typical_minimal_radiation_T`.
 5. The `1e-6` prefactor and `desired_accuracy_on_T_at_typical_n_H = 1.0 K` are
-   reasonable defaults for most problems.
+  reasonable defaults for most problems.
+

@@ -45,8 +45,8 @@ auto hasRawAtolParams() -> bool
 // and is set independently in each problem's specialization. typical_minimal_radiation_T only
 // controls the VODE tolerance, not Erad_floor.
 //
-// radiation_failure_tolerance defaults to 0.01 cm^-3 — a physically negligible photon count
-// per cm^3 — and can be overridden in the toml.
+// radiation_failure_tolerance defaults to 0.05 cm^-3 (physical guard against negative photon
+// density) — overridable in the toml. See docs/markdown/photoionization.md.
 template <typename problem_t> void SetAtolFromPhysics()
 {
 	if (!detail::hasTypicalParams() && !detail::hasRawAtolParams()) {
@@ -97,16 +97,17 @@ template <typename problem_t> void SetAtolFromPhysics()
 	const amrex::Real atol_enuc = c_v * desired_accuracy_on_T_at_typical_n_H;
 
 	// --- atol_rad_num: photon number density tolerance ---
-	// Set to 1e-6 × the blackbody photon density at typical_minimal_radiation_T.
-	// This makes photon counts below 1 ppm of the minimum meaningful radiation field
-	// negligible to VODE, so dark cells (Erad ≈ Erad_floor << a*T^4) return in one BDF step.
-	// typical_minimal_radiation_T is NOT Erad_floor; Erad_floor is set in RadSystem_Traits.
+	// One millionth of the blackbody photon density at typical_minimal_radiation_T.
+	// A small value keeps Newton steps small in stiff cells, preventing large
+	// overshoots that would trigger the radiation_failure_tolerance guard.
 	const amrex::Real atol_rad_num = 1.0e-6 * C::a_rad * std::pow(typical_minimal_radiation_T, 4.0) / E_photon;
 
 	// --- radiation_failure_tolerance ---
 	// Physical guard: maximum allowed negative photon number density (cm^-3).
-	// 0.01 photons/cm^3 is negligible in any astrophysical context.
-	amrex::Real radiation_failure_tolerance = 1.0e-2;
+	// Default 0.05 cm^-3 tolerates the worst-case Newton overshoot in stiff
+	// photoionization cells.  Rule of thumb: 2 orders of magnitude below the
+	// typical ionized gas density.  Lower for CGM/IGM.
+	amrex::Real radiation_failure_tolerance = 5.0e-2;
 	pp.query("radiation_failure_tolerance", radiation_failure_tolerance);
 
 	// --- Inject into ParmParse (init_extern_parameters reads these) ---
