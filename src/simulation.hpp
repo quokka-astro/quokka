@@ -2167,10 +2167,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 // N.B.  The ForceFinestLevel regrid guarantee lives in timeStepWithSubcycling, where a
 // level-0 regrid is forced at the start of the first coarse step.  The bare override here
 // keeps the virtual method available for future diagnostics.
-template <typename problem_t> void AMRSimulation<problem_t>::regrid(int lbase, amrex::Real time, bool initial)
-{
-	amrex::AmrCore::regrid(lbase, time, initial);
-}
+template <typename problem_t> void AMRSimulation<problem_t>::regrid(int lbase, amrex::Real time, bool initial) { amrex::AmrCore::regrid(lbase, time, initial); }
 
 // N.B.: This function actually works for subcycled or not subcycled, as long as
 // nsubsteps[lev] is set correctly.
@@ -2187,8 +2184,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 		// regrid changes level "lev+1" so we don't regrid on max_level
 		// also make sure we don't regrid fine levels again if
 		// it was taken care of during a coarser regrid
-		bool const force_finest_regrid =
-		    (lev == 0 && lev < max_level && istep[lev] == 0 && particleRegister_.anyParticleRequiresFinestLevel());
+		bool const force_finest_regrid = (lev == 0 && lev < max_level && istep[lev] == 0 && particleRegister_.anyParticleRequiresFinestLevel());
 		if ((lev < max_level && istep[lev] > last_regrid_step[lev]) || force_finest_regrid) {
 			if (istep[lev] % regrid_int == 0 || force_finest_regrid) {
 				// regrid could add newly refined levels (if finest_level < max_level)
