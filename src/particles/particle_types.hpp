@@ -349,32 +349,14 @@ using SinkParticleContainer = amrex::AmrParticleContainer<SinkParticleRealComps>
 using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
 
 //-------------------- Star particles --------------------
+// The layout enum and index constants live in a standalone header so that stellar
+// models can include them without pulling in the full particle type machinery.
 
-AMREX_ENUM(StarParticleDataIdx, // NOLINT
-	   mass,		// Mass of the particle
-	   vx,			// Velocity x
-	   vy,			// Velocity y
-	   vz,			// Velocity z
-	   birth_time,		// Simulation time when the particle was created
-	   mdot,		// Current mass accretion rate (set by the accretion module)
-	   radius,		// Stellar radius (set by the stellar-evolution model)
-	   lum			// Base index for luminosity components (MUST be last; expands to lum_0, lum_1, ... for nGroups)
-);
+#include "particles/star_particle_indices.H"
 
-constexpr int StarParticleMassIdx = static_cast<int>(StarParticleDataIdx::mass);
-constexpr int StarParticleVxIdx = static_cast<int>(StarParticleDataIdx::vx);
-constexpr int StarParticleVyIdx = static_cast<int>(StarParticleDataIdx::vy);
-constexpr int StarParticleVzIdx = static_cast<int>(StarParticleDataIdx::vz);
-constexpr int StarParticleBirthTimeIdx = static_cast<int>(StarParticleDataIdx::birth_time);
-constexpr int StarParticleMdotIdx = static_cast<int>(StarParticleDataIdx::mdot);
-constexpr int StarParticleRadiusIdx = static_cast<int>(StarParticleDataIdx::radius);
-constexpr int StarParticleLumIdx = static_cast<int>(StarParticleDataIdx::lum);
-
-static_assert(static_cast<int>(StarParticleDataIdx::lum) == 7);
-
-// Number of components = base scalars (7: mass..radius) + nGroups luminosity slots + model extras.
+// Number of components = fixed scalars + nGroups luminosity slots + model extras.
 template <typename problem_t>
-constexpr int StarParticleRealComps = 7 + Physics_Traits<problem_t>::nGroups + Particle_Traits<problem_t>::stellar_model::nExtraReal;
+constexpr int StarParticleRealComps = StarParticleFixedComps + Physics_Traits<problem_t>::nGroups + Particle_Traits<problem_t>::stellar_model::nExtraReal;
 template <typename problem_t> constexpr int StarParticleIntComps = Particle_Traits<problem_t>::stellar_model::nExtraInt;
 
 template <typename problem_t> using StarParticleContainer = amrex::AmrParticleContainer<StarParticleRealComps<problem_t>, StarParticleIntComps<problem_t>>;

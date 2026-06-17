@@ -5,6 +5,7 @@
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
 #include "fundamental_constants.H"
+#include "particles/star_particle_indices.H"
 #include <cmath>
 
 namespace quokka
@@ -14,8 +15,6 @@ namespace quokka
 //   R(M)      = R_sun * (M / M_sun)^0.4
 //   L_star(M) = L_sun * (M / M_sun)^3.5
 //   L_acc     = G * M * mdot / R
-// All functions are pure (no particle, no field indices), so this header has no particle
-// dependency and can be included by particle_types.hpp without a circular include.
 struct ToyStellarModel {
 	// Extra per-particle components this model needs beyond the base Star layout.
 	// The toy model is stateless, so it needs none.
@@ -50,23 +49,21 @@ struct ToyStellarModel {
 		return C::Gconst * mass * mdot / radius_val;
 	}
 
-	// Stellar-evolution step.
-	//   mass:       [in/out] current stellar mass (model may modify, e.g. wind mass loss)
-	//   mdot:       [in]     mass accretion rate onto the star (set by accretion module)
-	//   radius_val: [in/out] current stellar radius (model may read and/or modify)
-	//   lum:        [out]    luminosity array of size n_groups — model writes all groups
-	//   n_groups:   [in]     number of radiation groups (= length of lum array)
-	//   dt:         [in]     timestep
-	// The toy model is stateless, so it ignores the incoming radius/lum values and dt.
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void evolve(amrex::Real &mass, amrex::Real mdot, amrex::Real &radius_val,
-								    amrex::Real *lum, [[maybe_unused]] int n_groups,
-								    [[maybe_unused]] amrex::Real dt)
+	// Stellar-evolution step — takes the full particle real-data array so the model
+	// can read and modify any component (mass, radius, luminosity groups, etc.).
+	//   rdata:    [in/out] particle real-component array (layout defined by StarParticleDataIdx)
+	//   n_groups: [in]     number of radiation groups (= number of lum slots after index 7)
+	//   dt:       [in]     timestep
+	// The toy model is stateless, so it only reads mass/mdot and writes radius/lum.
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void evolve(amrex::Real *rdata, int n_groups, [[maybe_unused]] amrex::Real dt)
 	{
-		radius_val = radius(mass);
+		const amrex::Real mass = rdata[StarParticleMassIdx];
+		const amrex::Real mdot = rdata[StarParticleMdotIdx];
+		rdata[StarParticleRadiusIdx] = radius(mass);
 		if (n_groups > 0) {
-			lum[0] = luminosityStar(mass) + luminosityAcc(mass, mdot, radius_val);
+			rdata[StarParticleLumIdx] = luminosityStar(mass) + luminosityAcc(mass, mdot, rdata[StarParticleRadiusIdx]);
 			for (int g = 1; g < n_groups; ++g) {
-				lum[g] = 0.0;
+				rdata[StarParticleLumIdx + g] = 0.0;
 			}
 		}
 	}
