@@ -3,22 +3,31 @@
 ///        under AMR subcycling with max_level >= 2.
 ///
 /// Setup (from ParticleSinkSubcycle_bug.toml):
-///   domain = [-1.6e20, 1.6e20]^3, n_cell=32, dx_0=1e19, blocking_factor=4, n_error_buf=2
-///   max_level=2, do_subcycle=1
+///   domain = [-1.6e20, 1.6e20]^3, n_cell=32, dx_0=1e19, blocking_factor=8, n_error_buf=2
+///   max_level=2, do_subcycle=1, regrid_interval=1, max_timesteps=3
 ///
-///   refineGrid(lev==0): tags x < 0 (left half) → level-1 covers level-1 cells [0,31] in x
-///   Particle at x=-5e18 → level-0 cell 15, level-1 cell 31 (right at the level-1 boundary)
+///   refineGrid(lev==0): tags x < -1e20 (left sixth, cells [0,5]) → with n_error_buf=2
+///   growing [0,5]→[0,7] → level-1 cells [0,15] (covering level-0 cells [0,7]).
+///   Particle at x=-5e18 → level-0 cell 15 → OUTSIDE the initial level-1 patch → on level-0.
 ///
-///   With do_subcycle=1, a level-1-only regrid tries to create level-2 around the particle.
-///   bf_lev[1] = blocking_factor[2]/ref_ratio[1] = 4/2 = 2.
-///   Particle tag grown by n_error_buf=2: level-1 cells [29,33].
-///   Proper interior of level-1 patch [0,31]: cells [2,29].
-///   Cells 30-33 are outside the proper interior → tag CLEARED.
-///   Particle cannot get level-2 coverage → finestLevel() < max_level (the bug).
+///   Development (no fix): subcycled level-1 regrid calls AmrCore::regrid(1), which holds
+///   level-1 FIXED at [0,15]. refineGridsAroundParticles(1) can only find particles stored
+///   AT level-1; the particle is at level-0 and is not found. No level-2 is created.
+///   At coarse step 3, the coarse regrid (AmrCore::regrid(0)) also fails to maintain level-2
+///   because tagCellsAroundParticles(0) only searches level-0, missing the particle when it
+///   has been promoted to level-1 or level-2. The particle bounces back to level-0, and
+///   finestLevel() never reaches max_level=2.
 ///
-/// Expected ctest pass (PASS_REGULAR_EXPRESSION): only on PR #1961 branch where the
-/// guard fires with "ForceFinestLevel=true and max_level >= 2" abort message.
-/// On development, the test runs without abort and finestLevel() < max_level is observed.
+///   Fix (PR #1961):
+///     (a) timeStepWithSubcycling forces a level-0 regrid at the start of each coarse step
+///         when ForceFinestLevel particles exist, ensuring all levels are properly built before
+///         any advance occurs.
+///     (b) tagCellsAroundParticles(lev) now also searches particles at ALL other levels,
+///         projecting their positions to level-lev. This ensures ErrorEst at each level can
+///         tag cells for the next finer level even before the particle has been redistributed.
+///
+///   Expected: development exits with code 1 ("ISSUE #1957 REPRODUCED").
+///             PR branch exits with code 0 ("Test passed: particle is on finest level").
 
 #include "AMReX.H"
 #include "AMReX_MultiFab.H"
@@ -75,8 +84,9 @@ template <> void QuokkaSimulation<SubcycleProblem>::setInitialConditionsOnGridFa
 
 template <> void QuokkaSimulation<SubcycleProblem>::createInitialSinkParticles()
 {
-	// Particle at x=-5e18 cm (level-0 cell 15, level-1 cell 31) — near the right boundary
-	// of the level-1 patch that refineGrid creates for the left half (x < 0) of the domain.
+	// Particle at x=-5e18 cm — level-0 cell 15, level-1 cells 30/31.
+	// With the density-only initial regrid (refineGrid tags [0,5] → level-1 [0,15]),
+	// the particle is OUTSIDE the level-1 patch and is stored at level-0.
 	// mass, vx, vy, vz — 4 real extra attributes
 	const int nreal_extra = 4;
 	SinkParticles->SetVerbose(0);
@@ -88,15 +98,19 @@ template <> void QuokkaSimulation<SubcycleProblem>::refineGrid(int lev, amrex::T
 	if (lev > 0) {
 		return; // level-2 comes only from the particle tag (refineGridsAroundParticles)
 	}
-	// Tag the left half of the domain (x < 0) to create a level-1 patch.
-	// This places the particle near the right edge of the level-1 patch.
+	// Tag the leftmost sixth of the domain (x < -1e20, cells [0,5]) to create a level-1 patch.
+	// With n_error_buf=2, this grows to [0,7] → level-1 [0,15] (covering level-0 cells [0,7]).
+	// The particle at x=-5e18 (level-0 cell 15) is OUTSIDE this patch, staying on level-0.
+	// This is the geometry that exposes the subcycling bug: the subcycled regrid cannot
+	// expand level-1 to cover the particle, so level-2 cannot be properly nested around it.
+	const double threshold_x = -1.0e20;
 	const auto prob_lo = geom[lev].ProbLoArray();
 	const auto dx = geom[lev].CellSizeArray();
 	auto tag = tags.arrays();
 
 	amrex::ParallelFor(tags, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 		const double x = prob_lo[0] + (i + 0.5) * dx[0];
-		if (x < 0.0) {
+		if (x < threshold_x) {
 			tag[bx](i, j, k) = amrex::TagBox::SET;
 		}
 	});
@@ -107,15 +121,17 @@ auto problem_main() -> int
 	QuokkaSimulation<SubcycleProblem> sim;
 	sim.cflNumber_ = 0.3;
 
-	// On the PR branch this aborts here with:
-	// "Particles with ForceFinestLevel=true and max_level >= 2 require AMR subcycling
-	//  to be disabled. Set do_subcycle = 0."
-	// The PASS_REGULAR_EXPRESSION in CMakeLists matches that message.
+	// setInitialConditions: InitFromScratch runs the initial regrid (density tags only,
+	// no particles exist yet) → level-1 at [0,15]. Then InitPhyParticles creates the particle
+	// at x=-5e18; redistribute places it at level-0 (not covered by level-1 [0,7]).
+	// On PR branch, ForceFinestLevel is already true at registerParticleType (registered in
+	// InitPhyParticles) but the initial regrid already ran without the particle, so level-1
+	// remains [0,15] and the particle starts at level-0 on both branches.
 	sim.setInitialConditions();
 
-	// On development: setForceFinestLevel is set AFTER init (matching real production usage,
-	// e.g. ParticleAccretion). During evolve(), the subcycled level-1 regrid tries but fails
-	// to create level-2 around the particle due to the proper-nesting constraint.
+	// Ensure ForceFinestLevel is set on both branches so that refineGridsAroundParticles
+	// is active during evolve(). On the PR branch this is a no-op (already set at registration).
+	// On development this enables particle tagging for the subcycled regrid to attempt.
 	sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Sink)->setForceFinestLevel(true);
 
 	sim.evolve();

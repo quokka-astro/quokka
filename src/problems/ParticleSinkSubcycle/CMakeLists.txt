@@ -5,14 +5,14 @@ if(AMReX_SPACEDIM EQUAL 3)
     setup_target_for_cuda_compilation(${JOB_NAME})
   endif()
 
-  # Test passes only when the PR #1961 guard fires:
-  #   "Particles with ForceFinestLevel=true and max_level >= 2 require AMR subcycling
-  #    to be disabled. Set do_subcycle = 0."
-  # On development (no guard), the simulation runs and finestLevel() < max_level is observed.
+  # Test passes when the particle reaches the finest AMR level (level-2) under
+  # do_subcycle=1 + max_level=2. On the development branch (no fix), the subcycled
+  # level-1 regrid cannot expand level-1 to cover the particle, so level-2 is never
+  # properly created and the test exits with code 1.
   add_test(
     NAME ParticleSinkSubcycle
     COMMAND ${JOB_NAME} ../inputs/ParticleSinkSubcycle_bug.toml ${QuokkaTestParams}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
   set_tests_properties(ParticleSinkSubcycle PROPERTIES
-    PASS_REGULAR_EXPRESSION "ForceFinestLevel=true and max_level >= 2")
+    PASS_REGULAR_EXPRESSION "Test passed: particle is on finest level")
 endif()

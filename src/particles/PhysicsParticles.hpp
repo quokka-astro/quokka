@@ -735,27 +735,66 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			return;
 		}
 
+		// Use level-lev geometry for all position-to-cell conversions.
+		const auto &geom_lev = container_->Geom(lev);
+		const auto plo = geom_lev.ProbLoArray();
+		const auto dxi = geom_lev.InvCellSizeArray();
+
+		// (1) GPU-capable path: particles stored AT level lev — tags.array(pti) aligns with pti.
 		for (typename ContainerType::ParIterType pti(*container_, lev); pti.isValid(); ++pti) {
 			auto &particles = pti.GetArrayOfStructs();
 			auto *pData = particles().data();
 			const amrex::Long np = pti.numParticles();
-
-			// Get geometry information for this level
-			const auto &geom = container_->Geom(lev);
-			const auto plo = geom.ProbLoArray();
-			const auto dxi = geom.InvCellSizeArray();
-
 			const auto tag = tags.array(pti);
-
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 				auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-				// Find the cell containing the particle
 				const int ix = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
 				const int iy = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
 				const int iz = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
-
 				tag(ix, iy, iz) = amrex::TagBox::SET;
 			});
+		}
+
+		// (2) CPU path: particles at OTHER levels projected to level lev.
+		// A ForceFinestLevel particle may be stored at a coarser level (not yet promoted to lev)
+		// or a finer level (already past lev). Either way its physical position determines which
+		// level-lev cell needs refinement — project and tag it regardless of storage level.
+		// Regridding in AMReX is always CPU-initiated, so a CPU loop is correct here.
+		// Two-pass structure (collect then tag) avoids nested MFIters: ParIterType IS an MFIter,
+		// so creating MFIter mfi(tags) inside a live ParIter loop would violate AMReX's rule
+		// that at most one MFIter may be active at a time.
+		amrex::Gpu::synchronize(); // wait for GPU kernels from (1) to complete before CPU writes
+		amrex::Vector<amrex::IntVect> cross_level_cells;
+		for (int l = 0; l <= container_->finestLevel(); ++l) {
+			if (l == lev) {
+				continue; // already handled in (1)
+			}
+			// Collect cells from this level (ParIterType loop completes before MFIter loop below)
+			for (typename ContainerType::ParIterType pti(*container_, l); pti.isValid(); ++pti) {
+				const auto &particles = pti.GetArrayOfStructs();
+				const amrex::Long np = pti.numParticles();
+				for (amrex::Long idx = 0; idx < np; ++idx) {
+					const auto &p = particles()[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+					if (p.id() <= 0) {
+						continue; // skip invalid/ghost particles
+					}
+					const int ix = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
+					const int iy = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
+					const int iz = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
+					cross_level_cells.emplace_back(AMREX_D_DECL(ix, iy, iz));
+				}
+			}
+		}
+		// Tag collected cells with a separate MFIter (no ParIter active, no nesting)
+		if (!cross_level_cells.empty()) {
+			for (amrex::MFIter mfi(tags); mfi.isValid(); ++mfi) {
+				const amrex::Box &valid_box = mfi.validbox();
+				for (const auto &cell : cross_level_cells) {
+					if (valid_box.contains(cell)) {
+						tags[mfi](cell) = amrex::TagBox::SET;
+					}
+				}
+			}
 		}
 	}
 

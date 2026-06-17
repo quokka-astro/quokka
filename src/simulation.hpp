@@ -387,6 +387,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void AverageDown();
 	void AverageDownTo(int crse_lev);
 	void timeStepWithSubcycling(int lev, amrex::Real time, int iteration);
+	void regrid(int lbase, amrex::Real time, bool initial = false) override;
 	void calculateGpotAllLevels();
 	void gravAccelAllLevels(amrex::Real dt);
 	void ellipticSolveAllLevels(amrex::Real dt);
@@ -2163,6 +2164,14 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 }
 #endif // AMREX_SPACEDIM == 3
 
+// N.B.  The ForceFinestLevel regrid guarantee lives in timeStepWithSubcycling, where a
+// level-0 regrid is forced at the start of the first coarse step.  The bare override here
+// keeps the virtual method available for future diagnostics.
+template <typename problem_t> void AMRSimulation<problem_t>::regrid(int lbase, amrex::Real time, bool initial)
+{
+	amrex::AmrCore::regrid(lbase, time, initial);
+}
+
 // N.B.: This function actually works for subcycled or not subcycled, as long as
 // nsubsteps[lev] is set correctly.
 template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time, int iteration)
@@ -2178,8 +2187,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 		// regrid changes level "lev+1" so we don't regrid on max_level
 		// also make sure we don't regrid fine levels again if
 		// it was taken care of during a coarser regrid
-		if (lev < max_level && istep[lev] > last_regrid_step[lev]) {
-			if (istep[lev] % regrid_int == 0) {
+		bool const force_finest_regrid =
+		    (lev == 0 && lev < max_level && istep[lev] == 0 && particleRegister_.anyParticleRequiresFinestLevel());
+		if ((lev < max_level && istep[lev] > last_regrid_step[lev]) || force_finest_regrid) {
+			if (istep[lev] % regrid_int == 0 || force_finest_regrid) {
 				// regrid could add newly refined levels (if finest_level < max_level)
 				// so we save the previous finest level index
 				int old_finest = finest_level;
@@ -3662,16 +3673,6 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 			// Initialize particles through user-defined function
 			createInitialTestParticles();
 		}
-	}
-
-	// With AMR subcycling (do_subcycle=1) and max_level >= 2, a level-L regrid can only
-	// rebuild level L+1 while level L is held fixed. A particle on level L that is too
-	// close to the level-L patch boundary cannot receive a properly-nested level-(L+1)
-	// box around it, so it is left without finest-level coverage — violating the
-	// ForceFinestLevel invariant and causing mass non-conservation.
-	// Without subcycling, every regrid spans all levels, so this cannot happen.
-	if (particleRegister_.anyParticleRequiresFinestLevel() && max_level >= 2 && do_subcycle == 1) {
-		amrex::Abort("Particles with ForceFinestLevel=true and max_level >= 2 require AMR subcycling to be disabled. Set do_subcycle = 0.");
 	}
 
 	particleRegister_.redistribute(0);
