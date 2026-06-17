@@ -1,0 +1,28 @@
+# Test input for issue #1957 regression: sink particles + max_level=2 + do_subcycle=1
+# Domain: [-1.6e20, 1.6e20]^3, 32 cells, dx_0=1e19 cm
+# refineGrid(0) tags x < 0 => level-1 patch covers level-1 cells [0,31] in x
+# Particle at x=-5e18 => level-1 cell 31 (right at the level-1 boundary)
+# With n_error_buf=2 and blocking_factor=8: bf_lev[1]=4, safe interior=[4,27]
+# Particle tag grown to [29,33]; cells 28-33 outside safe interior => tag CLEARED
+# => Particle cannot get level-2 coverage under do_subcycle=1 (the bug)
+
+geometry.prob_lo = [-1.6e20, -1.6e20, -1.6e20]
+geometry.prob_hi = [1.6e20, 1.6e20, 1.6e20]
+quokka.bc = ["reflecting", "reflecting", "reflecting"]
+
+amr.n_cell = [32, 32, 32]
+amr.max_level = 2
+amr.blocking_factor = 8
+amr.max_grid_size = 32
+amr.n_error_buf = 2
+amr.grid_eff = 0.7
+
+do_reflux = 1
+do_subcycle = 1
+do_tracers = 0
+
+particles.verbose = 1
+
+initial_dt = "1.0e12"  # ~31.7 kyr, short so regrids happen quickly
+max_timesteps = 3
+tiny_profiler.enabled = 0
