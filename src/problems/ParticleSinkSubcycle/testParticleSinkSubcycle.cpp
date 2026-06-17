@@ -130,7 +130,8 @@ auto problem_main() -> int
 
 	if (finest < sim.max_level || data_finest.size() < data_all.size()) {
 		amrex::Print() << "ISSUE #1957 REPRODUCED: particle did not reach finest level under "
-			          "do_subcycle=1 + max_level=" << sim.max_level << "\n";
+				  "do_subcycle=1 + max_level="
+			       << sim.max_level << "\n";
 		return 1;
 	}
 	amrex::Print() << "Test passed: particle is on finest level\n";
