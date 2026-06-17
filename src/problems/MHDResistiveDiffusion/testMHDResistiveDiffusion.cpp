@@ -48,8 +48,8 @@ constexpr double gamma_gas = quokka::EOS_Traits<MHDResistiveDiffusion>::gamma;
 constexpr double eint_0 = pressure_0 / (gamma_gas - 1.0);
 
 // wavevector: one mode in a unit box
-AMREX_GPU_MANAGED double k_mode = 0.0;    // NOLINT
-AMREX_GPU_MANAGED double eta_val = 0.0;   // NOLINT
+AMREX_GPU_MANAGED double k_mode = 0.0;	// NOLINT
+AMREX_GPU_MANAGED double eta_val = 0.0; // NOLINT
 
 template <> void QuokkaSimulation<MHDResistiveDiffusion>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
