@@ -1,0 +1,23 @@
+# Test input for red-green cycle: max_level=2 + do_subcycle=1 with sink particles
+# Expected: abort with sink-particle guard message on PR branch
+geometry.prob_lo = [-3.949667304e+19, -3.949667304e+19, -3.949667304e+19]
+geometry.prob_hi = [3.949667304e+19, 3.949667304e+19, 3.949667304e+19]
+quokka.bc = ["reflecting", "reflecting", "reflecting"]
+
+amr.v = 1
+amr.n_cell = [32, 32, 32]
+amr.max_level = 2       # >= 2 to trigger the bug
+amr.blocking_factor = 16
+amr.max_grid_size = 16
+amr.n_error_buf = 2
+amr.grid_eff = 0.7
+
+do_reflux = 1
+do_subcycle = 1         # enables the dangerous combination
+do_tracers = 0
+
+particles.verbose = 1
+
+initial_dt = "0.1*Myr"
+
+tiny_profiler.enabled = 0
