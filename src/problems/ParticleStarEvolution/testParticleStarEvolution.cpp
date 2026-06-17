@@ -143,8 +143,7 @@ template <> void QuokkaSimulation<StarEvolutionProblem>::setInitialConditionsOnG
 template <> void QuokkaSimulation<StarEvolutionProblem>::computeAfterTimestep()
 {
 	const int finest_level = finestLevel();
-	const auto [real_data, int_data] =
-	    particleRegister_.getParticleDescriptor(quokka::ParticleType::Star)->getParticleDataAtLevel(finest_level);
+	const auto [real_data, int_data] = particleRegister_.getParticleDescriptor(quokka::ParticleType::Star)->getParticleDataAtLevel(finest_level);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		constexpr int off = AMREX_SPACEDIM; // 3 position components precede rdata
