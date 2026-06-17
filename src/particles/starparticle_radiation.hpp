@@ -14,8 +14,9 @@ namespace quokka
 {
 
 // Framework dispatcher for per-particle stellar-evolution updates.
-// Reads the particle's mass and accretion rate, calls the model selected by
-// Particle_Traits<problem_t>::stellar_model, and stores the resulting radius and luminosity.
+// Reads the particle's current state, calls the model selected by
+// Particle_Traits<problem_t>::stellar_model, and writes back any
+// quantities the model may have modified (mass, radius, luminosity groups).
 class StellarUpdate
 {
       public:
@@ -25,20 +26,18 @@ class StellarUpdate
 	{
 		using Model = typename Particle_Traits<problem_t>::stellar_model;
 
-		const amrex::Real mass = p.rdata(StarParticleMassIdx);
+		amrex::Real mass = p.rdata(StarParticleMassIdx);
 		const amrex::Real mdot = p.rdata(StarParticleMdotIdx);
+		amrex::Real radius = p.rdata(StarParticleRadiusIdx);
 
-		amrex::Real radius_val = 0.0;
-		amrex::Real lum_val = 0.0;
-		Model::evolve(mass, mdot, dt, radius_val, lum_val);
-
-		p.rdata(StarParticleRadiusIdx) = radius_val;
 		if constexpr (Nout > 0) {
-			p.rdata(StarParticleLumIdx) = lum_val;
-			for (int g = 1; g < Nout; ++g) {
-				p.rdata(StarParticleLumIdx + g) = 0.0;
-			}
+			Model::evolve(mass, mdot, radius, &p.rdata(StarParticleLumIdx), Nout, dt);
+		} else {
+			Model::evolve(mass, mdot, radius, nullptr, 0, dt);
 		}
+
+		p.rdata(StarParticleMassIdx) = mass;
+		p.rdata(StarParticleRadiusIdx) = radius;
 	}
 };
 
