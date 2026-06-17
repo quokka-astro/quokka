@@ -3632,15 +3632,19 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 	}
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Star) {
-		AMREX_ASSERT(StarParticles == nullptr);
-		static_assert(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS, "UnitSystem must be CGS for Star particles");
+		if (is_restart) {
+			initializeParticleContainerFromCheckpoint<quokka::ParticleType::Star>(StarParticles, *header_box_arrays);
+		} else {
+			AMREX_ASSERT(StarParticles == nullptr);
+			static_assert(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS, "UnitSystem must be CGS for Star particles");
 
-		StarParticles = std::make_unique<quokka::StarParticleContainer<problem_t>>(this);
-		StarParticles->SetVerbose(0);
+			StarParticles = std::make_unique<quokka::StarParticleContainer<problem_t>>(this);
+			StarParticles->SetVerbose(0);
 
-		particleRegister_.template registerParticleType<quokka::ParticleType::Star>(StarParticles.get());
+			particleRegister_.template registerParticleType<quokka::ParticleType::Star>(StarParticles.get());
 
-		createInitialStarParticles();
+			createInitialStarParticles();
+		}
 	}
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) {
 		if (is_restart) {
