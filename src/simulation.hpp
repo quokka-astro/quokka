@@ -387,7 +387,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void AverageDown();
 	void AverageDownTo(int crse_lev);
 	void timeStepWithSubcycling(int lev, amrex::Real time, int iteration);
-	void regrid(int lbase, amrex::Real time, bool initial = false) override;
+	void regrid(int lbase, amrex::Real time, bool initial) override;
 	void calculateGpotAllLevels();
 	void gravAccelAllLevels(amrex::Real dt);
 	void ellipticSolveAllLevels(amrex::Real dt);
@@ -2193,7 +2193,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 				// regrid could add newly refined levels (if finest_level < max_level)
 				// so we save the previous finest level index
 				int old_finest = finest_level;
-				regrid(lev, time);
+				regrid(lev, time, false);
 
 				// mark that we have regridded this level already
 				for (int k = lev; k <= finest_level; ++k) {
