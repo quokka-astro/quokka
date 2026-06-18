@@ -6,7 +6,7 @@ This test problem demonstrates the ability of the code to resolve fine features 
 
 The left- (\\(x < 1.0\\)) and right-side (\\(x \ge 1.0\\)) initial conditions are:
 
-<script type="math/tex; mode=display">
+\\[
 \begin{aligned}
 \rho_0 = 3.857143 \\
 v_{x,0} = 2.629369 \\
@@ -15,7 +15,7 @@ P_0 = 10.33333 \\
 v_{x,1} = 0 \\
 P_1 = 1
 \end{aligned}
-</script>
+\\]
 
 ## Solution
 

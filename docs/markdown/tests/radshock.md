@@ -6,29 +6,29 @@ This test problem demonstrates the correct coupled solution of the hydrodynamics
 
 The dimensionless shock parameters [@Lowrie_2008] are:
 
-<script type="math/tex; mode=display">
+\\[
 \begin{aligned}
 P_0 = 1.0 \times 10^{-4} \\
 \sigma_a = 1.0 \times 10^{6} \\
 \mathcal{M}_0 = 3.0 \\
 \gamma = 5/3 \\
 \end{aligned}
-</script>
+\\]
 
 Following [@Skinner_2019], we scale to dimensional values assuming
 
-<script type="math/tex; mode=display">
+\\[
 \begin{aligned}
 \mu = m_H \\
 c_v = \frac{k_B}{\mu (\gamma - 1)} \, \text{erg} \, \text{g}^{-1} \, \text{K}^{-1} \\
 c_{s,0} = 1.73 \times 10^{7} \, \text{cm} \, \text{s}^{-1} \\
 \kappa = 577.0 \, \text{cm}^{-1} \\
 \end{aligned}
-</script>
+\\]
 
 and obtain the following pre-shock and post-shock states:
 
-<script type="math/tex; mode=display">
+\\[
 \begin{aligned}
 T_0 = 2.18 \times 10^6 \, \text{K} \\
 \rho_0 = 5.69 \, \text{g} \, \text{cm}^{-3} \\
@@ -37,13 +37,13 @@ T_1 = 7.98\times 10^6 \, \text{K} \\
 \rho_1 = 17.1  \, \text{g} \, \text{cm}^{-3} \\
 v_1 = 1.73 \times 10^7 \, \text{cm} \, \text{s}^{-1} \, .
 \end{aligned}
-</script>
+\\]
 
 We adopt a reduced speed of light (as used in [@Skinner_2019])
 
-<script type="math/tex; mode=display">
+\\[
 \hat c = 10 (v_0 + c_{s,0}) \, .
-</script>
+\\]
 
 ## Solution
 

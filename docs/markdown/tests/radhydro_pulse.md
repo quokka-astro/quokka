@@ -6,7 +6,7 @@ This test demonstrates the code's ability to deal with the relativistic correcti
 
 Initial condition of the problem in static diffusion regime:
 
-<script type="math/tex; mode=display">
+\\[
 \begin{aligned}
 \begin{align}
 T = T_0 + (T_1 - T_0) \exp \left( - \frac{x^2}{2 w^2} \right), \\
@@ -18,13 +18,13 @@ v = 10 ~{\rm km~s^{-1}} \\
 \tau = \rho \kappa w = 3 \times 10^3, \beta = v/c = 3 \times 10^{-5}, \beta \tau = 9 \times 10^{-2}
 \end{align}
 \end{aligned}
-</script>
+\\]
 
 The simulation is run till \\(t_{\rm end} = 2 w/v = 4.8 \times 10^{-5} ~{\rm s}\\).
 
 Initial condition of the problem in dynamic diffusion regime: same parameters as in the static diffusion regime except
 
-<script type="math/tex; mode=display">
+\\[
 \begin{aligned}
 \begin{align}
 \kappa_P=\kappa_R=\kappa=1000 \mathrm{~cm}^2 \mathrm{~g}^{-1} \\
@@ -33,7 +33,7 @@ t_{\rm end} = 2 w/v = 1.2 \times 10^{-4} ~{\rm s} \\
 \tau = \rho \kappa w = 3 \times 10^4, \beta = v/c = 3 \times 10^{-3}, \beta \tau = 90
 \end{align}
 \end{aligned}
-</script>
+\\]
 
 ## Results
 
