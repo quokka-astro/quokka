@@ -55,7 +55,11 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		// For thermal groups, radEnergySource must be scaled by chat/c (= 1/cscale).
 		const double Src = RadSystem_Has_ChemBands<problem_t>::value ? radEnergySource(i, j, k, 0) * dt : radEnergySource(i, j, k, 0) * dt / cscale;
 		if constexpr (gamma_ != 1.0) {
-			AMREX_ASSERT(Src >= 0.0);
+			if constexpr (allow_signed_radiation_energy_source_) {
+				AMREX_ASSERT(Erad0 + Src >= Erad_floor_);
+			} else {
+				AMREX_ASSERT(Src >= 0.0);
+			}
 		}
 
 		double Egas0 = NAN;
