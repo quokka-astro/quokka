@@ -759,17 +759,15 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		// A ForceFinestLevel particle may be stored at a coarser level (not yet promoted to lev)
 		// or a finer level (already past lev). Either way its physical position determines which
 		// level-lev cell needs refinement — project and tag it regardless of storage level.
-		// Regridding in AMReX is always CPU-initiated, so a CPU loop is correct here.
-		// Two-pass structure (collect then tag) avoids nested MFIters: ParIterType IS an MFIter,
-		// so creating MFIter mfi(tags) inside a live ParIter loop would violate AMReX's rule
-		// that at most one MFIter may be active at a time.
+		// We use amrex::AllGatherBoxes so that every rank sees every tag cell: a particle on
+		// rank A may project to a level-lev cell owned by rank B, and without the AllGather
+		// rank B would never see the tag.
 		amrex::Gpu::synchronize(); // wait for GPU kernels from (1) to complete before CPU writes
-		amrex::Vector<amrex::IntVect> cross_level_cells;
+		amrex::Vector<amrex::Box> cross_level_boxes;
 		for (int l = 0; l <= container_->finestLevel(); ++l) {
 			if (l == lev) {
 				continue; // already handled in (1)
 			}
-			// Collect cells from this level (ParIterType loop completes before MFIter loop below)
 			for (typename ContainerType::ParIterType pti(*container_, l); pti.isValid(); ++pti) {
 				const auto &particles = pti.GetArrayOfStructs();
 				const amrex::Long np = pti.numParticles();
@@ -778,18 +776,26 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 					if (p.id() <= 0) {
 						continue; // skip invalid/ghost particles
 					}
-					const int ix = static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0]));
-					const int iy = static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1]));
-					const int iz = static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]));
-					cross_level_cells.emplace_back(AMREX_D_DECL(ix, iy, iz));
+					const amrex::Real x = p.pos(0);
+					const amrex::Real y = p.pos(1);
+					const amrex::Real z = p.pos(2);
+					const int ix = static_cast<int>(amrex::Math::floor((x - plo[0]) * dxi[0]));
+					const int iy = static_cast<int>(amrex::Math::floor((y - plo[1]) * dxi[1]));
+					const int iz = static_cast<int>(amrex::Math::floor((z - plo[2]) * dxi[2]));
+					const amrex::IntVect cell(AMREX_D_DECL(ix, iy, iz));
+					if (geom_lev.Domain().contains(cell)) {
+						cross_level_boxes.emplace_back(cell, cell);
+					}
 				}
 			}
 		}
-		// Tag collected cells with a separate MFIter (no ParIter active, no nesting)
-		if (!cross_level_cells.empty()) {
+		// Broadcast so every rank can tag cells within its own local boxes.
+		amrex::AllGatherBoxes(cross_level_boxes);
+		if (!cross_level_boxes.empty()) {
 			for (amrex::MFIter mfi(tags); mfi.isValid(); ++mfi) {
 				const amrex::Box &valid_box = mfi.validbox();
-				for (const auto &cell : cross_level_cells) {
+				for (const auto &cell_box : cross_level_boxes) {
+					const amrex::IntVect cell = cell_box.smallEnd();
 					if (valid_box.contains(cell)) {
 						tags[mfi](cell) = amrex::TagBox::SET;
 					}
