@@ -1127,37 +1127,55 @@ void MHDSystem<problem_t>::AddResistiveEnergyFlux(std::array<amrex::MultiFab, AM
 				amrex::Real eta_J_b0 = 0.0;
 				amrex::Real eta_J_b1 = 0.0;
 				const amrex::Real eta = resistivity; // first-capture for CUDA
+				// first-capture for CUDA
+				const auto B_b_local = B_b;
+				const auto B_iface_local = B_iface;
+				const auto B_a_local = B_a;
+				const auto delta_b_local = delta_b;
+				const auto delta_iface_local = delta_iface;
+				const auto delta_a_local = delta_a;
+				const amrex::Real dx_b_local = dx_b;
+				const amrex::Real dx_iface_local = dx_iface;
+				const amrex::Real dx_a_local = dx_a;
 				if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::constant) {
-					eta_J_a0 = computeResistiveEMF(B_b, B_iface, i, j, k, delta_b, delta_iface, dx_b, dx_iface, eta);
-					eta_J_a1 = computeResistiveEMF(B_b, B_iface, i + delta_b[0], j + delta_b[1], k + delta_b[2], delta_b, delta_iface, dx_b,
-								       dx_iface, eta);
-					eta_J_b0 = computeResistiveEMF(B_iface, B_a, i, j, k, delta_iface, delta_a, dx_iface, dx_a, eta);
-					eta_J_b1 = computeResistiveEMF(B_iface, B_a, i + delta_a[0], j + delta_a[1], k + delta_a[2], delta_iface, delta_a,
-								       dx_iface, dx_a, eta);
+					eta_J_a0 = computeResistiveEMF(B_b_local, B_iface_local, i, j, k, delta_b_local, delta_iface_local, dx_b_local,
+								       dx_iface_local, eta);
+					eta_J_a1 = computeResistiveEMF(B_b_local, B_iface_local, i + delta_b_local[0], j + delta_b_local[1],
+								       k + delta_b_local[2], delta_b_local, delta_iface_local, dx_b_local, dx_iface_local, eta);
+					eta_J_b0 = computeResistiveEMF(B_iface_local, B_a_local, i, j, k, delta_iface_local, delta_a_local, dx_iface_local,
+								       dx_a_local, eta);
+					eta_J_b1 = computeResistiveEMF(B_iface_local, B_a_local, i + delta_a_local[0], j + delta_a_local[1],
+								       k + delta_a_local[2], delta_iface_local, delta_a_local, dx_iface_local, dx_a_local, eta);
 				} else if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::problem_defined) {
-					const amrex::Real eta_a0 = computeResistivity<problem_t>(i, j, k, B_b, B_iface, dx_b, dx_iface);
-					eta_J_a0 = computeResistiveEMF(B_b, B_iface, i, j, k, delta_b, delta_iface, dx_b, dx_iface, eta_a0);
-					const amrex::Real eta_a1 =
-					    computeResistivity<problem_t>(i + delta_b[0], j + delta_b[1], k + delta_b[2], B_b, B_iface, dx_b, dx_iface);
-					eta_J_a1 = computeResistiveEMF(B_b, B_iface, i + delta_b[0], j + delta_b[1], k + delta_b[2], delta_b, delta_iface, dx_b,
-								       dx_iface, eta_a1);
-					const amrex::Real eta_b0 = computeResistivity<problem_t>(i, j, k, B_iface, B_a, dx_iface, dx_a);
-					eta_J_b0 = computeResistiveEMF(B_iface, B_a, i, j, k, delta_iface, delta_a, dx_iface, dx_a, eta_b0);
-					const amrex::Real eta_b1 =
-					    computeResistivity<problem_t>(i + delta_a[0], j + delta_a[1], k + delta_a[2], B_iface, B_a, dx_iface, dx_a);
-					eta_J_b1 = computeResistiveEMF(B_iface, B_a, i + delta_a[0], j + delta_a[1], k + delta_a[2], delta_iface, delta_a,
-								       dx_iface, dx_a, eta_b1);
+					const amrex::Real eta_a0 = computeResistivity<problem_t>(i, j, k, B_b_local, B_iface_local, dx_b_local, dx_iface_local);
+					eta_J_a0 = computeResistiveEMF(B_b_local, B_iface_local, i, j, k, delta_b_local, delta_iface_local, dx_b_local,
+								       dx_iface_local, eta_a0);
+					const amrex::Real eta_a1 = computeResistivity<problem_t>(i + delta_b_local[0], j + delta_b_local[1],
+											     k + delta_b_local[2], B_b_local, B_iface_local, dx_b_local, dx_iface_local);
+					eta_J_a1 = computeResistiveEMF(B_b_local, B_iface_local, i + delta_b_local[0], j + delta_b_local[1],
+								       k + delta_b_local[2], delta_b_local, delta_iface_local, dx_b_local, dx_iface_local, eta_a1);
+					const amrex::Real eta_b0 = computeResistivity<problem_t>(i, j, k, B_iface_local, B_a_local, dx_iface_local, dx_a_local);
+					eta_J_b0 = computeResistiveEMF(B_iface_local, B_a_local, i, j, k, delta_iface_local, delta_a_local, dx_iface_local,
+								       dx_a_local, eta_b0);
+					const amrex::Real eta_b1 = computeResistivity<problem_t>(i + delta_a_local[0], j + delta_a_local[1],
+											     k + delta_a_local[2], B_iface_local, B_a_local, dx_iface_local, dx_a_local);
+					eta_J_b1 = computeResistiveEMF(B_iface_local, B_a_local, i + delta_a_local[0], j + delta_a_local[1],
+								       k + delta_a_local[2], delta_iface_local, delta_a_local, dx_iface_local, dx_a_local, eta_b1);
 				}
 
 				// Average face-B to each edge position across the face-normal direction
-				const amrex::Real avg_Bb_0 = 0.5 * (B_b(i, j, k) + B_b(i - delta_iface[0], j - delta_iface[1], k - delta_iface[2]));
+				const amrex::Real avg_Bb_0 =
+				    0.5 * (B_b_local(i, j, k) + B_b_local(i - delta_iface_local[0], j - delta_iface_local[1], k - delta_iface_local[2]));
 				const amrex::Real avg_Bb_1 =
-				    0.5 * (B_b(i + delta_b[0], j + delta_b[1], k + delta_b[2]) +
-					   B_b(i + delta_b[0] - delta_iface[0], j + delta_b[1] - delta_iface[1], k + delta_b[2] - delta_iface[2]));
-				const amrex::Real avg_Ba_0 = 0.5 * (B_a(i, j, k) + B_a(i - delta_iface[0], j - delta_iface[1], k - delta_iface[2]));
+				    0.5 * (B_b_local(i + delta_b_local[0], j + delta_b_local[1], k + delta_b_local[2]) +
+					   B_b_local(i + delta_b_local[0] - delta_iface_local[0], j + delta_b_local[1] - delta_iface_local[1],
+						     k + delta_b_local[2] - delta_iface_local[2]));
+				const amrex::Real avg_Ba_0 =
+				    0.5 * (B_a_local(i, j, k) + B_a_local(i - delta_iface_local[0], j - delta_iface_local[1], k - delta_iface_local[2]));
 				const amrex::Real avg_Ba_1 =
-				    0.5 * (B_a(i + delta_a[0], j + delta_a[1], k + delta_a[2]) +
-					   B_a(i + delta_a[0] - delta_iface[0], j + delta_a[1] - delta_iface[1], k + delta_a[2] - delta_iface[2]));
+				    0.5 * (B_a_local(i + delta_a_local[0], j + delta_a_local[1], k + delta_a_local[2]) +
+					   B_a_local(i + delta_a_local[0] - delta_iface_local[0], j + delta_a_local[1] - delta_iface_local[1],
+						     k + delta_a_local[2] - delta_iface_local[2]));
 
 				// F_eta = (eta_J x B)_iface = eta_J_a * B_b - eta_J_b * B_a, averaged over the two bounding edges
 				const amrex::Real F_eta = 0.25 * (eta_J_a0 * avg_Bb_0 + eta_J_a1 * avg_Bb_1 - eta_J_b0 * avg_Ba_0 - eta_J_b1 * avg_Ba_1);
