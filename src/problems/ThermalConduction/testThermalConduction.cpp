@@ -180,8 +180,8 @@ auto problem_main() -> int
 	quokka::richardson::applyQuietDefaults();
 	quokka::richardson::Parameters params{};
 	params.machine_precision_target = 2.0e-9; // limit based on delta_b_magn, smaller values can be used if this is decreased
-	params.nx_initial = 64;
-	params.nx_max = 256;
+	params.nx_initial = 32;
+	params.nx_max = 128;
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;
 	params.test_name = "Thermal Conduction";
