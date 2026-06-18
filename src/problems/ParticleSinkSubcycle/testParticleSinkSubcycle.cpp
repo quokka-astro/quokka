@@ -41,6 +41,7 @@
 
 struct SubcycleProblem {
 };
+static bool density_refinement_enabled = true;
 
 template <> struct Particle_Traits<SubcycleProblem> {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Sink;
@@ -98,6 +99,9 @@ template <> void QuokkaSimulation<SubcycleProblem>::refineGrid(int lev, amrex::T
 	if (lev > 0) {
 		return; // level-2 comes only from the particle tag (refineGridsAroundParticles)
 	}
+	if (!density_refinement_enabled) {
+		return; // test variant: pure particle-driven refinement
+	}
 	// Tag the leftmost sixth of the domain (x < -1e20, cells [0,5]) to create a level-1 patch.
 	// With n_error_buf=2, this grows to [0,7] → level-1 [0,15] (covering level-0 cells [0,7]).
 	// The particle at x=-5e18 (level-0 cell 15) is OUTSIDE this patch, staying on level-0.
@@ -120,6 +124,9 @@ auto problem_main() -> int
 {
 	QuokkaSimulation<SubcycleProblem> sim;
 	sim.cflNumber_ = 0.3;
+
+	amrex::ParmParse pp;
+	pp.query("density_refinement", density_refinement_enabled);
 
 	// setInitialConditions: InitFromScratch runs the initial regrid (density tags only,
 	// no particles exist yet) → level-1 at [0,15]. Then InitPhyParticles creates the particle

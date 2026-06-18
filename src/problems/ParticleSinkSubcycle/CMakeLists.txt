@@ -21,4 +21,14 @@ if(AMReX_SPACEDIM EQUAL 3)
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
   set_tests_properties(ParticleSinkSubcycleNoSubcycle PROPERTIES
     PASS_REGULAR_EXPRESSION "Test passed: particle is on finest level")
+
+  # Pure particle-driven refinement: no density tags, ForceFinestLevel alone
+  # drives all AMR levels.  Verifies that the force-regrid + cross-level tagging
+  # create the full hierarchy without density-based refinement help.
+  add_test(
+    NAME ParticleSinkSubcycleParticleOnly
+    COMMAND ${JOB_NAME} ../inputs/ParticleSinkSubcycle_particle_only.toml ${QuokkaTestParams}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  set_tests_properties(ParticleSinkSubcycleParticleOnly PROPERTIES
+    PASS_REGULAR_EXPRESSION "Test passed: particle is on finest level")
 endif()
