@@ -1126,13 +1126,14 @@ void MHDSystem<problem_t>::AddResistiveEnergyFlux(std::array<amrex::MultiFab, AM
 				amrex::Real eta_J_a1 = 0.0;
 				amrex::Real eta_J_b0 = 0.0;
 				amrex::Real eta_J_b1 = 0.0;
+				const amrex::Real eta = resistivity; // first-capture for CUDA
 				if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::constant) {
-					eta_J_a0 = computeResistiveEMF(B_b, B_iface, i, j, k, delta_b, delta_iface, dx_b, dx_iface, resistivity);
+					eta_J_a0 = computeResistiveEMF(B_b, B_iface, i, j, k, delta_b, delta_iface, dx_b, dx_iface, eta);
 					eta_J_a1 = computeResistiveEMF(B_b, B_iface, i + delta_b[0], j + delta_b[1], k + delta_b[2], delta_b, delta_iface, dx_b,
-								       dx_iface, resistivity);
-					eta_J_b0 = computeResistiveEMF(B_iface, B_a, i, j, k, delta_iface, delta_a, dx_iface, dx_a, resistivity);
+								       dx_iface, eta);
+					eta_J_b0 = computeResistiveEMF(B_iface, B_a, i, j, k, delta_iface, delta_a, dx_iface, dx_a, eta);
 					eta_J_b1 = computeResistiveEMF(B_iface, B_a, i + delta_a[0], j + delta_a[1], k + delta_a[2], delta_iface, delta_a,
-								       dx_iface, dx_a, resistivity);
+								       dx_iface, dx_a, eta);
 				} else if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::problem_defined) {
 					const amrex::Real eta_a0 = computeResistivity<problem_t>(i, j, k, B_b, B_iface, dx_b, dx_iface);
 					eta_J_a0 = computeResistiveEMF(B_b, B_iface, i, j, k, delta_b, delta_iface, dx_b, dx_iface, eta_a0);
