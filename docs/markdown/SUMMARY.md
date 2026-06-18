@@ -33,6 +33,7 @@
     - [Matter-radiation temperature equilibrium test](tests/energy_exchange.md)
     - [Uniform advecting radiation in diffusive limit](tests/radhydro_uniform_adv.md)
     - [Advecting radiation pulse test](tests/radhydro_pulse.md)
+    - [Taylor-Green Radiation Diffusion test](tests/taylor_green_radiation_diffusion.md)
 - [Runtime parameters](parameters.md)
 - [In-situ analysis](insitu_analysis.md)
 - [Postprocessing](postprocessing.md)
