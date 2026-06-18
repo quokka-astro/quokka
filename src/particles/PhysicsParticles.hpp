@@ -774,10 +774,9 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 						continue;
 					}
 					const auto &p = soa()[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-					const amrex::IntVect cell(AMREX_D_DECL(
-					    static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0])),
-					    static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1])),
-					    static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]))));
+					const amrex::IntVect cell(AMREX_D_DECL(static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0])),
+									       static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1])),
+									       static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]))));
 					if (geom_lev.Domain().contains(cell)) {
 						cross_level_boxes.emplace_back(cell, cell);
 					}
