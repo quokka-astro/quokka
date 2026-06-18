@@ -38,6 +38,7 @@ window.MathJax = {
     displayMath : [ [ "\\[", "\\]" ] ],
     processEscapes : true,
     processEnvironments : true,
+    tags : "ams",
   },
   options : {
     skipHtmlTags : [ "script", "noscript", "style", "textarea", "pre", "code" ],

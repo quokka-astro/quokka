@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-readonly MDBOOK_VERSION="0.5.2"
+readonly MDBOOK_VERSION="0.5.3"
 readonly MDBOOK_BIB_VERSION="0.5.2"
 readonly MDBOOK_PLANTUML_VERSION="2.0.0"
 
