@@ -219,7 +219,7 @@ The first term keeps the radiation energy profile fixed in the chosen
 Eulerian time dependence while the gas advects through it. The second
 term balances diffusion.
 
-## Explicit harmonic mode
+## Explicit cosine mode
 
 For a useful one-parameter MMS, take
 
@@ -232,6 +232,10 @@ For a useful one-parameter MMS, take
   \label{eq:harmonic-mode}
 \end{equation}
 </script>
+
+The recommended test sets \\(\omega=0\\), so this potential is steady in
+the Eulerian frame. Keeping \\(\omega\\ne0\\) is useful only if one wants to
+measure finite-P1 phase and amplitude errors.
 
 Then
 
@@ -328,8 +332,7 @@ Eq. \\(\ref{eq:p1-family-momentum}\\) becomes
 \end{equation}
 </script>
 
-After the homogeneous transient is removed, the solution remains a
-gradient field. Write
+For gradient initial data, the solution remains a gradient field. Write
 
 <script type="math/tex; mode=display">
 \begin{equation}
@@ -450,8 +453,68 @@ the diffusion source only through the flux-divergence term,
 \end{equation}
 </script>
 
-so, after spatial and temporal truncation errors are small, the P1
-relaxation error scales linearly with \\(\omega\tau_F\\).
+For \\(\omega\ne0\\), this gives a finite-P1 model error that scales
+linearly with \\(\omega\tau_F\\). The recommended test avoids this effect by
+setting \\(\omega=0\\).
+
+### Steady flux transient
+
+When \\(\omega=0\\), \\(\Phi\\) and \\(\mathbf{F}_{\mathrm D}\\) are time
+independent. The P1 relaxation equation has the exact solution
+
+<script type="math/tex; mode=display">
+\begin{equation}
+  \mathbf{F}_{\mathrm r}(t)
+  =
+  \mathbf{F}_{\mathrm D}
+  +
+  \left[\mathbf{F}_{\mathrm r}(0)-\mathbf{F}_{\mathrm D}\right]e^{-t/\tau_F}.
+  \label{eq:steady-flux-transient}
+\end{equation}
+</script>
+
+Equivalently,
+
+<script type="math/tex; mode=display">
+\begin{equation}
+  \Psi^\tau(t)
+  =
+  \Phi
+  +
+  \left[\Psi^\tau(0)-\Phi\right]e^{-t/\tau_F}.
+  \label{eq:steady-potential-transient}
+\end{equation}
+</script>
+
+This is the more direct asymptotic-diffusion test. Initialize the flux
+away from the diffusion value, for example
+\\(\mathbf{F}_{\mathrm r}(0)=\mathbf{0}\\), and measure
+
+<script type="math/tex; mode=display">
+\begin{equation}
+  \frac{\|\mathbf{F}_{\mathrm r}(t)-\mathbf{F}_{\mathrm D}\|}
+       {\|\mathbf{F}_{\mathrm r}(0)-\mathbf{F}_{\mathrm D}\|}
+  =
+  e^{-t/\tau_F}.
+  \label{eq:steady-transient-decay}
+\end{equation}
+</script>
+
+Initializing the code to the exact diffusion MMS state with the
+consistent flux \\(\mathbf{F}_{\mathrm r}(0)=\mathbf{F}_{\mathrm D}\\) is not
+a good code test. It removes the stiff flux-relaxation dynamics, so a
+time discretization with an incorrect factor of \\(c\\), \\(\hat{c}\\), or
+\\(\rho_0\kappa_R\\) in the relaxation term could still appear to preserve
+the already-balanced state.
+
+During the transient, exact finite-P1 gas momentum balance uses
+\\(p^\tau=p_0+\Pi_{\mathrm{TG}}+\Psi^\tau(t)\\), and the exact finite-P1
+radiation energy source is Eq. \\(\ref{eq:p1-energy-source}\\) with
+\\(\partial_t\Phi=0\\). As \\(t/\tau_F\\to\infty\\), the solution converges to
+the diffusion MMS:
+\\(\Psi^\tau\to\Phi\\),
+\\(\mathbf{F}_{\mathrm r}\to\mathbf{F}_{\mathrm D}\\), and
+\\(S_E^\tau\to S_E^{\mathrm D}\\).
 
 ## Positivity bounds
 
@@ -475,9 +538,9 @@ by the maximum amplitude of \\(\Psi^\tau\\), namely
 ## Suggested test problem parameters
 
 A practical first implementation should keep the gas nearly
-incompressible, the radiation flux safely subluminal, and the P1
-relaxation error large enough to measure above discretization error. The
-following dimensionless choice is a useful starting point:
+incompressible, the radiation flux safely subluminal, and the P1 flux
+relaxation time well resolved. The following dimensionless choice is a
+useful starting point:
 
 | Quantity | Recommended value |
 | --- | --- |
@@ -487,35 +550,47 @@ following dimensionless choice is a useful starting point:
 | Density | \\(\rho_0=1\\) |
 | Gas adiabatic index | \\(\gamma=5/3\\) |
 | Gas pressure offset | \\(p_0=0.1\\) |
-| Radiation potential | \\(\Phi=Aq\cos(\omega t)\\), \\(A=5\times10^{-3}\\) |
+| Radiation potential | \\(\Phi=Aq\\), \\(A=5\times10^{-3}\\) |
 | Radiation energy offset | \\(E_{\mathrm r,0}=1\\) |
 | Physical light speed | \\(c=100\\) |
 | Reduced light speed, if used | \\(\hat{c}=1\\) |
 | Velocity amplitude | \\(U=10^{-2}\\) or smaller |
 | Opacity | \\(\kappa_R=100\\) |
-| Driving frequency | \\(\omega=5\\) |
+| Driving frequency | \\(\omega=0\\) |
+| Initial P1 flux | \\(\mathbf{F}_{\mathrm r}(0)=\mathbf{0}\\) |
 | Resolution | \\(64^2\\) for development, \\(128^2\\) for convergence |
-| Comparison time | \\(t_f=\pi/(2\omega)\\) |
+| Comparison time | \\(t_f=5\tau_F\\) for decay, later for steady MMS error |
 
 The table assumes the finite-P1 relaxation is tested with a reduced light
 speed \\(\hat{c}\\), so
 
 <script type="math/tex; mode=display">
 \begin{equation}
-  \Omega \equiv \omega\tau_F
+  \tau_F
   =
-  \frac{\omega}{\hat{c}\rho_0\kappa_R}
+  \frac{1}{\hat{c}\rho_0\kappa_R}
   =
-  0.05.
-  \label{eq:recommended-omega}
+  0.01.
+  \label{eq:recommended-tauf}
 \end{equation}
 </script>
 
 For a full-speed calculation, replace \\(\hat{c}\\) by \\(c\\) in
-\\(\tau_F\\). With \\(\Omega=0.05\\), the finite-P1 flux and gas radiation
-force differ from the diffusion manufactured solution by about \\(5\%\\).
-This is large enough to measure, but small enough that the solution is
-visibly in the diffusion regime.
+\\(\tau_F\\). With the zero-flux initialization, the expected transient is
+
+<script type="math/tex; mode=display">
+\begin{equation}
+  \mathbf{F}_{\mathrm r}(t)-\mathbf{F}_{\mathrm D}
+  =
+  -\mathbf{F}_{\mathrm D}e^{-t/\tau_F}.
+  \label{eq:recommended-flux-decay}
+\end{equation}
+</script>
+
+At \\(t_f=5\tau_F\\), the flux error should be
+\\(e^{-5}\approx6.7\times10^{-3}\\) times its initial value. The late-time
+solution should then reproduce the diffusion MMS, up to the usual spatial
+and temporal discretization errors.
 
 At \\(64^2\\), the cell optical depth is
 
@@ -560,25 +635,21 @@ The maximum reduced flux is approximately
 
 well inside the P1 admissible region.
 
-For an asymptotic sweep, keep \\(\omega=5\\) and use
+For a relaxation sweep, keep \\(\hat{c}=1\\) and use
 
 <script type="math/tex; mode=display">
 \begin{equation}
   \kappa_R \in \{50,100,200,400\},
   \qquad
-  \Omega \in \{0.1,0.05,0.025,0.0125\}.
+  \tau_F \in \{0.02,0.01,0.005,0.0025\}.
   \label{eq:recommended-sweep}
 \end{equation}
 </script>
 
-The finite-P1 relaxation error should decrease linearly with
-\\(\Omega\\) once the mesh and timestep errors are smaller than this
-modeling error. The quarter-period comparison time
-\\(t_f=\pi/(2\omega)\\) is preferable to a full period because it exposes
-the leading phase lag directly; at a full period the leading phase error
-cancels in a final-time snapshot.
-
-These parameters assume the problem initializes the exact relaxed flux
-from Eq. \\(\ref{eq:relaxed-potential}\\), rather than initializing the
-diffusion flux \\(\mathbf{F}_{\mathrm D}\\). That removes the homogeneous
-flux-relaxation transient.
+The fitted decay rate should be \\(1/\tau_F\\), and the late-time state
+should converge to the same diffusion MMS for all opacities. If the
+problem instead initializes \\(\mathbf{F}_{\mathrm r}(0)=\mathbf{F}_{\mathrm D}\\),
+the homogeneous transient is removed and the test becomes a purely steady
+MMS balance. That initialization is useful only as a narrow equilibrium
+preservation check; it should not be the main code test because it does
+not exercise the scaling of the stiff time-discretized relaxation term.
