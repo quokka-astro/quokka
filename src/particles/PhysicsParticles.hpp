@@ -740,7 +740,7 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		const auto plo = geom_lev.ProbLoArray();
 		const auto dxi = geom_lev.InvCellSizeArray();
 
-		// (1) GPU-capable path: particles stored AT level lev — tags.array(pti) aligns with pti.
+		// Same-level: particles stored AT level lev — tags.array(pti) aligns with pti, GPU-safe.
 		for (typename ContainerType::ParIterType pti(*container_, lev); pti.isValid(); ++pti) {
 			auto &particles = pti.GetArrayOfStructs();
 			auto *pData = particles().data();
@@ -755,48 +755,42 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 			});
 		}
 
-		// (2) CPU path: particles at OTHER levels projected to level lev.
-		// A ForceFinestLevel particle may be stored at a coarser level (not yet promoted to lev)
-		// or a finer level (already past lev). Either way its physical position determines which
-		// level-lev cell needs refinement — project and tag it regardless of storage level.
-		// We use amrex::AllGatherBoxes so that every rank sees every tag cell: a particle on
-		// rank A may project to a level-lev cell owned by rank B, and without the AllGather
-		// rank B would never see the tag.
-		amrex::Gpu::synchronize(); // wait for GPU kernels from (1) to complete before CPU writes
+		// Cross-level: project particles from ALL other levels to level lev.
+		// A ForceFinestLevel particle may live at a level != lev; project its
+		// physical position to level-lev coordinates so the cell gets tagged.
+		// amrex::AllGatherBoxes guarantees every rank sees every tag cell —
+		// a particle on rank A may project to a level-lev cell owned by rank B.
+		amrex::Gpu::synchronize();
 		amrex::Vector<amrex::Box> cross_level_boxes;
 		for (int l = 0; l <= container_->finestLevel(); ++l) {
 			if (l == lev) {
-				continue; // already handled in (1)
+				continue;
 			}
 			for (typename ContainerType::ParIterType pti(*container_, l); pti.isValid(); ++pti) {
-				const auto &particles = pti.GetArrayOfStructs();
+				const auto &soa = pti.GetArrayOfStructs();
 				const amrex::Long np = pti.numParticles();
 				for (amrex::Long idx = 0; idx < np; ++idx) {
-					const auto &p = particles()[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-					if (p.id() <= 0) {
-						continue; // skip invalid/ghost particles
+					if (soa()[idx].id() <= 0) { // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+						continue;
 					}
-					const amrex::Real x = p.pos(0);
-					const amrex::Real y = p.pos(1);
-					const amrex::Real z = p.pos(2);
-					const int ix = static_cast<int>(amrex::Math::floor((x - plo[0]) * dxi[0]));
-					const int iy = static_cast<int>(amrex::Math::floor((y - plo[1]) * dxi[1]));
-					const int iz = static_cast<int>(amrex::Math::floor((z - plo[2]) * dxi[2]));
-					const amrex::IntVect cell(AMREX_D_DECL(ix, iy, iz));
+					const auto &p = soa()[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+					const amrex::IntVect cell(AMREX_D_DECL(
+					    static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0])),
+					    static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1])),
+					    static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]))));
 					if (geom_lev.Domain().contains(cell)) {
 						cross_level_boxes.emplace_back(cell, cell);
 					}
 				}
 			}
 		}
-		// Broadcast so every rank can tag cells within its own local boxes.
-		amrex::AllGatherBoxes(cross_level_boxes);
 		if (!cross_level_boxes.empty()) {
+			amrex::AllGatherBoxes(cross_level_boxes);
 			for (amrex::MFIter mfi(tags); mfi.isValid(); ++mfi) {
-				const amrex::Box &valid_box = mfi.validbox();
-				for (const auto &cell_box : cross_level_boxes) {
-					const amrex::IntVect cell = cell_box.smallEnd();
-					if (valid_box.contains(cell)) {
+				const amrex::Box &vb = mfi.validbox();
+				for (const auto &cb : cross_level_boxes) {
+					const amrex::IntVect cell = cb.smallEnd();
+					if (vb.contains(cell)) {
 						tags[mfi](cell) = amrex::TagBox::SET;
 					}
 				}
