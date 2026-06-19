@@ -28,21 +28,19 @@ done
 
 # Resolve pre-commit command: prefer 'uv run pre-commit', fall back to 'pre-commit' directly
 if command -v uv &>/dev/null; then
-	PRECOMMIT="uv run pre-commit"
+	PRECOMMIT=(uv run pre-commit)
 elif command -v pre-commit &>/dev/null; then
-	PRECOMMIT="pre-commit"
+	PRECOMMIT=(pre-commit)
 else
 	echo "pre-commit not found. Installing via pip install --user..."
 	pip install --user pre-commit
-	# After install, prefer 'pre-commit' directly (uv may still be unavailable)
-	PRECOMMIT="pre-commit"
+	[[ -d "$HOME/.local/bin" ]] && export PATH="$HOME/.local/bin:$PATH"
+	PRECOMMIT=(pre-commit)
 fi
 
-echo "Using: $PRECOMMIT"
+echo "Using: ${PRECOMMIT[*]}"
 
-$PRECOMMIT install
-$PRECOMMIT run --all-files || true
-$PRECOMMIT uninstall
+"${PRECOMMIT[@]}" run --all-files || true
 
 # Commit any changes made by pre-commit hooks (e.g. clang-format)
 if [[ -n $(git status --porcelain) ]]; then
