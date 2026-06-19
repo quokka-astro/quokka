@@ -47,9 +47,9 @@ SCHEMES = (
 )
 
 CASES = (
-    ("pure_damping", "Pure Damping", r"$t/t_{s,0}$"),
-    ("undamped_gyromotion", "Undamped Gyromotion", r"$\Omega_{\rm L} t$"),
-    ("damped_gyromotion", "Damped Gyromotion", r"$t/t_{s,0}$"),
+    ("pure_damping", r"$\Omega_{\rm L} t_{\rm s,0}=0$", r"$t/t_{s,0}$"),
+    ("undamped_gyromotion", r"$\Omega_{\rm L} t_{\rm s,0}\to\infty$", r"$\Omega_{\rm L} t$"),
+    ("damped_gyromotion", r"$\Omega_{\rm L} t_{\rm s,0}=5$", r"$t/t_{s,0}$"),
 )
 
 

@@ -21,7 +21,7 @@ constexpr double rho_dust2 = 1.0;
 constexpr double TS1 = 0.2;
 constexpr double TS2 = 0.002;
 constexpr double P_INITIAL = 1.0;
-constexpr double OMEGA = 1.0;
+constexpr double OMEGA_DRAG = 1.0;
 constexpr double gas_gamma = 1.4;
 constexpr int numDustVars = Physics_NumVars::numDustVarsPerGroup;
 
@@ -126,13 +126,17 @@ auto E_gas_analytic(double t) -> double
 		AnalyticState const state1 = analyticState(t1);
 		AnalyticState const state2 = analyticState(t2);
 
-		double const term1 =
-		    (rho_dust1 * (state1.v_dust1 - state1.v_gas) / TS1 * state1.v_gas + rho_dust2 * (state1.v_dust2 - state1.v_gas) / TS2 * state1.v_gas +
-		     OMEGA * (rho_dust1 * std::pow(state1.v_dust1 - state1.v_gas, 2) / TS1 + rho_dust2 * std::pow(state1.v_dust2 - state1.v_gas, 2) / TS2));
+		double const term1 = (rho_dust1 * (state1.v_dust1 - state1.v_gas) / TS1 * state1.v_gas +
+				      rho_dust2 * (state1.v_dust2 - state1.v_gas) / TS2 * state1.v_gas +
+				      OMEGA_DRAG *
+					  (rho_dust1 * std::pow(state1.v_dust1 - state1.v_gas, 2) / TS1 +
+					   rho_dust2 * std::pow(state1.v_dust2 - state1.v_gas, 2) / TS2));
 
-		double const term2 =
-		    (rho_dust1 * (state2.v_dust1 - state2.v_gas) / TS1 * state2.v_gas + rho_dust2 * (state2.v_dust2 - state2.v_gas) / TS2 * state2.v_gas +
-		     OMEGA * (rho_dust1 * std::pow(state2.v_dust1 - state2.v_gas, 2) / TS1 + rho_dust2 * std::pow(state2.v_dust2 - state2.v_gas, 2) / TS2));
+		double const term2 = (rho_dust1 * (state2.v_dust1 - state2.v_gas) / TS1 * state2.v_gas +
+				      rho_dust2 * (state2.v_dust2 - state2.v_gas) / TS2 * state2.v_gas +
+				      OMEGA_DRAG *
+					  (rho_dust1 * std::pow(state2.v_dust1 - state2.v_gas, 2) / TS1 +
+					   rho_dust2 * std::pow(state2.v_dust2 - state2.v_gas, 2) / TS2));
 
 		integral += 0.5 * (term1 + term2) * dt;
 	}
@@ -275,6 +279,13 @@ struct SchemeRunResult {
 	double rel_err_gas_E;
 };
 
+struct SchemeErrorTolerance {
+	double rel_err_gas_vx;
+	double rel_err_dust1_vx;
+	double rel_err_dust2_vx;
+	double rel_err_gas_E;
+};
+
 constexpr std::array<ResolvedRkScheme, 3> resolved_rk_schemes = {ResolvedRkScheme::TP2025, ResolvedRkScheme::GL4, ResolvedRkScheme::Midpoint};
 
 auto resolvedRkSchemeSlug(ResolvedRkScheme scheme) -> std::string_view
@@ -288,6 +299,24 @@ auto resolvedRkSchemeSlug(ResolvedRkScheme scheme) -> std::string_view
 		return "midpoint";
 	}
 	return "unknown";
+}
+
+auto resolvedRkSchemeTolerance(ResolvedRkScheme scheme) -> SchemeErrorTolerance
+{
+	switch (scheme) {
+	case ResolvedRkScheme::TP2025:
+		return SchemeErrorTolerance{.rel_err_gas_vx = 3.0e-3, .rel_err_dust1_vx = 2.0e-4, .rel_err_dust2_vx = 3.0e-3, .rel_err_gas_E = 1.5e-3};
+	case ResolvedRkScheme::GL4:
+		return SchemeErrorTolerance{.rel_err_gas_vx = 1.5e-2, .rel_err_dust1_vx = 2.0e-4, .rel_err_dust2_vx = 1.5e-2, .rel_err_gas_E = 5.0e-3};
+	case ResolvedRkScheme::Midpoint:
+		return SchemeErrorTolerance{.rel_err_gas_vx = 5.0e-2, .rel_err_dust1_vx = 1.0e-3, .rel_err_dust2_vx = 5.0e-2, .rel_err_gas_E = 2.0e-2};
+	}
+	return SchemeErrorTolerance{
+	    .rel_err_gas_vx = std::numeric_limits<double>::quiet_NaN(),
+	    .rel_err_dust1_vx = std::numeric_limits<double>::quiet_NaN(),
+	    .rel_err_dust2_vx = std::numeric_limits<double>::quiet_NaN(),
+	    .rel_err_gas_E = std::numeric_limits<double>::quiet_NaN(),
+	};
 }
 
 auto makePeriodicFaceBCs() -> amrex::Vector<amrex::BCRec>
@@ -316,7 +345,7 @@ auto runDustDampingSimulation(ResolvedRkScheme scheme) -> SimulationData<DustDam
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = CFL_number;
 	sim.dustResolvedRkScheme_ = scheme;
-	sim.dust_omega_drag_ = 1.0;
+	sim.dust_omega_drag_ = OMEGA_DRAG;
 	sim.dust_omega_magnetic_res_ = 0.0;
 
 	sim.setInitialConditions();
@@ -493,8 +522,8 @@ auto problem_main() -> int
 
 	int status = 0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		const double rel_err_tol = 0.03;
 		for (auto const &run : runs) {
+			SchemeErrorTolerance const tol = resolvedRkSchemeTolerance(run.scheme);
 			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for gas vx    = " << run.rel_err_gas_vx
 				       << "\n";
 			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for dust1 vx  = " << run.rel_err_dust1_vx
@@ -504,11 +533,29 @@ auto problem_main() -> int
 			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for gas E     = " << run.rel_err_gas_E
 				       << "\n";
 			if (!std::isfinite(run.rel_err_gas_vx) || !std::isfinite(run.rel_err_dust1_vx) || !std::isfinite(run.rel_err_dust2_vx) ||
-			    !std::isfinite(run.rel_err_gas_E) || (run.rel_err_gas_vx > rel_err_tol) || (run.rel_err_dust1_vx > rel_err_tol) ||
-			    (run.rel_err_dust2_vx > rel_err_tol) || (run.rel_err_gas_E > rel_err_tol)) {
+			    !std::isfinite(run.rel_err_gas_E) || (run.rel_err_gas_vx > tol.rel_err_gas_vx) || (run.rel_err_dust1_vx > tol.rel_err_dust1_vx) ||
+			    (run.rel_err_dust2_vx > tol.rel_err_dust2_vx) || (run.rel_err_gas_E > tol.rel_err_gas_E)) {
 				status = 1;
 			}
 		}
+
+		auto const find_run = [&runs](ResolvedRkScheme scheme) {
+			return std::find_if(runs.begin(), runs.end(), [scheme](auto const &run) { return run.scheme == scheme; });
+		};
+		auto const tp2025 = find_run(ResolvedRkScheme::TP2025);
+		auto const gl4 = find_run(ResolvedRkScheme::GL4);
+		auto const midpoint = find_run(ResolvedRkScheme::Midpoint);
+		if ((tp2025 == runs.end()) || (gl4 == runs.end()) || (midpoint == runs.end())) {
+			status = 1;
+		} else {
+			bool const gas_order_ok = (tp2025->rel_err_gas_vx < gl4->rel_err_gas_vx) && (gl4->rel_err_gas_vx < midpoint->rel_err_gas_vx);
+			bool const dust2_order_ok = (tp2025->rel_err_dust2_vx < gl4->rel_err_dust2_vx) && (gl4->rel_err_dust2_vx < midpoint->rel_err_dust2_vx);
+			bool const energy_order_ok = (tp2025->rel_err_gas_E < gl4->rel_err_gas_E) && (gl4->rel_err_gas_E < midpoint->rel_err_gas_E);
+			if (!gas_order_ok || !dust2_order_ok || !energy_order_ok) {
+				status = 1;
+			}
+		}
+
 		if (write_csv) {
 			writeHistoryCsv(runs);
 			writeExactCsv(runs);
