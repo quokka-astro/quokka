@@ -26,6 +26,12 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
+# Abort if working tree is dirty or has untracked files, to avoid accidentally staging unrelated work
+if [[ -n $(git status --porcelain) ]]; then
+	echo "Error: working tree is not clean. Commit or stash your changes before running this script."
+	exit 1
+fi
+
 # Resolve pre-commit command: prefer 'uv run pre-commit', fall back to 'pre-commit' directly
 if command -v uv &>/dev/null; then
 	PRECOMMIT=(uv run pre-commit)
