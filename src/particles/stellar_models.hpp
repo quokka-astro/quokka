@@ -49,13 +49,16 @@ struct ToyStellarModel {
 		return C::Gconst * mass * mdot / radius_val;
 	}
 
-	// Stellar-evolution step — takes the full particle real-data array so the model
-	// can read and modify any component (mass, radius, luminosity groups, etc.).
+	// Stellar-evolution step — takes the full particle real- and integer-data arrays
+	// so the model can read and modify any component (mass, radius, luminosity groups,
+	// integer state, etc.).
 	//   rdata:    [in/out] particle real-component array (layout defined by StarParticleDataIdx)
+	//   idata:    [in/out] particle integer-component array (may be nullptr if NInt == 0)
 	//   n_groups: [in]     number of radiation groups (= number of lum slots after index 7)
 	//   dt:       [in]     timestep
 	// The toy model is stateless, so it only reads mass/mdot and writes radius/lum.
-	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void evolve(amrex::Real *rdata, int n_groups, [[maybe_unused]] amrex::Real dt)
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void evolve(amrex::Real *rdata, [[maybe_unused]] int *idata, int n_groups,
+								    [[maybe_unused]] amrex::Real dt)
 	{
 		const amrex::Real mass = rdata[StarParticleMassIdx];
 		const amrex::Real mdot = rdata[StarParticleMdotIdx];

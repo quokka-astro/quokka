@@ -14,8 +14,8 @@ namespace quokka
 {
 
 // Framework dispatcher for per-particle stellar-evolution updates.
-// Passes the full particle real-data array to the model so it can read and
-// modify any component (mass, radius, luminosity groups, etc.).
+// Passes the full particle real- and integer-data arrays to the model so
+// it can read and modify any component.
 class StellarUpdate
 {
       public:
@@ -24,7 +24,11 @@ class StellarUpdate
 										LuminosityGpuConstTables<Nout> const & /*gpu_tables*/) noexcept
 	{
 		using Model = typename Particle_Traits<problem_t>::stellar_model;
-		Model::evolve(&p.rdata(0), Nout, dt);
+		if constexpr (ParticleType::NInt > 0) {
+			Model::evolve(&p.rdata(0), &p.idata(0), Nout, dt);
+		} else {
+			Model::evolve(&p.rdata(0), nullptr, Nout, dt);
+		}
 	}
 };
 

@@ -3554,6 +3554,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 	// Read particle parameters from input file
 	quokka::particleParmParse();
 
+	// Sink and Star both accrete via the same accretion-rate buffer (see particleMeshInteraction).
+	// Enabling both would double-apply gas removal: computeSinkAccretion accumulates into the shared
+	// buffer once per accreting type, then applySinkAccretion applies UpdateHydroState once per type.
+	// To support multiple accreting particle types in the future, the accretion dispatch would need
+	// to be refactored: buffer all accretion rates first, compute a combined rate with a single
+	// limiting factor, and apply accretion on all types using that shared limit.
+	static_assert(!(Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) ||
+			      !(Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Star),
+		      "Sink and Star particles cannot both be enabled. "
+		      "Both accrete via the same accretion-rate buffer and would double-apply gas removal. "
+		      "See the comment above for how to fix this if combined Sink+Star accretion is needed.");
+
 	const bool is_restart = (header_box_arrays != nullptr);
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Rad) {
