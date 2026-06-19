@@ -23,15 +23,15 @@ alpha_p  = 2.0          # surface density shape parameter
 beta_p   = 0.5          # surface density shape parameter
 
 # Taper widths
-inner_taper_kpc = 0.8   # ramp up over this width from axis
+inner_taper_kpc = 0.2   # ramp up over this width from axis
 outer_taper_kpc = 0   # roll off over this width at outer edge
-z_taper_kpc     = 0.3   # roll off over this width at top and bottom
+z_taper_kpc     = 0.1   # roll off over this width at top and bottom
 
 # Seed field strength
 B0 = 4.0*0.127e-6           # Gauss — set for plasma beta ~ 1000 in disk midplane
 B0 = B0 / np.sqrt(1000.0 / 3.0)  # ~ 2.8e-8 G
 oversample           = 4.  # factor by which to oversample the spectral grid relative to the output grid
-n_grid_cells = 2 
+n_grid_cells = 8 
 
 # ══════════════════════════════════════════════════════════════════
 #  Disk scale height (matches diskDensityAnalytic in testMHDDisk.cpp)
@@ -467,15 +467,15 @@ if __name__ == "__main__":
     # ── boundary tapers ───────────────────────────────────────────
     inner_taper_cells = max(4, int(inner_taper_kpc * kpc / dR))
     #outer_taper_cells = max(4, int(outer_taper_kpc * kpc / dR))
-    z_taper_cells     = max(4, int(z_taper_kpc * kpc / dz)) 
+    #z_taper_cells     = max(4, int(z_taper_kpc * kpc / dz)) 
 
     print(f"  inner taper: {inner_taper_cells} cells = {inner_taper_cells*dR/kpc:.3f} kpc")
     #print(f"  outer taper: {outer_taper_cells} cells = {outer_taper_cells*dR/kpc:.3f} kpc")
-    print(f"  z taper: {z_taper_cells} cells = {z_taper_cells*dz/kpc:.3f} kpc")
+    #print(f"  z taper: {z_taper_cells} cells = {z_taper_cells*dz/kpc:.3f} kpc")
 
     Aphi = apply_axis_taper(Aphi, R_nd, dR_nd, n_cells=inner_taper_cells)
     #Aphi = apply_outer_taper(Aphi, R_nd, Rmax_nd, width_cells=outer_taper_cells)
-    Aphi = apply_z_taper(Aphi, z_nd, Lz_nd, width_cells=z_taper_cells)
+    #Aphi = apply_z_taper(Aphi, z_nd, Lz_nd, width_cells=z_taper_cells)
     Aphi[0, :] = 0.0
 
     print(f"  Aphi[0]  mean |.|: {np.mean(np.abs(Aphi[0,  :])):.3e}  (should be 0)")
