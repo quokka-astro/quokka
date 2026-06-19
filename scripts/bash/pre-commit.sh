@@ -47,7 +47,5 @@ $PRECOMMIT uninstall
 # Commit any changes made by pre-commit hooks (e.g. clang-format)
 if [[ -n $(git status --porcelain) ]]; then
 	git add -A
-	git commit -m "style: apply pre-commit fixes
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+	git commit -m "style: apply pre-commit fixes"
 fi
