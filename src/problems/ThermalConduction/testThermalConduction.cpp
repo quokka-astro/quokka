@@ -126,7 +126,7 @@ void QuokkaSimulation<ThermalConductionProblem>::computeReferenceSolution(amrex:
 	}
 }
 
-auto runConductionTest(int nx) -> double
+auto runConductionTest(int nx, int /*ny*/, int /*nz*/) -> double
 {
 	// Read problem parameters
 	const double max_time = 469054.0075444166; // 1 conduction time
@@ -187,5 +187,5 @@ auto problem_main() -> int
 	params.test_name = "Thermal Conduction";
 	params.csv_filename = "thermal_conduction_convergence.csv";
 
-	return quokka::richardson::run(params, [](int nx) { return runConductionTest(nx); });
+	return quokka::richardson::run(params, [](int nx, int ny, int nz) { return runConductionTest(nx, ny, nz); });
 }
