@@ -33,7 +33,6 @@ struct MHDBitwiseICs {
 template <> struct quokka::EOS_Traits<MHDBitwiseICs> {
 	static constexpr amrex::Real gamma = 5. / 3.;
 	static constexpr amrex::Real mean_molecular_weight = C::m_u;
-	static constexpr amrex::Real boltzmann_constant = C::k_B;
 };
 
 template <> struct Physics_Traits<MHDBitwiseICs> : DefaultPhysicsTraits {
