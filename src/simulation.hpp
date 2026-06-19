@@ -3561,7 +3561,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 	// to be refactored: buffer all accretion rates first, compute a combined rate with a single
 	// limiting factor, and apply accretion on all types using that shared limit.
 	static_assert(!(Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) ||
-			      !(Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Star),
+			  !(Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Star),
 		      "Sink and Star particles cannot both be enabled. "
 		      "Both accrete via the same accretion-rate buffer and would double-apply gas removal. "
 		      "See the comment above for how to fix this if combined Sink+Star accretion is needed.");
