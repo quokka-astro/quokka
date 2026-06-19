@@ -222,7 +222,7 @@ auto get_taper_factor(double x, double y, double z,
     const double absZ = std::abs(z);
     
     // Taper parameters: adjust n_taper to change the steepness of the fall-off
-    const double n_taper = 8.0; 
+    const double n_taper = 4.0; 
     const double R_taper_start = Rmax - n_taper * amrex::max(dx, dy);
     const double Z_taper_start = 0.5 * Lz - n_taper * dz;
     
@@ -563,8 +563,8 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars(
 
         // taper is a smooth tanh roll-off.
         // Transition width (e.g., 5 cells) keeps the field consistent over the boundary.
-        const double taper_width_R = 5.0 * dx[0];
-        const double taper_width_Z = 5.0 * dx[2];
+        const double taper_width_R = 2.0 * dx[0];
+        const double taper_width_Z = 2.0 * dx[2];
         
         // Smoothly transition to 0.0 at the domain boundaries as (0.5 * (1.0 + tanh(...))) 
         double taper_R = 0.5 * (1.0 + std::tanh((Rmax_table - R_val - 2.0 * taper_width_R) / (0.5 * taper_width_R)));
