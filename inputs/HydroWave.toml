@@ -22,3 +22,9 @@ do_reflux = 0
 do_subcycle = 0
 do_tracers = 1
 plotfile_interval = -1
+stop_time = 1.0
+max_timesteps = 20000
+
+setup.run_convergence = false
+setup.run_sim = true
+setup.error_tol = 1.0e-8
