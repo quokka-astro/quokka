@@ -490,7 +490,9 @@ auto problem_main() -> int
 		params.test_name = "Entropy Wave";
 		params.csv_filename = "entropy_wave_convergence.csv";
 
-		status |= quokka::richardson::run(params, [](int nx, int ny, int nz) { return runWaveTest(nx, ny, nz); });
+		if (quokka::richardson::run(params, [](int nx, int ny, int nz) { return runWaveTest(nx, ny, nz); }) != 0) {
+			status = 1;
+		}
 	}
 
 	return status;
