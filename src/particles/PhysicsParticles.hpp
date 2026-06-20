@@ -791,14 +791,22 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		// even on ranks with zero particles (otherwise those ranks deadlock waiting for the others).
 		amrex::AllGatherBoxes(cross_level_boxes);
 		if (!cross_level_boxes.empty()) {
+			// Copy gathered boxes to device so we can tag from a GPU kernel.
+			// tags[mfi](cell) is device memory in GPU builds — host-side access segfaults.
+			// Use tags.array(mfi) + ParallelFor to match the GPU-safe pattern used above.
+			amrex::Gpu::DeviceVector<amrex::Box> cross_level_boxes_d(cross_level_boxes.size());
+			amrex::Gpu::copy(amrex::Gpu::hostToDevice, cross_level_boxes.begin(), cross_level_boxes.end(), cross_level_boxes_d.begin());
+			const amrex::Box *boxes_ptr = cross_level_boxes_d.dataPtr();
+			const int nboxes = static_cast<int>(cross_level_boxes_d.size());
 			for (amrex::MFIter mfi(tags); mfi.isValid(); ++mfi) {
-				const amrex::Box &vb = mfi.validbox();
-				for (const auto &cb : cross_level_boxes) {
-					const amrex::IntVect cell = cb.smallEnd();
+				const auto tag = tags.array(mfi);
+				const amrex::Box vb = mfi.validbox();
+				amrex::ParallelFor(nboxes, [=] AMREX_GPU_DEVICE(int i) {
+					const amrex::IntVect cell = boxes_ptr[i].smallEnd(); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 					if (vb.contains(cell)) {
-						tags[mfi](cell) = amrex::TagBox::SET;
+						tag(cell) = amrex::TagBox::SET;
 					}
-				}
+				});
 			}
 		}
 	}

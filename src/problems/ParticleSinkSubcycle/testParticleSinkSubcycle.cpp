@@ -41,7 +41,9 @@
 
 struct SubcycleProblem {
 };
-static bool density_refinement_enabled = true;
+namespace {
+bool density_refinement_enabled = true;
+} // namespace
 
 template <> struct Particle_Traits<SubcycleProblem> {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Sink;
@@ -125,7 +127,7 @@ auto problem_main() -> int
 	QuokkaSimulation<SubcycleProblem> sim;
 	sim.cflNumber_ = 0.3;
 
-	amrex::ParmParse pp;
+	const amrex::ParmParse pp;
 	pp.query("density_refinement", density_refinement_enabled);
 
 	// setInitialConditions: InitFromScratch runs the initial regrid (density tags only,
