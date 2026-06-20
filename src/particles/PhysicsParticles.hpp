@@ -760,20 +760,24 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		// physical position to level-lev coordinates so the cell gets tagged.
 		// amrex::AllGatherBoxes guarantees every rank sees every tag cell —
 		// a particle on rank A may project to a level-lev cell owned by rank B.
-		amrex::Gpu::synchronize();
+		amrex::Gpu::streamSynchronize(); // ensure same-level GPU writes complete before host reads
 		amrex::Vector<amrex::Box> cross_level_boxes;
 		for (int l = 0; l <= container_->finestLevel(); ++l) {
 			if (l == lev) {
 				continue;
 			}
 			for (typename ContainerType::ParIterType pti(*container_, l); pti.isValid(); ++pti) {
-				const auto &soa = pti.GetArrayOfStructs();
+				auto &particles = pti.GetArrayOfStructs();
 				const amrex::Long np = pti.numParticles();
+				// Copy device particle data to host: soa().data() is a device pointer in GPU builds.
+				const typename ContainerType::ParticleType *pData = particles().data();
+				amrex::Vector<typename ContainerType::ParticleType> pData_h(np);
+				amrex::Gpu::copy(amrex::Gpu::deviceToHost, pData, pData + np, pData_h.begin()); // NOLINT
 				for (amrex::Long idx = 0; idx < np; ++idx) {
-					if (soa()[idx].id() <= 0) { // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+					const auto &p = pData_h[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+					if (p.id() <= 0) {
 						continue;
 					}
-					const auto &p = soa()[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 					const amrex::IntVect cell(AMREX_D_DECL(static_cast<int>(amrex::Math::floor((p.pos(0) - plo[0]) * dxi[0])),
 									       static_cast<int>(amrex::Math::floor((p.pos(1) - plo[1]) * dxi[1])),
 									       static_cast<int>(amrex::Math::floor((p.pos(2) - plo[2]) * dxi[2]))));
@@ -783,8 +787,10 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 				}
 			}
 		}
+		// AllGatherBoxes is a collective MPI call: must be called on all ranks unconditionally,
+		// even on ranks with zero particles (otherwise those ranks deadlock waiting for the others).
+		amrex::AllGatherBoxes(cross_level_boxes);
 		if (!cross_level_boxes.empty()) {
-			amrex::AllGatherBoxes(cross_level_boxes);
 			for (amrex::MFIter mfi(tags); mfi.isValid(); ++mfi) {
 				const amrex::Box &vb = mfi.validbox();
 				for (const auto &cb : cross_level_boxes) {
