@@ -552,8 +552,8 @@ auto problem_main() -> int
 			}
 
 			const std::array<amrex::Real, 3> k_vec_prf = {2.0 * M_PI * static_cast<amrex::Real>(num_modes_x),
-								       2.0 * M_PI * static_cast<amrex::Real>(num_modes_y),
-								       2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)};
+								      2.0 * M_PI * static_cast<amrex::Real>(num_modes_y),
+								      2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)};
 			k_magn = computeMagnitude(k_vec_prf);
 			k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
 
