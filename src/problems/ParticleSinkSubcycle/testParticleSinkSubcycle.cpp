@@ -41,7 +41,8 @@
 
 struct SubcycleProblem {
 };
-namespace {
+namespace
+{
 bool density_refinement_enabled = true;
 } // namespace
 
