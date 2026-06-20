@@ -55,16 +55,11 @@ constexpr double Egas0 = P_INITIAL / (quokka::EOS_Traits<DustDampingMHDZeroB>::g
 constexpr double Egas0_internal = P_INITIAL / (quokka::EOS_Traits<DustDampingMHDZeroB>::gamma - 1.0);
 constexpr int numDustVars = Physics_NumVars::numDustVarsPerGroup;
 
-template <> struct Physics_Traits<DustDampingMHDZeroB> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<DustDampingMHDZeroB> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;
-	static constexpr int numPassiveScalars = numMassScalars + 0;
-	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_dust_enabled = true;
 	static constexpr int nDustGroups = 2;
 	static constexpr bool is_mhd_enabled = true;
-	static constexpr int nGroups = 1;
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = 1.0;
 	static constexpr double gravitational_constant = 1.0;

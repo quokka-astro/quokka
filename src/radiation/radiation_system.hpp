@@ -143,6 +143,23 @@ template <typename problem_t>
 struct RadSystem_Has_Opacity_Model<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::opacity_model)>> : std::true_type {
 };
 
+// Use SFINAE to check if ChemBands() is defined in RadSystem_Traits<problem_t> (indicates photoionization group)
+template <typename problem_t, typename = void> struct RadSystem_Has_ChemBands : std::false_type {
+};
+
+template <typename problem_t> struct RadSystem_Has_ChemBands<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::ChemBands())>> : std::true_type {
+};
+
+// Get NChemBands (number of chemistry frequency bands) from RadSystem_Traits<problem_t>.
+// Returns 0 if ChemBands() is not defined (no photoionization groups).
+template <typename problem_t, typename = void> struct RadSystem_NChemBands {
+	static constexpr int value = 0;
+};
+
+template <typename problem_t> struct RadSystem_NChemBands<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::ChemBands())>> {
+	static constexpr int value = static_cast<int>(decltype(RadSystem_Traits<problem_t>::ChemBands())::size()) - 1;
+};
+
 /// Class for the radiation moment equations
 ///
 template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_t>
@@ -240,6 +257,10 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static_assert(!(nGroups_ < 3 && opacity_model_ == OpacityModel::PPL_opacity_full_spectrum), // NOLINT
 		      "PPL_opacity_full_spectrum requires at least 3 photon groups.");
 
+	// Assertion: mixed thermal+chemical band configurations are untested
+	static_assert(RadSystem_NChemBands<problem_t>::value == 0 || RadSystem_NChemBands<problem_t>::value == nGroups_,
+		      "Mixed thermal and chemical radiation bands are not supported.");
+
 	static constexpr double mean_molecular_mass_ = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
 	static constexpr double gamma_ = quokka::EOS_Traits<problem_t>::gamma;
 
@@ -257,6 +278,10 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	}();
 
 	// static functions
+
+#ifdef PHOTOCHEMISTRY
+	AMREX_GPU_HOST_DEVICE static auto GetChemBandQuanta(int group_index) -> amrex::Real;
+#endif
 
 	static void ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons, array_t &maxSignal, amrex::Box const &indexRange);
 	static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons, array_t &primVar, amrex::Box const &indexRange);
@@ -646,6 +671,16 @@ void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real>
 		}
 	});
 }
+
+#ifdef PHOTOCHEMISTRY
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::GetChemBandQuanta(int group_index) -> amrex::Real
+{
+	auto const freq_bounds = RadSystem_Traits<problem_t>::ChemBands();
+	amrex::Real freq_low = freq_bounds[group_index];
+	amrex::Real freq_high = freq_bounds[group_index + 1];
+	return 0.5_rt * (freq_high + freq_low) * C::hplanck;
+}
+#endif
 
 template <typename problem_t>
 void RadSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const & /*cons*/, array_t &maxSignal, amrex::Box const &indexRange)

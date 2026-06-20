@@ -70,16 +70,10 @@ template <> struct quokka::EOS_Traits<DustDampingMHDZeroCharge> {
 constexpr double Egas0 = P_INITIAL / (quokka::EOS_Traits<DustDampingDragReference>::gamma - 1.0) + 0.5 * rho * v0 * v0;
 constexpr double Egas0_internal = P_INITIAL / (quokka::EOS_Traits<DustDampingDragReference>::gamma - 1.0);
 
-template <> struct Physics_Traits<DustDampingDragReference> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<DustDampingDragReference> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;
-	static constexpr int numPassiveScalars = numMassScalars + 0;
-	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_dust_enabled = true;
 	static constexpr int nDustGroups = 2;
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1;
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = 1.0;
 	static constexpr double gravitational_constant = 1.0;
@@ -87,16 +81,11 @@ template <> struct Physics_Traits<DustDampingDragReference> {
 	static constexpr double radiation_constant = 1.0;
 };
 
-template <> struct Physics_Traits<DustDampingMHDZeroCharge> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<DustDampingMHDZeroCharge> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;
-	static constexpr int numPassiveScalars = numMassScalars + 0;
-	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_dust_enabled = true;
 	static constexpr int nDustGroups = 2;
 	static constexpr bool is_mhd_enabled = true;
-	static constexpr int nGroups = 1;
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = 1.0;
 	static constexpr double gravitational_constant = 1.0;

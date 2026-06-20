@@ -51,7 +51,9 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		// load radiation energy source term
 		// plus advection source term (for well-balanced/SDC integrators)
 		// Note that radEnergySource should contain the luminosity volume density, L / V; unit: erg s^-1 cm^-3
-		const double Src = radEnergySource(i, j, k, 0) * dt / cscale;
+		// Single-group: if ChemBands is defined the only group is an ionizing photon group (no cscale).
+		// For thermal groups, radEnergySource must be scaled by chat/c (= 1/cscale).
+		const double Src = RadSystem_Has_ChemBands<problem_t>::value ? radEnergySource(i, j, k, 0) * dt : radEnergySource(i, j, k, 0) * dt / cscale;
 		if constexpr (gamma_ != 1.0) {
 			AMREX_ASSERT(Src >= 0.0);
 		}
