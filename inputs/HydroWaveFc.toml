@@ -23,6 +23,7 @@ amr.blocking_factor_z = 8
 
 do_reflux = 0
 do_subcycle = 0
+cfl = 0.1
 
 plotfile_interval = 1
 checkpoint_interval = -1
