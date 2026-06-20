@@ -24,14 +24,19 @@ do_tracers = 1
 plotfile_interval = -1
 
 cfl = 0.3
+stop_time = 1.0
+max_timesteps = 10000
 
 hydro.rk_integrator_order = 2
 hydro.reconstruction_order = 3
 hydro.use_dual_energy = 0
 
+mhd.reconstruction_order = 3
+
+setup.run_convergence = false
+setup.run_sim = true
+setup.error_tol = 0.002
 setup.num_modes_x = 1
 setup.num_modes_y = 0
 setup.num_modes_z = 0
-setup.angle_between_k_b0 = 0
-
-mhd.reconstruction_order = 3
+setup.angle_between_k_b0 = 0.0
