@@ -27,4 +27,3 @@ max_timesteps = 20000
 
 setup.run_convergence = false
 setup.run_sim = true
-setup.error_tol = 1.0e-8

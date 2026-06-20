@@ -180,6 +180,7 @@ auto problem_main() -> int
 		}
 
 		QuokkaSimulation<WaveProblem> sim(BCs_cc);
+		sim.cflNumber_ = 0.3;
 		sim.setInitialConditions();
 		auto [pos_exact, val_exact] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
 
