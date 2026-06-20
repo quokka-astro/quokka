@@ -43,7 +43,7 @@ struct SubcycleProblem {
 };
 namespace
 {
-bool density_refinement_enabled = true;
+bool density_refinement_enabled = true; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 } // namespace
 
 template <> struct Particle_Traits<SubcycleProblem> {
