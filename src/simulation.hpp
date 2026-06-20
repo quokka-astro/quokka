@@ -2190,6 +2190,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 		// it was taken care of during a coarser regrid
 		bool force_finest_regrid = false;
 #if AMREX_SPACEDIM == 3
+		// When ForceFinestLevel particles exist (e.g., sink particles), a level-0 regrid is
+		// forced at the start of every coarse step (istep[0] == 0), regardless of regrid_interval.
+		// This ensures the AMR hierarchy is fully rebuilt around sink particles before any level
+		// advance occurs, preventing the subcycled regrid from losing finest-level coverage.
 		force_finest_regrid = (lev == 0 && lev < max_level && istep[lev] == 0 && particleRegister_.anyParticleRequiresFinestLevel());
 #endif
 		if ((lev < max_level && istep[lev] > last_regrid_step[lev]) || force_finest_regrid) {
