@@ -95,15 +95,16 @@ jobs:
     - name: Create test output directory
       run: cmake -E make_directory $GITHUB_WORKSPACE/tests
 
-    - name: Felker-Stone EMF FPE smoke test
+    - name: "MHD Fast Wave: Balsara2025 + LondrilloDelZanna2004"
       working-directory: ${{github.workspace}}/tests
       shell: bash
       run: |
-        ${{runner.workspace}}/build/src/problems/FastWave/FastWave \
+        ${{runner.workspace}}/build/src/problems/FastWaveConvergence/FastWaveConvergence \
           ../inputs/FastWave.toml \
           amr.max_grid_size_x=32 \
           amr.blocking_factor_x=16 \
-          mhd.emf_compute_scheme=FelkerStone2017 \
+          mhd.emf_compute_scheme=Balsara2025 \
+          mhd.emf_averaging_scheme=LondrilloDelZanna2004 \
           amrex.init_snan=1 \
           amrex.fpe_trap_invalid=1 \
           amrex.fpe_trap_overflow=1 \
