@@ -42,7 +42,7 @@ struct CaseConfig {
 	std::string tag_;
 	std::string label_;
 	double dust_density0_ = 0.0;
-	double mu0_ = 0.0;
+	double epsilon0_ = 0.0;
 };
 
 // 2D mid-plane slice exported for the Fig. 6 analogue
@@ -54,7 +54,7 @@ struct SliceData {
 	std::vector<double> y_;
 	std::vector<double> rho_g_;
 	std::vector<double> rho_d_scaled_;
-	std::vector<double> mu_local_;
+	std::vector<double> epsilon_local_;
 };
 
 // 1D x = 0.5 profile exported for the Fig. 7 analogue
@@ -90,7 +90,8 @@ struct CaseResult {
 // reconstruct the active case metadata for mid-run snapshot capture
 auto activeCaseConfig() -> CaseConfig
 {
-	return {.tag_ = g_active_case_tag, .label_ = g_active_case_label, .dust_density0_ = g_initial_dust_density, .mu0_ = g_initial_dust_density / rho_gas0};
+	return {
+	    .tag_ = g_active_case_tag, .label_ = g_active_case_label, .dust_density0_ = g_initial_dust_density, .epsilon0_ = g_initial_dust_density / rho_gas0};
 }
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto vectorPotentialAz(double x, double y) -> double
@@ -118,7 +119,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeTotalEnergy(double rho_g, double
 
 auto makeCaseConfigs() -> std::vector<CaseConfig>
 {
-	return {{"high_mu", "high mu", 1.0e-1, 1.0e-1 / rho_gas0}, {"low_mu", "low mu", 1.0e-6, 1.0e-6 / rho_gas0}};
+	return {{"high_epsilon", "high epsilon", 1.0e-1, 1.0e-1 / rho_gas0}, {"low_epsilon", "low epsilon", 1.0e-6, 1.0e-6 / rho_gas0}};
 }
 
 auto snapshotTag(double time) -> std::string
@@ -132,9 +133,9 @@ auto snapshotTag(double time) -> std::string
 void writeSliceCsv(const SliceData &slice)
 {
 	std::ofstream file(std::format("dusty_orszag_tang_{}_{}_slice.csv", slice.case_tag_, slice.snapshot_tag_));
-	file << "x,y,rho_g,rho_d_scaled,mu_local\n";
+	file << "x,y,rho_g,rho_d_scaled,epsilon_local\n";
 	for (size_t idx = 0; idx < slice.x_.size(); ++idx) {
-		file << slice.x_[idx] << "," << slice.y_[idx] << "," << slice.rho_g_[idx] << "," << slice.rho_d_scaled_[idx] << "," << slice.mu_local_[idx]
+		file << slice.x_[idx] << "," << slice.y_[idx] << "," << slice.rho_g_[idx] << "," << slice.rho_d_scaled_[idx] << "," << slice.epsilon_local_[idx]
 		     << "\n";
 	}
 }
@@ -163,7 +164,7 @@ auto sliceIsFinite(const SliceData &slice) -> bool
 	auto const check = [](const std::vector<double> &values) {
 		return std::all_of(values.begin(), values.end(), [](double value) { return std::isfinite(value); });
 	};
-	return check(slice.rho_g_) && check(slice.rho_d_scaled_) && check(slice.mu_local_);
+	return check(slice.rho_g_) && check(slice.rho_d_scaled_) && check(slice.epsilon_local_);
 }
 
 // locate the outer shock-like front in the y profile
@@ -233,11 +234,11 @@ template <typename problem_t> auto extractSlice(QuokkaSimulation<problem_t> &sim
 
 	amrex::Gpu::HostVector<amrex::Real> rho_g(npts, 0.0);
 	amrex::Gpu::HostVector<amrex::Real> rho_d_scaled(npts, 0.0);
-	amrex::Gpu::HostVector<amrex::Real> mu_local(npts, 0.0);
+	amrex::Gpu::HostVector<amrex::Real> epsilon_local(npts, 0.0);
 	auto *rho_g_ptr = rho_g.data();
 	auto *rho_d_scaled_ptr = rho_d_scaled.data();
-	auto *mu_local_ptr = mu_local.data();
-	const double mu0 = config.mu0_;
+	auto *epsilon_local_ptr = epsilon_local.data();
+	const double epsilon0 = config.epsilon0_;
 	const auto &state_mf = sim.state_new_cc_[0];
 	const amrex::Real tiny_number_local = tiny_number;
 
@@ -256,15 +257,15 @@ template <typename problem_t> auto extractSlice(QuokkaSimulation<problem_t> &sim
 			const double rho_g_cell = state(i, j, k, HydroSystem<problem_t>::density_index);
 			const double rho_d_cell = state(i, j, k, HydroSystem<problem_t>::dustDensity_index);
 			rho_g_ptr[idx] = rho_g_cell;
-			rho_d_scaled_ptr[idx] = rho_d_cell / amrex::max(mu0, tiny_number_local);
-			mu_local_ptr[idx] = (rho_g_cell > 0.0) ? rho_d_cell / rho_g_cell : 0.0;
+			rho_d_scaled_ptr[idx] = rho_d_cell / amrex::max(epsilon0, tiny_number_local);
+			epsilon_local_ptr[idx] = (rho_g_cell > 0.0) ? rho_d_cell / rho_g_cell : 0.0;
 		});
 	}
 	amrex::Gpu::streamSynchronize();
 
 	amrex::ParallelDescriptor::ReduceRealSum(rho_g.data(), npts);
 	amrex::ParallelDescriptor::ReduceRealSum(rho_d_scaled.data(), npts);
-	amrex::ParallelDescriptor::ReduceRealSum(mu_local.data(), npts);
+	amrex::ParallelDescriptor::ReduceRealSum(epsilon_local.data(), npts);
 
 	SliceData slice;
 	slice.case_tag_ = config.tag_;
@@ -274,7 +275,7 @@ template <typename problem_t> auto extractSlice(QuokkaSimulation<problem_t> &sim
 	slice.y_.resize(npts);
 	slice.rho_g_.assign(rho_g.begin(), rho_g.end());
 	slice.rho_d_scaled_.assign(rho_d_scaled.begin(), rho_d_scaled.end());
-	slice.mu_local_.assign(mu_local.begin(), mu_local.end());
+	slice.epsilon_local_.assign(epsilon_local.begin(), epsilon_local.end());
 
 	for (int j = 0; j < ny; ++j) {
 		for (int i = 0; i < nx; ++i) {
@@ -302,7 +303,7 @@ template <typename problem_t> auto extractProfile(QuokkaSimulation<problem_t> &s
 	const int i_left = lo.x + nx / 2 - 1;
 	const int i_right = lo.x + nx / 2;
 	const double rescale = static_cast<double>(nx) / 2.0;
-	const double mu0 = config.mu0_;
+	const double epsilon0 = config.epsilon0_;
 	const amrex::Real tiny_number_local = tiny_number;
 
 	auto rho_g_avg = sim.computeAxisAlignedProfile(1, [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const amrex::Real> const &state) {
@@ -346,7 +347,7 @@ template <typename problem_t> auto extractProfile(QuokkaSimulation<problem_t> &s
 
 		profile.y_[j] = prob_lo[1] + (lo.y + j + 0.5) * dx[1];
 		profile.rho_g_[j] = rho_g;
-		profile.rho_d_scaled_[j] = rho_d / amrex::max(mu0, tiny_number_local);
+		profile.rho_d_scaled_[j] = rho_d / amrex::max(epsilon0, tiny_number_local);
 		profile.v_gx_[j] = (rho_g > 0.0) ? mom_gx / rho_g : 0.0;
 		profile.v_gy_[j] = (rho_g > 0.0) ? mom_gy / rho_g : 0.0;
 		profile.v_dx_[j] = (rho_d > 0.0) ? mom_dx / rho_d : 0.0;
@@ -390,7 +391,7 @@ template <typename problem_t> auto runCase(const CaseConfig &config, bool write_
 	g_active_case_tag = config.tag_;
 	g_active_case_label = config.label_;
 
-	amrex::Print() << std::format("Running DustyOrszagTang case: {} (mu = {:.6e})\n", config.tag_, config.mu0_);
+	amrex::Print() << std::format("Running DustyOrszagTang case: {} (epsilon = {:.6e})\n", config.tag_, config.epsilon0_);
 
 	auto BCs_cc = makePeriodicBCsCC<problem_t>();
 	auto BCs_fc = makePeriodicBCsFC<problem_t>();
@@ -532,27 +533,27 @@ auto problem_main() -> int
 	pp.query("write_csv", write_csv);
 
 	std::vector<CaseConfig> const cases = makeCaseConfigs();
-	CaseResult const high_mu = runCase<DustyOrszagTang>(cases[0], write_csv);
-	CaseResult const low_mu = runCase<DustyOrszagTang>(cases[1], write_csv);
+	CaseResult const high_epsilon = runCase<DustyOrszagTang>(cases[0], write_csv);
+	CaseResult const low_epsilon = runCase<DustyOrszagTang>(cases[1], write_csv);
 
-	const double shock_sep_025 = low_mu.snap_025_.shock_position_ - high_mu.snap_025_.shock_position_;
-	const double shock_sep_050 = low_mu.snap_050_.shock_position_ - high_mu.snap_050_.shock_position_;
+	const double shock_sep_025 = low_epsilon.snap_025_.shock_position_ - high_epsilon.snap_025_.shock_position_;
+	const double shock_sep_050 = low_epsilon.snap_050_.shock_position_ - high_epsilon.snap_050_.shock_position_;
 
-	amrex::Print() << std::format("  shock(high_mu, t=0.25) = {:.6e}\n", high_mu.snap_025_.shock_position_);
-	amrex::Print() << std::format("  shock(low_mu,  t=0.25) = {:.6e}\n", low_mu.snap_025_.shock_position_);
-	amrex::Print() << std::format("  shock(high_mu, t=0.50) = {:.6e}\n", high_mu.snap_050_.shock_position_);
-	amrex::Print() << std::format("  shock(low_mu,  t=0.50) = {:.6e}\n", low_mu.snap_050_.shock_position_);
+	amrex::Print() << std::format("  shock(high_epsilon, t=0.25) = {:.6e}\n", high_epsilon.snap_025_.shock_position_);
+	amrex::Print() << std::format("  shock(low_epsilon,  t=0.25) = {:.6e}\n", low_epsilon.snap_025_.shock_position_);
+	amrex::Print() << std::format("  shock(high_epsilon, t=0.50) = {:.6e}\n", high_epsilon.snap_050_.shock_position_);
+	amrex::Print() << std::format("  shock(low_epsilon,  t=0.50) = {:.6e}\n", low_epsilon.snap_050_.shock_position_);
 	amrex::Print() << std::format("  shock separation t=0.25 = {:.6e}\n", shock_sep_025);
 	amrex::Print() << std::format("  shock separation t=0.50 = {:.6e}\n", shock_sep_050);
-	amrex::Print() << std::format("  max drift high_mu t=0.25 = {:.6e}\n", high_mu.snap_025_.max_drift_);
-	amrex::Print() << std::format("  max drift low_mu  t=0.25 = {:.6e}\n", low_mu.snap_025_.max_drift_);
+	amrex::Print() << std::format("  max drift high_epsilon t=0.25 = {:.6e}\n", high_epsilon.snap_025_.max_drift_);
+	amrex::Print() << std::format("  max drift low_epsilon  t=0.25 = {:.6e}\n", low_epsilon.snap_025_.max_drift_);
 
-	const bool finite = high_mu.snap_025_.finite_ && high_mu.snap_050_.finite_ && low_mu.snap_025_.finite_ && low_mu.snap_050_.finite_;
-	const bool low_mu_shock_ahead_025 = shock_sep_025 > 5.0e-3;
-	const bool low_mu_shock_ahead_050 = shock_sep_050 > 5.0e-3;
-	const bool dust_drift_visible = high_mu.snap_025_.max_drift_ > 5.0e-2;
+	const bool finite = high_epsilon.snap_025_.finite_ && high_epsilon.snap_050_.finite_ && low_epsilon.snap_025_.finite_ && low_epsilon.snap_050_.finite_;
+	const bool low_epsilon_shock_ahead_025 = shock_sep_025 > 5.0e-3;
+	const bool low_epsilon_shock_ahead_050 = shock_sep_050 > 5.0e-3;
+	const bool dust_drift_visible = high_epsilon.snap_025_.max_drift_ > 5.0e-2;
 
-	if (!(finite && low_mu_shock_ahead_025 && low_mu_shock_ahead_050 && dust_drift_visible)) {
+	if (!(finite && low_epsilon_shock_ahead_025 && low_epsilon_shock_ahead_050 && dust_drift_visible)) {
 		amrex::Print() << "DustyOrszagTang FAILED.\n";
 		return 1;
 	}

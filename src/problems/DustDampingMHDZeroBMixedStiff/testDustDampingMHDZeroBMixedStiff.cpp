@@ -5,11 +5,13 @@
 #include "QuokkaSimulation.hpp"
 #include "util/fextract.hpp"
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <fstream>
+#include <iomanip>
 #include <limits>
-#ifdef HAVE_PYTHON
-#include "util/matplotlibcpp.h"
-#endif
+#include <string_view>
+#include <vector>
 
 namespace
 {
@@ -19,7 +21,7 @@ constexpr double rho_dust2 = 1.0;
 constexpr double TS1 = 0.2;
 constexpr double TS2 = 0.002;
 constexpr double P_INITIAL = 1.0;
-constexpr double OMEGA = 1.0;
+constexpr double OMEGA_DRAG = 1.0;
 constexpr double gas_gamma = 1.4;
 constexpr int numDustVars = Physics_NumVars::numDustVarsPerGroup;
 
@@ -126,11 +128,13 @@ auto E_gas_analytic(double t) -> double
 
 		double const term1 =
 		    (rho_dust1 * (state1.v_dust1 - state1.v_gas) / TS1 * state1.v_gas + rho_dust2 * (state1.v_dust2 - state1.v_gas) / TS2 * state1.v_gas +
-		     OMEGA * (rho_dust1 * std::pow(state1.v_dust1 - state1.v_gas, 2) / TS1 + rho_dust2 * std::pow(state1.v_dust2 - state1.v_gas, 2) / TS2));
+		     OMEGA_DRAG *
+			 (rho_dust1 * std::pow(state1.v_dust1 - state1.v_gas, 2) / TS1 + rho_dust2 * std::pow(state1.v_dust2 - state1.v_gas, 2) / TS2));
 
 		double const term2 =
 		    (rho_dust1 * (state2.v_dust1 - state2.v_gas) / TS1 * state2.v_gas + rho_dust2 * (state2.v_dust2 - state2.v_gas) / TS2 * state2.v_gas +
-		     OMEGA * (rho_dust1 * std::pow(state2.v_dust1 - state2.v_gas, 2) / TS1 + rho_dust2 * std::pow(state2.v_dust2 - state2.v_gas, 2) / TS2));
+		     OMEGA_DRAG *
+			 (rho_dust1 * std::pow(state2.v_dust1 - state2.v_gas, 2) / TS1 + rho_dust2 * std::pow(state2.v_dust2 - state2.v_gas, 2) / TS2));
 
 		integral += 0.5 * (term1 + term2) * dt;
 	}
@@ -273,9 +277,45 @@ struct SchemeRunResult {
 	double rel_err_gas_E;
 };
 
+struct SchemeErrorTolerance {
+	double rel_err_gas_vx;
+	double rel_err_dust1_vx;
+	double rel_err_dust2_vx;
+	double rel_err_gas_E;
+};
+
 constexpr std::array<ResolvedRkScheme, 3> resolved_rk_schemes = {ResolvedRkScheme::TP2025, ResolvedRkScheme::GL4, ResolvedRkScheme::Midpoint};
-constexpr std::array<char const *, 3> scheme_colors = {"C0", "C1", "C2"};
-constexpr std::array<char const *, 3> scheme_markers = {"o", "s", "^"};
+
+auto resolvedRkSchemeSlug(ResolvedRkScheme scheme) -> std::string_view
+{
+	switch (scheme) {
+		case ResolvedRkScheme::TP2025:
+			return "tp2025";
+		case ResolvedRkScheme::GL4:
+			return "gl4";
+		case ResolvedRkScheme::Midpoint:
+			return "midpoint";
+	}
+	return "unknown";
+}
+
+auto resolvedRkSchemeTolerance(ResolvedRkScheme scheme) -> SchemeErrorTolerance
+{
+	switch (scheme) {
+		case ResolvedRkScheme::TP2025:
+			return SchemeErrorTolerance{.rel_err_gas_vx = 3.0e-3, .rel_err_dust1_vx = 2.0e-4, .rel_err_dust2_vx = 3.0e-3, .rel_err_gas_E = 1.5e-3};
+		case ResolvedRkScheme::GL4:
+			return SchemeErrorTolerance{.rel_err_gas_vx = 1.5e-2, .rel_err_dust1_vx = 2.0e-4, .rel_err_dust2_vx = 1.5e-2, .rel_err_gas_E = 5.0e-3};
+		case ResolvedRkScheme::Midpoint:
+			return SchemeErrorTolerance{.rel_err_gas_vx = 5.0e-2, .rel_err_dust1_vx = 1.0e-3, .rel_err_dust2_vx = 5.0e-2, .rel_err_gas_E = 2.0e-2};
+	}
+	return SchemeErrorTolerance{
+	    .rel_err_gas_vx = std::numeric_limits<double>::quiet_NaN(),
+	    .rel_err_dust1_vx = std::numeric_limits<double>::quiet_NaN(),
+	    .rel_err_dust2_vx = std::numeric_limits<double>::quiet_NaN(),
+	    .rel_err_gas_E = std::numeric_limits<double>::quiet_NaN(),
+	};
+}
 
 auto makePeriodicFaceBCs() -> amrex::Vector<amrex::BCRec>
 {
@@ -303,7 +343,7 @@ auto runDustDampingSimulation(ResolvedRkScheme scheme) -> SimulationData<DustDam
 	sim.plotfileInterval_ = -1;
 	sim.cflNumber_ = CFL_number;
 	sim.dustResolvedRkScheme_ = scheme;
-	sim.dust_omega_drag_ = 1.0;
+	sim.dust_omega_drag_ = OMEGA_DRAG;
 	sim.dust_omega_magnetic_res_ = 0.0;
 
 	sim.setInitialConditions();
@@ -378,10 +418,100 @@ auto computeRunResult(ResolvedRkScheme scheme, SimulationData<DustDampingMHDZero
 	    .rel_err_gas_E = rel_err_gas_E,
 	};
 }
+
+void writeHistoryCsv(const std::vector<SchemeRunResult> &runs)
+{
+	if (runs.empty()) {
+		return;
+	}
+
+	size_t n_samples = runs.front().data.t_vec_.size();
+	for (auto const &run : runs) {
+		n_samples = std::min(n_samples, run.data.t_vec_.size());
+	}
+
+	std::ofstream file("dust_damping_mhd_zero_b_mixed_stiff_history.csv");
+	file << std::setprecision(17);
+	file << "t";
+	for (auto const &run : runs) {
+		std::string_view const slug = resolvedRkSchemeSlug(run.scheme);
+		file << ",v_gas_" << slug;
+	}
+	file << ",v_gas_exact";
+	for (auto const &run : runs) {
+		std::string_view const slug = resolvedRkSchemeSlug(run.scheme);
+		file << ",v_dust1_" << slug;
+	}
+	file << ",v_dust1_exact";
+	for (auto const &run : runs) {
+		std::string_view const slug = resolvedRkSchemeSlug(run.scheme);
+		file << ",v_dust2_" << slug;
+	}
+	file << ",v_dust2_exact";
+	for (auto const &run : runs) {
+		std::string_view const slug = resolvedRkSchemeSlug(run.scheme);
+		file << ",E_gas_" << slug;
+	}
+	file << ",E_gas_exact\n";
+
+	for (size_t i = 0; i < n_samples; ++i) {
+		double const t = runs.front().data.t_vec_[i];
+		file << t;
+		for (auto const &run : runs) {
+			file << "," << run.data.v_gas_vec_[i];
+		}
+		file << "," << v_gas_analytic(t);
+		for (auto const &run : runs) {
+			file << "," << run.data.v_dust1_vec_[i];
+		}
+		file << "," << v_dust1_analytic(t);
+		for (auto const &run : runs) {
+			file << "," << run.data.v_dust2_vec_[i];
+		}
+		file << "," << v_dust2_analytic(t);
+		for (auto const &run : runs) {
+			file << "," << run.data.E_gas_vec_[i];
+		}
+		file << "," << E_gas_analytic(t) << "\n";
+	}
+}
+
+void writeExactCsv(const std::vector<SchemeRunResult> &runs)
+{
+	if (runs.empty()) {
+		return;
+	}
+
+	const size_t n_dense_points = 1000;
+	const double t_max = runs.front().data.t_vec_.empty() ? 0.0 : runs.front().data.t_vec_.back();
+
+	std::ofstream file("dust_damping_mhd_zero_b_mixed_stiff_exact.csv");
+	file << std::setprecision(17);
+	file << "t,v_gas_exact,v_dust1_exact,v_dust2_exact,E_gas_exact\n";
+	for (size_t i = 0; i < n_dense_points; ++i) {
+		double const t = t_max * static_cast<double>(i) / static_cast<double>(n_dense_points - 1);
+		file << t << "," << v_gas_analytic(t) << "," << v_dust1_analytic(t) << "," << v_dust2_analytic(t) << "," << E_gas_analytic(t) << "\n";
+	}
+}
+
+void writeSummaryCsv(const std::vector<SchemeRunResult> &runs)
+{
+	std::ofstream file("dust_damping_mhd_zero_b_mixed_stiff_summary.csv");
+	file << std::setprecision(17);
+	file << "scheme,rel_err_gas_vx,rel_err_dust1_vx,rel_err_dust2_vx,rel_err_gas_E\n";
+	for (auto const &run : runs) {
+		file << resolvedRkSchemeSlug(run.scheme) << "," << run.rel_err_gas_vx << "," << run.rel_err_dust1_vx << "," << run.rel_err_dust2_vx << ","
+		     << run.rel_err_gas_E << "\n";
+	}
+}
 } // namespace
 
 auto problem_main() -> int
 {
+	bool write_csv = true;
+	amrex::ParmParse const pp("problem");
+	pp.query("write_csv", write_csv);
+
 	std::vector<SchemeRunResult> runs;
 	runs.reserve(resolved_rk_schemes.size());
 	for (ResolvedRkScheme const scheme : resolved_rk_schemes) {
@@ -390,8 +520,8 @@ auto problem_main() -> int
 
 	int status = 0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		const double rel_err_tol = 0.03;
 		for (auto const &run : runs) {
+			SchemeErrorTolerance const tol = resolvedRkSchemeTolerance(run.scheme);
 			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for gas vx    = " << run.rel_err_gas_vx
 				       << "\n";
 			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for dust1 vx  = " << run.rel_err_dust1_vx
@@ -401,81 +531,34 @@ auto problem_main() -> int
 			amrex::Print() << "[" << quokka::dust::resolvedRkSchemeName(run.scheme) << "] Relative L1 norm for gas E     = " << run.rel_err_gas_E
 				       << "\n";
 			if (!std::isfinite(run.rel_err_gas_vx) || !std::isfinite(run.rel_err_dust1_vx) || !std::isfinite(run.rel_err_dust2_vx) ||
-			    !std::isfinite(run.rel_err_gas_E) || (run.rel_err_gas_vx > rel_err_tol) || (run.rel_err_dust1_vx > rel_err_tol) ||
-			    (run.rel_err_dust2_vx > rel_err_tol) || (run.rel_err_gas_E > rel_err_tol)) {
+			    !std::isfinite(run.rel_err_gas_E) || (run.rel_err_gas_vx > tol.rel_err_gas_vx) || (run.rel_err_dust1_vx > tol.rel_err_dust1_vx) ||
+			    (run.rel_err_dust2_vx > tol.rel_err_dust2_vx) || (run.rel_err_gas_E > tol.rel_err_gas_E)) {
 				status = 1;
 			}
 		}
 
-#ifdef HAVE_PYTHON
-		std::vector<double> const &t = runs.front().data.t_vec_;
-		const size_t n_dense_points = 1000;
-		std::vector<double> t_dense(n_dense_points);
-		std::vector<double> v_gas_exact_dense(n_dense_points);
-		std::vector<double> v_dust1_exact_dense(n_dense_points);
-		std::vector<double> v_dust2_exact_dense(n_dense_points);
-		std::vector<double> E_gas_exact_dense(n_dense_points);
-		double const t_max = t.empty() ? 0.0 : t.back();
-		for (size_t i = 0; i < n_dense_points; ++i) {
-			t_dense[i] = t_max * static_cast<double>(i) / (n_dense_points - 1);
-			v_gas_exact_dense[i] = v_gas_analytic(t_dense[i]);
-			v_dust1_exact_dense[i] = v_dust1_analytic(t_dense[i]);
-			v_dust2_exact_dense[i] = v_dust2_analytic(t_dense[i]);
-			E_gas_exact_dense[i] = E_gas_analytic(t_dense[i]);
+		auto const find_run = [&runs](ResolvedRkScheme scheme) {
+			return std::find_if(runs.begin(), runs.end(), [scheme](auto const &run) { return run.scheme == scheme; });
+		};
+		auto const tp2025 = find_run(ResolvedRkScheme::TP2025);
+		auto const gl4 = find_run(ResolvedRkScheme::GL4);
+		auto const midpoint = find_run(ResolvedRkScheme::Midpoint);
+		if ((tp2025 == runs.end()) || (gl4 == runs.end()) || (midpoint == runs.end())) {
+			status = 1;
+		} else {
+			bool const gas_order_ok = (tp2025->rel_err_gas_vx < gl4->rel_err_gas_vx) && (gl4->rel_err_gas_vx < midpoint->rel_err_gas_vx);
+			bool const dust2_order_ok = (tp2025->rel_err_dust2_vx < gl4->rel_err_dust2_vx) && (gl4->rel_err_dust2_vx < midpoint->rel_err_dust2_vx);
+			bool const energy_order_ok = (tp2025->rel_err_gas_E < gl4->rel_err_gas_E) && (gl4->rel_err_gas_E < midpoint->rel_err_gas_E);
+			if (!gas_order_ok || !dust2_order_ok || !energy_order_ok) {
+				status = 1;
+			}
 		}
 
-		auto plotRunSeries = [&](auto const &series_accessor) {
-			for (size_t idx = 0; idx < runs.size(); ++idx) {
-				auto const &series = series_accessor(runs[idx].data);
-				matplotlibcpp::plot(runs[idx].data.t_vec_, series,
-						    {{"label", quokka::dust::resolvedRkSchemeName(runs[idx].scheme)},
-						     {"color", scheme_colors[idx]},
-						     {"linestyle", "-"},
-						     {"marker", scheme_markers[idx]},
-						     {"markersize", "3"}});
-			}
-		};
-
-		matplotlibcpp::clf();
-		matplotlibcpp::plot(t_dense, v_gas_exact_dense, {{"label", "analytic"}, {"color", "k"}, {"linestyle", "--"}});
-		plotRunSeries([](auto const &data) -> std::vector<double> const & { return data.v_gas_vec_; });
-		matplotlibcpp::legend();
-		matplotlibcpp::xlabel("t");
-		matplotlibcpp::ylabel(R"($v_g$)");
-		matplotlibcpp::title("Gas Velocity Evolution");
-		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./dust_damping_mhd_zero_b_mixed_stiff_gas_velocity.pdf");
-
-		matplotlibcpp::clf();
-		matplotlibcpp::plot(t_dense, v_dust1_exact_dense, {{"label", "analytic"}, {"color", "k"}, {"linestyle", "--"}});
-		plotRunSeries([](auto const &data) -> std::vector<double> const & { return data.v_dust1_vec_; });
-		matplotlibcpp::legend();
-		matplotlibcpp::xlabel("t");
-		matplotlibcpp::ylabel(R"($v_{d,1}$)");
-		matplotlibcpp::title("Dust1 Velocity Evolution");
-		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./dust_damping_mhd_zero_b_mixed_stiff_dust1_velocity.pdf");
-
-		matplotlibcpp::clf();
-		matplotlibcpp::plot(t_dense, v_dust2_exact_dense, {{"label", "analytic"}, {"color", "k"}, {"linestyle", "--"}});
-		plotRunSeries([](auto const &data) -> std::vector<double> const & { return data.v_dust2_vec_; });
-		matplotlibcpp::legend();
-		matplotlibcpp::xlabel("t");
-		matplotlibcpp::ylabel(R"($v_{d,2}$)");
-		matplotlibcpp::title("Dust2 Velocity Evolution");
-		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./dust_damping_mhd_zero_b_mixed_stiff_dust2_velocity.pdf");
-
-		matplotlibcpp::clf();
-		matplotlibcpp::plot(t_dense, E_gas_exact_dense, {{"label", "analytic"}, {"color", "k"}, {"linestyle", "--"}});
-		plotRunSeries([](auto const &data) -> std::vector<double> const & { return data.E_gas_vec_; });
-		matplotlibcpp::legend();
-		matplotlibcpp::xlabel("t");
-		matplotlibcpp::ylabel(R"($E_g$)");
-		matplotlibcpp::title("Gas Energy Evolution");
-		matplotlibcpp::tight_layout();
-		matplotlibcpp::save("./dust_damping_mhd_zero_b_mixed_stiff_gas_energy.pdf");
-#endif
+		if (write_csv) {
+			writeHistoryCsv(runs);
+			writeExactCsv(runs);
+			writeSummaryCsv(runs);
+		}
 		amrex::Print() << "Finished.\n";
 	}
 

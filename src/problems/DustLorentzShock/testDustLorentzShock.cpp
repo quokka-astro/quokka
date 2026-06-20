@@ -19,7 +19,7 @@ constexpr double dust_density_floor = 1.0e-12;
 
 struct ShockProfile {
 	std::string output_tag_;
-	double mu_ = 0.0;
+	double epsilon_ = 0.0;
 	double target_magnetization_ = 0.0;
 	std::vector<double> x_;
 	std::vector<double> rho_g_;
@@ -62,7 +62,7 @@ template <> struct ShockCaseParams<DustLorentzShockChargedDilute> {
 	static constexpr double stopping_time = 0.10;
 	static constexpr double target_magnetization = 20.0;
 	static constexpr double charge_to_mass_ratio = target_magnetization / (stopping_time * bz_ambient);
-	static constexpr char const *label = "Charged, mu = 0.01";
+	static constexpr char const *label = "Charged, epsilon = 0.01";
 	static constexpr char const *output_tag = "charged_dilute";
 };
 
@@ -75,7 +75,7 @@ template <> struct ShockCaseParams<DustLorentzShockChargedBackreacting> {
 	static constexpr double stopping_time = 0.10;
 	static constexpr double target_magnetization = 20.0;
 	static constexpr double charge_to_mass_ratio = target_magnetization / (stopping_time * bz_ambient);
-	static constexpr char const *label = "Charged, mu = 0.10";
+	static constexpr char const *label = "Charged, epsilon = 0.10";
 	static constexpr char const *output_tag = "charged_backreacting";
 };
 
@@ -240,7 +240,7 @@ template <typename problem_t> auto extractShockProfile(QuokkaSimulation<problem_
 
 	ShockProfile profile;
 	profile.output_tag_ = ShockCaseParams<problem_t>::output_tag;
-	profile.mu_ = ShockCaseParams<problem_t>::dust_to_gas_ratio;
+	profile.epsilon_ = ShockCaseParams<problem_t>::dust_to_gas_ratio;
 	profile.target_magnetization_ = ShockCaseParams<problem_t>::target_magnetization;
 	profile.x_ = x;
 	profile.rho_g_.resize(x.size());
@@ -344,8 +344,8 @@ void writeShockProfileCsv(const ShockProfile &profile, const std::vector<double>
 	file << "x,rho_g,v_gx,rho_d_scaled,v_dx,v_dy,v_guiding_x\n";
 
 	for (size_t i = 0; i < profile.x_.size(); ++i) {
-		file << profile.x_[i] << "," << profile.rho_g_[i] << "," << profile.v_gx_[i] << "," << profile.rho_d_[i] / std::max(profile.mu_, 1.0e-12) << ","
-		     << profile.v_dx_[i] << "," << profile.v_dy_[i] << ",";
+		file << profile.x_[i] << "," << profile.rho_g_[i] << "," << profile.v_gx_[i] << "," << profile.rho_d_[i] / std::max(profile.epsilon_, 1.0e-12)
+		     << "," << profile.v_dx_[i] << "," << profile.v_dy_[i] << ",";
 		if (guiding_vx != nullptr) {
 			file << (*guiding_vx)[i];
 		}

@@ -35,9 +35,9 @@ constexpr double dust_density_floor = 1.0e-12;
 constexpr double supersonic_eta = 9.0 * pi * gamma_iso / 128.0;
 constexpr double time_tolerance = 1.0e-10;
 constexpr double bar_a = 5.0;
-constexpr double grain_radius_density_param = 5.0;
+constexpr double grain_radius_density_product_param = 5.0;
 constexpr double xi_param = 10.0;
-constexpr double mu_param = 0.01;
+constexpr double dust_to_gas_ratio = 0.01;
 constexpr double beta_param = 2.0;
 constexpr double theta_Ba_deg = 87.0;
 constexpr double grain_density0 = 1.0;
@@ -56,19 +56,19 @@ std::array<double, 3> g_snapshot_times_over_ts0 = snapshot_times_over_ts0_defaul
 std::array<double, 3> g_snapshot_target_times = {0.0, 0.0, 0.0};		   // NOLINT
 double g_equilibrium_ts = 0.0;							   // NOLINT
 
-AMREX_GPU_MANAGED double g_grain_radius = grain_radius_density_param / grain_density0; // NOLINT
-AMREX_GPU_MANAGED double g_grain_density = grain_density0;			       // NOLINT
-AMREX_GPU_MANAGED double g_charge_to_mass = xi_param;				       // NOLINT
-AMREX_GPU_MANAGED double g_noise_amplitude = noise_amplitude_param;		       // NOLINT
-AMREX_GPU_MANAGED double g_Bx0 = 0.0;						       // NOLINT
-AMREX_GPU_MANAGED double g_By0 = 0.0;						       // NOLINT
-AMREX_GPU_MANAGED double g_Bz0 = 1.0;						       // NOLINT
-AMREX_GPU_MANAGED double g_gas_vx0 = 0.0;					       // NOLINT
-AMREX_GPU_MANAGED double g_gas_vy0 = 0.0;					       // NOLINT
-AMREX_GPU_MANAGED double g_gas_vz0 = 0.0;					       // NOLINT
-AMREX_GPU_MANAGED double g_dust_vx0 = 0.0;					       // NOLINT
-AMREX_GPU_MANAGED double g_dust_vy0 = 0.0;					       // NOLINT
-AMREX_GPU_MANAGED double g_dust_vz0 = 0.0;					       // NOLINT
+AMREX_GPU_MANAGED double g_grain_radius = grain_radius_density_product_param / grain_density0; // NOLINT
+AMREX_GPU_MANAGED double g_grain_density = grain_density0;				       // NOLINT
+AMREX_GPU_MANAGED double g_charge_to_mass = xi_param;					       // NOLINT
+AMREX_GPU_MANAGED double g_noise_amplitude = noise_amplitude_param;			       // NOLINT
+AMREX_GPU_MANAGED double g_Bx0 = 0.0;							       // NOLINT
+AMREX_GPU_MANAGED double g_By0 = 0.0;							       // NOLINT
+AMREX_GPU_MANAGED double g_Bz0 = 1.0;							       // NOLINT
+AMREX_GPU_MANAGED double g_gas_vx0 = 0.0;						       // NOLINT
+AMREX_GPU_MANAGED double g_gas_vy0 = 0.0;						       // NOLINT
+AMREX_GPU_MANAGED double g_gas_vz0 = 0.0;						       // NOLINT
+AMREX_GPU_MANAGED double g_dust_vx0 = 0.0;						       // NOLINT
+AMREX_GPU_MANAGED double g_dust_vy0 = 0.0;						       // NOLINT
+AMREX_GPU_MANAGED double g_dust_vz0 = 0.0;						       // NOLINT
 
 struct EquilibriumState {
 	Vec3 drift_{};
@@ -184,13 +184,13 @@ auto solveDriftEquilibrium() -> EquilibriumState
 	double const ts_sub = computeSubsonicStoppingTime();
 	double const omega_L = xi_param * magnetic_field_norm;
 
-	Vec3 drift = {(ts_sub / (1.0 + mu_param)) * bar_a, 0.0, 0.0};
+	Vec3 drift = {(ts_sub / (1.0 + dust_to_gas_ratio)) * bar_a, 0.0, 0.0};
 	for (int iter = 0; iter < 64; ++iter) {
 		double const drift_speed = norm(drift);
 		double const stop_time = ts_sub / std::sqrt(1.0 + supersonic_eta * square(drift_speed / sound_speed));
 		double const tau_local = omega_L * stop_time;
 
-		Vec3 const rhs = (stop_time / (1.0 + mu_param)) * acceleration;
+		Vec3 const rhs = (stop_time / (1.0 + dust_to_gas_ratio)) * acceleration;
 		Vec3 const rhs_parallel = dot(rhs, b_hat) * b_hat;
 		Vec3 const rhs_perp = rhs - rhs_parallel;
 		Vec3 const hall = cross(rhs, b_hat);
@@ -207,8 +207,8 @@ auto solveDriftEquilibrium() -> EquilibriumState
 	result.tau_ = omega_L * result.stop_time_;
 	result.drift_speed_ = norm(drift);
 	result.drift_angle_to_b_deg_ = angleDegrees(drift, result.magnetic_field_);
-	result.gas_velocity_ = (-mu_param / (1.0 + mu_param)) * drift;
-	result.dust_velocity_ = (1.0 / (1.0 + mu_param)) * drift;
+	result.gas_velocity_ = (-dust_to_gas_ratio / (1.0 + dust_to_gas_ratio)) * drift;
+	result.dust_velocity_ = (1.0 / (1.0 + dust_to_gas_ratio)) * drift;
 	return result;
 }
 
@@ -415,9 +415,9 @@ void writeSummaryCsv(EquilibriumState const &equilibrium, DustMagnetizedRDIHisto
 	std::ofstream file("dust_magnetized_rdi_summary.csv");
 	file << "key,value\n";
 	file << "bar_a," << bar_a << "\n";
-	file << "epsilon," << grainRadiusDensityProduct() << "\n";
+	file << "grain_radius_density_product," << grainRadiusDensityProduct() << "\n";
 	file << "xi," << xi_param << "\n";
-	file << "mu," << mu_param << "\n";
+	file << "dust_to_gas_ratio," << dust_to_gas_ratio << "\n";
 	file << "beta," << beta_param << "\n";
 	file << "theta_Ba_deg," << theta_Ba_deg << "\n";
 	file << "grain_radius," << g_grain_radius << "\n";
@@ -472,7 +472,7 @@ template <typename problem_t> auto extractFaceProjection(QuokkaSimulation<proble
 	const int ny = domain.length(1);
 	const int nz = domain.length(2);
 	const int slab_cells = std::clamp(g_slice_thickness_cells, 1, domain.length(normal_dir));
-	const double mean_dust_density = std::max(mu_param * rho_gas0, dust_density_floor);
+	const double mean_dust_density = std::max(dust_to_gas_ratio * rho_gas0, dust_density_floor);
 	const double bx0 = g_Bx0;
 	const double by0 = g_By0;
 	const double bz0 = g_Bz0;
@@ -703,7 +703,7 @@ template <> void QuokkaSimulation<DustMagnetizedRDI>::setInitialConditionsOnGrid
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const int ncomp_cc = Physics_Indices<DustMagnetizedRDI>::nvarTotal_cc;
-	const double dust_density0 = std::max(mu_param * rho_gas0, dust_density_floor);
+	const double dust_density0 = std::max(dust_to_gas_ratio * rho_gas0, dust_density_floor);
 	const double magnetic_energy = 0.5 * (g_Bx0 * g_Bx0 + g_By0 * g_By0 + g_Bz0 * g_Bz0);
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -772,8 +772,8 @@ template <> void QuokkaSimulation<DustMagnetizedRDI>::addStrangSplitSources(amre
 	amrex::ignore_unused(lev);
 	amrex::ignore_unused(time);
 
-	double const gas_accel_x = -mu_param * bar_a / (1.0 + mu_param);
-	double const dust_accel_x = bar_a / (1.0 + mu_param);
+	double const gas_accel_x = -dust_to_gas_ratio * bar_a / (1.0 + dust_to_gas_ratio);
+	double const dust_accel_x = bar_a / (1.0 + dust_to_gas_ratio);
 
 	for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
@@ -811,7 +811,7 @@ auto problem_main() -> int
 	amrex::Print() << std::format("  grain density      = {:.6f}\n", g_grain_density);
 	amrex::Print() << std::format("  a * rho_gr         = {:.6f}\n", grainRadiusDensityProduct());
 	amrex::Print() << std::format("  xi                 = {:.6f}\n", xi_param);
-	amrex::Print() << std::format("  mu                 = {:.6f}\n", mu_param);
+	amrex::Print() << std::format("  dust-to-gas ratio  = {:.6f}\n", dust_to_gas_ratio);
 	amrex::Print() << std::format("  beta               = {:.6f}\n", beta_param);
 	amrex::Print() << std::format("  theta_Ba [deg]     = {:.6f}\n", theta_Ba_deg);
 	amrex::Print() << std::format("  equilibrium t_s    = {:.6f}\n", equilibrium.stop_time_);

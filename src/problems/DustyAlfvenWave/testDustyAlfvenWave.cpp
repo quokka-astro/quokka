@@ -40,7 +40,7 @@ constexpr size_t tracer_particle_count = 128;
 constexpr int numerical_tracer_substeps = 8;
 constexpr int reference_dense_history_points = 1001;
 
-AMREX_GPU_MANAGED double g_mu = 0.01;			       // NOLINT
+AMREX_GPU_MANAGED double g_epsilon = 0.01;		       // NOLINT
 AMREX_GPU_MANAGED double g_stopping_time = 0.1;		       // NOLINT
 AMREX_GPU_MANAGED double g_omega_l_target = -alfven_frequency; // NOLINT
 
@@ -49,7 +49,7 @@ struct CaseConfig {
 	std::string sweep_;
 	std::string tag_;
 	std::string label_;
-	double mu_ = 0.0;
+	double epsilon_ = 0.0;
 	double omega_l_target_ = -alfven_frequency;
 	double stopping_time_ = stop_time_default;
 };
@@ -183,7 +183,7 @@ struct TracerState {
 
 template <typename T> auto square(T value) -> T { return value * value; }
 
-auto dustDensityFromMu(double mu) -> double { return std::max(mu * rho_gas, dust_density_floor); }
+auto dustDensityFromEpsilon(double epsilon) -> double { return std::max(epsilon * rho_gas, dust_density_floor); }
 
 AMREX_GPU_HOST_DEVICE auto chargeToMassRatio(double omega_l_target) -> double { return omega_l_target / initial_b_magnitude; }
 
@@ -225,8 +225,8 @@ auto referenceRhs(const ReferenceState &state, const CaseConfig &config) -> Refe
 
 	const std::complex<double> dust_source_perp = -alpha * w_perp + lorentz_qom * cross_perp;
 	const double dust_source_z = -alpha * w_z + lorentz_qom * cross_z;
-	const std::complex<double> gas_source_perp = -config.mu_ * dust_source_perp;
-	const double gas_source_z = -config.mu_ * dust_source_z;
+	const std::complex<double> gas_source_perp = -config.epsilon_ * dust_source_perp;
+	const double gas_source_z = -config.epsilon_ * dust_source_z;
 
 	ReferenceState rhs;
 	rhs.gas_perp_ = imaginary * wave_number * (bz0 * state.b_perp_ - state.gas_z_ * state.gas_perp_) + gas_source_perp;
@@ -790,7 +790,7 @@ void writeTracerHistoryDenseCsv(const CaseResult &result)
 
 auto runCase(const CaseConfig &config, int reference_steps) -> CaseResult
 {
-	g_mu = config.mu_;
+	g_epsilon = config.epsilon_;
 	g_omega_l_target = config.omega_l_target_;
 	g_stopping_time = config.stopping_time_;
 
@@ -850,19 +850,19 @@ auto runCase(const CaseConfig &config, int reference_steps) -> CaseResult
 	return result;
 }
 
-auto makeMuCases() -> std::vector<CaseConfig>
+auto makeEpsilonCases() -> std::vector<CaseConfig>
 {
-	return {{"mu", "mu0", "mu = 0", 0.0, -alfven_frequency, stop_time_default},
-		{"mu", "mu0p01", "mu = 0.01", 0.01, -alfven_frequency, stop_time_default},
-		{"mu", "mu0p1", "mu = 0.1", 0.1, -alfven_frequency, stop_time_default},
-		{"mu", "mu1", "mu = 1", 1.0, -alfven_frequency, stop_time_default}};
+	return {{"epsilon", "epsilon0", "epsilon = 0", 0.0, -alfven_frequency, stop_time_default},
+		{"epsilon", "epsilon0p01", "epsilon = 0.01", 0.01, -alfven_frequency, stop_time_default},
+		{"epsilon", "epsilon0p1", "epsilon = 0.1", 0.1, -alfven_frequency, stop_time_default},
+		{"epsilon", "epsilon1", "epsilon = 1", 1.0, -alfven_frequency, stop_time_default}};
 }
 
 auto makeOmegaCases() -> std::vector<CaseConfig>
 {
-	return {{"omega", "omega_high", "-omega_L/Omega_AW = 10", 0.01, -10.0 * alfven_frequency, stop_time_default},
-		{"omega", "omega_resonant", "-omega_L/Omega_AW = 1", 0.01, -alfven_frequency, stop_time_default},
-		{"omega", "omega_low", "-omega_L/Omega_AW = 0.1", 0.01, -0.1 * alfven_frequency, stop_time_default}};
+	return {{"omega", "omega_high", "-Omega_L/Omega_AW = 10", 0.01, -10.0 * alfven_frequency, stop_time_default},
+		{"omega", "omega_resonant", "-Omega_L/Omega_AW = 1", 0.01, -alfven_frequency, stop_time_default},
+		{"omega", "omega_low", "-Omega_L/Omega_AW = 0.1", 0.01, -0.1 * alfven_frequency, stop_time_default}};
 }
 } // namespace
 
@@ -891,7 +891,7 @@ template <> void QuokkaSimulation<DustyAlfvenWave>::setInitialConditionsOnGrid(q
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const int ncomp_cc = Physics_Indices<DustyAlfvenWave>::nvarTotal_cc;
-	const double rho_dust = dustDensityFromMu(g_mu);
+	const double rho_dust = dustDensityFromEpsilon(g_epsilon);
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		for (int n = 0; n < ncomp_cc; ++n) {
@@ -959,7 +959,7 @@ auto problem_main() -> int
 	pp.query("reference_steps", reference_steps);
 
 	std::vector<CaseResult> results;
-	for (CaseConfig const &config : makeMuCases()) {
+	for (CaseConfig const &config : makeEpsilonCases()) {
 		results.push_back(runCase(config, reference_steps));
 	}
 	for (CaseConfig const &config : makeOmegaCases()) {

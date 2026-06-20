@@ -24,10 +24,24 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
+PAPER_LABEL_FONTSIZE = 15
+PAPER_TICK_FONTSIZE = 13
+PAPER_TITLE_FONTSIZE = 14
+PAPER_LEGEND_FONTSIZE = 12
+
+plt.rcParams.update({
+    "font.size": PAPER_TICK_FONTSIZE,
+    "axes.labelsize": PAPER_LABEL_FONTSIZE,
+    "axes.titlesize": PAPER_TITLE_FONTSIZE,
+    "xtick.labelsize": PAPER_TICK_FONTSIZE,
+    "ytick.labelsize": PAPER_TICK_FONTSIZE,
+    "legend.fontsize": PAPER_LEGEND_FONTSIZE,
+})
+
 
 CASE_INFO = {
-    "high_mu": {"label": r"$\mu \approx 0.45$", "title": r"$\mu \approx 0.45$"},
-    "low_mu": {"label": r"$\mu \approx 4.5\times10^{-6}$", "title": r"$\mu \approx 4.5\times10^{-6}$"},
+    "high_epsilon": {"label": r"$\epsilon \approx 0.45$", "title": r"$\epsilon \approx 0.45$"},
+    "low_epsilon": {"label": r"$\epsilon \approx 4.5\times10^{-6}$", "title": r"$\epsilon \approx 4.5\times10^{-6}$"},
 }
 SNAPSHOTS = ("t0p25", "t0p50")
 
@@ -62,7 +76,7 @@ def make_fig6(data_dir: Path, output_dir: Path) -> Path:
     fig, axes = plt.subplots(2, 2, figsize=(11.5, 9.0), sharex=True, sharey=True, constrained_layout=True)
     contour_levels = [0.9, 1.0, 1.1, 1.2, 1.35, 1.5]
 
-    for row, case_tag in enumerate(("high_mu", "low_mu")):
+    for row, case_tag in enumerate(("high_epsilon", "low_epsilon")):
         for col, snapshot in enumerate(SNAPSHOTS):
             rows = read_csv(data_dir / f"dusty_orszag_tang_{case_tag}_{snapshot}_slice.csv")
             xs, ys, rho_g, rho_d_scaled = reshape_slice(rows)
@@ -81,7 +95,8 @@ def make_fig6(data_dir: Path, output_dir: Path) -> Path:
     axes[1, 0].set_xlabel("x")
     axes[1, 1].set_xlabel("x")
     cbar = fig.colorbar(mesh, ax=axes, fraction=0.046, pad=0.03)
-    cbar.set_label(r"$\rho_g$")
+    cbar.ax.tick_params(labelsize=PAPER_TICK_FONTSIZE)
+    cbar.set_label(r"$\rho_g$", fontsize=PAPER_LABEL_FONTSIZE)
     output_path = output_dir / "dusty_orszag_tang_fig6_analog.pdf"
     fig.savefig(output_path)
     plt.close(fig)
@@ -91,7 +106,7 @@ def make_fig6(data_dir: Path, output_dir: Path) -> Path:
 def make_fig7(data_dir: Path, output_dir: Path) -> Path:
     fig, axes = plt.subplots(2, 2, figsize=(11.5, 7.5), sharex=True, constrained_layout=True)
 
-    for col, case_tag in enumerate(("high_mu", "low_mu")):
+    for col, case_tag in enumerate(("high_epsilon", "low_epsilon")):
         rows = read_csv(data_dir / f"dusty_orszag_tang_{case_tag}_t0p25_profile.csv")
         y = np.array([row["y"] for row in rows])
         mask = y <= 0.3 + 1.0e-12

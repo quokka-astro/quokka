@@ -23,18 +23,32 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+PAPER_LABEL_FONTSIZE = 15
+PAPER_TICK_FONTSIZE = 13
+PAPER_TITLE_FONTSIZE = 14
+PAPER_LEGEND_FONTSIZE = 12
 
-MU_CASES = (
-    ("mu0", r"$\mu=0$"),
-    ("mu0p01", r"$\mu=0.01$"),
-    ("mu0p1", r"$\mu=0.1$"),
-    ("mu1", r"$\mu=1$"),
+plt.rcParams.update({
+    "font.size": PAPER_TICK_FONTSIZE,
+    "axes.labelsize": PAPER_LABEL_FONTSIZE,
+    "axes.titlesize": PAPER_TITLE_FONTSIZE,
+    "xtick.labelsize": PAPER_TICK_FONTSIZE,
+    "ytick.labelsize": PAPER_TICK_FONTSIZE,
+    "legend.fontsize": PAPER_LEGEND_FONTSIZE,
+})
+
+
+EPSILON_CASES = (
+    ("epsilon0", r"$\epsilon=0$"),
+    ("epsilon0p01", r"$\epsilon=0.01$"),
+    ("epsilon0p1", r"$\epsilon=0.1$"),
+    ("epsilon1", r"$\epsilon=1$"),
 )
 
 OMEGA_CASES = (
-    ("omega_high", r"$-\omega_L/\Omega_{\rm AW}=10$"),
-    ("omega_resonant", r"$-\omega_L/\Omega_{\rm AW}=1$"),
-    ("omega_low", r"$-\omega_L/\Omega_{\rm AW}=0.1$"),
+    ("omega_high", r"$-\Omega_L/\Omega_{\rm AW}=10$"),
+    ("omega_resonant", r"$-\Omega_L/\Omega_{\rm AW}=1$"),
+    ("omega_low", r"$-\Omega_L/\Omega_{\rm AW}=0.1$"),
 )
 
 
@@ -102,7 +116,14 @@ def plot_particle_history_panel(ax, history: dict[str, list[float]], dense_histo
     ax.set_xlim(0.0, 5.0)
 
 
-def make_figure(data_dir: Path, output_dir: Path, sweep: str, cases: tuple[tuple[str, str], ...], filename: str) -> Path:
+def make_figure(
+    data_dir: Path,
+    output_dir: Path,
+    sweep: str,
+    cases: tuple[tuple[str, str], ...],
+    filename: str,
+    y_limits: tuple[float, float] | None = None,
+) -> Path:
     require_files(data_dir, sweep, cases)
 
     fig, axes = plt.subplots(2, len(cases), figsize=(4.0 * len(cases), 7.0), sharex="row")
@@ -116,10 +137,13 @@ def make_figure(data_dir: Path, output_dir: Path, sweep: str, cases: tuple[tuple
         plot_profile_panel(axes[0, column], profile, title)
         plot_history_panel(axes[1, column], history)
         axes[1, column].set_xlabel(r"$t$")
+        if y_limits is not None:
+            axes[0, column].set_ylim(*y_limits)
+            axes[1, column].set_ylim(*y_limits)
 
     axes[0, 0].set_ylabel(r"$x$ velocity at $t=5$")
     axes[1, 0].set_ylabel(r"$v_{d,x}$")
-    axes[0, 0].legend(loc="best", fontsize=8)
+    axes[0, 0].legend(loc="best", fontsize=PAPER_LEGEND_FONTSIZE)
     fig.tight_layout()
     output_path = output_dir / filename
     fig.savefig(output_path)
@@ -127,7 +151,14 @@ def make_figure(data_dir: Path, output_dir: Path, sweep: str, cases: tuple[tuple
     return output_path
 
 
-def make_particle_figure(data_dir: Path, output_dir: Path, sweep: str, cases: tuple[tuple[str, str], ...], filename: str) -> Path:
+def make_particle_figure(
+    data_dir: Path,
+    output_dir: Path,
+    sweep: str,
+    cases: tuple[tuple[str, str], ...],
+    filename: str,
+    y_limits: tuple[float, float] | None = None,
+) -> Path:
     require_particle_files(data_dir, sweep, cases)
 
     fig, axes = plt.subplots(2, len(cases), figsize=(4.0 * len(cases), 7.0), sharex="row")
@@ -142,10 +173,13 @@ def make_particle_figure(data_dir: Path, output_dir: Path, sweep: str, cases: tu
         plot_particle_profile_panel(axes[0, column], profile, title)
         plot_particle_history_panel(axes[1, column], history, dense_history)
         axes[1, column].set_xlabel(r"$t$")
+        if y_limits is not None:
+            axes[0, column].set_ylim(*y_limits)
+            axes[1, column].set_ylim(*y_limits)
 
     axes[0, 0].set_ylabel(r"tracer $x$ velocity at $t=5$")
     axes[1, 0].set_ylabel(r"$v_{d,x}$")
-    axes[0, 0].legend(loc="best", fontsize=8)
+    axes[0, 0].legend(loc="best", fontsize=PAPER_LEGEND_FONTSIZE)
     fig.tight_layout()
     output_path = output_dir / filename
     fig.savefig(output_path)
@@ -167,10 +201,10 @@ def main() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     outputs = [
-        make_figure(data_dir, output_dir, "mu", MU_CASES, "dusty_alfven_mu.pdf"),
-        make_figure(data_dir, output_dir, "omega", OMEGA_CASES, "dusty_alfven_omega.pdf"),
-        make_particle_figure(data_dir, output_dir, "mu", MU_CASES, "dusty_alfven_mu_paper_like.pdf"),
-        make_particle_figure(data_dir, output_dir, "omega", OMEGA_CASES, "dusty_alfven_omega_paper_like.pdf"),
+        make_figure(data_dir, output_dir, "epsilon", EPSILON_CASES, "dusty_alfven_epsilon.pdf"),
+        make_figure(data_dir, output_dir, "omega", OMEGA_CASES, "dusty_alfven_omega.pdf", y_limits=(-0.5, 0.5)),
+        make_particle_figure(data_dir, output_dir, "epsilon", EPSILON_CASES, "dusty_alfven_epsilon_paper_like.pdf"),
+        make_particle_figure(data_dir, output_dir, "omega", OMEGA_CASES, "dusty_alfven_omega_paper_like.pdf", y_limits=(-0.5, 0.5)),
     ]
     for output in outputs:
         print(output)

@@ -27,6 +27,20 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+PAPER_LABEL_FONTSIZE = 15
+PAPER_TICK_FONTSIZE = 13
+PAPER_TITLE_FONTSIZE = 14
+PAPER_LEGEND_FONTSIZE = 12
+
+plt.rcParams.update({
+    "font.size": PAPER_TICK_FONTSIZE,
+    "axes.labelsize": PAPER_LABEL_FONTSIZE,
+    "axes.titlesize": PAPER_TITLE_FONTSIZE,
+    "xtick.labelsize": PAPER_TICK_FONTSIZE,
+    "ytick.labelsize": PAPER_TICK_FONTSIZE,
+    "legend.fontsize": PAPER_LEGEND_FONTSIZE,
+})
+
 
 CASE_FILES = {
     "ref_neutral": "dust_lorentz_shock_ref_neutral.csv",
@@ -54,21 +68,36 @@ def has_required_files(data_dir: Path, case_names: tuple[str, ...]) -> bool:
     return all((data_dir / CASE_FILES[case_name]).exists() for case_name in case_names)
 
 
-def plot_velocity_panel(ax, profile: dict[str, list[float]], title: str, guiding_key: str | None = None, neutral_reference=None) -> None:
-    ax.plot(profile["x"], profile["v_dx"], color="black", linewidth=1.3)
-    ax.plot(profile["x"], profile["v_gx"], color="red", linewidth=1.1)
+def plot_velocity_panel(
+    ax,
+    profile: dict[str, list[float]],
+    title: str,
+    guiding_key: str | None = None,
+    neutral_reference=None,
+    show_legend: bool = False,
+) -> None:
+    dust_line, = ax.plot(profile["x"], profile["v_dx"], color="black", linewidth=1.3)
+    gas_line, = ax.plot(profile["x"], profile["v_gx"], color="red", linewidth=1.1)
+    guiding_line = None
     if guiding_key is not None and guiding_key in profile:
-        ax.plot(profile["x"], profile[guiding_key], color="black", linestyle="--", linewidth=1.0)
+        guiding_line, = ax.plot(profile["x"], profile[guiding_key], color="black", linestyle="--", linewidth=1.0)
     if neutral_reference is not None:
         ax.plot(neutral_reference["x"], neutral_reference["v_dx"], color="black", linestyle=":", linewidth=1.0)
-    ax.set_xlim(0.0, 1.0)
+    ax.set_xlim(0.6, 1.0)
     ax.set_title(title)
+    if show_legend:
+        handles = [gas_line, dust_line]
+        labels = ["gas", "dust"]
+        if guiding_line is not None:
+            handles.append(guiding_line)
+            labels.append("guiding-center")
+        ax.legend(handles, labels, loc="best", frameon=False)
 
 
 def plot_density_panel(ax, profile: dict[str, list[float]]) -> None:
     ax.plot(profile["x"], profile["rho_d_scaled"], color="black", linewidth=1.3)
     ax.plot(profile["x"], profile["rho_g"], color="red", linewidth=1.1)
-    ax.set_xlim(0.0, 1.0)
+    ax.set_xlim(0.6, 1.0)
 
 
 def make_low_mach_figure(data_dir: Path, output_dir: Path) -> Path:
@@ -79,16 +108,17 @@ def make_low_mach_figure(data_dir: Path, output_dir: Path) -> Path:
     fig, axes = plt.subplots(2, 3, figsize=(15, 8.5), sharex="col")
 
     plot_velocity_panel(axes[0, 0], ref_neutral, "Neutral reference")
-    axes[0, 0].set_ylabel("v_x")
+    axes[0, 0].set_ylabel(r"$v_x$")
 
-    plot_velocity_panel(axes[0, 1], charged_backreacting, "Charged, mu = 0.10")
+    plot_velocity_panel(axes[0, 1], charged_backreacting, r"Charged, $\epsilon = 0.10$")
 
     plot_velocity_panel(
         axes[0, 2],
         charged_dilute,
-        "Charged, mu = 0.01",
+        r"Charged, $\epsilon = 0.01$",
         guiding_key="v_guiding_x",
         neutral_reference=ref_neutral,
+        show_legend=True,
     )
 
     plot_density_panel(axes[1, 0], ref_neutral)
