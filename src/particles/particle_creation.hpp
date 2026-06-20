@@ -326,7 +326,7 @@ AMREX_GPU_DEVICE inline void initializeSinkLikeParticles(PType *particles, int n
 			state_arr(i, j, k, HydroSystem<problem_t>::scalar0_index + n) *= scale_factor;
 		}
 	}
-	}
+}
 } // namespace SinkCreationHelpers
 
 // Specialization for Sink particles
