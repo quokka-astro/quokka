@@ -6,5 +6,8 @@ graph = "workflow.fabro"
 [run.environment]
 id = "local"
 
+[run.pull_request]
+enabled = false
+
 [environments.local]
 provider = "local"

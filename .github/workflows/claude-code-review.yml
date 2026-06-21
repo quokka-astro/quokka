@@ -1,4 +1,4 @@
-name: 🤖 Claude Code Review
+name: Fabro Code Review
 
 on:
   # Manual trigger
@@ -18,7 +18,7 @@ on:
     types: [labeled]
 
 jobs:
-  claude-review:
+  fabro-review:
     # Only run if:
     # 1. Manual trigger, OR
     # 2. Comment contains '/claude-review', OR
@@ -33,85 +33,100 @@ jobs:
        github.event.label.name == 'review-requested')
 
     runs-on: ubuntu-latest
+    outputs:
+      pr_number: ${{ steps.pr.outputs.pr_number }}
     permissions:
       contents: read
-      pull-requests: write
-      issues: write
-      id-token: write
+      pull-requests: read
+      issues: read
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Run Claude Code Review
-        id: claude-review
-        uses: anthropics/claude-code-action@v1
+      - name: Determine PR number
+        id: pr
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          case "${{ github.event_name }}" in
+            workflow_dispatch)
+              pr_number='${{ github.event.inputs.pr_number }}'
+              ;;
+            issue_comment)
+              pr_number="$(jq -r '.issue.number' "$GITHUB_EVENT_PATH")"
+              ;;
+            pull_request)
+              pr_number="$(jq -r '.pull_request.number' "$GITHUB_EVENT_PATH")"
+              ;;
+            *)
+              echo "Unsupported event: ${{ github.event_name }}" >&2
+              exit 1
+              ;;
+          esac
+
+          if [[ -z "${pr_number}" || "${pr_number}" == "null" ]]; then
+            echo "Could not determine pull request number." >&2
+            exit 1
+          fi
+
+          echo "pr_number=${pr_number}" >> "$GITHUB_OUTPUT"
+
+      - name: Collect PR diff
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .workflow
+          gh pr diff "${{ steps.pr.outputs.pr_number }}" --repo "${GITHUB_REPOSITORY}" > .workflow/pr.diff
+
+      - name: Install Fabro
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://fabro.sh/install.sh | bash
+          echo "$HOME/.fabro/bin" >> "$GITHUB_PATH"
+
+      - name: Run Fabro code review
+        shell: bash
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          FABRO_NO_UPGRADE_CHECK: "1"
+        run: |
+          set -euo pipefail
+          fabro run .fabro/workflows/quokka-pr-review/workflow.toml
+
+      - name: Upload review artifact
+        uses: actions/upload-artifact@v4
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          name: fabro-review
+          path: .workflow/review.md
+          if-no-files-found: error
 
-          prompt: |
-            ${{ github.event_name == 'workflow_dispatch' && format('Review PR #{0} in {1}.', github.event.inputs.pr_number, github.repository) || '' }}
+  post-review:
+    needs: fabro-review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
 
-            You are reviewing a pull request to Quokka, a radiation magnetohydrodynamics code
-            built on AMReX. Quokka uses C++20 with GPU support (CUDA/HIP) and a single codebase
-            that runs on both CPU and GPU.
+    steps:
+      - name: Download review artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: fabro-review
 
-            **Important:** You cannot compile or run the code in this environment. Focus entirely
-            on static analysis: logic, style, correctness, and completeness.
-
-            ## Review checklist
-
-            ### 1. Physics correctness
-            Read the changed source files carefully.
-            - Check that conservation laws, numerical schemes, and physical units are handled correctly.
-            - Flag suspicious math, index errors, or incorrect use of AMReX data structures.
-            - For radiation changes: check energy groups, opacity terms, and flux limiters are consistent.
-            - For hydro changes: check slope limiters, Riemann solvers, and source term coupling.
-            - For new problems: check that initial conditions are physically reasonable and boundary
-              conditions are appropriate.
-
-            ### 2. GPU lambda safety
-            These are the most common GPU bugs in AMReX code — check carefully:
-            - **Never** capture host pointers inside `AMREX_GPU_DEVICE` lambdas or `amrex::ParallelFor`.
-            - Use array forms inside device lambdas: `geom.ProbLoArray()`, `geom.CellSizeArray()`,
-              `geom.InvCellSizeArray()`. Never pass `geom.ProbLo()` or `geom.CellSize()` raw pointers.
-            - Never capture raw pointers from `GeometryData` inside GPU lambdas.
-            - `amrex::GpuArray` and `amrex::Array4` are safe to capture by value.
-
-            ### 3. Code style
-            Quokka uses an LLVM-based clang-format style:
-            - 160-character line limit, indentation with tabs.
-            - Classes: PascalCase (`QuokkaSimulation`). Member variables: camelCase with trailing
-              underscore (`radiationCflNumber_`). Member functions: PascalCase.
-            - Always curly braces, even for single-statement blocks.
-            - Always trailing return types for non-void functions: `auto foo() -> int`.
-            - Always declare variables `const` when not modified after initialization.
-            - Public APIs must have Doxygen-style comments.
-            - Comments explain WHY, never WHAT — no comments restating what the code already says.
-
-            ### 4. AMREX_SPACEDIM handling
-            `AMREX_SPACEDIM` is a compile-time constant (1, 2, or 3):
-            - Prefer `#if (AMREX_SPACEDIM > 1)` preprocessor guards for dimension-dependent code.
-            - If an inline ternary is used instead, require `// NOLINT(misc-redundant-expression)`.
-
-            ### 5. Test completeness
-            - New physics must have a corresponding test in `src/problems/`.
-            - A complete new problem requires: `src/problems/<TestName>/test<TestName>.cpp`,
-              `CMakeLists.txt`, and `inputs/<TestName>.toml`.
-            - Verify `CMakeLists.txt` registers the test with `add_test(...)` and sets `JOB_NAME`.
-            - Test variants (same binary, different `.toml`) are additional `add_test` entries in the
-              same `CMakeLists.txt`, not separate executables.
-
-            ## Output
-            - Post an overall summary as a top-level PR comment.
-            - Use inline comments for specific line-level issues.
-            - Be constructive: explain why something is a problem and suggest a concrete fix.
-            - Do not speculate about runtime behaviour you cannot observe.
-
-          use_sticky_comment: true
-
-          claude_args: |
-            --model claude-opus-4-7
-            --max-turns 30
+      - name: Post Fabro review
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.fabro-review.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          gh pr comment "${PR_NUMBER}" --repo "${GITHUB_REPOSITORY}" --body-file review.md
