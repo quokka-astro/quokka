@@ -39,7 +39,8 @@ photoionization.temperature = 1e3
 integrator.atol_spec                     = 1e-14
 integrator.atol_enuc                     = 1e-14
 integrator.atol_rad_num                  = 1e-14
-integrator.radiation_failure_tolerance   = 0.05     # cm^-3; physical guard, must exceed atol_rad_num
+integrator.species_failure_tolerance     = 1e-14    # cm^-3; matches atol_spec — VODE internal step guard
+integrator.radiation_failure_tolerance   = 0.05     # cm^-3; N_gamma guard, must exceed atol_rad_num
 
 integrator.rtol_spec     = 1e-14
 integrator.rtol_rad_num  = 1e-14
