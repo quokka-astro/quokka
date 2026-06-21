@@ -78,6 +78,7 @@ namespace filesystem = experimental::filesystem;
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
+#include "radiation/photochem_atol.H"
 #include "radiation/photochemistry.hpp"
 #include "radiation/radiation_system.hpp"
 #include "simulation.hpp"
@@ -268,6 +269,11 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		// set gamma
 		amrex::ParmParse eos("eos");
 		eos.add("eos_gamma", quokka::EOS_Traits<problem_t>::gamma);
+#ifdef PHOTOCHEMISTRY
+		// if integrator.typical_* keys are present, derive atol values and inject them into
+		// ParmParse before init_extern_parameters() reads integrator.atol_*
+		quokka::photochemistry::SetAtolFromPhysics<problem_t>();
+#endif
 		// initialize Microphysics params
 		init_extern_parameters();
 #if defined(PHOTOCHEMISTRY) || defined(CHEMISTRY)
