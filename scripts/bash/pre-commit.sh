@@ -38,9 +38,9 @@ if [[ ! -w "${PRE_COMMIT_HOME:-$HOME/.cache/pre-commit}" ]]; then
 	mkdir -p "$PRE_COMMIT_HOME"
 fi
 
-# Resolve pre-commit command: prefer 'uv run pre-commit', fall back to 'pre-commit' directly
+# Resolve pre-commit command: prefer 'uv run --with pre-commit', fall back to 'pre-commit' directly
 if command -v uv &>/dev/null; then
-	PRECOMMIT=(uv run pre-commit)
+	PRECOMMIT=(uv run --with pre-commit pre-commit)
 elif command -v pre-commit &>/dev/null; then
 	PRECOMMIT=(pre-commit)
 else
