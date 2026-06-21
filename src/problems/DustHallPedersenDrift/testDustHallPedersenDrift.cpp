@@ -6,10 +6,9 @@
 #include "util/fextract.hpp"
 #include <algorithm>
 #include <cmath>
+#include <fstream>
+#include <iomanip>
 #include <vector>
-#ifdef HAVE_PYTHON
-#include "util/matplotlibcpp.h"
-#endif
 
 struct DustHallPedersenDrift {
 };
@@ -274,42 +273,38 @@ auto maxMomentumResidual(SimulationData<DustHallPedersenDrift> const &data) -> d
 	return max_residual;
 }
 
-#ifdef HAVE_PYTHON
-void plotRelativeDrift(SimulationData<DustHallPedersenDrift> const &data)
+void writeHistoryCsv(SimulationData<DustHallPedersenDrift> const &data)
+{
+	std::ofstream file("dust_hall_pedersen_drift_history.csv");
+	file << std::setprecision(17);
+	file << "t,wx,wy,wx_exact,wy_exact\n";
+	for (size_t i = 0; i < data.t_vec_.size(); ++i) {
+		DriftState const exact = analyticRelativeDrift(data.t_vec_[i]);
+		file << data.t_vec_[i] << "," << data.wx_vec_[i] << "," << data.wy_vec_[i] << "," << exact.wx << "," << exact.wy << "\n";
+	}
+}
+
+void writeExactCsv(SimulationData<DustHallPedersenDrift> const &data)
 {
 	const size_t n_dense = 1000;
-	std::vector<double> t_dense(n_dense);
-	std::vector<double> wx_dense(n_dense);
-	std::vector<double> wy_dense(n_dense);
 	const double t_max = data.t_vec_.empty() ? 0.0 : data.t_vec_.back();
 
+	std::ofstream file("dust_hall_pedersen_drift_exact.csv");
+	file << std::setprecision(17);
+	file << "t,wx_exact,wy_exact\n";
 	for (size_t i = 0; i < n_dense; ++i) {
 		const double t = t_max * static_cast<double>(i) / static_cast<double>(n_dense - 1);
 		DriftState const exact = analyticRelativeDrift(t);
-		t_dense[i] = t;
-		wx_dense[i] = exact.wx;
-		wy_dense[i] = exact.wy;
+		file << t << "," << exact.wx << "," << exact.wy << "\n";
 	}
-
-	matplotlibcpp::clf();
-	matplotlibcpp::plot(t_dense, wx_dense, {{"label", R"(analytic $w_x$)"}, {"color", "C0"}, {"linestyle", "--"}, {"linewidth", "1.0"}});
-	matplotlibcpp::plot(data.t_vec_, data.wx_vec_,
-			    {{"label", R"(numerical $w_x$)"}, {"color", "C0"}, {"linestyle", "None"}, {"marker", "o"}, {"markersize", "4"}});
-	matplotlibcpp::plot(t_dense, wy_dense, {{"label", R"(analytic $w_y$)"}, {"color", "C1"}, {"linestyle", "--"}, {"linewidth", "1.0"}});
-	matplotlibcpp::plot(data.t_vec_, data.wy_vec_,
-			    {{"label", R"(numerical $w_y$)"}, {"color", "C1"}, {"linestyle", "None"}, {"marker", "s"}, {"markersize", "4"}});
-	matplotlibcpp::legend();
-	matplotlibcpp::tick_params({{"labelsize", "13"}});
-	matplotlibcpp::xlabel("t", {{"fontsize", "15"}});
-	matplotlibcpp::ylabel(R"($w_x,\ w_y$)", {{"fontsize", "15"}});
-	matplotlibcpp::tight_layout();
-	matplotlibcpp::save("./dust_hall_pedersen_drift.pdf");
 }
-#endif
 
 auto problem_main() -> int
 {
 	auto data = runHallPedersenSimulation();
+	bool write_csv = true;
+	amrex::ParmParse const pp("problem");
+	pp.query("write_csv", write_csv);
 
 	int status = 0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -338,9 +333,10 @@ auto problem_main() -> int
 		} else {
 			amrex::Print() << "\nTest PASSED: stiff Hall/Pedersen drift matches the analytic solution.\n";
 		}
-#ifdef HAVE_PYTHON
-		plotRelativeDrift(data);
-#endif
+		if (write_csv) {
+			writeHistoryCsv(data);
+			writeExactCsv(data);
+		}
 	}
 
 	return status;

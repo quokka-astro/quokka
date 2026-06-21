@@ -69,12 +69,12 @@ struct SchemeSweepResult {
 auto resolvedRkSchemeSlug(ResolvedRkScheme scheme) -> std::string_view
 {
 	switch (scheme) {
-	case ResolvedRkScheme::TP2025:
-		return "tp2025";
-	case ResolvedRkScheme::GL4:
-		return "gl4";
-	case ResolvedRkScheme::Midpoint:
-		return "midpoint";
+		case ResolvedRkScheme::TP2025:
+			return "tp2025";
+		case ResolvedRkScheme::GL4:
+			return "gl4";
+		case ResolvedRkScheme::Midpoint:
+			return "midpoint";
 	}
 	return "unknown";
 }
@@ -395,8 +395,8 @@ auto problem_main() -> int
 				}
 				amrex::Print() << ", conservation error = " << sample.conservation_error << "\n";
 
-				if (!std::isfinite(sample.delta_log_amplitude) || !std::isfinite(sample.delta_phase) || !std::isfinite(sample.conservation_error) ||
-				    (sample.conservation_error > conservation_tol)) {
+				if (!std::isfinite(sample.delta_log_amplitude) || !std::isfinite(sample.delta_phase) ||
+				    !std::isfinite(sample.conservation_error) || (sample.conservation_error > conservation_tol)) {
 					passed = false;
 				}
 			}

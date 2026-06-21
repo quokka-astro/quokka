@@ -31,7 +31,8 @@ constexpr double charge_to_mass_ratio = 1.0;
 constexpr double magnetic_field_z = 1.0;
 constexpr double external_force = 1.0;
 
-constexpr double sweep_stop_time = 10.0;
+constexpr double sweep_stop_time = 1.0;
+constexpr double stiff_branch_reference_steps = 5.0;
 
 constexpr double omega_L = charge_to_mass_ratio * magnetic_field_z;
 constexpr double alpha_rel = (1.0 + epsilon) * alpha_d;
@@ -79,12 +80,12 @@ constexpr Complex initial_rel{0.0, 0.0};
 auto resolvedRkSchemeSlug(ResolvedRkScheme scheme) -> std::string_view
 {
 	switch (scheme) {
-	case ResolvedRkScheme::TP2025:
-		return "tp2025";
-	case ResolvedRkScheme::GL4:
-		return "gl4";
-	case ResolvedRkScheme::Midpoint:
-		return "midpoint";
+		case ResolvedRkScheme::TP2025:
+			return "tp2025";
+		case ResolvedRkScheme::GL4:
+			return "gl4";
+		case ResolvedRkScheme::Midpoint:
+			return "midpoint";
 	}
 	return "unknown";
 }
@@ -254,7 +255,7 @@ auto resolvedBranchThresholdDt() -> double { return 1.0 / std::sqrt(alpha_d * al
 
 auto usesResolvedBranch(double effective_dt) -> bool { return effective_dt < (1.0 / std::sqrt(alpha_d * alpha_d + omega_L * omega_L)); }
 
-auto runStopTime(double requested_dt) -> double { return std::max(sweep_stop_time, requested_dt); }
+auto runStopTime(double requested_dt) -> double { return std::max(sweep_stop_time, stiff_branch_reference_steps * requested_dt); }
 
 auto runForcedSimulation(ResolvedRkScheme scheme, double constant_dt) -> SimulationData<DustHallPedersenForcedDiagnostics>
 {
@@ -535,7 +536,8 @@ auto problem_main() -> int
 				    !std::isfinite(sample.predicted_final_data_error) || !std::isfinite(sample.final_state_map_consistency_error) ||
 				    !std::isfinite(sample.momentum_residual) || (sample.momentum_residual > momentum_tol) ||
 				    (sample.final_state_map_consistency_error > map_consistency_tol) ||
-				    (sample.predicted_final_to_fixed_point_error > small_transient_tol) || (sample.final_to_fixed_point_error > small_transient_tol)) {
+				    (sample.predicted_final_to_fixed_point_error > small_transient_tol) ||
+				    (sample.final_to_fixed_point_error > small_transient_tol)) {
 					passed = false;
 				}
 			}

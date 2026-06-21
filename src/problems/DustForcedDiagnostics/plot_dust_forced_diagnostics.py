@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Plot the forced Hall-Pedersen timestep diagnostics into a 2x1 panel figure."""
+"""Plot the forced Hall-Pedersen timestep diagnostics for the paper and a residual reference figure."""
 
 from __future__ import annotations
 
@@ -29,6 +29,8 @@ PAPER_LABEL_FONTSIZE = 15
 PAPER_TICK_FONTSIZE = 13
 PAPER_TITLE_FONTSIZE = 14
 PAPER_LEGEND_FONTSIZE = 12
+MARKER_SIZE = 4.0
+MARKER_EDGE_WIDTH = 1.0
 
 plt.rcParams.update({
     "font.size": PAPER_TICK_FONTSIZE,
@@ -42,6 +44,7 @@ plt.rcParams.update({
 
 DATA_FILE = "dust_forced_diagnostics.csv"
 OUTPUT_FILE = "dust_forced_diagnostics_panels.pdf"
+REFERENCE_OUTPUT_FILE = "dust_forced_diagnostics_residual_reference.pdf"
 
 SCHEMES = (
     ("tp2025", "TP2025", "C0", "o"),
@@ -73,15 +76,48 @@ def group_by_scheme(rows: list[dict[str, float | str]]) -> dict[str, list[dict[s
     return grouped
 
 
-def legend_handles() -> list[Line2D]:
+def paper_legend_handles() -> list[Line2D]:
     handles = [
-        Line2D([], [], color=color, marker=marker, linestyle="-", linewidth=1.0, markersize=3.2, label=label)
+        Line2D(
+            [],
+            [],
+            color=color,
+            marker=marker,
+            linestyle="None",
+            markerfacecolor="white",
+            markeredgewidth=MARKER_EDGE_WIDTH,
+            markersize=MARKER_SIZE,
+            label=label,
+        )
         for _, label, color, marker in SCHEMES
     ]
     handles.extend((
-        Line2D([], [], color="black", linestyle="-", linewidth=1.0, label="simulation"),
-        Line2D([], [], color="black", linestyle="--", linewidth=1.0, label="discrete-map prediction"),
-        Line2D([], [], color="black", linestyle=":", linewidth=1.0, label="resolved/stiff boundary"),
+        Line2D([], [], color="black", marker="o", linestyle="None", markerfacecolor="white", markeredgewidth=MARKER_EDGE_WIDTH,
+               markersize=MARKER_SIZE, label=r"$\boldsymbol{w}_{\rm final}$"),
+        Line2D([], [], color="black", linestyle="--", linewidth=1.0, label=r"$\boldsymbol{w}_{\rm fp}$"),
+    ))
+    return handles
+
+
+def reference_legend_handles() -> list[Line2D]:
+    handles = [
+        Line2D(
+            [],
+            [],
+            color=color,
+            marker=marker,
+            linestyle="None",
+            markerfacecolor="white",
+            markeredgewidth=MARKER_EDGE_WIDTH,
+            markersize=MARKER_SIZE,
+            label=label,
+        )
+        for _, label, color, marker in SCHEMES
+    ]
+    handles.extend((
+        Line2D([], [], color="black", marker="o", linestyle="None", markerfacecolor="white", markeredgewidth=MARKER_EDGE_WIDTH,
+               markersize=MARKER_SIZE, label=r"$\boldsymbol{w}_{\rm final}$"),
+        Line2D([], [], color="black", linestyle="--", linewidth=1.0, label=r"predicted $\boldsymbol{w}_{\rm final}$"),
     ))
     return handles
 
@@ -93,7 +129,7 @@ def plot_panel(
     theory_key: str,
     ylabel: str,
     *,
-    show_legend: bool,
+    legend_handles: list[Line2D] | None = None,
 ) -> None:
     boundary_dt = None
 
@@ -112,9 +148,12 @@ def plot_panel(
             values,
             color=color,
             marker=marker,
-            markersize=3.2,
-            linewidth=1.0,
-            label=label if show_legend else "_nolegend_",
+            linestyle="None",
+            markerfacecolor="white",
+            markeredgewidth=MARKER_EDGE_WIDTH,
+            markersize=MARKER_SIZE,
+            label="_nolegend_",
+            zorder=3,
         )
         ax.plot(
             requested_dt,
@@ -123,48 +162,56 @@ def plot_panel(
             linestyle="--",
             linewidth=1.0,
             label="_nolegend_",
+            zorder=2,
         )
 
     if boundary_dt is not None:
-        ax.axvline(boundary_dt, color="black", linestyle=":", linewidth=1.0)
+        ax.axvline(boundary_dt, color="black", linestyle=":", linewidth=1.0, zorder=1)
 
     ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.grid(True, which="both", alpha=0.25, linewidth=0.6)
     ax.set_ylabel(ylabel)
-    if show_legend:
-        ax.legend(handles=legend_handles(), loc="best", frameon=False)
+    if legend_handles is not None:
+        ax.legend(handles=legend_handles, loc="best", frameon=False)
 
 
-def make_figure(data_dir: Path, output_dir: Path) -> Path:
+def make_figure(data_dir: Path, output_dir: Path) -> tuple[Path, Path]:
     grouped = group_by_scheme(read_rows(data_dir / DATA_FILE))
 
-    fig, axes = plt.subplots(2, 1, figsize=(7.0, 8.25), sharex=True)
+    fig, ax = plt.subplots(1, 1, figsize=(7.0, 4.4))
 
     plot_panel(
-        axes[0],
-        grouped,
-        "final_to_fixed_point_error",
-        "predicted_final_to_fixed_point_error",
-        r"$|w-w_{\rm fp}|$",
-        show_legend=True,
-    )
-    plot_panel(
-        axes[1],
+        ax,
         grouped,
         "final_data_error",
-        "predicted_final_data_error",
-        r"$|w-w_*|$",
-        show_legend=False,
+        "terminal_error",
+        r"distance to $\boldsymbol{w}_*$",
+        legend_handles=paper_legend_handles(),
     )
 
-    axes[1].set_xlabel(r"$\Delta t$")
+    ax.set_xlabel(r"$\Delta t$")
     fig.tight_layout()
 
     output_path = output_dir / OUTPUT_FILE
     fig.savefig(output_path)
     plt.close(fig)
-    return output_path
+
+    ref_fig, ref_ax = plt.subplots(1, 1, figsize=(7.0, 4.4))
+    plot_panel(
+        ref_ax,
+        grouped,
+        "final_to_fixed_point_error",
+        "predicted_final_to_fixed_point_error",
+        r"distance to $\boldsymbol{w}_{\rm fp}$",
+        legend_handles=reference_legend_handles(),
+    )
+    ref_ax.set_xlabel(r"$\Delta t$")
+    ref_fig.tight_layout()
+
+    reference_output_path = output_dir / REFERENCE_OUTPUT_FILE
+    ref_fig.savefig(reference_output_path)
+    plt.close(ref_fig)
+    return output_path, reference_output_path
 
 
 def parse_args() -> argparse.Namespace:
@@ -183,8 +230,9 @@ def main() -> int:
     if not (data_dir / DATA_FILE).exists():
         raise FileNotFoundError(f"Missing required CSV file: {DATA_FILE}")
 
-    output = make_figure(data_dir, output_dir)
+    output, reference_output = make_figure(data_dir, output_dir)
     print(output)
+    print(reference_output)
     return 0
 
 

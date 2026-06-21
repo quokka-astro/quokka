@@ -21,3 +21,6 @@ do_subcycle = 0
 suppress_output = 0
 
 max_timesteps = 1000
+
+[problem]
+write_csv = 1

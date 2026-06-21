@@ -29,6 +29,8 @@ PAPER_LABEL_FONTSIZE = 15
 PAPER_TICK_FONTSIZE = 13
 PAPER_TITLE_FONTSIZE = 14
 PAPER_LEGEND_FONTSIZE = 12
+MARKER_SIZE = 4.0
+MARKER_EDGE_WIDTH = 1.0
 
 plt.rcParams.update({
     "font.size": PAPER_TICK_FONTSIZE,
@@ -75,13 +77,23 @@ def group_by_scheme(rows: list[dict[str, float | str]]) -> dict[str, list[dict[s
 
 def legend_handles() -> list[Line2D]:
     handles = [
-        Line2D([], [], color=color, marker=marker, linestyle="-", linewidth=1.0, markersize=3.2, label=label)
+        Line2D(
+            [],
+            [],
+            color=color,
+            marker=marker,
+            linestyle="None",
+            markerfacecolor="white",
+            markeredgewidth=MARKER_EDGE_WIDTH,
+            markersize=MARKER_SIZE,
+            label=label,
+        )
         for _, label, color, marker in SCHEMES
     ]
     handles.extend((
-        Line2D([], [], color="black", linestyle="-", linewidth=1.0, label="measured error"),
+        Line2D([], [], color="black", marker="o", linestyle="None", markerfacecolor="white", markeredgewidth=MARKER_EDGE_WIDTH,
+               markersize=MARKER_SIZE, label="measured error"),
         Line2D([], [], color="black", linestyle="--", linewidth=1.0, label="analytic prediction"),
-        Line2D([], [], color="black", linestyle=":", linewidth=1.0, label="resolved/stiff boundary"),
     ))
     return handles
 
@@ -112,9 +124,12 @@ def plot_panel(
             values,
             color=color,
             marker=marker,
-            markersize=3.2,
-            linewidth=1.0,
+            linestyle="None",
+            markerfacecolor="white",
+            markeredgewidth=MARKER_EDGE_WIDTH,
+            markersize=MARKER_SIZE,
             label=label if show_legend else "_nolegend_",
+            zorder=3,
         )
         ax.plot(
             requested_dt,
@@ -123,6 +138,7 @@ def plot_panel(
             linestyle="--",
             linewidth=1.0,
             label="_nolegend_",
+            zorder=2,
         )
 
     if boundary_dt is not None:
@@ -130,7 +146,6 @@ def plot_panel(
 
     ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.grid(True, which="both", alpha=0.25, linewidth=0.6)
     ax.set_ylabel(ylabel)
     if show_legend:
         ax.legend(handles=legend_handles(), loc="best", frameon=False)
