@@ -1,0 +1,10 @@
+_version = 1
+
+[workflow]
+graph = "workflow.fabro"
+
+[run.environment]
+id = "local"
+
+[environments.local]
+provider = "local"
