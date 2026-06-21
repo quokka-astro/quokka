@@ -30,7 +30,8 @@ $$
 | $n_{\rm H^0}$ | Neutral hydrogen number density |
 | $n_{\rm H^+} = n_e$ | Ionized hydrogen / electron number density |
 | $\sigma_\gamma$ | Frequency-averaged photoionization cross-section |
-| $\alpha_A, \alpha_B$ | Case A / B recombination coefficients |
+| $\alpha_A, \alpha_B$ | Case A / B recombination coefficients (cm³ s⁻¹) |
+| $\beta$ | Collisional ionization rate coefficient (cm³ s⁻¹) |
 | $\dot{N}^*_\gamma$ | Stellar ionizing photon emission rate (cm⁻³ s⁻¹) |
 
 The source term $n_e n_{\rm H^+}(\alpha_A - \alpha_B)$ represents diffuse recombination
@@ -57,9 +58,14 @@ $$
 where $\mathcal{H}_{\rm photo} = n_{\rm H^0} c \sigma_\gamma \epsilon_\gamma N_\gamma$ is
 the photoheating rate and $\epsilon_\gamma = h(\bar{\nu} - \nu_{{\rm H}^0})$ is the mean
 excess photon energy above the ionization threshold (29.65 eV for a $10^5$ K blackbody).
-The cooling rate $\mathcal{L}$ includes case A recombination cooling, collisional
-excitation of H, collisional ionization cooling, and Bremsstrahlung. Rate coefficients
-follow Hui & Gnedin (1997) and Maselli et al. (2003).
+For heating and cooling that are not directly due to hydrogen photoionization, we
+follow the optically thin prescription of Krumholz (2007). In molecular gas, the
+approximate cooling and heating functions of Koyama & Inutsuka (2002) are used.
+In partially ionized gas, the cooling rate is computed following Osterbrock (1989),
+which includes cooling by ion-electron collisions involving the first and second
+ionized states of O, N, and Ne — the dominant coolants in H II regions at solar
+metallicity. A future PR will extend the cooling model to use the RIGEL prescription
+(Deng et al. 2024).
 
 ### 1.3 On-the-Spot Approximation (OTSA)
 
@@ -114,6 +120,7 @@ $$
 \frac{d F_{\gamma,i}}{d t} &= - n_{\rm H^0} \hat{c} \sigma_\gamma F_{\gamma,i} \quad (i = x, y, z), \\[2pt]
 \frac{d n_{\rm H^0}}{d t} &= \alpha_B n_e n_{\rm H^+} - \beta n_e n_{\rm H^0} - \hat{c} \sigma_\gamma N_\gamma n_{\rm H^0}, \\[2pt]
 \frac{d n_{\rm H^+}}{d t} &= -\alpha_B n_e n_{\rm H^+} + \beta n_e n_{\rm H^0} + \hat{c} \sigma_\gamma N_\gamma n_{\rm H^0}, \\[2pt]
+\frac{d n_e}{d t} &= -\alpha_B n_e n_{\rm H^+} + \beta n_e n_{\rm H^0} + \hat{c} \sigma_\gamma N_\gamma n_{\rm H^0}, \\[2pt]
 \frac{d e}{d t} &= n_{\rm H^0} \hat{c} \sigma_\gamma \epsilon_\gamma N_\gamma - \text{[cooling terms]}.
 \end{aligned}
 $$
