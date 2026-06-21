@@ -7,7 +7,7 @@ graph = "workflow.fabro"
 id = "local"
 
 [run.pull_request]
-enabled = false
+enabled = true
 
 [environments.local]
 provider = "local"
