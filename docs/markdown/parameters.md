@@ -141,7 +141,6 @@ Mutually exclusive with the `typical_*` parameters. Specifying neither set of to
 | `integrator.atol_rad_num` | Float | `1.e-10` | Absolute tolerance for radiation number density (cm⁻³). |
 | `integrator.rtol_rad_num` | Float | `1.e-10` | Relative tolerance for radiation number density. |
 | `integrator.radiation_failure_tolerance` | Float | `0.05` | Maximum allowed negative photon number density (cm⁻³) before the burn is declared failed. Physical guard, not a numerical tolerance. |
-| `integrator.species_failure_tolerance` | Float | `0.01` | Maximum violation of `0 ≤ X ≤ 1` before the burn is declared failed. |
 
 ### Other integrator parameters
 
@@ -150,10 +149,8 @@ Mutually exclusive with the `typical_*` parameters. Specifying neither set of to
 | `integrator.jacobian` | Integer | `1` | Jacobian type: `1` = analytical, `2` = numerical. |
 | `integrator.ode_max_steps` | Integer | `150000` | Maximum number of VODE internal steps per burn call. |
 | `integrator.ode_max_dt` | Float | `1.e30` | Maximum internal timestep for VODE. |
-| `integrator.use_number_densities` | Boolean (0/1) | `0` | If 1, evolve species as number densities instead of mass fractions. |
+| `integrator.use_number_densities` | Boolean (0/1) | `1` | If 1, evolve species as number densities instead of mass fractions. |
 | `integrator.subtract_internal_energy` | Boolean (0/1) | `1` | If 1, subtract internal energy before integration. Must be `0` for Quokka. |
-| `integrator.renormalize_abundances` | Boolean (0/1) | `0` | If 1, renormalize mass fractions to sum to unity at each step. |
-| `integrator.do_species_clip` | Boolean (0/1) | `0` | If 1, clip species to [0,1] during cleanup. |
 | `integrator.call_eos_in_rhs` | Boolean (0/1) | `1` | If 1, call EOS in the RHS to update temperature from internal energy. |
 | `integrator.integrate_energy` | Boolean (0/1) | `1` | If 1, enable energy integration; if 0, freeze energy. |
 | `integrator.scale_system` | Boolean (0/1) | `0` | If 1, scale the ODE system to be O(1). |
