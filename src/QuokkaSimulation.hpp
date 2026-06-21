@@ -69,6 +69,7 @@ namespace filesystem = experimental::filesystem;
 
 #include "SimulationData.hpp"
 #include "chemistry/Chemistry.hpp"
+#include "conduction/ElectronConduction.hpp"
 #include "cooling/ResampledCooling.hpp"
 #include "dust/DustSources.hpp"
 #include "dust/dust_system.hpp"
@@ -78,6 +79,7 @@ namespace filesystem = experimental::filesystem;
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
+#include "radiation/photochemistry.hpp"
 #include "radiation/radiation_system.hpp"
 #include "simulation.hpp"
 #include "turbulence/TurbulentDriving.hpp"
@@ -143,6 +145,10 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	using AMRSimulation<problem_t>::sfh_interval_;
 	using AMRSimulation<problem_t>::sfh_time_interval_;
 
+	using AMRSimulation<problem_t>::enableElectronConduction_;
+	using AMRSimulation<problem_t>::electronConductionKappa0_;
+	using AMRSimulation<problem_t>::conductionCFL;
+
 #if AMREX_SPACEDIM == 3
 	using AMRSimulation<problem_t>::luminosityTables_;
 #endif // AMREX_SPACEDIM == 3
@@ -159,6 +165,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	int enableCooling_ = 0;
 	int enableChemistry_ = 0;
+	int enablePhotoChemistry_ = 0;
 	int enableTurbulence_ = 0;
 	amrex::Real turbulenceStopTime_ = std::numeric_limits<amrex::Real>::max();
 	int enableIterDustStoptime_ = 0;
@@ -168,6 +175,10 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	quokka::ResampledCooling::resampled_tables resampledTables_;
 	std::string coolingTableType_;
 	std::string coolingTableFilename_;
+
+	amrex::Real electronConductionFluxLimiterPhi_ = 1.0;
+	amrex::Real electronConductionSaturationFactor_ = 5.0;
+	EOSFlagforConduction eosFlagForElectronConduction_ = EOSFlagforConduction::EOS;
 
 	std::map<std::string, std::string> turbParams_;
 
@@ -261,6 +272,10 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		eos.add("eos_gamma", quokka::EOS_Traits<problem_t>::gamma);
 		// initialize Microphysics params
 		init_extern_parameters();
+#if defined(PHOTOCHEMISTRY) || defined(CHEMISTRY)
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!integrator_rp::subtract_internal_energy,
+						 "integrator.subtract_internal_energy must be 0: Quokka reads total energy from burn_t::e, not the delta");
+#endif
 		// initialize Microphysics EOS
 		amrex::Real small_temp = 1e-10;
 		amrex::Real small_dens = 1e-100;
@@ -367,7 +382,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	void addStrangSplitSources(amrex::MultiFab &state, int lev, amrex::Real time, amrex::Real dt_lev);
 	template <SourceOrder Order>
-	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int lev, amrex::Real time,
+	auto addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, int lev, amrex::Real time,
 					      amrex::Real dt_lev) -> bool;
 	template <SourceOrder Order, typename... Fs> static auto callInOrder(Fs &&...fs) -> void
 	{
@@ -600,6 +615,16 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("update_initial_b_energy", updateInitialMagneticEnergy_);
 	}
 
+#ifdef PHOTOCHEMISTRY
+	// set photochemistry runtime parameters
+	{
+		amrex::ParmParse const hpp("photochemistry");
+		hpp.query("enabled", enablePhotoChemistry_);
+		hpp.query("max_density_allowed", max_density_allowed);
+		hpp.query("min_density_allowed", min_density_allowed); // don't do photochemistry in cells with densities below the minimum density specified
+	}
+#endif
+
 	// set cooling runtime parameters
 	bool cooling_table_include_pe = false;
 	{
@@ -621,6 +646,17 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 				amrex::Abort("Invalid cooling table type! Only 'resampled' is supported.");
 			}
 		}
+	}
+
+	// set electron thermal conduction runtime parameters
+	{
+		amrex::ParmParse const hpp("conduction");
+		hpp.query("enabled", enableElectronConduction_);
+		hpp.query("conductivity_prefactor", electronConductionKappa0_);
+		hpp.query("conduction_cfl", conductionCFL);
+		hpp.query("flux_limiter_phi", electronConductionFluxLimiterPhi_);
+		hpp.query("saturation_factor", electronConductionSaturationFactor_);
+		hpp.query("eos_flag", eosFlagForElectronConduction_);
 	}
 
 	// set turbulence runtime parameters
@@ -994,7 +1030,7 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computeExternalH
 
 template <typename problem_t>
 template <typename QuokkaSimulation<problem_t>::SourceOrder Order>
-auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, int lev,
+auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> &state_fc, int lev,
 								   amrex::Real time, amrex::Real dt) -> bool
 {
 	auto const applyDust = [&]() {
@@ -1049,12 +1085,34 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 		}
 	};
 
+	auto const applyConduction = [&]() {
+		if (enableElectronConduction_ == 1) {
+			if (max_level > 0) {
+				amrex::Abort("Electron conduction not implemented for > 0 levels.");
+			}
+			fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+					fillBoundaryConditions(state_fc[idim], state_fc[idim], lev, time, quokka::centering::fc,
+							       static_cast<quokka::direction>(idim), AMRSimulation<problem_t>::InterpHookNone,
+							       AMRSimulation<problem_t>::InterpHookNone, FillPatchType::fillpatch_function);
+				}
+			}
+			const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_,
+											     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
+											     .saturation_factor = electronConductionSaturationFactor_,
+											     .min_temperature = tempFloor_,
+											     .eos_flag = eosFlagForElectronConduction_};
+			quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, resampledTables_);
+		}
+	};
+
 	auto const applyUserSources = [&]() {
 		// compute user-specified sources
 		addStrangSplitSources(state, lev, time, dt);
 	};
 
-	callInOrder<Order>(applyDust, applyCooling, applyChemistry, applyTurbulence, applyUserSources);
+	callInOrder<Order>(applyDust, applyCooling, applyChemistry, applyTurbulence, applyConduction, applyUserSources);
 
 	return (burn_success && cool_success);
 }
@@ -2361,8 +2419,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 			auto ba_ec = amrex::convert(ba_cc, amrex::IntVect(AMREX_D_DECL(1, 1, 1)) - amrex::IntVect::TheDimensionVector(idim));
 			ec_emf_components_fo[idim].define(ba_ec, dm, 1, 0);
 		}
-		MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, FOfaceVel, state_old_fc_tmp, FOfast_mhd_wavespeeds,
-						 emfReconstructionOrder_, emfAveragingScheme_, mhdPlmLimiter_, emfComputingScheme_);
+		MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, FOfaceVel, state_old_fc_tmp, FOfast_mhd_wavespeeds, 1,
+						 emfAveragingScheme_, mhdPlmLimiter_, emfComputingScheme_);
 	}
 
 	// Stage 1 of RK2-SSP
@@ -3293,6 +3351,12 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 									       p_iteration_failure_counter);
 			}
 		}
+#ifdef PHOTOCHEMISTRY
+		if (enablePhotoChemistry_ == 1) {
+			// compute photo-chemistry
+			quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], dt_radiation, 1, max_density_allowed, min_density_allowed);
+		}
+#endif
 
 		if (print_rad_counter_) {
 			auto *h_iteration_counter = iteration_counter.copyToHost();

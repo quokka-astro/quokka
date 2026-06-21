@@ -48,6 +48,7 @@
 - [Hydro Integrator](hydro_integrator.md)
 - [Radiation Integrator](radiation_integrator.md)
 - [State Variable Component Indices](components.md)
+- [API Reference](api_reference.md)
 - [Debugging](debugging.md)
 - [Assertions and error checking](error_checking.md)
 - [Performance tips](performance.md)

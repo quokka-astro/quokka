@@ -639,7 +639,12 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		// Note that radEnergySource should contain the luminosity volume density, L / V; unit: erg s^-1 cm^-3
 		quokka::valarray<double, nGroups_> Src;
 		for (int g = 0; g < nGroups_; ++g) {
-			Src[g] = dt * (chat / c * radEnergySource(i, j, k, g));
+			// The last NChemBands groups are ionizing photon groups (no cscale).
+			// All other (thermal) groups require scaling by chat/c (= 1/cscale).
+			// Avoid if constexpr here: NVCC rejects first-captures inside constexpr-if in device lambdas.
+			Src[g] = (RadSystem_NChemBands<problem_t>::value > 0 && g >= nGroups_ - RadSystem_NChemBands<problem_t>::value)
+				     ? dt * radEnergySource(i, j, k, g)
+				     : dt * (chat / c * radEnergySource(i, j, k, g));
 		}
 
 		double Egas0 = NAN;

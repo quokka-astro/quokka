@@ -19,3 +19,5 @@ Add a unit test registered with CTest or extend `regression/quokka-tests.ini` wi
 
 ## Commit & Pull Request Guidelines
 Use short, imperative commit subjects (e.g., `fix clang-tidy`). Group related changes only and rebase onto `development` before opening a PR. Provide PR descriptions covering problem, solution, and validation, cite the `ctest` or benchmark commands run, and link relevant issues. Flag interface or input changes for documentation follow-up and mention required plots or logs when numerics shift.
+
+**After every commit**, run `./scripts/bash/pre-commit.sh` to check formatting, YAML validity, merge conflicts, and other CI-enforced hooks.

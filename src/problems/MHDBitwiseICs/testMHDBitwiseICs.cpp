@@ -2,7 +2,7 @@
 // Copyright 2022 Neco Kriel.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file test_fc_quantities.cpp
+/// \file testMHDBitwiseICs.cpp
 /// \brief Defines a test problem to make sure face-centered quantities are created correctly.
 ///
 
@@ -33,20 +33,11 @@ struct MHDBitwiseICs {
 template <> struct quokka::EOS_Traits<MHDBitwiseICs> {
 	static constexpr amrex::Real gamma = 5. / 3.;
 	static constexpr amrex::Real mean_molecular_weight = C::m_u;
-	static constexpr amrex::Real boltzmann_constant = C::k_B;
 };
 
-template <> struct Physics_Traits<MHDBitwiseICs> {
+template <> struct Physics_Traits<MHDBitwiseICs> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;
-	static constexpr int numPassiveScalars = numMassScalars + 0;
-	static constexpr bool is_self_gravity_enabled = false;
-	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_mhd_enabled = true;
-	static constexpr int nGroups = 1;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1;
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 AMREX_GPU_DEVICE

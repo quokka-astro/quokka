@@ -226,6 +226,11 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	int sn_count_ = 0;	      // number of SN explosions in a step (used for diagnostics)
 	int sn_count_cumulative_ = 0; // cumulative number of SN explosions (used for diagnostics)
 
+	// Conduction parameters
+	amrex::Real electronConductionKappa0_ = 4.17; // units of erg cm^-1 s^-1 K^-1
+	amrex::Real conductionCFL = 0.2;	      // default
+	int enableElectronConduction_ = 0;	      // default
+
 	amrex::Real densityFloor_ = 0.0;     // default
 	amrex::Real dustDensityFloor_ = 0.0; // default
 	amrex::Real tempFloor_ = 0.0;	     // default
@@ -385,6 +390,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	void AverageDown();
 	void AverageDownTo(int crse_lev);
 	void timeStepWithSubcycling(int lev, amrex::Real time, int iteration);
+	void regrid(int lbase, amrex::Real time, bool initial) override;
 	void calculateGpotAllLevels();
 	void gravAccelAllLevels(amrex::Real dt);
 	void ellipticSolveAllLevels(amrex::Real dt);
@@ -1246,6 +1252,21 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 		printCellProperties(lev, hydro_dt.index);
 	}
 
+	// compute timestep based on conduction parameters
+	amrex::ValLocPair<amrex::Real, amrex::IntVect> conduction_dt{.value = std::numeric_limits<amrex::Real>::max(),
+								     .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
+	if (enableElectronConduction_ == 1) {
+		double c_v = C::k_B / (quokka::EOS_Traits<problem_t>::mean_molecular_weight * (quokka::EOS_Traits<problem_t>::gamma - 1.0));
+		double diffusion_coefficient = electronConductionKappa0_ / (state_new_cc_[lev].min(0) * c_v);
+		conduction_dt.value = 0.5 * conductionCFL * dx_min * dx_min / diffusion_coefficient;
+		conduction_dt.index = domain_signal_maxloc;
+
+		if (verbose) {
+			amrex::Print() << std::format("...[level {}] \testimated conduction timestep: {:e}\n", lev, conduction_dt.value);
+			amrex::Print() << std::format("...[level {}] \tconduction timestep limited at cell {}\n", lev, formatIntVect(conduction_dt.index));
+		}
+	}
+
 	// compute maximum particle speed on level 'lev'
 	amrex::ValLocPair<amrex::Real, amrex::IntVect> particle_dt{.value = std::numeric_limits<amrex::Real>::max(),
 								   .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
@@ -1274,7 +1295,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 #endif
 
 	// compute minimum timestep
-	std::vector<dtloc_t *> dts = {&hydro_dt, &particle_dt};
+	std::vector<dtloc_t *> dts = {&hydro_dt, &conduction_dt, &particle_dt};
 	auto *const dt_min_ptr = *std::min_element(dts.begin(), dts.end(), [](dtloc_t *const p1, dtloc_t *const p2) { return p1->value < p2->value; });
 
 	if (verbose) {
@@ -1283,6 +1304,8 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 			amrex::Print() << std::format("...[level {}] timestep limited by HYDRO\n", lev);
 		} else if (dt_min_ptr == &particle_dt) {
 			amrex::Print() << std::format("...[level {}] timestep limited by PARTICLES\n", lev);
+		} else if (dt_min_ptr == &conduction_dt) {
+			amrex::Print() << std::format("...[level {}] timestep limited by CONDUCTION\n", lev);
 		}
 	}
 
@@ -1320,8 +1343,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::computeTimestep()
 
 	for (int level = 0; level <= finest_level; ++level) {
 		n_factor *= nsubsteps[level];
+
+		auto effective_factor = static_cast<amrex::Real>(n_factor);
+		if (enableElectronConduction_ == 1) {
+			// Conduction timestep scales as dx^2, so we need to use n_factor^2 here instead of n_factor.
+			effective_factor = static_cast<amrex::Real>(n_factor) * static_cast<amrex::Real>(n_factor);
+		}
+
 		const amrex::Real dt_0_old = dt_0; // save old dt_0
-		dt_0 = std::min(dt_0, static_cast<amrex::Real>(n_factor) * dt_tmp[level]);
+		dt_0 = std::min(dt_0, effective_factor * dt_tmp[level]);
 		if (dt_0 < dt_0_old) {
 			// level 'level' has now set the timestep
 			level_that_sets_dt_0 = level;
@@ -2135,8 +2165,12 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 	// Sink accretion, stage 2: update the particle states -- compute scale_down, apply to particle, apply to cells
 	particleRegister_.applySinkAccretion(state_new_cc_[lev], accretion_rate_at_level, state_fc_ptr, geom[lev], lev, time, dt);
 
-	// We allow particle formation at the finest level only to avoid duplicate particle creation from multiple levels at the same location.
-	particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt, state_fc_ptr, verbose);
+	// Only create particles when the AMR hierarchy has fully refined to max_level.
+	// Creating a ForceFinestLevel particle at a sub-max level violates the invariant
+	// that sink particles always reside on the finest level of the AMR hierarchy.
+	if (finest_level == max_level) {
+		particleRegister_.createParticlesFromState(state_new_cc_[lev], accretion_rate_at_level, lev, time, dt, state_fc_ptr, verbose);
+	}
 
 	// Deposit the SN particles into the MultiFab
 	const auto [num_sn_explosions, max_velocity] = particleRegister_.depositSN(state_new_cc_[lev], state_fc_ptr, lev, time, dt);
@@ -2157,6 +2191,11 @@ template <typename problem_t> void AMRSimulation<problem_t>::particleMeshInterac
 }
 #endif // AMREX_SPACEDIM == 3
 
+// N.B.  The ForceFinestLevel regrid guarantee lives in timeStepWithSubcycling, where a
+// level-0 regrid is forced at the start of the first coarse step.  The bare override here
+// keeps the virtual method available for future diagnostics.
+template <typename problem_t> void AMRSimulation<problem_t>::regrid(int lbase, amrex::Real time, bool initial) { amrex::AmrCore::regrid(lbase, time, initial); }
+
 // N.B.: This function actually works for subcycled or not subcycled, as long as
 // nsubsteps[lev] is set correctly.
 template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycling(int lev, amrex::Real time, int iteration)
@@ -2172,12 +2211,20 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 		// regrid changes level "lev+1" so we don't regrid on max_level
 		// also make sure we don't regrid fine levels again if
 		// it was taken care of during a coarser regrid
-		if (lev < max_level && istep[lev] > last_regrid_step[lev]) {
-			if (istep[lev] % regrid_int == 0) {
+		bool force_finest_regrid = false;
+#if AMREX_SPACEDIM == 3
+		// When ForceFinestLevel particles exist (e.g., sink particles), a level-0 regrid is
+		// forced at the start of every coarse step (istep[0] == 0), regardless of regrid_interval.
+		// This ensures the AMR hierarchy is fully rebuilt around sink particles before any level
+		// advance occurs, preventing the subcycled regrid from losing finest-level coverage.
+		force_finest_regrid = (lev == 0 && lev < max_level && istep[lev] == 0 && particleRegister_.anyParticleRequiresFinestLevel());
+#endif
+		if ((lev < max_level && istep[lev] > last_regrid_step[lev]) || force_finest_regrid) {
+			if (istep[lev] % regrid_int == 0 || force_finest_regrid) {
 				// regrid could add newly refined levels (if finest_level < max_level)
 				// so we save the previous finest level index
 				int old_finest = finest_level;
-				regrid(lev, time);
+				regrid(lev, time, false);
 
 				// mark that we have regridded this level already
 				for (int k = lev; k <= finest_level; ++k) {

@@ -735,10 +735,10 @@ void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(amrex::Array4<amrex:
 
 	amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		// 	// LondrilloDelZanna2004 scheme:
-		const double a0_m = std::max(fspd_x0(i, j, k, 0), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 0));
-		const double a0_p = std::max(fspd_x0(i, j, k, 1), fspd_x0(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 1));
-		const double a1_m = std::max(fspd_x1(i, j, k, 0), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 0));
-		const double a1_p = std::max(fspd_x1(i, j, k, 1), fspd_x1(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 1));
+		const double a0_m = std::max(fspd_x0(i, j, k, 0), fspd_x0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 0));
+		const double a0_p = std::max(fspd_x0(i, j, k, 1), fspd_x0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 1));
+		const double a1_m = std::max(fspd_x1(i, j, k, 0), fspd_x1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2], 0));
+		const double a1_p = std::max(fspd_x1(i, j, k, 1), fspd_x1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2], 1));
 
 		const double E2_q0_ = E2_q0(i, j, k);
 		const double E2_q1_ = E2_q1(i, j, k);
@@ -803,10 +803,10 @@ void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> E2_
 
 	amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 		// Wave speeds
-		const double SL = -std::max(fspd_x0(i, j, k, 0), fspd_x0(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 0));
-		const double SR = std::max(fspd_x0(i, j, k, 1), fspd_x0(i + delta_w1[0], j + delta_w1[1], k + delta_w1[2], 1));
-		const double SD = -std::max(fspd_x1(i, j, k, 0), fspd_x1(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 0));
-		const double SU = std::max(fspd_x1(i, j, k, 1), fspd_x1(i + delta_w0[0], j + delta_w0[1], k + delta_w0[2], 1));
+		const double SL = -std::max(fspd_x0(i, j, k, 0), fspd_x0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 0));
+		const double SR = std::max(fspd_x0(i, j, k, 1), fspd_x0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 1));
+		const double SD = -std::max(fspd_x1(i, j, k, 0), fspd_x1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2], 0));
+		const double SU = std::max(fspd_x1(i, j, k, 1), fspd_x1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2], 1));
 
 		// EMF quadrants
 		const auto E2_LD = E2_q0(i, j, k);
