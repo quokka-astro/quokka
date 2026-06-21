@@ -29,19 +29,9 @@ template <> struct quokka::EOS_Traits<WaveProblem> {
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct Physics_Traits<WaveProblem> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<WaveProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr bool is_radiation_enabled = false;
-	// face-centred
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1; // number of radiation groups
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 constexpr double rho0 = 1.0;					    // background density
@@ -90,7 +80,7 @@ template <> void QuokkaSimulation<WaveProblem>::setInitialConditionsOnGrid(quokk
 	});
 }
 
-auto runWaveTest(int nx) -> double
+auto runWaveTest(int nx, int ny, int nz) -> double
 {
 	// Problem parameters
 	const double CFL_number = 0.1;
@@ -109,12 +99,14 @@ auto runWaveTest(int nx) -> double
 
 	// Set grid dimensions using AMReX parameter system
 	amrex::ParmParse pp("amr");
-	amrex::Vector<int> const ncells = {nx, 8, 8};
+	amrex::Vector<int> const ncells = {nx, ny, nz};
 	pp.add("max_level", 0);
-	pp.add("blocking_factor_x", nx);
-	pp.add("blocking_factor_y", 8);
-	pp.add("blocking_factor_z", 8);
-	pp.add("max_grid_size", nx);
+	if (!pp.contains("blocking_factor")) {
+		pp.add("blocking_factor", 8);
+	}
+	if (!pp.contains("max_grid_size")) {
+		pp.add("max_grid_size", 128);
+	}
 	pp.addarr("n_cell", ncells);
 
 	// Set domain bounds using AMReX parameter system
@@ -168,13 +160,19 @@ auto problem_main() -> int
 	quokka::richardson::applyQuietDefaults();
 
 	quokka::richardson::Parameters params{};
-	params.machine_precision_target = 2.0e-11; // limit based on delta_rho_magn
+	params.machine_precision_target = 2.0e-11; // default; set to 0 via setup.machine_precision_target to disable early exit.
 	params.nx_initial = 128;
-	params.nx_max = 2048;
+	params.nx_max = 2048; // default; override with setup.nx_max in the input file.
+	{
+		amrex::ParmParse const pp("setup");
+		pp.query("machine_precision_target", params.machine_precision_target);
+		pp.query("nx_max", params.nx_max);
+		pp.query("refine_n_dims", params.refine_n_dims);
+	}
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;
 	params.test_name = "Hydro Wave";
 	params.csv_filename = "hydro_wave_convergence.csv";
 
-	return quokka::richardson::run(params, [](int nx) { return runWaveTest(nx); });
+	return quokka::richardson::run(params, [](int nx, int ny, int nz) { return runWaveTest(nx, ny, nz); });
 }
