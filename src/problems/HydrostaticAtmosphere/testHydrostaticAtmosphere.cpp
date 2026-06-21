@@ -30,16 +30,7 @@ template <> struct quokka::EOS_Traits<HydrostaticAtmosphereProblem> {
 };
 
 template <> struct Physics_Traits<HydrostaticAtmosphereProblem> : DefaultPhysicsTraits {
-	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;
-	static constexpr int numPassiveScalars = numMassScalars + 0;
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1;
-	static constexpr int nDustGroups = 1;
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 constexpr amrex::Real kTgasInit = 1.0;

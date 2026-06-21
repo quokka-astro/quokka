@@ -52,16 +52,9 @@ template <> struct HydroSystem_Traits<ParticleRadiationProblem> {
 };
 
 template <> struct Physics_Traits<ParticleRadiationProblem> : DefaultPhysicsTraits {
-	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = true;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr int nGroups = 2;			     // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
+	static constexpr int nGroups = 2; // number of radiation groups
 };
 
 template <> struct RadSystem_Traits<ParticleRadiationProblem> {

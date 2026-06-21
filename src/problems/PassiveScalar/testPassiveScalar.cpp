@@ -35,18 +35,9 @@ template <> struct quokka::EOS_Traits<ScalarProblem> {
 };
 
 template <> struct Physics_Traits<ScalarProblem> : DefaultPhysicsTraits {
-	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
-	// face-centred
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1; // number of radiation groups; has to be defined even though radiation is disabled
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 constexpr double v_contact = 2.0; // contact wave velocity

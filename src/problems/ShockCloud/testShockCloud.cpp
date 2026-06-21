@@ -47,16 +47,8 @@ constexpr double keV_in_ergs = 1000. * C::ev2erg; // ergs == 1 keV
 constexpr double m_H = C::m_p + C::m_e;		  // mass of hydrogen atom
 
 template <> struct Physics_Traits<ShockCloud> : DefaultPhysicsTraits {
-	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int numMassScalars = 0;
 	static constexpr int numPassiveScalars = numMassScalars + 3;
-	static constexpr int nGroups = 1; // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 template <> struct quokka::EOS_Traits<ShockCloud> {

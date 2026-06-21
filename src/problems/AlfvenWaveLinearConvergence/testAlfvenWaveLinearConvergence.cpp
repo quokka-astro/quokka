@@ -360,7 +360,7 @@ void QuokkaSimulation<AlfvenWaveLinear>::computeReferenceSolution_fc(amrex::Mult
 	}
 }
 
-auto runWaveTest(int nx) -> double
+auto runWaveTest(int nx, int ny, int nz) -> double
 {
 	// Read problem parameters
 	amrex::ParmParse const hpp("setup");
@@ -383,9 +383,11 @@ auto runWaveTest(int nx) -> double
 		amrex::Abort("Invalid k modes: the triplet (0,0,0) is not allowed.");
 	}
 
-	if (num_modes_y != 0 || num_modes_z != 0) {
-		amrex::Abort(
-		    "Oblique modes are not supported: Richardson only refines nx, so transverse resolution is fixed and oblique waves will not converge.");
+	if (num_modes_y != 0 && ny == 8) {
+		amrex::Abort("num_modes_y != 0 requires refine_n_dims >= 2 to converge.");
+	}
+	if (num_modes_z != 0 && nz == 8) {
+		amrex::Abort("num_modes_z != 0 requires refine_n_dims >= 3 to converge.");
 	}
 
 	// we assume box length = 1.0
@@ -414,17 +416,11 @@ auto runWaveTest(int nx) -> double
 
 	// Set grid dimensions using AMReX parameter system
 	amrex::ParmParse pp("amr");
-	amrex::Vector<int> const ncells = {nx, 8, 8};
+	amrex::Vector<int> const ncells = {nx, ny, nz};
 	pp.addarr("n_cell", ncells);
 
-	if (!pp.contains("blocking_factor_x")) {
-		pp.add("blocking_factor_x", 16);
-	}
-	if (!pp.contains("blocking_factor_y")) {
-		pp.add("blocking_factor_y", 8);
-	}
-	if (!pp.contains("blocking_factor_z")) {
-		pp.add("blocking_factor_z", 8);
+	if (!pp.contains("blocking_factor")) {
+		pp.add("blocking_factor", 8);
 	}
 
 	if (!pp.contains("max_grid_size")) {
@@ -480,11 +476,12 @@ auto problem_main() -> int
 		amrex::ParmParse const pp("setup");
 		pp.query("machine_precision_target", params.machine_precision_target);
 		pp.query("nx_max", params.nx_max);
+		pp.query("refine_n_dims", params.refine_n_dims);
 	}
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;
 	params.test_name = "Alfven Wave";
 	params.csv_filename = "alfven_wave_convergence.csv";
 
-	return quokka::richardson::run(params, [](int nx) { return runWaveTest(nx); });
+	return quokka::richardson::run(params, [](int nx, int ny, int nz) { return runWaveTest(nx, ny, nz); });
 }
