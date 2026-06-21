@@ -46,19 +46,12 @@ network.allow_mixed_cell_cooling = 0
 
 max_timesteps = 1000000  # stop_time governs; no artificial step cap
 
-# Physical scales: SetAtolFromPhysics() derives all integrator.atol_* values from these.
-# typical_minimal_radiation_T = 10 K is the minimum temperature at which radiation is physically
-# meaningful (photon field at this T becomes negligible after ~1e6 VODE steps via the 1e-6 prefactor).
+# VODE absolute tolerances — hand-tuned for DTypeFront.
 # Erad_floor (M1 floor) is C::a_rad * 1e-8 (T~0.01 K) in testDTypeFront.cpp — see docs/markdown/photoionization.md.
-integrator.typical_n_H                      = 139.9  # cm^-3; representative total H number density
-integrator.desired_accuracy_on_T_at_typical_n_H = 1.0   # K; temperature accuracy (sets atol_enuc)
-integrator.typical_minimal_radiation_T      = 10.0  # K; typical temperature of the cold (neutral) gas
-
-# Derived atol values (computed by SetAtolFromPhysics):
-#   atol_spec                    = 1.4e-3     # cm^-3;   spec_abundance_tol (1e-5) × typical_n_H
-#   atol_enuc                    = 1.24e8     # erg/g;   c_v × desired_accuracy_on_T (1 K)
-#   atol_rad_num                 = 1.25e-6    # cm^-3;   1e-6 × a_rad × typical_minimal_radiation_T^4 / E_photon
-#   radiation_failure_tolerance  = 0.05       # cm^-3;   physical guard, overridable (default)
+integrator.atol_spec                     = 1.4e-3   # cm^-3; 1e-5 × n_H = physical negligibility floor
+integrator.atol_enuc                     = 1.24e8   # erg/g; c_v × 1 K temperature accuracy
+integrator.atol_rad_num                  = 1.25e-6  # cm^-3; must exceed N_gamma_floor so dark cells return in one VODE step
+integrator.radiation_failure_tolerance   = 0.05     # cm^-3; physical guard, must exceed atol_rad_num
 
 integrator.rtol_spec     = 1e-2
 integrator.rtol_rad_num  = 1e-2
