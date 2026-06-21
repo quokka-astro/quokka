@@ -344,7 +344,7 @@ auto runDustDampingSimulation(ResolvedRkScheme scheme) -> SimulationData<DustDam
 	sim.cflNumber_ = CFL_number;
 	sim.dustResolvedRkScheme_ = scheme;
 	sim.dust_omega_drag_ = OMEGA_DRAG;
-	sim.dust_omega_magnetic_res_ = 0.0;
+	sim.dust_omega_gyro_res_ = 0.0;
 
 	sim.setInitialConditions();
 

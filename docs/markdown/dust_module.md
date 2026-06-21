@@ -88,7 +88,7 @@ The Lorentz work term in the gas total-energy equation is the gas-side work from
 \end{aligned}
 </script>
 
-In `DustSources::computeDustDragAndLorentz`, Quokka splits the deposited gas-energy increment into a drag-like contribution controlled by `dust.omega_drag_heating` and a B-dependent residual contribution controlled by `dust.omega_magnetic_residual`. 
+In `DustSources::computeDustDragAndLorentz`, Quokka splits the deposited gas-energy increment into a drag-like contribution controlled by `dust.omega_drag_heating` and a gyrofrequency-dependent residual contribution controlled by `dust.omega_gyro_residual`. 
 
 ## Variable Storage
 
@@ -167,7 +167,7 @@ The following input parameters tune the dust module and are documented in more d
 
 - `enable_iter_stoptime` – switch of iterative dust stopping time calculation.
 - `omega_drag_heating` – controls deposition of the drag-like heating contribution in the dust source update.
-- `omega_magnetic_residual` – controls deposition of the B-dependent residual contribution in `computeDustDragAndLorentz`.
+- `omega_gyro_residual` – controls deposition of the gyrofrequency-dependent residual contribution in `computeDustDragAndLorentz`.
 - `resolved_rk_scheme` – selects the GIRK coefficients in resolved branch used by `DustSources::computeDustDragAndLorentz`. Supported values are `TP2025`, `GL4`, and `Midpoint`.
 - `print_iteration_counts` - switch to turn on/off printing of dust source iteration counts for debugging.
 - `dust.density_floor` - the minimum dust density value allowed in the simulation.

@@ -480,7 +480,7 @@ template <typename AnalyticFn> void writeDenseExactCsv(const DustGyroHistory &da
 	std::vector<double> wx_dense;
 	fillDenseDriftXData(data, analytic, x_scale, t_dense, x_dense, wx_dense);
 
-	std::ofstream file(filename.data());
+	std::ofstream file{std::string(filename)};
 	file << std::setprecision(17);
 	file << "t,x_plot,wx_exact_norm\n";
 	for (size_t i = 0; i < t_dense.size(); ++i) {
@@ -499,7 +499,7 @@ template <typename AnalyticFn> void writeHistoryCsv(const std::vector<SchemeRunR
 		n_samples = std::min(n_samples, run.data.t_vec_.size());
 	}
 
-	std::ofstream file(filename.data());
+	std::ofstream file{std::string(filename)};
 	file << std::setprecision(17);
 	file << "t,x_plot";
 	for (auto const &run : runs) {
