@@ -32,6 +32,12 @@ if [[ -n $(git status --porcelain) ]]; then
 	exit 1
 fi
 
+# Ensure pre-commit has a writable cache directory
+if [[ ! -w "${PRE_COMMIT_HOME:-$HOME/.cache/pre-commit}" ]]; then
+	export PRE_COMMIT_HOME="${TMPDIR:-/tmp}/pre-commit-cache"
+	mkdir -p "$PRE_COMMIT_HOME"
+fi
+
 # Resolve pre-commit command: prefer 'uv run pre-commit', fall back to 'pre-commit' directly
 if command -v uv &>/dev/null; then
 	PRECOMMIT=(uv run pre-commit)
