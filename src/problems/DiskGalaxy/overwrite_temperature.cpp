@@ -158,6 +158,18 @@ auto makeUniquePath(std::filesystem::path const &base) -> std::filesystem::path
 	return base;
 }
 
+auto normalizePlotfilePath(std::filesystem::path path) -> std::filesystem::path
+{
+	path = path.lexically_normal();
+	while (!path.empty() && path != path.root_path() && path.filename().empty()) {
+		path = path.parent_path();
+	}
+	if (path.filename().empty()) {
+		amrex::Abort("Plotfile path '" + path.string() + "' does not name a plotfile directory.");
+	}
+	return path;
+}
+
 void preserveSidecarEntries(std::filesystem::path const &backup, std::filesystem::path const &rewritten)
 {
 	if (!amrex::ParallelDescriptor::IOProcessor()) {
@@ -179,7 +191,8 @@ void preserveSidecarEntries(std::filesystem::path const &backup, std::filesystem
 
 void overwritePlotfile(std::filesystem::path const &plotfile_path, bool const keep_backup, std::string const &cooling_table)
 {
-	amrex::PlotFileData plotfile(plotfile_path.string());
+	std::filesystem::path const normalized_plotfile_path = normalizePlotfilePath(plotfile_path);
+	amrex::PlotFileData plotfile(normalized_plotfile_path.string());
 	auto const &varnames = plotfile.varNames();
 	ComponentIndices const comps = findComponentIndices(varnames);
 	validateComponents(comps);
@@ -237,19 +250,20 @@ void overwritePlotfile(std::filesystem::path const &plotfile_path, bool const ke
 	}
 	amrex::Gpu::streamSynchronize();
 
-	std::filesystem::path const parent = plotfile_path.parent_path().empty() ? std::filesystem::path(".") : plotfile_path.parent_path();
-	std::filesystem::path const tmp_path = makeUniquePath(parent / (plotfile_path.filename().string() + ".tmp-rewrite"));
-	std::filesystem::path const backup_path = makeUniquePath(parent / (plotfile_path.filename().string() + ".bak"));
+	std::filesystem::path const parent =
+	    normalized_plotfile_path.parent_path().empty() ? std::filesystem::path(".") : normalized_plotfile_path.parent_path();
+	std::filesystem::path const tmp_path = makeUniquePath(parent / (normalized_plotfile_path.filename().string() + ".tmp-rewrite"));
+	std::filesystem::path const backup_path = makeUniquePath(parent / (normalized_plotfile_path.filename().string() + ".bak"));
 
 	amrex::WriteMultiLevelPlotfile(tmp_path.string(), nlevs, amrex::GetVecOfConstPtrs(output), varnames, geoms, plotfile.time(), level_steps, ref_ratio);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		std::filesystem::rename(plotfile_path, backup_path);
-		std::filesystem::rename(tmp_path, plotfile_path);
+		std::filesystem::rename(normalized_plotfile_path, backup_path);
+		std::filesystem::rename(tmp_path, normalized_plotfile_path);
 	}
 	amrex::ParallelDescriptor::Barrier();
 
-	preserveSidecarEntries(backup_path, plotfile_path);
+	preserveSidecarEntries(backup_path, normalized_plotfile_path);
 	amrex::ParallelDescriptor::Barrier();
 
 	if (!keep_backup && amrex::ParallelDescriptor::IOProcessor()) {
@@ -257,7 +271,7 @@ void overwritePlotfile(std::filesystem::path const &plotfile_path, bool const ke
 	}
 	amrex::ParallelDescriptor::Barrier();
 
-	amrex::Print() << "Overwrote temperature" << (has_entropy ? " and entropy" : "") << " in " << plotfile_path.string() << "\n";
+	amrex::Print() << "Overwrote temperature" << (has_entropy ? " and entropy" : "") << " in " << normalized_plotfile_path.string() << "\n";
 	if (keep_backup) {
 		amrex::Print() << "Original plotfile saved as " << backup_path.string() << "\n";
 	}
