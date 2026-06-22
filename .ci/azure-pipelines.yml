@@ -19,7 +19,6 @@ pr:
     - inputs/**
     - CMakeLists.txt
     - .ci/azure-pipelines.yml
-    - .ci/azure-pipelines-quick.yml
     - extern/cooling/*.h5
     - extern/amrex
     - extern/amrex/**
