@@ -51,7 +51,7 @@ jobs:
         else
           echo "Changed problems: $(echo $PROBLEMS | tr '\n' ' ')"
           CMAKE_TARGETS=$(echo "$PROBLEMS" | awk '{printf "--target %s ", $0}' | sed 's/ $//')
-          CTEST_REGEX=$(echo "$PROBLEMS" | tr '\n' '|' | sed 's/|$//')
+          CTEST_REGEX="^($(echo "$PROBLEMS" | tr '\n' '|' | sed 's/|$//'))($|-)"
           echo "cmake targets: $CMAKE_TARGETS"
           echo "ctest regex: $CTEST_REGEX"
           echo "##vso[task.setvariable variable=hasProblems]true"
