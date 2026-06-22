@@ -2349,8 +2349,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				ec_emf_components_rk_stage1[idim].define(ba_ec, dm, 1, 0);
 			}
 			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage1, stateOld_cc, faceVel, stateOld_fc, fast_mhd_wavespeeds,
-							 emfReconstructionOrder_, emfAveragingScheme_, mhdPlmLimiter_, emfComputingScheme_, dx,
-							 mhdResistivity_, hyperResistivityCoeff_);
+							 emfReconstructionOrder_, emfAveragingScheme_, mhdPlmLimiter_, emfComputingScheme_, dx, mhdResistivity_,
+							 hyperResistivityCoeff_);
 			MHDSystem<problem_t>::AddResistiveEnergyFlux(fluxArrays, stateOld_fc, dx, mhdResistivity_);
 		}
 
@@ -2483,8 +2483,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 				ec_emf_components_rk_stage2[idim].define(ba_ec, dm, 1, 0);
 			}
 			MHDSystem<problem_t>::ComputeEMF(ec_emf_components_rk_stage2, stateInter_cc, faceVel, stateInter_fc, fast_mhd_wavespeeds,
-							 emfReconstructionOrder_, emfAveragingScheme_, mhdPlmLimiter_, emfComputingScheme_, dx,
-							 mhdResistivity_, hyperResistivityCoeff_);
+							 emfReconstructionOrder_, emfAveragingScheme_, mhdPlmLimiter_, emfComputingScheme_, dx, mhdResistivity_,
+							 hyperResistivityCoeff_);
 			MHDSystem<problem_t>::AddResistiveEnergyFlux(fluxArrays, stateInter_fc, dx, mhdResistivity_);
 		}
 
