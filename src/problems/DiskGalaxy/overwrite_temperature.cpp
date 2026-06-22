@@ -1,5 +1,7 @@
 #include <algorithm>
 #include <filesystem>
+#include <iostream>
+#include <stdexcept>
 #include <string>
 
 #include "AMReX.H"
@@ -48,8 +50,7 @@ auto parseBool(std::string const &value) -> bool
 	if (value == "0" || value == "f" || value == "false" || value == "F" || value == "False" || value == "FALSE") {
 		return false;
 	}
-	amrex::Abort("Invalid boolean value '" + value + "'.");
-	return false;
+	throw std::invalid_argument("Invalid boolean value '" + value + "'.");
 }
 
 auto parseCommandLine(int argc, char *argv[]) -> CommandLineOptions
@@ -67,7 +68,7 @@ auto parseCommandLine(int argc, char *argv[]) -> CommandLineOptions
 				options.plotfile = arg;
 				continue;
 			}
-			amrex::Abort("Unexpected positional argument '" + arg + "'.");
+			throw std::invalid_argument("Unexpected positional argument '" + arg + "'.");
 		}
 		std::string const key = arg.substr(0, equals);
 		std::string const value = arg.substr(equals + 1);
@@ -304,7 +305,13 @@ void mainMain(char const *program, CommandLineOptions const &options)
 
 auto main(int argc, char *argv[]) -> int
 {
-	CommandLineOptions const options = parseCommandLine(argc, argv);
+	CommandLineOptions options;
+	try {
+		options = parseCommandLine(argc, argv);
+	} catch (std::exception const &ex) {
+		std::cerr << ex.what() << "\n";
+		return 1;
+	}
 	amrex::SetVerbose(0);
 	amrex::Initialize(argc, argv, false, MPI_COMM_WORLD, [&options]() { setTinyProfilerDefaults(options); });
 	mainMain(argv[0], options);
