@@ -1,8 +1,6 @@
 #include <algorithm>
 #include <filesystem>
-#include <iostream>
 #include <string>
-#include <vector>
 
 #include "AMReX.H"
 #include "AMReX_MultiFab.H"
@@ -13,9 +11,12 @@
 #include "AMReX_VisMF.H"
 
 #include "cooling/ResampledCooling.hpp"
+#include "fundamental_constants.H"
 
 namespace
 {
+
+constexpr double keV_in_ergs = 1000.0 * C::ev2erg; // ergs == 1 keV
 
 struct ComponentIndices {
 	int density = -1;
@@ -27,6 +28,7 @@ struct ComponentIndices {
 	int by = -1;
 	int bz = -1;
 	int temperature = -1;
+	int entropy = -1;
 };
 
 struct CommandLineOptions {
@@ -109,6 +111,7 @@ auto findComponentIndices(amrex::Vector<std::string> const &names) -> ComponentI
 	indices.by = findComponent(names, "y-BField");
 	indices.bz = findComponent(names, "z-BField");
 	indices.temperature = findComponent(names, "temperature");
+	indices.entropy = findComponent(names, "entropy");
 	return indices;
 }
 
@@ -170,7 +173,7 @@ void preserveSidecarEntries(std::filesystem::path const &backup, std::filesystem
 		if (std::filesystem::exists(destination)) {
 			continue;
 		}
-		std::filesystem::copy(entry.path(), destination, std::filesystem::copy_options::recursive);
+		std::filesystem::copy(entry.path(), destination, std::filesystem::copy_options::skip_existing | std::filesystem::copy_options::recursive);
 	}
 }
 
@@ -187,6 +190,7 @@ void overwritePlotfile(std::filesystem::path const &plotfile_path, bool const ke
 
 	int const nlevs = plotfile.finestLevel() + 1;
 	int const ncomp = static_cast<int>(varnames.size());
+	bool const has_entropy = (comps.entropy >= 0);
 	amrex::Vector<amrex::MultiFab> output(nlevs);
 	amrex::Vector<amrex::Geometry> geoms;
 	amrex::Vector<int> level_steps;
@@ -218,6 +222,10 @@ void overwritePlotfile(std::filesystem::path const &plotfile_path, bool const ke
 				amrex::Real const magnetic_energy = 0.5 * ((bx * bx) + (by * by) + (bz * bz));
 				amrex::Real const internal_energy = egas - kinetic_energy - magnetic_energy;
 				state(i, j, k, comps.temperature) = quokka::ResampledCooling::ComputeTgasFromEgas(rho, internal_energy, tables);
+				if (has_entropy) {
+					amrex::Real const K_cgs = quokka::ResampledCooling::ComputeEntropyFromRhoEint(rho, internal_energy, tables);
+					state(i, j, k, comps.entropy) = K_cgs / keV_in_ergs;
+				}
 			});
 		}
 
@@ -249,7 +257,7 @@ void overwritePlotfile(std::filesystem::path const &plotfile_path, bool const ke
 	}
 	amrex::ParallelDescriptor::Barrier();
 
-	amrex::Print() << "Overwrote temperature in " << plotfile_path.string() << "\n";
+	amrex::Print() << "Overwrote temperature" << (has_entropy ? " and entropy" : "") << " in " << plotfile_path.string() << "\n";
 	if (keep_backup) {
 		amrex::Print() << "Original plotfile saved as " << backup_path.string() << "\n";
 	}
@@ -257,7 +265,9 @@ void overwritePlotfile(std::filesystem::path const &plotfile_path, bool const ke
 
 void printUsage(char const *program)
 {
-	amrex::Print() << "Usage:\n"
+	amrex::Print() << "Rewrites temperature (and entropy, if present) in a plotfile using the MHD-corrected\n"
+		       << "internal energy (total energy minus kinetic and magnetic energy).\n"
+		       << "Usage:\n"
 		       << "  " << program << " plotfile=<plt> cooling.hdf5_data_file=<table.h5> [keep_backup=1] [tiny_profiler.enabled=0]\n"
 		       << "  " << program << " <plt> cooling.hdf5_data_file=<table.h5> [keep_backup=1] [tiny_profiler.enabled=0]\n";
 }
