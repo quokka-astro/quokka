@@ -297,3 +297,27 @@ tight for photochemistry and will cause the integrator to stall.
 5. The $10^{-6}$ prefactor and `desired_accuracy_on_T_at_typical_n_H = 1.0 K` are
    reasonable defaults for most problems.
 
+## 4. Compatibility
+
+### 4.1 Incompatibility with resampled cooling
+
+Setting both `photochemistry.enabled = 1` and `cooling.enabled = 1` in the same
+input file is a **fatal error** — Quokka will abort at startup.
+
+The resampled Cloudy cooling table (`cooling.cooling_table_type = "resampled"`)
+encodes the full H/He thermochemistry for an optically thin gas in a UV background,
+including:
+
+- photoheating by the UV background,
+- recombination cooling,
+- collisional ionization and excitation cooling.
+
+The photoionization module computes the same processes from first principles using
+the M1 radiation field and the hydrogen chemistry network (§1). Enabling both
+simultaneously would double-count every one of these rates, producing physically
+incorrect temperatures and ionization fractions.
+
+**Correct setup:** use `photochemistry.enabled = 1` and leave `cooling.enabled = 0`
+(the default). The photoionization chemistry network handles all heating and cooling
+internally.
+

@@ -631,6 +631,16 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		if (coolingTableType_.empty()) {
 			coolingTableType_ = "resampled";
 		}
+#ifdef PHOTOCHEMISTRY
+		// Resampled cooling and photoionization chemistry both model H thermochemistry
+		// (heating, recombination cooling, collisional ionization cooling). Enabling both
+		// simultaneously double-counts these terms. See docs/markdown/photoionization.md §4.1.
+		if ((enablePhotoChemistry_ == 1) && (enableCooling_ == 1)) {
+			amrex::Abort("photochemistry.enabled = 1 and cooling.enabled = 1 cannot be used together. "
+				     "Photoionization handles its own H thermochemistry; the resampled cooling table "
+				     "would double-count those terms. See docs/markdown/photoionization.md.");
+		}
+#endif
 		if ((enableCooling_ == 1) || (alwaysReadTables == 1)) {
 			hpp.query("hdf5_data_file", coolingTableFilename_);
 			if (coolingTableType_ == "resampled") {

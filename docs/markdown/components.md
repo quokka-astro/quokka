@@ -48,15 +48,16 @@ Here, `Dust` refers to the dedicated dust dynamics module enabled with `Physics_
 
 This matrix covers hydro, MHD, radiation, cooling, chemistry, particles, and the dedicated dust module. It does not include self-gravity.
 
-| Module | Hydro | MHD | Radiation | Cooling | Chemistry | Particles | Dust |
-| ------ |:-----:|:---:|:---------:|:-------:|:---------:|:---------:|:----:|
-| Hydro | - | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| MHD | - | - | ❌ | ✅ | ⚠️ | ✅ | ⚠️ |
-| Radiation | - | - | - | ⚠️ | | ✅ | |
-| Cooling | - | - | - | - | ⚠️ | ✅ | |
-| Chemistry | - | - | - | - | - | | |
-| Particles | - | - | - | - | - | - | |
-| Dust | - | - | - | - | - | - | - |
+| Module | Hydro | MHD | Radiation | Cooling | Photoionization | Chemistry | Particles | Dust |
+| ------ |:-----:|:---:|:---------:|:-------:|:---------------:|:---------:|:---------:|:----:|
+| Hydro | - | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| MHD | - | - | ❌ | ✅ | ⚠️ | ⚠️ | ✅ | ⚠️ |
+| Radiation | - | - | - | ⚠️ | ✅ | | ✅ | |
+| Cooling | - | - | - | - | ❌ | ⚠️ | ✅ | |
+| Photoionization | - | - | - | - | - | | ⚠️ | |
+| Chemistry | - | - | - | - | - | - | | |
+| Particles | - | - | - | - | - | - | - | |
+| Dust | - | - | - | - | - | - | - | - |
 
 Notes:
 
@@ -66,6 +67,9 @@ Notes:
 - `Hydro + chemistry` is tested by `PrimordialChem` and `PopIII`.
 - `MHD + radiation` is explicitly disabled in `src/QuokkaSimulation.hpp` with `static_assert(!(is_mhd_enabled && is_radiation_enabled), "MHD + Radiation is not supported yet.")`.
 - `MHD + cooling` is exercised by the `SN` problem with `is_mhd_enabled = true` and `cooling.enabled = 1`.
+- `Hydro + photoionization` is tested by `DTypeFront`, `StromgrenSphere`, and `OneZonePhotoionization`.
+- `Radiation + photoionization` is tested by `DTypeFront` and `StromgrenSphere` — photoionization requires `is_radiation_enabled = true`.
+- `Cooling + photoionization` is explicitly forbidden: both modules compute H thermochemistry (photoheating, recombination cooling, collisional ionization cooling), so enabling both simultaneously double-counts those rates. Quokka aborts at startup if `cooling.enabled = 1` and `photochemistry.enabled = 1` are set together. See `docs/markdown/photoionization.md §4.1`.
 - `Hydro + particles` is exercised by problems such as `BinaryOrbitCIC`, `ParticleSink*`, `ParticleSF`, `ParticleRadiation`, `RandomBlast`, and `SN`.
 - `MHD + particles` is exercised by `DiskGalaxy`, `ParticleAccretion`, `ParticleCreation`, `ParticleSink`, and `ParticleSinkFormation`.
 - `Radiation + particles` is exercised by `ParticleRadiation` and `GravRadParticle3D`.
