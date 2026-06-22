@@ -73,6 +73,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_VisMF.H"
 #include "util/BC.hpp"
 #include "util/time_units.hpp"
+#include "util/volume_integral.hpp"
 #include <AMReX_FluxRegister.H>
 #include <format>
 #include <unordered_set>
@@ -3516,28 +3517,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::AverageDownTo(int c
 
 template <typename problem_t> template <typename F> auto AMRSimulation<problem_t>::computeVolumeIntegral(F const &user_f) -> amrex::Real
 {
-	// compute integral of user_f(i, j, k, state) along the given axis.
-	const BL_PROFILE("AMRSimulation::computeVolumeIntegral()");
-
-	// allocate temporary multifabs
-	amrex::Vector<amrex::MultiFab> q;
-	q.resize(finest_level + 1);
-	for (int lev = 0; lev <= finest_level; ++lev) {
-		q[lev].define(boxArray(lev), DistributionMap(lev), 1, 0);
-	}
-
-	// evaluate user_f on all levels
-	// (note: it is not necessary to average down)
-	for (int lev = 0; lev <= finest_level; ++lev) {
-		auto const &state = state_new_cc_[lev].const_arrays();
-		auto const &result = q[lev].arrays();
-		amrex::ParallelFor(q[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) { result[bx](i, j, k) = user_f(i, j, k, state[bx]); });
-	}
-	amrex::Gpu::streamSynchronize();
-
-	// call amrex::volumeWeightedSum
-	const amrex::Real result = amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(q), 0, geom, ref_ratio);
-	return result;
+	return quokka::computeVolumeIntegral<problem_t>(finest_level, state_new_cc_, state_new_fc_, Geom(), refRatio(), user_f);
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::InitParticles()

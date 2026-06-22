@@ -748,16 +748,14 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 	stats["disk_mass_refine_region"] = disk_mass_refine / C::M_solar;
 
 	auto tables = resampledTables_.const_tables();
-	const amrex::Real cold_mass = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state) noexcept {
-		const Real rho = state(i, j, k, HydroSystem<DiskGalaxy>::density_index);
-		const Real x1Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index);
-		const Real x2Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x2Momentum_index);
-		const Real x3Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index);
-		const Real Egas = state(i, j, k, HydroSystem<DiskGalaxy>::energy_index);
-		const Real Eint = RadSystem<DiskGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
-		const Real Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
-		return (Tgas < 1.0e4) ? rho : 0.0;
-	});
+	const amrex::Real cold_mass =
+	    computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state,
+						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &state_fc) noexcept {
+		    const Real rho = state(i, j, k, HydroSystem<DiskGalaxy>::density_index);
+		    const Real Eint = HydroSystem<DiskGalaxy>::ComputeInternalEnergy(state, i, j, k, &state_fc);
+		    const Real Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+		    return (Tgas < 1.0e4) ? rho : 0.0;
+	    });
 	stats["mass_T_lt_1e4"] = cold_mass / C::M_solar;
 
 	if (!std::isnan(flux_sphere_radius_kpc)) {
