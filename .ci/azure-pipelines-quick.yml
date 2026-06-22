@@ -1,0 +1,160 @@
+# Quick CI pipeline: builds and tests only the problems changed in this PR.
+# Trigger manually with the PR comment: /azp run quick
+# If no src/problems/ files are changed, the job skips the build with a reminder.
+trigger: none
+
+pr:
+  autoCancel: true
+  branches:
+    include:
+    - development
+  paths:
+    include:
+    - .ci/azure-pipelines-quick.yml
+
+jobs:
+  - job: Quick_CUDA_Build_Test
+    pool: avatar
+    timeoutInMinutes: 360
+    steps:
+    - checkout: self
+      submodules: recursive
+
+    - script: |
+        mkdir -p "$(Agent.HomeDirectory)/cache/ccache"
+        echo "Using shared local disk cache at $(Agent.HomeDirectory)/cache/ccache"
+      displayName: Prepare shared ccache directory
+
+    - script: |
+        if command -v ccache >/dev/null 2>&1; then
+          echo "ccache available on agent."
+          echo "##vso[task.setvariable variable=cmakeLauncherArgs]-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_CUDA_COMPILER_LAUNCHER=ccache"
+        else
+          echo "ccache not found; proceeding without compiler cache."
+          echo "##vso[task.setvariable variable=cmakeLauncherArgs]"
+        fi
+      displayName: Detect ccache
+
+    - template: templates/ccache-prepare.yml
+
+    - script: |
+        TARGET_BRANCH=$(echo "$(System.PullRequest.TargetBranch)" | sed 's|refs/heads/||')
+        [ -z "$TARGET_BRANCH" ] && TARGET_BRANCH="development"
+        git fetch --deepen=1 origin "$TARGET_BRANCH"
+        CHANGED=$(git diff --name-only FETCH_HEAD HEAD)
+        PROBLEMS=$(echo "$CHANGED" | grep '^src/problems/' | awk -F'/' '{print $3}' | sort -u | grep -v '^$')
+        if [ -z "$PROBLEMS" ]; then
+          echo "##[section]No src/problems/ files changed in this PR."
+          echo "This pipeline only builds and tests problems modified in the PR."
+          echo "To run the full test suite, use: /azp run"
+          echo "##vso[task.setvariable variable=hasProblems]false"
+        else
+          echo "Changed problems: $(echo $PROBLEMS | tr '\n' ' ')"
+          CMAKE_TARGETS=$(echo "$PROBLEMS" | awk '{printf "--target %s ", $0}' | sed 's/ $//')
+          CTEST_REGEX="^($(echo "$PROBLEMS" | tr '\n' '|' | sed 's/|$//'))($|-)"
+          echo "cmake targets: $CMAKE_TARGETS"
+          echo "ctest regex: $CTEST_REGEX"
+          echo "##vso[task.setvariable variable=hasProblems]true"
+          echo "##vso[task.setvariable variable=cmakeTargetArgs]$CMAKE_TARGETS"
+          echo "##vso[task.setvariable variable=ctestRegex]$CTEST_REGEX"
+        fi
+      displayName: 'Detect changed problems'
+
+    - script: |
+        # Keep the job idle during the restricted window [03:30, 07:00).
+        blocked_start_minutes=$((3 * 60 + 30))
+        blocked_end_minutes=$((7 * 60))
+        time_check_interval=600
+
+        while true; do
+          hour=$(date +%H)
+          minute=$(date +%M)
+          now_minutes=$((10#$hour * 60 + 10#$minute))
+
+          if [ "$now_minutes" -lt "$blocked_start_minutes" ] || [ "$now_minutes" -ge "$blocked_end_minutes" ]; then
+            echo "Current time $(date '+%F %T') is outside restricted window."
+            break
+          fi
+
+          remaining_minutes=$((blocked_end_minutes - now_minutes))
+          remaining_seconds=$((remaining_minutes * 60))
+          echo "Current time $(date '+%F %T') is within restricted window (03:30-07:00). Remaining wait: ${remaining_minutes}m."
+
+          if [ "$remaining_seconds" -le "$time_check_interval" ]; then
+            sleep "$remaining_seconds"
+          else
+            sleep "$time_check_interval"
+          fi
+        done
+
+        echo "Checking for conflicting jobs on the GPU..."
+        gpu_check_interval=60
+        waited=0
+        while true; do
+          # Primary: check for active CUDA processes via GPU driver (cross-container reliable)
+          gpu_procs=$(nvidia-smi --query-compute-apps=pid,name --format=csv,noheader 2>/dev/null || true)
+          # Secondary: check for cron regression test script (best-effort; requires shared PID namespace)
+          regtest_running=0
+          if pgrep -f "regtest.py" > /dev/null 2>&1; then
+            regtest_running=1
+          fi
+          if [ -z "$gpu_procs" ] && [ "$regtest_running" -eq 0 ]; then
+            if [ "$waited" -gt 0 ]; then
+              echo "GPU is free and no regression test detected, proceeding..."
+            else
+              echo "GPU is free, proceeding..."
+            fi
+            break
+          fi
+          reasons=""
+          if [ -n "$gpu_procs" ]; then
+            count=$(echo "$gpu_procs" | grep -c '[0-9]' || true)
+            names=$(echo "$gpu_procs" | awk -F',' '{print $2}' | tr '\n' ' ' | sed 's/ $//')
+            reasons="GPU has ${count} active CUDA process(es) [${names}]"
+          fi
+          if [ "$regtest_running" -eq 1 ]; then
+            [ -n "$reasons" ] && reasons="${reasons}; "
+            reasons="${reasons}regression test (regtest.py) is running"
+          fi
+          echo "Waiting: ${reasons}. Rechecking in ${gpu_check_interval}s (${waited}s elapsed)..."
+          sleep "$gpu_check_interval"
+          waited=$((waited + gpu_check_interval))
+        done
+      displayName: 'Wait for allowed time and free GPU'
+      condition: eq(variables['hasProblems'], 'true')
+
+    - task: CMake@1
+      displayName: 'Configure CMake'
+      condition: eq(variables['hasProblems'], 'true')
+      env:
+        CCACHE_DIR: $(Agent.HomeDirectory)/cache/ccache
+        CCACHE_BASEDIR: $(Build.SourcesDirectory)
+        CCACHE_NOHASHDIR: 1
+      inputs:
+        cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DAMReX_SPACEDIM=3 -DAMReX_GPU_BACKEND=CUDA -DQUOKKA_PYTHON=OFF $(cmakeLauncherArgs)'
+
+    - task: CMake@1
+      displayName: 'Build Quokka (targeted)'
+      condition: eq(variables['hasProblems'], 'true')
+      env:
+        CCACHE_DIR: $(Agent.HomeDirectory)/cache/ccache
+        CCACHE_BASEDIR: $(Build.SourcesDirectory)
+        CCACHE_NOHASHDIR: 1
+      inputs:
+        cmakeArgs: '--build . --parallel 16 $(cmakeTargetArgs)'
+
+    - task: CMake@1
+      displayName: 'Run CTest (targeted)'
+      condition: eq(variables['hasProblems'], 'true')
+      inputs:
+        cmakeArgs: '-E chdir . ctest -R "$(ctestRegex)" -E "RadMatterCoupling*" -T Test --output-on-failure'
+
+    - task: PublishTestResults@2
+      inputs:
+        testResultsFormat: cTest
+        testResultsFiles: build/Testing/*/Test.xml
+        testRunTitle: $(Agent.JobName)
+      condition: and(succeededOrFailed(), eq(variables['hasProblems'], 'true'))
+      displayName: Publish test results
+
+    - template: templates/ccache-stats.yml
