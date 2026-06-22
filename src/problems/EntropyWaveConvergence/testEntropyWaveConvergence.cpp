@@ -296,7 +296,7 @@ void QuokkaSimulation<EntropyWaveLinear>::computeReferenceSolution_fc(amrex::Mul
 	}
 }
 
-auto runWaveTest(int nx) -> double
+auto runWaveTest(int nx, int ny, int nz) -> double
 {
 	// Read problem parameters
 	amrex::ParmParse const hpp("setup");
@@ -316,6 +316,13 @@ auto runWaveTest(int nx) -> double
 
 	if ((num_modes_x == 0) && (num_modes_y == 0) && (num_modes_z == 0)) {
 		amrex::Abort("Invalid k modes: the triplet (0,0,0) is not allowed.");
+	}
+
+	if (num_modes_y != 0 && ny == 8) {
+		amrex::Abort("num_modes_y != 0 requires refine_n_dims >= 2 to converge.");
+	}
+	if (num_modes_z != 0 && nz == 8) {
+		amrex::Abort("num_modes_z != 0 requires refine_n_dims >= 3 to converge.");
 	}
 
 	// we assume box length = 1.0
@@ -344,25 +351,15 @@ auto runWaveTest(int nx) -> double
 
 	// Set grid dimensions using AMReX parameter system
 	amrex::ParmParse pp("amr");
-	amrex::Vector<int> const ncells = {nx, 8, 8};
+	amrex::Vector<int> const ncells = {nx, ny, nz};
 	pp.addarr("n_cell", ncells);
 
-	int blocking_x = std::max(16, ncells[0]);
-	pp.query("blocking_factor_x", blocking_x);
-	if (!pp.contains("blocking_factor_x")) {
-		pp.add("blocking_factor_x", blocking_x);
-	}
-	if (!pp.contains("blocking_factor_y")) {
-		pp.add("blocking_factor_y", 8);
-	}
-	if (!pp.contains("blocking_factor_z")) {
-		pp.add("blocking_factor_z", 8);
+	if (!pp.contains("blocking_factor")) {
+		pp.add("blocking_factor", 8);
 	}
 
-	int max_grid_x = ncells[0];
-	pp.query("max_grid_size", max_grid_x);
 	if (!pp.contains("max_grid_size")) {
-		pp.add("max_grid_size", max_grid_x);
+		pp.add("max_grid_size", 128);
 	}
 
 	pp.add("max_level", 0);
@@ -407,13 +404,19 @@ auto problem_main() -> int
 	quokka::richardson::applyQuietDefaults();
 
 	quokka::richardson::Parameters params{};
-	params.machine_precision_target = 2.0e-9; // limit based on delta_rho_magn
+	params.machine_precision_target = 2.0e-9; // default; set to 0 via setup.machine_precision_target to disable early exit.
 	params.nx_initial = 16;
-	params.nx_max = 128;
+	params.nx_max = 128; // default; override with setup.nx_max in the input file.
+	{
+		amrex::ParmParse const pp("setup");
+		pp.query("machine_precision_target", params.machine_precision_target);
+		pp.query("nx_max", params.nx_max);
+		pp.query("refine_n_dims", params.refine_n_dims);
+	}
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;
 	params.test_name = "Entropy Wave";
 	params.csv_filename = "entropy_wave_convergence.csv";
 
-	return quokka::richardson::run(params, [](int nx) { return runWaveTest(nx); });
+	return quokka::richardson::run(params, [](int nx, int ny, int nz) { return runWaveTest(nx, ny, nz); });
 }

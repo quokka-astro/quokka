@@ -11,6 +11,13 @@ using Real = amrex::Real;
 // enum for unit system, one of CGS, CONSTANTS, CUSTOM
 enum class UnitSystem { CGS, CONSTANTS, CUSTOM };
 
+// enum for MHD resistivity model
+enum class ResistivityModel {
+	none,		 // no physical resistivity model
+	constant,	 // uniform Ohmic resistivity; eta read from mhd.resistivity in the TOML input file
+	problem_defined, // per-cell Ohmic resistivity; eta returned by a problem-specific computeResistivity device function
+};
+
 // default values for all Physics_Traits fields; specialize Physics_Traits by inheriting from this
 // struct and overriding only the fields that differ from the defaults
 struct DefaultPhysicsTraits {
@@ -24,6 +31,7 @@ struct DefaultPhysicsTraits {
 	static constexpr bool is_dust_enabled = false;
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
 	static constexpr int nGroups = 1;     // number of radiation groups
 	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
