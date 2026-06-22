@@ -39,7 +39,7 @@ constexpr int StarParticleFixedComps = 7;
 // When nExtraInt > 0, the component names expand from the stage entry below
 // (e.g. stage_0, stage_1, ... for multiple evolutionary stages).
 AMREX_ENUM(StarParticleIntIdx, // NOLINT
-	   stage // Evolutionary stage (expands to stage_0, stage_1, ... for nExtraInt > 1)
+	   stage	       // Evolutionary stage (expands to stage_0, stage_1, ... for nExtraInt > 1)
 );
 
 } // namespace quokka

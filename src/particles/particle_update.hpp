@@ -132,8 +132,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::Star> : ParticlePr
 				const amrex::Long np = pIter.numParticles();
 				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 					auto &p = pData[idx];
-					StellarUpdate::updateStellarProperties<problem_t, typename ContainerType::ParticleType, nGroups>(
-					    p, current_time, dt);
+					StellarUpdate::updateStellarProperties<problem_t, typename ContainerType::ParticleType, nGroups>(p, current_time, dt);
 				});
 			}
 		}
