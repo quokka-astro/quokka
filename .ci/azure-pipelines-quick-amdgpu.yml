@@ -1,8 +1,16 @@
 # Quick CI pipeline: builds and tests only the problems changed in this PR.
-# Trigger manually with the PR comment: /azp run quick
+# Trigger manually with the PR comment: /azp run rocm-quick
 # If no src/problems/ files are changed, the job skips the build with a reminder.
 trigger: none
-pr: none
+
+pr:
+  autoCancel: true
+  branches:
+    include:
+    - development
+  paths:
+    include:
+    - .ci/azure-pipelines-quick-amdgpu.yml
 
 jobs:
   - job: Quick_HIP_Build_Test

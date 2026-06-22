@@ -2,7 +2,15 @@
 # Trigger manually with the PR comment: /azp run quick
 # If no src/problems/ files are changed, the job skips the build with a reminder.
 trigger: none
-pr: none
+
+pr:
+  autoCancel: true
+  branches:
+    include:
+    - development
+  paths:
+    include:
+    - .ci/azure-pipelines-quick.yml
 
 jobs:
   - job: Quick_CUDA_Build_Test
