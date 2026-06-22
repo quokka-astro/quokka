@@ -531,6 +531,18 @@ auto problem_main() -> int
 		pp.query("error_tol", error_tol);
 	}
 
+	// FastWaveConvergence does not model resistivity; abort early rather than silently
+	// producing a wrong reference solution if mhd.resistivity is set (applies to both modes).
+	{
+		double eta = 0.0;
+		amrex::ParmParse const mhd_pp("mhd");
+		mhd_pp.query("resistivity", eta);
+		if (eta != 0.0) {
+			amrex::Abort("FastWaveConvergence does not support mhd.resistivity != 0; use the AlfvenWaveLinear fixed-resolution test for "
+				     "resistivity validation.");
+		}
+	}
+
 	int status = 0;
 
 	if (run_sim) {
