@@ -19,6 +19,7 @@ pr:
     - inputs/**
     - CMakeLists.txt
     - .ci/azure-pipelines-amdgpu.yml
+    - .ci/azure-pipelines-quick-amdgpu.yml
     - extern/cooling/*.h5
     - extern/amrex
     - extern/amrex/**
