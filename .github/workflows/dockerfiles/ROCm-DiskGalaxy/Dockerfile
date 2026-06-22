@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 opensuse/leap:15.6 AS build
+FROM --platform=linux/amd64 opensuse/leap:15.7 AS build
 
 ARG ROCM_ZYPP_REPO_VERSION=7.2.0
 ARG ROCM_ZYPP_PACKAGES=
@@ -14,7 +14,7 @@ RUN set -euo pipefail && \
     zypper --non-interactive refresh && \
     zypper --non-interactive update && \
     if ! zypper repos -E | grep -q devel_languages_perl; then \
-      zypper --non-interactive addrepo https://download.opensuse.org/repositories/devel:/languages:/perl/15.6/devel:languages:perl.repo; \
+      zypper --non-interactive addrepo https://download.opensuse.org/repositories/devel:/languages:/perl/15.7/devel:languages:perl.repo; \
     fi && \
     roc_repos_version="${ROCM_ZYPP_REPO_VERSION%.*}" && \
     printf "[ROCm-%s]\nname=ROCm%s\nbaseurl=https://repo.radeon.com/rocm/zyp/%s/main\nenabled=1\ngpgcheck=1\ngpgkey=https://repo.radeon.com/rocm/rocm.gpg.key\n" \
@@ -86,7 +86,7 @@ RUN set -euo pipefail && \
     test -x build/src/problems/DiskGalaxy/DiskGalaxy
 
 # Runtime stage (reduced image size)
-FROM --platform=linux/amd64 opensuse/leap:15.6
+FROM --platform=linux/amd64 opensuse/leap:15.7
 
 ARG MPICH_VERSION=4.2.2
 
