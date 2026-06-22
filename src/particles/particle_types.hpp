@@ -358,6 +358,7 @@ using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
 template <typename problem_t>
 constexpr int StarParticleRealComps = StarParticleFixedComps + Physics_Traits<problem_t>::nGroups + Particle_Traits<problem_t>::stellar_model::nExtraReal;
 template <typename problem_t> constexpr int StarParticleIntComps = Particle_Traits<problem_t>::stellar_model::nExtraInt;
+template <typename problem_t> constexpr int StarParticleIntegerComps = StarParticleIntComps<problem_t>;
 
 template <typename problem_t> using StarParticleContainer = amrex::AmrParticleContainer<StarParticleRealComps<problem_t>, StarParticleIntComps<problem_t>>;
 template <typename problem_t> using StarParticleIterator = amrex::ParIter<StarParticleRealComps<problem_t>, StarParticleIntComps<problem_t>>;
@@ -433,7 +434,7 @@ template <ParticleType particleType, typename problem_t> auto getParticleIntComp
 	} else if constexpr (particleType == ParticleType::CICRad) { // NOLINT
 								     // No integer components
 	} else if constexpr (particleType == ParticleType::Star) {   // NOLINT
-								     // No integer components
+		return expandEnumNames<StarParticleIntIdx, StarParticleIntegerComps<problem_t>, true>();
 	} else if constexpr (particleType == ParticleType::StochasticStellarPop) {
 		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<StochasticStellarPopParticleIntIdx>();
 		names = {enum_names.begin(), enum_names.end()};

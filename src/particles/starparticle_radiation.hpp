@@ -5,8 +5,7 @@
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
 
-#include "particles/particle_radiation.hpp" // LuminosityGpuConstTables
-#include "particles/particle_types.hpp"	    // StarParticle*Idx, ParticleType, Particle_Traits
+#include "particles/particle_types.hpp" // StarParticle*Idx, ParticleType, Particle_Traits
 
 #if AMREX_SPACEDIM == 3
 
@@ -20,8 +19,7 @@ class StellarUpdate
 {
       public:
 	template <typename problem_t, typename ParticleType, int Nout>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateStellarProperties(ParticleType &p, amrex::Real /*current_time*/, amrex::Real dt,
-										LuminosityGpuConstTables<Nout> const & /*gpu_tables*/) noexcept
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateStellarProperties(ParticleType &p, amrex::Real /*current_time*/, amrex::Real dt) noexcept
 	{
 		using Model = typename Particle_Traits<problem_t>::stellar_model;
 		if constexpr (ParticleType::NInt > 0) {

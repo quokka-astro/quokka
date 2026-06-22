@@ -34,6 +34,14 @@ static_assert(static_cast<int>(StarParticleDataIdx::lum) == 7);
 // Number of fixed components before the variable-length sections (nGroups + extras).
 constexpr int StarParticleFixedComps = 7;
 
+// Star particle integer-component layout.
+// Every Star particle has nExtraInt integer components (model-defined).
+// When nExtraInt > 0, the component names expand from the stage entry below
+// (e.g. stage_0, stage_1, ... for multiple evolutionary stages).
+AMREX_ENUM(StarParticleIntIdx, // NOLINT
+	   stage // Evolutionary stage (expands to stage_0, stage_1, ... for nExtraInt > 1)
+);
+
 } // namespace quokka
 
 #endif // STAR_PARTICLE_INDICES_H_

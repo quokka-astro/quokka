@@ -108,12 +108,13 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 
 #if AMREX_SPACEDIM == 3
 // Specialization for Star particles: dispatches to the modular stellar-evolution framework.
+// Stellar models own their internal tables (if any), so no gpu_tables are passed through.
 template <> struct ParticlePropertyUpdateTraits<ParticleType::Star> : ParticlePropertyUpdateBase<ParticleType::Star> {
 	template <typename problem_t, typename ParticleType, int Nout>
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateProperties(ParticleType &p, amrex::Real current_time, amrex::Real dt,
-									 LuminosityGpuConstTables<Nout> const &gpu_tables) noexcept
+									 LuminosityGpuConstTables<Nout> const & /*gpu_tables*/) noexcept
 	{
-		StellarUpdate::updateStellarProperties<problem_t>(p, current_time, dt, gpu_tables);
+		StellarUpdate::updateStellarProperties<problem_t, ParticleType, Nout>(p, current_time, dt);
 	}
 
 	template <typename problem_t, typename ContainerType>
@@ -124,8 +125,18 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::Star> : ParticlePr
 			return;
 		}
 		constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
-		LuminosityGpuConstTables<nGroups> const gpu_tables{}; // unused by the stellar model, passed for signature parity
-		applyUpdate<problem_t, ContainerType>(container, current_time, dt, gpu_tables);
+		for (int lev = 0; lev <= container->finestLevel(); ++lev) {
+			for (typename ContainerType::ParIterType pIter(*container, lev); pIter.isValid(); ++pIter) {
+				auto &particles = pIter.GetArrayOfStructs();
+				auto *pData = particles().data();
+				const amrex::Long np = pIter.numParticles();
+				amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
+					auto &p = pData[idx];
+					StellarUpdate::updateStellarProperties<problem_t, typename ContainerType::ParticleType, nGroups>(
+					    p, current_time, dt);
+				});
+			}
+		}
 	}
 };
 #endif // AMREX_SPACEDIM == 3
