@@ -55,18 +55,11 @@ template <> struct quokka::EOS_Traits<CoolingProblem> {
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct Physics_Traits<CoolingProblem> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<CoolingProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1;
 	// A custom unit system is used here to replicate a dimentionless unit system (c = k_B = a_rad = G = 1), for testing units conversion
 	static constexpr UnitSystem unit_system = UnitSystem::CUSTOM;
 	static constexpr double unit_length = 1.733039549e-33;
