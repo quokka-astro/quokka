@@ -161,8 +161,8 @@ from physical scales automatically in a future PR.
 | `integrator.rtol_spec`                  | Relative tolerance for chemical species                           |
 | `integrator.rtol_enuc`                  | Relative tolerance for gas internal energy                        |
 | `integrator.rtol_rad_num`               | Relative tolerance for photon number density                      |
-| `integrator.species_failure_tolerance`  | Maximum allowed negative species number density (cm^-3)           |
-| `integrator.radiation_failure_tolerance`| Maximum allowed negative photon number density before burn failure (cm^-3, see SS 3.5) |
+| `integrator.species_failure_tolerance`  | VODE internal substep rejection threshold for negative species (cm^-3, see SS 3.7) |
+| `integrator.radiation_failure_tolerance`| VODE internal substep rejection threshold for negative photon density (cm^-3, see SS 3.5) |
 
 ### 3.3 Why flux is excluded from convergence
 
@@ -196,28 +196,33 @@ Excluding flux from convergence gave a **3.8x speedup** in photochemistry on CPU
 
 ### 3.5 radiation_failure_tolerance
 
-This is a **physical guard**, not a numerical tolerance. It defines the maximum allowed
-negative photon number density (cm^-3) before a burn is declared failed — at most this
-many spurious photons can be "created from nothing" by VODE's Newton overshoot.
+VODE uses this threshold in two places:
 
-Whether this matters depends on two regimes:
+1. **Internal substeps:** if the photon number density becomes more negative than
+   `radiation_failure_tolerance`, VODE rejects the substep and retries with a smaller
+   timestep. This is the primary use.
+2. **Final state:** after interpolating to the output time, if the photon number density
+   is more negative than $1.5 \times$ `radiation_failure_tolerance`, the burn is
+   declared failed. The 1.5× factor (via `vode_final_state_radiation_failure_tolerance_factor`
+   in `vode_type.H`) accounts for VODE's non-monotonic interpolation, preventing false
+   failures from interpolation noise.
+
+Set `radiation_failure_tolerance` equal to `atol_rad_num` (the photon negligibility
+floor). The $1.5\times$ final-state factor absorbs BDF interpolation overshoot without
+manual inflation.
+
+Physically, the amount of spurious ionization that can be produced by a negative photon
+overshoot is at most $\texttt{radiation\_failure\_tolerance} / n_{\rm H}$. Whether this
+matters depends on two regimes:
 
 1. **Bright cells** ($N_\gamma \gtrsim n_{\rm H}$): the cell is fully ionized. A few
    percent error in photon count does not change the outcome.
-2. **Dark cells** ($N_\gamma \ll n_{\rm H}$): the spurious ionization is at most
-   $\texttt{radiation\_failure\_tolerance} / n_{\rm H}$. If this ratio is $\ll 1\%$,
-   it is negligible.
+2. **Dark cells** ($N_\gamma \ll n_{\rm H}$): the ratio is negligible as long as
+   $\texttt{radiation\_failure\_tolerance} \ll n_{\rm H}$.
 
-The default of 0.05 cm^-3 is appropriate for galactic disk or GMC environments, where the
-typical ionized gas density is ~10^2–10^4 cm^-3 (ratio <= 5x10^-4). For low-density environments
-such as the CGM or IGM, where the ionized gas density can be ~10^-4–10^-3 cm^-3, this
-default competes with the physical ionization equilibrium — override it in the input file.
-
-**Rule of thumb:** set `radiation_failure_tolerance` to at least two orders of magnitude
-below the **typical density of ionized gas** in the problem. This ensures that spurious
-photon creation cannot measurably affect the ionization fraction. The value does not
-scale with `atol_rad_num` because the Newton overshoot in the stiff radiation-chemistry
-system has a floor independent of the tolerance.
+For low-density environments such as the CGM or IGM, where the ionized gas density can
+be $\sim 10^{-4}$–$10^{-3}$ cm$^{-3}$, the default value of this parameter may compete
+with the physical ionization equilibrium — override it in the input file.
 
 ### 3.6 Erad_floor
 
@@ -240,11 +245,16 @@ For typical `Erad_floor` values corresponding to $T_{\rm floor} = 0.01$–$1$ K,
 
 ### 3.7 species_failure_tolerance
 
-VODE's internal step uses `species_failure_tolerance` directly; the final interpolated
-state uses $1.5 \times$ `species_failure_tolerance` (via
-`vode_final_state_species_failure_tolerance_factor` in `vode_type.H`). This accounts
-for VODE's non-monotonic interpolation back to the output time, preventing false
-burn failures from interpolation noise.
+VODE uses this threshold in two places:
+
+1. **Internal substeps (primary):** if a species number density becomes more negative
+   than `species_failure_tolerance`, VODE rejects the substep and retries with a smaller
+   timestep.
+2. **Final state (secondary):** after interpolating to the output time, if a species is
+   more negative than $1.5 \times$ `species_failure_tolerance`, the burn is declared
+   failed. The 1.5× factor (via `vode_final_state_species_failure_tolerance_factor` in
+   `vode_type.H`) accounts for VODE's non-monotonic interpolation, preventing false
+   failures from interpolation noise.
 
 Set `integrator.species_failure_tolerance` equal to `atol_spec` (the species
 negligibility floor). The $1.5\times$ final-state factor absorbs BDF interpolation
