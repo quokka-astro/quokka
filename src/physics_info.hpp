@@ -11,15 +11,27 @@ using Real = amrex::Real;
 // enum for unit system, one of CGS, CONSTANTS, CUSTOM
 enum class UnitSystem { CGS, CONSTANTS, CUSTOM };
 
-// this struct is specialized by the user application code.
-template <typename problem_t> struct Physics_Traits {
+// enum for MHD resistivity model
+enum class ResistivityModel {
+	none,		 // no physical resistivity model
+	constant,	 // uniform Ohmic resistivity; eta read from mhd.resistivity in the TOML input file
+	problem_defined, // per-cell Ohmic resistivity; eta returned by a problem-specific computeResistivity device function
+};
+
+// default values for all Physics_Traits fields; specialize Physics_Traits by inheriting from this
+// struct and overriding only the fields that differ from the defaults
+struct DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr int numMassScalars = 0;
+	// NOTE: numPassiveScalars is evaluated at the point of definition of DefaultPhysicsTraits, not
+	// at the point of specialization. If you override numMassScalars, you MUST also explicitly
+	// override numPassiveScalars, or it will silently inherit the pre-evaluated default of 0.
 	static constexpr int numPassiveScalars = numMassScalars + 0;
 	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_dust_enabled = false;
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_mhd_enabled = false;
+	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
 	static constexpr int nGroups = 1;     // number of radiation groups
 	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
@@ -31,6 +43,10 @@ template <typename problem_t> struct Physics_Traits {
 	static constexpr double unit_mass = 1.0;
 	static constexpr double unit_time = 1.0;
 	static constexpr double unit_temperature = 1.0;
+};
+
+// this struct is specialized by the user application code.
+template <typename problem_t> struct Physics_Traits : DefaultPhysicsTraits {
 };
 
 // this struct stores the indices at which quantities start

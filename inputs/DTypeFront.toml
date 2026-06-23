@@ -21,8 +21,7 @@ do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
 
-max_timesteps = 10000
-stop_time = 2.9e12
+stop_time = 1.93e13 # = 20 t_s
 
 stromgen.primary_species_1 = 1.0e-10
 stromgen.primary_species_2 = 139.9
@@ -47,7 +46,31 @@ integrator.rtol_rad_flux = 1e-2
 integrator.atol_enuc = 1.24e8  # erg/g
 integrator.rtol_enuc = 1e-2
 
-plotfile_interval = 1000000
+plotfile_interval = -1
 plotfile_prefix = "DType"
 
 network.allow_mixed_cell_cooling = 0
+
+
+max_timesteps = 1000000  # stop_time governs; no artificial step cap
+
+# VODE absolute tolerances — tuned for DTypeFront (n_H = 139.9 cm^-3).
+# Erad_floor (M1 floor) is C::a_rad * 1e-8 (T~0.01 K) in testDTypeFront.cpp — see docs/markdown/photoionization.md.
+#
+# atol_rad_num: the performance plateau for this problem is at ~5e-2 cm^-3. Below this value VODE spends
+# extra steps in dark cells; above it the step-rejection loop (N_gamma near -radiation_failure_tolerance)
+# erodes the gain. radiation_failure_tolerance must exceed the maximum BDF predictor-corrector overshoot
+# at the ionization front (~0.05–0.2 cm^-3 for this problem), so 0.5 provides a safe margin.
+#
+# species_failure_tolerance = atol_spec: the 1.5× final-state factor in vode_type.H
+# (vode_final_state_species_failure_tolerance_factor) absorbs BDF interpolation overshoot
+# without manual inflation — the two values can therefore be set equal.
+integrator.atol_spec                     = 1.4e-3   # cm^-3; 1e-5 × n_H = physical negligibility floor
+integrator.atol_enuc                     = 1.24e8   # erg/g; c_v × 1 K temperature accuracy
+integrator.atol_rad_num                  = 5e-2     # cm^-3; performance plateau for this problem
+integrator.species_failure_tolerance     = 1.4e-3   # cm^-3; = atol_spec (1.5× final-state factor in vode_type.H absorbs BDF overshoot)
+integrator.radiation_failure_tolerance   = 0.5      # cm^-3; must exceed max N_gamma BDF overshoot at ionization front
+
+integrator.rtol_spec     = 1e-2
+integrator.rtol_rad_num  = 1e-2
+integrator.rtol_enuc     = 1e-2

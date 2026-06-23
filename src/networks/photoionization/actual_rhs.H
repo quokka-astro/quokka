@@ -22,8 +22,8 @@ void actual_rhs_init();
 // Species 2 (Index 2 in the state)         = ionized hydrogen
 // Index net_ienuc(=3)                      = specific internal energy
 // Radiation index 0 (Index 4 in the state) = number density of photons
-// Radiation flux is NOT integrated in the ODE; it is attenuated algebraically
-// in computePhotoChemistry using the optical depth from the photon density equation.
+// Radiation index 1 (Index 5 in the state) = flux of photons normalized by the flux magnitude before the burn
+// (therefore, it is 1.0 at the beginning of burn)
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE auto fast_sqrt_approx(Real x) -> Real
 {
@@ -124,7 +124,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 	const amrex::Real n_e = state.xn[0];
 	const amrex::Real n_HI = state.xn[1];
 	const amrex::Real n_HII = state.xn[2];
-	const amrex::Real n_gamma = state.rn[0];
+	const amrex::Real n_gamma =
+	    amrex::max(state.rn[0], 0.0_rt); // clamp at zero: prevents sign reversal if VODE steps rn[0] slightly negative within tolerance
+	const amrex::Real n_gamma_flux = state.rn[1];
 
 	int molecular_process_switch = 1;
 	const amrex::Real n_H_total = n_HI + n_HII;
@@ -163,6 +165,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_rhs(const burn_t &state, Ar
 		ydot(net_ienuc) = energy_source / rho;
 	}
 	ydot(5) = -photoionization_term;
+	ydot(6) = -chat_sigma_photo * n_HI * n_gamma_flux;
 }
 
 template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual_jac(const burn_t &state, MatrixType &jac)
@@ -209,7 +212,12 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	const amrex::Real n_e = state.xn[0];
 	const amrex::Real n_HI = state.xn[1];
 	const amrex::Real n_HII = state.xn[2];
-	const amrex::Real n_gamma = state.rn[0];
+	const amrex::Real n_gamma =
+	    amrex::max(state.rn[0], 0.0_rt); // clamp at zero: prevents sign reversal if VODE steps rn[0] slightly negative within tolerance
+	// Gate for column-5 Jacobian entries: when rn[0] < 0 the clamp makes the RHS
+	// independent of rn[0], so all derivatives w.r.t. rn[0] are zero.
+	const amrex::Real n_gamma_active = (state.rn[0] >= 0.0_rt) ? 1.0_rt : 0.0_rt;
+	const amrex::Real n_gamma_flux = state.rn[1];
 
 	int molecular_process_switch = 1;
 	const amrex::Real n_H_total = n_HI + n_HII;
@@ -232,18 +240,21 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	jac(1, 2) = chat_sigma_photo * n_gamma + n_e * sigma_coll;
 	jac(1, 3) = -alpha_rec * n_e;
 	jac(1, net_ienuc) = (d_collisional_ionization_term_dT - d_recombination_term_dT) * dTde;
-	jac(1, 5) = chat_sigma_photo * n_HI;
+	jac(1, 5) = n_gamma_active * chat_sigma_photo * n_HI;
+	jac(1, 6) = 0.0_rt;
 
 	jac(2, 1) = -jac(1, 1);
 	jac(2, 2) = -jac(1, 2);
 	jac(2, 3) = -jac(1, 3);
 	jac(2, net_ienuc) = -jac(1, net_ienuc);
 	jac(2, 5) = -jac(1, 5);
+	jac(2, 6) = -jac(1, 6);
 	jac(3, 1) = jac(1, 1);
 	jac(3, 2) = jac(1, 2);
 	jac(3, 3) = jac(1, 3);
 	jac(3, net_ienuc) = jac(1, net_ienuc);
 	jac(3, 5) = jac(1, 5);
+	jac(3, 6) = jac(1, 6);
 
 	const Real inv_rho = 1.0_rt / rho;
 	const Real molecular_switch = static_cast<Real>(molecular_process_switch);
@@ -251,13 +262,22 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	jac(net_ienuc, 2) = (Gamma_photo * chat_sigma_photo * n_gamma + molecular_switch * (Gamma_KI - 2.0_rt * Lambda_KI * n_HI)) * inv_rho;
 	jac(net_ienuc, 3) = -(Lambda_rec + Lambda_ion_ff) * n_e * inv_rho;
 	jac(net_ienuc, net_ienuc) = (-d_recombination_cooling_dT - d_KI_cooling_dT - d_ion_ff_cooling_dT) * dTde * inv_rho;
-	jac(net_ienuc, 5) = Gamma_photo * chat_sigma_photo * n_HI * inv_rho;
+	jac(net_ienuc, 5) = Gamma_photo * chat_sigma_photo * n_HI * n_gamma_active * inv_rho;
+	jac(net_ienuc, 6) = 0.0_rt;
 
 	jac(5, 1) = 0.0_rt;
 	jac(5, 2) = -chat_sigma_photo * n_gamma;
 	jac(5, 3) = 0.0_rt;
 	jac(5, net_ienuc) = 0.0_rt;
-	jac(5, 5) = -chat_sigma_photo * n_HI;
+	jac(5, 5) = -n_gamma_active * chat_sigma_photo * n_HI;
+	jac(5, 6) = 0.0_rt;
+
+	jac(6, 1) = 0.0_rt;
+	jac(6, 2) = -chat_sigma_photo * n_gamma_flux;
+	jac(6, 3) = 0.0_rt;
+	jac(6, net_ienuc) = 0.0_rt;
+	jac(6, 5) = 0.0_rt;
+	jac(6, 6) = -n_HI * chat_sigma_photo;
 }
 
 #endif

@@ -86,15 +86,13 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 			for (int nn = 0; nn < NumChemBands; ++nn) {
 				photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] =
 				    state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) * invChemBandQuanta[nn];
+				photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn] = 1.0_rt;
 			}
 			photochemstate.rho = rho;
 			photochemstate.e = Eint / rho;
 
 			// call the EOS to set the temperature
 			eos(eos_input_re, photochemstate);
-
-			// Save initial photon density for algebraic flux attenuation
-			const Real n_gamma_initial = photochemstate.rn[0];
 
 			// do the actual integration
 			// do it in .cpp so that it is not built at compile time for all tests
@@ -124,12 +122,6 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 				    amrex::max(photochemstate.rn[static_cast<std::size_t>(nn) * MicrophysicsNumRadVarsPerGroup], small_x);
 			}
 
-			// Compute algebraic flux attenuation. The flux ODE dy(6)/dt =
-			// -chat*sigma*n_HI*y(6) has the same attenuation factor as
-			// the photon density equation dy(5)/dt = -chat*sigma*n_HI*y(5),
-			// so flux_attenuation = n_gamma_final / n_gamma_initial.
-			const Real flux_attenuation = (n_gamma_initial > 0.0_rt) ? amrex::min(photochemstate.rn[0] / n_gamma_initial, 1.0_rt) : 1.0_rt;
-
 			// get the updated specific eint
 			eos(eos_input_re, photochemstate);
 
@@ -140,11 +132,14 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 				state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) =
 				    photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] * chemBandQuanta[nn];
 				state(i, j, k, firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn) =
-				    flux_attenuation * state(i, j, k, firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn);
+				    photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn] *
+				    state(i, j, k, firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn);
 				state(i, j, k, firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn) =
-				    flux_attenuation * state(i, j, k, firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn);
+				    photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn] *
+				    state(i, j, k, firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn);
 				state(i, j, k, firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn) =
-				    flux_attenuation * state(i, j, k, firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn);
+				    photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn] *
+				    state(i, j, k, firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn);
 			}
 			// Quokka uses rho*eint
 			const Real dEint = (photochemstate.e * photochemstate.rho) - Eint;
