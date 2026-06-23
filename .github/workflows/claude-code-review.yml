@@ -111,6 +111,7 @@ jobs:
             - Do not speculate about runtime behaviour you cannot observe.
 
           use_sticky_comment: true
+          show_full_output: true
 
           claude_args: |
             --model claude-opus-4-7
