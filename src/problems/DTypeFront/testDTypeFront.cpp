@@ -414,12 +414,10 @@ auto problem_main() -> int
 	{
 		const auto totals = quokka::photochemistry::getPhotochemCounterTotals();
 		if (totals.burns > 0) {
-			amrex::Print() << "avg. num. of ODE steps per burn = "
-				       << static_cast<double>(totals.steps) / static_cast<double>(totals.burns) << '\n';
-			amrex::Print() << "avg. num. of RHS calls per burn = "
-				       << static_cast<double>(totals.rhs) / static_cast<double>(totals.burns) << '\n';
-			amrex::Print() << "avg. num. of Jacobian evals per burn = "
-				       << static_cast<double>(totals.jac) / static_cast<double>(totals.burns) << '\n';
+			amrex::Print() << "avg. num. of ODE steps per burn = " << static_cast<double>(totals.steps) / static_cast<double>(totals.burns) << '\n';
+			amrex::Print() << "avg. num. of RHS calls per burn = " << static_cast<double>(totals.rhs) / static_cast<double>(totals.burns) << '\n';
+			amrex::Print() << "avg. num. of Jacobian evals per burn = " << static_cast<double>(totals.jac) / static_cast<double>(totals.burns)
+				       << '\n';
 		}
 	}
 

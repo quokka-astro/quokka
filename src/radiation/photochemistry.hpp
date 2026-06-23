@@ -32,8 +32,7 @@ inline AMREX_GPU_MANAGED unsigned long long d_total_rhs = 0;
 inline AMREX_GPU_MANAGED unsigned long long d_total_jac = 0;
 } // namespace detail
 
-struct PhotochemCounterTotals
-{
+struct PhotochemCounterTotals {
 	unsigned long long burns{};
 	unsigned long long steps{};
 	unsigned long long rhs{};
