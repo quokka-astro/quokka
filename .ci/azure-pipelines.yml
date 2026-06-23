@@ -144,14 +144,12 @@ jobs:
         CCACHE_BASEDIR: $(Build.SourcesDirectory)
         CCACHE_NOHASHDIR: 1
       inputs:
-        # TEMPORARY: scoped to DTypeFront + Stromgren for GPU validation — revert before merging
-        cmakeArgs: '--build . --parallel 16 --target DTypeFront StromgrenSphere'
+        cmakeArgs: '--build . --parallel 16'
     
     - task: CMake@1
       displayName: 'Run CTest'
       inputs:
-        # TEMPORARY: scoped to DTypeFront + Stromgren for GPU validation — revert before merging
-        cmakeArgs: '-E chdir . ctest -R "DTypeFront|StromgrenSphereNoRecombination" -T Test --output-on-failure'
+        cmakeArgs: '-E chdir . ctest -E "RadMatterCoupling*" -T Test --output-on-failure'
     
     - task: PublishTestResults@2
       inputs:
