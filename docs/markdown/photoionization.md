@@ -59,10 +59,10 @@ where $\mathcal{H}_{\rm photo} = n_{\rm H^0} c \sigma_\gamma \epsilon_\gamma N_\
 the photoheating rate and $\epsilon_\gamma = h(\bar{\nu} - \nu_{{\rm H}^0})$ is the mean
 excess photon energy above the ionization threshold (29.65 eV for a $10^5$ K blackbody).
 For heating and cooling that are not directly due to hydrogen photoionization, we
-follow the optically thin prescription of Krumholz (2007) [@Krumholz2007]. In molecular
-gas, the approximate cooling and heating functions of Koyama & Inutsuka (2002)
-[@Koyama2002] are used. In partially ionized gas, the cooling rate is computed
-following Osterbrock (1989) [@Osterbrock1989], which includes cooling by ion-electron
+follow the optically thin prescription of [@Krumholz2007]: In molecular
+gas, the approximate cooling and heating functions of [@Koyama2002] are used. 
+In partially ionized gas, the cooling rate is computed
+following [@Osterbrock1989], which includes cooling by ion-electron
 collisions involving the first and second ionized states of O, N, and Ne — the
 dominant coolants in H II regions at solar metallicity. A future PR will extend the
 cooling model to use the RIGEL prescription (Deng et al. 2024).
