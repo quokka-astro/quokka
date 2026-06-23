@@ -99,11 +99,12 @@ jobs:
       working-directory: ${{github.workspace}}/tests
       shell: bash
       run: |
-        ${{runner.workspace}}/build/src/problems/FastWave/FastWave \
+        ${{runner.workspace}}/build/src/problems/FastWaveConvergence/FastWaveConvergence \
           ../inputs/FastWave.toml \
           amr.max_grid_size_x=32 \
           amr.blocking_factor_x=16 \
           mhd.emf_compute_scheme=FelkerStone2017 \
+          mhd.emf_averaging_scheme=LondrilloDelZanna2004 \
           amrex.init_snan=1 \
           amrex.fpe_trap_invalid=1 \
           amrex.fpe_trap_overflow=1 \
@@ -113,7 +114,7 @@ jobs:
     - name: Test
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      # Execute the MHD tests while skipping the slow HydroWave case
+      # Execute the MHD tests while skipping the slow HydroWaveConvergence case
       run: canary run --output-on-failure --workers=2 -k 'MHD and not HydroWaveConvergence' .
 
     - name: ccache stats

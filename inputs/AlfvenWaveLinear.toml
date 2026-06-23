@@ -34,6 +34,9 @@ hydro.rk_integrator_order = 2
 hydro.reconstruction_order = 5
 hydro.use_dual_energy = 0
 
+setup.run_convergence = false
+setup.run_sim = true
+setup.error_tol = 0.005
 setup.num_modes_x = 1
 setup.num_modes_y = 0
 setup.num_modes_z = 0
