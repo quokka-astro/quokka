@@ -1,0 +1,10 @@
+# Fabro project configuration
+# https://docs.fabro.computer/getting-started/quick-start
+
+_version = 1
+
+# Auto-create pull requests on successful workflow runs.
+[run.pull_request]
+enabled = true
+draft = true
+# auto_merge = true

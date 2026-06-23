@@ -1,0 +1,13 @@
+_version = 1
+
+[workflow]
+graph = "workflow.fabro"
+
+[run.environment]
+id = "local"
+
+[run.pull_request]
+enabled = true
+
+[environments.local]
+provider = "local"

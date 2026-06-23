@@ -1,0 +1,58 @@
+digraph QuokkaPRReview {
+    graph [
+        goal="Perform a static code review of a Quokka pull request",
+        rankdir=LR,
+        model_stylesheet="
+            *        { model: claude-sonnet-4-5; reasoning_effort: low; }
+            .deep    { model: claude-opus-4-7; reasoning_effort: high; }
+        "
+    ]
+
+    start [shape=Mdiamond, label="Start"]
+    exit  [shape=Msquare, label="Exit"]
+
+    collect_diff [
+        label="Verify PR Diff",
+        shape=parallelogram,
+        script="test -s .workflow/pr.diff"
+    ]
+
+    fork [label="Fork Review", shape=component, join_policy="wait_all"]
+
+    physics [
+        label="Physics Correctness",
+        class="deep",
+        shape=tab,
+        prompt="Read .workflow/pr.diff carefully. You are reviewing a pull request to Quokka, a radiation magnetohydrodynamics code built on AMReX. Focus on static analysis only; you cannot compile or run the code. Check conservation laws, numerical schemes, physical units, AMReX data structure use, radiation energy groups, opacity terms, flux limiters, hydro slope limiters, Riemann solvers, source-term coupling, initial conditions, and boundary conditions. Report only concrete, actionable findings."
+    ]
+
+    gpu [
+        label="GPU Lambda Safety",
+        class="deep",
+        shape=tab,
+        prompt="Read .workflow/pr.diff carefully. Review for AMReX GPU safety issues. Never allow host pointers inside AMREX_GPU_DEVICE lambdas or amrex::ParallelFor. Prefer geom.ProbLoArray(), geom.CellSizeArray(), and geom.InvCellSizeArray() over raw ProbLo() or CellSize() pointers. Never capture raw pointers from GeometryData inside GPU lambdas. amrex::GpuArray and amrex::Array4 are safe to capture by value. Report only concrete, actionable findings."
+    ]
+
+    style_tests [
+        label="Style And Tests",
+        shape=tab,
+        prompt="Read .workflow/pr.diff carefully. Review for Quokka code style and test completeness. Quokka uses C++20, LLVM-based clang-format with a 160-character line limit, tabs at eight spaces, PascalCase classes and methods, camelCase data members with trailing underscore, braces for single-statement blocks, trailing return types for non-void functions, const variables when possible, Doxygen comments for public APIs, and comments that explain why rather than restating what. For AMREX_SPACEDIM handling, prefer preprocessor guards for dimension-dependent code; inline ternaries need // NOLINT(misc-redundant-expression). New physics needs a matching src/problems test, CMakeLists.txt registration with add_test(...) and JOB_NAME, and an inputs/<TestName>.toml file. Report only concrete, actionable findings."
+    ]
+
+    merge [label="Merge Findings", shape=tripleoctagon]
+
+    synthesize [
+        label="Prepare Review Comment",
+        shape=tab,
+        prompt="Synthesize the review findings into .workflow/review.md as a GitHub PR comment. Start the file with '<!-- fabro-review -->'. Include a short overall summary, then prioritized findings with file and line references when possible. Be constructive and suggest concrete fixes. Do not speculate about runtime behavior you cannot observe. If there are no concrete issues, say that no blocking issues were found and mention that the review was static only."
+    ]
+
+    start -> collect_diff -> fork
+    fork -> physics
+    fork -> gpu
+    fork -> style_tests
+    physics -> merge
+    gpu -> merge
+    style_tests -> merge
+    merge -> synthesize -> exit
+}
