@@ -5,17 +5,27 @@
       "Bash(git diff *)",
       "Bash(git log *)",
       "Bash(git show *)",
+      "Bash(git fetch *)",
       "Bash(git status)",
       "Bash(git status *)",
       "Bash(git blame *)",
       "Bash(git ls-files *)",
       "Bash(gh pr view *)",
       "Bash(gh pr diff *)",
+      "Bash(gh pr list *)",
       "Bash(gh issue view *)",
+      "Bash(gh api *)",
       "Bash(find *)",
       "Bash(grep *)",
       "Bash(ls *)",
-      "Bash(wc *)"
+      "Bash(wc *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(echo *)",
+      "Bash(env)",
+      "Bash(printenv)",
+      "Bash(printenv *)"
     ]
   }
 }
