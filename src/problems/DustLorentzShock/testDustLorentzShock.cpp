@@ -100,6 +100,7 @@ struct ShockPhysicsTraits {
 	static constexpr double gravitational_constant = 1.0;
 	static constexpr double c_light = 1.0;
 	static constexpr double radiation_constant = 1.0;
+	static constexpr ResistivityModel resistivity_model = ResistivityModel::none;
 };
 
 template <typename problem_t> AMREX_GPU_DEVICE auto computeGasEnergy(double rho, double vx, double bz) -> double

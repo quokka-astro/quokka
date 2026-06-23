@@ -530,6 +530,15 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 
 auto problem_main() -> int
 {
+	{
+		double eta = 0.0;
+		amrex::ParmParse const mhd_pp("mhd");
+		mhd_pp.query("resistivity", eta);
+		if (eta != 0.0) {
+			amrex::Abort("SlowWaveConvergence does not support mhd.resistivity != 0; use the AlfvenWaveLinear fixed-resolution test for "
+				     "resistivity validation.");
+		}
+	}
 	quokka::richardson::applyQuietDefaults();
 
 	quokka::richardson::Parameters params{};
