@@ -24,6 +24,27 @@ namespace quokka::photochemistry
 {
 AMREX_GPU_DEVICE void photochem_burner(burn_t &photochemstate, Real dt);
 
+namespace detail
+{
+inline AMREX_GPU_MANAGED unsigned long long d_total_burns = 0;
+inline AMREX_GPU_MANAGED unsigned long long d_total_steps = 0;
+inline AMREX_GPU_MANAGED unsigned long long d_total_rhs = 0;
+inline AMREX_GPU_MANAGED unsigned long long d_total_jac = 0;
+} // namespace detail
+
+struct PhotochemCounterTotals
+{
+	unsigned long long burns{};
+	unsigned long long steps{};
+	unsigned long long rhs{};
+	unsigned long long jac{};
+};
+
+inline auto getPhotochemCounterTotals() -> PhotochemCounterTotals
+{
+	return PhotochemCounterTotals{detail::d_total_burns, detail::d_total_steps, detail::d_total_rhs, detail::d_total_jac};
+}
+
 template <typename problem_t>
 auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, const Real max_density_allowed, const Real min_density_allowed) -> bool
 {
@@ -98,6 +119,11 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 			// do it in .cpp so that it is not built at compile time for all tests
 			// which would otherwise slow down compilation due to the large RHS file
 			photochem_burner(photochemstate, dt_stage);
+
+			amrex::Gpu::Atomic::Add(&detail::d_total_burns, 1ULL);
+			amrex::Gpu::Atomic::Add(&detail::d_total_steps, static_cast<unsigned long long>(photochemstate.n_step));
+			amrex::Gpu::Atomic::Add(&detail::d_total_rhs, static_cast<unsigned long long>(photochemstate.n_rhs));
+			amrex::Gpu::Atomic::Add(&detail::d_total_jac, static_cast<unsigned long long>(photochemstate.n_jac));
 
 			if (std::isnan(photochemstate.xn[0]) || std::isnan(photochemstate.rho) || std::isnan(photochemstate.rn[0])) {
 				amrex::Abort("Burner returned NAN");

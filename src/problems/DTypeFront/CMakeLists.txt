@@ -3,8 +3,10 @@ if(AMReX_SPACEDIM GREATER_EQUAL 2)
                                                   # network_name to
                                                   # photoionization for this
                                                   # directory only
+  set(DTypeFront_INTEGRATOR "VODE" CACHE STRING "Microphysics integrator for DTypeFront")
   setup_target_for_microphysics_compilation(${microphysics_network_name}
-                                            "${CMAKE_CURRENT_BINARY_DIR}/")
+                                            "${CMAKE_CURRENT_BINARY_DIR}/"
+                                            "${DTypeFront_INTEGRATOR}")
 
   # use the BEFORE keyword so that these files get priority in compilation for
   # targets in this directory this is critical to ensure the correct Microphysics
