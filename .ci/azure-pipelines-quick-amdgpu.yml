@@ -10,7 +10,7 @@ pr:
     - development
   paths:
     include:
-    - .ci/azure-pipelines-quick-amdgpu.yml
+    - src/problems/**
 
 jobs:
   - job: Quick_HIP_Build_Test

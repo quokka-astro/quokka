@@ -10,7 +10,7 @@ pr:
     - development
   paths:
     include:
-    - .ci/azure-pipelines-quick.yml
+    - src/problems/**
 
 jobs:
   - job: Quick_CUDA_Build_Test
