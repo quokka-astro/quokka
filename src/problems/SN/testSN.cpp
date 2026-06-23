@@ -1,6 +1,6 @@
 /// \file testSN.cpp
 /// \brief Defines a test problem for supernova feedback.
-/// In this test, two supernova explode and in the end the gas temperature and velocity is checked for
+/// In this test, two supernovae explode and in the end the gas temperature and velocity is checked for
 /// Galilean invariance between a rest frame and a boost frame.
 
 #include "AMReX.H"
