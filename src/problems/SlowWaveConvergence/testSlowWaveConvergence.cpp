@@ -39,7 +39,7 @@ template <> struct Physics_Traits<SlowWaveConvergence> : DefaultPhysicsTraits {
 };
 
 constexpr double sound_speed = 1.0;
-constexpr double gamma_gas = ::quokka::EOS_Traits<SlowWaveConvergence>::gamma;
+constexpr double gamma_gas = quokka::EOS_Traits<SlowWaveConvergence>::gamma;
 constexpr double bg_density = 1.0;
 constexpr double bg_pressure = sound_speed * sound_speed * bg_density / gamma_gas;
 constexpr double b0_magn = 1.0;

@@ -44,7 +44,7 @@ template <> struct Physics_Traits<FCQuantities> : DefaultPhysicsTraits {
 };
 
 constexpr double rho0 = 1.0;					       // background density
-constexpr double P0 = 1.0 / ::quokka::EOS_Traits<FCQuantities>::gamma; // background pressure
+constexpr double P0 = 1.0 / quokka::EOS_Traits<FCQuantities>::gamma; // background pressure
 constexpr double v0 = 0.;					       // background velocity
 constexpr double amp = 1.0e-6;					       // perturbation amplitude
 
@@ -56,7 +56,7 @@ AMREX_GPU_DEVICE void computeWaveSolution(int i, int j, int k, amrex::Array4<amr
 	const amrex::Real A = amp;
 
 	const quokka::valarray<double, 3> R = {1.0, -1.0, 1.5}; // right eigenvector of sound wave
-	const quokka::valarray<double, 3> U_0 = {rho0, rho0 * v0, P0 / (::quokka::EOS_Traits<FCQuantities>::gamma - 1.0) + 0.5 * rho0 * std::pow(v0, 2)};
+	const quokka::valarray<double, 3> U_0 = {rho0, rho0 * v0, P0 / (quokka::EOS_Traits<FCQuantities>::gamma - 1.0) + 0.5 * rho0 * std::pow(v0, 2)};
 	const quokka::valarray<double, 3> dU = (A * R / (2.0 * M_PI * dx[0])) * (std::cos(2.0 * M_PI * x_L) - std::cos(2.0 * M_PI * x_R));
 
 	double const rho = U_0[0] + dU[0];

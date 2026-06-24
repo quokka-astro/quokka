@@ -220,7 +220,7 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::computeAfter
 		scalars[1] = n_HI * spmasses[1];
 		scalars[2] = n_HII * spmasses[2];
 		massScalars = scalars;
-		const amrex::Real temp = ::quokka::EOS<PhotoionizationStreamingProblem>::ComputeTgasFromEint(rho, Eint_i, massScalars);
+		const amrex::Real temp = quokka::EOS<PhotoionizationStreamingProblem>::ComputeTgasFromEint(rho, Eint_i, massScalars);
 
 		userData_.t_vec_.push_back(time);
 		userData_.n_e_vec_.push_back(n_e);

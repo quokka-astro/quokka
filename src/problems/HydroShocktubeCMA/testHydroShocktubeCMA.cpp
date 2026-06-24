@@ -101,7 +101,7 @@ template <> void QuokkaSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(
 		AMREX_ASSERT(!std::isnan(rho));
 		AMREX_ASSERT(!std::isnan(P));
 
-		const auto gamma = ::quokka::EOS_Traits<ShocktubeProblem>::gamma;
+		const auto gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
 		for (int n = 0; n < ncomp_cc; ++n) {
 			state_cc(i, j, k, n) = 0.;
 		}
@@ -127,7 +127,7 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVec
 {
 	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
 	constexpr int nvar = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
-	const auto gamma = ::quokka::EOS_Traits<ShocktubeProblem>::gamma;
+	const auto gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
 
 	// Prepare left boundary values (left state)
 	amrex::GpuArray<amrex::Real, nvar> low_bdr_cells{};

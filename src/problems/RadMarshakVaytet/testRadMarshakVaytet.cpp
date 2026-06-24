@@ -172,7 +172,7 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVe
 	// Number of variables
 	constexpr int nvar = Physics_Indices<SuOlsonProblemCgs>::nvarTotal_cc;
 	auto const radBoundaries_g = RadSystem<SuOlsonProblemCgs>::radBoundaries_;
-	const double Egas = ::quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
+	const double Egas = quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
 
 	// Left state
 	amrex::GpuArray<amrex::Real, nvar> low_bdr_cells{};
@@ -220,7 +220,7 @@ template <> void QuokkaSimulation<SuOlsonProblemCgs>::setInitialConditionsOnGrid
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		const double Egas = ::quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
+		const double Egas = quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
 		// const double Erad = a_rad * std::pow(T_initial, 4);
 		auto Erad_g = RadSystem<SuOlsonProblemCgs>::ComputeThermalRadiationMultiGroup(T_initial, radBoundaries_g);
 
@@ -307,7 +307,7 @@ auto problem_main() -> int
 			const double rho = values.at(RadSystem<SuOlsonProblemCgs>::gasDensity_index)[i];
 			amrex::Real const x = position[i];
 			xs.at(i) = x;
-			Tgas.at(i) = ::quokka::EOS<SuOlsonProblemCgs>::ComputeTgasFromEint(rho, Egas_t);
+			Tgas.at(i) = quokka::EOS<SuOlsonProblemCgs>::ComputeTgasFromEint(rho, Egas_t);
 			Trad.at(i) = std::pow(Erad_t / a_rad, 1. / 4.);
 
 			// vgas

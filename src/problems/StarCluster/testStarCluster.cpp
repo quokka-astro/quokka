@@ -96,7 +96,7 @@ template <> void QuokkaSimulation<StarCluster>::preCalculateInitialConditions()
 		const Real alpha_vir = userData_.alpha_vir;
 		const Real M_sphere = (4. / 3.) * M_PI * std::pow(R_sphere, 3) * rho_sph;
 		const Real rms_dv_target = std::sqrt(alpha_vir * (3. / 5.) * Gconst_ * M_sphere / R_sphere);
-		const Real rms_Mach_target = rms_dv_target / ::quokka::EOS_Traits<StarCluster>::cs_isothermal;
+		const Real rms_Mach_target = rms_dv_target / quokka::EOS_Traits<StarCluster>::cs_isothermal;
 		const Real rms_dv_actual = userData_.dv_rms_generated;
 		userData_.rescale_factor = rms_dv_target / rms_dv_actual;
 		amrex::Print() << "rms Mach target = " << rms_Mach_target << "\n";
@@ -169,7 +169,7 @@ template <> void QuokkaSimulation<StarCluster>::refineGrid(int lev, amrex::TagBo
 {
 	// refine on Jeans length
 	const int N_cells = 4; // inverse of the 'Jeans number' [Truelove et al. (1997)]
-	const amrex::Real cs = ::quokka::EOS_Traits<StarCluster>::cs_isothermal;
+	const amrex::Real cs = quokka::EOS_Traits<StarCluster>::cs_isothermal;
 	const amrex::Real dx = geom[lev].CellSizeArray()[0];
 	const amrex::Real G = Gconst_;
 

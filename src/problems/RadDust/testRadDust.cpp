@@ -102,7 +102,7 @@ template <> void QuokkaSimulation<DustProblem>::setInitialConditionsOnGrid(quokk
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	const double Egas = ::quokka::EOS<DustProblem>::ComputeEintFromTgas(rho0, T0);
+	const double Egas = quokka::EOS<DustProblem>::ComputeEintFromTgas(rho0, T0);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -132,11 +132,11 @@ template <> void QuokkaSimulation<DustProblem>::computeAfterTimestep()
 		const amrex::Real x3GasMom = values.at(RadSystem<DustProblem>::x3GasMomentum_index)[0];
 		const amrex::Real rho = values.at(RadSystem<DustProblem>::gasDensity_index)[0];
 		static_assert(!Physics_Traits<DustProblem>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
-		const amrex::Real Egas_i = ::quokka::EOS<DustProblem>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Etot_i, 0.0);
+		const amrex::Real Egas_i = quokka::EOS<DustProblem>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Etot_i, 0.0);
 		const amrex::Real Erad_i = values.at(RadSystem<DustProblem>::radEnergy_index)[0];
 		// userData_.Trad_vec_.push_back(std::pow(Erad_i / a_rad, 1. / 4.));
 		userData_.Trad_vec_.push_back(Erad_i / a_rad);
-		userData_.Tgas_vec_.push_back(::quokka::EOS<DustProblem>::ComputeTgasFromEint(rho, Egas_i));
+		userData_.Tgas_vec_.push_back(quokka::EOS<DustProblem>::ComputeTgasFromEint(rho, Egas_i));
 	}
 }
 

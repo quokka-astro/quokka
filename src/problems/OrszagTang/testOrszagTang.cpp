@@ -62,7 +62,7 @@ template <> void QuokkaSimulation<OrszagTang>::setInitialConditionsOnGrid(quokka
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 
-	constexpr double gamma_gas = ::quokka::EOS_Traits<OrszagTang>::gamma;
+	constexpr double gamma_gas = quokka::EOS_Traits<OrszagTang>::gamma;
 	constexpr double rho0 = 25. / (36. * M_PI);
 	constexpr double P0 = 5. / (12. * M_PI);
 

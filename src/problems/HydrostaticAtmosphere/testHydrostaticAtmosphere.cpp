@@ -52,7 +52,7 @@ AMRSimulation<HydrostaticAtmosphereProblem>::setCustomBoundaryConditions(const a
 	amrex::Real const x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 	amrex::Real const rho_atm = g_base_density_floor * std::exp(-x / g_scale_height);
 	amrex::Real const rho_init = kRhoInitFactor * rho_atm;
-	amrex::Real const Eint_init = ::quokka::EOS<HydrostaticAtmosphereProblem>::ComputeEintFromTgas(rho_init, kTgasInit);
+	amrex::Real const Eint_init = quokka::EOS<HydrostaticAtmosphereProblem>::ComputeEintFromTgas(rho_init, kTgasInit);
 
 	for (int n = 0; n < numcomp; ++n) {
 		consVar(i, j, k, n) = 0.;
@@ -80,7 +80,7 @@ template <> void QuokkaSimulation<HydrostaticAtmosphereProblem>::setInitialCondi
 		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 		amrex::Real const rho_atm = base_density_floor * std::exp(-x / scale_height);
 		amrex::Real const rho_init = kRhoInitFactor * rho_atm;
-		amrex::Real const Eint_init = ::quokka::EOS<HydrostaticAtmosphereProblem>::ComputeEintFromTgas(rho_init, kTgasInit);
+		amrex::Real const Eint_init = quokka::EOS<HydrostaticAtmosphereProblem>::ComputeEintFromTgas(rho_init, kTgasInit);
 
 		for (int n = 0; n < ncomp_cc; ++n) {
 			state_cc(i, j, k, n) = 0.;
@@ -121,7 +121,7 @@ void QuokkaSimulation<HydrostaticAtmosphereProblem>::computeReferenceSolution(am
 				amrex::Real const rho_atm = base_density_floor * std::exp(-x / scale_height);
 				amrex::Real const rho_floor = density_floor_parser(x, y, z, base_density_floor);
 				amrex::Real const rho_init = kRhoInitFactor * rho_atm;
-				amrex::Real const Eint_init = ::quokka::EOS<HydrostaticAtmosphereProblem>::ComputeEintFromTgas(rho_init, kTgasInit);
+				amrex::Real const Eint_init = quokka::EOS<HydrostaticAtmosphereProblem>::ComputeEintFromTgas(rho_init, kTgasInit);
 
 				for (int n = 0; n < ncomp_cc; ++n) {
 					state_ref(i, j, k, n) = 0.;
@@ -156,7 +156,7 @@ void QuokkaSimulation<HydrostaticAtmosphereProblem>::computeReferenceSolution(am
 				amrex::Real const rho_atm = base_density_floor * std::exp(-x / scale_height);
 				amrex::Real const rho_floor = density_floor_func(x, y, z, base_density_floor);
 				amrex::Real const rho_init = kRhoInitFactor * rho_atm;
-				amrex::Real const Eint_init = ::quokka::EOS<HydrostaticAtmosphereProblem>::ComputeEintFromTgas(rho_init, kTgasInit);
+				amrex::Real const Eint_init = quokka::EOS<HydrostaticAtmosphereProblem>::ComputeEintFromTgas(rho_init, kTgasInit);
 
 				for (int n = 0; n < ncomp_cc; ++n) {
 					state_ref(i, j, k, n) = 0.;

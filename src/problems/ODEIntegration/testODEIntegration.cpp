@@ -55,7 +55,7 @@ struct ODECoolingFunctor {
 	{
 		// compute temperature
 		Real const Eint = y_data[0];
-		Real const T = ::quokka::EOS<ODETest>::ComputeTgasFromEint(rho, Eint);
+		Real const T = quokka::EOS<ODETest>::ComputeTgasFromEint(rho, Eint);
 
 		// compute cooling function
 		y_rhs[0] = cooling_function(rho, T);
@@ -72,7 +72,7 @@ auto problem_main() -> int
 	eos_init(small_temp, small_dens);
 
 	// set up initial conditions
-	const Real Eint0 = ::quokka::EOS<ODETest>::ComputeEintFromTgas(rho0, Tgas0);
+	const Real Eint0 = quokka::EOS<ODETest>::ComputeEintFromTgas(rho0, Tgas0);
 	const Real Edot0 = cooling_function(rho0, Tgas0);
 	const Real tcool = std::abs(Eint0 / Edot0);
 	const Real max_time = 10.0 * tcool;
@@ -89,7 +89,7 @@ auto problem_main() -> int
 	int steps_taken = 0;
 	rk_adaptive_integrate(coolingFunctor, 0, y, max_time, rtol, abstol, steps_taken);
 
-	const Real Tgas = ::quokka::EOS<ODETest>::ComputeTgasFromEint(rho0, y[0]);
+	const Real Tgas = quokka::EOS<ODETest>::ComputeTgasFromEint(rho0, y[0]);
 	// for n_H = 0.01 cm^{-3} (for IK cooling function)
 	const Real Teq = 160.52611612610758;
 	const Real Terr_rel = std::abs(Tgas - Teq) / Teq;

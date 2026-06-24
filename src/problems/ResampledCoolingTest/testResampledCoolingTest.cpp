@@ -101,7 +101,7 @@ template <> struct Physics_Traits<ResampledCoolingTest> : DefaultPhysicsTraits {
 // Initial conditions: hot gas that will cool down
 constexpr double T_initial = 1.0e7;	// K
 constexpr double rho_initial = 1.0e-26; // g cm^-3 (constant density for isochoric)
-constexpr double mu_initial = 0.6 * ::quokka::EOS_Traits<ResampledCoolingTest>::mean_molecular_weight;
+constexpr double mu_initial = 0.6 * quokka::EOS_Traits<ResampledCoolingTest>::mean_molecular_weight;
 constexpr double pressure_initial = rho_initial * C::k_B * T_initial / mu_initial;
 constexpr double Bx_initial = 5.264491941623788e-06; // chosen so plasma beta = P_gas / (B^2 / 2) ~= 1
 constexpr double magnetic_energy_initial = 0.5 * Bx_initial * Bx_initial;
@@ -109,7 +109,7 @@ constexpr double active_magnetic_energy_initial = Physics_Traits<ResampledCoolin
 
 auto computeInitialInternalEnergy() -> double
 {
-	constexpr double gamma = ::quokka::EOS_Traits<ResampledCoolingTest>::gamma;
+	constexpr double gamma = quokka::EOS_Traits<ResampledCoolingTest>::gamma;
 	return rho_initial * C::k_B * T_initial / ((gamma - 1.0) * mu_initial);
 }
 
@@ -120,7 +120,7 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::setInitialConditionsOnG
 
 	// Compute initial internal energy from temperature
 	const double k_B = C::k_B;
-	const double gamma = ::quokka::EOS_Traits<ResampledCoolingTest>::gamma;
+	const double gamma = quokka::EOS_Traits<ResampledCoolingTest>::gamma;
 
 	// For ideal gas: P = (gamma - 1) * rho * e_int
 	// and P = rho * k_B * T / (mu * m_u)

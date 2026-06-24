@@ -82,8 +82,8 @@ template <> void QuokkaSimulation<CollapseProblem>::setInitialConditionsOnGrid(q
 		state_cc(i, j, k, HydroSystem<CollapseProblem>::x1Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<CollapseProblem>::x2Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<CollapseProblem>::x3Momentum_index) = 0;
-		state_cc(i, j, k, HydroSystem<CollapseProblem>::energy_index) = ::quokka::EOS<CollapseProblem>::ComputeEintFromPres(rho, P);
-		state_cc(i, j, k, HydroSystem<CollapseProblem>::internalEnergy_index) = ::quokka::EOS<CollapseProblem>::ComputeEintFromPres(rho, P);
+		state_cc(i, j, k, HydroSystem<CollapseProblem>::energy_index) = quokka::EOS<CollapseProblem>::ComputeEintFromPres(rho, P);
+		state_cc(i, j, k, HydroSystem<CollapseProblem>::internalEnergy_index) = quokka::EOS<CollapseProblem>::ComputeEintFromPres(rho, P);
 	});
 }
 

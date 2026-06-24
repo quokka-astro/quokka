@@ -62,8 +62,8 @@ template <> void QuokkaSimulation<MHDBlast>::setInitialConditionsOnGrid(quokka::
 		state_cc(i, j, k, HydroSystem<MHDBlast>::x1Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<MHDBlast>::x2Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<MHDBlast>::x3Momentum_index) = 0;
-		state_cc(i, j, k, HydroSystem<MHDBlast>::energy_index) = P / (::quokka::EOS_Traits<MHDBlast>::gamma - 1.) + Emag;
-		state_cc(i, j, k, HydroSystem<MHDBlast>::internalEnergy_index) = P / (::quokka::EOS_Traits<MHDBlast>::gamma - 1.);
+		state_cc(i, j, k, HydroSystem<MHDBlast>::energy_index) = P / (quokka::EOS_Traits<MHDBlast>::gamma - 1.) + Emag;
+		state_cc(i, j, k, HydroSystem<MHDBlast>::internalEnergy_index) = P / (quokka::EOS_Traits<MHDBlast>::gamma - 1.);
 	});
 }
 

@@ -67,8 +67,8 @@ template <> struct quokka::EOS_Traits<DustDampingMHDZeroCharge> {
 	static constexpr double gamma = 1.4;
 };
 
-constexpr double Egas0 = P_INITIAL / (::quokka::EOS_Traits<DustDampingDragReference>::gamma - 1.0) + 0.5 * rho * v0 * v0;
-constexpr double Egas0_internal = P_INITIAL / (::quokka::EOS_Traits<DustDampingDragReference>::gamma - 1.0);
+constexpr double Egas0 = P_INITIAL / (quokka::EOS_Traits<DustDampingDragReference>::gamma - 1.0) + 0.5 * rho * v0 * v0;
+constexpr double Egas0_internal = P_INITIAL / (quokka::EOS_Traits<DustDampingDragReference>::gamma - 1.0);
 
 template <> struct Physics_Traits<DustDampingDragReference> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;

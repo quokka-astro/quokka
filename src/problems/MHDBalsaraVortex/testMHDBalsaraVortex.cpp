@@ -37,7 +37,7 @@ template <> struct Physics_Traits<MHDBalsaraVortex> : DefaultPhysicsTraits {
 };
 
 // background state
-constexpr double gamma_gas = ::quokka::EOS_Traits<MHDBalsaraVortex>::gamma;
+constexpr double gamma_gas = quokka::EOS_Traits<MHDBalsaraVortex>::gamma;
 constexpr double bg_density = 1.0;
 constexpr double bg_pressure = 1.0;
 constexpr double sound_speed = gcem::sqrt(gamma_gas * bg_pressure / bg_density);

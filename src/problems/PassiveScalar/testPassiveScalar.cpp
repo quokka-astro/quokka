@@ -77,8 +77,8 @@ template <> void QuokkaSimulation<ScalarProblem>::setInitialConditionsOnGrid(quo
 		state_cc(i, j, k, HydroSystem<ScalarProblem>::x1Momentum_index) = rho * vx;
 		state_cc(i, j, k, HydroSystem<ScalarProblem>::x2Momentum_index) = 0.;
 		state_cc(i, j, k, HydroSystem<ScalarProblem>::x3Momentum_index) = 0.;
-		state_cc(i, j, k, HydroSystem<ScalarProblem>::energy_index) = ::quokka::EOS<ScalarProblem>::ComputeEintFromPres(rho, P) + 0.5 * rho * (vx * vx);
-		state_cc(i, j, k, HydroSystem<ScalarProblem>::internalEnergy_index) = ::quokka::EOS<ScalarProblem>::ComputeEintFromPres(rho, P);
+		state_cc(i, j, k, HydroSystem<ScalarProblem>::energy_index) = quokka::EOS<ScalarProblem>::ComputeEintFromPres(rho, P) + 0.5 * rho * (vx * vx);
+		state_cc(i, j, k, HydroSystem<ScalarProblem>::internalEnergy_index) = quokka::EOS<ScalarProblem>::ComputeEintFromPres(rho, P);
 		state_cc(i, j, k, HydroSystem<ScalarProblem>::scalar0_index) = scalar;
 	});
 }
@@ -119,8 +119,8 @@ void QuokkaSimulation<ScalarProblem>::computeReferenceSolution(amrex::MultiFab &
 			stateExact(i, j, k, HydroSystem<ScalarProblem>::x2Momentum_index) = 0.;
 			stateExact(i, j, k, HydroSystem<ScalarProblem>::x3Momentum_index) = 0.;
 			stateExact(i, j, k, HydroSystem<ScalarProblem>::energy_index) =
-			    ::quokka::EOS<ScalarProblem>::ComputeEintFromPres(rho, P) + 0.5 * rho * (vx * vx);
-			stateExact(i, j, k, HydroSystem<ScalarProblem>::internalEnergy_index) = ::quokka::EOS<ScalarProblem>::ComputeEintFromPres(rho, P);
+			    quokka::EOS<ScalarProblem>::ComputeEintFromPres(rho, P) + 0.5 * rho * (vx * vx);
+			stateExact(i, j, k, HydroSystem<ScalarProblem>::internalEnergy_index) = quokka::EOS<ScalarProblem>::ComputeEintFromPres(rho, P);
 			stateExact(i, j, k, HydroSystem<ScalarProblem>::scalar0_index) = scalar;
 		});
 	}
@@ -165,7 +165,7 @@ void QuokkaSimulation<ScalarProblem>::computeReferenceSolution(amrex::MultiFab &
 				const auto s = val_exact.at(HydroSystem<ScalarProblem>::scalar0_index)[i];
 				const auto vx = xmom / rho;
 				const auto Eint = E - 0.5 * rho * (vx * vx);
-				const auto P = ::quokka::EOS<ScalarProblem>::ComputePressure(rho, Eint);
+				const auto P = quokka::EOS<ScalarProblem>::ComputePressure(rho, Eint);
 				d_exact.push_back(rho);
 				vx_exact.push_back(vx);
 				P_exact.push_back(P);
@@ -179,7 +179,7 @@ void QuokkaSimulation<ScalarProblem>::computeReferenceSolution(amrex::MultiFab &
 				const auto fs = values.at(HydroSystem<ScalarProblem>::scalar0_index)[i];
 				const auto fvx = fxmom / frho;
 				const auto fEint = fE - 0.5 * frho * (fvx * fvx);
-				const auto fP = ::quokka::EOS<ScalarProblem>::ComputePressure(frho, fEint);
+				const auto fP = quokka::EOS<ScalarProblem>::ComputePressure(frho, fEint);
 				d_final.push_back(frho);
 				vx_final.push_back(fvx);
 				P_final.push_back(fP);

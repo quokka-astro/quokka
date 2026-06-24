@@ -237,7 +237,7 @@ auto problem_main() -> int
 			erad.at(i) += erad2.at(i);
 		}
 		const double e_gas = values.at(RadSystem<MarshakProblem>::gasInternalEnergy_index)[i];
-		T.at(i) = ::quokka::EOS<MarshakProblem>::ComputeTgasFromEint(rho0, e_gas);
+		T.at(i) = quokka::EOS<MarshakProblem>::ComputeTgasFromEint(rho0, e_gas);
 		T_exact.at(i) = T_end_exact;
 
 		const double E2 = EradL * std::exp(-rho0 * kappa2 * x);

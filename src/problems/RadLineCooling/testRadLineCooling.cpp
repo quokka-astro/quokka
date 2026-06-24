@@ -145,7 +145,7 @@ template <> void QuokkaSimulation<CoolingProblem>::setInitialConditionsOnGrid(qu
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	const double Egas = ::quokka::EOS<CoolingProblem>::ComputeEintFromTgas(rho0, T0);
+	const double Egas = quokka::EOS<CoolingProblem>::ComputeEintFromTgas(rho0, T0);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -175,8 +175,8 @@ template <> void QuokkaSimulation<CoolingProblem>::computeAfterTimestep()
 		const amrex::Real x3GasMom = values.at(RadSystem<CoolingProblem>::x3GasMomentum_index)[0];
 		const amrex::Real rho = values.at(RadSystem<CoolingProblem>::gasDensity_index)[0];
 		static_assert(!Physics_Traits<CoolingProblem>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
-		const amrex::Real Egas_i = ::quokka::EOS<CoolingProblem>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Etot_i, 0.0);
-		userData_.Tgas_vec_.push_back(::quokka::EOS<CoolingProblem>::ComputeTgasFromEint(rho, Egas_i));
+		const amrex::Real Egas_i = quokka::EOS<CoolingProblem>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Etot_i, 0.0);
+		userData_.Tgas_vec_.push_back(quokka::EOS<CoolingProblem>::ComputeTgasFromEint(rho, Egas_i));
 		const double Erad_i = values.at(RadSystem<CoolingProblem>::radEnergy_index)[0];
 		userData_.Erad_vec_.push_back(Erad_i);
 	}

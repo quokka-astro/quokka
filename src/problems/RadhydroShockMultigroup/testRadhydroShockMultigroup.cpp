@@ -270,7 +270,7 @@ auto problem_main() -> int
 
 			const double Egas_t = (Etot_t - Ekin);
 			Egas.at(i) = Egas_t;
-			Tgas.at(i) = ::quokka::EOS<ShockProblem>::ComputeTgasFromEint(rho, Egas_t) / T_lo; // dimensionless
+			Tgas.at(i) = quokka::EOS<ShockProblem>::ComputeTgasFromEint(rho, Egas_t) / T_lo; // dimensionless
 		}
 
 		// read in exact solution

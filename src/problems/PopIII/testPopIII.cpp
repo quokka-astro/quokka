@@ -314,7 +314,7 @@ template <> void QuokkaSimulation<PopIII>::setInitialConditionsOnGrid(quokka::gr
 		state_cc(i, j, k, HydroSystem<PopIII>::internalEnergy_index) = e;
 
 		static_assert(!Physics_Traits<PopIII>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
-		Real const Egas = ::quokka::EOS<PopIII>::ComputeEgasFromEint(state.rho, state.rho * vx, state.rho * vy, state.rho * vz, e, 0.0);
+		Real const Egas = quokka::EOS<PopIII>::ComputeEgasFromEint(state.rho, state.rho * vx, state.rho * vy, state.rho * vz, e, 0.0);
 		state_cc(i, j, k, HydroSystem<PopIII>::energy_index) = Egas;
 
 		for (int nn = 0; nn < NumSpec; ++nn) {
@@ -347,7 +347,7 @@ template <> void QuokkaSimulation<PopIII>::refineGrid(int lev, amrex::TagBoxArra
 			Real const pressure = HydroSystem<PopIII>::ComputePressure(state, i, j, k);
 			amrex::GpuArray<Real, Physics_Traits<PopIII>::numMassScalars> massScalars = RadSystem<PopIII>::ComputeMassScalars(state, i, j, k);
 
-			amrex::Real const cs = ::quokka::EOS<PopIII>::ComputeSoundSpeed(rho, pressure, massScalars);
+			amrex::Real const cs = quokka::EOS<PopIII>::ComputeSoundSpeed(rho, pressure, massScalars);
 
 			const amrex::Real l_Jeans = cs * std::sqrt(M_PI / (G * rho));
 			// add a density criterion for refinement so that no initial refinement is ever triggered outside the core
@@ -375,7 +375,7 @@ void QuokkaSimulation<PopIII>::ComputeDerivedVar(int /*lev*/, std::string const 
 
 			amrex::GpuArray<Real, Physics_Traits<PopIII>::numMassScalars> massScalars = RadSystem<PopIII>::ComputeMassScalars(state[bx], i, j, k);
 
-			output[bx](i, j, k, ncomp) = ::quokka::EOS<PopIII>::ComputeTgasFromEint(rho, Eint, massScalars);
+			output[bx](i, j, k, ncomp) = quokka::EOS<PopIII>::ComputeTgasFromEint(rho, Eint, massScalars);
 		});
 	}
 
@@ -415,7 +415,7 @@ void QuokkaSimulation<PopIII>::ComputeDerivedVar(int /*lev*/, std::string const 
 			Real const pressure = HydroSystem<PopIII>::ComputePressure(state[bx], i, j, k);
 			amrex::GpuArray<Real, Physics_Traits<PopIII>::numMassScalars> massScalars = RadSystem<PopIII>::ComputeMassScalars(state[bx], i, j, k);
 
-			amrex::Real const cs = ::quokka::EOS<PopIII>::ComputeSoundSpeed(rho, pressure, massScalars);
+			amrex::Real const cs = quokka::EOS<PopIII>::ComputeSoundSpeed(rho, pressure, massScalars);
 			output[bx](i, j, k, ncomp) = cs;
 		});
 	}

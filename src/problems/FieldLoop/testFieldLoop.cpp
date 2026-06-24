@@ -48,7 +48,7 @@ template <> void QuokkaSimulation<FieldLoop>::setInitialConditionsOnGrid(quokka:
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 
-	constexpr double gamma_gas = ::quokka::EOS_Traits<FieldLoop>::gamma;
+	constexpr double gamma_gas = quokka::EOS_Traits<FieldLoop>::gamma;
 	constexpr double rho0 = 1.0;
 	constexpr double P0 = 1.0;
 

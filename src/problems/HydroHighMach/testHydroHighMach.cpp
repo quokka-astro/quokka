@@ -65,7 +65,7 @@ template <> void QuokkaSimulation<HighMachProblem>::setInitialConditionsOnGrid(q
 		AMREX_ASSERT(!std::isnan(rho));
 		AMREX_ASSERT(!std::isnan(P));
 
-		const auto gamma = ::quokka::EOS_Traits<HighMachProblem>::gamma;
+		const auto gamma = quokka::EOS_Traits<HighMachProblem>::gamma;
 		for (int n = 0; n < state_cc.nComp(); ++n) {
 			state_cc(i, j, k, n) = 0.;
 		}
@@ -147,7 +147,7 @@ void QuokkaSimulation<HighMachProblem>::computeReferenceSolution(amrex::MultiFab
 	amrex::Gpu::streamSynchronizeAll();
 
 	// save reference solution
-	const Real gamma = ::quokka::EOS_Traits<HighMachProblem>::gamma;
+	const Real gamma = quokka::EOS_Traits<HighMachProblem>::gamma;
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox(); // excludes ghost zones
 		auto const &state = ref.array(iter);
@@ -188,7 +188,7 @@ void QuokkaSimulation<HighMachProblem>::computeReferenceSolution(amrex::MultiFab
 			const auto fE = values.at(HydroSystem<HighMachProblem>::energy_index)[i];
 			const auto fvx = fxmom / frho;
 			const auto fEint = fE - 0.5 * frho * (fvx * fvx);
-			const auto fP = (::quokka::EOS_Traits<HighMachProblem>::gamma - 1.) * fEint;
+			const auto fP = (quokka::EOS_Traits<HighMachProblem>::gamma - 1.) * fEint;
 
 			d_final.push_back(frho);
 			vx_final.push_back(fvx);

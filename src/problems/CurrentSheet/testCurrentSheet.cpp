@@ -35,7 +35,7 @@ template <> struct Physics_Traits<CurrentSheet> : DefaultPhysicsTraits {
 };
 
 // constants
-constexpr double gamma_gas = ::quokka::EOS_Traits<CurrentSheet>::gamma;
+constexpr double gamma_gas = quokka::EOS_Traits<CurrentSheet>::gamma;
 constexpr double beta = 0.1;
 constexpr double A = 0.1;
 

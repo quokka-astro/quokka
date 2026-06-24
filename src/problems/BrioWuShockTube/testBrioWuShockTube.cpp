@@ -68,7 +68,7 @@ template <> void QuokkaSimulation<MHDShocktubeProblem>::setInitialConditionsOnGr
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const double x = prob_lo[0] + ((i + 0.5) * dx[0]);
-		const auto gamma = ::quokka::EOS_Traits<MHDShocktubeProblem>::gamma;
+		const auto gamma = quokka::EOS_Traits<MHDShocktubeProblem>::gamma;
 		double rho = NAN;
 		double P = NAN;
 		double x2mag = NAN;
@@ -140,7 +140,7 @@ AMRSimulation<MHDShocktubeProblem>::setCustomBoundaryConditions(const amrex::Int
 {
 	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
 	constexpr int nvar = Physics_Indices<MHDShocktubeProblem>::nvarTotal_cc;
-	const auto gamma = ::quokka::EOS_Traits<MHDShocktubeProblem>::gamma;
+	const auto gamma = quokka::EOS_Traits<MHDShocktubeProblem>::gamma;
 
 	const double Emag_L = 0.5 * (Bx * Bx + By_L * By_L + Bz * Bz);
 	const double Emag_R = 0.5 * (Bx * Bx + By_R * By_R + Bz * Bz);

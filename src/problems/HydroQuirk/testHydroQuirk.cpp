@@ -112,8 +112,8 @@ template <> void QuokkaSimulation<QuirkProblem>::setInitialConditionsOnGrid(quok
 		state_cc(i, j, k, HydroSystem<QuirkProblem>::x1Momentum_index) = rho * vx;
 		state_cc(i, j, k, HydroSystem<QuirkProblem>::x2Momentum_index) = rho * vy;
 		state_cc(i, j, k, HydroSystem<QuirkProblem>::x3Momentum_index) = rho * vz;
-		state_cc(i, j, k, HydroSystem<QuirkProblem>::energy_index) = ::quokka::EOS<QuirkProblem>::ComputeEintFromPres(rho, P) + 0.5 * rho * v_sq;
-		state_cc(i, j, k, HydroSystem<QuirkProblem>::internalEnergy_index) = ::quokka::EOS<QuirkProblem>::ComputeEintFromPres(rho, P);
+		state_cc(i, j, k, HydroSystem<QuirkProblem>::energy_index) = quokka::EOS<QuirkProblem>::ComputeEintFromPres(rho, P) + 0.5 * rho * v_sq;
+		state_cc(i, j, k, HydroSystem<QuirkProblem>::internalEnergy_index) = quokka::EOS<QuirkProblem>::ComputeEintFromPres(rho, P);
 	});
 }
 
@@ -165,7 +165,7 @@ template <> void QuokkaSimulation<QuirkProblem>::computeAfterTimestep()
 			Real const peven = HydroSystem<QuirkProblem>::ComputePressure(state, i, j, k);
 
 			// the 'entropy function' s == P / rho^gamma
-			const Real gamma = ::quokka::EOS_Traits<QuirkProblem>::gamma;
+			const Real gamma = quokka::EOS_Traits<QuirkProblem>::gamma;
 			Real const sodd = podd / std::pow(dodd, gamma);
 			Real const seven = peven / std::pow(deven, gamma);
 			s[0] = std::abs(sodd - seven);
@@ -201,7 +201,7 @@ AMRSimulation<QuirkProblem>::setCustomBoundaryConditions(const amrex::IntVect &i
 {
 	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
 	constexpr int nvar = Physics_Indices<QuirkProblem>::nvarTotal_cc;
-	const auto gamma = ::quokka::EOS_Traits<QuirkProblem>::gamma;
+	const auto gamma = quokka::EOS_Traits<QuirkProblem>::gamma;
 
 	// Prepare left boundary values (left state)
 	amrex::GpuArray<amrex::Real, nvar> low_bdr_cells{};
