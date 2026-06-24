@@ -448,7 +448,6 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeIsothermalS
 }
 
 template <typename problem_t>
-template <typename... BArgs>
 AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromEgas(const double rho, const double mx, const double my, const double mz, const double Etot,
 							       const double magnetic_energy) -> double
 {
