@@ -317,7 +317,8 @@ auto problem_main() -> int
 		double const x3GasMom = values.at(RadSystem<TubeProblem>::x3GasMomentum_index)[i];
 
 		static_assert(!Physics_Traits<TubeProblem>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
-		double const Eint_exact = ::quokka::EOS<TubeProblem>::ComputeEintFromEgas(rho_exact, x1GasMom_exact, x2GasMom_exact, x3GasMom_exact, Egas_exact, 0.0);
+		double const Eint_exact =
+		    ::quokka::EOS<TubeProblem>::ComputeEintFromEgas(rho_exact, x1GasMom_exact, x2GasMom_exact, x3GasMom_exact, Egas_exact, 0.0);
 		double const Tgas_exact = ::quokka::EOS<TubeProblem>::ComputeTgasFromEint(rho_exact, Eint_exact);
 
 		static_assert(!Physics_Traits<TubeProblem>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
