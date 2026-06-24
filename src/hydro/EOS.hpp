@@ -460,9 +460,11 @@ AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromEgas(const double rho,
 	static_assert(sizeof...(BArgs) <= 1, "At most one B field argument is allowed.");
 
 	constexpr bool is_mhd = Physics_Traits<problem_t>::is_mhd_enabled;
+	constexpr bool is_rad = Physics_Traits<problem_t>::is_radiation_enabled;
 	constexpr bool has_B = (sizeof...(BArgs) == 1);
 
-	static_assert(!is_mhd || has_B, "EOS error: this problem has MHD enabled, but no magnetic field argument was provided.");
+	static_assert(!(is_mhd && is_rad) || has_B,
+		      "EOS error: this problem has both MHD and radiation enabled, but no magnetic field argument was provided.");
 
 	const double Ekin = 0.5 * (mx * mx + my * my + mz * mz) / rho;
 	double Enonthermal = Ekin;
@@ -486,9 +488,11 @@ AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEgasFromEint(const double rho,
 	static_assert(sizeof...(BArgs) <= 1, "At most one B field argument is allowed.");
 
 	constexpr bool is_mhd = Physics_Traits<problem_t>::is_mhd_enabled;
+	constexpr bool is_rad = Physics_Traits<problem_t>::is_radiation_enabled;
 	constexpr bool has_B = (sizeof...(BArgs) == 1);
 
-	static_assert(!is_mhd || has_B, "EOS error: this problem has MHD enabled, but no magnetic field argument was provided.");
+	static_assert(!(is_mhd && is_rad) || has_B,
+		      "EOS error: this problem has both MHD and radiation enabled, but no magnetic field argument was provided.");
 
 	const double Ekin = 0.5 * (mx * mx + my * my + mz * mz) / rho;
 	double Enonthermal = Ekin;
