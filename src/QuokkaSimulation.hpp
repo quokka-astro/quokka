@@ -3087,10 +3087,12 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				}
 			}
 #ifdef PHOTOCHEMISTRY
+#ifdef IMEX_PHOTOCHEMISTRY
 			if (enablePhotoChemistry_ == 1) {
 				quokka::photochemistry::computePhotoChemistry<problem_t>(state_tmp1_cc, dt_stage2_implicit, 1, max_density_allowed,
 											 min_density_allowed);
 			}
+#endif
 #endif
 		}
 
@@ -3136,11 +3138,13 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 					stateNew(i, j, k, RadSystem<problem_t>::gasEnergy_index) =
 					    RadSystem<problem_t>::ComputeEgasFromEint(rho, x1Mom, x2Mom, x3Mom, Eint);
 #ifdef PHOTOCHEMISTRY
+#ifdef IMEX_PHOTOCHEMISTRY
 					for (int nn = 0; nn < Physics_Traits<problem_t>::numPassiveScalars; ++nn) {
 						stateNew(i, j, k, RadSystem<problem_t>::scalar0_index + nn) =
 						    (1.0 - IMEX_alpha) * stateNew(i, j, k, RadSystem<problem_t>::scalar0_index + nn) +
 						    IMEX_alpha * stateTmp(i, j, k, RadSystem<problem_t>::scalar0_index + nn);
 					}
+#endif
 #endif
 				});
 			}
@@ -3176,10 +3180,17 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			}
 		}
 #ifdef PHOTOCHEMISTRY
+#ifdef IMEX_PHOTOCHEMISTRY
 		if (enablePhotoChemistry_ == 1) {
 			quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], dt_stage3_implicit, 1, max_density_allowed,
 										 min_density_allowed);
 		}
+#endif
+#if not defined(IMEX_PHOTOCHEMISTRY)
+		if (enablePhotoChemistry_ == 1) {
+			quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], dt_radiation, 1, max_density_allowed, min_density_allowed);
+		}
+#endif
 #endif
 
 		if (print_rad_counter_) {
