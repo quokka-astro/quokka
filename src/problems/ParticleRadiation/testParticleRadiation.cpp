@@ -42,7 +42,7 @@ enum class TestEnum : unsigned int {
 	MISTAKE = 0b00000100U,
 };
 
-template <> struct Particle_Traits<ParticleRadiationProblem> {
+template <> struct Particle_Traits<ParticleRadiationProblem> : DefaultParticleTraits {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
 };
