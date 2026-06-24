@@ -140,16 +140,15 @@ template <typename problem_t> struct FluxUpdateResult {
 // to work around an NVCC limitation that disallows first-capturing variables in
 // constexpr-if contexts inside extended device lambdas.
 template <typename problem_t>
-AMREX_GPU_DEVICE auto ComputeCellCenteredMagneticEnergy(int i, int j, int k,
-							std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &fc) -> double
+AMREX_GPU_DEVICE auto ComputeCellCenteredMagneticEnergy(int i, int j, int k, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &fc) -> double
 {
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		const amrex::Real bx = 0.5 * (fc[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
-					      fc[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex));
-		const amrex::Real by = 0.5 * (fc[1](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
-					      fc[1](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex));
-		const amrex::Real bz = 0.5 * (fc[2](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
-					      fc[2](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex));
+		const amrex::Real bx =
+		    0.5 * (fc[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) + fc[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex));
+		const amrex::Real by =
+		    0.5 * (fc[1](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) + fc[1](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex));
+		const amrex::Real bz =
+		    0.5 * (fc[2](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) + fc[2](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex));
 		return 0.5 * (bx * bx + by * by + bz * bz);
 	}
 	return 0.0;
@@ -326,8 +325,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				       amrex::Real time);
 
 	AMREX_GPU_DEVICE static auto UpdateFlux(int i, int j, int k, arrayconst_t const &consPrev, NewtonIterationResult<problem_t> &energy, double dt,
-						double gas_update_factor, double Ekin0, double Emag = {})
-	    -> FluxUpdateResult<problem_t>;
+						double gas_update_factor, double Ekin0, double Emag = {}) -> FluxUpdateResult<problem_t>;
 
 	static void AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_implicit,
 					     double gas_update_factor, double dustGasCoeff, double tol_h, double tol_rel_h, double tempFloor,

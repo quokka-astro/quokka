@@ -75,12 +75,12 @@ template <typename problem_t> class EOS
 	// Compute gas internal energy from gas total energy (Eint + Ekin, NOT including B field).
 	// Optionally accepts magnetic energy density (0.5 * B^2) to subtract when MHD is enabled.
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto ComputeEintFromEgas(double rho, double mx, double my, double mz, double Etot,
-									     double magnetic_energy = 0.0) -> double;
+									    double magnetic_energy = 0.0) -> double;
 
 	// Compute gas total energy (Eint + Ekin, NOT including B field) from gas internal energy.
 	// Optionally accepts magnetic energy density (0.5 * B^2) to add when MHD is enabled.
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto ComputeEgasFromEint(double rho, double mx, double my, double mz, double Eint,
-									     double magnetic_energy = 0.0) -> double;
+									    double magnetic_energy = 0.0) -> double;
 
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma; // needed for HLLD solver
 
@@ -449,8 +449,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeIsothermalS
 
 template <typename problem_t>
 template <typename... BArgs>
-AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromEgas(const double rho, const double mx, const double my, const double mz,
-							       const double Etot, const double magnetic_energy) -> double
+AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromEgas(const double rho, const double mx, const double my, const double mz, const double Etot,
+							       const double magnetic_energy) -> double
 {
 	const double Ekin = 0.5 * (mx * mx + my * my + mz * mz) / rho;
 	const double Eint = Etot - Ekin - magnetic_energy;
@@ -459,8 +459,8 @@ AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromEgas(const double rho,
 }
 
 template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEgasFromEint(const double rho, const double mx, const double my, const double mz,
-							       const double Eint, const double magnetic_energy) -> double
+AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEgasFromEint(const double rho, const double mx, const double my, const double mz, const double Eint,
+							       const double magnetic_energy) -> double
 {
 	const double Ekin = 0.5 * (mx * mx + my * my + mz * mz) / rho;
 	return Eint + Ekin + magnetic_energy;
