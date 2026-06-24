@@ -83,8 +83,7 @@ template <typename problem_t> struct Physics_Indices {
 // Defined here (rather than inline in a ParallelFor lambda) to work around an NVCC limitation
 // that disallows first-capturing variables in constexpr-if contexts inside extended device lambdas.
 template <typename problem_t>
-AMREX_GPU_DEVICE auto ComputeCellCenteredMagneticEnergy(int i, int j, int k,
-							std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &fc) -> double
+AMREX_GPU_DEVICE auto ComputeCellCenteredMagneticEnergy(int i, int j, int k, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &fc) -> double
 {
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 		const amrex::Real bx =

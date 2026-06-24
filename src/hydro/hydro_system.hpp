@@ -136,8 +136,7 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 	    -> amrex::Real;
 
 	AMREX_GPU_DEVICE static auto ComputeCellCenteredMagneticEnergy(int i, int j, int k,
-								       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &fc)
-	    -> amrex::Real
+								       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &fc) -> amrex::Real
 	{
 		return ::ComputeCellCenteredMagneticEnergy<problem_t>(i, j, k, fc);
 	}
