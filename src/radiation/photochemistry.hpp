@@ -24,9 +24,10 @@ namespace quokka::photochemistry
 AMREX_GPU_DEVICE void photochem_burner(burn_t &photochemstate, Real dt);
 
 template <typename problem_t>
-auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, const Real max_density_allowed, const Real min_density_allowed,
-			   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr) -> bool
+auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, const Real max_density_allowed, const Real min_density_allowed) -> bool
 {
+	static_assert(!Physics_Traits<problem_t>::is_mhd_enabled,
+		      "MHD + radiation + photochemistry is not yet supported. Pass face-centered MultiFabs through computePhotoChemistry to implement it.");
 	AMREX_ASSERT(stage == 1 || stage == 2);
 	// Start off by assuming a successful burn.
 	int photochem_burn_success = 1;
@@ -73,9 +74,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 			const Real zmom = state(i, j, k, RadSystem<problem_t>::x3GasMomentum_index);
 			const Real Ener = state(i, j, k, RadSystem<problem_t>::gasEnergy_index);
 
-			// Compute internal energy, excluding magnetic field energy if MHD is enabled
-			const double Emag = ComputeCellCenteredMagneticEnergy<problem_t>(i, j, k, *cons_fc);
-			const Real Eint = ::quokka::EOS<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener, Emag);
+			const Real Eint = ::quokka::EOS<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener, 0.0);
 
 			burn_t photochemstate;
 			photochemstate.success = true;
