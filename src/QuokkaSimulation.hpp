@@ -418,8 +418,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void subcycleRadiationAtLevel(int lev, amrex::Real time, amrex::Real dt_lev_hydro, amrex::FluxRegister *fr_as_crse, amrex::FluxRegister *fr_as_fine);
 
 	auto computeRadiationFluxes(amrex::Array4<const amrex::Real> const &consVar, const amrex::Box &indexRange, int nvars,
-				    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
-				    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc = {})
+				    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc = {})
 	    -> std::tuple<std::array<amrex::FArrayBox, AMREX_SPACEDIM>, std::array<amrex::FArrayBox, AMREX_SPACEDIM>>;
 
 	auto computeHydroFluxes(amrex::MultiFab const &consVar_cc, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &consVar_fc, int nvars, int nghost_Riemann,

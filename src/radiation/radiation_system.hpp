@@ -471,9 +471,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
-							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j, int k,
-							     int i_phys, int j_phys, int k_phys,
-							     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc,
+							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j, int k, int i_phys, int j_phys,
+							     int k_phys, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc,
 							     const amrex::GpuArray<double, nGroups_ + 1> &group_boundaries)
 	    -> quokka::valarray<double, nGroups_>;
 
@@ -891,8 +890,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeMassScalars(ArrayType const &
 template <typename problem_t>
 template <FluxDir DIR>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
-								    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j, int k,
-								    int i_phys, int j_phys, int k_phys,
+								    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j, int k, int i_phys,
+								    int j_phys, int k_phys,
 								    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc,
 								    const amrex::GpuArray<double, nGroups_ + 1> &group_boundaries)
     -> quokka::valarray<double, nGroups_>
