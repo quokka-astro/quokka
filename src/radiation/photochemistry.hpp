@@ -24,7 +24,8 @@ namespace quokka::photochemistry
 AMREX_GPU_DEVICE void photochem_burner(burn_t &photochemstate, Real dt);
 
 template <typename problem_t>
-auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, const Real max_density_allowed, const Real min_density_allowed) -> bool
+auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, const Real max_density_allowed, const Real min_density_allowed,
+			  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr) -> bool
 {
 	AMREX_ASSERT(stage == 1 || stage == 2);
 	// Start off by assuming a successful burn.
@@ -71,7 +72,22 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 			const Real ymom = state(i, j, k, RadSystem<problem_t>::x2GasMomentum_index);
 			const Real zmom = state(i, j, k, RadSystem<problem_t>::x3GasMomentum_index);
 			const Real Ener = state(i, j, k, RadSystem<problem_t>::gasEnergy_index);
-			const Real Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener);
+
+			// Compute internal energy, excluding magnetic field energy if MHD is enabled
+			const Real Eint = [&]() -> Real {
+				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+					const amrex::Real bx = 0.5 * ((*cons_fc)[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
+								      (*cons_fc)[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex));
+					const amrex::Real by = 0.5 * ((*cons_fc)[1](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
+								      (*cons_fc)[1](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex));
+					const amrex::Real bz = 0.5 * ((*cons_fc)[2](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
+								      (*cons_fc)[2](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex));
+					const std::array<amrex::Real, 3> B = {bx, by, bz};
+					return quokka::EOS<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener, B);
+				} else {
+					return quokka::EOS<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener);
+				}
+			}();
 
 			burn_t photochemstate;
 			photochemstate.success = true;

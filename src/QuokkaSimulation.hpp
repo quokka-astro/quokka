@@ -257,8 +257,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	{
 		AMRSimulation<problem_t>::initialize();
 
-		static_assert(!(Physics_Traits<problem_t>::is_mhd_enabled && Physics_Traits<problem_t>::is_radiation_enabled),
-			      "MHD + Radiation is not supported yet.");
 #if (AMREX_SPACEDIM != 3)
 		static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "MHD is only supported in 3D.");
 #endif // (AMREX_SPACEDIM != 3)
@@ -3124,15 +3122,25 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				auto const &radEnergySource_arr = radEnergySource.array(iter);
 				RadSystem<problem_t>::SetRadEnergySource(radEnergySource_arr, indexRange, dx, prob_lo, prob_hi, time_subcycle + dt_radiation);
 
+				// Build face-centered array for MHD-aware radiation coupling
+				std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc_arr;
+				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+					cons_fc_arr[0] = state_new_fc_[lev][0].const_array(iter);
+					cons_fc_arr[1] = state_new_fc_[lev][1].const_array(iter);
+#if AMREX_SPACEDIM == 3
+					cons_fc_arr[2] = state_new_fc_[lev][2].const_array(iter);
+#endif
+				}
+
 				// Full gas update (gas_update_factor = 1.0)
 				if constexpr (Physics_Traits<problem_t>::nGroups <= 1) {
 					RadSystem<problem_t>::AddSourceTermsSingleGroup(stateTmp1, radEnergySource_arr, indexRange, dt_stage2_implicit, 1.0,
 											dustGasInteractionCoeff_, rad_tol, rad_tol_rel, tempFloor,
-											p_iteration_counter, p_iteration_failure_counter);
+											p_iteration_counter, p_iteration_failure_counter, &cons_fc_arr);
 				} else {
 					RadSystem<problem_t>::AddSourceTermsMultiGroup(stateTmp1, radEnergySource_arr, indexRange, dt_stage2_implicit, 1.0,
 										       dustGasInteractionCoeff_, rad_tol, rad_tol_rel, tempFloor,
-										       p_iteration_counter, p_iteration_failure_counter);
+										       p_iteration_counter, p_iteration_failure_counter, &cons_fc_arr);
 				}
 			}
 		}
@@ -3154,6 +3162,17 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				const amrex::Box &indexRange = iter.validbox();
 				auto const &stateNew = state_new_cc_[lev].array(iter);
 				auto const &stateTmp = state_tmp1_cc.const_array(iter);
+
+				// Build face-centered array for MHD-aware energy conversion
+				auto cons_fc_shu = std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM>{};
+				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+					cons_fc_shu[0] = state_new_fc_[lev][0].const_array(iter);
+					cons_fc_shu[1] = state_new_fc_[lev][1].const_array(iter);
+#if AMREX_SPACEDIM == 3
+					cons_fc_shu[2] = state_new_fc_[lev][2].const_array(iter);
+#endif
+				}
+
 				// gasInternalEnergy is the primary variable for the coupling source g; combine it directly.
 				// gasEnergy (total = internal + kinetic) is then derived from the combined Eint and momentum.
 				// Combining gasEnergy directly instead would introduce a spurious kinematic term
@@ -3176,8 +3195,21 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 					stateNew(i, j, k, RadSystem<problem_t>::x3GasMomentum_index) = x3Mom;
 					stateNew(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index) = Eint;
 					// Derive gasEnergy (total) from combined internal energy + kinetic energy of combined momentum.
-					stateNew(i, j, k, RadSystem<problem_t>::gasEnergy_index) =
-					    RadSystem<problem_t>::ComputeEgasFromEint(rho, x1Mom, x2Mom, x3Mom, Eint);
+					// When MHD is enabled, also include magnetic energy.
+					if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+						const amrex::Real bx = 0.5 * (cons_fc_shu[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
+									      cons_fc_shu[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex));
+						const amrex::Real by = 0.5 * (cons_fc_shu[1](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
+									      cons_fc_shu[1](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex));
+						const amrex::Real bz = 0.5 * (cons_fc_shu[2](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
+									      cons_fc_shu[2](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex));
+						const std::array<amrex::Real, 3> B = {bx, by, bz};
+						stateNew(i, j, k, RadSystem<problem_t>::gasEnergy_index) =
+						    quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1Mom, x2Mom, x3Mom, Eint, B);
+					} else {
+						stateNew(i, j, k, RadSystem<problem_t>::gasEnergy_index) =
+						    quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1Mom, x2Mom, x3Mom, Eint);
+					}
 				});
 			}
 		}
@@ -3200,21 +3232,35 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			auto const &radEnergySource_arr = radEnergySource.array(iter);
 			RadSystem<problem_t>::SetRadEnergySource(radEnergySource_arr, indexRange, dx, prob_lo, prob_hi, time_subcycle + dt_radiation);
 
+			// Build face-centered array for MHD-aware radiation coupling
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc_arr;
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				cons_fc_arr[0] = state_new_fc_[lev][0].const_array(iter);
+				cons_fc_arr[1] = state_new_fc_[lev][1].const_array(iter);
+#if AMREX_SPACEDIM == 3
+				cons_fc_arr[2] = state_new_fc_[lev][2].const_array(iter);
+#endif
+			}
+
 			// Full gas update (gas_update_factor = 1.0)
 			if constexpr (Physics_Traits<problem_t>::nGroups <= 1) {
 				RadSystem<problem_t>::AddSourceTermsSingleGroup(stateNew_cc, radEnergySource_arr, indexRange, dt_stage3_implicit, 1.0,
 										dustGasInteractionCoeff_, rad_tol, rad_tol_rel, tempFloor, p_iteration_counter,
-										p_iteration_failure_counter);
+										p_iteration_failure_counter, &cons_fc_arr);
 			} else {
 				RadSystem<problem_t>::AddSourceTermsMultiGroup(stateNew_cc, radEnergySource_arr, indexRange, dt_stage3_implicit, 1.0,
 									       dustGasInteractionCoeff_, rad_tol, rad_tol_rel, tempFloor, p_iteration_counter,
-									       p_iteration_failure_counter);
+									       p_iteration_failure_counter, &cons_fc_arr);
 			}
 		}
 #ifdef PHOTOCHEMISTRY
 		if (enablePhotoChemistry_ == 1) {
 			// compute photo-chemistry
+			// Build cons_fc for photochemistry
 			quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], dt_radiation, 1, max_density_allowed, min_density_allowed);
+
+			// Note: photochemistry currently does not accept cons_fc. When MHD+radiation+photochemistry is needed,
+			// add the cons_fc parameter to computePhotoChemistry and pass it from the MFIter loop above.
 		}
 #endif
 

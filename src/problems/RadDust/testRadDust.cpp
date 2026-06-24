@@ -131,7 +131,7 @@ template <> void QuokkaSimulation<DustProblem>::computeAfterTimestep()
 		const amrex::Real x2GasMom = values.at(RadSystem<DustProblem>::x2GasMomentum_index)[0];
 		const amrex::Real x3GasMom = values.at(RadSystem<DustProblem>::x3GasMomentum_index)[0];
 		const amrex::Real rho = values.at(RadSystem<DustProblem>::gasDensity_index)[0];
-		const amrex::Real Egas_i = RadSystem<DustProblem>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Etot_i);
+		const amrex::Real Egas_i = quokka::EOS<DustProblem>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Etot_i);
 		const amrex::Real Erad_i = values.at(RadSystem<DustProblem>::radEnergy_index)[0];
 		// userData_.Trad_vec_.push_back(std::pow(Erad_i / a_rad, 1. / 4.));
 		userData_.Trad_vec_.push_back(Erad_i / a_rad);

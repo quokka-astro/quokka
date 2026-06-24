@@ -313,7 +313,7 @@ template <> void QuokkaSimulation<PopIII>::setInitialConditionsOnGrid(quokka::gr
 		state_cc(i, j, k, HydroSystem<PopIII>::x3Momentum_index) = state.rho * vz;
 		state_cc(i, j, k, HydroSystem<PopIII>::internalEnergy_index) = e;
 
-		Real const Egas = RadSystem<PopIII>::ComputeEgasFromEint(state.rho, state.rho * vx, state.rho * vy, state.rho * vz, e);
+		Real const Egas = quokka::EOS<PopIII>::ComputeEgasFromEint(state.rho, state.rho * vx, state.rho * vy, state.rho * vz, e);
 		state_cc(i, j, k, HydroSystem<PopIII>::energy_index) = Egas;
 
 		for (int nn = 0; nn < NumSpec; ++nn) {

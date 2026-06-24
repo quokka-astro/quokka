@@ -174,7 +174,7 @@ template <> void QuokkaSimulation<CoolingProblemMG>::computeAfterTimestep()
 		const amrex::Real x2GasMom = values.at(RadSystem<CoolingProblemMG>::x2GasMomentum_index)[0];
 		const amrex::Real x3GasMom = values.at(RadSystem<CoolingProblemMG>::x3GasMomentum_index)[0];
 		const amrex::Real rho = values.at(RadSystem<CoolingProblemMG>::gasDensity_index)[0];
-		const amrex::Real Egas_i = RadSystem<CoolingProblemMG>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Etot_i);
+		const amrex::Real Egas_i = quokka::EOS<CoolingProblemMG>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Etot_i);
 		userData_.Tgas_vec_.push_back(quokka::EOS<CoolingProblemMG>::ComputeTgasFromEint(rho, Egas_i));
 		const double Erad_line_i = values.at(RadSystem<CoolingProblemMG>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * line_index)[0];
 		userData_.Erad_line_vec_.push_back(Erad_line_i);

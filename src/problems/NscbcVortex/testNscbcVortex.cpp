@@ -101,7 +101,7 @@ template <> void QuokkaSimulation<Vortex>::setInitialConditionsOnGrid(quokka::gr
 		Real const ymom = rho * v;
 		Real const zmom = rho * w;
 		Real const Eint = quokka::EOS<Vortex>::ComputeEintFromPres(rho, P);
-		Real const Egas = RadSystem<Vortex>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+		Real const Egas = quokka::EOS<Vortex>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
 		Real const scalar = ::s0[0];
 
 		state_cc(i, j, k, HydroSystem<Vortex>::density_index) = rho;

@@ -149,7 +149,7 @@ void QuokkaSimulation<RandomBlast>::ComputeDerivedVar(int /*lev*/, std::string c
 				Real const x2Mom = state(i, j, k, HydroSystem<RandomBlast>::x2Momentum_index);
 				Real const x3Mom = state(i, j, k, HydroSystem<RandomBlast>::x3Momentum_index);
 				Real const Egas = state(i, j, k, HydroSystem<RandomBlast>::energy_index);
-				Real const Eint = RadSystem<RandomBlast>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+				Real const Eint = quokka::EOS<RandomBlast>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
 				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 
 				output(i, j, k, ncomp) = Tgas;
@@ -213,7 +213,7 @@ auto problem_main() -> int
 			Real const x2Mom = values.at(HydroSystem<RandomBlast>::x2Momentum_index)[i];
 			Real const x3Mom = values.at(HydroSystem<RandomBlast>::x3Momentum_index)[i];
 			Real const Egas = values.at(HydroSystem<RandomBlast>::energy_index)[i];
-			Real const Eint = RadSystem<RandomBlast>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			Real const Eint = quokka::EOS<RandomBlast>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
 			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 			temperature[i] = Tgas;
 		}

@@ -50,7 +50,7 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 			const Real ymom = state(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
 			const Real zmom = state(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
 			const Real Ener = state(i, j, k, HydroSystem<problem_t>::energy_index);
-			const Real Eint = RadSystem<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener);
+			const Real Eint = quokka::EOS<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener);
 
 			std::array<Real, NumSpec> chem = {-1.0};
 			std::array<Real, NumSpec> inmfracs = {-1.0};
