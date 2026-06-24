@@ -870,18 +870,19 @@ void HydroSystem<problem_t>::ComputeFlatteningCoefficients(amrex::MultiFab const
 			// compute (rho e) (gamma - 1)
 			amrex::GpuArray<Real, nmscalars_> massScalars_plus2 = RadSystem<problem_t>::ComputeMassScalars(primVar, i + 2, j, k);
 			Pplus2 = ::quokka::EOS<problem_t>::ComputePressure(primVar(i + 2, j, k, primDensity_index),
-									 primVar(i + 2, j, k, primDensity_index) * Pplus2, massScalars_plus2);
+									   primVar(i + 2, j, k, primDensity_index) * Pplus2, massScalars_plus2);
 			amrex::GpuArray<Real, nmscalars_> massScalars_plus1 = RadSystem<problem_t>::ComputeMassScalars(primVar, i + 1, j, k);
 			Pplus1 = ::quokka::EOS<problem_t>::ComputePressure(primVar(i + 1, j, k, primDensity_index),
-									 primVar(i + 1, j, k, primDensity_index) * Pplus1, massScalars_plus1);
+									   primVar(i + 1, j, k, primDensity_index) * Pplus1, massScalars_plus1);
 			amrex::GpuArray<Real, nmscalars_> massScalars = RadSystem<problem_t>::ComputeMassScalars(primVar, i, j, k);
-			P = ::quokka::EOS<problem_t>::ComputePressure(primVar(i, j, k, primDensity_index), primVar(i, j, k, primDensity_index) * P, massScalars);
+			P = ::quokka::EOS<problem_t>::ComputePressure(primVar(i, j, k, primDensity_index), primVar(i, j, k, primDensity_index) * P,
+								      massScalars);
 			amrex::GpuArray<Real, nmscalars_> massScalars_minus1 = RadSystem<problem_t>::ComputeMassScalars(primVar, i - 1, j, k);
 			Pminus1 = ::quokka::EOS<problem_t>::ComputePressure(primVar(i - 1, j, k, primDensity_index),
-									  primVar(i - 1, j, k, primDensity_index) * Pminus1, massScalars_minus1);
+									    primVar(i - 1, j, k, primDensity_index) * Pminus1, massScalars_minus1);
 			amrex::GpuArray<Real, nmscalars_> massScalars_minus2 = RadSystem<problem_t>::ComputeMassScalars(primVar, i - 2, j, k);
 			Pminus2 = ::quokka::EOS<problem_t>::ComputePressure(primVar(i - 2, j, k, primDensity_index),
-									  primVar(i - 2, j, k, primDensity_index) * Pminus2, massScalars_minus2);
+									    primVar(i - 2, j, k, primDensity_index) * Pminus2, massScalars_minus2);
 		}
 
 		if constexpr (is_eos_isothermal()) {

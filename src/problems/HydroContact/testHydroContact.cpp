@@ -77,7 +77,8 @@ template <> void QuokkaSimulation<ContactProblem>::setInitialConditionsOnGrid(qu
 		state_cc(i, j, k, HydroSystem<ContactProblem>::x1Momentum_index) = rho * vx;
 		state_cc(i, j, k, HydroSystem<ContactProblem>::x2Momentum_index) = 0.;
 		state_cc(i, j, k, HydroSystem<ContactProblem>::x3Momentum_index) = 0.;
-		state_cc(i, j, k, HydroSystem<ContactProblem>::energy_index) = ::quokka::EOS<ContactProblem>::ComputeEintFromPres(rho, P) + 0.5 * rho * (vx * vx);
+		state_cc(i, j, k, HydroSystem<ContactProblem>::energy_index) =
+		    ::quokka::EOS<ContactProblem>::ComputeEintFromPres(rho, P) + 0.5 * rho * (vx * vx);
 		state_cc(i, j, k, HydroSystem<ContactProblem>::internalEnergy_index) = ::quokka::EOS<ContactProblem>::ComputeEintFromPres(rho, P);
 	});
 }
