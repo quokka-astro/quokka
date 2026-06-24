@@ -897,8 +897,8 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::printCellPropert
 		const amrex::Real vel_mag = std::sqrt(vsq);
 		const amrex::Real Ekin = 0.5 * rho * vsq;
 		const amrex::Real Eint = Etot - Ekin;
-		const amrex::Real P = quokka::EOS<problem_t>::ComputePressure(rho, Eint);
-		const amrex::Real cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P);
+		const amrex::Real P = ::quokka::EOS<problem_t>::ComputePressure(rho, Eint);
+		const amrex::Real cs = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P);
 
 		amrex::AllPrint() << std::format("...[level {}] \tcell density = {:e}, |v| = {:e}, cs = {:e}\n", lev, rho, vel_mag, cs);
 	}
@@ -3198,7 +3198,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 					// When MHD is enabled, also include magnetic energy.
 					const double Emag = ComputeCellCenteredMagneticEnergy<problem_t>(i, j, k, cons_fc_shu);
 					stateNew(i, j, k, RadSystem<problem_t>::gasEnergy_index) =
-					    quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1Mom, x2Mom, x3Mom, Eint, Emag);
+					    ::quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1Mom, x2Mom, x3Mom, Eint, Emag);
 				});
 			}
 		}

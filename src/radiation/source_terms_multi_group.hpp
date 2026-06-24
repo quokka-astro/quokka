@@ -251,7 +251,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 		// 1. Compute dust temperature
 		// If the dust model is turned off, ComputeDustTemperature should be a function that returns T_gas.
 
-		T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+		T_gas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 		AMREX_ASSERT(T_gas >= 0.);
 		T_d = T_gas;
 
@@ -322,7 +322,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 
 		const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, rad_boundaries);
 		AMREX_ASSERT(!d_fourpiboverc_d_t.hasnan());
-		const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
+		const double c_v = ::quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
 
 		const auto Egas_diff = Egas_guess - Egas0;
 		const auto Erad_diff = EradVec_guess - Erad0Vec;
@@ -377,7 +377,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 		// temperature
 		const double T_rad = std::sqrt(std::sqrt(sum(EradVec_guess) / radiation_constant_));
 		if (enable_dE_constrain && delta_x / c_v > std::max(T_gas, T_rad)) {
-			Egas_guess = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
+			Egas_guess = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
 			// Rvec.fillin(0.0);
 		} else {
 			Egas_guess += delta_x;
@@ -519,7 +519,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 	// 3. Deal with the work term.
 	if constexpr ((gamma_ != 1.0) && (beta_order_ == 1)) {
 		// compute difference in gas kinetic energy before and after momentum update
-		amrex::Real const Egastot1 = quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, energy.Egas, Emag);
+		amrex::Real const Egastot1 = ::quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, energy.Egas, Emag);
 		amrex::Real const Ekin1 = Egastot1 - energy.Egas;
 		amrex::Real const dEkin_work = Ekin1 - Ekin0;
 
@@ -660,7 +660,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		quokka::valarray<double, nGroups_> work_prev{};
 
 		if constexpr (gamma_ != 1.0) {
-			Egas0 = quokka::EOS<problem_t>::ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0, Emag);
+			Egas0 = ::quokka::EOS<problem_t>::ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0, Emag);
 			Etot0 = Egas0 + (c / chat) * (Erad0 + sum(Src));
 			Ekin0 = Egastot0 - Egas0;
 		}
@@ -785,7 +785,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 				work = updated_energy.work;
 
 				// Check for convergence of the work term
-				auto const Egastot1 = quokka::EOS<problem_t>::ComputeEgasFromEint(rho, updated_flux.gasMomentum[0], updated_flux.gasMomentum[1],
+				auto const Egastot1 = ::quokka::EOS<problem_t>::ComputeEgasFromEint(rho, updated_flux.gasMomentum[0], updated_flux.gasMomentum[1],
 												  updated_flux.gasMomentum[2], Egas_guess, Emag);
 				const double rel_lag_tol = 1.0e-8;
 				const double lag_tol = 1.0e-13;
@@ -830,7 +830,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		if constexpr (gamma_ != 1.0) {
 			Egas_guess = Egas0 + (Egas_guess - Egas0) * gas_update_factor;
 			consNew(i, j, k, gasInternalEnergy_index) = Egas_guess;
-			consNew(i, j, k, gasEnergy_index) = quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess, Emag);
+			consNew(i, j, k, gasEnergy_index) = ::quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess, Emag);
 		} else {
 			amrex::ignore_unused(Egas_guess);
 			amrex::ignore_unused(Egas0);
