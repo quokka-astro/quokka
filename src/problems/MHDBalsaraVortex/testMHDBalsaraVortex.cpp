@@ -29,20 +29,11 @@ struct MHDBalsaraVortex {
 template <> struct quokka::EOS_Traits<MHDBalsaraVortex> {
 	static constexpr double gamma = 5.0 / 3.0;
 	static constexpr double mean_molecular_weight = C::m_u;
-	static constexpr double boltzmann_constant = C::k_B;
 };
 
-template <> struct Physics_Traits<MHDBalsaraVortex> {
+template <> struct Physics_Traits<MHDBalsaraVortex> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;
-	static constexpr int numPassiveScalars = numMassScalars + 0;
-	static constexpr bool is_self_gravity_enabled = false;
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr bool is_mhd_enabled = true;
-	static constexpr int nGroups = 1;
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 // background state

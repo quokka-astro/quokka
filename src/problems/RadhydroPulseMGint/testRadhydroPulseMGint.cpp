@@ -103,7 +103,7 @@ template <> struct quokka::EOS_Traits<ExactProblem> {
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct Physics_Traits<MGProblem> {
+template <> struct Physics_Traits<MGProblem> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
@@ -117,7 +117,7 @@ template <> struct Physics_Traits<MGProblem> {
 	static constexpr int nGroups = n_groups_;
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
-template <> struct Physics_Traits<ExactProblem> {
+template <> struct Physics_Traits<ExactProblem> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
