@@ -222,7 +222,7 @@ template <> void QuokkaSimulation<PrimordialChemTest>::setInitialConditionsOnGri
 		// Microphysics calculates specific internal energy so multiply it by rho for Quokka
 		Real const Eint = rho * state.e;
 
-		Real const Egas = quokka::EOS<PrimordialChemTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+		Real const Egas = quokka::EOS<PrimordialChemTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint, 0.0);
 
 		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::energy_index) = Egas;
 		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::internalEnergy_index) = Eint;

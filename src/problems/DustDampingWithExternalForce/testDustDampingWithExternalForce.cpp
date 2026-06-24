@@ -232,7 +232,7 @@ void QuokkaSimulation<DustDampingWithExternalForce>::addStrangSplitSources(amrex
 			const amrex::Real x3mom = state(i, j, k, HydroSystem<DustDampingWithExternalForce>::x3Momentum_index);
 			const amrex::Real Egas = state(i, j, k, HydroSystem<DustDampingWithExternalForce>::energy_index);
 
-			const amrex::Real Eint = quokka::EOS<DustDampingWithExternalForce>::ComputeEintFromEgas(rho, x1mom, x2mom, x3mom, Egas);
+			const amrex::Real Eint = quokka::EOS<DustDampingWithExternalForce>::ComputeEintFromEgas(rho, x1mom, x2mom, x3mom, Egas, 0.0);
 
 			double const x1mom_new = x1mom + dt * G_0;
 
@@ -240,7 +240,7 @@ void QuokkaSimulation<DustDampingWithExternalForce>::addStrangSplitSources(amrex
 
 			state(i, j, k, HydroSystem<DustDampingWithExternalForce>::x1Momentum_index) = x1mom_new;
 
-			const amrex::Real Egas_new = quokka::EOS<DustDampingWithExternalForce>::ComputeEgasFromEint(rho, x1mom_new, x2mom, x3mom, Eint);
+			const amrex::Real Egas_new = quokka::EOS<DustDampingWithExternalForce>::ComputeEgasFromEint(rho, x1mom_new, x2mom, x3mom, Eint, 0.0);
 			AMREX_ASSERT(!std::isnan(Egas_new));
 
 			state(i, j, k, HydroSystem<DustDampingWithExternalForce>::energy_index) = Egas_new;

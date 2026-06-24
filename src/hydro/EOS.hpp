@@ -73,14 +73,14 @@ template <typename problem_t> class EOS
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto ComputeIsothermalSoundSpeed(amrex::Real rho, amrex::Real Pressure) -> amrex::Real;
 
 	// Compute gas internal energy from gas total energy (Eint + Ekin, NOT including B field).
-	// Optionally accepts magnetic energy density (0.5 * B^2) to subtract when MHD is enabled.
+	// magnetic_energy (0.5 * B^2) is explicitly required: pass 0.0 for non-MHD problems.
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto ComputeEintFromEgas(double rho, double mx, double my, double mz, double Etot,
-									    double magnetic_energy = 0.0) -> double;
+									    double magnetic_energy) -> double;
 
 	// Compute gas total energy (Eint + Ekin, NOT including B field) from gas internal energy.
-	// Optionally accepts magnetic energy density (0.5 * B^2) to add when MHD is enabled.
+	// magnetic_energy (0.5 * B^2) is explicitly required: pass 0.0 for non-MHD problems.
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto ComputeEgasFromEint(double rho, double mx, double my, double mz, double Eint,
-									    double magnetic_energy = 0.0) -> double;
+									    double magnetic_energy) -> double;
 
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma; // needed for HLLD solver
 

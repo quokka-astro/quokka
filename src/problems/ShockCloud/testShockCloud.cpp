@@ -122,7 +122,7 @@ template <> void QuokkaSimulation<ShockCloud>::setInitialConditionsOnGrid(quokka
 		Real const ymom = 0;
 		Real const zmom = 0;
 		Real const Eint = P0 / (quokka::EOS_Traits<ShockCloud>::gamma - 1.);
-		Real const Egas = quokka::EOS<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+		Real const Egas = quokka::EOS<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint, 0.0);
 
 		state(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
 		state(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
@@ -168,7 +168,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 			Real const xmom = rho_wind * vx;
 			Real const ymom = 0;
 			Real const zmom = 0;
-			Real const Egas = quokka::EOS<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+			Real const Egas = quokka::EOS<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint, 0.0);
 			consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
 			consVar(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
 			consVar(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
@@ -282,7 +282,7 @@ void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string const 
 			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-			Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 			output[bx](i, j, k, ncomp) = Tgas;
 		});
@@ -299,7 +299,7 @@ void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string const 
 			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-			Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 			Real const cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, tables);
 			output[bx](i, j, k, ncomp) = cs / 1.0e5; // km/s
 		});
@@ -368,7 +368,7 @@ void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string const 
 			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-			Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 			Real const P_cgs = quokka::ResampledCooling::ComputePressureFromRhoEint(rho, Eint, tables);
 			Real const ndens_times_T = P_cgs / C::k_B; // convert to [K cm^-3]
 			output[bx](i, j, k, ncomp) = ndens_times_T;
@@ -386,7 +386,7 @@ void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string const 
 			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-			Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 			Real const K_cgs = quokka::ResampledCooling::ComputeEntropyFromRhoEint(rho, Eint, tables);
 			Real const K_keV_cm2 = K_cgs / keV_in_ergs; // convert to units of keV cm^2
 			output[bx](i, j, k, ncomp) = K_keV_cm2;
@@ -433,7 +433,7 @@ void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string const 
 			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-			Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 			Real const l_cool = quokka::ResampledCooling::ComputeCoolingLength(rho, Eint, tables);
 			output[bx](i, j, k, ncomp) = l_cool / parsec_in_cm;
 		});
@@ -483,7 +483,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTempResampled(int i, int j, 
 	Real const x2Mom = state(i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
 	Real const x3Mom = state(i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 	Real const Egas = state(i, j, k, HydroSystem<ShockCloud>::energy_index);
-	Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+	Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 	return quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 }
 template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<std::string, amrex::Real>
@@ -669,7 +669,7 @@ template <> void QuokkaSimulation<ShockCloud>::refineGrid(int lev, amrex::TagBox
 		Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
 		Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 		Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-		Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+		Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 		Real const l_cool = quokka::ResampledCooling::ComputeCoolingLength(rho, Eint, tables);
 
 		if (l_cool < resolved_length) {
