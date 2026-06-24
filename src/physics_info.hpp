@@ -1,10 +1,13 @@
 #ifndef PHYSICS_INFO_HPP_ // NOLINT
 #define PHYSICS_INFO_HPP_
 
+#include "AMReX_Array4.H"
+#include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
 #include "fundamental_constants.H"
 #include "physics_numVars.hpp"
 #include <AMReX.H>
+#include <array>
 
 using Real = amrex::Real;
 
@@ -75,5 +78,24 @@ template <typename problem_t> struct Physics_Indices {
 	static constexpr int nvarTotal_fc = AMREX_SPACEDIM * nvarPerDim_fc;
 	static constexpr int mhdFirstIndex = 0;
 };
+
+// Compute cell-centered magnetic energy density (0.5 * B^2) from face-centered field data.
+// Defined here (rather than inline in a ParallelFor lambda) to work around an NVCC limitation
+// that disallows first-capturing variables in constexpr-if contexts inside extended device lambdas.
+template <typename problem_t>
+AMREX_GPU_DEVICE auto ComputeCellCenteredMagneticEnergy(int i, int j, int k,
+							std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &fc) -> double
+{
+	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+		const amrex::Real bx =
+		    0.5 * (fc[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) + fc[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex));
+		const amrex::Real by =
+		    0.5 * (fc[1](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) + fc[1](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex));
+		const amrex::Real bz =
+		    0.5 * (fc[2](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) + fc[2](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex));
+		return 0.5 * (bx * bx + by * by + bz * bz);
+	}
+	return 0.0;
+}
 
 #endif // PHYSICS_INFO_HPP_

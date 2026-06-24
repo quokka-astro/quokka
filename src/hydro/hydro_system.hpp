@@ -135,6 +135,13 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 							   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr)
 	    -> amrex::Real;
 
+	AMREX_GPU_DEVICE static auto ComputeCellCenteredMagneticEnergy(int i, int j, int k,
+								       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &fc)
+	    -> amrex::Real
+	{
+		return ::ComputeCellCenteredMagneticEnergy<problem_t>(i, j, k, fc);
+	}
+
 	AMREX_GPU_DEVICE static auto ComputePlasmaBeta(amrex::Array4<const amrex::Real> const &cons, int i, int j, int k,
 						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const *cons_fc = nullptr) -> amrex::Real;
 

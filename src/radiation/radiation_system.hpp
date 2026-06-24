@@ -135,24 +135,6 @@ template <typename problem_t> struct FluxUpdateResult {
 	return 0.5 * (sgn(a) + sgn(b)) * std::min(std::abs(a), std::abs(b));
 }
 
-// Helper to compute cell-centered magnetic energy density (0.5 * B^2) from face-centered data.
-// Defined as a separate device function (rather than inline in a ParallelFor lambda)
-// to work around an NVCC limitation that disallows first-capturing variables in
-// constexpr-if contexts inside extended device lambdas.
-template <typename problem_t>
-AMREX_GPU_DEVICE auto ComputeCellCenteredMagneticEnergy(int i, int j, int k, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &fc) -> double
-{
-	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		const amrex::Real bx =
-		    0.5 * (fc[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) + fc[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex));
-		const amrex::Real by =
-		    0.5 * (fc[1](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) + fc[1](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex));
-		const amrex::Real bz =
-		    0.5 * (fc[2](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) + fc[2](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex));
-		return 0.5 * (bx * bx + by * by + bz * bz);
-	}
-	return 0.0;
-}
 
 // Use SFINAE (Substitution Failure Is Not An Error) to check if opacity_model is defined in RadSystem_Traits<problem_t>
 template <typename problem_t, typename = void> struct RadSystem_Has_Opacity_Model : std::false_type {
