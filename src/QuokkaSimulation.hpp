@@ -3164,12 +3164,12 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				auto const &stateTmp = state_tmp1_cc.const_array(iter);
 
 				// Build face-centered array for MHD-aware energy conversion
-				auto cons_fc_shu = std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM>{};
+				auto cons_fc = std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM>{};
 				if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-					cons_fc_shu[0] = state_new_fc_[lev][0].const_array(iter);
-					cons_fc_shu[1] = state_new_fc_[lev][1].const_array(iter);
+					cons_fc[0] = state_new_fc_[lev][0].const_array(iter);
+					cons_fc[1] = state_new_fc_[lev][1].const_array(iter);
 #if AMREX_SPACEDIM == 3
-					cons_fc_shu[2] = state_new_fc_[lev][2].const_array(iter);
+					cons_fc[2] = state_new_fc_[lev][2].const_array(iter);
 #endif
 				}
 
@@ -3196,7 +3196,7 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 					stateNew(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index) = Eint;
 					// Derive gasEnergy (total) from combined internal energy + kinetic energy of combined momentum.
 					// When MHD is enabled, also include magnetic energy.
-					const double Emag = HydroSystem<problem_t>::ComputeCellCenteredMagneticEnergy(i, j, k, cons_fc_shu);
+					const double Emag = HydroSystem<problem_t>::ComputeCellCenteredMagneticEnergy(i, j, k, cons_fc);
 					stateNew(i, j, k, RadSystem<problem_t>::gasEnergy_index) =
 					    ::quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1Mom, x2Mom, x3Mom, Eint, Emag);
 				});
