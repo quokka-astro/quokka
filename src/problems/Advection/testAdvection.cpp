@@ -1,5 +1,5 @@
 //==============================================================================
-// TwoMomentRad - a radiation hydrodynamics library for patch-based AMR codes
+// TwoMomentRad - a radiation transport library for patch-based AMR codes
 // Copyright 2020 Benjamin Wibking.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
