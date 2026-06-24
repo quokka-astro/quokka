@@ -4,6 +4,7 @@
 
 #include "radiation/radiation_system.hpp" // IWYU pragma: keep
 
+
 // Compute kappaE and kappaP based on the opacity model. The result is stored in the last five arguments: alpha_P, alpha_E, kappaP, kappaE, and kappaPoverE.
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeModelDependentKappaEAndKappaP(
@@ -628,19 +629,8 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		const double Egastot0 = consPrev(i, j, k, gasEnergy_index);
 		auto massScalars = RadSystem<problem_t>::ComputeMassScalars(consPrev, i, j, k);
 
-		// Compute cell-centered magnetic field, if MHD is enabled
-		amrex::Real bx = 0.0;
-		amrex::Real by = 0.0;
-		amrex::Real bz = 0.0;
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			bx = 0.5 * ((*cons_fc)[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
-				    (*cons_fc)[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex));
-			by = 0.5 * ((*cons_fc)[1](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
-				    (*cons_fc)[1](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex));
-			bz = 0.5 * ((*cons_fc)[2](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
-				    (*cons_fc)[2](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex));
-		}
-		const std::array<amrex::Real, 3> B_cc = {bx, by, bz};
+		// Compute cell-centered magnetic field
+		const std::array<amrex::Real, 3> B_cc = ComputeCellCenteredB<problem_t>(i, j, k, *cons_fc);
 
 		// load radiation energy
 		quokka::valarray<double, nGroups_> Erad0Vec;
