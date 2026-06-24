@@ -3196,20 +3196,20 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 					stateNew(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index) = Eint;
 					// Derive gasEnergy (total) from combined internal energy + kinetic energy of combined momentum.
 					// When MHD is enabled, also include magnetic energy.
+					amrex::Real bx = 0.0;
+					amrex::Real by = 0.0;
+					amrex::Real bz = 0.0;
 					if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-						const amrex::Real bx = 0.5 * (cons_fc_shu[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
-									      cons_fc_shu[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex));
-						const amrex::Real by = 0.5 * (cons_fc_shu[1](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
-									      cons_fc_shu[1](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex));
-						const amrex::Real bz = 0.5 * (cons_fc_shu[2](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
-									      cons_fc_shu[2](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex));
-						const std::array<amrex::Real, 3> B = {bx, by, bz};
-						stateNew(i, j, k, RadSystem<problem_t>::gasEnergy_index) =
-						    quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1Mom, x2Mom, x3Mom, Eint, B);
-					} else {
-						stateNew(i, j, k, RadSystem<problem_t>::gasEnergy_index) =
-						    quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1Mom, x2Mom, x3Mom, Eint);
+						bx = 0.5 * (cons_fc_shu[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
+							    cons_fc_shu[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex));
+						by = 0.5 * (cons_fc_shu[1](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
+							    cons_fc_shu[1](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex));
+						bz = 0.5 * (cons_fc_shu[2](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
+							    cons_fc_shu[2](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex));
 					}
+					const std::array<amrex::Real, 3> B = {bx, by, bz};
+					stateNew(i, j, k, RadSystem<problem_t>::gasEnergy_index) =
+					    quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1Mom, x2Mom, x3Mom, Eint, B);
 				});
 			}
 		}

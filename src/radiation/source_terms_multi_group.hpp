@@ -519,12 +519,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 	// 3. Deal with the work term.
 	if constexpr ((gamma_ != 1.0) && (beta_order_ == 1)) {
 		// compute difference in gas kinetic energy before and after momentum update
-		amrex::Real Egastot1 = NAN;
-		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			Egastot1 = quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, energy.Egas, B_cc);
-		} else {
-			Egastot1 = quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, energy.Egas);
-		}
+		amrex::Real const Egastot1 = quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, energy.Egas, B_cc);
 		amrex::Real const Ekin1 = Egastot1 - energy.Egas;
 		amrex::Real const dEkin_work = Ekin1 - Ekin0;
 
@@ -634,18 +629,18 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		auto massScalars = RadSystem<problem_t>::ComputeMassScalars(consPrev, i, j, k);
 
 		// Compute cell-centered magnetic field, if MHD is enabled
-		const auto B_cc = [&]() -> std::array<amrex::Real, 3> {
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				const amrex::Real bx = 0.5 * ((*cons_fc)[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
-							      (*cons_fc)[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex));
-				const amrex::Real by = 0.5 * ((*cons_fc)[1](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
-							      (*cons_fc)[1](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex));
-				const amrex::Real bz = 0.5 * ((*cons_fc)[2](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
-							      (*cons_fc)[2](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex));
-				return {bx, by, bz};
-			}
-			return {};
-		}();
+		amrex::Real bx = 0.0;
+		amrex::Real by = 0.0;
+		amrex::Real bz = 0.0;
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			bx = 0.5 * ((*cons_fc)[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
+				    (*cons_fc)[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex));
+			by = 0.5 * ((*cons_fc)[1](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
+				    (*cons_fc)[1](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex));
+			bz = 0.5 * ((*cons_fc)[2](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
+				    (*cons_fc)[2](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex));
+		}
+		const std::array<amrex::Real, 3> B_cc = {bx, by, bz};
 
 		// load radiation energy
 		quokka::valarray<double, nGroups_> Erad0Vec;
@@ -676,11 +671,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		quokka::valarray<double, nGroups_> work_prev{};
 
 		if constexpr (gamma_ != 1.0) {
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				Egas0 = quokka::EOS<problem_t>::ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0, B_cc);
-			} else {
-				Egas0 = quokka::EOS<problem_t>::ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
-			}
+			Egas0 = quokka::EOS<problem_t>::ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0, B_cc);
 			Etot0 = Egas0 + (c / chat) * (Erad0 + sum(Src));
 			Ekin0 = Egastot0 - Egas0;
 		}
@@ -805,16 +796,8 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 				work = updated_energy.work;
 
 				// Check for convergence of the work term
-				auto const Egastot1 = [&]() {
-					if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-						return quokka::EOS<problem_t>::ComputeEgasFromEint(rho, updated_flux.gasMomentum[0],
-												   updated_flux.gasMomentum[1], updated_flux.gasMomentum[2],
-												   Egas_guess, B_cc);
-					} else {
-						return quokka::EOS<problem_t>::ComputeEgasFromEint(
-						    rho, updated_flux.gasMomentum[0], updated_flux.gasMomentum[1], updated_flux.gasMomentum[2], Egas_guess);
-					}
-				}();
+				auto const Egastot1 = quokka::EOS<problem_t>::ComputeEgasFromEint(
+				    rho, updated_flux.gasMomentum[0], updated_flux.gasMomentum[1], updated_flux.gasMomentum[2], Egas_guess, B_cc);
 				const double rel_lag_tol = 1.0e-8;
 				const double lag_tol = 1.0e-13;
 				double ref_work = rel_lag_tol * sum(abs(work));
@@ -858,13 +841,8 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		if constexpr (gamma_ != 1.0) {
 			Egas_guess = Egas0 + (Egas_guess - Egas0) * gas_update_factor;
 			consNew(i, j, k, gasInternalEnergy_index) = Egas_guess;
-			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				consNew(i, j, k, gasEnergy_index) =
-				    quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess, B_cc);
-			} else {
-				consNew(i, j, k, gasEnergy_index) =
-				    quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
-			}
+			consNew(i, j, k, gasEnergy_index) =
+			    quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess, B_cc);
 		} else {
 			amrex::ignore_unused(Egas_guess);
 			amrex::ignore_unused(Egas0);
