@@ -74,13 +74,13 @@ template <typename problem_t> class EOS
 
 	// Compute gas internal energy from gas total energy (Eint + Ekin, NOT including B field).
 	// magnetic_energy (0.5 * B^2) is explicitly required: pass 0.0 for non-MHD problems.
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto ComputeEintFromEgas(double rho, double mx, double my, double mz, double Etot,
-									    double magnetic_energy) -> double;
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto ComputeEintFromEgas(double rho, double mx, double my, double mz, double Etot, double magnetic_energy)
+	    -> double;
 
 	// Compute gas total energy (Eint + Ekin, NOT including B field) from gas internal energy.
 	// magnetic_energy (0.5 * B^2) is explicitly required: pass 0.0 for non-MHD problems.
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto ComputeEgasFromEint(double rho, double mx, double my, double mz, double Eint,
-									    double magnetic_energy) -> double;
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto ComputeEgasFromEint(double rho, double mx, double my, double mz, double Eint, double magnetic_energy)
+	    -> double;
 
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma; // needed for HLLD solver
 
