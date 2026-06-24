@@ -34,7 +34,7 @@
 struct ShocktubeProblem {
 };
 
-template <> struct ::quokka::EOS_Traits<ShocktubeProblem> {
+template <> struct quokka::EOS_Traits<ShocktubeProblem> {
 	static constexpr double gamma = 1.4;
 	static constexpr double mean_molecular_weight = C::m_u;
 };

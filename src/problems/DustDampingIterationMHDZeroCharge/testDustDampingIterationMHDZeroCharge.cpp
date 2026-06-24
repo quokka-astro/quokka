@@ -57,12 +57,12 @@ template <> struct SimulationData<DustDampingDragReference> : DustDampingHistory
 template <> struct SimulationData<DustDampingMHDZeroCharge> : DustDampingHistory {
 };
 
-template <> struct ::quokka::EOS_Traits<DustDampingDragReference> {
+template <> struct quokka::EOS_Traits<DustDampingDragReference> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 1.4;
 };
 
-template <> struct ::quokka::EOS_Traits<DustDampingMHDZeroCharge> {
+template <> struct quokka::EOS_Traits<DustDampingMHDZeroCharge> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 1.4;
 };

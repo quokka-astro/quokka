@@ -29,7 +29,7 @@ constexpr double chat = 0.3;	   // reduced speed of light
 constexpr double kappa0 = 1.0e-10; // opacity
 constexpr double rho = 1.0;
 
-template <> struct ::quokka::EOS_Traits<StreamingProblem> {
+template <> struct quokka::EOS_Traits<StreamingProblem> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 5. / 3.;
 };

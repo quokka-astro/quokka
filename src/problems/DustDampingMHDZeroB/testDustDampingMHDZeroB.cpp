@@ -42,7 +42,7 @@ template <> struct SimulationData<DustDampingMHDZeroB> {
 	std::vector<double> E_gas_vec_;
 };
 
-template <> struct ::quokka::EOS_Traits<DustDampingMHDZeroB> {
+template <> struct quokka::EOS_Traits<DustDampingMHDZeroB> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 1.4;
 };

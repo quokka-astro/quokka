@@ -73,7 +73,7 @@ template <> struct RadSystem_Traits<ShockProblem> {
 	// static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_full_spectrum;
 };
 
-template <> struct ::quokka::EOS_Traits<ShockProblem> {
+template <> struct quokka::EOS_Traits<ShockProblem> {
 	static constexpr double mean_molecular_weight = C::m_p + C::m_e;
 	static constexpr double gamma = gamma_gas;
 };

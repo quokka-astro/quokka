@@ -33,7 +33,7 @@ template <> struct Physics_Traits<RandomBlast> : DefaultPhysicsTraits {
 	static constexpr int numPassiveScalars = numMassScalars + 1;
 };
 
-template <> struct ::quokka::EOS_Traits<RandomBlast> {
+template <> struct quokka::EOS_Traits<RandomBlast> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };

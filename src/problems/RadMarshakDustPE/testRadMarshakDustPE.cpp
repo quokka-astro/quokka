@@ -46,7 +46,7 @@ constexpr int n_group_ = 2;
 static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries_{1e-10, 30, 1e4};
 static constexpr OpacityModel opacity_model_ = OpacityModel::piecewise_constant_opacity;
 
-template <> struct ::quokka::EOS_Traits<MarshakProblem> {
+template <> struct quokka::EOS_Traits<MarshakProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double gamma = 5. / 3.;
 };

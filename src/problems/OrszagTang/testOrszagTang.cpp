@@ -27,7 +27,7 @@
 struct OrszagTang {
 };
 
-template <> struct ::quokka::EOS_Traits<OrszagTang> {
+template <> struct quokka::EOS_Traits<OrszagTang> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };

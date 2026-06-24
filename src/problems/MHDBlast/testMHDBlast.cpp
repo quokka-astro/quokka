@@ -19,7 +19,7 @@
 struct MHDBlast {
 };
 
-template <> struct ::quokka::EOS_Traits<MHDBlast> {
+template <> struct quokka::EOS_Traits<MHDBlast> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };

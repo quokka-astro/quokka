@@ -80,7 +80,7 @@ template <> struct SimulationData<DustDamping> {
 	std::vector<double> E_gas_vec_;
 };
 
-template <> struct ::quokka::EOS_Traits<DustDamping> {
+template <> struct quokka::EOS_Traits<DustDamping> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 1.4;
 	// static constexpr double cs_isothermal = 1.0; // only used when gamma = 1

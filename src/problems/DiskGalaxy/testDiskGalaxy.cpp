@@ -49,7 +49,7 @@ struct DiskGalaxy {
 
 static_assert(AMREX_SPACEDIM == 3, "DiskGalaxy problem requires AMREX_SPACEDIM == 3.");
 
-template <> struct ::quokka::EOS_Traits<DiskGalaxy> {
+template <> struct quokka::EOS_Traits<DiskGalaxy> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = 0.6 * C::m_u;
 };

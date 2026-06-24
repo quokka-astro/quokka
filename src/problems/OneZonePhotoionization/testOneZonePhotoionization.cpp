@@ -38,7 +38,7 @@ constexpr double c = C::c_light;    // speed of light
 constexpr double chat = C::c_light; // reduced speed of light
 constexpr double kappa0 = 0;	    // opacity
 
-template <> struct ::quokka::EOS_Traits<PhotoionizationStreamingProblem> {
+template <> struct quokka::EOS_Traits<PhotoionizationStreamingProblem> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 5. / 3.;
 };

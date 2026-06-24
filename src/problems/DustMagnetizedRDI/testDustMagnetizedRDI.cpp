@@ -658,7 +658,7 @@ template <typename problem_t> void recordHistory(QuokkaSimulation<problem_t> &si
 template <> struct SimulationData<DustMagnetizedRDI> : DustMagnetizedRDIHistory {
 };
 
-template <> struct ::quokka::EOS_Traits<DustMagnetizedRDI> {
+template <> struct quokka::EOS_Traits<DustMagnetizedRDI> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = gamma_iso;
 	static constexpr double cs_isothermal = sound_speed;

@@ -46,7 +46,7 @@ template <> struct SimulationData<DustProblem> {
 	std::vector<double> Tgas_vec_;
 };
 
-template <> struct ::quokka::EOS_Traits<DustProblem> {
+template <> struct quokka::EOS_Traits<DustProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double gamma = 5. / 3.;
 };

@@ -50,7 +50,7 @@ template <> struct SimulationData<CoolingProblem> {
 	std::vector<double> Erad_vec_;
 };
 
-template <> struct ::quokka::EOS_Traits<CoolingProblem> {
+template <> struct quokka::EOS_Traits<CoolingProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double gamma = 5. / 3.;
 };

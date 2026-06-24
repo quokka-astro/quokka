@@ -27,7 +27,7 @@
 struct ContactProblem {
 };
 
-template <> struct ::quokka::EOS_Traits<ContactProblem> {
+template <> struct quokka::EOS_Traits<ContactProblem> {
 	static constexpr double gamma = 1.4;
 	static constexpr double mean_molecular_weight = C::m_u;
 };

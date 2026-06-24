@@ -27,7 +27,7 @@ using amrex::Real;
 constexpr double Tgas0 = 6000.;			  // K
 constexpr double rho0 = 0.01 * (C::m_p + C::m_e); // g cm^-3
 
-template <> struct ::quokka::EOS_Traits<ODETest> {
+template <> struct quokka::EOS_Traits<ODETest> {
 	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double gamma = 5. / 3.;
 };

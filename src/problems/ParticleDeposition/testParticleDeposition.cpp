@@ -27,7 +27,7 @@ template <> struct Particle_Traits<ParticleDepositionProblem> {
 #endif
 };
 
-template <> struct ::quokka::EOS_Traits<ParticleDepositionProblem> {
+template <> struct quokka::EOS_Traits<ParticleDepositionProblem> {
 	static constexpr double gamma = 5.0 / 3.0;
 	static constexpr double mean_molecular_weight = C::m_u;
 };

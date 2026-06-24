@@ -26,7 +26,7 @@
 struct MHDBalsaraVortex {
 };
 
-template <> struct ::quokka::EOS_Traits<MHDBalsaraVortex> {
+template <> struct quokka::EOS_Traits<MHDBalsaraVortex> {
 	static constexpr double gamma = 5.0 / 3.0;
 	static constexpr double mean_molecular_weight = C::m_u;
 };

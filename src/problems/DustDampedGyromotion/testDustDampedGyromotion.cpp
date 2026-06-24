@@ -126,13 +126,13 @@ template <> struct SimulationData<DustGyroNoDrag> : DustGyroHistory {
 template <> struct SimulationData<DustGyroEpsteinWithB> : DustGyroHistory {
 };
 
-template <> struct ::quokka::EOS_Traits<DustGyroEpsteinNoB> : DustGyroEOSTraits {
+template <> struct quokka::EOS_Traits<DustGyroEpsteinNoB> : DustGyroEOSTraits {
 };
 
-template <> struct ::quokka::EOS_Traits<DustGyroNoDrag> : DustGyroEOSTraits {
+template <> struct quokka::EOS_Traits<DustGyroNoDrag> : DustGyroEOSTraits {
 };
 
-template <> struct ::quokka::EOS_Traits<DustGyroEpsteinWithB> : DustGyroEOSTraits {
+template <> struct quokka::EOS_Traits<DustGyroEpsteinWithB> : DustGyroEOSTraits {
 };
 
 template <> struct Physics_Traits<DustGyroEpsteinNoB> : DustGyroPhysicsTraits {

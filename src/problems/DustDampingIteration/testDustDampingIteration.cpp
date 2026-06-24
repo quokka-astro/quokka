@@ -38,13 +38,13 @@ template <> struct SimulationData<DustDampingWithoutCorrection> {
 	std::vector<double> E_gas_vec_;
 };
 
-template <> struct ::quokka::EOS_Traits<DustDampingWithCorrection> {
+template <> struct quokka::EOS_Traits<DustDampingWithCorrection> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 1.4;
 	// static constexpr double cs_isothermal = 1.0; // only used when gamma = 1
 };
 
-template <> struct ::quokka::EOS_Traits<DustDampingWithoutCorrection> {
+template <> struct quokka::EOS_Traits<DustDampingWithoutCorrection> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 1.4;
 	// static constexpr double cs_isothermal = 1.0; // only used when gamma = 1

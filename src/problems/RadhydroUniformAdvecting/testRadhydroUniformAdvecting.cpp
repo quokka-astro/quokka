@@ -57,7 +57,7 @@ constexpr double max_time = 10.0 / v0;
 constexpr double Erad0 = a_rad * T0 * T0 * T0 * T0;
 constexpr double Erad_beta2 = (1. + 4. / 3. * (v0 * v0) / (c * c)) * Erad0;
 
-template <> struct ::quokka::EOS_Traits<PulseProblem> {
+template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double gamma = 5. / 3.;
 };

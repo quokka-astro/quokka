@@ -106,7 +106,7 @@ constexpr double max_time = 10.0 / (1e-2 * c);
 
 constexpr double erad_floor = a_rad * 1e-30;
 
-template <> struct ::quokka::EOS_Traits<PulseProblem> {
+template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double gamma = 5. / 3.;
 };

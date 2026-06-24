@@ -36,7 +36,7 @@ using amrex::Real;
 struct StarCluster {
 };
 
-template <> struct ::quokka::EOS_Traits<StarCluster> {
+template <> struct quokka::EOS_Traits<StarCluster> {
 	static constexpr double gamma = 1.0;
 	static constexpr double cs_isothermal = 1.0; // dimensionless
 	static constexpr double mean_molecular_weight = C::m_u;

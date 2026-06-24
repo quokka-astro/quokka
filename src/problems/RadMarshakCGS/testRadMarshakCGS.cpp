@@ -40,7 +40,7 @@ constexpr double a_rad = C::a_rad;	  // erg cm^-3 K^-4
 constexpr double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
 constexpr double T_initial = 1.0e4; // K
 
-template <> struct ::quokka::EOS_Traits<SuOlsonProblemCgs> {
+template <> struct quokka::EOS_Traits<SuOlsonProblemCgs> {
 	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double gamma = 5. / 3.;
 };

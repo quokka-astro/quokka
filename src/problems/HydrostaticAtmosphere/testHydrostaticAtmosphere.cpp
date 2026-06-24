@@ -24,7 +24,7 @@ template <> struct SimulationData<HydrostaticAtmosphereProblem> {
 	amrex::Real atmosphere_scale_height = NAN;
 };
 
-template <> struct ::quokka::EOS_Traits<HydrostaticAtmosphereProblem> {
+template <> struct quokka::EOS_Traits<HydrostaticAtmosphereProblem> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };

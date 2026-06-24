@@ -33,7 +33,7 @@ constexpr double a_rad = radiation_constant_cgs_;
 
 constexpr double Erad_floor_ = a_rad * T_initial * T_initial * T_initial * T_initial;
 
-template <> struct ::quokka::EOS_Traits<SuOlsonProblemCgs> {
+template <> struct quokka::EOS_Traits<SuOlsonProblemCgs> {
 	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double gamma = 5. / 3.;
 };

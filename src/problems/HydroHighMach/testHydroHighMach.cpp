@@ -34,7 +34,7 @@ using amrex::Real;
 struct HighMachProblem {
 };
 
-template <> struct ::quokka::EOS_Traits<HighMachProblem> {
+template <> struct quokka::EOS_Traits<HighMachProblem> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };

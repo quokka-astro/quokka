@@ -28,7 +28,7 @@
 struct FastWaveConvergence {
 };
 
-template <> struct ::quokka::EOS_Traits<FastWaveConvergence> {
+template <> struct quokka::EOS_Traits<FastWaveConvergence> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };

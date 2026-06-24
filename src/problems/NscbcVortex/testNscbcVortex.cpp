@@ -46,7 +46,7 @@ using amrex::Real;
 struct Vortex {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-template <> struct ::quokka::EOS_Traits<Vortex> {
+template <> struct quokka::EOS_Traits<Vortex> {
 	static constexpr double gamma = 1.4;
 	static constexpr double mean_molecular_weight = 28.96 * C::m_u; // air
 };

@@ -32,7 +32,7 @@ template <> struct Particle_Traits<ParticleSFProblem> {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
 };
 
-template <> struct ::quokka::EOS_Traits<ParticleSFProblem> {
+template <> struct quokka::EOS_Traits<ParticleSFProblem> {
 	static constexpr double gamma = gamma_;
 	static constexpr double mean_molecular_weight = mu;
 };

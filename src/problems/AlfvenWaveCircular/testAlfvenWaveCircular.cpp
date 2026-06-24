@@ -22,7 +22,7 @@
 struct AlfvenWaveCircular {
 };
 
-template <> struct ::quokka::EOS_Traits<AlfvenWaveCircular> {
+template <> struct quokka::EOS_Traits<AlfvenWaveCircular> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };

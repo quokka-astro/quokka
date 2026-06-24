@@ -51,7 +51,7 @@ template <> struct Physics_Traits<ShockCloud> : DefaultPhysicsTraits {
 	static constexpr int numPassiveScalars = numMassScalars + 3;
 };
 
-template <> struct ::quokka::EOS_Traits<ShockCloud> {
+template <> struct quokka::EOS_Traits<ShockCloud> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };

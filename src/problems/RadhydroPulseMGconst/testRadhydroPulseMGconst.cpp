@@ -88,7 +88,7 @@ auto compute_exact_rho(const double x) -> double
 	return rho0 * T_lo / T + (a_rad * mu / 3. / k_B) * (std::pow(T_lo, 4) / T - std::pow(T, 3));
 }
 
-template <> struct ::quokka::EOS_Traits<SGProblem> {
+template <> struct quokka::EOS_Traits<SGProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double gamma = 5. / 3.;
 };
@@ -145,7 +145,7 @@ template <> void QuokkaSimulation<SGProblem>::setInitialConditionsOnGrid(quokka:
 	});
 }
 
-template <> struct ::quokka::EOS_Traits<MGproblem> {
+template <> struct quokka::EOS_Traits<MGproblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double gamma = 5. / 3.;
 };

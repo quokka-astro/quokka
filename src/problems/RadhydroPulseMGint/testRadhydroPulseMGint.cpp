@@ -94,11 +94,11 @@ constexpr double T_ref = T_lo;
 constexpr double nu_ref = 1.0e18;			     // Hz
 constexpr double coeff_ = h_planck * nu_ref / (k_B * T_ref); // = 4.799243073 = 1 / 0.2083661912
 
-template <> struct ::quokka::EOS_Traits<MGProblem> {
+template <> struct quokka::EOS_Traits<MGProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double gamma = 5. / 3.;
 };
-template <> struct ::quokka::EOS_Traits<ExactProblem> {
+template <> struct quokka::EOS_Traits<ExactProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double gamma = 5. / 3.;
 };

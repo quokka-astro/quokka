@@ -53,7 +53,7 @@ template <> struct Particle_Traits<SNProblem> {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Test;
 };
 
-template <> struct ::quokka::EOS_Traits<SNProblem> {
+template <> struct quokka::EOS_Traits<SNProblem> {
 	static constexpr double gamma = gamma_;
 	static constexpr double mean_molecular_weight = mu;
 };

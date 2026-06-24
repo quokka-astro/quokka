@@ -39,11 +39,11 @@ AMREX_GPU_MANAGED double kappa0 = 100.;	 // NOLINT
 AMREX_GPU_MANAGED double v0_adv = 1.0e6; // NOLINT
 // AMREX_GPU_MANAGED double max_time = 4.8e-5; // max_time = 2.0 * width / v1;
 
-template <> struct ::quokka::EOS_Traits<PulseProblem> {
+template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double gamma = 5. / 3.;
 };
-template <> struct ::quokka::EOS_Traits<AdvPulseProblem> {
+template <> struct quokka::EOS_Traits<AdvPulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double gamma = 5. / 3.;
 };

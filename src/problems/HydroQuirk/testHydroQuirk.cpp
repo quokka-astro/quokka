@@ -36,7 +36,7 @@ using Real = amrex::Real;
 struct QuirkProblem {
 };
 
-template <> struct ::quokka::EOS_Traits<QuirkProblem> {
+template <> struct quokka::EOS_Traits<QuirkProblem> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };

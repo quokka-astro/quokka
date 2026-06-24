@@ -38,7 +38,7 @@ struct DTypeFront {
 
 constexpr double c_hat = C::c_light / 1000.0;
 
-template <> struct ::quokka::EOS_Traits<DTypeFront> {
+template <> struct quokka::EOS_Traits<DTypeFront> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 5. / 3.;
 };

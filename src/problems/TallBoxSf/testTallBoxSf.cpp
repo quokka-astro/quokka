@@ -64,7 +64,7 @@ template <> struct HydroSystem_Traits<TheProblem> {
 	static constexpr bool reconstruct_eint = true; // need to reconstruct temperature
 };
 
-template <> struct ::quokka::EOS_Traits<TheProblem> {
+template <> struct quokka::EOS_Traits<TheProblem> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = mu;
 };

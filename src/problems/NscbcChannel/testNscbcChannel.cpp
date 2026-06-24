@@ -49,7 +49,7 @@ using amrex::Real;
 struct Channel {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-template <> struct ::quokka::EOS_Traits<Channel> {
+template <> struct quokka::EOS_Traits<Channel> {
 	static constexpr double gamma = 1.1;
 	static constexpr double mean_molecular_weight = 28.96 * C::m_u; // air
 };

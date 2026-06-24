@@ -88,7 +88,7 @@ template <> struct SimulationData<ResampledCoolingTest> {
 	std::vector<double> T_vec_;
 };
 
-template <> struct ::quokka::EOS_Traits<ResampledCoolingTest> {
+template <> struct quokka::EOS_Traits<ResampledCoolingTest> {
 	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double gamma = 5. / 3.;
 };

@@ -45,7 +45,7 @@ constexpr double a_rad = C::a_rad;
 
 constexpr double a0 = 4.0295519855200705e7; // cm s^-1
 
-template <> struct ::quokka::EOS_Traits<TubeProblem> {
+template <> struct quokka::EOS_Traits<TubeProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double gamma = gamma_gas;
 };

@@ -26,7 +26,7 @@
 struct RTProblem {
 };
 
-template <> struct ::quokka::EOS_Traits<RTProblem> {
+template <> struct quokka::EOS_Traits<RTProblem> {
 	static constexpr double gamma = 1.4;
 	static constexpr double mean_molecular_weight = C::m_u;
 };

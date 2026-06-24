@@ -61,7 +61,7 @@ template <> struct SimulationData<DustDampingWithExternalForce> {
 	std::vector<double> E_gas_vec_;
 };
 
-template <> struct ::quokka::EOS_Traits<DustDampingWithExternalForce> {
+template <> struct quokka::EOS_Traits<DustDampingWithExternalForce> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 1.4;
 };

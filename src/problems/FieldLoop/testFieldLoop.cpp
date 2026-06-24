@@ -27,7 +27,7 @@ struct FieldLoop {
 
 AMREX_ENUM(RefineOn, Region, MagneticEnergy); // NOLINT
 
-template <> struct ::quokka::EOS_Traits<FieldLoop> {
+template <> struct quokka::EOS_Traits<FieldLoop> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };

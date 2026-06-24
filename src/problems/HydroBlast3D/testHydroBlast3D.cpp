@@ -28,7 +28,7 @@ constexpr bool simulate_full_box = false;
 
 bool test_passes = false; // if one of the energy checks fails, set to false. NOLINT
 
-template <> struct ::quokka::EOS_Traits<SedovProblem> {
+template <> struct quokka::EOS_Traits<SedovProblem> {
 	static constexpr double gamma = 1.4;
 	static constexpr double mean_molecular_weight = C::m_u;
 };

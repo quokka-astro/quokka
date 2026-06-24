@@ -27,7 +27,7 @@ const static double SN_mass = 1.0e-5;	    // mass of SNProgenitor particles
 constexpr int n_test_particles_init = 8;    // 8 test particles created at the start of the simulation
 constexpr int n_test_particles_created = 8; // 8 test particles created and live to the end
 
-template <> struct ::quokka::EOS_Traits<TestParticle> {
+template <> struct quokka::EOS_Traits<TestParticle> {
 	static constexpr double gamma = 1.0;	     // isothermal
 	static constexpr double cs_isothermal = 3.0; //
 	static constexpr double mean_molecular_weight = 1.0;

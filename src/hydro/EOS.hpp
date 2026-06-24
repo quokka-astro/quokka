@@ -463,6 +463,8 @@ AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEgasFromEint(const double rho,
 {
 	const double Ekin = 0.5 * (mx * mx + my * my + mz * mz) / rho;
 	return Eint + Ekin + magnetic_energy;
+}
+
 } // namespace quokka
 
 #endif // EOS_HPP_

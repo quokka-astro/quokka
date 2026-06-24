@@ -39,7 +39,7 @@ template <> struct SimulationData<ShocktubeProblem> {
 	std::vector<double> delta_eps_t_vec_; // stores sum of mass fractions at each time
 };
 
-template <> struct ::quokka::EOS_Traits<ShocktubeProblem> {
+template <> struct quokka::EOS_Traits<ShocktubeProblem> {
 	static constexpr double gamma = 1.4;
 	static constexpr double mean_molecular_weight = C::m_u;
 };

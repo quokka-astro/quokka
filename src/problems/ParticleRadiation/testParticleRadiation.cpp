@@ -32,7 +32,7 @@ template <> struct SimulationData<ParticleRadiationProblem> {
 	std::string particles_filename = "../inputs/TestParticlesNoRad.txt";
 };
 
-template <> struct ::quokka::EOS_Traits<ParticleRadiationProblem> {
+template <> struct quokka::EOS_Traits<ParticleRadiationProblem> {
 	static constexpr double gamma = gamma_;
 	static constexpr double mean_molecular_weight = mu;
 };

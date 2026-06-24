@@ -40,11 +40,11 @@ AMREX_GPU_MANAGED double v0_adv = 1.0e6; // NOLINT
 // constexpr double v0_adv = 1.0e8;    // advecting pulse
 // constexpr double max_time = 1.2e-4; // max_time = 2.0 * width / v1;
 
-template <> struct ::quokka::EOS_Traits<PulseProblem> {
+template <> struct quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double gamma = 5. / 3.;
 };
-template <> struct ::quokka::EOS_Traits<AdvPulseProblem> {
+template <> struct quokka::EOS_Traits<AdvPulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double gamma = 5. / 3.;
 };

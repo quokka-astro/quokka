@@ -37,7 +37,7 @@ template <> struct SimulationData<CouplingProblem> {
 	std::vector<double> Tgas_vec_;
 };
 
-template <> struct ::quokka::EOS_Traits<CouplingProblem> {
+template <> struct quokka::EOS_Traits<CouplingProblem> {
 	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double gamma = 5. / 3.;
 };
