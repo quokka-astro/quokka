@@ -427,7 +427,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j, int const k, arrayconst_t &consPrev, NewtonIterationResult<problem_t> &energy,
 						       double const dt, double const gas_update_factor, double const Ekin0,
-						       std::array<amrex::Real, 3> const &B_cc) -> FluxUpdateResult<problem_t>
+						       double Emag) -> FluxUpdateResult<problem_t>
 {
 	amrex::GpuArray<amrex::Real, 3> Frad_t0{};
 	amrex::GpuArray<amrex::Real, 3> dMomentum{0., 0., 0.};
@@ -519,7 +519,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j,
 	// 3. Deal with the work term.
 	if constexpr ((gamma_ != 1.0) && (beta_order_ == 1)) {
 		// compute difference in gas kinetic energy before and after momentum update
-		amrex::Real const Egastot1 = quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, energy.Egas, B_cc);
+		amrex::Real const Egastot1 = quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, energy.Egas, Emag);
 		amrex::Real const Ekin1 = Egastot1 - energy.Egas;
 		amrex::Real const dEkin_work = Ekin1 - Ekin0;
 
@@ -629,7 +629,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		auto massScalars = RadSystem<problem_t>::ComputeMassScalars(consPrev, i, j, k);
 
 		// Compute cell-centered magnetic field
-		const std::array<amrex::Real, 3> B_cc = ComputeCellCenteredB<problem_t>(i, j, k, *cons_fc);
+		const double Emag = ComputeCellCenteredMagneticEnergy<problem_t>(i, j, k, *cons_fc);
 
 		// load radiation energy
 		quokka::valarray<double, nGroups_> Erad0Vec;
@@ -660,7 +660,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		quokka::valarray<double, nGroups_> work_prev{};
 
 		if constexpr (gamma_ != 1.0) {
-			Egas0 = quokka::EOS<problem_t>::ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0, B_cc);
+			Egas0 = quokka::EOS<problem_t>::ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0, Emag);
 			Etot0 = Egas0 + (c / chat) * (Erad0 + sum(Src));
 			Ekin0 = Egastot0 - Egas0;
 		}
@@ -775,7 +775,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 			// 2. Compute radiation flux update
 
 			// 2.1. Update flux and gas momentum
-			auto updated_flux = UpdateFlux(i, j, k, consPrev, updated_energy, dt, gas_update_factor, Ekin0, B_cc);
+			auto updated_flux = UpdateFlux(i, j, k, consPrev, updated_energy, dt, gas_update_factor, Ekin0, Emag);
 
 			// 2.2. Check for convergence of the work term
 			bool work_converged = true;
@@ -786,7 +786,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 				// Check for convergence of the work term
 				auto const Egastot1 = quokka::EOS<problem_t>::ComputeEgasFromEint(rho, updated_flux.gasMomentum[0], updated_flux.gasMomentum[1],
-												  updated_flux.gasMomentum[2], Egas_guess, B_cc);
+												  updated_flux.gasMomentum[2], Egas_guess, Emag);
 				const double rel_lag_tol = 1.0e-8;
 				const double lag_tol = 1.0e-13;
 				double ref_work = rel_lag_tol * sum(abs(work));
@@ -830,7 +830,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 		if constexpr (gamma_ != 1.0) {
 			Egas_guess = Egas0 + (Egas_guess - Egas0) * gas_update_factor;
 			consNew(i, j, k, gasInternalEnergy_index) = Egas_guess;
-			consNew(i, j, k, gasEnergy_index) = quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess, B_cc);
+			consNew(i, j, k, gasEnergy_index) = quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess, Emag);
 		} else {
 			amrex::ignore_unused(Egas_guess);
 			amrex::ignore_unused(Egas0);

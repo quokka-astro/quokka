@@ -74,8 +74,8 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 			const Real Ener = state(i, j, k, RadSystem<problem_t>::gasEnergy_index);
 
 			// Compute internal energy, excluding magnetic field energy if MHD is enabled
-			const std::array<amrex::Real, 3> B = ComputeCellCenteredB<problem_t>(i, j, k, *cons_fc);
-			const Real Eint = quokka::EOS<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener, B);
+			const double Emag = ComputeCellCenteredMagneticEnergy<problem_t>(i, j, k, *cons_fc);
+			const Real Eint = quokka::EOS<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener, Emag);
 
 			burn_t photochemstate;
 			photochemstate.success = true;

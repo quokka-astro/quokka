@@ -3196,9 +3196,9 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 					stateNew(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index) = Eint;
 					// Derive gasEnergy (total) from combined internal energy + kinetic energy of combined momentum.
 					// When MHD is enabled, also include magnetic energy.
-					const std::array<amrex::Real, 3> B = ComputeCellCenteredB<problem_t>(i, j, k, cons_fc_shu);
+					const double Emag = ComputeCellCenteredMagneticEnergy<problem_t>(i, j, k, cons_fc_shu);
 					stateNew(i, j, k, RadSystem<problem_t>::gasEnergy_index) =
-					    quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1Mom, x2Mom, x3Mom, Eint, B);
+					    quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1Mom, x2Mom, x3Mom, Eint, Emag);
 				});
 			}
 		}

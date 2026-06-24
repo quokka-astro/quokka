@@ -135,23 +135,24 @@ template <typename problem_t> struct FluxUpdateResult {
 	return 0.5 * (sgn(a) + sgn(b)) * std::min(std::abs(a), std::abs(b));
 }
 
-// Helper to compute cell-centered magnetic field from face-centered data.
+// Helper to compute cell-centered magnetic energy density (0.5 * B^2) from face-centered data.
 // Defined as a separate device function (rather than inline in a ParallelFor lambda)
 // to work around an NVCC limitation that disallows first-capturing variables in
 // constexpr-if contexts inside extended device lambdas.
 template <typename problem_t>
-AMREX_GPU_DEVICE auto ComputeCellCenteredB(int i, int j, int k, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &fc)
-    -> std::array<amrex::Real, 3>
+AMREX_GPU_DEVICE auto ComputeCellCenteredMagneticEnergy(int i, int j, int k,
+							std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &fc) -> double
 {
-	amrex::Real bx = 0.0;
-	amrex::Real by = 0.0;
-	amrex::Real bz = 0.0;
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		bx = 0.5 * (fc[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) + fc[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex));
-		by = 0.5 * (fc[1](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) + fc[1](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex));
-		bz = 0.5 * (fc[2](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) + fc[2](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex));
+		const amrex::Real bx = 0.5 * (fc[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
+					      fc[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex));
+		const amrex::Real by = 0.5 * (fc[1](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
+					      fc[1](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex));
+		const amrex::Real bz = 0.5 * (fc[2](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) +
+					      fc[2](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex));
+		return 0.5 * (bx * bx + by * by + bz * bz);
 	}
-	return {bx, by, bz};
+	return 0.0;
 }
 
 // Use SFINAE (Substitution Failure Is Not An Error) to check if opacity_model is defined in RadSystem_Traits<problem_t>
@@ -325,7 +326,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				       amrex::Real time);
 
 	AMREX_GPU_DEVICE static auto UpdateFlux(int i, int j, int k, arrayconst_t const &consPrev, NewtonIterationResult<problem_t> &energy, double dt,
-						double gas_update_factor, double Ekin0, std::array<amrex::Real, 3> const &B_cc = {})
+						double gas_update_factor, double Ekin0, double Emag = {})
 	    -> FluxUpdateResult<problem_t>;
 
 	static void AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_implicit,

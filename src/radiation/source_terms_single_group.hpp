@@ -44,7 +44,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		auto massScalars = RadSystem<problem_t>::ComputeMassScalars(consPrev, i, j, k);
 
 		// Compute cell-centered magnetic field
-		const std::array<amrex::Real, 3> B_cc = ComputeCellCenteredB<problem_t>(i, j, k, *cons_fc);
+		const double Emag = ComputeCellCenteredMagneticEnergy<problem_t>(i, j, k, *cons_fc);
 
 		// load radiation energy
 		const double Erad0 = consPrev(i, j, k, radEnergy_index);
@@ -83,7 +83,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		amrex::GpuArray<Real, 3> Frad_t1{};
 
 		if constexpr (gamma_ != 1.0) {
-			Egas0 = quokka::EOS<problem_t>::ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0, B_cc);
+			Egas0 = quokka::EOS<problem_t>::ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0, Emag);
 			Etot0 = Egas0 + cscale * (Erad0 + Src);
 			AMREX_ASSERT(Egas0 > 0.0);
 		}
@@ -491,7 +491,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 			if constexpr ((gamma_ != 1.0) && (beta_order_ != 0)) {
 				// compute difference in gas kinetic energy before and after momentum update
 				amrex::Real Egastot1 = NAN;
-				Egastot1 = quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess, B_cc);
+				Egastot1 = quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess, Emag);
 				amrex::Real const Ekin1 = Egastot1 - Egas_guess;
 				amrex::Real const dEkin_work = Ekin1 - Ekin0;
 
@@ -553,7 +553,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		if constexpr (gamma_ != 1.0) {
 			Egas_guess = Egas0 + (Egas_guess - Egas0) * gas_update_factor;
 			consNew(i, j, k, gasInternalEnergy_index) = Egas_guess;
-			consNew(i, j, k, gasEnergy_index) = quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess, B_cc);
+			consNew(i, j, k, gasEnergy_index) = quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess, Emag);
 			consNew(i, j, k, radEnergy_index) = Erad_guess;
 		} else {
 			amrex::ignore_unused(Erad_guess);
