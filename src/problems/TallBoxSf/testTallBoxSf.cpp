@@ -393,6 +393,7 @@ template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::Mult
 			const Real x3mom = state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index);
 			const Real Egas = state(i, j, k, HydroSystem<TheProblem>::energy_index);
 
+			static_assert(!Physics_Traits<TheProblem>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
 			const Real Eint = quokka::EOS<TheProblem>::ComputeEintFromEgas(rho, x1mom, x2mom, x3mom, Egas, 0.0);
 
 			posvec[0] = prob_lo[0] + (i + 0.5) * dx[0];
@@ -430,6 +431,7 @@ template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::Mult
 			state(i, j, k, HydroSystem<TheProblem>::x2Momentum_index) = x2mom_new;
 			state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = x3mom_new;
 
+			static_assert(!Physics_Traits<TheProblem>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
 			const Real Egas_new = quokka::EOS<TheProblem>::ComputeEgasFromEint(rho, x1mom_new, x2mom_new, x3mom_new, Eint, 0.0);
 			AMREX_ASSERT(!std::isnan(Egas_new));
 

@@ -943,7 +943,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 	double Tgas_R = NAN;
 
 	if constexpr (gamma_ != 1.0) {
+		static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
 		Eint_L = quokka::EOS<problem_t>::ComputeEintFromEgas(rho_L, x1GasMom_L, x2GasMom_L, x3GasMom_L, Egas_L, 0.0);
+		static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
 		Eint_R = quokka::EOS<problem_t>::ComputeEintFromEgas(rho_R, x1GasMom_R, x2GasMom_R, x3GasMom_R, Egas_R, 0.0);
 		Tgas_L = quokka::EOS<problem_t>::ComputeTgasFromEint(rho_L, Eint_L, massScalars_L);
 		Tgas_R = quokka::EOS<problem_t>::ComputeTgasFromEint(rho_R, Eint_R, massScalars_R);

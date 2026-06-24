@@ -81,6 +81,7 @@ template <> void QuokkaSimulation<Channel>::setInitialConditionsOnGrid(quokka::g
 	Real const ymom = 0;
 	Real const zmom = 0;
 	Real const Eint = quokka::EOS<Channel>::ComputeEintFromTgas(rho0, Tgas0);
+	static_assert(!Physics_Traits<Channel>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
 	Real const Egas = quokka::EOS<Channel>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint, 0.0);
 	Real const scalar = s0;
 

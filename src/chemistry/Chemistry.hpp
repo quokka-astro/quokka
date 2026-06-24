@@ -50,6 +50,7 @@ template <typename problem_t> auto computeChemistry(amrex::MultiFab &mf, const R
 			const Real ymom = state(i, j, k, HydroSystem<problem_t>::x2Momentum_index);
 			const Real zmom = state(i, j, k, HydroSystem<problem_t>::x3Momentum_index);
 			const Real Ener = state(i, j, k, HydroSystem<problem_t>::energy_index);
+			static_assert(!Physics_Traits<problem_t>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
 			const Real Eint = quokka::EOS<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener, 0.0);
 
 			std::array<Real, NumSpec> chem = {-1.0};
