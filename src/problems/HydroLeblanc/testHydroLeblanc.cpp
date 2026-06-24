@@ -36,7 +36,7 @@
 struct ShocktubeProblem {
 };
 
-template <> struct quokka::EOS_Traits<ShocktubeProblem> {
+template <> struct ::quokka::EOS_Traits<ShocktubeProblem> {
 	static constexpr double gamma = (5. / 3.);
 	static constexpr double mean_molecular_weight = C::m_u;
 };
@@ -79,7 +79,7 @@ template <> void QuokkaSimulation<ShocktubeProblem>::setInitialConditionsOnGrid(
 			state_cc(i, j, k, n) = 0.;
 		}
 
-		const auto gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
+		const auto gamma = ::quokka::EOS_Traits<ShocktubeProblem>::gamma;
 		state_cc(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) = rho * vx;
 		state_cc(i, j, k, HydroSystem<ShocktubeProblem>::x2Momentum_index) = 0.;
@@ -97,7 +97,7 @@ AMRSimulation<ShocktubeProblem>::setCustomBoundaryConditions(const amrex::IntVec
 {
 	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
 	constexpr int nvar = Physics_Indices<ShocktubeProblem>::nvarTotal_cc;
-	const auto gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
+	const auto gamma = ::quokka::EOS_Traits<ShocktubeProblem>::gamma;
 
 	// Left state
 	const double vx_L = 0.0;
@@ -171,7 +171,7 @@ void QuokkaSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::MultiFa
 		auto density = values.at(2);
 		auto pressure = values.at(3);
 		auto velocity = values.at(4);
-		auto eint = pressure / ((quokka::EOS_Traits<ShocktubeProblem>::gamma - 1.0) * density);
+		auto eint = pressure / ((::quokka::EOS_Traits<ShocktubeProblem>::gamma - 1.0) * density);
 
 		xs_exact.push_back(x);
 		density_exact.push_back(density);
@@ -229,7 +229,7 @@ void QuokkaSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::MultiFa
 			amrex::Real const vx = vx_arr[i];
 			amrex::Real const P = P_arr[i];
 
-			const auto gamma = quokka::EOS_Traits<ShocktubeProblem>::gamma;
+			const auto gamma = ::quokka::EOS_Traits<ShocktubeProblem>::gamma;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::density_index) = rho;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x1Momentum_index) = rho * vx;
 			stateExact(i, j, k, HydroSystem<ShocktubeProblem>::x2Momentum_index) = 0.;
@@ -260,7 +260,7 @@ void QuokkaSimulation<ShocktubeProblem>::computeReferenceSolution(amrex::MultiFa
 			amrex::Real const xvel = xmom / rho;
 			amrex::Real const Eint = Egas - xmom * xmom / (2.0 * rho);
 			amrex::Real const specific_Eint = Eint / rho;
-			amrex::Real const pressure = (quokka::EOS_Traits<ShocktubeProblem>::gamma - 1.) * Eint;
+			amrex::Real const pressure = (::quokka::EOS_Traits<ShocktubeProblem>::gamma - 1.) * Eint;
 
 			d.at(i) = rho;
 			vx.at(i) = xvel;

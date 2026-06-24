@@ -77,7 +77,7 @@ struct CaseHistory {
 template <> struct SimulationData<DustyAlfvenWave> : CaseHistory {
 };
 
-template <> struct quokka::EOS_Traits<DustyAlfvenWave> {
+template <> struct ::quokka::EOS_Traits<DustyAlfvenWave> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 1.0;
 	static constexpr double cs_isothermal = sound_speed;

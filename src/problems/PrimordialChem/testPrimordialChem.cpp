@@ -223,7 +223,7 @@ template <> void QuokkaSimulation<PrimordialChemTest>::setInitialConditionsOnGri
 		Real const Eint = rho * state.e;
 
 		static_assert(!Physics_Traits<PrimordialChemTest>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
-		Real const Egas = quokka::EOS<PrimordialChemTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint, 0.0);
+		Real const Egas = ::quokka::EOS<PrimordialChemTest>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint, 0.0);
 
 		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::energy_index) = Egas;
 		state_cc(i, j, k, HydroSystem<PrimordialChemTest>::internalEnergy_index) = Eint;

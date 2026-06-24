@@ -29,7 +29,7 @@
 struct MHDResistiveDiffusion {
 };
 
-template <> struct quokka::EOS_Traits<MHDResistiveDiffusion> {
+template <> struct ::quokka::EOS_Traits<MHDResistiveDiffusion> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };
@@ -44,7 +44,7 @@ template <> struct Physics_Traits<MHDResistiveDiffusion> : DefaultPhysicsTraits 
 constexpr double rho_0 = 1.0;
 constexpr double pressure_0 = 0.01;
 constexpr double b_amp = 0.1;
-constexpr double gamma_gas = quokka::EOS_Traits<MHDResistiveDiffusion>::gamma;
+constexpr double gamma_gas = ::quokka::EOS_Traits<MHDResistiveDiffusion>::gamma;
 constexpr double eint_0 = pressure_0 / (gamma_gas - 1.0);
 
 // wavevector: one mode in a unit box

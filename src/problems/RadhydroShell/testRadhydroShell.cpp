@@ -39,7 +39,7 @@ constexpr double k_B = C::k_B;	   // erg K^-1
 constexpr double m_H = C::m_u;	   // atomic mass unit
 constexpr double gamma_gas = 5. / 3.;
 
-template <> struct quokka::EOS_Traits<ShellProblem> {
+template <> struct ::quokka::EOS_Traits<ShellProblem> {
 	static constexpr double mean_molecular_weight = 2.2 * m_H;
 	static constexpr double gamma = gamma_gas;
 };

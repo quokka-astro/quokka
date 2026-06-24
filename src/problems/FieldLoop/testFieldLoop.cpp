@@ -27,7 +27,7 @@ struct FieldLoop {
 
 AMREX_ENUM(RefineOn, Region, MagneticEnergy); // NOLINT
 
-template <> struct quokka::EOS_Traits<FieldLoop> {
+template <> struct ::quokka::EOS_Traits<FieldLoop> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };
@@ -48,7 +48,7 @@ template <> void QuokkaSimulation<FieldLoop>::setInitialConditionsOnGrid(quokka:
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 
-	constexpr double gamma_gas = quokka::EOS_Traits<FieldLoop>::gamma;
+	constexpr double gamma_gas = ::quokka::EOS_Traits<FieldLoop>::gamma;
 	constexpr double rho0 = 1.0;
 	constexpr double P0 = 1.0;
 

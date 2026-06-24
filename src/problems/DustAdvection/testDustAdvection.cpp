@@ -24,7 +24,7 @@ constexpr double sigma = 0.1; // width
 constexpr double Lx = 1.0;    // domain size
 constexpr double xc = 0.5;    // domain center
 
-template <> struct quokka::EOS_Traits<DustAdvection> {
+template <> struct ::quokka::EOS_Traits<DustAdvection> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 5. / 3.;
 };

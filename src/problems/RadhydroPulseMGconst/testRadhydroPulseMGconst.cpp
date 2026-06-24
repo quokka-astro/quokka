@@ -88,7 +88,7 @@ auto compute_exact_rho(const double x) -> double
 	return rho0 * T_lo / T + (a_rad * mu / 3. / k_B) * (std::pow(T_lo, 4) / T - std::pow(T, 3));
 }
 
-template <> struct quokka::EOS_Traits<SGProblem> {
+template <> struct ::quokka::EOS_Traits<SGProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double gamma = 5. / 3.;
 };
@@ -128,7 +128,7 @@ template <> void QuokkaSimulation<SGProblem>::setInitialConditionsOnGrid(quokka:
 		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 		const double Trad = compute_initial_Tgas(x - x0);
 		const double rho = compute_exact_rho(x - x0);
-		const double Egas = quokka::EOS<SGProblem>::ComputeEintFromTgas(rho, Trad);
+		const double Egas = ::quokka::EOS<SGProblem>::ComputeEintFromTgas(rho, Trad);
 		const double Erad = a_rad * Trad * Trad * Trad * Trad;
 
 		state_cc(i, j, k, RadSystem<SGProblem>::radEnergy_index) = Erad;
@@ -145,7 +145,7 @@ template <> void QuokkaSimulation<SGProblem>::setInitialConditionsOnGrid(quokka:
 	});
 }
 
-template <> struct quokka::EOS_Traits<MGproblem> {
+template <> struct ::quokka::EOS_Traits<MGproblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double gamma = 5. / 3.;
 };
@@ -202,7 +202,7 @@ template <> void QuokkaSimulation<MGproblem>::setInitialConditionsOnGrid(quokka:
 		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
 		const double Trad = compute_initial_Tgas(x - x0);
 		const double rho = compute_exact_rho(x - x0);
-		const double Egas = quokka::EOS<MGproblem>::ComputeEintFromTgas(rho, Trad);
+		const double Egas = ::quokka::EOS<MGproblem>::ComputeEintFromTgas(rho, Trad);
 
 		auto Erad_g = RadSystem<MGproblem>::ComputeThermalRadiationMultiGroup(Trad, radBoundaries_g);
 
@@ -277,7 +277,7 @@ auto problem_main() -> int
 		const auto Egas = values.at(RadSystem<SGProblem>::gasInternalEnergy_index)[i];
 		rhogas.at(i) = rho_t;
 		Trad.at(i) = Trad_t;
-		Tgas.at(i) = quokka::EOS<SGProblem>::ComputeTgasFromEint(rho_t, Egas);
+		Tgas.at(i) = ::quokka::EOS<SGProblem>::ComputeTgasFromEint(rho_t, Egas);
 		Vgas.at(i) = 1e-5 * v_t;
 	}
 	// END OF PROBLEM 1
@@ -351,7 +351,7 @@ auto problem_main() -> int
 		xs2.at(i) = x - drift;
 		rhogas2.at(index_) = rho_t;
 		Trad2.at(index_) = Trad_t;
-		Tgas2.at(index_) = quokka::EOS<MGproblem>::ComputeTgasFromEint(rho_t, Egas);
+		Tgas2.at(index_) = ::quokka::EOS<MGproblem>::ComputeTgasFromEint(rho_t, Egas);
 		Vgas2.at(index_) = 1e-5 * (v_t - v0);
 	}
 	// END OF PROBLEM 2

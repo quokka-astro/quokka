@@ -50,7 +50,7 @@ template <> struct Particle_Traits<SubcycleProblem> {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Sink;
 };
 
-template <> struct quokka::EOS_Traits<SubcycleProblem> {
+template <> struct ::quokka::EOS_Traits<SubcycleProblem> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_p;
 };

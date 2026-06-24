@@ -27,7 +27,7 @@
 struct OrszagTang {
 };
 
-template <> struct quokka::EOS_Traits<OrszagTang> {
+template <> struct ::quokka::EOS_Traits<OrszagTang> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };
@@ -62,7 +62,7 @@ template <> void QuokkaSimulation<OrszagTang>::setInitialConditionsOnGrid(quokka
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 
-	constexpr double gamma_gas = quokka::EOS_Traits<OrszagTang>::gamma;
+	constexpr double gamma_gas = ::quokka::EOS_Traits<OrszagTang>::gamma;
 	constexpr double rho0 = 25. / (36. * M_PI);
 	constexpr double P0 = 5. / (12. * M_PI);
 

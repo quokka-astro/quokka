@@ -44,7 +44,7 @@ const double sigma = 2.410685615625e+17;     // width of the Gaussian, in units 
 struct ThermalConductionProblem {
 };
 
-template <> struct quokka::EOS_Traits<ThermalConductionProblem> {
+template <> struct ::quokka::EOS_Traits<ThermalConductionProblem> {
 	static constexpr double gamma = 2.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };

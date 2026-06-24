@@ -49,7 +49,7 @@ struct DiskGalaxy {
 
 static_assert(AMREX_SPACEDIM == 3, "DiskGalaxy problem requires AMREX_SPACEDIM == 3.");
 
-template <> struct quokka::EOS_Traits<DiskGalaxy> {
+template <> struct ::quokka::EOS_Traits<DiskGalaxy> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = 0.6 * C::m_u;
 };
@@ -379,7 +379,7 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 
 		// integrate profiles over cell volume
 		const double cell_vol = dx[0] * dx[1] * dx[2];
-		constexpr double gamma_gas = quokka::EOS_Traits<DiskGalaxy>::gamma;
+		constexpr double gamma_gas = ::quokka::EOS_Traits<DiskGalaxy>::gamma;
 		constexpr double mu = 0.61;
 
 		auto rho_total_exact = [=] AMREX_GPU_DEVICE(double x, double y, double z) { return rhoDisk_exact(x, y, z) + rhoHalo_exact(x, y, z); };
@@ -586,7 +586,7 @@ void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::string const 
 				Real const x3Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index);
 				Real const Egas = state(i, j, k, HydroSystem<DiskGalaxy>::energy_index);
 				Real const Emag = ComputeCellCenteredMagneticEnergy<DiskGalaxy>(i, j, k, cons_fc);
-				Real const Eint = quokka::EOS<DiskGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, Emag);
+				Real const Eint = ::quokka::EOS<DiskGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, Emag);
 				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 				output(i, j, k, ncomp) = Tgas;
 			});
@@ -624,7 +624,7 @@ void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::string const 
 				Real const x3Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index);
 				Real const Egas = state(i, j, k, HydroSystem<DiskGalaxy>::energy_index);
 				Real const Emag = ComputeCellCenteredMagneticEnergy<DiskGalaxy>(i, j, k, cons_fc);
-				Real const Eint = quokka::EOS<DiskGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, Emag);
+				Real const Eint = ::quokka::EOS<DiskGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, Emag);
 				Real const K_cgs = quokka::ResampledCooling::ComputeEntropyFromRhoEint(rho, Eint, tables);
 				output(i, j, k, ncomp) = K_cgs / keV_in_ergs;
 			});

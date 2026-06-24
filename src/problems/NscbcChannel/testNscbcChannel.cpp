@@ -49,7 +49,7 @@ using amrex::Real;
 struct Channel {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-template <> struct quokka::EOS_Traits<Channel> {
+template <> struct ::quokka::EOS_Traits<Channel> {
 	static constexpr double gamma = 1.1;
 	static constexpr double mean_molecular_weight = 28.96 * C::m_u; // air
 };
@@ -80,9 +80,9 @@ template <> void QuokkaSimulation<Channel>::setInitialConditionsOnGrid(quokka::g
 	Real const xmom = rho0 * u0;
 	Real const ymom = 0;
 	Real const zmom = 0;
-	Real const Eint = quokka::EOS<Channel>::ComputeEintFromTgas(rho0, Tgas0);
+	Real const Eint = ::quokka::EOS<Channel>::ComputeEintFromTgas(rho0, Tgas0);
 	static_assert(!Physics_Traits<Channel>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
-	Real const Egas = quokka::EOS<Channel>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint, 0.0);
+	Real const Egas = ::quokka::EOS<Channel>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint, 0.0);
 	Real const scalar = s0;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -134,8 +134,8 @@ auto problem_main() -> int
 	pp.query("s_inflow", ::s_inflow[0]); // inflow passive scalar [dimensionless]
 
 	// compute derived parameters
-	const Real Eint0 = quokka::EOS<Channel>::ComputeEintFromTgas(rho0, Tgas0);
-	::P_outflow = quokka::EOS<Channel>::ComputePressure(rho0, Eint0);
+	const Real Eint0 = ::quokka::EOS<Channel>::ComputeEintFromTgas(rho0, Tgas0);
+	::P_outflow = ::quokka::EOS<Channel>::ComputePressure(rho0, Eint0);
 	amrex::Print() << "Derived outflow pressure is " << ::P_outflow << " erg/cc.\n";
 
 	// Set initial conditions
@@ -167,7 +167,7 @@ auto problem_main() -> int
 			amrex::Real const Egas = values.at(HydroSystem<Channel>::energy_index)[i];
 			amrex::Real const scalar = values.at(HydroSystem<Channel>::scalar0_index)[i];
 			amrex::Real const Eint = Egas - (xmom * xmom) / (2.0 * rho);
-			amrex::Real const gamma = quokka::EOS_Traits<Channel>::gamma;
+			amrex::Real const gamma = ::quokka::EOS_Traits<Channel>::gamma;
 			d.at(i) = rho;
 			vx.at(i) = xmom / rho;
 			P.at(i) = ((gamma - 1.0) * Eint);

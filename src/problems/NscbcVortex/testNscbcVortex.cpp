@@ -46,7 +46,7 @@ using amrex::Real;
 struct Vortex {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
-template <> struct quokka::EOS_Traits<Vortex> {
+template <> struct ::quokka::EOS_Traits<Vortex> {
 	static constexpr double gamma = 1.4;
 	static constexpr double mean_molecular_weight = 28.96 * C::m_u; // air
 };
@@ -78,8 +78,8 @@ template <> void QuokkaSimulation<Vortex>::setInitialConditionsOnGrid(quokka::gr
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
 
-	constexpr Real gamma = quokka::EOS_Traits<Vortex>::gamma;
-	constexpr Real R = C::k_B / quokka::EOS_Traits<Vortex>::mean_molecular_weight;
+	constexpr Real gamma = ::quokka::EOS_Traits<Vortex>::gamma;
+	constexpr Real R = C::k_B / ::quokka::EOS_Traits<Vortex>::mean_molecular_weight;
 	const Real c = std::sqrt(gamma * R * T_ref);
 
 	const Real G = ::G_vortex;
@@ -100,9 +100,9 @@ template <> void QuokkaSimulation<Vortex>::setInitialConditionsOnGrid(quokka::gr
 		Real const xmom = rho * u;
 		Real const ymom = rho * v;
 		Real const zmom = rho * w;
-		Real const Eint = quokka::EOS<Vortex>::ComputeEintFromPres(rho, P);
+		Real const Eint = ::quokka::EOS<Vortex>::ComputeEintFromPres(rho, P);
 		static_assert(!Physics_Traits<Vortex>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
-		Real const Egas = quokka::EOS<Vortex>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint, 0.0);
+		Real const Egas = ::quokka::EOS<Vortex>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint, 0.0);
 		Real const scalar = ::s0[0];
 
 		state_cc(i, j, k, HydroSystem<Vortex>::density_index) = rho;

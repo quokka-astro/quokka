@@ -27,7 +27,7 @@
 struct ContactProblem {
 };
 
-template <> struct quokka::EOS_Traits<ContactProblem> {
+template <> struct ::quokka::EOS_Traits<ContactProblem> {
 	static constexpr double gamma = 1.4;
 	static constexpr double mean_molecular_weight = C::m_u;
 };
@@ -77,8 +77,8 @@ template <> void QuokkaSimulation<ContactProblem>::setInitialConditionsOnGrid(qu
 		state_cc(i, j, k, HydroSystem<ContactProblem>::x1Momentum_index) = rho * vx;
 		state_cc(i, j, k, HydroSystem<ContactProblem>::x2Momentum_index) = 0.;
 		state_cc(i, j, k, HydroSystem<ContactProblem>::x3Momentum_index) = 0.;
-		state_cc(i, j, k, HydroSystem<ContactProblem>::energy_index) = quokka::EOS<ContactProblem>::ComputeEintFromPres(rho, P) + 0.5 * rho * (vx * vx);
-		state_cc(i, j, k, HydroSystem<ContactProblem>::internalEnergy_index) = quokka::EOS<ContactProblem>::ComputeEintFromPres(rho, P);
+		state_cc(i, j, k, HydroSystem<ContactProblem>::energy_index) = ::quokka::EOS<ContactProblem>::ComputeEintFromPres(rho, P) + 0.5 * rho * (vx * vx);
+		state_cc(i, j, k, HydroSystem<ContactProblem>::internalEnergy_index) = ::quokka::EOS<ContactProblem>::ComputeEintFromPres(rho, P);
 	});
 }
 
@@ -116,8 +116,8 @@ void QuokkaSimulation<ContactProblem>::computeReferenceSolution(amrex::MultiFab 
 			stateExact(i, j, k, HydroSystem<ContactProblem>::x2Momentum_index) = 0.;
 			stateExact(i, j, k, HydroSystem<ContactProblem>::x3Momentum_index) = 0.;
 			stateExact(i, j, k, HydroSystem<ContactProblem>::energy_index) =
-			    quokka::EOS<ContactProblem>::ComputeEintFromPres(rho, P) + 0.5 * rho * (vx * vx);
-			stateExact(i, j, k, HydroSystem<ContactProblem>::internalEnergy_index) = quokka::EOS<ContactProblem>::ComputeEintFromPres(rho, P);
+			    ::quokka::EOS<ContactProblem>::ComputeEintFromPres(rho, P) + 0.5 * rho * (vx * vx);
+			stateExact(i, j, k, HydroSystem<ContactProblem>::internalEnergy_index) = ::quokka::EOS<ContactProblem>::ComputeEintFromPres(rho, P);
 		});
 	}
 
@@ -146,7 +146,7 @@ void QuokkaSimulation<ContactProblem>::computeReferenceSolution(amrex::MultiFab 
 				const auto E = val_exact.at(HydroSystem<ContactProblem>::energy_index)[i];
 				const auto vx = xmom / rho;
 				const auto Eint = E - 0.5 * rho * (vx * vx);
-				const auto P = quokka::EOS<ContactProblem>::ComputePressure(rho, Eint);
+				const auto P = ::quokka::EOS<ContactProblem>::ComputePressure(rho, Eint);
 				d_exact.push_back(rho);
 				vx_exact.push_back(vx);
 				P_exact.push_back(P);
@@ -158,7 +158,7 @@ void QuokkaSimulation<ContactProblem>::computeReferenceSolution(amrex::MultiFab 
 				const auto fE = values.at(HydroSystem<ContactProblem>::energy_index)[i];
 				const auto fvx = fxmom / frho;
 				const auto fEint = fE - 0.5 * frho * (fvx * fvx);
-				const auto fP = (quokka::EOS_Traits<ContactProblem>::gamma - 1.) * fEint;
+				const auto fP = (::quokka::EOS_Traits<ContactProblem>::gamma - 1.) * fEint;
 				d_final.push_back(frho);
 				vx_final.push_back(fvx);
 				P_final.push_back(fP);

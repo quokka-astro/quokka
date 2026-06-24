@@ -40,7 +40,7 @@ constexpr double a_rad = C::a_rad;	  // erg cm^-3 K^-4
 constexpr double alpha_SuOlson = 4.0 * a_rad / eps_SuOlson;
 constexpr double T_initial = 1.0e4; // K
 
-template <> struct quokka::EOS_Traits<SuOlsonProblemCgs> {
+template <> struct ::quokka::EOS_Traits<SuOlsonProblemCgs> {
 	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double gamma = 5. / 3.;
 };
@@ -70,7 +70,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<SuOlsonProblemCgs>::ComputeFlux
 [[maybe_unused]] static constexpr int nmscalars_ = Physics_Traits<SuOlsonProblemCgs>::numMassScalars;
 template <>
 AMREX_GPU_HOST_DEVICE auto
-quokka::EOS<SuOlsonProblemCgs>::ComputeTgasFromEint([[maybe_unused]] const double rho, const double Egas,
+::quokka::EOS<SuOlsonProblemCgs>::ComputeTgasFromEint([[maybe_unused]] const double rho, const double Egas,
 						    [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
@@ -78,7 +78,7 @@ quokka::EOS<SuOlsonProblemCgs>::ComputeTgasFromEint([[maybe_unused]] const doubl
 
 template <>
 AMREX_GPU_HOST_DEVICE auto
-quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas([[maybe_unused]] const double rho, const double Tgas,
+::quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas([[maybe_unused]] const double rho, const double Tgas,
 						    [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
 {
 	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
@@ -86,7 +86,7 @@ quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas([[maybe_unused]] const doubl
 
 template <>
 AMREX_GPU_HOST_DEVICE auto
-quokka::EOS<SuOlsonProblemCgs>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas,
+::quokka::EOS<SuOlsonProblemCgs>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas,
 							  quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	// This is also known as the heat capacity, i.e.
@@ -152,7 +152,7 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVe
 	}
 
 	// gas boundary conditions are the same on both sides
-	const double Egas = quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
+	const double Egas = ::quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasEnergy_index) = Egas;
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasDensity_index) = rho0;
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasInternalEnergy_index) = Egas;
@@ -168,7 +168,7 @@ template <> void QuokkaSimulation<SuOlsonProblemCgs>::setInitialConditionsOnGrid
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		const double Egas = quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
+		const double Egas = ::quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
 		const double Erad = a_rad * std::pow(T_initial, 4);
 
 		state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index) = Erad;
@@ -258,7 +258,7 @@ auto problem_main() -> int
 
 			const double Egas_t = (Etot_t - Ekin);
 			Egas.at(i) = Egas_t;
-			Tgas.at(i) = quokka::EOS<SuOlsonProblemCgs>::ComputeTgasFromEint(rho, Egas_t);
+			Tgas.at(i) = ::quokka::EOS<SuOlsonProblemCgs>::ComputeTgasFromEint(rho, Egas_t);
 		}
 
 		// read in exact solution

@@ -33,7 +33,7 @@ template <> struct Physics_Traits<RandomBlast> : DefaultPhysicsTraits {
 	static constexpr int numPassiveScalars = numMassScalars + 1;
 };
 
-template <> struct quokka::EOS_Traits<RandomBlast> {
+template <> struct ::quokka::EOS_Traits<RandomBlast> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };
@@ -72,7 +72,7 @@ template <> void QuokkaSimulation<RandomBlast>::setInitialConditionsOnGrid(quokk
 		Real const xmom = rho * vx;
 		Real const ymom = rho * vy;
 		Real const zmom = rho * vz;
-		Real const Eint = quokka::EOS<RandomBlast>::ComputeEintFromTgas(rho, Tgas0);
+		Real const Eint = ::quokka::EOS<RandomBlast>::ComputeEintFromTgas(rho, Tgas0);
 		Real const Egas = Eint + 0.5 * (xmom * xmom + ymom * ymom + zmom * zmom) / rho;
 		Real const scalar_density = 0;
 
@@ -150,7 +150,7 @@ void QuokkaSimulation<RandomBlast>::ComputeDerivedVar(int /*lev*/, std::string c
 				Real const x3Mom = state(i, j, k, HydroSystem<RandomBlast>::x3Momentum_index);
 				Real const Egas = state(i, j, k, HydroSystem<RandomBlast>::energy_index);
 				static_assert(!Physics_Traits<RandomBlast>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
-				Real const Eint = quokka::EOS<RandomBlast>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
+				Real const Eint = ::quokka::EOS<RandomBlast>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 
 				output(i, j, k, ncomp) = Tgas;
@@ -215,7 +215,7 @@ auto problem_main() -> int
 			Real const x3Mom = values.at(HydroSystem<RandomBlast>::x3Momentum_index)[i];
 			Real const Egas = values.at(HydroSystem<RandomBlast>::energy_index)[i];
 			static_assert(!Physics_Traits<RandomBlast>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
-			Real const Eint = quokka::EOS<RandomBlast>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
+			Real const Eint = ::quokka::EOS<RandomBlast>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 			temperature[i] = Tgas;
 		}

@@ -267,7 +267,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 		readParmParse();
 		// set gamma
 		amrex::ParmParse eos("eos");
-		eos.add("eos_gamma", quokka::EOS_Traits<problem_t>::gamma);
+		eos.add("eos_gamma", ::quokka::EOS_Traits<problem_t>::gamma);
 		// initialize Microphysics params
 		init_extern_parameters();
 #if defined(PHOTOCHEMISTRY) || defined(CHEMISTRY)

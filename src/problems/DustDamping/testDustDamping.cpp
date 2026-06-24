@@ -80,7 +80,7 @@ template <> struct SimulationData<DustDamping> {
 	std::vector<double> E_gas_vec_;
 };
 
-template <> struct quokka::EOS_Traits<DustDamping> {
+template <> struct ::quokka::EOS_Traits<DustDamping> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 1.4;
 	// static constexpr double cs_isothermal = 1.0; // only used when gamma = 1
@@ -88,8 +88,8 @@ template <> struct quokka::EOS_Traits<DustDamping> {
 
 constexpr double rho = 1.0;
 constexpr double v0 = 1.0;
-constexpr double Egas0 = P_INITIAL / (quokka::EOS_Traits<DustDamping>::gamma - 1.0) + 0.5 * rho * v0 * v0;
-constexpr double Egas0_internal = P_INITIAL / (quokka::EOS_Traits<DustDamping>::gamma - 1.0);
+constexpr double Egas0 = P_INITIAL / (::quokka::EOS_Traits<DustDamping>::gamma - 1.0) + 0.5 * rho * v0 * v0;
+constexpr double Egas0_internal = P_INITIAL / (::quokka::EOS_Traits<DustDamping>::gamma - 1.0);
 constexpr int numDustVars = Physics_NumVars::numDustVarsPerGroup;
 
 template <> struct Physics_Traits<DustDamping> : DefaultPhysicsTraits {
@@ -223,7 +223,7 @@ auto E_gas_analytic(double t) -> double
 		integral += 0.5 * (term1 + term2) * dt;
 	}
 
-	const double E_gas_initial = P_INITIAL / (quokka::EOS_Traits<DustDamping>::gamma - 1.0) + 0.5 * 1.0 * std::pow(v_gas_analytic(0), 2);
+	const double E_gas_initial = P_INITIAL / (::quokka::EOS_Traits<DustDamping>::gamma - 1.0) + 0.5 * 1.0 * std::pow(v_gas_analytic(0), 2);
 	return E_gas_initial + integral;
 }
 

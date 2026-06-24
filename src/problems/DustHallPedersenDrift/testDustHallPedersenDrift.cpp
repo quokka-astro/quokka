@@ -49,7 +49,7 @@ template <> struct SimulationData<DustHallPedersenDrift> {
 	std::vector<double> center_momentum_z_vec_;
 };
 
-template <> struct quokka::EOS_Traits<DustHallPedersenDrift> {
+template <> struct ::quokka::EOS_Traits<DustHallPedersenDrift> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 1.0;
 	static constexpr double cs_isothermal = sound_speed;

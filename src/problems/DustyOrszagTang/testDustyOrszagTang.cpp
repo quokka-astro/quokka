@@ -419,7 +419,7 @@ template <typename problem_t> auto runCase(const CaseConfig &config, bool write_
 }
 } // namespace
 
-template <> struct quokka::EOS_Traits<DustyOrszagTang> {
+template <> struct ::quokka::EOS_Traits<DustyOrszagTang> {
 	static constexpr double gamma = gamma_gas;
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double boltzmann_constant = 1.0;

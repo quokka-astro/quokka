@@ -28,7 +28,7 @@
 struct FastWaveConvergence {
 };
 
-template <> struct quokka::EOS_Traits<FastWaveConvergence> {
+template <> struct ::quokka::EOS_Traits<FastWaveConvergence> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };
@@ -39,7 +39,7 @@ template <> struct Physics_Traits<FastWaveConvergence> : DefaultPhysicsTraits {
 };
 
 constexpr double sound_speed = 1.0;
-constexpr double gamma_gas = quokka::EOS_Traits<FastWaveConvergence>::gamma;
+constexpr double gamma_gas = ::quokka::EOS_Traits<FastWaveConvergence>::gamma;
 constexpr double bg_density = 1.0;
 constexpr double bg_pressure = sound_speed * sound_speed * bg_density / gamma_gas;
 constexpr double b0_magn = 1.0;

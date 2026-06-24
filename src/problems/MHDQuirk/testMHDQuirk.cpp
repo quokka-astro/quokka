@@ -36,7 +36,7 @@ using Real = amrex::Real;
 struct MHDQuirk {
 };
 
-template <> struct quokka::EOS_Traits<MHDQuirk> {
+template <> struct ::quokka::EOS_Traits<MHDQuirk> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };
@@ -129,8 +129,8 @@ template <> void QuokkaSimulation<MHDQuirk>::setInitialConditionsOnGrid(quokka::
 		state_cc(i, j, k, HydroSystem<MHDQuirk>::x1Momentum_index) = rho * vx;
 		state_cc(i, j, k, HydroSystem<MHDQuirk>::x2Momentum_index) = rho * vy;
 		state_cc(i, j, k, HydroSystem<MHDQuirk>::x3Momentum_index) = rho * vz;
-		state_cc(i, j, k, HydroSystem<MHDQuirk>::energy_index) = quokka::EOS<MHDQuirk>::ComputeEintFromPres(rho, P) + 0.5 * rho * v_sq;
-		state_cc(i, j, k, HydroSystem<MHDQuirk>::internalEnergy_index) = quokka::EOS<MHDQuirk>::ComputeEintFromPres(rho, P);
+		state_cc(i, j, k, HydroSystem<MHDQuirk>::energy_index) = ::quokka::EOS<MHDQuirk>::ComputeEintFromPres(rho, P) + 0.5 * rho * v_sq;
+		state_cc(i, j, k, HydroSystem<MHDQuirk>::internalEnergy_index) = ::quokka::EOS<MHDQuirk>::ComputeEintFromPres(rho, P);
 	});
 }
 
@@ -184,7 +184,7 @@ template <> void QuokkaSimulation<MHDQuirk>::computeAfterTimestep()
 			Real const peven = HydroSystem<MHDQuirk>::ComputePressure(state, i, j, k, &cons_fc);
 
 			// the 'entropy function' s == P / rho^gamma
-			const Real gamma = quokka::EOS_Traits<MHDQuirk>::gamma;
+			const Real gamma = ::quokka::EOS_Traits<MHDQuirk>::gamma;
 			Real const sodd = podd / std::pow(dodd, gamma);
 			Real const seven = peven / std::pow(deven, gamma);
 			s[0] = std::abs(sodd - seven);
@@ -220,7 +220,7 @@ AMRSimulation<MHDQuirk>::setCustomBoundaryConditions(const amrex::IntVect &iv, a
 {
 	// Number of variables
 	constexpr int nvar = Physics_Indices<MHDQuirk>::nvarTotal_cc;
-	const auto gamma = quokka::EOS_Traits<MHDQuirk>::gamma;
+	const auto gamma = ::quokka::EOS_Traits<MHDQuirk>::gamma;
 
 	// Left state
 	amrex::GpuArray<amrex::Real, nvar> low_bdr_cells{};

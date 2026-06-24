@@ -33,7 +33,7 @@ constexpr double a_rad = radiation_constant_cgs_;
 
 constexpr double Erad_floor_ = a_rad * T_initial * T_initial * T_initial * T_initial;
 
-template <> struct quokka::EOS_Traits<SuOlsonProblemCgs> {
+template <> struct ::quokka::EOS_Traits<SuOlsonProblemCgs> {
 	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double gamma = 5. / 3.;
 };
@@ -123,7 +123,7 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVe
 	}
 
 	// gas boundary conditions are the same on both sides
-	const double Egas = quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
+	const double Egas = ::quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasEnergy_index) = Egas;
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasDensity_index) = rho0;
 	consVar(i, j, k, RadSystem<SuOlsonProblemCgs>::gasInternalEnergy_index) = Egas;
@@ -139,7 +139,7 @@ template <> void QuokkaSimulation<SuOlsonProblemCgs>::setInitialConditionsOnGrid
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		const double Egas = quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
+		const double Egas = ::quokka::EOS<SuOlsonProblemCgs>::ComputeEintFromTgas(rho0, T_initial);
 		const double Erad = a_rad * std::pow(T_initial, 4);
 
 		state_cc(i, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index) = Erad;
@@ -247,7 +247,7 @@ auto problem_main() -> int
 		const double Ekin = (x1GasMom * x1GasMom) / (2.0 * rho);
 		const double Egas_t = (Etot_t - Ekin);
 
-		Tgas_keV.at(i) = quokka::EOS<SuOlsonProblemCgs>::ComputeTgasFromEint(rho, Egas_t) / T_hohlraum;
+		Tgas_keV.at(i) = ::quokka::EOS<SuOlsonProblemCgs>::ComputeTgasFromEint(rho, Egas_t) / T_hohlraum;
 		Trad_keV.at(i) = std::pow(Erad_t / a_rad, 1. / 4.) / T_hohlraum;
 	}
 

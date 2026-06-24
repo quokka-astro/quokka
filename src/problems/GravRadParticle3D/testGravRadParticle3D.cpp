@@ -37,7 +37,7 @@ constexpr double m_H = C::m_p + C::m_e;
 
 const double lum1 = 1.0;
 
-template <> struct quokka::EOS_Traits<ParticleProblem> {
+template <> struct ::quokka::EOS_Traits<ParticleProblem> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 5. / 3.;
 };

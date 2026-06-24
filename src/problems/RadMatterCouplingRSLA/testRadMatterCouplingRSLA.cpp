@@ -37,7 +37,7 @@ template <> struct SimulationData<CouplingProblem> {
 	std::vector<double> Tgas_vec_;
 };
 
-template <> struct quokka::EOS_Traits<CouplingProblem> {
+template <> struct ::quokka::EOS_Traits<CouplingProblem> {
 	static constexpr double mean_molecular_weight = C::m_u;
 	static constexpr double gamma = 5. / 3.;
 };
@@ -67,7 +67,7 @@ template <> AMREX_GPU_HOST_DEVICE auto RadSystem<CouplingProblem>::ComputeFluxMe
 [[maybe_unused]] static constexpr int nmscalars_ = Physics_Traits<CouplingProblem>::numMassScalars;
 template <>
 AMREX_GPU_HOST_DEVICE auto
-quokka::EOS<CouplingProblem>::ComputeTgasFromEint([[maybe_unused]] const double rho, const double Egas,
+::quokka::EOS<CouplingProblem>::ComputeTgasFromEint([[maybe_unused]] const double rho, const double Egas,
 						  [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
 {
 	return std::pow(4.0 * Egas / alpha_SuOlson, 1. / 4.);
@@ -75,7 +75,7 @@ quokka::EOS<CouplingProblem>::ComputeTgasFromEint([[maybe_unused]] const double 
 
 template <>
 AMREX_GPU_HOST_DEVICE auto
-quokka::EOS<CouplingProblem>::ComputeEintFromTgas([[maybe_unused]] const double rho, const double Tgas,
+::quokka::EOS<CouplingProblem>::ComputeEintFromTgas([[maybe_unused]] const double rho, const double Tgas,
 						  [[maybe_unused]] quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars) -> double
 {
 	return (alpha_SuOlson / 4.0) * std::pow(Tgas, 4);
@@ -83,7 +83,7 @@ quokka::EOS<CouplingProblem>::ComputeEintFromTgas([[maybe_unused]] const double 
 
 template <>
 AMREX_GPU_HOST_DEVICE auto
-quokka::EOS<CouplingProblem>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas,
+::quokka::EOS<CouplingProblem>::ComputeEintTempDerivative(const double /*rho*/, const double Tgas,
 							quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	// This is also known as the heat capacity, i.e.
@@ -134,12 +134,12 @@ template <> void QuokkaSimulation<CouplingProblem>::computeAfterTimestep()
 		const amrex::Real x3GasMom = values.at(RadSystem<CouplingProblem>::x3GasMomentum_index)[0];
 		const amrex::Real rho = values.at(RadSystem<CouplingProblem>::gasDensity_index)[0];
 		static_assert(!Physics_Traits<CouplingProblem>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
-		const amrex::Real Egas_i = quokka::EOS<CouplingProblem>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Etot_i, 0.0);
+		const amrex::Real Egas_i = ::quokka::EOS<CouplingProblem>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Etot_i, 0.0);
 
 		const amrex::Real Erad_i = values.at(RadSystem<CouplingProblem>::radEnergy_index)[0];
 
 		userData_.Trad_vec_.push_back(std::pow(Erad_i / a_rad, 1. / 4.));
-		userData_.Tgas_vec_.push_back(quokka::EOS<CouplingProblem>::ComputeTgasFromEint(rho, Egas_i));
+		userData_.Tgas_vec_.push_back(::quokka::EOS<CouplingProblem>::ComputeTgasFromEint(rho, Egas_i));
 	}
 }
 
@@ -177,7 +177,7 @@ auto problem_main() -> int
 		std::vector<double> Tgas_exact(nmax);
 		std::vector<double> Tgas_rsla_exact(nmax);
 
-		const double initial_Tgas = quokka::EOS<CouplingProblem>::ComputeTgasFromEint(rho0, Egas0);
+		const double initial_Tgas = ::quokka::EOS<CouplingProblem>::ComputeTgasFromEint(rho0, Egas0);
 		const auto kappa = RadSystem<CouplingProblem>::ComputePlanckOpacity(rho0, initial_Tgas);
 
 		for (int n = 0; n < nmax; ++n) {

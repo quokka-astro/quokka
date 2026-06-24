@@ -35,7 +35,7 @@ struct BinaryOrbit {
 static bool do_split_particles = false; // NOLINT
 static int split_factor = 8;		// NOLINT
 
-template <> struct quokka::EOS_Traits<BinaryOrbit> {
+template <> struct ::quokka::EOS_Traits<BinaryOrbit> {
 	static constexpr double gamma = 1.0;	       // isothermal
 	static constexpr double cs_isothermal = 1.3e7; // cm s^{-1}
 	static constexpr double mean_molecular_weight = C::m_u;

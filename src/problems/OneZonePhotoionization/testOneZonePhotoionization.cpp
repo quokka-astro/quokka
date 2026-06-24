@@ -38,7 +38,7 @@ constexpr double c = C::c_light;    // speed of light
 constexpr double chat = C::c_light; // reduced speed of light
 constexpr double kappa0 = 0;	    // opacity
 
-template <> struct quokka::EOS_Traits<PhotoionizationStreamingProblem> {
+template <> struct ::quokka::EOS_Traits<PhotoionizationStreamingProblem> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 5. / 3.;
 };
@@ -220,7 +220,7 @@ template <> void QuokkaSimulation<PhotoionizationStreamingProblem>::computeAfter
 		scalars[1] = n_HI * spmasses[1];
 		scalars[2] = n_HII * spmasses[2];
 		massScalars = scalars;
-		const amrex::Real temp = quokka::EOS<PhotoionizationStreamingProblem>::ComputeTgasFromEint(rho, Eint_i, massScalars);
+		const amrex::Real temp = ::quokka::EOS<PhotoionizationStreamingProblem>::ComputeTgasFromEint(rho, Eint_i, massScalars);
 
 		userData_.t_vec_.push_back(time);
 		userData_.n_e_vec_.push_back(n_e);

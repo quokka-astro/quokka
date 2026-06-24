@@ -35,7 +35,7 @@ constexpr double c_hat = C::c_light / 1.0;
 constexpr double sigma_star_coeff = 1.5 / 16.0;
 constexpr double r_trunc_coeff = 2.5;
 
-template <> struct quokka::EOS_Traits<StromgrenSphere> {
+template <> struct ::quokka::EOS_Traits<StromgrenSphere> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 5. / 3.;
 };

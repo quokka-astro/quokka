@@ -57,13 +57,13 @@ template <> struct SimulationData<DustSoundwave> {
 };
 ;
 
-template <> struct quokka::EOS_Traits<DustSoundwave> {
+template <> struct ::quokka::EOS_Traits<DustSoundwave> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 1.0;
 	static constexpr double cs_isothermal = 1.0; // only used when gamma = 1
 };
 
-const double cs = quokka::EOS_Traits<DustSoundwave>::cs_isothermal;
+const double cs = ::quokka::EOS_Traits<DustSoundwave>::cs_isothermal;
 
 template <> struct Physics_Traits<DustSoundwave> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;

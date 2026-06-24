@@ -50,7 +50,7 @@ constexpr double Frad0 = rho0 * a0 * c_light_cgs_ / tau; // erg cm^-2 s^-1
 constexpr double g0 = kappa0 * Frad0 / c_light_cgs_;	 // cm s^{-2}
 constexpr double Lx = (a0 * a0) / g0;			 // cm
 
-template <> struct quokka::EOS_Traits<TubeProblem> {
+template <> struct ::quokka::EOS_Traits<TubeProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double gamma = gamma_gas;
 	static constexpr double cs_isothermal = a0; // only used when gamma = 1

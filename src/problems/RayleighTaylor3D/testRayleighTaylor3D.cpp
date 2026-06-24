@@ -26,7 +26,7 @@
 struct RTProblem {
 };
 
-template <> struct quokka::EOS_Traits<RTProblem> {
+template <> struct ::quokka::EOS_Traits<RTProblem> {
 	static constexpr double gamma = 1.4;
 	static constexpr double mean_molecular_weight = C::m_u;
 };
@@ -84,7 +84,7 @@ template <> void QuokkaSimulation<RTProblem>::setInitialConditionsOnGrid(quokka:
 		AMREX_ASSERT(!std::isnan(P));
 
 		const auto v_sq = vx * vx + vy * vy + vz * vz;
-		const auto gamma = quokka::EOS_Traits<RTProblem>::gamma;
+		const auto gamma = ::quokka::EOS_Traits<RTProblem>::gamma;
 
 		state_cc(i, j, k, HydroSystem<RTProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<RTProblem>::x1Momentum_index) = rho * vx;

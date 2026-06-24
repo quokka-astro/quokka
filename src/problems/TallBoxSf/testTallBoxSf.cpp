@@ -64,7 +64,7 @@ template <> struct HydroSystem_Traits<TheProblem> {
 	static constexpr bool reconstruct_eint = true; // need to reconstruct temperature
 };
 
-template <> struct quokka::EOS_Traits<TheProblem> {
+template <> struct ::quokka::EOS_Traits<TheProblem> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = mu;
 };
@@ -264,7 +264,7 @@ template <> void QuokkaSimulation<TheProblem>::setInitialConditionsOnGrid(quokka
 
 		// const double Tgas = P / (rho / mu * C::k_B);
 
-		const auto gamma = quokka::EOS_Traits<TheProblem>::gamma;
+		const auto gamma = ::quokka::EOS_Traits<TheProblem>::gamma;
 
 		// add turbulent velocities
 		const int turb_i = turb_lo[0] + (i % nturb);
@@ -394,7 +394,7 @@ template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::Mult
 			const Real Egas = state(i, j, k, HydroSystem<TheProblem>::energy_index);
 
 			static_assert(!Physics_Traits<TheProblem>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
-			const Real Eint = quokka::EOS<TheProblem>::ComputeEintFromEgas(rho, x1mom, x2mom, x3mom, Egas, 0.0);
+			const Real Eint = ::quokka::EOS<TheProblem>::ComputeEintFromEgas(rho, x1mom, x2mom, x3mom, Egas, 0.0);
 
 			posvec[0] = prob_lo[0] + (i + 0.5) * dx[0];
 			posvec[1] = prob_lo[1] + (j + 0.5) * dx[1];
@@ -432,7 +432,7 @@ template <> void QuokkaSimulation<TheProblem>::addStrangSplitSources(amrex::Mult
 			state(i, j, k, HydroSystem<TheProblem>::x3Momentum_index) = x3mom_new;
 
 			static_assert(!Physics_Traits<TheProblem>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
-			const Real Egas_new = quokka::EOS<TheProblem>::ComputeEgasFromEint(rho, x1mom_new, x2mom_new, x3mom_new, Eint, 0.0);
+			const Real Egas_new = ::quokka::EOS<TheProblem>::ComputeEgasFromEint(rho, x1mom_new, x2mom_new, x3mom_new, Eint, 0.0);
 			AMREX_ASSERT(!std::isnan(Egas_new));
 
 			state(i, j, k, HydroSystem<TheProblem>::energy_index) = Egas_new;

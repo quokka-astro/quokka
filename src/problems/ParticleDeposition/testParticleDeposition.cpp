@@ -27,7 +27,7 @@ template <> struct Particle_Traits<ParticleDepositionProblem> {
 #endif
 };
 
-template <> struct quokka::EOS_Traits<ParticleDepositionProblem> {
+template <> struct ::quokka::EOS_Traits<ParticleDepositionProblem> {
 	static constexpr double gamma = 5.0 / 3.0;
 	static constexpr double mean_molecular_weight = C::m_u;
 };
@@ -48,7 +48,7 @@ template <> void QuokkaSimulation<ParticleDepositionProblem>::setInitialConditio
 
 	const amrex::Real rho0 = 1.0e-3;
 	const amrex::Real P0 = 1.0e-6;
-	const amrex::Real eint0 = P0 / (rho0 * (quokka::EOS_Traits<ParticleDepositionProblem>::gamma - 1.0));
+	const amrex::Real eint0 = P0 / (rho0 * (::quokka::EOS_Traits<ParticleDepositionProblem>::gamma - 1.0));
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		state(i, j, k, HydroSystem<ParticleDepositionProblem>::density_index) = rho0;

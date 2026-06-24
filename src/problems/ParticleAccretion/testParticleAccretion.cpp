@@ -55,7 +55,7 @@ template <> struct Particle_Traits<AccretionProblem> {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Sink;
 };
 
-template <> struct quokka::EOS_Traits<AccretionProblem> {
+template <> struct ::quokka::EOS_Traits<AccretionProblem> {
 	static constexpr double gamma = 1.0;
 	static constexpr double cs_isothermal = cs0;
 	static constexpr double mean_molecular_weight = mu;

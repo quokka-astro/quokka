@@ -47,7 +47,7 @@ template <> struct Particle_Traits<SinkProblem> {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Sink;
 };
 
-template <> struct quokka::EOS_Traits<SinkProblem> {
+template <> struct ::quokka::EOS_Traits<SinkProblem> {
 	static constexpr double gamma = gamma_;
 	static constexpr double mean_molecular_weight = mu;
 };

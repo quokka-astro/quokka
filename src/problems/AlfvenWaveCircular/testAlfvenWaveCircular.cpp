@@ -22,7 +22,7 @@
 struct AlfvenWaveCircular {
 };
 
-template <> struct quokka::EOS_Traits<AlfvenWaveCircular> {
+template <> struct ::quokka::EOS_Traits<AlfvenWaveCircular> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };
@@ -34,7 +34,7 @@ template <> struct Physics_Traits<AlfvenWaveCircular> : DefaultPhysicsTraits {
 
 // constants
 constexpr double sound_speed = 1.0;
-constexpr double gamma_gas = quokka::EOS_Traits<AlfvenWaveCircular>::gamma;
+constexpr double gamma_gas = ::quokka::EOS_Traits<AlfvenWaveCircular>::gamma;
 
 // we have set up the problem so that the direction of wave propagation, vec(k), is aligned with the x1-direction, and the background magnetic field sits in the
 // x1-x2 plane

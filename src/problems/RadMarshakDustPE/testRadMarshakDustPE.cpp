@@ -46,7 +46,7 @@ constexpr int n_group_ = 2;
 static constexpr amrex::GpuArray<double, n_group_ + 1> radBoundaries_{1e-10, 30, 1e4};
 static constexpr OpacityModel opacity_model_ = OpacityModel::piecewise_constant_opacity;
 
-template <> struct quokka::EOS_Traits<MarshakProblem> {
+template <> struct ::quokka::EOS_Traits<MarshakProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double gamma = 5. / 3.;
 };
@@ -245,7 +245,7 @@ auto problem_main() -> int
 		erad1_exact.at(i) = 0.0;
 		erad2_exact.at(i) = x < c_hat_ * sim.tNew_[0] ? EradL : erad_floor;
 
-		T.at(i) = quokka::EOS<MarshakProblem>::ComputeTgasFromEint(rho0, e_gas);
+		T.at(i) = ::quokka::EOS<MarshakProblem>::ComputeTgasFromEint(rho0, e_gas);
 		T_exact.at(i) = x < c_hat_ * sim.tNew_[0] ? initial_T + PE_rate * (sim.tNew_[0] - x / c_hat_) : initial_T;
 	}
 

@@ -416,11 +416,11 @@ auto runLowMachRegression(bool write_csv) -> int
 }
 } // namespace
 
-template <> struct quokka::EOS_Traits<DustLorentzShockRefNeutral> : ShockEOSTraits<DustLorentzShockRefNeutral> {
+template <> struct ::quokka::EOS_Traits<DustLorentzShockRefNeutral> : ShockEOSTraits<DustLorentzShockRefNeutral> {
 };
-template <> struct quokka::EOS_Traits<DustLorentzShockChargedDilute> : ShockEOSTraits<DustLorentzShockChargedDilute> {
+template <> struct ::quokka::EOS_Traits<DustLorentzShockChargedDilute> : ShockEOSTraits<DustLorentzShockChargedDilute> {
 };
-template <> struct quokka::EOS_Traits<DustLorentzShockChargedBackreacting> : ShockEOSTraits<DustLorentzShockChargedBackreacting> {
+template <> struct ::quokka::EOS_Traits<DustLorentzShockChargedBackreacting> : ShockEOSTraits<DustLorentzShockChargedBackreacting> {
 };
 
 template <> struct Physics_Traits<DustLorentzShockRefNeutral> : ShockPhysicsTraits {

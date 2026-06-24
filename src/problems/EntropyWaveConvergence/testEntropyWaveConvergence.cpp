@@ -37,7 +37,7 @@
 struct EntropyWaveLinear {
 };
 
-template <> struct quokka::EOS_Traits<EntropyWaveLinear> {
+template <> struct ::quokka::EOS_Traits<EntropyWaveLinear> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };
@@ -49,7 +49,7 @@ template <> struct Physics_Traits<EntropyWaveLinear> : DefaultPhysicsTraits {
 
 // Background and perturbation parameters
 constexpr double adv_speed = 1.0; // advection speed of the entropy wave (in MRF along k)
-constexpr double gamma_gas = quokka::EOS_Traits<EntropyWaveLinear>::gamma;
+constexpr double gamma_gas = ::quokka::EOS_Traits<EntropyWaveLinear>::gamma;
 constexpr double bg_density = 1.0;
 constexpr double delta_rho_magn = 1e-6; // small density perturbation amplitude
 constexpr double sound_speed = 1.0;

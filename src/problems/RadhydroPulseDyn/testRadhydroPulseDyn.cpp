@@ -39,11 +39,11 @@ AMREX_GPU_MANAGED double kappa0 = 500.;	 // NOLINT
 AMREX_GPU_MANAGED double v0_adv = 3.0e7; // NOLINT
 // AMREX_GPU_MANAGED double max_time = 4.8e-6;
 
-template <> struct quokka::EOS_Traits<PulseProblem> {
+template <> struct ::quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double gamma = 5. / 3.;
 };
-template <> struct quokka::EOS_Traits<AdvPulseProblem> {
+template <> struct ::quokka::EOS_Traits<AdvPulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double gamma = 5. / 3.;
 };
@@ -121,7 +121,7 @@ template <> void QuokkaSimulation<PulseProblem>::setInitialConditionsOnGrid(quok
 		const double Trad = compute_initial_Tgas(x - x0);
 		const double Erad = a_rad * std::pow(Trad, 4);
 		const double rho = compute_exact_rho(x - x0);
-		const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho, Trad);
+		const double Egas = ::quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho, Trad);
 
 		state_cc(i, j, k, RadSystem<PulseProblem>::radEnergy_index) = Erad;
 		state_cc(i, j, k, RadSystem<PulseProblem>::x1RadFlux_index) = 0.;
@@ -152,7 +152,7 @@ template <> void QuokkaSimulation<AdvPulseProblem>::setInitialConditionsOnGrid(q
 		const double Trad = compute_initial_Tgas(x - x0);
 		const double Erad = a_rad * std::pow(Trad, 4);
 		const double rho = compute_exact_rho(x - x0);
-		const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho, Trad);
+		const double Egas = ::quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho, Trad);
 		const double v0 = v0_adv;
 
 		if constexpr (beta_order_ <= 1) {
@@ -236,7 +236,7 @@ auto problem_main() -> int
 		const auto flux_t = values.at(RadSystem<PulseProblem>::x1RadFlux_index)[i];
 		rhogas.at(i) = rho_t;
 		Trad.at(i) = Trad_t;
-		Tgas.at(i) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas);
+		Tgas.at(i) = ::quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas);
 		Vgas.at(i) = 1e-5 * v_t;
 		flux.at(i) = flux_t;
 	}
@@ -304,7 +304,7 @@ auto problem_main() -> int
 		xs2.at(i) = x - drift;
 		rhogas2.at(index_) = rho_t;
 		Trad2.at(index_) = Trad_t;
-		Tgas2.at(index_) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas);
+		Tgas2.at(index_) = ::quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas);
 		Vgas2.at(index_) = 1e-5 * (v_t - v0_adv);
 		flux2.at(index_) = flux_t;
 	}

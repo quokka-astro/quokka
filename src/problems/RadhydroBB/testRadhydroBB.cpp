@@ -106,7 +106,7 @@ constexpr double max_time = 10.0 / (1e-2 * c);
 
 constexpr double erad_floor = a_rad * 1e-30;
 
-template <> struct quokka::EOS_Traits<PulseProblem> {
+template <> struct ::quokka::EOS_Traits<PulseProblem> {
 	static constexpr double mean_molecular_weight = mu;
 	static constexpr double gamma = 5. / 3.;
 };
@@ -163,7 +163,7 @@ template <> void QuokkaSimulation<PulseProblem>::setInitialConditionsOnGrid(quok
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	const double Egas = quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho0, T0);
+	const double Egas = ::quokka::EOS<PulseProblem>::ComputeEintFromTgas(rho0, T0);
 
 	// loop over the grid and set the initial condition
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
@@ -249,7 +249,7 @@ auto problem_main() -> int
 		Erad.at(i) = Erad_t;
 		Trad.at(i) = Trad_t / T0;
 		Egas.at(i) = values.at(RadSystem<PulseProblem>::gasInternalEnergy_index)[i];
-		Tgas.at(i) = quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas.at(i)) / T0;
+		Tgas.at(i) = ::quokka::EOS<PulseProblem>::ComputeTgasFromEint(rho_t, Egas.at(i)) / T0;
 		Tgas_exact.push_back(1.0);
 		Vgas.at(i) = v_t;
 		Vgas_exact.at(i) = v0;

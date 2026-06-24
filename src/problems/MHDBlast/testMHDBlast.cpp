@@ -19,7 +19,7 @@
 struct MHDBlast {
 };
 
-template <> struct quokka::EOS_Traits<MHDBlast> {
+template <> struct ::quokka::EOS_Traits<MHDBlast> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };
@@ -62,8 +62,8 @@ template <> void QuokkaSimulation<MHDBlast>::setInitialConditionsOnGrid(quokka::
 		state_cc(i, j, k, HydroSystem<MHDBlast>::x1Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<MHDBlast>::x2Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<MHDBlast>::x3Momentum_index) = 0;
-		state_cc(i, j, k, HydroSystem<MHDBlast>::energy_index) = P / (quokka::EOS_Traits<MHDBlast>::gamma - 1.) + Emag;
-		state_cc(i, j, k, HydroSystem<MHDBlast>::internalEnergy_index) = P / (quokka::EOS_Traits<MHDBlast>::gamma - 1.);
+		state_cc(i, j, k, HydroSystem<MHDBlast>::energy_index) = P / (::quokka::EOS_Traits<MHDBlast>::gamma - 1.) + Emag;
+		state_cc(i, j, k, HydroSystem<MHDBlast>::internalEnergy_index) = P / (::quokka::EOS_Traits<MHDBlast>::gamma - 1.);
 	});
 }
 

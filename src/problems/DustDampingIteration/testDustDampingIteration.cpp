@@ -38,13 +38,13 @@ template <> struct SimulationData<DustDampingWithoutCorrection> {
 	std::vector<double> E_gas_vec_;
 };
 
-template <> struct quokka::EOS_Traits<DustDampingWithCorrection> {
+template <> struct ::quokka::EOS_Traits<DustDampingWithCorrection> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 1.4;
 	// static constexpr double cs_isothermal = 1.0; // only used when gamma = 1
 };
 
-template <> struct quokka::EOS_Traits<DustDampingWithoutCorrection> {
+template <> struct ::quokka::EOS_Traits<DustDampingWithoutCorrection> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 1.4;
 	// static constexpr double cs_isothermal = 1.0; // only used when gamma = 1
@@ -53,11 +53,11 @@ template <> struct quokka::EOS_Traits<DustDampingWithoutCorrection> {
 constexpr double rho = 1.0;
 constexpr double v0 = 1.0;
 
-constexpr double Egas0_with_corr = P_INITIAL / (quokka::EOS_Traits<DustDampingWithCorrection>::gamma - 1.0) + 0.5 * rho * v0 * v0;
-constexpr double Egas0_internal_with_corr = P_INITIAL / (quokka::EOS_Traits<DustDampingWithCorrection>::gamma - 1.0);
+constexpr double Egas0_with_corr = P_INITIAL / (::quokka::EOS_Traits<DustDampingWithCorrection>::gamma - 1.0) + 0.5 * rho * v0 * v0;
+constexpr double Egas0_internal_with_corr = P_INITIAL / (::quokka::EOS_Traits<DustDampingWithCorrection>::gamma - 1.0);
 
-constexpr double Egas0_without_corr = P_INITIAL / (quokka::EOS_Traits<DustDampingWithoutCorrection>::gamma - 1.0) + 0.5 * rho * v0 * v0;
-constexpr double Egas0_internal_without_corr = P_INITIAL / (quokka::EOS_Traits<DustDampingWithoutCorrection>::gamma - 1.0);
+constexpr double Egas0_without_corr = P_INITIAL / (::quokka::EOS_Traits<DustDampingWithoutCorrection>::gamma - 1.0) + 0.5 * rho * v0 * v0;
+constexpr double Egas0_internal_without_corr = P_INITIAL / (::quokka::EOS_Traits<DustDampingWithoutCorrection>::gamma - 1.0);
 
 constexpr int numDustVars = Physics_NumVars::numDustVarsPerGroup;
 namespace

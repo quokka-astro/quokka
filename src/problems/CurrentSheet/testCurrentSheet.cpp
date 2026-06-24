@@ -24,7 +24,7 @@
 struct CurrentSheet {
 };
 
-template <> struct quokka::EOS_Traits<CurrentSheet> {
+template <> struct ::quokka::EOS_Traits<CurrentSheet> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
 };
@@ -35,7 +35,7 @@ template <> struct Physics_Traits<CurrentSheet> : DefaultPhysicsTraits {
 };
 
 // constants
-constexpr double gamma_gas = quokka::EOS_Traits<CurrentSheet>::gamma;
+constexpr double gamma_gas = ::quokka::EOS_Traits<CurrentSheet>::gamma;
 constexpr double beta = 0.1;
 constexpr double A = 0.1;
 

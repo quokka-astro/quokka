@@ -28,7 +28,7 @@ constexpr double drag_coefficient = 1.0; // K1 in the analytic solution
 struct DustyShock {
 };
 
-template <> struct quokka::EOS_Traits<DustyShock> {
+template <> struct ::quokka::EOS_Traits<DustyShock> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 1.0;
 	static constexpr double cs_isothermal = 1.0; // only used when gamma = 1
