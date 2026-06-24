@@ -39,6 +39,41 @@ struct DTypeFront {
 
 constexpr double c_hat = C::c_light / 1000.0;
 
+#ifndef DTYPEFRONT_INTEGRATOR_NAME
+#define DTYPEFRONT_INTEGRATOR_NAME "VODE"
+#endif
+
+namespace
+{
+#ifdef DTYPEFRONT_INTEGRATOR_ROSENBROCK
+auto rosenbrockTableauName(const int tableau) -> std::string
+{
+	switch (tableau) {
+	case 0:
+		return "Rodas5P";
+	case 1:
+		return "Rodas4P";
+	case 2:
+		return "Rodas3P";
+	case 3:
+		return "ROS2S";
+	default:
+		return "unknown";
+	}
+}
+#endif
+
+void printIntegratorSelection()
+{
+	amrex::Print() << "DTypeFront microphysics integrator: " << DTYPEFRONT_INTEGRATOR_NAME;
+#ifdef DTYPEFRONT_INTEGRATOR_ROSENBROCK
+	amrex::Print() << " (Rosenbrock tableau " << integrator_rp::rosenbrock_tableau << ": "
+		       << rosenbrockTableauName(integrator_rp::rosenbrock_tableau) << ')';
+#endif
+	amrex::Print() << '\n';
+}
+} // namespace
+
 template <> struct quokka::EOS_Traits<DTypeFront> {
 	static constexpr double mean_molecular_weight = 1.0;
 	static constexpr double gamma = 5. / 3.;
@@ -399,6 +434,7 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<DTypeFront> sim;
+	printIntegratorSelection();
 
 	// initialize
 	sim.setInitialConditions();

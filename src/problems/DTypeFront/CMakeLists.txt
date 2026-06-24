@@ -94,6 +94,10 @@ if(AMReX_SPACEDIM GREATER_EQUAL 2)
 
   # this will add #define CHEMISTRY
   target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY)
+  target_compile_definitions(${JOB_NAME} PRIVATE DTYPEFRONT_INTEGRATOR_NAME="${DTypeFront_INTEGRATOR}")
+  if(DTypeFront_INTEGRATOR STREQUAL "Rosenbrock")
+    target_compile_definitions(${JOB_NAME} PRIVATE DTYPEFRONT_INTEGRATOR_ROSENBROCK)
+  endif()
 
   if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(${JOB_NAME})

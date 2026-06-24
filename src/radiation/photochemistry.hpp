@@ -17,6 +17,7 @@
 #include "burn_type.H"
 #include "eos.H"
 #include "extern_parameters.H"
+#include "integrator_data.H"
 #include "network_properties.H"
 #include "physics_numVars.hpp"
 
@@ -55,8 +56,18 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 	auto *p_num_failed = d_num_failed.data();
 	amrex::Gpu::Buffer<int> d_error_code({std::numeric_limits<int>::max()});
 	auto *p_error_code = d_error_code.data();
+	amrex::Gpu::Buffer<int> d_species_low({0});
+	auto *p_species_low = d_species_low.data();
+	amrex::Gpu::Buffer<int> d_species_high({0});
+	auto *p_species_high = d_species_high.data();
+	amrex::Gpu::Buffer<int> d_rad_low({0});
+	auto *p_rad_low = d_rad_low.data();
 
 	int num_failed = 0;
+	int error_code = IERR_SUCCESS;
+	int species_low = 0;
+	int species_high = 0;
+	int rad_low = 0;
 
 	auto dt_stage = dt / static_cast<Real>(stage);
 	auto energy_update_factor = static_cast<Real>(stage);
@@ -130,11 +141,25 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 
 			if (!photochemstate.success) {
 				burn_failed = 1;
-				amrex::Gpu::Atomic::Min(p_error_code, static_cast<int>(photochemstate.error_code));
+				for (int nn = 0; nn < NumSpec; ++nn) {
+					if (photochemstate.xn[nn] < -integrator_rp::species_failure_tolerance) {
+						amrex::Gpu::Atomic::Add(p_species_low, 1);
+					}
+					if (!integrator_rp::use_number_densities && photochemstate.xn[nn] > 1.0_rt + integrator_rp::species_failure_tolerance) {
+						amrex::Gpu::Atomic::Add(p_species_high, 1);
+					}
+				}
+				for (int nn = 0; nn < NumChemBands; ++nn) {
+					const int rad_num_index = MicrophysicsNumRadVarsPerGroup * nn;
+					if (photochemstate.rn[rad_num_index] < -integrator_rp::radiation_failure_tolerance) {
+						amrex::Gpu::Atomic::Add(p_rad_low, 1);
+					}
+				}
 			}
 
 			if (burn_failed) {
 				amrex::Gpu::Atomic::Add(p_num_failed, burn_failed);
+				amrex::Gpu::Atomic::Min(p_error_code, static_cast<int>(photochemstate.error_code));
 			}
 
 			// Ensure positivity
@@ -178,16 +203,25 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 	}
 
 	num_failed = *(d_num_failed.copyToHost());
-	int error_code = *(d_error_code.copyToHost());
+	error_code = *(d_error_code.copyToHost());
 	if (error_code == std::numeric_limits<int>::max()) {
-		error_code = 0;
+		error_code = IERR_SUCCESS;
 	}
+	species_low = *(d_species_low.copyToHost());
+	species_high = *(d_species_high.copyToHost());
+	rad_low = *(d_rad_low.copyToHost());
 
 	photochem_burn_success = num_failed == 0;
 	amrex::ParallelDescriptor::ReduceIntMin(photochem_burn_success);
+	amrex::ParallelDescriptor::ReduceIntMin(error_code);
+	amrex::ParallelDescriptor::ReduceIntSum(species_low);
+	amrex::ParallelDescriptor::ReduceIntSum(species_high);
+	amrex::ParallelDescriptor::ReduceIntSum(rad_low);
 
 	if (!photochem_burn_success) {
-		amrex::Abort(std::string("Burn failed in VODE. Aborting. error_code=") + std::to_string(error_code));
+		amrex::Abort("Photochemistry burn failed with integrator error_code = " + std::to_string(error_code) +
+			     ", species_low = " + std::to_string(species_low) + ", species_high = " + std::to_string(species_high) +
+			     ", rad_low = " + std::to_string(rad_low) + ". Aborting.");
 	}
 
 	return photochem_burn_success;
