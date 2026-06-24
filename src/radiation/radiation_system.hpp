@@ -306,8 +306,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 				       amrex::Real time);
 
 	AMREX_GPU_DEVICE static auto UpdateFlux(int i, int j, int k, arrayconst_t const &consPrev, NewtonIterationResult<problem_t> &energy, double dt,
-						double gas_update_factor, double Ekin0,
-						std::array<amrex::Real, 3> const &B_cc = {}) -> FluxUpdateResult<problem_t>;
+						double gas_update_factor, double Ekin0, std::array<amrex::Real, 3> const &B_cc = {})
+	    -> FluxUpdateResult<problem_t>;
 
 	static void AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_implicit,
 					     double gas_update_factor, double dustGasCoeff, double tol_h, double tol_rel_h, double tempFloor,

@@ -573,9 +573,11 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 			Egas_guess = Egas0 + (Egas_guess - Egas0) * gas_update_factor;
 			consNew(i, j, k, gasInternalEnergy_index) = Egas_guess;
 			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-				consNew(i, j, k, gasEnergy_index) = quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess, B_cc);
+				consNew(i, j, k, gasEnergy_index) =
+				    quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess, B_cc);
 			} else {
-				consNew(i, j, k, gasEnergy_index) = quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
+				consNew(i, j, k, gasEnergy_index) =
+				    quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
 			}
 			consNew(i, j, k, radEnergy_index) = Erad_guess;
 		} else {

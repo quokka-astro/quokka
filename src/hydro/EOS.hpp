@@ -78,14 +78,14 @@ template <typename problem_t> class EOS
 	// When MHD is enabled, the B field argument is required (compile-time error otherwise).
 	// When MHD is disabled, the B field argument is ignored.
 	template <typename... BArgs>
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto ComputeEintFromEgas(double rho, double mx, double my, double mz, double Etot,
-									     BArgs const &...bargs) -> double;
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto ComputeEintFromEgas(double rho, double mx, double my, double mz, double Etot, BArgs const &...bargs)
+	    -> double;
 
 	// Compute gas total energy (Eint + Ekin, NOT including B field) from gas internal energy.
 	// Accepts an optional magnetic field array. Same compile-time safety rules as ComputeEintFromEgas.
 	template <typename... BArgs>
-	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto ComputeEgasFromEint(double rho, double mx, double my, double mz, double Eint,
-									     BArgs const &...bargs) -> double;
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto ComputeEgasFromEint(double rho, double mx, double my, double mz, double Eint, BArgs const &...bargs)
+	    -> double;
 
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma; // needed for HLLD solver
 
@@ -454,8 +454,8 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeIsothermalS
 
 template <typename problem_t>
 template <typename... BArgs>
-AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromEgas(const double rho, const double mx, const double my, const double mz,
-								const double Etot, BArgs const &...bargs) -> double
+AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromEgas(const double rho, const double mx, const double my, const double mz, const double Etot,
+							       BArgs const &...bargs) -> double
 {
 	static_assert(sizeof...(BArgs) <= 1, "At most one B field argument is allowed.");
 
@@ -480,8 +480,8 @@ AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromEgas(const double rho,
 
 template <typename problem_t>
 template <typename... BArgs>
-AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEgasFromEint(const double rho, const double mx, const double my, const double mz,
-								const double Eint, BArgs const &...bargs) -> double
+AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEgasFromEint(const double rho, const double mx, const double my, const double mz, const double Eint,
+							       BArgs const &...bargs) -> double
 {
 	static_assert(sizeof...(BArgs) <= 1, "At most one B field argument is allowed.");
 
