@@ -401,22 +401,99 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 
 auto problem_main() -> int
 {
-	quokka::richardson::applyQuietDefaults();
-
-	quokka::richardson::Parameters params{};
-	params.machine_precision_target = 2.0e-9; // default; set to 0 via setup.machine_precision_target to disable early exit.
-	params.nx_initial = 16;
-	params.nx_max = 128; // default; override with setup.nx_max in the input file.
+	bool run_convergence = true;
+	bool run_sim = false;
+	double error_tol = 0.002;
 	{
 		amrex::ParmParse const pp("setup");
-		pp.query("machine_precision_target", params.machine_precision_target);
-		pp.query("nx_max", params.nx_max);
-		pp.query("refine_n_dims", params.refine_n_dims);
+		pp.query("run_convergence", run_convergence);
+		pp.query("run_sim", run_sim);
+		pp.query("error_tol", error_tol);
 	}
-	params.expected_rate = 2.0;
-	params.tolerance = 0.3;
-	params.test_name = "Entropy Wave";
-	params.csv_filename = "entropy_wave_convergence.csv";
 
-	return quokka::richardson::run(params, [](int nx, int ny, int nz) { return runWaveTest(nx, ny, nz); });
+	int status = 0;
+
+	if (run_sim) {
+		{
+			amrex::ParmParse const pp("setup");
+			double angle_between_k_b0_deg = 0.0;
+			pp.query("angle_between_k_b0", angle_between_k_b0_deg);
+			constexpr double deg2rad = M_PI / 180.0;
+			angle_between_k_b0_rad = deg2rad * angle_between_k_b0_deg;
+
+			int num_modes_x = 0;
+			int num_modes_y = 0;
+			int num_modes_z = 0;
+			pp.query("num_modes_x", num_modes_x);
+			pp.query("num_modes_y", num_modes_y);
+			pp.query("num_modes_z", num_modes_z);
+			if ((num_modes_x == 0) && (num_modes_y == 0) && (num_modes_z == 0)) {
+				amrex::Abort("Invalid k modes: the triplet (0,0,0) is not allowed.");
+			}
+
+			const std::array<amrex::Real, 3> k_vec_prf = {2.0 * M_PI * static_cast<amrex::Real>(num_modes_x),
+								      2.0 * M_PI * static_cast<amrex::Real>(num_modes_y),
+								      2.0 * M_PI * static_cast<amrex::Real>(num_modes_z)};
+			k_magn = computeMagnitude(k_vec_prf);
+			k_dir_prf = {k_vec_prf[0] / k_magn, k_vec_prf[1] / k_magn, k_vec_prf[2] / k_magn};
+
+			k_rotation_in_xy_rad = std::atan2(k_dir_prf[1], k_dir_prf[0]);
+			k_elevation_from_xy_rad = std::atan2(k_dir_prf[2], std::hypot(k_dir_prf[0], k_dir_prf[1]));
+
+			std::array<amrex::Real, 3> ref_prf{0.0, 0.0, 1.0};
+			if (std::abs(computeDotProduct(ref_prf, k_dir_prf)) > 0.9999) {
+				ref_prf = {0.0, 1.0, 0.0};
+			}
+			inplane_dir_prf = computeCrossProduct(ref_prf, k_dir_prf);
+			normalizeVector(inplane_dir_prf);
+			outofplane_dir_prf = computeCrossProduct(k_dir_prf, inplane_dir_prf);
+			normalizeVector(outofplane_dir_prf);
+		}
+
+		auto BCs_cc = quokka::BC<EntropyWaveLinear>(quokka::BCType::int_dir);
+		const int nvars_fc = Physics_Indices<EntropyWaveLinear>::nvarTotal_fc;
+		amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
+		for (int icomp = 0; icomp < nvars_fc; ++icomp) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				BCs_fc[icomp].setLo(idim, amrex::BCType::int_dir);
+				BCs_fc[icomp].setHi(idim, amrex::BCType::int_dir);
+			}
+		}
+
+		QuokkaSimulation<EntropyWaveLinear> sim(BCs_cc, BCs_fc);
+		sim.setInitialConditions();
+		sim.evolve();
+
+		const double error_norm = sim.computeErrorNorm();
+		amrex::Print() << std::format("\nrun_sim error norm = {:.6e}  (tol = {:.6e})\n", error_norm, error_tol);
+		if (error_norm > error_tol) {
+			status = 1;
+		}
+	}
+
+	if (run_convergence) {
+		quokka::richardson::applyQuietDefaults();
+
+		quokka::richardson::Parameters params{};
+		params.machine_precision_target = 2.0e-9;
+		params.nx_initial = 16;
+		params.nx_max = 128;
+		{
+			amrex::ParmParse const pp("setup");
+			pp.query("nx_start", params.nx_initial);
+			pp.query("nx_max", params.nx_max);
+			pp.query("machine_precision_target", params.machine_precision_target);
+			pp.query("refine_n_dims", params.refine_n_dims);
+		}
+		params.expected_rate = 2.0;
+		params.tolerance = 0.3;
+		params.test_name = "Entropy Wave";
+		params.csv_filename = "entropy_wave_convergence.csv";
+
+		if (quokka::richardson::run(params, [](int nx, int ny, int nz) { return runWaveTest(nx, ny, nz); }) != 0) {
+			status = 1;
+		}
+	}
+
+	return status;
 }
