@@ -56,7 +56,7 @@ template <> struct SimulationData<TheProblem> {
 	Real warm_T = 2.0e4; // K
 };
 
-template <> struct Particle_Traits<TheProblem> {
+template <> struct Particle_Traits<TheProblem> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
 };
 
@@ -72,15 +72,8 @@ template <> struct quokka::EOS_Traits<TheProblem> {
 template <> struct Physics_Traits<TheProblem> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = true;
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_chemistry_enabled = false;
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1;			     // number of dust groups
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars
-	static constexpr int nGroups = 1;			     // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 template <> void QuokkaSimulation<TheProblem>::createInitialStochasticStellarPopParticles()

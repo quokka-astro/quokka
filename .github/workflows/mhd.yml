@@ -36,7 +36,7 @@ jobs:
       CCACHE_MAXSIZE: 450M
 
     steps:
-    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v4.2.2
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
       with:
         submodules: true
 
@@ -99,11 +99,12 @@ jobs:
       working-directory: ${{github.workspace}}/tests
       shell: bash
       run: |
-        ${{runner.workspace}}/build/src/problems/FastWave/FastWave \
+        ${{runner.workspace}}/build/src/problems/FastWaveConvergence/FastWaveConvergence \
           ../inputs/FastWave.toml \
           amr.max_grid_size_x=32 \
           amr.blocking_factor_x=16 \
           mhd.emf_compute_scheme=FelkerStone2017 \
+          mhd.emf_averaging_scheme=LondrilloDelZanna2004 \
           amrex.init_snan=1 \
           amrex.fpe_trap_invalid=1 \
           amrex.fpe_trap_overflow=1 \
@@ -113,7 +114,7 @@ jobs:
     - name: Test
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      # Execute the MHD tests while skipping the slow HydroWave case
+      # Execute the MHD tests while skipping the slow HydroWaveConvergence case
       run: canary run --output-on-failure --workers=2 -k 'MHD and not HydroWaveConvergence' .
 
     - name: ccache stats

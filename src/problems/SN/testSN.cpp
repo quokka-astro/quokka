@@ -1,6 +1,6 @@
 /// \file testSN.cpp
 /// \brief Defines a test problem for supernova feedback.
-/// In this test, two supernova explode and in the end the gas temperature and velocity is checked for
+/// In this test, two supernovae explode and in the end the gas temperature and velocity is checked for
 /// Galilean invariance between a rest frame and a boost frame.
 
 #include "AMReX.H"
@@ -48,7 +48,7 @@ constexpr double B0 = 1.0e-7;	 // uniform background field for MHD variant
 
 static double n_amb = 1.0; // ambient density (g cm^-3) // NOLINT
 
-template <> struct Particle_Traits<SNProblem> {
+template <> struct Particle_Traits<SNProblem> : DefaultParticleTraits {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Test;
 };
@@ -63,18 +63,11 @@ template <> struct HydroSystem_Traits<SNProblem> {
 };
 
 template <> struct Physics_Traits<SNProblem> : DefaultPhysicsTraits {
-	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
 	static constexpr bool is_mhd_enabled = true;
-	static constexpr int nGroups = 1; // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 template <> struct SimulationData<SNProblem> {

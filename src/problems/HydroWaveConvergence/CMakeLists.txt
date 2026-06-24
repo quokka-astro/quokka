@@ -10,3 +10,13 @@ add_test(
   NAME ${JOB_NAME}
   COMMAND ${JOB_NAME} ${QuokkaTestParams}
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+
+add_test(
+  NAME HydroWave
+  COMMAND ${JOB_NAME} ../inputs/HydroWave.toml ${QuokkaTestParams}
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+
+add_test(
+  NAME HydroWaveFc
+  COMMAND ${JOB_NAME} ../inputs/HydroWaveFc.toml ${QuokkaTestParams}
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)

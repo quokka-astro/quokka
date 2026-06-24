@@ -48,13 +48,6 @@ template <> struct Physics_Traits<PopIII> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = true;
 	static constexpr int numMassScalars = NumSpec;		     // number of chemical species
 	static constexpr int numPassiveScalars = numMassScalars + 0; // we only have mass scalars
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
-	// face-centred
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1;
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 template <> struct SimulationData<PopIII> {
