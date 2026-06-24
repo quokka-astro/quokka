@@ -108,29 +108,45 @@ execute_process(COMMAND git rev-parse HEAD
     OUTPUT_VARIABLE QUOKKA_GIT_HASH
     OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-execute_process(COMMAND git rev-parse HEAD
-    WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}/extern/amrex
-    OUTPUT_VARIABLE AMREX_GIT_HASH
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
+if(EXISTS "${QuokkaCode_SOURCE_DIR}/extern/amrex/.git")
+    execute_process(COMMAND git rev-parse HEAD
+        WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}/extern/amrex
+        OUTPUT_VARIABLE AMREX_GIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+else()
+    set(AMREX_GIT_HASH "unknown")
+endif()
 
-execute_process(COMMAND git rev-parse HEAD
-    WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}/extern/Microphysics
-    OUTPUT_VARIABLE MICROPHYSICS_GIT_HASH
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
+if(EXISTS "${QuokkaCode_SOURCE_DIR}/extern/Microphysics/.git")
+    execute_process(COMMAND git rev-parse HEAD
+        WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}/extern/Microphysics
+        OUTPUT_VARIABLE MICROPHYSICS_GIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+else()
+    set(MICROPHYSICS_GIT_HASH "unknown")
+endif()
 
-execute_process(COMMAND git rev-parse HEAD
-    WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}/extern/AMReX-Hydro
-    OUTPUT_VARIABLE AMREX_HYDRO_GIT_HASH
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
+if(EXISTS "${QuokkaCode_SOURCE_DIR}/extern/AMReX-Hydro/.git")
+    execute_process(COMMAND git rev-parse HEAD
+        WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}/extern/AMReX-Hydro
+        OUTPUT_VARIABLE AMREX_HYDRO_GIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+else()
+    set(AMREX_HYDRO_GIT_HASH "unknown")
+endif()
 
-execute_process(COMMAND git rev-parse HEAD
-    WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}/extern/turbulence
-    OUTPUT_VARIABLE TURBULENCE_GIT_HASH
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
+if(EXISTS "${QuokkaCode_SOURCE_DIR}/extern/turbulence/.git")
+    execute_process(COMMAND git rev-parse HEAD
+        WORKING_DIRECTORY ${QuokkaCode_SOURCE_DIR}/extern/turbulence
+        OUTPUT_VARIABLE TURBULENCE_GIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+else()
+    set(TURBULENCE_GIT_HASH "unknown")
+endif()
 
 # Check if the working directory is dirty
 execute_process(
