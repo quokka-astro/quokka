@@ -1130,9 +1130,6 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 
 	auto const applyConduction = [&]() {
 		if (enableElectronConduction_ == 1) {
-			if (max_level > 0) {
-				amrex::Abort("Electron conduction not implemented for > 0 levels.");
-			}
 			fillBoundaryConditions(state, state, lev, time, quokka::centering::cc, quokka::direction::na, PreInterpState, PostInterpState);
 			std::array<amrex::MultiFab, AMREX_SPACEDIM> heat_flux;
 
