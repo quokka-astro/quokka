@@ -34,13 +34,15 @@ integrator.renormalize_abundances = 0
 integrator.subtract_internal_energy = 0
 integrator.X_reject_buffer = 1e100
 
-integrator.atol_spec = 1e-14
-integrator.atol_rad_num = 1e-14
-integrator.atol_enuc = 1e-14
+integrator.atol_spec                     = 1.0e-2   # cm^-3; spec_abundance_tol (1e-5) × n_H (1000)
+integrator.atol_enuc                     = 1.24e8   # erg/g; c_v × 1 K temperature accuracy
+integrator.atol_rad_num                  = 1.0e-2   # cm^-3; same order as atol_spec (Ben's review)
+integrator.species_failure_tolerance     = 1.0e-2   # cm^-3; = atol_spec (1.5× final-state factor absorbs BDF overshoot)
+integrator.radiation_failure_tolerance   = 0.1      # cm^-3; must exceed max N_gamma BDF overshoot (10× atol_rad_num)
 
-integrator.rtol_spec = 1e-14
-integrator.rtol_rad_num = 1e-14
-integrator.rtol_enuc = 1e-14
+integrator.rtol_spec     = 1e-2
+integrator.rtol_rad_num  = 1e-2
+integrator.rtol_enuc     = 1e-2
 
 plotfile_interval = 1
 plotfile_prefix = "StrmNoRec"

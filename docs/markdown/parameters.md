@@ -117,20 +117,9 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 
 These parameters control the VODE ODE integrator used for chemistry and photochemistry source terms. The generated code reads them via `init_extern_parameters()` from the `integrator` prefix. See also `docs/markdown/photoionization.md`.
 
-### High-level physical parameters (recommended)
+VODE's built-in defaults (~1e-10) are unusably tight for photochemistry and will cause the integrator to stall. Users must explicitly set the tolerances below.
 
-When any `integrator.typical_*` parameter is present, `SetAtolFromPhysics()` derives the `atol_*` values from physical scales and injects them before `init_extern_parameters()` reads them. Mutually exclusive with the raw `atol_*` parameters below. At least one set must be specified — VODE's built-in defaults (~1e-10) are unusably tight for photochemistry.
-
-| Parameter Name | Type | Default | Description |
-|---|---|---|---|
-| `integrator.typical_n_H` | Float | **Required** if photochemistry is enabled and `atol_*` is not set | Representative total H number density (cm⁻³). Sets `atol_spec` via `spec_abundance_tol × typical_n_H`. |
-| `integrator.typical_minimal_radiation_T` | Float | **Required** if photochemistry is enabled and `atol_*` is not set | Typical temperature of the cold (neutral) gas in the domain (K). Sets `atol_rad_num` via `1e-6 × a_rad × T⁴ / E_photon`. |
-| `integrator.desired_accuracy_on_T_at_typical_n_H` | Float | `1.0` | Desired temperature accuracy (K). Sets `atol_enuc` via `c_v × accuracy`. |
-| `integrator.spec_abundance_tol` | Float | `1.0e-5` | Species negligibility threshold as a fraction of `typical_n_H`. |
-
-### Raw tolerance parameters (legacy)
-
-Mutually exclusive with the `typical_*` parameters. Specifying neither set of tolerances will abort the simulation.
+### Tolerance parameters
 
 | Parameter Name | Type | Default | Description |
 |---|---|---|---|
@@ -140,8 +129,8 @@ Mutually exclusive with the `typical_*` parameters. Specifying neither set of to
 | `integrator.rtol_enuc` | Float | `1.e-10` | Relative tolerance for internal energy. |
 | `integrator.atol_rad_num` | Float | `1.e-10` | Absolute tolerance for radiation number density (cm⁻³). |
 | `integrator.rtol_rad_num` | Float | `1.e-10` | Relative tolerance for radiation number density. |
-| `integrator.radiation_failure_tolerance` | Float | `0.05` | Maximum allowed negative photon number density (cm⁻³) before the burn is declared failed. Physical guard, not a numerical tolerance. |
-| `integrator.species_failure_tolerance` | Float | `0.01` | Maximum violation of `0 ≤ X ≤ 1` before the burn is declared failed. |
+| `integrator.species_failure_tolerance` | Float | `0.01` | Maximum allowed negative species number density (cm⁻³) at internal VODE nodes. When exceeded, VODE rejects the substep and retries with a smaller timestep. Should equal `atol_spec`. At the final interpolated state, the threshold is relaxed to 1.5× this value to account for VODE's non-monotonic interpolation. |
+| `integrator.radiation_failure_tolerance` | Float | `0.01` | Maximum allowed negative photon number density (cm⁻³) at internal VODE nodes. When exceeded, VODE rejects the substep and retries with a smaller timestep. Should equal `atol_rad_num`. At the final interpolated state, the threshold is relaxed to 1.5× this value. |
 
 ### Other integrator parameters
 
@@ -150,18 +139,16 @@ Mutually exclusive with the `typical_*` parameters. Specifying neither set of to
 | `integrator.jacobian` | Integer | `1` | Jacobian type: `1` = analytical, `2` = numerical. |
 | `integrator.ode_max_steps` | Integer | `150000` | Maximum number of VODE internal steps per burn call. |
 | `integrator.ode_max_dt` | Float | `1.e30` | Maximum internal timestep for VODE. |
-| `integrator.use_number_densities` | Boolean (0/1) | `0` | If 1, evolve species as number densities instead of mass fractions. |
+| `integrator.use_number_densities` | Boolean (0/1) | `1` | If 1, evolve species as number densities instead of mass fractions. Must be `1` for Quokka. |
 | `integrator.subtract_internal_energy` | Boolean (0/1) | `1` | If 1, subtract internal energy before integration. Must be `0` for Quokka. |
-| `integrator.renormalize_abundances` | Boolean (0/1) | `0` | If 1, renormalize mass fractions to sum to unity at each step. |
-| `integrator.do_species_clip` | Boolean (0/1) | `0` | If 1, clip species to [0,1] during cleanup. |
-| `integrator.call_eos_in_rhs` | Boolean (0/1) | `1` | If 1, call EOS in the RHS to update temperature from internal energy. |
-| `integrator.integrate_energy` | Boolean (0/1) | `1` | If 1, enable energy integration; if 0, freeze energy. |
-| `integrator.scale_system` | Boolean (0/1) | `0` | If 1, scale the ODE system to be O(1). |
+| `integrator.call_eos_in_rhs` | Boolean (0/1) | `1` | If 1, call EOS in the RHS to update temperature from internal energy. Must be `1` for Quokka. |
+| `integrator.integrate_energy` | Boolean (0/1) | `1` | If 1, enable energy integration; if 0, freeze energy. Not recommended for use with number densities. |
+| `integrator.scale_system` | Boolean (0/1) | `0` | If 1, scale the ODE system to be O(1). Does not work with number densities — leave at `0`. |
 | `integrator.use_burn_retry` | Boolean (0/1) | `0` | If 1, retry failed burns with swapped Jacobian or relaxed tolerances. |
-| `integrator.retry_swap_jacobian` | Boolean (0/1) | `1` | If 1, swap Jacobian type (analytic ↔ numerical) on retry. |
+| `integrator.retry_swap_jacobian` | Boolean (0/1) | `1` | If 1, swap Jacobian type (analytic to numerical) on retry. |
 | `integrator.burner_verbose` | Boolean (0/1) | `0` | If 1, print diagnostic output after each burn. |
 | `integrator.SMALL_X_SAFE` | Float | `1.e-30` | Species floor to prevent underflow in the integrator. |
-| `integrator.X_reject_buffer` | Float | `1.0` | Buffer factor for the species rejection threshold. |
+| `integrator.X_reject_buffer` | Float | `1.0` | Buffer factor for the species change-factor rejection threshold. Only meaningful for mass fractions; has no effect with number densities. Set to `1e100` to disable. |
 | `integrator.do_corrector_validation` | Boolean (0/1) | `1` | If 1, check predicted state validity before calling RHS. |
 
 ## Dust

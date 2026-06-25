@@ -177,6 +177,9 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	const amrex::Real n_HII = state.xn[2];
 	const amrex::Real n_gamma =
 	    amrex::max(state.rn[0], 0.0_rt); // clamp at zero: prevents sign reversal if VODE steps rn[0] slightly negative within tolerance
+	// Gate for column-5 Jacobian entries: when rn[0] < 0 the clamp makes the RHS
+	// independent of rn[0], so all derivatives w.r.t. rn[0] are zero.
+	const amrex::Real n_gamma_active = (state.rn[0] >= 0.0_rt) ? 1.0_rt : 0.0_rt;
 	const amrex::Real n_gamma_flux = state.rn[1];
 
 	int molecular_process_switch = 1;
@@ -200,7 +203,7 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 	jac(1, 2) = (chat_sigma_photo * n_gamma + collisional_ionization_switch * n_e * sigma_coll);
 	jac(1, 3) = -recombination_switch * alpha_rec * n_e;
 	jac(1, net_ienuc) = (d_collisional_ionization_term_dT - d_recombination_term_dT) * dTde;
-	jac(1, 5) = chat_sigma_photo * n_HI;
+	jac(1, 5) = n_gamma_active * chat_sigma_photo * n_HI;
 	jac(1, 6) = 0.0_rt;
 
 	jac(2, 1) = -jac(1, 1);
@@ -223,14 +226,14 @@ template <class MatrixType> AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void actual
 			    state.rho;
 	jac(net_ienuc, 3) = energy_switch * (-recombination_cooling_switch * Lambda_rec * n_e - ion_ff_cooling_switch * Lambda_ion_ff * n_e) / state.rho;
 	jac(net_ienuc, net_ienuc) = energy_switch * (-d_recombination_cooling_dT - d_KI_cooling_dT - d_ion_ff_cooling_dT) * dTde / state.rho;
-	jac(net_ienuc, 5) = energy_switch * (photoheating_switch * Gamma_photo * chat_sigma_photo * n_HI) / state.rho;
+	jac(net_ienuc, 5) = energy_switch * (photoheating_switch * Gamma_photo * chat_sigma_photo * n_HI) * n_gamma_active / state.rho;
 	jac(net_ienuc, 6) = 0.0_rt;
 
 	jac(5, 1) = 0.0_rt;
 	jac(5, 2) = -chat_sigma_photo * n_gamma;
 	jac(5, 3) = 0.0_rt;
 	jac(5, net_ienuc) = 0.0_rt;
-	jac(5, 5) = -chat_sigma_photo * n_HI;
+	jac(5, 5) = -n_gamma_active * chat_sigma_photo * n_HI;
 	jac(5, 6) = 0.0_rt;
 
 	jac(6, 1) = 0.0_rt;

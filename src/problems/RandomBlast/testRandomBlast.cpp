@@ -27,17 +27,10 @@ struct RandomBlast {
 constexpr double m_H = C::m_p + C::m_e;	     // mass of hydrogen atom
 constexpr double seconds_per_year = 3.154e7; // seconds per year
 
-template <> struct Physics_Traits<RandomBlast> {
+template <> struct Physics_Traits<RandomBlast> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = true;
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int numMassScalars = 0;
 	static constexpr int numPassiveScalars = numMassScalars + 1;
-	static constexpr int nGroups = 1; // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 template <> struct quokka::EOS_Traits<RandomBlast> {
@@ -45,7 +38,7 @@ template <> struct quokka::EOS_Traits<RandomBlast> {
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct Particle_Traits<RandomBlast> {
+template <> struct Particle_Traits<RandomBlast> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
 };
 
