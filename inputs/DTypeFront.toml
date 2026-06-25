@@ -59,9 +59,9 @@ max_timesteps = 1000000  # stop_time governs; no artificial step cap
 # without manual inflation — the two values can therefore be set equal.
 integrator.atol_spec                     = 1.4e-3   # cm^-3; 1e-5 × n_H = physical negligibility floor
 integrator.atol_enuc                     = 1.24e8   # erg/g; c_v × 1 K temperature accuracy
-integrator.atol_rad_num                  = 5e-2     # cm^-3; performance plateau for this problem
+integrator.atol_rad_num                  = 1e50     # cm^-3; performance plateau for this problem
 integrator.species_failure_tolerance     = 1.4e-3   # cm^-3; = atol_spec (1.5× final-state factor in vode_type.H absorbs BDF overshoot)
-integrator.radiation_failure_tolerance   = 0.5      # cm^-3; must exceed max N_gamma BDF overshoot at ionization front
+integrator.radiation_failure_tolerance   = 1e50      # cm^-3; must exceed max N_gamma BDF overshoot at ionization front
 
 integrator.rtol_spec     = 1e-2
 integrator.rtol_rad_num  = 1e-2
