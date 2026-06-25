@@ -1,15 +1,15 @@
 import numpy as np
 from scipy.special import j1, jn_zeros
-from scipy.ndimage import uniform_filter1d
 import matplotlib.pyplot as plt
 
 # ══════════════════════════════════════════════════════════════════
 #  Parameters
 # ══════════════════════════════════════════════════════════════════
 
-nR_coarse, nz_coarse = 128, 256
-levels               = 1
-SEED                 = 42
+nR_coarse, nz_coarse = 128 , 256
+levels               = 0
+SEED                 = 4100
+padding              = 2    # ghost cells added beyond domain on each side
 
 # Physical constants
 G_grav = 6.674e-8       # cm^3 g^-1 s^-2
@@ -23,15 +23,14 @@ alpha_p  = 2.0          # surface density shape parameter
 beta_p   = 0.5          # surface density shape parameter
 
 # Taper widths
-inner_taper_kpc = 0.2   # ramp up over this width from axis
-outer_taper_kpc = 0   # roll off over this width at outer edge
-z_taper_kpc     = 0.1   # roll off over this width at top and bottom
+inner_taper_kpc = 0.6   # ramp up over this width from axis
+outer_taper_kpc = 0.5   # ramp up over this width from axis
 
 # Seed field strength
 B0 = 4.0*0.127e-6           # Gauss — set for plasma beta ~ 1000 in disk midplane
 B0 = B0 / np.sqrt(1000.0 / 3.0)  # ~ 2.8e-8 G
-oversample           = 4.  # factor by which to oversample the spectral grid relative to the output grid
-n_grid_cells = 8 
+oversample           = 32.  # factor by which to oversample the spectral grid relative to the output grid
+n_grid_cells = 4 
 
 # ══════════════════════════════════════════════════════════════════
 #  Disk scale height (matches diskDensityAnalytic in testMHDDisk.cpp)
@@ -101,17 +100,24 @@ def init_modes(nR_coarse, nz_coarse, Rmax_nd, Lz_nd, seed=0):
 # ══════════════════════════════════════════════════════════════════
 
 def init_coeffs(k, kmin, kmax, seed):
-    rng   = np.random.default_rng(seed)
+    rng = np.random.default_rng(seed)
     coeff = np.zeros_like(k, dtype=np.complex128)
 
     mask = (k >= kmin) & (k < kmax)
+    # 1. Generate Gaussian random variables
     rand = rng.standard_normal(mask.sum()) + 1j * rng.standard_normal(mask.sum())
-
-    # Pure Kolmogorov — no kR correction
+    
+    # 2. Apply power law
     alpha = 11.0 / 6.0
-    rand *= k[mask] ** (-alpha)
-    rand /= np.sqrt(np.mean(np.abs(rand)**2))
+    power_law = k[mask] ** (-alpha)
+    rand *= power_law
 
+    # 3. CRITICAL: Normalize by the expected power, not the realized mean
+    # The total power is the sum of (amplitude^2).
+    # We want sum(|coeff|^2) to represent the physical energy.
+    total_power = np.sum(np.abs(rand)**2)
+    rand /= np.sqrt(total_power)
+    
     coeff[mask] = rand
     return coeff
 
@@ -287,10 +293,6 @@ def curl_Aphi(RA, R, dR, dz):
 # ══════════════════════════════════════════════════════════════════
 #  Save binary + metadata
 #
-#  Two binaries are written:
-#    stem.bin          — RA  = R * A_phi(R,z)  [physical cm * normalised]
-#    stem_Aphi.bin     — A_phi(R,z)            [normalised, no R factor]
-#
 #  The C++ face-var initialisation should use stem_Aphi.bin so that
 #  the Cartesian projection  Ax = -Aphi*y/R,  Ay = Aphi*x/R  uses
 #  the exact face geometry for x/R and y/R, avoiding the 1/R^2
@@ -298,19 +300,14 @@ def curl_Aphi(RA, R, dR, dz):
 #  when the RA table is used.
 # ══════════════════════════════════════════════════════════════════
 
-def save_outputs(RA_phys, Aphi_phys, Br, Bz,
+def save_outputs(Aphi_phys,
                  nR, nz, nR_coarse, nz_coarse, levels, oversample, SEED,
                  Rmax, Lz, dR, dz, kmin_nd, kmax_nd, Rmax_nd,
                  H_phys_cm, B0_gauss=1e-9, stem="Aphi_2d"):
     import os
 
-    ra_bin_path   = stem + ".bin"
     aphi_bin_path = stem + "_Aphi.bin"
     meta_path     = stem + "_meta.txt"
-
-    # ── write RA table (kept for cell-centred energy / backward compat) ──
-    RA_phys.astype(np.float64).tofile(ra_bin_path)
-    print(f"Saved RA binary  : {ra_bin_path}  ({os.path.getsize(ra_bin_path)/1e6:.1f} MB)")
 
     # ── write Aphi table (used for face-centred B initialisation) ────────
     # Aphi_phys has units of [cm * normalised_A_phi / cm] = [normalised_A_phi]
@@ -362,11 +359,6 @@ def save_outputs(RA_phys, Aphi_phys, Br, Bz,
         f"rms_B_HL          = {rms_B_HL:e}  [= B0_HL, since stored B is rms-normalised to 1]",
         f"layout            = C-order float64, shape ({int(nR)}, {int(nz)})",
         f"",
-        f"# ── RA table ({ra_bin_path}) ────────────────────────────────────",
-        f"stored_field_RA   = RA = R * A_phi(R,z)  [cm * normalised_A_phi]",
-        f"RA_usage          = cell-centred energy initialisation; backward compatibility",
-        f"RA_formula        = RA[i,j] = R_i * Aphi[i,j]  where R_i = (i+0.5)*dR_fine_cm",
-        f"",
         f"# ── Aphi table ({aphi_bin_path}) ──────────────────────────────────",
         f"stored_field_Aphi = A_phi(R,z)  [normalised scalar, no R factor]",
         f"Aphi_usage        = face-centred B initialisation via Cartesian curl",
@@ -399,7 +391,7 @@ def save_outputs(RA_phys, Aphi_phys, Br, Bz,
         f.write("\n".join(lines) + "\n")
 
     print(f"Saved metadata   : {meta_path}")
-    return ra_bin_path, aphi_bin_path, meta_path
+    return aphi_bin_path, meta_path
 
 # ══════════════════════════════════════════════════════════════════
 #  MAIN
@@ -422,30 +414,43 @@ if __name__ == "__main__":
     H_nd    = H_phys / Rmax
 
     # ── fine physical grid ────────────────────────────────────────
-    factor = 2 ** levels
-    nz     = nz_coarse * factor * oversample
-    nR = int(np.ceil(nz * Rmax / Lz))
-    print(f"Output grid: nR={nR}, nz={nz}")
+    # nR_sim/nz_sim are the simulation domain cell counts.
+    # nR/nz add padding cells on each side so the C++ face stencils
+    # at the domain boundary have valid neighbours in the table.
+    factor  = 2 ** levels
+    nz_sim  = int(nz_coarse * factor * oversample)
+    nR_sim  = int(np.ceil(nz_sim * Rmax / Lz))
+    nR      = nR_sim + 2 * padding
+    nz      = nz_sim + 2 * padding
+    print(f"Sim grid:    nR_sim={nR_sim}, nz_sim={nz_sim}")
+    print(f"Table grid:  nR={nR}, nz={nz}  (padding={padding} each side)")
 
-    dR = Rmax / nR
-    dz = Lz   / nz
+    # Cell spacing defined by the sim grid — padding cells inherit the same spacing
+    dR = Rmax / nR_sim
+    dz = Lz   / nz_sim
 
-    # Dimensionless grids for spectral evaluation
-    R_nd = (np.arange(nR) + 0.5) / nR * Rmax_nd
-    z_nd = (-0.5 + (np.arange(nz) + 0.5) / nz) * Lz_nd
+    dR_nd = Rmax_nd / nR_sim
+    dz_nd = Lz_nd   / nz_sim
+
+    # Coordinate arrays: padding cells sit outside [0, Rmax] x [-Lz/2, Lz/2]
+    # so they are naturally zero after the ghost-cell zeroing step below.
+    R_nd = (np.arange(nR) - padding + 0.5) * dR_nd
+    z_nd = (np.arange(nz) - padding + 0.5) * dz_nd - Lz_nd / 2.0
 
     # Physical grids
     R = R_nd * Rmax
     z = z_nd * Rmax
 
-    dR_nd = Rmax_nd / nR
-    dz_nd = Lz_nd   / nz
+    # Padded Rmax/Lz: extend domain by padding cells on each side so that
+    # sample_bicubic's  dR = Rmax_table / nR_table  recovers the correct dR.
+    Rmax_padded = Rmax + padding * dR
+    Lz_padded   = Lz   + 2 * padding * dz
 
     # ── spectral modes ────────────────────────────────────────────
     kR, kz, k = init_modes(nR_coarse * factor, nz_coarse * factor, Rmax_nd, Lz_nd, seed=SEED)
 
     kmin_nd = physical_kmin(H_nd)
-    kmax_nd = physical_kmax(nR, nz, Rmax_nd, Lz_nd, levels)
+    kmax_nd = physical_kmax(nR_sim, nz_sim, Rmax_nd, Lz_nd, n_cells=n_grid_cells)
 
     print(f"k range (nd): [{k.min():.3e}, {k.max():.3e}]")
     print(f"kmin (nd)   = {kmin_nd:.3e}  (lambda_max = 2H = {2*H_phys/kpc*1e3:.0f} pc)")
@@ -466,42 +471,67 @@ if __name__ == "__main__":
 
     # ── boundary tapers ───────────────────────────────────────────
     inner_taper_cells = max(4, int(inner_taper_kpc * kpc / dR))
-    #outer_taper_cells = max(4, int(outer_taper_kpc * kpc / dR))
+    outer_taper_cells = max(4, int(outer_taper_kpc * kpc / dR))
     #z_taper_cells     = max(4, int(z_taper_kpc * kpc / dz)) 
 
     print(f"  inner taper: {inner_taper_cells} cells = {inner_taper_cells*dR/kpc:.3f} kpc")
-    #print(f"  outer taper: {outer_taper_cells} cells = {outer_taper_cells*dR/kpc:.3f} kpc")
+    print(f"  outer taper: {outer_taper_cells} cells = {outer_taper_cells*dR/kpc:.3f} kpc")
     #print(f"  z taper: {z_taper_cells} cells = {z_taper_cells*dz/kpc:.3f} kpc")
 
     Aphi = apply_axis_taper(Aphi, R_nd, dR_nd, n_cells=inner_taper_cells)
-    #Aphi = apply_outer_taper(Aphi, R_nd, Rmax_nd, width_cells=outer_taper_cells)
-    #Aphi = apply_z_taper(Aphi, z_nd, Lz_nd, width_cells=z_taper_cells)
-    Aphi[0, :] = 0.0
+    Aphi = apply_outer_taper(Aphi, R_nd, Rmax_nd, width_cells=outer_taper_cells)
 
-    print(f"  Aphi[0]  mean |.|: {np.mean(np.abs(Aphi[0,  :])):.3e}  (should be 0)")
-    print(f"  Aphi[-1] mean |.|: {np.mean(np.abs(Aphi[-1, :])):.3e}  (should be ~0)")
+    # Zero padding cells that lie outside the physical domain.
+    # The tapers drive Aphi to zero at the domain edges; this makes
+    # the ghost cells explicitly zero so the C++ stencil sees a clean
+    # roll-off rather than whatever the spectral basis left there.
+    Aphi[R_nd < 0, :]                   = 0.0
+    Aphi[R_nd > Rmax_nd, :]             = 0.0
+    Aphi[:, np.abs(z_nd) > Lz_nd / 2]  = 0.0
 
-    # ── radial rms equalisation ───────────────────────────────────
-    Aphi_rms_R      = np.sqrt(np.mean(Aphi**2, axis=1))
-    Aphi_rms_smooth = uniform_filter1d(Aphi_rms_R, size=max(1, nR//50))
-    floor           = 0.01 * Aphi_rms_smooth.max()
-    Aphi_rms_smooth = np.where(Aphi_rms_smooth > floor, Aphi_rms_smooth, floor)
-    Aphi           /= Aphi_rms_smooth[:, None]
+    #print(f"  Aphi[0]  mean |.|: {np.mean(np.abs(Aphi[0,  :])):.3e}  (should be 0)")
+    #print(f"  Aphi[-1] mean |.|: {np.mean(np.abs(Aphi[-1, :])):.3e}  (should be ~0)")
 
-    Aphi[0, :]   = 0.0
-    Aphi[-1, :] *= 0.0
+    # ── disk envelope: shapes rms_B(R) ~ sqrt(Sigma(R)) ─────────────
+    # Since rms_Br(R) ~ Aphi(R)*kz_turb, multiplying Aphi by sqrt(Sigma(R))
+    # directly gives rms_B(R) ~ sqrt(Sigma(R)) after the curl.
+    # A linear ramp over the axis taper zone forces Aphi->0 at R=0
+    # (Sigma is finite at the axis for this profile, so it can't do it alone).
+    # x_env      = R_nd * Rmax / kpc / Rd_kpc
+    # Sigma_env  = np.exp(-x_env - beta_p * np.exp(-alpha_p * x_env))
+    # Sigma_Rd_v = np.exp(-1.0 - beta_p * np.exp(-alpha_p))
+    # ramp_env   = np.minimum(R_nd / (inner_taper_cells * dR_nd), 1.0)
+    # Aphi_env   = np.sqrt(Sigma_env / Sigma_Rd_v) * ramp_env
+    # Aphi_env  /= Aphi_env[np.argmin(np.abs(R_nd - Rd_kpc * kpc / Rmax))]  # =1 at Rd
+    # Aphi      *= Aphi_env[:, None]
 
-    Aphi /= np.sqrt(np.mean(Aphi**2))
-    print(f"  Aphi rms after equalisation: {np.sqrt(np.mean(Aphi**2)):.3f}  (should be 1)")
+    #Aphi[0, :]   = 0.0
+    #Aphi[-1, :] *= 0.0
+
+    #Aphi /= np.sqrt(np.mean(Aphi**2))
+    #print(f"  Aphi rms after disk envelope: {np.sqrt(np.mean(Aphi**2)):.3f}  (should be 1)")
 
     # ── low-pass filter: sigma = 1 table cell ────────────────────
     from scipy.ndimage import gaussian_filter
-    Aphi = gaussian_filter(Aphi, sigma=1.0)
-    Aphi[0, :]   = 0.0
-    Aphi[-1, :] *= 0.0
+    #Aphi = gaussian_filter(Aphi, sigma=1.0)
+    #Aphi[0, :]   = 0.0
+    #Aphi[-1, :] *= 0.0
     rms_after = np.sqrt(np.mean(Aphi**2))
-    print(f"  Aphi rms after smoothing: {rms_after:.3f}")
-    Aphi /= rms_after
+    #print(f"  Aphi rms after smoothing: {rms_after:.3f}")
+    #Aphi /= rms_after
+
+    # ── Radial RMS equalization ───────────────────────────────────
+    # The Bessel basis concentrates power near the axis. Divide each
+    # radial ring by its own rms(z) so that the *curl* rms is roughly
+    # flat in R before the global normalisation step below.
+    # Smoothing the profile prevents the 1/rms amplification of axis
+    # noise where only a few J1 modes contribute.
+    from scipy.ndimage import uniform_filter1d
+    rms_profile = np.sqrt(np.mean(Aphi**2, axis=1))
+    rms_profile = uniform_filter1d(rms_profile, size=max(1, len(rms_profile)//50))
+    rms_profile = np.maximum(rms_profile, 0.1 * rms_profile[len(rms_profile)//4:].mean())
+    Aphi /= rms_profile[:, None]
+    Aphi[R_nd <= 0, :] = 0.0
 
     # ── form RA = R * A_phi ───────────────────────────────────────
     RA = R_nd[:, None] * Aphi
@@ -516,16 +546,17 @@ if __name__ == "__main__":
     net_flux_raw = np.mean(np.trapezoid(Bz_nd * R_nd[:, None], R_nd, axis=0))
     print(f"  Net flux (raw, nd):  {net_flux_raw:.3e}  (target: 0)")
 
-    # ── normalise in dimensionless units ──────────────────────────────────
-    rms_nd  = np.sqrt(np.mean(Br_nd**2 + Bz_nd**2))
-    Br_nd  /= rms_nd
-    Bz_nd  /= rms_nd
+    # ── normalise by curl rms so that rms(B_nd) = 1 ──────────────
+    # This is the contract the C++ beta formula relies on: B_phys_rms = B0_scale.
+    # Must be done AFTER equalization so both steps are self-consistent.
+    rms_nd = np.sqrt(np.mean(Br_nd**2 + Bz_nd**2))
+    print(f"  curl rms before normalisation: {rms_nd:.4f}")
+    Aphi  /= rms_nd
+    Br_nd /= rms_nd
+    Bz_nd /= rms_nd
 
-    # Normalise Aphi directly — do NOT divide RA_norm by R_nd
-    # Aphi already has axis taper, outer taper, equalisation, smoothing applied.
-    # Dividing RA/R amplifies near-axis noise by 1/R[0] ~ 680x.
-    Aphi_norm       = Aphi / rms_nd        # same normalisation as B field
-    Aphi_norm[0, :] = 0.0                  # enforce axis BC
+    Aphi_norm                    = Aphi
+    Aphi_norm[R_nd <= 0, :]     = 0.0
 
     # RA_norm derived from the clean Aphi_norm (not the other way around)
     RA_norm         = R_nd[:, None] * Aphi_norm    
@@ -542,12 +573,19 @@ if __name__ == "__main__":
     grad_rms = np.sqrt(np.mean(np.diff(Aphi_norm, axis=0)**2)) / dR_nd
     print(f"  grad rms of Aphi_norm (nd): {grad_rms:.4f}  (should be ~1)")
 
-    Aphi_phys       = Aphi_norm * Rmax
-    RA_phys         = RA_norm   * Rmax
-    Aphi_phys[0, :] = 0.0
-    Aphi_phys[-1, :] = 0.0
-    Aphi_phys[:, 0] = 0.0
-    Aphi_phys[:, -1] = 0.0
+    Aphi_phys = Aphi_norm
+    RA_phys   = RA_norm * Rmax
+
+    # Radial Gaussian smooth (sigma=1 table cell) to suppress Bessel-mode
+    # ringing that imprints as concentric Bphi rings in the XY plane.
+    # Applied in R only so the z-structure and curl normalisation are unaffected.
+    from scipy.ndimage import gaussian_filter1d
+    Aphi_phys = gaussian_filter1d(Aphi_phys, sigma=1.0, axis=0)
+
+    # Re-zero ghost cells and axis after smoothing.
+    Aphi_phys[R_nd <= 0, :]                  = 0.0
+    Aphi_phys[R_nd >= Rmax_nd, :]            = 0.0
+    Aphi_phys[:, np.abs(z_nd) >= Lz_nd / 2] = 0.0
 
     print(f"  Aphi_phys rms: {np.sqrt(np.mean(Aphi_phys**2)):.4e} cm  (should be ~Rmax/nR ~ {Rmax/nR:.3e} cm)")
 
@@ -567,12 +605,11 @@ if __name__ == "__main__":
     print(f"  Bphi max (should be 0): {np.max(np.abs(Bphi)):.3e}")
 
     # ── save ──────────────────────────────────────────────────────
-    save_outputs(
-        RA_phys, Aphi_phys, Br, Bz,
+    save_outputs( Aphi_phys, 
         nR=nR, nz=nz,
         nR_coarse=nR_coarse, nz_coarse=nz_coarse,
         levels=levels, oversample=oversample, SEED=SEED,
-        Rmax=Rmax, Lz=Lz, dR=dR, dz=dz,
+        Rmax=Rmax_padded, Lz=Lz_padded, dR=dR, dz=dz,
         kmin_nd=kmin_nd, kmax_nd=kmax_nd, Rmax_nd=Rmax_nd,
         H_phys_cm=H_phys,
         B0_gauss=B0, stem="Aphi_2d",
@@ -738,7 +775,6 @@ if __name__ == "__main__":
     print(f"  Net flux std  = {np.std(flux_per_z):.3e}  (dimensionless)")
     print(f"  B0_gauss = {B0:.3e} G  =>  B0_HL = {B0/(4*np.pi)**0.5:.3e} G (HL)")
     print(f"\nOutput files:")
-    print(f"  Aphi_2d.bin       — RA = R*Aphi table  (cell-centred energy init)")
     print(f"  Aphi_2d_Aphi.bin  — Aphi table          (face-centred B init)")
     print(f"  Aphi_2d_meta.txt  — metadata for both")
 
