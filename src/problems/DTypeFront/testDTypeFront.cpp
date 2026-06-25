@@ -5,7 +5,7 @@
 //==============================================================================
 /// \file testDTypeFront.cpp
 /// \brief Defines a test problem for the static Stromgren sphere with no temperature dependence.
-///
+/// dump trigger
 
 #include "AMReX.H"
 #include "AMReX_Array.H"
