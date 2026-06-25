@@ -43,10 +43,11 @@ namespace
 	constexpr double beta_profile  = 0.5;
 	constexpr double q_flatten     = 0.7;
 	constexpr double rho_transition = 1.0e-28;
+	constexpr double target_beta_seed = 1.0e4;
 	constexpr double Rmax_kpc = 8.0;
 	constexpr double Rmax = Rmax_kpc * 1.0e3 * C::parsec;
 	constexpr double refine_Rcyl_kpc = 9.0;
-	constexpr double refine_Hcyl_pc  = 300.0;
+	constexpr double refine_Hcyl_pc  = 600.0;
 	constexpr double refine_Rcyl     = refine_Rcyl_kpc * 1.0e3 * C::parsec;
 	constexpr double refine_Hcyl     = refine_Hcyl_pc  * C::parsec;
 } // namespace
@@ -222,7 +223,7 @@ auto get_taper_factor(double x, double y, double z,
     const double absZ = std::abs(z);
     
     // Taper parameters: adjust n_taper to change the steepness of the fall-off
-    const double n_taper = 4.0; 
+    const double n_taper = 4.0;
     const double R_taper_start = Rmax - n_taper * amrex::max(dx, dy);
     const double Z_taper_start = 0.5 * Lz - n_taper * dz;
     
@@ -374,11 +375,30 @@ template <> void QuokkaSimulation<MHDGalaxy>::preCalculateInitialConditions()
 			"Error parsing cylindrical vector potential meta variables from init_seed_pot_field.");
 
 		std::size_t total_elements = userData_.seed_nR * userData_.seed_nz;
-		std::string data_filename = "Aphi_2d.bin";
+		std::string data_filename = "Aphi_2d_Aphi.bin";
 		userData_.Aphi_device = load_bin_to_device(data_filename, total_elements);
 
 		amrex::Print() << "Loaded 2D Cylindrical Aphi Table cleanly. Map Size: " 
 		               << userData_.seed_nR << " x " << userData_.seed_nz << "\n";
+
+		// Derive B0 from target plasma beta at the disk midplane (R=Rd, z=0).
+		// The stored Aphi table is dimensionless with rms(curl_nd) = 1 in units of 1/Rmax.
+		// Physical B = aphi_nd * B0_scale / Rmax * curl_nd, so B_rms = B0_scale / Rmax.
+		// beta = (rho cs^2 / gamma) / (B_rms^2 / 2)
+		// => B_rms = cs * sqrt(2 rho_mid / (gamma * beta))
+		// => B0_scale = B_rms * Rmax
+		{
+			constexpr double cs  = quokka::EOS_Traits<MHDGalaxy>::cs_disk;
+			constexpr double gam = quokka::EOS_Traits<MHDGalaxy>::gamma;
+			const double Sigma_Rd = surfaceDensityProfile(Rd, userData_.Sigma0);
+			const double rho_mid  = (M_PI * C::Gconst * Sigma_Rd * Sigma_Rd) / (2.0 * cs * cs);
+			const double B_rms_HL = cs * std::sqrt(2.0 * rho_mid / (gam * target_beta_seed));
+			userData_.seed_B0_HL  = B_rms_HL * userData_.seed_Rmax;
+			amrex::Print() << "Seed field: target_beta=" << target_beta_seed
+			               << "  rho_mid=" << rho_mid
+			               << "  B_rms_HL=" << B_rms_HL
+			               << "  B0_scale=" << userData_.seed_B0_HL << " G*cm (HL)\n";
+		}
 	}
 
 	amrex::Print()
@@ -405,6 +425,7 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(
 	constexpr double gamma = quokka::EOS_Traits<MHDGalaxy>::gamma;
 	
 	const double B0_scale = userData_.seed_B0_HL;
+	//const double B0_scale = 1.0; 
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(B0_scale > 0.0, "Seed field strength must be positive.");
 
 	const amrex::Box            &indexRange = grid_elem.indexRange_;
@@ -420,27 +441,15 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(
 	const double Lz_table = userData_.seed_Lz;
 
     const double dR_table = Rmax_table / static_cast<double>(nR_table);
-    const double axis_dead_zone = 2.0 * dR_table;
+    const double axis_dead_zone = 1.0 * dR_table;
 
     // physical potential with hard boundary guard and smooth tapering, sampled directly in the node lambdas 
 	// to ensure consistency with the interpolated values used for curl calculation.
-    auto get_Aphi_physical = [=] AMREX_GPU_DEVICE(double x_val, double y_val, double z_val) -> double {
-        const double R_val = std::sqrt(x_val * x_val + y_val * y_val);
-        const double absZ  = std::abs(z_val);
-
-        // Define a taper width (e.g., 5 cells)
-        const double taper_width = 5.0 * dx[0]; 
-        const double dist_R = (Rmax_table - R_val);
-        const double dist_Z = (0.5 * Lz_table - absZ);
-
-        // Apply tanh-based roll-off. This transitions from 1.0 (inside) to 0.0 (at boundary) smoothly
-        double taper = 0.5 * (1.0 + std::tanh((dist_R - 2.0 * taper_width) / (0.5 * taper_width))) *
-                    0.5 * (1.0 + std::tanh((dist_Z - 2.0 * taper_width) / (0.5 * taper_width)));
-
-        double aphi_nd = sample_bicubic(aphi_ptr, nR_table, nz_table, Rmax_table, Lz_table, R_val, z_val);
-        
-        return aphi_nd * B0_scale * taper;
-    };
+	auto get_Aphi_physical = [=] AMREX_GPU_DEVICE(double x_val, double y_val, double z_val) -> double {
+		const double R_val = std::sqrt(x_val * x_val + y_val * y_val);
+		double aphi_nd = sample_bicubic(aphi_ptr, nR_table, nz_table, Rmax_table, Lz_table, R_val, z_val);
+		return aphi_nd * B0_scale;
+	};
 
     auto get_Ax = [=] AMREX_GPU_DEVICE(double x_e, double y_e, double z_e) -> double {
         const double R_e = std::sqrt(x_e * x_e + y_e * y_e);
@@ -449,6 +458,7 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGrid(
         if (R_e < axis_dead_zone) { return 0.0; }
         
         const double taper = get_taper_factor(x_e, y_e, z_e, Rmax_table, Lz_table, dx[0], dx[1], dx[2]);
+		
         const double Aphi  = get_Aphi_physical(x_e, y_e, z_e);
         return -Aphi * (y_e / R_e) * taper;
     };
@@ -554,26 +564,15 @@ void QuokkaSimulation<MHDGalaxy>::setInitialConditionsOnGridFaceVars(
 	const double Rmax_table = userData_.seed_Rmax;
 	const double Lz_table = userData_.seed_Lz;
     const double dR_table     = Rmax_table / static_cast<double>(nR_table);
-	const double axis_dead_zone = 2.0 * dR_table;
+	const double axis_dead_zone = 1.0 * dR_table;
+
 
 	// magnetic potential with hard boundary guard
-    auto get_Aphi_physical = [=] AMREX_GPU_DEVICE(double x_val, double y_val, double z_val) -> double {
-        const double R_val = std::sqrt(x_val * x_val + y_val * y_val);
-        const double absZ  = std::abs(z_val);
-
-        // taper is a smooth tanh roll-off.
-        // Transition width (e.g., 5 cells) keeps the field consistent over the boundary.
-        const double taper_width_R = 2.0 * dx[0];
-        const double taper_width_Z = 2.0 * dx[2];
-        
-        // Smoothly transition to 0.0 at the domain boundaries as (0.5 * (1.0 + tanh(...))) 
-        double taper_R = 0.5 * (1.0 + std::tanh((Rmax_table - R_val - 2.0 * taper_width_R) / (0.5 * taper_width_R)));
-        double taper_Z = 0.5 * (1.0 + std::tanh((0.5 * Lz_table - absZ - 2.0 * taper_width_Z) / (0.5 * taper_width_Z)));
-
-        double aphi_nd = sample_bicubic(aphi_ptr, nR_table, nz_table, Rmax_table, Lz_table, R_val, z_val);
-        
-        return aphi_nd * B0_scale * taper_R * taper_Z;
-    };
+	auto get_Aphi_physical = [=] AMREX_GPU_DEVICE(double x_val, double y_val, double z_val) -> double {
+		const double R_val = std::sqrt(x_val * x_val + y_val * y_val);
+		double aphi_nd = sample_bicubic(aphi_ptr, nR_table, nz_table, Rmax_table, Lz_table, R_val, z_val);
+		return aphi_nd * B0_scale;
+	};
     // cartesian mapping with deadzone
     auto get_Ax_node = [=] AMREX_GPU_DEVICE(double x_n, double y_n, double z_n) -> double {
         const double R = std::sqrt(x_n * x_n + y_n * y_n);
