@@ -28,7 +28,7 @@ run_case() {
 
 	echo "=== $(date -Is) ${tag} ==="
 	echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset}"
-	/usr/bin/time -p "${exe}" "${INPUT_FILE}" dtype_front.plot_radii=0 "$@" \
+	/usr/bin/time -p "${exe}" "${INPUT_FILE}" "$@" \
 		> "${LOG_DIR}/${tag}.log" 2>&1
 }
 

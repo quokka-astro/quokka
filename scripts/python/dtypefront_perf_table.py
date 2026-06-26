@@ -84,7 +84,7 @@ def method_from_log(text: str, path: Path) -> str:
 def parse_profiler_line(text: str, name: str) -> tuple[float, float] | None:
     # Example:
     # PhotoChemistry::computePhotoChemistry() 7734 6.474 6.474 6.474 33.65%
-    pattern = re.compile(rf"^{re.escape(name)}\s+\d+\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)%", re.MULTILINE)
+    pattern = re.compile(rf"^\s*{re.escape(name)}\s+\d+\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)%", re.MULTILINE)
     matches = [(float(match.group(3)), float(match.group(4))) for match in pattern.finditer(text)]
     if not matches:
         return None
@@ -184,7 +184,7 @@ def main() -> None:
     print(make_table(metrics))
 
     if args.show_failures:
-        failures = [(path, row.failed) for path, row in zip(logs, metrics, strict=True) if row.failed is not None]
+        failures = [(path, row.failed) for path, row in zip(logs, metrics) if row.failed is not None]
         if failures:
             print("\nFailures:")
             for path, failure in failures:
