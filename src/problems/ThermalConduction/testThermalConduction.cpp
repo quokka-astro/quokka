@@ -27,11 +27,11 @@ The initial condition for the test problem for running a wind-cloud problem. */
 
 
 
-const double Twind = 2.e6;
+const double Twind = 3.e6;
 const double Tcloud  = 1.e4;
-const double rho_cloud = C::m_p; // g/cm^3
+const double rho_cloud = 0.006 * C::m_p; // g/cm^3
 const double Mach = 4.0; // Mach number of the wind
-const double R0 = 40.0 * C::parsec; // radius of the cloud		
+const double R0 = 545 * C::parsec; // radius of the cloud		
 
 struct ThermalConductionProblem {
 };
@@ -92,16 +92,35 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::setInitialCondition
 		// 	vz = Mach * cs_wind; // 100 km/s
 		// }
 		// const amrex::Real Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T);
+		amrex::Real rho;	  // g/cm^3
+		amrex::Real T;
+		amrex::Real vz;
+		amrex::Real cs_wind;
+		double R = std::sqrt((x-R0)*(x-R0) + (y-R0)*(y-R0) + (z-R0)*(z-R0));
+		if(R < R0){
+			T = Tcloud;
+			rho = rho_cloud; // g/cm^3
+			vz = 0.0; // cloud is stationary
+		}
+		else{
+			T = Twind;
+			rho = rho_cloud * Tcloud / Twind; // g/cm^3
+			amrex::Real pressure = rho * T * C::k_B / C::m_u;
+			cs_wind = quokka::EOS<ThermalConductionProblem>::ComputeSoundSpeed(rho, pressure);
+			vz = Mach * cs_wind; // 100 km/s
+		}
+		const amrex::Real Eint = quokka::EOS<ThermalConductionProblem>::ComputeEintFromTgas(rho, T);
 		/*-------------------------------------------------*/
 
 		for (int n = 0; n < state_cc.nComp(); ++n) {
 			state_cc(i, j, k, n) = 0.; // zero fill all components
 		}
-		if(i==64 ){
+		if(i==0 & j==0 * k==0 ){
 			amrex::Print() << "Initial conditions at the center of the domain: " << std::endl;
 			amrex::Print() << "Density: " << rho << std::endl;
 			amrex::Print() << "Temperature: " << T << std::endl;
 			amrex::Print() << "Internal Energy: " << Eint << std::endl;
+			amrex::Print() << "cs: " << cs_wind << ", vz:" << vz << std::endl;
 		}
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::density_index) = rho;
 		state_cc(i, j, k, HydroSystem<ThermalConductionProblem>::x3Momentum_index) = rho * vz;
