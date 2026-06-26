@@ -195,16 +195,16 @@ auto compute_equilibrium_temperature_ionized(double n_e) -> double
 auto rosenbrock_tableau_name(int tableau) -> char const *
 {
 	switch (tableau) {
-	case 0:
-		return "Rodas5P";
-	case 1:
-		return "Rodas4P";
-	case 2:
-		return "Rodas3P";
-	case 3:
-		return "ROS2S";
-	default:
-		return "unknown";
+		case 0:
+			return "Rodas5P";
+		case 1:
+			return "Rodas4P";
+		case 2:
+			return "Rodas3P";
+		case 3:
+			return "ROS2S";
+		default:
+			return "unknown";
 	}
 }
 #endif
