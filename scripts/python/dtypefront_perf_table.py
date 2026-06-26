@@ -141,38 +141,64 @@ def fmt_fom(value: float | None) -> str:
     return f"{value:.4f}"
 
 
-def make_table(metrics: list[Metrics]) -> str:
+def table_cells(metrics: list[Metrics]) -> list[list[str]]:
     rows = sorted(metrics, key=lambda row: (METHOD_ORDER.get(row.method, 99), row.method))
+    return [
+        [
+            row.method,
+            fmt_fom(row.fom_us),
+            fmt(row.mupdates, 2),
+            fmt(row.tp_wall_s, 2),
+            fmt(row.chem_s, 2),
+            fmt(row.chem_pct, 2),
+            fmt(row.rad_no_ode_pct, 2),
+            fmt(row.hydro_pct, 2),
+            fmt(row.hydro_only_speedup, 2),
+            fmt(row.rad_substep_cost, 2),
+            fmt(row.subcycles, 2),
+        ]
+        for row in rows
+    ]
+
+
+def make_markdown_table(metrics: list[Metrics]) -> str:
     lines = [
         "| Method | FoM us/zone | Mupdate/s | TP wall s | Chem s | Chem % | Rad-noODE % | Hydro % | Hydro-only x | RadSub/HydroStep | Subcyc |",
         "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
-    for row in rows:
-        lines.append(
-            "| "
-            + " | ".join(
-                [
-                    row.method,
-                    fmt_fom(row.fom_us),
-                    fmt(row.mupdates, 2),
-                    fmt(row.tp_wall_s, 2),
-                    fmt(row.chem_s, 2),
-                    fmt(row.chem_pct, 2),
-                    fmt(row.rad_no_ode_pct, 2),
-                    fmt(row.hydro_pct, 2),
-                    fmt(row.hydro_only_speedup, 2),
-                    fmt(row.rad_substep_cost, 2),
-                    fmt(row.subcycles, 2),
-                ]
-            )
-            + " |"
-        )
+    lines.extend("| " + " | ".join(row) + " |" for row in table_cells(metrics))
     return "\n".join(lines)
+
+
+def make_pretty_table(metrics: list[Metrics]) -> str:
+    header = ["Method", "FoM us/zone", "Mupdate/s", "TP wall s", "Chem s", "Chem %", "Rad-noODE %", "Hydro %", "Hydro-only x", "RadSub/HydroStep", "Subcyc"]
+    rows = table_cells(metrics)
+    widths = [max(len(row[col]) for row in [header, *rows]) for col in range(len(header))]
+
+    def left(value: str, col: int) -> str:
+        return value.ljust(widths[col])
+
+    def right(value: str, col: int) -> str:
+        return value.rjust(widths[col])
+
+    lines = [
+        "| " + " | ".join(left(value, col) if col == 0 else right(value, col) for col, value in enumerate(header)) + " |",
+        "|" + "|".join("-" * (widths[col] + 2) if col == 0 else "-" * (widths[col] + 1) + ":" for col in range(len(header))) + "|",
+    ]
+    lines.extend("| " + " | ".join(left(value, col) if col == 0 else right(value, col) for col, value in enumerate(row)) + " |" for row in rows)
+    return "\n".join(lines)
+
+
+def make_table(metrics: list[Metrics], *, pretty: bool = False) -> str:
+    if pretty:
+        return make_pretty_table(metrics)
+    return make_markdown_table(metrics)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("logs", nargs="+", type=Path, help="DTypeFront log files or directories containing *.log files")
+    parser.add_argument("--pretty", action="store_true", help="print a Markdown table with fixed-width columns")
     parser.add_argument("--show-failures", action="store_true", help="print failed-run diagnostics after the table")
     args = parser.parse_args()
 
@@ -181,7 +207,7 @@ def main() -> None:
         raise SystemExit("no log files found")
 
     metrics = [parse_log(path) for path in logs]
-    print(make_table(metrics))
+    print(make_table(metrics, pretty=args.pretty))
 
     if args.show_failures:
         failures = [(path, row.failed) for path, row in zip(logs, metrics) if row.failed is not None]
