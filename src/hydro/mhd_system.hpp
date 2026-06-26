@@ -871,7 +871,7 @@ void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> a4_
 		const auto b1_R = a4_b1_m(i, j, k);
 		const auto b1_L = a4_b1_p(i, j, k);
 
-		const auto s = std::max({s_L, s_R, s_B, s_T});
+		const auto s_max = std::max({s_L, s_R, s_B, s_T});
 
 		double emf2_T_star = 0.0;
 		double emf2_B_star = 0.0;
@@ -900,12 +900,12 @@ void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> a4_
 		} else {
 		    // LLF fallback when s_L==s_R or s_B==s_T (HLL denominator vanishes)
 			// eqs. 3.3, 3.5: LLF star states
-			emf2_T_star = 0.5 * ((emf2_LT + emf2_RT) + s * (b1_R - b1_L));
-			emf2_B_star = 0.5 * ((emf2_LB + emf2_RB) + s * (b1_R - b1_L));
-			emf2_R_star = 0.5 * ((emf2_RB + emf2_RT) - s * (b0_T - b0_B));
-			emf2_L_star = 0.5 * ((emf2_LB + emf2_LT) - s * (b0_T - b0_B));
+			emf2_T_star = 0.5 * ((emf2_LT + emf2_RT) + s_max * (b1_R - b1_L));
+			emf2_B_star = 0.5 * ((emf2_LB + emf2_RB) + s_max * (b1_R - b1_L));
+			emf2_R_star = 0.5 * ((emf2_RB + emf2_RT) - s_max * (b0_T - b0_B));
+			emf2_L_star = 0.5 * ((emf2_LB + emf2_LT) - s_max * (b0_T - b0_B));
 			// eq. 3.9: LLF double-star
-			emf2_dstar = 0.5 * ((emf2_RT + emf2_LT + emf2_LB + emf2_RB) / 2.0 + s * (b0_B - b0_T + b1_R - b1_L));
+			emf2_dstar = 0.5 * ((emf2_RT + emf2_LT + emf2_LB + emf2_RB) / 2.0 + s_max * (b0_B - b0_T + b1_R - b1_L));
 		}
 
 		// Select state overlying the z-axis based on which speeds are zero (Fig. 4 of Balsara25a).
