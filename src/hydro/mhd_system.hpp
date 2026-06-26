@@ -820,7 +820,7 @@ void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(amrex::Array4<amrex:
 	});
 }
 
-// solver from Balsara et al. 2025, 988, 134B
+// emf averaging via 2d riemann solver; balsara25a (balsara et al. 2025, apj 988:134b), sec. 3.
 
 template <typename problem_t>
 void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> a4_emf2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_emf_q,
@@ -853,19 +853,20 @@ void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> a4_
 	const auto &a4_fspd_w1 = fspds[w1_comp];
 
 	amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		// Wave speeds: max over two adjacent faces per direction (Felker18a App. A); s_L,s_R,s_T,s_B are non-negative magnitudes.
+		// signal speeds (balsara25a sec. 3): s_L <= 0, s_B <= 0; s_R >= 0, s_T >= 0; max over two adjacent faces per dir (felker18a app. A).
 		const double s_L = -std::max(a4_fspd_w0(i, j, k, 0), a4_fspd_w0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 0));
 		const double s_R = std::max(a4_fspd_w0(i, j, k, 1), a4_fspd_w0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 1));
 		const double s_B = -std::max(a4_fspd_w1(i, j, k, 0), a4_fspd_w1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2], 0));
 		const double s_T = std::max(a4_fspd_w1(i, j, k, 1), a4_fspd_w1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2], 1));
 
-		// EMF quadrants
+		// emf quadrants (balsara25a fig. 2): LB=E_z(LD), LT=E_z(LU), RT=E_z(RU), RB=E_z(RD).
 		const auto emf2_LB = a4_emf2_q0(i, j, k);
 		const auto emf2_LT = a4_emf2_q1(i, j, k);
 		const auto emf2_RT = a4_emf2_q2(i, j, k);
 		const auto emf2_RB = a4_emf2_q3(i, j, k);
 
-		// Magnetic field components
+		// open: b-field slot assignment (b0_T=m, b0_B=p) is inverted relative to balsara25a geometry (BxU/BxD);
+		// reverting to the geometrically consistent assignment breaks BrioWuShockTube. root cause unresolved.
 		const auto b0_T = a4_b0_m(i, j, k);
 		const auto b0_B = a4_b0_p(i, j, k);
 		const auto b1_R = a4_b1_m(i, j, k);
@@ -882,33 +883,33 @@ void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> a4_
 		double emf2_dstar = 0.0;
 
 		if (s_L != s_R && s_B != s_T) {
-			// eq. 3.2: x-directional HLL star states (T = upper, B = lower)
+			// balsara25a eq. 3.2: x-direction HLL star states.
 			emf2_T_star = (s_R * emf2_LT - s_L * emf2_RT) / (s_R - s_L) - (s_R * s_L) * (b1_R - b1_L) / (s_R - s_L);
 			emf2_B_star = (s_R * emf2_LB - s_L * emf2_RB) / (s_R - s_L) - (s_R * s_L) * (b1_R - b1_L) / (s_R - s_L);
-			// eq. 3.4: y-directional HLL star states (R = right, L = left)
+			// balsara25a eq. 3.4: y-direction HLL star states.
 			emf2_R_star = (s_T * emf2_RB - s_B * emf2_RT) / (s_T - s_B) + (s_T * s_B) * (b0_T - b0_B) / (s_T - s_B);
 			emf2_L_star = (s_T * emf2_LB - s_B * emf2_LT) / (s_T - s_B) + (s_T * s_B) * (b0_T - b0_B) / (s_T - s_B);
-			// eq. 3.6: double-star B fields
+			// balsara25a eq. 3.6: double-star b-field states.
 			b0_dstar = (s_T * b0_T - s_B * b0_B) / (s_T - s_B) + (emf2_LB - emf2_LT + emf2_RB - emf2_RT) / (2.0 * (s_T - s_B));
 			b1_dstar = (s_R * b1_R - s_L * b1_L) / (s_R - s_L) + (-emf2_LB - emf2_LT + emf2_RB + emf2_RT) / (2.0 * (s_R - s_L));
-			// eq. 3.7: E_z** via x-flux; eq. 3.8: E_z** via y-flux; final = average (last line of sec. 3)
+			// balsara25a eqs. 3.7 (x-flux) and 3.8 (y-flux); emf2_dstar = average of both.
 			const auto emf2_dstar_1 = -(s_R + s_L) * b1_dstar / 2.0 + (s_T * (emf2_LB + emf2_RB) - s_B * (emf2_LT + emf2_RT)) / (2.0 * (s_T - s_B)) -
 						s_T * s_B * (b0_B - b0_T) / (s_T - s_B) + (s_R * b1_R + s_L * b1_L) / 2.0;
 			const auto emf2_dstar_2 = (s_T + s_B) * b0_dstar / 2.0 + (s_R * (emf2_LB + emf2_LT) - s_L * (emf2_RB + emf2_RT)) / (2.0 * (s_R - s_L)) -
 						(s_T * b0_T + s_B * b0_B) / 2.0 - s_R * s_L * (b1_R - b1_L) / (s_R - s_L);
 			emf2_dstar = 0.5 * (emf2_dstar_1 + emf2_dstar_2);
 		} else {
-		    // LLF fallback when s_L==s_R or s_B==s_T (HLL denominator vanishes)
-			// eqs. 3.3, 3.5: LLF star states
+			// LLF fallback: used when s_L==s_R or s_B==s_T (HLL denominator vanishes).
+			// balsara25a eqs. 3.3 (x) and 3.5 (y): LLF star states.
 			emf2_T_star = 0.5 * ((emf2_LT + emf2_RT) + s_max * (b1_R - b1_L));
 			emf2_B_star = 0.5 * ((emf2_LB + emf2_RB) + s_max * (b1_R - b1_L));
 			emf2_R_star = 0.5 * ((emf2_RB + emf2_RT) - s_max * (b0_T - b0_B));
 			emf2_L_star = 0.5 * ((emf2_LB + emf2_LT) - s_max * (b0_T - b0_B));
-			// eq. 3.9: LLF double-star
+			// balsara25a eq. 3.9: LLF double-star emf.
 			emf2_dstar = 0.5 * ((emf2_RT + emf2_LT + emf2_LB + emf2_RB) / 2.0 + s_max * (b0_B - b0_T + b1_R - b1_L));
 		}
 
-		// Select state overlying the z-axis based on which speeds are zero (Fig. 4 of Balsara25a).
+		// select state at the z-edge based on which speeds are zero (balsara25a fig. 4).
 		if (s_L == 0.0 && s_B == 0.0) {
 			a4_emf2_ave(i, j, k) = emf2_LB;
 		} else if (s_R == 0.0 && s_B == 0.0) {
