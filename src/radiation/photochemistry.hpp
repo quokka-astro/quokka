@@ -24,10 +24,9 @@ namespace quokka::photochemistry
 AMREX_GPU_DEVICE void photochem_burner(burn_t &photochemstate, Real dt);
 
 template <typename problem_t>
-auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, const Real max_density_allowed, const Real min_density_allowed) -> bool
+auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &fc_mfs, const Real dt, const int stage,
+			   const Real max_density_allowed, const Real min_density_allowed) -> bool
 {
-	static_assert(!Physics_Traits<problem_t>::is_mhd_enabled,
-		      "MHD + radiation + photochemistry is not yet supported. Pass face-centered MultiFabs through computePhotoChemistry to implement it.");
 	AMREX_ASSERT(stage == 1 || stage == 2);
 	// Start off by assuming a successful burn.
 	int photochem_burn_success = 1;
@@ -58,6 +57,17 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &state = mf.array(iter);
 
+		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc{};
+		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+			cons_fc[0] = fc_mfs[0]->const_array(iter);
+#if (AMREX_SPACEDIM >= 2)
+			cons_fc[1] = fc_mfs[1]->const_array(iter);
+#endif
+#if (AMREX_SPACEDIM == 3)
+			cons_fc[2] = fc_mfs[2]->const_array(iter);
+#endif
+		}
+
 		amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			const Real rho = state(i, j, k, RadSystem<problem_t>::gasDensity_index);
 			// dont do photochemistry in cells with densities below the minimum density specified
@@ -73,8 +83,9 @@ auto computePhotoChemistry(amrex::MultiFab &mf, const Real dt, const int stage, 
 			const Real ymom = state(i, j, k, RadSystem<problem_t>::x2GasMomentum_index);
 			const Real zmom = state(i, j, k, RadSystem<problem_t>::x3GasMomentum_index);
 			const Real Ener = state(i, j, k, RadSystem<problem_t>::gasEnergy_index);
+			const Real Emag = ComputeCellCenteredMagneticEnergy<problem_t>(i, j, k, cons_fc);
 
-			const Real Eint = ::quokka::EOS<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener, 0.0);
+			const Real Eint = ::quokka::EOS<problem_t>::ComputeEintFromEgas(rho, xmom, ymom, zmom, Ener, Emag);
 
 			burn_t photochemstate;
 			photochemstate.success = true;

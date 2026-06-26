@@ -3245,7 +3245,17 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 		}
 #ifdef PHOTOCHEMISTRY
 		if (enablePhotoChemistry_ == 1) {
-			quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], dt_radiation, 1, max_density_allowed, min_density_allowed);
+			std::array<amrex::MultiFab const *, AMREX_SPACEDIM> fc_ptrs{};
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
+				fc_ptrs[0] = &state_new_fc_[lev][0];
+#if (AMREX_SPACEDIM >= 2)
+				fc_ptrs[1] = &state_new_fc_[lev][1];
+#endif
+#if (AMREX_SPACEDIM == 3)
+				fc_ptrs[2] = &state_new_fc_[lev][2];
+#endif
+			}
+			quokka::photochemistry::computePhotoChemistry<problem_t>(state_new_cc_[lev], fc_ptrs, dt_radiation, 1, max_density_allowed, min_density_allowed);
 		}
 #endif
 
