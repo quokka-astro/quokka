@@ -35,6 +35,8 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          additional_permissions: |
+            actions: read # Required for viewing workflow results
 
           # Optional: Customize the trigger phrase (default: @claude)
           # trigger_phrase: "/claude"
