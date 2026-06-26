@@ -87,13 +87,15 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellCenteredMagneticEnergy(int i
 									   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &fc) -> double
 {
 	if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-		const amrex::Real bx =
-		    0.5 * (fc[0](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) + fc[0](i + 1, j, k, Physics_Indices<problem_t>::mhdFirstIndex));
-		const amrex::Real by =
-		    0.5 * (fc[1](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) + fc[1](i, j + 1, k, Physics_Indices<problem_t>::mhdFirstIndex));
-		const amrex::Real bz =
-		    0.5 * (fc[2](i, j, k, Physics_Indices<problem_t>::mhdFirstIndex) + fc[2](i, j, k + 1, Physics_Indices<problem_t>::mhdFirstIndex));
-		return 0.5 * (bx * bx + by * by + bz * bz);
+		constexpr int mhdIdx = Physics_Indices<problem_t>::mhdFirstIndex;
+		const amrex::Real bx = 0.5 * (fc[0](i, j, k, mhdIdx) + fc[0](i + 1, j, k, mhdIdx));
+#if (AMREX_SPACEDIM >= 2)
+		const amrex::Real by = 0.5 * (fc[1](i, j, k, mhdIdx) + fc[1](i, j + 1, k, mhdIdx));
+#endif
+#if (AMREX_SPACEDIM == 3)
+		const amrex::Real bz = 0.5 * (fc[2](i, j, k, mhdIdx) + fc[2](i, j, k + 1, mhdIdx));
+#endif
+		return 0.5 * (AMREX_D_TERM(bx * bx, +by * by, +bz * bz));
 	}
 	return 0.0;
 }
