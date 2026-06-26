@@ -175,8 +175,8 @@ void MHDSystem<problem_t>::AverageEMF(amrex::Array4<amrex::Real> const &a4_emf2_
 	}
 }
 
-// EMF solver from Felker & Stone (2017)
-// uses cell-centered velocity and face-centered magnetic fields extrapolated to the cell-edge to compute the EMF
+// emf compute solver; Felker18a (Felker & Stone 2018, ApJS 237:24).
+// uses cell-centered velocity and face-centered magnetic fields extrapolated to the cell-edge.
 
 template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
@@ -403,8 +403,8 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 	}
 }
 
-// EMF solver Quokka variant (2026) of Felker & Stone (2017)
-// uses face-centered Riemann velocity and face-centered magnetic fields extrapolated to the cell-edge to compute the EMF
+// emf compute solver; Quokka (2026) variant of Felker18a.
+// uses face-centered Riemann velocity and face-centered magnetic fields extrapolated to the cell-edge.
 
 template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
@@ -542,9 +542,9 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 	}
 }
 
-// EMF solver Balsara (2025)
-// uses cell-centered velocity and face-centered magnetic fields averaged to cell-center to compute the EMF at cell center,
-// then extrapolate the EMF to the cell-edge
+// emf compute solver; Balsara25a (Balsara et al. 2025, ApJ 988:134b).
+// uses cell-centered velocity and face-centered magnetic fields averaged to cell-center to compute the emf,
+// then extrapolates to the cell-edge.
 
 template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
@@ -617,8 +617,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 	cc_mf_emf.FillBoundary(); // fill ghost cells
 	amrex::Gpu::streamSynchronize();
 
-	// now that EMF is calculated at cell center, we need to interpolate to cell edge
-	// we also need to get the magnetic field from the face to cell edge for the Balsara2025 or LondrilloDelZanna2004 solvers
+	// interpolate emf from cell-center to cell-edge; also move b-field from face to cell-edge for averaging solvers.
 
 	// In this part we distinguish between world (w:3), array (i:2), quandrant (q:4), and component (x:3) index-ing by using prefixes. We will
 	// use the prefix x- when the w- and i- indexes are the same.
@@ -749,8 +748,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 	}
 }
 
-// more complex emf solver: uses information about the fast wave speeds to do a weighted average of the quadrants
-// from: Londrillo & Del Zanna 2004, JCP, 195
+// emf averaging solver; LD2004 (Londrillo & Del Zanna 2004, JCP 195). uses fast wave speeds to weight the quadrant average.
 template <typename problem_t>
 void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(amrex::Array4<amrex::Real> a4_emf2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_emf_q,
 							    amrex::Box const &box_ec, std::array<int, 2> const &extrap_dirs,
@@ -783,7 +781,6 @@ void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(amrex::Array4<amrex:
 	const auto &a4_fspd_w1 = fspds[w1_comp];
 
 	amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		// 	// LondrilloDelZanna2004 scheme:
 		const double a0_m = std::max(a4_fspd_w0(i, j, k, 0), a4_fspd_w0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 0));
 		const double a0_p = std::max(a4_fspd_w0(i, j, k, 1), a4_fspd_w0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2], 1));
 		const double a1_m = std::max(a4_fspd_w1(i, j, k, 0), a4_fspd_w1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2], 0));
@@ -808,7 +805,7 @@ void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(amrex::Array4<amrex:
 		const double num1 = ((a0_p * a1_p) * emf2_q0 + (a0_m * a1_p) * emf2_q3) + ((a0_p * a1_m) * emf2_q1 + (a0_m * a1_m) * emf2_q2);
 		const double num2 = ((a0_p * a1_p) * emf2_q0 + (a0_p * a1_m) * emf2_q1) + ((a0_m * a1_p) * emf2_q3 + (a0_m * a1_m) * emf2_q2);
 
-		// 	// must be averaged for exact floating-point symmetry
+		// averaged for exact floating-point symmetry.
 		const double numerator = 0.5 * (num1 + num2);
 		const double denominator = (a0_m + a0_p) * (a1_m + a1_p);
 
