@@ -157,22 +157,82 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 
 auto problem_main() -> int
 {
-	quokka::richardson::applyQuietDefaults();
-
-	quokka::richardson::Parameters params{};
-	params.machine_precision_target = 2.0e-11; // default; set to 0 via setup.machine_precision_target to disable early exit.
-	params.nx_initial = 128;
-	params.nx_max = 2048; // default; override with setup.nx_max in the input file.
+	bool run_convergence = true;
+	bool run_sim = false;
+	double error_tol = 1.0e-8;
 	{
 		amrex::ParmParse const pp("setup");
-		pp.query("machine_precision_target", params.machine_precision_target);
-		pp.query("nx_max", params.nx_max);
-		pp.query("refine_n_dims", params.refine_n_dims);
+		pp.query("run_convergence", run_convergence);
+		pp.query("run_sim", run_sim);
+		pp.query("error_tol", error_tol);
 	}
-	params.expected_rate = 2.0;
-	params.tolerance = 0.3;
-	params.test_name = "Hydro Wave";
-	params.csv_filename = "hydro_wave_convergence.csv";
 
-	return quokka::richardson::run(params, [](int nx, int ny, int nz) { return runWaveTest(nx, ny, nz); });
+	int status = 0;
+
+	if (run_sim) {
+		const int ncomp_cc = Physics_Indices<WaveProblem>::nvarTotal_cc;
+		amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+		for (int n = 0; n < ncomp_cc; ++n) {
+			for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+				BCs_cc[n].setLo(i, amrex::BCType::int_dir);
+				BCs_cc[n].setHi(i, amrex::BCType::int_dir);
+			}
+		}
+
+		QuokkaSimulation<WaveProblem> sim(BCs_cc);
+		sim.cflNumber_ = 0.3;
+		sim.setInitialConditions();
+		auto [pos_exact, val_exact] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
+
+		sim.evolve();
+
+		auto [position, values] = fextract(sim.state_new_cc_[0], sim.geom[0], 0, 0.5);
+		const int nx_final = static_cast<int>(position.size());
+
+		amrex::Real err_sq = 0.;
+		for (int n = 0; n < QuokkaSimulation<WaveProblem>::nvars_; ++n) {
+			if (n == HydroSystem<WaveProblem>::internalEnergy_index) {
+				continue;
+			}
+			amrex::Real dU_k = 0.;
+			for (int i = 0; i < nx_final; ++i) {
+				const amrex::Real U_k0 = val_exact.at(n)[i];
+				const amrex::Real U_k1 = values.at(n)[i];
+				dU_k += std::abs(U_k1 - U_k0) / static_cast<double>(nx_final);
+			}
+			err_sq += dU_k * dU_k;
+		}
+		const amrex::Real epsilon = std::sqrt(err_sq);
+
+		amrex::Print() << std::format("\nrun_sim error norm = {:.6e}  (tol = {:.6e})\n", static_cast<double>(epsilon), error_tol);
+		if (epsilon > error_tol) {
+			status = 1;
+		}
+	}
+
+	if (run_convergence) {
+		quokka::richardson::applyQuietDefaults();
+
+		quokka::richardson::Parameters params{};
+		params.machine_precision_target = 2.0e-11;
+		params.nx_initial = 128;
+		params.nx_max = 2048;
+		{
+			amrex::ParmParse const pp("setup");
+			pp.query("nx_start", params.nx_initial);
+			pp.query("nx_max", params.nx_max);
+			pp.query("machine_precision_target", params.machine_precision_target);
+			pp.query("refine_n_dims", params.refine_n_dims);
+		}
+		params.expected_rate = 2.0;
+		params.tolerance = 0.3;
+		params.test_name = "Hydro Wave";
+		params.csv_filename = "hydro_wave_convergence.csv";
+
+		if (quokka::richardson::run(params, [](int nx, int ny, int nz) { return runWaveTest(nx, ny, nz); }) != 0) {
+			status = 1;
+		}
+	}
+
+	return status;
 }

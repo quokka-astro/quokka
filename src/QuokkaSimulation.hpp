@@ -322,6 +322,7 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 	void createInitialCICRadParticles() override;
 	void createInitialStochasticStellarPopParticles() override;
 	void createInitialSinkParticles() override;
+	void createInitialStarParticles() override;
 	void createInitialTestParticles() override;
 #endif // AMREX_SPACEDIM == 3
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int ncycle) override;
@@ -649,6 +650,16 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		if (coolingTableType_.empty()) {
 			coolingTableType_ = "resampled";
 		}
+#ifdef PHOTOCHEMISTRY
+		// Resampled cooling and photoionization chemistry both model H thermochemistry
+		// (heating, recombination cooling, collisional ionization cooling). Enabling both
+		// simultaneously double-counts these terms. See docs/markdown/photoionization.md §4.1.
+		if ((enablePhotoChemistry_ == 1) && (enableCooling_ == 1)) {
+			amrex::Abort("photochemistry.enabled = 1 and cooling.enabled = 1 cannot be used together. "
+				     "Photoionization handles its own H thermochemistry; the resampled cooling table "
+				     "would double-count those terms. See docs/markdown/photoionization.md.");
+		}
+#endif
 		if ((enableCooling_ == 1) || (alwaysReadTables == 1)) {
 			hpp.query("hdf5_data_file", coolingTableFilename_);
 			if (coolingTableType_ == "resampled") {
@@ -992,6 +1003,13 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialSin
 	// Sink particles are created on-the-fly from fluid cells. The user can optionally implement this function to create particles at the
 	// beginning of the simulation.
 	// note: an implementation is only effective if Sink_particles are used
+}
+
+template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialStarParticles()
+{
+	const BL_PROFILE("QuokkaSimulation::createInitialStarParticles()");
+	// Default: no Star particles. A problem overrides this to place particles at t=0.
+	// Only effective when ParticleSwitch::Star is enabled for the problem.
 }
 
 template <typename problem_t> void QuokkaSimulation<problem_t>::createInitialTestParticles()
