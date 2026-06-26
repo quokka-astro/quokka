@@ -19,6 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
           fetch-depth: 1
 
       - uses: anthropics/claude-code-action@v1
@@ -27,7 +28,7 @@ jobs:
           track_progress: true # ✨ Enables tracking comments
           prompt: |
             REPO: ${{ github.repository }}
-            PR NUMBER: ${{ github.event.pull_request.number }}
+            PR NUMBER: ${{ github.event.issue.number }}
 
             You are reviewing a pull request to Quokka, a radiation magnetohydrodynamics code
             built on AMReX. Quokka uses C++20 with GPU support (CUDA/HIP) and a single codebase
