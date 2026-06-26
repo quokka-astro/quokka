@@ -3346,10 +3346,10 @@ void QuokkaSimulation<problem_t>::advanceRadiationForwardEuler(int lev, amrex::R
 		auto const &stateNew_cc = state_out.array(iter);
 		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc_arr;
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			cons_fc_arr[0] = state_new_fc_[lev][0].const_array(iter);
-			cons_fc_arr[1] = state_new_fc_[lev][1].const_array(iter);
+			cons_fc_arr[0] = state_old_fc_[lev][0].const_array(iter);
+			cons_fc_arr[1] = state_old_fc_[lev][1].const_array(iter);
 #if (AMREX_SPACEDIM == 3)
-			cons_fc_arr[2] = state_new_fc_[lev][2].const_array(iter);
+			cons_fc_arr[2] = state_old_fc_[lev][2].const_array(iter);
 #endif
 		}
 		auto [fluxArrays, fluxDiffusiveArrays] = computeRadiationFluxes(stateOld_cc, indexRange, ncompHyperbolic_, dx, cons_fc_arr);
@@ -3406,10 +3406,10 @@ void QuokkaSimulation<problem_t>::advanceRadiationMidpointRK2(int lev, amrex::Re
 		auto const &stateNew_cc = state_new_cc_[lev].array(iter);
 		std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc_arr;
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
-			cons_fc_arr[0] = state_new_fc_[lev][0].const_array(iter);
-			cons_fc_arr[1] = state_new_fc_[lev][1].const_array(iter);
+			cons_fc_arr[0] = state_old_fc_[lev][0].const_array(iter);
+			cons_fc_arr[1] = state_old_fc_[lev][1].const_array(iter);
 #if (AMREX_SPACEDIM == 3)
-			cons_fc_arr[2] = state_new_fc_[lev][2].const_array(iter);
+			cons_fc_arr[2] = state_old_fc_[lev][2].const_array(iter);
 #endif
 		}
 		auto [fluxArraysOld, fluxDiffusiveArraysOld] = computeRadiationFluxes(stateOld_cc, indexRange, ncompHyperbolic_, dx, cons_fc_arr);
