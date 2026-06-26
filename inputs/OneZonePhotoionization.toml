@@ -46,6 +46,8 @@ integrator.rtol_spec     = 1e-14
 integrator.rtol_rad_num  = 1e-14
 integrator.rtol_enuc     = 1e-14
 
+integrator.rosenbrock_tableau = 3
+
 network.energy_switch = 0
 network.collisional_ionization_switch = 0
 network.recombination_temperature_dependent = 0
