@@ -1,58 +1,34 @@
 name: 🤖 Claude Code Review
-
 on:
-  # Manual trigger
-  workflow_dispatch:
-    inputs:
-      pr_number:
-        description: 'PR number to review'
-        required: true
-        type: string
-
-  # Trigger on specific comment containing '/claude-review'
   issue_comment:
     types: [created]
 
-  # Trigger when 'review-requested' label is added to PR
-  pull_request:
-    types: [labeled]
-
 jobs:
-  claude-review:
-    # Only run if:
-    # 1. Manual trigger, OR
-    # 2. Comment contains '/claude-review', OR
-    # 3. Label 'review-requested' was added
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'issue_comment' &&
-       github.event.issue.pull_request &&
-       contains(github.event.comment.body, '/claude-review')) ||
-      (github.event_name == 'pull_request' &&
-       github.event.action == 'labeled' &&
-       github.event.label.name == 'review-requested')
-
+  review:
+    # Only run for PR comments and when the body contains our trigger command
+    if: >
+      github.event.issue.pull_request != null &&
+      (
+        contains(github.event.comment.body, '/claude-review')
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
-      issues: write
       id-token: write
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+      - uses: actions/checkout@v6
         with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
           fetch-depth: 1
 
-      - name: Run Claude Code Review
-        id: claude-review
-        uses: anthropics/claude-code-action@v1
+      - uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-
+          track_progress: true # ✨ Enables tracking comments
           prompt: |
-            ${{ github.event_name == 'workflow_dispatch' && format('Review PR #{0} in {1}.', github.event.inputs.pr_number, github.repository) || '' }}
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.issue.number }}
 
             You are reviewing a pull request to Quokka, a radiation magnetohydrodynamics code
             built on AMReX. Quokka uses C++20 with GPU support (CUDA/HIP) and a single codebase
@@ -104,15 +80,9 @@ jobs:
             - Test variants (same binary, different `.toml`) are additional `add_test` entries in the
               same `CMakeLists.txt`, not separate executables.
 
-            ## Output
-            - Post an overall summary as a top-level PR comment.
-            - Use inline comments for specific line-level issues.
-            - Be constructive: explain why something is a problem and suggest a concrete fix.
-            - Do not speculate about runtime behaviour you cannot observe.
+            Provide detailed feedback using inline comments for specific issues.
 
-          use_sticky_comment: true
-          show_full_output: true
+            Post an overall summary as a top-level PR comment.
 
           claude_args: |
-            --model claude-opus-4-7
-            --max-turns 30
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"

@@ -65,7 +65,7 @@ template <> struct Physics_Traits<DiskGalaxy> : DefaultPhysicsTraits {
 	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars
 };
 
-template <> struct Particle_Traits<DiskGalaxy> {
+template <> struct Particle_Traits<DiskGalaxy> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | ParticleSwitch::StochasticStellarPop;
 };
 

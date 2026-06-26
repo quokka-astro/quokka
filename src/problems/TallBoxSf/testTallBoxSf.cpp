@@ -56,7 +56,7 @@ template <> struct SimulationData<TheProblem> {
 	Real warm_T = 2.0e4; // K
 };
 
-template <> struct Particle_Traits<TheProblem> {
+template <> struct Particle_Traits<TheProblem> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
 };
 

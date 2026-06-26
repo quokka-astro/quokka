@@ -46,7 +46,7 @@ namespace
 bool density_refinement_enabled = true; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 } // namespace
 
-template <> struct Particle_Traits<SubcycleProblem> {
+template <> struct Particle_Traits<SubcycleProblem> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Sink;
 };
 
