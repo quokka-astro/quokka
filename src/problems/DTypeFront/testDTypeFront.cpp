@@ -191,6 +191,34 @@ auto compute_equilibrium_temperature_ionized(double n_e) -> double
 	return 0.5 * (T_lo + T_hi);
 }
 
+#ifdef DTYPEFRONT_USE_ROSENBROCK
+auto rosenbrock_tableau_name(int tableau) -> char const *
+{
+	switch (tableau) {
+	case 0:
+		return "Rodas5P";
+	case 1:
+		return "Rodas4P";
+	case 2:
+		return "Rodas3P";
+	case 3:
+		return "ROS2S";
+	default:
+		return "unknown";
+	}
+}
+#endif
+
+void print_microphysics_integrator()
+{
+#ifdef DTYPEFRONT_USE_ROSENBROCK
+	amrex::Print() << "DTypeFront microphysics integrator: Rosenbrock (Rosenbrock tableau " << integrator_rp::rosenbrock_tableau << ": "
+		       << rosenbrock_tableau_name(integrator_rp::rosenbrock_tableau) << ")\n";
+#else
+	amrex::Print() << "DTypeFront microphysics integrator: VODE\n";
+#endif
+}
+
 } // namespace
 
 AMREX_GPU_HOST_DEVICE auto wendland_c2(amrex::Real r) -> amrex::Real
@@ -398,6 +426,7 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<DTypeFront> sim;
+	print_microphysics_integrator();
 
 	// initialize
 	sim.setInitialConditions();
