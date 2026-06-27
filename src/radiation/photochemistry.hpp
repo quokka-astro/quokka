@@ -45,6 +45,14 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 	const int firstChemFyIndex = firstChemFxIndex + 1;
 	const int firstChemFzIndex = firstChemFyIndex + 1;
 
+	// Gate the O(v/c) radiation-pressure work term on beta_order==1 (the same
+	// compile-time switch used in the regular RHD source terms, see
+	// radiation_system.hpp:41 and source_terms_multi_group.hpp:455-577) and on
+	// hydrodynamics being enabled. The work term activates only for problems that
+	// have requested O(v/c) radiation coupling; problems with beta_order==0
+	// (e.g. DTypeFront, OneZonePhotoionization) are unaffected.
+	constexpr bool do_vc_work = (RadSystem_Traits<problem_t>::beta_order == 1) && Physics_Traits<problem_t>::is_hydro_enabled;
+
 	amrex::GpuArray<Real, NumChemBands> chemBandQuanta{};
 	amrex::GpuArray<Real, NumChemBands> invChemBandQuanta{};
 	for (int nn = 0; nn < NumChemBands; ++nn) {
@@ -98,6 +106,18 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 				photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] =
 				    state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) * invChemBandQuanta[nn];
 				photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn] = 1.0_rt;
+			}
+
+			// Cache the pre-burn chem-band radiation flux (energy units) so the O(v/c) work
+			// term can use the VODE-attenuated flux difference -(F_after - F_before) to
+			// deposit the absorbed photon momentum to the gas.
+			amrex::GpuArray<amrex::GpuArray<Real, 3>, NumChemBands> frad_before{};
+			if constexpr (do_vc_work) {
+				for (int nn = 0; nn < NumChemBands; ++nn) {
+					frad_before[nn][0] = state(i, j, k, firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn);
+					frad_before[nn][1] = state(i, j, k, firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn);
+					frad_before[nn][2] = state(i, j, k, firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn);
+				}
 			}
 			photochemstate.rho = rho;
 			photochemstate.e = Eint / rho;
@@ -155,6 +175,48 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			const Real dEint = (photochemstate.e * photochemstate.rho) - Eint;
 			state(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index) += dEint * energy_update_factor;
 			state(i, j, k, RadSystem<problem_t>::gasEnergy_index) += dEint * energy_update_factor;
+
+			// O(v/c) radiation-pressure work term: deposit the photon momentum absorbed
+			// during the burn to the gas. The matching RHD source-term path removes the
+			// kinetic-energy gain from internal energy so that the gas total energy remains
+			// consistent with the updated momentum.
+			if constexpr (do_vc_work) {
+				const Real c_light_local = C::c_light;
+				const Real inv_c2 = 1.0_rt / (c_light_local * c_light_local);
+
+				// dP = -(F_after - F_before) / c^2, summed over chem bands. The absorbed
+				// photon momentum is tied to the physical photon flux F = c E; the reduced
+				// speed of light only changes the absorption rate used by the chemistry
+				// solve.
+				Real dPx = 0.0_rt;
+				Real dPy = 0.0_rt;
+				Real dPz = 0.0_rt;
+				for (int nn = 0; nn < NumChemBands; ++nn) {
+					const Real Fx_after = state(i, j, k, firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn);
+					const Real Fy_after = state(i, j, k, firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn);
+					const Real Fz_after = state(i, j, k, firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn);
+					dPx += -(Fx_after - frad_before[nn][0]) * inv_c2;
+					dPy += -(Fy_after - frad_before[nn][1]) * inv_c2;
+					dPz += -(Fz_after - frad_before[nn][2]) * inv_c2;
+				}
+
+				const Real xmom_new = xmom + dPx;
+				const Real ymom_new = ymom + dPy;
+				const Real zmom_new = zmom + dPz;
+				state(i, j, k, RadSystem<problem_t>::x1GasMomentum_index) = xmom_new;
+				state(i, j, k, RadSystem<problem_t>::x2GasMomentum_index) = ymom_new;
+				state(i, j, k, RadSystem<problem_t>::x3GasMomentum_index) = zmom_new;
+
+				// Ekin per volume = sum_i (mom_i^2) / (2 * rho). Decrease internal energy
+				// by dEkin so the kinetic gain is balanced, then recompute total gas energy
+				// from the updated conserved fields.
+				const Real Ekin_before = (xmom * xmom + ymom * ymom + zmom * zmom) / (2.0_rt * rho);
+				const Real Ekin_after = (xmom_new * xmom_new + ymom_new * ymom_new + zmom_new * zmom_new) / (2.0_rt * rho);
+				const Real dEkin = Ekin_after - Ekin_before;
+				state(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index) -= dEkin * energy_update_factor;
+				state(i, j, k, RadSystem<problem_t>::gasEnergy_index) = ::quokka::EOS<problem_t>::ComputeEgasFromEint(
+				    rho, xmom_new, ymom_new, zmom_new, state(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index), Emag);
+			}
 		});
 
 #ifdef AMREX_USE_HIP
