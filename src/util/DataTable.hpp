@@ -755,16 +755,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			data_tables[out_idx] = data_h_[out_idx]->const_table();
 		}
 
-		DataTableGpuConst<Ndim, Nout, oob_policy> tables{
-		    coord_tables,
-		    data_tables,
-		    coord_min_,
-		    coord_max_,
-		    spacing_types_,
-		    dcoord_,
-		    sizes_,
-		    output_spacing_
-		};
+		DataTableGpuConst<Ndim, Nout, oob_policy> tables{coord_tables,	 data_tables, coord_min_, coord_max_,
+								 spacing_types_, dcoord_,     sizes_,	  output_spacing_};
 		return tables;
 	}
 
