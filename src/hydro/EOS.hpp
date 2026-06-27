@@ -9,7 +9,6 @@
 
 #include <cmath>
 #include <optional>
-#include <tuple>
 
 #include "util/Optional.hpp"
 
@@ -73,6 +72,16 @@ template <typename problem_t> class EOS
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto ComputeIsothermalSoundSpeed(amrex::Real rho, amrex::Real Pressure) -> amrex::Real;
 
+	// Compute gas internal energy from gas total energy (Eint + Ekin, NOT including B field).
+	// magnetic_energy (0.5 * B^2) is explicitly required: pass 0.0 for non-MHD problems.
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto ComputeEintFromEgas(double rho, double mx, double my, double mz, double Etot, double magnetic_energy)
+	    -> double;
+
+	// Compute gas total energy (Eint + Ekin, NOT including B field) from gas internal energy.
+	// magnetic_energy (0.5 * B^2) is explicitly required: pass 0.0 for non-MHD problems.
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto ComputeEgasFromEint(double rho, double mx, double my, double mz, double Eint, double magnetic_energy)
+	    -> double;
+
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma; // needed for HLLD solver
 
 	static constexpr amrex::Real boltzmann_constant_ = []() constexpr {
@@ -97,7 +106,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeTgasFromEin
 	// return temperature for an ideal gas given density and internal energy
 	amrex::Real Tgas = NAN; // NOLINT(cppcoreguidelines-init-variables)
 
-#ifdef CHEMISTRY
+#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 	eos_t chemstate;
 	chemstate.rho = rho;
 	chemstate.e = Eint / rho;
@@ -139,7 +148,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromTga
 	// return internal energy density given density and temperature
 	amrex::Real Eint = NAN; // NOLINT(cppcoreguidelines-init-variables)
 
-#ifdef CHEMISTRY
+#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 	eos_t chemstate;
 	chemstate.rho = rho;
 	// Define and initialize Tgas here
@@ -182,7 +191,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromPre
 	// return internal energy density given density and pressure
 	amrex::Real Eint = NAN; // NOLINT(cppcoreguidelines-init-variables)
 
-#ifdef CHEMISTRY
+#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 	eos_t chemstate;
 	chemstate.rho = rho;
 	chemstate.p = Pressure;
@@ -223,7 +232,7 @@ EOS<problem_t>::ComputeEintTempDerivative(const amrex::Real rho, const amrex::Re
 	// compute derivative of internal energy w/r/t temperature, given density and temperature
 	amrex::Real dEint_dT = NAN;
 
-#ifdef CHEMISTRY
+#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 	amrex::ignore_unused(Tgas);
 	eos_t chemstate;
 	chemstate.rho = rho;
@@ -274,7 +283,7 @@ EOS<problem_t>::ComputeOtherDerivatives(const amrex::Real rho, const amrex::Real
 	// fundamental derivative
 	amrex::Real G = NAN;
 
-#ifdef CHEMISTRY
+#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 	eos_t chemstate;
 	chemstate.rho = rho;
 	chemstate.p = P;
@@ -331,7 +340,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputePressure(am
 		P = rho * EOS_Traits<problem_t>::cs_isothermal * EOS_Traits<problem_t>::cs_isothermal;
 		return P;
 	}
-#ifdef CHEMISTRY
+#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 	eos_t chemstate;
 	chemstate.rho = rho;
 	chemstate.e = Eint / rho;
@@ -384,7 +393,7 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeSoundSpeed(
 		return cs;
 	}
 
-#ifdef CHEMISTRY
+#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 	eos_t chemstate;
 	chemstate.rho = rho;
 	chemstate.p = Pressure;
@@ -436,6 +445,24 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeIsothermalS
 	}
 
 	return cs;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromEgas(const double rho, const double mx, const double my, const double mz, const double Etot,
+							       const double magnetic_energy) -> double
+{
+	const double Ekin = 0.5 * (mx * mx + my * my + mz * mz) / rho;
+	const double Eint = Etot - Ekin - magnetic_energy;
+	AMREX_ASSERT_WITH_MESSAGE(Eint > 0., "Gas internal energy is not positive!");
+	return Eint;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEgasFromEint(const double rho, const double mx, const double my, const double mz, const double Eint,
+							       const double magnetic_energy) -> double
+{
+	const double Ekin = 0.5 * (mx * mx + my * my + mz * mz) / rho;
+	return Eint + Ekin + magnetic_energy;
 }
 
 } // namespace quokka

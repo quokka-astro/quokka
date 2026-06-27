@@ -1,0 +1,55 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  [0.0, 0.0, 0.0]
+geometry.prob_hi     =  [100000000000.0, 100000000000.0, 100000000000.0]
+quokka.bc = ["periodic", "periodic", "periodic"]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 0       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = [8, 8, 8]
+amr.max_level       = 0     # number of levels = max_level + 1
+max_timesteps = 500000
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 0
+
+photochemistry.enabled = 1
+integrator.use_number_densities = 1
+integrator.do_species_clip = 0
+integrator.jacobian = 1
+integrator.renormalize_abundances = 0
+integrator.subtract_internal_energy = 0
+
+photoionization.primary_species_1 = 1e-10
+photoionization.primary_species_2 = 1e2
+photoionization.primary_species_3 = 1e-10
+photoionization.tend = 10000
+photoionization.n_photon = 5e3
+photoionization.temperature = 1e3
+
+# Validation test against Julia reference at 1e-6 L1 error tolerance.
+# Use very tight tolerances (effectively pure relative) to match the reference.
+integrator.atol_spec                     = 1e-14
+integrator.atol_enuc                     = 1e-14
+integrator.atol_rad_num                  = 1e-14
+integrator.species_failure_tolerance     = 1e-14    # cm^-3; matches atol_spec — VODE internal step guard
+integrator.radiation_failure_tolerance   = 0.05     # cm^-3; N_gamma guard, must exceed atol_rad_num
+
+integrator.rtol_spec     = 1e-14
+integrator.rtol_rad_num  = 1e-14
+integrator.rtol_enuc     = 1e-14
+
+integrator.rosenbrock_tableau = 3
+
+network.energy_switch = 1
+network.KI_heating_switch = 0
+network.KI_cooling_switch = 0
+network.ion_ff_cooling_switch = 0
+network.collisional_ionization_switch = 0

@@ -23,6 +23,9 @@ struct SGProblem {
 // Multi-group problem
 struct MGproblem {
 };
+// Multi-group problem with MHD
+struct MGproblemMHD {
+};
 
 // constexpr int n_groups_ = 1;
 // constexpr amrex::GpuArray<double, n_groups_ + 1> rad_boundaries_{0., inf};
@@ -93,19 +96,10 @@ template <> struct quokka::EOS_Traits<SGProblem> {
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct Physics_Traits<SGProblem> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<SGProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
-	// face-centred
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1;
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 template <> struct RadSystem_Traits<SGProblem> {
@@ -159,19 +153,12 @@ template <> struct quokka::EOS_Traits<MGproblem> {
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct Physics_Traits<MGproblem> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<MGproblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
-	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = n_groups_;
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 template <> struct RadSystem_Traits<MGproblem> {
@@ -237,6 +224,102 @@ template <> void QuokkaSimulation<MGproblem>::setInitialConditionsOnGrid(quokka:
 		state_cc(i, j, k, RadSystem<MGproblem>::x3GasMomentum_index) = 0.;
 	});
 }
+
+// MGproblemMHD: same multigroup radiation test with a tiny constant magnetic field.
+// The B field is much smaller than the gas pressure so the radiation-diffusion
+// result is unchanged; the purpose is to exercise the MHD + radiation code path.
+// MHD is only supported in 3D builds.
+#if (AMREX_SPACEDIM == 3)
+constexpr double B0 = 1.0e3; // magnetic field strength (Quokka internal units, Emag = 0.5*B0^2)
+
+template <> struct quokka::EOS_Traits<MGproblemMHD> {
+	static constexpr double mean_molecular_weight = mu;
+	static constexpr double gamma = 5. / 3.;
+};
+
+template <> struct Physics_Traits<MGproblemMHD> : DefaultPhysicsTraits {
+	static constexpr bool is_hydro_enabled = true;
+	static constexpr bool is_radiation_enabled = true;
+	static constexpr bool is_mhd_enabled = true;
+	static constexpr int nGroups = n_groups_;
+};
+
+template <> struct RadSystem_Traits<MGproblemMHD> {
+	static constexpr double c_hat_over_c = 1.0;
+	static constexpr double Erad_floor = erad_floor;
+	static constexpr double energy_unit = h_planck;
+	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;
+	static constexpr int beta_order = 1;
+	static constexpr OpacityModel opacity_model = OpacityModel::PPL_opacity_fixed_slope_spectrum;
+};
+
+template <>
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto
+RadSystem<MGproblemMHD>::DefineOpacityExponentsAndLowerValues(amrex::GpuArray<double, nGroups_ + 1> const /* rad_boundaries */, const double /* rho */,
+							      const double /* Tgas */) -> amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2>
+{
+	amrex::GpuArray<double, nGroups_ + 1> exponents{};
+	amrex::GpuArray<double, nGroups_ + 1> kappa_lower{};
+	for (int g = 0; g < nGroups_ + 1; ++g) {
+		exponents[g] = 0.;
+		kappa_lower[g] = kappa0;
+	}
+	amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> const exponents_and_values{exponents, kappa_lower};
+	return exponents_and_values;
+}
+
+template <> void QuokkaSimulation<MGproblemMHD>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+{
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const dx = grid_elem.dx_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo = grid_elem.prob_lo_;
+	amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_hi = grid_elem.prob_hi_;
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const amrex::Array4<double> &state_cc = grid_elem.array_;
+
+	amrex::Real const x0 = prob_lo[0] + 0.5 * (prob_hi[0] - prob_lo[0]);
+
+	const auto radBoundaries_g = RadSystem_Traits<MGproblemMHD>::radBoundaries;
+	constexpr double Emag0 = 0.5 * B0 * B0;
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		amrex::Real const x = prob_lo[0] + (i + static_cast<amrex::Real>(0.5)) * dx[0];
+		const double Trad = compute_initial_Tgas(x - x0);
+		const double rho = compute_exact_rho(x - x0);
+		const double Egas = quokka::EOS<MGproblemMHD>::ComputeEintFromTgas(rho, Trad);
+
+		auto Erad_g = RadSystem<MGproblemMHD>::ComputeThermalRadiationMultiGroup(Trad, radBoundaries_g);
+
+		for (int g = 0; g < Physics_Traits<MGproblemMHD>::nGroups; ++g) {
+			state_cc(i, j, k, RadSystem<MGproblemMHD>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g) = Erad_g[g];
+			state_cc(i, j, k, RadSystem<MGproblemMHD>::x1RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 4. / 3. * v0 * Erad_g[g];
+			state_cc(i, j, k, RadSystem<MGproblemMHD>::x2RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+			state_cc(i, j, k, RadSystem<MGproblemMHD>::x3RadFlux_index + Physics_NumVars::numRadVarsPerGroup * g) = 0;
+		}
+
+		state_cc(i, j, k, RadSystem<MGproblemMHD>::gasEnergy_index) = Egas + 0.5 * rho * v0 * v0 + Emag0;
+		state_cc(i, j, k, RadSystem<MGproblemMHD>::gasDensity_index) = rho;
+		state_cc(i, j, k, RadSystem<MGproblemMHD>::gasInternalEnergy_index) = Egas;
+		state_cc(i, j, k, RadSystem<MGproblemMHD>::x1GasMomentum_index) = v0 * rho;
+		state_cc(i, j, k, RadSystem<MGproblemMHD>::x2GasMomentum_index) = 0.;
+		state_cc(i, j, k, RadSystem<MGproblemMHD>::x3GasMomentum_index) = 0.;
+	});
+}
+
+template <> void QuokkaSimulation<MGproblemMHD>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
+{
+	const amrex::Box &indexRange = grid_elem.indexRange_;
+	const amrex::Array4<double> &state_fc = grid_elem.array_;
+	const quokka::direction dir = grid_elem.dir_;
+
+	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		if (dir == quokka::direction::x) {
+			state_fc(i, j, k, Physics_Indices<MGproblemMHD>::mhdFirstIndex) = B0;
+		} else {
+			state_fc(i, j, k, Physics_Indices<MGproblemMHD>::mhdFirstIndex) = 0.;
+		}
+	});
+}
+#endif // AMREX_SPACEDIM == 3
 
 auto problem_main() -> int
 {
@@ -372,6 +455,59 @@ auto problem_main() -> int
 	}
 	// END OF PROBLEM 2
 
+#if (AMREX_SPACEDIM == 3)
+	// Problem 3: advecting pulse with MHD + multigroup radiation
+	auto BCs_cc3 = quokka::BC<MGproblemMHD>(quokka::BCType::foextrap, quokka::BCType::int_dir, quokka::BCType::int_dir);
+	auto BCs_fc3 = quokka::BC_fc<MGproblemMHD>(quokka::BCType::mathematicalBndryTypes::foextrap, quokka::BCType::mathematicalBndryTypes::periodic,
+						   quokka::BCType::mathematicalBndryTypes::periodic);
+
+	QuokkaSimulation<MGproblemMHD> sim3(BCs_cc3, BCs_fc3);
+
+	sim3.radiationReconstructionOrder_ = 3; // PPM
+	sim3.stopTime_ = max_time;
+	sim3.radiationCflNumber_ = CFL_number;
+	sim3.cflNumber_ = CFL_number;
+	sim3.maxDt_ = max_dt;
+	sim3.maxTimesteps_ = max_timesteps;
+	sim3.plotfileInterval_ = -1;
+
+	sim3.setInitialConditions();
+	sim3.evolve();
+
+	auto [position3, values3] = fextract(sim3.state_new_cc_[0], sim3.Geom(0), 0, 0.0);
+	const int nx3 = static_cast<int>(position3.size());
+
+	std::vector<double> Trad3(nx3);
+	std::vector<double> Tgas3(nx3);
+
+	for (int i = 0; i < nx3; ++i) {
+		int index_ = 0;
+		if (shift >= 0) {
+			if (i < shift) {
+				index_ = nx2 - shift + i;
+			} else {
+				index_ = i - shift;
+			}
+		} else {
+			if (i <= nx2 - 1 + shift) {
+				index_ = i - shift;
+			} else {
+				index_ = i - (nx2 + shift);
+			}
+		}
+		double Erad_t = 0.0;
+		for (int g = 0; g < Physics_Traits<MGproblemMHD>::nGroups; ++g) {
+			Erad_t += values3.at(RadSystem<MGproblemMHD>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * g)[i];
+		}
+		const auto Trad_t = std::pow(Erad_t / a_rad, 1. / 4.);
+		const auto rho_t = values3.at(RadSystem<MGproblemMHD>::gasDensity_index)[i];
+		const auto Egas = values3.at(RadSystem<MGproblemMHD>::gasInternalEnergy_index)[i];
+		Trad3.at(index_) = Trad_t;
+		Tgas3.at(index_) = quokka::EOS<MGproblemMHD>::ComputeTgasFromEint(rho_t, Egas);
+	}
+	// END OF PROBLEM 3
+#endif // AMREX_SPACEDIM == 3
+
 	// compute error norm
 	double err_norm = 0.;
 	double sol_norm = 0.;
@@ -379,7 +515,14 @@ auto problem_main() -> int
 		err_norm += std::abs(Tgas[i] - Trad[i]);
 		err_norm += std::abs(Trad2[i] - Trad[i]);
 		err_norm += std::abs(Tgas2[i] - Trad[i]);
+#if (AMREX_SPACEDIM == 3)
+		err_norm += std::abs(Trad3[i] - Trad[i]);
+		err_norm += std::abs(Tgas3[i] - Trad[i]);
+#endif
 		sol_norm += std::abs(Trad[i]) * 3.0;
+#if (AMREX_SPACEDIM == 3)
+		sol_norm += std::abs(Trad[i]) * 2.0;
+#endif
 	}
 	const double error_tol = 0.006;
 	const double rel_error = err_norm / sol_norm;

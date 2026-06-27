@@ -143,6 +143,23 @@ template <typename problem_t>
 struct RadSystem_Has_Opacity_Model<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::opacity_model)>> : std::true_type {
 };
 
+// Use SFINAE to check if ChemBands() is defined in RadSystem_Traits<problem_t> (indicates photoionization group)
+template <typename problem_t, typename = void> struct RadSystem_Has_ChemBands : std::false_type {
+};
+
+template <typename problem_t> struct RadSystem_Has_ChemBands<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::ChemBands())>> : std::true_type {
+};
+
+// Get NChemBands (number of chemistry frequency bands) from RadSystem_Traits<problem_t>.
+// Returns 0 if ChemBands() is not defined (no photoionization groups).
+template <typename problem_t, typename = void> struct RadSystem_NChemBands {
+	static constexpr int value = 0;
+};
+
+template <typename problem_t> struct RadSystem_NChemBands<problem_t, std::void_t<decltype(RadSystem_Traits<problem_t>::ChemBands())>> {
+	static constexpr int value = static_cast<int>(decltype(RadSystem_Traits<problem_t>::ChemBands())::size()) - 1;
+};
+
 /// Class for the radiation moment equations
 ///
 template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_t>
@@ -240,8 +257,12 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static_assert(!(nGroups_ < 3 && opacity_model_ == OpacityModel::PPL_opacity_full_spectrum), // NOLINT
 		      "PPL_opacity_full_spectrum requires at least 3 photon groups.");
 
-	static constexpr double mean_molecular_mass_ = quokka::EOS_Traits<problem_t>::mean_molecular_weight;
-	static constexpr double gamma_ = quokka::EOS_Traits<problem_t>::gamma;
+	// Assertion: mixed thermal+chemical band configurations are untested
+	static_assert(RadSystem_NChemBands<problem_t>::value == 0 || RadSystem_NChemBands<problem_t>::value == nGroups_,
+		      "Mixed thermal and chemical radiation bands are not supported.");
+
+	static constexpr double mean_molecular_mass_ = ::quokka::EOS_Traits<problem_t>::mean_molecular_weight;
+	static constexpr double gamma_ = ::quokka::EOS_Traits<problem_t>::gamma;
 
 	static constexpr amrex::Real boltzmann_constant_ = []() constexpr {
 		if constexpr (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) {
@@ -257,6 +278,10 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	}();
 
 	// static functions
+
+#ifdef PHOTOCHEMISTRY
+	AMREX_GPU_HOST_DEVICE static auto GetChemBandQuanta(int group_index) -> amrex::Real;
+#endif
 
 	static void ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const &cons, array_t &maxSignal, amrex::Box const &indexRange);
 	static void ConservedToPrimitive(amrex::Array4<const amrex::Real> const &cons, array_t &primVar, amrex::Box const &indexRange);
@@ -274,22 +299,25 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	template <FluxDir DIR>
 	static void ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
 				  amrex::Array4<const amrex::Real> const &x1RightState_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
-				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, bool use_wavespeed_correction);
+				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, bool use_wavespeed_correction,
+				  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc = {});
 
 	static void SetRadEnergySource(array_t &radEnergySource, amrex::Box const &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 				       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi,
 				       amrex::Real time);
 
 	AMREX_GPU_DEVICE static auto UpdateFlux(int i, int j, int k, arrayconst_t const &consPrev, NewtonIterationResult<problem_t> &energy, double dt,
-						double gas_update_factor, double Ekin0) -> FluxUpdateResult<problem_t>;
+						double gas_update_factor, double Ekin0, double Emag = {}) -> FluxUpdateResult<problem_t>;
 
 	static void AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_implicit,
 					     double gas_update_factor, double dustGasCoeff, double tol_h, double tol_rel_h, double tempFloor,
-					     int *p_iteration_counter, int *p_iteration_failure_counter);
+					     int *p_iteration_counter, int *p_iteration_failure_counter,
+					     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc = {});
 
 	static void AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_implicit,
 					      double gas_update_factor, double dustGasCoeff, double tol_h, double tol_rel_h, double tempFloor,
-					      int *p_iteration_counter, int *p_iteration_failure_counter);
+					      int *p_iteration_counter, int *p_iteration_failure_counter,
+					      std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc = {});
 
 	static void balanceMatterRadiation(arrayconst_t &consPrev, array_t &consNew, amrex::Box const &indexRange);
 
@@ -319,8 +347,6 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	// AMREX_GPU_HOST_DEVICE static auto
 	// ComputeGroupMeanOpacityWithMinusOneSlope(amrex::GpuArray<amrex::GpuArray<double, nGroups_ + 1>, 2> kappa_expo_and_lower_value,
 	// 					 amrex::GpuArray<double, nGroups_> radBoundaryRatios) -> quokka::valarray<double, nGroups_>;
-	AMREX_GPU_HOST_DEVICE static auto ComputeEintFromEgas(double density, double X1GasMom, double X2GasMom, double X3GasMom, double Etot) -> double;
-	AMREX_GPU_HOST_DEVICE static auto ComputeEgasFromEint(double density, double X1GasMom, double X2GasMom, double X3GasMom, double Eint) -> double;
 	AMREX_GPU_HOST_DEVICE static auto PlanckFunction(double nu, double T) -> double;
 	AMREX_GPU_HOST_DEVICE static auto
 	ComputeDiffusionFluxMeanOpacity(quokka::valarray<double, nGroups_> kappaPVec, quokka::valarray<double, nGroups_> kappaEVec,
@@ -445,7 +471,8 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
-							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j, int k,
+							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j, int k, int i_phys, int j_phys,
+							     int k_phys, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc,
 							     const amrex::GpuArray<double, nGroups_ + 1> &group_boundaries)
 	    -> quokka::valarray<double, nGroups_>;
 
@@ -646,6 +673,16 @@ void RadSystem<problem_t>::ConservedToPrimitive(amrex::Array4<const amrex::Real>
 		}
 	});
 }
+
+#ifdef PHOTOCHEMISTRY
+template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::GetChemBandQuanta(int group_index) -> amrex::Real
+{
+	auto const freq_bounds = RadSystem_Traits<problem_t>::ChemBands();
+	amrex::Real freq_low = freq_bounds[group_index];
+	amrex::Real freq_high = freq_bounds[group_index + 1];
+	return 0.5_rt * (freq_high + freq_low) * C::hplanck;
+}
+#endif
 
 template <typename problem_t>
 void RadSystem<problem_t>::ComputeMaxSignalSpeed(amrex::Array4<const amrex::Real> const & /*cons*/, array_t &maxSignal, amrex::Box const &indexRange)
@@ -853,7 +890,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeMassScalars(ArrayType const &
 template <typename problem_t>
 template <FluxDir DIR>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
-								    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j, int k,
+								    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j, int k, int i_phys,
+								    int j_phys, int k_phys,
+								    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc,
 								    const amrex::GpuArray<double, nGroups_ + 1> &group_boundaries)
     -> quokka::valarray<double, nGroups_>
 {
@@ -889,10 +928,20 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeCellOpticalDepth(const quokka
 	double Tgas_R = NAN;
 
 	if constexpr (gamma_ != 1.0) {
-		Eint_L = RadSystem<problem_t>::ComputeEintFromEgas(rho_L, x1GasMom_L, x2GasMom_L, x3GasMom_L, Egas_L);
-		Eint_R = RadSystem<problem_t>::ComputeEintFromEgas(rho_R, x1GasMom_R, x2GasMom_R, x3GasMom_R, Egas_R);
-		Tgas_L = quokka::EOS<problem_t>::ComputeTgasFromEint(rho_L, Eint_L, massScalars_L);
-		Tgas_R = quokka::EOS<problem_t>::ComputeTgasFromEint(rho_R, Eint_R, massScalars_R);
+		double Emag_L = 0.0;
+		double Emag_R = 0.0;
+		if constexpr (DIR == FluxDir::X1) {
+			Emag_L = ComputeCellCenteredMagneticEnergy<problem_t>(i_phys - 1, j_phys, k_phys, cons_fc);
+		} else if constexpr (DIR == FluxDir::X2) {
+			Emag_L = ComputeCellCenteredMagneticEnergy<problem_t>(i_phys, j_phys - 1, k_phys, cons_fc);
+		} else {
+			Emag_L = ComputeCellCenteredMagneticEnergy<problem_t>(i_phys, j_phys, k_phys - 1, cons_fc);
+		}
+		Emag_R = ComputeCellCenteredMagneticEnergy<problem_t>(i_phys, j_phys, k_phys, cons_fc);
+		Eint_L = ::quokka::EOS<problem_t>::ComputeEintFromEgas(rho_L, x1GasMom_L, x2GasMom_L, x3GasMom_L, Egas_L, Emag_L);
+		Eint_R = ::quokka::EOS<problem_t>::ComputeEintFromEgas(rho_R, x1GasMom_R, x2GasMom_R, x3GasMom_R, Egas_R, Emag_R);
+		Tgas_L = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho_L, Eint_L, massScalars_L);
+		Tgas_R = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho_R, Eint_R, massScalars_R);
 	}
 
 	double dl = NAN;
@@ -1036,7 +1085,8 @@ template <typename problem_t>
 template <FluxDir DIR>
 void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
 					 amrex::Array4<const amrex::Real> const &x1RightState_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
-					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, bool const use_wavespeed_correction)
+					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, bool const use_wavespeed_correction,
+					 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
 {
 	quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in);
 	quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in);
@@ -1068,7 +1118,7 @@ void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiff
 		// Similar to the asymptotic-preserving flux correction in Skinner et al. (2019). Use optionally apply it here to reduce odd-even instability.
 		quokka::valarray<double, nGroups_> tau_cell{};
 		if (use_wavespeed_correction) {
-			tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k, radBoundaries_g_copy);
+			tau_cell = ComputeCellOpticalDepth<DIR>(consVar, dx, i, j, k, i_in, j_in, k_in, cons_fc, radBoundaries_g_copy);
 		}
 
 		// gather left- and right- state variables
@@ -1334,27 +1384,6 @@ RadSystem<problem_t>::ComputeGroupMeanOpacity(amrex::GpuArray<amrex::GpuArray<do
 		AMREX_ASSERT(!std::isnan(kappa[g]));
 	}
 	return kappa;
-}
-
-template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEintFromEgas(const double density, const double X1GasMom, const double X2GasMom, const double X3GasMom,
-								     const double Etot) -> double
-{
-	const double p_sq = X1GasMom * X1GasMom + X2GasMom * X2GasMom + X3GasMom * X3GasMom;
-	const double Ekin = p_sq / (2.0 * density);
-	const double Eint = Etot - Ekin;
-	AMREX_ASSERT_WITH_MESSAGE(Eint > 0., "Gas internal energy is not positive!");
-	return Eint;
-}
-
-template <typename problem_t>
-AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::ComputeEgasFromEint(const double density, const double X1GasMom, const double X2GasMom, const double X3GasMom,
-								     const double Eint) -> double
-{
-	const double p_sq = X1GasMom * X1GasMom + X2GasMom * X2GasMom + X3GasMom * X3GasMom;
-	const double Ekin = p_sq / (2.0 * density);
-	const double Etot = Eint + Ekin;
-	return Etot;
 }
 
 template <typename problem_t> AMREX_GPU_HOST_DEVICE auto RadSystem<problem_t>::PlanckFunction(const double nu, const double T) -> double

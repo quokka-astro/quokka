@@ -115,9 +115,9 @@ template <typename problem_t> class ElectronConduction
 				if constexpr (nmscalars_ > 0) {
 					massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
 				}
-				Tgas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
-				amrex::Real Pgas = quokka::EOS<problem_t>::ComputePressure(rho, Eint, massScalars);
-				cs = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, Pgas, massScalars);
+				Tgas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
+				amrex::Real Pgas = ::quokka::EOS<problem_t>::ComputePressure(rho, Eint, massScalars);
+				cs = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho, Pgas, massScalars);
 			}
 
 			const amrex::Real Tuse = amrex::max(Tgas, t_min);

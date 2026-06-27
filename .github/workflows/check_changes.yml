@@ -18,6 +18,8 @@ on:
         value: ${{ jobs.check.outputs.has_cpp_changes }}
       has_py_changes:
         value: ${{ jobs.check.outputs.has_py_changes }}
+      has_api_docs_changes:
+        value: ${{ jobs.check.outputs.has_api_docs_changes }}
       has_workflow_changes:
         value: ${{ jobs.check.outputs.has_workflow_changes }}
       has_specific_workflow_changes:
@@ -32,10 +34,11 @@ jobs:
       has_scripts_changes: ${{ steps.set-output.outputs.has_scripts_changes }}
       has_cpp_changes: ${{ steps.set-output.outputs.has_cpp_changes }}
       has_py_changes: ${{ steps.set-output.outputs.has_py_changes }}
+      has_api_docs_changes: ${{ steps.set-output.outputs.has_api_docs_changes }}
       has_workflow_changes: ${{ steps.set-output.outputs.has_workflow_changes }}
       has_specific_workflow_changes: ${{ steps.set-output.outputs.has_specific_workflow_changes }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
         id: changes
         with:
@@ -68,6 +71,12 @@ jobs:
             py:
               - '**/*.py'
               - '**/*.ipynb'
+            api_docs:
+              - 'src/**'
+              - 'README.md'
+              - 'docs/Doxyfile'
+              - 'docs/markdown/api_reference.md'
+              - 'scripts/bash/docs_api_build.sh'
             workflows:
               - '.github/workflows/**/*.yml'
               - '.github/workflows/**/*.yaml'
@@ -81,6 +90,7 @@ jobs:
           SCRIPTS_CHANGED: ${{ steps.changes.outputs.scripts }}
           CPP_CHANGED: ${{ steps.changes.outputs.cpp }}
           PY_CHANGED: ${{ steps.changes.outputs.py }}
+          API_DOCS_CHANGED: ${{ steps.changes.outputs.api_docs }}
           WORKFLOW_CHANGED: ${{ steps.changes.outputs.workflows }}
           SPECIFIC_WORKFLOW_CHANGED: ${{ steps.changes.outputs.specific_workflow }}
           CODE_CHANGED: ${{ steps.changes.outputs.code }}
@@ -90,6 +100,7 @@ jobs:
           echo "has_scripts_changes=$SCRIPTS_CHANGED" >> "$GITHUB_OUTPUT"
           echo "has_cpp_changes=$CPP_CHANGED" >> "$GITHUB_OUTPUT"
           echo "has_py_changes=$PY_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "has_api_docs_changes=$API_DOCS_CHANGED" >> "$GITHUB_OUTPUT"
           echo "has_workflow_changes=$WORKFLOW_CHANGED" >> "$GITHUB_OUTPUT"
           echo "has_specific_workflow_changes=$SPECIFIC_WORKFLOW_CHANGED" >> "$GITHUB_OUTPUT"
           

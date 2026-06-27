@@ -41,7 +41,7 @@ template <> struct quokka::EOS_Traits<BinaryOrbit> {
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct Particle_Traits<BinaryOrbit> {
+template <> struct Particle_Traits<BinaryOrbit> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC;
 };
 
@@ -49,17 +49,9 @@ template <> struct HydroSystem_Traits<BinaryOrbit> {
 	static constexpr bool reconstruct_eint = false;
 };
 
-template <> struct Physics_Traits<BinaryOrbit> {
+template <> struct Physics_Traits<BinaryOrbit> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_self_gravity_enabled = true;
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr int nGroups = 1;			     // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 template <> struct SimulationData<BinaryOrbit> {
