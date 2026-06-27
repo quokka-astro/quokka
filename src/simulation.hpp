@@ -303,6 +303,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	virtual void createInitialCICRadParticles() = 0;
 	virtual void createInitialStochasticStellarPopParticles() = 0;
 	virtual void createInitialSinkParticles() = 0;
+	virtual void createInitialStarParticles() = 0;
 	virtual void createInitialTestParticles() = 0;
 	void particleMeshInteraction(amrex::Real time, amrex::Real dt);
 	// Test particles have integer components, and InitFromAsciiFile does not support integer components, so we do not allow creating them at the start
@@ -695,6 +696,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	std::unique_ptr<quokka::CICRadParticleContainer<problem_t>> CICRadParticles;
 	std::unique_ptr<quokka::StochasticStellarPopParticleContainer<problem_t>> StochasticStellarPopParticles;
 	std::unique_ptr<quokka::SinkParticleContainer> SinkParticles;
+	std::unique_ptr<quokka::StarParticleContainer<problem_t>> StarParticles;
 	std::unique_ptr<quokka::TestParticleContainer<problem_t>> TestParticles;
 
 	// Add PhysicsParticleRegister member
@@ -811,6 +813,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 	// add git commit to metadata
 	simulationMetadata_["git_hash_quokka"] = getGitHashForQuokka();
 	simulationMetadata_["git_hash_amrex"] = getGitHashForAmrex();
+
+	// print version and git hashes to stdout
+	amrex::Print() << std::format("\nQuokka version {} (git: {})\n", QUOKKA_VERSION, getGitHashForQuokka());
+	amrex::Print() << std::format("\tAMReX git: {}\n", getGitHashForAmrex());
+	amrex::Print() << std::format("\tMicrophysics git: {}\n", MICROPHYSICS_GIT_HASH);
+#if AMREX_SPACEDIM == 3
+	amrex::Print() << std::format("\tAMReX-Hydro git: {}\n", AMREX_HYDRO_GIT_HASH);
+#endif
+	amrex::Print() << std::format("\tTurbGen git: {}\n", TURBULENCE_GIT_HASH);
 
 	// add units and physics-specific metadata
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
@@ -1256,7 +1267,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	amrex::ValLocPair<amrex::Real, amrex::IntVect> conduction_dt{.value = std::numeric_limits<amrex::Real>::max(),
 								     .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
 	if (enableElectronConduction_ == 1) {
-		double c_v = C::k_B / (quokka::EOS_Traits<problem_t>::mean_molecular_weight * (quokka::EOS_Traits<problem_t>::gamma - 1.0));
+		double c_v = C::k_B / (::quokka::EOS_Traits<problem_t>::mean_molecular_weight * (::quokka::EOS_Traits<problem_t>::gamma - 1.0));
 		double diffusion_coefficient = electronConductionKappa0_ / (state_new_cc_[lev].min(0) * c_v);
 		conduction_dt.value = 0.5 * conductionCFL * dx_min * dx_min / diffusion_coefficient;
 		conduction_dt.index = domain_signal_maxloc;
@@ -3609,6 +3620,18 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 	// Read particle parameters from input file
 	quokka::particleParmParse();
 
+	// Sink and Star both accrete via the same accretion-rate buffer (see particleMeshInteraction).
+	// Enabling both would double-apply gas removal: computeSinkAccretion accumulates into the shared
+	// buffer once per accreting type, then applySinkAccretion applies UpdateHydroState once per type.
+	// To support multiple accreting particle types in the future, the accretion dispatch would need
+	// to be refactored: buffer all accretion rates first, compute a combined rate with a single
+	// limiting factor, and apply accretion on all types using that shared limit.
+	static_assert(!(Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) ||
+			  !(Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Star),
+		      "Sink and Star particles cannot both be enabled. "
+		      "Both accrete via the same accretion-rate buffer and would double-apply gas removal. "
+		      "See the comment above for how to fix this if combined Sink+Star accretion is needed.");
+
 	const bool is_restart = (header_box_arrays != nullptr);
 
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Rad) {
@@ -3686,6 +3709,21 @@ template <typename problem_t> void AMRSimulation<problem_t>::InitPhyParticles(am
 		}
 	}
 
+	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Star) {
+		if (is_restart) {
+			initializeParticleContainerFromCheckpoint<quokka::ParticleType::Star>(StarParticles, *header_box_arrays);
+		} else {
+			AMREX_ASSERT(StarParticles == nullptr);
+			static_assert(Physics_Traits<problem_t>::unit_system == UnitSystem::CGS, "UnitSystem must be CGS for Star particles");
+
+			StarParticles = std::make_unique<quokka::StarParticleContainer<problem_t>>(this);
+			StarParticles->SetVerbose(0);
+
+			particleRegister_.template registerParticleType<quokka::ParticleType::Star>(StarParticles.get());
+
+			createInitialStarParticles();
+		}
+	}
 	if constexpr (Particle_Traits<problem_t>::particle_switch & ParticleSwitch::Sink) {
 		if (is_restart) {
 			initializeParticleContainerFromCheckpoint<quokka::ParticleType::Sink>(SinkParticles, *header_box_arrays);

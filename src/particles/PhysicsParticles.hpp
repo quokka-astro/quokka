@@ -54,6 +54,8 @@ namespace quokka
 			return "StochasticStellarPop";
 		case ParticleType::Sink:
 			return "Sink";
+		case ParticleType::Star:
+			return "Star";
 		default:
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, "Unknown particle type");
 			return "Unknown";
@@ -75,6 +77,8 @@ namespace quokka
 			return "ParticleSwitch::StochasticStellarPop";
 		case ParticleType::Sink:
 			return "ParticleSwitch::Sink";
+		case ParticleType::Star:
+			return "ParticleSwitch::Star";
 		default:
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, "Unknown particle type");
 			return "ParticleSwitch::Unknown";
@@ -100,6 +104,9 @@ namespace quokka
 	}
 	if (particle_type_name == "Sink") {
 		return ParticleType::Sink;
+	}
+	if (particle_type_name == "Star") {
+		return ParticleType::Star;
 	}
 	return std::nullopt;
 }
@@ -939,6 +946,8 @@ template <typename problem_t> class PhysicsParticleRegister
 				return "StochasticStellarPop_particles";
 			case ParticleType::Sink:
 				return "Sink_particles";
+			case ParticleType::Star:
+				return "Star_particles";
 			default:
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, "Unknown particle type");
 				return "Unknown_particles";
@@ -971,6 +980,12 @@ template <typename problem_t> class PhysicsParticleRegister
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Sink>>(
 			    container, SinkParticleMassIdx, -1, -1, -1, true, false, -1, true, -1, SinkParticleMdotIdx, SinkParticleLxIdx);
 			descriptor->setForceFinestLevel(true); // sink particles must always reside on the finest AMR level
+		} else if constexpr (particleType == ParticleType::Star) {
+			constexpr int lum_idx = (Physics_Traits<problem_t>::nGroups > 0) ? StarParticleLumIdx : -1;
+			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Star>>(
+			    container, StarParticleMassIdx, lum_idx, StarParticleBirthTimeIdx, -1, /*allows_creation=*/false,
+			    /*allows_destruction=*/false, /*evolution_stage_idx=*/-1, /*allows_accretion=*/true, /*mass_at_birth_idx=*/-1, StarParticleMdotIdx);
+			descriptor->setForceFinestLevel(true); // star particles must always reside on the finest AMR level
 		} else if constexpr (particleType == ParticleType::Test) {
 			descriptor = std::make_unique<PhysicsParticleDescriptor<ContainerType, problem_t, ParticleType::Test>>(
 			    container, TestParticleMassIdx, TestParticleLumIdx, TestParticleBirthTimeIdx, TestParticleDeathTimeIdx, true, true,

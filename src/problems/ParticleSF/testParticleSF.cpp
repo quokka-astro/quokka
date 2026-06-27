@@ -27,7 +27,7 @@ static Real n0 = 1.0e4;			       // NOLINT
 static Real Tamb = 10.0;		       // NOLINT
 static bool validate_initial_imf_stats = true; // NOLINT
 
-template <> struct Particle_Traits<ParticleSFProblem> {
+template <> struct Particle_Traits<ParticleSFProblem> : DefaultParticleTraits {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
 };
