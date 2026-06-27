@@ -8,7 +8,7 @@ void DiagBase::init(const std::string &a_prefix, std::string_view a_diagName)
 	// IO
 	pp.query("int", m_interval);
 	pp.query("per", m_per);
-	pp.query("time_int", m_time_interval); // time_int takes precedence over per
+	pp.queryWithParser("time_int", m_time_interval); // time_int takes precedence over per; supports unit expressions (e.g. "1.0*Myr")
 	m_diagfile = a_diagName;
 	pp.query("file", m_diagfile);
 	AMREX_ASSERT(m_interval > 0 || m_per > 0.0 || m_time_interval > 0.0);
@@ -52,6 +52,13 @@ void DiagBase::prepare(int /*a_nlevels*/, const amrex::Vector<amrex::Geometry> &
 
 auto DiagBase::doDiag(const amrex::Real &a_time, int a_nstep) -> bool
 {
+	// Always output initial snapshot at step 0 when any interval is active,
+	// matching the behaviour of plotfile_interval / plottime_interval.
+	// Do NOT update m_next_output_time so the first time-based output fires at t = m_time_interval.
+	if (a_nstep == 0) {
+		return (m_interval > 0 || m_time_interval > 0.0);
+	}
+
 	// Reset flag if we're on a new step
 	if (m_last_output_step != a_nstep) {
 		m_did_output_this_step = false;

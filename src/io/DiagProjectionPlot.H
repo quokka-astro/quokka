@@ -52,6 +52,10 @@ template <typename problem_t> void DiagProjectionPlot::processDiag(int a_nstep, 
 
 	// Get the simulation pointer
 	auto *sim = getSim<problem_t>();
+	amrex::Vector<amrex::IntVect> max_grid_size(sim->finestLevel() + 1);
+	for (int lev = 0; lev <= sim->finestLevel(); ++lev) {
+		max_grid_size[lev] = sim->maxGridSize(lev);
+	}
 
 	// Loop through all requested projection directions
 	for (auto const &dir : m_projectionDirs) {
@@ -60,7 +64,8 @@ template <typename problem_t> void DiagProjectionPlot::processDiag(int a_nstep, 
 		proj.reserve(m_fieldNames.size());
 		for (const auto &field : m_fieldNames) {
 			const int comp = getFieldIndex(field, *m_diagVars);
-			proj[field] = quokka::diagnostics::ComputePlaneProjectionFromMultiFab(*m_diagMF, sim->finestLevel(), *m_geoms, *m_refRatio, dir, comp);
+			proj[field] = quokka::diagnostics::ComputePlaneProjectionFromMultiFab(*m_diagMF, sim->finestLevel(), *m_geoms, *m_refRatio,
+											      max_grid_size, dir, comp);
 		}
 
 		// Skip if no projection data

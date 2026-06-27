@@ -2,7 +2,7 @@
 # Usage:
 #   quokka_add_problem(
 #     JOB_NAME <name>
-#     [INPUT_FILE <input_file>]  # defaults to ${JOB_NAME}.in
+#     [INPUT_FILE <input_file>]  # defaults to ${JOB_NAME}.toml
 #     [ADD_TEST <ON|OFF>]        # whether to add a test (default: ON)
 #     [TEST_PARAMS <params>]     # additional test parameters (default: ${QuokkaTestParams})
 #     [PRIORITY <number>]        # test priority, higher values run first (default: 0)
@@ -22,7 +22,7 @@ function(quokka_add_problem)
 
   # Set default input file if not provided
   if(NOT QUOKKA_PROBLEM_INPUT_FILE)
-    set(QUOKKA_PROBLEM_INPUT_FILE "${QUOKKA_PROBLEM_JOB_NAME}.in")
+    set(QUOKKA_PROBLEM_INPUT_FILE "${QUOKKA_PROBLEM_JOB_NAME}.toml")
   endif()
 
   # Default to adding test if not explicitly set, or if explicitly set to ON

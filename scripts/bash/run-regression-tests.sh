@@ -195,6 +195,10 @@ run_regression_tests() {
 	echo "Running regression tests"
 	echo "=========================================="
 
+  # uncomment to dry-run
+  #echo Dry run
+  #return 0
+
 	local exit_code=0
 	local log_file="$WEB_DIR/regression-run.log"
 
@@ -208,11 +212,13 @@ run_regression_tests() {
 
 	# Run regtest.py, capturing both stdout and stderr to log file
 	# Don't exit on failure - we want to always publish results
+	# Note: do NOT restore set -e here; the script header uses set -uo pipefail
+	# (not set -e), so calling set -e would globally enable it and cause the
+	# non-zero return below to abort the script before publish_results runs.
 	set +e
 	./extern/regression_testing/regtest.py --clean_testdir "$INI_FILE" \
 		> "$log_file" 2>&1
 	exit_code=$?
-	set -e
 
 	echo ""
 	echo "Regression tests completed with exit code: $exit_code"
@@ -357,7 +363,11 @@ EOF
 }
 
 #######################################
-# Publish results to GitHub Pages
+# Commit results to local git repo.
+# The actual 'git push' is performed by the host-side script
+# (run-regression-exe.sh) AFTER the container exits, so that:
+#   - host SSH credentials are used, and
+#   - results are pushed even if the container timed out or was killed.
 # Arguments:
 #   $1 - status string
 #######################################
@@ -365,7 +375,7 @@ publish_results() {
 	local status=$1
 
 	echo "=========================================="
-	echo "Publishing results to GitHub Pages"
+	echo "Committing results to local git repo"
 	echo "=========================================="
 
 	# Change to web directory
@@ -377,7 +387,7 @@ publish_results() {
 	# Check if this is a git repository
 	if [ ! -d .git ]; then
 		echo "ERROR: $WEB_DIR is not a git repository"
-		echo "       Cannot publish results without git repository"
+		echo "       Cannot commit results without git repository"
 		return 1
 	fi
 
@@ -392,7 +402,7 @@ publish_results() {
 
 	# Check if there are changes to commit
 	if git diff --staged --quiet; then
-		echo "No changes to commit, skipping push"
+		echo "No changes to commit"
 		return 0
 	fi
 
@@ -411,23 +421,8 @@ publish_results() {
 		-c user.email="quokka-ci-bot@quokka.dev" \
 		commit --no-verify -m "$commit_msg"
 
-	# Push to remote (origin HEAD = current branch)
 	echo ""
-	echo "Pushing to remote..."
-	set +e
-	git push origin HEAD 2>&1
-	local push_exit=$?
-	set -e
-
-	if [ $push_exit -ne 0 ]; then
-		echo ""
-		echo "WARNING: Push failed with exit code $push_exit"
-		echo "         Continuing anyway (results are committed locally)"
-		return 0
-	fi
-
-	echo ""
-	echo "✓ Successfully published results to GitHub Pages"
+	echo "✓ Results committed locally (git push will be performed by host)"
 	return 0
 }
 

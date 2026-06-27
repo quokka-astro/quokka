@@ -1,0 +1,45 @@
+[book]
+title = "Quokka"
+authors = ["Quokka Developers"]
+description = "Documentation for the Quokka radiation hydrodynamics code."
+language = "en"
+src = "markdown"
+
+[build]
+build-dir = "site"
+create-missing = false
+
+[preprocessor.bib]
+command = "mdbook-bib"
+bibliography = "references.bib"
+citation-syntax = "pandoc"
+backend = "csl"
+csl-style = "apa"
+title = "References"
+render-bib = "cited"
+order = "index"
+
+# Renders ```plantuml code blocks as inline SVG via the public PlantUML server.
+# Diagrams contain only non-sensitive code architecture; no Java required in CI.
+[preprocessor.plantuml]
+plantuml-cmd = "https://www.plantuml.com/plantuml"
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "navy"
+mathjax-support = false
+no-section-label = true
+additional-js = ["javascripts/mathjax-init.js", "javascripts/mermaid-init.js"]
+git-repository-url = "https://github.com/quokka-astro/quokka"
+edit-url-template = "https://github.com/quokka-astro/quokka/edit/development/docs/markdown/{path}"
+site-url = "/quokka/"
+input-404 = "404.md"
+
+[output.html.search]
+limit-results = 30
+teaser-word-count = 30
+use-boolean-and = true
+expand = true
+heading-split-level = 3
+
+# MathJax and Mermaid are handled client-side via `docs/javascripts/`.

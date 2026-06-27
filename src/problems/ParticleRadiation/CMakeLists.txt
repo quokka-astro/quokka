@@ -8,15 +8,15 @@ if(AMReX_SPACEDIM EQUAL 3)
 
   add_test(
     NAME ${JOB_NAME}
-    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in ${QuokkaTestParams}
+    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml ${QuokkaTestParams}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
   add_test(
     NAME ParticleRadiationLog
-    COMMAND ${JOB_NAME} ../inputs/ParticleRadiationLog.in ${QuokkaTestParams}
+    COMMAND ${JOB_NAME} ../inputs/ParticleRadiationLog.toml ${QuokkaTestParams}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
   add_test(
     NAME ParticleRadiationFastlog
-    COMMAND ${JOB_NAME} ../inputs/ParticleRadiationFastlog.in
+    COMMAND ${JOB_NAME} ../inputs/ParticleRadiationFastlog.toml
             ${QuokkaTestParams}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

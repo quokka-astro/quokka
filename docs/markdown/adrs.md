@@ -1,17 +1,21 @@
 # Architecture Decision Records (ADRs)
 
-!!! note "Purpose"
-    ADRs document important technical decisions so future contributors understand the problem we solved, the options we evaluated, and how to revisit the choice if assumptions change.
+> **Note: Purpose**
+>
+> ADRs document important technical decisions so future contributors understand the problem we solved, the options we evaluated, and how to revisit the choice if assumptions change.
+>
 
 ## When to Author an ADR
 
 Write an ADR whenever a change has broad impact, is hard to reverse, or triggers sustained debate.
 
-!!! warning "Common triggers"
-    - Adjusting `ParmParse` options beyond trivial additions (renames, removals, behaviour changes).
-    - Any risk to the output file format (typically rejected; document how compatibility is preserved if discussed).
-    - Modifying the problem-file interface (new hooks, migration plans, deprecations).
-    - Shifts in accuracy/performance trade-offs (limiters, fluxes, numerical precision), or non-trivial dependency/toolchain updates.
+> **Warning: Common triggers**
+>
+> - Adjusting `ParmParse` options beyond trivial additions (renames, removals, behaviour changes).
+> - Any risk to the output file format (typically rejected; document how compatibility is preserved if discussed).
+> - Modifying the problem-file interface (new hooks, migration plans, deprecations).
+> - Shifts in accuracy/performance trade-offs (limiters, fluxes, numerical precision), or non-trivial dependency/toolchain updates.
+>
 
 ---
 

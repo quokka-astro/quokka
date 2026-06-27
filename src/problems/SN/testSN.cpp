@@ -1,6 +1,6 @@
 /// \file testSN.cpp
 /// \brief Defines a test problem for supernova feedback.
-/// In this test, two supernova explode and in the end the gas temperature and velocity is checked for
+/// In this test, two supernovae explode and in the end the gas temperature and velocity is checked for
 /// Galilean invariance between a rest frame and a boost frame.
 
 #include "AMReX.H"
@@ -48,7 +48,7 @@ constexpr double B0 = 1.0e-7;	 // uniform background field for MHD variant
 
 static double n_amb = 1.0; // ambient density (g cm^-3) // NOLINT
 
-template <> struct Particle_Traits<SNProblem> {
+template <> struct Particle_Traits<SNProblem> : DefaultParticleTraits {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Test;
 };
@@ -62,19 +62,12 @@ template <> struct HydroSystem_Traits<SNProblem> {
 	static constexpr bool reconstruct_eint = true; // need to reconstruct temperature
 };
 
-template <> struct Physics_Traits<SNProblem> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<SNProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
 	static constexpr bool is_mhd_enabled = true;
-	static constexpr int nGroups = 1; // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 template <> struct SimulationData<SNProblem> {
@@ -297,9 +290,8 @@ auto problem_main() -> int
 	std::vector<double> x(nx);
 	std::vector<double> vx(nx);
 
-	// plot the temperature and vx profile along the x axis at the center
+	// extract the temperature and vx profile along the x axis at the center
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-#ifdef HAVE_PYTHON
 		for (int i = 0; i < nx; ++i) {
 			const double rho = values.at(HydroSystem<SNProblem>::density_index)[i];
 			const double Eint = values.at(HydroSystem<SNProblem>::internalEnergy_index)[i];
@@ -308,7 +300,6 @@ auto problem_main() -> int
 			x[i] = position[i];
 			vx[i] = vx_val;
 		}
-#endif
 	}
 
 	QuokkaSimulation<SNProblem> sim2;
@@ -339,9 +330,8 @@ auto problem_main() -> int
 
 	int status = 0;
 
-	// plot the temperature and vx profile along the x axis at the center
+	// validate Galilean invariance and optionally plot profiles
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-#ifdef HAVE_PYTHON
 		double v_value_norm = 0.0;
 		double v_err_norm = 0.0;
 		double T_value_norm = 0.0;
@@ -368,7 +358,7 @@ auto problem_main() -> int
 			T2[index_] = Eint / (rho * CV); // simplified, but good enough for the purpose
 			x2[i] = position2[i] - drift;
 			vx2_rel[index_] = vx_val - boost_vel_x;
-			v_value_norm += std::abs(vx_val); // use raw vx to account for the large boost velocity
+			v_value_norm += std::abs(vx_val); // use raw vx_val to account for the large boost velocity
 			v_err_norm += std::abs(vx2_rel[index_] - vx[index_]);
 			T_value_norm += std::abs(T[index_]);
 			T_err_norm += std::abs(T2[index_] - T[index_]);
@@ -380,9 +370,11 @@ auto problem_main() -> int
 		amrex::Print() << std::format("Relative L1 norm for vx = {}, tolerance = {}\n", v_rel_err_norm, v_rel_err_tol);
 		amrex::Print() << std::format("Relative L1 norm for T = {}, tolerance = {}\n", T_rel_err_norm, T_rel_err_tol);
 		if (!(v_rel_err_norm < v_rel_err_tol) || !(T_rel_err_norm < T_rel_err_tol)) {
+			amrex::Print() << "FAIL: Velocity or T error not within tolerance\n";
 			status = 1;
 		}
 
+#ifdef HAVE_PYTHON
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(x, T, {{"label", "base"}, {"color", "C0"}});
 		matplotlibcpp::plot(x2, T2, {{"label", "boosted"}, {"color", "C1"}, {"linestyle", "--"}});
@@ -400,7 +392,7 @@ auto problem_main() -> int
 		matplotlibcpp::xlabel("x (cm)");
 		matplotlibcpp::ylabel("vx (cm/s)");
 		matplotlibcpp::title(std::format("time t = {:.4g}", sim2.tNew_[0]));
-		matplotlibcpp::save(std::format("sn_velocity_profile_n0_{:.1g}.pdf", n_amb, boost_vel_x));
+		matplotlibcpp::save(std::format("sn_velocity_profile_n0_{:.1g}_boost_vel_{:.1g}.pdf", n_amb, boost_vel_x));
 #endif
 	}
 

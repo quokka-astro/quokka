@@ -16,9 +16,14 @@
 #include "AMReX_GpuContainers.H"
 #include "AMReX_GpuDevice.H"
 #include "AMReX_MultiFab.H"
+#include "AMReX_MultiFabUtil.H"
+#include "AMReX_ParallelContext.H"
+#include "AMReX_ParallelReduce.H"
 #include "AMReX_Parser.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
+#include "AMReX_Reduce.H"
+#include "AMReX_iMultiFab.H"
 
 #include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
@@ -27,6 +32,7 @@
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
 #include "math/quadrature.hpp"
+#include "math/spherical_geometry.hpp"
 #include "particles/particle_types.hpp"
 #include "physics_info.hpp"
 #include "util/BC.hpp"
@@ -46,27 +52,20 @@ static_assert(AMREX_SPACEDIM == 3, "DiskGalaxy problem requires AMREX_SPACEDIM =
 template <> struct quokka::EOS_Traits<DiskGalaxy> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = 0.6 * C::m_u;
-	static constexpr double boltzmann_constant = C::k_B;
 };
 
 template <> struct HydroSystem_Traits<DiskGalaxy> {
 	static constexpr bool reconstruct_eint = true;
 };
 
-template <> struct Physics_Traits<DiskGalaxy> {
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
+template <> struct Physics_Traits<DiskGalaxy> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_self_gravity_enabled = true;
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	static constexpr bool is_mhd_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars
-	static constexpr int nGroups = 1;			     // number of radiation groups
 };
 
-template <> struct Particle_Traits<DiskGalaxy> {
+template <> struct Particle_Traits<DiskGalaxy> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | ParticleSwitch::StochasticStellarPop;
 };
 
@@ -558,7 +557,9 @@ template <> void QuokkaSimulation<DiskGalaxy>::refineGrid(int lev, amrex::TagBox
 	amrex::Gpu::streamSynchronize();
 }
 
-template <> void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
+template <>
+void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
+						     amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "gpot") {
@@ -575,14 +576,17 @@ template <> void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::s
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
-			auto const &state = state_new_cc_[lev].const_array(iter);
+			auto const &state = state_cc.const_array(iter);
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const cons_fc{
+			    AMREX_D_DECL(state_fc[0].const_array(iter), state_fc[1].const_array(iter), state_fc[2].const_array(iter))};
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				Real const rho = state(i, j, k, HydroSystem<DiskGalaxy>::density_index);
 				Real const x1Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index);
 				Real const x2Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x2Momentum_index);
 				Real const x3Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index);
 				Real const Egas = state(i, j, k, HydroSystem<DiskGalaxy>::energy_index);
-				Real const Eint = RadSystem<DiskGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+				Real const Emag = HydroSystem<DiskGalaxy>::ComputeCellCenteredMagneticEnergy(i, j, k, cons_fc);
+				Real const Eint = quokka::EOS<DiskGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, Emag);
 				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 				output(i, j, k, ncomp) = Tgas;
 			});
@@ -591,11 +595,10 @@ template <> void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::s
 
 	if (dname == "pressure") {
 		const int ncomp = ncomp_cc_in;
-		auto const &state_fc = state_new_fc_[lev];
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
-			auto const &state = state_new_cc_[lev].const_array(iter);
+			auto const &state = state_cc.const_array(iter);
 			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const cons_fc{
 			    AMREX_D_DECL(state_fc[0].const_array(iter), state_fc[1].const_array(iter), state_fc[2].const_array(iter))};
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
@@ -611,14 +614,17 @@ template <> void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::s
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
-			auto const &state = state_new_cc_[lev].const_array(iter);
+			auto const &state = state_cc.const_array(iter);
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const cons_fc{
+			    AMREX_D_DECL(state_fc[0].const_array(iter), state_fc[1].const_array(iter), state_fc[2].const_array(iter))};
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				Real const rho = state(i, j, k, HydroSystem<DiskGalaxy>::density_index);
 				Real const x1Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index);
 				Real const x2Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x2Momentum_index);
 				Real const x3Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index);
 				Real const Egas = state(i, j, k, HydroSystem<DiskGalaxy>::energy_index);
-				Real const Eint = RadSystem<DiskGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+				Real const Emag = HydroSystem<DiskGalaxy>::ComputeCellCenteredMagneticEnergy(i, j, k, cons_fc);
+				Real const Eint = quokka::EOS<DiskGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, Emag);
 				Real const K_cgs = quokka::ResampledCooling::ComputeEntropyFromRhoEint(rho, Eint, tables);
 				output(i, j, k, ncomp) = K_cgs / keV_in_ergs;
 			});
@@ -648,9 +654,9 @@ template <> void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::s
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
-			auto const &bx_fc = state_new_fc_[lev][0].const_array(iter);
-			auto const &by_fc = state_new_fc_[lev][1].const_array(iter);
-			auto const &bz_fc = state_new_fc_[lev][2].const_array(iter);
+			auto const &bx_fc = state_fc[0].const_array(iter);
+			auto const &by_fc = state_fc[1].const_array(iter);
+			auto const &bz_fc = state_fc[2].const_array(iter);
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				const amrex::Real bx_cc = 0.5 * (bx_fc(i, j, k, 0) + bx_fc(i + 1, j, k, 0));
 				const amrex::Real by_cc = 0.5 * (by_fc(i, j, k, 0) + by_fc(i, j + 1, k, 0));
@@ -668,7 +674,7 @@ template <> void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::s
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
-			auto const &state = state_new_cc_[lev].const_array(iter);
+			auto const &state = state_cc.const_array(iter);
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				const amrex::Real rho = state(i, j, k, HydroSystem<DiskGalaxy>::density_index);
 				const amrex::Real vx = state(i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index) / rho;
@@ -691,7 +697,7 @@ template <> void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::s
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
-			auto const &state = state_new_cc_[lev].const_array(iter);
+			auto const &state = state_cc.const_array(iter);
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				const amrex::Real rho = state(i, j, k, HydroSystem<DiskGalaxy>::density_index);
 				const amrex::Real vx = state(i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index) / rho;
@@ -717,8 +723,10 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 	amrex::ParmParse const pp("disk_galaxy");
 	amrex::Real refine_Rmax_kpc = NAN;
 	amrex::Real refine_zmax_kpc = NAN;
+	amrex::Real flux_sphere_radius_kpc = NAN;
 	pp.query("refine_Rmax_kpc", refine_Rmax_kpc);
 	pp.query("refine_zmax_kpc", refine_zmax_kpc);
+	pp.query("flux_sphere_radius_kpc", flux_sphere_radius_kpc);
 	AMREX_ALWAYS_ASSERT(!std::isnan(refine_Rmax_kpc));
 	AMREX_ALWAYS_ASSERT(!std::isnan(refine_zmax_kpc));
 	const amrex::Real refine_Rmax = refine_Rmax_kpc * (1.0e3 * C::parsec);
@@ -756,11 +764,132 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 		const Real x2Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x2Momentum_index);
 		const Real x3Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index);
 		const Real Egas = state(i, j, k, HydroSystem<DiskGalaxy>::energy_index);
-		const Real Eint = RadSystem<DiskGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+		// computeVolumeIntegral does not provide face-centred data, so Emag is not available.
+		// The resulting temperature may be slightly overestimated in low-beta regions.
+		const Real Eint = Egas - 0.5 * (x1Mom * x1Mom + x2Mom * x2Mom + x3Mom * x3Mom) / rho;
 		const Real Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 		return (Tgas < 1.0e4) ? rho : 0.0;
 	});
 	stats["mass_T_lt_1e4"] = cold_mass / C::M_solar;
+
+	if (!std::isnan(flux_sphere_radius_kpc)) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(flux_sphere_radius_kpc > 0.0, "disk_galaxy.flux_sphere_radius_kpc must be > 0.");
+		const amrex::Real flux_sphere_radius = flux_sphere_radius_kpc * (1.0e3 * C::parsec);
+		stats["flux_sphere_radius_kpc"] = flux_sphere_radius_kpc;
+
+		amrex::Vector<amrex::iMultiFab> flux_mask;
+		flux_mask.resize(finest_level + 1);
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			if (lev == finest_level) {
+				flux_mask[lev].define(boxArray(lev), DistributionMap(lev), 1, 0);
+				flux_mask[lev].setVal(1);
+			} else {
+				flux_mask[lev] = amrex::makeFineMask(state_new_cc_[lev], state_new_cc_[lev + 1], amrex::IntVect(0), ref_ratio[lev],
+								     geom[lev].periodicity(), 1, 0);
+			}
+		}
+
+		amrex::Real mass_flux_sphere = 0.0;
+		amrex::Real hydro_energy_flux_sphere = 0.0;
+		amrex::Real mhd_energy_flux_sphere = 0.0;
+		amrex::Real passive_scalar_flux_sphere = 0.0;
+		for (int lev = 0; lev <= finest_level; ++lev) {
+			const auto prob_lo = geom[lev].ProbLoArray();
+			const auto dx = geom[lev].CellSizeArray();
+			auto const &state = state_new_cc_[lev].const_arrays();
+			auto const &state_fc = state_new_fc_[lev];
+			auto const &state_fc_x = state_fc[0].const_arrays();
+			auto const &state_fc_y = state_fc[1].const_arrays();
+			auto const &state_fc_z = state_fc[2].const_arrays();
+			auto const &mask = flux_mask[lev].const_arrays();
+
+			auto const level_flux = amrex::ParReduce(
+			    amrex::TypeList<amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum>{},
+			    amrex::TypeList<amrex::Real, amrex::Real, amrex::Real, amrex::Real>{}, state_new_cc_[lev], amrex::IntVect(0),
+			    [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real, amrex::Real> {
+				    if (mask[bx](i, j, k) == 0) {
+					    return {0.0, 0.0, 0.0, 0.0};
+				    }
+
+				    const amrex::Real x0 = prob_lo[0] + static_cast<amrex::Real>(i) * dx[0];
+				    const amrex::Real y0 = prob_lo[1] + static_cast<amrex::Real>(j) * dx[1];
+				    const amrex::Real z0 = prob_lo[2] + static_cast<amrex::Real>(k) * dx[2];
+				    const amrex::Real x1 = x0 + dx[0];
+				    const amrex::Real y1 = y0 + dx[1];
+				    const amrex::Real z1 = z0 + dx[2];
+
+				    const amrex::Real x = prob_lo[0] + (static_cast<amrex::Real>(i) + 0.5) * dx[0];
+				    const amrex::Real y = prob_lo[1] + (static_cast<amrex::Real>(j) + 0.5) * dx[1];
+				    const amrex::Real z = prob_lo[2] + (static_cast<amrex::Real>(k) + 0.5) * dx[2];
+				    const amrex::Real r = std::sqrt(x * x + y * y + z * z);
+
+				    const amrex::Real rho = state[bx](i, j, k, HydroSystem<DiskGalaxy>::density_index);
+				    if (r <= 0.0 || rho <= 0.0) {
+					    return {0.0, 0.0, 0.0, 0.0};
+				    }
+
+				    const amrex::Real momx = state[bx](i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index);
+				    const amrex::Real momy = state[bx](i, j, k, HydroSystem<DiskGalaxy>::x2Momentum_index);
+				    const amrex::Real momz = state[bx](i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index);
+				    const amrex::Real vx = momx / rho;
+				    const amrex::Real vy = momy / rho;
+				    const amrex::Real vz = momz / rho;
+				    const amrex::Real vr = (x * momx + y * momy + z * momz) / (rho * r);
+				    const amrex::Real rhat_x = x / r;
+				    const amrex::Real rhat_y = y / r;
+				    const amrex::Real rhat_z = z / r;
+
+				    const amrex::Real mass_flux_density = rho * vr;
+				    const amrex::Real energy_density = state[bx](i, j, k, HydroSystem<DiskGalaxy>::energy_index);
+				    const amrex::Real scalar_density = state[bx](i, j, k, HydroSystem<DiskGalaxy>::scalar0_index);
+				    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const cons_fc{
+					AMREX_D_DECL(state_fc_x[bx], state_fc_y[bx], state_fc_z[bx])};
+				    const amrex::Real Pgas = HydroSystem<DiskGalaxy>::ComputePressure(state[bx], i, j, k, &cons_fc);
+				    const amrex::Real Emag = HydroSystem<DiskGalaxy>::ComputeMagneticEnergy(i, j, k, &cons_fc);
+				    const amrex::Real Ehydro = energy_density - Emag;
+
+				    const amrex::Real bx1_m = cons_fc[0](i, j, k, Physics_Indices<DiskGalaxy>::mhdFirstIndex);
+				    const amrex::Real bx1_p = cons_fc[0](i + 1, j, k, Physics_Indices<DiskGalaxy>::mhdFirstIndex);
+				    const amrex::Real bx2_m = cons_fc[1](i, j, k, Physics_Indices<DiskGalaxy>::mhdFirstIndex);
+				    const amrex::Real bx2_p = cons_fc[1](i, j + 1, k, Physics_Indices<DiskGalaxy>::mhdFirstIndex);
+				    const amrex::Real bx3_m = cons_fc[2](i, j, k, Physics_Indices<DiskGalaxy>::mhdFirstIndex);
+				    const amrex::Real bx3_p = cons_fc[2](i, j, k + 1, Physics_Indices<DiskGalaxy>::mhdFirstIndex);
+				    const amrex::Real Bx = 0.5 * (bx1_m + bx1_p);
+				    const amrex::Real By = 0.5 * (bx2_m + bx2_p);
+				    const amrex::Real Bz = 0.5 * (bx3_m + bx3_p);
+				    const amrex::Real Bdotv = vx * Bx + vy * By + vz * Bz;
+				    const amrex::Real Br = rhat_x * Bx + rhat_y * By + rhat_z * Bz;
+
+				    const amrex::Real hydro_energy_flux_density = (Ehydro + Pgas) * vr;
+				    const amrex::Real mhd_energy_flux_density = (energy_density + Pgas + Emag) * vr - Bdotv * Br;
+				    const amrex::Real area = quokka::math::sphericalSectionAreaInCell(flux_sphere_radius, x0, x1, y0, y1, z0, z1);
+				    if (area <= 0.0) {
+					    return {0.0, 0.0, 0.0, 0.0};
+				    }
+
+				    return {mass_flux_density * area, hydro_energy_flux_density * area, mhd_energy_flux_density * area,
+					    (scalar_density * vr) * area};
+			    });
+
+			mass_flux_sphere += amrex::get<0>(level_flux);
+			hydro_energy_flux_sphere += amrex::get<1>(level_flux);
+			mhd_energy_flux_sphere += amrex::get<2>(level_flux);
+			passive_scalar_flux_sphere += amrex::get<3>(level_flux);
+		}
+
+		// MPI reduction
+		std::array<Real, 4> fluxes_sphere = {mass_flux_sphere, hydro_energy_flux_sphere, mhd_energy_flux_sphere, passive_scalar_flux_sphere};
+		amrex::ParallelAllReduce::Sum(fluxes_sphere.data(), fluxes_sphere.size(), amrex::ParallelContext::CommunicatorSub());
+		mass_flux_sphere = fluxes_sphere[0];
+		hydro_energy_flux_sphere = fluxes_sphere[1];
+		mhd_energy_flux_sphere = fluxes_sphere[2];
+		passive_scalar_flux_sphere = fluxes_sphere[3];
+
+		stats["mass_flux_sphere"] = mass_flux_sphere;
+		stats["hydro_energy_flux_sphere"] = hydro_energy_flux_sphere;
+		stats["mhd_energy_flux_sphere"] = mhd_energy_flux_sphere;
+		stats["passive_scalar_flux_sphere"] = passive_scalar_flux_sphere;
+	}
 
 	const amrex::Real stellar_mass_at_birth = particleRegister_.computeTotalStellarMassAtBirth();
 	stats["stellar_mass_at_birth"] = stellar_mass_at_birth / C::M_solar;

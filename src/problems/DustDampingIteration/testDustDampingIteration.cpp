@@ -3,6 +3,7 @@
 ///
 
 #include "QuokkaSimulation.hpp"
+#include "dust/DustRuntimeParams.hpp"
 #include "util/fextract.hpp"
 #include <cmath>
 #include <format>
@@ -59,21 +60,19 @@ constexpr double Egas0_without_corr = P_INITIAL / (quokka::EOS_Traits<DustDampin
 constexpr double Egas0_internal_without_corr = P_INITIAL / (quokka::EOS_Traits<DustDampingWithoutCorrection>::gamma - 1.0);
 
 constexpr int numDustVars = Physics_NumVars::numDustVarsPerGroup;
-static constexpr amrex::GpuArray<amrex::Real, 2> dust_grain_radius = {0.02, 0.01};
-static constexpr amrex::GpuArray<amrex::Real, 2> dust_grain_density = {1.0, 1.0};
+namespace
+{
+// problem-specific grain defaults; input files may override them with dust.grain_radius and dust.grain_density
+AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 2> g_dust_grain_radius = {0.02, 0.01}; // NOLINT
+AMREX_GPU_MANAGED amrex::GpuArray<amrex::Real, 2> g_dust_grain_density = {1.0, 1.0};  // NOLINT
+} // namespace
 static constexpr bool enable_supersonic_correction_with = true;
 static constexpr bool enable_supersonic_correction_without = false;
 
-template <> struct Physics_Traits<DustDampingWithCorrection> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<DustDampingWithCorrection> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_dust_enabled = true;
 	static constexpr int nDustGroups = 2; // number of dust groups
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = 1.0;
 	static constexpr double gravitational_constant = 1.0;
@@ -81,16 +80,10 @@ template <> struct Physics_Traits<DustDampingWithCorrection> {
 	static constexpr double radiation_constant = 1.0;
 };
 
-template <> struct Physics_Traits<DustDampingWithoutCorrection> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<DustDampingWithoutCorrection> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_dust_enabled = true;
 	static constexpr int nDustGroups = 2; // number of dust groups
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = 1.0;
 	static constexpr double gravitational_constant = 1.0;
@@ -99,21 +92,22 @@ template <> struct Physics_Traits<DustDampingWithoutCorrection> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustDrag<DustDampingWithCorrection>::ComputeReciprocalStoppingTime(amrex::Real rho_g,
-											      amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-											      amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag, double cs)
-    -> amrex::GpuArray<amrex::Real, nDustGroups_>
-{
-	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, dust_grain_radius, dust_grain_density, enable_supersonic_correction_with);
-}
-
-template <>
-AMREX_GPU_HOST_DEVICE auto DustDrag<DustDampingWithoutCorrection>::ComputeReciprocalStoppingTime(amrex::Real rho_g,
+AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingWithCorrection>::ComputeReciprocalStoppingTime(amrex::Real rho_g,
 												 amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
 												 amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag,
 												 double cs) -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
-	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, dust_grain_radius, dust_grain_density, enable_supersonic_correction_without);
+	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, g_dust_grain_radius, g_dust_grain_density, enable_supersonic_correction_with);
+}
+
+template <>
+AMREX_GPU_HOST_DEVICE auto DustSources<DustDampingWithoutCorrection>::ComputeReciprocalStoppingTime(amrex::Real rho_g,
+												    amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
+												    amrex::GpuArray<amrex::Real, nDustGroups_> rel_vel_mag,
+												    double cs) -> amrex::GpuArray<amrex::Real, nDustGroups_>
+{
+	return ComputeReciprocalStoppingTimeKwok(rho_g, rho_d, rel_vel_mag, cs, g_dust_grain_radius, g_dust_grain_density,
+						 enable_supersonic_correction_without);
 }
 
 template <> void QuokkaSimulation<DustDampingWithCorrection>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -188,78 +182,6 @@ template <> void QuokkaSimulation<DustDampingWithoutCorrection>::setInitialCondi
 			state_cc(i, j, k, HydroSystem<DustDampingWithoutCorrection>::x3DustMomentum_index + numDustVars) = 0.;
 		}
 	});
-}
-
-template <> void QuokkaSimulation<DustDampingWithCorrection>::computeBeforeTimestep()
-{
-	// extract initial physical quantities at t=0
-	if (amrex::ParallelDescriptor::IOProcessor() && userData_.t_vec_.empty()) {
-		auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
-
-		userData_.t_vec_.push_back(0.0); // initial time t=0
-
-		// extract physical quantities
-		const double density = values.at(HydroSystem<DustDampingWithCorrection>::density_index)[0];
-		const double momentum_x = values.at(HydroSystem<DustDampingWithCorrection>::x1Momentum_index)[0];
-		const double Egas_total = values.at(HydroSystem<DustDampingWithCorrection>::energy_index)[0];
-
-		// store gas velocity
-		const double v_gas = momentum_x / density;
-		userData_.v_gas_vec_.push_back(v_gas);
-
-		// store gas total energy
-		userData_.E_gas_vec_.push_back(Egas_total);
-
-		if constexpr (Physics_Traits<DustDampingWithCorrection>::is_dust_enabled) {
-			// store dust1 velocity
-			const double dust1_density = values.at(HydroSystem<DustDampingWithCorrection>::dustDensity_index)[0];
-			const double dust1_momentum_x = values.at(HydroSystem<DustDampingWithCorrection>::x1DustMomentum_index)[0];
-			const double v_dust1 = dust1_momentum_x / dust1_density;
-			userData_.v_dust1_vec_.push_back(v_dust1);
-
-			// store dust2 velocity
-			const double dust2_density = values.at(HydroSystem<DustDampingWithCorrection>::dustDensity_index + numDustVars)[0];
-			const double dust2_momentum_x = values.at(HydroSystem<DustDampingWithCorrection>::x1DustMomentum_index + numDustVars)[0];
-			const double v_dust2 = dust2_momentum_x / dust2_density;
-			userData_.v_dust2_vec_.push_back(v_dust2);
-		}
-	}
-}
-
-template <> void QuokkaSimulation<DustDampingWithoutCorrection>::computeBeforeTimestep()
-{
-	// extract initial physical quantities at t=0
-	if (amrex::ParallelDescriptor::IOProcessor() && userData_.t_vec_.empty()) {
-		auto [position, values] = fextract(state_new_cc_[0], Geom(0), 0, 0.5);
-
-		userData_.t_vec_.push_back(0.0); // initial time t=0
-
-		// extract physical quantities
-		const double density = values.at(HydroSystem<DustDampingWithoutCorrection>::density_index)[0];
-		const double momentum_x = values.at(HydroSystem<DustDampingWithoutCorrection>::x1Momentum_index)[0];
-		const double Egas_total = values.at(HydroSystem<DustDampingWithoutCorrection>::energy_index)[0];
-
-		// store gas velocity
-		const double v_gas = momentum_x / density;
-		userData_.v_gas_vec_.push_back(v_gas);
-
-		// store gas total energy
-		userData_.E_gas_vec_.push_back(Egas_total);
-
-		if constexpr (Physics_Traits<DustDampingWithoutCorrection>::is_dust_enabled) {
-			// store dust1 velocity
-			const double dust1_density = values.at(HydroSystem<DustDampingWithoutCorrection>::dustDensity_index)[0];
-			const double dust1_momentum_x = values.at(HydroSystem<DustDampingWithoutCorrection>::x1DustMomentum_index)[0];
-			const double v_dust1 = dust1_momentum_x / dust1_density;
-			userData_.v_dust1_vec_.push_back(v_dust1);
-
-			// store dust2 velocity
-			const double dust2_density = values.at(HydroSystem<DustDampingWithoutCorrection>::dustDensity_index + numDustVars)[0];
-			const double dust2_momentum_x = values.at(HydroSystem<DustDampingWithoutCorrection>::x1DustMomentum_index + numDustVars)[0];
-			const double v_dust2 = dust2_momentum_x / dust2_density;
-			userData_.v_dust2_vec_.push_back(v_dust2);
-		}
-	}
 }
 
 template <> void QuokkaSimulation<DustDampingWithCorrection>::computeAfterTimestep()
@@ -339,12 +261,37 @@ auto run_reference_simulation() -> SimulationData<DustDampingWithCorrection>
 	sim.reconstructionOrder_ = 3;
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.plotfileInterval_ = -1;
-	sim.cflNumber_ = 1000000.0;
-	sim.constantDt_ = 0.00001;
+	sim.cflNumber_ = 1000000.0; // large CFL number to avoid CFL violation
+	sim.constantDt_ = 0.00005;  // fixed small timestep for reference solution
 	sim.enableIterDustStoptime_ = 0;
 	sim.print_dust_counter_ = false;
 
 	sim.setInitialConditions();
+	// store initial values for t=0 plotting
+	auto [_, val_ini] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.5);
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		sim.userData_.t_vec_.push_back(0.0);
+
+		const double initial_density = val_ini.at(HydroSystem<DustDampingWithCorrection>::density_index)[0];
+		const double initial_momentum_x = val_ini.at(HydroSystem<DustDampingWithCorrection>::x1Momentum_index)[0];
+		const double initial_Egas_total = val_ini.at(HydroSystem<DustDampingWithCorrection>::energy_index)[0];
+		const double initial_v_gas = initial_momentum_x / initial_density;
+		sim.userData_.v_gas_vec_.push_back(initial_v_gas);
+		sim.userData_.E_gas_vec_.push_back(initial_Egas_total);
+
+		if constexpr (Physics_Traits<DustDampingWithCorrection>::is_dust_enabled) {
+			const double initial_dust1_density = val_ini.at(HydroSystem<DustDampingWithCorrection>::dustDensity_index)[0];
+			const double initial_dust1_momentum_x = val_ini.at(HydroSystem<DustDampingWithCorrection>::x1DustMomentum_index)[0];
+			const double initial_v_dust1 = initial_dust1_momentum_x / initial_dust1_density;
+			sim.userData_.v_dust1_vec_.push_back(initial_v_dust1);
+
+			const double initial_dust2_density = val_ini.at(HydroSystem<DustDampingWithCorrection>::dustDensity_index + numDustVars)[0];
+			const double initial_dust2_momentum_x = val_ini.at(HydroSystem<DustDampingWithCorrection>::x1DustMomentum_index + numDustVars)[0];
+			const double initial_v_dust2 = initial_dust2_momentum_x / initial_dust2_density;
+			sim.userData_.v_dust2_vec_.push_back(initial_v_dust2);
+		}
+	}
+
 	sim.evolve();
 
 	return sim.userData_;
@@ -363,6 +310,30 @@ auto run_iterative_with_correction() -> SimulationData<DustDampingWithCorrection
 	sim.print_dust_counter_ = true;
 
 	sim.setInitialConditions();
+	// store initial values for t=0 plotting
+	auto [_, val_ini] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.5);
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		sim.userData_.t_vec_.push_back(0.0);
+
+		const double initial_density = val_ini.at(HydroSystem<DustDampingWithCorrection>::density_index)[0];
+		const double initial_momentum_x = val_ini.at(HydroSystem<DustDampingWithCorrection>::x1Momentum_index)[0];
+		const double initial_Egas_total = val_ini.at(HydroSystem<DustDampingWithCorrection>::energy_index)[0];
+		const double initial_v_gas = initial_momentum_x / initial_density;
+		sim.userData_.v_gas_vec_.push_back(initial_v_gas);
+		sim.userData_.E_gas_vec_.push_back(initial_Egas_total);
+
+		if constexpr (Physics_Traits<DustDampingWithCorrection>::is_dust_enabled) {
+			const double initial_dust1_density = val_ini.at(HydroSystem<DustDampingWithCorrection>::dustDensity_index)[0];
+			const double initial_dust1_momentum_x = val_ini.at(HydroSystem<DustDampingWithCorrection>::x1DustMomentum_index)[0];
+			const double initial_v_dust1 = initial_dust1_momentum_x / initial_dust1_density;
+			sim.userData_.v_dust1_vec_.push_back(initial_v_dust1);
+
+			const double initial_dust2_density = val_ini.at(HydroSystem<DustDampingWithCorrection>::dustDensity_index + numDustVars)[0];
+			const double initial_dust2_momentum_x = val_ini.at(HydroSystem<DustDampingWithCorrection>::x1DustMomentum_index + numDustVars)[0];
+			const double initial_v_dust2 = initial_dust2_momentum_x / initial_dust2_density;
+			sim.userData_.v_dust2_vec_.push_back(initial_v_dust2);
+		}
+	}
 	sim.evolve();
 
 	return sim.userData_;
@@ -381,6 +352,30 @@ auto run_iterative_without_correction() -> SimulationData<DustDampingWithoutCorr
 	sim.print_dust_counter_ = true;
 
 	sim.setInitialConditions();
+	// store initial values for t=0 plotting
+	auto [_, val_ini] = fextract(sim.state_new_cc_[0], sim.Geom(0), 0, 0.5);
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		sim.userData_.t_vec_.push_back(0.0);
+
+		const double initial_density = val_ini.at(HydroSystem<DustDampingWithoutCorrection>::density_index)[0];
+		const double initial_momentum_x = val_ini.at(HydroSystem<DustDampingWithoutCorrection>::x1Momentum_index)[0];
+		const double initial_Egas_total = val_ini.at(HydroSystem<DustDampingWithoutCorrection>::energy_index)[0];
+		const double initial_v_gas = initial_momentum_x / initial_density;
+		sim.userData_.v_gas_vec_.push_back(initial_v_gas);
+		sim.userData_.E_gas_vec_.push_back(initial_Egas_total);
+
+		if constexpr (Physics_Traits<DustDampingWithoutCorrection>::is_dust_enabled) {
+			const double initial_dust1_density = val_ini.at(HydroSystem<DustDampingWithoutCorrection>::dustDensity_index)[0];
+			const double initial_dust1_momentum_x = val_ini.at(HydroSystem<DustDampingWithoutCorrection>::x1DustMomentum_index)[0];
+			const double initial_v_dust1 = initial_dust1_momentum_x / initial_dust1_density;
+			sim.userData_.v_dust1_vec_.push_back(initial_v_dust1);
+
+			const double initial_dust2_density = val_ini.at(HydroSystem<DustDampingWithoutCorrection>::dustDensity_index + numDustVars)[0];
+			const double initial_dust2_momentum_x = val_ini.at(HydroSystem<DustDampingWithoutCorrection>::x1DustMomentum_index + numDustVars)[0];
+			const double initial_v_dust2 = initial_dust2_momentum_x / initial_dust2_density;
+			sim.userData_.v_dust2_vec_.push_back(initial_v_dust2);
+		}
+	}
 	sim.evolve();
 
 	return sim.userData_;
@@ -431,6 +426,8 @@ auto compute_relative_error(const std::vector<double> &t_test, const std::vector
 
 auto problem_main() -> int
 {
+	quokka::dust::readDustGrainParams(g_dust_grain_radius, g_dust_grain_density);
+
 	// step 1: run the reference solution (non-iterative, fixed small time step, with correction enabled)
 	auto ref_data = run_reference_simulation();
 
@@ -473,33 +470,33 @@ auto problem_main() -> int
 
 	// determine whether the test has passed
 	int status = 0;
-	const double rel_err_tol = 0.01;
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		const double rel_err_tol = 0.01;
 
-	bool const with_corr_passed = (rel_err_with_corr_gas_vx <= rel_err_tol) && (rel_err_with_corr_dust1_vx <= rel_err_tol) &&
-				      (rel_err_with_corr_dust2_vx <= rel_err_tol) && (rel_err_with_corr_gas_E <= rel_err_tol);
+		bool const with_corr_passed = (rel_err_with_corr_gas_vx <= rel_err_tol) && (rel_err_with_corr_dust1_vx <= rel_err_tol) &&
+					      (rel_err_with_corr_dust2_vx <= rel_err_tol) && (rel_err_with_corr_gas_E <= rel_err_tol);
 
-	bool const without_corr_passed = (rel_err_without_corr_gas_vx <= rel_err_tol) && (rel_err_without_corr_dust1_vx <= rel_err_tol) &&
-					 (rel_err_without_corr_dust2_vx <= rel_err_tol) && (rel_err_without_corr_gas_E <= rel_err_tol);
+		bool const without_corr_passed = (rel_err_without_corr_gas_vx <= rel_err_tol) && (rel_err_without_corr_dust1_vx <= rel_err_tol) &&
+						 (rel_err_without_corr_dust2_vx <= rel_err_tol) && (rel_err_without_corr_gas_E <= rel_err_tol);
 
-	if (!with_corr_passed || !without_corr_passed) {
-		status = 1;
-		amrex::Print() << "\nTest FAILED: one or more errors exceed tolerance of " << rel_err_tol << "\n";
-		if (!with_corr_passed) {
-			amrex::Print() << "  - Iterative with correction failed\n";
+		if (!with_corr_passed || !without_corr_passed) {
+			status = 1;
+			amrex::Print() << "\nTest FAILED: one or more errors exceed tolerance of " << rel_err_tol << "\n";
+			if (!with_corr_passed) {
+				amrex::Print() << "  - Iterative with correction failed\n";
+			}
+			if (!without_corr_passed) {
+				amrex::Print() << "  - Iterative without correction failed\n";
+			}
+		} else {
+			amrex::Print() << "\nTest PASSED: all errors within tolerance of " << rel_err_tol << "\n";
 		}
-		if (!without_corr_passed) {
-			amrex::Print() << "  - Iterative without correction failed\n";
-		}
-	} else {
-		amrex::Print() << "\nTest PASSED: all errors within tolerance of " << rel_err_tol << "\n";
-	}
 
 #ifdef HAVE_PYTHON
-	if (!ref_data.t_vec_.empty() && !iter_with_corr_data.t_vec_.empty() && !iter_without_corr_data.t_vec_.empty()) {
 		// gas velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_gas_vec_,
-				    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+				    {{"label", "reference (non-iter, dt=0.00005)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
 		matplotlibcpp::plot(iter_with_corr_data.t_vec_, iter_with_corr_data.v_gas_vec_,
 				    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::plot(iter_without_corr_data.t_vec_, iter_without_corr_data.v_gas_vec_,
@@ -514,7 +511,7 @@ auto problem_main() -> int
 		// dust1 velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust1_vec_,
-				    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+				    {{"label", "reference (non-iter, dt=0.00005)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
 		matplotlibcpp::plot(iter_with_corr_data.t_vec_, iter_with_corr_data.v_dust1_vec_,
 				    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::plot(iter_without_corr_data.t_vec_, iter_without_corr_data.v_dust1_vec_,
@@ -529,7 +526,7 @@ auto problem_main() -> int
 		// dust2 velocity
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(ref_data.t_vec_, ref_data.v_dust2_vec_,
-				    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+				    {{"label", "reference (non-iter, dt=0.00005)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
 		matplotlibcpp::plot(iter_with_corr_data.t_vec_, iter_with_corr_data.v_dust2_vec_,
 				    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::plot(iter_without_corr_data.t_vec_, iter_without_corr_data.v_dust2_vec_,
@@ -544,7 +541,7 @@ auto problem_main() -> int
 		// gas energy
 		matplotlibcpp::clf();
 		matplotlibcpp::plot(ref_data.t_vec_, ref_data.E_gas_vec_,
-				    {{"label", "reference (non-iter, dt=0.00001)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
+				    {{"label", "reference (non-iter, dt=0.00005)"}, {"color", "k"}, {"linestyle", "--"}, {"linewidth", "0.7"}});
 		matplotlibcpp::plot(iter_with_corr_data.t_vec_, iter_with_corr_data.E_gas_vec_,
 				    {{"label", "iterative with correction"}, {"color", "r"}, {"linestyle", "--"}, {"marker", "o"}, {"markersize", "3"}});
 		matplotlibcpp::plot(iter_without_corr_data.t_vec_, iter_without_corr_data.E_gas_vec_,
@@ -555,8 +552,8 @@ auto problem_main() -> int
 		matplotlibcpp::title("Gas Energy");
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("./dust_damping_iteration_gas_energy.pdf");
-	}
 #endif
+	}
 
 	amrex::Print() << "\nTest complete.\n";
 	return status;

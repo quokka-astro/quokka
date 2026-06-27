@@ -14,7 +14,7 @@
 - `regression/`
     - The regression harness (`quokka-tests.ini`) enumerates long-running GPU test suites, including MPI launch commands, linked data files, and which executables to build ([regression/quokka-tests.ini](https://github.com/quokka-astro/quokka/blob/development/regression/quokka-tests.ini#L1-L146)).
 - `docs/`
-    - Source for the published documentation site (MkDocs). The landing page summarises Quokka’s goals and AMReX integration, and additional pages cover workflow diagrams, testing, debugging, and performance topics ([site overview](index.md), [simulation flowchart](flowchart.md), [test catalog](tests/index.md)).
+    - Source for the published documentation site (mdBook). The landing page summarises Quokka’s goals and AMReX integration, and additional pages cover workflow diagrams, testing, debugging, and performance topics ([site overview](index.md), [simulation flowchart](flowchart.md), [test catalog](tests/index.md)).
 
 ## Execution flow in practice
 - Start-up: `main.cpp` initialises AMReX, then calls `problem_main()` declared in `main.hpp` and implemented by each problem driver ([main.cpp](https://github.com/quokka-astro/quokka/blob/development/src/main.cpp#L1-L55), [main.hpp](https://github.com/quokka-astro/quokka/blob/development/src/main.hpp#L8-L19)).
@@ -24,14 +24,17 @@
 ## Build, test, and quality checks
 - **Build locally.** Follow the installation guide to clone with submodules, configure with CMake (Ninja or Make), and choose the desired dimensionality and accelerator backend ([installation guide](installation.md)).
 - **Automated tests.** `ninja test` or `ctest` exercises the bundled problem suite; for full GPU coverage, rely on the regression harness described earlier ([installation guide](installation.md), [quokka-tests.ini](https://github.com/quokka-astro/quokka/blob/development/regression/quokka-tests.ini#L65-L146)).
+- **Pre-commit checks.** Run `./scripts/bash/pre-commit.sh` to execute the same pre-commit hooks (YAML validation, clang-format, merge conflict detection, etc.) that the CI enforces. The script prefers `uv run pre-commit`, falls back to `pre-commit` directly, and auto-installs via `pip install --user` if neither is available — no manual setup required.
 - **Static analysis.** Run `clang-tidy` manually or via `scripts/tidy.sh` to match the repository’s CI checks, as documented in the How to Use clang-tidy guide ([clang-tidy how-to](howto_clang_tidy.md)).
 - **CUDA builds on macOS or Linux.** To build and test CUDA functionality locally, run `./scripts/bash/run-cuda-container.sh`. This script pulls the appropriate Docker image, launches a container, and performs a CUDA build—useful for catching CUDA-specific issues on your development machine.
+- **Fast GPU validation via a scoped CI pipeline.** When iterating on a single problem that requires GPU hardware (e.g. during AMD HIP development), you can temporarily restrict the CI pipeline to build and test only that one target. In `.ci/azure-pipelines.yml` and `.ci/azure-pipelines-amdgpu.yml`, add `--target <ProblemName>` to the `cmake --build` step and `-R "<ProblemName>"` to the `ctest` step, then push to trigger the pipeline. This avoids rebuilding and running the full test suite on shared GPU hardware, cutting pipeline time dramatically. Remember to revert these changes before merging.
 - **Writing and building documentation.** The developer is responsible for updating the documentation site. To build and view the documentation site locally:
 ```bash
-pip install -r docs/requirements.txt
-./scripts/bash/build_and_view_docs.sh
+./scripts/bash/install_mdbook.sh
+./scripts/bash/docs_build_and_view.sh
 ```
-Then open `http://[::]:8000/` in your browser to view the documentation locally.
+This uses the same mdBook install commands as the GitHub Actions docs jobs.
+Then open the printed `http://localhost:<port>/` URL in your browser to view the documentation locally.
 
 ## Where to dive deeper next
 1. **Physics modules.** Explore `src/hydro/` and `src/radiation/` alongside the corresponding documentation pages (`hydro_integrator.md`, radiation topics) to understand scheme implementations ([QuokkaSimulation.hpp](https://github.com/quokka-astro/quokka/blob/development/src/QuokkaSimulation.hpp#L66-L200), [overview page](index.md)).

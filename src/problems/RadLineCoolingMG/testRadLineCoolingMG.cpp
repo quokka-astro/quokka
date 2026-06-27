@@ -60,17 +60,11 @@ template <> struct quokka::EOS_Traits<CoolingProblemMG> {
 	static constexpr double gamma = 5. / 3.;
 };
 
-template <> struct Physics_Traits<CoolingProblemMG> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<CoolingProblemMG> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
-	static constexpr bool is_mhd_enabled = false;
 	static constexpr int nGroups = n_groups_;
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = 1.0;
@@ -180,7 +174,8 @@ template <> void QuokkaSimulation<CoolingProblemMG>::computeAfterTimestep()
 		const amrex::Real x2GasMom = values.at(RadSystem<CoolingProblemMG>::x2GasMomentum_index)[0];
 		const amrex::Real x3GasMom = values.at(RadSystem<CoolingProblemMG>::x3GasMomentum_index)[0];
 		const amrex::Real rho = values.at(RadSystem<CoolingProblemMG>::gasDensity_index)[0];
-		const amrex::Real Egas_i = RadSystem<CoolingProblemMG>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Etot_i);
+		static_assert(!Physics_Traits<CoolingProblemMG>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+		const amrex::Real Egas_i = quokka::EOS<CoolingProblemMG>::ComputeEintFromEgas(rho, x1GasMom, x2GasMom, x3GasMom, Etot_i, 0.0);
 		userData_.Tgas_vec_.push_back(quokka::EOS<CoolingProblemMG>::ComputeTgasFromEint(rho, Egas_i));
 		const double Erad_line_i = values.at(RadSystem<CoolingProblemMG>::radEnergy_index + Physics_NumVars::numRadVarsPerGroup * line_index)[0];
 		userData_.Erad_line_vec_.push_back(Erad_line_i);

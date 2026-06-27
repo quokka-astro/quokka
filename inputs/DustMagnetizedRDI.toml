@@ -1,0 +1,44 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo = [0.0, 0.0, 0.0]
+geometry.prob_hi = [1.0, 1.0, 1.0]
+quokka.bc = ["periodic", "periodic", "periodic"]
+
+# *****************************************************************
+# Verbosity
+# *****************************************************************
+amr.v = 0
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell = [64, 64, 64]
+amr.max_level = 0
+amr.max_grid_size = 64
+amr.blocking_factor = 32
+
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 0
+
+plotfile_interval = -1
+checkpoint_interval = -1
+max_timesteps = 200000
+stop_time = 55.0
+cfl = 0.25
+
+mhd.emf_averaging_scheme = "Balsara2025"
+mhd.emf_compute_scheme = "Balsara2025"
+
+dust.enable_iter_stoptime = 1
+dust.print_iteration_counts = 0
+dust.density_floor = 1.0e-12
+dust.grain_radius = 5.0
+dust.grain_density = 1.0
+
+[problem]
+write_csv = 1
+history_dt_over_ts0 = 0.1
+snapshot_times_over_ts0 = [6.2, 8.3, 17.0]
+slice_thickness_cells = 1
