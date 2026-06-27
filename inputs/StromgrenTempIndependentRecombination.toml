@@ -33,7 +33,8 @@ integrator.jacobian = 1
 integrator.renormalize_abundances = 0
 integrator.subtract_internal_energy = 0
 integrator.X_reject_buffer = 1e100
-integrator.rosenbrock_tableau = 3
+# ROS2S is too slow for this problem
+integrator.rosenbrock_tableau = 1
 
 plotfile_interval = 50
 plotfile_prefix = "StrmConstRec"
