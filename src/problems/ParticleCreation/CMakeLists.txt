@@ -1,9 +1,17 @@
-if (AMReX_SPACEDIM EQUAL 3)
-    add_executable(particle_creation particle_creation_from_cell.cpp ${QuokkaObjSources})
-    if(AMReX_GPU_BACKEND MATCHES "CUDA")
-        setup_target_for_cuda_compilation(particle_creation)
-    endif()
+if(AMReX_SPACEDIM EQUAL 3)
+  set(JOB_NAME ParticleCreation)
 
-    add_test(NAME ParticleCreation COMMAND particle_creation ../inputs/ParticleCreation.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-    add_test(NAME ParticleCreationAMR COMMAND particle_creation ../inputs/ParticleCreationAMR.in ${QuokkaTestParams} WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_executable(${JOB_NAME} test${JOB_NAME}.cpp ${QuokkaObjSources})
+  if(AMReX_GPU_BACKEND MATCHES "CUDA")
+    setup_target_for_cuda_compilation(${JOB_NAME})
+  endif()
+
+  add_test(
+    NAME ${JOB_NAME}
+    COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.in ${QuokkaTestParams}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  add_test(
+    NAME ParticleCreationAMR
+    COMMAND ${JOB_NAME} ../inputs/ParticleCreationAMR.in ${QuokkaTestParams}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 endif()

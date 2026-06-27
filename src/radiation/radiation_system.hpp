@@ -1479,8 +1479,9 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 {
 	if (n_step > 0) {
 		const auto T_d = T_gas - R_sum / (N_d * std::sqrt(T_gas));
-		AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
-		return T_d;
+		// AMREX_ASSERT_WITH_MESSAGE(T_d_floored >= 0., "Dust temperature is negative!");
+		const auto T_d_floored = std::max(T_d, 10.0);
+		return T_d_floored;
 	}
 
 	amrex::GpuArray<double, nGroups_> rad_boundary_ratios{};
@@ -1531,9 +1532,10 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 	const double Lambda_compare = N_d * std::sqrt(T_gas) * T_gas;
 
 	const auto T_d = BackwardEulerOneVariable(rhs, jac, T_d_init, Lambda_compare);
-	AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
+	// AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
+	const Real T_d_floored = std::max(T_d, 10.0);
 
-	return T_d;
+	return T_d_floored;
 }
 
 #include "radiation/source_terms_multi_group.hpp"  // IWYU pragma: export

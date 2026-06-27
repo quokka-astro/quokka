@@ -1,6 +1,3 @@
-if (AMReX_SPACEDIM GREATER_EQUAL 2)
-    add_executable(test_radiation_tophat test_radiation_tophat.cpp ${QuokkaObjSources})
-    if(AMReX_GPU_BACKEND MATCHES "CUDA")
-        setup_target_for_cuda_compilation(test_radiation_tophat)
-    endif()
+if(AMReX_SPACEDIM GREATER_EQUAL 2)
+  quokka_add_problem(JOB_NAME RadTophat ADD_TEST OFF)
 endif()

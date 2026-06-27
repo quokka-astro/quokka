@@ -1,8 +1,3 @@
-if (AMReX_SPACEDIM GREATER_EQUAL 3)
-    add_executable(shock_cloud cloud.cpp ${QuokkaObjSources})
-
-    if(AMReX_GPU_BACKEND MATCHES "CUDA")
-        setup_target_for_cuda_compilation(shock_cloud)
-    endif(AMReX_GPU_BACKEND MATCHES "CUDA")
-    
+if(AMReX_SPACEDIM GREATER_EQUAL 3)
+  quokka_add_problem(JOB_NAME ShockCloud ADD_TEST OFF)
 endif(AMReX_SPACEDIM GREATER_EQUAL 3)

@@ -1,8 +1,16 @@
-#include "DiagFramePlane.H"
+#include <cmath>
+#include <cstring>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+
 #include "AMReX_FPC.H"
+#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_PlotFileUtil.H"
+#include "AMReX_Print.H"
 #include "AMReX_VisMF.H"
+#include "DiagFramePlane.H"
 #include "yaml-cpp/yaml.h"
 
 void printLowerDimIntVect(std::ostream &a_File, const amrex::IntVect &a_IntVect, int skipDim)
@@ -76,6 +84,23 @@ void DiagFramePlane::init(const std::string &a_prefix, std::string_view a_diagNa
 		m_interpType = Quadratic;
 	} else {
 		amrex::Abort("Unknown interpolation type for " + a_prefix);
+	}
+
+	// Read particle types to include (optional, default to empty = no particles)
+	int const nParticleTypes = pp.countval("particles");
+	if (nParticleTypes > 0) {
+		m_particleTypes.resize(nParticleTypes);
+		for (int n = 0; n < nParticleTypes; ++n) {
+			pp.get("particles", m_particleTypes[n], n);
+		}
+
+		amrex::Print() << "DiagFramePlane: Including particles: ";
+		for (const auto &ptype : m_particleTypes) {
+			amrex::Print() << ptype << " ";
+		}
+		amrex::Print() << "\n";
+	} else {
+		amrex::Print() << "DiagFramePlane: No particles will be included\n";
 	}
 }
 

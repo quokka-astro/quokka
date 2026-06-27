@@ -2,7 +2,7 @@
 
 **Quadrilateral, Umbra-producing, Orthogonal, Kangaroo-conserving Kode for Astrophysics!**
 
-Quokka is a two-moment radiation hydrodynamics code that uses the piecewise-parabolic method, with AMR and subcycling in time. Runs on CPUs (MPI+vectorized) or NVIDIA GPUs (MPI+CUDA) with a single-source codebase. Written in C++17. (100% Fortran-free.)
+Quokka is a two-moment radiation hydrodynamics code that uses the piecewise-parabolic method, with AMR and subcycling in time. Runs on CPUs (MPI+vectorized) or NVIDIA GPUs (MPI+CUDA) with a single-source codebase. Written in C++20. (100% Fortran-free.)
 
 !!! Note  
     The Quokka methods paper is now [available on arXiv](https://arxiv.org/abs/2110.01792).

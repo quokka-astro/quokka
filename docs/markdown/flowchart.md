@@ -54,14 +54,22 @@ flowchart TB
                 subgraph forLoop ["for i in range(nsubSteps):"]
                     direction TB
                     G1["swapRadiationState()"]
-                    G2["advanceRadiationSubstepAtLevel()"]
-                    
+                    G2["advanceRadiationForwardEuler()"]
+
                     subgraph operator ["operatorSplitSourceTerms()"]
                         direction TB
                         K1["SetRadEnergySource()"]
-                        K2["AddSourceTerms()"]
-                        
+												K2["AddSourceTermsSingleGroup() or AddSourceTermsMultiGroup()"]
                         K1 --> K2
+                    end
+                    
+										G5["advanceRadiationMidpointRK2()"]
+
+                    subgraph operator ["operatorSplitSourceTerms()"]
+                        direction TB
+                        K3["SetRadEnergySource()"]
+												K4["AddSourceTermsSingleGroup() or AddSourceTermsMultiGroup()"]
+                        K3 --> K4
                     end
                     
                     G1 --> G2 --> operator

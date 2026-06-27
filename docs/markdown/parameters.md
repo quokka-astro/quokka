@@ -71,7 +71,9 @@ These parameters are read in the ``QuokkaSimulation<problem_t>::readParmParse()`
 
 | Parameter Name | Type | Description |
 |----|----|----|
-| mhd.emf_averaging_method | String | Determines the method used to average EMF at edges. Can be set to `BalsaraSpicer` or `LD04`. Default: `LD04`. |
+| mhd.emf_computing_scheme | String | Determines the method used to compute the EMF at edges. Can be set to `FelkerStone2017`, `Balsara2025`, or `Quokka2026`. Default: `Balsara2025`. |
+
+| mhd.emf_averaging_scheme | String | Determines the method used to average EMF at edges. Can be set to `BalsaraSpicer2004`, `LondrilloDelZanna2004`, or `Balsara2025`. Default: `Balsara2025`. |
 | mhd.emf_reconstruction_order | Integer | Determines the order of spatial reconstruction algorithm used for EMF computation. Can be set to 1 (piecewise constant), 2 (piecewise linear; PLM), 3 (piecewise parabolic; PPM), or 5 (extrema-preserving xPPM). Default: 5 (xPPM). |
 
 ## Optically-thin radiative cooling

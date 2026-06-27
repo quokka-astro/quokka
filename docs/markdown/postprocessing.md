@@ -24,23 +24,8 @@ Other tools:
 !!! Warning
     There are [known bugs](https://github.com/yt-project/yt/issues/3889) that affect Quokka outputs. PlotfileTools (see above) can be used instead for axis-aligned slice plots.
 
-The plotfile directory can be loaded with `yt.load` as usual. However, the standard fields such as `('gas', 'density')` are not defined. Instead, you have to use non-standard fields. Examine `ds.field_list` to see the fields that exist in the plotfiles. These should be:
-
-``` python
-[('boxlib', 'gasDensity'), ('boxlib', 'gasEnergy'),
-('boxlib', 'radEnergy'), ('boxlib', 'scalar'),
-('boxlib', 'temperature'), ('boxlib', 'x-GasMomentum'),
-('boxlib', 'x-RadFlux'), ('boxlib', 'y-GasMomentum'),
-('boxlib', 'y-RadFlux'), ('boxlib', 'z-GasMomentum'), ('boxlib', 'z-RadFlux')]
-```
-
-For details, see the [yt documentation on reading AMReX data](https://yt-project.org/doc/examining/loading_data.html#amrex-boxlib-data).
-
 !!! Tip
     One of the most useful things to do is to convert the data into a uniform-resolution NumPy array with the [covering_grid](https://yt-project.org/doc/examining/low_level_inspection.html#examining-grid-data-in-a-fixed-resolution-array) function.
-
-!!! Tip
-    This [WarpX script](https://warpx.readthedocs.io/en/latest/dataanalysis/plot_parallel.html) may be useful as a starting point for visualizing a time series of outputs. This script will require some modification to work with Quokka outputs.
 
 We have a fork of YT that includes a customized Quokka frontend: [https://github.com/chongchonghe/yt](https://github.com/chongchonghe/yt). To install it, run `pip install "yt[quokka] @ git+https://github.com/chongchonghe/yt.git"`. A comprehensive documentation is available at [this link](https://github.com/chongchonghe/yt/blob/Rongjun-ANUquokka-frontend/doc/source/examining/loading_data.rst#quokka-data), and a Jupyter Notebook with tutorials is available at [README.ipynb](https://github.com/Rongjun-ANU/README-of-yt-frontend-for-QUOKKA/blob/main/README.ipynb).
 

@@ -1,9 +1,18 @@
 #ifndef DIAGFRAMEPLANE_H
 #define DIAGFRAMEPLANE_H
 
+#include <string>
+#include <vector>
+
 #include "AMReX_PlotFileUtil.H"
 #include "AMReX_VisMF.H"
 #include "DiagBase.H"
+
+// Forward declaration
+namespace quokka
+{
+template <typename problem_t> class PhysicsParticleRegister;
+} // namespace quokka
 
 class DiagFramePlane : public DiagBase::Register<DiagFramePlane>
 {
@@ -21,6 +30,9 @@ class DiagFramePlane : public DiagBase::Register<DiagFramePlane>
 	template <typename problem_t> void processDiag(int a_nstep, const amrex::Real &a_time);
 
 	void addVars(amrex::Vector<std::string> &a_varList) override;
+
+	// Get the list of particle types to include (empty means none)
+	[[nodiscard]] auto getParticleTypes() const -> const std::vector<std::string> & { return m_particleTypes; }
 
 	void Write2DMultiLevelPlotfile(const std::string &a_pltfile, int a_nlevels, const amrex::Vector<const amrex::MultiFab *> &a_slice,
 				       const amrex::Vector<std::string> &a_varnames, const amrex::Vector<amrex::Geometry> &a_geoms, const amrex::Real &a_time,
@@ -47,6 +59,9 @@ class DiagFramePlane : public DiagBase::Register<DiagFramePlane>
 	// Variables output
 	amrex::Vector<std::string> m_fieldNames;
 	amrex::Gpu::DeviceVector<int> m_fieldIndices_d;
+
+	// Particle types to include (default: empty)
+	std::vector<std::string> m_particleTypes;
 
 	// Plane definition
 	int m_normal;
@@ -140,6 +155,13 @@ template <typename problem_t> void DiagFramePlane::processDiag(int a_nstep, cons
 		amrex::Vector<int> const step_array(nlevs, a_nstep);
 		Write2DMultiLevelPlotfile(diagfile, nlevs, GetVecOfConstPtrs(planeData), m_fieldNames, pltGeoms, a_time, step_array, ref_ratio,
 					  simulationMetadata);
+
+		// If particles are requested, write them
+		if (!m_particleTypes.empty()) {
+			auto *sim = getSim<problem_t>();
+			sim->particleRegister_.writePlotFileFiltered(diagfile, m_particleTypes);
+			amrex::Print() << "  Wrote particles to frame plane " << diagfile << "\n";
+		}
 	}
 }
 

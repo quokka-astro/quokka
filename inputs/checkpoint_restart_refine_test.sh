@@ -86,7 +86,7 @@ $SED_INPLACE 's/do_subcycle = 0/do_subcycle = 1/' fine_amr.in
 
 echo "=== Step 1: Create coarse AMR checkpoint (32^3 base + 1 AMR level) ==="
 # Run coarse AMR simulation to create checkpoints
-mpirun --use-hwthread-cpus -n $NPROC $BUILD_DIR/src/problems/HydroBlast3D/test_hydro3d_blast coarse_amr.in stop_time=$CHECKPOINT_TIME
+mpirun --use-hwthread-cpus -n $NPROC $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D coarse_amr.in stop_time=$CHECKPOINT_TIME
 
 # Save and find last checkpoint
 mkdir -p step1_32cube
@@ -132,7 +132,7 @@ fi
 
 echo ""
 echo "=== Step 2: Run native fine AMR simulation (64^3 base + 1 AMR level) ==="
-mpirun --use-hwthread-cpus -n $NPROC $BUILD_DIR/src/problems/HydroBlast3D/test_hydro3d_blast fine_amr.in stop_time=$STOP_TIME
+mpirun --use-hwthread-cpus -n $NPROC $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D fine_amr.in stop_time=$STOP_TIME
 
 # Save native results  
 mkdir -p step2_native_64cube
@@ -150,7 +150,7 @@ echo "Native fine AMR simulation completed at time t=$native_time"
 
 echo ""
 echo "=== Step 3: Restart with multi-level universal refinement ==="
-mpirun --use-hwthread-cpus -n $NPROC $BUILD_DIR/src/problems/HydroBlast3D/test_hydro3d_blast fine_amr.in restartfile=$last_chk stop_time=$STOP_TIME
+mpirun --use-hwthread-cpus -n $NPROC $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D fine_amr.in restartfile=$last_chk stop_time=$STOP_TIME
 
 # Save restart results
 mkdir -p step3_restart_64cube

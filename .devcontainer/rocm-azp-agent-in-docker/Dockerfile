@@ -8,6 +8,7 @@ USER root
 RUN zypper --non-interactive refresh && \
     zypper --non-interactive update && \
     zypper --non-interactive install \
+        ccache \
         curl \
         git \
         jq \
