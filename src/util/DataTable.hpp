@@ -850,10 +850,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		amrex::Gpu::streamSynchronize();
 	}
 
-	template <typename DataType>
-	void initialize_common(const std::array<amrex::Real, Ndim> &x_mins, const std::array<amrex::Real, Ndim> &x_maxs, const std::array<int, Ndim> &n_xs,
-			       const std::array<SpacingType, Ndim> &spacing_types, const std::array<amrex::Vector<amrex::Real>, Ndim> & /*coords*/,
-			       const DataType &data)
+	void initializeStorage(const std::array<amrex::Real, Ndim> &x_mins, const std::array<amrex::Real, Ndim> &x_maxs, const std::array<int, Ndim> &n_xs,
+			       const std::array<SpacingType, Ndim> &spacing_types)
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "Only 1D-4D tables are supported");
 
@@ -914,6 +912,13 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 			data_h_[out_idx] = std::make_unique<data_table_type>(lo, hi, amrex::The_Pinned_Arena());
 			data_d_[out_idx] = std::make_unique<data_table_type>(lo, hi);
+		}
+	}
+
+	template <typename DataType>
+	void fillDataTables(const DataType &data)
+	{
+		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 			auto data_table = data_h_[out_idx]->table();
 
 			if constexpr (Ndim == 1) {
@@ -946,7 +951,6 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				}
 			}
 		}
-		// Ensure kernels only see device-resident tables.
 		sync_tables_to_device();
 	}
 
@@ -956,7 +960,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 						 std::format("Flat data size mismatch! (expected: {}, actual: {})", flatDataSize(sizes_), flat_data.size()));
 
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-			auto data_table = data_[out_idx]->table();
+			auto data_table = data_h_[out_idx]->table();
 
 			if constexpr (Ndim == 1) {
 				for (int i = 0; i < sizes_[0]; ++i) {
@@ -989,6 +993,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				}
 			}
 		}
+		sync_tables_to_device();
 	}
 
 	void initializeCommonFlat(const std::array<amrex::Real, Ndim> &x_mins, const std::array<amrex::Real, Ndim> &x_maxs, const std::array<int, Ndim> &n_xs,
@@ -998,8 +1003,6 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		fillDataTablesFlat(flat_data);
 	}
 
-	// Optimized initialization that takes bounds, sizes, and spacing directly
-	// coords parameter is optional - if empty, coordinates will be generated based on spacing type
 	template <typename DataType>
 	void initialize_common(const std::array<amrex::Real, Ndim> &x_mins, const std::array<amrex::Real, Ndim> &x_maxs, const std::array<int, Ndim> &n_xs,
 			       const std::array<SpacingType, Ndim> &spacing_types, const std::array<amrex::Vector<amrex::Real>, Ndim> & /*coords*/,
