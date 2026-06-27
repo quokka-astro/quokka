@@ -907,8 +907,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		}
 	}
 
-	template <typename DataType>
-	void fillDataTables(const DataType &data)
+	template <typename DataType> void fillDataTables(const DataType &data)
 	{
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
 			auto data_table = data_h_[out_idx]->table();
