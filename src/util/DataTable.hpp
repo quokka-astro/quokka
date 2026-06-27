@@ -835,6 +835,21 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
       private:
 	// Optimized initialization that takes bounds, sizes, and spacing directly
 	// coords parameter is optional - if empty, coordinates will be generated based on spacing type
+	void sync_tables_to_device()
+	{
+		for (int dim = 0; dim < Ndim; ++dim) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coords_h_[dim] != nullptr && coords_d_[dim] != nullptr,
+							 "Coordinate tables must be allocated before H2D copy.");
+			coords_d_[dim]->copy(*coords_h_[dim]);
+		}
+		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(data_h_[out_idx] != nullptr && data_d_[out_idx] != nullptr,
+							 "Data tables must be allocated before H2D copy.");
+			data_d_[out_idx]->copy(*data_h_[out_idx]);
+		}
+		amrex::Gpu::streamSynchronize();
+	}
+
 	template <typename DataType>
 	void initialize_common(const std::array<amrex::Real, Ndim> &x_mins, const std::array<amrex::Real, Ndim> &x_maxs, const std::array<int, Ndim> &n_xs,
 			       const std::array<SpacingType, Ndim> &spacing_types, const std::array<amrex::Vector<amrex::Real>, Ndim> & /*coords*/,
@@ -878,7 +893,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			// 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(static_cast<int>(coords[dim].size()) == sizes_[dim],
 			// 					 std::format("Provided coordinates size mismatch for dimension {}! (expected: {}, actual: {})",
 			// 						     dim, sizes_[dim], coords[dim].size()));
-			// 	auto coord_table = coords_[dim]->table();
+			// 	auto coord_table = coords_h_[dim]->table();
 			// 	for (int i = 0; i < sizes_[dim]; ++i) {
 			// 		coord_table(i) = coords[dim][i];
 			// 	}
@@ -897,8 +912,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		}
 
 		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
-			data_[out_idx] = std::make_unique<amrex::TableData<amrex::Real, Ndim>>(lo, hi, amrex::The_Pinned_Arena());
-			auto data_table = data_[out_idx]->table();
+			data_h_[out_idx] = std::make_unique<data_table_type>(lo, hi, amrex::The_Pinned_Arena());
+			data_d_[out_idx] = std::make_unique<data_table_type>(lo, hi);
+			auto data_table = data_h_[out_idx]->table();
 
 			if constexpr (Ndim == 1) {
 				for (int i = 0; i < sizes_[0]; ++i) {
