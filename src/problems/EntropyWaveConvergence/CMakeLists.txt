@@ -12,4 +12,10 @@ if(AMReX_SPACEDIM EQUAL 3)
     COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
   set_tests_properties(EntropyWaveConvergence PROPERTIES LABELS "MHD")
+
+  add_test(
+    NAME EntropyWave
+    COMMAND ${JOB_NAME} ../inputs/EntropyWave.toml
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  set_tests_properties(EntropyWave PROPERTIES LABELS "MHD")
 endif()

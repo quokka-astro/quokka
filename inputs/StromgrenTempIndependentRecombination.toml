@@ -1,0 +1,44 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  [0.0, 0.0, 0.0]
+geometry.prob_hi     =  [8.3e18, 8.3e18, 8.3e18]
+quokka.bc = ["reflecting", "reflecting", "reflecting"]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 0       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = [16, 16, 16]
+amr.max_level       = 0     # number of levels = max_level + 1
+#max_timesteps = 10
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 0
+
+stromgen.tend = 1.2e10
+stromgen.primary_species_1 = 1.0e-30
+stromgen.primary_species_2 = 1670
+stromgen.primary_species_3 = 1.0e-30
+stromgen.Q = 1e51
+
+photochemistry.enabled = 1
+integrator.use_number_densities = 1
+integrator.do_species_clip = 0
+integrator.jacobian = 1
+integrator.renormalize_abundances = 0
+integrator.subtract_internal_energy = 0
+integrator.X_reject_buffer = 1e100
+integrator.rosenbrock_tableau = 3
+
+plotfile_interval = 50
+plotfile_prefix = "StrmConstRec"
+
+network.recombination_switch = 1
+network.recombination_temperature_dependent = 0
+network.energy_switch = 0
+network.collisional_ionization_switch = 0
