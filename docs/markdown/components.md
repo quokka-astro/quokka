@@ -51,7 +51,7 @@ This matrix covers hydro, MHD, radiation, cooling, chemistry, particles, and the
 | Module | Hydro | MHD | Radiation | Cooling | Photoionization | Chemistry | Particles | Dust |
 | ------ |:-----:|:---:|:---------:|:-------:|:---------------:|:---------:|:---------:|:----:|
 | Hydro | - | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| MHD | - | - | ❌ | ✅ | ⚠️ | ⚠️ | ✅ | ⚠️ |
+| MHD | - | - | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ⚠️ |
 | Radiation | - | - | - | ⚠️ | ✅ | | ✅ | |
 | Cooling | - | - | - | - | ❌ | ⚠️ | ✅ | |
 | Photoionization | - | - | - | - | - | | ⚠️ | |
@@ -65,7 +65,7 @@ Notes:
 - `Hydro + radiation` is tested by the radiation-hydrodynamics problems such as `RadhydroPulse*`, `RadhydroShock*`, `RadhydroShell`, `RadTube`, and `RadhydroBB`.
 - `Hydro + cooling` is tested by `ResampledCoolingTest`, `ShockCloud`, `RandomBlast`, and `SN`.
 - `Hydro + chemistry` is tested by `PrimordialChem` and `PopIII`.
-- `MHD + radiation` is explicitly disabled in `src/QuokkaSimulation.hpp` with `static_assert(!(is_mhd_enabled && is_radiation_enabled), "MHD + Radiation is not supported yet.")`.
+- `MHD + radiation` is tested by `RadhydroPulseMGconst` (Problem 3: `MGproblemMHD`, a multigroup advecting radiation pulse with a constant background magnetic field). The combination is 3D-only because MHD requires `AMREX_SPACEDIM == 3`.
 - `MHD + cooling` is exercised by the `SN` problem with `is_mhd_enabled = true` and `cooling.enabled = 1`.
 - `Hydro + photoionization` is tested by `DTypeFront`, `StromgrenSphere`, and `OneZonePhotoionization`.
 - `Radiation + photoionization` is tested by `DTypeFront` and `StromgrenSphere` — photoionization requires `is_radiation_enabled = true`.

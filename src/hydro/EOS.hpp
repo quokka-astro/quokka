@@ -9,7 +9,6 @@
 
 #include <cmath>
 #include <optional>
-#include <tuple>
 
 #include "util/Optional.hpp"
 
@@ -72,6 +71,16 @@ template <typename problem_t> class EOS
 	    -> amrex::Real;
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto ComputeIsothermalSoundSpeed(amrex::Real rho, amrex::Real Pressure) -> amrex::Real;
+
+	// Compute gas internal energy from gas total energy (Eint + Ekin, NOT including B field).
+	// magnetic_energy (0.5 * B^2) is explicitly required: pass 0.0 for non-MHD problems.
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto ComputeEintFromEgas(double rho, double mx, double my, double mz, double Etot, double magnetic_energy)
+	    -> double;
+
+	// Compute gas total energy (Eint + Ekin, NOT including B field) from gas internal energy.
+	// magnetic_energy (0.5 * B^2) is explicitly required: pass 0.0 for non-MHD problems.
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE static auto ComputeEgasFromEint(double rho, double mx, double my, double mz, double Eint, double magnetic_energy)
+	    -> double;
 
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma; // needed for HLLD solver
 
@@ -436,6 +445,24 @@ AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeIsothermalS
 	}
 
 	return cs;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEintFromEgas(const double rho, const double mx, const double my, const double mz, const double Etot,
+							       const double magnetic_energy) -> double
+{
+	const double Ekin = 0.5 * (mx * mx + my * my + mz * mz) / rho;
+	const double Eint = Etot - Ekin - magnetic_energy;
+	AMREX_ASSERT_WITH_MESSAGE(Eint > 0., "Gas internal energy is not positive!");
+	return Eint;
+}
+
+template <typename problem_t>
+AMREX_GPU_HOST_DEVICE auto EOS<problem_t>::ComputeEgasFromEint(const double rho, const double mx, const double my, const double mz, const double Eint,
+							       const double magnetic_energy) -> double
+{
+	const double Ekin = 0.5 * (mx * mx + my * my + mz * mz) / rho;
+	return Eint + Ekin + magnetic_energy;
 }
 
 } // namespace quokka
