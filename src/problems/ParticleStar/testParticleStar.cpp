@@ -144,19 +144,22 @@ auto problem_main() -> int
 	amrex::Real const vol = AMREX_D_TERM(dx0[0], *dx0[1], *dx0[2]);
 	amrex::Real const m_gas_init = sim.state_new_cc_[0].sum(HydroSystem<ParticleStar>::density_index) * vol;
 
-	// get total particle mass of the initial state
-	const int mass_index = 3;
-	[[maybe_unused]] const auto [ids_init, real_data_init, int_data_init] =
-	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Star)->getParticleDataAtAllLevels();
-	amrex::Real const m_stars_init = std::accumulate(real_data_init.begin(), real_data_init.end(), 0.0,
-							 [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
-	const double m_tot_init = m_gas_init + m_stars_init;
-
 	int status = 0;
 
 	// evolve to step 1
 	sim.maxTimesteps_ = 1;
 	sim.evolve();
+
+	// get total particle mass of the initial state
+	const int mass_index = quokka::StarParticleMassIdx;
+	const int radius_index = quokka::StarParticleRadiusIdx;
+	[[maybe_unused]] const auto [ids_init, real_data_init, int_data_init] =
+	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Star)->getParticleDataAtAllLevels();
+	amrex::Real const m_stars_init = std::accumulate(real_data_init.begin(), real_data_init.end(), 0.0,
+							 [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
+	amrex::Real const m_radius_init = std::accumulate(real_data_init.begin(), real_data_init.end(), 0.0,
+							 [radius_index](double sum, const auto &particle) { return sum + particle[radius_index]; });
+	const double m_tot_init = m_gas_init + m_stars_init;
 
 	// get total gas mass after step 1
 	amrex::Real const m_gas_step1 = sim.state_new_cc_[0].sum(HydroSystem<ParticleStar>::density_index) * vol;
@@ -177,13 +180,14 @@ auto problem_main() -> int
 	const double m_tot_step1 = m_gas_step1 + m_stars_step1;
 
 	amrex::Print() << "Initial gas mass = " << m_gas_init << "\n";
-	amrex::Print() << "Initial particle mass = " << m_stars_init << "\n";
-	amrex::Print() << "Initial total mass = " << m_tot_init << "\n";
+	// amrex::Print() << "Initial total mass = " << m_tot_init << "\n";
 
 	// Check relative error in the formation step and confirm mass is conserved to machine precision
 	const double rel_error_gas_mass_step1 = std::abs(m_tot_init - m_tot_step1) / m_tot_init;
 	amrex::Print() << "Step 1: total mass = " << m_tot_step1 << "\n";
 	amrex::Print() << "Step 1: (total_mass - initial_total_mass) / initial_total_mass = " << rel_error_gas_mass_step1 << "\n";
+	amrex::Print() << "Step 1: particle mass = " << m_stars_init << "\n";
+	amrex::Print() << "Step 1: particle radius = " << m_radius_init << "\n";
 	const double rel_error_total_mass_step1 = 1.0e-14;
 	if (!(rel_error_gas_mass_step1 < rel_error_total_mass_step1)) {
 		status = 1;
@@ -204,6 +208,8 @@ auto problem_main() -> int
 	    sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::Star)->getParticleDataAtAllLevels();
 	amrex::Real const m_stars_final = std::accumulate(real_data_final.begin(), real_data_final.end(), 0.0,
 							  [mass_index](double sum, const auto &particle) { return sum + particle[mass_index]; });
+	amrex::Real const m_radius_final = std::accumulate(real_data_final.begin(), real_data_final.end(), 0.0,
+							 [radius_index](double sum, const auto &particle) { return sum + particle[radius_index]; });
 	const double m_tot_final = m_gas_final + m_stars_final;
 
 	// Check relative error in the accretion step and confirm mass is conserved to machine precision

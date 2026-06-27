@@ -337,6 +337,9 @@ class StellarUpdate
 		amrex::Real radius = p.rdata(StarParticleRadiusIdx);
 		auto burn_state = static_cast<burningState>(p.idata(StarParticleBurnStateIdx));
 
+		// TODO(CCH): check this
+		radius = StellarPhysics::rad_init(mdot);
+
 		// Initialize if needed
 		if (burn_state == burningState::Uninitialized) {
 			if (mass < StellarConstants::M_rad_min || mdot == 0.0) {
@@ -344,7 +347,6 @@ class StellarUpdate
 			}
 
 			n = StellarPhysics::n_init(mdot);
-			radius = StellarPhysics::rad_init(mdot);
 			burn_state = burningState::None;
 
 			p.rdata(StarParticleNIdx) = n;
