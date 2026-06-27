@@ -152,7 +152,7 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::computeAfterTimestep()
 			coolingTableType_ = "resampled";
 		}
 		if (coolingTableType_ == "resampled") {
-			T = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, resampledTables_.const_tables());
+			T = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, resampledTables_.const_tables_host());
 		} else {
 			amrex::Abort("Unsupported cooling table type: " + coolingTableType_);
 		}

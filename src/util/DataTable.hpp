@@ -614,7 +614,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		initialize_common(coords, data);
 	}
 
-	// Get GPU-friendly const tables
+	// Get GPU-friendly const tables (device-backed; only safe to access from GPU kernels).
 	[[nodiscard]] auto const_tables() const -> DataTableGpuConst<Ndim, Nout, oob_policy>
 	{
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(is_initialized(), "DataTable must be initialized before getting const tables!");
@@ -638,6 +638,36 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		    dcoord_,	    // dcoord array
 		    sizes_,	    // sizes array
 		    output_spacing_ // output spacing (converted to enum)
+		};
+		return tables;
+	}
+
+	// Get host-accessible const tables (pinned memory; safe to read on the CPU).
+	// Use this for host-side initialization code that reads table values directly.
+	// GPU kernels should use const_tables() instead for optimal performance.
+	[[nodiscard]] auto const_tables_host() const -> DataTableGpuConst<Ndim, Nout, oob_policy>
+	{
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(is_initialized(), "DataTable must be initialized before getting const tables!");
+
+		std::array<amrex::Table1D<const amrex::Real>, Ndim> coord_tables{};
+		for (int i = 0; i < Ndim; ++i) {
+			coord_tables[i] = coords_h_[i]->const_table();
+		}
+
+		std::array<typename DataTableGpuConst<Ndim, Nout, oob_policy>::single_data_table_type, Nout> data_tables{};
+		for (int out_idx = 0; out_idx < Nout; ++out_idx) {
+			data_tables[out_idx] = data_h_[out_idx]->const_table();
+		}
+
+		DataTableGpuConst<Ndim, Nout, oob_policy> tables{
+		    coord_tables,
+		    data_tables,
+		    coord_min_,
+		    coord_max_,
+		    spacing_types_,
+		    dcoord_,
+		    sizes_,
+		    output_spacing_
 		};
 		return tables;
 	}
