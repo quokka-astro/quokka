@@ -1,5 +1,5 @@
 // ABOUTME: Tests O(v/c) photoionization momentum deposition after the photochemistry burn.
-// ABOUTME: Compares gas momentum to absorbed chem-band radiation flux divided by c^2.
+// ABOUTME: Verifies absorbed photon momentum changes kinetic energy, not internal energy.
 //==============================================================================
 // TwoMomentRad - a radiation transport library for patch-based AMR codes
 // Copyright 2020 Benjamin Wibking.
@@ -43,6 +43,12 @@ struct MomentumCheck {
 	amrex::Real gas_py{};
 	amrex::Real gas_pz{};
 	amrex::Real expected_px{};
+};
+
+struct EnergyCheck {
+	amrex::Real gas_energy{};
+	amrex::Real gas_internal_energy{};
+	amrex::Real gas_kinetic_energy{};
 };
 } // namespace
 
@@ -198,6 +204,32 @@ auto compute_momentum_check(amrex::MultiFab const &state_mf, amrex::GpuArray<amr
 	amrex::ParallelAllReduce::Sum(expected_px, amrex::ParallelContext::CommunicatorSub());
 	return {.gas_px = gas_px, .gas_py = gas_py, .gas_pz = gas_pz, .expected_px = expected_px};
 }
+
+auto compute_energy_check(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) -> EnergyCheck
+{
+	amrex::ReduceOps<amrex::ReduceOpSum, amrex::ReduceOpSum, amrex::ReduceOpSum> reduce_op;
+	amrex::ReduceData<amrex::Real, amrex::Real, amrex::Real> reduce_data(reduce_op);
+	auto const state = state_mf.const_arrays();
+	const amrex::Real cell_volume = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+
+	reduce_op.eval(state_mf, amrex::IntVect(0), reduce_data,
+		       [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept -> amrex::GpuTuple<amrex::Real, amrex::Real, amrex::Real> {
+			       const amrex::Real rho = state[box_no](i, j, k, RadSystem<DTypeFrontVC>::gasDensity_index);
+			       const amrex::Real px = state[box_no](i, j, k, RadSystem<DTypeFrontVC>::x1GasMomentum_index);
+			       const amrex::Real py = state[box_no](i, j, k, RadSystem<DTypeFrontVC>::x2GasMomentum_index);
+			       const amrex::Real pz = state[box_no](i, j, k, RadSystem<DTypeFrontVC>::x3GasMomentum_index);
+			       const amrex::Real kinetic = (px * px + py * py + pz * pz) / (2.0_rt * rho);
+			       const amrex::Real gas_energy = state[box_no](i, j, k, RadSystem<DTypeFrontVC>::gasEnergy_index);
+			       const amrex::Real gas_internal_energy = state[box_no](i, j, k, RadSystem<DTypeFrontVC>::gasInternalEnergy_index);
+			       return {cell_volume * gas_energy, cell_volume * gas_internal_energy, cell_volume * kinetic};
+		       });
+
+	auto [gas_energy, gas_internal_energy, gas_kinetic_energy] = reduce_data.value();
+	amrex::ParallelAllReduce::Sum(gas_energy, amrex::ParallelContext::CommunicatorSub());
+	amrex::ParallelAllReduce::Sum(gas_internal_energy, amrex::ParallelContext::CommunicatorSub());
+	amrex::ParallelAllReduce::Sum(gas_kinetic_energy, amrex::ParallelContext::CommunicatorSub());
+	return {.gas_energy = gas_energy, .gas_internal_energy = gas_internal_energy, .gas_kinetic_energy = gas_kinetic_energy};
+}
 } // namespace
 
 auto problem_main() -> int
@@ -209,22 +241,33 @@ auto problem_main() -> int
 	const amrex::Real initial_rad_energy = initial_photon_number_density * photon_energy;
 	const amrex::Real initial_flux_x = C::c_light * initial_rad_energy;
 	set_uniform_radiation_beam(sim.state_new_cc_[0], initial_rad_energy, initial_flux_x);
+	const EnergyCheck energy_before = compute_energy_check(sim.state_new_cc_[0], sim.geom[0].CellSizeArray());
 
 	std::array<amrex::MultiFab const *, AMREX_SPACEDIM> fc_ptrs{};
 	static_cast<void>(quokka::photochemistry::computePhotoChemistry<DTypeFrontVC>(sim.state_new_cc_[0], fc_ptrs, burn_dt, 1,
 										      std::numeric_limits<amrex::Real>::max(), 0.0_rt));
 
 	const MomentumCheck check = compute_momentum_check(sim.state_new_cc_[0], sim.geom[0].CellSizeArray(), initial_flux_x);
+	const EnergyCheck energy_after = compute_energy_check(sim.state_new_cc_[0], sim.geom[0].CellSizeArray());
 
 	int status = 0;
 	const amrex::Real rel_err = std::abs(check.gas_px - check.expected_px) / check.expected_px;
 	const amrex::Real transverse_momentum = std::sqrt(check.gas_py * check.gas_py + check.gas_pz * check.gas_pz);
 	const amrex::Real transverse_rel = transverse_momentum / check.expected_px;
+	const amrex::Real internal_rel = std::abs(energy_after.gas_internal_energy - energy_before.gas_internal_energy) / energy_before.gas_internal_energy;
+	const amrex::Real total_energy_delta = energy_after.gas_energy - energy_before.gas_energy;
+	const amrex::Real kinetic_abs = std::abs(total_energy_delta - energy_after.gas_kinetic_energy);
+	const amrex::Real kinetic_rel = std::abs(total_energy_delta - energy_after.gas_kinetic_energy) / energy_after.gas_kinetic_energy;
 
 	amrex::Print() << "Gas x-momentum: " << check.gas_px << '\n';
 	amrex::Print() << "Expected x-momentum from absorbed flux: " << check.expected_px << '\n';
 	amrex::Print() << "Relative x-momentum error: " << rel_err << '\n';
 	amrex::Print() << "Relative transverse momentum: " << transverse_rel << '\n';
+	amrex::Print() << "Relative internal-energy change from O(v/c) work term: " << internal_rel << '\n';
+	amrex::Print() << "Total gas-energy change: " << total_energy_delta << '\n';
+	amrex::Print() << "Gas kinetic energy after momentum deposition: " << energy_after.gas_kinetic_energy << '\n';
+	amrex::Print() << "Absolute total-energy/kinetic-energy error: " << kinetic_abs << '\n';
+	amrex::Print() << "Relative total-energy/kinetic-energy error: " << kinetic_rel << '\n';
 
 	if (!(check.expected_px > 0.0_rt)) {
 		amrex::Print() << "Test FAILED: no chem-band flux was absorbed.\n";
@@ -238,8 +281,16 @@ auto problem_main() -> int
 		amrex::Print() << "Test FAILED: transverse momentum was deposited by a purely x-directed beam.\n";
 		status = 1;
 	}
+	if (internal_rel > 1.0e-12_rt) {
+		amrex::Print() << "Test FAILED: O(v/c) momentum work changed gas internal energy.\n";
+		status = 1;
+	}
+	if (kinetic_abs > 1.0e-12_rt * energy_after.gas_energy) {
+		amrex::Print() << "Test FAILED: absorbed momentum did not increase total gas energy by the kinetic-energy gain.\n";
+		status = 1;
+	}
 	if (status == 0) {
-		amrex::Print() << "Test passed: photoionization O(v/c) momentum deposition matches absorbed flux.\n";
+		amrex::Print() << "Test passed: photoionization O(v/c) momentum deposition changes kinetic energy only.\n";
 	}
 
 	return status;

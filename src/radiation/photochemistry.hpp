@@ -177,9 +177,8 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			state(i, j, k, RadSystem<problem_t>::gasEnergy_index) += dEint * energy_update_factor;
 
 			// O(v/c) radiation-pressure work term: deposit the photon momentum absorbed
-			// during the burn to the gas. The matching RHD source-term path removes the
-			// kinetic-energy gain from internal energy so that the gas total energy remains
-			// consistent with the updated momentum.
+			// during the burn to the gas. This changes the kinetic energy associated with
+			// the updated momentum; the auxiliary internal energy is unaffected.
 			if constexpr (do_vc_work) {
 				const Real c_light_local = C::c_light;
 				const Real inv_c2 = 1.0_rt / (c_light_local * c_light_local);
@@ -207,13 +206,8 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 				state(i, j, k, RadSystem<problem_t>::x2GasMomentum_index) = ymom_new;
 				state(i, j, k, RadSystem<problem_t>::x3GasMomentum_index) = zmom_new;
 
-				// Ekin per volume = sum_i (mom_i^2) / (2 * rho). Decrease internal energy
-				// by dEkin so the kinetic gain is balanced, then recompute total gas energy
-				// from the updated conserved fields.
-				const Real Ekin_before = (xmom * xmom + ymom * ymom + zmom * zmom) / (2.0_rt * rho);
-				const Real Ekin_after = (xmom_new * xmom_new + ymom_new * ymom_new + zmom_new * zmom_new) / (2.0_rt * rho);
-				const Real dEkin = Ekin_after - Ekin_before;
-				state(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index) -= dEkin * energy_update_factor;
+				// Recompute total gas energy from the unchanged internal energy and the
+				// updated momentum so the absorbed momentum appears only as kinetic energy.
 				state(i, j, k, RadSystem<problem_t>::gasEnergy_index) = ::quokka::EOS<problem_t>::ComputeEgasFromEint(
 				    rho, xmom_new, ymom_new, zmom_new, state(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index), Emag);
 			}
