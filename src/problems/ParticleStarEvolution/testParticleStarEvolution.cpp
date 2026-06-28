@@ -1,7 +1,6 @@
 /// \file testParticleStarEvolution.cpp
 /// \brief Validates the toy stellar-evolution model (R(M), L(M, mdot)) for a Star particle
 ///        accreting from a uniform medium via the grid Bondi accretion module.
-/// placeholder
 
 #include "AMReX.H"
 #include "AMReX_BLassert.H"
