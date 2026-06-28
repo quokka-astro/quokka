@@ -203,11 +203,17 @@ auto problem_main() -> int
 		const double tol = 2.0e-2; // 2% absorbs the one-step lag (see plan)
 		int n_checked = 0;
 		for (int i = 0; i < n; ++i) {
-			if (!(R[i] > 0.0) || !(M[i] > 0.0)) {
+			if (!std::isfinite(R[i]) || !std::isfinite(M[i]) || !std::isfinite(L[i]) || (R[i] <= 0.0) || (M[i] <= 0.0)) {
 				continue; // skip pre-activation samples
 			}
+
+			const double mdot_prev = (i > 0 && std::isfinite(mdot[i - 1])) ? mdot[i - 1] : 0.0;
 			const double R_pred = Model::radius(M[i]);
-			const double L_pred = Model::luminosityStar(M[i]) + Model::luminosityAcc(M[i], (i > 0) ? mdot[i - 1] : 0.0, R[i]);
+			const double L_pred = Model::luminosityStar(M[i]) + Model::luminosityAcc(M[i], mdot_prev, R[i]);
+
+			if (!std::isfinite(R_pred) || !std::isfinite(L_pred) || (R_pred <= 0.0)) {
+				continue;
+			}
 
 			const double R_err = std::abs(R[i] - R_pred) / R_pred;
 			const double L_err = (L_pred > 0.0) ? std::abs(L[i] - L_pred) / L_pred : std::abs(L[i]);
@@ -230,15 +236,26 @@ auto problem_main() -> int
 
 		// Verify the numerical accretion rate matches the analytic Bondi rate.
 		if (n >= 2) {
-			const double mdot_fit = (M[n - 1] - M[0]) / (t[n - 1] - t[0]);
+			if (!std::isfinite(t[0]) || !std::isfinite(t[n - 1]) || (t[n - 1] <= t[0]) || !std::isfinite(M[0]) || !std::isfinite(M[n - 1]) ||
+			    (M[0] <= 0.0)) {
+				status += 1;
+				amrex::Print() << "  FAIL: invalid history vectors for Bondi-rate check (non-finite or non-increasing t / non-positive M)\n";
+			} else {
+				const double mdot_fit = (M[n - 1] - M[0]) / (t[n - 1] - t[0]);
 			const double lambda = std::exp(1.5) / 4.0;
 			const double Mdot_bondi = 4.0 * M_PI * rho0 * r_B * r_B * lambda * cs0;
-			const double mdot_err = std::abs(mdot_fit - Mdot_bondi) / Mdot_bondi;
-			amrex::Print() << "Mean dM/dt = " << mdot_fit << " g/s; analytic Bondi = " << Mdot_bondi << " g/s\n";
-			amrex::Print() << "Mass growth over run: " << (M[n - 1] / M[0] - 1.0) * 100.0 << " %\n";
-			if (mdot_err > 0.10) {
+				if (!std::isfinite(Mdot_bondi) || (Mdot_bondi <= 0.0) || !std::isfinite(mdot_fit)) {
+					status += 1;
+					amrex::Print() << "  FAIL: invalid Bondi-rate quantities (non-finite or non-positive denominator)\n";
+				} else {
+					const double mdot_err = std::abs(mdot_fit - Mdot_bondi) / Mdot_bondi;
+					amrex::Print() << "Mean dM/dt = " << mdot_fit << " g/s; analytic Bondi = " << Mdot_bondi << " g/s\n";
+					amrex::Print() << "Mass growth over run: " << (M[n - 1] / M[0] - 1.0) * 100.0 << " %\n";
+					if (mdot_err > 0.10) {
 				status += 1;
 				amrex::Print() << "  FAIL: accretion rate mismatch, rel_err=" << mdot_err << " (tolerance 10%)\n";
+					}
+				}
 			}
 		}
 
