@@ -100,7 +100,8 @@ jobs:
       condition: and(succeeded(), eq(variables['RunHeavyCI'], 'true'))
 
     - template: templates/ccache-prepare.yml
-      condition: and(succeeded(), eq(variables['RunHeavyCI'], 'true'))
+      parameters:
+        stepCondition: and(succeeded(), eq(variables['RunHeavyCI'], 'true'))
 
     - script: |
         # Keep the job idle during the restricted window [03:30, 07:00).
@@ -208,4 +209,5 @@ jobs:
       displayName: Publish CTest temporary logs artifact
 
     - template: templates/ccache-stats.yml
-      condition: and(succeeded(), eq(variables['RunHeavyCI'], 'true'))
+      parameters:
+        stepCondition: and(succeededOrFailed(), eq(variables['RunHeavyCI'], 'true'))
