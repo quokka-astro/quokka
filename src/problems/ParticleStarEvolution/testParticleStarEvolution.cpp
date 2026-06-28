@@ -189,6 +189,9 @@ auto problem_main() -> int
 
 	int status = 0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
+		// Validation computes diagnostic ratios on host-side summary vectors. In CI we run with
+		// amrex.fpe_trap_{invalid,zero,overflow}=1, so temporarily disable these traps here to
+		// avoid aborting before we can report a structured test failure status.
 		const auto prev_excepts = amrex::disableFPExcept(amrex::FPExcept::invalid | amrex::FPExcept::zero | amrex::FPExcept::overflow);
 
 		using Model = quokka::ToyStellarModel;
@@ -264,6 +267,7 @@ auto problem_main() -> int
 		amrex::Print() << (status == 0 ? "\n=== All stellar-evolution checks passed ===\n"
 					       : "\n=== Test FAILED (status=" + std::to_string(status) + ") ===\n");
 
+		// Restore the exact previous trap mask so downstream code keeps the original FP behavior.
 		amrex::setFPExcept(prev_excepts);
 	}
 
