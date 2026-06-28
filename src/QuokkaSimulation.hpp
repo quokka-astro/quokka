@@ -664,8 +664,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 				// read resampled cooling tables
 				amrex::Print() << "Reading resampled cooling tables...\n";
 				cooling_table_include_pe = quokka::ResampledCooling::readResampledData(coolingTableFilename_, resampledTables_);
-					quokka::ResampledCooling::registerEOSTabulated(resampledTables_.const_tables_host(),
-											resampledTables_.const_tables());
+				quokka::ResampledCooling::registerEOSTabulated(resampledTables_.const_tables_host(), resampledTables_.const_tables());
 			} else {
 				amrex::Abort("Invalid cooling table type! Only 'resampled' is supported.");
 			}

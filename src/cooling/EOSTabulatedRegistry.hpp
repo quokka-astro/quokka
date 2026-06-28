@@ -68,10 +68,7 @@ struct EOSTabulatedRegistry {
 
 extern AMREX_GPU_MANAGED EOSTabulatedRegistry *g_eos_tabulated_registry;
 
-inline AMREX_GPU_HOST_DEVICE auto getEOSTabulatedRegistry() -> EOSTabulatedRegistry *
-{
-	return g_eos_tabulated_registry;
-}
+inline AMREX_GPU_HOST_DEVICE auto getEOSTabulatedRegistry() -> EOSTabulatedRegistry * { return g_eos_tabulated_registry; }
 
 void registerEOSTabulated(resampledGpuConstTables host_tables, resampledGpuConstTables device_tables);
 
