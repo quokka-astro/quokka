@@ -9,6 +9,7 @@
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
 #include "particles/particle_types.hpp"
+#include "problems/chemical_yield_test_utils.hpp"
 
 struct test_WR_AGB_yields {
 };
@@ -117,6 +118,7 @@ auto problem_main() -> int
 	sim.setInitialConditions();
 
 	sim.evolve();
+	quokka::ChemicalYieldTest::validateWRAGBYields(sim, initial_particles_file, {"C12", "O16", "Fe56"});
 	amrex::Print() << "test_WR_AGB_yields completed\n";
 	return 0;
 }
