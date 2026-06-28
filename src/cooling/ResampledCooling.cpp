@@ -83,16 +83,16 @@ auto resampled_tables::const_tables() const -> resampledGpuConstTables
 
 auto resampled_tables::const_tables_host() const -> resampledGpuConstTables
 {
-	resampledGpuConstTables tables{cooling_rates.const_tables_host(),
-				       temperatures.const_tables_host(),
-				       sound_speeds.const_tables_host(),
-				       pressures.const_tables_host(),
-				       entropies.const_tables_host(),
-				       rho_min,
-				       rho_max,
-				       eint_min,
-				       eint_max,
-				       cloudy_H_mass_fraction};
+	resampledGpuConstTables tables{.cooling_rates = cooling_rates.const_tables_host(),
+				       .temperatures = temperatures.const_tables_host(),
+				       .sound_speeds = sound_speeds.const_tables_host(),
+				       .pressures = pressures.const_tables_host(),
+				       .entropies = entropies.const_tables_host(),
+				       .rho_min = rho_min,
+				       .rho_max = rho_max,
+				       .eint_min = eint_min,
+				       .eint_max = eint_max,
+				       .cloudy_H_mass_fraction = cloudy_H_mass_fraction};
 	return tables;
 }
 
