@@ -159,4 +159,12 @@ jobs:
       condition: succeededOrFailed()
       displayName: Publish test results
 
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: build/Testing/Temporary
+        ArtifactName: ctest-temporary-logs
+        publishLocation: Container
+      condition: succeededOrFailed()
+      displayName: Publish CTest temporary logs artifact
+
     - template: templates/ccache-stats.yml
