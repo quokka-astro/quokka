@@ -189,6 +189,8 @@ auto problem_main() -> int
 
 	int status = 0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
+		const auto prev_excepts = amrex::disableFPExcept(amrex::FPExcept::invalid | amrex::FPExcept::zero | amrex::FPExcept::overflow);
+
 		using Model = quokka::ToyStellarModel;
 		const auto &t = sim.userData_.time;
 		const auto &M = sim.userData_.mass;
@@ -261,6 +263,8 @@ auto problem_main() -> int
 
 		amrex::Print() << (status == 0 ? "\n=== All stellar-evolution checks passed ===\n"
 					       : "\n=== Test FAILED (status=" + std::to_string(status) + ") ===\n");
+
+		amrex::setFPExcept(prev_excepts);
 	}
 
 	amrex::ParallelDescriptor::Bcast(&status, 1, amrex::ParallelDescriptor::IOProcessorNumber());
