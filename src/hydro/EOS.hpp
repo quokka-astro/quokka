@@ -37,21 +37,16 @@ template <typename problem_t> struct EOSMicrophysics;
 #endif
 template <typename problem_t> struct EOSTabulated;
 
-// Default values for ideal gamma-law EOS. Specializations should inherit from
-// this struct and override only the fields that differ from the defaults.
+// Primary EOS_Traits template. Provides default values for ideal gamma-law EOS
+// and selects the compile-time EOS backend. Full specializations need only define
+// the trait values they override; EOSBackend defaults to EOSIdeal via SFINAE if omitted.
 //
-struct DefaultEOSTraits {
+template <typename problem_t> struct EOS_Traits {
 	static constexpr double gamma = 5. / 3.;     // default value
 	static constexpr double cs_isothermal = NAN; // only used when gamma = 1
 	static constexpr double mean_molecular_weight = NAN;
 	static constexpr double boltzmann_constant = C::k_B;
-};
 
-// Primary EOS_Traits template. Inherits the default gamma-law values and
-// selects the compile-time EOS backend. Specializations should also inherit
-// from DefaultEOSTraits and override only what differs.
-//
-template <typename problem_t> struct EOS_Traits : DefaultEOSTraits {
 #if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 	using EOSBackend = EOSMicrophysics<problem_t>;
 #else
