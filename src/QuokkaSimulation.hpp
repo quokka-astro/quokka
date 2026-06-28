@@ -659,6 +659,12 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		}
 #endif
 		if ((enableCooling_ == 1) || (alwaysReadTables == 1)) {
+				if (enableCooling_ == 1) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(quokka::EOS<problem_t>::is_tabulated,
+								 "cooling.enabled = 1 requires the EOSTabulated EOS backend. "
+								 "Add 'using EOSBackend = quokka::EOSTabulated<YourProblem>;' "
+								 "to your EOS_Traits specialization.");
+				}
 			hpp.query("hdf5_data_file", coolingTableFilename_);
 			if (coolingTableType_ == "resampled") {
 				// read resampled cooling tables

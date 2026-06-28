@@ -59,6 +59,7 @@ template <typename problem_t> struct EOS_Traits {
 
 template <typename problem_t> struct EOSIdeal {
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
+	static constexpr bool is_tabulated = false;
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma;
 	static constexpr amrex::Real mean_molecular_weight_ = EOS_Traits<problem_t>::mean_molecular_weight;
 	static constexpr amrex::Real boltzmann_constant_ = []() constexpr {
@@ -244,6 +245,7 @@ template <typename problem_t> struct EOSIdeal {
 #if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 template <typename problem_t> struct EOSMicrophysics {
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
+	static constexpr bool is_tabulated = false;
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma;
 	static constexpr amrex::Real boltzmann_constant_ = EOSIdeal<problem_t>::boltzmann_constant_;
 
@@ -421,6 +423,7 @@ template <typename problem_t> struct EOSMicrophysics {
 
 template <typename problem_t> struct EOSTabulated {
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
+	static constexpr bool is_tabulated = true;
 	static constexpr amrex::Real gamma_ = EOSIdeal<problem_t>::gamma_;
 	static constexpr amrex::Real boltzmann_constant_ = EOSIdeal<problem_t>::boltzmann_constant_;
 
@@ -455,12 +458,15 @@ template <typename problem_t> struct EOSTabulated {
 	ComputeEintTempDerivative(const amrex::Real rho, const amrex::Real Tgas,
 				  quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> amrex::Real
 	{
-		// finite-difference derivative of Eint(T) about Tgas
+		// Compute dEint/dT with one root-find + two cheap table lookups
+		// instead of two root-finds (toms748, up to 32 iterations each).
+		const amrex::Real Eint = ComputeEintFromTgas(rho, Tgas, massScalars);
 		constexpr amrex::Real eps = 1.0e-6;
-		const amrex::Real dT = amrex::max(eps * Tgas, eps);
-		const amrex::Real Eint_plus = ComputeEintFromTgas(rho, Tgas + dT, massScalars);
-		const amrex::Real Eint_minus = ComputeEintFromTgas(rho, Tgas - dT, massScalars);
-		return (Eint_plus - Eint_minus) / (2.0 * dT);
+		const amrex::Real dEint = amrex::max(eps * Eint, eps);
+		const amrex::Real T_plus = ComputeTgasFromEint(rho, Eint + dEint, massScalars);
+		const amrex::Real T_minus = ComputeTgasFromEint(rho, Eint - dEint, massScalars);
+		const amrex::Real dT = T_plus - T_minus;
+		return (dT > 0.0) ? (2.0 * dEint) / dT : 0.0;
 	}
 
 	// Non-temperature methods — delegate to EOSIdeal
@@ -526,6 +532,7 @@ template <typename problem_t> class EOS
 
       public:
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
+		static constexpr bool is_tabulated = backend_t::is_tabulated;
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma; // needed for HLLD solver
 
 	static constexpr amrex::Real boltzmann_constant_ = []() constexpr {

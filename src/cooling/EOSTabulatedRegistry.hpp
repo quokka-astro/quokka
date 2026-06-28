@@ -30,6 +30,9 @@ struct resampledGpuConstTables {
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(Real const rho, Real const Eint, resampledGpuConstTables const &tables) -> Real
 {
+	if (rho <= 0.0) {
+		return 0.0;
+	}
 	const Real eint = Eint / rho;
 	std::array<amrex::Real, 2> const point = {FastMath::fastlg(rho), FastMath::fastlg(eint)};
 	const Real Tgas = tables.temperatures.interpolate_single(point);
@@ -38,6 +41,9 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(Real const rho
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEgasFromTgas(Real const rho, Real const Tgas, resampledGpuConstTables const &tables) -> Real
 {
+	if (rho <= 0.0) {
+		return 0.0;
+	}
 	const Real Eint_min = rho * tables.eint_min;
 	const Real Eint_max = rho * tables.eint_max;
 
