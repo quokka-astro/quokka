@@ -465,13 +465,13 @@ template <ParticleType particleType, typename problem_t> auto getParticleRealCom
 					names.push_back("chem_birth_" + channel_names[block - 1] + "_" + isotopeName(n));
 				}
 			}
-			}
-			// Include chemistry-history particle components added for tracked passive scalars.
-			return names;
-			//return expandEnumNames<StochasticStellarPopParticleRealIdx, StochasticStellarPopParticleRealComps<problem_t>, true>();
-		} else if constexpr (particleType == ParticleType::Star) {
-			return expandEnumNames<StarParticleDataIdx, StarParticleRealComps<problem_t>, true>();
-		} else if constexpr (particleType == ParticleType::Sink) {
+		}
+		// Include chemistry-history particle components added for tracked passive scalars.
+		return names;
+		// return expandEnumNames<StochasticStellarPopParticleRealIdx, StochasticStellarPopParticleRealComps<problem_t>, true>();
+	} else if constexpr (particleType == ParticleType::Star) {
+		return expandEnumNames<StarParticleDataIdx, StarParticleRealComps<problem_t>, true>();
+	} else if constexpr (particleType == ParticleType::Sink) {
 		return expandEnumNames<SinkParticleRealIdx, SinkParticleRealComps, false>();
 	} else if constexpr (particleType == ParticleType::Test) {
 		return expandEnumNames<TestParticleRealIdx, TestParticleRealComps<problem_t>, true>();

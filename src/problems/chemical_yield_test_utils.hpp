@@ -110,8 +110,8 @@ void validateWRAGBYields(const QuokkaSimulation<problem_t> &sim, const std::stri
 	int wr_index = -1;
 	int agb_index = -1;
 	for (int i = 0; i < static_cast<int>(records.size()); ++i) {
-		const amrex::Real mass_msun = records[static_cast<std::size_t>(i)].rdata[static_cast<std::size_t>(StochasticStellarPopParticleMassAtBirthIdx)] /
-					      C::M_solar;
+		const amrex::Real mass_msun =
+		    records[static_cast<std::size_t>(i)].rdata[static_cast<std::size_t>(StochasticStellarPopParticleMassAtBirthIdx)] / C::M_solar;
 		if (mass_msun >= 9.0 && wr_index < 0) {
 			wr_index = i;
 		}
@@ -132,8 +132,7 @@ void validateWRAGBYields(const QuokkaSimulation<problem_t> &sim, const std::stri
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(wr_lifetime > 0.0, "WR particle has non-positive lifetime");
 
 	const amrex::Real wr_elapsed = std::min(sim.tNew_[0] - wr_birth_time, wr_lifetime);
-	const amrex::Real wr_distribution =
-	    ChemicalYieldLookup::queryWRMassLossCumulativeFraction(tables, wr_elapsed, wr_mass / C::M_solar);
+	const amrex::Real wr_distribution = ChemicalYieldLookup::queryWRMassLossCumulativeFraction(tables, wr_elapsed, wr_mass / C::M_solar);
 
 	amrex::Print() << "test_WR_AGB_yields simulated/table:\n";
 	for (int n = 0; n < static_cast<int>(isotopes.size()); ++n) {
@@ -153,8 +152,7 @@ void validateWRAGBYields(const QuokkaSimulation<problem_t> &sim, const std::stri
 	}
 }
 
-template <typename problem_t>
-void validateSNIaYields(const QuokkaSimulation<problem_t> &sim, const std::vector<std::string> &isotopes, amrex::Real ejecta_mass)
+template <typename problem_t> void validateSNIaYields(const QuokkaSimulation<problem_t> &sim, const std::vector<std::string> &isotopes, amrex::Real ejecta_mass)
 {
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(ChemicalYieldLookup::isLoaded(), "chemical yield tables were not loaded");
 	const auto tables = ChemicalYieldLookup::constTables();
