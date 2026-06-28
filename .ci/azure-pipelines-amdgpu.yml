@@ -100,7 +100,8 @@ jobs:
       condition: and(succeeded(), eq(variables['RunHeavyCI'], 'true'))
 
     - template: templates/ccache-prepare.yml
-      condition: and(succeeded(), eq(variables['RunHeavyCI'], 'true'))
+      parameters:
+        stepCondition: and(succeeded(), eq(variables['RunHeavyCI'], 'true'))
 
     - task: CMake@1
       displayName: 'Configure CMake'
@@ -145,4 +146,5 @@ jobs:
       displayName: Publish CTest temporary logs artifact
 
     - template: templates/ccache-stats.yml
-      condition: and(succeeded(), eq(variables['RunHeavyCI'], 'true'))
+      parameters:
+        stepCondition: and(succeededOrFailed(), eq(variables['RunHeavyCI'], 'true'))
