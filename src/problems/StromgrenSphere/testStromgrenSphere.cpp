@@ -41,18 +41,12 @@ template <> struct quokka::EOS_Traits<StromgrenSphere> {
 };
 
 template <> struct Physics_Traits<StromgrenSphere> : DefaultPhysicsTraits {
-	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = false;
 	static constexpr int numMassScalars = NumSpec;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1; // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 	static constexpr double boltzmann_constant = C::k_B;
 	static constexpr double gravitational_constant = C::Gconst;
 	static constexpr double c_light = C::c_light;

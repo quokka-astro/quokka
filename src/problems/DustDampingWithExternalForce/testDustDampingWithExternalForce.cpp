@@ -72,15 +72,9 @@ constexpr double Egas0_internal = P_INITIAL / (quokka::EOS_Traits<DustDampingWit
 constexpr int numDustVars = Physics_NumVars::numDustVarsPerGroup;
 
 template <> struct Physics_Traits<DustDampingWithExternalForce> : DefaultPhysicsTraits {
-	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_dust_enabled = true;
 	static constexpr int nDustGroups = 2; // number of dust groups
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = 1.0;
 	static constexpr double gravitational_constant = 1.0;
@@ -238,7 +232,8 @@ void QuokkaSimulation<DustDampingWithExternalForce>::addStrangSplitSources(amrex
 			const amrex::Real x3mom = state(i, j, k, HydroSystem<DustDampingWithExternalForce>::x3Momentum_index);
 			const amrex::Real Egas = state(i, j, k, HydroSystem<DustDampingWithExternalForce>::energy_index);
 
-			const amrex::Real Eint = RadSystem<DustDampingWithExternalForce>::ComputeEintFromEgas(rho, x1mom, x2mom, x3mom, Egas);
+			static_assert(!Physics_Traits<DustDampingWithExternalForce>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+			const amrex::Real Eint = quokka::EOS<DustDampingWithExternalForce>::ComputeEintFromEgas(rho, x1mom, x2mom, x3mom, Egas, 0.0);
 
 			double const x1mom_new = x1mom + dt * G_0;
 
@@ -246,7 +241,8 @@ void QuokkaSimulation<DustDampingWithExternalForce>::addStrangSplitSources(amrex
 
 			state(i, j, k, HydroSystem<DustDampingWithExternalForce>::x1Momentum_index) = x1mom_new;
 
-			const amrex::Real Egas_new = RadSystem<DustDampingWithExternalForce>::ComputeEgasFromEint(rho, x1mom_new, x2mom, x3mom, Eint);
+			static_assert(!Physics_Traits<DustDampingWithExternalForce>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+			const amrex::Real Egas_new = quokka::EOS<DustDampingWithExternalForce>::ComputeEgasFromEint(rho, x1mom_new, x2mom, x3mom, Eint, 0.0);
 			AMREX_ASSERT(!std::isnan(Egas_new));
 
 			state(i, j, k, HydroSystem<DustDampingWithExternalForce>::energy_index) = Egas_new;

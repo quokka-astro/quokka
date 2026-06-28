@@ -37,13 +37,19 @@ template <int Nout = 1, quokka::OutOfBounds oob_policy = quokka::OutOfBounds::cl
 template <int Nout = 1, quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp>
 inline LuminosityTables<Nout, oob_policy> *g_luminosity_tables_ptr = nullptr; // NOLINT
 
-// Class to handle luminosity updates for stellar particles
+// GPU-accessible copy of the luminosity tables, set by the host before each update.
+// updateLuminosity reads this directly so that gpu_tables don't need to be threaded
+// through applyUpdate / updateProperties.
+template <int Nout = 1, quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp>
+AMREX_GPU_MANAGED inline LuminosityGpuConstTables<Nout, oob_policy> g_device_luminosity_tables{}; // NOLINT
+
+// Class to handle luminosity updates for stellar particles.
+// Tables are accessed via g_device_luminosity_tables<Nout> (set by host before the GPU launch).
 class LuminosityUpdate
 {
       public:
 	template <typename problem_t, typename ParticleType, int Nout, quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateLuminosity(ParticleType &p, amrex::Real current_time,
-									 LuminosityGpuConstTables<Nout, oob_policy> const &gpu_tables) noexcept
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateLuminosity(ParticleType &p, amrex::Real current_time) noexcept
 	{
 		constexpr int nGroups = Physics_Traits<problem_t>::nGroups;
 		static_assert(nGroups == Nout, "Number of groups must match table outputs");
@@ -62,8 +68,7 @@ class LuminosityUpdate
 		std::array<amrex::Real, 2> const point = {age_in_years, mass_in_solar_masses};
 
 		// Interpolate luminosity from table (returns array with nGroups elements)
-		// Conversion from log space is handled automatically by DataTable::interpolate()
-		auto const luminosities = gpu_tables.luminosity.interpolate(point);
+		auto const luminosities = g_device_luminosity_tables<Nout, oob_policy>.luminosity.interpolate(point);
 
 		// Update luminosity components (they are stored consecutively starting at lum_idx)
 		if (lum_idx + nGroups <= ParticleType::NReal) {

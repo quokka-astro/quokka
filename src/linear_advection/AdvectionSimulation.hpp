@@ -99,6 +99,7 @@ template <typename problem_t> class AdvectionSimulation : public AMRSimulation<p
 	void createInitialCICRadParticles() override;
 	void createInitialStochasticStellarPopParticles() override;
 	void createInitialSinkParticles() override;
+	void createInitialStarParticles() override;
 	void createInitialTestParticles() override;
 #endif // AMREX_SPACEDIM == 3
 	void advanceSingleTimestepAtLevel(int lev, amrex::Real time, amrex::Real dt_lev, int /*ncycle*/) override;
@@ -222,6 +223,12 @@ template <typename problem_t> void AdvectionSimulation<problem_t>::createInitial
 {
 	// Optional implementation
 	// note: an implementation is only effective if Sink particles are used
+}
+
+template <typename problem_t> void AdvectionSimulation<problem_t>::createInitialStarParticles()
+{
+	// Optional implementation
+	// note: an implementation is only effective if Star particles are used
 }
 
 template <typename problem_t> void AdvectionSimulation<problem_t>::createInitialTestParticles()

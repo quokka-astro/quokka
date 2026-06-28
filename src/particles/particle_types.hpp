@@ -6,6 +6,7 @@
 #include "AMReX_ParIter.H"
 #include "AMReX_Vector.H"
 #include "particles/particle_chemical_yield.hpp"
+#include "particles/stellar_models.hpp"
 #include "physics_info.hpp"
 
 #include <cstddef>
@@ -28,7 +29,8 @@ enum class ParticleSwitch : unsigned int {
 	CICRad = bitflag<3>(),		     // Combined gravitating-radiating particles, = 0b0100
 	StochasticStellarPop = bitflag<4>(), // Stellar population particles, = 0b1000
 	Sink = bitflag<5>(),		     // Sink particles, = 0b10000
-	Test = bitflag<6>()		     // Test particles with all features enabled, = 0b100000
+	Test = bitflag<6>(),		     // Test particles with all features enabled, = 0b100000
+	Star = bitflag<7>()		     // Star particles, = 0b1000000
 };
 
 // Enable bitwise operations on the enum class
@@ -55,8 +57,14 @@ constexpr auto operator&(ParticleSwitch flags, ParticleSwitch flag) -> bool
 // };
 // - static constexpr TestEnum particle_switch = TestEnum::MISTAKE;
 // - static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | TestEnum::MISTAKE;
-template <typename problem_t> struct Particle_Traits {
+struct DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::None; // Determines which particle types are enabled using bitwise flags.
+	using stellar_model = quokka::ToyStellarModel;				// Default stellar-evolution model
+};
+
+// This struct should be specialized by the user application code to configure particle behavior.
+// Inherits from DefaultParticleTraits so that new parameters added to it don't require updating every problem.
+template <typename problem_t> struct Particle_Traits : DefaultParticleTraits {
 };
 
 // Static assertion helper to verify that particle_switch is of the correct type
@@ -88,7 +96,8 @@ enum class ParticleType {
 	CICRad,		      // Gravitating radiation particles
 	StochasticStellarPop, // Stellar population particles
 	Sink,		      // Sink particles
-	Test		      // Test particles with all features enabled
+	Test,		      // Test particles with all features enabled
+	Star		      // Star particles
 };
 
 // Compile-time particle metadata.
@@ -368,6 +377,21 @@ constexpr int SinkParticleRealComps = 8; // mass, vx, vy, vz, mdot, Lx, Ly, Lz
 using SinkParticleContainer = amrex::AmrParticleContainer<SinkParticleRealComps>;
 using SinkParticleIterator = amrex::ParIter<SinkParticleRealComps>;
 
+//-------------------- Star particles --------------------
+// The layout enum and index constants live in a standalone header so that stellar
+// models can include them without pulling in the full particle type machinery.
+
+#include "particles/star_particle_indices.H"
+
+// Number of components = fixed scalars + nGroups luminosity slots + model extras.
+template <typename problem_t>
+constexpr int StarParticleRealComps = StarParticleFixedComps + Physics_Traits<problem_t>::nGroups + Particle_Traits<problem_t>::stellar_model::nExtraReal;
+template <typename problem_t> constexpr int StarParticleIntComps = Particle_Traits<problem_t>::stellar_model::nExtraInt;
+template <typename problem_t> constexpr int StarParticleIntegerComps = StarParticleIntComps<problem_t>;
+
+template <typename problem_t> using StarParticleContainer = amrex::AmrParticleContainer<StarParticleRealComps<problem_t>, StarParticleIntComps<problem_t>>;
+template <typename problem_t> using StarParticleIterator = amrex::ParIter<StarParticleRealComps<problem_t>, StarParticleIntComps<problem_t>>;
+
 //-------------------- Component Names for I/O --------------------
 
 // Helper function to generate component names from an enum type
@@ -441,9 +465,13 @@ template <ParticleType particleType, typename problem_t> auto getParticleRealCom
 					names.push_back("chem_birth_" + channel_names[block - 1] + "_" + isotopeName(n));
 				}
 			}
-		}
-		return names;
-	} else if constexpr (particleType == ParticleType::Sink) {
+			}
+			// Include chemistry-history particle components added for tracked passive scalars.
+			return names;
+			//return expandEnumNames<StochasticStellarPopParticleRealIdx, StochasticStellarPopParticleRealComps<problem_t>, true>();
+		} else if constexpr (particleType == ParticleType::Star) {
+			return expandEnumNames<StarParticleDataIdx, StarParticleRealComps<problem_t>, true>();
+		} else if constexpr (particleType == ParticleType::Sink) {
 		return expandEnumNames<SinkParticleRealIdx, SinkParticleRealComps, false>();
 	} else if constexpr (particleType == ParticleType::Test) {
 		return expandEnumNames<TestParticleRealIdx, TestParticleRealComps<problem_t>, true>();
@@ -464,6 +492,8 @@ template <ParticleType particleType, typename problem_t> auto getParticleIntComp
 								     // No integer components
 	} else if constexpr (particleType == ParticleType::CICRad) { // NOLINT
 								     // No integer components
+	} else if constexpr (particleType == ParticleType::Star) {   // NOLINT
+		return expandEnumNames<StarParticleIntIdx, StarParticleIntegerComps<problem_t>, true>();
 	} else if constexpr (particleType == ParticleType::StochasticStellarPop) {
 		const std::vector<std::string> enum_names = amrex::getEnumNameStrings<StochasticStellarPopParticleIntIdx>();
 		names = {enum_names.begin(), enum_names.end()};
@@ -509,6 +539,15 @@ inline auto get_units_data() -> const auto &
 	       {"death_z", {0, 1, 0, 0}},
 	       {"death_density", {1, -3, 0, 0}},
 	       {"mass_at_birth", {1, 0, 0, 0}},
+	       {"luminosity", {-1, 2, -3, 0}}}}},
+	    {ParticleType::Star,
+	     {{{"mass", {1, 0, 0, 0}},
+	       {"vx", {0, 1, -1, 0}},
+	       {"vy", {0, 1, -1, 0}},
+	       {"vz", {0, 1, -1, 0}},
+	       {"birth_time", {0, 0, 1, 0}},
+	       {"mdot", {1, 0, -1, 0}},
+	       {"radius", {0, 1, 0, 0}},
 	       {"luminosity", {-1, 2, -3, 0}}}}},
 	    {ParticleType::Sink,
 	     {{{"mass", {1, 0, 0, 0}},

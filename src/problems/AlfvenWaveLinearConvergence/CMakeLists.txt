@@ -12,4 +12,10 @@ if(AMReX_SPACEDIM EQUAL 3)
     COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
   set_tests_properties(AlfvenWaveLinearConvergence PROPERTIES LABELS "MHD")
+
+  add_test(
+    NAME AlfvenWaveLinear
+    COMMAND ${JOB_NAME} ../inputs/AlfvenWaveLinear.toml
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  set_tests_properties(AlfvenWaveLinear PROPERTIES LABELS "MHD")
 endif()

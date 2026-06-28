@@ -44,23 +44,27 @@ template <> struct quokka::EOS_Traits<DTypeFront> {
 };
 
 template <> struct Physics_Traits<DTypeFront> : DefaultPhysicsTraits {
-	static constexpr bool is_self_gravity_enabled = false;
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr int numMassScalars = NumSpec;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
 	static constexpr bool is_radiation_enabled = true;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
-	// face-centred
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1; // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 template <> struct RadSystem_Traits<DTypeFront> {
 	static constexpr double c_hat_over_c = c_hat / C::c_light;
-	static constexpr double Erad_floor = 1e-99;
+	// Erad_floor sets the M1 radiation energy density floor (erg cm^-3), defined here as a
+	// blackbody at T=0.01 K.  The corresponding photon number density floor is
+	//   N_gamma_floor = Erad_floor / E_photon ~ 1.25e-10 cm^-3.
+	//
+	// SetAtolFromPhysics() derives atol_rad_num = 1e-6 * a_rad * T_min^4 / E_photon, where
+	// T_min = typical_minimal_radiation_T.  With T_min = 10 K, atol_rad_num ~ 1.25e-6 cm^-3.
+	// The ratio atol_rad_num / N_gamma_floor ~ 1e4 ensures that VODE returns in one BDF step
+	// even in the darkest cells.
+	//
+	// The 1e-6 prefactor means radiation at T_min becomes numerically negligible after
+	// ~1e6 VODE steps (accumulated local error stays below the physically meaningful level).
+	static constexpr double Erad_floor = C::a_rad * 1.0e-8;
 	static constexpr int beta_order = 0;
 	static constexpr auto ChemBands() { return ChemBandsHeader_; }
 };

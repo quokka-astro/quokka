@@ -52,16 +52,8 @@ template <> struct quokka::EOS_Traits<Vortex> {
 };
 
 template <> struct Physics_Traits<Vortex> : DefaultPhysicsTraits {
-	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
 	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
-	static constexpr int nGroups = 1;     // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 // global variables needed for Dirichlet boundary condition and initial conditions
@@ -109,7 +101,8 @@ template <> void QuokkaSimulation<Vortex>::setInitialConditionsOnGrid(quokka::gr
 		Real const ymom = rho * v;
 		Real const zmom = rho * w;
 		Real const Eint = quokka::EOS<Vortex>::ComputeEintFromPres(rho, P);
-		Real const Egas = RadSystem<Vortex>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+		static_assert(!Physics_Traits<Vortex>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+		Real const Egas = quokka::EOS<Vortex>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint, 0.0);
 		Real const scalar = ::s0[0];
 
 		state_cc(i, j, k, HydroSystem<Vortex>::density_index) = rho;

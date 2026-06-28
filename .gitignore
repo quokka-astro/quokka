@@ -40,7 +40,8 @@ Backtrace.*
 # !/tests/ascent_actions.yaml
 
 # agent files
-/.claude
+/.claude/*
+!/.claude/settings.json
 /.agent
 /.agents
 

@@ -30,14 +30,7 @@ constexpr double seconds_per_year = 3.154e7; // seconds per year
 template <> struct Physics_Traits<RandomBlast> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = true;
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int numMassScalars = 0;
 	static constexpr int numPassiveScalars = numMassScalars + 1;
-	static constexpr int nGroups = 1; // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 template <> struct quokka::EOS_Traits<RandomBlast> {
@@ -45,7 +38,7 @@ template <> struct quokka::EOS_Traits<RandomBlast> {
 	static constexpr double mean_molecular_weight = C::m_u;
 };
 
-template <> struct Particle_Traits<RandomBlast> {
+template <> struct Particle_Traits<RandomBlast> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
 };
 
@@ -156,7 +149,8 @@ void QuokkaSimulation<RandomBlast>::ComputeDerivedVar(int /*lev*/, std::string c
 				Real const x2Mom = state(i, j, k, HydroSystem<RandomBlast>::x2Momentum_index);
 				Real const x3Mom = state(i, j, k, HydroSystem<RandomBlast>::x3Momentum_index);
 				Real const Egas = state(i, j, k, HydroSystem<RandomBlast>::energy_index);
-				Real const Eint = RadSystem<RandomBlast>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+				static_assert(!Physics_Traits<RandomBlast>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+				Real const Eint = quokka::EOS<RandomBlast>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 
 				output(i, j, k, ncomp) = Tgas;
@@ -220,7 +214,8 @@ auto problem_main() -> int
 			Real const x2Mom = values.at(HydroSystem<RandomBlast>::x2Momentum_index)[i];
 			Real const x3Mom = values.at(HydroSystem<RandomBlast>::x3Momentum_index)[i];
 			Real const Egas = values.at(HydroSystem<RandomBlast>::energy_index)[i];
-			Real const Eint = RadSystem<RandomBlast>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			static_assert(!Physics_Traits<RandomBlast>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+			Real const Eint = quokka::EOS<RandomBlast>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 			temperature[i] = Tgas;
 		}
