@@ -532,7 +532,7 @@ template <typename problem_t> class EOS
 
       public:
 	static constexpr int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
-		static constexpr bool is_tabulated = backend_t::is_tabulated;
+	static constexpr bool is_tabulated = backend_t::is_tabulated;
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma; // needed for HLLD solver
 
 	static constexpr amrex::Real boltzmann_constant_ = []() constexpr {
