@@ -504,7 +504,11 @@ template <typename problem_t> struct EOSTabulated {
 namespace detail
 {
 template <typename T, typename = void> struct EOSBackendHelper {
+#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
+	using type = EOSMicrophysics<T>;
+#else
 	using type = EOSIdeal<T>;
+#endif
 };
 
 template <typename T> struct EOSBackendHelper<T, std::void_t<typename EOS_Traits<T>::EOSBackend>> {
