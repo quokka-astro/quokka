@@ -51,9 +51,9 @@ template <> struct Physics_Traits<ShockCloud> : DefaultPhysicsTraits {
 	static constexpr int numPassiveScalars = numMassScalars + 3;
 };
 
-template <> struct quokka::EOS_Traits<ShockCloud> {
-	static constexpr double gamma = 5. / 3.;
+template <> struct quokka::EOS_Traits<ShockCloud> : quokka::DefaultEOSTraits {
 	static constexpr double mean_molecular_weight = C::m_u;
+	using EOSBackend = quokka::EOSTabulated<ShockCloud>;
 };
 
 /// global variables
@@ -286,7 +286,7 @@ void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string const 
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
 			static_assert(!Physics_Traits<ShockCloud>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
 			Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
-			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+			Real const Tgas = quokka::EOS<ShockCloud>::ComputeTgasFromEint(rho, Eint);
 			output[bx](i, j, k, ncomp) = Tgas;
 		});
 
@@ -492,7 +492,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTempResampled(int i, int j, 
 	Real const Egas = state(i, j, k, HydroSystem<ShockCloud>::energy_index);
 	static_assert(!Physics_Traits<ShockCloud>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
 	Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
-	return quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+	return quokka::EOS<ShockCloud>::ComputeTgasFromEint(rho, Eint);
 }
 template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<std::string, amrex::Real>
 {
@@ -753,8 +753,8 @@ auto problem_main() -> int
 	constexpr Real gamma = HydroSystem<ShockCloud>::gamma_;
 	const Real Eint_bg = ::P0 / (gamma - 1.);
 	const Real Eint_cl = ::P0 / (gamma - 1.);
-	Real T_bg = quokka::ResampledCooling::ComputeTgasFromEgas(rho0, Eint_bg, cooling_tables);
-	Real T_cl = quokka::ResampledCooling::ComputeTgasFromEgas(rho1, Eint_cl, cooling_tables);
+	Real T_bg = quokka::EOS<ShockCloud>::ComputeTgasFromEint(rho0, Eint_bg);
+	Real T_cl = quokka::EOS<ShockCloud>::ComputeTgasFromEint(rho1, Eint_cl);
 	amrex::Print() << std::format("T_bg = {} K\n", T_bg);
 	amrex::Print() << std::format("T_cl = {} K\n", T_cl);
 
@@ -770,7 +770,7 @@ auto problem_main() -> int
 	const Real v_shock = M0 * x4;
 
 	const Real Eint_post = P_post / (gamma - 1.);
-	Real T_post = quokka::ResampledCooling::ComputeTgasFromEgas(rho_post, Eint_post, cooling_tables);
+	Real T_post = quokka::EOS<ShockCloud>::ComputeTgasFromEint(rho_post, Eint_post);
 	amrex::Print() << std::format("T_wind = {} K\n", T_post);
 
 	::v_wind = v_wind; // set global variables

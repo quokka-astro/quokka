@@ -88,9 +88,9 @@ template <> struct SimulationData<ResampledCoolingTest> {
 	std::vector<double> T_vec_;
 };
 
-template <> struct quokka::EOS_Traits<ResampledCoolingTest> {
+template <> struct quokka::EOS_Traits<ResampledCoolingTest> : quokka::DefaultEOSTraits {
 	static constexpr double mean_molecular_weight = C::m_u;
-	static constexpr double gamma = 5. / 3.;
+	using EOSBackend = quokka::EOSTabulated<ResampledCoolingTest>;
 };
 
 template <> struct Physics_Traits<ResampledCoolingTest> : DefaultPhysicsTraits {
@@ -174,7 +174,7 @@ template <> void QuokkaSimulation<ResampledCoolingTest>::computeAfterTimestep()
 			coolingTableType_ = "resampled";
 		}
 		if (coolingTableType_ == "resampled") {
-			T = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, resampledTables_.const_tables_host());
+			T = quokka::EOS<ResampledCoolingTest>::ComputeTgasFromEint(rho, Eint);
 		} else {
 			amrex::Abort("Unsupported cooling table type: " + coolingTableType_);
 		}

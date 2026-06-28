@@ -12,6 +12,7 @@
 
 #include "cooling/ResampledCooling.hpp"
 
+#include "AMReX_Arena.H"
 #include "AMReX_Print.H"
 #include <format>
 
@@ -93,7 +94,20 @@ auto resampled_tables::const_tables_host() const -> resampledGpuConstTables
 				       .eint_min = eint_min,
 				       .eint_max = eint_max,
 				       .cloudy_H_mass_fraction = cloudy_H_mass_fraction};
-	return tables;
+		return tables;
+	}
+
+AMREX_GPU_MANAGED EOSTabulatedRegistry *g_eos_tabulated_registry = nullptr;
+
+void registerEOSTabulated(resampledGpuConstTables host_tables, resampledGpuConstTables device_tables)
+{
+	if (!g_eos_tabulated_registry) {
+		auto *mem = amrex::The_Managed_Arena()->alloc(sizeof(EOSTabulatedRegistry));
+		g_eos_tabulated_registry = new (mem) EOSTabulatedRegistry{};
+	}
+	g_eos_tabulated_registry->active = true;
+	g_eos_tabulated_registry->host = host_tables;
+	g_eos_tabulated_registry->device = device_tables;
 }
 
 } // namespace quokka::ResampledCooling

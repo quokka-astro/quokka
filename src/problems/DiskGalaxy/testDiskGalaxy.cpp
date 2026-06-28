@@ -49,9 +49,9 @@ struct DiskGalaxy {
 
 static_assert(AMREX_SPACEDIM == 3, "DiskGalaxy problem requires AMREX_SPACEDIM == 3.");
 
-template <> struct quokka::EOS_Traits<DiskGalaxy> {
-	static constexpr double gamma = 5. / 3.;
+template <> struct quokka::EOS_Traits<DiskGalaxy> : quokka::DefaultEOSTraits {
 	static constexpr double mean_molecular_weight = 0.6 * C::m_u;
+	using EOSBackend = quokka::EOSTabulated<DiskGalaxy>;
 };
 
 template <> struct HydroSystem_Traits<DiskGalaxy> {
@@ -587,7 +587,7 @@ void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::string const 
 				Real const Egas = state(i, j, k, HydroSystem<DiskGalaxy>::energy_index);
 				Real const Emag = HydroSystem<DiskGalaxy>::ComputeCellCenteredMagneticEnergy(i, j, k, cons_fc);
 				Real const Eint = quokka::EOS<DiskGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, Emag);
-				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+				Real const Tgas = quokka::EOS<DiskGalaxy>::ComputeTgasFromEint(rho, Eint);
 				output(i, j, k, ncomp) = Tgas;
 			});
 		}
@@ -767,7 +767,7 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 		// computeVolumeIntegral does not provide face-centred data, so Emag is not available.
 		// The resulting temperature may be slightly overestimated in low-beta regions.
 		const Real Eint = Egas - 0.5 * (x1Mom * x1Mom + x2Mom * x2Mom + x3Mom * x3Mom) / rho;
-		const Real Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+		const Real Tgas = quokka::EOS<DiskGalaxy>::ComputeTgasFromEint(rho, Eint);
 		return (Tgas < 1.0e4) ? rho : 0.0;
 	});
 	stats["mass_T_lt_1e4"] = cold_mass / C::M_solar;

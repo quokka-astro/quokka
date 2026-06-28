@@ -25,26 +25,6 @@
 namespace quokka::ResampledCooling
 {
 
-struct resampledGpuConstTables {
-	// GPU-friendly const table access
-	quokka::DataTableGpuConst<2, 1> cooling_rates;
-	quokka::DataTableGpuConst<2, 1> temperatures;
-	quokka::DataTableGpuConst<2, 1> sound_speeds;
-	quokka::DataTableGpuConst<2, 1> pressures;
-	quokka::DataTableGpuConst<2, 1> entropies;
-
-	// density range
-	amrex::Real rho_min;
-	amrex::Real rho_max;
-
-	// specific internal energy range
-	amrex::Real eint_min;
-	amrex::Real eint_max;
-
-	// hydrogen mass fraction
-	amrex::Real cloudy_H_mass_fraction;
-};
-
 class resampled_tables
 {
       public:
@@ -76,43 +56,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto resampled_cooling_function(Real co
 	// const Real d_Edot_over_d_rhosq = tables.cooling_rates.numeric_derivative(fast_log_rho_val, fast_log_eint_val)[0]; // NOLINT
 	const Real Edot = Edot_over_rhosq * (rho * rho);
 	return Edot;
-}
-
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(Real const rho, Real const Eint, resampledGpuConstTables const &tables) -> Real
-{
-	// Convert Eint (energy density) to eint (specific energy) and then to fast log scale for interpolation
-	const Real eint = Eint / rho;
-	std::array<amrex::Real, 2> const point = {FastMath::fastlg(rho), FastMath::fastlg(eint)};
-
-	// Interpolate temperature from data tables
-	const Real Tgas = tables.temperatures.interpolate_single(point);
-
-	return Tgas;
-}
-
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEgasFromTgas(Real const rho, Real const Tgas, resampledGpuConstTables const &tables) -> Real
-{
-	const Real Eint_min = rho * tables.eint_min;
-	const Real Eint_max = rho * tables.eint_max;
-
-	const Real Tmin = ComputeTgasFromEgas(rho, Eint_min, tables);
-	if (Tgas <= Tmin) {
-		return Eint_min;
-	}
-
-	const Real Tmax = ComputeTgasFromEgas(rho, Eint_max, tables);
-	if (Tgas >= Tmax) {
-		return Eint_max;
-	}
-
-	// Temperature is monotonic in the tabulated specific internal energy, so root-finding on T(Eint) - Tgas converges.
-	auto f = [=](Real Eint) -> Real { return ComputeTgasFromEgas(rho, Eint, tables) - Tgas; };
-
-	int max_iter = 32;
-	auto tol = quokka::math::eps_tolerance<Real>{};
-	auto const [Eint_lo, Eint_hi] = quokka::math::toms748_solve(f, Eint_min, Eint_max, Tmin - Tgas, Tmax - Tgas, tol, max_iter);
-
-	return Eint_hi;
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(Real const rho, Real const Eint, resampledGpuConstTables const &tables,

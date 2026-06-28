@@ -104,19 +104,20 @@ template <typename problem_t> class ElectronConduction
 			auto const &cons = state_x0[bx];
 			const amrex::Real rho = cons(i, j, k, HydroSystem<problem_t>::density_index);
 			const amrex::Real Eint = HydroSystem<problem_t>::ComputeInternalEnergy(cons, i, j, k, &local_state_fc);
-			amrex::Real Tgas = NAN;
+			// Temperature always from EOS
+			const int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
+			quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {};
+			if constexpr (nmscalars_ > 0) {
+				massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
+			}
+			const amrex::Real Tgas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
+
+			// Sound speed: from table if ResampledCooling, else from EOS
 			amrex::Real cs = NAN;
 			if (params.eos_flag == EOSFlagforConduction::ResampledCooling) {
-				Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, *tables_dev);
 				cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, *tables_dev);
-			} else if (params.eos_flag == EOSFlagforConduction::EOS) {
-				const int nmscalars_ = Physics_Traits<problem_t>::numMassScalars;
-				quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> massScalars = {};
-				if constexpr (nmscalars_ > 0) {
-					massScalars = RadSystem<problem_t>::ComputeMassScalars(cons, i, j, k);
-				}
-				Tgas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
-				amrex::Real Pgas = ::quokka::EOS<problem_t>::ComputePressure(rho, Eint, massScalars);
+			} else {
+				amrex::Real const Pgas = ::quokka::EOS<problem_t>::ComputePressure(rho, Eint, massScalars);
 				cs = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho, Pgas, massScalars);
 			}
 

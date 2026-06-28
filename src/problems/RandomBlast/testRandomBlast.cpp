@@ -33,9 +33,9 @@ template <> struct Physics_Traits<RandomBlast> : DefaultPhysicsTraits {
 	static constexpr int numPassiveScalars = numMassScalars + 1;
 };
 
-template <> struct quokka::EOS_Traits<RandomBlast> {
-	static constexpr double gamma = 5. / 3.;
+template <> struct quokka::EOS_Traits<RandomBlast> : quokka::DefaultEOSTraits {
 	static constexpr double mean_molecular_weight = C::m_u;
+	using EOSBackend = quokka::EOSTabulated<RandomBlast>;
 };
 
 template <> struct Particle_Traits<RandomBlast> : DefaultParticleTraits {
@@ -151,7 +151,7 @@ void QuokkaSimulation<RandomBlast>::ComputeDerivedVar(int /*lev*/, std::string c
 				Real const Egas = state(i, j, k, HydroSystem<RandomBlast>::energy_index);
 				static_assert(!Physics_Traits<RandomBlast>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
 				Real const Eint = quokka::EOS<RandomBlast>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
-				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+				Real const Tgas = quokka::EOS<RandomBlast>::ComputeTgasFromEint(rho, Eint);
 
 				output(i, j, k, ncomp) = Tgas;
 			});
@@ -216,7 +216,7 @@ auto problem_main() -> int
 			Real const Egas = values.at(HydroSystem<RandomBlast>::energy_index)[i];
 			static_assert(!Physics_Traits<RandomBlast>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
 			Real const Eint = quokka::EOS<RandomBlast>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
-			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+			Real const Tgas = quokka::EOS<RandomBlast>::ComputeTgasFromEint(rho, Eint);
 			temperature[i] = Tgas;
 		}
 
