@@ -137,7 +137,6 @@ void QuokkaSimulation<RandomBlast>::ComputeDerivedVar(int /*lev*/, std::string c
 	if (dname == "temperature") {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "RandomBlast diagnostics require resampled cooling tables.");
 		const int ncomp = ncomp_cc_in;
-		auto tables = resampledTables_.const_tables();
 
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
@@ -206,7 +205,6 @@ auto problem_main() -> int
 		std::vector<double> temperature(nz);
 
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.coolingTableType_ == "resampled", "RandomBlast temperature extraction requires resampled cooling tables.");
-		auto tables = sim.resampledTables_.const_tables_host();
 
 		for (int i = 0; i < nz; ++i) {
 			zs[i] = position[i];

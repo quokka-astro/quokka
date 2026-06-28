@@ -305,7 +305,6 @@ void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::string const 
 		amrex::Gpu::streamSynchronize();
 	} else if (dname == "temperature") {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "diagnostics require resampled cooling tables.");
-		auto tables = resampledTables_.const_tables();
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
 			Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
@@ -327,7 +326,6 @@ void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::string const 
 			output[bx](i, j, k, ncomp) = scalar0 * vz;
 		});
 	} else {
-		auto tables = resampledTables_.const_tables();
 		Real const hot_T = userData_.hot_T;
 		Real const warm_T = userData_.warm_T;
 		if (dname == "hot_gas_z_outflow_rate") {
