@@ -368,7 +368,7 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, zmet=1.0,
         tab1.attrs.create('spacing', np.array(['fast_log', 'fast_log'], dtype='S'))
 
         # --- Domain-specific attributes ---
-        tab1.attrs['include_pe'] = 1 if include_pe else 0
+        tab1.attrs.create('include_pe', np.int32(1 if include_pe else 0), dtype='i4')
         tab1.attrs['cloudy_H_mass_fraction'] = cloudy_H_mass_fraction
 
         # --- Data: shape [Nout, n_rho, n_eint] in C (row-major) order ---
