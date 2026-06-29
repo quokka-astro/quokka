@@ -1511,8 +1511,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read 'data' dataset in group: " + group_name).c_str());
 				H5Dclose(dset_id);
 				flat_data.resize(static_cast<std::size_t>(total));
-				std::transform(raw_data.begin(), raw_data.end(), flat_data.begin(),
-					       [](double v) { return static_cast<amrex::Real>(v); });
+				std::transform(raw_data.begin(), raw_data.end(), flat_data.begin(), [](double v) { return static_cast<amrex::Real>(v); });
 			}
 
 			H5Gclose(group_id);
