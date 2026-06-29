@@ -13,10 +13,6 @@ python3 resample_grackle_cooling_tables.py \
     --output "CloudyData_UVB=HM2012_resampled_noPE.h5"
 
 python3 resample_grackle_cooling_tables.py \
-    --exclude_pe \
-    --output "CloudyData_UVB=HM2012_resampled_no_PE.h5"
-
-python3 resample_grackle_cooling_tables.py \
     --shield \
     --output "CloudyData_UVB=HM2012_shielded_resampled.h5"
 
