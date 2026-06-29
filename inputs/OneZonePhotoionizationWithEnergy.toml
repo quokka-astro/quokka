@@ -34,15 +34,17 @@ photoionization.tend = 10000
 photoionization.n_photon = 5e3
 photoionization.temperature = 1e3
 
-integrator.atol_spec = 1e-14
-integrator.atol_rad_num = 1e-14
-integrator.atol_rad_flux = 1e-14
-integrator.atol_enuc = 1e-14
+# Validation test against Julia reference at 1e-6 L1 error tolerance.
+# Use very tight tolerances (effectively pure relative) to match the reference.
+integrator.atol_spec                     = 1e-14
+integrator.atol_enuc                     = 1e-14
+integrator.atol_rad_num                  = 1e-14
+integrator.species_failure_tolerance     = 1e-14    # cm^-3; matches atol_spec — VODE internal step guard
+integrator.radiation_failure_tolerance   = 0.05     # cm^-3; N_gamma guard, must exceed atol_rad_num
 
-integrator.rtol_spec = 1e-14
-integrator.rtol_rad_num = 1e-14
-integrator.rtol_rad_flux = 1e-14
-integrator.rtol_enuc = 1e-14
+integrator.rtol_spec     = 1e-14
+integrator.rtol_rad_num  = 1e-14
+integrator.rtol_enuc     = 1e-14
 
 network.energy_switch = 1
 network.KI_heating_switch = 0

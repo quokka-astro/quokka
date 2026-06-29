@@ -1,6 +1,6 @@
 /// \file testSN.cpp
 /// \brief Defines a test problem for supernova feedback.
-/// In this test, two supernova explode and in the end the gas temperature and velocity is checked for
+/// In this test, two supernovae explode and in the end the gas temperature and velocity is checked for
 /// Galilean invariance between a rest frame and a boost frame.
 
 #include "AMReX.H"
@@ -48,7 +48,7 @@ constexpr double B0 = 1.0e-7;	 // uniform background field for MHD variant
 
 static double n_amb = 1.0; // ambient density (g cm^-3) // NOLINT
 
-template <> struct Particle_Traits<SNProblem> {
+template <> struct Particle_Traits<SNProblem> : DefaultParticleTraits {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Test;
 };
