@@ -356,34 +356,34 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 			// compute the EMF along the cell-edge using a single kernel (all quadrants inside)
 			{
 				// bind read/write Array4 views on the host (required for GPU lambda capture)
-				std::array<amrex::Array4<const amrex::Real>, 4> u_w0_s;
-				std::array<amrex::Array4<const amrex::Real>, 4> u_w1_s;
-				std::array<amrex::Array4<const amrex::Real>, 4> b_w0_s;
-				std::array<amrex::Array4<const amrex::Real>, 4> b_w1_s;
-				std::array<amrex::Array4<amrex::Real>, 4> emf_w2_s;
+				std::array<amrex::Array4<const amrex::Real>, 4> us_w0;
+				std::array<amrex::Array4<const amrex::Real>, 4> us_w1;
+				std::array<amrex::Array4<const amrex::Real>, 4> bs_w0;
+				std::array<amrex::Array4<const amrex::Real>, 4> bs_w1;
+				std::array<amrex::Array4<amrex::Real>, 4> emfs_w2;
 
 				for (int qi = 0; qi < 4; ++qi) {
 					// extract relevant velocity and magnetic field components (host: get Array4 views)
 					const int idx0 = (qi == 0 || qi == 3) ? 0 : 1;	    // B/T selector for dir-0
 					const int idx1 = (qi < 2) ? 0 : 1;		    // L/R selector for dir-1
-					u_w0_s[qi] = ec_fabs_ui_q[0][qi].const_array();	    // component 0, index iquad
-					u_w1_s[qi] = ec_fabs_ui_q[1][qi].const_array();	    // component 1, index iquad
-					b_w0_s[qi] = ec_fabs_bi_ieside[0][idx0].const_array(); // component 0, index idx0
-					b_w1_s[qi] = ec_fabs_bi_ieside[1][idx1].const_array(); // component 1, index idx1
+					us_w0[qi] = ec_fabs_ui_q[0][qi].const_array();	    // component 0, index iquad
+					us_w1[qi] = ec_fabs_ui_q[1][qi].const_array();	    // component 1, index iquad
+					bs_w0[qi] = ec_fabs_bi_ieside[0][idx0].const_array(); // component 0, index idx0
+					bs_w1[qi] = ec_fabs_bi_ieside[1][idx1].const_array(); // component 1, index idx1
 
 					// define EMF FArrayBox for each quadrant (we need to allocate outside the kernel)
 					ec_fabs_emf_q[qi] = amrex::FArrayBox(box_ec, 1, amrex::The_Async_Arena());
-					emf_w2_s[qi] = ec_fabs_emf_q[qi].array();
+					emfs_w2[qi] = ec_fabs_emf_q[qi].array();
 				}
 
 				// single kernel over the edge-centered box; compute E in all four quadrants
 				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 					for (int qi = 0; qi < 4; ++qi) {
-						const amrex::Real u_w0 = u_w0_s[qi](i, j, k);
-						const amrex::Real u_w1 = u_w1_s[qi](i, j, k);
-						const amrex::Real b_w0 = b_w0_s[qi](i, j, k);
-						const amrex::Real b_w1 = b_w1_s[qi](i, j, k);
-						emf_w2_s[qi](i, j, k) = u_w0 * b_w1 - u_w1 * b_w0; // cross product at the edge
+						const amrex::Real u_w0 = us_w0[qi](i, j, k);
+						const amrex::Real u_w1 = us_w1[qi](i, j, k);
+						const amrex::Real b_w0 = bs_w0[qi](i, j, k);
+						const amrex::Real b_w1 = bs_w1[qi](i, j, k);
+						emfs_w2[qi](i, j, k) = u_w0 * b_w1 - u_w1 * b_w0; // cross product at the edge
 					}
 				});
 			}
@@ -495,11 +495,11 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 			// compute the EMF along the cell-edge using a single kernel (all quadrants inside)
 			{
 				// bind read/write Array4 views on the host (required for GPU lambda capture)
-				std::array<amrex::Array4<const amrex::Real>, 4> u_w0_s;
-				std::array<amrex::Array4<const amrex::Real>, 4> u_w1_s;
-				std::array<amrex::Array4<const amrex::Real>, 4> b_w0_s;
-				std::array<amrex::Array4<const amrex::Real>, 4> b_w1_s;
-				std::array<amrex::Array4<amrex::Real>, 4> emf_w2_s;
+				std::array<amrex::Array4<const amrex::Real>, 4> us_w0;
+				std::array<amrex::Array4<const amrex::Real>, 4> us_w1;
+				std::array<amrex::Array4<const amrex::Real>, 4> bs_w0;
+				std::array<amrex::Array4<const amrex::Real>, 4> bs_w1;
+				std::array<amrex::Array4<amrex::Real>, 4> emfs_w2;
 
 				for (int qi = 0; qi < 4; ++qi) {
 					const int idx0 = (qi == 0 || qi == 3) ? 0 : 1; // B/T selector for dir-0
@@ -509,21 +509,21 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 					ec_fabs_emf_q[qi] = amrex::FArrayBox(box_ec, 1, amrex::The_Async_Arena());
 
 					// extract relevant velocity and magnetic field components (host: get Array4 views)
-					u_w0_s[qi] = ec_fabs_ui_ieside[0][idx0].const_array(); // B/T
-					b_w0_s[qi] = ec_fabs_bi_ieside[0][idx0].const_array(); // B/T
-					u_w1_s[qi] = ec_fabs_ui_ieside[1][idx1].const_array(); // L/R
-					b_w1_s[qi] = ec_fabs_bi_ieside[1][idx1].const_array(); // L/R
-					emf_w2_s[qi] = ec_fabs_emf_q[qi].array();		    // output EMF view
+					us_w0[qi] = ec_fabs_ui_ieside[0][idx0].const_array(); // B/T
+					bs_w0[qi] = ec_fabs_bi_ieside[0][idx0].const_array(); // B/T
+					us_w1[qi] = ec_fabs_ui_ieside[1][idx1].const_array(); // L/R
+					bs_w1[qi] = ec_fabs_bi_ieside[1][idx1].const_array(); // L/R
+					emfs_w2[qi] = ec_fabs_emf_q[qi].array();		    // output EMF view
 				}
 
 				// single kernel over the edge-centered box; compute E in all four quadrants
 				amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 					for (int qi = 0; qi < 4; ++qi) {
-						const amrex::Real u_w0 = u_w0_s[qi](i, j, k);
-						const amrex::Real u_w1 = u_w1_s[qi](i, j, k);
-						const amrex::Real b_w0 = b_w0_s[qi](i, j, k);
-						const amrex::Real b_w1 = b_w1_s[qi](i, j, k);
-						emf_w2_s[qi](i, j, k) = u_w0 * b_w1 - u_w1 * b_w0; // cross product at the edge
+						const amrex::Real u_w0 = us_w0[qi](i, j, k);
+						const amrex::Real u_w1 = us_w1[qi](i, j, k);
+						const amrex::Real b_w0 = bs_w0[qi](i, j, k);
+						const amrex::Real b_w1 = bs_w1[qi](i, j, k);
+						emfs_w2[qi](i, j, k) = u_w0 * b_w1 - u_w1 * b_w0; // cross product at the edge
 					}
 				});
 			}
