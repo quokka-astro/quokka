@@ -24,6 +24,7 @@ struct ShockProfile {
 	std::vector<double> x_;
 	std::vector<double> rho_g_;
 	std::vector<double> v_gx_;
+	std::vector<double> v_gy_;
 	std::vector<double> rho_d_;
 	std::vector<double> v_dx_;
 	std::vector<double> v_dy_;
@@ -246,6 +247,7 @@ template <typename problem_t> auto extractShockProfile(QuokkaSimulation<problem_
 	profile.x_ = x;
 	profile.rho_g_.resize(x.size());
 	profile.v_gx_.resize(x.size());
+	profile.v_gy_.resize(x.size());
 	profile.rho_d_.resize(x.size());
 	profile.v_dx_.resize(x.size());
 	profile.v_dy_.resize(x.size());
@@ -253,12 +255,14 @@ template <typename problem_t> auto extractShockProfile(QuokkaSimulation<problem_
 	for (size_t i = 0; i < static_cast<size_t>(x.size()); ++i) {
 		const double rho_g = values.at(HydroSystem<problem_t>::density_index)[i];
 		const double mom_gx = values.at(HydroSystem<problem_t>::x1Momentum_index)[i];
+		const double mom_gy = values.at(HydroSystem<problem_t>::x2Momentum_index)[i];
 		const double rho_d = values.at(HydroSystem<problem_t>::dustDensity_index)[i];
 		const double mom_dx = values.at(HydroSystem<problem_t>::x1DustMomentum_index)[i];
 		const double mom_dy = values.at(HydroSystem<problem_t>::x2DustMomentum_index)[i];
 
 		profile.rho_g_[i] = rho_g;
 		profile.v_gx_[i] = (rho_g > 0.0) ? mom_gx / rho_g : 0.0;
+		profile.v_gy_[i] = (rho_g > 0.0) ? mom_gy / rho_g : 0.0;
 		profile.rho_d_[i] = rho_d;
 		profile.v_dx_[i] = (rho_d > 0.0) ? mom_dx / rho_d : 0.0;
 		profile.v_dy_[i] = (rho_d > 0.0) ? mom_dy / rho_d : 0.0;
@@ -333,7 +337,7 @@ auto computeGuidingCenterVx(const ShockProfile &profile) -> std::vector<double>
 		return profile.v_dx_;
 	}
 	for (size_t i = 0; i < profile.x_.size(); ++i) {
-		const double w_y = profile.v_dy_[i];
+		const double w_y = profile.v_dy_[i] - profile.v_gy_[i];
 		guiding_vx[i] = profile.v_gx_[i] - w_y / omega_ts;
 	}
 	return guiding_vx;
@@ -342,11 +346,12 @@ auto computeGuidingCenterVx(const ShockProfile &profile) -> std::vector<double>
 void writeShockProfileCsv(const ShockProfile &profile, const std::vector<double> *guiding_vx = nullptr)
 {
 	std::ofstream file(std::format("dust_lorentz_shock_{}.csv", profile.output_tag_));
-	file << "x,rho_g,v_gx,rho_d_scaled,v_dx,v_dy,v_guiding_x\n";
+	file << "x,rho_g,v_gx,v_gy,rho_d_scaled,v_dx,v_dy,w_y,v_guiding_x\n";
 
 	for (size_t i = 0; i < profile.x_.size(); ++i) {
-		file << profile.x_[i] << "," << profile.rho_g_[i] << "," << profile.v_gx_[i] << "," << profile.rho_d_[i] / std::max(profile.epsilon_, 1.0e-12)
-		     << "," << profile.v_dx_[i] << "," << profile.v_dy_[i] << ",";
+		const double w_y = profile.v_dy_[i] - profile.v_gy_[i];
+		file << profile.x_[i] << "," << profile.rho_g_[i] << "," << profile.v_gx_[i] << "," << profile.v_gy_[i] << ","
+		     << profile.rho_d_[i] / std::max(profile.epsilon_, 1.0e-12) << "," << profile.v_dx_[i] << "," << profile.v_dy_[i] << "," << w_y << ",";
 		if (guiding_vx != nullptr) {
 			file << (*guiding_vx)[i];
 		}

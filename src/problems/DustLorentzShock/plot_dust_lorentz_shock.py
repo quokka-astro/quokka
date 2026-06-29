@@ -81,6 +81,7 @@ def plot_velocity_panel(
     if guiding_key is not None and guiding_key in profile:
         guiding_line, = ax.plot(profile["x"], profile[guiding_key], color="black", linestyle="--", linewidth=1.0)
     ax.set_xlim(0.6, 1.0)
+    ax.set_ylim(0.0, 4.0)
     ax.set_title(title)
     if show_legend:
         handles = [gas_line, dust_line]
@@ -95,6 +96,7 @@ def plot_density_panel(ax, profile: dict[str, list[float]]) -> None:
     ax.plot(profile["x"], profile["rho_d_scaled"], color="black", linewidth=1.3)
     ax.plot(profile["x"], profile["rho_g"], color="red", linewidth=1.1)
     ax.set_xlim(0.6, 1.0)
+    ax.set_ylim(0.0, 6.0)
 
 
 def make_regression_figure(data_dir: Path, output_dir: Path) -> Path:
@@ -128,7 +130,7 @@ def make_regression_figure(data_dir: Path, output_dir: Path) -> Path:
 
     plot_density_panel(axes[1, 0], shock_eps001_omega_ts0)
     axes[1, 0].set_xlabel("x")
-    axes[1, 0].set_ylabel("density")
+    axes[1, 0].set_ylabel("density (scaled)")
 
     plot_density_panel(axes[1, 1], shock_eps010_omega_ts20)
     axes[1, 1].set_xlabel("x")
