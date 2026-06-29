@@ -205,7 +205,7 @@ auto problem_main() -> int
 		std::vector<double> temperature(nz);
 
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.coolingTableType_ == "resampled", "RandomBlast temperature extraction requires resampled cooling tables.");
-		auto tables = sim.resampledTables_.const_tables();
+		auto tables = sim.resampledTables_.const_tables_host();
 
 		for (int i = 0; i < nz; ++i) {
 			zs[i] = position[i];

@@ -739,7 +739,7 @@ auto problem_main() -> int
 	amrex::Print() << std::format("Pressure = {} K cm^-3\n", P_over_k);
 
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.coolingTableType_ == "resampled", "ShockCloud setup requires resampled cooling tables.");
-	auto cooling_tables = sim.resampledTables_.const_tables();
+	auto cooling_tables = sim.resampledTables_.const_tables_host();
 	// compute mass density of background, cloud
 	Real const H_mass_fraction = cooling_tables.cloudy_H_mass_fraction;
 	::rho0 = nH_bg * m_H / H_mass_fraction;	   // g cm^-3

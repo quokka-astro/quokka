@@ -35,6 +35,12 @@ template <quokka::OutOfBounds oob_policy = quokka::OutOfBounds::clamp> class PeH
 		return tables;
 	}
 
+	[[nodiscard]] auto const_tables_host() const -> PeHeatingGpuConstTables<oob_policy>
+	{
+		PeHeatingGpuConstTables<oob_policy> tables{pe_heating.const_tables_host()};
+		return tables;
+	}
+
 	[[nodiscard]] auto is_initialized() const -> bool { return pe_heating.is_initialized(); }
 };
 
