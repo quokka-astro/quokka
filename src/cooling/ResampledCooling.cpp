@@ -86,10 +86,10 @@ auto readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 auto resampled_tables::const_tables() const -> resampledGpuConstTables
 {
 	return resampledGpuConstTables{
-	    all_tables.const_tables(),
-	    cloudy_H_mass_fraction,
-	    all_tables.coord_xlo()[1], // eint_min (physical erg/g)
-	    all_tables.coord_xhi()[1], // eint_max (physical erg/g)
+	    .all_tables = all_tables.const_tables(),
+	    .cloudy_H_mass_fraction = cloudy_H_mass_fraction,
+	    .eint_min = all_tables.coord_xlo()[1],
+	    .eint_max = all_tables.coord_xhi()[1],
 	};
 }
 

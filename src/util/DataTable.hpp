@@ -16,6 +16,7 @@
 #include <hdf5.h>
 
 #include "math/FastMath.hpp"
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <fstream>
@@ -1382,7 +1383,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			// Read and validate Ndim
 			{
 				int file_ndim = 0;
-				hid_t attr_id = H5Aopen(group_id, "Ndim", H5P_DEFAULT);
+				hid_t const attr_id = H5Aopen(group_id, "Ndim", H5P_DEFAULT);
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(attr_id >= 0, "Failed to open Ndim attribute");
 				status = H5Aread(attr_id, H5T_NATIVE_INT, &file_ndim);
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read Ndim attribute");
@@ -1395,7 +1396,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			// Read and validate Nout
 			{
 				int file_nout = 0;
-				hid_t attr_id = H5Aopen(group_id, "Nout", H5P_DEFAULT);
+				hid_t const attr_id = H5Aopen(group_id, "Nout", H5P_DEFAULT);
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(attr_id >= 0, "Failed to open Nout attribute");
 				status = H5Aread(attr_id, H5T_NATIVE_INT, &file_nout);
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read Nout attribute");
@@ -1407,7 +1408,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 			// Read Nx
 			{
-				hid_t attr_id = H5Aopen(group_id, "Nx", H5P_DEFAULT);
+				hid_t const attr_id = H5Aopen(group_id, "Nx", H5P_DEFAULT);
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(attr_id >= 0, "Failed to open Nx attribute");
 				status = H5Aread(attr_id, H5T_NATIVE_INT, sizes.data());
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read Nx attribute");
@@ -1439,7 +1440,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 			// Read spacing (fixed-size string array written by numpy dtype='S')
 			{
-				hid_t attr_id = H5Aopen(group_id, "spacing", H5P_DEFAULT);
+				hid_t const attr_id = H5Aopen(group_id, "spacing", H5P_DEFAULT);
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(attr_id >= 0, "Failed to open spacing attribute");
 				hid_t const atype = H5Aget_type(attr_id);
 				hid_t const native_type = H5Tget_native_type(atype, H5T_DIR_ASCEND);
@@ -1467,13 +1468,13 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				if (H5Aexists(group_id, attr_name) <= 0) {
 					return result;
 				}
-				hid_t aid = H5Aopen(group_id, attr_name, H5P_DEFAULT);
+				hid_t const aid = H5Aopen(group_id, attr_name, H5P_DEFAULT);
 				if (aid < 0) {
 					return result;
 				}
-				hid_t atype_id = H5Aget_type(aid);
-				hid_t native_type_id = H5Tget_native_type(atype_id, H5T_DIR_ASCEND);
-				size_t str_size = H5Tget_size(native_type_id);
+				hid_t const atype_id = H5Aget_type(aid);
+				hid_t const native_type_id = H5Tget_native_type(atype_id, H5T_DIR_ASCEND);
+				size_t const str_size = H5Tget_size(native_type_id);
 				std::vector<char> raw_buf(static_cast<std::size_t>(count) * str_size);
 				H5Aread(aid, native_type_id, raw_buf.data());
 				H5Tclose(native_type_id);
@@ -1510,9 +1511,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read 'data' dataset in group: " + group_name).c_str());
 				H5Dclose(dset_id);
 				flat_data.resize(static_cast<std::size_t>(total));
-				for (std::size_t i = 0; i < static_cast<std::size_t>(total); ++i) {
-					flat_data[i] = static_cast<amrex::Real>(raw_data[i]);
-				}
+				std::transform(raw_data.begin(), raw_data.end(), flat_data.begin(),
+					       [](double v) { return static_cast<amrex::Real>(v); });
 			}
 
 			H5Gclose(group_id);
