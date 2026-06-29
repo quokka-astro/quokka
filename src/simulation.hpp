@@ -3532,7 +3532,7 @@ template <typename problem_t> template <typename F> auto AMRSimulation<problem_t
 	const BL_PROFILE("AMRSimulation::computeVolumeIntegral()");
 	using StateArray = amrex::Array4<const amrex::Real>;
 	using FaceArray = std::array<StateArray, AMREX_SPACEDIM>;
-#if !defined(AMREX_USE_GPU)
+#ifndef AMREX_USE_GPU
 	constexpr bool user_f_accepts_cc_fc = amrex::IsCallable<F const, int, int, int, StateArray const &, FaceArray const &>::value;
 	static_assert(user_f_accepts_cc_fc, "computeVolumeIntegral callback must accept (i, j, k, state_cc, state_fc).");
 #endif
