@@ -36,7 +36,7 @@ configure_build() {
 	local build_dir="$1"
 	local integrator="$2"
 
-	cmake -S "${ROOT_DIR}" -B "${build_dir}" -DDTypeFront_INTEGRATOR="${integrator}" -DAMReX_GPU_BACKEND=CUDA -DAMReX_GPU_ARCH=9.0 -DAMReX_SPACEDIM=3
+	cmake -S "${ROOT_DIR}" -B "${build_dir}" -DDTypeFront_INTEGRATOR="${integrator}" -DAMReX_GPU_BACKEND=CUDA -DAMReX_GPU_ARCH=9.0 -DAMReX_SPACEDIM=3 -DCMAKE_BUILD_TYPE=Release
 	cmake --build "${build_dir}" --target DTypeFront -j "${BUILD_JOBS}"
 }
 
