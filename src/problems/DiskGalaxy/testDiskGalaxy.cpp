@@ -103,7 +103,7 @@ template <> void QuokkaSimulation<DiskGalaxy>::preCalculateInitialConditions()
 	pp.query("vcirc_file", filename);
 
 	auto halo_table = quokka::DataTable<1, 4, quokka::OutOfBounds::clamp>::CSVReader(filename, quokka::SpacingType::linear);
-	auto const halo_table_const = halo_table.const_tables();
+	auto const halo_table_const = halo_table.const_tables_host();
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(halo_table_const.sizes[0] > 0, "disk_galaxy.vcirc_file contained no numeric rows.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(halo_table_const.spacing_types[0] == quokka::SpacingType::linear,
 					 "disk_galaxy.vcirc_file must use linear spacing for the radius coordinate.");
