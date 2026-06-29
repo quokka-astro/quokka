@@ -23,15 +23,14 @@
 #include "physics_numVars.hpp"
 #include <iostream>
 
-AMREX_ENUM(EMFComputeScheme, FelkerStone2017, Balsara2025, Quokka2026); // NOLINT
-
 // Felker + Stone (2017): uses cell-centered velocity
 // Balsara (2025): EMF interpolation from cc->ec
 // Quokka variant of FS17: uses face-centered Riemann velocity
+AMREX_ENUM(EMFComputeScheme, FelkerStone2017, Balsara2025, Quokka2026); // NOLINT
 
-AMREX_ENUM(EMFAvgScheme, LondrilloDelZanna2004, Balsara2025); // NOLINT
 // Londrillo + Del Zanna (2004)
 // Balsara (2025): Higher-order averaging
+AMREX_ENUM(EMFAvgScheme, LondrilloDelZanna2004, Balsara2025); // NOLINT
 
 AMREX_FORCE_INLINE constexpr auto MinimumHydroRiemannGhost(bool is_mhd_enabled, EMFComputeScheme emf_compute_scheme, EMFAvgScheme emf_avg_scheme,
 							   bool require_tracer_ghosts = false) -> int
@@ -1066,9 +1065,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto MHDSystem<problem_t>::computeResistiveE
 										   std::array<int, 3> const &delta_w0, std::array<int, 3> const &delta_w1,
 										   amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real resistivity) -> amrex::Real
 {
-	const amrex::Real J_edge = (a4_b_w1(i, j, k) - a4_b_w1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2])) / dx_w0 -
+	const amrex::Real j_edge = (a4_b_w1(i, j, k) - a4_b_w1(i - delta_w0[0], j - delta_w0[1], k - delta_w0[2])) / dx_w0 -
 				   (a4_b_w0(i, j, k) - a4_b_w0(i - delta_w1[0], j - delta_w1[1], k - delta_w1[2])) / dx_w1;
-	return resistivity * J_edge;
+	return resistivity * j_edge;
 }
 
 template <typename problem_t>
@@ -1118,24 +1117,24 @@ void MHDSystem<problem_t>::AddResistiveEnergyFlux(std::array<amrex::MultiFab, AM
 		for (amrex::MFIter mfi(fluxArrays[iface]); mfi.isValid(); ++mfi) {
 			const amrex::Box &box_face = mfi.validbox();
 
-			// B_a on a-faces, B_b on b-faces, B_iface on iface-faces (aliased, no copy)
-			const auto B_a = fcx_mf_cVars[a][mfi].const_array(bfield_index);
-			const auto B_b = fcx_mf_cVars[b][mfi].const_array(bfield_index);
-			const auto B_iface = fcx_mf_cVars[iface][mfi].const_array(bfield_index);
+			// b_a on a-faces, b_b on b-faces, b_iface on iface-faces (aliased, no copy)
+			const auto b_a = fcx_mf_cVars[a][mfi].const_array(bfield_index);
+			const auto b_b = fcx_mf_cVars[b][mfi].const_array(bfield_index);
+			const auto b_iface = fcx_mf_cVars[iface][mfi].const_array(bfield_index);
 			auto flux = fluxArrays[iface][mfi].array();
 
-			// a-edge: a4_b_w0=B_b, delta_w0=delta_b, dx_w0=dx_b; a4_b_w1=B_iface, delta_w1=delta_iface, dx_w1=dx_iface
-			// b-edge: a4_b_w0=B_iface, delta_w0=delta_iface, dx_w0=dx_iface; a4_b_w1=B_a, delta_w1=delta_a, dx_w1=dx_a
+			// a-edge: a4_b_w0=b_b, delta_w0=delta_b, dx_w0=dx_b; a4_b_w1=b_iface, delta_w1=delta_iface, dx_w1=dx_iface
+			// b-edge: a4_b_w0=b_iface, delta_w0=delta_iface, dx_w0=dx_iface; a4_b_w1=b_a, delta_w1=delta_a, dx_w1=dx_a
 			amrex::ParallelFor(box_face, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				amrex::Real eta_J_a0 = 0.0;
 				amrex::Real eta_J_a1 = 0.0;
 				amrex::Real eta_J_b0 = 0.0;
 				amrex::Real eta_J_b1 = 0.0;
-				const amrex::Real eta = resistivity; // first-capture for CUDA
-				// first-capture for CUDA
-				const auto B_b_local = B_b;
-				const auto B_iface_local = B_iface;
-				const auto B_a_local = B_a;
+				const amrex::Real eta = resistivity;
+				// first-captures for CUDA
+				const auto b_b_local = b_b;
+				const auto b_iface_local = b_iface;
+				const auto b_a_local = b_a;
 				const auto delta_b_local = delta_b;
 				const auto delta_iface_local = delta_iface;
 				const auto delta_a_local = delta_a;
@@ -1143,52 +1142,52 @@ void MHDSystem<problem_t>::AddResistiveEnergyFlux(std::array<amrex::MultiFab, AM
 				const amrex::Real dx_iface_local = dx_iface;
 				const amrex::Real dx_a_local = dx_a;
 				if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::constant) {
-					eta_J_a0 = computeResistiveEMF(B_b_local, B_iface_local, i, j, k, delta_b_local, delta_iface_local, dx_b_local,
+					eta_J_a0 = computeResistiveEMF(b_b_local, b_iface_local, i, j, k, delta_b_local, delta_iface_local, dx_b_local,
 								       dx_iface_local, eta);
-					eta_J_a1 = computeResistiveEMF(B_b_local, B_iface_local, i + delta_b_local[0], j + delta_b_local[1],
+					eta_J_a1 = computeResistiveEMF(b_b_local, b_iface_local, i + delta_b_local[0], j + delta_b_local[1],
 								       k + delta_b_local[2], delta_b_local, delta_iface_local, dx_b_local, dx_iface_local, eta);
-					eta_J_b0 = computeResistiveEMF(B_iface_local, B_a_local, i, j, k, delta_iface_local, delta_a_local, dx_iface_local,
+					eta_J_b0 = computeResistiveEMF(b_iface_local, b_a_local, i, j, k, delta_iface_local, delta_a_local, dx_iface_local,
 								       dx_a_local, eta);
-					eta_J_b1 = computeResistiveEMF(B_iface_local, B_a_local, i + delta_a_local[0], j + delta_a_local[1],
+					eta_J_b1 = computeResistiveEMF(b_iface_local, b_a_local, i + delta_a_local[0], j + delta_a_local[1],
 								       k + delta_a_local[2], delta_iface_local, delta_a_local, dx_iface_local, dx_a_local, eta);
 				} else if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::problem_defined) {
-					const amrex::Real eta_a0 = computeResistivity<problem_t>(i, j, k, B_b_local, B_iface_local, dx_b_local, dx_iface_local);
-					eta_J_a0 = computeResistiveEMF(B_b_local, B_iface_local, i, j, k, delta_b_local, delta_iface_local, dx_b_local,
+					const amrex::Real eta_a0 = computeResistivity<problem_t>(i, j, k, b_b_local, b_iface_local, dx_b_local, dx_iface_local);
+					eta_J_a0 = computeResistiveEMF(b_b_local, b_iface_local, i, j, k, delta_b_local, delta_iface_local, dx_b_local,
 								       dx_iface_local, eta_a0);
 					const amrex::Real eta_a1 =
-					    computeResistivity<problem_t>(i + delta_b_local[0], j + delta_b_local[1], k + delta_b_local[2], B_b_local,
-									  B_iface_local, dx_b_local, dx_iface_local);
+					    computeResistivity<problem_t>(i + delta_b_local[0], j + delta_b_local[1], k + delta_b_local[2], b_b_local,
+									  b_iface_local, dx_b_local, dx_iface_local);
 					eta_J_a1 =
-					    computeResistiveEMF(B_b_local, B_iface_local, i + delta_b_local[0], j + delta_b_local[1], k + delta_b_local[2],
+					    computeResistiveEMF(b_b_local, b_iface_local, i + delta_b_local[0], j + delta_b_local[1], k + delta_b_local[2],
 								delta_b_local, delta_iface_local, dx_b_local, dx_iface_local, eta_a1);
-					const amrex::Real eta_b0 = computeResistivity<problem_t>(i, j, k, B_iface_local, B_a_local, dx_iface_local, dx_a_local);
-					eta_J_b0 = computeResistiveEMF(B_iface_local, B_a_local, i, j, k, delta_iface_local, delta_a_local, dx_iface_local,
+					const amrex::Real eta_b0 = computeResistivity<problem_t>(i, j, k, b_iface_local, b_a_local, dx_iface_local, dx_a_local);
+					eta_J_b0 = computeResistiveEMF(b_iface_local, b_a_local, i, j, k, delta_iface_local, delta_a_local, dx_iface_local,
 								       dx_a_local, eta_b0);
 					const amrex::Real eta_b1 =
-					    computeResistivity<problem_t>(i + delta_a_local[0], j + delta_a_local[1], k + delta_a_local[2], B_iface_local,
-									  B_a_local, dx_iface_local, dx_a_local);
+					    computeResistivity<problem_t>(i + delta_a_local[0], j + delta_a_local[1], k + delta_a_local[2], b_iface_local,
+									  b_a_local, dx_iface_local, dx_a_local);
 					eta_J_b1 =
-					    computeResistiveEMF(B_iface_local, B_a_local, i + delta_a_local[0], j + delta_a_local[1], k + delta_a_local[2],
+					    computeResistiveEMF(b_iface_local, b_a_local, i + delta_a_local[0], j + delta_a_local[1], k + delta_a_local[2],
 								delta_iface_local, delta_a_local, dx_iface_local, dx_a_local, eta_b1);
 				}
 
-				// Average face-B to each edge position across the face-normal direction
-				const amrex::Real avg_Bb_0 =
-				    0.5 * (B_b_local(i, j, k) + B_b_local(i - delta_iface_local[0], j - delta_iface_local[1], k - delta_iface_local[2]));
-				const amrex::Real avg_Bb_1 =
-				    0.5 * (B_b_local(i + delta_b_local[0], j + delta_b_local[1], k + delta_b_local[2]) +
-					   B_b_local(i + delta_b_local[0] - delta_iface_local[0], j + delta_b_local[1] - delta_iface_local[1],
+				// average face-b to each edge position across the face-normal direction.
+				const amrex::Real avg_bb_0 =
+				    0.5 * (b_b_local(i, j, k) + b_b_local(i - delta_iface_local[0], j - delta_iface_local[1], k - delta_iface_local[2]));
+				const amrex::Real avg_bb_1 =
+				    0.5 * (b_b_local(i + delta_b_local[0], j + delta_b_local[1], k + delta_b_local[2]) +
+					   b_b_local(i + delta_b_local[0] - delta_iface_local[0], j + delta_b_local[1] - delta_iface_local[1],
 						     k + delta_b_local[2] - delta_iface_local[2]));
-				const amrex::Real avg_Ba_0 =
-				    0.5 * (B_a_local(i, j, k) + B_a_local(i - delta_iface_local[0], j - delta_iface_local[1], k - delta_iface_local[2]));
-				const amrex::Real avg_Ba_1 =
-				    0.5 * (B_a_local(i + delta_a_local[0], j + delta_a_local[1], k + delta_a_local[2]) +
-					   B_a_local(i + delta_a_local[0] - delta_iface_local[0], j + delta_a_local[1] - delta_iface_local[1],
+				const amrex::Real avg_ba_0 =
+				    0.5 * (b_a_local(i, j, k) + b_a_local(i - delta_iface_local[0], j - delta_iface_local[1], k - delta_iface_local[2]));
+				const amrex::Real avg_ba_1 =
+				    0.5 * (b_a_local(i + delta_a_local[0], j + delta_a_local[1], k + delta_a_local[2]) +
+					   b_a_local(i + delta_a_local[0] - delta_iface_local[0], j + delta_a_local[1] - delta_iface_local[1],
 						     k + delta_a_local[2] - delta_iface_local[2]));
 
-				// F_eta = (eta_J x B)_iface = eta_J_a * B_b - eta_J_b * B_a, averaged over the two bounding edges
-				const amrex::Real F_eta = 0.25 * (eta_J_a0 * avg_Bb_0 + eta_J_a1 * avg_Bb_1 - eta_J_b0 * avg_Ba_0 - eta_J_b1 * avg_Ba_1);
-				flux(i, j, k, energy_idx) += F_eta;
+				// f_eta = (eta_J x b)_iface = eta_J_a * b_b - eta_J_b * b_a, averaged over the two bounding edges.
+				const amrex::Real f_eta = 0.25 * (eta_J_a0 * avg_bb_0 + eta_J_a1 * avg_bb_1 - eta_J_b0 * avg_ba_0 - eta_J_b1 * avg_ba_1);
+				flux(i, j, k, energy_idx) += f_eta;
 			});
 		}
 	}
