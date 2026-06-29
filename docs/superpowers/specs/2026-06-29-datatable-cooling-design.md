@@ -140,8 +140,6 @@ class resampled_tables {
   public:
     quokka::DataTable<2, 5> all_tables;
     amrex::Real cloudy_H_mass_fraction;
-    amrex::Real eint_min;
-    amrex::Real eint_max;
     bool include_pe;
 
     [[nodiscard]] auto const_tables() const -> resampledGpuConstTables;
@@ -169,8 +167,6 @@ const Real val = tables.all_tables.interpolate_single(point, COOLING_RATE_IDX);
 
 ```cpp
 resampledTables.all_tables = quokka::DataTable<2, 5>::H5Reader(hdf5_file, "tab1");
-resampledTables.eint_min = resampledTables.all_tables.coord_xlo()[1];
-resampledTables.eint_max = resampledTables.all_tables.coord_xhi()[1];
 // include_pe and cloudy_H_mass_fraction read directly from tab1 attrs via HDF5 API
 ```
 
@@ -180,8 +176,8 @@ resampledTables.eint_max = resampledTables.all_tables.coord_xhi()[1];
 return resampledGpuConstTables{
     all_tables.const_tables(),
     cloudy_H_mass_fraction,
-    eint_min,
-    eint_max
+    all_tables.coord_xlo()[1],  // eint_min — physical erg/g
+    all_tables.coord_xhi()[1],  // eint_max — physical erg/g
 };
 ```
 
