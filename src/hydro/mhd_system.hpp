@@ -185,14 +185,9 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 						      amrex::Real resistivity)
 {
 	const BL_PROFILE("MHDSystem::ComputeEMF_FelkerStone2017()");
-	const int nghost_cc = 4; // we only need 4 cc ghost cells when reconstructing cc->fc->ec using PPM
-	// note: all the different centerings still have the same distribution mapping, so it is fine for us to attach our looping to cc FArrayBox
-	// note: cell-centered (cc), face-centered (fc), and edge-centered (ec) data all have a different number of cells
-
-	// In this function we distinguish between world (w:3), array (i:2), quandrant (qi:4), and component (x:3) index-ing by using prefixes. We will
-	// use the prefix x- when the w- and i- indexes are the same. We also choose to minimise the storage footprint by only computing and holding
-	// onto the quantities required for calculating the EMF in the w-direction. This inadvertently leads to duplicate computation, but allows us to
-	// significantly reduces the total memory used, which is a much bigger bottleneck.
+	const int nghost_cc = 4; // 4 cc ghost cells needed for cc->fc->ec PPM reconstruction
+	// note: all centerings share the same distribution mapping; looping over cc MFIter is valid
+	// note: cc, fc, and ec data have different cell counts
 
 	// loop over each box-array on this level
 	constexpr int nstreams = 1; // only run on 1 GPU stream to avoid race conditions
@@ -416,16 +411,11 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 	const BL_PROFILE("MHDSystem::ComputeEMF_Quokka2026()");
 
 	// loop over each box-array on the level
-	// note: all the different centerings still have the same distribution mapping, so it is fine for us to attach our looping to cc FArrayBox
-	// note: cell-centered (cc), face-centered (fc), and edge-centered (ec) data all have a different number of cells
+	// note: all centerings share the same distribution mapping; looping over cc MFIter is valid
+	// note: cc, fc, and ec data have different cell counts
 	constexpr int nstreams = 1; // only run on 1 GPU stream to avoid race conditions
 	for (amrex::MFIter mfi(fcx_mf_cVars[0], amrex::MFItInfo().SetNumStreams(nstreams)); mfi.isValid(); ++mfi) {
 		const amrex::Box &box_cc = mfi.validbox();
-
-		// In this function we distinguish between world (w:3), array (i:2), quandrant (qi:4), and component (x:3) index-ing by using prefixes. We will
-		// use the prefix x- when the w- and i- indexes are the same. We also choose to minimise the storage footprint by only computing and holding
-		// onto the quantities required for calculating the EMF in the w-direction. This inadvertently leads to duplicate computation, but allows us to
-		// significantly reduces the total memory used, which is a much bigger bottleneck.
 
 		// indexing: field[3: x-component/x-face]
 		// create a view of all the u-field data (+ghost cells; do not make another copy)
@@ -552,11 +542,11 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 						  SlopeLimiter plmLimiter, EMFAvgScheme emf_ave_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 						  amrex::Real resistivity)
 {
-	// calculating v x B at cell center, v already at cell center, B at face center
+	// v x b at cell center; v is already cc, b averaged from fc
 
 	const BL_PROFILE("MHDSystem::ComputeEMF_Balsara2025()");
 	const int nghost_cc = 4;
-	// note: cell-centered (cc), face-centered (fc), and edge-centered (ec) data all have a different number of cells
+	// note: cc, fc, and ec data have different cell counts
 
 	const auto &ba = cc_mf_cVars.boxArray();
 	const auto &dm = cc_mf_cVars.DistributionMap();
@@ -565,9 +555,9 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 	cc_mf_emf.setVal(0.0, 0, 3, nghost_cc); // initialize to zero everywhere including ghost zones
 
 	for (amrex::MFIter mfi(cc_mf_cVars, amrex::MFItInfo().SetNumStreams(nstreams)); mfi.isValid(); ++mfi) {
-		const amrex::Box &box_cc_emf = mfi.growntilebox(nghost_cc); // Ensure enough ghost cells for EMF computation
+		const amrex::Box &box_cc_emf = mfi.growntilebox(nghost_cc); // ensure enough ghost cells for EMF computation
 
-		// Access the MultiFab components for this tile
+		// emf Array4 views for this tile
 		const auto &cc_a4_emfx0 = cc_mf_emf[mfi].array(0);
 		const auto &cc_a4_emfx1 = cc_mf_emf[mfi].array(1);
 		const auto &cc_a4_emfx2 = cc_mf_emf[mfi].array(2);
@@ -580,18 +570,18 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 		    amrex::FArrayBox(fcx_mf_cVars[2][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
 		};
 
-		// Get face-centered B field arrays
+		// face-centered b-field Array4 views
 		std::array<amrex::Array4<amrex::Real const>, 3> fc_a4_bx = {fcx_mf_cVars[0][mfi].const_array(MHDSystem<problem_t>::bfield_index),
 									    fcx_mf_cVars[1][mfi].const_array(MHDSystem<problem_t>::bfield_index),
 									    fcx_mf_cVars[2][mfi].const_array(MHDSystem<problem_t>::bfield_index)};
 
-		// Compute v x B for all three directions in parallel
+		// compute v x b for all three dimensions
 		amrex::ParallelFor(box_cc_emf, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			const auto rho = cc_a4_cVars(i, j, k, HydroSystem<problem_t>::density_index);
 			std::array<amrex::Real, 3> v = {cc_a4_cVars(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / rho,
 							cc_a4_cVars(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / rho,
 							cc_a4_cVars(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / rho};
-			// Loop over each dimension to compute the corresponding EMF component
+			// emf component for each dimension
 			for (int idim = 0; idim < 3; ++idim) {
 				int const x2ind = (idim + 1) % 3;
 				int const x3ind = (idim + 2) % 3;
@@ -601,13 +591,13 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 				delta_x2[x2ind] = 1;
 				delta_x3[x3ind] = 1;
 
-				// Average face-centered B to cell center
+				// average face-centered b to cell center
 				amrex::Real const bx2_avg =
 				    0.5 * (fc_a4_bx[x2ind](i, j, k) + fc_a4_bx[x2ind](i + delta_x2[0], j + delta_x2[1], k + delta_x2[2]));
 				amrex::Real const bx3_avg =
 				    0.5 * (fc_a4_bx[x3ind](i, j, k) + fc_a4_bx[x3ind](i + delta_x3[0], j + delta_x3[1], k + delta_x3[2]));
 
-				// v x B computation
+				// v x b computation
 				cc_a4_emf_array[idim](i, j, k) = v[x2ind] * bx3_avg - v[x3ind] * bx2_avg; //
 			}
 		});
@@ -617,9 +607,6 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 	amrex::Gpu::streamSynchronize();
 
 	// interpolate emf from cell-center to cell-edge; also move b-field from face to cell-edge for averaging solvers.
-
-	// In this part we distinguish between world (w:3), array (i:2), quandrant (q:4), and component (x:3) index-ing by using prefixes. We will
-	// use the prefix x- when the w- and i- indexes are the same.
 
 	for (amrex::MFIter mfi(cc_mf_cVars, amrex::MFItInfo().SetNumStreams(nstreams)); mfi.isValid(); ++mfi) { // keep
 		const amrex::Box &box_cc = mfi.validbox();
@@ -808,7 +795,7 @@ void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(amrex::Array4<amrex:
 		const double numerator = 0.5 * (num1 + num2);
 		const double denominator = (a0_m + a0_p) * (a1_m + a1_p);
 
-		// Felker18a eq. 41 (= LD2004 eq. 56); a0_m<=0,a0_p>=0 are signed speeds (not negated like in b_w25).
+		// Felker18a eq. 41 (= LD2004 eq. 56); a0_m<=0,a0_p>=0 are signed speeds (not negated like in Balsara25a).
 		const double term2 = ((a1_m * a1_p) / (a1_m + a1_p)) * (b_w0_T - b_w0_B) + ((a0_m * a0_p) / (a0_m + a0_p)) * (b_w1_L - b_w1_R);
 
 		a4_emf_w2_ave(i, j, k) = (numerator / denominator) + term2;
@@ -936,7 +923,7 @@ void MHDSystem<problem_t>::ReconstructTo(FluxDir dir, arrayconst_t &cState, arra
 {
 	const BL_PROFILE("MHDSystem::ReconstructTo()");
 	const amrex::IntVect dir_vec = amrex::IntVect::TheDimensionVector(static_cast<int>(dir));
-	// PPM kernels loop over cells and fill left(i+1) and right(i), so include one extra cell in the reconstruction direction.
+	// PPM kernels loop over cells and fill left(i+1) and right(i); include one extra cell in the reconstruction direction
 	const amrex::Box box_cell_range = amrex::grow(amrex::enclosedCells(box_iValid, static_cast<int>(dir)), dir_vec);
 	const amrex::Box box_interface_range = amrex::surroundingNodes(box_cell_range, static_cast<int>(dir));
 	if (reconstructionOrder == 5) {
@@ -1013,10 +1000,7 @@ void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_S
 	const BL_PROFILE("MHDSystem::SolveInductionEqn()");
 	// compute the total right-hand-side for the MOL integration
 
-	// By convention, the fluxes are defined on the left edge of each zone,
-	// i.e. flux_(i) is the flux *into* zone i through the interface on the
-	// left of zone i, and -1.0*flux(i+1) is the flux *into* zone i through
-	// the interface on the right of zone i.
+	// flux sign convention: flux_(i) is into zone i from the left; -flux_(i+1) is into zone i from the right
 
 	// loop over faces pointing in the w0-direction
 	for (int w0 = 0; w0 < 3; ++w0) {
