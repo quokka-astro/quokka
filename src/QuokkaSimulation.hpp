@@ -1048,8 +1048,8 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computePhotoelec
 		return heating_rate; // Return 0 if tables not loaded
 	}
 
-	// Get GPU-friendly const tables
-	auto const gpu_tables = quokka::g_pe_heating_tables_ptr<>->const_tables();
+	// PE heating rate is computed on the host; use host-accessible (pinned) tables.
+	auto const gpu_tables = quokka::g_pe_heating_tables_ptr<>->const_tables_host();
 
 	if (const_sfr_Msun_per_year_per_kpc2_ > 0.0) {
 		// Constant star formation rate
