@@ -12,7 +12,9 @@
 
 #include "cooling/ResampledCooling.hpp"
 
+#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_Print.H"
+#include <hdf5.h>
 #include <format>
 
 namespace quokka::ResampledCooling
@@ -31,54 +33,64 @@ auto readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 		amrex::Abort("Resampled cooling table file does not exist!");
 	}
 
-	// Define coordinate names and fast_log setting
-	const std::vector<std::string> coord_names = {"rho", "eint"};
-	const int is_fast_log = 1;
+	// Read the combined table (Nout=5: cooling_rate, temperature, sound_speed, pressure, entropy)
+	resampledTables.table = quokka::DataTable<2, 5>::H5Reader(hdf5_file, "/data");
 
-	// Coordinate bounds will be read by H5Reader
-	std::array<std::pair<amrex::Real, amrex::Real>, 2> coord_bounds;
-	bool is_pe_enabled = false;
+	// Read physical eint bounds (xlo[1], xhi[1]) and file-level include_pe flag
+	amrex::Real eint_min = 0.0;
+	amrex::Real eint_max = 0.0;
+	int include_pe_val = 0;
 
-	// Read all 2D datasets using generic DataTable H5Reader (file path-based interface)
-	resampledTables.cooling_rates =
-	    quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/cooling_rates", coord_names, is_fast_log, &coord_bounds, &is_pe_enabled);
-	resampledTables.temperatures = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/temperatures", coord_names, is_fast_log);
-	resampledTables.sound_speeds = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/sound_speeds", coord_names, is_fast_log);
-	resampledTables.pressures = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/pressures", coord_names, is_fast_log);
-	resampledTables.entropies = quokka::DataTable<2, 1>::H5Reader(hdf5_file, "/data/entropies", coord_names, is_fast_log);
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		const herr_t h5_error = -1;
+		hid_t const file_id = H5Fopen(hdf5_file.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file_id != h5_error, ("Failed to open HDF5 file: " + hdf5_file).c_str());
 
-	// Set coordinate bounds from H5Reader output
-	resampledTables.rho_min = coord_bounds[0].first;
-	resampledTables.rho_max = coord_bounds[0].second;
-	resampledTables.eint_min = coord_bounds[1].first;
-	resampledTables.eint_max = coord_bounds[1].second;
+		// Read xlo/xhi from /data group to get eint bounds (index 1)
+		hid_t const group_id = H5Gopen2(file_id, "/data", H5P_DEFAULT);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(group_id != h5_error, "Failed to open /data group!");
+		double xlo[2] = {0.0, 0.0};
+		double xhi[2] = {0.0, 0.0};
+		hid_t attr_id = H5Aopen(group_id, "xlo", H5P_DEFAULT);
+		H5Aread(attr_id, H5T_NATIVE_DOUBLE, xlo);
+		H5Aclose(attr_id);
+		attr_id = H5Aopen(group_id, "xhi", H5P_DEFAULT);
+		H5Aread(attr_id, H5T_NATIVE_DOUBLE, xhi);
+		H5Aclose(attr_id);
+		H5Gclose(group_id);
+		eint_min = xlo[1];
+		eint_max = xhi[1];
 
-	// Get grid dimensions from the DataTable objects for logging
-	const int n_rho = resampledTables.cooling_rates.size(0);
-	const int n_eint = resampledTables.cooling_rates.size(1);
+		// Read file-level include_pe attribute
+		if (H5Aexists(file_id, "include_pe") > 0) {
+			attr_id = H5Aopen(file_id, "include_pe", H5P_DEFAULT);
+			H5Aread(attr_id, H5T_NATIVE_INT, &include_pe_val);
+			H5Aclose(attr_id);
+		}
+		H5Fclose(file_id);
+	}
 
+	amrex::ParallelDescriptor::Bcast(&eint_min, 1, amrex::ParallelDescriptor::IOProcessorNumber());
+	amrex::ParallelDescriptor::Bcast(&eint_max, 1, amrex::ParallelDescriptor::IOProcessorNumber());
+	amrex::ParallelDescriptor::Bcast(&include_pe_val, 1, amrex::ParallelDescriptor::IOProcessorNumber());
+
+	resampledTables.eint_min = eint_min;
+	resampledTables.eint_max = eint_max;
 	resampledTables.cloudy_H_mass_fraction = cloudy_H_mass_fraction;
 
-	amrex::Print() << std::format("\tDensity range: {} to {} g/cm^3 ({} steps).\n", resampledTables.rho_min, resampledTables.rho_max, n_rho);
-	amrex::Print() << std::format("\tSpecific energy range: {} to {} erg/g ({} steps).\n", resampledTables.eint_min, resampledTables.eint_max, n_eint);
-	amrex::Print() << std::format("\tPhotoelectric heating: {}.\n", is_pe_enabled ? "enabled" : "disabled");
+	const int n_rho = resampledTables.table.size(0);
+	const int n_eint = resampledTables.table.size(1);
+	amrex::Print() << std::format("\tDensity range: {} to {} g/cm^3 ({} steps).\n", resampledTables.table.xlo()[0],
+				      resampledTables.table.xhi()[0], n_rho);
+	amrex::Print() << std::format("\tSpecific energy range: {} to {} erg/g ({} steps).\n", eint_min, eint_max, n_eint);
+	amrex::Print() << std::format("\tPhotoelectric heating: {}.\n", (include_pe_val != 0) ? "enabled" : "disabled");
 
-	return is_pe_enabled;
+	return (include_pe_val != 0);
 }
 
 auto resampled_tables::const_tables() const -> resampledGpuConstTables
 {
-	resampledGpuConstTables tables{cooling_rates.const_tables(),
-				       temperatures.const_tables(),
-				       sound_speeds.const_tables(),
-				       pressures.const_tables(),
-				       entropies.const_tables(),
-				       rho_min,
-				       rho_max,
-				       eint_min,
-				       eint_max,
-				       cloudy_H_mass_fraction};
-	return tables;
+	return resampledGpuConstTables{table.const_tables(), eint_min, eint_max, cloudy_H_mass_fraction};
 }
 
 } // namespace quokka::ResampledCooling
