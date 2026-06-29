@@ -144,11 +144,12 @@ jobs:
       inputs:
         cmakeArgs: '--build . --parallel 16 $(cmakeTargetArgs)'
 
-    - task: CMake@1
+    - script: |
+        echo "Searching for problems matching regex: $(ctestRegex)"
+        ctest -R "$(ctestRegex)" -E "RadMatterCoupling*" -T Test --output-on-failure
       displayName: 'Run CTest (targeted)'
       condition: eq(variables['hasProblems'], 'true')
-      inputs:
-        cmakeArgs: '-E chdir . ctest -R "$(ctestRegex)" -E "RadMatterCoupling*" -T Test --output-on-failure'
+      workingDirectory: build
 
     - task: PublishTestResults@2
       inputs:
