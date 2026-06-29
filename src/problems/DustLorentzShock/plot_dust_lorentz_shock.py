@@ -43,12 +43,12 @@ plt.rcParams.update({
 
 
 CASE_FILES = {
-    "ref_neutral": "dust_lorentz_shock_ref_neutral.csv",
-    "charged_dilute": "dust_lorentz_shock_charged_dilute.csv",
-    "charged_backreacting": "dust_lorentz_shock_charged_backreacting.csv",
+    "eps001_omega_ts0": "dust_lorentz_shock_eps001_omega_ts0.csv",
+    "eps001_omega_ts20": "dust_lorentz_shock_eps001_omega_ts20.csv",
+    "eps010_omega_ts20": "dust_lorentz_shock_eps010_omega_ts20.csv",
 }
 
-LOW_MACH_CASES = ("ref_neutral", "charged_dilute", "charged_backreacting")
+REGRESSION_CASES = ("eps001_omega_ts0", "eps001_omega_ts20", "eps010_omega_ts20")
 
 
 def read_profile(path: Path) -> dict[str, list[float]]:
@@ -73,7 +73,6 @@ def plot_velocity_panel(
     profile: dict[str, list[float]],
     title: str,
     guiding_key: str | None = None,
-    neutral_reference=None,
     show_legend: bool = False,
 ) -> None:
     dust_line, = ax.plot(profile["x"], profile["v_dx"], color="black", linewidth=1.3)
@@ -81,8 +80,6 @@ def plot_velocity_panel(
     guiding_line = None
     if guiding_key is not None and guiding_key in profile:
         guiding_line, = ax.plot(profile["x"], profile[guiding_key], color="black", linestyle="--", linewidth=1.0)
-    if neutral_reference is not None:
-        ax.plot(neutral_reference["x"], neutral_reference["v_dx"], color="black", linestyle=":", linewidth=1.0)
     ax.set_xlim(0.6, 1.0)
     ax.set_title(title)
     if show_legend:
@@ -100,39 +97,47 @@ def plot_density_panel(ax, profile: dict[str, list[float]]) -> None:
     ax.set_xlim(0.6, 1.0)
 
 
-def make_low_mach_figure(data_dir: Path, output_dir: Path) -> Path:
-    ref_neutral = read_profile(data_dir / CASE_FILES["ref_neutral"])
-    charged_dilute = read_profile(data_dir / CASE_FILES["charged_dilute"])
-    charged_backreacting = read_profile(data_dir / CASE_FILES["charged_backreacting"])
+def make_regression_figure(data_dir: Path, output_dir: Path) -> Path:
+    shock_eps001_omega_ts0 = read_profile(data_dir / CASE_FILES["eps001_omega_ts0"])
+    shock_eps001_omega_ts20 = read_profile(data_dir / CASE_FILES["eps001_omega_ts20"])
+    shock_eps010_omega_ts20 = read_profile(data_dir / CASE_FILES["eps010_omega_ts20"])
 
     fig, axes = plt.subplots(2, 3, figsize=(15, 8.5), sharex="col")
 
-    plot_velocity_panel(axes[0, 0], ref_neutral, "Neutral reference")
+    plot_velocity_panel(
+        axes[0, 0],
+        shock_eps001_omega_ts0,
+        "$\\epsilon = 0.01,\\ \\Omega_{\\rm L} t_{\\rm s} = 0$",
+    )
     axes[0, 0].set_ylabel(r"$v_x$")
 
-    plot_velocity_panel(axes[0, 1], charged_backreacting, r"Charged, $\epsilon = 0.10$")
+    plot_velocity_panel(
+        axes[0, 1],
+        shock_eps010_omega_ts20,
+        "$\\epsilon = 0.10,\\ \\Omega_{\\rm L} t_{\\rm s} = 20$",
+        guiding_key="v_guiding_x",
+    )
 
     plot_velocity_panel(
         axes[0, 2],
-        charged_dilute,
-        r"Charged, $\epsilon = 0.01$",
+        shock_eps001_omega_ts20,
+        "$\\epsilon = 0.01,\\ \\Omega_{\\rm L} t_{\\rm s} = 20$",
         guiding_key="v_guiding_x",
-        neutral_reference=ref_neutral,
         show_legend=True,
     )
 
-    plot_density_panel(axes[1, 0], ref_neutral)
+    plot_density_panel(axes[1, 0], shock_eps001_omega_ts0)
     axes[1, 0].set_xlabel("x")
     axes[1, 0].set_ylabel("density")
 
-    plot_density_panel(axes[1, 1], charged_backreacting)
+    plot_density_panel(axes[1, 1], shock_eps010_omega_ts20)
     axes[1, 1].set_xlabel("x")
 
-    plot_density_panel(axes[1, 2], charged_dilute)
+    plot_density_panel(axes[1, 2], shock_eps001_omega_ts20)
     axes[1, 2].set_xlabel("x")
 
     fig.tight_layout()
-    output_path = output_dir / "dust_lorentz_shock_fig2_analog.pdf"
+    output_path = output_dir / "dust_lorentz_shock_regression.pdf"
     fig.savefig(output_path)
     plt.close(fig)
     return output_path
@@ -151,10 +156,10 @@ def main() -> int:
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    if not has_required_files(data_dir, LOW_MACH_CASES):
+    if not has_required_files(data_dir, REGRESSION_CASES):
         raise FileNotFoundError("Missing one or more DustLorentzShock CSV files.")
 
-    output = make_low_mach_figure(data_dir, output_dir)
+    output = make_regression_figure(data_dir, output_dir)
     print(output)
     return 0
 
