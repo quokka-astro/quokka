@@ -1388,7 +1388,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read Ndim attribute");
 				H5Aclose(attr_id);
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-				    file_ndim == Ndim, std::format("Ndim mismatch in group '{}': file has {}, DataTable expects {}", group_name, file_ndim, Ndim));
+				    file_ndim == Ndim,
+				    std::format("Ndim mismatch in group '{}': file has {}, DataTable expects {}", group_name, file_ndim, Ndim));
 			}
 
 			// Read and validate Nout
@@ -1400,7 +1401,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read Nout attribute");
 				H5Aclose(attr_id);
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-				    file_nout == Nout, std::format("Nout mismatch in group '{}': file has {}, DataTable expects {}", group_name, file_nout, Nout));
+				    file_nout == Nout,
+				    std::format("Nout mismatch in group '{}': file has {}, DataTable expects {}", group_name, file_nout, Nout));
 			}
 
 			// Read Nx
