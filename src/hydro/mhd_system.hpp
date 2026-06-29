@@ -582,23 +582,23 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 							cc_a4_cVars(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / rho,
 							cc_a4_cVars(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / rho};
 			// emf component for each dimension
-			for (int idim = 0; idim < 3; ++idim) {
-				int const x2ind = (idim + 1) % 3;
-				int const x3ind = (idim + 2) % 3;
+			for (int x0 = 0; x0 < 3; ++x0) {
+				int const x1 = (x0 + 1) % 3;
+				int const x2 = (x0 + 2) % 3;
 
+				std::array<int, 3> delta_x1 = {0, 0, 0};
 				std::array<int, 3> delta_x2 = {0, 0, 0};
-				std::array<int, 3> delta_x3 = {0, 0, 0};
-				delta_x2[x2ind] = 1;
-				delta_x3[x3ind] = 1;
+				delta_x1[x1] = 1;
+				delta_x2[x2] = 1;
 
 				// average face-centered b to cell center
+				amrex::Real const bx1_avg =
+				    0.5 * (fc_a4_bx[x1](i, j, k) + fc_a4_bx[x1](i + delta_x1[0], j + delta_x1[1], k + delta_x1[2]));
 				amrex::Real const bx2_avg =
-				    0.5 * (fc_a4_bx[x2ind](i, j, k) + fc_a4_bx[x2ind](i + delta_x2[0], j + delta_x2[1], k + delta_x2[2]));
-				amrex::Real const bx3_avg =
-				    0.5 * (fc_a4_bx[x3ind](i, j, k) + fc_a4_bx[x3ind](i + delta_x3[0], j + delta_x3[1], k + delta_x3[2]));
+				    0.5 * (fc_a4_bx[x2](i, j, k) + fc_a4_bx[x2](i + delta_x2[0], j + delta_x2[1], k + delta_x2[2]));
 
 				// v x b computation
-				cc_a4_emf_array[idim](i, j, k) = v[x2ind] * bx3_avg - v[x3ind] * bx2_avg; //
+				cc_a4_emf_array[x0](i, j, k) = v[x1] * bx2_avg - v[x2] * bx1_avg; //
 			}
 		});
 	}
