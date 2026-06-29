@@ -431,8 +431,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 	std::array<amrex::Real, Ndim> coord_min_{};
 	std::array<amrex::Real, Ndim> coord_max_{};
-	std::array<amrex::Real, Ndim> xlo_physical_{};  // physical lower bounds (before log transform)
-	std::array<amrex::Real, Ndim> xhi_physical_{};  // physical upper bounds (before log transform)
+	std::array<amrex::Real, Ndim> xlo_physical_{}; // physical lower bounds (before log transform)
+	std::array<amrex::Real, Ndim> xhi_physical_{}; // physical upper bounds (before log transform)
 	std::array<SpacingType, Ndim> spacing_types_{};
 
 	// Precomputed grid spacing for optimization
@@ -808,7 +808,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 		coord_min_ = x_mins;
 		coord_max_ = x_maxs;
-		xlo_physical_ = x_mins;  // store physical bounds before log transformation
+		xlo_physical_ = x_mins; // store physical bounds before log transformation
 		xhi_physical_ = x_maxs;
 		sizes_ = n_xs;
 		spacing_types_ = spacing_types;
@@ -1486,18 +1486,16 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			attr_id = H5Aopen(group_id, "Ndim", H5P_DEFAULT);
 			status = H5Aread(attr_id, H5T_NATIVE_INT, &n_dim_file);
 			H5Aclose(attr_id);
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-			    n_dim_file == Ndim,
-			    std::format("HDF5 Ndim mismatch in {}: file={}, template expects {}", group_name, n_dim_file, Ndim));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n_dim_file == Ndim,
+							 std::format("HDF5 Ndim mismatch in {}: file={}, template expects {}", group_name, n_dim_file, Ndim));
 
 			// Validate Nout
 			int n_out_file = 0;
 			attr_id = H5Aopen(group_id, "Nout", H5P_DEFAULT);
 			status = H5Aread(attr_id, H5T_NATIVE_INT, &n_out_file);
 			H5Aclose(attr_id);
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-			    n_out_file == Nout,
-			    std::format("HDF5 Nout mismatch in {}: file={}, template expects {}", group_name, n_out_file, Nout));
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(n_out_file == Nout,
+							 std::format("HDF5 Nout mismatch in {}: file={}, template expects {}", group_name, n_out_file, Nout));
 
 			// Read grid sizes
 			attr_id = H5Aopen(group_id, "Nx", H5P_DEFAULT);
@@ -1519,9 +1517,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				try {
 					spacing_types[i] = amrex::getEnumCaseInsensitive<SpacingType>(spacing_strs[i]);
 				} catch (const std::runtime_error &) {
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-					    false, std::format("Invalid spacing '{}' for dim {} in {}. Must be linear, log, or fast_log.",
-							       spacing_strs[i], i, group_name));
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false,
+									 std::format("Invalid spacing '{}' for dim {} in {}. Must be linear, log, or fast_log.",
+										     spacing_strs[i], i, group_name));
 				}
 			}
 
@@ -1547,8 +1545,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			const amrex::Long total = flatDataSize(sizes);
 			std::vector<double> temp_data(static_cast<std::size_t>(total));
 			hid_t const dset_id = H5Dopen2(group_id, "data", H5P_DEFAULT);
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dset_id != h5_error,
-							 ("Failed to open 'data' dataset in group: " + group_name).c_str());
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dset_id != h5_error, ("Failed to open 'data' dataset in group: " + group_name).c_str());
 			status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data.data());
 			H5Dclose(dset_id);
 			H5Gclose(group_id);

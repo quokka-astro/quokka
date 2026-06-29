@@ -14,8 +14,8 @@
 
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_Print.H"
-#include <hdf5.h>
 #include <format>
+#include <hdf5.h>
 
 namespace quokka::ResampledCooling
 {
@@ -80,8 +80,7 @@ auto readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 
 	const int n_rho = resampledTables.table.size(0);
 	const int n_eint = resampledTables.table.size(1);
-	amrex::Print() << std::format("\tDensity range: {} to {} g/cm^3 ({} steps).\n", resampledTables.table.xlo()[0],
-				      resampledTables.table.xhi()[0], n_rho);
+	amrex::Print() << std::format("\tDensity range: {} to {} g/cm^3 ({} steps).\n", resampledTables.table.xlo()[0], resampledTables.table.xhi()[0], n_rho);
 	amrex::Print() << std::format("\tSpecific energy range: {} to {} erg/g ({} steps).\n", eint_min, eint_max, n_eint);
 	amrex::Print() << std::format("\tPhotoelectric heating: {}.\n", (include_pe_val != 0) ? "enabled" : "disabled");
 
