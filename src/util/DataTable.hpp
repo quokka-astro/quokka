@@ -439,6 +439,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 	std::array<amrex::Real, Ndim> coord_min_{};
 	std::array<amrex::Real, Ndim> coord_max_{};
+	std::array<amrex::Real, Ndim> xlo_physical_{}; // bounds in physical units (before any log transform)
+	std::array<amrex::Real, Ndim> xhi_physical_{};
 	std::array<SpacingType, Ndim> spacing_types_{};
 
 	// Precomputed grid spacing for optimization
@@ -538,6 +540,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		return index;
 	}
 
+      public:
 	void setMetadata(const std::array<std::string, Ndim> &input_names, const std::array<std::string, Nout> &output_names,
 			 const std::array<std::string, Ndim> &input_units, const std::array<std::string, Nout> &output_units, SpacingType output_spacing)
 	{
@@ -548,7 +551,6 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		output_spacing_ = output_spacing;
 	}
 
-      public:
 	// Default constructor
 	DataTable() = default;
 
@@ -792,6 +794,10 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	// Get number of outputs
 	[[nodiscard]] constexpr auto num_outputs() const -> int { return Nout; }
 
+	// Get physical coordinate bounds (before any log transform)
+	[[nodiscard]] auto coord_xlo() const -> std::array<amrex::Real, Ndim> { return xlo_physical_; }
+	[[nodiscard]] auto coord_xhi() const -> std::array<amrex::Real, Ndim> { return xhi_physical_; }
+
 	// Get metadata accessors
 	[[nodiscard]] auto input_names() const -> std::array<std::string, Ndim> { return input_names_; }
 	[[nodiscard]] auto output_names() const -> std::array<std::string, Nout> { return output_names_; }
@@ -849,6 +855,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 		coord_min_ = x_mins;
 		coord_max_ = x_maxs;
+		xlo_physical_ = x_mins; // save physical bounds before any log transform
+		xhi_physical_ = x_maxs;
 		sizes_ = n_xs;
 		spacing_types_ = spacing_types;
 
@@ -1336,140 +1344,193 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		return table;
 	}
 
-	// H5Reader: Generic static method to read n-dimensional data from HDF5 file and create DataTable
-	// Reads metadata, coordinates, and data all from the HDF5 file
-	// Optionally returns coordinate bounds via coord_bounds parameter
-	// Optionally returns whether photoelectric heating is enabled via include_pe parameter
-	static auto H5Reader(const std::string &file_path, const std::string &dataset_path, const std::vector<std::string> &coord_names, int is_fast_log = 0,
-			     std::array<std::pair<amrex::Real, amrex::Real>, Ndim> *coord_bounds = nullptr, bool *include_pe = nullptr) -> DataTable
+	// H5Reader: Read an n-dimensional DataTable from an HDF5 group following the standard format.
+	//
+	// The group must contain the following attributes:
+	//   Ndim (int), Nout (int), Nx (int[Ndim]), xlo (double[Ndim]), xhi (double[Ndim]),
+	//   spacing (str[Ndim]: "linear"/"log"/"fast_log"),
+	//   input_names, output_names, input_units, output_units (str arrays, optional)
+	//
+	// The group must contain a dataset named "data" of shape [Nout, Nx[0], Nx[1], ...] in row-major order.
+	// If a "grids" subgroup exists it is ignored (irregular grids are not supported; use linear/log/fast_log spacing).
+	//
+	// All data is broadcast to non-IO MPI ranks automatically.
+	static auto H5Reader(const std::string &file_path, const std::string &group_name = "tab1") -> DataTable
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "H5Reader supports 1D-4D tables");
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-		    coord_names.size() == Ndim,
-		    std::format("H5Reader requires exactly Ndim coordinate names! (expected: {}, provided: {})", Ndim, coord_names.size()));
 
 		std::array<int, Ndim> sizes{};
-		std::array<amrex::Real, Ndim> coord_starts{};
-		std::array<amrex::Real, Ndim> coord_ends{};
+		std::array<amrex::Real, Ndim> x_mins{};
+		std::array<amrex::Real, Ndim> x_maxs{};
 		std::array<SpacingType, Ndim> spacing_types{};
-		std::array<amrex::Real, Ndim> coord_bounds_min{};
-		std::array<amrex::Real, Ndim> coord_bounds_max{};
-		int include_pe_value = 0;
+		std::array<std::string, Ndim> input_names{};
+		std::array<std::string, Nout> output_names{};
+		std::array<std::string, Ndim> input_units{};
+		std::array<std::string, Nout> output_units{};
 		amrex::Vector<amrex::Real> flat_data;
-
-		spacing_types.fill(SpacingType::linear);
 
 		if (amrex::ParallelDescriptor::IOProcessor()) {
 			herr_t status = 0;
 			herr_t const h5_error = -1;
-			hid_t attr_id = 0;
-			hid_t dset_id = 0;
+
 			hid_t const file_id = H5Fopen(file_path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file_id != h5_error, ("Failed to open HDF5 file: " + file_path).c_str());
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(file_id >= 0, ("Failed to open HDF5 file: " + file_path).c_str());
 
-			hid_t const metadata_group = H5Gopen2(file_id, "/metadata", H5P_DEFAULT);
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(metadata_group != h5_error, "Failed to open metadata group!");
+			hid_t const group_id = H5Gopen2(file_id, group_name.c_str(), H5P_DEFAULT);
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(group_id >= 0, ("Failed to open HDF5 group: " + group_name).c_str());
 
-			for (int dim = 0; dim < Ndim; ++dim) {
-				const std::string n_coord_attr = "n_" + coord_names[dim];
-				attr_id = H5Aopen(metadata_group, n_coord_attr.c_str(), H5P_DEFAULT);
-				status = H5Aread(attr_id, H5T_NATIVE_INT, &sizes[dim]);
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + n_coord_attr + "!").c_str());
+			// Read and validate Ndim
+			{
+				int file_ndim = 0;
+				hid_t attr_id = H5Aopen(group_id, "Ndim", H5P_DEFAULT);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(attr_id >= 0, "Failed to open Ndim attribute");
+				status = H5Aread(attr_id, H5T_NATIVE_INT, &file_ndim);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read Ndim attribute");
 				H5Aclose(attr_id);
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sizes[dim] > 0, std::format("Invalid dimension size {} for dimension {}", sizes[dim], dim));
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    file_ndim == Ndim, std::format("Ndim mismatch in group '{}': file has {}, DataTable expects {}", group_name, file_ndim, Ndim));
 			}
 
-			if (coord_bounds != nullptr) {
+			// Read and validate Nout
+			{
+				int file_nout = 0;
+				hid_t attr_id = H5Aopen(group_id, "Nout", H5P_DEFAULT);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(attr_id >= 0, "Failed to open Nout attribute");
+				status = H5Aread(attr_id, H5T_NATIVE_INT, &file_nout);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read Nout attribute");
+				H5Aclose(attr_id);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+				    file_nout == Nout, std::format("Nout mismatch in group '{}': file has {}, DataTable expects {}", group_name, file_nout, Nout));
+			}
+
+			// Read Nx
+			{
+				hid_t attr_id = H5Aopen(group_id, "Nx", H5P_DEFAULT);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(attr_id >= 0, "Failed to open Nx attribute");
+				status = H5Aread(attr_id, H5T_NATIVE_INT, sizes.data());
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read Nx attribute");
+				H5Aclose(attr_id);
 				for (int dim = 0; dim < Ndim; ++dim) {
-					const std::string min_attr = coord_names[dim] + "_min";
-					const std::string max_attr = coord_names[dim] + "_max";
-
-					attr_id = H5Aopen(metadata_group, min_attr.c_str(), H5P_DEFAULT);
-					status = H5Aread(attr_id, H5T_NATIVE_DOUBLE, &coord_bounds_min[dim]);
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + min_attr + "!").c_str());
-					H5Aclose(attr_id);
-
-					attr_id = H5Aopen(metadata_group, max_attr.c_str(), H5P_DEFAULT);
-					status = H5Aread(attr_id, H5T_NATIVE_DOUBLE, &coord_bounds_max[dim]);
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + max_attr + "!").c_str());
-					H5Aclose(attr_id);
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sizes[dim] > 0, std::format("Invalid Nx[{}] = {}", dim, sizes[dim]));
 				}
 			}
 
-			if (include_pe != nullptr) {
-				if (H5Aexists(metadata_group, "include_pe") > 0) {
-					attr_id = H5Aopen(metadata_group, "include_pe", H5P_DEFAULT);
-					const hid_t attr_type = H5Aget_type(attr_id);
-					if (H5Tget_class(attr_type) == H5T_INTEGER) {
-						status = H5Aread(attr_id, H5T_NATIVE_INT, &include_pe_value);
-						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read include_pe (integer)!");
-					} else if (H5Tget_class(attr_type) == H5T_STRING) {
-						std::array<char, 4> buf{};
-						const hid_t mem_type = H5Tcopy(H5T_C_S1);
-						H5Tset_size(mem_type, 4);
-						status = H5Aread(attr_id, mem_type, buf.data());
-						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read include_pe (string)!");
-						include_pe_value = (buf[0] == '1') ? 1 : 0;
-						H5Tclose(mem_type);
-					} else {
-						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(false, "include_pe attribute is neither integer nor string!");
+			// Read xlo and xhi
+			{
+				std::array<double, Ndim> xlo_d{};
+				std::array<double, Ndim> xhi_d{};
+				hid_t attr_id = H5Aopen(group_id, "xlo", H5P_DEFAULT);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(attr_id >= 0, "Failed to open xlo attribute");
+				status = H5Aread(attr_id, H5T_NATIVE_DOUBLE, xlo_d.data());
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read xlo attribute");
+				H5Aclose(attr_id);
+				attr_id = H5Aopen(group_id, "xhi", H5P_DEFAULT);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(attr_id >= 0, "Failed to open xhi attribute");
+				status = H5Aread(attr_id, H5T_NATIVE_DOUBLE, xhi_d.data());
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read xhi attribute");
+				H5Aclose(attr_id);
+				for (int dim = 0; dim < Ndim; ++dim) {
+					x_mins[dim] = static_cast<amrex::Real>(xlo_d[dim]);
+					x_maxs[dim] = static_cast<amrex::Real>(xhi_d[dim]);
+				}
+			}
+
+			// Read spacing (fixed-size string array written by numpy dtype='S')
+			{
+				hid_t attr_id = H5Aopen(group_id, "spacing", H5P_DEFAULT);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(attr_id >= 0, "Failed to open spacing attribute");
+				hid_t const atype = H5Aget_type(attr_id);
+				hid_t const native_type = H5Tget_native_type(atype, H5T_DIR_ASCEND);
+				size_t const type_size = H5Tget_size(native_type);
+				std::vector<char> raw(static_cast<std::size_t>(Ndim) * type_size);
+				H5Aread(attr_id, native_type, raw.data());
+				H5Tclose(native_type);
+				H5Tclose(atype);
+				H5Aclose(attr_id);
+				for (int i = 0; i < Ndim; ++i) {
+					std::string s(raw.data() + static_cast<std::size_t>(i) * type_size, type_size);
+					s.erase(std::find(s.begin(), s.end(), '\0'), s.end());
+					try {
+						spacing_types[i] = amrex::getEnumCaseInsensitive<SpacingType>(s);
+					} catch (const std::runtime_error &) {
+						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+						    false, std::format("Invalid spacing '{}' for dim {}. Must be 'linear', 'log', or 'fast_log'", s, i));
 					}
-					H5Tclose(attr_type);
-					H5Aclose(attr_id);
 				}
 			}
 
-			H5Gclose(metadata_group);
+			// Helper: read a fixed-size numpy-style string array attribute
+			auto read_str_array = [&](const char *attr_name, int count) -> std::vector<std::string> {
+				std::vector<std::string> result(static_cast<std::size_t>(count));
+				if (H5Aexists(group_id, attr_name) <= 0) {
+					return result;
+				}
+				hid_t aid = H5Aopen(group_id, attr_name, H5P_DEFAULT);
+				if (aid < 0) {
+					return result;
+				}
+				hid_t atype_id = H5Aget_type(aid);
+				hid_t native_type_id = H5Tget_native_type(atype_id, H5T_DIR_ASCEND);
+				size_t str_size = H5Tget_size(native_type_id);
+				std::vector<char> raw_buf(static_cast<std::size_t>(count) * str_size);
+				H5Aread(aid, native_type_id, raw_buf.data());
+				H5Tclose(native_type_id);
+				H5Tclose(atype_id);
+				H5Aclose(aid);
+				for (int i = 0; i < count; ++i) {
+					std::string s(raw_buf.data() + static_cast<std::size_t>(i) * str_size, str_size);
+					s.erase(std::find(s.begin(), s.end(), '\0'), s.end());
+					result[static_cast<std::size_t>(i)] = s;
+				}
+				return result;
+			};
 
-			const std::string prefix = (is_fast_log == 1) ? "fast_log_" : "";
-			for (int dim = 0; dim < Ndim; ++dim) {
-				const std::string coord_dataset = "/grids/" + prefix + coord_names[dim];
-				std::vector<double> coord_data(static_cast<std::size_t>(sizes[dim]));
+			auto in_names = read_str_array("input_names", Ndim);
+			auto out_names = read_str_array("output_names", Nout);
+			auto in_units = read_str_array("input_units", Ndim);
+			auto out_units = read_str_array("output_units", Nout);
+			for (int i = 0; i < Ndim; ++i) {
+				input_names[i] = in_names[static_cast<std::size_t>(i)];
+				input_units[i] = in_units[static_cast<std::size_t>(i)];
+			}
+			for (int i = 0; i < Nout; ++i) {
+				output_names[i] = out_names[static_cast<std::size_t>(i)];
+				output_units[i] = out_units[static_cast<std::size_t>(i)];
+			}
 
-				dset_id = H5Dopen2(file_id, coord_dataset.c_str(), H5P_DEFAULT);
-				status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, coord_data.data());
-				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read " + coord_dataset + " dataset!").c_str());
+			// Read 'data' dataset: shape [Nout, Nx[0], Nx[1], ...] row-major
+			{
+				amrex::Long const total = flatDataSize(sizes);
+				std::vector<double> raw_data(static_cast<std::size_t>(total));
+				hid_t const dset_id = H5Dopen2(group_id, "data", H5P_DEFAULT);
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dset_id >= 0, ("Failed to open 'data' dataset in group: " + group_name).c_str());
+				status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, raw_data.data());
+				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read 'data' dataset in group: " + group_name).c_str());
 				H5Dclose(dset_id);
-
-				coord_starts[dim] = static_cast<amrex::Real>(coord_data.front());
-				coord_ends[dim] = static_cast<amrex::Real>(coord_data.back());
+				flat_data.resize(static_cast<std::size_t>(total));
+				for (std::size_t i = 0; i < static_cast<std::size_t>(total); ++i) {
+					flat_data[i] = static_cast<amrex::Real>(raw_data[i]);
+				}
 			}
 
-			std::vector<double> temp_data(flatDataSize(sizes));
-			dset_id = H5Dopen2(file_id, dataset_path.c_str(), H5P_DEFAULT);
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dset_id != h5_error, ("Failed to open HDF5 dataset: " + dataset_path).c_str());
-			status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_data.data());
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read HDF5 dataset: " + dataset_path).c_str());
-			H5Dclose(dset_id);
+			H5Gclose(group_id);
 			H5Fclose(file_id);
-
-			flat_data.resize(temp_data.size());
-			for (std::size_t i = 0; i < temp_data.size(); ++i) {
-				flat_data[i] = static_cast<amrex::Real>(temp_data[i]);
-			}
 		}
 
+		// Broadcast all data to non-IO ranks
 		bcastArray(sizes);
-		bcastArray(coord_starts);
-		bcastArray(coord_ends);
+		bcastArray(x_mins);
+		bcastArray(x_maxs);
+		bcastSpacingTypes(spacing_types);
+		bcastStringArray(input_names);
+		bcastStringArray(output_names);
+		bcastStringArray(input_units);
+		bcastStringArray(output_units);
 		bcastVector(flat_data);
 
-		if (coord_bounds != nullptr) {
-			bcastArray(coord_bounds_min);
-			bcastArray(coord_bounds_max);
-			for (int dim = 0; dim < Ndim; ++dim) {
-				(*coord_bounds)[dim].first = coord_bounds_min[dim];
-				(*coord_bounds)[dim].second = coord_bounds_max[dim];
-			}
-		}
-
-		if (include_pe != nullptr) {
-			bcastScalar(include_pe_value);
-			*include_pe = (include_pe_value != 0);
-		}
-
 		DataTable table;
-		table.initializeCommonFlat(coord_starts, coord_ends, sizes, spacing_types, flat_data);
+		table.initializeCommonFlat(x_mins, x_maxs, sizes, spacing_types, flat_data);
+		table.setMetadata(input_names, output_names, input_units, output_units, SpacingType::linear);
 		return table;
 	}
 };
