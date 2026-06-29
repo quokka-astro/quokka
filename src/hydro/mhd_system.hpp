@@ -62,7 +62,7 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 
 	static constexpr int bfield_index = Physics_Indices<problem_t>::mhdFirstIndex;
 
-	static void ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
+	static void ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_comps, amrex::MultiFab const &cc_mf_cVars,
 			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgScheme emf_ave_scheme,
 			       SlopeLimiter plmLimiter, EMFComputeScheme emf_compute_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
@@ -70,22 +70,22 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 
 	static void AverageEMF(amrex::Array4<amrex::Real> const &a4_emf_w2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_emf_q, amrex::Box const &box_ec,
 			       std::array<int, 2> const &extrap_dirs, std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
-			       std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_bi_ieside, EMFAvgScheme emf_ave_scheme,
+			       std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_bi_jeside, EMFAvgScheme emf_ave_scheme,
 			       amrex::Array4<const amrex::Real> const &a4_b_w0, amrex::Array4<const amrex::Real> const &a4_b_w1, amrex::Real dx_w0, amrex::Real dx_w1,
 			       amrex::Real resistivity);
 
-	static void ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
+	static void ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_comps, amrex::MultiFab const &cc_mf_cVars,
 					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
 					       SlopeLimiter plmLimiter, EMFAvgScheme emf_ave_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
 					       amrex::Real resistivity = 0.0);
 
-	static void ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
+	static void ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_comps, amrex::MultiFab const &cc_mf_cVars,
 					   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 					   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, SlopeLimiter plmLimiter,
 					   EMFAvgScheme emf_ave_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, amrex::Real resistivity = 0.0);
 
-	static void ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
+	static void ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_comps,
 					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
 					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 					  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, SlopeLimiter plmLimiter,
@@ -94,13 +94,13 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 	static void EMFAverage_LondrilloDelZanna2004(amrex::Array4<amrex::Real> a4_emf_w2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_emf_q,
 						     amrex::Box const &box_ec, std::array<int, 2> const &extrap_dirs,
 						     std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
-						     std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_bi_ieside,
+						     std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_bi_jeside,
 						     amrex::Array4<const amrex::Real> const &a4_b_w0, amrex::Array4<const amrex::Real> const &a4_b_w1,
 						     amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real resistivity);
 
 	static void EMFAverage_Balsara2025(amrex::Array4<amrex::Real> a4_emf_w2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_emf_q, amrex::Box const &box_ec,
 					   std::array<int, 2> const &extrap_dirs, std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
-					   std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_bi_ieside,
+					   std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_bi_jeside,
 					   amrex::Array4<const amrex::Real> const &a4_b_w0, amrex::Array4<const amrex::Real> const &a4_b_w1, amrex::Real dx_w0,
 					   amrex::Real dx_w1, amrex::Real resistivity);
 
@@ -137,7 +137,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeResistivity(int /*i*/, int /*j*/
 }
 
 template <typename problem_t>
-void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
+void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_comps, amrex::MultiFab const &cc_mf_cVars,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder, EMFAvgScheme emf_ave_scheme,
@@ -145,13 +145,13 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 				      amrex::Real resistivity)
 {
 	if (emf_compute_scheme == EMFComputeScheme::FelkerStone2017) {
-		MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, plmLimiter,
+		MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(ec_mf_emf_comps, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, plmLimiter,
 								 emf_ave_scheme, dx, resistivity);
 	} else if (emf_compute_scheme == EMFComputeScheme::Balsara2025) {
-		MHDSystem<problem_t>::ComputeEMF_Balsara2025(ec_mf_emf_components, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, plmLimiter,
+		MHDSystem<problem_t>::ComputeEMF_Balsara2025(ec_mf_emf_comps, cc_mf_cVars, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, plmLimiter,
 							     emf_ave_scheme, dx, resistivity);
 	} else if (emf_compute_scheme == EMFComputeScheme::Quokka2026) {
-		MHDSystem<problem_t>::ComputeEMF_Quokka2026(ec_mf_emf_components, fcx_mf_vel, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, plmLimiter,
+		MHDSystem<problem_t>::ComputeEMF_Quokka2026(ec_mf_emf_comps, fcx_mf_vel, fcx_mf_cVars, fcx_mf_fspds, reconstructionOrder, plmLimiter,
 							    emf_ave_scheme, dx, resistivity);
 	} else {
 		throw std::runtime_error("Unsupported EMF-scheme. Expected either FelkerStone2017, Balsara2025, or Quokka2026.");
@@ -161,14 +161,14 @@ void MHDSystem<problem_t>::ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM
 template <typename problem_t>
 void MHDSystem<problem_t>::AverageEMF(amrex::Array4<amrex::Real> const &a4_emf_w2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_emf_q, amrex::Box const &box_ec,
 				      std::array<int, 2> const &extrap_dirs, std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
-				      std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_bi_ieside, EMFAvgScheme emf_ave_scheme,
+				      std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_bi_jeside, EMFAvgScheme emf_ave_scheme,
 				      amrex::Array4<const amrex::Real> const &a4_b_w0, amrex::Array4<const amrex::Real> const &a4_b_w1, amrex::Real dx_w0,
 				      amrex::Real dx_w1, amrex::Real resistivity)
 {
 	if (emf_ave_scheme == EMFAvgScheme::LondrilloDelZanna2004) {
-		EMFAverage_LondrilloDelZanna2004(a4_emf_w2_ave, ec_fabs_emf_q, box_ec, extrap_dirs, fspds, ec_fabs_bi_ieside, a4_b_w0, a4_b_w1, dx_w0, dx_w1, resistivity);
+		EMFAverage_LondrilloDelZanna2004(a4_emf_w2_ave, ec_fabs_emf_q, box_ec, extrap_dirs, fspds, ec_fabs_bi_jeside, a4_b_w0, a4_b_w1, dx_w0, dx_w1, resistivity);
 	} else if (emf_ave_scheme == EMFAvgScheme::Balsara2025) {
-		EMFAverage_Balsara2025(a4_emf_w2_ave, ec_fabs_emf_q, box_ec, extrap_dirs, fspds, ec_fabs_bi_ieside, a4_b_w0, a4_b_w1, dx_w0, dx_w1, resistivity);
+		EMFAverage_Balsara2025(a4_emf_w2_ave, ec_fabs_emf_q, box_ec, extrap_dirs, fspds, ec_fabs_bi_jeside, a4_b_w0, a4_b_w1, dx_w0, dx_w1, resistivity);
 	} else {
 		amrex::Abort("Unknown EMF averaging type");
 	}
@@ -178,7 +178,7 @@ void MHDSystem<problem_t>::AverageEMF(amrex::Array4<amrex::Real> const &a4_emf_w
 // uses cell-centered velocity and face-centered magnetic fields extrapolated to the cell-edge.
 
 template <typename problem_t>
-void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
+void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_comps, amrex::MultiFab const &cc_mf_cVars,
 						      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 						      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
 						      SlopeLimiter plmLimiter, EMFAvgScheme emf_ave_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
@@ -247,19 +247,19 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 			// indexing: field[2: i-compnent][2: i-side of edge]
 			// note: magnetic field components cannot be discontinuous along themselves (i.e., either side of the face where they are
 			// stored), so there are only two possible values (sides), rather than four (quadrants of) possible reconstructed values
-			std::array<std::array<amrex::FArrayBox, 2>, 2> ec_fabs_bi_ieside;
+			std::array<std::array<amrex::FArrayBox, 2>, 2> ec_fabs_bi_jeside;
 
 			// initialise FArrayBox for storing the edge-centered velocity fields averaged across the two extrapolation permutations
 			// indexing: field[2: i-compnent][4: quadrant around edge]
-			std::array<std::array<amrex::FArrayBox, 4>, 2> ec_fabs_ui_q;
+			std::array<std::array<amrex::FArrayBox, 4>, 2> ec_fabs_ui_qj;
 
 			// define quantities
 			for (int icomp = 0; icomp < 2; ++icomp) {
-				ec_fabs_bi_ieside[icomp][0] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
-				ec_fabs_bi_ieside[icomp][1] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
-				for (int iquad = 0; iquad < 4; ++iquad) {
-					ec_fabs_ui_q[icomp][iquad] = amrex::FArrayBox(box_ec, 1, amrex::The_Async_Arena());
-					ec_fabs_ui_q[icomp][iquad].setVal<amrex::RunOn::Device>(0.0);
+				ec_fabs_bi_jeside[icomp][0] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
+				ec_fabs_bi_jeside[icomp][1] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
+				for (int jquad = 0; jquad < 4; ++jquad) {
+					ec_fabs_ui_qj[icomp][jquad] = amrex::FArrayBox(box_ec, 1, amrex::The_Async_Arena());
+					ec_fabs_ui_qj[icomp][jquad].setVal<amrex::RunOn::Device>(0.0);
 				}
 			}
 
@@ -305,8 +305,8 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 										    ec_fabs_u_ieside[1].array(), box_ec, reconstructionOrder, plmLimiter);
 
 						// figure out which quadrant of the cell-edge this extrapolated velocity component corresponds with
-						int iquad0 = -1;
-						int iquad1 = -1;
+						int jquad0 = -1;
+						int jquad1 = -1;
 
 						// note: quadrants are defined based on where the quantity sits relative to the edge (dir-0, dir-1):
 						// (-,+) | (+,+)
@@ -315,23 +315,23 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 						//   0   |   3
 						// (-,-) | (+,-)
 						if (iperm == 0) {
-							iquad0 = (iface == 0) ? 0 : 3;
-							iquad1 = (iface == 0) ? 1 : 2;
+							jquad0 = (iface == 0) ? 0 : 3;
+							jquad1 = (iface == 0) ? 1 : 2;
 						} else {
-							iquad0 = (iface == 0) ? 0 : 1;
-							iquad1 = (iface == 0) ? 3 : 2;
+							jquad0 = (iface == 0) ? 0 : 1;
+							jquad1 = (iface == 0) ? 3 : 2;
 						}
 
-						ec_fabs_ui_q[icomp][iquad0].plus<amrex::RunOn::Device>(ec_fabs_u_ieside[0], 0, 0, 1);
-						ec_fabs_ui_q[icomp][iquad1].plus<amrex::RunOn::Device>(ec_fabs_u_ieside[1], 0, 0, 1);
+						ec_fabs_ui_qj[icomp][jquad0].plus<amrex::RunOn::Device>(ec_fabs_u_ieside[0], 0, 0, 1);
+						ec_fabs_ui_qj[icomp][jquad1].plus<amrex::RunOn::Device>(ec_fabs_u_ieside[1], 0, 0, 1);
 					}
 				}
 			}
 
 			// finish averaging the two different ways for extrapolating velocity fields: cc->fc->ec
 			for (int icomp = 0; icomp < 2; ++icomp) {
-				for (int iquad = 0; iquad < 4; ++iquad) {
-					ec_fabs_ui_q[icomp][iquad].mult<amrex::RunOn::Device>(0.5, 0, 1);
+				for (int jquad = 0; jquad < 4; ++jquad) {
+					ec_fabs_ui_qj[icomp][jquad].mult<amrex::RunOn::Device>(0.5, 0, 1);
 				}
 			}
 
@@ -341,8 +341,8 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 				const auto dir2edge = static_cast<FluxDir>(extrap_dir2edge);
 				const int wcomp = extrap_dirs[icomp];
 				// extrapolate face-centered magnetic components to the cell-edge
-				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_bx[wcomp].array(), ec_fabs_bi_ieside[icomp][0].array(),
-								    ec_fabs_bi_ieside[icomp][1].array(), box_ec, reconstructionOrder, plmLimiter);
+				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_bx[wcomp].array(), ec_fabs_bi_jeside[icomp][0].array(),
+								    ec_fabs_bi_jeside[icomp][1].array(), box_ec, reconstructionOrder, plmLimiter);
 			}
 
 			// indexing: field[4: quadrant around edge]
@@ -361,10 +361,10 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 					// extract relevant velocity and magnetic field components (host: get Array4 views)
 					const int idx0 = (qi == 0 || qi == 3) ? 0 : 1;	    // B/T selector for dir-0
 					const int idx1 = (qi < 2) ? 0 : 1;		    // L/R selector for dir-1
-					us_w0[qi] = ec_fabs_ui_q[0][qi].const_array();	    // component 0, index iquad
-					us_w1[qi] = ec_fabs_ui_q[1][qi].const_array();	    // component 1, index iquad
-					bs_w0[qi] = ec_fabs_bi_ieside[0][idx0].const_array(); // component 0, index idx0
-					bs_w1[qi] = ec_fabs_bi_ieside[1][idx1].const_array(); // component 1, index idx1
+					us_w0[qi] = ec_fabs_ui_qj[0][qi].const_array();	    // component 0, index jquad
+					us_w1[qi] = ec_fabs_ui_qj[1][qi].const_array();	    // component 1, index jquad
+					bs_w0[qi] = ec_fabs_bi_jeside[0][idx0].const_array(); // component 0, index idx0
+					bs_w1[qi] = ec_fabs_bi_jeside[1][idx1].const_array(); // component 1, index idx1
 
 					// define EMF FArrayBox for each quadrant (we need to allocate outside the kernel)
 					ec_fabs_emf_q[qi] = amrex::FArrayBox(box_ec, 1, amrex::The_Async_Arena());
@@ -384,12 +384,12 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 			}
 
 			// compute electric field on the cell-edge
-			const auto &a4_emf_w2_ave = ec_mf_emf_components[iedge][mfi].array();
+			const auto &a4_emf_w2_ave = ec_mf_emf_comps[iedge][mfi].array();
 
 			// selected averaging method for EMF:
 			std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi),
 										       fcx_mf_fspds[2].const_array(mfi)};
-			MHDSystem<problem_t>::AverageEMF(a4_emf_w2_ave, ec_fabs_emf_q, box_ec, extrap_dirs, fspds, ec_fabs_bi_ieside, emf_ave_scheme,
+			MHDSystem<problem_t>::AverageEMF(a4_emf_w2_ave, ec_fabs_emf_q, box_ec, extrap_dirs, fspds, ec_fabs_bi_jeside, emf_ave_scheme,
 							 fcx_mf_cVars[extrap_dirs[0]][mfi].const_array(bfield_index),
 							 fcx_mf_cVars[extrap_dirs[1]][mfi].const_array(bfield_index), dx[extrap_dirs[0]], dx[extrap_dirs[1]],
 							 resistivity);
@@ -401,7 +401,7 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 // uses face-centered Riemann velocity and face-centered magnetic fields extrapolated to the cell-edge.
 
 template <typename problem_t>
-void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components,
+void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_comps,
 						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_vel,
 						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 						 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
@@ -443,13 +443,13 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 
 			// FArrayBoxes for storing the edge-centered fields produced by reconstructing from the cell-face to the cell-edge
 			// indexing: field[2: i-component][2: i-side of edge]
-			std::array<std::array<amrex::FArrayBox, 2>, 2> ec_fabs_ui_ieside;
-			std::array<std::array<amrex::FArrayBox, 2>, 2> ec_fabs_bi_ieside;
+			std::array<std::array<amrex::FArrayBox, 2>, 2> ec_fabs_ui_jeside;
+			std::array<std::array<amrex::FArrayBox, 2>, 2> ec_fabs_bi_jeside;
 			// define quantities - allocate with async arena
 			for (int icomp = 0; icomp < 2; ++icomp) {
-				for (int ieside = 0; ieside < 2; ++ieside) {
-					ec_fabs_ui_ieside[icomp][ieside] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
-					ec_fabs_bi_ieside[icomp][ieside] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
+				for (int jeside = 0; jeside < 2; ++jeside) {
+					ec_fabs_ui_jeside[icomp][jeside] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
+					ec_fabs_bi_jeside[icomp][jeside] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
 				}
 			}
 
@@ -458,10 +458,10 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 				const auto dir2edge = static_cast<FluxDir>(field_w_indices[(icomp + 1) % 2]);
 				const int wcomp = field_w_indices[icomp];
 				// extrapolate face-centered components to the cell-edge
-				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_bx[wcomp].array(), ec_fabs_bi_ieside[icomp][0].array(),
-								    ec_fabs_bi_ieside[icomp][1].array(), box_ec, reconstructionOrder, plmLimiter);
-				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_ux[wcomp].array(), ec_fabs_ui_ieside[icomp][0].array(),
-								    ec_fabs_ui_ieside[icomp][1].array(), box_ec, reconstructionOrder, plmLimiter);
+				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_bx[wcomp].array(), ec_fabs_bi_jeside[icomp][0].array(),
+								    ec_fabs_bi_jeside[icomp][1].array(), box_ec, reconstructionOrder, plmLimiter);
+				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_ux[wcomp].array(), ec_fabs_ui_jeside[icomp][0].array(),
+								    ec_fabs_ui_jeside[icomp][1].array(), box_ec, reconstructionOrder, plmLimiter);
 			}
 
 			// indexing: field[4: quadrant around edge]
@@ -478,7 +478,7 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 			// |          / \                    |               Q_2 = u_{0,T} * b_{1,R} - u_{1,R} * b_{0,T} |
 			// |         /   \             (-,-) | (+,-)                                                     |
 			// |        /     \             Q_0  |  Q_3          Q_3 = u_{0,B} * b_{1,R} - u_{1,R} * b_{0,B} |
-			// |       /       \       q_1 + q_2 | q_3 + q_0                                                 |
+			// |       /       \       q_0 + q_1 | q_3 + q_0                                                 |
 			// |       u,b_{0,B}                 |                                                           |
 			// |          q_0                                                                                |
 			// |---------------------------------------------------------------------------------------------|
@@ -499,10 +499,10 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 					ec_fabs_emf_q[qi] = amrex::FArrayBox(box_ec, 1, amrex::The_Async_Arena());
 
 					// extract relevant velocity and magnetic field components (host: get Array4 views)
-					us_w0[qi] = ec_fabs_ui_ieside[0][idx0].const_array(); // B/T
-					bs_w0[qi] = ec_fabs_bi_ieside[0][idx0].const_array(); // B/T
-					us_w1[qi] = ec_fabs_ui_ieside[1][idx1].const_array(); // L/R
-					bs_w1[qi] = ec_fabs_bi_ieside[1][idx1].const_array(); // L/R
+					us_w0[qi] = ec_fabs_ui_jeside[0][idx0].const_array(); // B/T
+					bs_w0[qi] = ec_fabs_bi_jeside[0][idx0].const_array(); // B/T
+					us_w1[qi] = ec_fabs_ui_jeside[1][idx1].const_array(); // L/R
+					bs_w1[qi] = ec_fabs_bi_jeside[1][idx1].const_array(); // L/R
 					emfs_w2[qi] = ec_fabs_emf_q[qi].array();		    // output EMF view
 				}
 
@@ -518,12 +518,12 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 				});
 			}
 
-			const auto &a4_emf_w2_ave = ec_mf_emf_components[iedge][mfi].array();
+			const auto &a4_emf_w2_ave = ec_mf_emf_comps[iedge][mfi].array();
 
 			// selected averaging method for the emf:
 			std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi),
 										       fcx_mf_fspds[2].const_array(mfi)};
-			MHDSystem<problem_t>::AverageEMF(a4_emf_w2_ave, ec_fabs_emf_q, box_ec, field_w_indices, fspds, ec_fabs_bi_ieside, emf_ave_scheme,
+			MHDSystem<problem_t>::AverageEMF(a4_emf_w2_ave, ec_fabs_emf_q, box_ec, field_w_indices, fspds, ec_fabs_bi_jeside, emf_ave_scheme,
 							 fcx_mf_cVars[field_w_indices[0]][mfi].const_array(bfield_index),
 							 fcx_mf_cVars[field_w_indices[1]][mfi].const_array(bfield_index), dx[field_w_indices[0]],
 							 dx[field_w_indices[1]], resistivity);
@@ -536,7 +536,7 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 // then extrapolates to the cell-edge.
 
 template <typename problem_t>
-void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_components, amrex::MultiFab const &cc_mf_cVars,
+void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emf_comps, amrex::MultiFab const &cc_mf_cVars,
 						  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_cVars,
 						  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcx_mf_fspds, int reconstructionOrder,
 						  SlopeLimiter plmLimiter, EMFAvgScheme emf_ave_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
@@ -627,7 +627,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 			const amrex::Box box_ec_r = amrex::grow(box_ec, 1);
 
 			// initializing array to hold EMF at cell edge
-			const auto &a4_emf_w2_ave = ec_mf_emf_components[iedge][mfi].array();
+			const auto &a4_emf_w2_ave = ec_mf_emf_comps[iedge][mfi].array();
 			std::array<amrex::FArrayBox, 2> ec_fabs_emf_ieside = {amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena()),
 									      amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena())};
 
@@ -708,11 +708,11 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 				ec_fabs_emf_q[iquad].mult<amrex::RunOn::Device>(0.5, 0, 1);
 			}
 
-			std::array<std::array<amrex::FArrayBox, 2>, 2> ec_fabs_bi_ieside;
+			std::array<std::array<amrex::FArrayBox, 2>, 2> ec_fabs_bi_jeside;
 			// define quantities - allocate with async arena
 			for (int icomp = 0; icomp < 2; ++icomp) {
-				for (int ieside = 0; ieside < 2; ++ieside) {
-					ec_fabs_bi_ieside[icomp][ieside] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
+				for (int jeside = 0; jeside < 2; ++jeside) {
+					ec_fabs_bi_jeside[icomp][jeside] = amrex::FArrayBox(box_ec_r, 1, amrex::The_Async_Arena());
 				}
 			}
 
@@ -720,13 +720,13 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 				const auto dir2edge = static_cast<FluxDir>(extrap_dirs[(icomp + 1) % 2]);
 				const int wcomp = extrap_dirs[icomp];
 				// extrapolate face-centered components to the cell-edge
-				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_bx[wcomp].array(), ec_fabs_bi_ieside[icomp][0].array(),
-								    ec_fabs_bi_ieside[icomp][1].array(), box_ec, reconstructionOrder, plmLimiter);
+				MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_bx[wcomp].array(), ec_fabs_bi_jeside[icomp][0].array(),
+								    ec_fabs_bi_jeside[icomp][1].array(), box_ec, reconstructionOrder, plmLimiter);
 			}
 			// selected averaging method for the emf:
 			std::array<amrex::Array4<const amrex::Real>, 3> const fspds = {fcx_mf_fspds[0].const_array(mfi), fcx_mf_fspds[1].const_array(mfi),
 										       fcx_mf_fspds[2].const_array(mfi)};
-			MHDSystem<problem_t>::AverageEMF(a4_emf_w2_ave, ec_fabs_emf_q, box_ec, extrap_dirs, fspds, ec_fabs_bi_ieside, emf_ave_scheme,
+			MHDSystem<problem_t>::AverageEMF(a4_emf_w2_ave, ec_fabs_emf_q, box_ec, extrap_dirs, fspds, ec_fabs_bi_jeside, emf_ave_scheme,
 							 fcx_mf_cVars[extrap_dirs[0]][mfi].const_array(bfield_index),
 							 fcx_mf_cVars[extrap_dirs[1]][mfi].const_array(bfield_index), dx[extrap_dirs[0]], dx[extrap_dirs[1]],
 							 resistivity);
@@ -739,7 +739,7 @@ template <typename problem_t>
 void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(amrex::Array4<amrex::Real> a4_emf_w2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_emf_q,
 							    amrex::Box const &box_ec, std::array<int, 2> const &extrap_dirs,
 							    std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
-							    std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_bi_ieside,
+							    std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_bi_jeside,
 							    amrex::Array4<const amrex::Real> const &a4_b_w0, amrex::Array4<const amrex::Real> const &a4_b_w1,
 							    amrex::Real dx_w0, amrex::Real dx_w1, amrex::Real resistivity)
 {
@@ -750,10 +750,10 @@ void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(amrex::Array4<amrex:
 	const auto &a4_emf_w2_q2 = ec_fabs_emf_q[2].const_array();
 	const auto &a4_emf_w2_q3 = ec_fabs_emf_q[3].const_array();
 
-	const auto &a4_b_w0_m = ec_fabs_bi_ieside[0][0].const_array();
-	const auto &a4_b_w0_p = ec_fabs_bi_ieside[0][1].const_array();
-	const auto &a4_b_w1_m = ec_fabs_bi_ieside[1][0].const_array();
-	const auto &a4_b_w1_p = ec_fabs_bi_ieside[1][1].const_array();
+	const auto &a4_b_w0_m = ec_fabs_bi_jeside[0][0].const_array();
+	const auto &a4_b_w0_p = ec_fabs_bi_jeside[0][1].const_array();
+	const auto &a4_b_w1_m = ec_fabs_bi_jeside[1][0].const_array();
+	const auto &a4_b_w1_p = ec_fabs_bi_jeside[1][1].const_array();
 
 	int const w0_comp = extrap_dirs[0];
 	int const w1_comp = extrap_dirs[1];
@@ -809,7 +809,7 @@ template <typename problem_t>
 void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> a4_emf_w2_ave, std::array<amrex::FArrayBox, 4> const &ec_fabs_emf_q,
 						  amrex::Box const &box_ec, std::array<int, 2> const &extrap_dirs,
 						  std::array<amrex::Array4<const amrex::Real>, 3> const &fspds,
-						  std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_bi_ieside,
+						  std::array<std::array<amrex::FArrayBox, 2>, 2> const &ec_fabs_bi_jeside,
 						  amrex::Array4<const amrex::Real> const &a4_b_w0, amrex::Array4<const amrex::Real> const &a4_b_w1, amrex::Real dx_w0,
 						  amrex::Real dx_w1, amrex::Real resistivity)
 {
@@ -819,10 +819,10 @@ void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> a4_
 	const auto &a4_emf_w2_q2 = ec_fabs_emf_q[2].const_array();
 	const auto &a4_emf_w2_q3 = ec_fabs_emf_q[3].const_array();
 
-	const auto &a4_b_w0_m = ec_fabs_bi_ieside[0][0].const_array();
-	const auto &a4_b_w0_p = ec_fabs_bi_ieside[0][1].const_array();
-	const auto &a4_b_w1_m = ec_fabs_bi_ieside[1][0].const_array();
-	const auto &a4_b_w1_p = ec_fabs_bi_ieside[1][1].const_array();
+	const auto &a4_b_w0_m = ec_fabs_bi_jeside[0][0].const_array();
+	const auto &a4_b_w0_p = ec_fabs_bi_jeside[0][1].const_array();
+	const auto &a4_b_w1_m = ec_fabs_bi_jeside[1][0].const_array();
+	const auto &a4_b_w1_p = ec_fabs_bi_jeside[1][1].const_array();
 
 	int const w0_comp = extrap_dirs[0];
 	int const w1_comp = extrap_dirs[1];
