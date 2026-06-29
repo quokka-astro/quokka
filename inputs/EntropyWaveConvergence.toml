@@ -25,7 +25,6 @@ plotfile_interval = -1
 
 cfl = 0.3
 
-
 hydro.rk_integrator_order = 2
 hydro.reconstruction_order = 3
 hydro.use_dual_energy = 0

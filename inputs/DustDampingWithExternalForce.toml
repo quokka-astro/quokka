@@ -25,6 +25,4 @@ suppress_output = 0
 max_timesteps = 1000
 constant_dt = 0.1
 
-dust.omega = 1.0
-
 stop_time = 10.0

@@ -19,7 +19,7 @@
 struct ParticleDepositionProblem {
 };
 
-template <> struct Particle_Traits<ParticleDepositionProblem> {
+template <> struct Particle_Traits<ParticleDepositionProblem> : DefaultParticleTraits {
 #if AMREX_SPACEDIM == 3
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | ParticleSwitch::Test;
 #else
@@ -30,20 +30,10 @@ template <> struct Particle_Traits<ParticleDepositionProblem> {
 template <> struct quokka::EOS_Traits<ParticleDepositionProblem> {
 	static constexpr double gamma = 5.0 / 3.0;
 	static constexpr double mean_molecular_weight = C::m_u;
-	static constexpr double boltzmann_constant = C::k_B;
 };
 
-template <> struct Physics_Traits<ParticleDepositionProblem> {
+template <> struct Physics_Traits<ParticleDepositionProblem> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_self_gravity_enabled = false;
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1;
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int numMassScalars = 0;
-	static constexpr int numPassiveScalars = numMassScalars + 0;
-	static constexpr int nGroups = 1;
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 template <> struct SimulationData<ParticleDepositionProblem> {
@@ -153,7 +143,10 @@ template <> void QuokkaSimulation<ParticleDepositionProblem>::computeAfterTimest
 #endif
 }
 
-template <> void QuokkaSimulation<ParticleDepositionProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int /*ncomp*/) const
+template <>
+void QuokkaSimulation<ParticleDepositionProblem>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, int /*ncomp*/,
+								    amrex::MultiFab const & /*state_cc*/,
+								    amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
 {
 #if AMREX_SPACEDIM == 3
 	if (dname == "particle_mass_density") {

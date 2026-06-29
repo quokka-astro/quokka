@@ -1,0 +1,39 @@
+name: 📏 PR Diff Size
+
+on:
+  pull_request:
+    branches:
+      - development
+
+permissions:
+  contents: read
+
+jobs:
+  diff-size:
+    runs-on: ubuntu-latest
+    env:
+      MAX_DIFF_LINES: 5000
+
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Check PR diff size
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          changed_lines=$(git diff --numstat "$BASE_SHA"...HEAD | awk '
+            $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ { total += $1 + $2 }
+            END { print total + 0 }
+          ')
+
+          echo "PR diff text lines changed: ${changed_lines}"
+          echo "Maximum allowed text lines changed: ${MAX_DIFF_LINES}"
+
+          if [ "$changed_lines" -gt "$MAX_DIFF_LINES" ]; then
+            echo "::error::PR diff changes ${changed_lines} text lines, which exceeds the ${MAX_DIFF_LINES}-line limit."
+            exit 1
+          fi

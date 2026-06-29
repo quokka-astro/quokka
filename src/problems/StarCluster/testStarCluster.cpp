@@ -46,18 +46,11 @@ template <> struct HydroSystem_Traits<StarCluster> {
 	static constexpr bool reconstruct_eint = false;
 };
 
-template <> struct Physics_Traits<StarCluster> {
+template <> struct Physics_Traits<StarCluster> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_self_gravity_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1; // number of radiation groups
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = C::k_B;
 	static constexpr amrex::Real gravitational_constant = 1.0;
@@ -193,12 +186,14 @@ template <> void QuokkaSimulation<StarCluster>::refineGrid(int lev, amrex::TagBo
 	});
 }
 
-template <> void QuokkaSimulation<StarCluster>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
+template <>
+void QuokkaSimulation<StarCluster>::ComputeDerivedVar(int /*lev*/, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
+						      amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "log_density") {
 		const int ncomp = ncomp_cc_in;
-		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &state = state_cc.const_arrays();
 		auto output = mf.arrays();
 
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {

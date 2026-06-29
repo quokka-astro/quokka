@@ -46,17 +46,9 @@ constexpr double solarmass_in_g = C::M_solar;	  // g == 1 Msun
 constexpr double keV_in_ergs = 1000. * C::ev2erg; // ergs == 1 keV
 constexpr double m_H = C::m_p + C::m_e;		  // mass of hydrogen atom
 
-template <> struct Physics_Traits<ShockCloud> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<ShockCloud> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int numMassScalars = 0;
 	static constexpr int numPassiveScalars = numMassScalars + 3;
-	static constexpr int nGroups = 1; // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 template <> struct quokka::EOS_Traits<ShockCloud> {
@@ -130,7 +122,8 @@ template <> void QuokkaSimulation<ShockCloud>::setInitialConditionsOnGrid(quokka
 		Real const ymom = 0;
 		Real const zmom = 0;
 		Real const Eint = P0 / (quokka::EOS_Traits<ShockCloud>::gamma - 1.);
-		Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+		static_assert(!Physics_Traits<ShockCloud>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+		Real const Egas = quokka::EOS<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint, 0.0);
 
 		state(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
 		state(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
@@ -176,7 +169,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 			Real const xmom = rho_wind * vx;
 			Real const ymom = 0;
 			Real const zmom = 0;
-			Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+			static_assert(!Physics_Traits<ShockCloud>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+			Real const Egas = quokka::EOS<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint, 0.0);
 			consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
 			consVar(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
 			consVar(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
@@ -272,7 +266,9 @@ template <> void QuokkaSimulation<ShockCloud>::computeAfterTimestep()
 	}
 }
 
-template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in) const
+template <>
+void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_in,
+						     amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
 {
 	// compute derived variables and save in 'mf'
 
@@ -280,7 +276,7 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "ShockCloud diagnostics require resampled cooling tables.");
 		const int ncomp = ncomp_in;
 		auto const &output = mf.arrays();
-		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &state = state_cc.const_arrays();
 		auto tables = resampledTables_.const_tables();
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
@@ -288,7 +284,8 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			static_assert(!Physics_Traits<ShockCloud>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+			Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 			output[bx](i, j, k, ncomp) = Tgas;
 		});
@@ -297,7 +294,7 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "ShockCloud diagnostics require resampled cooling tables.");
 		const int ncomp = ncomp_in;
 		auto const &output = mf.arrays();
-		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &state = state_cc.const_arrays();
 		auto tables = resampledTables_.const_tables();
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
@@ -305,7 +302,8 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			static_assert(!Physics_Traits<ShockCloud>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+			Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 			Real const cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, tables);
 			output[bx](i, j, k, ncomp) = cs / 1.0e5; // km/s
 		});
@@ -314,7 +312,7 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "ShockCloud diagnostics require resampled cooling tables.");
 		const int ncomp = ncomp_in;
 		auto const &output = mf.arrays();
-		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &state = state_cc.const_arrays();
 		auto tables = resampledTables_.const_tables();
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
@@ -326,7 +324,7 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "ShockCloud diagnostics require resampled cooling tables.");
 		const int ncomp = ncomp_in;
 		auto const &output = mf.arrays();
-		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &state = state_cc.const_arrays();
 		auto tables = resampledTables_.const_tables();
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho_cloud = state[bx](i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
@@ -338,7 +336,7 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "ShockCloud diagnostics require resampled cooling tables.");
 		const int ncomp = ncomp_in;
 		auto const &output = mf.arrays();
-		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &state = state_cc.const_arrays();
 		auto tables = resampledTables_.const_tables();
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho_wind = state[bx](i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
@@ -350,7 +348,7 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "ShockCloud diagnostics require resampled cooling tables.");
 		const int ncomp = ncomp_in;
 		auto const &output = mf.arrays();
-		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &state = state_cc.const_arrays();
 		auto tables = resampledTables_.const_tables();
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
@@ -366,7 +364,7 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "ShockCloud diagnostics require resampled cooling tables.");
 		const int ncomp = ncomp_in;
 		auto const &output = mf.arrays();
-		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &state = state_cc.const_arrays();
 		auto tables = resampledTables_.const_tables();
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
@@ -374,7 +372,8 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			static_assert(!Physics_Traits<ShockCloud>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+			Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 			Real const P_cgs = quokka::ResampledCooling::ComputePressureFromRhoEint(rho, Eint, tables);
 			Real const ndens_times_T = P_cgs / C::k_B; // convert to [K cm^-3]
 			output[bx](i, j, k, ncomp) = ndens_times_T;
@@ -384,7 +383,7 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "ShockCloud diagnostics require resampled cooling tables.");
 		const int ncomp = ncomp_in;
 		auto const &output = mf.arrays();
-		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &state = state_cc.const_arrays();
 		auto tables = resampledTables_.const_tables();
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho = state[bx](i, j, k, HydroSystem<ShockCloud>::density_index);
@@ -392,7 +391,8 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			static_assert(!Physics_Traits<ShockCloud>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+			Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 			Real const K_cgs = quokka::ResampledCooling::ComputeEntropyFromRhoEint(rho, Eint, tables);
 			Real const K_keV_cm2 = K_cgs / keV_in_ergs; // convert to units of keV cm^2
 			output[bx](i, j, k, ncomp) = K_keV_cm2;
@@ -401,7 +401,7 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 	} else if (dname == "mass") {
 		const int ncomp = ncomp_in;
 		auto const &output = mf.arrays();
-		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &state = state_cc.const_arrays();
 		auto const dx = geom[lev].CellSizeArray();
 		const Real dvol = dx[0] * dx[1] * dx[2];
 
@@ -413,7 +413,7 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 	} else if (dname == "cloud_fraction") {
 		const int ncomp = ncomp_in;
 		auto const &output = mf.arrays();
-		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &state = state_cc.const_arrays();
 
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			// cloud partial density
@@ -429,7 +429,7 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "ShockCloud diagnostics require resampled cooling tables.");
 		const int ncomp = ncomp_in;
 		auto const &output = mf.arrays();
-		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &state = state_cc.const_arrays();
 
 		auto tables = resampledTables_.const_tables();
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
@@ -439,7 +439,8 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			static_assert(!Physics_Traits<ShockCloud>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+			Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 			Real const l_cool = quokka::ResampledCooling::ComputeCoolingLength(rho, Eint, tables);
 			output[bx](i, j, k, ncomp) = l_cool / parsec_in_cm;
 		});
@@ -447,7 +448,7 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 	} else if (dname == "lab_velocity_x") {
 		const int ncomp = ncomp_in;
 		auto const &output = mf.arrays();
-		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &state = state_cc.const_arrays();
 		const Real delta_vx = ::delta_vx;
 
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
@@ -462,7 +463,7 @@ template <> void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::s
 	} else if (dname == "velocity_mag") {
 		const int ncomp = ncomp_in;
 		auto const &output = mf.arrays();
-		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &state = state_cc.const_arrays();
 
 		amrex::ParallelFor(mf, mf.nGrowVect(), [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			// compute simulation-frame |v| in km/s
@@ -489,7 +490,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTempResampled(int i, int j, 
 	Real const x2Mom = state(i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
 	Real const x3Mom = state(i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 	Real const Egas = state(i, j, k, HydroSystem<ShockCloud>::energy_index);
-	Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+	static_assert(!Physics_Traits<ShockCloud>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+	Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 	return quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 }
 template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<std::string, amrex::Real>
@@ -675,7 +677,8 @@ template <> void QuokkaSimulation<ShockCloud>::refineGrid(int lev, amrex::TagBox
 		Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
 		Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 		Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-		Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+		static_assert(!Physics_Traits<ShockCloud>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+		Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 		Real const l_cool = quokka::ResampledCooling::ComputeCoolingLength(rho, Eint, tables);
 
 		if (l_cool < resolved_length) {
@@ -736,7 +739,7 @@ auto problem_main() -> int
 	amrex::Print() << std::format("Pressure = {} K cm^-3\n", P_over_k);
 
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.coolingTableType_ == "resampled", "ShockCloud setup requires resampled cooling tables.");
-	auto cooling_tables = sim.resampledTables_.const_tables();
+	auto cooling_tables = sim.resampledTables_.const_tables_host();
 	// compute mass density of background, cloud
 	Real const H_mass_fraction = cooling_tables.cloudy_H_mass_fraction;
 	::rho0 = nH_bg * m_H / H_mass_fraction;	   // g cm^-3
