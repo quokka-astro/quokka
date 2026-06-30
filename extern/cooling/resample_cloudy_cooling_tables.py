@@ -378,6 +378,7 @@ def resample_cloudy_cooling_tables(cloudy_file, n_rho=100, n_eint=100,
                           np.array(['erg/cm^3/s/(g/cm^3)^2', 'K', 'cm/s',
                                     'dyne/cm^2', 'erg*cm^2'], dtype='S'))
         tab1.attrs['cloudy_H_mass_fraction'] = cloudy_H_mass_fraction
+        tab1.attrs.create('include_pe', np.int32(0), dtype='i4')  # Cloudy table; external PE heating may still be added
 
         tab1.create_dataset('data', data=all_data)
 
