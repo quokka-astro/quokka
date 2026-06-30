@@ -1410,6 +1410,14 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			{
 				hid_t const attr_id = H5Aopen(group_id, "Nx", H5P_DEFAULT);
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(attr_id >= 0, "Failed to open Nx attribute");
+				{
+					hid_t const space_id = H5Aget_space(attr_id);
+					hssize_t const nelem = H5Sget_simple_extent_npoints(space_id);
+					H5Sclose(space_id);
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    nelem == static_cast<hssize_t>(Ndim),
+					    std::format("Nx attribute has {} elements, expected {}", nelem, Ndim));
+				}
 				status = H5Aread(attr_id, H5T_NATIVE_INT, sizes.data());
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read Nx attribute");
 				H5Aclose(attr_id);
@@ -1424,11 +1432,27 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				std::array<double, Ndim> xhi_d{};
 				hid_t attr_id = H5Aopen(group_id, "xlo", H5P_DEFAULT);
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(attr_id >= 0, "Failed to open xlo attribute");
+				{
+					hid_t const space_id = H5Aget_space(attr_id);
+					hssize_t const nelem = H5Sget_simple_extent_npoints(space_id);
+					H5Sclose(space_id);
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    nelem == static_cast<hssize_t>(Ndim),
+					    std::format("xlo attribute has {} elements, expected {}", nelem, Ndim));
+				}
 				status = H5Aread(attr_id, H5T_NATIVE_DOUBLE, xlo_d.data());
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read xlo attribute");
 				H5Aclose(attr_id);
 				attr_id = H5Aopen(group_id, "xhi", H5P_DEFAULT);
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(attr_id >= 0, "Failed to open xhi attribute");
+				{
+					hid_t const space_id = H5Aget_space(attr_id);
+					hssize_t const nelem = H5Sget_simple_extent_npoints(space_id);
+					H5Sclose(space_id);
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    nelem == static_cast<hssize_t>(Ndim),
+					    std::format("xhi attribute has {} elements, expected {}", nelem, Ndim));
+				}
 				status = H5Aread(attr_id, H5T_NATIVE_DOUBLE, xhi_d.data());
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read xhi attribute");
 				H5Aclose(attr_id);
@@ -1442,6 +1466,14 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			{
 				hid_t const attr_id = H5Aopen(group_id, "spacing", H5P_DEFAULT);
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(attr_id >= 0, "Failed to open spacing attribute");
+				{
+					hid_t const space_id = H5Aget_space(attr_id);
+					hssize_t const nelem = H5Sget_simple_extent_npoints(space_id);
+					H5Sclose(space_id);
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    nelem == static_cast<hssize_t>(Ndim),
+					    std::format("spacing attribute has {} elements, expected {}", nelem, Ndim));
+				}
 				hid_t const atype = H5Aget_type(attr_id);
 				hid_t const native_type = H5Tget_native_type(atype, H5T_DIR_ASCEND);
 				size_t const type_size = H5Tget_size(native_type);
@@ -1471,6 +1503,14 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				hid_t const aid = H5Aopen(group_id, attr_name, H5P_DEFAULT);
 				if (aid < 0) {
 					return result;
+				}
+				{
+					hid_t const space_id = H5Aget_space(aid);
+					hssize_t const nelem = H5Sget_simple_extent_npoints(space_id);
+					H5Sclose(space_id);
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    nelem == static_cast<hssize_t>(count),
+					    std::format("{} attribute has {} elements, expected {}", attr_name, nelem, count));
 				}
 				hid_t const atype_id = H5Aget_type(aid);
 				hid_t const native_type_id = H5Tget_native_type(atype_id, H5T_DIR_ASCEND);
@@ -1504,9 +1544,18 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			// Read 'data' dataset: shape [Nout, Nx[0], Nx[1], ...] row-major
 			{
 				amrex::Long const total = flatDataSize(sizes);
-				std::vector<double> raw_data(static_cast<std::size_t>(total));
 				hid_t const dset_id = H5Dopen2(group_id, "data", H5P_DEFAULT);
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(dset_id >= 0, ("Failed to open 'data' dataset in group: " + group_name).c_str());
+				{
+					hid_t const space_id = H5Dget_space(dset_id);
+					hssize_t const file_total = H5Sget_simple_extent_npoints(space_id);
+					H5Sclose(space_id);
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    file_total == static_cast<hssize_t>(total),
+					    std::format("'data' dataset in group '{}' has {} elements, expected {} (Nout={}, Nx as read)", group_name,
+							file_total, total, Nout));
+				}
+				std::vector<double> raw_data(static_cast<std::size_t>(total));
 				status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, raw_data.data());
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read 'data' dataset in group: " + group_name).c_str());
 				H5Dclose(dset_id);
