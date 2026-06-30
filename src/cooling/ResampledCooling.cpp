@@ -50,12 +50,14 @@ auto readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 
 		hid_t attr_id = H5Aopen(group_id, "cloudy_H_mass_fraction", H5P_DEFAULT);
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(attr_id >= 0, "Failed to open cloudy_H_mass_fraction attribute");
-		H5Aread(attr_id, H5T_NATIVE_DOUBLE, &cloudy_H_mass_fraction_val);
+		herr_t status = H5Aread(attr_id, H5T_NATIVE_DOUBLE, &cloudy_H_mass_fraction_val);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status >= 0, "Failed to read cloudy_H_mass_fraction attribute");
 		H5Aclose(attr_id);
 
 		attr_id = H5Aopen(group_id, "include_pe", H5P_DEFAULT);
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(attr_id >= 0, "Failed to open include_pe attribute");
-		H5Aread(attr_id, H5T_NATIVE_INT, &include_pe_val);
+		status = H5Aread(attr_id, H5T_NATIVE_INT, &include_pe_val);
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status >= 0, "Failed to read include_pe attribute");
 		H5Aclose(attr_id);
 
 		H5Gclose(group_id);
