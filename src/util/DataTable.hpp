@@ -1561,7 +1561,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				flat_data.resize(static_cast<std::size_t>(total));
 				amrex::Long const spatial_size = total / Nout;
 				for (amrex::Long k = 0; k < total; ++k) {
-					amrex::Real const val = static_cast<amrex::Real>(raw_data[static_cast<std::size_t>(k)]);
+					auto const val = static_cast<amrex::Real>(raw_data[static_cast<std::size_t>(k)]);
 					int const out_idx = static_cast<int>(k / spatial_size);
 					if (output_spacings[static_cast<std::size_t>(out_idx)] == SpacingType::fast_log) {
 						flat_data[static_cast<std::size_t>(k)] = FastMath::inverse_pow2(val);
