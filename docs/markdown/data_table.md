@@ -119,6 +119,18 @@ Each output can independently use a different spacing for interpolation. The spa
 
 HDF5 files always store **raw physical values** regardless of spacing. When `H5Reader` loads a `fast_log` output, it applies `FastMath::inverse_pow2` (Newton iteration) element-wise at load time so that subsequent bilinear interpolation happens in log space. No transform is needed in the Python table-generation scripts. See [Cooling module](cooling_module.md) for a concrete example.
 
+### Why `fast_log` is as accurate as a true log–exp pair
+
+`fast_pow2` is a ~10% approximation to `2^x`, and a naive `fast_log2` is a ~10% approximation to `log₂(x)`. Their naive composition is **not** the identity: `fast_pow2(fast_log2(q)) ≠ q`. Storing `fast_log2(q)` in the table would leave a ~10% error at every grid point.
+
+`FastMath::inverse_pow2` is different: it uses Newton iteration to find `v` such that `fast_pow2(v) = q` **to machine precision**. It is the exact mathematical inverse of `fast_pow2`, not an approximation to log₂. This has two consequences:
+
+1. **Grid points are exact.** The buffer stores `inverse_pow2(q_i)`. At query time, `fast_pow2(inverse_pow2(q_i)) = q_i` to machine precision — no approximation error at all.
+
+2. **Between grid points, accuracy is determined by table resolution, not by the ~10% deviation of `fast_pow2` from `2^x`.** Linear interpolation in `inverse_pow2`-space followed by `fast_pow2` is geometrically equivalent to log-space interpolation, with second-order error `O(h²)` — the same as a true log–exp pair.
+
+The underlying principle is that any smooth monotone bijection can be used for interpolation with full accuracy, as long as the exact forward and inverse transforms are applied consistently. Here `(inverse_pow2, fast_pow2)` form that exact bijection by construction. The 10% approximation error of `fast_pow2` relative to `2^x` is irrelevant because both directions are consistent with each other.
+
 ## Key API
 
 | Method | Description |
