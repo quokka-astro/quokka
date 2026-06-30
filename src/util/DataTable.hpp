@@ -1414,9 +1414,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 					hid_t const space_id = H5Aget_space(attr_id);
 					hssize_t const nelem = H5Sget_simple_extent_npoints(space_id);
 					H5Sclose(space_id);
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-					    nelem == static_cast<hssize_t>(Ndim),
-					    std::format("Nx attribute has {} elements, expected {}", nelem, Ndim));
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nelem == static_cast<hssize_t>(Ndim),
+									 std::format("Nx attribute has {} elements, expected {}", nelem, Ndim));
 				}
 				status = H5Aread(attr_id, H5T_NATIVE_INT, sizes.data());
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read Nx attribute");
@@ -1436,9 +1435,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 					hid_t const space_id = H5Aget_space(attr_id);
 					hssize_t const nelem = H5Sget_simple_extent_npoints(space_id);
 					H5Sclose(space_id);
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-					    nelem == static_cast<hssize_t>(Ndim),
-					    std::format("xlo attribute has {} elements, expected {}", nelem, Ndim));
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nelem == static_cast<hssize_t>(Ndim),
+									 std::format("xlo attribute has {} elements, expected {}", nelem, Ndim));
 				}
 				status = H5Aread(attr_id, H5T_NATIVE_DOUBLE, xlo_d.data());
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read xlo attribute");
@@ -1449,9 +1447,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 					hid_t const space_id = H5Aget_space(attr_id);
 					hssize_t const nelem = H5Sget_simple_extent_npoints(space_id);
 					H5Sclose(space_id);
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-					    nelem == static_cast<hssize_t>(Ndim),
-					    std::format("xhi attribute has {} elements, expected {}", nelem, Ndim));
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nelem == static_cast<hssize_t>(Ndim),
+									 std::format("xhi attribute has {} elements, expected {}", nelem, Ndim));
 				}
 				status = H5Aread(attr_id, H5T_NATIVE_DOUBLE, xhi_d.data());
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, "Failed to read xhi attribute");
@@ -1470,9 +1467,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 					hid_t const space_id = H5Aget_space(attr_id);
 					hssize_t const nelem = H5Sget_simple_extent_npoints(space_id);
 					H5Sclose(space_id);
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-					    nelem == static_cast<hssize_t>(Ndim),
-					    std::format("spacing attribute has {} elements, expected {}", nelem, Ndim));
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nelem == static_cast<hssize_t>(Ndim),
+									 std::format("spacing attribute has {} elements, expected {}", nelem, Ndim));
 				}
 				hid_t const atype = H5Aget_type(attr_id);
 				hid_t const native_type = H5Tget_native_type(atype, H5T_DIR_ASCEND);
@@ -1508,9 +1504,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 					hid_t const space_id = H5Aget_space(aid);
 					hssize_t const nelem = H5Sget_simple_extent_npoints(space_id);
 					H5Sclose(space_id);
-					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-					    nelem == static_cast<hssize_t>(count),
-					    std::format("{} attribute has {} elements, expected {}", attr_name, nelem, count));
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(nelem == static_cast<hssize_t>(count),
+									 std::format("{} attribute has {} elements, expected {}", attr_name, nelem, count));
 				}
 				hid_t const atype_id = H5Aget_type(aid);
 				hid_t const native_type_id = H5Tget_native_type(atype_id, H5T_DIR_ASCEND);
