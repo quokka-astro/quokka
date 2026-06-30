@@ -1556,8 +1556,21 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				status = H5Dread(dset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, raw_data.data());
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(status != h5_error, ("Failed to read 'data' dataset in group: " + group_name).c_str());
 				H5Dclose(dset_id);
+				// Apply per-output transform (inverse_pow2 for fast_log, log for log).
+				// HDF5 stores raw physical values; the transform converts to interpolation space.
 				flat_data.resize(static_cast<std::size_t>(total));
-				std::transform(raw_data.begin(), raw_data.end(), flat_data.begin(), [](double v) { return static_cast<amrex::Real>(v); });
+				amrex::Long const spatial_size = total / Nout;
+				for (amrex::Long k = 0; k < total; ++k) {
+					amrex::Real const val = static_cast<amrex::Real>(raw_data[static_cast<std::size_t>(k)]);
+					int const out_idx = static_cast<int>(k / spatial_size);
+					if (output_spacings[static_cast<std::size_t>(out_idx)] == SpacingType::fast_log) {
+						flat_data[static_cast<std::size_t>(k)] = FastMath::inverse_pow2(val);
+					} else if (output_spacings[static_cast<std::size_t>(out_idx)] == SpacingType::log) {
+						flat_data[static_cast<std::size_t>(k)] = std::log(val);
+					} else {
+						flat_data[static_cast<std::size_t>(k)] = val;
+					}
+				}
 			}
 
 			H5Gclose(group_id);

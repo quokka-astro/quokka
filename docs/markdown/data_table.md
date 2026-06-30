@@ -111,13 +111,13 @@ All data is read on the I/O processor and broadcast automatically to non-I/O ran
 
 Each output can independently use a different spacing for interpolation. The spacing type is declared at the C++ call site and is **not** stored in the HDF5 file (it is a property of the interpolation, not of the data).
 
-| Spacing | Stored value | Recovered value | Use case |
-|---------|-------------|-----------------|----------|
-| `linear` | physical value | stored value | quantities that can be negative |
-| `fast_log` | `fast_log2(physical)` | `FastMath::pow2(stored)` | positive-definite quantities |
-| `log` | `ln(physical)` | `exp(stored)` | positive-definite (rare) |
+| Spacing | In HDF5 file | Internal buffer | Recovered on interpolate |
+|---------|-------------|-----------------|--------------------------|
+| `linear` | physical value | physical value | buffer value |
+| `fast_log` | physical value | `FastMath::inverse_pow2(physical)` | `FastMath::pow2(buffer)` |
+| `log` | physical value | `ln(physical)` | `exp(buffer)` |
 
-When an output is stored in `fast_log` space, the Python table-generation script must apply `fast_log2(value)` before writing to HDF5, and the `H5Reader` call must specify the matching spacing. See [Cooling module](cooling_module.md) for a concrete example.
+HDF5 files always store **raw physical values** regardless of spacing. When `H5Reader` loads a `fast_log` output, it applies `FastMath::inverse_pow2` (Newton iteration) element-wise at load time so that subsequent bilinear interpolation happens in log space. No transform is needed in the Python table-generation scripts. See [Cooling module](cooling_module.md) for a concrete example.
 
 ## Key API
 

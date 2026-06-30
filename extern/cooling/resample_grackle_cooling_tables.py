@@ -346,15 +346,9 @@ def resample_cooling_tables(grackle_file, n_rho=100, n_eint=100, zmet=1.0,
     print(f"\nSaving resampled tables to {output_file}")
 
     # Stack all outputs into a single [5, n_rho, n_eint] array (row-major, C order).
-    # Outputs 1-4 are stored in fast_log2 space (interpolated as log in C++; NaN propagates naturally).
-    # Output index mapping: 0=cooling_rate (linear), 1=temperature, 2=sound_speed, 3=pressure, 4=entropy
-    all_data = np.stack([
-        cooling_rates,
-        fast_log2(temperatures),
-        fast_log2(sound_speeds),
-        fast_log2(pressures),
-        fast_log2(entropies),
-    ], axis=0)
+    # Raw physical values are stored; C++ H5Reader applies inverse_pow2 for fast_log outputs at load time.
+    # Output index mapping: 0=cooling_rate, 1=temperature, 2=sound_speed, 3=pressure, 4=entropy
+    all_data = np.stack([cooling_rates, temperatures, sound_speeds, pressures, entropies], axis=0)
 
     with h5py.File(output_file, 'w') as f:
         # Create the 'tab1' group following the standard DataTable HDF5 format
