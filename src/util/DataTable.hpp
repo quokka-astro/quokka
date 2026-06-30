@@ -67,8 +67,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 
 	std::array<int, Ndim> sizes{};
 
-	// Output spacing for return values: linear, log, or fast_log
-	SpacingType output_spacing = SpacingType::linear;
+	// Per-output spacing for return values: linear, log, or fast_log
+	std::array<SpacingType, Nout> output_spacings{};
 
 	/// @brief Find interpolation indices and normalized coordinates for n-dimensional interpolation
 	///
@@ -198,13 +198,11 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 		// Part 2: Perform n-dimensional interpolation for all outputs
 		auto values = interpolate_from_indices(interp);
 
-		// Part 3: Convert from log space if output values are stored in log
-		if (output_spacing == SpacingType::fast_log) {
-			for (int i = 0; i < Nout; ++i) {
+		// Part 3: Convert from log space per output
+		for (int i = 0; i < Nout; ++i) {
+			if (output_spacings[i] == SpacingType::fast_log) {
 				values[i] = FastMath::pow2(values[i]);
-			}
-		} else if (output_spacing == SpacingType::log) {
-			for (int i = 0; i < Nout; ++i) {
+			} else if (output_spacings[i] == SpacingType::log) {
 				values[i] = std::exp(values[i]);
 			}
 		}
@@ -268,10 +266,10 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 		// Part 2: Perform n-dimensional interpolation for single output
 		amrex::Real value = interpolate_single_from_indices(interp, output_index);
 
-		// Part 3: Convert from log space if output values are stored in log
-		if (output_spacing == SpacingType::fast_log) {
+		// Part 3: Convert from log space for this output
+		if (output_spacings[output_index] == SpacingType::fast_log) {
 			value = FastMath::pow2(value);
-		} else if (output_spacing == SpacingType::log) {
+		} else if (output_spacings[output_index] == SpacingType::log) {
 			value = std::exp(value);
 		}
 
@@ -455,8 +453,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	std::array<std::string, Ndim> input_units_{};
 	std::array<std::string, Nout> output_units_{};
 
-	// Output spacing type: "linear" or "fast_log"
-	SpacingType output_spacing_ = SpacingType::linear;
+	// Per-output spacing type: linear, log, or fast_log
+	std::array<SpacingType, Nout> output_spacings_{};
 
 	[[nodiscard]] static constexpr auto ioProcessorNumber() -> int { return amrex::ParallelDescriptor::IOProcessorNumber(); }
 
@@ -543,13 +541,14 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
       public:
 	void setMetadata(const std::array<std::string, Ndim> &input_names, const std::array<std::string, Nout> &output_names,
-			 const std::array<std::string, Ndim> &input_units, const std::array<std::string, Nout> &output_units, SpacingType output_spacing)
+			 const std::array<std::string, Ndim> &input_units, const std::array<std::string, Nout> &output_units,
+			 std::array<SpacingType, Nout> output_spacings)
 	{
 		input_names_ = input_names;
 		output_names_ = output_names;
 		input_units_ = input_units;
 		output_units_ = output_units;
-		output_spacing_ = output_spacing;
+		output_spacings_ = output_spacings;
 	}
 
 	// Default constructor
@@ -736,7 +735,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		    spacing_types_, // spacing types array (converted to enum)
 		    dcoord_,	    // dcoord array
 		    sizes_,	    // sizes array
-		    output_spacing_ // output spacing (converted to enum)
+		    output_spacings_ // per-output spacing
 		};
 		return tables;
 	}
@@ -759,7 +758,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		}
 
 		DataTableGpuConst<Ndim, Nout, oob_policy> tables{coord_tables,	 data_tables, coord_min_, coord_max_,
-								 spacing_types_, dcoord_,     sizes_,	  output_spacing_};
+								 spacing_types_, dcoord_,     sizes_,	  output_spacings_};
 		return tables;
 	}
 
@@ -1341,7 +1340,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 		DataTable table;
 		table.initializeCommonFlat(x_mins, x_maxs, sizes, spacing_types_enum, flat_data);
-		table.setMetadata(input_names, output_names, input_units, output_units, output_spacing_bcast);
+		std::array<SpacingType, Nout> output_spacings_arr{};
+		output_spacings_arr.fill(output_spacing_bcast);
+		table.setMetadata(input_names, output_names, input_units, output_units, output_spacings_arr);
 		return table;
 	}
 
@@ -1356,7 +1357,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	// If a "grids" subgroup exists it is ignored (irregular grids are not supported; use linear/log/fast_log spacing).
 	//
 	// All data is broadcast to non-IO MPI ranks automatically.
-	static auto H5Reader(const std::string &file_path, const std::string &group_name = "tab1") -> DataTable
+	static auto H5Reader(const std::string &file_path, const std::string &group_name = "tab1",
+			     std::array<SpacingType, Nout> output_spacings = {}) -> DataTable
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "H5Reader supports 1D-4D tables");
 
@@ -1575,7 +1577,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 		DataTable table;
 		table.initializeCommonFlat(x_mins, x_maxs, sizes, spacing_types, flat_data);
-		table.setMetadata(input_names, output_names, input_units, output_units, SpacingType::linear);
+		table.setMetadata(input_names, output_names, input_units, output_units, output_spacings);
 		return table;
 	}
 };

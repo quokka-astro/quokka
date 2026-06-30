@@ -22,7 +22,7 @@ is integrated adaptively using an embedded RK2 (Heun's method) sub-cycle. Densit
 
 ## Cooling tables
 
-The tables bundled with Quokka were generated from Grackle's Cloudy data using the scripts in `extern/cooling/`. Each table covers a 2D grid of \\((\rho, e\_{\rm int})\\) with `fast_log` spacing (a bit-level approximation to log₂) and stores five output quantities indexed as:
+The tables bundled with Quokka were generated from Grackle's Cloudy data using the scripts in `extern/cooling/`. Each table covers a 2D grid of \\((\rho, e\_{\rm int})\\) with `fast_log` coordinate spacing (a bit-level approximation to log₂). The five output quantities are stored in log–log space: the cooling rate (index 0) is stored as a raw value (it can be negative), while temperature, sound speed, pressure, and entropy (indices 1–4) are stored as `fast_log2(value)` so that interpolation is performed in log–log space and the physical value is recovered via `FastMath::pow2`. The indices are:
 
 | Index | Quantity | Units |
 |-------|----------|-------|
@@ -43,6 +43,8 @@ Available table files:
 | `isrf_1000Go_grains_resampled.h5` | ISRF 1000 G₀ + grains | not applicable |
 
 To regenerate the Grackle-based tables, run `extern/cooling/resample_grackle_cooling_tables.sh`. To regenerate `isrf_1000Go_grains_resampled.h5`, run `extern/cooling/resample_cloudy_cooling_tables.py` directly.
+
+**Note:** The `output_spacing` metadata is intentionally absent from the HDF5 files. The per-output spacing (`linear` for cooling rate, `fast_log` for the other four quantities) is a property of the interpolation and is declared at the C++ call site in `ResampledCooling.cpp`, not stored in the table file. Python table-generation scripts must pre-transform outputs 1–4 with `fast_log2()` before writing.
 
 ## HDF5 table format
 

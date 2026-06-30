@@ -50,7 +50,13 @@ spacing[0], spacing[1], ...   # linear / log / fast_log
 ### From an HDF5 file (recommended)
 
 ```cpp
+// All outputs linear (default):
 auto table = quokka::DataTable<2, 5>::H5Reader("path/to/table.h5", "tab1");
+
+// Per-output spacing — declared at the call site, not stored in the HDF5 file:
+auto table = quokka::DataTable<2, 5>::H5Reader("path/to/table.h5", "tab1",
+    {SpacingType::linear, SpacingType::fast_log, SpacingType::fast_log,
+     SpacingType::fast_log, SpacingType::fast_log});
 ```
 
 The HDF5 group `tab1` must contain:
@@ -101,12 +107,24 @@ With the default `OutOfBounds::clamp` policy, coordinates outside `[xlo, xhi]` a
 
 All data is read on the I/O processor and broadcast automatically to non-I/O ranks by `H5Reader` and `CSVReader`. No special MPI handling is needed at the call site.
 
+## Output spacing
+
+Each output can independently use a different spacing for interpolation. The spacing type is declared at the C++ call site and is **not** stored in the HDF5 file (it is a property of the interpolation, not of the data).
+
+| Spacing | Stored value | Recovered value | Use case |
+|---------|-------------|-----------------|----------|
+| `linear` | physical value | stored value | quantities that can be negative |
+| `fast_log` | `fast_log2(physical)` | `FastMath::pow2(stored)` | positive-definite quantities |
+| `log` | `ln(physical)` | `exp(stored)` | positive-definite (rare) |
+
+When an output is stored in `fast_log` space, the Python table-generation script must apply `fast_log2(value)` before writing to HDF5, and the `H5Reader` call must specify the matching spacing. See [Cooling module](cooling_module.md) for a concrete example.
+
 ## Key API
 
 | Method | Description |
 |--------|-------------|
-| `H5Reader(file, group)` | Static factory: read from HDF5 group. |
-| `CSVReader(file, output_spacing)` | Static factory: read from CSV file. |
+| `H5Reader(file, group, output_spacings)` | Static factory: read from HDF5 group. `output_spacings` defaults to all `linear`. |
+| `CSVReader(file, output_spacing)` | Static factory: read from CSV file; same spacing applied to all outputs. |
 | `const_tables()` | Return `DataTableGpuConst` view backed by device memory. |
 | `const_tables_host()` | Return `DataTableGpuConst` view backed by pinned host memory. |
 | `size(dim)` | Grid size along dimension `dim`. |
@@ -118,15 +136,23 @@ All data is read on the I/O processor and broadcast automatically to non-I/O ran
 ```cpp
 #include "util/DataTable.hpp"
 
+// Cooling rate (index 0) is linear; T/cs/P/S (indices 1-4) are fast_log.
 quokka::DataTable<2, 5> tbl = quokka::DataTable<2, 5>::H5Reader(
-    "extern/cooling/CloudyData_UVB=HM2012_resampled.h5", "tab1");
+    "extern/cooling/CloudyData_UVB=HM2012_resampled.h5", "tab1",
+    {quokka::SpacingType::linear,   // cooling rate — can be negative
+     quokka::SpacingType::fast_log, // temperature
+     quokka::SpacingType::fast_log, // sound speed
+     quokka::SpacingType::fast_log, // pressure
+     quokka::SpacingType::fast_log  // entropy
+    });
 
 // Pass the GPU view to a kernel
 auto gpu_tbl = tbl.const_tables();
 amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
     std::array<amrex::Real, 2> pt = {rho(i,j,k), eint(i,j,k)};
     auto vals = gpu_tbl.interpolate(pt);
-    // vals[0] = cooling rate, vals[1] = T, vals[2] = cs, ...
+    // vals[0] = cooling rate (raw), vals[1] = T (K), vals[2] = cs (cm/s), ...
+    // fast_pow2 back-transform is applied automatically for indices 1-4
 });
 ```
 

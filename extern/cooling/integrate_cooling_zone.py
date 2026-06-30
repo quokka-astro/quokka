@@ -35,10 +35,10 @@ def load_resampled_cooling_tables(filename):
         'fast_log_rho':  fast_log2(rho_grid),
         'fast_log_eint': fast_log2(eint_grid),
         'cooling_rates': all_data[0],
-        'temperatures':  all_data[1],
-        'sound_speeds':  all_data[2],
-        'pressures':     all_data[3],
-        'entropies':     all_data[4],
+        'temperatures':  np.exp2(all_data[1]),  # stored as fast_log2; invert with 2^x
+        'sound_speeds':  np.exp2(all_data[2]),
+        'pressures':     np.exp2(all_data[3]),
+        'entropies':     np.exp2(all_data[4]),
         'metadata':      metadata,
     }
     return data
