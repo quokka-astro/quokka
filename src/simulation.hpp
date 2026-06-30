@@ -811,6 +811,15 @@ template <typename problem_t> void AMRSimulation<problem_t>::initialize()
 	simulationMetadata_["git_hash_quokka"] = getGitHashForQuokka();
 	simulationMetadata_["git_hash_amrex"] = getGitHashForAmrex();
 
+	// print version and git hashes to stdout
+	amrex::Print() << std::format("\nQuokka version {} (git: {})\n", QUOKKA_VERSION, getGitHashForQuokka());
+	amrex::Print() << std::format("\tAMReX git: {}\n", getGitHashForAmrex());
+	amrex::Print() << std::format("\tMicrophysics git: {}\n", MICROPHYSICS_GIT_HASH);
+#if AMREX_SPACEDIM == 3
+	amrex::Print() << std::format("\tAMReX-Hydro git: {}\n", AMREX_HYDRO_GIT_HASH);
+#endif
+	amrex::Print() << std::format("\tTurbGen git: {}\n", TURBULENCE_GIT_HASH);
+
 	// add units and physics-specific metadata
 	if constexpr (Physics_Traits<problem_t>::is_hydro_enabled || Physics_Traits<problem_t>::is_radiation_enabled) {
 		initializeSimulationMetadata();
@@ -1255,7 +1264,7 @@ template <typename problem_t> auto AMRSimulation<problem_t>::computeTimestepAtLe
 	amrex::ValLocPair<amrex::Real, amrex::IntVect> conduction_dt{.value = std::numeric_limits<amrex::Real>::max(),
 								     .index = amrex::IntVect{AMREX_D_DECL(-1, -1, -1)}};
 	if (enableElectronConduction_ == 1) {
-		double c_v = C::k_B / (quokka::EOS_Traits<problem_t>::mean_molecular_weight * (quokka::EOS_Traits<problem_t>::gamma - 1.0));
+		double c_v = C::k_B / (::quokka::EOS_Traits<problem_t>::mean_molecular_weight * (::quokka::EOS_Traits<problem_t>::gamma - 1.0));
 		double diffusion_coefficient = electronConductionKappa0_ / (state_new_cc_[lev].min(0) * c_v);
 		conduction_dt.value = 0.5 * conductionCFL * dx_min * dx_min / diffusion_coefficient;
 		conduction_dt.index = domain_signal_maxloc;
