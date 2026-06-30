@@ -729,12 +729,12 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 		DataTableGpuConst<Ndim, Nout, oob_policy> tables{
 		    coord_tables,
-		    data_tables,    // array of data tables
-		    coord_min_,	    // coord_min array
-		    coord_max_,	    // coord_max array
-		    spacing_types_, // spacing types array (converted to enum)
-		    dcoord_,	    // dcoord array
-		    sizes_,	    // sizes array
+		    data_tables,     // array of data tables
+		    coord_min_,	     // coord_min array
+		    coord_max_,	     // coord_max array
+		    spacing_types_,  // spacing types array (converted to enum)
+		    dcoord_,	     // dcoord array
+		    sizes_,	     // sizes array
 		    output_spacings_ // per-output spacing
 		};
 		return tables;
@@ -1357,8 +1357,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	// If a "grids" subgroup exists it is ignored (irregular grids are not supported; use linear/log/fast_log spacing).
 	//
 	// All data is broadcast to non-IO MPI ranks automatically.
-	static auto H5Reader(const std::string &file_path, const std::string &group_name = "tab1",
-			     std::array<SpacingType, Nout> output_spacings = {}) -> DataTable
+	static auto H5Reader(const std::string &file_path, const std::string &group_name = "tab1", std::array<SpacingType, Nout> output_spacings = {})
+	    -> DataTable
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "H5Reader supports 1D-4D tables");
 

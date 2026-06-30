@@ -36,9 +36,10 @@ auto readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 	}
 
 	// Read all 5 cooling outputs: cooling rate is linear, T/cs/P/S are fast_log
-	resampledTables.all_tables = quokka::DataTable<2, 5>::H5Reader(hdf5_file, "tab1",
-	    {quokka::SpacingType::linear, quokka::SpacingType::fast_log, quokka::SpacingType::fast_log,
-	     quokka::SpacingType::fast_log, quokka::SpacingType::fast_log});
+	resampledTables.all_tables =
+	    quokka::DataTable<2, 5>::H5Reader(hdf5_file, "tab1",
+					      {quokka::SpacingType::linear, quokka::SpacingType::fast_log, quokka::SpacingType::fast_log,
+					       quokka::SpacingType::fast_log, quokka::SpacingType::fast_log});
 
 	// Read domain-specific attributes (include_pe, cloudy_H_mass_fraction) from tab1
 	amrex::Real cloudy_H_mass_fraction_val = 0.0;
