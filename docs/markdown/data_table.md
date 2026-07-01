@@ -101,7 +101,7 @@ auto vals = host_table.interpolate(point);
 
 ## Out-of-bounds behavior
 
-With the default `OutOfBounds::clamp` policy, coordinates outside `[xlo, xhi]` are silently clamped to the nearest boundary before interpolation (nearest-neighbor extrapolation). With `OutOfBounds::fail`, the code aborts via `AMREX_ALWAYS_ASSERT_WITH_MESSAGE`.
+With the default `OutOfBounds::clamp` policy, coordinates outside `[xlo, xhi]` are silently clamped to the nearest boundary before interpolation (nearest-neighbor extrapolation). With `OutOfBounds::fail`, the code aborts via `AMREX_ALWAYS_ASSERT_WITH_MESSAGE` when running on CPUs.
 
 ## MPI
 
@@ -121,15 +121,15 @@ HDF5 files always store **raw physical values** regardless of transform. When `H
 
 ### Why `fast_log` is as accurate as a true log–exp pair
 
-`fast_pow2` is a ~10% approximation to `2^x`, and a naive `fast_log2` is a ~10% approximation to `log₂(x)`. Their naive composition is **not** the identity: `fast_pow2(fast_log2(q)) ≠ q`. Storing `fast_log2(q)` in the table would leave a ~10% error at every grid point.
+`fast_pow2` and naive `fast_log2` are each a few-percent approximation to `2^x` and `log₂(x)`, respectively. Their direct composition is **not** the identity: `fast_pow2(fast_log2(q)) ≠ q`. So if the table stored `fast_log2(q)`, each grid point would carry a noticeable reconstruction error.
 
-`FastMath::inverse_pow2` is different: it uses Newton iteration to find `v` such that `fast_pow2(v) = q` **to machine precision**. It is the exact mathematical inverse of `fast_pow2`, not an approximation to log₂. This has two consequences:
+`FastMath::inverse_pow2` avoids that issue. It uses Newton iteration to solve `fast_pow2(v) = q` to machine precision, so it is the numerical inverse of `fast_pow2` (not an approximation to `log₂`). This gives two key properties:
 
-1. **Grid points are exact.** The buffer stores `inverse_pow2(q_i)`. At query time, `fast_pow2(inverse_pow2(q_i)) = q_i` to machine precision — no approximation error at all.
+1. **Grid points are exact.** The table stores `inverse_pow2(q_i)`, and lookup returns `fast_pow2(inverse_pow2(q_i)) = q_i` to machine precision.
 
-2. **Between grid points, accuracy is determined by table resolution, not by the ~10% deviation of `fast_pow2` from `2^x`.** Linear interpolation in `inverse_pow2`-space followed by `fast_pow2` is geometrically equivalent to log-space interpolation, with second-order error `O(h²)` — the same as a true log–exp pair.
+2. **Off-grid accuracy is resolution-limited.** Between grid points, error is set by interpolation resolution, not by the standalone approximation error of `fast_pow2` versus `2^x`. Interpolating in `inverse_pow2` space and mapping back with `fast_pow2` has the same `O(h²)` interpolation order as a standard log-exp workflow.
 
-The underlying principle is that any smooth monotone bijection can be used for interpolation with full accuracy, as long as the exact forward and inverse transforms are applied consistently. Here `(inverse_pow2, fast_pow2)` form that exact bijection by construction. How closely either function approximates `2^x` or `log₂(x)` is not the key point; Newton iteration is used to enforce machine-precision invertibility of the transform composition.
+The general principle is that interpolation is accurate when a smooth monotone transform and its true inverse are applied consistently. In this case, `(inverse_pow2, fast_pow2)` is that paired transform. How well either function approximates `2^x` or `log₂(x)` is secondary; Newton iteration is used to enforce machine-precision invertibility of the composition.
 
 ## Key API
 
