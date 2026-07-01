@@ -67,8 +67,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 
 	std::array<int, Ndim> sizes{};
 
-	// Per-output spacing for return values: linear, log, or fast_log
-	std::array<SpacingType, Nout> output_spacings{};
+	// Per-output transform for return values: linear, log, or fast_log
+	std::array<SpacingType, Nout> output_transforms{};
 
 	/// @brief Find interpolation indices and normalized coordinates for n-dimensional interpolation
 	///
@@ -200,9 +200,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 
 		// Part 3: Convert from log space per output
 		for (int i = 0; i < Nout; ++i) {
-			if (output_spacings[i] == SpacingType::fast_log) {
+			if (output_transforms[i] == SpacingType::fast_log) {
 				values[i] = FastMath::pow2(values[i]);
-			} else if (output_spacings[i] == SpacingType::log) {
+			} else if (output_transforms[i] == SpacingType::log) {
 				values[i] = std::exp(values[i]);
 			}
 		}
@@ -267,9 +267,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 		amrex::Real value = interpolate_single_from_indices(interp, output_index);
 
 		// Part 3: Convert from log space for this output
-		if (output_spacings[output_index] == SpacingType::fast_log) {
+		if (output_transforms[output_index] == SpacingType::fast_log) {
 			value = FastMath::pow2(value);
-		} else if (output_spacings[output_index] == SpacingType::log) {
+		} else if (output_transforms[output_index] == SpacingType::log) {
 			value = std::exp(value);
 		}
 
@@ -453,8 +453,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	std::array<std::string, Ndim> input_units_{};
 	std::array<std::string, Nout> output_units_{};
 
-	// Per-output spacing type: linear, log, or fast_log
-	std::array<SpacingType, Nout> output_spacings_{};
+	// Per-output transform type: linear, log, or fast_log
+	std::array<SpacingType, Nout> output_transforms_{};
 
 	[[nodiscard]] static constexpr auto ioProcessorNumber() -> int { return amrex::ParallelDescriptor::IOProcessorNumber(); }
 
@@ -542,13 +542,13 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
       public:
 	void setMetadata(const std::array<std::string, Ndim> &input_names, const std::array<std::string, Nout> &output_names,
 			 const std::array<std::string, Ndim> &input_units, const std::array<std::string, Nout> &output_units,
-			 std::array<SpacingType, Nout> output_spacings)
+			 std::array<SpacingType, Nout> output_transforms)
 	{
 		input_names_ = input_names;
 		output_names_ = output_names;
 		input_units_ = input_units;
 		output_units_ = output_units;
-		output_spacings_ = output_spacings;
+		output_transforms_ = output_transforms;
 	}
 
 	// Default constructor
@@ -735,7 +735,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		    spacing_types_,  // spacing types array (converted to enum)
 		    dcoord_,	     // dcoord array
 		    sizes_,	     // sizes array
-		    output_spacings_ // per-output spacing
+		    output_transforms_ // per-output transform
 		};
 		return tables;
 	}
@@ -758,7 +758,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		}
 
 		DataTableGpuConst<Ndim, Nout, oob_policy> tables{coord_tables,	 data_tables, coord_min_, coord_max_,
-								 spacing_types_, dcoord_,     sizes_,	  output_spacings_};
+								 spacing_types_, dcoord_,     sizes_,	  output_transforms_};
 		return tables;
 	}
 
@@ -1062,9 +1062,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	//     For 4D: (nx4 × nx3 × nx2) rows × nx1 columns
 	//
 	// @param file_path Path to the CSV file
-	// @param output_spacing Spacing type for output values: linear, log, or fast_log
+	// @param output_transform Transform type applied to each output value: linear (no transform), log, or fast_log
 	//                      If fast_log, output values are converted to log before storage
-	static auto CSVReader(const std::string &file_path, SpacingType output_spacing) -> DataTable
+	static auto CSVReader(const std::string &file_path, SpacingType output_transform) -> DataTable
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "CSVReader supports 1D-4D tables");
 
@@ -1076,7 +1076,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		std::array<std::string, Nout> output_names{};
 		std::array<std::string, Ndim> input_units{};
 		std::array<std::string, Nout> output_units{};
-		SpacingType output_spacing_bcast = output_spacing;
+		SpacingType output_transform_bcast = output_transform;
 		amrex::Vector<amrex::Real> flat_data;
 
 		if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -1225,8 +1225,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				x_maxs[dim] = coord_bounds[dim].second;
 			}
 
-			auto log_ = [output_spacing_bcast](amrex::Real x) {
-				if (output_spacing_bcast == SpacingType::fast_log) {
+			auto log_ = [output_transform_bcast](amrex::Real x) {
+				if (output_transform_bcast == SpacingType::fast_log) {
 					return FastMath::inverse_pow2(x);
 				}
 				return std::log(x);
@@ -1243,10 +1243,10 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 						if (i < sizes[0] - 1) {
 							file >> comma;
 						}
-						if (output_spacing_bcast == SpacingType::fast_log || output_spacing_bcast == SpacingType::log) {
+						if (output_transform_bcast == SpacingType::fast_log || output_transform_bcast == SpacingType::log) {
 							AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 							    value > 0.0,
-							    std::format("log output spacing requires positive values, got {} at output {} index {}", value,
+							    std::format("log output transform requires positive values, got {} at output {} index {}", value,
 									out_idx, i));
 							value = log_(value);
 						}
@@ -1263,11 +1263,11 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 							if (i1 < sizes[0] - 1) {
 								file >> comma;
 							}
-							if (output_spacing_bcast == SpacingType::fast_log || output_spacing_bcast == SpacingType::log) {
+							if (output_transform_bcast == SpacingType::fast_log || output_transform_bcast == SpacingType::log) {
 								AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 								    value > 0.0,
 								    std::format(
-									"log output spacing requires positive values, got {} at output {} index ({}, {})",
+									"log output transform requires positive values, got {} at output {} index ({}, {})",
 									value, out_idx, i1, i2));
 								value = log_(value);
 							}
@@ -1286,9 +1286,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 								if (i1 < sizes[0] - 1) {
 									file >> comma;
 								}
-								if (output_spacing_bcast == SpacingType::fast_log || output_spacing_bcast == SpacingType::log) {
+								if (output_transform_bcast == SpacingType::fast_log || output_transform_bcast == SpacingType::log) {
 									AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-									    value > 0.0, std::format("log output spacing requires positive values, got {} at "
+									    value > 0.0, std::format("log output transform requires positive values, got {} at "
 												     "output {} index ({}, {}, {})",
 												     value, out_idx, i1, i2, i3));
 									value = log_(value);
@@ -1310,10 +1310,10 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 									if (i1 < sizes[0] - 1) {
 										file >> comma;
 									}
-									if (output_spacing_bcast == SpacingType::fast_log ||
-									    output_spacing_bcast == SpacingType::log) {
+									if (output_transform_bcast == SpacingType::fast_log ||
+									    output_transform_bcast == SpacingType::log) {
 										AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-										    value > 0.0, std::format("log output spacing requires positive values, got "
+										    value > 0.0, std::format("log output transform requires positive values, got "
 													     "{} at output {} index ({}, {}, {}, {})",
 													     value, out_idx, i1, i2, i3, i4));
 										value = log_(value);
@@ -1335,14 +1335,14 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		bcastStringArray(output_names);
 		bcastStringArray(input_units);
 		bcastStringArray(output_units);
-		bcastSpacingType(output_spacing_bcast);
+		bcastSpacingType(output_transform_bcast);
 		bcastVector(flat_data);
 
 		DataTable table;
 		table.initializeCommonFlat(x_mins, x_maxs, sizes, spacing_types_enum, flat_data);
-		std::array<SpacingType, Nout> output_spacings_arr{};
-		output_spacings_arr.fill(output_spacing_bcast);
-		table.setMetadata(input_names, output_names, input_units, output_units, output_spacings_arr);
+		std::array<SpacingType, Nout> output_transforms_arr{};
+		output_transforms_arr.fill(output_transform_bcast);
+		table.setMetadata(input_names, output_names, input_units, output_units, output_transforms_arr);
 		return table;
 	}
 
@@ -1357,7 +1357,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	// If a "grids" subgroup exists it is ignored (irregular grids are not supported; use linear/log/fast_log spacing).
 	//
 	// All data is broadcast to non-IO MPI ranks automatically.
-	static auto H5Reader(const std::string &file_path, const std::string &group_name = "tab1", std::array<SpacingType, Nout> output_spacings = {})
+	static auto H5Reader(const std::string &file_path, const std::string &group_name = "tab1", std::array<SpacingType, Nout> output_transforms = {})
 	    -> DataTable
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "H5Reader supports 1D-4D tables");
@@ -1563,9 +1563,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				for (amrex::Long k = 0; k < total; ++k) {
 					auto const val = static_cast<amrex::Real>(raw_data[static_cast<std::size_t>(k)]);
 					int const out_idx = static_cast<int>(k / spatial_size);
-					if (output_spacings[static_cast<std::size_t>(out_idx)] == SpacingType::fast_log) {
+					if (output_transforms[static_cast<std::size_t>(out_idx)] == SpacingType::fast_log) {
 						flat_data[static_cast<std::size_t>(k)] = FastMath::inverse_pow2(val);
-					} else if (output_spacings[static_cast<std::size_t>(out_idx)] == SpacingType::log) {
+					} else if (output_transforms[static_cast<std::size_t>(out_idx)] == SpacingType::log) {
 						flat_data[static_cast<std::size_t>(k)] = std::log(val);
 					} else {
 						flat_data[static_cast<std::size_t>(k)] = val;
@@ -1590,7 +1590,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 		DataTable table;
 		table.initializeCommonFlat(x_mins, x_maxs, sizes, spacing_types, flat_data);
-		table.setMetadata(input_names, output_names, input_units, output_units, output_spacings);
+		table.setMetadata(input_names, output_names, input_units, output_units, output_transforms);
 		return table;
 	}
 };

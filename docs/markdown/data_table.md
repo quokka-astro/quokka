@@ -53,7 +53,7 @@ spacing[0], spacing[1], ...   # linear / log / fast_log
 // All outputs linear (default):
 auto table = quokka::DataTable<2, 5>::H5Reader("path/to/table.h5", "tab1");
 
-// Per-output spacing — declared at the call site, not stored in the HDF5 file:
+// Per-output transforms — declared at the call site, not stored in the HDF5 file:
 auto table = quokka::DataTable<2, 5>::H5Reader("path/to/table.h5", "tab1",
     {SpacingType::linear, SpacingType::fast_log, SpacingType::fast_log,
      SpacingType::fast_log, SpacingType::fast_log});
@@ -107,17 +107,17 @@ With the default `OutOfBounds::clamp` policy, coordinates outside `[xlo, xhi]` a
 
 All data is read on the I/O processor and broadcast automatically to non-I/O ranks by `H5Reader` and `CSVReader`. No special MPI handling is needed at the call site.
 
-## Output spacing
+## Output transforms
 
-Each output can independently use a different spacing for interpolation. The spacing type is declared at the C++ call site and is **not** stored in the HDF5 file (it is a property of the interpolation, not of the data).
+Each output can independently use a different transform for interpolation. The transform type is declared at the C++ call site and is **not** stored in the HDF5 file (it is a property of the interpolation, not of the data).
 
-| Spacing | In HDF5 file | Internal buffer | Recovered on interpolate |
-|---------|-------------|-----------------|--------------------------|
+| Transform | In HDF5 file | Internal buffer | Recovered on interpolate |
+|-----------|-------------|-----------------|--------------------------|
 | `linear` | physical value | physical value | buffer value |
 | `fast_log` | physical value | `FastMath::inverse_pow2(physical)` | `FastMath::pow2(buffer)` |
 | `log` | physical value | `ln(physical)` | `exp(buffer)` |
 
-HDF5 files always store **raw physical values** regardless of spacing. When `H5Reader` loads a `fast_log` output, it applies `FastMath::inverse_pow2` (Newton iteration) element-wise at load time so that subsequent bilinear interpolation happens in log space. No transform is needed in the Python table-generation scripts. See [Cooling module](cooling_module.md) for a concrete example.
+HDF5 files always store **raw physical values** regardless of transform. When `H5Reader` loads a `fast_log` output, it applies `FastMath::inverse_pow2` (Newton iteration) element-wise at load time so that subsequent bilinear interpolation happens in log space. No transform is needed in the Python table-generation scripts. See [Cooling module](cooling_module.md) for a concrete example.
 
 ### Why `fast_log` is as accurate as a true log–exp pair
 
@@ -135,8 +135,8 @@ The underlying principle is that any smooth monotone bijection can be used for i
 
 | Method | Description |
 |--------|-------------|
-| `H5Reader(file, group, output_spacings)` | Static factory: read from HDF5 group. `output_spacings` defaults to all `linear`. |
-| `CSVReader(file, output_spacing)` | Static factory: read from CSV file; same spacing applied to all outputs. |
+| `H5Reader(file, group, output_transforms)` | Static factory: read from HDF5 group. `output_transforms` defaults to all `linear`. |
+| `CSVReader(file, output_transform)` | Static factory: read from CSV file; same transform applied to all outputs. |
 | `const_tables()` | Return `DataTableGpuConst` view backed by device memory. |
 | `const_tables_host()` | Return `DataTableGpuConst` view backed by pinned host memory. |
 | `size(dim)` | Grid size along dimension `dim`. |

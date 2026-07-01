@@ -44,7 +44,7 @@ Available table files:
 
 To regenerate the Grackle-based tables, run `extern/cooling/resample_grackle_cooling_tables.sh`. To regenerate `isrf_1000Go_grains_resampled.h5`, run `extern/cooling/resample_cloudy_cooling_tables.py` directly.
 
-**Note:** The `output_spacing` metadata is intentionally absent from the HDF5 files. Output spacing is a property of the interpolation, not of the data; it is declared at the C++ call site in `ResampledCooling.cpp`. HDF5 files always contain raw physical values. When `H5Reader` loads a `fast_log` output, it applies `FastMath::inverse_pow2` (Newton iteration) to each value at load time, so the internal buffer stores the interpolation-space representation that `FastMath::pow2` inverts during lookup.
+**Note:** Output transform metadata is intentionally absent from the HDF5 files. Output transforms are a property of the interpolation, not of the data; they are declared at the C++ call site in `ResampledCooling.cpp`. HDF5 files always contain raw physical values. When `H5Reader` loads a `fast_log` output, it applies `FastMath::inverse_pow2` (Newton iteration) to each value at load time, so the internal buffer stores the interpolation-space representation that `FastMath::pow2` inverts during lookup.
 
 ## HDF5 table format
 
