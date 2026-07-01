@@ -150,55 +150,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate(const std::array<amrex::Real, Ndim> &point) const
 	    -> std::array<amrex::Real, Nout>
 	{
-		// Take log or fast_log if the spacing types are log or fast_log
-		std::array<amrex::Real, Ndim> point_{};
-		for (int dim = 0; dim < Ndim; ++dim) {
-			if (spacing_types[dim] == SpacingType::linear) {
-				point_[dim] = point[dim];
-			} else if (spacing_types[dim] == SpacingType::log) {
-				// Handle non-positive values for log spacing
-				if constexpr (oob_policy == OutOfBounds::clamp) {
-					// Clamp to minimum valid value (slightly above zero)
-					constexpr amrex::Real epsilon = std::numeric_limits<amrex::Real>::min() * 1.0e10; // ~1e-298 for double
-					amrex::Real const clamped_val = amrex::max(point[dim], epsilon);
-					point_[dim] = std::log(clamped_val);
-				} else if constexpr (oob_policy == OutOfBounds::fail) {
-					// Check for non-positive values and abort if found
-					if (point[dim] <= 0.0) {
-						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-						    false,
-						    std::format("Invalid value for log interpolation in dimension {}: {} (must be positive)", dim, point[dim])
-							.c_str());
-					}
-					point_[dim] = std::log(point[dim]);
-				}
-			} else if (spacing_types[dim] == SpacingType::fast_log) {
-				// Handle non-positive values for fast_log spacing
-				if constexpr (oob_policy == OutOfBounds::clamp) {
-					// Clamp to minimum valid value (slightly above zero)
-					constexpr amrex::Real epsilon = std::numeric_limits<amrex::Real>::min() * 1.0e10; // ~1e-298 for double
-					amrex::Real const clamped_val = amrex::max(point[dim], epsilon);
-					point_[dim] = FastMath::lg(clamped_val);
-				} else if constexpr (oob_policy == OutOfBounds::fail) {
-					// Check for non-positive values and abort if found
-					if (point[dim] <= 0.0) {
-						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-						    false, std::format("Invalid value for fast_log interpolation in dimension {}: {} (must be positive)", dim,
-								       point[dim])
-							       .c_str());
-					}
-					point_[dim] = FastMath::lg(point[dim]);
-				}
-			}
-		}
-
-		// Part 1: Find interpolation indices and normalized coordinates (shared for all outputs)
-		InterpData<Ndim> const interp = find_interpolation_data(point_);
-
-		// Part 2: Perform n-dimensional interpolation for all outputs
+		InterpData<Ndim> const interp = find_interpolation_data(transform_point(point));
 		auto values = interpolate_from_indices(interp);
-
-		// Part 3: Convert from log space per output
 		for (int i = 0; i < Nout; ++i) {
 			if (output_transforms[i] == SpacingType::fast_log) {
 				values[i] = FastMath::pow2(values[i]);
@@ -206,7 +159,6 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 				values[i] = std::exp(values[i]);
 			}
 		}
-
 		return values;
 	}
 
@@ -218,65 +170,51 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto interpolate_single(const std::array<amrex::Real, Ndim> &point, int output_index = 0) const
 	    -> amrex::Real
 	{
-		// Take log or fast_log if the spacing types are log or fast_log
-		std::array<amrex::Real, Ndim> point_{};
-		for (int dim = 0; dim < Ndim; ++dim) {
-			if (spacing_types[dim] == SpacingType::linear) {
-				point_[dim] = point[dim];
-			} else if (spacing_types[dim] == SpacingType::log) {
-				// Handle non-positive values for log spacing
-				if constexpr (oob_policy == OutOfBounds::clamp) {
-					// Clamp to minimum valid value (slightly above zero)
-					constexpr amrex::Real epsilon = std::numeric_limits<amrex::Real>::min() * 1.0e10; // ~1e-298 for double
-					amrex::Real const clamped_val = amrex::max(point[dim], epsilon);
-					point_[dim] = std::log(clamped_val);
-				} else if constexpr (oob_policy == OutOfBounds::fail) {
-					// Check for non-positive values and abort if found
-					if (point[dim] <= 0.0) {
-						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-						    false,
-						    std::format("Invalid value for log interpolation in dimension {}: {} (must be positive)", dim, point[dim])
-							.c_str());
-					}
-					point_[dim] = std::log(point[dim]);
-				}
-			} else if (spacing_types[dim] == SpacingType::fast_log) {
-				// Handle non-positive values for fast_log spacing
-				if constexpr (oob_policy == OutOfBounds::clamp) {
-					// Clamp to minimum valid value (slightly above zero)
-					constexpr amrex::Real epsilon = std::numeric_limits<amrex::Real>::min() * 1.0e10; // ~1e-298 for double
-					amrex::Real const clamped_val = amrex::max(point[dim], epsilon);
-					point_[dim] = FastMath::lg(clamped_val);
-				} else if constexpr (oob_policy == OutOfBounds::fail) {
-					// Check for non-positive values and abort if found
-					if (point[dim] <= 0.0) {
-						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-						    false, std::format("Invalid value for fast_log interpolation in dimension {}: {} (must be positive)", dim,
-								       point[dim])
-							       .c_str());
-					}
-					point_[dim] = FastMath::lg(point[dim]);
-				}
-			}
-		}
-
-		// Part 1: Find interpolation indices and normalized coordinates
-		InterpData<Ndim> const interp = find_interpolation_data(point_);
-
-		// Part 2: Perform n-dimensional interpolation for single output
+		InterpData<Ndim> const interp = find_interpolation_data(transform_point(point));
 		amrex::Real value = interpolate_single_from_indices(interp, output_index);
-
-		// Part 3: Convert from log space for this output
 		if (output_transforms[output_index] == SpacingType::fast_log) {
 			value = FastMath::pow2(value);
 		} else if (output_transforms[output_index] == SpacingType::log) {
 			value = std::exp(value);
 		}
-
 		return value;
 	}
 
       private:
+	/// @brief Transform physical coordinates to interpolation space (log/fast_log per dimension)
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto transform_point(const std::array<amrex::Real, Ndim> &point) const
+	    -> std::array<amrex::Real, Ndim>
+	{
+		std::array<amrex::Real, Ndim> pt{};
+		for (int dim = 0; dim < Ndim; ++dim) {
+			if (spacing_types[dim] == SpacingType::log) {
+				if constexpr (oob_policy == OutOfBounds::clamp) {
+					constexpr amrex::Real epsilon = std::numeric_limits<amrex::Real>::min() * 1.0e10; // ~1e-298 for double
+					pt[dim] = std::log(amrex::max(point[dim], epsilon));
+				} else if constexpr (oob_policy == OutOfBounds::fail) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    point[dim] > 0.0,
+					    std::format("Invalid value for log interpolation in dimension {}: {} (must be positive)", dim, point[dim]).c_str());
+					pt[dim] = std::log(point[dim]);
+				}
+			} else if (spacing_types[dim] == SpacingType::fast_log) {
+				if constexpr (oob_policy == OutOfBounds::clamp) {
+					constexpr amrex::Real epsilon = std::numeric_limits<amrex::Real>::min() * 1.0e10; // ~1e-298 for double
+					pt[dim] = FastMath::lg(amrex::max(point[dim], epsilon));
+				} else if constexpr (oob_policy == OutOfBounds::fail) {
+					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+					    point[dim] > 0.0,
+					    std::format("Invalid value for fast_log interpolation in dimension {}: {} (must be positive)", dim, point[dim])
+						.c_str());
+					pt[dim] = FastMath::lg(point[dim]);
+				}
+			} else {
+				pt[dim] = point[dim];
+			}
+		}
+		return pt;
+	}
+
 	/// @brief Helper for n-dimensional interpolation (multiple outputs)
 	///
 	/// This function performs n-linear interpolation for 1D-4D cases for all outputs.
