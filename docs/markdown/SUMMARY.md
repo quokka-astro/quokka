@@ -33,6 +33,7 @@
     - [Slow-moving shock test](tests/sms.md)
     - [Matter-radiation temperature equilibrium test](tests/energy_exchange.md)
     - [Uniform advecting radiation in diffusive limit](tests/radhydro_uniform_adv.md)
+    - [Moving matter-radiation equilibration anomaly](tests/radhydro_equilibration_anomaly.md)
     - [Advecting radiation pulse test](tests/radhydro_pulse.md)
 - [Runtime parameters](parameters.md)
 - [In-situ analysis](insitu_analysis.md)
