@@ -162,9 +162,14 @@ quokka::DataTable<2, 5> tbl = quokka::DataTable<2, 5>::H5Reader(
 auto gpu_tbl = tbl.const_tables();
 amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
     std::array<amrex::Real, 2> pt = {rho(i,j,k), eint(i,j,k)};
+
+    // All outputs at once — coordinate work done once, cheapest per value.
     auto vals = gpu_tbl.interpolate(pt);
     // vals[0] = cooling rate (raw), vals[1] = T (K), vals[2] = cs (cm/s), ...
     // fast_pow2 back-transform is applied automatically for indices 1-4
+
+    // Single output by index — useful when only one quantity is needed.
+    amrex::Real const T = gpu_tbl.interpolate_single(pt, 1 /*TEMPERATURE_IDX*/);
 });
 ```
 
