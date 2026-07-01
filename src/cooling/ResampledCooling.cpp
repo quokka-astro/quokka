@@ -83,7 +83,7 @@ auto readResampledData(std::string const &hdf5_file, resampled_tables &resampled
 
 	amrex::Print() << std::format("\tDensity range: {} to {} g/cm^3 ({} steps).\n", rho_min, rho_max, n_rho);
 	amrex::Print() << std::format("\tSpecific energy range: {} to {} erg/g ({} steps).\n", eint_min, eint_max, n_eint);
-	amrex::Print() << std::format("\tPhotoelectric heating: {}.\n", resampledTables.include_pe ? "enabled" : "disabled");
+	amrex::Print() << std::format("\tPhotoelectric heating: {}.\n", resampledTables.include_pe ? "included in table" : "NOT included in table");
 
 	return resampledTables.include_pe;
 }
