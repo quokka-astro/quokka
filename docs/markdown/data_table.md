@@ -117,19 +117,20 @@ Each output can independently use a different transform for interpolation. The t
 | `fast_log` | physical value | `FastMath::inverse_pow2(physical)` | `FastMath::pow2(buffer)` |
 | `log` | physical value | `ln(physical)` | `exp(buffer)` |
 
-HDF5 files always store **raw physical values** regardless of transform. When `H5Reader` loads a `fast_log` output, it applies `FastMath::inverse_pow2` (Newton iteration) element-wise at load time so that subsequent bilinear interpolation happens in log space. No transform is needed in the Python table-generation scripts. See [Cooling module](cooling_module.md) for a concrete example.
+HDF5 files always store **raw physical values** regardless of transform. When `H5Reader` loads a `fast_log` output, it applies `FastMath::inverse_pow2` (Newton iteration) element-wise at load time so that subsequent n-linear interpolation happens in the transformed space used by `FastMath::pow2`. No transform is needed in the Python table-generation scripts. See [Cooling module](cooling_module.md) for a concrete example.
 
-### Why `fast_log` is as accurate as a true log–exp pair
+### Why `inverse_pow2` is used for `fast_log` outputs
 
-`fast_pow2` and naive `fast_log2` are each a few-percent approximation to `2^x` and `log₂(x)`, respectively. Their direct composition is **not** the identity: `fast_pow2(fast_log2(q)) ≠ q`. So if the table stored `fast_log2(q)`, each grid point would carry a noticeable reconstruction error.
+Using `FastMath::lg(q)` directly for stored outputs would not be invertible under this pipeline, because in general `FastMath::pow2(FastMath::lg(q)) != q`.
 
-`FastMath::inverse_pow2` avoids that issue. It uses Newton iteration to solve `fast_pow2(v) = q` to machine precision, so it is the numerical inverse of `fast_pow2` (not an approximation to `log₂`). This gives two key properties:
+Instead, for `SpacingType::fast_log` outputs, `H5Reader` stores `FastMath::inverse_pow2(q)` in the internal buffer and interpolation returns `FastMath::pow2(...)` of the interpolated value. `FastMath::inverse_pow2` is computed by Newton iteration to solve `FastMath::pow2(v) = q` with a relative residual tolerance (`1e-15` in the current implementation), so it acts as a numerical inverse of `FastMath::pow2` rather than as an approximation to `log2`.
 
-1. **Grid points are exact.** The table stores `inverse_pow2(q_i)`, and lookup returns `fast_pow2(inverse_pow2(q_i)) = q_i` to machine precision.
+This gives the behavior we want:
 
-2. **Off-grid accuracy is resolution-limited.** Between grid points, error is set by interpolation resolution, not by the standalone approximation error of `fast_pow2` versus `2^x`. Interpolating in `inverse_pow2` space and mapping back with `fast_pow2` has the same `O(h²)` interpolation order as a standard log-exp workflow.
+1. **At grid points:** reconstruction uses an inverse-consistent pair (`inverse_pow2` then `pow2`), so values are recovered to solver tolerance.
+2. **Between grid points:** error is dominated by multilinear interpolation in transform space and table resolution, not by an avoidable mismatch like `pow2(lg(q))`.
 
-The general principle is that interpolation is accurate when a smooth monotone transform and its true inverse are applied consistently. In this case, `(inverse_pow2, fast_pow2)` is that paired transform. How well either function approximates `2^x` or `log₂(x)` is secondary; Newton iteration is used to enforce machine-precision invertibility of the composition.
+This is analogous in spirit to standard log-space interpolation, but it is not mathematically identical to exact `ln/exp` interpolation.
 
 ### Python reference implementations
 
