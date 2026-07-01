@@ -133,36 +133,51 @@ The general principle is that interpolation is accurate when a smooth monotone t
 
 ### Python reference implementations
 
-Two functions from `src/math/FastMath.hpp` are useful when generating a `fast_log`-spaced grid in Python.
+Two functions are needed when generating a `fast_log`-spaced grid in Python. `fast_log2` maps physical values to fast-log2 space; `inverse_fast_log2` inverts it via root-finding, giving the physical values that correspond to regularly-spaced fast-log2 coordinates.
 
 ```python
-import math
+import numpy as np
+from scipy.optimize import brentq
 
-def fast_log2(x: float) -> float:
-    """Maps a physical value to fast-log2 space.
-    Uses frexp to split x = m * 2^e (m in [0.5, 1)), then approximates log2(m) as 2*(m-1)."""
-    m, e = math.frexp(x)
-    return 2.0 * (m - 1.0) + e
+def fast_log2(x):
+    """Fast approximation of log2(x). Mirrors FastMath::lg in C++."""
+    x = np.asarray(x, dtype=float)
+    if np.any(x <= 0):
+        raise ValueError("fast_log2 undefined for x <= 0")
+    mantissa, exponent = np.frexp(x)   # x = mantissa * 2^exponent, mantissa in [0.5, 1)
+    return 2.0 * (mantissa - 1.0) + exponent
 
-def inverse_fast_log2(y: float) -> float:
-    """Inverse of fast_log2: maps a fast-log2-space value back to a physical value."""
-    flr = math.floor(y)
-    remainder = y - flr
-    return math.ldexp(0.5 * (remainder + 1.0), flr + 1)
+def inverse_fast_log2(y):
+    """Inverse of fast_log2: find x such that fast_log2(x) == y, to machine precision.
+    Uses Brent's method with an optional Newton-Raphson refinement step."""
+    y = np.asarray(y, dtype=float)
+    scalar = y.ndim == 0
+    y = np.atleast_1d(y)
+    eps = np.finfo(np.float64).eps
+    result = np.empty_like(y)
+    for i, y_val in enumerate(y.flat):
+        x_guess = 2.0 ** y_val
+        x_sol = brentq(lambda x: fast_log2(x) - y_val,
+                       x_guess * 0.5, x_guess * 2.0,
+                       xtol=eps * x_guess, rtol=4 * eps, maxiter=1000)
+        # Newton-Raphson refinement if needed
+        for _ in range(5):
+            dx = -(fast_log2(x_sol) - y_val) * x_sol * np.log(2.0)
+            x_new = x_sol + dx
+            if abs(fast_log2(x_new) - y_val) < abs(fast_log2(x_sol) - y_val):
+                x_sol = x_new
+        result.flat[i] = x_sol
+    return result[0] if scalar else result
 ```
 
 To build a uniformly-spaced grid in fast-log2 space:
 
 ```python
-import numpy as np
-
-v_min = fast_log2(x_min)
-v_max = fast_log2(x_max)
-v_grid = np.linspace(v_min, v_max, n)         # uniform in fast-log2 space
-x_grid = np.vectorize(inverse_fast_log2)(v_grid)  # physical values at each grid point
+v_grid = np.linspace(fast_log2(x_min), fast_log2(x_max), n)  # uniform in fast-log2 space
+x_grid = inverse_fast_log2(v_grid)                            # physical values at each point
 ```
 
-These correspond to `FastMath::lg` and `FastMath::pow2` in C++. Python table-generation scripts should store **raw physical values** in the HDF5 file; `H5Reader` handles the internal transform at load time.
+Python table-generation scripts should store **raw physical values** in the HDF5 file; `H5Reader` handles the internal transform at load time.
 
 ## Key API
 
