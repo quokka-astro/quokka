@@ -18,9 +18,9 @@ Each input dimension has an independent spacing type, set per-dimension when the
 
 | Spacing | Stored coordinate | Use case |
 |---------|-------------------|----------|
-| `SpacingType::linear` | physical value | uniformly spaced grids |
-| `SpacingType::log` | natural log | log-spaced grids (standard) |
-| `SpacingType::fast_log` | `FastMath::lg(x)` (bit-level log₂ approx) | hot paths on GPU |
+| `TransformType::linear` | physical value | uniformly spaced grids |
+| `TransformType::log` | natural log | log-spaced grids (standard) |
+| `TransformType::fast_log` | `FastMath::lg(x)` (bit-level log₂ approx) | hot paths on GPU |
 
 Callers always pass **physical** values to `interpolate`; the spacing transform is handled internally.
 
@@ -29,7 +29,7 @@ Callers always pass **physical** values to `interpolate`; the spacing transform 
 ### From a CSV file
 
 ```cpp
-auto table = quokka::DataTable<2, 3>::CSVReader("path/to/table.csv", SpacingType::linear);
+auto table = quokka::DataTable<2, 3>::CSVReader("path/to/table.csv", TransformType::linear);
 ```
 
 CSV header format (lines 1–9 followed by data):
@@ -55,8 +55,8 @@ auto table = quokka::DataTable<2, 5>::H5Reader("path/to/table.h5", "tab1");
 
 // Per-output transforms — declared at the call site, not stored in the HDF5 file:
 auto table = quokka::DataTable<2, 5>::H5Reader("path/to/table.h5", "tab1",
-    {SpacingType::linear, SpacingType::fast_log, SpacingType::fast_log,
-     SpacingType::fast_log, SpacingType::fast_log});
+    {TransformType::linear, TransformType::fast_log, TransformType::fast_log,
+     TransformType::fast_log, TransformType::fast_log});
 ```
 
 The HDF5 group `tab1` must contain:
@@ -123,7 +123,7 @@ HDF5 files always store **raw physical values** regardless of transform. When `H
 
 Using `FastMath::lg(q)` directly for stored outputs would not be invertible under this pipeline, because in general `FastMath::pow2(FastMath::lg(q)) != q`.
 
-Instead, for `SpacingType::fast_log` outputs, `H5Reader` stores `FastMath::inverse_pow2(q)` in the internal buffer and interpolation returns `FastMath::pow2(...)` of the interpolated value. `FastMath::inverse_pow2` is computed by Newton iteration to solve `FastMath::pow2(v) = q` with a relative residual tolerance (`1e-15` in the current implementation), so it acts as a numerical inverse of `FastMath::pow2` rather than as an approximation to `log2`.
+Instead, for `TransformType::fast_log` outputs, `H5Reader` stores `FastMath::inverse_pow2(q)` in the internal buffer and interpolation returns `FastMath::pow2(...)` of the interpolated value. `FastMath::inverse_pow2` is computed by Newton iteration to solve `FastMath::pow2(v) = q` with a relative residual tolerance (`1e-15` in the current implementation), so it acts as a numerical inverse of `FastMath::pow2` rather than as an approximation to `log2`.
 
 This gives the behavior we want:
 
@@ -200,11 +200,11 @@ Python table-generation scripts should store **raw physical values** in the HDF5
 // Cooling rate (index 0) is linear; T/cs/P/S (indices 1-4) are fast_log.
 quokka::DataTable<2, 5> tbl = quokka::DataTable<2, 5>::H5Reader(
     "extern/cooling/CloudyData_UVB=HM2012_resampled.h5", "tab1",
-    {quokka::SpacingType::linear,   // cooling rate — can be negative
-     quokka::SpacingType::fast_log, // temperature
-     quokka::SpacingType::fast_log, // sound speed
-     quokka::SpacingType::fast_log, // pressure
-     quokka::SpacingType::fast_log  // entropy
+    {quokka::TransformType::linear,   // cooling rate — can be negative
+     quokka::TransformType::fast_log, // temperature
+     quokka::TransformType::fast_log, // sound speed
+     quokka::TransformType::fast_log, // pressure
+     quokka::TransformType::fast_log  // entropy
     });
 
 // Pass the GPU view to a kernel

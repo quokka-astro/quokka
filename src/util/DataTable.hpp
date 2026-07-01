@@ -34,7 +34,7 @@ namespace quokka
 {
 
 // Enum for spacing types (GPU-compatible, supports ParmParse)
-AMREX_ENUM(SpacingType, linear, log, fast_log); // NOLINT
+AMREX_ENUM(TransformType, linear, log, fast_log); // NOLINT
 
 // Enum for out-of-bounds handling (GPU-compatible, supports ParmParse)
 AMREX_ENUM(OutOfBounds, clamp, fail); // NOLINT
@@ -60,7 +60,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 
 	std::array<amrex::Real, Ndim> coord_min{};
 	std::array<amrex::Real, Ndim> coord_max{};
-	std::array<SpacingType, Ndim> spacing_types{};
+	std::array<TransformType, Ndim> spacing_types{};
 
 	// Precomputed grid spacing for optimization
 	std::array<amrex::Real, Ndim> dcoord{};
@@ -68,7 +68,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 	std::array<int, Ndim> sizes{};
 
 	// Per-output transform for return values: linear, log, or fast_log
-	std::array<SpacingType, Nout> output_transforms{};
+	std::array<TransformType, Nout> output_transforms{};
 
 	/// @brief Find interpolation indices and normalized coordinates for n-dimensional interpolation
 	///
@@ -153,9 +153,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 		InterpData<Ndim> const interp = find_interpolation_data(transform_point(point));
 		auto values = interpolate_from_indices(interp);
 		for (int i = 0; i < Nout; ++i) {
-			if (output_transforms[i] == SpacingType::fast_log) {
+			if (output_transforms[i] == TransformType::fast_log) {
 				values[i] = FastMath::pow2(values[i]);
-			} else if (output_transforms[i] == SpacingType::log) {
+			} else if (output_transforms[i] == TransformType::log) {
 				values[i] = std::exp(values[i]);
 			}
 		}
@@ -172,9 +172,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 	{
 		InterpData<Ndim> const interp = find_interpolation_data(transform_point(point));
 		amrex::Real value = interpolate_single_from_indices(interp, output_index);
-		if (output_transforms[output_index] == SpacingType::fast_log) {
+		if (output_transforms[output_index] == TransformType::fast_log) {
 			value = FastMath::pow2(value);
-		} else if (output_transforms[output_index] == SpacingType::log) {
+		} else if (output_transforms[output_index] == TransformType::log) {
 			value = std::exp(value);
 		}
 		return value;
@@ -187,7 +187,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 	{
 		std::array<amrex::Real, Ndim> pt{};
 		for (int dim = 0; dim < Ndim; ++dim) {
-			if (spacing_types[dim] == SpacingType::log) {
+			if (spacing_types[dim] == TransformType::log) {
 				if constexpr (oob_policy == OutOfBounds::clamp) {
 					constexpr amrex::Real epsilon = std::numeric_limits<amrex::Real>::min() * 1.0e10; // ~1e-298 for double
 					pt[dim] = std::log(amrex::max(point[dim], epsilon));
@@ -197,7 +197,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 					    std::format("Invalid value for log interpolation in dimension {}: {} (must be positive)", dim, point[dim]).c_str());
 					pt[dim] = std::log(point[dim]);
 				}
-			} else if (spacing_types[dim] == SpacingType::fast_log) {
+			} else if (spacing_types[dim] == TransformType::fast_log) {
 				if constexpr (oob_policy == OutOfBounds::clamp) {
 					constexpr amrex::Real epsilon = std::numeric_limits<amrex::Real>::min() * 1.0e10; // ~1e-298 for double
 					pt[dim] = FastMath::lg(amrex::max(point[dim], epsilon));
@@ -378,7 +378,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	std::array<amrex::Real, Ndim> coord_max_{};
 	std::array<amrex::Real, Ndim> xlo_physical_{}; // bounds in physical units (before any log transform)
 	std::array<amrex::Real, Ndim> xhi_physical_{};
-	std::array<SpacingType, Ndim> spacing_types_{};
+	std::array<TransformType, Ndim> spacing_types_{};
 
 	// Precomputed grid spacing for optimization
 	std::array<amrex::Real, Ndim> dcoord_{};
@@ -392,7 +392,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	std::array<std::string, Nout> output_units_{};
 
 	// Per-output transform type: linear, log, or fast_log
-	std::array<SpacingType, Nout> output_transforms_{};
+	std::array<TransformType, Nout> output_transforms_{};
 
 	[[nodiscard]] static constexpr auto ioProcessorNumber() -> int { return amrex::ParallelDescriptor::IOProcessorNumber(); }
 
@@ -434,16 +434,16 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		}
 	}
 
-	static void bcastSpacingType(SpacingType &value)
+	static void bcastTransformType(TransformType &value)
 	{
 		int spacing_value = amrex::ParallelDescriptor::IOProcessor() ? static_cast<int>(value) : 0;
 		bcastScalar(spacing_value);
 		if (!amrex::ParallelDescriptor::IOProcessor()) {
-			value = static_cast<SpacingType>(spacing_value);
+			value = static_cast<TransformType>(spacing_value);
 		}
 	}
 
-	static void bcastSpacingTypes(std::array<SpacingType, Ndim> &values)
+	static void bcastTransformTypes(std::array<TransformType, Ndim> &values)
 	{
 		std::array<int, Ndim> serialized{};
 		if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -454,7 +454,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		bcastArray(serialized);
 		if (!amrex::ParallelDescriptor::IOProcessor()) {
 			for (int dim = 0; dim < Ndim; ++dim) {
-				values[dim] = static_cast<SpacingType>(serialized[dim]);
+				values[dim] = static_cast<TransformType>(serialized[dim]);
 			}
 		}
 	}
@@ -480,7 +480,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
       public:
 	void setMetadata(const std::array<std::string, Ndim> &input_names, const std::array<std::string, Nout> &output_names,
 			 const std::array<std::string, Ndim> &input_units, const std::array<std::string, Nout> &output_units,
-			 std::array<SpacingType, Nout> output_transforms)
+			 std::array<TransformType, Nout> output_transforms)
 	{
 		input_names_ = input_names;
 		output_names_ = output_names;
@@ -787,7 +787,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	}
 
 	void initializeStorage(const std::array<amrex::Real, Ndim> &x_mins, const std::array<amrex::Real, Ndim> &x_maxs, const std::array<int, Ndim> &n_xs,
-			       const std::array<SpacingType, Ndim> &spacing_types)
+			       const std::array<TransformType, Ndim> &spacing_types)
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "Only 1D-4D tables are supported");
 
@@ -809,14 +809,14 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			    std::make_unique<coord_table_type>(amrex::Array<int, 1>{0}, amrex::Array<int, 1>{sizes_[dim] - 1}, amrex::The_Pinned_Arena());
 			coords_d_[dim] = std::make_unique<coord_table_type>(amrex::Array<int, 1>{0}, amrex::Array<int, 1>{sizes_[dim] - 1});
 
-			if (spacing_types_[dim] == SpacingType::linear) {
+			if (spacing_types_[dim] == TransformType::linear) {
 				// Linear spacing: coordinates computed on-the-fly in GPU code, no need to populate table.
-			} else if (spacing_types_[dim] == SpacingType::log) {
+			} else if (spacing_types_[dim] == TransformType::log) {
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_min_[dim] > 0.0 && coord_max_[dim] > 0.0,
 								 std::format("Log spacing requires positive bounds for dimension {}", dim));
 				coord_min_[dim] = std::log(coord_min_[dim]);
 				coord_max_[dim] = std::log(coord_max_[dim]);
-			} else if (spacing_types_[dim] == SpacingType::fast_log) {
+			} else if (spacing_types_[dim] == TransformType::fast_log) {
 				AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coord_min_[dim] > 0.0 && coord_max_[dim] > 0.0,
 								 std::format("Fast log spacing requires positive bounds for dimension {}", dim));
 				coord_min_[dim] = FastMath::lg(coord_min_[dim]);
@@ -825,7 +825,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 			// NOSONAR
 			// For future support of irregular spacing
-			// } else if (spacing_types_[dim] == SpacingType::irregular) {
+			// } else if (spacing_types_[dim] == TransformType::irregular) {
 			// 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(static_cast<int>(coords[dim].size()) == sizes_[dim],
 			// 					 std::format("Provided coordinates size mismatch for dimension {}! (expected: {}, actual: {})",
 			// 						     dim, sizes_[dim], coords[dim].size()));
@@ -934,7 +934,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	}
 
 	void initializeCommonFlat(const std::array<amrex::Real, Ndim> &x_mins, const std::array<amrex::Real, Ndim> &x_maxs, const std::array<int, Ndim> &n_xs,
-				  const std::array<SpacingType, Ndim> &spacing_types, const amrex::Vector<amrex::Real> &flat_data)
+				  const std::array<TransformType, Ndim> &spacing_types, const amrex::Vector<amrex::Real> &flat_data)
 	{
 		initializeStorage(x_mins, x_maxs, n_xs, spacing_types);
 		fillDataTablesFlat(flat_data);
@@ -942,7 +942,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 	template <typename DataType>
 	void initialize_common(const std::array<amrex::Real, Ndim> &x_mins, const std::array<amrex::Real, Ndim> &x_maxs, const std::array<int, Ndim> &n_xs,
-			       const std::array<SpacingType, Ndim> &spacing_types, const std::array<amrex::Vector<amrex::Real>, Ndim> & /*coords*/,
+			       const std::array<TransformType, Ndim> &spacing_types, const std::array<amrex::Vector<amrex::Real>, Ndim> & /*coords*/,
 			       const DataType &data)
 	{
 		initializeStorage(x_mins, x_maxs, n_xs, spacing_types);
@@ -961,14 +961,14 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		std::array<amrex::Real, Ndim> x_mins;
 		std::array<amrex::Real, Ndim> x_maxs;
 		std::array<int, Ndim> n_xs{};
-		std::array<SpacingType, Ndim> spacing_types{};
+		std::array<TransformType, Ndim> spacing_types{};
 
 		for (int dim = 0; dim < Ndim; ++dim) {
 			n_xs[dim] = static_cast<int>(coords[dim].size());
 			x_mins[dim] = coords[dim].front();
 			x_maxs[dim] = coords[dim].back();
 			// This is a hack for backward compatibility to the cooling table, which uses log input and linear output
-			spacing_types[dim] = SpacingType::linear;
+			spacing_types[dim] = TransformType::linear;
 		}
 
 		// Pass empty coords - for linear spacing they will be computed on-the-fly
@@ -1002,19 +1002,19 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	// @param file_path Path to the CSV file
 	// @param output_transform Transform type applied to each output value: linear (no transform), log, or fast_log
 	//                      If fast_log, output values are converted to log before storage
-	static auto CSVReader(const std::string &file_path, SpacingType output_transform) -> DataTable
+	static auto CSVReader(const std::string &file_path, TransformType output_transform) -> DataTable
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "CSVReader supports 1D-4D tables");
 
 		std::array<amrex::Real, Ndim> x_mins{};
 		std::array<amrex::Real, Ndim> x_maxs{};
 		std::array<int, Ndim> sizes{};
-		std::array<SpacingType, Ndim> spacing_types_enum{};
+		std::array<TransformType, Ndim> spacing_types_enum{};
 		std::array<std::string, Ndim> input_names{};
 		std::array<std::string, Nout> output_names{};
 		std::array<std::string, Ndim> input_units{};
 		std::array<std::string, Nout> output_units{};
-		SpacingType output_transform_bcast = output_transform;
+		TransformType output_transform_bcast = output_transform;
 		amrex::Vector<amrex::Real> flat_data;
 
 		if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -1152,7 +1152,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 									     coord_bounds[dim].first, coord_bounds[dim].second));
 
 				try {
-					spacing_types_enum[dim] = amrex::getEnumCaseInsensitive<SpacingType>(spacing_metadata[dim]);
+					spacing_types_enum[dim] = amrex::getEnumCaseInsensitive<TransformType>(spacing_metadata[dim]);
 				} catch (const std::runtime_error &) {
 					AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 					    false, std::format("Invalid spacing type '{}' for dimension {}. Must be 'linear', 'log', or 'fast_log'",
@@ -1164,7 +1164,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 			}
 
 			auto log_ = [output_transform_bcast](amrex::Real x) {
-				if (output_transform_bcast == SpacingType::fast_log) {
+				if (output_transform_bcast == TransformType::fast_log) {
 					return FastMath::inverse_pow2(x);
 				}
 				return std::log(x);
@@ -1181,7 +1181,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 						if (i < sizes[0] - 1) {
 							file >> comma;
 						}
-						if (output_transform_bcast == SpacingType::fast_log || output_transform_bcast == SpacingType::log) {
+						if (output_transform_bcast == TransformType::fast_log || output_transform_bcast == TransformType::log) {
 							AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 							    value > 0.0,
 							    std::format("log output transform requires positive values, got {} at output {} index {}", value,
@@ -1201,7 +1201,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 							if (i1 < sizes[0] - 1) {
 								file >> comma;
 							}
-							if (output_transform_bcast == SpacingType::fast_log || output_transform_bcast == SpacingType::log) {
+							if (output_transform_bcast == TransformType::fast_log || output_transform_bcast == TransformType::log) {
 								AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 								    value > 0.0,
 								    std::format(
@@ -1224,8 +1224,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 								if (i1 < sizes[0] - 1) {
 									file >> comma;
 								}
-								if (output_transform_bcast == SpacingType::fast_log ||
-								    output_transform_bcast == SpacingType::log) {
+								if (output_transform_bcast == TransformType::fast_log ||
+								    output_transform_bcast == TransformType::log) {
 									AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 									    value > 0.0, std::format("log output transform requires positive values, got {} at "
 												     "output {} index ({}, {}, {})",
@@ -1249,8 +1249,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 									if (i1 < sizes[0] - 1) {
 										file >> comma;
 									}
-									if (output_transform_bcast == SpacingType::fast_log ||
-									    output_transform_bcast == SpacingType::log) {
+									if (output_transform_bcast == TransformType::fast_log ||
+									    output_transform_bcast == TransformType::log) {
 										AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 										    value > 0.0,
 										    std::format("log output transform requires positive values, got "
@@ -1270,17 +1270,17 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		bcastArray(sizes);
 		bcastArray(x_mins);
 		bcastArray(x_maxs);
-		bcastSpacingTypes(spacing_types_enum);
+		bcastTransformTypes(spacing_types_enum);
 		bcastStringArray(input_names);
 		bcastStringArray(output_names);
 		bcastStringArray(input_units);
 		bcastStringArray(output_units);
-		bcastSpacingType(output_transform_bcast);
+		bcastTransformType(output_transform_bcast);
 		bcastVector(flat_data);
 
 		DataTable table;
 		table.initializeCommonFlat(x_mins, x_maxs, sizes, spacing_types_enum, flat_data);
-		std::array<SpacingType, Nout> output_transforms_arr{};
+		std::array<TransformType, Nout> output_transforms_arr{};
 		output_transforms_arr.fill(output_transform_bcast);
 		table.setMetadata(input_names, output_names, input_units, output_units, output_transforms_arr);
 		return table;
@@ -1297,7 +1297,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 	// If a "grids" subgroup exists it is ignored (irregular grids are not supported; use linear/log/fast_log spacing).
 	//
 	// All data is broadcast to non-IO MPI ranks automatically.
-	static auto H5Reader(const std::string &file_path, const std::string &group_name = "tab1", std::array<SpacingType, Nout> output_transforms = {})
+	static auto H5Reader(const std::string &file_path, const std::string &group_name = "tab1", std::array<TransformType, Nout> output_transforms = {})
 	    -> DataTable
 	{
 		static_assert(Ndim >= 1 && Ndim <= 4, "H5Reader supports 1D-4D tables");
@@ -1305,7 +1305,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		std::array<int, Ndim> sizes{};
 		std::array<amrex::Real, Ndim> x_mins{};
 		std::array<amrex::Real, Ndim> x_maxs{};
-		std::array<SpacingType, Ndim> spacing_types{};
+		std::array<TransformType, Ndim> spacing_types{};
 		std::array<std::string, Ndim> input_names{};
 		std::array<std::string, Nout> output_names{};
 		std::array<std::string, Ndim> input_units{};
@@ -1424,7 +1424,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 					std::string s(raw.data() + static_cast<std::size_t>(i) * type_size, type_size);
 					s.erase(std::find(s.begin(), s.end(), '\0'), s.end());
 					try {
-						spacing_types[i] = amrex::getEnumCaseInsensitive<SpacingType>(s);
+						spacing_types[i] = amrex::getEnumCaseInsensitive<TransformType>(s);
 					} catch (const std::runtime_error &) {
 						AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 						    false, std::format("Invalid spacing '{}' for dim {}. Must be 'linear', 'log', or 'fast_log'", s, i));
@@ -1503,9 +1503,9 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 				for (amrex::Long k = 0; k < total; ++k) {
 					auto const val = static_cast<amrex::Real>(raw_data[static_cast<std::size_t>(k)]);
 					int const out_idx = static_cast<int>(k / spatial_size);
-					if (output_transforms[static_cast<std::size_t>(out_idx)] == SpacingType::fast_log) {
+					if (output_transforms[static_cast<std::size_t>(out_idx)] == TransformType::fast_log) {
 						flat_data[static_cast<std::size_t>(k)] = FastMath::inverse_pow2(val);
-					} else if (output_transforms[static_cast<std::size_t>(out_idx)] == SpacingType::log) {
+					} else if (output_transforms[static_cast<std::size_t>(out_idx)] == TransformType::log) {
 						flat_data[static_cast<std::size_t>(k)] = std::log(val);
 					} else {
 						flat_data[static_cast<std::size_t>(k)] = val;
@@ -1521,7 +1521,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 		bcastArray(sizes);
 		bcastArray(x_mins);
 		bcastArray(x_maxs);
-		bcastSpacingTypes(spacing_types);
+		bcastTransformTypes(spacing_types);
 		bcastStringArray(input_names);
 		bcastStringArray(output_names);
 		bcastStringArray(input_units);

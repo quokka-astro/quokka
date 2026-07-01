@@ -603,7 +603,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	bool useLuminosityTable_ = true;
 	std::string luminosityTableFilename_;
-	quokka::SpacingType rad_table_output_transform_ = quokka::SpacingType::fast_log;
+	quokka::TransformType rad_table_output_transform_ = quokka::TransformType::fast_log;
 
 #if AMREX_SPACEDIM == 3
 	quokka::LuminosityTables<Physics_Traits<problem_t>::nGroups> luminosityTables_;
