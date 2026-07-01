@@ -261,7 +261,7 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 	int dust_model = 1;
 	double T_d0 = NAN;
 	double lambda_gd_times_dt = NAN;
-	const double T_gas0 = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
+	const double T_gas0 = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
 	AMREX_ASSERT(T_gas0 >= 0.);
 	T_d0 = ComputeDustTemperatureBateKeto(T_gas0, T_gas0, rho, Erad0Vec, coeff_n, dt, NAN, 0, rad_boundaries);
 	AMREX_ASSERT_WITH_MESSAGE(T_d0 >= 0., "Dust temperature is negative!");
@@ -336,7 +336,7 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 
 	const double H_num_den = ComputeNumberDensityH(rho, massScalars);
 
-	T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+	T_gas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 	AMREX_ASSERT(T_gas >= 0.);
 
 	const int maxIter = 100;
@@ -360,7 +360,7 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 		// If the dust model is turned off, ComputeDustTemperature should be a function that returns T_gas.
 
 		if (n > 0) {
-			T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+			T_gas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 			AMREX_ASSERT(T_gas >= 0.);
 		}
 
@@ -448,7 +448,7 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 
 		const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, rad_boundaries);
 		AMREX_ASSERT(!d_fourpiboverc_d_t.hasnan());
-		const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
+		const double c_v = ::quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
 
 		const auto Egas_diff = Egas_guess - Egas0;
 		const auto Erad_diff = EradVec_guess - Erad0Vec;
@@ -514,7 +514,7 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 		} else {
 			const double T_rad = std::sqrt(std::sqrt(sum(EradVec_guess) / radiation_constant_));
 			if (enable_dE_constrain && delta_x / c_v > std::max(T_gas, T_rad)) {
-				Egas_guess = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
+				Egas_guess = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
 				// Rvec.fillin(0.0);
 			} else {
 				Egas_guess += delta_x;
@@ -542,14 +542,14 @@ RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, qu
 
 		// RHS of the equation 0 = Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling)
 		auto rhs = [=](double Egas_) -> double {
-			const double T_gas_ = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
+			const double T_gas_ = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
 			const auto cooling_ = DefineNetCoolingRate(T_gas_, H_num_den) * dt;
 			return Egas_ - Egas0 + cscale * lambda_gd_times_dt + sum(cooling_) - CR_heating;
 		};
 
 		// Jacobian of the RHS of the equation 0 = Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling)
 		auto jac = [=](double Egas_) -> double {
-			const double T_gas_ = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
+			const double T_gas_ = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
 			const auto d_cooling_d_Tgas_ = DefineNetCoolingRateTempDerivative(T_gas_, H_num_den) * dt;
 			return 1.0 + sum(d_cooling_d_Tgas_);
 		};
@@ -629,7 +629,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	int dust_model = 1;
 	double T_d0 = NAN;
 	double lambda_gd_times_dt = NAN;
-	const double T_gas0 = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
+	const double T_gas0 = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas0, massScalars);
 	AMREX_ASSERT(T_gas0 >= 0.);
 	T_d0 = ComputeDustTemperatureBateKeto(T_gas0, T_gas0, rho, Erad0Vec, coeff_n, dt, NAN, 0, rad_boundaries);
 	AMREX_ASSERT_WITH_MESSAGE(T_d0 >= 0., "Dust temperature is negative!");
@@ -701,7 +701,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 	double Egas_guess_prev = Egas_guess;
 	auto EradVec_guess_prev = EradVec_guess;
 
-	T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+	T_gas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 	AMREX_ASSERT(T_gas >= 0.);
 
 	// phtoelectric heating
@@ -729,7 +729,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 		// If the dust model is turned off, ComputeDustTemperature should be a function that returns T_gas.
 
 		if (n > 0) {
-			T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+			T_gas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 			AMREX_ASSERT(T_gas >= 0.);
 		}
 
@@ -816,7 +816,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 
 		const auto d_fourpiboverc_d_t = ComputeThermalRadiationTempDerivativeMultiGroup(T_d, rad_boundaries);
 		AMREX_ASSERT(!d_fourpiboverc_d_t.hasnan());
-		const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
+		const double c_v = ::quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
 
 		const auto Egas_diff = Egas_guess - Egas0;
 		const auto Erad_diff = EradVec_guess - Erad0Vec;
@@ -883,7 +883,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 		} else {
 			const double T_rad = std::sqrt(std::sqrt(sum(EradVec_guess) / radiation_constant_));
 			if (enable_dE_constrain && delta_x / c_v > std::max(T_gas, T_rad)) {
-				Egas_guess = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
+				Egas_guess = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
 				// Rvec.fillin(0.0);
 			} else {
 				Egas_guess += delta_x;
@@ -911,7 +911,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 		// RHS of the equation 0 = Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling) - PE_heating_energy_derivative * EradVec_guess[nGroups_ -
 		// 1];
 		auto rhs = [=](double Egas_) -> double {
-			const double T_gas_ = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
+			const double T_gas_ = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
 			const auto cooling_ = DefineNetCoolingRate(T_gas_, H_num_den) * dt;
 			return Egas_ - Egas0 + cscale * lambda_gd_times_dt + sum(cooling_) - PE_heating_energy_derivative * EradVec_guess[nGroups_ - 1] -
 			       CR_heating;
@@ -920,7 +920,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchangeW
 		// Jacobian of the RHS of the equation 0 = Egas - Egas0 + cscale * lambda_gd_times_dt + sum(cooling) + PE_heating_energy_derivative *
 		// EradVec_guess[nGroups_ - 1];
 		auto jac = [=](double Egas_) -> double {
-			const double T_gas_ = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
+			const double T_gas_ = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_, massScalars);
 			const auto d_cooling_d_Tgas_ = DefineNetCoolingRateTempDerivative(T_gas_, H_num_den) * dt;
 			return 1.0 + sum(d_cooling_d_Tgas_);
 		};

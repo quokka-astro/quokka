@@ -21,6 +21,7 @@
 #include "AMReX_REAL.H"
 #include "AMReX_Reduce.H"
 #include "AMReX_SPACE.H"
+#include <array>
 #include <format>
 
 #include "QuokkaSimulation.hpp"
@@ -122,7 +123,8 @@ template <> void QuokkaSimulation<ShockCloud>::setInitialConditionsOnGrid(quokka
 		Real const ymom = 0;
 		Real const zmom = 0;
 		Real const Eint = P0 / (quokka::EOS_Traits<ShockCloud>::gamma - 1.);
-		Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+		static_assert(!Physics_Traits<ShockCloud>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+		Real const Egas = quokka::EOS<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint, 0.0);
 
 		state(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
 		state(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
@@ -168,7 +170,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void AMRSimulation<ShockCloud>::setCustomBou
 			Real const xmom = rho_wind * vx;
 			Real const ymom = 0;
 			Real const zmom = 0;
-			Real const Egas = RadSystem<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint);
+			static_assert(!Physics_Traits<ShockCloud>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+			Real const Egas = quokka::EOS<ShockCloud>::ComputeEgasFromEint(rho, xmom, ymom, zmom, Eint, 0.0);
 			consVar(i, j, k, RadSystem<ShockCloud>::gasDensity_index) = rho;
 			consVar(i, j, k, RadSystem<ShockCloud>::x1GasMomentum_index) = xmom;
 			consVar(i, j, k, RadSystem<ShockCloud>::x2GasMomentum_index) = ymom;
@@ -282,7 +285,8 @@ void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string const 
 			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			static_assert(!Physics_Traits<ShockCloud>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+			Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 			output[bx](i, j, k, ncomp) = Tgas;
 		});
@@ -299,7 +303,8 @@ void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string const 
 			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			static_assert(!Physics_Traits<ShockCloud>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+			Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 			Real const cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, tables);
 			output[bx](i, j, k, ncomp) = cs / 1.0e5; // km/s
 		});
@@ -368,7 +373,8 @@ void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string const 
 			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			static_assert(!Physics_Traits<ShockCloud>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+			Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 			Real const P_cgs = quokka::ResampledCooling::ComputePressureFromRhoEint(rho, Eint, tables);
 			Real const ndens_times_T = P_cgs / C::k_B; // convert to [K cm^-3]
 			output[bx](i, j, k, ncomp) = ndens_times_T;
@@ -386,7 +392,8 @@ void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string const 
 			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			static_assert(!Physics_Traits<ShockCloud>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+			Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 			Real const K_cgs = quokka::ResampledCooling::ComputeEntropyFromRhoEint(rho, Eint, tables);
 			Real const K_keV_cm2 = K_cgs / keV_in_ergs; // convert to units of keV cm^2
 			output[bx](i, j, k, ncomp) = K_keV_cm2;
@@ -433,7 +440,8 @@ void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string const 
 			Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
 			Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 			Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-			Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+			static_assert(!Physics_Traits<ShockCloud>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+			Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 			Real const l_cool = quokka::ResampledCooling::ComputeCoolingLength(rho, Eint, tables);
 			output[bx](i, j, k, ncomp) = l_cool / parsec_in_cm;
 		});
@@ -483,7 +491,8 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTempResampled(int i, int j, 
 	Real const x2Mom = state(i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
 	Real const x3Mom = state(i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 	Real const Egas = state(i, j, k, HydroSystem<ShockCloud>::energy_index);
-	Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+	static_assert(!Physics_Traits<ShockCloud>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+	Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 	return quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 }
 template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<std::string, amrex::Real>
@@ -491,6 +500,7 @@ template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<s
 	// compute scalar statistics
 	std::map<std::string, amrex::Real> stats;
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "ShockCloud statistics require resampled cooling tables.");
+	using FaceStateArray = std::array<amrex::Array4<const Real>, AMREX_SPACEDIM>;
 
 	// save time
 	const Real t_cc = simulationMetadata_["t_cc"].as<Real>();
@@ -525,41 +535,41 @@ template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<s
 	Real M_cl_12000 = 0.0;
 
 	auto tables = resampledTables_.const_tables();
-	M_cl_1e4 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state,
-							      std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &state_fc) noexcept {
-		Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		Real const result = (T < 1.0e4) ? rho : 0.0;
-		return result;
-	});
-	M_cl_8000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state,
-							       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &state_fc) noexcept {
-		Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		Real const result = (T < 8000.) ? rho : 0.0;
-		return result;
-	});
-	M_cl_9000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state,
-							       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &state_fc) noexcept {
-		Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		Real const result = (T < 9000.) ? rho : 0.0;
-		return result;
-	});
-	M_cl_11000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state,
-								std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &state_fc) noexcept {
-		Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		Real const result = (T < 1.1e4) ? rho : 0.0;
-		return result;
-	});
-	M_cl_12000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state,
-								std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &state_fc) noexcept {
-		Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
-		Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
-		Real const result = (T < 1.2e4) ? rho : 0.0;
-		return result;
-	});
+	M_cl_1e4 = computeVolumeIntegral(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
+		    Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+		    Real const result = (T < 1.0e4) ? rho : 0.0;
+		    return result;
+	    });
+	M_cl_8000 = computeVolumeIntegral(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
+		    Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+		    Real const result = (T < 8000.) ? rho : 0.0;
+		    return result;
+	    });
+	M_cl_9000 = computeVolumeIntegral(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
+		    Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+		    Real const result = (T < 9000.) ? rho : 0.0;
+		    return result;
+	    });
+	M_cl_11000 = computeVolumeIntegral(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
+		    Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+		    Real const result = (T < 1.1e4) ? rho : 0.0;
+		    return result;
+	    });
+	M_cl_12000 = computeVolumeIntegral(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
+		    Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
+		    Real const result = (T < 1.2e4) ? rho : 0.0;
+		    return result;
+	    });
 
 	stats["cloud_mass_1e4"] = M_cl_1e4 / solarmass_in_g;
 	stats["cloud_mass_8000"] = M_cl_8000 / solarmass_in_g;
@@ -574,41 +584,41 @@ template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<s
 	Real origM_cl_12000 = 0.0;
 
 	auto tables_orig = resampledTables_.const_tables();
-	origM_cl_1e4 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state,
-								  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &state_fc) noexcept {
-		Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables_orig);
-		Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-		Real const result = (T < 1.0e4) ? rho_cloud : 0.0;
-		return result;
-	});
-	origM_cl_8000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state,
-								   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &state_fc) noexcept {
-		Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables_orig);
-		Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-		Real const result = (T < 8000.) ? rho_cloud : 0.0;
-		return result;
-	});
-	origM_cl_9000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state,
-								   std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &state_fc) noexcept {
-		Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables_orig);
-		Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-		Real const result = (T < 9000.) ? rho_cloud : 0.0;
-		return result;
-	});
-	origM_cl_11000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state,
-								    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &state_fc) noexcept {
-		Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables_orig);
-		Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-		Real const result = (T < 1.1e4) ? rho_cloud : 0.0;
-		return result;
-	});
-	origM_cl_12000 = computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state,
-								    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &state_fc) noexcept {
-		Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables_orig);
-		Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
-		Real const result = (T < 1.2e4) ? rho_cloud : 0.0;
-		return result;
-	});
+	origM_cl_1e4 = computeVolumeIntegral(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
+		    Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables_orig);
+		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+		    Real const result = (T < 1.0e4) ? rho_cloud : 0.0;
+		    return result;
+	    });
+	origM_cl_8000 = computeVolumeIntegral(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
+		    Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables_orig);
+		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+		    Real const result = (T < 8000.) ? rho_cloud : 0.0;
+		    return result;
+	    });
+	origM_cl_9000 = computeVolumeIntegral(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
+		    Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables_orig);
+		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+		    Real const result = (T < 9000.) ? rho_cloud : 0.0;
+		    return result;
+	    });
+	origM_cl_11000 = computeVolumeIntegral(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
+		    Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables_orig);
+		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+		    Real const result = (T < 1.1e4) ? rho_cloud : 0.0;
+		    return result;
+	    });
+	origM_cl_12000 = computeVolumeIntegral(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
+		    Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables_orig);
+		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
+		    Real const result = (T < 1.2e4) ? rho_cloud : 0.0;
+		    return result;
+	    });
 
 	stats["cloud_mass_1e4_original"] = origM_cl_1e4 / solarmass_in_g;
 	stats["cloud_mass_8000_original"] = origM_cl_8000 / solarmass_in_g;
@@ -617,17 +627,15 @@ template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<s
 	stats["cloud_mass_12000_original"] = origM_cl_12000 / solarmass_in_g;
 
 	// compute cloud mass according to passive scalar threshold
-	const Real M_cl_scalar_01 =
-	    computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state,
-						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &state_fc) noexcept {
+	const Real M_cl_scalar_01 = computeVolumeIntegral(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
 		    Real const C = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index);
 		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
 		    Real const result = (C > 0.1) ? rho : 0.0;
 		    return result;
 	    });
-	const Real M_cl_scalar_01_09 =
-	    computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state,
-						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &state_fc) noexcept {
+	const Real M_cl_scalar_01_09 = computeVolumeIntegral(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
 		    Real const C = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index);
 		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
 		    Real const result = ((C > 0.1) && (C < 0.9)) ? rho : 0.0;
@@ -638,9 +646,8 @@ template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<s
 	stats["cloud_mass_scalar_01_09"] = M_cl_scalar_01_09 / solarmass_in_g;
 
 	// compute cloud mass according to cloud fraction threshold
-	const Real M_cl_fraction_01 =
-	    computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state,
-						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &state_fc) noexcept {
+	const Real M_cl_fraction_01 = computeVolumeIntegral(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
 		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
 		    Real const rho_bg = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
 		    Real const C_frac = rho_cloud / (rho_cloud + rho_bg);
@@ -649,9 +656,8 @@ template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<s
 		    Real const result = (C_frac > 0.1) ? rho : 0.0;
 		    return result;
 	    });
-	const Real M_cl_fraction_01_09 =
-	    computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state,
-						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &state_fc) noexcept {
+	const Real M_cl_fraction_01_09 = computeVolumeIntegral(
+	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
 		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
 		    Real const rho_bg = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 2);
 		    Real const C_frac = rho_cloud / (rho_cloud + rho_bg);
@@ -687,7 +693,8 @@ template <> void QuokkaSimulation<ShockCloud>::refineGrid(int lev, amrex::TagBox
 		Real const x2Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x2Momentum_index);
 		Real const x3Mom = state[bx](i, j, k, HydroSystem<ShockCloud>::x3Momentum_index);
 		Real const Egas = state[bx](i, j, k, HydroSystem<ShockCloud>::energy_index);
-		Real const Eint = RadSystem<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas);
+		static_assert(!Physics_Traits<ShockCloud>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+		Real const Eint = quokka::EOS<ShockCloud>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
 		Real const l_cool = quokka::ResampledCooling::ComputeCoolingLength(rho, Eint, tables);
 
 		if (l_cool < resolved_length) {
@@ -748,7 +755,7 @@ auto problem_main() -> int
 	amrex::Print() << std::format("Pressure = {} K cm^-3\n", P_over_k);
 
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.coolingTableType_ == "resampled", "ShockCloud setup requires resampled cooling tables.");
-	auto cooling_tables = sim.resampledTables_.const_tables();
+	auto cooling_tables = sim.resampledTables_.const_tables_host();
 	// compute mass density of background, cloud
 	Real const H_mass_fraction = cooling_tables.cloudy_H_mass_fraction;
 	::rho0 = nH_bg * m_H / H_mass_fraction;	   // g cm^-3

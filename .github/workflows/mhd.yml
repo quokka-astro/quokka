@@ -50,7 +50,7 @@ jobs:
       run: .github/workflows/dependencies/dependencies_ccache.sh
 
     - name: Set Up Cache
-      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/ccache
         key: ccache-${{ github.workflow }}-${{ github.job }}-git-${{ github.sha }}
@@ -99,11 +99,12 @@ jobs:
       working-directory: ${{github.workspace}}/tests
       shell: bash
       run: |
-        ${{runner.workspace}}/build/src/problems/FastWave/FastWave \
+        ${{runner.workspace}}/build/src/problems/FastWaveConvergence/FastWaveConvergence \
           ../inputs/FastWave.toml \
           amr.max_grid_size_x=32 \
           amr.blocking_factor_x=16 \
           mhd.emf_compute_scheme=FelkerStone2017 \
+          mhd.emf_averaging_scheme=LondrilloDelZanna2004 \
           amrex.init_snan=1 \
           amrex.fpe_trap_invalid=1 \
           amrex.fpe_trap_overflow=1 \
@@ -113,7 +114,7 @@ jobs:
     - name: Test
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      # Execute the MHD tests while skipping the slow HydroWave case
+      # Execute the MHD tests while skipping the slow HydroWaveConvergence case
       run: canary run --output-on-failure --workers=2 -k 'MHD and not HydroWaveConvergence' .
 
     - name: ccache stats

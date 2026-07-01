@@ -19,7 +19,7 @@
 struct ParticleDepositionProblem {
 };
 
-template <> struct Particle_Traits<ParticleDepositionProblem> {
+template <> struct Particle_Traits<ParticleDepositionProblem> : DefaultParticleTraits {
 #if AMREX_SPACEDIM == 3
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::CIC | ParticleSwitch::Test;
 #else
