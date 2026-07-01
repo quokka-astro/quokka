@@ -61,7 +61,7 @@ auto table = quokka::DataTable<2, 5>::H5Reader("path/to/table.h5", "tab1",
 
 The HDF5 group `tab1` must contain:
 - Dataset `data` with shape `[Nout, Nx0, Nx1, ...]` in C row-major order.
-- Attributes `Ndim` (int32), `Nout` (int32), `Nx` (int32[Ndim]), `xlo` (float64[Ndim]), `xhi` (float64[Ndim]), `spacing` (fixed-length byte strings).
+- Attributes `Ndim` (int32), `Nout` (int32), `Nx` (int32[Ndim]), `xlo` (float64[Ndim]), `xhi` (float64[Ndim]), `spacing` (fixed-length string[Ndim]).
 - Optional attributes `input_names`, `output_names`, `input_units`, `output_units`.
 
 See [Cooling module](cooling_module.md) for the full attribute specification used by the cooling tables.
@@ -129,7 +129,7 @@ HDF5 files always store **raw physical values** regardless of transform. When `H
 
 2. **Between grid points, accuracy is determined by table resolution, not by the ~10% deviation of `fast_pow2` from `2^x`.** Linear interpolation in `inverse_pow2`-space followed by `fast_pow2` is geometrically equivalent to log-space interpolation, with second-order error `O(h²)` — the same as a true log–exp pair.
 
-The underlying principle is that any smooth monotone bijection can be used for interpolation with full accuracy, as long as the exact forward and inverse transforms are applied consistently. Here `(inverse_pow2, fast_pow2)` form that exact bijection by construction. The 10% approximation error of `fast_pow2` relative to `2^x` is irrelevant because both directions are consistent with each other.
+The underlying principle is that any smooth monotone bijection can be used for interpolation with full accuracy, as long as the exact forward and inverse transforms are applied consistently. Here `(inverse_pow2, fast_pow2)` form that exact bijection by construction. How closely either function approximates `2^x` or `log₂(x)` is not the key point; Newton iteration is used to enforce machine-precision invertibility of the transform composition.
 
 ## Key API
 

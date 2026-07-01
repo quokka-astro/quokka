@@ -40,7 +40,7 @@ Available table files:
 | `CloudyData_UVB=HM2012_resampled_noPE.h5` | HM2012 | excluded |
 | `CloudyData_UVB=HM2012_shielded_resampled.h5` | HM2012 (shielded) | included |
 | `CloudyData_UVB=HM2012_shielded_resampled_noPE.h5` | HM2012 (shielded) | excluded |
-| `isrf_1000Go_grains_resampled.h5` | ISRF 1000 G₀ + grains | not applicable |
+| `isrf_1000Go_grains_resampled.h5` | ISRF 1000 G₀ + grains | included |
 
 To regenerate the Grackle-based tables, run `extern/cooling/resample_grackle_cooling_tables.sh`. To regenerate `isrf_1000Go_grains_resampled.h5`, run `extern/cooling/resample_cloudy_cooling_tables.py` directly.
 
@@ -62,13 +62,15 @@ All cooling tables follow the self-describing `tab1` group format read by `quokk
   | `Nx` | int32[2] | Grid sizes `[n_rho, n_eint]` |
   | `xlo` | float64[2] | Physical lower bounds `[rho_min, eint_min]` |
   | `xhi` | float64[2] | Physical upper bounds `[rho_max, eint_max]` |
-  | `spacing` | bytes[2] | Coordinate spacing type (`"fast_log"` for both) |
-  | `input_names` | bytes[2] | `["rho", "eint"]` |
-  | `output_names` | bytes[5] | Names for the five outputs |
-  | `input_units` | bytes[2] | Physical units of inputs |
-  | `output_units` | bytes[5] | Physical units of outputs |
+  | `spacing` | string[2] | Coordinate spacing type (`"fast_log"` for both) |
+  | `input_names` | string[2] | `["rho", "eint"]` |
+  | `output_names` | string[5] | Names for the five outputs |
+  | `input_units` | string[2] | Physical units of inputs |
+  | `output_units` | string[5] | Physical units of outputs |
   | `include_pe` | int32 | 1 if photoelectric heating is included, else 0 |
   | `cloudy_H_mass_fraction` | float64 | Hydrogen mass fraction assumed in Cloudy |
+
+  String attributes must use fixed-length HDF5 strings (numpy `dtype='S'`); variable-length HDF5 strings are not supported by `H5Reader`.
 
 Old-format files (pre-`tab1`) can be converted in-place with `scripts/python/convert_cooling_table_hdf5.py`.
 
