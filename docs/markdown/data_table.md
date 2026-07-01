@@ -131,6 +131,44 @@ HDF5 files always store **raw physical values** regardless of transform. When `H
 
 The general principle is that interpolation is accurate when a smooth monotone transform and its true inverse are applied consistently. In this case, `(inverse_pow2, fast_pow2)` is that paired transform. How well either function approximates `2^x` or `log₂(x)` is secondary; Newton iteration is used to enforce machine-precision invertibility of the composition.
 
+### Python reference implementations
+
+Python equivalents of the three functions from `src/math/FastMath.hpp`. Table-generation scripts that need to verify round-trips or pre-apply the transform can use these directly.
+
+```python
+import math
+
+def fastlg(x: float) -> float:
+    """Fast approximation to log2(x). Uses frexp to split x = m * 2^e (m in [0.5, 1)),
+    then approximates log2(m) linearly as 2*(m-1)."""
+    m, e = math.frexp(x)       # x = m * 2^e, m in [0.5, 1)
+    return 2.0 * (m - 1.0) + e
+
+def fastpow2(x: float) -> float:
+    """Fast approximation to 2^x. Splits x into integer and fractional parts,
+    then uses ldexp to construct the result."""
+    flr = math.floor(x)
+    remainder = x - flr
+    mantissa = 0.5 * (remainder + 1.0)   # mantissa in [0.5, 1)
+    return math.ldexp(mantissa, flr + 1)  # mantissa * 2^(flr+1)
+
+_LN2 = math.log(2.0)
+
+def inverse_pow2(x: float, max_iter: int = 20, tol: float = 1e-15) -> float:
+    """Exact inverse of fastpow2: finds y such that fastpow2(y) == x to machine precision.
+    Uses fastlg as initial guess, then Newton iteration on f(y) = fastpow2(y) - x."""
+    y = fastlg(x)
+    for _ in range(max_iter):
+        p = fastpow2(y)
+        f = p - x
+        if abs(f) < tol * abs(x):
+            break
+        y -= f / (p * _LN2)   # Newton step: y -= f(y) / f'(y)
+    return y
+```
+
+`H5Reader` applies `inverse_pow2` element-wise to every `fast_log` output at load time. Python table-generation scripts should store **raw physical values** and leave the transform to the C++ loader; these implementations are provided for verification and for tools that need to inspect the interpolation-space representation.
+
 ## Key API
 
 | Method | Description |
