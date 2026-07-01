@@ -43,6 +43,29 @@ For this problem the fully relativistic solution has no acceleration. A Newtonia
 
 Thus the short test asserts that the measured velocity increment is positive and close to the small-step Newtonian prediction. This verifies that Quokka is exercising the anomalous coupling path.
 
+## Scaling note
+
+The anomalous term is small in powers of the velocity only if the radiation energy density is comparable to the flux energy density. Comparing the anomalous acceleration to the physical flux acceleration,
+
+<script type="math/tex; mode=display">
+\frac{a_\mathrm{anom}}{a_\mathrm{rad}}
+\sim
+\beta\frac{c(E_r-a_rT^4)}{F_r},
+</script>
+
+where \\(\beta=v/c\\) and \\(a_\mathrm{rad}=\kappa_F F_r/c\\). For optically thin, free-streaming radiation, \\(cE_r/F_r = O(1)\\), so the anomalous acceleration is only \\(O(\beta)\\) of the physical radiative acceleration. In an optically thick diffusive region, \\(cE_r/F_r = O(\tau)\\). If the radiation and material are also out of thermal equilibrium, so that \\(|E_r-a_rT^4| = O(E_r)\\), then the instantaneous anomalous acceleration can be \\(O(\beta\tau)\\) times the physical flux acceleration.
+
+This force-level estimate does not by itself imply that every equilibration event produces an \\(O(\beta\tau)\\) velocity error. For a one-time relaxation, increasing the opacity also shortens the equilibration time, and the anomalous acceleration shuts off when \\(E_r=a_rT^4\\). The \\(O(\beta\tau)\\) scaling is most relevant when non-equilibrium is sustained over a hydrodynamic residence time, such as in a driven radiative shock, a Zel'dovich spike, or a source/transport imbalance that continually replenishes \\(E_r-a_rT^4\\). In the notation of Lowrie, Wollaeger, and Morel, the corresponding fluid-time measure is
+
+<script type="math/tex; mode=display">
+A =
+\left(\frac{E_r}{\rho v_\mathrm{ref}^2}\right)
+(\kappa_F\rho L)
+\left(\frac{v_\mathrm{ref}}{c}\right),
+</script>
+
+with the thermal non-equilibrium fraction multiplying this estimate when \\(|E_r-a_rT^4| < E_r\\).
+
 ## Running
 
 The registered test uses the short one-step input:
