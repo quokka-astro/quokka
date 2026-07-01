@@ -24,7 +24,7 @@ constexpr double radiation_constant_value = 1.0;
 constexpr double Erad0 = 4.0;
 constexpr double kappa0 = 1.0;
 constexpr double dt = 1.0e-4;
-double initialErad = Erad0;			       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+double initialErad = Erad0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 } // namespace
 
 template <> struct SimulationData<RadhydroEquilibrationAnomaly> {
@@ -56,8 +56,7 @@ template <> struct Physics_Traits<RadhydroEquilibrationAnomaly> : DefaultPhysics
 template <>
 AMREX_GPU_HOST_DEVICE auto
 quokka::EOS<RadhydroEquilibrationAnomaly>::ComputeTgasFromEint(const double /*rho*/, const double Egas,
-							       quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/)
-    -> double
+							       quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	return std::pow(Egas, 1. / 4.);
 }
@@ -65,15 +64,13 @@ quokka::EOS<RadhydroEquilibrationAnomaly>::ComputeTgasFromEint(const double /*rh
 template <>
 AMREX_GPU_HOST_DEVICE auto
 quokka::EOS<RadhydroEquilibrationAnomaly>::ComputeEintFromTgas(const double /*rho*/, const double Tgas,
-							       quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/)
-    -> double
+							       quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	return std::pow(Tgas, 4);
 }
 
 template <>
-AMREX_GPU_HOST_DEVICE auto
-quokka::EOS<RadhydroEquilibrationAnomaly>::ComputeEintTempDerivative(
+AMREX_GPU_HOST_DEVICE auto quokka::EOS<RadhydroEquilibrationAnomaly>::ComputeEintTempDerivative(
     const double /*rho*/, const double Tgas, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/) -> double
 {
 	return 4.0 * std::pow(Tgas, 3);
@@ -81,14 +78,10 @@ quokka::EOS<RadhydroEquilibrationAnomaly>::ComputeEintTempDerivative(
 
 namespace
 {
-[[nodiscard]] auto initialGasInternalEnergy() -> double
-{
-	return quokka::EOS<RadhydroEquilibrationAnomaly>::ComputeEintFromTgas(rho0, Tgas0);
-}
+[[nodiscard]] auto initialGasInternalEnergy() -> double { return quokka::EOS<RadhydroEquilibrationAnomaly>::ComputeEintFromTgas(rho0, Tgas0); }
 } // namespace
 
-template <>
-AMREX_GPU_HOST_DEVICE auto RadSystem<RadhydroEquilibrationAnomaly>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<RadhydroEquilibrationAnomaly>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
 {
 	return kappa0;
 }
