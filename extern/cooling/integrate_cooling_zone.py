@@ -28,6 +28,11 @@ def load_resampled_cooling_tables(filename):
         eint_grid = tab1['grids/eint'][:]
         all_data  = tab1['data'][:]  # shape [5, n_rho, n_eint]
         metadata  = {k: tab1.attrs[k] for k in tab1.attrs}
+        # Compatibility aliases: xlo/xhi[0]=rho, xlo/xhi[1]=eint
+        metadata['rho_min']  = float(metadata['xlo'][0])
+        metadata['rho_max']  = float(metadata['xhi'][0])
+        metadata['eint_min'] = float(metadata['xlo'][1])
+        metadata['eint_max'] = float(metadata['xhi'][1])
 
     data = {
         'rho':  rho_grid,
