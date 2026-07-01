@@ -603,7 +603,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	bool useLuminosityTable_ = true;
 	std::string luminosityTableFilename_;
-	quokka::SpacingType rad_table_output_spacing_ = quokka::SpacingType::fast_log;
+	quokka::SpacingType rad_table_output_transform_ = quokka::SpacingType::fast_log;
 
 #if AMREX_SPACEDIM == 3
 	quokka::LuminosityTables<Physics_Traits<problem_t>::nGroups> luminosityTables_;
@@ -1107,7 +1107,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 		amrex::ParmParse const ppp("particles");
 		ppp.query("use_luminosity_table", useLuminosityTable_);
 		ppp.query("rad_table", luminosityTableFilename_);
-		ppp.query("rad_table_output_spacing", rad_table_output_spacing_);
+		ppp.query("rad_table_output_transform", rad_table_output_transform_);
 		ppp.query("split_particles_on_restart_refine", splitParticlesOnRestartRefine_);
 
 		// if particle and radiation are enabled
@@ -1120,7 +1120,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 				amrex::Print() << "Loading luminosity table from: " << luminosityTableFilename_ << "\n";
 
 				// Use specified spacing for luminosity values
-				luminosityTables_.luminosity = quokka::DataTable<2, nGroups>::CSVReader(luminosityTableFilename_, rad_table_output_spacing_);
+				luminosityTables_.luminosity = quokka::DataTable<2, nGroups>::CSVReader(luminosityTableFilename_, rad_table_output_transform_);
 
 				amrex::Print() << "Luminosity table loaded successfully.\n";
 				amrex::Print() << std::format("\tTable dimensions: {} x {}\n", luminosityTables_.luminosity.size(0),
