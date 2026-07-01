@@ -729,12 +729,12 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
 		DataTableGpuConst<Ndim, Nout, oob_policy> tables{
 		    coord_tables,
-		    data_tables,     // array of data tables
-		    coord_min_,	     // coord_min array
-		    coord_max_,	     // coord_max array
-		    spacing_types_,  // spacing types array (converted to enum)
-		    dcoord_,	     // dcoord array
-		    sizes_,	     // sizes array
+		    data_tables,       // array of data tables
+		    coord_min_,	       // coord_min array
+		    coord_max_,	       // coord_max array
+		    spacing_types_,    // spacing types array (converted to enum)
+		    dcoord_,	       // dcoord array
+		    sizes_,	       // sizes array
 		    output_transforms_ // per-output transform
 		};
 		return tables;
@@ -1286,7 +1286,8 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 								if (i1 < sizes[0] - 1) {
 									file >> comma;
 								}
-								if (output_transform_bcast == SpacingType::fast_log || output_transform_bcast == SpacingType::log) {
+								if (output_transform_bcast == SpacingType::fast_log ||
+								    output_transform_bcast == SpacingType::log) {
 									AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
 									    value > 0.0, std::format("log output transform requires positive values, got {} at "
 												     "output {} index ({}, {}, {})",
@@ -1313,9 +1314,10 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 									if (output_transform_bcast == SpacingType::fast_log ||
 									    output_transform_bcast == SpacingType::log) {
 										AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-										    value > 0.0, std::format("log output transform requires positive values, got "
-													     "{} at output {} index ({}, {}, {}, {})",
-													     value, out_idx, i1, i2, i3, i4));
+										    value > 0.0,
+										    std::format("log output transform requires positive values, got "
+												"{} at output {} index ({}, {}, {}, {})",
+												value, out_idx, i1, i2, i3, i4));
 										value = log_(value);
 									}
 									flat_data[flatDataIndex(out_idx, sizes, std::array<int, Ndim>{i1, i2, i3, i4})] = value;
