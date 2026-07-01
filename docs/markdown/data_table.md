@@ -133,41 +133,36 @@ The general principle is that interpolation is accurate when a smooth monotone t
 
 ### Python reference implementations
 
-Python equivalents of the three functions from `src/math/FastMath.hpp`. Table-generation scripts that need to verify round-trips or pre-apply the transform can use these directly.
+Two functions from `src/math/FastMath.hpp` are useful when generating a `fast_log`-spaced grid in Python.
 
 ```python
 import math
 
-def fastlg(x: float) -> float:
-    """Fast approximation to log2(x). Uses frexp to split x = m * 2^e (m in [0.5, 1)),
-    then approximates log2(m) linearly as 2*(m-1)."""
-    m, e = math.frexp(x)       # x = m * 2^e, m in [0.5, 1)
+def fast_log2(x: float) -> float:
+    """Maps a physical value to fast-log2 space.
+    Uses frexp to split x = m * 2^e (m in [0.5, 1)), then approximates log2(m) as 2*(m-1)."""
+    m, e = math.frexp(x)
     return 2.0 * (m - 1.0) + e
 
-def fastpow2(x: float) -> float:
-    """Fast approximation to 2^x. Splits x into integer and fractional parts,
-    then uses ldexp to construct the result."""
-    flr = math.floor(x)
-    remainder = x - flr
-    mantissa = 0.5 * (remainder + 1.0)   # mantissa in [0.5, 1)
-    return math.ldexp(mantissa, flr + 1)  # mantissa * 2^(flr+1)
-
-_LN2 = math.log(2.0)
-
-def inverse_pow2(x: float, max_iter: int = 20, tol: float = 1e-15) -> float:
-    """Exact inverse of fastpow2: finds y such that fastpow2(y) == x to machine precision.
-    Uses fastlg as initial guess, then Newton iteration on f(y) = fastpow2(y) - x."""
-    y = fastlg(x)
-    for _ in range(max_iter):
-        p = fastpow2(y)
-        f = p - x
-        if abs(f) < tol * abs(x):
-            break
-        y -= f / (p * _LN2)   # Newton step: y -= f(y) / f'(y)
-    return y
+def inverse_fast_log2(y: float) -> float:
+    """Inverse of fast_log2: maps a fast-log2-space value back to a physical value."""
+    flr = math.floor(y)
+    remainder = y - flr
+    return math.ldexp(0.5 * (remainder + 1.0), flr + 1)
 ```
 
-`H5Reader` applies `inverse_pow2` element-wise to every `fast_log` output at load time. Python table-generation scripts should store **raw physical values** and leave the transform to the C++ loader; these implementations are provided for verification and for tools that need to inspect the interpolation-space representation.
+To build a uniformly-spaced grid in fast-log2 space:
+
+```python
+import numpy as np
+
+v_min = fast_log2(x_min)
+v_max = fast_log2(x_max)
+v_grid = np.linspace(v_min, v_max, n)         # uniform in fast-log2 space
+x_grid = np.vectorize(inverse_fast_log2)(v_grid)  # physical values at each grid point
+```
+
+These correspond to `FastMath::lg` and `FastMath::pow2` in C++. Python table-generation scripts should store **raw physical values** in the HDF5 file; `H5Reader` handles the internal transform at load time.
 
 ## Key API
 
