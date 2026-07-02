@@ -532,10 +532,8 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 						const amrex::Real v_wcomp1 = ec_vs_wcomp1_iquad[iquad](i, j, k);
 						const amrex::Real b_wcomp0 = ec_bs_wcomp0_iquad[iquad](i, j, k);
 						const amrex::Real b_wcomp1 = ec_bs_wcomp1_iquad[iquad](i, j, k);
-						// FelkerStone2017 eqns. 36-37: v x b cross product at each corner. OPEN QUESTION: this term looks
-						// sign-flipped relative to the paper (emf = v2*b1 - v1*b2). SolveInductionEqn geometry did not
-						// unambiguously confirm or resolve this from paper-reading alone. Unverified against a reference
-						// solution; needs further checking.
+						// OPEN QUESTION: this term's sign has not been verified against a reference solution. SolveInductionEqn
+						// geometry did not unambiguously confirm or resolve this from index-mapping alone; needs further checking.
 						ec_emfs_wcomp2_iquad[iquad](i, j, k) = v_wcomp0 * b_wcomp1 - v_wcomp1 * b_wcomp0; // cross product at the edge
 					}
 				});
@@ -625,8 +623,8 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 									fc_a4_bs_wcomp[wcomp2](i + delta_wcomp2[0], j + delta_wcomp2[1], k + delta_wcomp2[2]));
 
 				// Balsara2025a sec. 3 (step 2, prose description, no numbered eqn.): v x b computation. OPEN QUESTION:
-				// this term looks sign-flipped relative to the paper (emf = v2*b1 - v1*b2), matching the same pattern
-				// found in FelkerStone2017/Quokka2026. Unverified against a reference solution; needs further checking.
+				// this term looks sign-flipped relative to the paper (emf = v2*b1 - v1*b2). Unverified against a
+				// reference solution; needs further checking.
 				cc_a4_emfs_wcomp[wcomp0](i, j, k) = vs_wcomp[wcomp1] * b_ave_wcomp2 - vs_wcomp[wcomp2] * b_ave_wcomp1;
 			}
 		});
@@ -675,8 +673,8 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 
 			// Balsara2025a sec. 3 (steps 3-5, prose description, no numbered eqns.): interpolate the cell-centered
 			// EMF to the cell-edge. there are two possible permutations for doing this: getting cell-centered
-			// quanties to a cell-edge first is cc->fc[dir-0]->ec and second is cc->fc[dir-1]->ec. as in
-			// FelkerStone2017, reconstruction does not commute, so the results are averaged below.
+			// quanties to a cell-edge first is cc->fc[dir-0]->ec and second is cc->fc[dir-1]->ec. reconstruction
+			// does not commute, so the results are averaged below.
 			for (int iperm = 0; iperm < 2; ++iperm) {
 				// for each permutation of extrapolating cc->fc->ec
 
