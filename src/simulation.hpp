@@ -68,6 +68,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
+#include "AMReX_TypeTraits.H"
 #include "AMReX_Utility.H"
 #include "AMReX_Vector.H"
 #include "AMReX_VisMF.H"
@@ -471,7 +472,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	AMREX_GPU_DEVICE static void setConstantDirichletBCFaceVarHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar_fc,
 								     amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, ncomp> const &values);
 
-	// compute volume integrals
+	// compute volume integrals. The callback signature is (i, j, k, state_cc, state_fc).
 	template <typename F> auto computeVolumeIntegral(F const &user_f) -> amrex::Real;
 
 	// I/O functions
@@ -3530,6 +3531,12 @@ template <typename problem_t> template <typename F> auto AMRSimulation<problem_t
 {
 	// compute integral of user_f(i, j, k, state) along the given axis.
 	const BL_PROFILE("AMRSimulation::computeVolumeIntegral()");
+	using StateArray = amrex::Array4<const amrex::Real>;
+	using FaceArray = std::array<StateArray, AMREX_SPACEDIM>;
+#ifndef AMREX_USE_GPU
+	constexpr bool user_f_accepts_cc_fc = amrex::IsCallable<F const, int, int, int, StateArray const &, FaceArray const &>::value;
+	static_assert(user_f_accepts_cc_fc, "computeVolumeIntegral callback must accept (i, j, k, state_cc, state_fc).");
+#endif
 
 	// allocate temporary multifabs
 	amrex::Vector<amrex::MultiFab> q;
@@ -3543,7 +3550,24 @@ template <typename problem_t> template <typename F> auto AMRSimulation<problem_t
 	for (int lev = 0; lev <= finest_level; ++lev) {
 		auto const &state = state_new_cc_[lev].const_arrays();
 		auto const &result = q[lev].arrays();
-		amrex::ParallelFor(q[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) { result[bx](i, j, k) = user_f(i, j, k, state[bx]); });
+		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
+			auto const &state_fc_x0 = state_new_fc_[lev][0].const_arrays();
+#if (AMREX_SPACEDIM >= 2)
+			auto const &state_fc_x1 = state_new_fc_[lev][1].const_arrays();
+#endif
+#if (AMREX_SPACEDIM == 3)
+			auto const &state_fc_x2 = state_new_fc_[lev][2].const_arrays();
+#endif
+			amrex::ParallelFor(q[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+				FaceArray const state_fc{AMREX_D_DECL(state_fc_x0[bx], state_fc_x1[bx], state_fc_x2[bx])};
+				result[bx](i, j, k) = user_f(i, j, k, state[bx], state_fc);
+			});
+		} else {
+			amrex::ParallelFor(q[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
+				FaceArray const state_fc{};
+				result[bx](i, j, k) = user_f(i, j, k, state[bx], state_fc);
+			});
+		}
 	}
 	amrex::Gpu::streamSynchronize();
 
