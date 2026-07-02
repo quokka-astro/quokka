@@ -500,6 +500,19 @@ template <typename problem_t> struct EOSTabulated {
 	{
 		return EOSIdeal<problem_t>::ComputeIsothermalSoundSpeed(rho, Pressure);
 	}
+
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
+	ComputeEntropyFromRhoEint(amrex::Real rho, amrex::Real Eint,
+			      quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> amrex::Real
+	{
+		amrex::ignore_unused(massScalars);
+		auto *reg = ResampledCooling::getEOSTabulatedRegistry();
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(reg != nullptr, "EOSTabulated: registry not registered before use!");
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(reg->active, "EOSTabulated: registry not active!");
+
+		AMREX_IF_ON_DEVICE((return ResampledCooling::ComputeEntropyFromRhoEint(rho, Eint, reg->device);))
+		AMREX_IF_ON_HOST((return ResampledCooling::ComputeEntropyFromRhoEint(rho, Eint, reg->host);))
+	}
 };
 
 // ==================== EOS backend selection ====================
@@ -597,6 +610,13 @@ template <typename problem_t> class EOS
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto ComputeIsothermalSoundSpeed(amrex::Real rho, amrex::Real Pressure) -> amrex::Real
 	{
 		return backend_t::ComputeIsothermalSoundSpeed(rho, Pressure);
+	}
+
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
+	ComputeEntropyFromRhoEint(amrex::Real rho, amrex::Real Eint,
+			      quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> amrex::Real
+	{
+		return backend_t::ComputeEntropyFromRhoEint(rho, Eint, massScalars);
 	}
 
 	// Compute gas internal energy from gas total energy (Eint + Ekin, NOT including B field).

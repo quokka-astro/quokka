@@ -66,6 +66,17 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEgasFromTgas(Real const rho
 	return Eint_hi;
 }
 
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEntropyFromRhoEint(Real const rho, Real const Eint, resampledGpuConstTables const &tables) -> Real
+{
+	if (rho <= 0.0) {
+		return 0.0;
+	}
+	const Real eint = Eint / rho;
+	std::array<amrex::Real, 2> const point = {FastMath::fastlg(rho), FastMath::fastlg(eint)};
+	const Real K = tables.entropies.interpolate_single(point);
+	return K;
+}
+
 struct EOSTabulatedRegistry {
 	bool active = false;
 	resampledGpuConstTables host;

@@ -610,7 +610,6 @@ void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::string const 
 
 	if (dname == "entropy") {
 		const int ncomp = ncomp_cc_in;
-		auto tables = resampledTables_.const_tables();
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
 			auto const &output = mf.array(iter);
@@ -625,7 +624,7 @@ void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::string const 
 				Real const Egas = state(i, j, k, HydroSystem<DiskGalaxy>::energy_index);
 				Real const Emag = HydroSystem<DiskGalaxy>::ComputeCellCenteredMagneticEnergy(i, j, k, cons_fc);
 				Real const Eint = quokka::EOS<DiskGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, Emag);
-				Real const K_cgs = quokka::ResampledCooling::ComputeEntropyFromRhoEint(rho, Eint, tables);
+				Real const K_cgs = quokka::EOS<DiskGalaxy>::ComputeEntropyFromRhoEint(rho, Eint);
 				output(i, j, k, ncomp) = K_cgs / keV_in_ergs;
 			});
 		}

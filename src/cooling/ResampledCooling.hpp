@@ -87,18 +87,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputePressureFromRhoEint(Real co
 	return P;
 }
 
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEntropyFromRhoEint(Real const rho, Real const Eint, resampledGpuConstTables const &tables) -> Real
-{
-	// Convert Eint (energy density) to eint (specific energy) and then to fast log scale for interpolation
-	const Real eint = Eint / rho;
-	std::array<amrex::Real, 2> const point = {FastMath::fastlg(rho), FastMath::fastlg(eint)};
-
-	// Interpolate entropy from data tables
-	const Real K = tables.entropies.interpolate_single(point);
-
-	return K;
-}
-
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeSoundSpeedFromRhoEint(Real const rho, Real const Eint, resampledGpuConstTables const &tables) -> Real
 {
 	// Convert Eint (energy density) to eint (specific energy) and then to fast log scale for interpolation
