@@ -8,7 +8,6 @@
 /// \file testResampledCoolingTest.cpp
 /// \brief Defines a test problem for cooling integrator accuracy using the ResampledCooling module.
 ///
-/// placeholder
 
 #ifdef HAVE_PYTHON
 #include "util/matplotlibcpp.h"
