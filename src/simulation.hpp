@@ -1107,7 +1107,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 		amrex::ParmParse const ppp("particles");
 		ppp.query("use_luminosity_table", useLuminosityTable_);
 		ppp.query("rad_table", luminosityTableFilename_);
-		ppp.query("rad_table_output_transform", rad_table_output_transform_);
+		ppp.query("rad_table_output_spacing", rad_table_output_transform_);   // legacy key (pre-rename)
+		ppp.query("rad_table_output_transform", rad_table_output_transform_); // new key takes precedence
 		ppp.query("split_particles_on_restart_refine", splitParticlesOnRestartRefine_);
 
 		// if particle and radiation are enabled
