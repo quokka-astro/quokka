@@ -1143,7 +1143,7 @@ MHDSystem<problem_t>::computeResistiveEMF(amrex::Array4<const amrex::Real> const
 					  amrex::Real dx_wcomp1, amrex::Real resistivity) -> amrex::Real
 {
 	const amrex::Real ec_j = (fc_a4_b_wcomp1(i, j, k) - fc_a4_b_wcomp1(i - delta_wcomp0[0], j - delta_wcomp0[1], k - delta_wcomp0[2])) / dx_wcomp0 -
-				   (fc_a4_b_wcomp0(i, j, k) - fc_a4_b_wcomp0(i - delta_wcomp1[0], j - delta_wcomp1[1], k - delta_wcomp1[2])) / dx_wcomp1;
+				 (fc_a4_b_wcomp0(i, j, k) - fc_a4_b_wcomp0(i - delta_wcomp1[0], j - delta_wcomp1[1], k - delta_wcomp1[2])) / dx_wcomp1;
 	return resistivity * ec_j;
 }
 
@@ -1259,7 +1259,7 @@ void MHDSystem<problem_t>::AddResistiveEnergyFlux(std::array<amrex::MultiFab, AM
 
 				// flux_eta is the wcomp0-component of cross(eta_j, b), averaged over the lo/hi bounding edges
 				const amrex::Real flux_eta = 0.25 * (eta_j_wcomp1_lo * ave_b_wcomp2_lo + eta_j_wcomp1_hi * ave_b_wcomp2_hi -
-								  eta_j_wcomp2_lo * ave_b_wcomp1_lo - eta_j_wcomp2_hi * ave_b_wcomp1_hi);
+								     eta_j_wcomp2_lo * ave_b_wcomp1_lo - eta_j_wcomp2_hi * ave_b_wcomp1_hi);
 				fc_a4_flux(i, j, k, energy_idx) += flux_eta;
 			});
 		}
