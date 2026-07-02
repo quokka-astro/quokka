@@ -383,7 +383,7 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 					ec_bs_wcomp0_iquad[iquad] = ec_fabs_bs_icomp_jeside[0][idx0].const_array(); // comp=0, index idx0
 					ec_bs_wcomp1_iquad[iquad] = ec_fabs_bs_icomp_jeside[1][idx1].const_array(); // comp=1, index idx1
 
-					// define EMF FArrayBox for each quadrant (we need to allocate outside the kernel)
+					// define EMF FArrayBox for each quadrant (must be allocated outside the kernel)
 					ec_fabs_emfs_iquad[iquad] = amrex::FArrayBox(box_ec, 1, amrex::The_Async_Arena());
 					ec_emfs_wcomp2_iquad[iquad] = ec_fabs_emfs_iquad[iquad].array();
 				}
@@ -523,7 +523,7 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 					const int idx0 = (iquad == 0 || iquad == 3) ? 0 : 1; // B/T selector for dir-0
 					const int idx1 = (iquad < 2) ? 0 : 1;		     // L/R selector for dir-1
 
-					// define EMF FArrayBox for each quadrant (we need to allocate outside the kernel)
+					// define EMF FArrayBox for each quadrant (must be allocated outside the kernel)
 					ec_fabs_emfs_iquad[iquad] = amrex::FArrayBox(box_ec, 1, amrex::The_Async_Arena());
 
 					// extract relevant velocity and magnetic field components (host: get Array4 views)
@@ -1098,12 +1098,10 @@ void MHDSystem<problem_t>::SolveInductionEqn(std::array<amrex::MultiFab, AMREX_S
 
 	// loop over faces with wcomp0-normal
 	for (int wcomp0 = 0; wcomp0 < 3; ++wcomp0) {
-		// you have two edges on the perimeter of this face
-		const int wcomp1 = (wcomp0 + 1) % 3; // vec_fc(wcomp0) + vec_fc(wcomp1)
-		const int wcomp2 = (wcomp0 + 2) % 3; // vec_fc(wcomp0) + vec_fc(wcomp2)
+		const int wcomp1 = (wcomp0 + 1) % 3;
+		const int wcomp2 = (wcomp0 + 2) % 3;
 
-		// direction to find the edges either side of the face. this depends on the direction the face points
-		// indexing: delta_wcomp{1/2}[3: spatial dimension]
+		// indexing: delta_wcomp{0/1}[3: spatial dimension]
 		std::array<int, 3> delta_wcomp1 = {0, 0, 0};
 		std::array<int, 3> delta_wcomp2 = {0, 0, 0};
 		if (wcomp0 == 0) {
@@ -1144,9 +1142,9 @@ MHDSystem<problem_t>::computeResistiveEMF(amrex::Array4<const amrex::Real> const
 					  int j, int k, std::array<int, 3> const &delta_wcomp0, std::array<int, 3> const &delta_wcomp1, amrex::Real dx_wcomp0,
 					  amrex::Real dx_wcomp1, amrex::Real resistivity) -> amrex::Real
 {
-	const amrex::Real j_edge = (fc_a4_b_wcomp1(i, j, k) - fc_a4_b_wcomp1(i - delta_wcomp0[0], j - delta_wcomp0[1], k - delta_wcomp0[2])) / dx_wcomp0 -
+	const amrex::Real ec_j = (fc_a4_b_wcomp1(i, j, k) - fc_a4_b_wcomp1(i - delta_wcomp0[0], j - delta_wcomp0[1], k - delta_wcomp0[2])) / dx_wcomp0 -
 				   (fc_a4_b_wcomp0(i, j, k) - fc_a4_b_wcomp0(i - delta_wcomp1[0], j - delta_wcomp1[1], k - delta_wcomp1[2])) / dx_wcomp1;
-	return resistivity * j_edge;
+	return resistivity * ec_j;
 }
 
 template <typename problem_t>
@@ -1200,7 +1198,7 @@ void MHDSystem<problem_t>::AddResistiveEnergyFlux(std::array<amrex::MultiFab, AM
 		for (amrex::MFIter mfi(fcw_mf_fluxes_wcomp[wcomp0]); mfi.isValid(); ++mfi) {
 			const amrex::Box &box_face = mfi.validbox();
 
-			// fc_a4_b_wcomp_wcomp1 on wcomp1-faces, fc_a4_b_wcomp_wcomp2 on wcomp2-faces, fc_a4_b_wcomp_wcomp0 on wcomp0-faces (aliased, no copy)
+			// b-field Array4 aliases (no copy) for the wcomp{0/1/2}-faces
 			const auto fc_a4_b_wcomp_wcomp1 = fcw_mf_cVars_wcomp[wcomp1][mfi].const_array(bfield_index);
 			const auto fc_a4_b_wcomp_wcomp2 = fcw_mf_cVars_wcomp[wcomp2][mfi].const_array(bfield_index);
 			const auto fc_a4_b_wcomp_wcomp0 = fcw_mf_cVars_wcomp[wcomp0][mfi].const_array(bfield_index);
@@ -1245,7 +1243,7 @@ void MHDSystem<problem_t>::AddResistiveEnergyFlux(std::array<amrex::MultiFab, AM
 								k + delta_wcomp1[2], delta_wcomp0, delta_wcomp1, dx_wcomp0, dx_wcomp1, eta_wcomp2_hi);
 				}
 
-				// average face-b to each edge position across the wcomp0-direction.
+				// average fc b across wcomp0 to ec
 				const amrex::Real ave_b_wcomp2_lo =
 				    0.5 * (fc_a4_b_wcomp_wcomp2(i, j, k) + fc_a4_b_wcomp_wcomp2(i - delta_wcomp0[0], j - delta_wcomp0[1], k - delta_wcomp0[2]));
 				const amrex::Real ave_b_wcomp2_hi =
@@ -1259,10 +1257,10 @@ void MHDSystem<problem_t>::AddResistiveEnergyFlux(std::array<amrex::MultiFab, AM
 					   fc_a4_b_wcomp_wcomp1(i + delta_wcomp1[0] - delta_wcomp0[0], j + delta_wcomp1[1] - delta_wcomp0[1],
 								k + delta_wcomp1[2] - delta_wcomp0[2]));
 
-				// f_eta = (cross(eta_j, b))_wcomp0 = eta_j_wcomp1 * b_wcomp2 - eta_j_wcomp2 * b_wcomp1, averaged over lo and hi bounding edges.
-				const amrex::Real f_eta = 0.25 * (eta_j_wcomp1_lo * ave_b_wcomp2_lo + eta_j_wcomp1_hi * ave_b_wcomp2_hi -
+				// flux_eta is the wcomp0-component of cross(eta_j, b), averaged over the lo/hi bounding edges
+				const amrex::Real flux_eta = 0.25 * (eta_j_wcomp1_lo * ave_b_wcomp2_lo + eta_j_wcomp1_hi * ave_b_wcomp2_hi -
 								  eta_j_wcomp2_lo * ave_b_wcomp1_lo - eta_j_wcomp2_hi * ave_b_wcomp1_hi);
-				fc_a4_flux(i, j, k, energy_idx) += f_eta;
+				fc_a4_flux(i, j, k, energy_idx) += flux_eta;
 			});
 		}
 	}
