@@ -275,9 +275,10 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 				}
 			}
 
-			// extrapolate the two required cell-centered velocity field components to the cell-edge
-			// there are two possible permutations for doing this: getting cell-centered quanties to a cell-edge
-			// first is cc->fc[dir-0]->ec and second is cc->fc[dir-1]->ec
+			// FelkerStone2017 sec. 4.1.1 (step 3): extrapolate the two required cell-centered velocity field components
+			// to the cell-edge. there are two possible permutations for doing this: getting cell-centered quanties to a
+			// cell-edge first is cc->fc[dir-0]->ec and second is cc->fc[dir-1]->ec. reconstruction does not commute
+			// (hence the two permutations), so the results are averaged below.
 			for (int iperm = 0; iperm < 2; ++iperm) {
 				// for each permutation of extrapolating cc->fc->ec
 
@@ -347,7 +348,8 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 				}
 			}
 
-			// extrapolate the two required face-centered magnetic field components to the cell-edge
+			// FelkerStone2017 sec. 4.1.1 (steps 1-2, preceding eqn. 37): extrapolate the two required face-centered
+			// magnetic field components to the cell-edge.
 			for (int icomp = 0; icomp < 2; ++icomp) {
 				const int extrap_dir2edge = extrap_dirs[(icomp + 1) % 2];
 				const auto dir2edge = static_cast<FluxDir>(extrap_dir2edge);
@@ -391,6 +393,10 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 						const amrex::Real v_wcomp1 = ec_vs_wcomp1_iquad[iquad](i, j, k);
 						const amrex::Real b_wcomp0 = ec_bs_wcomp0_iquad[iquad](i, j, k);
 						const amrex::Real b_wcomp1 = ec_bs_wcomp1_iquad[iquad](i, j, k);
+						// FelkerStone2017 eqns. 36-37: v x b cross product at each corner. OPEN QUESTION: this term looks
+						// sign-flipped relative to the paper (emf = v2*b1 - v1*b2). SolveInductionEqn geometry did not
+						// unambiguously confirm or resolve this from paper-reading alone. Unverified against a reference
+						// solution; needs further checking.
 						ec_emfs_wcomp2_iquad[iquad](i, j, k) = v_wcomp0 * b_wcomp1 - v_wcomp1 * b_wcomp0; // cross product at the edge
 					}
 				});
@@ -526,6 +532,10 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 						const amrex::Real v_wcomp1 = ec_vs_wcomp1_iquad[iquad](i, j, k);
 						const amrex::Real b_wcomp0 = ec_bs_wcomp0_iquad[iquad](i, j, k);
 						const amrex::Real b_wcomp1 = ec_bs_wcomp1_iquad[iquad](i, j, k);
+						// FelkerStone2017 eqns. 36-37: v x b cross product at each corner. OPEN QUESTION: this term looks
+						// sign-flipped relative to the paper (emf = v2*b1 - v1*b2). SolveInductionEqn geometry did not
+						// unambiguously confirm or resolve this from paper-reading alone. Unverified against a reference
+						// solution; needs further checking.
 						ec_emfs_wcomp2_iquad[iquad](i, j, k) = v_wcomp0 * b_wcomp1 - v_wcomp1 * b_wcomp0; // cross product at the edge
 					}
 				});
