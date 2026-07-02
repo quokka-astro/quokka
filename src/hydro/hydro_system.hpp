@@ -1518,6 +1518,10 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 		}
 
 		// compute face-centered normal velocity using HLL star state
+		// NOTE (Mignone21a): this HLL-weighted average of L/R normal-velocity states has the same weighting form
+		// as Mignone21a eqn. (29) (used there for the *transverse* velocity at a face). This is the actual formula
+		// feeding ComputeEMF_Quokka2026's face velocity; it differs from the flux/upwind-density description of
+		// this step in the associated paper draft's prose, worth reconciling paper text and code.
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			quokka::Array4View<amrex::Real, DIR> x1FSpds(x1FSpds_ref);
 			amrex::Real const fspd_m = x1FSpds(i, j, k, 0);

@@ -418,6 +418,9 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 
 // emf compute solver; Quokka (2026) variant of FelkerStone2017.
 // uses face-centered Riemann velocity and face-centered magnetic fields extrapolated to the cell-edge.
+// NOTE (Mignone21a): developed independently; Mignone21a sec. 4.2/5 was found afterward to use a similar
+// face-velocity, single-reconstruction approach. See markers below and in hydro_system.hpp for where this
+// code differs in specifics; for you to judge whether/how to acknowledge.
 
 template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emfs_wcomp,
@@ -472,6 +475,10 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 			}
 
 			// extrapolate the face-centered fields (normal to the cell-face) to the cell-edge
+			// NOTE (Mignone21a): this single fc->ec transverse reconstruction of a Riemann-derived face velocity is
+			// structurally similar to Mignone21a eqn. (29)/sec. 4.2-5, which does the same for the *transverse* velocity
+			// component at a face (this code reconstructs the *normal* component instead); Mignone21a also fuses
+			// reconstruction with averaging into one formula, whereas this code keeps them decoupled (see AverageEMF).
 			for (int icomp = 0; icomp < 2; ++icomp) {
 				const auto dir2edge = static_cast<FluxDir>(extrap_dirs[(icomp + 1) % 2]);
 				const int wcomp = extrap_dirs[icomp];
