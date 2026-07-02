@@ -1,32 +1,29 @@
 #ifndef MHD_SYSTEM_HPP_ // NOLINT
 #define MHD_SYSTEM_HPP_
+
 //==============================================================================
-// ...
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file mhd_system.hpp
-/// \brief Defines a class for solving the MHD equations.
+/// \brief A class for solving the resistive MHD induction equation, including Ohmic heating for non-isothermal plasmas.
 ///
 
-// c++ headers
-
 // library headers
-
-// internal headers
 #include "AMReX_BLProfiler.H"
 #include "AMReX_GpuControl.H"
 #include "AMReX_MFIter.H"
 #include "AMReX_ParmParse.H"
+
+// internal headers
 #include "hydro_system.hpp"
 #include "hyperbolic_system.hpp"
 #include "physics_info.hpp"
 #include "physics_numVars.hpp"
-#include <iostream>
 
 AMREX_ENUM(EMFComputeScheme, FelkerStone2017, Balsara2025, Quokka2026); // NOLINT
 // FelkerStone2017: Felker & Stone (2018), JCP 375:1365; uses cc velocity.
 // Balsara2025a: Balsara et al. (2025a), ApJ 988:134; EMF reconstructed from cc->ec.
-// Quokka2026: this work (2026); variant of FelkerStone2017 using fc Riemann velocity.
+// Quokka2026: work in preparation; variant of Mignone21a: Mignone & Del Zanna (2021), JCP 424:109748.
 
 AMREX_ENUM(EMFAvgScheme, LondrilloDelZanna2004, Balsara2025); // NOLINT
 // LondrilloDelZanna2004: Londrillo & Del Zanna (2004), JCP 195:17; wave-speed-weighted quadrant average.
@@ -53,7 +50,7 @@ AMREX_FORCE_INLINE constexpr auto MinimumHydroRiemannGhost(bool is_mhd_enabled, 
 	return nghost;
 }
 
-/// Class for a MHD system of conservation laws
+/// Class for solving the MHD induction equation.
 template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_t>
 {
       public:
@@ -62,6 +59,7 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 
 	static constexpr int bfield_index = Physics_Indices<problem_t>::mhdFirstIndex;
 
+	// EMF dispatch
 	static void ComputeEMF(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emfs_wcomp, amrex::MultiFab const &cc_mf_cVars,
 			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_vs_wcomp,
 			       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_cVars_wcomp,
@@ -76,6 +74,7 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 			       amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp0, amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp1,
 			       amrex::Real dx_wcomp0, amrex::Real dx_wcomp1, amrex::Real resistivity);
 
+	// EMF compute schemes
 	static void ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emfs_wcomp, amrex::MultiFab const &cc_mf_cVars,
 					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_cVars_wcomp,
 					       std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_fspds_wcomp, int reconstruction_order,
@@ -95,6 +94,10 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 					  SlopeLimiter plm_limiter, EMFAvgScheme emf_ave_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_wcomp,
 					  amrex::Real resistivity = 0.0);
 
+	static void ReconstructTo(FluxDir dir, arrayconst_t &in_state_middle, array_t &out_state_left, array_t &out_state_right,
+				  const amrex::Box &box_valid_range, int reconstruction_order, SlopeLimiter plm_limiter);
+
+	// EMF averaging schemes
 	static void EMFAverage_LondrilloDelZanna2004(amrex::Array4<amrex::Real> ec_a4_emf_ave_wcomp2, std::array<amrex::FArrayBox, 4> const &ec_fabs_emfs_iquad,
 						     amrex::Box const &box_ec, std::array<int, 2> const &reconstruct_dirs,
 						     std::array<amrex::Array4<const amrex::Real>, 3> const &fcw_fspds_wcomp,
@@ -110,6 +113,7 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 					   amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp0, amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp1,
 					   amrex::Real dx_wcomp0, amrex::Real dx_wcomp1, amrex::Real resistivity);
 
+	// resistive corrections
 	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static auto computeResistiveEMF(amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp0,
 									    amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp1, int i, int j, int k,
 									    std::array<int, 3> const &delta_wcomp0, std::array<int, 3> const &delta_wcomp1,
@@ -126,9 +130,7 @@ template <typename problem_t> class MHDSystem : public HyperbolicSystem<problem_
 					   std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fcw_mf_cVars_wcomp,
 					   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_wcomp, amrex::Real resistivity);
 
-	static void ReconstructTo(FluxDir dir, arrayconst_t &in_state_middle, array_t &out_state_left, array_t &out_state_right,
-				  const amrex::Box &box_valid_range, int reconstruction_order, SlopeLimiter plm_limiter);
-
+	// induction equation
 	static void SolveInductionEqn(std::array<amrex::MultiFab, AMREX_SPACEDIM> const &fc_mf_cVars_old_wcomp,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> &fc_mf_cVars_new_wcomp,
 				      std::array<amrex::MultiFab, AMREX_SPACEDIM> const &ec_mf_emfs_wcomp, double dt,
@@ -1266,4 +1268,4 @@ void MHDSystem<problem_t>::AddResistiveEnergyFlux(std::array<amrex::MultiFab, AM
 	}
 }
 
-#endif // HYDRO_SYSTEM_HPP_
+#endif // MHD_SYSTEM_HPP_
