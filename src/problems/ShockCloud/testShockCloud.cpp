@@ -482,8 +482,7 @@ void QuokkaSimulation<ShockCloud>::ComputeDerivedVar(int lev, std::string const 
 }
 
 // Helper function for ResampledCooling
-AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTempResampled(int i, int j, int k, amrex::Array4<const Real> const &state, amrex::Real /*gamma*/,
-								  quokka::ResampledCooling::resampledGpuConstTables const &tables)
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto ComputeCellTempResampled(int i, int j, int k, amrex::Array4<const Real> const &state)
 {
 	// return cell temperature
 	Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
@@ -534,38 +533,37 @@ template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<s
 	Real M_cl_11000 = 0.0;
 	Real M_cl_12000 = 0.0;
 
-	auto tables = resampledTables_.const_tables();
 	M_cl_1e4 = computeVolumeIntegral(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
-		    Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		    Real const T = ComputeCellTempResampled(i, j, k, state);
 		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
 		    Real const result = (T < 1.0e4) ? rho : 0.0;
 		    return result;
 	    });
 	M_cl_8000 = computeVolumeIntegral(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
-		    Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		    Real const T = ComputeCellTempResampled(i, j, k, state);
 		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
 		    Real const result = (T < 8000.) ? rho : 0.0;
 		    return result;
 	    });
 	M_cl_9000 = computeVolumeIntegral(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
-		    Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		    Real const T = ComputeCellTempResampled(i, j, k, state);
 		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
 		    Real const result = (T < 9000.) ? rho : 0.0;
 		    return result;
 	    });
 	M_cl_11000 = computeVolumeIntegral(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
-		    Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		    Real const T = ComputeCellTempResampled(i, j, k, state);
 		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
 		    Real const result = (T < 1.1e4) ? rho : 0.0;
 		    return result;
 	    });
 	M_cl_12000 = computeVolumeIntegral(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
-		    Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables);
+		    Real const T = ComputeCellTempResampled(i, j, k, state);
 		    Real const rho = state(i, j, k, HydroSystem<ShockCloud>::density_index);
 		    Real const result = (T < 1.2e4) ? rho : 0.0;
 		    return result;
@@ -583,38 +581,37 @@ template <> auto QuokkaSimulation<ShockCloud>::ComputeStatistics() -> std::map<s
 	Real origM_cl_11000 = 0.0;
 	Real origM_cl_12000 = 0.0;
 
-	auto tables_orig = resampledTables_.const_tables();
 	origM_cl_1e4 = computeVolumeIntegral(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
-		    Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables_orig);
+		    Real const T = ComputeCellTempResampled(i, j, k, state);
 		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
 		    Real const result = (T < 1.0e4) ? rho_cloud : 0.0;
 		    return result;
 	    });
 	origM_cl_8000 = computeVolumeIntegral(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
-		    Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables_orig);
+		    Real const T = ComputeCellTempResampled(i, j, k, state);
 		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
 		    Real const result = (T < 8000.) ? rho_cloud : 0.0;
 		    return result;
 	    });
 	origM_cl_9000 = computeVolumeIntegral(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
-		    Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables_orig);
+		    Real const T = ComputeCellTempResampled(i, j, k, state);
 		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
 		    Real const result = (T < 9000.) ? rho_cloud : 0.0;
 		    return result;
 	    });
 	origM_cl_11000 = computeVolumeIntegral(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
-		    Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables_orig);
+		    Real const T = ComputeCellTempResampled(i, j, k, state);
 		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
 		    Real const result = (T < 1.1e4) ? rho_cloud : 0.0;
 		    return result;
 	    });
 	origM_cl_12000 = computeVolumeIntegral(
 	    [=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state, FaceStateArray const & /*state_fc*/) noexcept {
-		    Real const T = ComputeCellTempResampled(i, j, k, state, HydroSystem<ShockCloud>::gamma_, tables_orig);
+		    Real const T = ComputeCellTempResampled(i, j, k, state);
 		    Real const rho_cloud = state(i, j, k, HydroSystem<ShockCloud>::scalar0_index + 1);
 		    Real const result = (T < 1.2e4) ? rho_cloud : 0.0;
 		    return result;
