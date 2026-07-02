@@ -418,9 +418,8 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 
 // emf compute solver; Quokka (2026) variant of FelkerStone2017.
 // uses face-centered Riemann velocity and face-centered magnetic fields extrapolated to the cell-edge.
-// NOTE (Mignone21a): developed independently; Mignone21a sec. 4.2/5 was found afterward to use a similar
-// face-velocity, single-reconstruction approach. See markers below and in hydro_system.hpp for where this
-// code differs in specifics; for you to judge whether/how to acknowledge.
+// NOTE (Mignone21a): Mignone21a sec. 4.2/5 describes a similar face-velocity, single-reconstruction approach.
+// See markers below and in hydro_system.hpp for where this code differs in specifics.
 
 template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emfs_wcomp,
