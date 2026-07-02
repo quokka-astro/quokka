@@ -105,7 +105,6 @@ template <> void QuokkaSimulation<DiskGalaxy>::preCalculateInitialConditions()
 
 	auto halo_table = quokka::DataTable<1, 4, quokka::OutOfBounds::clamp>::CSVReader(filename, quokka::SpacingType::linear);
 	auto const halo_table_const = halo_table.const_tables_host();
-	auto const halo_table_const = halo_table.const_tables_host();
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(halo_table_const.sizes[0] > 0, "disk_galaxy.vcirc_file contained no numeric rows.");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(halo_table_const.spacing_types[0] == quokka::SpacingType::linear,
 					 "disk_galaxy.vcirc_file must use linear spacing for the radius coordinate.");
@@ -758,7 +757,6 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 	const amrex::Real disk_mass_refine = amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(refine_mask), 0, geom, ref_ratio);
 	stats["disk_mass_refine_region"] = disk_mass_refine / C::M_solar;
 
-	auto tables = resampledTables_.const_tables();
 	const amrex::Real cold_mass =
 	    computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state,
 						       std::array<amrex::Array4<const Real>, AMREX_SPACEDIM> const &state_fc) noexcept {
