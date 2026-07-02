@@ -502,8 +502,8 @@ template <typename problem_t> struct EOSTabulated {
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
-	ComputeEntropyFromRhoEint(amrex::Real rho, amrex::Real Eint,
-			      quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> amrex::Real
+	ComputeEntropyFromRhoEint(amrex::Real rho, amrex::Real Eint, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
+	    -> amrex::Real
 	{
 		amrex::ignore_unused(massScalars);
 		auto *reg = ResampledCooling::getEOSTabulatedRegistry();
@@ -613,8 +613,8 @@ template <typename problem_t> class EOS
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
-	ComputeEntropyFromRhoEint(amrex::Real rho, amrex::Real Eint,
-			      quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> amrex::Real
+	ComputeEntropyFromRhoEint(amrex::Real rho, amrex::Real Eint, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
+	    -> amrex::Real
 	{
 		return backend_t::ComputeEntropyFromRhoEint(rho, Eint, massScalars);
 	}
