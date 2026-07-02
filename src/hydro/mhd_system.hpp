@@ -24,13 +24,13 @@
 #include <iostream>
 
 AMREX_ENUM(EMFComputeScheme, FelkerStone2017, Balsara2025, Quokka2026); // NOLINT
-// Felker + Stone (2017): uses cc velocity
-// Balsara (2025): EMF interpolation from cc->ec
-// Quokka variant of FS17: uses fc Riemann velocity
+// FelkerStone2017: Felker & Stone (2018), JCP 375:1365; uses cell-centered velocity.
+// Balsara2025a: Balsara et al. (2025a), ApJ 988:134; EMF interpolated from cc->ec.
+// Quokka2026: this work (2026); variant of FelkerStone2017 using fc Riemann velocity.
 
 AMREX_ENUM(EMFAvgScheme, LondrilloDelZanna2004, Balsara2025); // NOLINT
-// Londrillo + Del Zanna (2004)
-// Balsara (2025): Higher-order averaging
+// LondrilloDelZanna2004: Londrillo & Del Zanna (2004), JCP 195:17; wave-speed-weighted quadrant average.
+// Balsara2025b: Balsara et al. (2025b), CAMC 7; higher-order averaging via 2D Riemann solver.
 
 AMREX_FORCE_INLINE constexpr auto MinimumHydroRiemannGhost(bool is_mhd_enabled, EMFComputeScheme emf_compute_scheme, EMFAvgScheme emf_ave_scheme,
 							   bool require_tracer_ghosts = false) -> int
@@ -185,7 +185,7 @@ void MHDSystem<problem_t>::AverageEMF(amrex::Array4<amrex::Real> const &ec_a4_em
 	}
 }
 
-// emf compute solver; Felker18a (Felker & Stone 2018, ApJS 237:24).
+// emf compute solver; FelkerStone2017.
 // uses cell-centered velocity and face-centered magnetic fields extrapolated to the cell-edge.
 
 template <typename problem_t>
@@ -410,7 +410,7 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 	}
 }
 
-// emf compute solver; Quokka (2026) variant of Felker18a.
+// emf compute solver; Quokka (2026) variant of FelkerStone2017.
 // uses face-centered Riemann velocity and face-centered magnetic fields extrapolated to the cell-edge.
 
 template <typename problem_t>
@@ -422,10 +422,10 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 						 amrex::Real resistivity)
 {
 	const BL_PROFILE("MHDSystem::ComputeEMF_Quokka2026()");
-
-	// loop over each box-array on the level
 	// note: all centerings share the same distribution mapping; looping over cc MFIter is valid
 	// note: cc, fc, and ec data have different cell counts
+
+	// loop over each box-array on the level
 	constexpr int nstreams = 1; // only run on 1 GPU stream to avoid race conditions
 	for (amrex::MFIter mfi(fcw_mf_cVars_wcomp[0], amrex::MFItInfo().SetNumStreams(nstreams)); mfi.isValid(); ++mfi) {
 		const amrex::Box &box_cc = mfi.validbox();
@@ -479,21 +479,21 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 			// indexing: field[4: quadrant around edge]
 			std::array<amrex::FArrayBox, 4> ec_fabs_emfs_iquad;
 			// note: quadrants are defined based on where the quantity sits relative to the edge (dir-0, dir-1):
-			// |---------------------------------------------------------------------------------------------|
-			// |          q_2                                                                                |
-			// |       u,b_{0,T}                 |                                                           |
-			// |       \       /       q_1 + q_2 | q_2 + q_3                                                 |
-			// |        \     /             Q_1  |  Q_2          Q_0 = u_{0,B} * b_{1,L} - u_{1,L} * b_{0,B} |
-			// |         \   /             (-,+) | (+,+)                                                     |
-			// |    q_1   \ /   q_3              |               Q_1 = u_{0,T} * b_{1,L} - u_{1,L} * b_{0,T} |
-			// | u,b_{1,L} . u,b_{1,R} -> --------------- where:                                             |
-			// |          / \                    |               Q_2 = u_{0,T} * b_{1,R} - u_{1,R} * b_{0,T} |
-			// |         /   \             (-,-) | (+,-)                                                     |
-			// |        /     \             Q_0  |  Q_3          Q_3 = u_{0,B} * b_{1,R} - u_{1,R} * b_{0,B} |
-			// |       /       \       q_0 + q_1 | q_3 + q_0                                                 |
-			// |       u,b_{0,B}                 |                                                           |
-			// |          q_0                                                                                |
-			// |---------------------------------------------------------------------------------------------|
+			// |----------------------------------------------------------------------------------------|
+			// |            q2                                                                          |
+			// |         {u/b}0^T                 |                                                     |
+			// |        \       /         q1 + q2 | q2 + q3                                             |
+			// |         \     /             TL   |  TR             emf^BL = u0^B * b1^L - u1^L * b0^B  |
+			// |          \   /             (-,+) | (+,+)                                               |
+			// |      q1   \ /   q3               |                 emf^TL = u0^T * b1^L - u1^L * b0^T  |
+			// |  {u/b}1^L . {u/b}1^R  ->  ---------------  where:                                      |
+			// |           / \                    |                 emf^TR = u0^T * b1^R - u1^R * b0^T  |
+			// |          /   \             (-,-) | (+,-)                                               |
+			// |         /     \             BL   |  BR             emf^BR = u0^B * b1^R - u1^R * b0^B  |
+			// |        /       \         q0 + q1 | q3 + q0                                             |
+			// |         {u/b}0^B                 |                                                     |
+			// |            q0                                                                          |
+			// |----------------------------------------------------------------------------------------|
 			// compute the EMF along the cell-edge using a single kernel (all quadrants inside)
 			{
 				// bind read/write Array4 views on the host (required for GPU lambda capture)
@@ -544,9 +544,9 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 	}
 }
 
-// emf compute solver; Balsara25a (Balsara et al. 2025, ApJ 988:134b).
+// emf compute solver; Balsara2025a.
 // uses cell-centered velocity and face-centered magnetic fields averaged to cell-center to compute the emf,
-// then extrapolates to the cell-edge.
+// then extrapolates it to the cell-edge.
 
 template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emfs_wcomp, amrex::MultiFab const &cc_mf_cVars,
@@ -555,10 +555,10 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 						  SlopeLimiter plm_limiter, EMFAvgScheme emf_ave_scheme, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx_wcomp,
 						  amrex::Real resistivity)
 {
-	// v x b at cell center; v is already cc, b averaged from fc
 
 	const BL_PROFILE("MHDSystem::ComputeEMF_Balsara2025()");
 	const int nghost_cc = 4;
+	// note: all centerings share the same distribution mapping; looping over cc MFIter is valid
 	// note: cc, fc, and ec data have different cell counts
 
 	const auto &ba = cc_mf_cVars.boxArray();
@@ -756,7 +756,9 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 	}
 }
 
-// emf averaging solver; LD2004 (Londrillo & Del Zanna 2004, JCP 195). uses fast wave speeds to weight the quadrant average.
+// emf averaging solver; LondrilloDelZanna2004, eqn. 56.
+// uses fast wave speeds to weight the quadrant average.
+
 template <typename problem_t>
 void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(
     amrex::Array4<amrex::Real> ec_a4_emf_ave_wcomp2, std::array<amrex::FArrayBox, 4> const &ec_fabs_emfs_iquad, amrex::Box const &box_ec,
@@ -765,7 +767,8 @@ void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(
     amrex::Array4<const amrex::Real> const &fc_a4_b_wcomp1, amrex::Real dx_wcomp0, amrex::Real dx_wcomp1, amrex::Real resistivity)
 {
 	const BL_PROFILE("MHDSystem::EMFAverage_LondrilloDelZanna2004()");
-
+	// FelkerStone2017 (2018) implements this same eqn., as their eqn. 41; cited alongside LondrilloDelZanna2004 below since that is
+	// the numbering we cross-checked against.
 	const auto &ec_a4_emf_iquad0_wcomp2 = ec_fabs_emfs_iquad[0].const_array();
 	const auto &ec_a4_emf_iquad1_wcomp2 = ec_fabs_emfs_iquad[1].const_array();
 	const auto &ec_a4_emf_iquad2_wcomp2 = ec_fabs_emfs_iquad[2].const_array();
@@ -789,6 +792,9 @@ void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(
 	const auto &fc_a4_fspds_wcomp1 = fcw_fspds_wcomp[wcomp1_comp];
 
 	amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+		// LondrilloDelZanna2004 eqn. 56 (FelkerStone2017 eqn. 41): max_fspd_wcomp{0/1}_{m/p} below are FelkerStone2017's alpha{1/2}^{m/p}, already
+		// the nonnegative clamped wave-speed magnitudes the eqn. needs (see LLF_mhd.hpp/HLLD.hpp); no extra negation is
+		// needed here, unlike in Balsara2025b.
 		const double max_fspd_wcomp0_m =
 		    std::max(fc_a4_fspds_wcomp0(i, j, k, 0), fc_a4_fspds_wcomp0(i - delta_wcomp1[0], j - delta_wcomp1[1], k - delta_wcomp1[2], 0));
 		const double max_fspd_wcomp0_p =
@@ -814,6 +820,9 @@ void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(
 		//   0   |   3
 		// (-,-) | (+,-)
 
+		// LondrilloDelZanna2004 eqn. 56 (FelkerStone2017 eqn. 41): consistency (centered) numerator, an alpha1^{m/p}*alpha2^{m/p} weighted sum of
+		// the four corner EMFs (emf_iquad{0/1/2/3} = emf^{BL/TL/TR/BR}). num1 and num2 compute the same value, but change the
+		// order of summed elements, so that averaging the two gives exact floating-point symmetry.
 		const double num1 =
 		    ((max_fspd_wcomp0_p * max_fspd_wcomp1_p) * emf_iquad0_wcomp2 + (max_fspd_wcomp0_m * max_fspd_wcomp1_p) * emf_iquad3_wcomp2) +
 		    ((max_fspd_wcomp0_p * max_fspd_wcomp1_m) * emf_iquad1_wcomp2 + (max_fspd_wcomp0_m * max_fspd_wcomp1_m) * emf_iquad2_wcomp2);
@@ -823,9 +832,18 @@ void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(
 
 		// averaged for exact floating-point symmetry.
 		const double numerator = 0.5 * (num1 + num2);
+		// LondrilloDelZanna2004 eqn. 56 (FelkerStone2017 eqn. 41): (alpha1^m+alpha1^p)*(alpha2^m+alpha2^p).
 		const double denominator = (max_fspd_wcomp0_m + max_fspd_wcomp0_p) * (max_fspd_wcomp1_m + max_fspd_wcomp1_p);
 
-		// Felker18a eq. 41 (= LD2004 eq. 56); max_fspd_wcomp0_m<=0,max_fspd_wcomp0_p>=0 are signed speeds (not negated like in Balsara25a).
+		// LondrilloDelZanna2004 eqn. 56 (FelkerStone2017 eqn. 41): dissipative correction term. DISCREPANCY: both terms below have the
+		// opposite sign to the paper,
+		//
+		//   -[alpha2^p alpha2^m / (alpha2^m + alpha2^p)] * (b1^T - b1^B) + [alpha1^p alpha1^m / (alpha1^m + alpha1^p)] * (b2^R - b2^L)
+		//
+		// Coefficient magnitudes match exactly (numerator and denominator above are exact); only the sign of this
+		// correction differs. FelkerStone2017 describes this term as the dissipative contribution required for the induction
+		// equation to evolve stably, so a flipped sign here would be anti-dissipative. Unverified against a shock test
+		// (e.g. BrioWuShockTube).
 		const double term2 = ((max_fspd_wcomp1_m * max_fspd_wcomp1_p) / (max_fspd_wcomp1_m + max_fspd_wcomp1_p)) * (b_T_wcomp0 - b_B_wcomp0) +
 				     ((max_fspd_wcomp0_m * max_fspd_wcomp0_p) / (max_fspd_wcomp0_m + max_fspd_wcomp0_p)) * (b_L_wcomp1 - b_R_wcomp1);
 
@@ -835,7 +853,7 @@ void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(
 	});
 }
 
-// emf averaging via 2d riemann solver; Balsara25a (Balsara et al. 2025, ApJ 988:134b), sec. 3.
+// emf averaging via 2d riemann solver; Balsara2025b.
 
 template <typename problem_t>
 void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> ec_a4_emf_ave_wcomp2, std::array<amrex::FArrayBox, 4> const &ec_fabs_emfs_iquad,
@@ -847,6 +865,8 @@ void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> ec_
 						  amrex::Real resistivity)
 {
 	const BL_PROFILE("MHDSystem::EMFAverage_Balsara2025()");
+	// Balsara2025a sec. 3 recaps this solver with the eqn. numbering (eqn. 3.10) we cross-checked against; cited
+	// alongside Balsara2025b below.
 	const auto &ec_a4_emf_iquad0_wcomp2 = ec_fabs_emfs_iquad[0].const_array();
 	const auto &ec_a4_emf_iquad1_wcomp2 = ec_fabs_emfs_iquad[1].const_array();
 	const auto &ec_a4_emf_iquad2_wcomp2 = ec_fabs_emfs_iquad[2].const_array();
@@ -870,8 +890,8 @@ void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> ec_
 	const auto &fc_a4_fspds_wcomp1 = fcw_fspds_wcomp[wcomp1_comp];
 
 	amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		// signal speeds (Balsara25a sec. 3): max_fspd_wcomp0_m <= 0, max_fspd_wcomp1_m <= 0; max_fspd_wcomp0_p >= 0, max_fspd_wcomp1_p >= 0; max over
-		// two adjacent faces per dir (Felker18a app. A).
+		// signal speeds (Balsara2025a sec. 3): max_fspd_wcomp0_m <= 0, max_fspd_wcomp1_m <= 0; max_fspd_wcomp0_p >= 0, max_fspd_wcomp1_p >= 0; max over
+		// two adjacent faces per dir (FelkerStone2017 app. A).
 		const double max_fspd_wcomp0_m =
 		    -std::max(fc_a4_fspds_wcomp0(i, j, k, 0), fc_a4_fspds_wcomp0(i - delta_wcomp1[0], j - delta_wcomp1[1], k - delta_wcomp1[2], 0));
 		const double max_fspd_wcomp0_p =
@@ -881,13 +901,13 @@ void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> ec_
 		const double max_fspd_wcomp1_p =
 		    std::max(fc_a4_fspds_wcomp1(i, j, k, 1), fc_a4_fspds_wcomp1(i - delta_wcomp0[0], j - delta_wcomp0[1], k - delta_wcomp0[2], 1));
 
-		// emf quadrants (Balsara25a fig. 2): LB=E_z(LD), LT=E_z(LU), RT=E_z(RU), RB=E_z(RD).
+		// emf quadrants (Balsara2025a fig. 2): LB=E_z(LD), LT=E_z(LU), RT=E_z(RU), RB=E_z(RD).
 		const auto emf_LB_wcomp2 = ec_a4_emf_iquad0_wcomp2(i, j, k);
 		const auto emf_LT_wcomp2 = ec_a4_emf_iquad1_wcomp2(i, j, k);
 		const auto emf_RT_wcomp2 = ec_a4_emf_iquad2_wcomp2(i, j, k);
 		const auto emf_RB_wcomp2 = ec_a4_emf_iquad3_wcomp2(i, j, k);
 
-		// open: b-field slot assignment (b_T_wcomp0=m, b_B_wcomp0=p) is inverted relative to Balsara25a geometry (BxU/BxD);
+		// DISCREPANCY: b-field slot assignment (b_T_wcomp0=m, b_B_wcomp0=p) is inverted relative to Balsara2025a geometry (BxU/BxD);
 		// reverting to the geometrically consistent assignment breaks BrioWuShockTube. root cause unresolved.
 		const auto b_T_wcomp0 = ec_a4_b_wcomp0_m(i, j, k);
 		const auto b_B_wcomp0 = ec_a4_b_wcomp0_p(i, j, k);
@@ -905,22 +925,22 @@ void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> ec_
 		double emf_dstar_wcomp2 = 0.0;
 
 		if (max_fspd_wcomp0_m != max_fspd_wcomp0_p && max_fspd_wcomp1_m != max_fspd_wcomp1_p) {
-			// Balsara25a eq. 3.2: x-direction HLL star states.
+			// Balsara2025b eqn. 7HLL (Balsara2025a eqn. 3.2): x-direction HLL star states.
 			emf_T_star_wcomp2 = (max_fspd_wcomp0_p * emf_LT_wcomp2 - max_fspd_wcomp0_m * emf_RT_wcomp2) / (max_fspd_wcomp0_p - max_fspd_wcomp0_m) -
 					    (max_fspd_wcomp0_p * max_fspd_wcomp0_m) * (b_R_wcomp1 - b_L_wcomp1) / (max_fspd_wcomp0_p - max_fspd_wcomp0_m);
 			emf_B_star_wcomp2 = (max_fspd_wcomp0_p * emf_LB_wcomp2 - max_fspd_wcomp0_m * emf_RB_wcomp2) / (max_fspd_wcomp0_p - max_fspd_wcomp0_m) -
 					    (max_fspd_wcomp0_p * max_fspd_wcomp0_m) * (b_R_wcomp1 - b_L_wcomp1) / (max_fspd_wcomp0_p - max_fspd_wcomp0_m);
-			// Balsara25a eq. 3.4: y-direction HLL star states.
+			// Balsara2025b eqn. 8HLL (Balsara2025a eqn. 3.4): y-direction HLL star states.
 			emf_R_star_wcomp2 = (max_fspd_wcomp1_p * emf_RB_wcomp2 - max_fspd_wcomp1_m * emf_RT_wcomp2) / (max_fspd_wcomp1_p - max_fspd_wcomp1_m) +
 					    (max_fspd_wcomp1_p * max_fspd_wcomp1_m) * (b_T_wcomp0 - b_B_wcomp0) / (max_fspd_wcomp1_p - max_fspd_wcomp1_m);
 			emf_L_star_wcomp2 = (max_fspd_wcomp1_p * emf_LB_wcomp2 - max_fspd_wcomp1_m * emf_LT_wcomp2) / (max_fspd_wcomp1_p - max_fspd_wcomp1_m) +
 					    (max_fspd_wcomp1_p * max_fspd_wcomp1_m) * (b_T_wcomp0 - b_B_wcomp0) / (max_fspd_wcomp1_p - max_fspd_wcomp1_m);
-			// Balsara25a eq. 3.6: double-star b-field states.
+			// Balsara2025b eqns. 16-17 (Balsara2025a eqn. 3.6): double-star b-field states.
 			b_dstar_wcomp0 = (max_fspd_wcomp1_p * b_T_wcomp0 - max_fspd_wcomp1_m * b_B_wcomp0) / (max_fspd_wcomp1_p - max_fspd_wcomp1_m) +
 					 (emf_LB_wcomp2 - emf_LT_wcomp2 + emf_RB_wcomp2 - emf_RT_wcomp2) / (2.0 * (max_fspd_wcomp1_p - max_fspd_wcomp1_m));
 			b_dstar_wcomp1 = (max_fspd_wcomp0_p * b_R_wcomp1 - max_fspd_wcomp0_m * b_L_wcomp1) / (max_fspd_wcomp0_p - max_fspd_wcomp0_m) +
 					 (-emf_LB_wcomp2 - emf_LT_wcomp2 + emf_RB_wcomp2 + emf_RT_wcomp2) / (2.0 * (max_fspd_wcomp0_p - max_fspd_wcomp0_m));
-			// Balsara25a eqs. 3.7 (x-flux) and 3.8 (y-flux); emf_dstar_wcomp2 = average of both.
+			// Balsara2025b eqns. 18 and 19 (Balsara2025a eqns. 3.7 (x-flux) and 3.8 (y-flux)); emf_dstar_wcomp2 = average of both.
 			const auto emf_dstar_1_wcomp2 =
 			    -(max_fspd_wcomp0_p + max_fspd_wcomp0_m) * b_dstar_wcomp1 / 2.0 +
 			    (max_fspd_wcomp1_p * (emf_LB_wcomp2 + emf_RB_wcomp2) - max_fspd_wcomp1_m * (emf_LT_wcomp2 + emf_RT_wcomp2)) /
@@ -936,17 +956,17 @@ void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> ec_
 			emf_dstar_wcomp2 = 0.5 * (emf_dstar_1_wcomp2 + emf_dstar_2_wcomp2);
 		} else {
 			// LLF fallback: used when max_fspd_wcomp0_m==max_fspd_wcomp0_p or max_fspd_wcomp1_m==max_fspd_wcomp1_p (HLL denominator vanishes).
-			// Balsara25a eqs. 3.3 (x) and 3.5 (y): LLF star states.
+			// Balsara2025b eqns. 7LLF and 8LLF (Balsara2025a eqns. 3.3 (x) and 3.5 (y)): LLF star states.
 			emf_T_star_wcomp2 = 0.5 * ((emf_LT_wcomp2 + emf_RT_wcomp2) + max_fspd * (b_R_wcomp1 - b_L_wcomp1));
 			emf_B_star_wcomp2 = 0.5 * ((emf_LB_wcomp2 + emf_RB_wcomp2) + max_fspd * (b_R_wcomp1 - b_L_wcomp1));
 			emf_R_star_wcomp2 = 0.5 * ((emf_RB_wcomp2 + emf_RT_wcomp2) - max_fspd * (b_T_wcomp0 - b_B_wcomp0));
 			emf_L_star_wcomp2 = 0.5 * ((emf_LB_wcomp2 + emf_LT_wcomp2) - max_fspd * (b_T_wcomp0 - b_B_wcomp0));
-			// Balsara25a eq. 3.9: LLF double-star emf.
+			// Balsara2025b eqn. 12 (Balsara2025a eqn. 3.9): LLF double-star emf.
 			emf_dstar_wcomp2 = 0.5 * ((emf_RT_wcomp2 + emf_LT_wcomp2 + emf_LB_wcomp2 + emf_RB_wcomp2) / 2.0 +
 						  max_fspd * (b_B_wcomp0 - b_T_wcomp0 + b_R_wcomp1 - b_L_wcomp1));
 		}
 
-		// select state at the z-edge based on which speeds are zero (Balsara25a fig. 4).
+		// select state at the z-edge based on which speeds are zero (Balsara2025b eqn. 20; Balsara2025a fig. 4).
 		if (max_fspd_wcomp0_m == 0.0 && max_fspd_wcomp1_m == 0.0) {
 			ec_a4_emf_ave_wcomp2(i, j, k) = emf_LB_wcomp2;
 		} else if (max_fspd_wcomp0_p == 0.0 && max_fspd_wcomp1_m == 0.0) {
