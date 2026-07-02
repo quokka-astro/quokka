@@ -618,13 +618,15 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 				delta_wcomp1[wcomp1] = 1;
 				delta_wcomp2[wcomp2] = 1;
 
-				// average face-centered b to cell center
+				// Balsara2025a sec. 3 (step 1, prose description, no numbered eqn.): average face-centered b to cell center.
 				amrex::Real const b_ave_wcomp1 = 0.5 * (fc_a4_bs_wcomp[wcomp1](i, j, k) +
 									fc_a4_bs_wcomp[wcomp1](i + delta_wcomp1[0], j + delta_wcomp1[1], k + delta_wcomp1[2]));
 				amrex::Real const b_ave_wcomp2 = 0.5 * (fc_a4_bs_wcomp[wcomp2](i, j, k) +
 									fc_a4_bs_wcomp[wcomp2](i + delta_wcomp2[0], j + delta_wcomp2[1], k + delta_wcomp2[2]));
 
-				// v x b computation
+				// Balsara2025a sec. 3 (step 2, prose description, no numbered eqn.): v x b computation. OPEN QUESTION:
+				// this term looks sign-flipped relative to the paper (emf = v2*b1 - v1*b2), matching the same pattern
+				// found in FelkerStone2017/Quokka2026. Unverified against a reference solution; needs further checking.
 				cc_a4_emfs_wcomp[wcomp0](i, j, k) = vs_wcomp[wcomp1] * b_ave_wcomp2 - vs_wcomp[wcomp2] * b_ave_wcomp1;
 			}
 		});
@@ -671,9 +673,10 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 				ec_fabs_emfs_iquad[iquad].setVal<amrex::RunOn::Device>(0.0);
 			}
 
-			// interpolate the cell-centered EMF to the cell-edge
-			// there are two possible permutations for doing this: getting cell-centered quanties to a cell-edge
-			// first is cc->fc[dir-0]->ec and second is cc->fc[dir-1]->ec
+			// Balsara2025a sec. 3 (steps 3-5, prose description, no numbered eqns.): interpolate the cell-centered
+			// EMF to the cell-edge. there are two possible permutations for doing this: getting cell-centered
+			// quanties to a cell-edge first is cc->fc[dir-0]->ec and second is cc->fc[dir-1]->ec. as in
+			// FelkerStone2017, reconstruction does not commute, so the results are averaged below.
 			for (int iperm = 0; iperm < 2; ++iperm) {
 				// for each permutation of extrapolating cc->fc->ec
 
@@ -748,6 +751,8 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 				}
 			}
 
+			// Balsara2025a sec. 3: this reconstruction is not used by the Balsara2025a EMF formula itself (which only
+			// needs cell-center b, above); it is done here because the EMF averaging schemes need edge b-field values.
 			for (int icomp = 0; icomp < 2; ++icomp) {
 				const auto dir2edge = static_cast<FluxDir>(extrap_dirs[(icomp + 1) % 2]);
 				const int wcomp = extrap_dirs[icomp];
