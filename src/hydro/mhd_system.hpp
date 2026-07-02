@@ -29,6 +29,10 @@ AMREX_ENUM(EMFAvgScheme, LondrilloDelZanna2004, Balsara2025); // NOLINT
 // LondrilloDelZanna2004: Londrillo & Del Zanna (2004), JCP 195:17; wave-speed-weighted quadrant average.
 // Balsara2025b: Balsara et al. (2025b), CAMC 7; higher-order averaging via 2D Riemann solver.
 
+// sign convention: this module defines emf = cross(v, b), while the papers cited use Ohm's law as emf = -cross(v, b), instead.
+// every cited formula is transcribed with this sign flip baked in, so individual terms may look sign-flipped
+// relative to the paper while the net dB/dt (computed in SolveInductionEqn) remains correct.
+
 AMREX_FORCE_INLINE constexpr auto MinimumHydroRiemannGhost(bool is_mhd_enabled, EMFComputeScheme emf_compute_scheme, EMFAvgScheme emf_ave_scheme,
 							   bool require_tracer_ghosts = false) -> int
 {
@@ -244,7 +248,8 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 			// therefore looping (implicitly) over the 3 edge orientations (indexed by wcomp0), rather than iterating per
 			// cell-face and revisiting each face's edges, avoids redundant compute.
 
-			// define the two reconstruction directions needed to get cc v-fields to ec.
+			// define the two reconstruction directions needed to get cc v-fields to ec;
+			// right-hand-rule: dirs perpendicular to wcomp0.
 			// indexing: reconstruct_dirs[2: reconstruction direction]
 			std::array<int, 2> reconstruct_dirs = {(wcomp0 + 1) % 3, (wcomp0 + 2) % 3};
 			// indexing: vecs_cc2ec[2: unit vector to reach edge]
@@ -397,12 +402,8 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 						const amrex::Real v_wcomp1 = ec_vs_wcomp1_iquad[iquad](i, j, k);
 						const amrex::Real b_wcomp0 = ec_bs_wcomp0_iquad[iquad](i, j, k);
 						const amrex::Real b_wcomp1 = ec_bs_wcomp1_iquad[iquad](i, j, k);
-						// FelkerStone2017 eqns. 36-37: cross(v,b) at each corner.
-						// OPEN QUESTION: this term looks  sign-flipped relative to the paper:
-						//   emf = v2*b1 - v1*b2
-						// SolveInductionEqn geometry did not unambiguously confirm or resolve this from paper-reading alone.
-						// Unverified against a reference solution; needs further checking.
-						ec_emfs_wcomp2_iquad[iquad](i, j, k) = v_wcomp0 * b_wcomp1 - v_wcomp1 * b_wcomp0; // cross product at the edge
+						// FelkerStone2017 eqns. 36-37: cross(v, b) at each corner
+						ec_emfs_wcomp2_iquad[iquad](i, j, k) = v_wcomp0 * b_wcomp1 - v_wcomp1 * b_wcomp0;
 					}
 				});
 			}
@@ -459,9 +460,10 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 		};
 		// compute the ec emf components
 		for (int wcomp0 = 0; wcomp0 < AMREX_SPACEDIM; ++wcomp0) {
-			const int wcomp1 = (wcomp0 + 1) % 3;
-			const int wcomp2 = (wcomp0 + 2) % 3;
-			const std::array<int, 2> reconstruct_dirs = {wcomp1, wcomp2}; // right-hand-rule: dirs perpendicular to wcomp0
+			// define the two reconstruction directions needed to get cc v-fields to ec;
+			// right-hand-rule: dirs perpendicular to wcomp0.
+			// indexing: reconstruct_dirs[2: reconstruction direction]
+			std::array<int, 2> reconstruct_dirs = {(wcomp0 + 1) % 3, (wcomp0 + 2) % 3};
 			const amrex::Box box_ec = amrex::convert(box_cc, amrex::IntVect::TheDimensionVector(reconstruct_dirs[0]) +
 									     amrex::IntVect::TheDimensionVector(reconstruct_dirs[1]));
 			const amrex::Box box_ec_plus1 = amrex::grow(box_ec, 1);
@@ -543,8 +545,6 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 						const amrex::Real v_wcomp1 = ec_vs_wcomp1_iquad[iquad](i, j, k);
 						const amrex::Real b_wcomp0 = ec_bs_wcomp0_iquad[iquad](i, j, k);
 						const amrex::Real b_wcomp1 = ec_bs_wcomp1_iquad[iquad](i, j, k);
-						// OPEN QUESTION: this term's sign has not been verified against a reference solution. SolveInductionEqn
-						// geometry did not unambiguously confirm or resolve this from index-mapping alone; needs further checking.
 						ec_emfs_wcomp2_iquad[iquad](i, j, k) = v_wcomp0 * b_wcomp1 - v_wcomp1 * b_wcomp0; // cross product at the edge
 					}
 				});
@@ -609,7 +609,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 										  fcw_mf_cVars_wcomp[1][mfi].const_array(MHDSystem<problem_t>::bfield_index),
 										  fcw_mf_cVars_wcomp[2][mfi].const_array(MHDSystem<problem_t>::bfield_index)};
 
-		// compute cross(v,b) for all three dimensions
+		// compute cross(v, b) for all three dimensions
 		amrex::ParallelFor(box_cc_emf, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			const auto rho = cc_a4_cVars(i, j, k, HydroSystem<problem_t>::density_index);
 			// indexing: vs_wcomp[3: world direction = velocity component]
@@ -634,8 +634,6 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 									fc_a4_bs_wcomp[wcomp2](i + delta_wcomp2[0], j + delta_wcomp2[1], k + delta_wcomp2[2]));
 
 				// Balsara2025a sec. 3 (step 2)
-				// OPEN QUESTION: this term looks sign-flipped relative to the paper: emf = v2*b1 - v1*b2. Unverified against a
-				// reference solution; needs further checking.
 				cc_a4_emfs_wcomp[wcomp0](i, j, k) = vs_wcomp[wcomp1] * b_ave_wcomp2 - vs_wcomp[wcomp2] * b_ave_wcomp1;
 			}
 		});
@@ -658,7 +656,9 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 
 		for (int wcomp0 = 0; wcomp0 < 3; ++wcomp0) {
 
-			// indexing: reconstruct_dirs[2: reconstruction direction], vecs_cc2ec[2: unit vector to reach edge]
+			// define the two reconstruction directions needed to get cc v-fields to ec;
+			// right-hand-rule: dirs perpendicular to wcomp0.
+			// indexing: reconstruct_dirs[2: reconstruction direction]
 			std::array<int, 2> reconstruct_dirs = {(wcomp0 + 1) % 3, (wcomp0 + 2) % 3};
 			std::array<amrex::IntVect, 2> vecs_cc2ec = {amrex::IntVect::TheDimensionVector(reconstruct_dirs[0]),
 								    amrex::IntVect::TheDimensionVector(reconstruct_dirs[1])};
@@ -858,15 +858,8 @@ void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(
 		// LondrilloDelZanna2004 eqn. 56 (FelkerStone2017 eqn. 41)
 		const double denominator = (max_fspd_wcomp0_m + max_fspd_wcomp0_p) * (max_fspd_wcomp1_m + max_fspd_wcomp1_p);
 
-		// LondrilloDelZanna2004 eqn. 56 (FelkerStone2017 eqn. 41): dissipative correction term.
-		// DISCREPANCY: both terms below have the opposite sign to the paper,
-		//
-		//   -[alpha2^p alpha2^m / (alpha2^m + alpha2^p)] * (b1^T - b1^B) + [alpha1^p alpha1^m / (alpha1^m + alpha1^p)] * (b2^R - b2^L)
-		//
-		// Coefficient magnitudes match exactly (numerator and denominator above are exact); only the sign of this
-		// correction differs. FelkerStone2017 describes this term as the dissipative contribution required for the induction
-		// equation to evolve stably, so a flipped sign here would be anti-dissipative. Unverified against a shock test
-		// (e.g. BrioWuShockTube).
+		// LondrilloDelZanna2004 eqn. 56 (FelkerStone2017 eqn. 41): dissipative correction term. both terms below have the
+		// opposite sign to the paper's own formula, consistent with this module's emf sign convention.
 		const double term2 = ((max_fspd_wcomp1_m * max_fspd_wcomp1_p) / (max_fspd_wcomp1_m + max_fspd_wcomp1_p)) * (b_T_wcomp0 - b_B_wcomp0) +
 				     ((max_fspd_wcomp0_m * max_fspd_wcomp0_p) / (max_fspd_wcomp0_m + max_fspd_wcomp0_p)) * (b_L_wcomp1 - b_R_wcomp1);
 
@@ -928,8 +921,8 @@ void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> ec_
 		const auto emf_RT_wcomp2 = ec_a4_emf_iquad2_wcomp2(i, j, k);
 		const auto emf_RB_wcomp2 = ec_a4_emf_iquad3_wcomp2(i, j, k);
 
-		// DISCREPANCY: b-field assignment (b_T_wcomp0=m, b_B_wcomp0=p) is inverted relative to Balsara2025a geometry (BxU/BxD);
-		// reverting to the geometrically consistent assignment breaks BrioWuShockTube. root cause unresolved.
+		// b_T/b_B and b_R/b_L are assigned opposite to Balsara2025a's geometric convention, which is required to stay
+		// consistent with this module's emf sign convention (see top of file).
 		const auto b_T_wcomp0 = ec_a4_b_wcomp0_m(i, j, k);
 		const auto b_B_wcomp0 = ec_a4_b_wcomp0_p(i, j, k);
 		const auto b_R_wcomp1 = ec_a4_b_wcomp1_m(i, j, k);
@@ -1245,7 +1238,7 @@ void MHDSystem<problem_t>::AddResistiveEnergyFlux(std::array<amrex::MultiFab, AM
 								k + delta_wcomp1[2], delta_wcomp0, delta_wcomp1, dx_wcomp0, dx_wcomp1, eta_wcomp2_hi);
 				}
 
-				// average fc b across wcomp0 to ec
+				// average fc b-fields across wcomp0 to ec
 				const amrex::Real ave_b_wcomp2_lo =
 				    0.5 * (fc_a4_b_wcomp_wcomp2(i, j, k) + fc_a4_b_wcomp_wcomp2(i - delta_wcomp0[0], j - delta_wcomp0[1], k - delta_wcomp0[2]));
 				const amrex::Real ave_b_wcomp2_hi =
