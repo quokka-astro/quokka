@@ -792,7 +792,7 @@ addCompositeBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex::
 	// Compute sound speed
 	Real cs = NAN;
 	if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
-		cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
+		cs = ::quokka::EOS_Traits<problem_t>::cs_isothermal;
 	} else {
 		cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, i, j, k, fab_fc);
 	}
@@ -856,7 +856,7 @@ addThermalOnlyBufferToState(amrex::Array4<amrex::Real> const &local_state, amrex
 	// Compute sound speed. For thermal-only feedback, the gas velocity stays unchanged, so we only report sound speed.
 	Real cs = NAN;
 	if constexpr (HydroSystem<problem_t>::is_eos_isothermal()) {
-		cs = quokka::EOS_Traits<problem_t>::cs_isothermal;
+		cs = ::quokka::EOS_Traits<problem_t>::cs_isothermal;
 	} else {
 		cs = HydroSystem<problem_t>::ComputeSoundSpeed(local_state, i, j, k, fab_fc);
 	}
