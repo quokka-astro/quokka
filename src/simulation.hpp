@@ -5067,6 +5067,10 @@ template <typename problem_t> void AMRSimulation<problem_t>::ReadCheckpointFile(
 
 	// 1. Read header information
 	auto header_box_arrays = readCheckpointHeader(restart_chkfile);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(finest_level <= max_level,
+					 std::format("Checkpoint '{}' contains AMR levels 0-{}, but the restart input configured amr.max_level = {}. "
+						     "Restart with amr.max_level >= {} or use a checkpoint with fewer levels.",
+						     restart_chkfile, finest_level, max_level, finest_level));
 
 	// 3. Detect refinement context
 	auto refinement_context = detectRefinementContext(header_box_arrays[0], geom[0]);
