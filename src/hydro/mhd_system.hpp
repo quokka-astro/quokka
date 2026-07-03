@@ -383,8 +383,8 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 
 				for (int iquad = 0; iquad < 4; ++iquad) {
 					// extract relevant v-field and b-field components (host: get Array4 views)
-					const int idx0 = (iquad == 0 || iquad == 3) ? 0 : 1;			    // choose from B/T for dir-0
-					const int idx1 = (iquad < 2) ? 0 : 1;					    // choose from L/R for dir-1
+					const int idx0 = (iquad == 0 || iquad == 3) ? 0 : 1; // choose from B/T for dir-0
+					const int idx1 = (iquad < 2) ? 0 : 1; // choose from L/R for dir-1
 					ec_vs_wcomp0_iquad[iquad] = ec_fabs_vs_icomp_jquad[0][iquad].const_array(); // comp=0, index jquad
 					ec_vs_wcomp1_iquad[iquad] = ec_fabs_vs_icomp_jquad[1][iquad].const_array(); // comp=1, index jquad
 					ec_bs_wcomp0_iquad[iquad] = ec_fabs_bs_icomp_jeside[0][idx0].const_array(); // comp=0, index idx0
@@ -423,8 +423,8 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 
 // compute emf components; Quokka (2026).
 // uses fc Riemann v-field and fc b-field reconstructed to ec.
-// note: Mignone21a: Mignone & Del Zanna (2021), JCP 424:109748; sec. 4.2/5 describes a similar single-reconstruction approach
-// based on using the fc v-field from the Riemann solver.
+// note: Mignone21a: Mignone & Del Zanna (2021), JCP 424:109748; sec. 4.2/5 describes a similar
+// single-reconstruction approach based on using the fc v-field from the Riemann solver.
 
 template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emfs_wcomp,
@@ -479,7 +479,7 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 			}
 
 			// reconstruct the field components that are normal to the cell-face: fc->ec.
-			// note this matches the form of Mignone21a eqn. (29).
+			// note this is the same as Mignone21a eqn. (29).
 			for (int icomp = 0; icomp < 2; ++icomp) {
 				const auto dir2edge = static_cast<FluxDir>(reconstruct_dirs[(icomp + 1) % 2]);
 				const int wcomp = reconstruct_dirs[icomp];
@@ -520,7 +520,7 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 
 				for (int iquad = 0; iquad < 4; ++iquad) {
 					const int idx0 = (iquad == 0 || iquad == 3) ? 0 : 1; // B/T selector for dir-0
-					const int idx1 = (iquad < 2) ? 0 : 1;		     // L/R selector for dir-1
+					const int idx1 = (iquad < 2) ? 0 : 1; // L/R selector for dir-1
 
 					// define EMF FArrayBox for each quadrant (must be allocated outside the kernel)
 					ec_fabs_emfs_iquad[iquad] = amrex::FArrayBox(box_ec, 1, amrex::The_Async_Arena());
@@ -530,7 +530,7 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 					ec_bs_wcomp0_iquad[iquad] = ec_fabs_bs_icomp_jeside[0][idx0].const_array(); // B/T
 					ec_vs_wcomp1_iquad[iquad] = ec_fabs_vs_icomp_jeside[1][idx1].const_array(); // L/R
 					ec_bs_wcomp1_iquad[iquad] = ec_fabs_bs_icomp_jeside[1][idx1].const_array(); // L/R
-					ec_emfs_wcomp2_iquad[iquad] = ec_fabs_emfs_iquad[iquad].array();	    // output EMF view
+					ec_emfs_wcomp2_iquad[iquad] = ec_fabs_emfs_iquad[iquad].array(); // output EMF view
 				}
 
 				// single kernel over the ec box; compute E in all four quadrants
@@ -540,7 +540,7 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 						const amrex::Real v_wcomp1 = ec_vs_wcomp1_iquad[iquad](i, j, k);
 						const amrex::Real b_wcomp0 = ec_bs_wcomp0_iquad[iquad](i, j, k);
 						const amrex::Real b_wcomp1 = ec_bs_wcomp1_iquad[iquad](i, j, k);
-						ec_emfs_wcomp2_iquad[iquad](i, j, k) = v_wcomp0 * b_wcomp1 - v_wcomp1 * b_wcomp0; // cross product at the edge
+						ec_emfs_wcomp2_iquad[iquad](i, j, k) = v_wcomp0 * b_wcomp1 - v_wcomp1 * b_wcomp0;
 					}
 				});
 			}
@@ -638,7 +638,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 
 	// reconstruct emf cc->ec; also move b-field fc->ec for averaging solvers.
 
-	for (amrex::MFIter mfi(cc_mf_cVars, amrex::MFItInfo().SetNumStreams(nstreams)); mfi.isValid(); ++mfi) { // keep
+	for (amrex::MFIter mfi(cc_mf_cVars, amrex::MFItInfo().SetNumStreams(nstreams)); mfi.isValid(); ++mfi) {
 		const amrex::Box &box_cc = mfi.validbox();
 
 		// indexing: field[3: fc-normal direction = field component]
