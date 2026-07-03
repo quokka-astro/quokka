@@ -189,7 +189,7 @@ template <> void QuokkaSimulation<TheProblem>::preCalculateInitialConditions()
 		if (!userData_.IC_file.empty()) {
 			amrex::Print() << "Reading initial conditions from: " << userData_.IC_file << "\n";
 			// Read CSV file with linear spacing for outputs
-			userData_.ic_table = quokka::DataTable<1, 3, quokka::OutOfBounds::clamp>::CSVReader(userData_.IC_file, quokka::SpacingType::linear);
+			userData_.ic_table = quokka::DataTable<1, 3, quokka::OutOfBounds::clamp>::CSVReader(userData_.IC_file, quokka::TransformType::linear);
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(userData_.ic_table.is_initialized(), "Initial conditions table failed to load.");
 			amrex::Print() << "Initial conditions table loaded successfully.\n";
 		} else {

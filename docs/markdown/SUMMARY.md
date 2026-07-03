@@ -16,6 +16,7 @@
 - [Star Formation and Feedback (beta)](particles.md)
 - [Photoionization](photoionization.md)
 - [Dust Module (beta)](dust_module.md)
+- [Optically-Thin Radiative Cooling](cooling_module.md)
 
 # Simulation Gallery
 
@@ -54,6 +55,7 @@
 - [Assertions and error checking](error_checking.md)
 - [Performance tips](performance.md)
 - [How to use clang-tidy](howto_clang_tidy.md)
+- [DataTable](data_table.md)
 
 # Maintainer Guide
 
