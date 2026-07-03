@@ -1140,11 +1140,11 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 							       AMRSimulation<problem_t>::InterpHookNone, FillPatchType::fillpatch_function);
 				}
 			}
-		// for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		// 	auto ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
-		// 	heat_flux[idim].define(ba_face, state.DistributionMap(), state.nComp(), 0);
-		// 	heat_flux[idim].setVal(0.0);
-		// }
+			// for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			// 	auto ba_face = amrex::convert(state.boxArray(), amrex::IntVect::TheDimensionVector(idim));
+			// 	heat_flux[idim].define(ba_face, state.DistributionMap(), state.nComp(), 0);
+			// 	heat_flux[idim].setVal(0.0);
+			// }
 			const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_,
 											     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
 											     .saturation_factor = electronConductionSaturationFactor_,

@@ -39,7 +39,7 @@ const double Eint0 = 2.505e-8;		     // equivalent to T = 2.e8 K
 const double Efloor = 5.674216387016754e-11; // equivalent tp T = 2.e6 K
 const double rho0 = 0.1;		     // 1/cm^3
 const double D = 4.396303164750053e+28;	     // diffusion coefficient, in units of cm^2/s
-const double sigma = 2.41016e+17;     // width of the Gaussian, in units of cm
+const double sigma = 2.41016e+17;	     // width of the Gaussian, in units of cm
 
 struct ThermalConductionProblem {
 };
@@ -217,26 +217,25 @@ auto problem_main() -> int
 	// amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
 	// for (int n = 0; n < ncomp_cc; ++n) {
 	// 	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-	// 	BCs_cc[n].setLo(dir, amrex::BCType::foextrap);  
-	// 	BCs_cc[n].setHi(dir, amrex::BCType::foextrap); 
+	// 	BCs_cc[n].setLo(dir, amrex::BCType::foextrap);
+	// 	BCs_cc[n].setHi(dir, amrex::BCType::foextrap);
 	// 	}
 	// }
-    	// for (int n = 0; n < ncomp_cc; ++n) {
-		// for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-		// 	// diode boundary conditions
-		// 	if (i == 2) {
-		// 		BCs_cc[n].setLo(i, amrex::BCType::foextrap);
-		// 		BCs_cc[n].setHi(i, amrex::BCType::foextrap);
-		// 	} else {
-		// 		BCs_cc[n].setLo(i, amrex::BCType::foextrap); // periodic
-		// 		BCs_cc[n].setHi(i, amrex::BCType::foextrap); // periodic
-		// 	}
-		// }
-	// } 
+	// for (int n = 0; n < ncomp_cc; ++n) {
+	// for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+	// 	// diode boundary conditions
+	// 	if (i == 2) {
+	// 		BCs_cc[n].setLo(i, amrex::BCType::foextrap);
+	// 		BCs_cc[n].setHi(i, amrex::BCType::foextrap);
+	// 	} else {
+	// 		BCs_cc[n].setLo(i, amrex::BCType::foextrap); // periodic
+	// 		BCs_cc[n].setHi(i, amrex::BCType::foextrap); // periodic
+	// 	}
+	// }
+	// }
 	// Problem initialization
 	// QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
-	
-	
+
 	// // initialize
 	// sim.setInitialConditions();
 
