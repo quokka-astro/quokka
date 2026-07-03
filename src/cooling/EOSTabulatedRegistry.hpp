@@ -5,7 +5,6 @@
 
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
-#include "math/FastMath.hpp"
 #include "math/root_finding.hpp"
 #include "util/DataTable.hpp"
 
@@ -14,18 +13,23 @@ namespace quokka::ResampledCooling
 
 using Real = amrex::Real;
 
-struct resampledGpuConstTables {
-	quokka::DataTableGpuConst<2, 1> cooling_rates;
-	quokka::DataTableGpuConst<2, 1> temperatures;
-	quokka::DataTableGpuConst<2, 1> sound_speeds;
-	quokka::DataTableGpuConst<2, 1> pressures;
-	quokka::DataTableGpuConst<2, 1> entropies;
+// Output indices into the DataTable<2, 5> for the five cooling quantities
+constexpr int COOLING_RATE_IDX = 0;
+constexpr int TEMPERATURE_IDX = 1;
+constexpr int SOUND_SPEED_IDX = 2;
+constexpr int PRESSURE_IDX = 3;
+constexpr int ENTROPY_IDX = 4;
 
-	amrex::Real rho_min;
-	amrex::Real rho_max;
+struct resampledGpuConstTables {
+	// Single GPU-friendly table holding all 5 cooling outputs
+	quokka::DataTableGpuConst<2, 5> all_tables;
+
+	// Hydrogen mass fraction (used to convert rho -> nH)
+	amrex::Real cloudy_H_mass_fraction;
+
+	// Physical specific-energy bounds (erg/g) -- used as root-finding bounds in ComputeEgasFromTgas
 	amrex::Real eint_min;
 	amrex::Real eint_max;
-	amrex::Real cloudy_H_mass_fraction;
 };
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(Real const rho, Real const Eint, resampledGpuConstTables const &tables) -> Real
@@ -34,9 +38,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(Real const rho
 		return 0.0;
 	}
 	const Real eint = Eint / rho;
-	std::array<amrex::Real, 2> const point = {FastMath::fastlg(rho), FastMath::fastlg(eint)};
-	const Real Tgas = tables.temperatures.interpolate_single(point);
-	return Tgas;
+	std::array<amrex::Real, 2> const point = {rho, eint};
+	return tables.all_tables.interpolate_single(point, TEMPERATURE_IDX);
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEgasFromTgas(Real const rho, Real const Tgas, resampledGpuConstTables const &tables) -> Real
@@ -72,9 +75,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEntropyFromRhoEint(Real con
 		return 0.0;
 	}
 	const Real eint = Eint / rho;
-	std::array<amrex::Real, 2> const point = {FastMath::fastlg(rho), FastMath::fastlg(eint)};
-	const Real K = tables.entropies.interpolate_single(point);
-	return K;
+	std::array<amrex::Real, 2> const point = {rho, eint};
+	return tables.all_tables.interpolate_single(point, ENTROPY_IDX);
 }
 
 struct EOSTabulatedRegistry {
