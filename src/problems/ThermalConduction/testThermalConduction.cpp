@@ -92,7 +92,7 @@ template <> void QuokkaSimulation<ThermalConductionProblem>::refineGrid(int lev,
 {
 	// geometrical refinement
 	// tag cells within one-sigma of the initial Gaussian profile for refinement
-	const double refine_Lmax = 0.5 * sigma; // 0.2 pc
+	const double refine_Lmax = 1. * sigma; // 0.2 pc
 
 	const auto prob_lo = geom[lev].ProbLoArray();
 	const auto dx = geom[lev].CellSizeArray();
@@ -213,14 +213,14 @@ auto runConductionTest(int nx, int /*ny*/, int /*nz*/) -> double
 auto problem_main() -> int
 {
 	// boundary conditions
-	constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
-	amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
-	for (int n = 0; n < ncomp_cc; ++n) {
-		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-		BCs_cc[n].setLo(dir, amrex::BCType::foextrap);  
-		BCs_cc[n].setHi(dir, amrex::BCType::foextrap); 
-		}
-	}
+	// constexpr int ncomp_cc = Physics_Indices<ThermalConductionProblem>::nvarTotal_cc;
+	// amrex::Vector<amrex::BCRec> BCs_cc(ncomp_cc);
+	// for (int n = 0; n < ncomp_cc; ++n) {
+	// 	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+	// 	BCs_cc[n].setLo(dir, amrex::BCType::foextrap);  
+	// 	BCs_cc[n].setHi(dir, amrex::BCType::foextrap); 
+	// 	}
+	// }
     	// for (int n = 0; n < ncomp_cc; ++n) {
 		// for (int i = 0; i < AMREX_SPACEDIM; ++i) {
 		// 	// diode boundary conditions
@@ -234,29 +234,31 @@ auto problem_main() -> int
 		// }
 	// } 
 	// Problem initialization
-	QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
+	// QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
 	
 	
-	// initialize
-	sim.setInitialConditions();
+	// // initialize
+	// sim.setInitialConditions();
 
-	// evolve
-	sim.evolve();
+	// // evolve
+	// sim.evolve();
+	// const double error_norm = sim.computeErrorNorm();
+	// amrex::Print() << std::format("\nrun_sim error norm = {:.6e})\n", error_norm);
 
-	// Cleanup and exit
-	amrex::Print() << "Finished." << '\n';
-	return 0;
+	// // Cleanup and exit
+	// amrex::Print() << "Finished." << '\n';
+	// return 0;
 	/***Richardson Extrapolation ****/
 
-	// quokka::richardson::applyQuietDefaults();
-	// quokka::richardson::Parameters params{};
-	// params.machine_precision_target = 2.0e-9; // limit based on delta_b_magn, smaller values can be used if this is decreased
-	// params.nx_initial = 32;
-	// params.nx_max = 128;
-	// params.expected_rate = 2.0;
-	// params.tolerance = 0.3;
-	// params.test_name = "Thermal Conduction";
-	// params.csv_filename = "thermal_conduction_convergence.csv";
+	quokka::richardson::applyQuietDefaults();
+	quokka::richardson::Parameters params{};
+	params.machine_precision_target = 2.0e-9; // limit based on delta_b_magn, smaller values can be used if this is decreased
+	params.nx_initial = 32;
+	params.nx_max = 128;
+	params.expected_rate = 2.0;
+	params.tolerance = 0.3;
+	params.test_name = "Thermal Conduction";
+	params.csv_filename = "thermal_conduction_convergence.csv";
 
-	// return quokka::richardson::run(params, [](int nx, int ny, int nz) { return runConductionTest(nx, ny, nz); });
+	return quokka::richardson::run(params, [](int nx, int ny, int nz) { return runConductionTest(nx, ny, nz); });
 }
