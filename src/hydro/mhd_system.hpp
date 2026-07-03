@@ -21,7 +21,7 @@
 #include "physics_numVars.hpp"
 
 AMREX_ENUM(EMFComputeScheme, FelkerStone2017, Balsara2025, Quokka2026); // NOLINT
-// FelkerStone2017: Felker & Stone (2018), JCP 375:1365; uses cc velocity.
+// FelkerStone2017: Felker & Stone (2018), JCP 375:1365; uses cc v-field.
 // Balsara2025a: Balsara et al. (2025a), ApJ 988:134; EMF reconstructed from cc->ec.
 // Quokka2026: work in preparation; variant of Mignone21a: Mignone & Del Zanna (2021), JCP 424:109748.
 
@@ -192,7 +192,7 @@ void MHDSystem<problem_t>::AverageEMF(amrex::Array4<amrex::Real> const &ec_a4_em
 }
 
 // compute emf components; FelkerStone2017.
-// uses cc velocity and fc magnetic fields reconstructed to ec.
+// uses cc v-field and fc b-field reconstructed to ec.
 
 template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emfs_wcomp, amrex::MultiFab const &cc_mf_cVars,
@@ -242,7 +242,7 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 		    amrex::FArrayBox(fcw_mf_cVars_wcomp[2][mfi], amrex::make_alias, MHDSystem<problem_t>::bfield_index, 1),
 		};
 
-		// compute the magnetic flux through each cell-face
+		// compute the b-field flux through each cell-face
 		for (int wcomp0 = 0; wcomp0 < 3; ++wcomp0) {
 			// each cell-edge is shared by two adjacent cell-faces, so a one-to-one mapping exists between face-pairs and edges,
 			// therefore looping (implicitly) over the 3 edge orientations (indexed by wcomp0), rather than iterating per
@@ -265,7 +265,7 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 									     amrex::FArrayBox(box_ec_plus1, 1, amrex::The_Async_Arena())};
 
 			// indexing: field[2: i-component][2: i-side of edge]
-			// note: magnetic field components cannot be discontinuous along themselves (i.e., either side of the face where they are
+			// note: b-field components cannot be discontinuous along themselves (i.e., either side of the face where they are
 			// stored), so there are only two possible values (sides of the interface), rather than four (quadrants of) possible
 			// reconstructed values.
 			std::array<std::array<amrex::FArrayBox, 2>, 2> ec_fabs_bs_icomp_jeside;
@@ -284,7 +284,7 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 				}
 			}
 
-			// FelkerStone2017 sec. 4.1.1 (step 3): reconstruct the two cc velocity field components that are required
+			// FelkerStone2017 sec. 4.1.1 (step 3): reconstruct the two cc v-field components that are required
 			// (to compute the emf at the edge) to ec. there are two possible permutations for doing this:
 			//   1. cc->fc[dir-0]->ec
 			//   2. cc->fc[dir-1]->ec
@@ -307,27 +307,27 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 
 				// reconstruct both required v-fields cc->fc->ec
 				for (int icomp = 0; icomp < 2; ++icomp) {
-					// create temporary FArrayBox for storing the fc velocity field reconstructed from cc
+					// create temporary FArrayBox for storing the fc v-field reconstructed from cc
 					// indexing: field[2: i-side of face]
 					const int wcomp = reconstruct_dirs[icomp];
 					std::array<amrex::FArrayBox, 2> fc_fabs_vs_ifside = {amrex::FArrayBox(box_fc_u_scratch, 1, amrex::The_Async_Arena()),
 											     amrex::FArrayBox(box_fc_u_scratch, 1, amrex::The_Async_Arena())};
 
-					// reconstruct velocity components cc->fc
+					// reconstruct v-field components cc->fc
 					MHDSystem<problem_t>::ReconstructTo(dir2face, cc_fabs_vs_wcomp[wcomp].array(), fc_fabs_vs_ifside[0].array(),
 									    fc_fabs_vs_ifside[1].array(), box_fc_u, reconstruction_order, plm_limiter);
 
-					// reconstruct velocity components fc->ec
+					// reconstruct v-field components fc->ec
 					for (int iface = 0; iface < 2; ++iface) {
 						// reset values in temporary FArrayBox
 						ec_fabs_vs_ieside[0].setVal<amrex::RunOn::Device>(0.0);
 						ec_fabs_vs_ieside[1].setVal<amrex::RunOn::Device>(0.0);
 
-						// reconstruct velocity component fc->ec
+						// reconstruct v-field component fc->ec
 						MHDSystem<problem_t>::ReconstructTo(dir2edge, fc_fabs_vs_ifside[iface].array(), ec_fabs_vs_ieside[0].array(),
 										    ec_fabs_vs_ieside[1].array(), box_ec, reconstruction_order, plm_limiter);
 
-						// figure out which ec quadrant this reconstructed velocity component corresponds with
+						// figure out which ec quadrant this reconstructed v-field component corresponds with
 						int jquad0 = -1;
 						int jquad1 = -1;
 
@@ -358,12 +358,12 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 				}
 			}
 
-			// FelkerStone2017 sec. 4.1.1 (steps 1 and 2): reconstruct the two required fc magnetic field components to ec.
+			// FelkerStone2017 sec. 4.1.1 (steps 1 and 2): reconstruct the two required fc b-field components to ec.
 			for (int icomp = 0; icomp < 2; ++icomp) {
 				const int reconstruct_dir2edge = reconstruct_dirs[(icomp + 1) % 2];
 				const auto dir2edge = static_cast<FluxDir>(reconstruct_dir2edge);
 				const int wcomp = reconstruct_dirs[icomp];
-				// reconstruct magnetic components fc->ec
+				// reconstruct b-field components fc->ec
 				MHDSystem<problem_t>::ReconstructTo(dir2edge, fcw_fabs_bs_wcomp[wcomp].array(), ec_fabs_bs_icomp_jeside[icomp][0].array(),
 								    ec_fabs_bs_icomp_jeside[icomp][1].array(), box_ec, reconstruction_order, plm_limiter);
 			}
@@ -382,7 +382,7 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 				std::array<amrex::Array4<amrex::Real>, 4> ec_emfs_wcomp2_iquad;
 
 				for (int iquad = 0; iquad < 4; ++iquad) {
-					// extract relevant velocity and magnetic field components (host: get Array4 views)
+					// extract relevant v-field and b-field components (host: get Array4 views)
 					const int idx0 = (iquad == 0 || iquad == 3) ? 0 : 1;			    // choose from B/T for dir-0
 					const int idx1 = (iquad < 2) ? 0 : 1;					    // choose from L/R for dir-1
 					ec_vs_wcomp0_iquad[iquad] = ec_fabs_vs_icomp_jquad[0][iquad].const_array(); // comp=0, index jquad
@@ -424,9 +424,9 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 }
 
 // compute emf components; Quokka (2026).
-// uses fc Riemann velocity and fc magnetic fields reconstructed to ec.
+// uses fc Riemann v-field and fc b-field reconstructed to ec.
 // note: Mignone21a: Mignone & Del Zanna (2021), JCP 424:109748; sec. 4.2/5 describes a similar single-reconstruction approach
-// based on using face-velocity from the Riemann solver.
+// based on using the fc v-field from the Riemann solver.
 
 template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emfs_wcomp,
@@ -527,7 +527,7 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 					// define EMF FArrayBox for each quadrant (must be allocated outside the kernel)
 					ec_fabs_emfs_iquad[iquad] = amrex::FArrayBox(box_ec, 1, amrex::The_Async_Arena());
 
-					// extract relevant velocity and magnetic field components (host: get Array4 views)
+					// extract relevant v-field and b-field components (host: get Array4 views)
 					ec_vs_wcomp0_iquad[iquad] = ec_fabs_vs_icomp_jeside[0][idx0].const_array(); // B/T
 					ec_bs_wcomp0_iquad[iquad] = ec_fabs_bs_icomp_jeside[0][idx0].const_array(); // B/T
 					ec_vs_wcomp1_iquad[iquad] = ec_fabs_vs_icomp_jeside[1][idx1].const_array(); // L/R
@@ -562,7 +562,7 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 }
 
 // compute emf components; Balsara2025a.
-// uses cc v-fields and fc b-fields averaged to cc to compute the emf, then reconstructs it cc->ec.
+// uses cc v-field and fc b-field averaged to cc to compute the emf, then reconstructs it cc->ec.
 
 template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emfs_wcomp, amrex::MultiFab const &cc_mf_cVars,
@@ -609,7 +609,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 		// compute cross(v, b) for all three dimensions
 		amrex::ParallelFor(box_cc_emf, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 			const auto rho = cc_a4_cVars(i, j, k, HydroSystem<problem_t>::density_index);
-			// indexing: vs_wcomp[3: world direction = velocity component]
+			// indexing: vs_wcomp[3: world direction = v-field component]
 			std::array<amrex::Real, 3> vs_wcomp = {cc_a4_cVars(i, j, k, HydroSystem<problem_t>::x1Momentum_index) / rho,
 							       cc_a4_cVars(i, j, k, HydroSystem<problem_t>::x2Momentum_index) / rho,
 							       cc_a4_cVars(i, j, k, HydroSystem<problem_t>::x3Momentum_index) / rho};
