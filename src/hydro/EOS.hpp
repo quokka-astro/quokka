@@ -237,6 +237,15 @@ template <typename problem_t> struct EOSIdeal {
 		}
 		return cs;
 	}
+
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
+	ComputeEntropyFromRhoEint(amrex::Real /*rho*/, amrex::Real /*Eint*/,
+			      quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/ = {}) -> amrex::Real
+	{
+			// sizeof(problem_t)==0: fires only on instantiation, not at parse time (C++20 ill-formed NDR workaround)
+		static_assert(sizeof(problem_t) == 0, "ComputeEntropyFromRhoEint is only supported by the EOSTabulated backend");
+		return 0.0;
+	}
 };
 
 // ==================== EOSMicrophysics backend ====================
@@ -415,6 +424,15 @@ template <typename problem_t> struct EOSMicrophysics {
 		amrex::ignore_unused(Pressure);
 		return EOS_Traits<problem_t>::cs_isothermal;
 	}
+
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
+	ComputeEntropyFromRhoEint(amrex::Real /*rho*/, amrex::Real /*Eint*/,
+			      quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const & /*massScalars*/ = {}) -> amrex::Real
+	{
+			// sizeof(problem_t)==0: fires only on instantiation, not at parse time (C++20 ill-formed NDR workaround)
+		static_assert(sizeof(problem_t) == 0, "ComputeEntropyFromRhoEint is only supported by the EOSTabulated backend");
+		return 0.0;
+	}
 };
 #endif // CHEMISTRY || PHOTOCHEMISTRY
 
@@ -548,17 +566,7 @@ template <typename problem_t> class EOS
 	static constexpr bool is_tabulated = backend_t::is_tabulated;
 	static constexpr amrex::Real gamma_ = EOS_Traits<problem_t>::gamma; // needed for HLLD solver
 
-	static constexpr amrex::Real boltzmann_constant_ = []() constexpr {
-		if constexpr (Physics_Traits<problem_t>::unit_system == UnitSystem::CGS) {
-			return C::k_B;
-		} else if constexpr (Physics_Traits<problem_t>::unit_system == UnitSystem::CONSTANTS) {
-			return Physics_Traits<problem_t>::boltzmann_constant;
-		} else if constexpr (Physics_Traits<problem_t>::unit_system == UnitSystem::CUSTOM) {
-			return C::k_B /
-			       (Physics_Traits<problem_t>::unit_length * Physics_Traits<problem_t>::unit_length * Physics_Traits<problem_t>::unit_mass /
-				(Physics_Traits<problem_t>::unit_time * Physics_Traits<problem_t>::unit_time) / Physics_Traits<problem_t>::unit_temperature);
-		}
-	}();
+		static constexpr amrex::Real boltzmann_constant_ = EOSIdeal<problem_t>::boltzmann_constant_;
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeTgasFromEint(amrex::Real rho, amrex::Real Eint, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
