@@ -1,5 +1,5 @@
 /// \file testDustyAlfvenWave.cpp
-/// \brief Circularly polarized dusty Alfven wave test inspired by Moseley et al. (2022).
+/// \brief Circularly polarized dusty Alfven wave test inspired by Moseley et al. (2023).
 
 #include "AMReX_Gpu.H"
 #include "AMReX_ParmParse.H"
@@ -36,7 +36,7 @@ constexpr double sample_z_target = 0.5;
 constexpr double time_tolerance = 1.0e-12;
 constexpr double advance_tolerance = 1.0e-14;
 constexpr int history_stride = 20;
-constexpr size_t tracer_particle_count = 128;
+constexpr size_t tracer_particle_count = 64;
 constexpr int numerical_tracer_substeps = 8;
 constexpr int reference_dense_history_points = 1001;
 

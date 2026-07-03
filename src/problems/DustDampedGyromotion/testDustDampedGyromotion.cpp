@@ -1,5 +1,5 @@
 /// \file testDustDampedGyromotion.cpp
-/// \brief Damped dust-gas gyromotion test from Moseley et al. (2022).
+/// \brief Damped dust-gas gyromotion test from Moseley et al. (2023).
 ///
 
 #include "QuokkaSimulation.hpp"
