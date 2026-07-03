@@ -27,4 +27,4 @@ install_script() {
 }
 
 install_script "$SCRIPT_DIR/quokka" "quokka"
-install_script "$SCRIPT_DIR/pre-commit.sh" "pre-commit.sh"
+install_script "$SCRIPT_DIR/quokka-pre-commit.sh" "quokka-pre-commit.sh"

@@ -7,7 +7,7 @@ Quokka is a two-moment radiation hydrodynamics code using the piecewise-paraboli
 
 ## Build & Test Commands
 
-The `scripts/bash/quokka` script is the recommended way to configure, build, and run tests. Make sure it exists in your `PATH`; if not, run `./scripts/bash/bootstrap.sh` once from the repo root to install it (and `pre-commit.sh`) into `~/.local/bin/`. All commands accept `--root <path>` to specify the repo root when not running from it.
+The `scripts/bash/quokka` script is the recommended way to configure, build, and run tests. Make sure it exists in your `PATH`; if not, run `./scripts/bash/bootstrap.sh` once from the repo root to install it (and `quokka-pre-commit.sh`) into `~/.local/bin/`. All commands accept `--root <path>` to specify the repo root when not running from it.
 
 The script optionally sources an environment file via `--source <file>` for commands that need the build/test environment (`config`, `build`, `buildrun`, `run`, `target`). If `--source` is omitted, no environment file is sourced.
 
@@ -86,4 +86,4 @@ Presets: `1d`, `2d`, `3d`, `1d-debug`, `2d-debug`, `3d-debug`, `1d-hip`, `2d-hip
 - Use short, imperative commit subjects (e.g., `fix clang-tidy`)
 - Group related changes only and rebase onto `development` before opening a PR
 - PRs should be focused on a single change and target the `development` branch
-- **After every commit**, run `./scripts/bash/pre-commit.sh` to check formatting, YAML validity, merge conflicts, and other CI-enforced hooks
+- **After every commit**, run `./scripts/bash/quokka-pre-commit.sh` to check formatting, YAML validity, merge conflicts, and other CI-enforced hooks
