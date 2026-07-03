@@ -867,7 +867,7 @@ void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(
 
 // average emf components; Balsara2025b.
 // uses a 2D Riemann solver to average the EMF quadrants.
-// note Balsara2025a sec. 3 also derives this.
+// note Balsara2025a sec. 3 recounts the same derivation (eqns. 3.2-3.10).
 
 template <typename problem_t>
 void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> ec_a4_emf_ave_wcomp2, std::array<amrex::FArrayBox, 4> const &ec_fabs_emfs_iquad,
@@ -902,7 +902,8 @@ void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> ec_
 	const auto &fc_a4_fspds_wcomp1 = fcw_fspds_wcomp[wcomp1_comp];
 
 	amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-		// Balsara2025a sec. 3; unlike in FelkerStone2017, these wave speeds are signed (note the negation)
+		// Balsara2025b sec. 3.1 (Balsara2025a sec. 3); unlike in FelkerStone2017, these wave speeds are signed,
+		// so note the negation
 		const double max_fspd_wcomp0_m =
 		    -std::max(fc_a4_fspds_wcomp0(i, j, k, 0), fc_a4_fspds_wcomp0(i - delta_wcomp1[0], j - delta_wcomp1[1], k - delta_wcomp1[2], 0));
 		const double max_fspd_wcomp0_p =
@@ -917,8 +918,8 @@ void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> ec_
 		const auto emf_RT_wcomp2 = ec_a4_emf_iquad2_wcomp2(i, j, k);
 		const auto emf_RB_wcomp2 = ec_a4_emf_iquad3_wcomp2(i, j, k);
 
-		// b_T/b_B and b_R/b_L are assigned opposite to Balsara2025a's geometric convention, which is required to stay
-		// consistent with this module's emf sign convention (see top of file).
+		// b_T/b_B and b_R/b_L are assigned opposite to Balsara2025b's geometric convention (sec. 3.1; also in Balsara2025a
+		// sec. 3), which is required to stay consistent with this module's emf sign convention.
 		const auto b_T_wcomp0 = ec_a4_b_wcomp0_m(i, j, k);
 		const auto b_B_wcomp0 = ec_a4_b_wcomp0_p(i, j, k);
 		const auto b_R_wcomp1 = ec_a4_b_wcomp1_m(i, j, k);
@@ -976,7 +977,7 @@ void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> ec_
 						  max_fspd * (b_B_wcomp0 - b_T_wcomp0 + b_R_wcomp1 - b_L_wcomp1));
 		}
 
-		// select state at the dir-2 edge based on which speeds are zero (Balsara2025b eqn. 20; Balsara2025a fig. 4).
+		// Balsara2025b eqn. 20 (Balsara2025a fig. 4): select state at the dir-2 edge based on which speeds are zero
 		if (max_fspd_wcomp0_m == 0.0 && max_fspd_wcomp1_m == 0.0) {
 			ec_a4_emf_ave_wcomp2(i, j, k) = emf_LB_wcomp2;
 		} else if (max_fspd_wcomp0_p == 0.0 && max_fspd_wcomp1_m == 0.0) {
