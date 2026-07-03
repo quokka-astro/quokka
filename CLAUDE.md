@@ -7,7 +7,7 @@ Quokka is a two-moment radiation hydrodynamics code using the piecewise-paraboli
 
 ## Build & Test Commands
 
-The `scripts/bash/quokka` script is the recommended way to configure, build, and run tests. Make sure it exists in your `PATH`; if not, install it once by copying it to a directory on your `PATH` (e.g. `~/.local/bin/`). All commands accept `--root <path>` to specify the repo root when not running from it.
+The `scripts/bash/quokka` script is the recommended way to configure, build, and run tests. Make sure it exists in your `PATH`; if not, run `./scripts/bash/bootstrap.sh` once from the repo root to install it (and `pre-commit.sh`) into `~/.local/bin/`. All commands accept `--root <path>` to specify the repo root when not running from it.
 
 The script optionally sources an environment file via `--source <file>` for commands that need the build/test environment (`config`, `build`, `buildrun`, `run`, `target`). If `--source` is omitted, no environment file is sourced.
 

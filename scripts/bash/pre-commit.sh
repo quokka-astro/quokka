@@ -2,6 +2,11 @@
 
 set -e
 
+if [[ ! -d ".github" ]] || [[ ! -d ".ci" ]] || [[ ! -d "src" ]]; then
+	echo "Error: run this from the Quokka repository root (missing .github, .ci, or src)"
+	exit 1
+fi
+
 # Function to display help message
 show_help() {
 	echo "Usage: $0 [OPTIONS]"
