@@ -559,6 +559,8 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 
 // compute emf components; Balsara2025a.
 // uses cc v-field and fc b-field averaged to cc to compute the emf, then reconstructs it cc->ec.
+// note Balsara2025b sec. 4 (steps 2-3) describes a similar but more elaborate AFD-WENO version of this
+// b-field fc->cc, then cc->ec procedure; the following instead follows Balsara2025a's simpler approach.
 
 template <typename problem_t>
 void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AMREX_SPACEDIM> &ec_mf_emfs_wcomp, amrex::MultiFab const &cc_mf_cVars,
@@ -620,13 +622,13 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 				delta_wcomp1[wcomp1] = 1;
 				delta_wcomp2[wcomp2] = 1;
 
-				// Balsara2025a sec. 3 (step 1): average fc b-field to cell center.
+				// Balsara2025a sec. 3: average fc b-field to cell center.
 				amrex::Real const b_ave_wcomp1 = 0.5 * (fc_a4_bs_wcomp[wcomp1](i, j, k) +
 									fc_a4_bs_wcomp[wcomp1](i + delta_wcomp1[0], j + delta_wcomp1[1], k + delta_wcomp1[2]));
 				amrex::Real const b_ave_wcomp2 = 0.5 * (fc_a4_bs_wcomp[wcomp2](i, j, k) +
 									fc_a4_bs_wcomp[wcomp2](i + delta_wcomp2[0], j + delta_wcomp2[1], k + delta_wcomp2[2]));
 
-				// Balsara2025a sec. 3 (step 2)
+				// Balsara2025a sec. 3
 				cc_a4_emfs_wcomp[wcomp0](i, j, k) = vs_wcomp[wcomp1] * b_ave_wcomp2 - vs_wcomp[wcomp2] * b_ave_wcomp1;
 			}
 		});
@@ -675,7 +677,7 @@ void MHDSystem<problem_t>::ComputeEMF_Balsara2025(std::array<amrex::MultiFab, AM
 				ec_fabs_emfs_iquad[iquad].setVal<amrex::RunOn::Device>(0.0);
 			}
 
-			// Balsara2025a sec. 3 (steps 3-5): reconstruct the cc EMF to ec.
+			// Balsara2025a sec. 3: reconstruct the cc EMF to ec.
 			// there are two possible permutations for doing this:
 			//   1. cc->fc[dir-0]->ec
 			//   2. cc->fc[dir-1]->ec
