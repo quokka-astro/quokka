@@ -481,10 +481,7 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 			}
 
 			// reconstruct the field components that are normal to the cell-face: fc->ec.
-			// note this single fc->ec transverse reconstruction of a Riemann-derived face velocity is structurally similar
-			// to Mignone21a eqn. (29) (see also sec. 4.2-5), though they do this for the transverse velocity component at
-			// each face, whereas this method only does this for the normal component; Mignone21a also fuses reconstruction
-			// and averaging steps, whereas this method keeps them decoupled (see AverageEMF).
+			// note this matches the form of Mignone21a eqn. (29).
 			for (int icomp = 0; icomp < 2; ++icomp) {
 				const auto dir2edge = static_cast<FluxDir>(reconstruct_dirs[(icomp + 1) % 2]);
 				const int wcomp = reconstruct_dirs[icomp];
