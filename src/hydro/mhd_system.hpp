@@ -383,8 +383,8 @@ void MHDSystem<problem_t>::ComputeEMF_FelkerStone2017(std::array<amrex::MultiFab
 
 				for (int iquad = 0; iquad < 4; ++iquad) {
 					// extract relevant v-field and b-field components (host: get Array4 views)
-					const int idx0 = (iquad == 0 || iquad == 3) ? 0 : 1; // choose from B/T for dir-0
-					const int idx1 = (iquad < 2) ? 0 : 1; // choose from L/R for dir-1
+					const int idx0 = (iquad == 0 || iquad == 3) ? 0 : 1;			    // choose from B/T for dir-0
+					const int idx1 = (iquad < 2) ? 0 : 1;					    // choose from L/R for dir-1
 					ec_vs_wcomp0_iquad[iquad] = ec_fabs_vs_icomp_jquad[0][iquad].const_array(); // comp=0, index jquad
 					ec_vs_wcomp1_iquad[iquad] = ec_fabs_vs_icomp_jquad[1][iquad].const_array(); // comp=1, index jquad
 					ec_bs_wcomp0_iquad[iquad] = ec_fabs_bs_icomp_jeside[0][idx0].const_array(); // comp=0, index idx0
@@ -520,7 +520,7 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 
 				for (int iquad = 0; iquad < 4; ++iquad) {
 					const int idx0 = (iquad == 0 || iquad == 3) ? 0 : 1; // B/T selector for dir-0
-					const int idx1 = (iquad < 2) ? 0 : 1; // L/R selector for dir-1
+					const int idx1 = (iquad < 2) ? 0 : 1;		     // L/R selector for dir-1
 
 					// define EMF FArrayBox for each quadrant (must be allocated outside the kernel)
 					ec_fabs_emfs_iquad[iquad] = amrex::FArrayBox(box_ec, 1, amrex::The_Async_Arena());
@@ -530,7 +530,7 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 					ec_bs_wcomp0_iquad[iquad] = ec_fabs_bs_icomp_jeside[0][idx0].const_array(); // B/T
 					ec_vs_wcomp1_iquad[iquad] = ec_fabs_vs_icomp_jeside[1][idx1].const_array(); // L/R
 					ec_bs_wcomp1_iquad[iquad] = ec_fabs_bs_icomp_jeside[1][idx1].const_array(); // L/R
-					ec_emfs_wcomp2_iquad[iquad] = ec_fabs_emfs_iquad[iquad].array(); // output EMF view
+					ec_emfs_wcomp2_iquad[iquad] = ec_fabs_emfs_iquad[iquad].array();	    // output EMF view
 				}
 
 				// single kernel over the ec box; compute E in all four quadrants
