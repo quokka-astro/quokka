@@ -813,8 +813,8 @@ void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(
 	const auto &fc_a4_fspds_wcomp1 = fcw_fspds_wcomp[wcomp1_comp];
 
 	amrex::ParallelFor(box_ec, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		// LondrilloDelZanna2004 eqn. 56 (FelkerStone2017 eqn. 41; alpha{1/2}^{m/p}). note that unlike in Balsara2025b,
-		// these are absolute wave-speed magnitudes, so no negation is needed.
+		// LondrilloDelZanna2004 eqn. 56, alpha{1/2}^{m/p}: note that unlike in Balsara2025b, these are
+		// absolute wave-speed magnitudes, so no negation is needed.
 		const double max_fspd_wcomp0_m =
 		    std::max(fc_a4_fspds_wcomp0(i, j, k, 0), fc_a4_fspds_wcomp0(i - delta_wcomp1[0], j - delta_wcomp1[1], k - delta_wcomp1[2], 0));
 		const double max_fspd_wcomp0_p =
@@ -840,9 +840,9 @@ void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(
 		//   0   |   3
 		// (-,-) | (+,-)
 
-		// LondrilloDelZanna2004 eqn. 56 (FelkerStone2017 eqn. 41): the numerator is calculated as a weighted sum of
-		// two different way to group and average the four corner EMFs. num1 and num2 compute the same value, but change
-		// theorder of the summed elements, so that averaging them gives exact floating-point symmetry.
+		// LondrilloDelZanna2004 eqn. 56, numerator: a weighted sum of two different ways to group and average
+		// the four corner EMFs. num1 and num2 compute the same value, but change the order of the summed
+		// elements, so that averaging them gives exact floating-point symmetry.
 		const double num1 =
 		    ((max_fspd_wcomp0_p * max_fspd_wcomp1_p) * emf_iquad0_wcomp2 + (max_fspd_wcomp0_m * max_fspd_wcomp1_p) * emf_iquad3_wcomp2) +
 		    ((max_fspd_wcomp0_p * max_fspd_wcomp1_m) * emf_iquad1_wcomp2 + (max_fspd_wcomp0_m * max_fspd_wcomp1_m) * emf_iquad2_wcomp2);
@@ -852,14 +852,15 @@ void MHDSystem<problem_t>::EMFAverage_LondrilloDelZanna2004(
 
 		// averaged for exact floating-point symmetry
 		const double numerator = 0.5 * (num1 + num2);
-		// LondrilloDelZanna2004 eqn. 56 (FelkerStone2017 eqn. 41)
+		// LondrilloDelZanna2004 eqn. 56, denominator
 		const double denominator = (max_fspd_wcomp0_m + max_fspd_wcomp0_p) * (max_fspd_wcomp1_m + max_fspd_wcomp1_p);
 
-		// LondrilloDelZanna2004 eqn. 56 (FelkerStone2017 eqn. 41): dissipative correction term. both terms below have the
-		// opposite sign to the paper's own formula, consistent with this module's emf sign convention.
+		// LondrilloDelZanna2004 eqn. 56, dissipative correction term: both terms below have the opposite sign
+		// to the paper's own formula, consistent with this module's emf sign convention.
 		const double term2 = ((max_fspd_wcomp1_m * max_fspd_wcomp1_p) / (max_fspd_wcomp1_m + max_fspd_wcomp1_p)) * (b_T_wcomp0 - b_B_wcomp0) +
 				     ((max_fspd_wcomp0_m * max_fspd_wcomp0_p) / (max_fspd_wcomp0_m + max_fspd_wcomp0_p)) * (b_L_wcomp1 - b_R_wcomp1);
 
+		// LondrilloDelZanna2004 eqn. 56 (FelkerStone2017 eqn. 41)
 		ec_a4_emf_ave_wcomp2(i, j, k) = (numerator / denominator) + term2;
 		MHDSystem<problem_t>::ApplyResistiveCorrection(ec_a4_emf_ave_wcomp2, i, j, k, fc_a4_b_wcomp0, fc_a4_b_wcomp1, delta_wcomp0, delta_wcomp1,
 							       dx_wcomp0, dx_wcomp1, resistivity);
