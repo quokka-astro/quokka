@@ -221,30 +221,19 @@ auto problem_main() -> int
 	// 	BCs_cc[n].setHi(dir, amrex::BCType::foextrap);
 	// 	}
 	// }
-	// for (int n = 0; n < ncomp_cc; ++n) {
-	// for (int i = 0; i < AMREX_SPACEDIM; ++i) {
-	// 	// diode boundary conditions
-	// 	if (i == 2) {
-	// 		BCs_cc[n].setLo(i, amrex::BCType::foextrap);
-	// 		BCs_cc[n].setHi(i, amrex::BCType::foextrap);
-	// 	} else {
-	// 		BCs_cc[n].setLo(i, amrex::BCType::foextrap); // periodic
-	// 		BCs_cc[n].setHi(i, amrex::BCType::foextrap); // periodic
-	// 	}
-	// }
-	// }
 	// Problem initialization
 	// QuokkaSimulation<ThermalConductionProblem> sim(BCs_cc);
-
-	// // initialize
+	
+	
+	// initialize
 	// sim.setInitialConditions();
 
-	// // evolve
+	// evolve
 	// sim.evolve();
 	// const double error_norm = sim.computeErrorNorm();
 	// amrex::Print() << std::format("\nrun_sim error norm = {:.6e})\n", error_norm);
 
-	// // Cleanup and exit
+	// Cleanup and exit
 	// amrex::Print() << "Finished." << '\n';
 	// return 0;
 	/***Richardson Extrapolation ****/
@@ -252,8 +241,8 @@ auto problem_main() -> int
 	quokka::richardson::applyQuietDefaults();
 	quokka::richardson::Parameters params{};
 	params.machine_precision_target = 2.0e-9; // limit based on delta_b_magn, smaller values can be used if this is decreased
-	params.nx_initial = 32;
-	params.nx_max = 128;
+	params.nx_initial = 64;
+	params.nx_max = 256;
 	params.expected_rate = 2.0;
 	params.tolerance = 0.3;
 	params.test_name = "Thermal Conduction";
