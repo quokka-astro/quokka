@@ -48,8 +48,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto resampled_cooling_function(Real co
 	return Edot;
 }
 
-
-
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeCoolingLength(Real const rho, Real const Eint, resampledGpuConstTables const &tables,
 								   Real const_heating_rate = 0.0) -> Real
 {
@@ -70,7 +68,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputePressureFromRhoEint(Real co
 	std::array<amrex::Real, 2> const point = {rho, eint};
 	return tables.all_tables.interpolate_single(point, PRESSURE_IDX);
 }
-
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeSoundSpeedFromRhoEint(Real const rho, Real const Eint, resampledGpuConstTables const &tables) -> Real
 {
