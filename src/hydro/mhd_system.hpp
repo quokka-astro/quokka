@@ -1211,35 +1211,35 @@ void MHDSystem<problem_t>::AddResistiveEnergyFlux(std::array<amrex::MultiFab, AM
 				if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::constant) {
 					eta_j_wcomp1_lo = computeResistiveEMF(fc_a4_b_wcomp_wcomp2_local, fc_a4_b_wcomp_wcomp0_local, i, j, k, delta_wcomp2,
 									      delta_wcomp0, dx_wcomp2, dx_wcomp0, resistivity);
-					eta_j_wcomp1_hi =
-					    computeResistiveEMF(fc_a4_b_wcomp_wcomp2_local, fc_a4_b_wcomp_wcomp0_local, i + delta_wcomp2[0], j + delta_wcomp2[1],
-								k + delta_wcomp2[2], delta_wcomp2, delta_wcomp0, dx_wcomp2, dx_wcomp0, resistivity);
+					eta_j_wcomp1_hi = computeResistiveEMF(fc_a4_b_wcomp_wcomp2_local, fc_a4_b_wcomp_wcomp0_local, i + delta_wcomp2[0],
+									      j + delta_wcomp2[1], k + delta_wcomp2[2], delta_wcomp2, delta_wcomp0, dx_wcomp2,
+									      dx_wcomp0, resistivity);
 					eta_j_wcomp2_lo = computeResistiveEMF(fc_a4_b_wcomp_wcomp0_local, fc_a4_b_wcomp_wcomp1_local, i, j, k, delta_wcomp0,
 									      delta_wcomp1, dx_wcomp0, dx_wcomp1, resistivity);
-					eta_j_wcomp2_hi =
-					    computeResistiveEMF(fc_a4_b_wcomp_wcomp0_local, fc_a4_b_wcomp_wcomp1_local, i + delta_wcomp1[0], j + delta_wcomp1[1],
-								k + delta_wcomp1[2], delta_wcomp0, delta_wcomp1, dx_wcomp0, dx_wcomp1, resistivity);
+					eta_j_wcomp2_hi = computeResistiveEMF(fc_a4_b_wcomp_wcomp0_local, fc_a4_b_wcomp_wcomp1_local, i + delta_wcomp1[0],
+									      j + delta_wcomp1[1], k + delta_wcomp1[2], delta_wcomp0, delta_wcomp1, dx_wcomp0,
+									      dx_wcomp1, resistivity);
 				} else if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::problem_defined) {
-					const amrex::Real eta_wcomp1_lo =
-					    computeResistivity<problem_t>(i, j, k, fc_a4_b_wcomp_wcomp2_local, fc_a4_b_wcomp_wcomp0_local, dx_wcomp2, dx_wcomp0);
+					const amrex::Real eta_wcomp1_lo = computeResistivity<problem_t>(i, j, k, fc_a4_b_wcomp_wcomp2_local,
+													fc_a4_b_wcomp_wcomp0_local, dx_wcomp2, dx_wcomp0);
 					eta_j_wcomp1_lo = computeResistiveEMF(fc_a4_b_wcomp_wcomp2_local, fc_a4_b_wcomp_wcomp0_local, i, j, k, delta_wcomp2,
 									      delta_wcomp0, dx_wcomp2, dx_wcomp0, eta_wcomp1_lo);
 					const amrex::Real eta_wcomp1_hi =
-					    computeResistivity<problem_t>(i + delta_wcomp2[0], j + delta_wcomp2[1], k + delta_wcomp2[2], fc_a4_b_wcomp_wcomp2_local,
-									  fc_a4_b_wcomp_wcomp0_local, dx_wcomp2, dx_wcomp0);
-					eta_j_wcomp1_hi =
-					    computeResistiveEMF(fc_a4_b_wcomp_wcomp2_local, fc_a4_b_wcomp_wcomp0_local, i + delta_wcomp2[0], j + delta_wcomp2[1],
-								k + delta_wcomp2[2], delta_wcomp2, delta_wcomp0, dx_wcomp2, dx_wcomp0, eta_wcomp1_hi);
-					const amrex::Real eta_wcomp2_lo =
-					    computeResistivity<problem_t>(i, j, k, fc_a4_b_wcomp_wcomp0_local, fc_a4_b_wcomp_wcomp1_local, dx_wcomp0, dx_wcomp1);
+					    computeResistivity<problem_t>(i + delta_wcomp2[0], j + delta_wcomp2[1], k + delta_wcomp2[2],
+									  fc_a4_b_wcomp_wcomp2_local, fc_a4_b_wcomp_wcomp0_local, dx_wcomp2, dx_wcomp0);
+					eta_j_wcomp1_hi = computeResistiveEMF(fc_a4_b_wcomp_wcomp2_local, fc_a4_b_wcomp_wcomp0_local, i + delta_wcomp2[0],
+									      j + delta_wcomp2[1], k + delta_wcomp2[2], delta_wcomp2, delta_wcomp0, dx_wcomp2,
+									      dx_wcomp0, eta_wcomp1_hi);
+					const amrex::Real eta_wcomp2_lo = computeResistivity<problem_t>(i, j, k, fc_a4_b_wcomp_wcomp0_local,
+													fc_a4_b_wcomp_wcomp1_local, dx_wcomp0, dx_wcomp1);
 					eta_j_wcomp2_lo = computeResistiveEMF(fc_a4_b_wcomp_wcomp0_local, fc_a4_b_wcomp_wcomp1_local, i, j, k, delta_wcomp0,
 									      delta_wcomp1, dx_wcomp0, dx_wcomp1, eta_wcomp2_lo);
 					const amrex::Real eta_wcomp2_hi =
-					    computeResistivity<problem_t>(i + delta_wcomp1[0], j + delta_wcomp1[1], k + delta_wcomp1[2], fc_a4_b_wcomp_wcomp0_local,
-									  fc_a4_b_wcomp_wcomp1_local, dx_wcomp0, dx_wcomp1);
-					eta_j_wcomp2_hi =
-					    computeResistiveEMF(fc_a4_b_wcomp_wcomp0_local, fc_a4_b_wcomp_wcomp1_local, i + delta_wcomp1[0], j + delta_wcomp1[1],
-								k + delta_wcomp1[2], delta_wcomp0, delta_wcomp1, dx_wcomp0, dx_wcomp1, eta_wcomp2_hi);
+					    computeResistivity<problem_t>(i + delta_wcomp1[0], j + delta_wcomp1[1], k + delta_wcomp1[2],
+									  fc_a4_b_wcomp_wcomp0_local, fc_a4_b_wcomp_wcomp1_local, dx_wcomp0, dx_wcomp1);
+					eta_j_wcomp2_hi = computeResistiveEMF(fc_a4_b_wcomp_wcomp0_local, fc_a4_b_wcomp_wcomp1_local, i + delta_wcomp1[0],
+									      j + delta_wcomp1[1], k + delta_wcomp1[2], delta_wcomp0, delta_wcomp1, dx_wcomp0,
+									      dx_wcomp1, eta_wcomp2_hi);
 				}
 
 				// average fc b-fields across wcomp0 to ec
