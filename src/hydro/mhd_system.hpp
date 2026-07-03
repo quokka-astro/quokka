@@ -478,8 +478,7 @@ void MHDSystem<problem_t>::ComputeEMF_Quokka2026(std::array<amrex::MultiFab, AMR
 				}
 			}
 
-			// reconstruct the field components that are normal to the cell-face: fc->ec.
-			// note this is the same as Mignone21a eqn. (29).
+			// reconstruct the field components that are normal to the cell-face: fc->ec
 			for (int icomp = 0; icomp < 2; ++icomp) {
 				const auto dir2edge = static_cast<FluxDir>(reconstruct_dirs[(icomp + 1) % 2]);
 				const int wcomp = reconstruct_dirs[icomp];
