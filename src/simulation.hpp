@@ -4809,6 +4809,10 @@ template <typename problem_t> auto AMRSimulation<problem_t>::readCheckpointHeade
 
 	// read in finest_level
 	is >> finest_level;
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(finest_level <= max_level,
+					 std::format("Checkpoint '{}' contains AMR levels 0-{}, but the restart input configured amr.max_level = {}. "
+						     "Restart with amr.max_level >= {} or use a checkpoint with fewer levels.",
+						     restart_file, finest_level, max_level, finest_level));
 	GotoNextLine(is);
 
 	// read in array of istep
