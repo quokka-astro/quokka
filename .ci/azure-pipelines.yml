@@ -59,9 +59,8 @@ jobs:
 
         TARGET_BRANCH=$(echo "$(System.PullRequest.TargetBranch)" | sed 's|refs/heads/||')
         [ -z "$TARGET_BRANCH" ] && TARGET_BRANCH="development"
-        git fetch --deepen=100 origin "$TARGET_BRANCH"
-        MERGE_BASE=$(git merge-base FETCH_HEAD HEAD)
-        changed_files="$(git diff --name-only "$MERGE_BASE" HEAD)"
+        git fetch origin "$TARGET_BRANCH"
+        changed_files="$(git diff --name-only FETCH_HEAD...HEAD)"
 
         run_heavy="false"
         while IFS= read -r f; do

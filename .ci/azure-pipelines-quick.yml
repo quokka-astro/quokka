@@ -40,9 +40,8 @@ jobs:
     - script: |
         TARGET_BRANCH=$(echo "$(System.PullRequest.TargetBranch)" | sed 's|refs/heads/||')
         [ -z "$TARGET_BRANCH" ] && TARGET_BRANCH="development"
-        git fetch --deepen=100 origin "$TARGET_BRANCH"
-        MERGE_BASE=$(git merge-base FETCH_HEAD HEAD)
-        CHANGED=$(git diff --name-only "$MERGE_BASE" HEAD)
+        git fetch origin "$TARGET_BRANCH"
+        CHANGED=$(git diff --name-only FETCH_HEAD...HEAD)
         PROBLEMS=$(echo "$CHANGED" | grep '^src/problems/' | awk -F'/' '{print $3}' | sort -u | grep -v '^$')
         if [ -z "$PROBLEMS" ]; then
           echo "##[section]No src/problems/ files changed in this PR."
