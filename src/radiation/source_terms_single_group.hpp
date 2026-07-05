@@ -9,7 +9,8 @@
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, Real dt_implicit,
 						     double gas_update_factor_in, double dustGasCoeff, double tol_h, double /*tol_rel_h*/, double /*tempFloor*/,
-						     int *p_iteration_counter, int *p_iteration_failure_counter)
+						     int *p_iteration_counter, int *p_iteration_failure_counter,
+						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
 {
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;
@@ -41,6 +42,9 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		const std::array<double, 3> gasMtm0 = {x1GasMom0, x2GasMom0, x3GasMom0};
 		const double Egastot0 = consPrev(i, j, k, gasEnergy_index);
 		auto massScalars = RadSystem<problem_t>::ComputeMassScalars(consPrev, i, j, k);
+
+		// Compute cell-centered magnetic field
+		const double Emag = ComputeCellCenteredMagneticEnergy<problem_t>(i, j, k, cons_fc);
 
 		// load radiation energy
 		const double Erad0 = consPrev(i, j, k, radEnergy_index);
@@ -79,7 +83,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		amrex::GpuArray<Real, 3> Frad_t1{};
 
 		if constexpr (gamma_ != 1.0) {
-			Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
+			Egas0 = ::quokka::EOS<problem_t>::ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0, Emag);
 			Etot0 = Egas0 + cscale * (Erad0 + Src);
 			AMREX_ASSERT(Egas0 > 0.0);
 		}
@@ -157,7 +161,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 				const int maxIter = 100;
 				int n = 0;
 				for (; n < maxIter; ++n) {
-					T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+					T_gas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 					AMREX_ASSERT(T_gas >= 0.);
 
 					// dust temperature
@@ -258,7 +262,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						break;
 					}
 
-					const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
+					const double c_v = ::quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
 
 #if 0
 					// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
@@ -330,7 +334,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						AMREX_ASSERT(Erad_guess >= 0.0);
 						T_rad = std::sqrt(std::sqrt(Erad_guess / radiation_constant_));
 						if (deltaEgas / c_v > std::max(T_gas, T_rad)) {
-							Egas_guess = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
+							Egas_guess = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
 							// R = 0.0;
 						} else {
 							Egas_guess += deltaEgas;
@@ -486,7 +490,8 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 			// 3. Deal with the work term.
 			if constexpr ((gamma_ != 1.0) && (beta_order_ != 0)) {
 				// compute difference in gas kinetic energy before and after momentum update
-				amrex::Real const Egastot1 = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
+				amrex::Real const Egastot1 =
+				    ::quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess, Emag);
 				amrex::Real const Ekin1 = Egastot1 - Egas_guess;
 				amrex::Real const dEkin_work = Ekin1 - Ekin0;
 
@@ -548,7 +553,8 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		if constexpr (gamma_ != 1.0) {
 			Egas_guess = Egas0 + (Egas_guess - Egas0) * gas_update_factor;
 			consNew(i, j, k, gasInternalEnergy_index) = Egas_guess;
-			consNew(i, j, k, gasEnergy_index) = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
+			consNew(i, j, k, gasEnergy_index) =
+			    ::quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess, Emag);
 			consNew(i, j, k, radEnergy_index) = Erad_guess;
 		} else {
 			amrex::ignore_unused(Erad_guess);

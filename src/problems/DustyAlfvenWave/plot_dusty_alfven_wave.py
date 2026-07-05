@@ -39,10 +39,16 @@ plt.rcParams.update({
 
 
 EPSILON_CASES = (
-    ("epsilon0", r"$\epsilon=0$"),
-    ("epsilon0p01", r"$\epsilon=0.01$"),
-    ("epsilon0p1", r"$\epsilon=0.1$"),
     ("epsilon1", r"$\epsilon=1$"),
+    ("epsilon0p1", r"$\epsilon=0.1$"),
+    ("epsilon0p01", r"$\epsilon=0.01$"),
+    ("epsilon0", r"$\epsilon=0$"),
+)
+
+EPSILON_CASES_PAPER = (
+    ("epsilon1", r"$\epsilon=1$"),
+    ("epsilon0p1", r"$\epsilon=0.1$"),
+    ("epsilon0", r"$\epsilon=0$"),
 )
 
 OMEGA_CASES = (
@@ -87,33 +93,98 @@ def require_particle_files(data_dir: Path, sweep: str, cases: tuple[tuple[str, s
 
 
 def plot_profile_panel(ax, profile: dict[str, list[float]], title: str) -> None:
-    ax.plot(profile["z"], profile["ref_dust_vx"], color="black", linewidth=1.3, label="dust ref")
-    ax.plot(profile["z"], profile["ref_gas_vx"], color="tab:red", linewidth=1.1, label="gas ref")
-    ax.plot(profile["z"], profile["dust_vx"], color="black", linestyle="None", marker="s", markersize=3.0, label="dust")
-    ax.plot(profile["z"], profile["gas_vx"], color="tab:red", linestyle="None", marker="o", markersize=3.0, label="gas")
+    ax.plot(profile["z"], profile["ref_gas_vx"], color="tab:red", linewidth=1.1, label="gas")
+    ax.plot(profile["z"], profile["ref_dust_vx"], color="black", linewidth=1.3, label="dust")
+    ax.plot(
+        profile["z"],
+        profile["gas_vx"],
+        color="tab:red",
+        linestyle="None",
+        marker="s",
+        markersize=4.0,
+        markerfacecolor="none",
+        markeredgewidth=1.0,
+        markevery=4,
+    )
+    ax.plot(
+        profile["z"],
+        profile["dust_vx"],
+        color="black",
+        linestyle="None",
+        marker="s",
+        markersize=4.0,
+        markerfacecolor="none",
+        markeredgewidth=1.0,
+        markevery=4,
+    )
     ax.set_xlim(0.0, 1.0)
     ax.set_title(title)
 
 
 def plot_history_panel(ax, history: dict[str, list[float]]) -> None:
     ax.plot(history["t"], history["ref_dust_vx"], color="black", linewidth=1.3)
-    ax.plot(history["t"], history["dust_vx"], color="black", linestyle="None", marker="s", markersize=2.5)
+    ax.plot(
+        history["t"],
+        history["dust_vx"],
+        color="black",
+        linestyle="None",
+        marker="s",
+        markersize=4.0,
+        markerfacecolor="none",
+        markeredgewidth=1.0,
+    )
     ax.set_xlim(0.0, 5.0)
 
 
 def plot_particle_profile_panel(ax, profile: dict[str, list[float]], title: str) -> None:
-    ax.plot(profile["z_ref"], profile["dust_vx_ref"], color="black", linewidth=1.3, label="dust ref")
-    ax.plot(profile["z_ref"], profile["gas_vx_ref"], color="tab:red", linewidth=1.1, label="gas ref")
-    ax.plot(profile["z_num"], profile["dust_vx_num"], color="black", linestyle="None", marker="s", markersize=3.0, label="dust")
-    ax.plot(profile["z_num"], profile["gas_vx_num"], color="tab:red", linestyle="None", marker="o", markersize=3.0, label="gas")
+    ax.plot(profile["z_ref"], profile["gas_vx_ref"], color="tab:red", linewidth=1.1, label="gas")
+    ax.plot(profile["z_ref"], profile["dust_vx_ref"], color="black", linewidth=1.3, label="dust")
+    ax.plot(
+        profile["z_num"],
+        profile["gas_vx_num"],
+        color="tab:red",
+        linestyle="None",
+        marker="s",
+        markersize=4.0,
+        markerfacecolor="none",
+        markeredgewidth=1.0,
+        markevery=4,
+    )
+    ax.plot(
+        profile["z_num"],
+        profile["dust_vx_num"],
+        color="black",
+        linestyle="None",
+        marker="s",
+        markersize=4.0,
+        markerfacecolor="none",
+        markeredgewidth=1.0,
+        markevery=4,
+    )
     ax.set_xlim(0.0, 1.0)
     ax.set_title(title)
 
 
 def plot_particle_history_panel(ax, history: dict[str, list[float]], dense_history: dict[str, list[float]]) -> None:
     ax.plot(dense_history["t"], dense_history["ref_dust_vx"], color="black", linewidth=1.3)
-    ax.plot(history["t"], history["dust_vx"], color="black", linestyle="None", marker="s", markersize=2.5)
+    ax.plot(
+        history["t"],
+        history["dust_vx"],
+        color="black",
+        linestyle="None",
+        marker="s",
+        markersize=4.0,
+        markerfacecolor="none",
+        markeredgewidth=1.0,
+    )
     ax.set_xlim(0.0, 5.0)
+
+
+def style_axes(axes) -> None:
+    for row in axes:
+        for ax in row:
+            ax.minorticks_off()
+            ax.tick_params(which="minor", bottom=False, top=False, left=False, right=False)
 
 
 def make_figure(
@@ -136,12 +207,14 @@ def make_figure(
 
         plot_profile_panel(axes[0, column], profile, title)
         plot_history_panel(axes[1, column], history)
+        axes[0, column].set_xlabel(r"$z$")
         axes[1, column].set_xlabel(r"$t$")
         if y_limits is not None:
             axes[0, column].set_ylim(*y_limits)
             axes[1, column].set_ylim(*y_limits)
 
-    axes[0, 0].set_ylabel(r"$x$ velocity at $t=5$")
+    style_axes(axes)
+    axes[0, 0].set_ylabel(r"$v_x$")
     axes[1, 0].set_ylabel(r"$v_{d,x}$")
     axes[0, 0].legend(loc="best", fontsize=PAPER_LEGEND_FONTSIZE)
     fig.tight_layout()
@@ -158,6 +231,8 @@ def make_particle_figure(
     cases: tuple[tuple[str, str], ...],
     filename: str,
     y_limits: tuple[float, float] | None = None,
+    top_row_limits: tuple[tuple[float, float], ...] | None = None,
+    bottom_row_limits: tuple[tuple[float, float], ...] | None = None,
 ) -> Path:
     require_particle_files(data_dir, sweep, cases)
 
@@ -172,12 +247,18 @@ def make_particle_figure(
 
         plot_particle_profile_panel(axes[0, column], profile, title)
         plot_particle_history_panel(axes[1, column], history, dense_history)
+        axes[0, column].set_xlabel(r"$z$")
         axes[1, column].set_xlabel(r"$t$")
         if y_limits is not None:
             axes[0, column].set_ylim(*y_limits)
             axes[1, column].set_ylim(*y_limits)
+        if top_row_limits is not None:
+            axes[0, column].set_ylim(*top_row_limits[column])
+        if bottom_row_limits is not None:
+            axes[1, column].set_ylim(*bottom_row_limits[column])
 
-    axes[0, 0].set_ylabel(r"tracer $x$ velocity at $t=5$")
+    style_axes(axes)
+    axes[0, 0].set_ylabel(r"$v_x$")
     axes[1, 0].set_ylabel(r"$v_{d,x}$")
     axes[0, 0].legend(loc="best", fontsize=PAPER_LEGEND_FONTSIZE)
     fig.tight_layout()
@@ -203,7 +284,15 @@ def main() -> int:
     outputs = [
         make_figure(data_dir, output_dir, "epsilon", EPSILON_CASES, "dusty_alfven_epsilon.pdf"),
         make_figure(data_dir, output_dir, "omega", OMEGA_CASES, "dusty_alfven_omega.pdf", y_limits=(-0.5, 0.5)),
-        make_particle_figure(data_dir, output_dir, "epsilon", EPSILON_CASES, "dusty_alfven_epsilon_paper_like.pdf"),
+        make_particle_figure(
+            data_dir,
+            output_dir,
+            "epsilon",
+            EPSILON_CASES_PAPER,
+            "dusty_alfven_epsilon_paper_like.pdf",
+            top_row_limits=((-0.1, 0.1), (-0.1, 0.1), (-0.5, 0.5)),
+            bottom_row_limits=((-0.58, 0.58), (-0.58, 0.58), (-0.58, 0.58)),
+        ),
         make_particle_figure(data_dir, output_dir, "omega", OMEGA_CASES, "dusty_alfven_omega_paper_like.pdf", y_limits=(-0.5, 0.5)),
     ]
     for output in outputs:

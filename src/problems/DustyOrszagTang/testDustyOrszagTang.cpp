@@ -1,5 +1,5 @@
 /// \file testDustyOrszagTang.cpp
-/// \brief Dusty Orszag-Tang vortex analogue inspired by Moseley et al. (2022), Section 3.4.
+/// \brief Dusty Orszag-Tang vortex analogue inspired by Moseley et al. (2023), Section 3.4.
 
 #include "AMReX_Gpu.H"
 #include "AMReX_ParmParse.H"

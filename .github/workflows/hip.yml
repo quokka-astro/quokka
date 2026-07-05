@@ -39,7 +39,7 @@ jobs:
     - name: Python and HDF5 dependencies
       run: sudo apt-get update && sudo apt-get install python3-dev python3-numpy python3-matplotlib python3-pip libhdf5-mpi-dev
     - name: Set Up Cache
-      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/ccache
         key: ccache-${{ github.workflow }}-${{ github.job }}-git-${{ github.sha }}

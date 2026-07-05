@@ -1,5 +1,5 @@
 /// \file testDustMagnetizedRDI.cpp
-/// \brief Magnetized RDI analogue inspired by Moseley et al. (2022), Section 3.5.
+/// \brief Magnetized RDI analogue inspired by Moseley et al. (2023), Section 3.5.
 
 #include "AMReX_Gpu.H"
 #include "AMReX_ParallelDescriptor.H"

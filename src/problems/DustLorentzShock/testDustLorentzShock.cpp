@@ -1,5 +1,5 @@
 /// \file testDustLorentzShock.cpp
-/// \brief Fluid-dust Lorentz shock regression test inspired by Moseley et al. (2022).
+/// \brief Fluid-dust Lorentz shock regression test inspired by Moseley et al. (2023).
 
 #include "QuokkaSimulation.hpp"
 #include "util/fextract.hpp"
