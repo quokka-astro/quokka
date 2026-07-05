@@ -23,6 +23,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.ticker import NullLocator
 
 PAPER_LABEL_FONTSIZE = 15
 PAPER_TICK_FONTSIZE = 13
@@ -72,30 +73,87 @@ def reshape_slice(rows: list[dict[str, float]]) -> tuple[np.ndarray, np.ndarray,
     return xs, ys, rho_g, rho_d_scaled
 
 
+def disable_minor_ticks(ax: plt.Axes) -> None:
+    ax.minorticks_off()
+    ax.xaxis.set_minor_locator(NullLocator())
+    ax.yaxis.set_minor_locator(NullLocator())
+    ax.tick_params(which="minor", bottom=False, top=False, left=False, right=False)
+
+
+def trim_shared_edge_ticks(ax: plt.Axes, *, axis: str, drop_first: bool = False, drop_last: bool = False) -> None:
+    if axis == "x":
+        ticks = ax.get_xticks()
+        lo, hi = ax.get_xlim()
+        setter = ax.set_xticks
+    else:
+        ticks = ax.get_yticks()
+        lo, hi = ax.get_ylim()
+        setter = ax.set_yticks
+
+    span = max(abs(hi - lo), 1.0)
+    tol = 1.0e-9 * span
+    visible_ticks = [tick for tick in ticks if (lo - tol) <= tick <= (hi + tol)]
+    trimmed_ticks = [
+        tick for tick in visible_ticks if not ((drop_first and abs(tick - lo) <= tol) or (drop_last and abs(tick - hi) <= tol))
+    ]
+    setter(trimmed_ticks)
+
+
 def make_fig6(data_dir: Path, output_dir: Path) -> Path:
-    fig, axes = plt.subplots(2, 2, figsize=(11.5, 9.0), sharex=True, sharey=True, constrained_layout=True)
+    fig, axes = plt.subplots(2, 2, figsize=(11.0, 9.0), sharex=True, sharey=True, gridspec_kw={"wspace": 0.0, "hspace": 0.0})
     contour_levels = [0.9, 1.0, 1.1, 1.2, 1.35, 1.5]
+    fig.subplots_adjust(left=0.07, right=0.88, bottom=0.08, top=0.94, wspace=0.0, hspace=0.0)
 
     for row, case_tag in enumerate(("high_epsilon", "low_epsilon")):
         for col, snapshot in enumerate(SNAPSHOTS):
             rows = read_csv(data_dir / f"dusty_orszag_tang_{case_tag}_{snapshot}_slice.csv")
             xs, ys, rho_g, rho_d_scaled = reshape_slice(rows)
             ax = axes[row, col]
-            mesh = ax.pcolormesh(xs, ys, rho_g, shading="nearest", cmap="magma")
+            mesh = ax.pcolormesh(
+                xs,
+                ys,
+                rho_g,
+                shading="nearest",
+                cmap="magma",
+                edgecolors="none",
+                linewidth=0.0,
+                antialiased=False,
+                rasterized=True,
+            )
             normalized_dust = rho_d_scaled / np.mean(rho_d_scaled)
             ax.contour(xs, ys, normalized_dust, levels=contour_levels, colors="black", linewidths=0.55, alpha=0.75)
             if row == 0:
                 ax.set_title(f"t = {0.25 if snapshot == 't0p25' else 0.5:g}")
             if col == 0:
-                ax.set_ylabel(f"y\n{CASE_INFO[case_tag]['label']}")
+                ax.text(
+                    0.03,
+                    0.97,
+                    CASE_INFO[case_tag]["label"],
+                    color="white",
+                    fontsize=PAPER_LABEL_FONTSIZE + 1,
+                    ha="left",
+                    va="top",
+                    transform=ax.transAxes,
+                )
             ax.set_xlim(0.0, 1.0)
             ax.set_ylim(0.0, 1.0)
             ax.set_aspect("equal")
+            disable_minor_ticks(ax)
+            ax.tick_params(which="major", direction="in", top=True, right=True)
+            if row == 0:
+                ax.tick_params(labelbottom=False)
+            if col == 1:
+                ax.tick_params(labelleft=False)
 
-    axes[1, 0].set_xlabel("x")
-    axes[1, 1].set_xlabel("x")
-    cbar = fig.colorbar(mesh, ax=axes, fraction=0.046, pad=0.03)
+    fig.supxlabel("x")
+    fig.supylabel("y")
+    trim_shared_edge_ticks(axes[1, 0], axis="x", drop_last=True)
+    trim_shared_edge_ticks(axes[1, 1], axis="x", drop_first=True)
+    trim_shared_edge_ticks(axes[0, 0], axis="y", drop_first=True)
+    trim_shared_edge_ticks(axes[1, 0], axis="y", drop_last=True)
+    cbar = fig.colorbar(mesh, ax=axes, fraction=0.046, pad=0.005)
     cbar.ax.tick_params(labelsize=PAPER_TICK_FONTSIZE)
+    disable_minor_ticks(cbar.ax)
     cbar.set_label(r"$\rho_g$", fontsize=PAPER_LABEL_FONTSIZE)
     output_path = output_dir / "dusty_orszag_tang_fig6_analog.pdf"
     fig.savefig(output_path)
@@ -104,7 +162,8 @@ def make_fig6(data_dir: Path, output_dir: Path) -> Path:
 
 
 def make_fig7(data_dir: Path, output_dir: Path) -> Path:
-    fig, axes = plt.subplots(2, 2, figsize=(11.5, 7.5), sharex=True, constrained_layout=True)
+    fig, axes = plt.subplots(2, 2, figsize=(11.2, 7.5), sharex="col", sharey="row", gridspec_kw={"wspace": 0.0, "hspace": 0.0})
+    fig.subplots_adjust(left=0.09, right=0.985, bottom=0.09, top=0.94, wspace=0.0, hspace=0.0)
 
     for col, case_tag in enumerate(("high_epsilon", "low_epsilon")):
         rows = read_csv(data_dir / f"dusty_orszag_tang_{case_tag}_t0p25_profile.csv")
@@ -119,17 +178,28 @@ def make_fig7(data_dir: Path, output_dir: Path) -> Path:
         axes[0, col].plot(y, v_dy, color="black", linewidth=1.3, label="dust")
         axes[0, col].plot(y, v_gy, color="red", linewidth=1.1, label="gas")
         axes[0, col].set_title(CASE_INFO[case_tag]["title"])
-        axes[0, col].set_ylabel(r"$v_y$")
 
         axes[1, col].plot(y, rho_d_scaled, color="black", linewidth=1.3, label="dust")
         axes[1, col].plot(y, rho_g, color="red", linewidth=1.1, label="gas")
-        axes[1, col].set_ylabel("density")
-        axes[1, col].set_xlabel("y")
+
+    axes[0, 0].set_ylabel(r"$v_y$")
+    axes[1, 0].set_ylabel("density")
+    fig.supxlabel("y")
+    trim_shared_edge_ticks(axes[1, 0], axis="x", drop_last=True)
+    trim_shared_edge_ticks(axes[1, 1], axis="x", drop_first=True)
+    trim_shared_edge_ticks(axes[0, 0], axis="y", drop_first=True)
+    trim_shared_edge_ticks(axes[1, 0], axis="y", drop_last=True)
 
     axes[0, 0].legend(frameon=False, loc="upper right")
-    axes[1, 0].legend(frameon=False, loc="upper right")
     for ax in axes.flat:
         ax.set_xlim(0.0, 0.3)
+        disable_minor_ticks(ax)
+        ax.tick_params(which="major", direction="in", top=True, right=True)
+
+    for ax in axes[0, :]:
+        ax.tick_params(labelbottom=False)
+    for ax in axes[:, 1]:
+        ax.tick_params(labelleft=False)
 
     output_path = output_dir / "dusty_orszag_tang_fig7_analog.pdf"
     fig.savefig(output_path)
