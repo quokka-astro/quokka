@@ -327,10 +327,9 @@ template <typename problem_t> struct EOSMicrophysics {
 	ComputeEintTempDerivative(const amrex::Real rho, const amrex::Real Tgas,
 				  quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> amrex::Real
 	{
-		amrex::ignore_unused(Tgas);
 		eos_t chemstate;
 		chemstate.rho = rho;
-		chemstate.T = NAN;
+		chemstate.T = Tgas;
 		for (int ii = 0; ii < NumSpec; ++ii) {
 			chemstate.xn[ii] = -1.0;
 		}
