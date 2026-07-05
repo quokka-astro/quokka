@@ -542,13 +542,14 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HyperbolicSystem<problem_t>::ComputeWEN
 	/// compute WENO-Z reconstruction following Balsara (2017).
 
 	/// compute moments for each stencil
-	// left-biased stencil
-	const double sL_x = -2.0 * q(i - 1, j, k, n) + 0.5 * q(i - 2, j, k, n) + 1.5 * q(i, j, k, n);
-	const double sL_xx = 0.5 * q(i - 2, j, k, n) - q(i - 1, j, k, n) + 0.5 * q(i, j, k, n);
+	// left-biased stencil; written centre-out (i, i-1, i-2) to mirror the right stencil's term order bit-for-bit
+	const double sL_x = 1.5 * q(i, j, k, n) - 2.0 * q(i - 1, j, k, n) + 0.5 * q(i - 2, j, k, n);
+	const double sL_xx = 0.5 * q(i, j, k, n) - q(i - 1, j, k, n) + 0.5 * q(i - 2, j, k, n);
 
 	// centered stencil
 	const double sC_x = 0.5 * (q(i + 1, j, k, n) - q(i - 1, j, k, n));
-	const double sC_xx = 0.5 * q(i - 1, j, k, n) - q(i, j, k, n) + 0.5 * q(i + 1, j, k, n);
+	// pair the rot180 mirror neighbours (i-1, i+1) before the centre so the sum is reflection-invariant
+	const double sC_xx = (0.5 * q(i - 1, j, k, n) + 0.5 * q(i + 1, j, k, n)) - q(i, j, k, n);
 
 	// right-biased stencil
 	const double sR_x = -1.5 * q(i, j, k, n) + 2.0 * q(i + 1, j, k, n) - 0.5 * q(i + 2, j, k, n);
@@ -568,15 +569,15 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HyperbolicSystem<problem_t>::ComputeWEN
 	double wC = 0.6 * (1. + tau / (IS_C + eps));
 	double wR = 0.2 * (1. + tau / (IS_R + eps));
 
-	// normalise weights
-	const double norm = wL + wC + wR;
+	// normalise weights; pair the rot180 mirror weights (L, R) before the centre so the sum is reflection-invariant
+	const double norm = (wL + wR) + wC;
 	wL /= norm;
 	wC /= norm;
 	wR /= norm;
 
-	// compute weighted moments
-	const double q_x = wL * sL_x + wC * sC_x + wR * sR_x;
-	const double q_xx = wL * sL_xx + wC * sC_xx + wR * sR_xx;
+	// compute weighted moments; pair the rot180 mirror stencils (L, R) before the centre so the sum is reflection-invariant
+	const double q_x = (wL * sL_x + wR * sR_x) + wC * sC_x;
+	const double q_xx = (wL * sL_xx + wR * sR_xx) + wC * sC_xx;
 
 	return std::make_pair(q_x, q_xx);
 }
