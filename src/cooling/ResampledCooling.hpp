@@ -15,6 +15,7 @@
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_iMultiFab.H"
 
+#include "cooling/EOSTabulatedRegistry.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/ODEIntegrate.hpp"
 #include "math/root_finding.hpp"

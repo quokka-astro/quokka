@@ -113,15 +113,14 @@ AMREX_GPU_MANAGED EOSTabulatedRegistry *g_eos_tabulated_registry = nullptr;
 
 /// Register (or re-register) resampled table sub-handles for the tabulated EOS backend.
 /// Lazily allocates the managed-memory registry on first call. Repeated calls overwrite
-/// the host and device tables and set the active flag, so the registry always reflects
-/// the most recently loaded cooling table.
+/// the host and device tables, so the registry always reflects the most recently loaded
+/// cooling table. The pointer being non-null is the sole "registered" invariant.
 void registerEOSTabulated(resampledGpuConstTables host_tables, resampledGpuConstTables device_tables)
 {
 	if (!g_eos_tabulated_registry) {
 		auto *mem = amrex::The_Managed_Arena()->alloc(sizeof(EOSTabulatedRegistry));
 		g_eos_tabulated_registry = new (mem) EOSTabulatedRegistry{};
 	}
-	g_eos_tabulated_registry->active = true;
 	g_eos_tabulated_registry->host = host_tables;
 	g_eos_tabulated_registry->device = device_tables;
 }

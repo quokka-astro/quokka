@@ -37,20 +37,20 @@ template <typename problem_t> struct EOSMicrophysics;
 #endif
 template <typename problem_t> struct EOSTabulated;
 
+// Single source of truth for the default EOS backend selection, forward-declared here
+// so EOS_Traits can reference it. Fully defined after EOSMicrophysics below.
+template <typename problem_t> struct DefaultEOSBackend;
+
 // Primary EOS_Traits template. Provides default values for ideal gamma-law EOS
 // and selects the compile-time EOS backend. Full specializations need only define
-// the trait values they override; EOSBackend defaults to EOSIdeal via SFINAE if omitted.
+// the trait values they override; EOSBackend defaults via SFINAE if omitted.
 //
 template <typename problem_t> struct EOS_Traits {
 	static constexpr double gamma = 5. / 3.;     // default value
 	static constexpr double cs_isothermal = NAN; // only used when gamma = 1
 	static constexpr double mean_molecular_weight = NAN;
 
-#if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
-	using EOSBackend = EOSMicrophysics<problem_t>;
-#else
-	using EOSBackend = EOSIdeal<problem_t>;
-#endif
+	using EOSBackend = typename DefaultEOSBackend<problem_t>::type;
 };
 
 // ==================== EOSIdeal backend ====================
@@ -451,12 +451,7 @@ template <typename problem_t> struct EOSTabulated {
 	    -> amrex::Real
 	{
 		amrex::ignore_unused(massScalars);
-		auto *reg = ResampledCooling::getEOSTabulatedRegistry();
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(reg != nullptr, "EOSTabulated: registry not registered before use!");
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(reg->active, "EOSTabulated: registry not active!");
-
-		AMREX_IF_ON_DEVICE((return ResampledCooling::ComputeTgasFromEgas(rho, Eint, reg->device);))
-		AMREX_IF_ON_HOST((return ResampledCooling::ComputeTgasFromEgas(rho, Eint, reg->host);))
+		return ResampledCooling::ComputeTgasFromEgas(rho, Eint, get_tables());
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
@@ -464,41 +459,24 @@ template <typename problem_t> struct EOSTabulated {
 	    -> amrex::Real
 	{
 		amrex::ignore_unused(massScalars);
-		auto *reg = ResampledCooling::getEOSTabulatedRegistry();
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(reg != nullptr, "EOSTabulated: registry not registered before use!");
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(reg->active, "EOSTabulated: registry not active!");
-
-		AMREX_IF_ON_DEVICE((return ResampledCooling::ComputeEgasFromTgas(rho, Tgas, reg->device);))
-		AMREX_IF_ON_HOST((return ResampledCooling::ComputeEgasFromTgas(rho, Tgas, reg->host);))
+		return ResampledCooling::ComputeEgasFromTgas(rho, Tgas, get_tables());
 	}
 
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputeEintTempDerivative(const amrex::Real rho, const amrex::Real Tgas,
 				  quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> amrex::Real
 	{
-		// Compute dEint/dT with one root-find + two cheap table lookups
-		// instead of two root-finds (toms748, up to 32 iterations each).
-		// Clamp perturbations to the table domain to avoid out-of-range
-		// interpolation; use one-sided difference when boundary is hit.
+		// One root-find + two cheap table lookups instead of two root-finds.
+		// ComputeEintFromTgas clamps to [rho*eint_min, rho*eint_max], so Eint > 0;
+		// use a purely relative step to avoid dominating ISM-scale energy densities.
 		const amrex::Real Eint = ComputeEintFromTgas(rho, Tgas, massScalars);
-		// Use a purely relative step so the perturbation scales with Eint.
-		// ComputeEintFromTgas clamps to [rho*eint_min, rho*eint_max], so
-		// Eint > 0 here; an absolute floor would dominate at ISM densities.
 		constexpr amrex::Real eps = 1.0e-6;
 		const amrex::Real dEint = eps * Eint;
-		auto *reg = ResampledCooling::getEOSTabulatedRegistry();
-		AMREX_IF_ON_DEVICE((
-			const amrex::Real Eint_hi = amrex::min(Eint + dEint, rho * reg->device.eint_max);
-			const amrex::Real Eint_lo = amrex::max(Eint - dEint, rho * reg->device.eint_min);
-			const amrex::Real dT = ComputeTgasFromEint(rho, Eint_hi, massScalars) - ComputeTgasFromEint(rho, Eint_lo, massScalars);
-			return (dT > 0.0) ? (Eint_hi - Eint_lo) / dT : amrex::Real(NAN);
-		))
-		AMREX_IF_ON_HOST((
-			const amrex::Real Eint_hi = amrex::min(Eint + dEint, rho * reg->host.eint_max);
-			const amrex::Real Eint_lo = amrex::max(Eint - dEint, rho * reg->host.eint_min);
-			const amrex::Real dT = ComputeTgasFromEint(rho, Eint_hi, massScalars) - ComputeTgasFromEint(rho, Eint_lo, massScalars);
-			return (dT > 0.0) ? (Eint_hi - Eint_lo) / dT : amrex::Real(NAN);
-		))
+		auto const &tables = get_tables();
+		const amrex::Real Eint_hi = amrex::min(Eint + dEint, rho * tables.eint_max);
+		const amrex::Real Eint_lo = amrex::max(Eint - dEint, rho * tables.eint_min);
+		const amrex::Real dT = ComputeTgasFromEint(rho, Eint_hi, massScalars) - ComputeTgasFromEint(rho, Eint_lo, massScalars);
+		return (dT > 0.0) ? (Eint_hi - Eint_lo) / dT : amrex::Real(NAN);
 	}
 
 	// Non-temperature methods — delegate to EOSIdeal
@@ -538,28 +516,43 @@ template <typename problem_t> struct EOSTabulated {
 	    -> amrex::Real
 	{
 		amrex::ignore_unused(massScalars);
-		auto *reg = ResampledCooling::getEOSTabulatedRegistry();
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(reg != nullptr, "EOSTabulated: registry not registered before use!");
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(reg->active, "EOSTabulated: registry not active!");
+		return ResampledCooling::ComputeEntropyFromRhoEint(rho, Eint, get_tables());
+	}
 
-		AMREX_IF_ON_DEVICE((return ResampledCooling::ComputeEntropyFromRhoEint(rho, Eint, reg->device);))
-		AMREX_IF_ON_HOST((return ResampledCooling::ComputeEntropyFromRhoEint(rho, Eint, reg->host);))
+      private:
+	// Returns the device or host table handle appropriate for the current execution context.
+	// The registration invariant (non-null pointer) is checked once at setup; only a
+	// debug-mode assert is needed here to avoid per-cell overhead in Release GPU kernels.
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto get_tables()
+	    -> ResampledCooling::resampledGpuConstTables const &
+	{
+		auto *reg = ResampledCooling::getEOSTabulatedRegistry();
+		AMREX_ASSERT(reg != nullptr);
+		AMREX_IF_ON_DEVICE((return reg->device;))
+		AMREX_IF_ON_HOST((return reg->host;))
 	}
 };
 
-// ==================== EOS backend selection ====================
-// If EOS_Traits<problem_t> defines EOSBackend, use it; otherwise default to EOSIdeal.
-// This preserves backward compatibility with existing full specializations that
-// predate the EOSBackend mechanism.
-
-namespace detail
-{
-template <typename T, typename = void> struct EOSBackendHelper {
+// DefaultEOSBackend — definition (forward-declared near EOS_Traits above).
+// Both EOS_Traits (primary template) and EOSBackendHelper (SFINAE fallback) use this
+// so the default-backend policy lives in exactly one place.
+template <typename T> struct DefaultEOSBackend {
 #if defined(CHEMISTRY) || defined(PHOTOCHEMISTRY)
 	using type = EOSMicrophysics<T>;
 #else
 	using type = EOSIdeal<T>;
 #endif
+};
+
+// ==================== EOS backend selection ====================
+// If EOS_Traits<problem_t> defines EOSBackend, use it; otherwise fall back to
+// DefaultEOSBackend. This preserves backward compatibility with existing full
+// specializations that predate the EOSBackend mechanism.
+
+namespace detail
+{
+template <typename T, typename = void> struct EOSBackendHelper {
+	using type = typename DefaultEOSBackend<T>::type;
 };
 
 template <typename T> struct EOSBackendHelper<T, std::void_t<typename EOS_Traits<T>::EOSBackend>> {

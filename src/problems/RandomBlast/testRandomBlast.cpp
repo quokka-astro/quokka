@@ -36,6 +36,10 @@ template <> struct Physics_Traits<RandomBlast> : DefaultPhysicsTraits {
 template <> struct quokka::EOS_Traits<RandomBlast> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
+	// EOSTabulated: ComputeEintFromTgas root-finds through the resampled table,
+	// so ICs differ from the ideal-gas inverse by the table-vs-fixed-mu ratio.
+	// This is intentional — the table EOS is needed for consistent cooling.
+	// Temperatures below the table minimum are silently clamped to eint_min.
 	using EOSBackend = quokka::EOSTabulated<RandomBlast>;
 };
 

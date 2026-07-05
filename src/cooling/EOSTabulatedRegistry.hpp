@@ -84,7 +84,6 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEntropyFromRhoEint(Real con
 }
 
 struct EOSTabulatedRegistry {
-	bool active = false;
 	resampledGpuConstTables host;
 	resampledGpuConstTables device;
 };
