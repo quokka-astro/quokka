@@ -86,4 +86,18 @@ Presets: `1d`, `2d`, `3d`, `1d-debug`, `2d-debug`, `3d-debug`, `1d-hip`, `2d-hip
 - Use short, imperative commit subjects (e.g., `fix clang-tidy`)
 - Group related changes only and rebase onto `development` before opening a PR
 - PRs should be focused on a single change and target the `development` branch
-- **After every commit**, run `./scripts/bash/quokka-pre-commit.sh` to check formatting, YAML validity, merge conflicts, and other CI-enforced hooks
+- **After every commit**, run `pre-commit.sh` to check formatting, YAML validity, merge conflicts, and other CI-enforced hooks
+
+## Container Environment (Docker)
+
+This repository runs inside a Docker container. The following quirks apply:
+
+- **CUDA**: `nvcc` is at `/usr/local/cuda/bin/nvcc` but not in PATH. Pass `CUDACXX=/usr/local/cuda/bin/nvcc` explicitly for CUDA builds:
+  ```bash
+  CUDACXX=/usr/local/cuda/bin/nvcc cmake -S <REPO_ROOT> -B <BUILD_DIR> ... -DAMReX_GPU_BACKEND=CUDA
+  CUDACXX=/usr/local/cuda/bin/nvcc ninja -C <BUILD_DIR> <target>
+  ```
+  The `quokka` script does not handle this automatically, so use raw `cmake`/`ninja` for CUDA config and build, or prepend `CUDACXX=...` when calling `quokka config -d <N>d-cuda`.
+- **No environment file**: `~/.config/quokka/quokka.rc` does not exist. Omit `--source` from all `quokka` invocations.
+- **Bootstrap**: run `bash scripts/bash/bootstrap.sh` once per session to install `quokka` and `pre-commit.sh` into `~/.local/bin/` (already in PATH).
+- **Stale build directories**: if cmake complains about a source/binary directory mismatch (e.g. a macOS path from another machine), use `quokka config --delete` or delete the build directory and reconfigure.
