@@ -57,7 +57,9 @@ jobs:
     - script: |
         set -euo pipefail
 
-        git fetch origin development --depth=1
+        TARGET_BRANCH=$(echo "$(System.PullRequest.TargetBranch)" | sed 's|refs/heads/||')
+        [ -z "$TARGET_BRANCH" ] && TARGET_BRANCH="development"
+        git fetch origin "$TARGET_BRANCH"
         changed_files="$(git diff --name-only FETCH_HEAD...HEAD)"
 
         run_heavy="false"
