@@ -96,12 +96,10 @@ These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` 
 
 These parameters are read in the `QuokkaSimulation<problem_t>::readParmParse()` function in `src/QuokkaSimulation.hpp`.
 
-| Parameter Name                       | Type          | Default                             | Description                                                                                                                                         |
-|--------------------------------------|---------------|-------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
-| cooling.enabled                      | Boolean (0/1) | `0` (Disabled)                      | If set to 1, turns on optically-thin radiative cooling as a Strang-split source term.                                                               |
-| cooling.cooling_table_type           | String        | `"resampled"`                       | Specifies the type of cooling table to use. The only supported option is "resampled".                                                               |
-| cooling.read_tables_even_if_disabled | Boolean (0/1) | `0` (Disabled)                      | If set to 1, reads the cooling tables even if the cooling module is disabled.                                                                       |
-| cooling.hdf5_data_file               | String        | **Required** if `cooling.enabled=1` | The path to the cooling tables in HDF5 format. We recommend using `extern/cooling/CloudyData_UVB=HM2012_resampled.h5` for ISM at solar metallicity. |
+| Parameter Name                       | Type          | Default                                        | Description                                                                                                                                                                                                           |
+|--------------------------------------|---------------|------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| cooling.read_tables_even_if_disabled | Boolean (0/1) | `0` (Disabled)                                 | If set to 1, reads the cooling tables even if the problem does not use the `EOSTabulated` backend (e.g. for electron conduction sound-speed lookups). Not needed for problems that set `EOSBackend = EOSTabulated<P>`. |
+| cooling.hdf5_data_file               | String        | **Required** if `EOSTabulated` backend is used | The path to the cooling tables in HDF5 format. We recommend using `extern/cooling/CloudyData_UVB=HM2012_resampled.h5` for ISM at solar metallicity.                                                                   |
 
 ## Chemistry
 
