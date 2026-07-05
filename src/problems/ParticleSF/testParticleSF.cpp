@@ -35,6 +35,7 @@ template <> struct Particle_Traits<ParticleSFProblem> : DefaultParticleTraits {
 template <> struct quokka::EOS_Traits<ParticleSFProblem> {
 	static constexpr double gamma = gamma_;
 	static constexpr double mean_molecular_weight = mu;
+	using EOSBackend = quokka::EOSTabulated<ParticleSFProblem>;
 };
 
 template <> struct HydroSystem_Traits<ParticleSFProblem> {
