@@ -86,4 +86,4 @@ Presets: `1d`, `2d`, `3d`, `1d-debug`, `2d-debug`, `3d-debug`, `1d-hip`, `2d-hip
 - Use short, imperative commit subjects (e.g., `fix clang-tidy`)
 - Group related changes only and rebase onto `development` before opening a PR
 - PRs should be focused on a single change and target the `development` branch
-- **After every commit**, run `pre-commit.sh` to check formatting, YAML validity, merge conflicts, and other CI-enforced hooks
+- **After every commit**, run `./scripts/bash/quokka-pre-commit.sh` to check formatting, YAML validity, merge conflicts, and other CI-enforced hooks
