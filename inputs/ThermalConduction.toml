@@ -19,9 +19,7 @@ amr.blocking_factor = 16  # grid size must be divisible by this
 
 cfl = 0.3
 
-cooling.enabled = 0
 cooling.read_tables_even_if_disabled = 1
-cooling.cooling_table_type = "resampled"
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 
 
