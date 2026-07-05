@@ -640,6 +640,11 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	bool cooling_table_include_pe = false;
 	{
 		amrex::ParmParse const hpp("cooling");
+		int deprecated_enabled = 0;
+		if (hpp.query("enabled", deprecated_enabled) != 0) {
+			amrex::Abort("cooling.enabled is no longer supported. Remove it from your input file. "
+				     "Cooling is now driven automatically by the EOSTabulated compile-time EOS backend.");
+		}
 		int alwaysReadTables = 0;
 		hpp.query("cooling_table_type", coolingTableType_);
 		hpp.query("read_tables_even_if_disabled", alwaysReadTables);
