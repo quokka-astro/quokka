@@ -1,0 +1,43 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo = [0.0, 0.0, 0.0]
+geometry.prob_hi = [1.0, 1.0, 1.0]
+quokka.bc = ["periodic", "periodic", "periodic"]
+
+# *****************************************************************
+# Verbosity
+# *****************************************************************
+amr.v = 0
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell = [64, 64, 8]
+amr.max_level = 0
+amr.max_grid_size = 64
+amr.blocking_factor_x = 16
+amr.blocking_factor_y = 16
+amr.blocking_factor_z = 8
+
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 1
+
+plotfile_interval = -1
+checkpoint_interval = -1
+max_timesteps = 300000
+stop_time = 0.5
+cfl = 0.3
+
+mhd.emf_averaging_scheme = "Balsara2025"
+mhd.emf_compute_scheme = "Balsara2025"
+
+dust.density_floor = 1.0e-12
+
+[problem]
+write_csv = 1
+write_slice_csv = 0
+write_profile_csv = 1
+case_tags = ["high_epsilon"]
+output_prefix = "dusty_orszag_tang_paper"
