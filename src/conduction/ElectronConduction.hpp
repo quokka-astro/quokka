@@ -84,6 +84,10 @@ template <typename problem_t> class ElectronConduction
 		amrex::IntVect ng = amrex::IntVect(AMREX_D_DECL(state.nGrow(), state.nGrow(), state.nGrow()));
 		std::optional<decltype(tables.const_tables())> tables_dev;
 		if (params.eos_flag == EOSFlagforConduction::ResampledCooling) {
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(quokka::EOS<problem_t>::is_tabulated,
+							 "conduction.eos_flag = ResampledCooling requires the EOSTabulated EOS backend. "
+							 "Add 'using EOSBackend = quokka::EOSTabulated<YourProblem>;' "
+							 "to your EOS_Traits specialization.");
 			tables_dev = tables.const_tables();
 		} else if (params.eos_flag != EOSFlagforConduction::ResampledCooling && params.eos_flag != EOSFlagforConduction::EOS) {
 			amrex::Abort("Invalid eos_flag value in ElectronConduction. Must be 0 (resampled cooling) or 1 (quokka::EOS).");

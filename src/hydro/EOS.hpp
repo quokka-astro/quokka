@@ -374,6 +374,7 @@ template <typename problem_t> struct EOSMicrophysics {
 	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto
 	ComputePressure(amrex::Real rho, amrex::Real Eint, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> amrex::Real
 	{
+		static_assert(gamma_ != 1.0, "EOSMicrophysics does not support isothermal (gamma=1) problems.");
 		eos_t chemstate;
 		chemstate.rho = rho;
 		chemstate.e = Eint / rho;
@@ -396,6 +397,7 @@ template <typename problem_t> struct EOSMicrophysics {
 	ComputeSoundSpeed(amrex::Real rho, amrex::Real Pressure, quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {})
 	    -> amrex::Real
 	{
+		static_assert(gamma_ != 1.0, "EOSMicrophysics does not support isothermal (gamma=1) problems.");
 		eos_t chemstate;
 		chemstate.rho = rho;
 		chemstate.p = Pressure;
@@ -476,13 +478,24 @@ template <typename problem_t> struct EOSTabulated {
 	{
 		// Compute dEint/dT with one root-find + two cheap table lookups
 		// instead of two root-finds (toms748, up to 32 iterations each).
+		// Clamp perturbations to the table domain to avoid out-of-range
+		// interpolation; use one-sided difference when boundary is hit.
 		const amrex::Real Eint = ComputeEintFromTgas(rho, Tgas, massScalars);
 		constexpr amrex::Real eps = 1.0e-6;
 		const amrex::Real dEint = amrex::max(eps * Eint, eps);
-		const amrex::Real T_plus = ComputeTgasFromEint(rho, Eint + dEint, massScalars);
-		const amrex::Real T_minus = ComputeTgasFromEint(rho, Eint - dEint, massScalars);
-		const amrex::Real dT = T_plus - T_minus;
-		return (dT > 0.0) ? (2.0 * dEint) / dT : 0.0;
+		auto *reg = ResampledCooling::getEOSTabulatedRegistry();
+		AMREX_IF_ON_DEVICE((
+			const amrex::Real Eint_hi = amrex::min(Eint + dEint, rho * reg->device.eint_max);
+			const amrex::Real Eint_lo = amrex::max(Eint - dEint, rho * reg->device.eint_min);
+			const amrex::Real dT = ComputeTgasFromEint(rho, Eint_hi, massScalars) - ComputeTgasFromEint(rho, Eint_lo, massScalars);
+			return (dT > 0.0) ? (Eint_hi - Eint_lo) / dT : 0.0;
+		))
+		AMREX_IF_ON_HOST((
+			const amrex::Real Eint_hi = amrex::min(Eint + dEint, rho * reg->host.eint_max);
+			const amrex::Real Eint_lo = amrex::max(Eint - dEint, rho * reg->host.eint_min);
+			const amrex::Real dT = ComputeTgasFromEint(rho, Eint_hi, massScalars) - ComputeTgasFromEint(rho, Eint_lo, massScalars);
+			return (dT > 0.0) ? (Eint_hi - Eint_lo) / dT : 0.0;
+		))
 	}
 
 	// Non-temperature methods — delegate to EOSIdeal
