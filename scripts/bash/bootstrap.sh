@@ -3,6 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SUPERPOWERS_BIN="$HOME/superpowers/bin"
 INSTALL_DIR="$HOME/.local/bin"
 
 install_script() {
@@ -28,3 +29,10 @@ install_script() {
 
 install_script "$SCRIPT_DIR/quokka" "quokka"
 install_script "$SCRIPT_DIR/quokka-pre-commit.sh" "quokka-pre-commit.sh"
+
+# Install quokka environment file to ~/.config/quokka/quokka.rc
+if [ -f "$SUPERPOWERS_BIN/quokka.rc" ]; then
+	mkdir -p "$HOME/.config/quokka"
+	cp "$SUPERPOWERS_BIN/quokka.rc" "$HOME/.config/quokka/quokka.rc"
+	echo "Installed quokka.rc -> $HOME/.config/quokka/quokka.rc"
+fi
