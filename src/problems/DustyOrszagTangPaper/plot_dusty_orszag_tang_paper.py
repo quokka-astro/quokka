@@ -111,9 +111,25 @@ def trim_shared_edge_ticks(ax: plt.Axes, *, axis: str, drop_first: bool = False,
 
 
 def make_fig6(data_dir: Path, output_dir: Path, prefix: str, resolution: int) -> Path:
-    fig, axes = plt.subplots(2, 2, figsize=(11.0, 9.0), sharex=True, sharey=True, gridspec_kw={"wspace": 0.0, "hspace": 0.0})
+    fig = plt.figure(figsize=(9.4, 9.0))
+    grid = fig.add_gridspec(
+        2,
+        3,
+        width_ratios=(1.0, 1.0, 0.08),
+        wspace=0.0,
+        hspace=0.0,
+        left=0.07,
+        right=0.93,
+        bottom=0.08,
+        top=0.94,
+    )
+    axes = np.empty((2, 2), dtype=object)
+    axes[0, 0] = fig.add_subplot(grid[0, 0])
+    axes[0, 1] = fig.add_subplot(grid[0, 1], sharex=axes[0, 0], sharey=axes[0, 0])
+    axes[1, 0] = fig.add_subplot(grid[1, 0], sharex=axes[0, 0], sharey=axes[0, 0])
+    axes[1, 1] = fig.add_subplot(grid[1, 1], sharex=axes[0, 0], sharey=axes[0, 0])
+    cax = fig.add_subplot(grid[:, 2])
     contour_levels = [0.9, 1.0, 1.1, 1.2, 1.35, 1.5]
-    fig.subplots_adjust(left=0.07, right=0.88, bottom=0.08, top=0.94, wspace=0.0, hspace=0.0)
 
     for row, case_tag in enumerate(("high_epsilon", "low_epsilon")):
         for col, snapshot in enumerate(SNAPSHOTS):
@@ -162,7 +178,7 @@ def make_fig6(data_dir: Path, output_dir: Path, prefix: str, resolution: int) ->
     trim_shared_edge_ticks(axes[1, 1], axis="x", drop_first=True)
     trim_shared_edge_ticks(axes[0, 0], axis="y", drop_first=True)
     trim_shared_edge_ticks(axes[1, 0], axis="y", drop_last=True)
-    cbar = fig.colorbar(mesh, ax=axes, fraction=0.046, pad=0.005)
+    cbar = fig.colorbar(mesh, cax=cax)
     cbar.ax.tick_params(labelsize=PAPER_TICK_FONTSIZE)
     disable_minor_ticks(cbar.ax)
     cbar.set_label(r"$\rho_g$", fontsize=PAPER_LABEL_FONTSIZE)
@@ -196,6 +212,7 @@ def make_fig7(data_dir: Path, output_dir: Path, prefix: str, case_tag: str, reso
     axes[0].set_ylabel(r"$v_y$")
     axes[1].set_ylabel("density")
     axes[1].set_xlabel("y")
+    axes[1].set_ylim(bottom=0.0)
 
     legend_handles = [
         Line2D([0], [0], color="black", linewidth=1.2, linestyle="-", label="dust"),
