@@ -481,20 +481,23 @@ template <typename problem_t> struct EOSTabulated {
 		// Clamp perturbations to the table domain to avoid out-of-range
 		// interpolation; use one-sided difference when boundary is hit.
 		const amrex::Real Eint = ComputeEintFromTgas(rho, Tgas, massScalars);
+		// Use a purely relative step so the perturbation scales with Eint.
+		// ComputeEintFromTgas clamps to [rho*eint_min, rho*eint_max], so
+		// Eint > 0 here; an absolute floor would dominate at ISM densities.
 		constexpr amrex::Real eps = 1.0e-6;
-		const amrex::Real dEint = amrex::max(eps * Eint, eps);
+		const amrex::Real dEint = eps * Eint;
 		auto *reg = ResampledCooling::getEOSTabulatedRegistry();
 		AMREX_IF_ON_DEVICE((
 			const amrex::Real Eint_hi = amrex::min(Eint + dEint, rho * reg->device.eint_max);
 			const amrex::Real Eint_lo = amrex::max(Eint - dEint, rho * reg->device.eint_min);
 			const amrex::Real dT = ComputeTgasFromEint(rho, Eint_hi, massScalars) - ComputeTgasFromEint(rho, Eint_lo, massScalars);
-			return (dT > 0.0) ? (Eint_hi - Eint_lo) / dT : 0.0;
+			return (dT > 0.0) ? (Eint_hi - Eint_lo) / dT : amrex::Real(NAN);
 		))
 		AMREX_IF_ON_HOST((
 			const amrex::Real Eint_hi = amrex::min(Eint + dEint, rho * reg->host.eint_max);
 			const amrex::Real Eint_lo = amrex::max(Eint - dEint, rho * reg->host.eint_min);
 			const amrex::Real dT = ComputeTgasFromEint(rho, Eint_hi, massScalars) - ComputeTgasFromEint(rho, Eint_lo, massScalars);
-			return (dT > 0.0) ? (Eint_hi - Eint_lo) / dT : 0.0;
+			return (dT > 0.0) ? (Eint_hi - Eint_lo) / dT : amrex::Real(NAN);
 		))
 	}
 

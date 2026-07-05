@@ -2,6 +2,7 @@
 #define EOS_TABULATED_REGISTRY_HPP_
 
 #include <array>
+#include <cmath>
 
 #include "AMReX_GpuQualifiers.H"
 #include "AMReX_REAL.H"
@@ -35,7 +36,8 @@ struct resampledGpuConstTables {
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(Real const rho, Real const Eint, resampledGpuConstTables const &tables) -> Real
 {
 	if (rho <= 0.0) {
-		return 0.0;
+		AMREX_ASSERT(rho > 0.0);
+		return amrex::Real(NAN);
 	}
 	const Real eint = Eint / rho;
 	std::array<amrex::Real, 2> const point = {rho, eint};
@@ -45,7 +47,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeTgasFromEgas(Real const rho
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEgasFromTgas(Real const rho, Real const Tgas, resampledGpuConstTables const &tables) -> Real
 {
 	if (rho <= 0.0) {
-		return 0.0;
+		AMREX_ASSERT(rho > 0.0);
+		return amrex::Real(NAN);
 	}
 	const Real Eint_min = rho * tables.eint_min;
 	const Real Eint_max = rho * tables.eint_max;
@@ -72,7 +75,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEgasFromTgas(Real const rho
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto ComputeEntropyFromRhoEint(Real const rho, Real const Eint, resampledGpuConstTables const &tables) -> Real
 {
 	if (rho <= 0.0) {
-		return 0.0;
+		AMREX_ASSERT(rho > 0.0);
+		return amrex::Real(NAN);
 	}
 	const Real eint = Eint / rho;
 	std::array<amrex::Real, 2> const point = {rho, eint};
