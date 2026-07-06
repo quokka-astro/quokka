@@ -175,9 +175,9 @@ template <> void QuokkaSimulation<OrszagTang>::computeAfterTimestep()
 	const amrex::Real rel_y = (max_abs_y > 0.) ? max_res_y / max_abs_y : 0.;
 
 	// second pass: locate the (i,j) cell attaining max_res_x / max_res_y, for tracing the seed back to its source.
-	// packs (i,j) into a double score, valid only at cells matching the max residual (encode() reversible since
-	// nx,ny << 2^26, well within double's exact-integer range).
-	auto encode = [](int i, int j) -> double { return static_cast<double>(i) * 100000.0 + static_cast<double>(j); };
+	// packs (i,j) into a double score, valid only at cells matching the max residual (reversible since nx,ny <<
+	// 2^26, well within double's exact-integer range). inlined (not a helper lambda) because nvcc's extended
+	// __device__ lambdas cannot capture a locally-defined lambda type.
 	amrex::Real loc_score_x = -1.;
 	{
 		const amrex::MultiFab &Bx_mf = state_new_fc_[lev][0];
@@ -191,7 +191,7 @@ template <> void QuokkaSimulation<OrszagTang>::computeAfterTimestep()
 				const amrex::Real bx = Bx(i, j, k, bidx);
 				const amrex::Real bx_rot = Bx(nx - i, ny - 1 - j, k, bidx);
 				const amrex::Real res = std::abs(bx + bx_rot);
-				return {(res >= max_res_x) ? encode(i, j) : -1.};
+				return {(res >= max_res_x) ? (static_cast<double>(i) * 100000.0 + static_cast<double>(j)) : -1.};
 			});
 			loc_score_x = std::max(loc_score_x, amrex::get<0>(reduce_data.value()));
 		}
@@ -209,7 +209,7 @@ template <> void QuokkaSimulation<OrszagTang>::computeAfterTimestep()
 				const amrex::Real by = By(i, j, k, bidx);
 				const amrex::Real by_rot = By(nx - 1 - i, ny - j, k, bidx);
 				const amrex::Real res = std::abs(by + by_rot);
-				return {(res >= max_res_y) ? encode(i, j) : -1.};
+				return {(res >= max_res_y) ? (static_cast<double>(i) * 100000.0 + static_cast<double>(j)) : -1.};
 			});
 			loc_score_y = std::max(loc_score_y, amrex::get<0>(reduce_data.value()));
 		}
