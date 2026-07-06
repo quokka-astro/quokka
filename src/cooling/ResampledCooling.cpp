@@ -117,7 +117,7 @@ AMREX_GPU_MANAGED EOSTabulatedRegistry *g_eos_tabulated_registry = nullptr;
 /// cooling table. The pointer being non-null is the sole "registered" invariant.
 void registerEOSTabulated(resampledGpuConstTables host_tables, resampledGpuConstTables device_tables)
 {
-	if (!g_eos_tabulated_registry) {
+	if (g_eos_tabulated_registry == nullptr) {
 		auto *mem = amrex::The_Managed_Arena()->alloc(sizeof(EOSTabulatedRegistry));
 		g_eos_tabulated_registry = new (mem) EOSTabulatedRegistry{};
 	}

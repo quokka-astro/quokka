@@ -264,8 +264,8 @@ template <typename problem_t> struct EOSMicrophysics {
 		eos_t chemstate;
 		chemstate.rho = rho;
 		chemstate.e = Eint / rho;
-		for (int ii = 0; ii < NumSpec; ++ii) {
-			chemstate.xn[ii] = -1.0;
+		for (double &ii : chemstate.xn) {
+			ii = -1.0;
 		}
 
 		if (massScalars) {
@@ -286,8 +286,8 @@ template <typename problem_t> struct EOSMicrophysics {
 		eos_t chemstate;
 		chemstate.rho = rho;
 		chemstate.T = Tgas;
-		for (int ii = 0; ii < NumSpec; ++ii) {
-			chemstate.xn[ii] = -1.0;
+		for (double &ii : chemstate.xn) {
+			ii = -1.0;
 		}
 
 		if (massScalars) {
@@ -308,8 +308,8 @@ template <typename problem_t> struct EOSMicrophysics {
 		eos_t chemstate;
 		chemstate.rho = rho;
 		chemstate.p = Pressure;
-		for (int ii = 0; ii < NumSpec; ++ii) {
-			chemstate.xn[ii] = -1.0;
+		for (double &ii : chemstate.xn) {
+			ii = -1.0;
 		}
 
 		if (massScalars) {
@@ -330,8 +330,8 @@ template <typename problem_t> struct EOSMicrophysics {
 		eos_t chemstate;
 		chemstate.rho = rho;
 		chemstate.T = Tgas;
-		for (int ii = 0; ii < NumSpec; ++ii) {
-			chemstate.xn[ii] = -1.0;
+		for (double &ii : chemstate.xn) {
+			ii = -1.0;
 		}
 
 		if (massScalars) {
@@ -351,8 +351,8 @@ template <typename problem_t> struct EOSMicrophysics {
 		eos_t chemstate;
 		chemstate.rho = rho;
 		chemstate.p = P;
-		for (int ii = 0; ii < NumSpec; ++ii) {
-			chemstate.xn[ii] = -1.0;
+		for (double &ii : chemstate.xn) {
+			ii = -1.0;
 		}
 
 		if (massScalars) {
@@ -363,11 +363,11 @@ template <typename problem_t> struct EOSMicrophysics {
 		}
 
 		eos(eos_input_rp, chemstate);
-		amrex::Real deint_dRho = chemstate.dedr;
-		amrex::Real deint_dP = 1.0 / chemstate.dpde;
+		const amrex::Real deint_dRho = chemstate.dedr;
+		const amrex::Real deint_dP = 1.0 / chemstate.dpde;
 		amrex::Real dRho_dP = 1.0 / (chemstate.dpdr * C::k_B / boltzmann_constant_);
-		amrex::Real dP_dRho_s = chemstate.cs * chemstate.cs;
-		amrex::Real G = chemstate.G;
+		const amrex::Real dP_dRho_s = chemstate.cs * chemstate.cs;
+		const amrex::Real G = chemstate.G;
 		return std::make_tuple(deint_dRho, deint_dP, dRho_dP, dP_dRho_s, G);
 	}
 
@@ -378,8 +378,8 @@ template <typename problem_t> struct EOSMicrophysics {
 		eos_t chemstate;
 		chemstate.rho = rho;
 		chemstate.e = Eint / rho;
-		for (int ii = 0; ii < NumSpec; ++ii) {
-			chemstate.xn[ii] = -1.0;
+		for (double &ii : chemstate.xn) {
+			ii = -1.0;
 		}
 
 		if (massScalars) {
@@ -401,8 +401,8 @@ template <typename problem_t> struct EOSMicrophysics {
 		eos_t chemstate;
 		chemstate.rho = rho;
 		chemstate.p = Pressure;
-		for (int ii = 0; ii < NumSpec; ++ii) {
-			chemstate.xn[ii] = -1.0;
+		for (double &ii : chemstate.xn) {
+			ii = -1.0;
 		}
 
 		if (massScalars) {
