@@ -173,7 +173,56 @@ template <> void QuokkaSimulation<OrszagTang>::computeAfterTimestep()
 
 	const amrex::Real rel_x = (max_abs_x > 0.) ? max_res_x / max_abs_x : 0.;
 	const amrex::Real rel_y = (max_abs_y > 0.) ? max_res_y / max_abs_y : 0.;
-	amrex::Print() << std::format("[rot180] step={} Bx={:.4e} By={:.4e}\n", cycleCount_, rel_x, rel_y);
+
+	// second pass: locate the (i,j) cell attaining max_res_x / max_res_y, for tracing the seed back to its source.
+	// packs (i,j) into a double score, valid only at cells matching the max residual (encode() reversible since
+	// nx,ny << 2^26, well within double's exact-integer range).
+	auto encode = [](int i, int j) -> double { return static_cast<double>(i) * 100000.0 + static_cast<double>(j); };
+	amrex::Real loc_score_x = -1.;
+	{
+		const amrex::MultiFab &Bx_mf = state_new_fc_[lev][0];
+		for (amrex::MFIter mfi(Bx_mf); mfi.isValid(); ++mfi) {
+			auto const &Bx = Bx_mf.const_array(mfi);
+			const amrex::Box &box = mfi.validbox();
+			amrex::ReduceOps<amrex::ReduceOpMax> reduce_op;
+			amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
+			using ReduceTuple = typename decltype(reduce_data)::Type;
+			reduce_op.eval(box, reduce_data, [=] AMREX_GPU_DEVICE(int i, int j, int k) -> ReduceTuple {
+				const amrex::Real bx = Bx(i, j, k, bidx);
+				const amrex::Real bx_rot = Bx(nx - i, ny - 1 - j, k, bidx);
+				const amrex::Real res = std::abs(bx + bx_rot);
+				return {(res >= max_res_x) ? encode(i, j) : -1.};
+			});
+			loc_score_x = std::max(loc_score_x, amrex::get<0>(reduce_data.value()));
+		}
+	}
+	amrex::Real loc_score_y = -1.;
+	{
+		const amrex::MultiFab &By_mf = state_new_fc_[lev][1];
+		for (amrex::MFIter mfi(By_mf); mfi.isValid(); ++mfi) {
+			auto const &By = By_mf.const_array(mfi);
+			const amrex::Box &box = mfi.validbox();
+			amrex::ReduceOps<amrex::ReduceOpMax> reduce_op;
+			amrex::ReduceData<amrex::Real> reduce_data(reduce_op);
+			using ReduceTuple = typename decltype(reduce_data)::Type;
+			reduce_op.eval(box, reduce_data, [=] AMREX_GPU_DEVICE(int i, int j, int k) -> ReduceTuple {
+				const amrex::Real by = By(i, j, k, bidx);
+				const amrex::Real by_rot = By(nx - 1 - i, ny - j, k, bidx);
+				const amrex::Real res = std::abs(by + by_rot);
+				return {(res >= max_res_y) ? encode(i, j) : -1.};
+			});
+			loc_score_y = std::max(loc_score_y, amrex::get<0>(reduce_data.value()));
+		}
+	}
+	amrex::ParallelDescriptor::ReduceRealMax(loc_score_x);
+	amrex::ParallelDescriptor::ReduceRealMax(loc_score_y);
+	const int ix = static_cast<int>(loc_score_x / 100000.0);
+	const int jx = static_cast<int>(loc_score_x) % 100000;
+	const int iy = static_cast<int>(loc_score_y / 100000.0);
+	const int jy = static_cast<int>(loc_score_y) % 100000;
+
+	amrex::Print() << std::format("[rot180] step={} Bx={:.4e} By={:.4e} argmax_x=({},{}) argmax_y=({},{})\n", cycleCount_, rel_x, rel_y, ix, jx, iy,
+				      jy);
 }
 
 auto problem_main() -> int
