@@ -5,6 +5,7 @@
 //==============================================================================
 /// \file testDTypeFront.cpp
 /// \brief Defines a test problem for the static Stromgren sphere with no temperature dependence.
+/// \note Exercises the photoionization momentum/work-term coupling (radiation force on the gas).
 ///
 
 #include "AMReX.H"

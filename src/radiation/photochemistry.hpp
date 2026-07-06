@@ -138,23 +138,81 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			for (int nn = 0; nn < NumSpec; ++nn) {
 				state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) = photochemstate.xn[nn] * spmasses[nn];
 			}
+			// Attenuate the photon field and accumulate the momentum transferred to the gas.
+			// Absorbed ionizing photons deposit their momentum in the gas: dp = -(F_new - F_old) / (c * chat),
+			// matching the RSLA-consistent radiation-force convention used by the M1 source terms.
+			const Real inv_c_chat = 1.0_rt / (C::c_light * photochemstate.c_hat);
+			Real dMomX = 0.0_rt;
+			Real dMomY = 0.0_rt;
+			Real dMomZ = 0.0_rt;
+			amrex::GpuArray<Real, NumChemBands> dMomMag{};
+			Real dMomMagSum = 0.0_rt;
 			for (int nn = 0; nn < NumChemBands; ++nn) {
-				state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) =
-				    photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] * chemBandQuanta[nn];
-				state(i, j, k, firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn) =
-				    photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn] *
-				    state(i, j, k, firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn);
-				state(i, j, k, firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn) =
-				    photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn] *
-				    state(i, j, k, firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn);
-				state(i, j, k, firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn) =
-				    photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn] *
-				    state(i, j, k, firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn);
+				const int eIdx = firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn;
+				const int fxIdx = firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn;
+				const int fyIdx = firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn;
+				const int fzIdx = firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn;
+
+				state(i, j, k, eIdx) = photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] * chemBandQuanta[nn];
+
+				// flux_factor = F_new / F_old (photon flux attenuation from the burn)
+				const Real flux_factor = photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn];
+				const Real FxOld = state(i, j, k, fxIdx);
+				const Real FyOld = state(i, j, k, fyIdx);
+				const Real FzOld = state(i, j, k, fzIdx);
+
+				const Real dpx = (1.0_rt - flux_factor) * FxOld * inv_c_chat;
+				const Real dpy = (1.0_rt - flux_factor) * FyOld * inv_c_chat;
+				const Real dpz = (1.0_rt - flux_factor) * FzOld * inv_c_chat;
+				dMomX += dpx;
+				dMomY += dpy;
+				dMomZ += dpz;
+				dMomMag[nn] = std::sqrt(dpx * dpx + dpy * dpy + dpz * dpz);
+				dMomMagSum += dMomMag[nn];
+
+				state(i, j, k, fxIdx) = flux_factor * FxOld;
+				state(i, j, k, fyIdx) = flux_factor * FyOld;
+				state(i, j, k, fzIdx) = flux_factor * FzOld;
 			}
+
 			// Quokka uses rho*eint
 			const Real dEint = (photochemstate.e * photochemstate.rho) - Eint;
 			state(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index) += dEint * energy_update_factor;
-			state(i, j, k, RadSystem<problem_t>::gasEnergy_index) += dEint * energy_update_factor;
+
+			// Update the gas momentum by conservation with the absorbed photons.
+			const Real xmom_new = xmom + dMomX;
+			const Real ymom_new = ymom + dMomY;
+			const Real zmom_new = zmom + dMomZ;
+			state(i, j, k, RadSystem<problem_t>::x1GasMomentum_index) = xmom_new;
+			state(i, j, k, RadSystem<problem_t>::x2GasMomentum_index) = ymom_new;
+			state(i, j, k, RadSystem<problem_t>::x3GasMomentum_index) = zmom_new;
+
+			// Reconstruct the gas total energy from the updated internal energy and the updated kinetic energy.
+			// dEkin is the work done on the gas by the radiation force (magnetic energy is unchanged by the kick).
+			const Real dEkin =
+			    (xmom_new * xmom_new + ymom_new * ymom_new + zmom_new * zmom_new - (xmom * xmom + ymom * ymom + zmom * zmom)) / (2.0_rt * rho);
+			state(i, j, k, RadSystem<problem_t>::gasEnergy_index) += dEint * energy_update_factor + dEkin;
+
+			// Strict energy conservation: remove the work-term energy (c / chat) * dEkin from the chem-band photon field,
+			// split across bands in proportion to each band's momentum contribution. Clamp so n_gamma stays >= small_x.
+			// Rescale each band's flux by the same factor its energy density changes so the reduced flux |F| / (c E) is
+			// preserved (keeps the M1 closure constraint F / c <= E from being violated by the energy debit).
+			if (dMomMagSum > 0.0_rt) {
+				const Real E_debit = (C::c_light / photochemstate.c_hat) * dEkin;
+				for (int nn = 0; nn < NumChemBands; ++nn) {
+					const int eIdx = firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn;
+					const int fxIdx = firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn;
+					const int fyIdx = firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn;
+					const int fzIdx = firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn;
+					const Real E_old = state(i, j, k, eIdx); // > 0: rn[0] was clamped to small_x above
+					const Real E_new = amrex::max(E_old - E_debit * (dMomMag[nn] / dMomMagSum), small_x * chemBandQuanta[nn]);
+					state(i, j, k, eIdx) = E_new;
+					const Real flux_rescale = E_new / E_old;
+					state(i, j, k, fxIdx) *= flux_rescale;
+					state(i, j, k, fyIdx) *= flux_rescale;
+					state(i, j, k, fzIdx) *= flux_rescale;
+				}
+			}
 		});
 
 #ifdef AMREX_USE_HIP

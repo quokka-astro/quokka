@@ -5,6 +5,7 @@
 //==============================================================================
 /// \file testOneZonePhotoionization.cpp
 /// \brief Defines a test problem for photoionization.
+/// \note Zero-flux regression for the photoionization momentum/work-term coupling.
 ///
 
 #include "AMReX.H"
