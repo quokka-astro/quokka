@@ -500,6 +500,33 @@ AMREX_GPU_HOST_DEVICE void HyperbolicSystem<problem_t>::ReconstructStatesPPM(quo
 	}
 	rightState(i, j, k, iWriteFrom + n) = new_a_minus;
 	leftState(i + 1, j, k, iWriteFrom + n) = new_a_plus;
+
+	// debug: trace the monotonicity branch at the observed tearing/reconnection hot-spot (from the argmax
+	// trajectory of the rot180 residual on the q26+b25 order-3 1024^2 OT run) and its rot180 mirror
+	// (physical cell-centered map for a 1024^3 domain: (i,j) -> (1023-i, 1023-j)).
+	bool is_target = false;
+	{
+		const int cand_i[] = {551, 605, 608, 624, 547, 564, 562, 533, 1023 - 551, 1023 - 605, 1023 - 608,
+				      1023 - 624, 1023 - 547, 1023 - 564, 1023 - 562, 1023 - 533};
+		const int cand_j[] = {42, 33, 36, 27, 34, 30, 35, 57, 1023 - 42, 1023 - 33, 1023 - 36,
+				      1023 - 27, 1023 - 34, 1023 - 30, 1023 - 35, 1023 - 57};
+		for (int c = 0; c < 8; ++c) {
+			if (i_in == cand_i[c] && j_in == cand_j[c]) {
+				is_target = true;
+			}
+			if (i_in == cand_i[c + 8] && j_in == cand_j[c + 8]) {
+				is_target = true;
+			}
+		}
+	}
+	if (is_target && k_in == 0) {
+		const char *dir_label = (DIR == FluxDir::X1) ? "x1" : (DIR == FluxDir::X2) ? "x2" : "x3";
+		printf("[ppm-mono] dir=%s n=%d (%d,%d,%d) bounds=(%.17e,%.17e) a_minus=%.17e a_plus=%.17e "
+		       "new_a_minus=%.17e new_a_plus=%.17e dq_minus=%.17e dq_plus=%.17e qa=%.17e extremum=%d "
+		       "rightState=%.17e leftState=%.17e\n",
+		       dir_label, n, i_in, j_in, k_in, bounds.first, bounds.second, a_minus, a_plus, new_a_minus, new_a_plus, dq_minus, dq_plus, qa,
+		       static_cast<int>(qa <= 0.0), rightState(i, j, k, iWriteFrom + n), leftState(i + 1, j, k, iWriteFrom + n));
+	}
 }
 
 template <typename problem_t>
