@@ -173,7 +173,7 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 	/// @param output_idx Output quantity index to differentiate (0-indexed)
 	/// @return ∂output[output_idx] / ∂point[axis] in physical units.
 	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto partial_derivative(const std::array<amrex::Real, Ndim> &point, int axis,
-											int output_idx = 0) const -> amrex::Real
+										       int output_idx = 0) const -> amrex::Real
 	{
 		// Half a grid cell in transform space, converted to physical units.
 		// For log/fast_log axes, point[axis] must be positive (precondition for log spacing).
