@@ -471,7 +471,8 @@ template <typename problem_t> struct EOSTabulated {
 		const amrex::Real Eint = ComputeEintFromTgas(rho, Tgas, massScalars);
 		auto const &tables = get_tables();
 		const amrex::Real dT_deint = tables.all_tables.partial_derivative({rho, Eint / rho}, 1, ResampledCooling::TEMPERATURE_IDX);
-		return (dT_deint > amrex::Real(0.0)) ? rho / dT_deint : amrex::Real(NAN);
+		AMREX_ASSERT(dT_deint > amrex::Real(0.0));
+		return rho / dT_deint;
 	}
 
 	// Non-temperature methods — delegate to EOSIdeal
