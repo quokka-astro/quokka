@@ -605,7 +605,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	bool useLuminosityTable_ = true;
 	std::string luminosityTableFilename_;
-	quokka::SpacingType rad_table_output_spacing_ = quokka::SpacingType::fast_log;
+	quokka::TransformType rad_table_output_transform_ = quokka::TransformType::fast_log;
 
 #if AMREX_SPACEDIM == 3
 	quokka::LuminosityTables<Physics_Traits<problem_t>::nGroups> luminosityTables_;
@@ -1109,7 +1109,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 		amrex::ParmParse const ppp("particles");
 		ppp.query("use_luminosity_table", useLuminosityTable_);
 		ppp.query("rad_table", luminosityTableFilename_);
-		ppp.query("rad_table_output_spacing", rad_table_output_spacing_);
+		ppp.query("rad_table_output_spacing", rad_table_output_transform_);   // legacy key (pre-rename)
+		ppp.query("rad_table_output_transform", rad_table_output_transform_); // new key takes precedence
 		ppp.query("split_particles_on_restart_refine", splitParticlesOnRestartRefine_);
 
 		// if particle and radiation are enabled
@@ -1122,7 +1123,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 				amrex::Print() << "Loading luminosity table from: " << luminosityTableFilename_ << "\n";
 
 				// Use specified spacing for luminosity values
-				luminosityTables_.luminosity = quokka::DataTable<2, nGroups>::CSVReader(luminosityTableFilename_, rad_table_output_spacing_);
+				luminosityTables_.luminosity = quokka::DataTable<2, nGroups>::CSVReader(luminosityTableFilename_, rad_table_output_transform_);
 
 				amrex::Print() << "Luminosity table loaded successfully.\n";
 				amrex::Print() << std::format("\tTable dimensions: {} x {}\n", luminosityTables_.luminosity.size(0),
@@ -4765,6 +4766,10 @@ template <typename problem_t> auto AMRSimulation<problem_t>::readCheckpointHeade
 
 	// read in finest_level
 	is >> finest_level;
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(finest_level <= max_level,
+					 std::format("Checkpoint '{}' contains AMR levels 0-{}, but the restart input configured amr.max_level = {}. "
+						     "Restart with amr.max_level >= {} or use a checkpoint with fewer levels.",
+						     restart_file, finest_level, max_level, finest_level));
 	GotoNextLine(is);
 
 	// read in array of istep
