@@ -221,8 +221,7 @@ template <> void QuokkaSimulation<OrszagTang>::computeAfterTimestep()
 	const int iy = static_cast<int>(loc_score_y / 100000.0);
 	const int jy = static_cast<int>(loc_score_y) % 100000;
 
-	amrex::Print() << std::format("[rot180] step={} Bx={:.4e} By={:.4e} argmax_x=({},{}) argmax_y=({},{})\n", cycleCount_, rel_x, rel_y, ix, jx, iy,
-				      jy);
+	amrex::Print() << std::format("[rot180] step={} Bx={:.4e} By={:.4e} argmax_x=({},{}) argmax_y=({},{})\n", cycleCount_, rel_x, rel_y, ix, jx, iy, jy);
 }
 
 auto problem_main() -> int
