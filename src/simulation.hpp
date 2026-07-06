@@ -974,6 +974,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default checkpoint prefix
 	pp.query("checkpoint_prefix", chk_file);
 
+	// Default statistics prefix
+	pp.query("statistics_prefix", stats_file);
+
 	// Default do_reflux = 1
 	pp.query("do_reflux", do_reflux);
 
