@@ -162,6 +162,39 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 		return values;
 	}
 
+	/// @brief Compute the partial derivative of output[output_idx] w.r.t. physical input axis `axis`.
+	///
+	/// Uses a centered finite difference with a step equal to half the local grid spacing
+	/// in the axis's coordinate space, converted to physical units. This ties the step to
+	/// the table resolution and avoids absolute-floor problems at extreme parameter values.
+	///
+	/// @param point      Physical coordinates to differentiate at (size Ndim)
+	/// @param axis       Input dimension index to differentiate with respect to (0-indexed)
+	/// @param output_idx Output quantity index to differentiate (0-indexed)
+	/// @return ∂output[output_idx] / ∂point[axis] in physical units, or NaN if degenerate.
+	[[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto partial_derivative(const std::array<amrex::Real, Ndim> &point, int axis,
+											int output_idx = 0) const -> amrex::Real
+	{
+		// Half a grid cell in transform space, converted to physical units.
+		const amrex::Real h_t = amrex::Real(0.5) * dcoord[axis];
+		amrex::Real h_p;
+		if (spacing_types[axis] == TransformType::log) {
+			h_p = point[axis] * (std::exp(h_t) - amrex::Real(1.0));
+		} else if (spacing_types[axis] == TransformType::fast_log) {
+			h_p = point[axis] * (FastMath::pow2(h_t) - amrex::Real(1.0));
+		} else {
+			h_p = h_t;
+		}
+		if (h_p <= amrex::Real(0.0)) {
+			return amrex::Real(NAN);
+		}
+		auto pt_hi = point;
+		auto pt_lo = point;
+		pt_hi[axis] += h_p;
+		pt_lo[axis] -= h_p;
+		return (interpolate_single(pt_hi, output_idx) - interpolate_single(pt_lo, output_idx)) / (amrex::Real(2.0) * h_p);
+	}
+
 	/// @brief Perform n-dimensional linear interpolation for a single output (backward compatibility)
 	///
 	/// @param point Physical coordinates to interpolate at (size Ndim)

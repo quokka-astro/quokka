@@ -466,17 +466,12 @@ template <typename problem_t> struct EOSTabulated {
 	ComputeEintTempDerivative(const amrex::Real rho, const amrex::Real Tgas,
 				  quokka::optional<amrex::GpuArray<amrex::Real, nmscalars_>> const &massScalars = {}) -> amrex::Real
 	{
-		// One root-find + two cheap table lookups instead of two root-finds.
-		// ComputeEintFromTgas clamps to [rho*eint_min, rho*eint_max], so Eint > 0;
-		// use a purely relative step to avoid dominating ISM-scale energy densities.
+		// One root-find, then use DataTable::partial_derivative for ∂T/∂eint_specific.
+		// Table axes: (rho, eint_specific = Eint/rho). dEint_density/dT = rho / (∂T/∂eint_specific).
 		const amrex::Real Eint = ComputeEintFromTgas(rho, Tgas, massScalars);
-		constexpr amrex::Real eps = 1.0e-6;
-		const amrex::Real dEint = eps * Eint;
 		auto const &tables = get_tables();
-		const amrex::Real Eint_hi = amrex::min(Eint + dEint, rho * tables.eint_max);
-		const amrex::Real Eint_lo = amrex::max(Eint - dEint, rho * tables.eint_min);
-		const amrex::Real dT = ComputeTgasFromEint(rho, Eint_hi, massScalars) - ComputeTgasFromEint(rho, Eint_lo, massScalars);
-		return (dT > 0.0) ? (Eint_hi - Eint_lo) / dT : amrex::Real(NAN);
+		const amrex::Real dT_deint = tables.all_tables.partial_derivative({rho, Eint / rho}, 1, ResampledCooling::TEMPERATURE_IDX);
+		return (dT_deint > amrex::Real(0.0)) ? rho / dT_deint : amrex::Real(NAN);
 	}
 
 	// Non-temperature methods — delegate to EOSIdeal
