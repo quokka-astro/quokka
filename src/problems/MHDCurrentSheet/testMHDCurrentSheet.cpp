@@ -4,12 +4,14 @@
 //==============================================================================
 /// \file testMHDCurrentSheet.cpp
 /// \brief Sharp, rot180-symmetric current-sheet bench for localising floating-point
-///   symmetry-breaking in the MHD reconstruction. Bx(y) = B0 tanh(sin(2 pi y)/delta)
-///   gives sharp current sheets (odd under rot180); vy = V0 sin(2 pi x) (odd under
-///   rot180) makes the EMF nonzero so the reconstruction is exercised at the sharp
-///   gradient from step 1. Density and pressure are uniform; the field is div-free
-///   (Bx depends on y only, By = 0). Not an equilibrium: it is a one-step symmetry
-///   probe, not a physics run.
+///   symmetry-breaking in the MHD reconstruction and Riemann solver. Bx(y) = B0
+///   tanh(sin(2 pi y)/delta) and By(x) = B0 tanh(sin(2 pi x)/delta) give sharp,
+///   simultaneously nonzero current sheets in both directions (each odd under
+///   rot180; div-free since each depends only on the orthogonal coordinate), so
+///   every face has a nonzero transverse B component, exercising the HLLD
+///   b-nonzero star-state branch. vy = V0 tanh(sin(2 pi x)/delta) (odd under
+///   rot180) makes the EMF nonzero from step 1. Density and pressure are uniform.
+///   Not an equilibrium: it is a one-step symmetry probe, not a physics run.
 ///
 
 #include <cmath>
@@ -48,6 +50,7 @@ constexpr double V0 = 1.0;
 constexpr double delta = 0.05; // sheet half-width; smaller is sharper
 
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto Bx_of_y(double y) -> double { return B0 * std::tanh(std::sin(2.0 * M_PI * y) / delta); }
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto By_of_x(double x) -> double { return B0 * std::tanh(std::sin(2.0 * M_PI * x) / delta); }
 
 template <> void QuokkaSimulation<MHDCurrentSheet>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -63,11 +66,12 @@ template <> void QuokkaSimulation<MHDCurrentSheet>::setInitialConditionsOnGrid(q
 		const double y = prob_lo[1] + ((j + 0.5) * dx[1]);
 
 		const double vy = V0 * std::tanh(std::sin(2.0 * M_PI * x) / delta); // sharp shear, odd under rot180
-		const double Bx = Bx_of_y(y);					    // sharp sheet, odd under rot180; By = 0
+		const double Bx = Bx_of_y(y);					    // sharp sheet, odd under rot180
+		const double By = By_of_x(x);					    // sharp sheet, odd under rot180
 
 		const double Ekin = 0.5 * rho0 * (vy * vy);
 		const double Eint = P0 / (gamma_gas - 1.0);
-		const double Emag = 0.5 * (Bx * Bx);
+		const double Emag = 0.5 * (Bx * Bx + By * By);
 
 		state_cc(i, j, k, HydroSystem<MHDCurrentSheet>::density_index) = rho0;
 		state_cc(i, j, k, HydroSystem<MHDCurrentSheet>::x1Momentum_index) = 0;
@@ -92,7 +96,9 @@ template <> void QuokkaSimulation<MHDCurrentSheet>::setInitialConditionsOnGridFa
 			const double y = prob_lo[1] + ((j + 0.5) * dx[1]);
 			state_fc(i, j, k, Physics_Indices<MHDCurrentSheet>::mhdFirstIndex) = Bx_of_y(y);
 		} else if (dir == quokka::direction::y) {
-			state_fc(i, j, k, Physics_Indices<MHDCurrentSheet>::mhdFirstIndex) = 0;
+			// y-face: nodal in y, cell-centred in x -> use x = (i + 0.5) dx
+			const double x = prob_lo[0] + ((i + 0.5) * dx[0]);
+			state_fc(i, j, k, Physics_Indices<MHDCurrentSheet>::mhdFirstIndex) = By_of_x(x);
 		} else if (dir == quokka::direction::z) {
 			state_fc(i, j, k, Physics_Indices<MHDCurrentSheet>::mhdFirstIndex) = 0;
 		}
@@ -160,6 +166,46 @@ template <> void QuokkaSimulation<MHDCurrentSheet>::computeAfterTimestep()
 	const amrex::Real rel_x = (max_abs_x > 0.) ? max_res_x / max_abs_x : 0.;
 	const amrex::Real rel_y = (max_abs_y > 0.) ? max_res_y / max_abs_y : 0.;
 	amrex::Print() << std::format("[rot180] step={} Bx={:.4e} By={:.4e}\n", cycleCount_, rel_x, rel_y);
+
+	// cell-centred conserved-variable rot180 residual. cc mirror maps (i,j,k) -> (nx-1-i, ny-1-j, k).
+	// Under the point reflection density and energy are even, momenta are odd; residual uses the
+	// appropriate combination (diff for even, sum for odd). A nonzero cc residual at step 1 localises a
+	// non-covariant seed to the hydro (HLLD flux) update, upstream of the (now covariant) EMF path.
+	{
+		using Hydro = HydroSystem<MHDCurrentSheet>;
+		const int idxs[5] = {Hydro::density_index, Hydro::x1Momentum_index, Hydro::x2Momentum_index, Hydro::x3Momentum_index, Hydro::energy_index};
+		const int is_odd[5] = {0, 1, 1, 1, 0}; // density even, momenta odd, energy even
+		const char *names[5] = {"rho", "mx", "my", "mz", "E"};
+		amrex::Real rel_cc[5] = {0., 0., 0., 0., 0.};
+		const amrex::MultiFab &cc_mf = state_new_cc_[lev];
+		for (int v = 0; v < 5; ++v) {
+			const int comp = idxs[v];
+			const int odd = is_odd[v];
+			amrex::Real max_res = 0.;
+			amrex::Real max_abs = 0.;
+			for (amrex::MFIter mfi(cc_mf); mfi.isValid(); ++mfi) {
+				auto const &q = cc_mf.const_array(mfi);
+				const amrex::Box &box = mfi.validbox();
+				amrex::ReduceOps<amrex::ReduceOpMax, amrex::ReduceOpMax> reduce_op;
+				amrex::ReduceData<amrex::Real, amrex::Real> reduce_data(reduce_op);
+				using ReduceTuple = typename decltype(reduce_data)::Type;
+				reduce_op.eval(box, reduce_data, [=] AMREX_GPU_DEVICE(int i, int j, int k) -> ReduceTuple {
+					const amrex::Real a = q(i, j, k, comp);
+					const amrex::Real b = q(nx - 1 - i, ny - 1 - j, k, comp);
+					const amrex::Real res = (odd == 1) ? std::abs(a + b) : std::abs(a - b);
+					return {res, std::abs(a)};
+				});
+				auto [res, ab] = reduce_data.value();
+				max_res = std::max(max_res, res);
+				max_abs = std::max(max_abs, ab);
+			}
+			amrex::ParallelDescriptor::ReduceRealMax(max_res);
+			amrex::ParallelDescriptor::ReduceRealMax(max_abs);
+			rel_cc[v] = (max_abs > 0.) ? max_res / max_abs : 0.;
+		}
+		amrex::Print() << std::format("[rot180-cc] step={} {}={:.4e} {}={:.4e} {}={:.4e} {}={:.4e} {}={:.4e}\n", cycleCount_, names[0], rel_cc[0],
+					      names[1], rel_cc[1], names[2], rel_cc[2], names[3], rel_cc[3], names[4], rel_cc[4]);
+	}
 }
 
 auto problem_main() -> int
