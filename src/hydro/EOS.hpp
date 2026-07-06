@@ -523,8 +523,7 @@ template <typename problem_t> struct EOSTabulated {
 	// Returns the device or host table handle appropriate for the current execution context.
 	// The registration invariant (non-null pointer) is checked once at setup; only a
 	// debug-mode assert is needed here to avoid per-cell overhead in Release GPU kernels.
-	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto get_tables()
-	    -> ResampledCooling::resampledGpuConstTables const &
+	[[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_HOST_DEVICE static auto get_tables() -> ResampledCooling::resampledGpuConstTables const &
 	{
 		auto *reg = ResampledCooling::getEOSTabulatedRegistry();
 		AMREX_ASSERT(reg != nullptr);

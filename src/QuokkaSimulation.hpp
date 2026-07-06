@@ -1103,8 +1103,8 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 		if constexpr (quokka::EOS<problem_t>::is_tabulated) {
 			const Real external_heating_rate_per_H = computeExternalHeatingRate(time, dt); // unit: erg/s/H
 			const Real const_heating_rate_per_H = computePhotoelectricHeatingRate(time) + external_heating_rate_per_H;
-			cool_success = quokka::ResampledCooling::computeCooling<problem_t>(state, state_fc, dt, resampledTables_, tempFloor_,
-											   const_heating_rate_per_H);
+			cool_success =
+			    quokka::ResampledCooling::computeCooling<problem_t>(state, state_fc, dt, resampledTables_, tempFloor_, const_heating_rate_per_H);
 		}
 	};
 
