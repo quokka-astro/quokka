@@ -8,7 +8,6 @@
 
 #include <cassert>
 #include <cmath>
-#include <format>
 #include <gcem.hpp>
 #include <numbers>
 
@@ -17,7 +16,6 @@
 #include "AMReX_Gpu.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_REAL.H"
-#include "AMReX_Reduce.H"
 
 #include "QuokkaSimulation.hpp"
 #include "grid.hpp"
@@ -213,72 +211,6 @@ void QuokkaSimulation<MHDBalsaraVortex>::computeReferenceSolution_fc(amrex::Mult
 			computeVortexSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::fc, dir);
 		});
 	}
-}
-
-// per-step rot180 bijection residual of the face-centred B field: relative
-// max|B + rot180(B)| / max|B|, using that B is odd under the point reflection.
-// requires a single box covering the domain (mirror index read in-FAB).
-template <> void QuokkaSimulation<MHDBalsaraVortex>::computeAfterTimestep()
-{
-	constexpr int lev = 0;
-	constexpr int bidx = Physics_Indices<MHDBalsaraVortex>::mhdFirstIndex;
-
-	const amrex::Box domain = Geom(lev).Domain();
-	const int nx = domain.length(0);
-	const int ny = domain.length(1);
-
-	// x-face Bx: rot180 maps (i,j,k) -> (nx-i, ny-1-j, k), Bx is odd
-	amrex::Real max_res_x = 0.;
-	amrex::Real max_abs_x = 0.;
-	{
-		const amrex::MultiFab &Bx_mf = state_new_fc_[lev][0];
-		for (amrex::MFIter mfi(Bx_mf); mfi.isValid(); ++mfi) {
-			auto const &Bx = Bx_mf.const_array(mfi);
-			const amrex::Box &box = mfi.validbox();
-			amrex::ReduceOps<amrex::ReduceOpMax, amrex::ReduceOpMax> reduce_op;
-			amrex::ReduceData<amrex::Real, amrex::Real> reduce_data(reduce_op);
-			using ReduceTuple = typename decltype(reduce_data)::Type;
-			reduce_op.eval(box, reduce_data, [=] AMREX_GPU_DEVICE(int i, int j, int k) -> ReduceTuple {
-				const amrex::Real bx = Bx(i, j, k, bidx);
-				const amrex::Real bx_rot = Bx(nx - i, ny - 1 - j, k, bidx);
-				return {std::abs(bx + bx_rot), std::abs(bx)};
-			});
-			auto [res, ab] = reduce_data.value();
-			max_res_x = std::max(max_res_x, res);
-			max_abs_x = std::max(max_abs_x, ab);
-		}
-	}
-
-	// y-face By: rot180 maps (i,j,k) -> (nx-1-i, ny-j, k), By is odd
-	amrex::Real max_res_y = 0.;
-	amrex::Real max_abs_y = 0.;
-	{
-		const amrex::MultiFab &By_mf = state_new_fc_[lev][1];
-		for (amrex::MFIter mfi(By_mf); mfi.isValid(); ++mfi) {
-			auto const &By = By_mf.const_array(mfi);
-			const amrex::Box &box = mfi.validbox();
-			amrex::ReduceOps<amrex::ReduceOpMax, amrex::ReduceOpMax> reduce_op;
-			amrex::ReduceData<amrex::Real, amrex::Real> reduce_data(reduce_op);
-			using ReduceTuple = typename decltype(reduce_data)::Type;
-			reduce_op.eval(box, reduce_data, [=] AMREX_GPU_DEVICE(int i, int j, int k) -> ReduceTuple {
-				const amrex::Real by = By(i, j, k, bidx);
-				const amrex::Real by_rot = By(nx - 1 - i, ny - j, k, bidx);
-				return {std::abs(by + by_rot), std::abs(by)};
-			});
-			auto [res, ab] = reduce_data.value();
-			max_res_y = std::max(max_res_y, res);
-			max_abs_y = std::max(max_abs_y, ab);
-		}
-	}
-
-	amrex::ParallelDescriptor::ReduceRealMax(max_res_x);
-	amrex::ParallelDescriptor::ReduceRealMax(max_abs_x);
-	amrex::ParallelDescriptor::ReduceRealMax(max_res_y);
-	amrex::ParallelDescriptor::ReduceRealMax(max_abs_y);
-
-	const amrex::Real rel_x = (max_abs_x > 0.) ? max_res_x / max_abs_x : 0.;
-	const amrex::Real rel_y = (max_abs_y > 0.) ? max_res_y / max_abs_y : 0.;
-	amrex::Print() << std::format("[rot180] step={} Bx={:.4e} By={:.4e}\n", cycleCount_, rel_x, rel_y);
 }
 
 auto problem_main() -> int
