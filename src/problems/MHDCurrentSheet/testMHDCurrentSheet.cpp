@@ -65,16 +65,19 @@ template <> void QuokkaSimulation<MHDCurrentSheet>::setInitialConditionsOnGrid(q
 		const double x = prob_lo[0] + ((i + 0.5) * dx[0]);
 		const double y = prob_lo[1] + ((j + 0.5) * dx[1]);
 
+		// vx shear (odd under rot180, depends on y only) keeps the normal velocity nonzero so the HLLD
+		// contact speed S_M != 0, avoiding the degenerate region-selection branch tie at S_M = 0.
+		const double vx = V0 * std::tanh(std::sin(2.0 * M_PI * y) / delta); // sharp shear, odd under rot180
 		const double vy = V0 * std::tanh(std::sin(2.0 * M_PI * x) / delta); // sharp shear, odd under rot180
 		const double Bx = Bx_of_y(y);					    // sharp sheet, odd under rot180
 		const double By = By_of_x(x);					    // sharp sheet, odd under rot180
 
-		const double Ekin = 0.5 * rho0 * (vy * vy);
+		const double Ekin = 0.5 * rho0 * (vx * vx + vy * vy);
 		const double Eint = P0 / (gamma_gas - 1.0);
 		const double Emag = 0.5 * (Bx * Bx + By * By);
 
 		state_cc(i, j, k, HydroSystem<MHDCurrentSheet>::density_index) = rho0;
-		state_cc(i, j, k, HydroSystem<MHDCurrentSheet>::x1Momentum_index) = 0;
+		state_cc(i, j, k, HydroSystem<MHDCurrentSheet>::x1Momentum_index) = rho0 * vx;
 		state_cc(i, j, k, HydroSystem<MHDCurrentSheet>::x2Momentum_index) = rho0 * vy;
 		state_cc(i, j, k, HydroSystem<MHDCurrentSheet>::x3Momentum_index) = 0;
 		state_cc(i, j, k, HydroSystem<MHDCurrentSheet>::internalEnergy_index) = Eint;
