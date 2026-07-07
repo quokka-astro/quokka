@@ -19,6 +19,7 @@ jobs:
     steps:
     - checkout: self
       submodules: recursive
+      fetchDepth: 0
 
     - script: |
         mkdir -p "$(Agent.HomeDirectory)/cache/ccache"
@@ -40,7 +41,7 @@ jobs:
     - script: |
         TARGET_BRANCH=$(echo "$(System.PullRequest.TargetBranch)" | sed 's|refs/heads/||')
         [ -z "$TARGET_BRANCH" ] && TARGET_BRANCH="development"
-        git fetch --deepen=100 origin "$TARGET_BRANCH"
+        git fetch origin "$TARGET_BRANCH"
         MERGE_BASE=$(git merge-base FETCH_HEAD HEAD)
         CHANGED=$(git diff --name-only "$MERGE_BASE" HEAD)
         PROBLEMS=$(echo "$CHANGED" | grep '^src/problems/' | awk -F'/' '{print $3}' | sort -u | grep -v '^$')
