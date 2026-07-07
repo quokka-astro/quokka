@@ -581,12 +581,7 @@ void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::string const 
 			    AMREX_D_DECL(state_fc[0].const_array(iter), state_fc[1].const_array(iter), state_fc[2].const_array(iter))};
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				Real const rho = state(i, j, k, HydroSystem<DiskGalaxy>::density_index);
-				Real const x1Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index);
-				Real const x2Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x2Momentum_index);
-				Real const x3Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index);
-				Real const Egas = state(i, j, k, HydroSystem<DiskGalaxy>::energy_index);
-				Real const Emag = HydroSystem<DiskGalaxy>::ComputeCellCenteredMagneticEnergy(i, j, k, cons_fc);
-				Real const Eint = quokka::EOS<DiskGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, Emag);
+				Real const Eint = HydroSystem<DiskGalaxy>::ComputeInternalEnergy(state, i, j, k, &cons_fc);
 				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 				output(i, j, k, ncomp) = Tgas;
 			});
@@ -619,12 +614,7 @@ void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::string const 
 			    AMREX_D_DECL(state_fc[0].const_array(iter), state_fc[1].const_array(iter), state_fc[2].const_array(iter))};
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				Real const rho = state(i, j, k, HydroSystem<DiskGalaxy>::density_index);
-				Real const x1Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index);
-				Real const x2Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x2Momentum_index);
-				Real const x3Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index);
-				Real const Egas = state(i, j, k, HydroSystem<DiskGalaxy>::energy_index);
-				Real const Emag = HydroSystem<DiskGalaxy>::ComputeCellCenteredMagneticEnergy(i, j, k, cons_fc);
-				Real const Eint = quokka::EOS<DiskGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, Emag);
+				Real const Eint = HydroSystem<DiskGalaxy>::ComputeInternalEnergy(state, i, j, k, &cons_fc);
 				Real const K_cgs = quokka::ResampledCooling::ComputeEntropyFromRhoEint(rho, Eint, tables);
 				output(i, j, k, ncomp) = K_cgs / keV_in_ergs;
 			});
@@ -760,14 +750,9 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 	auto tables = resampledTables_.const_tables();
 	const amrex::Real cold_mass =
 	    computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state,
-						       std::array<amrex::Array4<const Real>, AMREX_SPACEDIM> const &state_fc) noexcept {
+						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &state_fc) noexcept {
 		    const Real rho = state(i, j, k, HydroSystem<DiskGalaxy>::density_index);
-		    const Real x1Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index);
-		    const Real x2Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x2Momentum_index);
-		    const Real x3Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x3Momentum_index);
-		    const Real Egas = state(i, j, k, HydroSystem<DiskGalaxy>::energy_index);
-		    const Real Emag = HydroSystem<DiskGalaxy>::ComputeCellCenteredMagneticEnergy(i, j, k, state_fc);
-		    const Real Eint = quokka::EOS<DiskGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, Emag);
+		    const Real Eint = HydroSystem<DiskGalaxy>::ComputeInternalEnergy(state, i, j, k, &state_fc);
 		    const Real Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 		    return (Tgas < 1.0e4) ? rho : 0.0;
 	    });
