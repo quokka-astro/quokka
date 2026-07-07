@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
-"""Post-process DustyAlfvenWave CSV files into Moseley-style panel figures."""
+"""Convert DustyAlfvenWave CSV files into four 2x3 panel figures."""
 
 from __future__ import annotations
 
 import argparse
 import csv
 import os
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -23,29 +24,59 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-PAPER_LABEL_FONTSIZE = 15
-PAPER_TICK_FONTSIZE = 13
-PAPER_TITLE_FONTSIZE = 14
-PAPER_LEGEND_FONTSIZE = 12
+DOUBLE_COLUMN_WIDTH = 6.9
+
+_LATEX_AVAILABLE = shutil.which("latex") is not None
 
 plt.rcParams.update({
-    "font.size": PAPER_TICK_FONTSIZE,
-    "axes.labelsize": PAPER_LABEL_FONTSIZE,
-    "axes.titlesize": PAPER_TITLE_FONTSIZE,
-    "xtick.labelsize": PAPER_TICK_FONTSIZE,
-    "ytick.labelsize": PAPER_TICK_FONTSIZE,
-    "legend.fontsize": PAPER_LEGEND_FONTSIZE,
+    "font.size": 9.0,
+    "axes.labelsize": 10.5,
+    "axes.titlesize": 10.5,
+    "axes.linewidth": 0.8,
+    "xtick.labelsize": 9.0,
+    "ytick.labelsize": 9.0,
+    "xtick.major.width": 0.8,
+    "ytick.major.width": 0.8,
+    "xtick.major.size": 3.0,
+    "ytick.major.size": 3.0,
+    "legend.fontsize": 8.5,
+    "legend.frameon": False,
+    "legend.handlelength": 1.6,
+    "legend.handletextpad": 0.45,
+    "legend.labelspacing": 0.25,
+    "legend.borderaxespad": 0.25,
+    "legend.columnspacing": 0.7,
+    "lines.linewidth": 1.1,
+    "lines.markersize": 3.8,
+    "lines.markerfacecolor": "none",
+    "lines.markeredgewidth": 0.9,
+    "xtick.direction": "out",
+    "ytick.direction": "out",
+    "xtick.top": False,
+    "ytick.right": False,
+    "xtick.minor.visible": False,
+    "ytick.minor.visible": False,
+    "axes.formatter.use_mathtext": True,
+    "savefig.bbox": "tight",
+    "savefig.pad_inches": 0.03,
 })
+
+if _LATEX_AVAILABLE:
+    plt.rcParams.update({
+        "text.usetex": True,
+        "font.family": "serif",
+        "font.serif": ["Computer Modern Roman", "CMU Serif", "Latin Modern Roman"],
+        "text.latex.preamble": r"\usepackage{amsmath}\usepackage{amssymb}\usepackage{bm}",
+    })
+else:
+    plt.rcParams.update({
+        "font.family": "serif",
+        "font.serif": ["STIXGeneral", "STIX Two Text", "DejaVu Serif"],
+        "mathtext.fontset": "stix",
+    })
 
 
 EPSILON_CASES = (
-    ("epsilon1", r"$\epsilon=1$"),
-    ("epsilon0p1", r"$\epsilon=0.1$"),
-    ("epsilon0p01", r"$\epsilon=0.01$"),
-    ("epsilon0", r"$\epsilon=0$"),
-)
-
-EPSILON_CASES_PAPER = (
     ("epsilon1", r"$\epsilon=1$"),
     ("epsilon0p1", r"$\epsilon=0.1$"),
     ("epsilon0", r"$\epsilon=0$"),
@@ -71,18 +102,6 @@ def read_csv(path: Path) -> dict[str, list[float]]:
 def require_files(data_dir: Path, sweep: str, cases: tuple[tuple[str, str], ...]) -> None:
     missing: list[Path] = []
     for tag, _ in cases:
-        for kind in ("profile", "history"):
-            path = data_dir / f"dusty_alfven_{sweep}_{tag}_{kind}.csv"
-            if not path.exists():
-                missing.append(path)
-    if missing:
-        names = "\n".join(str(path) for path in missing)
-        raise FileNotFoundError(f"Missing DustyAlfvenWave CSV files:\n{names}")
-
-
-def require_particle_files(data_dir: Path, sweep: str, cases: tuple[tuple[str, str], ...]) -> None:
-    missing: list[Path] = []
-    for tag, _ in cases:
         for kind in ("particle_profile", "particle_history", "particle_history_dense"):
             path = data_dir / f"dusty_alfven_{sweep}_{tag}_{kind}.csv"
             if not path.exists():
@@ -92,99 +111,23 @@ def require_particle_files(data_dir: Path, sweep: str, cases: tuple[tuple[str, s
         raise FileNotFoundError(f"Missing DustyAlfvenWave particle CSV files:\n{names}")
 
 
-def plot_profile_panel(ax, profile: dict[str, list[float]], title: str) -> None:
-    ax.plot(profile["z"], profile["ref_gas_vx"], color="tab:red", linewidth=1.1, label="gas")
-    ax.plot(profile["z"], profile["ref_dust_vx"], color="black", linewidth=1.3, label="dust")
-    ax.plot(
-        profile["z"],
-        profile["gas_vx"],
-        color="tab:red",
-        linestyle="None",
-        marker="s",
-        markersize=4.0,
-        markerfacecolor="none",
-        markeredgewidth=1.0,
-        markevery=4,
-    )
-    ax.plot(
-        profile["z"],
-        profile["dust_vx"],
-        color="black",
-        linestyle="None",
-        marker="s",
-        markersize=4.0,
-        markerfacecolor="none",
-        markeredgewidth=1.0,
-        markevery=4,
-    )
+def plot_particle_profile_panel(ax: plt.Axes, profile: dict[str, list[float]], title: str) -> None:
+    ax.plot(profile["z_ref"], profile["gas_vx_ref"], color="tab:red", label="gas")
+    ax.plot(profile["z_ref"], profile["dust_vx_ref"], color="black", label="dust")
+    ax.plot(profile["z_num"], profile["gas_vx_num"], color="tab:red", linestyle="None", marker="s", markevery=4)
+    ax.plot(profile["z_num"], profile["dust_vx_num"], color="black", linestyle="None", marker="s", markevery=4)
     ax.set_xlim(0.0, 1.0)
     ax.set_title(title)
 
 
-def plot_history_panel(ax, history: dict[str, list[float]]) -> None:
-    ax.plot(history["t"], history["ref_dust_vx"], color="black", linewidth=1.3)
-    ax.plot(
-        history["t"],
-        history["dust_vx"],
-        color="black",
-        linestyle="None",
-        marker="s",
-        markersize=4.0,
-        markerfacecolor="none",
-        markeredgewidth=1.0,
-    )
+def plot_particle_history_panel(ax: plt.Axes, history: dict[str, list[float]], dense_history: dict[str, list[float]]) -> None:
+    ax.plot(dense_history["t"], dense_history["ref_dust_vx"], color="black")
+    ax.plot(history["t"], history["dust_vx"], color="black", linestyle="None", marker="s", markevery=2)
     ax.set_xlim(0.0, 5.0)
 
 
-def plot_particle_profile_panel(ax, profile: dict[str, list[float]], title: str) -> None:
-    ax.plot(profile["z_ref"], profile["gas_vx_ref"], color="tab:red", linewidth=1.1, label="gas")
-    ax.plot(profile["z_ref"], profile["dust_vx_ref"], color="black", linewidth=1.3, label="dust")
-    ax.plot(
-        profile["z_num"],
-        profile["gas_vx_num"],
-        color="tab:red",
-        linestyle="None",
-        marker="s",
-        markersize=4.0,
-        markerfacecolor="none",
-        markeredgewidth=1.0,
-        markevery=4,
-    )
-    ax.plot(
-        profile["z_num"],
-        profile["dust_vx_num"],
-        color="black",
-        linestyle="None",
-        marker="s",
-        markersize=4.0,
-        markerfacecolor="none",
-        markeredgewidth=1.0,
-        markevery=4,
-    )
-    ax.set_xlim(0.0, 1.0)
-    ax.set_title(title)
-
-
-def plot_particle_history_panel(ax, history: dict[str, list[float]], dense_history: dict[str, list[float]]) -> None:
-    ax.plot(dense_history["t"], dense_history["ref_dust_vx"], color="black", linewidth=1.3)
-    ax.plot(
-        history["t"],
-        history["dust_vx"],
-        color="black",
-        linestyle="None",
-        marker="s",
-        markersize=4.0,
-        markerfacecolor="none",
-        markeredgewidth=1.0,
-    )
-    ax.set_xlim(0.0, 5.0)
-
-
-def style_axes(axes) -> None:
-    for row in axes:
-        for ax in row:
-            ax.minorticks_off()
-            ax.tick_params(which="minor", bottom=False, top=False, left=False, right=False)
+def figure_width() -> float:
+    return DOUBLE_COLUMN_WIDTH + 0.35
 
 
 def make_figure(
@@ -194,51 +137,15 @@ def make_figure(
     cases: tuple[tuple[str, str], ...],
     filename: str,
     y_limits: tuple[float, float] | None = None,
-) -> Path:
-    require_files(data_dir, sweep, cases)
-
-    fig, axes = plt.subplots(2, len(cases), figsize=(4.0 * len(cases), 7.0), sharex="row")
-    if len(cases) == 1:
-        axes = axes.reshape(2, 1)
-
-    for column, (tag, title) in enumerate(cases):
-        profile = read_csv(data_dir / f"dusty_alfven_{sweep}_{tag}_profile.csv")
-        history = read_csv(data_dir / f"dusty_alfven_{sweep}_{tag}_history.csv")
-
-        plot_profile_panel(axes[0, column], profile, title)
-        plot_history_panel(axes[1, column], history)
-        axes[0, column].set_xlabel(r"$z$")
-        axes[1, column].set_xlabel(r"$t$")
-        if y_limits is not None:
-            axes[0, column].set_ylim(*y_limits)
-            axes[1, column].set_ylim(*y_limits)
-
-    style_axes(axes)
-    axes[0, 0].set_ylabel(r"$v_x$")
-    axes[1, 0].set_ylabel(r"$v_{d,x}$")
-    axes[0, 0].legend(loc="best", fontsize=PAPER_LEGEND_FONTSIZE)
-    fig.tight_layout()
-    output_path = output_dir / filename
-    fig.savefig(output_path)
-    plt.close(fig)
-    return output_path
-
-
-def make_particle_figure(
-    data_dir: Path,
-    output_dir: Path,
-    sweep: str,
-    cases: tuple[tuple[str, str], ...],
-    filename: str,
-    y_limits: tuple[float, float] | None = None,
     top_row_limits: tuple[tuple[float, float], ...] | None = None,
     bottom_row_limits: tuple[tuple[float, float], ...] | None = None,
 ) -> Path:
-    require_particle_files(data_dir, sweep, cases)
+    require_files(data_dir, sweep, cases)
 
-    fig, axes = plt.subplots(2, len(cases), figsize=(4.0 * len(cases), 7.0), sharex="row")
+    fig, axes = plt.subplots(2, len(cases), figsize=(figure_width(), 4.35), sharex="row")
     if len(cases) == 1:
         axes = axes.reshape(2, 1)
+    fig.subplots_adjust(left=0.08, right=0.985, bottom=0.12, top=0.90, wspace=0.24, hspace=0.28)
 
     for column, (tag, title) in enumerate(cases):
         profile = read_csv(data_dir / f"dusty_alfven_{sweep}_{tag}_particle_profile.csv")
@@ -247,8 +154,8 @@ def make_particle_figure(
 
         plot_particle_profile_panel(axes[0, column], profile, title)
         plot_particle_history_panel(axes[1, column], history, dense_history)
-        axes[0, column].set_xlabel(r"$z$")
-        axes[1, column].set_xlabel(r"$t$")
+        axes[0, column].set_xlabel(r"$z$", labelpad=1.5)
+        axes[1, column].set_xlabel(r"$t$", labelpad=1.0)
         if y_limits is not None:
             axes[0, column].set_ylim(*y_limits)
             axes[1, column].set_ylim(*y_limits)
@@ -257,11 +164,10 @@ def make_particle_figure(
         if bottom_row_limits is not None:
             axes[1, column].set_ylim(*bottom_row_limits[column])
 
-    style_axes(axes)
     axes[0, 0].set_ylabel(r"$v_x$")
     axes[1, 0].set_ylabel(r"$v_{d,x}$")
-    axes[0, 0].legend(loc="best", fontsize=PAPER_LEGEND_FONTSIZE)
-    fig.tight_layout()
+    axes[0, 0].legend(loc="best")
+
     output_path = output_dir / filename
     fig.savefig(output_path)
     plt.close(fig)
@@ -282,18 +188,26 @@ def main() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     outputs = [
-        make_figure(data_dir, output_dir, "epsilon", EPSILON_CASES, "dusty_alfven_epsilon.pdf"),
-        make_figure(data_dir, output_dir, "omega", OMEGA_CASES, "dusty_alfven_omega.pdf", y_limits=(-0.5, 0.5)),
-        make_particle_figure(
+        make_figure(
             data_dir,
             output_dir,
             "epsilon",
-            EPSILON_CASES_PAPER,
+            EPSILON_CASES,
+            "dusty_alfven_epsilon.pdf",
+            top_row_limits=((-0.1, 0.1), (-0.1, 0.1), (-0.5, 0.5)),
+            bottom_row_limits=((-0.58, 0.58), (-0.58, 0.58), (-0.58, 0.58)),
+        ),
+        make_figure(data_dir, output_dir, "omega", OMEGA_CASES, "dusty_alfven_omega.pdf", y_limits=(-0.5, 0.5)),
+        make_figure(
+            data_dir,
+            output_dir,
+            "epsilon",
+            EPSILON_CASES,
             "dusty_alfven_epsilon_paper_like.pdf",
             top_row_limits=((-0.1, 0.1), (-0.1, 0.1), (-0.5, 0.5)),
             bottom_row_limits=((-0.58, 0.58), (-0.58, 0.58), (-0.58, 0.58)),
         ),
-        make_particle_figure(data_dir, output_dir, "omega", OMEGA_CASES, "dusty_alfven_omega_paper_like.pdf", y_limits=(-0.5, 0.5)),
+        make_figure(data_dir, output_dir, "omega", OMEGA_CASES, "dusty_alfven_omega_paper_like.pdf", y_limits=(-0.5, 0.5)),
     ]
     for output in outputs:
         print(output)

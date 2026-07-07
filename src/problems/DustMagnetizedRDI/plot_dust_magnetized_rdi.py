@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Post-process DustMagnetizedRDI CSV diagnostics into figure PDFs."""
+"""Convert DustMagnetizedRDI CSV diagnostics into one 2x2 figure and two 3-panel figures."""
 
 from __future__ import annotations
 

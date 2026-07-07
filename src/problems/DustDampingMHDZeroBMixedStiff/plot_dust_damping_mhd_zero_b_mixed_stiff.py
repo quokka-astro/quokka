@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
-"""Plot the mixed stopping-time drag-damping test into a 1x4 panel figure."""
+"""Convert mixed-stiff drag-damping CSV histories into a 4x1 panel figure."""
 
 from __future__ import annotations
 
 import argparse
 import csv
 import os
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -22,20 +23,58 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 
-PAPER_LABEL_FONTSIZE = 15
-PAPER_TICK_FONTSIZE = 13
-PAPER_TITLE_FONTSIZE = 14
-PAPER_LEGEND_FONTSIZE = 12
+SINGLE_COLUMN_WIDTH = 3.4
+
+_LATEX_AVAILABLE = shutil.which("latex") is not None
 
 plt.rcParams.update({
-    "font.size": PAPER_TICK_FONTSIZE,
-    "axes.labelsize": PAPER_LABEL_FONTSIZE,
-    "axes.titlesize": PAPER_TITLE_FONTSIZE,
-    "xtick.labelsize": PAPER_TICK_FONTSIZE,
-    "ytick.labelsize": PAPER_TICK_FONTSIZE,
-    "legend.fontsize": PAPER_LEGEND_FONTSIZE,
+    "font.size": 9.0,
+    "axes.labelsize": 10.5,
+    "axes.titlesize": 10.5,
+    "axes.linewidth": 0.8,
+    "xtick.labelsize": 9.0,
+    "ytick.labelsize": 9.0,
+    "xtick.major.width": 0.8,
+    "ytick.major.width": 0.8,
+    "xtick.major.size": 3.0,
+    "ytick.major.size": 3.0,
+    "legend.fontsize": 8.5,
+    "legend.frameon": False,
+    "legend.handlelength": 1.6,
+    "legend.handletextpad": 0.45,
+    "legend.labelspacing": 0.25,
+    "legend.borderaxespad": 0.25,
+    "legend.columnspacing": 0.7,
+    "lines.linewidth": 1.1,
+    "lines.markersize": 3.8,
+    "lines.markerfacecolor": "none",
+    "lines.markeredgewidth": 0.9,
+    "xtick.direction": "out",
+    "ytick.direction": "out",
+    "xtick.top": False,
+    "ytick.right": False,
+    "xtick.minor.visible": False,
+    "ytick.minor.visible": False,
+    "axes.formatter.use_mathtext": True,
+    "savefig.bbox": "tight",
+    "savefig.pad_inches": 0.03,
 })
+
+if _LATEX_AVAILABLE:
+    plt.rcParams.update({
+        "text.usetex": True,
+        "font.family": "serif",
+        "font.serif": ["Computer Modern Roman", "CMU Serif", "Latin Modern Roman"],
+        "text.latex.preamble": r"\usepackage{amsmath}\usepackage{amssymb}\usepackage{bm}",
+    })
+else:
+    plt.rcParams.update({
+        "font.family": "serif",
+        "font.serif": ["STIXGeneral", "STIX Two Text", "DejaVu Serif"],
+        "mathtext.fontset": "stix",
+    })
 
 
 HISTORY_FILE = "dust_damping_mhd_zero_b_mixed_stiff_history.csv"
@@ -66,40 +105,47 @@ def read_table(path: Path) -> dict[str, list[float]]:
     return columns
 
 
+def legend_handles() -> list[Line2D]:
+    handles = [Line2D([], [], color="black", linestyle="--", label="analytic")]
+    handles.extend(
+        Line2D([], [], color=color, marker=marker, markerfacecolor="none", linestyle="-", label=label)
+        for _, label, color, marker in SCHEMES
+    )
+    return handles
+
+
+def plot_panel(ax: plt.Axes, history: dict[str, list[float]], exact: dict[str, list[float]], prefix: str, ylabel: str, *, show_legend: bool) -> None:
+    ax.plot(exact["t"], exact[f"{prefix}_exact"], color="black", linestyle="--", zorder=2)
+
+    for slug, _, color, marker in SCHEMES:
+        ax.plot(
+            history["t"],
+            history[f"{prefix}_{slug}"],
+            color=color,
+            marker=marker,
+            linestyle="-",
+            zorder=3,
+        )
+
+    ax.set_ylabel(ylabel)
+    ax.set_xlim(0.0, 3.0)
+    if show_legend:
+        ax.legend(handles=legend_handles(), loc="best")
+
+
 def make_figure(data_dir: Path, output_dir: Path) -> Path:
     history = read_table(data_dir / HISTORY_FILE)
     exact = read_table(data_dir / EXACT_FILE)
 
-    fig, axes = plt.subplots(1, 4, figsize=(18, 4.4), sharex=False)
+    fig, axes = plt.subplots(4, 1, figsize=(SINGLE_COLUMN_WIDTH, 6.1), sharex=True, gridspec_kw={"hspace": 0.0})
+    fig.subplots_adjust(left=0.24, right=0.98, bottom=0.08, top=0.995, hspace=0.0)
 
-    for ax, (prefix, ylabel) in zip(axes, PANELS):
-        show_legend = prefix == PANELS[0][0]
-        ax.plot(
-            exact["t"],
-            exact[f"{prefix}_exact"],
-            color="black",
-            linestyle="--",
-            linewidth=1.2,
-            label="analytic" if show_legend else "_nolegend_",
-        )
+    for index, (ax, (prefix, ylabel)) in enumerate(zip(axes, PANELS)):
+        plot_panel(ax, history, exact, prefix, ylabel, show_legend=(index == 0))
 
-        for slug, label, color, marker in SCHEMES:
-            ax.plot(
-                history["t"],
-                history[f"{prefix}_{slug}"],
-                color=color,
-                marker=marker,
-                markersize=3.2,
-                linewidth=1.0,
-                label=label if show_legend else "_nolegend_",
-            )
-
-        ax.set_xlabel("t")
-        ax.set_ylabel(ylabel)
-        if show_legend:
-            ax.legend(loc="best", frameon=False)
-
-    fig.tight_layout()
+    for ax in axes[:-1]:
+        ax.tick_params(labelbottom=False)
+    axes[-1].set_xlabel("t")
 
     output_path = output_dir / OUTPUT_FILE
     fig.savefig(output_path)

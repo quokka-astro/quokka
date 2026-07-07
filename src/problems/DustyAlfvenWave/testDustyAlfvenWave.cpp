@@ -848,7 +848,6 @@ auto runCase(const CaseConfig &config, int reference_steps) -> CaseResult
 auto makeEpsilonCases() -> std::vector<CaseConfig>
 {
 	return {{"epsilon", "epsilon0", "epsilon = 0", 0.0, -alfven_frequency, stop_time_default},
-		{"epsilon", "epsilon0p01", "epsilon = 0.01", 0.01, -alfven_frequency, stop_time_default},
 		{"epsilon", "epsilon0p1", "epsilon = 0.1", 0.1, -alfven_frequency, stop_time_default},
 		{"epsilon", "epsilon1", "epsilon = 1", 1.0, -alfven_frequency, stop_time_default}};
 }

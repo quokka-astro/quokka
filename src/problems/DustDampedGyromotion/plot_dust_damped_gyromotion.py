@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
-"""Plot the damped-gyromotion test cases into a 1x3 panel figure."""
+"""Convert damped-gyromotion CSV histories into a 1x3 panel figure."""
 
 from __future__ import annotations
 
 import argparse
 import csv
 import os
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -22,20 +23,58 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 
-PAPER_LABEL_FONTSIZE = 15
-PAPER_TICK_FONTSIZE = 13
-PAPER_TITLE_FONTSIZE = 14
-PAPER_LEGEND_FONTSIZE = 12
+DOUBLE_COLUMN_WIDTH = 6.9
+
+_LATEX_AVAILABLE = shutil.which("latex") is not None
 
 plt.rcParams.update({
-    "font.size": PAPER_TICK_FONTSIZE,
-    "axes.labelsize": PAPER_LABEL_FONTSIZE,
-    "axes.titlesize": PAPER_TITLE_FONTSIZE,
-    "xtick.labelsize": PAPER_TICK_FONTSIZE,
-    "ytick.labelsize": PAPER_TICK_FONTSIZE,
-    "legend.fontsize": PAPER_LEGEND_FONTSIZE,
+    "font.size": 9.0,
+    "axes.labelsize": 10.5,
+    "axes.titlesize": 10.5,
+    "axes.linewidth": 0.8,
+    "xtick.labelsize": 9.0,
+    "ytick.labelsize": 9.0,
+    "xtick.major.width": 0.8,
+    "ytick.major.width": 0.8,
+    "xtick.major.size": 3.0,
+    "ytick.major.size": 3.0,
+    "legend.fontsize": 8.5,
+    "legend.frameon": False,
+    "legend.handlelength": 1.6,
+    "legend.handletextpad": 0.45,
+    "legend.labelspacing": 0.25,
+    "legend.borderaxespad": 0.25,
+    "legend.columnspacing": 0.7,
+    "lines.linewidth": 1.1,
+    "lines.markersize": 3.8,
+    "lines.markerfacecolor": "none",
+    "lines.markeredgewidth": 0.9,
+    "xtick.direction": "out",
+    "ytick.direction": "out",
+    "xtick.top": False,
+    "ytick.right": False,
+    "xtick.minor.visible": False,
+    "ytick.minor.visible": False,
+    "axes.formatter.use_mathtext": True,
+    "savefig.bbox": "tight",
+    "savefig.pad_inches": 0.03,
 })
+
+if _LATEX_AVAILABLE:
+    plt.rcParams.update({
+        "text.usetex": True,
+        "font.family": "serif",
+        "font.serif": ["Computer Modern Roman", "CMU Serif", "Latin Modern Roman"],
+        "text.latex.preamble": r"\usepackage{amsmath}\usepackage{amssymb}\usepackage{bm}",
+    })
+else:
+    plt.rcParams.update({
+        "font.family": "serif",
+        "font.serif": ["STIXGeneral", "STIX Two Text", "DejaVu Serif"],
+        "mathtext.fontset": "stix",
+    })
 
 
 OUTPUT_FILE = "dust_damped_gyromotion_panels.pdf"
@@ -63,41 +102,42 @@ def read_table(path: Path) -> dict[str, list[float]]:
     return columns
 
 
-def make_figure(data_dir: Path, output_dir: Path) -> Path:
-    fig, axes = plt.subplots(1, 3, figsize=(13.5, 4.2), sharey=True)
+def legend_handles() -> list[Line2D]:
+    handles = [Line2D([], [], color="black", linestyle="--", label="analytic")]
+    handles.extend(
+        Line2D([], [], color=color, marker=marker, markerfacecolor="none", linestyle="None", label=label)
+        for _, label, color, marker in SCHEMES
+    )
+    return handles
 
-    for ax, (case_tag, title, xlabel) in zip(axes, CASES):
+
+def make_figure(data_dir: Path, output_dir: Path) -> Path:
+    fig, axes = plt.subplots(1, 3, figsize=(DOUBLE_COLUMN_WIDTH, 2.55), sharey=True)
+    fig.subplots_adjust(left=0.08, right=0.99, bottom=0.16, top=0.88, wspace=0.17)
+
+    for column, (ax, (case_tag, title, xlabel)) in enumerate(zip(axes, CASES)):
         history = read_table(data_dir / f"dust_damped_gyromotion_{case_tag}_history.csv")
         exact = read_table(data_dir / f"dust_damped_gyromotion_{case_tag}_exact.csv")
-        show_legend = case_tag == CASES[0][0]
 
-        ax.plot(
-            exact["x_plot"],
-            exact["wx_exact_norm"],
-            color="black",
-            linestyle="--",
-            linewidth=1.2,
-            label="analytic" if show_legend else "_nolegend_",
-        )
+        ax.plot(exact["x_plot"], exact["wx_exact_norm"], color="black", linestyle="--", zorder=2)
 
-        for slug, label, color, marker in SCHEMES:
+        for slug, _, color, marker in SCHEMES:
             ax.plot(
                 history["x_plot"],
                 history[f"wx_{slug}_norm"],
                 color=color,
                 marker=marker,
-                markersize=3.2,
                 linestyle="None",
-                label=label if show_legend else "_nolegend_",
+                zorder=3,
             )
 
         ax.set_title(title)
         ax.set_xlabel(xlabel)
-        ax.set_ylabel(r"$w_x/w_0$")
-        if show_legend:
-            ax.legend(loc="best", frameon=False)
-
-    fig.tight_layout()
+        ax.set_ylim(-1.0, 1.0)
+        ax.set_xlim(0.0, 10.0 if case_tag == "undamped_gyromotion" else 2.0)
+        if column == 0:
+            ax.set_ylabel(r"$w_x/w_0$")
+            ax.legend(handles=legend_handles(), loc="best")
 
     output_path = output_dir / OUTPUT_FILE
     fig.savefig(output_path)
