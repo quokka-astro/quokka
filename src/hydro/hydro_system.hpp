@@ -1107,15 +1107,29 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			// Enforce temperature floor (for total energy)
 			// First-capture face-centered arrays before any constexpr-if context for CUDA.
 			std::remove_cv_t<std::remove_reference_t<decltype(state_fc_x0[bx])>> state_fc_x0_ref{};
+#if AMREX_SPACEDIM >= 2
+			std::remove_cv_t<std::remove_reference_t<decltype(state_fc_x1[bx])>> state_fc_x1_ref{};
+#endif
+#if AMREX_SPACEDIM == 3
+			std::remove_cv_t<std::remove_reference_t<decltype(state_fc_x2[bx])>> state_fc_x2_ref{};
+#endif
 			if (Physics_Traits<problem_t>::is_mhd_enabled) {
 				state_fc_x0_ref = state_fc_x0[bx];
+#if AMREX_SPACEDIM >= 2
 				state_fc_x1_ref = state_fc_x1[bx];
+#endif
+#if AMREX_SPACEDIM == 3
 				state_fc_x2_ref = state_fc_x2[bx];
+#endif
 			}
 			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> state_fc{};
 			state_fc[0] = state_fc_x0_ref;
+#if AMREX_SPACEDIM >= 2
 			state_fc[1] = state_fc_x1_ref;
+#endif
+#if AMREX_SPACEDIM == 3
 			state_fc[2] = state_fc_x2_ref;
+#endif
 
 			amrex::Real const Emag = ComputeMagneticEnergy(i, j, k, &state_fc);
 			amrex::Real const Eint = ComputeInternalEnergy(state[bx], i, j, k, &state_fc);
