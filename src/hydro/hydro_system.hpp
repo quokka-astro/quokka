@@ -1106,7 +1106,7 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 
 			// Enforce temperature floor (for total energy)
 			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> state_fc{};
-			if (Physics_Traits<problem_t>::is_mhd_enabled) {
+			if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 				state_fc[0] = state_fc_x0[bx];
 #if AMREX_SPACEDIM >= 2
 				state_fc[1] = state_fc_x1[bx];
@@ -1116,9 +1116,9 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 #endif
 			}
 			amrex::Real const Emag = ComputeMagneticEnergy(i, j, k, &state_fc);
+			amrex::Real const Eint = ComputeInternalEnergy(state[bx],i, j, k, &state_fc);
 			amrex::GpuArray<Real, nmscalars_> const massScalars = RadSystem<problem_t>::ComputeMassScalars(state[bx], i, j, k);
-			amrex::Real const Etot = state[bx](i, j, k, energy_index);
-			amrex::Real const primTemp = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho_new, (Etot - Ekin - Emag), massScalars);
+			amrex::Real const primTemp = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho_new, Eint, massScalars);
 
 			if (primTemp < tempFloor) {
 				amrex::Real const prim_eint = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho_new, tempFloor, massScalars);
