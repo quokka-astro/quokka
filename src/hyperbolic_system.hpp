@@ -548,7 +548,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HyperbolicSystem<problem_t>::ComputeWEN
 
 	// centered stencil
 	const double sC_x = 0.5 * (q(i + 1, j, k, n) - q(i - 1, j, k, n));
-	// pair the rot180 mirror neighbours (i-1, i+1) before the centre so the sum is reflection-invariant
+	// pair the rot180 mirror neighbours (i-1, i+1) before the centre, for floating-point associativity symmetry
 	const double sC_xx = (0.5 * q(i - 1, j, k, n) + 0.5 * q(i + 1, j, k, n)) - q(i, j, k, n);
 
 	// right-biased stencil
@@ -569,13 +569,13 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto HyperbolicSystem<problem_t>::ComputeWEN
 	double wC = 0.6 * (1. + tau / (IS_C + eps));
 	double wR = 0.2 * (1. + tau / (IS_R + eps));
 
-	// normalise weights; pair the rot180 mirror weights (L, R) before the centre so the sum is reflection-invariant
+	// normalise weights; same mirror-pairing (L, R) before the centre
 	const double norm = (wL + wR) + wC;
 	wL /= norm;
 	wC /= norm;
 	wR /= norm;
 
-	// compute weighted moments; pair the rot180 mirror stencils (L, R) before the centre so the sum is reflection-invariant
+	// compute weighted moments; same mirror-pairing (L, R) before the centre
 	const double q_x = (wL * sL_x + wR * sR_x) + wC * sC_x;
 	const double q_xx = (wL * sL_xx + wR * sR_xx) + wC * sC_xx;
 
