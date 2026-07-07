@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
-"""Plot the pure-gyromotion timestep diagnostics into a 2x1 panel figure."""
+"""Convert pure-gyromotion diagnostic CSV data into a 2x1 panel figure."""
 
 from __future__ import annotations
 
 import argparse
 import csv
 import os
+import shutil
 import tempfile
 from collections import defaultdict
 from pathlib import Path
@@ -24,22 +25,58 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+from matplotlib.ticker import NullLocator
 
-PAPER_LABEL_FONTSIZE = 15
-PAPER_TICK_FONTSIZE = 13
-PAPER_TITLE_FONTSIZE = 14
-PAPER_LEGEND_FONTSIZE = 12
-MARKER_SIZE = 4.0
-MARKER_EDGE_WIDTH = 1.0
+SINGLE_COLUMN_WIDTH = 3.4
+
+_LATEX_AVAILABLE = shutil.which("latex") is not None
 
 plt.rcParams.update({
-    "font.size": PAPER_TICK_FONTSIZE,
-    "axes.labelsize": PAPER_LABEL_FONTSIZE,
-    "axes.titlesize": PAPER_TITLE_FONTSIZE,
-    "xtick.labelsize": PAPER_TICK_FONTSIZE,
-    "ytick.labelsize": PAPER_TICK_FONTSIZE,
-    "legend.fontsize": PAPER_LEGEND_FONTSIZE,
+    "font.size": 9.0,
+    "axes.labelsize": 10.5,
+    "axes.titlesize": 10.5,
+    "axes.linewidth": 0.8,
+    "xtick.labelsize": 9.0,
+    "ytick.labelsize": 9.0,
+    "xtick.major.width": 0.8,
+    "ytick.major.width": 0.8,
+    "xtick.major.size": 3.0,
+    "ytick.major.size": 3.0,
+    "legend.fontsize": 8.5,
+    "legend.frameon": False,
+    "legend.handlelength": 1.6,
+    "legend.handletextpad": 0.45,
+    "legend.labelspacing": 0.25,
+    "legend.borderaxespad": 0.25,
+    "legend.columnspacing": 0.7,
+    "lines.linewidth": 1.1,
+    "lines.markersize": 3.8,
+    "lines.markerfacecolor": "none",
+    "lines.markeredgewidth": 0.9,
+    "xtick.direction": "out",
+    "ytick.direction": "out",
+    "xtick.top": False,
+    "ytick.right": False,
+    "xtick.minor.visible": False,
+    "ytick.minor.visible": False,
+    "axes.formatter.use_mathtext": True,
+    "savefig.bbox": "tight",
+    "savefig.pad_inches": 0.03,
 })
+
+if _LATEX_AVAILABLE:
+    plt.rcParams.update({
+        "text.usetex": True,
+        "font.family": "serif",
+        "font.serif": ["Computer Modern Roman", "CMU Serif", "Latin Modern Roman"],
+        "text.latex.preamble": r"\usepackage{amsmath}\usepackage{amssymb}\usepackage{bm}",
+    })
+else:
+    plt.rcParams.update({
+        "font.family": "serif",
+        "font.serif": ["STIXGeneral", "STIX Two Text", "DejaVu Serif"],
+        "mathtext.fontset": "stix",
+    })
 
 
 DATA_FILE = "dust_gyromotion_diagnostics.csv"
@@ -76,26 +113,7 @@ def group_by_scheme(rows: list[dict[str, float | str]]) -> dict[str, list[dict[s
 
 
 def legend_handles() -> list[Line2D]:
-    handles = [
-        Line2D(
-            [],
-            [],
-            color=color,
-            marker=marker,
-            linestyle="None",
-            markerfacecolor="white",
-            markeredgewidth=MARKER_EDGE_WIDTH,
-            markersize=MARKER_SIZE,
-            label=label,
-        )
-        for _, label, color, marker in SCHEMES
-    ]
-    handles.extend((
-        Line2D([], [], color="black", marker="o", linestyle="None", markerfacecolor="white", markeredgewidth=MARKER_EDGE_WIDTH,
-               markersize=MARKER_SIZE, label="measured error"),
-        Line2D([], [], color="black", linestyle="--", linewidth=1.0, label="analytic prediction"),
-    ))
-    return handles
+    return [Line2D([], [], color=color, linestyle="-", label=label) for _, label, color, _ in SCHEMES]
 
 
 def plot_panel(
@@ -125,9 +143,6 @@ def plot_panel(
             color=color,
             marker=marker,
             linestyle="None",
-            markerfacecolor="white",
-            markeredgewidth=MARKER_EDGE_WIDTH,
-            markersize=MARKER_SIZE,
             label=label if show_legend else "_nolegend_",
             zorder=3,
         )
@@ -135,32 +150,36 @@ def plot_panel(
             requested_dt,
             theory_values,
             color=color,
-            linestyle="--",
-            linewidth=1.0,
+            linestyle="-",
             label="_nolegend_",
             zorder=2,
         )
 
     if boundary_dt is not None:
-        ax.axvline(boundary_dt, color="black", linestyle=":", linewidth=1.0)
+        ax.axvline(boundary_dt, color="black", linestyle=":")
 
     ax.set_xscale("log")
     ax.set_yscale("log")
+    ax.xaxis.set_minor_locator(NullLocator())
+    ax.yaxis.set_minor_locator(NullLocator())
+    ax.tick_params(which="minor", bottom=False, top=False, left=False, right=False)
     ax.set_ylabel(ylabel)
     if show_legend:
-        ax.legend(handles=legend_handles(), loc="best", frameon=False)
+        ax.legend(handles=legend_handles(), loc="best")
 
 
 def make_figure(data_dir: Path, output_dir: Path) -> Path:
     grouped = group_by_scheme(read_rows(data_dir / DATA_FILE))
 
-    fig, axes = plt.subplots(2, 1, figsize=(7.0, 8.25), sharex=True)
+    fig, axes = plt.subplots(2, 1, figsize=(SINGLE_COLUMN_WIDTH, 4.2), sharex=True, gridspec_kw={"hspace": 0.0})
+    fig.subplots_adjust(left=0.18, right=0.98, bottom=0.10, top=0.98, hspace=0.0)
 
     plot_panel(axes[0], grouped, "abs_delta_log_amplitude", "theory_delta_log_amplitude", r"$|\delta a|$", show_legend=True)
     plot_panel(axes[1], grouped, "abs_delta_phase", "theory_delta_phase", r"$|\delta \phi|$", show_legend=False)
 
+    axes[0].tick_params(bottom=False, labelbottom=False)
+    axes[1].tick_params(top=False)
     axes[1].set_xlabel(r"$\Delta t$")
-    fig.tight_layout()
 
     output_path = output_dir / OUTPUT_FILE
     fig.savefig(output_path)

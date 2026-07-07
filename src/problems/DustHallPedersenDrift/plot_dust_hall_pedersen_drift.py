@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
-"""Plot the Hall-Pedersen drift history into a paper-style single-panel figure."""
+"""Convert Hall-Pedersen drift CSV histories into a single-panel figure."""
 
 from __future__ import annotations
 
 import argparse
 import csv
 import os
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -24,21 +25,56 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-PAPER_LABEL_FONTSIZE = 15
-PAPER_TICK_FONTSIZE = 13
-PAPER_TITLE_FONTSIZE = 14
-PAPER_LEGEND_FONTSIZE = 12
-MARKER_SIZE = 4.0
-MARKER_EDGE_WIDTH = 1.0
+SINGLE_COLUMN_WIDTH = 3.4
+
+_LATEX_AVAILABLE = shutil.which("latex") is not None
 
 plt.rcParams.update({
-    "font.size": PAPER_TICK_FONTSIZE,
-    "axes.labelsize": PAPER_LABEL_FONTSIZE,
-    "axes.titlesize": PAPER_TITLE_FONTSIZE,
-    "xtick.labelsize": PAPER_TICK_FONTSIZE,
-    "ytick.labelsize": PAPER_TICK_FONTSIZE,
-    "legend.fontsize": PAPER_LEGEND_FONTSIZE,
+    "font.size": 9.0,
+    "axes.labelsize": 10.5,
+    "axes.titlesize": 10.5,
+    "axes.linewidth": 0.8,
+    "xtick.labelsize": 9.0,
+    "ytick.labelsize": 9.0,
+    "xtick.major.width": 0.8,
+    "ytick.major.width": 0.8,
+    "xtick.major.size": 3.0,
+    "ytick.major.size": 3.0,
+    "legend.fontsize": 8.5,
+    "legend.frameon": False,
+    "legend.handlelength": 1.6,
+    "legend.handletextpad": 0.45,
+    "legend.labelspacing": 0.25,
+    "legend.borderaxespad": 0.25,
+    "legend.columnspacing": 0.7,
+    "lines.linewidth": 1.1,
+    "lines.markersize": 3.8,
+    "lines.markerfacecolor": "none",
+    "lines.markeredgewidth": 0.9,
+    "xtick.direction": "out",
+    "ytick.direction": "out",
+    "xtick.top": False,
+    "ytick.right": False,
+    "xtick.minor.visible": False,
+    "ytick.minor.visible": False,
+    "axes.formatter.use_mathtext": True,
+    "savefig.bbox": "tight",
+    "savefig.pad_inches": 0.03,
 })
+
+if _LATEX_AVAILABLE:
+    plt.rcParams.update({
+        "text.usetex": True,
+        "font.family": "serif",
+        "font.serif": ["Computer Modern Roman", "CMU Serif", "Latin Modern Roman"],
+        "text.latex.preamble": r"\usepackage{amsmath}\usepackage{amssymb}\usepackage{bm}",
+    })
+else:
+    plt.rcParams.update({
+        "font.family": "serif",
+        "font.serif": ["STIXGeneral", "STIX Two Text", "DejaVu Serif"],
+        "mathtext.fontset": "stix",
+    })
 
 
 HISTORY_FILE = "dust_hall_pedersen_drift_history.csv"
@@ -48,11 +84,8 @@ OUTPUT_FILE = "dust_hall_pedersen_drift.pdf"
 
 def legend_handles() -> list[Line2D]:
     handles = [
-        Line2D([], [], color="C0", linewidth=1.2, label=r"$w_x$"),
-        Line2D([], [], color="C1", linewidth=1.2, label=r"$w_y$"),
-        Line2D([], [], color="black", linestyle="--", linewidth=1.2, label="analytic"),
-        Line2D([], [], color="black", marker="o", linestyle="None", markerfacecolor="white", markeredgewidth=MARKER_EDGE_WIDTH,
-               markersize=MARKER_SIZE, label="simulation"),
+        Line2D([], [], color="C0", marker="o", markerfacecolor="none", linestyle="None", label=r"$w_x$"),
+        Line2D([], [], color="C1", marker="s", markerfacecolor="none", linestyle="None", label=r"$w_y$"),
     ]
     return handles
 
@@ -71,14 +104,13 @@ def make_figure(data_dir: Path, output_dir: Path) -> Path:
     history = read_table(data_dir / HISTORY_FILE)
     exact = read_table(data_dir / EXACT_FILE)
 
-    fig, ax = plt.subplots(1, 1, figsize=(7.0, 5.0))
+    fig, ax = plt.subplots(1, 1, figsize=(SINGLE_COLUMN_WIDTH, 2.45))
 
     ax.plot(
         exact["t"],
         exact["wx_exact"],
         color="C0",
         linestyle="--",
-        linewidth=1.2,
         label=r"analytic $w_x$",
     )
     ax.plot(
@@ -87,9 +119,6 @@ def make_figure(data_dir: Path, output_dir: Path) -> Path:
         color="C0",
         marker="o",
         linestyle="None",
-        markerfacecolor="white",
-        markeredgewidth=MARKER_EDGE_WIDTH,
-        markersize=MARKER_SIZE,
         zorder=3,
     )
     ax.plot(
@@ -97,7 +126,6 @@ def make_figure(data_dir: Path, output_dir: Path) -> Path:
         exact["wy_exact"],
         color="C1",
         linestyle="--",
-        linewidth=1.2,
         label=r"analytic $w_y$",
     )
     ax.plot(
@@ -106,15 +134,13 @@ def make_figure(data_dir: Path, output_dir: Path) -> Path:
         color="C1",
         marker="s",
         linestyle="None",
-        markerfacecolor="white",
-        markeredgewidth=MARKER_EDGE_WIDTH,
-        markersize=MARKER_SIZE,
         zorder=3,
     )
 
     ax.set_xlabel("t")
     ax.set_ylabel(r"$w_x,\ w_y$")
-    ax.legend(handles=legend_handles(), loc="best", frameon=False, ncol=2, columnspacing=1.0, handlelength=1.6)
+    ax.set_xlim(0.0, 20.0)
+    ax.legend(handles=legend_handles(), loc="center right", ncol=2)
     fig.tight_layout()
 
     output_path = output_dir / OUTPUT_FILE

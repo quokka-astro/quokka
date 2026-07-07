@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
-"""Post-process DustyOrszagTangPaper CSV diagnostics into paper-style figure PDFs."""
+"""Convert DustyOrszagTangPaper CSV diagnostics into a 2x2 slice figure and a 2x1 profile figure."""
 
 from __future__ import annotations
 
 import argparse
 import csv
 import os
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -24,28 +25,67 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.lines import Line2D
-from matplotlib.ticker import NullLocator
 
-PAPER_LABEL_FONTSIZE = 15
-PAPER_TICK_FONTSIZE = 13
-PAPER_TITLE_FONTSIZE = 14
-PAPER_LEGEND_FONTSIZE = 12
-OUTPUT_PREFIX = "dusty_orszag_tang_paper"
+SINGLE_COLUMN_WIDTH = 3.4
+DOUBLE_COLUMN_WIDTH = 6.9
+
+_LATEX_AVAILABLE = shutil.which("latex") is not None
 
 plt.rcParams.update({
-    "font.size": PAPER_TICK_FONTSIZE,
-    "axes.labelsize": PAPER_LABEL_FONTSIZE,
-    "axes.titlesize": PAPER_TITLE_FONTSIZE,
-    "xtick.labelsize": PAPER_TICK_FONTSIZE,
-    "ytick.labelsize": PAPER_TICK_FONTSIZE,
-    "legend.fontsize": PAPER_LEGEND_FONTSIZE,
+    "font.size": 9.0,
+    "axes.labelsize": 10.5,
+    "axes.titlesize": 10.5,
+    "axes.linewidth": 0.8,
+    "xtick.labelsize": 9.0,
+    "ytick.labelsize": 9.0,
+    "xtick.major.width": 0.8,
+    "ytick.major.width": 0.8,
+    "xtick.major.size": 3.0,
+    "ytick.major.size": 3.0,
+    "legend.fontsize": 8.5,
+    "legend.frameon": False,
+    "legend.handlelength": 1.6,
+    "legend.handletextpad": 0.45,
+    "legend.labelspacing": 0.25,
+    "legend.borderaxespad": 0.25,
+    "legend.columnspacing": 0.7,
+    "lines.linewidth": 1.1,
+    "lines.markersize": 3.8,
+    "lines.markerfacecolor": "none",
+    "lines.markeredgewidth": 0.9,
+    "xtick.direction": "out",
+    "ytick.direction": "out",
+    "xtick.top": False,
+    "ytick.right": False,
+    "xtick.minor.visible": False,
+    "ytick.minor.visible": False,
+    "axes.formatter.use_mathtext": True,
+    "savefig.bbox": "tight",
+    "savefig.pad_inches": 0.03,
 })
+
+if _LATEX_AVAILABLE:
+    plt.rcParams.update({
+        "text.usetex": True,
+        "font.family": "serif",
+        "font.serif": ["Computer Modern Roman", "CMU Serif", "Latin Modern Roman"],
+        "text.latex.preamble": r"\usepackage{amsmath}\usepackage{amssymb}\usepackage{bm}",
+    })
+else:
+    plt.rcParams.update({
+        "font.family": "serif",
+        "font.serif": ["STIXGeneral", "STIX Two Text", "DejaVu Serif"],
+        "mathtext.fontset": "stix",
+    })
+
+OUTPUT_PREFIX = "dusty_orszag_tang_paper"
 
 CASE_INFO = {
     "high_epsilon": {"label": r"$\epsilon \approx 0.45$", "title": r"$\epsilon \approx 0.45$"},
     "low_epsilon": {"label": r"$\epsilon \approx 4.5\times10^{-6}$", "title": r"$\epsilon \approx 4.5\times10^{-6}$"},
 }
 SNAPSHOTS = ("t0p25", "t0p50")
+CONTOUR_LEVELS = [0.1, 0.6, 1.1, 1.6, 2.1, 2.6, 3.1]
 LINE_STYLES = {
     64: ":",
     128: (0, (6.0, 2.3, 1.4, 2.3)),
@@ -84,13 +124,6 @@ def reshape_slice(rows: list[dict[str, float]]) -> tuple[np.ndarray, np.ndarray,
     return xs, ys, rho_g, rho_d_scaled
 
 
-def disable_minor_ticks(ax: plt.Axes) -> None:
-    ax.minorticks_off()
-    ax.xaxis.set_minor_locator(NullLocator())
-    ax.yaxis.set_minor_locator(NullLocator())
-    ax.tick_params(which="minor", bottom=False, top=False, left=False, right=False)
-
-
 def trim_shared_edge_ticks(ax: plt.Axes, *, axis: str, drop_first: bool = False, drop_last: bool = False) -> None:
     if axis == "x":
         ticks = ax.get_xticks()
@@ -111,7 +144,7 @@ def trim_shared_edge_ticks(ax: plt.Axes, *, axis: str, drop_first: bool = False,
 
 
 def make_fig6(data_dir: Path, output_dir: Path, prefix: str, resolution: int) -> Path:
-    fig = plt.figure(figsize=(9.4, 9.0))
+    fig = plt.figure(figsize=(DOUBLE_COLUMN_WIDTH, 6.6))
     grid = fig.add_gridspec(
         2,
         3,
@@ -129,8 +162,6 @@ def make_fig6(data_dir: Path, output_dir: Path, prefix: str, resolution: int) ->
     axes[1, 0] = fig.add_subplot(grid[1, 0], sharex=axes[0, 0], sharey=axes[0, 0])
     axes[1, 1] = fig.add_subplot(grid[1, 1], sharex=axes[0, 0], sharey=axes[0, 0])
     cax = fig.add_subplot(grid[:, 2])
-    contour_levels = [0.9, 1.0, 1.1, 1.2, 1.35, 1.5]
-
     for row, case_tag in enumerate(("high_epsilon", "low_epsilon")):
         for col, snapshot in enumerate(SNAPSHOTS):
             rows = read_csv(csv_path(data_dir, prefix, resolution, case_tag, snapshot, "slice"))
@@ -148,7 +179,7 @@ def make_fig6(data_dir: Path, output_dir: Path, prefix: str, resolution: int) ->
                 rasterized=True,
             )
             normalized_dust = rho_d_scaled / np.mean(rho_d_scaled)
-            ax.contour(xs, ys, normalized_dust, levels=contour_levels, colors="black", linewidths=0.55, alpha=0.75)
+            ax.contour(xs, ys, normalized_dust, levels=CONTOUR_LEVELS, colors="black", linewidths=0.55, alpha=0.75)
             if row == 0:
                 ax.set_title(f"t = {0.25 if snapshot == 't0p25' else 0.5:g}")
             if col == 0:
@@ -157,7 +188,7 @@ def make_fig6(data_dir: Path, output_dir: Path, prefix: str, resolution: int) ->
                     0.97,
                     CASE_INFO[case_tag]["label"],
                     color="white",
-                    fontsize=PAPER_LABEL_FONTSIZE + 1,
+                    fontsize=11.0,
                     ha="left",
                     va="top",
                     transform=ax.transAxes,
@@ -165,8 +196,6 @@ def make_fig6(data_dir: Path, output_dir: Path, prefix: str, resolution: int) ->
             ax.set_xlim(0.0, 1.0)
             ax.set_ylim(0.0, 1.0)
             ax.set_aspect("equal")
-            disable_minor_ticks(ax)
-            ax.tick_params(which="major", direction="in", top=True, right=True)
             if row == 0:
                 ax.tick_params(labelbottom=False)
             if col == 1:
@@ -179,9 +208,7 @@ def make_fig6(data_dir: Path, output_dir: Path, prefix: str, resolution: int) ->
     trim_shared_edge_ticks(axes[0, 0], axis="y", drop_first=True)
     trim_shared_edge_ticks(axes[1, 0], axis="y", drop_last=True)
     cbar = fig.colorbar(mesh, cax=cax)
-    cbar.ax.tick_params(labelsize=PAPER_TICK_FONTSIZE)
-    disable_minor_ticks(cbar.ax)
-    cbar.set_label(r"$\rho_g$", fontsize=PAPER_LABEL_FONTSIZE)
+    cbar.set_label(r"$\rho_g$")
     output_path = output_dir / "dusty_orszag_tang_paper_fig6_analog.pdf"
     fig.savefig(output_path)
     plt.close(fig)
@@ -189,7 +216,7 @@ def make_fig6(data_dir: Path, output_dir: Path, prefix: str, resolution: int) ->
 
 
 def make_fig7(data_dir: Path, output_dir: Path, prefix: str, case_tag: str, resolutions: list[int]) -> Path:
-    fig, axes = plt.subplots(2, 1, figsize=(7.1, 7.7), sharex=True, gridspec_kw={"hspace": 0.0})
+    fig, axes = plt.subplots(2, 1, figsize=(SINGLE_COLUMN_WIDTH, 3.8), sharex=True, gridspec_kw={"hspace": 0.0})
     fig.subplots_adjust(left=0.14, right=0.98, bottom=0.10, top=0.95, hspace=0.0)
 
     for resolution in resolutions:
@@ -203,10 +230,10 @@ def make_fig7(data_dir: Path, output_dir: Path, prefix: str, case_tag: str, reso
         v_dy = np.array([row["v_dy"] for row in rows])[mask]
         linestyle = LINE_STYLES[resolution]
 
-        axes[0].plot(y, v_dy, color="black", linewidth=1.2, linestyle=linestyle)
-        axes[0].plot(y, v_gy, color="red", linewidth=1.05, linestyle=linestyle)
-        axes[1].plot(y, rho_d_scaled, color="black", linewidth=1.2, linestyle=linestyle)
-        axes[1].plot(y, rho_g, color="red", linewidth=1.05, linestyle=linestyle)
+        axes[0].plot(y, v_dy, color="black", linestyle=linestyle)
+        axes[0].plot(y, v_gy, color="red", linestyle=linestyle)
+        axes[1].plot(y, rho_d_scaled, color="black", linestyle=linestyle)
+        axes[1].plot(y, rho_g, color="red", linestyle=linestyle)
 
     axes[0].set_title(CASE_INFO[case_tag]["title"])
     axes[0].set_ylabel(r"$v_y$")
@@ -214,20 +241,28 @@ def make_fig7(data_dir: Path, output_dir: Path, prefix: str, case_tag: str, reso
     axes[1].set_xlabel("y")
     axes[1].set_ylim(bottom=0.0)
 
-    legend_handles = [
-        Line2D([0], [0], color="black", linewidth=1.2, linestyle="-", label="dust"),
-        Line2D([0], [0], color="red", linewidth=1.05, linestyle="-", label="gas"),
-    ]
+    legend_handles = [Line2D([0], [0], color="red", linestyle="-", label="gas")]
     legend_handles.extend(
-        Line2D([0], [0], color="black", linewidth=1.2, linestyle=LINE_STYLES[resolution], label=rf"${resolution}^2$")
-        for resolution in resolutions
+        Line2D(
+            [0],
+            [0],
+            color="black",
+            linestyle=LINE_STYLES[resolution],
+            label=(rf"${resolution}^2$(dust)" if resolution == 512 else rf"${resolution}^2$"),
+        )
+        for resolution in sorted(resolutions, reverse=True)
     )
-    axes[0].legend(handles=legend_handles, frameon=False, loc="upper right", ncol=2, columnspacing=1.0, handlelength=2.7)
+    axes[0].legend(
+        handles=legend_handles,
+        loc="upper left",
+        ncol=1,
+        handlelength=1.9,
+        labelspacing=0.2,
+        borderaxespad=0.15,
+    )
 
     for ax in axes:
         ax.set_xlim(0.0, 0.3)
-        disable_minor_ticks(ax)
-        ax.tick_params(which="major", direction="in", top=True, right=True)
 
     axes[0].tick_params(labelbottom=False)
     output_path = output_dir / "dusty_orszag_tang_paper_fig7_analog.pdf"

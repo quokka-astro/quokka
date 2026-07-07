@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
-"""Post-process DustLorentzShockMoseley CSV profiles into a paper-style PDF."""
+"""Convert DustLorentzShockMoseley CSV profiles into a 2x3 panel figure."""
 
 from __future__ import annotations
 
 import argparse
 import csv
 import os
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -23,19 +24,56 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-PAPER_LABEL_FONTSIZE = 15
-PAPER_TICK_FONTSIZE = 13
-PAPER_TITLE_FONTSIZE = 14
-PAPER_LEGEND_FONTSIZE = 12
+DOUBLE_COLUMN_WIDTH = 6.9
+
+_LATEX_AVAILABLE = shutil.which("latex") is not None
 
 plt.rcParams.update({
-    "font.size": PAPER_TICK_FONTSIZE,
-    "axes.labelsize": PAPER_LABEL_FONTSIZE,
-    "axes.titlesize": PAPER_TITLE_FONTSIZE,
-    "xtick.labelsize": PAPER_TICK_FONTSIZE,
-    "ytick.labelsize": PAPER_TICK_FONTSIZE,
-    "legend.fontsize": PAPER_LEGEND_FONTSIZE,
+    "font.size": 9.0,
+    "axes.labelsize": 10.5,
+    "axes.titlesize": 10.5,
+    "axes.linewidth": 0.8,
+    "xtick.labelsize": 9.0,
+    "ytick.labelsize": 9.0,
+    "xtick.major.width": 0.8,
+    "ytick.major.width": 0.8,
+    "xtick.major.size": 3.0,
+    "ytick.major.size": 3.0,
+    "legend.fontsize": 8.5,
+    "legend.frameon": False,
+    "legend.handlelength": 1.6,
+    "legend.handletextpad": 0.45,
+    "legend.labelspacing": 0.25,
+    "legend.borderaxespad": 0.25,
+    "legend.columnspacing": 0.7,
+    "lines.linewidth": 1.1,
+    "lines.markersize": 3.8,
+    "lines.markerfacecolor": "none",
+    "lines.markeredgewidth": 0.9,
+    "xtick.direction": "out",
+    "ytick.direction": "out",
+    "xtick.top": False,
+    "ytick.right": False,
+    "xtick.minor.visible": False,
+    "ytick.minor.visible": False,
+    "axes.formatter.use_mathtext": True,
+    "savefig.bbox": "tight",
+    "savefig.pad_inches": 0.03,
 })
+
+if _LATEX_AVAILABLE:
+    plt.rcParams.update({
+        "text.usetex": True,
+        "font.family": "serif",
+        "font.serif": ["Computer Modern Roman", "CMU Serif", "Latin Modern Roman"],
+        "text.latex.preamble": r"\usepackage{amsmath}\usepackage{amssymb}\usepackage{bm}",
+    })
+else:
+    plt.rcParams.update({
+        "font.family": "serif",
+        "font.serif": ["STIXGeneral", "STIX Two Text", "DejaVu Serif"],
+        "mathtext.fontset": "stix",
+    })
 
 
 CASES = (
@@ -74,19 +112,23 @@ def read_profile(path: Path) -> dict[str, list[float]]:
 
 
 def plot_velocity_panel(ax, profile: dict[str, list[float]], title: str, *, show_legend: bool = False) -> None:
-    dust_line, = ax.plot(profile["x"], profile["v_dx"], color="black", linewidth=1.3)
-    gas_line, = ax.plot(profile["x"], profile["v_gx"], color="red", linewidth=1.1)
-    guiding_line, = ax.plot(profile["x"], profile["v_guiding_x"], color="black", linestyle="--", linewidth=1.0)
+    dust_line, = ax.plot(profile["x"], profile["v_dx"], color="black")
+    gas_line, = ax.plot(profile["x"], profile["v_gx"], color="red")
+    guiding_line, = ax.plot(profile["x"], profile["v_guiding_x"], color="black", linestyle="--")
     ax.set_xlim(0.6, 1.0)
     ax.set_ylim(0.0, 4.0)
-    ax.set_title(title, pad=10.0)
+    ax.set_title(title, pad=5.0)
     if show_legend:
-        ax.legend((gas_line, dust_line, guiding_line), ("gas", "dust", "guiding-center"), loc="best", frameon=False)
+        ax.legend(
+            (gas_line, dust_line, guiding_line),
+            ("gas", "dust", "guiding-center"),
+            loc="best",
+        )
 
 
 def plot_density_panel(ax, profile: dict[str, list[float]]) -> None:
-    ax.plot(profile["x"], profile["rho_d_scaled"], color="black", linewidth=1.3)
-    ax.plot(profile["x"], profile["rho_g"], color="red", linewidth=1.1)
+    ax.plot(profile["x"], profile["rho_d_scaled"], color="black")
+    ax.plot(profile["x"], profile["rho_g"], color="red")
     ax.set_xlim(0.6, 1.0)
     ax.set_ylim(0.0, 6.0)
 
@@ -94,7 +136,7 @@ def plot_density_panel(ax, profile: dict[str, list[float]]) -> None:
 def make_figure(data_dir: Path, output_dir: Path) -> Path:
     profiles = [read_profile(data_dir / case_filename(case["tag"])) for case in CASES]
 
-    fig, axes = plt.subplots(2, 3, figsize=(15, 8.8), sharex="col")
+    fig, axes = plt.subplots(2, 3, figsize=(DOUBLE_COLUMN_WIDTH, 4.05), sharex="col")
 
     for column, (case, profile) in enumerate(zip(CASES, profiles)):
         plot_velocity_panel(axes[0, column], profile, case["title"], show_legend=(column == 2))
