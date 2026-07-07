@@ -1116,7 +1116,7 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 #endif
 			}
 			amrex::Real const Emag = ComputeMagneticEnergy(i, j, k, &state_fc);
-			amrex::Real const Eint = ComputeInternalEnergy(state[bx],i, j, k, &state_fc);
+			amrex::Real const Eint = ComputeInternalEnergy(state[bx], i, j, k, &state_fc);
 			amrex::GpuArray<Real, nmscalars_> const massScalars = RadSystem<problem_t>::ComputeMassScalars(state[bx], i, j, k);
 			amrex::Real const primTemp = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho_new, Eint, massScalars);
 
