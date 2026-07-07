@@ -153,11 +153,11 @@ void checkEnforceLimitsPreservesMagneticEnergy()
 
 	// create domain
 	amrex::Box const domain(amrex::IntVect(AMREX_D_DECL(0, 0, 0)), amrex::IntVect(AMREX_D_DECL(0, 0, 0)));
-	amrex::BoxArray ba(domain);
+	amrex::BoxArray const ba(domain);
 	amrex::DistributionMapping const dm(ba);
 	amrex::RealBox const real_box({AMREX_D_DECL(0.0, 0.0, 0.0)}, {AMREX_D_DECL(1.0, 1.0, 1.0)});
 	amrex::Vector<int> is_periodic(AMREX_SPACEDIM, 0);
-	amrex::Geometry geom(domain, &real_box, amrex::CoordSys::cartesian, is_periodic.data());
+	amrex::Geometry const geom(domain, &real_box, amrex::CoordSys::cartesian, is_periodic.data());
 
 	// create state_cc
 	amrex::MultiFab state_cc(ba, dm, Physics_Indices<FCQuantities>::nvarTotal_cc, 0);
