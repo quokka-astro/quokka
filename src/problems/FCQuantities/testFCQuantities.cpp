@@ -9,7 +9,9 @@
 #include "hydro/hydro_system.hpp"
 #include "hydro/mhd_system.hpp"
 #include <algorithm>
+#include <array>
 #include <cassert>
+#include <cmath>
 #include <format>
 #include <limits>
 #include <ostream>
@@ -19,6 +21,11 @@
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
+#include "AMReX_BoxArray.H"
+#include "AMReX_DistributionMapping.H"
+#include "AMReX_Geometry.H"
+#include "AMReX_GpuDevice.H"
+#include "AMReX_MultiFab.H"
 #include "AMReX_MultiFabUtil.H"
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
@@ -140,6 +147,61 @@ void setPlotfileParams(std::string const &prefix)
 	pp.add("skip_initial_plotfile", 0);
 }
 
+void checkEnforceLimitsPreservesMagneticEnergy()
+{
+	amrex::Print() << "Checking MHD temperature floor magnetic-energy accounting...\n";
+
+	amrex::Box const domain(amrex::IntVect(AMREX_D_DECL(0, 0, 0)), amrex::IntVect(AMREX_D_DECL(0, 0, 0)));
+	amrex::BoxArray ba(domain);
+	amrex::DistributionMapping const dm(ba);
+
+	amrex::MultiFab state_cc(ba, dm, Physics_Indices<FCQuantities>::nvarTotal_cc, 0);
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> state_fc;
+	for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+		state_fc[dir].define(amrex::convert(ba, amrex::IntVect::TheDimensionVector(dir)), dm, Physics_Indices<FCQuantities>::nvarPerDim_fc, 0);
+	}
+
+	state_cc.setVal(0.0);
+	for (auto &face_state : state_fc) {
+		face_state.setVal(0.0);
+	}
+
+	constexpr amrex::Real rho = 1.0;
+	constexpr amrex::Real temp_cold = 1.0;
+	constexpr amrex::Real temp_floor = 10.0;
+	amrex::Real const Eint_cold = quokka::EOS<FCQuantities>::ComputeEintFromTgas(rho, temp_cold);
+	amrex::Real const Eint_floor = quokka::EOS<FCQuantities>::ComputeEintFromTgas(rho, temp_floor);
+	amrex::Real const Emag = 10.0 * Eint_floor;
+	amrex::Real const Bx = std::sqrt(2.0 * Emag);
+
+	state_cc.setVal(rho, HydroSystem<FCQuantities>::density_index, 1, 0);
+	state_cc.setVal(Eint_cold + Emag, HydroSystem<FCQuantities>::energy_index, 1, 0);
+	state_cc.setVal(Eint_cold, HydroSystem<FCQuantities>::internalEnergy_index, 1, 0);
+	state_fc[0].setVal(Bx, Physics_Indices<FCQuantities>::mhdFirstIndex, 1, 0);
+
+	amrex::RealBox const real_box({AMREX_D_DECL(0.0, 0.0, 0.0)}, {AMREX_D_DECL(1.0, 1.0, 1.0)});
+	amrex::Vector<int> is_periodic(AMREX_SPACEDIM, 0);
+	amrex::Geometry geom;
+	geom.define(domain, &real_box, amrex::CoordSys::cartesian, is_periodic.data());
+
+	auto const density_floor_func = [] AMREX_GPU_HOST_DEVICE(amrex::Real /*x*/, amrex::Real /*y*/, amrex::Real /*z*/,
+								 amrex::Real base_density_floor) noexcept -> amrex::Real { return base_density_floor; };
+
+	HydroSystem<FCQuantities>::EnforceLimits(0.0, 0.0, temp_floor, state_cc, state_fc, geom, density_floor_func);
+	amrex::Gpu::streamSynchronizeAll();
+
+	amrex::Real const expected_Etot = Eint_floor + Emag;
+	amrex::Real const actual_Etot = state_cc.min(HydroSystem<FCQuantities>::energy_index);
+	amrex::Real const Etot_rel_error = std::abs(actual_Etot - expected_Etot) / std::max(std::abs(expected_Etot), 1.0);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(Etot_rel_error <= 1000.0 * std::numeric_limits<amrex::Real>::epsilon(),
+					 std::format("MHD temperature floor total energy mismatch: got {}, expected {}", actual_Etot, expected_Etot));
+
+	amrex::Real const actual_aux_eint = state_cc.min(HydroSystem<FCQuantities>::internalEnergy_index);
+	amrex::Real const aux_rel_error = std::abs(actual_aux_eint - Eint_floor) / std::max(std::abs(Eint_floor), 1.0);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(aux_rel_error <= 1000.0 * std::numeric_limits<amrex::Real>::epsilon(),
+					 std::format("MHD auxiliary internal energy floor mismatch: got {}, expected {}", actual_aux_eint, Eint_floor));
+}
+
 void checkDivFreeRestart(QuokkaSimulation<FCQuantities> const &sim)
 {
 	auto const &state_fc = sim.getNewMF_fc();
@@ -181,6 +243,7 @@ auto problem_main() -> int
 	setAmrNCell(coarse_ncells);
 	setPlotfileParams("fcq_pre");
 	QuokkaSimulation<FCQuantities> sim_write;
+	checkEnforceLimitsPreservesMagneticEnergy();
 	sim_write.setInitialConditions();
 	amrex::Print() << "\n";
 

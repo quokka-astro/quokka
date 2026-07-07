@@ -11,6 +11,7 @@
 
 // c++ headers
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 // library headers
@@ -165,7 +166,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	template <typename DensityFloorFunc>
 	static void EnforceLimits(amrex::Real densityFloor, amrex::Real dustDensityFloor, amrex::Real tempFloor, amrex::MultiFab &state_mf,
-				  amrex::Geometry const &geom, DensityFloorFunc const &density_floor_func);
+				  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc_mf, amrex::Geometry const &geom,
+				  DensityFloorFunc const &density_floor_func);
 
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
@@ -1013,9 +1015,17 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 template <typename problem_t>
 template <typename DensityFloorFunc>
 void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const dustDensityFloor, amrex::Real const tempFloor,
-					   amrex::MultiFab &state_mf, amrex::Geometry const &geom, DensityFloorFunc const &density_floor_func)
+					   amrex::MultiFab &state_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc_mf,
+					   amrex::Geometry const &geom, DensityFloorFunc const &density_floor_func)
 {
 	auto state = state_mf.arrays();
+	auto const &state_fc_x0 = state_fc_mf[0].const_arrays();
+#if AMREX_SPACEDIM >= 2
+	auto const &state_fc_x1 = state_fc_mf[1].const_arrays();
+#endif
+#if AMREX_SPACEDIM == 3
+	auto const &state_fc_x2 = state_fc_mf[2].const_arrays();
+#endif
 	auto const prob_lo = geom.ProbLoArray();
 	auto const dx = geom.CellSizeArray();
 
@@ -1095,13 +1105,24 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			amrex::Real const Ekin = 0.5 * rho_new * (vx1 * vx1 + vx2 * vx2 + vx3 * vx3);
 
 			// Enforce temperature floor (for total energy)
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> state_fc{};
+			if (Physics_Traits<problem_t>::is_mhd_enabled) {
+				state_fc[0] = state_fc_x0[bx];
+#if AMREX_SPACEDIM >= 2
+				state_fc[1] = state_fc_x1[bx];
+#endif
+#if AMREX_SPACEDIM == 3
+				state_fc[2] = state_fc_x2[bx];
+#endif
+			}
+			amrex::Real const Emag = ComputeMagneticEnergy(i, j, k, &state_fc);
 			amrex::GpuArray<Real, nmscalars_> const massScalars = RadSystem<problem_t>::ComputeMassScalars(state[bx], i, j, k);
 			amrex::Real const Etot = state[bx](i, j, k, energy_index);
-			amrex::Real const primTemp = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho_new, (Etot - Ekin), massScalars);
+			amrex::Real const primTemp = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho_new, (Etot - Ekin - Emag), massScalars);
 
 			if (primTemp < tempFloor) {
 				amrex::Real const prim_eint = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho_new, tempFloor, massScalars);
-				state[bx](i, j, k, energy_index) = Ekin + prim_eint;
+				state[bx](i, j, k, energy_index) = Ekin + Emag + prim_eint;
 			}
 
 			// Enforce temperature floor (for auxiliary internal energy)
