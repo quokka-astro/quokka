@@ -195,9 +195,12 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 				[[maybe_unused]] amrex::GpuArray<Real, NumChemBands> dMomMag{};
 				[[maybe_unused]] Real dMomMagSum = 0.0_rt;
 				for (int nn = 0; nn < NumChemBands; ++nn) {
-					const Real dpx = (frad_before[nn][0] - state(i, j, k, firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn)) * inv_c2;
-					const Real dpy = (frad_before[nn][1] - state(i, j, k, firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn)) * inv_c2;
-					const Real dpz = (frad_before[nn][2] - state(i, j, k, firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn)) * inv_c2;
+					const Real dpx =
+					    (frad_before[nn][0] - state(i, j, k, firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn)) * inv_c2;
+					const Real dpy =
+					    (frad_before[nn][1] - state(i, j, k, firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn)) * inv_c2;
+					const Real dpz =
+					    (frad_before[nn][2] - state(i, j, k, firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn)) * inv_c2;
 					dMomX += dpx;
 					dMomY += dpy;
 					dMomZ += dpz;
@@ -237,7 +240,8 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 							const int fyIdx = firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn;
 							const int fzIdx = firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn;
 							const Real E_old = state(i, j, k, eIdx); // > 0: rn[0] was clamped to small_x above
-							const Real E_new = amrex::max(E_old - E_debit * (dMomMag[nn] / dMomMagSum), small_x * chemBandQuanta[nn]);
+							const Real E_new =
+							    amrex::max(E_old - E_debit * (dMomMag[nn] / dMomMagSum), small_x * chemBandQuanta[nn]);
 							state(i, j, k, eIdx) = E_new;
 							const Real flux_rescale = E_new / E_old;
 							state(i, j, k, fxIdx) *= flux_rescale;
