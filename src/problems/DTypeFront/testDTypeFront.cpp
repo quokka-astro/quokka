@@ -5,7 +5,6 @@
 //==============================================================================
 /// \file testDTypeFront.cpp
 /// \brief Defines a test problem for the static Stromgren sphere with no temperature dependence.
-/// \note Exercises the photoionization momentum/work-term coupling (radiation force on the gas).
 ///
 
 #include "AMReX.H"
@@ -66,6 +65,9 @@ template <> struct RadSystem_Traits<DTypeFront> {
 	// The 1e-6 prefactor means radiation at T_min becomes numerically negligible after
 	// ~1e6 VODE steps (accumulated local error stays below the physically meaningful level).
 	static constexpr double Erad_floor = C::a_rad * 1.0e-8;
+	// beta_order = 0 disables the O(v/c) radiation terms, including the photoionization work term
+	// (photochemistry momentum deposition is gated on beta_order == 1), so this test validates pure
+	// thermal-pressure D-type front expansion against the Spitzer solution without radiation pressure.
 	static constexpr int beta_order = 0;
 	static constexpr auto ChemBands() { return ChemBandsHeader_; }
 };
