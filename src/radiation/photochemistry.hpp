@@ -21,6 +21,15 @@
 
 namespace quokka::photochemistry
 {
+// If true, the work-term kinetic energy the gas gains from the absorbed-photon momentum kick is debited
+// from the chem-band photon field (photon energy density reduced by (c / chat) * dEkin, and each band's
+// flux rescaled by the same factor to preserve the M1 closure |F| <= c E), strictly conserving the
+// gas+radiation energy. If false (default), the photon field is left unchanged after the burn: the gas
+// still gains the kinetic energy, but it is not removed from the radiation, so the ionizing photon number
+// density is conserved at the cost of gas+radiation energy conservation. Conserving the ionizing photon
+// budget is the more important property for correct ionization-front propagation, so it is the default.
+static constexpr bool debit_work_term_from_radiation = false;
+
 AMREX_GPU_DEVICE void photochem_burner(burn_t &photochemstate, Real dt);
 
 template <typename problem_t>
@@ -145,8 +154,9 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			Real dMomX = 0.0_rt;
 			Real dMomY = 0.0_rt;
 			Real dMomZ = 0.0_rt;
-			amrex::GpuArray<Real, NumChemBands> dMomMag{};
-			Real dMomMagSum = 0.0_rt;
+			// per-band momentum-kick magnitudes, used only to split the work-term energy debit across bands
+			[[maybe_unused]] amrex::GpuArray<Real, NumChemBands> dMomMag{};
+			[[maybe_unused]] Real dMomMagSum = 0.0_rt;
 			for (int nn = 0; nn < NumChemBands; ++nn) {
 				const int eIdx = firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn;
 				const int fxIdx = firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn;
@@ -167,8 +177,10 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 				dMomX += dpx;
 				dMomY += dpy;
 				dMomZ += dpz;
-				dMomMag[nn] = std::sqrt(dpx * dpx + dpy * dpy + dpz * dpz);
-				dMomMagSum += dMomMag[nn];
+				if constexpr (debit_work_term_from_radiation) {
+					dMomMag[nn] = std::sqrt(dpx * dpx + dpy * dpy + dpz * dpz);
+					dMomMagSum += dMomMag[nn];
+				}
 
 				state(i, j, k, fxIdx) = flux_factor * FxOld;
 				state(i, j, k, fyIdx) = flux_factor * FyOld;
@@ -193,24 +205,28 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			    (xmom_new * xmom_new + ymom_new * ymom_new + zmom_new * zmom_new - (xmom * xmom + ymom * ymom + zmom * zmom)) / (2.0_rt * rho);
 			state(i, j, k, RadSystem<problem_t>::gasEnergy_index) += dEint * energy_update_factor + dEkin;
 
-			// Strict energy conservation: remove the work-term energy (c / chat) * dEkin from the chem-band photon field,
-			// split across bands in proportion to each band's momentum contribution. Clamp so n_gamma stays >= small_x.
-			// Rescale each band's flux by the same factor its energy density changes so the reduced flux |F| / (c E) is
+			// Optionally enforce strict gas+radiation energy conservation: remove the work-term energy (c / chat) * dEkin
+			// from the chem-band photon field, split across bands in proportion to each band's momentum contribution, and
+			// rescale each band's flux by the same factor its energy density changes so the reduced flux |F| / (c E) is
 			// preserved (keeps the M1 closure constraint F / c <= E from being violated by the energy debit).
-			if (dMomMagSum > 0.0_rt) {
-				const Real E_debit = (C::c_light / photochemstate.c_hat) * dEkin;
-				for (int nn = 0; nn < NumChemBands; ++nn) {
-					const int eIdx = firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn;
-					const int fxIdx = firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn;
-					const int fyIdx = firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn;
-					const int fzIdx = firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn;
-					const Real E_old = state(i, j, k, eIdx); // > 0: rn[0] was clamped to small_x above
-					const Real E_new = amrex::max(E_old - E_debit * (dMomMag[nn] / dMomMagSum), small_x * chemBandQuanta[nn]);
-					state(i, j, k, eIdx) = E_new;
-					const Real flux_rescale = E_new / E_old;
-					state(i, j, k, fxIdx) *= flux_rescale;
-					state(i, j, k, fyIdx) *= flux_rescale;
-					state(i, j, k, fzIdx) *= flux_rescale;
+			// Disabled by default: conserving the ionizing photon number density is more important than energy conservation
+			// for correct ionization-front propagation (see debit_work_term_from_radiation).
+			if constexpr (debit_work_term_from_radiation) {
+				if (dMomMagSum > 0.0_rt) {
+					const Real E_debit = (C::c_light / photochemstate.c_hat) * dEkin;
+					for (int nn = 0; nn < NumChemBands; ++nn) {
+						const int eIdx = firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn;
+						const int fxIdx = firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn;
+						const int fyIdx = firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn;
+						const int fzIdx = firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn;
+						const Real E_old = state(i, j, k, eIdx); // > 0: rn[0] was clamped to small_x above
+						const Real E_new = amrex::max(E_old - E_debit * (dMomMag[nn] / dMomMagSum), small_x * chemBandQuanta[nn]);
+						state(i, j, k, eIdx) = E_new;
+						const Real flux_rescale = E_new / E_old;
+						state(i, j, k, fxIdx) *= flux_rescale;
+						state(i, j, k, fyIdx) *= flux_rescale;
+						state(i, j, k, fzIdx) *= flux_rescale;
+					}
 				}
 			}
 		});
