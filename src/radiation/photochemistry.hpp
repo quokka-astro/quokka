@@ -158,9 +158,9 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			// here unconditionally (cheap) and only applied when do_vc_work is true -- computing it outside the
 			// `if constexpr (do_vc_work)` block avoids NVCC's "cannot first-capture in constexpr-if" restriction.
 			const Real inv_c2 = 1.0_rt / (C::c_light * C::c_light);
-			[[maybe_unused]] Real dMomX = 0.0_rt;
-			[[maybe_unused]] Real dMomY = 0.0_rt;
-			[[maybe_unused]] Real dMomZ = 0.0_rt;
+			Real dMomX = 0.0_rt;
+			Real dMomY = 0.0_rt;
+			Real dMomZ = 0.0_rt;
 			// per-band momentum-kick magnitudes, used only to split the optional work-term energy debit across bands
 			[[maybe_unused]] amrex::GpuArray<Real, NumChemBands> dMomMag{};
 			[[maybe_unused]] Real dMomMagSum = 0.0_rt;
