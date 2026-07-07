@@ -154,26 +154,43 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			for (int nn = 0; nn < NumSpec; ++nn) {
 				state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) = photochemstate.xn[nn] * spmasses[nn];
 			}
-			// Cache the pre-burn chem-band radiation flux (energy units) so the O(v/c) work term can use the
-			// VODE-attenuated flux difference -(F_after - F_before) to deposit the absorbed photon momentum to
-			// the gas. Only needed when the work term is active.
-			[[maybe_unused]] amrex::GpuArray<amrex::GpuArray<Real, 3>, NumChemBands> frad_before{};
-			if constexpr (do_vc_work) {
-				for (int nn = 0; nn < NumChemBands; ++nn) {
-					frad_before[nn][0] = state(i, j, k, firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn);
-					frad_before[nn][1] = state(i, j, k, firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn);
-					frad_before[nn][2] = state(i, j, k, firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn);
-				}
-			}
-
-			// Update the chem-band photon number density and attenuate the flux by the burn's rn[1] factor.
+			// Update the chem-band photon number density, attenuate the flux by the burn's rn[1] factor, and
+			// accumulate the momentum the gas absorbs from the O(v/c) work term: dP = -(F_after - F_before) / c^2,
+			// summed over chem bands. The absorbed photon momentum is tied to the physical photon flux F = c E; the
+			// reduced speed of light only changes the absorption rate used by the chemistry solve. dMom is computed
+			// here unconditionally (cheap) and only applied when do_vc_work is true -- computing it outside the
+			// `if constexpr (do_vc_work)` block avoids NVCC's "cannot first-capture in constexpr-if" restriction.
+			const Real inv_c2 = 1.0_rt / (C::c_light * C::c_light);
+			[[maybe_unused]] Real dMomX = 0.0_rt;
+			[[maybe_unused]] Real dMomY = 0.0_rt;
+			[[maybe_unused]] Real dMomZ = 0.0_rt;
+			// per-band momentum-kick magnitudes, used only to split the optional work-term energy debit across bands
+			[[maybe_unused]] amrex::GpuArray<Real, NumChemBands> dMomMag{};
+			[[maybe_unused]] Real dMomMagSum = 0.0_rt;
 			for (int nn = 0; nn < NumChemBands; ++nn) {
+				const int fxIdx = firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn;
+				const int fyIdx = firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn;
+				const int fzIdx = firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn;
 				const Real flux_factor = photochemstate.rn[1 + MicrophysicsNumRadVarsPerGroup * nn];
 				state(i, j, k, firstChemIndex + Physics_NumVars::numRadVarsPerGroup * nn) =
 				    photochemstate.rn[0 + MicrophysicsNumRadVarsPerGroup * nn] * chemBandQuanta[nn];
-				state(i, j, k, firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn) *= flux_factor;
-				state(i, j, k, firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn) *= flux_factor;
-				state(i, j, k, firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn) *= flux_factor;
+				const Real FxOld = state(i, j, k, fxIdx);
+				const Real FyOld = state(i, j, k, fyIdx);
+				const Real FzOld = state(i, j, k, fzIdx);
+				// dp = (F_before - F_after) / c^2 = (1 - flux_factor) * F_before / c^2
+				const Real dpx = (1.0_rt - flux_factor) * FxOld * inv_c2;
+				const Real dpy = (1.0_rt - flux_factor) * FyOld * inv_c2;
+				const Real dpz = (1.0_rt - flux_factor) * FzOld * inv_c2;
+				dMomX += dpx;
+				dMomY += dpy;
+				dMomZ += dpz;
+				if constexpr (debit_work_term_from_radiation) {
+					dMomMag[nn] = std::sqrt(dpx * dpx + dpy * dpy + dpz * dpz);
+					dMomMagSum += dMomMag[nn];
+				}
+				state(i, j, k, fxIdx) = flux_factor * FxOld;
+				state(i, j, k, fyIdx) = flux_factor * FyOld;
+				state(i, j, k, fzIdx) = flux_factor * FzOld;
 			}
 
 			// Quokka uses rho*eint
@@ -181,35 +198,12 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			state(i, j, k, RadSystem<problem_t>::gasInternalEnergy_index) += dEint * energy_update_factor;
 			state(i, j, k, RadSystem<problem_t>::gasEnergy_index) += dEint * energy_update_factor;
 
-			// O(v/c) radiation-pressure work term: deposit the photon momentum absorbed during the burn to the
-			// gas. dP = -(F_after - F_before) / c^2, summed over chem bands. The absorbed photon momentum is tied
-			// to the physical photon flux F = c E; the reduced speed of light only changes the absorption rate
-			// used by the chemistry solve. This changes the kinetic energy of the updated momentum only; the
-			// auxiliary internal energy is unaffected.
-			if constexpr (do_vc_work) {
-				const Real inv_c2 = 1.0_rt / (C::c_light * C::c_light);
-				Real dMomX = 0.0_rt;
-				Real dMomY = 0.0_rt;
-				Real dMomZ = 0.0_rt;
-				// per-band momentum-kick magnitudes, used only to split the optional work-term energy debit across bands
-				[[maybe_unused]] amrex::GpuArray<Real, NumChemBands> dMomMag{};
-				[[maybe_unused]] Real dMomMagSum = 0.0_rt;
-				for (int nn = 0; nn < NumChemBands; ++nn) {
-					const Real dpx =
-					    (frad_before[nn][0] - state(i, j, k, firstChemFxIndex + Physics_NumVars::numRadVarsPerGroup * nn)) * inv_c2;
-					const Real dpy =
-					    (frad_before[nn][1] - state(i, j, k, firstChemFyIndex + Physics_NumVars::numRadVarsPerGroup * nn)) * inv_c2;
-					const Real dpz =
-					    (frad_before[nn][2] - state(i, j, k, firstChemFzIndex + Physics_NumVars::numRadVarsPerGroup * nn)) * inv_c2;
-					dMomX += dpx;
-					dMomY += dpy;
-					dMomZ += dpz;
-					if constexpr (debit_work_term_from_radiation) {
-						dMomMag[nn] = std::sqrt(dpx * dpx + dpy * dpy + dpz * dpz);
-						dMomMagSum += dMomMag[nn];
-					}
-				}
-
+			// O(v/c) radiation-pressure work term: apply the absorbed photon momentum (dMom, computed above) to the
+			// gas. This changes the kinetic energy of the updated momentum only; the auxiliary internal energy is
+			// unaffected. Gated on beta_order==1 && hydro (do_vc_work), so beta_order==0 problems are untouched.
+			// Use a runtime `if` on the constexpr flag (the dead branch is optimized away): NVCC rejects extended
+			// __device__ lambdas that first-capture a variable inside an `if constexpr` block.
+			if (do_vc_work) {
 				const Real xmom_new = xmom + dMomX;
 				const Real ymom_new = ymom + dMomY;
 				const Real zmom_new = zmom + dMomZ;
