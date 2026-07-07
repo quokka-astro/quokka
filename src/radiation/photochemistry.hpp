@@ -55,11 +55,8 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 	const int firstChemFyIndex = firstChemFxIndex + 1;
 	const int firstChemFzIndex = firstChemFyIndex + 1;
 
-	// Gate the O(v/c) radiation-pressure work term on beta_order>=1 (the same compile-time switch used by the
-	// regular RHD source terms, see radiation_system.hpp and source_terms_multi_group.hpp) and on hydrodynamics
-	// being enabled. The work term activates only for problems that request O(v/c) radiation coupling; problems
-	// with beta_order==0 (e.g. DTypeFront, OneZonePhotoionization) are unaffected.
-	constexpr bool do_vc_work = (RadSystem_Traits<problem_t>::beta_order >= 1) && Physics_Traits<problem_t>::is_hydro_enabled;
+	// The O(v/c) radiation-pressure work term is gated on beta_order>=1 && is_hydro_enabled; the condition is
+	// inlined inside the device lambda's if constexpr below to avoid NVCC first-capturing a local constexpr.
 
 	amrex::GpuArray<Real, NumChemBands> chemBandQuanta{};
 	amrex::GpuArray<Real, NumChemBands> invChemBandQuanta{};
@@ -200,16 +197,13 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 
 			// O(v/c) radiation-pressure work term: apply the absorbed photon momentum (dMom, computed above) to the
 			// gas. This changes the kinetic energy of the updated momentum only; the auxiliary internal energy is
-			// unaffected. Gated on beta_order>=1 && hydro (do_vc_work), so beta_order==0 problems are untouched.
-			// Touch the momentum increments in local copies first (first-capture for CUDA, cf. DustDamping): NVCC
-			// rejects extended __device__ lambdas that first-capture a variable inside an `if constexpr` block.
-			const Real dMomX_c = dMomX;
-			const Real dMomY_c = dMomY;
-			const Real dMomZ_c = dMomZ;
-			if constexpr (do_vc_work) {
-				const Real xmom_new = xmom + dMomX_c;
-				const Real ymom_new = ymom + dMomY_c;
-				const Real zmom_new = zmom + dMomZ_c;
+			// unaffected. Gated on beta_order>=1 && hydro, so beta_order==0 problems are untouched.
+			// Condition inlined (not using a function-local constexpr) to avoid NVCC first-capturing a captured
+			// variable inside an `if constexpr` block.
+			if constexpr ((RadSystem_Traits<problem_t>::beta_order >= 1) && Physics_Traits<problem_t>::is_hydro_enabled) {
+				const Real xmom_new = xmom + dMomX;
+				const Real ymom_new = ymom + dMomY;
+				const Real zmom_new = zmom + dMomZ;
 				state(i, j, k, RadSystem<problem_t>::x1GasMomentum_index) = xmom_new;
 				state(i, j, k, RadSystem<problem_t>::x2GasMomentum_index) = ymom_new;
 				state(i, j, k, RadSystem<problem_t>::x3GasMomentum_index) = zmom_new;
