@@ -80,6 +80,7 @@ else:
 HISTORY_FILE = "dust_damping_mhd_zero_b_mixed_stiff_history.csv"
 EXACT_FILE = "dust_damping_mhd_zero_b_mixed_stiff_exact.csv"
 OUTPUT_FILE = "dust_damping_mhd_zero_b_mixed_stiff_panels.pdf"
+T_MAX = 2.0
 
 SCHEMES = (
     ("tp2025", "TP2025", "C0", "o"),
@@ -128,7 +129,7 @@ def plot_panel(ax: plt.Axes, history: dict[str, list[float]], exact: dict[str, l
         )
 
     ax.set_ylabel(ylabel)
-    ax.set_xlim(0.0, 3.0)
+    ax.set_xlim(0.0, T_MAX)
     if show_legend:
         ax.legend(handles=legend_handles(), loc="best")
 

@@ -22,6 +22,7 @@ constexpr double TS1 = 0.2;
 constexpr double TS2 = 0.002;
 constexpr double P_INITIAL = 1.0;
 constexpr double OMEGA_DRAG = 1.0;
+constexpr double STOP_TIME = 2.0;
 constexpr double gas_gamma = 1.4;
 constexpr int numDustVars = Physics_NumVars::numDustVarsPerGroup;
 
@@ -340,6 +341,7 @@ auto runDustDampingSimulation(ResolvedRkScheme scheme) -> SimulationData<DustDam
 	sim.dustResolvedRkScheme_ = scheme;
 	sim.dust_omega_drag_ = OMEGA_DRAG;
 	sim.dust_omega_gyro_res_ = 0.0;
+	sim.stopTime_ = STOP_TIME;
 
 	sim.setInitialConditions();
 
