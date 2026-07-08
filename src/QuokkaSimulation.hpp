@@ -742,7 +742,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		amrex::Print() << "Loading PE heating table from: " << sfh_to_pe_heating_table_filename_ << "\n";
 
 		// Use linear spacing for PE heating values (can be changed if needed)
-		peHeatingTables_.pe_heating = quokka::DataTable<1, 1>::CSVReader(sfh_to_pe_heating_table_filename_, quokka::SpacingType::fast_log);
+		peHeatingTables_.pe_heating = quokka::DataTable<1, 1>::CSVReader(sfh_to_pe_heating_table_filename_, quokka::TransformType::fast_log);
 
 		amrex::Print() << "PE heating table loaded successfully.\n";
 		amrex::Print() << std::format("\tTable dimension: {}\n", peHeatingTables_.pe_heating.size(0));
@@ -1048,8 +1048,8 @@ template <typename problem_t> auto QuokkaSimulation<problem_t>::computePhotoelec
 		return heating_rate; // Return 0 if tables not loaded
 	}
 
-	// Get GPU-friendly const tables
-	auto const gpu_tables = quokka::g_pe_heating_tables_ptr<>->const_tables();
+	// PE heating rate is computed on the host; use host-accessible (pinned) tables.
+	auto const gpu_tables = quokka::g_pe_heating_tables_ptr<>->const_tables_host();
 
 	if (const_sfr_Msun_per_year_per_kpc2_ > 0.0) {
 		// Constant star formation rate
@@ -1946,13 +1946,13 @@ void QuokkaSimulation<problem_t>::ApplyHydroStateFixup(amrex::MultiFab &state_cc
 									  amrex::Real base_density_floor) -> amrex::Real {
 			return density_floor_parser(x, y, z, base_density_floor);
 		};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_cc, geom[lev], density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_cc, state_fc, geom[lev], density_floor_func);
 	} else {
 		auto const density_floor_func = [this] AMREX_GPU_HOST_DEVICE(amrex::Real x, amrex::Real y, amrex::Real z,
 									     amrex::Real base_density_floor) -> amrex::Real {
 			return densityFloor(x, y, z, base_density_floor);
 		};
-		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_cc, geom[lev], density_floor_func);
+		HydroSystem<problem_t>::EnforceLimits(densityFloor_, dustDensityFloor_, tempFloor_, state_cc, state_fc, geom[lev], density_floor_func);
 	}
 
 	if (useDualEnergy_ == 1) {
