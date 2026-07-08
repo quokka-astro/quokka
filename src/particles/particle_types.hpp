@@ -540,6 +540,10 @@ inline bool SN_smooth_gas_velocity = true; // NOLINT
 // Sink particle accretion
 inline bool sink_particle_use_uniform_kernel = false; // NOLINT. If true, use uniform accretion kernel in a (7 dx)^3 box
 
+// Density floor enforced in the sink accretion zone. Defaults to the global `density_floor` each time
+// particleParmParse() is called, but can be overridden independently via "particles.sink_accretion_density_floor".
+inline amrex::Real sink_accretion_density_floor = 0.0; // NOLINT
+
 // Verbosity for particle operations
 inline int particle_verbose = 0; // NOLINT print particle logistics
 
@@ -567,12 +571,16 @@ inline amrex::Real SN_p_term_Msunkmps = SN_p_term_Msunkmps_canonical; // NOLINT
 // It tells the linker that all instances of this function across different translation units
 // should be treated as the same function. This is a common pattern for small utility
 // functions defined in header files.
-inline void particleParmParse()
+inline void particleParmParse(amrex::Real global_density_floor = 0.0)
 {
 	// Parse particle parameters
 	const amrex::ParmParse pp("particles");
 	pp.query("disable_SN_feedback", disable_SN_feedback);
 	pp.query("sink_particle_use_uniform_kernel", sink_particle_use_uniform_kernel);
+
+	// Sink accretion-zone density floor; defaults to the global density_floor unless overridden
+	sink_accretion_density_floor = global_density_floor;
+	pp.query("sink_accretion_density_floor", sink_accretion_density_floor);
 
 	// Handle SNScheme enum
 	pp.query("SN_scheme", SN_scheme);
