@@ -177,22 +177,20 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> s
 	{
 		// Half a grid cell in transform space, converted to physical units.
 		// For log/fast_log axes, point[axis] must be positive (precondition for log spacing).
-		const amrex::Real h_t = amrex::Real(0.5) * dcoord[axis];
-		amrex::Real h_p;
+		const amrex::Real h_t = 0.5 * dcoord[axis];
+		amrex::Real h_p = h_t; // linear spacing default; overridden below for log axes
 		if (spacing_types[axis] == TransformType::log) {
-			AMREX_ASSERT(point[axis] > amrex::Real(0.0));
-			h_p = point[axis] * (std::exp(h_t) - amrex::Real(1.0));
+			AMREX_ASSERT(point[axis] > 0.0);
+			h_p = point[axis] * (std::exp(h_t) - 1.0);
 		} else if (spacing_types[axis] == TransformType::fast_log) {
-			AMREX_ASSERT(point[axis] > amrex::Real(0.0));
-			h_p = point[axis] * (FastMath::pow2(h_t) - amrex::Real(1.0));
-		} else {
-			h_p = h_t;
+			AMREX_ASSERT(point[axis] > 0.0);
+			h_p = point[axis] * (FastMath::pow2(h_t) - 1.0);
 		}
 		auto pt_hi = point;
 		auto pt_lo = point;
 		pt_hi[axis] += h_p;
 		pt_lo[axis] -= h_p;
-		return (interpolate_single(pt_hi, output_idx) - interpolate_single(pt_lo, output_idx)) / (amrex::Real(2.0) * h_p);
+		return (interpolate_single(pt_hi, output_idx) - interpolate_single(pt_lo, output_idx)) / (2.0 * h_p);
 	}
 
 	/// @brief Perform n-dimensional linear interpolation for a single output (backward compatibility)
