@@ -176,12 +176,12 @@ auto checkRot180Symmetry(const amrex::MultiFab &mf, int comp, const amrex::Box &
 				}
 			}
 		}
-	}
-	amrex::ParallelDescriptor::Bcast(&num_diffs, 1, amrex::ParallelDescriptor::IOProcessorNumber());
-	if (num_diffs == 0) {
-		amrex::Print() << "[rot180] " << label << ": exact match under 180-degree rotation.\n";
-	} else {
-		amrex::Print() << "[rot180] " << label << ": found " << num_diffs << " mismatched cell pairs under 180-degree rotation.\n";
+
+		if (num_diffs == 0) {
+			amrex::Print() << "[rot180] " << label << ": exact match under 180-degree rotation.\n";
+		} else {
+			amrex::Print() << "[rot180] " << label << ": found " << num_diffs << " mismatched cell pairs under 180-degree rotation.\n";
+		}
 	}
 	return num_diffs;
 }
@@ -200,9 +200,11 @@ template <> void QuokkaSimulation<OrszagTang>::computeAfterEvolve(amrex::Vector<
 	num_diffs += checkRot180Symmetry(state_new_fc_[0][0], Physics_Indices<OrszagTang>::mhdFirstIndex, domain, Rot180Parity::Odd, "Bx");
 	num_diffs += checkRot180Symmetry(state_new_fc_[0][1], Physics_Indices<OrszagTang>::mhdFirstIndex, domain, Rot180Parity::Odd, "By");
 
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(num_diffs == 0, "OrszagTang rot180 symmetry check failed: the MHD solver broke bit-exact point-reflection "
-							 "symmetry (see PR #1997); this indicates a regression in floating-point term-pairing for "
-							 "WENO reconstruction, EMF averaging, or HLLD.");
+	if (amrex::ParallelDescriptor::IOProcessor()) {
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(num_diffs == 0, "OrszagTang rot180 symmetry check failed: the MHD solver broke bit-exact point-reflection "
+								 "symmetry (see PR #1997); this indicates a regression in floating-point term-pairing for "
+								 "WENO reconstruction, EMF averaging, or HLLD.");
+	}
 }
 
 auto problem_main() -> int
