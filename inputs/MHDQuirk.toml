@@ -23,4 +23,4 @@ do_subcycle = 0
 
 plotfile_interval = -1
 
-hydro.reconstruction_order = 2  # PLM
+hydro.reconstruction_order = 2
