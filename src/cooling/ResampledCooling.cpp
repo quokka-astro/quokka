@@ -109,7 +109,7 @@ auto resampled_tables::const_tables_host() const -> resampledGpuConstTables
 	};
 }
 
-AMREX_GPU_MANAGED EOSTabulatedRegistry *g_eos_tabulated_registry = nullptr;
+AMREX_GPU_MANAGED EOSTabulatedRegistry *g_eos_tabulated_registry = nullptr; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 /// Register (or re-register) resampled table sub-handles for the tabulated EOS backend.
 /// Lazily allocates the managed-memory registry on first call. Repeated calls overwrite
@@ -119,7 +119,7 @@ void registerEOSTabulated(resampledGpuConstTables host_tables, resampledGpuConst
 {
 	if (g_eos_tabulated_registry == nullptr) {
 		auto *mem = amrex::The_Managed_Arena()->alloc(sizeof(EOSTabulatedRegistry));
-		g_eos_tabulated_registry = new (mem) EOSTabulatedRegistry{};
+		g_eos_tabulated_registry = new (mem) EOSTabulatedRegistry{}; // NOLINT(cppcoreguidelines-owning-memory)
 	}
 	g_eos_tabulated_registry->host = host_tables;
 	g_eos_tabulated_registry->device = device_tables;

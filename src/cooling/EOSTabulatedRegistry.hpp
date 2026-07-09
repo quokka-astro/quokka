@@ -88,7 +88,7 @@ struct EOSTabulatedRegistry {
 	resampledGpuConstTables device;
 };
 
-extern AMREX_GPU_MANAGED EOSTabulatedRegistry *g_eos_tabulated_registry;
+extern AMREX_GPU_MANAGED EOSTabulatedRegistry *g_eos_tabulated_registry; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 inline AMREX_GPU_HOST_DEVICE auto getEOSTabulatedRegistry() -> EOSTabulatedRegistry * { return g_eos_tabulated_registry; }
 
