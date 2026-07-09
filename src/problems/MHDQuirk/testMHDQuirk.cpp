@@ -52,12 +52,13 @@ template <> struct Physics_Traits<MHDQuirk> : DefaultPhysicsTraits {
 	static constexpr bool is_mhd_enabled = true;
 };
 
-constexpr Real dl = 3.692;
-constexpr Real ul = -0.625;
-constexpr Real pl = 26.85;
-constexpr Real dr = 1.0;
-constexpr Real ur = -5.0;
-constexpr Real pr = 0.6;
+AMREX_GPU_MANAGED Real dl = 3.692;    // NOLINT
+AMREX_GPU_MANAGED Real ul = -0.625;   // NOLINT
+AMREX_GPU_MANAGED Real pl = 26.85;    // NOLINT
+AMREX_GPU_MANAGED Real dr = 1.0;      // NOLINT
+AMREX_GPU_MANAGED Real ur = -5.0;     // NOLINT
+AMREX_GPU_MANAGED Real pr = 0.6;      // NOLINT
+AMREX_GPU_MANAGED Real xshock = 0.4;  // NOLINT
 constexpr int ishock_g = 0;
 
 template <> void QuokkaSimulation<MHDQuirk>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
@@ -83,7 +84,6 @@ template <> void QuokkaSimulation<MHDQuirk>::setInitialConditionsOnGrid(quokka::
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
 
-	Real const xshock = 0.4;
 	int ishock = 0;
 	for (ishock = 0; (prob_lo[0] + dx[0] * (ishock + static_cast<Real>(0.5))) < xshock; ++ishock) {
 	}
@@ -247,6 +247,15 @@ AMRSimulation<MHDQuirk>::setCustomBoundaryConditions(const amrex::IntVect &iv, a
 
 auto problem_main() -> int
 {
+	amrex::ParmParse const hpp("setup");
+	hpp.query("dl", dl);
+	hpp.query("ul", ul);
+	hpp.query("pl", pl);
+	hpp.query("dr", dr);
+	hpp.query("ur", ur);
+	hpp.query("pr", pr);
+	hpp.query("xshock", xshock);
+
 	// Boundary conditions: ext_dir in x, periodic in y and z
 	auto BCs_cc = quokka::BC<MHDQuirk>(quokka::BCType::ext_dir,  // x: outflow
 					   quokka::BCType::int_dir,  // y: periodic
