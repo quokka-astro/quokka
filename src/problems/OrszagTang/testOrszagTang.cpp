@@ -189,7 +189,7 @@ auto checkRot180Symmetry(const amrex::MultiFab &mf, int comp, const amrex::Box &
 
 template <> void QuokkaSimulation<OrszagTang>::computeAfterEvolve(amrex::Vector<amrex::Real> & /*initSumCons*/)
 {
-	// the OT vortex's IC is point-symmetric about the domain centre, so the exact solution stays
+	// the Orszag-Tang vortex's IC is point-symmetric about the domain centre, so the exact solution stays
 	// bit-exactly rot180-symmetric for all time; a floating-point non-associativity bug in
 	// reconstruction, EMF averaging, or the Riemann solver breaks this (see PR #1997).
 	const amrex::Box &domain = Geom(0).Domain();
