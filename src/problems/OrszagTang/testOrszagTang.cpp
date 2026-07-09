@@ -141,9 +141,9 @@ auto checkRot180Symmetry(const amrex::MultiFab &mf, int comp, const amrex::Box &
 
 	int num_diffs = 0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		amrex::MFIter mfi(mf_single);
+		const amrex::MFIter mfi(mf_single);
 		const amrex::Box &box = mfi.validbox();
-#if defined(AMREX_USE_GPU)
+#ifdef AMREX_USE_GPU
 		amrex::FArrayBox host_fab(box, 1, amrex::The_Pinned_Arena());
 		static_cast<void>(mf_single[mfi].template copyToMem<amrex::RunOn::Device>(box, 0, 1, host_fab.dataPtr()));
 		amrex::Gpu::synchronize();
