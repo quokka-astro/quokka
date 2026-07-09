@@ -587,7 +587,7 @@ void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::string const 
 				Real const Egas = state(i, j, k, HydroSystem<DiskGalaxy>::energy_index);
 				Real const Emag = HydroSystem<DiskGalaxy>::ComputeCellCenteredMagneticEnergy(i, j, k, cons_fc);
 				Real const Eint = quokka::EOS<DiskGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, Emag);
-				Real const Tgas = quokka::EOS<DiskGalaxy>::ComputeTgasFromEint(rho, Eint);
+				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 				output(i, j, k, ncomp) = Tgas;
 			});
 		}
@@ -624,7 +624,7 @@ void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::string const 
 				Real const Egas = state(i, j, k, HydroSystem<DiskGalaxy>::energy_index);
 				Real const Emag = HydroSystem<DiskGalaxy>::ComputeCellCenteredMagneticEnergy(i, j, k, cons_fc);
 				Real const Eint = quokka::EOS<DiskGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, Emag);
-				Real const K_cgs = quokka::EOS<DiskGalaxy>::ComputeEntropyFromRhoEint(rho, Eint);
+				Real const K_cgs = quokka::ResampledCooling::ComputeEntropyFromRhoEint(rho, Eint, tables);
 				output(i, j, k, ncomp) = K_cgs / keV_in_ergs;
 			});
 		}
@@ -758,7 +758,7 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 
 	const amrex::Real cold_mass =
 	    computeVolumeIntegral([=] AMREX_GPU_DEVICE(int i, int j, int k, amrex::Array4<const Real> const &state,
-						       std::array<amrex::Array4<const Real>, AMREX_SPACEDIM> const &state_fc) noexcept {
+						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &state_fc) noexcept {
 		    const Real rho = state(i, j, k, HydroSystem<DiskGalaxy>::density_index);
 		    const Real x1Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x1Momentum_index);
 		    const Real x2Mom = state(i, j, k, HydroSystem<DiskGalaxy>::x2Momentum_index);
@@ -766,7 +766,7 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 		    const Real Egas = state(i, j, k, HydroSystem<DiskGalaxy>::energy_index);
 		    const Real Emag = HydroSystem<DiskGalaxy>::ComputeCellCenteredMagneticEnergy(i, j, k, state_fc);
 		    const Real Eint = quokka::EOS<DiskGalaxy>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, Emag);
-		    const Real Tgas = quokka::EOS<DiskGalaxy>::ComputeTgasFromEint(rho, Eint);
+		    const Real Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
 		    return (Tgas < 1.0e4) ? rho : 0.0;
 	    });
 	stats["mass_T_lt_1e4"] = cold_mass / C::M_solar;
