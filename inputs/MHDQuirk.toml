@@ -22,18 +22,5 @@ do_reflux = 0
 do_subcycle = 0
 
 plotfile_interval = -1
-checkpoint_interval = -1
-cfl = 0.4
-stop_time = 0.4
-max_timesteps = 2000
 
-hydro.rk_integrator_order = 2
 hydro.reconstruction_order = 2  # PLM
-
-setup.dl = 3.692
-setup.ul = -0.625
-setup.pl = 26.85
-setup.dr = 1.0
-setup.ur = -5.0
-setup.pr = 0.6
-setup.xshock = 0.4
