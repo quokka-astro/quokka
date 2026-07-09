@@ -52,13 +52,13 @@ template <> struct Physics_Traits<MHDQuirk> : DefaultPhysicsTraits {
 	static constexpr bool is_mhd_enabled = true;
 };
 
-AMREX_GPU_MANAGED Real dl = 3.692;    // NOLINT
-AMREX_GPU_MANAGED Real ul = -0.625;   // NOLINT
-AMREX_GPU_MANAGED Real pl = 26.85;    // NOLINT
-AMREX_GPU_MANAGED Real dr = 1.0;      // NOLINT
-AMREX_GPU_MANAGED Real ur = -5.0;     // NOLINT
-AMREX_GPU_MANAGED Real pr = 0.6;      // NOLINT
-AMREX_GPU_MANAGED Real xshock = 0.4;  // NOLINT
+AMREX_GPU_MANAGED Real dl = 3.692;   // NOLINT
+AMREX_GPU_MANAGED Real ul = -0.625;  // NOLINT
+AMREX_GPU_MANAGED Real pl = 26.85;   // NOLINT
+AMREX_GPU_MANAGED Real dr = 1.0;     // NOLINT
+AMREX_GPU_MANAGED Real ur = -5.0;    // NOLINT
+AMREX_GPU_MANAGED Real pr = 0.6;     // NOLINT
+AMREX_GPU_MANAGED Real xshock = 0.4; // NOLINT
 constexpr int ishock_g = 0;
 
 template <> void QuokkaSimulation<MHDQuirk>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
