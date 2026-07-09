@@ -58,7 +58,7 @@ constexpr Real pl = 26.85;
 constexpr Real dr = 1.0;
 constexpr Real ur = -5.0;
 constexpr Real pr = 0.6;
-AMREX_GPU_MANAGED int ishock_g = 0; // NOLINT; set from the computed shock index in setInitialConditionsOnGrid
+int ishock_g = 0; // NOLINT; set from the computed shock index in setInitialConditionsOnGrid; host-only, never dereferenced on device
 
 template <> void QuokkaSimulation<MHDQuirk>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
 {
