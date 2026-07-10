@@ -25,7 +25,7 @@ template <> struct quokka::EOS_Traits<test_SNII_Yields> {
 	static constexpr double mean_molecular_weight = 1.0;
 };
 
-template <> struct Particle_Traits<test_SNII_Yields> {
+template <> struct Particle_Traits<test_SNII_Yields> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
 };
 
@@ -33,7 +33,7 @@ template <> struct HydroSystem_Traits<test_SNII_Yields> {
 	static constexpr bool reconstruct_eint = true;
 };
 
-template <> struct Physics_Traits<test_SNII_Yields> {
+template <> struct Physics_Traits<test_SNII_Yields> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;

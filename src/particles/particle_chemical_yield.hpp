@@ -131,12 +131,12 @@ inline auto outputIndex(const FullChemicalYieldDataTable &table, const std::stri
 	return -1;
 }
 
-inline auto physicalCoordinateBound(amrex::Real coord, quokka::SpacingType spacing) -> amrex::Real
+inline auto physicalCoordinateBound(amrex::Real coord, quokka::TransformType spacing) -> amrex::Real
 {
-	if (spacing == quokka::SpacingType::log) {
+	if (spacing == quokka::TransformType::log) {
 		return std::exp(coord);
 	}
-	if (spacing == quokka::SpacingType::fast_log) {
+	if (spacing == quokka::TransformType::fast_log) {
 		return FastMath::pow2(coord);
 	}
 	return coord;
@@ -167,14 +167,14 @@ inline auto makeZeroTable() -> SelectedChemicalYieldDataTable
 	const std::array<amrex::Real, 1> x_mins{1.0};
 	const std::array<amrex::Real, 1> x_maxs{2.0};
 	const std::array<int, 1> n_xs{2};
-	const std::array<quokka::SpacingType, 1> spacing{quokka::SpacingType::linear};
+	const std::array<quokka::TransformType, 1> spacing{quokka::TransformType::linear};
 	const std::array<std::string, 1> input_names{"mass"};
 	const std::array<std::string, 1> input_units{"Msun"};
 	const auto output_names = makeOutputNames({});
 	const auto output_units = makeOutputUnits();
 	amrex::Vector<amrex::Real> flat_data(static_cast<std::size_t>(max_tracked_isotopes * n_xs[0]), 0.0);
 	return SelectedChemicalYieldDataTable::FromFlatData(x_mins, x_maxs, n_xs, spacing, flat_data, input_names, output_names, input_units, output_units,
-							    quokka::SpacingType::linear);
+							    quokka::TransformType::linear);
 }
 
 inline auto makeZeroWRMassLossDistributionTable() -> WRMassLossDistributionDataTable
@@ -182,14 +182,14 @@ inline auto makeZeroWRMassLossDistributionTable() -> WRMassLossDistributionDataT
 	const std::array<amrex::Real, 2> x_mins{0.0, 1.0};
 	const std::array<amrex::Real, 2> x_maxs{1.0, 2.0};
 	const std::array<int, 2> n_xs{2, 2};
-	const std::array<quokka::SpacingType, 2> spacing{quokka::SpacingType::linear, quokka::SpacingType::linear};
+	const std::array<quokka::TransformType, 2> spacing{quokka::TransformType::linear, quokka::TransformType::linear};
 	const std::array<std::string, 2> input_names{"age", "mass"};
 	const std::array<std::string, 1> output_names{"cumulative_fraction"};
 	const std::array<std::string, 2> input_units{"s", "Msun"};
 	const std::array<std::string, 1> output_units{"fraction"};
 	amrex::Vector<amrex::Real> flat_data(4, 0.0);
 	return WRMassLossDistributionDataTable::FromFlatData(x_mins, x_maxs, n_xs, spacing, flat_data, input_names, output_names, input_units, output_units,
-							     quokka::SpacingType::linear);
+							     quokka::TransformType::linear);
 }
 
 inline auto loadChannelTable(const std::filesystem::path &table_path, int channel_index, const std::vector<std::string> &tracked_isotopes) -> bool
@@ -198,7 +198,7 @@ inline auto loadChannelTable(const std::filesystem::path &table_path, int channe
 		return false;
 	}
 
-	auto full_table = FullChemicalYieldDataTable::CSVReader(table_path.string(), quokka::SpacingType::linear);
+	auto full_table = FullChemicalYieldDataTable::CSVReader(table_path.string(), quokka::TransformType::linear);
 	if (!full_table.is_initialized()) {
 		return false;
 	}
@@ -214,7 +214,7 @@ inline auto loadChannelTable(const std::filesystem::path &table_path, int channe
 	const std::array<amrex::Real, 1> x_mins{physicalCoordinateBound(full_const.coord_min[0], spacing)};
 	const std::array<amrex::Real, 1> x_maxs{physicalCoordinateBound(full_const.coord_max[0], spacing)};
 	const std::array<int, 1> n_xs{num_entries};
-	const std::array<quokka::SpacingType, 1> spacing_types{spacing};
+	const std::array<quokka::TransformType, 1> spacing_types{spacing};
 	const std::array<std::string, 1> input_names{"mass"};
 	const std::array<std::string, 1> input_units{"Msun"};
 	const auto output_names = makeOutputNames(tracked_isotopes);
@@ -232,7 +232,7 @@ inline auto loadChannelTable(const std::filesystem::path &table_path, int channe
 	}
 
 	mutableTables().channels[static_cast<std::size_t>(channel_index)] = SelectedChemicalYieldDataTable::FromFlatData(
-	    x_mins, x_maxs, n_xs, spacing_types, flat_data, input_names, output_names, input_units, output_units, quokka::SpacingType::linear);
+	    x_mins, x_maxs, n_xs, spacing_types, flat_data, input_names, output_names, input_units, output_units, quokka::TransformType::linear);
 	channel_enabled[channel_index] = 1;
 	return true;
 }
@@ -243,7 +243,7 @@ inline auto loadWRMassLossDistributionTable(const std::filesystem::path &table_p
 		return false;
 	}
 
-	auto distribution_table = WRMassLossDistributionDataTable::CSVReader(table_path.string(), quokka::SpacingType::linear);
+	auto distribution_table = WRMassLossDistributionDataTable::CSVReader(table_path.string(), quokka::TransformType::linear);
 	if (!distribution_table.is_initialized()) {
 		return false;
 	}

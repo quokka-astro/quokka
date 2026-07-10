@@ -24,7 +24,7 @@ template <> struct quokka::EOS_Traits<test_WR_AGB_yields> {
 	static constexpr double mean_molecular_weight = 1.0;
 };
 
-template <> struct Particle_Traits<test_WR_AGB_yields> {
+template <> struct Particle_Traits<test_WR_AGB_yields> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
 };
 
@@ -32,7 +32,7 @@ template <> struct HydroSystem_Traits<test_WR_AGB_yields> {
 	static constexpr bool reconstruct_eint = true;
 };
 
-template <> struct Physics_Traits<test_WR_AGB_yields> {
+template <> struct Physics_Traits<test_WR_AGB_yields> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;

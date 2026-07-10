@@ -983,14 +983,16 @@ template <int Ndim, int Nout = 1, OutOfBounds oob_policy = OutOfBounds::clamp> c
 
       public:
 	static auto FromFlatData(const std::array<amrex::Real, Ndim> &x_mins, const std::array<amrex::Real, Ndim> &x_maxs, const std::array<int, Ndim> &n_xs,
-				 const std::array<SpacingType, Ndim> &spacing_types, const amrex::Vector<amrex::Real> &flat_data,
+				 const std::array<TransformType, Ndim> &spacing_types, const amrex::Vector<amrex::Real> &flat_data,
 				 const std::array<std::string, Ndim> &input_names, const std::array<std::string, Nout> &output_names,
 				 const std::array<std::string, Ndim> &input_units, const std::array<std::string, Nout> &output_units,
-				 SpacingType output_spacing) -> DataTable
+				 TransformType output_transform) -> DataTable
 	{
 		DataTable table;
 		table.initializeCommonFlat(x_mins, x_maxs, n_xs, spacing_types, flat_data);
-		table.setMetadata(input_names, output_names, input_units, output_units, output_spacing);
+		std::array<TransformType, Nout> output_transforms{};
+		output_transforms.fill(output_transform);
+		table.setMetadata(input_names, output_names, input_units, output_units, output_transforms);
 		return table;
 	}
 

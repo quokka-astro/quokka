@@ -92,10 +92,11 @@ void validateSNIIYields(const QuokkaSimulation<problem_t> &sim, const std::strin
 	const amrex::Real birth_mass = records.front().rdata[static_cast<std::size_t>(StochasticStellarPopParticleMassAtBirthIdx)];
 
 	amrex::Print() << "test_SNII_Yields simulated/table:\n";
-	for (int n = 0; n < static_cast<int>(isotopes.size()); ++n) {
-		const amrex::Real expected = yieldFraction(tables, 0, n, birth_mass) * birth_mass;
-		const amrex::Real measured = scalarMass(sim, n);
-		assertClose(std::format("  {} scalar_{}", isotopes[static_cast<std::size_t>(n)], n), measured, expected);
+	for (std::size_t n = 0; n < isotopes.size(); ++n) {
+		const int n_idx = static_cast<int>(n);
+		const amrex::Real expected = yieldFraction(tables, 0, n_idx, birth_mass) * birth_mass;
+		const amrex::Real measured = scalarMass(sim, n_idx);
+		assertClose(std::format("  {} scalar_{}", isotopes[n], n_idx), measured, expected);
 	}
 }
 
@@ -109,14 +110,13 @@ void validateWRAGBYields(const QuokkaSimulation<problem_t> &sim, const std::stri
 	const auto tables = ChemicalYieldLookup::constTables();
 	int wr_index = -1;
 	int agb_index = -1;
-	for (int i = 0; i < static_cast<int>(records.size()); ++i) {
-		const amrex::Real mass_msun =
-		    records[static_cast<std::size_t>(i)].rdata[static_cast<std::size_t>(StochasticStellarPopParticleMassAtBirthIdx)] / C::M_solar;
+	for (std::size_t i = 0; i < records.size(); ++i) {
+		const amrex::Real mass_msun = records[i].rdata[static_cast<std::size_t>(StochasticStellarPopParticleMassAtBirthIdx)] / C::M_solar;
 		if (mass_msun >= 9.0 && wr_index < 0) {
-			wr_index = i;
+			wr_index = static_cast<int>(i);
 		}
 		if (mass_msun <= 8.0 && agb_index < 0) {
-			agb_index = i;
+			agb_index = static_cast<int>(i);
 		}
 	}
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(wr_index >= 0, "test_WR_AGB_yields did not find a WR-mass particle");
@@ -135,20 +135,21 @@ void validateWRAGBYields(const QuokkaSimulation<problem_t> &sim, const std::stri
 	const amrex::Real wr_distribution = ChemicalYieldLookup::queryWRMassLossCumulativeFraction(tables, wr_elapsed, wr_mass / C::M_solar);
 
 	amrex::Print() << "test_WR_AGB_yields simulated/table:\n";
-	for (int n = 0; n < static_cast<int>(isotopes.size()); ++n) {
-		const amrex::Real wr_expected = yieldFraction(tables, 1, n, wr_mass) * wr_mass * wr_distribution;
-		const amrex::Real agb_expected = yieldFraction(tables, 2, n, agb_mass) * agb_mass;
+	for (std::size_t n = 0; n < isotopes.size(); ++n) {
+		const int n_idx = static_cast<int>(n);
+		const amrex::Real wr_expected = yieldFraction(tables, 1, n_idx, wr_mass) * wr_mass * wr_distribution;
+		const amrex::Real agb_expected = yieldFraction(tables, 2, n_idx, agb_mass) * agb_mass;
 		const amrex::Real total_expected = wr_expected + agb_expected;
 
-		const amrex::Real measured_total = scalarMass(sim, n);
-		const amrex::Real measured_snii = scalarMass(sim, 3 + n);
-		const amrex::Real measured_wr = scalarMass(sim, 6 + n);
-		const amrex::Real measured_agb = scalarMass(sim, 9 + n);
+		const amrex::Real measured_total = scalarMass(sim, n_idx);
+		const amrex::Real measured_snii = scalarMass(sim, 3 + n_idx);
+		const amrex::Real measured_wr = scalarMass(sim, 6 + n_idx);
+		const amrex::Real measured_agb = scalarMass(sim, 9 + n_idx);
 
-		assertClose(std::format("  {} total scalar_{}", isotopes[static_cast<std::size_t>(n)], n), measured_total, total_expected);
-		assertClose(std::format("  {} WR scalar_{}", isotopes[static_cast<std::size_t>(n)], 6 + n), measured_wr, wr_expected);
-		assertClose(std::format("  {} AGB scalar_{}", isotopes[static_cast<std::size_t>(n)], 9 + n), measured_agb, agb_expected);
-		assertClose(std::format("  {} SNII scalar_{}", isotopes[static_cast<std::size_t>(n)], 3 + n), measured_snii, 0.0);
+		assertClose(std::format("  {} total scalar_{}", isotopes[n], n_idx), measured_total, total_expected);
+		assertClose(std::format("  {} WR scalar_{}", isotopes[n], 6 + n_idx), measured_wr, wr_expected);
+		assertClose(std::format("  {} AGB scalar_{}", isotopes[n], 9 + n_idx), measured_agb, agb_expected);
+		assertClose(std::format("  {} SNII scalar_{}", isotopes[n], 3 + n_idx), measured_snii, 0.0);
 	}
 }
 
@@ -158,12 +159,13 @@ template <typename problem_t> void validateSNIaYields(const QuokkaSimulation<pro
 	const auto tables = ChemicalYieldLookup::constTables();
 
 	amrex::Print() << "test_SNIa_Yields simulated/table:\n";
-	for (int n = 0; n < static_cast<int>(isotopes.size()); ++n) {
-		const amrex::Real expected = yieldFraction(tables, 3, n, ejecta_mass) * ejecta_mass;
-		const amrex::Real measured_total = scalarMass(sim, n);
-		const amrex::Real measured_snia = scalarMass(sim, 12 + n);
-		assertClose(std::format("  {} total scalar_{}", isotopes[static_cast<std::size_t>(n)], n), measured_total, expected);
-		assertClose(std::format("  {} SNIa scalar_{}", isotopes[static_cast<std::size_t>(n)], 12 + n), measured_snia, expected);
+	for (std::size_t n = 0; n < isotopes.size(); ++n) {
+		const int n_idx = static_cast<int>(n);
+		const amrex::Real expected = yieldFraction(tables, 3, n_idx, ejecta_mass) * ejecta_mass;
+		const amrex::Real measured_total = scalarMass(sim, n_idx);
+		const amrex::Real measured_snia = scalarMass(sim, 12 + n_idx);
+		assertClose(std::format("  {} total scalar_{}", isotopes[n], n_idx), measured_total, expected);
+		assertClose(std::format("  {} SNIa scalar_{}", isotopes[n], 12 + n_idx), measured_snia, expected);
 	}
 }
 
