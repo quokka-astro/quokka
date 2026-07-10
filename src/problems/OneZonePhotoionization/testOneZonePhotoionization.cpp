@@ -4,7 +4,7 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file testOneZonePhotoionization.cpp
-/// \brief Defines a test problem for photoionization.
+/// \brief Defines a test problem for one-zone photoionization.
 ///
 
 #include "AMReX.H"
