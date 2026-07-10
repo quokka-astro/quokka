@@ -198,8 +198,6 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			// O(v/c) radiation-pressure work term: apply the absorbed photon momentum (dMom, computed above) to the
 			// gas. This changes the kinetic energy of the updated momentum only; the auxiliary internal energy is
 			// unaffected. Gated on beta_order>=1 && hydro, so beta_order==0 problems are untouched.
-			// Condition inlined (not using a function-local constexpr) to avoid NVCC first-capturing a captured
-			// variable inside an `if constexpr` block.
 			if constexpr ((RadSystem_Traits<problem_t>::beta_order >= 1) && Physics_Traits<problem_t>::is_hydro_enabled) {
 				const Real xmom_new = xmom + dMomX;
 				const Real ymom_new = ymom + dMomY;
