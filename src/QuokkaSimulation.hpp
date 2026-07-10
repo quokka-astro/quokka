@@ -624,6 +624,19 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::constant) {
 			hpp.query("resistivity", mhdResistivity_);
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(mhdResistivity_ >= 0.0, "mhd.resistivity must be >= 0.");
+		} else if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::none) {
+			// resistivity_model is a compile-time trait: if it is `none`, mhd.resistivity is never read
+			// (see the `constant` branch above) and the resistive EMF/energy terms never fire, regardless
+			// of what this problem's input file says. Catch a set-but-silently-ignored value here instead
+			// of letting it pass with no effect.
+			amrex::Real unused_resistivity = 0.0;
+			const bool resistivity_key_present = hpp.query("resistivity", unused_resistivity);
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!resistivity_key_present, "mhd.resistivity is set in the input file, but this problem's "
+										   "Physics_Traits::resistivity_model is `none`, so resistivity is never "
+										   "applied here. This is a compile-time trait, not a runtime switch: to "
+										   "test resistivity with this problem, set `resistivity_model = "
+										   "ResistivityModel::constant` in its Physics_Traits specialization and "
+										   "rebuild.");
 		}
 	}
 
