@@ -281,11 +281,9 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<MHDQuirk> sim(BCs_cc, BCs_fc);
 
-	sim.reconstructionOrder_ = 2; // PLM
 	sim.stopTime_ = 0.4;
 	sim.cflNumber_ = 0.4;
 	sim.maxTimesteps_ = 2000;
-	sim.plotfileInterval_ = -1;
 
 	// initialize
 	sim.setInitialConditions();
