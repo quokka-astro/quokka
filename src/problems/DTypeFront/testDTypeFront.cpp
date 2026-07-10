@@ -68,7 +68,7 @@ template <> struct RadSystem_Traits<DTypeFront> {
 	// beta_order = 0 disables the O(v/c) radiation terms, including the photoionization work term
 	// (photochemistry momentum deposition is gated on beta_order == 1), so this test validates pure
 	// thermal-pressure D-type front expansion against the Spitzer solution without radiation pressure.
-	static constexpr int beta_order = 0;
+	static constexpr int beta_order = 1;
 	static constexpr auto ChemBands() { return ChemBandsHeader_; }
 };
 
