@@ -946,11 +946,12 @@ void MHDSystem<problem_t>::EMFAverage_Balsara2025(amrex::Array4<amrex::Real> ec_
 					    (max_fspd_wcomp1_p * max_fspd_wcomp1_m) * (b_T_wcomp0 - b_B_wcomp0) / (max_fspd_wcomp1_p - max_fspd_wcomp1_m);
 			emf_L_star_wcomp2 = (max_fspd_wcomp1_p * emf_LB_wcomp2 - max_fspd_wcomp1_m * emf_LT_wcomp2) / (max_fspd_wcomp1_p - max_fspd_wcomp1_m) +
 					    (max_fspd_wcomp1_p * max_fspd_wcomp1_m) * (b_T_wcomp0 - b_B_wcomp0) / (max_fspd_wcomp1_p - max_fspd_wcomp1_m);
-			// Balsara2025b eqns. 16-17 (Balsara2025a eqn. 3.6): double-star b-field states.
+			// Balsara2025b eqns. 16-17 (Balsara2025a eqn. 3.6): double-star b-field states; the four-corner sum
+			// pairs rot180 partners (LB,RT)/(LT,RB), for floating-point associativity symmetry (cf. ld04 num1/num2).
 			b_dstar_wcomp0 = (max_fspd_wcomp1_p * b_T_wcomp0 - max_fspd_wcomp1_m * b_B_wcomp0) / (max_fspd_wcomp1_p - max_fspd_wcomp1_m) +
-					 (emf_LB_wcomp2 - emf_LT_wcomp2 + emf_RB_wcomp2 - emf_RT_wcomp2) / (2.0 * (max_fspd_wcomp1_p - max_fspd_wcomp1_m));
+					 ((emf_LB_wcomp2 - emf_RT_wcomp2) + (emf_RB_wcomp2 - emf_LT_wcomp2)) / (2.0 * (max_fspd_wcomp1_p - max_fspd_wcomp1_m));
 			b_dstar_wcomp1 = (max_fspd_wcomp0_p * b_R_wcomp1 - max_fspd_wcomp0_m * b_L_wcomp1) / (max_fspd_wcomp0_p - max_fspd_wcomp0_m) +
-					 (-emf_LB_wcomp2 - emf_LT_wcomp2 + emf_RB_wcomp2 + emf_RT_wcomp2) / (2.0 * (max_fspd_wcomp0_p - max_fspd_wcomp0_m));
+					 ((emf_RT_wcomp2 - emf_LB_wcomp2) + (emf_RB_wcomp2 - emf_LT_wcomp2)) / (2.0 * (max_fspd_wcomp0_p - max_fspd_wcomp0_m));
 			// Balsara2025b eqns. 18 and 19 (Balsara2025a eqns. 3.7 for dir-0 flux and 3.8 for dir-1 flux); emf_dstar_wcomp2 = average of both.
 			const auto emf_dstar_1_wcomp2 =
 			    -(max_fspd_wcomp0_p + max_fspd_wcomp0_m) * b_dstar_wcomp1 / 2.0 +
