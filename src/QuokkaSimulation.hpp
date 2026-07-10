@@ -629,8 +629,7 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 			// (see the `constant` branch above) and the resistive EMF/energy terms never fire, regardless
 			// of what this problem's input file says. Catch a set-but-silently-ignored value here instead
 			// of letting it pass with no effect.
-			amrex::Real unused_resistivity = 0.0;
-			const bool resistivity_key_present = hpp.query("resistivity", unused_resistivity);
+			const bool resistivity_key_present = hpp.contains("resistivity");
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!resistivity_key_present, "mhd.resistivity is set in the input file, but this problem's "
 										   "Physics_Traits::resistivity_model is `none`, so resistivity is never "
 										   "applied here. This is a compile-time trait, not a runtime switch: to "
