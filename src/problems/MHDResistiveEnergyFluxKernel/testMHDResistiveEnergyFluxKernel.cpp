@@ -68,35 +68,37 @@ auto problem_main() -> int
 	constexpr int bfield_index = MHDSystem<MHDResistiveEnergyFluxKernel>::bfield_index;
 	constexpr int energy_idx = HydroSystem<MHDResistiveEnergyFluxKernel>::energy_index;
 
-	std::array<amrex::MultiFab, AMREX_SPACEDIM> bfield_fc;
-	std::array<amrex::MultiFab, AMREX_SPACEDIM> flux_fc;
-	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		auto ba_fc = amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(idim));
-		bfield_fc[idim] = amrex::MultiFab(ba_fc, dm, nvars_fc, 0);
-		flux_fc[idim] = amrex::MultiFab(ba_fc, dm, nvars_cc, 0);
-		bfield_fc[idim].setVal(0.0);
-		flux_fc[idim].setVal(0.0);
+	// indexing: fcw_mf_bfields[3: world-direction of the face normal]
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> fcw_mf_bfields;
+	// indexing: fcw_mf_fluxes[3: world-direction of the face normal]
+	std::array<amrex::MultiFab, AMREX_SPACEDIM> fcw_mf_fluxes;
+	for (int wcomp0 = 0; wcomp0 < AMREX_SPACEDIM; ++wcomp0) {
+		auto ba_fc = amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(wcomp0));
+		fcw_mf_bfields[wcomp0] = amrex::MultiFab(ba_fc, dm, nvars_fc, 0);
+		fcw_mf_fluxes[wcomp0] = amrex::MultiFab(ba_fc, dm, nvars_cc, 0);
+		fcw_mf_bfields[wcomp0].setVal(0.0);
+		fcw_mf_fluxes[wcomp0].setVal(0.0);
 	}
 
-	for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
-		for (amrex::MFIter mfi(bfield_fc[idim]); mfi.isValid(); ++mfi) {
+	for (int wcomp0 = 0; wcomp0 < AMREX_SPACEDIM; ++wcomp0) {
+		for (amrex::MFIter mfi(fcw_mf_bfields[wcomp0]); mfi.isValid(); ++mfi) {
 			const amrex::Box &box_fc = mfi.validbox();
-			auto const &b_arr = bfield_fc[idim].array(mfi);
+			auto const &fc_a4_bfield = fcw_mf_bfields[wcomp0].array(mfi);
 			amrex::ParallelFor(box_fc, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				// every face array here is cell-centred in x (the field only varies with x),
-				// so the x-coordinate formula is the same regardless of which direction idim is.
+				// so the x-coordinate formula is the same regardless of which direction wcomp0 is.
 				const double x = prob_lo[0] + (i + 0.5) * dx[0];
-				if (idim == 1) {
-					b_arr(i, j, k, bfield_index) = amp_y * std::sin(k_mode * x);
-				} else if (idim == 2) {
-					b_arr(i, j, k, bfield_index) = amp_z * std::cos(k_mode * x);
+				if (wcomp0 == 1) {
+					fc_a4_bfield(i, j, k, bfield_index) = amp_y * std::sin(k_mode * x);
+				} else if (wcomp0 == 2) {
+					fc_a4_bfield(i, j, k, bfield_index) = amp_z * std::cos(k_mode * x);
 				}
-				// idim == 0 (B_x) stays zero.
+				// wcomp0 == 0 (B_x) stays zero.
 			});
 		}
 	}
 
-	MHDSystem<MHDResistiveEnergyFluxKernel>::AddResistiveEnergyFlux(flux_fc, bfield_fc, dx, resistivity);
+	MHDSystem<MHDResistiveEnergyFluxKernel>::AddResistiveEnergyFlux(fcw_mf_fluxes, fcw_mf_bfields, dx, resistivity);
 
 	// expected values computed independently (not by re-running this code) by replicating
 	// AddResistiveEnergyFlux's discrete formula in Python for this exact field and grid.
@@ -112,9 +114,9 @@ auto problem_main() -> int
 
 	constexpr double reltol = 1.0e-10;
 	bool all_ok = true;
-	auto const &flux_arr = flux_fc[0].array(0);
+	auto const &fc_a4_flux = fcw_mf_fluxes[0].array(0);
 	for (const auto &pt : expected) {
-		const double computed = flux_arr(pt.i, pt.j, pt.k, energy_idx);
+		const double computed = fc_a4_flux(pt.i, pt.j, pt.k, energy_idx);
 		const double rel_err = std::abs(computed - pt.flux_eta) / std::abs(pt.flux_eta);
 		amrex::Print() << "(i,j,k)=(" << pt.i << "," << pt.j << "," << pt.k << "): computed=" << computed << " expected=" << pt.flux_eta
 			       << " rel_err=" << rel_err << "\n";
