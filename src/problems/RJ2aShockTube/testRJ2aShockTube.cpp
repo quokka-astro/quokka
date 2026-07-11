@@ -54,10 +54,10 @@ constexpr amrex::Real vx_R = 0.0;
 constexpr amrex::Real vy_R = 0.0;
 constexpr amrex::Real vz_R = 0.0;
 
-constexpr amrex::Real Bx = 0.5641895835477562;   // 2 / sqrt(4 pi); constant
+constexpr amrex::Real Bx = 0.5641895835477562;	 // 2 / sqrt(4 pi); constant
 constexpr amrex::Real By_L = 1.0155412503859613; // 3.6 / sqrt(4 pi)
 constexpr amrex::Real By_R = 1.1283791670955125; // 4 / sqrt(4 pi)
-constexpr amrex::Real Bz = 0.5641895835477562;	  // 2 / sqrt(4 pi); constant
+constexpr amrex::Real Bz = 0.5641895835477562;	 // 2 / sqrt(4 pi); constant
 
 template <> void QuokkaSimulation<RJ2aShockTubeProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
@@ -146,8 +146,8 @@ template <> void QuokkaSimulation<RJ2aShockTubeProblem>::setInitialConditionsOnG
 template <>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 AMRSimulation<RJ2aShockTubeProblem>::setCustomBoundaryConditions(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar, int /*dcomp*/,
-								   int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
-								   const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
+								 int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+								 const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	// Number of variables (use Physics_Indices which correctly accounts for enabled physics)
 	constexpr int nvar = Physics_Indices<RJ2aShockTubeProblem>::nvarTotal_cc;
@@ -187,10 +187,9 @@ AMRSimulation<RJ2aShockTubeProblem>::setCustomBoundaryConditions(const amrex::In
 template <>
 template <quokka::direction dir>
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
-AMRSimulation<RJ2aShockTubeProblem>::setCustomBoundaryConditionsFaceVar(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar_fc,
-									  int /*dcomp*/, int /*numcomp*/, amrex::GeometryData const &geom,
-									  const amrex::Real /*time*/, const amrex::BCRec * /*bcr*/, int /*bcomp*/,
-									  int /*orig_comp*/)
+AMRSimulation<RJ2aShockTubeProblem>::setCustomBoundaryConditionsFaceVar(const amrex::IntVect &iv, amrex::Array4<amrex::Real> const &consVar_fc, int /*dcomp*/,
+									int /*numcomp*/, amrex::GeometryData const &geom, const amrex::Real /*time*/,
+									const amrex::BCRec * /*bcr*/, int /*bcomp*/, int /*orig_comp*/)
 {
 	// Prepare boundary values for each face direction: {x-face, y-face, z-face}
 	const amrex::GpuArray<amrex::Real, 3> low_bdr_values = {Bx, By_L, Bz};
