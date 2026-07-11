@@ -3,19 +3,7 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file testMHDResistiveEnergyFluxKernel.cpp
-/// \brief Unit/algorithm test for MHDSystem::AddResistiveEnergyFlux().
-///
-/// This test never constructs a QuokkaSimulation or calls evolve(): it builds a
-/// static, hand-chosen B-field snapshot directly, calls AddResistiveEnergyFlux()
-/// once, and compares the result against values computed independently (see the
-/// Python replica used to derive them) at a few grid points. Because nothing is
-/// time-integrated, there is no risk of the check being confounded by any
-/// self-consistent dynamics (e.g. the initial condition need not be in force
-/// balance); this isolates the discrete flux formula itself, which is the piece
-/// that a full-simulation test cannot discriminate (AddResistiveEnergyFlux only
-/// ever adds a flux-difference correction, so its net contribution to the
-/// domain-integrated energy is forced to be correct by conservation regardless
-/// of whether the formula itself is right).
+/// \brief Defines a unit test for MHDSystem::AddResistiveEnergyFlux(); never evolves a simulation.
 ///
 
 #include <cmath>
