@@ -59,9 +59,8 @@ constexpr double eint_0 = pressure_0 / (gamma_gas - 1.0);
 // and the resulting magnetosonic redistribution contaminates the E_tot Joule-heating check.
 // Threshold calibrated empirically: b_amp/pressure_0 ratios of 0.125 and above produce E_tot
 // errors that are marginal-to-failing against the 2% tolerance in computeErrorNorm/problem_main.
-static_assert((b_amp * b_amp / 2.0) / pressure_0 < 0.1,
-	      "b_amp is too large relative to pressure_0 for the weak-field assumption behind "
-	      "computeReferenceSolution() to hold; reduce b_amp or increase pressure_0.");
+static_assert((b_amp * b_amp / 2.0) / pressure_0 < 0.1, "b_amp is too large relative to pressure_0 for the weak-field assumption behind "
+							"computeReferenceSolution() to hold; reduce b_amp or increase pressure_0.");
 
 // wavevector: one mode in a unit box
 AMREX_GPU_MANAGED double k_mode = 0.0;	// NOLINT
