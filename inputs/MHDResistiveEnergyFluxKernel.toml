@@ -1,8 +1,7 @@
 # *****************************************************************
 # Problem size and geometry
 # *****************************************************************
-# unused by the test itself (it never constructs a QuokkaSimulation), but
-# required because AMReX parses this file before problem_main() runs.
+# unused by the test itself.
 geometry.prob_lo = [0.0, 0.0, 0.0]
 geometry.prob_hi = [1.0, 1.0, 1.0]
 quokka.bc = ["periodic", "periodic", "periodic"]
@@ -15,7 +14,7 @@ amr.v = 1  # verbosity in Amr
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell = [16, 8, 8]
+amr.n_cell = [64, 8, 8]
 amr.max_level = 0
 amr.blocking_factor_x = 16
 amr.max_grid_size = 128
