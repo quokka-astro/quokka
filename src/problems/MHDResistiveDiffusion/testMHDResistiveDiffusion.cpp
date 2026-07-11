@@ -7,13 +7,9 @@
 ///
 /// Initial condition: b_z = b_amp * sin(k*x), v = 0, uniform rho and pressure.
 /// Analytic solution: b_z(x,t) = b_amp * exp(-eta*k^2*t) * sin(k*x).
-/// The total energy gains a resistive Poynting flux correction; comparing eint
-/// against the local Joule-heating profile (eta*|J|^2, cos^2(k*x)-modulated,
-/// not its domain mean) checks that AddResistiveEnergyFlux is working. This
-/// comparison is only valid in the weak-field regime (see the static_assert
-/// on b_amp below); at larger amplitudes the unbalanced magnetic pressure
-/// gradient drives real magnetosonic redistribution that the reference does
-/// not account for.
+/// Comparing eint against the local cos^2(kx) Joule-heating profile checks
+/// that AddResistiveEnergyFlux works; valid only in the weak-field regime
+/// (see static_assert on b_amp below).
 ///
 
 #include <cmath>
@@ -52,13 +48,9 @@ constexpr double b_amp = 0.02;
 constexpr double gamma_gas = quokka::EOS_Traits<MHDResistiveDiffusion>::gamma;
 constexpr double eint_0 = pressure_0 / (gamma_gas - 1.0);
 
-// The analytic reference assumes the field is a passive, non-dynamical background (v stays ~0,
-// only resistive Joule heating acts). That only holds in the weak-field regime: if the magnetic
-// pressure amplitude is a non-negligible fraction of the gas pressure, the initial condition is
-// not in magnetostatic equilibrium (uniform gas pressure vs spatially varying magnetic pressure),
-// and the resulting magnetosonic redistribution contaminates the E_tot Joule-heating check.
-// Threshold calibrated empirically: b_amp/pressure_0 ratios of 0.125 and above produce E_tot
-// errors that are marginal-to-failing against the 2% tolerance in computeErrorNorm/problem_main.
+// Magnetic pressure must stay a small perturbation on gas pressure, else the unbalanced
+// pressure gradient drives magnetosonic redistribution that contaminates the Joule-heating
+// check below. Threshold calibrated empirically: ratios >= 0.125 fail the 2% E_tot tolerance.
 static_assert((b_amp * b_amp / 2.0) / pressure_0 < 0.1, "b_amp is too large relative to pressure_0 for the weak-field assumption behind "
 							"computeReferenceSolution() to hold; reduce b_amp or increase pressure_0.");
 
@@ -138,8 +130,7 @@ void QuokkaSimulation<MHDResistiveDiffusion>::computeReferenceSolution(amrex::Mu
 			const double b_z_ref = b_amp * decay * sin_kx;
 			const double emag_ref = 0.5 * b_z_ref * b_z_ref;
 
-			// local Joule heating profile: eta*|J|^2 = eta*k^2*b_amp^2*cos^2(kx)*exp(-2*eta*k^2*t);
-			// integrating in time gives a cos^2(kx)-modulated deposit, not its domain mean.
+			// eta*|J|^2 = eta*k^2*b_amp^2*cos^2(kx)*exp(-2*eta*k^2*t), time-integrated.
 			const double eint_ref = eint_0 + (b_amp * b_amp / 2.0) * (1.0 - decay_sq) * cos_kx * cos_kx;
 			const double etot_ref = eint_ref + emag_ref;
 
@@ -148,9 +139,7 @@ void QuokkaSimulation<MHDResistiveDiffusion>::computeReferenceSolution(amrex::Mu
 			state_ref(i, j, k, HydroSystem<MHDResistiveDiffusion>::x2Momentum_index) = 0.0;
 			state_ref(i, j, k, HydroSystem<MHDResistiveDiffusion>::x3Momentum_index) = 0.0;
 			state_ref(i, j, k, HydroSystem<MHDResistiveDiffusion>::energy_index) = etot_ref;
-			// gasInternalEnergy (the dual-energy auxiliary field) is never updated when
-			// hydro.use_dual_energy=0 (required for this problem), so its reference must stay
-			// at the initial value rather than track the Joule-heating profile above.
+			// gasInternalEnergy is never updated when hydro.use_dual_energy=0, so it stays at eint_0.
 			state_ref(i, j, k, HydroSystem<MHDResistiveDiffusion>::internalEnergy_index) = eint_0;
 		});
 	}
