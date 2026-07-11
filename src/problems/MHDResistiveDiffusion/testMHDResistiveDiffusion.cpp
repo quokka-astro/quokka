@@ -7,7 +7,7 @@
 ///
 /// Initial condition: b_z = b_amp * sin(k*x), v = 0, uniform rho and pressure.
 /// Analytic solution: b_z(x,t) = b_amp * exp(-eta*k^2*t) * sin(k*x).
-/// Comparing eint against the local cos^2(kx) Joule-heating profile checks
+/// Comparing etot against the local cos^2(kx) Joule-heating profile checks
 /// that AddResistiveEnergyFlux works; valid only in the weak-field regime
 /// (see static_assert on b_amp below).
 ///
@@ -130,7 +130,7 @@ void QuokkaSimulation<MHDResistiveDiffusion>::computeReferenceSolution(amrex::Mu
 			const double b_z_ref = b_amp * decay * sin_kx;
 			const double emag_ref = 0.5 * b_z_ref * b_z_ref;
 
-			// eta*|J|^2 = eta*k^2*b_amp^2*cos^2(kx)*exp(-2*eta*k^2*t), time-integrated.
+			// Total Joule heat deposited by time t: time-integral of eta*|J|^2 from 0 to t.
 			const double eint_ref = eint_0 + (b_amp * b_amp / 2.0) * (1.0 - decay_sq) * cos_kx * cos_kx;
 			const double etot_ref = eint_ref + emag_ref;
 
