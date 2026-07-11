@@ -1004,13 +1004,13 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeSNIIChannelYield(ChemicalYieldLo
 		return 0.0;
 	}
 
-	amrex::Real snii_total_frac = fallback_yield_fraction;
 	if (use_chemical_tables) {
-		const amrex::Real queried_frac = ChemicalYieldLookup::queryYieldFraction(yield_tables, 0, isotope_index, mass_birth_msun, metallicity_lookup);
-		if (queried_frac > 0.0) {
-			snii_total_frac = queried_frac;
-		}
+		const amrex::Real snii_total_frac =
+		    ChemicalYieldLookup::queryYieldFraction(yield_tables, 0, isotope_index, mass_birth_msun, metallicity_lookup);
+		return std::max<amrex::Real>(0.0, snii_total_frac * mass_birth);
 	}
+
+	const amrex::Real snii_total_frac = fallback_yield_fraction;
 	return std::max<amrex::Real>(0.0, (birth_iso_abundance + snii_total_frac) * mass_birth);
 }
 
@@ -1023,13 +1023,12 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto computeAGBChannelYield(ChemicalYieldLoo
 		return 0.0;
 	}
 
-	amrex::Real agb_total_frac = fallback_yield_fraction;
 	if (use_chemical_tables) {
-		const amrex::Real queried_frac = ChemicalYieldLookup::queryYieldFraction(yield_tables, 2, isotope_index, mass_birth_msun, metallicity_lookup);
-		if (queried_frac > 0.0) {
-			agb_total_frac = queried_frac;
-		}
+		const amrex::Real agb_total_frac = ChemicalYieldLookup::queryYieldFraction(yield_tables, 2, isotope_index, mass_birth_msun, metallicity_lookup);
+		return std::max<amrex::Real>(0.0, agb_total_frac * mass_birth);
 	}
+
+	const amrex::Real agb_total_frac = fallback_yield_fraction;
 	return std::max<amrex::Real>(0.0, (birth_iso_abundance + agb_total_frac) * mass_birth);
 }
 

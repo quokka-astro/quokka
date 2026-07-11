@@ -64,10 +64,15 @@ template <> void QuokkaSimulation<test_WR_AGB_yields>::createInitialStochasticSt
 				continue;
 			}
 			auto *pdata = particle_array().data();
+			const int chem_base = quokka::StochasticStellarPopParticleChemistryBaseIdx<test_WR_AGB_yields>();
 
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
 				pdata[i].idata(quokka::StochasticStellarPopParticleStageIdx) =
 				    static_cast<int>(quokka::StellarEvolutionStage::HighMassNonExploding);
+				// Non-zero birth abundances catch accidental double-counting in table-driven yields.
+				pdata[i].rdata(chem_base) = 1.0e-3;
+				pdata[i].rdata(chem_base + 1) = 2.0e-3;
+				pdata[i].rdata(chem_base + 2) = 3.0e-3;
 				if (pdata[i].rdata(quokka::StochasticStellarPopParticleMassAtBirthIdx) <= 8.0 * C::M_solar) {
 					pdata[i].rdata(quokka::StochasticStellarPopParticleDeathTimeIdx) = 5.0e13;
 				}

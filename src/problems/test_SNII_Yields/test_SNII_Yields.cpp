@@ -66,9 +66,14 @@ template <> void QuokkaSimulation<test_SNII_Yields>::createInitialStochasticStel
 			}
 
 			auto *pdata = particle_array().data();
+			const int chem_base = quokka::StochasticStellarPopParticleChemistryBaseIdx<test_SNII_Yields>();
 
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
 				pdata[i].idata(quokka::StochasticStellarPopParticleStageIdx) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+				// Non-zero birth abundances catch accidental double-counting in table-driven yields.
+				pdata[i].rdata(chem_base) = 1.0e-3;
+				pdata[i].rdata(chem_base + 1) = 2.0e-3;
+				pdata[i].rdata(chem_base + 2) = 3.0e-3;
 			});
 		}
 	}
