@@ -53,12 +53,11 @@ jobs:
         else
           echo "Changed problems: $(echo $PROBLEMS | tr '\n' ' ')"
           CMAKE_TARGETS=$(echo "$PROBLEMS" | awk '{printf "--target %s ", $0}' | sed 's/ $//')
-          CTEST_REGEX="^($(echo "$PROBLEMS" | tr '\n' '|' | sed 's/|$//'))($|-)"
+          CHANGED_PROBLEMS=$(echo "$PROBLEMS" | tr '\n' ' ' | sed 's/ $//')
           echo "cmake targets: $CMAKE_TARGETS"
-          echo "ctest regex: $CTEST_REGEX"
           echo "##vso[task.setvariable variable=hasProblems]true"
           echo "##vso[task.setvariable variable=cmakeTargetArgs]$CMAKE_TARGETS"
-          echo "##vso[task.setvariable variable=ctestRegex]$CTEST_REGEX"
+          echo "##vso[task.setvariable variable=changedProblems]$CHANGED_PROBLEMS"
         fi
       displayName: 'Detect changed problems'
 
@@ -134,6 +133,34 @@ jobs:
         CCACHE_NOHASHDIR: 1
       inputs:
         cmakeArgs: '.. -DCMAKE_BUILD_TYPE=Release -DAMReX_SPACEDIM=3 -DAMReX_GPU_BACKEND=CUDA -DQUOKKA_PYTHON=OFF $(cmakeLauncherArgs)'
+
+    - script: |
+        # A problem directory's ctest test names don't always equal the directory/target
+        # name (e.g. add_test(NAME ${JOB_NAME}Suffix ...)), so a name-derived regex can miss
+        # tests. Instead read the literal, fully-resolved test names that CMake writes per
+        # source directory after configure: build/src/problems/<Name>/CTestTestfile.cmake.
+        TEST_NAMES=""
+        for p in $(changedProblems); do
+          TESTFILE="build/src/problems/${p}/CTestTestfile.cmake"
+          if [ -f "$TESTFILE" ]; then
+            NAMES=$(grep -oE '^add_test\([A-Za-z0-9_]+' "$TESTFILE" | sed 's/^add_test(//')
+            TEST_NAMES="$TEST_NAMES $NAMES"
+          else
+            echo "##[warning]No $TESTFILE found for changed problem '$p' (possibly excluded by a dimensionality guard); skipping."
+          fi
+        done
+        TEST_NAMES=$(echo $TEST_NAMES | tr ' ' '\n' | sort -u | grep -v '^$')
+        if [ -z "$TEST_NAMES" ]; then
+          echo "##[error]No ctest tests found for changed problems: $(changedProblems)"
+          echo "##vso[task.setvariable variable=hasProblems]false"
+        else
+          echo "Resolved ctest test names: $(echo $TEST_NAMES | tr '\n' ' ')"
+          CTEST_REGEX="^($(echo "$TEST_NAMES" | tr '\n' '|' | sed 's/|$//'))$"
+          echo "ctest regex: $CTEST_REGEX"
+          echo "##vso[task.setvariable variable=ctestRegex]$CTEST_REGEX"
+        fi
+      displayName: 'Resolve exact ctest test names for changed problems'
+      condition: eq(variables['hasProblems'], 'true')
 
     - task: CMake@1
       displayName: 'Build Quokka (targeted)'
