@@ -2240,8 +2240,13 @@ template <typename problem_t> void AMRSimulation<problem_t>::timeStepWithSubcycl
 				}
 
 #if AMREX_SPACEDIM == 3
-				// redistribute all particles in particleRegister_
-				particleRegister_.redistribute(lev);
+				// Particle containers loaded from a checkpoint may own a snapshot of the
+				// pre-regrid ParGDB. Synchronize every affected AMR level before
+				// redistributing particles onto the new grid layout.
+				for (int k = lev; k <= finest_level; ++k) {
+					particleRegister_.setGridLayout(k, boxArray(k), DistributionMap(k), Geom(k));
+				}
+				particleRegister_.redistribute(lev, 0);
 #endif // AMREX_SPACEDIM == 3
 
 				// do fix-up on all levels that have been re-gridded

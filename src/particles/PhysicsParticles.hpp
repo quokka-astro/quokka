@@ -183,6 +183,9 @@ class PhysicsParticleDescriptorBase
 	// Redistribute particles at level lev and above with ngrow ghost cells
 	virtual void redistribute(int lev, int ngrow) const = 0;
 
+	// Synchronize the particle container with an AMR level after regridding.
+	virtual void setGridLayout(int lev, const amrex::BoxArray &ba, const amrex::DistributionMapping &dm, const amrex::Geometry &geom) const = 0;
+
 	// Write particle data to plot file
 	virtual void writePlotFile(const std::string &plotfilename, const std::string &name) = 0;
 
@@ -679,6 +682,15 @@ template <typename ContainerType, typename problem_t, ParticleType particleType>
 		}
 	}
 
+	void setGridLayout(int lev, const amrex::BoxArray &ba, const amrex::DistributionMapping &dm, const amrex::Geometry &geom) const override
+	{
+		if (container_ != nullptr) {
+			container_->SetParticleGeometry(lev, geom);
+			container_->SetParticleBoxArray(lev, ba);
+			container_->SetParticleDistributionMap(lev, dm);
+		}
+	}
+
 	// Implementation of particle redistribution with ghost cells
 	void redistribute(int lev, int ngrow) const override
 	{
@@ -1086,6 +1098,15 @@ template <typename problem_t> class PhysicsParticleRegister
 			if (descriptor->getAllowsAccretion()) {
 				descriptor->applySinkAccretion(state, state_accretion_rate, state_fc, geom, lev, time, dt);
 			}
+		}
+	}
+
+	// Synchronize all registered particle containers with an AMR level.
+	void setGridLayout(int lev, const amrex::BoxArray &ba, const amrex::DistributionMapping &dm, const amrex::Geometry &geom) const
+	{
+		const BL_PROFILE("PhysicsParticleRegister::setGridLayout()");
+		for (const auto &[type, descriptor] : particleRegistry_) {
+			descriptor->setGridLayout(lev, ba, dm, geom);
 		}
 	}
 
