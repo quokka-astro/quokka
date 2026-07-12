@@ -34,7 +34,6 @@ template <typename problem_t> struct EOS_Traits {
 	static constexpr double gamma = 5. / 3.;     // default value
 	static constexpr double cs_isothermal = NAN; // only used when gamma = 1
 	static constexpr double mean_molecular_weight = NAN;
-	static constexpr double boltzmann_constant = C::k_B;
 };
 
 template <typename problem_t> class EOS

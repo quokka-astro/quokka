@@ -19,6 +19,7 @@ jobs:
     steps:
     - checkout: self
       submodules: recursive
+      fetchDepth: 0
 
     - script: |
         mkdir -p "$(Agent.HomeDirectory)/cache/ccache"
@@ -40,7 +41,7 @@ jobs:
     - script: |
         TARGET_BRANCH=$(echo "$(System.PullRequest.TargetBranch)" | sed 's|refs/heads/||')
         [ -z "$TARGET_BRANCH" ] && TARGET_BRANCH="development"
-        git fetch --deepen=100 origin "$TARGET_BRANCH"
+        git fetch origin "$TARGET_BRANCH"
         MERGE_BASE=$(git merge-base FETCH_HEAD HEAD)
         CHANGED=$(git diff --name-only "$MERGE_BASE" HEAD)
         PROBLEMS=$(echo "$CHANGED" | grep '^src/problems/' | awk -F'/' '{print $3}' | sort -u | grep -v '^$')
@@ -81,11 +82,12 @@ jobs:
       inputs:
         cmakeArgs: '--build . --parallel 16 $(cmakeTargetArgs)'
 
-    - task: CMake@1
+    - script: |
+        echo "Searching for problems matching regex: $(ctestRegex)"
+        ctest -R "$(ctestRegex)" -E "RadMatterCoupling*" -T Test --output-on-failure
       displayName: 'Run CTest (targeted)'
       condition: eq(variables['hasProblems'], 'true')
-      inputs:
-        cmakeArgs: '-E chdir . ctest -R "$(ctestRegex)" -E "RadMatterCoupling*" -T Test --output-on-failure'
+      workingDirectory: build
 
     - task: PublishTestResults@2
       inputs:
@@ -94,5 +96,13 @@ jobs:
         testRunTitle: $(Agent.JobName)
       condition: and(succeededOrFailed(), eq(variables['hasProblems'], 'true'))
       displayName: Publish test results
+
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: build/Testing/Temporary
+        ArtifactName: ctest-temporary-logs
+        publishLocation: Container
+      condition: and(succeededOrFailed(), eq(variables['hasProblems'], 'true'))
+      displayName: Publish CTest temporary logs artifact
 
     - template: templates/ccache-stats.yml
