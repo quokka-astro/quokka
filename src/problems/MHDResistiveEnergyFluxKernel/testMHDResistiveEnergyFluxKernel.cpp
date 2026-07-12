@@ -8,6 +8,7 @@
 
 #include <cmath>
 
+#include "AMReX_Arena.H"
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
 #include "AMReX_BoxArray.H"
@@ -62,15 +63,21 @@ auto problem_main() -> int
 	std::array<amrex::MultiFab, AMREX_SPACEDIM> fcw_mf_fluxes;
 	for (int wcomp0 = 0; wcomp0 < AMREX_SPACEDIM; ++wcomp0) {
 		auto ba_fc = amrex::convert(ba_cc, amrex::IntVect::TheDimensionVector(wcomp0));
-		fcw_mf_bfields[wcomp0] = amrex::MultiFab(ba_fc, dm, nvars_fc, 0);
-		fcw_mf_fluxes[wcomp0] = amrex::MultiFab(ba_fc, dm, nvars_cc, 0);
+		// 1 ghost cell: AddResistiveEnergyFlux reads the B-field up to one cell beyond the
+		// current index in transverse directions (four-edge EMF averaging).
+		fcw_mf_bfields[wcomp0] = amrex::MultiFab(ba_fc, dm, nvars_fc, 1);
+		// pinned arena: fluxes are read directly from host below, after the device kernel
+		// writes them; the default GPU arena is not host-accessible.
+		fcw_mf_fluxes[wcomp0] = amrex::MultiFab(ba_fc, dm, nvars_cc, 0, amrex::MFInfo().SetArena(amrex::The_Pinned_Arena()));
 		fcw_mf_bfields[wcomp0].setVal(0.0);
 		fcw_mf_fluxes[wcomp0].setVal(0.0);
 	}
 
 	for (int wcomp0 = 0; wcomp0 < AMREX_SPACEDIM; ++wcomp0) {
 		for (amrex::MFIter mfi(fcw_mf_bfields[wcomp0]); mfi.isValid(); ++mfi) {
-			const amrex::Box &box_fc = mfi.validbox();
+			// fill the ghost cell too: the analytic field is well-defined at any x, and
+			// AddResistiveEnergyFlux reads one cell beyond the valid box transversely.
+			const amrex::Box box_fc = amrex::grow(mfi.validbox(), 1);
 			auto const &fc_a4_bfield = fcw_mf_bfields[wcomp0].array(mfi);
 			amrex::ParallelFor(box_fc, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				// every face array here is cell-centred in x (the field only varies with x),
