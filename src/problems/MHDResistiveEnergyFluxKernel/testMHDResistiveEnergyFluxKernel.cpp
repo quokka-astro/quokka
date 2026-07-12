@@ -95,9 +95,9 @@ auto problem_main() -> int
 		double flux_eta;
 	};
 	const std::array<ExpectedPoint, 3> expected{{
-	    {2, 3, 3, 6.046101299219208e-02},
-	    {4, 3, 3, -9.782797401561581e-02},
-	    {6, 3, 3, 9.782797401561583e-02},
+	    {.i = 2, .j = 3, .k = 3, .flux_eta = 6.046101299219208e-02},
+	    {.i = 4, .j = 3, .k = 3, .flux_eta = -9.782797401561581e-02},
+	    {.i = 6, .j = 3, .k = 3, .flux_eta = 9.782797401561583e-02},
 	}};
 
 	constexpr double reltol = 1.0e-10;
