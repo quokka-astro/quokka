@@ -32,8 +32,9 @@
 struct BinaryOrbit {
 };
 
-static bool do_split_particles = false; // NOLINT
-static int split_factor = 8;		// NOLINT
+static bool do_split_particles = false;	    // NOLINT
+static int split_factor = 8;		    // NOLINT
+static bool verify_particle_layout = false; // NOLINT
 
 template <> struct quokka::EOS_Traits<BinaryOrbit> {
 	static constexpr double gamma = 1.0;	       // isothermal
@@ -107,6 +108,15 @@ void QuokkaSimulation<BinaryOrbit>::ComputeDerivedVar(int lev, std::string const
 
 template <> void QuokkaSimulation<BinaryOrbit>::computeAfterTimestep()
 {
+	if (verify_particle_layout) {
+		bool layout_matches = CICParticles->GetParGDB() == GetParGDB();
+		for (int lev = 0; lev <= finestLevel(); ++lev) {
+			layout_matches = layout_matches && CICParticles->ParticleBoxArray(lev).CellEqual(boxArray(lev)) &&
+					 CICParticles->ParticleDistributionMap(lev) == DistributionMap(lev);
+		}
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(layout_matches, "Particle container does not track the AMR hierarchy after restart refinement");
+	}
+
 	// every N cycles, save particle statistics at the finest level
 	static int cycle = 1;
 	if (cycle % 10 == 0) {
@@ -155,6 +165,7 @@ auto problem_main() -> int
 	amrex::ParmParse const pp("problem");
 	pp.query("do_split_particles", do_split_particles);
 	pp.query("split_factor", split_factor);
+	pp.query("verify_particle_layout", verify_particle_layout);
 
 	// Problem initialization
 	QuokkaSimulation<BinaryOrbit> sim;
@@ -179,7 +190,6 @@ auto problem_main() -> int
 	const auto &real_data = sim.particleRegister_.getParticleDescriptor(quokka::ParticleType::CIC)->getParticleDataAtLevel(0).first;
 
 	int status = 0;
-
 	// check max abs particle distance
 	double max_deviation = 0.0;
 	if (amrex::ParallelDescriptor::IOProcessor()) {
