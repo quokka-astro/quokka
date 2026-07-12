@@ -65,7 +65,10 @@ template <> struct RadSystem_Traits<DTypeFront> {
 	// The 1e-6 prefactor means radiation at T_min becomes numerically negligible after
 	// ~1e6 VODE steps (accumulated local error stays below the physically meaningful level).
 	static constexpr double Erad_floor = C::a_rad * 1.0e-8;
-	static constexpr int beta_order = 0;
+	// beta_order = 0 disables the O(v/c) radiation terms, including the photoionization work term
+	// (photochemistry momentum deposition is gated on beta_order == 1), so this test validates pure
+	// thermal-pressure D-type front expansion against the Spitzer solution without radiation pressure.
+	static constexpr int beta_order = 1;
 	static constexpr auto ChemBands() { return ChemBandsHeader_; }
 };
 
@@ -189,6 +192,34 @@ auto compute_equilibrium_temperature_ionized(double n_e) -> double
 		}
 	}
 	return 0.5 * (T_lo + T_hi);
+}
+
+#ifdef DTYPEFRONT_USE_ROSENBROCK
+auto rosenbrock_tableau_name(int tableau) -> char const *
+{
+	switch (tableau) {
+		case 0:
+			return "Rodas5P";
+		case 1:
+			return "Rodas4P";
+		case 2:
+			return "Rodas3P";
+		case 3:
+			return "ROS2S";
+		default:
+			return "unknown";
+	}
+}
+#endif
+
+void print_microphysics_integrator()
+{
+#ifdef DTYPEFRONT_USE_ROSENBROCK
+	amrex::Print() << "DTypeFront microphysics integrator: Rosenbrock (Rosenbrock tableau " << integrator_rp::rosenbrock_tableau << ": "
+		       << rosenbrock_tableau_name(integrator_rp::rosenbrock_tableau) << ")\n";
+#else
+	amrex::Print() << "DTypeFront microphysics integrator: VODE\n";
+#endif
 }
 
 } // namespace
@@ -398,6 +429,7 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<DTypeFront> sim;
+	print_microphysics_integrator();
 
 	// initialize
 	sim.setInitialConditions();

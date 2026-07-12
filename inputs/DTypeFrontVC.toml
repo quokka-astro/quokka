@@ -1,0 +1,51 @@
+# *****************************************************************
+# Direct photoionization O(v/c) momentum deposition test
+# *****************************************************************
+
+geometry.prob_lo = [0.0, 0.0, 0.0]
+geometry.prob_hi = [1.0, 1.0, 1.0]
+quokka.bc = ["reflecting", "reflecting", "reflecting"]
+
+amr.v = 0
+amr.n_cell = [16, 16, 16]
+amr.max_level = 0
+amr.blocking_factor = 16
+amr.max_grid_size = 64
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 1
+
+# The problem calls computePhotoChemistry() directly; stop_time is not used.
+stop_time = 0.0
+max_timesteps = 0
+plotfile_interval = -1
+
+photoionization_momentum.primary_species_1 = 1.0e-10
+photoionization_momentum.primary_species_2 = 1.0e2
+photoionization_momentum.primary_species_3 = 1.0e-10
+photoionization_momentum.temperature = 1.0e3
+
+integrator.use_number_densities = 1
+integrator.do_species_clip = 0
+integrator.jacobian = 1
+integrator.renormalize_abundances = 0
+integrator.subtract_internal_energy = 0
+integrator.X_reject_buffer = 1e100
+integrator.ode_max_steps = 50000
+
+network.recombination_switch = 0
+network.energy_switch = 0
+network.collisional_ionization_switch = 0
+network.allow_mixed_cell_cooling = 0
+
+integrator.atol_spec = 1.0e-8
+integrator.atol_enuc = 1.24e8
+integrator.atol_rad_num = 1.0e-8
+integrator.species_failure_tolerance = 1.0e-8
+integrator.radiation_failure_tolerance = 1.0e-8
+
+integrator.rtol_spec = 1.0e-10
+integrator.rtol_rad_num = 1.0e-10
+integrator.rtol_enuc = 1.0e-10
+
+integrator.rosenbrock_tableau = 3
