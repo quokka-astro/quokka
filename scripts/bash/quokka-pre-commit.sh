@@ -57,10 +57,18 @@ fi
 
 echo "Using: ${PRECOMMIT[*]}"
 
-"${PRECOMMIT[@]}" run --all-files || true
+STATUS=0
+"${PRECOMMIT[@]}" run --all-files || STATUS=$?
 
-# Commit any changes made by pre-commit hooks (e.g. clang-format)
+# Commit any changes made by pre-commit hooks (e.g. clang-format), then rerun
+# the hooks to check for remaining (non-mutating) failures such as invalid
+# YAML or a failed checker.
 if [[ -n $(git status --porcelain) ]]; then
 	git add -A
 	git commit -m "style: apply pre-commit fixes"
+
+	STATUS=0
+	"${PRECOMMIT[@]}" run --all-files || STATUS=$?
 fi
+
+exit "$STATUS"

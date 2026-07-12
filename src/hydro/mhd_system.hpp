@@ -1260,9 +1260,11 @@ void MHDSystem<problem_t>::AddResistiveEnergyFlux(std::array<amrex::MultiFab, AM
 					   fc_a4_b_wcomp_wcomp1(i + delta_wcomp1[0] - delta_wcomp0[0], j + delta_wcomp1[1] - delta_wcomp0[1],
 								k + delta_wcomp1[2] - delta_wcomp0[2]));
 
-				// flux_eta is the wcomp0-component of cross(eta_j, b), averaged over the lo/hi bounding edges
-				const amrex::Real flux_eta = 0.25 * (eta_j_wcomp1_lo * ave_b_wcomp2_lo + eta_j_wcomp1_hi * ave_b_wcomp2_hi -
-								     eta_j_wcomp2_lo * ave_b_wcomp1_lo - eta_j_wcomp2_hi * ave_b_wcomp1_hi);
+				// flux_eta is the wcomp0-component of cross(eta_j, b): each cross term (eta_j_wcomp1*b_wcomp2 and
+				// eta_j_wcomp2*b_wcomp1) is independently averaged over its own two bounding edges (0.5 weight
+				// each), then the two averaged terms are subtracted.
+				const amrex::Real flux_eta = 0.5 * (eta_j_wcomp1_lo * ave_b_wcomp2_lo + eta_j_wcomp1_hi * ave_b_wcomp2_hi -
+								    eta_j_wcomp2_lo * ave_b_wcomp1_lo - eta_j_wcomp2_hi * ave_b_wcomp1_hi);
 				fc_a4_flux(i, j, k, energy_idx) += flux_eta;
 			});
 		}
