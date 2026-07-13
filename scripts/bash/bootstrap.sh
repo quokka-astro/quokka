@@ -8,19 +8,16 @@ INSTALL_DIR="$HOME/.local/bin"
 install_script() {
 	local src="$1"
 	local name="$2"
-	local target="$INSTALL_DIR/$name"
-	local resolved=""
 
-	if resolved="$(command -v "$name" 2>/dev/null)"; then
-		if [[ "$resolved" != "$target" ]]; then
-			echo "WARNING: $name already resolves to $resolved; updating $target anyway."
-		fi
+	if command -v "$name" &>/dev/null; then
+		echo "$name is already in PATH ($(command -v "$name")), skipping."
+		return
 	fi
 
 	mkdir -p "$INSTALL_DIR"
-	cp "$src" "$target"
-	chmod +x "$target"
-	echo "Installed $name -> $target"
+	cp "$src" "$INSTALL_DIR/$name"
+	chmod +x "$INSTALL_DIR/$name"
+	echo "Installed $name -> $INSTALL_DIR/$name"
 
 	if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
 		echo "WARNING: $INSTALL_DIR is not in your PATH."
