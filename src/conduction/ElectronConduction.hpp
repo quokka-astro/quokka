@@ -20,29 +20,26 @@
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
 #include "AMReX_Vector.H"
-#include "cooling/ResampledCooling.hpp"
 #include "hydro/hydro_system.hpp"
 
-AMREX_ENUM(EOSFlagforConduction, // NOLINT
-	   ResampledCooling,	 // Use resampled cooling tables for EOS
-	   EOS			 // Use quokka::EOS for EOS calculations
-);
 namespace quokka::conduction
 {
 
 struct ElectronConductionParams {
 	amrex::Real conductivity_prefactor = 3.e34; // units of erg cm^-1 s^-1 K^-1
 	amrex::Real flux_limiter_phi = 0.1;
-	amrex::Real saturation_factor = 5.0;			   // refer to equation 8 of Cowie & McKee 1977
-	amrex::Real min_temperature = 0.0;			   // default value will be overwritten by tempFloor_ during initialization
-	EOSFlagforConduction eos_flag = EOSFlagforConduction::EOS; // default to using quokka::EOS;
+	amrex::Real saturation_factor = 5.0; // refer to equation 8 of Cowie & McKee 1977
+	amrex::Real min_temperature = 0.0;   // default value will be overwritten by tempFloor_ during initialization
 };
 
 template <typename problem_t> class ElectronConduction
 {
       public:
+	// Sound speed always comes from quokka::EOS (the fixed-mu ideal-gas formula, even for the
+	// EOSTabulated backend), matching how hydro itself computes pressure/sound speed for every
+	// problem — only temperature is actually table-driven. See EOSTabulated in hydro/EOS.hpp.
 	static void ComputeExplicit(amrex::MultiFab &state, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc, amrex::Geometry const &geom,
-				    amrex::Real dt, ElectronConductionParams const &params, const quokka::ResampledCooling::resampled_tables &tables)
+				    amrex::Real dt, ElectronConductionParams const &params)
 	{
 		static_assert(Physics_Traits<problem_t>::is_hydro_enabled, "Electron conduction requires hydro to be enabled.");
 
@@ -82,16 +79,6 @@ template <typename problem_t> class ElectronConduction
 		auto conductivity_arr = conductivity.arrays();
 		auto saturated_flux_arr = saturated_flux.arrays();
 		amrex::IntVect ng = amrex::IntVect(AMREX_D_DECL(state.nGrow(), state.nGrow(), state.nGrow()));
-		std::optional<decltype(tables.const_tables())> tables_dev;
-		if (params.eos_flag == EOSFlagforConduction::ResampledCooling) {
-			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(quokka::EOS<problem_t>::is_tabulated,
-							 "conduction.eos_flag = ResampledCooling requires the EOSTabulated EOS backend. "
-							 "Add 'using EOSBackend = quokka::EOSTabulated<YourProblem>;' "
-							 "to your EOS_Traits specialization.");
-			tables_dev = tables.const_tables();
-		} else if (params.eos_flag != EOSFlagforConduction::ResampledCooling && params.eos_flag != EOSFlagforConduction::EOS) {
-			amrex::Abort("Invalid eos_flag value in ElectronConduction. Must be 0 (resampled cooling) or 1 (quokka::EOS).");
-		}
 
 		amrex::ParallelFor(state, ng, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> local_state_fc{};
@@ -116,14 +103,9 @@ template <typename problem_t> class ElectronConduction
 			}
 			const amrex::Real Tgas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Eint, massScalars);
 
-			// Sound speed: from table if ResampledCooling, else from EOS
-			amrex::Real cs = NAN;
-			if (params.eos_flag == EOSFlagforConduction::ResampledCooling) {
-				cs = quokka::ResampledCooling::ComputeSoundSpeedFromRhoEint(rho, Eint, *tables_dev);
-			} else {
-				amrex::Real const Pgas = ::quokka::EOS<problem_t>::ComputePressure(rho, Eint, massScalars);
-				cs = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho, Pgas, massScalars);
-			}
+			// Sound speed always from EOS (see comment on ComputeExplicit above)
+			amrex::Real const Pgas = ::quokka::EOS<problem_t>::ComputePressure(rho, Eint, massScalars);
+			amrex::Real const cs = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho, Pgas, massScalars);
 
 			const amrex::Real Tuse = amrex::max(Tgas, t_min);
 			const amrex::Real kappa = params.conductivity_prefactor;
