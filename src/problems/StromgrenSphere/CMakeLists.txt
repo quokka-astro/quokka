@@ -1,5 +1,4 @@
 if(AMReX_SPACEDIM EQUAL 3)
-  # CI regex fix verification: dummy touch, no behavior change.
   set(microphysics_network_name "photoionization") # this will override
                                                   # network_name to
                                                   # photoionization for this
