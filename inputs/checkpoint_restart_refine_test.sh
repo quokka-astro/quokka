@@ -255,6 +255,9 @@ fi
 
 mpirun --use-hwthread-cpus -n $NPROC $BUILD_DIR/src/problems/BinaryOrbitCIC/BinaryOrbitCIC ../inputs/BinaryOrbitCICAMR_checkpoint_restart.toml \
     restartfile=$particle_checkpoint 'amr.n_cell=64 64 64' amr.blocking_factor=16 amr.max_grid_size=16 regrid_interval=1 \
-    max_timesteps=2 checkpoint_interval=-1 plotfile_interval=-1 suppress_output=1 tiny_profiler.enabled=0 problem.verify_particle_layout=1
+    max_timesteps=2 checkpoint_interval=-1 plotfile_interval=-1 suppress_output=1 tiny_profiler.enabled=0 problem.verify_particle_layout=1 || {
+    echo "❌ PARTICLE LAYOUT CHECK FAILED"
+    exit 1
+}
 
 echo "✅ PARTICLE LAYOUT CHECK PASSED: Restart-refined particle container tracks the regridded AMR hierarchy."
