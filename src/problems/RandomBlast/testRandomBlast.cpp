@@ -36,6 +36,11 @@ template <> struct Physics_Traits<RandomBlast> : DefaultPhysicsTraits {
 template <> struct quokka::EOS_Traits<RandomBlast> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = C::m_u;
+	// EOSTabulated: ComputeEintFromTgas root-finds through the resampled table,
+	// so ICs differ from the ideal-gas inverse by the table-vs-fixed-mu ratio.
+	// This is intentional — the table EOS is needed for consistent cooling.
+	// Temperatures below the table minimum are silently clamped to eint_min.
+	using EOSBackend = quokka::EOSTabulated<RandomBlast>;
 };
 
 template <> struct Particle_Traits<RandomBlast> : DefaultParticleTraits {
@@ -136,7 +141,6 @@ void QuokkaSimulation<RandomBlast>::ComputeDerivedVar(int /*lev*/, std::string c
 	if (dname == "temperature") {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "RandomBlast diagnostics require resampled cooling tables.");
 		const int ncomp = ncomp_cc_in;
-		auto tables = resampledTables_.const_tables();
 
 		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
 			const amrex::Box &indexRange = iter.validbox();
@@ -151,7 +155,7 @@ void QuokkaSimulation<RandomBlast>::ComputeDerivedVar(int /*lev*/, std::string c
 				Real const Egas = state(i, j, k, HydroSystem<RandomBlast>::energy_index);
 				static_assert(!Physics_Traits<RandomBlast>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
 				Real const Eint = quokka::EOS<RandomBlast>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
-				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+				Real const Tgas = quokka::EOS<RandomBlast>::ComputeTgasFromEint(rho, Eint);
 
 				output(i, j, k, ncomp) = Tgas;
 			});
@@ -205,7 +209,6 @@ auto problem_main() -> int
 		std::vector<double> temperature(nz);
 
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(sim.coolingTableType_ == "resampled", "RandomBlast temperature extraction requires resampled cooling tables.");
-		auto tables = sim.resampledTables_.const_tables_host();
 
 		for (int i = 0; i < nz; ++i) {
 			zs[i] = position[i];
@@ -216,7 +219,7 @@ auto problem_main() -> int
 			Real const Egas = values.at(HydroSystem<RandomBlast>::energy_index)[i];
 			static_assert(!Physics_Traits<RandomBlast>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
 			Real const Eint = quokka::EOS<RandomBlast>::ComputeEintFromEgas(rho, x1Mom, x2Mom, x3Mom, Egas, 0.0);
-			Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+			Real const Tgas = quokka::EOS<RandomBlast>::ComputeTgasFromEint(rho, Eint);
 			temperature[i] = Tgas;
 		}
 
