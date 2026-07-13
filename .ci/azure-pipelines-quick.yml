@@ -143,16 +143,17 @@ jobs:
         for p in $(changedProblems); do
           TESTFILE="build/src/problems/${p}/CTestTestfile.cmake"
           if [ -f "$TESTFILE" ]; then
-            NAMES=$(grep -oE '^add_test\([A-Za-z0-9_]+' "$TESTFILE" | sed 's/^add_test(//')
+            NAMES=$(grep -oE '^add_test\([A-Za-z0-9_.-]+' "$TESTFILE" | sed 's/^add_test(//')
             TEST_NAMES="$TEST_NAMES $NAMES"
           else
             echo "##[warning]No $TESTFILE found for changed problem '$p' (possibly excluded by a dimensionality guard); skipping."
           fi
         done
-        TEST_NAMES=$(echo $TEST_NAMES | tr ' ' '\n' | sort -u | grep -v '^$')
+        TEST_NAMES=$(echo $TEST_NAMES | tr ' ' '\n' | sort -u | sed '/^$/d')
         if [ -z "$TEST_NAMES" ]; then
           echo "##[error]No ctest tests found for changed problems: $(changedProblems)"
           echo "##vso[task.setvariable variable=hasProblems]false"
+          exit 1
         else
           echo "Resolved ctest test names: $(echo $TEST_NAMES | tr '\n' ' ')"
           CTEST_REGEX="^($(echo "$TEST_NAMES" | tr '\n' '|' | sed 's/|$//'))$"
