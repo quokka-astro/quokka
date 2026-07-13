@@ -13,6 +13,7 @@ This table lists all test problems in the Quokka codebase. The acronyms used are
 | Advection                | 1   | ❌    | ❌  | ❌                | ❌      | ❌                        | ❌             |
 | AdvectionSemiellipse     | 1   | ❌    | ❌  | ❌                | ❌      | ❌                        | ❌             |
 | AlfvenWaveCircular       | 3   | ✅    | ✅  | ❌                | ❌      | ❌                        | ❌             |
+| AlfvenWaveCircularConvergence | 3   | ✅    | ✅  | ❌                | ❌      | ❌                        | ❌             |
 | AlfvenWaveLinear         | 3   | ✅    | ✅  | ❌                | ❌      | ❌                        | ❌             |
 | BinaryOrbitCIC           | 3   | ✅    | ❌  | ❌                | ✅      | CIC                       | ❌             |
 | BrioWuShockTube          | 3   | ✅    | ✅  | ❌                | ❌      | ❌                        | ❌             |
