@@ -220,7 +220,6 @@ void QuokkaSimulation<AlfvenWaveCircular>::computeReferenceSolution_fc(amrex::Mu
 
 auto runWaveTest(int nx, int ny, int nz) -> double
 {
-	const double CFL_number = 0.2;
 	const double wavelength = 1.0 / num_modes;
 	const double max_time = wavelength / alfven_speed;
 	const int max_timesteps = std::max(20000, nx * 100);
@@ -264,7 +263,6 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 	// Run simulation
 	QuokkaSimulation<AlfvenWaveCircular> sim(BCs_cc, BCs_fc);
 
-	sim.cflNumber_ = CFL_number;
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.setInitialConditions();
