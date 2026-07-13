@@ -1561,7 +1561,8 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			F[internalEnergy_index] = 0;
 		}
 
-		// compute face-centered normal velocity using HLL star state
+		// compute face-centered normal velocity using HLL star state; matches Mignone21a eqn. (29), feeds
+		// ComputeEMF_Quokka2026's face velocity.
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			quokka::Array4View<amrex::Real, DIR> x1FSpds(x1FSpds_ref);
 			amrex::Real const fspd_m = x1FSpds(i, j, k, 0);

@@ -623,6 +623,19 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::constant) {
 			hpp.query("resistivity", mhdResistivity_);
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(mhdResistivity_ >= 0.0, "mhd.resistivity must be >= 0.");
+		} else if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::none ||
+				     Physics_Traits<problem_t>::resistivity_model == ResistivityModel::problem_defined) {
+			// mhd.resistivity is only read in the `constant` branch above; every other model falls
+			// through to here.
+			const bool resistivity_key_present = hpp.contains("resistivity");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!resistivity_key_present, "mhd.resistivity is set in the input file, but this problem's "
+										   "Physics_Traits::resistivity_model is not `constant`, so this value is "
+										   "ignored (with `none`, no resistivity is applied; with "
+										   "`problem_defined`, resistivity comes from the problem's "
+										   "computeResistivity function instead). This is a compile-time trait, "
+										   "not a runtime switch: to test resistivity with this problem, set "
+										   "`resistivity_model = ResistivityModel::constant` in its Physics_Traits "
+										   "specialization and rebuild.");
 		}
 	}
 
@@ -2342,6 +2355,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		}
 		MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, FOfaceVel, state_old_fc_tmp, FOfast_mhd_wavespeeds, 1,
 						 emfAveragingScheme_, mhdPlmLimiter_, emfComputingScheme_, dx, mhdResistivity_);
+		// FOFC fallback cells (see replaceFluxes() below) would otherwise silently drop Joule heating.
+		MHDSystem<problem_t>::AddResistiveEnergyFlux(FOfluxArrays, state_old_fc_tmp, dx, mhdResistivity_);
 	}
 
 	// Stage 1 of RK2-SSP

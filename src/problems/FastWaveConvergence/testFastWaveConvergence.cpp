@@ -538,8 +538,8 @@ auto problem_main() -> int
 		amrex::ParmParse const mhd_pp("mhd");
 		mhd_pp.query("resistivity", eta);
 		if (eta != 0.0) {
-			amrex::Abort("FastWaveConvergence does not support mhd.resistivity != 0; use the AlfvenWaveLinear fixed-resolution test for "
-				     "resistivity validation.");
+			amrex::Abort("FastWaveConvergence does not support mhd.resistivity != 0; use AlfvenWaveLinearConvergence "
+				     "for resistivity validation.");
 		}
 	}
 
