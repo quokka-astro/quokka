@@ -163,6 +163,11 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 			constexpr int W_stencil_width = 2 * W_stencil_N + 1;
 			constexpr amrex::Real W_cutoff_r2 = static_cast<amrex::Real>(W_stencil_N * W_stencil_N);
 			constexpr amrex::Real W_inv_N = 1.0 / static_cast<amrex::Real>(W_stencil_N);
+			const bool enable_WR_metal_d = enable_WR_metal;
+			const bool store_channel_fields_d = store_channel_fields;
+			const amrex::Real stellar_metallicity_fraction_d = stellar_metallicity_fraction;
+			const amrex::Real wr_age_start_d = wr_age_start;
+			const amrex::Real wr_metal_yield_rate_per_mass_d = wr_metal_yield_rate_per_mass;
 
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int64_t idx) {
 				auto &p = pData[idx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
@@ -175,10 +180,10 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 
 				for (int n = 0; n < nchem; ++n) {
 					const amrex::Real birth_iso_abundance = std::max<amrex::Real>(0.0, p.rdata(chem_base + n));
-					const amrex::Real z_lookup = std::max<amrex::Real>(1.0e-12, stellar_metallicity_fraction);
+					const amrex::Real z_lookup = std::max<amrex::Real>(1.0e-12, stellar_metallicity_fraction_d);
 
 					amrex::Real y_wr = 0.0;
-					if (enable_WR_metal) {
+					if (enable_WR_metal_d) {
 						const bool wr_stage = ((stage == static_cast<int>(StellarEvolutionStage::SNProgenitor)) ||
 								       (stage == static_cast<int>(StellarEvolutionStage::HighMassNonExploding))) &&
 								      (mass_birth_msun >= 9.0);
@@ -198,11 +203,12 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 								const amrex::Real delta_fraction = std::max<amrex::Real>(0.0, f_end - f_begin);
 								y_wr = std::max<amrex::Real>(0.0, wr_total_frac * mass_birth * delta_fraction);
 							} else {
-								const amrex::Real wr_window = std::max<amrex::Real>(0.0, wr_lifetime - wr_age_start);
-								if (age >= wr_age_start && wr_window > 0.0) {
+								const amrex::Real wr_window = std::max<amrex::Real>(0.0, wr_lifetime - wr_age_start_d);
+								if (age >= wr_age_start_d && wr_window > 0.0) {
 									const amrex::Real baseline_wr_rate_per_mass = birth_iso_abundance / wr_window;
 									y_wr = std::max<amrex::Real>(
-									    0.0, (baseline_wr_rate_per_mass + wr_metal_yield_rate_per_mass) * mass_birth * dt);
+									    0.0,
+									    (baseline_wr_rate_per_mass + wr_metal_yield_rate_per_mass_d) * mass_birth * dt);
 								}
 							}
 						}
@@ -235,7 +241,7 @@ template <> struct ParticlePropertyUpdateTraits<ParticleType::StochasticStellarP
 														  interp.index[2] + kk, total_comp),
 												     total_val);
 
-									if (store_channel_fields && enable_WR_metal && y_wr > 0.0) {
+									if (store_channel_fields_d && enable_WR_metal_d && y_wr > 0.0) {
 										const int wr_comp =
 										    HydroSystem<problem_t>::scalar0_index + scalar_offset + 2 * nchem + n;
 										if (wr_comp < HydroSystem<problem_t>::scalar0_index + nPassive) {
