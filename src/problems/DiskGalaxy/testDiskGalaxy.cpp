@@ -27,20 +27,24 @@
 
 #include "QuokkaSimulation.hpp"
 #include "SimulationData.hpp"
+#include "actual_eos_data.H"
+#include "eos.H"
+#include "extern_parameters.H"
 #include "fundamental_constants.H"
 #include "hydro/EOS.hpp"
 #include "hydro/hydro_system.hpp"
 #include "math/interpolate.hpp"
 #include "math/quadrature.hpp"
 #include "math/spherical_geometry.hpp"
+#include "network.H"
 #include "particles/particle_types.hpp"
 #include "physics_info.hpp"
+#include "radiation/radiation_system.hpp"
 #include "util/BC.hpp"
 #include "util/DataTable.hpp"
 
 namespace
 {
-constexpr double keV_in_ergs = 1000.0 * C::ev2erg; // ergs == 1 keV
 constexpr double seconds_per_year = 3.15576e7;
 } // namespace
 
@@ -51,8 +55,9 @@ static_assert(AMREX_SPACEDIM == 3, "DiskGalaxy problem requires AMREX_SPACEDIM =
 
 template <> struct quokka::EOS_Traits<DiskGalaxy> {
 	static constexpr double gamma = 5. / 3.;
+	static constexpr double cs_isothermal = NAN;
 	static constexpr double mean_molecular_weight = 0.6 * C::m_u;
-	using EOSBackend = quokka::EOSTabulated<DiskGalaxy>;
+	using EOSBackend = quokka::EOSMicrophysics<DiskGalaxy>;
 };
 
 template <> struct HydroSystem_Traits<DiskGalaxy> {
@@ -63,7 +68,16 @@ template <> struct Physics_Traits<DiskGalaxy> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_self_gravity_enabled = true;
 	static constexpr bool is_mhd_enabled = true;
+	static constexpr bool is_radiation_enabled = true;
+	static constexpr int numMassScalars = NumSpec;
 	static constexpr int numPassiveScalars = numMassScalars + 1; // number of passive scalars
+};
+
+template <> struct RadSystem_Traits<DiskGalaxy> {
+	static constexpr double c_hat_over_c = 1.0e-3;
+	static constexpr double Erad_floor = C::a_rad * 1.0e-8;
+	static constexpr int beta_order = 1;
+	static constexpr auto ChemBands() { return ChemBandsHeader_; }
 };
 
 template <> struct Particle_Traits<DiskGalaxy> : DefaultParticleTraits {
@@ -97,6 +111,12 @@ template <> struct SimulationData<DiskGalaxy> {
 
 template <> void QuokkaSimulation<DiskGalaxy>::preCalculateInitialConditions()
 {
+	init_extern_parameters();
+	amrex::Real small_temp = 1.0e-2_rt;
+	amrex::Real small_dens = 1.0e-60_rt;
+	eos_init(small_temp, small_dens);
+	network_init();
+
 	// 1. read in circular velocity table "vcirc.dat"
 	// get circular velocity profile filename from ParmParse
 	amrex::ParmParse const pp("disk_galaxy");
@@ -380,9 +400,6 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 
 		// integrate profiles over cell volume
 		const double cell_vol = dx[0] * dx[1] * dx[2];
-		constexpr double gamma_gas = quokka::EOS_Traits<DiskGalaxy>::gamma;
-		constexpr double mu = 0.61;
-
 		auto rho_total_exact = [=] AMREX_GPU_DEVICE(double x, double y, double z) { return rhoDisk_exact(x, y, z) + rhoHalo_exact(x, y, z); };
 
 		auto momx_total_exact = [=] AMREX_GPU_DEVICE(double x, double y, double z) {
@@ -406,9 +423,17 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 			const double rho_disk_local = rhoDisk_exact(x, y, z);
 			const double rho_halo_local = rhoHalo_exact(x, y, z);
 			const double temp_halo_local = tempHalo_exact(x, y, z);
-			const double eint_disk_local = (rho_disk_local > 0.0) ? (rho_disk_local * C::k_B * T_disk / (mu * C::m_p * (gamma_gas - 1.0))) : 0.0;
+			const amrex::Real ionized_pair_mass = spmasses[Species::e] + spmasses[Species::Hp];
+			const amrex::Real electron_mass_fraction = spmasses[Species::e] / ionized_pair_mass;
+			const amrex::Real proton_mass_fraction = spmasses[Species::Hp] / ionized_pair_mass;
+			amrex::GpuArray<amrex::Real, NumSpec> disk_species{rho_disk_local * electron_mass_fraction, 0.0_rt,
+									   rho_disk_local * proton_mass_fraction};
+			amrex::GpuArray<amrex::Real, NumSpec> halo_species{rho_halo_local * electron_mass_fraction, 0.0_rt,
+									   rho_halo_local * proton_mass_fraction};
+			const double eint_disk_local =
+			    (rho_disk_local > 0.0) ? quokka::EOS<DiskGalaxy>::ComputeEintFromTgas(rho_disk_local, T_disk, disk_species) : 0.0;
 			const double eint_halo_local =
-			    (rho_halo_local > 0.0) ? (rho_halo_local * C::k_B * temp_halo_local / (mu * C::m_p * (gamma_gas - 1.0))) : 0.0;
+			    (rho_halo_local > 0.0) ? quokka::EOS<DiskGalaxy>::ComputeEintFromTgas(rho_halo_local, temp_halo_local, halo_species) : 0.0;
 			return eint_disk_local + eint_halo_local;
 		};
 
@@ -439,11 +464,36 @@ template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGrid(quokka
 		// first capture on device
 		const auto initial_scalar_density_d = initial_scalar_density;
 
-		// Initialize passive scalar field
-		if constexpr (Physics_Traits<DiskGalaxy>::numPassiveScalars > 0) {
-			state_cc(i, j, k, HydroSystem<DiskGalaxy>::scalar0_index) = initial_scalar_density_d;
+		// Initialize a charge-neutral, fully ionized hydrogen plasma. Electron
+		// and proton partial densities are normalized to sum to the gas density.
+		const amrex::Real ionized_pair_mass = spmasses[Species::e] + spmasses[Species::Hp];
+		const amrex::Real electron_mass_density = rho_disk_halo * spmasses[Species::e] / ionized_pair_mass;
+		const amrex::Real proton_mass_density = rho_disk_halo * spmasses[Species::Hp] / ionized_pair_mass;
+		state_cc(i, j, k, HydroSystem<DiskGalaxy>::scalar0_index + static_cast<int>(Species::e)) = electron_mass_density;
+		state_cc(i, j, k, HydroSystem<DiskGalaxy>::scalar0_index + static_cast<int>(Species::H)) = 0.0_rt;
+		state_cc(i, j, k, HydroSystem<DiskGalaxy>::scalar0_index + static_cast<int>(Species::Hp)) = proton_mass_density;
+
+		// The enrichment tracer follows the network's three mass scalars.
+		state_cc(i, j, k, HydroSystem<DiskGalaxy>::scalar0_index + NumSpec) = initial_scalar_density_d;
+
+		for (int g = 0; g < Physics_Traits<DiskGalaxy>::nGroups; ++g) {
+			const int offset = Physics_NumVars::numRadVarsPerGroup * g;
+			state_cc(i, j, k, RadSystem<DiskGalaxy>::radEnergy_index + offset) = RadSystem_Traits<DiskGalaxy>::Erad_floor;
+			state_cc(i, j, k, RadSystem<DiskGalaxy>::x1RadFlux_index + offset) = 0.0_rt;
+			state_cc(i, j, k, RadSystem<DiskGalaxy>::x2RadFlux_index + offset) = 0.0_rt;
+			state_cc(i, j, k, RadSystem<DiskGalaxy>::x3RadFlux_index + offset) = 0.0_rt;
 		}
 	});
+}
+
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DiskGalaxy>::ComputePlanckOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+{
+	return 0.0_rt;
+}
+
+template <> AMREX_GPU_HOST_DEVICE auto RadSystem<DiskGalaxy>::ComputeFluxMeanOpacity(const double /*rho*/, const double /*Tgas*/) -> amrex::Real
+{
+	return 0.0_rt;
 }
 
 template <> void QuokkaSimulation<DiskGalaxy>::setInitialConditionsOnGridFaceVars(quokka::grid const &grid_elem)
@@ -582,7 +632,8 @@ void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::string const 
 			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 				Real const rho = state(i, j, k, HydroSystem<DiskGalaxy>::density_index);
 				Real const Eint = HydroSystem<DiskGalaxy>::ComputeInternalEnergy(state, i, j, k, &cons_fc);
-				Real const Tgas = quokka::EOS<DiskGalaxy>::ComputeTgasFromEint(rho, Eint);
+				auto const mass_scalars = RadSystem<DiskGalaxy>::ComputeMassScalars(state, i, j, k);
+				Real const Tgas = quokka::EOS<DiskGalaxy>::ComputeTgasFromEint(rho, Eint, mass_scalars);
 				output(i, j, k, ncomp) = Tgas;
 			});
 		}
@@ -604,20 +655,7 @@ void QuokkaSimulation<DiskGalaxy>::ComputeDerivedVar(int lev, std::string const 
 	}
 
 	if (dname == "entropy") {
-		const int ncomp = ncomp_cc_in;
-		for (amrex::MFIter iter(mf); iter.isValid(); ++iter) {
-			const amrex::Box &indexRange = iter.validbox();
-			auto const &output = mf.array(iter);
-			auto const &state = state_cc.const_array(iter);
-			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const cons_fc{
-			    AMREX_D_DECL(state_fc[0].const_array(iter), state_fc[1].const_array(iter), state_fc[2].const_array(iter))};
-			amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-				Real const rho = state(i, j, k, HydroSystem<DiskGalaxy>::density_index);
-				Real const Eint = HydroSystem<DiskGalaxy>::ComputeInternalEnergy(state, i, j, k, &cons_fc);
-				Real const K_cgs = quokka::EOS<DiskGalaxy>::ComputeEntropyFromRhoEint(rho, Eint);
-				output(i, j, k, ncomp) = K_cgs / keV_in_ergs;
-			});
-		}
+		amrex::Abort("DiskGalaxy's EOSMicrophysics backend does not provide the table-based entropy derived field.");
 	}
 
 	if (dname == "radius_sph") {
@@ -825,7 +863,7 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 
 				    const amrex::Real mass_flux_density = rho * vr;
 				    const amrex::Real energy_density = state[bx](i, j, k, HydroSystem<DiskGalaxy>::energy_index);
-				    const amrex::Real scalar_density = state[bx](i, j, k, HydroSystem<DiskGalaxy>::scalar0_index);
+				    const amrex::Real scalar_density = state[bx](i, j, k, HydroSystem<DiskGalaxy>::scalar0_index + NumSpec);
 				    std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const cons_fc{
 					AMREX_D_DECL(state_fc_x[bx], state_fc_y[bx], state_fc_z[bx])};
 				    const amrex::Real Pgas = HydroSystem<DiskGalaxy>::ComputePressure(state[bx], i, j, k, &cons_fc);

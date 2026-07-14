@@ -535,6 +535,9 @@ template <> struct ParticleCreationTraits<ParticleType::StochasticStellarPop> {
 
 				for (int p_idx = 0; p_idx < num_particles; ++p_idx) {
 					auto &p = particles[p_idx]; // NOLINT
+					for (int g = 0; g < Physics_Traits<problem_t>::nGroups; ++g) {
+						p.rdata(StochasticStellarPopParticleLumIdx + g) = 0.0_rt;
+					}
 
 					// Set particle ID and CPU
 					p.id() = pid_start + base_offset + p_idx;
