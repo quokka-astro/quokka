@@ -94,7 +94,7 @@ if(AMReX_SPACEDIM GREATER_EQUAL 2)
                 ../../radiation/photochemistry.cpp ${photoionization_sources})
 
   # this will add #define CHEMISTRY
-  target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY)
+  target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY SKIP_PHOTOCHEMFLUX)
   if(DTypeFront_INTEGRATOR STREQUAL "Rosenbrock")
     target_compile_definitions(${JOB_NAME} PUBLIC DTYPEFRONT_USE_ROSENBROCK)
   else()

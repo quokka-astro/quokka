@@ -92,7 +92,7 @@ if(AMReX_SPACEDIM EQUAL 3)
                 ../../radiation/photochemistry.cpp ${photoionization_sources})
 
   # this will add #define PHOTOCHEMISTRY
-  target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY SKIP_PHOTOCHEMFLUX)
+  target_compile_definitions(${JOB_NAME} PUBLIC PHOTOCHEMISTRY)
 
   if(AMReX_GPU_BACKEND MATCHES "CUDA")
     setup_target_for_cuda_compilation(${JOB_NAME})
