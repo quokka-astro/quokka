@@ -2,22 +2,28 @@
 // Copyright 2022 Neco Kriel.
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
-/// \file testAlfvenWaveCircular.cpp
-/// \brief Defines a test problem to make sure face-centred quantities are created correctly.
+/// \file testAlfvenWaveCircularConvergence.cpp
+/// \brief Defines a Richardson convergence test for the circularly-polarized Alfven wave, and
+///        makes sure face-centred quantities are created correctly.
 ///
 
+#include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <format>
 #include <gcem.hpp>
 
 #include "AMReX_Array.H"
 #include "AMReX_Array4.H"
+#include "AMReX_ParmParse.H"
+#include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 
 #include "QuokkaSimulation.hpp"
 #include "grid.hpp"
 #include "physics_info.hpp"
 #include "util/BC.hpp"
+#include "util/richardson.hpp"
 
 struct AlfvenWaveCircular {
 };
@@ -178,6 +184,7 @@ template <>
 void QuokkaSimulation<AlfvenWaveCircular>::computeReferenceSolution(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 								    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo)
 {
+	const amrex::Real time = tNew_[0];
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = ref.array(iter);
@@ -187,7 +194,7 @@ void QuokkaSimulation<AlfvenWaveCircular>::computeReferenceSolution(amrex::Multi
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.0; // fill unused quantities with zeros
 			}
-			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::cc, quokka::direction::na, 0);
+			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::cc, quokka::direction::na, time);
 		});
 	}
 }
@@ -196,6 +203,7 @@ template <>
 void QuokkaSimulation<AlfvenWaveCircular>::computeReferenceSolution_fc(amrex::MultiFab &ref, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 								       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, quokka::direction const dir)
 {
+	const amrex::Real time = tNew_[0];
 	for (amrex::MFIter iter(ref); iter.isValid(); ++iter) {
 		const amrex::Box &indexRange = iter.validbox();
 		auto const &stateExact = ref.array(iter);
@@ -205,25 +213,135 @@ void QuokkaSimulation<AlfvenWaveCircular>::computeReferenceSolution_fc(amrex::Mu
 			for (int n = 0; n < ncomp; ++n) {
 				stateExact(i, j, k, n) = 0.0; // fill unused quantities with zeros
 			}
-			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::fc, dir, 0);
+			computeWaveSolution(i, j, k, stateExact, dx, prob_lo, quokka::centering::fc, dir, time);
 		});
 	}
 }
 
-auto problem_main() -> int
+auto runWaveTest(int nx, int ny, int nz) -> double
 {
+	const double wavelength = 1.0 / num_modes;
+	const double max_time = wavelength / alfven_speed;
+	const int max_timesteps = std::max(20000, nx * 100);
 
-	QuokkaSimulation<AlfvenWaveCircular> sim;
+	// Set grid dimensions using AMReX parameter system
+	amrex::ParmParse pp("amr");
+	amrex::Vector<int> const ncells = {nx, ny, nz};
 
+	if (!pp.contains("blocking_factor")) {
+		pp.add("blocking_factor", 8);
+	}
+
+	if (!pp.contains("max_grid_size")) {
+		pp.add("max_grid_size", 128);
+	}
+
+	pp.add("max_level", 0);
+	pp.addarr("n_cell", ncells);
+
+	// Set domain bounds using AMReX parameter system
+	amrex::ParmParse pp_geom("geometry");
+	amrex::Vector<double> const prob_lo = {0.0, 0.0, 0.0};
+	amrex::Vector<double> const prob_hi = {1.0, 1.0, 1.0};
+	amrex::Vector<int> const is_periodic = {1, 1, 1};
+	pp_geom.addarr("prob_lo", prob_lo);
+	pp_geom.addarr("prob_hi", prob_hi);
+	pp_geom.addarr("is_periodic", is_periodic);
+
+	// Setup boundary conditions
+	auto BCs_cc = quokka::BC<AlfvenWaveCircular>(quokka::BCType::int_dir);
+
+	const int nvars_fc = Physics_Indices<AlfvenWaveCircular>::nvarTotal_fc;
+	amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
+	for (int icomp = 0; icomp < nvars_fc; ++icomp) {
+		for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+			BCs_fc[icomp].setLo(idim, amrex::BCType::int_dir);
+			BCs_fc[icomp].setHi(idim, amrex::BCType::int_dir);
+		}
+	}
+
+	// Run simulation
+	QuokkaSimulation<AlfvenWaveCircular> sim(BCs_cc, BCs_fc);
+
+	sim.stopTime_ = max_time;
+	sim.maxTimesteps_ = max_timesteps;
 	sim.setInitialConditions();
+
+	// Main time loop
 	sim.evolve();
 
-	// Compute test success condition
+	return sim.computeErrorNorm();
+}
+
+auto problem_main() -> int
+{
+	bool run_convergence = true;
+	bool run_sim = false;
+	double error_tol = 0.003;
+	{
+		amrex::ParmParse const pp("setup");
+		pp.query("run_convergence", run_convergence);
+		pp.query("run_sim", run_sim);
+		pp.query("error_tol", error_tol);
+	}
+
+	// AlfvenWaveCircularConvergence does not model resistivity; abort early rather than silently
+	// producing a wrong reference solution if mhd.resistivity is set (applies to both modes).
+	{
+		double eta = 0.0;
+		amrex::ParmParse const mhd_pp("mhd");
+		mhd_pp.query("resistivity", eta);
+		if (eta != 0.0) {
+			amrex::Abort("AlfvenWaveCircularConvergence does not support mhd.resistivity != 0; use AlfvenWaveLinearConvergence "
+				     "for resistivity validation.");
+		}
+	}
+
 	int status = 0;
-	const double error_tol = 0.003;
-	amrex::Real const error_norm = sim.computeErrorNorm();
-	if (error_norm > error_tol) {
-		status = 1;
+
+	if (run_sim) {
+		auto BCs_cc = quokka::BC<AlfvenWaveCircular>(quokka::BCType::int_dir);
+		const int nvars_fc = Physics_Indices<AlfvenWaveCircular>::nvarTotal_fc;
+		amrex::Vector<amrex::BCRec> BCs_fc(nvars_fc);
+		for (int icomp = 0; icomp < nvars_fc; ++icomp) {
+			for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+				BCs_fc[icomp].setLo(idim, amrex::BCType::int_dir);
+				BCs_fc[icomp].setHi(idim, amrex::BCType::int_dir);
+			}
+		}
+
+		QuokkaSimulation<AlfvenWaveCircular> sim(BCs_cc, BCs_fc);
+		sim.setInitialConditions();
+		sim.evolve();
+
+		const double error_norm = sim.computeErrorNorm();
+		amrex::Print() << std::format("\nrun_sim error norm = {:.6e}  (tol = {:.6e})\n", error_norm, error_tol);
+		if (error_norm > error_tol) {
+			status = 1;
+		}
+	}
+
+	if (run_convergence) {
+		quokka::richardson::applyQuietDefaults();
+
+		quokka::richardson::Parameters params{};
+		params.machine_precision_target = 2.0e-10;
+		params.nx_initial = 16;
+		params.nx_max = 128;
+		{
+			amrex::ParmParse const pp("setup");
+			pp.query("nx_start", params.nx_initial);
+			pp.query("nx_max", params.nx_max);
+			pp.query("machine_precision_target", params.machine_precision_target);
+		}
+		params.expected_rate = 2.0;
+		params.tolerance = 0.3;
+		params.test_name = "Alfven Wave Circular";
+		params.csv_filename = "alfven_wave_circular_convergence.csv";
+
+		if (quokka::richardson::run(params, [](int nx, int ny, int nz) { return runWaveTest(nx, ny, nz); }) != 0) {
+			status = 1;
+		}
 	}
 
 	return status;

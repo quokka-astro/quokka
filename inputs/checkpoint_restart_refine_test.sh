@@ -94,7 +94,8 @@ $SED_INPLACE 's/do_subcycle = 0/do_subcycle = 1/' fine_amr.toml
 
 echo "=== Step 1: Create coarse AMR checkpoint (32^3 base + 1 AMR level) ==="
 # Run coarse AMR simulation to create checkpoints
-mpirun --use-hwthread-cpus -n $NPROC $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D coarse_amr.toml stop_time=$CHECKPOINT_TIME
+mpirun --use-hwthread-cpus -n $NPROC $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D coarse_amr.toml stop_time=$CHECKPOINT_TIME suppress_output=1 \
+    tiny_profiler.enabled=0
 
 # Save and find last checkpoint
 mkdir -p step1_32cube
@@ -140,7 +141,8 @@ fi
 
 echo ""
 echo "=== Step 2: Run native fine AMR simulation (64^3 base + 1 AMR level) ==="
-mpirun --use-hwthread-cpus -n $NPROC $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D fine_amr.toml stop_time=$STOP_TIME
+mpirun --use-hwthread-cpus -n $NPROC $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D fine_amr.toml stop_time=$STOP_TIME suppress_output=1 \
+    tiny_profiler.enabled=0
 
 # Save native results  
 mkdir -p step2_native_64cube
@@ -158,7 +160,8 @@ echo "Native fine AMR simulation completed at time t=$native_time"
 
 echo ""
 echo "=== Step 3: Restart with multi-level universal refinement ==="
-mpirun --use-hwthread-cpus -n $NPROC $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D fine_amr.toml restartfile=$last_chk stop_time=$STOP_TIME
+mpirun --use-hwthread-cpus -n $NPROC $BUILD_DIR/src/problems/HydroBlast3D/HydroBlast3D fine_amr.toml restartfile=$last_chk stop_time=$STOP_TIME suppress_output=1 \
+    tiny_profiler.enabled=0
 
 # Save restart results
 mkdir -p step3_restart_64cube
@@ -234,3 +237,27 @@ echo "3. $([ "$comparison_passed" = true ] && echo "✅" || echo "⚠️ ") Resu
 
 echo ""
 echo "=== Multi-Level Universal Refinement Test Complete ==="
+
+echo ""
+echo "=== Particle Container Restart Refinement Test ==="
+rm -rf particle_step1_32cube 2>/dev/null || true
+
+mpirun --use-hwthread-cpus -n $NPROC $BUILD_DIR/src/problems/BinaryOrbitCIC/BinaryOrbitCIC ../inputs/BinaryOrbitAMR.toml \
+    max_timesteps=1 checkpoint_interval=1 plotfile_interval=-1 suppress_output=1 tiny_profiler.enabled=0
+
+mkdir -p particle_step1_32cube
+mv chk* particle_step1_32cube/ 2>/dev/null || true
+particle_checkpoint=$(ls -1d particle_step1_32cube/chk* 2>/dev/null | tail -1)
+if [ -z "$particle_checkpoint" ]; then
+    echo "❌ ERROR: No particle checkpoint files created in particle_step1_32cube/"
+    exit 1
+fi
+
+mpirun --use-hwthread-cpus -n $NPROC $BUILD_DIR/src/problems/BinaryOrbitCIC/BinaryOrbitCIC ../inputs/BinaryOrbitCICAMR_checkpoint_restart.toml \
+    restartfile=$particle_checkpoint 'amr.n_cell=64 64 64' amr.blocking_factor=16 amr.max_grid_size=16 regrid_interval=1 \
+    max_timesteps=2 checkpoint_interval=-1 plotfile_interval=-1 suppress_output=1 tiny_profiler.enabled=0 problem.verify_particle_layout=1 || {
+    echo "❌ PARTICLE LAYOUT CHECK FAILED"
+    exit 1
+}
+
+echo "✅ PARTICLE LAYOUT CHECK PASSED: Restart-refined particle container tracks the regridded AMR hierarchy."
