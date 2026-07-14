@@ -5218,6 +5218,7 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 			particles->SetParticleBoxArray(lev, current_ba[lev]);
 			particles->SetParticleDistributionMap(lev, current_dm[lev]);
 		}
+		particles->Define(this->GetParGDB());
 
 		// Redistribute particles to refined grid
 		particles->Redistribute();
