@@ -15,19 +15,16 @@ amr.v = 1      # verbosity in Amr
 # *****************************************************************
 amr.n_cell = [128, 128, 128]
 amr.max_level = 0  # number of levels = max_level + 1
-amr.blocking_factor = 8  # grid size must be divisible by this
+amr.blocking_factor = 16  # grid size must be divisible by this
 
 cfl = 0.3
 
-cooling.enabled = 0
 cooling.read_tables_even_if_disabled = 1
-cooling.cooling_table_type = "resampled"
 cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 
 
 conduction.enabled = 1
-conduction.conductivity_prefactor = 3.056958245467793e11
+conduction.conductivity_prefactor = 0.6113916490935586e12
 conduction.flux_limiter_phi = 1
 conduction.saturation_factor = 1.2e20
 conduction.conduction_cfl = 0.1
-conduction.eos_flag = 1

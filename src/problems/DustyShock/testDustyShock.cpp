@@ -34,16 +34,10 @@ template <> struct quokka::EOS_Traits<DustyShock> {
 	static constexpr double cs_isothermal = 1.0; // only used when gamma = 1
 };
 
-template <> struct Physics_Traits<DustyShock> {
-	static constexpr bool is_self_gravity_enabled = false;
+template <> struct Physics_Traits<DustyShock> : DefaultPhysicsTraits {
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr int numMassScalars = 0;
 	static constexpr int numPassiveScalars = 0;
-	static constexpr bool is_radiation_enabled = false;
 	static constexpr bool is_dust_enabled = true;
-	static constexpr int nDustGroups = 1;
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1;
 	static constexpr UnitSystem unit_system = UnitSystem::CONSTANTS;
 	static constexpr double boltzmann_constant = 1.0;
 	static constexpr double gravitational_constant = 1.0;
@@ -52,8 +46,8 @@ template <> struct Physics_Traits<DustyShock> {
 };
 
 template <>
-AMREX_GPU_HOST_DEVICE auto DustDrag<DustyShock>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
-									       amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/, double /*cs*/)
+AMREX_GPU_HOST_DEVICE auto DustSources<DustyShock>::ComputeReciprocalStoppingTime(amrex::Real /*rho_g*/, amrex::GpuArray<amrex::Real, nDustGroups_> rho_d,
+										  amrex::GpuArray<amrex::Real, nDustGroups_> /*rel_vel_mag*/, double /*cs*/)
     -> amrex::GpuArray<amrex::Real, nDustGroups_>
 {
 	amrex::GpuArray<amrex::Real, nDustGroups_> alpha{};

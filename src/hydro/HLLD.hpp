@@ -278,8 +278,9 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLD(quokka::HydroState<N_scalars, N_ms
 	u_dstar_L.bz = tmp;
 	u_dstar_R.bz = tmp;
 
-	// MK5: eqn (63)
-	tmp = spds[2] * bx + (u_dstar_L.my * u_dstar_L.by + u_dstar_L.mz * u_dstar_L.bz) / u_dstar_L.rho;
+	// MK5: eqn (63); average the L/R evaluations of the shared dot(v, b) for floating-point associativity symmetry
+	tmp = spds[2] * bx + 0.5 * ((u_dstar_L.my * u_dstar_L.by + u_dstar_L.mz * u_dstar_L.bz) / u_dstar_L.rho +
+				    (u_dstar_R.my * u_dstar_R.by + u_dstar_R.mz * u_dstar_R.bz) / u_dstar_R.rho);
 	u_dstar_L.E = u_star_L.E - rho_sqrt_L * bx_sign * (vb_star_L - tmp);
 	u_dstar_R.E = u_star_R.E + rho_sqrt_R * bx_sign * (vb_star_R - tmp);
 

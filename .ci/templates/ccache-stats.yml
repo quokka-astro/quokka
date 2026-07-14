@@ -1,4 +1,9 @@
 # Reusable template for reporting ccache statistics
+parameters:
+- name: stepCondition
+  type: string
+  default: succeededOrFailed()
+
 steps:
 - script: |
     if command -v ccache >/dev/null 2>&1; then
@@ -17,6 +22,6 @@ steps:
       echo "ccache not installed; no statistics to report."
     fi
   displayName: Report ccache statistics
-  condition: succeededOrFailed()
+  condition: ${{ parameters.stepCondition }}
   env:
     CCACHE_DIR: $(Agent.HomeDirectory)/cache/ccache

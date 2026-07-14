@@ -14,7 +14,9 @@
 
 - [Magnetohydrodynamics (beta)](mhd_module.md)
 - [Star Formation and Feedback (beta)](particles.md)
+- [Photoionization](photoionization.md)
 - [Dust Module (beta)](dust_module.md)
+- [Optically-Thin Radiative Cooling](cooling_module.md)
 
 # Simulation Gallery
 
@@ -48,10 +50,12 @@
 - [Hydro Integrator](hydro_integrator.md)
 - [Radiation Integrator](radiation_integrator.md)
 - [State Variable Component Indices](components.md)
+- [API Reference](api_reference.md)
 - [Debugging](debugging.md)
 - [Assertions and error checking](error_checking.md)
 - [Performance tips](performance.md)
 - [How to use clang-tidy](howto_clang_tidy.md)
+- [DataTable](data_table.md)
 
 # Maintainer Guide
 
