@@ -789,7 +789,8 @@ template <> auto QuokkaSimulation<DiskGalaxy>::ComputeStatistics() -> std::map<s
 						       std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> const &state_fc) noexcept {
 		    const Real rho = state(i, j, k, HydroSystem<DiskGalaxy>::density_index);
 		    const Real Eint = HydroSystem<DiskGalaxy>::ComputeInternalEnergy(state, i, j, k, &state_fc);
-		    const Real Tgas = quokka::EOS<DiskGalaxy>::ComputeTgasFromEint(rho, Eint);
+		    auto const mass_scalars = RadSystem<DiskGalaxy>::ComputeMassScalars(state, i, j, k);
+		    const Real Tgas = quokka::EOS<DiskGalaxy>::ComputeTgasFromEint(rho, Eint, mass_scalars);
 		    return (Tgas < 1.0e4) ? rho : 0.0;
 	    });
 	stats["mass_T_lt_1e4"] = cold_mass / C::M_solar;
