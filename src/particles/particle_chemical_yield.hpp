@@ -206,7 +206,7 @@ inline auto loadChannelTable(const std::filesystem::path &table_path, int channe
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(full_table.input_name(0) == "mass", "chemical yield tables must use 'mass' as the input coordinate");
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(full_table.input_unit(0) == "Msun", "chemical yield table mass coordinate must use 'Msun'");
 
-	const auto full_const = full_table.const_tables();
+	const auto full_const = full_table.const_tables_host();
 	const int num_entries = full_const.sizes[0];
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(num_entries >= 2, "chemical yield tables must contain at least two mass points");
 

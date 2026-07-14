@@ -468,7 +468,6 @@ template <ParticleType particleType, typename problem_t> auto getParticleRealCom
 		}
 		// Include chemistry-history particle components added for tracked passive scalars.
 		return names;
-		// return expandEnumNames<StochasticStellarPopParticleRealIdx, StochasticStellarPopParticleRealComps<problem_t>, true>();
 	} else if constexpr (particleType == ParticleType::Star) {
 		return expandEnumNames<StarParticleDataIdx, StarParticleRealComps<problem_t>, true>();
 	} else if constexpr (particleType == ParticleType::Sink) {

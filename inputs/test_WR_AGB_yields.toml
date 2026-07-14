@@ -18,7 +18,7 @@ do_tracers = 0
 hydro.artificial_viscosity_coefficient = 0.1
 
 particles.verbose = 0
-particles.eps_ff = 0.5
+particles.eps_ff = 0.0
 particles.enable_chemical_feedback = 1
 particles.enable_SNII_metal = 1
 particles.enable_WR_metal = 1

@@ -28,7 +28,7 @@ hydro.artificial_viscosity_coefficient = 0.1
 
 particles.SN_scheme = "SN_thermal_or_thermal_momentum"
 particles.verbose = 0
-particles.eps_ff = 0.5
+particles.eps_ff = 0.0
 particles.stellar_velocity_limit = 1.0e8
 particles.enable_chemical_feedback = 1
 particles.enable_SNII_metal = 1
