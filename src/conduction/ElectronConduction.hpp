@@ -112,7 +112,7 @@ template <typename problem_t> class ElectronConduction
 			const amrex::Real qsat = amrex::max(saturation_factor * flux_limiter_phi * rho * cs * cs * cs, small);
 
 			temperature_arr[bx](i, j, k) = Tuse;
-			conductivity_arr[bx](i, j, k) = kappa;
+			conductivity_arr[bx](i, j, k) = kappa * std::pow(Tuse, 2.5);
 			saturated_flux_arr[bx](i, j, k) = qsat;
 		});
 
