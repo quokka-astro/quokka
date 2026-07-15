@@ -47,5 +47,5 @@ initial_dt = 1.0e13
 plotfile_interval = 10
 checkpoint_interval = -1
 
-plotfile_prefix = "test_WR_AGB_yields/plt"
-checkpoint_prefix = "test_WR_AGB_yields/chk"
+plotfile_prefix = "WRAGBYields/plt"
+checkpoint_prefix = "WRAGBYields/chk"

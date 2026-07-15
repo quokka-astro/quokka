@@ -185,7 +185,7 @@ def validate_wr_agb(args):
     measured_wr = scalar_masses(ds, 6)
     measured_agb = scalar_masses(ds, 9)
 
-    print("test_WR_AGB_yields simulated/table:")
+    print("WRAGBYields simulated/table:")
     max_error = 0.0
     for i, isotope in enumerate(isotopes):
         wr_distribution = query_wr_distribution(tables, wr_elapsed, wr_mass / MSUN_CGS)

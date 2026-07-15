@@ -2,14 +2,107 @@
 /// \brief Defines a compact StochasticStellarPop test problem for SNII yield validation.
 ///
 
+#include "AMReX_BLassert.H"
 #include "AMReX_ParmParse.H"
 #include "AMReX_Print.H"
 
 #include "QuokkaSimulation.hpp"
 #include "fundamental_constants.H"
 #include "hydro/hydro_system.hpp"
+#include "particles/particle_chemical_yield.hpp"
 #include "particles/particle_types.hpp"
-#include "problems/chemical_yield_test_utils.hpp"
+
+#include <cmath>
+#include <format>
+#include <fstream>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace
+{
+
+constexpr amrex::Real yield_validation_rtol = 1.0e-10;
+
+struct InitialParticleRecord {
+	std::vector<amrex::Real> rdata;
+};
+
+auto readInitialParticleRecords(const std::string &filename, int nreal) -> std::vector<InitialParticleRecord>
+{
+	std::ifstream input(filename);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(input.is_open(), ("failed to open initial particle file: " + filename).c_str());
+
+	int count = 0;
+	input >> count;
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(count >= 0, ("invalid particle count in file: " + filename).c_str());
+
+	std::vector<InitialParticleRecord> records;
+	records.reserve(static_cast<std::size_t>(count));
+	for (int p = 0; p < count; ++p) {
+		amrex::Real pos = 0.0;
+		for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+			input >> pos;
+		}
+
+		InitialParticleRecord record{};
+		record.rdata.resize(static_cast<std::size_t>(nreal));
+		for (int n = 0; n < nreal; ++n) {
+			input >> record.rdata[static_cast<std::size_t>(n)];
+		}
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(input.good(), ("failed to read particle data from file: " + filename).c_str());
+		records.push_back(std::move(record));
+	}
+
+	return records;
+}
+
+template <typename problem_t> [[nodiscard]] auto cellVolume(const QuokkaSimulation<problem_t> &sim) -> amrex::Real
+{
+	const auto dx = sim.Geom(0).CellSizeArray();
+	return AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+}
+
+template <typename problem_t> [[nodiscard]] auto scalarMass(const QuokkaSimulation<problem_t> &sim, int scalar_index) -> amrex::Real
+{
+	const int comp = HydroSystem<problem_t>::scalar0_index + scalar_index;
+	return sim.state_new_cc_[0].sum(comp) * cellVolume(sim);
+}
+
+auto yieldFraction(const quokka::ChemicalYieldLookup::ChemicalYieldGpuConstTables &tables, int channel_index, int isotope_index, amrex::Real mass)
+    -> amrex::Real
+{
+	return quokka::ChemicalYieldLookup::queryYieldFraction(tables, channel_index, isotope_index, mass / C::M_solar, quokka::stellar_metallicity_fraction);
+}
+
+void assertClose(const std::string &label, amrex::Real simulated, amrex::Real expected, amrex::Real tolerance = yield_validation_rtol)
+{
+	const amrex::Real error = (expected > 0.0) ? std::abs(simulated / expected - 1.0) : std::abs(simulated);
+	const amrex::Real ratio = (expected > 0.0) ? simulated / expected : 1.0;
+	amrex::Print() << label << ": simulated=" << simulated << " expected=" << expected << " sim/expected=" << ratio << "\n";
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(error <= tolerance, std::format("{} failed: error={} > {}", label, error, tolerance).c_str());
+}
+
+template <typename problem_t>
+void validateSNIIYields(const QuokkaSimulation<problem_t> &sim, const std::string &initial_particles_file, const std::vector<std::string> &isotopes)
+{
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(quokka::ChemicalYieldLookup::isLoaded(), "chemical yield tables were not loaded");
+	const auto records = readInitialParticleRecords(initial_particles_file, quokka::StochasticStellarPopParticleRealComps<problem_t>);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!records.empty(), "test_SNII_Yields requires at least one initial particle");
+
+	const auto tables = quokka::ChemicalYieldLookup::constTables();
+	const amrex::Real birth_mass = records.front().rdata[static_cast<std::size_t>(quokka::StochasticStellarPopParticleMassAtBirthIdx)];
+
+	amrex::Print() << "test_SNII_Yields simulated/table:\n";
+	for (std::size_t n = 0; n < isotopes.size(); ++n) {
+		const int n_idx = static_cast<int>(n);
+		const amrex::Real expected = yieldFraction(tables, 0, n_idx, birth_mass) * birth_mass;
+		const amrex::Real measured = scalarMass(sim, n_idx);
+		assertClose(std::format("  {} scalar_{}", isotopes[n], n_idx), measured, expected);
+	}
+}
+
+} // namespace
 
 struct test_SNII_Yields {
 };
@@ -112,8 +205,7 @@ auto problem_main() -> int
 	sim.setInitialConditions();
 
 	sim.evolve();
-	quokka::ChemicalYieldTest::validateSNIIYields(sim, initial_particles_file, {"C12", "N14", "O16"});
-	// TODO: move the content of the function here
+	validateSNIIYields(sim, initial_particles_file, {"C12", "N14", "O16"});
 	amrex::Print() << "test_SNII_Yields completed\n";
 	return 0;
 }
