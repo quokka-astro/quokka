@@ -2,7 +2,7 @@
 # Problem size and geometry
 # *****************************************************************
 geometry.prob_lo     =  [0.0, 0.0, 0.0]
-geometry.prob_hi     =  [1.596e19, 1.596e19, 1.596e19]
+geometry.prob_hi     =  [3.12e19, 3.12e19, 3.12e19]
 quokka.bc = ["reflecting", "reflecting", "reflecting"]
 
 # *****************************************************************
@@ -21,34 +21,13 @@ do_reflux = 0
 do_subcycle = 0
 suppress_output = 0
 
-# Radiation-pressure-influenced regime of Krumholz & Matzner (2009).
-# With n_H = 1e4 cm^-3 and Q = 1.56e51 s^-1, their Eq. 8 gives zeta ~ 10 for the paper's
-# fiducial f_trap = 2. However, the code deposits only the DIRECT ionizing-photon momentum
-# (f_trap ~ 1), and since zeta ~ f_trap^2, the physically relevant value here is zeta ~ 2.5:
-# radiation pressure is important but not deeply dominant. (Corner source + reflecting BCs
-# make this one octant of a sphere = the embedded case.) For these parameters (T_eq ~ 1.05e4 K)
-# the Spitzer time is t_s ~ 1.87e12 s.
-# stop_time = 5 t_s ~ 9.34e12 s. The numerical front reaches ~3.5 pc, inside the 5.17 pc box,
-# and leads the Spitzer solution -- the radiation-pressure boost. The numerical front lands
-# BETWEEN the pure Spitzer solution and the KM09 combined (radiation + gas) solution, as
-# expected for this crossover regime.
-stop_time = 9.34e12 # ~ 5 t_s
+stop_time = 6.18e13 # ~ 1 t_ch
 
 stromgen.primary_species_1 = 1.0e-10
-stromgen.primary_species_2 = 1.0e4      # n_H = 1e4 cm^-3 (radiation-pressure regime; was 139.9)
+stromgen.primary_species_2 = 1.0e4
 stromgen.primary_species_3 = 1.0e-10
-stromgen.Q = 1.56e51                     # ionizing rate; S49 = 156 -> zeta ~ 2.5 at f_trap=1 (was 4e46)
+stromgen.Q = 1.56e51
 stromgen.temperature = 37.11
-
-# Krumholz & Matzner (2009) radiation-pressure analytic solution parameters. The KM09 combined
-# curve is r = (r_rad^p + r_gas^p)^(1/p) with r_rad = [3 f_trap L/(2 pi c rho0)]^(1/4) sqrt(t)
-# (dimensional Eq. 11) and r_gas the code's own Spitzer radius; L = psi * S * eps0, rho0 = mu_amb
-# * m_p * n_H. See the testDTypeFrontRadPres.cpp header comment.
-# f_trap = 1: the code deposits only the DIRECT ionizing-photon momentum, so f_trap ~ 1 is the
-# physically consistent choice (the paper's Table/figures use f_trap = 2). r_rad ~ f_trap^(1/4).
-radpres.f_trap = 1.0
-radpres.psi    = 1.0
-radpres.mu_amb = 1.4
 
 photochemistry.enabled = 1
 integrator.use_number_densities = 1

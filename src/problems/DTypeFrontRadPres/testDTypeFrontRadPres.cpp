@@ -6,17 +6,6 @@
 /// \file testDTypeFrontRadPres.cpp
 /// \brief Defines a radiation-pressure-driven D-type ionization front test.
 ///
-/// This is a copy of the DTypeFront test set up in the radiation-pressure-dominated
-/// regime of Krumholz & Matzner (2009, ApJ, 703, 1352). The parameter zeta
-/// (their Eq. 8) measures the importance of radiation pressure relative to gas
-/// pressure; here we choose parameters giving zeta ~ 10 (embedded case), so
-/// radiation pressure dominates the resolved expansion. In addition to the usual
-/// Spitzer gas-pressure D-type solution, we compare the numerical front radius
-/// against the radiation-pressure-driven solution of Krumholz & Matzner (their
-/// dimensionless equation of motion, Eq. 10, together with the combined
-/// approximation Eq. 13), and print the deviation of the simulation from BOTH
-/// analytic solutions.
-///
 
 #include "AMReX.H"
 #include "AMReX_Array.H"
@@ -65,9 +54,7 @@ template <> struct Physics_Traits<DTypeFrontRadPres> : DefaultPhysicsTraits {
 template <> struct RadSystem_Traits<DTypeFrontRadPres> {
 	static constexpr double c_hat_over_c = c_hat / C::c_light;
 	static constexpr double Erad_floor = C::a_rad * 1.0e-8;
-	// beta_order = 1 enables the O(v/c) radiation terms, including the photoionization momentum
-	// for this test: the radiation-pressure drive of the front is applied through that momentum kick.
-	static constexpr int beta_order = 0;
+	static constexpr int beta_order = 1;
 	static constexpr auto ChemBands() { return ChemBandsHeader_; }
 };
 
@@ -82,8 +69,8 @@ template <> struct SimulationData<DTypeFrontRadPres> {
 	int recombination_switch{};
 	amrex::Vector<amrex::Real> t_vec_;
 	amrex::Vector<amrex::Real> r_effective_vec_;
-	amrex::Vector<amrex::Real> r_analytical_vec_; // Spitzer gas-pressure solution
-	amrex::Vector<amrex::Real> r_radpres_vec_;    // Krumholz & Matzner (2009) radiation-pressure solution
+	amrex::Vector<amrex::Real> r_spitzer_vec_; // Spitzer gas-pressure solution
+	amrex::Vector<amrex::Real> r_KM09_vec_;	   // Krumholz & Matzner (2009) radiation-pressure solution
 	amrex::Real r_analytical_last_t{};
 	amrex::Real r_analytical_last_R{};
 	std::ofstream output_file_;
@@ -91,76 +78,6 @@ template <> struct SimulationData<DTypeFrontRadPres> {
 
 namespace
 {
-
-// ---------------------------------------------------------------------------
-// Krumholz & Matzner (2009) radiation-pressure-driven D-type front solution.
-//
-// The dimensionless equation of motion (their Eq. 10, embedded/spherical case,
-// density power-law index k_rho) is
-//
-//     d/dtau ( x^(3 - k_rho) dx/dtau ) = 1 + x^(1/2),
-//
-// where x = r/r_ch and tau = t/t_ch. The first term on the RHS is radiation
-// pressure, the second is gas pressure. The combined analytic approximation
-// (their Eq. 13) is
-//
-//     x_approx = ( x_rad^((7 - k_rho)/2) + x_gas^((7 - k_rho)/2) )^(2/(7 - k_rho)),
-//
-// accurate to better than 5% for k_rho = 0-1, where x_rad and x_gas are the pure
-// radiation-pressure (Eq. 11) and pure gas-pressure (Eq. 12) similarity solutions.
-//
-// DIMENSIONAL, ANCHOR-FREE FORM
-// -----------------------------
-// Multiplying Eq. 13 through by r_ch (with p = (7 - k_rho)/2) gives the DIMENSIONAL
-// combined radius directly in terms of the two dimensional limbs:
-//
-//     r_KM09(t) = ( r_rad(t)^p + r_gas(t)^p )^(1/p),
-//
-// so the characteristic scales r_ch and t_ch cancel out and never need to be formed.
-// We supply the two dimensional limbs from physical quantities that require no
-// paper-fiducial constants (alpha_B, T_II, phi), which would otherwise be
-// inconsistent with the values the code uses to set its Stromgren radius:
-//
-//   * r_rad(t): the pure radiation-pressure momentum-driven solution. The shell
-//     momentum equals the radiant momentum, M_sh * rdot = f_trap * L * t / c, with
-//     M_sh = (4/3) pi rho0 r^3 for the embedded (spherical) case and k_rho = 0.
-//     Integrating with r(0) = 0 gives the closed form
-//
-//         r_rad(t) = [ 3 f_trap L / (2 pi c rho0) ]^(1/4) * sqrt(t).
-//
-//     This is exactly the dimensional version of Eq. 11 (k_rho = 0), and depends
-//     only on the bolometric luminosity L = psi * S * eps0 and ambient density rho0.
-//
-//   * r_gas(t): the code's OWN Spitzer solution (computed in computeAfterTimestep),
-//     so the gas limb of the combined curve is identical to the Spitzer curve this
-//     test already reports. The combined curve therefore reduces EXACTLY to Spitzer
-//     as t -> infinity and to the radiation solution as t -> 0.
-//
-// f_trap is a free parameter. The code deposits only the DIRECT ionizing-photon
-// momentum, so f_trap ~ 1 is the physically consistent choice (the paper's
-// Table/figures use f_trap = 2). Note r_rad ~ f_trap^(1/4), so the radiation limb is
-// only weakly sensitive to it.
-// ---------------------------------------------------------------------------
-
-constexpr double krho_radpres = 0.0; // uniform ambient density
-
-// Pure radiation-pressure momentum-driven front radius (dimensional Eq. 11, embedded,
-// k_rho = 0): r_rad(t) = [3 f_trap L / (2 pi c rho0)]^(1/4) sqrt(t).
-auto km09_r_rad(double t, double L, double rho0, double f_trap) -> double
-{
-	if (t <= 0.0) {
-		return 0.0;
-	}
-	return std::pow(3.0 * f_trap * L / (2.0 * M_PI * C::c_light * rho0), 0.25) * std::sqrt(t);
-}
-
-// Combined radiation + gas front radius (dimensional Eq. 13): r = (r_rad^p + r_gas^p)^(1/p),
-// p = (7 - k_rho)/2. r_gas is the code's own Spitzer radius, passed in by the caller.
-auto km09_r_combined(double r_rad, double r_gas) -> double
-{
-	const double p = 0.5 * (7.0 - krho_radpres);
-	return std::pow(std::pow(r_rad, p) + std::pow(r_gas, p), 1.0 / p);
-}
 
 auto compute_effective_radius(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx) -> amrex::Real
 {
@@ -264,34 +181,6 @@ auto compute_equilibrium_temperature_ionized(double n_e) -> double
 	return 0.5 * (T_lo + T_hi);
 }
 
-#ifdef DTYPEFRONT_USE_ROSENBROCK
-auto rosenbrock_tableau_name(int tableau) -> char const *
-{
-	switch (tableau) {
-		case 0:
-			return "Rodas5P";
-		case 1:
-			return "Rodas4P";
-		case 2:
-			return "Rodas3P";
-		case 3:
-			return "ROS2S";
-		default:
-			return "unknown";
-	}
-}
-#endif
-
-void print_microphysics_integrator()
-{
-#ifdef DTYPEFRONT_USE_ROSENBROCK
-	amrex::Print() << "DTypeFrontRadPres microphysics integrator: Rosenbrock (Rosenbrock tableau " << integrator_rp::rosenbrock_tableau << ": "
-		       << rosenbrock_tableau_name(integrator_rp::rosenbrock_tableau) << ")\n";
-#else
-	amrex::Print() << "DTypeFrontRadPres microphysics integrator: VODE\n";
-#endif
-}
-
 } // namespace
 
 AMREX_GPU_HOST_DEVICE auto wendland_c2(amrex::Real r) -> amrex::Real
@@ -391,7 +280,7 @@ template <> void QuokkaSimulation<DTypeFrontRadPres>::preCalculateInitialConditi
 	if (amrex::ParallelDescriptor::IOProcessor()) {
 		std::string const filename = "dtype_front_radii_beta" + std::to_string(RadSystem_Traits<DTypeFrontRadPres>::beta_order) + ".csv";
 		userData_.output_file_.open(filename);
-		userData_.output_file_ << "time,r_effective,r_spitzer,r_radpres\n";
+		userData_.output_file_ << "time,r_effective,r_spitzer,r_KM09\n";
 	}
 }
 
@@ -468,57 +357,41 @@ template <> void QuokkaSimulation<DTypeFrontRadPres>::computeAfterTimestep()
 	const int lev = 0;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
 	const amrex::Real r_effective = compute_effective_radius(state_new_cc_[lev], dx);
+	const amrex::Real t = tNew_[lev];
 	userData_.r_effective_vec_.push_back(r_effective);
-	userData_.t_vec_.push_back(tNew_[lev]);
+	userData_.t_vec_.push_back(t);
 
 	const amrex::Real n_e = userData_.primary_species_2;
-	const double T_eq = compute_equilibrium_temperature_ionized(static_cast<double>(n_e));
-	const double alpha_B = 2.6e-13 * std::pow(T_eq / 1.0e4, -0.7);
-	const double mu = 0.5;
-	const double c_i = std::sqrt(C::k_B * T_eq / (mu * C::m_p));
+	const amrex::Real T_eq = compute_equilibrium_temperature_ionized(n_e);
+	const amrex::Real alpha_B = 2.6e-13 * std::pow(T_eq / 1.0e4, -0.7);
+	const amrex::Real mu = 0.5;
+	const amrex::Real Q = userData_.Q;
+	const amrex::Real c_i = std::sqrt(C::k_B * T_eq / (mu * C::m_p));
+	const amrex::Real rho =
+	    userData_.primary_species_1 * spmasses[0] + userData_.primary_species_2 * spmasses[1] + userData_.primary_species_3 * spmasses[2];
+	const double eps = RadSystem<DTypeFrontRadPres>::GetChemBandQuanta(0);
+
 	const amrex::Real r_s = std::pow((3.0_rt * userData_.Q) / (4.0_rt * M_PI * alpha_B * n_e * n_e), 1.0_rt / 3.0_rt);
-	const amrex::Real t_s = r_s / static_cast<amrex::Real>(c_i);
+	const amrex::Real t_s = r_s / c_i;
 
-	const amrex::Real t = tNew_[lev];
+	const amrex::Real r_ch = Q * eps * eps * alpha_B / (12.0_rt * M_PI * C::k_B * C::k_B * T_eq * T_eq * C::c_light * C::c_light);
+	const amrex::Real t_ch = std::sqrt(4 * M_PI * rho * r_ch * r_ch * r_ch * r_ch * C::c_light / (3.0_rt * Q * eps));
 
-	// --- Spitzer gas-pressure D-type solution (unchanged from DTypeFront) ---
-	amrex::Real r_analytical = 0.0_rt;
-	if (t_s > 0.0_rt) {
-		r_analytical = r_s * std::pow(1.0_rt + 7.0_rt * t / (4.0_rt * t_s), 4.0_rt / 7.0_rt);
-	}
-	userData_.r_analytical_vec_.push_back(r_analytical);
+	// Spitzer gas-pressure D-type solution
+	const amrex::Real r_spitzer = r_s * std::pow(1.0_rt + 7.0_rt * t / (4.0_rt * t_s), 4.0_rt / 7.0_rt);
+	userData_.r_spitzer_vec_.push_back(r_spitzer);
 
-	// --- Krumholz & Matzner (2009) radiation-pressure-driven solution (Eq. 13) ---
-	// Dimensional, anchor-free form (see the detailed comment at the top of this file):
-	//   r_rad(t) = [3 f_trap L / (2 pi c rho0)]^(1/4) sqrt(t)   (pure radiation, dimensional Eq. 11)
-	//   r_gas(t) = r_analytical                                 (the code's own Spitzer radius)
-	//   r_radpres = (r_rad^p + r_gas^p)^(1/p), p = (7-k_rho)/2   (combined, dimensional Eq. 13)
-	// so the radiation-pressure curve reduces EXACTLY to the code Spitzer curve at late times, and
-	// the difference between the two isolates the radiation-pressure boost. L and rho0 come from
-	// the actual problem parameters, with no paper-fiducial constants that would be inconsistent
-	// with the code's Stromgren radius.
-	amrex::Real r_radpres = 0.0_rt;
-	{
-		amrex::ParmParse const pp("radpres");
-		double f_trap = 1.0; // direct ionizing radiation pressure only (see file header comment)
-		double psi = 1.0;    // ratio of bolometric to ionizing power, L = psi * S * eps0
-		double mu_amb = 1.4; // atomic mass per H nucleus of the ambient neutral gas
-		pp.query("f_trap", f_trap);
-		pp.query("psi", psi);
-		pp.query("mu_amb", mu_amb);
+	// Krumholz & Matzner (2009) radiation-pressure solution
+	const amrex::Real tau = t / t_ch;
+	const amrex::Real x_rad = std::pow(2.0_rt * tau * tau, 1.0_rt / 4.0_rt);
+	const amrex::Real x_gas = std::pow(49.0_rt / (36.0_rt) * tau * tau, 2.0_rt / 7.0_rt);
+	const amrex::Real x = std::pow(std::pow(x_rad, 7.0_rt / 2.0_rt) + std::pow(x_gas, 7.0_rt / 2.0_rt), 2.0_rt / 7.0_rt);
+	const amrex::Real r_KM09 = r_ch * x;
 
-		const double eps0 = 13.6 * C::ev2erg;				// ionization threshold energy (erg)
-		const double S = static_cast<double>(userData_.Q);		// ionizing photon rate (s^-1)
-		const double L = psi * S * eps0;				// bolometric luminosity (erg s^-1)
-		const double rho0 = mu_amb * C::m_p * static_cast<double>(n_e); // ambient mass density (n_e == ambient n_H)
-
-		const double r_rad = km09_r_rad(static_cast<double>(t), L, rho0, f_trap);
-		r_radpres = static_cast<amrex::Real>(km09_r_combined(r_rad, static_cast<double>(r_analytical)));
-	}
-	userData_.r_radpres_vec_.push_back(r_radpres);
+	userData_.r_KM09_vec_.push_back(r_KM09);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
-		userData_.output_file_ << t << ',' << r_effective << ',' << r_analytical << ',' << r_radpres << '\n';
+		userData_.output_file_ << t << ',' << r_effective << ',' << r_spitzer << ',' << r_KM09 << '\n';
 	}
 }
 
@@ -530,7 +403,6 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<DTypeFrontRadPres> sim;
-	print_microphysics_integrator();
 
 	// initialize
 	sim.setInitialConditions();
@@ -543,36 +415,36 @@ auto problem_main() -> int
 
 	sim.evolve();
 
-	// Check 1: effective radius vs BOTH analytic solutions at end of simulation.
-	// We report the deviation of the numerical front from the Spitzer gas-pressure
-	// solution AND from the Krumholz & Matzner (2009) radiation-pressure solution.
-	//
-	// NOTE: this is informational only -- it does NOT set the pass/fail status. The two
-	// analytic solutions have different t=0 initial conditions (the Spitzer form starts
-	// at the full Stromgren radius r_s at t=0, whereas the KM09 similarity solution
-	// starts from r=0 as tau->0), so neither is an exact match to the simulation across
-	// the whole run. The overall test status is driven by the temperature checks below.
 	{
 		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = sim.geom[0].CellSizeArray();
 		const amrex::Real cell_size = dx[0];
+		const amrex::Real tol_perc = 10.0_rt;
 
 		if (!sim.userData_.r_effective_vec_.empty()) {
-			const amrex::Real r_spitzer = sim.userData_.r_analytical_vec_.back();
-			const amrex::Real r_radpres = sim.userData_.r_radpres_vec_.back();
+			const amrex::Real r_spitzer = sim.userData_.r_spitzer_vec_.back();
+			const amrex::Real r_KM09 = sim.userData_.r_KM09_vec_.back();
 			const amrex::Real r_effective = sim.userData_.r_effective_vec_.back();
-			const amrex::Real dev_spitzer = (r_effective - r_spitzer) / cell_size;
-			const amrex::Real dev_radpres = (r_effective - r_radpres) / cell_size;
-
-			amrex::Print() << "End of simulation radius comparison (informational):\n";
-			amrex::Print() << "  Effective radius:            " << r_effective << " cm\n";
-			amrex::Print() << "  Spitzer (gas) radius:        " << r_spitzer << " cm\n";
-			amrex::Print() << "  Rad.-pressure radius (KM09): " << r_radpres << " cm\n";
-			amrex::Print() << "  (r_effective - r_spitzer) / dx = " << dev_spitzer << " cells\n";
-			amrex::Print() << "  (r_effective - r_radpres) / dx = " << dev_radpres << " cells\n";
+			const amrex::Real delta_over_dx_spitzer = std::abs(r_effective - r_spitzer) / cell_size;
+			const amrex::Real delta_over_dx_KM09 = std::abs(r_effective - r_KM09) / cell_size;
+			amrex::Print() << "Spitzer radius: " << r_spitzer << '\n';
+			amrex::Print() << "KM09 radius: " << r_KM09 << '\n';
+			amrex::Print() << "Effective radius: " << r_effective << '\n';
+			amrex::Print() << "|r_effective - r_spitzer| / dx = " << delta_over_dx_spitzer << '\n';
+			amrex::Print() << "|r_effective - r_KM09| / dx = " << delta_over_dx_KM09 << '\n';
+			const amrex::Real KM09_dev = std::abs(r_effective - r_KM09) / r_KM09 * 100.0_rt;
+			if (KM09_dev < tol_perc) {
+				amrex::Print() << "Test passed: Effective radius is within " << tol_perc << "% of KM09 solution.\n";
+				if (delta_over_dx_spitzer > delta_over_dx_KM09 + 1.0) {
+					amrex::Print() << "Test passed: Effective radius is more than 1 cell closer to KM09 solution than Spitzer solution.\n";
+				}
+			} else {
+				amrex::Print() << "Test failed: Effective radius is not within " << tol_perc << "% of KM09 solution.\n";
+				status = 1;
+			}
 		}
 	}
 
-	// Check 2: temperature in cavity and neutral region at end of simulation
+	// Check: temperature in cavity and neutral region at end of simulation
 	{
 		// primary_species_2 is the initial n_HI (species index 1), which equals n_e in the fully ionized cavity
 		const double ne_eq = sim.userData_.primary_species_2;
@@ -582,15 +454,7 @@ auto problem_main() -> int
 
 		amrex::MultiFab const &state_mf = sim.state_new_cc_[0];
 
-		// Collect temperatures per region: cavity (fully ionized, x_HII > 99%), neutral (x_HI > 99.99%).
-		//
-		// The cavity sample is the FULLY-IONIZED interior, which is what T_ion_eq (computed for a fully
-		// ionized gas, x_HII ~ 1) describes. We deliberately do NOT use a "1% < x_HII < 99%" transition
-		// band here: at this problem's density (n_H = 1e4 cm^-3) the ionization front collapses to a
-		// step across ~1 cell (the ionizing-photon mean free path is ~5e-6 pc << dx ~ 0.08 pc), so such
-		// a band would sample only a few numerically-mixed, partially-neutral front cells that are
-		// genuinely cooler than the fully-ionized equilibrium -- not a meaningful comparison against
-		// T_ion_eq. The ionized interior reaches x_HII ~ 0.9997-0.99999, comfortably above 0.99.
+		// Collect temperatures per region: cavity (x_HII > 90%), neutral (x_HI > 99.99%)
 		std::vector<double> cavity_temps;
 		std::vector<double> neutral_temps;
 
@@ -626,7 +490,7 @@ auto problem_main() -> int
 				eos(eos_input_re, bstate);
 				const double T_cell = bstate.T;
 
-				if (x_HII > 0.99_rt) {
+				if (x_HII > 0.9_rt) {
 					cavity_temps.push_back(T_cell);
 				}
 				if (x_HI > 0.9999_rt) {
@@ -709,8 +573,8 @@ auto problem_main() -> int
 		radpres_args["linestyle"] = "-.";
 
 		matplotlibcpp::plot(sim.userData_.t_vec_, sim.userData_.r_effective_vec_, numerical_args);
-		matplotlibcpp::plot(sim.userData_.t_vec_, sim.userData_.r_analytical_vec_, spitzer_args);
-		matplotlibcpp::plot(sim.userData_.t_vec_, sim.userData_.r_radpres_vec_, radpres_args);
+		matplotlibcpp::plot(sim.userData_.t_vec_, sim.userData_.r_spitzer_vec_, spitzer_args);
+		matplotlibcpp::plot(sim.userData_.t_vec_, sim.userData_.r_KM09_vec_, radpres_args);
 		matplotlibcpp::xlabel("time (s)");
 		matplotlibcpp::ylabel("radius (cm)");
 		matplotlibcpp::legend();
@@ -720,21 +584,21 @@ auto problem_main() -> int
 		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = sim.geom[0].CellSizeArray();
 		const amrex::Real cell_size = dx[0];
 		std::vector<amrex::Real> dev_spitzer_vec(sim.userData_.t_vec_.size());
-		std::vector<amrex::Real> dev_radpres_vec(sim.userData_.t_vec_.size());
+		std::vector<amrex::Real> dev_KM09_vec(sim.userData_.t_vec_.size());
 		for (int i = 0; i < static_cast<int>(sim.userData_.t_vec_.size()); ++i) {
-			dev_spitzer_vec[i] = (sim.userData_.r_effective_vec_[i] - sim.userData_.r_analytical_vec_[i]) / cell_size;
-			dev_radpres_vec[i] = (sim.userData_.r_effective_vec_[i] - sim.userData_.r_radpres_vec_[i]) / cell_size;
+			dev_spitzer_vec[i] = (sim.userData_.r_effective_vec_[i] - sim.userData_.r_spitzer_vec_[i]) / cell_size;
+			dev_KM09_vec[i] = (sim.userData_.r_effective_vec_[i] - sim.userData_.r_KM09_vec_[i]) / cell_size;
 		}
 
 		matplotlibcpp::clf();
 		std::map<std::string, std::string> diff_spitzer_args;
 		diff_spitzer_args["label"] = "(r_effective - r_spitzer) / dx";
 		diff_spitzer_args["color"] = "C1";
-		std::map<std::string, std::string> diff_radpres_args;
-		diff_radpres_args["label"] = "(r_effective - r_radpres) / dx";
-		diff_radpres_args["color"] = "C3";
+		std::map<std::string, std::string> diff_KM09_args;
+		diff_KM09_args["label"] = "(r_effective - r_KM09) / dx";
+		diff_KM09_args["color"] = "C3";
 		matplotlibcpp::plot(sim.userData_.t_vec_, dev_spitzer_vec, diff_spitzer_args);
-		matplotlibcpp::plot(sim.userData_.t_vec_, dev_radpres_vec, diff_radpres_args);
+		matplotlibcpp::plot(sim.userData_.t_vec_, dev_KM09_vec, diff_KM09_args);
 		matplotlibcpp::xlabel("time (s)");
 		matplotlibcpp::ylabel("delta r / dx");
 		matplotlibcpp::legend();
