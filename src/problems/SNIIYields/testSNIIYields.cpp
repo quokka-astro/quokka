@@ -34,20 +34,10 @@ template <> struct HydroSystem_Traits<test_SNII_Yields> {
 };
 
 template <> struct Physics_Traits<test_SNII_Yields> : DefaultPhysicsTraits {
-	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1;
-	static constexpr bool is_mhd_enabled = false;
 	static constexpr int numMassScalars = 0;
 	static constexpr int numPassiveScalars = 3;
 	static constexpr int nGroups = 1;
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
-	static constexpr double boltzmann_constant = C::k_B;
-	static constexpr double gravitational_constant = C::Gconst;
-	static constexpr double c_light = C::c_light;
-	static constexpr double radiation_constant = C::a_rad;
 };
 
 template <> void QuokkaSimulation<test_SNII_Yields>::createInitialStochasticStellarPopParticles()
@@ -112,6 +102,7 @@ auto problem_main() -> int
 
 	const int seed = 42;
 	amrex::InitRandom(seed, 1);
+	// TODO: remove seed
 
 	amrex::ParmParse const ppp("problem");
 	ppp.query("Tamb", Tamb);
