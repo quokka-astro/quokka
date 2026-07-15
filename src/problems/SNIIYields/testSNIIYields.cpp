@@ -113,6 +113,7 @@ auto problem_main() -> int
 
 	sim.evolve();
 	quokka::ChemicalYieldTest::validateSNIIYields(sim, initial_particles_file, {"C12", "N14", "O16"});
+	// TODO: move the content of the function here
 	amrex::Print() << "test_SNII_Yields completed\n";
 	return 0;
 }
