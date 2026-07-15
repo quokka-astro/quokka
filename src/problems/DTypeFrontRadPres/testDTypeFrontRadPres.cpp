@@ -558,6 +558,21 @@ auto problem_main() -> int
 
 #ifdef HAVE_PYTHON
 	if (amrex::ParallelDescriptor::IOProcessor()) {
+		constexpr amrex::Real seconds_per_Myr = 3.15576e13;
+		constexpr amrex::Real cm_per_pc = 3.085677581491367e18;
+		const std::string plot_title = "beta_order = " + std::to_string(RadSystem_Traits<DTypeFrontRadPres>::beta_order);
+
+		std::vector<amrex::Real> t_Myr(sim.userData_.t_vec_.size());
+		std::vector<amrex::Real> r_effective_pc(sim.userData_.t_vec_.size());
+		std::vector<amrex::Real> r_spitzer_pc(sim.userData_.t_vec_.size());
+		std::vector<amrex::Real> r_KM09_pc(sim.userData_.t_vec_.size());
+		for (int i = 0; i < static_cast<int>(sim.userData_.t_vec_.size()); ++i) {
+			t_Myr[i] = sim.userData_.t_vec_[i] / seconds_per_Myr;
+			r_effective_pc[i] = sim.userData_.r_effective_vec_[i] / cm_per_pc;
+			r_spitzer_pc[i] = sim.userData_.r_spitzer_vec_[i] / cm_per_pc;
+			r_KM09_pc[i] = sim.userData_.r_KM09_vec_[i] / cm_per_pc;
+		}
+
 		// Plot radii vs time
 		matplotlibcpp::clf();
 		std::map<std::string, std::string> numerical_args;
@@ -572,11 +587,12 @@ auto problem_main() -> int
 		radpres_args["color"] = "C3";
 		radpres_args["linestyle"] = "-.";
 
-		matplotlibcpp::plot(sim.userData_.t_vec_, sim.userData_.r_effective_vec_, numerical_args);
-		matplotlibcpp::plot(sim.userData_.t_vec_, sim.userData_.r_spitzer_vec_, spitzer_args);
-		matplotlibcpp::plot(sim.userData_.t_vec_, sim.userData_.r_KM09_vec_, radpres_args);
-		matplotlibcpp::xlabel("time (s)");
-		matplotlibcpp::ylabel("radius (cm)");
+		matplotlibcpp::plot(t_Myr, r_effective_pc, numerical_args);
+		matplotlibcpp::plot(t_Myr, r_spitzer_pc, spitzer_args);
+		matplotlibcpp::plot(t_Myr, r_KM09_pc, radpres_args);
+		matplotlibcpp::xlabel("time (Myr)");
+		matplotlibcpp::ylabel("radius (pc)");
+		matplotlibcpp::title(plot_title);
 		matplotlibcpp::legend();
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("./dtype_front_radii.pdf");
@@ -597,10 +613,11 @@ auto problem_main() -> int
 		std::map<std::string, std::string> diff_KM09_args;
 		diff_KM09_args["label"] = "(r_effective - r_KM09) / dx";
 		diff_KM09_args["color"] = "C3";
-		matplotlibcpp::plot(sim.userData_.t_vec_, dev_spitzer_vec, diff_spitzer_args);
-		matplotlibcpp::plot(sim.userData_.t_vec_, dev_KM09_vec, diff_KM09_args);
-		matplotlibcpp::xlabel("time (s)");
+		matplotlibcpp::plot(t_Myr, dev_spitzer_vec, diff_spitzer_args);
+		matplotlibcpp::plot(t_Myr, dev_KM09_vec, diff_KM09_args);
+		matplotlibcpp::xlabel("time (Myr)");
 		matplotlibcpp::ylabel("delta r / dx");
+		matplotlibcpp::title(plot_title);
 		matplotlibcpp::legend();
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("./dtype_front_radii_difference.pdf");
