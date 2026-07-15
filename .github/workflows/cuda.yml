@@ -23,8 +23,8 @@ jobs:
     with:
       workflow_file: '.github/workflows/cuda.yml'
 
-  tests-cuda12:
-    name: CUDA@13.0 C++20 Release [build]
+  tests-cuda13:
+    name: CUDA@13.3 C++20 Release [build]
     runs-on: ubuntu-24.04
     needs: check_changes
     if: needs.check_changes.outputs.has_non_docs_changes == 'true'
@@ -40,7 +40,7 @@ jobs:
 
     - name: Dependencies
       run: |
-        extern/amrex/.github/workflows/dependencies/dependencies_nvcc.sh 13.0
+        extern/amrex/.github/workflows/dependencies/dependencies_nvcc.sh 13.3
         .github/workflows/dependencies/dependencies_ccache.sh
         sudo apt-get update && sudo apt-get install libhdf5-mpi-dev
 
@@ -85,5 +85,4 @@ jobs:
 
         ccache -s
         du -hs ~/.cache/ccache
-
 
