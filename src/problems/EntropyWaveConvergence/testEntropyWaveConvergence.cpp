@@ -304,7 +304,6 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 	hpp.query("angle_between_k_b0", angle_between_k_b0_deg);
 	constexpr double deg2rad = M_PI / 180.0;
 	angle_between_k_b0_rad = deg2rad * angle_between_k_b0_deg;
-	const double CFL_number = 0.2;
 	const int max_timesteps = std::max(20000, nx * 100);
 
 	int num_modes_x = 0;
@@ -388,7 +387,6 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 	// Run simulation
 	QuokkaSimulation<EntropyWaveLinear> sim(BCs_cc, BCs_fc);
 
-	sim.cflNumber_ = CFL_number;
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.setInitialConditions();

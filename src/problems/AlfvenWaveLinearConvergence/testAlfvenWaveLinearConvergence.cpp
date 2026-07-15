@@ -407,7 +407,6 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 	hpp.query("angle_between_k_b0", angle_between_k_b0_deg);
 	constexpr double deg2rad = M_PI / 180.0;
 	angle_between_k_b0_rad = deg2rad * angle_between_k_b0_deg;
-	const double CFL_number = 0.2;
 	const double cA = alfven_speed * std::abs(std::cos(angle_between_k_b0_rad));
 	const int max_timesteps = std::max(20000, nx * 100);
 
@@ -494,7 +493,6 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 	// Run simulation
 	QuokkaSimulation<AlfvenWaveLinear> sim(BCs_cc, BCs_fc);
 
-	sim.cflNumber_ = CFL_number;
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.setInitialConditions();
