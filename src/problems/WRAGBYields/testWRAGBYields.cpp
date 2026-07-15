@@ -1,5 +1,5 @@
-/// \file test_SNII_Yields.cpp
-/// \brief Defines a compact StochasticStellarPop test problem for SNII yield validation.
+/// \file testWRAGBYields.cpp
+/// \brief Defines a compact StochasticStellarPop test problem for WR/AGB yield validation.
 ///
 
 #include "AMReX_BLassert.H"
@@ -12,6 +12,7 @@
 #include "particles/particle_chemical_yield.hpp"
 #include "particles/particle_types.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <format>
 #include <fstream>
@@ -84,49 +85,82 @@ void assertClose(const std::string &label, amrex::Real simulated, amrex::Real ex
 }
 
 template <typename problem_t>
-void validateSNIIYields(const QuokkaSimulation<problem_t> &sim, const std::string &initial_particles_file, const std::vector<std::string> &isotopes)
+void validateWRAGBYields(const QuokkaSimulation<problem_t> &sim, const std::string &initial_particles_file, const std::vector<std::string> &isotopes)
 {
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(quokka::ChemicalYieldLookup::isLoaded(), "chemical yield tables were not loaded");
 	const auto records = readInitialParticleRecords(initial_particles_file, quokka::StochasticStellarPopParticleRealComps<problem_t>);
-	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!records.empty(), "test_SNII_Yields requires at least one initial particle");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(records.size() >= 2, "WRAGBYields requires at least two initial particles");
 
 	const auto tables = quokka::ChemicalYieldLookup::constTables();
-	const amrex::Real birth_mass = records.front().rdata[static_cast<std::size_t>(quokka::StochasticStellarPopParticleMassAtBirthIdx)];
+	int wr_index = -1;
+	int agb_index = -1;
+	for (std::size_t i = 0; i < records.size(); ++i) {
+		const amrex::Real mass_msun = records[i].rdata[static_cast<std::size_t>(quokka::StochasticStellarPopParticleMassAtBirthIdx)] / C::M_solar;
+		if (mass_msun >= 9.0 && wr_index < 0) {
+			wr_index = static_cast<int>(i);
+		}
+		if (mass_msun <= 8.0 && agb_index < 0) {
+			agb_index = static_cast<int>(i);
+		}
+	}
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(wr_index >= 0, "WRAGBYields did not find a WR-mass particle");
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(agb_index >= 0, "WRAGBYields did not find an AGB-mass particle");
 
-	amrex::Print() << "test_SNII_Yields simulated/table:\n";
+	const auto &wr_record = records[static_cast<std::size_t>(wr_index)].rdata;
+	const auto &agb_record = records[static_cast<std::size_t>(agb_index)].rdata;
+	const amrex::Real wr_mass = wr_record[static_cast<std::size_t>(quokka::StochasticStellarPopParticleMassAtBirthIdx)];
+	const amrex::Real agb_mass = agb_record[static_cast<std::size_t>(quokka::StochasticStellarPopParticleMassAtBirthIdx)];
+	const amrex::Real wr_birth_time = wr_record[static_cast<std::size_t>(quokka::StochasticStellarPopParticleBirthTimeIdx)];
+	const amrex::Real wr_death_time = wr_record[static_cast<std::size_t>(quokka::StochasticStellarPopParticleDeathTimeIdx)];
+	const amrex::Real wr_lifetime = std::max<amrex::Real>(wr_death_time - wr_birth_time, 0.0);
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(wr_lifetime > 0.0, "WR particle has non-positive lifetime");
+
+	const amrex::Real wr_elapsed = std::min(sim.tNew_[0] - wr_birth_time, wr_lifetime);
+	const amrex::Real wr_distribution = quokka::ChemicalYieldLookup::queryWRMassLossCumulativeFraction(tables, wr_elapsed, wr_mass / C::M_solar);
+
+	amrex::Print() << "WRAGBYields simulated/table:\n";
 	for (std::size_t n = 0; n < isotopes.size(); ++n) {
 		const int n_idx = static_cast<int>(n);
-		const amrex::Real expected = yieldFraction(tables, 0, n_idx, birth_mass) * birth_mass;
-		const amrex::Real measured = scalarMass(sim, n_idx);
-		assertClose(std::format("  {} scalar_{}", isotopes[n], n_idx), measured, expected);
+		const amrex::Real wr_expected = yieldFraction(tables, 1, n_idx, wr_mass) * wr_mass * wr_distribution;
+		const amrex::Real agb_expected = yieldFraction(tables, 2, n_idx, agb_mass) * agb_mass;
+		const amrex::Real total_expected = wr_expected + agb_expected;
+
+		const amrex::Real measured_total = scalarMass(sim, n_idx);
+		const amrex::Real measured_snii = scalarMass(sim, 3 + n_idx);
+		const amrex::Real measured_wr = scalarMass(sim, 6 + n_idx);
+		const amrex::Real measured_agb = scalarMass(sim, 9 + n_idx);
+
+		assertClose(std::format("  {} total scalar_{}", isotopes[n], n_idx), measured_total, total_expected);
+		assertClose(std::format("  {} WR scalar_{}", isotopes[n], 6 + n_idx), measured_wr, wr_expected);
+		assertClose(std::format("  {} AGB scalar_{}", isotopes[n], 9 + n_idx), measured_agb, agb_expected);
+		assertClose(std::format("  {} SNII scalar_{}", isotopes[n], 3 + n_idx), measured_snii, 0.0);
 	}
 }
 
 } // namespace
 
-struct test_SNII_Yields {
+struct WRAGBYields {
 };
 
 constexpr Real gamma_ = 5. / 3.;
-constexpr Real year = 3.15576e+07;
-static Real n0 = 1.0e4;									// NOLINT
-static Real Tamb = 10.0;								// NOLINT
-static std::string initial_particles_file = "../inputs/test_SNII_Yields_particles.txt"; // NOLINT
+static Real n0 = 1.0e4;									  // NOLINT
+static Real Tamb = 10.0;								  // NOLINT
+static std::string initial_particles_file = "../inputs/test_WR_AGB_yields_particles.txt"; // NOLINT
 
-template <> struct quokka::EOS_Traits<test_SNII_Yields> {
+template <> struct quokka::EOS_Traits<WRAGBYields> {
 	static constexpr double gamma = gamma_;
 	static constexpr double mean_molecular_weight = 1.0;
 };
 
-template <> struct Particle_Traits<test_SNII_Yields> : DefaultParticleTraits {
+template <> struct Particle_Traits<WRAGBYields> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::StochasticStellarPop;
 };
 
-template <> struct HydroSystem_Traits<test_SNII_Yields> {
+template <> struct HydroSystem_Traits<WRAGBYields> {
 	static constexpr bool reconstruct_eint = true;
 };
 
-template <> struct Physics_Traits<test_SNII_Yields> : DefaultPhysicsTraits {
+template <> struct Physics_Traits<WRAGBYields> : DefaultPhysicsTraits {
 	static constexpr bool is_self_gravity_enabled = false;
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_radiation_enabled = false;
@@ -134,7 +168,7 @@ template <> struct Physics_Traits<test_SNII_Yields> : DefaultPhysicsTraits {
 	static constexpr int nDustGroups = 1;
 	static constexpr bool is_mhd_enabled = false;
 	static constexpr int numMassScalars = 0;
-	static constexpr int numPassiveScalars = 3;
+	static constexpr int numPassiveScalars = 12; // total + SNII + WR + AGB for 3 isotopes
 	static constexpr int nGroups = 1;
 	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 	static constexpr double boltzmann_constant = C::k_B;
@@ -143,30 +177,33 @@ template <> struct Physics_Traits<test_SNII_Yields> : DefaultPhysicsTraits {
 	static constexpr double radiation_constant = C::a_rad;
 };
 
-template <> void QuokkaSimulation<test_SNII_Yields>::createInitialStochasticStellarPopParticles()
+template <> void QuokkaSimulation<WRAGBYields>::createInitialStochasticStellarPopParticles()
 {
-	const int nreal_extra = quokka::StochasticStellarPopParticleRealComps<test_SNII_Yields>;
+	const int nreal_extra = quokka::StochasticStellarPopParticleRealComps<WRAGBYields>;
 	StochasticStellarPopParticles->SetVerbose(1);
 	StochasticStellarPopParticles->InitFromAsciiFile(initial_particles_file, nreal_extra, nullptr);
 
+	// Force particle metadata using mass, avoiding tile-local particle ordering.
 	for (auto &kv : StochasticStellarPopParticles->GetParticles()) {
 		for (auto &ikv : kv) {
 			auto &particle_array = ikv.second.GetArrayOfStructs();
 			const int np = particle_array.numParticles();
-
 			if (np == 0) {
 				continue;
 			}
-
 			auto *pdata = particle_array().data();
-			const int chem_base = quokka::StochasticStellarPopParticleChemistryBaseIdx<test_SNII_Yields>();
+			const int chem_base = quokka::StochasticStellarPopParticleChemistryBaseIdx<WRAGBYields>();
 
 			amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int i) {
-				pdata[i].idata(quokka::StochasticStellarPopParticleStageIdx) = static_cast<int>(quokka::StellarEvolutionStage::SNProgenitor);
+				pdata[i].idata(quokka::StochasticStellarPopParticleStageIdx) =
+				    static_cast<int>(quokka::StellarEvolutionStage::HighMassNonExploding);
 				// Non-zero birth abundances catch accidental double-counting in table-driven yields.
 				pdata[i].rdata(chem_base) = 1.0e-3;
 				pdata[i].rdata(chem_base + 1) = 2.0e-3;
 				pdata[i].rdata(chem_base + 2) = 3.0e-3;
+				if (pdata[i].rdata(quokka::StochasticStellarPopParticleMassAtBirthIdx) <= 8.0 * C::M_solar) {
+					pdata[i].rdata(quokka::StochasticStellarPopParticleDeathTimeIdx) = 5.0e13;
+				}
 			});
 		}
 	}
@@ -174,7 +211,7 @@ template <> void QuokkaSimulation<test_SNII_Yields>::createInitialStochasticStel
 	amrex::Gpu::streamSynchronize();
 }
 
-template <> void QuokkaSimulation<test_SNII_Yields>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
+template <> void QuokkaSimulation<WRAGBYields>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
 {
 	const amrex::Box &indexRange = grid_elem.indexRange_;
 	const amrex::Array4<double> &state_cc = grid_elem.array_;
@@ -183,25 +220,25 @@ template <> void QuokkaSimulation<test_SNII_Yields>::setInitialConditionsOnGrid(
 	const double e_int = 1.0 / (gamma_ - 1.0) * rho * C::k_B * Tamb;
 
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-		state_cc(i, j, k, HydroSystem<test_SNII_Yields>::density_index) = rho;
-		state_cc(i, j, k, HydroSystem<test_SNII_Yields>::x1Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<test_SNII_Yields>::x2Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<test_SNII_Yields>::x3Momentum_index) = 0.0;
-		state_cc(i, j, k, HydroSystem<test_SNII_Yields>::energy_index) = e_int;
-		state_cc(i, j, k, HydroSystem<test_SNII_Yields>::internalEnergy_index) = e_int;
-		for (int n = 0; n < Physics_Traits<test_SNII_Yields>::numPassiveScalars; ++n) {
-			state_cc(i, j, k, HydroSystem<test_SNII_Yields>::scalar0_index + n) = 0.0;
+		state_cc(i, j, k, HydroSystem<WRAGBYields>::density_index) = rho;
+		state_cc(i, j, k, HydroSystem<WRAGBYields>::x1Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<WRAGBYields>::x2Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<WRAGBYields>::x3Momentum_index) = 0.0;
+		state_cc(i, j, k, HydroSystem<WRAGBYields>::energy_index) = e_int;
+		state_cc(i, j, k, HydroSystem<WRAGBYields>::internalEnergy_index) = e_int;
+		for (int n = 0; n < Physics_Traits<WRAGBYields>::numPassiveScalars; ++n) {
+			state_cc(i, j, k, HydroSystem<WRAGBYields>::scalar0_index + n) = 0.0;
 		}
 	});
 }
 
 auto problem_main() -> int
 {
-	QuokkaSimulation<test_SNII_Yields> sim;
+	QuokkaSimulation<WRAGBYields> sim;
 
 	sim.reconstructionOrder_ = 3;
 	sim.cflNumber_ = 0.5;
-	sim.stopTime_ = 1.0e7 * year;
+	sim.stopTime_ = 1.0e14;
 
 	const int seed = 42;
 	amrex::InitRandom(seed, 1);
@@ -214,7 +251,7 @@ auto problem_main() -> int
 	sim.setInitialConditions();
 
 	sim.evolve();
-	validateSNIIYields(sim, initial_particles_file, {"C12", "N14", "O16"});
-	amrex::Print() << "test_SNII_Yields completed\n";
+	validateWRAGBYields(sim, initial_particles_file, {"C12", "O16", "Fe56"});
+	amrex::Print() << "WRAGBYields completed\n";
 	return 0;
 }
