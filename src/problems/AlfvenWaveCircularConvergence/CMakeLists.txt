@@ -1,5 +1,5 @@
 if(AMReX_SPACEDIM EQUAL 3)
-  set(JOB_NAME MHDResistiveDiffusion)
+  set(JOB_NAME AlfvenWaveCircularConvergence)
 
   add_executable(${JOB_NAME} test${JOB_NAME}.cpp ${QuokkaObjSources})
 
@@ -11,5 +11,11 @@ if(AMReX_SPACEDIM EQUAL 3)
     NAME ${JOB_NAME}
     COMMAND ${JOB_NAME} ../inputs/${JOB_NAME}.toml
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
-  set_tests_properties(MHDResistiveDiffusion PROPERTIES LABELS "MHD")
+  set_tests_properties(AlfvenWaveCircularConvergence PROPERTIES LABELS "MHD")
+
+  add_test(
+    NAME AlfvenWaveCircular
+    COMMAND ${JOB_NAME} ../inputs/AlfvenWaveCircular.toml
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+  set_tests_properties(AlfvenWaveCircular PROPERTIES LABELS "MHD")
 endif()

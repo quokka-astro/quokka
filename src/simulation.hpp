@@ -975,6 +975,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default checkpoint prefix
 	pp.query("checkpoint_prefix", chk_file);
 
+	// Default statistics file name
+	pp.query("statistics_file", stats_file);
+
 	// Default do_reflux = 1
 	pp.query("do_reflux", do_reflux);
 
@@ -5219,6 +5222,7 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 			particles->SetParticleBoxArray(lev, current_ba[lev]);
 			particles->SetParticleDistributionMap(lev, current_dm[lev]);
 		}
+		particles->Define(this->GetParGDB());
 
 		// Redistribute particles to refined grid
 		particles->Redistribute();

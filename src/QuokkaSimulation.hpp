@@ -162,7 +162,8 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 							      // override real star formation rate from the simulation if non-negative
 	quokka::PeHeatingTables<> peHeatingTables_;
 
-	int enableCooling_ = 0;
+	int enableCooling_ = 1; // only takes effect when quokka::EOS<problem_t>::is_tabulated; lets tests disable the cooling integrator while still
+				// using the tabulated EOS to compute temperature
 	int enableChemistry_ = 0;
 	int enablePhotoChemistry_ = 0;
 	int enableTurbulence_ = 0;
@@ -177,7 +178,6 @@ template <typename problem_t> class QuokkaSimulation : public AMRSimulation<prob
 
 	amrex::Real electronConductionFluxLimiterPhi_ = 1.0;
 	amrex::Real electronConductionSaturationFactor_ = 5.0;
-	EOSFlagforConduction eosFlagForElectronConduction_ = EOSFlagforConduction::EOS;
 
 	std::map<std::string, std::string> turbParams_;
 
@@ -624,6 +624,19 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::constant) {
 			hpp.query("resistivity", mhdResistivity_);
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(mhdResistivity_ >= 0.0, "mhd.resistivity must be >= 0.");
+		} else if constexpr (Physics_Traits<problem_t>::resistivity_model == ResistivityModel::none ||
+				     Physics_Traits<problem_t>::resistivity_model == ResistivityModel::problem_defined) {
+			// mhd.resistivity is only read in the `constant` branch above; every other model falls
+			// through to here.
+			const bool resistivity_key_present = hpp.contains("resistivity");
+			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!resistivity_key_present, "mhd.resistivity is set in the input file, but this problem's "
+										   "Physics_Traits::resistivity_model is not `constant`, so this value is "
+										   "ignored (with `none`, no resistivity is applied; with "
+										   "`problem_defined`, resistivity comes from the problem's "
+										   "computeResistivity function instead). This is a compile-time trait, "
+										   "not a runtime switch: to test resistivity with this problem, set "
+										   "`resistivity_model = ResistivityModel::constant` in its Physics_Traits "
+										   "specialization and rebuild.");
 		}
 	}
 
@@ -641,29 +654,34 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 	bool cooling_table_include_pe = false;
 	{
 		amrex::ParmParse const hpp("cooling");
-		int alwaysReadTables = 0;
 		hpp.query("enabled", enableCooling_);
+		int alwaysReadTables = 0;
 		hpp.query("cooling_table_type", coolingTableType_);
 		hpp.query("read_tables_even_if_disabled", alwaysReadTables);
 		if (coolingTableType_.empty()) {
 			coolingTableType_ = "resampled";
 		}
+		if constexpr (quokka::EOS<problem_t>::is_tabulated) {
 #ifdef PHOTOCHEMISTRY
-		// Resampled cooling and photoionization chemistry both model H thermochemistry
-		// (heating, recombination cooling, collisional ionization cooling). Enabling both
-		// simultaneously double-counts these terms. See docs/markdown/photoionization.md §4.1.
-		if ((enablePhotoChemistry_ == 1) && (enableCooling_ == 1)) {
-			amrex::Abort("photochemistry.enabled = 1 and cooling.enabled = 1 cannot be used together. "
-				     "Photoionization handles its own H thermochemistry; the resampled cooling table "
-				     "would double-count those terms. See docs/markdown/photoionization.md.");
-		}
+			// Resampled cooling and photoionization chemistry both model H thermochemistry
+			// (heating, recombination cooling, collisional ionization cooling). Enabling both
+			// simultaneously double-counts these terms. See docs/markdown/photoionization.md §4.1.
+			if ((enablePhotoChemistry_ == 1) && (enableCooling_ == 1)) {
+				amrex::Abort("photochemistry.enabled = 1 and cooling.enabled = 1 cannot be used together with the EOSTabulated EOS backend. "
+					     "Photoionization handles its own H thermochemistry; the resampled cooling table "
+					     "would double-count those terms. See docs/markdown/photoionization.md.");
+			}
 #endif
-		if ((enableCooling_ == 1) || (alwaysReadTables == 1)) {
+		}
+		if (quokka::EOS<problem_t>::is_tabulated || (alwaysReadTables == 1)) {
 			hpp.query("hdf5_data_file", coolingTableFilename_);
 			if (coolingTableType_ == "resampled") {
 				// read resampled cooling tables
 				amrex::Print() << "Reading resampled cooling tables...\n";
 				cooling_table_include_pe = quokka::ResampledCooling::readResampledData(coolingTableFilename_, resampledTables_);
+				if constexpr (quokka::EOS<problem_t>::is_tabulated) {
+					quokka::ResampledCooling::registerEOSTabulated(resampledTables_.const_tables_host(), resampledTables_.const_tables());
+				}
 			} else {
 				amrex::Abort("Invalid cooling table type! Only 'resampled' is supported.");
 			}
@@ -678,7 +696,6 @@ template <typename problem_t> void QuokkaSimulation<problem_t>::readParmParse()
 		hpp.query("conduction_cfl", conductionCFL);
 		hpp.query("flux_limiter_phi", electronConductionFluxLimiterPhi_);
 		hpp.query("saturation_factor", electronConductionSaturationFactor_);
-		hpp.query("eos_flag", eosFlagForElectronConduction_);
 	}
 
 	// set turbulence runtime parameters
@@ -1092,19 +1109,14 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 	// start by assuming cooling integrator is successful.
 	bool cool_success = true;
 	auto const applyCooling = [&]() {
-		if (enableCooling_ == 1) {
+		if constexpr (quokka::EOS<problem_t>::is_tabulated) {
+			if (enableCooling_ != 1) {
+				return;
+			}
 			const Real external_heating_rate_per_H = computeExternalHeatingRate(time, dt); // unit: erg/s/H
 			const Real const_heating_rate_per_H = computePhotoelectricHeatingRate(time) + external_heating_rate_per_H;
-
-			if (coolingTableType_.empty()) {
-				coolingTableType_ = "resampled";
-			}
-			if (coolingTableType_ == "resampled") {
-				cool_success = quokka::ResampledCooling::computeCooling<problem_t>(state, state_fc, dt, resampledTables_, tempFloor_,
-												   const_heating_rate_per_H);
-			} else {
-				amrex::Abort("Invalid cooling table type! Only 'resampled' is supported.");
-			}
+			cool_success =
+			    quokka::ResampledCooling::computeCooling<problem_t>(state, state_fc, dt, resampledTables_, tempFloor_, const_heating_rate_per_H);
 		}
 	};
 
@@ -1142,9 +1154,8 @@ auto QuokkaSimulation<problem_t>::addStrangSplitSourcesWithBuiltin(amrex::MultiF
 			const quokka::conduction::ElectronConductionParams conduction_params{.conductivity_prefactor = electronConductionKappa0_,
 											     .flux_limiter_phi = electronConductionFluxLimiterPhi_,
 											     .saturation_factor = electronConductionSaturationFactor_,
-											     .min_temperature = tempFloor_,
-											     .eos_flag = eosFlagForElectronConduction_};
-			quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params, resampledTables_);
+											     .min_temperature = tempFloor_};
+			quokka::conduction::ElectronConduction<problem_t>::ComputeExplicit(state, state_fc, geom[lev], dt, conduction_params);
 		}
 	};
 
@@ -2342,6 +2353,8 @@ auto QuokkaSimulation<problem_t>::advanceHydroAtLevel(amrex::MultiFab &state_old
 		}
 		MHDSystem<problem_t>::ComputeEMF(ec_emf_components_fo, state_old_cc_tmp, FOfaceVel, state_old_fc_tmp, FOfast_mhd_wavespeeds, 1,
 						 emfAveragingScheme_, mhdPlmLimiter_, emfComputingScheme_, dx, mhdResistivity_);
+		// FOFC fallback cells (see replaceFluxes() below) would otherwise silently drop Joule heating.
+		MHDSystem<problem_t>::AddResistiveEnergyFlux(FOfluxArrays, state_old_fc_tmp, dx, mhdResistivity_);
 	}
 
 	// Stage 1 of RK2-SSP
