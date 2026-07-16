@@ -1,4 +1,4 @@
-# Optically-Thin Radiative Cooling
+# Cooling Module
 
 Radiative cooling in Quokka is selected at compile time by the `EOSBackend` member of `quokka::EOS_Traits<problem_t>`. The backend determines both how gas temperature is computed and whether a cooling source term is applied at all — there is no separate "enable cooling" trait.
 
