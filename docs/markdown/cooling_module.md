@@ -157,6 +157,8 @@ heating_rate_external = "max(min(1.0, 2.0 - time / (32 * Myr)), 0.0024) * 2e-26"
 
 ## Using cooling in a problem
 
+Tabulated cooling is the only cooling module currently supported: a problem gets radiative cooling by selecting the `EOSTabulated` backend, and `cooling.cooling_table_type` accepts only `"resampled"`. (`EOSMicrophysics` evolves its own thermochemistry through the reaction network, but that is the chemistry burner rather than this cooling operator, and is limited to Pop III problems.) The rest of this section covers setting up and using the tabulated backend.
+
 ### 1. Select the tabulated backend
 
 ```cpp
@@ -175,7 +177,25 @@ cooling.hdf5_data_file = "../extern/cooling/CloudyData_UVB=HM2012_resampled.h5"
 
 Quokka reads the table at startup and calls `quokka::ResampledCooling::computeCooling()` as a Strang-split operator each timestep. Cooling requires a non-isothermal EOS; it aborts if `gamma = 1`. It also cannot be combined with photoionization (`photochemistry.enabled = 1`), which models the same hydrogen thermochemistry — see [Photoionization](photoionization.md).
 
-### 3. Access thermodynamic quantities in callbacks
+### 3. Choose how photoelectric heating is treated
+
+The table file and `use_sfh_based_pe_heating` together select one of three mutually exclusive treatments of grain photoelectric heating:
+
+| Treatment | Table file | `use_sfh_based_pe_heating` |
+|-----------|-----------|----------------------------|
+| No photoelectric heating | `_noPE` | `0` (default) |
+| Constant PE heating, baked into the table | without `_noPE` | `0` (default) |
+| Time-variable PE heating from the star formation rate | `_noPE` | `1` |
+
+- **Ignore photoelectric heating** — use a `_noPE` table. Appropriate where the ISRF is irrelevant or supplied by other means.
+- **Constant PE heating** — use a table without `_noPE`. The Wolfire et al. (2003) rate for a fixed \\(G\_0 = 1.7\\) is baked in at table-generation time, so it costs nothing at runtime but cannot respond to the simulation.
+- **Star-formation-rate-based PE heating** — use a `_noPE` table *and* set `use_sfh_based_pe_heating = 1`, so the ISRF tracks the stars the simulation forms. See [the section below](#star-formation-history-based-photoelectric-heating) for the required parameters.
+
+The third option requires a `_noPE` table because the SFH-based rate **replaces** the table's static PE term rather than supplementing it; pairing it with a PE-inclusive table would double-count the heating. Quokka enforces this at startup by checking the table's `include_pe` attribute (the filename is only a naming convention) and aborting on a mismatch.
+
+An external `heating_rate_external` expression is independent of this choice and is simply added to whichever rate applies.
+
+### 4. Access thermodynamic quantities in callbacks
 
 Prefer `quokka::EOS<problem_t>`, which forwards to the selected backend and therefore works for any problem:
 
@@ -199,7 +219,7 @@ amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 });
 ```
 
-### 4. Cooling length estimate
+### 5. Cooling length estimate
 
 ```cpp
 const Real l_cool = quokka::ResampledCooling::ComputeCoolingLength(rho, Eint, tables);
