@@ -11,6 +11,7 @@
 
 // c++ headers
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 // library headers
@@ -165,7 +166,8 @@ template <typename problem_t> class HydroSystem : public HyperbolicSystem<proble
 
 	template <typename DensityFloorFunc>
 	static void EnforceLimits(amrex::Real densityFloor, amrex::Real dustDensityFloor, amrex::Real tempFloor, amrex::MultiFab &state_mf,
-				  amrex::Geometry const &geom, DensityFloorFunc const &density_floor_func);
+				  std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc_mf, amrex::Geometry const &geom,
+				  DensityFloorFunc const &density_floor_func);
 
 	static void AddInternalEnergyPdV(amrex::MultiFab &rhs_mf, amrex::MultiFab const &consVar_mf,
 					 std::array<amrex::MultiFab, AMREX_SPACEDIM> const &cons_fc_mf, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
@@ -1013,9 +1015,17 @@ void HydroSystem<problem_t>::FlattenShocks(amrex::MultiFab const &q_mf, amrex::M
 template <typename problem_t>
 template <typename DensityFloorFunc>
 void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex::Real const dustDensityFloor, amrex::Real const tempFloor,
-					   amrex::MultiFab &state_mf, amrex::Geometry const &geom, DensityFloorFunc const &density_floor_func)
+					   amrex::MultiFab &state_mf, std::array<amrex::MultiFab, AMREX_SPACEDIM> const &state_fc_mf,
+					   amrex::Geometry const &geom, DensityFloorFunc const &density_floor_func)
 {
 	auto state = state_mf.arrays();
+	auto const &state_fc_x0 = state_fc_mf[0].const_arrays();
+#if AMREX_SPACEDIM >= 2
+	auto const &state_fc_x1 = state_fc_mf[1].const_arrays();
+#endif
+#if AMREX_SPACEDIM == 3
+	auto const &state_fc_x2 = state_fc_mf[2].const_arrays();
+#endif
 	auto const prob_lo = geom.ProbLoArray();
 	auto const dx = geom.CellSizeArray();
 
@@ -1095,13 +1105,40 @@ void HydroSystem<problem_t>::EnforceLimits(amrex::Real const densityFloor, amrex
 			amrex::Real const Ekin = 0.5 * rho_new * (vx1 * vx1 + vx2 * vx2 + vx3 * vx3);
 
 			// Enforce temperature floor (for total energy)
+			// First-capture face-centered arrays before any constexpr-if context for CUDA.
+			std::remove_cv_t<std::remove_reference_t<decltype(state_fc_x0[bx])>> state_fc_x0_ref{};
+#if AMREX_SPACEDIM >= 2
+			std::remove_cv_t<std::remove_reference_t<decltype(state_fc_x1[bx])>> state_fc_x1_ref{};
+#endif
+#if AMREX_SPACEDIM == 3
+			std::remove_cv_t<std::remove_reference_t<decltype(state_fc_x2[bx])>> state_fc_x2_ref{};
+#endif
+			if (Physics_Traits<problem_t>::is_mhd_enabled) {
+				state_fc_x0_ref = state_fc_x0[bx];
+#if AMREX_SPACEDIM >= 2
+				state_fc_x1_ref = state_fc_x1[bx];
+#endif
+#if AMREX_SPACEDIM == 3
+				state_fc_x2_ref = state_fc_x2[bx];
+#endif
+			}
+			std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> state_fc{};
+			state_fc[0] = state_fc_x0_ref;
+#if AMREX_SPACEDIM >= 2
+			state_fc[1] = state_fc_x1_ref;
+#endif
+#if AMREX_SPACEDIM == 3
+			state_fc[2] = state_fc_x2_ref;
+#endif
+
+			amrex::Real const Emag = ComputeMagneticEnergy(i, j, k, &state_fc);
+			amrex::Real const Eint = ComputeInternalEnergy(state[bx], i, j, k, &state_fc);
 			amrex::GpuArray<Real, nmscalars_> const massScalars = RadSystem<problem_t>::ComputeMassScalars(state[bx], i, j, k);
-			amrex::Real const Etot = state[bx](i, j, k, energy_index);
-			amrex::Real const primTemp = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho_new, (Etot - Ekin), massScalars);
+			amrex::Real const primTemp = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho_new, Eint, massScalars);
 
 			if (primTemp < tempFloor) {
 				amrex::Real const prim_eint = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho_new, tempFloor, massScalars);
-				state[bx](i, j, k, energy_index) = Ekin + prim_eint;
+				state[bx](i, j, k, energy_index) = Ekin + Emag + prim_eint;
 			}
 
 			// Enforce temperature floor (for auxiliary internal energy)
@@ -1524,7 +1561,8 @@ void HydroSystem<problem_t>::ComputeFluxes(amrex::MultiFab &x1Flux_mf, amrex::Mu
 			F[internalEnergy_index] = 0;
 		}
 
-		// compute face-centered normal velocity using HLL star state
+		// compute face-centered normal velocity using HLL star state; matches Mignone21a eqn. (29), feeds
+		// ComputeEMF_Quokka2026's face velocity.
 		if constexpr (Physics_Traits<problem_t>::is_mhd_enabled) {
 			quokka::Array4View<amrex::Real, DIR> x1FSpds(x1FSpds_ref);
 			amrex::Real const fspd_m = x1FSpds(i, j, k, 0);

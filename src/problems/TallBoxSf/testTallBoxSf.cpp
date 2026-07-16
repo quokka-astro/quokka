@@ -67,6 +67,7 @@ template <> struct HydroSystem_Traits<TheProblem> {
 template <> struct quokka::EOS_Traits<TheProblem> {
 	static constexpr double gamma = 5. / 3.;
 	static constexpr double mean_molecular_weight = mu;
+	using EOSBackend = quokka::EOSTabulated<TheProblem>;
 };
 
 template <> struct Physics_Traits<TheProblem> : DefaultPhysicsTraits {
@@ -188,7 +189,7 @@ template <> void QuokkaSimulation<TheProblem>::preCalculateInitialConditions()
 		if (!userData_.IC_file.empty()) {
 			amrex::Print() << "Reading initial conditions from: " << userData_.IC_file << "\n";
 			// Read CSV file with linear spacing for outputs
-			userData_.ic_table = quokka::DataTable<1, 3, quokka::OutOfBounds::clamp>::CSVReader(userData_.IC_file, quokka::SpacingType::linear);
+			userData_.ic_table = quokka::DataTable<1, 3, quokka::OutOfBounds::clamp>::CSVReader(userData_.IC_file, quokka::TransformType::linear);
 			AMREX_ALWAYS_ASSERT_WITH_MESSAGE(userData_.ic_table.is_initialized(), "Initial conditions table failed to load.");
 			amrex::Print() << "Initial conditions table loaded successfully.\n";
 		} else {
@@ -304,11 +305,10 @@ void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::string const 
 		amrex::Gpu::streamSynchronize();
 	} else if (dname == "temperature") {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "diagnostics require resampled cooling tables.");
-		auto tables = resampledTables_.const_tables();
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 			Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
 			Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
-			output[bx](i, j, k, ncomp) = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+			output[bx](i, j, k, ncomp) = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho, Eint);
 		});
 	} else if (dname == "c_s") {
 		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(coolingTableType_ == "resampled", "diagnostics require resampled cooling tables.");
@@ -326,28 +326,27 @@ void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::string const 
 			output[bx](i, j, k, ncomp) = scalar0 * vz;
 		});
 	} else {
-		auto tables = resampledTables_.const_tables();
 		Real const hot_T = userData_.hot_T;
 		Real const warm_T = userData_.warm_T;
 		if (dname == "hot_gas_z_outflow_rate") {
 			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 				Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
 				Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
-				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+				Real const Tgas = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho, Eint);
 				output[bx](i, j, k, ncomp) = (Tgas > hot_T) ? state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index) : 0.0;
 			});
 		} else if (dname == "warm_gas_z_outflow_rate") {
 			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 				Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
 				Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
-				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+				Real const Tgas = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho, Eint);
 				output[bx](i, j, k, ncomp) = (Tgas < warm_T) ? state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index) : 0.0;
 			});
 		} else if (dname == "hot_scalar0_z_outflow_rate") {
 			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 				Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
 				Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
-				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+				Real const Tgas = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho, Eint);
 				Real const vz = state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index) / rho;
 				Real const scalar0 = state[bx](i, j, k, HydroSystem<TheProblem>::scalar0_index);
 				output[bx](i, j, k, ncomp) = (Tgas > hot_T) ? scalar0 * vz : 0.0;
@@ -356,7 +355,7 @@ void QuokkaSimulation<TheProblem>::ComputeDerivedVar(int lev, std::string const 
 			amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
 				Real const rho = state[bx](i, j, k, HydroSystem<TheProblem>::density_index);
 				Real const Eint = HydroSystem<TheProblem>::ComputeInternalEnergy(state[bx], i, j, k, nullptr);
-				Real const Tgas = quokka::ResampledCooling::ComputeTgasFromEgas(rho, Eint, tables);
+				Real const Tgas = quokka::EOS<TheProblem>::ComputeTgasFromEint(rho, Eint);
 				Real const vz = state[bx](i, j, k, HydroSystem<TheProblem>::x3Momentum_index) / rho;
 				Real const scalar0 = state[bx](i, j, k, HydroSystem<TheProblem>::scalar0_index);
 				output[bx](i, j, k, ncomp) = (Tgas < warm_T) ? scalar0 * vz : 0.0;

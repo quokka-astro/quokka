@@ -420,7 +420,6 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 	constexpr double deg2rad = M_PI / 180.0;
 	angle_between_k_b0_rad = deg2rad * angle_between_k_b0_deg;
 
-	const double CFL_number = 0.2;
 	const double a = sound_speed;
 	const double vA = alfven_speed;
 	const double cosθ = std::cos(angle_between_k_b0_rad);
@@ -508,7 +507,6 @@ auto runWaveTest(int nx, int ny, int nz) -> double
 	// Run simulation
 	QuokkaSimulation<FastWaveConvergence> sim(BCs_cc, BCs_fc);
 
-	sim.cflNumber_ = CFL_number;
 	sim.stopTime_ = max_time;
 	sim.maxTimesteps_ = max_timesteps;
 	sim.setInitialConditions();
@@ -538,8 +536,8 @@ auto problem_main() -> int
 		amrex::ParmParse const mhd_pp("mhd");
 		mhd_pp.query("resistivity", eta);
 		if (eta != 0.0) {
-			amrex::Abort("FastWaveConvergence does not support mhd.resistivity != 0; use the AlfvenWaveLinear fixed-resolution test for "
-				     "resistivity validation.");
+			amrex::Abort("FastWaveConvergence does not support mhd.resistivity != 0; use AlfvenWaveLinearConvergence "
+				     "for resistivity validation.");
 		}
 	}
 

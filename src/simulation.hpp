@@ -68,11 +68,13 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_Print.H"
 #include "AMReX_REAL.H"
 #include "AMReX_SPACE.H"
+#include "AMReX_TypeTraits.H"
 #include "AMReX_Utility.H"
 #include "AMReX_Vector.H"
 #include "AMReX_VisMF.H"
 #include "util/BC.hpp"
 #include "util/time_units.hpp"
+#include "util/volume_integral.hpp"
 #include <AMReX_FluxRegister.H>
 #include <format>
 #include <unordered_set>
@@ -471,7 +473,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 	AMREX_GPU_DEVICE static void setConstantDirichletBCFaceVarHi(amrex::IntVect const &iv, amrex::Array4<amrex::Real> const &consVar_fc,
 								     amrex::GeometryData const &geom, amrex::GpuArray<amrex::Real, ncomp> const &values);
 
-	// compute volume integrals
+	// compute volume integrals. The callback signature is (i, j, k, state_cc, state_fc).
 	template <typename F> auto computeVolumeIntegral(F const &user_f) -> amrex::Real;
 
 	// I/O functions
@@ -603,7 +605,7 @@ template <typename problem_t> class AMRSimulation : public amrex::AmrCore
 
 	bool useLuminosityTable_ = true;
 	std::string luminosityTableFilename_;
-	quokka::SpacingType rad_table_output_spacing_ = quokka::SpacingType::fast_log;
+	quokka::TransformType rad_table_output_transform_ = quokka::TransformType::fast_log;
 
 #if AMREX_SPACEDIM == 3
 	quokka::LuminosityTables<Physics_Traits<problem_t>::nGroups> luminosityTables_;
@@ -973,6 +975,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 	// Default checkpoint prefix
 	pp.query("checkpoint_prefix", chk_file);
 
+	// Default statistics file name
+	pp.query("statistics_file", stats_file);
+
 	// Default do_reflux = 1
 	pp.query("do_reflux", do_reflux);
 
@@ -1107,7 +1112,8 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 		amrex::ParmParse const ppp("particles");
 		ppp.query("use_luminosity_table", useLuminosityTable_);
 		ppp.query("rad_table", luminosityTableFilename_);
-		ppp.query("rad_table_output_spacing", rad_table_output_spacing_);
+		ppp.query("rad_table_output_spacing", rad_table_output_transform_);   // legacy key (pre-rename)
+		ppp.query("rad_table_output_transform", rad_table_output_transform_); // new key takes precedence
 		ppp.query("split_particles_on_restart_refine", splitParticlesOnRestartRefine_);
 
 		// if particle and radiation are enabled
@@ -1120,7 +1126,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 				amrex::Print() << "Loading luminosity table from: " << luminosityTableFilename_ << "\n";
 
 				// Use specified spacing for luminosity values
-				luminosityTables_.luminosity = quokka::DataTable<2, nGroups>::CSVReader(luminosityTableFilename_, rad_table_output_spacing_);
+				luminosityTables_.luminosity = quokka::DataTable<2, nGroups>::CSVReader(luminosityTableFilename_, rad_table_output_transform_);
 
 				amrex::Print() << "Luminosity table loaded successfully.\n";
 				amrex::Print() << std::format("\tTable dimensions: {} x {}\n", luminosityTables_.luminosity.size(0),
@@ -3527,28 +3533,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::AverageDownTo(int c
 
 template <typename problem_t> template <typename F> auto AMRSimulation<problem_t>::computeVolumeIntegral(F const &user_f) -> amrex::Real
 {
-	// compute integral of user_f(i, j, k, state) along the given axis.
-	const BL_PROFILE("AMRSimulation::computeVolumeIntegral()");
-
-	// allocate temporary multifabs
-	amrex::Vector<amrex::MultiFab> q;
-	q.resize(finest_level + 1);
-	for (int lev = 0; lev <= finest_level; ++lev) {
-		q[lev].define(boxArray(lev), DistributionMap(lev), 1, 0);
-	}
-
-	// evaluate user_f on all levels
-	// (note: it is not necessary to average down)
-	for (int lev = 0; lev <= finest_level; ++lev) {
-		auto const &state = state_new_cc_[lev].const_arrays();
-		auto const &result = q[lev].arrays();
-		amrex::ParallelFor(q[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) { result[bx](i, j, k) = user_f(i, j, k, state[bx]); });
-	}
-	amrex::Gpu::streamSynchronize();
-
-	// call amrex::volumeWeightedSum
-	const amrex::Real result = amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(q), 0, geom, ref_ratio);
-	return result;
+	return quokka::computeVolumeIntegral<problem_t>(finest_level, state_new_cc_, state_new_fc_, Geom(), refRatio(), user_f);
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::InitParticles()
@@ -4784,6 +4769,10 @@ template <typename problem_t> auto AMRSimulation<problem_t>::readCheckpointHeade
 
 	// read in finest_level
 	is >> finest_level;
+	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(finest_level <= max_level,
+					 std::format("Checkpoint '{}' contains AMR levels 0-{}, but the restart input configured amr.max_level = {}. "
+						     "Restart with amr.max_level >= {} or use a checkpoint with fewer levels.",
+						     restart_file, finest_level, max_level, finest_level));
 	GotoNextLine(is);
 
 	// read in array of istep
@@ -5229,6 +5218,7 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 			particles->SetParticleBoxArray(lev, current_ba[lev]);
 			particles->SetParticleDistributionMap(lev, current_dm[lev]);
 		}
+		particles->Define(this->GetParGDB());
 
 		// Redistribute particles to refined grid
 		particles->Redistribute();
