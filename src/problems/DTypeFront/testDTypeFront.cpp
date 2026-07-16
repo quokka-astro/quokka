@@ -4,7 +4,7 @@
 // Released under the MIT license. See LICENSE file included in the GitHub repo.
 //==============================================================================
 /// \file testDTypeFront.cpp
-/// \brief Defines a test problem for the static Stromgren sphere with no temperature dependence.
+/// \brief Defines a test problem for a D Type front.
 ///
 
 #include "AMReX.H"
@@ -67,7 +67,7 @@ template <> struct RadSystem_Traits<DTypeFront> {
 	static constexpr double Erad_floor = C::a_rad * 1.0e-8;
 	// beta_order = 0 disables the O(v/c) radiation terms, including the photoionization work term
 	// (photochemistry momentum deposition is gated on beta_order == 1), so this test validates pure
-	// thermal-pressure D-type front expansion against the Spitzer solution without radiation pressure.
+	// thermal-pressure D-type front expansion with radiation pressure.
 	static constexpr int beta_order = 1;
 	static constexpr auto ChemBands() { return ChemBandsHeader_; }
 };
@@ -86,6 +86,9 @@ template <> struct SimulationData<DTypeFront> {
 	amrex::Vector<amrex::Real> r_analytical_vec_;
 	amrex::Real r_analytical_last_t{};
 	amrex::Real r_analytical_last_R{};
+	// zeta = r_ch/r_s (constant for a given problem setup); set once in computeAfterTimestep so
+	// problem_main can select the appropriate pass/fail check for the regime.
+	amrex::Real zeta_{};
 	std::ofstream output_file_;
 };
 
@@ -398,22 +401,39 @@ template <> void QuokkaSimulation<DTypeFront>::computeAfterTimestep()
 	const int lev = 0;
 	const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = geom[lev].CellSizeArray();
 	const amrex::Real r_effective = compute_effective_radius(state_new_cc_[lev], dx);
+	const amrex::Real t = tNew_[lev];
 	userData_.r_effective_vec_.push_back(r_effective);
-	userData_.t_vec_.push_back(tNew_[lev]);
+	userData_.t_vec_.push_back(t);
 
 	const amrex::Real n_e = userData_.primary_species_2;
-	const double T_eq = compute_equilibrium_temperature_ionized(static_cast<double>(n_e));
-	const double alpha_B = 2.6e-13 * std::pow(T_eq / 1.0e4, -0.7);
-	const double mu = 0.5;
-	const double c_i = std::sqrt(C::k_B * T_eq / (mu * C::m_p));
-	const amrex::Real r_s = std::pow((3.0_rt * userData_.Q) / (4.0_rt * M_PI * alpha_B * n_e * n_e), 1.0_rt / 3.0_rt);
-	const amrex::Real t_s = r_s / static_cast<amrex::Real>(c_i);
+	const amrex::Real T_eq = compute_equilibrium_temperature_ionized(n_e);
+	const amrex::Real alpha_B = 2.6e-13 * std::pow(T_eq / 1.0e4, -0.7);
+	const amrex::Real mu = 0.5;
+	const amrex::Real Q = userData_.Q;
+	const amrex::Real c_i = std::sqrt(C::k_B * T_eq / (mu * C::m_p));
+	const amrex::Real rho =
+	    userData_.primary_species_1 * spmasses[0] + userData_.primary_species_2 * spmasses[1] + userData_.primary_species_3 * spmasses[2];
+	const amrex::Real eps = RadSystem<DTypeFront>::GetChemBandQuanta(0);
 
-	const amrex::Real t = tNew_[lev];
-	amrex::Real r_analytical = 0.0_rt;
-	if (t_s > 0.0_rt) {
-		r_analytical = r_s * std::pow(1.0_rt + 7.0_rt * t / (4.0_rt * t_s), 4.0_rt / 7.0_rt);
-	}
+	const amrex::Real r_s = std::pow((3.0_rt * userData_.Q) / (4.0_rt * M_PI * alpha_B * n_e * n_e), 1.0_rt / 3.0_rt);
+	const amrex::Real t_s = r_s / c_i;
+
+	const amrex::Real r_ch = Q * eps * eps * alpha_B / (12.0_rt * M_PI * C::k_B * C::k_B * T_eq * T_eq * C::c_light * C::c_light);
+	const amrex::Real t_ch = std::sqrt(4 * M_PI * rho * r_ch * r_ch * r_ch * r_ch * C::c_light / (3.0_rt * Q * eps));
+
+	// Spitzer gas-pressure D-type solution
+	const amrex::Real r_spitzer = r_s * std::pow(1.0_rt + 7.0_rt * t / (4.0_rt * t_s), 4.0_rt / 7.0_rt);
+
+	// Krumholz & Matzner (2009) solution
+	const amrex::Real tau = t / t_ch;
+	const amrex::Real x_rad = std::pow(2.0_rt * tau * tau, 1.0_rt / 4.0_rt);
+	const amrex::Real x_gas = std::pow(49.0_rt / (36.0_rt) * tau * tau, 2.0_rt / 7.0_rt);
+	const amrex::Real x = std::pow(std::pow(x_rad, 7.0_rt / 2.0_rt) + std::pow(x_gas, 7.0_rt / 2.0_rt), 2.0_rt / 7.0_rt);
+	const amrex::Real r_KM09 = r_ch * x;
+	const amrex::Real zeta = r_ch / r_s;
+	const amrex::Real r_analytical = (zeta > 1.0_rt) ? r_KM09 : r_spitzer;
+	userData_.zeta_ = zeta;
+
 	userData_.r_analytical_vec_.push_back(r_analytical);
 
 	if (amrex::ParallelDescriptor::IOProcessor()) {
@@ -442,26 +462,40 @@ auto problem_main() -> int
 
 	sim.evolve();
 
-	// Check 1: effective radius vs analytical radius at end of simulation
+	// Check 1: effective radius vs analytical radius at end of simulation.
 	{
 		const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx = sim.geom[0].CellSizeArray();
 		const amrex::Real cell_size = dx[0];
 		const amrex::Real tol_cells = 3.0_rt * std::sqrt(3.0_rt) / 2.0_rt;
+		const amrex::Real tol_percent = 10.0_rt;
+		const bool gas_regime = sim.userData_.zeta_ < 1.0_rt;
 
 		if (!sim.userData_.r_effective_vec_.empty()) {
 			const amrex::Real r_analytical = sim.userData_.r_analytical_vec_.back();
 			const amrex::Real r_effective = sim.userData_.r_effective_vec_.back();
 			const amrex::Real delta_over_dx = (r_effective - r_analytical) / cell_size;
-			if ((delta_over_dx < -tol_cells) || (delta_over_dx > tol_cells)) {
+			const amrex::Real percent_diff = std::abs(r_effective - r_analytical) / r_analytical * 100.0_rt;
+
+			const bool failed = gas_regime ? ((delta_over_dx < -tol_cells) || (delta_over_dx > tol_cells)) : (percent_diff > tol_percent);
+
+			if (failed) {
 				amrex::Print() << "Test FAILED: radius check at end of simulation.\n";
 				amrex::Print() << "Analytical radius: " << r_analytical << '\n';
 				amrex::Print() << "Effective radius: " << r_effective << '\n';
-				amrex::Print() << "(r_effective - r_analytical) / dx = " << delta_over_dx << '\n';
-				amrex::Print() << "Tolerance: " << tol_cells << " cell sizes\n";
+				if (gas_regime) {
+					amrex::Print() << "(r_effective - r_analytical) / dx = " << delta_over_dx << '\n';
+					amrex::Print() << "Tolerance: " << tol_cells << " cell sizes\n";
+				} else {
+					amrex::Print() << "Difference: " << percent_diff << " percent\n";
+					amrex::Print() << "Tolerance: " << tol_percent << " percent\n";
+				}
 				status = 1;
-			} else {
+			} else if (gas_regime) {
 				amrex::Print() << "Test passed: D-type front effective radius matches analytical radius within " << tol_cells
 					       << " cell sizes at end of simulation.\n";
+			} else {
+				amrex::Print() << "Test passed: D-type front effective radius matches analytical radius within " << tol_percent
+					       << " percent at end of simulation.\n";
 			}
 		}
 	}
@@ -476,7 +510,7 @@ auto problem_main() -> int
 
 		amrex::MultiFab const &state_mf = sim.state_new_cc_[0];
 
-		// Collect temperatures per region: cavity (1% < x_HII < 99%), neutral (x_HI > 99.99%)
+		// Collect temperatures per region: cavity (x_HII > 90%), neutral (x_HI > 99.99%)
 		std::vector<double> cavity_temps;
 		std::vector<double> neutral_temps;
 
@@ -512,7 +546,7 @@ auto problem_main() -> int
 				eos(eos_input_re, bstate);
 				const double T_cell = bstate.T;
 
-				if (x_HII > 0.01_rt && x_HII < 0.99_rt) {
+				if (x_HII > 0.90_rt) {
 					cavity_temps.push_back(T_cell);
 				}
 				if (x_HI > 0.9999_rt) {
@@ -580,6 +614,17 @@ auto problem_main() -> int
 
 #ifdef HAVE_PYTHON
 	if (amrex::ParallelDescriptor::IOProcessor()) {
+		constexpr amrex::Real seconds_per_Myr = 3.15576e13;
+		constexpr amrex::Real cm_per_pc = 3.085677581491367e18;
+
+		std::vector<amrex::Real> t_Myr(sim.userData_.t_vec_.size());
+		std::vector<amrex::Real> r_effective_pc(sim.userData_.t_vec_.size());
+		std::vector<amrex::Real> r_analytical_pc(sim.userData_.t_vec_.size());
+		for (int i = 0; i < static_cast<int>(sim.userData_.t_vec_.size()); ++i) {
+			t_Myr[i] = sim.userData_.t_vec_[i] / seconds_per_Myr;
+			r_effective_pc[i] = sim.userData_.r_effective_vec_[i] / cm_per_pc;
+			r_analytical_pc[i] = sim.userData_.r_analytical_vec_[i] / cm_per_pc;
+		}
 		// Plot radii vs time
 		matplotlibcpp::clf();
 		std::map<std::string, std::string> numerical_args;
@@ -590,10 +635,10 @@ auto problem_main() -> int
 		analytical_args["color"] = "k";
 		analytical_args["linestyle"] = "--";
 
-		matplotlibcpp::plot(sim.userData_.t_vec_, sim.userData_.r_effective_vec_, numerical_args);
-		matplotlibcpp::plot(sim.userData_.t_vec_, sim.userData_.r_analytical_vec_, analytical_args);
-		matplotlibcpp::xlabel("time (s)");
-		matplotlibcpp::ylabel("radius (cm)");
+		matplotlibcpp::plot(t_Myr, r_effective_pc, numerical_args);
+		matplotlibcpp::plot(t_Myr, r_analytical_pc, analytical_args);
+		matplotlibcpp::xlabel("time (Myr)");
+		matplotlibcpp::ylabel("radius (pc)");
 		matplotlibcpp::legend();
 		matplotlibcpp::tight_layout();
 		matplotlibcpp::save("./dtype_front_radii.pdf");
@@ -609,8 +654,8 @@ auto problem_main() -> int
 		std::map<std::string, std::string> diff_args;
 		diff_args["label"] = "(r_effective - r_analytical) / dx";
 		diff_args["color"] = "C1";
-		matplotlibcpp::plot(sim.userData_.t_vec_, delta_over_dx_vec, diff_args);
-		matplotlibcpp::xlabel("time (s)");
+		matplotlibcpp::plot(t_Myr, delta_over_dx_vec, diff_args);
+		matplotlibcpp::xlabel("time (Myr)");
 		matplotlibcpp::ylabel("delta r / dx");
 		matplotlibcpp::legend();
 		matplotlibcpp::tight_layout();
