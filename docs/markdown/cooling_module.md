@@ -32,7 +32,9 @@ Applies optically-thin radiative cooling as a Strang-split source term, and comp
 
 ### EOSMicrophysics
 
-Delegates the EOS to the [Microphysics](https://github.com/AMReX-Astro/Microphysics) submodule, so that temperature is consistent with the evolving chemical species tracked by the reaction network (`chemstate.xn`). Cooling and heating are handled by the network itself rather than by a table, and are advanced by the chemistry burner (`quokka::chemistry::computeChemistry`) rather than by the cooling integrator. This backend is only used for primordial (Pop III) chemistry problems such as `PrimordialChem`, whose CMake target compiles with `-DCHEMISTRY`; see the chemistry module for details.
+Delegates the EOS to the [Microphysics](https://github.com/AMReX-Astro/Microphysics) submodule, so that temperature is consistent with the evolving chemical species tracked by the reaction network (`chemstate.xn`). Cooling and heating are handled by the network itself rather than by a table, and are advanced by the chemistry burner (`quokka::chemistry::computeChemistry`) rather than by the cooling integrator.
+
+This is the backend for every target compiled with `CHEMISTRY` or `PHOTOCHEMISTRY`, which covers both primordial chemistry problems (`PrimordialChem`, `PopIII`) and photoionization problems (`DTypeFront`, `DTypeFrontVC`, `StromgrenSphere`, `StromgrenSphereRSLA`, `OneZonePhotoionization`) — including hydro-enabled ones. None of these set `EOSBackend` explicitly; they receive `EOSMicrophysics` through `DefaultEOSBackend` by virtue of their compile definition. See the chemistry module and [Photoionization](photoionization.md) for details.
 
 ## The EOSTabulated cooling model
 
@@ -157,7 +159,7 @@ heating_rate_external = "max(min(1.0, 2.0 - time / (32 * Myr)), 0.0024) * 2e-26"
 
 ## Using cooling in a problem
 
-Tabulated cooling is the only cooling module currently supported: a problem gets radiative cooling by selecting the `EOSTabulated` backend, and `cooling.cooling_table_type` accepts only `"resampled"`. (`EOSMicrophysics` evolves its own thermochemistry through the reaction network, but that is the chemistry burner rather than this cooling operator, and is limited to Pop III problems.) The rest of this section covers setting up and using the tabulated backend.
+Tabulated cooling is the only cooling module currently supported: a problem gets radiative cooling by selecting the `EOSTabulated` backend, and `cooling.cooling_table_type` accepts only `"resampled"`. (`EOSMicrophysics` evolves its own thermochemistry through the reaction network, but that is the chemistry burner rather than this cooling operator.) The rest of this section covers setting up and using the tabulated backend.
 
 ### 1. Select the tabulated backend
 
