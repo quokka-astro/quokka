@@ -4,36 +4,38 @@
 # Box is [-10 kpc, 10 kpc] x [-10 kpc, 10 kpc] x [-10 kpc, 10 kpc]
 geometry.prob_lo     = -3.0856775814913674e22 -3.0856775814913674e22 -3.0856775814913674e22
 geometry.prob_hi     =  3.0856775814913674e22  3.0856775814913674e22  3.0856775814913674e22
-quokka.bc = foextrap foextrap foextrap
+geometry.is_periodic = [0, 0, 0]
 amr.v = 2
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 64 64 64
+amr.n_cell          = 128 128 128
 amr.blocking_factor = 32
 amr.max_grid_size   = 64
-amr.max_level       = 3
+amr.max_level       = 1
 amr.n_error_buf     = 2
 amr.grid_eff        = 0.75
 regrid_interval     = -1
 do_reflux           = 1
 do_subcycle         = 0
-plotfile_prefix = "mhddisk3_plt"
-checkpoint_prefix = "mhddisk3_chk"
-#density_floor = 1.0e-34
-#restartfile = "test_chk0000080"
+plotfile_prefix = "plots/mhdplt"
+checkpoint_prefix = "mhdchk"
+statistics_prefix = "mhdstats.txt"
+statistics_interval = 1
+density_floor = 1.0e-30
+#restartfile = "mhddisk3_chk00021300"
 # *****************************************************************
 # Time integration
 # *****************************************************************
 cfl                 = 0.3
-max_timesteps       = 1000
+max_timesteps       = 5
 stop_time           = 2.9652e15   # ~94 Myr = 1 t_rot at R=3 kpc, vc=200 km/s
 # *****************************************************************
 # Output
 # *****************************************************************
 checkpoint_interval = 100
-plotfile_interval   = 50
-derived_vars        = gpot pressure radius_sph radial_velocity circular_velocity mach
+plotfile_interval   = 10
+derived_vars        = gpot pressure radius_sph radial_velocity circular_velocity mach plasma_beta divB Bphi
 # *****************************************************************
 # Physics
 # *****************************************************************
@@ -43,6 +45,9 @@ poisson_supercycle_interval = 5
 # *****************************************************************
 mhd_galaxy.Q_mean    = 3.
 mhd_galaxy.Mc        = 28.6
+mhd_galaxy.sn_jeans_J              = 4.0
+mhd_galaxy.sn_remnant_fraction     = 0.5
+mhd_galaxy.sn_momentum             = 3.0e3
 
-#mhd.project_initial_b_field = true
-#mhd.update_initial_b_energy = true
+mhd.project_initial_b_field = true
+mhd.update_initial_b_energy = true
