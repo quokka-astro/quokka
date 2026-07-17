@@ -399,7 +399,7 @@ def save_outputs(Aphi_phys,
 
 if __name__ == "__main__":
     Lz   = 20.0 * kpc              # physical box height
-    Rmax = 10.0 * kpc * np.sqrt(2)             # physical outer radius — box diagonal / 2
+    Rmax = 10.0 * kpc #* np.sqrt(2)             # physical outer radius — box diagonal / 2
 
     # ── Disk scale height at R=Rd ─────────────────────────────────
     H_phys, Sigma_Rd = disk_scale_height(
