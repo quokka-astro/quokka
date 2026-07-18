@@ -74,6 +74,7 @@ namespace filesystem = experimental::filesystem;
 #include "AMReX_VisMF.H"
 #include "util/BC.hpp"
 #include "util/time_units.hpp"
+#include "util/volume_integral.hpp"
 #include <AMReX_FluxRegister.H>
 #include <format>
 #include <unordered_set>
@@ -973,6 +974,9 @@ template <typename problem_t> void AMRSimulation<problem_t>::readParameters()
 
 	// Default checkpoint prefix
 	pp.query("checkpoint_prefix", chk_file);
+
+	// Default statistics file name
+	pp.query("statistics_file", stats_file);
 
 	// Default do_reflux = 1
 	pp.query("do_reflux", do_reflux);
@@ -3529,51 +3533,7 @@ template <typename problem_t> void AMRSimulation<problem_t>::AverageDownTo(int c
 
 template <typename problem_t> template <typename F> auto AMRSimulation<problem_t>::computeVolumeIntegral(F const &user_f) -> amrex::Real
 {
-	// compute integral of user_f(i, j, k, state) along the given axis.
-	const BL_PROFILE("AMRSimulation::computeVolumeIntegral()");
-	using StateArray = amrex::Array4<const amrex::Real>;
-	using FaceArray = std::array<StateArray, AMREX_SPACEDIM>;
-#ifndef AMREX_USE_GPU
-	constexpr bool user_f_accepts_cc_fc = amrex::IsCallable<F const, int, int, int, StateArray const &, FaceArray const &>::value;
-	static_assert(user_f_accepts_cc_fc, "computeVolumeIntegral callback must accept (i, j, k, state_cc, state_fc).");
-#endif
-
-	// allocate temporary multifabs
-	amrex::Vector<amrex::MultiFab> q;
-	q.resize(finest_level + 1);
-	for (int lev = 0; lev <= finest_level; ++lev) {
-		q[lev].define(boxArray(lev), DistributionMap(lev), 1, 0);
-	}
-
-	// evaluate user_f on all levels
-	// (note: it is not necessary to average down)
-	for (int lev = 0; lev <= finest_level; ++lev) {
-		auto const &state = state_new_cc_[lev].const_arrays();
-		auto const &result = q[lev].arrays();
-		if constexpr (Physics_Indices<problem_t>::nvarTotal_fc > 0) {
-			auto const &state_fc_x0 = state_new_fc_[lev][0].const_arrays();
-#if (AMREX_SPACEDIM >= 2)
-			auto const &state_fc_x1 = state_new_fc_[lev][1].const_arrays();
-#endif
-#if (AMREX_SPACEDIM == 3)
-			auto const &state_fc_x2 = state_new_fc_[lev][2].const_arrays();
-#endif
-			amrex::ParallelFor(q[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
-				FaceArray const state_fc{AMREX_D_DECL(state_fc_x0[bx], state_fc_x1[bx], state_fc_x2[bx])};
-				result[bx](i, j, k) = user_f(i, j, k, state[bx], state_fc);
-			});
-		} else {
-			amrex::ParallelFor(q[lev], [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) {
-				FaceArray const state_fc{};
-				result[bx](i, j, k) = user_f(i, j, k, state[bx], state_fc);
-			});
-		}
-	}
-	amrex::Gpu::streamSynchronize();
-
-	// call amrex::volumeWeightedSum
-	const amrex::Real result = amrex::volumeWeightedSum(amrex::GetVecOfConstPtrs(q), 0, geom, ref_ratio);
-	return result;
+	return quokka::computeVolumeIntegral<problem_t>(finest_level, state_new_cc_, state_new_fc_, Geom(), refRatio(), user_f);
 }
 
 template <typename problem_t> void AMRSimulation<problem_t>::InitParticles()
@@ -5258,6 +5218,7 @@ void AMRSimulation<problem_t>::restartParticleContainerWithRefinement(std::uniqu
 			particles->SetParticleBoxArray(lev, current_ba[lev]);
 			particles->SetParticleDistributionMap(lev, current_dm[lev]);
 		}
+		particles->Define(this->GetParGDB());
 
 		// Redistribute particles to refined grid
 		particles->Redistribute();

@@ -37,7 +37,7 @@ hydro.rk_integrator_order = 2
 hydro.reconstruction_order = 5
 hydro.use_dual_energy = 0
 
-mhd.reconstruction_order = 5
+mhd.emf_reconstruction_order = 5
 mhd.emf_compute_scheme = "Balsara2025"
 mhd.emf_averaging_scheme = "LondrilloDelZanna2004"
 

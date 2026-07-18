@@ -12,6 +12,7 @@
 
 #include "cooling/ResampledCooling.hpp"
 
+#include "AMReX_Arena.H"
 #include "AMReX_FileSystem.H"
 #include "AMReX_ParallelDescriptor.H"
 #include "AMReX_Print.H"
@@ -106,6 +107,22 @@ auto resampled_tables::const_tables_host() const -> resampledGpuConstTables
 	    .eint_min = all_tables.coord_xlo()[1],
 	    .eint_max = all_tables.coord_xhi()[1],
 	};
+}
+
+AMREX_GPU_MANAGED EOSTabulatedRegistry *g_eos_tabulated_registry = nullptr; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
+/// Register (or re-register) resampled table sub-handles for the tabulated EOS backend.
+/// Lazily allocates the managed-memory registry on first call. Repeated calls overwrite
+/// the host and device tables, so the registry always reflects the most recently loaded
+/// cooling table. The pointer being non-null is the sole "registered" invariant.
+void registerEOSTabulated(resampledGpuConstTables host_tables, resampledGpuConstTables device_tables)
+{
+	if (g_eos_tabulated_registry == nullptr) {
+		auto *mem = amrex::The_Managed_Arena()->alloc(sizeof(EOSTabulatedRegistry));
+		g_eos_tabulated_registry = new (mem) EOSTabulatedRegistry{}; // NOLINT(cppcoreguidelines-owning-memory)
+	}
+	g_eos_tabulated_registry->host = host_tables;
+	g_eos_tabulated_registry->device = device_tables;
 }
 
 } // namespace quokka::ResampledCooling
