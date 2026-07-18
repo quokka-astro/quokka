@@ -225,7 +225,7 @@ void loadProblemParameters()
 	pp.query("noise_seed", g_noise_seed);
 	amrex::Vector<double> stage_times_over_ts0;
 	if (pp.queryarr("stage_times_over_ts0", stage_times_over_ts0) != 0) {
-		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stage_times_over_ts0.size() == g_stage_times_over_ts0.size(),
+		AMREX_ALWAYS_ASSERT_WITH_MESSAGE(stage_times_over_ts0.size() == static_cast<amrex::Long>(g_stage_times_over_ts0.size()),
 						 "problem.stage_times_over_ts0 must contain exactly 3 values.");
 		for (std::size_t i = 0; i < g_stage_times_over_ts0.size(); ++i) {
 			g_stage_times_over_ts0[i] = stage_times_over_ts0[i];
