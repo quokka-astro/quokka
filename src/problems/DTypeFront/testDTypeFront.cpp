@@ -52,7 +52,6 @@ template <> struct Physics_Traits<DTypeFront> : DefaultPhysicsTraits {
 };
 
 template <> struct RadSystem_Traits<DTypeFront> {
-	static constexpr double c_hat_over_c = c_hat / C::c_light;
 	// Erad_floor sets the M1 radiation energy density floor (erg cm^-3), defined here as a
 	// blackbody at T=0.01 K.  The corresponding photon number density floor is
 	//   N_gamma_floor = Erad_floor / E_photon ~ 1.25e-10 cm^-3.
@@ -430,6 +429,8 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<DTypeFront> sim;
 	print_microphysics_integrator();
+
+	sim.chat_over_c_ = c_hat / C::c_light;
 
 	// initialize
 	sim.setInitialConditions();

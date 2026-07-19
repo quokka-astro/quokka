@@ -28,7 +28,7 @@
 #include "math/math_impl.hpp"
 #include "physics_info.hpp"
 #include "radiation/planck_integral.hpp"
-#include "util/ArrayView_3d.hpp"
+#include "util/ArrayView.hpp"
 #include "util/valarray.hpp"
 
 using Real = amrex::Real;

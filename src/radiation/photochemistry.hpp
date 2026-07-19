@@ -35,7 +35,7 @@ AMREX_GPU_DEVICE void photochem_burner(burn_t &photochemstate, Real dt);
 
 template <typename problem_t>
 auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const &fc_mfs, const Real dt, const int stage,
-			   const Real max_density_allowed, const Real min_density_allowed) -> bool
+			   const Real chat_over_c, const Real max_density_allowed, const Real min_density_allowed) -> bool
 {
 	AMREX_ASSERT(stage == 1 || stage == 2);
 	// Start off by assuming a successful burn.
@@ -103,7 +103,7 @@ auto computePhotoChemistry(amrex::MultiFab &mf, std::array<amrex::MultiFab const
 			burn_t photochemstate;
 			photochemstate.success = true;
 			int burn_failed = 0;
-			photochemstate.c_hat = RadSystem_Traits<problem_t>::c_hat_over_c * C::c_light;
+			photochemstate.c_hat = chat_over_c * C::c_light;
 			for (int nn = 0; nn < NumSpec; ++nn) {
 				photochemstate.xn[nn] = state(i, j, k, RadSystem<problem_t>::scalar0_index + nn) / spmasses[nn];
 			}

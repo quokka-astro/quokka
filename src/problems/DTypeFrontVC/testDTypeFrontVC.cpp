@@ -63,7 +63,6 @@ template <> struct Physics_Traits<DTypeFrontVC> : DefaultPhysicsTraits {
 };
 
 template <> struct RadSystem_Traits<DTypeFrontVC> {
-	static constexpr double c_hat_over_c = c_hat / C::c_light;
 	static constexpr double Erad_floor = C::a_rad * 1.0e-8;
 	static constexpr int beta_order = 1;
 	static constexpr auto ChemBands() { return ChemBandsHeader_; }
@@ -233,6 +232,7 @@ auto compute_energy_check(amrex::MultiFab const &state_mf, amrex::GpuArray<amrex
 auto problem_main() -> int
 {
 	QuokkaSimulation<DTypeFrontVC> sim;
+	sim.chat_over_c_ = c_hat / C::c_light;
 	sim.setInitialConditions();
 
 	const amrex::Real photon_energy = RadSystem<DTypeFrontVC>::GetChemBandQuanta(0);
@@ -242,7 +242,7 @@ auto problem_main() -> int
 	const EnergyCheck energy_before = compute_energy_check(sim.state_new_cc_[0], sim.geom[0].CellSizeArray());
 
 	std::array<amrex::MultiFab const *, AMREX_SPACEDIM> const fc_ptrs{};
-	static_cast<void>(quokka::photochemistry::computePhotoChemistry<DTypeFrontVC>(sim.state_new_cc_[0], fc_ptrs, burn_dt, 1,
+	static_cast<void>(quokka::photochemistry::computePhotoChemistry<DTypeFrontVC>(sim.state_new_cc_[0], fc_ptrs, burn_dt, 1, sim.chat_over_c_,
 										      std::numeric_limits<amrex::Real>::max(), 0.0_rt));
 
 	const MomentumCheck check = compute_momentum_check(sim.state_new_cc_[0], sim.geom[0].CellSizeArray(), initial_flux_x);
