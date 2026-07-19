@@ -495,7 +495,7 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	AMREX_GPU_DEVICE static auto ComputeEddingtonTensor(double fx_L, double fy_L, double fz_L) -> std::array<std::array<double, 3>, 3>;
 
 	static void ComputeReducedSpeedOfLightFactor(arrayconst_t &consVar, double c_hat_over_c, double variable_chat_param1, double variable_chat_param2,
-						     array_t &reducedSpeedOfLightFactor, const amrex::Box &indexRange,
+						     double radiation_cfl, array_t &reducedSpeedOfLightFactor, const amrex::Box &indexRange,
 						     const amrex::GpuArray<double, AMREX_SPACEDIM> &dx);
 };
 
@@ -1607,29 +1607,72 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 
 template <typename problem_t>
 void RadSystem<problem_t>::ComputeReducedSpeedOfLightFactor(arrayconst_t &consVar_in, const double c_hat_over_c, const double variable_chat_param1,
-							    const double variable_chat_param2, array_t &reducedSpeedOfLightFactor, const amrex::Box &indexRange,
+							    const double variable_chat_param2, const double radiation_cfl,
+							    array_t &reducedSpeedOfLightFactor, const amrex::Box &indexRange,
 							    const amrex::GpuArray<double, AMREX_SPACEDIM> &dx)
 {
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const auto tau_cell = ComputeCellOpticalDepthAllDirMin(consVar_in, dx, i, j, k, radBoundaries_);
 
-		const double scaling = variable_chat_param1;
-		const double pow = variable_chat_param2;
-
 		for (int g = 0; g < nGroups_; ++g) {
-			// IRSLA limiter: phi = (phi0 + x^p) / (1 + x^p) with x = tau_cell * scaling, so that
-			// phi -> phi0 (standard RSLA) in optically thin cells and phi -> 1 (full speed of light,
-			// exact RHD) in optically thick cells. Using the per-cell optical depth as the control
-			// variable is a conservative lower bound on the structure optical depth that enters the
-			// linear theory, since any resolved structure spans at least one cell.
-			const double scaled = std::pow(tau_cell[g] * scaling, pow);
-			// guard against Inf/Inf = NaN for extreme optical depths; scaled >= 1e30 already gives
-			// phi = 1 to machine precision
-			if (scaled < 1.0e30) {
-				reducedSpeedOfLightFactor(i, j, k, g) = (c_hat_over_c + scaled) / (1.0 + scaled);
+			double phi = NAN;
+			if (variable_chat_param2 > 0.0) {
+				// Legacy fitting-formula mode: phi = (phi0 + x^p) / (1 + x^p) with
+				// x = tau_cell * param1 and p = param2, so that phi -> phi0 (standard RSLA) in
+				// optically thin cells and phi -> 1 (full speed of light, exact RHD) in optically
+				// thick cells.
+				const double scaled = std::pow(tau_cell[g] * variable_chat_param1, variable_chat_param2);
+				// guard against Inf/Inf = NaN for extreme optical depths; scaled >= 1e30 already
+				// gives phi = 1 to machine precision
+				if (scaled < 1.0e30) {
+					phi = (c_hat_over_c + scaled) / (1.0 + scaled);
+				} else {
+					phi = 1.0;
+				}
 			} else {
-				reducedSpeedOfLightFactor(i, j, k, g) = 1.0;
+				// Stability-bound mode (param2 <= 0): set phi to the largest value that is stable
+				// at the current time step dt = CFL * dx / (phi0 * c). Two channels constrain phi
+				// (both derived from the von Neumann analysis of the operator-split scheme):
+				//
+				// (1) Transport amplification vs. per-stage source damping. A grid-scale
+				//     radiation mode is amplified by the upwind transport substep by
+				//     ~ 2 nu / sqrt(3) - 1 (nu = phi c dt / dx) and damped by the implicit source
+				//     update by 1/(1 + nu * tau_cell); requiring the product <= 1 gives
+				//       phi_tau = phi0 * (2 / CFL) / max(2/sqrt(3) - tau_cell, 0),
+				//     which recovers the ordinary CFL bound as tau_cell -> 0 and is unbounded
+				//     (phi = 1 allowed) for tau_cell >= 2/sqrt(3). Its margin relative to the
+				//     exact stability boundary also covers the radiation-force channel for
+				//     P_rad/P_gas up to a few percent.
+				//
+				// (2) The radiation-force feedback channel: amplified grid-scale radiation
+				//     perturbations accelerate gas at a rate proportional to the local
+				//     radiation-to-gas pressure ratio, closing an unstable loop unless
+				//     nu * (P_rad/P_gas) <~ 0.5, i.e.
+				//       phi_P = 0.5 * phi0 / (CFL * P_rad/P_gas).
+				//
+				// param1 is a safety factor <= 1 applied to the combined bound (0.9 recommended);
+				// there are no other free parameters.
+				const double safety = variable_chat_param1;
+				// radiation-to-gas pressure ratio; ideal-EOS estimate p_gas = (gamma - 1) e_int.
+				// For gamma -> 1 (isothermal), p_gas -> 0 and the bound falls back to the
+				// ordinary CFL limit, which is the safe direction.
+				const double Eint_gas = consVar_in(i, j, k, gasInternalEnergy_index);
+				const double rho_cell = consVar_in(i, j, k, gasDensity_index);
+				const auto massScalars_cell = ComputeMassScalars(consVar_in, i, j, k);
+				const double T_gas_cell = quokka::EOS<problem_t>::ComputeTgasFromEint(rho_cell, Eint_gas, massScalars_cell);
+				double Erad_tot = 0.0;
+				for (int gg = 0; gg < nGroups_; ++gg) {
+					Erad_tot += consVar_in(i, j, k, radEnergy_index + numRadVars_ * gg);
+				}
+				const double arT4 = radiation_constant_ * (T_gas_cell * T_gas_cell) * (T_gas_cell * T_gas_cell);
+				const double p_gas = (quokka::EOS_Traits<problem_t>::gamma - 1.0) * Eint_gas;
+				const double P_ratio = std::max(arT4, Erad_tot) / std::max(p_gas, 1.0e-300);
+				const double margin = 2.0 / std::sqrt(3.0) - tau_cell[g];
+				const double phi_tau = (margin > 0.0) ? c_hat_over_c * (2.0 / radiation_cfl) / margin : 1.0;
+				const double phi_P = 0.5 * c_hat_over_c / (radiation_cfl * std::max(P_ratio, 1.0e-300));
+				phi = std::min(1.0, std::max(c_hat_over_c, safety * std::min(phi_tau, phi_P)));
 			}
+			reducedSpeedOfLightFactor(i, j, k, g) = phi;
 		}
 	});
 }
