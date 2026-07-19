@@ -779,7 +779,7 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 			// 2. Compute radiation flux update
 
 			// 2.1. Update flux and gas momentum
-			auto updated_flux = UpdateFlux(i, j, k, consPrev, updated_energy, dt, gas_update_factor, Ekin0, Emag, chat);
+			auto updated_flux = UpdateFlux(i, j, k, consPrev, updated_energy, dt, gas_update_factor, Ekin0, chat, Emag);
 
 			// 2.2. Check for convergence of the work term
 			bool work_converged = true;

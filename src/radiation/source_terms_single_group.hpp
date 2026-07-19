@@ -52,8 +52,6 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		const double Erad0 = consPrev(i, j, k, radEnergy_index);
 		AMREX_ASSERT(Erad0 > 0.0);
 
-		const double cscale = c / chat;
-
 		// load radiation energy source term
 		// plus advection source term (for well-balanced/SDC integrators)
 		// Note that radEnergySource should contain the luminosity volume density, L / V; unit: erg s^-1 cm^-3

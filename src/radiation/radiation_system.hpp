@@ -301,15 +301,15 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 	static void ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
 				  amrex::Array4<const amrex::Real> const &x1RightState_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
 				  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, bool use_wavespeed_correction,
-				  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc = {},
-				  amrex::Array4<const amrex::Real> const &reducedSpeedOfLightFactor_in);
+				  amrex::Array4<const amrex::Real> const &reducedSpeedOfLightFactor_in,
+				  std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc = {});
 
 	static void SetRadEnergySource(array_t &radEnergySource, amrex::Box const &indexRange, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &dx,
 				       amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_lo, amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const &prob_hi,
 				       amrex::Real time);
 
 	AMREX_GPU_DEVICE static auto UpdateFlux(int i, int j, int k, arrayconst_t const &consPrev, NewtonIterationResult<problem_t> &energy, double dt,
-						double gas_update_factor, double Ekin0, double Emag = {}, quokka::valarray<double, nGroups_> const &chat)
+						double gas_update_factor, double Ekin0, quokka::valarray<double, nGroups_> const &chat, double Emag = {})
 	    -> FluxUpdateResult<problem_t>;
 
 	static void AddSourceTermsMultiGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, amrex::Real dt_implicit,
@@ -479,13 +479,13 @@ template <typename problem_t> class RadSystem : public HyperbolicSystem<problem_
 
 	template <FluxDir DIR>
 	AMREX_GPU_DEVICE static auto ComputeCellOpticalDepth(const quokka::Array4View<const amrex::Real, DIR> &consVar,
-							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j, int k,
+							     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j, int k, int i_phys, int j_phys,
+							     int k_phys, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc,
 							     const amrex::GpuArray<double, nGroups_ + 1> &group_boundaries)
 	    -> quokka::valarray<double, nGroups_>;
 
 	AMREX_GPU_DEVICE static auto ComputeCellOpticalDepthAllDirMin(const amrex::Array4<const amrex::Real> &consVar,
-								      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j, int k, int i_phys, int j_phys,
-							     int k_phys, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc,
+								      amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, int i, int j, int k,
 								      const amrex::GpuArray<double, nGroups_ + 1> &group_boundaries)
 	    -> quokka::valarray<double, nGroups_>;
 
@@ -1128,8 +1128,8 @@ template <FluxDir DIR>
 void RadSystem<problem_t>::ComputeFluxes(array_t &x1Flux_in, array_t &x1FluxDiffusive_in, amrex::Array4<const amrex::Real> const &x1LeftState_in,
 					 amrex::Array4<const amrex::Real> const &x1RightState_in, amrex::Box const &indexRange, arrayconst_t &consVar_in,
 					 amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx, bool const use_wavespeed_correction,
-					 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc,
-					 amrex::Array4<const amrex::Real> const &reducedSpeedOfLightFactor_in)
+					 amrex::Array4<const amrex::Real> const &reducedSpeedOfLightFactor_in,
+					 std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
 {
 	quokka::Array4View<const amrex::Real, DIR> x1LeftState(x1LeftState_in);
 	quokka::Array4View<const amrex::Real, DIR> x1RightState(x1RightState_in);
