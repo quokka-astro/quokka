@@ -3167,8 +3167,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 			// Forward Euler: overwrites radiation vars in state_tmp1 from state_old
 			//   state_tmp1_rad = state_old_rad + dt * Aex_21 * s(state_old_rad)
 			//   state_tmp1_gas = gas_n (unchanged by PredictStep)
-			advanceRadiationForwardEuler(lev, time_subcycle, dt_radiation * IMEX_Aex_21, i, nsubSteps, fr_as_crse, fr_as_fine, reducedSpeedOfLightFactor,
-						    state_tmp1_cc);
+			advanceRadiationForwardEuler(lev, time_subcycle, dt_radiation * IMEX_Aex_21, i, nsubSteps, fr_as_crse, fr_as_fine,
+						     reducedSpeedOfLightFactor, state_tmp1_cc);
 
 			// Implicit source terms for stage 2
 			radEnergySource.setVal(0.0);
@@ -3204,15 +3204,13 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				// Note that only a fraction (IMEX_a32) of the matter-radiation exchange source terms are added to hydro. This ensures that the
 				// hydro properties get to t + IMEX_a32 dt in terms of matter-radiation exchange.
 				if constexpr (Physics_Traits<problem_t>::nGroups <= 1) {
-					RadSystem<problem_t>::AddSourceTermsSingleGroup(stateTmp1, radEnergySource_arr, indexRange, dt_stage2_implicit, 1.0,
-											dustGasInteractionCoeff_, rad_tol, rad_tol_rel, tempFloor,
-											reducedSpeedOfLightFactor_arr, p_iteration_counter,
-											p_iteration_failure_counter, cons_fc_arr);
+					RadSystem<problem_t>::AddSourceTermsSingleGroup(
+					    stateTmp1, radEnergySource_arr, indexRange, dt_stage2_implicit, 1.0, dustGasInteractionCoeff_, rad_tol, rad_tol_rel,
+					    tempFloor, reducedSpeedOfLightFactor_arr, p_iteration_counter, p_iteration_failure_counter, cons_fc_arr);
 				} else {
-					RadSystem<problem_t>::AddSourceTermsMultiGroup(stateTmp1, radEnergySource_arr, indexRange, dt_stage2_implicit, 1.0,
-										       dustGasInteractionCoeff_, rad_tol, rad_tol_rel, tempFloor,
-										       reducedSpeedOfLightFactor_arr, p_iteration_counter,
-										       p_iteration_failure_counter, cons_fc_arr);
+					RadSystem<problem_t>::AddSourceTermsMultiGroup(
+					    stateTmp1, radEnergySource_arr, indexRange, dt_stage2_implicit, 1.0, dustGasInteractionCoeff_, rad_tol, rad_tol_rel,
+					    tempFloor, reducedSpeedOfLightFactor_arr, p_iteration_counter, p_iteration_failure_counter, cons_fc_arr);
 				}
 			}
 		}
@@ -3300,15 +3298,13 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 
 			// update state_new_cc_[lev] in place (updates both radiation and hydro vars)
 			if constexpr (Physics_Traits<problem_t>::nGroups <= 1) {
-				RadSystem<problem_t>::AddSourceTermsSingleGroup(stateNew_cc, radEnergySource_arr, indexRange, dt_stage3_implicit, 1.0,
-										dustGasInteractionCoeff_, rad_tol, rad_tol_rel, tempFloor,
-										reducedSpeedOfLightFactor_arr, p_iteration_counter, p_iteration_failure_counter,
-										cons_fc_arr);
+				RadSystem<problem_t>::AddSourceTermsSingleGroup(
+				    stateNew_cc, radEnergySource_arr, indexRange, dt_stage3_implicit, 1.0, dustGasInteractionCoeff_, rad_tol, rad_tol_rel,
+				    tempFloor, reducedSpeedOfLightFactor_arr, p_iteration_counter, p_iteration_failure_counter, cons_fc_arr);
 			} else {
-				RadSystem<problem_t>::AddSourceTermsMultiGroup(stateNew_cc, radEnergySource_arr, indexRange, dt_stage3_implicit, 1.0,
-									       dustGasInteractionCoeff_, rad_tol, rad_tol_rel, tempFloor,
-									       reducedSpeedOfLightFactor_arr, p_iteration_counter, p_iteration_failure_counter,
-									       cons_fc_arr);
+				RadSystem<problem_t>::AddSourceTermsMultiGroup(
+				    stateNew_cc, radEnergySource_arr, indexRange, dt_stage3_implicit, 1.0, dustGasInteractionCoeff_, rad_tol, rad_tol_rel,
+				    tempFloor, reducedSpeedOfLightFactor_arr, p_iteration_counter, p_iteration_failure_counter, cons_fc_arr);
 			}
 		}
 
@@ -3589,7 +3585,8 @@ void QuokkaSimulation<problem_t>::fluxFunction(amrex::Array4<const amrex::Real> 
 	// interface-centered kernel
 	amrex::Box const &x1FluxRange = amrex::surroundingNodes(indexRange, dir);
 	RadSystem<problem_t>::template ComputeFluxes<DIR>(x1Flux.array(), x1FluxDiffusive.array(), x1LeftState.array(), x1RightState.array(), x1FluxRange,
-							  consState, dx, use_wavespeed_correction_, reducedSpeedOfLightFactor, cons_fc); // watch out for argument order!!
+							  consState, dx, use_wavespeed_correction_, reducedSpeedOfLightFactor,
+							  cons_fc); // watch out for argument order!!
 }
 
 // Save single-level plotfile

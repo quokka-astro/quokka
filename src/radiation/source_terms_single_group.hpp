@@ -9,9 +9,8 @@
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, Real dt_implicit,
 						     double gas_update_factor_in, double dustGasCoeff, double tol_h, double /*tol_rel_h*/, double /*tempFloor*/,
-						     amrex::Array4<const amrex::Real> const &reducedSpeedOfLightFactor,
-						     int *p_iteration_counter, int *p_iteration_failure_counter,
-						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
+						     amrex::Array4<const amrex::Real> const &reducedSpeedOfLightFactor, int *p_iteration_counter,
+						     int *p_iteration_failure_counter, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
 {
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;

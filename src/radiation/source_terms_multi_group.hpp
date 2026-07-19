@@ -424,8 +424,7 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasRadiationEnergyExchange(
 template <typename problem_t>
 AMREX_GPU_DEVICE auto RadSystem<problem_t>::UpdateFlux(int const i, int const j, int const k, arrayconst_t &consPrev, NewtonIterationResult<problem_t> &energy,
 						       double const dt, double const gas_update_factor, double const Ekin0,
-						       quokka::valarray<double, nGroups_> const &chat, double Emag)
-    -> FluxUpdateResult<problem_t>
+						       quokka::valarray<double, nGroups_> const &chat, double Emag) -> FluxUpdateResult<problem_t>
 {
 	amrex::GpuArray<amrex::Real, 3> Frad_t0{};
 	amrex::GpuArray<amrex::Real, 3> dMomentum{0., 0., 0.};
@@ -738,8 +737,8 @@ void RadSystem<problem_t>::AddSourceTermsMultiGroup(array_t &consVar, arrayconst
 
 				if constexpr (!enable_dust_gas_thermal_coupling_model_) {
 					// gas + radiation
-					updated_energy = SolveGasRadiationEnergyExchange(Egas0, Erad0Vec, rho, dt, cscale, massScalars, iter, work, vel_times_F, Src,
-											 radBoundaries_g_copy, tol, tol_rel, tempFloor,
+					updated_energy = SolveGasRadiationEnergyExchange(Egas0, Erad0Vec, rho, dt, cscale, massScalars, iter, work, vel_times_F,
+											 Src, radBoundaries_g_copy, tol, tol_rel, tempFloor,
 											 p_iteration_counter_local, p_iteration_failure_counter_local);
 				} else {
 					if constexpr (!enable_photoelectric_heating_) {
