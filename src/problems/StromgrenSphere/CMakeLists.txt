@@ -88,7 +88,7 @@ if(AMReX_SPACEDIM EQUAL 3)
 
 
   add_executable(
-    ${JOB_NAME} test{JOB_NAME}.cpp "${QuokkaSourcesNoEOS}"
+    ${JOB_NAME} test${JOB_NAME}.cpp "${QuokkaSourcesNoEOS}"
                 ../../radiation/photochemistry.cpp ${photoionization_sources})
 
   # this will add #define PHOTOCHEMISTRY
