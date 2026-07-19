@@ -225,15 +225,12 @@ AMREX_GPU_HOST_DEVICE void RadSystem<problem_t>::SolveLinearEqsWithLastColumn(Ja
 }
 
 template <typename problem_t>
-AMREX_GPU_DEVICE auto
-RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho,
-							  double const N_d, double const dt, amrex::GpuArray<Real, nmscalars_> const &massScalars,
-							  int const n_outer_iter, quokka::valarray<double, nGroups_> const &work,
-							  quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src,
-							  quokka::valarray<double, nGroups_> const &chat, amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries,
-							  double resid_tol, double rel_change_tol, double /*tempFloor*/, int *p_iteration_counter,
-							  int *p_iteration_failure_counter)
-    -> NewtonIterationResult<problem_t> // NOSONAR: High cognitive complexity is expected for this numerical solver
+AMREX_GPU_DEVICE auto RadSystem<problem_t>::SolveGasDustRadiationEnergyExchange(
+    double const Egas0, quokka::valarray<double, nGroups_> const &Erad0Vec, double const rho, double const N_d, double const dt,
+    amrex::GpuArray<Real, nmscalars_> const &massScalars, int const n_outer_iter, quokka::valarray<double, nGroups_> const &work,
+    quokka::valarray<double, nGroups_> const &vel_times_F, quokka::valarray<double, nGroups_> const &Src, quokka::valarray<double, nGroups_> const &chat,
+    amrex::GpuArray<double, nGroups_ + 1> const &rad_boundaries, double resid_tol, double rel_change_tol, double /*tempFloor*/, int *p_iteration_counter,
+    int *p_iteration_failure_counter) -> NewtonIterationResult<problem_t> // NOSONAR: High cognitive complexity is expected for this numerical solver
 {
 	// 1. Compute energy exchange
 
