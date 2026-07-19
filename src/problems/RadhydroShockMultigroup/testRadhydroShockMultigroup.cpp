@@ -62,7 +62,6 @@ template <> struct Physics_Traits<ShockProblem> : DefaultPhysicsTraits {
 };
 
 template <> struct RadSystem_Traits<ShockProblem> {
-	static constexpr double c_hat_over_c = chat / c;
 	static constexpr double Erad_floor = Erad_floor_;
 	static constexpr double energy_unit = C::hplanck; // set boundary unit to Hz
 	static constexpr amrex::GpuArray<double, Physics_Traits<ShockProblem>::nGroups + 1> radBoundaries{1.00000000e+15, 1.00000000e+16, 1.00000000e+17,
@@ -234,6 +233,7 @@ auto problem_main() -> int
 	sim.maxTimesteps_ = max_timesteps;
 	sim.stopTime_ = max_time;
 	sim.plotfileInterval_ = -1;
+	sim.chat_over_c_ = chat / c;
 
 	// run
 	sim.setInitialConditions();

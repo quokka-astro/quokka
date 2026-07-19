@@ -103,7 +103,6 @@ template <> struct Physics_Traits<SGProblem> : DefaultPhysicsTraits {
 };
 
 template <> struct RadSystem_Traits<SGProblem> {
-	static constexpr double c_hat_over_c = 1.0;
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr int beta_order = 1;
 };
@@ -162,7 +161,6 @@ template <> struct Physics_Traits<MGproblem> : DefaultPhysicsTraits {
 };
 
 template <> struct RadSystem_Traits<MGproblem> {
-	static constexpr double c_hat_over_c = 1.0;
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr double energy_unit = h_planck;
 	static constexpr amrex::GpuArray<double, n_groups_ + 1> radBoundaries = rad_boundaries_;

@@ -23,6 +23,11 @@
 struct SuOlsonProblemCgs {
 }; // dummy type to allow compile-type polymorphism via template specialization
 
+const double chat_over_c_ = 0.1;
+// chat_over_c = (chat_over_c_0 + (variable_chat_param1_ * tau_cell)^variable_chat_param2_) / (1.0 + (variable_chat_param1_ * tau_cell)^variable_chat_param2_)
+const double variable_chat_param1_ = 100.0;
+const double variable_chat_param2_ = 0.5;
+
 constexpr double kappa = 300.0;		      // cm^-1 (opacity)
 constexpr double rho0 = 2.0879373766122384;   // g cm^-3 (matter density)
 constexpr double T_hohlraum = 1.1604448449e7; // K (1 keV)
@@ -39,7 +44,6 @@ template <> struct quokka::EOS_Traits<SuOlsonProblemCgs> {
 };
 
 template <> struct RadSystem_Traits<SuOlsonProblemCgs> {
-	static constexpr double c_hat_over_c = 1.0;
 	static constexpr double Erad_floor = Erad_floor_;
 	static constexpr int beta_order = 0;
 };
@@ -86,7 +90,6 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVe
 		const double T_H = T_hohlraum;
 		const double E_inc = radiation_constant_cgs_ * std::pow(T_H, 4);
 		const double c = c_light_cgs_;
-		// const double F_inc = c * E_inc / 4.0; // incident flux
 
 		const double E_0 = consVar(0, j, k, RadSystem<SuOlsonProblemCgs>::radEnergy_index);
 		const double F_0 = consVar(0, j, k, RadSystem<SuOlsonProblemCgs>::x1RadFlux_index);
@@ -100,7 +103,6 @@ AMRSimulation<SuOlsonProblemCgs>::setCustomBoundaryConditions(const amrex::IntVe
 		//		      (1. / 12.) * (c * E_1 + 2.0 * F_1);
 
 		// use value at interface to solve for F_rad in the ghost zones
-		// const double F_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * F_0);
 		const double F_bdry = 0.5 * c * E_inc - 0.5 * (c * E_0 + 2.0 * F_0);
 		// F_bdry = std::max(F_bdry, 0.0);
 		// AMREX_ASSERT(F_bdry >= 0.0);
@@ -210,9 +212,13 @@ auto problem_main() -> int
 	sim.radiationReconstructionOrder_ = 3; // PPM
 	sim.stopTime_ = max_time;
 	sim.maxDt_ = max_dt;
+	sim.cflNumber_ = CFL_number;
 	sim.radiationCflNumber_ = CFL_number;
-	sim.maxTimesteps_ = max_timesteps;
+	// sim.maxTimesteps_ = max_timesteps;
 	sim.plotfileInterval_ = -1;
+	sim.chat_over_c_ = chat_over_c_;
+	sim.variable_chat_param1_ = variable_chat_param1_;
+	sim.variable_chat_param2_ = variable_chat_param2_;
 
 	bool use_wavespeed_correction = false;
 

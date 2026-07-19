@@ -61,7 +61,6 @@ template <> struct Physics_Traits<ParticleProblem> : DefaultPhysicsTraits {
 };
 
 template <> struct RadSystem_Traits<ParticleProblem> {
-	static constexpr double c_hat_over_c = chat / c;
 	static constexpr double Erad_floor = erad_floor;
 	static constexpr int beta_order = 0;
 };
@@ -186,6 +185,7 @@ auto problem_main() -> int
 	// Problem initialization
 	QuokkaSimulation<ParticleProblem> sim;
 
+	sim.chat_over_c_ = chat / c;
 	sim.radiationReconstructionOrder_ = 3; // PPM
 
 	// initialize

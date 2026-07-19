@@ -50,7 +50,6 @@ template <> struct Physics_Traits<StromgrenSphere> : DefaultPhysicsTraits {
 };
 
 template <> struct RadSystem_Traits<StromgrenSphere> {
-	static constexpr double c_hat_over_c = c_hat / C::c_light;
 	static constexpr double Erad_floor = 1e-99;
 	static constexpr int beta_order = 0;
 	static constexpr auto ChemBands() { return ChemBandsHeader_; }
@@ -338,6 +337,7 @@ auto problem_main() -> int
 
 	// Problem initialization
 	QuokkaSimulation<StromgrenSphere> sim;
+	sim.chat_over_c_ = c_hat / C::c_light;
 
 	// initialize
 	sim.setInitialConditions();

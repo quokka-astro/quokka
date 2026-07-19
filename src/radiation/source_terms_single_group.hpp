@@ -9,8 +9,8 @@
 template <typename problem_t>
 void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, Real dt_implicit,
 						     double gas_update_factor_in, double dustGasCoeff, double tol_h, double /*tol_rel_h*/, double /*tempFloor*/,
-						     int *p_iteration_counter, int *p_iteration_failure_counter,
-						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
+						     amrex::Array4<const amrex::Real> const &reducedSpeedOfLightFactor, int *p_iteration_counter,
+						     int *p_iteration_failure_counter, std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
 {
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;
@@ -29,8 +29,9 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		auto p_iteration_counter_local = p_iteration_counter;		      // NOLINT
 		auto p_iteration_failure_counter_local = p_iteration_failure_counter; // NOLINT
 
+		const double cscale = 1.0 / reducedSpeedOfLightFactor(i, j, k);
 		const double c = c_light_;
-		const double chat = c_hat_;
+		const double chat = c * reducedSpeedOfLightFactor(i, j, k);
 		const double dustGasCoeff_ = dustGasCoeff;
 		const double resid_tol = tol_h;
 
@@ -49,8 +50,6 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		// load radiation energy
 		const double Erad0 = consPrev(i, j, k, radEnergy_index);
 		AMREX_ASSERT(Erad0 > 0.0);
-
-		const double cscale = c / chat;
 
 		// load radiation energy source term
 		// plus advection source term (for well-balanced/SDC integrators)
@@ -90,12 +89,12 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 
 		const Real gas_update_factor = gas_update_factor_in;
 
-		double coeff_n = NAN;
+		double N_d = NAN;
 		const double H_num_den = ComputeNumberDensityH(rho, massScalars);
 		if constexpr (enable_dust_gas_thermal_coupling_model_) {
-			coeff_n = dt * dustGasCoeff_ * H_num_den * H_num_den / cscale;
+			N_d = dt * dustGasCoeff_ * H_num_den * H_num_den;
 		} else {
-			amrex::ignore_unused(coeff_n);
+			amrex::ignore_unused(N_d);
 			amrex::ignore_unused(H_num_den);
 			amrex::ignore_unused(dustGasCoeff_);
 		}
@@ -103,7 +102,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		const int max_ite = 5;
 		int ite = 0;
 		for (; ite < max_ite; ++ite) {
-			double R = NAN;
+			double R = NAN; // R = c / chat_g * tau_g (fourPiBoverC - Erad_guess / kappaPoverE)
 
 			Erad_guess = Erad0;
 
@@ -169,8 +168,13 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						T_d = T_gas;
 					} else {
 						const quokka::valarray<double, 1> Erad_guess_vec{Erad_guess};
-						T_d = ComputeDustTemperatureBateKeto(T_gas, T_gas, rho, Erad_guess_vec, coeff_n, dt, R, n);
-						AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
+						if (n == 0) {
+							T_d = ComputeDustTemperatureBateKeto(T_gas, T_gas, rho, Erad_guess_vec, N_d, dt, R, n);
+							AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
+						} else {
+							T_d = T_gas - (R * cscale) / (N_d * std::sqrt(T_gas));
+							AMREX_ASSERT_WITH_MESSAGE(T_d >= 0., "Dust temperature is negative!");
+						}
 						if (T_d < 0.0) {
 							amrex::Gpu::Atomic::Add(&p_iteration_failure_counter_local[1], 1); // NOLINT
 						}
@@ -302,7 +306,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					} else {
 						const double d_Td_d_T = 3. / 2. - T_d / (2. * T_gas);
 						dEg_dT *= d_Td_d_T;
-						const double dTd_dRg = -1.0 / (coeff_n * std::sqrt(T_gas));
+						const double dTd_dRg = -cscale / (N_d * std::sqrt(T_gas));
 
 						J00 = 1.0;
 						J01 = cscale;
@@ -503,7 +507,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 					// Old scheme: since the source term does not include work term, add the work term to radiation energy.
 
 					// compute loss of radiation energy to gas kinetic energy
-					auto dErad_work = -(c_hat_ / c_light_) * dEkin_work;
+					const auto dErad_work = -chat / c * dEkin_work;
 
 					auto radEnergyNew = Erad_guess + dErad_work;
 					// AMREX_ASSERT(radEnergyNew > 0.0);
