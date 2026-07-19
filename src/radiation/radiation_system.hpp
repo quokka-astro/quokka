@@ -1607,9 +1607,8 @@ AMREX_GPU_DEVICE auto RadSystem<problem_t>::ComputeDustTemperatureBateKeto(doubl
 
 template <typename problem_t>
 void RadSystem<problem_t>::ComputeReducedSpeedOfLightFactor(arrayconst_t &consVar_in, const double c_hat_over_c, const double variable_chat_param1,
-							    const double variable_chat_param2, const double radiation_cfl,
-							    array_t &reducedSpeedOfLightFactor, const amrex::Box &indexRange,
-							    const amrex::GpuArray<double, AMREX_SPACEDIM> &dx)
+							    const double variable_chat_param2, const double radiation_cfl, array_t &reducedSpeedOfLightFactor,
+							    const amrex::Box &indexRange, const amrex::GpuArray<double, AMREX_SPACEDIM> &dx)
 {
 	amrex::ParallelFor(indexRange, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
 		const auto tau_cell = ComputeCellOpticalDepthAllDirMin(consVar_in, dx, i, j, k, radBoundaries_);

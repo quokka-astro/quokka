@@ -3122,8 +3122,8 @@ void QuokkaSimulation<problem_t>::subcycleRadiationAtLevel(int lev, amrex::Real 
 				auto const &stateNew = state_new_cc_[lev].array(iter);
 				const amrex::Box &indexRange = amrex::grow(iter.validbox(), 2);
 				RadSystem<problem_t>::ComputeReducedSpeedOfLightFactor(stateNew, chat_over_c_, variable_chat_param1_, variable_chat_param2_,
-										       radiationCflNumber_, reducedSpeedOfLightFactor.array(iter),
-										       indexRange, dx);
+										       radiationCflNumber_, reducedSpeedOfLightFactor.array(iter), indexRange,
+										       dx);
 			}
 		}
 
