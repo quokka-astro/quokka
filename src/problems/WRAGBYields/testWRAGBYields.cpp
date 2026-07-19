@@ -91,7 +91,7 @@ void validateWRAGBYields(const QuokkaSimulation<problem_t> &sim, const std::stri
 	const auto records = readInitialParticleRecords(initial_particles_file, quokka::StochasticStellarPopParticleRealComps<problem_t>);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(records.size() >= 2, "WRAGBYields requires at least two initial particles");
 
-	const auto tables = quokka::ChemicalYieldLookup::constTables();
+	const auto tables = quokka::ChemicalYieldLookup::constTablesHost();
 	int wr_index = -1;
 	int agb_index = -1;
 	for (std::size_t i = 0; i < records.size(); ++i) {

@@ -302,6 +302,17 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto isLoaded() -> bool { return tables
 
 inline auto constTables() -> ChemicalYieldGpuConstTables { return mutableTables().const_tables(); }
 
+inline auto constTablesHost() -> ChemicalYieldGpuConstTables
+{
+	auto &tables = mutableTables();
+	ChemicalYieldGpuConstTables host_tables{};
+	for (int c = 0; c < max_tracked_channels; ++c) {
+		host_tables.channels[static_cast<std::size_t>(c)] = tables.channels[static_cast<std::size_t>(c)].const_tables_host();
+	}
+	host_tables.wr_mass_loss_distribution = tables.wr_mass_loss_distribution.const_tables_host();
+	return host_tables;
+}
+
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto queryYieldFraction(ChemicalYieldGpuConstTables const &tables, int channel_index, int isotope_index,
 								 amrex::Real mass_msun, amrex::Real /*metallicity*/) -> amrex::Real
 {

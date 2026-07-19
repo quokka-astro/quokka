@@ -90,7 +90,7 @@ void validateSNIIYields(const QuokkaSimulation<problem_t> &sim, const std::strin
 	const auto records = readInitialParticleRecords(initial_particles_file, quokka::StochasticStellarPopParticleRealComps<problem_t>);
 	AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!records.empty(), "test_SNII_Yields requires at least one initial particle");
 
-	const auto tables = quokka::ChemicalYieldLookup::constTables();
+	const auto tables = quokka::ChemicalYieldLookup::constTablesHost();
 	const amrex::Real birth_mass = records.front().rdata[static_cast<std::size_t>(quokka::StochasticStellarPopParticleMassAtBirthIdx)];
 
 	amrex::Print() << "test_SNII_Yields simulated/table:\n";
