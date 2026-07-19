@@ -14,6 +14,8 @@ if(AMReX_SPACEDIM EQUAL 3)
     BEFORE ${photoionization_dirs} "${CMAKE_CURRENT_BINARY_DIR}/"
     "includes/extern_parameters.H" "includes/network_properties.H")
 
+  set(JOB_NAME StromgrenSphere)
+
   # Number of species
   set(NSPEC 3)
   set(NEXTRASPEC 0)
@@ -84,7 +86,6 @@ if(AMReX_SPACEDIM EQUAL 3)
       @ONLY
   )
 
-  set(JOB_NAME StromgrenSphere)
 
   add_executable(
     ${JOB_NAME} test{JOB_NAME}.cpp "${QuokkaSourcesNoEOS}"
