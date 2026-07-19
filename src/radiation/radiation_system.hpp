@@ -1617,9 +1617,19 @@ void RadSystem<problem_t>::ComputeReducedSpeedOfLightFactor(arrayconst_t &consVa
 		const double pow = variable_chat_param2;
 
 		for (int g = 0; g < nGroups_; ++g) {
-			// the original model suggested by Mark, but replacing R with tau_cell and use various powers
+			// IRSLA limiter: phi = (phi0 + x^p) / (1 + x^p) with x = tau_cell * scaling, so that
+			// phi -> phi0 (standard RSLA) in optically thin cells and phi -> 1 (full speed of light,
+			// exact RHD) in optically thick cells. Using the per-cell optical depth as the control
+			// variable is a conservative lower bound on the structure optical depth that enters the
+			// linear theory, since any resolved structure spans at least one cell.
 			const double scaled = std::pow(tau_cell[g] * scaling, pow);
-			reducedSpeedOfLightFactor(i, j, k, g) = (c_hat_over_c + scaled) / (1.0 + scaled);
+			// guard against Inf/Inf = NaN for extreme optical depths; scaled >= 1e30 already gives
+			// phi = 1 to machine precision
+			if (scaled < 1.0e30) {
+				reducedSpeedOfLightFactor(i, j, k, g) = (c_hat_over_c + scaled) / (1.0 + scaled);
+			} else {
+				reducedSpeedOfLightFactor(i, j, k, g) = 1.0;
+			}
 		}
 	});
 }
