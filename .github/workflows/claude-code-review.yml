@@ -1,0 +1,88 @@
+name: 🤖 Claude Code Review
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  review:
+    # Only run for PR comments and when the body contains our trigger command
+    if: >
+      github.event.issue.pull_request != null &&
+      (
+        contains(github.event.comment.body, '/claude-review')
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+          fetch-depth: 1
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          track_progress: true # ✨ Enables tracking comments
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.issue.number }}
+
+            You are reviewing a pull request to Quokka, a radiation magnetohydrodynamics code
+            built on AMReX. Quokka uses C++20 with GPU support (CUDA/HIP) and a single codebase
+            that runs on both CPU and GPU.
+
+            **Important:** You cannot compile or run the code in this environment. Focus entirely
+            on static analysis: logic, style, correctness, and completeness.
+
+            ## Review checklist
+
+            ### 1. Physics correctness
+            Read the changed source files carefully.
+            - Check that conservation laws, numerical schemes, and physical units are handled correctly.
+            - Flag suspicious math, index errors, or incorrect use of AMReX data structures.
+            - For radiation changes: check energy groups, opacity terms, and flux limiters are consistent.
+            - For hydro changes: check slope limiters, Riemann solvers, and source term coupling.
+            - For new problems: check that initial conditions are physically reasonable and boundary
+              conditions are appropriate.
+
+            ### 2. GPU lambda safety
+            These are the most common GPU bugs in AMReX code — check carefully:
+            - **Never** capture host pointers inside `AMREX_GPU_DEVICE` lambdas or `amrex::ParallelFor`.
+            - Use array forms inside device lambdas: `geom.ProbLoArray()`, `geom.CellSizeArray()`,
+              `geom.InvCellSizeArray()`. Never pass `geom.ProbLo()` or `geom.CellSize()` raw pointers.
+            - Never capture raw pointers from `GeometryData` inside GPU lambdas.
+            - `amrex::GpuArray` and `amrex::Array4` are safe to capture by value.
+
+            ### 3. Code style
+            Quokka uses an LLVM-based clang-format style:
+            - 160-character line limit, indentation with tabs.
+            - Classes: PascalCase (`QuokkaSimulation`). Member variables: camelCase with trailing
+              underscore (`radiationCflNumber_`). Member functions: PascalCase.
+            - Always curly braces, even for single-statement blocks.
+            - Always trailing return types for non-void functions: `auto foo() -> int`.
+            - Always declare variables `const` when not modified after initialization.
+            - Public APIs must have Doxygen-style comments.
+            - Comments explain WHY, never WHAT — no comments restating what the code already says.
+
+            ### 4. AMREX_SPACEDIM handling
+            `AMREX_SPACEDIM` is a compile-time constant (1, 2, or 3):
+            - Prefer `#if (AMREX_SPACEDIM > 1)` preprocessor guards for dimension-dependent code.
+            - If an inline ternary is used instead, require `// NOLINT(misc-redundant-expression)`.
+
+            ### 5. Test completeness
+            - New physics must have a corresponding test in `src/problems/`.
+            - A complete new problem requires: `src/problems/<TestName>/test<TestName>.cpp`,
+              `CMakeLists.txt`, and `inputs/<TestName>.toml`.
+            - Verify `CMakeLists.txt` registers the test with `add_test(...)` and sets `JOB_NAME`.
+            - Test variants (same binary, different `.toml`) are additional `add_test` entries in the
+              same `CMakeLists.txt`, not separate executables.
+
+            Provide detailed feedback using inline comments for specific issues.
+
+            Post an overall summary as a top-level PR comment.
+
+          claude_args: |
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"

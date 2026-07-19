@@ -6,10 +6,12 @@ compile_commands.json
 .vscode/
 codeql-db/
 build/
+build_lint/
 docs/doxygen/
 tests/last_chk
 tests/plt*
 tests/chk*
+tests/slice*
 tests/*.csv
 tests/plt*
 sims/
@@ -19,6 +21,28 @@ __pycache__
 *.sarif
 Backtrace.*
 
+*.hdf5
+
+# Agora galaxy uncompressed data
+/extern/agora_data/vcirc_with_constant_halo.csv
+/extern/agora_data/vcirc.dat
+/extern/agora_data/AgoraGalaxy_particles_LOW.txt
+
+# Singularity Docker images
+*.sif
+
+# files in tests/ folder
+/tests/
+!/tests/matplotlibrc
+# !/tests/ascent_actions.yaml
+
+# agent files
+/.claude/*
+!/.claude/settings.json
+/.agent
+/.agents
+
+# LaTeX files
 *.aux
 *.dbl
 *.bbl
@@ -47,8 +71,7 @@ docs/doxyoutput/
 _build/
 
 # Include image and pdf files inside docs
-!/docs/docs/flowchart-v2.pdf
-!/docs/docs/tests/attach/*.png
+!/docs/markdown/tests/attach/*.png
 
 # Kokkos build files
 KokkosCore_config.h
@@ -89,3 +112,6 @@ KokkosCore_config.tmp
 *.exe
 *.out
 *.app
+
+# hdf5 files
+*.hdf5

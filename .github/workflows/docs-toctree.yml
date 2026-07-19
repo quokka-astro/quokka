@@ -1,0 +1,34 @@
+name: 📚 mdBook validation
+
+on:
+  push:
+    branches:
+      - main
+      - development
+  pull_request:
+
+jobs:
+  check_changes:
+    uses: ./.github/workflows/check_changes.yml
+    with:
+      workflow_file: '.github/workflows/docs-toctree.yml'
+
+  docs-toctree:
+    name: Validate mdBook summary and build
+    runs-on: ubuntu-latest
+    needs: check_changes
+    if: needs.check_changes.outputs.has_docs_changes == 'true' || needs.check_changes.outputs.has_specific_workflow_changes == 'true' || needs.check_changes.outputs.has_scripts_changes == 'true'
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Set up Python
+        uses: actions/setup-python@v6.3.0
+        with:
+          python-version: '3.x'
+      - name: Install mdBook tooling
+        run: ./scripts/bash/install_mdbook.sh
+      - name: Check for unreachable Markdown pages
+        run: python scripts/check_mdbook_summary.py
+      - name: Build mdBook documentation
+        run: ./scripts/bash/docs_build.sh

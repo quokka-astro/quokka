@@ -24,15 +24,15 @@
 using Real = amrex::Real;
 
 template <typename F, int N>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rk12_single_step(F &&rhs, Real t0, quokka::valarray<Real, N> const &y, Real dt, quokka::valarray<Real, N> &ynew,
-							       quokka::valarray<Real, N> &yerr, void *user_data) -> int
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rk12_single_step(F const &rhs, Real t0, quokka::valarray<Real, N> const &y, Real dt,
+							       quokka::valarray<Real, N> &ynew, quokka::valarray<Real, N> &yerr) -> int
 {
 	// Compute one step of the RK Heun-Euler (1)2 method
 
 	// stage 1 [Forward Euler step at t0]
 	quokka::valarray<Real, N> k1{};
 	quokka::valarray<Real, N> y_arg = y;
-	int ierr = rhs(t0, y_arg, k1, user_data);
+	int ierr = rhs(t0, y_arg, k1);
 	if (ierr != 0) {
 		return ierr;
 	}
@@ -41,7 +41,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rk12_single_step(F &&rhs, Real t0,
 	// stage 2 [Forward Euler step at t1]
 	quokka::valarray<Real, N> k2{};
 	y_arg = y + k1;
-	ierr = rhs(t0 + dt, y_arg, k2, user_data);
+	ierr = rhs(t0 + dt, y_arg, k2);
 	if (ierr != 0) {
 		return ierr;
 	}
@@ -57,8 +57,8 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rk12_single_step(F &&rhs, Real t0,
 }
 
 template <typename F, int N>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rk23_single_step(F &&rhs, Real t0, quokka::valarray<Real, N> const &y, Real dt, quokka::valarray<Real, N> &ynew,
-							       quokka::valarray<Real, N> &yerr, void *user_data) -> int
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rk23_single_step(F const &rhs, Real t0, quokka::valarray<Real, N> const &y, Real dt,
+							       quokka::valarray<Real, N> &ynew, quokka::valarray<Real, N> &yerr) -> int
 {
 	// Compute one step of the RK Bogaki-Shampine (2)3 method
 	// https://sundials.readthedocs.io/en/latest/arkode/Butcher_link.html#bogacki-shampine-4-2-3
@@ -66,7 +66,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rk23_single_step(F &&rhs, Real t0,
 	// stage 1
 	quokka::valarray<Real, N> k1{};
 	quokka::valarray<Real, N> y_arg = y;
-	int ierr = rhs(t0, y_arg, k1, user_data);
+	int ierr = rhs(t0, y_arg, k1);
 	if (ierr != 0) {
 		return ierr;
 	}
@@ -75,7 +75,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rk23_single_step(F &&rhs, Real t0,
 	// stage 2
 	quokka::valarray<Real, N> k2{};
 	y_arg = y + 0.5 * k1;
-	ierr = rhs(t0 + 0.5 * dt, y_arg, k2, user_data);
+	ierr = rhs(t0 + 0.5 * dt, y_arg, k2);
 	if (ierr != 0) {
 		return ierr;
 	}
@@ -84,7 +84,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rk23_single_step(F &&rhs, Real t0,
 	// stage 3
 	quokka::valarray<Real, N> k3{};
 	y_arg = y + (3. / 4.) * k2;
-	ierr = rhs(t0 + (3. / 4.) * dt, y_arg, k3, user_data);
+	ierr = rhs(t0 + (3. / 4.) * dt, y_arg, k3);
 	if (ierr != 0) {
 		return ierr;
 	}
@@ -93,7 +93,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto rk23_single_step(F &&rhs, Real t0,
 	// stage 4
 	quokka::valarray<Real, N> k4{};
 	y_arg = y + (2. / 9.) * k1 + (1. / 3.) * k2 + (4. / 9.) * k3;
-	ierr = rhs(t0 + dt, y_arg, k4, user_data);
+	ierr = rhs(t0 + dt, y_arg, k4);
 	if (ierr != 0) {
 		return ierr;
 	}
@@ -125,7 +125,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto error_norm(quokka::valarray<Real, 
 constexpr int maxStepsODEIntegrate = 2000;
 
 template <typename F, int N>
-AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rk_adaptive_integrate(F &&rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1, void *user_data, Real reltol,
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rk_adaptive_integrate(F const &rhs, Real t0, quokka::valarray<Real, N> &y0, Real t1, Real reltol,
 								    quokka::valarray<Real, N> const &abstol, int &steps_taken)
 {
 	// Integrate dy/dt = rhs(y, t) from t0 to t1,
@@ -134,7 +134,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rk_adaptive_integrate(F &&rhs, Rea
 
 	// initial timestep
 	quokka::valarray<Real, N> ydot0{};
-	rhs(t0, y0, ydot0, user_data);
+	rhs(t0, y0, ydot0);
 	const Real dt_guess = 0.1 * min(abs(y0 / ydot0));
 	AMREX_ASSERT(dt_guess > 0.0);
 
@@ -164,7 +164,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void rk_adaptive_integrate(F &&rhs, Rea
 		bool step_success = false;
 		for (int k = 0; k < maxRetries; ++k) {
 			// compute single step of chosen RK method
-			int ierr = rk12_single_step(rhs, time, y, dt, ynew, yerr, user_data);
+			int ierr = rk12_single_step(rhs, time, y, dt, ynew, yerr);
 
 			Real eta = NAN;
 			Real epsilon = NAN;

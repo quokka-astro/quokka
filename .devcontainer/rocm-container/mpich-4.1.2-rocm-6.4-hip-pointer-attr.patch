@@ -1,0 +1,19 @@
+diff --git a/src/mpl/src/gpu/mpl_gpu_hip.c b/src/mpl/src/gpu/mpl_gpu_hip.c
+index f6a2df3..b2c5954 100644
+--- a/src/mpl/src/gpu/mpl_gpu_hip.c
++++ b/src/mpl/src/gpu/mpl_gpu_hip.c
+@@ -90,7 +90,13 @@ int MPL_gpu_query_pointer_attr(const void *ptr, MPL_pointer_attr_t * attr)
+     hipError_t ret;
+     ret = hipPointerGetAttributes(&attr->device_attr, ptr);
+     if (ret == hipSuccess) {
+-        switch (attr->device_attr.memoryType) {
++#if defined(HIP_VERSION_MAJOR) && (HIP_VERSION_MAJOR >= 6)
++        /* ROCm 6+ uses hipPointerAttribute_t::type */
++        enum hipMemoryType memory_type = attr->device_attr.type;
++#else
++        enum hipMemoryType memory_type = attr->device_attr.memoryType;
++#endif
++        switch (memory_type) {
+             case hipMemoryTypeHost:
+                 attr->type = MPL_GPU_POINTER_REGISTERED_HOST;
+                 attr->device = attr->device_attr.device;

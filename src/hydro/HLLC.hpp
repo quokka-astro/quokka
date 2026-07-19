@@ -44,8 +44,8 @@ AMREX_FORCE_INLINE AMREX_GPU_DEVICE auto HLLC(quokka::HydroState<N_scalars, N_ms
 	double S_R = NAN;
 	if (gamma != 1.0) {
 
-		auto [dedr_L, dedp_L, drdp_L, dpdr_s_L, G_L] = quokka::EOS<problem_t>::ComputeOtherDerivatives(sL.rho, sL.P, sL.massScalar);
-		auto [dedr_R, dedp_R, drdp_R, dpdr_s_R, G_R] = quokka::EOS<problem_t>::ComputeOtherDerivatives(sR.rho, sR.P, sR.massScalar);
+		auto [dedr_L, dedp_L, drdp_L, dpdr_s_L, G_L] = ::quokka::EOS<problem_t>::ComputeOtherDerivatives(sL.rho, sL.P, sL.massScalar);
+		auto [dedr_R, dedp_R, drdp_R, dpdr_s_R, G_R] = ::quokka::EOS<problem_t>::ComputeOtherDerivatives(sR.rho, sR.P, sR.massScalar);
 
 		// equation A.5a of Kershaw+1998
 		// need specific internal energy here

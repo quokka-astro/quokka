@@ -53,13 +53,13 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_inflow_x1_lower(quokka::valarray<
 		massScalars[n] = Q[HydroSystem<problem_t>::primScalar0_index + n];
 	}
 
-	const Real T = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, quokka::EOS<problem_t>::ComputeEintFromPres(rho, P, massScalars), massScalars);
-	const Real Eint_aux_t = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_t, massScalars);
+	const Real T = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, ::quokka::EOS<problem_t>::ComputeEintFromPres(rho, P, massScalars), massScalars);
+	const Real Eint_aux_t = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_t, massScalars);
 
 	const Real du_dx = dQ_dx_data[1];
 	const Real dP_dx = dQ_dx_data[4];
 
-	const Real c = quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P, massScalars);
+	const Real c = ::quokka::EOS<problem_t>::ComputeSoundSpeed(rho, P, massScalars);
 	const amrex::Real M = amrex::Clamp(std::sqrt(u * u + v * v + w * w) / c, 0., 1.);
 
 	const Real eta_2 = 2.;
@@ -68,7 +68,7 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE auto dQ_dx_inflow_x1_lower(quokka::valarray<
 	const Real eta_5 = 2.;
 	const Real eta_6 = 2.;
 
-	const Real R = quokka::EOS<problem_t>::boltzmann_constant_ / quokka::EOS_Traits<problem_t>::mean_molecular_weight;
+	const Real R = ::quokka::EOS<problem_t>::boltzmann_constant_ / ::quokka::EOS_Traits<problem_t>::mean_molecular_weight;
 
 	// see SymPy notebook for derivation
 	quokka::valarray<Real, HydroSystem<problem_t>::nvar_> dQ_dx{};
@@ -133,6 +133,9 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setInflowX1Lower(const amrex::IntVect &
 	quokka::valarray<amrex::Real, N> const Q_im2 = -2.0 * Q_ip1 - 3.0 * Q_i + 6.0 * Q_im1 + 6.0 * dx * dQ_dx;
 	quokka::valarray<amrex::Real, N> const Q_im3 = 3.0 * Q_ip1 + 10.0 * Q_i - 18.0 * Q_im1 + 6.0 * Q_im2 - 12.0 * dx * dQ_dx;
 	quokka::valarray<amrex::Real, N> const Q_im4 = -2.0 * Q_ip1 - 13.0 * Q_i + 24.0 * Q_im1 - 12.0 * Q_im2 + 4.0 * Q_im3 + 12.0 * dx * dQ_dx;
+	// TODO(bwibking): update these values with higher-order extrapolated values
+	quokka::valarray<amrex::Real, N> const Q_im5 = Q_im4;
+	quokka::valarray<amrex::Real, N> const Q_im6 = Q_im4;
 
 	// set cell values
 	quokka::valarray<amrex::Real, N> consCell{};
@@ -144,6 +147,10 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setInflowX1Lower(const amrex::IntVect &
 		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_im3);
 	} else if (i == ilo - 4) {
 		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_im4);
+	} else if (i == ilo - 5) {
+		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_im5);
+	} else if (i == ilo - 6) {
+		consCell = HydroSystem<problem_t>::ComputeConsVars(Q_im6);
 	}
 
 	consVar(i, j, k, HydroSystem<problem_t>::density_index) = consCell[0];
@@ -184,14 +191,14 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE void setInflowX1LowerLowOrder(const amrex::I
 
 	// compute centered ghost values
 	const Real rho = Q_i[0];
-	const Real Eint = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_t, massScalars);
+	const Real Eint = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_t, massScalars);
 	quokka::valarray<amrex::Real, N> Q_im1{};
 	Q_im1[0] = rho; // extrapolate density
 	Q_im1[1] = u_t; // prescribe velocity
 	Q_im1[2] = v_t;
 	Q_im1[3] = w_t;
-	Q_im1[4] = quokka::EOS<problem_t>::ComputePressure(rho, Eint, massScalars); // prescribe temperature
-	Q_im1[5] = Eint;							    // prescribe temperature
+	Q_im1[4] = ::quokka::EOS<problem_t>::ComputePressure(rho, Eint, massScalars); // prescribe temperature
+	Q_im1[5] = Eint;							      // prescribe temperature
 	for (int i = 0; i < HydroSystem<problem_t>::nscalars_; ++i) {
 		Q_im1[6 + i] = s_t[i]; // prescribe passive scalars
 	}

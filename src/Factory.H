@@ -6,6 +6,7 @@
 #include <unordered_map>
 
 #include "AMReX.H"
+#include "AMReX_ParallelDescriptor.H"
 #include "AMReX_Print.H"
 
 namespace quokka
@@ -72,9 +73,13 @@ template <class Base, class... Args> struct Factory {
 	{
 		key_exists_or_error(key);
 		auto ptr = table().at(key)(std::move<Args>(args)...);
-		amrex::Print() << "Creating " << Base::base_identifier() << " instance: " << key << std::endl;
+		if (amrex::ParallelDescriptor::IOProcessor()) {
+			amrex::Print() << "Creating " << Base::base_identifier() << " instance: " << key << std::endl;
+		}
 		return ptr;
 	}
+
+	[[nodiscard]] static auto contains(const std::string &key) -> bool { return table().find(key) != table().end(); }
 
 	/** Print a list of the valid subclasses registered to this base instance
 	 *

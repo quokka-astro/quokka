@@ -7,16 +7,15 @@
 #define LARGE 1.0e100
 
 template <typename problem_t>
-void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, Real dt_radiation,
-						     const int stage, double dustGasCoeff, amrex::Array4<const amrex::Real> const &reducedSpeedOfLightFactor,
-						     int *p_iteration_counter, int *p_iteration_failure_counter)
+void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arrayconst_t &radEnergySource, amrex::Box const &indexRange, Real dt_implicit,
+						     double gas_update_factor_in, double dustGasCoeff, double tol_h, double /*tol_rel_h*/, double /*tempFloor*/,
+						     amrex::Array4<const amrex::Real> const &reducedSpeedOfLightFactor,
+						     int *p_iteration_counter, int *p_iteration_failure_counter,
+						     std::array<amrex::Array4<const amrex::Real>, AMREX_SPACEDIM> cons_fc)
 {
 	arrayconst_t &consPrev = consVar; // make read-only
 	array_t &consNew = consVar;
-	auto dt = dt_radiation;
-	if (stage == 2) {
-		dt = (1.0 - IMEX_a32) * dt_radiation;
-	}
+	auto dt = dt_implicit;
 
 	// don't need radBoundaries_g for single-group
 
@@ -35,6 +34,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		const double c = c_light_;
 		const double chat = c * reducedSpeedOfLightFactor(i, j, k);
 		const double dustGasCoeff_ = dustGasCoeff;
+		const double resid_tol = tol_h;
 
 		// load fluid properties
 		const double rho = consPrev(i, j, k, gasDensity_index);
@@ -45,13 +45,21 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		const double Egastot0 = consPrev(i, j, k, gasEnergy_index);
 		auto massScalars = RadSystem<problem_t>::ComputeMassScalars(consPrev, i, j, k);
 
+		// Compute cell-centered magnetic field
+		const double Emag = ComputeCellCenteredMagneticEnergy<problem_t>(i, j, k, cons_fc);
+
 		// load radiation energy
 		const double Erad0 = consPrev(i, j, k, radEnergy_index);
 		AMREX_ASSERT(Erad0 > 0.0);
 
+		const double cscale = c / chat;
+
 		// load radiation energy source term
 		// plus advection source term (for well-balanced/SDC integrators)
-		const double Src = radEnergySource(i, j, k, 0) * dt * chat;
+		// Note that radEnergySource should contain the luminosity volume density, L / V; unit: erg s^-1 cm^-3
+		// Single-group: if ChemBands is defined the only group is an ionizing photon group (no cscale).
+		// For thermal groups, radEnergySource must be scaled by chat/c (= 1/cscale).
+		const double Src = RadSystem_Has_ChemBands<problem_t>::value ? radEnergySource(i, j, k, 0) * dt : radEnergySource(i, j, k, 0) * dt / cscale;
 		if constexpr (gamma_ != 1.0) {
 			AMREX_ASSERT(Src >= 0.0);
 		}
@@ -77,15 +85,12 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		amrex::GpuArray<Real, 3> Frad_t1{};
 
 		if constexpr (gamma_ != 1.0) {
-			Egas0 = ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0);
+			Egas0 = ::quokka::EOS<problem_t>::ComputeEintFromEgas(rho, x1GasMom0, x2GasMom0, x3GasMom0, Egastot0, Emag);
 			Etot0 = Egas0 + cscale * (Erad0 + Src);
 			AMREX_ASSERT(Egas0 > 0.0);
 		}
 
-		Real gas_update_factor = 1.0;
-		if (stage == 1) {
-			gas_update_factor = IMEX_a32;
-		}
+		const Real gas_update_factor = gas_update_factor_in;
 
 		double N_d = NAN;
 		const double H_num_den = ComputeNumberDensityH(rho, massScalars);
@@ -155,11 +160,10 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 				double deltaR = NAN;
 				double F_D = NAN;
 
-				const double resid_tol = 1.0e-11; // 1.0e-15;
 				const int maxIter = 100;
 				int n = 0;
 				for (; n < maxIter; ++n) {
-					T_gas = quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
+					T_gas = ::quokka::EOS<problem_t>::ComputeTgasFromEint(rho, Egas_guess, massScalars);
 					AMREX_ASSERT(T_gas >= 0.);
 
 					// dust temperature
@@ -241,16 +245,23 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						cooling_derivative = DefineNetCoolingRateTempDerivative(T_gas, H_num_den)[0];
 					}
 
+					// Check for convergence. We need to take care of a special situation when tau is very small, in which case the source
+					// term won't be able to cancel the residual no matter how many iterations we try. This could happen when Src is
+					// non-zero or when the opacity is a sharp function of temperature. We set the criterion to be that: tau *
+					// std::max(a_rad * T_gas^4, E_tot0) < resid_tol * Etot0.
+
 					F_G = Egas_guess - Egas0 + cscale * R + cooling * dt - CR_heating;
 					F_D = Erad_guess - Erad0 - (R + Src);
+					double F_D_abs = 0.0;
+					if (tau * std::max(radiation_constant_ * std::pow(T_gas, 4), Etot0) < resid_tol * Etot0) {
+						Erad_guess = Erad0 + Src;
+						F_D = 0.0;
+						F_D_abs = 0.0;
+					} else {
+						F_D_abs = std::abs(F_D);
+					}
 					if constexpr (add_line_cooling_to_radiation_in_jac) {
 						F_D -= (1.0 / cscale) * cooling * dt;
-					}
-					double F_D_abs = 0.0;
-					if (tau > 0.0) {
-						F_D_abs = std::abs(F_D);
-					} else {
-						F_D_abs = std::abs(F_D + R);
 					}
 
 					// check relative convergence of the residuals
@@ -258,13 +269,13 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						break;
 					}
 
-					const double c_v = quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
+					const double c_v = ::quokka::EOS<problem_t>::ComputeEintTempDerivative(rho, T_gas, massScalars); // Egas = c_v * T
 
 #if 0
 					// For debugging: print (Egas0, Erad0Vec, tau0), which defines the initial condition for a Newton-Raphson iteration
 					if (n == maxIter - 10) {
-						std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0 << ", tau0 = " << tau0
-							  << "; C_V = " << c_v << ", a_rad = " << radiation_constant_ << std::endl;
+						std::cout << "Egas0 = " << Egas0 << ", Erad0Vec = " << Erad0 << ", tau0 = " << tau0 << "; C_V = " << c_v
+							  << ", a_rad = " << radiation_constant_ << std::endl;
 					} else if (n >= maxIter - 10) {
 						std::cout << "n = " << n << ", Egas_guess = " << Egas_guess << ", EradVec_guess = " << Erad_guess
 							  << ", tau = " << tau;
@@ -330,7 +341,7 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 						AMREX_ASSERT(Erad_guess >= 0.0);
 						T_rad = std::sqrt(std::sqrt(Erad_guess / radiation_constant_));
 						if (deltaEgas / c_v > std::max(T_gas, T_rad)) {
-							Egas_guess = quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
+							Egas_guess = ::quokka::EOS<problem_t>::ComputeEintFromTgas(rho, T_rad);
 							// R = 0.0;
 						} else {
 							Egas_guess += deltaEgas;
@@ -486,7 +497,8 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 			// 3. Deal with the work term.
 			if constexpr ((gamma_ != 1.0) && (beta_order_ != 0)) {
 				// compute difference in gas kinetic energy before and after momentum update
-				amrex::Real const Egastot1 = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
+				amrex::Real const Egastot1 =
+				    ::quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess, Emag);
 				amrex::Real const Ekin1 = Egastot1 - Egas_guess;
 				amrex::Real const dEkin_work = Ekin1 - Ekin0;
 
@@ -548,7 +560,8 @@ void RadSystem<problem_t>::AddSourceTermsSingleGroup(array_t &consVar, arraycons
 		if constexpr (gamma_ != 1.0) {
 			Egas_guess = Egas0 + (Egas_guess - Egas0) * gas_update_factor;
 			consNew(i, j, k, gasInternalEnergy_index) = Egas_guess;
-			consNew(i, j, k, gasEnergy_index) = ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess);
+			consNew(i, j, k, gasEnergy_index) =
+			    ::quokka::EOS<problem_t>::ComputeEgasFromEint(rho, x1GasMom1, x2GasMom1, x3GasMom1, Egas_guess, Emag);
 			consNew(i, j, k, radEnergy_index) = Erad_guess;
 		} else {
 			amrex::ignore_unused(Erad_guess);

@@ -1,4 +1,4 @@
-name: Build and Deploy Docs
+name: 📖 Build and Deploy Docs
 
 on:
   push:
@@ -22,22 +22,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  check_changes:
+    uses: ./.github/workflows/check_changes.yml
+    with:
+      workflow_file: '.github/workflows/docs.yml'
+
   build:
     runs-on: ubuntu-latest
+    needs: check_changes
+    if: needs.check_changes.outputs.has_docs_changes == 'true' || needs.check_changes.outputs.has_api_docs_changes == 'true' || needs.check_changes.outputs.has_specific_workflow_changes == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
         with:
           persist-credentials: false
 
-      - name: Dependencies
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install pypandoc_binary mkdocs-material>=9.5.9 mkdocs-include-markdown-plugin>=6.0.4 mkdocs-exclude>=1.0.2 mkdocs-macros-plugin>=1.0.4 pymdown-extensions mkdocs-awesome-pages-plugin mkdocs-material mkdocs-bibtex==2.15.0
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: Install and Build
+      - name: Install mdBook tooling
+        run: ./scripts/bash/install_mdbook.sh
+
+      - name: Install Doxygen
         run: |
-          ./build_docs.sh
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y doxygen
+
+      - name: Build documentation
+        run: |
+          ./scripts/bash/docs_build.sh
+          ./scripts/bash/docs_api_build.sh
 
       - name: Archive artifact
         shell: sh
@@ -56,20 +70,20 @@ jobs:
           INPUT_PATH: ./docs/site
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: 'github-pages'
           path: ${{ runner.temp }}/artifact.tar
           retention-days: 1
 
   deploy:
-    if: github.event_name == 'push' && github.repository == 'quokka-astro/quokka' && github.ref == 'refs/heads/development'
+    if: github.event_name == 'push' && github.repository == 'quokka-astro/quokka' && github.ref == 'refs/heads/development' && (needs.check_changes.outputs.has_docs_changes == 'true' || needs.check_changes.outputs.has_api_docs_changes == 'true' || needs.check_changes.outputs.has_specific_workflow_changes == 'true')
     environment:
       name: github-pages
       url: quokka-astro.github.io
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, check_changes]
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
