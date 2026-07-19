@@ -1,4 +1,4 @@
-/// \file test_radhydro_shock_super.cpp
+/// \file testRadhydro_shock_super.cpp
 /// \brief Defines a test problem for a supercritical radiative shock.
 ///
 
@@ -8,7 +8,6 @@
 #include "AMReX_ParallelDescriptor.H"
 #include "QuokkaSimulation.hpp"
 #include "hydro/hydro_system.hpp"
-#include "test_radhydro_shock_super.hpp"
 #include "util/fextract.hpp"
 
 struct ShockProblem {
