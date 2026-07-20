@@ -311,47 +311,37 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE auto luminosity_total(amrex::Real mass,
 }
 } // namespace StellarPhysics
 
-// Main update function for stellar particles
+// Physically-detailed stellar-evolution model: polytropic structure with a deuterium-burning
+// state machine (VariableCoreDeuterium -> SteadyCoreDeuterium -> ShellDeuterium -> ZAMS).
+// Conforms to the pluggable Particle_Traits<problem_t>::stellar_model interface (see
+// stellar_models.hpp). Uses only the StarParticle fixed real/int components (mdeut, n, radius,
+// burnState), so it needs no extra per-particle storage.
+struct DeuteriumBurningStellarModel {
+	static constexpr int nExtraReal = 0;
+	static constexpr int nExtraInt = 0;
 
-#if AMREX_SPACEDIM == 3
-
-class StellarUpdate
-{
-      public:
-	template <typename problem_t, typename ParticleType, int Nout>
-	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateStellarProperties(ParticleType &p, amrex::Real /*current_time*/, amrex::Real dt,
-										LuminosityGpuConstTables<Nout> const & /*gpu_tables*/) noexcept
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void evolve(amrex::Real *rdata, int *idata, int n_groups, amrex::Real dt) noexcept
 	{
-		// Call the internal update function
-		updateStellarPropertiesImpl(p, dt);
-	}
-
-      private:
-	template <typename ParticleType> AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateStellarPropertiesImpl(ParticleType &p, amrex::Real dt) noexcept
-	{
-		// Get current values using correct StarParticle indices
-		const amrex::Real mass = p.rdata(StarParticleMassIdx);
-		amrex::Real mdeut = p.rdata(StarParticleMdeutIdx);
-		const amrex::Real mdot = p.rdata(StarParticleMdotIdx); // already computed by UpdateParticleMassAndMomentumInBox
-		amrex::Real n = p.rdata(StarParticleNIdx);
-		amrex::Real radius = p.rdata(StarParticleRadiusIdx);
-		auto burn_state = static_cast<burningState>(p.idata(StarParticleBurnStateIdx));
-
-		// TODO(CCH): check this
-		radius = StellarPhysics::rad_init(mdot);
+		const amrex::Real mass = rdata[StarParticleMassIdx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+		amrex::Real mdeut = rdata[StarParticleMdeutIdx];     // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+		const amrex::Real mdot = rdata[StarParticleMdotIdx]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+		amrex::Real n = rdata[StarParticleNIdx];	      // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+		amrex::Real radius = StellarPhysics::rad_init(mdot);
+		auto burn_state = static_cast<burningState>(idata[StarParticleBurnStateIdx]); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
 		// Initialize if needed
 		if (burn_state == burningState::Uninitialized) {
 			if (mass < StellarConstants::M_rad_min || mdot == 0.0) {
+				zeroLuminosity(rdata, n_groups);
 				return;
 			}
 
 			n = StellarPhysics::n_init(mdot);
 			burn_state = burningState::None;
 
-			p.rdata(StarParticleNIdx) = n;
-			p.rdata(StarParticleRadiusIdx) = radius;
-			p.idata(StarParticleBurnStateIdx) = static_cast<int>(burn_state);
+			rdata[StarParticleNIdx] = n;	      // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+			rdata[StarParticleRadiusIdx] = radius; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+			idata[StarParticleBurnStateIdx] = static_cast<int>(burn_state); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 		}
 
 		// Update deuterium mass using already-computed mdot (after early return check)
@@ -389,13 +379,45 @@ class StellarUpdate
 
 		// Compute and store luminosity
 		const amrex::Real lum = StellarPhysics::luminosity_total(mass, radius, mdot, burn_state);
-		p.rdata(StarParticleLumIdx) = lum;
+		if (n_groups > 0) {
+			rdata[StarParticleLumIdx] = lum; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+			for (int g = 1; g < n_groups; ++g) {
+				rdata[StarParticleLumIdx + g] = 0.0; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+			}
+		}
 
 		// Update particle data
-		p.rdata(StarParticleMdeutIdx) = mdeut;
-		p.rdata(StarParticleNIdx) = n;
-		p.rdata(StarParticleRadiusIdx) = radius;
-		p.idata(StarParticleBurnStateIdx) = static_cast<int>(burn_state);
+		rdata[StarParticleMdeutIdx] = mdeut;	      // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+		rdata[StarParticleNIdx] = n;		      // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+		rdata[StarParticleRadiusIdx] = radius;	      // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+		idata[StarParticleBurnStateIdx] = static_cast<int>(burn_state); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+	}
+
+      private:
+	AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void zeroLuminosity(amrex::Real *rdata, int n_groups) noexcept
+	{
+		for (int g = 0; g < n_groups; ++g) {
+			rdata[StarParticleLumIdx + g] = 0.0; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+		}
+	}
+};
+
+// Main update function for stellar particles
+
+#if AMREX_SPACEDIM == 3
+
+class StellarUpdate
+{
+      public:
+	template <typename problem_t, typename ParticleType, int Nout>
+	AMREX_GPU_DEVICE AMREX_FORCE_INLINE static void updateStellarProperties(ParticleType &p, amrex::Real /*current_time*/, amrex::Real dt) noexcept
+	{
+		using Model = typename Particle_Traits<problem_t>::stellar_model;
+		if constexpr (ParticleType::NInt > 0) {
+			Model::evolve(&p.rdata(0), &p.idata(0), Nout, dt);
+		} else {
+			Model::evolve(&p.rdata(0), nullptr, Nout, dt);
+		}
 	}
 };
 

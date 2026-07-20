@@ -19,10 +19,10 @@ usage() {
     echo "  -h                  Display this help message"
     echo ""
     echo "Example:"
-    echo "  $0 -b ./build/src/FieldLoop/test_field_loop -i inputs/field_loop.in -n 10"
-    echo "  $0 -b ./build/src/FieldLoop/test_field_loop -i inputs/field_loop.in -n 10 -m single_stream"
-    echo "  $0 -b ./build/src/FieldLoop/test_field_loop -i inputs/field_loop.in -n 10 -r"
-    echo "  $0 -b ./build/src/FieldLoop/test_field_loop -i inputs/field_loop.in -n 10 -c"
+    echo "  $0 -b ./build/src/FieldLoop/test_field_loop -i inputs/FieldLoop.toml -n 10"
+    echo "  $0 -b ./build/src/FieldLoop/test_field_loop -i inputs/FieldLoop.toml -n 10 -m single_stream"
+    echo "  $0 -b ./build/src/FieldLoop/test_field_loop -i inputs/FieldLoop.toml -n 10 -r"
+    echo "  $0 -b ./build/src/FieldLoop/test_field_loop -i inputs/FieldLoop.toml -n 10 -c"
     exit 1
 }
 
@@ -146,7 +146,7 @@ cleanup() {
 trap cleanup EXIT
 
 # Copy input file to temp directory
-cp "${INPUT_FILE}" "${TEMP_DIR}/input.in"
+cp "${INPUT_FILE}" "${TEMP_DIR}/input.toml"
 
 # Prepare additional arguments
 ADDITIONAL_ARGS=""
@@ -174,12 +174,11 @@ if [ "${REPRODUCIBILITY_TEST}" = true ]; then
     cd "${TEMP_DIR}"
     mkdir run1
     cd run1
-    echo "Running: CUDA_LAUNCH_BLOCKING=1 ${BINARY} ../input.in max_timesteps=${MAX_TIMESTEPS} plotfile_interval=${MAX_TIMESTEPS} ${ADDITIONAL_ARGS}..."
-    CUDA_LAUNCH_BLOCKING=1 "${BINARY}" ../input.in \
+    echo "Running: CUDA_LAUNCH_BLOCKING=1 ${BINARY} ../input.toml max_timesteps=${MAX_TIMESTEPS} plotfile_interval=${MAX_TIMESTEPS} ${ADDITIONAL_ARGS}..."
+    CUDA_LAUNCH_BLOCKING=1 "${BINARY}" ../input.toml \
         max_timesteps=${MAX_TIMESTEPS} \
         plotfile_interval=${MAX_TIMESTEPS} \
         checkpoint_interval=-1 \
-        ascent_interval=-1 \
         projection_interval=-1 \
         statistics_interval=-1 \
         slice_interval=-1 \
@@ -211,12 +210,11 @@ if [ "${REPRODUCIBILITY_TEST}" = true ]; then
     cd "${TEMP_DIR}"
     mkdir run2
     cd run2
-    echo "Running: CUDA_LAUNCH_BLOCKING=1 ${BINARY} ../input.in max_timesteps=${MAX_TIMESTEPS} plotfile_interval=${MAX_TIMESTEPS} ${ADDITIONAL_ARGS}..."
-    CUDA_LAUNCH_BLOCKING=1 "${BINARY}" ../input.in \
+    echo "Running: CUDA_LAUNCH_BLOCKING=1 ${BINARY} ../input.toml max_timesteps=${MAX_TIMESTEPS} plotfile_interval=${MAX_TIMESTEPS} ${ADDITIONAL_ARGS}..."
+    CUDA_LAUNCH_BLOCKING=1 "${BINARY}" ../input.toml \
         max_timesteps=${MAX_TIMESTEPS} \
         plotfile_interval=${MAX_TIMESTEPS} \
         checkpoint_interval=-1 \
-        ascent_interval=-1 \
         projection_interval=-1 \
         statistics_interval=-1 \
         slice_interval=-1 \
@@ -364,16 +362,15 @@ if [ "${COMPUTE_SANITIZER}" = true ]; then
     
     echo ""
     echo "Running race condition check..."
-    echo "Command: compute-sanitizer --tool racecheck ${BINARY} ../input.in max_timesteps=${MAX_TIMESTEPS} ${ADDITIONAL_ARGS}"
+    echo "Command: compute-sanitizer --tool racecheck ${BINARY} ../input.toml max_timesteps=${MAX_TIMESTEPS} ${ADDITIONAL_ARGS}"
     echo ""
     
     # Run with racecheck tool
     set +e  # Don't exit on error so we can capture output
-    compute-sanitizer --tool racecheck "${BINARY}" ../input.in \
+    compute-sanitizer --tool racecheck "${BINARY}" ../input.toml \
         max_timesteps=${MAX_TIMESTEPS} \
         plotfile_interval=-1 \
         checkpoint_interval=-1 \
-        ascent_interval=-1 \
         projection_interval=-1 \
         statistics_interval=-1 \
         slice_interval=-1 \
@@ -384,16 +381,15 @@ if [ "${COMPUTE_SANITIZER}" = true ]; then
     echo ""
     echo "=========================================="
     echo "Running memory error check..."
-    echo "Command: compute-sanitizer --tool memcheck ${BINARY} ../input.in max_timesteps=${MAX_TIMESTEPS} ${ADDITIONAL_ARGS}"
+    echo "Command: compute-sanitizer --tool memcheck ${BINARY} ../input.toml max_timesteps=${MAX_TIMESTEPS} ${ADDITIONAL_ARGS}"
     echo ""
     
     # Run with memcheck tool
     set +e  # Don't exit on error so we can capture output
-    compute-sanitizer --tool memcheck "${BINARY}" ../input.in \
+    compute-sanitizer --tool memcheck "${BINARY}" ../input.toml \
         max_timesteps=${MAX_TIMESTEPS} \
         plotfile_interval=-1 \
         checkpoint_interval=-1 \
-        ascent_interval=-1 \
         projection_interval=-1 \
         statistics_interval=-1 \
         slice_interval=-1 \
@@ -476,12 +472,11 @@ echo "=========================================="
 cd "${TEMP_DIR}"
 mkdir run_blocking
 cd run_blocking
-echo "Running: CUDA_LAUNCH_BLOCKING=1 ${BINARY} ../input.in max_timesteps=${MAX_TIMESTEPS} plotfile_interval=${MAX_TIMESTEPS} ${ADDITIONAL_ARGS}..."
-CUDA_LAUNCH_BLOCKING=1 "${BINARY}" ../input.in \
+echo "Running: CUDA_LAUNCH_BLOCKING=1 ${BINARY} ../input.toml max_timesteps=${MAX_TIMESTEPS} plotfile_interval=${MAX_TIMESTEPS} ${ADDITIONAL_ARGS}..."
+CUDA_LAUNCH_BLOCKING=1 "${BINARY}" ../input.toml \
     max_timesteps=${MAX_TIMESTEPS} \
     plotfile_interval=${MAX_TIMESTEPS} \
     checkpoint_interval=-1 \
-    ascent_interval=-1 \
     projection_interval=-1 \
     statistics_interval=-1 \
     slice_interval=-1 \
@@ -513,12 +508,11 @@ echo "=========================================="
 cd "${TEMP_DIR}"
 mkdir run_nonblocking
 cd run_nonblocking
-echo "Running: CUDA_LAUNCH_BLOCKING=0 ${BINARY} ../input.in max_timesteps=${MAX_TIMESTEPS} plotfile_interval=${MAX_TIMESTEPS} ${ADDITIONAL_ARGS}..."
-CUDA_LAUNCH_BLOCKING=0 "${BINARY}" ../input.in \
+echo "Running: CUDA_LAUNCH_BLOCKING=0 ${BINARY} ../input.toml max_timesteps=${MAX_TIMESTEPS} plotfile_interval=${MAX_TIMESTEPS} ${ADDITIONAL_ARGS}..."
+CUDA_LAUNCH_BLOCKING=0 "${BINARY}" ../input.toml \
     max_timesteps=${MAX_TIMESTEPS} \
     plotfile_interval=${MAX_TIMESTEPS} \
     checkpoint_interval=-1 \
-    ascent_interval=-1 \
     projection_interval=-1 \
     statistics_interval=-1 \
     slice_interval=-1 \

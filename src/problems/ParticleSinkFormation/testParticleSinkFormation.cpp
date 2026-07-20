@@ -9,6 +9,7 @@
 #include "AMReX_Print.H"
 #include "AMReX_SPACE.H"
 #include "util/fextract.hpp"
+#include <exception>
 #include <format>
 
 #include "QuokkaSimulation.hpp"
@@ -34,7 +35,7 @@ const double year = 3.15576e+07;			// in seconds
 const double cs = std::sqrt(gamma_ * C::k_B * T0 / mu); // NOLINT
 constexpr double B0 = 1.0e-7;				// uniform background field
 
-template <> struct Particle_Traits<SinkProblem> {
+template <> struct Particle_Traits<SinkProblem> : DefaultParticleTraits {
 	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Sink;
 };
@@ -48,19 +49,12 @@ template <> struct HydroSystem_Traits<SinkProblem> {
 	static constexpr bool reconstruct_eint = true; // need to reconstruct temperature
 };
 
-template <> struct Physics_Traits<SinkProblem> {
+template <> struct Physics_Traits<SinkProblem> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_self_gravity_enabled = true;
-	static constexpr int numMassScalars = 0;		     // number of mass scalars
-	static constexpr int numPassiveScalars = numMassScalars + 0; // number of passive scalars
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
 	// face-centred
 	static constexpr bool is_mhd_enabled = true;
-	static constexpr int nGroups = 1; // number of radiation groups
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 template <> void QuokkaSimulation<SinkProblem>::setInitialConditionsOnGrid(quokka::grid const &grid_elem)
@@ -239,21 +233,25 @@ auto problem_main() -> int
 		}
 
 #ifdef HAVE_PYTHON
-		matplotlibcpp::clf();
-		std::map<std::string, std::string> rho0_args;
-		rho0_args["label"] = "rho0";
-		rho0_args["color"] = "blue";
-		matplotlibcpp::plot(xs, rho0_x, rho0_args);
-		std::map<std::string, std::string> rho_args;
-		rho_args["label"] = "rho";
-		rho_args["color"] = "red";
-		rho_args["linestyle"] = "--";
-		matplotlibcpp::plot(xs, rho_x, rho_args);
-		matplotlibcpp::xlabel("x (cm)");
-		matplotlibcpp::ylabel("rho (g cm^-3)");
-		matplotlibcpp::title(std::format("t = {:.2e}", sim.tNew_[0]));
-		matplotlibcpp::legend();
-		matplotlibcpp::save("./sink_formation_density.pdf");
+		try {
+			matplotlibcpp::clf();
+			std::map<std::string, std::string> rho0_args;
+			rho0_args["label"] = "rho0";
+			rho0_args["color"] = "blue";
+			matplotlibcpp::plot(xs, rho0_x, rho0_args);
+			std::map<std::string, std::string> rho_args;
+			rho_args["label"] = "rho";
+			rho_args["color"] = "red";
+			rho_args["linestyle"] = "--";
+			matplotlibcpp::plot(xs, rho_x, rho_args);
+			matplotlibcpp::xlabel("x (cm)");
+			matplotlibcpp::ylabel("rho (g cm^-3)");
+			matplotlibcpp::title(std::format("t = {:.2e}", sim.tNew_[0]));
+			matplotlibcpp::legend();
+			matplotlibcpp::save("./sink_formation_density.pdf");
+		} catch (std::exception const &e) {
+			amrex::Print() << "Skipping sink-formation plot: " << e.what() << "\n";
+		}
 #endif
 	}
 

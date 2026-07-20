@@ -1,20 +1,25 @@
 # Magnetohydrodynamics Module
 
+> **Warning: Beta feature**
+>
+> The MHD module has not yet been exercised in a published science application with Quokka and should currently be treated as **beta**.
+>
+
 The magnetohydrodynamics (MHD) module augments Quokka's Euler solver with
-magnetic fields while keeping the discrete divergence of $\vec{B}$ exactly
+magnetic fields while keeping the discrete divergence of \\(\vec{B}\\) exactly
 zero. It is built on the same method-of-lines framework described in
 [Equations](equations.md), but introduces face- and edge-centred fields to
 support constrained transport.
 
 ## Finite-volume discretization
 
-- Cell-centred conserved variables ($\rho$, $\rho\vec{v}$, $E_{\text{gas}}$ and
+- Cell-centred conserved variables (\\(\rho\\), \\(\rho\vec{v}\\), \\(E_{\text{gas}}\\) and
   optional scalars) live in the same `MultiFab` as the hydrodynamics module.
-  Magnetic fluxes $B_1$, $B_2$, $B_3$ are stored on face-centred `MultiFab`s so
+  Magnetic fluxes \\(B_1\\), \\(B_2\\), \\(B_3\\) are stored on face-centred `MultiFab`s so
   that each component is collocated with its normal face area.
 - Edge-centred electromotive forces (EMFs) are defined on a third staggered grid
   and assembled on demand. This staggered arrangement lets the induction update
-  follow Stokes' theorem exactly, ensuring $\nabla \cdot \vec{B}=0$ to machine
+  follow Stokes' theorem exactly, ensuring \\(\nabla \cdot \vec{B}=0\\) to machine
   precision on uniform grids.
 - Source terms (cooling, gravity, etc.) act on the cell-centred state. Since only
   ideal MHD is supported, there are no source terms in the magnetic induction
@@ -36,7 +41,7 @@ coordinate direction:
    sees a consistent state.
 4. Solve the one-dimensional Riemann problem with the HLLD solver. The normal
    magnetic field is taken directly from the face-centred data so that the
-   solution respects the jump condition $B_n^- = B_n^+$. The solver returns both
+   solution respects the jump condition \\(B_n^- = B_n^+\\). The solver returns both
    fluxes for the conserved state and a face-centred velocity that is reused by
    particle advection and, optionally, by the EMF calculation.
 
@@ -47,7 +52,7 @@ dual-energy synchronisation step.
 
 ## Edge-centred electromotive forces
 
-`MHDSystem::ComputeEMF` constructs either cell-centered or edge-centred EMFs $\mathcal{E} = -\vec{v}\times\vec{B}$ by
+`MHDSystem::ComputeEMF` constructs either cell-centered or edge-centred EMFs \\(\mathcal{E} = -\vec{v}\times\vec{B}\\) by
 combining face-centred magnetic fields with one of the three schemes selected by
 `emf_computinging_scheme`: 
 
@@ -58,9 +63,8 @@ combining face-centred magnetic fields with one of the three schemes selected by
 The stencil used in this reconstruction is controlled by `emf_reconstruction_order`
 with the same order options as the flux reconstruction. After reconstruction,
 Quokka averages the four quadrant-centred EMFs surrounding each edge using one of
-three formulas selected by `emf_averaging_scheme`:
+two formulas selected by `emf_averaging_scheme`:
 
-- `BalsaraSpicer2004` – arithmetic averaging of the four quadrants.
 - `LondrilloDelZanna2004` – the Londrillo & Del Zanna (2004) upwind constrained-transport
   formula, which weights the quadrants using characteristic MHD signal speeds.
 - `Balsara2025` - EMF averaging with a dissapative term from wavespeeds and magnetic field jumps 
@@ -73,13 +77,13 @@ without requiring a full state reconstruction and eigenvalue computation.
 
 Once EMFs are available, `MHDSystem::SolveInductionEqn` updates the face-centred
 magnetic fluxes using the area-integrated form of Faraday's law. For a face with
-normal direction $w_0$ and transverse directions $w_1$, $w_2$ the update reads
+normal direction \\(w_0\\) and transverse directions \\(w_1\\), \\(w_2\\) the update reads
 
-$$
+<script type="math/tex; mode=display">
 B_{w_0}^{n+1} = B_{w_0}^n + \frac{\Delta t}{\Delta A_{w_0}}
 \left[ \mathcal{E}_{w_2}(i+\tfrac{1}{2},j+1,k) - \mathcal{E}_{w_2}(i+\tfrac{1}{2},j,k)
      - \mathcal{E}_{w_1}(i+1,j+\tfrac{1}{2},k) + \mathcal{E}_{w_1}(i,j+\tfrac{1}{2},k) \right].
-$$
+</script>
 
 Because the EMFs on opposite edges are equal and opposite, the discrete
 divergence, computed as a finite difference of the face-centred fluxes, remains
@@ -91,10 +95,10 @@ The MHD module uses the same second-order strong stability preserving Runge–Ku
 (SSPRK2) integrator that advances the hydrodynamics:
 
 1. **Predictor stage:** Evaluate numerical fluxes (and EMFs) from the state at
-   $t^n$ and form a provisional update using `HydroSystem::PredictStep`.
+   \\(t^n\\) and form a provisional update using `HydroSystem::PredictStep`.
 2. **Corrector stage:** Recompute fluxes/EMFs from the predictor state, average
    them with the first-stage fluxes, and apply `HydroSystem::PredictStep` a
-   second time to obtain $U^{n+1}$.
+   second time to obtain \\(U^{n+1}\\).
 
 Strang-split source terms (chemistry, cooling, gravity) advance by half steps
 before and after the hydrodynamic RK stages. Radiation transport advances in a
@@ -122,7 +126,7 @@ more detail in [Runtime parameters](parameters.md):
 - `emf_reconstruction_order` – spatial order for the EMF reconstruction
   (default 5 = extrema-preserving PPM).
 - `emf_compute_scheme` – choose `FelkerStone2017`, `Balsara2025`, or `Quokka2026` for computing the emf either at cell-center or at the edge (default `Balsara2025`).
-- `emf_averaging_type` – choose `BalsaraSpicer2004`, `LondrilloDelZanna2004`, or `Balsara2025` for edge averaging
+- `emf_averaging_scheme` – choose `LondrilloDelZanna2004` or `Balsara2025` for edge averaging
   (default `Balsara2025`).
 - `artificial_viscosity_k` – optional scalar viscosity coefficient that adds a
   diffusive flux to the momentum equations and can damp post-shock oscillations.

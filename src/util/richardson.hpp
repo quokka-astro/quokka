@@ -26,6 +26,7 @@ struct Parameters {
 	double machine_precision_target = 0.0;
 	int nx_initial = 0;
 	int nx_max = 0;
+	int refine_n_dims = 1;
 	double expected_rate = 2.0;
 	double tolerance = 0.3;
 	std::string test_name;
@@ -61,8 +62,14 @@ template <typename Callable> auto run(const Parameters &params, Callable &&runTe
 	amrex::Print() << "Resolution\tError Norm\n";
 	amrex::Print() << "----------\t----------\n";
 
+	if (params.refine_n_dims < 1 || params.refine_n_dims > 3) {
+		amrex::Abort("refine_n_dims must be 1, 2, or 3.");
+	}
+
 	for (int nx = params.nx_initial; nx <= params.nx_max; nx *= 2) {
-		double error = std::forward<Callable>(runTest)(nx);
+		const int ny = (params.refine_n_dims >= 2) ? nx : 8;
+		const int nz = (params.refine_n_dims >= 3) ? nx : 8;
+		double error = std::forward<Callable>(runTest)(nx, ny, nz);
 		amrex::ParallelDescriptor::Bcast(&error, 1, amrex::ParallelDescriptor::IOProcessorNumber());
 
 		resolutions.push_back(nx);
@@ -90,6 +97,11 @@ template <typename Callable> auto run(const Parameters &params, Callable &&runTe
 	bool convergence_passed = true;
 
 	for (int i = 1; i < resolutions.size(); ++i) {
+		if (!std::isfinite(errors[i - 1]) || !std::isfinite(errors[i]) || errors[i] <= 0.0 || errors[i - 1] <= 0.0) {
+			amrex::Print() << std::format("{:4d} -> {:4d}\t{:>13}\t{:13.1f}\n", resolutions[i - 1], resolutions[i], "N/A", params.expected_rate);
+			convergence_passed = false;
+			continue;
+		}
 		double const log_error_ratio = std::log(errors[i - 1] / errors[i]);
 		double const log_dx_ratio = std::log(dx_values[i - 1] / dx_values[i]);
 		double const observed_rate = log_error_ratio / log_dx_ratio;
@@ -102,15 +114,23 @@ template <typename Callable> auto run(const Parameters &params, Callable &&runTe
 	}
 
 	if (resolutions.size() >= 2) {
-		double const overall_log_error_ratio = std::log(errors[0] / errors.back());
-		double const overall_log_dx_ratio = std::log(dx_values[0] / dx_values.back());
-		double const overall_rate = overall_log_error_ratio / overall_log_dx_ratio;
+		if (!std::isfinite(errors[0]) || !std::isfinite(errors.back()) || errors.back() <= 0.0 || errors[0] <= 0.0) {
+			amrex::Print() << "\nOverall convergence rate: N/A (non-positive or non-finite errors)\n";
+			amrex::Print() << "Problematic values:\n";
+			for (int i = 0; i < resolutions.size(); ++i) {
+				amrex::Print() << std::format("  nx={:4d}  error={:.6e}\n", resolutions[i], errors[i]);
+			}
+		} else {
+			double const overall_log_error_ratio = std::log(errors[0] / errors.back());
+			double const overall_log_dx_ratio = std::log(dx_values[0] / dx_values.back());
+			double const overall_rate = overall_log_error_ratio / overall_log_dx_ratio;
 
-		amrex::Print() << std::format("\nOverall convergence rate: {:.2f}\n", overall_rate);
-		amrex::Print() << std::format("Expected rate: {:.1f}\n", params.expected_rate);
+			amrex::Print() << std::format("\nOverall convergence rate: {:.2f}\n", overall_rate);
+			amrex::Print() << std::format("Expected rate: {:.1f}\n", params.expected_rate);
 
-		if (overall_rate + params.tolerance < params.expected_rate) {
-			convergence_passed = false;
+			if (overall_rate + params.tolerance < params.expected_rate) {
+				convergence_passed = false;
+			}
 		}
 	}
 

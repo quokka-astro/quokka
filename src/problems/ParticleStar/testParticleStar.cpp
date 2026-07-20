@@ -34,9 +34,11 @@ const double year = 3.15576e+07;			// in seconds
 const double cs = std::sqrt(gamma_ * C::k_B * T0 / mu); // NOLINT
 constexpr double B0 = 1.0e-7;				// uniform background field
 
-template <> struct Particle_Traits<ParticleStar> {
-	// static constexpr ParticleSwitch particle_switch = ParticleSwitch::None;
+template <> struct Particle_Traits<ParticleStar> : DefaultParticleTraits {
 	static constexpr ParticleSwitch particle_switch = ParticleSwitch::Star;
+	// This test validates the deuterium-burning polytropic model directly (see below),
+	// so it must select the model that implements that physics rather than the toy default.
+	using stellar_model = quokka::DeuteriumBurningStellarModel;
 };
 
 template <> struct quokka::EOS_Traits<ParticleStar> {
@@ -48,7 +50,7 @@ template <> struct HydroSystem_Traits<ParticleStar> {
 	static constexpr bool reconstruct_eint = true; // need to reconstruct temperature
 };
 
-template <> struct Physics_Traits<ParticleStar> {
+template <> struct Physics_Traits<ParticleStar> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_self_gravity_enabled = true;

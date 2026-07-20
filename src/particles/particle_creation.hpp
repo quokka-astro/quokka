@@ -194,8 +194,6 @@ template <ParticleType particleType> struct ParticleCreationTraits {
 	}
 };
 
-#if AMREX_SPACEDIM == 3
-
 // Helper namespace for Jeans-instability-based (sink-like) particle creation.
 // These helpers are shared between Sink and Star particle creation specializations.
 namespace SinkCreationHelpers
@@ -323,6 +321,12 @@ AMREX_GPU_DEVICE inline void initializeSinkLikeParticles(PType *particles, int n
 	state_arr(i, j, k, HydroSystem<problem_t>::x3Momentum_index) *= scale_factor;
 	state_arr(i, j, k, HydroSystem<problem_t>::energy_index) *= scale_factor;
 	state_arr(i, j, k, HydroSystem<problem_t>::internalEnergy_index) *= scale_factor;
+	// scale passive scalars to conserve mass fractions
+	if constexpr (Physics_Traits<problem_t>::numPassiveScalars > 0) {
+		for (int n = 0; n < Physics_Traits<problem_t>::numPassiveScalars; ++n) {
+			state_arr(i, j, k, HydroSystem<problem_t>::scalar0_index + n) *= scale_factor;
+		}
+	}
 }
 } // namespace SinkCreationHelpers
 
@@ -878,8 +882,6 @@ template <> struct ParticleCreationTraits<ParticleType::Star> {
 		    mass_at_birth_index, state_fc, verbose);
 	}
 };
-
-#endif // AMREX_SPACEDIM == 3
 
 } // namespace quokka
 

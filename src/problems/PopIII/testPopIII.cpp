@@ -42,19 +42,12 @@ template <> struct HydroSystem_Traits<PopIII> {
 	static constexpr bool reconstruct_eint = true;
 };
 
-template <> struct Physics_Traits<PopIII> {
+template <> struct Physics_Traits<PopIII> : DefaultPhysicsTraits {
 	// cell-centred
 	static constexpr bool is_hydro_enabled = true;
 	static constexpr bool is_self_gravity_enabled = true;
 	static constexpr int numMassScalars = NumSpec;		     // number of chemical species
 	static constexpr int numPassiveScalars = numMassScalars + 0; // we only have mass scalars
-	static constexpr bool is_radiation_enabled = false;
-	static constexpr bool is_dust_enabled = false;
-	static constexpr int nDustGroups = 1; // number of dust groups
-	// face-centred
-	static constexpr bool is_mhd_enabled = false;
-	static constexpr int nGroups = 1;
-	static constexpr UnitSystem unit_system = UnitSystem::CGS;
 };
 
 template <> struct SimulationData<PopIII> {
@@ -320,7 +313,8 @@ template <> void QuokkaSimulation<PopIII>::setInitialConditionsOnGrid(quokka::gr
 		state_cc(i, j, k, HydroSystem<PopIII>::x3Momentum_index) = state.rho * vz;
 		state_cc(i, j, k, HydroSystem<PopIII>::internalEnergy_index) = e;
 
-		Real const Egas = RadSystem<PopIII>::ComputeEgasFromEint(state.rho, state.rho * vx, state.rho * vy, state.rho * vz, e);
+		static_assert(!Physics_Traits<PopIII>::is_mhd_enabled, "MHD is enabled; pass magnetic_energy instead of 0.0");
+		Real const Egas = quokka::EOS<PopIII>::ComputeEgasFromEint(state.rho, state.rho * vx, state.rho * vy, state.rho * vz, e, 0.0);
 		state_cc(i, j, k, HydroSystem<PopIII>::energy_index) = Egas;
 
 		for (int nn = 0; nn < NumSpec; ++nn) {
@@ -365,12 +359,14 @@ template <> void QuokkaSimulation<PopIII>::refineGrid(int lev, amrex::TagBoxArra
 	}
 }
 
-template <> void QuokkaSimulation<PopIII>::ComputeDerivedVar(int lev, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in) const
+template <>
+void QuokkaSimulation<PopIII>::ComputeDerivedVar(int /*lev*/, std::string const &dname, amrex::MultiFab &mf, const int ncomp_cc_in,
+						 amrex::MultiFab const &state_cc, amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> const & /*state_fc*/) const
 {
 	// compute derived variables and save in 'mf'
 	if (dname == "temperature") {
 		const int ncomp = ncomp_cc_in;
-		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &state = state_cc.const_arrays();
 		auto output = mf.arrays();
 
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
@@ -386,7 +382,7 @@ template <> void QuokkaSimulation<PopIII>::ComputeDerivedVar(int lev, std::strin
 	if (dname == "pressure") {
 
 		const int ncomp = ncomp_cc_in;
-		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &state = state_cc.const_arrays();
 		auto output = mf.arrays();
 
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
@@ -398,7 +394,7 @@ template <> void QuokkaSimulation<PopIII>::ComputeDerivedVar(int lev, std::strin
 	if (dname == "velx") {
 
 		const int ncomp = ncomp_cc_in;
-		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &state = state_cc.const_arrays();
 		auto output = mf.arrays();
 
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {
@@ -411,7 +407,7 @@ template <> void QuokkaSimulation<PopIII>::ComputeDerivedVar(int lev, std::strin
 	if (dname == "sound_speed") {
 
 		const int ncomp = ncomp_cc_in;
-		auto const &state = state_new_cc_[lev].const_arrays();
+		auto const &state = state_cc.const_arrays();
 		auto output = mf.arrays();
 
 		amrex::ParallelFor(mf, [=] AMREX_GPU_DEVICE(int bx, int i, int j, int k) noexcept {

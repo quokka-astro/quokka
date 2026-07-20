@@ -3,7 +3,7 @@
 	url = https://github.com/AMReX-Codes/amrex.git
 [submodule "extern/Microphysics"]
 	path = extern/Microphysics
-	url = https://github.com/psharda/Microphysics
+	url = https://github.com/AMReX-Astro/Microphysics.git
 	branch = development
 [submodule "extern/yaml-cpp"]
 	path = extern/yaml-cpp

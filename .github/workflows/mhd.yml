@@ -36,7 +36,7 @@ jobs:
       CCACHE_MAXSIZE: 450M
 
     steps:
-    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v4.2.2
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
       with:
         submodules: true
 
@@ -50,7 +50,7 @@ jobs:
       run: .github/workflows/dependencies/dependencies_ccache.sh
 
     - name: Set Up Cache
-      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/ccache
         key: ccache-${{ github.workflow }}-${{ github.job }}-git-${{ github.sha }}
@@ -68,7 +68,7 @@ jobs:
     - name: Configure CMake
       shell: bash
       working-directory: ${{runner.workspace}}/build
-      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DAMReX_SPACEDIM=3
+      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DAMReX_SPACEDIM=3 -DENABLE_TESTS_FPE=ON
 
     - name: Get MHD test executables
       working-directory: ${{runner.workspace}}/build
@@ -95,10 +95,26 @@ jobs:
     - name: Create test output directory
       run: cmake -E make_directory $GITHUB_WORKSPACE/tests
 
+    - name: Felker-Stone EMF FPE smoke test
+      working-directory: ${{github.workspace}}/tests
+      shell: bash
+      run: |
+        ${{runner.workspace}}/build/src/problems/FastWaveConvergence/FastWaveConvergence \
+          ../inputs/FastWave.toml \
+          amr.max_grid_size_x=32 \
+          amr.blocking_factor_x=16 \
+          mhd.emf_compute_scheme=FelkerStone2017 \
+          mhd.emf_averaging_scheme=LondrilloDelZanna2004 \
+          amrex.init_snan=1 \
+          amrex.fpe_trap_invalid=1 \
+          amrex.fpe_trap_overflow=1 \
+          amrex.fpe_trap_zero=1 \
+          max_timesteps=3
+
     - name: Test
       working-directory: ${{runner.workspace}}/build
       shell: bash
-      # Execute the MHD tests while skipping the slow HydroWave case
+      # Execute the MHD tests while skipping the slow HydroWaveConvergence case
       run: canary run --output-on-failure --workers=2 -k 'MHD and not HydroWaveConvergence' .
 
     - name: ccache stats
@@ -109,7 +125,7 @@ jobs:
 
     - name: Upload test output
       if: always()
-      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: test-results
         path: ${{github.workspace}}/tests

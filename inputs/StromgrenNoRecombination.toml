@@ -1,0 +1,53 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+geometry.prob_lo     =  [0.0, 0.0, 0.0]
+geometry.prob_hi     =  [5e13, 5e13, 5e13]
+quokka.bc = ["reflecting", "reflecting", "reflecting"]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v              = 0       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell          = [16, 16, 16]
+amr.max_level       = 0     # number of levels = max_level + 1
+#max_timesteps = 10
+do_reflux = 0
+do_subcycle = 0
+suppress_output = 0
+
+stromgen.tend = 1200
+stromgen.primary_species_1 = 1.0e-30
+stromgen.primary_species_2 = 1.0e3
+stromgen.primary_species_3 = 1.0e-30
+stromgen.Q = 1e48
+
+photochemistry.enabled = 1
+integrator.use_number_densities = 1
+integrator.do_species_clip = 0
+integrator.jacobian = 1
+integrator.renormalize_abundances = 0
+integrator.subtract_internal_energy = 0
+integrator.X_reject_buffer = 1e100
+integrator.rosenbrock_tableau = 3
+
+integrator.atol_spec                     = 1.0e-2   # cm^-3; spec_abundance_tol (1e-5) × n_H (1000)
+integrator.atol_enuc                     = 1.24e8   # erg/g; c_v × 1 K temperature accuracy
+integrator.atol_rad_num                  = 1.0e-2   # cm^-3; same order as atol_spec (Ben's review)
+integrator.species_failure_tolerance     = 1.0e-2   # cm^-3; = atol_spec (1.5× final-state factor absorbs BDF overshoot)
+integrator.radiation_failure_tolerance   = 0.1      # cm^-3; must exceed max N_gamma BDF overshoot (10× atol_rad_num)
+
+integrator.rtol_spec     = 1e-2
+integrator.rtol_rad_num  = 1e-2
+integrator.rtol_enuc     = 1e-2
+
+plotfile_interval = 1
+plotfile_prefix = "StrmNoRec"
+
+network.recombination_switch = 0
+network.energy_switch = 0
+network.collisional_ionization_switch = 0

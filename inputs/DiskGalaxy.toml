@@ -1,0 +1,99 @@
+# *****************************************************************
+# Problem size and geometry
+# *****************************************************************
+# Box size is [-600 kpc, 600 kpc]^3
+geometry.prob_lo = [-1.8514065526075864e24, -1.8514065526075864e24, -1.8514065526075864e24]
+geometry.prob_hi = [1.8514065526075864e24, 1.8514065526075864e24, 1.8514065526075864e24]
+geometry.is_periodic = [0, 0, 0]
+
+# *****************************************************************
+# VERBOSITY
+# *****************************************************************
+amr.v = 1       # verbosity in Amr
+
+# *****************************************************************
+# Resolution and refinement
+# *****************************************************************
+amr.n_cell = [128, 128, 128]
+amr.max_level       = 5
+amr.blocking_factor = 32
+amr.max_grid_size   = 128
+amr.n_error_buf     = 3
+amr.grid_eff        = 0.7
+regrid_interval     = -1    # static refinement only (do not regrid)
+
+do_reflux = 1
+do_subcycle = 0
+do_tracers = 0
+
+max_walltime = "0:05:00"
+cfl = 0.3
+init_shrink = 0.01	# shrink first timestep by a factor of 100
+stop_time = 3.1536e16   # 1 Gyr
+dt_cutoff = 1.0e-12	# abort if the timestep is less than time*dt_cutoff
+max_timesteps = 1000
+
+# MHD parameters
+hydro.artificial_viscosity_coefficient = 0.1
+hydro.reconstruction_order = 3
+mhd.emf_reconstruction_order = 3
+mhd.emf_compute_scheme = "FelkerStone2017"
+mhd.emf_averaging_scheme = "LondrilloDelZanna2004"
+
+mhd.project_initial_b_field = true
+mhd.update_initial_b_energy = true
+
+cooling.read_tables_even_if_disabled = 1
+cooling.hdf5_data_file = "./CloudyData_UVB=HM2012_resampled.h5"
+temperature_floor = 1e4
+density_floor = 1e-28
+density_floor_expr = "x1=x*1.0e-22; y1=y*1.0e-22; z1=z*1.0e-22; r2=x1*x1+y1*y1+z1*z1; rb2=3.08567758*3.08567758; base_density_floor * (rb2 / max(r2, rb2))"
+
+checkpoint_interval = 10000
+plotfile_interval = 10000
+statistics_interval = 250
+derived_vars = [
+  "particle.CIC.mass_density",
+  "particle.StochasticStellarPop.birth_mass_density",
+]
+
+quokka.cic_particle_mass.type = "DerivedParticleDeposition"
+quokka.cic_particle_mass.particle_types = "CIC"
+quokka.cic_particle_mass.deposit_fields = "mass"
+
+quokka.stellarpop_particle_mass.type = "DerivedParticleDeposition"
+quokka.stellarpop_particle_mass.particle_types = "StochasticStellarPop"
+quokka.stellarpop_particle_mass.deposit_fields = "birth_mass"
+quokka.stellarpop_particle_mass.t_age = 1.57788e14   # 5 Myr in seconds
+quokka.stellarpop_particle_mass.normalization_expr = "1.0/(5.0e6*yr)"
+
+
+## star formation
+particles.eps_ff = 0.01
+particles.low_mass_composite_max_mass = 5.957650359245478e+35   # grams [= 299 Msun]
+particles.reproducibility_roundoff_redundancy = 36
+
+
+###################################
+## Disk and halo parameters
+###################################
+
+disk_galaxy.vcirc_file    = "./vcirc_with_constant_halo.csv"
+disk_galaxy.particle_file = "./AgoraGalaxy_particles_LOW.txt"
+disk_galaxy.refine_Rmax_kpc = 16.0          # kpc
+disk_galaxy.refine_zmax_kpc = 4.0           # kpc
+
+disk_galaxy.disk_gas_mass_Msun = 8.59322e9  # solar masses
+disk_galaxy.disk_Rscale_kpc = 3.43218       # kpc
+disk_galaxy.disk_zscale_kpc = 0.343218      # kpc
+disk_galaxy.disk_temperature = 1.0e4        # K
+disk_galaxy.disk_perturb_amplitude = 1.0    # dimensionless
+disk_galaxy.disk_perturb_Rmax_kpc = 20.0    # kpc
+
+disk_galaxy.halo_vphi_expr = "R=sqrt(x*x+y*y); R0=1.4e3*3.085677581e18; Rt=15.0e3*3.085677581e18; Rs=22.0e3*3.085677581e18; dR=max(R-Rt,0.0); 2.30e7*(1.0 - exp(-R / R0))/sqrt(1.0 + (dR/Rs)*(dR/Rs))"
+
+disk_galaxy.magnetic_field_microgauss = 1.0 # B-field strength (microgauss)
+disk_galaxy.initial_scalar_density = 1.67e-35 # 1e-11 mH/cm^3
+
+particles.scalar_yield_per_SN = 1.99e33       # 1 Msun
+particles.SN_p_term_Msunkmps = 5.0e5	      # 500,000 Msun km/s
