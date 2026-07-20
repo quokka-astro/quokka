@@ -9,10 +9,10 @@ amr.v = 2
 # *****************************************************************
 # Resolution and refinement
 # *****************************************************************
-amr.n_cell          = 128 128 128
+amr.n_cell          = 64 64 64
 amr.blocking_factor = 32
 amr.max_grid_size   = 64
-amr.max_level       = 1
+amr.max_level       = 2
 amr.n_error_buf     = 2
 amr.grid_eff        = 0.75
 regrid_interval     = -1
@@ -28,7 +28,7 @@ density_floor = 1.0e-30
 # Time integration
 # *****************************************************************
 cfl                 = 0.3
-max_timesteps       = 5
+max_timesteps       = 1
 stop_time           = 2.9652e15   # ~94 Myr = 1 t_rot at R=3 kpc, vc=200 km/s
 # *****************************************************************
 # Output
@@ -36,10 +36,6 @@ stop_time           = 2.9652e15   # ~94 Myr = 1 t_rot at R=3 kpc, vc=200 km/s
 checkpoint_interval = 100
 plotfile_interval   = 10
 derived_vars        = gpot pressure radius_sph radial_velocity circular_velocity mach plasma_beta divB Bphi
-# *****************************************************************
-# Physics
-# *****************************************************************
-poisson_supercycle_interval = 5
 # *****************************************************************
 # Problem parameters (Table 1, Q1_M29)
 # *****************************************************************
@@ -49,5 +45,5 @@ mhd_galaxy.sn_jeans_J              = 4.0
 mhd_galaxy.sn_remnant_fraction     = 0.5
 mhd_galaxy.sn_momentum             = 3.0e3
 
-mhd.project_initial_b_field = true
-mhd.update_initial_b_energy = true
+mhd.project_initial_b_field = false
+mhd.update_initial_b_energy = false
